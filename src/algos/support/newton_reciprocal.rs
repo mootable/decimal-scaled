@@ -398,7 +398,7 @@ const fn sub_assign_u128(a: &mut [u128], b: &[u128]) -> bool {
 /// 4xu64*u64->u128 partials decomposition (`<u128 as Limb>::widening_mul`).
 #[inline]
 fn mul_schoolbook_u128(a: &[u128], b: &[u128], out: &mut [u128]) {
-    use crate::int::types::compute_int::Limb;
+    use crate::int::types::compute_limbs::Limb;
     let mut i = 0;
     while i < a.len() {
         if a[i] != 0 {
@@ -852,12 +852,14 @@ pub(crate) fn dispatch_wide_pow10<W>(
     mode: crate::support::rounding::RoundingMode,
 ) -> W
 where
-    W: crate::int::types::traits::BigInt + crate::int::types::compute_int::ComputeInt,
+    W: crate::int::types::traits::BigInt,
+    W::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
     let bits = <W as crate::int::types::traits::BigInt>::BITS;
-    // u128 magnitude buffer from ComputeInt (size lives in the impl); no
-    // const work-width parameter — same mechanism as `div_wide_pow10`.
-    let mut buf = <W as crate::int::types::compute_int::ComputeInt>::single_u128();
+    // u128 magnitude buffer from `W`'s scratch carrier (`W::Scratch =
+    // Limbs<N>`, size lives in the impl); no const work-width parameter —
+    // same mechanism as `div_wide_pow10`.
+    let mut buf = <W::Scratch as crate::int::types::compute_limbs::ComputeLimbs>::single_u128();
     let mag = &mut buf.as_mut()[..W::U128_LIMBS];
     let neg = n.mag_into_u128(mag);
     dispatch_pow10_mag_u128(mag, scale, neg, mode, bits);

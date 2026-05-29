@@ -24,9 +24,9 @@ no algorithm is permitted to break them.
 1. **No heap — the runtime path is pure stack.** No `Vec`, `Box`, `Rc`,
    `Arc`, `alloc::*`, or any heap allocation anywhere a value is computed.
    Every working buffer is an inline `[u64; …]` / `[u128; …]` on the stack,
-   sized at compile time (the `ComputeInt` associated-type buffers and
-   const-init `static` data are how a width wider than `N` is carried — see
-   *Work-width scratch* below). This is what lets the crate run in `no_std`
+   sized at compile time (the `ComputeLimbs` associated-type buffers on the
+   `Limbs<N>` carrier and const-init `static` data are how a width wider than
+   `N` is carried — see *Work-width scratch* below). This is what lets the crate run in `no_std`
    with no allocator and keeps every call's cost on the stack where it
    const-folds. A heap allocation on the compute path is a **hard defect**,
    never a tolerated one. (Historical exceptions — the `_wide-support =
@@ -139,10 +139,11 @@ read as one vocabulary.
 
 ```
 int/                const-generic integer layer
-  types/            Int<N>/Uint<N>; the BigInt trait
+  types/            Int<N>/Uint<N>; the BigInt trait; the Limbs<N> scratch
+                    carrier + ComputeLimbs (compute_limbs.rs)
   policy/           per-width / limb-count algorithm-selection dispatch
   algos/            reusable width-matched algorithms
-  limbs/            raw slice limb primitives
+    support/limbs.rs  raw slice limb primitives
 ```
 
 ## Decimal front-ends
@@ -165,17 +166,53 @@ The cross-width API is four traits (`src/types/traits/`):
 The typed method shells (`D57::<20>::sqrt_strict_with(mode)`) are emitted
 by macros in `src/macros/` and immediately hand off to the dispatch layer.
 
-## Work-width scratch — exact `ComputeInt`, never build-max
+## Work-width scratch — exact `ComputeLimbs` on the `Limbs<N>` carrier, never build-max
 
 Many algorithms compute in a width *wider* than the value's own `N` u64
 limbs: a multiply's `2N` product, a `sqrt` radicand (`2N`), a `cbrt`
 radicand (`4N`), the `÷10^w` magnitude (`⌈N/2⌉` u128). Stable Rust cannot
 name `[u64; 2N]` from a generic `N`, so the width lives on an
-**associated-type buffer** on the storage integer: the `ComputeInt` trait
-(`src/int/types/compute_int.rs`) exposes per-`N` constructors. The size is
-fixed in the `impl` where `N` is concrete and **never appears in a function
-signature**: a kernel bounds on `Int<N>: ComputeInt`, calls the method, and
-gets an exactly-sized stack buffer that folds away per monomorphisation.
+**associated-type buffer**. That buffer is **NOT** a capability of the value
+integer; it is carried by a separate **zero-sized limb carrier**,
+`Limbs<const N>` — the `Limb` / `Limbs<N>` / `ComputeLimbs` triad:
+
+- **`Limb`** — the scalar element axis (`u64` / `u128`); a width-generic
+  kernel's per-element type (see *Limb width* below).
+- **`Limbs<N>`** — the zero-sized *sizing marker* (never instantiated), one
+  per `N`-u64-limb width. It is the type the `ComputeLimbs` buffers hang off.
+- **`ComputeLimbs`** — the trait carrying the per-`N` buffer associated types
+  + constructors (`src/int/types/compute_limbs.rs`), implemented for
+  `Limbs<N>` (NOT for `Int<N>`). It has **no supertrait** — a pure sizing
+  capability, deliberately not `: BigInt`.
+
+The value integer names its carrier through the **`BigInt::Scratch`
+associated type** (`type Scratch = Limbs<N>` in `impl BigInt for Int<N>`,
+`src/int/types/traits.rs`) — *the sanctioned new surface*: the value integer
+merely *names* its scratch carrier, it does not *carry* the scratch. This
+**severs the old `ComputeInt: BigInt` supertrait cycle**: when scratch was a
+capability bounded by `ComputeInt: BigInt`, a blanket `BigInt` method (or
+`Int<N>` operator) could not require `ComputeInt` without a cycle. Now
+`ComputeLimbs` does not require `BigInt`, and `BigInt` only *names* its
+carrier, so:
+
+- a concrete-`N` kernel bounds on `Limbs<N>: ComputeLimbs`, calls
+  `Limbs::<N>::double_buffered_u64()`, and gets an exactly-sized stack buffer
+  that folds away per monomorphisation;
+- a kernel generic over a *value* integer `W: BigInt` reaches scratch as
+  `W::Scratch::single_u128()` under a `where W::Scratch: ComputeLimbs` bound,
+  with no scratch bound on `W` itself.
+
+`BigInt::Scratch` is declared **unbounded** (`type Scratch;`, no
+`: ComputeLimbs`). `BigInt` is a blanket `impl<const N>` for every `Int<N>`,
+but in the `exact-scratch` build `ComputeLimbs` is implemented only at the
+listed widths; a `type Scratch: ComputeLimbs` bound would be unprovable for
+an arbitrary blanket `N`. The `ComputeLimbs` requirement is therefore
+discharged at the generic-helper **use sites** (`where W::Scratch:
+ComputeLimbs`), where `W` is always a concrete width that has it. (`Limbs<N>`
+is declared `pub` only because it is named in the `pub` `BigInt::Scratch`
+type — E0446 forbids leaking a more-private type — but it lives in the
+private `int` module, so it is not crate-public API, exactly like the `pub
+struct Int<N>` value type beside it.)
 
 **The scratch vocabulary is fixed clean limb-multiples — two families.** A
 buffer is named by a *multiple of `N`*, never by the function that wants it
@@ -205,33 +242,46 @@ stabilises, these collapse to inline array sizes — the method surface is the
 stable-Rust stand-in for that, not a permanent design preference.)
 
 **The algorithm sources its own exact scratch.** A kernel that needs a
-wider width takes `where Int<N>: ComputeInt` and calls the *normal* per-`N`
-method (`Int::<N>::double_limbs()`, …). It must **not** pass a work width as
-a const-generic argument (`fn f<W, const LW: usize>` where `LW == W::U128_LIMBS`
-is a defect — that const-work-width parameter is exactly the wall `ComputeInt`
-exists to remove), and it must **not** reach for the build-max blanket.
+wider width takes `where Limbs<N>: ComputeLimbs` and calls the *normal*
+per-`N` method (`Limbs::<N>::double_buffered_u64()`, …); a *value*-generic
+helper takes `where W::Scratch: ComputeLimbs` and calls
+`W::Scratch::single_u128()`. It must **not** pass a work width as a
+const-generic argument (`fn f<W, const LW: usize>` where `LW == W::U128_LIMBS`
+is a defect — that const-work-width parameter is exactly the wall
+`ComputeLimbs` exists to remove), and it must **not** reach for the build-max
+blanket.
 
 **The build-max blanket is the fallback of last resort — NOT for
 algorithms.** `MAX_SINGLE_LIMBS` / `MAX_DOUBLE_LIMBS` / `MAX_QUADRUPLE_LIMBS`
 / `MAX_U128_LIMB` (and the `max_*_limbs()` constructors), feature-gated via
-`MAX_WORK_N`, are sized to the widest tier the build enables. They exist for *really just one* path that
-**structurally cannot** carry a concrete `N` on stable: the blanket `Int<N>`
-`/` / `%` operators and the `BigInt` trait methods — `impl<const N>` over
-every `N`, which can neither name `[u64; N + 2]` nor carry a `ComputeInt`
-bound (`ComputeInt: BigInt` is the supertrait, so requiring `ComputeInt` on
-the operator/`BigInt` impl is a cycle). And even that is escapable: the bare
-operators are cold — decimal ops route through the `ComputeInt` kernels, not
-the `Int<N>` operator — so they can fall back to the scratchless `const`
-shift-subtract `div_rem` instead of a Knuth build-max buffer. **The build-max
-blanket is therefore a *shrinking* fallback whose target is zero.**
+`MAX_WORK_N`, are sized to the widest tier the build enables. They exist for
+the few paths that **structurally cannot** carry a concrete `N` on stable —
+the **width-erased** ones, blanket over *every* `N`:
+
+- the blanket `Int<N>` `/` / `%` operators and the width-erased blanket
+  `BigInt` methods (`resize_to`). The `BigInt::Scratch` bridge no longer
+  *cycles* (a blanket `BigInt` method *could* now name `Self::Scratch::*`
+  under `where Self::Scratch: ComputeLimbs`) — but `resize_to` is invoked on
+  a *generic* receiver `Int<N>` (the `raw.resize_to::<Int<N>>()` policy
+  bridges), and a generic-`N` caller cannot discharge `Limbs<N>: ComputeLimbs`
+  in the per-width `exact-scratch` build, so the bound would cascade
+  unboundedly. These stay build-max.
+- the **width-erased slice-divide engines** (`div_knuth`,
+  `div_burnikel_ziegler_with_knuth`, `div_knuth_u128_limb`) and
+  `int_fmt::fmt_into(&[u64])` — they take a bare `&[u64]` of *runtime* length
+  by design; there is no `N` to size against.
+
+The bare operators are also cold — decimal ops route through the
+`ComputeLimbs` kernels, not the `Int<N>` operator — so the build-max blanket
+is a *shrinking* fallback whose target is zero.
 
 Paths that *look* like exceptions but are **not** — a concrete `N` or const
-`SCALE` is in scope, so they must use `ComputeInt`:
+`SCALE` is in scope, so they must use `ComputeLimbs`:
 
 - `Display` / radix formatting (`int_fmt`): `N` is the monomorphised width at
-  `impl<const N> Display for Int<N>`. `Display` is not a `BigInt` supertrait,
-  so a `where Int<N>: ComputeInt` bound is sound — thread it and source
-  `single_limbs()`.
+  `impl<const N> Display for Int<N>`. (The byte-output buffer it hands the
+  width-erased `fmt_into(&[u64])` legitimately stays build-max; only its
+  *limb* scratch, if any, would be exact.)
 - `newton_reciprocal`: its reciprocal/pow buffer lengths are functions of the
   work width *and* the divide exponent, and the exponent derives from the
   const `SCALE` that the decimal policy dispatch carries (keyed on
@@ -240,15 +290,16 @@ Paths that *look* like exceptions but are **not** — a concrete `N` or const
   `MAX_*_U64` literals fed a runtime `scale: u32`, a Class-B defect to size
   down per `(width, SCALE)` threaded from dispatch.
 - `widen_mul`, the Newton-root `seed_bridge`, every algorithm kernel:
-  concrete `N` → `ComputeInt` methods.
+  concrete `N` → `Limbs<N>: ComputeLimbs`; value-generic `W` →
+  `W::Scratch: ComputeLimbs`.
 
 Everywhere a concrete `N` is in scope — every algorithm kernel, every
-decimal policy and decimal kernel — **use the normal `ComputeInt` methods,
+decimal policy and decimal kernel — **use the normal `ComputeLimbs` methods,
 never a `MAX_*` variant.** A `MAX_*` / `max_*_limbs()` use on a concrete-`N`
 path is the build-max blanket leaking onto a tier that can size itself
 exactly: that is the cross-tier size pollution the Constitution (rule 6)
-forbids, and it is a defect to be migrated to `single_limbs()` /
-`double_limbs()` / `quad_limbs()` / `u128_limbs()`.
+forbids, and it is a defect to be migrated to `Limbs::<N>::single_u64()` /
+`double_buffered_u64()` / `quad_buffered_u64()` / `single_u128()`.
 
 ## Const generics — the BigRule: pass the level's OWN, never any other
 
@@ -283,8 +334,8 @@ knows `N` and `SCALE`, so `dispatch::<N, SCALE>(…)` costs it nothing).
   no `const LW`, no `{2*N}` / `{<_>::U128_LIMBS}` const-generic argument. A
   const that *encodes a width derived from another* (`fn f<W, const LW>` where
   `LW == W::U128_LIMBS`) is the canonical defect — wider-than-`N` widths come
-  from `ComputeInt` (previous section), never a const param. That is the
-  const-work-width wall the `ComputeInt` associated types exist to remove.
+  from `ComputeLimbs` (previous section), never a const param. That is the
+  const-work-width wall the `ComputeLimbs` associated types exist to remove.
 - **Inward is optional.** Threading these consts *inward* (`select`,
   `select_for_limbs`, the kernels) is optional — a helper takes a const only
   if it uses it. Taking the level const at the `dispatch` entry but not
@@ -334,24 +385,25 @@ template to copy.
 A wide-tier kernel can run faster in **u128 limbs** (half the limbs and carries) than in
 u64. Which limb width wins is a per-`(N, SCALE)` property, so it is a **second matcher axis**
 alongside the algorithm: the policy `Select` verdict carries `(Algorithm, LimbSize)`, where
-`LimbSize` (`U64` / `U128`, defined in `compute_int.rs`) is the *const* part of the verdict
+`LimbSize` (`U64` / `U128`, defined in `compute_limbs.rs`) is the *const* part of the verdict
 (limb width is value-independent — never decided inside a `ByValue` closure). `dispatch`
 const-folds the verdict and runs the kernel at the chosen width.
 
 The width is delivered **by type, not by name**: a `Limb` trait (impl'd for `u64` and
 `u128`, carrying the scalar primitives) parameterises ONE generic kernel
-`fn k<const N: usize, L: Limb>(…) where Int<N>: ComputeInt`, dispatched by a const-folded
+`fn k<const N: usize, L: Limb>(…) where Limbs<N>: ComputeLimbs`, dispatched by a const-folded
 `match limbsize { U64 => k::<N, u64>(…), U128 => k::<N, u128>(…) }`. There is **one generic
 kernel, never a per-limb-type copy** (rule 2) — the u128 path is simply the `L = u128`
 monomorphisation (so a hand-written u128 variant of an algorithm is a *superseded duplicate*
 once the generic exists).
 
 Mechanics: storage stays `Int<N>` (u64); a `u128` kernel packs its `N` u64 limbs into
-`⌈N/2⌉` u128 (a cheap little-endian reinterpret into the u128 `ComputeInt` buffer), runs,
+`⌈N/2⌉` u128 (a cheap little-endian reinterpret into the u128 `ComputeLimbs` buffer), runs,
 unpacks. Packing pairs two u64 into one u128, so it is exact only for an **even** limb count
 — the matcher returns `U128` only for even cells; odd/narrow tiers stay `U64`. The `L`-typed
-scratch comes from `ComputeInt` (which carries both the u64 and u128 buffer families); the
-`Limb` accessors route `L` to the matching family, so the kernel never names a build-max
+scratch comes from `ComputeLimbs` on `Limbs<N>` (which carries both the u64 and u128 buffer
+families); the `Limb` accessors route `L` to the matching family (e.g.
+`L::double::<Limbs<N>>()`), so the kernel never names a build-max
 size. Rolled out pilot-first, microbench-gated per cell: a cell routes `U128` only where the
 benchmark shows the win.
 
@@ -654,7 +706,8 @@ to remove.** See `ALGORITHMS.md`.
 
 The one thing that *is* removed is a **superseded duplicate** — the obsolete
 *shape* of an algorithm that a migration replaced in place (e.g. a
-`const`-work-width `fn f<W, const N>` once it became `fn f<W: ComputeInt>`):
+`const`-work-width `fn f<W, const N>` once it became
+`fn f<W: BigInt> where W::Scratch: ComputeLimbs`):
 that is the same algorithm's dead skin, not an alternative, so it goes. The
 test of "alternative (keep) vs superseded duplicate (remove)": does it
 implement a *distinct* algorithm/shape that could win under different

@@ -25,7 +25,7 @@
 
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 use crate::int::algos::support::limbs::add_assign;
-use crate::int::types::compute_int::ComputeInt;
+use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
 use crate::int::types::Int;
 
 /// Significant limb length of `a` (index of the highest non-zero limb plus
@@ -43,19 +43,19 @@ pub(crate) fn sig_len(a: &[u64]) -> usize {
 /// returning its significant limb length. `N` is the storage limb count of
 /// the originating `Int<N>` operands, so each magnitude is `<= N` limbs and
 /// the radicand fits the `Buf2` scratch the caller supplies (`out` must be a
-/// freshly zeroed `Int::<N>::double_buffered_u64()`, i.e. `>= 2N + 1` limbs). This is the
+/// freshly zeroed `Limbs::<N>::double_buffered_u64()`, i.e. `>= 2N + 1` limbs). This is the
 /// single radicand former shared by [`sum_sq_schoolbook`] and the hypot
 /// kernel.
 #[inline]
 pub(crate) fn sum_sq_radicand<const N: usize>(ma: &[u64], mb: &[u64], out: &mut [u64]) -> usize
 where
-    Int<N>: ComputeInt,
+    Limbs<N>: ComputeLimbs,
 {
     let la = sig_len(ma);
     let lb = sig_len(mb);
     // a^2 into `out` (zeroed by the caller); b^2 into its own scratch.
     mul_schoolbook(&ma[..la], &ma[..la], &mut out[..2 * la]);
-    let mut bsq_buf = Int::<N>::double_buffered_u64();
+    let mut bsq_buf = Limbs::<N>::double_buffered_u64();
     let bsq = bsq_buf.as_mut();
     mul_schoolbook(&mb[..lb], &mb[..lb], &mut bsq[..2 * lb]);
     // accumulate into `out`; the +1 limb covers the addition carry.
@@ -72,11 +72,11 @@ where
 #[must_use]
 pub(crate) fn sum_sq_schoolbook<const N: usize>(a: Int<N>, b: Int<N>) -> Option<Int<N>>
 where
-    Int<N>: ComputeInt,
+    Limbs<N>: ComputeLimbs,
 {
     let ma = a.unsigned_abs();
     let mb = b.unsigned_abs();
-    let mut n_buf = Int::<N>::double_buffered_u64();
+    let mut n_buf = Limbs::<N>::double_buffered_u64();
     let n = n_buf.as_mut();
     let nl = sum_sq_radicand::<N>(ma.as_limbs(), mb.as_limbs(), n);
     // fit check: positive magnitude must be < 2^(64N-1) (signed range).

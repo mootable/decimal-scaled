@@ -33,7 +33,7 @@
 //! `hypot(0, 0) = 0` (bit-exact); `hypot(0, x) = |x|` (`isqrt(x²) = |x|`).
 
 use crate::algos::hypot;
-use crate::int::types::compute_int::ComputeInt;
+use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
@@ -93,7 +93,7 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(
     mode: RoundingMode,
 ) -> Int<N>
 where
-    Int<N>: ComputeInt,
+    Limbs<N>: ComputeLimbs,
 {
     // Both operands carry the same `10^SCALE`, so it divides out of the
     // root; `SCALE` is used only to label the out-of-range panic.

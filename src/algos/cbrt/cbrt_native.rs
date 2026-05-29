@@ -6,7 +6,7 @@
 //! # Why a bespoke arm rather than the int `icbrt` slice
 //!
 //! The generic slice `icbrt` ([`crate::int::algos::icbrt::icbrt_newton`])
-//! is width-agnostic over a build-max scratch buffer (`compute_int(4)`
+//! is width-agnostic over a build-max scratch buffer (`compute_limbs(4)`
 //! limbs — up to ~288 limbs for the widest enabled tier), which it zeroes
 //! several times per Newton iteration (`sq`, `q`, `r`, `y`, `rem3`). For
 //! the small radicands of the mid-scale wide cells that fixed-cost buffer
@@ -159,7 +159,7 @@ mod tests {
     /// correctly-rounded.
     fn check_cell<const N: usize, const W: usize>(scale: u32, raws: &[i128])
     where
-        Int<N>: crate::int::types::compute_int::ComputeInt,
+        crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
     {
         for &r in raws {
             let raw = Int::<N>::from_i128(r);

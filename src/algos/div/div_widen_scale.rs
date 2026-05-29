@@ -34,7 +34,7 @@ use crate::int::algos::div::div_knuth::div_knuth_into;
 use crate::int::algos::div::div_knuth_u128_limb::div_knuth_u128_limb_into;
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 use crate::int::policy::div_rem::{select_for_limbs, Algorithm};
-use crate::int::types::compute_int::ComputeInt;
+use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
 use crate::int::types::Int;
 use crate::support::rounding::{should_bump, RoundingMode};
 
@@ -102,7 +102,7 @@ fn apply_sign<const N: usize>(out: [u64; N], neg: bool, msg: &str) -> Int<N> {
 }
 
 /// Widen-then-divide decimal division kernel, generic over `N`. Requires
-/// `Int<N>: ComputeInt` for the `2N`-limb scaled-numerator scratch.
+/// `Limbs<N>: ComputeLimbs` for the `2N`-limb scaled-numerator scratch.
 ///
 /// `mult` is the pre-computed `10^SCALE` multiplier in `Int<N>` storage
 /// (the policy evaluates the per-type `multiplier()` const so it folds at
@@ -118,7 +118,7 @@ pub(crate) fn div_widen_scale<const N: usize>(
     mode: RoundingMode,
 ) -> Int<N>
 where
-    Int<N>: ComputeInt,
+    Limbs<N>: ComputeLimbs,
 {
     if b == Int::<N>::ZERO {
         panic!("attempt to divide by zero");
@@ -132,7 +132,7 @@ where
     let bl = sig_len(&b_mag);
 
     // Scaled numerator |a| * 10^SCALE (up to 2N u64 limbs) in scratch.
-    let mut num_buf = Int::<N>::double_buffered_u64();
+    let mut num_buf = Limbs::<N>::double_buffered_u64();
     let num = num_buf.as_mut();
     let nlen = (al + ml).min(num.len());
     for slot in num[..nlen].iter_mut() {
@@ -142,9 +142,9 @@ where
     let ntop = sig_len(&num[..nlen]);
 
     // q = num / b, r = num % b (magnitudes, via the int layer).
-    let mut quot_buf = Int::<N>::double_buffered_u64();
+    let mut quot_buf = Limbs::<N>::double_buffered_u64();
     let quot = quot_buf.as_mut();
-    let mut rem_buf = Int::<N>::double_buffered_u64();
+    let mut rem_buf = Limbs::<N>::double_buffered_u64();
     let rem = rem_buf.as_mut();
     let qlen = ntop.max(1);
     for slot in quot[..qlen].iter_mut() {
@@ -170,10 +170,10 @@ where
             // `u` = `2N`-value normalised dividend in u128 (`double_buffered`);
             // `v` = `N`-value divisor in u128 (`single`); the u64 buffers hold
             // the base-2⁶⁴ normalisation before packing.
-            let mut u64buf = Int::<N>::double_buffered_u64();
-            let mut v64buf = Int::<N>::single_buffered_u64();
-            let mut u128_u = Int::<N>::double_buffered_u128();
-            let mut u128_v = Int::<N>::single_u128();
+            let mut u64buf = Limbs::<N>::double_buffered_u64();
+            let mut v64buf = Limbs::<N>::single_buffered_u64();
+            let mut u128_u = Limbs::<N>::double_buffered_u128();
+            let mut u128_v = Limbs::<N>::single_u128();
             div_knuth_u128_limb_into(
                 num_s,
                 den_s,
@@ -192,8 +192,8 @@ where
             // The scaled numerator spans up to `2N` limbs, so its normalised
             // `u` needs `double_buffered_u64` (`≥ 2N + 2`); the divisor `b` is
             // `N`-wide, so `v` needs `single_buffered_u64` (`N + 2`).
-            let mut u_buf = Int::<N>::double_buffered_u64();
-            let mut v_buf = Int::<N>::single_buffered_u64();
+            let mut u_buf = Limbs::<N>::double_buffered_u64();
+            let mut v_buf = Limbs::<N>::single_buffered_u64();
             div_knuth_into(num_s, den_s, q, r, u_buf.as_mut(), v_buf.as_mut());
         }
     }

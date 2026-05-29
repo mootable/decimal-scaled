@@ -5,7 +5,7 @@
 
 use crate::int::algos::div::div_knuth::div_knuth_into;
 use crate::int::policy::div_rem::{select_for_limbs, Algorithm};
-use crate::int::types::compute_int::ComputeInt;
+use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
 use crate::int::types::Int;
 
 /// Decimal remainder via the `Int<N>` layer. Applies Rust's standard
@@ -43,7 +43,7 @@ use crate::int::types::Int;
 /// dominated the wide-tier remainder (98% of the cost at D57 … 12% at
 /// D1232). The bare `Rem` operator must stay build-max (blanket over all `N`,
 /// the `exact-scratch` wall); this concrete-`N` decimal kernel carries
-/// `Int<N>: ComputeInt`.
+/// `Limbs<N>: ComputeLimbs`.
 ///
 /// Only reached for `N >= 3` (the decimal `rem` policy routes `N <= 2` to
 /// `rem_native`), so the narrow hardware-`%` path is untouched; every such
@@ -54,7 +54,7 @@ use crate::int::types::Int;
 #[inline]
 pub(crate) fn rem_int_layer<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N>
 where
-    Int<N>: ComputeInt,
+    Limbs<N>: ComputeLimbs,
 {
     // Divide-by-zero panics in both modes. In debug, the `MIN % -ONE`
     // overflow must also panic, matching the primitive contract and the
@@ -143,14 +143,14 @@ fn divmod_mags<const N: usize>(
     neg_r: bool,
 ) -> Int<N>
 where
-    Int<N>: ComputeInt,
+    Limbs<N>: ComputeLimbs,
 {
     let mut quot = [0u64; N];
     let mut rem = [0u64; N];
     // Exact per-`N` Knuth scratch: `single_buffered_u64` is `[u64; N + 2]`, covering
     // the normalised dividend `u` (`num.len() + 2`) and divisor `v`.
-    let mut u = Int::<N>::single_buffered_u64();
-    let mut v = Int::<N>::single_buffered_u64();
+    let mut u = Limbs::<N>::single_buffered_u64();
+    let mut v = Limbs::<N>::single_buffered_u64();
     // Exhaustive over the verdict: the balanced shape only ever yields `Rem`
     // or `Knuth`, both correct via `div_knuth_into`; the wide-only engines are
     // unreachable here but listed so adding an engine forces a decision.
@@ -179,7 +179,7 @@ where
 #[inline]
 pub(crate) fn rem_int_layer_divmod<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N>
 where
-    Int<N>: ComputeInt,
+    Limbs<N>: ComputeLimbs,
 {
     if cfg!(debug_assertions) && a == Int::<N>::MIN && b == -Int::<N>::ONE {
         panic!("attempt to calculate the remainder with overflow");

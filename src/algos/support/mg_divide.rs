@@ -431,14 +431,15 @@ pub(crate) fn div_pow10_chain_mag_u128(
 
 /// Width-generic single-chunk MG divide `n / 10^scale`
 /// (`1 ≤ scale ≤ 38`) with `mode`-aware rounding. The `(N+1)/2`-limb u128
-/// magnitude buffer comes from the [`ComputeInt`] associated type (its
-/// size lives in the impl; we slice it to `W::U128_LIMBS` here), so the
-/// divide carries no const-generic limb count — the width-generic
-/// transcendental core calls the MG reciprocal without naming
-/// `{W::U128_LIMBS}`. Rounding is applied in the shared
+/// magnitude buffer comes from `W`'s scratch carrier
+/// ([`W::Scratch`](crate::int::types::traits::BigInt::Scratch) `= Limbs<N>`,
+/// which impls [`ComputeLimbs`]): its size lives in the impl (we slice it to
+/// `W::U128_LIMBS` here), so the divide carries no const-generic limb count —
+/// the width-generic transcendental core calls the MG reciprocal without
+/// naming `{W::U128_LIMBS}`. Rounding is applied in the shared
 /// [`div_pow10_mag_u128`] slice core (mode threaded straight through).
 ///
-/// [`ComputeInt`]: crate::int::types::compute_int::ComputeInt
+/// [`ComputeLimbs`]: crate::int::types::compute_limbs::ComputeLimbs
 #[inline]
 pub(crate) fn div_wide_pow10<W>(
     n: W,
@@ -446,9 +447,10 @@ pub(crate) fn div_wide_pow10<W>(
     mode: crate::support::rounding::RoundingMode,
 ) -> W
 where
-    W: crate::int::types::traits::BigInt + crate::int::types::compute_int::ComputeInt,
+    W: crate::int::types::traits::BigInt,
+    W::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
-    let mut buf = <W as crate::int::types::compute_int::ComputeInt>::single_u128();
+    let mut buf = <W::Scratch as crate::int::types::compute_limbs::ComputeLimbs>::single_u128();
     let mag = &mut buf.as_mut()[..W::U128_LIMBS];
     let neg = n.mag_into_u128(mag);
     div_pow10_mag_u128(mag, scale, neg, mode);
@@ -456,7 +458,7 @@ where
 }
 
 /// Width-generic extension of [`div_wide_pow10`] to scales past `38`,
-/// with `mode`-aware rounding; u128 buffer from [`ComputeInt`].
+/// with `mode`-aware rounding; u128 buffer from [`ComputeLimbs`].
 /// Divides `n / 10^SCALE` by ONE int Knuth divide against the whole
 /// `10^SCALE` magnitude (see [`div_pow10_chain_mag_u128`]).
 ///
@@ -471,7 +473,7 @@ where
 /// Int<16> inputs × every `w ∈ 39..=100` × every `RoundingMode` (the
 /// `round_div_chain_audit_*` tests in this file).
 ///
-/// [`ComputeInt`]: crate::int::types::compute_int::ComputeInt
+/// [`ComputeLimbs`]: crate::int::types::compute_limbs::ComputeLimbs
 #[inline]
 pub(crate) fn div_wide_pow10_chain<W>(
     n: W,
@@ -479,9 +481,10 @@ pub(crate) fn div_wide_pow10_chain<W>(
     mode: crate::support::rounding::RoundingMode,
 ) -> W
 where
-    W: crate::int::types::traits::BigInt + crate::int::types::compute_int::ComputeInt,
+    W: crate::int::types::traits::BigInt,
+    W::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
-    let mut buf = <W as crate::int::types::compute_int::ComputeInt>::single_u128();
+    let mut buf = <W::Scratch as crate::int::types::compute_limbs::ComputeLimbs>::single_u128();
     let mag = &mut buf.as_mut()[..W::U128_LIMBS];
     let neg = n.mag_into_u128(mag);
     div_pow10_chain_mag_u128(mag, scale, neg, mode);

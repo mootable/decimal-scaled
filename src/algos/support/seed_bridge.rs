@@ -31,7 +31,7 @@
 //! leaf.
 
 use crate::algo_x_support::seed::sqrt_seed;
-use crate::int::types::compute_int::ComputeInt;
+use crate::int::types::compute_limbs::ComputeLimbs;
 use crate::int::types::traits::BigInt;
 
 /// Unpacks the magnitude of `n` into the `u64` work slice `out_u64`
@@ -40,10 +40,14 @@ use crate::int::types::traits::BigInt;
 /// `&[u64]` interface — pure primitive limb splitting, no `BigInt`
 /// method beyond the existing magnitude bridge.
 #[inline]
-fn mag_to_u64<W: BigInt + ComputeInt>(n: W, out_u64: &mut [u64]) -> usize {
+fn mag_to_u64<W: BigInt>(n: W, out_u64: &mut [u64]) -> usize
+where
+    W::Scratch: ComputeLimbs,
+{
     let u128_len = (W::LIMBS + 1) >> 1;
-    // Exact per-`W` u128 magnitude buffer (`= W::U128_LIMBS`), no build-max.
-    let mut mag_buf = W::single_u128();
+    // Exact per-`W` u128 magnitude buffer (`= W::U128_LIMBS`), no build-max,
+    // sourced from `W`'s scratch carrier (`W::Scratch = Limbs<W::LIMBS>`).
+    let mut mag_buf = W::Scratch::single_u128();
     let mag = mag_buf.as_mut();
     n.mag_into_u128(&mut mag[..u128_len]);
     let mut i = 0;
@@ -61,10 +65,13 @@ fn mag_to_u64<W: BigInt + ComputeInt>(n: W, out_u64: &mut [u64]) -> usize {
 /// limbs into u128 limbs and hands them to the kept
 /// [`BigInt::from_mag_sign_u128`] bridge.
 #[inline]
-fn u64_to_w<W: BigInt + ComputeInt>(seed_u64: &[u64]) -> W {
+fn u64_to_w<W: BigInt>(seed_u64: &[u64]) -> W
+where
+    W::Scratch: ComputeLimbs,
+{
     let u64_len = seed_u64.len();
     let u128_len = (u64_len + 1) >> 1;
-    let mut mag_buf = W::single_u128();
+    let mut mag_buf = W::Scratch::single_u128();
     let mag = mag_buf.as_mut();
     let mut i = 0;
     while i < u128_len {
@@ -90,18 +97,22 @@ fn u64_to_w<W: BigInt + ComputeInt>(seed_u64: &[u64]) -> W {
 /// over-estimates. Always returns `≥ W::ONE`.
 #[inline]
 #[must_use]
-pub(crate) fn sqrt_seed_w<W: BigInt + ComputeInt>(n: W) -> W {
+pub(crate) fn sqrt_seed_w<W: BigInt>(n: W) -> W
+where
+    W::Scratch: ComputeLimbs,
+{
     let bits = n.bit_length();
     if bits <= 1 {
         // n == 1 → ⌊√1⌋ = 1; the leaf's preconditions assume bits ≥ 2.
         return W::ONE;
     }
     // Exact per-`W` u64 work slices (`single_buffered_u64` = `W::LIMBS + 2`, covering
-    // the magnitude's `≤ W::LIMBS + 1` live limbs), no build-max blanket.
-    let mut n_u64_buf = W::single_buffered_u64();
+    // the magnitude's `≤ W::LIMBS + 1` live limbs), no build-max blanket. Sourced
+    // from `W`'s scratch carrier (`W::Scratch = Limbs<W::LIMBS>`).
+    let mut n_u64_buf = W::Scratch::single_buffered_u64();
     let n_u64 = n_u64_buf.as_mut();
     let n_len = mag_to_u64(n, n_u64);
-    let mut seed_u64_buf = W::single_buffered_u64();
+    let mut seed_u64_buf = W::Scratch::single_buffered_u64();
     let seed_u64 = seed_u64_buf.as_mut();
     sqrt_seed(&n_u64[..n_len], bits, &mut seed_u64[..n_len]);
     u64_to_w::<W>(&seed_u64[..n_len])

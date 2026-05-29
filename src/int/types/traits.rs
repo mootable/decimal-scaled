@@ -14,6 +14,7 @@
 //! `is_negative`) stay on the inherent impls rather than this shared
 //! surface.
 
+use super::compute_limbs::Limbs;
 use super::Int;
 
 /// The unified big-integer trait — the single common surface for every
@@ -40,6 +41,25 @@ pub trait BigInt:
 {
     /// Raw little-endian limb array type (`[u64; LIMBS]`).
     type Limbs: Copy;
+
+    /// The compute-scratch carrier for this value integer — the zero-sized
+    /// [`Limbs<N>`](crate::int::types::compute_limbs::Limbs) marker that owns
+    /// the per-`N` [`ComputeLimbs`](crate::int::types::compute_limbs::ComputeLimbs)
+    /// buffers. This is the sanctioned bridge that severs the old
+    /// `ComputeInt: BigInt` supertrait cycle: scratch is no longer a
+    /// capability OF the value integer, the value integer merely *names* its
+    /// carrier here. A helper generic over a value integer `W: BigInt`
+    /// reaches scratch as `W::Scratch::single_u128()`.
+    ///
+    /// The associated type is deliberately **unbounded** (no
+    /// `: ComputeLimbs`). `BigInt` is a blanket `impl<const N>` for every
+    /// `Int<N>`, whereas in the `exact-scratch` build `ComputeLimbs` is
+    /// implemented only at the per-width list — so a `type Scratch: ComputeLimbs`
+    /// bound would be unprovable for an arbitrary blanket `N`. The
+    /// `ComputeLimbs` bound is therefore discharged at the generic helper USE
+    /// sites (`where W::Scratch: ComputeLimbs`), where `W` is always a
+    /// concrete width that has it.
+    type Scratch;
 
     /// Number of 64-bit limbs.
     const LIMBS: usize;
@@ -179,6 +199,7 @@ pub trait BigInt:
 
 impl<const N: usize> BigInt for Int<N> {
     type Limbs = [u64; N];
+    type Scratch = Limbs<N>;
 
     const LIMBS: usize = N;
     const BITS: u32 = (N * 64) as u32;
@@ -300,10 +321,17 @@ impl<const N: usize> BigInt for Int<N> {
         let negative = self.is_negative();
         // Reuse the direct u64→u128 pack the concrete `mag_into_u128`
         // override performs, then rebuild `T` from the magnitude/sign.
-        // `resize_to` is a blanket `BigInt` method (every `N`), so it can't
-        // carry a `ComputeInt` bound (the cycle) — it uses the gated build-max
-        // blanket `MAX_U128_LIMB`, not a frozen literal.
-        let mut u128_mag = [0u128; crate::int::types::compute_int::MAX_U128_LIMB];
+        // `resize_to` is a blanket `BigInt` method (every `N`) — it is invoked
+        // both on concrete widths AND on a generic receiver `Int<N>` (the
+        // `raw.resize_to::<Int<N>>()` policy bridges). A `where Self::Scratch:
+        // ComputeLimbs` bound (which the `BigInt::Scratch` bridge would now
+        // permit) is therefore unprovable here: a generic-`N` caller cannot
+        // discharge `Limbs<N>: ComputeLimbs` in the per-width `exact-scratch`
+        // build, and the bound would cascade unboundedly across every policy
+        // dispatcher. So this width-erased blanket method keeps the gated
+        // build-max blanket `MAX_U128_LIMB` (NOT a frozen literal) — the same
+        // category as the slice-divide engines and `int_fmt`.
+        let mut u128_mag = [0u128; crate::int::types::compute_limbs::MAX_U128_LIMB];
         let u128_len = N.div_ceil(2);
         self.mag_into_u128(&mut u128_mag[..u128_len]);
         T::from_mag_sign_u128(&u128_mag[..u128_len], negative)

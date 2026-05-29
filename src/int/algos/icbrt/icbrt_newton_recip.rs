@@ -83,7 +83,7 @@ use crate::algo_x_support::seed::cbrt_seed;
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 use crate::int::algos::support::limbs::{add_assign, bit_len, cmp, is_zero, shr, sub_assign};
 use crate::int::policy::div_rem::dispatch as div_rem_dispatch;
-use crate::int::types::compute_int::MAX_QUADRUPLE_LIMBS;
+use crate::int::types::compute_limbs::MAX_QUADRUPLE_LIMBS;
 
 /// Scratch capacity for the reciprocal-Newton cube root. The widest
 /// intermediate is `prod = Y·bracket ≈ 2^{4F−bits/3}` (≈`4F` bits); with

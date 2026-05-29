@@ -44,7 +44,7 @@
 
 use crate::int::algos::hypot::hypot_pythagoras::hypot_pythagoras;
 use crate::int::algos::support::limbs::{fit_k, fit_one};
-use crate::int::types::compute_int::ComputeInt;
+use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
@@ -350,7 +350,7 @@ fn cmp_u256(a: [u64; 4], b: [u64; 4]) -> i32 {
 #[allow(dead_code)]
 pub(crate) fn hypot_u128_fast<const N: usize>(a: Int<N>, b: Int<N>, mode: RoundingMode) -> Option<Int<N>>
 where
-    Int<N>: ComputeInt,
+    Limbs<N>: ComputeLimbs,
 {
     let ma = a.unsigned_abs();
     let mb = b.unsigned_abs();
@@ -747,7 +747,7 @@ mod tests {
     /// arm, and the wide fallback.
     fn diff_at<const N: usize>()
     where
-        Int<N>: crate::int::types::compute_int::ComputeInt,
+        Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
     {
         let mut s = 0xDEAD_BEEF_CAFE_F00D_u64 ^ (N as u64);
         for _ in 0..400 {

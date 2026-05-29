@@ -11,7 +11,7 @@
 //! to the low `N` u64 limbs of `x·x` at either width.
 //!
 //! Like the multiply pilot [`crate::int::algos::mul::mul_schoolbook::mul_low_limb`],
-//! the [`crate::int::types::compute_int::LimbSize`] axis (owned by
+//! the [`crate::int::types::compute_limbs::LimbSize`] axis (owned by
 //! [`crate::int::policy::sqr_low`]) picks `L`; this kernel holds neither the
 //! choice nor a per-limb-type copy. The u128 arm requires **even `N`**
 //! (`L::packed_len` halves it); the policy gates that via `LimbSize::for_packing`.
@@ -44,7 +44,7 @@
 //!
 //! [`mul_low_limb`]: crate::int::algos::mul::mul_schoolbook::mul_low_limb
 
-use crate::int::types::compute_int::Limb;
+use crate::int::types::compute_limbs::Limb;
 
 /// `out = (x²) mod 2^(64·N)` — truncated-low symmetric square in limb type `L`.
 ///
