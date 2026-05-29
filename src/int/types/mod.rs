@@ -2546,10 +2546,12 @@ where
     crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        // Stack scratch sized to the widest tier (256 limbs = Uint16384),
-        // matching the `Int<N>` Display impl below.
-        let mut buf = [0u8; 256 * 64];
-        let s = fmt_into::<N>(&self.limbs, 10, true, &mut buf);
+        // Exact per-`N` decimal output buffer (`20N + 2` bytes), drawn from
+        // the `Limbs<N>` scratch carrier; the formatter writes the base-10
+        // digits from its tail.
+        let mut buf =
+            <crate::int::types::compute_limbs::Limbs<N> as crate::int::types::compute_limbs::ComputeLimbs>::digit_formatting_limbs_u8();
+        let s = fmt_into::<N>(&self.limbs, 10, true, buf.as_mut());
         f.pad_integral(true, "", s)
     }
 }
@@ -2560,15 +2562,13 @@ where
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mag = *self.unsigned_abs().as_limbs();
-        // Decimal needs <= BITS bytes (`BITS * log10(2) < BITS`); the
-        // formatter writes from the buffer tail. A stack scratch sized
-        // to the crate's widest tier (256 limbs = Int16384) keeps the
-        // const-generic body `core`-clean — no `[u8; N*64]` const
-        // expression and no `alloc` dependency, matching the macro's
-        // per-width `[u8; $L * 64]` buffer.
-        const MAX_DIGITS: usize = 256 * 64;
-        let mut buf = [0u8; MAX_DIGITS];
-        let s = fmt_into::<N>(&mag, 10, true, &mut buf);
+        // Exact per-`N` decimal output buffer (`20N + 2` bytes): an `Int<N>`
+        // is `64N` bits, so its base-10 form is `⌈64·N·log10(2)⌉ ≈ 19.27·N`
+        // digits, comfortably within `20N + 2`. Drawn from the `Limbs<N>`
+        // scratch carrier; the formatter writes the digits from its tail.
+        let mut buf =
+            <crate::int::types::compute_limbs::Limbs<N> as crate::int::types::compute_limbs::ComputeLimbs>::digit_formatting_limbs_u8();
+        let s = fmt_into::<N>(&mag, 10, true, buf.as_mut());
         f.pad_integral(!self.is_negative() || self.is_zero(), "", s)
     }
 }
@@ -2584,17 +2584,20 @@ impl<const N: usize> core::str::FromStr for Int<N> {
 // ── Radix formatting (raw two's-complement bit pattern) ─────────────
 //
 // `LowerHex` / `UpperHex` / `Octal` / `Binary` print the raw limb bit
-// pattern (not a signed magnitude), matching the macro `$S` impls.
-// Stack scratch sized to the widest tier (256 limbs = Int16384), as in
-// the `Display` impl above.
+// pattern (not a signed magnitude), matching the macro `$S` impls. Each
+// draws its output buffer exact-per-`N` from the `Limbs<N>` scratch carrier:
+// hex (`16N` digits) fits the `digit_formatting_limbs_u8` decimal buffer
+// (`20N + 2`); octal (`⌈64N/3⌉`) and binary (`64N`, one byte per bit) take
+// the wider `bit_formatting_limbs_u8` buffer (`64N + 2`).
 
 impl<const N: usize> core::fmt::LowerHex for Int<N>
 where
     crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let mut buf = [0u8; 256 * 64];
-        let s = fmt_into::<N>(&self.limbs, 16, true, &mut buf);
+        let mut buf =
+            <crate::int::types::compute_limbs::Limbs<N> as crate::int::types::compute_limbs::ComputeLimbs>::digit_formatting_limbs_u8();
+        let s = fmt_into::<N>(&self.limbs, 16, true, buf.as_mut());
         f.pad_integral(true, "0x", s)
     }
 }
@@ -2604,8 +2607,9 @@ where
     crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let mut buf = [0u8; 256 * 64];
-        let s = fmt_into::<N>(&self.limbs, 16, false, &mut buf);
+        let mut buf =
+            <crate::int::types::compute_limbs::Limbs<N> as crate::int::types::compute_limbs::ComputeLimbs>::digit_formatting_limbs_u8();
+        let s = fmt_into::<N>(&self.limbs, 16, false, buf.as_mut());
         f.pad_integral(true, "0x", s)
     }
 }
@@ -2615,8 +2619,9 @@ where
     crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let mut buf = [0u8; 256 * 64];
-        let s = fmt_into::<N>(&self.limbs, 8, true, &mut buf);
+        let mut buf =
+            <crate::int::types::compute_limbs::Limbs<N> as crate::int::types::compute_limbs::ComputeLimbs>::bit_formatting_limbs_u8();
+        let s = fmt_into::<N>(&self.limbs, 8, true, buf.as_mut());
         f.pad_integral(true, "0o", s)
     }
 }
@@ -2626,8 +2631,9 @@ where
     crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let mut buf = [0u8; 256 * 64];
-        let s = fmt_into::<N>(&self.limbs, 2, true, &mut buf);
+        let mut buf =
+            <crate::int::types::compute_limbs::Limbs<N> as crate::int::types::compute_limbs::ComputeLimbs>::bit_formatting_limbs_u8();
+        let s = fmt_into::<N>(&self.limbs, 2, true, buf.as_mut());
         f.pad_integral(true, "0b", s)
     }
 }
