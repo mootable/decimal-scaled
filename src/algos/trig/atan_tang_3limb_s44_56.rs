@@ -75,13 +75,13 @@ const M: u32 = 512;
 /// divides and is not a `const fn`, so the table cannot be baked as
 /// `const` rodata in-crate.)
 #[inline]
-fn table_entry(w: u32, idx: usize) -> core::W {
+fn table_entry<const SCALE: u32>(w: u32, idx: usize) -> core::W {
     if idx == 0 {
         return core::zero();
     }
     // c_j = idx / M at working scale = (idx · 10^w) / M.
     let cj_w = (core::one(w) * core::lit(idx as u128)) / core::lit(M as u128);
-    core::atan_fixed(cj_w, w)
+    core::atan_fixed::<SCALE>(cj_w, w)
 }
 
 /// `atan(x)` strict kernel for `D57<SCALE>` with `SCALE ∈ 44..=56`.
@@ -186,11 +186,11 @@ pub(crate) fn atan_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> 
     };
 
     // atan(|x|) = table[j_idx] + atan(y).
-    let atan_abs_x = table_entry(w, j_idx as usize) + atan_y;
+    let atan_abs_x = table_entry::<SCALE>(w, j_idx as usize) + atan_y;
 
     // Stage 4: undo the reciprocal fold then the sign.
     let mut result = if add_half_pi {
-        core::half_pi(w) - atan_abs_x
+        core::half_pi::<SCALE>(w) - atan_abs_x
     } else {
         atan_abs_x
     };

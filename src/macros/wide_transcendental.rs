@@ -1655,7 +1655,7 @@ macro_rules! decl_wide_transcendental {
             ///
             /// Range-reduces `v = 2^k · m` with `m ∈ [1, 2)`, evaluates
             /// `ln(m) = 2·artanh((m−1)/(m+1))`, returns `k·ln 2 + ln(m)`.
-            pub(crate) fn ln_fixed(v_w: W, w: u32) -> W {
+            pub(crate) fn ln_fixed<const SCALE: u32>(v_w: W, w: u32) -> W {
                 let one_w = one(w);
                 let two_w = one_w + one_w;
                 let pow10_w = one_w;
@@ -1720,7 +1720,7 @@ macro_rules! decl_wide_transcendental {
                 // `2·sum` formula; with sqrt_l>0 it folds in the
                 // `2^l` factor from the unhalved-argument identity.
                 let ln_m = sum << (sqrt_l + 1);
-                scale_by_k(ln2(w), k as i128) + ln_m
+                scale_by_k(ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), k as i128) + ln_m
             }
 
             /// `log1p(t) = ln(1 + t)` at working scale `w`, evaluated
@@ -2379,9 +2379,12 @@ macro_rules! decl_wide_transcendental {
                 const_rounded(PI_REF_DIGITS, PI_REF_SCALE, PI_REF_TOP_CMP, w, mode)
             }
 
-            /// `π/2` at working scale `w`.
-            pub(crate) fn half_pi(w: u32) -> W {
-                pi(w) >> 1
+            /// `π/2` at working scale `w`. Routes `π` through the
+            /// const-folded [`pi_cf`] so the common (`w == SCALE + GUARD`)
+            /// path reads the baked constant rather than re-running the
+            /// runtime divide.
+            pub(crate) fn half_pi<const SCALE: u32>(w: u32) -> W {
+                pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE) >> 1
             }
 
             /// Taylor series for `sin` on a reduced `r ∈ [0, π/4]`.
@@ -2451,8 +2454,8 @@ macro_rules! decl_wide_transcendental {
             /// argument and roughly halves the Taylor term count, and
             /// cos converges faster than sin at the same argument
             /// because of the constant-1 leading term.
-            pub(crate) fn sin_fixed(v_w: W, w: u32) -> W {
-                let pi_w = pi(w);
+            pub(crate) fn sin_fixed<const SCALE: u32>(v_w: W, w: u32) -> W {
+                let pi_w = pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE);
                 let tau = pi_w + pi_w;
                 let hp = pi_w >> 1;
                 let qp = hp >> 1; // π/4
@@ -2489,8 +2492,8 @@ macro_rules! decl_wide_transcendental {
             /// One Taylor series + one wide sqrt + one wide mul,
             /// vs the historic two independent Taylor evaluations.
             /// Halves the wall-clock when both are needed.
-            pub(crate) fn sin_cos_fixed(v_w: W, w: u32) -> (W, W) {
-                let pi_w = pi(w);
+            pub(crate) fn sin_cos_fixed<const SCALE: u32>(v_w: W, w: u32) -> (W, W) {
+                let pi_w = pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE);
                 let tau = pi_w + pi_w;
                 let hp = pi_w >> 1;
                 let qp = hp >> 1;
@@ -2523,13 +2526,13 @@ macro_rules! decl_wide_transcendental {
             /// `sin_cos_fixed` remains the right choice when both
             /// outputs are wanted (one Taylor + one sqrt vs two
             /// Taylors).
-            pub(crate) fn cos_fixed(v_w: W, w: u32) -> W {
-                sin_fixed(half_pi(w) - v_w, w)
+            pub(crate) fn cos_fixed<const SCALE: u32>(v_w: W, w: u32) -> W {
+                sin_fixed::<SCALE>(half_pi::<SCALE>(w) - v_w, w)
             }
 
             /// Arctangent of a working-scale value, result in
             /// `(−π/2, π/2)`.
-            pub(crate) fn atan_fixed(v_w: W, w: u32) -> W {
+            pub(crate) fn atan_fixed<const SCALE: u32>(v_w: W, w: u32) -> W {
                 let one_w = one(w);
                 let sign = v_w < zero();
                 let mut x = if sign { -v_w } else { v_w };
@@ -2568,7 +2571,7 @@ macro_rules! decl_wide_transcendental {
                 }
                 let mut result = atan_taylor(x, w) << halvings;
                 if add_half_pi {
-                    result = half_pi(w) - result;
+                    result = half_pi::<SCALE>(w) - result;
                 }
                 if sign { -result } else { result }
             }
@@ -2600,23 +2603,23 @@ macro_rules! decl_wide_transcendental {
                 /// `ln(1 + idx/M)` at working scale `w` (`idx ∈ [0, M]`).
                 /// idx = 0 → ln(1) = 0.
                 #[inline]
-                pub(super) fn ln_table_entry(w: u32, idx: usize) -> W {
+                pub(super) fn ln_table_entry<const SCALE: u32>(w: u32, idx: usize) -> W {
                     if idx == 0 {
                         return zero();
                     }
                     let one_w = one(w);
                     let scaled = (one_w * lit(idx as u128)) / lit(LN_TANG_M as u128);
-                    ln_fixed(one_w + scaled, w)
+                    ln_fixed::<SCALE>(one_w + scaled, w)
                 }
 
                 /// `exp(idx · ln2 / m)` at working scale `w`
                 /// (`idx ∈ [0, m)`). idx = 0 → exp(0) = 1.
                 #[inline]
-                pub(super) fn exp_table_entry(w: u32, idx: usize, m: u32) -> W {
+                pub(super) fn exp_table_entry<const SCALE: u32>(w: u32, idx: usize, m: u32) -> W {
                     if idx == 0 {
                         return one(w);
                     }
-                    let cj_w = (ln2(w) * lit(idx as u128)) / lit(m as u128);
+                    let cj_w = (ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE) * lit(idx as u128)) / lit(m as u128);
                     exp_fixed(cj_w, w)
                 }
 
@@ -2624,12 +2627,12 @@ macro_rules! decl_wide_transcendental {
                 /// working scale `w` (`idx ∈ [0, m]`). idx = 0 →
                 /// (sin 0, cos 0) = (0, 1).
                 #[inline]
-                pub(super) fn sincos_table_entry(w: u32, idx: usize, m: u32) -> (W, W) {
+                pub(super) fn sincos_table_entry<const SCALE: u32>(w: u32, idx: usize, m: u32) -> (W, W) {
                     if idx == 0 {
                         return (zero(), one(w));
                     }
-                    let cj_w = (pi(w) * lit(idx as u128)) / lit((4 * m) as u128);
-                    sin_cos_fixed(cj_w, w)
+                    let cj_w = (pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE) * lit(idx as u128)) / lit((4 * m) as u128);
+                    sin_cos_fixed::<SCALE>(cj_w, w)
                 }
             }
 
@@ -2702,24 +2705,24 @@ macro_rules! decl_wide_transcendental {
                     exp_fixed(v_w, w)
                 }
                 #[inline]
-                fn ln_fixed(v_w: W, w: u32) -> W {
-                    ln_fixed(v_w, w)
+                fn ln_fixed<const SCALE: u32>(v_w: W, w: u32) -> W {
+                    ln_fixed::<SCALE>(v_w, w)
                 }
                 #[inline]
-                fn sin_fixed(v_w: W, w: u32) -> W {
-                    sin_fixed(v_w, w)
+                fn sin_fixed<const SCALE: u32>(v_w: W, w: u32) -> W {
+                    sin_fixed::<SCALE>(v_w, w)
                 }
                 #[inline]
-                fn cos_fixed(v_w: W, w: u32) -> W {
-                    cos_fixed(v_w, w)
+                fn cos_fixed<const SCALE: u32>(v_w: W, w: u32) -> W {
+                    cos_fixed::<SCALE>(v_w, w)
                 }
                 #[inline]
-                fn sin_cos_fixed(v_w: W, w: u32) -> (W, W) {
-                    sin_cos_fixed(v_w, w)
+                fn sin_cos_fixed<const SCALE: u32>(v_w: W, w: u32) -> (W, W) {
+                    sin_cos_fixed::<SCALE>(v_w, w)
                 }
                 #[inline]
-                fn atan_fixed(v_w: W, w: u32) -> W {
-                    atan_fixed(v_w, w)
+                fn atan_fixed<const SCALE: u32>(v_w: W, w: u32) -> W {
+                    atan_fixed::<SCALE>(v_w, w)
                 }
                 #[inline]
                 fn div(a: W, b: W, w: u32) -> W {
@@ -2775,8 +2778,8 @@ macro_rules! decl_wide_transcendental {
                     lit(n)
                 }
                 #[inline]
-                fn ln2(w: u32) -> W {
-                    ln2(w)
+                fn ln2<const SCALE: u32>(w: u32) -> W {
+                    ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
                 }
                 #[inline]
                 fn div_cached(a: W, b: W, pow10_w: W) -> W {
@@ -2795,24 +2798,24 @@ macro_rules! decl_wide_transcendental {
                     <W as $crate::int::types::traits::BigInt>::BITS
                 }
                 #[inline]
-                fn ln_table_entry(w: u32, idx: usize) -> W {
-                    tang_table::ln_table_entry(w, idx)
+                fn ln_table_entry<const SCALE: u32>(w: u32, idx: usize) -> W {
+                    tang_table::ln_table_entry::<SCALE>(w, idx)
                 }
                 #[inline]
-                fn exp_table_entry(w: u32, idx: usize, m: u32) -> W {
-                    tang_table::exp_table_entry(w, idx, m)
+                fn exp_table_entry<const SCALE: u32>(w: u32, idx: usize, m: u32) -> W {
+                    tang_table::exp_table_entry::<SCALE>(w, idx, m)
                 }
                 #[inline]
-                fn pi(w: u32) -> W {
-                    pi(w)
+                fn pi<const SCALE: u32>(w: u32) -> W {
+                    pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
                 }
                 #[inline]
-                fn half_pi(w: u32) -> W {
-                    half_pi(w)
+                fn half_pi<const SCALE: u32>(w: u32) -> W {
+                    half_pi::<SCALE>(w)
                 }
                 #[inline]
-                fn sincos_table_entry(w: u32, idx: usize, m: u32) -> (W, W) {
-                    tang_table::sincos_table_entry(w, idx, m)
+                fn sincos_table_entry<const SCALE: u32>(w: u32, idx: usize, m: u32) -> (W, W) {
+                    tang_table::sincos_table_entry::<SCALE>(w, idx, m)
                 }
             }
 
@@ -2875,15 +2878,15 @@ macro_rules! decl_wide_transcendental {
                     // sign bit-identical to Series's `ln_fixed`. Mirrors the
                     // `true, true` flags every `policy::ln::tang_routed`
                     // arm now uses.
-                    $crate::algos::ln::ln_tang::tang_ln_fixed::<Core, $ln_tang_cap, false>(v_w, w)
+                    $crate::algos::ln::ln_tang::tang_ln_fixed::<Core, $ln_tang_cap, false, SCALE>(v_w, w)
                 } else {
-                    ln_fixed(v_w, w)
+                    ln_fixed::<SCALE>(v_w, w)
                 }
             }
             #[cfg(not(feature = "_wide-support"))]
             #[inline]
             pub(crate) fn ln_fixed_routed<const SCALE: u32>(v_w: W, w: u32) -> W {
-                ln_fixed(v_w, w)
+                ln_fixed::<SCALE>(v_w, w)
             }
 
             /// Tang/Series-routed working-scale `exp(v_w) -> v_w` for
@@ -2907,7 +2910,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             pub(crate) fn exp_fixed_routed<const SCALE: u32>(v_w: W, w: u32) -> W {
                 if const { $crate::policy::exp::is_tang::<$n_limbs, SCALE>() } {
-                    $crate::algos::exp::exp_tang::tang_exp_fixed::<Core, $exp_tang_m, true>(v_w, w)
+                    $crate::algos::exp::exp_tang::tang_exp_fixed::<Core, $exp_tang_m, true, SCALE>(v_w, w)
                 } else {
                     exp_fixed(v_w, w)
                 }
@@ -3460,7 +3463,7 @@ macro_rules! decl_wide_transcendental {
             #[must_use]
             pub fn sin_cos_strict(self) -> (Self, Self) {
                 let w = SCALE + $core::GUARD;
-                let (s, c) = $core::sin_cos_fixed($core::to_work(self.to_bits()), w);
+                let (s, c) = $core::sin_cos_fixed::<SCALE>($core::to_work(self.to_bits()), w);
                 (
                     Self::from_bits($core::round_to_storage(s, w, SCALE)),
                     Self::from_bits($core::round_to_storage(c, w, SCALE)),
@@ -3618,10 +3621,10 @@ macro_rules! decl_wide_transcendental {
                 let inner = if ax >= one_w {
                     let inv = $core::div(one_w, ax, w);
                     let root = $core::sqrt_fixed(one_w + $core::mul(inv, inv, w), w);
-                    $core::ln_fixed(ax, w) + $core::ln_fixed(one_w + root, w)
+                    $core::ln_fixed::<SCALE>(ax, w) + $core::ln_fixed::<SCALE>(one_w + root, w)
                 } else {
                     let root = $core::sqrt_fixed($core::mul(ax, ax, w) + one_w, w);
-                    $core::ln_fixed(ax + root, w)
+                    $core::ln_fixed::<SCALE>(ax + root, w)
                 };
                 let signed = if raw < $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     -inner
@@ -3970,18 +3973,18 @@ macro_rules! decl_wide_transcendental {
                 }
                 let half_w = one_w >> 1;
                 let r = if abs_v == one_w {
-                    let hp = $core::half_pi(w);
+                    let hp = $core::half_pi::<SCALE>(w);
                     if v < $core::zero() { -hp } else { hp }
                 } else if abs_v <= half_w {
                     let denom = $core::sqrt_fixed(one_w - $core::mul(v, v, w), w);
-                    $core::atan_fixed($core::div(v, denom, w), w)
+                    $core::atan_fixed::<SCALE>($core::div(v, denom, w), w)
                 } else {
                     let inner = (one_w - abs_v) >> 1;
                     let inner_sqrt = $core::sqrt_fixed(inner, w);
                     let inner_denom =
                         $core::sqrt_fixed(one_w - $core::mul(inner_sqrt, inner_sqrt, w), w);
-                    let inner_asin = $core::atan_fixed($core::div(inner_sqrt, inner_denom, w), w);
-                    let result_abs = $core::half_pi(w) - inner_asin - inner_asin;
+                    let inner_asin = $core::atan_fixed::<SCALE>($core::div(inner_sqrt, inner_denom, w), w);
+                    let result_abs = $core::half_pi::<SCALE>(w) - inner_asin - inner_asin;
                     if v < $core::zero() {
                         -result_abs
                     } else {
@@ -4007,25 +4010,25 @@ macro_rules! decl_wide_transcendental {
                 }
                 let half_w = one_w >> 1;
                 let asin_w = if abs_v == one_w {
-                    let hp = $core::half_pi(w);
+                    let hp = $core::half_pi::<SCALE>(w);
                     if v < $core::zero() { -hp } else { hp }
                 } else if abs_v <= half_w {
                     let denom = $core::sqrt_fixed(one_w - $core::mul(v, v, w), w);
-                    $core::atan_fixed($core::div(v, denom, w), w)
+                    $core::atan_fixed::<SCALE>($core::div(v, denom, w), w)
                 } else {
                     let inner = (one_w - abs_v) >> 1;
                     let inner_sqrt = $core::sqrt_fixed(inner, w);
                     let inner_denom =
                         $core::sqrt_fixed(one_w - $core::mul(inner_sqrt, inner_sqrt, w), w);
-                    let inner_asin = $core::atan_fixed($core::div(inner_sqrt, inner_denom, w), w);
-                    let result_abs = $core::half_pi(w) - inner_asin - inner_asin;
+                    let inner_asin = $core::atan_fixed::<SCALE>($core::div(inner_sqrt, inner_denom, w), w);
+                    let result_abs = $core::half_pi::<SCALE>(w) - inner_asin - inner_asin;
                     if v < $core::zero() {
                         -result_abs
                     } else {
                         result_abs
                     }
                 };
-                let r = $core::half_pi(w) - asin_w;
+                let r = $core::half_pi::<SCALE>(w) - asin_w;
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 
@@ -4044,9 +4047,9 @@ macro_rules! decl_wide_transcendental {
                 let xraw = other.to_bits();
                 let r = if xraw == z {
                     if yraw > z {
-                        $core::half_pi(w)
+                        $core::half_pi::<SCALE>(w)
                     } else if yraw < z {
-                        -$core::half_pi(w)
+                        -$core::half_pi::<SCALE>(w)
                     } else {
                         $core::zero()
                     }
@@ -4064,10 +4067,10 @@ macro_rules! decl_wide_transcendental {
                     let abs_y = if y < zero_w { -y } else { y };
                     let abs_x = if x < zero_w { -x } else { x };
                     let base = if abs_x >= abs_y {
-                        $core::atan_fixed($core::div(y, x, w), w)
+                        $core::atan_fixed::<SCALE>($core::div(y, x, w), w)
                     } else {
-                        let inv = $core::atan_fixed($core::div(x, y, w), w);
-                        let hp = $core::half_pi(w);
+                        let inv = $core::atan_fixed::<SCALE>($core::div(x, y, w), w);
+                        let hp = $core::half_pi::<SCALE>(w);
                         // sign(y/x): same iff y and x agree in sign.
                         let same_sign = (y < zero_w) == (x < zero_w);
                         if same_sign { hp - inv } else { -hp - inv }
@@ -4272,10 +4275,10 @@ macro_rules! decl_wide_transcendental {
                         let inner = if ax >= one_w {
                             let inv = $core::div(one_w, ax, w);
                             let root = $core::sqrt_fixed(one_w + $core::mul(inv, inv, w), w);
-                            $core::ln_fixed(ax, w) + $core::ln_fixed(one_w + root, w)
+                            $core::ln_fixed::<SCALE>(ax, w) + $core::ln_fixed::<SCALE>(one_w + root, w)
                         } else {
                             let root = $core::sqrt_fixed($core::mul(ax, ax, w) + one_w, w);
-                            $core::ln_fixed(ax + root, w)
+                            $core::ln_fixed::<SCALE>(ax + root, w)
                         };
                         if neg { -inner } else { inner }
                     },
@@ -4403,7 +4406,7 @@ macro_rules! decl_wide_transcendental {
                 mode: $crate::support::rounding::RoundingMode,
             ) -> (Self, Self) {
                 let w = SCALE + $core::GUARD;
-                let (s, c) = $core::sin_cos_fixed($core::to_work(self.to_bits()), w);
+                let (s, c) = $core::sin_cos_fixed::<SCALE>($core::to_work(self.to_bits()), w);
                 (
                     Self::from_bits($core::round_to_storage_with(s, w, SCALE, mode)),
                     Self::from_bits($core::round_to_storage_with(c, w, SCALE, mode)),
@@ -4650,7 +4653,7 @@ macro_rules! decl_wide_transcendental {
                     return self.sin_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let r = $core::sin_fixed($core::to_work_w(self.to_bits(), working_digits), w);
+                let r = $core::sin_fixed::<SCALE>($core::to_work_w(self.to_bits(), working_digits), w);
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 
@@ -4676,8 +4679,8 @@ macro_rules! decl_wide_transcendental {
                     return self.cos_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let arg = $core::to_work_w(self.to_bits(), working_digits) + $core::half_pi(w);
-                let r = $core::sin_fixed(arg, w);
+                let arg = $core::to_work_w(self.to_bits(), working_digits) + $core::half_pi::<SCALE>(w);
+                let r = $core::sin_fixed::<SCALE>(arg, w);
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 
@@ -4704,7 +4707,7 @@ macro_rules! decl_wide_transcendental {
                 }
                 let w = SCALE + working_digits;
                 let (s, c) =
-                    $core::sin_cos_fixed($core::to_work_w(self.to_bits(), working_digits), w);
+                    $core::sin_cos_fixed::<SCALE>($core::to_work_w(self.to_bits(), working_digits), w);
                 (
                     Self::from_bits($core::round_to_storage_with(s, w, SCALE, mode)),
                     Self::from_bits($core::round_to_storage_with(c, w, SCALE, mode)),
@@ -4734,7 +4737,7 @@ macro_rules! decl_wide_transcendental {
                 }
                 let w = SCALE + working_digits;
                 let (sin_w, cos_w) =
-                    $core::sin_cos_fixed($core::to_work_w(self.to_bits(), working_digits), w);
+                    $core::sin_cos_fixed::<SCALE>($core::to_work_w(self.to_bits(), working_digits), w);
                 if cos_w == $core::zero() {
                     panic!(concat!(
                         stringify!($Type),
@@ -4767,7 +4770,7 @@ macro_rules! decl_wide_transcendental {
                     return self.atan_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let r = $core::atan_fixed($core::to_work_w(self.to_bits(), working_digits), w);
+                let r = $core::atan_fixed::<SCALE>($core::to_work_w(self.to_bits(), working_digits), w);
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 
@@ -4804,18 +4807,18 @@ macro_rules! decl_wide_transcendental {
                 }
                 let half_w = one_w >> 1;
                 let r = if abs_v == one_w {
-                    let hp = $core::half_pi(w);
+                    let hp = $core::half_pi::<SCALE>(w);
                     if v < $core::zero() { -hp } else { hp }
                 } else if abs_v <= half_w {
                     let denom = $core::sqrt_fixed(one_w - $core::mul(v, v, w), w);
-                    $core::atan_fixed($core::div(v, denom, w), w)
+                    $core::atan_fixed::<SCALE>($core::div(v, denom, w), w)
                 } else {
                     let inner = (one_w - abs_v) >> 1;
                     let inner_sqrt = $core::sqrt_fixed(inner, w);
                     let inner_denom =
                         $core::sqrt_fixed(one_w - $core::mul(inner_sqrt, inner_sqrt, w), w);
-                    let inner_asin = $core::atan_fixed($core::div(inner_sqrt, inner_denom, w), w);
-                    let result_abs = $core::half_pi(w) - inner_asin - inner_asin;
+                    let inner_asin = $core::atan_fixed::<SCALE>($core::div(inner_sqrt, inner_denom, w), w);
+                    let result_abs = $core::half_pi::<SCALE>(w) - inner_asin - inner_asin;
                     if v < $core::zero() {
                         -result_abs
                     } else {
@@ -4858,25 +4861,25 @@ macro_rules! decl_wide_transcendental {
                 }
                 let half_w = one_w >> 1;
                 let asin_w = if abs_v == one_w {
-                    let hp = $core::half_pi(w);
+                    let hp = $core::half_pi::<SCALE>(w);
                     if v < $core::zero() { -hp } else { hp }
                 } else if abs_v <= half_w {
                     let denom = $core::sqrt_fixed(one_w - $core::mul(v, v, w), w);
-                    $core::atan_fixed($core::div(v, denom, w), w)
+                    $core::atan_fixed::<SCALE>($core::div(v, denom, w), w)
                 } else {
                     let inner = (one_w - abs_v) >> 1;
                     let inner_sqrt = $core::sqrt_fixed(inner, w);
                     let inner_denom =
                         $core::sqrt_fixed(one_w - $core::mul(inner_sqrt, inner_sqrt, w), w);
-                    let inner_asin = $core::atan_fixed($core::div(inner_sqrt, inner_denom, w), w);
-                    let result_abs = $core::half_pi(w) - inner_asin - inner_asin;
+                    let inner_asin = $core::atan_fixed::<SCALE>($core::div(inner_sqrt, inner_denom, w), w);
+                    let result_abs = $core::half_pi::<SCALE>(w) - inner_asin - inner_asin;
                     if v < $core::zero() {
                         -result_abs
                     } else {
                         result_abs
                     }
                 };
-                let r = $core::half_pi(w) - asin_w;
+                let r = $core::half_pi::<SCALE>(w) - asin_w;
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 
@@ -4909,16 +4912,16 @@ macro_rules! decl_wide_transcendental {
                 let xraw = other.to_bits();
                 let r = if xraw == z {
                     if yraw > z {
-                        $core::half_pi(w)
+                        $core::half_pi::<SCALE>(w)
                     } else if yraw < z {
-                        -$core::half_pi(w)
+                        -$core::half_pi::<SCALE>(w)
                     } else {
                         $core::zero()
                     }
                 } else {
                     let y = $core::to_work_w(yraw, working_digits);
                     let x = $core::to_work_w(xraw, working_digits);
-                    let base = $core::atan_fixed($core::div(y, x, w), w);
+                    let base = $core::atan_fixed::<SCALE>($core::div(y, x, w), w);
                     if xraw > z {
                         base
                     } else if yraw >= z {
@@ -5087,10 +5090,10 @@ macro_rules! decl_wide_transcendental {
                 let inner = if ax >= one_w {
                     let inv = $core::div(one_w, ax, w);
                     let root = $core::sqrt_fixed(one_w + $core::mul(inv, inv, w), w);
-                    $core::ln_fixed(ax, w) + $core::ln_fixed(one_w + root, w)
+                    $core::ln_fixed::<SCALE>(ax, w) + $core::ln_fixed::<SCALE>(one_w + root, w)
                 } else {
                     let root = $core::sqrt_fixed($core::mul(ax, ax, w) + one_w, w);
-                    $core::ln_fixed(ax + root, w)
+                    $core::ln_fixed::<SCALE>(ax + root, w)
                 };
                 let signed = if raw < $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     -inner

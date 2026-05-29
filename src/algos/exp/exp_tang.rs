@@ -49,7 +49,12 @@ use crate::support::rounding::RoundingMode;
 /// its own guard, or the band's `|k|` is small enough not to need it).
 /// This is the shared surface the trig hyperbolic kernels reuse.
 #[must_use]
-pub(crate) fn tang_exp_fixed<C: WideTrigCore, const M: u32, const INTERNAL_EXTRA: bool>(
+pub(crate) fn tang_exp_fixed<
+    C: WideTrigCore,
+    const M: u32,
+    const INTERNAL_EXTRA: bool,
+    const SCALE: u32,
+>(
     v_w: C::W,
     w: u32,
 ) -> C::W {
@@ -61,7 +66,7 @@ pub(crate) fn tang_exp_fixed<C: WideTrigCore, const M: u32, const INTERNAL_EXTRA
     // reuse the value computed at `w` below.
     let k = {
         let one_w = C::one(w);
-        C::round_to_nearest_int(C::div_cached(v_w, C::ln2(w), one_w), w)
+        C::round_to_nearest_int(C::div_cached(v_w, C::ln2::<SCALE>(w), one_w), w)
     };
 
     let (w_ext, v_ext, extra) = if INTERNAL_EXTRA {
@@ -84,7 +89,7 @@ pub(crate) fn tang_exp_fixed<C: WideTrigCore, const M: u32, const INTERNAL_EXTRA
 
     let one_w = C::one(w_ext);
     let pow10_w = one_w;
-    let l2 = C::ln2(w_ext);
+    let l2 = C::ln2::<SCALE>(w_ext);
 
     // Stage 1: v = k·ln 2 + s, |s| ≤ ln 2 / 2.
     let k_l2 = if k >= 0 {
@@ -125,7 +130,7 @@ pub(crate) fn tang_exp_fixed<C: WideTrigCore, const M: u32, const INTERNAL_EXTRA
         }
     }
 
-    let exp_cj = C::exp_table_entry(w_ext, j_idx as usize, M);
+    let exp_cj = C::exp_table_entry::<SCALE>(w_ext, j_idx as usize, M);
     let exp_s = C::mul(exp_cj, sum, w_ext);
 
     let k_total = k + k_adj;
@@ -205,7 +210,7 @@ pub(crate) fn exp_tang<
         // through to the never-exact Ziv path below.
         let w = SCALE + GUARD;
         let v_w = C::to_work_w(raw, GUARD);
-        let result = tang_exp_fixed::<C, M, INTERNAL_EXTRA>(v_w, w);
+        let result = tang_exp_fixed::<C, M, INTERNAL_EXTRA, SCALE>(v_w, w);
         return C::round_to_storage_with(result, w, SCALE, mode);
     }
 
@@ -216,7 +221,7 @@ pub(crate) fn exp_tang<
         let w = SCALE + GUARD;
         let one_w = C::one(w);
         let v_w_probe = C::to_work_w(raw, GUARD);
-        let k = C::round_to_nearest_int(C::div_cached(v_w_probe, C::ln2(w), one_w), w);
+        let k = C::round_to_nearest_int(C::div_cached(v_w_probe, C::ln2::<SCALE>(w), one_w), w);
         let abs_k = if k < 0 { -k } else { k } as u128;
         let extra: u32 = if abs_k == 0 {
             0
@@ -240,6 +245,6 @@ pub(crate) fn exp_tang<
     // on inputs whose deciding residual is below the work-int resolution
     // (`exp(-10^-S)` just under `1.0`).
     C::round_to_storage_directed_never_exact(base_guard, SCALE, mode, &mut |guard| {
-        tang_exp_fixed::<C, M, INTERNAL_EXTRA>(C::to_work_w(raw, guard), SCALE + guard)
+        tang_exp_fixed::<C, M, INTERNAL_EXTRA, SCALE>(C::to_work_w(raw, guard), SCALE + guard)
     })
 }

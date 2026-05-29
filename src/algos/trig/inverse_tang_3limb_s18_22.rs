@@ -47,7 +47,7 @@ use crate::int::types::Int;
 /// narrow-`GUARD` atan slot guard (`wide_trig_core::atan_narrow`).
 const GUARD_NARROW: u32 = 10;
 
-fn asin_fixed(v: core::W, w: u32) -> core::W {
+fn asin_fixed<const SCALE: u32>(v: core::W, w: u32) -> core::W {
     let one_w = core::one(w);
     let abs_v = if v < core::zero() { -v } else { v };
     if abs_v > one_w {
@@ -55,19 +55,19 @@ fn asin_fixed(v: core::W, w: u32) -> core::W {
     }
     let half_w = one_w / core::lit(2);
     if abs_v == one_w {
-        let hp = core::half_pi(w);
+        let hp = core::half_pi::<SCALE>(w);
         return if v < core::zero() { -hp } else { hp };
     }
     if abs_v <= half_w {
         let denom = core::sqrt_fixed(one_w - core::mul(v, v, w), w);
-        return core::atan_fixed(core::div(v, denom, w), w);
+        return core::atan_fixed::<SCALE>(core::div(v, denom, w), w);
     }
     // Half-angle: asin(|x|) = π/2 − 2·asin(√((1−|x|)/2)).
     let inner = (one_w - abs_v) / core::lit(2);
     let inner_sqrt = core::sqrt_fixed(inner, w);
     let inner_denom = core::sqrt_fixed(one_w - core::mul(inner_sqrt, inner_sqrt, w), w);
-    let inner_asin = core::atan_fixed(core::div(inner_sqrt, inner_denom, w), w);
-    let result_abs = core::half_pi(w) - inner_asin - inner_asin;
+    let inner_asin = core::atan_fixed::<SCALE>(core::div(inner_sqrt, inner_denom, w), w);
+    let result_abs = core::half_pi::<SCALE>(w) - inner_asin - inner_asin;
     if v < core::zero() {
         -result_abs
     } else {
@@ -81,7 +81,7 @@ fn asin_fixed(v: core::W, w: u32) -> core::W {
 pub(crate) fn asin_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
     let w = SCALE + GUARD_NARROW;
     let v = core::to_work_w(raw, GUARD_NARROW);
-    let r = asin_fixed(v, w);
+    let r = asin_fixed::<SCALE>(v, w);
     core::round_to_storage_with(r, w, SCALE, mode)
 }
 
@@ -91,8 +91,8 @@ pub(crate) fn asin_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> 
 pub(crate) fn acos_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
     let w = SCALE + GUARD_NARROW;
     let v = core::to_work_w(raw, GUARD_NARROW);
-    let asin_w = asin_fixed(v, w);
-    let r = core::half_pi(w) - asin_w;
+    let asin_w = asin_fixed::<SCALE>(v, w);
+    let r = core::half_pi::<SCALE>(w) - asin_w;
     core::round_to_storage_with(r, w, SCALE, mode)
 }
 
@@ -108,9 +108,9 @@ pub(crate) fn atan2_strict<const SCALE: u32>(
     let zero_s = Int::<3>::ZERO;
     let r = if x_raw == zero_s {
         if y_raw > zero_s {
-            core::half_pi(w)
+            core::half_pi::<SCALE>(w)
         } else if y_raw < zero_s {
-            -core::half_pi(w)
+            -core::half_pi::<SCALE>(w)
         } else {
             core::zero()
         }
@@ -121,19 +121,19 @@ pub(crate) fn atan2_strict<const SCALE: u32>(
         let abs_y = if y < zero_w { -y } else { y };
         let abs_x = if x < zero_w { -x } else { x };
         let base = if abs_x >= abs_y {
-            core::atan_fixed(core::div(y, x, w), w)
+            core::atan_fixed::<SCALE>(core::div(y, x, w), w)
         } else {
-            let inv = core::atan_fixed(core::div(x, y, w), w);
-            let hp = core::half_pi(w);
+            let inv = core::atan_fixed::<SCALE>(core::div(x, y, w), w);
+            let hp = core::half_pi::<SCALE>(w);
             let same_sign = (y < zero_w) == (x < zero_w);
             if same_sign { hp - inv } else { -hp - inv }
         };
         if x_raw > zero_s {
             base
         } else if y_raw >= zero_s {
-            base + core::pi(w)
+            base + core::pi_cf::<SCALE>(w, crate::support::rounding::DEFAULT_ROUNDING_MODE)
         } else {
-            base - core::pi(w)
+            base - core::pi_cf::<SCALE>(w, crate::support::rounding::DEFAULT_ROUNDING_MODE)
         }
     };
     core::round_to_storage_with(r, w, SCALE, mode)

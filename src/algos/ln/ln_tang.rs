@@ -107,7 +107,12 @@ pub(crate) const EXTERNAL_EXTRA_DIGITS: u32 = 12;
 /// growing `guard` when the cap leaves room). Set `false` only for
 /// callers that already widen their `w` externally.
 #[inline]
-pub(crate) fn tang_ln_fixed<C: WideTrigCore, const CAP: u128, const INTERNAL_EXTRA: bool>(
+pub(crate) fn tang_ln_fixed<
+    C: WideTrigCore,
+    const CAP: u128,
+    const INTERNAL_EXTRA: bool,
+    const SCALE: u32,
+>(
     v_w: C::W,
     w: u32,
 ) -> C::W {
@@ -149,9 +154,9 @@ pub(crate) fn tang_ln_fixed<C: WideTrigCore, const CAP: u128, const INTERNAL_EXT
     // ln(v) = k · ln(2).
     let result_at_w_ext = if m_w == one_w {
         if k >= 0 {
-            C::ln2(w_ext) * C::lit(k as u128)
+            C::ln2::<SCALE>(w_ext) * C::lit(k as u128)
         } else if k < 0 {
-            -(C::ln2(w_ext) * C::lit((-k) as u128))
+            -(C::ln2::<SCALE>(w_ext) * C::lit((-k) as u128))
         } else {
             C::zero()
         }
@@ -189,13 +194,13 @@ pub(crate) fn tang_ln_fixed<C: WideTrigCore, const CAP: u128, const INTERNAL_EXT
                 break;
             }
         }
-        let ln_m = sum + sum + C::ln_table_entry(w_ext, i_idx);
+        let ln_m = sum + sum + C::ln_table_entry::<SCALE>(w_ext, i_idx);
 
         // Final: ln(v) = k · ln(2) + ln(m).
         let k_ln2 = if k >= 0 {
-            C::ln2(w_ext) * C::lit(k as u128)
+            C::ln2::<SCALE>(w_ext) * C::lit(k as u128)
         } else {
-            -(C::ln2(w_ext) * C::lit((-k) as u128))
+            -(C::ln2::<SCALE>(w_ext) * C::lit((-k) as u128))
         };
         k_ln2 + ln_m
     };
@@ -290,11 +295,11 @@ pub(crate) fn ln_tang<
         // caller's working ULP — necessary at MAX storage scale where
         // the outer Ziv cap collapses to base_guard.
         C::round_to_storage_directed(GUARD, SCALE, mode, &mut |guard| {
-            tang_ln_fixed::<C, CAP, INTERNAL_EXTRA>(C::to_work_w(raw, guard), SCALE + guard)
+            tang_ln_fixed::<C, CAP, INTERNAL_EXTRA, SCALE>(C::to_work_w(raw, guard), SCALE + guard)
         })
     } else {
         let w = SCALE + GUARD;
-        let r = tang_ln_fixed::<C, CAP, INTERNAL_EXTRA>(C::to_work_w(raw, GUARD), w);
+        let r = tang_ln_fixed::<C, CAP, INTERNAL_EXTRA, SCALE>(C::to_work_w(raw, GUARD), w);
         C::round_to_storage_with(r, w, SCALE, mode)
     }
 }

@@ -30,7 +30,7 @@ pub(crate) fn to_degrees_mul_pi_ratio<C: WideTrigCore, const SCALE: u32>(
 ) -> C::Storage {
     let w = SCALE + C::GUARD;
     let v = C::to_work(raw);
-    let r = C::div(v * C::lit(180), C::pi(w), w);
+    let r = C::div(v * C::lit(180), C::pi::<SCALE>(w), w);
     C::round_to_storage_with(r, w, SCALE, mode)
 }
 
@@ -44,7 +44,7 @@ pub(crate) fn to_radians_mul_pi_ratio<C: WideTrigCore, const SCALE: u32>(
 ) -> C::Storage {
     let w = SCALE + C::GUARD;
     let v = C::to_work(raw);
-    let r = C::mul(v, C::pi(w), w) / C::lit(180);
+    let r = C::mul(v, C::pi::<SCALE>(w), w) / C::lit(180);
     C::round_to_storage_with(r, w, SCALE, mode)
 }
 
