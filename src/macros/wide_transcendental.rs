@@ -3102,7 +3102,7 @@ macro_rules! decl_wide_transcendental {
                     panic!(concat!(stringify!($Type), "::log2: argument must be positive"));
                 }
                 let w = SCALE + working_digits;
-                let r = div(ln_fixed_routed::<SCALE>(to_work_w(raw, working_digits), w), ln2(w), w);
+                let r = div(ln_fixed_routed::<SCALE>(to_work_w(raw, working_digits), w), ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), w);
                 round_to_storage_with(r, w, SCALE, mode)
             }
 
@@ -3152,7 +3152,7 @@ macro_rules! decl_wide_transcendental {
                     panic!(concat!(stringify!($Type), "::log10: argument must be positive"));
                 }
                 let w = SCALE + working_digits;
-                let r = div(ln_fixed_routed::<SCALE>(to_work_w(raw, working_digits), w), ln10(w), w);
+                let r = div(ln_fixed_routed::<SCALE>(to_work_w(raw, working_digits), w), ln10_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), w);
                 round_to_storage_with(r, w, SCALE, mode)
             }
 
@@ -3198,7 +3198,7 @@ macro_rules! decl_wide_transcendental {
                     return <$Storage as $crate::int::types::traits::BigInt>::TEN.pow(SCALE);
                 }
                 let w = SCALE + working_digits;
-                let arg = mul(to_work_w(raw, working_digits), ln2(w), w);
+                let arg = mul(to_work_w(raw, working_digits), ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), w);
                 let r = exp_fixed_routed::<SCALE>(arg, w);
                 round_to_storage_with(r, w, SCALE, mode)
             }
@@ -5266,7 +5266,7 @@ macro_rules! decl_wide_transcendental {
                 );
                 let r = $core::div(
                     v * $crate::macros::wide_roots::wide_lit!($Work, "180"),
-                    $core::pi(w),
+                    $core::pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
                     w,
                 );
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
@@ -5295,7 +5295,7 @@ macro_rules! decl_wide_transcendental {
                 }
                 let w = SCALE + working_digits;
                 let v = $core::to_work_w(self.to_bits(), working_digits);
-                let r = $core::mul(v, $core::pi(w), w)
+                let r = $core::mul(v, $core::pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), w)
                     / $crate::macros::wide_roots::wide_lit!($Work, "180");
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
