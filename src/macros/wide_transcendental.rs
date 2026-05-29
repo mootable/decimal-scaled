@@ -4119,12 +4119,15 @@ macro_rules! decl_wide_transcendental {
                         let same_sign = (y < zero_w) == (x < zero_w);
                         if same_sign { hp - inv } else { -hp - inv }
                     };
+                    // const-folded `π` (baked, no per-call `pi(w)` rescale);
+                    // `SCALE` is the impl's const so this folds to the table entry.
+                    let pi_w = $core::pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE);
                     if xraw > z {
                         base
                     } else if yraw >= z {
-                        base + $core::pi(w)
+                        base + pi_w
                     } else {
-                        base - $core::pi(w)
+                        base - pi_w
                     }
                 };
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
@@ -4961,12 +4964,15 @@ macro_rules! decl_wide_transcendental {
                     let y = $core::to_work_w(yraw, working_digits);
                     let x = $core::to_work_w(xraw, working_digits);
                     let base = $core::atan_fixed::<SCALE>($core::div(y, x, w), w);
+                    // const-folded `π` (baked, no per-call `pi(w)` rescale);
+                    // `SCALE` is the impl's const so this folds to the table entry.
+                    let pi_w = $core::pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE);
                     if xraw > z {
                         base
                     } else if yraw >= z {
-                        base + $core::pi(w)
+                        base + pi_w
                     } else {
-                        base - $core::pi(w)
+                        base - pi_w
                     }
                 };
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
