@@ -30,8 +30,11 @@ permissions:
   contents: read
 
 concurrency:
+  # Match bench-branch-compare: let the in-progress run finish (don't waste a
+  # near-complete tests/golden gate), and let a newer push supersede the QUEUED
+  # run only (queue-of-1).
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   # GATE: the full test suite. Builds every target (lib, tests,
