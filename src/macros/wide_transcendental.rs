@@ -2657,14 +2657,15 @@ macro_rules! decl_wide_transcendental {
                 }
 
                 /// `exp(idx · ln2 / m)` at working scale `w`
-                /// (`idx ∈ [0, m)`). idx = 0 → exp(0) = 1.
+                /// (`idx ∈ [0, m)`), from the baked binary Tang table.
+                /// idx = 0 → exp(0) = 1. Replaces the per-call
+                /// `exp_fixed` Series recompute. The `SCALE` const is
+                /// unused on the baked path (the binary table is
+                /// scale-independent); kept on the signature to match the
+                /// trait forwarder.
                 #[inline]
                 pub(super) fn exp_table_entry<const SCALE: u32>(w: u32, idx: usize, m: u32) -> W {
-                    if idx == 0 {
-                        return one(w);
-                    }
-                    let cj_w = (ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE) * lit(idx as u128)) / lit(m as u128);
-                    exp_fixed::<SCALE>(cj_w, w)
+                    $crate::algos::support::exp_tang_table::exp_table_entry_baked::<W>(w, idx, m, pow10_table(w))
                 }
 
                 /// `(sin(c_j), cos(c_j))` with `c_j = idx · π / (4·m)` at
@@ -2772,6 +2773,80 @@ macro_rules! decl_wide_transcendental {
                     wc = (wc + 53).min(cap);
                 }
                 eprintln!("ln_table_baked_vs_series {tier}: max |baked-ref| = {max_diff:?} working LSBs (tol {tol:?}, ref max_w {max_w}, cap {cap})");
+            }
+
+            /// Differential validity wall for the baked binary Tang `exp`
+            /// table: the baked accessor
+            /// (`exp_tang_table::exp_table_entry_baked`) must reproduce the
+            /// OLD per-call `exp_fixed` Series recompute it replaced, to
+            /// within a tight working-LSB tolerance, for EVERY table slot
+            /// `idx ∈ [0, M)` this tier can request (`M = $exp_tang_m`),
+            /// across sampled working scales (`w = SCALE + GUARD`, plus the
+            /// Ziv-escalation band up to a safe fraction of the
+            /// `W::BITS/8` cap).
+            ///
+            /// As with the `ln` wall, the REFERENCE is the Series evaluated
+            /// at a much higher guard (`w + REF_EXTRA` digits) and narrowed
+            /// back to `w` — at that depth the `exp_fixed` Series has
+            /// converged, so the narrowed value is the correctly-rounded
+            /// `round(exp(idx·ln2/M) · 10^w)` oracle proxy. The OLD per-call
+            /// Series ran at `w` itself (carrying its own truncation error,
+            /// the imprecision the baked oracle removes), so we validate the
+            /// baked entry against the CONVERGED reference. The
+            /// reconstruction re-rounds with GUARD digits + Ziv on top, so
+            /// the entry only needs ~1-ULP accuracy.
+            #[cfg(test)]
+            pub(crate) fn exp_table_baked_vs_series(tier: &str) {
+                const M: u32 = $exp_tang_m;
+                // Extra guard digits at which the `exp_fixed` Series has
+                // fully converged relative to the target scale `w`.
+                const REF_EXTRA: u32 = 40;
+                // Correctly-rounded `round(exp(idx·ln2/M) · 10^w)`
+                // reference: Series at `w + REF_EXTRA`, narrowed back to `w`
+                // by a round-half-up divide by `10^REF_EXTRA`. exp(c_j) > 0,
+                // so the positive-narrowing bias applies.
+                fn ref_slot(w: u32, idx: usize, m: u32) -> W {
+                    if idx == 0 {
+                        return one(w);
+                    }
+                    let w_hi = w + REF_EXTRA;
+                    let cj_hi = (ln2_cf::<0>(w_hi, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                        * lit(idx as u128)) / lit(m as u128);
+                    let hi = exp_fixed::<0>(cj_hi, w_hi);
+                    // narrow w_hi -> w, round half up (values are positive).
+                    let p = pow10(REF_EXTRA);
+                    let half = p / lit(2);
+                    (hi + half) / p
+                }
+                // Sample `w` up to a safe fraction of the directed-narrow
+                // cap `W::BITS / 8`. The Series REFERENCE runs at
+                // `w + REF_EXTRA` and the `exp_fixed` reduction forms wide
+                // internal scratch, so we keep a generous headroom (a
+                // quarter of the cap) — that already spans every common
+                // `w = SCALE + GUARD` for the tier plus a slice of the Ziv
+                // band. The baked accessor itself is exercised to the full
+                // cap by the `ln` wall's cap sweep (same conversion shape).
+                let cap = <W as $crate::int::types::traits::BigInt>::BITS / 8;
+                let max_w = (cap / 4).saturating_sub(REF_EXTRA).max(GUARD);
+                let tol = lit(2); // working LSBs of allowed disagreement
+                let mut max_diff: W = zero();
+                let mut w = GUARD; // smallest reachable working scale (SCALE=0)
+                while w <= max_w {
+                    for idx in 0..M as usize {
+                        let baked = $crate::algos::support::exp_tang_table::exp_table_entry_baked::<W>(w, idx, M, pow10_table(w));
+                        let refv = ref_slot(w, idx, M);
+                        let diff = if baked >= refv { baked - refv } else { refv - baked };
+                        if diff > max_diff {
+                            max_diff = diff;
+                        }
+                        assert!(
+                            diff <= tol,
+                            "{tier}: baked exp_table_entry disagrees with converged Series at w={w} idx={idx} M={M} by {diff:?} working LSBs (tol {tol:?})"
+                        );
+                    }
+                    w += if w < GUARD + 6 { 1 } else { 37 };
+                }
+                eprintln!("exp_table_baked_vs_series {tier}: max |baked-ref| = {max_diff:?} working LSBs (tol {tol:?}, M {M}, ref max_w {max_w}, cap {cap})");
             }
 
             /// Zero-sized per-tier marker implementing
@@ -5608,6 +5683,39 @@ mod tests {
         wide_trig_d924::ln_table_baked_vs_series("D924");
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         wide_trig_d1232::ln_table_baked_vs_series("D1232");
+    }
+
+    /// Validity wall for the baked binary Tang `exp` table: on every
+    /// shipped wide tier, the baked `exp_table_entry` accessor reproduces
+    /// the OLD per-call `exp_fixed` Series recompute (to within a tight
+    /// working-LSB tolerance) for all `M` lattice slots across the
+    /// reachable working-scale band. If this passes, swapping the Series
+    /// recompute for the baked slice does not move the `exp` (or the
+    /// hyperbolic `sinh`/`cosh`/`tanh`, which reuse `tang_exp_fixed`)
+    /// result.
+    #[test]
+    fn exp_table_baked_vs_series_all_tiers() {
+        use crate::types::widths::*;
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        wide_trig_d57::exp_table_baked_vs_series("D57");
+        #[cfg(any(feature = "d76", feature = "wide"))]
+        wide_trig_d76::exp_table_baked_vs_series("D76");
+        #[cfg(any(feature = "d115", feature = "wide"))]
+        wide_trig_d115::exp_table_baked_vs_series("D115");
+        #[cfg(any(feature = "d153", feature = "wide"))]
+        wide_trig_d153::exp_table_baked_vs_series("D153");
+        #[cfg(any(feature = "d230", feature = "wide"))]
+        wide_trig_d230::exp_table_baked_vs_series("D230");
+        #[cfg(any(feature = "d307", feature = "x-wide"))]
+        wide_trig_d307::exp_table_baked_vs_series("D307");
+        #[cfg(any(feature = "d462", feature = "x-wide"))]
+        wide_trig_d462::exp_table_baked_vs_series("D462");
+        #[cfg(any(feature = "d616", feature = "x-wide"))]
+        wide_trig_d616::exp_table_baked_vs_series("D616");
+        #[cfg(any(feature = "d924", feature = "xx-wide"))]
+        wide_trig_d924::exp_table_baked_vs_series("D924");
+        #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+        wide_trig_d1232::exp_table_baked_vs_series("D1232");
     }
 
     /// Informational: report every `(constant, scale, mode)` cell where
