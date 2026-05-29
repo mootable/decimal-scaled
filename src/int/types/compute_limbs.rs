@@ -55,6 +55,13 @@
 //! | `quad`             | `[u64; 4N]`         | `[u128; 2N]`                 |
 //! | `quad_buffered`    | `[u64; 4N+⌈N/2⌉]`  | `[u128; ⌈(4N+⌈N/2⌉)/2⌉]`   |
 //!
+//! Two `u8` text-output buffers sit beside the limb family on a separate
+//! axis — the `Display`/radix `fmt` drain a rendered `Int<N>`/`Uint<N>`
+//! writes into: `digit_formatting_limbs_u8` (`[u8; 20N+2]`, the decimal and
+//! hex form) and `bit_formatting_limbs_u8` (`[u8; 64N+2]`, the wider octal
+//! and binary form). Both are exact per-`N` (`64N` bits → `⌈64N·log10(2)⌉`
+//! decimal / `64N` binary digits).
+//!
 //! Three build forms, identical sizes numerically — only *who pays for the
 //! slack* differs (each impls `ComputeLimbs for Limbs<N>`):
 //! - **default** — one blanket impl, build-max for every `N`.
@@ -130,6 +137,17 @@ pub(crate) const MAX_QUADRUPLE_LIMBS: usize = max_n_limbs(4);
 /// Build-max `single` u128 — the MG `÷10^w` magnitude, covering the widest
 /// work value (`4·MAX_WORK_N` u128).
 pub(crate) const MAX_U128_LIMB: usize = 4 * MAX_WORK_N;
+
+/// The widest `Int<N>`/`Uint<N>` storage width any build forms, in 64-bit
+/// limbs (`Int<256>` = `Int16384`, the widest `exact_compute!` storage tier).
+/// The `Display`/radix `fmt` impls range over storage widths, not work
+/// widths, so their build-max output buffers are scoped to this ceiling.
+const MAX_FMT_N: usize = 256;
+/// Build-max decimal output buffer — `20·MAX_FMT_N + 2` bytes.
+const MAX_DIGIT_FMT_U8: usize = 20 * MAX_FMT_N + 2;
+/// Build-max bit-radix output buffer — `64·MAX_FMT_N + 2` bytes (the binary
+/// form is one byte per bit, the widest of any radix).
+const MAX_BIT_FMT_U8: usize = 64 * MAX_FMT_N + 2;
 
 // The remaining family members' build-max sizes. The plain `single` u64 is
 // the value width itself (work-scoped); the plain `double`/`quad` u64 reuse
@@ -457,6 +475,19 @@ pub(crate) trait ComputeLimbs {
     type QuadBufferedU64: AsMut<[u64]> + AsRef<[u64]>;
     /// `[u128; ⌈(4N + ⌈N/2⌉)/2⌉]` — packed-u128 `quad_buffered`.
     type QuadBufferedU128: AsMut<[u128]> + AsRef<[u128]>;
+    /// `[u8; 20N + 2]` — the decimal-rendering output buffer. An
+    /// `Int<N>`/`Uint<N>` is `N·64` bits, so its base-10 form is
+    /// `⌈64·N·log10(2)⌉ ≈ 19.27·N` digits; `20N + 2` is the exact per-`N`
+    /// bound (a digit per `log10(2)` of the bit width, plus a sign byte and a
+    /// rounding-up unit of headroom), the radix-10 (and radix-16) `fmt_into`
+    /// output drain.
+    type DigitFormattingU8: AsMut<[u8]> + AsRef<[u8]>;
+    /// `[u8; 64N + 2]` — the bit-radix rendering output buffer. The binary
+    /// (radix 2) form is `N·64` digits — one per bit, the widest of any radix
+    /// — and the octal (radix 8) form is `⌈64·N/3⌉ ≈ 21.34·N`; `64N + 2`
+    /// covers both exactly per-`N` (plus a sign byte and a rounding-up unit),
+    /// the radix-2 / radix-8 `fmt_into` output drain.
+    type BitFormattingU8: AsMut<[u8]> + AsRef<[u8]>;
 
     /// A freshly zeroed `[u64; N]` buffer.
     fn single_u64() -> Self::SingleU64;
@@ -482,14 +513,19 @@ pub(crate) trait ComputeLimbs {
     fn quad_buffered_u64() -> Self::QuadBufferedU64;
     /// A freshly zeroed `[u128; ⌈(4N + ⌈N/2⌉)/2⌉]` buffer.
     fn quad_buffered_u128() -> Self::QuadBufferedU128;
+    /// A freshly zeroed `[u8; 20N + 2]` decimal-rendering output buffer.
+    fn digit_formatting_limbs_u8() -> Self::DigitFormattingU8;
+    /// A freshly zeroed `[u8; 64N + 2]` bit-radix rendering output buffer.
+    fn bit_formatting_limbs_u8() -> Self::BitFormattingU8;
 }
 
 // ── default: one blanket impl, build-max for every N ──────────────────
 #[cfg(not(feature = "exact-scratch"))]
 mod imp {
     use super::{
-        ComputeLimbs, Limbs, MAX_DOUBLE_LIMBS, MAX_DOUBLE_U128, MAX_QUADRUPLE_LIMBS, MAX_QUAD_U128,
-        MAX_SINGLE_BUF_U128, MAX_SINGLE_LIMBS, MAX_SINGLE_U128, MAX_SINGLE_U64,
+        ComputeLimbs, Limbs, MAX_BIT_FMT_U8, MAX_DIGIT_FMT_U8, MAX_DOUBLE_LIMBS, MAX_DOUBLE_U128,
+        MAX_QUADRUPLE_LIMBS, MAX_QUAD_U128, MAX_SINGLE_BUF_U128, MAX_SINGLE_LIMBS, MAX_SINGLE_U128,
+        MAX_SINGLE_U64,
     };
 
     // The blanket build-max impl: every buffer is its `MAX_*` blanket size.
@@ -511,6 +547,8 @@ mod imp {
         type QuadU128 = [u128; MAX_QUAD_U128];
         type QuadBufferedU64 = [u64; MAX_QUADRUPLE_LIMBS];
         type QuadBufferedU128 = [u128; MAX_QUAD_U128];
+        type DigitFormattingU8 = [u8; MAX_DIGIT_FMT_U8];
+        type BitFormattingU8 = [u8; MAX_BIT_FMT_U8];
         #[inline]
         fn single_u64() -> Self::SingleU64 {
             [0u64; MAX_SINGLE_U64]
@@ -559,6 +597,14 @@ mod imp {
         fn quad_buffered_u128() -> Self::QuadBufferedU128 {
             [0u128; MAX_QUAD_U128]
         }
+        #[inline]
+        fn digit_formatting_limbs_u8() -> Self::DigitFormattingU8 {
+            [0u8; MAX_DIGIT_FMT_U8]
+        }
+        #[inline]
+        fn bit_formatting_limbs_u8() -> Self::BitFormattingU8 {
+            [0u8; MAX_BIT_FMT_U8]
+        }
     }
 }
 
@@ -588,6 +634,8 @@ mod imp {
                 type QuadU128 = [u128; 2 * $n];
                 type QuadBufferedU64 = [u64; 4 * $n + ($n + 1) / 2];
                 type QuadBufferedU128 = [u128; (4 * $n + ($n + 1) / 2 + 1) / 2];
+                type DigitFormattingU8 = [u8; 20 * $n + 2];
+                type BitFormattingU8 = [u8; 64 * $n + 2];
                 #[inline]
                 fn single_u64() -> Self::SingleU64 {
                     [0u64; $n]
@@ -636,6 +684,14 @@ mod imp {
                 fn quad_buffered_u128() -> Self::QuadBufferedU128 {
                     [0u128; (4 * $n + ($n + 1) / 2 + 1) / 2]
                 }
+                #[inline]
+                fn digit_formatting_limbs_u8() -> Self::DigitFormattingU8 {
+                    [0u8; 20 * $n + 2]
+                }
+                #[inline]
+                fn bit_formatting_limbs_u8() -> Self::BitFormattingU8 {
+                    [0u8; 64 * $n + 2]
+                }
             }
         )+ };
     }
@@ -668,6 +724,8 @@ mod imp {
         [(); 4 * N]:,
         [(); n_limbs(4, N)]:,
         [(); (n_limbs(4, N) + 1) / 2]:,
+        [(); 20 * N + 2]:,
+        [(); 64 * N + 2]:,
     {
         type SingleU64 = [u64; N];
         type SingleU128 = [u128; (N + 1) / 2];
@@ -681,6 +739,8 @@ mod imp {
         type QuadU128 = [u128; 2 * N];
         type QuadBufferedU64 = [u64; n_limbs(4, N)];
         type QuadBufferedU128 = [u128; (n_limbs(4, N) + 1) / 2];
+        type DigitFormattingU8 = [u8; 20 * N + 2];
+        type BitFormattingU8 = [u8; 64 * N + 2];
         #[inline]
         fn single_u64() -> Self::SingleU64 {
             [0u64; N]
@@ -728,6 +788,14 @@ mod imp {
         #[inline]
         fn quad_buffered_u128() -> Self::QuadBufferedU128 {
             [0u128; (n_limbs(4, N) + 1) / 2]
+        }
+        #[inline]
+        fn digit_formatting_limbs_u8() -> Self::DigitFormattingU8 {
+            [0u8; 20 * N + 2]
+        }
+        #[inline]
+        fn bit_formatting_limbs_u8() -> Self::BitFormattingU8 {
+            [0u8; 64 * N + 2]
         }
     }
 }
