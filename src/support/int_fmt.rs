@@ -7,7 +7,7 @@
 //! layer.
 
 use crate::int::algos::support::limbs::is_zero;
-use crate::int::types::compute_limbs::max_single_limbs;
+use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
 
 /// `limbs /= radix` in place, returning the remainder. `radix` must be a
 /// u64 (so the per-limb divide stays inside `u128 / u64`).
@@ -36,13 +36,24 @@ const POW10_19_DIGITS: usize = 19;
 /// arithmetic. The expensive `O(limbs)` full-width small-divide then runs
 /// once per 19 digits rather than once per digit. The other radixes
 /// (2 / 8 / 16) keep the one-divide-per-digit loop.
-pub(crate) fn fmt_into<'a>(limbs: &[u64], radix: u64, lower: bool, buf: &'a mut [u8]) -> &'a str {
+pub(crate) fn fmt_into<'a, const N: usize>(
+    limbs: &[u64],
+    radix: u64,
+    lower: bool,
+    buf: &'a mut [u8],
+) -> &'a str
+where
+    Limbs<N>: ComputeLimbs,
+{
     if is_zero(limbs) {
         let last = buf.len() - 1;
         buf[last] = b'0';
         return core::str::from_utf8(&buf[last..]).unwrap();
     }
-    let mut work = max_single_limbs();
+    // The peel-divide runs in place over a copy of the `N`-limb magnitude;
+    // the plain `single` buffer (`[u64; N]`) holds it exactly per-`N`.
+    let mut work_buf = Limbs::<N>::single_u64();
+    let work = work_buf.as_mut();
     work[..limbs.len()].copy_from_slice(limbs);
     let wl = limbs.len();
     let mut pos = buf.len();
