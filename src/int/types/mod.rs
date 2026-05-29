@@ -2541,17 +2541,23 @@ impl<const N: usize> Rem for Int<N> {
 // Delegate to the same limb fmt / parse path the `decl_wide_int!` macro
 // types use, so the const-generic surface round-trips identically.
 
-impl<const N: usize> core::fmt::Display for Uint<N> {
+impl<const N: usize> core::fmt::Display for Uint<N>
+where
+    crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
+{
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         // Stack scratch sized to the widest tier (256 limbs = Uint16384),
         // matching the `Int<N>` Display impl below.
         let mut buf = [0u8; 256 * 64];
-        let s = fmt_into(&self.limbs, 10, true, &mut buf);
+        let s = fmt_into::<N>(&self.limbs, 10, true, &mut buf);
         f.pad_integral(true, "", s)
     }
 }
 
-impl<const N: usize> core::fmt::Display for Int<N> {
+impl<const N: usize> core::fmt::Display for Int<N>
+where
+    crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
+{
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mag = *self.unsigned_abs().as_limbs();
         // Decimal needs <= BITS bytes (`BITS * log10(2) < BITS`); the
@@ -2562,7 +2568,7 @@ impl<const N: usize> core::fmt::Display for Int<N> {
         // per-width `[u8; $L * 64]` buffer.
         const MAX_DIGITS: usize = 256 * 64;
         let mut buf = [0u8; MAX_DIGITS];
-        let s = fmt_into(&mag, 10, true, &mut buf);
+        let s = fmt_into::<N>(&mag, 10, true, &mut buf);
         f.pad_integral(!self.is_negative() || self.is_zero(), "", s)
     }
 }
@@ -2582,34 +2588,46 @@ impl<const N: usize> core::str::FromStr for Int<N> {
 // Stack scratch sized to the widest tier (256 limbs = Int16384), as in
 // the `Display` impl above.
 
-impl<const N: usize> core::fmt::LowerHex for Int<N> {
+impl<const N: usize> core::fmt::LowerHex for Int<N>
+where
+    crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
+{
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut buf = [0u8; 256 * 64];
-        let s = fmt_into(&self.limbs, 16, true, &mut buf);
+        let s = fmt_into::<N>(&self.limbs, 16, true, &mut buf);
         f.pad_integral(true, "0x", s)
     }
 }
 
-impl<const N: usize> core::fmt::UpperHex for Int<N> {
+impl<const N: usize> core::fmt::UpperHex for Int<N>
+where
+    crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
+{
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut buf = [0u8; 256 * 64];
-        let s = fmt_into(&self.limbs, 16, false, &mut buf);
+        let s = fmt_into::<N>(&self.limbs, 16, false, &mut buf);
         f.pad_integral(true, "0x", s)
     }
 }
 
-impl<const N: usize> core::fmt::Octal for Int<N> {
+impl<const N: usize> core::fmt::Octal for Int<N>
+where
+    crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
+{
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut buf = [0u8; 256 * 64];
-        let s = fmt_into(&self.limbs, 8, true, &mut buf);
+        let s = fmt_into::<N>(&self.limbs, 8, true, &mut buf);
         f.pad_integral(true, "0o", s)
     }
 }
 
-impl<const N: usize> core::fmt::Binary for Int<N> {
+impl<const N: usize> core::fmt::Binary for Int<N>
+where
+    crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
+{
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut buf = [0u8; 256 * 64];
-        let s = fmt_into(&self.limbs, 2, true, &mut buf);
+        let s = fmt_into::<N>(&self.limbs, 2, true, &mut buf);
         f.pad_integral(true, "0b", s)
     }
 }

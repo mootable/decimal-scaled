@@ -115,7 +115,7 @@ where
     let rem_nonzero = !(rl == 1 && rem[0] == 0);
     if rem_nonzero {
         // cmp_r = rem.cmp(divisor - rem), via comparing 2*rem to divisor.
-        let cmp_r = cmp_double_vs(&rem[..dl], &divisor[..dl]);
+        let cmp_r = cmp_double_vs::<N>(&rem[..dl], &divisor[..dl]);
         let q_is_odd = (quot[0] & 1) != 0;
         if should_bump(mode, cmp_r, q_is_odd, !neg) {
             // quot += 1
@@ -140,12 +140,15 @@ where
 /// Compare `2*rem` against `divisor` (both little-endian magnitudes),
 /// returning the ordering of `rem` vs `divisor - rem`.
 #[inline]
-fn cmp_double_vs(rem: &[u64], divisor: &[u64]) -> core::cmp::Ordering {
+fn cmp_double_vs<const N: usize>(rem: &[u64], divisor: &[u64]) -> core::cmp::Ordering
+where
+    Limbs<N>: ComputeLimbs,
+{
     // `2·rem` spans at most `rem.len() + 1` limbs, and `rem < divisor`, whose
-    // length is `≤ N ≤ MAX_WORK_N` (the widest enabled tier). A no-`N` slice
-    // helper, so it takes the build-max size (`MAX_WORK_N + 1`) — never a
-    // frozen literal that a wider tier could outgrow.
-    let mut two_r = [0u64; crate::int::algos::support::limbs::MAX_WORK_N + 1];
+    // length is `≤ N + 1` (the `10^SCALE` divisor); the `single_buffered_u64`
+    // buffer (`N + 2`) holds it exactly per-`N`.
+    let mut two_r_buf = Limbs::<N>::single_buffered_u64();
+    let two_r = two_r_buf.as_mut();
     let mut carry: u64 = 0;
     for (i, &r) in rem.iter().enumerate() {
         let v = (r as u128) << 1 | carry as u128;
