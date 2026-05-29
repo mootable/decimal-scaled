@@ -76,7 +76,8 @@ fn exp_0_5_scale_57_matches_math() {
 
 #[test]
 fn exp_0_5_scale_114_no_overflow() {
-    // The original `Int1024: mul overflow` site (ln2_compute at w_ext).
+    // `exp_strict` at the wide D115 scale must hold its working-scale
+    // `ln 2` reduction within the work integer without overflowing.
     close(
         "exp0.5 s114",
         xh_05::<114>().exp_strict().to_f64(),
