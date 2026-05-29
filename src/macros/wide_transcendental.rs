@@ -1848,7 +1848,7 @@ macro_rules! decl_wide_transcendental {
             /// Calling at the unlifted scale `w` exhibits the
             /// historical `~p/2` precision drop past `w ~ 40`
             /// described in Brent 1976 §3.
-            pub(crate) fn ln_fixed_agm(v_w: W, w: u32) -> W {
+            pub(crate) fn ln_fixed_agm<const SCALE: u32>(v_w: W, w: u32) -> W {
                 let one_w = one(w);
                 // p_bits ≈ working-scale precision in bits, w · log2(10).
                 // 332/100 is the integer rational just above log2(10).
@@ -1909,9 +1909,9 @@ macro_rules! decl_wide_transcendental {
                         break;
                     }
                 }
-                let pi_w = pi(w);
+                let pi_w = pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE);
                 let agm_part = div(pi_w, a + a, w);
-                agm_part - scale_by_k(ln2(w), m as i128)
+                agm_part - scale_by_k(ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), m as i128)
             }
 
             /// Exponential of a working-scale value via Newton's
@@ -1927,9 +1927,9 @@ macro_rules! decl_wide_transcendental {
             /// Range-reduces `v = k·ln 2 + s` first (same trick as
             /// `exp_fixed`) so the Newton seed and iterations stay in
             /// a small absolute range, then reassembles `2^k · exp(s)`.
-            pub(crate) fn exp_fixed_agm(v_w: W, w: u32) -> W {
+            pub(crate) fn exp_fixed_agm<const SCALE: u32>(v_w: W, w: u32) -> W {
                 let one_w = one(w);
-                let l2 = ln2(w);
+                let l2 = ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE);
                 let k = round_to_nearest_int(div(v_w, l2, w), w);
                 let s = v_w - scale_by_k(l2, k);
                 // Newton seed: low-order Taylor (1 + s + s²/2). Within
@@ -1941,7 +1941,7 @@ macro_rules! decl_wide_transcendental {
                 }
                 let iter_cap = 80u32;
                 for _ in 0..iter_cap {
-                    let ln_x = ln_fixed_agm(x, w);
+                    let ln_x = ln_fixed_agm::<SCALE>(x, w);
                     let delta = s - ln_x;
                     if abs(delta) <= lit(2) {
                         x = mul(x, one_w + delta, w);
@@ -1984,7 +1984,7 @@ macro_rules! decl_wide_transcendental {
             /// (`float/src/exp.rs`); the trick traces back to Brent
             /// 1976 §3 ("binary-splitting for exp via repeated
             /// squaring of a reduced argument").
-            pub(crate) fn exp_fixed(v_w: W, w: u32) -> W {
+            pub(crate) fn exp_fixed<const SCALE: u32>(v_w: W, w: u32) -> W {
                 #[cfg(feature = "perf-trace")]
                 let _exp_span =
                     $crate::tracing::info_span!(concat!(stringify!($Type), "::exp_fixed"))
@@ -1999,7 +1999,7 @@ macro_rules! decl_wide_transcendental {
                 // `hyper_fits_w` regime split the hyperbolics use. The
                 // normal / small regime keeps the fast `W` path — the check
                 // is a few leading-zero / shift ops.
-                if !exp_fits_w(v_w, w) {
+                if !exp_fits_w::<SCALE>(v_w, w) {
                     return exp_fixed_wide(v_w, w);
                 }
 
@@ -2042,7 +2042,7 @@ macro_rules! decl_wide_transcendental {
                 // 2016), §11.1 — range-reduction error budget with the
                 // `2^k · exp(s)` reassembly.
                 let one_w_pre = one(w);
-                let l2_pre = ln2(w);
+                let l2_pre = ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE);
                 let pow10_w_pre = one_w_pre;
                 let k = round_to_nearest_int(div_cached(v_w, l2_pre, pow10_w_pre), w);
                 let abs_k_u128 = if k < 0 { -k } else { k } as u128;
@@ -2073,7 +2073,7 @@ macro_rules! decl_wide_transcendental {
                 let w_ext = w + extra;
                 let v_ext = if extra == 0 { v_w } else { v_w * pow10(extra) };
                 let one_w = one(w_ext);
-                let l2 = ln2(w_ext);
+                let l2 = ln2_cf::<SCALE>(w_ext, $crate::support::rounding::DEFAULT_ROUNDING_MODE);
                 let pow10_w = one_w;
                 let s = v_ext - scale_by_k(l2, k);
 
@@ -2234,9 +2234,9 @@ macro_rules! decl_wide_transcendental {
             /// reciprocal divides by zero). `cap_bits` selects the `extra`
             /// cap so the estimate matches the body that will actually run
             /// (the tier `W`, or the wider `Wexp` after a lift).
-            fn exp_internal_peak_bits(v_w: W, w: u32, cap_bits: u32) -> u64 {
+            fn exp_internal_peak_bits<const SCALE: u32>(v_w: W, w: u32, cap_bits: u32) -> u64 {
                 let one_w_pre = one(w);
-                let l2_pre = ln2(w);
+                let l2_pre = ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE);
                 let k = round_to_nearest_int(div_cached(v_w, l2_pre, one_w_pre), w);
                 let abs_k_u128 = if k < 0 { -k } else { k } as u128;
                 let extra: u32 = if abs_k_u128 == 0 {
@@ -2275,9 +2275,9 @@ macro_rules! decl_wide_transcendental {
             /// The squaring peak `2·w_ext` already dominates `2w` (since
             /// `w_ext ≥ w`), so the exp peak bounds the whole composition.
             #[inline]
-            fn hyper_fits_w(av_w: W, w: u32) -> bool {
+            fn hyper_fits_w<const SCALE: u32>(av_w: W, w: u32) -> bool {
                 let cap_bits = <W as $crate::int::types::traits::BigInt>::BITS;
-                exp_internal_peak_bits(av_w, w, cap_bits) < cap_bits as u64
+                exp_internal_peak_bits::<SCALE>(av_w, w, cap_bits) < cap_bits as u64
             }
 
             /// Whether a direct `exp_fixed(v_w, w)` fits the tier's own work
@@ -2292,9 +2292,9 @@ macro_rules! decl_wide_transcendental {
             /// [`Wexp`] path instead. The normal / small regime keeps the
             /// fast `W` path.
             #[inline]
-            fn exp_fits_w(v_w: W, w: u32) -> bool {
+            fn exp_fits_w<const SCALE: u32>(v_w: W, w: u32) -> bool {
                 let cap_bits = <W as $crate::int::types::traits::BigInt>::BITS;
-                exp_internal_peak_bits(v_w, w, cap_bits) < cap_bits as u64
+                exp_internal_peak_bits::<SCALE>(v_w, w, cap_bits) < cap_bits as u64
             }
 
             /// `sinh(|x|)` at working scale `w` for a non-negative working
@@ -2306,9 +2306,9 @@ macro_rules! decl_wide_transcendental {
             /// lifts the whole composition to the wider [`Wexp`]. See
             /// [`hyper_fits_w`]. The caller reapplies the input sign (sinh
             /// is odd).
-            pub(crate) fn sinh_pos_wide(av_w: W, w: u32) -> W {
-                if hyper_fits_w(av_w, w) {
-                    let ex = exp_fixed(av_w, w);
+            pub(crate) fn sinh_pos_wide<const SCALE: u32>(av_w: W, w: u32) -> W {
+                if hyper_fits_w::<SCALE>(av_w, w) {
+                    let ex = exp_fixed::<SCALE>(av_w, w);
                     let enx = div(one(w), ex, w);
                     (ex - enx) >> 1
                 } else {
@@ -2322,9 +2322,9 @@ macro_rules! decl_wide_transcendental {
 
             /// `cosh(|x|) = (e^|x| + e^-|x|)/2` at working scale `w`. See
             /// [`sinh_pos_wide`] for the `W`-vs-[`Wexp`] regime split.
-            pub(crate) fn cosh_pos_wide(av_w: W, w: u32) -> W {
-                if hyper_fits_w(av_w, w) {
-                    let ex = exp_fixed(av_w, w);
+            pub(crate) fn cosh_pos_wide<const SCALE: u32>(av_w: W, w: u32) -> W {
+                if hyper_fits_w::<SCALE>(av_w, w) {
+                    let ex = exp_fixed::<SCALE>(av_w, w);
                     let enx = div(one(w), ex, w);
                     (ex + enx) >> 1
                 } else {
@@ -2339,9 +2339,9 @@ macro_rules! decl_wide_transcendental {
             /// `tanh(|x|) = (e^|x| − e^-|x|)/(e^|x| + e^-|x|)` at working
             /// scale `w`. See [`sinh_pos_wide`] for the regime split. The
             /// caller reapplies the input sign (tanh is odd).
-            pub(crate) fn tanh_pos_wide(av_w: W, w: u32) -> W {
-                if hyper_fits_w(av_w, w) {
-                    let ex = exp_fixed(av_w, w);
+            pub(crate) fn tanh_pos_wide<const SCALE: u32>(av_w: W, w: u32) -> W {
+                if hyper_fits_w::<SCALE>(av_w, w) {
+                    let ex = exp_fixed::<SCALE>(av_w, w);
                     let enx = div(one(w), ex, w);
                     div(ex - enx, ex + enx, w)
                 } else {
@@ -2658,7 +2658,7 @@ macro_rules! decl_wide_transcendental {
                         return one(w);
                     }
                     let cj_w = (ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE) * lit(idx as u128)) / lit(m as u128);
-                    exp_fixed(cj_w, w)
+                    exp_fixed::<SCALE>(cj_w, w)
                 }
 
                 /// `(sin(c_j), cos(c_j))` with `c_j = idx · π / (4·m)` at
@@ -2739,8 +2739,8 @@ macro_rules! decl_wide_transcendental {
                     round_to_storage_directed_never_exact(base_guard, target, mode, recompute)
                 }
                 #[inline]
-                fn exp_fixed(v_w: W, w: u32) -> W {
-                    exp_fixed(v_w, w)
+                fn exp_fixed<const SCALE: u32>(v_w: W, w: u32) -> W {
+                    exp_fixed::<SCALE>(v_w, w)
                 }
                 #[inline]
                 fn ln_fixed<const SCALE: u32>(v_w: W, w: u32) -> W {
@@ -2787,16 +2787,16 @@ macro_rules! decl_wide_transcendental {
                     exp_result_int_digits(mag_at_scale, scale)
                 }
                 #[inline]
-                fn sinh_pos_wide(av_w: W, w: u32) -> W {
-                    sinh_pos_wide(av_w, w)
+                fn sinh_pos_wide<const SCALE: u32>(av_w: W, w: u32) -> W {
+                    sinh_pos_wide::<SCALE>(av_w, w)
                 }
                 #[inline]
-                fn cosh_pos_wide(av_w: W, w: u32) -> W {
-                    cosh_pos_wide(av_w, w)
+                fn cosh_pos_wide<const SCALE: u32>(av_w: W, w: u32) -> W {
+                    cosh_pos_wide::<SCALE>(av_w, w)
                 }
                 #[inline]
-                fn tanh_pos_wide(av_w: W, w: u32) -> W {
-                    tanh_pos_wide(av_w, w)
+                fn tanh_pos_wide<const SCALE: u32>(av_w: W, w: u32) -> W {
+                    tanh_pos_wide::<SCALE>(av_w, w)
                 }
                 #[inline]
                 fn round_to_storage_directed_near_special(
@@ -2958,13 +2958,13 @@ macro_rules! decl_wide_transcendental {
                 if const { $crate::policy::exp::is_tang::<$n_limbs, SCALE>() } {
                     $crate::algos::exp::exp_tang::tang_exp_fixed::<Core, $exp_tang_m, true, SCALE>(v_w, w)
                 } else {
-                    exp_fixed(v_w, w)
+                    exp_fixed::<SCALE>(v_w, w)
                 }
             }
             #[cfg(not(feature = "_wide-support"))]
             #[inline]
             pub(crate) fn exp_fixed_routed<const SCALE: u32>(v_w: W, w: u32) -> W {
-                exp_fixed(v_w, w)
+                exp_fixed::<SCALE>(v_w, w)
             }
 
             // ── log-base algorithm kernels (LnDivide) ──────────────────
@@ -3271,7 +3271,7 @@ macro_rules! decl_wide_transcendental {
                 // `round_to_storage` narrows the wider working
                 // result back to `SCALE`.
                 let w_prime = SCALE + $core::GUARD + $core::guard_agm(SCALE);
-                let r = $core::ln_fixed_agm(
+                let r = $core::ln_fixed_agm::<SCALE>(
                     $core::to_work_w(raw, $core::GUARD + $core::guard_agm(SCALE)),
                     w_prime,
                 );
@@ -3306,7 +3306,7 @@ macro_rules! decl_wide_transcendental {
                 let k_lift = $core::exp_agm_k_lift_from_w(raw_w, SCALE);
                 let lift = $core::GUARD + $core::guard_agm(SCALE) + k_lift;
                 let w_prime = SCALE + lift;
-                let r = $core::exp_fixed_agm($core::to_work_w(raw, lift), w_prime);
+                let r = $core::exp_fixed_agm::<SCALE>($core::to_work_w(raw, lift), w_prime);
                 Self::from_bits($core::round_to_storage(r, w_prime, SCALE))
             }
 
@@ -3634,7 +3634,7 @@ macro_rules! decl_wide_transcendental {
             pub fn sinh_cosh_strict(self) -> (Self, Self) {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
-                let ex = $core::exp_fixed(v, w);
+                let ex = $core::exp_fixed::<SCALE>(v, w);
                 let enx = $core::div($core::one(w), ex, w);
                 let sinh = (ex - enx) >> 1;
                 let cosh = (ex + enx) >> 1;
@@ -3806,7 +3806,7 @@ macro_rules! decl_wide_transcendental {
                     ));
                 }
                 let w_prime = SCALE + $core::GUARD + $core::guard_agm(SCALE);
-                let r = $core::ln_fixed_agm(
+                let r = $core::ln_fixed_agm::<SCALE>(
                     $core::to_work_w(raw, $core::GUARD + $core::guard_agm(SCALE)),
                     w_prime,
                 );
@@ -3829,7 +3829,7 @@ macro_rules! decl_wide_transcendental {
                 let k_lift = $core::exp_agm_k_lift_from_w(raw_w, SCALE);
                 let lift = $core::GUARD + $core::guard_agm(SCALE) + k_lift;
                 let w_prime = SCALE + lift;
-                let r = $core::exp_fixed_agm($core::to_work_w(raw, lift), w_prime);
+                let r = $core::exp_fixed_agm::<SCALE>($core::to_work_w(raw, lift), w_prime);
                 Self::from_bits($core::round_to_storage_with(r, w_prime, SCALE, mode))
             }
 
@@ -4201,7 +4201,7 @@ macro_rules! decl_wide_transcendental {
                         let w = SCALE + guard;
                         let v = $core::to_work_w(raw, guard);
                         let av = if v < $core::zero() { -v } else { v };
-                        let sh = $core::sinh_pos_wide(av, w);
+                        let sh = $core::sinh_pos_wide::<SCALE>(av, w);
                         if neg { -sh } else { sh }
                     },
                 ))
@@ -4231,7 +4231,7 @@ macro_rules! decl_wide_transcendental {
                         let w = SCALE + guard;
                         let v = $core::to_work_w(raw, guard);
                         let av = if v < $core::zero() { -v } else { v };
-                        $core::cosh_pos_wide(av, w)
+                        $core::cosh_pos_wide::<SCALE>(av, w)
                     },
                 ))
             }
@@ -4289,7 +4289,7 @@ macro_rules! decl_wide_transcendental {
                         let w = SCALE + guard;
                         let v = $core::to_work_w(raw, guard);
                         let av = if v < $core::zero() { -v } else { v };
-                        let th = $core::tanh_pos_wide(av, w);
+                        let th = $core::tanh_pos_wide::<SCALE>(av, w);
                         if neg { -th } else { th }
                     },
                 ))
@@ -4464,7 +4464,7 @@ macro_rules! decl_wide_transcendental {
             ) -> (Self, Self) {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
-                let ex = $core::exp_fixed(v, w);
+                let ex = $core::exp_fixed::<SCALE>(v, w);
                 let enx = $core::div($core::one(w), ex, w);
                 let sinh = (ex - enx) >> 1;
                 let cosh = (ex + enx) >> 1;
@@ -5001,7 +5001,7 @@ macro_rules! decl_wide_transcendental {
                 }
                 let w = SCALE + working_digits;
                 let v = $core::to_work_w(self.to_bits(), working_digits);
-                let ex = $core::exp_fixed(v, w);
+                let ex = $core::exp_fixed::<SCALE>(v, w);
                 let enx = $core::div($core::one(w), ex, w);
                 let r = (ex - enx) >> 1;
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
@@ -5030,7 +5030,7 @@ macro_rules! decl_wide_transcendental {
                 }
                 let w = SCALE + working_digits;
                 let v = $core::to_work_w(self.to_bits(), working_digits);
-                let ex = $core::exp_fixed(v, w);
+                let ex = $core::exp_fixed::<SCALE>(v, w);
                 let enx = $core::div($core::one(w), ex, w);
                 let r = (ex + enx) >> 1;
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
@@ -5059,7 +5059,7 @@ macro_rules! decl_wide_transcendental {
                 }
                 let w = SCALE + working_digits;
                 let v = $core::to_work_w(self.to_bits(), working_digits);
-                let ex = $core::exp_fixed(v, w);
+                let ex = $core::exp_fixed::<SCALE>(v, w);
                 let enx = $core::div($core::one(w), ex, w);
                 let r = $core::div(ex - enx, ex + enx, w);
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
@@ -5088,7 +5088,7 @@ macro_rules! decl_wide_transcendental {
                 }
                 let w = SCALE + working_digits;
                 let v = $core::to_work_w(self.to_bits(), working_digits);
-                let ex = $core::exp_fixed(v, w);
+                let ex = $core::exp_fixed::<SCALE>(v, w);
                 let enx = $core::div($core::one(w), ex, w);
                 let sinh = (ex - enx) >> 1;
                 let cosh = (ex + enx) >> 1;
