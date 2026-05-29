@@ -89,7 +89,7 @@ pub(crate) fn mul_karatsuba_with_threshold(a: &[u64], b: &[u64], out: &mut [u64]
     debug_assert_eq!(a.len(), b.len());
     debug_assert!(out.len() >= 2 * a.len());
     let need = karatsuba_scratch_needed_th(a.len(), threshold);
-    let mut scratch = alloc::vec![0u64; need];
+    let mut scratch = vec![0u64; need];
     karatsuba_rec(a, b, out, &mut scratch, threshold);
 }
 
