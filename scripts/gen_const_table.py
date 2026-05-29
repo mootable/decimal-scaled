@@ -333,6 +333,41 @@ def main():
     w("    if bump { floor.wrapping_add(W::ONE) } else { floor }")
     w("}")
     w("")
+    w("/// Like [`round_entry`], but returns `None` when the value does")
+    w("/// not fit the SIGNED positive range of the work/storage integer")
+    w("/// `W` (i.e. it would exceed `Int::<W::LIMBS>::MAX`). Used by the")
+    w("/// PUBLIC constant accessors, where a constant requested at a")
+    w("/// scale too large for the type's storage must surface an overflow")
+    w("/// (the caller panics with an \"out of storage range\" message),")
+    w("/// not silently wrap. The constants are positive and the limbs are")
+    w("/// narrowest-fit, so the fit test is purely structural:")
+    w("///")
+    w("///   * more limbs than `W` holds            -> overflow;")
+    w("///   * exactly `W::LIMBS` limbs and the top limb has its high bit")
+    w("///     set (>= 2^63) -> the magnitude reaches into `W`'s sign bit")
+    w("///     -> overflow (the `+1` round-up bump cannot clear an already-")
+    w("///     set top bit, so no false negative);")
+    w("///   * otherwise it fits, and the rounded fold is exact.")
+    w("///")
+    w("/// The INTERNAL kernel path (`*_by_scale` / `*_by_w`) does NOT use")
+    w("/// this — it folds into a wide WORK integer where the value always")
+    w("/// fits and must never panic.")
+    w("#[inline]")
+    w("fn round_entry_checked<W: BigInt>(")
+    w("    limbs: &[u64],")
+    w("    round_up: u8,")
+    w("    mode: RoundingMode,")
+    w(") -> Option<W> {")
+    w("    let n = W::LIMBS;")
+    w("    if limbs.len() > n {")
+    w("        return None;")
+    w("    }")
+    w("    if limbs.len() == n && (limbs[n - 1] & 0x8000_0000_0000_0000) != 0 {")
+    w("        return None;")
+    w("    }")
+    w("    Some(round_entry::<W>(limbs, round_up, mode))")
+    w("}")
+    w("")
 
     # Per-constant width-generic public accessors. TWO forms per
     # constant:
@@ -376,6 +411,28 @@ def main():
         w("    round_entry::<W>(limbs, round_up, mode)")
         w("}")
         w("")
+        # A storage-RANGE-CHECKED accessor for the constants whose
+        # magnitude can exceed a type's storage at the type's top scale
+        # (deg_per_rad ~ 57.3). The public `DecimalConstants` impls use
+        # this so an out-of-range request PANICS (via the caller) rather
+        # than silently folding a wrapped value, matching every other
+        # constant. (rad_per_deg ~ 0.0175 never overflows but gets the
+        # symmetric accessor for consistency.)
+        if name in ("deg_per_rad", "rad_per_deg"):
+            w(f"/// `{name}` at the CONST working `scale` as in [`{name}_by_scale`],")
+            w("/// but returns `None` when the value does not fit the SIGNED")
+            w("/// storage range of `W` (see [`round_entry_checked`]). Used by the")
+            w("/// PUBLIC `DecimalConstants` impls so an over-range request panics")
+            w("/// rather than silently wrapping; NOT for the internal kernel path.")
+            w("#[inline]")
+            w(f"pub(crate) fn {name}_by_scale_checked<W: BigInt>(")
+            w("    scale: u32,")
+            w("    mode: RoundingMode,")
+            w(") -> Option<W> {")
+            w(f"    let (limbs, round_up) = {name}_entry(scale);")
+            w("    round_entry_checked::<W>(limbs, round_up, mode)")
+            w("}")
+            w("")
 
     # ── Self-test: re-derive the six modes from (floor, round_up) and
     # assert against a handful of independently-spelled known values. ───
