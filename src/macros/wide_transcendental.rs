@@ -1352,6 +1352,295 @@ macro_rules! decl_wide_transcendental {
                 }
             }
 
+            /// Const-evaluable companion to [`const_rounded`].
+            ///
+            /// Reproduces `const_rounded`'s rounding decision **bit for
+            /// bit** using only `const fn` limb arithmetic, so a caller
+            /// can bake the scaled-down constant at compile time instead
+            /// of dividing the wide `W-1`-scale reference by `10^shift`
+            /// on every call (the wide-tier-low-working-scale regression
+            /// this whole module exists to remove).
+            ///
+            /// `digits` is the floor-truncated reference at `ref_scale`
+            /// (always non-negative — the references are positive
+            /// constants), `top_cmp` is the build-time sub-LSB residual
+            /// against half at `ref_scale`, `w <= ref_scale` is the
+            /// target working scale, `mode` the rounding mode.
+            ///
+            /// Bit-identity argument. `const_rounded` does exactly two
+            /// things: for `w >= ref_scale` it applies `should_bump(mode,
+            /// top_cmp, digits.bit(0), true)`; for `w < ref_scale` it
+            /// computes `q = digits / 10^shift` and rounds per `mode`
+            /// using the three-way comparison of the dropped remainder
+            /// `r = digits mod 10^shift` against `10^shift / 2`. This
+            /// const fn computes the *same* `q` (schoolbook divide by 10
+            /// repeated `shift` times — exact integer floor division) and
+            /// the *same* `Ordering(r, half)`: the remainder block's most
+            /// significant dropped digit is the digit dropped on the
+            /// final `÷10` step; the tie/clear decision is that digit
+            /// versus 5 with a sticky-OR of the lower dropped digits.
+            /// That is identical to comparing `2·r` with `10^shift`
+            /// (`should_bump`'s `cmp_r`), with the same `q.bit(0)` parity
+            /// and `result_positive = true`. The `should_bump` match is
+            /// inlined verbatim below (it is not itself a `const fn`).
+            pub(crate) const fn const_rounded_cf(
+                digits: W,
+                ref_scale: u32,
+                top_cmp: ::core::cmp::Ordering,
+                w: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> W {
+                use ::core::cmp::Ordering;
+                // `r_is_zero` distinguishes "remainder exactly 0" (where
+                // NO mode bumps — `should_bump`'s documented precondition
+                // is that the caller pre-handles `r == 0`) from a `Less`
+                // comparison with a genuine non-zero residual. The
+                // shift==0 branch matches the runtime `const_rounded`,
+                // which applies `should_bump` to `top_cmp` directly (the
+                // sub-LSB residual is never the exact-zero algebraic
+                // case), so its `r_is_zero` is false.
+                let (q, cmp_r, r_is_zero) = if w >= ref_scale {
+                    (digits, top_cmp, false)
+                } else {
+                    let shift = ref_scale - w;
+                    let (q, cmp_r, rz) = div_by_pow10_cf(digits, shift);
+                    (q, cmp_r, rz)
+                };
+                if r_is_zero {
+                    return q;
+                }
+                // Inlined `should_bump`: result is always positive (the
+                // references are positive), so `q.bit(0)` is the parity
+                // and the bump (when taken) is `+1`.
+                let q_is_odd = q.bit(0);
+                let bump = match mode {
+                    $crate::support::rounding::RoundingMode::HalfToEven => match cmp_r {
+                        Ordering::Less => false,
+                        Ordering::Greater => true,
+                        Ordering::Equal => q_is_odd,
+                    },
+                    $crate::support::rounding::RoundingMode::HalfAwayFromZero => {
+                        !matches!(cmp_r, Ordering::Less)
+                    }
+                    $crate::support::rounding::RoundingMode::HalfTowardZero => {
+                        matches!(cmp_r, Ordering::Greater)
+                    }
+                    $crate::support::rounding::RoundingMode::Trunc => false,
+                    $crate::support::rounding::RoundingMode::Floor => false,
+                    $crate::support::rounding::RoundingMode::Ceiling => true,
+                };
+                if bump { q.wrapping_add(lit_cf(1)) } else { q }
+            }
+
+            /// `const fn` floor division of a **non-negative** `W` by
+            /// `10^shift` (`shift >= 1`), returning the quotient and the
+            /// three-way comparison of the dropped remainder against
+            /// `10^shift / 2` (`should_bump`'s `cmp_r`).
+            ///
+            /// Divides by 10 `shift` times over the little-endian u64
+            /// limbs (high limb first; `rem < 10` so `(rem << 64) | limb`
+            /// never overflows `u128`). The remainder block's most
+            /// significant digit is the one dropped on the final step;
+            /// lower dropped digits accumulate into a sticky flag. The
+            /// comparison is then that final digit versus 5 (sticky
+            /// breaking the `== 5` tie upward) — exactly `Ordering(r,
+            /// half)`.
+            const fn div_by_pow10_cf(
+                digits: W,
+                shift: u32,
+            ) -> (W, ::core::cmp::Ordering, bool) {
+                use ::core::cmp::Ordering;
+                let mut limbs = digits.limbs_le();
+                let n = limbs.len();
+                let mut sticky = false; // any lower dropped digit non-zero
+                let mut top_digit: u64 = 0; // most-significant dropped digit
+                let mut step: u32 = 0;
+                while step < shift {
+                    // Fold the previous step's dropped digit into sticky
+                    // (it is a lower-order digit than the one we drop now).
+                    if step > 0 && top_digit != 0 {
+                        sticky = true;
+                    }
+                    let mut rem: u64 = 0;
+                    let mut i = n;
+                    while i > 0 {
+                        i -= 1;
+                        let cur = ((rem as u128) << 64) | (limbs[i] as u128);
+                        limbs[i] = (cur / 10) as u64;
+                        rem = (cur % 10) as u64;
+                    }
+                    top_digit = rem;
+                    step += 1;
+                }
+                // The full dropped remainder is zero iff every dropped
+                // digit was zero: the most-significant (`top_digit`) and
+                // all the lower ones (`sticky`).
+                let r_is_zero = top_digit == 0 && !sticky;
+                let cmp_r = if top_digit > 5 {
+                    Ordering::Greater
+                } else if top_digit < 5 {
+                    Ordering::Less
+                } else if sticky {
+                    Ordering::Greater
+                } else {
+                    Ordering::Equal
+                };
+                (<W>::from_limbs_le(limbs), cmp_r, r_is_zero)
+            }
+
+            /// `const fn` small literal in `W` (positive). Companion to
+            /// the runtime [`lit`] usable from `const fn` context.
+            #[inline]
+            const fn lit_cf(n: u128) -> W {
+                <W>::from_u128(n)
+            }
+
+            /// Per-`(W, SCALE)` compile-time-baked transcendental
+            /// constants at the base working scale `SCALE + GUARD`.
+            ///
+            /// Each associated const evaluates [`const_rounded_cf`] at
+            /// compile time (associated consts may use the impl's `SCALE`
+            /// — a fn-body `const` may not, which is why this is a type).
+            /// One `.rodata` value per `(W, SCALE, constant, mode)`; the
+            /// `*_cf` fetches select among them with zero runtime divide
+            /// on the common non-escalated path.
+            pub(crate) struct WideConst<const SCALE: u32>;
+            impl<const SCALE: u32> WideConst<SCALE> {
+                const BASE_W: u32 = SCALE + GUARD;
+                // π
+                const PI_HTE: W = const_rounded_cf(PI_REF_DIGITS, PI_REF_SCALE, PI_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::HalfToEven);
+                const PI_HAFZ: W = const_rounded_cf(PI_REF_DIGITS, PI_REF_SCALE, PI_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::HalfAwayFromZero);
+                const PI_HTZ: W = const_rounded_cf(PI_REF_DIGITS, PI_REF_SCALE, PI_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::HalfTowardZero);
+                const PI_TRUNC: W = const_rounded_cf(PI_REF_DIGITS, PI_REF_SCALE, PI_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::Trunc);
+                const PI_FLOOR: W = const_rounded_cf(PI_REF_DIGITS, PI_REF_SCALE, PI_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::Floor);
+                const PI_CEIL: W = const_rounded_cf(PI_REF_DIGITS, PI_REF_SCALE, PI_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::Ceiling);
+                // ln 2
+                const LN2_HTE: W = const_rounded_cf(LN2_REF_DIGITS, LN2_REF_SCALE, LN2_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::HalfToEven);
+                const LN2_HAFZ: W = const_rounded_cf(LN2_REF_DIGITS, LN2_REF_SCALE, LN2_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::HalfAwayFromZero);
+                const LN2_HTZ: W = const_rounded_cf(LN2_REF_DIGITS, LN2_REF_SCALE, LN2_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::HalfTowardZero);
+                const LN2_TRUNC: W = const_rounded_cf(LN2_REF_DIGITS, LN2_REF_SCALE, LN2_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::Trunc);
+                const LN2_FLOOR: W = const_rounded_cf(LN2_REF_DIGITS, LN2_REF_SCALE, LN2_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::Floor);
+                const LN2_CEIL: W = const_rounded_cf(LN2_REF_DIGITS, LN2_REF_SCALE, LN2_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::Ceiling);
+                // ln 10
+                const LN10_HTE: W = const_rounded_cf(LN10_REF_DIGITS, LN10_REF_SCALE, LN10_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::HalfToEven);
+                const LN10_HAFZ: W = const_rounded_cf(LN10_REF_DIGITS, LN10_REF_SCALE, LN10_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::HalfAwayFromZero);
+                const LN10_HTZ: W = const_rounded_cf(LN10_REF_DIGITS, LN10_REF_SCALE, LN10_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::HalfTowardZero);
+                const LN10_TRUNC: W = const_rounded_cf(LN10_REF_DIGITS, LN10_REF_SCALE, LN10_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::Trunc);
+                const LN10_FLOOR: W = const_rounded_cf(LN10_REF_DIGITS, LN10_REF_SCALE, LN10_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::Floor);
+                const LN10_CEIL: W = const_rounded_cf(LN10_REF_DIGITS, LN10_REF_SCALE, LN10_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::Ceiling);
+            }
+
+            /// `π` const-folded at the base working scale `SCALE + GUARD`
+            /// for this `(W, SCALE)` cell — no runtime divide. The common
+            /// (non-Ziv-escalated) path fetches the baked constant; any
+            /// other `w` (a Ziv escalation) falls to the runtime
+            /// [`pi_with`].
+            #[inline]
+            pub(crate) fn pi_cf<const SCALE: u32>(
+                w: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> W {
+                use $crate::support::rounding::RoundingMode as Rm;
+                if w == SCALE + GUARD {
+                    return match mode {
+                        Rm::HalfToEven => WideConst::<SCALE>::PI_HTE,
+                        Rm::HalfAwayFromZero => WideConst::<SCALE>::PI_HAFZ,
+                        Rm::HalfTowardZero => WideConst::<SCALE>::PI_HTZ,
+                        Rm::Trunc => WideConst::<SCALE>::PI_TRUNC,
+                        Rm::Floor => WideConst::<SCALE>::PI_FLOOR,
+                        Rm::Ceiling => WideConst::<SCALE>::PI_CEIL,
+                    };
+                }
+                const_rounded(PI_REF_DIGITS, PI_REF_SCALE, PI_REF_TOP_CMP, w, mode)
+            }
+
+            /// `ln 2` const-folded at the base working scale — see
+            /// [`pi_cf`].
+            #[inline]
+            pub(crate) fn ln2_cf<const SCALE: u32>(
+                w: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> W {
+                use $crate::support::rounding::RoundingMode as Rm;
+                if w == SCALE + GUARD {
+                    return match mode {
+                        Rm::HalfToEven => WideConst::<SCALE>::LN2_HTE,
+                        Rm::HalfAwayFromZero => WideConst::<SCALE>::LN2_HAFZ,
+                        Rm::HalfTowardZero => WideConst::<SCALE>::LN2_HTZ,
+                        Rm::Trunc => WideConst::<SCALE>::LN2_TRUNC,
+                        Rm::Floor => WideConst::<SCALE>::LN2_FLOOR,
+                        Rm::Ceiling => WideConst::<SCALE>::LN2_CEIL,
+                    };
+                }
+                const_rounded(LN2_REF_DIGITS, LN2_REF_SCALE, LN2_REF_TOP_CMP, w, mode)
+            }
+
+            /// `ln 10` const-folded at the base working scale — see
+            /// [`pi_cf`].
+            #[inline]
+            pub(crate) fn ln10_cf<const SCALE: u32>(
+                w: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> W {
+                use $crate::support::rounding::RoundingMode as Rm;
+                if w == SCALE + GUARD {
+                    return match mode {
+                        Rm::HalfToEven => WideConst::<SCALE>::LN10_HTE,
+                        Rm::HalfAwayFromZero => WideConst::<SCALE>::LN10_HAFZ,
+                        Rm::HalfTowardZero => WideConst::<SCALE>::LN10_HTZ,
+                        Rm::Trunc => WideConst::<SCALE>::LN10_TRUNC,
+                        Rm::Floor => WideConst::<SCALE>::LN10_FLOOR,
+                        Rm::Ceiling => WideConst::<SCALE>::LN10_CEIL,
+                    };
+                }
+                const_rounded(LN10_REF_DIGITS, LN10_REF_SCALE, LN10_REF_TOP_CMP, w, mode)
+            }
+
+            /// Differential validity wall: the const-folded
+            /// [`const_rounded_cf`] must reproduce the runtime
+            /// [`const_rounded`] **bit for bit** for every constant
+            /// (π / ln2 / ln10), every [`RoundingMode`], and every
+            /// working scale this tier reaches. Invoked from the outer
+            /// `tests` module once per shipped tier `W`.
+            ///
+            /// `shift_targets` walks `ref_scale` (shift 0, the `top_cmp`
+            /// branch) down through a spread of working scales — including
+            /// the `shift > 38` Newton-divide region the regression came
+            /// from — so the limb-array divide and the `top_cmp` hint path
+            /// are both covered.
+            #[cfg(test)]
+            pub(crate) fn const_rounded_cf_matches_runtime() {
+                use $crate::support::rounding::RoundingMode::*;
+                let modes = [
+                    HalfToEven, HalfAwayFromZero, HalfTowardZero, Trunc, Floor, Ceiling,
+                ];
+                let consts: [(W, u32, ::core::cmp::Ordering, &str); 3] = [
+                    (PI_REF_DIGITS, PI_REF_SCALE, PI_REF_TOP_CMP, "pi"),
+                    (LN2_REF_DIGITS, LN2_REF_SCALE, LN2_REF_TOP_CMP, "ln2"),
+                    (LN10_REF_DIGITS, LN10_REF_SCALE, LN10_REF_TOP_CMP, "ln10"),
+                ];
+                for (digits, ref_scale, top_cmp, name) in consts {
+                    // Working scales across the whole reachable span: the
+                    // shift==0 top_cmp branch, small (<=38, single-chunk
+                    // MG) shifts, and large (>38, Newton-region) shifts.
+                    let mut w = 0u32;
+                    while w <= ref_scale {
+                        for mode in modes {
+                            let runtime = const_rounded(digits, ref_scale, top_cmp, w, mode);
+                            let cf = const_rounded_cf(digits, ref_scale, top_cmp, w, mode);
+                            assert!(
+                                runtime == cf,
+                                "{name}: const_rounded_cf != const_rounded at w={w} ref_scale={ref_scale} mode={mode:?}"
+                            );
+                        }
+                        // Sample densely near both ends and stride the
+                        // middle to keep the sweep cheap but exhaustive in
+                        // shape (shift 0..=ref_scale, both divide regions).
+                        w += if w < 5 || w + 5 > ref_scale { 1 } else { 7 };
+                    }
+                }
+            }
+
             /// `ln 2` at working scale `w`, rounded under the crate
             /// default mode from the per-width compile-time reference.
             pub(crate) fn ln2(w: u32) -> W {
@@ -2729,7 +3018,11 @@ macro_rules! decl_wide_transcendental {
                 }
                 {
                     let w0 = SCALE + GUARD;
-                    let r0 = div(ln_fixed_routed::<SCALE>(to_work(raw), w0), ln2(w0), w0);
+                    let r0 = div(
+                        ln_fixed_routed::<SCALE>(to_work(raw), w0),
+                        ln2_cf::<SCALE>(w0, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                        w0,
+                    );
                     let k = round_to_nearest_int(r0, w0);
                     let base2 = pow10_table(SCALE) + pow10_table(SCALE);
                     if log_is_exact_int(to_work_w(raw, 0), base2, SCALE, k) {
@@ -2738,7 +3031,11 @@ macro_rules! decl_wide_transcendental {
                 }
                 round_to_storage_directed(GUARD, SCALE, mode, |guard| {
                     let w = SCALE + guard;
-                    div(ln_fixed_routed::<SCALE>(to_work_w(raw, guard), w), ln2(w), w)
+                    div(
+                        ln_fixed_routed::<SCALE>(to_work_w(raw, guard), w),
+                        ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                        w,
+                    )
                 })
             }
 
@@ -2771,7 +3068,11 @@ macro_rules! decl_wide_transcendental {
                 }
                 {
                     let w0 = SCALE + GUARD;
-                    let r0 = div(ln_fixed_routed::<SCALE>(to_work(raw), w0), ln10(w0), w0);
+                    let r0 = div(
+                        ln_fixed_routed::<SCALE>(to_work(raw), w0),
+                        ln10_cf::<SCALE>(w0, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                        w0,
+                    );
                     let k = round_to_nearest_int(r0, w0);
                     let base10 = pow10_table(SCALE + 1);
                     if log_is_exact_int(to_work_w(raw, 0), base10, SCALE, k) {
@@ -2780,7 +3081,11 @@ macro_rules! decl_wide_transcendental {
                 }
                 round_to_storage_directed(GUARD, SCALE, mode, |guard| {
                     let w = SCALE + guard;
-                    div(ln_fixed_routed::<SCALE>(to_work_w(raw, guard), w), ln10(w), w)
+                    div(
+                        ln_fixed_routed::<SCALE>(to_work_w(raw, guard), w),
+                        ln10_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                        w,
+                    )
                 })
             }
 
@@ -2821,7 +3126,11 @@ macro_rules! decl_wide_transcendental {
                 let base_guard = GUARD + k_lift;
                 round_to_storage_directed(base_guard, SCALE, mode, |guard| {
                     let w = SCALE + guard;
-                    let arg = mul(to_work_w(raw, guard), ln2(w), w);
+                    let arg = mul(
+                        to_work_w(raw, guard),
+                        ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                        w,
+                    );
                     exp_fixed_wide(arg, w)
                 })
             }
@@ -2992,7 +3301,11 @@ macro_rules! decl_wide_transcendental {
                     ));
                 }
                 let w = SCALE + $core::GUARD;
-                let r = $core::div($core::ln_fixed_routed::<SCALE>($core::to_work(raw), w), $core::ln2(w), w);
+                let r = $core::div(
+                    $core::ln_fixed_routed::<SCALE>($core::to_work(raw), w),
+                    $core::ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                    w,
+                );
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
             }
 
@@ -3009,7 +3322,11 @@ macro_rules! decl_wide_transcendental {
                     ));
                 }
                 let w = SCALE + $core::GUARD;
-                let r = $core::div($core::ln_fixed_routed::<SCALE>($core::to_work(raw), w), $core::ln10(w), w);
+                let r = $core::div(
+                    $core::ln_fixed_routed::<SCALE>($core::to_work(raw), w),
+                    $core::ln10_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                    w,
+                );
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
             }
 
@@ -3037,7 +3354,11 @@ macro_rules! decl_wide_transcendental {
                     return Self::ONE;
                 }
                 let w = SCALE + $core::GUARD;
-                let arg = $core::mul($core::to_work(raw), $core::ln2(w), w);
+                let arg = $core::mul(
+                    $core::to_work(raw),
+                    $core::ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                    w,
+                );
                 let r = $core::exp_fixed_routed::<SCALE>(arg, w);
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
             }
@@ -3399,8 +3720,11 @@ macro_rules! decl_wide_transcendental {
             pub fn to_radians_strict(self) -> Self {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
-                let r = $core::mul(v, $core::pi(w), w)
-                    / $crate::macros::wide_roots::wide_lit!($Work, "180");
+                let r = $core::mul(
+                    v,
+                    $core::pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                    w,
+                ) / $crate::macros::wide_roots::wide_lit!($Work, "180");
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
             }
 
@@ -4063,8 +4387,11 @@ macro_rules! decl_wide_transcendental {
             ) -> Self {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
-                let r = $core::mul(v, $core::pi(w), w)
-                    / $crate::macros::wide_roots::wide_lit!($Work, "180");
+                let r = $core::mul(
+                    v,
+                    $core::pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                    w,
+                ) / $crate::macros::wide_roots::wide_lit!($Work, "180");
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 
@@ -5072,6 +5399,37 @@ pub(crate) use decl_wide_transcendental;
 
 #[cfg(all(test, not(feature = "fast")))]
 mod tests {
+
+    /// Validity wall for the const-folded wide constants: the
+    /// compile-time [`const_rounded_cf`] must reproduce the runtime
+    /// `const_rounded` bit-for-bit for π / ln2 / ln10 across every
+    /// rounding mode and every reachable working scale, on every shipped
+    /// wide tier `W`. If this passes, the baked `*_cf` fast path returns
+    /// exactly what the old runtime divide returned.
+    #[test]
+    fn const_rounded_cf_matches_runtime_all_tiers() {
+        use crate::types::widths::*;
+        #[cfg(any(feature = "d76", feature = "wide"))]
+        wide_trig_d76::const_rounded_cf_matches_runtime();
+        #[cfg(any(feature = "d153", feature = "wide"))]
+        wide_trig_d153::const_rounded_cf_matches_runtime();
+        #[cfg(any(feature = "d307", feature = "wide"))]
+        wide_trig_d307::const_rounded_cf_matches_runtime();
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        wide_trig_d57::const_rounded_cf_matches_runtime();
+        #[cfg(any(feature = "d115", feature = "wide"))]
+        wide_trig_d115::const_rounded_cf_matches_runtime();
+        #[cfg(any(feature = "d230", feature = "wide"))]
+        wide_trig_d230::const_rounded_cf_matches_runtime();
+        #[cfg(any(feature = "d462", feature = "x-wide"))]
+        wide_trig_d462::const_rounded_cf_matches_runtime();
+        #[cfg(any(feature = "d616", feature = "x-wide"))]
+        wide_trig_d616::const_rounded_cf_matches_runtime();
+        #[cfg(any(feature = "d924", feature = "xx-wide"))]
+        wide_trig_d924::const_rounded_cf_matches_runtime();
+        #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+        wide_trig_d1232::const_rounded_cf_matches_runtime();
+    }
 
     /// The wide-tier strict transcendentals are correctly rounded, so
     /// at any scale they must agree with the D38 strict path — itself
