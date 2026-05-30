@@ -322,6 +322,12 @@ name = "mul_div_candidates"
 path = "benches/micro/mul_div_candidates.rs"
 harness = false
 
+[[bench]]
+name = "dec_mul_wide_ab"
+path = "benches/micro/dec_mul_wide_ab.rs"
+harness = false
+required-features = ["wide", "x-wide"]
+
 # Focused micro-bench for the wide-int decimal `to_string` base case
 # (#38): base-10^19 19-digit chunking vs the historic one-divide-per-
 # digit loop, across Int256 / Int512 / Int1024 / Int4096.
