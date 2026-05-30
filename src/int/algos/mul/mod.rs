@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2026 John Moxley
+﻿// SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Integer multiplication algorithm family.
@@ -17,6 +17,7 @@
 
 pub(crate) mod mul_karatsuba;
 pub(crate) mod mul_schoolbook;
+pub(crate) mod mul_toom3;
 
 #[cfg(test)]
 mod tests {
