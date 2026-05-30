@@ -1680,9 +1680,11 @@ macro_rules! decl_wide_transcendental {
             pub(crate) fn ln2(w: u32) -> W {
                 ln2_with(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
-            /// `ln 2` at working scale `w`, rounded under `mode`.
+            /// `ln 2` at working scale `w`, rounded under `mode`. Static
+            /// lookup of the unified per-scale table (System A), replacing
+            /// the System-B `const_rounded` recompute off a per-width string.
             pub(crate) fn ln2_with(w: u32, mode: $crate::support::rounding::RoundingMode) -> W {
-                const_rounded(LN2_REF_DIGITS, LN2_REF_SCALE, LN2_REF_TOP_CMP, w, mode)
+                $crate::consts::ln2_by_working_scale::<W>(w, mode)
             }
 
             /// Natural logarithm of a positive working-scale value.
@@ -1836,9 +1838,11 @@ macro_rules! decl_wide_transcendental {
             pub(crate) fn ln10(w: u32) -> W {
                 ln10_with(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
-            /// `ln 10` at working scale `w`, rounded under `mode`.
+            /// `ln 10` at working scale `w`, rounded under `mode`. Static
+            /// lookup of the unified per-scale table (System A), replacing
+            /// the System-B `const_rounded` recompute off a per-width string.
             pub(crate) fn ln10_with(w: u32, mode: $crate::support::rounding::RoundingMode) -> W {
-                const_rounded(LN10_REF_DIGITS, LN10_REF_SCALE, LN10_REF_TOP_CMP, w, mode)
+                $crate::consts::ln10_by_working_scale::<W>(w, mode)
             }
 
             /// Natural log of a positive working-scale value via the
@@ -2410,7 +2414,7 @@ macro_rules! decl_wide_transcendental {
             }
             /// `π` at working scale `w`, rounded under `mode`.
             pub(crate) fn pi_with(w: u32, mode: $crate::support::rounding::RoundingMode) -> W {
-                const_rounded(PI_REF_DIGITS, PI_REF_SCALE, PI_REF_TOP_CMP, w, mode)
+                $crate::consts::pi_by_working_scale::<W>(w, mode)
             }
 
             /// `π/2` at working scale `w`. Routes `π` through the
