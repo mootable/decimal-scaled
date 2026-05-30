@@ -965,10 +965,18 @@ harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
 # mul_toom3_ab: N-way A/B for the Toom-Cook 3-way integer multiply (step-1 bench)
-# Compares toom3 x u64 vs school/karatsuba/u64/u128 at N=24/32/48/64.
+# The int-mul policy map: every fixed-array candidate (schoolbook/Karatsuba/
+# Toom-3 x u64/u128) raced per width across 24..256 (step-2 measure).
 [[bench]]
 name = "mul_toom3_ab"
 path = "benches/micro/mul_toom3_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
+# Karatsuba-u128 recursion-threshold sweep at the crossover region (step-2 tuning).
+[[bench]]
+name = "mul_kara_thresh_ab"
+path = "benches/micro/mul_kara_thresh_ab.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 

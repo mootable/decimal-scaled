@@ -339,6 +339,21 @@ pub mod __bench_internals {
     mul_kara_limb_wrappers!(mul_kara_u64_128, mul_kara_u128_128, 128);
     mul_kara_limb_wrappers!(mul_kara_u64_192, mul_kara_u128_192, 192);
     mul_kara_limb_wrappers!(mul_kara_u64_256, mul_kara_u128_256, 256);
+    /// Threshold-taking u128 Karatsuba wrappers for the threshold-sweep bench
+    /// (step-2 tuning): the recursion base width (in u64-limb units) is a
+    /// runtime arg so the bench can find the optimal crossover depth.
+    macro_rules! mul_kara_u128_thresh {
+        ($name:ident, $n:literal) => {
+            #[inline(never)]
+            pub fn $name(a: &[u64; $n], b: &[u64; $n], out: &mut [u64], threshold: usize) {
+                crate::int::algos::mul::mul_karatsuba::mul_karatsuba_limb::<$n, u128>(a, b, out, threshold)
+            }
+        };
+    }
+    mul_kara_u128_thresh!(mul_kara_u128_64_t, 64);
+    mul_kara_u128_thresh!(mul_kara_u128_96_t, 96);
+    mul_kara_u128_thresh!(mul_kara_u128_128_t, 128);
+    mul_kara_u128_thresh!(mul_kara_u128_256_t, 256);
     /// Toom-Cook 3-way multiply exposed for the mul_toom3_ab microbench.
     /// out must be zeroed by the caller; out.len() >= 2 * a.len().
     #[inline(never)]
