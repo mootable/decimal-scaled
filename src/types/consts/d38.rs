@@ -4,9 +4,9 @@
 //! # Constants provided
 //!
 //! The [`DecimalConstants`] trait exposes `pi`, `tau`, `half_pi`,
-//! `quarter_pi`, `golden`, and `e` as methods on every width. The
-//! native-tier (`D38` and narrower) impls live here; the wide tier
-//! (`D76` / `D153` / `D307`) impls live in `types/consts/wide.rs`.
+//! `quarter_pi`, `golden`, and `e` as methods on every width. A single
+//! generic impl over `D<Int<N>, SCALE>` serves every width, sourced from
+//! the unified per-scale table in [`crate::consts`].
 //!
 //! Two inherent associated constants, `EPSILON` and `MIN_POSITIVE`, are
 //! provided as analogues to `f64::EPSILON` and `f64::MIN_POSITIVE` so
@@ -16,16 +16,14 @@
 //! # Precision strategy
 //!
 //! Constants are sourced from an oracle-computed per-scale table — no
-//! `f64` anywhere. The narrow `DecimalConstants` methods read the
-//! always-present NARROW band (scales 0..=38) of
-//! [`crate::consts`]: each entry is
+//! `f64` anywhere. Each entry is
 //! `floor(const × 10^SCALE)` (narrowest-fit limbs) plus a `round_up`
 //! bit, from which the correct rounding under any [`RoundingMode`] is
 //! derived directly — `Trunc`/`Floor` = floor, `Ceiling` = floor+1, and
 //! the three half-modes = floor + round_up (the constants are
 //! irrational, so the dropped tail is never an exact tie). The selected
-//! work-integer value is then narrowed to the type's `i128` storage by
-//! [`checked_to_i128`]. Because the entry is already keyed on the
+//! work-integer value is then checked against the type's storage range.
+//! Because the entry is already keyed on the
 //! caller's `SCALE` there is no rescale step and no precision loss:
 //!
 //! **0.5 ULP at every supported scale**, with no exceptions in the
@@ -50,9 +48,7 @@
 
 use crate::int::types::Int;
 
-// The narrow `DecimalConstants` values are sourced per-scale from the unified
-// const table's NARROW band (see `*_at_target_with` below). The single raw
-// reference is `PI_RAW`: the `trig` series kernel
+// The single raw reference `PI_RAW`: the `trig` series kernel
 // (`algos::trig::trig_series_2limb`) consumes the 75-digit `Int<4>` value of pi
 // directly — re-exported here from the table's ungated `PI_RAW_D76_S75`.
 
@@ -62,37 +58,6 @@ use crate::int::types::Int;
 /// table (the ungated `PI_RAW_D76_S75`), not a build-time string.
 pub(crate) const PI_RAW: Int<4> = crate::consts::PI_RAW_D76_S75;
 
-/// The work integer the narrow path folds a `const_table` entry into
-/// before the storage-range check. `Int<3>` (192 bits) comfortably
-/// holds the widest narrow-band magnitude (`floor(tau × 10^38)`, a
-/// 39-digit ≈ 6.28×10^38 value — past `i128` but well inside 192 bits),
-/// so the fold never loses a limb; the subsequent `to_i128_checked`
-/// is what enforces the type's actual `i128` storage range.
-type NarrowWork = Int<3>;
-
-/// Convert a `const_table` work-integer constant at `TARGET` scale to an
-/// `i128`, applying the type's storage-range guard. Panics with the
-/// canonical "constant out of storage range" message when the value at
-/// `TARGET` exceeds `i128` (e.g. `pi ≈ 3.14` at `D38<38>` needs
-/// `3.14 × 10^38`, which exceeds `i128::MAX ≈ 1.7×10^38`).
-///
-/// `value` is the already-rounded constant in `NarrowWork`, sourced
-/// from the oracle `const_table` (the same 75-digit reference the wide
-/// tiers use, narrowest-fit per scale). The rounding mode was applied
-/// inside `const_table`; this layer only does the i128 fit check, so
-/// the range check + message stay LOCAL to the narrow path as before.
-#[inline]
-fn checked_to_i128(value: NarrowWork, name: &'static str, target: u32) -> i128 {
-    match value.try_to_i128() {
-        Some(v) => v,
-        None => panic!(
-            "D38 constant out of storage range: {name} cannot fit i128 at SCALE = {target} \
-             (storage range is ±i128::MAX / 10^SCALE)",
-            name = name,
-            target = target,
-        ),
-    }
-}
 
 /// Well-known mathematical constants available on every decimal width
 /// (`D18` / `D38` / `D76` / `D153` / `D307`).
@@ -257,127 +222,7 @@ pub trait DecimalConstants: Sized {
     fn log10_2_with(mode: crate::support::rounding::RoundingMode) -> Self;
 }
 
-// Public-to-crate helpers that return each constant's correctly-rounded
-// bits at the caller's target SCALE. Used by the `decl_decimal_consts!`
-// macro to provide `DecimalConstants` for the narrow widths (D18 =
-// Int<1>, D38 = Int<2>) without duplicating any logic.
-//
-// Each value is sourced from the oracle `const_table` NARROW band
-// (scales 0..=38): `*_by_scale::<NarrowWork>(TARGET, mode)` const-folds
-// (keyed on the const `TARGET`) to the single matching table entry,
-// zero-extends it into `NarrowWork`, and applies `mode`. The result is
-// then range-checked to `i128` by [`checked_to_i128`] (panicking with
-// the canonical "out of storage range" message when it does not fit the
-// type at that scale). This replaces the old 75-digit `Fixed` rescale —
-// the table is the same reference, pre-rounded per scale.
 
-pub(crate) fn pi_at_target<const TARGET: u32>() -> i128 {
-    pi_at_target_with::<TARGET>(crate::support::rounding::DEFAULT_ROUNDING_MODE)
-}
-pub(crate) fn tau_at_target<const TARGET: u32>() -> i128 {
-    tau_at_target_with::<TARGET>(crate::support::rounding::DEFAULT_ROUNDING_MODE)
-}
-pub(crate) fn half_pi_at_target<const TARGET: u32>() -> i128 {
-    half_pi_at_target_with::<TARGET>(crate::support::rounding::DEFAULT_ROUNDING_MODE)
-}
-pub(crate) fn quarter_pi_at_target<const TARGET: u32>() -> i128 {
-    quarter_pi_at_target_with::<TARGET>(crate::support::rounding::DEFAULT_ROUNDING_MODE)
-}
-pub(crate) fn golden_at_target<const TARGET: u32>() -> i128 {
-    golden_at_target_with::<TARGET>(crate::support::rounding::DEFAULT_ROUNDING_MODE)
-}
-pub(crate) fn e_at_target<const TARGET: u32>() -> i128 {
-    e_at_target_with::<TARGET>(crate::support::rounding::DEFAULT_ROUNDING_MODE)
-}
-pub(crate) fn deg_per_rad_at_target<const TARGET: u32>() -> i128 {
-    deg_per_rad_at_target_with::<TARGET>(crate::support::rounding::DEFAULT_ROUNDING_MODE)
-}
-pub(crate) fn rad_per_deg_at_target<const TARGET: u32>() -> i128 {
-    rad_per_deg_at_target_with::<TARGET>(crate::support::rounding::DEFAULT_ROUNDING_MODE)
-}
-
-// Mode-aware variants — used by the `*_with(mode)` constant methods.
-
-pub(crate) fn pi_at_target_with<const TARGET: u32>(
-    mode: crate::support::rounding::RoundingMode,
-) -> i128 {
-    checked_to_i128(
-        crate::consts::pi_by_scale::<NarrowWork>(TARGET, mode),
-        "pi",
-        TARGET,
-    )
-}
-pub(crate) fn tau_at_target_with<const TARGET: u32>(
-    mode: crate::support::rounding::RoundingMode,
-) -> i128 {
-    checked_to_i128(
-        crate::consts::tau_by_scale::<NarrowWork>(TARGET, mode),
-        "tau",
-        TARGET,
-    )
-}
-pub(crate) fn half_pi_at_target_with<const TARGET: u32>(
-    mode: crate::support::rounding::RoundingMode,
-) -> i128 {
-    checked_to_i128(
-        crate::consts::half_pi_by_scale::<NarrowWork>(TARGET, mode),
-        "half_pi",
-        TARGET,
-    )
-}
-pub(crate) fn quarter_pi_at_target_with<const TARGET: u32>(
-    mode: crate::support::rounding::RoundingMode,
-) -> i128 {
-    checked_to_i128(
-        crate::consts::quarter_pi_by_scale::<NarrowWork>(TARGET, mode),
-        "quarter_pi",
-        TARGET,
-    )
-}
-pub(crate) fn golden_at_target_with<const TARGET: u32>(
-    mode: crate::support::rounding::RoundingMode,
-) -> i128 {
-    checked_to_i128(
-        crate::consts::golden_by_scale::<NarrowWork>(TARGET, mode),
-        "golden",
-        TARGET,
-    )
-}
-pub(crate) fn e_at_target_with<const TARGET: u32>(
-    mode: crate::support::rounding::RoundingMode,
-) -> i128 {
-    checked_to_i128(
-        crate::consts::e_by_scale::<NarrowWork>(TARGET, mode),
-        "e",
-        TARGET,
-    )
-}
-pub(crate) fn deg_per_rad_at_target_with<const TARGET: u32>(
-    mode: crate::support::rounding::RoundingMode,
-) -> i128 {
-    checked_to_i128(
-        crate::consts::deg_per_rad_by_scale::<NarrowWork>(TARGET, mode),
-        "deg_per_rad",
-        TARGET,
-    )
-}
-pub(crate) fn rad_per_deg_at_target_with<const TARGET: u32>(
-    mode: crate::support::rounding::RoundingMode,
-) -> i128 {
-    checked_to_i128(
-        crate::consts::rad_per_deg_by_scale::<NarrowWork>(TARGET, mode),
-        "rad_per_deg",
-        TARGET,
-    )
-}
-
-// The `DecimalConstants` impl for `D38<SCALE>` is emitted by the
-// `decl_decimal_consts!` macro — the same macro D18 / D76+ use.
-// It expands to `Self(pi_at_target::<SCALE>())` etc.; each
-// `*_at_target` helper above rescales the 75-digit Int<4> reference
-// down to the caller's `SCALE` via half-to-even and narrows to i128
-// (or panics with a clear message if the constant's magnitude
-// exceeds the storage range at that scale).
 /// Unwraps a storage-range-checked constant, panicking with the canonical
 /// "out of storage range" message when the value does not fit `Int<N>` at the
 /// requested `SCALE`. Generic over the storage width — the single
