@@ -122,7 +122,12 @@ DEC_MAXES = (306, 615, 1231)        # (D307 / D616 / D1232) max_scale
 # `W::BITS/8` Ziv cap. Sized to ~1.5x the Ziv cap so the per-tier table path
 # never escalates past its band. (The widest large-result cases route to the
 # series-ln2 wide path, which does NOT read this table.)
-LN2_MAXES = (768, 1536, 3072)       # ~1.5x Ziv cap (D307 / D616 / D1232)
+# Sized to the wide/large-result path's peak bound: exp_generic::exp_fixed (the
+# series-free, table-sourced ln2 path) runs on Wexp and its squaring peak caps
+# w_ext at `(Wexp::BITS - 512)/6.644` (exp_internal_peak_bits) — ~1156/2389/4855
+# for D307/D616/D1232 (Wexp = Int<128>/Int<256>/Int<512>). Round up with margin so
+# the constant-sourced wide exp/hyperbolic path never escalates past its band.
+LN2_MAXES = (1280, 2560, 5120)      # wide-path peak bound (D307 / D616 / D1232)
 CONST_CLASS = {
     "pi": ZIV_MAXES, "ln2": LN2_MAXES, "ln10": ZIV_MAXES,
     "deg_per_rad": HOT_MAXES, "rad_per_deg": HOT_MAXES,
@@ -139,6 +144,13 @@ CONST_CLASS = {
 # the entry must still exist so the narrow path can READ it and apply
 # its own storage-range guard (panic with "out of storage range").
 W_NARROW = 38   # max D38 scale (entry present so the narrow path can range-check it)
+# ln2's NARROW band is wider than the other constants': the narrow tiers' exp
+# (`exp_series_2limb`, D18/D38) run the generic `exp_generic::exp_fixed`, whose
+# range reduction now reads `ln2` FROM THIS TABLE (not a series) at the EXTENDED
+# working scale `w_ext = w + extra` — up to ~165 digits even for a 38-digit D38
+# result (the `2^k` lift). The default / no_std build has NO wider band, so the
+# always-present NARROW band must cover that itself. 512 leaves ample margin.
+LN2_NARROW = 512
 
 # Gate strings. The base band is needed by every wide-support build.
 BASE_CFG = 'feature = "_wide-support"'
@@ -151,7 +163,7 @@ XXW_CFG = 'any(feature = "d924", feature = "d1232", feature = "xx-wide")'
 # ── Oracle precision ──────────────────────────────────────────────────
 # Comfortably above W_XXW (2048) with wide margin so floor + round-bit
 # are exact at the top scale.
-mp.dps = 5000
+mp.dps = 6000
 
 CONSTS = [
     ("pi", lambda: +mp.pi),
@@ -265,8 +277,9 @@ def main():
         value = getter()
         upper = name.upper()
         base_max, xw_max, xxw_max = CONST_CLASS[name]
+        narrow_max = LN2_NARROW if name == "ln2" else W_NARROW
         bands = [
-            ("NARROW", 0, W_NARROW, None),
+            ("NARROW", 0, narrow_max, None),
             ("BASE", 0, base_max, BASE_CFG),
             ("XW", base_max + 1, xw_max, XW_CFG),
             ("XXW", xw_max + 1, xxw_max, XXW_CFG),

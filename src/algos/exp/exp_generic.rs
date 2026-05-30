@@ -171,31 +171,15 @@ use crate::support::rounding::RoundingMode;
         crate::int::types::traits::BigInt::to_i128(qi)
     }
 
-    /// `ln 2` at working scale `w`, via `2·artanh(1/3)`. Recomputed per
-    /// call (the wider path is only taken on the rare large-result
-    /// regime, so memoisation is not worth the per-`S` thread-local).
-    fn ln2<S: BigInt>(w: u32) -> S
-    where
-        S::Scratch: ComputeLimbs,
-    {
-        let t = one::<S>(w) / lit::<S>(3);
-        let t2 = mul(t, t, w);
-        let mut sum = t;
-        let mut term = t;
-        let mut j: u128 = 1;
-        loop {
-            term = mul(term, t2, w);
-            let contrib = term / lit::<S>((2 * j + 1) as i128);
-            if contrib == S::ZERO {
-                break;
-            }
-            sum = sum + contrib;
-            j += 1;
-            if j > SERIES_CAP {
-                break;
-            }
-        }
-        sum + sum
+    /// `ln 2` at working scale `w`, sourced from the unified constant
+    /// table (`consts::ln2_by_working_scale`) — a static lookup +
+    /// zero-extend, NOT a recompute. Replaces the former `2·artanh(1/3)`
+    /// series (~`w` terms), which dominated the wide-tier exp/hyperbolic
+    /// cost; the table's `ln2` band is sized (gen_const_table.py
+    /// `LN2_MAXES`) to the peak `w_ext` this path can request. Mode is
+    /// half-to-even, matching the per-tier core's `ln2_cf`.
+    fn ln2<S: BigInt>(w: u32) -> S {
+        crate::consts::ln2_by_working_scale::<S>(w, RoundingMode::HalfToEven)
     }
 
     /// `e^v` for a working-scale value `v`, generic over the work
