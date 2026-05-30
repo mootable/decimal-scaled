@@ -277,6 +277,10 @@ name = "rounding_mode_probe"
 required-features = ["wide"]
 
 [[example]]
+name = "mul_toom3_probe"
+required-features = ["wide", "bench-alt"]
+
+[[example]]
 name = "sqrtbench"
 required-features = ["wide", "x-wide"]
 

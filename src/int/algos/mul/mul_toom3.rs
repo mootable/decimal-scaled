@@ -193,12 +193,9 @@ fn toom3_rec(
     let _ = add_assign(pb2, &tmp[..ew]);
 
     // ---- 5 pointwise sub-products -----------------------------------------
-    for v in w0.iter_mut() { *v = 0; }
-    for v in w1.iter_mut() { *v = 0; }
-    for v in wm.iter_mut() { *v = 0; }
-    for v in w2.iter_mut() { *v = 0; }
-    for v in wi.iter_mut() { *v = 0; }
-
+    // w0..wi were already zeroed by the level_buf zero above (line ~132) and
+    // nothing writes them in the eval phase, so they are still zero here --
+    // the child toom3_rec accumulates (+=) into a pre-zeroed `out`.
     toom3_rec(pa0, pb0, w0, child_scratch, threshold);
     toom3_rec(pa1, pb1, w1, child_scratch, threshold);
     toom3_rec(pam, pbm, wm, child_scratch, threshold);
@@ -371,14 +368,24 @@ fn shr1(a: &mut [u64]) {
 }
 
 /// Exact division by 3 (little-endian unsigned). Caller guarantees divisibility.
+///
+/// Uses exact-division by the modular inverse (Jebelean, "An algorithm for
+/// exact division", J. Symbolic Computation 15 (1993), 169-180; also Warren,
+/// "Hacker's Delight" 2nd ed. §10-17): since 3 is odd and divides the value,
+/// each quotient limb is `(limb - borrow) * 3^{-1} mod 2^64`, with the
+/// next borrow = `mulhi(q, 3) + underflow`. ONE multiply + a cheap `mulhi`
+/// per limb -- no per-limb 128/64 hardware division (the prior `/3`+`%3` was
+/// the kernel's #1 self-time hot spot, ~10%, per the samply probe).
 fn div3_signed(a: &mut [u64], neg: bool) -> bool {
-    let mut rem: u64 = 0;
-    for limb in a.iter_mut().rev() {
-        let cur = ((rem as u128) << 64) | (*limb as u128);
-        *limb = (cur / 3) as u64;
-        rem = (cur % 3) as u64;
+    const INV3: u64 = 0xAAAA_AAAA_AAAA_AAAB; // 3^{-1} mod 2^64  (3*INV3 == 1 mod 2^64)
+    let mut borrow: u64 = 0;
+    for limb in a.iter_mut() {
+        let (s, under) = limb.overflowing_sub(borrow);
+        let q = s.wrapping_mul(INV3);
+        *limb = q;
+        borrow = (((q as u128) * 3) >> 64) as u64 + under as u64;
     }
-    debug_assert_eq!(rem, 0, "div3: not divisible by 3 -- Toom-3 interpolation error");
+    debug_assert_eq!(borrow, 0, "div3: not divisible by 3 -- Toom-3 interpolation error");
     neg
 }
 
