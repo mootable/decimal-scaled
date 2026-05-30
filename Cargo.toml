@@ -45,7 +45,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 # To opt out and use the f64 bridge instead you have to take all
 # three steps: (a) `default-features = false`, (b) explicitly add
 # `fast` + `std`, and (c) NOT re-add `strict`:
-#   decimal-scaled = { version = "0.3.1", default-features = false,
+#   decimal-scaled = { version = "0.5.0", default-features = false,
 #                      features = ["std", "serde", "fast"] }
 # That gives ~16 decimal digits of platform-libm precision rather
 # than the deterministic 0.5 ULP strict path.
@@ -123,12 +123,13 @@ cross-scale-ops = []
 # See `crate::int::types::work_scratch`.
 exact-scratch = []
 exact-scratch-nightly = ["exact-scratch"]
-# Wide decimal tiers (D76 / D153 / D307). Each width is independently
-# opt-in; `wide` is the umbrella for the 256-bit / 512-bit tiers and
-# `x-wide` adds the 1024-bit tier. They are backed by the in-tree
-# hand-rolled wide-integer types in `crate::wide_int` — no external
-# big-integer dependency. D9 / D18 / D38 use primitive storage and
-# need none of this.
+# Wide decimal tiers (D57 … D1232). Each width is independently opt-in
+# (`d57` … `d1232`), and the umbrellas NEST: `wide` = D57/D76/D115/D153/
+# D230/D307, `x-wide` = `wide` + D462 + D616, `xx-wide` = `x-wide` + D924 +
+# D1232 — so a wider umbrella enables every tier up to it. All are backed by
+# the in-tree const-generic `Int<N>` integers in `crate::int` — no external
+# big-integer dependency. D18 / D38 use primitive i64 / i128 storage and need
+# none of this.
 # Internal marker: enabled by EVERY wide-family tier (d57 … d1232) so
 # the shared wide-tier support code (the `wide_roots` /
 # `wide_transcendental` macro modules, the `decl_wide_serde` macro, the
@@ -149,22 +150,22 @@ exact-scratch-nightly = ["exact-scratch"]
 # hard compile error rather than a silent heap allocation. (`std` still
 # pulls `alloc` for the std build; that is the std backend's own affair.)
 _wide-support = []
-wide = ["d57", "d76", "d115", "d153", "d230"]
+wide = ["d57", "d76", "d115", "d153", "d230", "d307"]
 d57 = ["_wide-support"]
 d76 = ["_wide-support"]
 d115 = ["_wide-support"]
 d153 = ["_wide-support"]
 d230 = ["_wide-support"]
-# Very-wide tier (D307+). Gated separately because its strict-
-# transcendental work integers run into thousands of bits and inflate
-# build time vs the narrower wide tiers.
-x-wide = ["d307", "d462", "d616"]
+# Very-wide tiers (D462 + D616), nesting `wide`. Gated separately because
+# their strict-transcendental work integers run into thousands of bits and
+# inflate build time vs the narrower wide tiers.
+x-wide = ["wide", "d462", "d616"]
 d307 = ["_wide-support"]
 d462 = ["_wide-support"]
 d616 = ["_wide-support"]
-# Extra-wide tier (D924+). Pulls in the Int12288 / Int16384 work
-# integers — multi-second compile-time cost for the macro emission.
-xx-wide = ["d924", "d1232"]
+# Extra-wide tiers (D924 + D1232), nesting `x-wide`. Pulls in the Int12288 /
+# Int16384 work integers — multi-second compile-time cost for the macro emission.
+xx-wide = ["x-wide", "d924", "d1232"]
 d924 = ["_wide-support"]
 d1232 = ["_wide-support"]
 # Internal perf-investigation feature: emits `tracing::info_span!`
