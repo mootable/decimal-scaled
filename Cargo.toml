@@ -1,4 +1,4 @@
-[package]
+﻿[package]
 name = "decimal-scaled"
 version = "0.5.0"
 edition = "2024"
@@ -957,6 +957,14 @@ required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 [[bench]]
 name = "mul_full_ab"
 path = "benches/micro/mul_full_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
+# mul_toom3_ab: N-way A/B for the Toom-Cook 3-way integer multiply (step-1 bench)
+# Compares toom3 x u64 vs school/karatsuba/u64/u128 at N=24/32/48/64.
+[[bench]]
+name = "mul_toom3_ab"
+path = "benches/micro/mul_toom3_ab.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 

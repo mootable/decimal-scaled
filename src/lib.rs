@@ -1,4 +1,4 @@
-//! Const-generic base-10 fixed-point decimal types for deterministic arithmetic.
+﻿//! Const-generic base-10 fixed-point decimal types for deterministic arithmetic.
 //!
 //! # Overview
 //!
@@ -331,6 +331,12 @@ pub mod __bench_internals {
     mul_kara_limb_wrappers!(mul_kara_u64_32, mul_kara_u128_32, 32);
     mul_kara_limb_wrappers!(mul_kara_u64_48, mul_kara_u128_48, 48);
     mul_kara_limb_wrappers!(mul_kara_u64_64, mul_kara_u128_64, 64);
+    /// Toom-Cook 3-way multiply exposed for the mul_toom3_ab microbench.
+    /// out must be zeroed by the caller; out.len() >= 2 * a.len().
+    #[inline(never)]
+    pub fn mul_toom3_slice(a: &[u64], b: &[u64], out: &mut [u64]) {
+        crate::int::algos::mul::mul_toom3::mul_toom3(a, b, out)
+    }
     /// Division engine candidates exposed for the `div_kernel_ab`
     /// microbench (the dispatch-seam A/B that recovers the WIDE integer
     /// division regression). Both take little-endian u64 magnitude limb
