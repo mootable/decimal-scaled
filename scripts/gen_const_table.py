@@ -3,7 +3,7 @@ transcendental constant table.
 
 This is a ONE-OFF hand-run generator (a sibling of
 `gen_golden_precision.py`). It is NOT run at build time: it emits a
-committed Rust source file `src/algos/support/const_table.rs`, and that
+committed Rust source file `src/consts/table.rs`, and that
 output is what the crate compiles. `build.rs` is untouched.
 
 Oracle. Every constant comes from `mpmath` directly at a working
@@ -52,11 +52,15 @@ from mpmath import mp
 
 # ── Tier table: (tier name, work-int limbs, max SCALE, gating cfg) ─────
 #
-# The wide-transcendental const-fold path (`WideConst<SCALE>`) requests a
-# constant at working scale `w = SCALE + GUARD`, GUARD = 30, for any
-# SCALE in `0 ..= max_scale`. So each tier needs working scales
-# `0 ..= max_scale + GUARD`. The work-int limb count is informational
-# (the value is width-independent — the accessor zero-extends).
+# The wide-transcendental const-fold path requests a constant at the HOT
+# working scale `w = SCALE + GUARD` (GUARD = 30) for any SCALE in
+# `0 ..= max_scale`. But the directed-rounding / Ziv-escalation + Tang-
+# reconstruction paths request `w` UP TO the cap `W::BITS / 8` decimal digits
+# (W = the tier's work integer), and that runtime `w` is served by a pure
+# STATIC LOOKUP (`*_by_working_scale`) — never a recompute. So each tier needs
+# working scales `0 ..= work_limbs * 8` (= W::BITS/8). The work-int limb count
+# is therefore LOAD-BEARING: it sets each band's Ziv cap (below).
+# (The value is width-independent — the accessor zero-extends.)
 GUARD = 30
 
 # (tier, work_limbs, max_scale, cfg gate matching consts/wide.rs)
@@ -79,15 +83,41 @@ TIERS = [
 # that can reach that band so a single-tier build (e.g. just `d307`)
 # still compiles its band.
 #
-#   base    0 ..= W_BASE  : reachable by any `_wide-support` tier; the
-#                           widest plain-`wide` tier is D230 (w<=259), but
-#                           D307 (d307/x-wide) reaches 336, so the base
-#                           band must cover up to 336 for any d307 build.
-#   xwide   .. ..= W_XW    : x-wide tiers (D462/D616), up to 645.
-#   xxwide  .. ..= W_XXW   : xx-wide tiers (D924/D1232), up to 1261.
-W_BASE = 336    # max working scale of D307 (the widest base/x-wide-min tier)
-W_XW = 645      # max working scale of D616
-W_XXW = 1261    # max working scale of D1232
+#   base    0 ..= W_BASE  : reachable by any `_wide-support` tier. Sized to the
+#                           Ziv cap (W::BITS/8) of the widest wide-group tier,
+#                           D307 (work Int<64> -> 64*8 = 512). [D307 in `wide`
+#                           per lib.rs; it pulls `_wide-support`, so BASE covers
+#                           its full Ziv band.]
+#   xwide   .. ..= W_XW    : x-wide tiers; widest is D616 (work Int<128> ->
+#                           128*8 = 1024).
+#   xxwide  .. ..= W_XXW   : xx-wide tiers; widest is D1232 (work Int<256> ->
+#                           256*8 = 2048).
+# Each band's max = the max Ziv cap of its own feature group, so a build never
+# Ziv-escalates into an absent (more-gated) band.
+W_BASE = 512    # D307 Ziv cap (W::BITS/8, work Int<64>) — widest wide-group tier
+W_XW = 1024     # D616 Ziv cap (work Int<128>)
+W_XXW = 2048    # D1232 Ziv cap (work Int<256>)
+
+# Per-constant band maxes. Not every constant needs the full Ziv band — only
+# the ones the transcendental CORES request at deep/Ziv working scales do.
+# Verified against the cores' `*_cf` accessors: pi / ln2 / ln10 / deg_per_rad /
+# rad_per_deg are the ONLY constants read at a working scale; tau / half_pi /
+# quarter_pi / e / golden are DecimalConstants-only.
+#   ZIV (pi, ln2, ln10): cores Ziv-escalate + Tang-reconstruct up to W::BITS/8.
+#   HOT (deg_per_rad, rad_per_deg): cores read the HOT scale SCALE+GUARD only
+#       (the angle kernels do not Ziv-escalate) -> max_scale + GUARD.
+#   DEC (tau, half_pi, quarter_pi, e, golden): DecimalConstants only, read at
+#       the type's const SCALE <= max_scale -> max_scale.
+# (NARROW stays 0..=W_NARROW for every constant — D18/D38 DecimalConstants.)
+ZIV_MAXES = (W_BASE, W_XW, W_XXW)   # 512 / 1024 / 2048  (D307 / D616 / D1232 Ziv cap)
+HOT_MAXES = (336, 645, 1261)        # (D307 / D616 / D1232) max_scale + GUARD
+DEC_MAXES = (306, 615, 1231)        # (D307 / D616 / D1232) max_scale
+CONST_CLASS = {
+    "pi": ZIV_MAXES, "ln2": ZIV_MAXES, "ln10": ZIV_MAXES,
+    "deg_per_rad": HOT_MAXES, "rad_per_deg": HOT_MAXES,
+    "tau": DEC_MAXES, "half_pi": DEC_MAXES, "quarter_pi": DEC_MAXES,
+    "e": DEC_MAXES, "golden": DEC_MAXES,
+}
 
 # The ALWAYS-PRESENT narrow band. The public `DecimalConstants` trait
 # (D18 = Int<1>, scale 0..=17; D38 = Int<2>, scale 0..=38) sources its
@@ -101,14 +131,14 @@ W_NARROW = 38   # max D38 scale (entry present so the narrow path can range-chec
 
 # Gate strings. The base band is needed by every wide-support build.
 BASE_CFG = 'feature = "_wide-support"'
-# The x-wide band (337..=645) is reached by D462/D616 (and any build that
+# The x-wide band (513..=1024) is reached by D462/D616 (and any build that
 # turns those on directly or via x-wide).
 XW_CFG = 'any(feature = "d462", feature = "d616", feature = "x-wide")'
-# The xx-wide band (646..=1261) is reached by D924/D1232 (or xx-wide).
+# The xx-wide band (1025..=2048) is reached by D924/D1232 (or xx-wide).
 XXW_CFG = 'any(feature = "d924", feature = "d1232", feature = "xx-wide")'
 
 # ── Oracle precision ──────────────────────────────────────────────────
-# Comfortably above W_XXW (1261) with wide margin so floor + round-bit
+# Comfortably above W_XXW (2048) with wide margin so floor + round-bit
 # are exact at the top scale.
 mp.dps = 5000
 
@@ -215,22 +245,22 @@ def main():
     w("pub(crate) type Entry = (u32, &'static [u64], u8);")
     w("")
 
-    # The NARROW band (0..=W_NARROW) is ALWAYS present (no `cfg`): the
-    # public `DecimalConstants` trait on D18/D38 reads it in every build.
-    # The three wider bands stay feature-gated exactly as before, so a
-    # `_wide-support` build's BASE/XW/XXW bytes are byte-identical to the
-    # previous table; only the small always-present NARROW band is new.
-    narrow_band = ("NARROW", 0, W_NARROW, None)
-    wide_bands = [
-        ("BASE", 0, W_BASE, BASE_CFG),
-        ("XW", W_BASE + 1, W_XW, XW_CFG),
-        ("XXW", W_XW + 1, W_XXW, XXW_CFG),
-    ]
-
+    # The NARROW band (0..=W_NARROW) is ALWAYS present (no `cfg`): the public
+    # `DecimalConstants` trait on D18/D38 reads it in every build. The three
+    # wider bands are feature-gated, and each constant's band maxes are sized to
+    # its CLASS (ZIV / HOT / DEC — see CONST_CLASS) so only the constants that
+    # Ziv-escalate carry the full deep band.
     for name, getter in CONSTS:
         value = getter()
         upper = name.upper()
-        for band, lo, hi, cfg in [narrow_band, *wide_bands]:
+        base_max, xw_max, xxw_max = CONST_CLASS[name]
+        bands = [
+            ("NARROW", 0, W_NARROW, None),
+            ("BASE", 0, base_max, BASE_CFG),
+            ("XW", base_max + 1, xw_max, XW_CFG),
+            ("XXW", xw_max + 1, xxw_max, XXW_CFG),
+        ]
+        for band, lo, hi, cfg in bands:
             if cfg is not None:
                 w(f"#[cfg({cfg})]")
             w(f"static {upper}_{band}: &[Entry] = &[")
@@ -242,6 +272,7 @@ def main():
     # statements so a disabled band's static is never referenced. ───────
     for name, _ in CONSTS:
         upper = name.upper()
+        base_max, xw_max, _ = CONST_CLASS[name]
         w("/// `floor(%s * 10^scale)` limbs (little-endian, narrowest-fit)" % name)
         w("/// plus the round-up bit, for the const working `scale`.")
         w("///")
@@ -265,7 +296,7 @@ def main():
         w("    }")
         w(f"    #[cfg({XW_CFG})]")
         w("    {")
-        w(f"        let base_lo = {W_BASE} + 1;")
+        w(f"        let base_lo = {base_max} + 1;")
         w("        if scale >= base_lo {")
         w("            let idx = (scale - base_lo) as usize;")
         w(f"            if idx < {upper}_XW.len() {{")
@@ -276,7 +307,7 @@ def main():
         w("    }")
         w(f"    #[cfg({XXW_CFG})]")
         w("    {")
-        w(f"        let xw_lo = {W_XW} + 1;")
+        w(f"        let xw_lo = {xw_max} + 1;")
         w("        if scale >= xw_lo {")
         w("            let idx = (scale - xw_lo) as usize;")
         w(f"            if idx < {upper}_XXW.len() {{")
@@ -349,7 +380,7 @@ def main():
     w("///     set top bit, so no false negative);")
     w("///   * otherwise it fits, and the rounded fold is exact.")
     w("///")
-    w("/// The INTERNAL kernel path (`*_by_scale` / `*_by_w`) does NOT use")
+    w("/// The INTERNAL kernel path (`*_by_scale` / `*_by_working_scale`) does NOT use")
     w("/// this — it folds into a wide WORK integer where the value always")
     w("/// fits and must never panic.")
     w("#[inline]")
@@ -378,7 +409,7 @@ def main():
     #                 single matching entry, so the hot path does no
     #                 runtime search and no divide.
     #
-    #   *_by_w      — a plain `fn` keyed on the RUNTIME working scale `w`.
+    #   *_by_working_scale — a plain `fn` keyed on the RUNTIME working scale `w`.
     #                 This is the RARE fallback (the Ziv-escalation path,
     #                 `w != SCALE + GUARD`). It does NOT const-fold; every
     #                 avoidable use is a const-fold miss. Prefer *_by_scale
@@ -406,7 +437,7 @@ def main():
         w("/// Does NOT const-fold; every avoidable call is a const-fold")
         w(f"/// miss. Prefer [`{name}_by_scale`] when a const SCALE is in hand.")
         w("#[inline]")
-        w(f"pub(crate) fn {name}_by_w<W: BigInt>(w: u32, mode: RoundingMode) -> W {{")
+        w(f"pub(crate) fn {name}_by_working_scale<W: BigInt>(w: u32, mode: RoundingMode) -> W {{")
         w(f"    let (limbs, round_up) = {name}_entry(w);")
         w("    round_entry::<W>(limbs, round_up, mode)")
         w("}")
@@ -472,11 +503,11 @@ def main():
     w("    /// narrow-only build has no work integer this wide to exercise).")
     w('    #[cfg(feature = "_wide-support")]')
     w("    #[test]")
-    w("    fn by_scale_eq_by_w() {")
+    w("    fn by_scale_eq_by_working_scale() {")
     w("        for s in [0u32, 1, 17, 18, 19, 30, 38, 86] {")
     w("            for m in [HalfToEven, Trunc, Ceiling, Floor, HalfAwayFromZero, HalfTowardZero] {")
-    w("                assert_eq!(pi_by_scale::<Int<16>>(s, m), pi_by_w::<Int<16>>(s, m));")
-    w("                assert_eq!(ln2_by_scale::<Int<16>>(s, m), ln2_by_w::<Int<16>>(s, m));")
+    w("                assert_eq!(pi_by_scale::<Int<16>>(s, m), pi_by_working_scale::<Int<16>>(s, m));")
+    w("                assert_eq!(ln2_by_scale::<Int<16>>(s, m), ln2_by_working_scale::<Int<16>>(s, m));")
     w("            }")
     w("        }")
     w("    }")
@@ -500,7 +531,7 @@ def main():
     w("")
 
     src = "\n".join(out) + "\n"
-    path = "src/algos/support/const_table.rs"
+    path = "src/consts/table.rs"
     with open(path, "w", encoding="utf-8", newline="\n") as f:
         f.write(src)
     print(f"wrote {path} ({len(src)} bytes), mp.dps={mp.dps}, "
