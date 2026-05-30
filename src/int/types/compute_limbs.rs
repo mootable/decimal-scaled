@@ -237,13 +237,17 @@ impl LimbSize {
 /// slice kernel needs, the pack/unpack to/from the `Int<N>` u64 storage, and
 /// the width-generic scratch fetch (the [`ComputeLimbs`] buffer family, by
 /// element). Implemented for exactly `u64` and `u128`.
-pub(crate) trait Limb: Copy + PartialEq {
+pub(crate) trait Limb: Copy + PartialEq + Ord {
     /// Additive identity (the array-repeat seed for scratch buffers).
     const ZERO: Self;
     /// Multiplicative identity — materialises a carry *bit* as a limb value
     /// for multi-limb carry propagation (e.g. the symmetric-square doubling
     /// pass), where `overflowing_add` needs a value addend, not a `bool`.
     const ONE: Self;
+    /// Bit width of this limb type (`64` for `u64`, `128` for `u128`). Lets a
+    /// width-generic kernel compute inter-limb shift carries (`Limb::BITS - s`)
+    /// without naming the concrete type — e.g. the Toom-3 eval/interp shifts.
+    const BITS: u32;
     /// Number of `L` limbs holding an `n`-u64-limb value: `n` for `u64`,
     /// `n / 2` for `u128` (caller guarantees even `n` for the `u128` impl).
     fn packed_len(n_u64: usize) -> usize;
@@ -262,6 +266,11 @@ pub(crate) trait Limb: Copy + PartialEq {
     /// `self + c1 + c2` — the schoolbook carry merge. The column bound
     /// (`hi ≤ MAX − 1`, and `c1`/`c2` never both set) guarantees no overflow.
     fn add_carries(self, c1: bool, c2: bool) -> Self;
+    /// `self << n` (`n < BITS`) — bits shifted past the top are dropped. Used
+    /// by the width-generic small-shift helpers (`×2`, `×4`, the `>>1` carry).
+    fn wrapping_shl(self, n: u32) -> Self;
+    /// `self >> n` (`n < BITS`) — logical (zero-fill) right shift.
+    fn wrapping_shr(self, n: u32) -> Self;
 
     // Width-generic scratch fetch. Each forwards to the matching
     // [`ComputeLimbs`] per-element buffer for this limb type, so a
@@ -296,6 +305,7 @@ pub(crate) trait Limb: Copy + PartialEq {
 impl Limb for u64 {
     const ZERO: Self = 0;
     const ONE: Self = 1;
+    const BITS: u32 = 64;
     #[inline]
     fn packed_len(n_u64: usize) -> usize {
         n_u64
@@ -326,6 +336,14 @@ impl Limb for u64 {
     #[inline]
     fn add_carries(self, c1: bool, c2: bool) -> Self {
         self.wrapping_add(c1 as u64).wrapping_add(c2 as u64)
+    }
+    #[inline]
+    fn wrapping_shl(self, n: u32) -> Self {
+        u64::wrapping_shl(self, n)
+    }
+    #[inline]
+    fn wrapping_shr(self, n: u32) -> Self {
+        u64::wrapping_shr(self, n)
     }
 
     type Single<I: ComputeLimbs> = I::SingleU64;
@@ -363,6 +381,7 @@ impl Limb for u64 {
 impl Limb for u128 {
     const ZERO: Self = 0;
     const ONE: Self = 1;
+    const BITS: u32 = 128;
     #[inline]
     fn packed_len(n_u64: usize) -> usize {
         n_u64 / 2
@@ -408,6 +427,14 @@ impl Limb for u128 {
     #[inline]
     fn add_carries(self, c1: bool, c2: bool) -> Self {
         self.wrapping_add(c1 as u128).wrapping_add(c2 as u128)
+    }
+    #[inline]
+    fn wrapping_shl(self, n: u32) -> Self {
+        u128::wrapping_shl(self, n)
+    }
+    #[inline]
+    fn wrapping_shr(self, n: u32) -> Self {
+        u128::wrapping_shr(self, n)
     }
 
     type Single<I: ComputeLimbs> = I::SingleU128;

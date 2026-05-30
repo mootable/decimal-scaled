@@ -219,8 +219,13 @@ fn karatsuba_rec_unbalanced(
 /// Same outer-product algorithm as mul_schoolbook, lifted to L space via
 /// Limb::widening_mul / overflowing_add / add_carries primitives.
 /// ONE function body, no per-limb-type copy.
+///
+/// `pub(crate)` because the Toom-3 kernel (`mul_toom3`) reuses it as its own
+/// Limb-generic base case — ONE shared L-space schoolbook, no duplicate
+/// (Constitution rule 2). (A future tidy could relocate this + the two
+/// `limb_{add,sub}_assign` helpers to `mul_schoolbook.rs` beside `mul_low_limb`.)
 #[inline]
-fn schoolbook_rec_limb<L: Limb>(a: &[L], b: &[L], out: &mut [L]) {
+pub(crate) fn schoolbook_rec_limb<L: Limb>(a: &[L], b: &[L], out: &mut [L]) {
     let na = a.len();
     let nb = b.len();
     let mut i = 0;
@@ -251,9 +256,10 @@ fn schoolbook_rec_limb<L: Limb>(a: &[L], b: &[L], out: &mut [L]) {
 }
 
 /// Limb-generic add-assign: a += b, returns carry. a.len() >= b.len().
-/// Used for sum-formation and recombine in L space.
+/// Used for sum-formation and recombine in L space. `pub(crate)`: shared
+/// with the Toom-3 kernel (one L-space add, no duplicate — rule 2).
 #[inline]
-fn limb_add_assign<L: Limb>(a: &mut [L], b: &[L]) -> bool {
+pub(crate) fn limb_add_assign<L: Limb>(a: &mut [L], b: &[L]) -> bool {
     let mut carry = false;
     let mut i = 0;
     while i < a.len() {
@@ -268,9 +274,10 @@ fn limb_add_assign<L: Limb>(a: &mut [L], b: &[L]) -> bool {
 }
 
 /// Limb-generic sub-assign: a -= b, returns borrow. a.len() >= b.len().
-/// Used for z1 formation (z1 -= z0; z1 -= z2) in L space.
+/// Used for z1 formation (z1 -= z0; z1 -= z2) in L space. `pub(crate)`:
+/// shared with the Toom-3 kernel (one L-space sub, no duplicate — rule 2).
 #[inline]
-fn limb_sub_assign<L: Limb>(a: &mut [L], b: &[L]) -> bool {
+pub(crate) fn limb_sub_assign<L: Limb>(a: &mut [L], b: &[L]) -> bool {
     let mut borrow = false;
     let mut i = 0;
     while i < a.len() {
