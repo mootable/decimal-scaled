@@ -29,7 +29,7 @@ use crate::int::types::Int;
 /// `d38::checked_to_i128`: the public `DecimalConstants` accessors that
 /// can overflow (`deg_per_rad` ≈ 57.3 near a tier's top scale) source
 /// their value through
-/// [`crate::algos::support::const_table::deg_per_rad_by_scale_checked`]
+/// [`crate::consts::deg_per_rad_by_scale_checked`]
 /// (etc.), which returns `None` on overflow; this turns that `None`
 /// into the same panic every other constant raises (`pi`/`tau`/`e` go
 /// through `rescale`, whose `checked_mul` panics). The INTERNAL
@@ -422,7 +422,7 @@ impl<const SCALE: u32> DecimalConstants for crate::D<crate::int::types::Int<4>, 
     #[inline]
     fn deg_per_rad_with(mode: crate::support::rounding::RoundingMode) -> Self {
         Self(checked_storage(
-            crate::algos::support::const_table::deg_per_rad_by_scale_checked::<
+            crate::consts::deg_per_rad_by_scale_checked::<
                 crate::int::types::Int<4>,
             >(SCALE, mode),
             "deg_per_rad",
@@ -432,7 +432,7 @@ impl<const SCALE: u32> DecimalConstants for crate::D<crate::int::types::Int<4>, 
     #[inline]
     fn rad_per_deg_with(mode: crate::support::rounding::RoundingMode) -> Self {
         Self(checked_storage(
-            crate::algos::support::const_table::rad_per_deg_by_scale_checked::<
+            crate::consts::rad_per_deg_by_scale_checked::<
                 crate::int::types::Int<4>,
             >(SCALE, mode),
             "rad_per_deg",
@@ -526,7 +526,7 @@ impl<const SCALE: u32> DecimalConstants for crate::D<crate::int::types::Int<8>, 
     #[inline]
     fn deg_per_rad_with(mode: crate::support::rounding::RoundingMode) -> Self {
         Self(checked_storage(
-            crate::algos::support::const_table::deg_per_rad_by_scale_checked::<
+            crate::consts::deg_per_rad_by_scale_checked::<
                 crate::int::types::Int<8>,
             >(SCALE, mode),
             "deg_per_rad",
@@ -536,7 +536,7 @@ impl<const SCALE: u32> DecimalConstants for crate::D<crate::int::types::Int<8>, 
     #[inline]
     fn rad_per_deg_with(mode: crate::support::rounding::RoundingMode) -> Self {
         Self(checked_storage(
-            crate::algos::support::const_table::rad_per_deg_by_scale_checked::<
+            crate::consts::rad_per_deg_by_scale_checked::<
                 crate::int::types::Int<8>,
             >(SCALE, mode),
             "rad_per_deg",
@@ -630,7 +630,7 @@ impl<const SCALE: u32> DecimalConstants for crate::D<crate::int::types::Int<16>,
     #[inline]
     fn deg_per_rad_with(mode: crate::support::rounding::RoundingMode) -> Self {
         Self(checked_storage(
-            crate::algos::support::const_table::deg_per_rad_by_scale_checked::<
+            crate::consts::deg_per_rad_by_scale_checked::<
                 crate::int::types::Int<16>,
             >(SCALE, mode),
             "deg_per_rad",
@@ -640,7 +640,7 @@ impl<const SCALE: u32> DecimalConstants for crate::D<crate::int::types::Int<16>,
     #[inline]
     fn rad_per_deg_with(mode: crate::support::rounding::RoundingMode) -> Self {
         Self(checked_storage(
-            crate::algos::support::const_table::rad_per_deg_by_scale_checked::<
+            crate::consts::rad_per_deg_by_scale_checked::<
                 crate::int::types::Int<16>,
             >(SCALE, mode),
             "rad_per_deg",
@@ -845,7 +845,7 @@ macro_rules! decl_wide_consts_tier {
             #[inline]
             fn deg_per_rad_with(mode: crate::support::rounding::RoundingMode) -> Self {
                 Self($crate::types::consts::wide::checked_storage(
-                    crate::algos::support::const_table::deg_per_rad_by_scale_checked::<$Storage>(
+                    crate::consts::deg_per_rad_by_scale_checked::<$Storage>(
                         SCALE, mode,
                     ),
                     "deg_per_rad",
@@ -855,7 +855,7 @@ macro_rules! decl_wide_consts_tier {
             #[inline]
             fn rad_per_deg_with(mode: crate::support::rounding::RoundingMode) -> Self {
                 Self($crate::types::consts::wide::checked_storage(
-                    crate::algos::support::const_table::rad_per_deg_by_scale_checked::<$Storage>(
+                    crate::consts::rad_per_deg_by_scale_checked::<$Storage>(
                         SCALE, mode,
                     ),
                     "rad_per_deg",

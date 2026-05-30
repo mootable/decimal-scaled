@@ -18,7 +18,7 @@
 //! Constants are sourced from an oracle-computed per-scale table — no
 //! `f64` anywhere. The narrow `DecimalConstants` methods read the
 //! always-present NARROW band (scales 0..=38) of
-//! [`crate::algos::support::const_table`]: each entry is
+//! [`crate::consts`]: each entry is
 //! `floor(const × 10^SCALE)` (narrowest-fit limbs) plus a `round_up`
 //! bit, from which the correct rounding under any [`RoundingMode`] is
 //! derived directly — `Trunc`/`Floor` = floor, `Ceiling` = floor+1, and
@@ -298,7 +298,7 @@ pub(crate) fn pi_at_target_with<const TARGET: u32>(
     mode: crate::support::rounding::RoundingMode,
 ) -> i128 {
     checked_to_i128(
-        crate::algos::support::const_table::pi_by_scale::<NarrowWork>(TARGET, mode),
+        crate::consts::pi_by_scale::<NarrowWork>(TARGET, mode),
         "pi",
         TARGET,
     )
@@ -307,7 +307,7 @@ pub(crate) fn tau_at_target_with<const TARGET: u32>(
     mode: crate::support::rounding::RoundingMode,
 ) -> i128 {
     checked_to_i128(
-        crate::algos::support::const_table::tau_by_scale::<NarrowWork>(TARGET, mode),
+        crate::consts::tau_by_scale::<NarrowWork>(TARGET, mode),
         "tau",
         TARGET,
     )
@@ -316,7 +316,7 @@ pub(crate) fn half_pi_at_target_with<const TARGET: u32>(
     mode: crate::support::rounding::RoundingMode,
 ) -> i128 {
     checked_to_i128(
-        crate::algos::support::const_table::half_pi_by_scale::<NarrowWork>(TARGET, mode),
+        crate::consts::half_pi_by_scale::<NarrowWork>(TARGET, mode),
         "half_pi",
         TARGET,
     )
@@ -325,7 +325,7 @@ pub(crate) fn quarter_pi_at_target_with<const TARGET: u32>(
     mode: crate::support::rounding::RoundingMode,
 ) -> i128 {
     checked_to_i128(
-        crate::algos::support::const_table::quarter_pi_by_scale::<NarrowWork>(TARGET, mode),
+        crate::consts::quarter_pi_by_scale::<NarrowWork>(TARGET, mode),
         "quarter_pi",
         TARGET,
     )
@@ -334,7 +334,7 @@ pub(crate) fn golden_at_target_with<const TARGET: u32>(
     mode: crate::support::rounding::RoundingMode,
 ) -> i128 {
     checked_to_i128(
-        crate::algos::support::const_table::golden_by_scale::<NarrowWork>(TARGET, mode),
+        crate::consts::golden_by_scale::<NarrowWork>(TARGET, mode),
         "golden",
         TARGET,
     )
@@ -343,7 +343,7 @@ pub(crate) fn e_at_target_with<const TARGET: u32>(
     mode: crate::support::rounding::RoundingMode,
 ) -> i128 {
     checked_to_i128(
-        crate::algos::support::const_table::e_by_scale::<NarrowWork>(TARGET, mode),
+        crate::consts::e_by_scale::<NarrowWork>(TARGET, mode),
         "e",
         TARGET,
     )
@@ -352,7 +352,7 @@ pub(crate) fn deg_per_rad_at_target_with<const TARGET: u32>(
     mode: crate::support::rounding::RoundingMode,
 ) -> i128 {
     checked_to_i128(
-        crate::algos::support::const_table::deg_per_rad_by_scale::<NarrowWork>(TARGET, mode),
+        crate::consts::deg_per_rad_by_scale::<NarrowWork>(TARGET, mode),
         "deg_per_rad",
         TARGET,
     )
@@ -361,7 +361,7 @@ pub(crate) fn rad_per_deg_at_target_with<const TARGET: u32>(
     mode: crate::support::rounding::RoundingMode,
 ) -> i128 {
     checked_to_i128(
-        crate::algos::support::const_table::rad_per_deg_by_scale::<NarrowWork>(TARGET, mode),
+        crate::consts::rad_per_deg_by_scale::<NarrowWork>(TARGET, mode),
         "rad_per_deg",
         TARGET,
     )

@@ -1515,7 +1515,7 @@ macro_rules! decl_wide_transcendental {
             // `.rodata` value per width × scale × mode, computed by
             // `const_rounded_cf`) has been REPLACED by the per-scale,
             // width-deduplicated oracle table in
-            // `crate::algos::support::const_table`. The `*_cf` functions
+            // `crate::consts`. The `*_cf` functions
             // below now source the baked constant from that table's
             // `<const>_by_scale` accessor (keyed on the const working
             // scale `SCALE + GUARD`, so it const-folds to one entry per
@@ -1538,7 +1538,7 @@ macro_rules! decl_wide_transcendental {
                     // Hot path: source `π` from the per-scale oracle table
                     // keyed on the CONST working scale — const-folds to one
                     // entry per monomorphisation, zero-extends into `W`.
-                    return $crate::algos::support::const_table::pi_by_scale::<W>(SCALE + GUARD, mode);
+                    return $crate::consts::pi_by_scale::<W>(SCALE + GUARD, mode);
                 }
                 const_rounded(PI_REF_DIGITS, PI_REF_SCALE, PI_REF_TOP_CMP, w, mode)
             }
@@ -1553,7 +1553,7 @@ macro_rules! decl_wide_transcendental {
                 if w == SCALE + GUARD {
                     // Hot path: source `ln 2` from the per-scale oracle
                     // table keyed on the CONST working scale — see `pi_cf`.
-                    return $crate::algos::support::const_table::ln2_by_scale::<W>(SCALE + GUARD, mode);
+                    return $crate::consts::ln2_by_scale::<W>(SCALE + GUARD, mode);
                 }
                 const_rounded(LN2_REF_DIGITS, LN2_REF_SCALE, LN2_REF_TOP_CMP, w, mode)
             }
@@ -1568,7 +1568,7 @@ macro_rules! decl_wide_transcendental {
                 if w == SCALE + GUARD {
                     // Hot path: source `ln 10` from the per-scale oracle
                     // table keyed on the CONST working scale — see `pi_cf`.
-                    return $crate::algos::support::const_table::ln10_by_scale::<W>(SCALE + GUARD, mode);
+                    return $crate::consts::ln10_by_scale::<W>(SCALE + GUARD, mode);
                 }
                 const_rounded(LN10_REF_DIGITS, LN10_REF_SCALE, LN10_REF_TOP_CMP, w, mode)
             }
@@ -1641,19 +1641,19 @@ macro_rules! decl_wide_transcendental {
                     let w = scale + GUARD;
                     for mode in modes {
                         let old_pi = const_rounded_cf(PI_REF_DIGITS, PI_REF_SCALE, PI_REF_TOP_CMP, w, mode);
-                        let new_pi = $crate::algos::support::const_table::pi_by_scale::<W>(w, mode);
+                        let new_pi = $crate::consts::pi_by_scale::<W>(w, mode);
                         if old_pi != new_pi {
                             diverged += 1;
                             eprintln!("DIVERGE {tier} pi scale={scale} w={w} mode={mode:?}: old={old_pi:?} new={new_pi:?}");
                         }
                         let old_ln2 = const_rounded_cf(LN2_REF_DIGITS, LN2_REF_SCALE, LN2_REF_TOP_CMP, w, mode);
-                        let new_ln2 = $crate::algos::support::const_table::ln2_by_scale::<W>(w, mode);
+                        let new_ln2 = $crate::consts::ln2_by_scale::<W>(w, mode);
                         if old_ln2 != new_ln2 {
                             diverged += 1;
                             eprintln!("DIVERGE {tier} ln2 scale={scale} w={w} mode={mode:?}: old={old_ln2:?} new={new_ln2:?}");
                         }
                         let old_ln10 = const_rounded_cf(LN10_REF_DIGITS, LN10_REF_SCALE, LN10_REF_TOP_CMP, w, mode);
-                        let new_ln10 = $crate::algos::support::const_table::ln10_by_scale::<W>(w, mode);
+                        let new_ln10 = $crate::consts::ln10_by_scale::<W>(w, mode);
                         if old_ln10 != new_ln10 {
                             diverged += 1;
                             eprintln!("DIVERGE {tier} ln10 scale={scale} w={w} mode={mode:?}: old={old_ln10:?} new={new_ln10:?}");
@@ -2414,7 +2414,7 @@ macro_rules! decl_wide_transcendental {
             /// `180/π` (degrees per radian) at working scale `w`, sourced
             /// from the per-scale oracle table. On the common
             /// (`w == SCALE + GUARD`) path the const-folded
-            /// [`crate::algos::support::const_table::deg_per_rad_by_scale`]
+            /// [`crate::consts::deg_per_rad_by_scale`]
             /// reads the baked entry keyed on the const scale; any other
             /// `w` (no Ziv escalation reaches this in the angle kernels,
             /// but keep it total) falls to the runtime-keyed `by_w`.
@@ -2423,9 +2423,9 @@ macro_rules! decl_wide_transcendental {
                 mode: $crate::support::rounding::RoundingMode,
             ) -> W {
                 if w == SCALE + GUARD {
-                    return $crate::algos::support::const_table::deg_per_rad_by_scale::<W>(SCALE + GUARD, mode);
+                    return $crate::consts::deg_per_rad_by_scale::<W>(SCALE + GUARD, mode);
                 }
-                $crate::algos::support::const_table::deg_per_rad_by_w::<W>(w, mode)
+                $crate::consts::deg_per_rad_by_w::<W>(w, mode)
             }
 
             /// `π/180` (radians per degree) at working scale `w` — see
@@ -2435,9 +2435,9 @@ macro_rules! decl_wide_transcendental {
                 mode: $crate::support::rounding::RoundingMode,
             ) -> W {
                 if w == SCALE + GUARD {
-                    return $crate::algos::support::const_table::rad_per_deg_by_scale::<W>(SCALE + GUARD, mode);
+                    return $crate::consts::rad_per_deg_by_scale::<W>(SCALE + GUARD, mode);
                 }
-                $crate::algos::support::const_table::rad_per_deg_by_w::<W>(w, mode)
+                $crate::consts::rad_per_deg_by_w::<W>(w, mode)
             }
 
             /// Taylor series for `sin` on a reduced `r ∈ [0, π/4]`.
