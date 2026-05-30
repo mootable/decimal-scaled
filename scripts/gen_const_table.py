@@ -510,6 +510,20 @@ def main():
         w("}")
         w("")
 
+    # `PI_RAW_D76_S75`: pi rounded half-to-even to 75 frac digits as an `Int<4>`,
+    # emitted UNGATED. The narrow trig series kernel (D38, always compiled)
+    # consumes it, but scale 75 lives in the `_wide-support`-gated BASE band — so
+    # this single value is ungated here (replaces `from_str_radix(PI_D76_S75)`).
+    _q75, _rb75 = floor_and_roundbit(mp.pi, 75)
+    _pi75_limbs = ", ".join(f"0x{l:016x}" for l in limbs_le(_q75 + _rb75))
+    w("/// `pi` rounded half-to-even to 75 fractional digits as `Int<4>`")
+    w("/// (`round(pi * 10^75)`), UNGATED — the narrow trig kernel needs it in")
+    w("/// every build (scale 75 sits in the `_wide-support`-gated BASE band, so it")
+    w("/// cannot read the per-scale table there). Replaces the old build-time")
+    w("/// `from_str_radix(PI_D76_S75)`.")
+    w(f"pub(crate) const PI_RAW_D76_S75: crate::int::types::Int<4> = limbs_to_int_n::<4>(&[{_pi75_limbs}]);")
+    w("")
+
     # ── Self-test: re-derive the six modes from (floor, round_up) and
     # assert against a handful of independently-spelled known values. ───
     w("#[cfg(test)]")

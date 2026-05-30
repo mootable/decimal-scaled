@@ -51,27 +51,17 @@
 use crate::types::widths::D38;
 use crate::int::types::Int;
 
-// The narrow `DecimalConstants` values are sourced per-scale from the
-// oracle `const_table` NARROW band (see `*_at_target_with` below), so
-// the old 75-digit `Fixed`-rescale machinery (and its `SCALE_REF` /
-// per-constant `*_RAW` references) is gone. The single remaining raw
+// The narrow `DecimalConstants` values are sourced per-scale from the unified
+// const table's NARROW band (see `*_at_target_with` below). The single raw
 // reference is `PI_RAW`: the `trig` series kernel
-// (`algos::trig::trig_series_2limb`) still consumes the 75-digit
-// `Int<4>` value of pi directly, so it is kept here.
+// (`algos::trig::trig_series_2limb`) consumes the 75-digit `Int<4>` value of pi
+// directly — re-exported here from the table's ungated `PI_RAW_D76_S75`.
 
-// Raw decimal string at 75 fractional digits, materialised at build
-// time by `build.rs`. The build-time string -> Int<4> parse is
-// `const fn` (via `Int::<4>::from_str_radix`, base 10 only). Source:
-// ISO 80000-2 / OEIS A000796.
-include!(concat!(env!("OUT_DIR"), "/wide_consts.rs"));
-
-/// Pi at 75 fractional digits as an `Int<4>` (`π × 10^75`). Consumed by
-/// the `trig` series kernel, which needs the raw wide reference rather
-/// than a per-scale narrow constant.
-pub(crate) const PI_RAW: Int<4> = match Int::<4>::from_str_radix(PI_D76_S75, 10) {
-    Ok(v) => v,
-    Err(_) => panic!("consts: PI_D76_S75 not parseable"),
-};
+/// Pi rounded to 75 fractional digits as an `Int<4>` (`round(π × 10^75)`).
+/// Consumed by the `trig` series kernel, which needs the raw wide reference
+/// rather than a per-scale narrow constant. Sourced from the unified const
+/// table (the ungated `PI_RAW_D76_S75`), not a build-time string.
+pub(crate) const PI_RAW: Int<4> = crate::consts::PI_RAW_D76_S75;
 
 /// The work integer the narrow path folds a `const_table` entry into
 /// before the storage-range check. `Int<3>` (192 bits) comfortably
