@@ -465,6 +465,51 @@ def main():
             w("}")
             w("")
 
+    # ── Strong-fold const-fn API: bake a constant into `Int<N>` at a concrete
+    # `N` in a const-block — a GUARANTEED compile-time fold (not optimizer-
+    # dependent like the generic `*_by_scale`). The DecimalConstants impls and
+    # the trig `PI_RAW` const use these.
+    w("/// Zero-extends a narrow little-endian limb slice into `Int<N>` as a")
+    w("/// `const fn` — the strong-fold primitive. Builds `[0u64; N]` (plain")
+    w("/// const-generic `N`, no `generic_const_exprs`) + `Int::from_limbs`, so a")
+    w("/// caller can bake the value in a const-block at a concrete `N`.")
+    w("const fn limbs_to_int_n<const N: usize>(limbs: &[u64]) -> crate::int::types::Int<N> {")
+    w("    let mut arr = [0u64; N];")
+    w("    let mut i = 0;")
+    w("    while i < limbs.len() {")
+    w("        arr[i] = limbs[i];")
+    w("        i += 1;")
+    w("    }")
+    w("    crate::int::types::Int::<N>::from_limbs(arr)")
+    w("}")
+    w("")
+    for name, _ in CONSTS:
+        w(f"/// `{name}` at the CONST `scale` as a compile-time-baked `Int<N>`")
+        w("/// (strong fold). Evaluate it in a const-block at a concrete-`N` leaf:")
+        w(f"/// the `{name}_entry` lookup folds, `limbs_to_int_n` bakes the zero-")
+        w("/// extend, and the `+1` bump folds when `mode` is const. Runtime / Ziv")
+        w(f"/// path: [`{name}_by_working_scale`].")
+        w(f"pub(crate) const fn {name}_const_n<const N: usize>(")
+        w("    scale: u32,")
+        w("    mode: RoundingMode,")
+        w(") -> crate::int::types::Int<N> {")
+        w(f"    let (limbs, round_up) = {name}_entry(scale);")
+        w("    let floor = limbs_to_int_n::<N>(limbs);")
+        w("    let bump = match mode {")
+        w("        RoundingMode::Trunc | RoundingMode::Floor => false,")
+        w("        RoundingMode::Ceiling => true,")
+        w("        RoundingMode::HalfToEven")
+        w("        | RoundingMode::HalfAwayFromZero")
+        w("        | RoundingMode::HalfTowardZero => round_up != 0,")
+        w("    };")
+        w("    if bump {")
+        w("        floor.wrapping_add(crate::int::types::Int::<N>::ONE)")
+        w("    } else {")
+        w("        floor")
+        w("    }")
+        w("}")
+        w("")
+
     # ── Self-test: re-derive the six modes from (floor, round_up) and
     # assert against a handful of independently-spelled known values. ───
     w("#[cfg(test)]")
