@@ -547,7 +547,9 @@ crate::macros::display::decl_decimal_display!(wide D18, crate::int::types::Uint<
 crate::macros::overflow::decl_decimal_overflow_variants!(wide D18, crate::int::types::Int<1>, crate::int::types::Int<2>);
 crate::macros::num_traits::decl_decimal_num_traits_basics!(D18);
 crate::macros::sign::decl_decimal_sign_methods!(wide D18, crate::int::types::Int<1>);
-crate::macros::consts::decl_decimal_consts!(wide D18, crate::int::types::Int<1>);
+// D18 (Int<1>) `DecimalConstants` comes from the single generic impl in
+// `src/types/consts/d38.rs` (sourced from the unified `consts` table) — no
+// per-tier macro invocation.
 crate::macros::from_str::decl_decimal_from_str!(wide D18, crate::int::types::Int<1>);
 crate::macros::float_bridge::decl_decimal_float_bridge!(wide D18, crate::int::types::Int<1>);
 crate::macros::storage_formatters::decl_decimal_storage_formatters!(D18);

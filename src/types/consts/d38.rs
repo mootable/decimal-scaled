@@ -48,7 +48,6 @@
 //! golden ratio (OEIS A001622), plus deg_per_rad (180/pi) and
 //! rad_per_deg (pi/180).
 
-use crate::types::widths::D38;
 use crate::int::types::Int;
 
 // The narrow `DecimalConstants` values are sourced per-scale from the unified
