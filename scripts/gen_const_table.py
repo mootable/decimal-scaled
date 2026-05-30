@@ -132,7 +132,7 @@ CONST_CLASS = {
     "pi": ZIV_MAXES, "ln2": LN2_MAXES, "ln10": ZIV_MAXES,
     "deg_per_rad": HOT_MAXES, "rad_per_deg": HOT_MAXES,
     "tau": DEC_MAXES, "half_pi": DEC_MAXES, "quarter_pi": DEC_MAXES,
-    "e": DEC_MAXES, "golden": DEC_MAXES,
+    "e": DEC_MAXES, "golden": DEC_MAXES, "log10_2": DEC_MAXES,
 }
 
 # The ALWAYS-PRESENT narrow band. The public `DecimalConstants` trait
@@ -174,6 +174,10 @@ CONSTS = [
     ("golden", lambda: (1 + mp.sqrt(5)) / 2),
     ("ln2", lambda: mp.log(2)),
     ("ln10", lambda: mp.log(10)),
+    # log10(2) = log(2)/log(10) ~ 0.30103 — the bit<->digit conversion
+    # factor (a value's decimal-digit count ~ bit_len * log10(2)). Public
+    # DecimalConstants value; sourced as a true oracle ratio.
+    ("log10_2", lambda: mp.log(2) / mp.log(10)),
     # one radian in degrees = 180/pi, sourced as a true oracle value.
     ("deg_per_rad", lambda: mp.degrees(1)),
     # one degree in radians = pi/180.

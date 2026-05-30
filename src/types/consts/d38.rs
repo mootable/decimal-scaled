@@ -214,6 +214,19 @@ pub trait DecimalConstants: Sized {
     /// N/A: constant value, no arithmetic performed.
     fn rad_per_deg() -> Self;
 
+    /// Base-10 logarithm of 2 (~0.30103...). The bit-to-digit factor:
+    /// a value's decimal-digit count is about `bit_length * log10(2)`,
+    /// so this scales between binary and decimal magnitudes.
+    ///
+    /// Source: the oracle value of `log(2)/log(10)`. Sourced per-scale
+    /// from the constant table to the caller's `SCALE` via the
+    /// crate-default rounding mode.
+    ///
+    /// # Precision
+    ///
+    /// N/A: constant value, no arithmetic performed.
+    fn log10_2() -> Self;
+
     // ─── *_with(mode) siblings ───────────────────────────────────
     //
     // Each `<const>_with(mode)` rescales the 75-digit reference under
@@ -240,6 +253,8 @@ pub trait DecimalConstants: Sized {
     fn deg_per_rad_with(mode: crate::support::rounding::RoundingMode) -> Self;
     /// `rad_per_deg()` under the supplied rounding mode.
     fn rad_per_deg_with(mode: crate::support::rounding::RoundingMode) -> Self;
+    /// `log10_2()` under the supplied rounding mode.
+    fn log10_2_with(mode: crate::support::rounding::RoundingMode) -> Self;
 }
 
 // Public-to-crate helpers that return each constant's correctly-rounded
@@ -437,6 +452,10 @@ impl<const N: usize, const SCALE: u32> DecimalConstants
     fn rad_per_deg() -> Self {
         Self::rad_per_deg_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
+    #[inline]
+    fn log10_2() -> Self {
+        Self::log10_2_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    }
 
     #[inline]
     fn pi_with(mode: crate::support::rounding::RoundingMode) -> Self {
@@ -499,6 +518,14 @@ impl<const N: usize, const SCALE: u32> DecimalConstants
         Self(checked_storage::<N>(
             crate::consts::rad_per_deg_by_scale_checked::<crate::int::types::Int<N>>(SCALE, mode),
             "rad_per_deg",
+            SCALE,
+        ))
+    }
+    #[inline]
+    fn log10_2_with(mode: crate::support::rounding::RoundingMode) -> Self {
+        Self(checked_storage::<N>(
+            crate::consts::log10_2_by_scale_checked::<crate::int::types::Int<N>>(SCALE, mode),
+            "log10_2",
             SCALE,
         ))
     }
