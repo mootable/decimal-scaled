@@ -76,7 +76,7 @@ pub trait Decimal:
     DecimalArithmetic
     + DecimalConvert
     + crate::types::traits::transcendental::DecimalTranscendental
-    + crate::types::consts::DecimalConstants
+    + crate::types::traits::consts::DecimalConstants
 {
 }
 
@@ -84,6 +84,6 @@ impl<T> Decimal for T where
     T: DecimalArithmetic
         + DecimalConvert
         + crate::types::traits::transcendental::DecimalTranscendental
-        + crate::types::consts::DecimalConstants
+        + crate::types::traits::consts::DecimalConstants
 {
 }

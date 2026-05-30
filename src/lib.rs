@@ -1794,7 +1794,7 @@ pub use crate::support::serde_helpers;
 
 pub use crate::support::error::{ConvertError, ParseError};
 pub use crate::support::rounding::RoundingMode;
-pub use crate::types::consts::DecimalConstants;
+pub use crate::types::traits::DecimalConstants;
 pub use crate::types::traits::Decimal;
 pub use crate::types::traits::DecimalArithmetic;
 pub use crate::types::traits::DecimalConvert;
