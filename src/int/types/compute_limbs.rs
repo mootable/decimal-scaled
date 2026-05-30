@@ -257,6 +257,8 @@ pub(crate) trait Limb: Copy + PartialEq {
     fn widening_mul(self, rhs: Self) -> (Self, Self);
     /// `self + rhs → (sum, carry)`.
     fn overflowing_add(self, rhs: Self) -> (Self, bool);
+    /// `self - rhs → (difference, borrow)`. Wraps on underflow.
+    fn overflowing_sub(self, rhs: Self) -> (Self, bool);
     /// `self + c1 + c2` — the schoolbook carry merge. The column bound
     /// (`hi ≤ MAX − 1`, and `c1`/`c2` never both set) guarantees no overflow.
     fn add_carries(self, c1: bool, c2: bool) -> Self;
@@ -316,6 +318,10 @@ impl Limb for u64 {
     #[inline]
     fn overflowing_add(self, rhs: Self) -> (Self, bool) {
         u64::overflowing_add(self, rhs)
+    }
+    #[inline]
+    fn overflowing_sub(self, rhs: Self) -> (Self, bool) {
+        u64::overflowing_sub(self, rhs)
     }
     #[inline]
     fn add_carries(self, c1: bool, c2: bool) -> Self {
@@ -394,6 +400,10 @@ impl Limb for u128 {
     #[inline]
     fn overflowing_add(self, rhs: Self) -> (Self, bool) {
         u128::overflowing_add(self, rhs)
+    }
+    #[inline]
+    fn overflowing_sub(self, rhs: Self) -> (Self, bool) {
+        u128::overflowing_sub(self, rhs)
     }
     #[inline]
     fn add_carries(self, c1: bool, c2: bool) -> Self {
