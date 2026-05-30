@@ -1,4 +1,4 @@
-//! `mul_widen_divide` — decimal multiplication by the widen-then-divide
+//! `mul_widen_divide` -- decimal multiplication by the widen-then-divide
 //! method, generic over the storage width `N` only.
 //!
 //! Multiplies `a * b` for two same-`SCALE` decimals stored as `Int<N>`. The
@@ -7,20 +7,21 @@
 //! width (`2N` limbs), so it is formed in a limb **scratch buffer** rather
 //! than a work *type* `Int<2N>` (which stable Rust cannot name from `N`).
 //!
-//! # Generic over the storage width only — no `Int<2N>` work type
+//! # Generic over the storage width only -- no `Int<2N>` work type
 //!
 //! Following the `sqrt`/`cbrt`/`hypot` template, the kernel is generic over
 //! the storage limb count `N` alone and does the `2N`-wide work directly in
 //! a `ComputeInt::double_buffered_u64()` buffer:
 //!
 //! 1. form the magnitude product `|a| * |b|` (`2N` u64 limbs) via the int
-//!    layer's width-agnostic slice kernel
-//!    [`crate::int::algos::mul::mul_schoolbook::mul_schoolbook`];
+//!    layer's const-`N` policy dispatcher
+//!    [`crate::int::policy::mul::dispatch`], which routes even-`N` widths
+//!    to the u128-packed `mul_full_limb` kernel for maximum throughput;
 //! 2. transcode the product into a u128 magnitude buffer and divide it by
 //!    `10^SCALE` in place via the shared MG / Newton magnitude-slice cores
 //!    ([`crate::algos::support::mg_divide::div_pow10_mag_u128`] for
 //!    `SCALE <= 38`, [`crate::algos::support::newton_reciprocal::dispatch_pow10_mag_u128`]
-//!    above) — the same magic-number / Newton-reciprocal path the typed
+//!    above) -- the same magic-number / Newton-reciprocal path the typed
 //!    `div_wide_pow10` wrapper uses, so no Knuth-divide regression;
 //! 3. rebuild the signed `Int<N>` result from the quotient magnitude and
 //!    the product sign.
@@ -33,22 +34,10 @@
 //! All integer arithmetic dispatches DOWN to the int layer; this fn never
 //! calls a decimal method on its own value.
 
-use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 use crate::int::types::traits::BigInt;
 use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
-
-/// Significant limb length of `a` (index of the highest non-zero limb + 1),
-/// clamped to at least 1 so zero has length 1.
-#[inline]
-fn sig_len(a: &[u64]) -> usize {
-    let mut l = a.len();
-    while l > 1 && a[l - 1] == 0 {
-        l -= 1;
-    }
-    l
-}
 
 /// Divide the u128 magnitude `mag` (in place) by `10^SCALE`, choosing the
 /// MG single-chunk / MG chain / Newton path exactly as the typed
@@ -122,9 +111,11 @@ fn narrow_mag_to_int<const N: usize>(mag: &[u128], neg: bool, msg: &str) -> Int<
 ///
 /// A fast path skips the wide product when `a * b` provably fits `Int<N>`
 /// (via leading-zero counts); otherwise the magnitude product is formed in
-/// the scratch buffer, divided by `10^SCALE` via the MG / Newton magnitude
-/// cores, and rebuilt as `Int<N>` (debug panic / release wrap on overflow).
-/// `SCALE == 0` returns the product unscaled.
+/// the scratch buffer via [`crate::int::policy::mul::dispatch`] (which routes
+/// even-`N` widths to the u128-packed `mul_full_limb` kernel), divided by
+/// `10^SCALE` via the MG / Newton magnitude cores, and rebuilt as `Int<N>`
+/// (debug panic / release wrap on overflow). `SCALE == 0` returns the product
+/// unscaled.
 #[inline]
 pub(crate) fn mul_widen_divide<const N: usize, const SCALE: u32>(
     a: Int<N>,
@@ -153,19 +144,16 @@ where
     }
 
     // Slow path: form |a| * |b| (2N u64 limbs) in the work scratch via the
-    // int slice kernel, then divide the u128 view by 10^SCALE.
+    // int-layer const-N policy dispatcher -- routes even-N widths to the
+    // u128-packed mul_full_limb kernel (the full-product sibling of
+    // mul_low_limb); the dispatcher zeroes its own accumulator and writes
+    // 2*N u64 limbs into prod_buf.
     let a_mag = *a.unsigned_abs().as_limbs();
     let b_mag = *b.unsigned_abs().as_limbs();
-    let al = sig_len(&a_mag);
-    let bl = sig_len(&b_mag);
 
     let mut prod_buf = Limbs::<N>::double_buffered_u64();
-    let prod = prod_buf.as_mut();
-    let plen = (al + bl).min(prod.len());
-    for slot in prod[..plen].iter_mut() {
-        *slot = 0;
-    }
-    mul_schoolbook(&a_mag[..al], &b_mag[..bl], &mut prod[..plen]);
+    crate::int::policy::mul::dispatch::<N>(&a_mag, &b_mag, prod_buf.as_mut());
+    let prod = prod_buf.as_ref();
 
     // Transcode the 2N-u64 product into N u128 limbs (2N u64 == N u128).
     let mut mag = [0u128; N];
