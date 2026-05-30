@@ -473,7 +473,11 @@ def main():
         # than silently folding a wrapped value, matching every other
         # constant. (rad_per_deg ~ 0.0175 never overflows but gets the
         # symmetric accessor for consistency.)
-        if name in ("deg_per_rad", "rad_per_deg"):
+        # Every PUBLIC DecimalConstants constant gets *_by_scale_checked: the
+        # single unified impl range-checks ALL of them (pi/tau/e overflow storage
+        # past the tier's top scale too, not just deg_per_rad). ln2/ln10 are
+        # internal-only (no public constant), so they skip the checked accessor.
+        if name not in ("ln2", "ln10"):
             w(f"/// `{name}` at the CONST working `scale` as in [`{name}_by_scale`],")
             w("/// but returns `None` when the value does not fit the SIGNED")
             w("/// storage range of `W` (see [`round_entry_checked`]). Used by the")

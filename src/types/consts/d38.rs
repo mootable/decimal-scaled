@@ -364,7 +364,146 @@ pub(crate) fn rad_per_deg_at_target_with<const TARGET: u32>(
 // down to the caller's `SCALE` via half-to-even and narrows to i128
 // (or panics with a clear message if the constant's magnitude
 // exceeds the storage range at that scale).
-crate::macros::consts::decl_decimal_consts!(wide D38, crate::int::types::Int<2>);
+/// Unwraps a storage-range-checked constant, panicking with the canonical
+/// "out of storage range" message when the value does not fit `Int<N>` at the
+/// requested `SCALE`. Generic over the storage width — the single
+/// [`DecimalConstants`] impl below uses it for every tier.
+#[inline]
+pub(crate) fn checked_storage<const N: usize>(
+    value: Option<crate::int::types::Int<N>>,
+    name: &'static str,
+    scale: u32,
+) -> crate::int::types::Int<N> {
+    match value {
+        Some(v) => v,
+        None => panic!(
+            "constant out of storage range: {name} cannot fit storage at SCALE = {scale} \
+             (storage range is +/- Int::<N>::MAX / 10^SCALE)"
+        ),
+    }
+}
+
+// ─── The SINGLE DecimalConstants impl for EVERY decimal width ──────────
+//
+// One generic impl over `D<Int<N>, SCALE>` replaces all the former per-tier
+// impls — the narrow `decl_decimal_consts!` macro (D18 = Int<1>, D38 = Int<2>),
+// the wide hand impls (D76/D153/D307 = Int<4>/<8>/<16>), and the
+// `decl_wide_consts_tier!` macro (D57/D115/D230/D462/D616/D924/D1232) — and the
+// System-B `*_RAW_*` / build-time `wide_consts.rs` path they were sourced from.
+//
+// Every constant is sourced from the unified per-scale table (`crate::consts`)
+// at the caller's const `SCALE`, range-CHECKED to the storage `Int<N>`: a value
+// past the tier's representable scale (pi/tau/e at a scale whose 10^scale lift
+// exceeds `Int<N>`, or deg_per_rad ~57.3 near a tier's top) panics with the
+// canonical "out of storage range" message, matching the prior per-tier impls.
+// The lookup is keyed on the const `SCALE`, so it folds to the one entry.
+//
+// We deliberately do NOT use the strong-fold `*_const_n` `const {}` bake here:
+// a `const {}` that overflows would be a COMPILE error, whereas an over-scale
+// request must be a RUNTIME panic — so the checked runtime accessor is the
+// behaviour-preserving choice. The internal kernel path (ln/exp/trig) uses the
+// unchecked `*_by_scale` / `*_by_working_scale` into a wide work integer.
+impl<const N: usize, const SCALE: u32> DecimalConstants
+    for crate::D<crate::int::types::Int<N>, SCALE>
+{
+    #[inline]
+    fn pi() -> Self {
+        Self::pi_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    }
+    #[inline]
+    fn tau() -> Self {
+        Self::tau_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    }
+    #[inline]
+    fn half_pi() -> Self {
+        Self::half_pi_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    }
+    #[inline]
+    fn quarter_pi() -> Self {
+        Self::quarter_pi_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    }
+    #[inline]
+    fn golden() -> Self {
+        Self::golden_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    }
+    #[inline]
+    fn e() -> Self {
+        Self::e_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    }
+    #[inline]
+    fn deg_per_rad() -> Self {
+        Self::deg_per_rad_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    }
+    #[inline]
+    fn rad_per_deg() -> Self {
+        Self::rad_per_deg_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    #[inline]
+    fn pi_with(mode: crate::support::rounding::RoundingMode) -> Self {
+        Self(checked_storage::<N>(
+            crate::consts::pi_by_scale_checked::<crate::int::types::Int<N>>(SCALE, mode),
+            "pi",
+            SCALE,
+        ))
+    }
+    #[inline]
+    fn tau_with(mode: crate::support::rounding::RoundingMode) -> Self {
+        Self(checked_storage::<N>(
+            crate::consts::tau_by_scale_checked::<crate::int::types::Int<N>>(SCALE, mode),
+            "tau",
+            SCALE,
+        ))
+    }
+    #[inline]
+    fn half_pi_with(mode: crate::support::rounding::RoundingMode) -> Self {
+        Self(checked_storage::<N>(
+            crate::consts::half_pi_by_scale_checked::<crate::int::types::Int<N>>(SCALE, mode),
+            "half_pi",
+            SCALE,
+        ))
+    }
+    #[inline]
+    fn quarter_pi_with(mode: crate::support::rounding::RoundingMode) -> Self {
+        Self(checked_storage::<N>(
+            crate::consts::quarter_pi_by_scale_checked::<crate::int::types::Int<N>>(SCALE, mode),
+            "quarter_pi",
+            SCALE,
+        ))
+    }
+    #[inline]
+    fn golden_with(mode: crate::support::rounding::RoundingMode) -> Self {
+        Self(checked_storage::<N>(
+            crate::consts::golden_by_scale_checked::<crate::int::types::Int<N>>(SCALE, mode),
+            "golden",
+            SCALE,
+        ))
+    }
+    #[inline]
+    fn e_with(mode: crate::support::rounding::RoundingMode) -> Self {
+        Self(checked_storage::<N>(
+            crate::consts::e_by_scale_checked::<crate::int::types::Int<N>>(SCALE, mode),
+            "e",
+            SCALE,
+        ))
+    }
+    #[inline]
+    fn deg_per_rad_with(mode: crate::support::rounding::RoundingMode) -> Self {
+        Self(checked_storage::<N>(
+            crate::consts::deg_per_rad_by_scale_checked::<crate::int::types::Int<N>>(SCALE, mode),
+            "deg_per_rad",
+            SCALE,
+        ))
+    }
+    #[inline]
+    fn rad_per_deg_with(mode: crate::support::rounding::RoundingMode) -> Self {
+        Self(checked_storage::<N>(
+            crate::consts::rad_per_deg_by_scale_checked::<crate::int::types::Int<N>>(SCALE, mode),
+            "rad_per_deg",
+            SCALE,
+        ))
+    }
+}
 
 // EPSILON / MIN_POSITIVE for every width are now emitted by
 // `decl_decimal_basics!`. The D38-specific inherent impl that used
