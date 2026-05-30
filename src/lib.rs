@@ -265,6 +265,10 @@ pub mod __bench_internals {
     mul_full_wrappers!(mul_full_u64_32, mul_full_u128_32, 32);
     mul_full_wrappers!(mul_full_u64_48, mul_full_u128_48, 48);
     mul_full_wrappers!(mul_full_u64_64, mul_full_u128_64, 64);
+    mul_full_wrappers!(mul_full_u64_96, mul_full_u128_96, 96);
+    mul_full_wrappers!(mul_full_u64_128, mul_full_u128_128, 128);
+    mul_full_wrappers!(mul_full_u64_192, mul_full_u128_192, 192);
+    mul_full_wrappers!(mul_full_u64_256, mul_full_u128_256, 256);
     /// `out = (x²) mod 2^(64*N)` via the u64-limb truncated-low symmetric
     /// square — the kernel the wide-tier exp/powf Smith squaring loop
     /// (`BigInt::wrapping_sqr_low_u128`) routes through at `L = u64`. Exposed
@@ -331,12 +335,41 @@ pub mod __bench_internals {
     mul_kara_limb_wrappers!(mul_kara_u64_32, mul_kara_u128_32, 32);
     mul_kara_limb_wrappers!(mul_kara_u64_48, mul_kara_u128_48, 48);
     mul_kara_limb_wrappers!(mul_kara_u64_64, mul_kara_u128_64, 64);
+    mul_kara_limb_wrappers!(mul_kara_u64_96, mul_kara_u128_96, 96);
+    mul_kara_limb_wrappers!(mul_kara_u64_128, mul_kara_u128_128, 128);
+    mul_kara_limb_wrappers!(mul_kara_u64_192, mul_kara_u128_192, 192);
+    mul_kara_limb_wrappers!(mul_kara_u64_256, mul_kara_u128_256, 256);
     /// Toom-Cook 3-way multiply exposed for the mul_toom3_ab microbench.
     /// out must be zeroed by the caller; out.len() >= 2 * a.len().
     #[inline(never)]
     pub fn mul_toom3_slice(a: &[u64], b: &[u64], out: &mut [u64]) {
         crate::int::algos::mul::mul_toom3::mul_toom3(a, b, out)
     }
+    /// Per-N monomorphic wrappers over the Limb-generic Toom-3 kernel
+    /// mul_toom3_limb::<N, L>. The u64 arm runs the value-slice recursion; the
+    /// u128 arm packs operands into N/2 u128 limbs and runs the identical
+    /// eval/interpolate/recombine in u128 space. Exposed for the mul_toom3_ab
+    /// bench toom3_u128 arm (the policy-map's u64-vs-u128 Toom-3 axis).
+    macro_rules! mul_toom3_limb_wrappers {
+        ($u64name:ident, $u128name:ident, $n:literal) => {
+            #[inline(never)]
+            pub fn $u64name(a: &[u64; $n], b: &[u64; $n], out: &mut [u64]) {
+                crate::int::algos::mul::mul_toom3::mul_toom3_limb::<$n, u64>(a, b, out)
+            }
+            #[inline(never)]
+            pub fn $u128name(a: &[u64; $n], b: &[u64; $n], out: &mut [u64]) {
+                crate::int::algos::mul::mul_toom3::mul_toom3_limb::<$n, u128>(a, b, out)
+            }
+        };
+    }
+    mul_toom3_limb_wrappers!(mul_toom3_u64_24, mul_toom3_u128_24, 24);
+    mul_toom3_limb_wrappers!(mul_toom3_u64_32, mul_toom3_u128_32, 32);
+    mul_toom3_limb_wrappers!(mul_toom3_u64_48, mul_toom3_u128_48, 48);
+    mul_toom3_limb_wrappers!(mul_toom3_u64_64, mul_toom3_u128_64, 64);
+    mul_toom3_limb_wrappers!(mul_toom3_u64_96, mul_toom3_u128_96, 96);
+    mul_toom3_limb_wrappers!(mul_toom3_u64_128, mul_toom3_u128_128, 128);
+    mul_toom3_limb_wrappers!(mul_toom3_u64_192, mul_toom3_u128_192, 192);
+    mul_toom3_limb_wrappers!(mul_toom3_u64_256, mul_toom3_u128_256, 256);
     /// Division engine candidates exposed for the `div_kernel_ab`
     /// microbench (the dispatch-seam A/B that recovers the WIDE integer
     /// division regression). Both take little-endian u64 magnitude limb

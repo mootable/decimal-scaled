@@ -123,21 +123,23 @@ pub(crate) fn mul_toom3_limb<const N: usize, L: Limb>(a: &[u64; N], b: &[u64; N]
     let ratio: usize = if h < N { 2 } else { 1 };
     let threshold_packed = (TOOM3_BASE_THRESHOLD / ratio).max(3);
 
-    // Product buffer (2h packed slots) + scratch, both in L limbs. The scratch
-    // is sized to the u64 worst case (TOOM3_SCRATCH_LIMBS): for L=u64, h=N needs
-    // toom3_scratch_needed(N, 9) (598 at N=64); the u128 packing (h=N/2) needs
-    // less. One generously-sized buffer covers both limb widths of this
-    // bench/test entry (the production u64 path `mul_toom3` is exactly sized).
-    let mut prod = [L::ZERO; TOOM3_SCRATCH_LIMBS];
-    let mut scratch = [L::ZERO; TOOM3_SCRATCH_LIMBS];
+    // Product buffer (2h packed slots) + scratch, both in L limbs, sized for the
+    // widest benched width N=256: prod needs 2h <= 2*256, scratch needs the u64
+    // worst case toom3_scratch_needed(256, 9) = 3458. These are bench/test-only
+    // sizes (this entry is #[cfg(test, bench-alt)]); the production u64 path
+    // `mul_toom3` keeps the exact TOOM3_SCRATCH_LIMBS (1024, its <=64 use).
+    const BENCH_PROD: usize = 2 * 256;
+    const BENCH_SCRATCH: usize = 3584; // > toom3_scratch_needed(256, 9) = 3458
+    let mut prod = [L::ZERO; BENCH_PROD];
+    let mut scratch = [L::ZERO; BENCH_SCRATCH];
     debug_assert!(2 * h <= prod.len());
     debug_assert!(
-        toom3_scratch_needed(h, threshold_packed) <= TOOM3_SCRATCH_LIMBS,
+        toom3_scratch_needed(h, threshold_packed) <= BENCH_SCRATCH,
         "Toom-3 limb scratch overflow: h={} threshold={} needs {} > {}",
         h,
         threshold_packed,
         toom3_scratch_needed(h, threshold_packed),
-        TOOM3_SCRATCH_LIMBS,
+        BENCH_SCRATCH,
     );
 
     for v in prod[..2 * h].iter_mut() {

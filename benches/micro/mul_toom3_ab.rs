@@ -1,22 +1,37 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! N-way microbench for the Toom-Cook 3-way integer multiply (step-1).
+//! N-way map bench for the integer multiply policy (step-2).
 //!
-//! Compares toom3 against slice-schoolbook, fixed-u64, u128-packed, and
-//! Karatsuba at N = 24, 32, 48, 64. Bit-identicality asserted before timing.
+//! Races every fixed-array candidate the int-mul policy could route, per
+//! width, on the SAME operands: schoolbook (u64 / u128 limbs), Karatsuba
+//! (u64 / u128), Toom-Cook-3 (u64 / u128). Widths span the wide storage tiers
+//! (D462..D1232 = 24..64 limbs) AND the transcendental work widths
+//! (96/128/192/256); the policy treats the 256 winner as the open-ended arm
+//! for all N >= 256 (owner directive 2026-05-30). Bit-identicality to the
+//! slice schoolbook oracle is asserted before timing.
+//!
+//! NOTE: the Karatsuba / Toom-3 arms recurse at threshold = N (a single split
+//! then schoolbook on the halves) -- a LOWER bound on the recursive benefit.
+//! If a recursive arm is competitive at the wide widths, the threshold is the
+//! tunable axis to sweep next.
 //!
 //! Run pinned on cores 16-19:
-//!
 //!   powershell.exe -NoProfile -File scripts/pin_run.ps1 \
 //!     -Mask 0xF0000 -Bench mul_toom3_ab \
 //!     -Features "wide x-wide xx-wide bench-alt"
 
 use criterion::Criterion;
 use decimal_scaled::__bench_internals::{
-    mul_karatsuba_forced, mul_slice, mul_toom3_slice,
-    mul_full_u64_24, mul_full_u64_32, mul_full_u64_48, mul_full_u64_64,
-    mul_full_u128_24, mul_full_u128_32, mul_full_u128_48, mul_full_u128_64,
+    mul_slice,
+    mul_full_u64_24, mul_full_u128_24, mul_kara_u64_24, mul_kara_u128_24, mul_toom3_u64_24, mul_toom3_u128_24,
+    mul_full_u64_32, mul_full_u128_32, mul_kara_u64_32, mul_kara_u128_32, mul_toom3_u64_32, mul_toom3_u128_32,
+    mul_full_u64_48, mul_full_u128_48, mul_kara_u64_48, mul_kara_u128_48, mul_toom3_u64_48, mul_toom3_u128_48,
+    mul_full_u64_64, mul_full_u128_64, mul_kara_u64_64, mul_kara_u128_64, mul_toom3_u64_64, mul_toom3_u128_64,
+    mul_full_u64_96, mul_full_u128_96, mul_kara_u64_96, mul_kara_u128_96, mul_toom3_u64_96, mul_toom3_u128_96,
+    mul_full_u64_128, mul_full_u128_128, mul_kara_u64_128, mul_kara_u128_128, mul_toom3_u64_128, mul_toom3_u128_128,
+    mul_full_u64_192, mul_full_u128_192, mul_kara_u64_192, mul_kara_u128_192, mul_toom3_u64_192, mul_toom3_u128_192,
+    mul_full_u64_256, mul_full_u128_256, mul_kara_u64_256, mul_kara_u128_256, mul_toom3_u64_256, mul_toom3_u128_256,
 };
 
 #[path = "../support/ab_microbench.rs"]
@@ -51,125 +66,65 @@ fn operands<const N: usize>() -> Vec<Operands<N>> {
     ]
 }
 
-fn school_run<const N: usize>(ops: Operands<N>) -> Vec<u64> {
+fn oracle<const N: usize>(ops: &Operands<N>) -> Vec<u64> {
     let mut out = vec![0u64; 2 * N];
     mul_slice(&ops.a, &ops.b, &mut out);
     out
 }
 
-fn toom3_run<const N: usize>(ops: Operands<N>) -> Vec<u64> {
-    let mut out = vec![0u64; 2 * N];
-    mul_toom3_slice(&ops.a, &ops.b, &mut out);
-    out
+/// Generate one width's N-way race over the six fixed-array candidates.
+macro_rules! width_bench {
+    ($fn:ident, $group:expr, $N:literal, $D:literal,
+     $u64:ident, $u128:ident, $ku64:ident, $ku128:ident, $tu64:ident, $tu128:ident) => {
+        fn $fn(c: &mut Criterion) {
+            const N: usize = $N;
+            // validity wall: every candidate bit-identical to the oracle
+            for ops in operands::<N>() {
+                let oc = oracle::<N>(&ops);
+                let mut r = vec![0u64; $D];
+                $u64(&ops.a, &ops.b, &mut r);   assert_eq!(r, oc, "u64 != oracle {} ({})", $N, ops.label);
+                let mut r = vec![0u64; $D]; $u128(&ops.a, &ops.b, &mut r);  assert_eq!(r, oc, "u128 != oracle {} ({})", $N, ops.label);
+                let mut r = vec![0u64; $D]; $ku64(&ops.a, &ops.b, &mut r);  assert_eq!(r, oc, "kara_u64 != oracle {} ({})", $N, ops.label);
+                let mut r = vec![0u64; $D]; $ku128(&ops.a, &ops.b, &mut r); assert_eq!(r, oc, "kara_u128 != oracle {} ({})", $N, ops.label);
+                let mut r = vec![0u64; $D]; $tu64(&ops.a, &ops.b, &mut r);  assert_eq!(r, oc, "toom3_u64 != oracle {} ({})", $N, ops.label);
+                let mut r = vec![0u64; $D]; $tu128(&ops.a, &ops.b, &mut r); assert_eq!(r, oc, "toom3_u128 != oracle {} ({})", $N, ops.label);
+            }
+            fn run_u64(ops: Operands<$N>) -> Vec<u64> { let mut o = vec![0u64; $D]; $u64(&ops.a, &ops.b, &mut o); o }
+            fn run_u128(ops: Operands<$N>) -> Vec<u64> { let mut o = vec![0u64; $D]; $u128(&ops.a, &ops.b, &mut o); o }
+            fn run_ku64(ops: Operands<$N>) -> Vec<u64> { let mut o = vec![0u64; $D]; $ku64(&ops.a, &ops.b, &mut o); o }
+            fn run_ku128(ops: Operands<$N>) -> Vec<u64> { let mut o = vec![0u64; $D]; $ku128(&ops.a, &ops.b, &mut o); o }
+            fn run_tu64(ops: Operands<$N>) -> Vec<u64> { let mut o = vec![0u64; $D]; $tu64(&ops.a, &ops.b, &mut o); o }
+            fn run_tu128(ops: Operands<$N>) -> Vec<u64> { let mut o = vec![0u64; $D]; $tu128(&ops.a, &ops.b, &mut o); o }
+            compare_all(c, $group, |ops: &Operands<N>| ops.label.to_string(), operands::<N>(), vec![
+                ("u64",        run_u64   as fn(Operands<N>) -> Vec<u64>),
+                ("u128",       run_u128  as fn(Operands<N>) -> Vec<u64>),
+                ("kara_u64",   run_ku64  as fn(Operands<N>) -> Vec<u64>),
+                ("kara_u128",  run_ku128 as fn(Operands<N>) -> Vec<u64>),
+                ("toom3_u64",  run_tu64  as fn(Operands<N>) -> Vec<u64>),
+                ("toom3_u128", run_tu128 as fn(Operands<N>) -> Vec<u64>),
+            ]);
+        }
+    };
 }
 
-fn kara_run<const N: usize>(ops: Operands<N>) -> Vec<u64> {
-    let mut out = vec![0u64; 2 * N];
-    mul_karatsuba_forced(&ops.a, &ops.b, &mut out, N);
-    out
-}
-
-fn bench_width_24(c: &mut Criterion) {
-    const N: usize = 24;
-    for ops in operands::<N>() {
-        let oracle = school_run::<N>(ops.clone());
-        let toom3  = toom3_run::<N>(ops.clone());
-        let kara   = kara_run::<N>(ops.clone());
-        assert_eq!(toom3, oracle, "toom3 != school n=24 ({})", ops.label);
-        assert_eq!(kara,  oracle, "kara != school n=24 ({})", ops.label);
-        let mut u64r  = vec![0u64; 48]; mul_full_u64_24(&ops.a, &ops.b, &mut u64r);
-        let mut u128r = vec![0u64; 48]; mul_full_u128_24(&ops.a, &ops.b, &mut u128r);
-        assert_eq!(u64r,  oracle, "u64 != school n=24 ({})", ops.label);
-        assert_eq!(u128r, oracle, "u128 != school n=24 ({})", ops.label);
-    }
-    fn u64_fn(ops: Operands<24>) -> Vec<u64> { let mut o = vec![0u64;48]; mul_full_u64_24(&ops.a,&ops.b,&mut o); o }
-    fn u128_fn(ops: Operands<24>) -> Vec<u64> { let mut o = vec![0u64;48]; mul_full_u128_24(&ops.a,&ops.b,&mut o); o }
-    compare_all(c, "mul_toom3/Int1536", |ops: &Operands<N>| ops.label.to_string(), operands::<N>(), vec![
-        ("school", school_run::<N> as fn(Operands<N>) -> Vec<u64>),
-        ("u64",    u64_fn          as fn(Operands<N>) -> Vec<u64>),
-        ("u128",   u128_fn         as fn(Operands<N>) -> Vec<u64>),
-        ("kara",   kara_run::<N>   as fn(Operands<N>) -> Vec<u64>),
-        ("toom3",  toom3_run::<N>  as fn(Operands<N>) -> Vec<u64>),
-    ]);
-}
-
-fn bench_width_32(c: &mut Criterion) {
-    const N: usize = 32;
-    for ops in operands::<N>() {
-        let oracle = school_run::<N>(ops.clone());
-        let toom3  = toom3_run::<N>(ops.clone());
-        let kara   = kara_run::<N>(ops.clone());
-        assert_eq!(toom3, oracle, "toom3 != school n=32 ({})", ops.label);
-        assert_eq!(kara,  oracle, "kara != school n=32 ({})", ops.label);
-        let mut u64r  = vec![0u64; 64]; mul_full_u64_32(&ops.a, &ops.b, &mut u64r);
-        let mut u128r = vec![0u64; 64]; mul_full_u128_32(&ops.a, &ops.b, &mut u128r);
-        assert_eq!(u64r,  oracle, "u64 != school n=32 ({})", ops.label);
-        assert_eq!(u128r, oracle, "u128 != school n=32 ({})", ops.label);
-    }
-    fn u64_fn(ops: Operands<32>) -> Vec<u64> { let mut o = vec![0u64;64]; mul_full_u64_32(&ops.a,&ops.b,&mut o); o }
-    fn u128_fn(ops: Operands<32>) -> Vec<u64> { let mut o = vec![0u64;64]; mul_full_u128_32(&ops.a,&ops.b,&mut o); o }
-    compare_all(c, "mul_toom3/Int2048", |ops: &Operands<N>| ops.label.to_string(), operands::<N>(), vec![
-        ("school", school_run::<N> as fn(Operands<N>) -> Vec<u64>),
-        ("u64",    u64_fn          as fn(Operands<N>) -> Vec<u64>),
-        ("u128",   u128_fn         as fn(Operands<N>) -> Vec<u64>),
-        ("kara",   kara_run::<N>   as fn(Operands<N>) -> Vec<u64>),
-        ("toom3",  toom3_run::<N>  as fn(Operands<N>) -> Vec<u64>),
-    ]);
-}
-
-fn bench_width_48(c: &mut Criterion) {
-    const N: usize = 48;
-    for ops in operands::<N>() {
-        let oracle = school_run::<N>(ops.clone());
-        let toom3  = toom3_run::<N>(ops.clone());
-        let kara   = kara_run::<N>(ops.clone());
-        assert_eq!(toom3, oracle, "toom3 != school n=48 ({})", ops.label);
-        assert_eq!(kara,  oracle, "kara != school n=48 ({})", ops.label);
-        let mut u64r  = vec![0u64; 96]; mul_full_u64_48(&ops.a, &ops.b, &mut u64r);
-        let mut u128r = vec![0u64; 96]; mul_full_u128_48(&ops.a, &ops.b, &mut u128r);
-        assert_eq!(u64r,  oracle, "u64 != school n=48 ({})", ops.label);
-        assert_eq!(u128r, oracle, "u128 != school n=48 ({})", ops.label);
-    }
-    fn u64_fn(ops: Operands<48>) -> Vec<u64> { let mut o = vec![0u64;96]; mul_full_u64_48(&ops.a,&ops.b,&mut o); o }
-    fn u128_fn(ops: Operands<48>) -> Vec<u64> { let mut o = vec![0u64;96]; mul_full_u128_48(&ops.a,&ops.b,&mut o); o }
-    compare_all(c, "mul_toom3/Int3072", |ops: &Operands<N>| ops.label.to_string(), operands::<N>(), vec![
-        ("school", school_run::<N> as fn(Operands<N>) -> Vec<u64>),
-        ("u64",    u64_fn          as fn(Operands<N>) -> Vec<u64>),
-        ("u128",   u128_fn         as fn(Operands<N>) -> Vec<u64>),
-        ("kara",   kara_run::<N>   as fn(Operands<N>) -> Vec<u64>),
-        ("toom3",  toom3_run::<N>  as fn(Operands<N>) -> Vec<u64>),
-    ]);
-}
-
-fn bench_width_64(c: &mut Criterion) {
-    const N: usize = 64;
-    for ops in operands::<N>() {
-        let oracle = school_run::<N>(ops.clone());
-        let toom3  = toom3_run::<N>(ops.clone());
-        let kara   = kara_run::<N>(ops.clone());
-        assert_eq!(toom3, oracle, "toom3 != school n=64 ({})", ops.label);
-        assert_eq!(kara,  oracle, "kara != school n=64 ({})", ops.label);
-        let mut u64r  = vec![0u64; 128]; mul_full_u64_64(&ops.a, &ops.b, &mut u64r);
-        let mut u128r = vec![0u64; 128]; mul_full_u128_64(&ops.a, &ops.b, &mut u128r);
-        assert_eq!(u64r,  oracle, "u64 != school n=64 ({})", ops.label);
-        assert_eq!(u128r, oracle, "u128 != school n=64 ({})", ops.label);
-    }
-    fn u64_fn(ops: Operands<64>) -> Vec<u64> { let mut o = vec![0u64;128]; mul_full_u64_64(&ops.a,&ops.b,&mut o); o }
-    fn u128_fn(ops: Operands<64>) -> Vec<u64> { let mut o = vec![0u64;128]; mul_full_u128_64(&ops.a,&ops.b,&mut o); o }
-    compare_all(c, "mul_toom3/Int4096", |ops: &Operands<N>| ops.label.to_string(), operands::<N>(), vec![
-        ("school", school_run::<N> as fn(Operands<N>) -> Vec<u64>),
-        ("u64",    u64_fn          as fn(Operands<N>) -> Vec<u64>),
-        ("u128",   u128_fn         as fn(Operands<N>) -> Vec<u64>),
-        ("kara",   kara_run::<N>   as fn(Operands<N>) -> Vec<u64>),
-        ("toom3",  toom3_run::<N>  as fn(Operands<N>) -> Vec<u64>),
-    ]);
-}
+width_bench!(bw_24,  "mul/Int1536_n24",  24,  48,  mul_full_u64_24,  mul_full_u128_24,  mul_kara_u64_24,  mul_kara_u128_24,  mul_toom3_u64_24,  mul_toom3_u128_24);
+width_bench!(bw_32,  "mul/Int2048_n32",  32,  64,  mul_full_u64_32,  mul_full_u128_32,  mul_kara_u64_32,  mul_kara_u128_32,  mul_toom3_u64_32,  mul_toom3_u128_32);
+width_bench!(bw_48,  "mul/Int3072_n48",  48,  96,  mul_full_u64_48,  mul_full_u128_48,  mul_kara_u64_48,  mul_kara_u128_48,  mul_toom3_u64_48,  mul_toom3_u128_48);
+width_bench!(bw_64,  "mul/Int4096_n64",  64,  128, mul_full_u64_64,  mul_full_u128_64,  mul_kara_u64_64,  mul_kara_u128_64,  mul_toom3_u64_64,  mul_toom3_u128_64);
+width_bench!(bw_96,  "mul/Int6144_n96",  96,  192, mul_full_u64_96,  mul_full_u128_96,  mul_kara_u64_96,  mul_kara_u128_96,  mul_toom3_u64_96,  mul_toom3_u128_96);
+width_bench!(bw_128, "mul/Int8192_n128", 128, 256, mul_full_u64_128, mul_full_u128_128, mul_kara_u64_128, mul_kara_u128_128, mul_toom3_u64_128, mul_toom3_u128_128);
+width_bench!(bw_192, "mul/Int12288_n192",192, 384, mul_full_u64_192, mul_full_u128_192, mul_kara_u64_192, mul_kara_u128_192, mul_toom3_u64_192, mul_toom3_u128_192);
+width_bench!(bw_256, "mul/Int16384_n256",256, 512, mul_full_u64_256, mul_full_u128_256, mul_kara_u64_256, mul_kara_u128_256, mul_toom3_u64_256, mul_toom3_u128_256);
 
 fn main() {
     let mut c = micro_criterion().configure_from_args();
-    bench_width_24(&mut c);
-    bench_width_32(&mut c);
-    bench_width_48(&mut c);
-    bench_width_64(&mut c);
+    bw_24(&mut c);
+    bw_32(&mut c);
+    bw_48(&mut c);
+    bw_64(&mut c);
+    bw_96(&mut c);
+    bw_128(&mut c);
+    bw_192(&mut c);
+    bw_256(&mut c);
     c.final_summary();
 }
