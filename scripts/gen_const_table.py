@@ -613,6 +613,83 @@ def main():
     w("}")
     w("")
 
+    # ── POW10 lookup: exact 10^exp, narrowest-fit little-endian limbs,
+    # width-generic (zero-extended into W). The wide tiers' `pow10` (the
+    # no-const-table tiers D924/D1232, and the width-generic `exp_generic`)
+    # read this as a static lookup instead of recomputing `10^exp` by repeated
+    # squaring. EXACT (10^exp is an integer) -> no round-up bit. Bands mirror
+    # ln2's (the deepest exp working-scale path); `pow10_in` falls back to a
+    # runtime `TEN.pow` beyond the generated range.
+    POW10_NARROW = 512
+    POW10_BASE_MAX, POW10_XW_MAX, POW10_XXW_MAX = (1280, 2560, 5120)
+    pow10_bands = [
+        ("NARROW", 0, POW10_NARROW, None),
+        ("BASE", 0, POW10_BASE_MAX, BASE_CFG),
+        ("XW", POW10_BASE_MAX + 1, POW10_XW_MAX, XW_CFG),
+        ("XXW", POW10_XW_MAX + 1, POW10_XXW_MAX, XXW_CFG),
+    ]
+    for band, lo, hi, cfg in pow10_bands:
+        if cfg is not None:
+            w(f"#[cfg({cfg})]")
+        w(f"static POW10_{band}: &[&[u64]] = &[")
+        for e in range(lo, hi + 1):
+            limbs = limbs_le(10 ** e)
+            limb_str = ", ".join(f"0x{l:016x}" for l in limbs)
+            w(f"    &[{limb_str}],")
+        w("];")
+        w("")
+    w("/// Limbs (little-endian) of `10^exp` if `exp` is within a generated POW10")
+    w("/// band, else `None`. Bands are feature-gated; the always-present NARROW")
+    w("/// band covers the default / no_std build. `const fn` so a const `exp`")
+    w("/// folds to the matching entry.")
+    w("#[inline]")
+    w("const fn pow10_entry(exp: u32) -> Option<&'static [u64]> {")
+    w("    if (exp as usize) < POW10_NARROW.len() {")
+    w("        return Some(POW10_NARROW[exp as usize]);")
+    w("    }")
+    w(f"    #[cfg({BASE_CFG})]")
+    w("    {")
+    w("        if (exp as usize) < POW10_BASE.len() {")
+    w("            return Some(POW10_BASE[exp as usize]);")
+    w("        }")
+    w("    }")
+    w(f"    #[cfg({XW_CFG})]")
+    w("    {")
+    w(f"        let base_lo = {POW10_BASE_MAX} + 1;")
+    w("        if exp >= base_lo {")
+    w("            let idx = (exp - base_lo) as usize;")
+    w("            if idx < POW10_XW.len() {")
+    w("                return Some(POW10_XW[idx]);")
+    w("            }")
+    w("        }")
+    w("    }")
+    w(f"    #[cfg({XXW_CFG})]")
+    w("    {")
+    w(f"        let xw_lo = {POW10_XW_MAX} + 1;")
+    w("        if exp >= xw_lo {")
+    w("            let idx = (exp - xw_lo) as usize;")
+    w("            if idx < POW10_XXW.len() {")
+    w("                return Some(POW10_XXW[idx]);")
+    w("            }")
+    w("        }")
+    w("    }")
+    w("    None")
+    w("}")
+    w("")
+    w("/// `10^exp` in the work integer `W`. A static lookup of the generated")
+    w("/// POW10 table (zero-extended into `W`) when `exp` is in range; otherwise")
+    w("/// a runtime `W::TEN.pow(exp)` recompute (the rare deep tail beyond the")
+    w("/// table). Replaces the per-tier / exp_generic `TEN.pow` recompute on the")
+    w("/// wide path.")
+    w("#[inline]")
+    w("pub(crate) fn pow10_in<W: BigInt>(exp: u32) -> W {")
+    w("    match pow10_entry(exp) {")
+    w("        Some(limbs) => limbs_to_w::<W>(limbs),")
+    w("        None => W::TEN.pow(exp),")
+    w("    }")
+    w("}")
+    w("")
+
     src = "\n".join(out) + "\n"
     path = "src/consts/table.rs"
     with open(path, "w", encoding="utf-8", newline="\n") as f:
