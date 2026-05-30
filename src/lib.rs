@@ -299,6 +299,38 @@ pub mod __bench_internals {
     pub fn mul_karatsuba_forced(a: &[u64], b: &[u64], out: &mut [u64], threshold: usize) {
         crate::int::algos::mul::mul_karatsuba::mul_karatsuba_forced(a, b, out, threshold)
     }
+    /// Per-N monomorphic wrappers over the Limb-generic Karatsuba kernel
+    /// mul_karatsuba_limb::<N, L>. The u64 arm runs the same recursion as
+    /// mul_karatsuba_forced; the u128 arm packs operands into N/2 u128
+    /// limbs and runs the identical split/recombine in u128 space.
+    /// Exposed for the mul_full_ab bench kara_u64 / kara_u128 arms.
+    macro_rules! mul_kara_limb_wrappers {
+        ($u64name:ident, $n:literal) => {
+            #[inline(never)]
+            pub fn $u64name(a: &[u64; $n], b: &[u64; $n], out: &mut [u64]) {
+                crate::int::algos::mul::mul_karatsuba::mul_karatsuba_limb::<$n, u64>(a, b, out, $n)
+            }
+        };
+        ($u64name:ident, $u128name:ident, $n:literal) => {
+            #[inline(never)]
+            pub fn $u64name(a: &[u64; $n], b: &[u64; $n], out: &mut [u64]) {
+                crate::int::algos::mul::mul_karatsuba::mul_karatsuba_limb::<$n, u64>(a, b, out, $n)
+            }
+            #[inline(never)]
+            pub fn $u128name(a: &[u64; $n], b: &[u64; $n], out: &mut [u64]) {
+                crate::int::algos::mul::mul_karatsuba::mul_karatsuba_limb::<$n, u128>(a, b, out, $n)
+            }
+        };
+    }
+    mul_kara_limb_wrappers!(mul_kara_u64_4, mul_kara_u128_4, 4);
+    mul_kara_limb_wrappers!(mul_kara_u64_6, mul_kara_u128_6, 6);
+    mul_kara_limb_wrappers!(mul_kara_u64_8, mul_kara_u128_8, 8);
+    mul_kara_limb_wrappers!(mul_kara_u64_12, mul_kara_u128_12, 12);
+    mul_kara_limb_wrappers!(mul_kara_u64_16, mul_kara_u128_16, 16);
+    mul_kara_limb_wrappers!(mul_kara_u64_24, mul_kara_u128_24, 24);
+    mul_kara_limb_wrappers!(mul_kara_u64_32, mul_kara_u128_32, 32);
+    mul_kara_limb_wrappers!(mul_kara_u64_48, mul_kara_u128_48, 48);
+    mul_kara_limb_wrappers!(mul_kara_u64_64, mul_kara_u128_64, 64);
     /// Division engine candidates exposed for the `div_kernel_ab`
     /// microbench (the dispatch-seam A/B that recovers the WIDE integer
     /// division regression). Both take little-endian u64 magnitude limb
