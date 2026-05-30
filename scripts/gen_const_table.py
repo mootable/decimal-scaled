@@ -556,6 +556,31 @@ def main():
     w(f"pub(crate) const PI_RAW_D76_S75: crate::int::types::Int<4> = limbs_to_int_n::<4>(&[{_pi75_limbs}]);")
     w("")
 
+    # `LN2_RAW_D76_S75` / `LN10_RAW_D76_S75`: ln(2) and ln(10) rounded half-to-even
+    # to 75 frac digits as `Int<4>`, emitted UNGATED — the narrow D38 ln series kernel
+    # (`algos::ln::ln_series_2limb`, always compiled) consumes them in every build
+    # (scale 75 sits in the `_wide-support`-gated BASE band, unreachable from the
+    # per-scale table there). Narrow analogs of `PI_RAW_D76_S75`; replace the old
+    # build-time `from_str_radix(LN2_S75)` / `from_str_radix(LN10_S75)` strings.
+    _ln2_q75, _ln2_rb75 = floor_and_roundbit(mp.log(2), 75)
+    _ln2_75_limbs = ", ".join(f"0x{l:016x}" for l in limbs_le(_ln2_q75 + _ln2_rb75))
+    w("/// `ln(2)` rounded half-to-even to 75 fractional digits as `Int<4>`")
+    w("/// (`round(ln(2) * 10^75)`), UNGATED — the narrow D38 ln series kernel needs")
+    w("/// it in every build (scale 75 sits in the `_wide-support`-gated BASE band, so")
+    w("/// it cannot read the per-scale table there). Replaces the old build-time")
+    w("/// `from_str_radix(LN2_S75)`.")
+    w(f"pub(crate) const LN2_RAW_D76_S75: crate::int::types::Int<4> = limbs_to_int_n::<4>(&[{_ln2_75_limbs}]);")
+    w("")
+    _ln10_q75, _ln10_rb75 = floor_and_roundbit(mp.log(10), 75)
+    _ln10_75_limbs = ", ".join(f"0x{l:016x}" for l in limbs_le(_ln10_q75 + _ln10_rb75))
+    w("/// `ln(10)` rounded half-to-even to 75 fractional digits as `Int<4>`")
+    w("/// (`round(ln(10) * 10^75)`), UNGATED — the narrow D38 ln series kernel needs")
+    w("/// it in every build (scale 75 sits in the `_wide-support`-gated BASE band, so")
+    w("/// it cannot read the per-scale table there). Replaces the old build-time")
+    w("/// `from_str_radix(LN10_S75)`.")
+    w(f"pub(crate) const LN10_RAW_D76_S75: crate::int::types::Int<4> = limbs_to_int_n::<4>(&[{_ln10_75_limbs}]);")
+    w("")
+
     # ── Self-test: re-derive the six modes from (floor, round_up) and
     # assert against a handful of independently-spelled known values. ───
     w("#[cfg(test)]")

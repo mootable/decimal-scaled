@@ -48,26 +48,18 @@ pub(crate) const STRICT_GUARD: u32 = 30;
 // `Int<4>` (max ≈ 5.78 × 10⁷⁶). The next-digit rounding is documented
 // in-line so the truncation step is auditable from this file alone.
 
-/// `ln(2) × 10^75`, half-to-even rounded (76th frac digit is 4 — round
-/// down). Source: high-precision evaluation of the natural logarithm.
-const LN2_S75: &str = "693147180559945309417232121458176568075500134360255254120680009493393621969";
-
-/// `ln(10) × 10^75`, half-to-even rounded (76th frac digit is 3 — round
-/// down). Source: high-precision evaluation of the natural logarithm.
-const LN10_S75: &str =
-    "2302585092994045684017991454684364207601101488628772976033327900967572609677";
-
-const LN2_RAW: Int<4> = match Int::<4>::from_str_radix(LN2_S75, 10)
-{
-    Ok(v) => v,
-    Err(_) => panic!("algos::ln::ln_series_2limb: LN2_S75 not parseable"),
-};
-
-const LN10_RAW: Int<4> =
-    match Int::<4>::from_str_radix(LN10_S75, 10) {
-        Ok(v) => v,
-        Err(_) => panic!("algos::ln::ln_series_2limb: LN10_S75 not parseable"),
-    };
+// `ln(2) × 10^75` and `ln(10) × 10^75`, correctly-rounded half-to-even, sourced
+// from the unified mpmath const table (the ungated `LN2_RAW_D76_S75` /
+// `LN10_RAW_D76_S75`) — the narrow analogs of `PI_RAW`, replacing the old
+// build-time `from_str_radix` string parse.
+//
+// NOTE: the old hand-typed `LN2_S75` was the *truncated* floor value `…621969`;
+// ln(2)'s 76th fractional digit is 6, so the correctly-rounded value is `…621970`
+// (what the table supplies). The ≤1e-75 correction sits far below the D38 strict
+// working scale (68 digits), so it is golden-neutral — but the table value is the
+// correct one. (`ln(10)` was already correctly rounded; unchanged.)
+const LN2_RAW: Int<4> = crate::consts::LN2_RAW_D76_S75;
+const LN10_RAW: Int<4> = crate::consts::LN10_RAW_D76_S75;
 
 /// Repacks an `Int<4>` (internally `[u64; 4]`) into a
 /// `Fixed` magnitude (`[u128; 2]`) sourced at scale `75`.
