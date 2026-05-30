@@ -97,10 +97,12 @@ pub(crate) fn mul_karatsuba_with_threshold(
 /// split/recombine runs in u128 space: half the limb count, half the
 /// carry-chain depth at every inner step.
 ///
-/// threshold is in u64-limb units; converted to packed units internally so
-/// passing N fires exactly one recursion level for both limb widths.
-/// out is zeroed by this function.
-#[cfg(feature = "bench-alt")]
+/// threshold is in u64-limb units; converted to packed units internally.
+/// out is written in full by this function (the unpack overwrites it).
+///
+/// Production kernel: `int::policy::mul` routes even `N >= KARATSUBA_ENGAGE` to
+/// `mul_karatsuba_limb::<N, u128>` — the policy-map showed it beats schoolbook-
+/// u128 by ~1.34x (N=128) .. 1.39x (N=256) at recursion threshold 48.
 pub(crate) fn mul_karatsuba_limb<const N: usize, L: Limb>(
     a: &[u64; N],
     b: &[u64; N],

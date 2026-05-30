@@ -10,11 +10,11 @@
 //! [`crate::int::algos::support::limbs`].
 //!
 //! The kernels ([`mul_schoolbook`] / [`mul_karatsuba`]) stay pure; this
-//! file owns the *choice* — the benched crossover threshold
-//! ([`KARATSUBA_THRESHOLD`]) is policy DATA here, not a magic number in a
-//! kernel.
+//! file owns the *choice* — the benched crossover ([`KARATSUBA_ENGAGE`]) and
+//! recursion depth ([`KARATSUBA_RECURSE`]) are policy DATA here, not magic
+//! numbers in a kernel.
 
-use crate::int::algos::mul::mul_karatsuba::mul_karatsuba;
+use crate::int::algos::mul::mul_karatsuba::{mul_karatsuba, mul_karatsuba_limb};
 use crate::int::algos::mul::mul_schoolbook::mul_full_limb;
 use crate::int::types::compute_limbs::{ComputeLimbs, Limbs, LimbSize};
 
@@ -46,13 +46,19 @@ impl Algorithm {
     /// at N >= 16 (matching the sibling [`crate::int::policy::mul_low`] pilot).
     /// So every even `N` packs to `u128`; this is the per-cell tuning seam —
     /// carve any even `N` that the bbc shows regressing back to `U64` here,
-    /// kernel and dispatch untouched. Karatsuba has no limb-width axis (it
-    /// recurses to slice schoolbook).
+    /// kernel and dispatch untouched.
+    ///
+    /// Karatsuba shares the SAME limb-width axis: the policy-map (`mul_toom3_ab`
+    /// + the `mul_kara_thresh_ab` sweep) showed the Limb-generic Karatsuba
+    /// (`mul_karatsuba_limb`) in `u128` limbs beats schoolbook-u128 by ~1.34x
+    /// (N=128) .. 1.39x (N=256) at recursion threshold 48, and the matcher only
+    /// engages Karatsuba at EVEN `N >= KARATSUBA_ENGAGE`, so it always packs to
+    /// `u128` (`for_packing` returns `U128` for even `N`).
     #[inline]
     const fn limb_size<const N: usize>(self) -> LimbSize {
         match self {
             Algorithm::Schoolbook => LimbSize::for_packing(N),
-            Algorithm::Karatsuba => LimbSize::U64,
+            Algorithm::Karatsuba => LimbSize::for_packing(N),
         }
     }
 }
@@ -72,40 +78,44 @@ enum Select {
 
 // ── policy data: the benched crossover threshold ──────────────────────
 
-/// Karatsuba threshold: the (equal) operand limb-count at or above which
-/// [`dispatch`] routes to the non-allocating Karatsuba kernel instead of the
-/// fixed-width schoolbook. File-private policy data.
+/// Karatsuba **engage** point: the (equal) operand limb-count at or above which
+/// [`dispatch`] routes EVEN-width products to the Limb-generic Karatsuba kernel
+/// (`mul_karatsuba_limb::<N, u128>`) instead of the u128 fixed-width schoolbook.
+/// File-private policy data.
 ///
-/// **`usize::MAX` — Karatsuba is disengaged at every shipped tier.** The
-/// full-product A/B (`mul_full_ab`: slice / `mul_full_limb::<N,u64>` /
-/// `mul_full_limb::<N,u128>` / one-level Karatsuba, N = 2..64) shows the
-/// in-tree one-level Karatsuba LOSING to the u128-packed fixed-width
-/// schoolbook at every benched width, the loss widest at the narrow end and
-/// still 1.5x at N = 64 (the widest equal-length storage-tier product,
-/// D1232). There is no schoolbook→Karatsuba crossover within the shipped
-/// widths, so the previous `64` engaged Karatsuba exactly where it is
-/// ~1.5x SLOWER — a regression. The weak kernel is kept (its bit-exactness
-/// tests still run) for a future Toom-3 / tighter-split re-tune that would
-/// finally beat schoolbook and lower this threshold back into range; until
-/// then it never engages.
-///
-/// The kernel still requires `>= 4` when it DOES recurse (the z1 sum product
-/// runs on `⌈n/2⌉ + 1` limbs, which only strictly shrinks below `n` once
-/// `n >= 4`); a threshold above every width trivially satisfies that.
-const KARATSUBA_THRESHOLD: usize = usize::MAX;
+/// **`128`** — the policy-map (`mul_toom3_ab`, every fixed-array candidate ×
+/// u64/u128 raced 24..256, pinned) plus the `mul_kara_thresh_ab` recursion-depth
+/// sweep localize the crossover to `(96, 128]`: schoolbook-u128 wins `N <= 96`,
+/// the u128-packed recursive Karatsuba wins `N >= 128` by **1.34x at N=128 and
+/// 1.39x at N=256** (vs the old one-level Karatsuba which lost everywhere — the
+/// reason this was `usize::MAX`). Only EVEN `N` reaches Karatsuba (so it always
+/// packs to `u128`); odd / `< 128` widths stay schoolbook. The exact crossover
+/// in `(96, 128]` is academic — no shipped storage tier (<=64) or work width
+/// (96/128/192/256) lies strictly between 96 and 128.
+const KARATSUBA_ENGAGE: usize = 128;
+
+/// Karatsuba **recursion** base: the limb-count below which the kernel stops
+/// splitting and runs schoolbook. **`48`** is the swept optimum (`kara_t48`
+/// beat `t16/t24/t32` at N=128 and decisively at N=256). Distinct from
+/// [`KARATSUBA_ENGAGE`] (when to USE Karatsuba) — this is how DEEP it recurses.
+/// The kernel requires `>= 4` (the z1 sum product on `⌈n/2⌉ + 1` limbs only
+/// strictly shrinks below `n` once `n >= 4`); 48 satisfies that.
+const KARATSUBA_RECURSE: usize = 48;
 
 // ── 3. the matcher: keyed on the runtime operand lengths ──────────────
 
-/// Pick the multiply algorithm for the operands' lengths. Equal-length
-/// operands at or above [`KARATSUBA_THRESHOLD`] take Karatsuba; everything
-/// else (unequal, or below the threshold) takes the fixed-width schoolbook.
+/// Pick the multiply algorithm for the operands' lengths. Equal-length EVEN
+/// operands at or above [`KARATSUBA_ENGAGE`] take Karatsuba; everything else
+/// (unequal, odd, or below the engage point) takes the fixed-width schoolbook.
 const fn select() -> Select {
     Select::ByShape(|a_len: usize, b_len: usize| {
-        // KARATSUBA_THRESHOLD = usize::MAX disables Karatsuba (validated
-        // never-wins at the shipped widths); the >= seam stays for a future
-        // finite threshold, so allow the lint rather than collapse it to ==.
-        #[allow(clippy::absurd_extreme_comparisons)]
-        let take_karatsuba = a_len == b_len && a_len >= KARATSUBA_THRESHOLD;
+        // Equal-length products at/above the engage point take the u128-packed
+        // recursive Karatsuba — but ONLY at EVEN widths, since that path packs
+        // two u64 limbs per u128 (odd widths can't pack, and the swept win is a
+        // u128 result). Everything else (unequal, odd, or below ENGAGE) takes
+        // the fixed-width schoolbook. For Int<N>×Int<N> both lengths are N, so
+        // this folds to a const verdict on N per monomorphisation.
+        let take_karatsuba = a_len == b_len && a_len >= KARATSUBA_ENGAGE && a_len % 2 == 0;
         if take_karatsuba {
             Algorithm::Karatsuba
         } else {
@@ -145,11 +155,20 @@ where
     match (algo, limb) {
         (Algorithm::Schoolbook, LimbSize::U64) => mul_full_limb::<N, u64>(a, b, out),
         (Algorithm::Schoolbook, LimbSize::U128) => mul_full_limb::<N, u128>(a, b, out),
-        (Algorithm::Karatsuba, _) => {
+        // The engaged Karatsuba arm: u128-packed Limb-generic kernel (the
+        // swept winner at even N >= ENGAGE), recursing to the schoolbook base
+        // at KARATSUBA_RECURSE. Writes `out` in full (the unpack overwrites it).
+        (Algorithm::Karatsuba, LimbSize::U128) => {
+            mul_karatsuba_limb::<N, u128>(a, b, out, KARATSUBA_RECURSE)
+        }
+        // Unreached (the matcher only engages Karatsuba at even N, which always
+        // packs to u128) but kept exhaustive: the u64 slice Karatsuba, zeroing
+        // its accumulator first.
+        (Algorithm::Karatsuba, LimbSize::U64) => {
             for o in out.iter_mut() {
                 *o = 0;
             }
-            mul_karatsuba(a, b, out, KARATSUBA_THRESHOLD);
+            mul_karatsuba(a, b, out, KARATSUBA_RECURSE);
         }
     }
 }
