@@ -1,11 +1,10 @@
 //! Mathematical constants (`pi`, `e`, `ln(2)`, …).
 //!
-//! The [`DecimalConstants`] trait carries the public surface; per-width
-//! impls live in [`d38`] (narrow tier — D18 / D38) and [`wide`]
-//! (wide tier — D57 and above).
+//! The [`DecimalConstants`] trait carries the public surface; a single
+//! generic impl in [`d38`] serves every width (narrow and wide),
+//! sourced from the unified per-scale table in [`crate::consts`].
 
 pub(crate) mod d38;
-pub(crate) mod wide;
 
 pub use d38::DecimalConstants;
 
