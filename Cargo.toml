@@ -1115,3 +1115,10 @@ name = "root_kernel_ab"
 path = "benches/micro/root_kernel_ab.rs"
 harness = false
 required-features = ["wide", "bench-alt"]
+
+# The wide-tier Tang/Series benchmark example uses the wide decimal types
+# (D307..D1232), which only exist under the wide feature umbrellas. Gate it so a
+# default / `--all-targets` build does not try to compile it without them.
+[[example]]
+name = "wide_tang_bench"
+required-features = ["wide", "x-wide", "xx-wide"]
