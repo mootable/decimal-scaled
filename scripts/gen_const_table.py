@@ -112,8 +112,19 @@ W_XXW = 2048    # D1232 Ziv cap (work Int<256>)
 ZIV_MAXES = (W_BASE, W_XW, W_XXW)   # 512 / 1024 / 2048  (D307 / D616 / D1232 Ziv cap)
 HOT_MAXES = (336, 645, 1261)        # (D307 / D616 / D1232) max_scale + GUARD
 DEC_MAXES = (306, 615, 1231)        # (D307 / D616 / D1232) max_scale
+# ln2 is special: exp's range reduction requests ln2 at the EXTENDED working
+# scale `w_ext = w + extra`, where `extra = ceil(|k|*log10(2)) + margin` is the
+# range-reduction lift that absorbs the `2^k` amplification (k = round(v/ln2)).
+# For a large-argument exp whose result still fits the tier's work integer W
+# (so it stays on the per-tier table path, NOT the wider series path), the lift
+# is ~1.25 * result-digits and the Ziv guard adds up to `W::BITS/8 - int_digits`,
+# so the request reaches `w_ext <= 2040 + 0.25*max_scale` — just past the plain
+# `W::BITS/8` Ziv cap. Sized to ~1.5x the Ziv cap so the per-tier table path
+# never escalates past its band. (The widest large-result cases route to the
+# series-ln2 wide path, which does NOT read this table.)
+LN2_MAXES = (768, 1536, 3072)       # ~1.5x Ziv cap (D307 / D616 / D1232)
 CONST_CLASS = {
-    "pi": ZIV_MAXES, "ln2": ZIV_MAXES, "ln10": ZIV_MAXES,
+    "pi": ZIV_MAXES, "ln2": LN2_MAXES, "ln10": ZIV_MAXES,
     "deg_per_rad": HOT_MAXES, "rad_per_deg": HOT_MAXES,
     "tau": DEC_MAXES, "half_pi": DEC_MAXES, "quarter_pi": DEC_MAXES,
     "e": DEC_MAXES, "golden": DEC_MAXES,
