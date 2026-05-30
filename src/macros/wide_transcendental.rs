@@ -1540,7 +1540,10 @@ macro_rules! decl_wide_transcendental {
                     // entry per monomorphisation, zero-extends into `W`.
                     return $crate::consts::pi_by_scale::<W>(SCALE + GUARD, mode);
                 }
-                const_rounded(PI_REF_DIGITS, PI_REF_SCALE, PI_REF_TOP_CMP, w, mode)
+                // Ziv-escalation path (`w != SCALE + GUARD`): a STATIC LOOKUP of
+                // the table at the runtime working scale — not a recompute. The
+                // table covers the full Ziv band (W::BITS/8) for π.
+                $crate::consts::pi_by_working_scale::<W>(w, mode)
             }
 
             /// `ln 2` const-folded at the base working scale — see
@@ -1555,7 +1558,9 @@ macro_rules! decl_wide_transcendental {
                     // table keyed on the CONST working scale — see `pi_cf`.
                     return $crate::consts::ln2_by_scale::<W>(SCALE + GUARD, mode);
                 }
-                const_rounded(LN2_REF_DIGITS, LN2_REF_SCALE, LN2_REF_TOP_CMP, w, mode)
+                // Ziv path: static lookup at the runtime working scale (table
+                // covers ln2's full Ziv band) — not a recompute.
+                $crate::consts::ln2_by_working_scale::<W>(w, mode)
             }
 
             /// `ln 10` const-folded at the base working scale — see
@@ -1570,7 +1575,9 @@ macro_rules! decl_wide_transcendental {
                     // table keyed on the CONST working scale — see `pi_cf`.
                     return $crate::consts::ln10_by_scale::<W>(SCALE + GUARD, mode);
                 }
-                const_rounded(LN10_REF_DIGITS, LN10_REF_SCALE, LN10_REF_TOP_CMP, w, mode)
+                // Ziv path: static lookup at the runtime working scale (table
+                // covers ln10's full Ziv band) — not a recompute.
+                $crate::consts::ln10_by_working_scale::<W>(w, mode)
             }
 
             /// Differential validity wall: the const-folded
