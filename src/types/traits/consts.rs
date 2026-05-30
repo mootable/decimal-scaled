@@ -1,4 +1,4 @@
-//! The [`DecimalConstants`] trait â mathematical constants (`pi`, `tau`,
+//! The [`DecimalConstants`] trait — mathematical constants (`pi`, `tau`,
 //! `half_pi`, `quarter_pi`, `golden`, `e`, `deg_per_rad`, `rad_per_deg`,
 //! `log10_2`) available on every decimal width.
 //!
