@@ -15,7 +15,7 @@
 //! sits below both and is never reached "upward".
 //!
 //! [`table`] holds the generated per-scale arrays + the `const fn` `*_entry`
-//! lookups + the `*_by_scale` (const working scale — const-folds) / `*_by_w`
+//! lookups + the `*_by_scale` (const working scale — const-folds) / `*_by_working_scale`
 //! (runtime working scale — static lookup) accessors. Feature-gated bands:
 //! NARROW (scales 0..=38) is always compiled; BASE / XW / XXW are gated behind
 //! `_wide-support` / `x-wide` / `xx-wide`.

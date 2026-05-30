@@ -2425,7 +2425,7 @@ macro_rules! decl_wide_transcendental {
                 if w == SCALE + GUARD {
                     return $crate::consts::deg_per_rad_by_scale::<W>(SCALE + GUARD, mode);
                 }
-                $crate::consts::deg_per_rad_by_w::<W>(w, mode)
+                $crate::consts::deg_per_rad_by_working_scale::<W>(w, mode)
             }
 
             /// `π/180` (radians per degree) at working scale `w` — see
@@ -2437,7 +2437,7 @@ macro_rules! decl_wide_transcendental {
                 if w == SCALE + GUARD {
                     return $crate::consts::rad_per_deg_by_scale::<W>(SCALE + GUARD, mode);
                 }
-                $crate::consts::rad_per_deg_by_w::<W>(w, mode)
+                $crate::consts::rad_per_deg_by_working_scale::<W>(w, mode)
             }
 
             /// Taylor series for `sin` on a reduced `r ∈ [0, π/4]`.
