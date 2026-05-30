@@ -185,24 +185,32 @@ impl NewtonReciprocal {
     pub fn precompute(scale: u32, width_u64_limbs: usize) -> Self {
         let width_limbs = width_u64_limbs;
 
-        // pow_scale = 10^scale via repeated *10 on a wide u64 buffer.
-        // 10^scale needs about scale * log2(10) ≈ scale * 3.322 bits.
-        // Each u64 limb absorbs ~19 decimal digits; use scale/19 + 2
-        // u64 limbs (matches the prior u128 path's scale/38 + 2 u128
-        // budget, doubled).
+        // pow_scale = 10^scale. `pow_len` reserves scale/19 + 3 u64 limbs
+        // (matches the prior u128 path's scale/38 + 2 u128 budget, doubled);
+        // the high limbs above the value stay zero either way, so the divide
+        // and downstream `k_u64` are identical regardless of how it is built.
         let pow_len = (scale as usize / 19 + 3).max(1);
         debug_assert!(pow_len <= MAX_POW_U64, "pow_scale buffer too small");
         let mut pow_scale = [0u64; MAX_POW_U64];
-        pow_scale[0] = 1u64;
-        for _ in 0..scale {
-            // multiply pow_scale[..pow_len] by 10
-            let mut carry: u64 = 0;
-            for limb in pow_scale[..pow_len].iter_mut() {
-                let prod = (*limb as u128) * 10u128 + (carry as u128);
-                *limb = prod as u64;
-                carry = (prod >> 64) as u64;
+        if let Some(limbs) = crate::consts::pow10_limbs(scale) {
+            // Read 10^scale from the baked POW10 const table — a memcpy that
+            // replaces the per-call O(scale²) ×10 chain (the dominant rescale
+            // cost). Same value, same `pow_len` (the high limbs stay zero), so
+            // bit-identical to the chain.
+            debug_assert!(limbs.len() <= pow_len, "pow10 table entry exceeds pow_len");
+            pow_scale[..limbs.len()].copy_from_slice(limbs);
+        } else {
+            // Rare deep tail beyond the (feature-gated) table: rebuild via *10.
+            pow_scale[0] = 1u64;
+            for _ in 0..scale {
+                let mut carry: u64 = 0;
+                for limb in pow_scale[..pow_len].iter_mut() {
+                    let prod = (*limb as u128) * 10u128 + (carry as u128);
+                    *limb = prod as u64;
+                    carry = (prod >> 64) as u64;
+                }
+                debug_assert_eq!(carry, 0, "pow_scale buffer too small at scale={scale}");
             }
-            debug_assert_eq!(carry, 0, "pow_scale buffer too small at scale={scale}");
         }
 
         // Pick k_u64: quotient room of `width_limbs` u64 limbs. Set
