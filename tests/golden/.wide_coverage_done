@@ -84,3 +84,73 @@ asin d1232
 acos d1232
 atan d1232
 atan2 d1232
+#
+# === chunk 3 / FINAL transcendental group (exp2 log2 log10 sinh cosh tanh
+#     asinh acosh atanh @ d230 d462 d616 d924 d1232) ===
+# LEGITIMATE DROPS (deliberate, verified -- NOT fabricated/recovered):
+#   cosh@S-1  ABSENT for every width: cosh(x)>=1 so cosh(x)*10^(S-1) always
+#             needs >= S digits but max_raw holds only S-1. Overflow drop.
+#   acosh@S-1 = 1 case per width: at scale S-1, one=10^(S-1)=max_raw, so the
+#             only acosh input (x>=1) that fits storage is x=1 (acosh(1)=0).
+#   atanh@s0  = 1 case per width: atanh domain (-1,1), one=1 at scale 0, so
+#             only raw=0 is valid (atanh(0)=0). (atanh@S-1 is healthy ~48-58.)
+# No oracle timeouts.
+exp2 d230
+log2 d230
+log10 d230
+sinh d230
+cosh d230
+tanh d230
+asinh d230
+acosh d230
+atanh d230
+exp2 d462
+log2 d462
+log10 d462
+sinh d462
+cosh d462
+tanh d462
+asinh d462
+acosh d462
+atanh d462
+exp2 d616
+log2 d616
+log10 d616
+sinh d616
+cosh d616
+tanh d616
+asinh d616
+acosh d616
+atanh d616
+exp2 d924
+log2 d924
+log10 d924
+sinh d924
+cosh d924
+tanh d924
+asinh d924
+acosh d924
+atanh d924
+exp2 d1232
+log2 d1232
+log10 d1232
+sinh d1232
+cosh d1232
+tanh d1232
+asinh d1232
+acosh d1232
+atanh d1232
+#
+# === WIDE-TIER TRANSCENDENTAL/ROOT 5-POINT COVERAGE (9.19): COMPLETE ===
+# All 22 single+two-arg transcendental/root functions covered at the
+# 5-point scale set for every wide width d230/d462/d616/d924/d1232, modulo
+# the verified legitimate domain/overflow drops above. Audit: 0 unexpected-
+# missing cells across all five wide tiers.
+#
+# OPEN (surfaced to coordinator, NOT done here): the binary ARITH ops
+# add/sub/mul/div/rem have NO wide-tier (d230..d1232) coverage -- their
+# roster (arith_coverage_cells) covers only d18/d38/d57/d76/d307. hypot's
+# roster is a curated edge list, not the 5-point grid, at wide tiers. The
+# chunk-1 claim that "binary arith is already full" was incorrect; corrected
+# here. Awaiting coordinator decision on whether to extend the arith roster
+# to the wide gap tiers.
