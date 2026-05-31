@@ -434,6 +434,48 @@ fn mul_schoolbook_u128(a: &[u128], b: &[u128], out: &mut [u128]) {
     }
 }
 
+/// HIGH product: `out[i] = limb (base + i)` of `a * b` (the full product has
+/// `a.len()+b.len()` limbs), forming only the partials with `i + j >= base`.
+/// The dropped low partials (`i + j < base`) are NOT included, so their carry
+/// into limb `base` is missing — making the high limbs too-LOW by a bounded
+/// amount. The Newton quotient `q = (a·b) >> k` reads this with a small guard
+/// (`base = k - GUARD`), bounding the deficit to `< 1` ULP at the `k`-cut; the
+/// Newton correction LOOP (`while rem >= D { q += 1 }`) adds back any residual,
+/// so the result is EXACT regardless of guard — the guard only bounds the loop
+/// count (perf). `out` pre-zeroed; `out.len() >= a.len()+b.len() - base`. This
+/// halves the `mag·r` work vs the full product (only the high half is kept).
+#[inline]
+fn mul_high_schoolbook_u128(a: &[u128], b: &[u128], out: &mut [u128], base: usize) {
+    use crate::int::types::compute_limbs::Limb;
+    let out_len = out.len();
+    let mut i = 0;
+    while i < a.len() {
+        if a[i] != 0 {
+            // Smallest j with i + j >= base; skip the dropped-low partials.
+            let j0 = base.saturating_sub(i);
+            let mut carry: u128 = 0;
+            let mut j = j0;
+            while j < b.len() {
+                let (lo, hi) = <u128 as Limb>::widening_mul(a[i], b[j]);
+                let idx = i + j - base; // i + j >= base for j >= j0
+                let (s1, c1) = out[idx].overflowing_add(lo);
+                let (s2, c2) = s1.overflowing_add(carry);
+                out[idx] = s2;
+                carry = hi.wrapping_add(c1 as u128).wrapping_add(c2 as u128);
+                j += 1;
+            }
+            let mut idx = i + b.len() - base;
+            while carry != 0 && idx < out_len {
+                let (s, c) = out[idx].overflowing_add(carry);
+                out[idx] = s;
+                carry = c as u128;
+                idx += 1;
+            }
+        }
+        i += 1;
+    }
+}
+
 /// Per-call Newton-reciprocal divide, u128-packed sibling of `div_newton`.
 /// All multiplies run on the precomputed u128-packed `r` and `pow_scale` (NO
 /// per-call pack); operand/output stay in u128 throughout.
@@ -447,12 +489,20 @@ fn div_newton_u128(
     let pow_scale = &table.pow_u128[..table.pow_u128_len];
 
     let prod_len = n.len() + r.len();
-    debug_assert!(prod_len <= MAX_PROD_U128, "u128 product buffer too small");
-    let mut prod = [0u128; MAX_PROD_U128];
-    mul_schoolbook_u128(n, r, &mut prod[..prod_len]);
-
     let lo = table.k_u128.min(prod_len);
-    let q_slice = &prod[lo..prod_len];
+    // q = (n·r) >> (128·k_u128) reads only the HIGH limbs [lo..]. Form just
+    // those (plus GUARD guard limbs) with the high-product — dropping the low
+    // partials halves the mag·r work and makes q too-LOW by < 1 ULP, which the
+    // correction loop below adds back (exact regardless of guard).
+    const GUARD: usize = 2;
+    let base = lo.saturating_sub(GUARD);
+    let high_len = prod_len - base;
+    debug_assert!(high_len <= MAX_PROD_U128, "u128 high-product buffer too small");
+    let mut prod = [0u128; MAX_PROD_U128];
+    mul_high_schoolbook_u128(n, r, &mut prod[..high_len], base);
+
+    // q = limbs [lo..prod_len] of n·r = prod[lo - base .. high_len].
+    let q_slice = &prod[lo - base..high_len];
     for (dst, src_) in quot.iter_mut().zip(q_slice.iter()) { *dst = *src_; }
     for dst in quot.iter_mut().skip(q_slice.len()) { *dst = 0; }
 

@@ -68,7 +68,10 @@ fn bench(c: &mut Criterion) {
     cell!(c, "D115", 6, 57);
     cell!(c, "D153", 8, 76);
     cell!(c, "D230", 12, 229);
+    cell!(c, "D462", 24, 461);
+    cell!(c, "D616", 32, 615);
     cell!(c, "D924", 48, 462);
+    cell!(c, "D924", 48, 923);
 }
 
 fn main() {

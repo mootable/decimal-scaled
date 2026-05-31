@@ -281,6 +281,10 @@ name = "mul_toom3_probe"
 required-features = ["wide", "bench-alt"]
 
 [[example]]
+name = "profile_rescale"
+required-features = ["wide", "x-wide", "xx-wide", "macros", "bench-alt"]
+
+[[example]]
 name = "sqrtbench"
 required-features = ["wide", "x-wide"]
 
