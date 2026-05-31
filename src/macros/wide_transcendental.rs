@@ -160,7 +160,7 @@ macro_rules! decl_pow10_table {
             // D924/D1232: no const-eval table fits the step budget, so read the
             // GENERATED POW10 table (a static lookup) instead of recomputing
             // `10^w` by repeated squaring. Falls back to `TEN.pow` past the band.
-            $crate::consts::pow10_in::<W>(w)
+            $crate::consts::pow10::dispatch::<W>(w)
         }
     };
 }

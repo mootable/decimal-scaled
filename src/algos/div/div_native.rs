@@ -79,7 +79,7 @@ pub(crate) fn div_native<const N: usize, const SCALE: u32>(
         // bear the quotient sign -- otherwise Floor / Ceiling round the wrong
         // way for a negative divisor.
         let b_neg = bi < 0;
-        let n = a.as_i128() * 10i128.pow(SCALE);
+        let n = a.as_i128() * crate::consts::pow10::dispatch_i128(SCALE);
         let n = if b_neg { -n } else { n };
         let b_mag: u64 = bi.unsigned_abs() as u64;
         let result = crate::macros::arithmetic::i128_divrem_by_u64_with_mode(n, b_mag, mode);

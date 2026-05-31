@@ -131,7 +131,7 @@ pub(crate) fn cbrt_native<const N: usize, const W: usize>(
 #[inline]
 #[must_use]
 pub(crate) fn cbrt_native_d57s20(raw: Int<3>, mode: RoundingMode) -> Int<3> {
-    cbrt_native::<3, 6>(raw, const { Int::<6>::TEN.pow(2 * 20) }, mode)
+    cbrt_native::<3, 6>(raw, const { crate::consts::pow10::dispatch_int::<6>(2 * 20) }, mode)
 }
 
 #[cfg(all(test, feature = "std"))]

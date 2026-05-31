@@ -53,7 +53,7 @@ pub(crate) fn cbrt_newton_with_table_seed(raw: Int<3>, mode: RoundingMode) -> In
     let widened: Int<6> = raw.resize_to::<Int<6>>();
     let negative = widened < zero;
     let mag = if negative { -widened } else { widened };
-    let n: Int<6> = mag * const { Int::<6>::TEN.pow(2 * SCALE) };
+    let n: Int<6> = mag * const { crate::consts::pow10::dispatch_int::<6>(2 * SCALE) };
 
     let q: Int<6> = n.icbrt();
 

@@ -128,7 +128,7 @@ where
             // Forced to fold at compile time via the `const` block: a bare
             // `TEN.pow(SCALE)` reaches the int pow as a runtime `u32`
             // exponent and runs the square-and-multiply every call.
-            let mult: Int<N> = const { <Int<N>>::TEN.pow(SCALE) };
+            let mult: Int<N> = const { crate::consts::pow10::dispatch_int::<N>(SCALE) };
             crate::algos::mul::mul_native::mul_native::<N, SCALE>(a, b, mult, mode)
         }
         Algorithm::WidenDivide => {

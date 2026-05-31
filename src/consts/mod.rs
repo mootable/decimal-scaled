@@ -21,4 +21,5 @@
 //! `_wide-support` / `x-wide` / `xx-wide`.
 
 pub(crate) mod table;
+pub(crate) mod pow10;
 pub(crate) use table::*;

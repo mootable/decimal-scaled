@@ -237,7 +237,7 @@ fn exp_wide_narrow_raw(raw: i128, scale: u32, working_digits: u32, mode: Roundin
 
     let w = scale + working_digits;
     let negative_input = raw < 0;
-    let v_mag = WNarrow::from_i128(raw.unsigned_abs() as i128) * WNarrow::TEN.pow(working_digits);
+    let v_mag = WNarrow::from_i128(raw.unsigned_abs() as i128) * crate::consts::pow10::dispatch::<WNarrow>(working_digits);
     let v_w = if negative_input { -v_mag } else { v_mag };
 
     let ex = exp_generic::exp_fixed::<WNarrow>(v_w, w);
@@ -271,7 +271,7 @@ fn narrow_round_mag(
     result_neg: bool,
 ) -> Option<i128> {
     use crate::support::rounding::{is_nearest_mode, should_bump};
-    let divisor = WNarrow::TEN.pow(shift);
+    let divisor = crate::consts::pow10::dispatch::<WNarrow>(shift);
     let (q, rem) = mag.div_rem(divisor);
     let result_positive = !result_neg;
     let bump = if rem != WNarrow::ZERO {
@@ -331,7 +331,7 @@ fn narrow_round_mag(
 fn hyper_pos_wide_narrow(av_w: WNarrow, w: u32, is_cosh: bool) -> WNarrow {
     use crate::algos::exp::exp_generic;
     let ex = exp_generic::exp_fixed::<WNarrow>(av_w, w);
-    let one_w = WNarrow::TEN.pow(w);
+    let one_w = crate::consts::pow10::dispatch::<WNarrow>(w);
     // `ex = e^|x|·10^w`. The reciprocal at the same scale is `e^-|x|·10^w
     // = 10^(2w) / ex`. For the integer-regime |x| this is a tiny positive
     // value (≪ 1 ULP-of-storage), formed in the wide integer to avoid the
@@ -356,7 +356,7 @@ pub(crate) fn sinh_wide_narrow_raw(
 ) -> i128 {
     let w = scale + working_digits;
     let neg = raw < 0;
-    let av = WNarrow::from_i128(raw.unsigned_abs() as i128) * WNarrow::TEN.pow(working_digits);
+    let av = WNarrow::from_i128(raw.unsigned_abs() as i128) * crate::consts::pow10::dispatch::<WNarrow>(working_digits);
     let sh = hyper_pos_wide_narrow(av, w, false);
     narrow_round_mag(sh, working_digits, mode, true, neg).unwrap_or_else(|| {
         crate::support::diagnostics::overflow_panic_with_scale("D38::sinh", scale)
@@ -374,7 +374,7 @@ pub(crate) fn cosh_wide_narrow_raw(
     mode: RoundingMode,
 ) -> i128 {
     let w = scale + working_digits;
-    let av = WNarrow::from_i128(raw.unsigned_abs() as i128) * WNarrow::TEN.pow(working_digits);
+    let av = WNarrow::from_i128(raw.unsigned_abs() as i128) * crate::consts::pow10::dispatch::<WNarrow>(working_digits);
     let ch = hyper_pos_wide_narrow(av, w, true);
     narrow_round_mag(ch, working_digits, mode, true, false).unwrap_or_else(|| {
         crate::support::diagnostics::overflow_panic_with_scale("D38::cosh", scale)

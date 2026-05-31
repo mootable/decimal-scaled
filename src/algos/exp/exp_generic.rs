@@ -41,7 +41,7 @@ use crate::support::rounding::RoundingMode;
     }
     #[inline]
     fn pow10<S: BigInt>(n: u32) -> S {
-        crate::consts::pow10_in::<S>(n)
+        crate::consts::pow10::dispatch::<S>(n)
     }
     #[inline]
     fn one<S: BigInt>(w: u32) -> S {
