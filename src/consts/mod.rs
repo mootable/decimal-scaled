@@ -17,7 +17,9 @@
 //! [`table`] holds the generated per-scale arrays + the `const fn` `*_entry`
 //! lookups + the `*_by_scale` (const working scale — const-folds) / `*_by_working_scale`
 //! (runtime working scale — static lookup) accessors. Feature-gated bands:
-//! NARROW (scales 0..=38) is always compiled; BASE / XW / XXW are gated behind
+//! the always-compiled NARROW band covers scales `0..=38` for most constants,
+//! widened to `0..=512` for `pi` / `ln2` / `ln10` (the three the always-present
+//! narrow kernels read at a WORKING scale); BASE / XW / XXW are gated behind
 //! `_wide-support` / `x-wide` / `xx-wide`.
 
 pub(crate) mod table;

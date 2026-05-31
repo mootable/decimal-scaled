@@ -46,17 +46,6 @@
 //! golden ratio (OEIS A001622), plus deg_per_rad (180/pi) and
 //! rad_per_deg (pi/180).
 
-use crate::int::types::Int;
-
-// The single raw reference `PI_RAW`: the `trig` series kernel
-// (`algos::trig::trig_series_2limb`) consumes the 75-digit `Int<4>` value of pi
-// directly — re-exported here from the table's ungated `PI_RAW_D76_S75`.
-
-/// Pi rounded to 75 fractional digits as an `Int<4>` (`round(π × 10^75)`).
-/// Consumed by the `trig` series kernel, which needs the raw wide reference
-/// rather than a per-scale narrow constant. Sourced from the unified const
-/// table (the ungated `PI_RAW_D76_S75`), not a build-time string.
-pub(crate) const PI_RAW: Int<4> = crate::consts::PI_RAW_D76_S75;
 
 
 pub use crate::types::traits::consts::DecimalConstants;

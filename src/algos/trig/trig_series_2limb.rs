@@ -137,25 +137,20 @@ pub(crate) const fn small_x_linear_threshold<const SCALE: u32>() -> i128 {
     10_i128.pow(thresh_exp)
 }
 
-/// π at working scale `w`, sourced from the crate-wide 75-digit
-/// `consts::PI_RAW` (Int<4> holding `π × 10^75`).
+/// π at working scale `w`, sourced DIRECTLY from the per-scale const
+/// table (`consts::pi_const_n`) — `floor(π·10^w)` rounded half-to-even.
+/// The ungated NARROW band covers `0..=512`, so this reads in every build
+/// (default / no_std included); no per-call rescale, no embedded raw.
 pub(crate) fn wide_pi(w: u32) -> Fixed {
-    debug_assert!(
-        w <= 75,
-        "wide_pi: working scale {w} exceeds embedded 75-digit π"
-    );
-    let words = crate::types::consts::PI_RAW.limbs_le();
-    let pi_at_75 = Fixed {
+    debug_assert!(w <= 75, "wide_pi: working scale {w} exceeds Fixed capacity");
+    let words = crate::consts::pi_const_n::<4>(w, crate::support::rounding::RoundingMode::HalfToEven)
+        .limbs_le();
+    Fixed {
         negative: false,
         mag: [
             (words[0] as u128) | ((words[1] as u128) << 64),
             (words[2] as u128) | ((words[3] as u128) << 64),
         ],
-    };
-    if w == 75 {
-        pi_at_75
-    } else {
-        pi_at_75.rescale_down(75, w)
     }
 }
 

@@ -48,19 +48,6 @@ pub(crate) const STRICT_GUARD: u32 = 30;
 // `Int<4>` (max ≈ 5.78 × 10⁷⁶). The next-digit rounding is documented
 // in-line so the truncation step is auditable from this file alone.
 
-// `ln(2) × 10^75` and `ln(10) × 10^75`, correctly-rounded half-to-even, sourced
-// from the unified mpmath const table (the ungated `LN2_RAW_D76_S75` /
-// `LN10_RAW_D76_S75`) — the narrow analogs of `PI_RAW`, replacing the old
-// build-time `from_str_radix` string parse.
-//
-// NOTE: the old hand-typed `LN2_S75` was the *truncated* floor value `…621969`;
-// ln(2)'s 76th fractional digit is 6, so the correctly-rounded value is `…621970`
-// (what the table supplies). The ≤1e-75 correction sits far below the D38 strict
-// working scale (68 digits), so it is golden-neutral — but the table value is the
-// correct one. (`ln(10)` was already correctly rounded; unchanged.)
-const LN2_RAW: Int<4> = crate::consts::LN2_RAW_D76_S75;
-const LN10_RAW: Int<4> = crate::consts::LN10_RAW_D76_S75;
-
 /// Repacks an `Int<4>` (internally `[u64; 4]`) into a
 /// `Fixed` magnitude (`[u128; 2]`) sourced at scale `75`.
 #[inline]
@@ -83,16 +70,11 @@ fn fixed_from_int256(raw: Int<4>) -> Fixed {
 /// strict call site is comfortably inside the bound. A debug-assert
 /// documents the invariant for any future caller.
 pub(crate) fn wide_ln2(w: u32) -> Fixed {
-    debug_assert!(
-        w <= 75,
-        "wide_ln2: working scale {w} exceeds embedded 75-digit ln 2"
-    );
-    let ln2_at_75 = fixed_from_int256(LN2_RAW);
-    if w == 75 {
-        ln2_at_75
-    } else {
-        ln2_at_75.rescale_down(75, w)
-    }
+    debug_assert!(w <= 75, "wide_ln2: working scale {w} exceeds Fixed capacity");
+    fixed_from_int256(crate::consts::ln2_const_n::<4>(
+        w,
+        crate::support::rounding::RoundingMode::HalfToEven,
+    ))
 }
 
 /// `ln(10)` as a `Fixed` at working scale `w` (`w <= 75`). Sourced from
@@ -100,16 +82,11 @@ pub(crate) fn wide_ln2(w: u32) -> Fixed {
 ///
 /// Caller-side precondition: `w <= 75`. See [`wide_ln2`].
 pub(crate) fn wide_ln10(w: u32) -> Fixed {
-    debug_assert!(
-        w <= 75,
-        "wide_ln10: working scale {w} exceeds embedded 75-digit ln 10"
-    );
-    let ln10_at_75 = fixed_from_int256(LN10_RAW);
-    if w == 75 {
-        ln10_at_75
-    } else {
-        ln10_at_75.rescale_down(75, w)
-    }
+    debug_assert!(w <= 75, "wide_ln10: working scale {w} exceeds Fixed capacity");
+    fixed_from_int256(crate::consts::ln10_const_n::<4>(
+        w,
+        crate::support::rounding::RoundingMode::HalfToEven,
+    ))
 }
 
 /// Natural logarithm of a positive working-scale value `v_w`, returned

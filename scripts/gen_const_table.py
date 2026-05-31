@@ -144,13 +144,16 @@ CONST_CLASS = {
 # the entry must still exist so the narrow path can READ it and apply
 # its own storage-range guard (panic with "out of storage range").
 W_NARROW = 38   # max D38 scale (entry present so the narrow path can range-check it)
-# ln2's NARROW band is wider than the other constants': the narrow tiers' exp
-# (`exp_series_2limb`, D18/D38) run the generic `exp_generic::exp_fixed`, whose
-# range reduction now reads `ln2` FROM THIS TABLE (not a series) at the EXTENDED
-# working scale `w_ext = w + extra` — up to ~165 digits even for a 38-digit D38
-# result (the `2^k` lift). The default / no_std build has NO wider band, so the
-# always-present NARROW band must cover that itself. 512 leaves ample margin.
-LN2_NARROW = 512
+# pi / ln2 / ln10 get a WIDER ungated NARROW band than the other constants.
+# The always-compiled narrow kernels (D18/D38 trig + ln/log/exp) read these
+# three at a WORKING scale (`w = SCALE + GUARD`, up to ~68–75 digits, and ln2's
+# exp range-reduction reaches `w_ext` ~165) and source them FROM THIS TABLE in
+# EVERY build — including default / no_std, which has none of the gated wider
+# bands. So the ungated NARROW band must itself cover the working scales those
+# kernels request; 512 leaves ample margin and matches the gated BASE band's
+# floor. (The other constants are read only at a const storage scale ≤ 38, so
+# they keep the tight 0..=38 narrow band.)
+WORKING_NARROW = 512
 
 # Gate strings. The base band is needed by every wide-support build.
 BASE_CFG = 'feature = "_wide-support"'
@@ -281,7 +284,7 @@ def main():
         value = getter()
         upper = name.upper()
         base_max, xw_max, xxw_max = CONST_CLASS[name]
-        narrow_max = LN2_NARROW if name == "ln2" else W_NARROW
+        narrow_max = WORKING_NARROW if name in ("pi", "ln2", "ln10") else W_NARROW
         bands = [
             ("NARROW", 0, narrow_max, None),
             ("BASE", 0, base_max, BASE_CFG),
@@ -542,44 +545,11 @@ def main():
         w("}")
         w("")
 
-    # `PI_RAW_D76_S75`: pi rounded half-to-even to 75 frac digits as an `Int<4>`,
-    # emitted UNGATED. The narrow trig series kernel (D38, always compiled)
-    # consumes it, but scale 75 lives in the `_wide-support`-gated BASE band — so
-    # this single value is ungated here (replaces `from_str_radix(PI_D76_S75)`).
-    _q75, _rb75 = floor_and_roundbit(mp.pi, 75)
-    _pi75_limbs = ", ".join(f"0x{l:016x}" for l in limbs_le(_q75 + _rb75))
-    w("/// `pi` rounded half-to-even to 75 fractional digits as `Int<4>`")
-    w("/// (`round(pi * 10^75)`), UNGATED — the narrow trig kernel needs it in")
-    w("/// every build (scale 75 sits in the `_wide-support`-gated BASE band, so it")
-    w("/// cannot read the per-scale table there). Replaces the old build-time")
-    w("/// `from_str_radix(PI_D76_S75)`.")
-    w(f"pub(crate) const PI_RAW_D76_S75: crate::int::types::Int<4> = limbs_to_int_n::<4>(&[{_pi75_limbs}]);")
-    w("")
-
-    # `LN2_RAW_D76_S75` / `LN10_RAW_D76_S75`: ln(2) and ln(10) rounded half-to-even
-    # to 75 frac digits as `Int<4>`, emitted UNGATED — the narrow D38 ln series kernel
-    # (`algos::ln::ln_series_2limb`, always compiled) consumes them in every build
-    # (scale 75 sits in the `_wide-support`-gated BASE band, unreachable from the
-    # per-scale table there). Narrow analogs of `PI_RAW_D76_S75`; replace the old
-    # build-time `from_str_radix(LN2_S75)` / `from_str_radix(LN10_S75)` strings.
-    _ln2_q75, _ln2_rb75 = floor_and_roundbit(mp.log(2), 75)
-    _ln2_75_limbs = ", ".join(f"0x{l:016x}" for l in limbs_le(_ln2_q75 + _ln2_rb75))
-    w("/// `ln(2)` rounded half-to-even to 75 fractional digits as `Int<4>`")
-    w("/// (`round(ln(2) * 10^75)`), UNGATED — the narrow D38 ln series kernel needs")
-    w("/// it in every build (scale 75 sits in the `_wide-support`-gated BASE band, so")
-    w("/// it cannot read the per-scale table there). Replaces the old build-time")
-    w("/// `from_str_radix(LN2_S75)`.")
-    w(f"pub(crate) const LN2_RAW_D76_S75: crate::int::types::Int<4> = limbs_to_int_n::<4>(&[{_ln2_75_limbs}]);")
-    w("")
-    _ln10_q75, _ln10_rb75 = floor_and_roundbit(mp.log(10), 75)
-    _ln10_75_limbs = ", ".join(f"0x{l:016x}" for l in limbs_le(_ln10_q75 + _ln10_rb75))
-    w("/// `ln(10)` rounded half-to-even to 75 fractional digits as `Int<4>`")
-    w("/// (`round(ln(10) * 10^75)`), UNGATED — the narrow D38 ln series kernel needs")
-    w("/// it in every build (scale 75 sits in the `_wide-support`-gated BASE band, so")
-    w("/// it cannot read the per-scale table there). Replaces the old build-time")
-    w("/// `from_str_radix(LN10_S75)`.")
-    w(f"pub(crate) const LN10_RAW_D76_S75: crate::int::types::Int<4> = limbs_to_int_n::<4>(&[{_ln10_75_limbs}]);")
-    w("")
+    # (The old ungated single-scale raws PI_RAW_D76_S75 / LN2_RAW_D76_S75 /
+    # LN10_RAW_D76_S75 are GONE: the narrow kernels now read pi / ln2 / ln10 at
+    # any working scale directly from the per-scale table — its ungated NARROW
+    # band covers 0..=512 for those three, so the single-value raws are no longer
+    # needed in any build.)
 
     # ── Self-test: re-derive the six modes from (floor, round_up) and
     # assert against a handful of independently-spelled known values. ───
