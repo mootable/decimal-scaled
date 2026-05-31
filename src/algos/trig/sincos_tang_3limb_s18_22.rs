@@ -62,7 +62,7 @@ pub(crate) enum Which {
 /// Reroutes the canonical [`core::sin_fixed`] / [`core::cos_fixed`]
 /// kernels through a narrower working width
 /// `w = SCALE + GUARD_NARROW`. The argument lift uses
-/// [`core::to_work_w`] so the storage raw is scaled by `10^GUARD_NARROW`
+/// [`core::to_work_scaled`] so the storage raw is scaled by `10^GUARD_NARROW`
 /// (matching the narrower `w`).
 #[inline]
 #[must_use]
@@ -84,7 +84,7 @@ pub(crate) fn sin_cos_strict<const SCALE: u32>(
     }
 
     let w = SCALE + GUARD_NARROW;
-    let v_w = core::to_work_w(raw, GUARD_NARROW);
+    let v_w = core::to_work_scaled(raw, GUARD_NARROW);
     let result = match which {
         Which::Sin => core::sin_fixed::<SCALE>(v_w, w),
         Which::Cos => core::cos_fixed::<SCALE>(v_w, w),
@@ -118,7 +118,7 @@ pub(crate) fn tan_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> I
         return Int::<3>::ZERO;
     }
     let w = SCALE + GUARD_NARROW;
-    let v_w = core::to_work_w(raw, GUARD_NARROW);
+    let v_w = core::to_work_scaled(raw, GUARD_NARROW);
     let (sin_w, cos_w) = core::sin_cos_fixed::<SCALE>(v_w, w);
     if cos_w == core::zero() {
         panic!("D57::tan: cosine is zero (argument is an odd multiple of pi/2)");

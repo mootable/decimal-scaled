@@ -580,7 +580,7 @@ macro_rules! decl_wide_transcendental {
             /// `10^working_digits` instead of the const `GUARD`. Used by
             /// the `_approx` family where the guard width is chosen at
             /// call time.
-            pub(crate) fn to_work_w(raw: $Storage, working_digits: u32) -> W {
+            pub(crate) fn to_work_scaled(raw: $Storage, working_digits: u32) -> W {
                 $crate::int::types::traits::BigInt::resize_to::<W>(raw) * pow10_table(working_digits)
             }
 
@@ -2693,8 +2693,8 @@ macro_rules! decl_wide_transcendental {
                     zero()
                 }
                 #[inline]
-                fn to_work_w(raw: $Storage, working_digits: u32) -> W {
-                    to_work_w(raw, working_digits)
+                fn to_work_scaled(raw: $Storage, working_digits: u32) -> W {
+                    to_work_scaled(raw, working_digits)
                 }
                 #[inline]
                 fn to_work(raw: $Storage) -> W {
@@ -2996,7 +2996,7 @@ macro_rules! decl_wide_transcendental {
                 {
                     let r0 = div(ln_fixed_routed::<SCALE>(to_work(raw), w0), ln_b0, w0);
                     let k = round_to_nearest_int(r0, w0);
-                    if log_is_exact_int(to_work_w(raw, 0), to_work_w(braw, 0), SCALE, k) {
+                    if log_is_exact_int(to_work_scaled(raw, 0), to_work_scaled(braw, 0), SCALE, k) {
                         return exact_int_at_scale(k, SCALE);
                     }
                 }
@@ -3006,8 +3006,8 @@ macro_rules! decl_wide_transcendental {
                 // true residual sign, not the base-guard approximation.
                 round_to_storage_directed(GUARD, SCALE, mode, |guard| {
                     let w = SCALE + guard;
-                    let ln_b = ln_fixed_routed::<SCALE>(to_work_w(braw, guard), w);
-                    div(ln_fixed_routed::<SCALE>(to_work_w(raw, guard), w), ln_b, w)
+                    let ln_b = ln_fixed_routed::<SCALE>(to_work_scaled(braw, guard), w);
+                    div(ln_fixed_routed::<SCALE>(to_work_scaled(raw, guard), w), ln_b, w)
                 })
             }
 
@@ -3034,11 +3034,11 @@ macro_rules! decl_wide_transcendental {
                     panic!(concat!(stringify!($Type), "::log: base must be positive"));
                 }
                 let w = SCALE + working_digits;
-                let ln_b = ln_fixed_routed::<SCALE>(to_work_w(braw, working_digits), w);
+                let ln_b = ln_fixed_routed::<SCALE>(to_work_scaled(braw, working_digits), w);
                 if ln_b == zero() {
                     panic!(concat!(stringify!($Type), "::log: base must not equal 1"));
                 }
-                let r = div(ln_fixed_routed::<SCALE>(to_work_w(raw, working_digits), w), ln_b, w);
+                let r = div(ln_fixed_routed::<SCALE>(to_work_scaled(raw, working_digits), w), ln_b, w);
                 round_to_storage_with(r, w, SCALE, mode)
             }
 
@@ -3063,14 +3063,14 @@ macro_rules! decl_wide_transcendental {
                     );
                     let k = round_to_nearest_int(r0, w0);
                     let base2 = pow10_table(SCALE) + pow10_table(SCALE);
-                    if log_is_exact_int(to_work_w(raw, 0), base2, SCALE, k) {
+                    if log_is_exact_int(to_work_scaled(raw, 0), base2, SCALE, k) {
                         return exact_int_at_scale(k, SCALE);
                     }
                 }
                 round_to_storage_directed(GUARD, SCALE, mode, |guard| {
                     let w = SCALE + guard;
                     div(
-                        ln_fixed_routed::<SCALE>(to_work_w(raw, guard), w),
+                        ln_fixed_routed::<SCALE>(to_work_scaled(raw, guard), w),
                         ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
                         w,
                     )
@@ -3091,7 +3091,7 @@ macro_rules! decl_wide_transcendental {
                     panic!(concat!(stringify!($Type), "::log2: argument must be positive"));
                 }
                 let w = SCALE + working_digits;
-                let r = div(ln_fixed_routed::<SCALE>(to_work_w(raw, working_digits), w), ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), w);
+                let r = div(ln_fixed_routed::<SCALE>(to_work_scaled(raw, working_digits), w), ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), w);
                 round_to_storage_with(r, w, SCALE, mode)
             }
 
@@ -3113,14 +3113,14 @@ macro_rules! decl_wide_transcendental {
                     );
                     let k = round_to_nearest_int(r0, w0);
                     let base10 = pow10_table(SCALE + 1);
-                    if log_is_exact_int(to_work_w(raw, 0), base10, SCALE, k) {
+                    if log_is_exact_int(to_work_scaled(raw, 0), base10, SCALE, k) {
                         return exact_int_at_scale(k, SCALE);
                     }
                 }
                 round_to_storage_directed(GUARD, SCALE, mode, |guard| {
                     let w = SCALE + guard;
                     div(
-                        ln_fixed_routed::<SCALE>(to_work_w(raw, guard), w),
+                        ln_fixed_routed::<SCALE>(to_work_scaled(raw, guard), w),
                         ln10_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
                         w,
                     )
@@ -3141,7 +3141,7 @@ macro_rules! decl_wide_transcendental {
                     panic!(concat!(stringify!($Type), "::log10: argument must be positive"));
                 }
                 let w = SCALE + working_digits;
-                let r = div(ln_fixed_routed::<SCALE>(to_work_w(raw, working_digits), w), ln10_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), w);
+                let r = div(ln_fixed_routed::<SCALE>(to_work_scaled(raw, working_digits), w), ln10_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), w);
                 round_to_storage_with(r, w, SCALE, mode)
             }
 
@@ -3165,7 +3165,7 @@ macro_rules! decl_wide_transcendental {
                 round_to_storage_directed(base_guard, SCALE, mode, |guard| {
                     let w = SCALE + guard;
                     let arg = mul(
-                        to_work_w(raw, guard),
+                        to_work_scaled(raw, guard),
                         ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
                         w,
                     );
@@ -3187,7 +3187,7 @@ macro_rules! decl_wide_transcendental {
                     return <$Storage as $crate::int::types::traits::BigInt>::TEN.pow(SCALE);
                 }
                 let w = SCALE + working_digits;
-                let arg = mul(to_work_w(raw, working_digits), ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), w);
+                let arg = mul(to_work_scaled(raw, working_digits), ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), w);
                 let r = exp_fixed_routed::<SCALE>(arg, w);
                 round_to_storage_with(r, w, SCALE, mode)
             }
@@ -3261,7 +3261,7 @@ macro_rules! decl_wide_transcendental {
                 // result back to `SCALE`.
                 let w_prime = SCALE + $core::GUARD + $core::guard_agm(SCALE);
                 let r = $core::ln_fixed_agm::<SCALE>(
-                    $core::to_work_w(raw, $core::GUARD + $core::guard_agm(SCALE)),
+                    $core::to_work_scaled(raw, $core::GUARD + $core::guard_agm(SCALE)),
                     w_prime,
                 );
                 Self::from_bits($core::round_to_storage(r, w_prime, SCALE))
@@ -3291,11 +3291,11 @@ macro_rules! decl_wide_transcendental {
                 // |v| above ~3 leaks the amplified residue into the
                 // storage scale (validated empirically against mpmath
                 // at SCALE up to 615).
-                let raw_w = $core::to_work_w(raw, 0);
+                let raw_w = $core::to_work_scaled(raw, 0);
                 let k_lift = $core::exp_agm_k_lift_from_w(raw_w, SCALE);
                 let lift = $core::GUARD + $core::guard_agm(SCALE) + k_lift;
                 let w_prime = SCALE + lift;
-                let r = $core::exp_fixed_agm::<SCALE>($core::to_work_w(raw, lift), w_prime);
+                let r = $core::exp_fixed_agm::<SCALE>($core::to_work_scaled(raw, lift), w_prime);
                 Self::from_bits($core::round_to_storage(r, w_prime, SCALE))
             }
 
@@ -3796,7 +3796,7 @@ macro_rules! decl_wide_transcendental {
                 }
                 let w_prime = SCALE + $core::GUARD + $core::guard_agm(SCALE);
                 let r = $core::ln_fixed_agm::<SCALE>(
-                    $core::to_work_w(raw, $core::GUARD + $core::guard_agm(SCALE)),
+                    $core::to_work_scaled(raw, $core::GUARD + $core::guard_agm(SCALE)),
                     w_prime,
                 );
                 Self::from_bits($core::round_to_storage_with(r, w_prime, SCALE, mode))
@@ -3814,11 +3814,11 @@ macro_rules! decl_wide_transcendental {
                     return Self::ONE;
                 }
                 // See `exp_strict_agm` for the `k_lift` rationale.
-                let raw_w = $core::to_work_w(raw, 0);
+                let raw_w = $core::to_work_scaled(raw, 0);
                 let k_lift = $core::exp_agm_k_lift_from_w(raw_w, SCALE);
                 let lift = $core::GUARD + $core::guard_agm(SCALE) + k_lift;
                 let w_prime = SCALE + lift;
-                let r = $core::exp_fixed_agm::<SCALE>($core::to_work_w(raw, lift), w_prime);
+                let r = $core::exp_fixed_agm::<SCALE>($core::to_work_scaled(raw, lift), w_prime);
                 Self::from_bits($core::round_to_storage_with(r, w_prime, SCALE, mode))
             }
 
@@ -3929,7 +3929,7 @@ macro_rules! decl_wide_transcendental {
                         SCALE,
                         $crate::support::rounding::RoundingMode::Trunc,
                     );
-                    $core::exp_result_int_digits($core::to_work_w(arg_at_scale, 0), SCALE)
+                    $core::exp_result_int_digits($core::to_work_scaled(arg_at_scale, 0), SCALE)
                 };
                 let base_guard = $core::GUARD + k_lift;
                 Self::from_bits($core::round_to_storage_directed(
@@ -3938,8 +3938,8 @@ macro_rules! decl_wide_transcendental {
                     mode,
                     |guard| {
                         let w = SCALE + guard;
-                        let ln_x = $core::ln_fixed_routed::<SCALE>($core::to_work_w(raw, guard), w);
-                        let y = $core::to_work_w(eraw, guard);
+                        let ln_x = $core::ln_fixed_routed::<SCALE>($core::to_work_scaled(raw, guard), w);
+                        let y = $core::to_work_scaled(eraw, guard);
                         $core::exp_fixed_routed::<SCALE>($core::mul(y, ln_x, w), w)
                     },
                 ))
@@ -4180,7 +4180,7 @@ macro_rules! decl_wide_transcendental {
                 // value — `round_to_storage_directed` reads the sign off
                 // the returned value and rounds each mode accordingly.
                 let neg = raw < <$Storage>::from_i128(0);
-                let k_lift = $core::exp_result_int_digits($core::to_work_w(raw, 0), SCALE);
+                let k_lift = $core::exp_result_int_digits($core::to_work_scaled(raw, 0), SCALE);
                 let base_guard = $core::GUARD + k_lift;
                 Self::from_bits($core::round_to_storage_directed(
                     base_guard,
@@ -4188,7 +4188,7 @@ macro_rules! decl_wide_transcendental {
                     mode,
                     |guard| {
                         let w = SCALE + guard;
-                        let v = $core::to_work_w(raw, guard);
+                        let v = $core::to_work_scaled(raw, guard);
                         let av = if v < $core::zero() { -v } else { v };
                         let sh = $core::sinh_pos_wide::<SCALE>(av, w);
                         if neg { -sh } else { sh }
@@ -4210,7 +4210,7 @@ macro_rules! decl_wide_transcendental {
                 // positive magnitude keeps the dominant `e^|x|` term
                 // direct and accurate (see `sinh_strict_with` for why the
                 // sign matters to the budget).
-                let k_lift = $core::exp_result_int_digits($core::to_work_w(raw, 0), SCALE);
+                let k_lift = $core::exp_result_int_digits($core::to_work_scaled(raw, 0), SCALE);
                 let base_guard = $core::GUARD + k_lift;
                 Self::from_bits($core::round_to_storage_directed(
                     base_guard,
@@ -4218,7 +4218,7 @@ macro_rules! decl_wide_transcendental {
                     mode,
                     |guard| {
                         let w = SCALE + guard;
-                        let v = $core::to_work_w(raw, guard);
+                        let v = $core::to_work_scaled(raw, guard);
                         let av = if v < $core::zero() { -v } else { v };
                         $core::cosh_pos_wide::<SCALE>(av, w)
                     },
@@ -4268,7 +4268,7 @@ macro_rules! decl_wide_transcendental {
                 // `sinh_strict_with`) and reapply the input sign to the
                 // non-negative `tanh(|x|)` working value.
                 let neg = raw < zero;
-                let k_lift = $core::exp_result_int_digits($core::to_work_w(raw, 0), SCALE);
+                let k_lift = $core::exp_result_int_digits($core::to_work_scaled(raw, 0), SCALE);
                 let base_guard = $core::GUARD + k_lift;
                 Self::from_bits($core::round_to_storage_directed(
                     base_guard,
@@ -4276,7 +4276,7 @@ macro_rules! decl_wide_transcendental {
                     mode,
                     |guard| {
                         let w = SCALE + guard;
-                        let v = $core::to_work_w(raw, guard);
+                        let v = $core::to_work_scaled(raw, guard);
                         let av = if v < $core::zero() { -v } else { v };
                         let th = $core::tanh_pos_wide::<SCALE>(av, w);
                         if neg { -th } else { th }
@@ -4300,7 +4300,7 @@ macro_rules! decl_wide_transcendental {
                     |guard| {
                         let w = SCALE + guard;
                         let one_w = $core::one(w);
-                        let v = $core::to_work_w(raw, guard);
+                        let v = $core::to_work_scaled(raw, guard);
                         let ax = if v < $core::zero() { -v } else { v };
                         // asinh @ MAX scale (input ±1) loses sub-w precision
                         // in the sqrt step before ln; tang_ln_fixed's
@@ -4340,7 +4340,7 @@ macro_rules! decl_wide_transcendental {
                     |guard| {
                         let w = SCALE + guard;
                         let one_w = $core::one(w);
-                        let v = $core::to_work_w(raw, guard);
+                        let v = $core::to_work_scaled(raw, guard);
                         let two_w = one_w + one_w;
                         if v >= two_w {
                             let inv = $core::div(one_w, v, w);
@@ -4383,7 +4383,7 @@ macro_rules! decl_wide_transcendental {
                     |guard| {
                         let w = SCALE + guard;
                         let one_w = $core::one(w);
-                        let v = $core::to_work_w(raw, guard);
+                        let v = $core::to_work_scaled(raw, guard);
                         // Gap form (1/2)*[ln(1+x) - ln(1-x)]: `one_w
                         // - v` is the exact working-scale gap, so neither
                         // `ln_fixed` argument suffers the `(1-x)`
@@ -4498,7 +4498,7 @@ macro_rules! decl_wide_transcendental {
                     ));
                 }
                 let w = SCALE + working_digits;
-                let r = $core::ln_fixed_routed::<SCALE>($core::to_work_w(raw, working_digits), w);
+                let r = $core::ln_fixed_routed::<SCALE>($core::to_work_scaled(raw, working_digits), w);
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 
@@ -4603,7 +4603,7 @@ macro_rules! decl_wide_transcendental {
                     return Self::ONE;
                 }
                 let w = SCALE + working_digits;
-                let r = $core::exp_fixed_routed::<SCALE>($core::to_work_w(raw, working_digits), w);
+                let r = $core::exp_fixed_routed::<SCALE>($core::to_work_scaled(raw, working_digits), w);
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 
@@ -4656,8 +4656,8 @@ macro_rules! decl_wide_transcendental {
                     return Self::ZERO;
                 }
                 let w = SCALE + working_digits;
-                let ln_x = $core::ln_fixed_routed::<SCALE>($core::to_work_w(raw, working_digits), w);
-                let y = $core::to_work_w(exp.to_bits(), working_digits);
+                let ln_x = $core::ln_fixed_routed::<SCALE>($core::to_work_scaled(raw, working_digits), w);
+                let y = $core::to_work_scaled(exp.to_bits(), working_digits);
                 let r = $core::exp_fixed_routed::<SCALE>($core::mul(y, ln_x, w), w);
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
@@ -4684,7 +4684,7 @@ macro_rules! decl_wide_transcendental {
                     return self.sin_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let r = $core::sin_fixed::<SCALE>($core::to_work_w(self.to_bits(), working_digits), w);
+                let r = $core::sin_fixed::<SCALE>($core::to_work_scaled(self.to_bits(), working_digits), w);
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 
@@ -4710,7 +4710,7 @@ macro_rules! decl_wide_transcendental {
                     return self.cos_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let arg = $core::to_work_w(self.to_bits(), working_digits) + $core::half_pi::<SCALE>(w);
+                let arg = $core::to_work_scaled(self.to_bits(), working_digits) + $core::half_pi::<SCALE>(w);
                 let r = $core::sin_fixed::<SCALE>(arg, w);
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
@@ -4738,7 +4738,7 @@ macro_rules! decl_wide_transcendental {
                 }
                 let w = SCALE + working_digits;
                 let (s, c) =
-                    $core::sin_cos_fixed::<SCALE>($core::to_work_w(self.to_bits(), working_digits), w);
+                    $core::sin_cos_fixed::<SCALE>($core::to_work_scaled(self.to_bits(), working_digits), w);
                 (
                     Self::from_bits($core::round_to_storage_with(s, w, SCALE, mode)),
                     Self::from_bits($core::round_to_storage_with(c, w, SCALE, mode)),
@@ -4768,7 +4768,7 @@ macro_rules! decl_wide_transcendental {
                 }
                 let w = SCALE + working_digits;
                 let (sin_w, cos_w) =
-                    $core::sin_cos_fixed::<SCALE>($core::to_work_w(self.to_bits(), working_digits), w);
+                    $core::sin_cos_fixed::<SCALE>($core::to_work_scaled(self.to_bits(), working_digits), w);
                 if cos_w == $core::zero() {
                     panic!(concat!(
                         stringify!($Type),
@@ -4801,7 +4801,7 @@ macro_rules! decl_wide_transcendental {
                     return self.atan_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let r = $core::atan_fixed::<SCALE>($core::to_work_w(self.to_bits(), working_digits), w);
+                let r = $core::atan_fixed::<SCALE>($core::to_work_scaled(self.to_bits(), working_digits), w);
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 
@@ -4828,7 +4828,7 @@ macro_rules! decl_wide_transcendental {
                 }
                 let w = SCALE + working_digits;
                 let one_w = $core::one(w);
-                let v = $core::to_work_w(self.to_bits(), working_digits);
+                let v = $core::to_work_scaled(self.to_bits(), working_digits);
                 let abs_v = if v < $core::zero() { -v } else { v };
                 if abs_v > one_w {
                     panic!(concat!(
@@ -4882,7 +4882,7 @@ macro_rules! decl_wide_transcendental {
                 }
                 let w = SCALE + working_digits;
                 let one_w = $core::one(w);
-                let v = $core::to_work_w(self.to_bits(), working_digits);
+                let v = $core::to_work_scaled(self.to_bits(), working_digits);
                 let abs_v = if v < $core::zero() { -v } else { v };
                 if abs_v > one_w {
                     panic!(concat!(
@@ -4950,8 +4950,8 @@ macro_rules! decl_wide_transcendental {
                         $core::zero()
                     }
                 } else {
-                    let y = $core::to_work_w(yraw, working_digits);
-                    let x = $core::to_work_w(xraw, working_digits);
+                    let y = $core::to_work_scaled(yraw, working_digits);
+                    let x = $core::to_work_scaled(xraw, working_digits);
                     let base = $core::atan_fixed::<SCALE>($core::div(y, x, w), w);
                     // const-folded `π` (baked, no per-call `pi(w)` rescale);
                     // `SCALE` is the impl's const so this folds to the table entry.
@@ -4989,7 +4989,7 @@ macro_rules! decl_wide_transcendental {
                     return self.sinh_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let v = $core::to_work_w(self.to_bits(), working_digits);
+                let v = $core::to_work_scaled(self.to_bits(), working_digits);
                 let ex = $core::exp_fixed::<SCALE>(v, w);
                 let enx = $core::div($core::one(w), ex, w);
                 let r = (ex - enx) >> 1;
@@ -5018,7 +5018,7 @@ macro_rules! decl_wide_transcendental {
                     return self.cosh_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let v = $core::to_work_w(self.to_bits(), working_digits);
+                let v = $core::to_work_scaled(self.to_bits(), working_digits);
                 let ex = $core::exp_fixed::<SCALE>(v, w);
                 let enx = $core::div($core::one(w), ex, w);
                 let r = (ex + enx) >> 1;
@@ -5047,7 +5047,7 @@ macro_rules! decl_wide_transcendental {
                     return self.tanh_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let v = $core::to_work_w(self.to_bits(), working_digits);
+                let v = $core::to_work_scaled(self.to_bits(), working_digits);
                 let ex = $core::exp_fixed::<SCALE>(v, w);
                 let enx = $core::div($core::one(w), ex, w);
                 let r = $core::div(ex - enx, ex + enx, w);
@@ -5076,7 +5076,7 @@ macro_rules! decl_wide_transcendental {
                     return self.sinh_cosh_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let v = $core::to_work_w(self.to_bits(), working_digits);
+                let v = $core::to_work_scaled(self.to_bits(), working_digits);
                 let ex = $core::exp_fixed::<SCALE>(v, w);
                 let enx = $core::div($core::one(w), ex, w);
                 let sinh = (ex - enx) >> 1;
@@ -5114,7 +5114,7 @@ macro_rules! decl_wide_transcendental {
                 }
                 let w = SCALE + working_digits;
                 let one_w = $core::one(w);
-                let v = $core::to_work_w(raw, working_digits);
+                let v = $core::to_work_scaled(raw, working_digits);
                 let ax = if v < $core::zero() { -v } else { v };
                 // asinh @ MAX scale (input ±1) loses sub-w precision in the
                 // sqrt step before ln; tang_ln_fixed's INTERNAL_EXTRA
@@ -5160,7 +5160,7 @@ macro_rules! decl_wide_transcendental {
                 }
                 let w = SCALE + working_digits;
                 let one_w = $core::one(w);
-                let v = $core::to_work_w(self.to_bits(), working_digits);
+                let v = $core::to_work_scaled(self.to_bits(), working_digits);
                 if v < one_w {
                     panic!(concat!(stringify!($Type), "::acosh: argument must be >= 1"));
                 }
@@ -5206,7 +5206,7 @@ macro_rules! decl_wide_transcendental {
                 }
                 let w = SCALE + working_digits;
                 let one_w = $core::one(w);
-                let v = $core::to_work_w(self.to_bits(), working_digits);
+                let v = $core::to_work_scaled(self.to_bits(), working_digits);
                 let ax = if v < $core::zero() { -v } else { v };
                 if ax >= one_w {
                     panic!(concat!(
@@ -5245,7 +5245,7 @@ macro_rules! decl_wide_transcendental {
                     return self.to_degrees_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let v = $core::to_work_w(self.to_bits(), working_digits);
+                let v = $core::to_work_scaled(self.to_bits(), working_digits);
                 debug_assert!(
                     $core::bit_length(v) + 8 < <$Work>::BITS,
                     concat!(
@@ -5283,7 +5283,7 @@ macro_rules! decl_wide_transcendental {
                     return self.to_radians_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let v = $core::to_work_w(self.to_bits(), working_digits);
+                let v = $core::to_work_scaled(self.to_bits(), working_digits);
                 let r = $core::mul(v, $core::pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), w)
                     / $crate::macros::wide_roots::wide_lit!($Work, "180");
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))

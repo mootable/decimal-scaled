@@ -24,11 +24,11 @@ pub(crate) fn sinh_schoolbook<C: WideTrigCore, const SCALE: u32>(
     mode: RoundingMode,
 ) -> C::Storage {
     let neg = raw < C::storage_zero();
-    let k_lift = C::exp_result_int_digits(C::to_work_w(raw, 0), SCALE);
+    let k_lift = C::exp_result_int_digits(C::to_work_scaled(raw, 0), SCALE);
     let base_guard = C::GUARD + k_lift;
     C::round_to_storage_directed(base_guard, SCALE, mode, &mut |guard| {
         let w = SCALE + guard;
-        let v = C::to_work_w(raw, guard);
+        let v = C::to_work_scaled(raw, guard);
         let av = if v < C::zero() { C::zero() - v } else { v };
         let sh = C::sinh_pos_wide::<SCALE>(av, w);
         if neg { C::zero() - sh } else { sh }
@@ -42,11 +42,11 @@ pub(crate) fn cosh_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
 ) -> C::Storage {
-    let k_lift = C::exp_result_int_digits(C::to_work_w(raw, 0), SCALE);
+    let k_lift = C::exp_result_int_digits(C::to_work_scaled(raw, 0), SCALE);
     let base_guard = C::GUARD + k_lift;
     C::round_to_storage_directed(base_guard, SCALE, mode, &mut |guard| {
         let w = SCALE + guard;
-        let v = C::to_work_w(raw, guard);
+        let v = C::to_work_scaled(raw, guard);
         let av = if v < C::zero() { C::zero() - v } else { v };
         C::cosh_pos_wide::<SCALE>(av, w)
     })
@@ -60,11 +60,11 @@ pub(crate) fn tanh_schoolbook<C: WideTrigCore, const SCALE: u32>(
     mode: RoundingMode,
 ) -> C::Storage {
     let neg = raw < C::storage_zero();
-    let k_lift = C::exp_result_int_digits(C::to_work_w(raw, 0), SCALE);
+    let k_lift = C::exp_result_int_digits(C::to_work_scaled(raw, 0), SCALE);
     let base_guard = C::GUARD + k_lift;
     C::round_to_storage_directed(base_guard, SCALE, mode, &mut |guard| {
         let w = SCALE + guard;
-        let v = C::to_work_w(raw, guard);
+        let v = C::to_work_scaled(raw, guard);
         let av = if v < C::zero() { C::zero() - v } else { v };
         let th = C::tanh_pos_wide::<SCALE>(av, w);
         if neg { C::zero() - th } else { th }
@@ -85,7 +85,7 @@ pub(crate) fn asinh_schoolbook<C: WideTrigCore, const SCALE: u32>(
     C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
         let w = SCALE + guard;
         let one_w = C::one(w);
-        let v = C::to_work_w(raw, guard);
+        let v = C::to_work_scaled(raw, guard);
         let ax = if v < C::zero() { C::zero() - v } else { v };
         let inner = if ax >= one_w {
             let inv = C::div(one_w, ax, w);
@@ -115,7 +115,7 @@ pub(crate) fn acosh_schoolbook<C: WideTrigCore, const SCALE: u32>(
     C::round_to_storage_directed_near_special(C::GUARD, SCALE, mode, &mut |guard| {
         let w = SCALE + guard;
         let one_w = C::one(w);
-        let v = C::to_work_w(raw, guard);
+        let v = C::to_work_scaled(raw, guard);
         let two_w = one_w + one_w;
         if v >= two_w {
             let inv = C::div(one_w, v, w);
@@ -147,7 +147,7 @@ pub(crate) fn atanh_schoolbook<C: WideTrigCore, const SCALE: u32>(
     C::round_to_storage_directed_near_special(C::GUARD, SCALE, mode, &mut |guard| {
         let w = SCALE + guard;
         let one_w = C::one(w);
-        let v = C::to_work_w(raw, guard);
+        let v = C::to_work_scaled(raw, guard);
         (C::ln_fixed::<SCALE>(one_w + v, w) - C::ln_fixed::<SCALE>(one_w - v, w)) >> 1
     })
 }
@@ -275,8 +275,17 @@ fn atanh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128
     let v = to_fixed(raw);
     let ax = Fixed { negative: false, mag: v.mag };
     assert!(!ax.ge_mag(one_w), "atanh: argument out of domain (-1, 1)");
-    let ratio = one_w.add(v).div(one_w.sub(v), w);
-    ln_fixed(ratio, w)
+    // atanh(x) = ½·ln((1+x)/(1-x)) = ½·(ln(1+x) − ln(1-x)). Computing the two
+    // logs SEPARATELY (not ln of the ratio) is essential near |x| = 1: the
+    // ratio (1+x)/(1-x) reaches ~10^(2·digits) there and, scaled to the
+    // working scale `w`, overflows the 256-bit `Fixed` — e.g. atanh(1−10⁻²⁸)
+    // at D38 s28 has ratio ≈ 2·10²⁸ which at w = SCALE+30 = 58 is a raw ~10⁸⁶,
+    // far past 2²⁵⁶. `1+x` and `1-x` each fit, and `ln_fixed` handles arguments
+    // below 1 (the x-near-−1 case already relies on it).
+    let ln_num = ln_fixed(one_w.add(v), w);
+    let ln_den = ln_fixed(one_w.sub(v), w);
+    ln_num
+        .sub(ln_den)
         .halve()
         .round_to_i128_with(w, SCALE, mode)
         .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("atanh", SCALE))

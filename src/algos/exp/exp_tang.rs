@@ -209,7 +209,7 @@ pub(crate) fn exp_tang<
         // resolution — `exp(-10^-S)` just under `1.0` at MAX scale) fall
         // through to the never-exact Ziv path below.
         let w = SCALE + GUARD;
-        let v_w = C::to_work_w(raw, GUARD);
+        let v_w = C::to_work_scaled(raw, GUARD);
         let result = tang_exp_fixed::<C, M, INTERNAL_EXTRA, SCALE>(v_w, w);
         return C::round_to_storage_with(result, w, SCALE, mode);
     }
@@ -220,7 +220,7 @@ pub(crate) fn exp_tang<
         // `extra` so the post-shift residual lands back inside the guard.
         let w = SCALE + GUARD;
         let one_w = C::one(w);
-        let v_w_probe = C::to_work_w(raw, GUARD);
+        let v_w_probe = C::to_work_scaled(raw, GUARD);
         let k = C::round_to_nearest_int(C::div_cached(v_w_probe, C::ln2::<SCALE>(w), one_w), w);
         let abs_k = if k < 0 { -k } else { k } as u128;
         let extra: u32 = if abs_k == 0 {
@@ -245,6 +245,6 @@ pub(crate) fn exp_tang<
     // on inputs whose deciding residual is below the work-int resolution
     // (`exp(-10^-S)` just under `1.0`).
     C::round_to_storage_directed_never_exact(base_guard, SCALE, mode, &mut |guard| {
-        tang_exp_fixed::<C, M, INTERNAL_EXTRA, SCALE>(C::to_work_w(raw, guard), SCALE + guard)
+        tang_exp_fixed::<C, M, INTERNAL_EXTRA, SCALE>(C::to_work_scaled(raw, guard), SCALE + guard)
     })
 }

@@ -46,7 +46,7 @@ pub(crate) fn sin_schoolbook<C: WideTrigCore, const SCALE: u32>(
     mode: RoundingMode,
 ) -> C::Storage {
     C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
-        C::sin_fixed::<SCALE>(C::to_work_w(raw, guard), SCALE + guard)
+        C::sin_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard)
     })
 }
 
@@ -59,7 +59,7 @@ pub(crate) fn cos_schoolbook<C: WideTrigCore, const SCALE: u32>(
     mode: RoundingMode,
 ) -> C::Storage {
     C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
-        C::cos_fixed::<SCALE>(C::to_work_w(raw, guard), SCALE + guard)
+        C::cos_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard)
     })
 }
 
@@ -75,7 +75,7 @@ pub(crate) fn tan_schoolbook<C: WideTrigCore, const SCALE: u32>(
 ) -> C::Storage {
     C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
         let w = SCALE + guard;
-        let (sin_w, cos_w) = C::sin_cos_fixed::<SCALE>(C::to_work_w(raw, guard), w);
+        let (sin_w, cos_w) = C::sin_cos_fixed::<SCALE>(C::to_work_scaled(raw, guard), w);
         if cos_w == C::zero() {
             panic!("schoolbook tan: cosine is zero (argument is an odd multiple of pi/2)");
         }
@@ -93,7 +93,7 @@ pub(crate) fn atan_schoolbook<C: WideTrigCore, const SCALE: u32>(
     mode: RoundingMode,
 ) -> C::Storage {
     C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
-        C::atan_fixed::<SCALE>(C::to_work_w(raw, guard), SCALE + guard)
+        C::atan_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard)
     })
 }
 

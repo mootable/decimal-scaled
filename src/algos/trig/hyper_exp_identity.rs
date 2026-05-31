@@ -55,7 +55,7 @@ pub(crate) fn sinh_exp_identity_with_tang<C: WideTrigCore, const SCALE: u32, con
     exp_fixed: fn(C::W, u32) -> C::W,
 ) -> C::Storage {
     let w = SCALE + GUARD;
-    let v = C::to_work_w(raw, GUARD);
+    let v = C::to_work_scaled(raw, GUARD);
     let (ex, enx) = ex_enx::<C>(exp_fixed, v, w);
     let r = (ex - enx) / C::lit(2);
     C::round_to_storage_with(r, w, SCALE, mode)
@@ -71,7 +71,7 @@ pub(crate) fn cosh_exp_identity_with_tang<C: WideTrigCore, const SCALE: u32, con
     exp_fixed: fn(C::W, u32) -> C::W,
 ) -> C::Storage {
     let w = SCALE + GUARD;
-    let v = C::to_work_w(raw, GUARD);
+    let v = C::to_work_scaled(raw, GUARD);
     let (ex, enx) = ex_enx::<C>(exp_fixed, v, w);
     let r = (ex + enx) / C::lit(2);
     C::round_to_storage_with(r, w, SCALE, mode)
@@ -111,7 +111,7 @@ pub(crate) fn tanh_exp_identity_with_tang<C: WideTrigCore, const SCALE: u32, con
     // half a storage ULP, so a single narrowing is correctly rounded for
     // every mode.
     let w = SCALE + GUARD;
-    let v = C::to_work_w(raw, GUARD);
+    let v = C::to_work_scaled(raw, GUARD);
     let (ex, enx) = ex_enx::<C>(exp_fixed, v, w);
     let r = C::div(ex - enx, ex + enx, w);
     C::round_to_storage_with(r, w, SCALE, mode)

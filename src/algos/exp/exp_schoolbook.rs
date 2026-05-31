@@ -125,7 +125,7 @@ pub(crate) fn exp_schoolbook<C: WideTrigCore, const SCALE: u32>(
     // sub-resolution artifact; the never-exact narrowing keeps Ceiling correct
     // on inputs whose deciding residual is below the work-int resolution.
     C::round_to_storage_directed_never_exact(C::GUARD, SCALE, mode, &mut |guard| {
-        C::exp_fixed::<SCALE>(C::to_work_w(raw, guard), SCALE + guard)
+        C::exp_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard)
     })
 }
 

@@ -55,7 +55,7 @@ fn sin_cos_strict<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
     // side. Route through the shared Ziv escalation; nearest modes narrow
     // once.
     C::round_to_storage_directed(GUARD, SCALE, mode, &mut |guard| {
-        let v_w = C::to_work_w(raw, guard);
+        let v_w = C::to_work_scaled(raw, guard);
         match which {
             Which::Sin => C::sin_fixed::<SCALE>(v_w, SCALE + guard),
             Which::Cos => C::cos_fixed::<SCALE>(v_w, SCALE + guard),
@@ -109,7 +109,7 @@ pub(crate) fn tan_narrow_with_taylor<
         return C::storage_zero();
     }
     let w0 = SCALE + GUARD;
-    let v0 = C::to_work_w(raw, GUARD);
+    let v0 = C::to_work_scaled(raw, GUARD);
     let (sin0, cos0) = C::sin_cos_fixed::<SCALE>(v0, w0);
     if cos0 == C::zero() {
         panic!("wide-tier tan: cosine is zero (argument is an odd multiple of pi/2)");
@@ -124,7 +124,7 @@ pub(crate) fn tan_narrow_with_taylor<
         return C::round_to_storage_with(probe, w0, SCALE, mode);
     }
     let w = w0 + extra;
-    let v_w = C::to_work_w(raw, GUARD + extra);
+    let v_w = C::to_work_scaled(raw, GUARD + extra);
     let (sin_w, cos_w) = C::sin_cos_fixed::<SCALE>(v_w, w);
     let r = C::div(sin_w, cos_w, w);
     C::round_to_storage_with(r, w, SCALE, mode)

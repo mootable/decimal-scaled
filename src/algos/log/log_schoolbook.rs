@@ -70,8 +70,8 @@ pub(crate) fn log_schoolbook<C: WideTrigCore, const SCALE: u32>(
     }
     C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
         let w = SCALE + guard;
-        let ln_x = C::ln_fixed::<SCALE>(C::to_work_w(raw_x, guard), w);
-        let ln_b = C::ln_fixed::<SCALE>(C::to_work_w(raw_b, guard), w);
+        let ln_x = C::ln_fixed::<SCALE>(C::to_work_scaled(raw_x, guard), w);
+        let ln_b = C::ln_fixed::<SCALE>(C::to_work_scaled(raw_b, guard), w);
         C::div(ln_x, ln_b, w)
     })
 }

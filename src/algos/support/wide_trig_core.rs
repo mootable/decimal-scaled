@@ -82,7 +82,7 @@ pub(crate) trait WideTrigCore {
 
     /// Builds a working-scale `W` from raw storage, scaling by
     /// `10^working_digits` (raw is `value · 10^SCALE`).
-    fn to_work_w(raw: Self::Storage, working_digits: u32) -> Self::W;
+    fn to_work_scaled(raw: Self::Storage, working_digits: u32) -> Self::W;
     /// Builds a working-scale `W` from raw storage at the const `GUARD`.
     fn to_work(raw: Self::Storage) -> Self::W;
     /// Rounds a working-scale `W` value at scale `w` to scale `target`
@@ -279,7 +279,7 @@ pub(crate) fn exp_series<C: WideTrigCore, const SCALE: u32>(
     // whose deciding residual sits below the work-int resolution (`exp(-10^-S)`
     // just under `1.0`). `raw == 0` (the one exact case) is pinned above.
     C::round_to_storage_directed_never_exact(C::GUARD, SCALE, mode, &mut |guard| {
-        C::exp_fixed::<SCALE>(C::to_work_w(raw, guard), SCALE + guard)
+        C::exp_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard)
     })
 }
 
@@ -295,7 +295,7 @@ pub(crate) fn ln_series<C: WideTrigCore, const SCALE: u32>(
         panic!("wide-tier ln: argument must be positive");
     }
     C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
-        C::ln_fixed::<SCALE>(C::to_work_w(raw, guard), SCALE + guard)
+        C::ln_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard)
     })
 }
 
@@ -308,7 +308,7 @@ pub(crate) fn sin_series<C: WideTrigCore, const SCALE: u32>(
     mode: RoundingMode,
 ) -> C::Storage {
     C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
-        C::sin_fixed::<SCALE>(C::to_work_w(raw, guard), SCALE + guard)
+        C::sin_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard)
     })
 }
 
@@ -322,7 +322,7 @@ pub(crate) fn cos_series<C: WideTrigCore, const SCALE: u32>(
     mode: RoundingMode,
 ) -> C::Storage {
     C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
-        C::cos_fixed::<SCALE>(C::to_work_w(raw, guard), SCALE + guard)
+        C::cos_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard)
     })
 }
 
@@ -348,7 +348,7 @@ pub(crate) fn tan_series<C: WideTrigCore, const SCALE: u32>(
         return C::round_to_storage_with(probe, w0, SCALE, mode);
     }
     let w = w0 + extra;
-    let (sin_w, cos_w) = C::sin_cos_fixed::<SCALE>(C::to_work_w(raw, C::GUARD + extra), w);
+    let (sin_w, cos_w) = C::sin_cos_fixed::<SCALE>(C::to_work_scaled(raw, C::GUARD + extra), w);
     let r = C::div(sin_w, cos_w, w);
     C::round_to_storage_with(r, w, SCALE, mode)
 }
@@ -362,7 +362,7 @@ pub(crate) fn atan_series<C: WideTrigCore, const SCALE: u32>(
     mode: RoundingMode,
 ) -> C::Storage {
     C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
-        C::atan_fixed::<SCALE>(C::to_work_w(raw, guard), SCALE + guard)
+        C::atan_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard)
     })
 }
 
@@ -380,7 +380,7 @@ pub(crate) fn atan_narrow<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
     mode: RoundingMode,
 ) -> C::Storage {
     let w = SCALE + GUARD;
-    let v_w = C::to_work_w(raw, GUARD);
+    let v_w = C::to_work_scaled(raw, GUARD);
     let r = C::atan_fixed::<SCALE>(v_w, w);
     C::round_to_storage_with(r, w, SCALE, mode)
 }

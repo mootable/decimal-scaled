@@ -80,7 +80,7 @@ fn asin_fixed<const SCALE: u32>(v: core::W, w: u32) -> core::W {
 #[must_use]
 pub(crate) fn asin_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
     let w = SCALE + GUARD_NARROW;
-    let v = core::to_work_w(raw, GUARD_NARROW);
+    let v = core::to_work_scaled(raw, GUARD_NARROW);
     let r = asin_fixed::<SCALE>(v, w);
     core::round_to_storage_with(r, w, SCALE, mode)
 }
@@ -90,7 +90,7 @@ pub(crate) fn asin_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> 
 #[must_use]
 pub(crate) fn acos_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
     let w = SCALE + GUARD_NARROW;
-    let v = core::to_work_w(raw, GUARD_NARROW);
+    let v = core::to_work_scaled(raw, GUARD_NARROW);
     let asin_w = asin_fixed::<SCALE>(v, w);
     let r = core::half_pi::<SCALE>(w) - asin_w;
     core::round_to_storage_with(r, w, SCALE, mode)
@@ -115,8 +115,8 @@ pub(crate) fn atan2_strict<const SCALE: u32>(
             core::zero()
         }
     } else {
-        let y = core::to_work_w(y_raw, GUARD_NARROW);
-        let x = core::to_work_w(x_raw, GUARD_NARROW);
+        let y = core::to_work_scaled(y_raw, GUARD_NARROW);
+        let x = core::to_work_scaled(x_raw, GUARD_NARROW);
         let zero_w = core::zero();
         let abs_y = if y < zero_w { -y } else { y };
         let abs_x = if x < zero_w { -x } else { x };
