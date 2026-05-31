@@ -473,6 +473,41 @@ mod tests {
         }
     }
 
+    // atanh near |x| = 1 at a HIGH scale (28) — the band where the old ratio
+    // form `ln((1+x)/(1-x))` overflowed the 256-bit `Fixed`. The ratio reaches
+    // ~2·10^SCALE there, and the working-scale divide widens it by 10^(SCALE+30),
+    // so it exceeds U256 once SCALE >= ~24 (hence the scale-12 cases above could
+    // never catch this). The two-log form keeps both operands in (0, 2); it must
+    // agree with the routed kernel here. This is exactly the cell that
+    // `golden atanh_d38_s28` exposes.
+    #[test]
+    fn atanh_schoolbook_narrow_matches_routed_kernel_near_one() {
+        const S: u32 = 28;
+        const ONE: i128 = 10_i128.pow(28);
+        // x = 1 − 10^{-k} for shrinking 10^{-k} (raw = ONE − 10^{28-k}), both signs.
+        const NEAR_ONE: [i128; 8] = [
+            ONE - 1,
+            ONE - 10,
+            ONE - 100,
+            ONE - 10_000,
+            ONE - 1_000_000,
+            ONE - 100_000_000,
+            ONE - 10_000_000_000,
+            ONE / 2,
+        ];
+        for &mag in &NEAR_ONE {
+            for &raw in &[mag, -mag] {
+                for &mode in &MODES {
+                    assert_eq!(
+                        atanh_schoolbook_narrow::<S>(Int::<2>::from_i128(raw), mode),
+                        D::<Int<2>, S>(Int::<2>::from_i128(raw)).atanh_strict_with(mode).0,
+                        "atanh near-1 schoolbook != routed at raw={raw} mode={mode:?}"
+                    );
+                }
+            }
+        }
+    }
+
     #[cfg(any(feature = "d57", feature = "wide"))]
     mod wide_d57 {
         use super::*;

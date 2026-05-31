@@ -1146,8 +1146,17 @@ pub(crate) fn atanh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: R
         !ax.ge_mag(one_w),
         "D38::atanh: argument out of domain (-1, 1)"
     );
-    let ratio = one_w.add(v).div(one_w.sub(v), w);
-    ln_fixed(ratio, w)
+    // atanh(x) = ½·ln((1+x)/(1-x)) = ½·(ln(1+x) − ln(1-x)). The two logs are
+    // taken SEPARATELY rather than ln of the ratio: near |x| = 1 the ratio
+    // (1+x)/(1-x) reaches ~10^(2·digits) and, scaled to the working scale `w`,
+    // overflows the 256-bit `Fixed` (e.g. atanh(1−10⁻²⁸) at D38 s28 has ratio
+    // ≈ 2·10²⁸, which at w = SCALE+30 = 58 is a raw ~10⁸⁶, past 2²⁵⁶). Each of
+    // `1+x` and `1-x` lies in (0, 2) and fits, and `ln_fixed` handles arguments
+    // below 1 (the x-near-−1 case already relies on it).
+    let ln_num = ln_fixed(one_w.add(v), w);
+    let ln_den = ln_fixed(one_w.sub(v), w);
+    ln_num
+        .sub(ln_den)
         .halve()
         .round_to_i128_with(w, scale, mode)
         .unwrap_or_else(|| {
