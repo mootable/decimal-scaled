@@ -476,6 +476,57 @@ pub(crate) fn atan_fixed(v_w: Fixed, w: u32) -> Fixed {
 
 // ── sin ────────────────────────────────────────────────────────────
 
+/// Largest working scale the narrow `Fixed` trig kernels escalate to: the
+/// embedded π (`wide_pi`) is exact to 75 digits and `10^75` sits safely inside
+/// the 256-bit `Fixed`, so directed-mode escalation stops here.
+const MAX_FIXED_TRIG_W: u32 = 75;
+
+/// Guard increment per directed-mode Ziv escalation step.
+const TRIG_GUARD_STEP: u32 = 8;
+
+/// Directed-mode rounding with Ziv escalation for the narrow `Fixed` trig
+/// kernels — the narrow-tier analogue of the wide path's
+/// `round_to_storage_directed`. Nearest modes round ONCE at `base_guard` (the
+/// common, benchmarked path — byte-identical to a plain `round_to_i128_with`).
+/// Directed modes (Trunc / Floor / Ceiling) need the residual SIGN: when the
+/// value lands exactly on a storage grid line at the base working scale, the
+/// true value may be a sub-resolution residual to one side. A near-extremum
+/// `cos`/`sin` is the canonical case — `cos`/`sin` near `kπ` equal `±1 ∓ δ²/2`,
+/// and for an argument within the input granularity of `kπ` the `δ²/2`
+/// deviation falls *below* the base guard, so at the base working scale the
+/// kernel rounds to exactly `±1` and a directed mode cannot see which side the
+/// true value lies on (the golden `cos`/`sin` near-`kπ` cells). Re-evaluate
+/// `eval(working_digits)` at increasing guard until the residual resolves,
+/// capped at [`MAX_FIXED_TRIG_W`] (where the value is treated as exact).
+#[inline]
+fn round_fixed_trig_directed(
+    scale: u32,
+    base_guard: u32,
+    mode: RoundingMode,
+    fn_name: &'static str,
+    mut eval: impl FnMut(u32) -> Fixed,
+) -> i128 {
+    let overflow = || crate::support::diagnostics::overflow_panic_with_scale(fn_name, scale);
+    if is_nearest_mode(mode) {
+        let w = scale + base_guard;
+        return eval(base_guard)
+            .round_to_i128_with(w, scale, mode)
+            .unwrap_or_else(|| overflow());
+    }
+    let max_guard = MAX_FIXED_TRIG_W.saturating_sub(scale).max(base_guard);
+    let mut guard = base_guard;
+    loop {
+        let w = scale + guard;
+        let (v, exact) = eval(guard)
+            .round_to_i128_with_exact(w, scale, mode)
+            .unwrap_or_else(|| (overflow(), true));
+        if !exact || guard >= max_guard {
+            return v;
+        }
+        guard += TRIG_GUARD_STEP;
+    }
+}
+
 #[inline]
 #[must_use]
 pub(crate) fn sin_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
@@ -485,10 +536,9 @@ pub(crate) fn sin_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) ->
     if raw.abs() <= small_x_linear_threshold::<SCALE>() && is_nearest_mode(mode) {
         return raw;
     }
-    let w = SCALE + STRICT_GUARD;
-    sin_fixed(to_fixed(raw), w)
-        .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("sin", SCALE))
+    round_fixed_trig_directed(SCALE, STRICT_GUARD, mode, "sin", |g| {
+        sin_fixed(to_fixed_w(raw, g), SCALE + g)
+    })
 }
 
 #[inline]
@@ -518,11 +568,10 @@ pub(crate) fn cos_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) ->
     if raw == 0 {
         return 10_i128.pow(SCALE);
     }
-    let w = SCALE + STRICT_GUARD;
-    let arg = to_fixed(raw).add(wide_half_pi(w));
-    sin_fixed(arg, w)
-        .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("cos", SCALE))
+    round_fixed_trig_directed(SCALE, STRICT_GUARD, mode, "cos", |g| {
+        let w = SCALE + g;
+        sin_fixed(to_fixed_w(raw, g).add(wide_half_pi(w)), w)
+    })
 }
 
 #[inline]

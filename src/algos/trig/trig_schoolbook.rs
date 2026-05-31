@@ -289,6 +289,38 @@ mod tests {
         }
     }
 
+    /// Near-extremum directed-rounding regression (the golden `cos_d38_s28`
+    /// defect). `cos(x)` for `x = ±3141.59…` (a truncation of `1000π`) equals
+    /// `1 − δ²/2`, just below `1`; at D38 s28 the deviation `δ²/2 ≈ 10⁻⁶⁰`
+    /// sits far below the base working scale. Before the Ziv-escalation fix the
+    /// narrow kernel rounded to exactly `1.0` at the base guard, so Trunc/Floor
+    /// wrongly returned `10²⁸` instead of the floor `10²⁸ − 1`. The escalation
+    /// lifts the guard until the sub-resolution residual resolves: Trunc/Floor
+    /// keep the floor, the nearest modes + Ceiling round up (golden class High,
+    /// `frac > 0.5`). Values are the golden `cos_d38_s28` `(floor, cls=High)`.
+    #[test]
+    fn cos_near_extremum_directed_rounding_s28() {
+        const FLOOR: i128 = 9_999_999_999_999_999_999_999_999_999; // 10^28 − 1
+        const UP: i128 = 10_000_000_000_000_000_000_000_000_000; // 10^28
+        // cos is even, so +x and −x give the same value.
+        for &raw in &[
+            31_415_926_535_897_932_384_626_433_832_795_i128,
+            -31_415_926_535_897_932_384_626_433_832_795_i128,
+        ] {
+            for &mode in &MODES {
+                let want = match mode {
+                    RoundingMode::Trunc | RoundingMode::Floor => FLOOR,
+                    _ => UP,
+                };
+                let got = D::<Int<2>, 28>(Int::<2>::from_i128(raw))
+                    .cos_strict_with(mode)
+                    .0
+                    .as_i128();
+                assert_eq!(got, want, "cos near-extremum mis-rounded raw={raw} mode={mode:?}");
+            }
+        }
+    }
+
     #[test]
     fn atan_schoolbook_narrow_matches_routed_kernel() {
         // atan input domain is all reals; include |x| > 1 (reciprocal

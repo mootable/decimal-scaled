@@ -730,28 +730,50 @@ impl Fixed {
         target: u32,
         mode: crate::support::rounding::RoundingMode,
     ) -> Option<i128> {
+        self.round_to_i128_with_exact(w, target, mode).map(|(v, _exact)| v)
+    }
+
+    /// Like [`round_to_i128_with`](Self::round_to_i128_with) but also reports
+    /// whether the sub-target working residual was exactly zero — i.e. whether
+    /// the value sits *exactly* on the storage grid line at this working scale
+    /// `w`. The escalating directed-rounding loop (the narrow-tier analogue of
+    /// the wide path's `round_to_storage_directed`) uses the flag: when a
+    /// directed mode lands on a grid line (`exact == true`) the true value may
+    /// be a sub-`w` residual to one side (a near-extremum cos/sin, where
+    /// `1∓f = δ²/2` falls below the base guard), so the caller re-evaluates at
+    /// a higher guard to recover the residual sign; a genuinely exact value
+    /// stays exact at every guard.
+    #[inline]
+    pub(crate) fn round_to_i128_with_exact(
+        self,
+        w: u32,
+        target: u32,
+        mode: crate::support::rounding::RoundingMode,
+    ) -> Option<(i128, bool)> {
         let shift = w - target;
         if shift == 0 {
-            // No rounding; just narrow.
+            // No rounding; just narrow. An all-zero shift carries no residual,
+            // so the value is exactly on grid by construction.
             if self.mag[1] != 0 {
                 return None;
             }
             let m = self.mag[0];
-            return if self.negative {
+            let v = if self.negative {
                 if m > 1u128 << 127 {
-                    None
-                } else {
-                    Some((m as i128).wrapping_neg())
+                    return None;
                 }
+                (m as i128).wrapping_neg()
             } else if m > i128::MAX as u128 {
-                None
+                return None;
             } else {
-                Some(m as i128)
+                m as i128
             };
+            return Some((v, true));
         }
         let divisor = Fixed::pow10(shift);
         let (q, r) = divmod_u256_by_pow10(self.mag, divisor, shift);
-        let rounded = if is_zero_u256(r) {
+        let exact = is_zero_u256(r);
+        let rounded = if exact {
             q
         } else {
             // |r| is r (already a magnitude); comp = divisor - r.
@@ -769,17 +791,17 @@ impl Fixed {
             return None;
         }
         let m = rounded[0];
-        if self.negative {
+        let v = if self.negative {
             if m > 1u128 << 127 {
-                None
-            } else {
-                Some((m as i128).wrapping_neg())
+                return None;
             }
+            (m as i128).wrapping_neg()
         } else if m > i128::MAX as u128 {
-            None
+            return None;
         } else {
-            Some(m as i128)
-        }
+            m as i128
+        };
+        Some((v, exact))
     }
 }
 
