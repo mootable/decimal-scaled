@@ -4,18 +4,21 @@
 //! not tied to one mathematical family; they are the cross-cutting
 //! building blocks the families and the arithmetic layer share:
 //!
+//! - [`rescale`] — the `÷ 10^SCALE` policy matcher: one `const fn` classifier
+//!   ([`rescale::select`]) behind a slice door and a typed door, selecting
+//!   between the MG and Newton kernels below.
 //! - [`mg_divide`] — the Moller-Granlund magic-number divide used by
 //!   every multiplicative `÷ 10^SCALE` rescale path.
 //! - [`fixed`] — the 256-bit sign-magnitude `Fixed` work integer the
 //!   strict-transcendental fallback paths evaluate their series in.
 //! - [`newton_reciprocal`] — the Newton-Raphson reciprocal divide for
-//!   `n / 10^SCALE` at the wide tiers, head-to-head benched against
-//!   [`mg_divide::div_wide_pow10_chain`] and routed in by
-//!   [`newton_reciprocal::dispatch_wide_pow10`] at the cells where
-//!   the bench matrix shows it wins.
+//!   `n / 10^SCALE` at the wide tiers. A kept-alt: [`rescale`] holds the
+//!   `Newton` arm but does not currently select it (uncached Newton is
+//!   dominated by the MG chain, 9.18.2); kept for a baked-`r` revival.
 
 pub(crate) mod fixed;
 pub(crate) mod mg_divide;
+pub(crate) mod rescale;
 
 // Typed-`W` Newton-root seed bridge over the cross-algorithm seed leaf
 // (`algo_x_support::seed`). Used by the wide fixed-point `sqrt` kernel,

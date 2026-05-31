@@ -440,15 +440,10 @@ macro_rules! decl_wide_transcendental {
                         $crate::support::rounding::RoundingMode::HalfToEven,
                     );
                 }
-                // Newton vs MG chain dispatch (see the matrix in
-                // [`crate::algos::support::newton_reciprocal::dispatch_wide_pow10`]).
-                // For most wide-tier `$Work` integers `W::BITS` lands
-                // outside the bench-validated cells (Int<128> /
-                // Int<192> / Int<256>) and the dispatcher forwards to
-                // MG; the routing is here so a future bench at the
-                // larger widths can promote without touching this
-                // site.
-                $crate::algos::support::newton_reciprocal::dispatch_wide_pow10::<W>(
+                // `scale > 38` rescale — the matcher selects the MG chain
+                // (uncached Newton is dominated, 9.18.2; the `Newton` arm is
+                // a kept-alt). See [`crate::algos::support::rescale`].
+                $crate::algos::support::rescale::dispatch_wide_pow10::<W>(
                     n,
                     w,
                     $crate::support::rounding::RoundingMode::HalfToEven,
@@ -628,9 +623,10 @@ macro_rules! decl_wide_transcendental {
                 } else if shift <= 38 {
                     $crate::algos::support::mg_divide::div_wide_pow10::<W>(v, shift, mode)
                 } else {
-                    // Newton vs MG chain dispatch — see the matrix
-                    // in [`crate::algos::support::newton_reciprocal::dispatch_wide_pow10`].
-                    $crate::algos::support::newton_reciprocal::dispatch_wide_pow10::<W>(
+                    // `shift > 38` rescale — the matcher selects the MG chain
+                    // (uncached Newton is dominated, 9.18.2; `Newton` is a
+                    // kept-alt). See [`crate::algos::support::rescale`].
+                    $crate::algos::support::rescale::dispatch_wide_pow10::<W>(
                         v, shift, mode,
                     )
                 };

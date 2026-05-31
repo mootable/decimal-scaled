@@ -1639,7 +1639,7 @@ pub mod __bench_internals {
                 crate::support::rounding::RoundingMode::HalfToEven,
             );
         }
-        crate::algos::support::newton_reciprocal::dispatch_wide_pow10::<W>(
+        crate::algos::support::rescale::dispatch_wide_pow10::<W>(
             n,
             w,
             crate::support::rounding::RoundingMode::HalfToEven,

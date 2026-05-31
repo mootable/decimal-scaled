@@ -39,24 +39,6 @@ use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
-/// Divide the u128 magnitude `mag` (in place) by `10^SCALE`, choosing the
-/// MG single-chunk / MG chain / Newton path exactly as the typed
-/// `div_wide_pow10` / `dispatch_wide_pow10` wrappers do. `neg` is
-/// the result sign (rounding tie-break); `work_bits` is the work width in
-/// bits (the Newton cache / threshold key). `SCALE == 0` is a no-op.
-#[inline]
-fn divide_mag_by_pow10(mag: &mut [u128], scale: u32, neg: bool, work_bits: u32, mode: RoundingMode) {
-    if scale == 0 {
-        // no rescale
-    } else if scale <= 38 {
-        crate::algos::support::mg_divide::div_pow10_mag_u128(mag, scale, neg, mode);
-    } else {
-        crate::algos::support::newton_reciprocal::dispatch_pow10_mag_u128(
-            mag, scale, neg, mode, work_bits,
-        );
-    }
-}
-
 /// Rebuild a signed `Int<N>` from a quotient magnitude held in u128 limbs
 /// `mag` (the low `(N + 1) / 2` of which carry the result) and sign `neg`.
 /// In debug, panics if the magnitude exceeds `Int<N>`'s representable range
@@ -139,7 +121,13 @@ where
         let u128_limbs = N.div_ceil(2);
         let mut mag = [0u128; N];
         let _ = prod.mag_into_u128(&mut mag[..u128_limbs]);
-        divide_mag_by_pow10(&mut mag[..u128_limbs], SCALE, neg, <Int<N>>::BITS, mode);
+        crate::algos::support::rescale::dispatch_mag(
+            &mut mag[..u128_limbs],
+            SCALE,
+            neg,
+            mode,
+            <Int<N>>::BITS,
+        );
         return Int::<N>::from_mag_sign_u128(&mag[..u128_limbs], neg);
     }
 
@@ -169,6 +157,6 @@ where
 
     // Work width is the 2N-limb product: 2 * N * 64 bits.
     let work_bits = (2 * N as u32) * 64;
-    divide_mag_by_pow10(&mut mag, SCALE, neg, work_bits, mode);
+    crate::algos::support::rescale::dispatch_mag(&mut mag, SCALE, neg, mode, work_bits);
     narrow_mag_to_int::<N>(&mag, neg, "attempt to multiply with overflow")
 }

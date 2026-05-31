@@ -598,9 +598,10 @@ pub(crate) fn newton_pow10_mag_u128_packed(
 /// integrated bench, cores 22–23, sees u128 1.18–3.46× over MG and
 /// 1.0–1.24× over u64 across s115–s953).
 ///
-/// Wider widths (8192/12288/16384/32768) stay on MG entirely — see
-/// [`newton_wins`] for the AGM-widening / buffer-scratch / contradicting
-/// integrated-bench reasons.
+/// Wider widths (8192/12288/16384/32768) stay on MG entirely — the
+/// AGM-widening / buffer-scratch / contradicting-integrated-bench reasons
+/// in this module's notes. (Newton is now a [`crate::algos::support::rescale`]
+/// kept-alt for every width, 9.18.2; this picks the packed apply if revived.)
 #[inline]
 const fn newton_u128_wins(width_bits: u32) -> bool {
     matches!(width_bits, 1536 | 2048 | 3072 | 4096 | 6144)
@@ -711,159 +712,36 @@ pub(crate) fn newton_pow10_mag_u128(
     }
 }
 
-/// Width-keyed dispatch decision for `n / 10^SCALE`.
+/// The uncached Newton-reciprocal rescale execution: `mag /= 10^scale` via a
+/// per-call [`NewtonReciprocal::precompute`] (a Knuth divide) plus a
+/// reciprocal-multiply apply, in place on a u128-limb magnitude slice
+/// (std-only; no_std forwards to the MG chain). `width_bits` is the work
+/// width in bits (the precompute / packed-apply key); `neg` is the result
+/// sign for the rounding tie-break.
 ///
-/// Returns `true` when the bench-validated Newton-vs-MG matrix says
-/// Newton wins for this `(width_bits, scale)` cell. The matrix:
-///
-/// | bits  | Storage match                       | Newton min SCALE |
-/// |-------|-------------------------------------|------------------|
-/// | 1536  | Int<24>  (D462 stg / D230 Work)     |  ≥ 200           |
-/// | 2048  | Int<32>  (D616 stg / D307 Work)     |  ≥ 200           |
-/// | 3072  | Int<48>  (D924 stg / D462 Work)     |  ≥ 200           |
-/// | 4096  | Int<64>  (D1232 stg / D616 Work)    |  ≥ 400           |
-/// | 6144  | Int<96>  (D230 Wexp / D924 Work)    |  ≥ 200           |
-///
-/// Bench source: `benches/micro/newton_vs_mg.rs` head-to-head against
-/// [`crate::algos::support::mg_divide::div_wide_pow10_chain`] at the
-/// listed widths × representative SCALE bands.
-///
-/// Widths 8192 / 12288 / 16384 / 32768 (D462 Wexp / D1232 Work / D924
-/// Wide / D616 Wexp / D924 Wexp / D1232 Wide / D1232 Wexp) are
-/// **deferred**. Two-part reason:
-///
-/// 1. **AGM widening invalidates the simple max-scale analysis.** The
-///    `_strict_agm` ln/exp paths lift the working scale to
-///    `w_prime = SCALE + GUARD + guard_agm(SCALE) ≈ 2·SCALE + 4` at
-///    high SCALE — so D924 Wide=12288 actually sees `w ≈ 1850` (not
-///    953), D1232 Work=8192 actually sees `w ≈ 2466` (not 1261). The
-///    Newton precompute's `2^k / 10^scale` numerator at those scales
-///    needs more u64 limbs than the routed `div_knuth`'s build-max
-///    scratch (`MAX_SINGLE_LIMBS = 258`) can hold: 12288 + AGM scale
-///    1850 → ~293 num limbs, 8192 + AGM scale 2466 → ~260 num limbs.
-///    The first golden run after enabling 8192/12288 panicked
-///    `div_knuth.rs:81` with the AGM-scale numerator. 6144 is the
-///    widest width whose AGM-scale numerator (~197 limbs) still fits.
-/// 2. **Sibling-agent integrated bench (atanh diagnosis) at
-///    Int<192>/Int<256>** reported Newton losing 5–58× to MG chain in
-///    the low-scale shape (e.g. w=38 → MG 2.63 µs vs Newton 109 µs).
-///    The crossover may exist but is structurally higher than at the
-///    narrower widths, and the picture isn't yet settled.
-///
-/// Revisit when (a) a wider-numerator divide kernel is wired into the
-/// Newton precompute (Knuth-into with caller-sized scratch), and (b)
-/// the integrated `newton_vs_mg` evidence at the AGM scale (not just
-/// the SCALE-band) confirms Newton wins.
-///
-/// The 1536-bit row recovers the bench-branch-compare wide-`÷10^SCALE`
-/// regression at D230's work width: `exp_D230_s{172,229}` (1.38× and
-/// 1.61× cells) rescale at Int<24>=1536 bits with working scale
-/// `w = SCALE + GUARD(30) ∈ {202, 259}`. The newton_vs_mg micro at
-/// 1536 bits puts the Newton crossover between s190 (MG 1.10×) and
-/// s195 (Newton 1.03×), with Newton 1.05–1.51× across s202..461 — so
-/// the conservative `≥ 200` threshold (same value the other rows use)
-/// covers the bbc cells with margin and avoids snapping to either edge.
-/// The same 1536-bit divide is shared with D462's storage `mul`/`div`
-/// rescale fast-path (where the work width also lands at 1536 bits)
-/// and D230's storage `mul` slow-path — see `mul_widen_divide`.
-///
-/// The 6144-bit row (audit 2026-05-28) covers the D230 `exp`/`atanh`
-/// Wexp band and the D924 Work integer's transcendental rescales.
-/// Bench evidence (cores 22–23, integrated `newton_vs_mg`):
-///
-/// | scale | mg_chain   | newton     | newton_u128 | best win |
-/// |-------|------------|------------|-------------|----------|
-/// | 38    | 1.17 µs MG | 2.68 µs    | 2.70 µs     | MG 2.3×  |
-/// | 115   | 3.06 µs    | 2.99 µs    | 2.60 µs     | u128 1.18× |
-/// | 200   | 4.75 µs    | 3.27 µs    | 2.92 µs     | u128 1.63× |
-/// | 400   | 8.13 µs    | 4.44 µs    | 4.15 µs     | u128 1.96× |
-/// | 600   | 10.67 µs   | 4.87 µs    | 3.90 µs     | u128 2.73× |
-/// | 800   | 12.36 µs   | 4.75 µs    | 4.34 µs     | u128 2.85× |
-/// | 953   | 13.90 µs   | 4.97 µs    | 4.02 µs     | u128 3.46× |
-///
-/// The crossover is between s38 (MG wins, single-pass) and s115 (Newton
-/// edges). The `≥ 200` threshold matches every other 0.5.0 row, keeps
-/// the gate on a continuous region per Constitution rule 6 + Class I,
-/// and avoids snapping to a specific bbc cell.
-///
-/// Scale `≤ 38` always returns `false`: the single-pass MG kernel
-/// `div_wide_pow10` is the chosen winner there and a chain-Newton
-/// would be both slower and indistinguishable rounding-wise.
+/// This is the `Newton` arm of the rescale matcher
+/// ([`crate::algos::support::rescale`]) — a **kept-alt**. The matcher does
+/// NOT currently route here: the §9.2 no-state rule deleted the reciprocal
+/// cache this kernel amortised against, so the per-call precompute makes it
+/// ~2× slower than the MG chain at every width × scale cell (measured 9.18.2:
+/// decimal `mul` D230<229> 2.15×, D924<462> 2.0×; the MG chain recovers both
+/// to parity with 0.4.4). Kept callable for a future baked-`r` const-table
+/// revival, whose binary-size cost is deferred (9.18.2 / 9.20).
 #[inline]
-const fn newton_wins(width_bits: u32, scale: u32) -> bool {
-    if scale <= 38 {
-        return false;
-    }
-    match width_bits {
-        1536 if scale >= 200 => true,
-        2048 if scale >= 200 => true,
-        3072 if scale >= 200 => true,
-        4096 if scale >= 400 => true,
-        6144 if scale >= 200 => true,
-        _ => false,
-    }
-}
-
-/// Width-class dispatch for `n / 10^SCALE`.
-///
-/// When the `(W::BITS, scale)` cell wins under [`newton_wins`] the
-/// call routes through the Newton kernel (recomputing the reciprocal
-/// each call); otherwise it forwards to the MG chain kernel.
-///
-/// Used at the `mul` / transcendental-rounding call sites where the
-/// numerator width is `W` and `scale` is a runtime value — see the
-/// matching call sites in `macros::arithmetic::decl_decimal_arithmetic`
-/// and `macros::wide_transcendental::decl_wide_transcendental`.
-#[inline]
-pub(crate) fn dispatch_wide_pow10<W>(
-    n: W,
-    scale: u32,
-    mode: crate::support::rounding::RoundingMode,
-) -> W
-where
-    W: crate::int::types::traits::BigInt,
-    W::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
-{
-    let bits = <W as crate::int::types::traits::BigInt>::BITS;
-    // u128 magnitude buffer from `W`'s scratch carrier (`W::Scratch =
-    // Limbs<N>`, size lives in the impl); no const work-width parameter —
-    // same mechanism as `div_wide_pow10`.
-    let mut buf = <W::Scratch as crate::int::types::compute_limbs::ComputeLimbs>::single_u128();
-    let mag = &mut buf.as_mut()[..W::U128_LIMBS];
-    let neg = n.mag_into_u128(mag);
-    dispatch_pow10_mag_u128(mag, scale, neg, mode, bits);
-    W::from_mag_sign_u128(mag, neg)
-}
-
-/// Width-agnostic dispatch for `mag / 10^scale`, in place on a u128-limb
-/// magnitude slice. `width_bits` is the work-width in bits (`mag.len() *
-/// 128`-bounded; supplied by the caller as the `newton_wins` key).
-///
-/// Routes Newton vs MG-chain by [`newton_wins`]; the Newton arm is
-/// std-only (no_std forwards to MG). Shared with the typed
-/// [`dispatch_wide_pow10`] wrapper and the `Int<N>`-only decimal `mul`
-/// kernel.
-#[inline]
-pub(crate) fn dispatch_pow10_mag_u128(
+pub(crate) fn newton_rescale_arm(
     mag: &mut [u128],
     scale: u32,
     neg: bool,
     mode: crate::support::rounding::RoundingMode,
     width_bits: u32,
 ) {
-    if !newton_wins(width_bits, scale) {
-        crate::algos::support::mg_divide::div_pow10_chain_mag_u128(mag, scale, neg, mode);
-        return;
-    }
-
     #[cfg(feature = "std")]
     {
-        // `width_limbs` in u64 limbs — the `precompute` unit.
+        // `width_limbs` in u64 limbs — the `precompute` unit. Recompute the
+        // fixed-size, stack-only `NewtonReciprocal` for this `(width, scale)`
+        // each call: value-independent but not const-evaluable (Knuth divide),
+        // so a per-call stack recompute is the stateless, heap-free form.
         let width_limbs = (width_bits as usize) / 64;
-        // Recompute the fixed-size, stack-only `NewtonReciprocal` for this
-        // `(width, scale)` each call: value-independent but not const-
-        // evaluable (Knuth divide), so a per-call stack recompute is the
-        // stateless, heap-free form.
         let table = NewtonReciprocal::precompute(scale, width_limbs);
         if newton_u128_wins(width_bits) {
             newton_pow10_mag_u128_packed(mag, neg, mode, &table);
@@ -874,10 +752,9 @@ pub(crate) fn dispatch_pow10_mag_u128(
 
     #[cfg(not(feature = "std"))]
     {
-        // no_std fallback: per-call precompute is one Knuth divide at
-        // storage width, costly for the wide tier; the Newton win
-        // depended on amortising the table across calls (now removed).
-        // Forward to MG instead.
+        // no_std has no Newton path (the per-call Knuth precompute is too
+        // costly); forward to the MG chain — the kernel the matcher selects.
+        let _ = width_bits;
         crate::algos::support::mg_divide::div_pow10_chain_mag_u128(mag, scale, neg, mode);
     }
 }
@@ -909,8 +786,8 @@ mod tests {
     }
 
     // Exercises `Int<24>` (D462 storage AND D230 Work) at the bbc anchor
-    // scales — bit-identical agreement is the validity wall for the new
-    // 1536-bit `newton_wins` entry.
+    // scales — bit-identical agreement is the validity wall for the
+    // 1536-bit Newton kept-alt (the `rescale` matcher's `Newton` arm).
     #[cfg(feature = "d462")]
     #[test]
     fn newton_matches_mg_chain_d462_s202() {
@@ -1111,8 +988,8 @@ mod tests {
     //
     // Int<96> / Int<128> / Int<192> exercised at the bbc-anchor scales
     // and the maxima. Bit-identical agreement with the Knuth-routed
-    // `div_rem_mag_slice` path is the validity wall for the new
-    // `newton_wins` (6144 / 8192 / 12288) entries.
+    // `div_rem_mag_slice` path is the validity wall for the wide Newton
+    // kept-alt cells (6144 / 8192 / 12288; the `rescale` `Newton` arm).
 
     #[cfg(any(feature = "d924", feature = "xx-wide"))]
     #[test]
