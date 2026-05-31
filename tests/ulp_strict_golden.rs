@@ -3206,3 +3206,102 @@ mod binary_ops {
         }
     }
 }
+
+/// Comprehensive auto-discovered golden gate: scans every `tests/golden/*.txt`,
+/// parses each `<func>_d<N>_s<S>.txt` into `(func, Width, scale)`, and runs the
+/// strict correct-rounding check on it. This closes the gap where new golden
+/// tables (the full wide-tier 5-point-scale set) were committed but only the
+/// `decl_band!`-listed tables were actually exercised — every table in the
+/// directory is now a gate.
+///
+/// `#[ignore]`d on purpose: with all twelve tiers this is ~1.6k tables and a
+/// multi-hour run (the wide transcendentals are milliseconds per call), so it
+/// is the opt-in COMPREHENSIVE gate (`cargo test ... -- --ignored`), not the
+/// fast per-commit one (the `decl_band!` subset). `GOLDEN_FILTER=<substr>`
+/// narrows it to file stems containing the substring (e.g. `GOLDEN_FILTER=mul_d`
+/// for every `mul` cell, `=_d1232_` for the widest tier). It reuses the 9.21
+/// per-table timeout watchdog in [`check_at_scale`], so a runaway kernel in any
+/// newly-covered cell is NAMED rather than hanging the suite. Every covered
+/// table runs even when one fails (each is `catch_unwind`-guarded); the failing
+/// `(func, width, scale)` list is reported together.
+#[cfg(all(feature = "wide", feature = "x-wide", feature = "xx-wide", feature = "macros"))]
+#[test]
+#[ignore = "comprehensive auto-discovered golden over all tests/golden/*.txt — opt-in via --ignored (multi-hour at the wide tiers); GOLDEN_FILTER=<substr> narrows it"]
+fn golden_autodiscover() {
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden");
+    let filter = std::env::var("GOLDEN_FILTER").unwrap_or_default();
+
+    let mut entries: Vec<_> = std::fs::read_dir(dir)
+        .expect("read tests/golden")
+        .filter_map(Result::ok)
+        .collect();
+    entries.sort_by_key(std::fs::DirEntry::file_name);
+
+    let mut tested = 0usize;
+    let mut skipped = 0usize;
+    let mut failures: Vec<String> = Vec::new();
+
+    for entry in entries {
+        let fname = entry.file_name().to_string_lossy().into_owned();
+        let Some(stem) = fname.strip_suffix(".txt") else {
+            continue;
+        };
+        if !filter.is_empty() && !stem.contains(filter.as_str()) {
+            continue;
+        }
+        // Parse `<func>_d<N>_s<S>` (every name in the directory conforms; a
+        // non-conforming one is counted as skipped rather than panicking).
+        let Some((left, scale_s)) = stem.rsplit_once("_s") else {
+            skipped += 1;
+            continue;
+        };
+        let Some((func, n_s)) = left.rsplit_once("_d") else {
+            skipped += 1;
+            continue;
+        };
+        let (Ok(n), Ok(scale)) = (n_s.parse::<u32>(), scale_s.parse::<u32>()) else {
+            skipped += 1;
+            continue;
+        };
+        let Some(width) = Width::from_digits(n) else {
+            skipped += 1;
+            continue;
+        };
+
+        // `check_at_scale` (the 9.21 watchdog) needs `'static`; leak the table
+        // and func name (the process exits after the gate, so a bounded leak —
+        // the whole corpus is capped well under the 9.19 budget — is fine).
+        let content = std::fs::read_to_string(entry.path()).expect("read golden table");
+        let table: &'static str = Box::leak(content.into_boxed_str());
+        let func_s: &'static str = Box::leak(func.to_owned().into_boxed_str());
+
+        match std::panic::catch_unwind(|| check_at_scale(func_s, width, scale, table)) {
+            Ok(()) => {}
+            Err(p) => {
+                let msg = p
+                    .downcast_ref::<String>()
+                    .map(String::as_str)
+                    .or_else(|| p.downcast_ref::<&str>().copied())
+                    .unwrap_or("<non-string panic>");
+                failures.push(format!("{func} d{n} s{scale}: {msg}"));
+            }
+        }
+        tested += 1;
+    }
+
+    eprintln!(
+        "golden_autodiscover: {tested} tested, {skipped} skipped, {} failed{}",
+        failures.len(),
+        if filter.is_empty() {
+            String::new()
+        } else {
+            format!(" (filter={filter:?})")
+        },
+    );
+    assert!(
+        failures.is_empty(),
+        "{} golden table(s) failed strict rounding:\n{}",
+        failures.len(),
+        failures.join("\n"),
+    );
+}
