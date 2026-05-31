@@ -559,6 +559,16 @@ fn exp2_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode)
     if let Some(pinned) = exp2_exact_pin(raw, scale, mode) {
         return pinned;
     }
+    // Integer-regime gate (mirrors `exp_with_raw`): `2^x = e^(x·ln 2)` whose
+    // result carries `k_lift` integer digits leaves the flat-`w` 256-bit
+    // `Fixed` too few fractional guard digits to round correctly (e.g. 2^93
+    // has 28 integer digits — the exp2_d38_s9 mis-round). Route those cells to
+    // the wider work integer, which lifts the working scale by `k_lift` exactly
+    // as the wide-tier `exp2_guarded` does. Small results stay on the fast path.
+    let abs_raw = raw.unsigned_abs();
+    if exp2_result_int_digits(abs_raw, scale) > FAST_MAX_RESULT_DIGITS {
+        return exp2_wide_narrow_raw(raw, scale, working_digits, mode);
+    }
     let w = scale + working_digits;
     let negative_input = raw < 0;
     let v_w = Fixed::from_u128_mag(raw.unsigned_abs(), false).mul_u128(10u128.pow(working_digits));
@@ -569,6 +579,71 @@ fn exp2_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode)
         .unwrap_or_else(|| {
             crate::support::diagnostics::overflow_panic_with_scale("D38::exp2", scale)
         })
+}
+
+/// Integer-digit count of `2^x` for the non-negative storage magnitude
+/// `abs_raw` at `scale` (`x = abs_raw / 10^scale`). `int_digits(2^x) =
+/// floor(x · log10 2) + 1`; for `x == 0` it is one digit. `log10 2 ≈
+/// 301030 / 1_000_000`, rounded UP (`div_ceil`) so the count is never
+/// under-stated — the safe direction for the [`FAST_MAX_RESULT_DIGITS`]
+/// gate (errs toward the wide path). Mirrors [`exp_result_int_digits`]'s
+/// overflow-free `q`/`r` split so no intermediate exceeds `u128`.
+#[inline]
+fn exp2_result_int_digits(abs_raw: u128, scale: u32) -> u32 {
+    let one_s = match 10u128.checked_pow(scale) {
+        Some(p) => p,
+        None => return 1,
+    };
+    let q = abs_raw / one_s; // integer part of |x|
+    let r = abs_raw % one_s; // fractional remainder, r < 10^scale
+    let q_capped = q.min(180); // past here the count far exceeds the band
+    let r7 = if scale <= 7 {
+        r * 10u128.pow(7 - scale)
+    } else {
+        r / 10u128.pow(scale - 7)
+    };
+    let x_e7 = q_capped * 10_000_000 + r7; // |x| · 10^7 (q capped)
+    let num = x_e7 * 301_030; // / 10^7 / 10^6 = / 10^13 gives |x|·log10 2
+    (num.div_ceil(10u128.pow(13)).min(u32::MAX as u128 - 1) as u32) + 1
+}
+
+/// Integer-regime / large-result `2^x` for the narrow tier, evaluated in the
+/// wider [`WNarrow`] work integer via the width-generic
+/// [`exp_generic::exp_fixed`], then narrowed with correct rounding. The
+/// working scale is lifted by the result's integer-digit count `k_lift` so the
+/// argument `x·ln 2` AND the `e^(x·ln 2)` evaluation keep enough fractional
+/// guard past the many integer digits — the narrow analogue of the wide-tier
+/// `exp2_guarded`'s `GUARD + k_lift`. [`narrow_round_mag`]'s `never_exact`
+/// gives the directed modes the sub-resolution residual a transcendental needs.
+fn exp2_wide_narrow_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
+    use crate::algos::exp::exp_generic;
+
+    let neg = raw < 0;
+    let abs_raw = raw.unsigned_abs();
+    let k_lift = exp2_result_int_digits(abs_raw, scale);
+    let guard = working_digits + k_lift;
+    let w = scale + guard;
+    // x · ln 2 at scale `w`, formed in the wide work integer:
+    //   x_w = x·10^w = abs_raw·10^guard ;  ln2_w = ln 2·10^w ;
+    //   (x_w · ln2_w) / 10^w = x·ln 2 · 10^w.
+    let x_w =
+        WNarrow::from_i128(abs_raw as i128) * crate::consts::pow10::dispatch::<WNarrow>(guard);
+    let ln2_w = crate::consts::ln2_by_working_scale::<WNarrow>(w, RoundingMode::HalfToEven);
+    let prod = x_w * ln2_w;
+    let arg_mag = if w <= 38 {
+        crate::algos::support::mg_divide::div_wide_pow10::<WNarrow>(prod, w, RoundingMode::HalfToEven)
+    } else {
+        crate::algos::support::mg_divide::div_wide_pow10_chain::<WNarrow>(
+            prod,
+            w,
+            RoundingMode::HalfToEven,
+        )
+    };
+    let arg = if neg { -arg_mag } else { arg_mag };
+    let ex = exp_generic::exp_fixed::<WNarrow>(arg, w);
+    narrow_round_mag(ex, guard, mode, true, false).unwrap_or_else(|| {
+        crate::support::diagnostics::overflow_panic_with_scale("exp2", scale)
+    })
 }
 
 #[inline]
@@ -770,6 +845,41 @@ mod fast_path_validity {
                 "{label:22}: fast={fast_ns:7.1}ns  wide={wide_ns:8.1}ns  speedup={:.2}x",
                 wide_ns / fast_ns
             );
+        }
+    }
+
+    // Integer-regime exp2 regression (the golden exp2_d38_s9 defect): 2^x
+    // whose result has many integer digits (2^93 ≈ 10^28) left the flat-`w`
+    // 256-bit `Fixed` too few fractional guard digits and mis-rounded the
+    // last ULPs. The gate now routes such cells to `exp2_wide_narrow_raw`.
+    // Pin the exposing cell (class "Low": every mode → floor, except Ceiling
+    // → floor+1) plus a small integer-regime sweep checking the rounding
+    // order stays consistent (floor ≤ nearest ≤ ceil, ceil − floor ≤ 1).
+    // Guards the fix in the fast default build, parallel to the atanh near-1
+    // test; the mpmath golden floor is independently confirmed by Arb.
+    #[test]
+    fn exp2_integer_regime_matches_golden_floor() {
+        const S9: u32 = 9;
+        let raw = 93_013_986_656_i128; // 93.013986656 at scale 9
+        let gfloor: i128 = 9_999_999_994_134_964_658_924_521_484_307_802_708;
+        for &mode in &MODES {
+            let got = exp2_with_raw(raw, S9, STRICT_GUARD, mode);
+            let want = if matches!(mode, RoundingMode::Ceiling) {
+                gfloor + 1
+            } else {
+                gfloor
+            };
+            assert_eq!(got, want, "exp2(93.013986656) s9 mode={mode:?}");
+        }
+        // Integer-regime inputs whose result still fits i128 at scale 9:
+        // 2^x·10^9 < i128::MAX ≈ 1.7·10^38 ⇒ x ≲ 97. (2^100·10^9 ≈ 1.3·10^39
+        // overflows and correctly panics, so keep the sweep below that.)
+        for &r in &[50_000_000_000_i128, 70_000_000_000, 90_000_000_000] {
+            let he = exp2_with_raw(r, S9, STRICT_GUARD, RoundingMode::HalfToEven);
+            let fl = exp2_with_raw(r, S9, STRICT_GUARD, RoundingMode::Floor);
+            let ce = exp2_with_raw(r, S9, STRICT_GUARD, RoundingMode::Ceiling);
+            assert!(fl <= he && he <= ce, "exp2 rounding order violated at raw={r}");
+            assert!(ce - fl <= 1, "exp2 floor/ceil differ by >1 at raw={r}");
         }
     }
 }
