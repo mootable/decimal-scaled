@@ -100,14 +100,50 @@ fn method_of(func: &str) -> Method {
 /// one `(func, width)` table, across all six modes, and assert every
 /// scored cell is correctly rounded (`lsbe == 0`). A mismatch prints the
 /// full (input, mode) detail and is counted; a non-zero count fails.
-fn check(func: &str, width: Width, table: &str) {
+fn check(func: &'static str, width: Width, table: &'static str) {
     check_at_scale(func, width, width.canonical_scale(), table);
 }
 
 /// As [`check`], but at an explicit `scale` rather than the width's canonical
 /// one — used for the wide tiers' second (SCALE 30) golden cell, which
 /// validates the low-scale Tang rectangle in `policy::exp`.
-fn check_at_scale(func: &str, width: Width, scale: u32, table: &str) {
+fn check_at_scale(func: &'static str, width: Width, scale: u32, table: &'static str) {
+    // Per-table TIMEOUT watchdog (9.21): run the table on a detached worker
+    // thread. If a kernel for this (function, width, scale) runs away (infinite
+    // recursion / non-termination) — a real risk as the wide-tier coverage
+    // expands — it is IDENTIFIED here: the test fails NAMING the table instead
+    // of the whole suite hanging silently. The worker leaks on timeout (the
+    // process exits after the suite, which is fine for a gate). A body panic (a
+    // genuine correctly-rounding failure) is caught and re-raised on the main
+    // thread so the assertion detail survives. The budget is generous — a wide
+    // golden table is thousands of kernel calls, so exceeding it means a
+    // runaway, not merely slow.
+    use std::sync::mpsc;
+    use std::time::Duration;
+    const GOLDEN_TABLE_TIMEOUT_SECS: u64 = 120;
+    let (tx, rx) = mpsc::channel();
+    let _worker = std::thread::Builder::new()
+        .name(format!("golden-{func}-{}-s{scale}", width.name()))
+        .spawn(move || {
+            let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                check_at_scale_inner(func, width, scale, table)
+            }));
+            let _ = tx.send(r);
+        })
+        .expect("spawn golden worker thread");
+    match rx.recv_timeout(Duration::from_secs(GOLDEN_TABLE_TIMEOUT_SECS)) {
+        Ok(Ok(())) => {}
+        Ok(Err(panic)) => std::panic::resume_unwind(panic),
+        Err(_) => panic!(
+            "GOLDEN TIMEOUT: {func} {} s{scale} did not finish within \
+             {GOLDEN_TABLE_TIMEOUT_SECS}s — possible runaway recursion / \
+             non-termination in the kernel for this (function, width, scale)",
+            width.name(),
+        ),
+    }
+}
+
+fn check_at_scale_inner(func: &str, width: Width, scale: u32, table: &str) {
     let subject = DecimalScaledSubject;
     let method = method_of(func);
     let mut failures = 0usize;
