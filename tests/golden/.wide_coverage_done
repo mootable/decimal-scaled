@@ -47,3 +47,40 @@ log d1232
 sin d1232
 cos d1232
 tan d1232
+#
+# === chunk 2 (roots + inverse-trig: sqrt cbrt asin acos atan atan2 @ d230 d462 d616 d924 d1232) ===
+# sqrt/cbrt: exact-algebraic-root cells (perfect-square / perfect-cube radicands)
+#   pinned to cls Z by the script's symbolic detection (verified present).
+# asin/acos @ s0: only 3 cases per width {raw -1,0,1} -- that IS the COMPLETE
+#   representable domain at scale 0 (x in [-1,1], one=1), not a taper/drop.
+# atan2 is two-arg (4-col), reuses the powf/log two-arg path. No oracle timeouts.
+sqrt d230
+cbrt d230
+asin d230
+acos d230
+atan d230
+atan2 d230
+sqrt d462
+cbrt d462
+asin d462
+acos d462
+atan d462
+atan2 d462
+sqrt d616
+cbrt d616
+asin d616
+acos d616
+atan d616
+atan2 d616
+sqrt d924
+cbrt d924
+asin d924
+acos d924
+atan d924
+atan2 d924
+sqrt d1232
+cbrt d1232
+asin d1232
+acos d1232
+atan d1232
+atan2 d1232
