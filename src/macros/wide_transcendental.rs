@@ -2102,7 +2102,7 @@ macro_rules! decl_wide_transcendental {
             /// [`crate::consts::deg_per_rad_by_scale`]
             /// reads the baked entry keyed on the const scale; any other
             /// `w` (no Ziv escalation reaches this in the angle kernels,
-            /// but keep it total) falls to the runtime-keyed `by_w`.
+            /// but keep it total) falls to the runtime-keyed `by_working_scale`.
             pub(crate) fn deg_per_rad_cf<const SCALE: u32>(
                 w: u32,
                 mode: $crate::support::rounding::RoundingMode,

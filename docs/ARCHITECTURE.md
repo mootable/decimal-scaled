@@ -407,30 +407,55 @@ metadata**: any const, type, or context *beyond* its level consts and the
 operands themselves. If a function cannot be picked or run without extra
 information threaded in from outside, the design is broken.
 
-### The one exception: division has no const-width axis
+### Const entry + slice entry — one length/shape classifier, two doors
 
-Division is the **single policy with no const-width axis**: it looks like the
-int-binary case that should take `<const Nthis, const Nother>`, but it cannot.
-Its operands have *independent* runtime lengths that no const expresses:
+Most policies key on the level's own const width(s) and **const-fold to one
+direct call** (the BigRule above) — that compile-away is the whole point, so it
+is the **default and must be preserved for every caller that holds the const.**
+But some operands have *independent runtime lengths that no const expresses*,
+and the policy must still pick the best algorithm for them. The rule:
+
+> **A policy keys its algorithm choice on a single `select_for_*(lengths/shape)`
+> classifier, and may expose TWO doors over it: a const-`N` `dispatch<N>` that
+> const-folds `select_for_*(N, …)` away (the hot path), and a slice
+> `dispatch_slice(&[u64], …)` that runs the SAME classifier at run time — but it
+> grows the slice door ONLY where a genuine runtime-slice caller needs it.** An
+> `Int<N>` is just a typed `[u64; N]`, so the classifier keys on *length*, a
+> property both forms share; the two doors differ only in WHEN it is evaluated.
+> Never route a const-holding caller through the slice door (that throws away the
+> const-fold), and never force a slice caller to manufacture a const it does not
+> have (the caller-side specialisation the guardrail forbids).
+
+**Division needs ONLY the slice door.** It looks like the int-binary
+`<const Nthis, const Nother>` case but cannot be — its operands have
+*independent* runtime lengths:
 
 - the decimal `/` divides a **`2N`-limb** scaled numerator by an **`N`-limb**
   divisor — two different widths, neither the caller's single `N`;
 - the slice roots (`isqrt_newton`, `icbrt_newton`, `newton_reciprocal`,
-  `div_rem_mag_slice`) divide **bare `&[u64]` of runtime length** — they hold
-  no `N` in their types at all.
+  `div_rem_mag_slice`) divide **bare `&[u64]` of runtime length** — no `N` in
+  their types at all.
 
-So `int::policy::div_rem`'s `select` and `dispatch` are **non-generic and
-slice-based** (`dispatch(num, den, quot, rem)`), and the shape decision lives
-entirely in the runtime `select_for_limbs(num, den)`. Threading a `<N>` would
-force the slice roots to *manufacture* a const they do not have — the exact
-caller-side specialisation the guardrail forbids — and the divide would not
-even use it: its engine choice (and any future limb-width refinement, e.g. a
-u128-limb engine for an even, wide divisor) is a **runtime arm inside
-`select_for_limbs`**, gated on the runtime `den_n`, because that is where the
-width information actually is. Contrast `mul_low` (a genuine `select<N>`
-policy): there the operands *are* width-`N`, so `N` is the level's own const
-and passing it is correct. Division is the slice/runtime exception, not a
-template to copy.
+So `int::policy::div_rem` is **slice-only** (`dispatch(num, den, quot, rem)`),
+with the shape decision in the runtime `select_for_limbs(num, den)` — its engine
+choice and any limb-width refinement (e.g. a u128-limb engine for an even, wide
+divisor) is a **runtime arm** there, gated on the runtime `den_n`, because that
+is where the width information actually is.
+
+**Multiply needs BOTH doors.** At its const callers (decimal mul, the
+wide-transcendental work-muls — the perf-critical path) the operands *are*
+width-`N`, so `int::policy::mul` keeps its const-`N` `dispatch<N>` that folds to
+one call. But it ALSO has genuine slice callers — the decimal slice roots
+(`cbrt_newton`, the sqrt roots) and the rescale product path hold runtime-length
+`&[u64]` and no `N` — so mul gains a `dispatch_slice` over the **same**
+`select_for_lengths` classifier (the length matcher already lives inside its
+`ByShape(|a_len, b_len|)`), and those callers route through it instead of
+reaching past the matcher to a hardcoded kernel. Exact scratch on the slice door
+is **caller-supplied** (the `div_knuth_into(…, u_buf, v_buf)` pattern — the
+caller usually still holds a const `N` for *sizing* even when its operand slices
+are runtime-length), or build-max for a truly width-erased caller. `mul_low`,
+whose operands are always width-`N`, needs only the const door. **The slice door
+is added per-caller-need, never pre-emptively.**
 
 ## Limb width — the matcher's second axis (`u64` / `u128`)
 
