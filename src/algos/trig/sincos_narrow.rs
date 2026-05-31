@@ -54,13 +54,18 @@ fn sin_cos_strict<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
     // multiple) the working-scale approximation can land on the wrong
     // side. Route through the shared Ziv escalation; nearest modes narrow
     // once.
-    C::round_to_storage_directed(GUARD, SCALE, mode, &mut |guard| {
+    let r = C::round_to_storage_directed(GUARD, SCALE, mode, &mut |guard| {
         let v_w = C::to_work_scaled(raw, guard);
         match which {
             Which::Sin => C::sin_fixed::<SCALE>(v_w, SCALE + guard),
             Which::Cos => C::cos_fixed::<SCALE>(v_w, SCALE + guard),
         }
-    })
+    });
+    // Near an extremum the deviation from ±1 can sit below any reachable
+    // working scale, so the kernel rounds to exactly ±10^SCALE and a directed
+    // mode lands on the wrong side; sin/cos are strictly interior for raw != 0,
+    // so the side is known a priori. See `wide_trig_core::adjust_bounded_extremum`.
+    crate::algos::support::wide_trig_core::adjust_bounded_extremum::<C, SCALE>(r, raw, mode)
 }
 
 /// Narrow `sin_strict` for a wide tier — generic over `C`, `SCALE`, the

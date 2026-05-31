@@ -307,9 +307,10 @@ pub(crate) fn sin_series<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
 ) -> C::Storage {
-    C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
+    let r = C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
         C::sin_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard)
-    })
+    });
+    adjust_bounded_extremum::<C, SCALE>(r, raw, mode)
 }
 
 /// `cos_strict` for a wide tier — generic over the tier `C`. Standalone
@@ -321,9 +322,61 @@ pub(crate) fn cos_series<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
 ) -> C::Storage {
-    C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
+    let r = C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
         C::cos_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard)
-    })
+    });
+    adjust_bounded_extremum::<C, SCALE>(r, raw, mode)
+}
+
+/// Directed-rounding post-adjust for `sin`/`cos` near an extremum the
+/// working-scale kernel cannot resolve.
+///
+/// `sin`/`cos` lie STRICTLY inside `(−1, 1)` for every representable
+/// non-special argument: `cos = +1` only at the already-pinned `raw == 0`,
+/// and `cos = −1` / `sin = ±1` occur only at arguments (`π`, `π/2 + kπ`) that
+/// are never exactly representable. But for an argument within the input
+/// granularity of an extremum the deviation `δ²/2` from `±1` can sit far below
+/// any REACHABLE working scale — e.g. ~`10⁻³⁴⁷` at D462 s346, against a
+/// ~462-digit work-integer ceiling — so the kernel rounds to exactly
+/// `±10^SCALE` and a DIRECTED mode then lands on the wrong side of the grid
+/// line (the value is interior, but the kernel saw it AS the extremum).
+///
+/// Because the true value is strictly interior, the directed side is known a
+/// priori with no extra precision:
+/// - just below `+1` (`result == +one`): Floor / Trunc step down one LSB to
+///   `one − 1`; Ceiling keeps `one`.
+/// - just above `−1` (`result == −one`): Ceiling / Trunc step toward zero to
+///   `−one + 1`; Floor keeps `−one`.
+///
+/// Nearest modes are unaffected (rounding to `±1` IS correct to nearest there).
+/// A no-op unless the directed result is exactly `±10^SCALE` and `raw != 0`, so
+/// reachable cells (already resolved off the grid line) and the exact
+/// `cos(0) = 1` point pass through untouched. The rule is continuous over the
+/// whole near-extremum region, not fitted to one benched cell.
+#[inline]
+pub(crate) fn adjust_bounded_extremum<C: WideTrigCore, const SCALE: u32>(
+    result: C::Storage,
+    raw: C::Storage,
+    mode: RoundingMode,
+) -> C::Storage {
+    if crate::support::rounding::is_nearest_mode(mode) || raw == C::storage_zero() {
+        return result;
+    }
+    let one = C::storage_one(SCALE);
+    let neg_one = C::storage_zero() - one;
+    if result == one {
+        match mode {
+            RoundingMode::Floor | RoundingMode::Trunc => one - <C::Storage as BigInt>::ONE,
+            _ => result,
+        }
+    } else if result == neg_one {
+        match mode {
+            RoundingMode::Ceiling | RoundingMode::Trunc => neg_one + <C::Storage as BigInt>::ONE,
+            _ => result,
+        }
+    } else {
+        result
+    }
 }
 
 /// `tan_strict` for a wide tier — generic over the tier `C`. Panics at
