@@ -1,0 +1,49 @@
+# Wide-tier golden coverage manifest (un-taper sweep).
+# One completed (fn,width) pair per line: <fn> <width>
+# Generated cells = that fn at all 5 scale points {0,S/4,S/2,3S/4,S-1} of the width.
+# Config change (raise ceiling to 100MB, COUNT_SCALE 0.34->1.0, un-taper wide
+# base_case_count to 80) committed alongside chunk 1.
+#
+# Wide-tier gap = widths d230 d462 d616 d924 d1232.
+# Function surface to (re)generate un-tapered:
+#   single-arg: exp ln log2 log10 exp2 sin cos tan atan asin acos
+#               sinh cosh tanh asinh acosh atanh sqrt cbrt
+#   two-arg:    log atan2 powf
+#   binary arith (add sub mul div rem hypot) already FULL via exact oracle
+#     (not COUNT_SCALE-tapered) -- NO action needed, excluded from this sweep.
+#
+# NOTE: cosh@S-1 is a legitimate overflow drop for every width (cosh(x)>=1 so
+#   cosh(x)*10^(S-1) always needs >= S digits but max_raw holds only S-1) --
+#   it is correctly absent and must NOT be "recovered".
+#
+# === chunk 1 (Tang funcs: exp ln log sin cos tan @ d230 d462 d616 d924 d1232) ===
+exp d230
+ln d230
+log d230
+sin d230
+cos d230
+tan d230
+exp d462
+ln d462
+log d462
+sin d462
+cos d462
+tan d462
+exp d616
+ln d616
+log d616
+sin d616
+cos d616
+tan d616
+exp d924
+ln d924
+log d924
+sin d924
+cos d924
+tan d924
+exp d1232
+ln d1232
+log d1232
+sin d1232
+cos d1232
+tan d1232
