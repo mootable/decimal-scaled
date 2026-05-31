@@ -192,6 +192,23 @@ pub(crate) fn mul_low_limb<const N: usize, L: Limb>(a: &[u64; N], b: &[u64; N], 
     let mut bp = [L::ZERO; N];
     L::pack(a, &mut ap[..h]);
     L::pack(b, &mut bp[..h]);
+    // `sb` = `b`'s live packed-limb count. The inner loop need only run over
+    // `b`'s significant limbs; its zero high limbs contribute only a carry,
+    // replicated bit-identically by the carry tail below. Skipping them turns
+    // a full-width multiply of a SMALL operand — the common shape in the wide
+    // transcendental series (terms shrink) and the working-scale lift — into
+    // one scaled by `b`'s magnitude. Gated to wide `N`: for the narrow tiers
+    // the operands are dense, so the scan is pure overhead and the const folds
+    // it away.
+    let sb = if N >= 16 {
+        let mut s = h;
+        while s > 0 && bp[s - 1] == L::ZERO {
+            s -= 1;
+        }
+        s
+    } else {
+        h
+    };
     let mut acc = [L::ZERO; N];
     let mut i = 0;
     while i < h {
@@ -199,9 +216,11 @@ pub(crate) fn mul_low_limb<const N: usize, L: Limb>(a: &[u64; N], b: &[u64; N], 
         if ai != L::ZERO {
             let mut carry = L::ZERO;
             let mut j = 0;
-            // Stop once `i + j` reaches `h`: those partials lie above
-            // 2^(64·N) and drop out of the truncated-low result.
-            while j < h - i {
+            // Stop once `i + j` reaches `h` (partials above 2^(64·N) drop out
+            // of the truncated-low result) OR once `b`'s significant limbs are
+            // exhausted (`sb`); the residual carry is propagated by the tail.
+            let jmax = (h - i).min(sb);
+            while j < jmax {
                 let (lo, hi) = ai.widening_mul(bp[j]);
                 let idx = i + j;
                 let (s1, c1) = acc[idx].overflowing_add(lo);
@@ -209,6 +228,16 @@ pub(crate) fn mul_low_limb<const N: usize, L: Limb>(a: &[u64; N], b: &[u64; N], 
                 acc[idx] = s2;
                 carry = hi.add_carries(c1, c2);
                 j += 1;
+            }
+            // Carry tail over the zero-`b` region — bit-identical to running
+            // the inner loop with `bp[j] == 0` (the multiply yields 0, leaving
+            // only `acc[idx] += carry` and its overflow into the next limb).
+            let mut idx = i + jmax;
+            while idx < h && carry != L::ZERO {
+                let (s, c) = acc[idx].overflowing_add(carry);
+                acc[idx] = s;
+                carry = L::ZERO.add_carries(false, c);
+                idx += 1;
             }
         }
         i += 1;
