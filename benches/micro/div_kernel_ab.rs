@@ -112,6 +112,21 @@ fn shapes_small(n: usize) -> Vec<Shape> {
     vec![Shape { label: "small_den1", num, den: vec![0x9E37_79B9_7F4A_7C17] }]
 }
 
+// ── bbc small-quotient SETUP path — the int divide that decimal `2 / 3 @ s0`
+// performs: `Int<N>[2,0,…] / Int<N>[3,0,…]`, tiny magnitudes in the FULL N-limb
+// storage (leading zeros → effective 1-limb / 1-limb, quotient 0). This is the
+// dispatch + leading-zero / normalize + single-limb SETUP cost the bbc `div@s0`
+// cells actually measure (the `2/3` operand), DISTINCT from the dense-division
+// work the other shapes profile. The regression the bbc flags lives HERE, not in
+// the multiply-subtract loop.
+fn shapes_tiny(n: usize) -> Vec<Shape> {
+    let mut num = vec![0u64; n];
+    let mut den = vec![0u64; n];
+    num[0] = 2;
+    den[0] = 3;
+    vec![Shape { label: "tiny_2_3", num, den }]
+}
+
 fn compare_width(c: &mut Criterion, n: usize, label: &str, shapes: fn(usize) -> Vec<Shape>) {
     // Correctness gate: forced BZ and Knuth must agree before timing — they
     // are two engines for the same exact-integer result (bit-identical).
@@ -217,6 +232,9 @@ fn bench(c: &mut Criterion) {
     ] {
         compare_width(c, n, &format!("bal_{lbl}"), shapes_bal);
         compare_width(c, n, &format!("wide_{lbl}"), shapes_wide);
+        // bbc small-quotient SETUP path (`2/3` in N-limb storage) — where the
+        // bbc `div@s0` regression lives; cheap, so run at every width.
+        compare_width(c, n, &format!("tiny_{lbl}"), shapes_tiny);
         // Single-limb-divisor regime over a full-width dividend (the scale-0
         // `rem` / small-divisor cells). Skip the very widest tiers for the
         // O(bits) schoolbook baseline cost — 24 limbs is enough to rank.
