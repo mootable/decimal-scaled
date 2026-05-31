@@ -1,0 +1,205 @@
+# Wide-tier golden coverage manifest (un-taper sweep).
+# One completed (fn,width) pair per line: <fn> <width>
+# Generated cells = that fn at all 5 scale points {0,S/4,S/2,3S/4,S-1} of the width.
+# Config change (raise ceiling to 100MB, COUNT_SCALE 0.34->1.0, un-taper wide
+# base_case_count to 80) committed alongside chunk 1.
+#
+# Wide-tier gap = widths d230 d462 d616 d924 d1232.
+# Function surface to (re)generate un-tapered:
+#   single-arg: exp ln log2 log10 exp2 sin cos tan atan asin acos
+#               sinh cosh tanh asinh acosh atanh sqrt cbrt
+#   two-arg:    log atan2 powf
+#   binary arith (add sub mul div rem hypot) already FULL via exact oracle
+#     (not COUNT_SCALE-tapered) -- NO action needed, excluded from this sweep.
+#
+# NOTE: cosh@S-1 is a legitimate overflow drop for every width (cosh(x)>=1 so
+#   cosh(x)*10^(S-1) always needs >= S digits but max_raw holds only S-1) --
+#   it is correctly absent and must NOT be "recovered".
+#
+# === chunk 1 (Tang funcs: exp ln log sin cos tan @ d230 d462 d616 d924 d1232) ===
+exp d230
+ln d230
+log d230
+sin d230
+cos d230
+tan d230
+exp d462
+ln d462
+log d462
+sin d462
+cos d462
+tan d462
+exp d616
+ln d616
+log d616
+sin d616
+cos d616
+tan d616
+exp d924
+ln d924
+log d924
+sin d924
+cos d924
+tan d924
+exp d1232
+ln d1232
+log d1232
+sin d1232
+cos d1232
+tan d1232
+#
+# === chunk 2 (roots + inverse-trig: sqrt cbrt asin acos atan atan2 @ d230 d462 d616 d924 d1232) ===
+# sqrt/cbrt: exact-algebraic-root cells (perfect-square / perfect-cube radicands)
+#   pinned to cls Z by the script's symbolic detection (verified present).
+# asin/acos @ s0: only 3 cases per width {raw -1,0,1} -- that IS the COMPLETE
+#   representable domain at scale 0 (x in [-1,1], one=1), not a taper/drop.
+# atan2 is two-arg (4-col), reuses the powf/log two-arg path. No oracle timeouts.
+sqrt d230
+cbrt d230
+asin d230
+acos d230
+atan d230
+atan2 d230
+sqrt d462
+cbrt d462
+asin d462
+acos d462
+atan d462
+atan2 d462
+sqrt d616
+cbrt d616
+asin d616
+acos d616
+atan d616
+atan2 d616
+sqrt d924
+cbrt d924
+asin d924
+acos d924
+atan d924
+atan2 d924
+sqrt d1232
+cbrt d1232
+asin d1232
+acos d1232
+atan d1232
+atan2 d1232
+#
+# === chunk 3 / FINAL transcendental group (exp2 log2 log10 sinh cosh tanh
+#     asinh acosh atanh @ d230 d462 d616 d924 d1232) ===
+# LEGITIMATE DROPS (deliberate, verified -- NOT fabricated/recovered):
+#   cosh@S-1  ABSENT for every width: cosh(x)>=1 so cosh(x)*10^(S-1) always
+#             needs >= S digits but max_raw holds only S-1. Overflow drop.
+#   acosh@S-1 = 1 case per width: at scale S-1, one=10^(S-1)=max_raw, so the
+#             only acosh input (x>=1) that fits storage is x=1 (acosh(1)=0).
+#   atanh@s0  = 1 case per width: atanh domain (-1,1), one=1 at scale 0, so
+#             only raw=0 is valid (atanh(0)=0). (atanh@S-1 is healthy ~48-58.)
+# No oracle timeouts.
+exp2 d230
+log2 d230
+log10 d230
+sinh d230
+cosh d230
+tanh d230
+asinh d230
+acosh d230
+atanh d230
+exp2 d462
+log2 d462
+log10 d462
+sinh d462
+cosh d462
+tanh d462
+asinh d462
+acosh d462
+atanh d462
+exp2 d616
+log2 d616
+log10 d616
+sinh d616
+cosh d616
+tanh d616
+asinh d616
+acosh d616
+atanh d616
+exp2 d924
+log2 d924
+log10 d924
+sinh d924
+cosh d924
+tanh d924
+asinh d924
+acosh d924
+atanh d924
+exp2 d1232
+log2 d1232
+log10 d1232
+sinh d1232
+cosh d1232
+tanh d1232
+asinh d1232
+acosh d1232
+atanh d1232
+#
+# === WIDE-TIER TRANSCENDENTAL/ROOT 5-POINT COVERAGE (9.19): COMPLETE ===
+# All 22 single+two-arg transcendental/root functions covered at the
+# 5-point scale set for every wide width d230/d462/d616/d924/d1232, modulo
+# the verified legitimate domain/overflow drops above. Audit: 0 unexpected-
+# missing cells across all five wide tiers.
+#
+# RESOLVED in chunk 4 (option a): the binary ARITH ops add/sub/mul/div/rem
+# now carry the five-point grid at EVERY width. The chunk-1 claim that
+# "binary arith is already full" was incorrect (it covered only
+# d18/d38/d57/d76/d307); corrected by extending arith_coverage_cells'
+# tier_caps to all 12 widths (added d115 d153 d230 d462 d616 d924 d1232 --
+# d115/d153 were also absent). Same exact integer/rational oracle, same
+# case shapes (near-max / opposite-sign / carry-borrow / div-with-rem),
+# fully parametric on tier_signed_max(alias) + one.
+#
+# === chunk 4 (binary arith add/sub/mul/div/rem @ d115 d153 d230 d462 d616
+#     d924 d1232 -- the previously-uncovered widths) ===
+add d115
+sub d115
+mul d115
+div d115
+rem d115
+add d153
+sub d153
+mul d153
+div d153
+rem d153
+add d230
+sub d230
+mul d230
+div d230
+rem d230
+add d462
+sub d462
+mul d462
+div d462
+rem d462
+add d616
+sub d616
+mul d616
+div d616
+rem d616
+add d924
+sub d924
+mul d924
+div d924
+rem d924
+add d1232
+sub d1232
+mul d1232
+div d1232
+rem d1232
+#
+# hypot NOT touched: its hand-curated adversarial-edge roster is a
+# deliberate design; a wide-tier hypot 5-point grid is a separate
+# owner decision, intentionally left out of scope here.
+#
+# ============================================================
+# 9.19 COMPLETE: all widths x the 5-point scale set x every golden
+# function (transcendental/root surface + arith add/sub/mul/div/rem),
+# modulo the verified legitimate domain/overflow drops documented above.
+# ============================================================

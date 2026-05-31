@@ -91,10 +91,11 @@ floor division, deduped) — scale 0 (integer regime), S-1 (MAX_SCALE,
 the near-overflow / deep-underflow edge), and the three interior
 quarters spanning the whole representable-scale range.
 
-Footprint budget: aim for <= 5 MB committed under `tests/golden/`.
-All twelve decimal widths are covered; case counts taper hard for
-the wider tiers (where each line is hundreds of digits) so the
-budget holds.
+Footprint budget: stay <= 100 MB committed under `tests/golden/`
+(a MAX ceiling, NOT a target — per-cell counts are sized for coverage,
+not to fill the budget). All twelve decimal widths are covered at their
+full per-cell roster; the wide tiers are no longer tapered, so every
+width × the five-point scale set × every function gets a healthy grid.
 
 Usage:
     pip install mpmath
@@ -104,15 +105,66 @@ Usage:
 from __future__ import annotations
 
 import math
+import os
 import random
 import sys
+import threading
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from mpmath import (
     mp, mpf, ln, exp, sin, cos, tan, atan, sqrt, cbrt, mpc,
     asin, acos, atan2, sinh, cosh, tanh, asinh, acosh, atanh, power, log,
 )
+
+
+# --- Per-cell oracle timeout guard ----------------------------------------
+#
+# A single mpmath evaluation at a wide tier (700+ working digits) is bounded
+# in practice, but a pathological argument (very large trig reduction, an
+# argument that drives mpmath into a slow internal series) can take far
+# longer than the rest of the cell combined. To keep a chunked run bounded,
+# every oracle call goes through `_call_with_timeout`, which runs it in a
+# daemon worker thread and abandons it if it exceeds `ORACLE_TIMEOUT_S`.
+# Abandoned inputs are RECORDED (printed as SKIP lines) and dropped, never
+# emitted — a dropped golden case is strictly safer than a hung run. The
+# timeout is generous (default 8 s) so it only fires on a genuine pathology,
+# and is overridable with the `GOLDEN_ORACLE_TIMEOUT` env var (seconds; 0
+# disables the guard for an unbounded local re-run).
+ORACLE_TIMEOUT_S = float(os.environ.get("GOLDEN_ORACLE_TIMEOUT", "8") or "0")
+
+# Inputs abandoned on the timeout, recorded for the run report.
+TIMED_OUT_CELLS: list[str] = []
+
+
+class _OracleTimeout(Exception):
+    """Raised internally when an oracle call exceeds ORACLE_TIMEOUT_S."""
+
+
+def _call_with_timeout(fn: Callable[..., Any], *args: Any) -> Any:
+    """Run `fn(*args)` under the per-cell timeout. Returns its result, or
+    raises `_OracleTimeout` if it exceeds `ORACLE_TIMEOUT_S`. When the guard
+    is disabled (timeout <= 0) the call runs directly with no thread."""
+    if ORACLE_TIMEOUT_S <= 0:
+        return fn(*args)
+    box: dict[str, Any] = {}
+
+    def _worker() -> None:
+        try:
+            box["val"] = fn(*args)
+        except BaseException as exc:  # propagate to the caller's except
+            box["exc"] = exc
+
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+    t.join(ORACLE_TIMEOUT_S)
+    if t.is_alive():
+        # The worker is abandoned (daemon); it will finish on its own. We
+        # move on so the run stays bounded.
+        raise _OracleTimeout()
+    if "exc" in box:
+        raise box["exc"]
+    return box.get("val")
 
 
 def real_cbrt(x: mpf) -> mpf:
@@ -151,9 +203,9 @@ mp.dps = 700
 # capacity and floor division (`scale_set_for`). Scale 0 is the integer
 # regime; S-1 is MAX_SCALE (the near-overflow / deep-underflow edge);
 # the three interior quarters span the function's whole SCALE range.
-# Case counts taper hard at the wider tiers to stay inside the 5 MB
-# committed budget; every width is present even where its per-cell count
-# is small.
+# Every width carries its full per-cell roster (the wide tiers are no
+# longer tapered); the committed footprint stays within the 100 MB MAX
+# ceiling.
 
 # Signed storage maxima for the tiers whose true range is narrower
 # than `10 ** (capacity - 1)`. Only the primitive-backed tiers need
@@ -167,6 +219,12 @@ STORAGE_MAX = {
 # (alias, storage_capacity_digits, base_case_count). The SCALE set per
 # tier is derived from the capacity by `scale_set_for` below, not listed
 # per-row.
+# With COUNT_SCALE removed (= 1.0) and a 100 MB ceiling, the wide tiers
+# are no longer tapered toward a near-minimum roster. Each tier carries a
+# full per-cell case count; the wide tiers (D230..D1232) get a uniform
+# un-tapered count (80) so every width × 5-point scale × function cell has
+# a healthy roster, comfortably under the 100 MB MAX (which is a ceiling,
+# not a target — counts are sized for coverage, not to fill the budget).
 TIERS = [
     ("d18",   18,   180),
     ("d38",   38,   160),
@@ -174,12 +232,12 @@ TIERS = [
     ("d76",   76,   120),
     ("d115",  115,  100),
     ("d153",  153,  90),
-    ("d230",  230,  70),
-    ("d307",  307,  60),
-    ("d462",  462,  44),
-    ("d616",  616,  36),
-    ("d924",  924,  24),
-    ("d1232", 1232, 20),
+    ("d230",  230,  80),
+    ("d307",  307,  80),
+    ("d462",  462,  80),
+    ("d616",  616,  80),
+    ("d924",  924,  80),
+    ("d1232", 1232, 80),
 ]
 
 
@@ -513,9 +571,15 @@ def from_raw(raw: int, scale: int) -> mpf:
     return mpf(raw) / (mpf(10) ** scale)
 
 
-def safe_call(oracle: Callable[[mpf], mpf], x: mpf) -> mpf | None:
+def safe_call(oracle: Callable[[mpf], mpf], x: mpf,
+              ctx: str | None = None) -> mpf | None:
     try:
-        y = oracle(x)
+        y = _call_with_timeout(oracle, x)
+    except _OracleTimeout:
+        label = ctx if ctx is not None else f"x={x}"
+        TIMED_OUT_CELLS.append(label)
+        print(f"  SKIP (oracle timeout {ORACLE_TIMEOUT_S}s): {label}")
+        return None
     except (ValueError, ZeroDivisionError, OverflowError, ArithmeticError):
         return None
     # Some mpmath functions (cbrt, sqrt) return mpc for negative
@@ -1126,10 +1190,16 @@ def two_arg_inputs(func_name: str, scale: int, max_raw: int, count: int,
     return out
 
 
-def safe_call_two(oracle: Callable[[mpf, mpf], mpf], a: mpf, b: mpf) -> mpf | None:
+def safe_call_two(oracle: Callable[[mpf, mpf], mpf], a: mpf, b: mpf,
+                  ctx: str | None = None) -> mpf | None:
     """Two-argument `safe_call`."""
     try:
-        y = oracle(a, b)
+        y = _call_with_timeout(oracle, a, b)
+    except _OracleTimeout:
+        label = ctx if ctx is not None else f"a={a},b={b}"
+        TIMED_OUT_CELLS.append(label)
+        print(f"  SKIP (oracle timeout {ORACLE_TIMEOUT_S}s): {label}")
+        return None
     except (ValueError, ZeroDivisionError, OverflowError, ArithmeticError):
         return None
     if isinstance(y, mpc):
@@ -1226,13 +1296,15 @@ def category_counts(base_count: int) -> dict[str, int]:
     }
 
 
-# The expanded surface (22 functions vs the original 8) would blow the
-# 5 MB committed budget at the original per-cell counts. We scale every
-# category count by this factor before splitting; the edge rosters and
-# the small explicit class lists (overflow / saturation / large-trig /
-# two-arg) are NOT scaled, so every function and edge class stays
-# represented even at the narrowest per-cell budget.
-COUNT_SCALE = 0.34
+# Per-cell category-count multiplier. Historically set below 1.0 to keep
+# the (then 5 MB) committed footprint small across the 22-function surface,
+# which tapered the WIDE tiers (D230..D1232) down to near-minimum per-cell
+# counts. The committed ceiling is now 100 MB (a MAX, not a target), so the
+# taper is removed: every tier gets its full per-cell roster at the
+# `base_case_count` set in TIERS. The edge rosters and the small explicit
+# class lists (overflow / saturation / large-trig / two-arg) are not scaled
+# either, so every function and edge class stays fully represented.
+COUNT_SCALE = 1.0
 
 
 def _csv_filter(flag: str) -> set[str] | None:
@@ -1578,9 +1650,17 @@ def arith_coverage_cells() -> dict[str, list[tuple[str, int, list[tuple[int, int
         return tier_signed_max(alias)
 
     # The tiers and their five-point {0, S/4, S/2, 3S/4, S-1} scale set
-    # (S = the tier's digit capacity), matching `scale_set_for`.
+    # (S = the tier's digit capacity), matching `scale_set_for`. Covers
+    # every decimal width — the narrow/mid tiers AND the wide gap tiers
+    # d230..d1232 — so add/sub/mul/div/rem carry the same five-point grid
+    # as the transcendental surface. The case shapes below are fully
+    # parametric on `tier_signed_max(alias)` and `one`, so each width gets
+    # the identical near-max / opposite-sign / carry-boundary / div-with-
+    # remainder roster; the exact integer oracle keeps even the widest
+    # tiers cheap in bytes.
     tier_caps = [("d18", 18), ("d38", 38), ("d57", 57), ("d76", 76),
-                 ("d307", 307)]
+                 ("d115", 115), ("d153", 153), ("d230", 230), ("d307", 307),
+                 ("d462", 462), ("d616", 616), ("d924", 924), ("d1232", 1232)]
     tier_scales = [(alias, scale_set_for(cap)) for alias, cap in tier_caps]
 
     roster: dict[str, list[tuple[str, int, list[tuple[int, int]]]]] = {
@@ -1730,6 +1810,10 @@ def main() -> None:
     print()
     print(f"total cases: {total_cases}")
     print(f"total bytes: {total_bytes} ({total_bytes / 1024 / 1024:.2f} MB)")
+    if TIMED_OUT_CELLS:
+        print(f"oracle timeouts (skipped, {len(TIMED_OUT_CELLS)}):")
+        for label in TIMED_OUT_CELLS:
+            print(f"  SKIPPED: {label}")
 
 
 def emit_tier_scale(alias: str, capacity: int, base_count: int, max_raw: int,
@@ -1819,7 +1903,8 @@ def emit_tier_scale(alias: str, capacity: int, base_count: int, max_raw: int,
                 cases.append((raw_in, floor_raw, cls))
                 continue
             x = from_raw(raw_in, scale)
-            y = safe_call(oracle, x)
+            y = safe_call(oracle, x,
+                          ctx=f"{func_name} {alias} s{scale} input_raw={raw_in}")
             if y is None:
                 continue
             floor_raw, cls = floor_and_class(y, scale)
@@ -1879,7 +1964,9 @@ def emit_tier_scale(alias: str, capacity: int, base_count: int, max_raw: int,
                 continue
             a = from_raw(a_raw, scale)
             b = from_raw(b_raw, scale)
-            y = safe_call_two(oracle2, a, b)
+            y = safe_call_two(
+                oracle2, a, b,
+                ctx=f"{func_name} {alias} s{scale} a_raw={a_raw} b_raw={b_raw}")
             if y is None:
                 continue
             floor_raw, cls = floor_and_class(y, scale)
