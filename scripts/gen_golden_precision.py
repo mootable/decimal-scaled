@@ -1650,9 +1650,17 @@ def arith_coverage_cells() -> dict[str, list[tuple[str, int, list[tuple[int, int
         return tier_signed_max(alias)
 
     # The tiers and their five-point {0, S/4, S/2, 3S/4, S-1} scale set
-    # (S = the tier's digit capacity), matching `scale_set_for`.
+    # (S = the tier's digit capacity), matching `scale_set_for`. Covers
+    # every decimal width — the narrow/mid tiers AND the wide gap tiers
+    # d230..d1232 — so add/sub/mul/div/rem carry the same five-point grid
+    # as the transcendental surface. The case shapes below are fully
+    # parametric on `tier_signed_max(alias)` and `one`, so each width gets
+    # the identical near-max / opposite-sign / carry-boundary / div-with-
+    # remainder roster; the exact integer oracle keeps even the widest
+    # tiers cheap in bytes.
     tier_caps = [("d18", 18), ("d38", 38), ("d57", 57), ("d76", 76),
-                 ("d307", 307)]
+                 ("d115", 115), ("d153", 153), ("d230", 230), ("d307", 307),
+                 ("d462", 462), ("d616", 616), ("d924", 924), ("d1232", 1232)]
     tier_scales = [(alias, scale_set_for(cap)) for alias, cap in tier_caps]
 
     roster: dict[str, list[tuple[str, int, list[tuple[int, int]]]]] = {

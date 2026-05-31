@@ -147,10 +147,59 @@ atanh d1232
 # the verified legitimate domain/overflow drops above. Audit: 0 unexpected-
 # missing cells across all five wide tiers.
 #
-# OPEN (surfaced to coordinator, NOT done here): the binary ARITH ops
-# add/sub/mul/div/rem have NO wide-tier (d230..d1232) coverage -- their
-# roster (arith_coverage_cells) covers only d18/d38/d57/d76/d307. hypot's
-# roster is a curated edge list, not the 5-point grid, at wide tiers. The
-# chunk-1 claim that "binary arith is already full" was incorrect; corrected
-# here. Awaiting coordinator decision on whether to extend the arith roster
-# to the wide gap tiers.
+# RESOLVED in chunk 4 (option a): the binary ARITH ops add/sub/mul/div/rem
+# now carry the five-point grid at EVERY width. The chunk-1 claim that
+# "binary arith is already full" was incorrect (it covered only
+# d18/d38/d57/d76/d307); corrected by extending arith_coverage_cells'
+# tier_caps to all 12 widths (added d115 d153 d230 d462 d616 d924 d1232 --
+# d115/d153 were also absent). Same exact integer/rational oracle, same
+# case shapes (near-max / opposite-sign / carry-borrow / div-with-rem),
+# fully parametric on tier_signed_max(alias) + one.
+#
+# === chunk 4 (binary arith add/sub/mul/div/rem @ d115 d153 d230 d462 d616
+#     d924 d1232 -- the previously-uncovered widths) ===
+add d115
+sub d115
+mul d115
+div d115
+rem d115
+add d153
+sub d153
+mul d153
+div d153
+rem d153
+add d230
+sub d230
+mul d230
+div d230
+rem d230
+add d462
+sub d462
+mul d462
+div d462
+rem d462
+add d616
+sub d616
+mul d616
+div d616
+rem d616
+add d924
+sub d924
+mul d924
+div d924
+rem d924
+add d1232
+sub d1232
+mul d1232
+div d1232
+rem d1232
+#
+# hypot NOT touched: its hand-curated adversarial-edge roster is a
+# deliberate design; a wide-tier hypot 5-point grid is a separate
+# owner decision, intentionally left out of scope here.
+#
+# ============================================================
+# 9.19 COMPLETE: all widths x the 5-point scale set x every golden
+# function (transcendental/root surface + arith add/sub/mul/div/rem),
+# modulo the verified legitimate domain/overflow drops documented above.
+# ============================================================
