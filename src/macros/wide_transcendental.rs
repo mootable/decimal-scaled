@@ -4212,7 +4212,7 @@ macro_rules! decl_wide_transcendental {
                 // sign matters to the budget).
                 let k_lift = $core::exp_result_int_digits($core::to_work_scaled(raw, 0), SCALE);
                 let base_guard = $core::GUARD + k_lift;
-                Self::from_bits($core::round_to_storage_directed(
+                let r = $core::round_to_storage_directed(
                     base_guard,
                     SCALE,
                     mode,
@@ -4222,7 +4222,21 @@ macro_rules! decl_wide_transcendental {
                         let av = if v < $core::zero() { -v } else { v };
                         $core::cosh_pos_wide::<SCALE>(av, w)
                     },
-                ))
+                );
+                // cosh(x) > 1 strictly for x ≠ 0 and is transcendental, so it
+                // never lands exactly on the 1.0 grid line; for a tiny |x| the
+                // x²/2 excess sits below the working scale and Ceiling
+                // under-rounds to exactly 10^SCALE. cosh(0) = 1 is exact and
+                // excluded by raw != 0; other modes keep the floor.
+                let r = if mode == $crate::support::rounding::RoundingMode::Ceiling
+                    && raw != <$Storage as $crate::int::types::traits::BigInt>::ZERO
+                    && r == Self::ONE.to_bits()
+                {
+                    r + <$Storage as $crate::int::types::traits::BigInt>::ONE
+                } else {
+                    r
+                };
+                Self::from_bits(r)
             }
 
             /// Mode-aware sibling of [`Self::tanh_strict`].

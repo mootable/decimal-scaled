@@ -226,7 +226,7 @@ fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
         16 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, 10, 400, true, false>(raw.resize_to::<Int<16>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d462::Core, SCALE, 10, 400, true, false>(raw.resize_to::<Int<24>>(), mode).resize_to::<Int<N>>(),
+        24 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d462::Core, SCALE, 10, 400, true, true>(raw.resize_to::<Int<24>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
         32 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d616::Core, SCALE, 10, 400, true, false>(raw.resize_to::<Int<32>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]

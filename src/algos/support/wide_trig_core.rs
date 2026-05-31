@@ -379,6 +379,47 @@ pub(crate) fn adjust_bounded_extremum<C: WideTrigCore, const SCALE: u32>(
     }
 }
 
+/// Directed-rounding post-adjust for `ln` very near `x = 1`.
+///
+/// Concavity gives `ln(x) < x − 1` STRICTLY for every `x ≠ 1`, and `ln(x)`
+/// is transcendental for algebraic `x ≠ 1`, so it never lands exactly on a
+/// storage grid line. For `x` within the input granularity of 1 the deficit
+/// `(x − 1) − ln(x) ≈ (x − 1)²/2` can sit far below any REACHABLE working
+/// scale (e.g. `x = 1 + 10⁻ˢ` leaves the deficit ~`10⁻²ˢ`), so the kernel
+/// rounds to exactly the linear term `δ = raw − 10^SCALE` and a downward
+/// mode then keeps `δ` though the true value is strictly below it. Because
+/// `ln(x) < x − 1`, a CORRECT downward result can never equal `δ`, so
+/// `result == δ` is unambiguously the sub-resolution overshoot — step down
+/// one LSB. `ln(1) = 0` is exact (`raw == one`) and excluded; nearest modes
+/// (frac ≈ 1⁻, rounds to `δ`) and `Ceiling` (`δ` IS the correct ceiling)
+/// are already right. `Floor` steps down for both signs; `Trunc` (toward
+/// zero) steps down only for `x > 1` (positive value). A no-op unless the
+/// result is exactly `δ`, so reachable cells pass untouched. Mirrors
+/// [`adjust_bounded_extremum`] / [`adjust_cosh_near_min`].
+#[inline]
+pub(crate) fn adjust_ln_near_one<C: WideTrigCore, const SCALE: u32>(
+    result: C::Storage,
+    raw: C::Storage,
+    mode: RoundingMode,
+) -> C::Storage {
+    if crate::support::rounding::is_nearest_mode(mode) {
+        return result;
+    }
+    let one = C::storage_one(SCALE);
+    if raw == one {
+        return result; // ln(1) = 0 is exact
+    }
+    let delta = raw - one; // (x − 1) at storage scale (signed)
+    if result != delta {
+        return result; // only the sub-resolution linear-term overshoot
+    }
+    match mode {
+        RoundingMode::Floor => result - <C::Storage as BigInt>::ONE,
+        RoundingMode::Trunc if raw > one => result - <C::Storage as BigInt>::ONE,
+        _ => result,
+    }
+}
+
 /// `tan_strict` for a wide tier — generic over the tier `C`. Panics at
 /// odd multiples of π/2 where the cosine is zero. Ports the near-pole
 /// recompute (`near_pole_tan::tan_extra_digits`, width-free). Replaces

@@ -294,9 +294,10 @@ pub(crate) fn ln_tang<
         // `INTERNAL_EXTRA` buries the artanh truncation bias below the
         // caller's working ULP — necessary at MAX storage scale where
         // the outer Ziv cap collapses to base_guard.
-        C::round_to_storage_directed(GUARD, SCALE, mode, &mut |guard| {
+        let r = C::round_to_storage_directed(GUARD, SCALE, mode, &mut |guard| {
             tang_ln_fixed::<C, CAP, INTERNAL_EXTRA, SCALE>(C::to_work_scaled(raw, guard), SCALE + guard)
-        })
+        });
+        crate::algos::support::wide_trig_core::adjust_ln_near_one::<C, SCALE>(r, raw, mode)
     } else {
         let w = SCALE + GUARD;
         let r = tang_ln_fixed::<C, CAP, INTERNAL_EXTRA, SCALE>(C::to_work_scaled(raw, GUARD), w);
