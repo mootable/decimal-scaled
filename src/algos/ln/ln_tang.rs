@@ -287,16 +287,40 @@ pub(crate) fn ln_tang<
         panic!("wide-tier ln: argument must be positive");
     }
     if DIRECTED {
-        // Directed modes decide which side of a storage grid line the
-        // true value falls; near a grid line the working-scale
-        // approximation can land on the wrong side. Route through the
-        // shared Ziv escalation; nearest modes narrow once. The kernel's
-        // `INTERNAL_EXTRA` buries the artanh truncation bias below the
-        // caller's working ULP — necessary at MAX storage scale where
-        // the outer Ziv cap collapses to base_guard.
-        let r = C::round_to_storage_directed(GUARD, SCALE, mode, &mut |guard| {
-            tang_ln_fixed::<C, CAP, INTERNAL_EXTRA, SCALE>(C::to_work_scaled(raw, guard), SCALE + guard)
-        });
+        // Directed modes decide which side of a storage grid line the true
+        // value falls; near a grid line the working-scale approximation can
+        // land on the wrong side. Route through the shared Ziv escalation.
+        //
+        // `INTERNAL_EXTRA` buries the ~1-working-ULP artanh truncation bias
+        // below the storage ULP (it runs the body at `w + EXTERNAL_EXTRA_DIGITS`,
+        // ~5× the cost). That bias only flips a directed result NEAR x = 1,
+        // where ln(x) ≈ x−1 is tiny and the deciding residual sits at the
+        // precision boundary (the loss region is ε ~ 10^(−SCALE/2)); for x away
+        // from 1 the result carries full significant digits and the bias is far
+        // below half a storage ULP. So we VALUE-GATE the wide path: pay it ONLY
+        // for near-1 inputs (`|x − 1| < 10^(−SCALE/4)`, comfortably covering the
+        // loss region with margin) — every other input takes the fast
+        // native-width path. `adjust_ln_near_one` (below) is itself value-gated
+        // (`result == δ`), so the truly-unreachable ε case is handled regardless.
+        let use_extra = INTERNAL_EXTRA && {
+            let one = C::storage_one(SCALE);
+            let diff = if raw >= one { raw - one } else { one - raw };
+            // near 1 iff |x − 1| < ~10^(−SCALE/4), tested on the bit-length so
+            // the threshold is a compile-time const and the check is O(limbs)
+            // (no per-call `pow`): `bit_length(10^k) ≈ k·log2(10)`, and ×3 is a
+            // conservative `log2(10)`. Covers the ε ~ 10^(−SCALE/2) loss region
+            // with wide margin; excludes ordinary operands (e.g. x = 1.5).
+            diff.bit_length() < (SCALE - SCALE / 4) * 3
+        };
+        let r = if use_extra {
+            C::round_to_storage_directed(GUARD, SCALE, mode, &mut |guard| {
+                tang_ln_fixed::<C, CAP, true, SCALE>(C::to_work_scaled(raw, guard), SCALE + guard)
+            })
+        } else {
+            C::round_to_storage_directed(GUARD, SCALE, mode, &mut |guard| {
+                tang_ln_fixed::<C, CAP, false, SCALE>(C::to_work_scaled(raw, guard), SCALE + guard)
+            })
+        };
         crate::algos::support::wide_trig_core::adjust_ln_near_one::<C, SCALE>(r, raw, mode)
     } else {
         let w = SCALE + GUARD;
