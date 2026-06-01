@@ -241,6 +241,10 @@ name = "karabench_u64"
 required-features = ["bench-alt"]
 
 [[example]]
+name = "int_div_probe"
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
+[[example]]
 name = "profile_atan_perfetto"
 required-features = ["perf-trace"]
 
