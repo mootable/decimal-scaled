@@ -134,6 +134,56 @@ where
     let ml = sig_len(&m_mag);
     let bl = sig_len(&b_mag);
 
+    // ── Fast path: the scaled numerator |a|·10^SCALE fits Int<N> ─────────
+    // When `lz(|a|) + lz(10^SCALE) > Int<N>::BITS` the product fits Int<N>, so
+    // divide in N limbs and skip the 2N widen machinery (the ×10^SCALE into a
+    // double-buffered scratch, the 2N-sized divide setup). Mirrors
+    // `mul_widen_divide`'s fits-Int<N> arm and recovers v0.4.4's `div_with`
+    // fast path — the narrow balanced `div@low-scale` recovery (at SCALE==0,
+    // `mult == 1`, so it engages for any operand with ≥2 leading zero bits).
+    // Bit-identical: the same `round(|a|·10^SCALE / |b|)`, an N-limb Knuth
+    // divide instead of 2N. Hardcoding Knuth is the matcher's choice for this
+    // shape: the dividend fits N limbs (≤ the divisor width `n`), so the u128
+    // engine's `dividend ≥ 2n` precondition is false and `select_for_limbs`
+    // always returns Knuth here — re-verify if a new `div_rem` engine is added.
+    let lz_a = a.unsigned_abs().leading_zeros();
+    let lz_m = mult.unsigned_abs().leading_zeros();
+    if lz_a + lz_m > <Int<N>>::BITS {
+        let num_mag = *a.wrapping_mul(mult).unsigned_abs().as_limbs();
+        let nl_fast = sig_len(&num_mag);
+        let mut quot = [0u64; N];
+        let mut rem = [0u64; N];
+        let mut u_buf = Limbs::<N>::single_buffered_u64();
+        let mut v_buf = Limbs::<N>::single_buffered_u64();
+        div_knuth_into(
+            &num_mag[..nl_fast],
+            &b_mag[..bl],
+            &mut quot,
+            &mut rem,
+            u_buf.as_mut(),
+            v_buf.as_mut(),
+        );
+        let rl = sig_len(&rem[..bl.max(1)]);
+        let rem_nonzero = !(rl == 1 && rem[0] == 0);
+        if rem_nonzero {
+            let cmp_r = cmp_double_vs::<N>(&rem[..bl.max(1)], &b_mag[..bl]);
+            let q_is_odd = (quot[0] & 1) != 0;
+            if should_bump(mode, cmp_r, q_is_odd, !neg) {
+                let mut carry: u64 = 1;
+                for limb in quot.iter_mut() {
+                    let (s, c) = limb.overflowing_add(carry);
+                    *limb = s;
+                    if !c {
+                        carry = 0;
+                        break;
+                    }
+                }
+                let _ = carry;
+            }
+        }
+        return apply_sign::<N>(quot, neg, "attempt to divide with overflow");
+    }
+
     // Scaled numerator |a| * 10^SCALE (up to 2N u64 limbs) in scratch.
     let mut num_buf = Limbs::<N>::double_buffered_u64();
     let num = num_buf.as_mut();
