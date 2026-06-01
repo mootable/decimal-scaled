@@ -61,6 +61,7 @@ macro_rules! decl_decimal_full {
         $CbrtWide:ty,
         $Work:ty,
         $Wexp:ty,
+        $AgmWork:ty,
         $core:ident,
         $max_scale:literal,
         $n_limbs:literal,
@@ -70,7 +71,7 @@ macro_rules! decl_decimal_full {
     ) => {
         $crate::macros::full::decl_decimal_full!(
             @body $Type, $Storage, $Unsigned, $Wider, $SqrtWide, $CbrtWide,
-            $Work, $Wexp, $core, $max_scale, $n_limbs, $ln_tang_cap, $exp_tang_m, no_const_table
+            $Work, $Wexp, $AgmWork, $core, $max_scale, $n_limbs, $ln_tang_cap, $exp_tang_m, no_const_table
         );
     };
     (
@@ -82,6 +83,7 @@ macro_rules! decl_decimal_full {
         $CbrtWide:ty,
         $Work:ty,
         $Wexp:ty,
+        $AgmWork:ty,
         $core:ident,
         $max_scale:literal,
         $n_limbs:literal,
@@ -90,7 +92,7 @@ macro_rules! decl_decimal_full {
     ) => {
         $crate::macros::full::decl_decimal_full!(
             @body $Type, $Storage, $Unsigned, $Wider, $SqrtWide, $CbrtWide,
-            $Work, $Wexp, $core, $max_scale, $n_limbs, $ln_tang_cap, $exp_tang_m, with_const_table
+            $Work, $Wexp, $AgmWork, $core, $max_scale, $n_limbs, $ln_tang_cap, $exp_tang_m, with_const_table
         );
     };
     (
@@ -102,6 +104,7 @@ macro_rules! decl_decimal_full {
         $CbrtWide:ty,
         $Work:ty,
         $Wexp:ty,
+        $AgmWork:ty,
         $core:ident,
         $max_scale:literal,
         $n_limbs:literal,
@@ -122,7 +125,7 @@ macro_rules! decl_decimal_full {
         $crate::macros::int_methods::decl_decimal_int_methods!(wide $Type, $Storage);
         $crate::macros::wide_roots::decl_wide_roots!($Type, $Storage, $SqrtWide, $CbrtWide);
         $crate::macros::wide_transcendental::decl_wide_transcendental!(
-            $Type, $Storage, $Work, $Wexp, $core, $max_scale, $table_mode,
+            $Type, $Storage, $Work, $Wexp, $AgmWork, $core, $max_scale, $table_mode,
             $n_limbs, $ln_tang_cap, $exp_tang_m
         );
         $crate::macros::transcendental_trait::decl_decimal_transcendental_impl!($Type);

@@ -186,13 +186,14 @@ pub(crate) use decl_pow10_table;
 ///   for D924 / D1232 where the table-build's `limbs_mul × max_scale`
 ///   work exceeds the stable-rust const-eval step budget.
 macro_rules! decl_wide_transcendental {
-    ($Type:ident, $Storage:ty, $Work:ty, $Wexp:ty, $core:ident, $max_scale:literal,
+    ($Type:ident, $Storage:ty, $Work:ty, $Wexp:ty, $AgmWork:ty, $core:ident, $max_scale:literal,
      $n_limbs:literal, $ln_tang_cap:literal, $exp_tang_m:literal) => {
         $crate::macros::wide_transcendental::decl_wide_transcendental!(
             $Type,
             $Storage,
             $Work,
             $Wexp,
+            $AgmWork,
             $core,
             $max_scale,
             with_const_table,
@@ -201,7 +202,7 @@ macro_rules! decl_wide_transcendental {
             $exp_tang_m
         );
     };
-    ($Type:ident, $Storage:ty, $Work:ty, $Wexp:ty, $core:ident, $max_scale:literal, $table_mode:ident,
+    ($Type:ident, $Storage:ty, $Work:ty, $Wexp:ty, $AgmWork:ty, $core:ident, $max_scale:literal, $table_mode:ident,
      $n_limbs:literal, $ln_tang_cap:literal, $exp_tang_m:literal) => {
         /// Per-tier guard-digit transcendental core. Every function
         /// works on `$Work` integers interpreted at a working scale `w`
@@ -226,6 +227,17 @@ macro_rules! decl_wide_transcendental {
             /// the squaring peak all fit, then narrow correctly-rounded
             /// to storage.
             pub(crate) type Wexp = $Wexp;
+
+            /// The WIDE composition/AGM work integer (the two-core split).
+            /// The default PRIMITIVE strict path (ln/exp/sin/cos/atan Tang)
+            /// runs in the NARROW [`W`]; the COMPOSITION functions
+            /// (`log`/`log2`/`log10`, `exp2`, `sinh`/`cosh`/`tanh`, `powf`)
+            /// and the opt-in AGM run in `Wagm`, which is wide enough for
+            /// their directed-Ziv guard ceiling (`~Wagm::BITS/8 − SCALE`),
+            /// their integer-digit `k_lift`, and the `resize_to::<Wagm>` of a
+            /// large `Wexp`-computed result. Sized per tier in `widths.rs`
+            /// (the old single shared work width); `W` is narrowed beneath it.
+            pub(crate) type Wagm = $AgmWork;
 
             /// Guard digits added below the type's own scale.
             ///
