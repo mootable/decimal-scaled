@@ -249,6 +249,10 @@ name = "ln_probe"
 required-features = ["wide", "x-wide", "xx-wide"]
 
 [[example]]
+name = "atan_probe"
+required-features = ["wide", "x-wide", "xx-wide"]
+
+[[example]]
 name = "profile_atan_perfetto"
 required-features = ["perf-trace"]
 
@@ -324,6 +328,14 @@ required-features = ["wide", "x-wide", "xx-wide", "golden"]
 # wide-feature gated so a plain `cargo build --all-targets` skips it.
 [[test]]
 name = "micro_golden"
+required-features = ["wide", "x-wide", "xx-wide"]
+
+# `atan_tang_band_accuracy` is a focused zero-tolerance gate for the D57
+# atan Tang band (SCALE 44..=56) — the cells `ulp_strict_golden`'s D57
+# row (run at SCALE 28) does not cover. Validates the baked-table atan
+# path is correctly rounded at the band edge. Wide-feature gated.
+[[test]]
+name = "atan_tang_band_accuracy"
 required-features = ["wide", "x-wide", "xx-wide"]
 
 # `sanity_golden` exercises the EXACT (non-transcendental) decimal ops with

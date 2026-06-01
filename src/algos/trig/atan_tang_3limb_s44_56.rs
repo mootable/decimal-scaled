@@ -49,6 +49,7 @@
 
 #![cfg(any(feature = "d57", feature = "wide"))]
 
+use crate::algos::support::atan_tang_table;
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::wide_trig_d57 as core;
 use crate::int::types::Int;
@@ -65,23 +66,24 @@ use crate::int::types::Int;
 /// the inner loop runs in ~15 iterations, and a call touches exactly
 /// one table slot (computed on the stack via [`table_entry`]).
 ///
-const M: u32 = 512;
+const M: u32 = atan_tang_table::ATAN_TANG_M;
 
 /// `atan(idx / M)` at working scale `w` — the single table slot the
-/// kernel needs (`idx ∈ [0, M)`). idx = 0 → atan(0) = 0.
+/// kernel needs (`idx ∈ [0, M]`). idx = 0 → atan(0) = 0.
 ///
-/// Value-independent for a given `(w, idx)`, recomputed on the stack each
-/// call: stateless and heap-free. (`core::atan_fixed` runs `BigInt`
-/// divides and is not a `const fn`, so the table cannot be baked as
-/// `const` rodata in-crate.)
+/// Reads the value from the BAKED binary Tang table
+/// [`atan_tang_table::atan_table_entry_baked`]: the `M + 1` values
+/// `atan(j/M)` are precomputed ONCE by an mpmath oracle as binary
+/// fixed-point `round(atan(j/M) · 2^B)` (committed rodata), then SLICED
+/// to the tier's needed precision and reconstructed to working scale `w`
+/// per call — one multiply + one shift. This replaces the previous
+/// per-call `core::atan_fixed` halving-chain Series recompute, which the
+/// samply probe showed dominated the kernel (~74% of total time at
+/// D57<56>). `pow10_w` is `10^w` in the work integer, supplied by the
+/// caller from the kernel's baked `core::one(w)` table lookup.
 #[inline]
-fn table_entry<const SCALE: u32>(w: u32, idx: usize) -> core::W {
-    if idx == 0 {
-        return core::zero();
-    }
-    // c_j = idx / M at working scale = (idx · 10^w) / M.
-    let cj_w = (core::one(w) * core::lit(idx as u128)) / core::lit(M as u128);
-    core::atan_fixed::<SCALE>(cj_w, w)
+fn table_entry(w: u32, idx: usize, pow10_w: core::W) -> core::W {
+    atan_tang_table::atan_table_entry_baked::<core::W>(w, idx, M, pow10_w)
 }
 
 /// `atan(x)` strict kernel for `D57<SCALE>` with `SCALE ∈ 44..=56`.
@@ -186,7 +188,7 @@ pub(crate) fn atan_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> 
     };
 
     // atan(|x|) = table[j_idx] + atan(y).
-    let atan_abs_x = table_entry::<SCALE>(w, j_idx as usize) + atan_y;
+    let atan_abs_x = table_entry(w, j_idx as usize, pow10_w) + atan_y;
 
     // Stage 4: undo the reciprocal fold then the sign.
     let mut result = if add_half_pi {
