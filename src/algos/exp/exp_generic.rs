@@ -182,6 +182,103 @@ use crate::support::rounding::RoundingMode;
         crate::consts::ln2_by_working_scale::<S>(w, RoundingMode::HalfToEven)
     }
 
+    /// `√v` at working scale `w`: `√(|v| · 10^w)`, truncating. Width-generic
+    /// twin of the per-tier `$core::sqrt_fixed` (the multi-level argument
+    /// reduction `ln_fixed` runs); bit-identical (same seed-library bootstrap
+    /// + monotone-downward Newton). `|v| · 10^w` must fit `S`.
+    pub(crate) fn sqrt_fixed<S: BigInt>(v: S, w: u32) -> S
+    where
+        S::Scratch: ComputeLimbs,
+    {
+        let av = abs::<S>(v);
+        let n = av * pow10::<S>(w);
+        if n <= zero::<S>() {
+            return zero::<S>();
+        }
+        // Seed from the shared cross-algorithm seed leaf (std f64 bootstrap /
+        // no_std 1-bit), both guaranteed over-estimates, so the AM-GM pre-step
+        // + monotone-downward loop converge to the identical floor either way.
+        let seed = crate::algos::support::seed_bridge::sqrt_seed_w::<S>(n);
+        let x0 = if seed <= zero::<S>() { lit::<S>(1) } else { seed };
+        let mut x = (x0 + n / x0) >> 1;
+        loop {
+            let y = (x + n / x) >> 1;
+            if y >= x {
+                return x;
+            }
+            x = y;
+        }
+    }
+
+    /// Natural logarithm of a positive working-scale value, generic over the
+    /// work integer `S`. Width-generic twin of the per-tier
+    /// `$core::ln_fixed`: range-reduces `v = 2^k·m` with `m ∈ [1, 2)`, applies
+    /// `sqrt_l` levels of sqrt argument reduction (Brent 1976), evaluates
+    /// `ln(m) = 2^(l+1)·artanh((m−1)/(m+1))`, returns `k·ln2 + ln(m)`. `ln2_w`
+    /// is `ln 2` at scale `w`, supplied by the caller (the primitive wrapper
+    /// passes the const-folded `ln2_cf::<SCALE>`; a composition passes its
+    /// wide-work `ln2`), so this stays free of the `SCALE` const. Bit-identical
+    /// to the per-tier core for the same `(v, w, ln2_w)`.
+    pub(crate) fn ln_fixed<S: BigInt>(v_w: S, w: u32, ln2_w: S) -> S
+    where
+        S::Scratch: ComputeLimbs,
+    {
+        let one_w = one::<S>(w);
+        let two_w = one_w + one_w;
+        let pow10_w = one_w;
+        let mut k: i32 = bit_length::<S>(v_w) as i32 - bit_length::<S>(one_w) as i32;
+        let mut m_w = loop {
+            let m = if k >= 0 {
+                v_w >> (k as u32)
+            } else {
+                v_w << ((-k) as u32)
+            };
+            if m >= two_w {
+                k += 1;
+            } else if m < one_w {
+                k -= 1;
+            } else {
+                break m;
+            }
+        };
+
+        // Multi-level sqrt argument reduction: `l ≈ √p_bits / 4`.
+        let p_bits = w.saturating_mul(3).saturating_add(1);
+        let sqrt_l: u32 = {
+            let mut n: u32 = 0;
+            while (n + 1) * (n + 1) <= p_bits {
+                n += 1;
+            }
+            n / 4
+        };
+        let mut i = 0;
+        while i < sqrt_l {
+            m_w = sqrt_fixed::<S>(m_w, w);
+            i += 1;
+        }
+
+        let t = div_cached::<S>(m_w - one_w, m_w + one_w, pow10_w);
+        let t2 = mul::<S>(t, t, w);
+        let mut sum = t;
+        let mut term = t;
+        let mut j: u128 = 1;
+        loop {
+            term = mul::<S>(term, t2, w);
+            let contrib = term / lit::<S>((2 * j + 1) as i128);
+            if contrib == zero::<S>() {
+                break;
+            }
+            sum = sum + contrib;
+            j += 1;
+            if j > SERIES_CAP {
+                break;
+            }
+        }
+        // ln(m) = 2^(l+1)·artanh(t) = sum << (sqrt_l + 1).
+        let ln_m = sum << (sqrt_l + 1);
+        scale_by_k::<S>(ln2_w, k as i128) + ln_m
+    }
+
     /// `e^v` for a working-scale value `v`, generic over the work
     /// integer `S`. Mirrors the per-tier `$core::exp_fixed` exactly
     /// (range-reduce `v = k·ln2 + s`, extend the working scale by

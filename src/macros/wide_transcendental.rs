@@ -544,37 +544,11 @@ macro_rules! decl_wide_transcendental {
             /// AM-GM (`(x + n/x)/2 ≥ √n`), so the seed direction is
             /// irrelevant to correctness.
             pub(crate) fn sqrt_fixed(v: W, w: u32) -> W {
-                let av = abs(v);
-                debug_assert!(
-                    bit_length(av) + (w as u32) * 4 < W::BITS,
-                    "sqrt_fixed: |v| * 10^w overflows the working width"
-                );
-                let n = av * pow10_table(w);
-                if n <= zero() {
-                    // √0 = 0; also guards the Newton loop's n / x divide.
-                    return zero();
-                }
-                // Newton seed delegated to the cross-algorithm seed leaf
-                // (`algo_x_support::seed::sqrt_seed`, via the generic
-                // `W ↔ &[u64]` bridge in `algos::support::seed_bridge`):
-                // under
-                // `std` it bootstraps from `f64::sqrt` of the top 64
-                // bits of `n` (~53 correct bits in one shot); under
-                // `no_std` it is the classical pure-integer 1-bit seed.
-                // Both over-estimate, so the unconditional AM-GM
-                // pre-step (`(x + n/x)/2 ≥ ⌈√n⌉`) and the
-                // monotone-downward loop below converge to the same
-                // floor root regardless of which seed body ran.
-                let seed = $crate::algos::support::seed_bridge::sqrt_seed_w::<W>(n);
-                let x0 = if seed <= zero() { lit(1) } else { seed };
-                let mut x = (x0 + n / x0) >> 1;
-                loop {
-                    let y = (x + n / x) >> 1;
-                    if y >= x {
-                        return x;
-                    }
-                    x = y;
-                }
+                // Delegates to the width-generic kernel
+                // (`exp_generic::sqrt_fixed`) — single source for the narrow
+                // primitive `W` and the wide composition `Wagm` (rule 2). Same
+                // seed-library bootstrap + monotone-downward Newton.
+                crate::algos::exp::exp_generic::sqrt_fixed::<W>(v, w)
             }
 
             /// Builds a working-scale value from the type's raw storage:
@@ -1371,71 +1345,19 @@ macro_rules! decl_wide_transcendental {
             /// Range-reduces `v = 2^k · m` with `m ∈ [1, 2)`, evaluates
             /// `ln(m) = 2·artanh((m−1)/(m+1))`, returns `k·ln 2 + ln(m)`.
             pub(crate) fn ln_fixed<const SCALE: u32>(v_w: W, w: u32) -> W {
-                let one_w = one(w);
-                let two_w = one_w + one_w;
-                let pow10_w = one_w;
-                let mut k: i32 = bit_length(v_w) as i32 - bit_length(one_w) as i32;
-                let mut m_w = loop {
-                    let m = if k >= 0 {
-                        v_w >> (k as u32)
-                    } else {
-                        v_w << ((-k) as u32)
-                    };
-                    if m >= two_w {
-                        k += 1;
-                    } else if m < one_w {
-                        k -= 1;
-                    } else {
-                        break m;
-                    }
-                };
-
-                // Multi-level sqrt argument reduction (Brent 1976,
-                // fastnum's approach). After `l` sqrt operations,
-                // `m ← m^(1/2^l)`, so `|t| = |(m-1)/(m+1)|` shrinks
-                // geometrically and the artanh series converges in
-                // `~p / (2 + 2l)` pair-terms instead of `~p / 2`.
-                // Each sqrt costs ~one wide isqrt; the term saving
-                // dominates around `l ≈ log₂(term_savings_per_sqrt)`
-                // — empirically `l ≈ √p_bits / 4` is the sweet spot.
-                let p_bits = w.saturating_mul(3).saturating_add(1);
-                let mut sqrt_l: u32 = 0;
-                {
-                    let mut n: u32 = 0;
-                    while (n + 1) * (n + 1) <= p_bits {
-                        n += 1;
-                    }
-                    sqrt_l = n / 4;
-                }
-                let mut i = 0;
-                while i < sqrt_l {
-                    m_w = sqrt_fixed(m_w, w);
-                    i += 1;
-                }
-
-                let t = div_cached(m_w - one_w, m_w + one_w, pow10_w);
-                let t2 = mul(t, t, w);
-                let mut sum = t;
-                let mut term = t;
-                let mut j: u128 = 1;
-                loop {
-                    term = mul(term, t2, w);
-                    let contrib = term / lit(2 * j + 1);
-                    if contrib == zero() {
-                        break;
-                    }
-                    sum = sum + contrib;
-                    j += 1;
-                    if j > SERIES_CAP {
-                        break;
-                    }
-                }
-                // ln(m) = 2^(l+1) · artanh(t) = sum << (sqrt_l + 1).
-                // With sqrt_l=0 this collapses to the historic
-                // `2·sum` formula; with sqrt_l>0 it folds in the
-                // `2^l` factor from the unhalved-argument identity.
-                let ln_m = sum << (sqrt_l + 1);
-                scale_by_k(ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), k as i128) + ln_m
+                // Delegates to the width-generic kernel
+                // (`exp_generic::ln_fixed`) — the single source for both the
+                // narrow primitive `W` and the wide composition `Wagm`
+                // (two-core split, Constitution rule 2: one generic algorithm).
+                // The const-folded `ln2_cf::<SCALE>(w)` is threaded in so this
+                // primitive path keeps its compile-time `ln2` (the generic
+                // kernel itself takes `ln2` as a parameter, so it stays free of
+                // the `SCALE` const).
+                crate::algos::exp::exp_generic::ln_fixed::<W>(
+                    v_w,
+                    w,
+                    ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                )
             }
 
             /// `log1p(t) = ln(1 + t)` at working scale `w`, evaluated
