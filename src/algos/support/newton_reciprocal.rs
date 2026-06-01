@@ -723,21 +723,25 @@ pub(crate) fn newton_pow10_mag_u128(
     }
 }
 
-/// The uncached Newton-reciprocal rescale execution: `mag /= 10^scale` via a
-/// per-call [`NewtonReciprocal::precompute`] (a Knuth divide) plus a
-/// reciprocal-multiply apply, in place on a u128-limb magnitude slice
-/// (std-only; no_std forwards to the MG chain). `width_bits` is the work
-/// width in bits (the precompute / packed-apply key); `neg` is the result
-/// sign for the rounding tie-break.
+/// The baked-reciprocal Newton rescale execution: `mag /= 10^scale` via a
+/// per-call [`NewtonReciprocal::precompute`] (a table LOOKUP of the §9.20
+/// baked `⌊2^k/10^scale⌋` reciprocal — [`crate::consts::newton_recip`] — not a
+/// Knuth divide) plus a reciprocal-multiply apply, in place on a u128-limb
+/// magnitude slice (std-only; no_std forwards to the MG chain). `width_bits`
+/// is the magnitude width in bits — the typed door
+/// ([`crate::algos::support::rescale::dispatch_wide_pow10`]) passes the
+/// SIGNIFICANT length here (task 9.24), so `precompute` sizes the reciprocal +
+/// quotient to the real magnitude, not the full work buffer; `neg` is the
+/// result sign for the rounding tie-break.
 ///
 /// This is the `Newton` arm of the rescale matcher
-/// ([`crate::algos::support::rescale`]) — a **kept-alt**. The matcher does
-/// NOT currently route here: the §9.2 no-state rule deleted the reciprocal
-/// cache this kernel amortised against, so the per-call precompute makes it
-/// ~2× slower than the MG chain at every width × scale cell (measured 9.18.2:
-/// decimal `mul` D230<229> 2.15×, D924<462> 2.0×; the MG chain recovers both
-/// to parity with 0.4.4). Kept callable for a future baked-`r` const-table
-/// revival, whose binary-size cost is deferred (9.18.2 / 9.20).
+/// ([`crate::algos::support::rescale`]) — **SELECTED** for the wide /
+/// high-scale band (`select` routes `width_limbs 24..=132 × scale 200..=1850`
+/// here). With the §9.20 baked table the precompute is a lookup, so the
+/// one-pass O(width) apply beats the `⌈scale/38⌉`-pass MG chain 1.5–13× above
+/// the crossover. The §9.2 no-state rule still holds — the per-call
+/// `NewtonReciprocal` is a fixed stack struct populated from the immutable
+/// baked const table, no cache.
 #[inline]
 pub(crate) fn newton_rescale_arm(
     mag: &mut [u128],
