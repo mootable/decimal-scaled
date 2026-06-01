@@ -207,6 +207,50 @@ fn bisect_wide(c: &mut Criterion, n: usize) {
     );
 }
 
+// WORKING-WIDTH crossover — the regime where BZ is actually ROUTED in
+// production. The decimal `÷10^w` rescale + the wide-transcendental slice roots
+// present divides at WORKING widths that EXCEED the storage tiers: an effective
+// divisor `den_n` up to ~67 over a `~2·den_n` dividend. BZ engages there
+// (`den_n ≥ BZ_THRESHOLD = 65`), so this is the den_n ≥ 65, 2n/n shape that
+// (a) overflowed the storage-sized recursive scratch and panicked the
+// D924/D1232 golden cells — the bit-identicality assert below is the regression
+// gate — and (b) is the ONLY regime where true-recursive BZ's asymptotic edge
+// could pay off. knuth + bz + u128 only: the O(bits) schoolbook / remfast
+// baselines are punishing at 130+ limbs and add nothing to the knuth-vs-bz
+// question. `n` here is the DIVISOR limb count; the dividend is `2n`.
+fn compare_working_width(c: &mut Criterion, n: usize, lbl: &str) {
+    for s in shapes_wide(n) {
+        let mut q0 = vec![0u64; s.num.len()];
+        let mut r0 = vec![0u64; s.num.len()];
+        div_knuth_slice(&s.num, &s.den, &mut q0, &mut r0);
+        // The regression gate: forced BZ must be bit-identical to Knuth at the
+        // working width — this is the assert that panicked before the scratch
+        // fix; it now passes, proving the recursive engine is correct here.
+        let mut q1 = vec![0u64; s.num.len()];
+        let mut r1 = vec![0u64; s.num.len()];
+        div_bz_forced_slice(&s.num, &s.den, &mut q1, &mut r1);
+        assert_eq!(q0, q1, "knuth vs bz quot mismatch working {lbl}");
+        assert_eq!(r0, r1, "knuth vs bz rem mismatch working {lbl}");
+        // And the production dispatcher (which routes den_n ≥ 65 to BZ) agrees.
+        let mut q2 = vec![0u64; s.num.len()];
+        let mut r2 = vec![0u64; s.num.len()];
+        div_dispatch_slice(&s.num, &s.den, &mut q2, &mut r2);
+        assert_eq!(q0, q2, "knuth vs dispatch quot mismatch working {lbl}");
+        assert_eq!(r0, r2, "knuth vs dispatch rem mismatch working {lbl}");
+    }
+    compare_all(
+        c,
+        &format!("div_kernel/working_{lbl}"),
+        |s: &Shape| s.label.to_string(),
+        shapes_wide(n),
+        vec![
+            ("knuth", run_knuth as fn(Shape) -> Vec<u64>),
+            ("bz", run_bz),
+            ("u128", run_u128),
+        ],
+    );
+}
+
 fn bench(c: &mut Criterion) {
     // Wide-shape knuth-vs-u128 bisection, finer-grained around den_n=24 (the
     // D462 storage-mul-rescale + decimal `/` divisor width, audit
@@ -217,6 +261,16 @@ fn bench(c: &mut Criterion) {
     // {24, 26, 28, 30, 32} bisection done in isolation.
     for &n in &[18usize, 20, 22, 24, 26, 28, 30, 32, 36, 48] {
         bisect_wide(c, n);
+    }
+    // WORKING-WIDTH knuth-vs-bz crossover — the den_n ≥ BZ_THRESHOLD(65) regime
+    // where BZ is ROUTED (the `÷10^w` rescale / wide-transcendental slice-root
+    // divides). This is the regression range (the panicking 134/67-style
+    // shapes) AND the only place true-recursive BZ could win; the earlier sweep
+    // stopped at 64 storage limbs. Odd den_n (65, 67) route the top-level split
+    // straight to a Knuth base case (BZ needs even n to halve); even den_n
+    // (96, 128) exercise the full recursion.
+    for &n in &[65usize, 67, 96, 128] {
+        compare_working_width(c, n, &format!("{n}limb"));
     }
     for &(n, lbl) in &[
         (3usize, "D57_3limb"),
