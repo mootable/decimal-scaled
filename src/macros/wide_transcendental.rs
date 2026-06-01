@@ -676,13 +676,16 @@ macro_rules! decl_wide_transcendental {
             /// Standard directed narrowing: the base-guard evaluation
             /// is trusted unless its residual sits within the kernel
             /// error band of a grid line, in which case it Ziv-escalates.
-            pub(crate) fn round_to_storage_directed(
+            pub(crate) fn round_to_storage_directed<S: $crate::int::types::traits::BigInt>(
                 base_guard: u32,
                 target: u32,
                 mode: $crate::support::rounding::RoundingMode,
-                recompute: impl FnMut(u32) -> W,
-            ) -> $Storage {
-                round_to_storage_directed_impl(base_guard, target, mode, false, false, recompute)
+                recompute: impl FnMut(u32) -> S,
+            ) -> $Storage
+            where
+                S::Scratch: $crate::int::types::compute_limbs::ComputeLimbs,
+            {
+                round_to_storage_directed_impl::<S>(base_guard, target, mode, false, false, recompute)
             }
 
             /// Directed-rounding narrowing for a kernel whose true result is
@@ -698,13 +701,16 @@ macro_rules! decl_wide_transcendental {
             /// the work integer's resolution (e.g. `exp(-10^-S)` just under
             /// `1.0`, whose residual is at scale ~`2S`). The caller MUST pin its
             /// algebraic-exact inputs (`exp 0` etc.) before reaching here.
-            pub(crate) fn round_to_storage_directed_never_exact(
+            pub(crate) fn round_to_storage_directed_never_exact<S: $crate::int::types::traits::BigInt>(
                 base_guard: u32,
                 target: u32,
                 mode: $crate::support::rounding::RoundingMode,
-                recompute: impl FnMut(u32) -> W,
-            ) -> $Storage {
-                round_to_storage_directed_impl(base_guard, target, mode, false, true, recompute)
+                recompute: impl FnMut(u32) -> S,
+            ) -> $Storage
+            where
+                S::Scratch: $crate::int::types::compute_limbs::ComputeLimbs,
+            {
+                round_to_storage_directed_impl::<S>(base_guard, target, mode, false, true, recompute)
             }
 
             /// Near-special-point directed narrowing for the derived
@@ -718,24 +724,46 @@ macro_rules! decl_wide_transcendental {
             /// (rather than trusting a "clear" residual that the residual
             /// kernel error could itself have placed on the wrong side),
             /// so the answer is correctly rounded under every mode.
-            pub(crate) fn round_to_storage_directed_near_special(
+            pub(crate) fn round_to_storage_directed_near_special<S: $crate::int::types::traits::BigInt>(
                 base_guard: u32,
                 target: u32,
                 mode: $crate::support::rounding::RoundingMode,
-                recompute: impl FnMut(u32) -> W,
-            ) -> $Storage {
-                round_to_storage_directed_impl(base_guard, target, mode, true, false, recompute)
+                recompute: impl FnMut(u32) -> S,
+            ) -> $Storage
+            where
+                S::Scratch: $crate::int::types::compute_limbs::ComputeLimbs,
+            {
+                round_to_storage_directed_impl::<S>(base_guard, target, mode, true, false, recompute)
             }
 
-            fn round_to_storage_directed_impl(
+            fn round_to_storage_directed_impl<S: $crate::int::types::traits::BigInt>(
                 base_guard: u32,
                 target: u32,
                 mode: $crate::support::rounding::RoundingMode,
                 force_confirm: bool,
                 never_exact: bool,
-                mut recompute: impl FnMut(u32) -> W,
-            ) -> $Storage {
+                mut recompute: impl FnMut(u32) -> S,
+            ) -> $Storage
+            where
+                S::Scratch: $crate::int::types::compute_limbs::ComputeLimbs,
+            {
                 use $crate::support::rounding::{RoundingMode, is_nearest_mode};
+
+                // Work-int-generic shadows of the per-tier `W`-typed helpers, so
+                // this Ziv-narrowing body operates on the caller's `S` — the
+                // narrow `W` for a primitive recompute, the wide `Wagm` for a
+                // composition (the wide-work directed-rounding guard ceiling
+                // `<S>::BITS/8` is the whole point of the two-core split).
+                let lit = |n: i128| <S as $crate::int::types::traits::BigInt>::from_i128(n);
+                let pow10 = |n: u32| $crate::consts::pow10::dispatch::<S>(n);
+                let bit_length = |v: S| -> u32 {
+                    let m = if v < <S as $crate::int::types::traits::BigInt>::ZERO { -v } else { v };
+                    <S as $crate::int::types::traits::BigInt>::BITS - m.leading_zeros()
+                };
+                let round_to_storage_with =
+                    |v: S, w: u32, t: u32, m: $crate::support::rounding::RoundingMode| -> $Storage {
+                        round_to_storage_with_g::<S>(v, w, t, m)
+                    };
 
                 let base_w = target + base_guard;
                 if is_nearest_mode(mode) {
@@ -767,13 +795,13 @@ macro_rules! decl_wide_transcendental {
                     };
                     let lo = nearest_narrow(base_guard);
                     let int_digits = {
-                        let n = $crate::int::types::traits::BigInt::resize_to::<W>(lo);
+                        let n = $crate::int::types::traits::BigInt::resize_to::<S>(lo);
                         let m = if n < lit(0) { -n } else { n };
                         let bl = bit_length(m);
                         let storage_digits = (bl as u64 * 30103 / 100_000) as u32 + 1;
                         storage_digits.saturating_sub(target)
                     };
-                    let cap_digits = (<W>::BITS / 8).saturating_sub(int_digits + 8);
+                    let cap_digits = (<S>::BITS / 8).saturating_sub(int_digits + 8);
                     let max_guard = cap_digits.saturating_sub(target).max(base_guard);
                     let mut guard = base_guard;
                     let mut best = lo;
@@ -799,7 +827,7 @@ macro_rules! decl_wide_transcendental {
                 // sign. `directed_narrow` returns both the rounded result and
                 // the residual position so the caller can tell when the value
                 // sits near a grid line (and the decision is untrustworthy).
-                let mut directed_narrow = |guard: u32| -> (W, W, W) {
+                let mut directed_narrow = |guard: u32| -> (S, S, S) {
                     let w = target + guard;
                     let v = recompute(guard);
                     let shift = w - target;
@@ -894,7 +922,7 @@ macro_rules! decl_wide_transcendental {
                     // ~12% headroom over the tightest scratch) so the
                     // recompute never overflows. Subtract the result's
                     // integer digits and a small margin.
-                    let cap_digits = (<W>::BITS / 8).saturating_sub(int_digits + 8);
+                    let cap_digits = (<S>::BITS / 8).saturating_sub(int_digits + 8);
                     let max_guard = cap_digits.saturating_sub(target).max(base_guard);
 
                     // A directed result is trustworthy once two consecutive
@@ -943,8 +971,8 @@ macro_rules! decl_wide_transcendental {
                     }
                 };
 
-                let max_w = $crate::int::types::traits::BigInt::resize_to::<W>(<$Storage>::MAX);
-                let min_w = $crate::int::types::traits::BigInt::resize_to::<W>(<$Storage>::MIN);
+                let max_w = $crate::int::types::traits::BigInt::resize_to::<S>(<$Storage>::MAX);
+                let min_w = $crate::int::types::traits::BigInt::resize_to::<S>(<$Storage>::MIN);
                 if signed > max_w || signed < min_w {
                     panic!(concat!(
                         stringify!($Type),
