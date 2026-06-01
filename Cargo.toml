@@ -245,6 +245,10 @@ name = "int_div_probe"
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
 [[example]]
+name = "ln_probe"
+required-features = ["wide", "x-wide", "xx-wide"]
+
+[[example]]
 name = "profile_atan_perfetto"
 required-features = ["perf-trace"]
 
