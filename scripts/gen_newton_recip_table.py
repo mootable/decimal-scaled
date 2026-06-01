@@ -20,7 +20,7 @@ Run: python scripts/gen_newton_recip_table.py   (rerun = byte-identical)
 """
 import os
 
-MAX_W = 96      # widest baked working width, u64 limbs (Int<96>, AGM)
+MAX_W = 132     # widest baked working width, u64 limbs (the split D1232 Tang work)
 MAX_S = 1850    # highest baked scale (the D924 AGM working-scale cap)
 
 

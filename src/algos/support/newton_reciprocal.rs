@@ -107,15 +107,16 @@ use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 /// Max `u64` limbs for the `10^SCALE` (`pow_scale`) buffer. Covers the
 /// D924 AGM scale at width 6144 (`w_prime ≤ 1850`, `pow_u64 ≤ 100`).
 const MAX_POW_U64: usize = 104;
-/// Max `u64` limbs for the reciprocal (`r`) buffer. Covers the
-/// 6144 + D924 AGM cell (`k_u64 + 1 ≤ 197`).
-const MAX_R_U64: usize = 200;
-/// Max `u64` limbs for the magnitude / quotient buffers. Covers
-/// the widest enabled width's magnitude (6144 → 96 u64), with margin.
-const MAX_MAG_U64: usize = 128;
+/// Max `u64` limbs for the reciprocal (`r`) buffer. Covers the widest baked
+/// table width (132 u64 = the split Tang work for D1232) at the top scale
+/// (`k_u64 + 1 ≤ 237`), with margin.
+const MAX_R_U64: usize = 240;
+/// Max `u64` limbs for the magnitude / quotient buffers. Covers the widest
+/// work integer's magnitude (the split D1232 Tang work = 132 u64), with margin.
+const MAX_MAG_U64: usize = 136;
 /// Max `u64` limbs for product / scratch buffers (`n·r`, `q·D`, …).
 /// Covers `MAX_MAG_U64 + MAX_R_U64`.
-const MAX_PROD_U64: usize = 332;
+const MAX_PROD_U64: usize = MAX_MAG_U64 + MAX_R_U64;
 
 // -- u128-limb sibling sizes (packed pairs of u64) --------------------
 //
@@ -785,7 +786,7 @@ mod tests {
     #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
     #[test]
     fn baked_newton_recip_matches_runtime_divide() {
-        for &width_limbs in &[16usize, 24, 32, 48, 64, 96] {
+        for &width_limbs in &[16usize, 24, 32, 48, 64, 96, 128, 132] {
             for &scale in &[1u32, 38, 39, 77, 200, 461, 615, 924, 1231, 1850] {
                 let pow_len = (scale as usize / 19 + 3).max(1);
                 let mut pow = [0u64; MAX_POW_U64];

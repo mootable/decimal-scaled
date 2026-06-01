@@ -67,7 +67,7 @@ enum Algorithm {
 /// Routing (policy-map `newton_vs_mg`, with the §9.20 baked reciprocal table
 /// making `precompute` a lookup): `scale <= 38` → single-pass `MgSingle`. For
 /// the wide / high-scale rescale where the baked table applies — work width
-/// `24..=96` u64 limbs AND `scale` in `200..=1850` — baked-reciprocal
+/// `24..=132` u64 limbs AND `scale` in `200..=1850` — baked-reciprocal
 /// **Newton** wins 1.5–13× over the `⌈scale/38⌉`-pass `MgChain` (the win grows
 /// with scale; 200 is a conservative continuous threshold safely past every
 /// per-width crossover). Everything else → `MgChain`: the narrow / `< 24`-limb
@@ -83,7 +83,7 @@ const fn select(scale: u32, width_bits: u32) -> Algorithm {
     // 1850 = `consts::newton_recip::NEWTON_RECIP_MAX_SCALE` (the baked cap);
     // literal here so this always-compiled `select` doesn't depend on the
     // wide-gated const.
-    if scale >= 200 && scale <= 1850 && width_limbs >= 24 && width_limbs <= 96 {
+    if scale >= 200 && scale <= 1850 && width_limbs >= 24 && width_limbs <= 132 {
         return Algorithm::Newton;
     }
     Algorithm::MgChain
