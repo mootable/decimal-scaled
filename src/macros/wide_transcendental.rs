@@ -603,21 +603,42 @@ macro_rules! decl_wide_transcendental {
                 target: u32,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> $Storage {
+                // The narrow primitive `W` path; delegates to the work-int-
+                // generic narrowing so the wide compositions can narrow a
+                // `Wagm`-computed value to storage through the same code.
+                round_to_storage_with_g::<W>(v, w, target, mode)
+            }
+
+            /// Work-int-generic narrowing of a working-scale value `v` (at
+            /// scale `w`) down to storage scale `target`, rounded under `mode`.
+            /// Input width `S` is the primitive narrow `W` OR the wide
+            /// composition `Wagm` (two-core split); output is always the tier's
+            /// `$Storage`. The `÷10^shift` divides are already width-generic
+            /// (`div_wide_pow10::<S>` / `dispatch_wide_pow10::<S>`).
+            pub(crate) fn round_to_storage_with_g<S: $crate::int::types::traits::BigInt>(
+                v: S,
+                w: u32,
+                target: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> $Storage
+            where
+                S::Scratch: $crate::int::types::compute_limbs::ComputeLimbs,
+            {
                 let shift = w - target;
                 let rounded = if shift == 0 {
                     v
                 } else if shift <= 38 {
-                    $crate::algos::support::mg_divide::div_wide_pow10::<W>(v, shift, mode)
+                    $crate::algos::support::mg_divide::div_wide_pow10::<S>(v, shift, mode)
                 } else {
                     // `shift > 38` rescale — the matcher selects the MG chain
                     // (uncached Newton is dominated, 9.18.2; `Newton` is a
                     // kept-alt). See [`crate::algos::support::rescale`].
-                    $crate::algos::support::rescale::dispatch_wide_pow10::<W>(
+                    $crate::algos::support::rescale::dispatch_wide_pow10::<S>(
                         v, shift, mode,
                     )
                 };
-                let max_w = $crate::int::types::traits::BigInt::resize_to::<W>(<$Storage>::MAX);
-                let min_w = $crate::int::types::traits::BigInt::resize_to::<W>(<$Storage>::MIN);
+                let max_w = $crate::int::types::traits::BigInt::resize_to::<S>(<$Storage>::MAX);
+                let min_w = $crate::int::types::traits::BigInt::resize_to::<S>(<$Storage>::MIN);
                 if rounded > max_w || rounded < min_w {
                     panic!(concat!(
                         stringify!($Type),
