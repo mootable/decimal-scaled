@@ -10,6 +10,12 @@
 //!   uses.
 //! - [`Mg3By2`] — 3-by-2 invariant divisor (Algorithms 5 & 6); a
 //!   single-pass exact quotient for a 2-limb divisor.
+//! - [`DivLimb`] — the *limb-width* abstraction over the q̂ 2-by-1 estimator,
+//!   so ONE generic Knuth Algorithm D kernel
+//!   ([`crate::int::algos::div::div_knuth::knuth_d_core`]) runs at base 2⁶⁴
+//!   (`L = u64`, [`Mg2By1`]) or base 2¹²⁸ (`L = u128`, [`Mg3By2`]).
+
+use crate::int::types::compute_limbs::Limb;
 
 /// Möller–Granlund 2-by-1 invariant divisor at u64 base.
 ///
@@ -171,5 +177,153 @@ impl Mg3By2 {
         }
 
         (q, r1, r0)
+    }
+}
+
+/// The limb-width abstraction the generic Knuth Algorithm D kernel
+/// ([`crate::int::algos::div::div_knuth::knuth_d_core`]) divides over: the q̂
+/// 2-by-1 estimator `(hi·B + lo) / v_top → (q̂, r̂)` (where `B = 2^L::BITS`),
+/// plus the limb-type `MAX`. Implemented for exactly `u64` (base 2⁶⁴, q̂ via
+/// the [`Mg2By1`] reciprocal) and `u128` (base 2¹²⁸, q̂ via two exact
+/// [`Mg3By2`] passes — a 256-by-128 divide of the four/two u64 sub-limbs).
+///
+/// The reciprocal of the divisor's top limb (`v_top`) is **invariant across a
+/// whole divide**, so it is built ONCE ([`new_recip`](DivLimb::new_recip)) and
+/// threaded into every q̂ ([`est_2by1`](DivLimb::est_2by1)) — never rebuilt per
+/// quotient digit.
+///
+/// Knuth D only needs an estimate within `{q, q + 1}` of the true digit (the
+/// D6 add-back corrects a single over-estimate), and the final quotient /
+/// remainder of an integer divide are UNIQUE — so any conforming `DivLimb`
+/// yields **bit-identical** output regardless of how q̂ is formed.
+pub(crate) trait DivLimb: Limb {
+    /// The precomputed reciprocal of the top divisor limb.
+    type Recip: Copy;
+    /// The running carry of the D4 multiply-subtract pass. Width-specific
+    /// because the *optimal* accumulation differs (the loop is otherwise one
+    /// generic source): `u64` limbs use a **double-width `u128` accumulator**
+    /// (`carry + q̂·v[i]` fused as one 128-bit add — a shorter critical path,
+    /// benched ~3–4 % faster than splitting the multiply carry from the
+    /// borrow), while `u128` limbs have no native double-width type and use a
+    /// **single-`u128` high-word carry**.
+    type Acc: Copy;
+    /// The all-ones limb value (`u64::MAX` / `u128::MAX`) — the q̂ clamp.
+    const MAX: Self;
+    /// Additive identity of the D4 carry accumulator [`Acc`](DivLimb::Acc).
+    const ACC_ZERO: Self::Acc;
+    /// Build the 2-by-1 reciprocal of the normalised top divisor limb
+    /// `v_top` (its top bit set). Called once per divide.
+    fn new_recip(v_top: Self) -> Self::Recip;
+    /// The Knuth q̂ 2-by-1 estimate `(hi·B + lo) / v_top → (q̂, r̂)`, requiring
+    /// `hi < v_top` (the caller's `hi >= v_top` clamp guarantees it). `B =
+    /// 2^Self::BITS`. Returns the floor quotient (`< B`) and its remainder.
+    fn est_2by1(recip: &Self::Recip, hi: Self, lo: Self) -> (Self, Self);
+    /// One D4 step `u[j+i] -= q̂·v[i] + carry`: returns the reduced dividend
+    /// limb and the carry propagated into the next limb. Per-width to keep each
+    /// limb type's optimal accumulation (see [`Acc`](DivLimb::Acc)).
+    fn mul_sub_step(q_hat: Self, v_i: Self, u_ji: Self, carry: Self::Acc) -> (Self, Self::Acc);
+    /// The D4 final window limb `u[j+n] -= carry`: returns the reduced limb and
+    /// whether it borrowed (q̂ was 1 too big ⇒ the D6 add-back fires).
+    fn mul_sub_final(u_top: Self, carry: Self::Acc) -> (Self, bool);
+    /// Serialise one quotient digit (the `L` value at quotient position `j`)
+    /// into the little-endian u64 output `quot` — the output is always u64
+    /// (the engine's external contract), so the digit is written at its u64
+    /// limb offset: `quot[j]` for `u64`, `quot[2j] | quot[2j+1] << 64` for
+    /// `u128`. Bounds-guarded (a digit beyond `quot.len()` is dropped, matching
+    /// both engines' prior `if … < quot.len()` writes), so the generic core
+    /// needs no separate `L`-typed quotient buffer.
+    fn store_quot_digit(quot: &mut [u64], j: usize, digit: Self);
+}
+
+impl DivLimb for u64 {
+    type Recip = Mg2By1;
+    type Acc = u128;
+    const MAX: Self = u64::MAX;
+    const ACC_ZERO: Self::Acc = 0;
+    #[inline]
+    fn new_recip(v_top: Self) -> Self::Recip {
+        Mg2By1::new(v_top)
+    }
+    #[inline]
+    fn est_2by1(recip: &Self::Recip, hi: Self, lo: Self) -> (Self, Self) {
+        recip.div_rem(hi, lo)
+    }
+    #[inline(always)]
+    fn mul_sub_step(q_hat: Self, v_i: Self, u_ji: Self, carry: u128) -> (Self, u128) {
+        // Double-width accumulator: fuse `carry + q̂·v[i]` into one 128-bit add
+        // (`carry ≤ 2⁶⁴`, product ≤ (2⁶⁴−1)², sum < 2¹²⁸), take the low word as
+        // the amount to subtract, propagate the high word plus the borrow.
+        // `inline(always)`: this is the O(m·n) hot step — it MUST fold into the
+        // generic loop body so the monomorphisation matches the hand-inlined
+        // base-2⁶⁴ loop with no call/abstraction overhead.
+        let acc = carry + (q_hat as u128) * (v_i as u128);
+        let (res, b) = u_ji.overflowing_sub(acc as u64);
+        (res, (acc >> 64) + (b as u128))
+    }
+    #[inline(always)]
+    fn mul_sub_final(u_top: Self, carry: u128) -> (Self, bool) {
+        let (s, b1) = u_top.overflowing_sub(carry as u64);
+        // The borrow is the subtraction borrow OR a non-zero high carry word.
+        (s, b1 || (carry >> 64) != 0)
+    }
+    #[inline]
+    fn store_quot_digit(quot: &mut [u64], j: usize, digit: Self) {
+        if j < quot.len() {
+            quot[j] = digit;
+        }
+    }
+}
+
+impl DivLimb for u128 {
+    type Recip = Mg3By2;
+    type Acc = u128;
+    const MAX: Self = u128::MAX;
+    const ACC_ZERO: Self::Acc = 0;
+    #[inline]
+    fn new_recip(v_top: Self) -> Self::Recip {
+        // The two u64 sub-limbs of the normalised top u128 divisor limb.
+        Mg3By2::new((v_top >> 64) as u64, v_top as u64)
+    }
+    #[inline]
+    fn est_2by1(recip: &Self::Recip, hi: Self, lo: Self) -> (Self, Self) {
+        // 256-by-128 → 128: a base-2⁶⁴ n=2 Knuth divide of the four u64 limbs
+        // (a3,a2,a1,a0) by the two u64 limbs of v_top, two exact Mg3By2 passes
+        // (no software u256 reciprocal). `hi < v_top` guarantees each pass's
+        // `(n2,n1) < (d1,d0)` precondition and a 128-bit quotient.
+        let a3 = (hi >> 64) as u64;
+        let a2 = hi as u64;
+        let a1 = (lo >> 64) as u64;
+        let a0 = lo as u64;
+        let (q1, r1, r0) = recip.div_rem(a3, a2, a1);
+        let (q0, s1, s0) = recip.div_rem(r1, r0, a0);
+        let q = ((q1 as u128) << 64) | (q0 as u128);
+        let r = ((s1 as u128) << 64) | (s0 as u128);
+        (q, r)
+    }
+    #[inline(always)]
+    fn mul_sub_step(q_hat: Self, v_i: Self, u_ji: Self, carry: u128) -> (Self, u128) {
+        // No native double-width type: single-`u128` high-word carry. `q̂·v[i]`
+        // is a 256-bit (p_lo, p_hi); add the incoming carry into p_lo, subtract
+        // p_lo from u[j+i], propagate p_hi + the add-overflow + the borrow
+        // (which fits one u128 by the same bound as the u64 double-width form).
+        // `inline(always)`: the O(m·n) hot step — see the u64 sibling.
+        let (p_lo, p_hi) = <u128 as Limb>::widening_mul(q_hat, v_i);
+        let (sub_lo, c0) = p_lo.overflowing_add(carry);
+        let (res, b) = u_ji.overflowing_sub(sub_lo);
+        (res, p_hi + (c0 as u128) + (b as u128))
+    }
+    #[inline(always)]
+    fn mul_sub_final(u_top: Self, carry: u128) -> (Self, bool) {
+        u_top.overflowing_sub(carry)
+    }
+    #[inline]
+    fn store_quot_digit(quot: &mut [u64], j: usize, digit: Self) {
+        // The u128 digit is two little-endian u64 limbs at offset 2j / 2j+1.
+        if 2 * j < quot.len() {
+            quot[2 * j] = digit as u64;
+        }
+        if 2 * j + 1 < quot.len() {
+            quot[2 * j + 1] = (digit >> 64) as u64;
+        }
     }
 }

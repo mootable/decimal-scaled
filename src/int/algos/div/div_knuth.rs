@@ -1,14 +1,19 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Knuth Algorithm D division at base 2⁶⁴.
+//! Knuth Algorithm D division — the limb-generic core ([`knuth_d_core`]) and
+//! the base-2⁶⁴ (u64-limb) value-divide entry points.
 //!
-//! [`div_knuth`] — Knuth Algorithm D (TAOCP Vol 2 §4.3.1) at base 2⁶⁴,
-//! with the q̂ estimate from the Möller–Granlund 2-by-1 reciprocal
-//! [`crate::int::algos::div::div_mg::Mg2By1`]. The divisor-shape *choice*
-//! that routes here lives in [`crate::int::policy::div_rem`].
+//! [`div_knuth`] — Knuth Algorithm D (TAOCP Vol 2 §4.3.1) at base 2⁶⁴, the
+//! `L = u64` monomorphisation of [`knuth_d_core`] (q̂ via the Möller–Granlund
+//! 2-by-1 reciprocal [`Mg2By1`](crate::int::algos::div::div_mg::Mg2By1)). The
+//! same [`knuth_d_core`], monomorphised at `L = u128`, is the base-2¹²⁸ engine
+//! [`crate::int::algos::div::div_knuth_u128_limb`] — ONE generic kernel, not a
+//! per-limb-width copy ([`DivLimb`] is the limb-width abstraction). The
+//! divisor-shape / limb-width *choice* that routes between them lives in
+//! [`crate::int::policy::div_rem`].
 
-use crate::int::algos::div::div_mg::Mg2By1;
+use crate::int::algos::div::div_mg::DivLimb;
 use crate::int::algos::div::div_rem::div_rem;
 use crate::int::types::compute_limbs::max_single_limbs;
 
@@ -102,91 +107,11 @@ pub(crate) fn div_knuth_into(
         return;
     }
 
-    // MG 2-by-1 q̂ estimator (Möller-Granlund 2011 Algorithm 4) + inner
-    // refinement against v[n-2]. The 3-by-2 estimator was re-benched post
-    // u64 migration: its per-q̂ setup cost (extra multiplies vs the
-    // 2-by-1's one) outweighs the refinement loop's near-zero iteration
-    // count on decimal divisors, so 2-by-1 + while-loop still wins at the
-    // widest tiers.
-    let v_top = v[n - 1];
-    let v_below = v[n - 2];
-    let mg_top = Mg2By1::new(v_top);
-
-    let mut j_plus_one = m + 1;
-    while j_plus_one > 0 {
-        j_plus_one -= 1;
-        let j = j_plus_one;
-
-        let jn = j + n;
-        let u_top = u[jn];
-        let u_next = u[jn - 1];
-
-        let (mut q_hat, mut r_hat) = if u_top > v_top {
-            (u64::MAX, u64::MAX)
-        } else if u_top == v_top {
-            let (r, of) = u_next.overflowing_add(v_top);
-            (u64::MAX, if of { u64::MAX } else { r })
-        } else {
-            mg_top.div_rem(u_top, u_next)
-        };
-
-        // Refinement against v[n-2].
-        loop {
-            let prod = (q_hat as u128) * (v_below as u128);
-            let hi = (prod >> 64) as u64;
-            let lo = prod as u64;
-            let rhs_lo = u[jn - 2];
-            let rhs_hi = r_hat;
-            if hi < rhs_hi || (hi == rhs_hi && lo <= rhs_lo) {
-                break;
-            }
-            q_hat = q_hat.wrapping_sub(1);
-            let (new_r, of) = r_hat.overflowing_add(v_top);
-            if of {
-                break;
-            }
-            r_hat = new_r;
-        }
-
-        // D4. u[j..=j+n] -= q̂ · v[0..n]
-        // Merged carry: a single u128 `carry` accumulates q̂·v[i] plus the
-        // borrow from the previous limb, so each inner step is one 64×64→128
-        // multiply, one u128 add and one `overflowing_sub` — one fewer
-        // overflowing op than tracking the multiply carry and the borrow as
-        // two separate u64s. The O(m·n) inner loop is the engine's hot path
-        // at the wide tiers, so the saved op per step compounds with width
-        // (benched: ~1.1× faster at D924/D1232; a wash at the narrow tiers).
-        // Bound: after `carry += q̂·v[i]`, carry ≤ (2⁶⁴−1)² + 2⁶⁴ < 2¹²⁸, so
-        // the accumulate never overflows the u128.
-        let mut carry: u128 = 0;
-        for i in 0..n {
-            carry += (q_hat as u128) * (v[i] as u128);
-            let sub_lo = carry as u64;
-            let (res, b) = u[j + i].overflowing_sub(sub_lo);
-            u[j + i] = res;
-            carry = (carry >> 64) + (b as u128);
-        }
-        let sub_lo = carry as u64;
-        let (s2, b1) = u[j + n].overflowing_sub(sub_lo);
-        u[j + n] = s2;
-        let final_borrow = (b1 as u64) + ((carry >> 64) as u64);
-
-        if final_borrow != 0 {
-            q_hat = q_hat.wrapping_sub(1);
-            let mut carry: u64 = 0;
-            for i in 0..n {
-                let (s1, c1) = u[j + i].overflowing_add(v[i]);
-                let (s2, c2) = s1.overflowing_add(carry);
-                u[j + i] = s2;
-                carry = (c1 as u64) + (c2 as u64);
-            }
-            u[j + n] = u[j + n].wrapping_add(carry);
-        }
-
-        if j < quot.len() {
-            quot[j] = q_hat;
-        }
-    }
+    // Knuth D6/D4: emit the `m + 1` quotient digits and reduce `u` in place to
+    // the remainder. The base-2⁶⁴ (`L = u64`) monomorphisation of the
+    // limb-generic [`knuth_d_core`]; the u64 quotient slice IS `quot` (no
+    // pack/unpack).
+    knuth_d_core::<u64>(u, v, n, m, quot);
 
     if shift == 0 {
         let copy_n = n.min(rem.len());
@@ -203,5 +128,115 @@ pub(crate) fn div_knuth_into(
                 rem[i] = lo | hi_into_lo;
             }
         }
+    }
+}
+
+/// The limb-generic Knuth Algorithm D inner engine (TAOCP Vol 2 §4.3.1, steps
+/// D2–D7), at base `2^L::BITS`. Runs the SAME source at base 2⁶⁴ (`L = u64`,
+/// the [`div_knuth`] path) and base 2¹²⁸ (`L = u128`, the
+/// [`div_knuth_u128_limb`](crate::int::algos::div::div_knuth_u128_limb) path),
+/// so the limb-width axis is ONE kernel, not a per-width copy (rule 2). The
+/// width is delivered by the [`DivLimb`] type parameter; the q̂ estimator and
+/// the limb `MAX` come from it.
+///
+/// Preconditions (the caller normalises + packs into `L` limbs):
+/// - `v[..n]` is the normalised divisor, `n >= 2` (the divisor's top limb
+///   `v[n-1]` has its top bit set);
+/// - `u` is the normalised running dividend with `u[m + n]` a zeroed window
+///   limb above the live dividend, and `u.len() > m + n`;
+/// - at each step `u[j+n] <= v[n-1]` (the Knuth normalisation invariant — the
+///   leading dividend limb never exceeds the leading divisor limb).
+///
+/// On return `quot` (little-endian **u64** — the engine's external quotient
+/// type) holds the `m + 1` quotient digits (each `L` digit serialised at its
+/// u64 limb offset via [`DivLimb::store_quot_digit`], bounds-guarded) and
+/// `u[..n]` holds the remainder (still normalised — the caller denormalises by
+/// the same shift). The quotient is exact and UNIQUE, so the output is
+/// **bit-identical** for any conforming [`DivLimb`].
+#[inline]
+pub(crate) fn knuth_d_core<L: DivLimb>(u: &mut [L], v: &[L], n: usize, m: usize, quot: &mut [u64]) {
+    let v_top = v[n - 1]; // normalised: top bit set
+    let v_below = v[n - 2];
+    // The q̂ 2-by-1 reciprocal of the (constant) top divisor limb, built ONCE.
+    let recip = L::new_recip(v_top);
+
+    let mut j_plus_one = m + 1;
+    while j_plus_one > 0 {
+        j_plus_one -= 1;
+        let j = j_plus_one;
+
+        let jn = j + n;
+        let u_top = u[jn];
+        let u_next = u[jn - 1];
+        debug_assert!(u_top <= v_top, "knuth_d_core: dividend window top exceeds divisor top");
+
+        // D3. q̂ = min(floor((u_top·B + u_next) / v_top), B − 1). The
+        // `u_top >= v_top` clamp (only `u_top == v_top` is reachable, per the
+        // invariant) caps q̂ at `MAX`; `overflow` records whether the resulting
+        // remainder estimate r̂ = u_next + v_top already ran past `B` (a wrapped
+        // r̂ ⇒ no D3 refinement is needed).
+        let (mut q_hat, mut r_hat, overflow) = if u_top >= v_top {
+            let (r, of) = u_next.overflowing_add(v_top);
+            (L::MAX, r, of)
+        } else {
+            let (q, r) = L::est_2by1(&recip, u_top, u_next);
+            (q, r, false)
+        };
+
+        // D3 refinement against v[n-2]: while q̂·v_below > r̂·B + u[jn-2],
+        // decrement q̂ (and bump r̂ by v_top), until r̂ runs past B.
+        if !overflow {
+            loop {
+                let (p_lo, p_hi) = q_hat.widening_mul(v_below);
+                if p_hi < r_hat || (p_hi == r_hat && p_lo <= u[jn - 2]) {
+                    break;
+                }
+                q_hat = q_hat.overflowing_sub(L::ONE).0;
+                let (new_r, of) = r_hat.overflowing_add(v_top);
+                if of {
+                    break;
+                }
+                r_hat = new_r;
+            }
+        }
+
+        // D4. u[j..=j+n] -= q̂ · v[0..n]. The O(m·n) inner loop — the engine's
+        // hot path at the wide tiers, so its per-step critical path dominates.
+        // The accumulation form is the limb type's optimal one
+        // ([`DivLimb::mul_sub_step`], [`DivLimb::Acc`]): a double-width `u128`
+        // accumulator for `u64` limbs (the fused `carry + q̂·v[i]` 128-bit add —
+        // benched faster than splitting the multiply carry), a single-`u128`
+        // high-word carry for `u128` limbs (no native double-width type). Both
+        // keep the carry within one accumulator word.
+        let mut carry = L::ACC_ZERO;
+        let mut i = 0;
+        while i < n {
+            let (res, c) = L::mul_sub_step(q_hat, v[i], u[j + i], carry);
+            u[j + i] = res;
+            carry = c;
+            i += 1;
+        }
+        let (s2, b1) = L::mul_sub_final(u[jn], carry);
+        u[jn] = s2;
+
+        // D5/D6. If the final subtraction borrowed, q̂ was 1 too big: add the
+        // divisor back once and decrement q̂.
+        if b1 {
+            q_hat = q_hat.overflowing_sub(L::ONE).0;
+            let mut carry = L::ZERO;
+            let mut i = 0;
+            while i < n {
+                let (s1, c1) = u[j + i].overflowing_add(v[i]);
+                let (s2, c2) = s1.overflowing_add(carry);
+                u[j + i] = s2;
+                // c1, c2 are never both set (`u[j+i]+v[i] ≤ 2B−2 < 2B−1`), so
+                // `0 + c1 + c2 ∈ {0, 1}` — the schoolbook carry merge.
+                carry = L::ZERO.add_carries(c1, c2);
+                i += 1;
+            }
+            u[jn] = u[jn].overflowing_add(carry).0;
+        }
+
+        L::store_quot_digit(quot, j, q_hat);
     }
 }

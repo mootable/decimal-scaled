@@ -43,7 +43,7 @@
 //!
 //! [`LimbSize`]: crate::int::types::compute_limbs::LimbSize
 
-use crate::int::algos::div::div_mg::Mg3By2;
+use crate::int::algos::div::div_knuth::knuth_d_core;
 use crate::int::types::compute_limbs::{Limb, MAX_SINGLE_LIMBS};
 
 /// u128-limb working scratch: half the u64 `MAX_SINGLE_LIMBS`, +2 slack
@@ -179,10 +179,14 @@ pub(crate) fn div_knuth_u128_limb_into(
     <u128 as Limb>::pack(&u64buf[..u_len64], &mut u[..u_len128]);
     <u128 as Limb>::pack(&v64buf[..n64], &mut v[..n128]);
 
-    // Base-2¹²⁸ Knuth D. The quotient has `m128 + 1` u128 digits; `u` has a
-    // zeroed limb above the live dividend (`u[u_len128]`) for the window top.
+    // Base-2¹²⁸ Knuth D — the `L = u128` monomorphisation of the limb-generic
+    // [`knuth_d_core`](crate::int::algos::div::div_knuth::knuth_d_core) (ONE
+    // kernel shared with the base-2⁶⁴ `div_knuth`). The quotient has `m128 + 1`
+    // u128 digits, written into `quot` as little-endian u64 pairs by
+    // [`DivLimb::store_quot_digit`]; `u` has a zeroed limb above the live
+    // dividend (`u[u_len128]`) for the window top.
     let m128 = u_len128 - n128;
-    knuth_d_base_u128(u, v, n128, m128, quot);
+    knuth_d_core::<u128>(&mut u[..=u_len128], &v[..n128], n128, m128, quot);
 
     // Unpack the remainder (low `n128` u128 limbs of `u` → `n64` u64 limbs)
     // into `u64buf` (reused as `r64` now the dividend is consumed), then
@@ -199,132 +203,6 @@ pub(crate) fn div_knuth_u128_limb_into(
                 let hi = if i + 1 < n64 { r64[i + 1] << (64 - shift) } else { 0 };
                 rem[i] = lo | hi;
             }
-        }
-    }
-}
-
-/// 256-by-128 → 128 division `(hi·2¹²⁸ + lo) / d`, requiring `hi < d` and
-/// `d` normalised (bit 127 set). Returns `(q, r)` with `q < 2¹²⁸`.
-///
-/// Implemented as a base-2⁶⁴ n=2 Knuth divide of the four u64 limbs by the
-/// two u64 limbs of `d`, two exact [`Mg3By2`] passes — no software u256
-/// reciprocal. `hi < d` guarantees each pass's `(n2, n1) < (d1, d0)`
-/// precondition and a 128-bit quotient.
-#[inline]
-fn div_256_by_128(hi: u128, lo: u128, d: u128) -> (u128, u128) {
-    debug_assert!(hi < d, "div_256_by_128: high word must be < divisor");
-    let d1 = (d >> 64) as u64;
-    let d0 = d as u64;
-    debug_assert!(d1 >> 63 == 1, "div_256_by_128: divisor must be normalised");
-    let a3 = (hi >> 64) as u64;
-    let a2 = hi as u64;
-    let a1 = (lo >> 64) as u64;
-    let a0 = lo as u64;
-
-    let mg = Mg3By2::new(d1, d0);
-    // High quotient limb: (a3·B² + a2·B + a1) / (d1·B + d0).
-    let (q1, r1, r0) = mg.div_rem(a3, a2, a1);
-    // Low quotient limb: (r·B + a0) / (d1·B + d0).
-    let (q0, s1, s0) = mg.div_rem(r1, r0, a0);
-
-    let q = ((q1 as u128) << 64) | (q0 as u128);
-    let r = ((s1 as u128) << 64) | (s0 as u128);
-    (q, r)
-}
-
-/// Base-2¹²⁸ Knuth D core: u128-limb running dividend `u` (with a zeroed
-/// limb above the live window) and divisor `v` (length `n128`, normalised),
-/// emitting `m128 + 1` u128 quotient digits into `quot` as pairs of u64
-/// limbs (`quot[2·j] = q̂ as u64`, `quot[2·j + 1] = (q̂ >> 64) as u64`).
-///
-/// The multiply-subtract and add-back run natively on u128 limbs (one
-/// 128×128→256 [`Limb::widening_mul`] per limb, a u128 carry-merge), the
-/// aligned-window win this kernel exists to test.
-#[inline]
-fn knuth_d_base_u128(u: &mut [u128], v: &[u128], n128: usize, m128: usize, quot: &mut [u64]) {
-    let v_top = v[n128 - 1]; // normalised: bit 127 set
-    let v_below = v[n128 - 2];
-
-    let mut j = m128 + 1;
-    while j > 0 {
-        j -= 1;
-        let jn = j + n128;
-        let u_top = u[jn];
-        let u_next = u[jn - 1];
-
-        // q̂ = min(floor((u_top·2¹²⁸ + u_next) / v_top), 2¹²⁸ − 1), with the
-        // standard `u_top >= v_top` clamp so `div_256_by_128`'s `hi < d`
-        // precondition holds.
-        let (mut q_hat, mut r_hat, overflow) = if u_top >= v_top {
-            (u128::MAX, u_next.wrapping_add(v_top), u_next.wrapping_add(v_top) < u_next)
-        } else {
-            let (q, r) = div_256_by_128(u_top, u_next, v_top);
-            (q, r, false)
-        };
-
-        // Refinement against v[n128-2]: while q̂·v_below > r_hat·2¹²⁸ + u[jn-2],
-        // decrement q̂ (and bump r_hat by v_top). `overflow` means r_hat has
-        // already wrapped past 2¹²⁸, so the comparison is satisfied.
-        if !overflow {
-            loop {
-                let (p_lo, p_hi) = <u128 as Limb>::widening_mul(q_hat, v_below);
-                if p_hi < r_hat || (p_hi == r_hat && p_lo <= u[jn - 2]) {
-                    break;
-                }
-                q_hat = q_hat.wrapping_sub(1);
-                let (nr, of) = r_hat.overflowing_add(v_top);
-                r_hat = nr;
-                if of {
-                    break;
-                }
-            }
-        }
-
-        // D4: u[j..=j+n128] -= q̂ · v[0..n128], native u128 carry-merge. The
-        // carry is a single u128 (the propagated high word): `q̂·v[i]` is a
-        // 256-bit (p_lo, p_hi); add the incoming carry into p_lo, subtract
-        // p_lo from u[j+i], propagate p_hi + borrow. Bounds (mirroring the
-        // base-2⁶⁴ proof): p_hi ≤ 2¹²⁸ − 2, so p_hi + 1 and carry + borrow
-        // never overflow the u128.
-        let mut carry: u128 = 0;
-        let mut i = 0;
-        while i < n128 {
-            let (p_lo, p_hi) = <u128 as Limb>::widening_mul(q_hat, v[i]);
-            let (acc_lo, k) = p_lo.overflowing_add(carry);
-            let acc_hi = p_hi + (k as u128);
-            let (res, b) = u[j + i].overflowing_sub(acc_lo);
-            u[j + i] = res;
-            carry = acc_hi + (b as u128);
-            i += 1;
-        }
-        let (s2, b1) = u[jn].overflowing_sub(carry);
-        u[jn] = s2;
-
-        // Over-estimate correction: q̂ was at most 1 too big (the 3-by-2
-        // refinement bounds the error), so a single add-back of v restores
-        // a non-negative dividend.
-        if b1 {
-            q_hat = q_hat.wrapping_sub(1);
-            let mut carry: u128 = 0;
-            let mut i = 0;
-            while i < n128 {
-                let (s1, c1) = u[j + i].overflowing_add(v[i]);
-                let (s2, c2) = s1.overflowing_add(carry);
-                u[j + i] = s2;
-                carry = (c1 as u128) + (c2 as u128);
-                i += 1;
-            }
-            u[jn] = u[jn].wrapping_add(carry);
-        }
-
-        // Store the u128 quotient digit as two u64 limbs (little-endian).
-        let lo64 = q_hat as u64;
-        let hi64 = (q_hat >> 64) as u64;
-        if 2 * j < quot.len() {
-            quot[2 * j] = lo64;
-        }
-        if 2 * j + 1 < quot.len() {
-            quot[2 * j + 1] = hi64;
         }
     }
 }
