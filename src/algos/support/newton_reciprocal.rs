@@ -226,20 +226,30 @@ impl NewtonReciprocal {
         let k_u64_raw = width_limbs + pow_len;
         let k_u64 = if k_u64_raw % 2 == 0 { k_u64_raw } else { k_u64_raw + 1 };
 
-        // numerator = 2^(64 * k_u64) — a single 1 in limb position k_u64.
         debug_assert!(k_u64 < MAX_R_U64, "num buffer too small");
-        let mut num = [0u64; MAX_R_U64];
-        num[k_u64] = 1u64;
 
-        // r = num / pow_scale.
+        // r = floor(2^(64*k_u64) / 10^scale). FAST: read the baked reciprocal
+        // (`consts::newton_recip` — the high `k_u64+1` limbs of the width-96
+        // per-scale reciprocal; bit-identical to the divide below, both exact
+        // integer floor division — `2^(64k)//10^s`). SLOW fallback (scale/width
+        // outside the baked range, or a non-wide build where the table is
+        // gated out → `None`): the one-shot Knuth divide.
         let mut r = [0u64; MAX_R_U64];
-        let mut rem = [0u64; MAX_POW_U64];
-        div_rem_mag_slice(
-            &num[..k_u64 + 1],
-            &pow_scale[..pow_len],
-            &mut r[..k_u64 + 1],
-            &mut rem[..pow_len],
-        );
+        if let Some(baked) = crate::consts::newton_recip_le(scale, width_limbs) {
+            debug_assert_eq!(baked.len(), k_u64 + 1, "baked newton recip length");
+            r[..k_u64 + 1].copy_from_slice(baked);
+        } else {
+            // numerator = 2^(64 * k_u64) — a single 1 in limb position k_u64.
+            let mut num = [0u64; MAX_R_U64];
+            num[k_u64] = 1u64;
+            let mut rem = [0u64; MAX_POW_U64];
+            div_rem_mag_slice(
+                &num[..k_u64 + 1],
+                &pow_scale[..pow_len],
+                &mut r[..k_u64 + 1],
+                &mut rem[..pow_len],
+            );
+        }
 
         // -- u128-packed mirrors ----------------------------------
         //
@@ -765,6 +775,47 @@ mod tests {
     use crate::algos::support::mg_divide::div_wide_pow10_chain;
     use crate::int::types::Int;
     use crate::support::rounding::RoundingMode;
+
+    /// The §9.20 baked reciprocal table must be BIT-IDENTICAL to what
+    /// `precompute` would compute at runtime (`floor(2^(64*k) / 10^s)` via
+    /// `div_rem_mag_slice`) — else the rescale result changes. Recompute the
+    /// reciprocal independently (10^scale via a *10 chain, then the production
+    /// divide) and compare to `consts::newton_recip_le`, across every baked
+    /// width and a scale sweep incl. the band edges.
+    #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
+    #[test]
+    fn baked_newton_recip_matches_runtime_divide() {
+        for &width_limbs in &[16usize, 24, 32, 48, 64, 96] {
+            for &scale in &[1u32, 38, 39, 77, 200, 461, 615, 924, 1231, 1850] {
+                let pow_len = (scale as usize / 19 + 3).max(1);
+                let mut pow = [0u64; MAX_POW_U64];
+                pow[0] = 1;
+                for _ in 0..scale {
+                    let mut carry = 0u64;
+                    for limb in pow[..pow_len].iter_mut() {
+                        let p = (*limb as u128) * 10 + carry as u128;
+                        *limb = p as u64;
+                        carry = (p >> 64) as u64;
+                    }
+                    assert_eq!(carry, 0, "10^{scale} overflowed pow_len");
+                }
+                let k_raw = width_limbs + pow_len;
+                let k = if k_raw % 2 == 0 { k_raw } else { k_raw + 1 };
+                let mut num = [0u64; MAX_R_U64];
+                num[k] = 1;
+                let mut r = [0u64; MAX_R_U64];
+                let mut rem = [0u64; MAX_POW_U64];
+                div_rem_mag_slice(&num[..k + 1], &pow[..pow_len], &mut r[..k + 1], &mut rem[..pow_len]);
+                let baked = crate::consts::newton_recip_le(scale, width_limbs)
+                    .expect("baked reciprocal in range");
+                assert_eq!(
+                    baked,
+                    &r[..k + 1],
+                    "baked != runtime divide: width_limbs={width_limbs} scale={scale}"
+                );
+            }
+        }
+    }
 
     // Exercises `Int<16>` (D307 storage); the divide scratch is sized by the
     // build's `MAX_WORK_N`, so this only runs where that tier is enabled.

@@ -48,33 +48,45 @@ use crate::int::types::compute_limbs::ComputeLimbs;
 use crate::int::types::traits::BigInt;
 use crate::support::rounding::RoundingMode;
 
-/// The three rescale kernels. `Newton` is a kept-alt: [`select`] does not
-/// currently route to it (uncached Newton is dominated by `MgChain`, 9.18.2),
-/// but the variant + its arm keep the kernel callable for a future baked-`r`
-/// revival.
+/// The three rescale kernels. `Newton` (baked-reciprocal Newton — the §9.20
+/// const table makes `precompute` a lookup, not a per-call Knuth divide) is
+/// now SELECTED for the wide / high-scale rescale (see [`select`]); `MgSingle`
+/// for `scale <= 38`, `MgChain` for the rest.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
     MgSingle,
     MgChain,
-    // Kept-alt — not produced by `select` while uncached Newton is dominated
-    // (9.18.2). Retained so the Newton arm (and kernel) stay live for a
-    // baked-`r` revival; remove with the kernel if that revival is rejected.
-    #[allow(dead_code)]
     Newton,
 }
 
 /// Pick the rescale kernel for `mag / 10^scale`. `const fn`, so a const
 /// `scale` (the `mul` door) folds the verdict to one arm and a runtime
-/// `scale` (the transcendental door) is a single branch. `width_bits` keys
-/// the (kept-alt) Newton width; it is unused while Newton is unselected.
+/// `scale` (the transcendental door) is a single branch. Keyed on
+/// `(scale, width_bits)`.
+///
+/// Routing (policy-map `newton_vs_mg`, with the §9.20 baked reciprocal table
+/// making `precompute` a lookup): `scale <= 38` → single-pass `MgSingle`. For
+/// the wide / high-scale rescale where the baked table applies — work width
+/// `24..=96` u64 limbs AND `scale` in `200..=1850` — baked-reciprocal
+/// **Newton** wins 1.5–13× over the `⌈scale/38⌉`-pass `MgChain` (the win grows
+/// with scale; 200 is a conservative continuous threshold safely past every
+/// per-width crossover). Everything else → `MgChain`: the narrow / `< 24`-limb
+/// widths (Newton doesn't win), `scale > 1850` (beyond the baked range — there
+/// `precompute` would fall back to a per-call Knuth divide, the 9.18.2 loss),
+/// and the marginal `39..200` band.
 #[inline]
 const fn select(scale: u32, width_bits: u32) -> Algorithm {
-    let _ = width_bits;
     if scale <= 38 {
-        Algorithm::MgSingle
-    } else {
-        Algorithm::MgChain
+        return Algorithm::MgSingle;
     }
+    let width_limbs = width_bits / 64;
+    // 1850 = `consts::newton_recip::NEWTON_RECIP_MAX_SCALE` (the baked cap);
+    // literal here so this always-compiled `select` doesn't depend on the
+    // wide-gated const.
+    if scale >= 200 && scale <= 1850 && width_limbs >= 24 && width_limbs <= 96 {
+        return Algorithm::Newton;
+    }
+    Algorithm::MgChain
 }
 
 /// `mag /= 10^scale` in place, rounded under `mode` — the **slice door**.

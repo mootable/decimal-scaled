@@ -24,4 +24,6 @@
 
 pub(crate) mod table;
 pub(crate) mod pow10;
+pub(crate) mod newton_recip;
 pub(crate) use table::*;
+pub(crate) use newton_recip::newton_recip_le;
