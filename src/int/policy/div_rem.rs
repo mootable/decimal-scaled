@@ -50,7 +50,15 @@ pub(crate) enum Algorithm {
     /// [`div_knuth`] — Knuth Algorithm D at base 2⁶⁴.
     Knuth,
     /// [`div_burnikel_ziegler_with_knuth`] — Burnikel–Ziegler outer
-    /// chunking, recursing to Knuth as its base case.
+    /// chunking, recursing to Knuth as its base case. Registered but
+    /// **unrouted**: the policy-map (af3011f6) measured it slowest or
+    /// near-slowest at every den_n ≥ 65 working width (u128-limb Knuth wins
+    /// that region 1.68–1.78×), so `select_for_limbs` no longer returns it.
+    /// Kept as a future-ready alternative — it can only win once the back-
+    /// multiply turns sub-quadratic at ≤128 limbs — and reachable via its
+    /// `#[cfg(test)]` differential. `#[allow(dead_code)]` suppresses the
+    /// never-constructed warning.
+    #[allow(dead_code)]
     BurnikelZieglerWithKnuth,
     /// [`div_knuth_u128_limb`] — Knuth Algorithm D on u128 limbs (base
     /// 2¹²⁸). The `LimbSize` axis as an engine: chosen only for the **wide
@@ -88,9 +96,14 @@ enum Select {
 
 // ── policy data: the benched crossover threshold ──────────────────────
 
-/// Burnikel–Ziegler engagement threshold, in u64 limbs: a divisor of at
-/// least this many effective limbs whose dividend is at least twice as
-/// wide takes [`div_burnikel_ziegler_with_knuth`]; otherwise Knuth.
+/// Burnikel–Ziegler engagement threshold, in u64 limbs. **No longer a
+/// routing threshold** — [`select_for_limbs`] does not return BZ (the
+/// policy-map af3011f6 showed it losing across the whole supported surface;
+/// the den_n ≥ 65 region routes to [`Algorithm::KnuthU128Limb`] instead).
+/// This const is now read ONLY by [`div_burnikel_ziegler_with_knuth`]'s own
+/// engagement guard (keeping BZ reachable via its `#[cfg(test)]` differential
+/// + the bench seam): a divisor of at least this many effective limbs whose
+/// dividend is `≥ 2·n` runs the BZ chunking, otherwise it shorts to Knuth.
 /// **Policy data** — the kernels take an already-chosen engine and never
 /// see this number.
 ///
@@ -134,34 +147,34 @@ pub(crate) const BZ_THRESHOLD: usize = 65;
 /// u128-limb Knuth ([`Algorithm::KnuthU128Limb`]) engagement threshold, in
 /// u64 divisor limbs. **Policy data.**
 ///
-/// **Benched** (`div_kernel_ab`, u128 base-2¹²⁸ vs u64 base-2⁶⁴). The
-/// limb-width win is **shape-dependent** — it materialises only on the
-/// **wide** `div` shape (a `2n`-limb dividend over an `n`-limb divisor; the
-/// decimal `/` scaled-numerator shape), and only once the divisor is wide
-/// enough for the aligned u128 carry-chain to outrun the doubled multiply
-/// count. A coarse sweep crossed with a `{24,26,28,30,32}` bisection of the
-/// even-`n` crossover (knuth median vs u128 median, wide shape):
+/// **Benched** (`div_kernel_ab`, u128 base-2¹²⁸ vs u64 base-2⁶⁴, wide `2n`/`n`
+/// shape — the decimal `/` scaled-numerator shape; the limb-width win
+/// materialises only on this shape). After the q̂-reciprocal was hoisted out
+/// of the per-digit loop (~12–15% faster u128), the policy-map (af3011f6)
+/// bisected the even-`n` crossover cleanly between 22 and 24:
 ///
-/// | divisor (limbs / tier) | wide `2n`/`n`  | balanced `n`/`n` |
-/// |------------------------|----------------|------------------|
-/// | 16 / D307              | u64 1.26×      | u64 1.31×        |
-/// | 24 / D462              | tie (1.00×)    | u64 1.56×        |
-/// | 26                     | u64 1.06×      | —                |
-/// | 28                     | u64 1.04×      | —                |
-/// | 30                     | tie (1.00×)    | —                |
-/// | 32 / D616              | **u128 1.02×** | u64 1.51×        |
-/// | 48 / D924              | **u128 1.20×** | u64 1.53×        |
-/// | 64 / D1232             | **u128 1.15×** | u64 1.50×        |
+/// | den_n | wide `2n`/`n`   |
+/// |-------|----------------|
+/// | 16    | u64 2.46×      |
+/// | 18    | u64 1.07×      |
+/// | 20    | tie (1.01×)    |
+/// | 22    | u64 1.02×      |
+/// | 24    | **u128 1.11×** |
+/// | 26    | **u128 1.10×** |
+/// | 30    | **u128 1.35×** |
+/// | 32    | **u128 1.42×** |
 ///
-/// So u128 only TIES at `den_n` 24–30 and is a clean win from `32` upward;
-/// the previous `24` gate engaged it across 24–30 where it actually loses
-/// 1.04–1.06×. u128 is therefore routed ONLY for an **even** divisor of
-/// `≥ 32` limbs whose dividend is `≥ 2·n` (the wide shape); the balanced
-/// shape (square `rem` / the `Int<N>` `/` operator) and every narrow/odd
-/// divisor stay base-2⁶⁴ Knuth, where u128 loses (balanced u64 wins ~1.5×
-/// at every width). The engine itself falls back to `div_knuth` for odd /
-/// `< 4`-limb divisors, so the matcher gate is the perf carve-out.
-const U128_DIV_THRESHOLD: usize = 32;
+/// Clean u128 win from **den_n = 24** upward (cross-checked: den_n=24 is u128
+/// 1.10–1.11× across two independent runs) — lowered from `32`, since the
+/// faster u128 engine now wins the 24–30 band it previously tied/lost. u128
+/// is routed for an **even** divisor `≥ 24` limbs with a `≥ 2·n` dividend,
+/// INCLUDING the den_n ≥ 65 working widths the decimal `÷10^w` rescale + wide
+/// transcendentals reach (same map: u128 beat the old Burnikel–Ziegler
+/// routing 1.68–1.78× at den_n 96/128). The balanced shape (square `rem` /
+/// the `Int<N>` `/` operator) and every narrow/odd divisor stay base-2⁶⁴
+/// Knuth, where u128 loses ~1.5×. The engine itself falls back to `div_knuth`
+/// for odd / `< 4`-limb divisors, so the matcher gate is the perf carve-out.
+const U128_DIV_THRESHOLD: usize = 24;
 
 // ── 3. the matcher: `select` (no const axis) → `select_for_limbs` ─────
 
@@ -195,9 +208,9 @@ const fn select() -> Select {
 ///   dividend at all.
 ///
 /// Routing: a single-limb divisor takes the hardware [`Algorithm::Rem`]
-/// path (covers every `10^scale`, `scale ≤ 19`); a divisor of at least
-/// [`BZ_THRESHOLD`] limbs whose dividend is at least twice as wide takes
-/// Burnikel–Ziegler; everything else takes Knuth.
+/// path (covers every `10^scale`, `scale ≤ 19`); a wide (`≥ 2·n` dividend)
+/// EVEN divisor of at least [`U128_DIV_THRESHOLD`] limbs takes the u128-limb
+/// Knuth engine; everything else takes base-2⁶⁴ Knuth.
 #[inline]
 pub(crate) fn select_for_limbs(num: &[u64], den: &[u64]) -> Algorithm {
     let den_n = effective_limbs(den);
@@ -205,18 +218,20 @@ pub(crate) fn select_for_limbs(num: &[u64], den: &[u64]) -> Algorithm {
     if den_n == 1 {
         return Algorithm::Rem;
     }
-    // `den_n >= 2` here. Both the wide engines (Burnikel–Ziegler, u128) want
-    // a `≥ 2·n` dividend, so the dividend's effective length is computed
-    // once — and lazily: only for a divisor wide enough to reach the smaller
-    // threshold. Every common `2..U128_DIV_THRESHOLD`-limb divisor returns
-    // Knuth without stripping the dividend at all.
+    // `den_n >= 2` here. The wide u128-limb engine wants a `≥ 2·n` dividend,
+    // so the dividend's effective length is computed once — and lazily: only
+    // for a divisor wide enough to reach the threshold. Every common
+    // `2..U128_DIV_THRESHOLD`-limb divisor returns Knuth without stripping the
+    // dividend at all.
     if den_n >= U128_DIV_THRESHOLD {
         let num_m = effective_limbs(num);
-        if den_n >= BZ_THRESHOLD && num_m >= 2 * den_n {
-            return Algorithm::BurnikelZieglerWithKnuth;
-        }
-        // Wide (`2n`-dividend) even divisor → the u128 limb-width engine wins
-        // here (and only here — the balanced shape stays Knuth).
+        // Wide (`2n`-dividend) even divisor → the u128 limb-width engine. This
+        // covers the WHOLE even-divisor wide region from `U128_DIV_THRESHOLD`
+        // up, INCLUDING the den_n ≥ 65 working widths the decimal `÷10^w`
+        // rescale + wide transcendentals reach: the policy-map (af3011f6)
+        // measured u128 beating the old Burnikel–Ziegler routing there
+        // 1.68–1.78× (96/128 limbs), so BZ is no longer routed (the balanced
+        // shape stays Knuth — u128 loses it ~1.5×).
         if den_n % 2 == 0 && num_m >= 2 * den_n {
             return Algorithm::KnuthU128Limb;
         }
