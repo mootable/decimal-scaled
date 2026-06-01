@@ -63,6 +63,7 @@
 
 #![cfg(any(feature = "d57", feature = "wide"))]
 
+#[cfg(feature = "std")]
 use crate::algo_x_support::seed::extract_top_u64;
 use crate::int::types::traits::BigInt;
 use crate::int::types::Int;
