@@ -32,7 +32,11 @@
 //! kernels into one generic over `C: WideTrigCore`, the table size `M`,
 //! and the per-band reduction/narrowing flags.
 
+use crate::algos::exp::exp_generic as eg;
+use crate::algos::support::exp_tang_table::exp_table_entry_baked;
 use crate::algos::support::wide_trig_core::WideTrigCore;
+use crate::int::types::compute_limbs::ComputeLimbs;
+use crate::int::types::traits::BigInt;
 use crate::support::rounding::RoundingMode;
 
 /// Tang-style `e^v_w` on an already-lifted working value `v_w` (`= x ·
@@ -57,7 +61,38 @@ pub(crate) fn tang_exp_fixed<
 >(
     v_w: C::W,
     w: u32,
-) -> C::W {
+) -> C::W
+where
+    <C::W as BigInt>::Scratch: ComputeLimbs,
+{
+    // Thin `WideTrigCore`-bound wrapper over the width-generic
+    // [`tang_exp_fixed_g`]: binds the work integer to `C::W` and supplies
+    // `ln 2` from `C::ln2::<SCALE>` (the crate's feature-flagged default
+    // rounding mode + the per-scale const-fold). One Tang `exp` kernel — the
+    // wide compositions call `tang_exp_fixed_g` directly at their `Wagm` work
+    // width.
+    tang_exp_fixed_g::<C::W, M, INTERNAL_EXTRA>(v_w, w, |ww| C::ln2::<SCALE>(ww))
+}
+
+/// Width-generic core of [`tang_exp_fixed`] — the Tang `exp` body over any
+/// [`BigInt`] work integer `S`, reusing the unified `exp_generic` fixed-point
+/// arithmetic leaves (the sibling of [`crate::algos::ln::ln_tang::tang_ln_fixed_g`]).
+///
+/// `ln 2` is supplied by an accessor `ln2(working_scale)` so the caller owns
+/// the rounding mode (the crate's feature-flagged default — never a hardcoded
+/// one); the Tang `exp` table is the already-width-generic
+/// [`exp_table_entry_baked`] (binary, scale-independent). `tang_exp_fixed::<C>`
+/// is the thin tier-bound wrapper; the wide compositions (`powf`/`exp2`/the
+/// hyperbolics) call this directly at their `Wagm` work width.
+#[must_use]
+pub(crate) fn tang_exp_fixed_g<S: BigInt, const M: u32, const INTERNAL_EXTRA: bool>(
+    v_w: S,
+    w: u32,
+    ln2: impl Fn(u32) -> S,
+) -> S
+where
+    S::Scratch: ComputeLimbs,
+{
     // Stage 0 (INTERNAL_EXTRA only): size an extended working scale
     // `w_ext = w + extra` from `|k|` so the `2^k` reassembly does not
     // amplify the reduction residual past the storage LSB. Matches the
@@ -65,8 +100,8 @@ pub(crate) fn tang_exp_fixed<
     // *Elementary Functions* 3rd ed., §11.1). `k` is scale-invariant, so
     // reuse the value computed at `w` below.
     let k = {
-        let one_w = C::one(w);
-        C::round_to_nearest_int(C::div_cached(v_w, C::ln2::<SCALE>(w), one_w), w)
+        let one_w = eg::one::<S>(w);
+        eg::round_to_nearest_int::<S>(eg::div_cached::<S>(v_w, ln2(w), one_w), w)
     };
 
     let (w_ext, v_ext, extra) = if INTERNAL_EXTRA {
@@ -80,31 +115,32 @@ pub(crate) fn tang_exp_fixed<
         let v_ext = if extra == 0 {
             v_w
         } else {
-            v_w * C::pow10(extra)
+            v_w * eg::pow10::<S>(extra)
         };
         (w + extra, v_ext, extra)
     } else {
         (w, v_w, 0)
     };
 
-    let one_w = C::one(w_ext);
+    let one_w = eg::one::<S>(w_ext);
     let pow10_w = one_w;
-    let l2 = C::ln2::<SCALE>(w_ext);
+    let l2 = ln2(w_ext);
 
     // Stage 1: v = k·ln 2 + s, |s| ≤ ln 2 / 2.
     let k_l2 = if k >= 0 {
-        l2 * C::lit(k as u128)
+        l2 * eg::lit::<S>(k)
     } else {
-        -(l2 * C::lit((-k) as u128))
+        -(l2 * eg::lit::<S>(-k))
     };
     let s = v_ext - k_l2;
 
     // Stage 2: s = j_signed · (ln 2 / M) + δ, |δ| ≤ ln 2 / (2M).
-    let j_signed = C::round_to_nearest_int(C::div_cached(s * C::lit(M as u128), l2, pow10_w), w_ext);
+    let j_signed =
+        eg::round_to_nearest_int::<S>(eg::div_cached::<S>(s * eg::lit::<S>(M as i128), l2, pow10_w), w_ext);
     let cj_signed_w = if j_signed >= 0 {
-        (l2 * C::lit(j_signed as u128)) / C::lit(M as u128)
+        (l2 * eg::lit::<S>(j_signed)) / eg::lit::<S>(M as i128)
     } else {
-        -((l2 * C::lit((-j_signed) as u128)) / C::lit(M as u128))
+        -((l2 * eg::lit::<S>(-j_signed)) / eg::lit::<S>(M as i128))
     };
     let delta = s - cj_signed_w;
     let (j_idx, k_adj) = if j_signed >= 0 {
@@ -119,8 +155,8 @@ pub(crate) fn tang_exp_fixed<
     let mut term = delta;
     let mut n: u128 = 2;
     loop {
-        term = C::mul(term, delta, w_ext) / C::lit(n);
-        if term == C::zero() {
+        term = eg::mul::<S>(term, delta, w_ext) / eg::lit::<S>(n as i128);
+        if term == eg::zero::<S>() {
             break;
         }
         sum = sum + term;
@@ -130,21 +166,21 @@ pub(crate) fn tang_exp_fixed<
         }
     }
 
-    let exp_cj = C::exp_table_entry::<SCALE>(w_ext, j_idx as usize, M);
-    let exp_s = C::mul(exp_cj, sum, w_ext);
+    let exp_cj = exp_table_entry_baked::<S>(w_ext, j_idx as usize, M, pow10_w);
+    let exp_s = eg::mul::<S>(exp_cj, sum, w_ext);
 
     let k_total = k + k_adj;
     let scaled_at_w_ext = if k_total >= 0 {
         let shift = k_total as u32;
         debug_assert!(
-            C::bit_length(exp_s) + shift < C::w_bits(),
+            eg::bit_length::<S>(exp_s) + shift < <S as BigInt>::BITS,
             "tang_exp_fixed: result overflows the representable range",
         );
         exp_s << shift
     } else {
         let neg_k = (-k_total) as u32;
-        if neg_k as u128 >= C::bit_length(exp_s) as u128 {
-            C::zero()
+        if neg_k as u128 >= eg::bit_length::<S>(exp_s) as u128 {
+            eg::zero::<S>()
         } else {
             exp_s >> neg_k
         }
@@ -156,9 +192,9 @@ pub(crate) fn tang_exp_fixed<
         // Narrow the extended-scale result back to `w` round-to-nearest
         // (ties up via the `+ half` bias). `extra` is bounded so
         // `10^extra` stays well inside the working width.
-        let p = C::pow10(extra);
-        let half = p / C::lit(2);
-        if scaled_at_w_ext >= C::zero() {
+        let p = eg::pow10::<S>(extra);
+        let half = p / eg::lit::<S>(2);
+        if scaled_at_w_ext >= eg::zero::<S>() {
             (scaled_at_w_ext + half) / p
         } else {
             -((-scaled_at_w_ext + half) / p)
@@ -194,7 +230,10 @@ pub(crate) fn exp_tang<
 >(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> C::Storage
+where
+    <C::W as BigInt>::Scratch: ComputeLimbs,
+{
     if raw == C::storage_zero() {
         return C::storage_one(SCALE);
     }

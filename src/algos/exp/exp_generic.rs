@@ -168,7 +168,7 @@ use crate::support::rounding::RoundingMode;
     }
     /// Rounds a working-scale value to the nearest integer (ties away
     /// from zero); used for the range-reduction quotient.
-    fn round_to_nearest_int<S: BigInt>(v: S, w: u32) -> i128 {
+    pub(crate) fn round_to_nearest_int<S: BigInt>(v: S, w: u32) -> i128 {
         let divisor = pow10::<S>(w);
         let (q, r) = v.div_rem(divisor);
         let half = divisor >> 1;
