@@ -3128,6 +3128,20 @@ macro_rules! decl_wide_transcendental {
                 let r_wide = $crate::algos::exp::exp_generic::exp_fixed::<Wexp>(v_wide, w);
                 $crate::int::types::traits::BigInt::resize_to::<Wagm>(r_wide)
             }
+            /// `Wagm` sibling of the macro `exp_fixed`: the GATED Series exp —
+            /// the fast `Wagm` kernel when the squaring peak fits, else the
+            /// `Wexp` lift ([`exp_fixed_wide_agm`]). Distinct from
+            /// `exp_fixed_agm` (the Brent-Salamin AGM exp). Bit-identical to
+            /// `exp_fixed::<SCALE>` on `W` while `Wagm == $Work`.
+            #[inline]
+            pub(crate) fn exp_fixed_series_agm(v_w: Wagm, w: u32) -> Wagm {
+                let cap = <Wagm as $crate::int::types::traits::BigInt>::BITS;
+                if exp_internal_peak_bits::<Wagm>(v_w, w, cap) < cap as u64 {
+                    $crate::algos::exp::exp_generic::exp_fixed::<Wagm>(v_w, w)
+                } else {
+                    exp_fixed_wide_agm(v_w, w)
+                }
+            }
 
             // ── log-base algorithm kernels (LnDivide) ──────────────────
             //
@@ -3806,14 +3820,15 @@ macro_rules! decl_wide_transcendental {
             #[must_use]
             pub fn sinh_cosh_strict(self) -> (Self, Self) {
                 let w = SCALE + $core::GUARD;
-                let v = $core::to_work(self.to_bits());
-                let ex = $core::exp_fixed::<SCALE>(v, w);
-                let enx = $core::div($core::one(w), ex, w);
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let v = $core::to_work_agm(self.to_bits());
+                let ex = $core::exp_fixed_series_agm(v, w);
+                let enx = $core::div_agm($core::one_agm(w), ex, w);
                 let sinh = (ex - enx) >> 1;
                 let cosh = (ex + enx) >> 1;
                 (
-                    Self::from_bits($core::round_to_storage(sinh, w, SCALE)),
-                    Self::from_bits($core::round_to_storage(cosh, w, SCALE)),
+                    Self::from_bits($core::round_to_storage_agm(sinh, w, SCALE)),
+                    Self::from_bits($core::round_to_storage_agm(cosh, w, SCALE)),
                 )
             }
 
@@ -4664,14 +4679,15 @@ macro_rules! decl_wide_transcendental {
                 mode: $crate::support::rounding::RoundingMode,
             ) -> (Self, Self) {
                 let w = SCALE + $core::GUARD;
-                let v = $core::to_work(self.to_bits());
-                let ex = $core::exp_fixed::<SCALE>(v, w);
-                let enx = $core::div($core::one(w), ex, w);
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let v = $core::to_work_agm(self.to_bits());
+                let ex = $core::exp_fixed_series_agm(v, w);
+                let enx = $core::div_agm($core::one_agm(w), ex, w);
                 let sinh = (ex - enx) >> 1;
                 let cosh = (ex + enx) >> 1;
                 (
-                    Self::from_bits($core::round_to_storage_with(sinh, w, SCALE, mode)),
-                    Self::from_bits($core::round_to_storage_with(cosh, w, SCALE, mode)),
+                    Self::from_bits($core::round_to_storage_with_g::<$core::Wagm>(sinh, w, SCALE, mode)),
+                    Self::from_bits($core::round_to_storage_with_g::<$core::Wagm>(cosh, w, SCALE, mode)),
                 )
             }
 
@@ -5202,11 +5218,12 @@ macro_rules! decl_wide_transcendental {
                     return self.sinh_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let v = $core::to_work_scaled(self.to_bits(), working_digits);
-                let ex = $core::exp_fixed::<SCALE>(v, w);
-                let enx = $core::div($core::one(w), ex, w);
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let v = $core::to_work_scaled_agm(self.to_bits(), working_digits);
+                let ex = $core::exp_fixed_series_agm(v, w);
+                let enx = $core::div_agm($core::one_agm(w), ex, w);
                 let r = (ex - enx) >> 1;
-                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+                Self::from_bits($core::round_to_storage_with_g::<$core::Wagm>(r, w, SCALE, mode))
             }
 
             /// Hyperbolic cosine with caller-chosen guard digits.
@@ -5231,11 +5248,12 @@ macro_rules! decl_wide_transcendental {
                     return self.cosh_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let v = $core::to_work_scaled(self.to_bits(), working_digits);
-                let ex = $core::exp_fixed::<SCALE>(v, w);
-                let enx = $core::div($core::one(w), ex, w);
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let v = $core::to_work_scaled_agm(self.to_bits(), working_digits);
+                let ex = $core::exp_fixed_series_agm(v, w);
+                let enx = $core::div_agm($core::one_agm(w), ex, w);
                 let r = (ex + enx) >> 1;
-                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+                Self::from_bits($core::round_to_storage_with_g::<$core::Wagm>(r, w, SCALE, mode))
             }
 
             /// Hyperbolic tangent with caller-chosen guard digits.
@@ -5260,11 +5278,12 @@ macro_rules! decl_wide_transcendental {
                     return self.tanh_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let v = $core::to_work_scaled(self.to_bits(), working_digits);
-                let ex = $core::exp_fixed::<SCALE>(v, w);
-                let enx = $core::div($core::one(w), ex, w);
-                let r = $core::div(ex - enx, ex + enx, w);
-                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let v = $core::to_work_scaled_agm(self.to_bits(), working_digits);
+                let ex = $core::exp_fixed_series_agm(v, w);
+                let enx = $core::div_agm($core::one_agm(w), ex, w);
+                let r = $core::div_agm(ex - enx, ex + enx, w);
+                Self::from_bits($core::round_to_storage_with_g::<$core::Wagm>(r, w, SCALE, mode))
             }
 
             /// Joint sinh/cosh with caller-chosen guard digits.
@@ -5289,14 +5308,15 @@ macro_rules! decl_wide_transcendental {
                     return self.sinh_cosh_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let v = $core::to_work_scaled(self.to_bits(), working_digits);
-                let ex = $core::exp_fixed::<SCALE>(v, w);
-                let enx = $core::div($core::one(w), ex, w);
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let v = $core::to_work_scaled_agm(self.to_bits(), working_digits);
+                let ex = $core::exp_fixed_series_agm(v, w);
+                let enx = $core::div_agm($core::one_agm(w), ex, w);
                 let sinh = (ex - enx) >> 1;
                 let cosh = (ex + enx) >> 1;
                 (
-                    Self::from_bits($core::round_to_storage_with(sinh, w, SCALE, mode)),
-                    Self::from_bits($core::round_to_storage_with(cosh, w, SCALE, mode)),
+                    Self::from_bits($core::round_to_storage_with_g::<$core::Wagm>(sinh, w, SCALE, mode)),
+                    Self::from_bits($core::round_to_storage_with_g::<$core::Wagm>(cosh, w, SCALE, mode)),
                 )
             }
 
