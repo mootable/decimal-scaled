@@ -3068,6 +3068,17 @@ macro_rules! decl_wide_transcendental {
             pub(crate) fn exp_fixed_routed_agm<const SCALE: u32>(v_w: Wagm, w: u32) -> Wagm {
                 $crate::algos::exp::exp_generic::exp_fixed::<Wagm>(v_w, w)
             }
+            /// `Wagm` sibling of [`exp_fixed_wide`]: the near-overflow exp
+            /// path that lifts to `Wexp` for the squaring peak, then narrows
+            /// back — here to `Wagm` instead of `W`. The `Wexp` computation is
+            /// the SAME generic kernel, so it is bit-identical while
+            /// `Wagm == $Work`.
+            #[inline]
+            pub(crate) fn exp_fixed_wide_agm(v_w: Wagm, w: u32) -> Wagm {
+                let v_wide = $crate::int::types::traits::BigInt::resize_to::<Wexp>(v_w);
+                let r_wide = $crate::algos::exp::exp_generic::exp_fixed::<Wexp>(v_wide, w);
+                $crate::int::types::traits::BigInt::resize_to::<Wagm>(r_wide)
+            }
 
             // ── log-base algorithm kernels (LnDivide) ──────────────────
             //
@@ -3279,14 +3290,15 @@ macro_rules! decl_wide_transcendental {
                 }
                 let k_lift = exp2_result_int_digits(raw, SCALE);
                 let base_guard = GUARD + k_lift;
-                round_to_storage_directed(base_guard, SCALE, mode, |guard| {
+                // Two-core: composition runs on the wide `Wagm` work int.
+                round_to_storage_directed::<Wagm>(base_guard, SCALE, mode, |guard| {
                     let w = SCALE + guard;
-                    let arg = mul(
-                        to_work_scaled(raw, guard),
-                        ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                    let arg = mul_agm(
+                        to_work_scaled_agm(raw, guard),
+                        $crate::consts::ln2_by_working_scale::<Wagm>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
                         w,
                     );
-                    exp_fixed_wide(arg, w)
+                    exp_fixed_wide_agm(arg, w)
                 })
             }
 
@@ -3304,9 +3316,10 @@ macro_rules! decl_wide_transcendental {
                     return <$Storage as $crate::int::types::traits::BigInt>::TEN.pow(SCALE);
                 }
                 let w = SCALE + working_digits;
-                let arg = mul(to_work_scaled(raw, working_digits), ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), w);
-                let r = exp_fixed_routed::<SCALE>(arg, w);
-                round_to_storage_with(r, w, SCALE, mode)
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let arg = mul_agm(to_work_scaled_agm(raw, working_digits), $crate::consts::ln2_by_working_scale::<Wagm>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), w);
+                let r = exp_fixed_routed_agm::<SCALE>(arg, w);
+                round_to_storage_with_g::<Wagm>(r, w, SCALE, mode)
             }
         }
 
@@ -3512,13 +3525,14 @@ macro_rules! decl_wide_transcendental {
                     return Self::ONE;
                 }
                 let w = SCALE + $core::GUARD;
-                let arg = $core::mul(
-                    $core::to_work(raw),
-                    $core::ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let arg = $core::mul_agm(
+                    $core::to_work_agm(raw),
+                    $crate::consts::ln2_by_working_scale::<$core::Wagm>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
                     w,
                 );
-                let r = $core::exp_fixed_routed::<SCALE>(arg, w);
-                Self::from_bits($core::round_to_storage(r, w, SCALE))
+                let r = $core::exp_fixed_routed_agm::<SCALE>(arg, w);
+                Self::from_bits($core::round_to_storage_agm(r, w, SCALE))
             }
 
             /// `self` raised to the power `exp`, as `exp(exp · ln self)`.
