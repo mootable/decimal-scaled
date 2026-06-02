@@ -987,36 +987,44 @@ macro_rules! decl_wide_transcendental {
             /// base_raw^(−k) == 10^(scale·(−k + 1))`. Overflow of the
             /// power short-circuits to `false` (a value that large is not
             /// a representable exact power at this width).
-            pub(crate) fn log_is_exact_int(value_raw: W, base_raw: W, scale: u32, k: i128) -> bool {
-                let one_s = pow10_table(scale);
+            pub(crate) fn log_is_exact_int<S: $crate::int::types::traits::BigInt>(
+                value_raw: S,
+                base_raw: S,
+                scale: u32,
+                k: i128,
+            ) -> bool {
+                let one_s = $crate::algos::exp::exp_generic::pow10::<S>(scale);
                 if k == 0 {
                     return value_raw == one_s;
                 }
                 // Reduce to the integer domain so the running power never
                 // carries the `· 10^scale` factor (which tips into a wider
-                // limb tier or overflows `W` at high scale). An integer
-                // `base^k = value` can only be an exact storage point when
-                // `base` is itself an exact integer multiple of `10^scale`
-                // (only the near-1 ill-conditioning probes are not, and
-                // those are never exact powers).
+                // limb tier or overflows the work int at high scale). An
+                // integer `base^k = value` can only be an exact storage point
+                // when `base` is itself an exact integer multiple of
+                // `10^scale` (only the near-1 ill-conditioning probes are not,
+                // and those are never exact powers).
                 let (bq, br) = base_raw.div_rem(one_s);
-                if br != lit(0) {
+                if br != S::ZERO {
                     return false;
                 }
                 let base_int = bq;
                 let kk = k.unsigned_abs();
-                let limit_bits = W::BITS - 4;
+                let limit_bits = <S as $crate::int::types::traits::BigInt>::BITS - 4;
                 if k > 0 {
                     // value == base^|k|: require `value` itself integral.
                     let (vq, vr) = value_raw.div_rem(one_s);
-                    if vr != lit(0) {
+                    if vr != S::ZERO {
                         return false;
                     }
                     let value_int = vq;
-                    let mut pow = lit(1);
+                    let mut pow = S::ONE;
                     let mut i: u128 = 0;
                     while i < kk {
-                        if bit_length(pow) + bit_length(base_int) >= limit_bits {
+                        if $crate::algos::exp::exp_generic::bit_length::<S>(pow)
+                            + $crate::algos::exp::exp_generic::bit_length::<S>(base_int)
+                            >= limit_bits
+                        {
                             return false;
                         }
                         pow = pow * base_int;
@@ -1029,7 +1037,10 @@ macro_rules! decl_wide_transcendental {
                     let mut cur = value_raw;
                     let mut i: u128 = 0;
                     while i < kk {
-                        if bit_length(cur) + bit_length(base_int) >= limit_bits {
+                        if $crate::algos::exp::exp_generic::bit_length::<S>(cur)
+                            + $crate::algos::exp::exp_generic::bit_length::<S>(base_int)
+                            >= limit_bits
+                        {
                             return false;
                         }
                         cur = cur * base_int;
@@ -2942,6 +2953,14 @@ macro_rules! decl_wide_transcendental {
                     $crate::support::rounding::DEFAULT_ROUNDING_MODE,
                 )
             }
+            #[inline]
+            pub(crate) fn div_agm(a: Wagm, b: Wagm, w: u32) -> Wagm {
+                $crate::algos::exp::exp_generic::div::<Wagm>(a, b, w)
+            }
+            #[inline]
+            pub(crate) fn round_to_nearest_int_agm(v: Wagm, w: u32) -> i128 {
+                $crate::algos::exp::exp_generic::round_to_nearest_int::<Wagm>(v, w)
+            }
             /// Tang/Series-routed `ln(v) -> v` at the wide composition work
             /// width `Wagm` — the `Wagm` sibling of [`ln_fixed_routed`],
             /// calling the SAME generic kernels (`tang_ln_fixed_g` /
@@ -3014,18 +3033,19 @@ macro_rules! decl_wide_transcendental {
                 if braw <= z {
                     panic!(concat!(stringify!($Type), "::log: base must be positive"));
                 }
-                // Probe at the base guard to reject base == 1.
+                // Probe at the base guard to reject base == 1. Two-core:
+                // the composition runs on the wide `Wagm` work int.
                 let w0 = SCALE + GUARD;
-                let ln_b0 = ln_fixed_routed::<SCALE>(to_work(braw), w0);
-                if ln_b0 == zero() {
+                let ln_b0 = ln_fixed_routed_agm::<SCALE>(to_work_agm(braw), w0);
+                if ln_b0 == zero_agm() {
                     panic!(concat!(stringify!($Type), "::log: base must not equal 1"));
                 }
                 // Exact-power pin: `self == base^k` ⇒ result is exactly
                 // the integer `k` (see `log10_strict_with`).
                 {
-                    let r0 = div(ln_fixed_routed::<SCALE>(to_work(raw), w0), ln_b0, w0);
-                    let k = round_to_nearest_int(r0, w0);
-                    if log_is_exact_int(to_work_scaled(raw, 0), to_work_scaled(braw, 0), SCALE, k) {
+                    let r0 = div_agm(ln_fixed_routed_agm::<SCALE>(to_work_agm(raw), w0), ln_b0, w0);
+                    let k = round_to_nearest_int_agm(r0, w0);
+                    if log_is_exact_int::<Wagm>(to_work_scaled_agm(raw, 0), to_work_scaled_agm(braw, 0), SCALE, k) {
                         return exact_int_at_scale(k, SCALE);
                     }
                 }
@@ -3033,10 +3053,10 @@ macro_rules! decl_wide_transcendental {
                 // Ziv escalation: recompute `ln(self)/ln(base)` at the
                 // requested guard so Trunc/Floor/Ceiling decide on the
                 // true residual sign, not the base-guard approximation.
-                round_to_storage_directed(GUARD, SCALE, mode, |guard| {
+                round_to_storage_directed::<Wagm>(GUARD, SCALE, mode, |guard| {
                     let w = SCALE + guard;
-                    let ln_b = ln_fixed_routed::<SCALE>(to_work_scaled(braw, guard), w);
-                    div(ln_fixed_routed::<SCALE>(to_work_scaled(raw, guard), w), ln_b, w)
+                    let ln_b = ln_fixed_routed_agm::<SCALE>(to_work_scaled_agm(braw, guard), w);
+                    div_agm(ln_fixed_routed_agm::<SCALE>(to_work_scaled_agm(raw, guard), w), ln_b, w)
                 })
             }
 
@@ -3063,12 +3083,13 @@ macro_rules! decl_wide_transcendental {
                     panic!(concat!(stringify!($Type), "::log: base must be positive"));
                 }
                 let w = SCALE + working_digits;
-                let ln_b = ln_fixed_routed::<SCALE>(to_work_scaled(braw, working_digits), w);
-                if ln_b == zero() {
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let ln_b = ln_fixed_routed_agm::<SCALE>(to_work_scaled_agm(braw, working_digits), w);
+                if ln_b == zero_agm() {
                     panic!(concat!(stringify!($Type), "::log: base must not equal 1"));
                 }
-                let r = div(ln_fixed_routed::<SCALE>(to_work_scaled(raw, working_digits), w), ln_b, w);
-                round_to_storage_with(r, w, SCALE, mode)
+                let r = div_agm(ln_fixed_routed_agm::<SCALE>(to_work_scaled_agm(raw, working_digits), w), ln_b, w);
+                round_to_storage_with_g::<Wagm>(r, w, SCALE, mode)
             }
 
             /// Strict-guard `log2(x)` under `mode`, on raw storage.
@@ -3084,23 +3105,24 @@ macro_rules! decl_wide_transcendental {
                     panic!(concat!(stringify!($Type), "::log2: argument must be positive"));
                 }
                 {
+                    // Two-core: composition runs on the wide `Wagm` work int.
                     let w0 = SCALE + GUARD;
-                    let r0 = div(
-                        ln_fixed_routed::<SCALE>(to_work(raw), w0),
-                        ln2_cf::<SCALE>(w0, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                    let r0 = div_agm(
+                        ln_fixed_routed_agm::<SCALE>(to_work_agm(raw), w0),
+                        $crate::consts::ln2_by_working_scale::<Wagm>(w0, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
                         w0,
                     );
-                    let k = round_to_nearest_int(r0, w0);
-                    let base2 = pow10_table(SCALE) + pow10_table(SCALE);
-                    if log_is_exact_int(to_work_scaled(raw, 0), base2, SCALE, k) {
+                    let k = round_to_nearest_int_agm(r0, w0);
+                    let base2 = one_agm(SCALE) + one_agm(SCALE);
+                    if log_is_exact_int::<Wagm>(to_work_scaled_agm(raw, 0), base2, SCALE, k) {
                         return exact_int_at_scale(k, SCALE);
                     }
                 }
-                round_to_storage_directed(GUARD, SCALE, mode, |guard| {
+                round_to_storage_directed::<Wagm>(GUARD, SCALE, mode, |guard| {
                     let w = SCALE + guard;
-                    div(
-                        ln_fixed_routed::<SCALE>(to_work_scaled(raw, guard), w),
-                        ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                    div_agm(
+                        ln_fixed_routed_agm::<SCALE>(to_work_scaled_agm(raw, guard), w),
+                        $crate::consts::ln2_by_working_scale::<Wagm>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
                         w,
                     )
                 })
@@ -3120,8 +3142,8 @@ macro_rules! decl_wide_transcendental {
                     panic!(concat!(stringify!($Type), "::log2: argument must be positive"));
                 }
                 let w = SCALE + working_digits;
-                let r = div(ln_fixed_routed::<SCALE>(to_work_scaled(raw, working_digits), w), ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), w);
-                round_to_storage_with(r, w, SCALE, mode)
+                let r = div_agm(ln_fixed_routed_agm::<SCALE>(to_work_scaled_agm(raw, working_digits), w), $crate::consts::ln2_by_working_scale::<Wagm>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), w);
+                round_to_storage_with_g::<Wagm>(r, w, SCALE, mode)
             }
 
             /// Strict-guard `log10(x)` under `mode`, on raw storage.
@@ -3134,23 +3156,24 @@ macro_rules! decl_wide_transcendental {
                     panic!(concat!(stringify!($Type), "::log10: argument must be positive"));
                 }
                 {
+                    // Two-core: composition runs on the wide `Wagm` work int.
                     let w0 = SCALE + GUARD;
-                    let r0 = div(
-                        ln_fixed_routed::<SCALE>(to_work(raw), w0),
-                        ln10_cf::<SCALE>(w0, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                    let r0 = div_agm(
+                        ln_fixed_routed_agm::<SCALE>(to_work_agm(raw), w0),
+                        $crate::consts::ln10_by_working_scale::<Wagm>(w0, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
                         w0,
                     );
-                    let k = round_to_nearest_int(r0, w0);
-                    let base10 = pow10_table(SCALE + 1);
-                    if log_is_exact_int(to_work_scaled(raw, 0), base10, SCALE, k) {
+                    let k = round_to_nearest_int_agm(r0, w0);
+                    let base10 = one_agm(SCALE + 1);
+                    if log_is_exact_int::<Wagm>(to_work_scaled_agm(raw, 0), base10, SCALE, k) {
                         return exact_int_at_scale(k, SCALE);
                     }
                 }
-                round_to_storage_directed(GUARD, SCALE, mode, |guard| {
+                round_to_storage_directed::<Wagm>(GUARD, SCALE, mode, |guard| {
                     let w = SCALE + guard;
-                    div(
-                        ln_fixed_routed::<SCALE>(to_work_scaled(raw, guard), w),
-                        ln10_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                    div_agm(
+                        ln_fixed_routed_agm::<SCALE>(to_work_scaled_agm(raw, guard), w),
+                        $crate::consts::ln10_by_working_scale::<Wagm>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
                         w,
                     )
                 })
@@ -3170,8 +3193,8 @@ macro_rules! decl_wide_transcendental {
                     panic!(concat!(stringify!($Type), "::log10: argument must be positive"));
                 }
                 let w = SCALE + working_digits;
-                let r = div(ln_fixed_routed::<SCALE>(to_work_scaled(raw, working_digits), w), ln10_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), w);
-                round_to_storage_with(r, w, SCALE, mode)
+                let r = div_agm(ln_fixed_routed_agm::<SCALE>(to_work_scaled_agm(raw, working_digits), w), $crate::consts::ln10_by_working_scale::<Wagm>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), w);
+                round_to_storage_with_g::<Wagm>(r, w, SCALE, mode)
             }
 
             /// Strict-guard `exp2(x) = 2^x` under `mode`, on raw storage.
@@ -3347,12 +3370,13 @@ macro_rules! decl_wide_transcendental {
                     panic!(concat!(stringify!($Type), "::log: base must be positive"));
                 }
                 let w = SCALE + $core::GUARD;
-                let ln_b = $core::ln_fixed_routed::<SCALE>($core::to_work(braw), w);
-                if ln_b == $core::zero() {
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let ln_b = $core::ln_fixed_routed_agm::<SCALE>($core::to_work_agm(braw), w);
+                if ln_b == $core::zero_agm() {
                     panic!(concat!(stringify!($Type), "::log: base must not equal 1"));
                 }
-                let r = $core::div($core::ln_fixed_routed::<SCALE>($core::to_work(raw), w), ln_b, w);
-                Self::from_bits($core::round_to_storage(r, w, SCALE))
+                let r = $core::div_agm($core::ln_fixed_routed_agm::<SCALE>($core::to_work_agm(raw), w), ln_b, w);
+                Self::from_bits($core::round_to_storage_agm(r, w, SCALE))
             }
 
             /// Base-2 logarithm. Strict and correctly rounded. Panics if
@@ -3368,12 +3392,13 @@ macro_rules! decl_wide_transcendental {
                     ));
                 }
                 let w = SCALE + $core::GUARD;
-                let r = $core::div(
-                    $core::ln_fixed_routed::<SCALE>($core::to_work(raw), w),
-                    $core::ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let r = $core::div_agm(
+                    $core::ln_fixed_routed_agm::<SCALE>($core::to_work_agm(raw), w),
+                    $crate::consts::ln2_by_working_scale::<$core::Wagm>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
                     w,
                 );
-                Self::from_bits($core::round_to_storage(r, w, SCALE))
+                Self::from_bits($core::round_to_storage_agm(r, w, SCALE))
             }
 
             /// Base-10 logarithm. Strict and correctly rounded. Panics
@@ -3389,12 +3414,13 @@ macro_rules! decl_wide_transcendental {
                     ));
                 }
                 let w = SCALE + $core::GUARD;
-                let r = $core::div(
-                    $core::ln_fixed_routed::<SCALE>($core::to_work(raw), w),
-                    $core::ln10_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let r = $core::div_agm(
+                    $core::ln_fixed_routed_agm::<SCALE>($core::to_work_agm(raw), w),
+                    $crate::consts::ln10_by_working_scale::<$core::Wagm>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
                     w,
                 );
-                Self::from_bits($core::round_to_storage(r, w, SCALE))
+                Self::from_bits($core::round_to_storage_agm(r, w, SCALE))
             }
 
             /// `e^self`. Strict and correctly rounded. Panics if the
