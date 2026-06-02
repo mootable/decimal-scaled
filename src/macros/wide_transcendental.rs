@@ -2700,6 +2700,7 @@ macro_rules! decl_wide_transcendental {
             impl $crate::algos::support::wide_trig_core::WideTrigCore for Core {
                 type W = W;
                 type Wexp = Wexp;
+                type Wagm = Wagm;
                 type Storage = $Storage;
                 const GUARD: u32 = GUARD;
 
@@ -2731,6 +2732,19 @@ macro_rules! decl_wide_transcendental {
                     mode: $crate::support::rounding::RoundingMode,
                 ) -> $Storage {
                     round_to_storage_with(v, w, target, mode)
+                }
+                #[inline]
+                fn to_work_scaled_agm(raw: $Storage, working_digits: u32) -> Wagm {
+                    to_work_scaled_agm(raw, working_digits)
+                }
+                #[inline]
+                fn round_to_storage_with_agm(
+                    v: Wagm,
+                    w: u32,
+                    target: u32,
+                    mode: $crate::support::rounding::RoundingMode,
+                ) -> $Storage {
+                    round_to_storage_with_g::<Wagm>(v, w, target, mode)
                 }
                 #[inline]
                 fn round_to_storage_directed(

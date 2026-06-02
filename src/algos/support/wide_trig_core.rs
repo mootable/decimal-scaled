@@ -63,6 +63,11 @@ pub(crate) trait WideTrigCore {
     /// consumed by the `*_series` functions directly; threaded so a
     /// later `BigInt`-generic core lift has the binding available.
     type Wexp: BigInt + Copy + PartialEq;
+    /// The wide composition / AGM work integer (the two-core split): the
+    /// compositions + the AGM run on `Wagm` so a narrowed primitive
+    /// [`Self::W`] cannot clip their precision. Aliases [`Self::W`] until
+    /// the primitive `$Work` is narrowed.
+    type Wagm: BigInt + Copy + PartialEq;
     /// The tier's storage integer (`x · 10^SCALE`).
     type Storage: BigInt + Copy + PartialEq;
 
@@ -89,6 +94,18 @@ pub(crate) trait WideTrigCore {
     /// under `mode` and narrows to storage.
     fn round_to_storage_with(
         v: Self::W,
+        w: u32,
+        target: u32,
+        mode: RoundingMode,
+    ) -> Self::Storage;
+    /// `Wagm` storage-bridge: lift raw storage to the wide composition work
+    /// integer (the `Wagm` sibling of [`Self::to_work_scaled`]).
+    fn to_work_scaled_agm(raw: Self::Storage, working_digits: u32) -> Self::Wagm;
+    /// `Wagm` storage-bridge: narrow a `Wagm` composition value at scale `w`
+    /// to scale `target` under `mode` (the `Wagm` sibling of
+    /// [`Self::round_to_storage_with`]).
+    fn round_to_storage_with_agm(
+        v: Self::Wagm,
         w: u32,
         target: u32,
         mode: RoundingMode,

@@ -32,53 +32,87 @@
 //! — the generic Tang `exp_tang::tang_exp_fixed::<C, M, INTERNAL_EXTRA>`
 //! surface, shared by every band including D307 140..=160).
 
+use crate::algos::exp::exp_generic as eg;
+use crate::algos::exp::exp_tang::tang_exp_fixed_g;
 use crate::algos::support::wide_trig_core::WideTrigCore;
+use crate::int::types::compute_limbs::ComputeLimbs;
 use crate::int::types::traits::BigInt;
 use crate::support::rounding::RoundingMode;
 
-/// Joint `(eˣ, e⁻ˣ)` pair at working scale `w`. One `exp` call + one
-/// reciprocal divide.
+/// Joint `(eˣ, e⁻ˣ)` pair at the wide composition work width `C::Wagm`
+/// (the two-core split). One Tang `exp` call + one reciprocal divide. `M`
+/// is the tier's Tang table size, `IE` its `INTERNAL_EXTRA` flag — the same
+/// pair the per-tier `policy::trig` arm previously baked into the passed
+/// `tang_exp_fixed` fn pointer.
 #[inline]
-fn ex_enx<C: WideTrigCore>(exp_fixed: fn(C::W, u32) -> C::W, v: C::W, w: u32) -> (C::W, C::W) {
-    let ex = exp_fixed(v, w);
-    let enx = C::div(C::one(w), ex, w);
+fn ex_enx_agm<C: WideTrigCore, const M: u32, const IE: bool>(
+    v: C::Wagm,
+    w: u32,
+) -> (C::Wagm, C::Wagm)
+where
+    <C::Wagm as BigInt>::Scratch: ComputeLimbs,
+{
+    let ex = tang_exp_fixed_g::<C::Wagm, M, IE>(v, w, |ww| {
+        crate::consts::ln2_by_working_scale::<C::Wagm>(
+            ww,
+            crate::support::rounding::DEFAULT_ROUNDING_MODE,
+        )
+    });
+    let enx = eg::div::<C::Wagm>(eg::one::<C::Wagm>(w), ex, w);
     (ex, enx)
 }
 
 /// `sinh_strict` for a wide tier — generic over the tier `C`, the band's
-/// narrow guard `GUARD`, and its working-scale `exp` kernel.
+/// narrow guard `GUARD`, and the Tang `exp` config `(M, IE)`. Two-core:
+/// runs on the wide `C::Wagm`.
 #[inline]
 #[must_use]
-pub(crate) fn sinh_exp_identity_with_tang<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
+pub(crate) fn sinh_exp_identity_with_tang<
+    C: WideTrigCore,
+    const SCALE: u32,
+    const GUARD: u32,
+    const M: u32,
+    const IE: bool,
+>(
     raw: C::Storage,
     mode: RoundingMode,
-    exp_fixed: fn(C::W, u32) -> C::W,
-) -> C::Storage {
+) -> C::Storage
+where
+    <C::Wagm as BigInt>::Scratch: ComputeLimbs,
+{
     let w = SCALE + GUARD;
-    let v = C::to_work_scaled(raw, GUARD);
-    let (ex, enx) = ex_enx::<C>(exp_fixed, v, w);
-    let r = (ex - enx) / C::lit(2);
-    C::round_to_storage_with(r, w, SCALE, mode)
+    let v = C::to_work_scaled_agm(raw, GUARD);
+    let (ex, enx) = ex_enx_agm::<C, M, IE>(v, w);
+    let r = (ex - enx) / eg::lit::<C::Wagm>(2);
+    C::round_to_storage_with_agm(r, w, SCALE, mode)
 }
 
-/// `cosh_strict` for a wide tier — generic over the tier `C`, the band's
-/// narrow guard `GUARD`, and its working-scale `exp` kernel.
+/// `cosh_strict` for a wide tier — see [`sinh_exp_identity_with_tang`].
+/// Two-core: runs on the wide `C::Wagm`.
 #[inline]
 #[must_use]
-pub(crate) fn cosh_exp_identity_with_tang<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
+pub(crate) fn cosh_exp_identity_with_tang<
+    C: WideTrigCore,
+    const SCALE: u32,
+    const GUARD: u32,
+    const M: u32,
+    const IE: bool,
+>(
     raw: C::Storage,
     mode: RoundingMode,
-    exp_fixed: fn(C::W, u32) -> C::W,
-) -> C::Storage {
+) -> C::Storage
+where
+    <C::Wagm as BigInt>::Scratch: ComputeLimbs,
+{
     let w = SCALE + GUARD;
-    let v = C::to_work_scaled(raw, GUARD);
-    let (ex, enx) = ex_enx::<C>(exp_fixed, v, w);
-    let r = (ex + enx) / C::lit(2);
-    C::round_to_storage_with(r, w, SCALE, mode)
+    let v = C::to_work_scaled_agm(raw, GUARD);
+    let (ex, enx) = ex_enx_agm::<C, M, IE>(v, w);
+    let r = (ex + enx) / eg::lit::<C::Wagm>(2);
+    C::round_to_storage_with_agm(r, w, SCALE, mode)
 }
 
-/// `tanh_strict` for a wide tier — generic over the tier `C`, the band's
-/// narrow guard `GUARD`, and its working-scale `exp` kernel.
+/// `tanh_strict` for a wide tier — see [`sinh_exp_identity_with_tang`].
+/// Two-core: runs on the wide `C::Wagm`.
 ///
 /// Carries the tiny-argument analytic band: for `tanh(x) = x − x³/3 + …`
 /// the cubic sits below one storage ULP yet is strictly positive, so the
@@ -88,11 +122,19 @@ pub(crate) fn cosh_exp_identity_with_tang<C: WideTrigCore, const SCALE: u32, con
 /// `raw`.
 #[inline]
 #[must_use]
-pub(crate) fn tanh_exp_identity_with_tang<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
+pub(crate) fn tanh_exp_identity_with_tang<
+    C: WideTrigCore,
+    const SCALE: u32,
+    const GUARD: u32,
+    const M: u32,
+    const IE: bool,
+>(
     raw: C::Storage,
     mode: RoundingMode,
-    exp_fixed: fn(C::W, u32) -> C::W,
-) -> C::Storage {
+) -> C::Storage
+where
+    <C::Wagm as BigInt>::Scratch: ComputeLimbs,
+{
     let zero = C::storage_zero();
     if raw != zero {
         let thresh_exp = SCALE - SCALE.div_ceil(3);
@@ -111,8 +153,8 @@ pub(crate) fn tanh_exp_identity_with_tang<C: WideTrigCore, const SCALE: u32, con
     // half a storage ULP, so a single narrowing is correctly rounded for
     // every mode.
     let w = SCALE + GUARD;
-    let v = C::to_work_scaled(raw, GUARD);
-    let (ex, enx) = ex_enx::<C>(exp_fixed, v, w);
-    let r = C::div(ex - enx, ex + enx, w);
-    C::round_to_storage_with(r, w, SCALE, mode)
+    let v = C::to_work_scaled_agm(raw, GUARD);
+    let (ex, enx) = ex_enx_agm::<C, M, IE>(v, w);
+    let r = eg::div::<C::Wagm>(ex - enx, ex + enx, w);
+    C::round_to_storage_with_agm(r, w, SCALE, mode)
 }
