@@ -40,7 +40,10 @@
 //! (`GUARD = 8` or `10`) and the artanh-series iteration cap — into one
 //! generic over `C: WideTrigCore`.
 
+use crate::algos::exp::exp_generic as eg;
+use crate::algos::support::ln_tang_table::ln_table_entry_baked;
 use crate::algos::support::wide_trig_core::WideTrigCore;
+use crate::int::types::compute_limbs::ComputeLimbs;
 use crate::int::types::traits::BigInt;
 use crate::support::rounding::RoundingMode;
 
@@ -115,26 +118,58 @@ pub(crate) fn tang_ln_fixed<
 >(
     v_w: C::W,
     w: u32,
-) -> C::W {
+) -> C::W
+where
+    <C::W as BigInt>::Scratch: ComputeLimbs,
+{
+    // Thin `WideTrigCore`-bound wrapper over the width-generic
+    // [`tang_ln_fixed_g`]: binds the work integer to `C::W` and supplies
+    // `ln 2` from the tier's `C::ln2::<SCALE>` (which carries the crate's
+    // feature-flagged default rounding mode AND the per-scale const-fold).
+    // One Tang `ln` kernel — the wide compositions call `tang_ln_fixed_g`
+    // directly at their `Wagm` work width.
+    tang_ln_fixed_g::<C::W, CAP, INTERNAL_EXTRA>(v_w, w, |ww| C::ln2::<SCALE>(ww))
+}
+
+/// Width-generic core of [`tang_ln_fixed`] — the Tang `ln` body over any
+/// [`BigInt`] work integer `S`, reusing the unified `exp_generic` fixed-point
+/// arithmetic leaves so there is no per-tier copy of the kernel.
+///
+/// `ln 2` is supplied by an accessor `ln2(working_scale)` rather than computed
+/// here, so the caller owns the rounding mode (the crate's feature-flagged
+/// default — never a hardcoded one) and any const-fold. The Tang `ln` table is
+/// the already-width-generic [`ln_table_entry_baked`] (a binary,
+/// scale-independent lookup). `tang_ln_fixed::<C>` is the thin tier-bound
+/// wrapper; the wide compositions (`log`/`log2`/`log10`/`powf`/…) call this
+/// directly at their `Wagm` work width.
+#[inline]
+pub(crate) fn tang_ln_fixed_g<S: BigInt, const CAP: u128, const INTERNAL_EXTRA: bool>(
+    v_w: S,
+    w: u32,
+    ln2: impl Fn(u32) -> S,
+) -> S
+where
+    S::Scratch: ComputeLimbs,
+{
     // Stage 0 (INTERNAL_EXTRA only): widen the internal working scale
     // by `extra = EXTERNAL_EXTRA_DIGITS` so the artanh-series
     // truncation bias (one-sided, ≈ 1 working-ULP) sits 12 decimal
     // digits below the caller's working ULP. The input is re-lifted
     // from `w` to `w_ext` by multiplying by `10^extra`.
-    let (w_ext, v_ext, extra): (u32, C::W, u32) = if INTERNAL_EXTRA {
+    let (w_ext, v_ext, extra): (u32, S, u32) = if INTERNAL_EXTRA {
         let extra = EXTERNAL_EXTRA_DIGITS;
-        let v_ext = v_w * C::pow10(extra);
+        let v_ext = v_w * eg::pow10::<S>(extra);
         (w + extra, v_ext, extra)
     } else {
         (w, v_w, 0)
     };
 
-    let one_w = C::one(w_ext);
+    let one_w = eg::one::<S>(w_ext);
     let pow10_w = one_w;
     let two_w = one_w + one_w;
 
     // Stage 1: v = 2^k · m, m ∈ [1, 2). k from bit-shifts.
-    let mut k: i32 = C::bit_length(v_ext) as i32 - C::bit_length(one_w) as i32;
+    let mut k: i32 = eg::bit_length::<S>(v_ext) as i32 - eg::bit_length::<S>(one_w) as i32;
     let m_w = loop {
         let m = if k >= 0 {
             v_ext >> (k as u32)
@@ -154,17 +189,17 @@ pub(crate) fn tang_ln_fixed<
     // ln(v) = k · ln(2).
     let result_at_w_ext = if m_w == one_w {
         if k >= 0 {
-            C::ln2::<SCALE>(w_ext) * C::lit(k as u128)
+            ln2(w_ext) * eg::lit::<S>(k as i128)
         } else if k < 0 {
-            -(C::ln2::<SCALE>(w_ext) * C::lit((-k) as u128))
+            -(ln2(w_ext) * eg::lit::<S>((-k) as i128))
         } else {
-            C::zero()
+            eg::zero::<S>()
         }
     } else {
         // i ∈ [0, M); when m = 2 exactly (rare boundary post-rounding),
         // clamp to M-1 so the table lookup stays in range, then the
         // residual t handles the remaining tiny piece.
-        let i_raw = ((m_w - one_w) * C::lit(M as u128)) / one_w;
+        let i_raw = ((m_w - one_w) * eg::lit::<S>(M as i128)) / one_w;
         let i_i128 = BigInt::to_i128(i_raw);
         let i_idx = if i_i128 >= M as i128 {
             (M - 1) as usize
@@ -172,20 +207,20 @@ pub(crate) fn tang_ln_fixed<
             i_i128 as usize
         };
 
-        let f_i = one_w + (one_w * C::lit(i_idx as u128)) / C::lit(M as u128);
+        let f_i = one_w + (one_w * eg::lit::<S>(i_idx as i128)) / eg::lit::<S>(M as i128);
 
         // Stage 3: t = (m - f_i) / (m + f_i). |t| < 1/(2M + 1).
-        let t = C::div_cached(m_w - f_i, m_w + f_i, pow10_w);
+        let t = eg::div_cached::<S>(m_w - f_i, m_w + f_i, pow10_w);
 
         // Artanh series: 2 · (t + t³/3 + t⁵/5 + ...).
-        let t2 = C::mul(t, t, w_ext);
+        let t2 = eg::mul::<S>(t, t, w_ext);
         let mut sum = t;
         let mut term = t;
         let mut j: u128 = 1;
         loop {
-            term = C::mul(term, t2, w_ext);
-            let contrib = term / C::lit(2 * j + 1);
-            if contrib == C::zero() {
+            term = eg::mul::<S>(term, t2, w_ext);
+            let contrib = term / eg::lit::<S>((2 * j + 1) as i128);
+            if contrib == eg::zero::<S>() {
                 break;
             }
             sum = sum + contrib;
@@ -194,13 +229,13 @@ pub(crate) fn tang_ln_fixed<
                 break;
             }
         }
-        let ln_m = sum + sum + C::ln_table_entry::<SCALE>(w_ext, i_idx);
+        let ln_m = sum + sum + ln_table_entry_baked::<S>(w_ext, i_idx, pow10_w);
 
         // Final: ln(v) = k · ln(2) + ln(m).
         let k_ln2 = if k >= 0 {
-            C::ln2::<SCALE>(w_ext) * C::lit(k as u128)
+            ln2(w_ext) * eg::lit::<S>(k as i128)
         } else {
-            -(C::ln2::<SCALE>(w_ext) * C::lit((-k) as u128))
+            -(ln2(w_ext) * eg::lit::<S>((-k) as i128))
         };
         k_ln2 + ln_m
     };
@@ -224,24 +259,24 @@ pub(crate) fn tang_ln_fixed<
         // magnitude `q + 1` straddles the true value on the "outside"
         // (in magnitude), which is exactly what a directed rounder
         // needs to decide whether to bump under each mode.
-        let p = C::pow10(extra);
-        let (q_signed, has_residue) = if result_at_w_ext >= C::zero() {
+        let p = eg::pow10::<S>(extra);
+        let (q_signed, has_residue) = if result_at_w_ext >= eg::zero::<S>() {
             let q = result_at_w_ext / p;
-            let has = result_at_w_ext - q * p != C::zero();
+            let has = result_at_w_ext - q * p != eg::zero::<S>();
             (q, has)
         } else {
             let abs_v = -result_at_w_ext;
             let q = abs_v / p;
-            let has = abs_v - q * p != C::zero();
+            let has = abs_v - q * p != eg::zero::<S>();
             (-q, has)
         };
         if has_residue {
             // Bump magnitude by 1 LSB-at-`w` so the outer rounder sees
             // a nonzero residual with the value's sign.
-            if q_signed >= C::zero() {
-                q_signed + C::lit(1)
+            if q_signed >= eg::zero::<S>() {
+                q_signed + eg::lit::<S>(1)
             } else {
-                q_signed - C::lit(1)
+                q_signed - eg::lit::<S>(1)
             }
         } else {
             q_signed
@@ -282,7 +317,10 @@ pub(crate) fn ln_tang<
 >(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> C::Storage
+where
+    <C::W as BigInt>::Scratch: ComputeLimbs,
+{
     if raw <= C::storage_zero() {
         panic!("wide-tier ln: argument must be positive");
     }

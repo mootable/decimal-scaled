@@ -28,11 +28,11 @@ use crate::support::rounding::RoundingMode;
     const SERIES_CAP: u128 = 20_000;
 
     #[inline]
-    fn lit<S: BigInt>(n: i128) -> S {
+    pub(crate) fn lit<S: BigInt>(n: i128) -> S {
         S::from_i128(n)
     }
     #[inline]
-    fn zero<S: BigInt>() -> S {
+    pub(crate) fn zero<S: BigInt>() -> S {
         S::ZERO
     }
     #[inline]
@@ -40,15 +40,15 @@ use crate::support::rounding::RoundingMode;
         if v < S::ZERO { -v } else { v }
     }
     #[inline]
-    fn pow10<S: BigInt>(n: u32) -> S {
+    pub(crate) fn pow10<S: BigInt>(n: u32) -> S {
         crate::consts::pow10::dispatch::<S>(n)
     }
     #[inline]
-    fn one<S: BigInt>(w: u32) -> S {
+    pub(crate) fn one<S: BigInt>(w: u32) -> S {
         pow10::<S>(w)
     }
     /// Bit length of `|v|` (0 for zero).
-    fn bit_length<S: BigInt>(v: S) -> u32 {
+    pub(crate) fn bit_length<S: BigInt>(v: S) -> u32 {
         <S as BigInt>::BITS - abs(v).leading_zeros()
     }
     /// Half-to-even round of `numerator / divisor` for `S`.
