@@ -53,7 +53,7 @@ use crate::support::rounding::RoundingMode;
     }
     /// Half-to-even round of `numerator / divisor` for `S`.
     #[inline]
-    fn round_div<S: BigInt>(n: S, d: S) -> S {
+    pub(crate) fn round_div<S: BigInt>(n: S, d: S) -> S {
         let (q, r) = n.div_rem(d);
         if r == S::ZERO {
             return q;
@@ -95,7 +95,7 @@ use crate::support::rounding::RoundingMode;
     /// hyperbolic/exp cost. The buffer comes from `S`'s scratch carrier ([`ComputeLimbs`]), so no
     /// const-generic limb count appears here.
     #[inline]
-    fn round_div_pow10<S: BigInt>(n: S, w: u32) -> S
+    pub(crate) fn round_div_pow10<S: BigInt>(n: S, w: u32) -> S
     where
         S::Scratch: ComputeLimbs,
     {
@@ -109,7 +109,16 @@ use crate::support::rounding::RoundingMode;
                 RoundingMode::HalfToEven,
             );
         }
-        crate::algos::support::mg_divide::div_wide_pow10_chain::<S>(
+        // `w > 38` rescale: route through the rescale MATCHER (not
+        // `div_wide_pow10_chain` directly) so the wide / high-scale band gets
+        // the baked-reciprocal Newton arm + the 9.24 magnitude-trim, exactly
+        // as the per-tier `wide_transcendental` cores do. The matcher only
+        // deviates from `MgChain` where its pick is faster, and every selected
+        // kernel is bit-identical (a fixed-mode `÷10^w` has one correct
+        // answer — the rescale validity wall), so this is value-neutral and
+        // never slower. Single source for the wide rescale across exp/ln/the
+        // generic Tang kernel.
+        crate::algos::support::rescale::dispatch_wide_pow10::<S>(
             n,
             w,
             RoundingMode::HalfToEven,
@@ -117,7 +126,7 @@ use crate::support::rounding::RoundingMode;
     }
     /// `(a · b) / 10^w`, rounded half-to-even.
     #[inline]
-    fn mul<S: BigInt>(a: S, b: S, w: u32) -> S
+    pub(crate) fn mul<S: BigInt>(a: S, b: S, w: u32) -> S
     where
         S::Scratch: ComputeLimbs,
     {
@@ -136,7 +145,7 @@ use crate::support::rounding::RoundingMode;
     /// `(a · 10^w) / b`, rounded half-to-even (precomputed numerator
     /// factor).
     #[inline]
-    fn div_cached<S: BigInt>(a: S, b: S, pow10_w: S) -> S {
+    pub(crate) fn div_cached<S: BigInt>(a: S, b: S, pow10_w: S) -> S {
         round_div(a.wrapping_mul_low_u128(pow10_w), b)
     }
     /// `a · n` for a small unsigned multiplier.
@@ -391,8 +400,13 @@ use crate::support::rounding::RoundingMode;
     /// `(a · 10^w) / b`, rounded half-to-even (the generic sibling of
     /// the per-tier `$core::div`).
     #[inline]
-    fn div<S: BigInt>(a: S, b: S, w: u32) -> S {
-        round_div(a * pow10::<S>(w), b)
+    pub(crate) fn div<S: BigInt>(a: S, b: S, w: u32) -> S {
+        // `(a·10^w)/b`, half-to-even. `10^w` comes from the `pow10` POLICY
+        // (`pow10::dispatch`, via `pow10::<S>`), NOT a per-tier baked static;
+        // the numerator product is the u128-packed truncated-low mul (the
+        // macro `div`'s kernel) so routing through the policy costs no
+        // multiply speed.
+        round_div(a.wrapping_mul_low_u128(pow10::<S>(w)), b)
     }
 
     /// `sinh(|x|)` at working scale `w` for a non-negative working

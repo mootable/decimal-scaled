@@ -392,29 +392,11 @@ macro_rules! decl_wide_transcendental {
             /// (two dispatcher calls = two full Knuth runs).
             #[inline]
             fn round_div(n: W, d: W) -> W {
-                let (q, r) = n.div_rem(d);
-                if r == lit(0) {
-                    return q;
-                }
-                let ar = abs(r);
-                let comp = abs(d) - ar;
-                let cmp_r = ar.cmp(&comp);
-                let q_is_odd = q.bit(0);
-                let result_positive = (n < lit(0)) == (d < lit(0));
-                if $crate::support::rounding::should_bump(
-                    $crate::support::rounding::RoundingMode::HalfToEven,
-                    cmp_r,
-                    q_is_odd,
-                    result_positive,
-                ) {
-                    if result_positive {
-                        q + lit(1)
-                    } else {
-                        q - lit(1)
-                    }
-                } else {
-                    q
-                }
+                // Forwards to the single generic source
+                // (`exp_generic::round_div`) — no per-tier copy of the
+                // half-to-even divide logic. `W` is concrete here so the
+                // monomorphisation is the same one direct call.
+                $crate::algos::exp::exp_generic::round_div::<W>(n, d)
             }
             /// Half-to-even quotient `n / 10^w`, selecting the
             /// fastest available divide kernel.
@@ -442,24 +424,12 @@ macro_rules! decl_wide_transcendental {
             /// `RoundingMode` and `w ∈ 39..=100`.
             #[inline]
             fn round_div_pow10(n: W, w: u32) -> W {
-                if w == 0 {
-                    return n;
-                }
-                if w <= 38 {
-                    return $crate::algos::support::mg_divide::div_wide_pow10::<W>(
-                        n,
-                        w,
-                        $crate::support::rounding::RoundingMode::HalfToEven,
-                    );
-                }
-                // `scale > 38` rescale — the matcher selects the MG chain
-                // (uncached Newton is dominated, 9.18.2; the `Newton` arm is
-                // a kept-alt). See [`crate::algos::support::rescale`].
-                $crate::algos::support::rescale::dispatch_wide_pow10::<W>(
-                    n,
-                    w,
-                    $crate::support::rounding::RoundingMode::HalfToEven,
-                )
+                // Forwards to the single generic source
+                // (`exp_generic::round_div_pow10`), which routes the `w > 38`
+                // rescale through the rescale matcher (baked-Newton / MgChain
+                // per `(scale, width)`, + the 9.24 magnitude-trim). `W`
+                // concrete here ⇒ one direct call.
+                $crate::algos::exp::exp_generic::round_div_pow10::<W>(n, w)
             }
             /// `(a · b) / 10^w`, rounded half-to-even. The
             /// rounded variant replaces the previous truncating
@@ -469,33 +439,30 @@ macro_rules! decl_wide_transcendental {
             /// the series-evaluation core.
             #[inline]
             pub(crate) fn mul(a: W, b: W, w: u32) -> W {
-                // Truncated-low product (mod 2^(64·N)), routed through the
-                // `mul_low` matcher so even-`N` work integers run the
-                // u128-packed kernel (bit-identical low `N` limbs to `a * b`,
-                // ~1.2–1.4× faster at the wide work widths N≥48). This is the
-                // per-term Series multiply, so the packing lands on every
-                // wide-tier Taylor term.
-                round_div_pow10(
-                    $crate::int::types::traits::BigInt::wrapping_mul_low_u128(a, b),
-                    w,
-                )
+                // Forwards to the single generic source (`exp_generic::mul`):
+                // the u128-packed truncated-low product `(a·b) mod 2^(64·N)`
+                // then `÷10^w` — the per-term Series multiply. No per-tier
+                // copy of the multiply logic. `W` concrete ⇒ one direct call.
+                $crate::algos::exp::exp_generic::mul::<W>(a, b, w)
             }
             /// `(a · 10^w) / b`, rounded half-to-even.
             #[inline]
             pub(crate) fn div(a: W, b: W, w: u32) -> W {
-                round_div(
-                    $crate::int::types::traits::BigInt::wrapping_mul_low_u128(a, pow10_table(w)),
-                    b,
-                )
+                // Forwards to the single generic source (`exp_generic::div`),
+                // which sources `10^w` from the `pow10` POLICY
+                // (`pow10::dispatch`) — NOT the per-tier `pow10_table` static.
+                // `W` concrete ⇒ one direct call.
+                $crate::algos::exp::exp_generic::div::<W>(a, b, w)
             }
             /// Loop-friendly variant of [`div`] taking a precomputed
             /// `10^w` numerator factor.
             #[inline]
             pub(crate) fn div_cached(a: W, b: W, pow10_w: W) -> W {
-                round_div(
-                    $crate::int::types::traits::BigInt::wrapping_mul_low_u128(a, pow10_w),
-                    b,
-                )
+                // Forwards to the single generic source
+                // (`exp_generic::div_cached`): `(a·10^w)/b` with the `10^w`
+                // numerator factor precomputed by the caller (no `pow10`
+                // accessor here). `W` concrete ⇒ one direct call.
+                $crate::algos::exp::exp_generic::div_cached::<W>(a, b, pow10_w)
             }
             /// `a · n` for a small unsigned multiplier.
             ///
