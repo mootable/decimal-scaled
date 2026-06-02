@@ -1406,19 +1406,22 @@ macro_rules! decl_wide_transcendental {
             /// Numerical Algorithms* 2nd ed. (2002), 1.14.1 and Problem
             /// 1.4; J.-M. Muller, *Elementary Functions* 3rd ed. (2016),
             /// 4.4.
-            pub(crate) fn log1p_fixed(t: W, w: u32) -> W {
-                let one_w = one(w);
+            pub(crate) fn log1p_fixed<S: $crate::int::types::traits::BigInt>(t: S, w: u32) -> S
+            where
+                S::Scratch: $crate::int::types::compute_limbs::ComputeLimbs,
+            {
+                let one_w = $crate::algos::exp::exp_generic::one::<S>(w);
                 let two_w = one_w + one_w;
                 let pow10_w = one_w;
-                let u = div_cached(t, two_w + t, pow10_w);
-                let u2 = mul(u, u, w);
+                let u = $crate::algos::exp::exp_generic::div_cached::<S>(t, two_w + t, pow10_w);
+                let u2 = $crate::algos::exp::exp_generic::mul::<S>(u, u, w);
                 let mut sum = u;
                 let mut term = u;
                 let mut j: u128 = 1;
                 loop {
-                    term = mul(term, u2, w);
-                    let contrib = term / lit(2 * j + 1);
-                    if contrib == zero() {
+                    term = $crate::algos::exp::exp_generic::mul::<S>(term, u2, w);
+                    let contrib = term / $crate::algos::exp::exp_generic::lit::<S>((2 * j + 1) as i128);
+                    if contrib == $crate::algos::exp::exp_generic::zero::<S>() {
                         break;
                     }
                     sum = sum + contrib;
@@ -2961,6 +2964,30 @@ macro_rules! decl_wide_transcendental {
             pub(crate) fn round_to_nearest_int_agm(v: Wagm, w: u32) -> i128 {
                 $crate::algos::exp::exp_generic::round_to_nearest_int::<Wagm>(v, w)
             }
+            #[inline]
+            pub(crate) fn mul_agm(a: Wagm, b: Wagm, w: u32) -> Wagm {
+                $crate::algos::exp::exp_generic::mul::<Wagm>(a, b, w)
+            }
+            #[inline]
+            pub(crate) fn sqrt_fixed_agm(v: Wagm, w: u32) -> Wagm {
+                $crate::algos::exp::exp_generic::sqrt_fixed::<Wagm>(v, w)
+            }
+            /// Series `ln(v) -> v` at `Wagm` (the `Wagm` sibling of the
+            /// Series-only `ln_fixed`) — used where a composition pins Series
+            /// (e.g. `asinh` near MAX scale). Distinct from `ln_fixed_agm`
+            /// (the Brent-Salamin AGM ln). `ln 2` from the unified table at
+            /// `Wagm` under the feature-flagged default rounding mode.
+            #[inline]
+            pub(crate) fn ln_fixed_series_agm(v_w: Wagm, w: u32) -> Wagm {
+                $crate::algos::exp::exp_generic::ln_fixed::<Wagm>(
+                    v_w,
+                    w,
+                    $crate::consts::ln2_by_working_scale::<Wagm>(
+                        w,
+                        $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                    ),
+                )
+            }
             /// Tang/Series-routed `ln(v) -> v` at the wide composition work
             /// width `Wagm` — the `Wagm` sibling of [`ln_fixed_routed`],
             /// calling the SAME generic kernels (`tang_ln_fixed_g` /
@@ -3700,28 +3727,29 @@ macro_rules! decl_wide_transcendental {
                     return Self::ZERO;
                 }
                 let w = SCALE + $core::GUARD;
-                let one_w = $core::one(w);
-                let v = $core::to_work(raw);
-                let ax = if v < $core::zero() { -v } else { v };
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let one_w = $core::one_agm(w);
+                let v = $core::to_work_agm(raw);
+                let ax = if v < $core::zero_agm() { -v } else { v };
                 // asinh @ MAX scale (input ±1) loses sub-w precision in the
                 // sqrt step before ln; tang_ln_fixed's INTERNAL_EXTRA
                 // residue-signal can't detect that caller-side loss. Keep
-                // on Series until ln_fixed_routed gains a PRE_RESIDUE flag
-                // (memory project_050_asinh_max_tang_residue).
+                // on Series (`ln_fixed_agm`) until ln_fixed_routed gains a
+                // PRE_RESIDUE flag (memory project_050_asinh_max_tang_residue).
                 let inner = if ax >= one_w {
-                    let inv = $core::div(one_w, ax, w);
-                    let root = $core::sqrt_fixed(one_w + $core::mul(inv, inv, w), w);
-                    $core::ln_fixed::<SCALE>(ax, w) + $core::ln_fixed::<SCALE>(one_w + root, w)
+                    let inv = $core::div_agm(one_w, ax, w);
+                    let root = $core::sqrt_fixed_agm(one_w + $core::mul_agm(inv, inv, w), w);
+                    $core::ln_fixed_series_agm(ax, w) + $core::ln_fixed_series_agm(one_w + root, w)
                 } else {
-                    let root = $core::sqrt_fixed($core::mul(ax, ax, w) + one_w, w);
-                    $core::ln_fixed::<SCALE>(ax + root, w)
+                    let root = $core::sqrt_fixed_agm($core::mul_agm(ax, ax, w) + one_w, w);
+                    $core::ln_fixed_series_agm(ax + root, w)
                 };
                 let signed = if raw < $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     -inner
                 } else {
                     inner
                 };
-                Self::from_bits($core::round_to_storage(signed, w, SCALE))
+                Self::from_bits($core::round_to_storage_agm(signed, w, SCALE))
             }
 
             /// Inverse hyperbolic cosine, as `ln(x + √(x² − 1))`,
@@ -3731,16 +3759,17 @@ macro_rules! decl_wide_transcendental {
             #[must_use]
             pub fn acosh_strict(self) -> Self {
                 let w = SCALE + $core::GUARD;
-                let one_w = $core::one(w);
-                let v = $core::to_work(self.to_bits());
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let one_w = $core::one_agm(w);
+                let v = $core::to_work_agm(self.to_bits());
                 if v < one_w {
                     panic!(concat!(stringify!($Type), "::acosh: argument must be >= 1"));
                 }
                 let two_w = one_w + one_w;
                 let inner = if v >= two_w {
-                    let inv = $core::div(one_w, v, w);
-                    let root = $core::sqrt_fixed(one_w - $core::mul(inv, inv, w), w);
-                    $core::ln_fixed_routed::<SCALE>(v, w) + $core::ln_fixed_routed::<SCALE>(one_w + root, w)
+                    let inv = $core::div_agm(one_w, v, w);
+                    let root = $core::sqrt_fixed_agm(one_w - $core::mul_agm(inv, inv, w), w);
+                    $core::ln_fixed_routed_agm::<SCALE>(v, w) + $core::ln_fixed_routed_agm::<SCALE>(one_w + root, w)
                 } else {
                     // Near 1: acosh(1+t) = log1p(t + sqrt(t*(t+2))).
                     // `t = v - one_w` is the exact gap above 1, so
@@ -3749,10 +3778,10 @@ macro_rules! decl_wide_transcendental {
                     // as `v -> 1`, and `log1p` avoids re-forming `1 + arg`
                     // when the gap (hence `arg`) is tiny.
                     let t = v - one_w;
-                    let root = $core::sqrt_fixed($core::mul(t, t + two_w, w), w);
-                    $core::log1p_fixed(t + root, w)
+                    let root = $core::sqrt_fixed_agm($core::mul_agm(t, t + two_w, w), w);
+                    $core::log1p_fixed::<$core::Wagm>(t + root, w)
                 };
-                Self::from_bits($core::round_to_storage(inner, w, SCALE))
+                Self::from_bits($core::round_to_storage_agm(inner, w, SCALE))
             }
 
             /// Inverse hyperbolic tangent, as `ln((1+x)/(1−x)) / 2`,
@@ -4366,28 +4395,29 @@ macro_rules! decl_wide_transcendental {
                     return Self::ZERO;
                 }
                 let neg = raw < $crate::macros::wide_roots::wide_lit!($Storage, "0");
-                Self::from_bits($core::round_to_storage_directed(
+                // Two-core: composition recompute runs on the wide `Wagm`.
+                Self::from_bits($core::round_to_storage_directed::<$core::Wagm>(
                     $core::GUARD,
                     SCALE,
                     mode,
                     |guard| {
                         let w = SCALE + guard;
-                        let one_w = $core::one(w);
-                        let v = $core::to_work_scaled(raw, guard);
-                        let ax = if v < $core::zero() { -v } else { v };
+                        let one_w = $core::one_agm(w);
+                        let v = $core::to_work_scaled_agm(raw, guard);
+                        let ax = if v < $core::zero_agm() { -v } else { v };
                         // asinh @ MAX scale (input ±1) loses sub-w precision
                         // in the sqrt step before ln; tang_ln_fixed's
                         // INTERNAL_EXTRA residue-signal can't detect that
-                        // caller-side loss. Keep on Series until
-                        // ln_fixed_routed gains a PRE_RESIDUE flag (memory
+                        // caller-side loss. Keep on Series (`ln_fixed_series_agm`)
+                        // until ln_fixed_routed gains a PRE_RESIDUE flag (memory
                         // project_050_asinh_max_tang_residue).
                         let inner = if ax >= one_w {
-                            let inv = $core::div(one_w, ax, w);
-                            let root = $core::sqrt_fixed(one_w + $core::mul(inv, inv, w), w);
-                            $core::ln_fixed::<SCALE>(ax, w) + $core::ln_fixed::<SCALE>(one_w + root, w)
+                            let inv = $core::div_agm(one_w, ax, w);
+                            let root = $core::sqrt_fixed_agm(one_w + $core::mul_agm(inv, inv, w), w);
+                            $core::ln_fixed_series_agm(ax, w) + $core::ln_fixed_series_agm(one_w + root, w)
                         } else {
-                            let root = $core::sqrt_fixed($core::mul(ax, ax, w) + one_w, w);
-                            $core::ln_fixed::<SCALE>(ax + root, w)
+                            let root = $core::sqrt_fixed_agm($core::mul_agm(ax, ax, w) + one_w, w);
+                            $core::ln_fixed_series_agm(ax + root, w)
                         };
                         if neg { -inner } else { inner }
                     },
@@ -4402,31 +4432,32 @@ macro_rules! decl_wide_transcendental {
                 {
                     // Domain check at the base guard.
                     let w0 = SCALE + $core::GUARD;
-                    if $core::to_work(raw) < $core::one(w0) {
+                    if $core::to_work_agm(raw) < $core::one_agm(w0) {
                         panic!(concat!(stringify!($Type), "::acosh: argument must be >= 1"));
                     }
                 }
-                Self::from_bits($core::round_to_storage_directed_near_special(
+                // Two-core: composition recompute runs on the wide `Wagm`.
+                Self::from_bits($core::round_to_storage_directed_near_special::<$core::Wagm>(
                     $core::GUARD,
                     SCALE,
                     mode,
                     |guard| {
                         let w = SCALE + guard;
-                        let one_w = $core::one(w);
-                        let v = $core::to_work_scaled(raw, guard);
+                        let one_w = $core::one_agm(w);
+                        let v = $core::to_work_scaled_agm(raw, guard);
                         let two_w = one_w + one_w;
                         if v >= two_w {
-                            let inv = $core::div(one_w, v, w);
-                            let root = $core::sqrt_fixed(one_w - $core::mul(inv, inv, w), w);
-                            $core::ln_fixed_routed::<SCALE>(v, w) + $core::ln_fixed_routed::<SCALE>(one_w + root, w)
+                            let inv = $core::div_agm(one_w, v, w);
+                            let root = $core::sqrt_fixed_agm(one_w - $core::mul_agm(inv, inv, w), w);
+                            $core::ln_fixed_routed_agm::<SCALE>(v, w) + $core::ln_fixed_routed_agm::<SCALE>(one_w + root, w)
                         } else {
                             // Near 1: acosh(1+t) = log1p(t +
                             // sqrt(t*(t+2))). The gap `t = v - one_w` is
                             // exact, so `v^2 - 1 = t*(t+2)` avoids the
                             // `mul(v,v) - one_w` cancellation as `v -> 1`.
                             let t = v - one_w;
-                            let root = $core::sqrt_fixed($core::mul(t, t + two_w, w), w);
-                            $core::log1p_fixed(t + root, w)
+                            let root = $core::sqrt_fixed_agm($core::mul_agm(t, t + two_w, w), w);
+                            $core::log1p_fixed::<$core::Wagm>(t + root, w)
                         }
                     },
                 ))
@@ -5187,28 +5218,29 @@ macro_rules! decl_wide_transcendental {
                     return Self::ZERO;
                 }
                 let w = SCALE + working_digits;
-                let one_w = $core::one(w);
-                let v = $core::to_work_scaled(raw, working_digits);
-                let ax = if v < $core::zero() { -v } else { v };
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let one_w = $core::one_agm(w);
+                let v = $core::to_work_scaled_agm(raw, working_digits);
+                let ax = if v < $core::zero_agm() { -v } else { v };
                 // asinh @ MAX scale (input ±1) loses sub-w precision in the
                 // sqrt step before ln; tang_ln_fixed's INTERNAL_EXTRA
                 // residue-signal can't detect that caller-side loss. Keep
-                // on Series until ln_fixed_routed gains a PRE_RESIDUE flag
-                // (memory project_050_asinh_max_tang_residue).
+                // on Series (`ln_fixed_series_agm`) until ln_fixed_routed gains
+                // a PRE_RESIDUE flag (memory project_050_asinh_max_tang_residue).
                 let inner = if ax >= one_w {
-                    let inv = $core::div(one_w, ax, w);
-                    let root = $core::sqrt_fixed(one_w + $core::mul(inv, inv, w), w);
-                    $core::ln_fixed::<SCALE>(ax, w) + $core::ln_fixed::<SCALE>(one_w + root, w)
+                    let inv = $core::div_agm(one_w, ax, w);
+                    let root = $core::sqrt_fixed_agm(one_w + $core::mul_agm(inv, inv, w), w);
+                    $core::ln_fixed_series_agm(ax, w) + $core::ln_fixed_series_agm(one_w + root, w)
                 } else {
-                    let root = $core::sqrt_fixed($core::mul(ax, ax, w) + one_w, w);
-                    $core::ln_fixed::<SCALE>(ax + root, w)
+                    let root = $core::sqrt_fixed_agm($core::mul_agm(ax, ax, w) + one_w, w);
+                    $core::ln_fixed_series_agm(ax + root, w)
                 };
                 let signed = if raw < $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     -inner
                 } else {
                     inner
                 };
-                Self::from_bits($core::round_to_storage_with(signed, w, SCALE, mode))
+                Self::from_bits($core::round_to_storage_with_g::<$core::Wagm>(signed, w, SCALE, mode))
             }
 
             /// Inverse hyperbolic cosine with caller-chosen guard digits.
@@ -5233,16 +5265,17 @@ macro_rules! decl_wide_transcendental {
                     return self.acosh_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let one_w = $core::one(w);
-                let v = $core::to_work_scaled(self.to_bits(), working_digits);
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let one_w = $core::one_agm(w);
+                let v = $core::to_work_scaled_agm(self.to_bits(), working_digits);
                 if v < one_w {
                     panic!(concat!(stringify!($Type), "::acosh: argument must be >= 1"));
                 }
                 let two_w = one_w + one_w;
                 let inner = if v >= two_w {
-                    let inv = $core::div(one_w, v, w);
-                    let root = $core::sqrt_fixed(one_w - $core::mul(inv, inv, w), w);
-                    $core::ln_fixed_routed::<SCALE>(v, w) + $core::ln_fixed_routed::<SCALE>(one_w + root, w)
+                    let inv = $core::div_agm(one_w, v, w);
+                    let root = $core::sqrt_fixed_agm(one_w - $core::mul_agm(inv, inv, w), w);
+                    $core::ln_fixed_routed_agm::<SCALE>(v, w) + $core::ln_fixed_routed_agm::<SCALE>(one_w + root, w)
                 } else {
                     // Near 1: acosh(1+t) = log1p(t + sqrt(t*(t+2))).
                     // `t = v - one_w` is the exact gap above 1, so
@@ -5251,10 +5284,10 @@ macro_rules! decl_wide_transcendental {
                     // as `v -> 1`, and `log1p` avoids re-forming `1 + arg`
                     // when the gap (hence `arg`) is tiny.
                     let t = v - one_w;
-                    let root = $core::sqrt_fixed($core::mul(t, t + two_w, w), w);
-                    $core::log1p_fixed(t + root, w)
+                    let root = $core::sqrt_fixed_agm($core::mul_agm(t, t + two_w, w), w);
+                    $core::log1p_fixed::<$core::Wagm>(t + root, w)
                 };
-                Self::from_bits($core::round_to_storage_with(inner, w, SCALE, mode))
+                Self::from_bits($core::round_to_storage_with_g::<$core::Wagm>(inner, w, SCALE, mode))
             }
 
             /// Inverse hyperbolic tangent with caller-chosen guard digits.
