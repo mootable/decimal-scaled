@@ -2906,6 +2906,85 @@ macro_rules! decl_wide_transcendental {
                 exp_fixed::<SCALE>(v_w, w)
             }
 
+            // ── Wagm (composition / AGM wide-work) bridges ─────────────
+            //
+            // The two-core split: the PRIMITIVES (ln/exp/sin/cos/atan) run on
+            // `$Work` (`W`, narrowed per tier); the COMPOSITIONS + AGM run on
+            // `Wagm` (`$AgmWork`, kept wide enough for their guard ceiling and
+            // intermediate growth). These are thin storage<->Wagm boundary
+            // bridges + the routed ln/exp at `Wagm` (delegating to the SAME
+            // generic kernels `W` uses) — no algorithm logic is duplicated.
+            // While `Wagm == $Work` they are bit-identical to the `W` path.
+            #[inline]
+            pub(crate) fn to_work_agm(raw: $Storage) -> Wagm {
+                $crate::int::types::traits::BigInt::resize_to::<Wagm>(raw)
+                    * $crate::algos::exp::exp_generic::pow10::<Wagm>(GUARD)
+            }
+            #[inline]
+            pub(crate) fn to_work_scaled_agm(raw: $Storage, working_digits: u32) -> Wagm {
+                $crate::int::types::traits::BigInt::resize_to::<Wagm>(raw)
+                    * $crate::algos::exp::exp_generic::pow10::<Wagm>(working_digits)
+            }
+            #[inline]
+            pub(crate) fn one_agm(w: u32) -> Wagm {
+                $crate::algos::exp::exp_generic::pow10::<Wagm>(w)
+            }
+            #[inline]
+            pub(crate) fn zero_agm() -> Wagm {
+                <Wagm as $crate::int::types::traits::BigInt>::ZERO
+            }
+            #[inline]
+            pub(crate) fn round_to_storage_agm(v: Wagm, w: u32, target: u32) -> $Storage {
+                round_to_storage_with_g::<Wagm>(
+                    v,
+                    w,
+                    target,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
+            }
+            /// Tang/Series-routed `ln(v) -> v` at the wide composition work
+            /// width `Wagm` — the `Wagm` sibling of [`ln_fixed_routed`],
+            /// calling the SAME generic kernels (`tang_ln_fixed_g` /
+            /// `exp_generic::ln_fixed`) with `ln 2` from the unified table at
+            /// `Wagm` (the crate's feature-flagged default rounding mode).
+            #[cfg(feature = "_wide-support")]
+            #[inline]
+            pub(crate) fn ln_fixed_routed_agm<const SCALE: u32>(v_w: Wagm, w: u32) -> Wagm {
+                if const { $crate::policy::ln::is_tang::<$n_limbs, SCALE>() } {
+                    $crate::algos::ln::ln_tang::tang_ln_fixed_g::<Wagm, $ln_tang_cap, false>(
+                        v_w,
+                        w,
+                        |ww| {
+                            $crate::consts::ln2_by_working_scale::<Wagm>(
+                                ww,
+                                $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                            )
+                        },
+                    )
+                } else {
+                    $crate::algos::exp::exp_generic::ln_fixed::<Wagm>(
+                        v_w,
+                        w,
+                        $crate::consts::ln2_by_working_scale::<Wagm>(
+                            w,
+                            $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                        ),
+                    )
+                }
+            }
+            #[cfg(not(feature = "_wide-support"))]
+            #[inline]
+            pub(crate) fn ln_fixed_routed_agm<const SCALE: u32>(v_w: Wagm, w: u32) -> Wagm {
+                $crate::algos::exp::exp_generic::ln_fixed::<Wagm>(
+                    v_w,
+                    w,
+                    $crate::consts::ln2_by_working_scale::<Wagm>(
+                        w,
+                        $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                    ),
+                )
+            }
+
             // ── log-base algorithm kernels (LnDivide) ──────────────────
             //
             // The arbitrary-base logarithm `log(x, b) = ln(x)/ln(b)` for
@@ -3657,9 +3736,13 @@ macro_rules! decl_wide_transcendental {
             #[must_use]
             pub fn atanh_strict(self) -> Self {
                 let w = SCALE + $core::GUARD;
-                let one_w = $core::one(w);
-                let v = $core::to_work(self.to_bits());
-                let ax = if v < $core::zero() { -v } else { v };
+                // Two-core: the composition runs on the wide `Wagm` work int
+                // (its ln + the gap-form subtraction), narrowing back to
+                // storage at the end — so a narrowed primitive `$Work` does
+                // not clip the composition's precision.
+                let one_w = $core::one_agm(w);
+                let v = $core::to_work_agm(self.to_bits());
+                let ax = if v < $core::zero_agm() { -v } else { v };
                 if ax >= one_w {
                     panic!(concat!(
                         stringify!($Type),
@@ -3671,8 +3754,8 @@ macro_rules! decl_wide_transcendental {
                 // storage input lifted by appending guard zeros), so
                 // neither `ln_fixed` argument suffers the `(1-x)`
                 // catastrophic cancellation the ratio form does near +-1.
-                let r = ($core::ln_fixed_routed::<SCALE>(one_w + v, w) - $core::ln_fixed_routed::<SCALE>(one_w - v, w)) >> 1;
-                Self::from_bits($core::round_to_storage(r, w, SCALE))
+                let r = ($core::ln_fixed_routed_agm::<SCALE>(one_w + v, w) - $core::ln_fixed_routed_agm::<SCALE>(one_w - v, w)) >> 1;
+                Self::from_bits($core::round_to_storage_agm(r, w, SCALE))
             }
 
             /// Convert radians to degrees: `self · (180 / π)`. Strict
@@ -4331,28 +4414,29 @@ macro_rules! decl_wide_transcendental {
                 {
                     // Domain check at the base guard.
                     let w0 = SCALE + $core::GUARD;
-                    let v0 = $core::to_work(raw);
-                    let ax0 = if v0 < $core::zero() { -v0 } else { v0 };
-                    if ax0 >= $core::one(w0) {
+                    let v0 = $core::to_work_agm(raw);
+                    let ax0 = if v0 < $core::zero_agm() { -v0 } else { v0 };
+                    if ax0 >= $core::one_agm(w0) {
                         panic!(concat!(
                             stringify!($Type),
                             "::atanh: argument out of domain (-1, 1)"
                         ));
                     }
                 }
-                Self::from_bits($core::round_to_storage_directed_near_special(
+                // Two-core: composition recompute runs on the wide `Wagm`.
+                Self::from_bits($core::round_to_storage_directed_near_special::<$core::Wagm>(
                     $core::GUARD,
                     SCALE,
                     mode,
                     |guard| {
                         let w = SCALE + guard;
-                        let one_w = $core::one(w);
-                        let v = $core::to_work_scaled(raw, guard);
+                        let one_w = $core::one_agm(w);
+                        let v = $core::to_work_scaled_agm(raw, guard);
                         // Gap form (1/2)*[ln(1+x) - ln(1-x)]: `one_w
                         // - v` is the exact working-scale gap, so neither
                         // `ln_fixed` argument suffers the `(1-x)`
                         // cancellation the ratio form does near +-1.
-                        ($core::ln_fixed_routed::<SCALE>(one_w + v, w) - $core::ln_fixed_routed::<SCALE>(one_w - v, w)) >> 1
+                        ($core::ln_fixed_routed_agm::<SCALE>(one_w + v, w) - $core::ln_fixed_routed_agm::<SCALE>(one_w - v, w)) >> 1
                     },
                 ))
             }
@@ -5169,9 +5253,10 @@ macro_rules! decl_wide_transcendental {
                     return self.atanh_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let one_w = $core::one(w);
-                let v = $core::to_work_scaled(self.to_bits(), working_digits);
-                let ax = if v < $core::zero() { -v } else { v };
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let one_w = $core::one_agm(w);
+                let v = $core::to_work_scaled_agm(self.to_bits(), working_digits);
+                let ax = if v < $core::zero_agm() { -v } else { v };
                 if ax >= one_w {
                     panic!(concat!(
                         stringify!($Type),
@@ -5183,8 +5268,8 @@ macro_rules! decl_wide_transcendental {
                 // storage input lifted by appending guard zeros), so
                 // neither `ln_fixed` argument suffers the `(1-x)`
                 // catastrophic cancellation the ratio form does near +-1.
-                let r = ($core::ln_fixed_routed::<SCALE>(one_w + v, w) - $core::ln_fixed_routed::<SCALE>(one_w - v, w)) >> 1;
-                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+                let r = ($core::ln_fixed_routed_agm::<SCALE>(one_w + v, w) - $core::ln_fixed_routed_agm::<SCALE>(one_w - v, w)) >> 1;
+                Self::from_bits($core::round_to_storage_with_g::<$core::Wagm>(r, w, SCALE, mode))
             }
 
             /// Radians-to-degrees with caller-chosen guard digits.
