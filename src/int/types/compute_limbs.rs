@@ -740,7 +740,7 @@ mod imp {
     // lifted to a *wider* tier-derived width — it needs a dedicated wider work
     // integer. `Int<512>` (32768 bits) holds that peak with comfortable margin
     // at every reachable working scale.
-    exact_compute!(1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256, 512);
+    exact_compute!(1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 176, 192, 256, 512);
 }
 
 // ── exact-scratch-nightly: one blanket impl, exact per-N via const-expr ─
