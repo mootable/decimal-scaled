@@ -1904,10 +1904,20 @@ macro_rules! decl_wide_transcendental {
             /// reciprocal divides by zero). `cap_bits` selects the `extra`
             /// cap so the estimate matches the body that will actually run
             /// (the tier `W`, or the wider `Wexp` after a lift).
-            fn exp_internal_peak_bits<const SCALE: u32>(v_w: W, w: u32, cap_bits: u32) -> u64 {
-                let one_w_pre = one(w);
-                let l2_pre = ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE);
-                let k = round_to_nearest_int(div_cached(v_w, l2_pre, one_w_pre), w);
+            fn exp_internal_peak_bits<S: $crate::int::types::traits::BigInt>(
+                v_w: S,
+                w: u32,
+                cap_bits: u32,
+            ) -> u64 {
+                let one_w_pre = $crate::algos::exp::exp_generic::one::<S>(w);
+                let l2_pre = $crate::consts::ln2_by_working_scale::<S>(
+                    w,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                );
+                let k = $crate::algos::exp::exp_generic::round_to_nearest_int::<S>(
+                    $crate::algos::exp::exp_generic::div_cached::<S>(v_w, l2_pre, one_w_pre),
+                    w,
+                );
                 let abs_k_u128 = if k < 0 { -k } else { k } as u128;
                 let extra: u32 = if abs_k_u128 == 0 {
                     0
@@ -1945,9 +1955,9 @@ macro_rules! decl_wide_transcendental {
             /// The squaring peak `2·w_ext` already dominates `2w` (since
             /// `w_ext ≥ w`), so the exp peak bounds the whole composition.
             #[inline]
-            fn hyper_fits_w<const SCALE: u32>(av_w: W, w: u32) -> bool {
-                let cap_bits = <W as $crate::int::types::traits::BigInt>::BITS;
-                exp_internal_peak_bits::<SCALE>(av_w, w, cap_bits) < cap_bits as u64
+            fn hyper_fits_w<S: $crate::int::types::traits::BigInt>(av_w: S, w: u32) -> bool {
+                let cap_bits = <S as $crate::int::types::traits::BigInt>::BITS;
+                exp_internal_peak_bits::<S>(av_w, w, cap_bits) < cap_bits as u64
             }
 
             /// Whether a direct `exp_fixed(v_w, w)` fits the tier's own work
@@ -1964,7 +1974,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             fn exp_fits_w<const SCALE: u32>(v_w: W, w: u32) -> bool {
                 let cap_bits = <W as $crate::int::types::traits::BigInt>::BITS;
-                exp_internal_peak_bits::<SCALE>(v_w, w, cap_bits) < cap_bits as u64
+                exp_internal_peak_bits::<W>(v_w, w, cap_bits) < cap_bits as u64
             }
 
             /// `sinh(|x|)` at working scale `w` for a non-negative working
@@ -1977,7 +1987,7 @@ macro_rules! decl_wide_transcendental {
             /// [`hyper_fits_w`]. The caller reapplies the input sign (sinh
             /// is odd).
             pub(crate) fn sinh_pos_wide<const SCALE: u32>(av_w: W, w: u32) -> W {
-                if hyper_fits_w::<SCALE>(av_w, w) {
+                if hyper_fits_w(av_w, w) {
                     let ex = exp_fixed::<SCALE>(av_w, w);
                     let enx = div(one(w), ex, w);
                     (ex - enx) >> 1
@@ -1993,7 +2003,7 @@ macro_rules! decl_wide_transcendental {
             /// `cosh(|x|) = (e^|x| + e^-|x|)/2` at working scale `w`. See
             /// [`sinh_pos_wide`] for the `W`-vs-[`Wexp`] regime split.
             pub(crate) fn cosh_pos_wide<const SCALE: u32>(av_w: W, w: u32) -> W {
-                if hyper_fits_w::<SCALE>(av_w, w) {
+                if hyper_fits_w(av_w, w) {
                     let ex = exp_fixed::<SCALE>(av_w, w);
                     let enx = div(one(w), ex, w);
                     (ex + enx) >> 1
@@ -2010,7 +2020,7 @@ macro_rules! decl_wide_transcendental {
             /// scale `w`. See [`sinh_pos_wide`] for the regime split. The
             /// caller reapplies the input sign (tanh is odd).
             pub(crate) fn tanh_pos_wide<const SCALE: u32>(av_w: W, w: u32) -> W {
-                if hyper_fits_w::<SCALE>(av_w, w) {
+                if hyper_fits_w(av_w, w) {
                     let ex = exp_fixed::<SCALE>(av_w, w);
                     let enx = div(one(w), ex, w);
                     div(ex - enx, ex + enx, w)
@@ -2020,6 +2030,45 @@ macro_rules! decl_wide_transcendental {
                         av_wide, w,
                     );
                     $crate::int::types::traits::BigInt::resize_to::<W>(r)
+                }
+            }
+
+            /// `Wagm` siblings of [`sinh_pos_wide`] / [`cosh_pos_wide`] /
+            /// [`tanh_pos_wide`] — same regime split (fast `Wagm` exp_fixed
+            /// when it fits, else lift to `Wexp`), narrowing the `Wexp` result
+            /// to `Wagm`. Bit-identical while `Wagm == $Work`. Used by the
+            /// hyperbolic compositions in the two-core split.
+            pub(crate) fn sinh_pos_wide_agm(av_w: Wagm, w: u32) -> Wagm {
+                if hyper_fits_w(av_w, w) {
+                    let ex = $crate::algos::exp::exp_generic::exp_fixed::<Wagm>(av_w, w);
+                    let enx = div_agm(one_agm(w), ex, w);
+                    (ex - enx) >> 1
+                } else {
+                    let av_wide = $crate::int::types::traits::BigInt::resize_to::<Wexp>(av_w);
+                    let r = $crate::algos::exp::exp_generic::sinh_pos::<Wexp>(av_wide, w);
+                    $crate::int::types::traits::BigInt::resize_to::<Wagm>(r)
+                }
+            }
+            pub(crate) fn cosh_pos_wide_agm(av_w: Wagm, w: u32) -> Wagm {
+                if hyper_fits_w(av_w, w) {
+                    let ex = $crate::algos::exp::exp_generic::exp_fixed::<Wagm>(av_w, w);
+                    let enx = div_agm(one_agm(w), ex, w);
+                    (ex + enx) >> 1
+                } else {
+                    let av_wide = $crate::int::types::traits::BigInt::resize_to::<Wexp>(av_w);
+                    let r = $crate::algos::exp::exp_generic::cosh_pos::<Wexp>(av_wide, w);
+                    $crate::int::types::traits::BigInt::resize_to::<Wagm>(r)
+                }
+            }
+            pub(crate) fn tanh_pos_wide_agm(av_w: Wagm, w: u32) -> Wagm {
+                if hyper_fits_w(av_w, w) {
+                    let ex = $crate::algos::exp::exp_generic::exp_fixed::<Wagm>(av_w, w);
+                    let enx = div_agm(one_agm(w), ex, w);
+                    div_agm(ex - enx, ex + enx, w)
+                } else {
+                    let av_wide = $crate::int::types::traits::BigInt::resize_to::<Wexp>(av_w);
+                    let r = $crate::algos::exp::exp_generic::tanh_pos::<Wexp>(av_wide, w);
+                    $crate::int::types::traits::BigInt::resize_to::<Wagm>(r)
                 }
             }
 
@@ -4323,17 +4372,18 @@ macro_rules! decl_wide_transcendental {
                 // value — `round_to_storage_directed` reads the sign off
                 // the returned value and rounds each mode accordingly.
                 let neg = raw < <$Storage>::from_i128(0);
-                let k_lift = $core::exp_result_int_digits($core::to_work_scaled(raw, 0), SCALE);
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let k_lift = $core::exp_result_int_digits::<$core::Wagm>($core::to_work_scaled_agm(raw, 0), SCALE);
                 let base_guard = $core::GUARD + k_lift;
-                Self::from_bits($core::round_to_storage_directed(
+                Self::from_bits($core::round_to_storage_directed::<$core::Wagm>(
                     base_guard,
                     SCALE,
                     mode,
                     |guard| {
                         let w = SCALE + guard;
-                        let v = $core::to_work_scaled(raw, guard);
-                        let av = if v < $core::zero() { -v } else { v };
-                        let sh = $core::sinh_pos_wide::<SCALE>(av, w);
+                        let v = $core::to_work_scaled_agm(raw, guard);
+                        let av = if v < $core::zero_agm() { -v } else { v };
+                        let sh = $core::sinh_pos_wide_agm(av, w);
                         if neg { -sh } else { sh }
                     },
                 ))
@@ -4353,17 +4403,18 @@ macro_rules! decl_wide_transcendental {
                 // positive magnitude keeps the dominant `e^|x|` term
                 // direct and accurate (see `sinh_strict_with` for why the
                 // sign matters to the budget).
-                let k_lift = $core::exp_result_int_digits($core::to_work_scaled(raw, 0), SCALE);
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let k_lift = $core::exp_result_int_digits::<$core::Wagm>($core::to_work_scaled_agm(raw, 0), SCALE);
                 let base_guard = $core::GUARD + k_lift;
-                let r = $core::round_to_storage_directed(
+                let r = $core::round_to_storage_directed::<$core::Wagm>(
                     base_guard,
                     SCALE,
                     mode,
                     |guard| {
                         let w = SCALE + guard;
-                        let v = $core::to_work_scaled(raw, guard);
-                        let av = if v < $core::zero() { -v } else { v };
-                        $core::cosh_pos_wide::<SCALE>(av, w)
+                        let v = $core::to_work_scaled_agm(raw, guard);
+                        let av = if v < $core::zero_agm() { -v } else { v };
+                        $core::cosh_pos_wide_agm(av, w)
                     },
                 );
                 // cosh(x) > 1 strictly for x ≠ 0 and is transcendental, so it
@@ -4425,17 +4476,18 @@ macro_rules! decl_wide_transcendental {
                 // `sinh_strict_with`) and reapply the input sign to the
                 // non-negative `tanh(|x|)` working value.
                 let neg = raw < zero;
-                let k_lift = $core::exp_result_int_digits($core::to_work_scaled(raw, 0), SCALE);
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let k_lift = $core::exp_result_int_digits::<$core::Wagm>($core::to_work_scaled_agm(raw, 0), SCALE);
                 let base_guard = $core::GUARD + k_lift;
-                Self::from_bits($core::round_to_storage_directed(
+                Self::from_bits($core::round_to_storage_directed::<$core::Wagm>(
                     base_guard,
                     SCALE,
                     mode,
                     |guard| {
                         let w = SCALE + guard;
-                        let v = $core::to_work_scaled(raw, guard);
-                        let av = if v < $core::zero() { -v } else { v };
-                        let th = $core::tanh_pos_wide::<SCALE>(av, w);
+                        let v = $core::to_work_scaled_agm(raw, guard);
+                        let av = if v < $core::zero_agm() { -v } else { v };
+                        let th = $core::tanh_pos_wide_agm(av, w);
                         if neg { -th } else { th }
                     },
                 ))
