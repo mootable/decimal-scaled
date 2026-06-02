@@ -81,85 +81,23 @@
 //!
 //! [`RoundingMode`]: crate::support::rounding::RoundingMode
 
-/// Emits the per-tier `pow10_table(w)` helper. Two flavours:
+/// Emits the per-tier `pow10_table(w)` door onto the `pow10` int policy.
 ///
-/// - `with_const_table` — emits a `static POW10_TABLE: [W; max_scale+GUARD+1]`
-///   initialised at compile time (one `wrapping_mul` per entry, chained
-///   from the previous) and indexes it directly for in-range `w`.
-///   Out-of-range `w` recomputes `10^w` on the stack.
-/// - `no_const_table` — recomputes `10^w` on the stack (no const table).
-///   Used on tiers where the const-eval step budget can't build the table
-///   in stable rust (D924, D1232).
+/// `10^w` keyed on the working width `w`, routed through
+/// [`crate::consts::pow10::dispatch`] — the single int policy for `10^exp`
+/// (the generated `POW10` limb table, with a `TEN.pow` fallback past the
+/// band). For a const `w` (the tier `SCALE`, `GUARD`, etc.) `dispatch`
+/// const-folds to the literal `W`; for a runtime `w` it is the policy's
+/// table lookup. No per-tier `static POW10_TABLE` is baked: that duplicated
+/// the policy's table once per tier in `.rodata`. The `$table_mode` /
+/// `$max_scale` arguments are vestigial (every tier now routes identically)
+/// and accepted only to keep the per-tier emission call shape unchanged.
 #[doc(hidden)]
 #[macro_export]
 macro_rules! decl_pow10_table {
-    (with_const_table, $max_scale:literal) => {
-        /// Upper bound on the strict-path working width
-        /// `w = SCALE + GUARD`. Sizes the const `POW10_TABLE`.
-        pub(crate) const POW10_TABLE_MAX_W: u32 = ($max_scale as u32) + GUARD;
-        /// `10^w` lookup table, built at compile time by chaining
-        /// `wrapping_mul(10)` from `1`. Covers every
-        /// `w ∈ 0..=POW10_TABLE_MAX_W` — i.e. the entire strict
-        /// path. The `_approx` family with `working_digits > GUARD`
-        /// can exceed this range; those recompute `10^w` on the stack.
-        ///
-        /// Memory cost: `(POW10_TABLE_MAX_W + 1) · sizeof(W)`. For
-        /// D76 that's ~13 KB (Int<16>); for D307 ~170 KB (Int<64>).
-        /// The table lives in `.rodata` once per tier in builds that
-        /// enable the tier. In a hot loop a single `w` value is reused,
-        /// so only one cache line is touched repeatedly — the table
-        /// size matters for binary footprint, not per-call cache
-        /// locality.
-        pub(crate) static POW10_TABLE: [W; (POW10_TABLE_MAX_W + 1) as usize] = {
-            let mut table = [<W>::from_u128(0); (POW10_TABLE_MAX_W + 1) as usize];
-            let ten = <W>::from_u128(10);
-            table[0] = <W>::from_u128(1);
-            let mut i: usize = 1;
-            let len = (POW10_TABLE_MAX_W + 1) as usize;
-            while i < len {
-                table[i] = table[i - 1].wrapping_mul(ten);
-                i += 1;
-            }
-            table
-        };
-        /// Companion to [`pow10`] keyed on `w`.
-        ///
-        /// For `w` within the strict-path range
-        /// (`0..=POW10_TABLE_MAX_W`) returns the compile-time table
-        /// entry — a single static load. For larger `w` (only reachable
-        /// via `_approx` with `working_digits > GUARD`) recomputes
-        /// `10^w` on the stack.
-        ///
-        /// The in-range path uses `get_unchecked` to skip the bounds
-        /// check — safe because the preceding `w <= POW10_TABLE_MAX_W`
-        /// branch guarantees `w as usize < POW10_TABLE.len()` (the
-        /// table is sized `POW10_TABLE_MAX_W + 1`).
+    ($table_mode:tt, $max_scale:literal) => {
         #[inline]
         pub(crate) fn pow10_table(w: u32) -> W {
-            if w <= POW10_TABLE_MAX_W {
-                // SAFETY: `w <= POW10_TABLE_MAX_W` implies
-                // `w as usize <= POW10_TABLE_MAX_W as usize <
-                // POW10_TABLE.len()` since the table length is
-                // `POW10_TABLE_MAX_W + 1`. `u32 as usize` is
-                // lossless on all supported targets.
-                return unsafe { *POW10_TABLE.get_unchecked(w as usize) };
-            }
-            pow10(w)
-        }
-    };
-    (no_const_table, $max_scale:literal) => {
-        /// Companion to [`pow10`] keyed on `w`. This tier's max scale
-        /// puts the const-table build past the stable-rust const-eval
-        /// step budget (the `with_const_table` arm's `static POW10_TABLE`
-        /// will not compile here), so there is no compile-time table — it
-        /// recomputes `10^w` on the stack each call. (Bakeable as a
-        /// `static` via a `build.rs` codegen step, which sidesteps the
-        /// const-eval budget; not done here.)
-        #[inline]
-        pub(crate) fn pow10_table(w: u32) -> W {
-            // D924/D1232: no const-eval table fits the step budget, so read the
-            // GENERATED POW10 table (a static lookup) instead of recomputing
-            // `10^w` by repeated squaring. Falls back to `TEN.pow` past the band.
             $crate::consts::pow10::dispatch::<W>(w)
         }
     };
