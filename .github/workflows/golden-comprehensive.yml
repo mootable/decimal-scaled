@@ -8,14 +8,12 @@ name: "🔬 golden (comprehensive)"
 # the `ci` and `bench-branch-compare` queues: a deep golden pass must never
 # delay a pre-merge gate or a perf compare, and must not be starved by them.
 #
-# Triggers:
-#   * workflow_dispatch — run on demand against ANY ref (e.g. release/0.5.0
-#     to deep-verify a precision-sensitive change, or before a release). The
-#     optional `filter` input maps to GOLDEN_FILTER to narrow the sweep to
-#     file stems containing the substring (e.g. `d924`, `mul_d`).
-#   * push to main — a post-merge comprehensive pass. main lands infrequently,
-#     so the queue-of-one completes rather than thrashing the way it would on
-#     rapid release-branch pushes (those keep the fast `golden (gate)` + bbc).
+# Trigger: workflow_dispatch only — run on demand against ANY ref (e.g.
+# release/0.5.0 to deep-verify a precision-sensitive change, or main before a
+# release). Manual-only by design: every multi-hour comprehensive run is then
+# deliberate, never auto-kicked by a push. The optional `filter` input maps to
+# GOLDEN_FILTER to narrow the sweep to file stems containing the substring
+# (e.g. `d924` for a ~1-minute single-tier scan, `mul_d`, etc.).
 
 on:
   workflow_dispatch:
@@ -24,9 +22,6 @@ on:
         description: "GOLDEN_FILTER substring (golden file-stem match; empty = ALL tables)"
         required: false
         default: ""
-  push:
-    branches:
-      - main
 
 permissions:
   contents: read
