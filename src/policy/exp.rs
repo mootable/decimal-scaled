@@ -132,8 +132,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // D924 + all of D1232 did not complete in the time budget, but trend
         // is uniform — Series widening lead with width).
         //
-        // **Audit Finding #5 (2026-05-28) DISPOSITION** — the
-        // `research/2026_05_28_d462_d924_d1232_policy_audit.md` audit raised
+        // **Audit Finding #5 DISPOSITION** — a policy audit raised
         // that `policy::exp` Tang then gated N ∈ {3,4,6,8,12,16} and asked
         // whether the wider tiers N ≥ 24 should also be Tang-gated. The 5-point
         // sweep above + the D462 bisection at s58/s115 EMPIRICALLY REFUTE the

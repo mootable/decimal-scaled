@@ -242,7 +242,7 @@ const AVAIL_RUNGS: [usize; 13] = [3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 1
 /// max-scale cells stay bit-identical.
 ///
 /// `MARGIN` is the directed-Ziv escalation headroom above the working scale.
-/// **MEASURED (policy-mapper STEP 2, 2026-06-03):** the WIDE tiers (storage ≥ 16
+/// **MEASURED:** the WIDE tiers (storage ≥ 16
 /// limbs: D307…D1232) reproduce the measured golden-safe narrowest-valid rung at
 /// `MARGIN = 24` — their near-grid-line-validated map is monotone, and `24` matches
 /// all 25 wide cells exactly (incl. the recovery cell `D462 s231 → w32`, where the

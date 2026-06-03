@@ -322,8 +322,8 @@ where
 }
 
 /// Rung-generic `ln_series` — the Brent-reduction wide-ln kernel run at an
-/// arbitrary work rung `Wk` (decoupled from `C::W`), so the policy / STEP-2
-/// policy-mapper can run / bench Series at its minimal valid work width
+/// arbitrary work rung `Wk` (decoupled from `C::W`), so the policy can
+/// run / bench Series at its minimal valid work width
 /// (mirrors [`crate::algos::ln::ln_tang::ln_tang_g`]; [`ln_series`] is the
 /// `Wk = C::W` alias, bit-identical). Calls the already-work-int-generic
 /// `exp_generic::ln_fixed::<Wk>` directly (bypassing the fixed-`C::W` trait
@@ -552,7 +552,7 @@ pub(crate) fn atan_narrow<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
 // Hoisted out of the per-tier `decl_wide_transcendental!` macro so a
 // tier-generic kernel (e.g. `ln_tang_g<C, Wk>`) can lift/narrow at an
 // arbitrary work rung `Wk` WITHOUT a per-tier module path and WITHOUT a new
-// trait method (owner directive: free-fn hoist, no trait-surface growth).
+// trait method (free-fn hoist, no trait-surface growth).
 // `St` (storage) appears only as the input/output type + the range-check
 // bounds; `St` has no trait-level `MAX`/`MIN`, so the caller supplies them
 // (`st_max`/`st_min`). The per-tier macro forwards pass `<$Storage>::MAX/MIN`

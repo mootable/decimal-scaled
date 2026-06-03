@@ -45,7 +45,7 @@
 //! - Non-allocating: fixed `[L; *_SCRATCH_*]` stack buffer; recursion carves
 //!   disjoint windows via `split_at_mut`.
 //! - Base-case: below `TOOM3_BASE_THRESHOLD` limbs falls to the schoolbook base.
-//! - The limb width (u64 / u128) is the policy-mapper's choice (a `LimbSize`
+//! - The limb width (u64 / u128) is the policy matcher's choice (a `LimbSize`
 //!   verdict), exactly like Karatsuba; this kernel just provides both.
 //! - NOT wired into any policy: a kept alternative awaiting the policy map.
 

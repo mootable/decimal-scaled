@@ -59,8 +59,7 @@ pub(crate) fn rem_native_direct<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> 
 #[cfg(test)]
 mod tests {
     // NOTE: candidate test — bit-identity vs the shipped magnitude path.
-    // NOT run by the hunter (cargo is owner-only). Left here so the owner
-    // can validate before wiring.
+    // Not run here; kept for validation before wiring.
     use super::rem_native_direct;
     use crate::int::algos::rem::rem_native::rem_native;
     use crate::int::types::Int;

@@ -18,7 +18,7 @@
 //! The ALGORITHM is ONE: karatsuba_rec_limb is the single generic
 //! recursion, instantiated at u64 or u128. There is no per-limb-type
 //! copy (rule 2 of the architecture constitution). The choice of which
-//! limb width wins per (N, SCALE) cell is the policy-mapper s job.
+//! limb width wins per (N, SCALE) cell is the policy matcher's job.
 
 use crate::int::algos::support::limbs::{add_assign, sub_assign};
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;

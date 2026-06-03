@@ -98,7 +98,7 @@ use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 // build-max scratch — D1232 strict_agm runs at `w_prime ≈ 2466`
 // which puts an 8192-bit Newton's numerator at 260+ limbs, and a
 // 12288-bit Newton's at 293+, both past the build-max scratch the
-// routed Knuth can hold. The sibling-agent atanh-diagnosis bench
+// routed Knuth can hold. The atanh-diagnosis bench
 // also reported Newton LOSING by 5–58× at Int<192>/Int<256> w=38
 // (low-scale shape), so even with extended scratch the integrated
 // picture isn't settled. Revisit when both the wider-numerator divide

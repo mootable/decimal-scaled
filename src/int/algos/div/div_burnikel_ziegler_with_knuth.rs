@@ -432,8 +432,8 @@ mod tests {
     // Production presents a divide at WORKING widths exceeding storage — the
     // `÷10^w` rescale + the wide-transcendental slice roots give an effective
     // `den_n` up to ~67 over a `~2·den_n` dividend — and BZ engages there
-    // (`den_n ≥ BZ_THRESHOLD`). These are the exact 2n/n shapes the coordinator
-    // named (134/67, 138/69, 96/48) plus neighbours, each bit-identical to
+    // (`den_n ≥ BZ_THRESHOLD`). These are the exact 2n/n shapes that arise
+    // in practice (134/67, 138/69, 96/48) plus neighbours, each bit-identical to
     // Knuth. xx-wide so the build-max recursive scratch is the widest tier.
     #[test]
     fn bz_recursive_matches_knuth_working_width_2n_over_n() {

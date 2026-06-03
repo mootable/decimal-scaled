@@ -9,8 +9,8 @@
 //! eliminate the per-iteration multi-precision divide that the shipped
 //! Newton cube root pays. The cube-root policy
 //! ([`crate::int::policy::icbrt`]) still routes every width to
-//! `icbrt_newton`; the coordinator benches this candidate against it and
-//! wires it (per `(N)`) only where it wins. See the kept-alternatives note
+//! `icbrt_newton`; this candidate is benched against it and wired
+//! (per `(N)`) only where it wins. See the kept-alternatives note
 //! in `docs/ARCHITECTURE.md`.
 //!
 //! # Why
@@ -90,8 +90,8 @@ use crate::int::types::compute_limbs::MAX_QUADRUPLE_LIMBS;
 /// `F ≈ 2·bits/3`, that is `≈8·bits/3` bits ≈ `4·n.len()` limbs of headroom
 /// over the operand. `2·MAX_QUADRUPLE_LIMBS + 8` u64 limbs covers it for
 /// every shipped operand width. Local to this candidate; it sizes no other
-/// tier. The wider footprint is the division-free trade's cost — the
-/// coordinator weighs it at bench time.
+/// tier. The wider footprint is the division-free trade's cost,
+/// weighed at bench time.
 const SCRATCH_LIMBS: usize = 2 * MAX_QUADRUPLE_LIMBS + 8;
 /// Guard fractional bits carried by the reciprocal `Y` beyond the root
 /// precision; ample for the end-correction to finish in O(1) steps.

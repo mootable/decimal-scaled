@@ -20,7 +20,7 @@
 //! It is registered as an UNWIRED, UNROUTED candidate (`#[allow(dead_code)]`)
 //! per `docs/ARCHITECTURE.md` → "Keeping the alternatives". The `eq` policy does
 //! not route it; only the `#[cfg(test)]` bit-identity check below exercises it.
-//! A later policy-mapper pass benches it against `eq_limbwise` and, if it wins,
+//! A later benchmark pass compares it against `eq_limbwise` and, if it wins,
 //! wires it via an `Algorithm` arm. The expected win is small (equality is
 //! already cheap) but it is a genuinely distinct, marginally cheaper algorithm
 //! — not an alias of the comparison kernel.

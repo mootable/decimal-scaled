@@ -10,7 +10,7 @@
 //!   OR-fold of per-limb XORs, a branchless equality cheaper than reusing the
 //!   comparison kernel. Kept per `docs/ARCHITECTURE.md` → "Keeping the
 //!   alternatives"; reached only by its own bit-identity test until a
-//!   policy-mapper pass benches and (if it wins) wires it.
+//!   benchmark pass compares and (if it wins) wires it.
 
 pub(crate) mod eq_limbwise;
 pub(crate) mod eq_xor_fold;

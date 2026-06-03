@@ -551,7 +551,7 @@ pub mod __bench_internals {
     }
     /// Native hardware integer square root candidate (`u64::isqrt` for
     /// `N == 1`, `u128::isqrt` for `N == 2`) exposed for the dedicated
-    /// `isqrt_ab` policy-mapper microbench. Const-`N`: the
+    /// `isqrt_ab` A/B microbench. Const-`N`: the
     /// [`isqrt_mag_fixed`][m] wrapper routes `N <= 2` to the hardware path
     /// and `N >= 3` to Newton, so this arm is only *eligible* (single
     /// hardware instruction, no Newton loop) at `N <= 2`.
@@ -575,7 +575,7 @@ pub mod __bench_internals {
     }
 
     /// Karatsuba Square Root candidate (`isqrt_karatsuba`) over little-endian
-    /// magnitude limb slices, exposed for the `isqrt_ab` policy-mapper A/B.
+    /// magnitude limb slices, exposed for the `isqrt_ab` A/B.
     /// Bit-identical to [`isqrt_newton_slice`]; A/B measures whether the
     /// `O(log n)` half-width divides beat Newton's full-width-divide-per-iter
     /// at each width.
@@ -586,7 +586,7 @@ pub mod __bench_internals {
 
     /// Division-free reciprocal-Newton cube-root candidate
     /// (`icbrt_newton_recip`) over little-endian magnitude limb slices, exposed
-    /// for the `icbrt_ab` policy-mapper A/B. Bit-identical to
+    /// for the `icbrt_ab` A/B. Bit-identical to
     /// [`icbrt_newton_slice`]; A/B measures whether the multiply-only
     /// reciprocal iteration beats the shipped divide-per-iteration Newton.
     #[inline(never)]
@@ -594,7 +594,7 @@ pub mod __bench_internals {
         crate::int::algos::icbrt::icbrt_newton_recip::icbrt_newton_recip(n, out)
     }
 
-    /// Integer `cube` candidates exposed for the `int_cube_eq_ab` policy-mapper
+    /// Integer `cube` candidates exposed for the `int_cube_eq_ab`
     /// A/B: the shipped sqr-then-multiply [`cube_schoolbook`] vs the fused
     /// product-scanning (comba) [`cube_fused_comba`] candidate. Both generic
     /// over `N`, both `const fn`, bit-identical low `N` limbs.
@@ -611,7 +611,7 @@ pub mod __bench_internals {
         crate::int::algos::cube::cube_fused_comba::cube_fused_comba::<N>(x)
     }
 
-    /// Integer `eq` candidates exposed for the `int_cube_eq_ab` policy-mapper
+    /// Integer `eq` candidates exposed for the `int_cube_eq_ab`
     /// A/B: the shipped [`eq_limbwise`] (reuses the comparison kernel) vs the
     /// [`eq_xor_fold`] candidate (branchless OR-fold of per-limb XORs). Both
     /// generic over `N`, both `const fn`, bit-identical.
@@ -1112,9 +1112,9 @@ pub mod __bench_internals {
 
     // exp — Schoolbook (the `Algorithm::Schoolbook` reference arm of the wide
     // `policy::exp` tiers — the naive Maclaurin series in a Fixed intermediate,
-    // generic over `Core`). Exported per tier so the policy-mapper A/B can
-    // include Schoolbook as a third candidate at every wide cell (owner
-    // directive 2026-05-29: bench every Algorithm variant, no exceptions).
+    // generic over `Core`). Exported per tier so the A/B bench can
+    // include Schoolbook as a third candidate at every wide cell —
+    // benching every Algorithm variant, no exceptions.
     // Same `(Int<N>, mode)` shape as `exp_series_d*`.
     #[cfg(any(feature = "d57", feature = "wide"))]
     #[inline(never)]
@@ -1453,7 +1453,7 @@ pub mod __bench_internals {
     }
 
     // D462 forward-trig bench seam — sin/cos/tan/atan Series-vs-narrow A/B
-    // for the policy-mapper bisection of the (24, 225..=235) band. The "Tang"
+    // for the A/B bisection of the (24, 225..=235) band. The "Tang"
     // variant at D462 is realised by `sincos_narrow::*_with_taylor` (a
     // narrowed-GUARD Taylor reclaim — not actual Tang lookup, see the
     // kernel module doc), parameterised by the band GUARD so the bench can
@@ -1763,7 +1763,7 @@ pub mod __bench_internals {
         // Newton precompute numerator at the AGM-widened scales
         // exceeds the routed Knuth build-max scratch
         // (`MAX_SINGLE_LIMBS = 258`), and the integrated-bench picture
-        // (sibling-agent atanh diagnosis) suggests MG is the right
+        // (the atanh diagnosis) suggests MG is the right
         // engine at those widths anyway.
         shim!(b6144, crate::int::types::Int<96>, "xx-wide");
     }

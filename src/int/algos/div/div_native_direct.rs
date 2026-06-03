@@ -68,8 +68,7 @@ pub(crate) fn div_rem_native_direct<const N: usize>(a: Int<N>, b: Int<N>) -> (In
 #[cfg(test)]
 mod tests {
     // NOTE: candidate test — bit-identity vs the shipped magnitude path
-    // (`Int::div_rem`). NOT run by the hunter (cargo is owner-only). Left
-    // here so the owner can validate before wiring.
+    // (`Int::div_rem`). Not run here; kept for validation before wiring.
     use super::div_rem_native_direct;
     use crate::int::types::Int;
 

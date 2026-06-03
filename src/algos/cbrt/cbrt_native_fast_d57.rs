@@ -291,7 +291,7 @@ pub(crate) fn cbrt_native_fast_b<const N: usize, const W: usize>(
     round_and_narrow::<N, W>(q, n, negative, mode)
 }
 
-// ── bit-identity test (NOT run here — coordinator runs the suite) ───────
+// ── bit-identity test (NOT run here — run by the full suite) ───────
 
 #[cfg(all(test, feature = "std"))]
 mod tests {
