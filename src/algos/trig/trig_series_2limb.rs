@@ -1190,13 +1190,35 @@ pub(crate) fn atanh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: R
         !ax.ge_mag(one_w),
         "D38::atanh: argument out of domain (-1, 1)"
     );
-    // atanh(x) = ½·ln((1+x)/(1-x)) = ½·(ln(1+x) − ln(1-x)). The two logs are
-    // taken SEPARATELY rather than ln of the ratio: near |x| = 1 the ratio
-    // (1+x)/(1-x) reaches ~10^(2·digits) and, scaled to the working scale `w`,
-    // overflows the 256-bit `Fixed` (e.g. atanh(1−10⁻²⁸) at D38 s28 has ratio
-    // ≈ 2·10²⁸, which at w = SCALE+30 = 58 is a raw ~10⁸⁶, past 2²⁵⁶). Each of
-    // `1+x` and `1-x` lies in (0, 2) and fits, and `ln_fixed` handles arguments
-    // below 1 (the x-near-−1 case already relies on it).
+    // atanh(x) = ½·ln((1+x)/(1-x)), value-gated on |x|:
+    //
+    //  - |x| ≤ 0.98 (1−|x| ≥ 0.02): the 1-log RATIO form ½·ln((1+x)/(1-x)) —
+    //    ONE `ln_fixed` (~2× cheaper than the two-log gap form). The ratio
+    //    R = (1+|x|)/(1-|x|) ≤ 99 there, so `R·10^w` fits the 256-bit `Fixed`
+    //    at any working scale up to the 75-digit ceiling (R < 2²⁵⁶/10⁷⁵ ≈ 115;
+    //    the strict path's w = SCALE+30 ≤ 68 has ~10⁷× more headroom). The
+    //    division's ≤0.5-ULP-at-w error propagates to atanh as ≤0.25·10⁻ʷ,
+    //    absorbed by the ≥30 guard digits, so every mode rounds correctly.
+    //
+    //  - |x| > 0.98 (near ±1): the GAP form ½·(ln(1+x) − ln(1-x)) — TWO logs,
+    //    taken separately so the overflowing ratio is never formed (the
+    //    `dab34171` correctness fix: near |x|=1 the ratio reaches ~10^(2·digits),
+    //    e.g. atanh(1−10⁻²⁸) at D38 s28 → ~10⁸⁶, past 2²⁵⁶). `1+x` and `1-x`
+    //    each lie in (0, 2) and fit; `ln_fixed` handles arguments below 1.
+    //
+    // Gate in `Fixed` magnitudes: `50·(1−|x|)·10^w ≥ 10^w` ⟺ `1−|x| ≥ 0.02`
+    // (the `50·(1−|x|)·10^w ≤ 5·10⁷⁶` intermediate fits 2²⁵⁶).
+    if one_w.sub(ax).mul_u128(50).ge_mag(one_w) {
+        // Ratio form: R = (1+x)/(1-x) at working scale w (both 1±x are positive
+        // for |x| < 1, so R > 0; R < 1 for x < 0). One `ln_fixed`.
+        let r = one_w.add(v).div(one_w.sub(v), w);
+        return ln_fixed(r, w)
+            .halve()
+            .round_to_i128_with(w, scale, mode)
+            .unwrap_or_else(|| {
+                crate::support::diagnostics::overflow_panic_with_scale("D38::atanh", scale)
+            });
+    }
     let ln_num = ln_fixed(one_w.add(v), w);
     let ln_den = ln_fixed(one_w.sub(v), w);
     ln_num

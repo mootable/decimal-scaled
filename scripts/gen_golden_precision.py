@@ -668,6 +668,16 @@ def sample_inputs(func_name: str, scale: int, max_raw: int, count: int,
             out.append(rng.randint(one, cap))
 
     elif func_name == "atanh":
+        # Value-gate boundary: `atanh_with_raw` routes |x| <= 0.98 to the 1-log
+        # ratio form ½·ln((1+x)/(1-x)) and |x| > 0.98 to the 2-log gap form.
+        # Pin the exact crossover so an edit to the gate or either form is caught:
+        # raw = 0.98·10^scale (ratio side) and +1 ULP (gap side), both signs.
+        if scale >= 2:
+            gate = 98 * (one // 100)  # |x| = 0.98 exactly
+            for g in (gate, gate + 1):
+                if 0 < g < one:
+                    out.append(g)
+                    out.append(-g)
         # Domain (-1, 1): sample strictly inside (avoid |raw| == one).
         while len(out) < count:
             r = rng.randint(-(one - 1), one - 1)
