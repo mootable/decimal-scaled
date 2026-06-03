@@ -80,6 +80,13 @@ pub(crate) trait WideTrigCore {
     fn storage_zero() -> Self::Storage;
     /// The storage representation of `1` at scale `SCALE` (`10^SCALE`).
     fn storage_one(scale: u32) -> Self::Storage;
+    /// The storage `MAX` / `MIN` (the tier's representable bounds). Supplied to
+    /// the work-rung narrowing range check (`round_to_storage_*_g`): `MAX`/`MIN`
+    /// are inherent consts on `Int<N>`, NOT on `BigInt`, so a tier-generic
+    /// kernel sources them through the `Core` here rather than `Self::Storage::MAX`.
+    fn storage_max() -> Self::Storage;
+    /// See [`Self::storage_max`].
+    fn storage_min() -> Self::Storage;
     /// The work-integer `0`.
     fn zero() -> Self::W;
 
@@ -494,4 +501,243 @@ pub(crate) fn atan_narrow<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
     let v_w = C::to_work_scaled(raw, GUARD);
     let r = C::atan_fixed::<SCALE>(v_w, w);
     C::round_to_storage_with(r, w, SCALE, mode)
+}
+
+// ─── Work-int-generic narrowing / lift free fns (the SCALE-derived work-rung
+//     surface) ─────────────────────────────────────────────────────────────
+//
+// Hoisted out of the per-tier `decl_wide_transcendental!` macro so a
+// tier-generic kernel (e.g. `ln_tang_g<C, Wk>`) can lift/narrow at an
+// arbitrary work rung `Wk` WITHOUT a per-tier module path and WITHOUT a new
+// trait method (owner directive: free-fn hoist, no trait-surface growth).
+// `St` (storage) appears only as the input/output type + the range-check
+// bounds; `St` has no trait-level `MAX`/`MIN`, so the caller supplies them
+// (`st_max`/`st_min`). The per-tier macro forwards pass `<$Storage>::MAX/MIN`
+// (bit-identical to the prior inline bodies); a tier-generic caller passes
+// `C::storage_max()/storage_min()`. The `÷10^shift` divides are already
+// width-generic (`div_wide_pow10::<S>` / `dispatch_wide_pow10::<S>`).
+
+/// Work-int-generic lift-up: widen storage `St` into the work integer `S` and
+/// scale by `10^working_digits`. Storage-generic sibling of the per-tier
+/// `to_work_scaled`; sources `10^d` from the width-generic `exp_generic::pow10`.
+#[inline]
+pub(crate) fn to_work_scaled_g<St: BigInt, S: BigInt>(raw: St, working_digits: u32) -> S
+where
+    S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    BigInt::resize_to::<S>(raw) * crate::algos::exp::exp_generic::pow10::<S>(working_digits)
+}
+
+/// Work-int-generic narrowing of a working-scale value `v` (at scale `w`) down
+/// to storage scale `target`, rounded under `mode`, into storage `St`.
+/// `st_max`/`st_min` are `St::MAX`/`MIN`, caller-supplied.
+#[inline]
+pub(crate) fn round_to_storage_with_g<St: BigInt + Copy, S: BigInt>(
+    v: S,
+    w: u32,
+    target: u32,
+    mode: RoundingMode,
+    st_max: St,
+    st_min: St,
+) -> St
+where
+    S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    let shift = w - target;
+    let rounded = if shift == 0 {
+        v
+    } else if shift <= 38 {
+        crate::algos::support::mg_divide::div_wide_pow10::<S>(v, shift, mode)
+    } else {
+        crate::algos::support::rescale::dispatch_wide_pow10::<S>(v, shift, mode)
+    };
+    let max_w = BigInt::resize_to::<S>(st_max);
+    let min_w = BigInt::resize_to::<S>(st_min);
+    if rounded > max_w || rounded < min_w {
+        panic!("wide-tier strict transcendental: result out of range");
+    }
+    BigInt::resize_to::<St>(rounded)
+}
+
+/// Work-int-generic directed-rounding narrowing with Ziv escalation. `St` =
+/// storage output, `S` = work integer (a rung `Wk` or the tier `W`).
+#[inline]
+pub(crate) fn round_to_storage_directed_g<St: BigInt + Copy, S: BigInt>(
+    base_guard: u32,
+    target: u32,
+    mode: RoundingMode,
+    st_max: St,
+    st_min: St,
+    recompute: impl FnMut(u32) -> S,
+) -> St
+where
+    S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    round_to_storage_directed_impl_g::<St, S>(base_guard, target, mode, false, false, st_max, st_min, recompute)
+}
+
+/// `never_exact` directed narrowing (an irrational-valued kernel, e.g. `exp`):
+/// a zero working residual is a sub-resolution positive residual.
+#[inline]
+pub(crate) fn round_to_storage_directed_never_exact_g<St: BigInt + Copy, S: BigInt>(
+    base_guard: u32,
+    target: u32,
+    mode: RoundingMode,
+    st_max: St,
+    st_min: St,
+    recompute: impl FnMut(u32) -> S,
+) -> St
+where
+    S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    round_to_storage_directed_impl_g::<St, S>(base_guard, target, mode, false, true, st_max, st_min, recompute)
+}
+
+/// Near-special-point directed narrowing (`acosh` at 1, `atanh` at ±1):
+/// force a confirm recompute even in nearest modes.
+#[inline]
+pub(crate) fn round_to_storage_directed_near_special_g<St: BigInt + Copy, S: BigInt>(
+    base_guard: u32,
+    target: u32,
+    mode: RoundingMode,
+    st_max: St,
+    st_min: St,
+    recompute: impl FnMut(u32) -> S,
+) -> St
+where
+    S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    round_to_storage_directed_impl_g::<St, S>(base_guard, target, mode, true, false, st_max, st_min, recompute)
+}
+
+fn round_to_storage_directed_impl_g<St: BigInt + Copy, S: BigInt>(
+    base_guard: u32,
+    target: u32,
+    mode: RoundingMode,
+    force_confirm: bool,
+    never_exact: bool,
+    st_max: St,
+    st_min: St,
+    mut recompute: impl FnMut(u32) -> S,
+) -> St
+where
+    S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    use crate::support::rounding::{is_nearest_mode, RoundingMode};
+
+    let lit = |n: i128| <S as BigInt>::from_i128(n);
+    let pow10 = |n: u32| crate::consts::pow10::dispatch::<S>(n);
+    let bit_length = |v: S| -> u32 {
+        let m = if v < <S as BigInt>::ZERO { -v } else { v };
+        <S as BigInt>::BITS - m.leading_zeros()
+    };
+    let round_to_storage_with = |v: S, w: u32, t: u32, m: RoundingMode| -> St {
+        round_to_storage_with_g::<St, S>(v, w, t, m, st_max, st_min)
+    };
+
+    let base_w = target + base_guard;
+    if is_nearest_mode(mode) {
+        if !force_confirm {
+            return round_to_storage_with(recompute(base_guard), base_w, target, mode);
+        }
+        let mut nearest_narrow = |guard: u32| -> St {
+            let w = target + guard;
+            round_to_storage_with(recompute(guard), w, target, mode)
+        };
+        let lo = nearest_narrow(base_guard);
+        let int_digits = {
+            let n = BigInt::resize_to::<S>(lo);
+            let m = if n < lit(0) { -n } else { n };
+            let bl = bit_length(m);
+            let storage_digits = (bl as u64 * 30103 / 100_000) as u32 + 1;
+            storage_digits.saturating_sub(target)
+        };
+        let cap_digits = (<S>::BITS / 8).saturating_sub(int_digits + 8);
+        let max_guard = cap_digits.saturating_sub(target).max(base_guard);
+        let mut guard = base_guard;
+        let mut best = lo;
+        loop {
+            if guard >= max_guard {
+                break;
+            }
+            let step = (target + base_guard).max(base_guard);
+            let next_guard = guard.saturating_add(step).min(max_guard);
+            let hi = nearest_narrow(next_guard);
+            if hi == best {
+                break;
+            }
+            guard = next_guard;
+            best = hi;
+        }
+        return best;
+    }
+
+    let mut directed_narrow = |guard: u32| -> (S, S, S) {
+        let w = target + guard;
+        let v = recompute(guard);
+        let shift = w - target;
+        let neg = v < lit(0);
+        let mag = if neg { -v } else { v };
+        let divisor = pow10(shift);
+        let (q, rem) = mag.div_rem(divisor);
+        let result_positive = !neg;
+        let residual_present = rem != lit(0) || never_exact;
+        let bump = residual_present
+            && match mode {
+                RoundingMode::Trunc => false,
+                RoundingMode::Floor => !result_positive,
+                RoundingMode::Ceiling => result_positive,
+                _ => unreachable!(),
+            };
+        let q_mag = if bump { q + lit(1) } else { q };
+        let signed = if neg { -q_mag } else { q_mag };
+        let dist = if rem < divisor - rem {
+            rem
+        } else {
+            divisor - rem
+        };
+        (signed, dist, divisor)
+    };
+
+    let (mut lo, dist0, divisor0) = directed_narrow(base_guard);
+
+    let band0 = divisor0 / lit(1000);
+    let near_grid = force_confirm || dist0 <= band0;
+
+    let signed = if !near_grid {
+        lo
+    } else {
+        let int_digits = {
+            let m = if lo < lit(0) { -lo } else { lo };
+            let bl = bit_length(m);
+            let storage_digits = (bl as u64 * 30103 / 100_000) as u32 + 1;
+            storage_digits.saturating_sub(target)
+        };
+        let cap_digits = (<S>::BITS / 8).saturating_sub(int_digits + 8);
+        let max_guard = cap_digits.saturating_sub(target).max(base_guard);
+
+        let mut guard = base_guard;
+        loop {
+            if guard >= max_guard {
+                break lo;
+            }
+            let step = (target + base_guard).max(base_guard);
+            let next_guard = guard.saturating_add(step).min(max_guard);
+            let (hi, hi_dist, hi_div) = directed_narrow(next_guard);
+            let hi_band = hi_div / lit(1000);
+            let resolved = hi_dist == lit(0) || hi_dist > hi_band;
+            if hi == lo && resolved {
+                break hi;
+            }
+            guard = next_guard;
+            lo = hi;
+        }
+    };
+
+    let max_w = BigInt::resize_to::<S>(st_max);
+    let min_w = BigInt::resize_to::<S>(st_min);
+    if signed > max_w || signed < min_w {
+        panic!("wide-tier strict transcendental: result out of range");
+    }
+    BigInt::resize_to::<St>(signed)
 }

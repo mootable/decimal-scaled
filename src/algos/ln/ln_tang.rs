@@ -307,8 +307,9 @@ where
 ///   the analogous flag on `exp_tang`.
 #[inline]
 #[must_use]
-pub(crate) fn ln_tang<
+pub(crate) fn ln_tang_g<
     C: WideTrigCore,
+    Wk: BigInt,
     const SCALE: u32,
     const GUARD: u32,
     const CAP: u128,
@@ -319,11 +320,26 @@ pub(crate) fn ln_tang<
     mode: RoundingMode,
 ) -> C::Storage
 where
-    <C::W as BigInt>::Scratch: ComputeLimbs,
+    <Wk as BigInt>::Scratch: ComputeLimbs,
 {
+    use crate::algos::support::wide_trig_core::{
+        round_to_storage_directed_g, round_to_storage_with_g, to_work_scaled_g,
+    };
+    use crate::support::rounding::DEFAULT_ROUNDING_MODE;
+
     if raw <= C::storage_zero() {
         panic!("wide-tier ln: argument must be positive");
     }
+    // `ln 2` at the RUNG work integer `Wk`, const-folded at the base working
+    // scale `SCALE + GUARD` (the hot path) — the rung sibling of the per-tier
+    // `C::ln2::<SCALE>` (value-identical; only the const-fold seam differs).
+    let ln2 = |ww: u32| -> Wk {
+        if ww == SCALE + GUARD {
+            crate::consts::ln2_by_scale::<Wk>(SCALE + GUARD, DEFAULT_ROUNDING_MODE)
+        } else {
+            crate::consts::ln2_by_working_scale::<Wk>(ww, DEFAULT_ROUNDING_MODE)
+        }
+    };
     if DIRECTED {
         // Directed modes decide which side of a storage grid line the true
         // value falls; near a grid line the working-scale approximation can
@@ -351,18 +367,55 @@ where
             diff.bit_length() < (SCALE - SCALE / 4) * 3
         };
         let r = if use_extra {
-            C::round_to_storage_directed(GUARD, SCALE, mode, &mut |guard| {
-                tang_ln_fixed::<C, CAP, true, SCALE>(C::to_work_scaled(raw, guard), SCALE + guard)
-            })
+            round_to_storage_directed_g::<C::Storage, Wk>(
+                GUARD, SCALE, mode, C::storage_max(), C::storage_min(),
+                |guard| {
+                    tang_ln_fixed_g::<Wk, CAP, true>(
+                        to_work_scaled_g::<C::Storage, Wk>(raw, guard), SCALE + guard, ln2,
+                    )
+                },
+            )
         } else {
-            C::round_to_storage_directed(GUARD, SCALE, mode, &mut |guard| {
-                tang_ln_fixed::<C, CAP, false, SCALE>(C::to_work_scaled(raw, guard), SCALE + guard)
-            })
+            round_to_storage_directed_g::<C::Storage, Wk>(
+                GUARD, SCALE, mode, C::storage_max(), C::storage_min(),
+                |guard| {
+                    tang_ln_fixed_g::<Wk, CAP, false>(
+                        to_work_scaled_g::<C::Storage, Wk>(raw, guard), SCALE + guard, ln2,
+                    )
+                },
+            )
         };
         crate::algos::support::wide_trig_core::adjust_ln_near_one::<C, SCALE>(r, raw, mode)
     } else {
         let w = SCALE + GUARD;
-        let r = tang_ln_fixed::<C, CAP, INTERNAL_EXTRA, SCALE>(C::to_work_scaled(raw, GUARD), w);
-        C::round_to_storage_with(r, w, SCALE, mode)
+        let r = tang_ln_fixed_g::<Wk, CAP, INTERNAL_EXTRA>(
+            to_work_scaled_g::<C::Storage, Wk>(raw, GUARD), w, ln2,
+        );
+        round_to_storage_with_g::<C::Storage, Wk>(
+            r, w, SCALE, mode, C::storage_max(), C::storage_min(),
+        )
     }
+}
+
+/// `ln_tang` = the `Wk = C::W` instantiation of [`ln_tang_g`] — the work-rung
+/// kernel at the tier's full primitive work width. This thin alias keeps every
+/// existing `policy::ln` call site unchanged; the work-width campaign routes
+/// narrower rungs through [`ln_tang_g`] directly (`policy::ln::tang_with_rung`).
+#[inline]
+#[must_use]
+pub(crate) fn ln_tang<
+    C: WideTrigCore,
+    const SCALE: u32,
+    const GUARD: u32,
+    const CAP: u128,
+    const DIRECTED: bool,
+    const INTERNAL_EXTRA: bool,
+>(
+    raw: C::Storage,
+    mode: RoundingMode,
+) -> C::Storage
+where
+    <C::W as BigInt>::Scratch: ComputeLimbs,
+{
+    ln_tang_g::<C, C::W, SCALE, GUARD, CAP, DIRECTED, INTERNAL_EXTRA>(raw, mode)
 }

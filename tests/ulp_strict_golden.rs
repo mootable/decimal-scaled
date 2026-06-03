@@ -2130,6 +2130,21 @@ mod band_edges {
         fn d462_ln_s461() {
             check_at_scale("ln", Width::D462, 461, include_str!("golden/ln_d462_s461.txt"));
         }
+        // Mid-scale D462 ln cells — the work-rung campaign (L7). The tables
+        // already exist; wiring them pins the rung-narrowed scales permanently
+        // (s115→W24, s231→W48, s346→W64 under the seed ladder) across all 6 modes.
+        #[test]
+        fn d462_ln_s115() {
+            check_at_scale("ln", Width::D462, 115, include_str!("golden/ln_d462_s115.txt"));
+        }
+        #[test]
+        fn d462_ln_s231() {
+            check_at_scale("ln", Width::D462, 231, include_str!("golden/ln_d462_s231.txt"));
+        }
+        #[test]
+        fn d462_ln_s346() {
+            check_at_scale("ln", Width::D462, 346, include_str!("golden/ln_d462_s346.txt"));
+        }
         #[test]
         fn d462_log2_s0() {
             check_at_scale("log2", Width::D462, 0, include_str!("golden/log2_d462_s0.txt"));

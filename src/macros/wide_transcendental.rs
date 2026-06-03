@@ -475,6 +475,26 @@ macro_rules! decl_wide_transcendental {
                 $crate::int::types::traits::BigInt::resize_to::<W>(raw) * pow10_table(working_digits)
             }
 
+            /// Work-int-generic lift-up (the SCALE-derived "work rung" path):
+            /// widens `$Storage` into an arbitrary work integer `S` and scales
+            /// by `10^working_digits`. The narrow primitive [`to_work_scaled`]
+            /// keeps its fast baked `pow10_table` at `W` (byte-identical); this
+            /// generic sibling serves a rung `S` narrower/other than `W`,
+            /// sourcing `10^digits` from the width-generic `exp_generic::pow10`.
+            /// The narrowing side is already work-int-generic
+            /// ([`round_to_storage_with_g`] / [`round_to_storage_directed`]),
+            /// so this completes the rung-generic Tang surface (see the L7
+            /// work-width campaign). Purely additive — no existing call rerouted.
+            pub(crate) fn to_work_scaled_g<S: $crate::int::types::traits::BigInt>(
+                raw: $Storage,
+                working_digits: u32,
+            ) -> S
+            where
+                S::Scratch: $crate::int::types::compute_limbs::ComputeLimbs,
+            {
+                $crate::algos::support::wide_trig_core::to_work_scaled_g::<$Storage, S>(raw, working_digits)
+            }
+
             /// Rounds a working-scale value down to scale `target` using
             /// the crate-default rounding mode and narrows to the
             /// type's storage. Panics if the rounded value does not
@@ -529,28 +549,9 @@ macro_rules! decl_wide_transcendental {
             where
                 S::Scratch: $crate::int::types::compute_limbs::ComputeLimbs,
             {
-                let shift = w - target;
-                let rounded = if shift == 0 {
-                    v
-                } else if shift <= 38 {
-                    $crate::algos::support::mg_divide::div_wide_pow10::<S>(v, shift, mode)
-                } else {
-                    // `shift > 38` rescale — the matcher selects the MG chain
-                    // (uncached Newton is dominated, 9.18.2; `Newton` is a
-                    // kept-alt). See [`crate::algos::support::rescale`].
-                    $crate::algos::support::rescale::dispatch_wide_pow10::<S>(
-                        v, shift, mode,
-                    )
-                };
-                let max_w = $crate::int::types::traits::BigInt::resize_to::<S>(<$Storage>::MAX);
-                let min_w = $crate::int::types::traits::BigInt::resize_to::<S>(<$Storage>::MIN);
-                if rounded > max_w || rounded < min_w {
-                    panic!(concat!(
-                        stringify!($Type),
-                        " strict transcendental: result out of range"
-                    ));
-                }
-                $crate::int::types::traits::BigInt::resize_to::<$Storage>(rounded)
+                $crate::algos::support::wide_trig_core::round_to_storage_with_g::<$Storage, S>(
+                    v, w, target, mode, <$Storage>::MAX, <$Storage>::MIN,
+                )
             }
 
             /// Directed-rounding narrowing with Ziv escalation.
@@ -590,7 +591,9 @@ macro_rules! decl_wide_transcendental {
             where
                 S::Scratch: $crate::int::types::compute_limbs::ComputeLimbs,
             {
-                round_to_storage_directed_impl::<S>(base_guard, target, mode, false, false, recompute)
+                $crate::algos::support::wide_trig_core::round_to_storage_directed_g::<$Storage, S>(
+                    base_guard, target, mode, <$Storage>::MAX, <$Storage>::MIN, recompute,
+                )
             }
 
             /// Directed-rounding narrowing for a kernel whose true result is
@@ -615,7 +618,9 @@ macro_rules! decl_wide_transcendental {
             where
                 S::Scratch: $crate::int::types::compute_limbs::ComputeLimbs,
             {
-                round_to_storage_directed_impl::<S>(base_guard, target, mode, false, true, recompute)
+                $crate::algos::support::wide_trig_core::round_to_storage_directed_never_exact_g::<$Storage, S>(
+                    base_guard, target, mode, <$Storage>::MAX, <$Storage>::MIN, recompute,
+                )
             }
 
             /// Near-special-point directed narrowing for the derived
@@ -638,253 +643,9 @@ macro_rules! decl_wide_transcendental {
             where
                 S::Scratch: $crate::int::types::compute_limbs::ComputeLimbs,
             {
-                round_to_storage_directed_impl::<S>(base_guard, target, mode, true, false, recompute)
-            }
-
-            fn round_to_storage_directed_impl<S: $crate::int::types::traits::BigInt>(
-                base_guard: u32,
-                target: u32,
-                mode: $crate::support::rounding::RoundingMode,
-                force_confirm: bool,
-                never_exact: bool,
-                mut recompute: impl FnMut(u32) -> S,
-            ) -> $Storage
-            where
-                S::Scratch: $crate::int::types::compute_limbs::ComputeLimbs,
-            {
-                use $crate::support::rounding::{RoundingMode, is_nearest_mode};
-
-                // Work-int-generic shadows of the per-tier `W`-typed helpers, so
-                // this Ziv-narrowing body operates on the caller's `S` — the
-                // narrow `W` for a primitive recompute, the wide `Wagm` for a
-                // composition (the wide-work directed-rounding guard ceiling
-                // `<S>::BITS/8` is the whole point of the two-core split).
-                let lit = |n: i128| <S as $crate::int::types::traits::BigInt>::from_i128(n);
-                let pow10 = |n: u32| $crate::consts::pow10::dispatch::<S>(n);
-                let bit_length = |v: S| -> u32 {
-                    let m = if v < <S as $crate::int::types::traits::BigInt>::ZERO { -v } else { v };
-                    <S as $crate::int::types::traits::BigInt>::BITS - m.leading_zeros()
-                };
-                let round_to_storage_with =
-                    |v: S, w: u32, t: u32, m: $crate::support::rounding::RoundingMode| -> $Storage {
-                        round_to_storage_with_g::<S>(v, w, t, m)
-                    };
-
-                let base_w = target + base_guard;
-                if is_nearest_mode(mode) {
-                    if !force_confirm {
-                        return round_to_storage_with(recompute(base_guard), base_w, target, mode);
-                    }
-                    // A single narrowing at `base_guard` is correctly
-                    // rounded whenever the working approximation lies
-                    // within half a storage ULP of the true value -- the
-                    // usual case the `GUARD` budget guarantees. Near a
-                    // special point (`atanh` at `+-1`, `acosh` at `1`) the
-                    // kernel's residual error grows, and a single
-                    // narrowing at the base guard can round to the wrong
-                    // storage neighbour even after the gap/log1p
-                    // reformulation removes the catastrophic cancellation.
-                    // Confirm the base narrowing against a wider-guard
-                    // recompute (Ziv): when two successive working scales
-                    // narrow to the same storage integer the result is
-                    // trustworthy. This mirrors the directed-mode loop
-                    // below but compares the rounded storage value
-                    // directly, since a nearest decision depends on the
-                    // whole residual, not just its sign. The guard is
-                    // capped from the result's integer-digit count exactly
-                    // as the directed loop is, so the recompute never
-                    // overflows `W`.
-                    let mut nearest_narrow = |guard: u32| -> $Storage {
-                        let w = target + guard;
-                        round_to_storage_with(recompute(guard), w, target, mode)
-                    };
-                    let lo = nearest_narrow(base_guard);
-                    let int_digits = {
-                        let n = $crate::int::types::traits::BigInt::resize_to::<S>(lo);
-                        let m = if n < lit(0) { -n } else { n };
-                        let bl = bit_length(m);
-                        let storage_digits = (bl as u64 * 30103 / 100_000) as u32 + 1;
-                        storage_digits.saturating_sub(target)
-                    };
-                    let cap_digits = (<S>::BITS / 8).saturating_sub(int_digits + 8);
-                    let max_guard = cap_digits.saturating_sub(target).max(base_guard);
-                    let mut guard = base_guard;
-                    let mut best = lo;
-                    loop {
-                        if guard >= max_guard {
-                            break;
-                        }
-                        let step = (target + base_guard).max(base_guard);
-                        let next_guard = guard.saturating_add(step).min(max_guard);
-                        let hi = nearest_narrow(next_guard);
-                        if hi == best {
-                            break;
-                        }
-                        guard = next_guard;
-                        best = hi;
-                    }
-                    return best;
-                }
-
-                // Directed answer: the truncated/bumped magnitude derived
-                // from the *true* residual sign. The working value carries a
-                // kernel error that, near a storage grid line, can flip that
-                // sign. `directed_narrow` returns both the rounded result and
-                // the residual position so the caller can tell when the value
-                // sits near a grid line (and the decision is untrustworthy).
-                let mut directed_narrow = |guard: u32| -> (S, S, S) {
-                    let w = target + guard;
-                    let v = recompute(guard);
-                    let shift = w - target;
-                    let neg = v < lit(0);
-                    let mag = if neg { -v } else { v };
-                    let divisor = pow10(shift);
-                    let (q, rem) = mag.div_rem(divisor);
-                    let result_positive = !neg;
-                    // `rem == 0` at the working scale means `|value|·10^target`
-                    // is an integer to the work-int's resolution — `q` is the
-                    // floor and the residual deciding a directed bump appears to
-                    // be exactly zero. For a `never_exact` kernel (a non-zero-
-                    // argument transcendental, whose true value is irrational by
-                    // Lindemann–Weierstrass and so NEVER lands on a finite
-                    // decimal grid line — the algebraic-exact inputs `exp 0`,
-                    // `ln 1`, … are pinned by the caller before reaching here)
-                    // a zero working residual is an ARTIFACT of finite working
-                    // precision, not a true zero: the true residual is a genuine
-                    // positive fraction sitting below the work-int's resolution
-                    // (e.g. `exp(-10^-S)` = `1 - 10^-S + 10^-2S/2 - …`, whose
-                    // deciding term is at scale ~`2S`, beyond any reachable
-                    // guard). `rem == 0` is moreover unambiguously the LOW side
-                    // of the grid line (`|value| = q·divisor + tiny_positive`):
-                    // a value just BELOW a grid line gives `rem ≈ divisor`, not
-                    // zero. So treat a zero working residual as present-and-
-                    // positive when `never_exact`, which bumps Ceiling up to the
-                    // next grid line while Floor / Trunc / nearest still keep
-                    // `q`.
-                    let residual_present = rem != lit(0) || never_exact;
-                    let bump = residual_present
-                        && match mode {
-                            RoundingMode::Trunc => false,
-                            RoundingMode::Floor => !result_positive,
-                            RoundingMode::Ceiling => result_positive,
-                            _ => unreachable!(),
-                        };
-                    let q_mag = if bump { q + lit(1) } else { q };
-                    let signed = if neg { -q_mag } else { q_mag };
-                    // Distance from the nearer grid line, in working-scale
-                    // units: min(rem, divisor − rem).
-                    let dist = if rem < divisor - rem {
-                        rem
-                    } else {
-                        divisor - rem
-                    };
-                    (signed, dist, divisor)
-                };
-
-                // Ziv escalation. Evaluate at `base_guard`; if the residual
-                // sits well clear of either grid line (`dist` exceeds a
-                // generous fraction of the working ULP grid), the directed
-                // decision is trustworthy and we are done. Otherwise recompute
-                // at a wider guard until two consecutive evaluations agree —
-                // the residual band the kernel error spans shrinks each step,
-                // so every non-algebraic input converges. Exact algebraic
-                // points (`exp 0`, `ln 1`, `sin 0`, exact quadrant multiples)
-                // are resolved by the caller before reaching here.
-                //
-                // Guard is capped so the recompute never overflows `W`: the
-                // result needs `int_digits + target + guard` significant
-                // digits, and `W` holds about `BITS · 0.3` of them. We size
-                // the cap from the result's integer-digit count (taken from
-                // the base evaluation) leaving a safety margin.
-                let (mut lo, dist0, divisor0) = directed_narrow(base_guard);
-
-                // "Near a grid line": within 1/1000 of the working ULP grid.
-                // Comfortably above any kernel rounding noise yet far below
-                // the residual of an ordinary (non-boundary) input.
-                let band0 = divisor0 / lit(1000);
-                let near_grid = force_confirm || dist0 <= band0;
-
-                let signed = if !near_grid {
-                    lo
-                } else {
-                    // Capacity of `W` in decimal digits (~BITS·log10(2)),
-                    // minus the result's integer-digit count and a margin,
-                    // bounds how far we may escalate without overflow.
-                    let int_digits = {
-                        let m = if lo < lit(0) { -lo } else { lo };
-                        // `lo` is the storage value (integer part scaled by
-                        // 10^target), so its decimal length minus `target`
-                        // is the integer-part digit count. Approximate the
-                        // length via bit length.
-                        let bl = bit_length(m);
-                        let storage_digits = (bl as u64 * 30103 / 100_000) as u32 + 1;
-                        storage_digits.saturating_sub(target)
-                    };
-                    // Some kernels form wide intermediate scratch — e.g.
-                    // `sqrt_fixed` asserts `bit_length(|v|) + 4·w < W::BITS`,
-                    // i.e. roughly `7·w_decimal < W::BITS`. Cap the total
-                    // working scale at `W::BITS / 8` decimal digits (leaving
-                    // ~12% headroom over the tightest scratch) so the
-                    // recompute never overflows. Subtract the result's
-                    // integer digits and a small margin.
-                    let cap_digits = (<S>::BITS / 8).saturating_sub(int_digits + 8);
-                    let max_guard = cap_digits.saturating_sub(target).max(base_guard);
-
-                    // A directed result is trustworthy once two consecutive
-                    // guards agree AND the residual has resolved its position
-                    // relative to the grid line. Two regimes are "resolved":
-                    //
-                    //  * residual EXACTLY zero (`dist == 0`): the value sits on
-                    //    a grid line to the full working resolution and stays
-                    //    there as the guard grows — a genuine algebraic-exact
-                    //    point (`sinh 0`, `cosh 0 = 1`, `log_b(b^k)`). Accept it
-                    //    (the floor `q` is exact; no directed bump).
-                    //  * residual CLEAR of the band (`dist > divisor/1000`): the
-                    //    deciding fraction is well above any kernel round-off,
-                    //    so the directed side is certain.
-                    //
-                    // The dangerous middle case is a SMALL NON-ZERO residual
-                    // inside the band: that is a finite-precision ARTIFACT, not
-                    // the true residual. E.g. `log10(10^k − 1) = k − 10^-k/ln10`
-                    // — at a working scale `w < k` the `−10^-k` deviation is
-                    // invisible and AGM/division round-off leaves a spurious
-                    // residual on the WRONG (high) side, so Trunc/Floor would
-                    // wrongly keep `k`. While the residual sits in the band we
-                    // keep escalating until the deviation materialises (the
-                    // guard exceeds the input's digit span) or the cap is hit.
-                    let mut guard = base_guard;
-                    loop {
-                        if guard >= max_guard {
-                            break lo;
-                        }
-                        // Step past `target` so a result term that only
-                        // materialises at guard ≈ target (the `+x` of
-                        // `exp(x) = 1 + x + …` for `|x| ≈ 10^-target`) is
-                        // reached, then confirm with a further step.
-                        let step = (target + base_guard).max(base_guard);
-                        let next_guard = guard.saturating_add(step).min(max_guard);
-                        let (hi, hi_dist, hi_div) = directed_narrow(next_guard);
-                        let hi_band = hi_div / lit(1000);
-                        // Resolved iff the residual is exactly on the grid line
-                        // (exact algebraic point) or clear of the near-grid band.
-                        let resolved = hi_dist == lit(0) || hi_dist > hi_band;
-                        if hi == lo && resolved {
-                            break hi;
-                        }
-                        guard = next_guard;
-                        lo = hi;
-                    }
-                };
-
-                let max_w = $crate::int::types::traits::BigInt::resize_to::<S>(<$Storage>::MAX);
-                let min_w = $crate::int::types::traits::BigInt::resize_to::<S>(<$Storage>::MIN);
-                if signed > max_w || signed < min_w {
-                    panic!(concat!(
-                        stringify!($Type),
-                        " strict transcendental: result out of range"
-                    ));
-                }
-                $crate::int::types::traits::BigInt::resize_to::<$Storage>(signed)
+                $crate::algos::support::wide_trig_core::round_to_storage_directed_near_special_g::<$Storage, S>(
+                    base_guard, target, mode, <$Storage>::MAX, <$Storage>::MIN, recompute,
+                )
             }
 
             /// Rounds a working-scale value to the nearest integer (ties
@@ -2649,6 +2410,14 @@ macro_rules! decl_wide_transcendental {
                 #[inline]
                 fn storage_one(scale: u32) -> $Storage {
                     <$Storage as $crate::int::types::traits::BigInt>::TEN.pow(scale)
+                }
+                #[inline]
+                fn storage_max() -> $Storage {
+                    <$Storage>::MAX
+                }
+                #[inline]
+                fn storage_min() -> $Storage {
+                    <$Storage>::MIN
                 }
                 #[inline]
                 fn zero() -> W {

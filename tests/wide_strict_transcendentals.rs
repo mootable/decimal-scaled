@@ -728,7 +728,12 @@ fn d76_acosh_strict_with_v_ge_two_branch() {
 // than a catastrophic argument (e.g. exp(70)) that degenerates the
 // working-scale intermediate to zero before the guard is reached.
 #[test]
-#[should_panic(expected = "D76 strict transcendental: result out of range")]
+// The out-of-range guard now lives in the work-int-generic narrowing free fns
+// (`wide_trig_core::round_to_storage_*_g`, the L7 work-rung hoist), so the panic
+// message is tier-agnostic ("wide-tier strict transcendental: result out of
+// range") rather than naming "D76". Assert the stable substring — the test's
+// purpose (a too-large result panics rather than wrapping) is unchanged.
+#[should_panic(expected = "strict transcendental: result out of range")]
 fn d76_strict_result_out_of_range_panics() {
     let v: D76<74> = D76::<74>::from(7);
     let _ = v.exp_strict();
