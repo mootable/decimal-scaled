@@ -2752,6 +2752,37 @@ macro_rules! decl_wide_transcendental {
             pub(crate) fn sqrt_fixed_agm(v: Wagm, w: u32) -> Wagm {
                 $crate::algos::exp::exp_generic::sqrt_fixed::<Wagm>(v, w)
             }
+            /// `ln 2` const-folded at the base working scale for the
+            /// wide composition core — the `Wagm` sibling of [`ln2_cf`].
+            /// On the common path (`w == SCALE + GUARD`) the lookup keys
+            /// on the CONST working scale and folds to one table entry per
+            /// monomorphisation; the Ziv-escalation path falls back to the
+            /// runtime static lookup. Bit-identical to a bare
+            /// `ln2_by_working_scale::<Wagm>(w, mode)` (same table entry,
+            /// same rounding) — it only recovers the const-fold.
+            #[inline]
+            pub(crate) fn ln2_cf_agm<const SCALE: u32>(
+                w: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> Wagm {
+                if w == SCALE + GUARD {
+                    return $crate::consts::ln2_by_scale::<Wagm>(SCALE + GUARD, mode);
+                }
+                $crate::consts::ln2_by_working_scale::<Wagm>(w, mode)
+            }
+            /// `ln 10` const-folded at the base working scale for the wide
+            /// composition core — the `Wagm` sibling of [`ln10_cf`]. See
+            /// [`ln2_cf_agm`]; bit-identical to `ln10_by_working_scale`.
+            #[inline]
+            pub(crate) fn ln10_cf_agm<const SCALE: u32>(
+                w: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> Wagm {
+                if w == SCALE + GUARD {
+                    return $crate::consts::ln10_by_scale::<Wagm>(SCALE + GUARD, mode);
+                }
+                $crate::consts::ln10_by_working_scale::<Wagm>(w, mode)
+            }
             /// Series `ln(v) -> v` at `Wagm` (the `Wagm` sibling of the
             /// Series-only `ln_fixed`) — used where a composition pins Series
             /// (e.g. `asinh` near MAX scale). Distinct from `ln_fixed_agm`
@@ -2781,7 +2812,7 @@ macro_rules! decl_wide_transcendental {
                         v_w,
                         w,
                         |ww| {
-                            $crate::consts::ln2_by_working_scale::<Wagm>(
+                            ln2_cf_agm::<SCALE>(
                                 ww,
                                 $crate::support::rounding::DEFAULT_ROUNDING_MODE,
                             )
@@ -2791,7 +2822,7 @@ macro_rules! decl_wide_transcendental {
                     $crate::algos::exp::exp_generic::ln_fixed::<Wagm>(
                         v_w,
                         w,
-                        $crate::consts::ln2_by_working_scale::<Wagm>(
+                        ln2_cf_agm::<SCALE>(
                             w,
                             $crate::support::rounding::DEFAULT_ROUNDING_MODE,
                         ),
@@ -2804,7 +2835,7 @@ macro_rules! decl_wide_transcendental {
                 $crate::algos::exp::exp_generic::ln_fixed::<Wagm>(
                     v_w,
                     w,
-                    $crate::consts::ln2_by_working_scale::<Wagm>(
+                    ln2_cf_agm::<SCALE>(
                         w,
                         $crate::support::rounding::DEFAULT_ROUNDING_MODE,
                     ),
@@ -2823,7 +2854,7 @@ macro_rules! decl_wide_transcendental {
                         v_w,
                         w,
                         |ww| {
-                            $crate::consts::ln2_by_working_scale::<Wagm>(
+                            ln2_cf_agm::<SCALE>(
                                 ww,
                                 $crate::support::rounding::DEFAULT_ROUNDING_MODE,
                             )
@@ -2969,7 +3000,7 @@ macro_rules! decl_wide_transcendental {
                     let w0 = SCALE + GUARD;
                     let r0 = div_agm(
                         ln_fixed_routed_agm::<SCALE>(to_work_agm(raw), w0),
-                        $crate::consts::ln2_by_working_scale::<Wagm>(w0, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                        ln2_cf_agm::<SCALE>(w0, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
                         w0,
                     );
                     let k = round_to_nearest_int_agm(r0, w0);
@@ -2982,7 +3013,7 @@ macro_rules! decl_wide_transcendental {
                     let w = SCALE + guard;
                     div_agm(
                         ln_fixed_routed_agm::<SCALE>(to_work_scaled_agm(raw, guard), w),
-                        $crate::consts::ln2_by_working_scale::<Wagm>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                        ln2_cf_agm::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
                         w,
                     )
                 })
@@ -3002,7 +3033,7 @@ macro_rules! decl_wide_transcendental {
                     panic!(concat!(stringify!($Type), "::log2: argument must be positive"));
                 }
                 let w = SCALE + working_digits;
-                let r = div_agm(ln_fixed_routed_agm::<SCALE>(to_work_scaled_agm(raw, working_digits), w), $crate::consts::ln2_by_working_scale::<Wagm>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), w);
+                let r = div_agm(ln_fixed_routed_agm::<SCALE>(to_work_scaled_agm(raw, working_digits), w), ln2_cf_agm::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), w);
                 round_to_storage_with_g::<Wagm>(r, w, SCALE, mode)
             }
 
@@ -3020,7 +3051,7 @@ macro_rules! decl_wide_transcendental {
                     let w0 = SCALE + GUARD;
                     let r0 = div_agm(
                         ln_fixed_routed_agm::<SCALE>(to_work_agm(raw), w0),
-                        $crate::consts::ln10_by_working_scale::<Wagm>(w0, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                        ln10_cf_agm::<SCALE>(w0, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
                         w0,
                     );
                     let k = round_to_nearest_int_agm(r0, w0);
@@ -3033,7 +3064,7 @@ macro_rules! decl_wide_transcendental {
                     let w = SCALE + guard;
                     div_agm(
                         ln_fixed_routed_agm::<SCALE>(to_work_scaled_agm(raw, guard), w),
-                        $crate::consts::ln10_by_working_scale::<Wagm>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                        ln10_cf_agm::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
                         w,
                     )
                 })
@@ -3053,7 +3084,7 @@ macro_rules! decl_wide_transcendental {
                     panic!(concat!(stringify!($Type), "::log10: argument must be positive"));
                 }
                 let w = SCALE + working_digits;
-                let r = div_agm(ln_fixed_routed_agm::<SCALE>(to_work_scaled_agm(raw, working_digits), w), $crate::consts::ln10_by_working_scale::<Wagm>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), w);
+                let r = div_agm(ln_fixed_routed_agm::<SCALE>(to_work_scaled_agm(raw, working_digits), w), ln10_cf_agm::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), w);
                 round_to_storage_with_g::<Wagm>(r, w, SCALE, mode)
             }
 
@@ -3079,7 +3110,7 @@ macro_rules! decl_wide_transcendental {
                     let w = SCALE + guard;
                     let arg = mul_agm(
                         to_work_scaled_agm(raw, guard),
-                        $crate::consts::ln2_by_working_scale::<Wagm>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                        ln2_cf_agm::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
                         w,
                     );
                     exp_fixed_wide_agm(arg, w)
@@ -3101,7 +3132,7 @@ macro_rules! decl_wide_transcendental {
                 }
                 let w = SCALE + working_digits;
                 // Two-core: composition runs on the wide `Wagm` work int.
-                let arg = mul_agm(to_work_scaled_agm(raw, working_digits), $crate::consts::ln2_by_working_scale::<Wagm>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), w);
+                let arg = mul_agm(to_work_scaled_agm(raw, working_digits), ln2_cf_agm::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), w);
                 let r = exp_fixed_routed_agm::<SCALE>(arg, w);
                 round_to_storage_with_g::<Wagm>(r, w, SCALE, mode)
             }
@@ -3257,7 +3288,7 @@ macro_rules! decl_wide_transcendental {
                 // Two-core: composition runs on the wide `Wagm` work int.
                 let r = $core::div_agm(
                     $core::ln_fixed_routed_agm::<SCALE>($core::to_work_agm(raw), w),
-                    $crate::consts::ln2_by_working_scale::<$core::Wagm>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                    $core::ln2_cf_agm::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
                     w,
                 );
                 Self::from_bits($core::round_to_storage_agm(r, w, SCALE))
@@ -3279,7 +3310,7 @@ macro_rules! decl_wide_transcendental {
                 // Two-core: composition runs on the wide `Wagm` work int.
                 let r = $core::div_agm(
                     $core::ln_fixed_routed_agm::<SCALE>($core::to_work_agm(raw), w),
-                    $crate::consts::ln10_by_working_scale::<$core::Wagm>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                    $core::ln10_cf_agm::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
                     w,
                 );
                 Self::from_bits($core::round_to_storage_agm(r, w, SCALE))
@@ -3312,7 +3343,7 @@ macro_rules! decl_wide_transcendental {
                 // Two-core: composition runs on the wide `Wagm` work int.
                 let arg = $core::mul_agm(
                     $core::to_work_agm(raw),
-                    $crate::consts::ln2_by_working_scale::<$core::Wagm>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                    $core::ln2_cf_agm::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
                     w,
                 );
                 let r = $core::exp_fixed_routed_agm::<SCALE>(arg, w);
