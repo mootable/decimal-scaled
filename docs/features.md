@@ -48,10 +48,10 @@ Exactly one of these may be enabled to change the crate-wide default
 
 ## Wide-tier features
 
-The wide decimal types use an in-tree, hand-rolled wide-integer
-module (`crate::wide_int`); there is no external big-integer
-dependency. They are opt-in per width, with three umbrella features
-covering increasing precision ranges.
+The wide decimal types are backed by an in-tree const-generic big
+integer, `Int<N>` over `N` u64 limbs (internal to the crate); there is
+no external big-integer dependency. They are opt-in per width, with
+three umbrella features covering increasing precision ranges.
 
 | Feature | Enables |
 |---|---|

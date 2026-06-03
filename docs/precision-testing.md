@@ -87,23 +87,19 @@ Functions: ln, exp, sin, cos, tan, atan, sqrt, cbrt.
 ### Known kernel holes (ignored cells)
 
 The shipped kernels are correctly rounded for the three *nearest*
-modes across every tier. Two classes of cell are not yet correctly
-rounded and are marked `#[ignore]` in the harness with a reason
-string (run them with `cargo test --test ulp_strict_golden --
---include-ignored`):
+modes across every tier. The remaining cell that is not yet correctly
+rounded is marked `#[ignore]` in the harness with a reason string (run
+it with `cargo test --test ulp_strict_golden -- --include-ignored`):
 
-- **Directed-rounding 1-LSB boundary.** Under `Trunc` / `Floor` /
-  `Ceiling`, ln / sin / cos / tan / exp / cbrt are off by exactly one
-  LSB when the true value sits sub-LSB on one side of an integer
-  output (e.g. `cos` near ±1, `ln` near an integer LSB multiple). The
-  nearest modes are exact for the same inputs.
-- **D115<57> `exp` large-magnitude precision loss.** A genuine
-  precision regression in the D115<57> exp kernel: many-LSB error for
-  large `|x|`, failing under *every* mode. This is the one cell whose
-  nearest-mode result is also wrong.
+- **Narrow-path `atan` directed-rounding 1-LSB boundary.** On the
+  narrow (`not(feature = "wide")`) `atan` path at D18 s9 and D38 s19,
+  under `Trunc` / `Floor` / `Ceiling`, the result is off by exactly one
+  LSB when the true value sits sub-LSB on one side of the output. The
+  nearest modes are exact for the same inputs, and the wide-feature
+  `atan` path is correctly rounded under every mode.
 
-Each ignored cell carries a documented reason; removing the `ignore`
-once a kernel is fixed and the band runs green is the witness.
+The ignored cell carries a documented reason; removing the `ignore`
+once the kernel is fixed and the band runs green is the witness.
 
 ### Regenerating the goldens
 

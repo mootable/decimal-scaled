@@ -107,7 +107,7 @@ decimal-scaled = { version = "0.5", features = ["rounding-half-away-from-zero"] 
 ```
 
 The features are mutually exclusive in intent. If more than one is
-enabled, a fixed priority order in `src/rounding.rs` picks one
+enabled, a fixed priority order in `src/support/rounding.rs` picks one
 deterministically - but you should enable at most one.
 
 The `_with` methods are unaffected by these features: they always honour

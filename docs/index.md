@@ -81,7 +81,7 @@ Const-generic base-10 fixed-point decimals — twelve widths from **D18 to D1232
 | Decimal arithmetic that doesn't drift (`0.1 + 0.2 == 0.3`) | Base-10 storage; exact `+ - %`, correctly-rounded `* /`. |
 | Bit-identical results across Linux / macOS / Windows / ARM / x86 | `*_strict` transcendentals - integer-only, no platform libm. |
 | Compile-time-fixed precision with zero per-value scale byte | Const-generic `D38<19>`, `D76<35>` etc. - scale is in the type. |
-| `no_std` (or `no_std + alloc`) | Default features build under `no_std`; the strict tier needs no libm. |
+| `no_std` (or `no_std + alloc`) | Builds under `no_std + alloc` with `default-features = false`; the strict, integer-only path needs no libm. |
 | ≤ 0.5 ULP correctly-rounded `ln` / `exp` / `sin` / `cos` / `tan` / `sqrt` / `atan` / `sinh` / `cosh` / `tanh` and friends — by default | At every shipped width, HalfToEven by default, bit-identical across every platform. Switch rounding mode per call via `*_with(mode)` or crate-wide via the `rounding-*` features. See [Benchmarks §5](benchmarks.md#5-where-each-crate-fits). |
 
 ## What it isn't
