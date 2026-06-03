@@ -25,10 +25,20 @@ $docs = Join-Path $repo 'docs'
 # Root pages the nav pulls in; MkDocs reads only under docs/, so copy them in for the build.
 $nav = 'ROADMAP.md', 'CHANGELOG.md', 'ALGORITHMS.md', 'CONTRIBUTORS.md'
 
-if (-not (Get-Command mkdocs -ErrorAction SilentlyContinue)) {
-    Write-Host "mkdocs not found on PATH. Install it once with:" -ForegroundColor Yellow
-    Write-Host "    pip install mkdocs-material pymdown-extensions"
-    exit 1
+# Resolve how to invoke mkdocs: prefer the console script on PATH, else fall back to
+# `python -m mkdocs` (on Windows pip often installs the Scripts dir off PATH).
+$mkExe = $null; $mkPre = @()
+if (Get-Command mkdocs -ErrorAction SilentlyContinue) {
+    $mkExe = 'mkdocs'
+}
+else {
+    & python -c "import mkdocs" 2>$null
+    if ($LASTEXITCODE -eq 0) { $mkExe = 'python'; $mkPre = @('-m', 'mkdocs') }
+    else {
+        Write-Host "mkdocs not found (neither on PATH nor as a python module). Install it once with:" -ForegroundColor Yellow
+        Write-Host "    pip install mkdocs-material pymdown-extensions"
+        exit 1
+    }
 }
 
 Push-Location $repo
@@ -50,13 +60,13 @@ try {
     $extra = @(); if ($MkdocsArgs) { $extra += $MkdocsArgs }
     if ($Build) {
         $a = @('build', '--site-dir', '_site'); if ($Strict) { $a += '--strict' }
-        mkdocs @a @extra
-        Write-Host "Built into $(Join-Path $repo '_site') — open _site\index.html." -ForegroundColor Green
+        & $mkExe @mkPre @a @extra
+        Write-Host "Built into $(Join-Path $repo '_site') - open _site\index.html." -ForegroundColor Green
     }
     else {
         $a = @('serve'); if ($Strict) { $a += '--strict' }
         Write-Host "Serving docs at http://127.0.0.1:8000  (Ctrl-C to stop)" -ForegroundColor Green
-        mkdocs @a @extra
+        & $mkExe @mkPre @a @extra
     }
 }
 finally {
