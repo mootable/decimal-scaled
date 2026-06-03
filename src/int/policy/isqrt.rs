@@ -1,17 +1,17 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Integer square-root policy â€” the native-vs-Newton algorithm matcher.
+//! Integer square-root policy — the native-vs-Newton algorithm matcher.
 //!
 //! `Uint<N>::isqrt` delegates to [`dispatch`], which follows the canonical
 //! policy shape (see `docs/ARCHITECTURE.md` â†’ "Policy file structure"):
 //!
-//! 1. an [`Algorithm`] enum â€” the real isqrt algorithms, no `Default`
+//! 1. an [`Algorithm`] enum — the real isqrt algorithms, no `Default`
 //!    variant;
-//! 2. a [`Select`] verdict â€” a settled algorithm or "the value decides";
+//! 2. a [`Select`] verdict — a settled algorithm or "the value decides";
 //! 3. a `const fn` [`select`] keyed on `N`, total over the key;
 //! 4. dispatch via an inline `const { select::<N>() }` block, then an
-//!    **exhaustive** `match algo` â€” no `_`, no panic.
+//!    **exhaustive** `match algo` — no `_`, no panic.
 //!
 //! Because `select` is `const` and keyed only on the const generic `N`,
 //! the `const { â€¦ }` block folds per monomorphisation and the unchosen arm
@@ -28,7 +28,7 @@
 //!   `u64::isqrt` (`N == 1`) or `u128::isqrt` (`N == 2`). The fastest path
 //!   at these widths; genuinely width-bespoke (no generic form).
 //! - **`N >= 3`** â†’ [`isqrt_newton`]: width-agnostic Newton iteration with a
-//!   hardware-`f64::sqrt` seed over u64 limbs â€” one algorithm serving every
+//!   hardware-`f64::sqrt` seed over u64 limbs — one algorithm serving every
 //!   wider int. Today's `limbs_isqrt_u64` (now in `int/algos/roots.rs`).
 //!
 //! The `ByValue` arm of [`Select`] is present for canonical-shape uniformity;
@@ -47,23 +47,23 @@ use crate::int::algos::isqrt::isqrt_mag_fixed::isqrt_mag_fixed;
 use crate::int::algos::isqrt::isqrt_schoolbook::isqrt_schoolbook as isqrt_schoolbook_kernel;
 use crate::int::types::Uint;
 
-// â”€â”€ 1. the real isqrt algorithms â€” NAMED, no `Default` â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€ 1. the real isqrt algorithms — NAMED, no `Default` â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// The integer square-root algorithms this policy chooses between. Variants
 /// are the CamelCase of each kernel fn's name minus the `isqrt_` function
-/// prefix â€” strict 1:1 with the kernel fns.
+/// prefix — strict 1:1 with the kernel fns.
 ///
 /// Names follow RULES Â§4: `isqrt_native` â†’ `Native`, `isqrt_newton` â†’
 /// `Newton`.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
-    /// [`isqrt_native`] â€” hardware `u64::isqrt` (`N == 1`) or
+    /// [`isqrt_native`] — hardware `u64::isqrt` (`N == 1`) or
     /// `u128::isqrt` (`N == 2`). Width-bespoke; const-split inside the fn.
     Native,
-    /// [`isqrt_newton`] â€” width-agnostic Newton iteration with a
+    /// [`isqrt_newton`] — width-agnostic Newton iteration with a
     /// hardware-`f64::sqrt` seed over u64 limbs. Serves `3 <= N < 64`.
     Newton,
-    /// [`isqrt_karatsuba`] â€” Karatsuba Square Root (Zimmermann RR-3805): one
+    /// [`isqrt_karatsuba`] — Karatsuba Square Root (Zimmermann RR-3805): one
     /// half-width divide per recursion level, `O(log n)` total, versus
     /// Newton's full-width divide per iteration. The `isqrt_ab` N-way A/B
     /// shows its margin shrinks monotonically with width and crosses over the

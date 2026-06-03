@@ -1,8 +1,8 @@
-//! To-degrees policy â€” the per-(N, SCALE) algorithm matcher for
+//! To-degrees policy — the per-(N, SCALE) algorithm matcher for
 //! radians-to-degrees angle conversion.
 //!
 //! `D<Int<N>, SCALE>::to_degrees_strict_with(mode)` delegates directly to
-//! the one shared [`dispatch`] generic function â€” the canonical
+//! the one shared [`dispatch`] generic function — the canonical
 //! matcher-only policy shape (see `docs/ARCHITECTURE.md`), mirrored from
 //! `sqrt`. Narrow tiers (N=1 widened to Int<2>, N=2) run the 256-bit
 //! `Fixed` `trig_series_2limb` kernel; wide tiers run the tier-generic

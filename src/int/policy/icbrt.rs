@@ -1,18 +1,18 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Integer cube-root policy â€” the native-vs-Newton algorithm matcher.
+//! Integer cube-root policy — the native-vs-Newton algorithm matcher.
 //!
 //! `Uint<N>::icbrt` and `Int<N>::icbrt` delegate to [`dispatch`], which
 //! follows the canonical policy shape (see `docs/ARCHITECTURE.md` â†’
 //! "Policy file structure"):
 //!
-//! 1. an [`Algorithm`] enum â€” the real icbrt algorithms, no `Default`
+//! 1. an [`Algorithm`] enum — the real icbrt algorithms, no `Default`
 //!    variant;
-//! 2. a [`Select`] verdict â€” a settled algorithm or "the value decides";
+//! 2. a [`Select`] verdict — a settled algorithm or "the value decides";
 //! 3. a `const fn` [`select`] keyed on `N`, total over the key;
 //! 4. dispatch via an inline `const { select::<N>() }` block, then an
-//!    **exhaustive** `match algo` â€” no `_`, no panic.
+//!    **exhaustive** `match algo` — no `_`, no panic.
 //!
 //! Because `select` is `const` and keyed only on the const generic `N`,
 //! the `const { â€¦ }` block folds per monomorphisation and the unchosen arm
@@ -49,14 +49,14 @@ use crate::int::algos::icbrt::icbrt_newton::icbrt_newton as icbrt_newton_kernel;
 use crate::int::algos::icbrt::icbrt_schoolbook::icbrt_schoolbook as icbrt_schoolbook_kernel;
 use crate::int::types::Uint;
 
-// â”€â”€ 1. the real icbrt algorithms â€” NAMED, no `Default` â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€ 1. the real icbrt algorithms — NAMED, no `Default` â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// The integer cube-root algorithms this policy chooses between. Variants
 /// are the CamelCase of each kernel fn's name minus the `icbrt_` function
-/// prefix â€” strict 1:1 with the kernel fns.
+/// prefix — strict 1:1 with the kernel fns.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
-    /// [`icbrt_newton`] â€” width-agnostic Newton iteration with a
+    /// [`icbrt_newton`] — width-agnostic Newton iteration with a
     /// shared-library `f64::cbrt` seed over u64 limbs. Serves every `N`
     /// (there is no native hardware cube root). Delegates to
     /// [`crate::int::algos::icbrt::icbrt_newton::icbrt_newton`].

@@ -1,16 +1,16 @@
-//! Natural-logarithm policy â€” the per-(N, SCALE) algorithm matcher
+//! Natural-logarithm policy — the per-(N, SCALE) algorithm matcher
 //! (plus the derived log2 / log10; arbitrary-base log lives in
 //! `policy::log`).
 //!
 //! `D<Int<N>, SCALE>::ln_strict_with(mode)` delegates directly to the one
-//! shared [`dispatch`] generic function â€” the canonical matcher-only
+//! shared [`dispatch`] generic function — the canonical matcher-only
 //! policy shape (see `docs/ARCHITECTURE.md`), mirrored from `sqrt`:
 //!
-//! 1. an [`Algorithm`] enum â€” Series / Tang / Schoolbook, no `Default`;
+//! 1. an [`Algorithm`] enum — Series / Tang / Schoolbook, no `Default`;
 //! 2. a [`Select`] verdict;
 //! 3. a `const fn` [`select`] keyed on `(N, SCALE)`, total over the key;
 //! 4. dispatch via `const { select::<N, SCALE>() }`, then an exhaustive
-//!    `match algo` â€” no `_`, no panic.
+//!    `match algo` — no `_`, no panic.
 //!
 //! The narrow tiers run the 256-bit `Fixed` kernel (`ln_series_2limb`,
 //! D18 widened to Int<2>); the wide tiers run the tier-generic `ln_series`
@@ -19,7 +19,7 @@
 //!
 //! log2 / log10 are derived (`ln(x)/ln2`, `ln(x)/ln10`) and route DOWN to
 //! the narrow `ln_series_2limb::{log2,log10}_*` kernels or the wide
-//! per-tier `wide_trig_<tier>::log{2,10}_*_with_kernel` free fns â€” never
+//! per-tier `wide_trig_<tier>::log{2,10}_*_with_kernel` free fns — never
 //! back through a sibling decimal policy.
 
 use crate::int::types::traits::BigInt;

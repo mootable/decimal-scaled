@@ -1,12 +1,12 @@
-//! Log-base policy â€” the per-(N, SCALE) algorithm matcher for the
+//! Log-base policy — the per-(N, SCALE) algorithm matcher for the
 //! arbitrary-base decimal logarithm `log(self, base)`.
 //!
 //! `D<Int<N>, SCALE>::log_strict_with(base, mode)` delegates directly to
-//! the one shared [`dispatch`] generic function â€” the canonical
+//! the one shared [`dispatch`] generic function — the canonical
 //! matcher-only policy shape (see `docs/ARCHITECTURE.md`), mirrored from
 //! `sqrt`.
 //!
-//! # One algorithm â€” `LnDivide`
+//! # One algorithm — `LnDivide`
 //!
 //! `log(self, base) = ln(self) / ln(base)`. Every tier and scale uses the
 //! same ratio. The narrow tiers route through the

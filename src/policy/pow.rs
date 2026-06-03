@@ -1,14 +1,14 @@
-//! Floating-point power policy â€” the per-(N, SCALE) algorithm matcher.
+//! Floating-point power policy — the per-(N, SCALE) algorithm matcher.
 //!
 //! `D<Int<N>, SCALE>::powf_strict_with(exp, mode)` delegates directly to
-//! the one shared [`dispatch`] generic function â€” the canonical
+//! the one shared [`dispatch`] generic function — the canonical
 //! matcher-only policy shape (see `docs/ARCHITECTURE.md`), mirrored from
 //! `sqrt`.
 //!
-//! # The one power algorithm â€” `ExpWithLn`
+//! # The one power algorithm — `ExpWithLn`
 //!
 //! `powf` is the hybrid `b^y = exp(y * ln b)`: a composition of the `exp`
-//! and `ln` algorithms. `ExpWithLn` names that composition â€” not a single
+//! and `ln` algorithms. `ExpWithLn` names that composition — not a single
 //! kernel fn; realised per tier: narrow tiers on the 256-bit `Fixed`
 //! intermediate via `pow::powf_series_2limb` (D18 widened to Int<2>), the
 //! wide tiers via the C-generic `pow::pow_schoolbook` over their
