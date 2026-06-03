@@ -30,70 +30,104 @@ src/algos/
 └── trig/
 ```
 
-Each family contains several **variants** — free functions that take
-the raw storage integer plus runtime parameters and return a raw
-storage integer. None of them know about the typed `Dxx<S>` wrapper.
+Each function directory holds one **named file per algorithm** — a free
+function that takes the raw storage integer (`Int<N>`) plus runtime
+parameters and returns a raw storage integer. None of them know about
+the typed `D<Int<N>, SCALE>` wrapper.
 
-Common variant names:
+A file is named for its *algorithm*, never its tier:
+`<func>_<algorithm>[_<precondition>]`. A kernel valid for all widths
+carries no precondition suffix; one valid only for a specific limb-count
+or scale band names that band in **limbs / scale**, never a `Dxx` alias.
 
-| Variant                       | What it does                                                      |
+| File                          | What it is                                                        |
 |-------------------------------|-------------------------------------------------------------------|
-| `generic_wide`                | One function, generic over `(Storage, Wide)` via `WideStorage`    |
-| `fixed_d38`                   | Hand-tuned `i128` kernel using the in-tree `Fixed` intermediate   |
-| `widen_to_d38`                | D18 widens into D38, run `fixed_d38`, narrow back                 |
-| `borrow_d57`                  | D38 widens into D57, runs the wide kernel, narrows back           |
-| `wide_kernel`                 | Per-tier wide-int core emitted by `decl_wide_transcendental!`     |
-| `lookup_<width>_s<lo>_<hi>[_<func>]` | Bespoke per-(width, scale-range) override slot             |
+| `sqrt_newton.rs`              | Newton `isqrt`, generic over `N` — the all-widths default         |
+| `sqrt_mg_divide.rs`           | Hand-tuned 256-bit isqrt for `Int<2>` storage (D38, D18 widened)  |
+| `exp_series_2limb.rs`         | Maclaurin series in the 256-bit `Fixed`, narrow (`Int<2>`)        |
+| `sincos_tang_3limb_s18_22.rs` | Tang sin/cos on a 3-limb work integer, scale range 18..=22        |
 
-Variant names describe the algorithm, not the type. One variant may
-serve many cells; one cell may have several variants competing.
+File names describe the algorithm, not the type. One algorithm may serve
+many cells; one cell may have several competing. Algorithms are **never
+deleted** — an unwired kernel or a today-loser is a *kept alternative*
+(`docs/ARCHITECTURE.md` → "Keeping the alternatives").
 
-### Which kernel runs where
+### Which kernel runs where — the policy matcher
 
 The wiring between **a typed value** and **a kernel** lives in
-[`src/policy/<family>.rs`](src/policy/). One policy trait per family
-(`SqrtPolicy`, `LnPolicy`, `TrigPolicy`, `PowPolicy`, …), implemented
-once per width, generic over `const SCALE: u32`. The body picks a
-kernel:
+[`src/policy/<func>.rs`](src/policy/) (decimal) /
+`src/int/policy/<func>.rs` (int). A policy file is **matcher-only** — it
+holds no algorithm bodies, only the choice. The canonical shape
+(`docs/ARCHITECTURE.md` → "Policy file structure"):
 
 ```rust
-impl<const SCALE: u32> SqrtPolicy for D57<SCALE> {
-    fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        // Scale-range overrides — first match wins.
-        if matches!(SCALE, 20..=20) {
-            return Self(sqrt::lookup_d57_s20::sqrt(self.0, mode));
-        }
-        // Width default.
-        Self(sqrt::generic_wide::sqrt_d57(self.0, SCALE, mode))
+// 1. the real algorithms — NAMED, no `Default` variant
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Algorithm { Newton, MgDivide }
+
+// 2. the verdict: a settled algorithm, or "the value decides"
+#[derive(Clone, Copy)]
+enum Select<const N: usize> {
+    ByAlgorithm(Algorithm),
+    #[allow(dead_code)] ByValue(fn(&Int<N>) -> Algorithm),
+}
+
+// 3. a `const` matcher, total over the key (N / (N, SCALE))
+const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
+    match (N, SCALE) {
+        (1, _) | (2, _) => Select::ByAlgorithm(Algorithm::MgDivide),
+        _               => Select::ByAlgorithm(Algorithm::Newton),
+    }
+}
+
+// 4. dispatch: fold the verdict, then an EXHAUSTIVE match — no `_`, no panic
+pub(crate) fn dispatch<const N: usize, const SCALE: u32>(
+    raw: Int<N>, mode: RoundingMode,
+) -> Int<N> {
+    let algo = match const { select::<N, SCALE>() } {
+        Select::ByAlgorithm(a) => a,
+        Select::ByValue(f) => f(&raw),
+    };
+    match algo {
+        Algorithm::Newton   => sqrt::sqrt_newton::sqrt_newton::<N>(raw, SCALE, mode),
+        Algorithm::MgDivide => sqrt::sqrt_mg_divide::sqrt_mg_divide(
+            raw.resize_to::<Int<2>>(), SCALE, mode).resize_to::<Int<N>>(),
     }
 }
 ```
 
-Because `SCALE` is `const`, the `if` is dead-code-eliminated per
-monomorphisation. Every concrete `D57<S>` compiles to a direct call
-to one kernel — zero runtime dispatch cost.
+Because `select` is `const` and keyed only on the const generics, the
+`const { … }` block folds per monomorphisation and every unchosen arm is
+dead-arm-eliminated in release: each concrete `D<Int<N>, SCALE>` compiles
+to a direct call to one kernel — zero runtime dispatch. `ByValue` is the
+one arm that keeps a runtime branch, for genuinely value-dependent
+choices; most policies never return it.
 
-Stable Rust does not allow trait-impl specialisation on const-generic
-types, so per-(width, scale) overrides live as `if matches!(SCALE, …)`
-arms inside the per-width impl rather than separate `impl … for D57<20>`
-blocks. The override list is grep-able in one place per family.
+There are no per-family policy *traits* and no `impl … for D57<SCALE>`
+blocks — stable Rust cannot specialise a trait impl on a const-generic
+type, so the whole choice is the one `const fn select` keyed on
+`(N, SCALE)`, grep-able in one place per function.
 
 ### The cascade
 
-When you call `D57<20>::sqrt_strict()`, dispatch flows:
+When you call `D<Int<3>, 20>::sqrt_strict_with(mode)`, dispatch flows
+**down only**:
 
 ```
-typed method shell  ──►  policy trait impl  ──►  algos kernel
-D57<20>::sqrt_strict     SqrtPolicy::sqrt_impl    sqrt::lookup_d57_s20::sqrt
+typed method                 policy matcher                  algos kernel
+D<Int<3>,20>::sqrt_strict_   policy::sqrt::dispatch::<3,20>   sqrt::sqrt_newton
+  with                       (const-folds select → one arm)     ::sqrt_newton
 ```
 
-Three intercept points exist, in priority order:
+The typed method is a one-line delegate to `dispatch`; the policy only
+*chooses*; the algorithm fn does the maths by calling kernels/leaves
+below it — never a method that re-enters its own policy (that inversion
+is forbidden, `docs/ARCHITECTURE.md` → "Layering direction").
 
-1. **Scale-range override** (`if matches!(SCALE, X..=Y) { … }`) — most specific
-2. **Width default** (the `else` arm in the per-width impl) — moderate
-3. **Family default** (the `generic_wide` kernel) — fallback
-
-Add an override where it gives you the most leverage for the least scope.
+To tune a cell you change the **matcher** — add an `Algorithm` variant,
+a `select` arm at the band, and a `dispatch` arm — never a per-tier `if`
+or trait impl. The matcher is the architecture's primary lever; place an
+arm across its whole continuous win-region, not a single benched point.
 
 ---
 
@@ -144,20 +178,29 @@ pub(crate) mod sincos_tang_3limb_s18_22;
 
 ### Step 3 — Wire it in the policy
 
-`src/policy/trig.rs`, in the `impl<const SCALE: u32> TrigPolicy for D57<SCALE>`
-block, add a scale-range arm above the default:
+`src/policy/trig.rs` is matcher-only. Add your kernel as a new
+`Algorithm` variant, route its band in `select`, and call it from the
+exhaustive `dispatch` match:
 
 ```rust
-fn sin_impl(self, mode: RoundingMode) -> Self {
-    if matches!(SCALE, 18..=22) {
-        return Self(trig::sincos_tang_3limb_s18_22::sin_strict(self.0, mode));
+enum Algorithm { /* … existing … */ TangNarrowBand }
+
+const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
+    match (N, SCALE) {
+        // the new bespoke band — a continuous range, never a single point
+        (3, 18..=22) => Select::ByAlgorithm(Algorithm::TangNarrowBand),
+        _ => /* the width / family default */ Select::ByAlgorithm(Algorithm::Series),
     }
-    if matches!(SCALE, 44..=56) {
-        return Self(trig::sincos_tang_3limb_s44_56::sin_strict(self.0, mode));
-    }
-    Self(trig::wide_kernel::sin_strict_d57(self.0, SCALE, mode))
 }
+
+// …then in dispatch's exhaustive `match algo`:
+Algorithm::TangNarrowBand =>
+    trig::sincos_tang_3limb_s18_22::sin_strict(raw, mode),
 ```
+
+Place the arm across the **continuous win-region** the bench shows, not
+the single benched `(width, scale)` cell — a point-snapped arm leaves its
+neighbours uncovered (`docs/ARCHITECTURE.md` → the single-cell-fit trap).
 
 ### Step 4 — Default rounding mode siblings
 
