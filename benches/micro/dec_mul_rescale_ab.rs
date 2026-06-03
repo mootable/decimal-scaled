@@ -44,6 +44,39 @@ fn operand<const N: usize>(seed: u64) -> Int<N> {
     int_from_mag_limbs::<N>(&mag)
 }
 
+/// Representable wide operand: only the low `N/2` limbs set, so `a*b/10^scale`
+/// fits `Int<N>` AND the 2N-limb product carries leading-zero high limbs — the
+/// magnitude-length-aware trim's target (a full-width `operand` overflows and
+/// leaves no high zeros, so it can't show the trim's effect).
+fn operand_repr<const N: usize>(seed: u64) -> Int<N> {
+    let mut mag = [0u64; N];
+    let lo = N / 2;
+    for (i, slot) in mag.iter_mut().enumerate().take(lo) {
+        *slot = seed
+            .wrapping_mul(0x9E37_79B9_7F4A_7C15)
+            .wrapping_add((i as u64).wrapping_mul(0x1357_9BDF));
+    }
+    int_from_mag_limbs::<N>(&mag)
+}
+
+macro_rules! cell_repr {
+    ($c:expr, $tier:literal, $n:literal, $scale:literal) => {{
+        let a = operand_repr::<$n>(1009);
+        let b = operand_repr::<$n>(2027);
+        let mut group = $c.benchmark_group("dec_mul_rescale");
+        group.bench_function(format!("{}_n{}_s{}", $tier, $n, $scale), |bn| {
+            bn.iter(|| {
+                black_box(dec_mul_widen_divide::<$n, $scale>(
+                    black_box(a),
+                    black_box(b),
+                    MODE,
+                ))
+            })
+        });
+        group.finish();
+    }};
+}
+
 macro_rules! cell {
     ($c:expr, $tier:literal, $n:literal, $scale:literal) => {{
         let a = operand::<$n>(1009);
@@ -72,6 +105,13 @@ fn bench(c: &mut Criterion) {
     cell!(c, "D616", 32, 615);
     cell!(c, "D924", 48, 462);
     cell!(c, "D924", 48, 923);
+    // L6 split probe (N=64 = D1232): s0 isolates product+transcode+narrow
+    // (SCALE==0 skips the rescale); s616 is the full op. s616 - s0 = rescale.
+    cell!(c, "D1232", 64, 0);
+    cell!(c, "D1232", 64, 616);
+    // L6 trim confirmation: a REPRESENTABLE D1232 mul (product has leading-zero
+    // high limbs) — the magnitude-length-aware trim should shrink its rescale.
+    cell_repr!(c, "D1232repr", 64, 616);
 }
 
 fn main() {

@@ -155,8 +155,22 @@ where
         return narrow_mag_to_int::<N>(&mag, neg, "attempt to multiply with overflow");
     }
 
-    // Work width is the 2N-limb product: 2 * N * 64 bits.
-    let work_bits = (2 * N as u32) * 64;
-    crate::algos::support::rescale::dispatch_mag(&mut mag, SCALE, neg, mode, work_bits);
+    // Magnitude-length-aware rescale (mirrors the typed door
+    // `rescale::dispatch_wide_pow10`, task 9.24). A *representable* product is
+    // far shorter than the full `2N`-limb buffer: the result must fit `Int<N>`,
+    // so `|a*b| <= 10^SCALE * |Int::<N>::MAX|` and the high u128 limbs of `mag`
+    // are zero. Every rescale kernel's cost scales with the SIGNIFICANT length,
+    // not the buffer width, so strip the leading-zero high limbs and size
+    // `select` + the baked-Newton apply on the real length — otherwise the
+    // wide-tier `÷10^SCALE` Newton runs at the full `2N` width regardless of the
+    // operand magnitude (the L6 `mul_D1232` regression). Bit-identical: the
+    // quotient `<= ` the numerator, so the trimmed high limbs stay zero and
+    // `narrow_mag_to_int` reads the full `mag` unchanged.
+    let mut sig = mag.len();
+    while sig > 1 && mag[sig - 1] == 0 {
+        sig -= 1;
+    }
+    let sig_bits = (sig as u32).saturating_mul(128).min((2 * N as u32) * 64);
+    crate::algos::support::rescale::dispatch_mag(&mut mag[..sig], SCALE, neg, mode, sig_bits);
     narrow_mag_to_int::<N>(&mag, neg, "attempt to multiply with overflow")
 }
