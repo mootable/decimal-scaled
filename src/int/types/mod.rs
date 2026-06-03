@@ -1169,12 +1169,12 @@ impl<const N: usize> Int<N> {
         }
     }
 
-    // ── BigInt / BigInt parity surface ─────────────────────────
+    // ── Int<N> / Uint<N> parity surface ─────────────────────────
     //
-    // The methods below mirror the `decl_wide_int!`-generated `Int*`
-    // surface so the const-generic `Int<N>` can satisfy the kernel-facing
-    // `BigInt` / `BigInt` traits and the public `IntXXXX` API. Most
-    // delegate to the existing inherent methods or the `Uint<N>` twin.
+    // The methods below give the const-generic `Int<N>` the surface the
+    // kernel-facing `BigInt` trait and the public `IntXXXX` type aliases
+    // expect. Most delegate to the existing inherent methods or the
+    // `Uint<N>` twin.
 
     /// Integer constant `10`, used by decimal-scale `10^scale`
     /// rescaling.
@@ -1192,8 +1192,7 @@ impl<const N: usize> Int<N> {
         Uint::from_limbs(*self.abs().as_limbs())
     }
 
-    /// Two's-complement negation. Alias of [`Self::wrapping_neg`],
-    /// matching the `decl_wide_int!` `negate` name.
+    /// Two's-complement negation. Alias of [`Self::wrapping_neg`].
     #[inline]
     pub fn negate(self) -> Self {
         self.wrapping_neg()
@@ -1204,9 +1203,8 @@ impl<const N: usize> Int<N> {
     /// remainder takes the sign of the dividend. Routes through the
     /// const-`N` fast-arm (`div_rem_mag_fixed`): native `u64` idiv at
     /// `N == 1`, native `u128` divide at `N == 2`, and the dispatching
-    /// divmod (Knuth / Burnikel–Ziegler) for wider `N` — matching the
-    /// `decl_wide_int!` `div_rem` so the const-generic and macro families
-    /// share one divide algorithm. Panics on a zero divisor.
+    /// divmod (Knuth / Burnikel–Ziegler) for wider `N`. Panics on a zero
+    /// divisor.
     #[inline]
     pub fn div_rem(self, rhs: Self) -> (Self, Self) {
         assert!(!rhs.is_zero(), "attempt to divide by zero");
@@ -1285,8 +1283,7 @@ impl<const N: usize> Int<N> {
     }
 
     /// Builds directly from the little-endian u64 limb array. Alias of
-    /// [`Self::from_limbs`], matching the `decl_wide_int!` `from_limbs_le`
-    /// name (the historic public surface).
+    /// [`Self::from_limbs`] under the historic `from_limbs_le` public name.
     #[inline]
     pub const fn from_limbs_le(limbs: [u64; N]) -> Self {
         Self { limbs }
@@ -1300,10 +1297,9 @@ impl<const N: usize> Int<N> {
     }
 
     /// `self · (n as Self)` with the sign of `self`, panicking on
-    /// overflow. Computes the n-by-1-word product (identical limb
-    /// recurrence to the macro's `mul_schoolbook_into`) and rejects a
-    /// non-zero top carry — matching the `decl_wide_int!`
-    /// `checked_mul_u64`.
+    /// overflow. Computes the n-by-1-word product (the same limb
+    /// recurrence as `mul_schoolbook_into`) and rejects a non-zero top
+    /// carry.
     #[inline]
     pub fn checked_mul_u64(self, n: u64) -> Self {
         let mag = *self.unsigned_abs().as_limbs();
@@ -1580,14 +1576,13 @@ impl<const N: usize> Int<N> {
         Ok(Self::from_mag_limbs(&acc, negative))
     }
 
-    // ── Named-type API parity (the `decl_wide_int!` `$S` surface) ─────
+    // ── Named-type API parity (the `IntXXXX` alias surface) ─────
     //
-    // The methods below complete the inherent surface the macro `Int*`
-    // structs expose, so the `IntXXXX = Int<N>` aliases keep every call
-    // site resolving. Behaviour-preserving ports of the macro bodies.
+    // The methods below complete the inherent surface the `IntXXXX = Int<N>`
+    // type aliases expose, so every named-type call site keeps resolving.
 
     /// Integer power: `self^exp` (wrapping on overflow). Alias of
-    /// [`Self::wrapping_pow`], matching the macro's `pow` name.
+    /// [`Self::wrapping_pow`] under the `pow` name.
     #[inline]
     pub const fn pow(self, exp: u32) -> Self {
         self.wrapping_pow(exp)
@@ -1997,7 +1992,7 @@ impl<const N: usize> Int<N> {
         let a = *self.unsigned_abs().as_limbs();
         let b = *rhs.unsigned_abs().as_limbs();
         // Full product spans 2·N u64 limbs — sized exactly by the source's
-        // `ComputeInt::double_buffered_u64()` (no build-max blanket). Route through
+        // `ComputeLimbs::double_buffered_u64()` (no build-max blanket). Route through
         // the equal-length multiply dispatcher: both operands are `[u64; N]`,
         // so this is the single site every wide tier's full product flows
         // through. The dispatcher base-cases to schoolbook below
@@ -2538,8 +2533,8 @@ impl<const N: usize> Rem for Int<N> {
 
 // ── Display / FromStr ───────────────────────────────────────────────
 //
-// Delegate to the same limb fmt / parse path the `decl_wide_int!` macro
-// types use, so the const-generic surface round-trips identically.
+// Delegate to the shared limb fmt / parse path, so the const-generic
+// surface round-trips identically across every width.
 
 impl<const N: usize> core::fmt::Display for Uint<N>
 where

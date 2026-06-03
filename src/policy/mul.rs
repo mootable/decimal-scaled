@@ -23,7 +23,7 @@
 //! Decimal multiplication forms `a * b`, which spans up to `2N` limbs,
 //! before dividing by `10^SCALE`. Rather than thread a work *type* `Int<2N>`
 //! (unnameable from `N` on stable), the [`WidenDivide`](Algorithm::WidenDivide)
-//! kernel does that arithmetic directly in a `ComputeInt` limb buffer and
+//! kernel does that arithmetic directly in a `ComputeLimbs` limb buffer and
 //! divides via the shared MG / Newton magnitude-slice cores. So `dispatch`
 //! carries no work-width parameter and the policy stays a pure `(N, SCALE)`
 //! matcher; it adds only `where Limbs<N>: ComputeLimbs` for the scratch buffer.
@@ -107,7 +107,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
 /// The `const { select }` block folds away at every concrete `N`, leaving a
 /// direct call to the chosen kernel. `dispatch` delegates *down* to the
 /// generic-over-`N` kernel; the `2N`-wide product lives in the kernel's
-/// `ComputeInt` scratch buffer, so no work-width type is named here.
+/// `ComputeLimbs` scratch buffer, so no work-width type is named here.
 #[inline]
 #[must_use]
 pub(crate) fn dispatch<const N: usize, const SCALE: u32>(

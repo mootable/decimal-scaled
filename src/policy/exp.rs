@@ -110,39 +110,12 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // (ALL three Tang configs reported INVALID by the validity wall — its
         // `k·ln 2` lift overflows the guard), so Tang is INELIGIBLE there
         // regardless of speed. No Tang gate for N >= 24.
-        // D462 (Int<24>): the wide A/B map sweeps {s0, s115, s231, s346, s460}
-        // and ranks SERIES THE WINNER at every scale (s0 1.02×, s231 1.07×,
-        // s346 1.14×, s460 1.19× — vs the production Tang config tang_m512_g30;
-        // only s115 ~tied at +1.01× Tang). A two-pass bisection at s58
-        // (`benches/micro/exp_wide_tang_bisect.rs`) returns a 0.4% ~tie
-        // (Tang 304.4ms, Series 305.5ms — within bench noise), and s115 in
-        // the bisect run flips to Series +1.10× (the 5-point sweep was
-        // measurement noise). No Tang win-region exists at D462 — every
-        // confirmed-non-noise cell goes to Series. Matches v0.4.4's per-tier
-        // decision (the v0.4.4 `policy::exp` comment: "D462 — Tang exp probed
-        // at SCALE 225..=235 and LOST (~75% regression)"). Tang's
-        // table-multiply post-reduction Taylor needs more wide mults than
-        // Series's adaptive Smith r/2^n at this depth, so the table-elimination
-        // of the `k·ln 2` reduction does NOT pay for the longer Taylor at
-        // Int<24>. No Tang gate at D462 — falls through to the `_` Series arm
-        // at every scale. D616/D924/D1232 (wider tiers) already fall through
-        // to Series for the same reason: the A/B confirms Series wins
-        // 1.19×–1.50× at every sampled scale at D616 (s0 1.29×, s154 1.19×,
-        // s308 ~tie, s462 1.50×, s614 1.45×) and 1.49× at D924_s0 (rest of
-        // D924 + all of D1232 did not complete in the time budget, but trend
-        // is uniform — Series widening lead with width).
-        //
-        // **Audit Finding #5 DISPOSITION** — a policy audit raised
-        // that `policy::exp` Tang then gated N ∈ {3,4,6,8,12,16} and asked
-        // whether the wider tiers N ≥ 24 should also be Tang-gated. The 5-point
-        // sweep above + the D462 bisection at s58/s115 EMPIRICALLY REFUTE the
-        // audit lead for `exp`: at N=24/32/48 the Tang structural overhead
-        // (table multiply + post-reduction Taylor at very wide work widths)
-        // exceeds the saving from removing the `k·ln 2` reduction. Series's
-        // adaptive Smith r/2^n is faster at every confirmed cell at D462+.
-        // The audit lead is RESOLVED for `exp` and NOT a defect — the absent
-        // wide-tier Tang arms are evidence-backed. (The hyperbolic trig and
-        // forward-trig coverage at D462+ are unrelated and tracked separately.)
+        // Wide tiers (N >= 24, D462 and up) fall through to Series: it is
+        // measured faster than Tang at every confirmed scale, with the lead
+        // widening as N grows. Tang's table-multiply plus post-reduction Taylor
+        // needs more wide multiplies than Series's adaptive Smith r/2^n at these
+        // widths, so eliminating the `k·ln 2` reduction does not pay for the
+        // longer Taylor. No wide-tier Tang arm — the `_` Series arm owns them.
         _ => Select::ByAlgorithm(Algorithm::Series),
     }
 }

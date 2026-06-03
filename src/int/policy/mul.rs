@@ -45,7 +45,7 @@ impl Algorithm {
     /// (within ±5%, both directions across runs) and a decisive 1.13–1.34x win
     /// at N >= 16 (matching the sibling [`crate::int::policy::mul_low`] pilot).
     /// So every even `N` packs to `u128`; this is the per-cell tuning seam —
-    /// carve any even `N` that the bbc shows regressing back to `U64` here,
+    /// carve any even `N` that benchmarks show regressing back to `U64` here,
     /// kernel and dispatch untouched.
     ///
     /// Karatsuba shares the SAME limb-width axis: the policy-map (`mul_toom3_ab`

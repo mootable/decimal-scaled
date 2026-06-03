@@ -34,7 +34,7 @@ use crate::int::algos::div::div_rem_schoolbook::div_rem_schoolbook;
 /// engine fns in [`crate::int::algos::div`].
 ///
 /// `pub(crate)` together with [`select_for_limbs`] so a concrete-`N` caller
-/// that needs **exact `ComputeInt` scratch** (the decimal `/` and `%` int
+/// that needs **exact `ComputeLimbs` scratch** (the decimal `/` and `%` int
 /// layers) can read the matcher's verdict and route to the chosen engine's
 /// `*_into` variant with its own buffers — rather than hardcoding one engine
 /// (the matcher-bypass defect). The slice [`dispatch`] is the build-max entry
@@ -265,7 +265,7 @@ fn effective_limbs(limbs: &[u64]) -> usize {
 /// operands as slices, so none has to manufacture a const to call this. The
 /// build-max Knuth `u`/`v` scratch lives in the engine ([`div_knuth`] owns
 /// it), not here — the matcher allocates nothing. A concrete-`N` caller that
-/// can size scratch exactly (`Int<N>: ComputeInt`) sources its own buffer
+/// can size scratch exactly (`Int<N>: ComputeLimbs`) sources its own buffer
 /// family and calls the chosen engine's `*_into` variant.
 pub(crate) fn dispatch(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
     let algo = match const { select() } {

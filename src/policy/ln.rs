@@ -55,7 +55,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // (N, SCALE) cell across {0, S/4, S/2, 3S/4, S-1} for every wide
         // tier, with zero validity failures. So Tang owns the whole range
         // at every tier — narrow-wide AND wide — not just point ranges
-        // snapped to bbc cells (the prior Class-I gate shape). The narrow
+        // snapped to benchmarked cells (the prior Class-I gate shape). The narrow
         // tiers exclude SCALE=0 because the narrow-wide validation
         // (`ln_series_tang_ab`) was only run for SCALE >= 1.
         #[cfg(any(feature = "d57", feature = "wide"))]
@@ -242,16 +242,12 @@ const AVAIL_RUNGS: [usize; 13] = [3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 1
 /// max-scale cells stay bit-identical.
 ///
 /// `MARGIN` is the directed-Ziv escalation headroom above the working scale.
-/// **MEASURED:** the WIDE tiers (storage ≥ 16
-/// limbs: D307…D1232) reproduce the measured golden-safe narrowest-valid rung at
-/// `MARGIN = 24` — their near-grid-line-validated map is monotone, and `24` matches
-/// all 25 wide cells exactly (incl. the recovery cell `D462 s231 → w32`, where the
-/// old `51` seed left `w48`). The NARROW tiers (storage < 16: D57…D230) keep
-/// `MARGIN = 51`: their near-grid-line validity is NON-MONOTONIC (e.g. D57 s14 needs
-/// `w12` while s28 needs only `w8` — `w8` is fast-but-wrong at s14), so no single
-/// tighter margin is safe there; `51` is never too-aggressive (the map proves it),
-/// at the cost of some low-value missed narrowing. Each tier carries only its own
-/// width (rule 6); the golden gate is the final correctness wall.
+/// Wide tiers (storage >= 16 limbs) use `MARGIN = 24`: their near-grid-line
+/// validity is monotone, so the tighter margin lands the narrowest valid rung.
+/// Narrow tiers (storage < 16) keep `MARGIN = 51`: their validity is
+/// non-monotone near the grid line, so no single tighter margin is safe — `51`
+/// is never too aggressive, at the cost of some missed narrowing. Each tier
+/// carries only its own width (rule 6); the golden gate is the correctness wall.
 #[cfg(feature = "_wide-support")]
 const fn pick_rung_limbs(scale: u32, storage: usize, floor: usize) -> usize {
     // Per-tier margin (measured map): wide tiers tighten to 24, narrow stay safe at 51.

@@ -38,8 +38,8 @@
 //!
 //! Like [`mul_low_limb`], the truncated-low result touches only the low
 //! `h = packed_len(N) ≤ N` limbs, so the accumulator is a local `[L; N]` —
-//! NOT a `ComputeInt`/`double_buffered` scratch (which the wider `2N` *full*
-//! product would need). So this kernel takes no `ComputeInt` bound, and neither
+//! NOT a `ComputeLimbs`/`double_buffered` scratch (which the wider `2N` *full*
+//! product would need). So this kernel takes no `ComputeLimbs` bound, and neither
 //! does its [`crate::int::policy::sqr_low`] dispatch.
 //!
 //! [`mul_low_limb`]: crate::int::algos::mul::mul_schoolbook::mul_low_limb

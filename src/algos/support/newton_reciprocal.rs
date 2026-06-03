@@ -851,7 +851,7 @@ mod tests {
         assert_eq!(got, want, "Newton differs from MG chain at D307 s=150");
     }
 
-    // Exercises `Int<24>` (D462 storage AND D230 Work) at the bbc anchor
+    // Exercises `Int<24>` (D462 storage AND D230 Work) at the benchmarked anchor
     // scales — bit-identical agreement is the validity wall for the
     // 1536-bit Newton kept-alt (the `rescale` matcher's `Newton` arm).
     #[cfg(feature = "d462")]
@@ -1052,7 +1052,7 @@ mod tests {
 
     // ── Wider-width validity wall (audit 2026-05-28) ──────────────────
     //
-    // Int<96> / Int<128> / Int<192> exercised at the bbc-anchor scales
+    // Int<96> / Int<128> / Int<192> exercised at the benchmarked anchor scales
     // and the maxima. Bit-identical agreement with the Knuth-routed
     // `div_rem_mag_slice` path is the validity wall for the wide Newton
     // kept-alt cells (6144 / 8192 / 12288; the `rescale` `Newton` arm).

@@ -11,7 +11,7 @@
 //!
 //! Following the `sqrt`/`cbrt`/`hypot` template, the kernel is generic over
 //! the storage limb count `N` alone and does the `2N`-wide work directly in
-//! a `ComputeInt::double_buffered_u64()` buffer:
+//! a `ComputeLimbs::double_buffered_u64()` buffer:
 //!
 //! 1. form the magnitude product `|a| * |b|` (`2N` u64 limbs) via the int
 //!    layer's const-`N` policy dispatcher
