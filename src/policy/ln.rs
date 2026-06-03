@@ -241,15 +241,22 @@ const AVAIL_RUNGS: [usize; 13] = [3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 1
 /// the answer — and there it reproduces the current per-tier `$Work`, so the
 /// max-scale cells stay bit-identical.
 ///
-/// `MARGIN` is the directed-Ziv escalation headroom, seeded at the two-core
-/// floor headroom (D462: cap `512` − max-scale `461` = `51`); validity-walled by
-/// golden (A4 — all 6 modes + near-grid-line inputs) and widened if a boundary
-/// mis-rounds. **ANALYTICAL SEED** — the `policy-mapper` (STEP 2) finalises the
-/// crossovers; the `policy-applier` writes the measured map here.
+/// `MARGIN` is the directed-Ziv escalation headroom above the working scale.
+/// **MEASURED (policy-mapper STEP 2, 2026-06-03):** the WIDE tiers (storage ≥ 16
+/// limbs: D307…D1232) reproduce the measured golden-safe narrowest-valid rung at
+/// `MARGIN = 24` — their near-grid-line-validated map is monotone, and `24` matches
+/// all 25 wide cells exactly (incl. the recovery cell `D462 s231 → w32`, where the
+/// old `51` seed left `w48`). The NARROW tiers (storage < 16: D57…D230) keep
+/// `MARGIN = 51`: their near-grid-line validity is NON-MONOTONIC (e.g. D57 s14 needs
+/// `w12` while s28 needs only `w8` — `w8` is fast-but-wrong at s14), so no single
+/// tighter margin is safe there; `51` is never too-aggressive (the map proves it),
+/// at the cost of some low-value missed narrowing. Each tier carries only its own
+/// width (rule 6); the golden gate is the final correctness wall.
 #[cfg(feature = "_wide-support")]
 const fn pick_rung_limbs(scale: u32, storage: usize, floor: usize) -> usize {
-    const MARGIN: u32 = 51;
-    let need = scale + MARGIN;
+    // Per-tier margin (measured map): wide tiers tighten to 24, narrow stay safe at 51.
+    let margin: u32 = if storage >= 16 { 24 } else { 51 };
+    let need = scale + margin;
     let mut i = 0;
     while i < AVAIL_RUNGS.len() {
         let w = AVAIL_RUNGS[i];

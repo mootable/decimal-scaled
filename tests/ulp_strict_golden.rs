@@ -1086,6 +1086,16 @@ mod band_edges {
         fn d57_ln_s0() {
             check_at_scale("ln", Width::D57, 0, include_str!("golden/ln_d57_s0.txt"));
         }
+        // Mid-scale ln cells (work-rung campaign): pin S/4 + 3S/4 so the apply's
+        // golden gate validates the tightened rung at the coarse grid, not just s0/S/2/max.
+        #[test]
+        fn d57_ln_s14() {
+            check_at_scale("ln", Width::D57, 14, include_str!("golden/ln_d57_s14.txt"));
+        }
+        #[test]
+        fn d57_ln_s42() {
+            check_at_scale("ln", Width::D57, 42, include_str!("golden/ln_d57_s42.txt"));
+        }
         #[test]
         fn d57_ln_s56() {
             check_at_scale("ln", Width::D57, 56, include_str!("golden/ln_d57_s56.txt"));
@@ -1261,6 +1271,14 @@ mod band_edges {
         #[test]
         fn d76_ln_s0() {
             check_at_scale("ln", Width::D76, 0, include_str!("golden/ln_d76_s0.txt"));
+        }
+        #[test]
+        fn d76_ln_s19() {
+            check_at_scale("ln", Width::D76, 19, include_str!("golden/ln_d76_s19.txt"));
+        }
+        #[test]
+        fn d76_ln_s57() {
+            check_at_scale("ln", Width::D76, 57, include_str!("golden/ln_d76_s57.txt"));
         }
         #[test]
         fn d76_ln_s75() {
@@ -1439,6 +1457,14 @@ mod band_edges {
             check_at_scale("ln", Width::D115, 0, include_str!("golden/ln_d115_s0.txt"));
         }
         #[test]
+        fn d115_ln_s28() {
+            check_at_scale("ln", Width::D115, 28, include_str!("golden/ln_d115_s28.txt"));
+        }
+        #[test]
+        fn d115_ln_s86() {
+            check_at_scale("ln", Width::D115, 86, include_str!("golden/ln_d115_s86.txt"));
+        }
+        #[test]
         fn d115_ln_s114() {
             check_at_scale("ln", Width::D115, 114, include_str!("golden/ln_d115_s114.txt"));
         }
@@ -1613,6 +1639,14 @@ mod band_edges {
         #[test]
         fn d153_ln_s0() {
             check_at_scale("ln", Width::D153, 0, include_str!("golden/ln_d153_s0.txt"));
+        }
+        #[test]
+        fn d153_ln_s38() {
+            check_at_scale("ln", Width::D153, 38, include_str!("golden/ln_d153_s38.txt"));
+        }
+        #[test]
+        fn d153_ln_s114() {
+            check_at_scale("ln", Width::D153, 114, include_str!("golden/ln_d153_s114.txt"));
         }
         #[test]
         fn d153_ln_s152() {
@@ -1791,6 +1825,14 @@ mod band_edges {
             check_at_scale("ln", Width::D230, 0, include_str!("golden/ln_d230_s0.txt"));
         }
         #[test]
+        fn d230_ln_s57() {
+            check_at_scale("ln", Width::D230, 57, include_str!("golden/ln_d230_s57.txt"));
+        }
+        #[test]
+        fn d230_ln_s172() {
+            check_at_scale("ln", Width::D230, 172, include_str!("golden/ln_d230_s172.txt"));
+        }
+        #[test]
         fn d230_ln_s229() {
             check_at_scale("ln", Width::D230, 229, include_str!("golden/ln_d230_s229.txt"));
         }
@@ -1957,6 +1999,14 @@ mod band_edges {
         #[test]
         fn d307_ln_s0() {
             check_at_scale("ln", Width::D307, 0, include_str!("golden/ln_d307_s0.txt"));
+        }
+        #[test]
+        fn d307_ln_s76() {
+            check_at_scale("ln", Width::D307, 76, include_str!("golden/ln_d307_s76.txt"));
+        }
+        #[test]
+        fn d307_ln_s230() {
+            check_at_scale("ln", Width::D307, 230, include_str!("golden/ln_d307_s230.txt"));
         }
         #[test]
         fn d307_ln_s306() {
@@ -2310,6 +2360,14 @@ mod band_edges {
             check_at_scale("ln", Width::D616, 0, include_str!("golden/ln_d616_s0.txt"));
         }
         #[test]
+        fn d616_ln_s154() {
+            check_at_scale("ln", Width::D616, 154, include_str!("golden/ln_d616_s154.txt"));
+        }
+        #[test]
+        fn d616_ln_s462() {
+            check_at_scale("ln", Width::D616, 462, include_str!("golden/ln_d616_s462.txt"));
+        }
+        #[test]
         fn d616_ln_s615() {
             check_at_scale("ln", Width::D616, 615, include_str!("golden/ln_d616_s615.txt"));
         }
@@ -2478,6 +2536,14 @@ mod band_edges {
             check_at_scale("ln", Width::D924, 0, include_str!("golden/ln_d924_s0.txt"));
         }
         #[test]
+        fn d924_ln_s231() {
+            check_at_scale("ln", Width::D924, 231, include_str!("golden/ln_d924_s231.txt"));
+        }
+        #[test]
+        fn d924_ln_s693() {
+            check_at_scale("ln", Width::D924, 693, include_str!("golden/ln_d924_s693.txt"));
+        }
+        #[test]
         fn d924_ln_s923() {
             check_at_scale("ln", Width::D924, 923, include_str!("golden/ln_d924_s923.txt"));
         }
@@ -2644,6 +2710,14 @@ mod band_edges {
         #[test]
         fn d1232_ln_s0() {
             check_at_scale("ln", Width::D1232, 0, include_str!("golden/ln_d1232_s0.txt"));
+        }
+        #[test]
+        fn d1232_ln_s308() {
+            check_at_scale("ln", Width::D1232, 308, include_str!("golden/ln_d1232_s308.txt"));
+        }
+        #[test]
+        fn d1232_ln_s924() {
+            check_at_scale("ln", Width::D1232, 924, include_str!("golden/ln_d1232_s924.txt"));
         }
         #[test]
         fn d1232_ln_s1231() {
