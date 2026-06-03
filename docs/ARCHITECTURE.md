@@ -29,10 +29,10 @@ no algorithm is permitted to break them.
    `N` is carried — see *Work-width scratch* below). This is what lets the crate run in `no_std`
    with no allocator and keeps every call's cost on the stack where it
    const-folds. A heap allocation on the compute path is a **hard defect**,
-   never a tolerated one. (Historical exceptions — the `_wide-support =
-   ["alloc"]` feature, `decl_table_cache!`'s `Vec` tables, the
-   `newton_reciprocal` `thread_local!`+`Vec` cache — are defects scheduled for
-   removal, not precedents to extend.)
+   never a tolerated one. (The earlier heap exceptions — a `decl_table_cache!`
+   `Vec` tables macro and the `newton_reciprocal` `thread_local!`+`Vec`
+   cache — were removed; `_wide-support = []` is now a heap-free marker.
+   Do not reintroduce any of them.)
 
 2. **No state — thread-safety comes from being stateless, so there is NO
    cache whatsoever.** Every function is a pure function of its inputs and
@@ -64,9 +64,10 @@ no algorithm is permitted to break them.
    compiler is immutable read-only data — it is computed once at build time,
    never written at run time, and shared with no synchronisation. What is
    forbidden is a value computed/populated **at run time on first use and
-   kept for later calls** — that is memoization, and it is exactly what the
-   `NewtonReciprocal` precompute cache and the `pi`/`ln2`/`ln10`/`pow10`
-   `thread_local!` caches do. The fix for such a site is either (a) lift the
+   kept for later calls** — that is memoization. That is what a
+   `NewtonReciprocal` precompute cache or the `pi`/`ln2`/`ln10`/`pow10`
+   `thread_local!` caches WOULD do; they were removed and must not return.
+   The fix for such a site is either (a) lift the
    precompute to *compile time* (a `const`/`const fn` table) where the value
    is fixed, or (b) **recompute it each call on the stack**; it is **never**
    to relocate the runtime cache into a mutable `static`.
@@ -188,13 +189,18 @@ storage can hold); `SCALE` is a const-generic so `D38<2>` (cents) and
 one representation at a fixed scale, `Eq`/`Ord`/`Hash` are derived
 straight from the storage bits.
 
-The cross-width API is four traits (`src/types/traits/`):
+The cross-width API is four trait families (`src/types/traits/`):
 
 - `DecimalArithmetic` — operators, sign, integer methods, the
   checked/wrapping/saturating/overflowing families, reductions.
 - `DecimalConvert` — round-trip, integer and float bridges.
 - `DecimalTranscendental` — `sqrt`/`cbrt`/`exp`/`ln`/trig/hyperbolic/`pow`.
-- `Decimal` — marker supertrait combining the above.
+- `DecimalConstants` — the per-type math constants (`pi`, `e`, … ).
+
+`Decimal` is the marker supertrait combining the four. Two more traits
+sit alongside them: `WidthLE` (the compile-time width-ordering relation
+used by the `widen` / `narrow` hops) and, under the `dyn` feature,
+`DynDecimal` (the object-safe erased view).
 
 The typed method shells (`D57::<20>::sqrt_strict_with(mode)`) are emitted
 by macros in `src/macros/` and immediately hand off to the dispatch layer.

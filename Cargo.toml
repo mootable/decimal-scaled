@@ -120,7 +120,7 @@ cross-scale-ops = []
 # sized exactly `mult·N + ceil(N/2)` — smaller frames, no nightly.
 # `exact-scratch-nightly` does the same per-`N` sizing with one blanket
 # impl via `generic_const_exprs` (the const-expr stays in that impl block).
-# See `crate::int::types::work_scratch`.
+# See `crate::int::types::compute_limbs`.
 exact-scratch = []
 exact-scratch-nightly = ["exact-scratch"]
 # Wide decimal tiers (D57 … D1232). Each width is independently opt-in
