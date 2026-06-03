@@ -104,18 +104,15 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // Series stays the canonical wide kernel, so the `_` arm is Series.)
         //
         // The WIDEST tiers (N >= 24: D462/D616/D924/D1232) likewise fall
-        // through to Series: the A/B confirms Series/Schoolbook win at every
-        // sampled scale (D462 s0 1.12×, … D1232 every sample), and at D1232 MAX
-        // scale (s1230) single-shot Tang is not even bit-identical to Series
-        // (ALL three Tang configs reported INVALID by the validity wall — its
-        // `k·ln 2` lift overflows the guard), so Tang is INELIGIBLE there
-        // regardless of speed. No Tang gate for N >= 24.
-        // Wide tiers (N >= 24, D462 and up) fall through to Series: it is
-        // measured faster than Tang at every confirmed scale, with the lead
-        // widening as N grows. Tang's table-multiply plus post-reduction Taylor
-        // needs more wide multiplies than Series's adaptive Smith r/2^n at these
-        // widths, so eliminating the `k·ln 2` reduction does not pay for the
-        // longer Taylor. No wide-tier Tang arm — the `_` Series arm owns them.
+        // through to Series: it is measured faster than Tang at every
+        // confirmed scale, the lead widening as N grows, because Tang's
+        // table-multiply plus post-reduction Taylor needs more wide
+        // multiplies than Series's adaptive Smith r/2^n at these widths —
+        // eliminating the `k·ln 2` reduction does not pay for the longer
+        // Taylor. And at the D1232 MAX scale single-shot Tang is not even
+        // bit-identical to Series (its `k·ln 2` lift overflows the guard,
+        // so the validity wall rules it INELIGIBLE regardless of speed).
+        // No Tang gate for N >= 24 — the `_` Series arm owns them.
         _ => Select::ByAlgorithm(Algorithm::Series),
     }
 }
