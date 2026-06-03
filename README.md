@@ -92,12 +92,12 @@ committed shootout result files:
 | library | mode | sqrt | cbrt | exp | ln | sin | cos | tan | atan | asinh |
 |---|---|---|---|---|---|---|---|---|---|---|
 | decimal-scaled | HalfToEven | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
-| fastnum | HalfAwayFromZero | 0 (0) | 0 (0) | 1 (1.00) | 0 (0) | 0 (0) | 0 (0) | 4 (1.0e1) | 0 (0) | 0 (0) |
-| rust_decimal | HalfToEven | 1 (1.00) | n/a | 6 (5.4e1) | 1 (1.00) | 1 (1.00) | 1 (1.00) | 1 (1.00) | n/a | n/a |
+| fastnum | HalfAwayFromZero | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 67 (1.1e20) | 0 (0) | 58 (2.0e17) |
+| rust_decimal | HalfToEven | 1 (1.00) | n/a | 33 (7.2e9) | 31 (1.1e9) | 1 (1.00) | 1 (1.00) | 36 (4.3e10) | n/a | n/a |
 | dashu-float | HalfAwayFromZero | 0 (0) | n/a | 0 (0) | 0 (0) | n/a | n/a | n/a | n/a | n/a |
 | decimal-rs | HalfToEven | 1 (1.00) | n/a | 1 (1.00) | 1 (1.00) | n/a | n/a | n/a | n/a | n/a |
 | bigdecimal | HalfToEven | 1 (1.00) | 1 (1.00) | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
-| g_math | HalfToEven | 1 (1.00) | n/a | 1 (1.00) | 1 (1.00) | 1 (1.00) | 1 (1.00) | 1 (1.00) | 0 (0) | 1 (1.00) |
+| g_math | HalfToEven | 6 (4.9e1) | n/a | 65 (2.3e19) | 6 (4.8e1) | 64 (1.5e19) | 6 (4.9e1) | 65 (2.0e19) | 64 (1.6e19) | 64 (1.8e19) |
 <!-- END GENERATED:precision:D38:readme -->
 
 `0 (0)` = correctly rounded (0 LSBε, bit-exact under that crate's

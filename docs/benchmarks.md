@@ -175,12 +175,12 @@ native mode:
 | library | mode | sqrt | cbrt | exp | ln | log2 | log10 | exp2 | sin | cos | tan | atan | asin | acos | sinh | cosh | tanh | asinh | acosh | atanh | log | atan2 | powf |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | decimal-scaled | HalfToEven | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
-| fastnum | HalfAwayFromZero | 0 (0) | 0 (0) | 1 (1.00) | 0 (0) | 0 (0) | 0 (0) | n/a | 0 (0) | 0 (0) | 4 (1.0e1) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | n/a | n/a | 0 (0) |
-| rust_decimal | HalfToEven | 1 (1.00) | n/a | 6 (5.4e1) | 1 (1.00) | n/a | n/a | n/a | 1 (1.00) | 1 (1.00) | 1 (1.00) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| fastnum | HalfAwayFromZero | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | n/a | 0 (0) | 0 (0) | 67 (1.1e20) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 58 (2.0e17) | 0 (0) | 0 (0) | n/a | n/a | 0 (0) |
+| rust_decimal | HalfToEven | 1 (1.00) | n/a | 33 (7.2e9) | 31 (1.1e9) | n/a | n/a | n/a | 1 (1.00) | 1 (1.00) | 36 (4.3e10) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
 | dashu-float | HalfAwayFromZero | 0 (0) | n/a | 0 (0) | 0 (0) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
 | decimal-rs | HalfToEven | 1 (1.00) | n/a | 1 (1.00) | 1 (1.00) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
 | bigdecimal | HalfToEven | 1 (1.00) | 1 (1.00) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
-| g_math | HalfToEven | 1 (1.00) | n/a | 1 (1.00) | 1 (1.00) | n/a | n/a | n/a | 1 (1.00) | 1 (1.00) | 1 (1.00) | 0 (0) | 1 (1.00) | 1 (1.00) | 1 (1.00) | 1 (1.00) | 0 (0) | 1 (1.00) | 1 (1.00) | 0 (0) | n/a | 1 (1.00) | 0 (0) |
+| g_math | HalfToEven | 6 (4.9e1) | n/a | 65 (2.3e19) | 6 (4.8e1) | n/a | n/a | n/a | 64 (1.5e19) | 6 (4.9e1) | 65 (2.0e19) | 64 (1.6e19) | 65 (3.1e19) | 65 (3.1e19) | 65 (2.3e19) | 6 (5.4e1) | 64 (9.2e18) | 64 (1.8e19) | 6 (5.0e1) | 69 (4.4e20) | n/a | 66 (6.3e19) | 70 (7.3e20) |
 <!-- END GENERATED:precision:D38 -->
 
 `decimal-scaled` is `0 (0)` across the entire surface — correctly
@@ -207,12 +207,12 @@ significant digits, so it cannot reach 35 either and is `n/a` as well;
 | library | mode | sqrt | cbrt | exp | ln | sin | cos | tan | atan |
 |---|---|---|---|---|---|---|---|---|---|
 | decimal-scaled | HalfToEven | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
-| fastnum | HalfAwayFromZero | 0 (0) | 0 (0) | 1 (1.00) | 0 (0) | 0 (0) | 0 (0) | 4 (1.0e1) | 0 (0) |
-| rust_decimal | HalfToEven | 1 (1.00) | n/a | 1 (1.00) | 1 (1.00) | 1 (1.00) | 1 (1.00) | 1 (1.00) | n/a |
-| dashu-float | HalfAwayFromZero | 0 (0) | n/a | 115 (2.6e34) | 0 (0) | n/a | n/a | n/a | n/a |
-| decimal-rs | HalfToEven | 1 (1.00) | n/a | 125 (2.6e37) | 1 (1.00) | n/a | n/a | n/a | n/a |
+| fastnum | HalfAwayFromZero | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| rust_decimal | HalfToEven | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| dashu-float | HalfAwayFromZero | 0 (0) | n/a | 0 (0) | 0 (0) | n/a | n/a | n/a | n/a |
+| decimal-rs | HalfToEven | 58 (2.3e17) | n/a | 130 (3.3e38) | 1 (1.00) | n/a | n/a | n/a | n/a |
 | bigdecimal | HalfToEven | 1 (1.00) | 1 (1.00) | n/a | n/a | n/a | n/a | n/a | n/a |
-| g_math | HalfToEven | 1 (1.00) | n/a | 1 (1.00) | 1 (1.00) | 1 (1.00) | 1 (1.00) | 1 (1.00) | 0 (0) |
+| g_math | HalfToEven | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
 <!-- END GENERATED:precision:D76 -->
 
 `decimal-scaled` remains `0 (0)` across this width too, and `dashu-float`
@@ -234,12 +234,12 @@ LSBε off at this depth.
 | library | mode | sqrt | cbrt | exp | ln | sin | cos | tan | atan |
 |---|---|---|---|---|---|---|---|---|---|
 | decimal-scaled | HalfToEven | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
-| fastnum | HalfAwayFromZero | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 4 (1.0e1) | 0 (0) |
-| rust_decimal | HalfToEven | 1 (1.00) | n/a | 0 (0) | 0 (0) | 1 (1.00) | 1 (1.00) | 1 (1.00) | n/a |
-| dashu-float | HalfAwayFromZero | 376 (4.7e112) | n/a | 884 (1.1e265) | 0 (0) | n/a | n/a | n/a | n/a |
-| decimal-rs | HalfToEven | 1 (1.00) | n/a | 0 (0) | 0 (0) | n/a | n/a | n/a | n/a |
-| bigdecimal | HalfToEven | 1 (1.00) | 6 (4.4e1) | n/a | n/a | n/a | n/a | n/a | n/a |
-| g_math | HalfToEven | 1 (1.00) | n/a | 0 (0) | 0 (0) | 1 (1.00) | 1 (1.00) | 1 (1.00) | 0 (0) |
+| fastnum | HalfAwayFromZero | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| rust_decimal | HalfToEven | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| dashu-float | HalfAwayFromZero | 126 (6.5e37) | n/a | 386 (3.0e115) | 53 (6.1e15) | n/a | n/a | n/a | n/a |
+| decimal-rs | HalfToEven | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| bigdecimal | HalfToEven | 761 (2.2e228) | 339 (3.8e101) | n/a | n/a | n/a | n/a | n/a | n/a |
+| g_math | HalfToEven | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
 <!-- END GENERATED:precision:D307 -->
 
 `decimal-scaled` is the only crate that is `0 (0)` — correctly rounded

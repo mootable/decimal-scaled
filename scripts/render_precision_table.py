@@ -60,9 +60,15 @@ def fmt_ulp(max_ulp):
 
 
 def read_tsv(path, width):
-    """(method -> (kind, max_lsbe, max_ulp)) for the given width."""
+    """(method -> (kind, max_lsbe, max_ulp)) for the given width at its
+    canonical scale (`SCALE[width]`). The TSVs carry several scale rows per
+    width (0, the canonical scale, max); the table is defined at the canonical
+    scale (the heading and prose say so), so filter to it — NOT the first row
+    seen, which is scale 0 and makes every competitor look correctly rounded
+    on an easy operand."""
     cells = {}
     mode = None
+    want_scale = str(SCALE[width]) if width in SCALE else None
     if not os.path.isfile(path):
         return cells, mode
     with open(path, encoding="utf-8") as f:
@@ -73,9 +79,11 @@ def read_tsv(path, width):
             cols = line.split("\t")
             if len(cols) < 9 or cols[1] != width:
                 continue
+            if want_scale is not None and cols[2] != want_scale:
+                continue
             if mode is None:
                 mode = cols[3]
-            # method -> (kind, max_lsbe, max_ulp); preserve first seen.
+            # method -> (kind, max_lsbe, max_ulp) at the canonical scale.
             cells.setdefault(cols[0], (cols[4], cols[5], cols[6]))
     return cells, mode
 
