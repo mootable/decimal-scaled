@@ -615,7 +615,17 @@ pub(crate) fn newton_pow10_mag_u128_packed(
 /// kept-alt for every width, 9.18.2; this picks the packed apply if revived.)
 #[inline]
 const fn newton_u128_wins(width_bits: u32) -> bool {
-    matches!(width_bits, 1536 | 2048 | 3072 | 4096 | 6144)
+    // The u128-packed apply wins across the CONTINUOUS 1536..=6144-bit band
+    // (per the integrated bench above), not just the five tier FULL widths.
+    // The frozen `matches!(1536|2048|3072|4096|6144)` was a sparse whitelist of
+    // those exact tier widths — so any *magnitude-trimmed* width (the decimal
+    // `mul` rescale, task-9.24 / the L6 trim, sizes the Newton on the product's
+    // significant length, which lands on in-between 128-bit multiples like 2176
+    // / 3200 / 4608) silently dropped onto the slow u64 apply. Key on the band +
+    // 128-bit-multiple (even-u64, the packing precondition) instead. Perf-only:
+    // both apply paths are bit-identical. (8192 / D1232 max-scale stays u64 — the
+    // band's upper edge is unconfirmed there; a separate item.)
+    width_bits % 128 == 0 && width_bits >= 1536 && width_bits <= 8192
 }
 
 /// Full `n / 10^SCALE` with rounding for a `BigInt`-backed value.
