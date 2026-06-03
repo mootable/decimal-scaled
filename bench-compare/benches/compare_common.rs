@@ -215,7 +215,20 @@ macro_rules! width_bench {
             )+
         }
 
-        ::criterion::criterion_group!(benches, bench);
+        // Faster bbc turnaround (owner 2026-06-03): 0.5s warm-up + 2.5s
+        // measurement (was the criterion default 3s + 5s). The branch÷prod
+        // ratio is read WITHIN one run (both sides at this same config), so the
+        // central ratio is config-robust; the shorter budgets trade some
+        // measurement variance — watch the slow wide-tier (ms-scale) cells,
+        // which warm/sample least. CLI args (--save-baseline etc.) still apply
+        // on top via the macro's internal configure_from_args.
+        ::criterion::criterion_group! {
+            name = benches;
+            config = ::criterion::Criterion::default()
+                .warm_up_time(::core::time::Duration::from_millis(500))
+                .measurement_time(::core::time::Duration::from_millis(2500));
+            targets = bench
+        }
         ::criterion::criterion_main!(benches);
     };
 }
