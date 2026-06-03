@@ -809,7 +809,7 @@ mod fast_path_validity {
             // bug) — the bench-branch-compare `exp_D38_s37`/`cosh`/`sinh`
             // regression operands (`exp(0.1)`). The speedup column here is the
             // measured fast-vs-wide gain these cells recover.
-            (10i128.pow(36), 37, "exp(0.1) D38 s37 *bbc*"),
+            (10i128.pow(36), 37, "exp(0.1) D38 s37"),
             (10i128.pow(37), 38, "exp(0.1) D38 s38"),
             (10i128.pow(35), 36, "exp(0.1) D38 s36"),
             (15 * 10i128.pow(36) / 10, 37, "exp(1.5) D38 s37"),
