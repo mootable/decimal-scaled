@@ -314,13 +314,56 @@ pub(crate) fn exp_series<C: WideTrigCore, const SCALE: u32>(
 pub(crate) fn ln_series<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> C::Storage
+where
+    <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    ln_series_g::<C, C::W, SCALE>(raw, mode)
+}
+
+/// Rung-generic `ln_series` — the Brent-reduction wide-ln kernel run at an
+/// arbitrary work rung `Wk` (decoupled from `C::W`), so the policy / STEP-2
+/// policy-mapper can run / bench Series at its minimal valid work width
+/// (mirrors [`crate::algos::ln::ln_tang::ln_tang_g`]; [`ln_series`] is the
+/// `Wk = C::W` alias, bit-identical). Calls the already-work-int-generic
+/// `exp_generic::ln_fixed::<Wk>` directly (bypassing the fixed-`C::W` trait
+/// method `C::ln_fixed`), with `ln 2` const-folded at the base working scale on
+/// the hot path — value-identical to the per-tier `ln2_cf::<SCALE>`.
+#[inline]
+#[must_use]
+pub(crate) fn ln_series_g<C: WideTrigCore, Wk: BigInt, const SCALE: u32>(
+    raw: C::Storage,
+    mode: RoundingMode,
+) -> C::Storage
+where
+    <Wk as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
     if raw <= C::storage_zero() {
         panic!("wide-tier ln: argument must be positive");
     }
-    C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
-        C::ln_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard)
-    })
+    round_to_storage_directed_g::<C::Storage, Wk>(
+        C::GUARD,
+        SCALE,
+        mode,
+        C::storage_max(),
+        C::storage_min(),
+        |guard| {
+            let w = SCALE + guard;
+            let ln2 = if w == SCALE + C::GUARD {
+                crate::consts::ln2_by_scale::<Wk>(w, crate::support::rounding::DEFAULT_ROUNDING_MODE)
+            } else {
+                crate::consts::ln2_by_working_scale::<Wk>(
+                    w,
+                    crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
+            };
+            crate::algos::exp::exp_generic::ln_fixed::<Wk>(
+                to_work_scaled_g::<C::Storage, Wk>(raw, guard),
+                w,
+                ln2,
+            )
+        },
+    )
 }
 
 /// `sin_strict` for a wide tier — generic over the tier `C`. Replaces
