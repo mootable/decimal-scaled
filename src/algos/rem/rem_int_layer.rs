@@ -18,7 +18,7 @@ use crate::int::types::Int;
 /// Two value-gated fast paths run FIRST. (1) When `|a| < |b|` the truncating
 /// remainder is the dividend itself (`a % b == a`), returned after one
 /// top-down magnitude compare — no divide, no scratch. This is the dominant
-/// decimal-`rem` bbc shape (`x % b` with `|x| < |b|`, e.g. `2.0 % 3.5`) and it
+/// decimal-`rem` benchmarked shape (`x % b` with `|x| < |b|`, e.g. `2.0 % 3.5`) and it
 /// catches the cases the u128 probe misses (a scaled divisor crossing the
 /// 128-bit line while the dividend stays smaller — D76 s38 onward).
 /// (2) When both operand magnitudes fit a single 128-bit word it takes a
@@ -30,7 +30,7 @@ use crate::int::types::Int;
 ///
 /// Otherwise it routes on the divide matcher's verdict
 /// ([`select_for_limbs`](crate::int::policy::div_rem::select_for_limbs)) and
-/// resolves the remainder via the chosen engine with **exact `ComputeInt`
+/// resolves the remainder via the chosen engine with **exact `ComputeLimbs`
 /// scratch** (`single_buffered_u64`, `N + 2` per width) instead of the `Rem`
 /// operator's build-max `[u64; MAX_SINGLE_LIMBS]` Knuth buffers. The balanced
 /// `a % b` shape never presents the wide `num ≥ 2·den` form the u128 /
@@ -47,7 +47,7 @@ use crate::int::types::Int;
 ///
 /// Only reached for `N >= 3` (the decimal `rem` policy routes `N <= 2` to
 /// `rem_native`), so the narrow hardware-`%` path is untouched; every such
-/// `N` is in the `exact-scratch` width list, so the `ComputeInt` bound
+/// `N` is in the `exact-scratch` width list, so the `ComputeLimbs` bound
 /// discharges at the concrete `N` and never cascades.
 ///
 /// [`div_knuth_into`]: crate::int::algos::div::div_knuth::div_knuth_into
@@ -79,7 +79,7 @@ where
     // top-down `N`-limb magnitude compare (`Uint::cmp`), correct for EVERY
     // `N` and operand value, and it catches the dominant decimal-`rem` shape
     // the u128 fast path below MISSES: a balanced-magnitude `x % b` where the
-    // SCALED divisor crosses the 128-bit line (e.g. the bbc `2.0 % 3.5` cell
+    // SCALED divisor crosses the 128-bit line (e.g. the benchmarked `2.0 % 3.5` cell
     // at D76 s38: `2·10^38` fits a u128 but `3.5·10^38` is 129 bits, so the
     // u128 probe fails and the operands fall into a full multi-limb Knuth
     // divmod whose `top < n` early-out the compare reaches first, for free).
@@ -95,7 +95,7 @@ where
     // `select_for_limbs` shape classifier, the `single_buffered_u64` scratch
     // and the Knuth normalise/shift setup that `div_knuth_into` runs even on
     // tiny operands. This is the dominant scale-0 decimal-`rem` shape (a bare
-    // integer / a small `k`, e.g. the `2 % 1` bbc cell at scale 0), where the
+    // integer / a small `k`, e.g. the `2 % 1` benchmarked cell at scale 0), where the
     // full divmod setup dwarfs the divide. Bit-identical to the divmod below
     // (the magnitude check guarantees the `u128` load is lossless), so valid
     // at every `N >= 3`. The MIN%-1 hazard cannot reach here (magnitudes are
@@ -207,7 +207,7 @@ mod tests {
     #[test]
     fn fast_path_matches_divmod_only() {
         // Small operands (fit one u128) — the fast-path branch. All sign
-        // combinations + the scale-0 bbc shape (2 % 1) and zero remainder.
+        // combinations + the scale-0 benchmarked shape (2 % 1) and zero remainder.
         let small: &[(i128, i128)] = &[
             (2, 1),
             (100, 7),

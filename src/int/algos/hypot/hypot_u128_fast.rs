@@ -95,7 +95,7 @@ fn isqrt_u128(n: u128) -> u128 {
 /// (`< 2^128`) zero-extended to four `u64` limbs has an exact `< 2^256` square,
 /// so its *full* product is exactly the low four limbs of the `N = 4` square.
 /// `sqr_low_fixed` is a `const fn` over `&[u64; N]` / `&mut [u64; N]` -- pure
-/// fixed-width stack arithmetic, NO allocation and NO `ComputeInt` slice
+/// fixed-width stack arithmetic, NO allocation and NO `ComputeLimbs` slice
 /// scratch -- so the no-allocation hot-path constraint is preserved while the
 /// squaring logic stays single-sourced in the leaf (not re-hand-rolled here).
 #[inline]

@@ -33,7 +33,7 @@ let l1 = x.ln_strict();
 let r2 = x.sqrt_fast();
 let l2 = x.ln_fast();
 
-// The plain method dispatches by feature (0.3.0 rule):
+// The plain method dispatches by feature:
 //   * with `strict` (default)         -> calls `*_strict`
 //   * with neither feature set        -> calls `*_strict`
 //   * with `fast` AND NOT `strict`    -> calls `*_fast`  (needs std)
@@ -93,10 +93,10 @@ f64-bridge methods are always emitted** so per-call selection
 stays available.
 
 **Strict-by-default — and `strict` wins when both are enabled.**
-0.3.0 changes the dispatcher rule: strict is the default plain
-dispatch *regardless* of whether the `strict` feature is
-explicitly enabled, and `fast` only takes over plain dispatch
-when `strict` is explicitly absent. Reasoning: the strict path
+The dispatcher rule: strict is the default plain dispatch
+*regardless* of whether the `strict` feature is explicitly enabled,
+and `fast` only takes over plain dispatch when `strict` is explicitly
+absent. Reasoning: the strict path
 is now fast enough (`ln_strict` at D38<19> is ~1.5 µs, sin at
 39 µs) that staying on the deterministic correctly-rounded path
 by default is the right call across more codepaths. The only
@@ -141,8 +141,10 @@ How it is achieved, per function family:
 - **Transcendentals** (`ln`, `log`, `log2`, `log10`, `exp`, `exp2`,
   `powf`, and the whole trig / hyperbolic / angle-conversion family)
   evaluate their range reduction and series in the in-tree
-  `wide_int::Fixed` intermediate - a 256-bit value at `SCALE + 30`
-  decimal *guard digits*. The 30 guard digits bound the total
+  `crate::algos::support::fixed::Fixed` intermediate - a 256-bit value
+  at `SCALE + 30` decimal *guard digits* for the narrow tiers (D18 /
+  D38); the wide tiers carry the same guard digits in their wider
+  working integers. The 30 guard digits bound the total
   accumulated rounding error to roughly `1e-17` of an output ULP, far
   inside the 0.5 ULP margin, and the value is rounded once
   (half-to-even) at the very end.

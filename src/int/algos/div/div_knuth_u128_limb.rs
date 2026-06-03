@@ -55,7 +55,7 @@ const SCRATCH_LIMBS_128: usize = MAX_SINGLE_LIMBS / 2 + 2;
 /// width and delegates to [`div_knuth_u128_limb_into`]. The slice
 /// [`dispatch`](crate::int::policy::div_rem::dispatch) calls this; a
 /// concrete-`N` caller that can size the scratch exactly
-/// (`Int<N>: ComputeInt`) calls `div_knuth_u128_limb_into` directly with its
+/// (`Int<N>: ComputeLimbs`) calls `div_knuth_u128_limb_into` directly with its
 /// own buffer family.
 pub(crate) fn div_knuth_u128_limb(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
     let mut u64buf = [0u64; MAX_SINGLE_LIMBS];
@@ -74,7 +74,7 @@ pub(crate) fn div_knuth_u128_limb(num: &[u64], den: &[u64], quot: &mut [u64], re
 /// single-limb / `num < den` shapes fall back to [`div_knuth_into`].
 ///
 /// A concrete-`N` caller sources the four scratch buffers from its
-/// `ComputeInt` family — for the decimal `/` wide shape (`2N`-dividend,
+/// `ComputeLimbs` family — for the decimal `/` wide shape (`2N`-dividend,
 /// `N`-divisor): `u64buf` = `double_buffered_u64`, `v64buf` =
 /// `single_buffered_u64`, `u` = `double_buffered_u128`, `v` = `single_u128`.
 /// All four slices are **zeroed here**, so the caller may reuse them across
@@ -281,7 +281,7 @@ mod tests {
 
     // `div_knuth_u128_limb_into` (the exact-scratch sibling) on the decimal
     // `/` wide shape — a `2N`-limb scaled numerator over an `N`-limb divisor —
-    // with the buffers sized by the SAME `ComputeInt` formulas `div_widen_scale`
+    // with the buffers sized by the SAME `ComputeLimbs` formulas `div_widen_scale`
     // uses (`u64buf`=double_buffered_u64, `v64buf`=single_buffered_u64,
     // `u`=double_buffered_u128, `v`=single_u128). Validates both the result
     // (bit-identical to `div_knuth`) AND that the exact buffers are large
@@ -299,7 +299,7 @@ mod tests {
             state
         };
         for &n in &[24usize, 32, 48, 64] {
-            // Exact-scratch sizes — the `ComputeInt` family formulas.
+            // Exact-scratch sizes — the `ComputeLimbs` family formulas.
             let u64buf_len = 2 * n + n.div_ceil(2); // double_buffered_u64
             let v64buf_len = n + 2; // single_buffered_u64
             let u128_u_len = (2 * n + n.div_ceil(2)).div_ceil(2); // double_buffered_u128

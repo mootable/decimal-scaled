@@ -124,7 +124,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         //
         // The wider mid tiers (D115/D153, N = 6/8) are NOT routed by `N`:
         // at the full-range `W = 2N` (12/16 limbs) the per-iteration Knuth
-        // divide outweighs the slice's scratch churn at the bbc scales, so a
+        // divide outweighs the slice's scratch churn at the benchmarked scales, so a
         // blanket `W = 2N` would regress them (rule 6 — size each width
         // exactly). They keep only their high-scale `Native` cells below,
         // where the radicand is genuinely wide.

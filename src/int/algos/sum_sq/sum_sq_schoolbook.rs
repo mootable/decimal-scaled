@@ -11,7 +11,7 @@
 //! former [`sum_sq_radicand`] so both paths share one source of truth.
 //!
 //! The work-width arithmetic is done in limbs -- no `W = Int<2N>` work type.
-//! `a^2 + b^2` spans up to `2N + 1` limbs, formed in a [`ComputeInt`] `Buf2`
+//! `a^2 + b^2` spans up to `2N + 1` limbs, formed in a [`ComputeLimbs`] `Buf2`
 //! scratch (sized `2N + ceil(N/2)`, so the carry margin is covered). The
 //! signs of the operands drop out of squaring, so the radicand is formed on
 //! the magnitudes.

@@ -64,10 +64,10 @@ pub(crate) const fn max_n_limbs(mult: usize) -> usize {
 /// Exact per-`N` work-scratch budget: `mult·n + ceil(n/2)`, the same
 /// formula as [`max_n_limbs`] but for a *specific* limb count `n` rather
 /// than the build-max. Used by the `exact-scratch-nightly` blanket
-/// [`ComputeInt`] impl, where it appears as a `generic_const_exprs` array
+/// [`ComputeLimbs`] impl, where it appears as a `generic_const_exprs` array
 /// length confined to that impl block.
 ///
-/// [`ComputeInt`]: crate::int::types::max_n_limbs::ComputeInt
+/// [`ComputeLimbs`]: crate::int::types::compute_limbs::ComputeLimbs
 #[cfg(feature = "exact-scratch-nightly")]
 pub(crate) const fn n_limbs(mult: usize, n: usize) -> usize {
     mult * n + (n + 1) / 2

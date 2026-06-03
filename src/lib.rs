@@ -727,7 +727,7 @@ pub mod __bench_internals {
         crate::algos::mul::mul_widen_divide::mul_widen_divide::<2, SCALE>(a, b, mode)
     }
     /// Generic-`N` decimal widen-then-divide multiply, exposed so the
-    /// wide-tier `÷10^w` rescale (the bbc `mul` regression cluster:
+    /// wide-tier `÷10^w` rescale (the measured `mul` regression cluster:
     /// D76/D115/D153 at high scale) can be measured at its real storage
     /// width and scale.
     #[inline(never)]
@@ -758,7 +758,7 @@ pub mod __bench_internals {
     /// The pre-fast-path `rem_int_layer`: always the exact-scratch Knuth
     /// divmod (no single-word `u128 % u128` short-circuit). Exposed so
     /// `rem_kernel_ab` can A/B the small-operand fast path's win against the
-    /// divmod-only path it now guards, on the scale-0 bbc shape.
+    /// divmod-only path it now guards, on the scale-0 benchmark shape.
     #[inline(never)]
     #[allow(private_bounds)]
     pub fn dec_rem_int_layer_divmod<const N: usize>(
@@ -1747,7 +1747,7 @@ pub mod __bench_internals {
         shim!(d307, crate::int::types::Int<16>, "x-wide");
         // `Int<24>` = 1536-bit storage; matches D462 storage, but ALSO the
         // production Work integer used by D230 (Int<12> storage doubles to
-        // Int<24> for the wide-trig `Work` type). The bbc regression cells
+        // Int<24> for the wide-trig `Work` type). The measured regression cells
         // `exp_D230_s{172,229}` rescale at this width, so the Newton-vs-MG
         // dispatch decision needs `1536`-bit data — hence the dedicated shim
         // (the previous d307/d616/d924/d1232 set skipped 1536).

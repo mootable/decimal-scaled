@@ -8,7 +8,7 @@
 //! This is the naive reference algorithm — no leading-zero fast path:
 //!
 //! 1. Form the full magnitude product `|a| * |b|` (`2N` u64 limbs) in a
-//!    [`ComputeInt::double_buffered_u64`] buffer via the int layer's slice
+//!    [`ComputeLimbs::double_buffered_u64`] buffer via the int layer's slice
 //!    [`crate::int::algos::mul::mul_schoolbook::mul_schoolbook`].
 //! 2. Build `10^SCALE` in the same limb domain and divide the product by
 //!    it using the int layer's width-agnostic divide

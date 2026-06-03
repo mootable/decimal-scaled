@@ -13,7 +13,7 @@
 //! Following the `sqrt`/`cbrt`/`hypot` template, the kernel is generic over
 //! `N` alone:
 //!
-//! 1. form `|a| * 10^SCALE` (`2N` u64 limbs) in a [`ComputeInt::double_buffered_u64`]
+//! 1. form `|a| * 10^SCALE` (`2N` u64 limbs) in a [`ComputeLimbs::double_buffered_u64`]
 //!    buffer via the int slice multiply;
 //! 2. divide it by `|b|` via the int layer's width-agnostic divide
 //!    ([`crate::int::algos::div::div_fixed::div_rem_mag_slice`], which
@@ -206,7 +206,7 @@ where
     for slot in rem[..bl.max(1)].iter_mut() {
         *slot = 0;
     }
-    // Route on the divide matcher's verdict, with exact `ComputeInt` scratch
+    // Route on the divide matcher's verdict, with exact `ComputeLimbs` scratch
     // per engine. The scaled-numerator shape (`2N`-limb dividend over an
     // `N`-limb divisor) is exactly where the u128-limb engine wins — for an
     // even divisor of ≥ 24 limbs whose dividend is ≥ 2·n — so it picks up the

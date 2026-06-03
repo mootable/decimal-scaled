@@ -24,7 +24,7 @@
 //! which spans up to `2N` limbs, before dividing by `b`. Rather than thread
 //! a work *type* `Int<2N>` (unnameable from `N` on stable), the
 //! [`WidenScale`](Algorithm::WidenScale) kernel forms the scaled numerator
-//! directly in a `ComputeInt` limb buffer and divides via the int layer's
+//! directly in a `ComputeLimbs` limb buffer and divides via the int layer's
 //! width-agnostic `div_rem`. So `dispatch` carries no work-width parameter;
 //! it adds only `where Limbs<N>: ComputeLimbs` for the scratch buffer.
 //!
@@ -104,7 +104,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
 ///
 /// The `const { select }` block folds away at every concrete `N`, leaving a
 /// direct call to the chosen kernel. The `2N`-wide scaled numerator lives
-/// in the kernel's `ComputeInt` scratch buffer, so no work-width type is
+/// in the kernel's `ComputeLimbs` scratch buffer, so no work-width type is
 /// named here.
 #[inline]
 #[must_use]

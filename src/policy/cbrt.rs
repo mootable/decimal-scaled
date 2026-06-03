@@ -126,7 +126,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         //
         // The wider mid tiers (D115/D153, N = 6/8) are NOT routed by `N`:
         // at the full-range `W = 3N` (18/24 limbs) the per-iteration Knuth
-        // divide outweighs the slice's scratch churn at the bbc scales, so a
+        // divide outweighs the slice's scratch churn at the benchmarked scales, so a
         // blanket `W = 3N` would regress them (rule 6 — size each width
         // exactly). They keep only their high-scale `Native` cells below.
         //
@@ -146,7 +146,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // (radicand via a const-folded `pow`) wins. `root_kernel_ab` localizes
         // the cbrt crossover near `SCALE ≈ 7·N`; the conservative `SCALE >=
         // 8·N` gate sits just inside the win region (every routed cell wins,
-        // none below is regressed). At the bbc max-scale (S-1) cells this
+        // none below is regressed). At the benchmarked max-scale (S-1) cells this
         // recovers 1.4–2.9× over the slice (bit-identical, all six modes).
         #[cfg(any(feature = "d57", feature = "wide"))]
         (6, s) if s >= 48 => Select::ByAlgorithm(Algorithm::Native), // D115, W=18

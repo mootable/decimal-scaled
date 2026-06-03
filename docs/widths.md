@@ -170,10 +170,11 @@ let _: D38<6> = c.try_into().unwrap();   // skip-jump back via TryFrom
   `d462`, `d616`, `d924`, `d1232`) or by umbrella (`wide` for
   D57–D307, `x-wide` adds D462 / D616, `xx-wide` adds D924 /
   D1232).
-- Storage is the in-tree hand-rolled wide-integer module
-  (`crate::wide_int`); there is no external big-integer
-  dependency. The wide-int type never appears in your code — you
-  work through `from_bits` / `to_bits` and the normal arithmetic.
+- Storage is an in-tree const-generic big integer, `Int<N>` over
+  `N` u64 limbs (internal to the crate; there is no external
+  big-integer dependency). The backend type never appears in your
+  code — you work through `from_bits` / `to_bits` and the normal
+  arithmetic.
 - The full surface is shipped on the wide tier: cross-type
   `PartialEq` against every primitive integer and float, the
   0.5-ULP-correctly-rounded strict transcendentals (with

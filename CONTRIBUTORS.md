@@ -100,14 +100,14 @@ Add an override where it gives you the most leverage for the least scope.
 ## 2. Adding a per-(width, scale) override
 
 Worked example: writing a bespoke `sin/cos` kernel for `D57<SCALE>`
-at `SCALE ∈ 18..=22`. The shipped
-[`src/algos/trig/lookup_d57_s44_56_sincos.rs`](src/algos/trig/lookup_d57_s44_56_sincos.rs)
-is the template for the SCALE 44..=56 band; a narrower band uses the
-same shape with different reduction parameters.
+at `SCALE ∈ 18..=22`. The shipped wide-tier
+[`src/algos/trig/sincos_tang.rs`](src/algos/trig/sincos_tang.rs)
+is the template; a narrower band uses the same shape with different
+reduction parameters.
 
 ### Step 1 — Create the kernel file
 
-`src/algos/trig/lookup_d57_s18_22_sincos.rs`:
+`src/algos/trig/sincos_tang_3limb_s18_22.rs`:
 
 ```rust
 //! Bespoke sin/cos slot for D57<SCALE> with SCALE in 18..=22.
@@ -119,16 +119,16 @@ same shape with different reduction parameters.
 //! cutting per-call cost on the bench numbers documented in the
 //! commit message that lands this kernel.
 
-use crate::rounding::RoundingMode;
-use crate::wide_int::Int192;
+use crate::support::rounding::RoundingMode;
+use crate::int::types::Int;
 
 const GUARD: u32 = 4; // narrower than the wide-default ~25
 
-pub(crate) fn sin_strict(raw: Int192, mode: RoundingMode) -> Int192 {
+pub(crate) fn sin_strict(raw: Int<3>, mode: RoundingMode) -> Int<3> {
     /* … reduction + Taylor at SCALE + GUARD … */
 }
 
-pub(crate) fn cos_strict(raw: Int192, mode: RoundingMode) -> Int192 {
+pub(crate) fn cos_strict(raw: Int<3>, mode: RoundingMode) -> Int<3> {
     /* … shares sin_cos_fixed core … */
 }
 ```
@@ -139,7 +139,7 @@ pub(crate) fn cos_strict(raw: Int192, mode: RoundingMode) -> Int192 {
 
 ```rust
 #[cfg(any(feature = "d57", feature = "wide"))]
-pub(crate) mod lookup_d57_s18_22_sincos;
+pub(crate) mod sincos_tang_3limb_s18_22;
 ```
 
 ### Step 3 — Wire it in the policy
@@ -150,10 +150,10 @@ block, add a scale-range arm above the default:
 ```rust
 fn sin_impl(self, mode: RoundingMode) -> Self {
     if matches!(SCALE, 18..=22) {
-        return Self(trig::lookup_d57_s18_22_sincos::sin_strict(self.0, mode));
+        return Self(trig::sincos_tang_3limb_s18_22::sin_strict(self.0, mode));
     }
     if matches!(SCALE, 44..=56) {
-        return Self(trig::lookup_d57_s44_56_sincos::sin_strict(self.0, mode));
+        return Self(trig::sincos_tang_3limb_s44_56::sin_strict(self.0, mode));
     }
     Self(trig::wide_kernel::sin_strict_d57(self.0, SCALE, mode))
 }
@@ -206,13 +206,13 @@ existing tests happen to pass". A smaller perf win at strict
 
 ## 3. File and naming conventions
 
-Bespoke slot files: `lookup_<width_alias>_s<lo>_<hi>[_<func>].rs`
+Bespoke slot files: `<func>_<algo>_<limbcount>limb_s<lo>_<hi>.rs`
 
 Examples:
 
-- `lookup_d57_s20.rs` — single scale, single function (file scope is unambiguous)
-- `lookup_d57_s44_56_atan.rs` — scale range, named function (multi-function family)
-- `lookup_d57_s44_56_sincos.rs` — scale range, shared kernel emitting both sin and cos
+- `atan_tang_3limb_s44_56.rs` — atan via the Tang kernel on a 3-limb work integer, scale range 44..=56
+- `inverse_tang_3limb_s18_22.rs` — inverse-trig family, Tang kernel, 3 limbs, scale range 18..=22
+- `sincos_tang_3limb_s18_22.rs` — shared kernel emitting both sin and cos, scale range 18..=22
 
 Inside the file:
 
