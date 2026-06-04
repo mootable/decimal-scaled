@@ -119,7 +119,7 @@ refutation of that claim at the matched 19-digit width.
 *Scope of this table:* it shows a representative slice of the full
 22-function surface at `D38<19>` under each crate's native mode; the
 complete per-method, per-width tables (`D38`, the `D76` subset, and the
-deep-scale `D307<150>` tier) are generated from the same result files by
+deep-scale `D307<153>` tier) are generated from the same result files by
 [`scripts/render_precision_table.py`](scripts/render_precision_table.py)
 and reproduced in the
 [benchmarks](https://mootable.github.io/decimal-scaled/benchmarks/).

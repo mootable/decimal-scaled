@@ -172,15 +172,15 @@ The full 22-function surface at a 19-digit scale, each crate under its
 native mode:
 
 <!-- BEGIN GENERATED:precision:D38 -->
-| library | mode | sqrt | cbrt | exp | ln | log2 | log10 | exp2 | sin | cos | tan | atan | asin | acos | sinh | cosh | tanh | asinh | acosh | atanh | log | atan2 | powf |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| decimal-scaled | HalfToEven | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
-| fastnum | HalfAwayFromZero | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | n/a | 0 (0) | 0 (0) | 67 (1.1e20) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 58 (2.0e17) | 0 (0) | 0 (0) | n/a | n/a | 0 (0) |
-| rust_decimal | HalfToEven | 1 (1.00) | n/a | 33 (7.2e9) | 31 (1.1e9) | n/a | n/a | n/a | 1 (1.00) | 1 (1.00) | 36 (4.3e10) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
-| dashu-float | HalfAwayFromZero | 0 (0) | n/a | 0 (0) | 0 (0) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
-| decimal-rs | HalfToEven | 1 (1.00) | n/a | 1 (1.00) | 1 (1.00) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
-| bigdecimal | HalfToEven | 1 (1.00) | 1 (1.00) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
-| g_math | HalfToEven | 6 (4.9e1) | n/a | 65 (2.3e19) | 6 (4.8e1) | n/a | n/a | n/a | 64 (1.5e19) | 6 (4.9e1) | 65 (2.0e19) | 64 (1.6e19) | 65 (3.1e19) | 65 (3.1e19) | 65 (2.3e19) | 6 (5.4e1) | 64 (9.2e18) | 64 (1.8e19) | 6 (5.0e1) | 69 (4.4e20) | n/a | 66 (6.3e19) | 70 (7.3e20) |
+| library | mode | sqrt | cbrt | exp | ln | log2 | log10 | exp2 | sin | cos | tan | atan | asin | acos | sinh | cosh | tanh | asinh | acosh | atanh | log | atan2 | powf | add | sub | mul | div | rem | hypot |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| decimal-scaled | HalfToEven | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
+| fastnum | HalfAwayFromZero | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | n/a | 0 (0) | 0 (0) | 67 (1.1e20) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 58 (2.0e17) | 0 (0) | 0 (0) | n/a | n/a | 0 (0) | n/a | n/a | n/a | n/a | n/a | n/a |
+| rust_decimal | HalfToEven | 1 (1.00) | n/a | 33 (7.2e9) | 31 (1.1e9) | n/a | n/a | n/a | 1 (1.00) | 1 (1.00) | 36 (4.3e10) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| dashu-float | HalfAwayFromZero | 0 (0) | n/a | 0 (0) | 0 (0) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| decimal-rs | HalfToEven | 1 (1.00) | n/a | 1 (1.00) | 1 (1.00) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| bigdecimal | HalfToEven | 1 (1.00) | 1 (1.00) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| g_math | HalfToEven | 6 (4.9e1) | n/a | 65 (2.3e19) | 6 (4.8e1) | n/a | n/a | n/a | 64 (1.5e19) | 6 (4.9e1) | 65 (2.0e19) | 64 (1.6e19) | 65 (3.1e19) | 65 (3.1e19) | 65 (2.3e19) | 6 (5.4e1) | 64 (9.2e18) | 64 (1.8e19) | 6 (5.0e1) | 69 (4.4e20) | n/a | 66 (6.3e19) | 70 (7.3e20) | n/a | n/a | n/a | n/a | n/a | n/a |
 <!-- END GENERATED:precision:D38 -->
 
 `decimal-scaled` is `0 (0)` across the entire surface — correctly
@@ -195,56 +195,54 @@ which markets "0 ULP transcendentals" — is in fact tens of LSBε off
 across most of its surface (`exp` 65, `sin` 64, `tan` 65, `powf` 70),
 the empirical refutation of that claim at the matched 19-digit width.
 
-### Wide tier (`D76<35>`)
+### Wide tier (`D76<38>`)
 
-The 35-digit subset that has an oracle table. `fastnum` and
-`rust_decimal` have no representation at this scale, so they score
-`n/a` throughout; `g_math`'s binary fixed-point tops out near 19
-significant digits, so it cannot reach 35 either and is `n/a` as well;
-`decimal-rs` reaches it but accumulates large gaps on `sqrt` and `exp`.
+The 38-digit subset that has an oracle table. `decimal-scaled` is
+`0 (0)` across this surface. The peers reach this scale: `fastnum` is
+correctly rounded except `ln`, and `dashu-float` is correctly rounded
+on the `sqrt`/`exp`/`ln` surface it exposes, while `rust_decimal`,
+`decimal-rs`, and `g_math` carry gaps of tens to hundreds of LSBε.
 
 <!-- BEGIN GENERATED:precision:D76 -->
 | library | mode | sqrt | cbrt | exp | ln | sin | cos | tan | atan |
 |---|---|---|---|---|---|---|---|---|---|
 | decimal-scaled | HalfToEven | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
-| fastnum | HalfAwayFromZero | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
-| rust_decimal | HalfToEven | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| fastnum | HalfAwayFromZero | 0 (0) | 0 (0) | 0 (0) | 1 (1.00) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
+| rust_decimal | HalfToEven | 30 (1.0e9) | n/a | 67 (1.3e20) | 5 (2.6e1) | 9 (5.0e2) | 3 (5.00) | 66 (6.3e19) | n/a |
 | dashu-float | HalfAwayFromZero | 0 (0) | n/a | 0 (0) | 0 (0) | n/a | n/a | n/a | n/a |
-| decimal-rs | HalfToEven | 58 (2.3e17) | n/a | 130 (3.3e38) | 1 (1.00) | n/a | n/a | n/a | n/a |
+| decimal-rs | HalfToEven | 63 (7.3e18) | n/a | 130 (3.8e38) | 7 (1.0e2) | n/a | n/a | n/a | n/a |
 | bigdecimal | HalfToEven | 1 (1.00) | 1 (1.00) | n/a | n/a | n/a | n/a | n/a | n/a |
-| g_math | HalfToEven | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| g_math | HalfToEven | 125 (3.0e37) | n/a | 65 (2.3e19) | 6 (4.9e1) | 64 (1.5e19) | 6 (4.6e1) | 65 (2.9e19) | 65 (3.1e19) |
 <!-- END GENERATED:precision:D76 -->
 
 `decimal-scaled` remains `0 (0)` across this width too, and `dashu-float`
 stays correctly rounded on the surface it exposes.
 
-### Deep scale (`D307<150>`)
+### Deep scale (`D307<153>`)
 
-The same surface at a 150-digit scale, against the mpmath golden
-oracle. Every fixed-precision peer is out of range here —
-`rust_decimal` (~28 digits), `fastnum` (~34), `decimal-rs` (~38), and
-`g_math` (~19, binary fixed-point) cannot represent a value of the
-target precision, so they score `n/a`. The arbitrary-precision peers
-that reach it no longer track the true value: `dashu-float`, given
-working precision past the result magnitude, is still tens-to-hundreds
-of LSBε off, and `bigdecimal`'s context `sqrt`/`cbrt` are hundreds of
-LSBε off at this depth.
+The same surface at a 153-digit scale, against the mpmath golden
+oracle. `decimal-scaled` is `0 (0)` across the full surface. The peers
+that reach this depth diverge from the true value — `dashu-float` and
+`bigdecimal`'s context `sqrt`/`cbrt` by tens to hundreds of LSBε, and
+`rust_decimal`, `decimal-rs`, and `g_math` by large margins on `exp`
+and the trig surface.
 
 <!-- BEGIN GENERATED:precision:D307 -->
 | library | mode | sqrt | cbrt | exp | ln | sin | cos | tan | atan |
 |---|---|---|---|---|---|---|---|---|---|
 | decimal-scaled | HalfToEven | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
-| fastnum | HalfAwayFromZero | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
-| rust_decimal | HalfToEven | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
-| dashu-float | HalfAwayFromZero | 126 (6.5e37) | n/a | 386 (3.0e115) | 53 (6.1e15) | n/a | n/a | n/a | n/a |
-| decimal-rs | HalfToEven | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
-| bigdecimal | HalfToEven | 761 (2.2e228) | 339 (3.8e101) | n/a | n/a | n/a | n/a | n/a | n/a |
-| g_math | HalfToEven | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| fastnum | HalfAwayFromZero | n/a | n/a | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
+| rust_decimal | HalfToEven | 10 (6.6e2) | n/a | 34 (1.0e10) | 5 (2.3e1) | 9 (5.0e2) | 2 (2.00) | 66 (4.3e19) | n/a |
+| dashu-float | HalfAwayFromZero | 122 (4.8e36) | n/a | 376 (4.4e112) | 0 (0) | n/a | n/a | n/a | n/a |
+| decimal-rs | HalfToEven | 11 (1.9e3) | n/a | 396 (3.2e118) | 7 (8.0e1) | n/a | n/a | n/a | n/a |
+| bigdecimal | HalfToEven | 765 (2.2e229) | 346 (4.2e103) | n/a | n/a | n/a | n/a | n/a | n/a |
+| g_math | HalfToEven | 1 (1.00) | n/a | 65 (2.3e19) | 3 (7.00) | 64 (1.4e19) | 6 (4.4e1) | 65 (2.0e19) | 64 (9.3e18) |
 <!-- END GENERATED:precision:D307 -->
 
-`decimal-scaled` is the only crate that is `0 (0)` — correctly rounded
-to the last of the 150 stored digits — at this depth, and it stays so
-across all six rounding modes and the full 22-function surface.
+`decimal-scaled` is the only crate correctly rounded across the entire
+surface — `0 (0)` to the last of the 153 stored digits — at this depth,
+and it stays so across all six rounding modes and the full 22-function
+surface.
 
 ### 0.4.4 precision-fix perf impact
 

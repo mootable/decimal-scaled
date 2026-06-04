@@ -33,9 +33,12 @@ LIBS = [
     "g_math",
 ]
 
-# D-type -> canonical scale, matches Width::canonical_scale() and the
-# scale column in the TSVs.
-SCALE = {"D38": 19, "D76": 35, "D307": 150}
+# D-type -> canonical scale. These MUST equal Width::canonical_scale()
+# (tests/support/precision_harness.rs) for the rendered widths, AND must be
+# a scale actually present in the committed TSVs. A drift here silently
+# renders a non-canonical scale under the canonical-scale heading (e.g. an
+# easy operand mislabelled as the hard canonical scale).
+SCALE = {"D38": 19, "D76": 38, "D307": 153}
 
 
 def file_stem(name):
