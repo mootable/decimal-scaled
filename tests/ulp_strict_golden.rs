@@ -3394,3 +3394,258 @@ fn golden_autodiscover() {
         failures.join("\n"),
     );
 }
+
+// hypot 5-point {0,S/4,S/2,3S/4,S-1} grid coverage (was hunter-cells only)
+mod golden_hypot_grid {
+    use super::{check_at_scale, Width};
+    #[test]
+    #[cfg(any(feature = "d115", feature = "wide"))]
+    fn hypot_d115_s0() {
+        check_at_scale("hypot", Width::D115, 0, include_str!("golden/hypot_d115_s0.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d115", feature = "wide"))]
+    fn hypot_d115_s114() {
+        check_at_scale("hypot", Width::D115, 114, include_str!("golden/hypot_d115_s114.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d115", feature = "wide"))]
+    fn hypot_d115_s28() {
+        check_at_scale("hypot", Width::D115, 28, include_str!("golden/hypot_d115_s28.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d115", feature = "wide"))]
+    fn hypot_d115_s57() {
+        check_at_scale("hypot", Width::D115, 57, include_str!("golden/hypot_d115_s57.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d115", feature = "wide"))]
+    fn hypot_d115_s86() {
+        check_at_scale("hypot", Width::D115, 86, include_str!("golden/hypot_d115_s86.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    fn hypot_d1232_s1231() {
+        check_at_scale("hypot", Width::D1232, 1231, include_str!("golden/hypot_d1232_s1231.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    fn hypot_d1232_s308() {
+        check_at_scale("hypot", Width::D1232, 308, include_str!("golden/hypot_d1232_s308.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    fn hypot_d1232_s616() {
+        check_at_scale("hypot", Width::D1232, 616, include_str!("golden/hypot_d1232_s616.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    fn hypot_d1232_s924() {
+        check_at_scale("hypot", Width::D1232, 924, include_str!("golden/hypot_d1232_s924.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d153", feature = "wide"))]
+    fn hypot_d153_s0() {
+        check_at_scale("hypot", Width::D153, 0, include_str!("golden/hypot_d153_s0.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d153", feature = "wide"))]
+    fn hypot_d153_s114() {
+        check_at_scale("hypot", Width::D153, 114, include_str!("golden/hypot_d153_s114.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d153", feature = "wide"))]
+    fn hypot_d153_s152() {
+        check_at_scale("hypot", Width::D153, 152, include_str!("golden/hypot_d153_s152.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d153", feature = "wide"))]
+    fn hypot_d153_s38() {
+        check_at_scale("hypot", Width::D153, 38, include_str!("golden/hypot_d153_s38.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d153", feature = "wide"))]
+    fn hypot_d153_s76() {
+        check_at_scale("hypot", Width::D153, 76, include_str!("golden/hypot_d153_s76.txt"));
+    }
+    #[test]
+    fn hypot_d18_s13() {
+        check_at_scale("hypot", Width::D18, 13, include_str!("golden/hypot_d18_s13.txt"));
+    }
+    #[test]
+    fn hypot_d18_s17() {
+        check_at_scale("hypot", Width::D18, 17, include_str!("golden/hypot_d18_s17.txt"));
+    }
+    #[test]
+    fn hypot_d18_s4() {
+        check_at_scale("hypot", Width::D18, 4, include_str!("golden/hypot_d18_s4.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d230", feature = "wide"))]
+    fn hypot_d230_s0() {
+        check_at_scale("hypot", Width::D230, 0, include_str!("golden/hypot_d230_s0.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d230", feature = "wide"))]
+    fn hypot_d230_s115() {
+        check_at_scale("hypot", Width::D230, 115, include_str!("golden/hypot_d230_s115.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d230", feature = "wide"))]
+    fn hypot_d230_s172() {
+        check_at_scale("hypot", Width::D230, 172, include_str!("golden/hypot_d230_s172.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d230", feature = "wide"))]
+    fn hypot_d230_s229() {
+        check_at_scale("hypot", Width::D230, 229, include_str!("golden/hypot_d230_s229.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d230", feature = "wide"))]
+    fn hypot_d230_s57() {
+        check_at_scale("hypot", Width::D230, 57, include_str!("golden/hypot_d230_s57.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d307", feature = "x-wide"))]
+    fn hypot_d307_s153() {
+        check_at_scale("hypot", Width::D307, 153, include_str!("golden/hypot_d307_s153.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d307", feature = "x-wide"))]
+    fn hypot_d307_s230() {
+        check_at_scale("hypot", Width::D307, 230, include_str!("golden/hypot_d307_s230.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d307", feature = "x-wide"))]
+    fn hypot_d307_s306() {
+        check_at_scale("hypot", Width::D307, 306, include_str!("golden/hypot_d307_s306.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d307", feature = "x-wide"))]
+    fn hypot_d307_s76() {
+        check_at_scale("hypot", Width::D307, 76, include_str!("golden/hypot_d307_s76.txt"));
+    }
+    #[test]
+    fn hypot_d38_s28() {
+        check_at_scale("hypot", Width::D38, 28, include_str!("golden/hypot_d38_s28.txt"));
+    }
+    #[test]
+    fn hypot_d38_s37() {
+        check_at_scale("hypot", Width::D38, 37, include_str!("golden/hypot_d38_s37.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d462", feature = "x-wide"))]
+    fn hypot_d462_s0() {
+        check_at_scale("hypot", Width::D462, 0, include_str!("golden/hypot_d462_s0.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d462", feature = "x-wide"))]
+    fn hypot_d462_s115() {
+        check_at_scale("hypot", Width::D462, 115, include_str!("golden/hypot_d462_s115.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d462", feature = "x-wide"))]
+    fn hypot_d462_s231() {
+        check_at_scale("hypot", Width::D462, 231, include_str!("golden/hypot_d462_s231.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d462", feature = "x-wide"))]
+    fn hypot_d462_s346() {
+        check_at_scale("hypot", Width::D462, 346, include_str!("golden/hypot_d462_s346.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d462", feature = "x-wide"))]
+    fn hypot_d462_s461() {
+        check_at_scale("hypot", Width::D462, 461, include_str!("golden/hypot_d462_s461.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    fn hypot_d57_s14() {
+        check_at_scale("hypot", Width::D57, 14, include_str!("golden/hypot_d57_s14.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    fn hypot_d57_s28() {
+        check_at_scale("hypot", Width::D57, 28, include_str!("golden/hypot_d57_s28.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    fn hypot_d57_s42() {
+        check_at_scale("hypot", Width::D57, 42, include_str!("golden/hypot_d57_s42.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    fn hypot_d57_s56() {
+        check_at_scale("hypot", Width::D57, 56, include_str!("golden/hypot_d57_s56.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d616", feature = "x-wide"))]
+    fn hypot_d616_s0() {
+        check_at_scale("hypot", Width::D616, 0, include_str!("golden/hypot_d616_s0.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d616", feature = "x-wide"))]
+    fn hypot_d616_s154() {
+        check_at_scale("hypot", Width::D616, 154, include_str!("golden/hypot_d616_s154.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d616", feature = "x-wide"))]
+    fn hypot_d616_s308() {
+        check_at_scale("hypot", Width::D616, 308, include_str!("golden/hypot_d616_s308.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d616", feature = "x-wide"))]
+    fn hypot_d616_s462() {
+        check_at_scale("hypot", Width::D616, 462, include_str!("golden/hypot_d616_s462.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d616", feature = "x-wide"))]
+    fn hypot_d616_s615() {
+        check_at_scale("hypot", Width::D616, 615, include_str!("golden/hypot_d616_s615.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d76", feature = "wide"))]
+    fn hypot_d76_s19() {
+        check_at_scale("hypot", Width::D76, 19, include_str!("golden/hypot_d76_s19.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d76", feature = "wide"))]
+    fn hypot_d76_s38() {
+        check_at_scale("hypot", Width::D76, 38, include_str!("golden/hypot_d76_s38.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d76", feature = "wide"))]
+    fn hypot_d76_s57() {
+        check_at_scale("hypot", Width::D76, 57, include_str!("golden/hypot_d76_s57.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d76", feature = "wide"))]
+    fn hypot_d76_s75() {
+        check_at_scale("hypot", Width::D76, 75, include_str!("golden/hypot_d76_s75.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d924", feature = "xx-wide"))]
+    fn hypot_d924_s0() {
+        check_at_scale("hypot", Width::D924, 0, include_str!("golden/hypot_d924_s0.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d924", feature = "xx-wide"))]
+    fn hypot_d924_s231() {
+        check_at_scale("hypot", Width::D924, 231, include_str!("golden/hypot_d924_s231.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d924", feature = "xx-wide"))]
+    fn hypot_d924_s462() {
+        check_at_scale("hypot", Width::D924, 462, include_str!("golden/hypot_d924_s462.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d924", feature = "xx-wide"))]
+    fn hypot_d924_s693() {
+        check_at_scale("hypot", Width::D924, 693, include_str!("golden/hypot_d924_s693.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d924", feature = "xx-wide"))]
+    fn hypot_d924_s923() {
+        check_at_scale("hypot", Width::D924, 923, include_str!("golden/hypot_d924_s923.txt"));
+    }
+}

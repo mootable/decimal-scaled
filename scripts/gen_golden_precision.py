@@ -1732,6 +1732,43 @@ def arith_coverage_cells() -> dict[str, list[tuple[str, int, list[tuple[int, int
     return roster
 
 
+def hypot_grid_cells() -> list[tuple[str, int, list[tuple[int, int]]]]:
+    """Five-point `{0, S/4, S/2, 3S/4, S-1}` hypot coverage across every
+    tier, so `hypot` carries the same scale grid as the unary transcendental
+    surface. `hypot_hunter_cells` alone leaves the wide tiers' canonical
+    scales uncovered (no file at the S/2 anchor for d115..d924); this fills
+    the grid. Pairs are RAW integers at the listed scale; the exact
+    integer-isqrt oracle in `binary_floor_class` computes each expected, and
+    `_binary_cell` drops any pair whose operands or root neighbours fall
+    outside the tier's signed range. Pythagorean pairs (exact integer roots)
+    guarantee a non-empty file at every (tier, scale)."""
+    tier_caps = [("d18", 18), ("d38", 38), ("d57", 57), ("d76", 76),
+                 ("d115", 115), ("d153", 153), ("d230", 230), ("d307", 307),
+                 ("d462", 462), ("d616", 616), ("d924", 924), ("d1232", 1232)]
+    out: list[tuple[str, int, list[tuple[int, int]]]] = []
+    for alias, cap in tier_caps:
+        smax = tier_signed_max(alias)
+        for s in scale_set_for(cap):
+            one = 10 ** s
+            # a=b=big needs big·sqrt(2) <= smax for the root to fit, so cap
+            # the near-max operand at ~0.7·smax (root ~= 0.99·smax, fits).
+            big = (7 * smax) // 10
+            frac = (one // 3) if s > 0 else 0   # sub-LSB residual when scaled
+            pairs = [
+                (3 * one, 4 * one),       # 5 — Pythagorean, exact root
+                (5 * one, 12 * one),      # 13 — exact
+                (8 * one, 15 * one),      # 17 — exact
+                (one, 0),                 # |1| — exact, one operand zero
+                (one, one),               # sqrt(2) — irrational (L/G classed)
+                (-3 * one, 4 * one),      # sign symmetry (hypot even in both)
+                (3 * one, -4 * one),
+                (one + frac, 2 * one),    # sub-LSB residual when s>0
+                (big, big),               # near-max operands, root ~0.99·smax
+            ]
+            out.append((alias, s, pairs))
+    return out
+
+
 def emit_binary_ops() -> tuple[int, int]:
     """Generate every hypot + arithmetic golden file. Returns
     `(total_bytes, total_cases)`. Files are `<func>_<alias>_s<scale>.txt`
@@ -1749,6 +1786,7 @@ def emit_binary_ops() -> tuple[int, int]:
             buckets[key].extend(pairs)
 
     add_cells("hypot", hypot_hunter_cells())
+    add_cells("hypot", hypot_grid_cells())
     for func, entries in arith_coverage_cells().items():
         add_cells(func, entries)
 
