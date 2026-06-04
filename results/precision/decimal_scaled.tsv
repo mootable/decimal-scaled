@@ -1,801 +1,1638 @@
 # library: decimal-scaled
 # key: method	width	scale	rounding	result
-# result columns: kind(executed|na)	max_lsbe	max_ulp	scored	correctly_rounded	max_digits
+# result columns: kind(executed|na)	max_lsbe	max_ulp	scored	correctly_rounded	max_digits	reach_scale
 # max_digits = exact decimal-digit length of the worst error magnitude (what the fidelity grade scores); max_lsbe is its bit-width.
+# reach_scale = the depth (fractional digits) this library was actually graded at — its own last representable digit; equals `scale` for arbitrary-precision peers and decimal-scaled, equals the library's cap for a fixed-precision peer running on a deeper cell. The lsbe/ulp/digits in this row measure correctness at THAT depth (grade-at-own-last-digit), and the gap `scale - reach_scale` is the shallower-reach metric.
 # source: benches/lib_cmp_precision.rs (regenerate with `cargo bench --bench lib_cmp_precision --features wide,x-wide,xx-wide,macros`)
-method	width	scale	rounding	kind	max_lsbe	max_ulp	scored	correctly_rounded	max_digits
-sqrt	D18	0	HalfToEven	executed	0	0	75	75	0
-sqrt	D18	9	HalfToEven	executed	0	0	76	76	0
-sqrt	D18	17	HalfToEven	executed	0	0	41	41	0
-sqrt	D38	0	HalfToEven	executed	0	0	67	67	0
-sqrt	D38	19	HalfToEven	executed	0	0	68	68	0
-sqrt	D38	37	HalfToEven	executed	0	0	35	35	0
-sqrt	D57	0	HalfToEven	executed	0	0	62	62	0
-sqrt	D57	28	HalfToEven	executed	0	0	63	63	0
-sqrt	D57	56	HalfToEven	executed	0	0	31	31	0
-sqrt	D76	0	HalfToEven	executed	0	0	54	54	0
-sqrt	D76	35	HalfToEven	executed	0	0	55	55	0
-sqrt	D76	75	HalfToEven	executed	0	0	26	26	0
-sqrt	D115	0	HalfToEven	executed	0	0	47	47	0
-sqrt	D115	57	HalfToEven	executed	0	0	48	48	0
-sqrt	D115	114	HalfToEven	executed	0	0	23	23	0
-sqrt	D153	0	HalfToEven	executed	0	0	43	43	0
-sqrt	D153	76	HalfToEven	executed	0	0	44	44	0
-sqrt	D153	152	HalfToEven	executed	0	0	21	21	0
-sqrt	D230	0	HalfToEven	executed	0	0	38	38	0
-sqrt	D230	115	HalfToEven	executed	0	0	39	39	0
-sqrt	D230	229	HalfToEven	executed	0	0	18	18	0
-sqrt	D307	0	HalfToEven	executed	0	0	34	34	0
-sqrt	D307	150	HalfToEven	executed	0	0	35	35	0
-sqrt	D307	306	HalfToEven	executed	0	0	16	16	0
-sqrt	D462	0	HalfToEven	executed	0	0	34	34	0
-sqrt	D462	230	HalfToEven	executed	0	0	35	35	0
-sqrt	D462	461	HalfToEven	executed	0	0	16	16	0
-sqrt	D616	0	HalfToEven	executed	0	0	34	34	0
-sqrt	D616	308	HalfToEven	executed	0	0	35	35	0
-sqrt	D616	615	HalfToEven	executed	0	0	16	16	0
-sqrt	D924	0	HalfToEven	executed	0	0	34	34	0
-sqrt	D924	460	HalfToEven	executed	0	0	35	35	0
-sqrt	D924	923	HalfToEven	executed	0	0	16	16	0
-sqrt	D1232	0	HalfToEven	executed	0	0	34	34	0
-sqrt	D1232	615	HalfToEven	executed	0	0	35	35	0
-sqrt	D1232	1231	HalfToEven	executed	0	0	16	16	0
-cbrt	D18	0	HalfToEven	executed	0	0	96	96	0
-cbrt	D18	9	HalfToEven	executed	0	0	98	98	0
-cbrt	D18	17	HalfToEven	executed	0	0	43	43	0
-cbrt	D38	0	HalfToEven	executed	0	0	88	88	0
-cbrt	D38	19	HalfToEven	executed	0	0	90	90	0
-cbrt	D38	37	HalfToEven	executed	0	0	37	37	0
-cbrt	D57	0	HalfToEven	executed	0	0	79	79	0
-cbrt	D57	28	HalfToEven	executed	0	0	85	85	0
-cbrt	D57	56	HalfToEven	executed	0	0	33	33	0
-cbrt	D76	0	HalfToEven	executed	0	0	75	75	0
-cbrt	D76	35	HalfToEven	executed	0	0	77	77	0
-cbrt	D76	75	HalfToEven	executed	0	0	30	30	0
-cbrt	D115	0	HalfToEven	executed	0	0	68	68	0
-cbrt	D115	57	HalfToEven	executed	0	0	70	70	0
-cbrt	D115	114	HalfToEven	executed	0	0	27	27	0
-cbrt	D153	0	HalfToEven	executed	0	0	64	64	0
-cbrt	D153	76	HalfToEven	executed	0	0	66	66	0
-cbrt	D153	152	HalfToEven	executed	0	0	23	23	0
-cbrt	D230	0	HalfToEven	executed	0	0	59	59	0
-cbrt	D230	115	HalfToEven	executed	0	0	61	61	0
-cbrt	D230	229	HalfToEven	executed	0	0	20	20	0
-cbrt	D307	0	HalfToEven	executed	0	0	55	55	0
-cbrt	D307	150	HalfToEven	executed	0	0	57	57	0
-cbrt	D307	306	HalfToEven	executed	0	0	18	18	0
-cbrt	D462	0	HalfToEven	executed	0	0	55	55	0
-cbrt	D462	230	HalfToEven	executed	0	0	57	57	0
-cbrt	D462	461	HalfToEven	executed	0	0	18	18	0
-cbrt	D616	0	HalfToEven	executed	0	0	55	55	0
-cbrt	D616	308	HalfToEven	executed	0	0	57	57	0
-cbrt	D616	615	HalfToEven	executed	0	0	18	18	0
-cbrt	D924	0	HalfToEven	executed	0	0	53	53	0
-cbrt	D924	460	HalfToEven	executed	0	0	57	57	0
-cbrt	D924	923	HalfToEven	executed	0	0	18	18	0
-cbrt	D1232	0	HalfToEven	executed	0	0	53	53	0
-cbrt	D1232	615	HalfToEven	executed	0	0	57	57	0
-cbrt	D1232	1231	HalfToEven	executed	0	0	18	18	0
-exp	D18	0	HalfToEven	executed	0	0	32	32	0
-exp	D18	9	HalfToEven	executed	0	0	67	67	0
-exp	D18	17	HalfToEven	executed	0	0	35	35	0
-exp	D38	0	HalfToEven	executed	0	0	32	32	0
-exp	D38	19	HalfToEven	executed	0	0	59	59	0
-exp	D38	37	HalfToEven	executed	0	0	32	32	0
-exp	D57	0	HalfToEven	executed	0	0	29	29	0
-exp	D57	28	HalfToEven	executed	0	0	54	54	0
-exp	D57	56	HalfToEven	executed	0	0	29	29	0
-exp	D76	0	HalfToEven	executed	0	0	25	25	0
-exp	D76	35	HalfToEven	executed	0	0	46	46	0
-exp	D76	75	HalfToEven	executed	0	0	20	20	0
-exp	D115	0	HalfToEven	executed	0	0	25	25	0
-exp	D115	57	HalfToEven	executed	0	0	39	39	0
-exp	D115	114	HalfToEven	executed	0	0	18	18	0
-exp	D153	0	HalfToEven	executed	0	0	25	25	0
-exp	D153	76	HalfToEven	executed	0	0	35	35	0
-exp	D153	152	HalfToEven	executed	0	0	9	9	0
-exp	D230	0	HalfToEven	executed	0	0	21	21	0
-exp	D230	115	HalfToEven	executed	0	0	30	30	0
-exp	D230	229	HalfToEven	executed	0	0	10	10	0
-exp	D307	0	HalfToEven	executed	0	0	16	16	0
-exp	D307	30	HalfToEven	executed	0	0	26	26	0
-exp	D307	70	HalfToEven	executed	0	0	26	26	0
-exp	D307	120	HalfToEven	executed	0	0	26	26	0
-exp	D307	150	HalfToEven	executed	0	0	26	26	0
-exp	D307	306	HalfToEven	executed	0	0	13	13	0
-exp	D462	0	HalfToEven	executed	0	0	19	19	0
-exp	D462	30	HalfToEven	executed	0	0	26	26	0
-exp	D462	100	HalfToEven	executed	0	0	26	26	0
-exp	D462	180	HalfToEven	executed	0	0	26	26	0
-exp	D462	230	HalfToEven	executed	0	0	26	26	0
-exp	D462	461	HalfToEven	executed	0	0	11	11	0
-exp	D616	0	HalfToEven	executed	0	0	19	19	0
-exp	D616	30	HalfToEven	executed	0	0	26	26	0
-exp	D616	130	HalfToEven	executed	0	0	26	26	0
-exp	D616	240	HalfToEven	executed	0	0	26	26	0
-exp	D616	308	HalfToEven	executed	0	0	26	26	0
-exp	D616	615	HalfToEven	executed	0	0	13	13	0
-exp	D924	0	HalfToEven	executed	0	0	18	18	0
-exp	D924	30	HalfToEven	executed	0	0	26	26	0
-exp	D924	180	HalfToEven	executed	0	0	26	26	0
-exp	D924	350	HalfToEven	executed	0	0	26	26	0
-exp	D924	460	HalfToEven	executed	0	0	26	26	0
-exp	D924	923	HalfToEven	executed	0	0	11	11	0
-exp	D1232	0	HalfToEven	executed	0	0	19	19	0
-exp	D1232	30	HalfToEven	executed	0	0	26	26	0
-exp	D1232	250	HalfToEven	executed	0	0	26	26	0
-exp	D1232	470	HalfToEven	executed	0	0	26	26	0
-exp	D1232	615	HalfToEven	executed	0	0	26	26	0
-exp	D1232	1231	HalfToEven	executed	0	0	13	13	0
-ln	D18	0	HalfToEven	executed	0	0	42	42	0
-ln	D18	9	HalfToEven	executed	0	0	66	66	0
-ln	D18	17	HalfToEven	executed	0	0	40	40	0
-ln	D38	0	HalfToEven	executed	0	0	37	37	0
-ln	D38	19	HalfToEven	executed	0	0	58	58	0
-ln	D38	37	HalfToEven	executed	0	0	33	33	0
-ln	D57	0	HalfToEven	executed	0	0	33	33	0
-ln	D57	28	HalfToEven	executed	0	0	53	53	0
-ln	D57	56	HalfToEven	executed	0	0	25	25	0
-ln	D76	0	HalfToEven	executed	0	0	28	28	0
-ln	D76	35	HalfToEven	executed	0	0	45	45	0
-ln	D76	75	HalfToEven	executed	0	0	23	23	0
-ln	D115	0	HalfToEven	executed	0	0	25	25	0
-ln	D115	57	HalfToEven	executed	0	0	38	38	0
-ln	D115	114	HalfToEven	executed	0	0	15	15	0
-ln	D153	0	HalfToEven	executed	0	0	23	23	0
-ln	D153	76	HalfToEven	executed	0	0	34	34	0
-ln	D153	152	HalfToEven	executed	0	0	20	20	0
-ln	D230	0	HalfToEven	executed	0	0	20	20	0
-ln	D230	115	HalfToEven	executed	0	0	29	29	0
-ln	D230	229	HalfToEven	executed	0	0	15	15	0
-ln	D307	0	HalfToEven	executed	0	0	18	18	0
-ln	D307	150	HalfToEven	executed	0	0	25	25	0
-ln	D307	306	HalfToEven	executed	0	0	11	11	0
-ln	D462	0	HalfToEven	executed	0	0	17	17	0
-ln	D462	230	HalfToEven	executed	0	0	25	25	0
-ln	D462	461	HalfToEven	executed	0	0	17	17	0
-ln	D616	0	HalfToEven	executed	0	0	17	17	0
-ln	D616	308	HalfToEven	executed	0	0	25	25	0
-ln	D616	615	HalfToEven	executed	0	0	11	11	0
-ln	D924	0	HalfToEven	executed	0	0	18	18	0
-ln	D924	460	HalfToEven	executed	0	0	25	25	0
-ln	D924	923	HalfToEven	executed	0	0	13	13	0
-ln	D1232	0	HalfToEven	executed	0	0	17	17	0
-ln	D1232	615	HalfToEven	executed	0	0	25	25	0
-ln	D1232	1231	HalfToEven	executed	0	0	13	13	0
-log2	D18	0	HalfToEven	executed	0	0	98	98	0
-log2	D18	9	HalfToEven	executed	0	0	91	91	0
-log2	D18	17	HalfToEven	executed	0	0	29	29	0
-log2	D38	0	HalfToEven	executed	0	0	96	96	0
-log2	D38	19	HalfToEven	executed	0	0	116	116	0
-log2	D38	37	HalfToEven	executed	0	0	26	26	0
-log2	D57	0	HalfToEven	executed	0	0	92	92	0
-log2	D57	28	HalfToEven	executed	0	0	112	112	0
-log2	D57	56	HalfToEven	executed	0	0	25	25	0
-log2	D76	0	HalfToEven	executed	0	0	87	87	0
-log2	D76	35	HalfToEven	executed	0	0	104	104	0
-log2	D76	75	HalfToEven	executed	0	0	20	20	0
-log2	D115	0	HalfToEven	executed	0	0	84	84	0
-log2	D115	57	HalfToEven	executed	0	0	97	97	0
-log2	D115	114	HalfToEven	executed	0	0	21	21	0
-log2	D153	0	HalfToEven	executed	0	0	81	81	0
-log2	D153	76	HalfToEven	executed	0	0	93	93	0
-log2	D153	152	HalfToEven	executed	0	0	16	16	0
-log2	D230	0	HalfToEven	executed	0	0	78	78	0
-log2	D230	115	HalfToEven	executed	0	0	88	88	0
-log2	D230	229	HalfToEven	executed	0	0	14	14	0
-log2	D307	0	HalfToEven	executed	0	0	77	77	0
-log2	D307	150	HalfToEven	executed	0	0	84	84	0
-log2	D307	306	HalfToEven	executed	0	0	8	8	0
-log2	D462	0	HalfToEven	executed	0	0	77	77	0
-log2	D462	230	HalfToEven	executed	0	0	84	84	0
-log2	D462	461	HalfToEven	executed	0	0	14	14	0
-log2	D616	0	HalfToEven	executed	0	0	76	76	0
-log2	D616	308	HalfToEven	executed	0	0	84	84	0
-log2	D616	615	HalfToEven	executed	0	0	14	14	0
-log2	D924	0	HalfToEven	executed	0	0	77	77	0
-log2	D924	460	HalfToEven	executed	0	0	84	84	0
-log2	D924	923	HalfToEven	executed	0	0	14	14	0
-log2	D1232	0	HalfToEven	executed	0	0	76	76	0
-log2	D1232	615	HalfToEven	executed	0	0	84	84	0
-log2	D1232	1231	HalfToEven	executed	0	0	12	12	0
-log10	D18	0	HalfToEven	executed	0	0	60	60	0
-log10	D18	9	HalfToEven	executed	0	0	72	72	0
-log10	D18	17	HalfToEven	executed	0	0	42	42	0
-log10	D38	0	HalfToEven	executed	0	0	73	73	0
-log10	D38	19	HalfToEven	executed	0	0	74	74	0
-log10	D38	37	HalfToEven	executed	0	0	34	34	0
-log10	D57	0	HalfToEven	executed	0	0	74	74	0
-log10	D57	28	HalfToEven	executed	0	0	79	79	0
-log10	D57	56	HalfToEven	executed	0	0	32	32	0
-log10	D76	0	HalfToEven	executed	0	0	69	69	0
-log10	D76	35	HalfToEven	executed	0	0	83	83	0
-log10	D76	75	HalfToEven	executed	0	0	27	27	0
-log10	D115	0	HalfToEven	executed	0	0	66	66	0
-log10	D115	57	HalfToEven	executed	0	0	77	77	0
-log10	D115	114	HalfToEven	executed	0	0	26	26	0
-log10	D153	0	HalfToEven	executed	0	0	63	63	0
-log10	D153	76	HalfToEven	executed	0	0	73	73	0
-log10	D153	152	HalfToEven	executed	0	0	23	23	0
-log10	D230	0	HalfToEven	executed	0	0	61	61	0
-log10	D230	115	HalfToEven	executed	0	0	68	68	0
-log10	D230	229	HalfToEven	executed	0	0	17	17	0
-log10	D307	0	HalfToEven	executed	0	0	58	58	0
-log10	D307	150	HalfToEven	executed	0	0	64	64	0
-log10	D307	306	HalfToEven	executed	0	0	11	11	0
-log10	D462	0	HalfToEven	executed	0	0	58	58	0
-log10	D462	230	HalfToEven	executed	0	0	64	64	0
-log10	D462	461	HalfToEven	executed	0	0	15	15	0
-log10	D616	0	HalfToEven	executed	0	0	58	58	0
-log10	D616	308	HalfToEven	executed	0	0	64	64	0
-log10	D616	615	HalfToEven	executed	0	0	17	17	0
-log10	D924	0	HalfToEven	executed	0	0	58	58	0
-log10	D924	460	HalfToEven	executed	0	0	64	64	0
-log10	D924	923	HalfToEven	executed	0	0	15	15	0
-log10	D1232	0	HalfToEven	executed	0	0	58	58	0
-log10	D1232	615	HalfToEven	executed	0	0	64	64	0
-log10	D1232	1231	HalfToEven	executed	0	0	17	17	0
-exp2	D18	0	HalfToEven	executed	0	0	55	55	0
-exp2	D18	9	HalfToEven	executed	0	0	89	89	0
-exp2	D18	17	HalfToEven	executed	0	0	32	32	0
-exp2	D38	0	HalfToEven	executed	0	0	61	61	0
-exp2	D38	19	HalfToEven	executed	0	0	95	95	0
-exp2	D38	37	HalfToEven	executed	0	0	32	32	0
-exp2	D57	0	HalfToEven	executed	0	0	63	63	0
-exp2	D57	28	HalfToEven	executed	0	0	94	94	0
-exp2	D57	56	HalfToEven	executed	0	0	23	23	0
-exp2	D76	0	HalfToEven	executed	0	0	60	60	0
-exp2	D76	35	HalfToEven	executed	0	0	86	86	0
-exp2	D76	75	HalfToEven	executed	0	0	22	22	0
-exp2	D115	0	HalfToEven	executed	0	0	63	63	0
-exp2	D115	57	HalfToEven	executed	0	0	81	81	0
-exp2	D115	114	HalfToEven	executed	0	0	22	22	0
-exp2	D153	0	HalfToEven	executed	0	0	60	60	0
-exp2	D153	76	HalfToEven	executed	0	0	77	77	0
-exp2	D153	152	HalfToEven	executed	0	0	18	18	0
-exp2	D230	0	HalfToEven	executed	0	0	61	61	0
-exp2	D230	115	HalfToEven	executed	0	0	74	74	0
-exp2	D230	229	HalfToEven	executed	0	0	12	12	0
-exp2	D307	0	HalfToEven	executed	0	0	57	57	0
-exp2	D307	150	HalfToEven	executed	0	0	70	70	0
-exp2	D307	306	HalfToEven	executed	0	0	7	7	0
-exp2	D462	0	HalfToEven	executed	0	0	58	58	0
-exp2	D462	230	HalfToEven	executed	0	0	70	70	0
-exp2	D462	461	HalfToEven	executed	0	0	9	9	0
-exp2	D616	0	HalfToEven	executed	0	0	58	58	0
-exp2	D616	308	HalfToEven	executed	0	0	70	70	0
-exp2	D616	615	HalfToEven	executed	0	0	13	13	0
-exp2	D924	0	HalfToEven	executed	0	0	58	58	0
-exp2	D924	460	HalfToEven	executed	0	0	70	70	0
-exp2	D924	923	HalfToEven	executed	0	0	7	7	0
-exp2	D1232	0	HalfToEven	executed	0	0	58	58	0
-exp2	D1232	615	HalfToEven	executed	0	0	70	70	0
-exp2	D1232	1231	HalfToEven	executed	0	0	13	13	0
-sin	D18	0	HalfToEven	executed	0	0	38	38	0
-sin	D18	9	HalfToEven	executed	0	0	76	76	0
-sin	D18	17	HalfToEven	executed	0	0	38	38	0
-sin	D38	0	HalfToEven	executed	0	0	33	33	0
-sin	D38	19	HalfToEven	executed	0	0	68	68	0
-sin	D38	37	HalfToEven	executed	0	0	38	38	0
-sin	D57	0	HalfToEven	executed	0	0	32	32	0
-sin	D57	28	HalfToEven	executed	0	0	63	63	0
-sin	D57	56	HalfToEven	executed	0	0	30	30	0
-sin	D76	0	HalfToEven	executed	0	0	31	31	0
-sin	D76	35	HalfToEven	executed	0	0	55	55	0
-sin	D76	75	HalfToEven	executed	0	0	31	31	0
-sin	D115	0	HalfToEven	executed	0	0	31	31	0
-sin	D115	57	HalfToEven	executed	0	0	48	48	0
-sin	D115	114	HalfToEven	executed	0	0	23	23	0
-sin	D153	0	HalfToEven	executed	0	0	24	24	0
-sin	D153	76	HalfToEven	executed	0	0	44	44	0
-sin	D153	152	HalfToEven	executed	0	0	22	22	0
-sin	D230	0	HalfToEven	executed	0	0	25	25	0
-sin	D230	115	HalfToEven	executed	0	0	39	39	0
-sin	D230	229	HalfToEven	executed	0	0	17	17	0
-sin	D307	0	HalfToEven	executed	0	0	24	24	0
-sin	D307	150	HalfToEven	executed	0	0	35	35	0
-sin	D307	306	HalfToEven	executed	0	0	15	15	0
-sin	D462	0	HalfToEven	executed	0	0	25	25	0
-sin	D462	230	HalfToEven	executed	0	0	35	35	0
-sin	D462	461	HalfToEven	executed	0	0	15	15	0
-sin	D616	0	HalfToEven	executed	0	0	25	25	0
-sin	D616	308	HalfToEven	executed	0	0	35	35	0
-sin	D616	615	HalfToEven	executed	0	0	17	17	0
-sin	D924	0	HalfToEven	executed	0	0	23	23	0
-sin	D924	460	HalfToEven	executed	0	0	35	35	0
-sin	D924	923	HalfToEven	executed	0	0	15	15	0
-sin	D1232	0	HalfToEven	executed	0	0	24	24	0
-sin	D1232	615	HalfToEven	executed	0	0	35	35	0
-sin	D1232	1231	HalfToEven	executed	0	0	15	15	0
-cos	D18	0	HalfToEven	executed	0	0	38	38	0
-cos	D18	9	HalfToEven	executed	0	0	76	76	0
-cos	D18	17	HalfToEven	executed	0	0	40	40	0
-cos	D38	0	HalfToEven	executed	0	0	34	34	0
-cos	D38	19	HalfToEven	executed	0	0	68	68	0
-cos	D38	37	HalfToEven	executed	0	0	37	37	0
-cos	D57	0	HalfToEven	executed	0	0	34	34	0
-cos	D57	28	HalfToEven	executed	0	0	63	63	0
-cos	D57	56	HalfToEven	executed	0	0	32	32	0
-cos	D76	0	HalfToEven	executed	0	0	31	31	0
-cos	D76	35	HalfToEven	executed	0	0	55	55	0
-cos	D76	75	HalfToEven	executed	0	0	31	31	0
-cos	D115	0	HalfToEven	executed	0	0	26	26	0
-cos	D115	57	HalfToEven	executed	0	0	48	48	0
-cos	D115	114	HalfToEven	executed	0	0	24	24	0
-cos	D153	0	HalfToEven	executed	0	0	28	28	0
-cos	D153	76	HalfToEven	executed	0	0	44	44	0
-cos	D153	152	HalfToEven	executed	0	0	24	24	0
-cos	D230	0	HalfToEven	executed	0	0	27	27	0
-cos	D230	115	HalfToEven	executed	0	0	39	39	0
-cos	D230	229	HalfToEven	executed	0	0	18	18	0
-cos	D307	0	HalfToEven	executed	0	0	24	24	0
-cos	D307	150	HalfToEven	executed	0	0	35	35	0
-cos	D307	306	HalfToEven	executed	0	0	14	14	0
-cos	D462	0	HalfToEven	executed	0	0	25	25	0
-cos	D462	230	HalfToEven	executed	0	0	35	35	0
-cos	D462	461	HalfToEven	executed	0	0	12	12	0
-cos	D616	0	HalfToEven	executed	0	0	24	24	0
-cos	D616	308	HalfToEven	executed	0	0	35	35	0
-cos	D616	615	HalfToEven	executed	0	0	12	12	0
-cos	D924	0	HalfToEven	executed	0	0	24	24	0
-cos	D924	460	HalfToEven	executed	0	0	35	35	0
-cos	D924	923	HalfToEven	executed	0	0	16	16	0
-cos	D1232	0	HalfToEven	executed	0	0	23	23	0
-cos	D1232	615	HalfToEven	executed	0	0	35	35	0
-cos	D1232	1231	HalfToEven	executed	0	0	12	12	0
-tan	D18	0	HalfToEven	executed	0	0	35	35	0
-tan	D18	9	HalfToEven	executed	0	0	74	74	0
-tan	D18	17	HalfToEven	executed	0	0	41	41	0
-tan	D38	0	HalfToEven	executed	0	0	29	29	0
-tan	D38	19	HalfToEven	executed	0	0	66	66	0
-tan	D38	37	HalfToEven	executed	0	0	44	44	0
-tan	D57	0	HalfToEven	executed	0	0	30	30	0
-tan	D57	28	HalfToEven	executed	0	0	61	61	0
-tan	D57	56	HalfToEven	executed	0	0	34	34	0
-tan	D76	0	HalfToEven	executed	0	0	25	25	0
-tan	D76	35	HalfToEven	executed	0	0	53	53	0
-tan	D76	75	HalfToEven	executed	0	0	35	35	0
-tan	D115	0	HalfToEven	executed	0	0	23	23	0
-tan	D115	57	HalfToEven	executed	0	0	46	46	0
-tan	D115	114	HalfToEven	executed	0	0	26	26	0
-tan	D153	0	HalfToEven	executed	0	0	26	26	0
-tan	D153	76	HalfToEven	executed	0	0	42	42	0
-tan	D153	152	HalfToEven	executed	0	0	21	21	0
-tan	D230	0	HalfToEven	executed	0	0	23	23	0
-tan	D230	115	HalfToEven	executed	0	0	37	37	0
-tan	D230	229	HalfToEven	executed	0	0	19	19	0
-tan	D307	0	HalfToEven	executed	0	0	21	21	0
-tan	D307	150	HalfToEven	executed	0	0	33	33	0
-tan	D307	306	HalfToEven	executed	0	0	21	21	0
-tan	D462	0	HalfToEven	executed	0	0	20	20	0
-tan	D462	230	HalfToEven	executed	0	0	33	33	0
-tan	D462	461	HalfToEven	executed	0	0	16	16	0
-tan	D616	0	HalfToEven	executed	0	0	18	18	0
-tan	D616	308	HalfToEven	executed	0	0	33	33	0
-tan	D616	615	HalfToEven	executed	0	0	15	15	0
-tan	D924	0	HalfToEven	executed	0	0	20	20	0
-tan	D924	460	HalfToEven	executed	0	0	33	33	0
-tan	D924	923	HalfToEven	executed	0	0	17	17	0
-tan	D1232	0	HalfToEven	executed	0	0	20	20	0
-tan	D1232	615	HalfToEven	executed	0	0	33	33	0
-tan	D1232	1231	HalfToEven	executed	0	0	14	14	0
-atan	D18	0	HalfToEven	executed	0	0	40	40	0
-atan	D18	9	HalfToEven	executed	0	0	66	66	0
-atan	D18	17	HalfToEven	executed	0	0	45	45	0
-atan	D38	0	HalfToEven	executed	0	0	38	38	0
-atan	D38	19	HalfToEven	executed	0	0	58	58	0
-atan	D38	37	HalfToEven	executed	0	0	46	46	0
-atan	D57	0	HalfToEven	executed	0	0	32	32	0
-atan	D57	28	HalfToEven	executed	0	0	53	53	0
-atan	D57	56	HalfToEven	executed	0	0	36	36	0
-atan	D76	0	HalfToEven	executed	0	0	27	27	0
-atan	D76	35	HalfToEven	executed	0	0	45	45	0
-atan	D76	75	HalfToEven	executed	0	0	33	33	0
-atan	D115	0	HalfToEven	executed	0	0	25	25	0
-atan	D115	57	HalfToEven	executed	0	0	38	38	0
-atan	D115	114	HalfToEven	executed	0	0	28	28	0
-atan	D153	0	HalfToEven	executed	0	0	25	25	0
-atan	D153	76	HalfToEven	executed	0	0	34	34	0
-atan	D153	152	HalfToEven	executed	0	0	24	24	0
-atan	D230	0	HalfToEven	executed	0	0	21	21	0
-atan	D230	115	HalfToEven	executed	0	0	29	29	0
-atan	D230	229	HalfToEven	executed	0	0	24	24	0
-atan	D307	0	HalfToEven	executed	0	0	17	17	0
-atan	D307	150	HalfToEven	executed	0	0	25	25	0
-atan	D307	306	HalfToEven	executed	0	0	19	19	0
-atan	D462	0	HalfToEven	executed	0	0	19	19	0
-atan	D462	230	HalfToEven	executed	0	0	25	25	0
-atan	D462	461	HalfToEven	executed	0	0	19	19	0
-atan	D616	0	HalfToEven	executed	0	0	19	19	0
-atan	D616	308	HalfToEven	executed	0	0	25	25	0
-atan	D616	615	HalfToEven	executed	0	0	15	15	0
-atan	D924	0	HalfToEven	executed	0	0	19	19	0
-atan	D924	460	HalfToEven	executed	0	0	25	25	0
-atan	D924	923	HalfToEven	executed	0	0	19	19	0
-atan	D1232	0	HalfToEven	executed	0	0	17	17	0
-atan	D1232	615	HalfToEven	executed	0	0	25	25	0
-atan	D1232	1231	HalfToEven	executed	0	0	15	15	0
-asin	D18	0	HalfToEven	executed	0	0	3	3	0
-asin	D18	9	HalfToEven	executed	0	0	80	80	0
-asin	D18	17	HalfToEven	executed	0	0	43	43	0
-asin	D38	0	HalfToEven	executed	0	0	3	3	0
-asin	D38	19	HalfToEven	executed	0	0	78	78	0
-asin	D38	37	HalfToEven	executed	0	0	37	37	0
-asin	D57	0	HalfToEven	executed	0	0	3	3	0
-asin	D57	28	HalfToEven	executed	0	0	73	73	0
-asin	D57	56	HalfToEven	executed	0	0	35	35	0
-asin	D76	0	HalfToEven	executed	0	0	3	3	0
-asin	D76	35	HalfToEven	executed	0	0	65	65	0
-asin	D76	75	HalfToEven	executed	0	0	29	29	0
-asin	D115	0	HalfToEven	executed	0	0	3	3	0
-asin	D115	57	HalfToEven	executed	0	0	58	58	0
-asin	D115	114	HalfToEven	executed	0	0	25	25	0
-asin	D153	0	HalfToEven	executed	0	0	3	3	0
-asin	D153	76	HalfToEven	executed	0	0	54	54	0
-asin	D153	152	HalfToEven	executed	0	0	20	20	0
-asin	D230	0	HalfToEven	executed	0	0	3	3	0
-asin	D230	115	HalfToEven	executed	0	0	49	49	0
-asin	D230	229	HalfToEven	executed	0	0	15	15	0
-asin	D307	0	HalfToEven	executed	0	0	3	3	0
-asin	D307	150	HalfToEven	executed	0	0	45	45	0
-asin	D307	306	HalfToEven	executed	0	0	17	17	0
-asin	D462	0	HalfToEven	executed	0	0	3	3	0
-asin	D462	230	HalfToEven	executed	0	0	45	45	0
-asin	D462	461	HalfToEven	executed	0	0	17	17	0
-asin	D616	0	HalfToEven	executed	0	0	3	3	0
-asin	D616	308	HalfToEven	executed	0	0	45	45	0
-asin	D616	615	HalfToEven	executed	0	0	15	15	0
-asin	D924	0	HalfToEven	executed	0	0	3	3	0
-asin	D924	460	HalfToEven	executed	0	0	45	45	0
-asin	D924	923	HalfToEven	executed	0	0	13	13	0
-asin	D1232	0	HalfToEven	executed	0	0	3	3	0
-asin	D1232	615	HalfToEven	executed	0	0	45	45	0
-asin	D1232	1231	HalfToEven	executed	0	0	15	15	0
-acos	D18	0	HalfToEven	executed	0	0	3	3	0
-acos	D18	9	HalfToEven	executed	0	0	80	80	0
-acos	D18	17	HalfToEven	executed	0	0	37	37	0
-acos	D38	0	HalfToEven	executed	0	0	3	3	0
-acos	D38	19	HalfToEven	executed	0	0	78	78	0
-acos	D38	37	HalfToEven	executed	0	0	34	34	0
-acos	D57	0	HalfToEven	executed	0	0	3	3	0
-acos	D57	28	HalfToEven	executed	0	0	73	73	0
-acos	D57	56	HalfToEven	executed	0	0	28	28	0
-acos	D76	0	HalfToEven	executed	0	0	3	3	0
-acos	D76	35	HalfToEven	executed	0	0	65	65	0
-acos	D76	75	HalfToEven	executed	0	0	28	28	0
-acos	D115	0	HalfToEven	executed	0	0	3	3	0
-acos	D115	57	HalfToEven	executed	0	0	58	58	0
-acos	D115	114	HalfToEven	executed	0	0	27	27	0
-acos	D153	0	HalfToEven	executed	0	0	3	3	0
-acos	D153	76	HalfToEven	executed	0	0	54	54	0
-acos	D153	152	HalfToEven	executed	0	0	25	25	0
-acos	D230	0	HalfToEven	executed	0	0	3	3	0
-acos	D230	115	HalfToEven	executed	0	0	49	49	0
-acos	D230	229	HalfToEven	executed	0	0	18	18	0
-acos	D307	0	HalfToEven	executed	0	0	3	3	0
-acos	D307	150	HalfToEven	executed	0	0	45	45	0
-acos	D307	306	HalfToEven	executed	0	0	19	19	0
-acos	D462	0	HalfToEven	executed	0	0	3	3	0
-acos	D462	230	HalfToEven	executed	0	0	45	45	0
-acos	D462	461	HalfToEven	executed	0	0	23	23	0
-acos	D616	0	HalfToEven	executed	0	0	3	3	0
-acos	D616	308	HalfToEven	executed	0	0	45	45	0
-acos	D616	615	HalfToEven	executed	0	0	21	21	0
-acos	D924	0	HalfToEven	executed	0	0	3	3	0
-acos	D924	460	HalfToEven	executed	0	0	45	45	0
-acos	D924	923	HalfToEven	executed	0	0	17	17	0
-acos	D1232	0	HalfToEven	executed	0	0	3	3	0
-acos	D1232	615	HalfToEven	executed	0	0	45	45	0
-acos	D1232	1231	HalfToEven	executed	0	0	21	21	0
-sinh	D18	0	HalfToEven	executed	0	0	31	31	0
-sinh	D18	9	HalfToEven	executed	0	0	67	67	0
-sinh	D18	17	HalfToEven	executed	0	0	45	45	0
-sinh	D38	0	HalfToEven	executed	0	0	34	34	0
-sinh	D38	19	HalfToEven	executed	0	0	59	59	0
-sinh	D38	37	HalfToEven	executed	0	0	35	35	0
-sinh	D57	0	HalfToEven	executed	0	0	34	34	0
-sinh	D57	28	HalfToEven	executed	0	0	54	54	0
-sinh	D57	56	HalfToEven	executed	0	0	34	34	0
-sinh	D76	0	HalfToEven	executed	0	0	29	29	0
-sinh	D76	35	HalfToEven	executed	0	0	46	46	0
-sinh	D76	75	HalfToEven	executed	0	0	32	32	0
-sinh	D115	0	HalfToEven	executed	0	0	25	25	0
-sinh	D115	57	HalfToEven	executed	0	0	39	39	0
-sinh	D115	114	HalfToEven	executed	0	0	24	24	0
-sinh	D153	0	HalfToEven	executed	0	0	23	23	0
-sinh	D153	76	HalfToEven	executed	0	0	35	35	0
-sinh	D153	152	HalfToEven	executed	0	0	24	24	0
-sinh	D230	0	HalfToEven	executed	0	0	21	21	0
-sinh	D230	115	HalfToEven	executed	0	0	30	30	0
-sinh	D230	229	HalfToEven	executed	0	0	21	21	0
-sinh	D307	0	HalfToEven	executed	0	0	18	18	0
-sinh	D307	150	HalfToEven	executed	0	0	26	26	0
-sinh	D307	306	HalfToEven	executed	0	0	17	17	0
-sinh	D462	0	HalfToEven	executed	0	0	17	17	0
-sinh	D462	230	HalfToEven	executed	0	0	26	26	0
-sinh	D462	461	HalfToEven	executed	0	0	15	15	0
-sinh	D616	0	HalfToEven	executed	0	0	19	19	0
-sinh	D616	308	HalfToEven	executed	0	0	26	26	0
-sinh	D616	615	HalfToEven	executed	0	0	17	17	0
-sinh	D924	0	HalfToEven	executed	0	0	18	18	0
-sinh	D924	460	HalfToEven	executed	0	0	26	26	0
-sinh	D924	923	HalfToEven	executed	0	0	17	17	0
-sinh	D1232	0	HalfToEven	executed	0	0	17	17	0
-sinh	D1232	615	HalfToEven	executed	0	0	26	26	0
-sinh	D1232	1231	HalfToEven	executed	0	0	17	17	0
-cosh	D18	0	HalfToEven	executed	0	0	36	36	0
-cosh	D18	9	HalfToEven	executed	0	0	67	67	0
-cosh	D38	0	HalfToEven	executed	0	0	32	32	0
-cosh	D38	19	HalfToEven	executed	0	0	59	59	0
-cosh	D57	0	HalfToEven	executed	0	0	30	30	0
-cosh	D57	28	HalfToEven	executed	0	0	54	54	0
-cosh	D76	0	HalfToEven	executed	0	0	28	28	0
-cosh	D76	35	HalfToEven	executed	0	0	46	46	0
-cosh	D115	0	HalfToEven	executed	0	0	24	24	0
-cosh	D115	57	HalfToEven	executed	0	0	39	39	0
-cosh	D153	0	HalfToEven	executed	0	0	24	24	0
-cosh	D153	76	HalfToEven	executed	0	0	35	35	0
-cosh	D230	0	HalfToEven	executed	0	0	21	21	0
-cosh	D230	115	HalfToEven	executed	0	0	30	30	0
-cosh	D307	0	HalfToEven	executed	0	0	18	18	0
-cosh	D307	150	HalfToEven	executed	0	0	26	26	0
-cosh	D462	0	HalfToEven	executed	0	0	17	17	0
-cosh	D462	230	HalfToEven	executed	0	0	26	26	0
-cosh	D616	0	HalfToEven	executed	0	0	17	17	0
-cosh	D616	308	HalfToEven	executed	0	0	26	26	0
-cosh	D924	0	HalfToEven	executed	0	0	18	18	0
-cosh	D924	460	HalfToEven	executed	0	0	26	26	0
-cosh	D1232	0	HalfToEven	executed	0	0	19	19	0
-cosh	D1232	615	HalfToEven	executed	0	0	26	26	0
-tanh	D18	0	HalfToEven	executed	0	0	25	25	0
-tanh	D18	9	HalfToEven	executed	0	0	92	92	0
-tanh	D18	17	HalfToEven	executed	0	0	38	38	0
-tanh	D38	0	HalfToEven	executed	0	0	23	23	0
-tanh	D38	19	HalfToEven	executed	0	0	84	84	0
-tanh	D38	37	HalfToEven	executed	0	0	38	38	0
-tanh	D57	0	HalfToEven	executed	0	0	24	24	0
-tanh	D57	28	HalfToEven	executed	0	0	79	79	0
-tanh	D57	56	HalfToEven	executed	0	0	29	29	0
-tanh	D76	0	HalfToEven	executed	0	0	25	25	0
-tanh	D76	35	HalfToEven	executed	0	0	71	71	0
-tanh	D76	75	HalfToEven	executed	0	0	22	22	0
-tanh	D115	0	HalfToEven	executed	0	0	20	20	0
-tanh	D115	57	HalfToEven	executed	0	0	64	64	0
-tanh	D115	114	HalfToEven	executed	0	0	26	26	0
-tanh	D153	0	HalfToEven	executed	0	0	21	21	0
-tanh	D153	76	HalfToEven	executed	0	0	60	60	0
-tanh	D153	152	HalfToEven	executed	0	0	23	23	0
-tanh	D230	0	HalfToEven	executed	0	0	18	18	0
-tanh	D230	115	HalfToEven	executed	0	0	55	55	0
-tanh	D230	229	HalfToEven	executed	0	0	20	20	0
-tanh	D307	0	HalfToEven	executed	0	0	19	19	0
-tanh	D307	150	HalfToEven	executed	0	0	51	51	0
-tanh	D307	306	HalfToEven	executed	0	0	17	17	0
-tanh	D462	0	HalfToEven	executed	0	0	16	16	0
-tanh	D462	230	HalfToEven	executed	0	0	51	51	0
-tanh	D462	461	HalfToEven	executed	0	0	19	19	0
-tanh	D616	0	HalfToEven	executed	0	0	15	15	0
-tanh	D616	308	HalfToEven	executed	0	0	51	51	0
-tanh	D616	615	HalfToEven	executed	0	0	17	17	0
-tanh	D924	0	HalfToEven	executed	0	0	17	17	0
-tanh	D924	460	HalfToEven	executed	0	0	51	51	0
-tanh	D924	923	HalfToEven	executed	0	0	17	17	0
-tanh	D1232	0	HalfToEven	executed	0	0	20	20	0
-tanh	D1232	615	HalfToEven	executed	0	0	51	51	0
-tanh	D1232	1231	HalfToEven	executed	0	0	15	15	0
-asinh	D18	0	HalfToEven	executed	0	0	43	43	0
-asinh	D18	9	HalfToEven	executed	0	0	70	70	0
-asinh	D18	17	HalfToEven	executed	0	0	57	57	0
-asinh	D38	0	HalfToEven	executed	0	0	37	37	0
-asinh	D38	19	HalfToEven	executed	0	0	62	62	0
-asinh	D38	37	HalfToEven	executed	0	0	47	47	0
-asinh	D57	0	HalfToEven	executed	0	0	32	32	0
-asinh	D57	28	HalfToEven	executed	0	0	57	57	0
-asinh	D57	56	HalfToEven	executed	0	0	46	46	0
-asinh	D76	0	HalfToEven	executed	0	0	31	31	0
-asinh	D76	35	HalfToEven	executed	0	0	49	49	0
-asinh	D76	75	HalfToEven	executed	0	0	39	39	0
-asinh	D115	0	HalfToEven	executed	0	0	29	29	0
-asinh	D115	57	HalfToEven	executed	0	0	42	42	0
-asinh	D115	114	HalfToEven	executed	0	0	32	32	0
-asinh	D153	0	HalfToEven	executed	0	0	26	26	0
-asinh	D153	76	HalfToEven	executed	0	0	38	38	0
-asinh	D153	152	HalfToEven	executed	0	0	30	30	0
-asinh	D230	0	HalfToEven	executed	0	0	22	22	0
-asinh	D230	115	HalfToEven	executed	0	0	33	33	0
-asinh	D230	229	HalfToEven	executed	0	0	25	25	0
-asinh	D307	0	HalfToEven	executed	0	0	21	21	0
-asinh	D307	150	HalfToEven	executed	0	0	29	29	0
-asinh	D307	306	HalfToEven	executed	0	0	23	23	0
-asinh	D462	0	HalfToEven	executed	0	0	20	20	0
-asinh	D462	230	HalfToEven	executed	0	0	29	29	0
-asinh	D462	461	HalfToEven	executed	0	0	21	21	0
-asinh	D616	0	HalfToEven	executed	0	0	22	22	0
-asinh	D616	308	HalfToEven	executed	0	0	29	29	0
-asinh	D616	615	HalfToEven	executed	0	0	21	21	0
-asinh	D924	0	HalfToEven	executed	0	0	21	21	0
-asinh	D924	460	HalfToEven	executed	0	0	29	29	0
-asinh	D924	923	HalfToEven	executed	0	0	17	17	0
-asinh	D1232	0	HalfToEven	executed	0	0	20	20	0
-asinh	D1232	615	HalfToEven	executed	0	0	29	29	0
-asinh	D1232	1231	HalfToEven	executed	0	0	19	19	0
-acosh	D18	0	HalfToEven	executed	0	0	43	43	0
-acosh	D18	9	HalfToEven	executed	0	0	70	70	0
-acosh	D18	17	HalfToEven	executed	0	0	1	1	0
-acosh	D38	0	HalfToEven	executed	0	0	37	37	0
-acosh	D38	19	HalfToEven	executed	0	0	65	65	0
-acosh	D38	37	HalfToEven	executed	0	0	1	1	0
-acosh	D57	0	HalfToEven	executed	0	0	33	33	0
-acosh	D57	28	HalfToEven	executed	0	0	60	60	0
-acosh	D57	56	HalfToEven	executed	0	0	1	1	0
-acosh	D76	0	HalfToEven	executed	0	0	28	28	0
-acosh	D76	35	HalfToEven	executed	0	0	52	52	0
-acosh	D76	75	HalfToEven	executed	0	0	1	1	0
-acosh	D115	0	HalfToEven	executed	0	0	25	25	0
-acosh	D115	57	HalfToEven	executed	0	0	45	45	0
-acosh	D115	114	HalfToEven	executed	0	0	1	1	0
-acosh	D153	0	HalfToEven	executed	0	0	23	23	0
-acosh	D153	76	HalfToEven	executed	0	0	41	41	0
-acosh	D153	152	HalfToEven	executed	0	0	1	1	0
-acosh	D230	0	HalfToEven	executed	0	0	20	20	0
-acosh	D230	115	HalfToEven	executed	0	0	36	36	0
-acosh	D230	229	HalfToEven	executed	0	0	1	1	0
-acosh	D307	0	HalfToEven	executed	0	0	18	18	0
-acosh	D307	150	HalfToEven	executed	0	0	32	32	0
-acosh	D307	306	HalfToEven	executed	0	0	1	1	0
-acosh	D462	0	HalfToEven	executed	0	0	18	18	0
-acosh	D462	230	HalfToEven	executed	0	0	32	32	0
-acosh	D462	461	HalfToEven	executed	0	0	1	1	0
-acosh	D616	0	HalfToEven	executed	0	0	18	18	0
-acosh	D616	308	HalfToEven	executed	0	0	32	32	0
-acosh	D616	615	HalfToEven	executed	0	0	1	1	0
-acosh	D924	0	HalfToEven	executed	0	0	18	18	0
-acosh	D924	460	HalfToEven	executed	0	0	32	32	0
-acosh	D924	923	HalfToEven	executed	0	0	1	1	0
-acosh	D1232	0	HalfToEven	executed	0	0	18	18	0
-acosh	D1232	615	HalfToEven	executed	0	0	32	32	0
-acosh	D1232	1231	HalfToEven	executed	0	0	1	1	0
-atanh	D18	0	HalfToEven	executed	0	0	1	1	0
-atanh	D18	9	HalfToEven	executed	0	0	78	78	0
-atanh	D18	17	HalfToEven	executed	0	0	40	40	0
-atanh	D38	0	HalfToEven	executed	0	0	1	1	0
-atanh	D38	19	HalfToEven	executed	0	0	76	76	0
-atanh	D38	37	HalfToEven	executed	0	0	37	37	0
-atanh	D57	0	HalfToEven	executed	0	0	1	1	0
-atanh	D57	28	HalfToEven	executed	0	0	71	71	0
-atanh	D57	56	HalfToEven	executed	0	0	31	31	0
-atanh	D76	0	HalfToEven	executed	0	0	1	1	0
-atanh	D76	35	HalfToEven	executed	0	0	63	63	0
-atanh	D76	75	HalfToEven	executed	0	0	27	27	0
-atanh	D115	0	HalfToEven	executed	0	0	1	1	0
-atanh	D115	57	HalfToEven	executed	0	0	56	56	0
-atanh	D115	114	HalfToEven	executed	0	0	22	22	0
-atanh	D153	0	HalfToEven	executed	0	0	1	1	0
-atanh	D153	76	HalfToEven	executed	0	0	52	52	0
-atanh	D153	152	HalfToEven	executed	0	0	25	25	0
-atanh	D230	0	HalfToEven	executed	0	0	1	1	0
-atanh	D230	115	HalfToEven	executed	0	0	47	47	0
-atanh	D230	229	HalfToEven	executed	0	0	17	17	0
-atanh	D307	0	HalfToEven	executed	0	0	1	1	0
-atanh	D307	150	HalfToEven	executed	0	0	43	43	0
-atanh	D307	306	HalfToEven	executed	0	0	15	15	0
-atanh	D462	0	HalfToEven	executed	0	0	1	1	0
-atanh	D462	230	HalfToEven	executed	0	0	43	43	0
-atanh	D462	461	HalfToEven	executed	0	0	15	15	0
-atanh	D616	0	HalfToEven	executed	0	0	1	1	0
-atanh	D616	308	HalfToEven	executed	0	0	43	43	0
-atanh	D616	615	HalfToEven	executed	0	0	13	13	0
-atanh	D924	0	HalfToEven	executed	0	0	1	1	0
-atanh	D924	460	HalfToEven	executed	0	0	43	43	0
-atanh	D924	923	HalfToEven	executed	0	0	15	15	0
-atanh	D1232	0	HalfToEven	executed	0	0	1	1	0
-atanh	D1232	615	HalfToEven	executed	0	0	43	43	0
-atanh	D1232	1231	HalfToEven	executed	0	0	15	15	0
-log	D18	0	HalfToEven	executed	0	0	60	60	0
-log	D18	9	HalfToEven	executed	0	0	58	58	0
-log	D18	17	HalfToEven	executed	0	0	18	18	0
-log	D38	0	HalfToEven	executed	0	0	53	53	0
-log	D38	19	HalfToEven	executed	0	0	53	53	0
-log	D38	37	HalfToEven	executed	0	0	19	19	0
-log	D57	0	HalfToEven	executed	0	0	46	46	0
-log	D57	28	HalfToEven	executed	0	0	46	46	0
-log	D57	56	HalfToEven	executed	0	0	16	16	0
-log	D76	0	HalfToEven	executed	0	0	39	39	0
-log	D76	35	HalfToEven	executed	0	0	39	39	0
-log	D76	75	HalfToEven	executed	0	0	10	10	0
-log	D115	0	HalfToEven	executed	0	0	33	33	0
-log	D115	57	HalfToEven	executed	0	0	33	33	0
-log	D115	114	HalfToEven	executed	0	0	13	13	0
-log	D153	0	HalfToEven	executed	0	0	30	30	0
-log	D153	76	HalfToEven	executed	0	0	30	30	0
-log	D153	152	HalfToEven	executed	0	0	12	12	0
-log	D230	0	HalfToEven	executed	0	0	23	23	0
-log	D230	115	HalfToEven	executed	0	0	23	23	0
-log	D230	229	HalfToEven	executed	0	0	8	8	0
-log	D307	0	HalfToEven	executed	0	0	20	20	0
-log	D307	150	HalfToEven	executed	0	0	20	20	0
-log	D307	306	HalfToEven	executed	0	0	2	2	0
-log	D462	0	HalfToEven	executed	0	0	20	20	0
-log	D462	230	HalfToEven	executed	0	0	20	20	0
-log	D462	461	HalfToEven	executed	0	0	4	4	0
-log	D616	0	HalfToEven	executed	0	0	20	20	0
-log	D616	308	HalfToEven	executed	0	0	20	20	0
-log	D616	615	HalfToEven	executed	0	0	3	3	0
-log	D924	0	HalfToEven	executed	0	0	20	20	0
-log	D924	460	HalfToEven	executed	0	0	20	20	0
-log	D924	923	HalfToEven	executed	0	0	3	3	0
-log	D1232	0	HalfToEven	executed	0	0	20	20	0
-log	D1232	615	HalfToEven	executed	0	0	20	20	0
-log	D1232	1231	HalfToEven	executed	0	0	2	2	0
-atan2	D18	0	HalfToEven	executed	0	0	59	59	0
-atan2	D18	9	HalfToEven	executed	0	0	61	61	0
-atan2	D18	17	HalfToEven	executed	0	0	16	16	0
-atan2	D38	0	HalfToEven	executed	0	0	52	52	0
-atan2	D38	19	HalfToEven	executed	0	0	54	54	0
-atan2	D38	37	HalfToEven	executed	0	0	12	12	0
-atan2	D57	0	HalfToEven	executed	0	0	45	45	0
-atan2	D57	28	HalfToEven	executed	0	0	47	47	0
-atan2	D57	56	HalfToEven	executed	0	0	12	12	0
-atan2	D76	0	HalfToEven	executed	0	0	38	38	0
-atan2	D76	35	HalfToEven	executed	0	0	40	40	0
-atan2	D76	75	HalfToEven	executed	0	0	13	13	0
-atan2	D115	0	HalfToEven	executed	0	0	32	32	0
-atan2	D115	57	HalfToEven	executed	0	0	34	34	0
-atan2	D115	114	HalfToEven	executed	0	0	9	9	0
-atan2	D153	0	HalfToEven	executed	0	0	28	28	0
-atan2	D153	76	HalfToEven	executed	0	0	30	30	0
-atan2	D153	152	HalfToEven	executed	0	0	11	11	0
-atan2	D230	0	HalfToEven	executed	0	0	21	21	0
-atan2	D230	115	HalfToEven	executed	0	0	23	23	0
-atan2	D230	229	HalfToEven	executed	0	0	8	8	0
-atan2	D307	0	HalfToEven	executed	0	0	18	18	0
-atan2	D307	150	HalfToEven	executed	0	0	20	20	0
-atan2	D307	306	HalfToEven	executed	0	0	5	5	0
-atan2	D462	0	HalfToEven	executed	0	0	18	18	0
-atan2	D462	230	HalfToEven	executed	0	0	20	20	0
-atan2	D462	461	HalfToEven	executed	0	0	5	5	0
-atan2	D616	0	HalfToEven	executed	0	0	18	18	0
-atan2	D616	308	HalfToEven	executed	0	0	20	20	0
-atan2	D616	615	HalfToEven	executed	0	0	6	6	0
-atan2	D924	0	HalfToEven	executed	0	0	18	18	0
-atan2	D924	460	HalfToEven	executed	0	0	20	20	0
-atan2	D924	923	HalfToEven	executed	0	0	7	7	0
-atan2	D1232	0	HalfToEven	executed	0	0	18	18	0
-atan2	D1232	615	HalfToEven	executed	0	0	20	20	0
-atan2	D1232	1231	HalfToEven	executed	0	0	4	4	0
-powf	D18	0	HalfToEven	executed	0	0	59	59	0
-powf	D18	9	HalfToEven	executed	0	0	61	61	0
-powf	D18	17	HalfToEven	executed	0	0	12	12	0
-powf	D38	0	HalfToEven	executed	0	0	53	53	0
-powf	D38	19	HalfToEven	executed	0	0	54	54	0
-powf	D38	37	HalfToEven	executed	0	0	10	10	0
-powf	D57	0	HalfToEven	executed	0	0	46	46	0
-powf	D57	28	HalfToEven	executed	0	0	47	47	0
-powf	D57	56	HalfToEven	executed	0	0	2	2	0
-powf	D76	0	HalfToEven	executed	0	0	39	39	0
-powf	D76	35	HalfToEven	executed	0	0	40	40	0
-powf	D76	75	HalfToEven	executed	0	0	12	12	0
-powf	D115	0	HalfToEven	executed	0	0	33	33	0
-powf	D115	57	HalfToEven	executed	0	0	34	34	0
-powf	D115	114	HalfToEven	executed	0	0	7	7	0
-powf	D153	0	HalfToEven	executed	0	0	30	30	0
-powf	D153	76	HalfToEven	executed	0	0	30	30	0
-powf	D153	152	HalfToEven	executed	0	0	2	2	0
-powf	D230	0	HalfToEven	executed	0	0	22	22	0
-powf	D230	115	HalfToEven	executed	0	0	23	23	0
-powf	D230	229	HalfToEven	executed	0	0	2	2	0
-powf	D307	0	HalfToEven	executed	0	0	19	19	0
-powf	D307	150	HalfToEven	executed	0	0	20	20	0
-powf	D307	306	HalfToEven	executed	0	0	5	5	0
-powf	D462	0	HalfToEven	executed	0	0	19	19	0
-powf	D462	230	HalfToEven	executed	0	0	20	20	0
-powf	D462	461	HalfToEven	executed	0	0	4	4	0
-powf	D616	0	HalfToEven	executed	0	0	20	20	0
-powf	D616	308	HalfToEven	executed	0	0	20	20	0
-powf	D616	615	HalfToEven	executed	0	0	1	1	0
-powf	D924	0	HalfToEven	executed	0	0	20	20	0
-powf	D924	460	HalfToEven	executed	0	0	20	20	0
-powf	D924	923	HalfToEven	executed	0	0	2	2	0
-powf	D1232	0	HalfToEven	executed	0	0	20	20	0
-powf	D1232	615	HalfToEven	executed	0	0	20	20	0
-powf	D1232	1231	HalfToEven	executed	0	0	3	3	0
+method	width	scale	rounding	kind	max_lsbe	max_ulp	scored	correctly_rounded	max_digits	reach_scale
+sqrt	D18	0	HalfToEven	executed	0	0	75	75	0	0
+sqrt	D18	4	HalfToEven	executed	0	0	76	76	0	4
+sqrt	D18	9	HalfToEven	executed	0	0	76	76	0	9
+sqrt	D18	13	HalfToEven	executed	0	0	58	58	0	13
+sqrt	D18	17	HalfToEven	executed	0	0	41	41	0	17
+sqrt	D38	0	HalfToEven	executed	0	0	67	67	0	0
+sqrt	D38	9	HalfToEven	executed	0	0	68	68	0	9
+sqrt	D38	19	HalfToEven	executed	0	0	68	68	0	19
+sqrt	D38	28	HalfToEven	executed	0	0	68	68	0	28
+sqrt	D38	37	HalfToEven	executed	0	0	35	35	0	37
+sqrt	D57	0	HalfToEven	executed	0	0	62	62	0	0
+sqrt	D57	14	HalfToEven	executed	0	0	63	63	0	14
+sqrt	D57	28	HalfToEven	executed	0	0	63	63	0	28
+sqrt	D57	42	HalfToEven	executed	0	0	63	63	0	42
+sqrt	D57	56	HalfToEven	executed	0	0	31	31	0	56
+sqrt	D76	0	HalfToEven	executed	0	0	54	54	0	0
+sqrt	D76	19	HalfToEven	executed	0	0	55	55	0	19
+sqrt	D76	38	HalfToEven	executed	0	0	55	55	0	38
+sqrt	D76	57	HalfToEven	executed	0	0	55	55	0	57
+sqrt	D76	75	HalfToEven	executed	0	0	26	26	0	75
+sqrt	D115	0	HalfToEven	executed	0	0	47	47	0	0
+sqrt	D115	28	HalfToEven	executed	0	0	48	48	0	28
+sqrt	D115	57	HalfToEven	executed	0	0	48	48	0	57
+sqrt	D115	86	HalfToEven	executed	0	0	48	48	0	86
+sqrt	D115	114	HalfToEven	executed	0	0	23	23	0	114
+sqrt	D153	0	HalfToEven	executed	0	0	43	43	0	0
+sqrt	D153	38	HalfToEven	executed	0	0	44	44	0	38
+sqrt	D153	76	HalfToEven	executed	0	0	44	44	0	76
+sqrt	D153	114	HalfToEven	executed	0	0	44	44	0	114
+sqrt	D153	152	HalfToEven	executed	0	0	21	21	0	152
+sqrt	D230	0	HalfToEven	executed	0	0	94	94	0	0
+sqrt	D230	57	HalfToEven	executed	0	0	95	95	0	57
+sqrt	D230	115	HalfToEven	executed	0	0	95	95	0	115
+sqrt	D230	172	HalfToEven	executed	0	0	95	95	0	172
+sqrt	D230	229	HalfToEven	executed	0	0	55	55	0	229
+sqrt	D307	0	HalfToEven	executed	0	0	34	34	0	0
+sqrt	D307	76	HalfToEven	executed	0	0	35	35	0	76
+sqrt	D307	153	HalfToEven	executed	0	0	35	35	0	153
+sqrt	D307	230	HalfToEven	executed	0	0	35	35	0	230
+sqrt	D307	306	HalfToEven	executed	0	0	16	16	0	306
+sqrt	D462	0	HalfToEven	executed	0	0	94	94	0	0
+sqrt	D462	115	HalfToEven	executed	0	0	95	95	0	115
+sqrt	D462	231	HalfToEven	executed	0	0	95	95	0	231
+sqrt	D462	346	HalfToEven	executed	0	0	95	95	0	346
+sqrt	D462	461	HalfToEven	executed	0	0	55	55	0	461
+sqrt	D616	0	HalfToEven	executed	0	0	94	94	0	0
+sqrt	D616	154	HalfToEven	executed	0	0	95	95	0	154
+sqrt	D616	308	HalfToEven	executed	0	0	95	95	0	308
+sqrt	D616	462	HalfToEven	executed	0	0	95	95	0	462
+sqrt	D616	615	HalfToEven	executed	0	0	55	55	0	615
+sqrt	D924	0	HalfToEven	executed	0	0	94	94	0	0
+sqrt	D924	231	HalfToEven	executed	0	0	95	95	0	231
+sqrt	D924	462	HalfToEven	executed	0	0	95	95	0	462
+sqrt	D924	693	HalfToEven	executed	0	0	95	95	0	693
+sqrt	D924	923	HalfToEven	executed	0	0	55	55	0	923
+sqrt	D1232	0	HalfToEven	executed	0	0	94	94	0	0
+sqrt	D1232	308	HalfToEven	executed	0	0	95	95	0	308
+sqrt	D1232	616	HalfToEven	executed	0	0	95	95	0	616
+sqrt	D1232	924	HalfToEven	executed	0	0	95	95	0	924
+sqrt	D1232	1231	HalfToEven	executed	0	0	55	55	0	1231
+cbrt	D18	0	HalfToEven	executed	0	0	96	96	0	0
+cbrt	D18	4	HalfToEven	executed	0	0	98	98	0	4
+cbrt	D18	9	HalfToEven	executed	0	0	98	98	0	9
+cbrt	D18	13	HalfToEven	executed	0	0	88	88	0	13
+cbrt	D18	17	HalfToEven	executed	0	0	43	43	0	17
+cbrt	D38	0	HalfToEven	executed	0	0	88	88	0	0
+cbrt	D38	9	HalfToEven	executed	0	0	90	90	0	9
+cbrt	D38	19	HalfToEven	executed	0	0	90	90	0	19
+cbrt	D38	28	HalfToEven	executed	0	0	90	90	0	28
+cbrt	D38	37	HalfToEven	executed	0	0	37	37	0	37
+cbrt	D57	0	HalfToEven	executed	0	0	79	79	0	0
+cbrt	D57	14	HalfToEven	executed	0	0	85	85	0	14
+cbrt	D57	28	HalfToEven	executed	0	0	85	85	0	28
+cbrt	D57	42	HalfToEven	executed	0	0	85	85	0	42
+cbrt	D57	56	HalfToEven	executed	0	0	33	33	0	56
+cbrt	D76	0	HalfToEven	executed	0	0	75	75	0	0
+cbrt	D76	19	HalfToEven	executed	0	0	77	77	0	19
+cbrt	D76	38	HalfToEven	executed	0	0	77	77	0	38
+cbrt	D76	57	HalfToEven	executed	0	0	77	77	0	57
+cbrt	D76	75	HalfToEven	executed	0	0	30	30	0	75
+cbrt	D115	0	HalfToEven	executed	0	0	68	68	0	0
+cbrt	D115	28	HalfToEven	executed	0	0	70	70	0	28
+cbrt	D115	57	HalfToEven	executed	0	0	70	70	0	57
+cbrt	D115	86	HalfToEven	executed	0	0	70	70	0	86
+cbrt	D115	114	HalfToEven	executed	0	0	27	27	0	114
+cbrt	D153	0	HalfToEven	executed	0	0	64	64	0	0
+cbrt	D153	38	HalfToEven	executed	0	0	66	66	0	38
+cbrt	D153	76	HalfToEven	executed	0	0	66	66	0	76
+cbrt	D153	114	HalfToEven	executed	0	0	66	66	0	114
+cbrt	D153	152	HalfToEven	executed	0	0	23	23	0	152
+cbrt	D230	0	HalfToEven	executed	0	0	110	110	0	0
+cbrt	D230	57	HalfToEven	executed	0	0	117	117	0	57
+cbrt	D230	115	HalfToEven	executed	0	0	117	117	0	115
+cbrt	D230	172	HalfToEven	executed	0	0	117	117	0	172
+cbrt	D230	229	HalfToEven	executed	0	0	57	57	0	229
+cbrt	D307	0	HalfToEven	executed	0	0	55	55	0	0
+cbrt	D307	76	HalfToEven	executed	0	0	57	57	0	76
+cbrt	D307	153	HalfToEven	executed	0	0	57	57	0	153
+cbrt	D307	230	HalfToEven	executed	0	0	57	57	0	230
+cbrt	D307	306	HalfToEven	executed	0	0	18	18	0	306
+cbrt	D462	0	HalfToEven	executed	0	0	114	114	0	0
+cbrt	D462	115	HalfToEven	executed	0	0	117	117	0	115
+cbrt	D462	231	HalfToEven	executed	0	0	117	117	0	231
+cbrt	D462	346	HalfToEven	executed	0	0	117	117	0	346
+cbrt	D462	461	HalfToEven	executed	0	0	57	57	0	461
+cbrt	D616	0	HalfToEven	executed	0	0	111	111	0	0
+cbrt	D616	154	HalfToEven	executed	0	0	117	117	0	154
+cbrt	D616	308	HalfToEven	executed	0	0	117	117	0	308
+cbrt	D616	462	HalfToEven	executed	0	0	117	117	0	462
+cbrt	D616	615	HalfToEven	executed	0	0	57	57	0	615
+cbrt	D924	0	HalfToEven	executed	0	0	110	110	0	0
+cbrt	D924	231	HalfToEven	executed	0	0	117	117	0	231
+cbrt	D924	462	HalfToEven	executed	0	0	117	117	0	462
+cbrt	D924	693	HalfToEven	executed	0	0	117	117	0	693
+cbrt	D924	923	HalfToEven	executed	0	0	57	57	0	923
+cbrt	D1232	0	HalfToEven	executed	0	0	111	111	0	0
+cbrt	D1232	308	HalfToEven	executed	0	0	117	117	0	308
+cbrt	D1232	616	HalfToEven	executed	0	0	117	117	0	616
+cbrt	D1232	924	HalfToEven	executed	0	0	117	117	0	924
+cbrt	D1232	1231	HalfToEven	executed	0	0	57	57	0	1231
+exp	D18	0	HalfToEven	executed	0	0	32	32	0	0
+exp	D18	4	HalfToEven	executed	0	0	67	67	0	4
+exp	D18	9	HalfToEven	executed	0	0	67	67	0	9
+exp	D18	13	HalfToEven	executed	0	0	67	67	0	13
+exp	D18	17	HalfToEven	executed	0	0	35	35	0	17
+exp	D38	0	HalfToEven	executed	0	0	32	32	0	0
+exp	D38	9	HalfToEven	executed	0	0	59	59	0	9
+exp	D38	19	HalfToEven	executed	0	0	59	59	0	19
+exp	D38	28	HalfToEven	executed	0	0	59	59	0	28
+exp	D38	37	HalfToEven	executed	0	0	32	32	0	37
+exp	D57	0	HalfToEven	executed	0	0	29	29	0	0
+exp	D57	14	HalfToEven	executed	0	0	54	54	0	14
+exp	D57	28	HalfToEven	executed	0	0	54	54	0	28
+exp	D57	42	HalfToEven	executed	0	0	54	54	0	42
+exp	D57	56	HalfToEven	executed	0	0	29	29	0	56
+exp	D76	0	HalfToEven	executed	0	0	25	25	0	0
+exp	D76	19	HalfToEven	executed	0	0	46	46	0	19
+exp	D76	38	HalfToEven	executed	0	0	46	46	0	38
+exp	D76	57	HalfToEven	executed	0	0	46	46	0	57
+exp	D76	75	HalfToEven	executed	0	0	20	20	0	75
+exp	D115	0	HalfToEven	executed	0	0	25	25	0	0
+exp	D115	28	HalfToEven	executed	0	0	39	39	0	28
+exp	D115	57	HalfToEven	executed	0	0	39	39	0	57
+exp	D115	86	HalfToEven	executed	0	0	39	39	0	86
+exp	D115	114	HalfToEven	executed	0	0	18	18	0	114
+exp	D153	0	HalfToEven	executed	0	0	25	25	0	0
+exp	D153	38	HalfToEven	executed	0	0	35	35	0	38
+exp	D153	76	HalfToEven	executed	0	0	35	35	0	76
+exp	D153	114	HalfToEven	executed	0	0	35	35	0	114
+exp	D153	152	HalfToEven	executed	0	0	9	9	0	152
+exp	D230	0	HalfToEven	executed	0	0	49	49	0	0
+exp	D230	57	HalfToEven	executed	0	0	86	86	0	57
+exp	D230	115	HalfToEven	executed	0	0	86	86	0	115
+exp	D230	172	HalfToEven	executed	0	0	86	86	0	172
+exp	D230	229	HalfToEven	executed	0	0	48	48	0	229
+exp	D307	0	HalfToEven	executed	0	0	16	16	0	0
+exp	D307	76	HalfToEven	executed	0	0	26	26	0	76
+exp	D307	153	HalfToEven	executed	0	0	26	26	0	153
+exp	D307	230	HalfToEven	executed	0	0	26	26	0	230
+exp	D307	306	HalfToEven	executed	0	0	13	13	0	306
+exp	D462	0	HalfToEven	executed	0	0	51	51	0	0
+exp	D462	115	HalfToEven	executed	0	0	86	86	0	115
+exp	D462	231	HalfToEven	executed	0	0	86	86	0	231
+exp	D462	346	HalfToEven	executed	0	0	86	86	0	346
+exp	D462	461	HalfToEven	executed	0	0	45	45	0	461
+exp	D616	0	HalfToEven	executed	0	0	48	48	0	0
+exp	D616	154	HalfToEven	executed	0	0	86	86	0	154
+exp	D616	308	HalfToEven	executed	0	0	86	86	0	308
+exp	D616	462	HalfToEven	executed	0	0	86	86	0	462
+exp	D616	615	HalfToEven	executed	0	0	40	40	0	615
+exp	D924	0	HalfToEven	executed	0	0	51	51	0	0
+exp	D924	231	HalfToEven	executed	0	0	86	86	0	231
+exp	D924	462	HalfToEven	executed	0	0	86	86	0	462
+exp	D924	693	HalfToEven	executed	0	0	86	86	0	693
+exp	D924	923	HalfToEven	executed	0	0	40	40	0	923
+exp	D1232	0	HalfToEven	executed	0	0	50	50	0	0
+exp	D1232	308	HalfToEven	executed	0	0	86	86	0	308
+exp	D1232	616	HalfToEven	executed	0	0	86	86	0	616
+exp	D1232	924	HalfToEven	executed	0	0	86	86	0	924
+exp	D1232	1231	HalfToEven	executed	0	0	45	45	0	1231
+ln	D18	0	HalfToEven	executed	0	0	42	42	0	0
+ln	D18	4	HalfToEven	executed	0	0	66	66	0	4
+ln	D18	9	HalfToEven	executed	0	0	66	66	0	9
+ln	D18	13	HalfToEven	executed	0	0	66	66	0	13
+ln	D18	17	HalfToEven	executed	0	0	40	40	0	17
+ln	D38	0	HalfToEven	executed	0	0	37	37	0	0
+ln	D38	9	HalfToEven	executed	0	0	58	58	0	9
+ln	D38	19	HalfToEven	executed	0	0	58	58	0	19
+ln	D38	28	HalfToEven	executed	0	0	58	58	0	28
+ln	D38	37	HalfToEven	executed	0	0	33	33	0	37
+ln	D57	0	HalfToEven	executed	0	0	33	33	0	0
+ln	D57	14	HalfToEven	executed	0	0	53	53	0	14
+ln	D57	28	HalfToEven	executed	0	0	53	53	0	28
+ln	D57	42	HalfToEven	executed	0	0	53	53	0	42
+ln	D57	56	HalfToEven	executed	0	0	25	25	0	56
+ln	D76	0	HalfToEven	executed	0	0	28	28	0	0
+ln	D76	19	HalfToEven	executed	0	0	45	45	0	19
+ln	D76	38	HalfToEven	executed	0	0	45	45	0	38
+ln	D76	57	HalfToEven	executed	0	0	45	45	0	57
+ln	D76	75	HalfToEven	executed	0	0	23	23	0	75
+ln	D115	0	HalfToEven	executed	0	0	25	25	0	0
+ln	D115	28	HalfToEven	executed	0	0	38	38	0	28
+ln	D115	57	HalfToEven	executed	0	0	38	38	0	57
+ln	D115	86	HalfToEven	executed	0	0	38	38	0	86
+ln	D115	114	HalfToEven	executed	0	0	15	15	0	114
+ln	D153	0	HalfToEven	executed	0	0	23	23	0	0
+ln	D153	38	HalfToEven	executed	0	0	34	34	0	38
+ln	D153	76	HalfToEven	executed	0	0	34	34	0	76
+ln	D153	114	HalfToEven	executed	0	0	34	34	0	114
+ln	D153	152	HalfToEven	executed	0	0	20	20	0	152
+ln	D230	0	HalfToEven	executed	0	0	56	56	0	0
+ln	D230	57	HalfToEven	executed	0	0	85	85	0	57
+ln	D230	115	HalfToEven	executed	0	0	85	85	0	115
+ln	D230	172	HalfToEven	executed	0	0	85	85	0	172
+ln	D230	229	HalfToEven	executed	0	0	49	49	0	229
+ln	D307	0	HalfToEven	executed	0	0	18	18	0	0
+ln	D307	76	HalfToEven	executed	0	0	25	25	0	76
+ln	D307	153	HalfToEven	executed	0	0	25	25	0	153
+ln	D307	230	HalfToEven	executed	0	0	25	25	0	230
+ln	D307	306	HalfToEven	executed	0	0	11	11	0	306
+ln	D462	0	HalfToEven	executed	0	0	56	56	0	0
+ln	D462	115	HalfToEven	executed	0	0	85	85	0	115
+ln	D462	231	HalfToEven	executed	0	0	85	85	0	231
+ln	D462	346	HalfToEven	executed	0	0	85	85	0	346
+ln	D462	461	HalfToEven	executed	0	0	51	51	0	461
+ln	D616	0	HalfToEven	executed	0	0	56	56	0	0
+ln	D616	154	HalfToEven	executed	0	0	85	85	0	154
+ln	D616	308	HalfToEven	executed	0	0	85	85	0	308
+ln	D616	462	HalfToEven	executed	0	0	85	85	0	462
+ln	D616	615	HalfToEven	executed	0	0	52	52	0	615
+ln	D924	0	HalfToEven	executed	0	0	56	56	0	0
+ln	D924	231	HalfToEven	executed	0	0	85	85	0	231
+ln	D924	462	HalfToEven	executed	0	0	85	85	0	462
+ln	D924	693	HalfToEven	executed	0	0	85	85	0	693
+ln	D924	923	HalfToEven	executed	0	0	44	44	0	923
+ln	D1232	0	HalfToEven	executed	0	0	56	56	0	0
+ln	D1232	308	HalfToEven	executed	0	0	85	85	0	308
+ln	D1232	616	HalfToEven	executed	0	0	85	85	0	616
+ln	D1232	924	HalfToEven	executed	0	0	85	85	0	924
+ln	D1232	1231	HalfToEven	executed	0	0	51	51	0	1231
+log2	D18	0	HalfToEven	executed	0	0	98	98	0	0
+log2	D18	4	HalfToEven	executed	0	0	108	108	0	4
+log2	D18	9	HalfToEven	executed	0	0	91	91	0	9
+log2	D18	13	HalfToEven	executed	0	0	77	77	0	13
+log2	D18	17	HalfToEven	executed	0	0	29	29	0	17
+log2	D38	0	HalfToEven	executed	0	0	96	96	0	0
+log2	D38	9	HalfToEven	executed	0	0	117	117	0	9
+log2	D38	19	HalfToEven	executed	0	0	116	116	0	19
+log2	D38	28	HalfToEven	executed	0	0	86	86	0	28
+log2	D38	37	HalfToEven	executed	0	0	26	26	0	37
+log2	D57	0	HalfToEven	executed	0	0	92	92	0	0
+log2	D57	14	HalfToEven	executed	0	0	112	112	0	14
+log2	D57	28	HalfToEven	executed	0	0	112	112	0	28
+log2	D57	42	HalfToEven	executed	0	0	98	98	0	42
+log2	D57	56	HalfToEven	executed	0	0	25	25	0	56
+log2	D76	0	HalfToEven	executed	0	0	87	87	0	0
+log2	D76	19	HalfToEven	executed	0	0	104	104	0	19
+log2	D76	38	HalfToEven	executed	0	0	104	104	0	38
+log2	D76	57	HalfToEven	executed	0	0	103	103	0	57
+log2	D76	75	HalfToEven	executed	0	0	20	20	0	75
+log2	D115	0	HalfToEven	executed	0	0	84	84	0	0
+log2	D115	28	HalfToEven	executed	0	0	97	97	0	28
+log2	D115	57	HalfToEven	executed	0	0	97	97	0	57
+log2	D115	86	HalfToEven	executed	0	0	97	97	0	86
+log2	D115	114	HalfToEven	executed	0	0	21	21	0	114
+log2	D153	0	HalfToEven	executed	0	0	81	81	0	0
+log2	D153	38	HalfToEven	executed	0	0	93	93	0	38
+log2	D153	76	HalfToEven	executed	0	0	93	93	0	76
+log2	D153	114	HalfToEven	executed	0	0	93	93	0	114
+log2	D153	152	HalfToEven	executed	0	0	16	16	0	152
+log2	D230	0	HalfToEven	executed	0	0	115	115	0	0
+log2	D230	57	HalfToEven	executed	0	0	144	144	0	57
+log2	D230	115	HalfToEven	executed	0	0	144	144	0	115
+log2	D230	172	HalfToEven	executed	0	0	144	144	0	172
+log2	D230	229	HalfToEven	executed	0	0	42	42	0	229
+log2	D307	0	HalfToEven	executed	0	0	77	77	0	0
+log2	D307	76	HalfToEven	executed	0	0	84	84	0	76
+log2	D307	153	HalfToEven	executed	0	0	84	84	0	153
+log2	D307	230	HalfToEven	executed	0	0	84	84	0	230
+log2	D307	306	HalfToEven	executed	0	0	8	8	0	306
+log2	D462	0	HalfToEven	executed	0	0	115	115	0	0
+log2	D462	115	HalfToEven	executed	0	0	144	144	0	115
+log2	D462	231	HalfToEven	executed	0	0	144	144	0	231
+log2	D462	346	HalfToEven	executed	0	0	144	144	0	346
+log2	D462	461	HalfToEven	executed	0	0	43	43	0	461
+log2	D616	0	HalfToEven	executed	0	0	115	115	0	0
+log2	D616	154	HalfToEven	executed	0	0	144	144	0	154
+log2	D616	308	HalfToEven	executed	0	0	144	144	0	308
+log2	D616	462	HalfToEven	executed	0	0	144	144	0	462
+log2	D616	615	HalfToEven	executed	0	0	42	42	0	615
+log2	D924	0	HalfToEven	executed	0	0	115	115	0	0
+log2	D924	231	HalfToEven	executed	0	0	144	144	0	231
+log2	D924	462	HalfToEven	executed	0	0	144	144	0	462
+log2	D924	693	HalfToEven	executed	0	0	144	144	0	693
+log2	D924	923	HalfToEven	executed	0	0	45	45	0	923
+log2	D1232	0	HalfToEven	executed	0	0	115	115	0	0
+log2	D1232	308	HalfToEven	executed	0	0	144	144	0	308
+log2	D1232	616	HalfToEven	executed	0	0	144	144	0	616
+log2	D1232	924	HalfToEven	executed	0	0	144	144	0	924
+log2	D1232	1231	HalfToEven	executed	0	0	44	44	0	1231
+log10	D18	0	HalfToEven	executed	0	0	60	60	0	0
+log10	D18	4	HalfToEven	executed	0	0	75	75	0	4
+log10	D18	9	HalfToEven	executed	0	0	72	72	0	9
+log10	D18	13	HalfToEven	executed	0	0	68	68	0	13
+log10	D18	17	HalfToEven	executed	0	0	42	42	0	17
+log10	D38	0	HalfToEven	executed	0	0	73	73	0	0
+log10	D38	9	HalfToEven	executed	0	0	84	84	0	9
+log10	D38	19	HalfToEven	executed	0	0	74	74	0	19
+log10	D38	28	HalfToEven	executed	0	0	65	65	0	28
+log10	D38	37	HalfToEven	executed	0	0	34	34	0	37
+log10	D57	0	HalfToEven	executed	0	0	74	74	0	0
+log10	D57	14	HalfToEven	executed	0	0	92	92	0	14
+log10	D57	28	HalfToEven	executed	0	0	79	79	0	28
+log10	D57	42	HalfToEven	executed	0	0	65	65	0	42
+log10	D57	56	HalfToEven	executed	0	0	32	32	0	56
+log10	D76	0	HalfToEven	executed	0	0	69	69	0	0
+log10	D76	19	HalfToEven	executed	0	0	84	84	0	19
+log10	D76	38	HalfToEven	executed	0	0	80	80	0	38
+log10	D76	57	HalfToEven	executed	0	0	61	61	0	57
+log10	D76	75	HalfToEven	executed	0	0	27	27	0	75
+log10	D115	0	HalfToEven	executed	0	0	66	66	0	0
+log10	D115	28	HalfToEven	executed	0	0	77	77	0	28
+log10	D115	57	HalfToEven	executed	0	0	77	77	0	57
+log10	D115	86	HalfToEven	executed	0	0	64	64	0	86
+log10	D115	114	HalfToEven	executed	0	0	26	26	0	114
+log10	D153	0	HalfToEven	executed	0	0	63	63	0	0
+log10	D153	38	HalfToEven	executed	0	0	73	73	0	38
+log10	D153	76	HalfToEven	executed	0	0	73	73	0	76
+log10	D153	114	HalfToEven	executed	0	0	70	70	0	114
+log10	D153	152	HalfToEven	executed	0	0	23	23	0	152
+log10	D230	0	HalfToEven	executed	0	0	97	97	0	0
+log10	D230	57	HalfToEven	executed	0	0	124	124	0	57
+log10	D230	115	HalfToEven	executed	0	0	124	124	0	115
+log10	D230	172	HalfToEven	executed	0	0	124	124	0	172
+log10	D230	229	HalfToEven	executed	0	0	57	57	0	229
+log10	D307	0	HalfToEven	executed	0	0	58	58	0	0
+log10	D307	76	HalfToEven	executed	0	0	64	64	0	76
+log10	D307	153	HalfToEven	executed	0	0	64	64	0	153
+log10	D307	230	HalfToEven	executed	0	0	64	64	0	230
+log10	D307	306	HalfToEven	executed	0	0	11	11	0	306
+log10	D462	0	HalfToEven	executed	0	0	97	97	0	0
+log10	D462	115	HalfToEven	executed	0	0	124	124	0	115
+log10	D462	231	HalfToEven	executed	0	0	124	124	0	231
+log10	D462	346	HalfToEven	executed	0	0	124	124	0	346
+log10	D462	461	HalfToEven	executed	0	0	58	58	0	461
+log10	D616	0	HalfToEven	executed	0	0	97	97	0	0
+log10	D616	154	HalfToEven	executed	0	0	124	124	0	154
+log10	D616	308	HalfToEven	executed	0	0	124	124	0	308
+log10	D616	462	HalfToEven	executed	0	0	124	124	0	462
+log10	D616	615	HalfToEven	executed	0	0	64	64	0	615
+log10	D924	0	HalfToEven	executed	0	0	97	97	0	0
+log10	D924	231	HalfToEven	executed	0	0	124	124	0	231
+log10	D924	462	HalfToEven	executed	0	0	124	124	0	462
+log10	D924	693	HalfToEven	executed	0	0	124	124	0	693
+log10	D924	923	HalfToEven	executed	0	0	66	66	0	923
+log10	D1232	0	HalfToEven	executed	0	0	97	97	0	0
+log10	D1232	308	HalfToEven	executed	0	0	124	124	0	308
+log10	D1232	616	HalfToEven	executed	0	0	124	124	0	616
+log10	D1232	924	HalfToEven	executed	0	0	124	124	0	924
+log10	D1232	1231	HalfToEven	executed	0	0	62	62	0	1231
+exp2	D18	0	HalfToEven	executed	0	0	55	55	0	0
+exp2	D18	4	HalfToEven	executed	0	0	97	97	0	4
+exp2	D18	9	HalfToEven	executed	0	0	89	89	0	9
+exp2	D18	13	HalfToEven	executed	0	0	75	75	0	13
+exp2	D18	17	HalfToEven	executed	0	0	32	32	0	17
+exp2	D38	0	HalfToEven	executed	0	0	61	61	0	0
+exp2	D38	9	HalfToEven	executed	0	0	99	99	0	9
+exp2	D38	19	HalfToEven	executed	0	0	95	95	0	19
+exp2	D38	28	HalfToEven	executed	0	0	83	83	0	28
+exp2	D38	37	HalfToEven	executed	0	0	32	32	0	37
+exp2	D57	0	HalfToEven	executed	0	0	63	63	0	0
+exp2	D57	14	HalfToEven	executed	0	0	96	96	0	14
+exp2	D57	28	HalfToEven	executed	0	0	94	94	0	28
+exp2	D57	42	HalfToEven	executed	0	0	88	88	0	42
+exp2	D57	56	HalfToEven	executed	0	0	23	23	0	56
+exp2	D76	0	HalfToEven	executed	0	0	60	60	0	0
+exp2	D76	19	HalfToEven	executed	0	0	88	88	0	19
+exp2	D76	38	HalfToEven	executed	0	0	86	86	0	38
+exp2	D76	57	HalfToEven	executed	0	0	82	82	0	57
+exp2	D76	75	HalfToEven	executed	0	0	22	22	0	75
+exp2	D115	0	HalfToEven	executed	0	0	63	63	0	0
+exp2	D115	28	HalfToEven	executed	0	0	83	83	0	28
+exp2	D115	57	HalfToEven	executed	0	0	81	81	0	57
+exp2	D115	86	HalfToEven	executed	0	0	79	79	0	86
+exp2	D115	114	HalfToEven	executed	0	0	22	22	0	114
+exp2	D153	0	HalfToEven	executed	0	0	60	60	0	0
+exp2	D153	38	HalfToEven	executed	0	0	79	79	0	38
+exp2	D153	76	HalfToEven	executed	0	0	77	77	0	76
+exp2	D153	114	HalfToEven	executed	0	0	75	75	0	114
+exp2	D153	152	HalfToEven	executed	0	0	18	18	0	152
+exp2	D230	0	HalfToEven	executed	0	0	83	83	0	0
+exp2	D230	57	HalfToEven	executed	0	0	130	130	0	57
+exp2	D230	115	HalfToEven	executed	0	0	130	130	0	115
+exp2	D230	172	HalfToEven	executed	0	0	128	128	0	172
+exp2	D230	229	HalfToEven	executed	0	0	47	47	0	229
+exp2	D307	0	HalfToEven	executed	0	0	57	57	0	0
+exp2	D307	76	HalfToEven	executed	0	0	70	70	0	76
+exp2	D307	153	HalfToEven	executed	0	0	70	70	0	153
+exp2	D307	230	HalfToEven	executed	0	0	68	68	0	230
+exp2	D307	306	HalfToEven	executed	0	0	7	7	0	306
+exp2	D462	0	HalfToEven	executed	0	0	81	81	0	0
+exp2	D462	115	HalfToEven	executed	0	0	130	130	0	115
+exp2	D462	231	HalfToEven	executed	0	0	130	130	0	231
+exp2	D462	346	HalfToEven	executed	0	0	130	130	0	346
+exp2	D462	461	HalfToEven	executed	0	0	36	36	0	461
+exp2	D616	0	HalfToEven	executed	0	0	84	84	0	0
+exp2	D616	154	HalfToEven	executed	0	0	130	130	0	154
+exp2	D616	308	HalfToEven	executed	0	0	130	130	0	308
+exp2	D616	462	HalfToEven	executed	0	0	130	130	0	462
+exp2	D616	615	HalfToEven	executed	0	0	44	44	0	615
+exp2	D924	0	HalfToEven	executed	0	0	83	83	0	0
+exp2	D924	231	HalfToEven	executed	0	0	130	130	0	231
+exp2	D924	462	HalfToEven	executed	0	0	130	130	0	462
+exp2	D924	693	HalfToEven	executed	0	0	130	130	0	693
+exp2	D924	923	HalfToEven	executed	0	0	43	43	0	923
+exp2	D1232	0	HalfToEven	executed	0	0	83	83	0	0
+exp2	D1232	308	HalfToEven	executed	0	0	130	130	0	308
+exp2	D1232	616	HalfToEven	executed	0	0	130	130	0	616
+exp2	D1232	924	HalfToEven	executed	0	0	130	130	0	924
+exp2	D1232	1231	HalfToEven	executed	0	0	47	47	0	1231
+sin	D18	0	HalfToEven	executed	0	0	38	38	0	0
+sin	D18	4	HalfToEven	executed	0	0	72	72	0	4
+sin	D18	9	HalfToEven	executed	0	0	76	76	0	9
+sin	D18	13	HalfToEven	executed	0	0	76	76	0	13
+sin	D18	17	HalfToEven	executed	0	0	38	38	0	17
+sin	D38	0	HalfToEven	executed	0	0	33	33	0	0
+sin	D38	9	HalfToEven	executed	0	0	68	68	0	9
+sin	D38	19	HalfToEven	executed	0	0	68	68	0	19
+sin	D38	28	HalfToEven	executed	0	0	68	68	0	28
+sin	D38	37	HalfToEven	executed	0	0	38	38	0	37
+sin	D57	0	HalfToEven	executed	0	0	32	32	0	0
+sin	D57	14	HalfToEven	executed	0	0	63	63	0	14
+sin	D57	28	HalfToEven	executed	0	0	63	63	0	28
+sin	D57	42	HalfToEven	executed	0	0	63	63	0	42
+sin	D57	56	HalfToEven	executed	0	0	30	30	0	56
+sin	D76	0	HalfToEven	executed	0	0	31	31	0	0
+sin	D76	19	HalfToEven	executed	0	0	55	55	0	19
+sin	D76	38	HalfToEven	executed	0	0	55	55	0	38
+sin	D76	57	HalfToEven	executed	0	0	55	55	0	57
+sin	D76	75	HalfToEven	executed	0	0	31	31	0	75
+sin	D115	0	HalfToEven	executed	0	0	31	31	0	0
+sin	D115	28	HalfToEven	executed	0	0	48	48	0	28
+sin	D115	57	HalfToEven	executed	0	0	48	48	0	57
+sin	D115	86	HalfToEven	executed	0	0	48	48	0	86
+sin	D115	114	HalfToEven	executed	0	0	23	23	0	114
+sin	D153	0	HalfToEven	executed	0	0	24	24	0	0
+sin	D153	38	HalfToEven	executed	0	0	44	44	0	38
+sin	D153	76	HalfToEven	executed	0	0	44	44	0	76
+sin	D153	114	HalfToEven	executed	0	0	44	44	0	114
+sin	D153	152	HalfToEven	executed	0	0	22	22	0	152
+sin	D230	0	HalfToEven	executed	0	0	44	44	0	0
+sin	D230	57	HalfToEven	executed	0	0	95	95	0	57
+sin	D230	115	HalfToEven	executed	0	0	95	95	0	115
+sin	D230	172	HalfToEven	executed	0	0	95	95	0	172
+sin	D230	229	HalfToEven	executed	0	0	56	56	0	229
+sin	D307	0	HalfToEven	executed	0	0	24	24	0	0
+sin	D307	76	HalfToEven	executed	0	0	35	35	0	76
+sin	D307	153	HalfToEven	executed	0	0	35	35	0	153
+sin	D307	230	HalfToEven	executed	0	0	35	35	0	230
+sin	D307	306	HalfToEven	executed	0	0	15	15	0	306
+sin	D462	0	HalfToEven	executed	0	0	43	43	0	0
+sin	D462	115	HalfToEven	executed	0	0	95	95	0	115
+sin	D462	231	HalfToEven	executed	0	0	95	95	0	231
+sin	D462	346	HalfToEven	executed	0	0	95	95	0	346
+sin	D462	461	HalfToEven	executed	0	0	56	56	0	461
+sin	D616	0	HalfToEven	executed	0	0	43	43	0	0
+sin	D616	154	HalfToEven	executed	0	0	95	95	0	154
+sin	D616	308	HalfToEven	executed	0	0	95	95	0	308
+sin	D616	462	HalfToEven	executed	0	0	95	95	0	462
+sin	D616	615	HalfToEven	executed	0	0	58	58	0	615
+sin	D924	0	HalfToEven	executed	0	0	42	42	0	0
+sin	D924	231	HalfToEven	executed	0	0	95	95	0	231
+sin	D924	462	HalfToEven	executed	0	0	95	95	0	462
+sin	D924	693	HalfToEven	executed	0	0	95	95	0	693
+sin	D924	923	HalfToEven	executed	0	0	56	56	0	923
+sin	D1232	0	HalfToEven	executed	0	0	40	40	0	0
+sin	D1232	308	HalfToEven	executed	0	0	95	95	0	308
+sin	D1232	616	HalfToEven	executed	0	0	95	95	0	616
+sin	D1232	924	HalfToEven	executed	0	0	95	95	0	924
+sin	D1232	1231	HalfToEven	executed	0	0	50	50	0	1231
+cos	D18	0	HalfToEven	executed	0	0	38	38	0	0
+cos	D18	4	HalfToEven	executed	0	0	74	74	0	4
+cos	D18	9	HalfToEven	executed	0	0	76	76	0	9
+cos	D18	13	HalfToEven	executed	0	0	76	76	0	13
+cos	D18	17	HalfToEven	executed	0	0	40	40	0	17
+cos	D38	0	HalfToEven	executed	0	0	34	34	0	0
+cos	D38	9	HalfToEven	executed	0	0	68	68	0	9
+cos	D38	19	HalfToEven	executed	0	0	68	68	0	19
+cos	D38	28	HalfToEven	executed	0	0	68	68	0	28
+cos	D38	37	HalfToEven	executed	0	0	37	37	0	37
+cos	D57	0	HalfToEven	executed	0	0	34	34	0	0
+cos	D57	14	HalfToEven	executed	0	0	63	63	0	14
+cos	D57	28	HalfToEven	executed	0	0	63	63	0	28
+cos	D57	42	HalfToEven	executed	0	0	63	63	0	42
+cos	D57	56	HalfToEven	executed	0	0	32	32	0	56
+cos	D76	0	HalfToEven	executed	0	0	31	31	0	0
+cos	D76	19	HalfToEven	executed	0	0	55	55	0	19
+cos	D76	38	HalfToEven	executed	0	0	55	55	0	38
+cos	D76	57	HalfToEven	executed	0	0	55	55	0	57
+cos	D76	75	HalfToEven	executed	0	0	31	31	0	75
+cos	D115	0	HalfToEven	executed	0	0	26	26	0	0
+cos	D115	28	HalfToEven	executed	0	0	48	48	0	28
+cos	D115	57	HalfToEven	executed	0	0	48	48	0	57
+cos	D115	86	HalfToEven	executed	0	0	48	48	0	86
+cos	D115	114	HalfToEven	executed	0	0	24	24	0	114
+cos	D153	0	HalfToEven	executed	0	0	28	28	0	0
+cos	D153	38	HalfToEven	executed	0	0	44	44	0	38
+cos	D153	76	HalfToEven	executed	0	0	44	44	0	76
+cos	D153	114	HalfToEven	executed	0	0	44	44	0	114
+cos	D153	152	HalfToEven	executed	0	0	24	24	0	152
+cos	D230	0	HalfToEven	executed	0	0	45	45	0	0
+cos	D230	57	HalfToEven	executed	0	0	95	95	0	57
+cos	D230	115	HalfToEven	executed	0	0	95	95	0	115
+cos	D230	172	HalfToEven	executed	0	0	95	95	0	172
+cos	D230	229	HalfToEven	executed	0	0	57	57	0	229
+cos	D307	0	HalfToEven	executed	0	0	24	24	0	0
+cos	D307	76	HalfToEven	executed	0	0	35	35	0	76
+cos	D307	153	HalfToEven	executed	0	0	35	35	0	153
+cos	D307	230	HalfToEven	executed	0	0	35	35	0	230
+cos	D307	306	HalfToEven	executed	0	0	14	14	0	306
+cos	D462	0	HalfToEven	executed	0	0	46	46	0	0
+cos	D462	115	HalfToEven	executed	0	0	95	95	0	115
+cos	D462	231	HalfToEven	executed	0	0	95	95	0	231
+cos	D462	346	HalfToEven	executed	0	0	95	95	0	346
+cos	D462	461	HalfToEven	executed	0	0	55	55	0	461
+cos	D616	0	HalfToEven	executed	0	0	43	43	0	0
+cos	D616	154	HalfToEven	executed	0	0	95	95	0	154
+cos	D616	308	HalfToEven	executed	0	0	95	95	0	308
+cos	D616	462	HalfToEven	executed	0	0	95	95	0	462
+cos	D616	615	HalfToEven	executed	0	0	50	50	0	615
+cos	D924	0	HalfToEven	executed	0	0	47	47	0	0
+cos	D924	231	HalfToEven	executed	0	0	95	95	0	231
+cos	D924	462	HalfToEven	executed	0	0	95	95	0	462
+cos	D924	693	HalfToEven	executed	0	0	95	95	0	693
+cos	D924	923	HalfToEven	executed	0	0	48	48	0	923
+cos	D1232	0	HalfToEven	executed	0	0	43	43	0	0
+cos	D1232	308	HalfToEven	executed	0	0	95	95	0	308
+cos	D1232	616	HalfToEven	executed	0	0	95	95	0	616
+cos	D1232	924	HalfToEven	executed	0	0	95	95	0	924
+cos	D1232	1231	HalfToEven	executed	0	0	48	48	0	1231
+tan	D18	0	HalfToEven	executed	0	0	35	35	0	0
+tan	D18	4	HalfToEven	executed	0	0	70	70	0	4
+tan	D18	9	HalfToEven	executed	0	0	74	74	0	9
+tan	D18	13	HalfToEven	executed	0	0	74	74	0	13
+tan	D18	17	HalfToEven	executed	0	0	41	41	0	17
+tan	D38	0	HalfToEven	executed	0	0	29	29	0	0
+tan	D38	9	HalfToEven	executed	0	0	66	66	0	9
+tan	D38	19	HalfToEven	executed	0	0	66	66	0	19
+tan	D38	28	HalfToEven	executed	0	0	66	66	0	28
+tan	D38	37	HalfToEven	executed	0	0	44	44	0	37
+tan	D57	0	HalfToEven	executed	0	0	30	30	0	0
+tan	D57	14	HalfToEven	executed	0	0	61	61	0	14
+tan	D57	28	HalfToEven	executed	0	0	61	61	0	28
+tan	D57	42	HalfToEven	executed	0	0	61	61	0	42
+tan	D57	56	HalfToEven	executed	0	0	34	34	0	56
+tan	D76	0	HalfToEven	executed	0	0	25	25	0	0
+tan	D76	19	HalfToEven	executed	0	0	53	53	0	19
+tan	D76	38	HalfToEven	executed	0	0	53	53	0	38
+tan	D76	57	HalfToEven	executed	0	0	53	53	0	57
+tan	D76	75	HalfToEven	executed	0	0	35	35	0	75
+tan	D115	0	HalfToEven	executed	0	0	23	23	0	0
+tan	D115	28	HalfToEven	executed	0	0	46	46	0	28
+tan	D115	57	HalfToEven	executed	0	0	46	46	0	57
+tan	D115	86	HalfToEven	executed	0	0	46	46	0	86
+tan	D115	114	HalfToEven	executed	0	0	26	26	0	114
+tan	D153	0	HalfToEven	executed	0	0	26	26	0	0
+tan	D153	38	HalfToEven	executed	0	0	42	42	0	38
+tan	D153	76	HalfToEven	executed	0	0	42	42	0	76
+tan	D153	114	HalfToEven	executed	0	0	42	42	0	114
+tan	D153	152	HalfToEven	executed	0	0	21	21	0	152
+tan	D230	0	HalfToEven	executed	0	0	37	37	0	0
+tan	D230	57	HalfToEven	executed	0	0	93	93	0	57
+tan	D230	115	HalfToEven	executed	0	0	93	93	0	115
+tan	D230	172	HalfToEven	executed	0	0	93	93	0	172
+tan	D230	229	HalfToEven	executed	0	0	63	63	0	229
+tan	D307	0	HalfToEven	executed	0	0	21	21	0	0
+tan	D307	76	HalfToEven	executed	0	0	33	33	0	76
+tan	D307	153	HalfToEven	executed	0	0	33	33	0	153
+tan	D307	230	HalfToEven	executed	0	0	33	33	0	230
+tan	D307	306	HalfToEven	executed	0	0	21	21	0	306
+tan	D462	0	HalfToEven	executed	0	0	40	40	0	0
+tan	D462	115	HalfToEven	executed	0	0	93	93	0	115
+tan	D462	231	HalfToEven	executed	0	0	93	93	0	231
+tan	D462	346	HalfToEven	executed	0	0	93	93	0	346
+tan	D462	461	HalfToEven	executed	0	0	49	49	0	461
+tan	D616	0	HalfToEven	executed	0	0	42	42	0	0
+tan	D616	154	HalfToEven	executed	0	0	93	93	0	154
+tan	D616	308	HalfToEven	executed	0	0	93	93	0	308
+tan	D616	462	HalfToEven	executed	0	0	93	93	0	462
+tan	D616	615	HalfToEven	executed	0	0	56	56	0	615
+tan	D924	0	HalfToEven	executed	0	0	38	38	0	0
+tan	D924	231	HalfToEven	executed	0	0	93	93	0	231
+tan	D924	462	HalfToEven	executed	0	0	93	93	0	462
+tan	D924	693	HalfToEven	executed	0	0	93	93	0	693
+tan	D924	923	HalfToEven	executed	0	0	57	57	0	923
+tan	D1232	0	HalfToEven	executed	0	0	42	42	0	0
+tan	D1232	308	HalfToEven	executed	0	0	93	93	0	308
+tan	D1232	616	HalfToEven	executed	0	0	93	93	0	616
+tan	D1232	924	HalfToEven	executed	0	0	93	93	0	924
+tan	D1232	1231	HalfToEven	executed	0	0	55	55	0	1231
+atan	D18	0	HalfToEven	executed	0	0	40	40	0	0
+atan	D18	4	HalfToEven	executed	0	0	66	66	0	4
+atan	D18	9	HalfToEven	executed	0	0	66	66	0	9
+atan	D18	13	HalfToEven	executed	0	0	66	66	0	13
+atan	D18	17	HalfToEven	executed	0	0	45	45	0	17
+atan	D38	0	HalfToEven	executed	0	0	38	38	0	0
+atan	D38	9	HalfToEven	executed	0	0	58	58	0	9
+atan	D38	19	HalfToEven	executed	0	0	58	58	0	19
+atan	D38	28	HalfToEven	executed	0	0	58	58	0	28
+atan	D38	37	HalfToEven	executed	0	0	46	46	0	37
+atan	D57	0	HalfToEven	executed	0	0	32	32	0	0
+atan	D57	14	HalfToEven	executed	0	0	53	53	0	14
+atan	D57	28	HalfToEven	executed	0	0	53	53	0	28
+atan	D57	42	HalfToEven	executed	0	0	53	53	0	42
+atan	D57	56	HalfToEven	executed	0	0	36	36	0	56
+atan	D76	0	HalfToEven	executed	0	0	27	27	0	0
+atan	D76	19	HalfToEven	executed	0	0	45	45	0	19
+atan	D76	38	HalfToEven	executed	0	0	45	45	0	38
+atan	D76	57	HalfToEven	executed	0	0	45	45	0	57
+atan	D76	75	HalfToEven	executed	0	0	33	33	0	75
+atan	D115	0	HalfToEven	executed	0	0	25	25	0	0
+atan	D115	28	HalfToEven	executed	0	0	38	38	0	28
+atan	D115	57	HalfToEven	executed	0	0	38	38	0	57
+atan	D115	86	HalfToEven	executed	0	0	38	38	0	86
+atan	D115	114	HalfToEven	executed	0	0	28	28	0	114
+atan	D153	0	HalfToEven	executed	0	0	25	25	0	0
+atan	D153	38	HalfToEven	executed	0	0	34	34	0	38
+atan	D153	76	HalfToEven	executed	0	0	34	34	0	76
+atan	D153	114	HalfToEven	executed	0	0	34	34	0	114
+atan	D153	152	HalfToEven	executed	0	0	24	24	0	152
+atan	D230	0	HalfToEven	executed	0	0	52	52	0	0
+atan	D230	57	HalfToEven	executed	0	0	85	85	0	57
+atan	D230	115	HalfToEven	executed	0	0	85	85	0	115
+atan	D230	172	HalfToEven	executed	0	0	85	85	0	172
+atan	D230	229	HalfToEven	executed	0	0	69	69	0	229
+atan	D307	0	HalfToEven	executed	0	0	17	17	0	0
+atan	D307	76	HalfToEven	executed	0	0	25	25	0	76
+atan	D307	153	HalfToEven	executed	0	0	25	25	0	153
+atan	D307	230	HalfToEven	executed	0	0	25	25	0	230
+atan	D307	306	HalfToEven	executed	0	0	19	19	0	306
+atan	D462	0	HalfToEven	executed	0	0	50	50	0	0
+atan	D462	115	HalfToEven	executed	0	0	85	85	0	115
+atan	D462	231	HalfToEven	executed	0	0	85	85	0	231
+atan	D462	346	HalfToEven	executed	0	0	85	85	0	346
+atan	D462	461	HalfToEven	executed	0	0	67	67	0	461
+atan	D616	0	HalfToEven	executed	0	0	51	51	0	0
+atan	D616	154	HalfToEven	executed	0	0	85	85	0	154
+atan	D616	308	HalfToEven	executed	0	0	85	85	0	308
+atan	D616	462	HalfToEven	executed	0	0	85	85	0	462
+atan	D616	615	HalfToEven	executed	0	0	60	60	0	615
+atan	D924	0	HalfToEven	executed	0	0	50	50	0	0
+atan	D924	231	HalfToEven	executed	0	0	85	85	0	231
+atan	D924	462	HalfToEven	executed	0	0	85	85	0	462
+atan	D924	693	HalfToEven	executed	0	0	85	85	0	693
+atan	D924	923	HalfToEven	executed	0	0	60	60	0	923
+atan	D1232	0	HalfToEven	executed	0	0	49	49	0	0
+atan	D1232	308	HalfToEven	executed	0	0	85	85	0	308
+atan	D1232	616	HalfToEven	executed	0	0	85	85	0	616
+atan	D1232	924	HalfToEven	executed	0	0	85	85	0	924
+atan	D1232	1231	HalfToEven	executed	0	0	62	62	0	1231
+asin	D18	0	HalfToEven	executed	0	0	3	3	0	0
+asin	D18	4	HalfToEven	executed	0	0	70	70	0	4
+asin	D18	9	HalfToEven	executed	0	0	80	80	0	9
+asin	D18	13	HalfToEven	executed	0	0	86	86	0	13
+asin	D18	17	HalfToEven	executed	0	0	43	43	0	17
+asin	D38	0	HalfToEven	executed	0	0	3	3	0	0
+asin	D38	9	HalfToEven	executed	0	0	72	72	0	9
+asin	D38	19	HalfToEven	executed	0	0	78	78	0	19
+asin	D38	28	HalfToEven	executed	0	0	78	78	0	28
+asin	D38	37	HalfToEven	executed	0	0	37	37	0	37
+asin	D57	0	HalfToEven	executed	0	0	3	3	0	0
+asin	D57	14	HalfToEven	executed	0	0	73	73	0	14
+asin	D57	28	HalfToEven	executed	0	0	73	73	0	28
+asin	D57	42	HalfToEven	executed	0	0	73	73	0	42
+asin	D57	56	HalfToEven	executed	0	0	35	35	0	56
+asin	D76	0	HalfToEven	executed	0	0	3	3	0	0
+asin	D76	19	HalfToEven	executed	0	0	65	65	0	19
+asin	D76	38	HalfToEven	executed	0	0	65	65	0	38
+asin	D76	57	HalfToEven	executed	0	0	65	65	0	57
+asin	D76	75	HalfToEven	executed	0	0	29	29	0	75
+asin	D115	0	HalfToEven	executed	0	0	3	3	0	0
+asin	D115	28	HalfToEven	executed	0	0	58	58	0	28
+asin	D115	57	HalfToEven	executed	0	0	58	58	0	57
+asin	D115	86	HalfToEven	executed	0	0	58	58	0	86
+asin	D115	114	HalfToEven	executed	0	0	25	25	0	114
+asin	D153	0	HalfToEven	executed	0	0	3	3	0	0
+asin	D153	38	HalfToEven	executed	0	0	54	54	0	38
+asin	D153	76	HalfToEven	executed	0	0	54	54	0	76
+asin	D153	114	HalfToEven	executed	0	0	54	54	0	114
+asin	D153	152	HalfToEven	executed	0	0	20	20	0	152
+asin	D230	0	HalfToEven	executed	0	0	3	3	0	0
+asin	D230	57	HalfToEven	executed	0	0	105	105	0	57
+asin	D230	115	HalfToEven	executed	0	0	105	105	0	115
+asin	D230	172	HalfToEven	executed	0	0	105	105	0	172
+asin	D230	229	HalfToEven	executed	0	0	53	53	0	229
+asin	D307	0	HalfToEven	executed	0	0	3	3	0	0
+asin	D307	76	HalfToEven	executed	0	0	45	45	0	76
+asin	D307	153	HalfToEven	executed	0	0	45	45	0	153
+asin	D307	230	HalfToEven	executed	0	0	45	45	0	230
+asin	D307	306	HalfToEven	executed	0	0	17	17	0	306
+asin	D462	0	HalfToEven	executed	0	0	3	3	0	0
+asin	D462	115	HalfToEven	executed	0	0	105	105	0	115
+asin	D462	231	HalfToEven	executed	0	0	105	105	0	231
+asin	D462	346	HalfToEven	executed	0	0	105	105	0	346
+asin	D462	461	HalfToEven	executed	0	0	55	55	0	461
+asin	D616	0	HalfToEven	executed	0	0	3	3	0	0
+asin	D616	154	HalfToEven	executed	0	0	105	105	0	154
+asin	D616	308	HalfToEven	executed	0	0	105	105	0	308
+asin	D616	462	HalfToEven	executed	0	0	105	105	0	462
+asin	D616	615	HalfToEven	executed	0	0	60	60	0	615
+asin	D924	0	HalfToEven	executed	0	0	3	3	0	0
+asin	D924	231	HalfToEven	executed	0	0	105	105	0	231
+asin	D924	462	HalfToEven	executed	0	0	105	105	0	462
+asin	D924	693	HalfToEven	executed	0	0	105	105	0	693
+asin	D924	923	HalfToEven	executed	0	0	57	57	0	923
+asin	D1232	0	HalfToEven	executed	0	0	3	3	0	0
+asin	D1232	308	HalfToEven	executed	0	0	105	105	0	308
+asin	D1232	616	HalfToEven	executed	0	0	105	105	0	616
+asin	D1232	924	HalfToEven	executed	0	0	105	105	0	924
+asin	D1232	1231	HalfToEven	executed	0	0	51	51	0	1231
+acos	D18	0	HalfToEven	executed	0	0	3	3	0	0
+acos	D18	4	HalfToEven	executed	0	0	70	70	0	4
+acos	D18	9	HalfToEven	executed	0	0	80	80	0	9
+acos	D18	13	HalfToEven	executed	0	0	86	86	0	13
+acos	D18	17	HalfToEven	executed	0	0	37	37	0	17
+acos	D38	0	HalfToEven	executed	0	0	3	3	0	0
+acos	D38	9	HalfToEven	executed	0	0	72	72	0	9
+acos	D38	19	HalfToEven	executed	0	0	78	78	0	19
+acos	D38	28	HalfToEven	executed	0	0	78	78	0	28
+acos	D38	37	HalfToEven	executed	0	0	34	34	0	37
+acos	D57	0	HalfToEven	executed	0	0	3	3	0	0
+acos	D57	14	HalfToEven	executed	0	0	73	73	0	14
+acos	D57	28	HalfToEven	executed	0	0	73	73	0	28
+acos	D57	42	HalfToEven	executed	0	0	73	73	0	42
+acos	D57	56	HalfToEven	executed	0	0	28	28	0	56
+acos	D76	0	HalfToEven	executed	0	0	3	3	0	0
+acos	D76	19	HalfToEven	executed	0	0	65	65	0	19
+acos	D76	38	HalfToEven	executed	0	0	65	65	0	38
+acos	D76	57	HalfToEven	executed	0	0	65	65	0	57
+acos	D76	75	HalfToEven	executed	0	0	28	28	0	75
+acos	D115	0	HalfToEven	executed	0	0	3	3	0	0
+acos	D115	28	HalfToEven	executed	0	0	58	58	0	28
+acos	D115	57	HalfToEven	executed	0	0	58	58	0	57
+acos	D115	86	HalfToEven	executed	0	0	58	58	0	86
+acos	D115	114	HalfToEven	executed	0	0	27	27	0	114
+acos	D153	0	HalfToEven	executed	0	0	3	3	0	0
+acos	D153	38	HalfToEven	executed	0	0	54	54	0	38
+acos	D153	76	HalfToEven	executed	0	0	54	54	0	76
+acos	D153	114	HalfToEven	executed	0	0	54	54	0	114
+acos	D153	152	HalfToEven	executed	0	0	25	25	0	152
+acos	D230	0	HalfToEven	executed	0	0	3	3	0	0
+acos	D230	57	HalfToEven	executed	0	0	105	105	0	57
+acos	D230	115	HalfToEven	executed	0	0	105	105	0	115
+acos	D230	172	HalfToEven	executed	0	0	105	105	0	172
+acos	D230	229	HalfToEven	executed	0	0	49	49	0	229
+acos	D307	0	HalfToEven	executed	0	0	3	3	0	0
+acos	D307	76	HalfToEven	executed	0	0	45	45	0	76
+acos	D307	153	HalfToEven	executed	0	0	45	45	0	153
+acos	D307	230	HalfToEven	executed	0	0	45	45	0	230
+acos	D307	306	HalfToEven	executed	0	0	19	19	0	306
+acos	D462	0	HalfToEven	executed	0	0	3	3	0	0
+acos	D462	115	HalfToEven	executed	0	0	105	105	0	115
+acos	D462	231	HalfToEven	executed	0	0	105	105	0	231
+acos	D462	346	HalfToEven	executed	0	0	105	105	0	346
+acos	D462	461	HalfToEven	executed	0	0	45	45	0	461
+acos	D616	0	HalfToEven	executed	0	0	3	3	0	0
+acos	D616	154	HalfToEven	executed	0	0	105	105	0	154
+acos	D616	308	HalfToEven	executed	0	0	105	105	0	308
+acos	D616	462	HalfToEven	executed	0	0	105	105	0	462
+acos	D616	615	HalfToEven	executed	0	0	48	48	0	615
+acos	D924	0	HalfToEven	executed	0	0	3	3	0	0
+acos	D924	231	HalfToEven	executed	0	0	105	105	0	231
+acos	D924	462	HalfToEven	executed	0	0	105	105	0	462
+acos	D924	693	HalfToEven	executed	0	0	105	105	0	693
+acos	D924	923	HalfToEven	executed	0	0	48	48	0	923
+acos	D1232	0	HalfToEven	executed	0	0	3	3	0	0
+acos	D1232	308	HalfToEven	executed	0	0	105	105	0	308
+acos	D1232	616	HalfToEven	executed	0	0	105	105	0	616
+acos	D1232	924	HalfToEven	executed	0	0	105	105	0	924
+acos	D1232	1231	HalfToEven	executed	0	0	45	45	0	1231
+sinh	D18	0	HalfToEven	executed	0	0	31	31	0	0
+sinh	D18	4	HalfToEven	executed	0	0	67	67	0	4
+sinh	D18	9	HalfToEven	executed	0	0	67	67	0	9
+sinh	D18	13	HalfToEven	executed	0	0	67	67	0	13
+sinh	D18	17	HalfToEven	executed	0	0	45	45	0	17
+sinh	D38	0	HalfToEven	executed	0	0	34	34	0	0
+sinh	D38	9	HalfToEven	executed	0	0	59	59	0	9
+sinh	D38	19	HalfToEven	executed	0	0	59	59	0	19
+sinh	D38	28	HalfToEven	executed	0	0	59	59	0	28
+sinh	D38	37	HalfToEven	executed	0	0	35	35	0	37
+sinh	D57	0	HalfToEven	executed	0	0	34	34	0	0
+sinh	D57	14	HalfToEven	executed	0	0	54	54	0	14
+sinh	D57	28	HalfToEven	executed	0	0	54	54	0	28
+sinh	D57	42	HalfToEven	executed	0	0	54	54	0	42
+sinh	D57	56	HalfToEven	executed	0	0	34	34	0	56
+sinh	D76	0	HalfToEven	executed	0	0	29	29	0	0
+sinh	D76	19	HalfToEven	executed	0	0	46	46	0	19
+sinh	D76	38	HalfToEven	executed	0	0	46	46	0	38
+sinh	D76	57	HalfToEven	executed	0	0	46	46	0	57
+sinh	D76	75	HalfToEven	executed	0	0	32	32	0	75
+sinh	D115	0	HalfToEven	executed	0	0	25	25	0	0
+sinh	D115	28	HalfToEven	executed	0	0	39	39	0	28
+sinh	D115	57	HalfToEven	executed	0	0	39	39	0	57
+sinh	D115	86	HalfToEven	executed	0	0	39	39	0	86
+sinh	D115	114	HalfToEven	executed	0	0	24	24	0	114
+sinh	D153	0	HalfToEven	executed	0	0	23	23	0	0
+sinh	D153	38	HalfToEven	executed	0	0	35	35	0	38
+sinh	D153	76	HalfToEven	executed	0	0	35	35	0	76
+sinh	D153	114	HalfToEven	executed	0	0	35	35	0	114
+sinh	D153	152	HalfToEven	executed	0	0	24	24	0	152
+sinh	D230	0	HalfToEven	executed	0	0	55	55	0	0
+sinh	D230	57	HalfToEven	executed	0	0	86	86	0	57
+sinh	D230	115	HalfToEven	executed	0	0	86	86	0	115
+sinh	D230	172	HalfToEven	executed	0	0	86	86	0	172
+sinh	D230	229	HalfToEven	executed	0	0	56	56	0	229
+sinh	D307	0	HalfToEven	executed	0	0	18	18	0	0
+sinh	D307	76	HalfToEven	executed	0	0	26	26	0	76
+sinh	D307	153	HalfToEven	executed	0	0	26	26	0	153
+sinh	D307	230	HalfToEven	executed	0	0	26	26	0	230
+sinh	D307	306	HalfToEven	executed	0	0	17	17	0	306
+sinh	D462	0	HalfToEven	executed	0	0	54	54	0	0
+sinh	D462	115	HalfToEven	executed	0	0	86	86	0	115
+sinh	D462	231	HalfToEven	executed	0	0	86	86	0	231
+sinh	D462	346	HalfToEven	executed	0	0	86	86	0	346
+sinh	D462	461	HalfToEven	executed	0	0	56	56	0	461
+sinh	D616	0	HalfToEven	executed	0	0	57	57	0	0
+sinh	D616	154	HalfToEven	executed	0	0	86	86	0	154
+sinh	D616	308	HalfToEven	executed	0	0	86	86	0	308
+sinh	D616	462	HalfToEven	executed	0	0	86	86	0	462
+sinh	D616	615	HalfToEven	executed	0	0	58	58	0	615
+sinh	D924	0	HalfToEven	executed	0	0	53	53	0	0
+sinh	D924	231	HalfToEven	executed	0	0	86	86	0	231
+sinh	D924	462	HalfToEven	executed	0	0	86	86	0	462
+sinh	D924	693	HalfToEven	executed	0	0	86	86	0	693
+sinh	D924	923	HalfToEven	executed	0	0	59	59	0	923
+sinh	D1232	0	HalfToEven	executed	0	0	58	58	0	0
+sinh	D1232	308	HalfToEven	executed	0	0	86	86	0	308
+sinh	D1232	616	HalfToEven	executed	0	0	86	86	0	616
+sinh	D1232	924	HalfToEven	executed	0	0	86	86	0	924
+sinh	D1232	1231	HalfToEven	executed	0	0	59	59	0	1231
+cosh	D18	0	HalfToEven	executed	0	0	36	36	0	0
+cosh	D18	4	HalfToEven	executed	0	0	67	67	0	4
+cosh	D18	9	HalfToEven	executed	0	0	67	67	0	9
+cosh	D18	13	HalfToEven	executed	0	0	67	67	0	13
+cosh	D38	0	HalfToEven	executed	0	0	32	32	0	0
+cosh	D38	9	HalfToEven	executed	0	0	59	59	0	9
+cosh	D38	19	HalfToEven	executed	0	0	59	59	0	19
+cosh	D38	28	HalfToEven	executed	0	0	59	59	0	28
+cosh	D57	0	HalfToEven	executed	0	0	30	30	0	0
+cosh	D57	14	HalfToEven	executed	0	0	54	54	0	14
+cosh	D57	28	HalfToEven	executed	0	0	54	54	0	28
+cosh	D57	42	HalfToEven	executed	0	0	54	54	0	42
+cosh	D76	0	HalfToEven	executed	0	0	28	28	0	0
+cosh	D76	19	HalfToEven	executed	0	0	46	46	0	19
+cosh	D76	38	HalfToEven	executed	0	0	46	46	0	38
+cosh	D76	57	HalfToEven	executed	0	0	46	46	0	57
+cosh	D115	0	HalfToEven	executed	0	0	24	24	0	0
+cosh	D115	28	HalfToEven	executed	0	0	39	39	0	28
+cosh	D115	57	HalfToEven	executed	0	0	39	39	0	57
+cosh	D115	86	HalfToEven	executed	0	0	39	39	0	86
+cosh	D153	0	HalfToEven	executed	0	0	24	24	0	0
+cosh	D153	38	HalfToEven	executed	0	0	35	35	0	38
+cosh	D153	76	HalfToEven	executed	0	0	35	35	0	76
+cosh	D153	114	HalfToEven	executed	0	0	35	35	0	114
+cosh	D230	0	HalfToEven	executed	0	0	49	49	0	0
+cosh	D230	57	HalfToEven	executed	0	0	86	86	0	57
+cosh	D230	115	HalfToEven	executed	0	0	86	86	0	115
+cosh	D230	172	HalfToEven	executed	0	0	86	86	0	172
+cosh	D307	0	HalfToEven	executed	0	0	18	18	0	0
+cosh	D307	76	HalfToEven	executed	0	0	26	26	0	76
+cosh	D307	153	HalfToEven	executed	0	0	26	26	0	153
+cosh	D307	230	HalfToEven	executed	0	0	26	26	0	230
+cosh	D462	0	HalfToEven	executed	0	0	56	56	0	0
+cosh	D462	115	HalfToEven	executed	0	0	86	86	0	115
+cosh	D462	231	HalfToEven	executed	0	0	86	86	0	231
+cosh	D462	346	HalfToEven	executed	0	0	86	86	0	346
+cosh	D616	0	HalfToEven	executed	0	0	54	54	0	0
+cosh	D616	154	HalfToEven	executed	0	0	86	86	0	154
+cosh	D616	308	HalfToEven	executed	0	0	86	86	0	308
+cosh	D616	462	HalfToEven	executed	0	0	86	86	0	462
+cosh	D924	0	HalfToEven	executed	0	0	51	51	0	0
+cosh	D924	231	HalfToEven	executed	0	0	86	86	0	231
+cosh	D924	462	HalfToEven	executed	0	0	86	86	0	462
+cosh	D924	693	HalfToEven	executed	0	0	86	86	0	693
+cosh	D1232	0	HalfToEven	executed	0	0	53	53	0	0
+cosh	D1232	308	HalfToEven	executed	0	0	86	86	0	308
+cosh	D1232	616	HalfToEven	executed	0	0	86	86	0	616
+cosh	D1232	924	HalfToEven	executed	0	0	86	86	0	924
+tanh	D18	0	HalfToEven	executed	0	0	25	25	0	0
+tanh	D18	4	HalfToEven	executed	0	0	92	92	0	4
+tanh	D18	9	HalfToEven	executed	0	0	92	92	0	9
+tanh	D18	13	HalfToEven	executed	0	0	92	92	0	13
+tanh	D18	17	HalfToEven	executed	0	0	38	38	0	17
+tanh	D38	0	HalfToEven	executed	0	0	23	23	0	0
+tanh	D38	9	HalfToEven	executed	0	0	84	84	0	9
+tanh	D38	19	HalfToEven	executed	0	0	84	84	0	19
+tanh	D38	28	HalfToEven	executed	0	0	84	84	0	28
+tanh	D38	37	HalfToEven	executed	0	0	38	38	0	37
+tanh	D57	0	HalfToEven	executed	0	0	24	24	0	0
+tanh	D57	14	HalfToEven	executed	0	0	79	79	0	14
+tanh	D57	28	HalfToEven	executed	0	0	79	79	0	28
+tanh	D57	42	HalfToEven	executed	0	0	79	79	0	42
+tanh	D57	56	HalfToEven	executed	0	0	29	29	0	56
+tanh	D76	0	HalfToEven	executed	0	0	25	25	0	0
+tanh	D76	19	HalfToEven	executed	0	0	71	71	0	19
+tanh	D76	38	HalfToEven	executed	0	0	71	71	0	38
+tanh	D76	57	HalfToEven	executed	0	0	71	71	0	57
+tanh	D76	75	HalfToEven	executed	0	0	22	22	0	75
+tanh	D115	0	HalfToEven	executed	0	0	20	20	0	0
+tanh	D115	28	HalfToEven	executed	0	0	64	64	0	28
+tanh	D115	57	HalfToEven	executed	0	0	64	64	0	57
+tanh	D115	86	HalfToEven	executed	0	0	64	64	0	86
+tanh	D115	114	HalfToEven	executed	0	0	26	26	0	114
+tanh	D153	0	HalfToEven	executed	0	0	21	21	0	0
+tanh	D153	38	HalfToEven	executed	0	0	60	60	0	38
+tanh	D153	76	HalfToEven	executed	0	0	60	60	0	76
+tanh	D153	114	HalfToEven	executed	0	0	60	60	0	114
+tanh	D153	152	HalfToEven	executed	0	0	23	23	0	152
+tanh	D230	0	HalfToEven	executed	0	0	28	28	0	0
+tanh	D230	57	HalfToEven	executed	0	0	111	111	0	57
+tanh	D230	115	HalfToEven	executed	0	0	111	111	0	115
+tanh	D230	172	HalfToEven	executed	0	0	111	111	0	172
+tanh	D230	229	HalfToEven	executed	0	0	48	48	0	229
+tanh	D307	0	HalfToEven	executed	0	0	19	19	0	0
+tanh	D307	76	HalfToEven	executed	0	0	51	51	0	76
+tanh	D307	153	HalfToEven	executed	0	0	51	51	0	153
+tanh	D307	230	HalfToEven	executed	0	0	51	51	0	230
+tanh	D307	306	HalfToEven	executed	0	0	17	17	0	306
+tanh	D462	0	HalfToEven	executed	0	0	32	32	0	0
+tanh	D462	115	HalfToEven	executed	0	0	111	111	0	115
+tanh	D462	231	HalfToEven	executed	0	0	111	111	0	231
+tanh	D462	346	HalfToEven	executed	0	0	111	111	0	346
+tanh	D462	461	HalfToEven	executed	0	0	55	55	0	461
+tanh	D616	0	HalfToEven	executed	0	0	28	28	0	0
+tanh	D616	154	HalfToEven	executed	0	0	111	111	0	154
+tanh	D616	308	HalfToEven	executed	0	0	111	111	0	308
+tanh	D616	462	HalfToEven	executed	0	0	111	111	0	462
+tanh	D616	615	HalfToEven	executed	0	0	55	55	0	615
+tanh	D924	0	HalfToEven	executed	0	0	28	28	0	0
+tanh	D924	231	HalfToEven	executed	0	0	111	111	0	231
+tanh	D924	462	HalfToEven	executed	0	0	111	111	0	462
+tanh	D924	693	HalfToEven	executed	0	0	111	111	0	693
+tanh	D924	923	HalfToEven	executed	0	0	50	50	0	923
+tanh	D1232	0	HalfToEven	executed	0	0	30	30	0	0
+tanh	D1232	308	HalfToEven	executed	0	0	111	111	0	308
+tanh	D1232	616	HalfToEven	executed	0	0	111	111	0	616
+tanh	D1232	924	HalfToEven	executed	0	0	111	111	0	924
+tanh	D1232	1231	HalfToEven	executed	0	0	53	53	0	1231
+asinh	D18	0	HalfToEven	executed	0	0	43	43	0	0
+asinh	D18	4	HalfToEven	executed	0	0	69	69	0	4
+asinh	D18	9	HalfToEven	executed	0	0	70	70	0	9
+asinh	D18	13	HalfToEven	executed	0	0	68	68	0	13
+asinh	D18	17	HalfToEven	executed	0	0	57	57	0	17
+asinh	D38	0	HalfToEven	executed	0	0	37	37	0	0
+asinh	D38	9	HalfToEven	executed	0	0	62	62	0	9
+asinh	D38	19	HalfToEven	executed	0	0	62	62	0	19
+asinh	D38	28	HalfToEven	executed	0	0	62	62	0	28
+asinh	D38	37	HalfToEven	executed	0	0	47	47	0	37
+asinh	D57	0	HalfToEven	executed	0	0	32	32	0	0
+asinh	D57	14	HalfToEven	executed	0	0	57	57	0	14
+asinh	D57	28	HalfToEven	executed	0	0	57	57	0	28
+asinh	D57	42	HalfToEven	executed	0	0	57	57	0	42
+asinh	D57	56	HalfToEven	executed	0	0	46	46	0	56
+asinh	D76	0	HalfToEven	executed	0	0	31	31	0	0
+asinh	D76	19	HalfToEven	executed	0	0	49	49	0	19
+asinh	D76	38	HalfToEven	executed	0	0	49	49	0	38
+asinh	D76	57	HalfToEven	executed	0	0	49	49	0	57
+asinh	D76	75	HalfToEven	executed	0	0	39	39	0	75
+asinh	D115	0	HalfToEven	executed	0	0	29	29	0	0
+asinh	D115	28	HalfToEven	executed	0	0	42	42	0	28
+asinh	D115	57	HalfToEven	executed	0	0	42	42	0	57
+asinh	D115	86	HalfToEven	executed	0	0	42	42	0	86
+asinh	D115	114	HalfToEven	executed	0	0	32	32	0	114
+asinh	D153	0	HalfToEven	executed	0	0	26	26	0	0
+asinh	D153	38	HalfToEven	executed	0	0	38	38	0	38
+asinh	D153	76	HalfToEven	executed	0	0	38	38	0	76
+asinh	D153	114	HalfToEven	executed	0	0	38	38	0	114
+asinh	D153	152	HalfToEven	executed	0	0	30	30	0	152
+asinh	D230	0	HalfToEven	executed	0	0	51	51	0	0
+asinh	D230	57	HalfToEven	executed	0	0	89	89	0	57
+asinh	D230	115	HalfToEven	executed	0	0	89	89	0	115
+asinh	D230	172	HalfToEven	executed	0	0	89	89	0	172
+asinh	D230	229	HalfToEven	executed	0	0	71	71	0	229
+asinh	D307	0	HalfToEven	executed	0	0	21	21	0	0
+asinh	D307	76	HalfToEven	executed	0	0	29	29	0	76
+asinh	D307	153	HalfToEven	executed	0	0	29	29	0	153
+asinh	D307	230	HalfToEven	executed	0	0	29	29	0	230
+asinh	D307	306	HalfToEven	executed	0	0	23	23	0	306
+asinh	D462	0	HalfToEven	executed	0	0	52	52	0	0
+asinh	D462	115	HalfToEven	executed	0	0	89	89	0	115
+asinh	D462	231	HalfToEven	executed	0	0	89	89	0	231
+asinh	D462	346	HalfToEven	executed	0	0	89	89	0	346
+asinh	D462	461	HalfToEven	executed	0	0	75	75	0	461
+asinh	D616	0	HalfToEven	executed	0	0	54	54	0	0
+asinh	D616	154	HalfToEven	executed	0	0	89	89	0	154
+asinh	D616	308	HalfToEven	executed	0	0	89	89	0	308
+asinh	D616	462	HalfToEven	executed	0	0	89	89	0	462
+asinh	D616	615	HalfToEven	executed	0	0	64	64	0	615
+asinh	D924	0	HalfToEven	executed	0	0	54	54	0	0
+asinh	D924	231	HalfToEven	executed	0	0	89	89	0	231
+asinh	D924	462	HalfToEven	executed	0	0	89	89	0	462
+asinh	D924	693	HalfToEven	executed	0	0	89	89	0	693
+asinh	D924	923	HalfToEven	executed	0	0	65	65	0	923
+asinh	D1232	0	HalfToEven	executed	0	0	52	52	0	0
+asinh	D1232	308	HalfToEven	executed	0	0	89	89	0	308
+asinh	D1232	616	HalfToEven	executed	0	0	89	89	0	616
+asinh	D1232	924	HalfToEven	executed	0	0	89	89	0	924
+asinh	D1232	1231	HalfToEven	executed	0	0	70	70	0	1231
+acosh	D18	0	HalfToEven	executed	0	0	43	43	0	0
+acosh	D18	4	HalfToEven	executed	0	0	63	63	0	4
+acosh	D18	9	HalfToEven	executed	0	0	70	70	0	9
+acosh	D18	13	HalfToEven	executed	0	0	72	72	0	13
+acosh	D18	17	HalfToEven	executed	0	0	1	1	0	17
+acosh	D38	0	HalfToEven	executed	0	0	37	37	0	0
+acosh	D38	9	HalfToEven	executed	0	0	62	62	0	9
+acosh	D38	19	HalfToEven	executed	0	0	65	65	0	19
+acosh	D38	28	HalfToEven	executed	0	0	65	65	0	28
+acosh	D38	37	HalfToEven	executed	0	0	1	1	0	37
+acosh	D57	0	HalfToEven	executed	0	0	33	33	0	0
+acosh	D57	14	HalfToEven	executed	0	0	60	60	0	14
+acosh	D57	28	HalfToEven	executed	0	0	60	60	0	28
+acosh	D57	42	HalfToEven	executed	0	0	60	60	0	42
+acosh	D57	56	HalfToEven	executed	0	0	1	1	0	56
+acosh	D76	0	HalfToEven	executed	0	0	28	28	0	0
+acosh	D76	19	HalfToEven	executed	0	0	52	52	0	19
+acosh	D76	38	HalfToEven	executed	0	0	52	52	0	38
+acosh	D76	57	HalfToEven	executed	0	0	52	52	0	57
+acosh	D76	75	HalfToEven	executed	0	0	1	1	0	75
+acosh	D115	0	HalfToEven	executed	0	0	25	25	0	0
+acosh	D115	28	HalfToEven	executed	0	0	45	45	0	28
+acosh	D115	57	HalfToEven	executed	0	0	45	45	0	57
+acosh	D115	86	HalfToEven	executed	0	0	45	45	0	86
+acosh	D115	114	HalfToEven	executed	0	0	1	1	0	114
+acosh	D153	0	HalfToEven	executed	0	0	23	23	0	0
+acosh	D153	38	HalfToEven	executed	0	0	41	41	0	38
+acosh	D153	76	HalfToEven	executed	0	0	41	41	0	76
+acosh	D153	114	HalfToEven	executed	0	0	41	41	0	114
+acosh	D153	152	HalfToEven	executed	0	0	1	1	0	152
+acosh	D230	0	HalfToEven	executed	0	0	57	57	0	0
+acosh	D230	57	HalfToEven	executed	0	0	92	92	0	57
+acosh	D230	115	HalfToEven	executed	0	0	92	92	0	115
+acosh	D230	172	HalfToEven	executed	0	0	92	92	0	172
+acosh	D230	229	HalfToEven	executed	0	0	1	1	0	229
+acosh	D307	0	HalfToEven	executed	0	0	18	18	0	0
+acosh	D307	76	HalfToEven	executed	0	0	32	32	0	76
+acosh	D307	153	HalfToEven	executed	0	0	32	32	0	153
+acosh	D307	230	HalfToEven	executed	0	0	32	32	0	230
+acosh	D307	306	HalfToEven	executed	0	0	1	1	0	306
+acosh	D462	0	HalfToEven	executed	0	0	57	57	0	0
+acosh	D462	115	HalfToEven	executed	0	0	92	92	0	115
+acosh	D462	231	HalfToEven	executed	0	0	92	92	0	231
+acosh	D462	346	HalfToEven	executed	0	0	92	92	0	346
+acosh	D462	461	HalfToEven	executed	0	0	1	1	0	461
+acosh	D616	0	HalfToEven	executed	0	0	57	57	0	0
+acosh	D616	154	HalfToEven	executed	0	0	92	92	0	154
+acosh	D616	308	HalfToEven	executed	0	0	92	92	0	308
+acosh	D616	462	HalfToEven	executed	0	0	92	92	0	462
+acosh	D616	615	HalfToEven	executed	0	0	1	1	0	615
+acosh	D924	0	HalfToEven	executed	0	0	57	57	0	0
+acosh	D924	231	HalfToEven	executed	0	0	92	92	0	231
+acosh	D924	462	HalfToEven	executed	0	0	92	92	0	462
+acosh	D924	693	HalfToEven	executed	0	0	92	92	0	693
+acosh	D924	923	HalfToEven	executed	0	0	1	1	0	923
+acosh	D1232	0	HalfToEven	executed	0	0	57	57	0	0
+acosh	D1232	308	HalfToEven	executed	0	0	92	92	0	308
+acosh	D1232	616	HalfToEven	executed	0	0	92	92	0	616
+acosh	D1232	924	HalfToEven	executed	0	0	92	92	0	924
+acosh	D1232	1231	HalfToEven	executed	0	0	1	1	0	1231
+atanh	D18	0	HalfToEven	executed	0	0	1	1	0	0
+atanh	D18	4	HalfToEven	executed	0	0	66	66	0	4
+atanh	D18	9	HalfToEven	executed	0	0	78	78	0	9
+atanh	D18	13	HalfToEven	executed	0	0	84	84	0	13
+atanh	D18	17	HalfToEven	executed	0	0	40	40	0	17
+atanh	D38	0	HalfToEven	executed	0	0	1	1	0	0
+atanh	D38	9	HalfToEven	executed	0	0	70	70	0	9
+atanh	D38	19	HalfToEven	executed	0	0	76	76	0	19
+atanh	D38	28	HalfToEven	executed	0	0	80	80	0	28
+atanh	D38	37	HalfToEven	executed	0	0	37	37	0	37
+atanh	D57	0	HalfToEven	executed	0	0	1	1	0	0
+atanh	D57	14	HalfToEven	executed	0	0	71	71	0	14
+atanh	D57	28	HalfToEven	executed	0	0	71	71	0	28
+atanh	D57	42	HalfToEven	executed	0	0	71	71	0	42
+atanh	D57	56	HalfToEven	executed	0	0	31	31	0	56
+atanh	D76	0	HalfToEven	executed	0	0	1	1	0	0
+atanh	D76	19	HalfToEven	executed	0	0	63	63	0	19
+atanh	D76	38	HalfToEven	executed	0	0	63	63	0	38
+atanh	D76	57	HalfToEven	executed	0	0	63	63	0	57
+atanh	D76	75	HalfToEven	executed	0	0	27	27	0	75
+atanh	D115	0	HalfToEven	executed	0	0	1	1	0	0
+atanh	D115	28	HalfToEven	executed	0	0	56	56	0	28
+atanh	D115	57	HalfToEven	executed	0	0	56	56	0	57
+atanh	D115	86	HalfToEven	executed	0	0	56	56	0	86
+atanh	D115	114	HalfToEven	executed	0	0	22	22	0	114
+atanh	D153	0	HalfToEven	executed	0	0	1	1	0	0
+atanh	D153	38	HalfToEven	executed	0	0	52	52	0	38
+atanh	D153	76	HalfToEven	executed	0	0	52	52	0	76
+atanh	D153	114	HalfToEven	executed	0	0	52	52	0	114
+atanh	D153	152	HalfToEven	executed	0	0	25	25	0	152
+atanh	D230	0	HalfToEven	executed	0	0	1	1	0	0
+atanh	D230	57	HalfToEven	executed	0	0	103	103	0	57
+atanh	D230	115	HalfToEven	executed	0	0	103	103	0	115
+atanh	D230	172	HalfToEven	executed	0	0	103	103	0	172
+atanh	D230	229	HalfToEven	executed	0	0	48	48	0	229
+atanh	D307	0	HalfToEven	executed	0	0	1	1	0	0
+atanh	D307	76	HalfToEven	executed	0	0	43	43	0	76
+atanh	D307	153	HalfToEven	executed	0	0	43	43	0	153
+atanh	D307	230	HalfToEven	executed	0	0	43	43	0	230
+atanh	D307	306	HalfToEven	executed	0	0	15	15	0	306
+atanh	D462	0	HalfToEven	executed	0	0	1	1	0	0
+atanh	D462	115	HalfToEven	executed	0	0	103	103	0	115
+atanh	D462	231	HalfToEven	executed	0	0	103	103	0	231
+atanh	D462	346	HalfToEven	executed	0	0	103	103	0	346
+atanh	D462	461	HalfToEven	executed	0	0	50	50	0	461
+atanh	D616	0	HalfToEven	executed	0	0	1	1	0	0
+atanh	D616	154	HalfToEven	executed	0	0	103	103	0	154
+atanh	D616	308	HalfToEven	executed	0	0	103	103	0	308
+atanh	D616	462	HalfToEven	executed	0	0	103	103	0	462
+atanh	D616	615	HalfToEven	executed	0	0	58	58	0	615
+atanh	D924	0	HalfToEven	executed	0	0	1	1	0	0
+atanh	D924	231	HalfToEven	executed	0	0	103	103	0	231
+atanh	D924	462	HalfToEven	executed	0	0	103	103	0	462
+atanh	D924	693	HalfToEven	executed	0	0	103	103	0	693
+atanh	D924	923	HalfToEven	executed	0	0	52	52	0	923
+atanh	D1232	0	HalfToEven	executed	0	0	1	1	0	0
+atanh	D1232	308	HalfToEven	executed	0	0	103	103	0	308
+atanh	D1232	616	HalfToEven	executed	0	0	103	103	0	616
+atanh	D1232	924	HalfToEven	executed	0	0	103	103	0	924
+atanh	D1232	1231	HalfToEven	executed	0	0	52	52	0	1231
+log	D18	0	HalfToEven	executed	0	0	60	60	0	0
+log	D18	4	HalfToEven	executed	0	0	59	59	0	4
+log	D18	9	HalfToEven	executed	0	0	58	58	0	9
+log	D18	13	HalfToEven	executed	0	0	56	56	0	13
+log	D18	17	HalfToEven	executed	0	0	18	18	0	17
+log	D38	0	HalfToEven	executed	0	0	53	53	0	0
+log	D38	9	HalfToEven	executed	0	0	53	53	0	9
+log	D38	19	HalfToEven	executed	0	0	53	53	0	19
+log	D38	28	HalfToEven	executed	0	0	52	52	0	28
+log	D38	37	HalfToEven	executed	0	0	19	19	0	37
+log	D57	0	HalfToEven	executed	0	0	46	46	0	0
+log	D57	14	HalfToEven	executed	0	0	46	46	0	14
+log	D57	28	HalfToEven	executed	0	0	46	46	0	28
+log	D57	42	HalfToEven	executed	0	0	46	46	0	42
+log	D57	56	HalfToEven	executed	0	0	16	16	0	56
+log	D76	0	HalfToEven	executed	0	0	39	39	0	0
+log	D76	19	HalfToEven	executed	0	0	39	39	0	19
+log	D76	38	HalfToEven	executed	0	0	39	39	0	38
+log	D76	57	HalfToEven	executed	0	0	39	39	0	57
+log	D76	75	HalfToEven	executed	0	0	10	10	0	75
+log	D115	0	HalfToEven	executed	0	0	33	33	0	0
+log	D115	28	HalfToEven	executed	0	0	33	33	0	28
+log	D115	57	HalfToEven	executed	0	0	33	33	0	57
+log	D115	86	HalfToEven	executed	0	0	33	33	0	86
+log	D115	114	HalfToEven	executed	0	0	13	13	0	114
+log	D153	0	HalfToEven	executed	0	0	30	30	0	0
+log	D153	38	HalfToEven	executed	0	0	30	30	0	38
+log	D153	76	HalfToEven	executed	0	0	30	30	0	76
+log	D153	114	HalfToEven	executed	0	0	30	30	0	114
+log	D153	152	HalfToEven	executed	0	0	12	12	0	152
+log	D230	0	HalfToEven	executed	0	0	78	78	0	0
+log	D230	57	HalfToEven	executed	0	0	78	78	0	57
+log	D230	115	HalfToEven	executed	0	0	78	78	0	115
+log	D230	172	HalfToEven	executed	0	0	78	78	0	172
+log	D230	229	HalfToEven	executed	0	0	35	35	0	229
+log	D307	0	HalfToEven	executed	0	0	20	20	0	0
+log	D307	76	HalfToEven	executed	0	0	20	20	0	76
+log	D307	153	HalfToEven	executed	0	0	20	20	0	153
+log	D307	230	HalfToEven	executed	0	0	20	20	0	230
+log	D307	306	HalfToEven	executed	0	0	2	2	0	306
+log	D462	0	HalfToEven	executed	0	0	78	78	0	0
+log	D462	115	HalfToEven	executed	0	0	78	78	0	115
+log	D462	231	HalfToEven	executed	0	0	78	78	0	231
+log	D462	346	HalfToEven	executed	0	0	78	78	0	346
+log	D462	461	HalfToEven	executed	0	0	31	31	0	461
+log	D616	0	HalfToEven	executed	0	0	78	78	0	0
+log	D616	154	HalfToEven	executed	0	0	78	78	0	154
+log	D616	308	HalfToEven	executed	0	0	78	78	0	308
+log	D616	462	HalfToEven	executed	0	0	78	78	0	462
+log	D616	615	HalfToEven	executed	0	0	35	35	0	615
+log	D924	0	HalfToEven	executed	0	0	78	78	0	0
+log	D924	231	HalfToEven	executed	0	0	78	78	0	231
+log	D924	462	HalfToEven	executed	0	0	78	78	0	462
+log	D924	693	HalfToEven	executed	0	0	78	78	0	693
+log	D924	923	HalfToEven	executed	0	0	31	31	0	923
+log	D1232	0	HalfToEven	executed	0	0	78	78	0	0
+log	D1232	308	HalfToEven	executed	0	0	78	78	0	308
+log	D1232	616	HalfToEven	executed	0	0	78	78	0	616
+log	D1232	924	HalfToEven	executed	0	0	78	78	0	924
+log	D1232	1231	HalfToEven	executed	0	0	33	33	0	1231
+atan2	D18	0	HalfToEven	executed	0	0	59	59	0	0
+atan2	D18	4	HalfToEven	executed	0	0	61	61	0	4
+atan2	D18	9	HalfToEven	executed	0	0	61	61	0	9
+atan2	D18	13	HalfToEven	executed	0	0	61	61	0	13
+atan2	D18	17	HalfToEven	executed	0	0	16	16	0	17
+atan2	D38	0	HalfToEven	executed	0	0	52	52	0	0
+atan2	D38	9	HalfToEven	executed	0	0	54	54	0	9
+atan2	D38	19	HalfToEven	executed	0	0	54	54	0	19
+atan2	D38	28	HalfToEven	executed	0	0	54	54	0	28
+atan2	D38	37	HalfToEven	executed	0	0	12	12	0	37
+atan2	D57	0	HalfToEven	executed	0	0	45	45	0	0
+atan2	D57	14	HalfToEven	executed	0	0	47	47	0	14
+atan2	D57	28	HalfToEven	executed	0	0	47	47	0	28
+atan2	D57	42	HalfToEven	executed	0	0	47	47	0	42
+atan2	D57	56	HalfToEven	executed	0	0	12	12	0	56
+atan2	D76	0	HalfToEven	executed	0	0	38	38	0	0
+atan2	D76	19	HalfToEven	executed	0	0	40	40	0	19
+atan2	D76	38	HalfToEven	executed	0	0	40	40	0	38
+atan2	D76	57	HalfToEven	executed	0	0	40	40	0	57
+atan2	D76	75	HalfToEven	executed	0	0	13	13	0	75
+atan2	D115	0	HalfToEven	executed	0	0	32	32	0	0
+atan2	D115	28	HalfToEven	executed	0	0	34	34	0	28
+atan2	D115	57	HalfToEven	executed	0	0	34	34	0	57
+atan2	D115	86	HalfToEven	executed	0	0	34	34	0	86
+atan2	D115	114	HalfToEven	executed	0	0	9	9	0	114
+atan2	D153	0	HalfToEven	executed	0	0	28	28	0	0
+atan2	D153	38	HalfToEven	executed	0	0	30	30	0	38
+atan2	D153	76	HalfToEven	executed	0	0	30	30	0	76
+atan2	D153	114	HalfToEven	executed	0	0	30	30	0	114
+atan2	D153	152	HalfToEven	executed	0	0	11	11	0	152
+atan2	D230	0	HalfToEven	executed	0	0	78	78	0	0
+atan2	D230	57	HalfToEven	executed	0	0	80	80	0	57
+atan2	D230	115	HalfToEven	executed	0	0	80	80	0	115
+atan2	D230	172	HalfToEven	executed	0	0	80	80	0	172
+atan2	D230	229	HalfToEven	executed	0	0	29	29	0	229
+atan2	D307	0	HalfToEven	executed	0	0	18	18	0	0
+atan2	D307	76	HalfToEven	executed	0	0	20	20	0	76
+atan2	D307	153	HalfToEven	executed	0	0	20	20	0	153
+atan2	D307	230	HalfToEven	executed	0	0	20	20	0	230
+atan2	D307	306	HalfToEven	executed	0	0	5	5	0	306
+atan2	D462	0	HalfToEven	executed	0	0	78	78	0	0
+atan2	D462	115	HalfToEven	executed	0	0	80	80	0	115
+atan2	D462	231	HalfToEven	executed	0	0	80	80	0	231
+atan2	D462	346	HalfToEven	executed	0	0	80	80	0	346
+atan2	D462	461	HalfToEven	executed	0	0	24	24	0	461
+atan2	D616	0	HalfToEven	executed	0	0	78	78	0	0
+atan2	D616	154	HalfToEven	executed	0	0	80	80	0	154
+atan2	D616	308	HalfToEven	executed	0	0	80	80	0	308
+atan2	D616	462	HalfToEven	executed	0	0	80	80	0	462
+atan2	D616	615	HalfToEven	executed	0	0	25	25	0	615
+atan2	D924	0	HalfToEven	executed	0	0	78	78	0	0
+atan2	D924	231	HalfToEven	executed	0	0	80	80	0	231
+atan2	D924	462	HalfToEven	executed	0	0	80	80	0	462
+atan2	D924	693	HalfToEven	executed	0	0	80	80	0	693
+atan2	D924	923	HalfToEven	executed	0	0	22	22	0	923
+atan2	D1232	0	HalfToEven	executed	0	0	78	78	0	0
+atan2	D1232	308	HalfToEven	executed	0	0	80	80	0	308
+atan2	D1232	616	HalfToEven	executed	0	0	80	80	0	616
+atan2	D1232	924	HalfToEven	executed	0	0	80	80	0	924
+atan2	D1232	1231	HalfToEven	executed	0	0	27	27	0	1231
+powf	D18	0	HalfToEven	executed	0	0	59	59	0	0
+powf	D18	4	HalfToEven	executed	0	0	61	61	0	4
+powf	D18	9	HalfToEven	executed	0	0	61	61	0	9
+powf	D18	13	HalfToEven	executed	0	0	56	56	0	13
+powf	D18	17	HalfToEven	executed	0	0	12	12	0	17
+powf	D38	0	HalfToEven	executed	0	0	53	53	0	0
+powf	D38	9	HalfToEven	executed	0	0	54	54	0	9
+powf	D38	19	HalfToEven	executed	0	0	54	54	0	19
+powf	D38	28	HalfToEven	executed	0	0	54	54	0	28
+powf	D38	37	HalfToEven	executed	0	0	10	10	0	37
+powf	D57	0	HalfToEven	executed	0	0	46	46	0	0
+powf	D57	14	HalfToEven	executed	0	0	47	47	0	14
+powf	D57	28	HalfToEven	executed	0	0	47	47	0	28
+powf	D57	42	HalfToEven	executed	0	0	47	47	0	42
+powf	D57	56	HalfToEven	executed	0	0	2	2	0	56
+powf	D76	0	HalfToEven	executed	0	0	39	39	0	0
+powf	D76	19	HalfToEven	executed	0	0	40	40	0	19
+powf	D76	38	HalfToEven	executed	0	0	40	40	0	38
+powf	D76	57	HalfToEven	executed	0	0	40	40	0	57
+powf	D76	75	HalfToEven	executed	0	0	12	12	0	75
+powf	D115	0	HalfToEven	executed	0	0	33	33	0	0
+powf	D115	28	HalfToEven	executed	0	0	34	34	0	28
+powf	D115	57	HalfToEven	executed	0	0	34	34	0	57
+powf	D115	86	HalfToEven	executed	0	0	34	34	0	86
+powf	D115	114	HalfToEven	executed	0	0	7	7	0	114
+powf	D153	0	HalfToEven	executed	0	0	30	30	0	0
+powf	D153	38	HalfToEven	executed	0	0	30	30	0	38
+powf	D153	76	HalfToEven	executed	0	0	30	30	0	76
+powf	D153	114	HalfToEven	executed	0	0	30	30	0	114
+powf	D153	152	HalfToEven	executed	0	0	2	2	0	152
+powf	D230	0	HalfToEven	executed	0	0	22	22	0	0
+powf	D230	57	HalfToEven	executed	0	0	23	23	0	57
+powf	D230	115	HalfToEven	executed	0	0	23	23	0	115
+powf	D230	172	HalfToEven	executed	0	0	23	23	0	172
+powf	D230	229	HalfToEven	executed	0	0	2	2	0	229
+powf	D307	0	HalfToEven	executed	0	0	19	19	0	0
+powf	D307	76	HalfToEven	executed	0	0	20	20	0	76
+powf	D307	153	HalfToEven	executed	0	0	20	20	0	153
+powf	D307	230	HalfToEven	executed	0	0	20	20	0	230
+powf	D307	306	HalfToEven	executed	0	0	5	5	0	306
+powf	D462	0	HalfToEven	executed	0	0	19	19	0	0
+powf	D462	115	HalfToEven	executed	0	0	20	20	0	115
+powf	D462	231	HalfToEven	executed	0	0	20	20	0	231
+powf	D462	346	HalfToEven	executed	0	0	20	20	0	346
+powf	D462	461	HalfToEven	executed	0	0	4	4	0	461
+powf	D616	0	HalfToEven	executed	0	0	20	20	0	0
+powf	D616	154	HalfToEven	executed	0	0	20	20	0	154
+powf	D616	308	HalfToEven	executed	0	0	20	20	0	308
+powf	D616	462	HalfToEven	executed	0	0	20	20	0	462
+powf	D616	615	HalfToEven	executed	0	0	1	1	0	615
+powf	D924	0	HalfToEven	executed	0	0	20	20	0	0
+powf	D924	231	HalfToEven	executed	0	0	20	20	0	231
+powf	D924	462	HalfToEven	executed	0	0	20	20	0	462
+powf	D924	693	HalfToEven	executed	0	0	20	20	0	693
+powf	D924	923	HalfToEven	executed	0	0	2	2	0	923
+powf	D1232	0	HalfToEven	executed	0	0	20	20	0	0
+powf	D1232	308	HalfToEven	executed	0	0	20	20	0	308
+powf	D1232	616	HalfToEven	executed	0	0	20	20	0	616
+powf	D1232	924	HalfToEven	executed	0	0	20	20	0	924
+powf	D1232	1231	HalfToEven	executed	0	0	3	3	0	1231
+add	D18	0	HalfToEven	executed	0	0	6	6	0	0
+add	D18	4	HalfToEven	executed	0	0	6	6	0	4
+add	D18	9	HalfToEven	executed	0	0	6	6	0	9
+add	D18	13	HalfToEven	executed	0	0	6	6	0	13
+add	D18	17	HalfToEven	executed	0	0	5	5	0	17
+add	D38	0	HalfToEven	executed	0	0	6	6	0	0
+add	D38	9	HalfToEven	executed	0	0	6	6	0	9
+add	D38	19	HalfToEven	executed	0	0	6	6	0	19
+add	D38	28	HalfToEven	executed	0	0	6	6	0	28
+add	D38	37	HalfToEven	executed	0	0	5	5	0	37
+add	D57	0	HalfToEven	executed	0	0	6	6	0	0
+add	D57	14	HalfToEven	executed	0	0	6	6	0	14
+add	D57	28	HalfToEven	executed	0	0	6	6	0	28
+add	D57	42	HalfToEven	executed	0	0	6	6	0	42
+add	D57	56	HalfToEven	executed	0	0	5	5	0	56
+add	D76	0	HalfToEven	executed	0	0	6	6	0	0
+add	D76	19	HalfToEven	executed	0	0	6	6	0	19
+add	D76	38	HalfToEven	executed	0	0	6	6	0	38
+add	D76	57	HalfToEven	executed	0	0	6	6	0	57
+add	D76	75	HalfToEven	executed	0	0	5	5	0	75
+add	D115	0	HalfToEven	executed	0	0	6	6	0	0
+add	D115	28	HalfToEven	executed	0	0	6	6	0	28
+add	D115	57	HalfToEven	executed	0	0	6	6	0	57
+add	D115	86	HalfToEven	executed	0	0	6	6	0	86
+add	D115	114	HalfToEven	executed	0	0	5	5	0	114
+add	D153	0	HalfToEven	executed	0	0	6	6	0	0
+add	D153	38	HalfToEven	executed	0	0	6	6	0	38
+add	D153	76	HalfToEven	executed	0	0	6	6	0	76
+add	D153	114	HalfToEven	executed	0	0	6	6	0	114
+add	D153	152	HalfToEven	executed	0	0	5	5	0	152
+add	D230	0	HalfToEven	executed	0	0	6	6	0	0
+add	D230	57	HalfToEven	executed	0	0	6	6	0	57
+add	D230	115	HalfToEven	executed	0	0	6	6	0	115
+add	D230	172	HalfToEven	executed	0	0	6	6	0	172
+add	D230	229	HalfToEven	executed	0	0	5	5	0	229
+add	D307	0	HalfToEven	executed	0	0	6	6	0	0
+add	D307	76	HalfToEven	executed	0	0	6	6	0	76
+add	D307	153	HalfToEven	executed	0	0	6	6	0	153
+add	D307	230	HalfToEven	executed	0	0	6	6	0	230
+add	D307	306	HalfToEven	executed	0	0	5	5	0	306
+add	D462	0	HalfToEven	executed	0	0	6	6	0	0
+add	D462	115	HalfToEven	executed	0	0	6	6	0	115
+add	D462	231	HalfToEven	executed	0	0	6	6	0	231
+add	D462	346	HalfToEven	executed	0	0	6	6	0	346
+add	D462	461	HalfToEven	executed	0	0	5	5	0	461
+add	D616	0	HalfToEven	executed	0	0	6	6	0	0
+add	D616	154	HalfToEven	executed	0	0	6	6	0	154
+add	D616	308	HalfToEven	executed	0	0	6	6	0	308
+add	D616	462	HalfToEven	executed	0	0	6	6	0	462
+add	D616	615	HalfToEven	executed	0	0	5	5	0	615
+add	D924	0	HalfToEven	executed	0	0	6	6	0	0
+add	D924	231	HalfToEven	executed	0	0	6	6	0	231
+add	D924	462	HalfToEven	executed	0	0	6	6	0	462
+add	D924	693	HalfToEven	executed	0	0	6	6	0	693
+add	D924	923	HalfToEven	executed	0	0	5	5	0	923
+add	D1232	0	HalfToEven	executed	0	0	6	6	0	0
+add	D1232	308	HalfToEven	executed	0	0	6	6	0	308
+add	D1232	616	HalfToEven	executed	0	0	6	6	0	616
+add	D1232	924	HalfToEven	executed	0	0	6	6	0	924
+add	D1232	1231	HalfToEven	executed	0	0	5	5	0	1231
+sub	D18	0	HalfToEven	executed	0	0	6	6	0	0
+sub	D18	4	HalfToEven	executed	0	0	6	6	0	4
+sub	D18	9	HalfToEven	executed	0	0	6	6	0	9
+sub	D18	13	HalfToEven	executed	0	0	6	6	0	13
+sub	D18	17	HalfToEven	executed	0	0	5	5	0	17
+sub	D38	0	HalfToEven	executed	0	0	6	6	0	0
+sub	D38	9	HalfToEven	executed	0	0	6	6	0	9
+sub	D38	19	HalfToEven	executed	0	0	6	6	0	19
+sub	D38	28	HalfToEven	executed	0	0	6	6	0	28
+sub	D38	37	HalfToEven	executed	0	0	5	5	0	37
+sub	D57	0	HalfToEven	executed	0	0	6	6	0	0
+sub	D57	14	HalfToEven	executed	0	0	6	6	0	14
+sub	D57	28	HalfToEven	executed	0	0	6	6	0	28
+sub	D57	42	HalfToEven	executed	0	0	6	6	0	42
+sub	D57	56	HalfToEven	executed	0	0	5	5	0	56
+sub	D76	0	HalfToEven	executed	0	0	6	6	0	0
+sub	D76	19	HalfToEven	executed	0	0	6	6	0	19
+sub	D76	38	HalfToEven	executed	0	0	6	6	0	38
+sub	D76	57	HalfToEven	executed	0	0	6	6	0	57
+sub	D76	75	HalfToEven	executed	0	0	5	5	0	75
+sub	D115	0	HalfToEven	executed	0	0	6	6	0	0
+sub	D115	28	HalfToEven	executed	0	0	6	6	0	28
+sub	D115	57	HalfToEven	executed	0	0	6	6	0	57
+sub	D115	86	HalfToEven	executed	0	0	6	6	0	86
+sub	D115	114	HalfToEven	executed	0	0	5	5	0	114
+sub	D153	0	HalfToEven	executed	0	0	6	6	0	0
+sub	D153	38	HalfToEven	executed	0	0	6	6	0	38
+sub	D153	76	HalfToEven	executed	0	0	6	6	0	76
+sub	D153	114	HalfToEven	executed	0	0	6	6	0	114
+sub	D153	152	HalfToEven	executed	0	0	5	5	0	152
+sub	D230	0	HalfToEven	executed	0	0	6	6	0	0
+sub	D230	57	HalfToEven	executed	0	0	6	6	0	57
+sub	D230	115	HalfToEven	executed	0	0	6	6	0	115
+sub	D230	172	HalfToEven	executed	0	0	6	6	0	172
+sub	D230	229	HalfToEven	executed	0	0	5	5	0	229
+sub	D307	0	HalfToEven	executed	0	0	6	6	0	0
+sub	D307	76	HalfToEven	executed	0	0	6	6	0	76
+sub	D307	153	HalfToEven	executed	0	0	6	6	0	153
+sub	D307	230	HalfToEven	executed	0	0	6	6	0	230
+sub	D307	306	HalfToEven	executed	0	0	5	5	0	306
+sub	D462	0	HalfToEven	executed	0	0	6	6	0	0
+sub	D462	115	HalfToEven	executed	0	0	6	6	0	115
+sub	D462	231	HalfToEven	executed	0	0	6	6	0	231
+sub	D462	346	HalfToEven	executed	0	0	6	6	0	346
+sub	D462	461	HalfToEven	executed	0	0	5	5	0	461
+sub	D616	0	HalfToEven	executed	0	0	6	6	0	0
+sub	D616	154	HalfToEven	executed	0	0	6	6	0	154
+sub	D616	308	HalfToEven	executed	0	0	6	6	0	308
+sub	D616	462	HalfToEven	executed	0	0	6	6	0	462
+sub	D616	615	HalfToEven	executed	0	0	5	5	0	615
+sub	D924	0	HalfToEven	executed	0	0	6	6	0	0
+sub	D924	231	HalfToEven	executed	0	0	6	6	0	231
+sub	D924	462	HalfToEven	executed	0	0	6	6	0	462
+sub	D924	693	HalfToEven	executed	0	0	6	6	0	693
+sub	D924	923	HalfToEven	executed	0	0	5	5	0	923
+sub	D1232	0	HalfToEven	executed	0	0	6	6	0	0
+sub	D1232	308	HalfToEven	executed	0	0	6	6	0	308
+sub	D1232	616	HalfToEven	executed	0	0	6	6	0	616
+sub	D1232	924	HalfToEven	executed	0	0	6	6	0	924
+sub	D1232	1231	HalfToEven	executed	0	0	5	5	0	1231
+mul	D18	0	HalfToEven	executed	0	0	5	5	0	0
+mul	D18	4	HalfToEven	executed	0	0	5	5	0	4
+mul	D18	9	HalfToEven	executed	0	0	5	5	0	9
+mul	D18	13	HalfToEven	executed	0	0	5	5	0	13
+mul	D18	17	HalfToEven	executed	0	0	4	4	0	17
+mul	D38	0	HalfToEven	executed	0	0	5	5	0	0
+mul	D38	9	HalfToEven	executed	0	0	5	5	0	9
+mul	D38	19	HalfToEven	executed	0	0	5	5	0	19
+mul	D38	28	HalfToEven	executed	0	0	5	5	0	28
+mul	D38	37	HalfToEven	executed	0	0	4	4	0	37
+mul	D57	0	HalfToEven	executed	0	0	5	5	0	0
+mul	D57	14	HalfToEven	executed	0	0	5	5	0	14
+mul	D57	28	HalfToEven	executed	0	0	5	5	0	28
+mul	D57	42	HalfToEven	executed	0	0	5	5	0	42
+mul	D57	56	HalfToEven	executed	0	0	4	4	0	56
+mul	D76	0	HalfToEven	executed	0	0	5	5	0	0
+mul	D76	19	HalfToEven	executed	0	0	5	5	0	19
+mul	D76	38	HalfToEven	executed	0	0	5	5	0	38
+mul	D76	57	HalfToEven	executed	0	0	5	5	0	57
+mul	D76	75	HalfToEven	executed	0	0	4	4	0	75
+mul	D115	0	HalfToEven	executed	0	0	5	5	0	0
+mul	D115	28	HalfToEven	executed	0	0	5	5	0	28
+mul	D115	57	HalfToEven	executed	0	0	5	5	0	57
+mul	D115	86	HalfToEven	executed	0	0	5	5	0	86
+mul	D115	114	HalfToEven	executed	0	0	4	4	0	114
+mul	D153	0	HalfToEven	executed	0	0	5	5	0	0
+mul	D153	38	HalfToEven	executed	0	0	5	5	0	38
+mul	D153	76	HalfToEven	executed	0	0	5	5	0	76
+mul	D153	114	HalfToEven	executed	0	0	5	5	0	114
+mul	D153	152	HalfToEven	executed	0	0	4	4	0	152
+mul	D230	0	HalfToEven	executed	0	0	5	5	0	0
+mul	D230	57	HalfToEven	executed	0	0	5	5	0	57
+mul	D230	115	HalfToEven	executed	0	0	5	5	0	115
+mul	D230	172	HalfToEven	executed	0	0	5	5	0	172
+mul	D230	229	HalfToEven	executed	0	0	4	4	0	229
+mul	D307	0	HalfToEven	executed	0	0	5	5	0	0
+mul	D307	76	HalfToEven	executed	0	0	5	5	0	76
+mul	D307	153	HalfToEven	executed	0	0	5	5	0	153
+mul	D307	230	HalfToEven	executed	0	0	5	5	0	230
+mul	D307	306	HalfToEven	executed	0	0	4	4	0	306
+mul	D462	0	HalfToEven	executed	0	0	5	5	0	0
+mul	D462	115	HalfToEven	executed	0	0	5	5	0	115
+mul	D462	231	HalfToEven	executed	0	0	5	5	0	231
+mul	D462	346	HalfToEven	executed	0	0	5	5	0	346
+mul	D462	461	HalfToEven	executed	0	0	4	4	0	461
+mul	D616	0	HalfToEven	executed	0	0	5	5	0	0
+mul	D616	154	HalfToEven	executed	0	0	5	5	0	154
+mul	D616	308	HalfToEven	executed	0	0	5	5	0	308
+mul	D616	462	HalfToEven	executed	0	0	5	5	0	462
+mul	D616	615	HalfToEven	executed	0	0	4	4	0	615
+mul	D924	0	HalfToEven	executed	0	0	5	5	0	0
+mul	D924	231	HalfToEven	executed	0	0	5	5	0	231
+mul	D924	462	HalfToEven	executed	0	0	5	5	0	462
+mul	D924	693	HalfToEven	executed	0	0	5	5	0	693
+mul	D924	923	HalfToEven	executed	0	0	4	4	0	923
+mul	D1232	0	HalfToEven	executed	0	0	5	5	0	0
+mul	D1232	308	HalfToEven	executed	0	0	5	5	0	308
+mul	D1232	616	HalfToEven	executed	0	0	5	5	0	616
+mul	D1232	924	HalfToEven	executed	0	0	5	5	0	924
+mul	D1232	1231	HalfToEven	executed	0	0	4	4	0	1231
+div	D18	0	HalfToEven	executed	0	0	7	7	0	0
+div	D18	4	HalfToEven	executed	0	0	7	7	0	4
+div	D18	9	HalfToEven	executed	0	0	7	7	0	9
+div	D18	13	HalfToEven	executed	0	0	7	7	0	13
+div	D18	17	HalfToEven	executed	0	0	7	7	0	17
+div	D38	0	HalfToEven	executed	0	0	7	7	0	0
+div	D38	9	HalfToEven	executed	0	0	7	7	0	9
+div	D38	19	HalfToEven	executed	0	0	7	7	0	19
+div	D38	28	HalfToEven	executed	0	0	7	7	0	28
+div	D38	37	HalfToEven	executed	0	0	7	7	0	37
+div	D57	0	HalfToEven	executed	0	0	7	7	0	0
+div	D57	14	HalfToEven	executed	0	0	7	7	0	14
+div	D57	28	HalfToEven	executed	0	0	7	7	0	28
+div	D57	42	HalfToEven	executed	0	0	7	7	0	42
+div	D57	56	HalfToEven	executed	0	0	7	7	0	56
+div	D76	0	HalfToEven	executed	0	0	7	7	0	0
+div	D76	19	HalfToEven	executed	0	0	7	7	0	19
+div	D76	38	HalfToEven	executed	0	0	7	7	0	38
+div	D76	57	HalfToEven	executed	0	0	7	7	0	57
+div	D76	75	HalfToEven	executed	0	0	7	7	0	75
+div	D115	0	HalfToEven	executed	0	0	7	7	0	0
+div	D115	28	HalfToEven	executed	0	0	7	7	0	28
+div	D115	57	HalfToEven	executed	0	0	7	7	0	57
+div	D115	86	HalfToEven	executed	0	0	7	7	0	86
+div	D115	114	HalfToEven	executed	0	0	7	7	0	114
+div	D153	0	HalfToEven	executed	0	0	7	7	0	0
+div	D153	38	HalfToEven	executed	0	0	7	7	0	38
+div	D153	76	HalfToEven	executed	0	0	7	7	0	76
+div	D153	114	HalfToEven	executed	0	0	7	7	0	114
+div	D153	152	HalfToEven	executed	0	0	7	7	0	152
+div	D230	0	HalfToEven	executed	0	0	7	7	0	0
+div	D230	57	HalfToEven	executed	0	0	7	7	0	57
+div	D230	115	HalfToEven	executed	0	0	7	7	0	115
+div	D230	172	HalfToEven	executed	0	0	7	7	0	172
+div	D230	229	HalfToEven	executed	0	0	7	7	0	229
+div	D307	0	HalfToEven	executed	0	0	7	7	0	0
+div	D307	76	HalfToEven	executed	0	0	7	7	0	76
+div	D307	153	HalfToEven	executed	0	0	7	7	0	153
+div	D307	230	HalfToEven	executed	0	0	7	7	0	230
+div	D307	306	HalfToEven	executed	0	0	7	7	0	306
+div	D462	0	HalfToEven	executed	0	0	7	7	0	0
+div	D462	115	HalfToEven	executed	0	0	7	7	0	115
+div	D462	231	HalfToEven	executed	0	0	7	7	0	231
+div	D462	346	HalfToEven	executed	0	0	7	7	0	346
+div	D462	461	HalfToEven	executed	0	0	7	7	0	461
+div	D616	0	HalfToEven	executed	0	0	7	7	0	0
+div	D616	154	HalfToEven	executed	0	0	7	7	0	154
+div	D616	308	HalfToEven	executed	0	0	7	7	0	308
+div	D616	462	HalfToEven	executed	0	0	7	7	0	462
+div	D616	615	HalfToEven	executed	0	0	7	7	0	615
+div	D924	0	HalfToEven	executed	0	0	7	7	0	0
+div	D924	231	HalfToEven	executed	0	0	7	7	0	231
+div	D924	462	HalfToEven	executed	0	0	7	7	0	462
+div	D924	693	HalfToEven	executed	0	0	7	7	0	693
+div	D924	923	HalfToEven	executed	0	0	7	7	0	923
+div	D1232	0	HalfToEven	executed	0	0	7	7	0	0
+div	D1232	308	HalfToEven	executed	0	0	7	7	0	308
+div	D1232	616	HalfToEven	executed	0	0	7	7	0	616
+div	D1232	924	HalfToEven	executed	0	0	7	7	0	924
+div	D1232	1231	HalfToEven	executed	0	0	7	7	0	1231
+rem	D18	0	HalfToEven	executed	0	0	6	6	0	0
+rem	D18	4	HalfToEven	executed	0	0	6	6	0	4
+rem	D18	9	HalfToEven	executed	0	0	6	6	0	9
+rem	D18	13	HalfToEven	executed	0	0	6	6	0	13
+rem	D18	17	HalfToEven	executed	0	0	6	6	0	17
+rem	D38	0	HalfToEven	executed	0	0	6	6	0	0
+rem	D38	9	HalfToEven	executed	0	0	6	6	0	9
+rem	D38	19	HalfToEven	executed	0	0	6	6	0	19
+rem	D38	28	HalfToEven	executed	0	0	6	6	0	28
+rem	D38	37	HalfToEven	executed	0	0	6	6	0	37
+rem	D57	0	HalfToEven	executed	0	0	6	6	0	0
+rem	D57	14	HalfToEven	executed	0	0	6	6	0	14
+rem	D57	28	HalfToEven	executed	0	0	6	6	0	28
+rem	D57	42	HalfToEven	executed	0	0	6	6	0	42
+rem	D57	56	HalfToEven	executed	0	0	6	6	0	56
+rem	D76	0	HalfToEven	executed	0	0	6	6	0	0
+rem	D76	19	HalfToEven	executed	0	0	6	6	0	19
+rem	D76	38	HalfToEven	executed	0	0	6	6	0	38
+rem	D76	57	HalfToEven	executed	0	0	6	6	0	57
+rem	D76	75	HalfToEven	executed	0	0	6	6	0	75
+rem	D115	0	HalfToEven	executed	0	0	6	6	0	0
+rem	D115	28	HalfToEven	executed	0	0	6	6	0	28
+rem	D115	57	HalfToEven	executed	0	0	6	6	0	57
+rem	D115	86	HalfToEven	executed	0	0	6	6	0	86
+rem	D115	114	HalfToEven	executed	0	0	6	6	0	114
+rem	D153	0	HalfToEven	executed	0	0	6	6	0	0
+rem	D153	38	HalfToEven	executed	0	0	6	6	0	38
+rem	D153	76	HalfToEven	executed	0	0	6	6	0	76
+rem	D153	114	HalfToEven	executed	0	0	6	6	0	114
+rem	D153	152	HalfToEven	executed	0	0	6	6	0	152
+rem	D230	0	HalfToEven	executed	0	0	6	6	0	0
+rem	D230	57	HalfToEven	executed	0	0	6	6	0	57
+rem	D230	115	HalfToEven	executed	0	0	6	6	0	115
+rem	D230	172	HalfToEven	executed	0	0	6	6	0	172
+rem	D230	229	HalfToEven	executed	0	0	6	6	0	229
+rem	D307	0	HalfToEven	executed	0	0	6	6	0	0
+rem	D307	76	HalfToEven	executed	0	0	6	6	0	76
+rem	D307	153	HalfToEven	executed	0	0	6	6	0	153
+rem	D307	230	HalfToEven	executed	0	0	6	6	0	230
+rem	D307	306	HalfToEven	executed	0	0	6	6	0	306
+rem	D462	0	HalfToEven	executed	0	0	6	6	0	0
+rem	D462	115	HalfToEven	executed	0	0	6	6	0	115
+rem	D462	231	HalfToEven	executed	0	0	6	6	0	231
+rem	D462	346	HalfToEven	executed	0	0	6	6	0	346
+rem	D462	461	HalfToEven	executed	0	0	6	6	0	461
+rem	D616	0	HalfToEven	executed	0	0	6	6	0	0
+rem	D616	154	HalfToEven	executed	0	0	6	6	0	154
+rem	D616	308	HalfToEven	executed	0	0	6	6	0	308
+rem	D616	462	HalfToEven	executed	0	0	6	6	0	462
+rem	D616	615	HalfToEven	executed	0	0	6	6	0	615
+rem	D924	0	HalfToEven	executed	0	0	6	6	0	0
+rem	D924	231	HalfToEven	executed	0	0	6	6	0	231
+rem	D924	462	HalfToEven	executed	0	0	6	6	0	462
+rem	D924	693	HalfToEven	executed	0	0	6	6	0	693
+rem	D924	923	HalfToEven	executed	0	0	6	6	0	923
+rem	D1232	0	HalfToEven	executed	0	0	6	6	0	0
+rem	D1232	308	HalfToEven	executed	0	0	6	6	0	308
+rem	D1232	616	HalfToEven	executed	0	0	6	6	0	616
+rem	D1232	924	HalfToEven	executed	0	0	6	6	0	924
+rem	D1232	1231	HalfToEven	executed	0	0	6	6	0	1231
+hypot	D18	0	HalfToEven	executed	0	0	19	19	0	0
+hypot	D18	3	HalfToEven	executed	0	0	1	1	0	3
+hypot	D18	9	HalfToEven	executed	0	0	8	8	0	9
+hypot	D38	0	HalfToEven	executed	0	0	9	9	0	0
+hypot	D38	2	HalfToEven	executed	0	0	2	2	0	2
+hypot	D38	6	HalfToEven	executed	0	0	10	10	0	6
+hypot	D38	9	HalfToEven	executed	0	0	1	1	0	9
+hypot	D38	10	HalfToEven	executed	0	0	1	1	0	10
+hypot	D38	12	HalfToEven	executed	0	0	1	1	0	12
+hypot	D38	17	HalfToEven	executed	0	0	1	1	0	17
+hypot	D38	18	HalfToEven	executed	0	0	1	1	0	18
+hypot	D38	19	HalfToEven	executed	0	0	11	11	0	19
+hypot	D57	0	HalfToEven	executed	0	0	12	12	0	0
+hypot	D57	20	HalfToEven	executed	0	0	1	1	0	20
+hypot	D57	30	HalfToEven	executed	0	0	9	9	0	30
+hypot	D76	0	HalfToEven	executed	0	0	1	1	0	0
+hypot	D76	18	HalfToEven	executed	0	0	1	1	0	18
+hypot	D76	40	HalfToEven	executed	0	0	2	2	0	40
+hypot	D115	50	HalfToEven	executed	0	0	1	1	0	50
+hypot	D307	0	HalfToEven	executed	0	0	2	2	0	0
+hypot	D307	30	HalfToEven	executed	0	0	8	8	0	30
+hypot	D307	50	HalfToEven	executed	0	0	2	2	0	50
+hypot	D1232	0	HalfToEven	executed	0	0	1	1	0	0

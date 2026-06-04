@@ -1,801 +1,1638 @@
 # library: dashu-float
 # key: method	width	scale	rounding	result
-# result columns: kind(executed|na)	max_lsbe	max_ulp	scored	correctly_rounded	max_digits
+# result columns: kind(executed|na)	max_lsbe	max_ulp	scored	correctly_rounded	max_digits	reach_scale
 # max_digits = exact decimal-digit length of the worst error magnitude (what the fidelity grade scores); max_lsbe is its bit-width.
+# reach_scale = the depth (fractional digits) this library was actually graded at — its own last representable digit; equals `scale` for arbitrary-precision peers and decimal-scaled, equals the library's cap for a fixed-precision peer running on a deeper cell. The lsbe/ulp/digits in this row measure correctness at THAT depth (grade-at-own-last-digit), and the gap `scale - reach_scale` is the shallower-reach metric.
 # source: benches/lib_cmp_precision.rs (regenerate with `cargo bench --bench lib_cmp_precision --features wide,x-wide,xx-wide,macros`)
-method	width	scale	rounding	kind	max_lsbe	max_ulp	scored	correctly_rounded	max_digits
-sqrt	D18	0	HalfAwayFromZero	executed	0	0	75	75	0
-sqrt	D18	9	HalfAwayFromZero	executed	0	0	76	76	0
-sqrt	D18	17	HalfAwayFromZero	executed	0	0	41	41	0
-sqrt	D38	0	HalfAwayFromZero	executed	0	0	67	67	0
-sqrt	D38	19	HalfAwayFromZero	executed	0	0	68	68	0
-sqrt	D38	37	HalfAwayFromZero	executed	0	0	35	35	0
-sqrt	D57	0	HalfAwayFromZero	executed	0	0	62	62	0
-sqrt	D57	28	HalfAwayFromZero	executed	0	0	63	63	0
-sqrt	D57	56	HalfAwayFromZero	executed	1	1.000000	31	30	1
-sqrt	D76	0	HalfAwayFromZero	executed	0	0	54	54	0
-sqrt	D76	35	HalfAwayFromZero	executed	0	0	55	55	0
-sqrt	D76	75	HalfAwayFromZero	executed	1	1.000000	26	25	1
-sqrt	D115	0	HalfAwayFromZero	executed	56	6.978e16	47	32	17
-sqrt	D115	57	HalfAwayFromZero	executed	0	0	48	48	0
-sqrt	D115	114	HalfAwayFromZero	executed	1	1.000000	23	22	1
-sqrt	D153	0	HalfAwayFromZero	executed	119	4.354e35	43	29	36
-sqrt	D153	76	HalfAwayFromZero	executed	0	0	44	44	0
-sqrt	D153	152	HalfAwayFromZero	executed	59	4.708e17	21	3	18
-sqrt	D230	0	HalfAwayFromZero	executed	250	4.947e74	38	24	75
-sqrt	D230	115	HalfAwayFromZero	executed	56	5.226e16	39	27	17
-sqrt	D230	229	HalfAwayFromZero	executed	1	1.000000	18	17	1
-sqrt	D307	0	HalfAwayFromZero	executed	376	4.749e112	34	25	113
-sqrt	D307	150	HalfAwayFromZero	executed	126	6.535e37	35	26	38
-sqrt	D307	306	HalfAwayFromZero	executed	1	1.000000	16	15	1
-sqrt	D462	0	HalfAwayFromZero	executed	635	4.449e190	34	23	191
-sqrt	D462	230	HalfAwayFromZero	executed	253	2.999e75	35	24	76
-sqrt	D462	461	HalfAwayFromZero	executed	1	1.000000	16	15	1
-sqrt	D616	0	HalfAwayFromZero	executed	891	4.449e267	34	23	268
-sqrt	D616	308	HalfAwayFromZero	executed	379	4.425e113	35	24	114
-sqrt	D616	615	HalfAwayFromZero	executed	1	1.000000	16	15	1
-sqrt	D924	0	HalfAwayFromZero	executed	1402	inf	34	23	422
-sqrt	D924	460	HalfAwayFromZero	executed	638	4.673e191	35	24	192
-sqrt	D924	923	HalfAwayFromZero	executed	1	1.000000	16	15	1
-sqrt	D1232	0	HalfAwayFromZero	executed	1914	inf	34	23	576
-sqrt	D1232	615	HalfAwayFromZero	executed	891	5.808e267	35	26	268
-sqrt	D1232	1231	HalfAwayFromZero	executed	1	1.000000	16	15	1
-cbrt	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D76	35	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D307	150	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D462	230	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D924	460	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D1232	615	HalfAwayFromZero	na	-1	na	0	0	-1
-cbrt	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1
-exp	D18	0	HalfAwayFromZero	executed	0	0	32	32	0
-exp	D18	9	HalfAwayFromZero	executed	0	0	67	67	0
-exp	D18	17	HalfAwayFromZero	executed	0	0	35	35	0
-exp	D38	0	HalfAwayFromZero	executed	0	0	32	32	0
-exp	D38	19	HalfAwayFromZero	executed	0	0	59	59	0
-exp	D38	37	HalfAwayFromZero	executed	0	0	32	32	0
-exp	D57	0	HalfAwayFromZero	executed	51	1.751e15	29	24	16
-exp	D57	28	HalfAwayFromZero	executed	0	0	54	54	0
-exp	D57	56	HalfAwayFromZero	executed	0	0	29	29	0
-exp	D76	0	HalfAwayFromZero	executed	115	2.564e34	25	22	35
-exp	D76	35	HalfAwayFromZero	executed	0	0	46	46	0
-exp	D76	75	HalfAwayFromZero	executed	0	0	20	20	0
-exp	D115	0	HalfAwayFromZero	executed	243	3.097e72	25	14	73
-exp	D115	57	HalfAwayFromZero	executed	53	5.492e15	39	33	16
-exp	D115	114	HalfAwayFromZero	executed	0	0	18	18	0
-exp	D153	0	HalfAwayFromZero	executed	369	3.390e110	25	16	111
-exp	D153	76	HalfAwayFromZero	executed	119	3.861e35	35	27	36
-exp	D153	152	HalfAwayFromZero	executed	60	6.118e17	9	2	18
-exp	D230	0	HalfAwayFromZero	executed	628	2.453e188	21	14	189
-exp	D230	115	HalfAwayFromZero	executed	246	1.051e73	30	26	74
-exp	D230	229	HalfAwayFromZero	executed	0	0	10	10	0
-exp	D307	0	HalfAwayFromZero	executed	884	1.118e265	16	10	266
-exp	D307	30	HalfAwayFromZero	executed	781	7.891e234	26	22	235
-exp	D307	70	HalfAwayFromZero	executed	648	4.453e194	26	24	195
-exp	D307	120	HalfAwayFromZero	executed	486	4.075e145	26	20	146
-exp	D307	150	HalfAwayFromZero	executed	386	2.957e115	26	20	116
-exp	D307	306	HalfAwayFromZero	executed	0	0	13	13	0
-exp	D462	0	HalfAwayFromZero	executed	1399	inf	19	13	421
-exp	D462	30	HalfAwayFromZero	executed	1299	inf	26	22	391
-exp	D462	100	HalfAwayFromZero	executed	1064	inf	26	18	320
-exp	D462	180	HalfAwayFromZero	executed	798	5.908e239	26	24	240
-exp	D462	230	HalfAwayFromZero	executed	635	1.732e190	26	20	191
-exp	D462	461	HalfAwayFromZero	executed	0	0	11	11	0
-exp	D616	0	HalfAwayFromZero	executed	1911	inf	19	13	575
-exp	D616	30	HalfAwayFromZero	executed	1808	inf	26	22	544
-exp	D616	130	HalfAwayFromZero	executed	1475	inf	26	22	444
-exp	D616	240	HalfAwayFromZero	executed	1110	inf	26	22	334
-exp	D616	308	HalfAwayFromZero	executed	887	4.755e266	26	22	267
-exp	D616	615	HalfAwayFromZero	executed	0	0	13	13	0
-exp	D924	0	HalfAwayFromZero	executed	2934	inf	18	16	883
-exp	D924	30	HalfAwayFromZero	executed	2834	inf	26	18	853
-exp	D924	180	HalfAwayFromZero	executed	2336	inf	26	20	703
-exp	D924	350	HalfAwayFromZero	executed	1771	inf	26	20	533
-exp	D924	460	HalfAwayFromZero	executed	1406	inf	26	18	423
-exp	D924	923	HalfAwayFromZero	executed	0	0	11	11	0
-exp	D1232	0	HalfAwayFromZero	executed	3957	inf	19	13	1191
-exp	D1232	30	HalfAwayFromZero	executed	3857	inf	26	20	1161
-exp	D1232	250	HalfAwayFromZero	executed	3126	inf	26	20	941
-exp	D1232	470	HalfAwayFromZero	executed	2396	inf	26	22	721
-exp	D1232	615	HalfAwayFromZero	executed	1911	inf	26	22	575
-exp	D1232	1231	HalfAwayFromZero	executed	0	0	13	13	0
-ln	D18	0	HalfAwayFromZero	executed	0	0	42	42	0
-ln	D18	9	HalfAwayFromZero	executed	0	0	66	66	0
-ln	D18	17	HalfAwayFromZero	executed	0	0	40	40	0
-ln	D38	0	HalfAwayFromZero	executed	0	0	37	37	0
-ln	D38	19	HalfAwayFromZero	executed	0	0	58	58	0
-ln	D38	37	HalfAwayFromZero	executed	0	0	33	33	0
-ln	D57	0	HalfAwayFromZero	executed	0	0	33	33	0
-ln	D57	28	HalfAwayFromZero	executed	0	0	53	53	0
-ln	D57	56	HalfAwayFromZero	executed	0	0	25	25	0
-ln	D76	0	HalfAwayFromZero	executed	0	0	28	28	0
-ln	D76	35	HalfAwayFromZero	executed	0	0	45	45	0
-ln	D76	75	HalfAwayFromZero	executed	0	0	23	23	0
-ln	D115	0	HalfAwayFromZero	executed	0	0	25	25	0
-ln	D115	57	HalfAwayFromZero	executed	0	0	38	38	0
-ln	D115	114	HalfAwayFromZero	executed	0	0	15	15	0
-ln	D153	0	HalfAwayFromZero	executed	0	0	23	23	0
-ln	D153	76	HalfAwayFromZero	executed	0	0	34	34	0
-ln	D153	152	HalfAwayFromZero	executed	59	5.095e17	20	7	18
-ln	D230	0	HalfAwayFromZero	executed	0	0	20	20	0
-ln	D230	115	HalfAwayFromZero	executed	0	0	29	29	0
-ln	D230	229	HalfAwayFromZero	executed	0	0	15	15	0
-ln	D307	0	HalfAwayFromZero	executed	0	0	18	18	0
-ln	D307	150	HalfAwayFromZero	executed	53	6.078e15	25	24	16
-ln	D307	306	HalfAwayFromZero	executed	0	0	11	11	0
-ln	D462	0	HalfAwayFromZero	executed	0	0	17	17	0
-ln	D462	230	HalfAwayFromZero	executed	0	0	25	25	0
-ln	D462	461	HalfAwayFromZero	executed	0	0	17	17	0
-ln	D616	0	HalfAwayFromZero	executed	0	0	17	17	0
-ln	D616	308	HalfAwayFromZero	executed	0	0	25	25	0
-ln	D616	615	HalfAwayFromZero	executed	0	0	11	11	0
-ln	D924	0	HalfAwayFromZero	executed	0	0	18	18	0
-ln	D924	460	HalfAwayFromZero	executed	0	0	25	25	0
-ln	D924	923	HalfAwayFromZero	executed	0	0	13	13	0
-ln	D1232	0	HalfAwayFromZero	executed	0	0	17	17	0
-ln	D1232	615	HalfAwayFromZero	executed	0	0	25	25	0
-ln	D1232	1231	HalfAwayFromZero	executed	0	0	13	13	0
-log2	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D76	35	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D307	150	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D462	230	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D924	460	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D1232	615	HalfAwayFromZero	na	-1	na	0	0	-1
-log2	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D76	35	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D307	150	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D462	230	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D924	460	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D1232	615	HalfAwayFromZero	na	-1	na	0	0	-1
-log10	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D76	35	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D307	150	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D462	230	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D924	460	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D1232	615	HalfAwayFromZero	na	-1	na	0	0	-1
-exp2	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D76	35	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D307	150	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D462	230	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D924	460	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D1232	615	HalfAwayFromZero	na	-1	na	0	0	-1
-sin	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D76	35	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D307	150	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D462	230	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D924	460	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D1232	615	HalfAwayFromZero	na	-1	na	0	0	-1
-cos	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D76	35	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D307	150	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D462	230	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D924	460	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D1232	615	HalfAwayFromZero	na	-1	na	0	0	-1
-tan	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D76	35	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D307	150	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D462	230	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D924	460	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D1232	615	HalfAwayFromZero	na	-1	na	0	0	-1
-atan	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D76	35	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D307	150	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D462	230	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D924	460	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D1232	615	HalfAwayFromZero	na	-1	na	0	0	-1
-asin	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D76	35	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D307	150	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D462	230	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D924	460	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D1232	615	HalfAwayFromZero	na	-1	na	0	0	-1
-acos	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D76	35	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D307	150	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D462	230	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D924	460	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D1232	615	HalfAwayFromZero	na	-1	na	0	0	-1
-sinh	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1
-cosh	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cosh	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1
-cosh	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cosh	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1
-cosh	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cosh	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1
-cosh	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cosh	D76	35	HalfAwayFromZero	na	-1	na	0	0	-1
-cosh	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cosh	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1
-cosh	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cosh	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1
-cosh	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cosh	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1
-cosh	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cosh	D307	150	HalfAwayFromZero	na	-1	na	0	0	-1
-cosh	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cosh	D462	230	HalfAwayFromZero	na	-1	na	0	0	-1
-cosh	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cosh	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1
-cosh	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cosh	D924	460	HalfAwayFromZero	na	-1	na	0	0	-1
-cosh	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1
-cosh	D1232	615	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D76	35	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D307	150	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D462	230	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D924	460	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D1232	615	HalfAwayFromZero	na	-1	na	0	0	-1
-tanh	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D76	35	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D307	150	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D462	230	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D924	460	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D1232	615	HalfAwayFromZero	na	-1	na	0	0	-1
-asinh	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D76	35	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D307	150	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D462	230	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D924	460	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D1232	615	HalfAwayFromZero	na	-1	na	0	0	-1
-acosh	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D76	35	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D307	150	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D462	230	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D924	460	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D1232	615	HalfAwayFromZero	na	-1	na	0	0	-1
-atanh	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D76	35	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D307	150	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D462	230	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D924	460	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D1232	615	HalfAwayFromZero	na	-1	na	0	0	-1
-log	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D76	35	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D307	150	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D462	230	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D924	460	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D1232	615	HalfAwayFromZero	na	-1	na	0	0	-1
-atan2	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D76	35	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D307	150	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D462	230	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D924	460	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D1232	615	HalfAwayFromZero	na	-1	na	0	0	-1
-powf	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1
+method	width	scale	rounding	kind	max_lsbe	max_ulp	scored	correctly_rounded	max_digits	reach_scale
+sqrt	D18	0	HalfAwayFromZero	executed	0	0	75	75	0	0
+sqrt	D18	4	HalfAwayFromZero	executed	0	0	76	76	0	4
+sqrt	D18	9	HalfAwayFromZero	executed	0	0	76	76	0	9
+sqrt	D18	13	HalfAwayFromZero	executed	0	0	58	58	0	13
+sqrt	D18	17	HalfAwayFromZero	executed	0	0	41	41	0	17
+sqrt	D38	0	HalfAwayFromZero	executed	0	0	67	67	0	0
+sqrt	D38	9	HalfAwayFromZero	executed	0	0	68	68	0	9
+sqrt	D38	19	HalfAwayFromZero	executed	0	0	68	68	0	19
+sqrt	D38	28	HalfAwayFromZero	executed	0	0	68	68	0	28
+sqrt	D38	37	HalfAwayFromZero	executed	0	0	35	35	0	37
+sqrt	D57	0	HalfAwayFromZero	executed	0	0	62	62	0	0
+sqrt	D57	14	HalfAwayFromZero	executed	0	0	63	63	0	14
+sqrt	D57	28	HalfAwayFromZero	executed	0	0	63	63	0	28
+sqrt	D57	42	HalfAwayFromZero	executed	0	0	63	63	0	42
+sqrt	D57	56	HalfAwayFromZero	executed	1	1.000000	31	30	1	56
+sqrt	D76	0	HalfAwayFromZero	executed	0	0	54	54	0	0
+sqrt	D76	19	HalfAwayFromZero	executed	0	0	55	55	0	19
+sqrt	D76	38	HalfAwayFromZero	executed	0	0	55	55	0	38
+sqrt	D76	57	HalfAwayFromZero	executed	0	0	55	55	0	57
+sqrt	D76	75	HalfAwayFromZero	executed	1	1.000000	26	25	1	75
+sqrt	D115	0	HalfAwayFromZero	executed	56	6.978e16	47	32	17	0
+sqrt	D115	28	HalfAwayFromZero	executed	10	512.000000	48	33	3	28
+sqrt	D115	57	HalfAwayFromZero	executed	0	0	48	48	0	57
+sqrt	D115	86	HalfAwayFromZero	executed	0	0	48	48	0	86
+sqrt	D115	114	HalfAwayFromZero	executed	1	1.000000	23	22	1	114
+sqrt	D153	0	HalfAwayFromZero	executed	119	4.354e35	43	29	36	0
+sqrt	D153	38	HalfAwayFromZero	executed	56	7.023e16	44	30	17	38
+sqrt	D153	76	HalfAwayFromZero	executed	0	0	44	44	0	76
+sqrt	D153	114	HalfAwayFromZero	executed	0	0	44	44	0	114
+sqrt	D153	152	HalfAwayFromZero	executed	1	1.000000	21	20	1	152
+sqrt	D230	0	HalfAwayFromZero	executed	250	5.155e74	94	57	75	0
+sqrt	D230	57	HalfAwayFromZero	executed	153	7.778e45	95	60	46	57
+sqrt	D230	115	HalfAwayFromZero	executed	57	8.496e16	95	60	17	115
+sqrt	D230	172	HalfAwayFromZero	executed	0	0	95	95	0	172
+sqrt	D230	229	HalfAwayFromZero	executed	1	1.000000	55	54	1	229
+sqrt	D307	0	HalfAwayFromZero	executed	376	4.749e112	34	25	113	0
+sqrt	D307	76	HalfAwayFromZero	executed	250	5.347e74	35	26	75	76
+sqrt	D307	153	HalfAwayFromZero	executed	122	4.841e36	35	24	37	153
+sqrt	D307	230	HalfAwayFromZero	executed	0	0	35	35	0	230
+sqrt	D307	306	HalfAwayFromZero	executed	1	1.000000	16	15	1	306
+sqrt	D462	0	HalfAwayFromZero	executed	635	6.188e190	94	57	191	0
+sqrt	D462	115	HalfAwayFromZero	executed	442	7.805e132	95	60	133	115
+sqrt	D462	231	HalfAwayFromZero	executed	250	6.745e74	95	60	75	231
+sqrt	D462	346	HalfAwayFromZero	executed	60	5.854e17	95	58	18	346
+sqrt	D462	461	HalfAwayFromZero	executed	1	1.000000	55	54	1	461
+sqrt	D616	0	HalfAwayFromZero	executed	891	5.367e267	94	57	268	0
+sqrt	D616	154	HalfAwayFromZero	executed	635	6.138e190	95	58	191	154
+sqrt	D616	308	HalfAwayFromZero	executed	379	5.424e113	95	58	114	308
+sqrt	D616	462	HalfAwayFromZero	executed	123	5.978e36	95	58	37	462
+sqrt	D616	615	HalfAwayFromZero	executed	1	1.000000	55	54	1	615
+sqrt	D924	0	HalfAwayFromZero	executed	1402	inf	94	57	422	0
+sqrt	D924	231	HalfAwayFromZero	executed	1017	6.010e305	95	60	306	231
+sqrt	D924	462	HalfAwayFromZero	executed	635	4.479e190	95	58	191	462
+sqrt	D924	693	HalfAwayFromZero	executed	250	8.054e74	95	60	75	693
+sqrt	D924	923	HalfAwayFromZero	executed	1	1.000000	55	54	1	923
+sqrt	D1232	0	HalfAwayFromZero	executed	1914	inf	94	57	576	0
+sqrt	D1232	308	HalfAwayFromZero	executed	1402	inf	95	58	422	308
+sqrt	D1232	616	HalfAwayFromZero	executed	891	5.595e267	95	58	268	616
+sqrt	D1232	924	HalfAwayFromZero	executed	379	5.974e113	95	58	114	924
+sqrt	D1232	1231	HalfAwayFromZero	executed	1	1.000000	55	54	1	1231
+cbrt	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cbrt	D18	4	HalfAwayFromZero	na	-1	na	0	0	-1	4
+cbrt	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+cbrt	D18	13	HalfAwayFromZero	na	-1	na	0	0	-1	13
+cbrt	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1	17
+cbrt	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cbrt	D38	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+cbrt	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+cbrt	D38	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+cbrt	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1	37
+cbrt	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cbrt	D57	14	HalfAwayFromZero	na	-1	na	0	0	-1	14
+cbrt	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+cbrt	D57	42	HalfAwayFromZero	na	-1	na	0	0	-1	42
+cbrt	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1	56
+cbrt	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cbrt	D76	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+cbrt	D76	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+cbrt	D76	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+cbrt	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1	75
+cbrt	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cbrt	D115	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+cbrt	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+cbrt	D115	86	HalfAwayFromZero	na	-1	na	0	0	-1	86
+cbrt	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+cbrt	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cbrt	D153	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+cbrt	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+cbrt	D153	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+cbrt	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1	152
+cbrt	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cbrt	D230	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+cbrt	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+cbrt	D230	172	HalfAwayFromZero	na	-1	na	0	0	-1	172
+cbrt	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1	229
+cbrt	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cbrt	D307	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+cbrt	D307	153	HalfAwayFromZero	na	-1	na	0	0	-1	153
+cbrt	D307	230	HalfAwayFromZero	na	-1	na	0	0	-1	230
+cbrt	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1	306
+cbrt	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cbrt	D462	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+cbrt	D462	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+cbrt	D462	346	HalfAwayFromZero	na	-1	na	0	0	-1	346
+cbrt	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1	461
+cbrt	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cbrt	D616	154	HalfAwayFromZero	na	-1	na	0	0	-1	154
+cbrt	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+cbrt	D616	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+cbrt	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1	615
+cbrt	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cbrt	D924	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+cbrt	D924	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+cbrt	D924	693	HalfAwayFromZero	na	-1	na	0	0	-1	693
+cbrt	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1	923
+cbrt	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cbrt	D1232	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+cbrt	D1232	616	HalfAwayFromZero	na	-1	na	0	0	-1	616
+cbrt	D1232	924	HalfAwayFromZero	na	-1	na	0	0	-1	924
+cbrt	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1	1231
+exp	D18	0	HalfAwayFromZero	executed	0	0	32	32	0	0
+exp	D18	4	HalfAwayFromZero	executed	0	0	67	67	0	4
+exp	D18	9	HalfAwayFromZero	executed	0	0	67	67	0	9
+exp	D18	13	HalfAwayFromZero	executed	0	0	67	67	0	13
+exp	D18	17	HalfAwayFromZero	executed	0	0	35	35	0	17
+exp	D38	0	HalfAwayFromZero	executed	0	0	32	32	0	0
+exp	D38	9	HalfAwayFromZero	executed	0	0	59	59	0	9
+exp	D38	19	HalfAwayFromZero	executed	0	0	59	59	0	19
+exp	D38	28	HalfAwayFromZero	executed	0	0	59	59	0	28
+exp	D38	37	HalfAwayFromZero	executed	0	0	32	32	0	37
+exp	D57	0	HalfAwayFromZero	executed	51	1.751e15	29	24	16	0
+exp	D57	14	HalfAwayFromZero	executed	6	40.000000	54	53	2	14
+exp	D57	28	HalfAwayFromZero	executed	0	0	54	54	0	28
+exp	D57	42	HalfAwayFromZero	executed	0	0	54	54	0	42
+exp	D57	56	HalfAwayFromZero	executed	0	0	29	29	0	56
+exp	D76	0	HalfAwayFromZero	executed	115	2.564e34	25	22	35	0
+exp	D76	19	HalfAwayFromZero	executed	52	4.312e15	46	44	16	19
+exp	D76	38	HalfAwayFromZero	executed	0	0	46	46	0	38
+exp	D76	57	HalfAwayFromZero	executed	0	0	46	46	0	57
+exp	D76	75	HalfAwayFromZero	executed	0	0	20	20	0	75
+exp	D115	0	HalfAwayFromZero	executed	243	3.097e72	25	14	73	0
+exp	D115	28	HalfAwayFromZero	executed	153	3.986e45	39	29	46	28
+exp	D115	57	HalfAwayFromZero	executed	53	5.492e15	39	33	16	57
+exp	D115	86	HalfAwayFromZero	executed	0	0	39	39	0	86
+exp	D115	114	HalfAwayFromZero	executed	0	0	18	18	0	114
+exp	D153	0	HalfAwayFromZero	executed	369	3.390e110	25	16	111	0
+exp	D153	38	HalfAwayFromZero	executed	246	2.361e73	35	28	74	38
+exp	D153	76	HalfAwayFromZero	executed	119	3.861e35	35	27	36	76
+exp	D153	114	HalfAwayFromZero	executed	0	0	35	35	0	114
+exp	D153	152	HalfAwayFromZero	executed	0	0	9	9	0	152
+exp	D230	0	HalfAwayFromZero	executed	628	2.453e188	49	37	189	0
+exp	D230	57	HalfAwayFromZero	executed	439	1.482e131	86	71	132	57
+exp	D230	115	HalfAwayFromZero	executed	246	1.051e73	86	75	74	115
+exp	D230	172	HalfAwayFromZero	executed	51	1.558e15	86	81	16	172
+exp	D230	229	HalfAwayFromZero	executed	0	0	48	48	0	229
+exp	D307	0	HalfAwayFromZero	executed	884	1.118e265	16	10	266	0
+exp	D307	76	HalfAwayFromZero	executed	632	4.316e189	26	22	190	76
+exp	D307	153	HalfAwayFromZero	executed	376	4.421e112	26	20	113	153
+exp	D307	230	HalfAwayFromZero	executed	113	7.935e33	26	25	34	230
+exp	D307	306	HalfAwayFromZero	executed	0	0	13	13	0	306
+exp	D462	0	HalfAwayFromZero	executed	1399	inf	51	34	421	0
+exp	D462	115	HalfAwayFromZero	executed	1017	1.086e305	86	67	306	115
+exp	D462	231	HalfAwayFromZero	executed	628	7.564e188	86	65	189	231
+exp	D462	346	HalfAwayFromZero	executed	250	1.593e74	86	73	75	346
+exp	D462	461	HalfAwayFromZero	executed	0	0	45	45	0	461
+exp	D616	0	HalfAwayFromZero	executed	1911	inf	48	28	575	0
+exp	D616	154	HalfAwayFromZero	executed	1396	inf	86	66	420	154
+exp	D616	308	HalfAwayFromZero	executed	887	4.755e266	86	64	267	308
+exp	D616	462	HalfAwayFromZero	executed	376	2.244e112	86	73	113	462
+exp	D616	615	HalfAwayFromZero	executed	0	0	40	40	0	615
+exp	D924	0	HalfAwayFromZero	executed	2934	inf	51	32	883	0
+exp	D924	231	HalfAwayFromZero	executed	2166	inf	86	66	652	231
+exp	D924	462	HalfAwayFromZero	executed	1399	inf	86	67	421	462
+exp	D924	693	HalfAwayFromZero	executed	628	8.683e188	86	67	189	693
+exp	D924	923	HalfAwayFromZero	executed	0	0	40	40	0	923
+exp	D1232	0	HalfAwayFromZero	executed	3957	inf	50	33	1191	0
+exp	D1232	308	HalfAwayFromZero	executed	2934	inf	86	70	883	308
+exp	D1232	616	HalfAwayFromZero	executed	1911	inf	86	69	575	616
+exp	D1232	924	HalfAwayFromZero	executed	887	4.396e266	86	68	267	924
+exp	D1232	1231	HalfAwayFromZero	executed	0	0	45	45	0	1231
+ln	D18	0	HalfAwayFromZero	executed	0	0	42	42	0	0
+ln	D18	4	HalfAwayFromZero	executed	0	0	66	66	0	4
+ln	D18	9	HalfAwayFromZero	executed	0	0	66	66	0	9
+ln	D18	13	HalfAwayFromZero	executed	0	0	66	66	0	13
+ln	D18	17	HalfAwayFromZero	executed	0	0	40	40	0	17
+ln	D38	0	HalfAwayFromZero	executed	0	0	37	37	0	0
+ln	D38	9	HalfAwayFromZero	executed	0	0	58	58	0	9
+ln	D38	19	HalfAwayFromZero	executed	0	0	58	58	0	19
+ln	D38	28	HalfAwayFromZero	executed	0	0	58	58	0	28
+ln	D38	37	HalfAwayFromZero	executed	0	0	33	33	0	37
+ln	D57	0	HalfAwayFromZero	executed	0	0	33	33	0	0
+ln	D57	14	HalfAwayFromZero	executed	0	0	53	53	0	14
+ln	D57	28	HalfAwayFromZero	executed	0	0	53	53	0	28
+ln	D57	42	HalfAwayFromZero	executed	0	0	53	53	0	42
+ln	D57	56	HalfAwayFromZero	executed	0	0	25	25	0	56
+ln	D76	0	HalfAwayFromZero	executed	0	0	28	28	0	0
+ln	D76	19	HalfAwayFromZero	executed	0	0	45	45	0	19
+ln	D76	38	HalfAwayFromZero	executed	0	0	45	45	0	38
+ln	D76	57	HalfAwayFromZero	executed	0	0	45	45	0	57
+ln	D76	75	HalfAwayFromZero	executed	0	0	23	23	0	75
+ln	D115	0	HalfAwayFromZero	executed	0	0	25	25	0	0
+ln	D115	28	HalfAwayFromZero	executed	0	0	38	38	0	28
+ln	D115	57	HalfAwayFromZero	executed	0	0	38	38	0	57
+ln	D115	86	HalfAwayFromZero	executed	0	0	38	38	0	86
+ln	D115	114	HalfAwayFromZero	executed	0	0	15	15	0	114
+ln	D153	0	HalfAwayFromZero	executed	0	0	23	23	0	0
+ln	D153	38	HalfAwayFromZero	executed	0	0	34	34	0	38
+ln	D153	76	HalfAwayFromZero	executed	0	0	34	34	0	76
+ln	D153	114	HalfAwayFromZero	executed	0	0	34	34	0	114
+ln	D153	152	HalfAwayFromZero	executed	0	0	20	20	0	152
+ln	D230	0	HalfAwayFromZero	executed	0	0	56	56	0	0
+ln	D230	57	HalfAwayFromZero	executed	0	0	85	85	0	57
+ln	D230	115	HalfAwayFromZero	executed	0	0	85	85	0	115
+ln	D230	172	HalfAwayFromZero	executed	0	0	85	85	0	172
+ln	D230	229	HalfAwayFromZero	executed	0	0	49	49	0	229
+ln	D307	0	HalfAwayFromZero	executed	0	0	18	18	0	0
+ln	D307	76	HalfAwayFromZero	executed	0	0	25	25	0	76
+ln	D307	153	HalfAwayFromZero	executed	0	0	25	25	0	153
+ln	D307	230	HalfAwayFromZero	executed	0	0	25	25	0	230
+ln	D307	306	HalfAwayFromZero	executed	0	0	11	11	0	306
+ln	D462	0	HalfAwayFromZero	executed	0	0	56	56	0	0
+ln	D462	115	HalfAwayFromZero	executed	0	0	85	85	0	115
+ln	D462	231	HalfAwayFromZero	executed	0	0	85	85	0	231
+ln	D462	346	HalfAwayFromZero	executed	0	0	85	85	0	346
+ln	D462	461	HalfAwayFromZero	executed	0	0	51	51	0	461
+ln	D616	0	HalfAwayFromZero	executed	0	0	56	56	0	0
+ln	D616	154	HalfAwayFromZero	executed	0	0	85	85	0	154
+ln	D616	308	HalfAwayFromZero	executed	0	0	85	85	0	308
+ln	D616	462	HalfAwayFromZero	executed	0	0	85	85	0	462
+ln	D616	615	HalfAwayFromZero	executed	0	0	52	52	0	615
+ln	D924	0	HalfAwayFromZero	executed	0	0	56	56	0	0
+ln	D924	231	HalfAwayFromZero	executed	0	0	85	85	0	231
+ln	D924	462	HalfAwayFromZero	executed	0	0	85	85	0	462
+ln	D924	693	HalfAwayFromZero	executed	0	0	85	85	0	693
+ln	D924	923	HalfAwayFromZero	executed	0	0	44	44	0	923
+ln	D1232	0	HalfAwayFromZero	executed	0	0	56	56	0	0
+ln	D1232	308	HalfAwayFromZero	executed	0	0	85	85	0	308
+ln	D1232	616	HalfAwayFromZero	executed	0	0	85	85	0	616
+ln	D1232	924	HalfAwayFromZero	executed	0	0	85	85	0	924
+ln	D1232	1231	HalfAwayFromZero	executed	0	0	51	51	0	1231
+log2	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log2	D18	4	HalfAwayFromZero	na	-1	na	0	0	-1	4
+log2	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+log2	D18	13	HalfAwayFromZero	na	-1	na	0	0	-1	13
+log2	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1	17
+log2	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log2	D38	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+log2	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+log2	D38	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+log2	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1	37
+log2	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log2	D57	14	HalfAwayFromZero	na	-1	na	0	0	-1	14
+log2	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+log2	D57	42	HalfAwayFromZero	na	-1	na	0	0	-1	42
+log2	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1	56
+log2	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log2	D76	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+log2	D76	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+log2	D76	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+log2	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1	75
+log2	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log2	D115	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+log2	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+log2	D115	86	HalfAwayFromZero	na	-1	na	0	0	-1	86
+log2	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+log2	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log2	D153	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+log2	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+log2	D153	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+log2	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1	152
+log2	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log2	D230	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+log2	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+log2	D230	172	HalfAwayFromZero	na	-1	na	0	0	-1	172
+log2	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1	229
+log2	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log2	D307	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+log2	D307	153	HalfAwayFromZero	na	-1	na	0	0	-1	153
+log2	D307	230	HalfAwayFromZero	na	-1	na	0	0	-1	230
+log2	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1	306
+log2	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log2	D462	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+log2	D462	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+log2	D462	346	HalfAwayFromZero	na	-1	na	0	0	-1	346
+log2	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1	461
+log2	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log2	D616	154	HalfAwayFromZero	na	-1	na	0	0	-1	154
+log2	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+log2	D616	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+log2	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1	615
+log2	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log2	D924	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+log2	D924	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+log2	D924	693	HalfAwayFromZero	na	-1	na	0	0	-1	693
+log2	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1	923
+log2	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log2	D1232	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+log2	D1232	616	HalfAwayFromZero	na	-1	na	0	0	-1	616
+log2	D1232	924	HalfAwayFromZero	na	-1	na	0	0	-1	924
+log2	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1	1231
+log10	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log10	D18	4	HalfAwayFromZero	na	-1	na	0	0	-1	4
+log10	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+log10	D18	13	HalfAwayFromZero	na	-1	na	0	0	-1	13
+log10	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1	17
+log10	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log10	D38	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+log10	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+log10	D38	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+log10	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1	37
+log10	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log10	D57	14	HalfAwayFromZero	na	-1	na	0	0	-1	14
+log10	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+log10	D57	42	HalfAwayFromZero	na	-1	na	0	0	-1	42
+log10	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1	56
+log10	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log10	D76	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+log10	D76	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+log10	D76	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+log10	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1	75
+log10	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log10	D115	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+log10	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+log10	D115	86	HalfAwayFromZero	na	-1	na	0	0	-1	86
+log10	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+log10	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log10	D153	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+log10	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+log10	D153	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+log10	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1	152
+log10	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log10	D230	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+log10	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+log10	D230	172	HalfAwayFromZero	na	-1	na	0	0	-1	172
+log10	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1	229
+log10	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log10	D307	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+log10	D307	153	HalfAwayFromZero	na	-1	na	0	0	-1	153
+log10	D307	230	HalfAwayFromZero	na	-1	na	0	0	-1	230
+log10	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1	306
+log10	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log10	D462	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+log10	D462	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+log10	D462	346	HalfAwayFromZero	na	-1	na	0	0	-1	346
+log10	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1	461
+log10	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log10	D616	154	HalfAwayFromZero	na	-1	na	0	0	-1	154
+log10	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+log10	D616	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+log10	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1	615
+log10	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log10	D924	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+log10	D924	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+log10	D924	693	HalfAwayFromZero	na	-1	na	0	0	-1	693
+log10	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1	923
+log10	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log10	D1232	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+log10	D1232	616	HalfAwayFromZero	na	-1	na	0	0	-1	616
+log10	D1232	924	HalfAwayFromZero	na	-1	na	0	0	-1	924
+log10	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1	1231
+exp2	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+exp2	D18	4	HalfAwayFromZero	na	-1	na	0	0	-1	4
+exp2	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+exp2	D18	13	HalfAwayFromZero	na	-1	na	0	0	-1	13
+exp2	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1	17
+exp2	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+exp2	D38	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+exp2	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+exp2	D38	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+exp2	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1	37
+exp2	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+exp2	D57	14	HalfAwayFromZero	na	-1	na	0	0	-1	14
+exp2	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+exp2	D57	42	HalfAwayFromZero	na	-1	na	0	0	-1	42
+exp2	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1	56
+exp2	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+exp2	D76	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+exp2	D76	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+exp2	D76	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+exp2	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1	75
+exp2	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+exp2	D115	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+exp2	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+exp2	D115	86	HalfAwayFromZero	na	-1	na	0	0	-1	86
+exp2	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+exp2	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+exp2	D153	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+exp2	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+exp2	D153	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+exp2	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1	152
+exp2	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+exp2	D230	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+exp2	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+exp2	D230	172	HalfAwayFromZero	na	-1	na	0	0	-1	172
+exp2	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1	229
+exp2	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+exp2	D307	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+exp2	D307	153	HalfAwayFromZero	na	-1	na	0	0	-1	153
+exp2	D307	230	HalfAwayFromZero	na	-1	na	0	0	-1	230
+exp2	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1	306
+exp2	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+exp2	D462	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+exp2	D462	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+exp2	D462	346	HalfAwayFromZero	na	-1	na	0	0	-1	346
+exp2	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1	461
+exp2	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+exp2	D616	154	HalfAwayFromZero	na	-1	na	0	0	-1	154
+exp2	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+exp2	D616	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+exp2	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1	615
+exp2	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+exp2	D924	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+exp2	D924	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+exp2	D924	693	HalfAwayFromZero	na	-1	na	0	0	-1	693
+exp2	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1	923
+exp2	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+exp2	D1232	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+exp2	D1232	616	HalfAwayFromZero	na	-1	na	0	0	-1	616
+exp2	D1232	924	HalfAwayFromZero	na	-1	na	0	0	-1	924
+exp2	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1	1231
+sin	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sin	D18	4	HalfAwayFromZero	na	-1	na	0	0	-1	4
+sin	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+sin	D18	13	HalfAwayFromZero	na	-1	na	0	0	-1	13
+sin	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1	17
+sin	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sin	D38	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+sin	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+sin	D38	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+sin	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1	37
+sin	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sin	D57	14	HalfAwayFromZero	na	-1	na	0	0	-1	14
+sin	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+sin	D57	42	HalfAwayFromZero	na	-1	na	0	0	-1	42
+sin	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1	56
+sin	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sin	D76	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+sin	D76	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+sin	D76	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+sin	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1	75
+sin	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sin	D115	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+sin	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+sin	D115	86	HalfAwayFromZero	na	-1	na	0	0	-1	86
+sin	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+sin	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sin	D153	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+sin	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+sin	D153	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+sin	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1	152
+sin	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sin	D230	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+sin	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+sin	D230	172	HalfAwayFromZero	na	-1	na	0	0	-1	172
+sin	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1	229
+sin	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sin	D307	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+sin	D307	153	HalfAwayFromZero	na	-1	na	0	0	-1	153
+sin	D307	230	HalfAwayFromZero	na	-1	na	0	0	-1	230
+sin	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1	306
+sin	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sin	D462	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+sin	D462	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+sin	D462	346	HalfAwayFromZero	na	-1	na	0	0	-1	346
+sin	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1	461
+sin	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sin	D616	154	HalfAwayFromZero	na	-1	na	0	0	-1	154
+sin	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+sin	D616	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+sin	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1	615
+sin	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sin	D924	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+sin	D924	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+sin	D924	693	HalfAwayFromZero	na	-1	na	0	0	-1	693
+sin	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1	923
+sin	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sin	D1232	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+sin	D1232	616	HalfAwayFromZero	na	-1	na	0	0	-1	616
+sin	D1232	924	HalfAwayFromZero	na	-1	na	0	0	-1	924
+sin	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1	1231
+cos	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cos	D18	4	HalfAwayFromZero	na	-1	na	0	0	-1	4
+cos	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+cos	D18	13	HalfAwayFromZero	na	-1	na	0	0	-1	13
+cos	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1	17
+cos	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cos	D38	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+cos	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+cos	D38	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+cos	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1	37
+cos	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cos	D57	14	HalfAwayFromZero	na	-1	na	0	0	-1	14
+cos	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+cos	D57	42	HalfAwayFromZero	na	-1	na	0	0	-1	42
+cos	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1	56
+cos	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cos	D76	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+cos	D76	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+cos	D76	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+cos	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1	75
+cos	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cos	D115	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+cos	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+cos	D115	86	HalfAwayFromZero	na	-1	na	0	0	-1	86
+cos	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+cos	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cos	D153	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+cos	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+cos	D153	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+cos	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1	152
+cos	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cos	D230	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+cos	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+cos	D230	172	HalfAwayFromZero	na	-1	na	0	0	-1	172
+cos	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1	229
+cos	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cos	D307	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+cos	D307	153	HalfAwayFromZero	na	-1	na	0	0	-1	153
+cos	D307	230	HalfAwayFromZero	na	-1	na	0	0	-1	230
+cos	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1	306
+cos	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cos	D462	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+cos	D462	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+cos	D462	346	HalfAwayFromZero	na	-1	na	0	0	-1	346
+cos	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1	461
+cos	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cos	D616	154	HalfAwayFromZero	na	-1	na	0	0	-1	154
+cos	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+cos	D616	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+cos	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1	615
+cos	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cos	D924	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+cos	D924	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+cos	D924	693	HalfAwayFromZero	na	-1	na	0	0	-1	693
+cos	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1	923
+cos	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cos	D1232	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+cos	D1232	616	HalfAwayFromZero	na	-1	na	0	0	-1	616
+cos	D1232	924	HalfAwayFromZero	na	-1	na	0	0	-1	924
+cos	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1	1231
+tan	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+tan	D18	4	HalfAwayFromZero	na	-1	na	0	0	-1	4
+tan	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+tan	D18	13	HalfAwayFromZero	na	-1	na	0	0	-1	13
+tan	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1	17
+tan	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+tan	D38	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+tan	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+tan	D38	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+tan	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1	37
+tan	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+tan	D57	14	HalfAwayFromZero	na	-1	na	0	0	-1	14
+tan	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+tan	D57	42	HalfAwayFromZero	na	-1	na	0	0	-1	42
+tan	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1	56
+tan	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+tan	D76	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+tan	D76	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+tan	D76	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+tan	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1	75
+tan	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+tan	D115	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+tan	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+tan	D115	86	HalfAwayFromZero	na	-1	na	0	0	-1	86
+tan	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+tan	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+tan	D153	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+tan	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+tan	D153	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+tan	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1	152
+tan	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+tan	D230	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+tan	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+tan	D230	172	HalfAwayFromZero	na	-1	na	0	0	-1	172
+tan	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1	229
+tan	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+tan	D307	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+tan	D307	153	HalfAwayFromZero	na	-1	na	0	0	-1	153
+tan	D307	230	HalfAwayFromZero	na	-1	na	0	0	-1	230
+tan	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1	306
+tan	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+tan	D462	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+tan	D462	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+tan	D462	346	HalfAwayFromZero	na	-1	na	0	0	-1	346
+tan	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1	461
+tan	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+tan	D616	154	HalfAwayFromZero	na	-1	na	0	0	-1	154
+tan	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+tan	D616	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+tan	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1	615
+tan	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+tan	D924	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+tan	D924	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+tan	D924	693	HalfAwayFromZero	na	-1	na	0	0	-1	693
+tan	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1	923
+tan	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+tan	D1232	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+tan	D1232	616	HalfAwayFromZero	na	-1	na	0	0	-1	616
+tan	D1232	924	HalfAwayFromZero	na	-1	na	0	0	-1	924
+tan	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1	1231
+atan	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atan	D18	4	HalfAwayFromZero	na	-1	na	0	0	-1	4
+atan	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+atan	D18	13	HalfAwayFromZero	na	-1	na	0	0	-1	13
+atan	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1	17
+atan	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atan	D38	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+atan	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+atan	D38	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+atan	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1	37
+atan	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atan	D57	14	HalfAwayFromZero	na	-1	na	0	0	-1	14
+atan	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+atan	D57	42	HalfAwayFromZero	na	-1	na	0	0	-1	42
+atan	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1	56
+atan	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atan	D76	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+atan	D76	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+atan	D76	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+atan	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1	75
+atan	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atan	D115	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+atan	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+atan	D115	86	HalfAwayFromZero	na	-1	na	0	0	-1	86
+atan	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+atan	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atan	D153	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+atan	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+atan	D153	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+atan	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1	152
+atan	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atan	D230	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+atan	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+atan	D230	172	HalfAwayFromZero	na	-1	na	0	0	-1	172
+atan	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1	229
+atan	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atan	D307	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+atan	D307	153	HalfAwayFromZero	na	-1	na	0	0	-1	153
+atan	D307	230	HalfAwayFromZero	na	-1	na	0	0	-1	230
+atan	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1	306
+atan	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atan	D462	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+atan	D462	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+atan	D462	346	HalfAwayFromZero	na	-1	na	0	0	-1	346
+atan	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1	461
+atan	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atan	D616	154	HalfAwayFromZero	na	-1	na	0	0	-1	154
+atan	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+atan	D616	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+atan	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1	615
+atan	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atan	D924	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+atan	D924	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+atan	D924	693	HalfAwayFromZero	na	-1	na	0	0	-1	693
+atan	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1	923
+atan	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atan	D1232	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+atan	D1232	616	HalfAwayFromZero	na	-1	na	0	0	-1	616
+atan	D1232	924	HalfAwayFromZero	na	-1	na	0	0	-1	924
+atan	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1	1231
+asin	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+asin	D18	4	HalfAwayFromZero	na	-1	na	0	0	-1	4
+asin	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+asin	D18	13	HalfAwayFromZero	na	-1	na	0	0	-1	13
+asin	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1	17
+asin	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+asin	D38	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+asin	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+asin	D38	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+asin	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1	37
+asin	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+asin	D57	14	HalfAwayFromZero	na	-1	na	0	0	-1	14
+asin	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+asin	D57	42	HalfAwayFromZero	na	-1	na	0	0	-1	42
+asin	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1	56
+asin	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+asin	D76	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+asin	D76	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+asin	D76	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+asin	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1	75
+asin	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+asin	D115	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+asin	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+asin	D115	86	HalfAwayFromZero	na	-1	na	0	0	-1	86
+asin	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+asin	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+asin	D153	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+asin	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+asin	D153	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+asin	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1	152
+asin	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+asin	D230	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+asin	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+asin	D230	172	HalfAwayFromZero	na	-1	na	0	0	-1	172
+asin	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1	229
+asin	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+asin	D307	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+asin	D307	153	HalfAwayFromZero	na	-1	na	0	0	-1	153
+asin	D307	230	HalfAwayFromZero	na	-1	na	0	0	-1	230
+asin	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1	306
+asin	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+asin	D462	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+asin	D462	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+asin	D462	346	HalfAwayFromZero	na	-1	na	0	0	-1	346
+asin	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1	461
+asin	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+asin	D616	154	HalfAwayFromZero	na	-1	na	0	0	-1	154
+asin	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+asin	D616	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+asin	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1	615
+asin	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+asin	D924	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+asin	D924	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+asin	D924	693	HalfAwayFromZero	na	-1	na	0	0	-1	693
+asin	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1	923
+asin	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+asin	D1232	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+asin	D1232	616	HalfAwayFromZero	na	-1	na	0	0	-1	616
+asin	D1232	924	HalfAwayFromZero	na	-1	na	0	0	-1	924
+asin	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1	1231
+acos	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+acos	D18	4	HalfAwayFromZero	na	-1	na	0	0	-1	4
+acos	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+acos	D18	13	HalfAwayFromZero	na	-1	na	0	0	-1	13
+acos	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1	17
+acos	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+acos	D38	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+acos	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+acos	D38	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+acos	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1	37
+acos	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+acos	D57	14	HalfAwayFromZero	na	-1	na	0	0	-1	14
+acos	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+acos	D57	42	HalfAwayFromZero	na	-1	na	0	0	-1	42
+acos	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1	56
+acos	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+acos	D76	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+acos	D76	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+acos	D76	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+acos	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1	75
+acos	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+acos	D115	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+acos	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+acos	D115	86	HalfAwayFromZero	na	-1	na	0	0	-1	86
+acos	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+acos	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+acos	D153	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+acos	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+acos	D153	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+acos	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1	152
+acos	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+acos	D230	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+acos	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+acos	D230	172	HalfAwayFromZero	na	-1	na	0	0	-1	172
+acos	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1	229
+acos	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+acos	D307	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+acos	D307	153	HalfAwayFromZero	na	-1	na	0	0	-1	153
+acos	D307	230	HalfAwayFromZero	na	-1	na	0	0	-1	230
+acos	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1	306
+acos	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+acos	D462	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+acos	D462	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+acos	D462	346	HalfAwayFromZero	na	-1	na	0	0	-1	346
+acos	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1	461
+acos	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+acos	D616	154	HalfAwayFromZero	na	-1	na	0	0	-1	154
+acos	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+acos	D616	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+acos	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1	615
+acos	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+acos	D924	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+acos	D924	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+acos	D924	693	HalfAwayFromZero	na	-1	na	0	0	-1	693
+acos	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1	923
+acos	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+acos	D1232	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+acos	D1232	616	HalfAwayFromZero	na	-1	na	0	0	-1	616
+acos	D1232	924	HalfAwayFromZero	na	-1	na	0	0	-1	924
+acos	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1	1231
+sinh	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sinh	D18	4	HalfAwayFromZero	na	-1	na	0	0	-1	4
+sinh	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+sinh	D18	13	HalfAwayFromZero	na	-1	na	0	0	-1	13
+sinh	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1	17
+sinh	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sinh	D38	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+sinh	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+sinh	D38	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+sinh	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1	37
+sinh	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sinh	D57	14	HalfAwayFromZero	na	-1	na	0	0	-1	14
+sinh	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+sinh	D57	42	HalfAwayFromZero	na	-1	na	0	0	-1	42
+sinh	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1	56
+sinh	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sinh	D76	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+sinh	D76	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+sinh	D76	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+sinh	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1	75
+sinh	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sinh	D115	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+sinh	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+sinh	D115	86	HalfAwayFromZero	na	-1	na	0	0	-1	86
+sinh	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+sinh	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sinh	D153	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+sinh	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+sinh	D153	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+sinh	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1	152
+sinh	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sinh	D230	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+sinh	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+sinh	D230	172	HalfAwayFromZero	na	-1	na	0	0	-1	172
+sinh	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1	229
+sinh	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sinh	D307	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+sinh	D307	153	HalfAwayFromZero	na	-1	na	0	0	-1	153
+sinh	D307	230	HalfAwayFromZero	na	-1	na	0	0	-1	230
+sinh	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1	306
+sinh	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sinh	D462	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+sinh	D462	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+sinh	D462	346	HalfAwayFromZero	na	-1	na	0	0	-1	346
+sinh	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1	461
+sinh	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sinh	D616	154	HalfAwayFromZero	na	-1	na	0	0	-1	154
+sinh	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+sinh	D616	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+sinh	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1	615
+sinh	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sinh	D924	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+sinh	D924	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+sinh	D924	693	HalfAwayFromZero	na	-1	na	0	0	-1	693
+sinh	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1	923
+sinh	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sinh	D1232	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+sinh	D1232	616	HalfAwayFromZero	na	-1	na	0	0	-1	616
+sinh	D1232	924	HalfAwayFromZero	na	-1	na	0	0	-1	924
+sinh	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1	1231
+cosh	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cosh	D18	4	HalfAwayFromZero	na	-1	na	0	0	-1	4
+cosh	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+cosh	D18	13	HalfAwayFromZero	na	-1	na	0	0	-1	13
+cosh	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cosh	D38	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+cosh	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+cosh	D38	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+cosh	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cosh	D57	14	HalfAwayFromZero	na	-1	na	0	0	-1	14
+cosh	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+cosh	D57	42	HalfAwayFromZero	na	-1	na	0	0	-1	42
+cosh	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cosh	D76	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+cosh	D76	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+cosh	D76	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+cosh	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cosh	D115	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+cosh	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+cosh	D115	86	HalfAwayFromZero	na	-1	na	0	0	-1	86
+cosh	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cosh	D153	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+cosh	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+cosh	D153	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+cosh	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cosh	D230	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+cosh	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+cosh	D230	172	HalfAwayFromZero	na	-1	na	0	0	-1	172
+cosh	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cosh	D307	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+cosh	D307	153	HalfAwayFromZero	na	-1	na	0	0	-1	153
+cosh	D307	230	HalfAwayFromZero	na	-1	na	0	0	-1	230
+cosh	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cosh	D462	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+cosh	D462	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+cosh	D462	346	HalfAwayFromZero	na	-1	na	0	0	-1	346
+cosh	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cosh	D616	154	HalfAwayFromZero	na	-1	na	0	0	-1	154
+cosh	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+cosh	D616	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+cosh	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cosh	D924	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+cosh	D924	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+cosh	D924	693	HalfAwayFromZero	na	-1	na	0	0	-1	693
+cosh	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+cosh	D1232	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+cosh	D1232	616	HalfAwayFromZero	na	-1	na	0	0	-1	616
+cosh	D1232	924	HalfAwayFromZero	na	-1	na	0	0	-1	924
+tanh	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+tanh	D18	4	HalfAwayFromZero	na	-1	na	0	0	-1	4
+tanh	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+tanh	D18	13	HalfAwayFromZero	na	-1	na	0	0	-1	13
+tanh	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1	17
+tanh	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+tanh	D38	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+tanh	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+tanh	D38	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+tanh	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1	37
+tanh	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+tanh	D57	14	HalfAwayFromZero	na	-1	na	0	0	-1	14
+tanh	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+tanh	D57	42	HalfAwayFromZero	na	-1	na	0	0	-1	42
+tanh	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1	56
+tanh	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+tanh	D76	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+tanh	D76	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+tanh	D76	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+tanh	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1	75
+tanh	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+tanh	D115	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+tanh	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+tanh	D115	86	HalfAwayFromZero	na	-1	na	0	0	-1	86
+tanh	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+tanh	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+tanh	D153	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+tanh	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+tanh	D153	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+tanh	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1	152
+tanh	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+tanh	D230	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+tanh	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+tanh	D230	172	HalfAwayFromZero	na	-1	na	0	0	-1	172
+tanh	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1	229
+tanh	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+tanh	D307	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+tanh	D307	153	HalfAwayFromZero	na	-1	na	0	0	-1	153
+tanh	D307	230	HalfAwayFromZero	na	-1	na	0	0	-1	230
+tanh	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1	306
+tanh	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+tanh	D462	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+tanh	D462	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+tanh	D462	346	HalfAwayFromZero	na	-1	na	0	0	-1	346
+tanh	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1	461
+tanh	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+tanh	D616	154	HalfAwayFromZero	na	-1	na	0	0	-1	154
+tanh	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+tanh	D616	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+tanh	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1	615
+tanh	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+tanh	D924	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+tanh	D924	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+tanh	D924	693	HalfAwayFromZero	na	-1	na	0	0	-1	693
+tanh	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1	923
+tanh	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+tanh	D1232	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+tanh	D1232	616	HalfAwayFromZero	na	-1	na	0	0	-1	616
+tanh	D1232	924	HalfAwayFromZero	na	-1	na	0	0	-1	924
+tanh	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1	1231
+asinh	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+asinh	D18	4	HalfAwayFromZero	na	-1	na	0	0	-1	4
+asinh	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+asinh	D18	13	HalfAwayFromZero	na	-1	na	0	0	-1	13
+asinh	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1	17
+asinh	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+asinh	D38	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+asinh	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+asinh	D38	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+asinh	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1	37
+asinh	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+asinh	D57	14	HalfAwayFromZero	na	-1	na	0	0	-1	14
+asinh	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+asinh	D57	42	HalfAwayFromZero	na	-1	na	0	0	-1	42
+asinh	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1	56
+asinh	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+asinh	D76	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+asinh	D76	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+asinh	D76	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+asinh	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1	75
+asinh	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+asinh	D115	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+asinh	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+asinh	D115	86	HalfAwayFromZero	na	-1	na	0	0	-1	86
+asinh	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+asinh	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+asinh	D153	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+asinh	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+asinh	D153	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+asinh	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1	152
+asinh	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+asinh	D230	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+asinh	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+asinh	D230	172	HalfAwayFromZero	na	-1	na	0	0	-1	172
+asinh	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1	229
+asinh	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+asinh	D307	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+asinh	D307	153	HalfAwayFromZero	na	-1	na	0	0	-1	153
+asinh	D307	230	HalfAwayFromZero	na	-1	na	0	0	-1	230
+asinh	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1	306
+asinh	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+asinh	D462	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+asinh	D462	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+asinh	D462	346	HalfAwayFromZero	na	-1	na	0	0	-1	346
+asinh	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1	461
+asinh	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+asinh	D616	154	HalfAwayFromZero	na	-1	na	0	0	-1	154
+asinh	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+asinh	D616	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+asinh	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1	615
+asinh	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+asinh	D924	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+asinh	D924	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+asinh	D924	693	HalfAwayFromZero	na	-1	na	0	0	-1	693
+asinh	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1	923
+asinh	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+asinh	D1232	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+asinh	D1232	616	HalfAwayFromZero	na	-1	na	0	0	-1	616
+asinh	D1232	924	HalfAwayFromZero	na	-1	na	0	0	-1	924
+asinh	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1	1231
+acosh	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+acosh	D18	4	HalfAwayFromZero	na	-1	na	0	0	-1	4
+acosh	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+acosh	D18	13	HalfAwayFromZero	na	-1	na	0	0	-1	13
+acosh	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1	17
+acosh	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+acosh	D38	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+acosh	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+acosh	D38	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+acosh	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1	37
+acosh	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+acosh	D57	14	HalfAwayFromZero	na	-1	na	0	0	-1	14
+acosh	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+acosh	D57	42	HalfAwayFromZero	na	-1	na	0	0	-1	42
+acosh	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1	56
+acosh	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+acosh	D76	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+acosh	D76	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+acosh	D76	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+acosh	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1	75
+acosh	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+acosh	D115	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+acosh	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+acosh	D115	86	HalfAwayFromZero	na	-1	na	0	0	-1	86
+acosh	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+acosh	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+acosh	D153	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+acosh	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+acosh	D153	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+acosh	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1	152
+acosh	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+acosh	D230	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+acosh	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+acosh	D230	172	HalfAwayFromZero	na	-1	na	0	0	-1	172
+acosh	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1	229
+acosh	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+acosh	D307	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+acosh	D307	153	HalfAwayFromZero	na	-1	na	0	0	-1	153
+acosh	D307	230	HalfAwayFromZero	na	-1	na	0	0	-1	230
+acosh	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1	306
+acosh	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+acosh	D462	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+acosh	D462	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+acosh	D462	346	HalfAwayFromZero	na	-1	na	0	0	-1	346
+acosh	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1	461
+acosh	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+acosh	D616	154	HalfAwayFromZero	na	-1	na	0	0	-1	154
+acosh	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+acosh	D616	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+acosh	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1	615
+acosh	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+acosh	D924	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+acosh	D924	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+acosh	D924	693	HalfAwayFromZero	na	-1	na	0	0	-1	693
+acosh	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1	923
+acosh	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+acosh	D1232	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+acosh	D1232	616	HalfAwayFromZero	na	-1	na	0	0	-1	616
+acosh	D1232	924	HalfAwayFromZero	na	-1	na	0	0	-1	924
+acosh	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1	1231
+atanh	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atanh	D18	4	HalfAwayFromZero	na	-1	na	0	0	-1	4
+atanh	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+atanh	D18	13	HalfAwayFromZero	na	-1	na	0	0	-1	13
+atanh	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1	17
+atanh	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atanh	D38	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+atanh	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+atanh	D38	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+atanh	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1	37
+atanh	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atanh	D57	14	HalfAwayFromZero	na	-1	na	0	0	-1	14
+atanh	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+atanh	D57	42	HalfAwayFromZero	na	-1	na	0	0	-1	42
+atanh	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1	56
+atanh	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atanh	D76	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+atanh	D76	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+atanh	D76	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+atanh	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1	75
+atanh	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atanh	D115	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+atanh	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+atanh	D115	86	HalfAwayFromZero	na	-1	na	0	0	-1	86
+atanh	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+atanh	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atanh	D153	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+atanh	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+atanh	D153	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+atanh	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1	152
+atanh	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atanh	D230	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+atanh	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+atanh	D230	172	HalfAwayFromZero	na	-1	na	0	0	-1	172
+atanh	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1	229
+atanh	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atanh	D307	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+atanh	D307	153	HalfAwayFromZero	na	-1	na	0	0	-1	153
+atanh	D307	230	HalfAwayFromZero	na	-1	na	0	0	-1	230
+atanh	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1	306
+atanh	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atanh	D462	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+atanh	D462	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+atanh	D462	346	HalfAwayFromZero	na	-1	na	0	0	-1	346
+atanh	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1	461
+atanh	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atanh	D616	154	HalfAwayFromZero	na	-1	na	0	0	-1	154
+atanh	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+atanh	D616	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+atanh	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1	615
+atanh	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atanh	D924	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+atanh	D924	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+atanh	D924	693	HalfAwayFromZero	na	-1	na	0	0	-1	693
+atanh	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1	923
+atanh	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atanh	D1232	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+atanh	D1232	616	HalfAwayFromZero	na	-1	na	0	0	-1	616
+atanh	D1232	924	HalfAwayFromZero	na	-1	na	0	0	-1	924
+atanh	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1	1231
+log	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log	D18	4	HalfAwayFromZero	na	-1	na	0	0	-1	4
+log	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+log	D18	13	HalfAwayFromZero	na	-1	na	0	0	-1	13
+log	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1	17
+log	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log	D38	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+log	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+log	D38	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+log	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1	37
+log	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log	D57	14	HalfAwayFromZero	na	-1	na	0	0	-1	14
+log	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+log	D57	42	HalfAwayFromZero	na	-1	na	0	0	-1	42
+log	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1	56
+log	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log	D76	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+log	D76	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+log	D76	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+log	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1	75
+log	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log	D115	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+log	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+log	D115	86	HalfAwayFromZero	na	-1	na	0	0	-1	86
+log	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+log	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log	D153	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+log	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+log	D153	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+log	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1	152
+log	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log	D230	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+log	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+log	D230	172	HalfAwayFromZero	na	-1	na	0	0	-1	172
+log	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1	229
+log	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log	D307	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+log	D307	153	HalfAwayFromZero	na	-1	na	0	0	-1	153
+log	D307	230	HalfAwayFromZero	na	-1	na	0	0	-1	230
+log	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1	306
+log	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log	D462	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+log	D462	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+log	D462	346	HalfAwayFromZero	na	-1	na	0	0	-1	346
+log	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1	461
+log	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log	D616	154	HalfAwayFromZero	na	-1	na	0	0	-1	154
+log	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+log	D616	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+log	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1	615
+log	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log	D924	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+log	D924	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+log	D924	693	HalfAwayFromZero	na	-1	na	0	0	-1	693
+log	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1	923
+log	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+log	D1232	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+log	D1232	616	HalfAwayFromZero	na	-1	na	0	0	-1	616
+log	D1232	924	HalfAwayFromZero	na	-1	na	0	0	-1	924
+log	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1	1231
+atan2	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atan2	D18	4	HalfAwayFromZero	na	-1	na	0	0	-1	4
+atan2	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+atan2	D18	13	HalfAwayFromZero	na	-1	na	0	0	-1	13
+atan2	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1	17
+atan2	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atan2	D38	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+atan2	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+atan2	D38	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+atan2	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1	37
+atan2	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atan2	D57	14	HalfAwayFromZero	na	-1	na	0	0	-1	14
+atan2	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+atan2	D57	42	HalfAwayFromZero	na	-1	na	0	0	-1	42
+atan2	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1	56
+atan2	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atan2	D76	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+atan2	D76	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+atan2	D76	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+atan2	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1	75
+atan2	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atan2	D115	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+atan2	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+atan2	D115	86	HalfAwayFromZero	na	-1	na	0	0	-1	86
+atan2	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+atan2	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atan2	D153	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+atan2	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+atan2	D153	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+atan2	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1	152
+atan2	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atan2	D230	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+atan2	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+atan2	D230	172	HalfAwayFromZero	na	-1	na	0	0	-1	172
+atan2	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1	229
+atan2	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atan2	D307	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+atan2	D307	153	HalfAwayFromZero	na	-1	na	0	0	-1	153
+atan2	D307	230	HalfAwayFromZero	na	-1	na	0	0	-1	230
+atan2	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1	306
+atan2	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atan2	D462	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+atan2	D462	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+atan2	D462	346	HalfAwayFromZero	na	-1	na	0	0	-1	346
+atan2	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1	461
+atan2	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atan2	D616	154	HalfAwayFromZero	na	-1	na	0	0	-1	154
+atan2	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+atan2	D616	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+atan2	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1	615
+atan2	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atan2	D924	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+atan2	D924	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+atan2	D924	693	HalfAwayFromZero	na	-1	na	0	0	-1	693
+atan2	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1	923
+atan2	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+atan2	D1232	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+atan2	D1232	616	HalfAwayFromZero	na	-1	na	0	0	-1	616
+atan2	D1232	924	HalfAwayFromZero	na	-1	na	0	0	-1	924
+atan2	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1	1231
+powf	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+powf	D18	4	HalfAwayFromZero	na	-1	na	0	0	-1	4
+powf	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+powf	D18	13	HalfAwayFromZero	na	-1	na	0	0	-1	13
+powf	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1	17
+powf	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+powf	D38	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+powf	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+powf	D38	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+powf	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1	37
+powf	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+powf	D57	14	HalfAwayFromZero	na	-1	na	0	0	-1	14
+powf	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+powf	D57	42	HalfAwayFromZero	na	-1	na	0	0	-1	42
+powf	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1	56
+powf	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+powf	D76	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+powf	D76	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+powf	D76	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+powf	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1	75
+powf	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+powf	D115	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+powf	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+powf	D115	86	HalfAwayFromZero	na	-1	na	0	0	-1	86
+powf	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+powf	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+powf	D153	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+powf	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+powf	D153	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+powf	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1	152
+powf	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+powf	D230	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+powf	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+powf	D230	172	HalfAwayFromZero	na	-1	na	0	0	-1	172
+powf	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1	229
+powf	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+powf	D307	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+powf	D307	153	HalfAwayFromZero	na	-1	na	0	0	-1	153
+powf	D307	230	HalfAwayFromZero	na	-1	na	0	0	-1	230
+powf	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1	306
+powf	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+powf	D462	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+powf	D462	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+powf	D462	346	HalfAwayFromZero	na	-1	na	0	0	-1	346
+powf	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1	461
+powf	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+powf	D616	154	HalfAwayFromZero	na	-1	na	0	0	-1	154
+powf	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+powf	D616	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+powf	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1	615
+powf	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+powf	D924	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+powf	D924	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+powf	D924	693	HalfAwayFromZero	na	-1	na	0	0	-1	693
+powf	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1	923
+powf	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+powf	D1232	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+powf	D1232	616	HalfAwayFromZero	na	-1	na	0	0	-1	616
+powf	D1232	924	HalfAwayFromZero	na	-1	na	0	0	-1	924
+powf	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1	1231
+add	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+add	D18	4	HalfAwayFromZero	na	-1	na	0	0	-1	4
+add	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+add	D18	13	HalfAwayFromZero	na	-1	na	0	0	-1	13
+add	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1	17
+add	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+add	D38	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+add	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+add	D38	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+add	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1	37
+add	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+add	D57	14	HalfAwayFromZero	na	-1	na	0	0	-1	14
+add	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+add	D57	42	HalfAwayFromZero	na	-1	na	0	0	-1	42
+add	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1	56
+add	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+add	D76	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+add	D76	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+add	D76	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+add	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1	75
+add	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+add	D115	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+add	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+add	D115	86	HalfAwayFromZero	na	-1	na	0	0	-1	86
+add	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+add	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+add	D153	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+add	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+add	D153	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+add	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1	152
+add	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+add	D230	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+add	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+add	D230	172	HalfAwayFromZero	na	-1	na	0	0	-1	172
+add	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1	229
+add	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+add	D307	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+add	D307	153	HalfAwayFromZero	na	-1	na	0	0	-1	153
+add	D307	230	HalfAwayFromZero	na	-1	na	0	0	-1	230
+add	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1	306
+add	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+add	D462	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+add	D462	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+add	D462	346	HalfAwayFromZero	na	-1	na	0	0	-1	346
+add	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1	461
+add	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+add	D616	154	HalfAwayFromZero	na	-1	na	0	0	-1	154
+add	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+add	D616	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+add	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1	615
+add	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+add	D924	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+add	D924	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+add	D924	693	HalfAwayFromZero	na	-1	na	0	0	-1	693
+add	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1	923
+add	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+add	D1232	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+add	D1232	616	HalfAwayFromZero	na	-1	na	0	0	-1	616
+add	D1232	924	HalfAwayFromZero	na	-1	na	0	0	-1	924
+add	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1	1231
+sub	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sub	D18	4	HalfAwayFromZero	na	-1	na	0	0	-1	4
+sub	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+sub	D18	13	HalfAwayFromZero	na	-1	na	0	0	-1	13
+sub	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1	17
+sub	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sub	D38	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+sub	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+sub	D38	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+sub	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1	37
+sub	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sub	D57	14	HalfAwayFromZero	na	-1	na	0	0	-1	14
+sub	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+sub	D57	42	HalfAwayFromZero	na	-1	na	0	0	-1	42
+sub	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1	56
+sub	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sub	D76	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+sub	D76	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+sub	D76	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+sub	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1	75
+sub	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sub	D115	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+sub	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+sub	D115	86	HalfAwayFromZero	na	-1	na	0	0	-1	86
+sub	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+sub	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sub	D153	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+sub	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+sub	D153	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+sub	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1	152
+sub	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sub	D230	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+sub	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+sub	D230	172	HalfAwayFromZero	na	-1	na	0	0	-1	172
+sub	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1	229
+sub	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sub	D307	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+sub	D307	153	HalfAwayFromZero	na	-1	na	0	0	-1	153
+sub	D307	230	HalfAwayFromZero	na	-1	na	0	0	-1	230
+sub	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1	306
+sub	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sub	D462	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+sub	D462	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+sub	D462	346	HalfAwayFromZero	na	-1	na	0	0	-1	346
+sub	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1	461
+sub	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sub	D616	154	HalfAwayFromZero	na	-1	na	0	0	-1	154
+sub	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+sub	D616	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+sub	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1	615
+sub	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sub	D924	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+sub	D924	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+sub	D924	693	HalfAwayFromZero	na	-1	na	0	0	-1	693
+sub	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1	923
+sub	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+sub	D1232	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+sub	D1232	616	HalfAwayFromZero	na	-1	na	0	0	-1	616
+sub	D1232	924	HalfAwayFromZero	na	-1	na	0	0	-1	924
+sub	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1	1231
+mul	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+mul	D18	4	HalfAwayFromZero	na	-1	na	0	0	-1	4
+mul	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+mul	D18	13	HalfAwayFromZero	na	-1	na	0	0	-1	13
+mul	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1	17
+mul	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+mul	D38	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+mul	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+mul	D38	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+mul	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1	37
+mul	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+mul	D57	14	HalfAwayFromZero	na	-1	na	0	0	-1	14
+mul	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+mul	D57	42	HalfAwayFromZero	na	-1	na	0	0	-1	42
+mul	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1	56
+mul	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+mul	D76	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+mul	D76	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+mul	D76	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+mul	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1	75
+mul	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+mul	D115	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+mul	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+mul	D115	86	HalfAwayFromZero	na	-1	na	0	0	-1	86
+mul	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+mul	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+mul	D153	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+mul	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+mul	D153	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+mul	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1	152
+mul	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+mul	D230	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+mul	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+mul	D230	172	HalfAwayFromZero	na	-1	na	0	0	-1	172
+mul	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1	229
+mul	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+mul	D307	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+mul	D307	153	HalfAwayFromZero	na	-1	na	0	0	-1	153
+mul	D307	230	HalfAwayFromZero	na	-1	na	0	0	-1	230
+mul	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1	306
+mul	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+mul	D462	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+mul	D462	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+mul	D462	346	HalfAwayFromZero	na	-1	na	0	0	-1	346
+mul	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1	461
+mul	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+mul	D616	154	HalfAwayFromZero	na	-1	na	0	0	-1	154
+mul	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+mul	D616	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+mul	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1	615
+mul	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+mul	D924	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+mul	D924	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+mul	D924	693	HalfAwayFromZero	na	-1	na	0	0	-1	693
+mul	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1	923
+mul	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+mul	D1232	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+mul	D1232	616	HalfAwayFromZero	na	-1	na	0	0	-1	616
+mul	D1232	924	HalfAwayFromZero	na	-1	na	0	0	-1	924
+mul	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1	1231
+div	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+div	D18	4	HalfAwayFromZero	na	-1	na	0	0	-1	4
+div	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+div	D18	13	HalfAwayFromZero	na	-1	na	0	0	-1	13
+div	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1	17
+div	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+div	D38	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+div	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+div	D38	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+div	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1	37
+div	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+div	D57	14	HalfAwayFromZero	na	-1	na	0	0	-1	14
+div	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+div	D57	42	HalfAwayFromZero	na	-1	na	0	0	-1	42
+div	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1	56
+div	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+div	D76	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+div	D76	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+div	D76	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+div	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1	75
+div	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+div	D115	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+div	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+div	D115	86	HalfAwayFromZero	na	-1	na	0	0	-1	86
+div	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+div	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+div	D153	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+div	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+div	D153	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+div	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1	152
+div	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+div	D230	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+div	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+div	D230	172	HalfAwayFromZero	na	-1	na	0	0	-1	172
+div	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1	229
+div	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+div	D307	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+div	D307	153	HalfAwayFromZero	na	-1	na	0	0	-1	153
+div	D307	230	HalfAwayFromZero	na	-1	na	0	0	-1	230
+div	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1	306
+div	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+div	D462	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+div	D462	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+div	D462	346	HalfAwayFromZero	na	-1	na	0	0	-1	346
+div	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1	461
+div	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+div	D616	154	HalfAwayFromZero	na	-1	na	0	0	-1	154
+div	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+div	D616	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+div	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1	615
+div	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+div	D924	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+div	D924	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+div	D924	693	HalfAwayFromZero	na	-1	na	0	0	-1	693
+div	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1	923
+div	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+div	D1232	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+div	D1232	616	HalfAwayFromZero	na	-1	na	0	0	-1	616
+div	D1232	924	HalfAwayFromZero	na	-1	na	0	0	-1	924
+div	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1	1231
+rem	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+rem	D18	4	HalfAwayFromZero	na	-1	na	0	0	-1	4
+rem	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+rem	D18	13	HalfAwayFromZero	na	-1	na	0	0	-1	13
+rem	D18	17	HalfAwayFromZero	na	-1	na	0	0	-1	17
+rem	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+rem	D38	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+rem	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+rem	D38	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+rem	D38	37	HalfAwayFromZero	na	-1	na	0	0	-1	37
+rem	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+rem	D57	14	HalfAwayFromZero	na	-1	na	0	0	-1	14
+rem	D57	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+rem	D57	42	HalfAwayFromZero	na	-1	na	0	0	-1	42
+rem	D57	56	HalfAwayFromZero	na	-1	na	0	0	-1	56
+rem	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+rem	D76	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+rem	D76	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+rem	D76	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+rem	D76	75	HalfAwayFromZero	na	-1	na	0	0	-1	75
+rem	D115	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+rem	D115	28	HalfAwayFromZero	na	-1	na	0	0	-1	28
+rem	D115	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+rem	D115	86	HalfAwayFromZero	na	-1	na	0	0	-1	86
+rem	D115	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+rem	D153	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+rem	D153	38	HalfAwayFromZero	na	-1	na	0	0	-1	38
+rem	D153	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+rem	D153	114	HalfAwayFromZero	na	-1	na	0	0	-1	114
+rem	D153	152	HalfAwayFromZero	na	-1	na	0	0	-1	152
+rem	D230	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+rem	D230	57	HalfAwayFromZero	na	-1	na	0	0	-1	57
+rem	D230	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+rem	D230	172	HalfAwayFromZero	na	-1	na	0	0	-1	172
+rem	D230	229	HalfAwayFromZero	na	-1	na	0	0	-1	229
+rem	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+rem	D307	76	HalfAwayFromZero	na	-1	na	0	0	-1	76
+rem	D307	153	HalfAwayFromZero	na	-1	na	0	0	-1	153
+rem	D307	230	HalfAwayFromZero	na	-1	na	0	0	-1	230
+rem	D307	306	HalfAwayFromZero	na	-1	na	0	0	-1	306
+rem	D462	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+rem	D462	115	HalfAwayFromZero	na	-1	na	0	0	-1	115
+rem	D462	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+rem	D462	346	HalfAwayFromZero	na	-1	na	0	0	-1	346
+rem	D462	461	HalfAwayFromZero	na	-1	na	0	0	-1	461
+rem	D616	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+rem	D616	154	HalfAwayFromZero	na	-1	na	0	0	-1	154
+rem	D616	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+rem	D616	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+rem	D616	615	HalfAwayFromZero	na	-1	na	0	0	-1	615
+rem	D924	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+rem	D924	231	HalfAwayFromZero	na	-1	na	0	0	-1	231
+rem	D924	462	HalfAwayFromZero	na	-1	na	0	0	-1	462
+rem	D924	693	HalfAwayFromZero	na	-1	na	0	0	-1	693
+rem	D924	923	HalfAwayFromZero	na	-1	na	0	0	-1	923
+rem	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+rem	D1232	308	HalfAwayFromZero	na	-1	na	0	0	-1	308
+rem	D1232	616	HalfAwayFromZero	na	-1	na	0	0	-1	616
+rem	D1232	924	HalfAwayFromZero	na	-1	na	0	0	-1	924
+rem	D1232	1231	HalfAwayFromZero	na	-1	na	0	0	-1	1231
+hypot	D18	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+hypot	D18	3	HalfAwayFromZero	na	-1	na	0	0	-1	3
+hypot	D18	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+hypot	D38	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+hypot	D38	2	HalfAwayFromZero	na	-1	na	0	0	-1	2
+hypot	D38	6	HalfAwayFromZero	na	-1	na	0	0	-1	6
+hypot	D38	9	HalfAwayFromZero	na	-1	na	0	0	-1	9
+hypot	D38	10	HalfAwayFromZero	na	-1	na	0	0	-1	10
+hypot	D38	12	HalfAwayFromZero	na	-1	na	0	0	-1	12
+hypot	D38	17	HalfAwayFromZero	na	-1	na	0	0	-1	17
+hypot	D38	18	HalfAwayFromZero	na	-1	na	0	0	-1	18
+hypot	D38	19	HalfAwayFromZero	na	-1	na	0	0	-1	19
+hypot	D57	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+hypot	D57	20	HalfAwayFromZero	na	-1	na	0	0	-1	20
+hypot	D57	30	HalfAwayFromZero	na	-1	na	0	0	-1	30
+hypot	D76	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+hypot	D76	18	HalfAwayFromZero	na	-1	na	0	0	-1	18
+hypot	D76	40	HalfAwayFromZero	na	-1	na	0	0	-1	40
+hypot	D115	50	HalfAwayFromZero	na	-1	na	0	0	-1	50
+hypot	D307	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
+hypot	D307	30	HalfAwayFromZero	na	-1	na	0	0	-1	30
+hypot	D307	50	HalfAwayFromZero	na	-1	na	0	0	-1	50
+hypot	D1232	0	HalfAwayFromZero	na	-1	na	0	0	-1	0
