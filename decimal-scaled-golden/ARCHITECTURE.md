@@ -210,3 +210,90 @@ A pipeline of four components:
 > The spec is the source of truth and **moves into the crate at phase 1**. Next
 > step before any code: a detailed, per-phase implementation plan for approval.
 
+## Trait architecture (Phase 2 — final)
+
+The Phase-1 `DecimalSubject` was a string-in/string-out sketch. The final design
+(settled 2026-06-07) splits it so a runner can time **only** the operation, never
+the string conversions, and stays **type-erased** over each library's native type.
+
+### `Computed<T>` — the result of asking a library to compute
+
+```rust
+pub enum Computed<T> {
+    Value(T),       // the library produced a result
+    Skip,           // not applicable: out of domain / not representable at this width·scale
+    Error(String),  // the library failed on an input it should have handled (reason flows to the report)
+}
+```
+
+Replaces `Option` everywhere a library result is returned. `Skip` (expected
+n/a) and `Error` (a real defect) are NOT conflated. A **panic** is not a
+`Computed` variant — it is a crash, caught separately (`catch_unwind`) and mapped
+to `Outcome::Panic`.
+
+### The typed trait (each library's adapter implements this)
+
+```rust
+pub trait DecimalSubject {
+    type Value;                                                     // the library's native decimal type
+    fn capabilities(&self, func: Function) -> Capabilities;        // 1. name + max width/scale + rounding modes + supported
+    fn to_text(&self, v: &Self::Value) -> String;                  // 2. value -> string
+    fn from_text(&self, s: &str, width: u32, scale: u32) -> Computed<Self::Value>;          // 3. string -> value
+    fn execute(&self, func: Function, inputs: &[Self::Value], width: u32, scale: u32,
+               mode: RoundingMode) -> Computed<Self::Value>;       // 4. run on native types
+}
+```
+
+`Value` is an **associated type** (each library has exactly one native type). The
+adapter author makes the `Skip` vs `Error` judgement.
+
+### The erased trait (the runner uses ONLY this — `Value` erased)
+
+```rust
+pub trait ErasedSubject {
+    fn capabilities(&self, func: Function) -> Capabilities;
+    /// correctness: per-case convert -> execute -> stringify (no timing)
+    fn eval(&self, func: Function, inputs: &[&str], width: u32, scale: u32, mode: RoundingMode) -> Computed<String>;
+    /// timing: convert the whole cell up front (untimed), warm up, then time the
+    /// execute loop (conversions excluded, execute black-boxed). Returns total ns.
+    fn time_batch(&self, func: Function, cases: &[Vec<String>], width: u32, scale: u32,
+                  mode: RoundingMode, warmup: u32) -> Option<u64>;
+}
+```
+
+A **blanket `impl<T: DecimalSubject> ErasedSubject for T`** captures `Value` and
+erases it: `eval` does `from_text → execute → to_text`; `time_batch`
+pre-converts the cell (untimed), warms up, then times one `black_box`-guarded
+loop over just the `execute` calls. So:
+
+- **Ownership:** the *caller* (a test/bench in a subject library) owns
+  `Vec<Box<dyn ErasedSubject>>`; the **runner borrows `&dyn ErasedSubject`** —
+  the same subjects feed both the correctness and timing runners.
+- **Timing purity:** only `execute` is measured; conversions are outside the
+  timed span; `execute` is `std::hint::black_box`-guarded (defeats DCE /
+  const-fold, matching the `ab_microbench` discipline); timer overhead is
+  amortised across the batch.
+
+### Capabilities
+
+```rust
+pub struct Capabilities {
+    pub name: String,                  // library name (carried here to keep the trait at 4 methods)
+    pub supported: bool,               // does this subject expose `func` at all?
+    pub max_width: u32,
+    pub max_scale: u32,                // absolute max; cells a given width can't represent return Skip
+    pub rounding_modes: Vec<RoundingMode>,
+}
+```
+
+### Result taxonomy (mirrors `Computed` + the validator verdicts)
+
+```rust
+pub enum Outcome { Pass, MisRounded { delta }, WrongMode { used }, Skipped, Error { reason }, Timeout, Panic }
+```
+
+The tester maps each cell: `catch_unwind` trip → `Panic`; `Computed::Value` →
+validate → `Pass` / `MisRounded` / `WrongMode`; `Computed::Skip` → `Skipped`;
+`Computed::Error(r)` → `Error{reason:r}`. `Timeout`'s mechanism (per-cell budget
+on a worker thread, needs `Subject: Sync`) is deferred to Phase 5.
+
