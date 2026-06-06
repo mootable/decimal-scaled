@@ -8,6 +8,7 @@ pub mod function;
 pub mod value;
 pub mod parser;
 pub mod subject;
+pub mod loader;
 
 pub use function::Function;
 pub use rounding::RoundingMode;
