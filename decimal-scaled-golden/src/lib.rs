@@ -7,7 +7,9 @@ pub mod rounding;
 pub mod function;
 pub mod value;
 pub mod parser;
+pub mod subject;
 
 pub use function::Function;
 pub use rounding::RoundingMode;
 pub use value::GoldenValue;
+pub use subject::DecimalSubject;
