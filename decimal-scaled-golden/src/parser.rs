@@ -1,0 +1,48 @@
+use crate::function::Function;
+
+/// One parsed golden test line: the inputs (arity == `Function::arity()`) and the
+/// golden output, both unparsed `digits.digits` strings.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GoldenCase {
+    pub inputs: Vec<String>,
+    pub output_raw: String,
+}
+
+/// Parse a golden file body for `func`. Fields split on `[ \t]+`; one test per
+/// line; `#` lines and blank lines skipped. A line whose field count != arity+1
+/// is skipped.
+pub fn parse(func: Function, body: &str) -> Vec<GoldenCase> {
+    let arity = func.arity();
+    let mut out = Vec::new();
+    for line in body.lines() {
+        let line = line.trim_end_matches('\r');
+        if line.is_empty() || line.starts_with('#') { continue; }
+        let fields: Vec<&str> = line.split([' ', '\t']).filter(|f| !f.is_empty()).collect();
+        if fields.len() != arity + 1 { continue; }
+        out.push(GoldenCase {
+            inputs: fields[..arity].iter().map(|s| s.to_string()).collect(),
+            output_raw: fields[arity].to_string(),
+        });
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_unary_lines() {
+        let txt = "# comment\n2.0   1.4142135\n\n9   3\n";
+        let cases = parse(Function::Sqrt, txt);
+        assert_eq!(cases.len(), 2);
+        assert_eq!(cases[0].inputs, vec!["2.0".to_string()]);
+        assert_eq!(cases[0].output_raw, "1.4142135");
+    }
+    #[test]
+    fn parses_binary_lines() {
+        let cases = parse(Function::Hypot, "3 4 5\n");
+        assert_eq!(cases[0].inputs, vec!["3".to_string(), "4".to_string()]);
+        assert_eq!(cases[0].output_raw, "5");
+    }
+}

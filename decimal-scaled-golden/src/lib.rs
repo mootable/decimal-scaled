@@ -6,6 +6,7 @@
 pub mod rounding;
 pub mod function;
 pub mod value;
+pub mod parser;
 
 pub use function::Function;
 pub use rounding::RoundingMode;
