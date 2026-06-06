@@ -1033,12 +1033,22 @@ pub(crate) fn cosh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: Ro
         mag: Fixed::pow10(w),
     };
     let enx = one_w.div(ex, w);
-    ex.add(enx)
+    let result = ex
+        .add(enx)
         .halve()
         .round_to_i128_with(w, scale, mode)
         .unwrap_or_else(|| {
             crate::support::diagnostics::overflow_panic_with_scale("D38::cosh", scale)
-        })
+        });
+    // cosh(x) > 1 strictly for x != 0 (raw == 0 returned 1.0 exactly above).
+    // Near the minimum the +x²/2 excess underflows the working scale, so the
+    // kernel rounds to exactly 1.0 and a directed-up mode cannot see that the
+    // true value sits just above the grid line — re-decide analytically.
+    let one_raw = 10_i128.pow(scale);
+    if result == one_raw {
+        return crate::support::rounding::tiny_above_line_directed(one_raw, 1, mode);
+    }
+    result
 }
 
 #[inline]

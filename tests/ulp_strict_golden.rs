@@ -3649,3 +3649,70 @@ mod golden_hypot_grid {
         check_at_scale("hypot", Width::D924, 923, include_str!("golden/hypot_d924_s923.txt"));
     }
 }
+
+// cosh@MAX_SCALE band: cosh's [1, ~10) minimum band, representable at the
+// top scale. Previously excluded as "always overflows"; the exclusion was a
+// directed-rounding gap (the +x^2/2 excess underflows the working scale, so
+// Ceiling could not see cosh(x) > 1). Fixed via tiny_above_line_directed in
+// cosh_with_raw; now emitted and gated here.
+mod golden_cosh_max_scale {
+    use super::{check_at_scale, Width};
+    #[test]
+    #[cfg(any(feature = "d115", feature = "wide"))]
+    fn cosh_d115_s114() {
+        check_at_scale("cosh", Width::D115, 114, include_str!("golden/cosh_d115_s114.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    fn cosh_d1232_s1231() {
+        check_at_scale("cosh", Width::D1232, 1231, include_str!("golden/cosh_d1232_s1231.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d153", feature = "wide"))]
+    fn cosh_d153_s152() {
+        check_at_scale("cosh", Width::D153, 152, include_str!("golden/cosh_d153_s152.txt"));
+    }
+    #[test]
+    fn cosh_d18_s17() {
+        check_at_scale("cosh", Width::D18, 17, include_str!("golden/cosh_d18_s17.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d230", feature = "wide"))]
+    fn cosh_d230_s229() {
+        check_at_scale("cosh", Width::D230, 229, include_str!("golden/cosh_d230_s229.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d307", feature = "x-wide"))]
+    fn cosh_d307_s306() {
+        check_at_scale("cosh", Width::D307, 306, include_str!("golden/cosh_d307_s306.txt"));
+    }
+    #[test]
+    fn cosh_d38_s37() {
+        check_at_scale("cosh", Width::D38, 37, include_str!("golden/cosh_d38_s37.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d462", feature = "x-wide"))]
+    fn cosh_d462_s461() {
+        check_at_scale("cosh", Width::D462, 461, include_str!("golden/cosh_d462_s461.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    fn cosh_d57_s56() {
+        check_at_scale("cosh", Width::D57, 56, include_str!("golden/cosh_d57_s56.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d616", feature = "x-wide"))]
+    fn cosh_d616_s615() {
+        check_at_scale("cosh", Width::D616, 615, include_str!("golden/cosh_d616_s615.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d76", feature = "wide"))]
+    fn cosh_d76_s75() {
+        check_at_scale("cosh", Width::D76, 75, include_str!("golden/cosh_d76_s75.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d924", feature = "xx-wide"))]
+    fn cosh_d924_s923() {
+        check_at_scale("cosh", Width::D924, 923, include_str!("golden/cosh_d924_s923.txt"));
+    }
+}

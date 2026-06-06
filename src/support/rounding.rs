@@ -287,6 +287,38 @@ where
     }
 }
 
+/// Directed rounding for an even transcendental whose true value at a tiny
+/// argument sits just *above* a fixed positive grid line by a sub-ULP
+/// amount — e.g. `cosh(x) = 1 + x²/2 + …`, where for `x ≠ 0` the quadratic
+/// excess is strictly positive but, near the minimum, below one storage ULP.
+/// At the deepest scales that excess also underflows the working scale, so
+/// the finite-precision `exp` path computes exactly `1.0` and cannot resolve
+/// the directed-rounding sign — the analytic decision below is required (the
+/// even-function, fixed-line analogue of [`tiny_odd_expanding_directed`]).
+///
+/// The true value lies in `(line, line + 1)` (cosh is ≥ 1, = 1 only at
+/// `x = 0`), so:
+///
+/// - nearest modes round to `line` (the excess is < 0.5 ULP);
+/// - toward-zero (`Trunc`) and toward `−∞` (`Floor`) keep `line` (the value
+///   is positive and below `line + 1`);
+/// - toward `+∞` (`Ceiling`) rounds up to `line + 1`.
+///
+/// `line` is the stored grid value the result sits just above (e.g.
+/// `10^SCALE` = 1.0 for cosh's minimum); `one` is the storage `1`.
+#[inline]
+pub(crate) fn tiny_above_line_directed<T>(line: T, one: T, mode: RoundingMode) -> T
+where
+    T: Copy + ::core::ops::Add<Output = T>,
+{
+    match mode {
+        RoundingMode::Ceiling => line + one,
+        // Nearest (×3), Trunc and Floor all keep the line for a value in
+        // `(line, line + 1)`.
+        _ => line,
+    }
+}
+
 /// Applies `mode` to integer division `raw / divisor`, returning the
 /// rounded quotient.
 ///

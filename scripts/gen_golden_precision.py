@@ -1892,35 +1892,48 @@ def emit_tier_scale(alias: str, capacity: int, base_count: int, max_raw: int,
         seed_key = f"{alias}-{scale}-{func_name}-v1"
         rng = random.Random(seed_key)
 
+        # cosh(x) >= 1 for every x, so the headroom-conservative
+        # `max_raw = 10**(capacity-1)` (which caps representable values below
+        # 1.0 at MAX_SCALE) admits ZERO cosh cells at the top scale -- unlike
+        # sinh/exp/acosh, whose sub-1 outputs fit. Use the tier's true signed
+        # ceiling there (exactly what the binary path uses via
+        # `tier_signed_max`), so cosh's [1, ~10) MAX_SCALE band is covered.
+        # The exp/cosh sampler branch bounds x by ln(eff_max_raw/one), so the
+        # raised cap auto-targets the small-x window where cosh fits. Scoped
+        # to this one (func, scale) cell -- every other cell keeps `max_raw`.
+        eff_max_raw = max_raw
+        if func_name == "cosh" and scale == capacity - 1:
+            eff_max_raw = tier_signed_max(alias)
+
         inputs: list[int] = []
 
         # Near-boundary — domain-specific small values.
-        inputs.extend(near_boundary_inputs(func_name, scale, max_raw,
+        inputs.extend(near_boundary_inputs(func_name, scale, eff_max_raw,
                                            counts["near_boundary"], rng))
 
         # Random uniform.
-        inputs.extend(sample_inputs(func_name, scale, max_raw,
+        inputs.extend(sample_inputs(func_name, scale, eff_max_raw,
                                     counts["random_uniform"], rng))
 
         # Half-ULP-tie.
         inputs.extend(find_half_ulp_ties(func_name, oracle, scale,
-                                         max_raw, counts["half_ulp_tie"],
+                                         eff_max_raw, counts["half_ulp_tie"],
                                          rng))
 
         # Edge values.
-        inputs.extend(edge_inputs(func_name, scale, max_raw))
+        inputs.extend(edge_inputs(func_name, scale, eff_max_raw))
 
         # Overflow just-fits boundary (asserted, not dropped).
-        inputs.extend(overflow_edge_inputs(func_name, oracle, scale, max_raw))
+        inputs.extend(overflow_edge_inputs(func_name, oracle, scale, eff_max_raw))
 
         # Very-large trig arguments (full Payne-Hanek).
-        inputs.extend(large_trig_inputs(func_name, scale, max_raw))
+        inputs.extend(large_trig_inputs(func_name, scale, eff_max_raw))
 
         # Saturation grid-lines (tanh -> ±1).
-        inputs.extend(saturation_inputs(func_name, scale, max_raw))
+        inputs.extend(saturation_inputs(func_name, scale, eff_max_raw))
 
         # Monotonicity pairs: x+1 beside a sample of the inputs above.
-        inputs.extend(monotonicity_inputs(inputs, max_raw))
+        inputs.extend(monotonicity_inputs(inputs, eff_max_raw))
 
         # Dedupe while preserving order.
         seen: set[int] = set()
@@ -1935,8 +1948,9 @@ def emit_tier_scale(alias: str, capacity: int, base_count: int, max_raw: int,
         for raw_in in deduped:
             # Drop inputs the storage type can't hold (edge rosters
             # build a few magnitudes from `one * 10**k` that exceed
-            # the narrow-tier signed maximum).
-            if abs(raw_in) > max_raw:
+            # the narrow-tier signed maximum). `eff_max_raw` == `max_raw`
+            # except for the cosh@MAX_SCALE cell (see above).
+            if abs(raw_in) > eff_max_raw:
                 continue
             # Exact algebraic points (perfect squares for sqrt,
             # perfect cubes for cbrt) are classified symbolically via
@@ -1946,7 +1960,7 @@ def emit_tier_scale(alias: str, capacity: int, base_count: int, max_raw: int,
             exact = exact_algebraic_root(func_name, raw_in, scale)
             if exact is not None:
                 floor_raw, cls = exact, "Z"
-                if abs(floor_raw) > max_raw or abs(floor_raw) + 1 > max_raw:
+                if abs(floor_raw) > eff_max_raw or abs(floor_raw) + 1 > eff_max_raw:
                     continue
                 cases.append((raw_in, floor_raw, cls))
                 continue
@@ -1958,7 +1972,7 @@ def emit_tier_scale(alias: str, capacity: int, base_count: int, max_raw: int,
             floor_raw, cls = floor_and_class(y, scale)
             # Both neighbours (floor and floor+1) must fit the
             # storage type — any RoundingMode may select either.
-            if abs(floor_raw) > max_raw or abs(floor_raw) + 1 > max_raw:
+            if abs(floor_raw) > eff_max_raw or abs(floor_raw) + 1 > eff_max_raw:
                 continue
             cases.append((raw_in, floor_raw, cls))
 
