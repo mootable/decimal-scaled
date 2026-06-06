@@ -97,7 +97,7 @@ committed shootout result files:
 | dashu-float | HalfAwayFromZero | 0 (0) | n/a | 0 (0) | 0 (0) | n/a | n/a | n/a | n/a | n/a |
 | decimal-rs | HalfToEven | 1 (1.00) | n/a | 1 (1.00) | 1 (1.00) | n/a | n/a | n/a | n/a | n/a |
 | bigdecimal | HalfToEven | 1 (1.00) | 1 (1.00) | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
-| g_math | HalfToEven | 6 (4.9e1) | n/a | 65 (2.3e19) | 6 (4.8e1) | 64 (1.5e19) | 6 (4.9e1) | 65 (2.0e19) | 64 (1.6e19) | 64 (1.8e19) |
+| g_math | HalfToEven | 6 (5.0e1) | n/a | 65 (2.3e19) | 6 (5.0e1) | 64 (1.7e19) | 6 (5.0e1) | 65 (2.1e19) | 64 (1.6e19) | 64 (1.8e19) |
 <!-- END GENERATED:precision:D38:readme -->
 
 `0 (0)` = correctly rounded (0 LSBε, bit-exact under that crate's

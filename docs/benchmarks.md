@@ -180,7 +180,7 @@ native mode:
 | dashu-float | HalfAwayFromZero | 0 (0) | n/a | 0 (0) | 0 (0) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
 | decimal-rs | HalfToEven | 1 (1.00) | n/a | 1 (1.00) | 1 (1.00) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
 | bigdecimal | HalfToEven | 1 (1.00) | 1 (1.00) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
-| g_math | HalfToEven | 6 (4.9e1) | n/a | 65 (2.3e19) | 6 (4.8e1) | n/a | n/a | n/a | 64 (1.5e19) | 6 (4.9e1) | 65 (2.0e19) | 64 (1.6e19) | 65 (3.1e19) | 65 (3.1e19) | 65 (2.3e19) | 6 (5.4e1) | 64 (9.2e18) | 64 (1.8e19) | 6 (5.0e1) | 69 (4.4e20) | n/a | 66 (6.3e19) | 70 (7.3e20) | n/a | n/a | n/a | n/a | n/a | n/a |
+| g_math | HalfToEven | 6 (5.0e1) | n/a | 65 (2.3e19) | 6 (5.0e1) | n/a | n/a | n/a | 64 (1.7e19) | 6 (5.0e1) | 65 (2.1e19) | 64 (1.6e19) | 65 (3.1e19) | 65 (3.1e19) | 65 (2.3e19) | 6 (5.4e1) | 64 (1.5e19) | 64 (1.8e19) | 6 (5.0e1) | 69 (4.4e20) | n/a | 66 (6.3e19) | 70 (7.7e20) | n/a | n/a | n/a | n/a | n/a | n/a |
 <!-- END GENERATED:precision:D38 -->
 
 `decimal-scaled` is `0 (0)` across the entire surface — correctly
@@ -208,11 +208,11 @@ on the `sqrt`/`exp`/`ln` surface it exposes, while `rust_decimal`,
 |---|---|---|---|---|---|---|---|---|---|
 | decimal-scaled | HalfToEven | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
 | fastnum | HalfAwayFromZero | 0 (0) | 0 (0) | 0 (0) | 1 (1.00) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
-| rust_decimal | HalfToEven | 30 (1.0e9) | n/a | 67 (1.3e20) | 5 (2.6e1) | 9 (5.0e2) | 3 (5.00) | 66 (6.3e19) | n/a |
+| rust_decimal | HalfToEven | 30 (1.0e9) | n/a | 99 (4.7e29) | 5 (2.4e1) | 9 (5.0e2) | 3 (6.00) | 66 (7.1e19) | n/a |
 | dashu-float | HalfAwayFromZero | 0 (0) | n/a | 0 (0) | 0 (0) | n/a | n/a | n/a | n/a |
-| decimal-rs | HalfToEven | 63 (7.3e18) | n/a | 130 (3.8e38) | 7 (1.0e2) | n/a | n/a | n/a | n/a |
+| decimal-rs | HalfToEven | 63 (7.9e18) | n/a | 130 (3.8e38) | 8 (1.3e2) | n/a | n/a | n/a | n/a |
 | bigdecimal | HalfToEven | 1 (1.00) | 1 (1.00) | n/a | n/a | n/a | n/a | n/a | n/a |
-| g_math | HalfToEven | 125 (3.0e37) | n/a | 65 (2.3e19) | 6 (4.9e1) | 64 (1.5e19) | 6 (4.6e1) | 65 (2.9e19) | 65 (3.1e19) |
+| g_math | HalfToEven | 125 (3.0e37) | n/a | 65 (2.4e19) | 6 (4.9e1) | 64 (1.4e19) | 6 (4.7e1) | 65 (2.0e19) | 65 (3.1e19) |
 <!-- END GENERATED:precision:D76 -->
 
 `decimal-scaled` remains `0 (0)` across this width too, and `dashu-float`
@@ -232,11 +232,11 @@ and the trig surface.
 |---|---|---|---|---|---|---|---|---|---|
 | decimal-scaled | HalfToEven | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
 | fastnum | HalfAwayFromZero | n/a | n/a | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
-| rust_decimal | HalfToEven | 10 (6.6e2) | n/a | 34 (1.0e10) | 5 (2.3e1) | 9 (5.0e2) | 2 (2.00) | 66 (4.3e19) | n/a |
-| dashu-float | HalfAwayFromZero | 122 (4.8e36) | n/a | 376 (4.4e112) | 0 (0) | n/a | n/a | n/a | n/a |
-| decimal-rs | HalfToEven | 11 (1.9e3) | n/a | 396 (3.2e118) | 7 (8.0e1) | n/a | n/a | n/a | n/a |
-| bigdecimal | HalfToEven | 765 (2.2e229) | 346 (4.2e103) | n/a | n/a | n/a | n/a | n/a | n/a |
-| g_math | HalfToEven | 1 (1.00) | n/a | 65 (2.3e19) | 3 (7.00) | 64 (1.4e19) | 6 (4.4e1) | 65 (2.0e19) | 64 (9.3e18) |
+| rust_decimal | HalfToEven | 10 (7.0e2) | n/a | 99 (3.5e29) | 5 (2.6e1) | 9 (5.0e2) | 3 (4.00) | 66 (6.8e19) | n/a |
+| dashu-float | HalfAwayFromZero | 123 (6.4e36) | n/a | 376 (4.4e112) | 0 (0) | n/a | n/a | n/a | n/a |
+| decimal-rs | HalfToEven | 12 (2.9e3) | n/a | 422 (1.3e126) | 8 (1.3e2) | n/a | n/a | n/a | n/a |
+| bigdecimal | HalfToEven | 765 (2.2e229) | 346 (4.9e103) | n/a | n/a | n/a | n/a | n/a | n/a |
+| g_math | HalfToEven | 1 (1.00) | n/a | 65 (2.3e19) | 6 (4.7e1) | 64 (1.5e19) | 6 (5.0e1) | 65 (2.1e19) | 64 (1.6e19) |
 <!-- END GENERATED:precision:D307 -->
 
 `decimal-scaled` is the only crate correctly rounded across the entire
