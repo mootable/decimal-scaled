@@ -1,0 +1,10 @@
+//! `decimal-scaled-golden` — the golden corpus + validation/comparison harness.
+//! Library-agnostic: a library implements `subject::DecimalSubject` to be
+//! validated/benched against the singular golden values. No subject impls live
+//! in this crate.
+
+pub mod rounding;
+pub mod function;
+
+pub use function::Function;
+pub use rounding::RoundingMode;

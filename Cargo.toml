@@ -842,6 +842,7 @@ bool_to_int_with_if = "allow"
 members = [
     ".",
     "./macros",
+    "./decimal-scaled-golden",
 ]
 resolver = "3"
 
