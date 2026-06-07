@@ -50,6 +50,12 @@ impl Tester for CorrectnessTester {
                 Some(g) => g,
                 None => continue,
             };
+            // Skip before calling the subject when the true result cannot be
+            // represented at this tier — the subject would otherwise be asked to
+            // compute an out-of-range value (and may overflow / panic).
+            if !golden.fits(width, scale) {
+                continue;
+            }
             let refs: Vec<&str> = case.inputs.iter().map(|s| s.as_str()).collect();
             let outcome = match catch_unwind(AssertUnwindSafe(|| {
                 subject.eval(function, &refs, width, scale, mode)
