@@ -1,7 +1,7 @@
 //! End-to-end proof: drive decimal-scaled through the decimal-scaled-golden
 //! harness against the Phase-3 proof corpus at D38<19>. Single cell; the full
 //! multi-cell enumeration comes later.
-use decimal_scaled::{D38, DecimalTranscendental, RoundingMode as DsMode};
+use decimal_scaled::{D38, RoundingMode as DsMode};
 use decimal_scaled_golden::parser;
 use decimal_scaled_golden::{
     run, Capabilities, Computed, CorrectnessTester, DecimalSubject, Function, Outcome, RoundingMode,
