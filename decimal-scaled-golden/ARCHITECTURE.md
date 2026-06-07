@@ -315,6 +315,14 @@ oracle, even for a GPL tool, let alone LGPL.
   to relink), and the oracle is never bundled.
 - Forbidden (standing rule): copying/adapting LGPL/GPL **source** — implement from
   the *paper* only. We only ever *call* oracles at arm's length.
+- **The `flint` / `mpfr` adapters are wired in, and safe.** Each is OUR code
+  (MIT/Apache) that imports the user-installed LGPL binding (`python-flint` /
+  `gmpy2`) at runtime — a *"work that uses the Library"* under LGPL §5, NOT a
+  derivative. The bindings (and the FLINT/MPFR/GMP they wrap) are **optional pip
+  packages the user installs**, never committed/bundled; the adapter imports them
+  **lazily** (oracle unavailable, with a clear message, if absent) and carries a
+  NOTICE. Running them needs `pip install python-flint gmpy2`; the tool still runs
+  on `mpmath`/`sympy` without them.
 - The competitor adapters (Phase 5) that link competitor crates live in a
   **separate, feature-gated comparison crate**, isolating any copyleft competitor
   from the core crates.
