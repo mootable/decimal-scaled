@@ -1,0 +1,147 @@
+"""Generate / revalidate the singular golden corpus.
+
+generate:   harvest inputs, compute each with the GENERATOR oracle, cross-check
+            with each VALIDATOR oracle, write golden/<func>.txt (accepted lines).
+revalidate: re-check a committed corpus against the validator oracles.
+"""
+import argparse
+import json
+import sys
+from pathlib import Path
+
+from .functions import FUNCTIONS
+from .harvest import harvest
+from .oracle import OracleUnavailable, get_oracle
+# import adapters so they register themselves:
+from .adapters import flint_oracle, mpfr_oracle, mpmath_oracle, sympy_oracle  # noqa: F401
+
+GEN_PRECISION = 1233
+
+
+def _scaled_int(s: str) -> int:
+    neg = s.startswith("-")
+    digits = s.lstrip("-").replace(".", "")
+    return -int(digits) if neg else int(digits)
+
+
+def _agree(a: str, b: str, tol: int = 1) -> bool:
+    return abs(_scaled_int(a) - _scaled_int(b)) <= tol
+
+
+def _load_config(path, generator, validators):
+    cfg = {"generator": "mpmath", "validators": ["flint"]}
+    if path and Path(path).exists():
+        cfg.update(json.loads(Path(path).read_text()))
+    if generator:
+        cfg["generator"] = generator
+    if validators is not None:
+        cfg["validators"] = validators
+    return cfg
+
+
+def _validators(names):
+    out = []
+    for vn in names:
+        try:
+            out.append(get_oracle(vn))
+        except OracleUnavailable as e:
+            print(f"[warn] validator '{vn}' unavailable: {e}", file=sys.stderr)
+    return out
+
+
+def cmd_generate(args):
+    cfg = _load_config(args.config, args.generator,
+                       args.validators.split(",") if args.validators else None)
+    gen = get_oracle(cfg["generator"])
+    vals = _validators(cfg["validators"])
+    src = Path(args.golden_src)
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for func in args.functions.split(","):
+        inputs = harvest(func, src)
+        if args.limit:
+            inputs = inputs[: args.limit]
+        lines = []
+        for inp in inputs:
+            try:
+                g = gen.value(func, inp, args.precision)
+            except Exception as e:
+                print(f"[flag] generator {gen.name()} failed {func}{inp}: {e}", file=sys.stderr)
+                continue
+            ok = True
+            for v in vals:
+                if not v.supports(func):
+                    continue
+                try:
+                    vv = v.value(func, inp, args.precision)
+                except Exception as e:
+                    print(f"[flag] {v.name()} failed {func}{inp}: {e}", file=sys.stderr)
+                    ok = False
+                    break
+                if not _agree(g, vv):
+                    print(f"[flag] disagree {func}{inp}: {gen.name()}={g[:32]}... {v.name()}={vv[:32]}...",
+                          file=sys.stderr)
+                    ok = False
+                    break
+            if ok:
+                lines.append(" ".join(inp + [g]))
+        lines = sorted(set(lines))
+        (out_dir / f"{func}.txt").write_text("\n".join(lines) + ("\n" if lines else ""))
+        print(f"{func}: wrote {len(lines)} lines")
+    return 0
+
+
+def cmd_revalidate(args):
+    cfg = _load_config(args.config, None,
+                       args.validators.split(",") if args.validators else None)
+    vals = _validators(cfg["validators"])
+    out_dir = Path(args.out)
+    mismatches = 0
+    for func in args.functions.split(","):
+        path = out_dir / f"{func}.txt"
+        if not path.exists():
+            continue
+        f = FUNCTIONS[func]
+        for line in path.read_text().splitlines():
+            if not line.strip():
+                continue
+            fields = line.split()
+            inp, stored = fields[: f.arity], fields[f.arity]
+            for v in vals:
+                if not v.supports(func):
+                    continue
+                vv = v.value(func, inp, args.precision)
+                if not _agree(stored, vv):
+                    print(f"[MISMATCH] {func}{inp}: stored={stored[:32]}... {v.name()}={vv[:32]}...",
+                          file=sys.stderr)
+                    mismatches += 1
+    print(f"revalidate: {mismatches} mismatch(es)")
+    return 1 if mismatches else 0
+
+
+def main(argv=None):
+    p = argparse.ArgumentParser(prog="oracle.generate")
+    sub = p.add_subparsers(dest="cmd", required=True)
+    g = sub.add_parser("generate")
+    g.add_argument("--functions", required=True)
+    g.add_argument("--out", required=True)
+    g.add_argument("--golden-src", default="../tests/golden")
+    g.add_argument("--config", default=None)
+    g.add_argument("--generator", default=None)
+    g.add_argument("--validators", default=None)
+    g.add_argument("--precision", type=int, default=GEN_PRECISION)
+    g.add_argument("--limit", type=int, default=None)
+    g.set_defaults(fn=cmd_generate)
+    r = sub.add_parser("revalidate")
+    r.add_argument("--functions", required=True)
+    r.add_argument("--out", required=True)
+    r.add_argument("--config", default=None)
+    r.add_argument("--validators", default=None)
+    r.add_argument("--precision", type=int, default=GEN_PRECISION)
+    r.set_defaults(fn=cmd_revalidate)
+    args = p.parse_args(argv)
+    sys.exit(args.fn(args) or 0)
+
+
+if __name__ == "__main__":
+    main()
