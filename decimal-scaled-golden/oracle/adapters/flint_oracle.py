@@ -51,27 +51,43 @@ class FlintOracle(Oracle):
 
     def supports(self, func: str) -> bool:
         # only what _eval_flint implements
-        return func in FUNCTIONS and func in (_PROOF | {"hypot", "log", "add", "sub", "mul", "div"})
+        return func in FUNCTIONS and func in (
+            _PROOF | {"cbrt", "hypot", "log", "add", "sub", "mul", "div"}
+        )
 
     def value(self, func: str, inputs: List[str], precision: int) -> str:
         try:
             import flint  # lazy
         except ImportError as e:
             raise OracleUnavailable("flint: python-flint not installed") from e
-        bits_base = int((precision + 40) * 3.3219281) + 64
+        # Budget the working precision by the RESULT's magnitude, not the input's:
+        # exp2/exp of a large argument produce a many-integer-digit result that
+        # needs that many EXTRA significant digits to pin `precision` fractional
+        # digits (e.g. exp2(299) ≈ 10^90). Gauge the magnitude with a cheap first
+        # pass, then size the precision and retry (doubling) until the Arb ball
+        # pins a unique integer.
+        flint.ctx.prec = int((precision + 80) * 3.3219281) + 128
+        r = _eval_flint(flint, func, [flint.arb(s) for s in inputs])
+        result_digits = 1
+        ar = abs(r)
+        if ar > flint.arb(0):
+            result_digits = max(1, int(float(ar.log() / flint.arb(10).log())) + 2)
+        bits_base = int((precision + result_digits + 60) * 3.3219281) + 128
         last = None
-        for attempt in range(5):
-            flint.ctx.prec = bits_base + attempt * (bits_base // 2)
-            x = [flint.arb(s) for s in inputs]
-            r = _eval_flint(flint, func, x)
-            neg = r < 0
+        for attempt in range(8):
+            flint.ctx.prec = bits_base << attempt
+            r = _eval_flint(flint, func, [flint.arb(s) for s in inputs])
             mag = abs(r) * (flint.arb(10) ** precision)
-            fl = mag.floor()
-            z = fl.unique_fmpz()        # the unique integer in the ball, or None if not pinned
+            z = mag.floor().unique_fmpz()
             if z is None:
-                last = "ball not tight enough"
-                continue
-            return _format(neg, int(z), precision)
+                # An exact-integer value (e.g. exp2 of an integer = 2^n) makes the
+                # floor of the ball straddle the boundary; the ball itself still
+                # pins the unique integer. The ±1 cross-val tolerance absorbs the
+                # rare just-below-boundary truncation edge.
+                z = mag.unique_fmpz()
+            if z is not None:
+                return _format(r < 0, int(z), precision)
+            last = "ball not tight enough"
         raise RuntimeError(f"flint: could not pin {func}{inputs} to {precision} digits ({last})")
 
 
