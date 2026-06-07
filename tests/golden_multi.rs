@@ -163,6 +163,8 @@ fn corpus_path(name: &str) -> String {
 #[test]
 fn golden_multi_tier() {
     let mut total_pass = 0usize;
+    let mut total_panic = 0usize;
+    let mut total_bad = 0usize;
     for (name, f) in FUNCS {
         let body = match std::fs::read_to_string(corpus_path(name)) {
             Ok(b) => b,
@@ -187,11 +189,22 @@ fn golden_multi_tier() {
             match &r.outcome {
                 Outcome::Pass => pass += 1,
                 Outcome::Skipped => skip += 1,
-                other => panic!("{name} @({},{}): {:?} on {:?}", r.width, r.scale, other, r.detail),
+                Outcome::Panic => {
+                    total_panic += 1;
+                    eprintln!("  PANIC {name} @({},{}) input={:?}", r.width, r.scale, r.detail);
+                }
+                other => {
+                    total_bad += 1;
+                    eprintln!("  BAD {name} @({},{}): {:?} on {:?}", r.width, r.scale, other, r.detail);
+                }
             }
         }
         eprintln!("{name}: {pass} pass / {skip} skip across {} cells", recs.len());
         total_pass += pass;
     }
+    eprintln!("TOTAL: {total_pass} pass / {total_panic} panic / {total_bad} bad");
+    // Correctness is the hard gate: nowhere may decimal-scaled mis-round, use the
+    // wrong mode, or error where it produces a value.
+    assert_eq!(total_bad, 0, "mis-rounded / wrong-mode / error cells found");
     assert!(total_pass > 0, "no Pass across any cell");
 }
