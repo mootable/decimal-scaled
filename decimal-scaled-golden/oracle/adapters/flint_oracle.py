@@ -17,7 +17,9 @@ _PROOF = {"sqrt", "exp", "ln", "log2", "log10", "exp2", "sin", "cos", "tan",
 def _eval_flint(flint, func: str, x):
     a = x[0]
     table = {
-        "sqrt": lambda: a.sqrt(), "cbrt": lambda: a.root(3),
+        "sqrt": lambda: a.sqrt(),
+        # REAL cube root (sign-preserving; Arb's root is for the non-negative branch).
+        "cbrt": lambda: (-((-a).root(3)) if a < flint.arb(0) else a.root(3)),
         "exp": lambda: a.exp(), "ln": lambda: a.log(),
         "log2": lambda: a.log() / flint.arb(2).log(),
         "log10": lambda: a.log() / flint.arb(10).log(),

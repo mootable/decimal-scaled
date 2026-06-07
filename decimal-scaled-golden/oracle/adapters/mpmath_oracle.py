@@ -20,7 +20,10 @@ def _truncated_digits(r, precision: int) -> str:
 
 
 _UNARY = {
-    "sqrt": mpmath.sqrt, "cbrt": mpmath.cbrt, "exp": mpmath.exp, "ln": mpmath.ln,
+    "sqrt": mpmath.sqrt,
+    # REAL cube root (mpmath.cbrt takes the complex principal branch for x<0).
+    "cbrt": lambda x: (-mpmath.cbrt(-x) if x < 0 else mpmath.cbrt(x)),
+    "exp": mpmath.exp, "ln": mpmath.ln,
     "log2": lambda x: mpmath.log(x, 2), "log10": lambda x: mpmath.log(x, 10),
     "exp2": lambda x: mpmath.power(2, x),
     "sin": mpmath.sin, "cos": mpmath.cos, "tan": mpmath.tan,
