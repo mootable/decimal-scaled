@@ -1,6 +1,6 @@
 /// The functions the golden corpus covers. `arity` is how many inputs precede
 /// the output on a golden file line.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum Function {
     // unary
     Sqrt, Cbrt, Exp, Ln, Log2, Log10, Exp2,
