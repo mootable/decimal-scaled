@@ -232,7 +232,8 @@ ds_cells! {
 }
 
 const FUNCS: &[(&str, Function)] = &[
-    ("sqrt", Function::Sqrt), ("exp", Function::Exp), ("ln", Function::Ln),
+    ("sqrt", Function::Sqrt), ("cbrt", Function::Cbrt), ("exp", Function::Exp),
+    ("exp2", Function::Exp2), ("ln", Function::Ln),
     ("log2", Function::Log2), ("log10", Function::Log10),
     ("sin", Function::Sin), ("cos", Function::Cos), ("tan", Function::Tan),
     ("atan", Function::Atan), ("asin", Function::Asin), ("acos", Function::Acos),
