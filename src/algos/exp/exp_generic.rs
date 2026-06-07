@@ -303,6 +303,20 @@ use crate::support::rounding::RoundingMode;
         let l2_pre = ln2::<S>(w);
         let pow10_w_pre = one_w_pre;
         let k = round_to_nearest_int(div_cached(v_w, l2_pre, pow10_w_pre), w);
+        // Deep underflow: e^v < 10^-w, so its working value is sub-resolution. For
+        // a very negative k the extra-guard range reduction below provisions
+        // `extra ≈ |k|·0.3` digits, pushing `w_ext` and the `k·ln2` term past the
+        // work integer S's capacity (an `Int: mul overflow`). Short-circuit to the
+        // smallest positive working value, preserving the positive sub-resolution
+        // so the caller rounds correctly (0 under nearest, the smallest positive
+        // under Ceiling). Sufficient condition: e^v < 2^(k+1) <= 10^-w, i.e.
+        // -(k+1)·log10(2) >= w  (log10(2) ≈ 30103/100000).
+        if k < -1 {
+            let neg = (-(k + 1)) as u128;
+            if neg.saturating_mul(30103) >= (w as u128).saturating_mul(100_000) {
+                return lit::<S>(1);
+            }
+        }
         let abs_k_u128 = if k < 0 { -k } else { k } as u128;
         let extra: u32 = if abs_k_u128 == 0 {
             0
@@ -440,7 +454,17 @@ use crate::support::rounding::RoundingMode;
     where
         S::Scratch: ComputeLimbs,
     {
+        let one_w = one::<S>(w);
+        // Large |x|: tanh(|x|) = 1 − 2·e^(−2|x|), which to scale w is all-nines
+        // once 2·e^(−2|x|) < 10^−w, i.e. |x| ≳ ln(10)/2·w ≈ 1.1513·w. Computing
+        // e^|x| there would overflow the work integer's internal range reduction,
+        // so return the largest working value below 1 (1 − 10^−w); the caller
+        // rounds it to 1 under nearest/up and to 1−ulp under Floor/Trunc.
+        let thr_x = (w as i128) * 1152 / 1000 + 2;
+        if av_w / one_w > lit::<S>(thr_x) {
+            return one_w - lit::<S>(1);
+        }
         let ex = exp_fixed::<S>(av_w, w);
-        let enx = div(one::<S>(w), ex, w);
+        let enx = div(one_w, ex, w);
         div(ex - enx, ex + enx, w)
     }
