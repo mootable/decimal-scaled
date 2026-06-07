@@ -44,7 +44,12 @@ def _eval(func: str, x):
     if func == "sub":   return x[0] - x[1]
     if func == "mul":   return x[0] * x[1]
     if func == "div":   return x[0] / x[1]
-    if func == "rem":   return mpmath.fmod(x[0], x[1])
+    if func == "rem":
+        # Rust truncated remainder (sign follows the dividend), NOT mpmath.fmod,
+        # which floors (result sign follows the divisor). Matches decimal-scaled's `%`.
+        q = x[0] / x[1]
+        tq = mpmath.floor(q) if q >= 0 else mpmath.ceil(q)
+        return x[0] - x[1] * tq
     raise ValueError(f"unknown function {func}")
 
 
