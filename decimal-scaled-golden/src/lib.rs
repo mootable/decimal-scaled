@@ -10,9 +10,11 @@ pub mod parser;
 pub mod subject;
 pub mod loader;
 pub mod computed;
+pub mod outcome;
 
 pub use function::Function;
 pub use rounding::RoundingMode;
 pub use value::GoldenValue;
 pub use computed::Computed;
+pub use outcome::{Outcome, ResultRecord};
 pub use subject::{Capabilities, DecimalSubject, ErasedSubject};
