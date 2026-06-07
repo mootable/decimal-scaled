@@ -297,3 +297,67 @@ validate → `Pass` / `MisRounded` / `WrongMode`; `Computed::Skip` → `Skipped`
 `Computed::Error(r)` → `Error{reason:r}`. `Timeout`'s mechanism (per-cell budget
 on a worker thread, needs `Subject: Sync`) is deferred to Phase 5.
 
+## Oracle generation & licensing (Phase 3)
+
+### Licensing — process isolation (the chosen approach)
+
+**A process boundary is a license boundary.** All oracles live ONLY inside the
+generation/validation script (a separate process); it writes the `digits.digits`
+text corpus; the Rust crate reads **only text**. Calling a separate program (or a
+dynamically-linked binding in a separate process) and reading its text output is
+arm's-length aggregation — it does **not** make our code a derivative of the
+oracle, even for a GPL tool, let alone LGPL.
+
+- **`decimal-scaled-golden`'s `Cargo.toml` never lists an oracle** — zero copyleft
+  in the crate's dependency tree.
+- The corpus is a **maintainer/CI build artifact** (committed text), not shipped
+  to end users — so LGPL's relink obligation never attaches (nothing distributed
+  to relink), and the oracle is never bundled.
+- Forbidden (standing rule): copying/adapting LGPL/GPL **source** — implement from
+  the *paper* only. We only ever *call* oracles at arm's length.
+- The competitor adapters (Phase 5) that link competitor crates live in a
+  **separate, feature-gated comparison crate**, isolating any copyleft competitor
+  from the core crates.
+
+### Pluggable oracles — one interface, role assigned by config
+
+A cross-platform **Python** tool. One **Oracle interface**; each oracle = one
+adapter module:
+
+```python
+class Oracle:
+    def name(self) -> str: ...
+    def supports(self, func) -> bool: ...                  # not every oracle covers every function
+    def value(self, func, inputs, precision) -> str: ...   # high-precision digits.digits
+```
+
+**Execution is identical for generator and validator** — an oracle does not know
+its role. The config assigns roles: the **generator** oracle's output becomes the
+stored corpus; each **validator** oracle independently recomputes and is compared.
+The same `value()` call is made in both cases; only what the script *does* with the
+result differs (store vs cross-check).
+
+Config (`oracles.toml` / CLI) picks one generator + any number of validators:
+
+```toml
+generator  = "mpmath"
+validators = ["flint", "mpfr"]   # 0..N independent cross-checks
+```
+
+A **registry doc-comment by the Oracle interface** lists the available oracles —
+each usable as generator OR validator (symmetric) — with license + coverage +
+recommended role:
+
+- `mpmath` — BSD; full coverage; default **generator**.
+- `sympy` — BSD; symbolic cross-check **validator**.
+- `flint` / Arb (`python-flint`) — LGPL; strong **validator** (separate process,
+  not bundled).
+- `mpfr` (`gmpy2`) — LGPL; **validator** (separate process, not bundled).
+
+**Acceptance:** a generated value is kept only if every configured validator that
+`supports` the function agrees to the required precision; a disagreement
+**flags/drops** the value with the input logged. A second mode re-validates the
+*committed* corpus against the configured oracle set. (Generalizes the existing
+`gen_golden_precision.py` mpmath generator + `validate_golden_with_arb.py`
+FLINT/Arb cross-check.)
+
