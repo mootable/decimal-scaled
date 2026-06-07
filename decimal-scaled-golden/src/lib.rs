@@ -14,6 +14,7 @@ pub mod outcome;
 pub mod bigdec;
 pub mod validator;
 pub mod tester;
+pub mod collator;
 
 pub use function::Function;
 pub use rounding::RoundingMode;
@@ -23,3 +24,4 @@ pub use outcome::{Outcome, ResultRecord};
 pub use validator::validate_one;
 pub use subject::{Capabilities, DecimalSubject, ErasedSubject};
 pub use tester::{run, CorrectnessTester, Tester, TimingTester};
+pub use collator::Collator;
