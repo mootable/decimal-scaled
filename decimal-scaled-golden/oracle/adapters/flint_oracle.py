@@ -32,6 +32,7 @@ def _eval_flint(flint, func: str, x):
         "log": lambda: x[0].log() / x[1].log(),
         "add": lambda: x[0] + x[1], "sub": lambda: x[0] - x[1],
         "mul": lambda: x[0] * x[1], "div": lambda: x[0] / x[1],
+        "atan2": lambda: flint.arb.atan2(x[0], x[1]), "powf": lambda: x[0] ** x[1],
     }
     if func not in table:
         raise NotImplementedError(f"flint adapter does not implement {func}")
@@ -54,7 +55,7 @@ class FlintOracle(Oracle):
     def supports(self, func: str) -> bool:
         # only what _eval_flint implements
         return func in FUNCTIONS and func in (
-            _PROOF | {"cbrt", "hypot", "log", "add", "sub", "mul", "div"}
+            _PROOF | {"cbrt", "hypot", "log", "atan2", "powf", "add", "sub", "mul", "div"}
         )
 
     def value(self, func: str, inputs: List[str], precision: int) -> str:
