@@ -1,0 +1,6 @@
+# Optional extra oracles. sympy is BSD. python-flint and gmpy2 are LGPL bindings
+# (to FLINT/Arb and MPFR/GMP) used at arm's length by our adapters and NOT bundled
+# with this repo -- install them yourself to enable the flint/mpfr oracles.
+sympy
+python-flint
+gmpy2
