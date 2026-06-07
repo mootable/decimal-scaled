@@ -513,6 +513,16 @@ impl Fixed {
         if n == 0 {
             return self;
         }
+        // A 256-bit magnitude shifted right by its full width (or more) is zero;
+        // this also guards the per-limb shifts below, where `mag[1] >> (n - 128)`
+        // would otherwise overflow the u128 once `n >= 256` (e.g. a deep-underflow
+        // `exp(-222)` reassembling `2^k` with `k ≈ -320`).
+        if n >= 256 {
+            return Fixed {
+                negative: false,
+                mag: [0, 0],
+            };
+        }
         let mag = if n >= 128 {
             [self.mag[1] >> (n - 128), 0]
         } else {
