@@ -33,36 +33,6 @@ fn frac_len(s: &str) -> usize {
     }
 }
 
-// One strict-transcendental dispatch shared by every cell variant. The result is
-// the same type `$x`, re-wrapped into the same DsValue variant via `$wrap`.
-macro_rules! exec_one {
-    ($func:expr, $x:expr, $m:expr, $wrap:path) => {{
-        let y = match $func {
-            Function::Sqrt => $x.sqrt_strict_with($m),
-            Function::Cbrt => $x.cbrt_strict_with($m),
-            Function::Exp => $x.exp_strict_with($m),
-            Function::Ln => $x.ln_strict_with($m),
-            Function::Log2 => $x.log2_strict_with($m),
-            Function::Log10 => $x.log10_strict_with($m),
-            Function::Exp2 => $x.exp2_strict_with($m),
-            Function::Sin => $x.sin_strict_with($m),
-            Function::Cos => $x.cos_strict_with($m),
-            Function::Tan => $x.tan_strict_with($m),
-            Function::Atan => $x.atan_strict_with($m),
-            Function::Asin => $x.asin_strict_with($m),
-            Function::Acos => $x.acos_strict_with($m),
-            Function::Sinh => $x.sinh_strict_with($m),
-            Function::Cosh => $x.cosh_strict_with($m),
-            Function::Tanh => $x.tanh_strict_with($m),
-            Function::Asinh => $x.asinh_strict_with($m),
-            Function::Acosh => $x.acosh_strict_with($m),
-            Function::Atanh => $x.atanh_strict_with($m),
-            _ => return Computed::Skip,
-        };
-        Computed::Value($wrap(y))
-    }};
-}
-
 macro_rules! ds_cells {
     ($($variant:ident => ($D:ty, $w:expr, $s:expr)),+ $(,)?) => {
         enum DsValue { $($variant($D),)+ }
@@ -73,14 +43,7 @@ macro_rules! ds_cells {
             type Value = DsValue;
 
             fn capabilities(&self, func: Function) -> Capabilities {
-                let supported = matches!(
-                    func,
-                    Function::Sqrt | Function::Cbrt | Function::Exp | Function::Ln
-                        | Function::Log2 | Function::Log10 | Function::Exp2
-                        | Function::Sin | Function::Cos | Function::Tan | Function::Atan
-                        | Function::Asin | Function::Acos | Function::Sinh | Function::Cosh
-                        | Function::Tanh | Function::Asinh | Function::Acosh | Function::Atanh
-                );
+                let supported = true;
                 Capabilities {
                     name: "decimal-scaled".to_string(),
                     supported,
@@ -119,7 +82,47 @@ macro_rules! ds_cells {
             ) -> Computed<DsValue> {
                 let m = ds_mode(mode);
                 match &inputs[0] {
-                    $(DsValue::$variant(x) => exec_one!(func, *x, m, DsValue::$variant),)+
+                    $(
+                        DsValue::$variant(x0) => {
+                            let x = *x0;
+                            // binary ops take a second operand from the SAME cell variant
+                            let d2 = match inputs.get(1) {
+                                Some(DsValue::$variant(d)) => Some(*d),
+                                _ => None,
+                            };
+                            let y = match func {
+                                Function::Sqrt => x.sqrt_strict_with(m),
+                                Function::Cbrt => x.cbrt_strict_with(m),
+                                Function::Exp => x.exp_strict_with(m),
+                                Function::Ln => x.ln_strict_with(m),
+                                Function::Log2 => x.log2_strict_with(m),
+                                Function::Log10 => x.log10_strict_with(m),
+                                Function::Exp2 => x.exp2_strict_with(m),
+                                Function::Sin => x.sin_strict_with(m),
+                                Function::Cos => x.cos_strict_with(m),
+                                Function::Tan => x.tan_strict_with(m),
+                                Function::Atan => x.atan_strict_with(m),
+                                Function::Asin => x.asin_strict_with(m),
+                                Function::Acos => x.acos_strict_with(m),
+                                Function::Sinh => x.sinh_strict_with(m),
+                                Function::Cosh => x.cosh_strict_with(m),
+                                Function::Tanh => x.tanh_strict_with(m),
+                                Function::Asinh => x.asinh_strict_with(m),
+                                Function::Acosh => x.acosh_strict_with(m),
+                                Function::Atanh => x.atanh_strict_with(m),
+                                Function::Log => match d2 { Some(d) => x.log_strict_with(d, m), None => return Computed::Skip },
+                                Function::Atan2 => match d2 { Some(d) => x.atan2_strict_with(d, m), None => return Computed::Skip },
+                                Function::Powf => match d2 { Some(d) => x.powf_strict_with(d, m), None => return Computed::Skip },
+                                Function::Hypot => match d2 { Some(d) => x.hypot_strict_with(d, m), None => return Computed::Skip },
+                                Function::Add => match d2 { Some(d) => x + d, None => return Computed::Skip },
+                                Function::Sub => match d2 { Some(d) => x - d, None => return Computed::Skip },
+                                Function::Mul => match d2 { Some(d) => x.mul_with(d, m), None => return Computed::Skip },
+                                Function::Div => match d2 { Some(d) => x.div_with(d, m), None => return Computed::Skip },
+                                Function::Rem => match d2 { Some(d) => x % d, None => return Computed::Skip },
+                            };
+                            Computed::Value(DsValue::$variant(y))
+                        }
+                    )+
                 }
             }
         }
@@ -239,6 +242,9 @@ const FUNCS: &[(&str, Function)] = &[
     ("atan", Function::Atan), ("asin", Function::Asin), ("acos", Function::Acos),
     ("sinh", Function::Sinh), ("cosh", Function::Cosh), ("tanh", Function::Tanh),
     ("asinh", Function::Asinh), ("acosh", Function::Acosh), ("atanh", Function::Atanh),
+    ("log", Function::Log), ("atan2", Function::Atan2), ("powf", Function::Powf),
+    ("hypot", Function::Hypot), ("add", Function::Add), ("sub", Function::Sub),
+    ("mul", Function::Mul), ("div", Function::Div), ("rem", Function::Rem),
 ];
 
 fn corpus_path(name: &str) -> String {
