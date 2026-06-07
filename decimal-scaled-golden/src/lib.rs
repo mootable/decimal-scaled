@@ -9,8 +9,10 @@ pub mod value;
 pub mod parser;
 pub mod subject;
 pub mod loader;
+pub mod computed;
 
 pub use function::Function;
 pub use rounding::RoundingMode;
 pub use value::GoldenValue;
-pub use subject::DecimalSubject;
+pub use computed::Computed;
+pub use subject::{Capabilities, DecimalSubject, ErasedSubject};
