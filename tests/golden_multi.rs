@@ -204,7 +204,8 @@ fn golden_multi_tier() {
     }
     eprintln!("TOTAL: {total_pass} pass / {total_panic} panic / {total_bad} bad");
     // Correctness is the hard gate: nowhere may decimal-scaled mis-round, use the
-    // wrong mode, or error where it produces a value.
+    // wrong mode, error, or panic where the result is representable at the tier.
     assert_eq!(total_bad, 0, "mis-rounded / wrong-mode / error cells found");
+    assert_eq!(total_panic, 0, "decimal-scaled panicked on a representable cell");
     assert!(total_pass > 0, "no Pass across any cell");
 }
