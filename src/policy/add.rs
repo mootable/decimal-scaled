@@ -22,11 +22,11 @@
 //!
 //! Decimal addition does not require rescaling: both operands share the same
 //! `SCALE`, so the storage-level sum is the answer. The single algorithm
-//! (`add_int_layer`) delegates to `Int<N>`'s `checked_add` / `wrapping_add`
-//! following Rust's standard integer-overflow contract (debug panics, release
-//! wraps). There is no crossover threshold, no work-width widening, and no
-//! value-dependent split. `ByValue` is present for canonical-shape
-//! uniformity; `select` never returns it.
+//! (`add_int_layer`) delegates to `Int<N>`'s `checked_add` and panics on
+//! overflow in both debug and release (the default operator never silently
+//! wraps a wrong number). There is no crossover threshold, no work-width
+//! widening, and no value-dependent split. `ByValue` is present for
+//! canonical-shape uniformity; `select` never returns it.
 
 use crate::int::types::Int;
 
@@ -81,9 +81,8 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
 /// are eliminated in release) then dispatches exhaustively over
 /// [`Algorithm`].
 ///
-/// Not `const fn`: `add_int_layer` branches on `cfg!(debug_assertions)`,
-/// which is not permitted in `const fn`. This matches the existing
-/// non-`const` `Add` operator on `D<Int<N>, SCALE>`.
+/// Not `const fn`: matches the existing non-`const` `Add` operator on
+/// `D<Int<N>, SCALE>`.
 #[inline]
 pub(crate) fn dispatch<const N: usize, const SCALE: u32>(a: Int<N>, b: Int<N>) -> Int<N> {
     let algo = match const { select::<N, SCALE>() } {
@@ -101,8 +100,7 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(a: Int<N>, b: Int<N>) -
 
 /// Per-type policy: which kernel a `D<Int<N>, SCALE>` uses for `+`.
 pub(crate) trait AddPolicy: Sized {
-    /// Add `rhs` to `self`, applying Rust's standard integer-overflow
-    /// contract (panic in debug, wrap in release).
+    /// Add `rhs` to `self`, panicking on overflow in both debug and release.
     fn add_impl(self, rhs: Self) -> Self;
 }
 

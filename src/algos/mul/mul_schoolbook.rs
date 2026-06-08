@@ -180,19 +180,16 @@ where
 }
 
 /// Rebuild a signed `Int<N>` from magnitude limbs `out` and sign `neg`,
-/// debug-panicking on overflow (matching the old `narrow_or_panic!`).
+/// panicking on overflow in BOTH debug and release (the decimal default
+/// operator never silently wraps a wrong number).
 #[inline]
 fn apply_sign<const N: usize>(out: [u64; N], neg: bool, msg: &str) -> Int<N> {
     let mag = Int::<N>::from_limbs(out);
-    if cfg!(debug_assertions) {
-        // `from_limbs` reinterprets bits as two's complement; if the top
-        // bit is set the magnitude exceeds the signed range.
-        if mag.is_negative() {
-            // The sole representable case is exactly Int<N>::MIN with neg.
-            if !(neg && mag == Int::<N>::MIN) {
-                panic!("{msg}");
-            }
-        }
+    // `from_limbs` reinterprets bits as two's complement; if the top bit is
+    // set the magnitude exceeds the signed range. The sole representable case
+    // is exactly Int<N>::MIN with neg.
+    if mag.is_negative() && !(neg && mag == Int::<N>::MIN) {
+        panic!("{msg}");
     }
     if neg {
         mag.wrapping_neg()

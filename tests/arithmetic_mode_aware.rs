@@ -1,7 +1,7 @@
 //! Coverage for the mode-aware D38 mul_with / div_with siblings and the
-//! `*Assign` operators, plus the overflow fallback paths in
-//! `panic_or_wrap_*` (release-build wrapping only — debug panics are
-//! validated by `should_panic` tests).
+//! `*Assign` operators, plus the default-operator overflow paths, which
+//! panic in BOTH debug and release (validated by the `should_panic` tests
+//! below).
 
 use decimal_scaled::{D38s12, RoundingMode};
 
@@ -63,45 +63,41 @@ fn mul_assign_div_assign() {
     assert_eq!(v.to_bits(), 1_000_000_000_000);
 }
 
-// ─── Overflow panic paths (debug builds: panic; release: wrap) ─────────
+// ─── Overflow panic paths (panic in BOTH debug and release) ────────────
 
 // `mul_with` / `div_with` share the same overflow contract as the plain
-// `*` / `/` operators: panic in debug, wrap in release. The mode argument
-// influences only the rounding step, not the overflow policy.
+// `*` / `/` operators: panic on overflow in both debug and release. The
+// mode argument influences only the rounding step, not the overflow policy.
 
-#[cfg(debug_assertions)]
 #[test]
 #[should_panic(expected = "attempt to multiply with overflow")]
-fn mul_with_overflow_panics_in_debug() {
+fn mul_with_overflow_panics() {
     let a = decimal_scaled::D38::<0>::MAX;
     let _ = a.mul_with(a, RoundingMode::HalfToEven);
 }
 
-#[cfg(debug_assertions)]
 #[test]
 #[should_panic(expected = "attempt to divide with overflow")]
-fn div_with_overflow_panics_in_debug() {
+fn div_with_overflow_panics() {
     use decimal_scaled::D38;
     let a = D38::<0>::MIN;
     let _ = a.div_with(D38::<0>::from(-1), RoundingMode::HalfToEven);
 }
 
-#[cfg(debug_assertions)]
 #[test]
 #[should_panic(expected = "attempt to multiply with overflow")]
-fn mul_overflow_panics_in_debug() {
+fn mul_overflow_panics() {
     // Choose operands such that the mg_divide path returns None and the
-    // panic_or_wrap_mul branch fires. D38<0>::MAX * 2 overflows.
+    // overflow panic fires. D38<0>::MAX * D38<0>::MAX overflows.
     use decimal_scaled::D38;
     let a = D38::<0>::MAX;
     let _ = a * a;
 }
 
-#[cfg(debug_assertions)]
 #[test]
 #[should_panic(expected = "attempt to divide with overflow")]
-fn div_overflow_panics_in_debug() {
-    // D38<0>::MIN / -1 wraps in i128 / -1 -> overflows.
+fn div_overflow_panics() {
+    // D38<0>::MIN / -1 overflows the i128 quotient.
     use decimal_scaled::D38;
     let a = D38::<0>::MIN;
     let _ = a / D38::<0>::from(-1);

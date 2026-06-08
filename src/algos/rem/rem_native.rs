@@ -21,10 +21,11 @@
 //!
 //! # Overflow / divide-by-zero contract
 //!
-//! Matches Rust primitive `%` and the generic path: a zero divisor panics;
-//! `MIN % -ONE` panics in debug (overflow) and wraps to `0` in release
-//! (`i64::wrapping_rem` / `i128::wrapping_rem`). The `wrapping_rem` primitive
-//! already encodes both, so debug-mode overflow is surfaced explicitly here.
+//! The default operator panics on overflow in BOTH debug and release: a zero
+//! divisor panics, and `MIN % -ONE` panics in both profiles (a fixed-width
+//! decimal has no ±∞/NaN, so silently wrapping to `0` is a wrong number with
+//! no signal). The explicit `wrapping_rem` / `checked_rem` / `overflowing_rem`
+//! variants carry the modular / `None` / flag policies.
 //!
 //! # Layering
 //!
@@ -36,9 +37,9 @@ use crate::int::types::Int;
 
 /// Hardware-`%` decimal remainder for narrow storage (`N <= 2`).
 ///
-/// Computes `a % b` on the storage values. Panics on a zero divisor; debug
-/// panics / release wraps on the `MIN % -ONE` overflow boundary, matching the
-/// primitive `wrapping_rem` and the generic `rem_int_layer` contract.
+/// Computes `a % b` on the storage values. Panics on a zero divisor and on
+/// the `MIN % -ONE` overflow boundary in BOTH debug and release, matching the
+/// generic `rem_int_layer` default-operator contract.
 #[inline]
 #[must_use]
 pub(crate) fn rem_native<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
@@ -49,7 +50,7 @@ pub(crate) fn rem_native<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
     if N == 1 {
         let ai = a.to_i128() as i64;
         let bi = b.to_i128() as i64;
-        if cfg!(debug_assertions) && ai == i64::MIN && bi == -1 {
+        if ai == i64::MIN && bi == -1 {
             panic!("attempt to calculate the remainder with overflow");
         }
         return Int::<N>::from_i128(ai.wrapping_rem(bi) as i128);
@@ -57,7 +58,7 @@ pub(crate) fn rem_native<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
     // N == 2 (D38): native i128 %.
     let ai = a.to_i128();
     let bi = b.to_i128();
-    if cfg!(debug_assertions) && ai == i128::MIN && bi == -1 {
+    if ai == i128::MIN && bi == -1 {
         panic!("attempt to calculate the remainder with overflow");
     }
     Int::<N>::from_i128(ai.wrapping_rem(bi))

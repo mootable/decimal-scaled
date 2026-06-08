@@ -133,15 +133,16 @@ macro_rules! decl_decimal_basics {
 
             /// The largest representable value: the storage type's `MAX`.
             ///
-            /// Arithmetic that overflows this bound panics in debug
-            /// builds and wraps in release builds.
+            /// Default arithmetic that overflows this bound panics in both
+            /// debug and release (the explicit `wrapping_*` / `checked_*` /
+            /// `saturating_*` variants apply the other policies).
             pub const MAX: Self = Self(<$Storage>::MAX);
 
             /// The smallest representable value: the storage type's `MIN`.
             ///
-            /// Mirror of [`Self::MAX`]. Note that `-MIN` panics in debug
-            /// builds because two's-complement `MIN` has no positive
-            /// counterpart.
+            /// Mirror of [`Self::MAX`]. Note that `-MIN` panics in both
+            /// debug and release because two's-complement `MIN` has no
+            /// positive counterpart.
             pub const MIN: Self = Self(<$Storage>::MIN);
 
             /// Smallest representable positive value: 1 LSB = `10^-SCALE`.

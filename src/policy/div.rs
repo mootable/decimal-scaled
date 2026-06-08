@@ -127,7 +127,7 @@ where
     };
     match algo {
         Algorithm::Native => {
-            crate::algos::div::div_native::div_native::<N, SCALE>(a, b, mult, mode)
+            crate::algos::div::div_native::div_native::<N, SCALE>(a, b, mode)
         }
         Algorithm::WidenScale => {
             crate::algos::div::div_widen_scale::div_widen_scale::<N>(a, b, mult, mode)

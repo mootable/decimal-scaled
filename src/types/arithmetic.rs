@@ -76,32 +76,26 @@ mod tests {
         assert_eq!(-D38s12::ONE + D38s12::ONE, D38s12::ZERO);
     }
 
-    /// Default policy: overflow panics in debug builds. Locks the
-    /// debug-vs-release split documented in module docs. The matching
-    /// release-build wrap behaviour is delegated to the toolchain's
-    /// `i128 +` semantics; testing it here would require a release-
-    /// only test gate that's overkill for a base-ops slice.
+    /// Default policy: overflow panics in BOTH debug and release (a
+    /// fixed-width decimal never silently wraps a wrong number).
     #[test]
-    #[cfg(debug_assertions)]
     #[should_panic(expected = "overflow")]
-    fn add_overflow_panics_in_debug() {
+    fn add_overflow_panics() {
         let _ = D38s12::MAX + D38s12::ONE;
     }
 
-    /// Default policy: underflow panics in debug builds.
+    /// Default policy: underflow panics in BOTH debug and release.
     #[test]
-    #[cfg(debug_assertions)]
     #[should_panic(expected = "overflow")]
-    fn sub_underflow_panics_in_debug() {
+    fn sub_underflow_panics() {
         let _ = D38s12::MIN - D38s12::ONE;
     }
 
-    /// Default policy: `-MIN` panics in debug builds (i128::MIN has
-    /// no positive counterpart in two's-complement).
+    /// Default policy: `-MIN` panics in BOTH debug and release (i128::MIN
+    /// has no positive counterpart in two's-complement).
     #[test]
-    #[cfg(debug_assertions)]
     #[should_panic(expected = "overflow")]
-    fn neg_min_panics_in_debug() {
+    fn neg_min_panics() {
         let _ = -D38s12::MIN;
     }
 
@@ -313,13 +307,12 @@ mod tests {
         assert_eq!(neg % b, neg_expected);
     }
 
-    /// Default policy: Mul overflow panics in debug. The product
-    /// `MAX * 2` overflows the FINAL i128 quotient (256-bit
+    /// Default policy: Mul overflow panics in BOTH debug and release. The
+    /// product `MAX * 2` overflows the FINAL i128 quotient (256-bit
     /// intermediate doesn't matter -- the result still can't fit).
     #[test]
-    #[cfg(debug_assertions)]
     #[should_panic(expected = "overflow")]
-    fn mul_overflow_panics_in_debug() {
+    fn mul_overflow_panics() {
         let two = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(2_000_000_000_000));
         let _ = D38s12::MAX * two;
     }
@@ -458,12 +451,11 @@ mod tests {
         assert_eq!(neg.abs(), pos);
     }
 
-    /// `abs(MIN)` panics in debug builds (no positive counterpart in
-    /// two's-complement). Locks the panic-debug policy.
+    /// `abs(MIN)` panics in BOTH debug and release (no positive counterpart
+    /// in two's-complement; `abs` takes the unconditional overflow contract).
     #[test]
-    #[cfg(debug_assertions)]
     #[should_panic(expected = "overflow")]
-    fn abs_min_panics_in_debug() {
+    fn abs_min_panics() {
         let _ = D38s12::MIN.abs();
     }
 

@@ -27,9 +27,12 @@
 //!
 //! # Overflow contract
 //!
-//! Both arms follow the standard integer-overflow contract: debug panics on an
-//! out-of-range result, release wraps. The release wrap is re-derived as
-//! `a * b / 10^SCALE` in wrapping `Int<N>` arithmetic.
+//! The default operator panics on an out-of-range result in BOTH debug and
+//! release — a fixed-width decimal has no ±∞/NaN, so silently returning a
+//! wrapped value is a wrong number with no signal. The explicit
+//! `wrapping_mul` / `checked_mul` / `saturating_mul` / `overflowing_mul`
+//! variants (in `crate::macros::overflow`) carry the modular / `None` / clamp
+//! / flag policies via their own `Int<N>` paths, not this kernel.
 //!
 //! # Layering
 //!
@@ -43,16 +46,14 @@ use crate::support::rounding::RoundingMode;
 
 /// Hardware-`i128` decimal multiply kernel for narrow storage (`N <= 2`).
 ///
-/// Computes `a * b / 10^SCALE` rounded under `mode`. Debug-panics /
-/// release-wraps on storage overflow per the standard integer contract.
-/// `mult` is the pre-computed `10^SCALE` in `Int<N>`, used only on the
-/// release-wrap path.
+/// Computes `a * b / 10^SCALE` rounded under `mode`. Panics on storage
+/// overflow in BOTH debug and release per the decimal default-operator
+/// contract.
 #[inline]
 #[must_use]
 pub(crate) fn mul_native<const N: usize, const SCALE: u32>(
     a: Int<N>,
     b: Int<N>,
-    mult: Int<N>,
     mode: RoundingMode,
 ) -> Int<N> {
     if N == 1 {
@@ -64,12 +65,10 @@ pub(crate) fn mul_native<const N: usize, const SCALE: u32>(
             let m_mag: u64 = 10u64.pow(SCALE);
             crate::macros::arithmetic::i128_divrem_by_u64_with_mode(n, m_mag, mode)
         };
-        if cfg!(debug_assertions) {
-            assert!(
-                scaled >= i64::MIN as i128 && scaled <= i64::MAX as i128,
-                "attempt to multiply with overflow"
-            );
-        }
+        assert!(
+            scaled >= i64::MIN as i128 && scaled <= i64::MAX as i128,
+            "attempt to multiply with overflow"
+        );
         return Int::<N>::from_i128(scaled);
     }
 
@@ -78,12 +77,7 @@ pub(crate) fn mul_native<const N: usize, const SCALE: u32>(
     let bi = b.as_i128();
     match mul_div_pow10_with::<SCALE>(ai, bi, mode) {
         Some(q) => Int::<N>::from_i128(q),
-        None => {
-            if cfg!(debug_assertions) {
-                panic!("attempt to multiply with overflow");
-            }
-            a.wrapping_mul(b).wrapping_div(mult)
-        }
+        None => panic!("attempt to multiply with overflow"),
     }
 }
 
@@ -111,8 +105,7 @@ mod tests {
         ];
         for &(a, b) in cases {
             let want = ((a as i128) * (b as i128)) / m;
-            let mult = Int::<1>::TEN.pow(S);
-            let got = mul_native::<1, S>(Int::<1>::from_i64(a), Int::<1>::from_i64(b), mult, MODE);
+            let got = mul_native::<1, S>(Int::<1>::from_i64(a), Int::<1>::from_i64(b), MODE);
             assert_eq!(got.to_i128(), want, "mul_native n1 ({a}, {b})");
         }
     }
@@ -132,8 +125,7 @@ mod tests {
         for &(a, b) in cases {
             assert_eq!((a * b) % m, 0, "test operands must be exact for ({a}, {b})");
             let want = (a * b) / m;
-            let mult = Int::<2>::TEN.pow(S);
-            let got = mul_native::<2, S>(Int::<2>::from_i128(a), Int::<2>::from_i128(b), mult, MODE);
+            let got = mul_native::<2, S>(Int::<2>::from_i128(a), Int::<2>::from_i128(b), MODE);
             assert_eq!(got.to_i128(), want, "mul_native n2 ({a}, {b})");
         }
     }

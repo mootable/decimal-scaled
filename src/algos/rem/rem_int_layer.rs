@@ -8,11 +8,13 @@ use crate::int::policy::div_rem::{select_for_limbs, Algorithm};
 use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
 use crate::int::types::Int;
 
-/// Decimal remainder via the `Int<N>` layer. Applies Rust's standard
-/// integer-overflow contract: division by zero always panics; `MIN % -ONE`
-/// panics in debug (with "overflow") and wraps in release (matching
-/// `i128::wrapping_rem`). No rescaling needed -- same-SCALE operands share
-/// the scale factor.
+/// Decimal remainder via the `Int<N>` layer. The default operator panics on
+/// overflow in BOTH debug and release: division by zero always panics, and
+/// `MIN % -ONE` panics in both profiles (a fixed-width decimal has no
+/// ±∞/NaN, so silently wrapping to `0` is a wrong number with no signal).
+/// The explicit `wrapping_rem` / `checked_rem` / `overflowing_rem` variants
+/// carry the modular / `None` / flag policies. No rescaling needed --
+/// same-SCALE operands share the scale factor.
 ///
 /// A value-gated small-operand fast path runs FIRST: when both operand
 /// Two value-gated fast paths run FIRST. (1) When `|a| < |b|` the truncating
@@ -56,11 +58,11 @@ pub(crate) fn rem_int_layer<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N>
 where
     Limbs<N>: ComputeLimbs,
 {
-    // Divide-by-zero panics in both modes. In debug, the `MIN % -ONE`
-    // overflow must also panic, matching the primitive contract and the
-    // prior `checked_rem` path; detect it with cheap comparisons (no divide)
-    // and panic before the divide wraps it to zero.
-    if cfg!(debug_assertions) && a == Int::<N>::MIN && b == -Int::<N>::ONE {
+    // Divide-by-zero panics, and the `MIN % -ONE` overflow must panic in
+    // BOTH debug and release (the default operator never silently wraps to
+    // `0`): detect it with cheap comparisons (no divide) and panic before
+    // the divide wraps it.
+    if a == Int::<N>::MIN && b == -Int::<N>::ONE {
         panic!("attempt to calculate the remainder with overflow");
     }
     assert!(
@@ -181,7 +183,7 @@ pub(crate) fn rem_int_layer_divmod<const N: usize>(a: Int<N>, b: Int<N>) -> Int<
 where
     Limbs<N>: ComputeLimbs,
 {
-    if cfg!(debug_assertions) && a == Int::<N>::MIN && b == -Int::<N>::ONE {
+    if a == Int::<N>::MIN && b == -Int::<N>::ONE {
         panic!("attempt to calculate the remainder with overflow");
     }
     assert!(

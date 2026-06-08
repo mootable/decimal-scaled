@@ -104,11 +104,10 @@ fn checked_mul_overflow_at_max() {
     assert_eq!(D38s12::MIN.saturating_mul(two), D38s12::MIN);
 }
 
-#[cfg(debug_assertions)]
 #[test]
 #[should_panic]
-fn add_overflow_panics_in_debug() {
-    // Debug builds panic on operator overflow (release wraps).
+fn add_overflow_panics() {
+    // The `+` operator panics on overflow in BOTH debug and release.
     let _ = D38s12::MAX + D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap());
 }
 
@@ -233,10 +232,11 @@ fn signum_abs_at_extremes() {
     assert_eq!(D38s12::MAX.abs(), D38s12::MAX);
 }
 
-#[cfg(debug_assertions)]
 #[test]
 #[should_panic]
-fn abs_of_min_panics_in_debug() {
+fn abs_of_min_panics() {
+    // `abs` takes the unconditional overflow contract: panics in BOTH
+    // debug and release.
     let _ = D38s12::MIN.abs();
 }
 

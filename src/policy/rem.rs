@@ -31,11 +31,12 @@
 //!   native beats `rem_int_layer` ~1.5x at D18 and ~8x at D38 by skipping the
 //!   generic unpack-to-magnitude / divmod / signed-repack.
 //! * **`N >= 3`** → `rem_int_layer`: the magnitude exceeds a single hardware
-//!   integer, so it delegates to `Int<N>`'s `checked_rem` / `wrapping_rem`
-//!   following Rust's standard integer-overflow contract.
+//!   integer, so it unpacks to unsigned magnitudes and runs the const-`N`
+//!   divmod, detecting the `MIN % -ONE` overflow up front.
 //!
-//! Both follow the same overflow contract (debug panics on `MIN % -ONE` or a
-//! zero divisor, release wraps / panics). `ByValue` is present for
+//! Both follow the same overflow contract: a zero divisor and the
+//! `MIN % -ONE` overflow both panic in BOTH debug and release (the default
+//! operator never silently wraps to `0`). `ByValue` is present for
 //! canonical-shape uniformity; `select` never returns it.
 
 use crate::int::types::Int;
@@ -105,8 +106,8 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
 /// are eliminated in release) then dispatches exhaustively over
 /// [`Algorithm`].
 ///
-/// Not `const fn`: both `rem_native` and `rem_int_layer` branch on
-/// `cfg!(debug_assertions)`, which is not permitted in `const fn`.
+/// Not `const fn`: matches the existing non-`const` `Rem` operator on
+/// `D<Int<N>, SCALE>`.
 #[inline]
 pub(crate) fn dispatch<const N: usize, const SCALE: u32>(a: Int<N>, b: Int<N>) -> Int<N>
 where
@@ -128,9 +129,8 @@ where
 
 /// Per-type policy: which kernel a `D<Int<N>, SCALE>` uses for `%`.
 pub(crate) trait RemPolicy: Sized {
-    /// Remainder of `self % rhs`, applying Rust's standard integer-overflow
-    /// contract (panic in debug, wrap in release; divide-by-zero always
-    /// panics).
+    /// Remainder of `self % rhs`, panicking on the `MIN % -ONE` overflow and
+    /// on a zero divisor in both debug and release.
     fn rem_impl(self, rhs: Self) -> Self;
 }
 

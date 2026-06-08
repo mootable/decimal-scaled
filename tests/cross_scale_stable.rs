@@ -96,11 +96,11 @@ fn mul_of_with_rounding_modes() {
 
 // ── Overflow panic on mul. ───────────────────────────────────────────
 
-#[cfg(debug_assertions)]
 #[test]
 #[should_panic]
-fn add_of_overflow_panics_in_debug() {
-    // D18<0>::MAX + 1 overflows the storage range.
+fn add_of_overflow_panics() {
+    // D18<0>::MAX + 1 overflows the storage range — panics in BOTH debug
+    // and release via the default `+` operator.
     let a = D18::<0>::MAX;
     let b = D18::<0>::from(1);
     let _c: D18<0> = D18::<0>::add_of(a, b);

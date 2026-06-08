@@ -74,7 +74,7 @@ fn operand_set<const N: usize>(bits: u32) -> Vec<Pair<N>> {
 
 fn div1<const S: u32>(c: &mut Criterion, label: &str) {
     let m = Int::<1>::TEN.pow(S);
-    let nat = move |p: Pair<1>| dec_div_native::<1, S>(p.a, p.b, m, MODE);
+    let nat = move |p: Pair<1>| dec_div_native::<1, S>(p.a, p.b, MODE);
     let wid = move |p: Pair<1>| dec_div_widen_scale_n1(p.a, p.b, m, MODE);
     for p in operand_set::<1>(28) {
         assert_eq!(nat(p.clone()), wid(p.clone()), "div1 {label} {}", p.label);
@@ -88,7 +88,7 @@ fn div1<const S: u32>(c: &mut Criterion, label: &str) {
 
 fn div2<const S: u32>(c: &mut Criterion, label: &str) {
     let m = Int::<2>::TEN.pow(S);
-    let nat = move |p: Pair<2>| dec_div_native::<2, S>(p.a, p.b, m, MODE);
+    let nat = move |p: Pair<2>| dec_div_native::<2, S>(p.a, p.b, MODE);
     let wid = move |p: Pair<2>| dec_div_widen_scale_n2(p.a, p.b, m, MODE);
     for p in operand_set::<2>(56) {
         assert_eq!(nat(p.clone()), wid(p.clone()), "div2 {label} {}", p.label);
