@@ -1586,59 +1586,6 @@ macro_rules! decl_wide_transcendental {
                 $crate::int::types::traits::BigInt::resize_to::<W>(r_wide)
             }
 
-            /// True worst-case bit-width the `exp_fixed(v_w, w)` body
-            /// reaches internally for a working-scale value `v_w` at scale
-            /// `w`, in a work integer of capacity `cap_bits` bits.
-            ///
-            /// This mirrors `exp_fixed`'s own `k`/`extra`/`w_ext` arithmetic
-            /// EXACTLY (range-reduce `v = k·ln2 + s`, lift the working scale
-            /// by `extra` digits, run the Taylor squarings at `w_ext`, then
-            /// reassemble `2^k · exp(s)`), so the fit gate models the real
-            /// squaring-reassembly PEAK — `2·w_ext` decimal digits for the
-            /// symmetric `sum²` plus the `sum << k` shift — rather than the
-            /// stale `w + 2·result_digits` digit bound that under-counted
-            /// the peak by a full `w` and let large arguments silently wrap
-            /// the work integer (the `wrapping_sqr_low_u128` returns the low
-            /// bits, so an overflowed square truncates to 0 → the `e^-|x|`
-            /// reciprocal divides by zero). `cap_bits` selects the `extra`
-            /// cap so the estimate matches the body that will actually run
-            /// (the tier `W`, or the wider `Wexp` after a lift).
-            fn exp_internal_peak_bits<S: $crate::int::types::traits::BigInt>(
-                v_w: S,
-                w: u32,
-                cap_bits: u32,
-            ) -> u64 {
-                let one_w_pre = $crate::algos::exp::exp_generic::one::<S>(w);
-                let l2_pre = $crate::consts::ln2_by_working_scale::<S>(
-                    w,
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                );
-                let k = $crate::algos::exp::exp_generic::round_to_nearest_int::<S>(
-                    $crate::algos::exp::exp_generic::div_cached::<S>(v_w, l2_pre, one_w_pre),
-                    w,
-                );
-                let abs_k_u128 = if k < 0 { -k } else { k } as u128;
-                let extra: u32 = if abs_k_u128 == 0 {
-                    0
-                } else {
-                    let digits = (abs_k_u128 * 30103).div_ceil(100_000);
-                    let capped = digits.min((cap_bits / 4) as u128) as u32;
-                    capped + 12 + (capped >> 2)
-                };
-                let w_ext = (w + extra) as u64;
-                // digits → bits: `log2(10) ≈ 3.3220 ≈ 3322/1000`.
-                // Squaring peak: the symmetric `sum²` before the round-divide
-                // spans `2·w_ext` decimal digits.
-                let sqr_bits = 2 * w_ext * 3322 / 1000;
-                // Reassembly peak: `sum << k` lifts the `w_ext`-digit Taylor
-                // sum up by `|k|` bits.
-                let reasm_bits = w_ext * 3322 / 1000 + abs_k_u128 as u64;
-                // A `512`-bit margin covers the series accumulation and the
-                // rounded-narrowing residue.
-                let peak = if sqr_bits > reasm_bits { sqr_bits } else { reasm_bits };
-                peak + 512
-            }
-
             /// Whether the hyperbolic composition fits the tier's own work
             /// integer `W` at working scale `w` for the magnitude `av_w`
             /// (`= |x|·10^w`), so the fast per-tier kernels (cached `ln2` /
@@ -1647,33 +1594,33 @@ macro_rules! decl_wide_transcendental {
             ///
             /// Two intermediates must fit `W`:
             /// - the `1/e^|x|` reciprocal numerator `10^(2w)` — `2w` digits;
-            /// - the `exp_fixed` internal peak — modelled exactly by
-            ///   [`exp_internal_peak_bits`] (the true `2·w_ext` squaring +
-            ///   `2^k` reassembly), NOT the old `w + 2·result_digits` bound.
+            /// - the `exp_fixed` internal peak — modelled by the width-generic
+            ///   `exp_generic::exp_peak_fits` (the true `2·w_ext` squaring +
+            ///   `2^k` reassembly peak; the single source the kernel's own
+            ///   overflow guard uses).
             ///
             /// The squaring peak `2·w_ext` already dominates `2w` (since
             /// `w_ext ≥ w`), so the exp peak bounds the whole composition.
             #[inline]
             fn hyper_fits_w<S: $crate::int::types::traits::BigInt>(av_w: S, w: u32) -> bool {
-                let cap_bits = <S as $crate::int::types::traits::BigInt>::BITS;
-                exp_internal_peak_bits::<S>(av_w, w, cap_bits) < cap_bits as u64
+                $crate::algos::exp::exp_generic::exp_peak_fits::<S>(av_w, w)
             }
 
             /// Whether a direct `exp_fixed(v_w, w)` fits the tier's own work
             /// integer `W`.
             ///
-            /// Models the real `exp_fixed` squaring-reassembly peak via
-            /// [`exp_internal_peak_bits`]: when the `2·w_ext` square or the
-            /// `2^k` reassembly would exceed `W`'s bit capacity the body
-            /// would silently wrap (`wrapping_sqr_low_u128` truncates to the
-            /// low bits, so an overflowed square returns 0), so the caller
-            /// routes the value through the wider [`exp_fixed_wide`] /
+            /// Models the real `exp_fixed` squaring-reassembly peak via the
+            /// width-generic `exp_generic::exp_peak_fits` (the single source
+            /// the kernel's own overflow guard uses): when the `2·w_ext`
+            /// square or the `2^k` reassembly would exceed `W`'s bit capacity
+            /// the body would silently wrap (`wrapping_sqr_low_u128` truncates
+            /// to the low bits, so an overflowed square returns 0), so the
+            /// caller routes the value through the wider [`exp_fixed_wide`] /
             /// [`Wexp`] path instead. The normal / small regime keeps the
             /// fast `W` path.
             #[inline]
             fn exp_fits_w<const SCALE: u32>(v_w: W, w: u32) -> bool {
-                let cap_bits = <W as $crate::int::types::traits::BigInt>::BITS;
-                exp_internal_peak_bits::<W>(v_w, w, cap_bits) < cap_bits as u64
+                $crate::algos::exp::exp_generic::exp_peak_fits::<W>(v_w, w)
             }
 
             /// `sinh(|x|)` at working scale `w` for a non-negative working
@@ -2887,8 +2834,7 @@ macro_rules! decl_wide_transcendental {
             /// `exp_fixed::<SCALE>` on `W` while `Wagm == $Work`.
             #[inline]
             pub(crate) fn exp_fixed_series_agm(v_w: Wagm, w: u32) -> Wagm {
-                let cap = <Wagm as $crate::int::types::traits::BigInt>::BITS;
-                if exp_internal_peak_bits::<Wagm>(v_w, w, cap) < cap as u64 {
+                if $crate::algos::exp::exp_generic::exp_peak_fits::<Wagm>(v_w, w) {
                     $crate::algos::exp::exp_generic::exp_fixed::<Wagm>(v_w, w)
                 } else {
                     exp_fixed_wide_agm(v_w, w)
