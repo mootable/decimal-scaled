@@ -840,6 +840,39 @@ kernel's error of a tie, an adaptive widening step (Ziv iteration) settles
 it. The result is correct rounding under all six modes with the common,
 nearest-mode path paying nothing extra.
 
+## Overflow & domain behaviour — one contract, invariant across tier and scale
+
+**Principle (hard rule).** An operation's behaviour on overflow / out-of-range
+results is IDENTICAL at every width and every scale. A behaviour chosen for one
+cell holds for all of them: if a strict transcendental panics on an out-of-range
+result at a wide width, it panics identically at a narrow width, and scale never
+changes the contract. Tier- or scale-dependent overflow behaviour is a bug, not a
+detail — the historic split (wide transcendentals `panic!`, narrow ones silently
+returned a wrapped/saturated value) is exactly what this rule forbids.
+
+**How it's enforced — detect once, apply the policy in the wrapper.** The kernel /
+final narrow-to-storage step DETECTS overflow exactly once and falls through to the
+decimal method with that signal (the `checked` form — `Option` / `Result` — is the
+primitive). The public method variants are thin policy wrappers over that single
+detection, mirroring how `i64::overflowing_add` sits under `add` / `checked_add` /
+`wrapping_add` / `saturating_add`:
+
+- `<fn>` (default) — unwrap-or-panic: **panics on overflow in both debug and
+  release.** A fixed-width decimal has no ∞/NaN, and silently returning a
+  wrapped or saturated value is a wrong number with no signal — unacceptable for a
+  precision type, so the default fails loudly. (This follows `rust_decimal` /
+  .NET `Decimal`, deliberately NOT the integer wrap-in-release default.)
+- `checked_<fn>` — returns the `Option` / `Result` directly (the primitive form).
+- `saturating_<fn>` — clamps to `MAX` / `MIN`; an explicit opt-in, never a default.
+- `wrapping_<fn>` — modular two's-complement; arithmetic only (wrapping a
+  transcendental result is meaningless, so it is not exposed there).
+
+Because the detection lives in one place and the wrapper is the only thing that
+varies, the tier/scale-invariance is structural: there is no per-tier branch left
+that can drift. Transcendentals expose the default (panic) + the `checked_` form;
+the exact arithmetic ops carry the full `checked_` / `wrapping_` / `saturating_` /
+`overflowing_` family.
+
 ## Map of the source tree
 
 ```
