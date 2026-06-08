@@ -267,7 +267,7 @@ mod tests {
             let a = i1(ra);
             let b = i1(rb);
             for mode in ALL_MODES {
-                let nat = div_native::<1, SCALE>(a, b, mult, mode);
+                let nat = div_native::<1, SCALE>(a, b, mode);
                 let wd = div_widen_scale::<1>(a, b, mult, mode);
                 assert_eq!(nat, wd, "div N1 ({ra},{rb}) mode {mode:?}");
             }
@@ -291,13 +291,13 @@ mod tests {
             for mode in ALL_MODES {
                 let mult6 = Int::<2>::TEN.pow(6);
                 assert_eq!(
-                    div_native::<2, 6>(a, b, mult6, mode),
+                    div_native::<2, 6>(a, b, mode),
                     div_widen_scale::<2>(a, b, mult6, mode),
                     "div N2 s6 ({ra},{rb}) mode {mode:?}"
                 );
                 let mult22 = Int::<2>::TEN.pow(22);
                 assert_eq!(
-                    div_native::<2, 22>(a, b, mult22, mode),
+                    div_native::<2, 22>(a, b, mode),
                     div_widen_scale::<2>(a, b, mult22, mode),
                     "div N2 s22 ({ra},{rb}) mode {mode:?}"
                 );

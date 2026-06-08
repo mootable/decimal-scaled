@@ -328,8 +328,28 @@ use crate::support::rounding::RoundingMode;
         // `|k|` bits.
         let reasm_bits = w_ext * 3322 / 1000 + abs_k_u128 as u64;
         let peak = if sqr_bits > reasm_bits { sqr_bits } else { reasm_bits };
-        // A margin covers the series accumulation and rounded-narrowing residue.
-        peak + 512
+        // Small safety slack on top of the modelled peak. The model can
+        // under-count the TRUE internal peak by only a few bits: `sum` can
+        // reach `√2·10^w_ext` (e^(ln2/2)), so the symmetric `sum²` reaches
+        // `2·10^(2·w_ext)` — `2·w_ext` digits PLUS the leading factor `2`
+        // (≈ +2 bits the `2·w_ext·3322/1000` digit count omits) — plus the
+        // half-LSB residue of the rounded `÷10^w_ext`. ~4 bits suffices to
+        // keep `peak` an UPPER bound (so the gate never lets a genuine wrap
+        // through); one u64 limb (64) is a generous, clean pad.
+        //
+        // The slack MUST stay small. It is a flat additive bit count, so on a
+        // tier whose work integer `S` is NARROW it eats a large fraction of
+        // the budget — and D76 is the sole tier whose `Wexp == W == Int<16>`
+        // (1024 bits), so a value that overflows `W` cannot lift to anything
+        // wider: the gate IS the last line, and an over-large slack
+        // false-panics in-range band-edge cosh/sinh/exp (sqr_bits ≈ 910 at the
+        // D76<0> edge x≈175). 64 clears that edge with room while every other
+        // tier's wider `Wexp` absorbs it. A result that genuinely overflows
+        // STORAGE but still fits `S` is NOT this gate's concern — it is caught
+        // downstream by the narrowing fit check (`round_to_storage_with_g`,
+        // which panics "result out of range"); this gate guards only the work
+        // integer `S` itself wrapping.
+        peak + 64
     }
 
     /// Whether [`exp_fixed`]'s internal squaring-reassembly peak for
@@ -458,7 +478,7 @@ use crate::support::rounding::RoundingMode;
         let scaled_at_w_ext = if k >= 0 {
             let shift = k as u32;
             if bit_length(sum) + shift >= <S as BigInt>::BITS {
-                panic!("exp_generic::exp_fixed: result overflows the working width");
+                panic!("exp_generic::exp_fixed: result out of range");
             }
             sum << shift
         } else {
@@ -493,6 +513,41 @@ use crate::support::rounding::RoundingMode;
         } else {
             result
         }
+    }
+
+    /// Narrows a `Wexp`-computed working value `v` back down to the tier's
+    /// own work integer `Dst`, panicking UNIFORMLY when it does not fit.
+    ///
+    /// The wide `exp` / hyperbolic compositions evaluate in the wider `Wexp`
+    /// (their squaring peak needs the extra width — that is why the per-tier
+    /// `exp_fits_w` / `hyper_fits_w` gate lifted them there), then narrow the
+    /// result back to the tier work integer `Dst`. A genuinely out-of-range
+    /// result — `e^|x|` larger than the tier can represent — is correctly
+    /// computed at `Wexp` but EXCEEDS `Dst` at this step. A bare
+    /// [`BigInt::resize_to`] would silently TRUNCATE it to `Dst`'s low bits,
+    /// yielding a small wrapped value that then slips through the downstream
+    /// storage-narrowing fit check — the exact silent-overflow the strict
+    /// transcendental contract forbids. Detect it here and PANIC instead
+    /// ("result out of range", identical at every tier and scale, in both
+    /// debug and release).
+    ///
+    /// This is the structural twin of [`exp_fixed`]'s own peak gate: the gate
+    /// guards the *work integer wrapping* during the squaring; this guards the
+    /// *narrow back to the tier width* once the (correct) result is in hand.
+    /// In-range results provably fit `Dst` — the tier work integer holds any
+    /// value whose storage representation is in range at the lifted working
+    /// scale — so this never fires for a representable cell. When
+    /// `Dst == Wexp` (the widest tier, where no narrowing happens) it is a
+    /// cheap bit-length compare that always passes. The hyperbolic results are
+    /// non-negative (`e^|x|`, `cosh`, `sinh(|x|)`), so the magnitude test is
+    /// exact: a value needing `≥ Dst::BITS` significant bits cannot fit the
+    /// signed `Dst`.
+    #[inline]
+    pub(crate) fn resize_or_panic<Src: BigInt, Dst: BigInt>(v: Src) -> Dst {
+        if bit_length::<Src>(abs::<Src>(v)) >= <Dst as BigInt>::BITS {
+            panic!("exp_generic: result out of range");
+        }
+        <Src as BigInt>::resize_to::<Dst>(v)
     }
 
     /// `(a · 10^w) / b`, rounded half-to-even (the generic sibling of

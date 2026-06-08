@@ -110,6 +110,32 @@ mod widest {
     }
 }
 
+// ── D76 storage-narrow gap (peak-margin regression guard) ──────────────
+//
+// D76 is the SOLE tier whose exp work integer `Wexp == W == Int<16>`
+// (1024 bits): a result overflowing the work integer cannot lift any
+// wider, so `exp_generic`'s peak gate IS the last line for it. The peak
+// model's flat margin was over-large (+512 bits ≈ half D76's work budget)
+// and false-panicked IN-RANGE band-edge cosh/sinh at D76<0> (those
+// in-range cells are covered by `ulp_strict_golden` band_edges); the
+// margin is now a small +64 slack. This pins the COUNTERPART case the
+// smaller margin newly routes through the storage-narrowing path: a cosh
+// whose result overflows STORAGE but whose internal squaring peak still
+// fits Int<16> — cosh(180) ≈ 7e77 is 78 digits (> D76's 76-digit storage)
+// while its internal peak is ≈ 764 bits (< 1024). It must still PANIC,
+// caught by the narrowing fit check (`round_to_storage_with_g`), not the
+// work-int peak gate — keeping the out-of-range contract uniform.
+#[cfg(any(feature = "d76", feature = "wide"))]
+mod d76_gap {
+    use decimal_scaled::D76;
+
+    #[test]
+    #[should_panic(expected = "result out of range")]
+    fn d76_cosh_storage_overflow_panics() {
+        let _ = D76::<0>::from(180).cosh_strict();
+    }
+}
+
 // ── In-range cells must still return a value (no false-positive panic) ──
 //
 // The guard must reject ONLY genuinely out-of-range results. These cells

@@ -1583,7 +1583,10 @@ macro_rules! decl_wide_transcendental {
                 let v_wide = $crate::int::types::traits::BigInt::resize_to::<Wexp>(v_w);
                 let r_wide =
                     $crate::algos::exp::exp_generic::exp_fixed::<Wexp>(v_wide, w);
-                $crate::int::types::traits::BigInt::resize_to::<W>(r_wide)
+                // Narrow back to the tier work integer, PANICKING (not
+                // truncating) if the `Wexp`-computed result is out of the
+                // tier's range — see `exp_generic::resize_or_panic`.
+                $crate::algos::exp::exp_generic::resize_or_panic::<Wexp, W>(r_wide)
             }
 
             /// Whether the hyperbolic composition fits the tier's own work
@@ -1642,7 +1645,7 @@ macro_rules! decl_wide_transcendental {
                     let r = $crate::algos::exp::exp_generic::sinh_pos::<Wexp>(
                         av_wide, w,
                     );
-                    $crate::int::types::traits::BigInt::resize_to::<W>(r)
+                    $crate::algos::exp::exp_generic::resize_or_panic::<Wexp, W>(r)
                 }
             }
 
@@ -1658,7 +1661,7 @@ macro_rules! decl_wide_transcendental {
                     let r = $crate::algos::exp::exp_generic::cosh_pos::<Wexp>(
                         av_wide, w,
                     );
-                    $crate::int::types::traits::BigInt::resize_to::<W>(r)
+                    $crate::algos::exp::exp_generic::resize_or_panic::<Wexp, W>(r)
                 }
             }
 
@@ -1675,7 +1678,7 @@ macro_rules! decl_wide_transcendental {
                     let r = $crate::algos::exp::exp_generic::tanh_pos::<Wexp>(
                         av_wide, w,
                     );
-                    $crate::int::types::traits::BigInt::resize_to::<W>(r)
+                    $crate::algos::exp::exp_generic::resize_or_panic::<Wexp, W>(r)
                 }
             }
 
@@ -1692,7 +1695,7 @@ macro_rules! decl_wide_transcendental {
                 } else {
                     let av_wide = $crate::int::types::traits::BigInt::resize_to::<Wexp>(av_w);
                     let r = $crate::algos::exp::exp_generic::sinh_pos::<Wexp>(av_wide, w);
-                    $crate::int::types::traits::BigInt::resize_to::<Wagm>(r)
+                    $crate::algos::exp::exp_generic::resize_or_panic::<Wexp, Wagm>(r)
                 }
             }
             pub(crate) fn cosh_pos_wide_agm(av_w: Wagm, w: u32) -> Wagm {
@@ -1703,7 +1706,7 @@ macro_rules! decl_wide_transcendental {
                 } else {
                     let av_wide = $crate::int::types::traits::BigInt::resize_to::<Wexp>(av_w);
                     let r = $crate::algos::exp::exp_generic::cosh_pos::<Wexp>(av_wide, w);
-                    $crate::int::types::traits::BigInt::resize_to::<Wagm>(r)
+                    $crate::algos::exp::exp_generic::resize_or_panic::<Wexp, Wagm>(r)
                 }
             }
             pub(crate) fn tanh_pos_wide_agm(av_w: Wagm, w: u32) -> Wagm {
@@ -1714,7 +1717,7 @@ macro_rules! decl_wide_transcendental {
                 } else {
                     let av_wide = $crate::int::types::traits::BigInt::resize_to::<Wexp>(av_w);
                     let r = $crate::algos::exp::exp_generic::tanh_pos::<Wexp>(av_wide, w);
-                    $crate::int::types::traits::BigInt::resize_to::<Wagm>(r)
+                    $crate::algos::exp::exp_generic::resize_or_panic::<Wexp, Wagm>(r)
                 }
             }
 
@@ -2825,7 +2828,9 @@ macro_rules! decl_wide_transcendental {
             pub(crate) fn exp_fixed_wide_agm(v_w: Wagm, w: u32) -> Wagm {
                 let v_wide = $crate::int::types::traits::BigInt::resize_to::<Wexp>(v_w);
                 let r_wide = $crate::algos::exp::exp_generic::exp_fixed::<Wexp>(v_wide, w);
-                $crate::int::types::traits::BigInt::resize_to::<Wagm>(r_wide)
+                // Narrow back to `Wagm`, panicking on an out-of-range result
+                // rather than truncating — see `exp_generic::resize_or_panic`.
+                $crate::algos::exp::exp_generic::resize_or_panic::<Wexp, Wagm>(r_wide)
             }
             /// `Wagm` sibling of the macro `exp_fixed`: the GATED Series exp —
             /// the fast `Wagm` kernel when the squaring peak fits, else the
