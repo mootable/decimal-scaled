@@ -17,32 +17,26 @@
 //! that keeps `self` / `rhs` in the same macro hygiene context as the
 //! method signature.
 //!
-//! Overflow semantics mirror Rust's default integer arithmetic:
-//! debug-mode panic on overflow, release-mode wrap. Explicit-overflow
-//! variants (`checked_*`, `saturating_*`, `wrapping_*`) live in a
-//! companion module.
+//! The default operators panic on overflow in BOTH debug and release — a
+//! fixed-width decimal has no ±∞/NaN, so silently returning a wrapped value
+//! is a wrong number with no signal (following `rust_decimal` / .NET
+//! `Decimal`, deliberately NOT the integer wrap-in-release default). The
+//! explicit-overflow variants (`checked_*`, `saturating_*`, `wrapping_*`,
+//! `overflowing_*`) live in a companion module and keep their own
+//! modular / `None` / clamp / flag policies.
 //!
 //! ## Overflow contract (how it is implemented)
 //!
-//! The decimal operators layer Rust's standard integer-overflow contract
-//! on top of the `Int<N>` storage, whose own operators and kernels are
-//! deliberately *modular* (wrapping) so the bignum algorithms stay
-//! composable. The contract lives only here, at the decimal-operator
-//! layer:
-//!
-//! * **Runtime (non-`const`) operators** — `Add` / `Sub` / `Neg` / `Rem`
-//!   and the `Mul` / `Div` value paths — use the profile switch
-//!   `if cfg!(debug_assertions) { checked … .expect("…overflow") } else {
-//!   wrapping … }`: debug panics, release wraps. Built entirely from
-//!   `Int<N>`'s existing `checked_*` / `wrapping_*` methods plus `core`
-//!   `panic!` — no `std` dependency, so `no_std` still builds.
-//! * **`const fn` paths** — any decimal-arith helper that is `const`
-//!   (e.g. `abs`) cannot branch on `cfg!(debug_assertions)` and still be
-//!   profile-correct, so it takes the stricter rule: an *unconditional*
-//!   `checked_* … .expect(…)`. In a `const` context that lowers to a
-//!   compile-time evaluation error on overflow (profile-independent),
-//!   exactly matching `std`'s `const` integer arithmetic; at runtime it
-//!   panics in both profiles.
+//! The decimal operators layer the panic-on-overflow contract on top of the
+//! `Int<N>` storage, whose own operators and kernels are deliberately
+//! *modular* (wrapping) so the bignum algorithms stay composable. The
+//! contract lives only here, at the decimal-operator layer: the default
+//! `Add` / `Sub` / `Neg` / `Rem` and the `Mul` / `Div` value paths route
+//! through the per-function policy dispatch, whose kernels detect overflow
+//! once and `panic!` (or unwrap the `checked_*` primitive) unconditionally —
+//! built from `Int<N>`'s `checked_*` methods plus `core` `panic!`, so
+//! `no_std` still builds. The explicit variants apply their own policy
+//! around the same detection.
 
 
 /// Divides a signed `i128` magnitude-bearing numerator by an unsigned
@@ -285,8 +279,10 @@ macro_rules! decl_decimal_arithmetic {
             type Output = Self;
             /// Add two values of the same scale.
             ///
-            /// Follows Rust's standard integer-overflow contract: panics
-            /// in debug builds, wraps (two's-complement) in release.
+            /// Panics on overflow in BOTH debug and release (a fixed-width
+            /// decimal never silently wraps a wrong number; use
+            /// [`Self::wrapping_add`] / [`Self::checked_add`] /
+            /// [`Self::saturating_add`] for the other policies).
             /// Routes through the `AddPolicy` per-type policy trait.
             #[inline]
             fn add(self, rhs: Self) -> Self {
@@ -306,7 +302,9 @@ macro_rules! decl_decimal_arithmetic {
             type Output = Self;
             /// Subtract two values of the same scale.
             ///
-            /// Panics on overflow in debug builds, wraps in release.
+            /// Panics on overflow in BOTH debug and release (use
+            /// [`Self::wrapping_sub`] / [`Self::checked_sub`] /
+            /// [`Self::saturating_sub`] for the other policies).
             /// Routes through the `SubPolicy` per-type policy trait.
             #[inline]
             fn sub(self, rhs: Self) -> Self {
@@ -324,9 +322,10 @@ macro_rules! decl_decimal_arithmetic {
 
         impl<const SCALE: u32> ::core::ops::Neg for $Type<SCALE> {
             type Output = Self;
-            /// Negate a value. Panics on overflow in debug builds
-            /// (`-MIN` is unrepresentable in two's-complement), wraps in
-            /// release (`-MIN == MIN`).
+            /// Negate a value. Panics on overflow in BOTH debug and release
+            /// (`-MIN` is unrepresentable in two's-complement; use
+            /// [`Self::wrapping_neg`] / [`Self::checked_neg`] /
+            /// [`Self::saturating_neg`] for the other policies).
             /// Routes through the `NegPolicy` per-type policy trait.
             #[inline]
             fn neg(self) -> Self {
@@ -341,9 +340,10 @@ macro_rules! decl_decimal_arithmetic {
             /// operands share the scale factor, the storage-level
             /// remainder is the answer with no rescaling.
             ///
-            /// Panics on the `MIN % -ONE` overflow boundary in debug
-            /// builds, wraps in release (matching `i128::wrapping_rem`).
-            /// Division by zero always panics.
+            /// Panics on the `MIN % -ONE` overflow boundary in BOTH debug
+            /// and release; division by zero always panics (use
+            /// [`Self::wrapping_rem`] / [`Self::checked_rem`] for the other
+            /// policies).
             /// Routes through the `RemPolicy` per-type policy trait.
             #[inline]
             fn rem(self, rhs: Self) -> Self {

@@ -19,8 +19,8 @@
 //!    ([`crate::int::algos::div::div_fixed::div_rem_mag_slice`], which
 //!    fronts the divisor-shape policy — Knuth / single-limb fast paths),
 //!    rounding under `mode`;
-//! 3. rebuild the signed `Int<N>` quotient (debug panic / release wrap on
-//!    overflow).
+//! 3. rebuild the signed `Int<N>` quotient (panics on overflow in both
+//!    debug and release).
 //!
 //! The divisor here is the runtime operand `b`, not `10^SCALE`, so the MG
 //! magic-divide does not apply — the int-layer `div_rem` (with its own
@@ -90,11 +90,12 @@ where
 }
 
 /// Rebuild a signed `Int<N>` from magnitude limbs `out` and sign `neg`,
-/// debug-panicking on overflow.
+/// panicking on overflow in BOTH debug and release (the decimal default
+/// operator never silently wraps a wrong number).
 #[inline]
 fn apply_sign<const N: usize>(out: [u64; N], neg: bool, msg: &str) -> Int<N> {
     let mag = Int::<N>::from_limbs(out);
-    if cfg!(debug_assertions) && mag.is_negative() && !(neg && mag == Int::<N>::MIN) {
+    if mag.is_negative() && !(neg && mag == Int::<N>::MIN) {
         panic!("{msg}");
     }
     if neg {

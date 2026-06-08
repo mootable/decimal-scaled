@@ -30,9 +30,9 @@ macro_rules! decl_decimal_cross_scale_ops {
             /// any width ≤ `Self`'s and any SCALE. Both operands are
             /// widened to `Self`'s storage, rescaled to `Self`'s
             /// `SCALE` (UP-rescale is exact; DOWN uses the crate's
-            /// default rounding mode), then multiplied. Panics on
-            /// overflow (debug) / wraps (release), matching the
-            /// same-width same-SCALE [`Mul`](core::ops::Mul) operator.
+            /// default rounding mode), then multiplied. Panics on overflow
+            /// in both debug and release, matching the same-width
+            /// same-SCALE [`Mul`](core::ops::Mul) operator.
             ///
             /// See [`Self::mul_of_with`] for an explicit-rounding form.
             #[inline]

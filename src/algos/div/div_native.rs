@@ -29,10 +29,13 @@
 //!
 //! A zero divisor panics up front (matching `i128 /` and the `WidenScale`
 //! kernel). `div_pow10_div_with` returns `None` for an out-of-range quotient
-//! (and for the zero divisor it never sees, guarded here): debug-panic /
-//! release-wrap per the standard integer contract. The release wrap is
-//! re-derived as `(a * 10^SCALE) / b` with wrapping `Int<N>` arithmetic,
-//! matching the naive form and the `WidenScale` wrap in range.
+//! (and for the zero divisor it never sees, guarded here): the default
+//! operator panics on that overflow in BOTH debug and release — a fixed-width
+//! decimal has no ±∞/NaN, so silently returning a wrapped value is a wrong
+//! number with no signal. The explicit `wrapping_div` / `checked_div` /
+//! `saturating_div` / `overflowing_div` variants (in `crate::macros::overflow`)
+//! carry the modular / `None` / clamp / flag policies via their own `Int<N>`
+//! paths, not this kernel.
 //!
 //! # Layering
 //!
@@ -48,16 +51,13 @@ use crate::support::rounding::RoundingMode;
 /// Hardware-`i128` decimal divide kernel for narrow storage (`N <= 2`).
 ///
 /// Computes `(a * 10^SCALE) / b` rounded under `mode`. Panics on a zero
-/// divisor. On `i128` overflow of the quotient, debug-panics / release-wraps
-/// per the standard integer contract (the wrap re-derives via `Int<N>`
-/// wrapping ops). `mult` is the pre-computed `10^SCALE` in `Int<N>`, used
-/// only on the release-wrap path (the hardware kernel forms its own).
+/// divisor and on `i128` overflow of the quotient in BOTH debug and release
+/// per the decimal default-operator contract.
 #[inline]
 #[must_use]
 pub(crate) fn div_native<const N: usize, const SCALE: u32>(
     a: Int<N>,
     b: Int<N>,
-    mult: Int<N>,
     mode: RoundingMode,
 ) -> Int<N> {
     if b == Int::<N>::ZERO {
@@ -83,12 +83,10 @@ pub(crate) fn div_native<const N: usize, const SCALE: u32>(
         let n = if b_neg { -n } else { n };
         let b_mag: u64 = bi.unsigned_abs() as u64;
         let result = crate::macros::arithmetic::i128_divrem_by_u64_with_mode(n, b_mag, mode);
-        if cfg!(debug_assertions) {
-            assert!(
-                result >= i64::MIN as i128 && result <= i64::MAX as i128,
-                "attempt to divide with overflow"
-            );
-        }
+        assert!(
+            result >= i64::MIN as i128 && result <= i64::MAX as i128,
+            "attempt to divide with overflow"
+        );
         return Int::<N>::from_i128(result);
     }
 
@@ -97,12 +95,6 @@ pub(crate) fn div_native<const N: usize, const SCALE: u32>(
     let bi = b.as_i128();
     match div_pow10_div_with::<SCALE>(ai, bi, mode) {
         Some(q) => Int::<N>::from_i128(q),
-        None => {
-            if cfg!(debug_assertions) {
-                panic!("attempt to divide with overflow");
-            }
-            // Release wrap: (a * 10^SCALE) / b in wrapping Int<N> arithmetic.
-            a.wrapping_mul(mult).wrapping_div(b)
-        }
+        None => panic!("attempt to divide with overflow"),
     }
 }

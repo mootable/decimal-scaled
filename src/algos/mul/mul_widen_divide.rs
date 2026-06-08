@@ -41,48 +41,47 @@ use crate::support::rounding::RoundingMode;
 
 /// Rebuild a signed `Int<N>` from a quotient magnitude held in u128 limbs
 /// `mag` (the low `(N + 1) / 2` of which carry the result) and sign `neg`.
-/// In debug, panics if the magnitude exceeds `Int<N>`'s representable range
-/// (matching the old `narrow_or_panic!`); in release it wraps via
-/// `from_mag_sign_u128`.
+/// Panics in BOTH debug and release if the magnitude exceeds `Int<N>`'s
+/// representable range — the decimal default operator never silently wraps a
+/// wrong number. (The explicit `wrapping_mul` / `checked_mul` etc. variants
+/// take their own `Int<N>` paths and do not reach this kernel.)
 #[inline]
 fn narrow_mag_to_int<const N: usize>(mag: &[u128], neg: bool, msg: &str) -> Int<N> {
-    if cfg!(debug_assertions) {
-        let u128_limbs = N.div_ceil(2);
-        // Any set bit beyond the storage width is overflow.
-        let mut overflow = mag.iter().skip(u128_limbs).any(|&l| l != 0);
-        if !overflow {
-            // Compare the in-range magnitude against |Int<N>::MAX| / |MIN|.
-            let limit = if neg {
-                Int::<N>::MIN.unsigned_abs()
-            } else {
-                Int::<N>::MAX.unsigned_abs()
-            };
-            let limit_limbs = *limit.as_limbs();
-            // Reconstruct the result magnitude limbs (u64) for the compare.
-            let mut got = [0u64; N];
-            let pairs = (N / 2).min(u128_limbs).min(mag.len());
-            let mut i = 0;
-            while i < pairs {
-                got[2 * i] = mag[i] as u64;
-                got[2 * i + 1] = (mag[i] >> 64) as u64;
-                i += 1;
-            }
-            if (N & 1) == 1 && i < u128_limbs && i < mag.len() {
-                got[2 * i] = mag[i] as u64;
-            }
-            // got > limit ?  (little-endian magnitude compare)
-            let mut k = N;
-            while k > 0 {
-                k -= 1;
-                if got[k] != limit_limbs[k] {
-                    overflow = got[k] > limit_limbs[k];
-                    break;
-                }
+    let u128_limbs = N.div_ceil(2);
+    // Any set bit beyond the storage width is overflow.
+    let mut overflow = mag.iter().skip(u128_limbs).any(|&l| l != 0);
+    if !overflow {
+        // Compare the in-range magnitude against |Int<N>::MAX| / |MIN|.
+        let limit = if neg {
+            Int::<N>::MIN.unsigned_abs()
+        } else {
+            Int::<N>::MAX.unsigned_abs()
+        };
+        let limit_limbs = *limit.as_limbs();
+        // Reconstruct the result magnitude limbs (u64) for the compare.
+        let mut got = [0u64; N];
+        let pairs = (N / 2).min(u128_limbs).min(mag.len());
+        let mut i = 0;
+        while i < pairs {
+            got[2 * i] = mag[i] as u64;
+            got[2 * i + 1] = (mag[i] >> 64) as u64;
+            i += 1;
+        }
+        if (N & 1) == 1 && i < u128_limbs && i < mag.len() {
+            got[2 * i] = mag[i] as u64;
+        }
+        // got > limit ?  (little-endian magnitude compare)
+        let mut k = N;
+        while k > 0 {
+            k -= 1;
+            if got[k] != limit_limbs[k] {
+                overflow = got[k] > limit_limbs[k];
+                break;
             }
         }
-        if overflow {
-            panic!("{msg}");
-        }
+    }
+    if overflow {
+        panic!("{msg}");
     }
     Int::<N>::from_mag_sign_u128(mag, neg)
 }
@@ -96,8 +95,8 @@ fn narrow_mag_to_int<const N: usize>(mag: &[u128], neg: bool, msg: &str) -> Int<
 /// the scratch buffer via [`crate::int::policy::mul::dispatch`] (which routes
 /// even-`N` widths to the u128-packed `mul_full_limb` kernel), divided by
 /// `10^SCALE` via the MG / Newton magnitude cores, and rebuilt as `Int<N>`
-/// (debug panic / release wrap on overflow). `SCALE == 0` returns the product
-/// unscaled.
+/// (panics on overflow in both debug and release). `SCALE == 0` returns the
+/// product unscaled.
 #[inline]
 pub(crate) fn mul_widen_divide<const N: usize, const SCALE: u32>(
     a: Int<N>,

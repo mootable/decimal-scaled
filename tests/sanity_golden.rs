@@ -97,11 +97,10 @@ fn neg_exact_vectors() {
     assert_eq!(r(-d(7)), -7);
 }
 
-// `-MIN` is unrepresentable in two's-complement. Like `i128`, the `Neg`
-// operator panics on overflow in debug builds and WRAPS in release
-// (`-MIN == MIN`). This test therefore only holds under `debug_assertions`;
-// release callers that must detect the overflow use `checked_neg`.
-#[cfg(debug_assertions)]
+// `-MIN` is unrepresentable in two's-complement. The default `Neg`
+// operator panics on this overflow in BOTH debug and release (a fixed-width
+// decimal never silently wraps to `-MIN == MIN`); callers that must detect
+// the overflow without panicking use `checked_neg` / `wrapping_neg`.
 #[test]
 #[should_panic]
 fn neg_min_panics() {
@@ -183,10 +182,9 @@ fn rem_by_zero_panics() {
     let _ = d(100) % d(0);
 }
 
-// `MIN % -1` hits the same quotient-overflow boundary as `MIN / -1`. Like
-// `i128`, `Rem` panics on it in debug and WRAPS in release (remainder 0), so
-// this only holds under `debug_assertions`.
-#[cfg(debug_assertions)]
+// `MIN % -1` hits the same quotient-overflow boundary as `MIN / -1`. The
+// default `Rem` operator panics on it in BOTH debug and release (a
+// fixed-width decimal never silently wraps to remainder 0).
 #[test]
 #[should_panic]
 fn rem_min_by_neg_one_panics() {

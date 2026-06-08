@@ -23,11 +23,11 @@
 //!
 //! Decimal negation requires no rescaling: the sign of the stored integer
 //! flips and the scale is unchanged. The single algorithm
-//! (`neg_int_layer`) delegates to `Int<N>`'s `checked_neg` / `wrapping_neg`
-//! following Rust's standard integer-overflow contract (debug panics on
-//! `-MIN`, release wraps). There is no crossover threshold, no work-width
-//! widening, and no value-dependent split. `ByValue` is present for
-//! canonical-shape uniformity; `select` never returns it.
+//! (`neg_int_layer`) delegates to `Int<N>`'s `checked_neg` and panics on
+//! the `-MIN` overflow in both debug and release (the default operator
+//! never silently wraps a wrong number). There is no crossover threshold,
+//! no work-width widening, and no value-dependent split. `ByValue` is
+//! present for canonical-shape uniformity; `select` never returns it.
 
 use crate::int::types::Int;
 
@@ -80,8 +80,8 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
 /// are eliminated in release) then dispatches exhaustively over
 /// [`Algorithm`].
 ///
-/// Not `const fn`: `neg_int_layer` branches on `cfg!(debug_assertions)`,
-/// which is not permitted in `const fn`.
+/// Not `const fn`: matches the existing non-`const` `Neg` operator on
+/// `D<Int<N>, SCALE>`.
 #[inline]
 pub(crate) fn dispatch<const N: usize, const SCALE: u32>(a: Int<N>) -> Int<N> {
     let algo = match const { select::<N, SCALE>() } {
@@ -99,8 +99,8 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(a: Int<N>) -> Int<N> {
 
 /// Per-type policy: which kernel a `D<Int<N>, SCALE>` uses for unary `-`.
 pub(crate) trait NegPolicy: Sized {
-    /// Negate `self`, applying Rust's standard integer-overflow contract
-    /// (panic in debug, wrap in release).
+    /// Negate `self`, panicking on the `-MIN` overflow in both debug and
+    /// release.
     fn neg_impl(self) -> Self;
 }
 

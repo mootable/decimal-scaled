@@ -115,12 +115,11 @@ fn checked_add_returns_none_on_overflow() {
     assert!(D38s12::ZERO.checked_add(D38s12::ONE).is_some());
 }
 
-#[cfg(debug_assertions)]
 #[test]
 #[should_panic(expected = "overflow")]
-fn operator_add_panics_on_overflow_in_debug() {
-    // The `+` operator follows Rust's integer-overflow contract: it
-    // panics in debug builds. (In release it wraps, so this assertion
-    // is debug-gated.)
+fn operator_add_panics_on_overflow() {
+    // The `+` operator panics on overflow in BOTH debug and release — a
+    // fixed-width decimal never silently wraps a wrong number. (The
+    // explicit `wrapping_add` carries the modular behaviour.)
     let _ = D38s12::MAX + D38s12::ONE;
 }

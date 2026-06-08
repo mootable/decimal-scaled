@@ -676,10 +676,9 @@ pub mod __bench_internals {
     pub fn dec_div_native<const N: usize, const SCALE: u32>(
         a: crate::int::types::Int<N>,
         b: crate::int::types::Int<N>,
-        mult: crate::int::types::Int<N>,
         mode: crate::RoundingMode,
     ) -> crate::int::types::Int<N> {
-        crate::algos::div::div_native::div_native::<N, SCALE>(a, b, mult, mode)
+        crate::algos::div::div_native::div_native::<N, SCALE>(a, b, mode)
     }
     #[inline(never)]
     pub fn dec_div_widen_scale_n1(
@@ -705,10 +704,9 @@ pub mod __bench_internals {
     pub fn dec_mul_native<const N: usize, const SCALE: u32>(
         a: crate::int::types::Int<N>,
         b: crate::int::types::Int<N>,
-        mult: crate::int::types::Int<N>,
         mode: crate::RoundingMode,
     ) -> crate::int::types::Int<N> {
-        crate::algos::mul::mul_native::mul_native::<N, SCALE>(a, b, mult, mode)
+        crate::algos::mul::mul_native::mul_native::<N, SCALE>(a, b, mode)
     }
     #[inline(never)]
     pub fn dec_mul_widen_divide_n1<const SCALE: u32>(
