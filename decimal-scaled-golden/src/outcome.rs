@@ -54,7 +54,12 @@ pub struct ResultRecord {
     pub width: u32,
     pub scale: u32,
     pub mode: RoundingMode,
+    /// The strict result: rounding (when the value fits) or overflow (when it
+    /// doesn't) — whichever applied. `Pass` when the relevant validator is NoOp.
     pub outcome: Outcome,
+    /// Graded precision distance (ULP magnitude) when `ValidatePrecision` is
+    /// active; `None` when it's NoOp or not applicable.
+    pub precision: Option<String>,
     /// Correctness: the offending input (for a failure). Timing: None.
     pub detail: Option<String>,
     /// Timing: batch nanoseconds. Correctness: None.

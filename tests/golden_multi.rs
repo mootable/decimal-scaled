@@ -11,17 +11,18 @@
 //! Honour `GOLDEN_THREADS` to cap parallelism (default = available cores).
 #![cfg(all(feature = "wide", feature = "x-wide", feature = "xx-wide"))]
 
-use std::collections::BTreeMap;
 use std::marker::PhantomData;
 
 use decimal_scaled::{
     DecimalArithmetic, DecimalTranscendental, D115, D1232, D153, D18, D230, D307, D38, D462, D57,
     D616, D76, D924, RoundingMode as DsMode,
 };
+use decimal_scaled_golden::parser::GoldenCase;
 use decimal_scaled_golden::{
-    parser, run_parallel, Capabilities, Computed, CorrectnessTester, DecimalSubject, ErasedSubject,
-    FnSupport, Function, Outcome, Overflow, RoundingMode,
+    parser, run_parallel, Capabilities, Computed, FnSupport, Function, Outcome, Overflow,
+    RoundingMode, RunOnce, Subject, Validator,
 };
+use std::collections::BTreeMap;
 
 const GP: usize = 1233;
 
@@ -58,8 +59,7 @@ fn frac_len(s: &str) -> usize {
 }
 
 /// Inherent rounded mul/div aren't on a width-generic trait, so bridge them
-/// locally — one delegating impl per width, scale-generic. Keeps `DsSubject<D>`
-/// a single generic impl (no per-cell duplication).
+/// locally — one delegating impl per width, scale-generic.
 trait DsOps: Sized {
     fn ds_mul_with(self, o: Self, m: DsMode) -> Self;
     fn ds_div_with(self, o: Self, m: DsMode) -> Self;
@@ -75,7 +75,6 @@ macro_rules! impl_ds_ops {
 impl_ds_ops!(D18, D38, D57, D76, D115, D153, D230, D307, D462, D616, D924, D1232);
 
 /// One single-cell decimal-scaled subject over the concrete decimal type `D`.
-/// `width`/`scale`/`storage_bits` are reported to the harness via `capabilities`.
 struct DsSubject<D> {
     width: u32,
     scale: u32,
@@ -83,57 +82,14 @@ struct DsSubject<D> {
     _p: PhantomData<D>,
 }
 
-impl<D> DecimalSubject for DsSubject<D>
+impl<D> DsSubject<D>
 where
-    D: DecimalArithmetic + DecimalTranscendental + DsOps + core::str::FromStr,
+    D: DecimalArithmetic + DecimalTranscendental + DsOps,
 {
-    type Value = D;
-
-    fn capabilities(&self) -> Capabilities {
-        // decimal-scaled follows Rust's overflow contract: debug panics, release
-        // wraps (2's-complement on the integer storage).
-        let overflow = if cfg!(debug_assertions) { Overflow::Panic } else { Overflow::Wrap };
-        let modes = vec![RoundingMode::HalfToEven]; // TODO: RoundingMode::ALL for full mode coverage
-        let mut functions = BTreeMap::new();
-        for (_, f) in FUNCS {
-            functions.insert(*f, FnSupport { modes: modes.clone(), overflow });
-        }
-        Capabilities {
-            name: "decimal-scaled".to_string(),
-            width: self.width,
-            scale: self.scale,
-            storage_bits: self.storage_bits,
-            functions,
-        }
-    }
-
-    fn from_text(&self, s: &str) -> Computed<D> {
-        // An input with more fractional digits than the cell scale is not exactly
-        // representable here -- skip it rather than silently round the input.
-        if frac_len(s) > self.scale as usize {
-            return Computed::Skip;
-        }
-        match s.parse::<D>() {
-            Ok(v) => Computed::Value(v),
-            Err(_) => Computed::Skip,
-        }
-    }
-
-    fn to_text(&self, v: &D) -> String {
-        v.to_string()
-    }
-
-    fn execute(
-        &self,
-        func: Function,
-        inputs: &[D],
-        mode: RoundingMode,
-        _overflow: Overflow,
-    ) -> Computed<D> {
-        let m = ds_mode(mode);
-        let x = inputs[0];
-        let d2 = inputs.get(1).copied();
-        let y = match func {
+    /// The op only — shared by `eval` (after parse, before format) and the
+    /// `compute_thunk` timed closure. `None` if a binary op is missing operand 2.
+    fn compute(&self, func: Function, x: D, d2: Option<D>, m: DsMode) -> Option<D> {
+        Some(match func {
             Function::Sqrt => x.sqrt_strict_with(m),
             Function::Cbrt => x.cbrt_strict_with(m),
             Function::Exp => x.exp_strict_with(m),
@@ -153,27 +109,111 @@ where
             Function::Asinh => x.asinh_strict_with(m),
             Function::Acosh => x.acosh_strict_with(m),
             Function::Atanh => x.atanh_strict_with(m),
-            Function::Log => match d2 { Some(d) => x.log_strict_with(d, m), None => return Computed::Skip },
-            Function::Atan2 => match d2 { Some(d) => x.atan2_strict_with(d, m), None => return Computed::Skip },
-            Function::Powf => match d2 { Some(d) => x.powf_strict_with(d, m), None => return Computed::Skip },
-            Function::Hypot => match d2 { Some(d) => x.hypot_strict_with(d, m), None => return Computed::Skip },
-            Function::Add => match d2 { Some(d) => x + d, None => return Computed::Skip },
-            Function::Sub => match d2 { Some(d) => x - d, None => return Computed::Skip },
-            Function::Mul => match d2 { Some(d) => x.ds_mul_with(d, m), None => return Computed::Skip },
-            Function::Div => match d2 { Some(d) => x.ds_div_with(d, m), None => return Computed::Skip },
-            Function::Rem => match d2 { Some(d) => x % d, None => return Computed::Skip },
+            Function::Log => x.log_strict_with(d2?, m),
+            Function::Atan2 => x.atan2_strict_with(d2?, m),
+            Function::Powf => x.powf_strict_with(d2?, m),
+            Function::Hypot => x.hypot_strict_with(d2?, m),
+            Function::Add => x + d2?,
+            Function::Sub => x - d2?,
+            Function::Mul => x.ds_mul_with(d2?, m),
+            Function::Div => x.ds_div_with(d2?, m),
+            Function::Rem => x % d2?,
+        })
+    }
+
+    /// Parse `inputs` to typed values, skipping any not exactly representable.
+    fn parse_inputs(&self, inputs: &[&str]) -> Option<(D, Option<D>)>
+    where
+        D: core::str::FromStr,
+    {
+        let mut vals: Vec<D> = Vec::with_capacity(inputs.len());
+        for s in inputs {
+            if frac_len(s) > self.scale as usize {
+                return None;
+            }
+            match s.parse::<D>() {
+                Ok(v) => vals.push(v),
+                Err(_) => return None,
+            }
+        }
+        let x = *vals.first()?;
+        Some((x, vals.get(1).copied()))
+    }
+}
+
+impl<D> Subject for DsSubject<D>
+where
+    D: DecimalArithmetic + DecimalTranscendental + DsOps + core::str::FromStr,
+{
+    fn capabilities(&self) -> Capabilities {
+        // decimal-scaled follows Rust's overflow contract: debug panics, release
+        // wraps (2's-complement on the integer storage).
+        let overflow = if cfg!(debug_assertions) { Overflow::Panic } else { Overflow::Wrap };
+        let modes = RoundingMode::ALL.to_vec(); // full rounding-mode coverage
+        let mut functions = BTreeMap::new();
+        for (_, f) in FUNCS {
+            functions.insert(*f, FnSupport { modes: modes.clone(), overflow });
+        }
+        Capabilities {
+            name: "decimal-scaled".to_string(),
+            width: self.width,
+            scale: self.scale,
+            storage_bits: self.storage_bits,
+            functions,
+        }
+    }
+
+    fn eval(
+        &self,
+        func: Function,
+        inputs: &[&str],
+        mode: RoundingMode,
+        _overflow: Overflow,
+    ) -> Computed<String> {
+        let (x, d2) = match self.parse_inputs(inputs) {
+            Some(v) => v,
+            None => return Computed::Skip,
         };
-        Computed::Value(y)
+        match self.compute(func, x, d2, ds_mode(mode)) {
+            Some(y) => Computed::Value(y.to_string()),
+            None => Computed::Skip,
+        }
+    }
+
+    fn compute_thunk<'a>(
+        &'a self,
+        cases: &'a [GoldenCase],
+        func: Function,
+        mode: RoundingMode,
+        _overflow: Overflow,
+    ) -> Option<Box<dyn FnMut() + 'a>> {
+        let m = ds_mode(mode);
+        // Parse the whole batch UP FRONT (untimed).
+        let mut batch: Vec<(D, Option<D>)> = Vec::with_capacity(cases.len());
+        for case in cases {
+            let refs: Vec<&str> = case.inputs.iter().map(|s| s.as_str()).collect();
+            if let Some(pair) = self.parse_inputs(&refs) {
+                batch.push(pair);
+            }
+        }
+        if batch.is_empty() {
+            return None;
+        }
+        Some(Box::new(move || {
+            for (x, d2) in &batch {
+                std::hint::black_box(self.compute(func, *x, *d2, m));
+            }
+        }))
     }
 }
 
 /// Build the subject vec: one `DsSubject<D>` per band-edge `(width, scale)` cell.
 macro_rules! ds_subjects {
     ($($D:ty => ($w:expr, $s:expr, $bits:expr)),+ $(,)?) => {
-        fn ds_subjects() -> Vec<Box<dyn ErasedSubject + Sync>> {
+        fn ds_subjects() -> Vec<Box<dyn Subject + Sync>> {
             vec![ $(
                 Box::new(DsSubject::<$D> { width: $w, scale: $s, storage_bits: $bits, _p: PhantomData })
-                    as Box<dyn ErasedSubject + Sync>
+                    as Box<dyn Subject + Sync>
             ),+ ]
         }
     };
@@ -242,6 +282,8 @@ fn thread_count() -> usize {
 #[ignore = "full-surface golden; run via: cargo test --release --features wide,x-wide,xx-wide --test golden_multi -- --ignored --nocapture"]
 fn golden_multi_tier() {
     let subjects = ds_subjects();
+    let tester = Validator::validation_tester(GP);
+    let strategy = RunOnce;
     let threads = thread_count();
     let mut total_pass = 0usize;
     let mut total_panic = 0usize;
@@ -255,7 +297,7 @@ fn golden_multi_tier() {
         if cases.is_empty() {
             continue;
         }
-        let recs = run_parallel(&CorrectnessTester, &subjects, *f, &cases, GP, threads);
+        let recs = run_parallel(&tester, &strategy, &subjects, *f, &cases, threads);
         let mut pass = 0usize;
         let mut skip = 0usize;
         for r in &recs {

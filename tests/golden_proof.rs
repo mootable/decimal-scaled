@@ -4,9 +4,10 @@
 use std::collections::BTreeMap;
 
 use decimal_scaled::{D38, RoundingMode as DsMode};
+use decimal_scaled_golden::parser::GoldenCase;
 use decimal_scaled_golden::{
-    parser, run, Capabilities, Computed, CorrectnessTester, DecimalSubject, ErasedSubject,
-    FnSupport, Function, Outcome, Overflow, RoundingMode,
+    parser, run, Capabilities, Computed, FnSupport, Function, Outcome, Overflow, RoundingMode,
+    RunOnce, Subject, Validator,
 };
 
 const GP: usize = 1233;
@@ -31,9 +32,19 @@ fn frac_len(s: &str) -> usize {
     }
 }
 
-impl DecimalSubject for DecimalScaledD38S19 {
-    type Value = D38<19>;
+impl DecimalScaledD38S19 {
+    fn compute(&self, func: Function, x: D38<19>, m: DsMode) -> Option<D38<19>> {
+        Some(match func {
+            Function::Sqrt => x.sqrt_strict_with(m),
+            Function::Exp => x.exp_strict_with(m),
+            Function::Ln => x.ln_strict_with(m),
+            Function::Sin => x.sin_strict_with(m),
+            _ => return None,
+        })
+    }
+}
 
+impl Subject for DecimalScaledD38S19 {
     fn capabilities(&self) -> Capabilities {
         let overflow = if cfg!(debug_assertions) { Overflow::Panic } else { Overflow::Wrap };
         let mut functions = BTreeMap::new();
@@ -49,39 +60,52 @@ impl DecimalSubject for DecimalScaledD38S19 {
         }
     }
 
-    fn from_text(&self, s: &str) -> Computed<D38<19>> {
-        // An input with more fractional digits than scale 19 is not exactly
-        // representable here -- skip it rather than silently round.
-        if frac_len(s) > 19 {
-            return Computed::Skip;
-        }
-        match s.parse::<D38<19>>() {
-            Ok(v) => Computed::Value(v),
-            Err(_) => Computed::Skip,
-        }
-    }
-
-    fn to_text(&self, v: &D38<19>) -> String {
-        v.to_string()
-    }
-
-    fn execute(
+    fn eval(
         &self,
         func: Function,
-        inputs: &[D38<19>],
+        inputs: &[&str],
         mode: RoundingMode,
         _overflow: Overflow,
-    ) -> Computed<D38<19>> {
-        let x = inputs[0];
-        let m = ds_mode(mode);
-        let y = match func {
-            Function::Sqrt => x.sqrt_strict_with(m),
-            Function::Exp => x.exp_strict_with(m),
-            Function::Ln => x.ln_strict_with(m),
-            Function::Sin => x.sin_strict_with(m),
-            _ => return Computed::Skip,
+    ) -> Computed<String> {
+        if frac_len(inputs[0]) > 19 {
+            return Computed::Skip;
+        }
+        let x = match inputs[0].parse::<D38<19>>() {
+            Ok(v) => v,
+            Err(_) => return Computed::Skip,
         };
-        Computed::Value(y)
+        match self.compute(func, x, ds_mode(mode)) {
+            Some(y) => Computed::Value(y.to_string()),
+            None => Computed::Skip,
+        }
+    }
+
+    fn compute_thunk<'a>(
+        &'a self,
+        cases: &'a [GoldenCase],
+        func: Function,
+        mode: RoundingMode,
+        _overflow: Overflow,
+    ) -> Option<Box<dyn FnMut() + 'a>> {
+        let m = ds_mode(mode);
+        let batch: Vec<D38<19>> = cases
+            .iter()
+            .filter_map(|c| {
+                let s = c.inputs.first()?;
+                if frac_len(s) > 19 {
+                    return None;
+                }
+                s.parse::<D38<19>>().ok()
+            })
+            .collect();
+        if batch.is_empty() {
+            return None;
+        }
+        Some(Box::new(move || {
+            for x in &batch {
+                std::hint::black_box(self.compute(func, *x, m));
+            }
+        }))
     }
 }
 
@@ -96,13 +120,15 @@ fn golden_proof_d38_s19() {
         ("ln", Function::Ln),
         ("sin", Function::Sin),
     ];
-    let subjects: Vec<Box<dyn ErasedSubject>> = vec![Box::new(DecimalScaledD38S19)];
+    let tester = Validator::validation_tester(GP);
+    let strategy = RunOnce;
+    let subjects: Vec<Box<dyn Subject>> = vec![Box::new(DecimalScaledD38S19)];
     let mut total_pass = 0usize;
     for (name, f) in funcs {
         let body = std::fs::read_to_string(corpus_path(name)).expect("read proof corpus");
         let cases = parser::parse(f, &body);
         assert!(!cases.is_empty(), "{name}: no cases parsed");
-        let recs = run(&CorrectnessTester, &subjects, f, &cases, GP);
+        let recs = run(&tester, &strategy, &subjects, f, &cases);
         let mut pass = 0usize;
         let mut skip = 0usize;
         for r in &recs {
