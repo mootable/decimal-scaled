@@ -906,11 +906,17 @@ macro_rules! decl_wide_transcendental {
             /// Upper bound on the integer-digit count of `2^x` (the `exp2`
             /// result) for storage raw `raw` (= `x · 10^scale`), capped by
             /// [`exp_lift_cap`] for use as the large-result lift.
+            ///
+            /// For `x < 0`, `2^x < 1`: the result has NO integer-digit growth, so
+            /// the lift is 0. Using `|x|` here (as if the result were `2^|x|`)
+            /// over-lifts the working scale by hundreds of digits for a large
+            /// negative argument, corrupting the lifted-scale `exp` evaluation —
+            /// the `exp2_strict_with` vs `exp2_strict` divergence.
             pub(crate) fn exp2_result_int_digits(raw: $Storage, scale: u32) -> u32 {
-                exp_lift_cap(
-                    pow_result_digits(abs(widen_storage(raw)), scale, 30103),
-                    scale,
-                )
+                if raw < $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    return 0;
+                }
+                exp_lift_cap(pow_result_digits(widen_storage(raw), scale, 30103), scale)
             }
 
             /// Upper bound on the integer-digit count of `e^|v|` (the
