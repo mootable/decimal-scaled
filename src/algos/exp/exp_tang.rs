@@ -122,6 +122,25 @@ where
         (w, v_w, 0)
     };
 
+    // Overflow gate (up front, before any `w_ext`-scale work). The body runs at
+    // the extended scale `w_ext` — `one_w = 10^w_ext` and the `2^k` reassembly
+    // `exp_s << k` — so a result too large to represent needs `w_ext` digits
+    // (`≈ w_ext·log2(10)` bits) PLUS the `k`-bit shift to exceed `S`. Without
+    // this gate the `10^w_ext` literal alone silently WRAPS once it passes `S`'s
+    // width (e.g. exp2(1005) = e^696.7: `w_ext ≈ 372` ⇒ ~1236 bits > Wagm's
+    // 1024 ⇒ garbage), and the result came back as 0 instead of panicking. A
+    // fixed-width decimal has no infinity: PANIC, uniform across debug AND
+    // release (the strict-transcendental overflow contract). In-range results
+    // fit `S` (wider than storage) with room, so this never fires for a
+    // representable cell. digits→bits: `log2(10) ≈ 3322/1000`.
+    {
+        let peak_bits =
+            (w_ext as u64) * 3322 / 1000 + if k >= 0 { k as u64 } else { 0 };
+        if peak_bits >= <S as BigInt>::BITS as u64 {
+            panic!("tang_exp_fixed: result out of range");
+        }
+    }
+
     let one_w = eg::one::<S>(w_ext);
     let pow10_w = one_w;
     let l2 = ln2(w_ext);
@@ -172,10 +191,18 @@ where
     let k_total = k + k_adj;
     let scaled_at_w_ext = if k_total >= 0 {
         let shift = k_total as u32;
-        debug_assert!(
-            eg::bit_length::<S>(exp_s) + shift < <S as BigInt>::BITS,
-            "tang_exp_fixed: result overflows the representable range",
-        );
+        // The `2^k` reassembly `exp_s << shift` wraps past `S`'s width once the
+        // result is too large to represent — a genuinely out-of-range exp. A
+        // fixed-width decimal has no infinity, so PANIC, uniform across debug
+        // AND release (the strict-transcendental overflow contract). This was a
+        // `debug_assert!`, so a RELEASE build silently WRAPPED to garbage — e.g.
+        // `exp2(1005)` (= e^696.7, far beyond every tier) returned 0 instead of
+        // panicking, while `exp2(200)` (overflow that still fits `S`, panicking
+        // later at the storage narrow) was correct: a tier/scale-INVARIANT
+        // violation the full-surface golden surfaced.
+        if eg::bit_length::<S>(exp_s) + shift >= <S as BigInt>::BITS {
+            panic!("tang_exp_fixed: result out of range");
+        }
         exp_s << shift
     } else {
         let neg_k = (-k_total) as u32;
