@@ -1,6 +1,11 @@
 """mpmath generator oracle (BSD). Computes each function to arbitrary precision
-and returns the value truncated TOWARD ZERO to `precision` fractional digits, as a
-plain signed `digits.digits` string."""
+and returns a plain signed `digits.digits` string. A value that TERMINATES within
+`precision` fractional digits is written stripped of its trailing zeros (so it has
+fewer than `precision` frac digits, marking it exact); a non-terminating value is
+truncated TOWARD ZERO to exactly `precision` frac digits. Preserving the
+terminated-vs-truncated distinction is essential — the consumer's tie detection
+(HalfToEven, Ceiling/Floor) depends on whether a residual exists below the stored
+digits."""
 from typing import List
 
 import mpmath
@@ -8,14 +13,35 @@ import mpmath
 from ..functions import FUNCTIONS
 from ..oracle import Oracle, register
 
+# Extra fractional digits computed beyond `precision` to decide termination: if
+# they are all zero, the value terminated within `precision` and is stripped;
+# otherwise it is a genuine truncation. A coincidental run of this many zeros in a
+# non-terminating expansion is ~10^-GUARD — negligible.
+GUARD = 40
 
-def _truncated_digits(r, precision: int) -> str:
+
+def _format(r, precision: int) -> str:
     sign = "-" if r < 0 else ""
-    scaled = int(mpmath.floor(abs(r) * (mpmath.mpf(10) ** precision)))
-    s = str(scaled)
+    scaled_guard = int(mpmath.floor(abs(r) * (mpmath.mpf(10) ** (precision + GUARD))))
+    if scaled_guard % (10 ** GUARD) == 0:
+        # Terminated within `precision` digits: strip trailing zeros.
+        exact = scaled_guard // (10 ** GUARD)  # value * 10^precision, exact
+        if exact == 0:
+            return "0"
+        z = 0
+        while z < precision and exact % 10 == 0:
+            exact //= 10
+            z += 1
+        frac_len = precision - z
+        if frac_len == 0:
+            return f"{sign}{exact}"
+        s = str(exact).rjust(frac_len + 1, "0")
+        return f"{sign}{s[:-frac_len]}.{s[-frac_len:]}"
+    # Non-terminating: truncate toward zero to exactly `precision` frac digits.
+    scaled = scaled_guard // (10 ** GUARD)
     if precision == 0:
-        return f"{sign}{s}"
-    s = s.rjust(precision + 1, "0")
+        return f"{sign}{scaled}"
+    s = str(scaled).rjust(precision + 1, "0")
     return f"{sign}{s[:-precision]}.{s[-precision:]}"
 
 
@@ -61,20 +87,20 @@ class MpmathOracle(Oracle):
         return func in FUNCTIONS
 
     def value(self, func: str, inputs: List[str], precision: int) -> str:
-        mpmath.mp.dps = precision + 60
+        mpmath.mp.dps = precision + GUARD + 30
         x = [mpmath.mpf(s) for s in inputs]
         r = _eval(func, x)
-        # ensure working precision covers the RESULT's integer part too
+        # ensure working precision covers the RESULT's integer part + the guard
         if r != 0:
             int_digits = max(0, int(mpmath.floor(mpmath.log10(abs(r)))) + 1)
         else:
             int_digits = 1
-        need = precision + int_digits + 25
+        need = precision + int_digits + GUARD + 25
         if mpmath.mp.dps < need:
             mpmath.mp.dps = need
             x = [mpmath.mpf(s) for s in inputs]
             r = _eval(func, x)
-        return _truncated_digits(r, precision)
+        return _format(r, precision)
 
 
 register("mpmath", MpmathOracle)

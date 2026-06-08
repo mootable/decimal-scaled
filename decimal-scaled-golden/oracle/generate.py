@@ -18,14 +18,31 @@ from .adapters import flint_oracle, mpfr_oracle, mpmath_oracle, sympy_oracle  # 
 GEN_PRECISION = 1233
 
 
-def _scaled_int(s: str) -> int:
+def _frac_len(s: str) -> int:
+    i = s.find(".")
+    return 0 if i < 0 else len(s) - i - 1
+
+
+def _scaled_int_at(s: str, n: int) -> int:
+    """`s` as a signed integer scaled by 10^n (fraction padded/truncated to n)."""
     neg = s.startswith("-")
-    digits = s.lstrip("-").replace(".", "")
-    return -int(digits) if neg else int(digits)
+    body = s.lstrip("+-")
+    ip, fp = body.split(".", 1) if "." in body else (body, "")
+    fp = (fp + "0" * n)[:n]
+    v = int((ip + fp) or "0")
+    return -v if neg else v
 
 
-def _agree(a: str, b: str, tol: int = 1) -> bool:
-    return abs(_scaled_int(a) - _scaled_int(b)) <= tol
+def _agree(a: str, b: str, tol: int = 1, precision: int = GEN_PRECISION) -> bool:
+    """Agree within `tol` units at 10^-precision, robust to differing fraction
+    lengths: a stripped (terminated) value compares equal to a zero-padded one."""
+    n = max(_frac_len(a), _frac_len(b))
+    sa, sb = _scaled_int_at(a, n), _scaled_int_at(b, n)
+    pow_ = n - precision
+    if pow_ >= 0:
+        return abs(sa - sb) <= tol * (10 ** pow_)
+    # Finer than the tolerance scale: terminated values must match exactly.
+    return sa == sb
 
 
 def _load_config(path, generator, validators):
@@ -86,7 +103,7 @@ def cmd_generate(args):
                     print(f"[flag] {v.name()} failed {func}{inp}: {e}", file=sys.stderr)
                     ok = False
                     break
-                if not _agree(g, vv):
+                if not _agree(g, vv, precision=args.precision):
                     print(f"[flag] disagree {func}{inp}: {gen.name()}={g[:32]}... {v.name()}={vv[:32]}...",
                           file=sys.stderr)
                     ok = False
@@ -121,7 +138,7 @@ def cmd_revalidate(args):
                 if not v.supports(func):
                     continue
                 vv = v.value(func, inp, args.precision)
-                if not _agree(stored, vv):
+                if not _agree(stored, vv, precision=args.precision):
                     print(f"[MISMATCH] {func}{inp}: stored={stored[:32]}... {v.name()}={vv[:32]}...",
                           file=sys.stderr)
                     mismatches += 1

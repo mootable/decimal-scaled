@@ -9,28 +9,28 @@ pub mod value;
 pub mod parser;
 pub mod subject;
 pub mod loader;
-pub mod computed;
 pub mod outcome;
 pub mod bigdec;
 pub mod overflow;
 pub mod validator;
-pub mod validate;
 pub mod execution;
+pub mod collector;
+pub mod caseloader;
 pub mod tester;
 pub mod collator;
 
 pub use function::Function;
 pub use rounding::RoundingMode;
 pub use value::GoldenValue;
-pub use computed::Computed;
 pub use outcome::{Outcome, ResultRecord};
-pub use overflow::expected_overflow;
-pub use validator::validate_one;
-pub use subject::{Capabilities, CaseOutput, FnSupport, Overflow, Subject};
-pub use validate::{
-    DefaultOverflow, DefaultPrecision, DefaultRounding, NoOpOverflow, NoOpPrecision, NoOpRounding,
-    ValidateOverflow, ValidatePrecision, ValidateRounding,
+pub use subject::{Capabilities, FnSupport, Overflow, Subject};
+pub use collector::{
+    CellStatus, ExecutionCollector, ExecutionResult, FunctionCollector, SubjectCollector,
+    TestCollector,
 };
 pub use execution::{ExecutionStrategy, RunOnce, Timed};
-pub use tester::{run, run_parallel, Tester, Validator};
+pub use caseloader::{CaseLoader, FileCaseLoader};
+pub use tester::{ParallelTester, SeriesTester, Tester};
+pub use overflow::expected_overflow;
+pub use validator::{OverflowValidator, PrecisionValidator, RoundingValidator, Validator};
 pub use collator::Collator;

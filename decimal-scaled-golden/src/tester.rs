@@ -1,420 +1,331 @@
-use std::cmp::Ordering;
-use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
+//! The tester. For ONE subject it loads each function's golden cases (via the
+//! configured `CaseLoader`), runs them through the configured `ExecutionStrategy`,
+//! scores each cell with the configured `Validator`s, and returns that subject's
+//! `SubjectCollector`. Two impls — `SeriesTester` (serial) and `ParallelTester`
+//! (a work-queue over the subject's individual executions).
+//!
+//! `run` is generic over `Subject`, so different `Value` types need no erasure:
+//! `strategy.execute(subject, ..)` is monomorphised where `S` is concrete. The
+//! caller runs each subject and assembles the `TestCollector`; the collator sits
+//! outside the tester.
 
-use crate::bigdec::cmp_mag;
-use crate::computed::Computed;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+use crate::caseloader::CaseLoader;
+use crate::collector::{ExecutionCollector, FunctionCollector, SubjectCollector};
 use crate::execution::ExecutionStrategy;
 use crate::function::Function;
-use crate::outcome::{Outcome, ResultRecord};
 use crate::parser::GoldenCase;
-use crate::rounding::RoundingMode;
-use crate::subject::{CaseOutput, Capabilities, Overflow, Subject};
-use crate::validate::{
-    DefaultOverflow, DefaultPrecision, DefaultRounding, NoOpOverflow, NoOpPrecision, NoOpRounding,
-    ValidateOverflow, ValidatePrecision, ValidateRounding,
-};
+use crate::subject::{Capabilities, FnSupport, Subject};
+use crate::validator::Validator;
 use crate::value::GoldenValue;
 
-/// A tester scores a subject's output. It owns three validations (rounding,
-/// overflow, precision) and provides the `run`/`run_parallel` loop as default
-/// methods. The one shipped impl is [`Validator`].
+/// Runs one subject over a set of functions, producing its `SubjectCollector`.
+/// Configured on construction with an `ExecutionStrategy`, a `CaseLoader`, and the
+/// `Validator`s to apply.
 pub trait Tester {
-    fn validate_rounding(
-        &self, got: &str, golden: &GoldenValue, width: u32, scale: u32, mode: RoundingMode,
-    ) -> Outcome;
-    fn validate_overflow(
-        &self, got: &CaseOutput, golden: &GoldenValue, width: u32, scale: u32, storage_bits: u32,
-        overflow: Overflow,
-    ) -> Outcome;
-    fn validate_precision(
-        &self, got: &str, golden: &GoldenValue, width: u32, scale: u32, mode: RoundingMode,
-    ) -> Option<String>;
-
-    /// Whether anything validates. When false the runner skips the format/eval
-    /// pass (a pure-timing or no-op run).
-    fn validates(&self) -> bool {
-        true
-    }
-
-    /// Run `function` over a list of subjects, serially. Each subject is one
-    /// cell; for each supported mode, one `ResultRecord`. Subjects that don't
-    /// support the function contribute nothing.
-    fn run(
-        &self,
-        strategy: &dyn ExecutionStrategy,
-        subjects: &[Box<dyn Subject>],
-        function: Function,
-        cases: &[GoldenCase],
-    ) -> Vec<ResultRecord> {
-        let mut out = Vec::new();
-        for subject in subjects {
-            let caps = subject.capabilities();
-            let modes = match caps.function(function) {
-                Some(s) => s.modes.clone(),
-                None => continue,
-            };
-            for mode in modes {
-                out.push(run_cell(self, subject.as_ref(), function, cases, &caps, mode, strategy));
-            }
-        }
-        out
-    }
-
-    /// Parallel sibling of [`Tester::run`]: distributes `(subject, mode)` across
-    /// `threads` workers via a shared atomic index. `threads <= 1` runs serially.
-    /// CORRECTNESS ONLY — timing must use the serial `run` (concurrent workers
-    /// corrupt timing). Records returned in stable `(subject, mode)` order.
-    fn run_parallel(
-        &self,
-        strategy: &(dyn ExecutionStrategy + Sync),
-        subjects: &[Box<dyn Subject + Sync>],
-        function: Function,
-        cases: &[GoldenCase],
-        threads: usize,
-    ) -> Vec<ResultRecord>
-    where
-        Self: Sync,
-    {
-        let caps: Vec<Capabilities> = subjects.iter().map(|s| s.capabilities()).collect();
-        let mut work: Vec<(usize, RoundingMode)> = Vec::new();
-        for (i, c) in caps.iter().enumerate() {
-            if let Some(s) = c.function(function) {
-                for &m in &s.modes {
-                    work.push((i, m));
-                }
-            }
-        }
-        if work.is_empty() {
-            return Vec::new();
-        }
-        if threads <= 1 {
-            return work
-                .into_iter()
-                .map(|(i, m)| {
-                    run_cell(self, subjects[i].as_ref(), function, cases, &caps[i], m, strategy)
-                })
-                .collect();
-        }
-        let next = AtomicUsize::new(0);
-        let n_workers = threads.min(work.len());
-        let work_ref = &work;
-        let caps_ref = &caps;
-        let next_ref = &next;
-        let nested: Vec<Vec<(usize, ResultRecord)>> = std::thread::scope(|scope| {
-            let handles: Vec<_> = (0..n_workers)
-                .map(|_| {
-                    scope.spawn(move || {
-                        let mut local: Vec<(usize, ResultRecord)> = Vec::new();
-                        loop {
-                            let k = next_ref.fetch_add(1, AtomicOrdering::Relaxed);
-                            if k >= work_ref.len() {
-                                break;
-                            }
-                            let (i, m) = work_ref[k];
-                            local.push((
-                                k,
-                                run_cell(
-                                    self, subjects[i].as_ref(), function, cases, &caps_ref[i], m,
-                                    strategy,
-                                ),
-                            ));
-                        }
-                        local
-                    })
-                })
-                .collect();
-            handles.into_iter().map(|h| h.join().unwrap()).collect()
-        });
-        let mut indexed: Vec<(usize, ResultRecord)> = nested.into_iter().flatten().collect();
-        indexed.sort_by_key(|&(k, _)| k);
-        indexed.into_iter().map(|(_, r)| r).collect()
-    }
+    fn run<S: Subject + Sync>(&self, subject: &S, functions: &[Function]) -> SubjectCollector;
 }
 
-/// Process one cell: a validation pass (per-case `eval`, only when something
-/// validates) plus the strategy's timing measurement.
-fn run_cell(
-    tester: &(impl Tester + ?Sized),
-    subject: &dyn Subject,
-    function: Function,
-    cases: &[GoldenCase],
-    caps: &Capabilities,
-    mode: RoundingMode,
-    strategy: &dyn ExecutionStrategy,
-) -> ResultRecord {
-    let (width, scale, storage_bits) = (caps.width, caps.scale, caps.storage_bits);
-    let overflow = caps.function(function).map(|f| f.overflow).unwrap_or(Overflow::Panic);
+/// Runs the subject's executions serially.
+pub struct SeriesTester<E: ExecutionStrategy> {
+    pub strategy: E,
+    pub loader: Box<dyn CaseLoader>,
+    pub validators: Vec<Box<dyn Validator + Sync>>,
+}
 
-    let mut worst = Outcome::Skipped;
-    let mut worst_prec: Option<String> = None;
-    let mut detail: Option<String> = None;
-
-    if tester.validates() {
-        for case in cases {
-            let golden = match GoldenValue::parse(&case.output_raw) {
-                Some(g) => g,
-                None => continue,
-            };
-            let refs: Vec<&str> = case.inputs.iter().map(|s| s.as_str()).collect();
-            let out = match catch_unwind(AssertUnwindSafe(|| {
-                subject.eval(function, &refs, mode, overflow)
-            })) {
-                Err(_) => CaseOutput::Panic,
-                Ok(Computed::Value(s)) => CaseOutput::Value(s),
-                Ok(Computed::Skip) => CaseOutput::Skip,
-                Ok(Computed::Error(e)) => CaseOutput::Error(e),
-            };
-            let fits = golden.fits(width, scale);
-            let outcome = if fits {
-                match &out {
-                    CaseOutput::Value(got) => {
-                        tester.validate_rounding(got, &golden, width, scale, mode)
+impl<E: ExecutionStrategy> Tester for SeriesTester<E> {
+    fn run<S: Subject + Sync>(&self, subject: &S, functions: &[Function]) -> SubjectCollector {
+        let caps = subject.capabilities();
+        let mut collector = SubjectCollector::new(caps.clone());
+        for &function in functions {
+            collector.add(match caps.function(function) {
+                None => FunctionCollector::unsupported(function),
+                Some(&support) => {
+                    let mut fc = FunctionCollector::new(function, support);
+                    for case in self.loader.load(function) {
+                        fc.add(run_cell(
+                            subject, &self.strategy, &self.validators, function, &caps, support, &case,
+                        ));
                     }
-                    CaseOutput::Skip => Outcome::Skipped,
-                    CaseOutput::Error(e) => Outcome::Error { reason: e.clone() },
-                    CaseOutput::Panic => Outcome::Panic,
+                    fc
                 }
-            } else {
-                tester.validate_overflow(&out, &golden, width, scale, storage_bits, overflow)
-            };
-            let prec = if fits {
-                if let CaseOutput::Value(got) = &out {
-                    tester.validate_precision(got, &golden, width, scale, mode)
-                } else {
-                    None
+            });
+        }
+        collector
+    }
+}
+
+/// Distributes the subject's individual executions across `threads` workers (a
+/// shared atomic work-index). The per-execution work is identical to serial.
+pub struct ParallelTester<E: ExecutionStrategy + Sync> {
+    pub threads: usize,
+    pub strategy: E,
+    pub loader: Box<dyn CaseLoader>,
+    pub validators: Vec<Box<dyn Validator + Sync>>,
+}
+
+/// One function's place in the run: unsupported, or supported with its cases.
+struct Plan {
+    function: Function,
+    support: Option<FnSupport>,
+    cases: Vec<GoldenCase>,
+}
+
+impl<E: ExecutionStrategy + Sync> Tester for ParallelTester<E> {
+    fn run<S: Subject + Sync>(&self, subject: &S, functions: &[Function]) -> SubjectCollector {
+        let caps = subject.capabilities();
+
+        // Pre-pass (serial, cheap): per-function support + cases, and a flat job
+        // list of every execution.
+        let plans: Vec<Plan> = functions
+            .iter()
+            .map(|&function| match caps.function(function) {
+                None => Plan { function, support: None, cases: Vec::new() },
+                Some(&support) => {
+                    Plan { function, support: Some(support), cases: self.loader.load(function) }
                 }
-            } else {
-                None
-            };
-            if worse_than(&outcome, &worst) {
-                worst = outcome;
-                detail = Some(case.inputs.join(" "));
+            })
+            .collect();
+        let mut jobs: Vec<(usize, usize)> = Vec::new(); // (plan index, case index)
+        for (pi, plan) in plans.iter().enumerate() {
+            if plan.support.is_some() {
+                for ci in 0..plan.cases.len() {
+                    jobs.push((pi, ci));
+                }
             }
-            worst_prec = max_delta(worst_prec, prec);
         }
-        if matches!(worst, Outcome::Pass | Outcome::Skipped) {
-            detail = None;
+
+        let results = run_jobs(
+            subject, &self.strategy, &self.validators, &caps, &plans, &jobs, self.threads,
+        );
+
+        // Assemble: results are in job order (function then case), drain them in.
+        let mut results = results.into_iter();
+        let mut collector = SubjectCollector::new(caps.clone());
+        for plan in &plans {
+            collector.add(match plan.support {
+                None => FunctionCollector::unsupported(plan.function),
+                Some(support) => {
+                    let mut fc = FunctionCollector::new(plan.function, support);
+                    for _ in 0..plan.cases.len() {
+                        fc.add(results.next().expect("one result per job"));
+                    }
+                    fc
+                }
+            });
         }
-    }
-
-    let nanos = strategy.measure(subject, cases, function, mode, overflow);
-
-    ResultRecord {
-        library: caps.name.clone(), function, width, scale, mode,
-        outcome: worst, precision: worst_prec, detail, nanos,
+        collector
     }
 }
 
-/// Strict "more severe than", breaking MisRounded ties by larger delta.
-fn worse_than(a: &Outcome, b: &Outcome) -> bool {
-    match (a, b) {
-        (Outcome::MisRounded { delta: da }, Outcome::MisRounded { delta: db }) => {
-            cmp_mag(da, db) == Ordering::Greater
-        }
-        _ => a.severity() > b.severity(),
-    }
-}
-
-/// Keep the larger of two ULP deltas (cell precision = worst case).
-fn max_delta(a: Option<String>, b: Option<String>) -> Option<String> {
-    match (a, b) {
-        (None, x) | (x, None) => x,
-        (Some(x), Some(y)) => Some(if cmp_mag(&x, &y) == Ordering::Less { y } else { x }),
-    }
-}
-
-/// The one `Tester` impl: holds the three validation strategies and routes to
-/// them. Build with [`Validator::validation_tester`] / [`Validator::no_validation_tester`].
-pub struct Validator<R, O, P> {
-    pub rounding: R,
-    pub overflow: O,
-    pub precision: P,
-}
-
-impl<R: ValidateRounding, O: ValidateOverflow, P: ValidatePrecision> Tester for Validator<R, O, P> {
-    fn validate_rounding(
-        &self, got: &str, golden: &GoldenValue, width: u32, scale: u32, mode: RoundingMode,
-    ) -> Outcome {
-        self.rounding.validate_rounding(got, golden, width, scale, mode)
-    }
-    fn validate_overflow(
-        &self, got: &CaseOutput, golden: &GoldenValue, width: u32, scale: u32, storage_bits: u32,
-        overflow: Overflow,
-    ) -> Outcome {
-        self.overflow.validate_overflow(got, golden, width, scale, storage_bits, overflow)
-    }
-    fn validate_precision(
-        &self, got: &str, golden: &GoldenValue, width: u32, scale: u32, mode: RoundingMode,
-    ) -> Option<String> {
-        self.precision.validate_precision(got, golden, width, scale, mode)
-    }
-    fn validates(&self) -> bool {
-        self.rounding.active() || self.overflow.active() || self.precision.active()
-    }
-}
-
-impl Validator<DefaultRounding, DefaultOverflow, DefaultPrecision> {
-    /// All three checks active. `gen_precision` = the corpus generation precision.
-    pub const fn validation_tester(
-        gen_precision: usize,
-    ) -> Validator<DefaultRounding, DefaultOverflow, DefaultPrecision> {
-        Validator {
-            rounding: DefaultRounding { gen_precision },
-            overflow: DefaultOverflow,
-            precision: DefaultPrecision { gen_precision },
-        }
-    }
-}
-
-impl Validator<NoOpRounding, NoOpOverflow, NoOpPrecision> {
-    /// No checks (e.g. a pure-timing run): skips the format/eval pass entirely.
-    pub const fn no_validation_tester() -> Validator<NoOpRounding, NoOpOverflow, NoOpPrecision> {
-        Validator { rounding: NoOpRounding, overflow: NoOpOverflow, precision: NoOpPrecision }
-    }
-}
-
-/// Run `function` over `subjects` with `tester` + `strategy` (serial). Delegates
-/// to [`Tester::run`].
-pub fn run(
-    tester: &dyn Tester,
-    strategy: &dyn ExecutionStrategy,
-    subjects: &[Box<dyn Subject>],
-    function: Function,
-    cases: &[GoldenCase],
-) -> Vec<ResultRecord> {
-    tester.run(strategy, subjects, function, cases)
-}
-
-/// Parallel sibling of [`run`]. Delegates to [`Tester::run_parallel`].
-pub fn run_parallel(
-    tester: &(dyn Tester + Sync),
-    strategy: &(dyn ExecutionStrategy + Sync),
-    subjects: &[Box<dyn Subject + Sync>],
-    function: Function,
-    cases: &[GoldenCase],
+/// Run every job (execution), serially or across `threads` workers pulling from a
+/// shared atomic index. Returns the results in job order.
+fn run_jobs<S: Subject + Sync, E: ExecutionStrategy + Sync>(
+    subject: &S,
+    strategy: &E,
+    validators: &[Box<dyn Validator + Sync>],
+    caps: &Capabilities,
+    plans: &[Plan],
+    jobs: &[(usize, usize)],
     threads: usize,
-) -> Vec<ResultRecord> {
-    tester.run_parallel(strategy, subjects, function, cases, threads)
+) -> Vec<ExecutionCollector> {
+    let run = |&(pi, ci): &(usize, usize)| {
+        let plan = &plans[pi];
+        run_cell(subject, strategy, validators, plan.function, caps, plan.support.unwrap(), &plan.cases[ci])
+    };
+    if threads <= 1 || jobs.len() <= 1 {
+        return jobs.iter().map(run).collect();
+    }
+    let workers = threads.min(jobs.len());
+    let next = AtomicUsize::new(0);
+    let next_ref = &next;
+    let nested: Vec<Vec<(usize, ExecutionCollector)>> = std::thread::scope(|scope| {
+        let handles: Vec<_> = (0..workers)
+            .map(|_| {
+                scope.spawn(move || {
+                    let mut local: Vec<(usize, ExecutionCollector)> = Vec::new();
+                    loop {
+                        let k = next_ref.fetch_add(1, Ordering::Relaxed);
+                        if k >= jobs.len() {
+                            break;
+                        }
+                        local.push((k, run(&jobs[k])));
+                    }
+                    local
+                })
+            })
+            .collect();
+        handles.into_iter().map(|h| h.join().unwrap()).collect()
+    });
+    let mut indexed: Vec<(usize, ExecutionCollector)> = nested.into_iter().flatten().collect();
+    indexed.sort_by_key(|&(k, _)| k);
+    indexed.into_iter().map(|(_, c)| c).collect()
+}
+
+/// Run + validate one golden case: build the cell, skip unrepresentable inputs,
+/// execute via the strategy (which produces the `String` result), then let each
+/// validator score the cell.
+fn run_cell<S: Subject, E: ExecutionStrategy>(
+    subject: &S,
+    strategy: &E,
+    validators: &[Box<dyn Validator + Sync>],
+    function: Function,
+    caps: &Capabilities,
+    support: FnSupport,
+    case: &GoldenCase,
+) -> ExecutionCollector {
+    let mut cell = ExecutionCollector::new(case.inputs.clone(), case.output_raw.clone());
+    if !case.inputs.iter().all(|s| representable(s, caps.width, caps.scale)) {
+        cell.mark_unsupported();
+        return cell;
+    }
+    strategy.execute(subject, &case.inputs, function, support.mode, support.overflow, &mut cell);
+    if let Some(golden) = GoldenValue::parse(&case.output_raw) {
+        for v in validators {
+            v.validate(
+                &mut cell, &golden, caps.width, caps.scale, caps.storage_bits, support.mode,
+                support.overflow,
+            );
+        }
+    }
+    cell
+}
+
+/// True if `input` is exactly representable at `(width, scale)` — fractional
+/// digits ≤ scale and integer digits ≤ width − scale.
+fn representable(input: &str, width: u32, scale: u32) -> bool {
+    match GoldenValue::parse(input) {
+        Some(gv) => gv.frac_digits.len() <= scale as usize && gv.fits(width, scale),
+        None => false,
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::collector::{CellStatus, ExecutionResult};
     use crate::execution::RunOnce;
-    use crate::subject::{Capabilities, FnSupport};
+    use crate::outcome::Outcome;
+    use crate::rounding::RoundingMode;
+    use crate::subject::{FnSupport, Overflow};
     use std::collections::BTreeMap;
-    const GP: usize = 1233;
 
-    fn caps_sqrt(name: &str) -> Capabilities {
-        let mut functions = BTreeMap::new();
-        functions.insert(
-            Function::Sqrt,
-            FnSupport { modes: vec![RoundingMode::HalfToEven], overflow: Overflow::Panic },
-        );
-        Capabilities { name: name.into(), width: 38, scale: 4, storage_bits: 128, functions }
-    }
-
-    struct Fixed(&'static str);
-    impl Subject for Fixed {
+    struct Sqrt64;
+    impl Subject for Sqrt64 {
+        type Value = f64;
         fn capabilities(&self) -> Capabilities {
-            caps_sqrt("fixed")
+            let mut functions = BTreeMap::new();
+            functions.insert(
+                Function::Sqrt,
+                FnSupport { mode: RoundingMode::HalfToEven, overflow: Overflow::Panic },
+            );
+            Capabilities { name: "sqrt64".into(), width: 38, scale: 4, storage_bits: 128, functions }
         }
-        fn eval(&self, _f: Function, _i: &[&str], _m: RoundingMode, _o: Overflow) -> Computed<String> {
-            Computed::Value(self.0.to_string())
+        fn string_to_value(&self, s: &str) -> f64 {
+            s.parse::<f64>().expect("parse f64")
         }
-        fn compute_thunk<'a>(
-            &'a self, _c: &'a [GoldenCase], _f: Function, _m: RoundingMode, _o: Overflow,
-        ) -> Option<Box<dyn FnMut() + 'a>> {
-            None
+        fn value_to_string(&self, v: &f64) -> String {
+            format!("{v:.4}")
         }
-    }
-    struct Panicker;
-    impl Subject for Panicker {
-        fn capabilities(&self) -> Capabilities {
-            caps_sqrt("panicker")
-        }
-        fn eval(&self, _f: Function, _i: &[&str], _m: RoundingMode, _o: Overflow) -> Computed<String> {
-            panic!("boom")
-        }
-        fn compute_thunk<'a>(
-            &'a self, _c: &'a [GoldenCase], _f: Function, _m: RoundingMode, _o: Overflow,
-        ) -> Option<Box<dyn FnMut() + 'a>> {
-            None
+        fn execute(&self, _f: Function, _m: RoundingMode, _o: Overflow) -> impl Fn(&[f64]) -> f64 {
+            |inputs| inputs[0].sqrt()
         }
     }
 
-    fn case(input: &str, out: &str) -> GoldenCase {
-        GoldenCase { inputs: vec![input.to_string()], output_raw: out.to_string() }
+    /// Toy validator: Pass when the actual matches the expected string.
+    struct EqValidator;
+    impl Validator for EqValidator {
+        fn validate(
+            &self, cell: &mut ExecutionCollector, _g: &GoldenValue, _w: u32, _s: u32, _b: u32,
+            _m: RoundingMode, _o: Overflow,
+        ) {
+            let ok = cell.value() == Some(cell.expected.as_str());
+            cell.add_validation(if ok { Outcome::Pass } else { Outcome::MisRounded { delta: "?".into() } });
+        }
+    }
+
+    struct FixedLoader;
+    impl CaseLoader for FixedLoader {
+        fn load(&self, _f: Function) -> Vec<GoldenCase> {
+            vec![GoldenCase { inputs: vec!["2".into()], output_raw: "1.4142".into() }]
+        }
+    }
+
+    fn series() -> SeriesTester<RunOnce> {
+        SeriesTester {
+            strategy: RunOnce,
+            loader: Box::new(FixedLoader),
+            validators: vec![Box::new(EqValidator)],
+        }
     }
 
     #[test]
-    fn correctness_pass() {
-        let v = Validator::validation_tester(GP);
-        let r = run_cell(
-            &v, &Fixed("1.4142"), Function::Sqrt, &[case("2", "1.4142135")],
-            &caps_sqrt("fixed"), RoundingMode::HalfToEven, &RunOnce,
-        );
-        assert_eq!(r.outcome, Outcome::Pass);
-        assert_eq!(r.library, "fixed");
-        assert_eq!(r.precision.as_deref(), Some("0"));
+    fn series_runs_a_cell() {
+        let sc = series().run(&Sqrt64, &[Function::Sqrt]);
+        let fc = &sc.functions[0];
+        assert!(fc.supported());
+        assert_eq!(fc.cells.len(), 1);
+        assert_eq!(fc.cells[0].value(), Some("1.4142"));
+        assert_eq!(fc.cells[0].validations, vec![Outcome::Pass]);
     }
 
     #[test]
-    fn correctness_mis_rounded() {
-        let v = Validator::validation_tester(GP);
-        let r = run_cell(
-            &v, &Fixed("1.4140"), Function::Sqrt, &[case("2", "1.4142135")],
-            &caps_sqrt("fixed"), RoundingMode::HalfToEven, &RunOnce,
-        );
-        assert_eq!(r.outcome, Outcome::MisRounded { delta: "2".into() });
-        assert_eq!(r.detail.as_deref(), Some("2"));
+    fn unsupported_function_recorded() {
+        let sc = series().run(&Sqrt64, &[Function::Exp]);
+        assert!(!sc.functions[0].supported());
+        assert!(sc.functions[0].cells.is_empty());
     }
 
     #[test]
-    fn correctness_catches_panic() {
-        let v = Validator::validation_tester(GP);
-        let r = run_cell(
-            &v, &Panicker, Function::Sqrt, &[case("2", "1.4142135")],
-            &caps_sqrt("panicker"), RoundingMode::HalfToEven, &RunOnce,
-        );
-        assert_eq!(r.outcome, Outcome::Panic);
+    fn too_precise_input_unsupported() {
+        struct PreciseLoader;
+        impl CaseLoader for PreciseLoader {
+            fn load(&self, _f: Function) -> Vec<GoldenCase> {
+                vec![GoldenCase { inputs: vec!["1.23456".into()], output_raw: "1.1111".into() }]
+            }
+        }
+        let tester = SeriesTester {
+            strategy: RunOnce,
+            loader: Box::new(PreciseLoader),
+            validators: vec![Box::new(EqValidator)],
+        };
+        let sc = tester.run(&Sqrt64, &[Function::Sqrt]);
+        assert_eq!(sc.functions[0].cells[0].status, CellStatus::Unsupported);
     }
 
     #[test]
-    fn no_validation_skips() {
-        let v = Validator::no_validation_tester();
-        assert!(!v.validates());
-        let r = run_cell(
-            &v, &Panicker, Function::Sqrt, &[case("2", "1.4142135")],
-            &caps_sqrt("panicker"), RoundingMode::HalfToEven, &RunOnce,
-        );
-        // never evaluated -> never panicked -> Skipped, no precision
-        assert_eq!(r.outcome, Outcome::Skipped);
-        assert_eq!(r.precision, None);
-    }
-
-    #[test]
-    fn run_walks_subject_vec() {
-        let v = Validator::validation_tester(GP);
-        let subjects: Vec<Box<dyn Subject>> = vec![Box::new(Fixed("1.4142"))];
-        let recs = run(&v, &RunOnce, &subjects, Function::Sqrt, &[case("2", "1.4142135")]);
-        assert_eq!(recs.len(), 1);
-        assert_eq!(recs[0].outcome, Outcome::Pass);
-    }
-
-    #[test]
-    fn parallel_matches_serial() {
-        let v = Validator::validation_tester(GP);
-        let par: Vec<Box<dyn Subject + Sync>> =
-            vec![Box::new(Fixed("1.4142")), Box::new(Fixed("1.4140"))];
-        let ser: Vec<Box<dyn Subject>> =
-            vec![Box::new(Fixed("1.4142")), Box::new(Fixed("1.4140"))];
-        let cases = [case("2", "1.4142135")];
-        let p = run_parallel(&v, &RunOnce, &par, Function::Sqrt, &cases, 4);
-        let s = run(&v, &RunOnce, &ser, Function::Sqrt, &cases);
-        assert_eq!(p.len(), s.len());
-        assert_eq!(p[0].outcome, s[0].outcome);
-        assert_eq!(p[1].outcome, s[1].outcome);
+    fn parallel_matches_series() {
+        // many cells -> the work-queue distributes executions across workers
+        struct ManyLoader;
+        impl CaseLoader for ManyLoader {
+            fn load(&self, _f: Function) -> Vec<GoldenCase> {
+                (1..=20)
+                    .map(|n| GoldenCase {
+                        inputs: vec![n.to_string()],
+                        output_raw: format!("{:.4}", (n as f64).sqrt()),
+                    })
+                    .collect()
+            }
+        }
+        let par = ParallelTester {
+            threads: 4,
+            strategy: RunOnce,
+            loader: Box::new(ManyLoader),
+            validators: vec![Box::new(EqValidator)],
+        };
+        let ser = SeriesTester {
+            strategy: RunOnce,
+            loader: Box::new(ManyLoader),
+            validators: vec![Box::new(EqValidator)],
+        };
+        let pc = par.run(&Sqrt64, &[Function::Sqrt]);
+        let sc = ser.run(&Sqrt64, &[Function::Sqrt]);
+        let (pcells, scells) = (&pc.functions[0].cells, &sc.functions[0].cells);
+        assert_eq!(pcells.len(), scells.len());
+        for (p, s) in pcells.iter().zip(scells) {
+            assert_eq!(p.value(), s.value());
+            assert_eq!(p.validations, s.validations);
+        }
     }
 }

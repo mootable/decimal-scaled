@@ -1,6 +1,6 @@
 //! Expected result when a true value overflows a subject's cell, per the
 //! subject's declared [`Overflow`] policy, as a signed scaled-integer string
-//! (the same form `validate_one` compares against).
+//! (the same form the validators compare against).
 //!
 //! `Overflow::Panic` returns `None` (the tester validates it via `catch_unwind`);
 //! `Truncate` / `Saturate` / `Wrap` are computed here from the full-precision
