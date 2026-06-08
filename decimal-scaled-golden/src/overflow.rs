@@ -11,6 +11,36 @@ use crate::rounding::RoundingMode;
 use crate::subject::Overflow;
 use crate::value::GoldenValue;
 
+/// Whether the correctly-rounded true value OVERFLOWS `storage_bits`-wide signed
+/// 2's-complement storage at `(scale, mode)`.
+///
+/// This is the ONE place output-side range is consulted: it is the
+/// `OverflowValidator`'s domain (detect "would this overflow", then judge the
+/// subject's overflow behaviour). The rounding/precision validators never
+/// consult range — a representable result is theirs to judge, an overflowing one
+/// is this function's. Representability of the *result* is exactly "does the
+/// scaled integer fit the storage int" — the storage range (`storage_bits`), not
+/// the nominal decimal-digit width (the library's own `MAX` is `Storage::MAX`).
+pub fn overflows_storage(
+    golden: &GoldenValue,
+    scale: u32,
+    storage_bits: u32,
+    mode: RoundingMode,
+) -> bool {
+    // The true value rounded to `scale` under the subject's mode — the signed
+    // integer the storage would have to hold.
+    let signed = golden.round_to(scale, mode, false);
+    let (neg, mag) = split_sign(&signed);
+    let m = from_decimal(mag);
+    if neg {
+        // i<bits>::MIN = -2^(bits-1); overflow iff |v| > 2^(bits-1).
+        cmp(&m, &two_pow(storage_bits - 1)) == std::cmp::Ordering::Greater
+    } else {
+        // i<bits>::MAX = 2^(bits-1) - 1; overflow iff v > 2^(bits-1) - 1.
+        cmp(&m, &sub_one(two_pow(storage_bits - 1))) == std::cmp::Ordering::Greater
+    }
+}
+
 /// The expected overflow result at `(width, scale)` for a subject with
 /// `storage_bits`-wide 2's-complement storage, as a signed scaled-integer
 /// string, or `None` for [`Overflow::Panic`].
@@ -19,11 +49,14 @@ pub fn expected_overflow(
     width: u32,
     scale: u32,
     storage_bits: u32,
+    mode: RoundingMode,
     overflow: Overflow,
 ) -> Option<String> {
-    // The true value scaled by 10^scale, truncated toward zero: the signed
-    // integer the storage would hold (e.g. "-12345").
-    let signed = golden.round_to(scale, RoundingMode::Trunc, false);
+    // The true value scaled by 10^scale, rounded under the SUBJECT'S mode (a
+    // correctly-rounding subject wraps/saturates the value it would have
+    // produced, which it rounds with its own mode — not a fixed `Trunc`): the
+    // signed integer the storage would hold (e.g. "-12345").
+    let signed = golden.round_to(scale, mode, false);
     let (neg, mag) = split_sign(&signed);
     match overflow {
         Overflow::Panic => None,
@@ -251,7 +284,7 @@ mod tests {
     #[test]
     fn truncate_keeps_low_digits() {
         assert_eq!(
-            expected_overflow(&gv("12345"), 3, 0, 128, Overflow::Truncate).unwrap(),
+            expected_overflow(&gv("12345"), 3, 0, 128, RoundingMode::HalfToEven, Overflow::Truncate).unwrap(),
             "345"
         );
     }
@@ -260,11 +293,11 @@ mod tests {
     fn saturate_i128_max_min() {
         // huge positive -> i128::MAX, huge negative -> i128::MIN
         assert_eq!(
-            expected_overflow(&gv("999999999999999999999999999999999999999"), 38, 0, 128, Overflow::Saturate).unwrap(),
+            expected_overflow(&gv("999999999999999999999999999999999999999"), 38, 0, 128, RoundingMode::HalfToEven, Overflow::Saturate).unwrap(),
             "170141183460469231731687303715884105727"
         );
         assert_eq!(
-            expected_overflow(&gv("-999999999999999999999999999999999999999"), 38, 0, 128, Overflow::Saturate).unwrap(),
+            expected_overflow(&gv("-999999999999999999999999999999999999999"), 38, 0, 128, RoundingMode::HalfToEven, Overflow::Saturate).unwrap(),
             "-170141183460469231731687303715884105728"
         );
     }
@@ -273,7 +306,7 @@ mod tests {
     fn wrap_2pow127_is_i128_min() {
         // 2^127 (i128::MAX + 1) wraps to i128::MIN = -2^127
         assert_eq!(
-            expected_overflow(&gv("170141183460469231731687303715884105728"), 38, 0, 128, Overflow::Wrap).unwrap(),
+            expected_overflow(&gv("170141183460469231731687303715884105728"), 38, 0, 128, RoundingMode::HalfToEven, Overflow::Wrap).unwrap(),
             "-170141183460469231731687303715884105728"
         );
     }
@@ -281,13 +314,29 @@ mod tests {
     #[test]
     fn wrap_small_in_range_is_identity() {
         assert_eq!(
-            expected_overflow(&gv("5"), 38, 0, 128, Overflow::Wrap).unwrap(),
+            expected_overflow(&gv("5"), 38, 0, 128, RoundingMode::HalfToEven, Overflow::Wrap).unwrap(),
             "5"
         );
     }
 
     #[test]
     fn panic_has_no_expected_value() {
-        assert_eq!(expected_overflow(&gv("123"), 2, 0, 128, Overflow::Panic), None);
+        assert_eq!(expected_overflow(&gv("123"), 2, 0, 128, RoundingMode::HalfToEven, Overflow::Panic), None);
+    }
+
+    #[test]
+    fn overflows_storage_storage_range_not_digit_width() {
+        // i64 (D18) holds up to 9.2e18 (19 digits) — a 19-digit value in
+        // (10^18, i64::MAX] is IN range despite exceeding the nominal 18 digits.
+        assert!(!overflows_storage(&gv("9000000000000000000"), 0, 64, RoundingMode::HalfToEven)); // < i64::MAX
+        assert!(overflows_storage(&gv("9300000000000000000"), 0, 64, RoundingMode::HalfToEven)); // > i64::MAX
+        // i128 (D38): 2^127-1 fits, 2^127 overflows; MIN edge -2^127 fits.
+        assert!(!overflows_storage(&gv("170141183460469231731687303715884105727"), 0, 128, RoundingMode::HalfToEven));
+        assert!(overflows_storage(&gv("170141183460469231731687303715884105728"), 0, 128, RoundingMode::HalfToEven));
+        assert!(!overflows_storage(&gv("-170141183460469231731687303715884105728"), 0, 128, RoundingMode::HalfToEven));
+        assert!(overflows_storage(&gv("-170141183460469231731687303715884105729"), 0, 128, RoundingMode::HalfToEven));
+        // scale shifts the boundary: i64 at scale 17 holds ~92.2.
+        assert!(!overflows_storage(&gv("92.0"), 17, 64, RoundingMode::HalfToEven));
+        assert!(overflows_storage(&gv("93.0"), 17, 64, RoundingMode::HalfToEven));
     }
 }

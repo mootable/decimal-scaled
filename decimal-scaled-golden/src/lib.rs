@@ -8,7 +8,6 @@ pub mod function;
 pub mod value;
 pub mod parser;
 pub mod subject;
-pub mod loader;
 pub mod outcome;
 pub mod bigdec;
 pub mod overflow;

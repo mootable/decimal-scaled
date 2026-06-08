@@ -125,9 +125,13 @@ where
     type Value = D;
 
     fn capabilities(&self) -> Capabilities {
-        // decimal-scaled follows Rust's overflow contract: debug panics, release
-        // wraps (2's-complement on the integer storage).
-        let overflow = if cfg!(debug_assertions) { Overflow::Panic } else { Overflow::Wrap };
+        // decimal-scaled's overflow contract is to PANIC on an out-of-range
+        // result, in BOTH debug and release, for every default op — transcendental
+        // AND arithmetic (a fixed-width decimal has no infinity/NaN, so a wrapped
+        // or saturated value would be a silent wrong number). The opt-out
+        // `wrapping_`/`checked_`/`saturating_` variants exist but are not the path
+        // tested here.
+        let overflow = Overflow::Panic;
         let mut functions = BTreeMap::new();
         for &f in FUNCS {
             functions.insert(f, FnSupport { mode: RoundingMode::HalfToEven, overflow });
