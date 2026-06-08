@@ -288,6 +288,58 @@ use crate::support::rounding::RoundingMode;
         scale_by_k::<S>(ln2_w, k as i128) + ln_m
     }
 
+    /// True worst-case bit-width the [`exp_fixed`] body reaches internally
+    /// for a working-scale value `v_w` at scale `w`, in a work integer `S`
+    /// of capacity `S::BITS` bits.
+    ///
+    /// Mirrors [`exp_fixed`]'s own `k` / `extra` / `w_ext` arithmetic
+    /// EXACTLY (range-reduce `v = k·ln2 + s`, lift the working scale by
+    /// `extra` digits, run the Taylor squarings at `w_ext`, then reassemble
+    /// `2^k · exp(s)`), so the fit gate models the real squaring-reassembly
+    /// PEAK — `2·w_ext` decimal digits for the symmetric `sum²` plus the
+    /// `sum << k` shift — NOT just the final result magnitude. The body's
+    /// `wrapping_sqr_low_u128` / `wrapping_mul_low_u128` return the low bits,
+    /// so an internal peak that exceeds `S::BITS` silently TRUNCATES (an
+    /// overflowed square collapses to 0) and the post-narrowing fit check —
+    /// which only sees the wrapped, small result — never fires. This model
+    /// lets [`exp_fixed`] reject such an argument UP FRONT instead.
+    ///
+    /// This is the width-generic single source for the peak estimate; the
+    /// per-tier `decl_wide_transcendental!` `exp_internal_peak_bits` /
+    /// `exp_fits_w` / `hyper_fits_w` gates delegate to it.
+    pub(crate) fn exp_internal_peak_bits<S: BigInt>(v_w: S, w: u32) -> u64 {
+        let one_w_pre = one::<S>(w);
+        let l2_pre = ln2::<S>(w);
+        let k = round_to_nearest_int(div_cached(v_w, l2_pre, one_w_pre), w);
+        let abs_k_u128 = if k < 0 { -k } else { k } as u128;
+        let extra: u32 = if abs_k_u128 == 0 {
+            0
+        } else {
+            let digits = (abs_k_u128 * 30103).div_ceil(100_000);
+            let capped = digits.min((<S as BigInt>::BITS / 4) as u128) as u32;
+            capped + 12 + (capped >> 2)
+        };
+        let w_ext = (w + extra) as u64;
+        // digits → bits: `log2(10) ≈ 3.3220 ≈ 3322/1000`.
+        // Squaring peak: the symmetric `sum²` before the round-divide spans
+        // `2·w_ext` decimal digits.
+        let sqr_bits = 2 * w_ext * 3322 / 1000;
+        // Reassembly peak: `sum << k` lifts the `w_ext`-digit Taylor sum by
+        // `|k|` bits.
+        let reasm_bits = w_ext * 3322 / 1000 + abs_k_u128 as u64;
+        let peak = if sqr_bits > reasm_bits { sqr_bits } else { reasm_bits };
+        // A margin covers the series accumulation and rounded-narrowing residue.
+        peak + 512
+    }
+
+    /// Whether [`exp_fixed`]'s internal squaring-reassembly peak for
+    /// `(v_w, w)` fits the work integer `S` without wrapping. Used by the
+    /// per-tier `exp_fits_w` / `hyper_fits_w` regime-routing gates.
+    #[inline]
+    pub(crate) fn exp_peak_fits<S: BigInt>(v_w: S, w: u32) -> bool {
+        exp_internal_peak_bits::<S>(v_w, w) < <S as BigInt>::BITS as u64
+    }
+
     /// `e^v` for a working-scale value `v`, generic over the work
     /// integer `S`. Mirrors the per-tier `$core::exp_fixed` exactly
     /// (range-reduce `v = k·ln2 + s`, extend the working scale by
@@ -295,6 +347,22 @@ use crate::support::rounding::RoundingMode;
     /// repeated-squaring Taylor core, reassemble `2^k · exp(s)`), but
     /// stays width-generic so the caller can run it in a wider integer
     /// for the large-result regime.
+    ///
+    /// # Panics
+    ///
+    /// Panics with the stable `"result out of range"` substring when the
+    /// argument is so large that the internal squaring / `2^k`-reassembly
+    /// peak would exceed the work integer `S`'s capacity. The body reduces
+    /// modulo `2^BITS` (`wrapping_sqr_low_u128`), so an unchecked overflow
+    /// here would silently TRUNCATE — collapsing a far-out-of-range result
+    /// to a small (often zero) value that then slips through the caller's
+    /// post-narrowing fit check. Failing loudly at the work integer it can
+    /// no longer represent keeps the strict-transcendental overflow contract
+    /// uniform: a result out of range PANICS at every tier and scale (in
+    /// both debug and release), never returns a wrapped value. The caller
+    /// runs this in the WIDEST work integer it can (`Wexp` / `WNarrow`); the
+    /// panic fires only when even that cannot hold the peak — a genuinely
+    /// unrepresentable result.
     pub(crate) fn exp_fixed<S: BigInt>(v_w: S, w: u32) -> S
     where
         S::Scratch: ComputeLimbs,
@@ -316,6 +384,22 @@ use crate::support::rounding::RoundingMode;
             if neg.saturating_mul(30103) >= (w as u128).saturating_mul(100_000) {
                 return lit::<S>(1);
             }
+        }
+        // Overflow guard (positive results only). For `k >= 0`, `e^v >= 1` and
+        // grows without bound; once the internal squaring / `2^k`-reassembly
+        // peak exceeds `S::BITS` the body's `wrapping_*` arithmetic would
+        // silently TRUNCATE the result (an overflowed square collapses to 0),
+        // and the caller's post-narrowing fit check — seeing only the wrapped,
+        // small value — would never fire, letting a far-out-of-range result
+        // escape as a wrong (often zero) value. A fixed-width decimal has no
+        // ∞/NaN, so there is nothing to return: PANIC, uniform across every
+        // tier and scale, in both debug and release. The caller runs this in
+        // the WIDEST work integer it can (`Wexp` / `WNarrow`); the panic fires
+        // only when even that cannot hold the peak — a genuinely
+        // unrepresentable result. (`k < 0` is the underflow direction, handled
+        // by the short-circuits above and below — never panicked.)
+        if k >= 0 && !exp_peak_fits::<S>(v_w, w) {
+            panic!("exp_generic::exp_fixed: result out of range");
         }
         let abs_k_u128 = if k < 0 { -k } else { k } as u128;
         let extra: u32 = if abs_k_u128 == 0 {
