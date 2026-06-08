@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use decimal_scaled::{D38, RoundingMode as DsMode};
 use decimal_scaled_golden::{
-    Capabilities, FileCaseLoader, FnSupport, Function, Outcome, Overflow, RoundingMode,
+    Capabilities, FileCaseLoader, FnSupport, Function, GoldenValue, Outcome, Overflow, RoundingMode,
     RoundingValidator, RunOnce, SeriesTester, Subject, Tester,
 };
 
@@ -38,8 +38,9 @@ impl Subject for DecimalScaledD38S19 {
     type Value = D38<19>;
 
     fn capabilities(&self) -> Capabilities {
-        // decimal-scaled follows Rust's overflow contract: debug panics, release wraps.
-        let overflow = if cfg!(debug_assertions) { Overflow::Panic } else { Overflow::Wrap };
+        // decimal-scaled panics on overflow in BOTH debug and release (the
+        // strict contract; the `wrapping_`/`checked_` variants aren't tested here).
+        let overflow = Overflow::Panic;
         let mut functions = BTreeMap::new();
         for f in [Function::Sqrt, Function::Exp, Function::Ln, Function::Sin] {
             functions.insert(f, FnSupport { mode: RoundingMode::HalfToEven, overflow });
@@ -48,7 +49,6 @@ impl Subject for DecimalScaledD38S19 {
             name: "decimal-scaled".to_string(),
             width: 38,
             scale: 19,
-            storage_bits: 128,
             functions,
         }
     }
@@ -61,6 +61,10 @@ impl Subject for DecimalScaledD38S19 {
 
     fn value_to_string(&self, v: &D38<19>) -> String {
         v.to_string()
+    }
+
+    fn representable(&self, value: &GoldenValue) -> bool {
+        value.to_decimal_string().parse::<D38<19>>().is_ok()
     }
 
     fn execute(

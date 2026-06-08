@@ -129,13 +129,16 @@ mod tests {
                 Function::Sqrt,
                 FnSupport { mode: RoundingMode::HalfToEven, overflow: Overflow::Panic },
             );
-            Capabilities { name: "sqrt64".into(), width: 38, scale: 15, storage_bits: 128, functions }
+            Capabilities { name: "sqrt64".into(), width: 38, scale: 15, functions }
         }
         fn string_to_value(&self, s: &str) -> f64 {
             s.parse::<f64>().expect("parse f64")
         }
         fn value_to_string(&self, v: &f64) -> String {
             format!("{v:.4}")
+        }
+        fn representable(&self, _value: &crate::value::GoldenValue) -> bool {
+            true
         }
         fn execute(&self, _f: Function, _m: RoundingMode, _o: Overflow) -> impl Fn(&[f64]) -> f64 {
             |inputs| inputs[0].sqrt()

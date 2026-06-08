@@ -10,7 +10,6 @@ pub mod parser;
 pub mod subject;
 pub mod outcome;
 pub mod bigdec;
-pub mod overflow;
 pub mod validator;
 pub mod execution;
 pub mod collector;
@@ -30,6 +29,5 @@ pub use collector::{
 pub use execution::{ExecutionStrategy, RunOnce, Timed};
 pub use caseloader::{CaseLoader, FileCaseLoader};
 pub use tester::{ParallelTester, SeriesTester, Tester};
-pub use overflow::expected_overflow;
 pub use validator::{OverflowValidator, PrecisionValidator, RoundingValidator, Validator};
 pub use collator::Collator;

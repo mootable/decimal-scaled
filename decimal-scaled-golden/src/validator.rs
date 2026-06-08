@@ -13,21 +13,22 @@
 use crate::bigdec::abs_diff;
 use crate::collector::{ExecutionCollector, ExecutionResult};
 use crate::outcome::Outcome;
-use crate::overflow::{expected_overflow, overflows_storage};
 use crate::rounding::RoundingMode;
 use crate::subject::Overflow;
 use crate::value::GoldenValue;
 
 /// Scores a finished cell against the golden value and pushes verdict(s) into it.
-/// `width`/`scale`/`storage_bits`/`mode`/`overflow` describe the cell.
+/// `scale`/`mode`/`overflow` describe the cell; `representable` = whether the
+/// subject can represent the true value (the subject answered, via
+/// [`Subject::representable`](crate::subject::Subject::representable)) — the
+/// tester computes no storage details itself.
 pub trait Validator {
     fn validate(
         &self,
         cell: &mut ExecutionCollector,
         golden: &GoldenValue,
-        width: u32,
         scale: u32,
-        storage_bits: u32,
+        representable: bool,
         mode: RoundingMode,
         overflow: Overflow,
     );
@@ -45,9 +46,8 @@ impl Validator for RoundingValidator {
         &self,
         cell: &mut ExecutionCollector,
         golden: &GoldenValue,
-        _width: u32,
         scale: u32,
-        _storage_bits: u32,
+        _representable: bool,
         mode: RoundingMode,
         _overflow: Overflow,
     ) {
@@ -86,34 +86,33 @@ impl Validator for RoundingValidator {
     }
 }
 
-/// "How does it overflow." The ONE validator that consults the result's range
-/// (via [`overflows_storage`], the storage range — the library's real `MAX`).
-/// It also sees whether the subject PANICKED, which for an overflow may be the
-/// expected outcome (the default strict contract panics on overflow). It judges:
-/// an in-range value is silent (rounding/precision's domain); an in-range panic
-/// is an unexpected bug; an overflowing result must match the declared policy —
-/// a `Panic` policy expects the panic, a `Wrap`/`Saturate`/`Truncate` policy
-/// expects the corresponding value.
+/// "How does it overflow." The ONE validator that cares about the result's
+/// range — but it does NOT compute the range itself: the subject already
+/// answered ([`Subject::representable`](crate::subject::Subject::representable)),
+/// and that verdict arrives as `representable`. It also sees whether the subject
+/// PANICKED, which for an overflow may be the expected outcome (the default
+/// strict contract panics on overflow). It judges: an in-range value is silent
+/// (rounding/precision's domain); an in-range panic is an unexpected bug; an
+/// out-of-range result must match the declared policy — a `Panic` policy expects
+/// the panic.
 pub struct OverflowValidator;
 
 impl Validator for OverflowValidator {
     fn validate(
         &self,
         cell: &mut ExecutionCollector,
-        golden: &GoldenValue,
-        width: u32,
-        scale: u32,
-        storage_bits: u32,
-        mode: RoundingMode,
+        _golden: &GoldenValue,
+        _scale: u32,
+        representable: bool,
+        _mode: RoundingMode,
         overflow: Overflow,
     ) {
-        let would_overflow = overflows_storage(golden, scale, storage_bits, mode);
         // Read the execution result into an owned form first (so we can mutate
         // the cell below without holding a borrow of it).
         let result = cell.execution_result().cloned();
         let outcome = match result {
             Some(ExecutionResult::Panic) => {
-                if !would_overflow {
+                if representable {
                     // Representable result, yet the subject panicked — a real bug.
                     Outcome::Panic
                 } else if overflow == Overflow::Panic {
@@ -125,20 +124,19 @@ impl Validator for OverflowValidator {
                     Outcome::Panic
                 }
             }
-            Some(ExecutionResult::Value(s)) => {
-                if !would_overflow {
+            Some(ExecutionResult::Value(_)) => {
+                if representable {
                     return; // in range — rounding/precision judge the value
                 }
-                match expected_overflow(golden, width, scale, storage_bits, mode, overflow) {
-                    // Policy = Panic, but it returned a value instead of panicking.
-                    None => Outcome::Error {
+                match overflow {
+                    // Out of range, Panic policy, yet a value came back instead.
+                    Overflow::Panic => Outcome::Error {
                         reason: "declared overflow=Panic but returned a value".to_string(),
                     },
-                    Some(exp) => match to_scaled_int(&s, scale) {
-                        Some(got_scaled) if got_scaled == exp => Outcome::Pass,
-                        Some(got_scaled) => Outcome::MisRounded { delta: abs_diff(&got_scaled, &exp) },
-                        None => Outcome::MisRounded { delta: "nan".to_string() },
-                    },
+                    // Wrap/Saturate/Truncate need a subject-provided expected
+                    // value (no such subject exists yet) — left unvalidated until
+                    // one does, rather than baking a storage model into the tester.
+                    _ => return,
                 }
             }
             None => return,
@@ -159,9 +157,8 @@ impl Validator for PrecisionValidator {
         &self,
         cell: &mut ExecutionCollector,
         golden: &GoldenValue,
-        _width: u32,
         scale: u32,
-        _storage_bits: u32,
+        _representable: bool,
         mode: RoundingMode,
         _overflow: Overflow,
     ) {
@@ -182,7 +179,7 @@ impl Validator for PrecisionValidator {
 }
 
 /// Normalize a subject's output string to a signed scaled-integer at `scale` (the
-/// form `round_to`/`expected_overflow` produce). `None` if unparseable.
+/// form `round_to` produces). `None` if unparseable.
 fn to_scaled_int(got: &str, scale: u32) -> Option<String> {
     let gv = GoldenValue::parse(got)?;
     Some(gv.round_to(scale, RoundingMode::Trunc, false))
@@ -205,7 +202,7 @@ mod tests {
         let g = GoldenValue::parse("1.4142135").unwrap();
         let mut c = value_cell("1.4142");
         RoundingValidator { gen_precision: GP }.validate(
-            &mut c, &g, 38, 4, 128, RoundingMode::HalfToEven, Overflow::Panic,
+            &mut c, &g, 4, true, RoundingMode::HalfToEven, Overflow::Panic,
         );
         assert_eq!(c.validations, vec![Outcome::Pass]);
     }
@@ -218,7 +215,7 @@ mod tests {
         let g = GoldenValue::parse("1.4142135").unwrap();
         let mut c = value_cell("1.414213");
         RoundingValidator { gen_precision: GP }.validate(
-            &mut c, &g, 38, 6, 128, RoundingMode::HalfToEven, Overflow::Panic,
+            &mut c, &g, 6, true, RoundingMode::HalfToEven, Overflow::Panic,
         );
         assert_eq!(c.validations, vec![Outcome::WrongMode { used: RoundingMode::HalfTowardZero }]);
     }
@@ -228,7 +225,7 @@ mod tests {
         let g = GoldenValue::parse("1.4142135").unwrap();
         let mut c = value_cell("1.4140");
         RoundingValidator { gen_precision: GP }.validate(
-            &mut c, &g, 38, 4, 128, RoundingMode::HalfToEven, Overflow::Panic,
+            &mut c, &g, 4, true, RoundingMode::HalfToEven, Overflow::Panic,
         );
         assert_eq!(c.validations, vec![Outcome::MisRounded { delta: "2".to_string() }]);
     }
@@ -245,7 +242,7 @@ mod tests {
         let g = GoldenValue::parse("1.4142135").unwrap();
         let mut c = panic_cell();
         RoundingValidator { gen_precision: GP }.validate(
-            &mut c, &g, 38, 4, 128, RoundingMode::HalfToEven, Overflow::Panic,
+            &mut c, &g, 4, true, RoundingMode::HalfToEven, Overflow::Panic,
         );
         assert!(c.validations.is_empty());
     }
@@ -255,7 +252,7 @@ mod tests {
         let g = GoldenValue::parse("1.4142135").unwrap();
         let mut c = value_cell("1.4142");
         PrecisionValidator { gen_precision: GP }.validate(
-            &mut c, &g, 38, 4, 128, RoundingMode::HalfToEven, Overflow::Panic,
+            &mut c, &g, 4, true, RoundingMode::HalfToEven, Overflow::Panic,
         );
         assert_eq!(c.validations, vec![Outcome::Precision { ulps: "0".to_string() }]);
     }
@@ -265,54 +262,44 @@ mod tests {
         let g = GoldenValue::parse("1.4142135").unwrap();
         let mut c = panic_cell();
         PrecisionValidator { gen_precision: GP }.validate(
-            &mut c, &g, 38, 4, 128, RoundingMode::HalfToEven, Overflow::Panic,
+            &mut c, &g, 4, true, RoundingMode::HalfToEven, Overflow::Panic,
         );
         assert!(c.validations.is_empty());
     }
 
     #[test]
-    fn overflow_expects_wrap() {
-        // 2^127 overflows i128 (out of range at storage_bits 128) and wraps to
-        // i128::MIN = -2^127 under a Wrap policy.
-        let g = GoldenValue::parse("170141183460469231731687303715884105728").unwrap();
-        let mut c = value_cell("-170141183460469231731687303715884105728");
-        OverflowValidator.validate(&mut c, &g, 38, 0, 128, RoundingMode::HalfToEven, Overflow::Wrap);
-        assert_eq!(c.validations, vec![Outcome::Pass]);
-    }
-
-    #[test]
     fn overflow_silent_in_range_value() {
-        // 5 fits the storage — overflow is not its concern (rounding/precision are).
+        // Representable + a value — overflow is not its concern (rounding/precision are).
         let g = GoldenValue::parse("5").unwrap();
         let mut c = value_cell("5");
-        OverflowValidator.validate(&mut c, &g, 38, 0, 128, RoundingMode::HalfToEven, Overflow::Wrap);
+        OverflowValidator.validate(&mut c, &g, 0, true, RoundingMode::HalfToEven, Overflow::Panic);
         assert!(c.validations.is_empty());
     }
 
     #[test]
     fn overflow_panic_is_expected_outcome_of_overflow() {
-        // 2^127 overflows i128; under a Panic policy, the panic IS correct.
-        let g = GoldenValue::parse("170141183460469231731687303715884105728").unwrap();
+        // Out of range (representable=false); under a Panic policy, the panic IS correct.
+        let g = GoldenValue::parse("9").unwrap();
         let mut c = panic_cell();
-        OverflowValidator.validate(&mut c, &g, 38, 0, 128, RoundingMode::HalfToEven, Overflow::Panic);
+        OverflowValidator.validate(&mut c, &g, 0, false, RoundingMode::HalfToEven, Overflow::Panic);
         assert_eq!(c.validations, vec![Outcome::Pass]);
     }
 
     #[test]
     fn overflow_flags_in_range_panic_as_bug() {
-        // 123 fits i128 — a panic on a representable result is an unexpected bug.
+        // Representable, yet the subject panicked — an unexpected bug.
         let g = GoldenValue::parse("123").unwrap();
         let mut c = panic_cell();
-        OverflowValidator.validate(&mut c, &g, 38, 0, 128, RoundingMode::HalfToEven, Overflow::Panic);
+        OverflowValidator.validate(&mut c, &g, 0, true, RoundingMode::HalfToEven, Overflow::Panic);
         assert_eq!(c.validations, vec![Outcome::Panic]);
     }
 
     #[test]
     fn overflow_value_under_panic_policy_is_error() {
-        // Overflowing result, Panic policy, yet a value came back — it should have panicked.
-        let g = GoldenValue::parse("170141183460469231731687303715884105728").unwrap();
+        // Out of range, Panic policy, yet a value came back — it should have panicked.
+        let g = GoldenValue::parse("9").unwrap();
         let mut c = value_cell("5");
-        OverflowValidator.validate(&mut c, &g, 38, 0, 128, RoundingMode::HalfToEven, Overflow::Panic);
+        OverflowValidator.validate(&mut c, &g, 0, false, RoundingMode::HalfToEven, Overflow::Panic);
         assert!(matches!(c.validations.as_slice(), [Outcome::Error { .. }]));
     }
 }

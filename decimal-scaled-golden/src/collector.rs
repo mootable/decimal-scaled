@@ -111,8 +111,8 @@ impl FunctionCollector {
 }
 
 /// Everything tested for one subject (one `(width, scale)`). Carries the
-/// subject's full `Capabilities` (name/width/scale/storage_bits + the
-/// per-function modes/overflow) so the collator has it all.
+/// subject's full `Capabilities` (name/width/scale + the per-function
+/// modes/overflow) so the collator has it all.
 #[derive(Clone, Debug)]
 pub struct SubjectCollector {
     pub capabilities: Capabilities,

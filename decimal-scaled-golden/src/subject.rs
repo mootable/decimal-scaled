@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::function::Function;
 use crate::rounding::RoundingMode;
+use crate::value::GoldenValue;
 
 /// What a subject does when a true result exceeds its `(width, scale)`.
 ///
@@ -31,16 +32,14 @@ pub struct FnSupport {
 
 /// What a subject can do. A subject is pinned to exactly one `(width, scale)`.
 /// The function map's keys are the supported functions (absence == unsupported).
-/// `width`/`scale`/`storage_bits` are for the runner (golden derivation, the
-/// representability skip, overflow detection + exact `Wrap` validation).
+/// `width`/`scale` identify the cell; how a value's representability and any
+/// overflow behaviour are determined is the subject's own business (see
+/// [`Subject::representable`]) — the tester holds no storage details.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Capabilities {
     pub name: String,
     pub width: u32,
     pub scale: u32,
-    /// Bit width of the 2's-complement integer storage, for exact
-    /// [`Overflow::Wrap`] validation.
-    pub storage_bits: u32,
     pub functions: BTreeMap<Function, FnSupport>,
 }
 
@@ -67,6 +66,17 @@ pub trait Subject {
     /// Format a value back to its canonical decimal string.
     fn value_to_string(&self, v: &Self::Value) -> String;
 
+    /// Whether the true result `value` is representable by this subject at its
+    /// cell (i.e. fits its storage, correctly rounded to its scale).
+    ///
+    /// This is the ONE judgement that depends on the subject's internals, so it
+    /// lives HERE, behind the trait — the tester never inspects bit widths or
+    /// storage models. Each adapter answers in its own terms: a fixed-width
+    /// decimal checks the value fits its integer storage; an arbitrary-precision
+    /// type returns `true` always. The runner uses it only to route validation
+    /// (representable → rounding/precision; not → overflow policy).
+    fn representable(&self, value: &GoldenValue) -> bool;
+
     /// Curry `func`/`mode`/`overflow` into a closure that computes the op over
     /// pre-parsed inputs. The closure is compute only — no parse, no format — so
     /// the timing path measures exactly it.
@@ -92,13 +102,16 @@ mod tests {
                 Function::Sqrt,
                 FnSupport { mode: RoundingMode::HalfToEven, overflow: Overflow::Panic },
             );
-            Capabilities { name: "sqrt64".into(), width: 38, scale: 15, storage_bits: 128, functions }
+            Capabilities { name: "sqrt64".into(), width: 38, scale: 15, functions }
         }
         fn string_to_value(&self, s: &str) -> f64 {
             s.parse::<f64>().expect("parse f64")
         }
         fn value_to_string(&self, v: &f64) -> String {
             format!("{v:.4}")
+        }
+        fn representable(&self, _value: &GoldenValue) -> bool {
+            true
         }
         fn execute(
             &self, _func: Function, _mode: RoundingMode, _overflow: Overflow,

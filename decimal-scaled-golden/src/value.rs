@@ -42,6 +42,18 @@ impl GoldenValue {
         self.int_digits.trim_start_matches('0').len()
     }
 
+    /// Render the canonical `[-]int[.frac]` decimal string (the inverse of
+    /// [`parse`](Self::parse)) — e.g. for handing to a subject's `FromStr`.
+    pub fn to_decimal_string(&self) -> String {
+        let sign = if self.negative { "-" } else { "" };
+        let int = if self.int_digits.is_empty() { "0" } else { &self.int_digits };
+        if self.frac_digits.is_empty() {
+            format!("{sign}{int}")
+        } else {
+            format!("{sign}{int}.{}", self.frac_digits)
+        }
+    }
+
     /// Fits a tier of `width_digits` total decimal digits at `scale` places.
     pub fn fits(&self, width_digits: u32, scale: u32) -> bool {
         let avail = width_digits.saturating_sub(scale) as usize;

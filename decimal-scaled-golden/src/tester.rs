@@ -176,25 +176,27 @@ fn run_cell<S: Subject, E: ExecutionStrategy>(
     case: &GoldenCase,
 ) -> ExecutionCollector {
     let mut cell = ExecutionCollector::new(case.inputs.clone(), case.output_raw.clone());
-    if !case.inputs.iter().all(|s| representable(s, caps.width, caps.scale)) {
+    if !case.inputs.iter().all(|s| input_representable(s, caps.width, caps.scale)) {
         cell.mark_unsupported();
         return cell;
     }
     strategy.execute(subject, &case.inputs, function, support.mode, support.overflow, &mut cell);
     if let Some(golden) = GoldenValue::parse(&case.output_raw) {
+        // The subject answers whether the true result is representable by it —
+        // the one judgement that depends on its internals (see `Subject`).
+        let representable = subject.representable(&golden);
         for v in validators {
-            v.validate(
-                &mut cell, &golden, caps.width, caps.scale, caps.storage_bits, support.mode,
-                support.overflow,
-            );
+            v.validate(&mut cell, &golden, caps.scale, representable, support.mode, support.overflow);
         }
     }
     cell
 }
 
 /// True if `input` is exactly representable at `(width, scale)` — fractional
-/// digits ≤ scale and integer digits ≤ width − scale.
-fn representable(input: &str, width: u32, scale: u32) -> bool {
+/// digits ≤ scale and integer digits ≤ width − scale. This is the INPUT skip
+/// (don't feed a subject a case it can't take); the OUTPUT representability is
+/// the subject's own [`Subject::representable`](crate::subject::Subject::representable).
+fn input_representable(input: &str, width: u32, scale: u32) -> bool {
     match GoldenValue::parse(input) {
         Some(gv) => gv.frac_digits.len() <= scale as usize && gv.fits(width, scale),
         None => false,
@@ -204,7 +206,7 @@ fn representable(input: &str, width: u32, scale: u32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::collector::{CellStatus, ExecutionResult};
+    use crate::collector::CellStatus;
     use crate::execution::RunOnce;
     use crate::outcome::Outcome;
     use crate::rounding::RoundingMode;
@@ -220,13 +222,16 @@ mod tests {
                 Function::Sqrt,
                 FnSupport { mode: RoundingMode::HalfToEven, overflow: Overflow::Panic },
             );
-            Capabilities { name: "sqrt64".into(), width: 38, scale: 4, storage_bits: 128, functions }
+            Capabilities { name: "sqrt64".into(), width: 38, scale: 4, functions }
         }
         fn string_to_value(&self, s: &str) -> f64 {
             s.parse::<f64>().expect("parse f64")
         }
         fn value_to_string(&self, v: &f64) -> String {
             format!("{v:.4}")
+        }
+        fn representable(&self, _value: &GoldenValue) -> bool {
+            true
         }
         fn execute(&self, _f: Function, _m: RoundingMode, _o: Overflow) -> impl Fn(&[f64]) -> f64 {
             |inputs| inputs[0].sqrt()
@@ -237,7 +242,7 @@ mod tests {
     struct EqValidator;
     impl Validator for EqValidator {
         fn validate(
-            &self, cell: &mut ExecutionCollector, _g: &GoldenValue, _w: u32, _s: u32, _b: u32,
+            &self, cell: &mut ExecutionCollector, _g: &GoldenValue, _s: u32, _representable: bool,
             _m: RoundingMode, _o: Overflow,
         ) {
             let ok = cell.value() == Some(cell.expected.as_str());
