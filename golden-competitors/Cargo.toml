@@ -1,0 +1,17 @@
+[package]
+name = "golden-competitors"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "competitor decimal-library subjects + comparison runs for the decimal-scaled-golden harness"
+license = "MIT OR Apache-2.0"
+
+# Competitor libraries live ONLY here (never in the core library or the agnostic
+# harness). Comparison runs carry the decimal-scaled subjects too, via golden-ds,
+# so each competitor is graded side-by-side against decimal-scaled on the same
+# golden set. The set mirrors the libraries the perf benches compare against.
+[dependencies]
+golden-ds = { path = "../golden-ds" }
+decimal-scaled-golden = { path = "../decimal-scaled-golden" }
+
+rust_decimal = { version = "1", default-features = false, features = ["maths"] }

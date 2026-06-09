@@ -844,6 +844,7 @@ members = [
     "./macros",
     "./decimal-scaled-golden",
     "./golden-ds",
+    "./golden-competitors",
 ]
 resolver = "3"
 
