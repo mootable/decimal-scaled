@@ -1,5 +1,6 @@
-//! `ParallelRunner` — distributes the subject's executions across `threads` workers
-//! pulling from a shared atomic work-index. Per-execution work is identical to serial.
+//! `ParallelRunner` — distributes the subject's executions across `threads` named
+//! workers pulling from a shared atomic work-index. Per-execution work is identical
+//! to serial.
 
 use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
 
@@ -104,18 +105,25 @@ fn run_jobs<S: DecimalSubject + Sync, E: ExecutionStrategy + Sync>(
     let next_ref = &next;
     let nested: Vec<Vec<(usize, ExecutionCollector)>> = std::thread::scope(|scope| {
         let handles: Vec<_> = (0..workers)
-            .map(|_| {
-                scope.spawn(move || {
-                    let mut local: Vec<(usize, ExecutionCollector)> = Vec::new();
-                    loop {
-                        let k = next_ref.fetch_add(1, AtomicOrdering::Relaxed);
-                        if k >= jobs.len() {
-                            break;
+            .map(|w| {
+                // Name each worker so a caught panic prints `thread 'golden-worker-N'`
+                // instead of `thread '<unnamed>'` — the worker index identifies which
+                // drain hit it (the offending cell's function/inputs come from the
+                // execution strategy's recorded `Computed::Panic`).
+                std::thread::Builder::new()
+                    .name(format!("golden-worker-{w}"))
+                    .spawn_scoped(scope, move || {
+                        let mut local: Vec<(usize, ExecutionCollector)> = Vec::new();
+                        loop {
+                            let k = next_ref.fetch_add(1, AtomicOrdering::Relaxed);
+                            if k >= jobs.len() {
+                                break;
+                            }
+                            local.push((k, run(&jobs[k])));
                         }
-                        local.push((k, run(&jobs[k])));
-                    }
-                    local
-                })
+                        local
+                    })
+                    .expect("spawn named golden worker")
             })
             .collect();
         handles.into_iter().map(|h| h.join().unwrap()).collect()

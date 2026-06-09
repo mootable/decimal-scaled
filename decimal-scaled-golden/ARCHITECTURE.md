@@ -729,16 +729,6 @@ instead of blocking, then continues.
 - **Readiness.** `Computed::Timeout` (§3.3) and the `Outcome::Timeout` verdict already
   exist, so only the runner-side watchdog is new.
 
-### Named worker threads
-
-The `ParallelRunner` spawns its workers anonymously, so a caught panic prints
-`thread '<unnamed>' panicked …` — useless for telling *which* worker (and thus
-which cell) tripped it. Each worker should be spawned via
-`std::thread::Builder::name(…)` with a stable identifier (e.g. its worker index,
-or the `(subject, function)` it is draining) so panic output and any future
-timeout diagnostics name the culprit. Purely a diagnostics improvement — no
-change to scheduling or verdicts.
-
 ### Binary-grid compliance
 
 `Radix::Binary` is carried today only as a verdict-neutral annotation (§6). A
