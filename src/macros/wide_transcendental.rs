@@ -3351,7 +3351,21 @@ macro_rules! decl_wide_transcendental {
                     return Self::ZERO;
                 }
                 if let ::core::option::Option::Some(n) = Self::powf_exp_as_small_int(exp) {
-                    return self.powi(n);
+                    // Gate the exact integer power on the storage range: an
+                    // out-of-range `x^|n|` DEFERS to the `exp(y·ln x)`
+                    // composition below (which panics uniformly on a
+                    // genuinely out-of-range result and computes an in-range
+                    // reciprocal correctly) rather than wrap. Bit-identical to
+                    // `self.powi(n)` for every in-range power.
+                    if n >= 0 {
+                        if let ::core::option::Option::Some(v) = self.checked_pow(n as u32) {
+                            return v;
+                        }
+                    } else if let ::core::option::Option::Some(p) =
+                        self.checked_pow(n.unsigned_abs())
+                    {
+                        return Self::ONE / p;
+                    }
                 }
                 let w = SCALE + $core::GUARD;
                 // Two-core: composition runs on the wide `Wagm` work int.
@@ -3833,10 +3847,24 @@ macro_rules! decl_wide_transcendental {
                     // the default-mode `powi` here would silently drop a
                     // directed mode (Ceiling of a sub-resolution `x^-k` must
                     // round up to 1, not truncate to 0).
+                    //
+                    // `checked_pow` gates the exact integer power on the
+                    // storage range: when `x^|n|` leaves it we DEFER to the
+                    // `exp(y·ln x)` composition below rather than wrap (the
+                    // `Mul` operator's release-wrap would otherwise return a
+                    // wrong representable value for `12² = 144` out of range,
+                    // or feed a wrapped `x^|n|` into the reciprocal). The
+                    // composition panics uniformly on a genuinely out-of-range
+                    // result and computes an in-range reciprocal correctly.
                     if n >= 0 {
-                        return self.powi(n);
+                        if let ::core::option::Option::Some(v) = self.checked_pow(n as u32) {
+                            return v;
+                        }
+                    } else if let ::core::option::Option::Some(p) =
+                        self.checked_pow(n.unsigned_abs())
+                    {
+                        return Self::ONE.div_with(p, mode);
                     }
-                    return Self::ONE.div_with(self.powi(n.unsigned_abs() as i32), mode);
                 }
                 // x^0.5 ≡ √x. The exp(0.5·ln x) chain loses a sub-ULP at a
                 // perfect-square base (e.g. 4^0.5), rounding 1 LSB short

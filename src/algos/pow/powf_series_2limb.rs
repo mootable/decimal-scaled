@@ -12,8 +12,12 @@
 //!   NaN-to-ZERO policy for negative bases with arbitrary fractional
 //!   exponents).
 //! - Integer-valued exponents with `|n| <= INT_FAST_PATH_THRESHOLD`
-//!   route to `powi_raw::<SCALE>` — exact via square-and-multiply on raw
-//!   ~10–500× faster than the `exp(y·ln(x))` chain.
+//!   route to `powi_raw_checked::<SCALE>` — exact via square-and-multiply
+//!   on raw, ~10–500× faster than the `exp(y·ln(x))` chain. When a partial
+//!   power leaves the storage range it returns `None` and the call defers
+//!   to the overflow-safe composition (so an in-range reciprocal such as
+//!   `powf(10, -2) = 0.01` computes instead of panicking on its `10² = 100`
+//!   intermediate).
 //!
 //! Returns the raw `i128` storage at the input's scale.
 
@@ -34,46 +38,78 @@ use crate::support::rounding::RoundingMode;
 /// so a fixed threshold is sufficient.
 pub(crate) const INT_FAST_PATH_THRESHOLD: i32 = 64;
 
-/// Integer-exponent square-and-multiply on raw `i128` storage at
-/// `SCALE`, using `mul_widen_divide` directly instead of routing through
-/// the decimal `Mul` operator (which would re-enter the mul policy from
-/// inside an algorithm fn - the layering inversion). `ONE_S` is
-/// `10^SCALE`; passing it avoids recomputing the constant inside the loop.
+/// `(a · b) / 10^SCALE` rounded under `mode`, formed in the 256-bit
+/// `Int<4>` widening so the product never overflows mid-step, then
+/// narrowed back to `i128` storage. Returns `None` when the rounded
+/// result does not fit `i128` — the signal [`powi_raw_checked`] uses to
+/// defer to the overflow-safe `exp(y·ln x)` composition rather than
+/// compute a partial power that has left the storage range.
 ///
-/// For negative `n`, returns `ONE_S / base^|n|` via the same path, but
-/// uses the decimal `div_widen_scale` for the final reciprocal since
-/// that is a genuine downward cross-tier call to the int layer.
+/// Bit-identical to the prior `mul_widen_divide::<2, SCALE>` for every
+/// in-range result: the value and rounding are width-independent, so the
+/// narrowed `i128` matches exactly.
 #[inline]
-fn powi_raw<const SCALE: u32>(base: i128, n: i32, mode: RoundingMode) -> i128 {
+fn mul_div_scale_checked<const SCALE: u32>(a: i128, b: i128, mode: RoundingMode) -> Option<i128> {
+    crate::algos::mul::mul_widen_divide::mul_widen_divide::<4, SCALE>(
+        Int::<4>::from_i128(a),
+        Int::<4>::from_i128(b),
+        mode,
+    )
+    .try_to_i128()
+}
+
+/// Integer-exponent square-and-multiply on raw `i128` storage at `SCALE`,
+/// returning `None` if any partial power `base^k` (`k ≤ |n|`) leaves the
+/// `i128` storage range. Uses `mul_widen_divide` directly (not the decimal
+/// `Mul` operator, which would re-enter the mul policy from inside an
+/// algorithm fn — the layering inversion). `one_s` is `10^SCALE`.
+///
+/// Every intermediate (`acc`, `b`) is bounded by `base^|n|`, so a `None`
+/// means the full integer power `base^|n|` is itself out of range. The
+/// caller then routes to the composition, which panics on a genuinely
+/// out-of-range result (positive `n`) and computes the in-range reciprocal
+/// `base^-|n|` overflow-safely (negative `n`) — fixing the integer fast
+/// path's spurious panic on `powf(10, -2)` (`10² = 100` overflows storage
+/// while `1/100 = 0.01` is representable). When `Some`, the result is the
+/// exact integer power (or its reciprocal), bit-identical to before.
+///
+/// For negative `n`, returns `one_s / base^|n|` via the decimal
+/// `div_widen_scale` (a genuine downward cross-tier call to the int layer).
+#[inline]
+fn powi_raw_checked<const SCALE: u32>(base: i128, n: i32, mode: RoundingMode) -> Option<i128> {
     let one_s: Int<2> = Int::<2>::TEN.pow(SCALE);
     if n == 0 {
-        return one_s.as_i128();
+        return Some(one_s.as_i128());
     }
     let pos_n = n.unsigned_abs();
-    // Square-and-multiply using mul_widen_divide kernel directly.
-    let mut acc: Int<2> = one_s;
-    let mut b: Int<2> = Int::<2>::from_i128(base);
+    // Square-and-multiply; every partial product is range-checked so an
+    // out-of-storage intermediate signals `None` instead of panicking.
+    let mut acc: i128 = one_s.as_i128();
+    let mut b: i128 = base;
     let mut e = pos_n;
     while e > 0 {
         if e & 1 == 1 {
-            acc = crate::algos::mul::mul_widen_divide::mul_widen_divide::<2, SCALE>(
-                acc, b, mode,
-            );
+            acc = mul_div_scale_checked::<SCALE>(acc, b, mode)?;
         }
         e >>= 1;
         if e > 0 {
-            b = crate::algos::mul::mul_widen_divide::mul_widen_divide::<2, SCALE>(
-                b, b, mode,
-            );
+            b = mul_div_scale_checked::<SCALE>(b, b, mode)?;
         }
     }
     if n > 0 {
-        acc.as_i128()
+        Some(acc)
     } else {
-        // Reciprocal: one_s / acc using div_widen_scale kernel.
-        crate::algos::div::div_widen_scale::div_widen_scale::<2>(
-            one_s, acc, Int::<2>::TEN.pow(SCALE), mode,
-        ).as_i128()
+        // Reciprocal: one_s / base^|n|. `acc = base^|n|` fits i128 here and
+        // `1/acc ≤ 1`, so the quotient certainly fits storage.
+        Some(
+            crate::algos::div::div_widen_scale::div_widen_scale::<2>(
+                one_s,
+                Int::<2>::from_i128(acc),
+                Int::<2>::TEN.pow(SCALE),
+                mode,
+            )
+            .as_i128(),
+        )
     }
 }
 
@@ -129,7 +165,13 @@ fn powf_with_raw<const SCALE: u32>(
         return 0;
     }
     if let Some(n) = exp_as_small_int::<SCALE>(exp) {
-        return powi_raw::<SCALE>(base, n, mode);
+        if let Some(v) = powi_raw_checked::<SCALE>(base, n, mode) {
+            return v;
+        }
+        // `base^|n|` left the storage range: defer to the overflow-safe
+        // `exp(y·ln x)` composition below — it panics on a genuinely
+        // out-of-range result and computes an in-range reciprocal
+        // (`base^-|n|`) correctly-rounded.
     }
     let w = SCALE + working_digits;
     let pow = 10u128.pow(working_digits);
@@ -158,7 +200,13 @@ fn powf_strict_raw<const SCALE: u32>(base: i128, exp: i128, mode: RoundingMode) 
         return 0;
     }
     if let Some(n) = exp_as_small_int::<SCALE>(exp) {
-        return powi_raw::<SCALE>(base, n, mode);
+        if let Some(v) = powi_raw_checked::<SCALE>(base, n, mode) {
+            return v;
+        }
+        // `base^|n|` left the storage range: defer to the overflow-safe
+        // `exp(y·ln x)` composition below — it panics on a genuinely
+        // out-of-range result and computes an in-range reciprocal
+        // (`base^-|n|`) correctly-rounded.
     }
     let w = SCALE + STRICT_GUARD;
     let pow = 10u128.pow(STRICT_GUARD);
@@ -171,4 +219,46 @@ fn powf_strict_raw<const SCALE: u32>(base: i128, exp: i128, mode: RoundingMode) 
         .unwrap_or_else(|| {
             crate::support::diagnostics::overflow_panic_with_scale("powf kernel", SCALE)
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // D38<37>: storage MAX ≈ 17.01 (full i128 range), so bases 10..17 are
+    // representable but their squares are not — the integer fast path's
+    // `base^|n|` intermediate overflows storage even when the result fits.
+    const S: u32 = 37;
+    const ONE: i128 = 10_i128.pow(S);
+    const M: RoundingMode = RoundingMode::HalfToEven;
+
+    fn powf(base: i128, exp: i128) -> i128 {
+        powf_strict_raw::<S>(base * ONE, exp * ONE, M)
+    }
+
+    #[test]
+    fn in_range_reciprocal_with_overflowing_intermediate_computes() {
+        // `10^-2 = 0.01` is representable, but `10² = 100` overflows i128
+        // storage at scale 37. The fast path must defer to the composition,
+        // not panic on the intermediate.
+        assert_eq!(powf(10, -2), ONE / 100);
+        assert_eq!(powf(5, -3), ONE / 125); // 1/125 = 0.008
+        assert_eq!(powf(16, -2), ONE / 256); // 1/256 = 0.00390625
+    }
+
+    #[test]
+    fn exact_small_powers_unchanged() {
+        // Cases the fast path always handled — must stay bit-identical.
+        assert_eq!(powf(2, 3), 8 * ONE);
+        assert_eq!(powf(2, -3), ONE / 8); // 0.125
+        assert_eq!(powf(4, -2), ONE / 16); // 0.0625
+        assert_eq!(powf(17, 1), 17 * ONE); // at the in-range edge
+    }
+
+    #[test]
+    #[should_panic(expected = "result out of range")]
+    fn out_of_range_positive_power_panics() {
+        // `10² = 100` exceeds the storage MAX (≈17) — must panic, not wrap.
+        let _ = powf(10, 2);
+    }
 }
