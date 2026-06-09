@@ -1072,6 +1072,25 @@ pub(crate) fn tanh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: Ro
         return crate::support::rounding::tiny_odd_compressing_directed(raw, 0, 1, mode);
     }
     let w = scale + working_digits;
+    // Large |x|: tanh(|x|) = 1 − 2·e^(−2|x|), which to the working scale `w`
+    // is all-nines once 2·e^(−2|x|) < 10^−w, i.e. |x| ≳ ln(10)/2·w ≈ 1.1513·w.
+    // Forming e^|x| there overflows the 256-bit `Fixed`, so return the largest
+    // working value below 1 (1 − 10^−w) carrying the input's sign; the caller
+    // rounds it to ±1 (nearest/away/up) or ±(1−ulp) (Floor/Trunc). tanh is
+    // BOUNDED in (−1, 1) so this can never genuinely overflow the tier. Mirrors
+    // `exp_generic::tanh_pos` (the wide path) so narrow and wide agree exactly.
+    let thr_x = (w as i128) * 1152 / 1000 + 2;
+    if raw.abs() / 10_i128.pow(scale) > thr_x {
+        let one_w = Fixed {
+            negative: false,
+            mag: Fixed::pow10(w),
+        };
+        let sat = one_w.sub(Fixed::from_u128_mag(1, false));
+        let sat = if raw < 0 { sat.neg() } else { sat };
+        return sat.round_to_i128_with(w, scale, mode).unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("D38::tanh", scale)
+        });
+    }
     let v = to_fixed_w(raw, working_digits);
     // tanh is odd; evaluate at |v| (dominant `e^|x|` direct, see
     // `sinh_with`) and reapply the input sign.
