@@ -3065,12 +3065,38 @@ macro_rules! decl_wide_transcendental {
                 // Two-core: composition runs on the wide `Wagm` work int.
                 round_to_storage_directed::<Wagm>(base_guard, SCALE, mode, |guard| {
                     let w = SCALE + guard;
-                    let arg = mul_agm(
-                        to_work_scaled_agm(raw, guard),
-                        ln2_cf_agm::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                    // Form the `x·ln 2` argument with the wide multiply in
+                    // `Wexp` — the work integer `exp_fixed` runs the series in,
+                    // and the width `exp_lift_cap` sized the `k_lift` lift
+                    // against. The lifted working scale makes the
+                    // `x·10^w · ln 2·10^w` intermediate span `2·w` digits; the
+                    // narrower `Wagm` cannot hold that for a large
+                    // (out-of-range) argument, so a `Wagm` multiply would
+                    // `wrapping_mul` it down to a small in-range value —
+                    // silently returning a wrong, representable result for a
+                    // `2^x` that must overflow (the `exp2_strict_with` vs
+                    // `exp2_strict` divergence). `exp_lift_cap` bounds `2·w`
+                    // inside `Wexp`, so the multiply is exact there and
+                    // `exp_fixed::<Wexp>`'s peak gate (then `resize_or_panic`)
+                    // panics uniformly on a genuinely out-of-range result,
+                    // exactly as the natural `exp` does. In-range cells stay
+                    // bit-identical: the argument value itself fits `Wagm`;
+                    // only its squared-scale intermediate did not.
+                    let arg = $crate::algos::exp::exp_generic::mul::<Wexp>(
+                        $crate::int::types::traits::BigInt::resize_to::<Wexp>(
+                            to_work_scaled_agm(raw, guard),
+                        ),
+                        $crate::int::types::traits::BigInt::resize_to::<Wexp>(
+                            ln2_cf_agm::<SCALE>(
+                                w,
+                                $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                            ),
+                        ),
                         w,
                     );
-                    exp_fixed_wide_agm(arg, w)
+                    $crate::algos::exp::exp_generic::resize_or_panic::<Wexp, Wagm>(
+                        $crate::algos::exp::exp_generic::exp_fixed::<Wexp>(arg, w),
+                    )
                 })
             }
 
