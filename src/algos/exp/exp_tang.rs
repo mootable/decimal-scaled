@@ -43,15 +43,17 @@ use crate::support::rounding::RoundingMode;
 /// 10^w`), returned at working scale `w`. Generic over the tier `C` and
 /// the table size `M`.
 ///
-/// `INTERNAL_EXTRA` selects the large-`|k|` mitigation. The final `2^k`
-/// reassembly amplifies the reduction residual by `2^k ≈ 10^(|k|·log10
-/// 2)` decimal digits, so a fixed narrow guard cannot cover an unbounded
-/// `|k|`. When `true` the whole reduction runs at an extended working
-/// scale `w + extra` (`extra = ceil(|k|·log10 2) + 12`) and the result
-/// is narrowed back to `w` round-to-nearest; when `false` the body runs
-/// at the caller-supplied `w` (the caller absorbs the `extra` lift in
-/// its own guard, or the band's `|k|` is small enough not to need it).
-/// This is the shared surface the trig hyperbolic kernels reuse.
+/// `INTERNAL_EXTRA` selects the large-`k` mitigation. For `k > 0` the final
+/// `2^k` reassembly (a LEFT shift) amplifies the reduction residual by
+/// `2^k ≈ 10^(k·log10 2)` decimal digits, so a fixed narrow guard cannot
+/// cover an unbounded `k`. When `true` the whole reduction runs at an
+/// extended working scale `w + extra` (`extra = ceil(k·log10 2) + 12`, sized
+/// for `k > 0` only) and the result is narrowed back to `w`
+/// round-to-nearest; when `false` the body runs at the caller-supplied `w`
+/// (the caller absorbs the `extra` lift in its own guard, or the band's `k`
+/// is small enough not to need it). For `k ≤ 0` the reassembly is an
+/// error-shrinking RIGHT shift, so no lift is taken (`extra = 0`) — see the
+/// body comment. This is the shared surface the trig hyperbolic kernels reuse.
 #[must_use]
 pub(crate) fn tang_exp_fixed<
     C: WideTrigCore,
@@ -105,11 +107,17 @@ where
     };
 
     let (w_ext, v_ext, extra) = if INTERNAL_EXTRA {
-        let abs_k = if k < 0 { -k } else { k } as u128;
-        let extra: u32 = if abs_k == 0 {
+        // Size the extended scale from `k` only for `k > 0`: the `2^k`
+        // reassembly amplifies the residual only on the LEFT shift. For `k < 0`
+        // (underflow) the reassembly is an error-shrinking RIGHT shift, so the
+        // base scale already suffices — and inflating `w_ext` there would drive
+        // the table-entry product `slot_hi · 10^w_ext` (≈ `2·w_ext·log2(10)`
+        // bits) past the work integer `S`, silently wrapping `exp(c_j)`. (Same
+        // asymmetry the `EXTERNAL_EXTRA` wrapper applies.)
+        let extra: u32 = if k <= 0 {
             0
         } else {
-            let digits = (abs_k * 30103).div_ceil(100_000) as u32;
+            let digits = (k as u128 * 30103).div_ceil(100_000) as u32;
             digits + 12
         };
         let v_ext = if extra == 0 {
@@ -281,17 +289,28 @@ where
     }
 
     let base_guard = if EXTERNAL_EXTRA {
-        // The final `2^k` reassembly amplifies the working-scale rounding
-        // error by `2^k` (≈ `|k|·log10 2` digits). Widen the base guard by
-        // `extra` so the post-shift residual lands back inside the guard.
+        // The final reassembly is `exp_s << k` for `k ≥ 0` and `exp_s >> |k|`
+        // for `k < 0`. Only the LEFT shift (`k ≥ 0`) amplifies the
+        // working-scale rounding error by `2^k` (≈ `|k|·log10 2` digits), so
+        // only there must the base guard widen by `extra` to keep the
+        // post-shift residual inside the guard. For `k < 0` (the underflow
+        // direction — `e^(large negative)`) the reassembly is a RIGHT shift
+        // that shrinks the value and its absolute error, so the base `GUARD`
+        // already covers it with vast margin; inflating the guard there is not
+        // only needless but HARMFUL — it drives the working scale `w = SCALE +
+        // base_guard` high enough that the Tang table-entry product
+        // (`exp_table_entry_baked`'s `slot_hi · 10^w`, ≈ `2·w·log2(10)` bits)
+        // overflows the work integer `S`, silently wrapping the `exp(c_j)`
+        // factor (the deep-underflow misround at the wide tiers' max scale).
+        // So size `extra` from `k` only when `k > 0`.
         let w = SCALE + GUARD;
         let one_w = C::one(w);
         let v_w_probe = C::to_work_scaled(raw, GUARD);
         let k = C::round_to_nearest_int(C::div_cached(v_w_probe, C::ln2::<SCALE>(w), one_w), w);
-        let abs_k = if k < 0 { -k } else { k } as u128;
-        let extra: u32 = if abs_k == 0 {
+        let extra: u32 = if k <= 0 {
             0
         } else {
+            let abs_k = k as u128;
             let digits = (abs_k * 30103).div_ceil(100_000);
             let capped = digits.min((C::w_bits() / 4) as u128) as u32;
             capped + 12 + (capped >> 2)
@@ -313,4 +332,50 @@ where
     C::round_to_storage_directed_never_exact(base_guard, SCALE, mode, &mut |guard| {
         tang_exp_fixed::<C, M, INTERNAL_EXTRA, SCALE>(C::to_work_scaled(raw, guard), SCALE + guard)
     })
+}
+
+#[cfg(all(test, feature = "wide"))]
+mod tests {
+    //! Deep-underflow correctness for the Tang `exp` path.
+    //!
+    //! Regression for the wide-tier max-scale misround: at D76<75> the Tang
+    //! `wide_tang_gate` admits large negative arguments (`e^(−34..−58)`, all
+    //! representable), but the old `EXTERNAL_EXTRA` guard inflated the working
+    //! scale `w` by `≈ |k|·log10 2` digits — even though the `k < 0`
+    //! reassembly is an error-shrinking RIGHT shift that needs no such guard.
+    //! That pushed the table-entry product `slot_hi · 10^w` past the tier work
+    //! integer `Int<16>` (1024 bits), silently wrapping the `exp(c_j)` factor
+    //! (~25 % error). The wider D307<75> tier runs the Series path and is the
+    //! oracle: `exp` rounded to scale 75 is the same value at every storage
+    //! width, so the two decimal renderings must be identical.
+
+    use crate::types::traits::DecimalTranscendental;
+    use crate::types::widths::{D307, D76};
+    use crate::RoundingMode;
+
+    const MODES: [RoundingMode; 6] = [
+        RoundingMode::HalfToEven,
+        RoundingMode::HalfAwayFromZero,
+        RoundingMode::HalfTowardZero,
+        RoundingMode::Trunc,
+        RoundingMode::Floor,
+        RoundingMode::Ceiling,
+    ];
+
+    #[test]
+    fn tang_deep_underflow_matches_wide_series_oracle_d76_s75() {
+        // Negative args spanning the underflow regime the Tang gate routes —
+        // from below the overflow boundary (~−33) up to the storage edge
+        // (max |x| ≈ 57.9 at D76<75>).
+        let args = ["-20.0", "-33.5", "-34.37", "-40.0", "-45.123", "-50.25", "-55.0", "-57.5"];
+        for s in args {
+            let a76: D76<75> = s.parse().unwrap();
+            let a307: D307<75> = s.parse().unwrap();
+            for m in MODES {
+                let got = a76.exp_strict_with(m).to_string();
+                let want = a307.exp_strict_with(m).to_string();
+                assert_eq!(got, want, "exp({s}) D76<75> vs D307<75> oracle, mode {m:?}");
+            }
+        }
+    }
 }
