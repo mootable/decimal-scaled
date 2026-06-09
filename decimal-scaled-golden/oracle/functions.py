@@ -3,7 +3,7 @@
 strings (decimal.Decimal, never float).
 
 Binary input order (provisional for now; the unary functions used by the proof
-corpus are unambiguous): log=[x, base]; atan2=[y, x]; powf=[base, exp];
+set are unambiguous): log=[x, base]; atan2=[y, x]; powf=[base, exp];
 hypot=[a, b]; add/sub/mul/div/rem=[a, b].
 """
 from dataclasses import dataclass

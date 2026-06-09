@@ -1,0 +1,15 @@
+[package]
+name = "golden-ds"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "decimal-scaled subjects + run adapters for the decimal-scaled-golden harness"
+license = "MIT OR Apache-2.0"
+
+# This crate exists to isolate the heavy full-surface golden run (88 (width,scale)
+# cells × every strict transcendental ≈ thousands of monomorphisations) from the
+# core library's `cargo test`. The wide tiers are always on — the crate's whole
+# purpose is the wide gate.
+[dependencies]
+decimal-scaled = { path = "..", features = ["wide", "x-wide", "xx-wide"] }
+decimal-scaled-golden = { path = "../decimal-scaled-golden" }

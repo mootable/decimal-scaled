@@ -2,7 +2,7 @@
 name = "decimal-scaled-golden"
 version = "0.1.0"
 edition = "2021"
-description = "Library-agnostic golden corpus, validator, and comparison harness for decimal libraries"
+description = "Library-agnostic golden value set, validator, and comparison harness for decimal libraries"
 license = "MIT OR Apache-2.0"
 publish = false
 

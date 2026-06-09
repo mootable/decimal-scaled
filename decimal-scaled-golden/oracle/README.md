@@ -1,9 +1,9 @@
 # Golden oracle generation tool
 
-Generates the singular golden corpus (`golden/<func>.txt`, `digits.digits` to
+Generates the singular golden set (`golden/<func>.golden`, `digits.digits` to
 `GEN_PRECISION = 1233` fractional digits) from one configurable **generator**
-oracle, cross-validated by any number of **validator** oracles. The corpus is the
-only thing the Rust crate reads — it never links an oracle.
+oracle, cross-validated by any number of **validator** oracles. The golden set is
+the only thing the Rust crate reads — it never links an oracle.
 
 ## Usage
 
@@ -16,7 +16,7 @@ pip install -r oracle/requirements-extra.txt
 # generate a few functions (cross-validated per oracles.json):
 python -m oracle.generate generate --functions sqrt,exp,ln,sin --out golden --precision 1233
 
-# re-check a committed corpus against the validators:
+# re-check the committed golden set against the validators:
 python -m oracle.generate revalidate --functions sqrt,exp,ln,sin --out golden --precision 1233
 ```
 
@@ -30,8 +30,8 @@ adapters are OUR code (MIT/Apache) that call the user-installed LGPL packages
 `python-flint` / `gmpy2` at arm's length — "works that use the Library"
 (LGPL section 5), not derivatives; the LGPL packages are not bundled.
 
-## Full corpus (maintainer run)
+## Full golden set (maintainer run)
 
-The committed `golden/` is a small proof set. Regenerating the FULL corpus (every
-function x all harvested inputs at precision 1233) is a long compute — a
+The committed `golden/` is a small proof set. Regenerating the FULL golden set
+(every function x all harvested inputs at precision 1233) is a long compute — a
 maintainer/CI step, not run on every change.

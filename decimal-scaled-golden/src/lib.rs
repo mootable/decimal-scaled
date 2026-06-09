@@ -1,33 +1,38 @@
-//! `decimal-scaled-golden` — the golden corpus + validation/comparison harness.
-//! Library-agnostic: a library implements `subject::Subject` (one per
+//! `decimal-scaled-golden` — the golden values + validation/reporting harness.
+//! Library-agnostic: a library implements `subject::DecimalSubject` (one per
 //! `(width, scale)` cell) to be validated/benched against the singular golden
 //! values. No subject impls live in this crate.
+//!
+//! One folder per extension point — `subject`, `loader`, `execution`, `runner`,
+//! `validators`, `reporting` — with shared leaf types (`function`, `rounding`,
+//! `outcome`, `string_decimal`, `collector`) gathered under `support`.
 
-pub mod rounding;
-pub mod function;
-pub mod value;
-pub mod parser;
-pub mod subject;
-pub mod outcome;
-pub mod bigdec;
-pub mod validator;
 pub mod execution;
-pub mod collector;
-pub mod caseloader;
-pub mod tester;
-pub mod collator;
+pub mod loader;
+pub mod reporting;
+pub mod runner;
+pub mod subject;
+pub mod support;
+pub mod validators;
 
-pub use function::Function;
-pub use rounding::RoundingMode;
-pub use value::GoldenValue;
-pub use outcome::{Outcome, ResultRecord};
-pub use subject::{Capabilities, FnSupport, Overflow, Subject};
+// Crate-root aliases for the shared leaves, so `crate::function`, `crate::collector`,
+// etc. resolve regardless of where the type lives.
+pub use support::{collector, function, outcome, rounding, string_decimal};
+
 pub use collector::{
-    CellStatus, ExecutionCollector, ExecutionResult, FunctionCollector, SubjectCollector,
-    TestCollector,
+    CellStatus, ExecutionCollector, ExecutionResult, FunctionCollector, RunCollector,
+    SubjectCollector,
 };
 pub use execution::{ExecutionStrategy, RunOnce, Timed};
-pub use caseloader::{CaseLoader, FileCaseLoader};
-pub use tester::{ParallelTester, SeriesTester, Tester};
-pub use validator::{OverflowValidator, PrecisionValidator, RoundingValidator, Validator};
-pub use collator::Collator;
+pub use function::Function;
+pub use loader::{CaseLoader, FileLoader, GoldenCase, GoldenValue};
+pub use outcome::Outcome;
+pub use reporting::{ReportArtifact, ReportOutput, Reporter, TsvReporter};
+pub use rounding::RoundingMode;
+pub use runner::{GoldenRunner, ParallelRunner, SeriesRunner};
+pub use subject::{
+    Capabilities, Computed, DecimalSubject, FnSupport, Limits, NonReal, Overflow, Radix,
+};
+pub use validators::{
+    OverflowValidator, PrecisionValidator, RoundingValidator, ValidationContext, Validator,
+};

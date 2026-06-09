@@ -1,4 +1,4 @@
-"""Harvest the per-function input set from the existing golden corpus
+"""Harvest the per-function input set from the existing golden set
 (tests/golden/<func>_d*_s*.txt). Those files store inputs as RAW scaled integers at
 the scale S encoded in the filename; convert each back to a canonical decimal
 string (value = raw / 10^S), dedupe by value, keep only in-domain inputs."""

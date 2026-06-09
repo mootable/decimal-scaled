@@ -1,8 +1,8 @@
-"""Generate / revalidate the singular golden corpus.
+"""Generate / revalidate the singular golden set.
 
 generate:   harvest inputs, compute each with the GENERATOR oracle, cross-check
             with each VALIDATOR oracle, write golden/<func>.txt (accepted lines).
-revalidate: re-check a committed corpus against the validator oracles.
+revalidate: re-check the committed golden set against the validator oracles.
 """
 import argparse
 import json
@@ -16,6 +16,9 @@ from .oracle import OracleUnavailable, get_oracle
 from .adapters import flint_oracle, mpfr_oracle, mpmath_oracle, sympy_oracle  # noqa: F401
 
 GEN_PRECISION = 1233
+# Guard digits beyond the widest tier's scale — spent deciding the rounding, not
+# verifiable depth. GEN_PRECISION = max_decimal_width + GUARD.
+GUARD = 2
 
 
 def _frac_len(s: str) -> int:
@@ -111,8 +114,11 @@ def cmd_generate(args):
             if ok:
                 lines.append(" ".join(inp + [g]))
         lines = sorted(set(lines))
-        out_text = "".join(f"{provenance}\n{ln}\n" for ln in lines)
-        (out_dir / f"{func}.txt").write_text(out_text)
+        # `#key=value` metadata header: the loader reads `gen_precision`/`guard`
+        # from it to size the oracle's reach, rather than hardcoding.
+        header = f"#gen_precision={args.precision}\n#guard={GUARD}\n"
+        out_text = header + "".join(f"{provenance}\n{ln}\n" for ln in lines)
+        (out_dir / f"{func}.golden").write_text(out_text)
         print(f"{func}: wrote {len(lines)} lines")
     return 0
 
@@ -124,7 +130,7 @@ def cmd_revalidate(args):
     out_dir = Path(args.out)
     mismatches = 0
     for func in args.functions.split(","):
-        path = out_dir / f"{func}.txt"
+        path = out_dir / f"{func}.golden"
         if not path.exists():
             continue
         f = FUNCTIONS[func]
