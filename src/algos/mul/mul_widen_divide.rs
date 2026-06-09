@@ -50,6 +50,17 @@ fn narrow_mag_to_int<const N: usize>(mag: &[u128], neg: bool, msg: &str) -> Int<
     let u128_limbs = N.div_ceil(2);
     // Any set bit beyond the storage width is overflow.
     let mut overflow = mag.iter().skip(u128_limbs).any(|&l| l != 0);
+    // For odd `N` the top counted u128 limb (`u128_limbs - 1`) is only
+    // half-used — storage is `N` u64 limbs, so that limb carries one u64 and
+    // its HIGH 64 bits sit beyond `Int<N>`. `skip(u128_limbs)` never reaches
+    // those bits and the magnitude pack (`from_mag_sign_u128`) truncates them,
+    // so a product spilling into them would wrap silently; treat any set bit
+    // there as overflow. (Even `N` uses every counted limb fully — no tail.)
+    if (N & 1) == 1 {
+        if let Some(&top) = mag.get(u128_limbs - 1) {
+            overflow |= (top >> 64) != 0;
+        }
+    }
     if !overflow {
         // Compare the in-range magnitude against |Int<N>::MAX| / |MIN|.
         let limit = if neg {
@@ -172,4 +183,45 @@ where
     let sig_bits = (sig as u32).saturating_mul(128).min((2 * N as u32) * 64);
     crate::algos::support::rescale::dispatch_mag(&mut mag[..sig], SCALE, neg, mode, sig_bits);
     narrow_mag_to_int::<N>(&mag, neg, "attempt to multiply with overflow")
+}
+
+#[cfg(test)]
+mod overflow_tests {
+    use super::mul_widen_divide;
+    use crate::int::types::Int;
+    use crate::support::rounding::RoundingMode;
+
+    /// `value * 10^k` as an `Int<3>` (the D57 raw storage of `value` at scale `k`).
+    fn at_scale(value: i128, k: u32) -> Int<3> {
+        let mut p = Int::<3>::from_i128(value);
+        let ten = Int::<3>::from_i128(10);
+        for _ in 0..k {
+            p = p.wrapping_mul(ten);
+        }
+        p
+    }
+
+    /// D57 (`Int<3>`, the only odd-`N` wide tier): an out-of-range product must
+    /// PANIC, while an in-range product stays bit-identical. The overflow used to
+    /// slip the high 64 bits of the top half-used u128 limb and silently wrap.
+    #[test]
+    fn mul_widen_divide_d57_overflow_panics_in_range_exact() {
+        let mode = RoundingMode::HalfToEven;
+
+        // In-range: 3 * 4 = 12 at scale 56 (MAX ≈ 31.4) — must equal 12·10^56.
+        let got = mul_widen_divide::<3, 56>(at_scale(3, 56), at_scale(4, 56), mode);
+        assert_eq!(got, at_scale(12, 56), "in-range D57<56> product must be exact");
+
+        // Out-of-range at scale 56: 15 * 13 = 195 > MAX ≈ 31.4 → must panic.
+        let a = at_scale(15, 56);
+        let b = at_scale(13, 56);
+        let r = std::panic::catch_unwind(|| mul_widen_divide::<3, 56>(a, b, mode));
+        assert!(r.is_err(), "D57<56> 15*13=195 out of range must panic, not wrap");
+
+        // Out-of-range at scale 0: -2.219...e57 * 3 overflows Int<3> (MAX ≈ 3.14e57).
+        let neg_big = Int::<3>::ZERO.wrapping_sub(at_scale(2_219_290_601, 48)); // ≈ -2.22e57, in range
+        let three = Int::<3>::from_i128(3);
+        let r0 = std::panic::catch_unwind(|| mul_widen_divide::<3, 0>(neg_big, three, mode));
+        assert!(r0.is_err(), "D57<0> (-2.2e57)*3 overflow must panic, not wrap");
+    }
 }
