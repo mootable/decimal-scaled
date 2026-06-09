@@ -4179,6 +4179,12 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn cosh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                // `cosh(0) = 1` is the SOLE exact case (the golden stores it as a
+                // terminating `1`); pin it so the `never_exact` directed nudge below
+                // never bumps it.
+                if self == Self::ZERO {
+                    return Self::ONE;
+                }
                 let raw = self.to_bits();
                 // Large-argument lift: see `sinh_strict_with`. `cosh` is
                 // even, so we always evaluate at `|v|` — feeding the
@@ -4188,24 +4194,23 @@ macro_rules! decl_wide_transcendental {
                 // Two-core: composition runs on the wide `Wagm` work int.
                 let k_lift = $core::exp_result_int_digits::<$core::Wagm>($core::to_work_scaled_agm(raw, 0), SCALE);
                 let base_guard = $core::GUARD + k_lift;
-                // Two-width near-min widening (the `Wagm` composition int, then
-                // the wider `Wexp`). `cosh(x) = 1 + x²/2 + x⁴/24 + …` is
-                // transcendental and > 1 for x ≠ 0, but its half-ULP / grid-line
-                // residual is decided by the `x⁴/24` term at digit ≈ `2·SCALE`,
-                // beyond the tier work integer's reach at mid/high scales. The
-                // widening resolves it (a clear positive residual → Ceiling
-                // rounds up, nearest rounds up) when it lies within the precision
-                // horizon, and leaves it an EXACT tie (no sub-resolution bump)
-                // beyond — matching the finite-precision golden oracle, which
-                // also cannot see a digit that deep. (This replaces the old
-                // `Ceiling && r == ONE` nudge, which over-rounded the deep ties.)
+                // Two-width near-min widening (the `Wagm` composition int, then the
+                // wider `Wexp`). `cosh(x) = 1 + x²/2 + x⁴/24 + …` is transcendental
+                // and strictly > 1 for every x ≠ 0, so — exactly like `exp` — it is
+                // NEVER on a storage grid line: `never_exact = true`. The widening
+                // resolves the directed side from the `x²/2` residual (at digit ≈
+                // `2·SCALE`) when it lies within the precision horizon; PAST the
+                // horizon the `never_exact` rule still nudges by the KNOWN sign
+                // (cosh > 1 ⇒ Ceiling rounds up, Floor/Trunc stay), which the oracle
+                // — storing cosh to its full precision (a non-zero residual below the
+                // scale) — agrees with. The `cosh(0) = 1` exact case is pinned above.
                 let r = $crate::algos::support::wide_trig_core::round_to_storage_widening_g::<
                     $Storage, $core::Wagm, $core::Wexp,
                 >(
                     base_guard,
                     SCALE,
                     mode,
-                    false,
+                    true,
                     <$Storage>::MAX,
                     <$Storage>::MIN,
                     |guard| {
