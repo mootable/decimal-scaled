@@ -282,6 +282,45 @@ pub(crate) trait WideTrigCore {
     fn sincos_table_entry<const SCALE: u32>(w: u32, idx: usize, m: u32) -> (Self::W, Self::W);
 }
 
+/// Near-min analytic pin for `exp`. When `|v| < 10^(-SCALE/2)` the deviation
+/// `e^v − (1 + v) = v²/2 + …` is provably below half a storage ULP, and `e^v > 1 + v`
+/// strictly (exp is convex), so the correctly-rounded result is exactly `1 + v` for
+/// every mode except `Ceiling`, which the positive deviation rounds up by one ULP.
+/// This short-circuits the widening: at these tiny inputs its `s >> n` range reduction
+/// loses bits (the working guard carries fewer factors of 2 than `n`), and the
+/// resulting sub-ULP deficit borrows into the result digit at the `…999000` /
+/// `1.000…` grid line — a deciding digit past the work integer's reach, so the
+/// escalation can't recover it. Returns `None` (defer to the normal path) otherwise.
+/// The cheap bit-length pre-filter exits before the `pow10` for every non-tiny input,
+/// so the hot path is unaffected.
+#[inline]
+fn exp_near_min_pin<C: WideTrigCore, const SCALE: u32>(
+    raw: C::Storage,
+    mode: RoundingMode,
+) -> Option<C::Storage> {
+    let half = SCALE / 2;
+    let zero = C::storage_zero();
+    if half == 0 || raw == zero {
+        return None;
+    }
+    let absr = if raw < zero { zero - raw } else { raw };
+    // `10^half` has ≈ half·log2(10) bits; skip the pow10 unless |raw| is plausibly
+    // below it (true only for genuinely tiny inputs — every normal call exits here).
+    let bl = <C::Storage as BigInt>::BITS - absr.leading_zeros();
+    if (bl as u64) * 100_000 >= (half as u64) * 332_193 {
+        return None;
+    }
+    // Exact: |raw| < 10^half ⟺ v²/2 < ½ ULP and the deviation sits past the scale.
+    if absr >= crate::consts::pow10::dispatch::<C::Storage>(half) {
+        return None;
+    }
+    let g = C::storage_one(SCALE) + raw; // (1 + v), exact since |v| < 1
+    Some(match mode {
+        RoundingMode::Ceiling => g + <C::Storage as BigInt>::from_i128(1),
+        _ => g,
+    })
+}
+
 /// `exp_strict` for a wide tier — generic over the tier `C`.
 ///
 /// `raw == 0` short-circuits to the type's `ONE` raw (`10^SCALE`) rather
@@ -299,6 +338,9 @@ where
 {
     if raw == C::storage_zero() {
         return C::storage_one(SCALE);
+    }
+    if let Some(r) = exp_near_min_pin::<C, SCALE>(raw, mode) {
+        return r;
     }
     // `exp(x)` for `x != 0` is transcendental (Lindemann–Weierstrass), so its
     // true value is never exactly on a storage grid line — a zero working
