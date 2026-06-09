@@ -29,7 +29,9 @@ pub use execution::CriterionStrategy;
 pub use function::Function;
 pub use loader::{CaseLoader, FileLoader, GoldenCase, GoldenValue};
 pub use outcome::Outcome;
-pub use reporting::{ReportArtifact, ReportOutput, Reporter, TsvReporter};
+pub use reporting::{
+    ConsoleReporter, InlineReporter, ReportArtifact, ReportOutput, Reporter, RunSummary, TsvReporter,
+};
 pub use rounding::RoundingMode;
 pub use runner::{GoldenRunner, ParallelRunner, SeriesRunner};
 pub use subject::{

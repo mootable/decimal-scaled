@@ -114,17 +114,27 @@ where
     }
 }
 
-/// One single-cell decimal-scaled subject over the concrete decimal type `D`. The
-/// `width`/`scale` ride in `Capabilities::config` as report metadata only.
+/// One single-cell decimal-scaled subject over the concrete decimal type `D`, tested
+/// under one rounding `mode`. The `width`/`scale`/`mode` ride in `Capabilities::config`
+/// as report metadata only.
 pub struct DsSubject<D> {
     pub width: u32,
     pub scale: u32,
+    pub mode: RoundingMode,
     pub _p: PhantomData<D>,
 }
 
 impl<D> DsSubject<D> {
+    /// A subject tested under the default half-to-even rounding.
     pub fn new(width: u32, scale: u32) -> DsSubject<D> {
-        DsSubject { width, scale, _p: PhantomData }
+        DsSubject::with_mode(width, scale, RoundingMode::HalfToEven)
+    }
+
+    /// A subject tested under a specific rounding `mode` — the full set is swept by
+    /// the `golden_multi` gate so directed rounding (Ceiling/Floor/Trunc) is covered,
+    /// not just the default.
+    pub fn with_mode(width: u32, scale: u32, mode: RoundingMode) -> DsSubject<D> {
+        DsSubject { width, scale, mode, _p: PhantomData }
     }
 }
 
@@ -140,7 +150,7 @@ where
     type Value = D;
 
     fn name(&self) -> String {
-        format!("decimal-scaled D{}<{}>", self.width, self.scale)
+        format!("decimal-scaled D{}<{}> {:?}", self.width, self.scale, self.mode)
     }
 
     fn capabilities(&self) -> Capabilities {
@@ -150,11 +160,12 @@ where
         // `wrapping_`/`checked_`/`saturating_` variants are not the path tested here.
         let mut functions = BTreeMap::new();
         for &f in FUNCS {
-            functions.insert(f, FnSupport { mode: RoundingMode::HalfToEven, overflow: Overflow::Panic });
+            functions.insert(f, FnSupport { mode: self.mode, overflow: Overflow::Panic });
         }
         let mut config = BTreeMap::new();
         config.insert("width".into(), self.width.to_string());
         config.insert("scale".into(), self.scale.to_string());
+        config.insert("mode".into(), format!("{:?}", self.mode));
         Capabilities { name: "decimal-scaled".into(), radix: Radix::Decimal, config, functions }
     }
 

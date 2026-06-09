@@ -18,8 +18,9 @@ use decimal_scaled::{
     D115, D1232, D153, D18, D230, D307, D38, D462, D57, D616, D76, D924,
 };
 use decimal_scaled_golden::{
-    CaseLoader, ExecutionResult, FileLoader, Function, GoldenCase, GoldenRunner, Limits, Outcome,
-    OverflowValidator, ParallelRunner, RoundingValidator, RunCollector, RunOnce,
+    CaseLoader, ConsoleReporter, FileLoader, Function, GoldenCase, GoldenRunner, InlineReporter,
+    Limits, OverflowValidator, ParallelRunner, RoundingMode, RoundingValidator, RunCollector,
+    RunOnce,
 };
 use golden_ds::{golden_dir, thread_count, DsSubject, FUNCS, GEN_PRECISION, GUARD};
 
@@ -54,17 +55,27 @@ impl CaseLoader for CachingLoader {
     }
 }
 
-/// Run one `runner.run` per band-edge `(width, scale)` cell, collecting each
-/// subject's `SubjectCollector` into one `RunCollector`.
+/// Add one `runner.run` per band-edge `(width, scale)` cell — at the given rounding
+/// `mode` — into the shared `RunCollector`.
 macro_rules! run_subjects {
-    ($runner:expr, $funcs:expr, $($D:ty => ($w:expr, $s:expr)),+ $(,)?) => {{
-        let mut rc = RunCollector::new();
+    ($runner:expr, $funcs:expr, $rc:expr, $mode:expr, $($D:ty => ($w:expr, $s:expr)),+ $(,)?) => {{
         $(
-            rc.add($runner.run(&DsSubject::<$D>::new($w, $s), $funcs));
+            $rc.add($runner.run(&DsSubject::<$D>::with_mode($w, $s, $mode), $funcs));
         )+
-        rc
     }};
 }
+
+/// Every rounding mode the gate sweeps — directed rounding (Ceiling/Floor/Trunc) is
+/// covered alongside the three nearest modes, since a fixed-width decimal rounds its
+/// last digit differently per mode and a directed-rounding regression shows only here.
+const MODES: [RoundingMode; 6] = [
+    RoundingMode::HalfToEven,
+    RoundingMode::HalfAwayFromZero,
+    RoundingMode::HalfTowardZero,
+    RoundingMode::Ceiling,
+    RoundingMode::Floor,
+    RoundingMode::Trunc,
+];
 
 #[test]
 #[ignore = "full-surface golden; run via: cargo test -p golden-ds --release --test golden_multi -- --ignored --nocapture"]
@@ -80,7 +91,15 @@ fn golden_multi_tier() {
         ],
     };
 
-    let rc = run_subjects! { runner, &funcs,
+    // The expected out-of-range cells panic (caught + validated as overflow); silence
+    // the default hook so the all-mode sweep isn't drowned in ~100k backtraces (which
+    // also dominated the wall time). Restored before the assertions below.
+    let prev_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+
+    let mut rc = RunCollector::new();
+    for mode in MODES {
+    run_subjects! { runner, &funcs, rc, mode,
         // D18 — Int<1>, 64-bit storage
         D18<0> => (18, 0), D18<3> => (18, 3), D18<4> => (18, 4),
         D18<9> => (18, 9), D18<13> => (18, 13), D18<17> => (18, 17),
@@ -127,41 +146,15 @@ fn golden_multi_tier() {
         D1232<308> => (1232, 308), D1232<470> => (1232, 470), D1232<616> => (1232, 616),
         D1232<924> => (1232, 924), D1232<1231> => (1232, 1231),
     };
-
-    let mut pass = 0usize;
-    let mut skip = 0usize;
-    let mut panic = 0usize;
-    let mut bad = 0usize;
-    for subject in &rc.subjects {
-        let cfg = &subject.capabilities.config;
-        let w = cfg.get("width").cloned().unwrap_or_default();
-        let s = cfg.get("scale").cloned().unwrap_or_default();
-        for fc in &subject.functions {
-            for cell in &fc.cells {
-                if matches!(cell.result(), Some(ExecutionResult::Skipped)) {
-                    skip += 1;
-                    continue;
-                }
-                for outcome in &cell.validations {
-                    match outcome {
-                        Outcome::Pass => pass += 1,
-                        Outcome::Skipped => skip += 1,
-                        Outcome::Precision { .. } => {}
-                        Outcome::Panic => {
-                            panic += 1;
-                            eprintln!("  PANIC {} @({w},{s}) [{}.golden:{}] input={:?}", fc.function.name(), fc.function.name(), cell.line, cell.inputs);
-                        }
-                        other => {
-                            bad += 1;
-                            eprintln!("  BAD {} @({w},{s}) [{}.golden:{}]: {:?} on {:?}", fc.function.name(), fc.function.name(), cell.line, other, cell.inputs);
-                        }
-                    }
-                }
-            }
-        }
     }
-    eprintln!("TOTAL: {pass} pass / {skip} skip / {panic} panic / {bad} bad");
-    assert_eq!(bad, 0, "mis-rounded / wrong-mode / error cells found");
-    assert_eq!(panic, 0, "decimal-scaled panicked on a representable cell");
-    assert!(pass > 0, "no Pass across any cell");
+    std::panic::set_hook(prev_hook);
+
+    // Stream the console summary (each failing cell under its subject — the label
+    // carries width/scale/mode) and assert on the returned counts.
+    let summary = ConsoleReporter::gate()
+        .report(&[rc], &mut std::io::stderr())
+        .expect("write golden report");
+    assert_eq!(summary.bad, 0, "mis-rounded / wrong-mode / error cells found");
+    assert_eq!(summary.panic, 0, "decimal-scaled panicked on a representable cell");
+    assert!(summary.pass > 0, "no Pass across any cell");
 }
