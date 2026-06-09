@@ -2,10 +2,14 @@
 //! Generic over `DecimalSubject`, so the strategy is the typed→string boundary
 //! (`Value` never escapes it).
 
+#[cfg(feature = "bench")]
+mod criterion_strategy;
 mod run_once;
 mod strategy;
 mod timed;
 
+#[cfg(feature = "bench")]
+pub use criterion_strategy::CriterionStrategy;
 pub use run_once::RunOnce;
 pub use strategy::ExecutionStrategy;
 pub use timed::Timed;

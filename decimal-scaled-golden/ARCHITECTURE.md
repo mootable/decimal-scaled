@@ -395,6 +395,33 @@ validators, and any number of libraries with different `Value` types compose.
   only the `execute` closure under `std::hint::black_box` (defeats dead-code
   elimination / const-folding); the stringified value comes from the first run.
   So conversions are never measured — only the operation.
+- **`CriterionStrategy`** *(behind the optional `bench` feature)* — benches each
+  cell with **criterion** (warmup, sampling, outlier handling) instead of naive
+  averaging, the way the precision/perf benches measure. Same timing purity as
+  `Timed`: parse hoisted out, a compute-once-first that records the stringified
+  outcome and only benches when it is a `Computed::Value` (criterion's `iter` does
+  not catch panics), then `bench_function`/`iter` under `black_box` on input and
+  result. It does **not** change the `ExecutionStrategy` trait or add a runner:
+
+  - **Optional dependency, zero-dep default.** The crate keeps its no-dependency
+    posture; `bench` pulls `codspeed-criterion-compat` (API-identical to criterion,
+    with `cargo_bench_support`; the workspace's single bench toolchain) as an
+    `optional` dep, and the strategy module is `#[cfg(feature = "bench")]`-gated.
+  - **No Runner variant — enforced by the type system.** criterion needs `&mut
+    Criterion`, which lives as a `RefCell<Criterion>` *on the struct* (the trait's
+    `&self` is untouched). That `RefCell` makes `CriterionStrategy` `!Sync`, so
+    `ParallelRunner` (`E: Sync`) cannot compile with it while `SeriesRunner` accepts
+    it — criterion's "serial, quiet machine" requirement is enforced at compile
+    time, for free. The `RefCell` is load-bearing; do not "fix" it to a `Mutex`.
+  - **criterion's report is the artifact; `timing` stays `None`.** criterion exposes
+    no programmatic measurement (`bench_function` → `&mut Criterion`; every `iter*`
+    → `()`; estimates go to `target/criterion/…` + stdout/HTML). The strategy *drives*
+    criterion and its own statistically-sound report is the deliverable; the cell's
+    `timing` is left `None` (an `estimates.json` read-back into `record_timing` is
+    possible but couples to criterion's unstable on-disk layout — out of scope).
+  - **Curated cells only.** criterion is ~hundreds of ms per benched id, so this
+    strategy is only ever paired with a tiny curated loader (a handful of
+    representative `(function, inputs)`), never the full golden surface.
 
 A panic in the *subject* (parse, compute, format) is caught (`catch_unwind`) and recorded as
 `Computed::Panic` — the library crashed, a test failure. The overflow validator (§5.3) reads it:

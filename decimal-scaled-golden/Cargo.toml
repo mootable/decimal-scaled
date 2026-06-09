@@ -6,4 +6,11 @@ description = "Library-agnostic golden value set, validator, and comparison harn
 license = "MIT OR Apache-2.0"
 publish = false
 
+[features]
+# `bench` adds the `CriterionStrategy` (§5.2): a criterion-backed ExecutionStrategy
+# for timing a small curated cell set. Off by default so the crate stays zero-dep
+# and library-agnostic; turning it on pulls the workspace's single bench toolchain.
+bench = ["dep:criterion"]
+
 [dependencies]
+criterion = { version = "4.6.0", package = "codspeed-criterion-compat", optional = true, default-features = false, features = ["cargo_bench_support"] }
