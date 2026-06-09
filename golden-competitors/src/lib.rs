@@ -47,10 +47,30 @@ fn expand_scientific(s: &str) -> String {
     if neg { format!("-{plain}") } else { plain }
 }
 
+/// Count the significant integer digits of a decimal value string (the part left
+/// of the point, leading zeros and sign stripped). `"316.22"` → 3, `"0.004"` → 0,
+/// `"-50.0"` → 2. Used to grade a fixed-significant-digit library to the fractional
+/// depth it can actually represent at this magnitude: a float with `S` significant
+/// digits holds only `S − int_digits` fractional places once the integer part grows,
+/// so a flat fractional `max_precision` would over-claim (and score false
+/// `MisRounded`) on large-magnitude results. The grader passes the golden OUTPUT
+/// value to `limits`, so the depth can be sized per result.
+fn int_digits(value: &str) -> u32 {
+    value
+        .trim_start_matches(['-', '+'])
+        .split('.')
+        .next()
+        .unwrap_or("")
+        .trim_start_matches('0')
+        .len() as u32
+}
+
 /// [rust_decimal](https://docs.rs/rust_decimal): a 96-bit fixed-point decimal with
-/// up to ~28 significant digits, rounding half-away-from-zero. Transcendentals come
-/// from its `maths` feature (`MathematicalOps`); it has no cbrt / exp2 / log2 /
-/// inverse-trig / hyperbolics, so those are simply not declared.
+/// up to ~28 significant digits (scale capped at 28), rounding half-to-even
+/// (banker's) — its kernels break exact-half ties on coefficient parity, and
+/// `round_dp` defaults to nearest-even. Transcendentals come from its `maths` feature
+/// (`MathematicalOps`); it has no cbrt / exp2 / log2 / inverse-trig / hyperbolics, so
+/// those are simply not declared.
 pub struct RustDecimal;
 
 impl RustDecimal {
@@ -59,6 +79,8 @@ impl RustDecimal {
         Function::Sin, Function::Cos, Function::Tan,
         Function::Add, Function::Sub, Function::Mul, Function::Div, Function::Rem,
     ];
+    /// Significant-digit reach (~28, with the scale also capped at 28).
+    const SIG_DIGITS: u32 = 28;
 }
 
 impl DecimalSubject for RustDecimal {
@@ -71,11 +93,12 @@ impl DecimalSubject for RustDecimal {
     fn capabilities(&self) -> Capabilities {
         let mut functions = BTreeMap::new();
         for &f in Self::FUNCS {
-            // rust_decimal rounds half-away-from-zero; an out-of-range result has
-            // no representation (the `checked_*` ops yield `None`) -> `Absent`.
+            // rust_decimal rounds half-to-even (banker's) uniformly — arithmetic and
+            // the `maths` transcendentals alike; an out-of-range result has no
+            // representation (the `checked_*` ops yield `None`) -> `Absent`.
             functions.insert(
                 f,
-                FnSupport { mode: RoundingMode::HalfAwayFromZero, overflow: Overflow::Absent },
+                FnSupport { mode: RoundingMode::HalfToEven, overflow: Overflow::Absent },
             );
         }
         Capabilities {
@@ -96,11 +119,15 @@ impl DecimalSubject for RustDecimal {
         v.normalize().to_string()
     }
 
-    fn limits(&self, _value: &str) -> Limits {
+    fn limits(&self, value: &str) -> Limits {
+        // Fixed-significant (~28 digits, scale <= 28): the representable fractional
+        // depth shrinks to 28 − int_digits as the integer part grows, so grade to that
+        // depth (a flat 28 over-claimed for large-magnitude sqrt/exp/powf/div results).
+        let max_precision = Self::SIG_DIGITS.saturating_sub(int_digits(value));
         Limits {
             min_value: Some(Decimal::MIN.to_string()),
             max_value: Some(Decimal::MAX.to_string()),
-            max_precision: 28,
+            max_precision,
         }
     }
 
@@ -137,8 +164,8 @@ impl DecimalSubject for RustDecimal {
                     }
                 }
                 Function::Powf => from_opt(x.checked_powd(inputs[1])),
-                Function::Sin => Computed::Value(x.sin()),
-                Function::Cos => Computed::Value(x.cos()),
+                Function::Sin => from_opt(x.checked_sin()),
+                Function::Cos => from_opt(x.checked_cos()),
                 Function::Tan => from_opt(x.checked_tan()),
                 Function::Add => from_opt(x.checked_add(inputs[1])),
                 Function::Sub => from_opt(x.checked_sub(inputs[1])),
@@ -167,6 +194,11 @@ impl F64 {
         Function::Atan2, Function::Powf, Function::Hypot, Function::Add, Function::Sub,
         Function::Mul, Function::Div, Function::Rem,
     ];
+    /// f64's reliable significant-digit budget (`f64::DIGITS` = 15 is the guaranteed
+    /// floor; 16 round-trips for nearly all values — used as the grading reach).
+    const SIG_DIGITS: u32 = 16;
+    /// Cap on graded fractional places (a sub-1 value carries ~15 fractional digits).
+    const FRAC_CAP: u32 = 15;
 }
 
 fn classify_f64(v: f64) -> Computed<f64> {
@@ -211,11 +243,16 @@ impl DecimalSubject for F64 {
         format!("{v}")
     }
 
-    fn limits(&self, _value: &str) -> Limits {
+    fn limits(&self, value: &str) -> Limits {
+        // f64 carries ~16 reliable significant digits, so its representable fractional
+        // depth is 16 − int_digits, capped at 15. A flat 15 over-claimed the moment
+        // |x| >= 10, manufacturing artifact MisRounded rather than honest
+        // binary-vs-decimal misses; grading a constant ~16 significant digits is fair.
+        let max_precision = Self::SIG_DIGITS.saturating_sub(int_digits(value)).min(Self::FRAC_CAP);
         Limits {
             min_value: Some(format!("{}", f64::MIN)),
             max_value: Some(format!("{}", f64::MAX)),
-            max_precision: 15,
+            max_precision,
         }
     }
 
@@ -265,17 +302,23 @@ impl DecimalSubject for F64 {
 // bigdecimal — arbitrary-precision decimal.
 // ---------------------------------------------------------------------------
 
-use bigdecimal::BigDecimal;
+use std::num::NonZeroU64;
+
+use bigdecimal::{BigDecimal, Context};
 
 /// [bigdecimal](https://docs.rs/bigdecimal): an arbitrary-precision decimal with no
 /// finite envelope. Being unbounded, computing `exp` (or any exp-family op) of a
 /// large golden input would produce an astronomically large number and never
 /// terminate, so `exp` is deliberately NOT declared — only the slow-growth `sqrt`
 /// and `cbrt` plus the five arithmetic ops are (it has no `ln` / `powf` / trig).
-/// sqrt/cbrt run at the crate's default `Context` (~100 significant digits,
-/// half-to-even), well above the 30 fractional places results are graded to. Being
-/// unbounded it never overflows: the only non-value outcome is `sqrt` of a negative
-/// (-> imaginary).
+/// add/sub/mul/rem are exact in bigdecimal; sqrt/cbrt/div round, and the crate's
+/// DEFAULT context is only 100 SIGNIFICANT digits (half-to-even) — which leaves
+/// FEWER than 30 fractional digits once a result's integer part is large (golden
+/// sqrt/cbrt/div outputs reach hundreds, and div up to 1233, integer digits). So
+/// those three are computed under an explicit high-precision context instead, giving
+/// bigdecimal (genuinely arbitrary-precision) a fair >= 30 fractional digits before
+/// the 30-place grade. Being unbounded it never overflows: the only non-value outcome
+/// is `sqrt` of a negative (-> imaginary).
 pub struct BigDecimalSubject;
 
 impl BigDecimalSubject {
@@ -283,8 +326,12 @@ impl BigDecimalSubject {
         Function::Sqrt, Function::Cbrt,
         Function::Add, Function::Sub, Function::Mul, Function::Div, Function::Rem,
     ];
-    /// Grading depth (fractional places) — well under the ~100-digit compute context.
+    /// Grading depth (fractional places).
     const PRECISION: u32 = 30;
+    /// Significant-digit context for the rounding ops (sqrt/cbrt/div): covers the
+    /// widest golden output (~1233 integer digits for div) plus the 30 graded
+    /// fractional places, with headroom, so >= 30 correct fractional digits exist.
+    const COMPUTE_PRECISION: u64 = 1320;
 }
 
 impl DecimalSubject for BigDecimalSubject {
@@ -328,18 +375,28 @@ impl DecimalSubject for BigDecimalSubject {
         _mode: RoundingMode,
         _overflow: Overflow,
     ) -> impl Fn(&[BigDecimal]) -> Computed<BigDecimal> {
+        // High-precision context for the rounding ops; add/sub/mul/rem stay exact.
+        let ctx = Context::new(
+            NonZeroU64::new(Self::COMPUTE_PRECISION).unwrap(),
+            bigdecimal::rounding::RoundingMode::HalfEven,
+        );
         move |inputs| {
             let x = &inputs[0];
             match func {
-                Function::Sqrt => match x.sqrt() {
+                Function::Sqrt => match x.sqrt_with_context(&ctx) {
                     Some(v) => Computed::Value(v),
                     None => Computed::NonReal(NonReal::Imaginary),
                 },
-                Function::Cbrt => Computed::Value(x.cbrt()),
+                Function::Cbrt => Computed::Value(x.cbrt_with_context(&ctx)),
                 Function::Add => Computed::Value(x + &inputs[1]),
                 Function::Sub => Computed::Value(x - &inputs[1]),
                 Function::Mul => Computed::Value(x * &inputs[1]),
-                Function::Div => Computed::Value(x / &inputs[1]),
+                // bigdecimal's `/` is pinned to the 100-digit default context; divide
+                // at high precision via the context-aware reciprocal instead.
+                Function::Div => {
+                    let inv = inputs[1].inverse_with_context(&ctx);
+                    Computed::Value(x * &inv)
+                }
                 Function::Rem => Computed::Value(x % &inputs[1]),
                 other => Computed::Error(format!("bigdecimal: unsupported {}", other.name())),
             }
@@ -358,9 +415,11 @@ use dashu_float::DBig;
 /// unbounded, `exp` / `powf` of a large golden input would grow without bound and
 /// never terminate, so those exp-family ops are deliberately NOT declared — only the
 /// slow-growth `ln` plus arithmetic are (it has no `sqrt` / `cbrt` / trig). Inputs
-/// are lifted to a 34-significant-digit working precision so `ln` computes to that
-/// depth; results are graded to 30 fractional places. Unbounded, so the envelope is
-/// open; `Display` can emit scientific form, expanded for the grader.
+/// are lifted to a high (1280-significant-digit) working precision so `ln` and every
+/// rounded arithmetic op compute well past the 30-fractional-place grade depth at the
+/// golden set's largest magnitudes; results are graded to 30 fractional places.
+/// Unbounded, so the envelope is open; `Display` is plain decimal (the
+/// `expand_scientific` wrap is a harmless no-op here).
 pub struct DashuFloat;
 
 impl DashuFloat {
@@ -369,7 +428,12 @@ impl DashuFloat {
         Function::Add, Function::Sub, Function::Mul, Function::Div, Function::Rem,
     ];
     /// Significant-digit precision every operation is lifted to before computing.
-    const WORKING_PRECISION: usize = 34;
+    /// dashu rounds each binary op to `Context::max(lhs, rhs)` significant digits, so
+    /// this must cover the widest result: golden `div`/`add`/`sub` operands reach ~925
+    /// integer digits, so 1280 sig digits leaves ample fractional headroom past the
+    /// 30-place grade depth (a 34-digit working precision silently truncated every
+    /// large-magnitude result to garbage — a false `MisRounded`, not a real one).
+    const WORKING_PRECISION: usize = 1280;
     /// Grading depth (fractional places) — well under the working precision.
     const PRECISION: u32 = 30;
 }
@@ -420,6 +484,10 @@ impl DecimalSubject for DashuFloat {
         move |inputs| {
             let x = inputs[0].clone();
             match func {
+                // dashu has no -inf/NaN sentinel; ln of a non-positive would panic.
+                // No golden case feeds one today — this guards for parity with the
+                // rust_decimal / decimal-rs adapters' NonReal mapping.
+                Function::Ln if x <= DBig::ZERO => Computed::NonReal(NonReal::NegativeInfinity),
                 Function::Ln => Computed::Value(x.ln()),
                 Function::Add => Computed::Value(x + inputs[1].clone()),
                 Function::Sub => Computed::Value(x - inputs[1].clone()),
@@ -457,6 +525,8 @@ impl FastNum {
     ];
     /// Grading depth (fractional places) — well under D512's ~154-digit reach.
     const PRECISION: u32 = 50;
+    /// D512's significant-digit reach (512-bit coefficient ≈ 154 decimal digits).
+    const SIG_DIGITS: u32 = 154;
 }
 
 /// Map a fastnum result to a `Computed`: NaN -> `NaN`, ±infinity -> the signed
@@ -485,9 +555,13 @@ impl DecimalSubject for FastNum {
     fn capabilities(&self) -> Capabilities {
         let mut functions = BTreeMap::new();
         for &f in Self::FUNCS {
+            // fastnum's default context traps exceptional conditions, so overflow /
+            // division-by-zero PANIC under a normal (debug) `cargo test` rather than
+            // yielding ±infinity; `Panic` is the faithful policy. Dormant on the
+            // golden set anyway (open envelope -> never out of range).
             functions.insert(
                 f,
-                FnSupport { mode: RoundingMode::HalfAwayFromZero, overflow: Overflow::Infinity },
+                FnSupport { mode: RoundingMode::HalfAwayFromZero, overflow: Overflow::Panic },
             );
         }
         Capabilities {
@@ -506,8 +580,14 @@ impl DecimalSubject for FastNum {
         expand_scientific(&v.reduce().to_string())
     }
 
-    fn limits(&self, _value: &str) -> Limits {
-        Limits { min_value: None, max_value: None, max_precision: Self::PRECISION }
+    fn limits(&self, value: &str) -> Limits {
+        // D512 is fixed-significant (~154 digits): once the integer part grows, the
+        // representable fractional depth shrinks to `154 − int_digits`. Grade to the
+        // smaller of the 50-place cap and that depth, so large-magnitude results
+        // (e.g. sqrt of a ~600-digit input) aren't scored against fractional digits
+        // D512 cannot hold. Envelope stays open (D512's magnitude range dwarfs the set).
+        let max_precision = Self::PRECISION.min(Self::SIG_DIGITS.saturating_sub(int_digits(value)));
+        Limits { min_value: None, max_value: None, max_precision }
     }
 
     fn execute(
@@ -551,8 +631,10 @@ use decimal_rs::Decimal as DecimalRs;
 /// significant digits) that signals out-of-range by returning `None` from its
 /// `checked_*` / `sqrt` / `ln` / `exp` methods (-> `Absent`). It provides sqrt, ln,
 /// exp and `checked_pow` plus the five checked arithmetic ops — no cbrt, no trig.
-/// Its envelope is `(10^38 - 1)·10^126`; results grade to 34 fractional places (just
-/// under its 38-digit reach). Default rounding is half-up (half-away-from-zero).
+/// Its envelope is `(10^38 - 1)·10^126`. Because it is fixed-significant (38 digits)
+/// with a floating point, the fractional depth it can represent is value-dependent
+/// (`38 − int_digits`), so results grade to that depth rather than a flat value.
+/// Default rounding is half-up (half-away-from-zero).
 pub struct DecimalRsSubject;
 
 impl DecimalRsSubject {
@@ -560,8 +642,8 @@ impl DecimalRsSubject {
         Function::Sqrt, Function::Ln, Function::Exp, Function::Powf,
         Function::Add, Function::Sub, Function::Mul, Function::Div, Function::Rem,
     ];
-    /// Grading depth (fractional places) — just under decimal-rs's 38-digit reach.
-    const PRECISION: u32 = 34;
+    /// decimal-rs's significant-digit reach (`MAX_PRECISION = 38`).
+    const SIG_DIGITS: u32 = 38;
 }
 
 impl DecimalSubject for DecimalRsSubject {
@@ -595,14 +677,18 @@ impl DecimalSubject for DecimalRsSubject {
         expand_scientific(&v.normalize().to_string())
     }
 
-    fn limits(&self, _value: &str) -> Limits {
-        // int_val has <= 38 digits and scale reaches -126, so the largest magnitude
-        // is (10^38 - 1)·10^126 — 38 nines followed by 126 zeros.
+    fn limits(&self, value: &str) -> Limits {
+        // Magnitude envelope: int_val has <= 38 digits and scale reaches -126, so the
+        // largest magnitude is (10^38 - 1)·10^126 — 38 nines followed by 126 zeros.
         let max = format!("{}{}", "9".repeat(38), "0".repeat(126));
+        // Fixed-significant + floating point: the representable fractional depth
+        // shrinks as the integer part grows, so grade to 38 − int_digits (a flat 34
+        // over-claimed for large-magnitude sqrt/exp/powf/div, scoring false MisRounded).
+        let max_precision = Self::SIG_DIGITS.saturating_sub(int_digits(value));
         Limits {
             min_value: Some(format!("-{max}")),
             max_value: Some(max),
-            max_precision: Self::PRECISION,
+            max_precision,
         }
     }
 
@@ -688,9 +774,16 @@ impl DecimalSubject for GMath {
     fn capabilities(&self) -> Capabilities {
         let mut functions = BTreeMap::new();
         for &f in Self::FUNCS {
+            // The FASC canonical pipeline rounds half-away-from-zero on the decimal
+            // compute path (and to-nearest on the 2^-128 grid for bare-integer
+            // inputs), both accurate well past the 30-digit grade depth. The grader
+            // re-rounds g_math's deeper output to that depth under this declared
+            // mode, so half-away-from-zero is the faithful declaration. An
+            // out-of-range result fails evaluation -> panic, caught as
+            // `Computed::Panic` (the declared overflow signal).
             functions.insert(
                 f,
-                FnSupport { mode: RoundingMode::HalfToEven, overflow: Overflow::Panic },
+                FnSupport { mode: RoundingMode::HalfAwayFromZero, overflow: Overflow::Panic },
             );
         }
         Capabilities {
