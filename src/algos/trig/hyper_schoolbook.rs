@@ -203,6 +203,19 @@ fn tanh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 
         return 0;
     }
     let w = SCALE + STRICT_GUARD;
+    // Large |x|: saturate BEFORE forming e^|x| (which overflows the 256-bit
+    // `Fixed`). tanh(|x|) = 1 − 2·e^(−2|x|) is all-nines at working scale `w`
+    // once |x| ≳ ln(10)/2·w ≈ 1.1513·w; return 1 − 10^−w with the input's sign.
+    // tanh is BOUNDED in (−1, 1) so this can never overflow the tier. Mirrors
+    // the routed `tanh_with_raw` / wide `exp_generic::tanh_pos`, bit-for-bit.
+    let thr_x = (w as i128) * 1152 / 1000 + 2;
+    if raw.abs() / 10_i128.pow(SCALE) > thr_x {
+        let sat = one_fixed(w).sub(Fixed::from_u128_mag(1, false));
+        let sat = if raw < 0 { sat.neg() } else { sat };
+        return sat.round_to_i128_with(w, SCALE, mode).unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("tanh", SCALE)
+        });
+    }
     let v = to_fixed(raw);
     let neg = raw < 0;
     let av = Fixed { negative: false, mag: v.mag };
@@ -402,6 +415,30 @@ mod tests {
                     tanh_schoolbook_narrow::<S38>(d38(raw).0, mode),
                     d38(raw).tanh_strict_with(mode).0,
                     "tanh schoolbook != routed at raw={raw} mode={mode:?}"
+                );
+            }
+        }
+    }
+
+    // Large |x| (well past the saturation onset |x| ≳ 1.1513·w): tanh is
+    // BOUNDED in (−1, 1), so these must SATURATE to ±1 (or ±(1−ulp) under the
+    // directed modes), never panic by forming e^|x|. Schoolbook and routed
+    // must still agree bit-for-bit. Dedicated array (not the shared
+    // HYP_INPUTS) because sinh/cosh genuinely overflow the tier at this scale.
+    #[test]
+    fn tanh_schoolbook_narrow_saturates_large_x_matches_routed() {
+        const LARGE: [i128; 4] = [
+            100_000_000_000_000,    // x = 100
+            5_000_000_000_000_000,  // x = 5000
+            -100_000_000_000_000,   // x = -100
+            -5_000_000_000_000_000, // x = -5000
+        ];
+        for &raw in &LARGE {
+            for &mode in &MODES {
+                assert_eq!(
+                    tanh_schoolbook_narrow::<S38>(d38(raw).0, mode),
+                    d38(raw).tanh_strict_with(mode).0,
+                    "tanh saturation schoolbook != routed at raw={raw} mode={mode:?}"
                 );
             }
         }
