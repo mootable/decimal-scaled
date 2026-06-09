@@ -3324,19 +3324,17 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn exp2_strict(self) -> Self {
-                let raw = self.to_bits();
-                if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    return Self::ONE;
-                }
-                let w = SCALE + $core::GUARD;
-                // Two-core: composition runs on the wide `Wagm` work int.
-                let arg = $core::mul_agm(
-                    $core::to_work_agm(raw),
-                    $core::ln2_cf_agm::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
-                    w,
-                );
-                let r = $core::exp_fixed_routed_agm::<SCALE>(arg, w);
-                Self::from_bits($core::round_to_storage_agm(r, w, SCALE))
+                // Delegate to the mode-aware kernel at the default rounding mode
+                // so the no-mode path shares BOTH the exact-power pin and the
+                // Wexp-correct argument formation. The former inline `Wagm`
+                // composition lacked both: it skipped `exp2_exact_pin` (~3 ULP
+                // on exact powers like 2^97) and formed `x·ln2` in `Wagm`, which
+                // wraps an out-of-range result instead of panicking (the
+                // documented exp2_strict_with vs exp2_strict divergence).
+                Self::from_bits($core::exp2_strict_with_kernel::<SCALE>(
+                    self.to_bits(),
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                ))
             }
 
             /// `self` raised to the power `exp`, as `exp(exp · ln self)`.

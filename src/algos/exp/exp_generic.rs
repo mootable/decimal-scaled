@@ -594,16 +594,25 @@ use crate::support::rounding::RoundingMode;
         S::Scratch: ComputeLimbs,
     {
         let one_w = one::<S>(w);
-        // Large |x|: tanh(|x|) = 1 − 2·e^(−2|x|), which to scale w is all-nines
-        // once 2·e^(−2|x|) < 10^−w, i.e. |x| ≳ ln(10)/2·w ≈ 1.1513·w. Computing
-        // e^|x| there would overflow the work integer's internal range reduction,
-        // so return the largest working value below 1 (1 − 10^−w); the caller
-        // rounds it to 1 under nearest/up and to 1−ulp under Floor/Trunc.
+        // Past the all-nines saturation onset |x| ≳ ln(10)/2·w ≈ 1.1513·w,
+        // tanh(|x|) rounds to 1 − 10^−w; return that directly.
         let thr_x = (w as i128) * 1152 / 1000 + 2;
+        let saturated = one_w - lit::<S>(1);
         if av_w / one_w > lit::<S>(thr_x) {
-            return one_w - lit::<S>(1);
+            return saturated;
         }
-        let ex = exp_fixed::<S>(av_w, w);
-        let enx = div(one_w, ex, w);
-        div(ex - enx, ex + enx, w)
+        // Below `thr_x` use the negative-exponent identity tanh(|x|) =
+        // (1 − m)/(1 + m), m = e^(−2|x|). Forming the dominant e^(+|x|) directly
+        // overflows the work integer `S` once |x| ≳ (S::BITS·ln2 − w·ln10)/ln10,
+        // which at high scale on a deep tier (w ≳ 0.67·S digits, e.g. D1232<924>)
+        // is BELOW `thr_x` — a panic GAP. `m` is tiny and is formed by `exp_fixed`
+        // on the NEGATIVE argument −2|x| (its 2^k reassembly shifts DOWN, never
+        // the overflowing up-shift), so e^(+|x|) is never formed; the identity is
+        // the exact tanh. Mirrors `trig_series_2limb::tanh_with_raw` (the narrow
+        // path). `m == 0` (deep saturation just under `thr_x`) → `saturated`.
+        let m = exp_fixed::<S>(-(av_w + av_w), w);
+        if m == lit::<S>(0) {
+            return saturated;
+        }
+        div(one_w - m, one_w + m, w)
     }
