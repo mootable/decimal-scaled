@@ -115,7 +115,7 @@ mod tests {
             format!("{v:.4}")
         }
         fn limits(&self, _value: &str) -> Limits {
-            Limits { min_value: None, max_value: None, max_precision: 4 }
+            Limits { min_value: None, max_value: None, max_precision: 4, max_significant_digits: None }
         }
         fn execute(
             &self,

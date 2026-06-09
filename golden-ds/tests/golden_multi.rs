@@ -50,7 +50,7 @@ impl CaseLoader for CachingLoader {
     }
     fn oracle_limits(&self) -> Limits {
         // Verifiable depth = generation precision minus the rounding-guard digits.
-        Limits { min_value: None, max_value: None, max_precision: (GEN_PRECISION - GUARD) as u32 }
+        Limits { min_value: None, max_value: None, max_precision: (GEN_PRECISION - GUARD) as u32, max_significant_digits: None }
     }
 }
 

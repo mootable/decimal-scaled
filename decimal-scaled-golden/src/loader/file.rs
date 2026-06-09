@@ -34,6 +34,7 @@ impl FileLoader {
                 min_value: None,
                 max_value: None,
                 max_precision: gen_precision.saturating_sub(guard),
+                max_significant_digits: None,
             },
         }
     }

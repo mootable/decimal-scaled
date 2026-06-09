@@ -128,6 +128,8 @@ impl DecimalSubject for RustDecimal {
             min_value: Some(Decimal::MIN.to_string()),
             max_value: Some(Decimal::MAX.to_string()),
             max_precision,
+            // ~28-figure coefficient: a wider input can't be ingested exactly -> skip.
+            max_significant_digits: Some(Self::SIG_DIGITS),
         }
     }
 
@@ -253,6 +255,8 @@ impl DecimalSubject for F64 {
             min_value: Some(format!("{}", f64::MIN)),
             max_value: Some(format!("{}", f64::MAX)),
             max_precision,
+            // ~16 reliable figures: a longer literal isn't f64-representable -> skip.
+            max_significant_digits: Some(Self::SIG_DIGITS),
         }
     }
 
@@ -366,7 +370,8 @@ impl DecimalSubject for BigDecimalSubject {
     }
 
     fn limits(&self, _value: &str) -> Limits {
-        Limits { min_value: None, max_value: None, max_precision: Self::PRECISION }
+        // Arbitrary precision: no figure cap (it ingests any-length literal exactly).
+        Limits { min_value: None, max_value: None, max_precision: Self::PRECISION, max_significant_digits: None }
     }
 
     fn execute(
@@ -472,7 +477,8 @@ impl DecimalSubject for DashuFloat {
     }
 
     fn limits(&self, _value: &str) -> Limits {
-        Limits { min_value: None, max_value: None, max_precision: Self::PRECISION }
+        // Arbitrary precision: no figure cap (it ingests any-length literal exactly).
+        Limits { min_value: None, max_value: None, max_precision: Self::PRECISION, max_significant_digits: None }
     }
 
     fn execute(
@@ -587,7 +593,8 @@ impl DecimalSubject for FastNum {
         // (e.g. sqrt of a ~600-digit input) aren't scored against fractional digits
         // D512 cannot hold. Envelope stays open (D512's magnitude range dwarfs the set).
         let max_precision = Self::PRECISION.min(Self::SIG_DIGITS.saturating_sub(int_digits(value)));
-        Limits { min_value: None, max_value: None, max_precision }
+        // ~154-figure D512 coefficient: a longer literal can't be ingested -> skip.
+        Limits { min_value: None, max_value: None, max_precision, max_significant_digits: Some(Self::SIG_DIGITS) }
     }
 
     fn execute(
@@ -689,6 +696,8 @@ impl DecimalSubject for DecimalRsSubject {
             min_value: Some(format!("-{max}")),
             max_value: Some(max),
             max_precision,
+            // 38-figure coefficient: a longer literal can't be ingested exactly -> skip.
+            max_significant_digits: Some(Self::SIG_DIGITS),
         }
     }
 
@@ -814,6 +823,8 @@ impl DecimalSubject for GMath {
             min_value: Some(format!("-{bound}")),
             max_value: Some(bound.into()),
             max_precision: Self::PRECISION,
+            // Q128.128 magnitude bound already excludes the wide inputs; no figure cap.
+            max_significant_digits: None,
         }
     }
 

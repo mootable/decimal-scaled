@@ -11,4 +11,13 @@ pub struct Limits {
     pub max_value: Option<String>,
     /// Native fractional depth (places after the point).
     pub max_precision: u32,
+    /// Maximum coefficient figures the subject can hold *exactly* — the count of
+    /// significant figures spanning its stored mantissa (e.g. a fixed-significant
+    /// decimal like fastnum D512 ≈ 154, decimal-rs 38). An input whose figure span
+    /// exceeds this is not exactly representable (its literal cannot be ingested
+    /// without rounding), so the runner skips it — the same exact-input rule the
+    /// fractional `max_precision` enforces, extended to total figures. `None` =
+    /// unbounded (arbitrary-precision subjects, and fixed-scale subjects whose
+    /// magnitude envelope already bounds what reaches them).
+    pub max_significant_digits: Option<u32>,
 }

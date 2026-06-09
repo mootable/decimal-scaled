@@ -73,6 +73,9 @@ fn run_cell<S: DecimalSubject, E: ExecutionStrategy>(
 fn input_representable<S: DecimalSubject>(subject: &S, input: &str) -> bool {
     let lim = subject.limits(input);
     significant_frac_digits(input) <= lim.max_precision as usize
+        && lim
+            .max_significant_digits
+            .is_none_or(|cap| significant_digit_span(input) <= cap as usize)
         && within(input, lim.min_value.as_deref(), lim.max_value.as_deref())
 }
 
@@ -80,6 +83,18 @@ fn input_representable<S: DecimalSubject>(subject: &S, input: &str) -> bool {
 /// the depth at which the value is exactly representable. `1.00` → 0, `1.50` → 1.
 fn significant_frac_digits(s: &str) -> usize {
     s.split_once('.').map(|(_, f)| f.trim_end_matches('0').len()).unwrap_or(0)
+}
+
+/// Count of significant figures spanning the value's stored mantissa: integer and
+/// fraction digits concatenated (the point is positional), leading zeros dropped.
+/// `"1000"` → 4, `"0.00123"` → 3, `"12.30"` → 4, `"0"` → 0. This is the figure
+/// count a fixed-significant subject's coefficient must hold to ingest the literal
+/// exactly — the total-figure analogue of `significant_frac_digits`.
+fn significant_digit_span(s: &str) -> usize {
+    s.bytes()
+        .filter(u8::is_ascii_digit)
+        .skip_while(|b| *b == b'0')
+        .count()
 }
 
 #[cfg(test)]
@@ -113,7 +128,7 @@ mod tests {
             format!("{v:.4}")
         }
         fn limits(&self, _value: &str) -> Limits {
-            Limits { min_value: None, max_value: None, max_precision: 4 }
+            Limits { min_value: None, max_value: None, max_precision: 4, max_significant_digits: None }
         }
         fn execute(&self, _f: Function, _m: RoundingMode, _o: Overflow) -> impl Fn(&[f64]) -> Computed<f64> {
             |inputs| Computed::Value(inputs[0].sqrt())
@@ -126,7 +141,7 @@ mod tests {
             Cow::Owned(vec![GoldenCase { inputs: vec!["2".into()], output_raw: "1.4142135".into(), line: 0 }])
         }
         fn oracle_limits(&self) -> Limits {
-            Limits { min_value: None, max_value: None, max_precision: 1231 }
+            Limits { min_value: None, max_value: None, max_precision: 1231, max_significant_digits: None }
         }
     }
 
@@ -153,7 +168,7 @@ mod tests {
                 Cow::Owned(vec![GoldenCase { inputs: vec!["1.234567".into()], output_raw: "1.1111".into(), line: 0 }])
             }
             fn oracle_limits(&self) -> Limits {
-                Limits { min_value: None, max_value: None, max_precision: 1231 }
+                Limits { min_value: None, max_value: None, max_precision: 1231, max_significant_digits: None }
             }
         }
         let runner = SeriesRunner {
@@ -181,7 +196,7 @@ mod tests {
                 )
             }
             fn oracle_limits(&self) -> Limits {
-                Limits { min_value: None, max_value: None, max_precision: 1231 }
+                Limits { min_value: None, max_value: None, max_precision: 1231, max_significant_digits: None }
             }
         }
         let par = ParallelRunner {
@@ -203,5 +218,51 @@ mod tests {
             assert_eq!(p.value(), s.value());
             assert_eq!(p.validations, s.validations);
         }
+    }
+
+    #[test]
+    fn figure_span_counts_stored_coefficient_digits() {
+        // Trailing zeros count (they are stored figures the coefficient must hold);
+        // leading zeros and the point do not.
+        assert_eq!(significant_digit_span("1000"), 4);
+        assert_eq!(significant_digit_span("0.00123"), 3);
+        assert_eq!(significant_digit_span("12.30"), 4);
+        assert_eq!(significant_digit_span("-0.5"), 1);
+        assert_eq!(significant_digit_span("0"), 0);
+        // A 1232-digit wide-tier integer exceeds any fixed-significant cap.
+        assert_eq!(significant_digit_span(&format!("1{}", "0".repeat(1231))), 1232);
+    }
+
+    #[test]
+    fn too_many_figures_input_skipped() {
+        // A subject with a 4-figure coefficient cap skips a 5-figure input even when
+        // its fractional depth and magnitude would otherwise admit it.
+        struct Capped4;
+        impl DecimalSubject for Capped4 {
+            type Value = f64;
+            fn capabilities(&self) -> Capabilities {
+                let mut functions = BTreeMap::new();
+                functions.insert(
+                    Function::Sqrt,
+                    FnSupport { mode: RoundingMode::HalfToEven, overflow: Overflow::Panic },
+                );
+                Capabilities { name: "capped4".into(), radix: Radix::Decimal, config: BTreeMap::new(), functions }
+            }
+            fn string_to_value(&self, s: &str) -> f64 {
+                s.parse::<f64>().expect("parse f64")
+            }
+            fn value_to_string(&self, v: &f64) -> String {
+                format!("{v:.4}")
+            }
+            fn limits(&self, _value: &str) -> Limits {
+                Limits { min_value: None, max_value: None, max_precision: 4, max_significant_digits: Some(4) }
+            }
+            fn execute(&self, _f: Function, _m: RoundingMode, _o: Overflow) -> impl Fn(&[f64]) -> Computed<f64> {
+                |inputs| Computed::Value(inputs[0].sqrt())
+            }
+        }
+        assert!(input_representable(&Capped4, "1234"));     // 4 figures — fits
+        assert!(!input_representable(&Capped4, "12345"));   // 5 figures — skipped
+        assert!(!input_representable(&Capped4, "10000"));   // trailing zeros count
     }
 }

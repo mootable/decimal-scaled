@@ -173,6 +173,9 @@ where
             min_value: Some(<D as DecimalArithmetic>::MIN.to_string()),
             max_value: Some(<D as DecimalArithmetic>::MAX.to_string()),
             max_precision: self.scale,
+            // Fixed-scale: the magnitude envelope + fractional depth already bound
+            // exactly what it can hold, so no separate figure cap is needed.
+            max_significant_digits: None,
         }
     }
 

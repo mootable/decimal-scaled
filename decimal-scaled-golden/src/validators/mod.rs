@@ -56,8 +56,8 @@ mod tests {
     #[test]
     fn rounding_passes_correct() {
         let g = GoldenValue::parse("1.4142135").unwrap();
-        let lim = Limits { min_value: None, max_value: None, max_precision: 4 };
-        let oracle = Limits { min_value: None, max_value: None, max_precision: GP as u32 };
+        let lim = Limits { min_value: None, max_value: None, max_precision: 4, max_significant_digits: None };
+        let oracle = Limits { min_value: None, max_value: None, max_precision: GP as u32, max_significant_digits: None };
         let c = caps(RoundingMode::HalfToEven, Overflow::Panic);
         let r = value("1.4142");
         let cx = ctx(&r, &g, &lim, &oracle, &c);
@@ -67,8 +67,8 @@ mod tests {
     #[test]
     fn overflow_panic_expected_when_out_of_range() {
         let g = GoldenValue::parse("9").unwrap();
-        let lim = Limits { min_value: Some("-5".into()), max_value: Some("5".into()), max_precision: 0 };
-        let oracle = Limits { min_value: None, max_value: None, max_precision: GP as u32 };
+        let lim = Limits { min_value: Some("-5".into()), max_value: Some("5".into()), max_precision: 0, max_significant_digits: None };
+        let oracle = Limits { min_value: None, max_value: None, max_precision: GP as u32, max_significant_digits: None };
         let c = caps(RoundingMode::HalfToEven, Overflow::Panic);
         let r = ExecutionResult::Computed(Computed::Panic("overflow".into()));
         let cx = ctx(&r, &g, &lim, &oracle, &c);
@@ -78,8 +78,8 @@ mod tests {
     #[test]
     fn overflow_in_range_panic_is_bug() {
         let g = GoldenValue::parse("3").unwrap();
-        let lim = Limits { min_value: Some("-5".into()), max_value: Some("5".into()), max_precision: 0 };
-        let oracle = Limits { min_value: None, max_value: None, max_precision: GP as u32 };
+        let lim = Limits { min_value: Some("-5".into()), max_value: Some("5".into()), max_precision: 0, max_significant_digits: None };
+        let oracle = Limits { min_value: None, max_value: None, max_precision: GP as u32, max_significant_digits: None };
         let c = caps(RoundingMode::HalfToEven, Overflow::Panic);
         let r = ExecutionResult::Computed(Computed::Panic("oops".into()));
         let cx = ctx(&r, &g, &lim, &oracle, &c);
