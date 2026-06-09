@@ -828,11 +828,17 @@ macro_rules! decl_wide_transcendental {
                 mode: $crate::support::rounding::RoundingMode,
             ) -> $Storage {
                 let num = lit(5).pow(scale);
-                // When `2^p` overflows the working width it strictly exceeds
-                // `2·num` (since `num < 2^BITS` and `p ≥ BITS`), so `q = 0`
-                // and the residual `num` sits strictly below half — a
-                // sub-resolution positive value (only `Ceiling` rounds up).
-                if p >= <W as $crate::int::types::traits::BigInt>::BITS {
+                // When `2^p` does not fit the SIGNED working width it strictly
+                // exceeds `2·num` (since `num < 2^(BITS-1)` and `p ≥ BITS-1`),
+                // so `q = 0` and the residual `num` sits strictly below half —
+                // a sub-resolution positive value (only `Ceiling` rounds up).
+                // The bound is `BITS-1`, not `BITS`: `lit(1) << (BITS-1)` sets
+                // the SIGN bit, so `denom` would be NEGATIVE and the `2·r` vs
+                // `denom` tie comparison would read `Greater` (positive > neg)
+                // — misrounding the sub-half residual UP under nearest. (The
+                // golden `exp2(-1053)@D57<30>` / `exp2(-2097)@D115<50>` land
+                // exactly on `p = BITS-1` for their work integer.)
+                if p >= <W as $crate::int::types::traits::BigInt>::BITS - 1 {
                     let bump = $crate::support::rounding::should_bump(
                         mode,
                         ::core::cmp::Ordering::Less,
@@ -4184,30 +4190,45 @@ macro_rules! decl_wide_transcendental {
                 // Two-core: composition runs on the wide `Wagm` work int.
                 let k_lift = $core::exp_result_int_digits::<$core::Wagm>($core::to_work_scaled_agm(raw, 0), SCALE);
                 let base_guard = $core::GUARD + k_lift;
-                let r = $core::round_to_storage_directed::<$core::Wagm>(
+                // Two-width near-min widening (the `Wagm` composition int, then
+                // the wider `Wexp`). `cosh(x) = 1 + x²/2 + x⁴/24 + …` is
+                // transcendental and > 1 for x ≠ 0, but its half-ULP / grid-line
+                // residual is decided by the `x⁴/24` term at digit ≈ `2·SCALE`,
+                // beyond the tier work integer's reach at mid/high scales. The
+                // widening resolves it (a clear positive residual → Ceiling
+                // rounds up, nearest rounds up) when it lies within the precision
+                // horizon, and leaves it an EXACT tie (no sub-resolution bump)
+                // beyond — matching the finite-precision golden oracle, which
+                // also cannot see a digit that deep. (This replaces the old
+                // `Ceiling && r == ONE` nudge, which over-rounded the deep ties.)
+                let r = $crate::algos::support::wide_trig_core::round_to_storage_widening_g::<
+                    $Storage, $core::Wagm, $core::Wexp,
+                >(
                     base_guard,
                     SCALE,
                     mode,
+                    false,
+                    <$Storage>::MAX,
+                    <$Storage>::MIN,
                     |guard| {
                         let w = SCALE + guard;
                         let v = $core::to_work_scaled_agm(raw, guard);
                         let av = if v < $core::zero_agm() { -v } else { v };
                         $core::cosh_pos_wide_agm(av, w)
                     },
+                    |guard| {
+                        let w = SCALE + guard;
+                        let v = $crate::algos::support::wide_trig_core::to_work_scaled_g::<
+                            $Storage, $core::Wexp,
+                        >(raw, guard);
+                        let av = if v < <$core::Wexp as $crate::int::types::traits::BigInt>::ZERO {
+                            -v
+                        } else {
+                            v
+                        };
+                        $crate::algos::exp::exp_generic::cosh_pos::<$core::Wexp>(av, w)
+                    },
                 );
-                // cosh(x) > 1 strictly for x ≠ 0 and is transcendental, so it
-                // never lands exactly on the 1.0 grid line; for a tiny |x| the
-                // x²/2 excess sits below the working scale and Ceiling
-                // under-rounds to exactly 10^SCALE. cosh(0) = 1 is exact and
-                // excluded by raw != 0; other modes keep the floor.
-                let r = if mode == $crate::support::rounding::RoundingMode::Ceiling
-                    && raw != <$Storage as $crate::int::types::traits::BigInt>::ZERO
-                    && r == Self::ONE.to_bits()
-                {
-                    r + <$Storage as $crate::int::types::traits::BigInt>::ONE
-                } else {
-                    r
-                };
                 Self::from_bits(r)
             }
 

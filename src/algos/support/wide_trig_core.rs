@@ -292,19 +292,41 @@ pub(crate) trait WideTrigCore {
 pub(crate) fn exp_series<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> C::Storage
+where
+    <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+    <C::Wexp as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
     if raw == C::storage_zero() {
         return C::storage_one(SCALE);
     }
     // `exp(x)` for `x != 0` is transcendental (Lindemann–Weierstrass), so its
     // true value is never exactly on a storage grid line — a zero working
-    // residual is a sub-resolution artifact, not a true zero. Use the
-    // never-exact narrowing so Ceiling rounds up (and Floor stays) on inputs
-    // whose deciding residual sits below the work-int resolution (`exp(-10^-S)`
-    // just under `1.0`). `raw == 0` (the one exact case) is pinned above.
-    C::round_to_storage_directed_never_exact(C::GUARD, SCALE, mode, &mut |guard| {
-        C::exp_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard)
-    })
+    // residual is a sub-resolution artifact, not a true zero. The `never_exact`
+    // rule makes Ceiling round up (Floor stays) on inputs whose deciding
+    // residual sits below the work-int resolution (`exp(-10^-S)` just under
+    // `1.0`). `raw == 0` (the one exact case) is pinned above.
+    //
+    // Two-width near-min widening: near `x ≈ 0` the half-ULP tie of
+    // `exp(±10^-k)` is decided by the `x³/6` term at digit ≈ `1.5·SCALE`, beyond
+    // the tier work integer's escalation reach at mid/high scales; retry at
+    // `C::Wexp` when the deciding digit is unreachable in `C::W`. Deep ties past
+    // the precision horizon stay exact ties.
+    round_to_storage_widening_g::<C::Storage, C::W, C::Wexp>(
+        C::GUARD,
+        SCALE,
+        mode,
+        true,
+        C::storage_max(),
+        C::storage_min(),
+        |guard| C::exp_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard),
+        |guard| {
+            crate::algos::exp::exp_generic::exp_fixed::<C::Wexp>(
+                to_work_scaled_g::<C::Storage, C::Wexp>(raw, guard),
+                SCALE + guard,
+            )
+        },
+    )
 }
 
 /// `ln_strict` for a wide tier — generic over the tier `C`. Panics if
@@ -602,6 +624,188 @@ where
     BigInt::resize_to::<St>(rounded)
 }
 
+/// Absolute floor (`10^4` work-integer units) separating a genuine deciding-
+/// digit SIGNAL from the kernel's own working-scale rounding NOISE. The strict
+/// kernels compute to a few-ULP working accuracy (≈10²–10³ work units of
+/// error); a residual-to-boundary distance above this is a real deciding digit,
+/// below it is noise. Once a deciding term is representable its signal grows
+/// 10× per extra working digit, so it clears the floor within a handful of
+/// digits. Using an ABSOLUTE floor (not the old `divisor/1000`, which scales
+/// with the working scale and so never fired for a near-min input) is what lets
+/// the loop tell "resolved" from "spinning on kernel noise" — and so return the
+/// clean exact-tie base narrowing instead of a noise-driven deep misround.
+const ZIV_RESOLVE_FLOOR_POW10: u32 = 4;
+
+/// The crate's correctly-rounded precision HORIZON, in working-scale digits. A
+/// near-tie whose deciding term lies beyond this is unverifiable (the widest
+/// shipped tier, D1232 / `Int<64>` storage, carries ~1232 significant digits,
+/// and the mpmath golden oracle is generated to match), so it is treated as an
+/// EXACT tie rather than resolved. This keeps a deep near-min tie at the WIDEST
+/// tier (e.g. `cosh(1e-462)` / `exp(1e-462)` at D1232<924>, deciding digit past
+/// 1300) an exact tie instead of a kernel-noise-driven misround.
+const ZIV_PRECISION_HORIZON: u32 = 1264;
+
+/// Single-width near-min escalation for `cosh` / `exp`, returning
+/// `(value, resolved)`. A near-tie's deciding term (`cosh`'s `x⁴/24`,
+/// `exp`'s `x³/6`) is resolved the moment its residual-to-boundary distance
+/// clears the absolute kernel-noise floor; `resolved == false` means the cap
+/// (the work integer's capacity, never past the precision horizon) was reached
+/// with the residual still in the noise band — the returned value is the CLEAN
+/// base-guard narrowing (an exact-tie / never-exact base result), and a
+/// widening caller may retry at a wider integer.
+#[allow(clippy::too_many_arguments)]
+fn near_min_resolve_g<St: BigInt + Copy, S: BigInt>(
+    base_guard: u32,
+    target: u32,
+    mode: RoundingMode,
+    never_exact: bool,
+    st_max: St,
+    st_min: St,
+    mut recompute: impl FnMut(u32) -> S,
+) -> (St, bool)
+where
+    S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    use crate::support::rounding::{is_nearest_mode, RoundingMode};
+    let lit = |n: i128| <S as BigInt>::from_i128(n);
+    let pow10 = |n: u32| crate::consts::pow10::dispatch::<S>(n);
+    let bit_length = |v: S| -> u32 {
+        let m = if v < <S as BigInt>::ZERO { -v } else { v };
+        <S as BigInt>::BITS - m.leading_zeros()
+    };
+    let rtsw = |v: S, w: u32, t: u32, m: RoundingMode| -> St {
+        round_to_storage_with_g::<St, S>(v, w, t, m, st_max, st_min)
+    };
+    let floor = pow10(ZIV_RESOLVE_FLOOR_POW10);
+    let max_guard_for = |int_digits: u32| -> u32 {
+        let cap = (<S>::BITS / 8).saturating_sub(int_digits + 8);
+        cap.saturating_sub(target)
+            .min(ZIV_PRECISION_HORIZON.saturating_sub(target))
+            .max(base_guard)
+    };
+    let int_digits_of = |v: St| -> u32 {
+        let n = BigInt::resize_to::<S>(v);
+        let m = if n < lit(0) { -n } else { n };
+        ((bit_length(m) as u64 * 30103 / 100_000) as u32 + 1).saturating_sub(target)
+    };
+
+    if is_nearest_mode(mode) {
+        let mut narrow = |g: u32| -> (St, S) {
+            let w = target + g;
+            let v = recompute(g);
+            let narrowed = rtsw(v, w, target, mode);
+            let mag = if v < lit(0) { -v } else { v };
+            let divisor = pow10(g);
+            let rem = mag.div_rem(divisor).1;
+            let half = divisor / lit(2);
+            let dist_half = if rem < half { half - rem } else { rem - half };
+            (narrowed, dist_half)
+        };
+        let (lo, dist0) = narrow(base_guard);
+        if dist0 > pow10(base_guard) / lit(1000) {
+            return (lo, true); // not near a half-ULP tie (wide escalate band)
+        }
+        let max_guard = max_guard_for(int_digits_of(lo));
+        let mut guard = base_guard;
+        loop {
+            if guard >= max_guard {
+                return (lo, false); // exact tie within reach — clean base narrowing
+            }
+            let step = (target + base_guard).max(base_guard);
+            let next_guard = guard.saturating_add(step).min(max_guard);
+            let (hi, hi_dist) = narrow(next_guard);
+            if hi_dist > floor {
+                return (hi, true); // deciding digit resolved above the noise floor
+            }
+            guard = next_guard;
+        }
+    }
+
+    // directed
+    let mut dnarrow = |g: u32| -> (S, S) {
+        let w = target + g;
+        let v = recompute(g);
+        let neg = v < lit(0);
+        let mag = if neg { -v } else { v };
+        let divisor = pow10(w - target);
+        let (q, rem) = mag.div_rem(divisor);
+        let result_positive = !neg;
+        let residual_present = rem != lit(0) || never_exact;
+        let bump = residual_present
+            && match mode {
+                RoundingMode::Trunc => false,
+                RoundingMode::Floor => !result_positive,
+                RoundingMode::Ceiling => result_positive,
+                _ => unreachable!(),
+            };
+        let q_mag = if bump { q + lit(1) } else { q };
+        let signed = if neg { -q_mag } else { q_mag };
+        let dist = if rem < divisor - rem { rem } else { divisor - rem };
+        (signed, dist)
+    };
+    let range_check = |signed: S| -> St {
+        let max_w = BigInt::resize_to::<S>(st_max);
+        let min_w = BigInt::resize_to::<S>(st_min);
+        if signed > max_w || signed < min_w {
+            panic!("wide-tier strict transcendental: result out of range");
+        }
+        BigInt::resize_to::<St>(signed)
+    };
+    let (base, dist0) = dnarrow(base_guard);
+    if dist0 > pow10(base_guard) / lit(1000) {
+        return (range_check(base), true); // clear of a grid line (wide escalate band)
+    }
+    let max_guard = max_guard_for(int_digits_of(range_check(base)));
+    let mut guard = base_guard;
+    loop {
+        if guard >= max_guard {
+            // Unresolved at the cap: the deciding digit is beyond reach. Return
+            // the CLEAN base narrowing — for `cosh` (`never_exact == false`) the
+            // base residual is 0, so no sub-resolution bump (matching the finite
+            // oracle's exact treatment of a deep tie); for `exp`
+            // (`never_exact == true`) the base keeps its genuine sub-resolution
+            // sign bump. Either way it is noise-free, unlike the deepest narrowing.
+            return (range_check(base), false);
+        }
+        let step = (target + base_guard).max(base_guard);
+        let next_guard = guard.saturating_add(step).min(max_guard);
+        let (hi, hi_dist) = dnarrow(next_guard);
+        if hi_dist > floor {
+            return (range_check(hi), true);
+        }
+        guard = next_guard;
+    }
+}
+
+/// Two-width near-min narrowing for `cosh` / `exp`: resolve the near-tie at the
+/// tier work integer `S1`; if its deciding digit was unreachable there (and a
+/// wider integer would reach further, i.e. `S1` is below the precision
+/// horizon), retry at the next-wider `S2`. Deep ties past the horizon stay
+/// exact at both widths. `never_exact` mirrors the `exp` sub-resolution rule.
+#[inline]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn round_to_storage_widening_g<St: BigInt + Copy, S1: BigInt, S2: BigInt>(
+    base_guard: u32,
+    target: u32,
+    mode: RoundingMode,
+    never_exact: bool,
+    st_max: St,
+    st_min: St,
+    recompute1: impl FnMut(u32) -> S1,
+    recompute2: impl FnMut(u32) -> S2,
+) -> St
+where
+    S1::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+    S2::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    let (v1, resolved1) =
+        near_min_resolve_g::<St, S1>(base_guard, target, mode, never_exact, st_max, st_min, recompute1);
+    if resolved1 || (<S1>::BITS / 8) >= ZIV_PRECISION_HORIZON {
+        return v1;
+    }
+    near_min_resolve_g::<St, S2>(base_guard, target, mode, never_exact, st_max, st_min, recompute2).0
+}
+
 /// Work-int-generic directed-rounding narrowing with Ziv escalation. `St` =
 /// storage output, `S` = work integer (a rung `Wk` or the tier `W`).
 #[inline]
@@ -678,17 +882,17 @@ where
         round_to_storage_with_g::<St, S>(v, w, t, m, st_max, st_min)
     };
 
+    let floor = pow10(ZIV_RESOLVE_FLOOR_POW10);
     if is_nearest_mode(mode) {
-        // Round to nearest at a working scale `target + guard` AND report the
+        // Round to nearest at a working scale `target + guard`, reporting the
         // sub-storage residual's distance to the half-ULP boundary
-        // (`dist_half`) plus the band that counts as "clear of the boundary".
-        // A round-to-nearest decision is only trustworthy once `dist_half`
-        // exceeds the band; while it sits inside, the deciding digit is below
-        // the working scale and the narrowing can be a Table-Maker's-Dilemma
-        // misround (the true value's half-ULP side is decided by a series term
-        // the base working scale cannot resolve — e.g. `exp(1e-14)`'s `x³/6`,
-        // `cosh(1e-28)`'s `x⁴/24`, both just past an exact half).
-        let mut nearest_narrow = |guard: u32| -> (St, S, S) {
+        // (`dist_half`). A round-to-nearest decision is trustworthy only once
+        // `dist_half` exceeds the ABSOLUTE kernel-noise floor — a genuine
+        // deciding digit (`exp(1e-14)`'s `x³/6`, `cosh(1e-28)`'s `x⁴/24`, both
+        // just past an exact half). While `dist_half` sits inside the floor the
+        // residual is the kernel's own working-scale rounding noise, not a real
+        // deciding digit, so the narrowing is a Table-Maker's-Dilemma tie.
+        let mut nearest_narrow = |guard: u32| -> (St, S) {
             let w = target + guard;
             let v = recompute(guard);
             let narrowed = round_to_storage_with(v, w, target, mode);
@@ -697,16 +901,15 @@ where
             let rem = mag.div_rem(divisor).1;
             let half = divisor / lit(2);
             let dist_half = if rem < half { half - rem } else { rem - half };
-            let band = divisor / lit(1000);
-            (narrowed, dist_half, band)
+            (narrowed, dist_half)
         };
-        let (lo, dist0, band0) = nearest_narrow(base_guard);
-        // Escalate ONLY on a possible near-tie: the base residual sits within
-        // the half-ULP band, OR the caller forces a confirm (`acosh` / `atanh`
-        // near-special). Ordinary inputs — residual clear of the half boundary —
-        // keep the single base narrowing (bit-identical to the prior single-shot
-        // path), so the millions of non-tie cells pay only one extra `div_rem`.
-        if !(force_confirm || dist0 <= band0) {
+        let (lo, dist0) = nearest_narrow(base_guard);
+        // Ordinary input — residual clear of the half boundary by more than the
+        // (generous) `divisor/1000` near-tie band — keep the single base
+        // narrowing (bit-identical to the prior single-shot path). The escalate
+        // trigger stays the wide band; the absolute `floor` below is only the
+        // STOP test (signal vs noise), not the escalate trigger.
+        if !force_confirm && dist0 > pow10(base_guard) / lit(1000) {
             return lo;
         }
         let int_digits = {
@@ -717,31 +920,37 @@ where
             storage_digits.saturating_sub(target)
         };
         let cap_digits = (<S>::BITS / 8).saturating_sub(int_digits + 8);
-        let max_guard = cap_digits.saturating_sub(target).max(base_guard);
+        let max_guard = cap_digits
+            .saturating_sub(target)
+            .min(ZIV_PRECISION_HORIZON.saturating_sub(target))
+            .max(base_guard);
         let mut guard = base_guard;
         let mut best = lo;
         loop {
             if guard >= max_guard {
-                break;
+                // Cap reached without clearing the noise floor. `force_confirm`
+                // (acosh/atanh) trusts its last stable narrowing; otherwise the
+                // deciding digit is below the work integer's / the crate's reach
+                // — return the CLEAN base narrowing (the exact-tie answer the
+                // finite-precision oracle agrees with), NOT the deepest
+                // narrowing (which is dominated by kernel noise at this depth).
+                return if force_confirm { best } else { lo };
             }
             let step = (target + base_guard).max(base_guard);
             let next_guard = guard.saturating_add(step).min(max_guard);
-            let (hi, hi_dist, hi_band) = nearest_narrow(next_guard);
-            // Stop once the narrowing is STABLE *and* its residual has cleared
-            // the half-ULP band (so the round is no longer on a tie). Requiring
-            // `resolved` — not just stability — prevents a premature stop when
-            // two insufficient-precision guards happen to agree while the
-            // deciding digit is still below the working scale. `force_confirm`
-            // keeps the legacy stop-on-stable behaviour (`acosh` / `atanh`,
-            // where the recompute itself is the confirmation).
-            let resolved = hi_dist > hi_band;
-            if hi == best && (force_confirm || resolved) {
-                break;
+            let (hi, hi_dist) = nearest_narrow(next_guard);
+            if force_confirm {
+                if hi == best {
+                    return best;
+                }
+            } else if hi_dist > floor {
+                // Deciding digit is now a clear signal above the noise floor —
+                // this narrowing is trustworthy.
+                return hi;
             }
             guard = next_guard;
             best = hi;
         }
-        return best;
     }
 
     let mut directed_narrow = |guard: u32| -> (S, S, S) {
