@@ -19,7 +19,7 @@ impl Validator for PrecisionValidator {
         let got = ctx.value()?;
         let mode = ctx.mode()?;
         let grade = ctx.grade_precision();
-        let got_scaled = to_scaled_int(got, grade)?;
+        let got_scaled = to_scaled_int(got, grade, mode)?;
         let truncated = ctx.golden_value.truncated_at(self.gen_precision);
         let expected = ctx.golden_value.round_to(grade, mode, truncated);
         Some(Outcome::Precision { ulps: abs_diff(&got_scaled, &expected) })

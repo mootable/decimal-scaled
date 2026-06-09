@@ -69,9 +69,14 @@ pub trait Validator {
     fn validate(&self, ctx: &ValidationContext) -> Option<Outcome>;
 }
 
-/// Normalize a subject's output string to a signed scaled-integer at `scale`. `None`
-/// if unparseable (e.g. the subject emitted a non-decimal).
-pub(super) fn to_scaled_int(got: &str, scale: u32) -> Option<String> {
+/// Normalize a subject's output string to a signed scaled-integer at `scale`,
+/// rounding under the subject's declared `mode` — the SAME mode the oracle is
+/// rounded with. A subject that emits MORE digits than `scale` (every arbitrary /
+/// high-precision competitor) must be ROUNDED to the grade depth, not truncated:
+/// truncating drops the round-up and biases such a subject toward `Trunc`, which
+/// only a fixed-scale subject (decimal-scaled — exactly `scale` digits, so the
+/// round is a no-op) escapes. `None` if unparseable (a non-decimal output).
+pub(super) fn to_scaled_int(got: &str, scale: u32, mode: RoundingMode) -> Option<String> {
     let gv = GoldenValue::parse(got)?;
-    Some(gv.round_to(scale, RoundingMode::Trunc, false))
+    Some(gv.round_to(scale, mode, false))
 }

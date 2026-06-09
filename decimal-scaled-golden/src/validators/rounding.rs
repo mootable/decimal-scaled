@@ -22,7 +22,7 @@ impl Validator for RoundingValidator {
         let mode = ctx.mode()?;
         let grade = ctx.grade_precision();
         let truncated = ctx.golden_value.truncated_at(self.gen_precision);
-        let got_scaled = match to_scaled_int(got, grade) {
+        let got_scaled = match to_scaled_int(got, grade, mode) {
             Some(s) => s,
             None => return Some(Outcome::MisRounded { delta: "nan".to_string() }),
         };
