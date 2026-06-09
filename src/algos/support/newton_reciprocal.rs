@@ -787,7 +787,9 @@ pub(crate) fn newton_rescale_arm(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "wide")]
     use crate::algos::support::mg_divide::div_wide_pow10_chain;
+    #[cfg(feature = "wide")]
     use crate::int::types::Int;
     use crate::support::rounding::RoundingMode;
 

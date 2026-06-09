@@ -7,7 +7,7 @@
 
 #![cfg(all(feature = "wide", feature = "x-wide"))]
 
-use decimal_scaled::{DecimalTranscendental, RoundingMode, D307, D57};
+use decimal_scaled::{RoundingMode, D307, D57};
 
 #[test]
 fn wide_exp_deep_underflow_nearest_and_ceiling() {

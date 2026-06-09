@@ -349,7 +349,6 @@ mod tests {
     //! oracle: `exp` rounded to scale 75 is the same value at every storage
     //! width, so the two decimal renderings must be identical.
 
-    use crate::types::traits::DecimalTranscendental;
     use crate::types::widths::{D307, D76};
     use crate::RoundingMode;
 

@@ -5,7 +5,7 @@
 //! shift). The correctly-rounded result is `0` under nearest, the smallest
 //! positive under Ceiling; the kernel must return it, not panic.
 
-use decimal_scaled::{DecimalTranscendental, RoundingMode, D18, D38};
+use decimal_scaled::{RoundingMode, D18, D38};
 
 #[test]
 fn exp_deep_underflow_nearest_is_zero() {
