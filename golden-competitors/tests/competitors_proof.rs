@@ -9,8 +9,12 @@ use decimal_scaled_golden::{
     DecimalSubject, ExecutionResult, FileLoader, Function, GoldenRunner, Outcome,
     OverflowValidator, ParallelRunner, RoundingValidator, RunOnce,
 };
-use golden_competitors::{F64, RustDecimal};
+use golden_competitors::{
+    BigDecimalSubject, DashuFloat, DecimalRsSubject, FastNum, GMath, F64, RustDecimal,
+};
 use golden_ds::{golden_dir, thread_count, FUNCS, GEN_PRECISION};
+
+use Function::*;
 
 /// Run one competitor over `funcs` against the golden set; print and return its
 /// pass / skip / bad counts (bad = mis-rounded / wrong-mode / error vs the golden).
@@ -56,6 +60,44 @@ fn competitors_validate_against_the_golden_set() {
     // f64: every function (binary radix — decimal compliance is the verdict).
     let (f64_pass, ..) = run_competitor(&F64, FUNCS);
 
+    // bigdecimal: arbitrary precision; sqrt/cbrt + the five arithmetic ops (exp
+    // excluded — its unbounded growth would never terminate on large golden inputs).
+    let (bd_pass, ..) = run_competitor(
+        &BigDecimalSubject,
+        &[Sqrt, Cbrt, Add, Sub, Mul, Div, Rem],
+    );
+    // dashu-float: arbitrary precision; ln + arithmetic (exp/powf excluded — they
+    // would grow without bound and never terminate on large golden inputs).
+    let (dashu_pass, ..) = run_competitor(
+        &DashuFloat,
+        &[Ln, Add, Sub, Mul, Div, Rem],
+    );
+    // fastnum (D512): the most complete real-function competitor.
+    let (fast_pass, ..) = run_competitor(
+        &FastNum,
+        &[
+            Sqrt, Cbrt, Ln, Log2, Log10, Exp, Exp2, Sin, Cos, Tan, Powf, Add, Sub, Mul, Div, Rem,
+        ],
+    );
+    // decimal-rs: fixed 38-digit; sqrt/ln/exp/powf + checked arithmetic.
+    let (drs_pass, ..) = run_competitor(
+        &DecimalRsSubject,
+        &[Sqrt, Ln, Exp, Powf, Add, Sub, Mul, Div, Rem],
+    );
+    // g_math: deterministic fixed-point; richest function set (trig + hyperbolics).
+    let (gm_pass, ..) = run_competitor(
+        &GMath,
+        &[
+            Sqrt, Ln, Exp, Sin, Cos, Tan, Atan, Asin, Acos, Sinh, Cosh, Tanh, Asinh, Acosh, Atanh,
+            Powf, Atan2, Add, Sub, Mul, Div,
+        ],
+    );
+
     assert!(rd_pass > 0, "rust_decimal should correctly compute some golden values");
     assert!(f64_pass > 0, "f64 should correctly compute some golden values");
+    assert!(bd_pass > 0, "bigdecimal should correctly compute some golden values");
+    assert!(dashu_pass > 0, "dashu-float should correctly compute some golden values");
+    assert!(fast_pass > 0, "fastnum should correctly compute some golden values");
+    assert!(drs_pass > 0, "decimal-rs should correctly compute some golden values");
+    assert!(gm_pass > 0, "g_math should correctly compute some golden values");
 }
