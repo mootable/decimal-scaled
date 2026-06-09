@@ -139,6 +139,10 @@ where
 {
     type Value = D;
 
+    fn name(&self) -> String {
+        format!("decimal-scaled D{}<{}>", self.width, self.scale)
+    }
+
     fn capabilities(&self) -> Capabilities {
         // decimal-scaled's overflow contract is to PANIC on an out-of-range result,
         // in BOTH debug and release, for every default op — transcendental AND

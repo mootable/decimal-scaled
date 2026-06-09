@@ -16,6 +16,20 @@ pub trait DecimalSubject {
     /// Identity, radix, per-function support, and report metadata.
     fn capabilities(&self) -> Capabilities;
 
+    /// A short human label for this subject — used in diagnostics such as the
+    /// `ParallelRunner`'s worker thread names. Defaults to the `capabilities`
+    /// name plus its `config` (e.g. `"decimal-scaled[scale=19,width=38]"`); a
+    /// subject may override it with a tidier per-cell identifier.
+    fn name(&self) -> String {
+        let caps = self.capabilities();
+        if caps.config.is_empty() {
+            caps.name
+        } else {
+            let cfg: Vec<String> = caps.config.iter().map(|(k, v)| format!("{k}={v}")).collect();
+            format!("{}[{}]", caps.name, cfg.join(","))
+        }
+    }
+
     /// Parse one input string to a value. Panics on malformed/unrepresentable
     /// input (the runner pre-filters such inputs and catches anything else).
     fn string_to_value(&self, s: &str) -> Self::Value;
