@@ -169,13 +169,18 @@ fn ln_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -
         return 0;
     }
     let delta = raw - one_bits;
-    let ln1p_band: i128 = 10_i128.pow(scale.saturating_sub(scale.div_ceil(2)));
+    let ln1p_band: i128 = 10_i128.pow(scale.saturating_sub(1) / 2);
     if delta.abs() <= ln1p_band && is_nearest_mode(mode) {
-        // ln(1 + δ/10^S)·10^S = δ − δ²/(2·10^S) + … : within the band
-        // the quadratic term is below half an LSB, so the nearest-rounded
-        // result is exactly `delta`. Directed modes need the true residual
-        // sign (the value sits sub-LSB to one side of `delta`), so they
-        // fall through to the full working-scale kernel below.
+        // ln(1 + δ/10^S)·10^S = δ − δ²/(2·10^S) + … . The leading omitted term
+        // is δ²/(2·10^S); at the band edge |δ| = 10^k it equals 10^(2k−S)/2, so
+        // the linear value `δ` is the nearest-rounded result only while
+        // 2k − S < 0 STRICTLY (the term is below half an LSB and the round is
+        // not a tie). The band exponent k = ⌊(S−1)/2⌋ gives 2k − S ≤ −1, i.e.
+        // ≤ 0.05 LSB — strictly clear of the half-ULP tie for EVERY S. The old
+        // k = ⌊S/2⌋ put 2k − S = 0 for even S, so the edge term was exactly
+        // 0.5 LSB and `δ` misrounded the tie (ln(0.999) at s6/s18/s28). Directed
+        // modes need the true residual sign (the value sits sub-LSB to one side
+        // of `δ`), so they fall through to the full working-scale kernel below.
         return delta;
     }
     let w = scale + working_digits;
@@ -206,11 +211,14 @@ fn ln_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
         return 0;
     }
     let delta = raw - one_bits;
-    let ln1p_band: i128 = 10_i128.pow(SCALE.saturating_sub(SCALE.div_ceil(2)));
+    let ln1p_band: i128 = 10_i128.pow(SCALE.saturating_sub(1) / 2);
     if delta.abs() <= ln1p_band && is_nearest_mode(mode) {
-        // See `ln_with`: the linear approximation is correctly rounded to
-        // nearest inside the band but loses the residual sign that directed
-        // modes require, so those fall through to the full kernel.
+        // See `ln_with_raw`: the band exponent ⌊(S−1)/2⌋ keeps the omitted
+        // quadratic term ≤ 0.05 LSB — strictly clear of the half-ULP tie for
+        // every S (the old ⌊S/2⌋ hit exactly 0.5 LSB at the edge for even S).
+        // The linear approximation `δ` is then the correctly nearest-rounded
+        // result inside the band; directed modes need the residual sign and
+        // fall through to the full kernel.
         return delta;
     }
     let w = SCALE + STRICT_GUARD;

@@ -678,16 +678,37 @@ where
         round_to_storage_with_g::<St, S>(v, w, t, m, st_max, st_min)
     };
 
-    let base_w = target + base_guard;
     if is_nearest_mode(mode) {
-        if !force_confirm {
-            return round_to_storage_with(recompute(base_guard), base_w, target, mode);
-        }
-        let mut nearest_narrow = |guard: u32| -> St {
+        // Round to nearest at a working scale `target + guard` AND report the
+        // sub-storage residual's distance to the half-ULP boundary
+        // (`dist_half`) plus the band that counts as "clear of the boundary".
+        // A round-to-nearest decision is only trustworthy once `dist_half`
+        // exceeds the band; while it sits inside, the deciding digit is below
+        // the working scale and the narrowing can be a Table-Maker's-Dilemma
+        // misround (the true value's half-ULP side is decided by a series term
+        // the base working scale cannot resolve — e.g. `exp(1e-14)`'s `x³/6`,
+        // `cosh(1e-28)`'s `x⁴/24`, both just past an exact half).
+        let mut nearest_narrow = |guard: u32| -> (St, S, S) {
             let w = target + guard;
-            round_to_storage_with(recompute(guard), w, target, mode)
+            let v = recompute(guard);
+            let narrowed = round_to_storage_with(v, w, target, mode);
+            let mag = if v < lit(0) { -v } else { v };
+            let divisor = pow10(guard);
+            let rem = mag.div_rem(divisor).1;
+            let half = divisor / lit(2);
+            let dist_half = if rem < half { half - rem } else { rem - half };
+            let band = divisor / lit(1000);
+            (narrowed, dist_half, band)
         };
-        let lo = nearest_narrow(base_guard);
+        let (lo, dist0, band0) = nearest_narrow(base_guard);
+        // Escalate ONLY on a possible near-tie: the base residual sits within
+        // the half-ULP band, OR the caller forces a confirm (`acosh` / `atanh`
+        // near-special). Ordinary inputs — residual clear of the half boundary —
+        // keep the single base narrowing (bit-identical to the prior single-shot
+        // path), so the millions of non-tie cells pay only one extra `div_rem`.
+        if !(force_confirm || dist0 <= band0) {
+            return lo;
+        }
         let int_digits = {
             let n = BigInt::resize_to::<S>(lo);
             let m = if n < lit(0) { -n } else { n };
@@ -705,8 +726,16 @@ where
             }
             let step = (target + base_guard).max(base_guard);
             let next_guard = guard.saturating_add(step).min(max_guard);
-            let hi = nearest_narrow(next_guard);
-            if hi == best {
+            let (hi, hi_dist, hi_band) = nearest_narrow(next_guard);
+            // Stop once the narrowing is STABLE *and* its residual has cleared
+            // the half-ULP band (so the round is no longer on a tie). Requiring
+            // `resolved` — not just stability — prevents a premature stop when
+            // two insufficient-precision guards happen to agree while the
+            // deciding digit is still below the working scale. `force_confirm`
+            // keeps the legacy stop-on-stable behaviour (`acosh` / `atanh`,
+            // where the recompute itself is the confirmation).
+            let resolved = hi_dist > hi_band;
+            if hi == best && (force_confirm || resolved) {
                 break;
             }
             guard = next_guard;

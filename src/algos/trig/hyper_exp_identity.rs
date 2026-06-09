@@ -104,11 +104,28 @@ pub(crate) fn cosh_exp_identity_with_tang<
 where
     <C::Wagm as BigInt>::Scratch: ComputeLimbs,
 {
-    let w = SCALE + GUARD;
-    let v = C::to_work_scaled_agm(raw, GUARD);
-    let (ex, enx) = ex_enx_agm::<C, M, IE>(v, w);
-    let r = (ex + enx) / eg::lit::<C::Wagm>(2);
-    C::round_to_storage_with_agm(r, w, SCALE, mode)
+    // Route the narrowing through the shared directed/near-tie Ziv escalation
+    // (on the wide `Wagm`), matching `cosh_schoolbook`. `cosh(x) = 1 + x²/2 +
+    // x⁴/24 + …`: just above its minimum the deciding `x⁴/24` term sits below
+    // the base working scale, so a single narrowing round-to-nearest can misround
+    // the half-ULP tie (e.g. `cosh(1e-…)` at the band scales). The escalation
+    // confirms the round against a wider guard; non-tie inputs keep the single
+    // base narrowing (bit-identical). `cosh(0) = 1` is the only grid-exact point
+    // and yields a zero residual, so the directed (not never-exact) narrowing
+    // leaves it untouched.
+    crate::algos::support::wide_trig_core::round_to_storage_directed_g::<C::Storage, C::Wagm>(
+        GUARD,
+        SCALE,
+        mode,
+        C::storage_max(),
+        C::storage_min(),
+        |guard| {
+            let w = SCALE + guard;
+            let v = C::to_work_scaled_agm(raw, guard);
+            let (ex, enx) = ex_enx_agm::<C, M, IE>(v, w);
+            (ex + enx) / eg::lit::<C::Wagm>(2)
+        },
+    )
 }
 
 /// `tanh_strict` for a wide tier — see [`sinh_exp_identity_with_tang`].
