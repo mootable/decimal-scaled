@@ -1,18 +1,20 @@
-//! Proof that a competitor adapter runs end-to-end against the golden set through
+//! Proof that each competitor adapter runs end-to-end against the golden set through
 //! the harness, graded down to the competitor's own precision. Unlike `golden_multi`
-//! this is NOT a 0-bad gate — a competitor is *expected* to mis-round some values
-//! (that is the comparison); we only assert it computes a meaningful share correctly,
-//! and print the pass/skip/bad split so the numbers are visible.
+//! this is NOT a 0-bad gate — a competitor is *expected* to mis-round many values
+//! (that is the comparison); we only assert each computes a meaningful share
+//! correctly, and print the pass/skip/bad split so the contrast with decimal-scaled
+//! (0 bad across the whole surface) is visible.
 
 use decimal_scaled_golden::{
-    ExecutionResult, FileLoader, Function, GoldenRunner, Outcome, OverflowValidator, ParallelRunner,
-    RoundingValidator, RunOnce,
+    DecimalSubject, ExecutionResult, FileLoader, Function, GoldenRunner, Outcome,
+    OverflowValidator, ParallelRunner, RoundingValidator, RunOnce,
 };
-use golden_competitors::RustDecimal;
-use golden_ds::{golden_dir, thread_count, GEN_PRECISION};
+use golden_competitors::{F64, RustDecimal};
+use golden_ds::{golden_dir, thread_count, FUNCS, GEN_PRECISION};
 
-#[test]
-fn rust_decimal_validates_against_the_golden_set() {
+/// Run one competitor over `funcs` against the golden set; print and return its
+/// pass / skip / bad counts (bad = mis-rounded / wrong-mode / error vs the golden).
+fn run_competitor<S: DecimalSubject + Sync>(subject: &S, funcs: &[Function]) -> (usize, usize, usize) {
     let runner = ParallelRunner {
         threads: thread_count(),
         strategy: RunOnce,
@@ -22,10 +24,7 @@ fn rust_decimal_validates_against_the_golden_set() {
             Box::new(OverflowValidator),
         ],
     };
-    // The functions rust_decimal actually provides (the rest are unsupported and skip).
-    let funcs = [Function::Sqrt, Function::Exp, Function::Ln, Function::Sin];
-    let sc = runner.run(&RustDecimal, &funcs);
-
+    let sc = runner.run(subject, funcs);
     let (mut pass, mut bad, mut skip) = (0usize, 0usize, 0usize);
     for fc in &sc.functions {
         for cell in &fc.cells {
@@ -42,8 +41,21 @@ fn rust_decimal_validates_against_the_golden_set() {
             }
         }
     }
-    eprintln!(
-        "rust_decimal vs golden (graded to its 28 digits): {pass} pass / {skip} skip / {bad} bad"
+    eprintln!("{}: {pass} pass / {skip} skip / {bad} bad", subject.name());
+    (pass, skip, bad)
+}
+
+#[test]
+fn competitors_validate_against_the_golden_set() {
+    eprintln!("-- competitor vs golden (graded to each lib's own precision; decimal-scaled = 0 bad) --");
+    // rust_decimal: only the functions its `MathematicalOps` provides.
+    let (rd_pass, ..) = run_competitor(
+        &RustDecimal,
+        &[Function::Sqrt, Function::Exp, Function::Ln, Function::Sin],
     );
-    assert!(pass > 0, "rust_decimal should correctly compute at least some golden values");
+    // f64: every function (binary radix — decimal compliance is the verdict).
+    let (f64_pass, ..) = run_competitor(&F64, FUNCS);
+
+    assert!(rd_pass > 0, "rust_decimal should correctly compute some golden values");
+    assert!(f64_pass > 0, "f64 should correctly compute some golden values");
 }

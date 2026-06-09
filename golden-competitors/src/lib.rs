@@ -120,3 +120,113 @@ impl DecimalSubject for RustDecimal {
         }
     }
 }
+
+/// `f64` — the platform's native IEEE-754 binary double (~15–17 significant decimal
+/// digits), via std's inherent float methods. It provides EVERY function in the set.
+/// Radix is `Binary` (it rounds on the `2^-k` grid, not the decimal one — a
+/// verdict-neutral annotation): graded for decimal compliance it mis-rounds often,
+/// which is the point. NaN -> `NonReal::NaN`; ±inf (overflow) -> the signed infinities.
+pub struct F64;
+
+impl F64 {
+    const FUNCS: &'static [Function] = &[
+        Function::Sqrt, Function::Cbrt, Function::Exp, Function::Ln, Function::Log2,
+        Function::Log10, Function::Exp2, Function::Sin, Function::Cos, Function::Tan,
+        Function::Atan, Function::Asin, Function::Acos, Function::Sinh, Function::Cosh,
+        Function::Tanh, Function::Asinh, Function::Acosh, Function::Atanh, Function::Log,
+        Function::Atan2, Function::Powf, Function::Hypot, Function::Add, Function::Sub,
+        Function::Mul, Function::Div, Function::Rem,
+    ];
+}
+
+fn classify_f64(v: f64) -> Computed<f64> {
+    if v.is_nan() {
+        Computed::NonReal(NonReal::NaN)
+    } else if v.is_infinite() {
+        Computed::NonReal(if v > 0.0 { NonReal::PositiveInfinity } else { NonReal::NegativeInfinity })
+    } else {
+        Computed::Value(v)
+    }
+}
+
+impl DecimalSubject for F64 {
+    type Value = f64;
+
+    fn name(&self) -> String {
+        "f64".into()
+    }
+
+    fn capabilities(&self) -> Capabilities {
+        let mut functions = BTreeMap::new();
+        for &f in Self::FUNCS {
+            functions.insert(
+                f,
+                FnSupport { mode: RoundingMode::HalfToEven, overflow: Overflow::Infinity },
+            );
+        }
+        Capabilities {
+            name: "f64".into(),
+            radix: Radix::Binary,
+            config: BTreeMap::new(),
+            functions,
+        }
+    }
+
+    fn string_to_value(&self, s: &str) -> f64 {
+        s.parse::<f64>().unwrap_or_else(|e| panic!("f64 could not parse {s:?}: {e}"))
+    }
+
+    fn value_to_string(&self, v: &f64) -> String {
+        // The shortest decimal that round-trips to this f64; graded to f64's depth.
+        format!("{v}")
+    }
+
+    fn limits(&self, _value: &str) -> Limits {
+        Limits {
+            min_value: Some(format!("{}", f64::MIN)),
+            max_value: Some(format!("{}", f64::MAX)),
+            max_precision: 15,
+        }
+    }
+
+    fn execute(
+        &self,
+        func: Function,
+        _mode: RoundingMode,
+        _overflow: Overflow,
+    ) -> impl Fn(&[f64]) -> Computed<f64> {
+        move |inputs| {
+            let x = inputs[0];
+            classify_f64(match func {
+                Function::Sqrt => x.sqrt(),
+                Function::Cbrt => x.cbrt(),
+                Function::Exp => x.exp(),
+                Function::Ln => x.ln(),
+                Function::Log2 => x.log2(),
+                Function::Log10 => x.log10(),
+                Function::Exp2 => x.exp2(),
+                Function::Sin => x.sin(),
+                Function::Cos => x.cos(),
+                Function::Tan => x.tan(),
+                Function::Atan => x.atan(),
+                Function::Asin => x.asin(),
+                Function::Acos => x.acos(),
+                Function::Sinh => x.sinh(),
+                Function::Cosh => x.cosh(),
+                Function::Tanh => x.tanh(),
+                Function::Asinh => x.asinh(),
+                Function::Acosh => x.acosh(),
+                Function::Atanh => x.atanh(),
+                Function::Log => x.log(inputs[1]),
+                Function::Atan2 => x.atan2(inputs[1]),
+                Function::Powf => x.powf(inputs[1]),
+                Function::Hypot => x.hypot(inputs[1]),
+                Function::Add => x + inputs[1],
+                Function::Sub => x - inputs[1],
+                Function::Mul => x * inputs[1],
+                Function::Div => x / inputs[1],
+                Function::Rem => x % inputs[1],
+            })
+        }
+    }
+}
