@@ -43,7 +43,7 @@ fn golden_proof_d38_s19() {
                     Outcome::Precision { .. } => {}
                     other => {
                         bad += 1;
-                        eprintln!("{}: {:?} on {:?}", fc.function.name(), other, cell.inputs);
+                        eprintln!("{} [{}.golden:{}]: {:?} on {:?}", fc.function.name(), fc.function.name(), cell.line, other, cell.inputs);
                     }
                 }
             }

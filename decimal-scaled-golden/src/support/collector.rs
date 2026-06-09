@@ -38,6 +38,9 @@ pub enum CellStatus {
 pub struct ExecutionCollector {
     pub inputs: Vec<String>,
     pub expected: String,
+    /// 1-based source line in the golden file (`0` if the case had no file),
+    /// so a failing cell can be traced straight back to its golden line.
+    pub line: usize,
     pub status: CellStatus,
     pub timing: Option<u64>,
     /// Set when grading was clamped to the oracle's depth (§4.3): a Pass here is
@@ -47,10 +50,11 @@ pub struct ExecutionCollector {
 }
 
 impl ExecutionCollector {
-    pub fn new(inputs: Vec<String>, expected: String) -> ExecutionCollector {
+    pub fn new(inputs: Vec<String>, expected: String, line: usize) -> ExecutionCollector {
         ExecutionCollector {
             inputs,
             expected,
+            line,
             status: CellStatus::Pending,
             timing: None,
             oracle_limited: false,

@@ -6,11 +6,14 @@ use crate::function::Function;
 use crate::subject::Limits;
 
 /// One parsed golden line: the inputs (arity per `Function`) + the raw output
-/// string, both unparsed `digits.digits`.
+/// string, both unparsed `digits.digits`, plus the 1-based source line it came
+/// from (`0` for an in-memory case with no file) so a failing cell can be traced
+/// back to its golden file.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GoldenCase {
     pub inputs: Vec<String>,
     pub output_raw: String,
+    pub line: usize,
 }
 
 /// Yields the golden cases for a function, and the oracle's representability reach.

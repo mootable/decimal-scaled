@@ -93,18 +93,21 @@ fn parse(func: Function, body: &str) -> Vec<GoldenCase> {
     let arity = func.arity();
     let body = strip_block_comments(body);
     let mut out = Vec::new();
-    for line in body.lines() {
-        let line = line.trim_end_matches('\r').trim();
-        if line.is_empty() || line.starts_with('#') || line.starts_with("//") {
+    // `strip_block_comments` preserves one newline per original newline, so the
+    // enumeration index matches the line's position in the original file.
+    for (idx, raw) in body.lines().enumerate() {
+        let text = raw.trim_end_matches('\r').trim();
+        if text.is_empty() || text.starts_with('#') || text.starts_with("//") {
             continue;
         }
-        let fields: Vec<&str> = line.split([' ', '\t']).filter(|f| !f.is_empty()).collect();
+        let fields: Vec<&str> = text.split([' ', '\t']).filter(|f| !f.is_empty()).collect();
         if fields.len() != arity + 1 {
             continue;
         }
         out.push(GoldenCase {
             inputs: fields[..arity].iter().map(|s| s.to_string()).collect(),
             output_raw: fields[arity].to_string(),
+            line: idx + 1,
         });
     }
     out

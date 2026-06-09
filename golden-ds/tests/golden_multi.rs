@@ -149,11 +149,11 @@ fn golden_multi_tier() {
                         Outcome::Precision { .. } => {}
                         Outcome::Panic => {
                             panic += 1;
-                            eprintln!("  PANIC {} @({w},{s}) input={:?}", fc.function.name(), cell.inputs);
+                            eprintln!("  PANIC {} @({w},{s}) [{}.golden:{}] input={:?}", fc.function.name(), fc.function.name(), cell.line, cell.inputs);
                         }
                         other => {
                             bad += 1;
-                            eprintln!("  BAD {} @({w},{s}): {:?} on {:?}", fc.function.name(), other, cell.inputs);
+                            eprintln!("  BAD {} @({w},{s}) [{}.golden:{}]: {:?} on {:?}", fc.function.name(), fc.function.name(), cell.line, other, cell.inputs);
                         }
                     }
                 }

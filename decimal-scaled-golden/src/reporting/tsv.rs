@@ -146,7 +146,7 @@ mod tests {
             Function::Sqrt,
             FnSupport { mode: RoundingMode::HalfToEven, overflow: Overflow::Panic },
         );
-        let mut cell = ExecutionCollector::new(vec!["2".into()], "1.41".into());
+        let mut cell = ExecutionCollector::new(vec!["2".into()], "1.41".into(), 0);
         cell.record(ExecutionResult::Computed(Computed::Value("1.41".into())));
         cell.add_validation(Outcome::Pass);
         fc.add(cell);

@@ -50,7 +50,7 @@ mod tests {
 
     #[test]
     fn run_once_records_value() {
-        let mut c = ExecutionCollector::new(one("2"), "1.4142".into());
+        let mut c = ExecutionCollector::new(one("2"), "1.4142".into(), 0);
         RunOnce.execute(&Sqrt64, &one("2"), Function::Sqrt, RoundingMode::HalfToEven, Overflow::Panic, &mut c);
         assert_eq!(c.value(), Some("1.4142"));
         assert_eq!(c.timing, None);
@@ -58,14 +58,14 @@ mod tests {
 
     #[test]
     fn run_once_catches_panic() {
-        let mut c = ExecutionCollector::new(one("bad"), "x".into());
+        let mut c = ExecutionCollector::new(one("bad"), "x".into(), 0);
         RunOnce.execute(&Sqrt64, &one("bad"), Function::Sqrt, RoundingMode::HalfToEven, Overflow::Panic, &mut c);
         assert!(matches!(c.computed(), Some(Computed::Panic(_))));
     }
 
     #[test]
     fn timed_first_value_and_average() {
-        let mut c = ExecutionCollector::new(one("2"), "1.4142".into());
+        let mut c = ExecutionCollector::new(one("2"), "1.4142".into(), 0);
         Timed { number_of_executions: 32 }.execute(
             &Sqrt64, &one("2"), Function::Sqrt, RoundingMode::HalfToEven, Overflow::Panic, &mut c,
         );

@@ -55,8 +55,8 @@ impl<E: ExecutionStrategy + Sync> GoldenRunner for ParallelRunner<E> {
 
 /// Run one function's cases — serially, or across `threads` workers pulling from a
 /// shared atomic index — returning the results in case order. Each worker is named
-/// `golden:<subject>:<function>:wN` so a caught panic prints which `(subject,
-/// function)` drain hit it (the offending input comes from the recorded `Computed::Panic`).
+/// `gold:w<N>:<function>:<subject>` so a caught panic prints which `(subject,
+/// function)` drain hit it (the offending input + its golden line come from the cell).
 #[allow(clippy::too_many_arguments)]
 fn run_function<S: DecimalSubject + Sync, E: ExecutionStrategy + Sync>(
     subject: &S,
@@ -82,7 +82,9 @@ fn run_function<S: DecimalSubject + Sync, E: ExecutionStrategy + Sync>(
     let nested: Vec<Vec<(usize, ExecutionCollector)>> = std::thread::scope(|scope| {
         let handles: Vec<_> = (0..workers)
             .map(|w| {
-                let name = format!("golden:{label}:{}:w{w}", function.name());
+                // `gold:w<worker>:<function>:<subject>` — the function is the
+                // loader's per-batch contribution; the subject names itself.
+                let name = format!("gold:w{w}:{}:{label}", function.name());
                 std::thread::Builder::new()
                     .name(name)
                     .spawn_scoped(scope, move || {

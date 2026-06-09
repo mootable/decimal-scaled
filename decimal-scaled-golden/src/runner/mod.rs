@@ -32,7 +32,7 @@ fn run_cell<S: DecimalSubject, E: ExecutionStrategy>(
     case: &GoldenCase,
     oracle: &Limits,
 ) -> ExecutionCollector {
-    let mut cell = ExecutionCollector::new(case.inputs.clone(), case.output_raw.clone());
+    let mut cell = ExecutionCollector::new(case.inputs.clone(), case.output_raw.clone(), case.line);
 
     // Input filter: every input must be exactly representable by the subject.
     if !case.inputs.iter().all(|s| input_representable(subject, s)) {
@@ -123,7 +123,7 @@ mod tests {
     struct FixedLoader;
     impl CaseLoader for FixedLoader {
         fn load(&self, _f: Function) -> Cow<'_, [GoldenCase]> {
-            Cow::Owned(vec![GoldenCase { inputs: vec!["2".into()], output_raw: "1.4142135".into() }])
+            Cow::Owned(vec![GoldenCase { inputs: vec!["2".into()], output_raw: "1.4142135".into(), line: 0 }])
         }
         fn oracle_limits(&self) -> Limits {
             Limits { min_value: None, max_value: None, max_precision: 1231 }
@@ -150,7 +150,7 @@ mod tests {
         struct PreciseLoader;
         impl CaseLoader for PreciseLoader {
             fn load(&self, _f: Function) -> Cow<'_, [GoldenCase]> {
-                Cow::Owned(vec![GoldenCase { inputs: vec!["1.234567".into()], output_raw: "1.1111".into() }])
+                Cow::Owned(vec![GoldenCase { inputs: vec!["1.234567".into()], output_raw: "1.1111".into(), line: 0 }])
             }
             fn oracle_limits(&self) -> Limits {
                 Limits { min_value: None, max_value: None, max_precision: 1231 }
@@ -175,6 +175,7 @@ mod tests {
                         .map(|n| GoldenCase {
                             inputs: vec![n.to_string()],
                             output_raw: format!("{:.7}", (n as f64).sqrt()),
+                            line: n,
                         })
                         .collect(),
                 )
