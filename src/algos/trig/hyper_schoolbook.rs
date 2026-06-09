@@ -203,26 +203,32 @@ fn tanh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 
         return 0;
     }
     let w = SCALE + STRICT_GUARD;
-    // Large |x|: saturate BEFORE forming e^|x| (which overflows the 256-bit
-    // `Fixed`). tanh(|x|) = 1 − 2·e^(−2|x|) is all-nines at working scale `w`
-    // once |x| ≳ ln(10)/2·w ≈ 1.1513·w; return 1 − 10^−w with the input's sign.
-    // tanh is BOUNDED in (−1, 1) so this can never overflow the tier. Mirrors
-    // the routed `tanh_with_raw` / wide `exp_generic::tanh_pos`, bit-for-bit.
-    let thr_x = (w as i128) * 1152 / 1000 + 2;
-    if raw.abs() / 10_i128.pow(SCALE) > thr_x {
-        let sat = one_fixed(w).sub(Fixed::from_u128_mag(1, false));
-        let sat = if raw < 0 { sat.neg() } else { sat };
-        return sat.round_to_i128_with(w, SCALE, mode).unwrap_or_else(|| {
-            crate::support::diagnostics::overflow_panic_with_scale("tanh", SCALE)
-        });
-    }
-    let v = to_fixed(raw);
-    let neg = raw < 0;
-    let av = Fixed { negative: false, mag: v.mag };
-    let ex = exp_fixed(av, w);
     let one_w = one_fixed(w);
-    let enx = one_w.div(ex, w);
-    let th = ex.sub(enx).div(ex.add(enx), w);
+    let neg = raw < 0;
+    // Large |x| via the NEGATIVE-exponent identity tanh(|x|) = (1 − m)/(1 + m),
+    // m = e^(−2|x|) = (e^|x| − e^−|x|)/(e^|x| + e^−|x|) — exact. Forming e^(+|x|)
+    // directly overflows the 256-bit `Fixed` once |x| ≳ (256·ln2 − w·ln10) (≈ 44
+    // at w = 58), BELOW the all-nines saturation onset |x| ≳ 1.1513·w (`thr_x`),
+    // leaving a panic GAP. The identity sidesteps it: m is TINY for large |x|,
+    // formed by `exp_fixed` on the NEGATIVE argument −2|x| whose `2^k` reassembly
+    // shifts DOWN, never the overflowing up-shift. Mirrors the routed
+    // `tanh_with_raw` / wide `exp_generic::tanh_pos`, bit-for-bit.
+    let thr_x = (w as i128) * 1152 / 1000 + 2;
+    // Largest working value below 1 (value 1 − 10^−w): the all-nines saturation.
+    let saturated = one_w.sub(Fixed::from_u128_mag(1, false));
+    let th = if raw.abs() / 10_i128.pow(SCALE) > thr_x {
+        saturated
+    } else {
+        let v = to_fixed(raw);
+        let av = Fixed { negative: false, mag: v.mag };
+        let m = exp_fixed(av.double().neg(), w);
+        if m.is_zero() {
+            // |x| just under `thr_x`: m underflowed; tanh is all-nines too.
+            saturated
+        } else {
+            one_w.sub(m).div(one_w.add(m), w)
+        }
+    };
     let th = if neg { th.neg() } else { th };
     th.round_to_i128_with(w, SCALE, mode)
         .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("tanh", SCALE))
@@ -440,6 +446,31 @@ mod tests {
                     d38(raw).tanh_strict_with(mode).0,
                     "tanh saturation schoolbook != routed at raw={raw} mode={mode:?}"
                 );
+            }
+        }
+    }
+
+    // Large |x| at a HIGH scale (28) — the band the old `(e^|x| ± e^-|x|)` form
+    // could not reach. At w = SCALE + 30 = 58 the dominant e^(+|x|) overflows the
+    // 256-bit `Fixed` once |x| ≳ 44, yet the saturation onset sits at |x| ≳ 1.1513·w
+    // ≈ 67, so |x| in [44, 67] used to PANIC (the 18 D38<28> defect cells). The
+    // negative-exponent form tanh = (1 − e^-2|x|)/(1 + e^-2|x|) never forms e^(+|x|),
+    // so these compute (no panic) AND still agree with the routed kernel bit-for-bit.
+    #[test]
+    fn tanh_schoolbook_narrow_gap_band_high_scale_matches_routed() {
+        const S: u32 = 28;
+        const UNIT: i128 = 10_i128.pow(28);
+        // |x| spanning the overflow gap [44, 66] plus the saturation region above.
+        const XS: [i128; 9] = [44, 48, 50, 55, 60, 66, 67, 70, 100];
+        for &x in &XS {
+            for &raw in &[x * UNIT, -x * UNIT] {
+                for &mode in &MODES {
+                    assert_eq!(
+                        tanh_schoolbook_narrow::<S>(Int::<2>::from_i128(raw), mode),
+                        D::<Int<2>, S>(Int::<2>::from_i128(raw)).tanh_strict_with(mode).0,
+                        "tanh gap-band schoolbook != routed at raw={raw} mode={mode:?}"
+                    );
+                }
             }
         }
     }
