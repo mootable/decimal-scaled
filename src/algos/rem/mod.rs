@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Decimal remainder algorithm family.
 //!
 //! One algorithm: [`rem_int_layer`] — same-`SCALE` remainder needs no

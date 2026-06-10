@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `sqrt_mg_divide` — D38 square-root kernel
 //! (`mg_divide::sqrt_raw_with`).
 //!

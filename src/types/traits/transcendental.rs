@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! The [`DecimalTranscendental`] trait — the width-generic
 //! transcendental + root surface shared by every decimal type.
 //!

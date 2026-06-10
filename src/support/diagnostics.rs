@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Diagnostic helpers for narrowing-overflow panics.
 //!
 //! Every strict transcendental kernel computes at a wider working

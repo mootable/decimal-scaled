@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Macro-generated helper methods: min/max/clamp/recip/copysign.
 //!
 //! `min` / `max` / `clamp` / `recip` are identical across native and

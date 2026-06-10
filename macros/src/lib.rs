@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Construction macros for `decimal-scaled`.
 //!
 //! See `macros/README.md` for the full spec. This crate now ships:

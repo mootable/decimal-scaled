@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Decimal addition algorithm family.
 //!
 //! One algorithm: [`add_int_layer`] — same-`SCALE` addition needs no

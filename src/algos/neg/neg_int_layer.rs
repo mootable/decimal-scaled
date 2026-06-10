@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `neg_int_layer` — decimal negation via the `Int<N>` layer.
 
 use crate::int::types::Int;

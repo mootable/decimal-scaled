@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! The [`DecimalConstants`] trait — mathematical constants (`pi`, `tau`,
 //! `half_pi`, `quarter_pi`, `golden`, `e`, `deg_per_rad`, `rad_per_deg`,
 //! `log10_2`) available on every decimal width.

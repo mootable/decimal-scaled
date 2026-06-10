@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Nightly-gated auto-inferred cross-scale operations.
 //!
 //! Free functions [`cross::mul`], [`cross::add`], [`cross::sub`],

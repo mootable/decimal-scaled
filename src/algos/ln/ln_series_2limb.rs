@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Natural-logarithm series kernel — `ln_fixed` evaluated on the
 //! 256-bit `Fixed` guard-digit intermediate with a configurable
 //! working-scale guard.

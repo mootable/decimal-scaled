@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Per-family policy traits — which algorithm each `Dxx<S>` calls.
 //!
 //! The typed method shell on each `Dxx<S>` (e.g. `D57::<SCALE>::exp_strict`)

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Bespoke narrow-`GUARD` `sin_strict` + `cos_strict` kernel slot for
 //! `D57<SCALE>` with `SCALE ∈ 18..=22`.
 //!

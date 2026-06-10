@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Unit tests for the decimal schoolbook baseline kernels.
 //!
 //! Tests call the algorithm fns directly (bypassing the policy dispatcher)

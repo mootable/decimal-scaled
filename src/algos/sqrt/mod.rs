@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Square-root algorithm family.
 //!
 //! Each variant in this module is a kernel — a free function taking the

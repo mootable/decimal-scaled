@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `cbrt_newton` — Newton–Raphson integer cube root of `|raw| · 10^(2·SCALE)`,
 //! with a single round step, sign-preserving, computed directly over `u64`
 //! limbs.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Floating-point power series kernel — `powf` computed as
 //! `exp(y · ln(x))` on the 256-bit `Fixed` guard-digit intermediate.
 //!

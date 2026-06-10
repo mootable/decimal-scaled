@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Decimal division algorithm family.
 //!
 //! One algorithm: [`div_widen_scale`] — widens `a * 10^SCALE` to the

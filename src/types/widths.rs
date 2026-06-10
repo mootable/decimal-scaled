@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Core type definitions for every decimal width and their scale aliases.
 //!
 //! Each width is a `#[repr(transparent)]` newtype around an integer

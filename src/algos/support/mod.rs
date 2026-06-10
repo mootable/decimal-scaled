@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Shared support kernels consumed across the algorithm families.
 //!
 //! Unlike the per-family trees (`algos::sqrt`, `algos::ln`, …) these are

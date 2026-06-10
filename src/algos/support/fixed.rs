@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Minimal in-tree wide-integer arithmetic for the correctly-rounded
 //! strict transcendentals.
 //!

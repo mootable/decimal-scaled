@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Scale-changing operations for every decimal width.
 //!
 //! Each `Dxx<SCALE>` carries its scale in the type. Converting between

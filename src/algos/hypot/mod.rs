@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Hypotenuse algorithm family.
 //!
 //! `hypot` computes `sqrt(a² + b²)` by routing the root **down** through

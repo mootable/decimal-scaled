@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Radix-to-string formatting for little-endian `u64` limb magnitudes.
 //!
 //! The radix-conversion machinery the `Int<N>` / `Uint<N>` `Display` /

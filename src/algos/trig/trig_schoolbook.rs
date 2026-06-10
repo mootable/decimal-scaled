@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Forward-trig schoolbook reference kernels -- sin / cos / tan / atan.
 //!
 //! These are the **naive textbook** realisations of the forward family,

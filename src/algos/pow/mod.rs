@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Floating-point power algorithm family -- narrow-tier kernels.
 //!
 //! Only D18 / D38 have policy-routed `powf_strict` today. The wide

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Cube-root policy — the per-`(N, SCALE)` algorithm matcher.
 //!
 //! `D<Int<N>, SCALE>::cbrt_strict_with(mode)` delegates directly to the

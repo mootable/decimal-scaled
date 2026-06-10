@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Macro-generated integer-flavoured methods shared by every decimal
 //! width: Euclidean division / remainder, floor / ceil division,
 //! absolute difference, midpoint, and the `is_zero` predicate.

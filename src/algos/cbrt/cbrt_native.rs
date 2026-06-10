@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `cbrt_native` -- bespoke cube-root kernel that runs Newton directly in a
 //! tight, concrete work integer `Int<W>` with an `f64::cbrt` Newton seed,
 //! instead of through the width-agnostic int slice `icbrt` (mirrors prod

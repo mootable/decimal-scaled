@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! The [`DecimalConvert`] trait — round-trip + integer conversion +
 //! float bridge shared by every decimal width.
 //!

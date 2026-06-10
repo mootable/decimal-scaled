@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Emits the [`DecimalTranscendental`] impl for a decimal width.
 //!
 //! Every method is a one-line delegator to the inherent method of

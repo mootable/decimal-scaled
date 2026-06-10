@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Log-base policy — the per-(N, SCALE) algorithm matcher for the
 //! arbitrary-base decimal logarithm `log(self, base)`.
 //!

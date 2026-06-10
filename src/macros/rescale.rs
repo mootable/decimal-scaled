@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Macro-generated `rescale` / `rescale_with` for all decimal widths.
 //!
 //! The body lives in `rescale_with`, which takes an explicit

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Macro-generated `PartialEq` impls between a decimal type and the
 //! primitive integer / float types.
 //!

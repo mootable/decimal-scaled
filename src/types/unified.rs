@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Unified decimal type: `D<S, const SCALE: u32>` — a generic
 //! `#[repr(transparent)]` wrapper over the storage integer `S`.
 //!
