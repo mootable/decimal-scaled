@@ -29,9 +29,26 @@ fn sig_frac_digits(s: &str) -> usize {
     }
 }
 
-/// Round the full-precision decimal string `exp` to `scale` fraction digits
-/// under `mode`, rendered the way `to_string()` renders storage (sign +
-/// integer part + '.' + exactly `scale` digits; no negative zero).
+/// The golden generation precision: a stored value carrying this many
+/// fraction digits is TRUNCATED (a strictly positive tail exists below its
+/// stored digits); a shorter one is exact as printed (the proof-based
+/// exactness marker).
+const GEN_PRECISION: usize = 1233;
+
+/// Residual classification relative to the half point — mirrors the golden
+/// gate's `classify_residual`.
+#[derive(Clone, Copy, PartialEq)]
+enum Residual {
+    Zero,
+    Below,
+    Tie,
+    Above,
+}
+
+/// Round the golden decimal string `exp` to `scale` fraction digits under
+/// `mode`, mirroring the golden gate's `GoldenValue::round_to` (including
+/// the truncation marker), rendered the way `to_string()` renders storage
+/// (sign + integer part + '.' + exactly `scale` digits; no negative zero).
 fn round_dec_str(exp: &str, scale: usize, mode: RoundingMode) -> String {
     let neg = exp.starts_with('-');
     let mag = exp.trim_start_matches('-');
@@ -39,40 +56,61 @@ fn round_dec_str(exp: &str, scale: usize, mode: RoundingMode) -> String {
         Some((i, f)) => (i, f),
         None => (mag, ""),
     };
+    let truncated = frac_part.len() >= GEN_PRECISION;
     let mut kept: Vec<u8> = frac_part.bytes().take(scale).collect();
     while kept.len() < scale {
         kept.push(b'0');
     }
-    let rest = if frac_part.len() > scale { &frac_part[scale..] } else { "" };
-    let rest_nonzero = rest.bytes().any(|b| b != b'0');
-    let bump = rest_nonzero
-        && match mode {
+    let rest: &[u8] =
+        if frac_part.len() > scale { &frac_part.as_bytes()[scale..] } else { &[] };
+    let residual = match rest.iter().position(|&b| b != b'0') {
+        None => {
+            if truncated {
+                Residual::Below
+            } else {
+                Residual::Zero
+            }
+        }
+        Some(0) => match rest[0] {
+            b'5' => {
+                if rest[1..].iter().any(|&b| b != b'0') || truncated {
+                    Residual::Above
+                } else {
+                    Residual::Tie
+                }
+            }
+            d if d < b'5' => Residual::Below,
+            _ => Residual::Above,
+        },
+        Some(_) => Residual::Below,
+    };
+    let last_kept_odd = {
+        let last = kept
+            .last()
+            .copied()
+            .unwrap_or_else(|| *int_part.as_bytes().last().unwrap());
+        (last - b'0') % 2 == 1
+    };
+    let bump = match residual {
+        Residual::Zero => false,
+        Residual::Below => matches!(
+            (mode, neg),
+            (RoundingMode::Ceiling, false) | (RoundingMode::Floor, true)
+        ),
+        Residual::Above => match mode {
             RoundingMode::Trunc => false,
             RoundingMode::Floor => neg,
             RoundingMode::Ceiling => !neg,
-            _ => {
-                let first = rest.as_bytes()[0];
-                if first > b'5' {
-                    true
-                } else if first < b'5' {
-                    false
-                } else if rest[1..].bytes().any(|b| b != b'0') {
-                    true
-                } else {
-                    match mode {
-                        RoundingMode::HalfAwayFromZero => true,
-                        RoundingMode::HalfTowardZero => false,
-                        _ => {
-                            let last = kept
-                                .last()
-                                .copied()
-                                .unwrap_or_else(|| *int_part.as_bytes().last().unwrap());
-                            (last - b'0') % 2 == 1
-                        }
-                    }
-                }
-            }
-        };
+            _ => true,
+        },
+        Residual::Tie => match mode {
+            RoundingMode::Trunc | RoundingMode::HalfTowardZero => false,
+            RoundingMode::HalfAwayFromZero => true,
+            RoundingMode::HalfToEven => last_kept_odd,
+            RoundingMode::Floor => neg,
+            RoundingMode::Ceiling => !neg,
+        },
+    };
     let mut int_digits: Vec<u8> = int_part.bytes().collect();
     if bump {
         let mut i = kept.len();
