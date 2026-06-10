@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `RoundingValidator` — decimal compliance (the verdict). In-range values only:
 //! is the produced value the correctly-rounded golden under the declared mode?
 

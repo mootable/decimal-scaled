@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Shared leaf types used across the extension-point folders: the function
 //! enumeration, rounding mode, the `Outcome` verdict, the `string_decimal`
 //! comparison helper, and the run `collector` records. These carry no

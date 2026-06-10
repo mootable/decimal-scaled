@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `TsvReporter` — flattens every cell of every run into one filterable TSV. Its
 //! per-cell row shape is its own private concern; `width`/`scale` ride in from each
 //! subject's `config` metadata (strings), nothing typed.

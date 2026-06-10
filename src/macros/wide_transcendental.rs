@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Correctly-rounded strict transcendentals for the wide decimal tiers
 //! (D76 / D153 / D307).
 //!

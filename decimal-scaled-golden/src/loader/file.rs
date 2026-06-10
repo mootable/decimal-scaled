@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `FileLoader` — reads + parses golden files. Parsing is its private detail:
 //! `//` line comments, `/* … */` block comments, `#key=value` metadata.
 

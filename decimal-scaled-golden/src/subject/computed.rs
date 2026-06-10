@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `Computed` — the test-level outcome of one execution.
 
 /// The test-level outcome of one execution: what the subject produced, or one of

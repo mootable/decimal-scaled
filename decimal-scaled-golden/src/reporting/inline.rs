@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `InlineReporter` — the console-streaming counterpart of [`Reporter`].
 //!
 //! Where a [`Reporter`](crate::reporting::Reporter) renders named file artifacts

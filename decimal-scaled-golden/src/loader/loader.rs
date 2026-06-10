@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! The `CaseLoader` trait and the `GoldenCase` it yields.
 
 use std::borrow::Cow;

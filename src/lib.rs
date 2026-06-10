@@ -1,4 +1,7 @@
-﻿//! Const-generic base-10 fixed-point decimal types for deterministic arithmetic.
+﻿// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+//! Const-generic base-10 fixed-point decimal types for deterministic arithmetic.
 //!
 //! # Overview
 //!

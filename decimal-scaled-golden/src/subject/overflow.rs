@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `Overflow` — how a subject signals an out-of-range result.
 
 /// How a subject signals that a result overflows its cell. The non-value family
