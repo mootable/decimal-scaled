@@ -285,7 +285,8 @@ pub(crate) trait WideTrigCore {
 /// Near-min analytic pin for `exp`. When `|v| < 10^(-SCALE/2)` the deviation
 /// `e^v − (1 + v) = v²/2 + …` is provably below half a storage ULP, and `e^v > 1 + v`
 /// strictly (exp is convex), so the correctly-rounded result is exactly `1 + v` for
-/// every mode except `Ceiling`, which the positive deviation rounds up by one ULP.
+/// every mode except `Ceiling`, which the positive deviation — however deep it
+/// sits — rounds up by one ULP.
 /// This short-circuits the widening: at these tiny inputs its `s >> n` range reduction
 /// loses bits (the working guard carries fewer factors of 2 than `n`), and the
 /// resulting sub-ULP deficit borrows into the result digit at the `…999000` /
@@ -306,8 +307,11 @@ fn exp_near_min_pin<C: WideTrigCore, const SCALE: u32>(
     let absr = if raw < zero { zero - raw } else { raw };
     // `10^half` has ≈ half·log2(10) bits; skip the pow10 unless |raw| is plausibly
     // below it (true only for genuinely tiny inputs — every normal call exits here).
+    // A value of bit-length `bl` is at least `2^(bl−1)`, so the exit is certain
+    // only once `2^(bl−1) >= 10^half` ⟺ `(bl−1)·log10(2) >= half` — comparing
+    // `bl` itself (not `bl−1`) silently dropped the top quarter of the band.
     let bl = <C::Storage as BigInt>::BITS - absr.leading_zeros();
-    if (bl as u64) * 100_000 >= (half as u64) * 332_193 {
+    if ((bl - 1) as u64) * 100_000 >= (half as u64) * 332_193 {
         return None;
     }
     // Exact: |raw| < 10^half ⟺ v²/2 < ½ ULP and the deviation sits past the scale.
@@ -678,23 +682,44 @@ where
 /// clean exact-tie base narrowing instead of a noise-driven deep misround.
 const ZIV_RESOLVE_FLOOR_POW10: u32 = 4;
 
-/// The crate's correctly-rounded precision HORIZON, in working-scale digits. A
+/// How deep the Ziv escalations may PROBE, in working-scale digits. A
 /// near-tie whose deciding term lies beyond this is unverifiable (the widest
 /// shipped tier, D1232 / `Int<64>` storage, carries ~1232 significant digits,
-/// and the mpmath golden oracle is generated to match), so it is treated as an
-/// EXACT tie rather than resolved. This keeps a deep near-min tie at the WIDEST
-/// tier (e.g. `cosh(1e-462)` / `exp(1e-462)` at D1232<924>, deciding digit past
-/// 1300) an exact tie instead of a kernel-noise-driven misround.
+/// and the golden data is generated to match), so the escalation stops and
+/// falls to its unresolved endgame — the near-min resolver then applies the
+/// never-exact sub-resolution rule (a strictly positive tail under the
+/// computed digits) instead of trusting a kernel-noise-driven deep narrowing.
 const ZIV_PRECISION_HORIZON: u32 = 1264;
+
+/// Exact decimal digit count of a non-negative work value (`v > 0`).
+/// Bit-length estimate (`digits <= floor(bl·log10 2) + 1`, at most one high),
+/// refined by a single `pow10` compare. Cold-path helper for the positional
+/// cross-depth confirmation below.
+fn dec_digits_g<S: BigInt>(v: S) -> u32 {
+    let bl = <S as BigInt>::BITS - v.leading_zeros();
+    let mut d = ((bl as u64 * 30_103) / 100_000) as u32 + 1;
+    if d > 1 && v < crate::consts::pow10::dispatch::<S>(d - 1) {
+        d -= 1;
+    }
+    d
+}
 
 /// Single-width near-min escalation for `cosh` / `exp`, returning
 /// `(value, resolved)`. A near-tie's deciding term (`cosh`'s `x⁴/24`,
-/// `exp`'s `x³/6`) is resolved the moment its residual-to-boundary distance
-/// clears the absolute kernel-noise floor; `resolved == false` means the cap
-/// (the work integer's capacity, never past the precision horizon) was reached
-/// with the residual still in the noise band — the returned value is the CLEAN
-/// base-guard narrowing (an exact-tie / never-exact base result), and a
-/// widening caller may retry at a wider integer.
+/// `exp`'s `x³/6`) is trusted only once it clears the absolute kernel-noise
+/// floor AND a probe at a DIFFERENT depth reproduces its position and side —
+/// the kernels' working-scale error can far exceed the floor (measured
+/// ~10^12 units at some depths), but noise always sits in the bottom digits
+/// of whatever `w` produced it, while a genuine deciding term keeps a
+/// depth-independent fractional position. `resolved == false` means the cap
+/// (the work integer's capacity, never past [`ZIV_PRECISION_HORIZON`]) was
+/// reached without a confirmed deciding term: the value is then the BASE
+/// probe SNAPPED to its nearest grid line (absorbing the kernel's sub-floor
+/// noise) with the `never_exact` sub-resolution rule applied on top — the
+/// true value carries a strictly positive tail below the computed digits, so
+/// Ceiling (positive result) / Floor (negative) nudge one ULP off the grid
+/// line and an unresolved half-ULP boundary rounds as ABOVE half for the
+/// nearest modes. A widening caller may still retry at a wider integer.
 #[allow(clippy::too_many_arguments)]
 fn near_min_resolve_g<St: BigInt + Copy, S: BigInt>(
     base_guard: u32,
@@ -708,15 +733,12 @@ fn near_min_resolve_g<St: BigInt + Copy, S: BigInt>(
 where
     S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
-    use crate::support::rounding::{is_nearest_mode, RoundingMode};
+    use crate::support::rounding::{is_nearest_mode, should_bump, RoundingMode};
     let lit = |n: i128| <S as BigInt>::from_i128(n);
     let pow10 = |n: u32| crate::consts::pow10::dispatch::<S>(n);
     let bit_length = |v: S| -> u32 {
         let m = if v < <S as BigInt>::ZERO { -v } else { v };
         <S as BigInt>::BITS - m.leading_zeros()
-    };
-    let rtsw = |v: S, w: u32, t: u32, m: RoundingMode| -> St {
-        round_to_storage_with_g::<St, S>(v, w, t, m, st_max, st_min)
     };
     let floor = pow10(ZIV_RESOLVE_FLOOR_POW10);
     let max_guard_for = |int_digits: u32| -> u32 {
@@ -730,47 +752,121 @@ where
         let m = if n < lit(0) { -n } else { n };
         ((bit_length(m) as u64 * 30103 / 100_000) as u32 + 1).saturating_sub(target)
     };
+    let range_check = |signed: S| -> St {
+        let max_w = BigInt::resize_to::<S>(st_max);
+        let min_w = BigInt::resize_to::<S>(st_min);
+        if signed > max_w || signed < min_w {
+            panic!("wide-tier strict transcendental: result out of range");
+        }
+        BigInt::resize_to::<St>(signed)
+    };
+    let finish = |neg: bool, q: S, bump: bool| -> St {
+        let q_mag = if bump { q + lit(1) } else { q };
+        range_check(if neg { -q_mag } else { q_mag })
+    };
+    // Leading fractional-digit position of the deciding residual `dist`
+    // (working units at scale `target + g`) — the cross-depth confirmation
+    // key: a genuine deciding term keeps this position across depths.
+    let pos_of = |dist: S, g: u32| -> u32 { target + g - dec_digits_g::<S>(dist) + 1 };
+    // One working-scale probe: `(neg, q, rem, divisor)` of the recomputed
+    // value at guard `g`, magnitude split at the storage grid.
+    let mut probe = |g: u32| -> (bool, S, S, S) {
+        let v = recompute(g);
+        let neg = v < lit(0);
+        let mag = if neg { -v } else { v };
+        let divisor = pow10(g);
+        let (q, rem) = mag.div_rem(divisor);
+        (neg, q, rem, divisor)
+    };
 
     if is_nearest_mode(mode) {
-        let mut narrow = |g: u32| -> (St, S) {
-            let w = target + g;
-            let v = recompute(g);
-            let narrowed = rtsw(v, w, target, mode);
-            let mag = if v < lit(0) { -v } else { v };
-            let divisor = pow10(g);
-            let rem = mag.div_rem(divisor).1;
+        // Nearest rounding of a probe, by the true `rem` vs `half` ordering.
+        let round_half = |neg: bool, q: S, rem: S, divisor: S| -> St {
             let half = divisor / lit(2);
-            let dist_half = if rem < half { half - rem } else { rem - half };
-            (narrowed, dist_half)
+            let cmp_r = if rem < half {
+                ::core::cmp::Ordering::Less
+            } else if rem == half {
+                ::core::cmp::Ordering::Equal
+            } else {
+                ::core::cmp::Ordering::Greater
+            };
+            finish(neg, q, should_bump(mode, cmp_r, q.bit(0), !neg))
         };
-        let (lo, dist0) = narrow(base_guard);
+        let (neg0, q0, rem0, div0) = probe(base_guard);
+        let half0 = div0 / lit(2);
+        let dist0 = if rem0 < half0 { half0 - rem0 } else { rem0 - half0 };
         if dist0 > pow10(base_guard) / lit(1000) {
-            return (lo, true); // not near a half-ULP tie (wide escalate band)
+            return (round_half(neg0, q0, rem0, div0), true); // not near a half-ULP tie
         }
+        let lo = round_half(neg0, q0, rem0, div0);
         let max_guard = max_guard_for(int_digits_of(lo));
+        // Cross-depth confirmation: the kernels' working-scale error can reach
+        // well past the absolute noise floor (measured ~10^12 units at some
+        // depths), but noise always sits in the BOTTOM digits of whatever `w`
+        // produced it, while a genuine deciding term keeps a depth-independent
+        // fractional position. A probe's signal `(position, side)` is therefore
+        // trusted only once a probe at a DIFFERENT depth reproduces it.
+        let mut pending: Option<(u32, bool)> = if dist0 > floor {
+            Some((pos_of(dist0, base_guard), rem0 > half0))
+        } else {
+            None
+        };
         let mut guard = base_guard;
         loop {
             if guard >= max_guard {
-                return (lo, false); // exact tie within reach — clean base narrowing
+                // Cap reached without a confirmed deciding term. An unconfirmed
+                // signal from the deepest probe gets ONE shifted confirm probe
+                // (real positions reproduce; noise tracks the bottom of `w`).
+                if let Some((pp, ps)) = pending {
+                    let back = ZIV_RESOLVE_FLOOR_POW10 + 3;
+                    if max_guard > base_guard + back {
+                        let g_c = max_guard - back;
+                        let (neg, q, rem, div) = probe(g_c);
+                        let half = div / lit(2);
+                        let dist = if rem < half { half - rem } else { rem - half };
+                        if dist > floor {
+                            let p = pos_of(dist, g_c);
+                            if (rem > half) == ps && p.abs_diff(pp) <= 1 {
+                                return (round_half(neg, q, rem, div), true);
+                            }
+                        }
+                    }
+                }
+                // Still unresolved: the deciding term sits below every probed
+                // depth. With the never-exact rule the half boundary carries a
+                // strictly positive sub-resolution tail — the residual is
+                // ABOVE half, so every nearest mode rounds away from the kept
+                // value; otherwise keep the clean base narrowing. Either way
+                // the widening caller may retry at a wider integer.
+                if never_exact {
+                    return (finish(neg0, q0, true), false);
+                }
+                return (lo, false);
             }
             let step = (target + base_guard).max(base_guard);
             let next_guard = guard.saturating_add(step).min(max_guard);
-            let (hi, hi_dist) = narrow(next_guard);
+            let (neg, q, rem, div) = probe(next_guard);
+            let half = div / lit(2);
+            let hi_dist = if rem < half { half - rem } else { rem - half };
             if hi_dist > floor {
-                return (hi, true); // deciding digit resolved above the noise floor
+                let p = pos_of(hi_dist, next_guard);
+                let above = rem > half;
+                if let Some((pp, ps)) = pending {
+                    if above == ps && p.abs_diff(pp) <= 1 {
+                        // Confirmed deciding digit — trustworthy.
+                        return (round_half(neg, q, rem, div), true);
+                    }
+                }
+                pending = Some((p, above));
             }
             guard = next_guard;
         }
     }
 
     // directed
-    let mut dnarrow = |g: u32| -> (S, S) {
-        let w = target + g;
-        let v = recompute(g);
-        let neg = v < lit(0);
-        let mag = if neg { -v } else { v };
-        let divisor = pow10(w - target);
-        let (q, rem) = mag.div_rem(divisor);
+    // Directed semantics: any nonzero residual (or the `never_exact`
+    // sub-resolution rule) nudges Ceiling/Floor by the result's sign.
+    let dir_round = |neg: bool, q: S, rem: S| -> St {
         let result_positive = !neg;
         let residual_present = rem != lit(0) || never_exact;
         let bump = residual_present
@@ -780,40 +876,75 @@ where
                 RoundingMode::Ceiling => result_positive,
                 _ => unreachable!(),
             };
-        let q_mag = if bump { q + lit(1) } else { q };
-        let signed = if neg { -q_mag } else { q_mag };
-        let dist = if rem < divisor - rem { rem } else { divisor - rem };
-        (signed, dist)
+        finish(neg, q, bump)
     };
-    let range_check = |signed: S| -> St {
-        let max_w = BigInt::resize_to::<S>(st_max);
-        let min_w = BigInt::resize_to::<S>(st_min);
-        if signed > max_w || signed < min_w {
-            panic!("wide-tier strict transcendental: result out of range");
-        }
-        BigInt::resize_to::<St>(signed)
-    };
-    let (base, dist0) = dnarrow(base_guard);
+    let (neg0, q0, rem0, div0) = probe(base_guard);
+    let dist0 = if rem0 < div0 - rem0 { rem0 } else { div0 - rem0 };
     if dist0 > pow10(base_guard) / lit(1000) {
-        return (range_check(base), true); // clear of a grid line (wide escalate band)
+        return (dir_round(neg0, q0, rem0), true); // clear of a grid line
     }
-    let max_guard = max_guard_for(int_digits_of(range_check(base)));
+    let base = dir_round(neg0, q0, rem0);
+    let max_guard = max_guard_for(int_digits_of(base));
+    // Cross-depth confirmation — see the nearest branch: a probe's signal
+    // `(position, side)` is trusted only once a probe at a different depth
+    // reproduces it (noise tracks the bottom of `w`; real digits do not move).
+    let mut pending: Option<(u32, bool)> = if dist0 > floor {
+        Some((pos_of(dist0, base_guard), rem0 < div0 - rem0))
+    } else {
+        None
+    };
     let mut guard = base_guard;
     loop {
         if guard >= max_guard {
-            // Unresolved at the cap: the deciding digit is beyond reach. Return
-            // the CLEAN base narrowing — for `cosh` (`never_exact == false`) the
-            // base residual is 0, so no sub-resolution bump (matching the finite
-            // oracle's exact treatment of a deep tie); for `exp`
-            // (`never_exact == true`) the base keeps its genuine sub-resolution
-            // sign bump. Either way it is noise-free, unlike the deepest narrowing.
-            return (range_check(base), false);
+            // Cap reached without a confirmed deciding term. An unconfirmed
+            // signal from the deepest probe gets ONE shifted confirm probe.
+            if let Some((pp, ps)) = pending {
+                let back = ZIV_RESOLVE_FLOOR_POW10 + 3;
+                if max_guard > base_guard + back {
+                    let g_c = max_guard - back;
+                    let (neg, q, rem, div) = probe(g_c);
+                    let dist = if rem < div - rem { rem } else { div - rem };
+                    if dist > floor {
+                        let p = pos_of(dist, g_c);
+                        if (rem < div - rem) == ps && p.abs_diff(pp) <= 1 {
+                            return (dir_round(neg, q, rem), true);
+                        }
+                    }
+                }
+            }
+            // Still unresolved: the deciding digit is beyond reach. SNAP the
+            // base probe to its nearest grid line — the sub-floor remainder is
+            // kernel noise around it (the undershoot that would otherwise
+            // leave the narrowing one ULP short) — then apply the
+            // `never_exact` sub-resolution rule on the grid value: the true
+            // value carries a strictly positive tail below the computed
+            // digits, so Ceiling (positive result) / Floor (negative) nudge
+            // one ULP off the line; Trunc keeps it. A non-`never_exact`
+            // caller keeps the bare grid line.
+            let q_grid = if rem0 > div0 / lit(2) { q0 + lit(1) } else { q0 };
+            let tail_bump = never_exact
+                && match mode {
+                    RoundingMode::Trunc => false,
+                    RoundingMode::Floor => neg0,
+                    RoundingMode::Ceiling => !neg0,
+                    _ => unreachable!(),
+                };
+            return (finish(neg0, q_grid, tail_bump), false);
         }
         let step = (target + base_guard).max(base_guard);
         let next_guard = guard.saturating_add(step).min(max_guard);
-        let (hi, hi_dist) = dnarrow(next_guard);
+        let (neg, q, rem, div) = probe(next_guard);
+        let hi_dist = if rem < div - rem { rem } else { div - rem };
         if hi_dist > floor {
-            return (range_check(hi), true);
+            let p = pos_of(hi_dist, next_guard);
+            let above = rem < div - rem;
+            if let Some((pp, ps)) = pending {
+                if above == ps && p.abs_diff(pp) <= 1 {
+                    // Confirmed deciding digit — trustworthy.
+                    return (dir_round(neg, q, rem), true);
+                }
+            }
+            pending = Some((p, above));
         }
         guard = next_guard;
     }
@@ -822,8 +953,9 @@ where
 /// Two-width near-min narrowing for `cosh` / `exp`: resolve the near-tie at the
 /// tier work integer `S1`; if its deciding digit was unreachable there (and a
 /// wider integer would reach further, i.e. `S1` is below the precision
-/// horizon), retry at the next-wider `S2`. Deep ties past the horizon stay
-/// exact at both widths. `never_exact` mirrors the `exp` sub-resolution rule.
+/// horizon), retry at the next-wider `S2`. A tie unresolved at both widths
+/// falls to the never-exact endgame (the sub-resolution positive tail).
+/// `never_exact` mirrors the `exp` sub-resolution rule.
 #[inline]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn round_to_storage_widening_g<St: BigInt + Copy, S1: BigInt, S2: BigInt>(
