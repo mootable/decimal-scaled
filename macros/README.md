@@ -336,9 +336,10 @@ the literal form when you need a const.
 
 ---
 
-## Test corpus
+## Test coverage
 
-`tests/macros.rs` (in the parent crate) exercises every entry
+`decimal-scale-test/tests/api/proc_macro.rs` exercises every entry
 point, every literal shape, every error path, the radix-prefix
 forms, the inline-expression form, and the curated per-scale
-wrappers. Run under `cargo test --features "wide x-wide macros"`.
+wrappers. Run under
+`cargo test -p decimal-scale-test --features macros --test api proc_macro`.

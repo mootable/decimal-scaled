@@ -13,15 +13,14 @@
 
 ## Automatic gates (CI — must be green)
 
-- [ ] 📐 Precision (0.5 ULP gate) — `ulp_strict_golden` delta == 0, all 6 modes / 13 widths; proptest ULP fuzz
+- [ ] 📐 Precision (0.5 ULP gate) — `ci.yml` `golden (gate)` at 0 bad / 0 panic, all 6 modes, every band-edge `(width, scale)` cell; `tests (gate)` green (incl. proptest ULP fuzz)
 - [ ] CodSpeed — no unexpected perf regression
 - [ ] cargo-audit — clean
 
 ## Manual checks (verified before merge)
 
-- [ ] `cargo test --features wide,x-wide,xx-wide,macros` + default-feature run green
-- [ ] `cargo clippy --lib` clean
-- [ ] Docs build: `RUSTDOCFLAGS="-D warnings" cargo doc --no-deps` and `mkdocs build --strict`
+- [ ] `cargo clippy --lib` clean (the `ci.yml` clippy job is informational only)
+- [ ] Site build: `mkdocs build --strict` (rustdoc is auto-gated pre-merge by `docs (gate)`)
 - [ ] **Benchmarks refreshed** from a fresh GitHub-Actions sweep (figures + `benchmarks.md` tables)
 - [ ] `ROADMAP.md` — shipped items moved; next-version "incoming" section; later proposals marked `0.5+`
 - [ ] `ALGORITHMS.md` — matches shipped kernels; "evaluated and not used" current; citations correct

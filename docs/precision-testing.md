@@ -10,34 +10,42 @@ rounding mode. "Correctly rounded" is the strong reading of 0.5 ULP
 — not merely *within* half a ULP (faithful rounding), but the
 *exact* nearest representable, with **zero** tolerance.
 
-The contract is proved at `delta == 0` storage LSB against a
-high-precision [mpmath](https://mpmath.org/) oracle, for **every**
+The contract is proved at `delta == 0` storage LSB against two
+independently generated high-precision oracles — the committed
+full-surface golden set (Layer 1) and an
+[mpmath](https://mpmath.org/) table set (Layer 3) — for **every**
 [`RoundingMode`](https://github.com/mootable/decimal-scaled/blob/main/src/support/rounding.rs) — `HalfToEven`,
 `HalfAwayFromZero`, `HalfTowardZero`, `Trunc`, `Floor`, `Ceiling` —
-across **all twelve** decimal widths over a five-point scale set.
+across **all twelve** decimal widths.
 
 There are four independent layers, each catching a different
 failure mode.
 
-## Layer 1 — hand-computed truth tables
+## Layer 1 — the full-surface golden gate (the CI-enforced proof)
 
-`tests/precision_strict_05_ulp.rs` lists hand-computed truth values
-at D38<12> for every constant and strict transcendental, computed
-from canonical 35-digit references and rounded half-to-even at the
-storage LSB. Each case asserts the kernel returns the *correctly
-rounded* value at the storage scale.
+The consolidated test crate
+[`decimal-scale-test`](https://github.com/mootable/decimal-scaled/tree/main/decimal-scale-test)
+drives the library-agnostic
+[`decimal-scaled-golden`](https://github.com/mootable/decimal-scaled/tree/main/decimal-scaled-golden)
+harness over **every band-edge `(width, scale)` cell** — 88 cells
+from `D18<0>` to `D1232<1231>` — for every strict function under
+**all six** rounding modes. The oracle is the committed golden set:
+one width-agnostic `.golden` file per function (28 functions), each
+value stored once to 1233 fractional digits and folded in-harness to
+the correctly-rounded integer at the subject's cell and mode. A gate
+run passes only at **0 bad / 0 panic** — out-of-range cells must
+match the declared overflow contract (panic), in-range cells must be
+bit-exact.
 
-It is the only table the crate maintainers transcribe by hand, and
-it is compile-gated to `HalfToEven`. The full correctly-rounded
-proof — bit-exact under *every* `RoundingMode`, across every tier —
-lives in Layer 3 (`ulp_strict_golden.rs`); the other layers exist
-because hand-computing per-mode tables for every tier × every
-function is impractical.
+This is the gate CI enforces on every push (see "CI gate" below)
+and the broadest net: every cell, every mode, zero tolerance. See
+the [`decimal-scale-test` README](https://github.com/mootable/decimal-scaled/blob/main/decimal-scale-test/README.md)
+for running it locally and the `GOLDEN_*` filter variables.
 
 ## Layer 2 — internal cross-witness tables
 
-`tests/wide_strict_transcendentals.rs` and
-`tests/precision_wide_baseline.rs` validate the wide tiers by
+`tests/wide_strict_transcendentals.rs` (and its narrow-tier sibling
+`tests/narrow_strict_transcendentals.rs`) validates the wide tiers by
 cross-witness: compute a value at the target's storage and scale,
 compute the reference at the same scale with a wider storage type,
 rescale, and assert ±1 LSB agreement.
@@ -47,15 +55,18 @@ tiers — but a kernel bug *shared* between the narrow and wide
 paths will be invisible to it, because both sides agree on the
 wrong answer. The next layer addresses that.
 
-## Layer 3 — mpmath-oracle golden tables (the correctness proof)
+## Layer 3 — mpmath-oracle golden tables (the independent second oracle)
 
 `tests/ulp_strict_golden.rs` reads pre-computed `.txt` tables from
 `tests/golden/` and asserts kernel results are the **correctly
 rounded** value — bit-exact (`delta == 0` storage LSB, ZERO
 tolerance) with the [mpmath](https://mpmath.org/) oracle
 (BSD-3-Clause) over each tier's five-point scale set, under **every**
-`RoundingMode`. This is the definitive proof of the headline
-guarantee.
+`RoundingMode`. Its oracle is generated independently of the Layer-1
+golden set, so the two golden nets cross-check each other. The suite
+is gated behind the root crate's `golden` Cargo feature (it is a
+heavy run, kept out of the regular `cargo test`); run it locally
+with the feature enabled as shown below.
 
 Tables live at `tests/golden/<func>_d<N>_s<S>.txt`, with one
 `<input_raw>\t<floor_raw>\t<cls>` per line:
@@ -89,7 +100,8 @@ Functions: ln, exp, sin, cos, tan, atan, sqrt, cbrt.
 The shipped kernels are correctly rounded for the three *nearest*
 modes across every tier. The remaining cell that is not yet correctly
 rounded is marked `#[ignore]` in the harness with a reason string (run
-it with `cargo test --test ulp_strict_golden -- --include-ignored`):
+it with `cargo test --test ulp_strict_golden --features
+wide,x-wide,xx-wide,golden -- --include-ignored`):
 
 - **Narrow-path `atan` directed-rounding 1-LSB boundary.** On the
   narrow (`not(feature = "wide")`) `atan` path at D18 s9 and D38 s19,
@@ -146,7 +158,7 @@ right move when a golden case fails is to investigate the kernel.
 The harness is split per width so local iteration is fast:
 
 ```sh
-cargo test --test ulp_strict_golden --features wide,x-wide,xx-wide,macros --release d76
+cargo test --test ulp_strict_golden --features wide,x-wide,xx-wide,golden --release d76
 ```
 
 Runs only the D76<35> band — eight functions, a few hundred cases
@@ -175,8 +187,8 @@ worst-case input shape, which generalises.
 
 ## Layer 4 — proptest property fuzz
 
-`tests/ulp_proptest.rs` exercises identities that hold without an
-external oracle:
+`decimal-scale-test/tests/proptest_identities.rs` exercises
+identities that hold without an external oracle:
 
 - `exp(ln(x)) ≈ x` for positive x
 - `ln(exp(x)) ≈ x` for x in `[0, 30]`
@@ -213,16 +225,23 @@ isn't accidentally pinned to local-filesystem state.
 
 When a property fails locally, proptest prints the *minimised*
 counterexample (`minimal failing input: raw = …`). That's the
-input to debug — copy it into a unit test under
-`tests/precision_strict_05_ulp.rs` (or whichever file owns the
+input to debug — pin it as a reproducer under
+`decimal-scale-test/tests/regressions/` (or whichever file owns the
 relevant tier) and iterate against it directly.
 
 ## CI gate
 
-[`/.github/workflows/precision.yml`](https://github.com/mootable/decimal-scaled/blob/main/.github/workflows/precision.yml)
-runs all four layers on every PR and push to `main`. The
-precision gate is *Required* in branch-protection — there is no
-reviewer override. A failed precision check blocks merge full stop.
+[`/.github/workflows/ci.yml`](https://github.com/mootable/decimal-scaled/blob/main/.github/workflows/ci.yml)
+enforces the contract on every PR and push. Its `golden (gate)` job
+runs the Layer-1 full-surface gate in release across all six rounding
+modes (row-sampled via `GOLDEN_SAMPLE` for per-push latency, plus
+each file's edge lines); the `tests (gate)` job runs the full
+`cargo test` — which includes the Layer-2 cross-witness suites and
+the Layer-4 proptest fuzz. The unsampled every-row deep pass is the
+dispatch-only
+[`golden (comprehensive)`](https://github.com/mootable/decimal-scaled/blob/main/.github/workflows/golden-comprehensive.yml)
+workflow. A failed correctness check blocks merge full stop — there
+is no reviewer override.
 
 If your kernel change fails the gate: the contract is fixed at
 0.5 ULP. Adjust the kernel (usually a wider `GUARD` constant, or a
@@ -262,7 +281,7 @@ ordinary data.
 > row missing the `cls` column, so legacy hard-input rows are
 > currently inert. Update `gen_hard_inputs.py` to emit the
 > floor-and-class columns (mirroring `gen_golden_precision.py`'s
-> `floor_and_class`) before relying on the hard-input corpus again.
+> `floor_and_class`) before relying on the hard-input rows again.
 
 The categories, each cited from the precision literature
 (license-compatible — papers, not test vectors):
@@ -316,9 +335,9 @@ The categories, each cited from the precision literature
     elementary mathematical library for the IEEE floating-point
     standard" (1991).
 
-The proptest harness `tests/ulp_proptest.rs` mirrors these
-categories with per-category input strategies (100 cases each,
-deterministic seed). Identity-based assertions
+The proptest harness `decimal-scale-test/tests/proptest_identities.rs`
+mirrors these categories with per-category input strategies (100
+cases each, deterministic seed). Identity-based assertions
 (round-trip / symmetry) substitute for the runtime oracle.
 
 ### Oracle working precision

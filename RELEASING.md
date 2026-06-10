@@ -50,11 +50,17 @@ the rest are **manual** and must be verified by hand before merge.
 
 ### Automatic gates (CI — fail the PR)
 
-- **Precision (0.5 ULP gate)** — `precision.yml`, on every PR **and**
-  push: the strict-ULP suites, the mpmath-oracle `ulp_strict_golden`
-  golden suite (D38…D1232, **delta == 0 across all six rounding modes**),
-  and the proptest ULP fuzz. The precision guarantee is *enforced here,
-  not assumed* — a kernel that rounds wrong turns the PR red.
+- **ci (pre-merge gates)** — `ci.yml`, on every PR **and** push to
+  `main` / `release/*`: `tests (gate)` (the full `cargo test` for the
+  root crate and `decimal-scale-test`, widest and default feature
+  sets), `golden (gate)` (the full-surface golden run in release —
+  every band-edge `(width, scale)` cell, **all six rounding modes**,
+  row-sampled per push; 0 bad / 0 panic), plus `no_std`, `docs`
+  (rustdoc `-D warnings`), and `msrv`. The precision guarantee is
+  *enforced here, not assumed* — a kernel that rounds wrong turns the
+  PR red.
+- **docs-drift** — `docs-drift.yml`; `render_docs.py --check` on every
+  PR, failing on any stale GENERATED doc region.
 - **Run benchmarks** — `codspeed.yml`; the CodSpeed harness job. The
   benches must compile and run (this is a required context).
 - **cargo-audit** — RustSec advisory check.
@@ -67,13 +73,14 @@ the rest are **manual** and must be verified by hand before merge.
 
 ### Manual — run / verify before merge (NOT auto-gated)
 
-- **Tests + clippy** — `cargo test --features wide,x-wide,xx-wide,macros`
-  (plus the default-feature run) and `cargo clippy --lib` clean. The
-  precision gate deliberately does **not** run the full `cargo test`.
-- **Docs build** — `RUSTDOCFLAGS="-D warnings" cargo doc --no-deps` and
-  `mkdocs build --strict`. `docs.yml` runs only on push to `main`
-  (post-merge), so a broken docs build does **not** block the PR — check
-  it locally first.
+- **Clippy** — `cargo clippy --lib` clean. The `ci.yml` clippy job is
+  informational only (it never fails the build), so clippy stays a
+  manual check. The full `cargo test` itself is auto-gated by
+  `tests (gate)`.
+- **mkdocs build** — `mkdocs build --strict`. The rustdoc build is
+  auto-gated pre-merge (`docs (gate)` in `ci.yml`), but the mkdocs site
+  build runs only in `docs.yml` on push to `main` (post-merge), so a
+  broken site build does **not** block the PR — check it locally first.
 - **ROADMAP.md** — shipped items moved to shipped; the next version's
   "incoming" section present; later proposals marked `0.5+`.
 - **ALGORITHMS.md** — each documented kernel matches what actually ships;
@@ -114,8 +121,11 @@ git checkout -b release/<MAJOR.MINOR.PATCH>   # e.g. release/0.4.4
 
 - All code complete; tests, clippy, and the docs build green (see the
   manual checklist above).
-- The precision gate green: `ulp_strict_golden` all pass, **0 ignored**,
-  delta == 0 across all six rounding modes and all thirteen widths.
+- The golden gate green: `golden_default` and `golden_all_modes`
+  (`decimal-scale-test`) at **0 bad / 0 panic** over every band-edge
+  `(width, scale)` cell, all six rounding modes — plus the root crate's
+  `ulp_strict_golden` mpmath suite (the `golden` feature) all pass,
+  delta == 0.
 - **Regenerate the single-sourced docs and commit on the release branch
   as part of the PR.** Run `python scripts/render_docs.py`; it fills
   every `<!-- … GENERATED:<key> … -->` region — the install snippet
@@ -249,7 +259,8 @@ gh pr create --base main --head release/<version> \
   (`.github/PULL_REQUEST_TEMPLATE/release.md`) — work through every box.
 - All merges into `main` go through a **PR** (branch-protection
   practice) — never push to `main` directly.
-- The PR must pass CI: the precision gate, CodSpeed, and cargo-audit.
+- The PR must pass CI: the `ci.yml` gates (tests, golden, no_std,
+  docs, msrv), docs-drift, CodSpeed, and cargo-audit.
 - Review for: precision gate green, benchmarks refreshed, CHANGELOG and
   docs updated, version bumped.
 - Pushing docs to the release branch during the sweep is safe — docs do
