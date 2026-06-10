@@ -72,6 +72,22 @@ pub(crate) fn pow_schoolbook<C: WideTrigCore, const SCALE: u32>(
     if exponent == C::storage_zero() {
         return C::storage_one(SCALE);
     }
+    // Exact integer-power pin: when the base and exponent are exact integers,
+    // `base^exp` is an exact rational and its correctly-directed-rounded value
+    // is fixed by integer arithmetic — emit it directly so the to-nearest
+    // `exp(exp·ln base)` composition cannot land a directed mode 1 LSB off at
+    // these algebraic-exact points (e.g. `10^-2 = 0.01`). `None` (fractional
+    // base/exponent, or a positive power out of range) defers to the
+    // composition below. The wide schoolbook kernel has no other integer
+    // fast path, so this is also the wide tiers' only exact-integer handling.
+    if let Some(v) = crate::algos::pow::powi_exact::powi_exact_pin::<C::Storage, SCALE>(
+        base,
+        exponent,
+        C::storage_max(),
+        mode,
+    ) {
+        return v;
+    }
     C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
         let w = SCALE + guard;
         let ln_base = C::ln_fixed::<SCALE>(C::to_work_scaled(base, guard), w);
@@ -226,6 +242,37 @@ mod tests {
                         crate::algos::pow::pow_schoolbook::pow_schoolbook::<Core, S>(rb, re, mode),
                         D::<Int<3>, S>(rb).powf_strict_with(D::<Int<3>, S>(re), mode).0,
                         "D57 pow schoolbook != routed at base={b} exp={e} mode={mode:?}"
+                    );
+                }
+            }
+        }
+
+        #[test]
+        fn integer_reciprocal_is_directed_exact() {
+            // The wide schoolbook kernel has NO integer fast path, so before
+            // the exact pin every integer-exponent power went through the
+            // to-nearest `exp(exp·ln base)` composition — 1 LSB off under a
+            // directed mode at an exact reciprocal. Each power below lands
+            // exactly on a storage grid line, so every mode must return it.
+            let one = 10_i128.pow(S);
+            let one3 = Int::<3>::from_i128(one);
+            // (base value, exp value, divisor = base^|exp|)
+            let cases: [(i128, i128, i128); 5] = [
+                (10, -2, 100),    // 0.01
+                (20, -2, 400),    // 0.0025
+                (25, -3, 15_625), // 0.000064
+                (4, -3, 64),      // 0.015625
+                (5, -3, 125),     // 0.008
+            ];
+            for (b, e, div) in cases {
+                let rb = Int::<3>::from_i128(b) * one3;
+                let re = Int::<3>::from_i128(e) * one3;
+                let want = Int::<3>::from_i128(one / div);
+                for mode in MODES {
+                    assert_eq!(
+                        crate::algos::pow::pow_schoolbook::pow_schoolbook::<Core, S>(rb, re, mode),
+                        want,
+                        "D57 {b}^{e} mode={mode:?}"
                     );
                 }
             }

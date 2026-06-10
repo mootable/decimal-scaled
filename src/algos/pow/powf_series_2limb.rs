@@ -168,10 +168,21 @@ fn powf_with_raw<const SCALE: u32>(
         if let Some(v) = powi_raw_checked::<SCALE>(base, n, mode) {
             return v;
         }
-        // `base^|n|` left the storage range: defer to the overflow-safe
-        // `exp(y·ln x)` composition below — it panics on a genuinely
-        // out-of-range result and computes an in-range reciprocal
-        // (`base^-|n|`) correctly-rounded.
+        // `base^|n|` left the storage range. When the base is an exact
+        // integer the result is still an exact rational — pin its
+        // correctly-directed-rounded value (`10^SCALE / base^|n|` for a
+        // negative `n`) so a directed mode is not 1 LSB off, rather than
+        // defer to the to-nearest `exp(y·ln x)` composition. A fractional
+        // base or a genuinely out-of-range positive power returns `None`
+        // and falls through to the composition (which panics on overflow).
+        if let Some(v) = crate::algos::pow::powi_exact::powi_exact_pin::<Int<2>, SCALE>(
+            Int::<2>::from_i128(base),
+            Int::<2>::from_i128(exp),
+            Int::<2>::MAX,
+            mode,
+        ) {
+            return v.as_i128();
+        }
     }
     let w = SCALE + working_digits;
     let pow = 10u128.pow(working_digits);
@@ -203,10 +214,21 @@ fn powf_strict_raw<const SCALE: u32>(base: i128, exp: i128, mode: RoundingMode) 
         if let Some(v) = powi_raw_checked::<SCALE>(base, n, mode) {
             return v;
         }
-        // `base^|n|` left the storage range: defer to the overflow-safe
-        // `exp(y·ln x)` composition below — it panics on a genuinely
-        // out-of-range result and computes an in-range reciprocal
-        // (`base^-|n|`) correctly-rounded.
+        // `base^|n|` left the storage range. When the base is an exact
+        // integer the result is still an exact rational — pin its
+        // correctly-directed-rounded value (`10^SCALE / base^|n|` for a
+        // negative `n`) so a directed mode is not 1 LSB off, rather than
+        // defer to the to-nearest `exp(y·ln x)` composition. A fractional
+        // base or a genuinely out-of-range positive power returns `None`
+        // and falls through to the composition (which panics on overflow).
+        if let Some(v) = crate::algos::pow::powi_exact::powi_exact_pin::<Int<2>, SCALE>(
+            Int::<2>::from_i128(base),
+            Int::<2>::from_i128(exp),
+            Int::<2>::MAX,
+            mode,
+        ) {
+            return v.as_i128();
+        }
     }
     let w = SCALE + STRICT_GUARD;
     let pow = 10u128.pow(STRICT_GUARD);
@@ -232,6 +254,15 @@ mod tests {
     const ONE: i128 = 10_i128.pow(S);
     const M: RoundingMode = RoundingMode::HalfToEven;
 
+    const MODES: [RoundingMode; 6] = [
+        RoundingMode::HalfToEven,
+        RoundingMode::HalfAwayFromZero,
+        RoundingMode::HalfTowardZero,
+        RoundingMode::Trunc,
+        RoundingMode::Floor,
+        RoundingMode::Ceiling,
+    ];
+
     fn powf(base: i128, exp: i128) -> i128 {
         powf_strict_raw::<S>(base * ONE, exp * ONE, M)
     }
@@ -239,11 +270,43 @@ mod tests {
     #[test]
     fn in_range_reciprocal_with_overflowing_intermediate_computes() {
         // `10^-2 = 0.01` is representable, but `10² = 100` overflows i128
-        // storage at scale 37. The fast path must defer to the composition,
+        // storage at scale 37. The fast path must defer to the exact pin,
         // not panic on the intermediate.
         assert_eq!(powf(10, -2), ONE / 100);
         assert_eq!(powf(5, -3), ONE / 125); // 1/125 = 0.008
         assert_eq!(powf(16, -2), ONE / 256); // 1/256 = 0.00390625
+    }
+
+    #[track_caller]
+    fn check_directed_exact<const SC: u32>(base: i128, exp: i128, divisor: i128) {
+        let one = 10_i128.pow(SC);
+        for mode in MODES {
+            assert_eq!(
+                powf_strict_raw::<SC>(base * one, exp * one, mode),
+                one / divisor,
+                "base={base} exp={exp} scale={SC} mode={mode:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn overflowing_intermediate_reciprocal_is_directed_exact() {
+        // The defect: these reciprocals' scaled `base^|n|` intermediate
+        // overflows i128, so the integer fast path returned `None` and
+        // DEFERRED to the to-nearest `exp(y·ln x)` composition — which lands
+        // ~1 ULP low, so `Floor` / `Trunc` rounded to the value one LSB BELOW
+        // the exact power (e.g. `0.00999…9` for `0.01`). The exact integer pin
+        // must return the on-grid value for EVERY mode, since each power lands
+        // exactly on a storage grid line. Each base is representable at its
+        // scale yet its scaled power overflows i128 (so the pin, not
+        // `powi_raw_checked`, decides). Bases ≤ 17 at scale 37, larger at 36.
+        check_directed_exact::<37>(10, -2, 100); // 0.01
+        check_directed_exact::<37>(16, -2, 256); // 0.00390625
+        check_directed_exact::<37>(4, -3, 64); // 0.015625
+        check_directed_exact::<37>(5, -3, 125); // 0.008
+        check_directed_exact::<36>(20, -2, 400); // 0.0025
+        check_directed_exact::<36>(25, -2, 625); // 0.0016
+        check_directed_exact::<36>(25, -3, 15_625); // 0.000064
     }
 
     #[test]

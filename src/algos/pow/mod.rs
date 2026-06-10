@@ -19,6 +19,11 @@
 //!   `Algorithm::Schoolbook` variant.
 
 pub(crate) mod powf_series_2limb;
+/// Exact integer-power pin shared by the narrow + wide `powf` kernels: when
+/// the base and exponent are exact integers, `base^exp` is an exact rational
+/// and its correctly-directed-rounded value is emitted directly instead of
+/// the to-nearest `exp(exp*ln base)` composition.
+pub(crate) mod powi_exact;
 /// Schoolbook floating-point power -- naive `exp(y*ln(x))` composition,
 /// correctness reference. Registered as the unrouted `Algorithm::Schoolbook`
 /// arm; not connected to `select`.
