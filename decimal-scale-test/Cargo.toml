@@ -6,10 +6,34 @@ publish = false
 description = "decimal-scaled test subjects + filterable golden gate over the decimal-scaled-golden harness"
 license = "MIT OR Apache-2.0"
 
-# This crate exists to isolate the heavy full-surface golden run (88 (width,scale)
+# This crate isolates the heavy full-surface golden run (88 (width,scale)
 # cells × every strict transcendental ≈ thousands of monomorphisations) from the
-# core library's `cargo test`. The wide tiers are always on — the crate's whole
-# purpose is the wide gate.
+# core library's `cargo test`, and hosts the consolidated public-API test suite.
+# Features pass through to the root crate so each CI leg (default narrow /
+# full wide) exercises the same surface it did when the tests lived at the root.
 [dependencies]
-decimal-scaled = { path = "..", features = ["wide", "x-wide", "xx-wide"] }
+decimal-scaled = { path = "..", default-features = false }
 decimal-scaled-golden = { path = "../decimal-scaled-golden" }
+
+[features]
+default  = ["std"]
+std      = ["decimal-scaled/std"]
+alloc    = ["decimal-scaled/alloc"]
+wide     = ["decimal-scaled/wide"]
+x-wide   = ["decimal-scaled/x-wide"]
+xx-wide  = ["decimal-scaled/xx-wide"]
+macros   = ["decimal-scaled/macros"]
+serde    = ["decimal-scaled/serde"]
+dyn      = ["decimal-scaled/dyn"]
+strict   = ["decimal-scaled/strict"]
+fast     = ["decimal-scaled/fast"]
+cross-scale-ops = ["decimal-scaled/cross-scale-ops"]
+rounding-half-away-from-zero = ["decimal-scaled/rounding-half-away-from-zero"]
+rounding-half-toward-zero = ["decimal-scaled/rounding-half-toward-zero"]
+rounding-trunc = ["decimal-scaled/rounding-trunc"]
+rounding-floor = ["decimal-scaled/rounding-floor"]
+rounding-ceiling = ["decimal-scaled/rounding-ceiling"]
+
+[[test]]
+name = "golden"
+required-features = ["wide", "x-wide", "xx-wide"]
