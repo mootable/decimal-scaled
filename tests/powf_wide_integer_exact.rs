@@ -91,3 +91,56 @@ tier_test!(d616_integer_powers_directed_exact, D616, 32, 614);
 tier_test!(d924_integer_powers_directed_exact, D924, 48, 922);
 #[cfg(feature = "xx-wide")]
 tier_test!(d1232_integer_powers_directed_exact, D1232, 64, 1230);
+
+/// Fractional-base integer exponents: a terminating-decimal base to a small
+/// integer power is computed by the exact chain (`2.5^2 = 6.25`) and a
+/// negative exponent by one correctly-rounded division — including the
+/// non-terminating reciprocal `1.5^-1 = 0.666...`, whose last digit each mode
+/// must place per its rule (residual `.66... > half`: nearest modes round up,
+/// Trunc/Floor keep, Ceiling bumps).
+mod fractional_base {
+    use super::MODES;
+    use decimal_scaled::{RoundingMode, D1232, D57};
+
+    fn sixes_with_last(scale: usize, last: char) -> String {
+        let mut s = String::from("0.");
+        for _ in 1..scale {
+            s.push('6');
+        }
+        s.push(last);
+        s
+    }
+
+    macro_rules! check_tier {
+        ($D:ty, $S:expr) => {{
+            type D = $D;
+            let parse = |s: &str| s.parse::<D>().unwrap();
+            for m in MODES {
+                assert_eq!(parse("2.5").powf_strict_with(parse("2"), m), parse("6.25"), "{m:?} 2.5^2");
+                assert_eq!(parse("0.5").powf_strict_with(parse("-2"), m), parse("4"), "{m:?} 0.5^-2");
+                assert_eq!(parse("1.5").powf_strict_with(parse("3"), m), parse("3.375"), "{m:?} 1.5^3");
+                assert_eq!(parse("0.1").powf_strict_with(parse("5"), m), parse("0.00001"), "{m:?} 0.1^5");
+                let last = match m {
+                    RoundingMode::Trunc | RoundingMode::Floor => '6',
+                    _ => '7', // nearest (residual above half) and Ceiling round up
+                };
+                assert_eq!(
+                    parse("1.5").powf_strict_with(parse("-1"), m),
+                    parse(&sixes_with_last($S, last)),
+                    "{m:?} 1.5^-1"
+                );
+            }
+        }};
+    }
+
+    #[test]
+    fn d57_fractional_exact_and_reciprocal() {
+        check_tier!(D57<19>, 19);
+    }
+
+    #[cfg(feature = "xx-wide")]
+    #[test]
+    fn d1232_fractional_exact_and_reciprocal() {
+        check_tier!(D1232<30>, 30);
+    }
+}

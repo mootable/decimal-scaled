@@ -3385,6 +3385,32 @@ macro_rules! decl_wide_transcendental {
                 {
                     return Self::from_bits(v);
                 }
+                // Fractional-base integer-exponent fast path: the pin handles
+                // integer bases only, but a terminating-decimal base to a small
+                // integer power is still EXACT whenever every chain step
+                // divides out `10^SCALE` (`2.5^2 = 6.25`); a negative exponent
+                // feeds the exact chain through one correctly-rounded division
+                // (correct even for a non-terminating reciprocal). Overflow or
+                // inexact chains defer to the guarded composition.
+                if let ::core::option::Option::Some(n) =
+                    $crate::algos::pow::powi_exact::exp_as_small_int_raw::<$Storage, SCALE>(
+                        exp.to_bits(),
+                    )
+                {
+                    if n == 0 {
+                        return Self::ONE;
+                    }
+                    if let ::core::option::Option::Some(v) =
+                        $crate::algos::pow::powi_exact::powi_terminating_pin::<$Storage, SCALE>(
+                            raw,
+                            n,
+                            <$Storage>::MAX,
+                            $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                        )
+                    {
+                        return Self::from_bits(v);
+                    }
+                }
                 let w = SCALE + $core::GUARD;
                 // Two-core: composition runs on the wide `Wagm` work int.
                 let ln_x = $core::ln_fixed_routed_agm::<SCALE>($core::to_work_agm(raw), w);
@@ -3851,6 +3877,27 @@ macro_rules! decl_wide_transcendental {
                     )
                 {
                     return Self::from_bits(v);
+                }
+                // Fractional-base integer-exponent fast path — see
+                // [`Self::powf_strict`]; here under the caller's `mode`.
+                if let ::core::option::Option::Some(n) =
+                    $crate::algos::pow::powi_exact::exp_as_small_int_raw::<$Storage, SCALE>(
+                        exp.to_bits(),
+                    )
+                {
+                    if n == 0 {
+                        return Self::ONE;
+                    }
+                    if let ::core::option::Option::Some(v) =
+                        $crate::algos::pow::powi_exact::powi_terminating_pin::<$Storage, SCALE>(
+                            raw,
+                            n,
+                            <$Storage>::MAX,
+                            mode,
+                        )
+                    {
+                        return Self::from_bits(v);
+                    }
                 }
                 // x^0.5 ≡ √x. The exp(0.5·ln x) chain loses a sub-ULP at a
                 // perfect-square base (e.g. 4^0.5), rounding 1 LSB short
