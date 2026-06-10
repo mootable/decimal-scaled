@@ -6,8 +6,7 @@
 //! This bucket holds the generic `D<S, SCALE>` newtype, the per-width
 //! aliases (`D18`, `D38`, …), the `DecimalConstants` constants
 //! surface, the public-trait surface in [`traits`], and the per-family
-//! inherent-impl shells (`arithmetic`, `overflow_variants`,
-//! `log_exp`, `trig`, `powers`, …).
+//! inherent-impl shells (`log_exp`, `trig`, `powers`, …).
 //!
 //! Lower-layer kernels live in [`crate::algos`] and routing lives in
 //! [`crate::policy`]; this bucket is the typed surface that calls into
@@ -19,9 +18,7 @@ pub(crate) mod consts;
 pub(crate) mod unified;
 pub(crate) mod widths;
 
-pub(crate) mod arithmetic;
 pub(crate) mod num_traits;
-pub(crate) mod overflow_variants;
 pub(crate) mod rescale;
 
 // Strict (integer-only) transcendental shells. Strict is the crate's

@@ -1,17 +1,10 @@
-// SPDX-FileCopyrightText: 2026 John Moxley
-// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Overflow-aware arithmetic variant contracts
+//! (`checked_*` / `wrapping_*` / `saturating_*` / `overflowing_*`),
+//! moved from `src/types/overflow_variants.rs`.
 
-//! Behaviour tests for [`D38`] overflow-aware arithmetic variants.
-//!
-//! The `checked_*` / `wrapping_*` / `saturating_*` / `overflowing_*`
-//! method families are emitted by the shared
-//! `decl_decimal_overflow_variants!(wide D38, …)` macro over the
-//! `Int<2>` storage (see `src/macros/overflow.rs`). This file retains
-//! only the width-specific behaviour tests.
-#[cfg(test)]
 #[allow(clippy::arithmetic_side_effects)]
-mod tests {
-    use crate::types::widths::D38s12;
+mod from_src_overflow_variants {
+    use decimal_scaled::{D38s12, Int};
 
     /// Returns `-ONE` as a convenience value.
     fn neg_one() -> D38s12 {
@@ -20,12 +13,12 @@ mod tests {
 
     /// Returns `2.0` in `D38s12` canonical form.
     fn two() -> D38s12 {
-        D38s12::from_bits(crate::int::types::Int::<2>::from_i128(2_000_000_000_000))
+        D38s12::from_bits(Int::<2>::try_from(2_000_000_000_000_i128).unwrap())
     }
 
     /// Returns `3.0` in `D38s12` canonical form.
     fn three() -> D38s12 {
-        D38s12::from_bits(crate::int::types::Int::<2>::from_i128(3_000_000_000_000))
+        D38s12::from_bits(Int::<2>::try_from(3_000_000_000_000_i128).unwrap())
     }
 
     // Add variants
@@ -40,14 +33,14 @@ mod tests {
         // MAX + ONE overflows (MAX is i128::MAX raw; ONE is 10^SCALE raw).
         assert_eq!(D38s12::MAX.checked_add(D38s12::ONE), None);
         // Boundary: MAX + 1 LSB also overflows.
-        assert_eq!(D38s12::MAX.checked_add(D38s12::from_bits(crate::int::types::Int::<2>::from_i128(1))), None);
+        assert_eq!(D38s12::MAX.checked_add(D38s12::from_bits(Int::<2>::try_from(1_i128).unwrap())), None);
     }
 
     #[test]
     fn checked_add_negative_overflow_returns_none() {
         assert_eq!(D38s12::MIN.checked_add(neg_one()), None);
         // Boundary: MIN + (-1 LSB) also overflows.
-        assert_eq!(D38s12::MIN.checked_add(D38s12::from_bits(crate::int::types::Int::<2>::from_i128(-1))), None);
+        assert_eq!(D38s12::MIN.checked_add(D38s12::from_bits(Int::<2>::try_from(-1_i128).unwrap())), None);
     }
 
     #[test]
@@ -58,13 +51,13 @@ mod tests {
     #[test]
     fn wrapping_add_overflow_wraps_to_min() {
         // MAX + 1 LSB wraps to MIN under two's-complement.
-        assert_eq!(D38s12::MAX.wrapping_add(D38s12::from_bits(crate::int::types::Int::<2>::from_i128(1))), D38s12::MIN);
+        assert_eq!(D38s12::MAX.wrapping_add(D38s12::from_bits(Int::<2>::try_from(1_i128).unwrap())), D38s12::MIN);
     }
 
     #[test]
     fn wrapping_add_negative_overflow_wraps_to_max() {
         // MIN + (-1 LSB) wraps to MAX.
-        assert_eq!(D38s12::MIN.wrapping_add(D38s12::from_bits(crate::int::types::Int::<2>::from_i128(-1))), D38s12::MAX);
+        assert_eq!(D38s12::MIN.wrapping_add(D38s12::from_bits(Int::<2>::try_from(-1_i128).unwrap())), D38s12::MAX);
     }
 
     #[test]
@@ -91,7 +84,7 @@ mod tests {
     fn overflowing_add_overflow_flagged() {
         // MAX + 1 LSB wraps exactly to MIN; overflow flag is set.
         assert_eq!(
-            D38s12::MAX.overflowing_add(D38s12::from_bits(crate::int::types::Int::<2>::from_i128(1))),
+            D38s12::MAX.overflowing_add(D38s12::from_bits(Int::<2>::try_from(1_i128).unwrap())),
             (D38s12::MIN, true)
         );
     }
@@ -100,7 +93,7 @@ mod tests {
     fn overflowing_add_negative_overflow_flagged() {
         // MIN + (-1 LSB) wraps exactly to MAX.
         assert_eq!(
-            D38s12::MIN.overflowing_add(D38s12::from_bits(crate::int::types::Int::<2>::from_i128(-1))),
+            D38s12::MIN.overflowing_add(D38s12::from_bits(Int::<2>::try_from(-1_i128).unwrap())),
             (D38s12::MAX, true)
         );
     }
@@ -131,7 +124,7 @@ mod tests {
     #[test]
     fn wrapping_sub_underflow_wraps_to_max() {
         // MIN - 1 LSB wraps exactly to MAX.
-        assert_eq!(D38s12::MIN.wrapping_sub(D38s12::from_bits(crate::int::types::Int::<2>::from_i128(1))), D38s12::MAX);
+        assert_eq!(D38s12::MIN.wrapping_sub(D38s12::from_bits(Int::<2>::try_from(1_i128).unwrap())), D38s12::MAX);
     }
 
     #[test]
@@ -159,7 +152,7 @@ mod tests {
     fn overflowing_sub_underflow_flagged() {
         // MIN - 1 LSB wraps exactly to MAX.
         assert_eq!(
-            D38s12::MIN.overflowing_sub(D38s12::from_bits(crate::int::types::Int::<2>::from_i128(1))),
+            D38s12::MIN.overflowing_sub(D38s12::from_bits(Int::<2>::try_from(1_i128).unwrap())),
             (D38s12::MAX, true)
         );
     }
@@ -181,7 +174,7 @@ mod tests {
     #[test]
     fn checked_neg_max_succeeds() {
         // MAX = i128::MAX, -MAX = i128::MIN + 1, fits.
-        let neg_max = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(-i128::MAX));
+        let neg_max = D38s12::from_bits(Int::<2>::try_from(-i128::MAX).unwrap());
         assert_eq!(D38s12::MAX.checked_neg(), Some(neg_max));
     }
 
@@ -223,8 +216,8 @@ mod tests {
 
     #[test]
     fn checked_mul_normal() {
-        let half = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(500_000_000_000));
-        let quarter = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(250_000_000_000));
+        let half = D38s12::from_bits(Int::<2>::try_from(500_000_000_000_i128).unwrap());
+        let quarter = D38s12::from_bits(Int::<2>::try_from(250_000_000_000_i128).unwrap());
         assert_eq!(half.checked_mul(half), Some(quarter));
     }
 
@@ -236,7 +229,7 @@ mod tests {
 
     #[test]
     fn checked_mul_one_identity() {
-        let v = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(7_500_000_000_000)); // 7.5
+        let v = D38s12::from_bits(Int::<2>::try_from(7_500_000_000_000_i128).unwrap()); // 7.5
         assert_eq!(v.checked_mul(D38s12::ONE), Some(v));
         assert_eq!(D38s12::ONE.checked_mul(v), Some(v));
     }
@@ -255,8 +248,8 @@ mod tests {
 
     #[test]
     fn wrapping_mul_normal() {
-        let half = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(500_000_000_000));
-        let quarter = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(250_000_000_000));
+        let half = D38s12::from_bits(Int::<2>::try_from(500_000_000_000_i128).unwrap());
+        let quarter = D38s12::from_bits(Int::<2>::try_from(250_000_000_000_i128).unwrap());
         assert_eq!(half.wrapping_mul(half), quarter);
     }
 
@@ -269,8 +262,8 @@ mod tests {
 
     #[test]
     fn saturating_mul_normal() {
-        let half = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(500_000_000_000));
-        let quarter = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(250_000_000_000));
+        let half = D38s12::from_bits(Int::<2>::try_from(500_000_000_000_i128).unwrap());
+        let quarter = D38s12::from_bits(Int::<2>::try_from(250_000_000_000_i128).unwrap());
         assert_eq!(half.saturating_mul(half), quarter);
     }
 
@@ -300,8 +293,8 @@ mod tests {
 
     #[test]
     fn overflowing_mul_normal_no_overflow() {
-        let half = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(500_000_000_000));
-        let quarter = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(250_000_000_000));
+        let half = D38s12::from_bits(Int::<2>::try_from(500_000_000_000_i128).unwrap());
+        let quarter = D38s12::from_bits(Int::<2>::try_from(250_000_000_000_i128).unwrap());
         assert_eq!(half.overflowing_mul(half), (quarter, false));
     }
 
@@ -316,7 +309,7 @@ mod tests {
     #[test]
     fn checked_div_normal() {
         // 6.0 / 2.0 = 3.0
-        let six = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(6_000_000_000_000));
+        let six = D38s12::from_bits(Int::<2>::try_from(6_000_000_000_000_i128).unwrap());
         assert_eq!(six.checked_div(two()), Some(three()));
     }
 
@@ -328,19 +321,19 @@ mod tests {
     #[test]
     fn checked_div_overflow_returns_none() {
         // MAX / 0.5 = 2 * MAX -> overflows the final quotient.
-        let half = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(500_000_000_000));
+        let half = D38s12::from_bits(Int::<2>::try_from(500_000_000_000_i128).unwrap());
         assert_eq!(D38s12::MAX.checked_div(half), None);
     }
 
     #[test]
     fn checked_div_negative_normal() {
-        let neg_six = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(-6_000_000_000_000));
+        let neg_six = D38s12::from_bits(Int::<2>::try_from(-6_000_000_000_000_i128).unwrap());
         assert_eq!(neg_six.checked_div(two()), Some(-three()));
     }
 
     #[test]
     fn wrapping_div_normal() {
-        let six = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(6_000_000_000_000));
+        let six = D38s12::from_bits(Int::<2>::try_from(6_000_000_000_000_i128).unwrap());
         assert_eq!(six.wrapping_div(two()), three());
     }
 
@@ -353,13 +346,13 @@ mod tests {
     #[test]
     fn wrapping_div_overflow_does_not_panic() {
         // Verify it does not panic; the exact result is unspecified.
-        let half = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(500_000_000_000));
+        let half = D38s12::from_bits(Int::<2>::try_from(500_000_000_000_i128).unwrap());
         let _ = D38s12::MAX.wrapping_div(half);
     }
 
     #[test]
     fn saturating_div_normal() {
-        let six = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(6_000_000_000_000));
+        let six = D38s12::from_bits(Int::<2>::try_from(6_000_000_000_000_i128).unwrap());
         assert_eq!(six.saturating_div(two()), three());
     }
 
@@ -372,14 +365,14 @@ mod tests {
     #[test]
     fn saturating_div_overflow_clamps_to_max() {
         // MAX / 0.5 (both positive) saturates to MAX.
-        let half = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(500_000_000_000));
+        let half = D38s12::from_bits(Int::<2>::try_from(500_000_000_000_i128).unwrap());
         assert_eq!(D38s12::MAX.saturating_div(half), D38s12::MAX);
     }
 
     #[test]
     fn saturating_div_negative_overflow_clamps_to_min() {
         // MAX / -0.5 (mixed sign) saturates to MIN.
-        let neg_half = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(-500_000_000_000));
+        let neg_half = D38s12::from_bits(Int::<2>::try_from(-500_000_000_000_i128).unwrap());
         assert_eq!(D38s12::MAX.saturating_div(neg_half), D38s12::MIN);
     }
 
@@ -388,10 +381,10 @@ mod tests {
         // 20 / 3 = 6.666… does not divide evenly; the checked/wrapping
         // variants must round to nearest using the crate-default mode,
         // identically to the `/` operator — not truncate toward zero.
-        let twenty = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(20_000_000_000_000));
-        let three = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(3_000_000_000_000));
+        let twenty = D38s12::from_bits(Int::<2>::try_from(20_000_000_000_000_i128).unwrap());
+        let three = D38s12::from_bits(Int::<2>::try_from(3_000_000_000_000_i128).unwrap());
         let rounded = twenty / three;
-        let truncated = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(6_666_666_666_666));
+        let truncated = D38s12::from_bits(Int::<2>::try_from(6_666_666_666_666_i128).unwrap());
         assert_ne!(rounded, truncated, "the operator must round, not truncate");
         assert_eq!(twenty.checked_div(three), Some(rounded));
         assert_eq!(twenty.wrapping_div(three), rounded);
@@ -399,13 +392,13 @@ mod tests {
 
     #[test]
     fn overflowing_div_normal() {
-        let six = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(6_000_000_000_000));
+        let six = D38s12::from_bits(Int::<2>::try_from(6_000_000_000_000_i128).unwrap());
         assert_eq!(six.overflowing_div(two()), (three(), false));
     }
 
     #[test]
     fn overflowing_div_overflow_flagged() {
-        let half = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(500_000_000_000));
+        let half = D38s12::from_bits(Int::<2>::try_from(500_000_000_000_i128).unwrap());
         let (_, ovf) = D38s12::MAX.overflowing_div(half);
         assert!(ovf);
     }
@@ -421,8 +414,8 @@ mod tests {
     #[test]
     fn checked_rem_normal() {
         // 5.5 % 2.0 = 1.5
-        let a = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(5_500_000_000_000));
-        let expected = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(1_500_000_000_000));
+        let a = D38s12::from_bits(Int::<2>::try_from(5_500_000_000_000_i128).unwrap());
+        let expected = D38s12::from_bits(Int::<2>::try_from(1_500_000_000_000_i128).unwrap());
         assert_eq!(a.checked_rem(two()), Some(expected));
     }
 
@@ -436,14 +429,14 @@ mod tests {
         // The raw overflow case is `i128::MIN % -1` (because i128::MIN / -1
         // overflows). The divisor's raw bits are -1, not the decimal -ONE
         // (-10^12), which does not trigger this path.
-        let neg_one_lsb = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(-1));
+        let neg_one_lsb = D38s12::from_bits(Int::<2>::try_from(-1_i128).unwrap());
         assert_eq!(D38s12::MIN.checked_rem(neg_one_lsb), None);
     }
 
     #[test]
     fn wrapping_rem_normal() {
-        let a = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(5_500_000_000_000));
-        let expected = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(1_500_000_000_000));
+        let a = D38s12::from_bits(Int::<2>::try_from(5_500_000_000_000_i128).unwrap());
+        let expected = D38s12::from_bits(Int::<2>::try_from(1_500_000_000_000_i128).unwrap());
         assert_eq!(a.wrapping_rem(two()), expected);
     }
 
@@ -456,20 +449,20 @@ mod tests {
     #[test]
     fn wrapping_rem_min_neg_one_lsb_returns_zero() {
         // i128::MIN % -1 wraps to 0 (the overflow case).
-        let neg_one_lsb = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(-1));
+        let neg_one_lsb = D38s12::from_bits(Int::<2>::try_from(-1_i128).unwrap());
         assert_eq!(D38s12::MIN.wrapping_rem(neg_one_lsb), D38s12::ZERO);
     }
 
     #[test]
     fn overflowing_rem_normal() {
-        let a = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(5_500_000_000_000));
-        let expected = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(1_500_000_000_000));
+        let a = D38s12::from_bits(Int::<2>::try_from(5_500_000_000_000_i128).unwrap());
+        let expected = D38s12::from_bits(Int::<2>::try_from(1_500_000_000_000_i128).unwrap());
         assert_eq!(a.overflowing_rem(two()), (expected, false));
     }
 
     #[test]
     fn overflowing_rem_min_neg_one_lsb_flagged() {
-        let neg_one_lsb = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(-1));
+        let neg_one_lsb = D38s12::from_bits(Int::<2>::try_from(-1_i128).unwrap());
         assert_eq!(
             D38s12::MIN.overflowing_rem(neg_one_lsb),
             (D38s12::ZERO, true)
@@ -481,10 +474,10 @@ mod tests {
     /// Verifies that the variant family compiles and functions correctly at SCALE = 6.
     #[test]
     fn variants_at_scale_6() {
-        type D6 = crate::D<crate::int::types::Int<2>, 6>;
+        type D6 = decimal_scaled::D<Int<2>, 6>;
         let one = D6::ONE;
-        let two_d6 = D6::from_bits(crate::int::types::Int::<2>::from_i128(2_000_000)); // 2.0 at SCALE=6
-        let one_lsb = D6::from_bits(crate::int::types::Int::<2>::from_i128(1));
+        let two_d6 = D6::from_bits(Int::<2>::try_from(2_000_000_i128).unwrap()); // 2.0 at SCALE=6
+        let one_lsb = D6::from_bits(Int::<2>::try_from(1_i128).unwrap());
 
         assert_eq!(one.checked_add(one), Some(two_d6));
         // MAX + 1 LSB overflows / wraps to MIN under two's-complement.
@@ -501,7 +494,7 @@ mod tests {
     /// Verifies that `checked_*` matches the base operator when no overflow occurs.
     #[test]
     fn checked_matches_op_in_range() {
-        let a = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(7_500_000_000_000)); // 7.5
+        let a = D38s12::from_bits(Int::<2>::try_from(7_500_000_000_000_i128).unwrap()); // 7.5
         let b = two();
         assert_eq!(a.checked_add(b), Some(a + b));
         assert_eq!(a.checked_sub(b), Some(a - b));
@@ -530,7 +523,7 @@ mod tests {
         assert_eq!(ovf, D38s12::MIN.checked_neg().is_none());
 
         // Rem: MIN % (-1 LSB) -- the raw i128::MIN % -1 case.
-        let neg_one_lsb = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(-1));
+        let neg_one_lsb = D38s12::from_bits(Int::<2>::try_from(-1_i128).unwrap());
         let (_, ovf) = D38s12::MIN.overflowing_rem(neg_one_lsb);
         assert_eq!(ovf, D38s12::MIN.checked_rem(neg_one_lsb).is_none());
     }
@@ -541,7 +534,7 @@ mod tests {
     fn saturating_never_escapes_bounds() {
         let extremes = [
             D38s12::MIN,
-            D38s12::from_bits(crate::int::types::Int::<2>::from_i128(-1)),
+            D38s12::from_bits(Int::<2>::try_from(-1_i128).unwrap()),
             D38s12::ZERO,
             D38s12::ONE,
             D38s12::MAX,
