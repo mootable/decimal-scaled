@@ -596,6 +596,25 @@ macro_rules! decl_wide_transcendental {
                 )
             }
 
+            /// Near-min narrowing with positional residual handling — the
+            /// exp/cosh near-min resolver at one work rung, for `exp2`'s
+            /// `2^(±10^-k)` cells whose `ln 2`-tail residual can sit past the
+            /// crate's precision horizon. See
+            /// [`wide_trig_core::round_to_storage_near_min_g`].
+            pub(crate) fn round_to_storage_near_min<S: $crate::int::types::traits::BigInt>(
+                base_guard: u32,
+                target: u32,
+                mode: $crate::support::rounding::RoundingMode,
+                recompute: impl FnMut(u32) -> S,
+            ) -> $Storage
+            where
+                S::Scratch: $crate::int::types::compute_limbs::ComputeLimbs,
+            {
+                $crate::algos::support::wide_trig_core::round_to_storage_near_min_g::<$Storage, S>(
+                    base_guard, target, mode, <$Storage>::MAX, <$Storage>::MIN, recompute,
+                )
+            }
+
             /// Directed-rounding narrowing for a kernel whose true result is
             /// **never exactly representable** at the storage scale — a
             /// non-zero-argument transcendental (`exp`), whose value is
@@ -3069,7 +3088,13 @@ macro_rules! decl_wide_transcendental {
                 let k_lift = exp2_result_int_digits(raw, SCALE);
                 let base_guard = GUARD + k_lift;
                 // Two-core: composition runs on the wide `Wagm` work int.
-                round_to_storage_directed::<Wagm>(base_guard, SCALE, mode, |guard| {
+                // Near-min narrowing: a `2^(±10^-k)` result is `1 ± ln 2·10^-k
+                // + …` whose sub-storage residual (the `ln 2` digit tail) can
+                // sit past the precision horizon — the positional resolver
+                // rounds it as exactly the grid line there, where the plain
+                // directed escalation would never resolve the constant-ratio
+                // residual and keep the base bump.
+                round_to_storage_near_min::<Wagm>(base_guard, SCALE, mode, |guard| {
                     let w = SCALE + guard;
                     // Form the `x·ln 2` argument with the wide multiply in
                     // `Wexp` — the work integer `exp_fixed` runs the series in,

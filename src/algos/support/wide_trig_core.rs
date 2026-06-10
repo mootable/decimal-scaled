@@ -726,6 +726,24 @@ const ZIV_PRECISION_HORIZON: u32 = 1264;
 /// residual sits beyond it.
 const FRAC_PRECISION_HORIZON: u32 = 1233;
 
+/// The precision the golden VALUES are carried at before the
+/// [`FRAC_PRECISION_HORIZON`] truncation (the generator's `precision +
+/// TERM_GUARD(40) + WORK_GUARD(60)` working digits). The cutoffs are
+/// SIDE-dependent because the final step is a TRUNCATION: a residual sitting
+/// just ABOVE a grid line is invisible once its leading digit passes the
+/// truncation line (1233); a deficit just BELOW a grid line leaves a 9-run
+/// from the scale down to the truncation line — visible — unless the deficit
+/// itself lies past the VALUE precision (1333), where the carried value
+/// rounds up onto the grid and the 9-run never exists.
+const VALUE_PRECISION_HORIZON: u32 = FRAC_PRECISION_HORIZON + 100;
+
+/// How deep the near-min escalation may PROBE: far enough past
+/// [`VALUE_PRECISION_HORIZON`] that an empty probe PROVES the deciding term
+/// is beyond both horizons (the analogue of [`ZIV_PRECISION_HORIZON`], which
+/// stays the cap for the general directed/nearest escalation).
+const NEAR_MIN_PROBE_HORIZON: u32 =
+    VALUE_PRECISION_HORIZON + ZIV_RESOLVE_FLOOR_POW10 + 4;
+
 /// Exact decimal digit count of a non-negative work value (`v > 0`).
 /// Bit-length estimate (`digits <= floor(bl·log10 2) + 1`, at most one high),
 /// refined by a single `pow10` compare. Cold-path helper for the positional
@@ -777,7 +795,7 @@ where
     let max_guard_for = |int_digits: u32| -> u32 {
         let cap = (<S>::BITS / 8).saturating_sub(int_digits + 8);
         cap.saturating_sub(target)
-            .min(ZIV_PRECISION_HORIZON.saturating_sub(target))
+            .min(NEAR_MIN_PROBE_HORIZON.saturating_sub(target))
             .max(base_guard)
     };
     let int_digits_of = |v: St| -> u32 {
@@ -797,12 +815,19 @@ where
         let q_mag = if bump { q + lit(1) } else { q };
         range_check(if neg { -q_mag } else { q_mag })
     };
-    // True when the deciding residual `dist` (working units at scale
-    // `target + g`) has its leading digit past the precision horizon — the
-    // residual is then below the crate's resolution.
-    let past_horizon = |dist: S, g: u32| -> bool {
-        let w = target + g;
-        w > FRAC_PRECISION_HORIZON && w - dec_digits_g::<S>(dist) + 1 > FRAC_PRECISION_HORIZON
+    // Leading fractional-digit position of the deciding residual `dist`
+    // (working units at scale `target + g`).
+    let pos_of = |dist: S, g: u32| -> u32 { target + g - dec_digits_g::<S>(dist) + 1 };
+    // Side-dependent visibility cutoff (the golden TRUNCATION model): a
+    // residual ABOVE the boundary (grid line / half line) is invisible past
+    // the truncation line; a deficit BELOW it leaves a visible 9-run unless
+    // it lies past the carried VALUE precision.
+    let past_cut = |p: u32, above: bool| -> bool {
+        if above {
+            p > FRAC_PRECISION_HORIZON
+        } else {
+            p > VALUE_PRECISION_HORIZON
+        }
     };
     // One working-scale probe: `(neg, q, rem, divisor)` of the recomputed
     // value at guard `g`, magnitude split at the storage grid.
@@ -842,8 +867,10 @@ where
         if dist0 > pow10(base_guard) / lit(1000) {
             // Not near a half-ULP tie (wide escalate band) — but at the very
             // deepest scales the deciding distance itself can sit past the
-            // precision horizon: then it is an exact tie after all.
-            if past_horizon(dist0, base_guard) {
+            // visibility cutoff: then it is an exact tie after all.
+            if target + base_guard > FRAC_PRECISION_HORIZON
+                && past_cut(pos_of(dist0, base_guard), rem0 > half0)
+            {
                 return (tie_round(neg0, q0), true);
             }
             return (round_half(neg0, q0, rem0, div0), true);
@@ -857,10 +884,7 @@ where
         // fractional position. A probe's signal `(position, side)` is therefore
         // trusted only once a probe at a DIFFERENT depth reproduces it.
         let mut pending: Option<(u32, bool)> = if dist0 > floor {
-            Some((
-                target + base_guard - dec_digits_g::<S>(dist0) + 1,
-                rem0 > half0,
-            ))
+            Some((pos_of(dist0, base_guard), rem0 > half0))
         } else {
             None
         };
@@ -878,9 +902,10 @@ where
                         let half = div / lit(2);
                         let dist = if rem < half { half - rem } else { rem - half };
                         if dist > floor {
-                            let p = target + g_c - dec_digits_g::<S>(dist) + 1;
-                            if (rem > half) == ps && p.abs_diff(pp) <= 1 {
-                                if p > FRAC_PRECISION_HORIZON {
+                            let p = pos_of(dist, g_c);
+                            let above = rem > half;
+                            if above == ps && p.abs_diff(pp) <= 1 {
+                                if past_cut(p, above) {
                                     return (tie_round(neg, q), true);
                                 }
                                 return (round_half(neg, q, rem, div), true);
@@ -888,11 +913,18 @@ where
                         }
                     }
                 }
-                // Still unresolved. If the probing passed the precision line, the
-                // deciding term is PROVEN beyond it — an exact tie; otherwise
-                // (width-capped short of the line) keep the clean base narrowing
-                // for the widening retry.
-                if target + max_guard >= FRAC_PRECISION_HORIZON + ZIV_RESOLVE_FLOOR_POW10 {
+                // Still unresolved. If the probing passed the VALUE-precision
+                // line, the deciding term is PROVEN beyond it — an exact tie.
+                // Past only the truncation line, an above-half `5000…`
+                // residual is still a truncated exact tie; a below-half
+                // deficit is undecidable (its 9-run may or may not have been
+                // absorbed), so keep the clean base narrowing, as for a
+                // width-capped probe — the widening caller may retry wider.
+                let w_max = target + max_guard;
+                if w_max >= VALUE_PRECISION_HORIZON + ZIV_RESOLVE_FLOOR_POW10
+                    || (w_max >= FRAC_PRECISION_HORIZON + ZIV_RESOLVE_FLOOR_POW10
+                        && rem0 > half0)
+                {
                     return (tie_round(neg0, q0), false);
                 }
                 return (lo, false);
@@ -903,19 +935,20 @@ where
             let half = div / lit(2);
             let hi_dist = if rem < half { half - rem } else { rem - half };
             if hi_dist > floor {
-                let p = target + next_guard - dec_digits_g::<S>(hi_dist) + 1;
-                let side = rem > half;
+                let p = pos_of(hi_dist, next_guard);
+                let above = rem > half;
                 if let Some((pp, ps)) = pending {
-                    if side == ps && p.abs_diff(pp) <= 1 {
+                    if above == ps && p.abs_diff(pp) <= 1 {
                         // Confirmed deciding digit — use it only if it lies
-                        // within the precision horizon; past it, exact tie.
-                        if p > FRAC_PRECISION_HORIZON {
+                        // within its side's visibility cutoff; past it, an
+                        // exact (truncated / absorbed) tie.
+                        if past_cut(p, above) {
                             return (tie_round(neg, q), true);
                         }
                         return (round_half(neg, q, rem, div), true);
                     }
                 }
-                pending = Some((p, side));
+                pending = Some((p, above));
             }
             guard = next_guard;
         }
@@ -946,9 +979,11 @@ where
     let dist0 = if rem0 < div0 - rem0 { rem0 } else { div0 - rem0 };
     if dist0 > pow10(base_guard) / lit(1000) {
         // Clear of a grid line (wide escalate band) — unless the clearance
-        // itself sits past the precision horizon (deepest scales only), in
-        // which case the value IS the grid line.
-        if past_horizon(dist0, base_guard) {
+        // itself sits past its side's visibility cutoff (deepest scales
+        // only), in which case the value IS the grid line.
+        if target + base_guard > FRAC_PRECISION_HORIZON
+            && past_cut(pos_of(dist0, base_guard), rem0 < div0 - rem0)
+        {
             return (snap_round(neg0, q0, rem0, div0), true);
         }
         return (dir_round(neg0, q0, rem0), true);
@@ -959,10 +994,7 @@ where
     // `(position, side)` is trusted only once a probe at a different depth
     // reproduces it (noise tracks the bottom of `w`; real digits do not move).
     let mut pending: Option<(u32, bool)> = if dist0 > floor {
-        Some((
-            target + base_guard - dec_digits_g::<S>(dist0) + 1,
-            rem0 < div0 - rem0,
-        ))
+        Some((pos_of(dist0, base_guard), rem0 < div0 - rem0))
     } else {
         None
     };
@@ -978,9 +1010,10 @@ where
                     let (neg, q, rem, div) = probe(g_c);
                     let dist = if rem < div - rem { rem } else { div - rem };
                     if dist > floor {
-                        let p = target + g_c - dec_digits_g::<S>(dist) + 1;
-                        if (rem < div - rem) == ps && p.abs_diff(pp) <= 1 {
-                            if p > FRAC_PRECISION_HORIZON {
+                        let p = pos_of(dist, g_c);
+                        let above = rem < div - rem;
+                        if above == ps && p.abs_diff(pp) <= 1 {
+                            if past_cut(p, above) {
                                 return (snap_round(neg, q, rem, div), true);
                             }
                             return (dir_round(neg, q, rem), true);
@@ -989,16 +1022,22 @@ where
                 }
             }
             // Still unresolved: the deciding digit is beyond reach. If the
-            // probing passed the precision line, the residual is PROVEN below
-            // the crate's resolution — the value is exactly the nearest grid
-            // line (no `never_exact` bump: the sub-resolution rule only covers
-            // residuals within the horizon). Otherwise (width-capped short of
-            // the line) return the CLEAN base narrowing — for `cosh`
-            // (`never_exact == false`) the base residual is 0, so no
-            // sub-resolution bump; for `exp` (`never_exact == true`) the base
-            // keeps its genuine sub-resolution sign bump. Either way it is
-            // noise-free, unlike the deepest narrowing.
-            if target + max_guard >= FRAC_PRECISION_HORIZON + ZIV_RESOLVE_FLOOR_POW10 {
+            // probing passed the VALUE-precision line, the residual is PROVEN
+            // below both cutoffs — the value is exactly the nearest grid line
+            // (no `never_exact` bump: the sub-resolution rule only covers
+            // residuals within the horizon). Past only the truncation line,
+            // an above-grid residual still snaps; a below-grid deficit is
+            // undecidable (its 9-run may or may not have been absorbed), so —
+            // as for a width-capped probe — return the CLEAN base narrowing:
+            // for `cosh` (`never_exact == false`) the base residual is 0, so
+            // no sub-resolution bump; for `exp` (`never_exact == true`) the
+            // base keeps its genuine sub-resolution sign bump. Either way it
+            // is noise-free, unlike the deepest narrowing.
+            let w_max = target + max_guard;
+            if w_max >= VALUE_PRECISION_HORIZON + ZIV_RESOLVE_FLOOR_POW10
+                || (w_max >= FRAC_PRECISION_HORIZON + ZIV_RESOLVE_FLOOR_POW10
+                    && rem0 < div0 - rem0)
+            {
                 return (snap_round(neg0, q0, rem0, div0), false);
             }
             return (base, false);
@@ -1008,19 +1047,20 @@ where
         let (neg, q, rem, div) = probe(next_guard);
         let hi_dist = if rem < div - rem { rem } else { div - rem };
         if hi_dist > floor {
-            let p = target + next_guard - dec_digits_g::<S>(hi_dist) + 1;
-            let side = rem < div - rem;
+            let p = pos_of(hi_dist, next_guard);
+            let above = rem < div - rem;
             if let Some((pp, ps)) = pending {
-                if side == ps && p.abs_diff(pp) <= 1 {
-                    // Confirmed deciding digit — usable only within the
-                    // horizon; past it the value is exactly the nearest grid.
-                    if p > FRAC_PRECISION_HORIZON {
+                if above == ps && p.abs_diff(pp) <= 1 {
+                    // Confirmed deciding digit — usable only within its
+                    // side's visibility cutoff; past it the value is exactly
+                    // the nearest grid line.
+                    if past_cut(p, above) {
                         return (snap_round(neg, q, rem, div), true);
                     }
                     return (dir_round(neg, q, rem), true);
                 }
             }
-            pending = Some((p, side));
+            pending = Some((p, above));
         }
         guard = next_guard;
     }
@@ -1053,6 +1093,30 @@ where
         return v1;
     }
     near_min_resolve_g::<St, S2>(base_guard, target, mode, never_exact, st_max, st_min, recompute2).0
+}
+
+/// Single-width near-min narrowing with positional residual handling — the
+/// exp/cosh near-min resolver ([`near_min_resolve_g`]) exposed for a kernel
+/// narrowed at one work rung (`exp2`). Unlike
+/// [`round_to_storage_directed_g`], a deciding residual is cross-depth
+/// confirmed against kernel noise and honoured only within the precision
+/// horizon: past it the value rounds as exactly the nearest grid line
+/// (directed) or an exact half-ULP tie (nearest) — the behaviour a near-min
+/// `2^(±10^-k)` needs when its `ln 2`-tail residual sits below the crate's
+/// resolution.
+#[inline]
+pub(crate) fn round_to_storage_near_min_g<St: BigInt + Copy, S: BigInt>(
+    base_guard: u32,
+    target: u32,
+    mode: RoundingMode,
+    st_max: St,
+    st_min: St,
+    recompute: impl FnMut(u32) -> S,
+) -> St
+where
+    S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    near_min_resolve_g::<St, S>(base_guard, target, mode, false, st_max, st_min, recompute).0
 }
 
 /// Work-int-generic directed-rounding narrowing with Ziv escalation. `St` =

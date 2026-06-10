@@ -113,6 +113,49 @@ fn exp_visible_quadratic_grid_point_with_invisible_cubic() {
     }
 }
 
+// ── exp2 ────────────────────────────────────────────────────────────
+
+#[test]
+fn exp2_truncated_exact_tail_all_modes_agree() {
+    // exp2(1e-924) at scale 1231: the result is `1 + ln2·10^-924 + …`, whose
+    // digits just below the scale (positions 1232..1233, `ln 2`'s 308th and
+    // 309th digits) are zero, and everything deeper lies past the precision
+    // horizon's truncation — the result is exact at horizon precision, so
+    // every mode (Ceiling included — the over-bump this pins) agrees.
+    let v = D1232::<1231>::from_str(&tiny(924)).unwrap();
+    let c = v.exp2_strict_with(Ceiling);
+    for mode in [Floor, Trunc, HalfToEven, HalfAwayFromZero, HalfTowardZero] {
+        assert_eq!(v.exp2_strict_with(mode), c, "{mode:?}");
+    }
+}
+
+#[test]
+fn exp2_below_grid_nine_run_visible() {
+    // exp2(-1e-924) at scale 1231: the deficit to the next grid line sits at
+    // position ~1235 — within the carried value precision — so the 9-run
+    // below the scale is VISIBLE: Trunc/Floor keep the lower grid line,
+    // Ceiling and nearest round up one ULP.
+    let n = -D1232::<1231>::from_str(&tiny(924)).unwrap();
+    let t = n.exp2_strict_with(Trunc);
+    assert_eq!(n.exp2_strict_with(Floor), t);
+    let up = plus_ulp!(D1232, 1231, t);
+    assert_eq!(n.exp2_strict_with(Ceiling), up);
+    assert_eq!(n.exp2_strict_with(HalfToEven), up);
+}
+
+#[test]
+fn exp2_just_below_half_rounds_down() {
+    // exp2(-1e-308) at scale 1231: the rest digits below the scale are
+    // `49…` — just below half by a sub-truncation amount that is still
+    // within the carried value precision, so nearest rounds DOWN (not a
+    // tie); Ceiling rounds up.
+    let n = -D1232::<1231>::from_str(&tiny(308)).unwrap();
+    let t = n.exp2_strict_with(Trunc);
+    assert_eq!(n.exp2_strict_with(HalfToEven), t);
+    assert_eq!(n.exp2_strict_with(HalfAwayFromZero), t);
+    assert_eq!(n.exp2_strict_with(Ceiling), plus_ulp!(D1232, 1231, t));
+}
+
 #[test]
 fn exp_near_min_pin_prefilter_boundary_band() {
     // The pin's bit-length pre-filter must keep the WHOLE |v| < 10^(-S/2)
