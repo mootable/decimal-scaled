@@ -39,6 +39,8 @@ def _format(r, precision: int) -> str:
         return f"{sign}{s[:-frac_len]}.{s[-frac_len:]}"
     # Non-terminating: truncate toward zero to exactly `precision` frac digits.
     scaled = scaled_guard // (10 ** GUARD)
+    if scaled == 0:
+        sign = ""  # never render a signed zero (-0.000…0)
     if precision == 0:
         return f"{sign}{scaled}"
     s = str(scaled).rjust(precision + 1, "0")

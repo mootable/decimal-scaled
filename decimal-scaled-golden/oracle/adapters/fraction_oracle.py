@@ -4,9 +4,11 @@ finite-result arithmetic ops only: add, sub, mul, div, rem.
 These results are finite/rational decimals, so a BINARY oracle (mpmath/flint/mpfr) is
 the wrong tool: an exact decimal like `-0.00000004555500747` has no finite binary form,
 so rendering its binary approximation to 1233 digits yields a spurious tail (`...46999...`)
-that the termination check then bakes in as a truncation. Fraction arithmetic is exact in
-base 10, so add/sub/mul/rem always terminate (and are stored stripped to mark them exact)
-and div is the only op that can truncate toward zero.
+that the termination check then bakes in as a truncation. Fraction arithmetic is exact, so
+every result is the true rational: add/sub/mul/rem results always have a finite decimal
+expansion (stored stripped to mark them exact when it fits the generation precision; a
+deeper-than-precision expansion — e.g. a product of two near-precision-deep operands — is
+truncated toward zero like any other oracle value) and div may be genuinely non-terminating.
 
 The transcendentals stay on the binary/base-10 oracles (irrational results; binary to many
 guard digits, cross-validated, is correct there). This oracle covers only the five exact
@@ -63,6 +65,8 @@ def _format(r: Fraction, precision: int) -> str:
         return f"{sign}{s[:-frac_len]}.{s[-frac_len:]}"
     # Non-terminating (or terminating deeper than `precision`): truncate toward zero.
     scaled = (num * pow10) // den
+    if scaled == 0:
+        sign = ""  # never render a signed zero (-0.000…0)
     if precision == 0:
         return f"{sign}{scaled}"
     s = str(scaled).rjust(precision + 1, "0")
