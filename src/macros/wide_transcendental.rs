@@ -4272,22 +4272,47 @@ macro_rules! decl_wide_transcendental {
                         );
                     }
                 }
-                // Saturation-edge lift. For a large `|x|` the intermediate
-                // `e^|x|` carries `~|x|·log10(e)` integer digits and runs
-                // its squaring core past `W` — so `exp_fixed_wide` runs it
-                // in the wider work integer [`Wexp`]. The result `tanh(x)`
-                // itself is in `[-1, 1]` (no result lift needed), but the
-                // `(ex − enx)/(ex + enx)` ratio needs the tiny `enx = e^-|x|`
-                // resolved to keep the directed-rounding decision correct;
-                // lift the base working scale by the `e^|x|` integer-digit
-                // count so `enx` keeps a full guard below the storage LSB.
-                // `tanh` is odd; evaluate at `|v|` (so the dominant
-                // `e^|x|` term is direct and accurate, see
-                // `sinh_strict_with`) and reapply the input sign to the
-                // non-negative `tanh(|x|)` working value.
                 let neg = raw < zero;
+                // Saturation onset at the BASE working scale: the
+                // `1 − tanh(|x|) = 2·e^(−2|x|)·(1 − …)` deficit's leading
+                // digit sits at fractional position `~2|x|·log10 e =
+                // 0.86859·|x|`; once that passes `SCALE + GUARD` every digit
+                // the narrowing keeps is a `9` — return the all-nines
+                // working value directly (its sub-resolution deficit rounds
+                // each mode correctly) instead of running the kernel at a
+                // working scale the deficit cannot reach. Integer compare:
+                // `|x| > (SCALE + GUARD + 2)/0.86859`.
+                let sat_x = ((SCALE as u128 + $core::GUARD as u128 + 2) * 100_000 / 86_859) as i128;
+                if raw.abs() / <$Storage>::from_i128(10).pow(SCALE) > <$Storage>::from_i128(sat_x) {
+                    return Self::from_bits($core::round_to_storage_directed::<$core::Wagm>(
+                        $core::GUARD,
+                        SCALE,
+                        mode,
+                        |guard| {
+                            let w = SCALE + guard;
+                            let sat = $core::one_agm(w)
+                                - <$core::Wagm as $crate::int::types::traits::BigInt>::ONE;
+                            if neg { -sat } else { sat }
+                        },
+                    ));
+                }
+                // Below the onset: the intermediate `e^|x|` carries
+                // `~|x|·log10(e)` integer digits; lift the base working scale
+                // by that count so the `(ex − enx)/(ex + enx)` ratio keeps
+                // `enx = e^-|x|` resolved with a full guard below the storage
+                // LSB. The lift estimator is a power-of-two UPPER bound on
+                // `|x|`, so cap it by the analytic tanh bound — outside
+                // saturation `0.86859·|x| <= SCALE + GUARD + 3`, hence
+                // `int_digits(e^|x|) = 0.43429·|x| <= (SCALE + GUARD)/2 + 2`
+                // — an over-lift would push the `e^(−2|x|)` evaluation past
+                // the work integer's internal headroom and corrupt `enx`.
+                // `tanh` is odd; evaluate at `|v|` (so the dominant `e^|x|`
+                // term is direct and accurate, see `sinh_strict_with`) and
+                // reapply the input sign to the non-negative `tanh(|x|)`
+                // working value.
                 // Two-core: composition runs on the wide `Wagm` work int.
-                let k_lift = $core::exp_result_int_digits::<$core::Wagm>($core::to_work_scaled_agm(raw, 0), SCALE);
+                let k_lift = $core::exp_result_int_digits::<$core::Wagm>($core::to_work_scaled_agm(raw, 0), SCALE)
+                    .min((SCALE + $core::GUARD) / 2 + 2);
                 let base_guard = $core::GUARD + k_lift;
                 Self::from_bits($core::round_to_storage_directed::<$core::Wagm>(
                     base_guard,
