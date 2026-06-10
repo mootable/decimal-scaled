@@ -14,6 +14,7 @@
 //!   D924 s895..=905 (s900), D1232 s1195..=1205 (s1200).
 //! * ON-GRID bands — the golden gate pins the mid-band cell bit-exact —
 //!   keep only the band-EDGE no-panic bounds, which no golden cell covers:
+//!   D230 s110 / s120 (cell D230<115> is on-grid),
 //!   D924 s455 / s465 (cell D924<462> is on-grid),
 //!   D1232 s610 / s620 (cell D1232<616> is on-grid).
 //!
@@ -113,6 +114,13 @@ macro_rules! ln_band_edge_no_panic {
             assert!(y > decimal_scaled::$D::<$scale>::ZERO);
         }
     };
+}
+
+// ── D230 s110..=120 (mid-band on-grid at D230<115>; edges kept) ────────────
+#[cfg(all(feature = "wide", not(feature = "fast")))]
+mod from_d230_s115_lookup_parity {
+    ln_band_edge_no_panic!(ln_lookup_band_lower_bound_s110, D230, 110);
+    ln_band_edge_no_panic!(ln_lookup_band_upper_bound_s120, D230, 120);
 }
 
 // ── D307 s285..=295 (off-grid band; cell s290) ─────────────────────────────

@@ -424,7 +424,6 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "powf kernel")]
-    #[test]
     fn positive_overflow_panics() {
         // 10² = 100 exceeds the D38<37> decimal range; the exact arithmetic is
         // PROOF of the overflow, so the pin panics per the contract (deferring

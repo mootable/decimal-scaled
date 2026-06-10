@@ -570,9 +570,18 @@ mod from_src_overflow_variants {
 
     #[test]
     fn wrapping_mul_overflow_does_not_panic() {
-        // Verify it does not panic; the exact bit pattern is unspecified.
-        let _ = D38s12::MAX.wrapping_mul(two());
-        let _ = D38s12::MIN.wrapping_mul(two());
+        // The intermediate product widens exactly; ONLY the final narrowing
+        // wraps (two's-complement, like the primitives). Multiplying by 2.0
+        // scales the raw bits by exactly 2 (the 10^SCALE factors cancel), so
+        // the wrapped raw must equal the storage's own wrapping double.
+        let w = D38s12::MAX.wrapping_mul(two());
+        assert_eq!(i128::from(w.to_bits()), i128::MAX.wrapping_mul(2));
+        // overflowing_mul must return the same wrapped value plus the flag.
+        assert_eq!(D38s12::MAX.overflowing_mul(two()), (w, true));
+
+        let w = D38s12::MIN.wrapping_mul(two());
+        assert_eq!(i128::from(w.to_bits()), i128::MIN.wrapping_mul(2));
+        assert_eq!(D38s12::MIN.overflowing_mul(two()), (w, true));
     }
 
     #[test]
@@ -660,9 +669,15 @@ mod from_src_overflow_variants {
 
     #[test]
     fn wrapping_div_overflow_does_not_panic() {
-        // Verify it does not panic; the exact result is unspecified.
+        // MAX / 0.5 = 2·MAX. The scale-up intermediate is exact in the wider
+        // integer and the division is remainder-free (rounding never
+        // engages); ONLY the final narrowing wraps two's-complement, so the
+        // wrapped raw must equal the storage's own wrapping double.
         let half = D38s12::from_bits(Int::<2>::try_from(500_000_000_000_i128).unwrap());
-        let _ = D38s12::MAX.wrapping_div(half);
+        let w = D38s12::MAX.wrapping_div(half);
+        assert_eq!(i128::from(w.to_bits()), i128::MAX.wrapping_mul(2));
+        // overflowing_div must return the same wrapped value plus the flag.
+        assert_eq!(D38s12::MAX.overflowing_div(half), (w, true));
     }
 
     #[test]

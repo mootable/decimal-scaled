@@ -349,7 +349,8 @@ mod from_edge_cases {
         ] {
             assert_eq!(D38s12::from_bits(decimal_scaled::Int::<2>::try_from(raw).unwrap()).to_bits(), raw);
         }
-        for raw in [0_i32, 1, -1, i32::MAX, i32::MIN] {
+        for raw in [0_i64, 1, -1, i64::MAX, i64::MIN, i64::MAX - 1, i64::MIN + 1] {
+            assert_eq!(D18s9::from_bits(decimal_scaled::Int::<1>::from(raw)).to_bits(), raw);
         }
     }
 
