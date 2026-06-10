@@ -20,16 +20,53 @@
 //! the narrow `Fixed` kernel (`powf_series_2limb`, `St = Int<2>`) and the
 //! wide schoolbook kernel (`pow_schoolbook`, `St = C::Storage`).
 //!
-//! Returns `None` (defer to the composition) ONLY when the pin cannot prove
-//! anything: a non-integer exponent, a non-integer base, or `|n|` above the
-//! fast-path threshold. A positive integer power that overflows storage is a
-//! PROOF of out-of-range and panics here directly, per the overflow contract
-//! — the composition's to-nearest approximation could otherwise be
-//! directed-rounded (Floor / Trunc) back inside the range at an out-by-one
-//! boundary.
+//! The pin DEFERS to the composition ([`ExactPin::Defer`]) ONLY when it
+//! cannot prove anything: a non-integer exponent, a non-integer base, or
+//! `|n|` above the fast-path threshold. A positive integer power that
+//! overflows storage is a PROOF of out-of-range ([`ExactPin::OutOfRange`]):
+//! the seamed narrow kernel propagates it as its `None` (the policy dispatch
+//! wrapper applies the overflow contract's panic; the `checked_` surface
+//! propagates), and the default [`powi_exact_pin`] wrapper panics directly
+//! for the wide shells. Deferring instead would be wrong — the composition's
+//! to-nearest approximation could be directed-rounded (Floor / Trunc) back
+//! inside the range at an out-by-one boundary.
 
 use crate::int::types::traits::BigInt;
 use crate::support::rounding::{should_bump, RoundingMode};
+
+/// Verdict of an exact-power pin: the pin either DECIDES the cell — an
+/// exact value, or proof the exact result exceeds the decimal range —
+/// or declines and defers to the `exp(n · ln b)` composition.
+pub(crate) enum ExactPin<V> {
+    /// The correctly-rounded exact storage value.
+    Value(V),
+    /// Exact integer arithmetic proved the result exceeds the decimal
+    /// range. The kernel seam returns `None` for it (the default policy
+    /// dispatch wrapper applies the overflow contract's panic); the
+    /// unseamed default wrappers panic directly.
+    OutOfRange,
+    /// The pin does not apply — defer to the composition.
+    Defer,
+}
+
+/// Default (panicking) form of [`powi_exact_pin_checked`] for the unseamed
+/// wide shells: `Value` → `Some`, `Defer` → `None`, and a proven
+/// out-of-range applies the overflow contract's panic directly.
+#[inline]
+pub(crate) fn powi_exact_pin<St: BigInt, const SCALE: u32>(
+    base: St,
+    exp: St,
+    storage_max: St,
+    mode: RoundingMode,
+) -> Option<St> {
+    match powi_exact_pin_checked::<St, SCALE>(base, exp, storage_max, mode) {
+        ExactPin::Value(v) => Some(v),
+        ExactPin::OutOfRange => {
+            crate::support::diagnostics::overflow_panic_with_scale("powf kernel", SCALE)
+        }
+        ExactPin::Defer => None,
+    }
+}
 
 /// Correctly-rounded storage value of `b^n` at scale `SCALE`, when `b` is an
 /// exact positive integer and `n` an exact integer with
@@ -38,18 +75,19 @@ use crate::support::rounding::{should_bump, RoundingMode};
 /// (`Int<N>::MAX` for the narrow path, `C::storage_max()` for the wide path),
 /// used only to reject a positive power that has left the decimal range.
 ///
-/// Returns `None` to signal "this pin does not apply — defer to the
+/// [`ExactPin::Defer`] signals "this pin does not apply — defer to the
 /// `exp(n · ln b)` composition": a fractional base or exponent (the genuinely
 /// transcendental case) or `|n|` past the threshold. A positive power out of
-/// range PANICS here (the overflow is proof). For `n < 0` the result is
-/// always in `(0, 1]` and so always representable.
+/// range is [`ExactPin::OutOfRange`] (the overflow is proof) — detected once
+/// here; each wrapper applies its policy (seam `None` / contract panic). For
+/// `n < 0` the result is always in `(0, 1]` and so always representable.
 #[inline]
-pub(crate) fn powi_exact_pin<St: BigInt, const SCALE: u32>(
+pub(crate) fn powi_exact_pin_checked<St: BigInt, const SCALE: u32>(
     base: St,
     exp: St,
     storage_max: St,
     mode: RoundingMode,
-) -> Option<St> {
+) -> ExactPin<St> {
     // `10^SCALE` — the raw value `1.0`, sourced from the baked table so it is
     // exact at every tier (`St::TEN.pow` would wrap; `pow10::dispatch` does
     // not).
@@ -59,27 +97,27 @@ pub(crate) fn powi_exact_pin<St: BigInt, const SCALE: u32>(
     // `10^SCALE`) with `|n|` inside the integer fast-path threshold.
     let (n_big, e_rem) = exp.div_rem(one_s);
     if e_rem != St::ZERO {
-        return None;
+        return ExactPin::Defer;
     }
     let thresh =
         St::from_i128(crate::algos::pow::powf_series_2limb::INT_FAST_PATH_THRESHOLD as i128);
     if n_big > thresh || n_big < St::ZERO - thresh {
-        return None;
+        return ExactPin::Defer;
     }
     let n = n_big.to_i128() as i32;
 
     // The base must be an exact positive integer `b >= 1`.
     if base <= St::ZERO {
-        return None;
+        return ExactPin::Defer;
     }
     let (bv, b_rem) = base.div_rem(one_s);
     if b_rem != St::ZERO {
-        return None; // fractional base — defer to the composition
+        return ExactPin::Defer; // fractional base — defer to the composition
     }
 
     // `b^0 = 1` and `1^n = 1` are exactly `1.0` for every mode.
     if n == 0 || bv == St::ONE {
-        return Some(one_s);
+        return ExactPin::Value(one_s);
     }
     let k = n.unsigned_abs();
 
@@ -87,20 +125,21 @@ pub(crate) fn powi_exact_pin<St: BigInt, const SCALE: u32>(
         // `b^n · 10^SCALE` — an exact integer when it fits the decimal range.
         // A `checked_pow` / `checked_mul` overflow, or a value past
         // `storage_max`, is PROOF the exact `b^n` exceeds the decimal range
-        // (integer `b >= 2`, `n > 0`: the power is monotone): panic per the
-        // overflow contract (debug AND release) rather than deferring to the
-        // `exp(n·ln b)` composition, whose to-nearest approximation can
-        // directed-round (Floor / Trunc) back INSIDE the range at an
-        // out-by-one boundary (the `exp2(127)` hair case: `2^127` at scale 0
-        // is `i128::MAX + 1`).
-        let v = bv
+        // (integer `b >= 2`, `n > 0`: the power is monotone): report
+        // `OutOfRange` per the overflow contract (the default wrappers panic
+        // in debug AND release; the `checked_` seam propagates `None`) rather
+        // than deferring to the `exp(n·ln b)` composition, whose to-nearest
+        // approximation can directed-round (Floor / Trunc) back INSIDE the
+        // range at an out-by-one boundary (the `exp2(127)` hair case:
+        // `2^127` at scale 0 is `i128::MAX + 1`).
+        match bv
             .checked_pow(k)
             .and_then(|p| p.checked_mul(one_s))
             .filter(|v| *v <= storage_max)
-            .unwrap_or_else(|| {
-                crate::support::diagnostics::overflow_panic_with_scale("powf kernel", SCALE)
-            });
-        Some(v)
+        {
+            Some(v) => ExactPin::Value(v),
+            None => ExactPin::OutOfRange,
+        }
     } else {
         // `b^-k = 1 / b^k`, stored as `round(10^SCALE / b^k)` — a strictly
         // positive value in `(0, 1]`.
@@ -109,7 +148,7 @@ pub(crate) fn powi_exact_pin<St: BigInt, const SCALE: u32>(
                 // `d = b^k` fits storage; round `10^SCALE / d` under `mode`.
                 let (q, r) = one_s.div_rem(d);
                 if r == St::ZERO {
-                    return Some(q); // exact — no rounding
+                    return ExactPin::Value(q); // exact — no rounding
                 }
                 // Half-comparison `2r vs d`, formed as `r vs d − r` to avoid
                 // overflowing `2r` (`r < d <= MAX`). `q` is the truncated
@@ -117,7 +156,7 @@ pub(crate) fn powi_exact_pin<St: BigInt, const SCALE: u32>(
                 let cmp = r.cmp(&(d - r));
                 let q_is_odd = q.bit(0);
                 let bump = should_bump(mode, cmp, q_is_odd, true);
-                Some(if bump { q + St::ONE } else { q })
+                ExactPin::Value(if bump { q + St::ONE } else { q })
             }
             None => {
                 // `b^k` overflowed storage ⟹ `b^k > MAX >= 2·10^SCALE`
@@ -126,7 +165,7 @@ pub(crate) fn powi_exact_pin<St: BigInt, const SCALE: u32>(
                 // a sub-resolution positive, strictly below the half
                 // boundary. Only `Ceiling` rounds it up to one LSB.
                 let bump = should_bump(mode, core::cmp::Ordering::Less, false, true);
-                Some(if bump { St::ONE } else { St::ZERO })
+                ExactPin::Value(if bump { St::ONE } else { St::ZERO })
             }
         }
     }
@@ -424,7 +463,6 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "powf kernel")]
-    #[test]
     fn positive_overflow_panics() {
         // 10² = 100 exceeds the D38<37> decimal range; the exact arithmetic is
         // PROOF of the overflow, so the pin panics per the contract (deferring

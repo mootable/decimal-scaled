@@ -224,6 +224,30 @@ fn exp_overflow_none_narrow() {
 }
 
 #[test]
+fn exp_deep_overflow_none_narrow() {
+    // The deep band is decided by the wider work integer's ANALYTIC
+    // verdicts, threaded through the same seam: e^2000 by the internal
+    // squaring/reassembly peak model, e^100000 and e^1e17 by the
+    // argument-magnitude pre-gate — all before the kernel's range
+    // reduction runs.
+    assert_eq!(d38(2_000).checked_exp_strict(), None);
+    assert_eq!(d38(100_000).checked_exp_strict(), None);
+    assert_eq!(d38(100_000_000_000_000_000).checked_exp_strict(), None);
+}
+
+#[test]
+#[should_panic(expected = "result out of range")]
+fn exp_deep_overflow_default_panics() {
+    let _ = d38(100_000).exp_strict();
+}
+
+#[test]
+#[should_panic(expected = "result out of range")]
+fn exp_deepest_overflow_default_panics() {
+    let _ = d38(100_000_000_000_000_000).exp_strict();
+}
+
+#[test]
 #[should_panic(expected = "result out of range")]
 fn exp_overflow_default_panics() {
     let _ = d38(120).exp_strict();
@@ -237,12 +261,20 @@ fn exp_overflow_default_panics_d18() {
 
 #[test]
 fn exp2_overflow_none_narrow() {
-    // 2^100 has 31 integer digits; D38<10> holds 28. (Deeper overflow
-    // arguments, x >= ~120 at this scale, currently die in an internal
-    // div_knuth assertion on BOTH the default and checked paths — a
-    // pre-existing kernel defect upstream of the overflow detection,
-    // flagged in research/checked_wide_shell_patch.md.)
+    // 2^100 has 31 integer digits; D38<10> holds 28 — the exact-power
+    // pin's ladder overflow is the proof.
     assert_eq!(d38(100).checked_exp2_strict(), None);
+    // 2^95.5 (29 digits): a fractional argument past the pin — the
+    // series kernel computes it in the wider work integer and the
+    // post-narrowing fit check signals the None.
+    let frac = d38(95) + D38::<10>::ONE / d38(2);
+    assert_eq!(frac.checked_exp2_strict(), None);
+    // Deep band: 2^7000 (exact integer — pin ladder proof) and 2^7000.5
+    // (fractional — the analytic integer-digit gate, before any kernel
+    // arithmetic runs).
+    assert_eq!(d38(7_000).checked_exp2_strict(), None);
+    let deep_frac = d38(7_000) + D38::<10>::ONE / d38(2);
+    assert_eq!(deep_frac.checked_exp2_strict(), None);
     // An exact integer power inside the range stays exact.
     assert_eq!(d38(10).checked_exp2_strict(), Some(d38(1024)));
 }
@@ -254,10 +286,33 @@ fn exp2_overflow_default_panics() {
 }
 
 #[test]
+#[should_panic(expected = "result out of range")]
+fn exp2_fractional_overflow_default_panics() {
+    let _ = (d38(95) + D38::<10>::ONE / d38(2)).exp2_strict();
+}
+
+#[test]
+#[should_panic(expected = "result out of range")]
+fn exp2_deep_overflow_default_panics() {
+    let _ = d38(7_000).exp2_strict();
+}
+
+#[test]
+#[should_panic(expected = "result out of range")]
+fn exp2_deep_fractional_overflow_default_panics() {
+    let _ = (d38(7_000) + D38::<10>::ONE / d38(2)).exp2_strict();
+}
+
+#[test]
 fn powf_overflow_none_narrow() {
     let ten = d38(10);
     // 10^30 has 31 integer digits; D38<10> holds 28.
     assert_eq!(ten.checked_powf_strict(d38(30)), None);
+    // 3^100.5 (48 digits): a non-integer exponent past the pins — the
+    // composition's analytic argument gate decides it before the exp
+    // kernel runs.
+    let frac_exp = d38(100) + D38::<10>::ONE / d38(2);
+    assert_eq!(d38(3).checked_powf_strict(frac_exp), None);
     // Non-positive bases saturate to zero, as the default form does.
     let half = D38::<10>::ONE / d38(2);
     assert_eq!(d38(-3).checked_powf_strict(half), Some(D38::<10>::ZERO));
@@ -268,6 +323,12 @@ fn powf_overflow_none_narrow() {
 #[should_panic(expected = "result out of range")]
 fn powf_overflow_default_panics() {
     let _ = d38(10).powf_strict(d38(30));
+}
+
+#[test]
+#[should_panic(expected = "result out of range")]
+fn powf_fractional_overflow_default_panics() {
+    let _ = d38(3).powf_strict(d38(100) + D38::<10>::ONE / d38(2));
 }
 
 #[test]

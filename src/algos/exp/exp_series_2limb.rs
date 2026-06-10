@@ -13,6 +13,7 @@
 //! defaults (`exp_fixed`) so the typed-shell file has no
 //! `crate::algos::*` or `crate::algos::support::fixed::*` references left.
 
+use crate::algos::pow::powi_exact::ExactPin;
 use crate::algos::support::fixed::Fixed;
 use crate::algos::ln::ln_series_2limb::{STRICT_GUARD, wide_ln2};
 use crate::int::types::Int;
@@ -276,7 +277,11 @@ fn exp_wide_narrow_raw(
     let v_mag = WNarrow::from_i128(raw.unsigned_abs() as i128) * crate::consts::pow10::dispatch::<WNarrow>(working_digits);
     let v_w = if negative_input { -v_mag } else { v_mag };
 
-    let ex = exp_generic::exp_fixed::<WNarrow>(v_w, w);
+    // `try_exp_fixed`: a deep argument the generic kernel proves out of
+    // range is this kernel's `None` (the policy dispatch wrapper applies
+    // the default form's contractual panic; the `checked_` surface
+    // propagates it), same as the post-narrowing fit check below.
+    let ex = exp_generic::try_exp_fixed::<WNarrow>(v_w, w)?;
     narrow_round_mag(ex, working_digits, mode, true, false)
 }
 
@@ -503,50 +508,68 @@ fn exp_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i12
 /// rational*, never a transcendental residual. Returns the
 /// **correctly-rounded** storage value of `2^k` under `mode`, computed
 /// from exact integer arithmetic, so the `exp(k·ln 2)` series round-off
-/// can never bump it across a tie or grid line. Returns `None` only when
-/// `raw` is not an exact integer (the genuinely transcendental case the
-/// series kernel handles) or when a representable result overflows
-/// `i128`. See the wide-tier `exp2_exact_pow`.
+/// can never bump it across a tie or grid line. [`ExactPin::Defer`] only
+/// when `raw` is not an exact integer (the genuinely transcendental case
+/// the series kernel handles); a positive `2^k` past the decimal range is
+/// [`ExactPin::OutOfRange`] — the exact ladder's overflow is PROOF,
+/// detected once here: the kernel returns `None` for it (the policy
+/// dispatch wrapper applies the default form's contractual panic, the
+/// `checked_` surface propagates) rather than deferring to the
+/// `exp(k·ln 2)` composition, whose to-nearest approximation can
+/// directed-round (Floor / Trunc) back INSIDE the range at an out-by-one
+/// boundary (`exp2(127)` at scale 0 is `i128::MAX + 1`). See the
+/// wide-tier `exp2_exact_pow`.
 #[inline]
-fn exp2_exact_pin(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
-    let one_s = 10i128.checked_pow(scale)?;
+fn exp2_exact_pin(raw: i128, scale: u32, mode: RoundingMode) -> ExactPin<i128> {
+    let one_s = match 10i128.checked_pow(scale) {
+        Some(v) => v,
+        None => return ExactPin::Defer,
+    };
     if raw % one_s != 0 {
-        return None;
+        return ExactPin::Defer;
     }
     let k = raw / one_s;
     if k == 0 {
-        return Some(one_s);
+        return ExactPin::Value(one_s);
     }
     let kk = k.unsigned_abs();
     if k > 0 {
-        // 2^k · 10^scale — exact integer when representable. An overflow here
-        // is PROOF the exact result exceeds the decimal range: panic per the
-        // overflow contract (debug AND release) rather than deferring to the
-        // `exp(k·ln 2)` composition, whose to-nearest approximation can
-        // directed-round (Floor / Trunc) back INSIDE the range at an
-        // out-by-one boundary (`exp2(127)` at scale 0 is `i128::MAX + 1`).
+        // 2^k · 10^scale — exact integer when representable; the ladder's
+        // overflow is the out-of-range proof.
         let mut v: i128 = one_s;
         for _ in 0..kk {
-            v = v.checked_mul(2).unwrap_or_else(|| {
-                crate::support::diagnostics::overflow_panic_with_scale("D38::exp2", scale)
-            });
+            v = match v.checked_mul(2) {
+                Some(d) => d,
+                None => return ExactPin::OutOfRange,
+            };
         }
-        Some(v)
+        ExactPin::Value(v)
     } else if kk <= scale as u128 {
-        // 2^-|k| = 5^|k| · 10^(scale − |k|) — exact, no rounding.
-        let mut v = 10i128.checked_pow(scale - kk as u32)?;
+        // 2^-|k| = 5^|k| · 10^(scale − |k|) — exact, no rounding. These
+        // checked steps cannot fail for any real scale (the value is
+        // `<= 10^scale`); kept checked-and-deferring for totality.
+        let mut v = match 10i128.checked_pow(scale - kk as u32) {
+            Some(d) => d,
+            None => return ExactPin::Defer,
+        };
         for _ in 0..kk {
-            v = v.checked_mul(5)?;
+            v = match v.checked_mul(5) {
+                Some(d) => d,
+                None => return ExactPin::Defer,
+            };
         }
-        Some(v)
+        ExactPin::Value(v)
     } else {
         // |k| > scale: `2^k · 10^scale = 5^scale / 2^(|k|−scale)` is a
         // proper dyadic fraction in `(0, 1)` storage units. Round it
         // exactly under `mode` (`exp2(-1) = 0.5` is the half-to-even tie
         // → 0; `exp2(-146)` is a sub-resolution positive → Ceiling → 1).
-        let num = 5u128.checked_pow(scale)?; // 5^38 < 2^89, fits u128
+        let num = match 5u128.checked_pow(scale) {
+            Some(d) => d, // 5^38 < 2^89, fits u128
+            None => return ExactPin::Defer,
+        };
         let p = kk as u32 - scale; // shift amount, ≥ 1
-        Some(round_pow2_fraction(num, p, mode))
+        ExactPin::Value(round_pow2_fraction(num, p, mode))
     }
 }
 
@@ -607,9 +630,14 @@ fn exp2_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode)
     // Exact-power pin: `exp2(integer k) = 2^k` is an exact algebraic
     // point (integer for `k >= 0`, `5^|k|·10^(scale−|k|)` for `k < 0`).
     // Emitting it directly stops the `exp(k·ln 2)` round-off from
-    // bumping a directed mode by one LSB at the exact power.
-    if let Some(pinned) = exp2_exact_pin(raw, scale, mode) {
-        return Some(pinned);
+    // bumping a directed mode by one LSB at the exact power. A proven
+    // out-of-range positive power is the kernel's `None` (the policy
+    // dispatch wrapper applies the default form's panic; the `checked_`
+    // surface propagates) — never deferred to the composition.
+    match exp2_exact_pin(raw, scale, mode) {
+        ExactPin::Value(pinned) => return Some(pinned),
+        ExactPin::OutOfRange => return None,
+        ExactPin::Defer => {}
     }
     // Integer-regime gate (mirrors `exp_with_raw`): `2^x = e^(x·ln 2)` whose
     // result carries `k_lift` integer digits leaves the flat-`w` 256-bit
@@ -709,20 +737,22 @@ fn exp2_wide_narrow_raw(
     // integer-digit count, so a deep-overflow argument inflates every
     // dividend downstream (`x·ln 2`, the kernel's own `k` range-reduction
     // divide) far past what the build's divide scratch provisions for
-    // in-range work — tripping an INTERNAL kernel assertion instead of the
-    // contractual panic. Analytic bound, exact for every scale: the
-    // result `2^x ≥ 10^(d−1)` for `d = int_digits(2^x)`, so its storage
-    // value is `≥ 10^(d−1+scale)`; `i128` holds values `< 1.8·10^38 <
-    // 10^39`, hence `d + scale ≥ 40` PROVES the result cannot be stored.
-    // `d` is the floor lower bound (never over-stated), so no
-    // representable cell can fire; cells between the true edge and this
-    // bound still flow to the kernel, whose post-narrowing fit check
-    // ([`narrow_round_mag`] → `None`) raises the SAME panic — and for
-    // those cells `d + scale ≤ 39` bounds the lift (`w ≤ scale +
-    // working_digits + 41 − scale`), keeping every dividend inside the
-    // scratch at every scale.
+    // in-range work — tripping an INTERNAL kernel assertion instead of
+    // the contractual out-of-range signal. Analytic bound, exact for
+    // every scale: the result `2^x ≥ 10^(d−1)` for `d = int_digits(2^x)`,
+    // so its storage value is `≥ 10^(d−1+scale)`; `i128` holds values
+    // `< 1.8·10^38 < 10^39`, hence `d + scale ≥ 40` PROVES the result
+    // cannot be stored — return the kernel's `None` (the policy dispatch
+    // wrapper applies the default form's contractual panic; the
+    // `checked_` surface propagates it). `d` is the floor lower bound
+    // (never over-stated), so no representable cell can fire; cells
+    // between the true edge and this bound still flow to the kernel,
+    // whose post-narrowing fit check ([`narrow_round_mag`] → `None`)
+    // signals the SAME `None` — and for those cells `d + scale ≤ 39`
+    // bounds the lift (`w ≤ scale + working_digits + 41 − scale`),
+    // keeping every dividend inside the scratch at every scale.
     if raw > 0 && exp2_result_int_digits_floor(abs_raw, scale).saturating_add(scale) >= 40 {
-        crate::support::diagnostics::overflow_panic_with_scale("exp2", scale);
+        return None;
     }
     // The lift exists to keep guard digits ABOVE the result's integer
     // digits. A negative argument has none (`2^x < 1`), so its lift is 0 —
@@ -749,7 +779,9 @@ fn exp2_wide_narrow_raw(
         )
     };
     let arg = if neg { -arg_mag } else { arg_mag };
-    let ex = exp_generic::exp_fixed::<WNarrow>(arg, w);
+    // `try_exp_fixed`: see [`exp_wide_narrow_raw`] — an out-of-range
+    // verdict from the generic kernel propagates as this kernel's `None`.
+    let ex = exp_generic::try_exp_fixed::<WNarrow>(arg, w)?;
     narrow_round_mag(ex, guard, mode, true, false)
 }
 
