@@ -90,6 +90,21 @@ jobs:
         # files were gated, only a `cargo check` was possible here.
         run: cargo test
 
+      - name: Consolidated test suite (decimal-scale-test, full features)
+        # The migrated integration suite lives in `decimal-scale-test`
+        # (10.11). The crate passes every feature through to the root
+        # crate, so this leg runs the widest stable surface. The heavy
+        # golden targets stay out of the way: `golden` carries
+        # `required-features` + `#[ignore]`, so only the quick tests run.
+        run: cargo test -p decimal-scale-test --features wide,x-wide,xx-wide,macros,serde,alloc,dyn
+
+      - name: Consolidated test suite (decimal-scale-test, default features)
+        # Default-feature (narrow-tier) run of the migrated suite — the
+        # feature passthrough exists exactly so this leg keeps covering
+        # the narrow build (several historical regressions were
+        # narrow-build-only).
+        run: cargo test -p decimal-scale-test
+
   # GATE: the golden suite, split out of `tests (gate)` so it runs in
   # PARALLEL with it, in RELEASE. Runs the `decimal-scale-test` gate —
   # one erased subject over every band-edge (width, scale) cell across
@@ -124,11 +139,14 @@ jobs:
       - name: All-mode golden gate (release, sampled)
         # `-p decimal-scale-test` scopes the build to the gate crate (the
         # root crate's bench dev-deps — plotters/fontconfig — never
-        # compile). GOLDEN_SAMPLE keeps ~1-in-10 golden rows plus each
+        # compile). The wide-tier features are passed explicitly now that
+        # the crate's dependency line no longer hardcodes them (the
+        # `golden` target also pins them via `required-features`).
+        # GOLDEN_SAMPLE keeps ~1-in-10 golden rows plus each
         # file's first lines, so all six modes fit per-push latency.
         env:
           GOLDEN_SAMPLE: "10"
-        run: cargo test -p decimal-scale-test --release --test golden golden_all_modes -- --ignored --nocapture
+        run: cargo test -p decimal-scale-test --release --features wide,x-wide,xx-wide --test golden golden_all_modes -- --ignored --nocapture
 
   # GATE: the no_std + alloc build. The crate is `#![no_std]` under
   # non-default features, but no workflow exercised that build, so a

@@ -10,6 +10,13 @@
 //! `golden-competitors` all share it. [`Filter`] reads the `GOLDEN_*` env vars so a
 //! `cargo test` run can target just the cells / modes / functions under investigation.
 
+// The subjects enumerate every decimal tier (D18..D1232), so the crate body
+// needs the full wide feature ladder; a narrower build (e.g. the
+// default-feature leg of the consolidated test suite) compiles this crate
+// empty. The golden gate target pins the same requirement via
+// `required-features` in Cargo.toml.
+#![cfg(all(feature = "wide", feature = "x-wide", feature = "xx-wide"))]
+
 use std::collections::BTreeMap;
 
 use decimal_scaled::{
