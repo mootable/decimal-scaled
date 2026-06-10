@@ -36,7 +36,19 @@ mod from_d38_max_scale_log_panic {
     #[test]
     fn log10_strict_on_near_max_d38_scale38() {
         let v = D38::<38>::from_bits(decimal_scaled::Int::<2>::try_from(i128::MAX).unwrap());
-        let _ = v.log10_strict();
+        let r = v.log10_strict();
+        // v = i128::MAX / 10^38 ∈ (1.70, 1.71), so log10(v) ∈ (log10(1.70),
+        // log10(1.71)) = (0.2304, 0.2330) ⊂ (0.22, 0.24); at scale 38 the
+        // raw bits land in (2.2e37, 2.4e37).
+        let bits = i128::from(r.to_bits());
+        assert!(
+            bits > 22 * 10_i128.pow(36),
+            "log10(near-MAX) ≈ 0.2308, bits ≈ 2.31e37, got {bits}"
+        );
+        assert!(
+            bits < 24 * 10_i128.pow(36),
+            "log10(near-MAX) ≈ 0.2308, bits ≈ 2.31e37, got {bits}"
+        );
     }
 }
 
@@ -71,7 +83,18 @@ mod from_d57_max_scale_cbrt_panic {
     #[test]
     fn d57_max_scale_cbrt_does_not_panic() {
         let v = D57::<57>::from_f64(8.0);
-        let _ = v.cbrt_strict();
+        let r = v.cbrt_strict();
+        // 8.0 saturates to MAX = Int192::MAX / 10^57 ≈ 3.1385; since
+        // 1 < MAX < 8, the cube root must land strictly inside (1, 2)
+        // (cbrt(MAX) ≈ 1.4641).
+        assert!(
+            r > D57::<57>::from(1),
+            "cbrt(MAX ≈ 3.14) ≈ 1.464 must exceed 1, got {r:?}"
+        );
+        assert!(
+            r < D57::<57>::from(2),
+            "cbrt(MAX ≈ 3.14) ≈ 1.464 must be below 2, got {r:?}"
+        );
     }
 
     /// cbrt(1.0) at D57<MAX_SCALE> — small input that fits the
