@@ -15,20 +15,20 @@ mod from_num_traits {
     //!
     //! # Trait coverage
     //!
-    //! - [`num_traits::Zero`] / [`num_traits::One`] — additive and
+    //! - [`num_traits::Zero`] / [`num_traits::One`] â€” additive and
     //! multiplicative identities.
-    //! - [`num_traits::Num`] — umbrella numeric trait combining
+    //! - [`num_traits::Num`] â€” umbrella numeric trait combining
     //! `Zero + One + PartialEq + Add + Sub + Mul + Div + Rem` with a
     //! `from_str_radix` constructor.
-    //! - [`num_traits::Bounded`] — `min_value()` / `max_value()` for
+    //! - [`num_traits::Bounded`] â€” `min_value()` / `max_value()` for
     //! generic clamping code.
-    //! - [`num_traits::Signed`] — `abs`, `signum`, `is_positive`,
+    //! - [`num_traits::Signed`] â€” `abs`, `signum`, `is_positive`,
     //! `is_negative`, `abs_sub`.
-    //! - [`num_traits::FromPrimitive`] / [`num_traits::ToPrimitive`] —
+    //! - [`num_traits::FromPrimitive`] / [`num_traits::ToPrimitive`] â€”
     //! fallible conversions to and from the primitive numeric types.
     //! - [`num_traits::CheckedAdd`] / [`num_traits::CheckedSub`] /
     //! [`num_traits::CheckedMul`] / [`num_traits::CheckedDiv`] /
-    //! [`num_traits::CheckedRem`] / [`num_traits::CheckedNeg`] —
+    //! [`num_traits::CheckedRem`] / [`num_traits::CheckedNeg`] â€”
     //! overflow-safe variants returning `Option<Self>`.
     //!
     //! # `from_str_radix`
@@ -192,7 +192,7 @@ mod from_num_traits {
 
     #[test]
     fn from_primitive_i128_overflow_returns_none() {
-        // i128::MAX cannot be scaled by 10^12 — TryFrom returns Err,
+        // i128::MAX cannot be scaled by 10^12 â€” TryFrom returns Err,
         // FromPrimitive surfaces that as None.
         assert_eq!(<D38s12 as FromPrimitive>::from_i128(i128::MAX), None);
         assert_eq!(<D38s12 as FromPrimitive>::from_i128(i128::MIN), None);
@@ -206,7 +206,7 @@ mod from_num_traits {
 
     #[test]
     fn from_primitive_u128_overflow_returns_none() {
-        // u128::MAX > i128::MAX — the first try_from step fails.
+        // u128::MAX > i128::MAX â€” the first try_from step fails.
         assert_eq!(<D38s12 as FromPrimitive>::from_u128(u128::MAX), None);
 
         // Small values succeed.
@@ -631,7 +631,7 @@ mod from_num_traits {
             (D38s12::MIN, D38s12::MIN),
             (D38s12::ZERO, D38s12::ONE),
             (D38s12::ONE, D38s12::MAX),
-            // divide by zero — both must return None
+            // divide by zero â€” both must return None
             (D38s12::ONE, D38s12::ZERO),
             (D38s12::MAX, D38s12::ZERO),
             // true overflow case: MIN / -ONE
@@ -673,7 +673,7 @@ mod from_num_traits {
     }
 
     // ---------------------------------------------------------------------------
-    // Cross-scale exercise — non-default SCALE
+    // Cross-scale exercise â€” non-default SCALE
     // ---------------------------------------------------------------------------
 
     /// At SCALE = 6 the trait surface works correctly.
@@ -724,7 +724,7 @@ mod from_num_traits {
     /// f64's 53-bit mantissa range, validating the integer fast path.
     #[test]
     fn numcast_from_i64_above_f64_mantissa_is_exact() {
-        // 2^54 = 18_014_398_509_481_984 — above f64's exact-integer range.
+        // 2^54 = 18_014_398_509_481_984 â€” above f64's exact-integer range.
         let v: i64 = 1_i64 << 54;
         let d: D38s12 = <D38s12 as NumCast>::from(v).expect("in-range");
         assert_eq!(<D38s12 as ToPrimitive>::to_i64(&d), Some(v));
@@ -732,7 +732,7 @@ mod from_num_traits {
 }
 
 mod from_macros_num_traits {
-    //! Coverage suite for `macros/num_traits.rs` — the `num_traits`
+    //! Coverage suite for `macros/num_traits.rs` â€” the `num_traits`
     //! impls emitted for every decimal width. Covers Num, Signed,
     //! CheckedAdd/Sub/Mul/Div/Rem/Neg, FromPrimitive, ToPrimitive, NumCast.
 
@@ -748,7 +748,7 @@ mod from_macros_num_traits {
         Num, NumCast, One, Signed, ToPrimitive, Zero,
     };
 
-    // ─── Num ───────────────────────────────────────────────────────────────
+    // â”€â”€â”€ Num â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     #[test]
     fn num_from_str_radix_10() {
@@ -765,7 +765,7 @@ mod from_macros_num_traits {
         assert!(<D18<2> as Num>::from_str_radix("10", 8).is_err());
     }
 
-    // ─── Checked* via trait dispatch ──────────────────────────────────────
+    // â”€â”€â”€ Checked* via trait dispatch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     #[test]
     fn checked_add_sub_mul_div_rem_neg_traits() {
@@ -803,7 +803,7 @@ mod from_macros_num_traits {
         let _ = <D18<2> as CheckedNeg>::checked_neg(&a).unwrap();
     }
 
-    // ─── Signed ────────────────────────────────────────────────────────────
+    // â”€â”€â”€ Signed â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     #[test]
     fn signed_traits() {
@@ -831,7 +831,7 @@ mod from_macros_num_traits {
         let _ = pos18.abs_sub(&D18::<2>::try_from(1).unwrap());
     }
 
-    // ─── FromPrimitive ─────────────────────────────────────────────────────
+    // â”€â”€â”€ FromPrimitive â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     #[test]
     fn from_primitive_all_widths() {
@@ -866,7 +866,7 @@ mod from_macros_num_traits {
             <D38<2> as FromPrimitive>::from_u128(5).unwrap().to_bits(),
             500
         );
-        // f32 / f64 — Option-returning trait variants
+        // f32 / f64 â€” Option-returning trait variants
         assert_eq!(
             <D38<2> as FromPrimitive>::from_f32(1.5).unwrap().to_bits(),
             150
@@ -899,7 +899,7 @@ mod from_macros_num_traits {
         assert!(<D18<2> as FromPrimitive>::from_u128(u128::MAX).is_none());
     }
 
-    // ─── ToPrimitive ───────────────────────────────────────────────────────
+    // â”€â”€â”€ ToPrimitive â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     #[test]
     fn to_primitive_all_widths() {
@@ -910,7 +910,7 @@ mod from_macros_num_traits {
         assert_eq!(<D38<2> as ToPrimitive>::to_u128(&v), Some(7));
         assert_eq!(<D38<2> as ToPrimitive>::to_f32(&v), Some(7.0_f32));
         assert_eq!(<D38<2> as ToPrimitive>::to_f64(&v), Some(7.0));
-        // Negative → u64 is None
+        // Negative â†’ u64 is None
         let neg = D38::<2>::try_from(-7).unwrap();
         assert_eq!(<D38<2> as ToPrimitive>::to_u64(&neg), None);
         assert_eq!(<D38<2> as ToPrimitive>::to_u128(&neg), None);
@@ -926,7 +926,7 @@ mod from_macros_num_traits {
         assert_eq!(<D18<2> as ToPrimitive>::to_u128(&neg18), None);
     }
 
-    // ─── NumCast ───────────────────────────────────────────────────────────
+    // â”€â”€â”€ NumCast â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     #[test]
     fn numcast_integer_path() {
@@ -955,9 +955,9 @@ mod from_macros_num_traits {
         assert!(<D38<2> as NumCast>::from(f64::INFINITY).is_none());
     }
 
-    // ─── Zero / One / Bounded (existing tests in macros_surface; here we
+    // â”€â”€â”€ Zero / One / Bounded (existing tests in macros_surface; here we
     //     additionally hit the trait-method bodies that may share text with
-    //     the macro's `impl Zero { is_zero }` etc.) ───
+    //     the macro's `impl Zero { is_zero }` etc.) â”€â”€â”€
 
     #[test]
     fn zero_one_bounded_redux() {
@@ -967,7 +967,7 @@ mod from_macros_num_traits {
         assert_eq!(<D18<2> as Bounded>::max_value(), D18::<2>::MAX);
     }
 
-    // ─── Wide variants ─────────────────────────────────────────────────────
+    // â”€â”€â”€ Wide variants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     #[cfg(feature = "wide")]
     #[test]
@@ -1013,7 +1013,7 @@ mod from_macros_num_traits {
         assert_eq!(<D76<2> as FromPrimitive>::from_f32(1.5).unwrap(), exp_f);
         assert_eq!(<D76<2> as FromPrimitive>::from_f64(1.5).unwrap(), exp_f);
 
-        // ToPrimitive on wide — disambiguate trait method (inherent to_f32 returns f32 not Option<f32>).
+        // ToPrimitive on wide â€” disambiguate trait method (inherent to_f32 returns f32 not Option<f32>).
         let v: D76<2> = D38::<2>::try_from(7).unwrap().into();
         assert_eq!(<D76<2> as ToPrimitive>::to_i64(&v), Some(7));
         assert_eq!(<D76<2> as ToPrimitive>::to_u64(&v), Some(7));
@@ -1021,7 +1021,7 @@ mod from_macros_num_traits {
         assert_eq!(<D76<2> as ToPrimitive>::to_u128(&v), Some(7));
         assert_eq!(<D76<2> as ToPrimitive>::to_f64(&v), Some(7.0));
         assert_eq!(<D76<2> as ToPrimitive>::to_f32(&v), Some(7.0_f32));
-        // Negative → u64/u128 None
+        // Negative â†’ u64/u128 None
         let neg: D76<2> = D38::<2>::try_from(-7).unwrap().into();
         assert_eq!(<D76<2> as ToPrimitive>::to_u64(&neg), None);
         assert_eq!(<D76<2> as ToPrimitive>::to_u128(&neg), None);
@@ -1043,7 +1043,7 @@ mod from_macros_surface {
 
     use decimal_scaled::{D18, D38};
 
-    // ─── macros/num_traits.rs: Bounded / Zero / One / Num / Inv ────────────
+    // â”€â”€â”€ macros/num_traits.rs: Bounded / Zero / One / Num / Inv â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     #[test]
     fn num_traits_zero_one_bounded() {
@@ -1073,5 +1073,190 @@ mod from_macros_surface {
         assert!(<D76<2> as One>::one().is_one());
         assert_eq!(<D76<2> as Bounded>::min_value(), D76::<2>::MIN);
         assert_eq!(<D76<2> as Bounded>::max_value(), D76::<2>::MAX);
+    }
+}
+
+mod from_src_num_traits {
+    use decimal_scaled::{D38s12, Int};
+
+    // from_num â€” thin delegate over NumCast / FromPrimitive.
+
+    /// `from_num(i32)` matches the idiomatic `From<i32>` impl.
+    #[test]
+    fn from_num_i32_round_trip() {
+        let d = D38s12::from_num(42_i32);
+        assert_eq!(d, D38s12::from(42_i32));
+        assert_eq!(d.to_num::<i32>(), 42_i32);
+    }
+
+    /// `from_num(i64)` matches `From<i64>`.
+    #[test]
+    fn from_num_i64_matches_from() {
+        let d = D38s12::from_num(1_000_i64);
+        assert_eq!(d, D38s12::from(1_000_i64));
+    }
+
+    /// `from_num(f64)` for an in-range value matches `from_f64`.
+    #[test]
+    fn from_num_f64_within_range() {
+        let d = D38s12::from_num(1.5_f64);
+        assert_eq!(d, D38s12::from_f64(1.5_f64));
+    }
+
+    /// `from_num(f64::INFINITY)` saturates to `MAX`.
+    #[test]
+    fn from_num_f64_inf_saturates_max() {
+        assert_eq!(D38s12::from_num(f64::INFINITY), D38s12::MAX);
+    }
+
+    /// `from_num(f64::NEG_INFINITY)` saturates to `MIN`.
+    #[test]
+    fn from_num_f64_neg_inf_saturates_min() {
+        assert_eq!(D38s12::from_num(f64::NEG_INFINITY), D38s12::MIN);
+    }
+
+    /// `from_num(f64::NAN)` returns `ZERO` (deterministic NaN policy).
+    #[test]
+    fn from_num_f64_nan_is_zero() {
+        assert_eq!(D38s12::from_num(f64::NAN), D38s12::ZERO);
+    }
+
+    /// Finite out-of-range f64 saturates by sign.
+    #[test]
+    fn from_num_f64_finite_oor_saturates() {
+        // 1e30 * 10^12 = 1e42 > i128::MAX ~1.7e38; positive â†’ MAX.
+        assert_eq!(D38s12::from_num(1e30_f64), D38s12::MAX);
+        // negative â†’ MIN.
+        assert_eq!(D38s12::from_num(-1e30_f64), D38s12::MIN);
+    }
+
+    /// `from_num(f32::INFINITY)` saturates (validates f32 path).
+    #[test]
+    fn from_num_f32_inf_saturates() {
+        assert_eq!(D38s12::from_num(f32::INFINITY), D38s12::MAX);
+        assert_eq!(D38s12::from_num(f32::NEG_INFINITY), D38s12::MIN);
+        assert_eq!(D38s12::from_num(f32::NAN), D38s12::ZERO);
+    }
+
+    /// `from_num` accepts values past i64's range that still fit
+    /// `D38<SCALE>`'s storage â€” at `SCALE = 12`, D38's integer range is
+    /// roughly Â±1.7e14 model units.
+    #[test]
+    fn from_num_does_not_saturate_for_wider_than_i64_decimal_range() {
+        let v: i64 = 10_000_000_000_i64;
+        let d = D38s12::from_num(v);
+        assert_eq!(d.to_int(), v);
+    }
+
+    // to_num â€” thin delegate over NumCast / ToPrimitive.
+
+    /// `D38::ONE.to_num::<f64>() == 1.0`.
+    #[test]
+    fn to_num_f64_lossy() {
+        assert_eq!(D38s12::ONE.to_num::<f64>(), 1.0_f64);
+        assert_eq!((-D38s12::ONE).to_num::<f64>(), -1.0_f64);
+        assert_eq!(D38s12::ZERO.to_num::<f64>(), 0.0_f64);
+    }
+
+    /// `D38::ONE.to_num::<f32>() == 1.0`.
+    #[test]
+    fn to_num_f32_lossy() {
+        assert_eq!(D38s12::ONE.to_num::<f32>(), 1.0_f32);
+        assert_eq!((-D38s12::ONE).to_num::<f32>(), -1.0_f32);
+    }
+
+    /// `D38::from(42_i32).to_num::<i32>() == 42`.
+    #[test]
+    fn to_num_i32_in_range() {
+        let d = D38s12::from(42_i32);
+        assert_eq!(d.to_num::<i32>(), 42_i32);
+
+        let neg = D38s12::from(-42_i32);
+        assert_eq!(neg.to_num::<i32>(), -42_i32);
+    }
+
+    /// `D38::MAX.to_num::<i32>() == i32::MAX` (saturating positive).
+    #[test]
+    fn to_num_i32_out_of_range_saturates_max() {
+        assert_eq!(D38s12::MAX.to_num::<i32>(), i32::MAX);
+    }
+
+    /// `D38::MIN.to_num::<i32>() == i32::MIN` (saturating negative).
+    #[test]
+    fn to_num_i32_out_of_range_saturates_min() {
+        assert_eq!(D38s12::MIN.to_num::<i32>(), i32::MIN);
+    }
+
+    /// `to_num::<i64>()` saturates at i64 bounds.
+    #[test]
+    fn to_num_i64_saturates() {
+        assert_eq!(D38s12::MAX.to_num::<i64>(), i64::MAX);
+        assert_eq!(D38s12::MIN.to_num::<i64>(), i64::MIN);
+        assert_eq!(D38s12::from(42_i64).to_num::<i64>(), 42_i64);
+    }
+
+    /// `to_num::<u32>()` returns 0 for negative values (saturates to
+    /// `u32::MIN = 0`).
+    #[test]
+    fn to_num_u32_negative_saturates_to_zero() {
+        assert_eq!((-D38s12::ONE).to_num::<u32>(), u32::MIN);
+        assert_eq!(D38s12::MIN.to_num::<u32>(), u32::MIN);
+        // Positive out-of-range â†’ u32::MAX.
+        assert_eq!(D38s12::MAX.to_num::<u32>(), u32::MAX);
+    }
+
+    /// Round-trip via from_num / to_num for representative i32 values.
+    #[test]
+    fn from_num_to_num_round_trip_i32() {
+        for v in [0_i32, 1, -1, 42, -42, 1_000_000, -1_000_000] {
+            let d = D38s12::from_num(v);
+            assert_eq!(d.to_num::<i32>(), v);
+        }
+    }
+
+    // Cross-scale exercise â€” non-default SCALE.
+
+    /// Compat surface works at non-default SCALE.
+    #[test]
+    fn from_num_to_num_at_scale_6() {
+        type D6 = decimal_scaled::D<Int<2>, 6>;
+        let d = D6::from_num(7_i32);
+        assert_eq!(d, D6::from(7_i32));
+        assert_eq!(d.to_num::<i32>(), 7_i32);
+    }
+
+    // Integer-typed inputs must not route through f64 for sign
+    // detection.
+
+    /// `from_num(i128::MAX)` saturates to `D38::MAX` via the i128 sign
+    /// signal, not through a f64 round-trip. `i128::MAX * 10^12`
+    /// overflows i128 storage, so `NumCast::from` returns `None`; the
+    /// saturation fallback reads sign directly from i128.
+    #[test]
+    fn from_num_i128_max_saturates_via_int_signal() {
+        assert_eq!(D38s12::from_num(i128::MAX), D38s12::MAX);
+    }
+
+    /// `from_num(i128::MIN)` saturates to `D38::MIN` via the i128 sign
+    /// signal.
+    #[test]
+    fn from_num_i128_min_saturates_via_int_signal() {
+        assert_eq!(D38s12::from_num(i128::MIN), D38s12::MIN);
+    }
+
+    /// `from_num(u128::MAX)` saturates to `D38::MAX` via the u128 sign
+    /// signal. `to_i128` returns None for u128 > i128::MAX, so the u128
+    /// fallback path is exercised here.
+    #[test]
+    fn from_num_u128_max_saturates_via_uint_signal() {
+        assert_eq!(D38s12::from_num(u128::MAX), D38s12::MAX);
+    }
+
+    /// `from_num(u64::MAX)` succeeds without saturation â€” u64::MAX fits
+    /// in D38's storage at `SCALE = 12`.
+    #[test]
+    fn from_num_u64_max_succeeds_without_saturation() {
+        let d = D38s12::from_num(u64::MAX);
+        assert_eq!(d, D38s12::from(u64::MAX));
     }
 }

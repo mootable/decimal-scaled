@@ -4,9 +4,12 @@
 //! in their own `mod from_<source>` block, so later batches concatenate
 //! cleanly into the same files.
 
+mod arithmetic;
 mod bitwise;
+mod constants;
 mod conversions;
 mod cross_scale;
+mod display;
 mod equalities;
 mod errors;
 mod foundation;
@@ -16,3 +19,4 @@ mod parsing;
 mod pow;
 mod rescale;
 mod traits;
+mod trig;
