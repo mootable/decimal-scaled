@@ -58,8 +58,8 @@ theme:
         icon: material/weather-night
         name: Switch to light mode
   features:
-    - header.autohide        # header slides away on scroll-down
     - navigation.tabs
+    - navigation.tabs.sticky # most of the nav lives in the tabs; keep them visible on scroll
     - navigation.sections
     - navigation.top
     - navigation.tracking
@@ -85,27 +85,39 @@ extra:
       link: https://crates.io/crates/decimal-scaled
   generator: false
 
+# Seven tabs (navigation.tabs renders each top-level entry as a tab).
+# The first plain-path child of a section is its index page
+# (navigation.indexes). ROADMAP / CHANGELOG / CONTRIBUTORS / SECURITY
+# are root files staged into docs/ at build time by docs.yml (CI) and
+# scripts/preview_docs.ps1 (local) — keep all three lists in step.
 nav:
   - Home: index.md
-  - Getting started: getting-started.md
-  - Architecture: ARCHITECTURE.md
-  - Guides:
-      - Index: guides.md
-      - Widths: widths.md
-      - Strict mode: strict-mode.md
-      - Rounding: rounding.md
-      - Macros: macros.md
-      - Conversions: conversions.md
-      - Cross-scale operations: cross-scale.md
+  - Getting started:
+      - getting-started.md
+      - Decimal literals (d*! macros): macros.md
+      - Strict vs fast transcendentals: strict-mode.md
       - Cargo features: features.md
-      - Comparisons: comparisons.md
-      - Precision testing: precision-testing.md
+  - Reference:
+      - reference.md
+      - The width family: widths.md
+      - Rounding: rounding.md
+      - Conversions: conversions.md
+      - Serde: serde.md
+      - Cross-scale operations: cross-scale.md
       - Glossary: glossary.md
-  - Benchmarks: benchmarks.md
-  - Algorithms: ALGORITHMS.md
-  - Roadmap: ROADMAP.md
-  - Changelog: CHANGELOG.md
-  - Contributing: CONTRIBUTORS.md
+  - Benchmarks & precision:
+      - benchmarks.md
+      - Library comparisons: comparisons.md
+  - Architecture & internals:
+      - Architecture: ARCHITECTURE.md
+      - Algorithms: ALGORITHMS.md
+      - Precision testing & golden validation: precision-testing.md
+  - Project:
+      - Roadmap: ROADMAP.md
+      - Changelog: CHANGELOG.md
+      - Contributing: CONTRIBUTORS.md
+      - Security: SECURITY.md
+      - Licensing: licensing.md
   - API reference (rustdoc): https://mootable.github.io/decimal-scaled/api/decimal_scaled/
 
 markdown_extensions:
