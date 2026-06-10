@@ -1,8 +1,8 @@
 //! Property-based ULP coverage for the strict transcendentals.
 //!
-//! Complements the deterministic mpmath-oracle table in
-//! `tests/ulp_strict_golden.rs` with randomised, fixed-seed fuzz
-//! over the natural input domain of each function.
+//! Complements the deterministic golden gate (this crate's `golden`
+//! test target) with randomised, fixed-seed fuzz over the natural
+//! input domain of each function.
 //!
 //! The oracle here is mathematical *identity*, not a precomputed
 //! table:
@@ -314,7 +314,7 @@ proptest! {
 // Same SCALE on both sides, so the storage int comparison is direct
 // (D76 result fits i128 at scale 19 — width matters only for
 // arithmetic headroom, not the value itself). Tolerance widens to
-// match `precision_wide_baseline.rs`: ±1 LSB.
+// ±1 LSB.
 
 #[cfg(any(feature = "d76", feature = "wide"))]
 mod wide_witness {
@@ -329,7 +329,7 @@ mod wide_witness {
 
     /// Per-call LSB budget for D76 vs D38 cross-witness. Both
     /// kernels target 0.5 ULP at the same storage scale; we allow
-    /// ±1 LSB (matches `precision_wide_baseline.rs`).
+    /// ±1 LSB.
     const CROSS_TIER_LSB_TOL: i128 = 1;
 
     fn nonneg_x() -> impl Strategy<Value = i128> {
@@ -816,9 +816,9 @@ mod hard_inputs {
         // -13·ln2, exp(x) underflows below 10^-9, leaving < scale
         // significant digits, and the subsequent ln re-amplifies
         // the relative error well past the `round_trip_tol` budget.
-        // The audit's known-failing arrays in `ulp_strict_golden.rs`
-        // own the negative-x exp/ln precision holes; the proptest
-        // strategy stays inside the well-conditioned half.
+        // The deterministic golden set owns the negative-x exp/ln
+        // precision holes; the proptest strategy stays inside the
+        // well-conditioned half.
         const LN2_S19: i128 = 6_931_471_805_599_453_094;
         (0i64..=30i64).prop_flat_map(|k| {
             let center = (k as i128) * LN2_S19;

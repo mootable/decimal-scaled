@@ -220,10 +220,6 @@ scientific = "0.5"
 # Chart generation for docs/figures/library_comparison/*.png — pure
 # Rust, no Python dep. Driven by examples/chart_gen.rs.
 plotters = { version = "0.3", default-features = false, features = ["bitmap_backend", "bitmap_encoder", "line_series", "ttf"] }
-# Property-based fuzz coverage for the strict transcendentals — see
-# tests/ulp_proptest.rs. Pinned 1.x for deterministic, fixed-seed
-# minimisation when a counterexample is found.
-proptest = "1"
 # Pin the bench process to a single core (int_ops_micro + the
 # precision-fix impact microbench) so the criterion timing loop doesn't
 # migrate cross-core mid-measurement. Cross-platform, MIT/Apache. Bench-only.
@@ -337,13 +333,6 @@ required-features = ["wide", "x-wide", "xx-wide"]
 [[test]]
 name = "atan_tang_band_accuracy"
 required-features = ["wide", "x-wide", "xx-wide"]
-
-# `sanity_golden` exercises the EXACT (non-transcendental) decimal ops with
-# a wide-tier (D307) spot-check, so it needs the x-wide tier feature; a plain
-# `cargo build --all-targets` (default) therefore skips it.
-[[test]]
-name = "sanity_golden"
-required-features = ["x-wide"]
 
 [[bench]]
 name = "mul_div_candidates"

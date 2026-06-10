@@ -14,6 +14,12 @@ license = "MIT OR Apache-2.0"
 decimal-scaled = { path = "..", default-features = false }
 decimal-scaled-golden = { path = "../decimal-scaled-golden" }
 
+[dev-dependencies]
+# Property-based fuzz coverage for the strict transcendentals — see
+# tests/proptest_identities.rs. Pinned 1.x for deterministic, fixed-seed
+# minimisation when a counterexample is found.
+proptest = "1"
+
 [features]
 default  = ["std"]
 std      = ["decimal-scaled/std"]
@@ -39,3 +45,10 @@ rounding-ceiling = ["decimal-scaled/rounding-ceiling"]
 [[test]]
 name = "golden"
 required-features = ["wide", "x-wide", "xx-wide"]
+
+# `sanity` exercises the EXACT (non-transcendental) decimal ops with a
+# wide-tier (D307) spot-check, so it needs the x-wide tier feature; a
+# default (narrow) build therefore skips it.
+[[test]]
+name = "sanity"
+required-features = ["x-wide"]
