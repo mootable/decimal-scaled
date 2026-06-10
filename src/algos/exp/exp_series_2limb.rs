@@ -157,6 +157,31 @@ pub(crate) fn exp_fixed(v_w: Fixed, w: u32) -> Fixed {
         negative: false,
         mag: Fixed::pow10(w),
     };
+    // Deep-underflow pre-gate — BEFORE the `k` range-reduction divide. For
+    // a deep negative argument that divide (and the `k·ln 2` product after
+    // it) overflows the 256-bit intermediates: `|v| ≥ (w+1)·ln 10` makes
+    // `e^v < 10^-(w+1)`, strictly below the working resolution, while
+    // `|k| ≈ |v|/ln 2` is far past what `mul_u128` / the `2^k` shift can
+    // carry — pre-fix, `exp(-1.5e38)` died in an internal `div_u512_by_
+    // pow10` invariant instead of returning its in-range 0. The threshold
+    // `(w+1)·2.302586` over-approximates `(w+1)·ln 10` (so the gate only
+    // fires on provable sub-resolution values), built as `(w+1)·2_302_586 ·
+    // 10^(w−6)` — within `U256` for every working scale this kernel serves
+    // (`w ≤ 68`). The returned ZERO is exactly what the ungated body
+    // produces for any deep negative it can carry (`sum >> |k|` underflows
+    // to zero), so every caller — exp's nearest-mode fast path (directed
+    // modes route to the wider work integer before this kernel) and powf's
+    // composition — sees the value it always did.
+    if v_w.negative && w >= 6 {
+        let thr = Fixed {
+            negative: false,
+            mag: Fixed::pow10(w - 6),
+        }
+        .mul_u128(((w as u128) + 1) * 2_302_586);
+        if v_w.ge_mag(thr) {
+            return Fixed::ZERO;
+        }
+    }
     let ln2 = wide_ln2(w);
 
     // k = round(v / ln 2); s = v - k·ln(2), |s| <= ln(2)/2.
@@ -204,14 +229,20 @@ pub(crate) fn exp_fixed(v_w: Fixed, w: u32) -> Fixed {
 
     // exp(v) = 2^k · exp(s).
     if k >= 0 {
-        let shift = k as u32;
+        // Saturating narrowing: a `k` past `u32` (not formable by the gated
+        // callers, but cheap to make total) must FAIL the range assert, not
+        // wrap into a small shift that silently passes it.
+        let shift = u32::try_from(k).unwrap_or(u32::MAX);
         assert!(
-            sum.bit_length() + shift <= 256,
-            "D38::exp: result overflows the representable range"
+            (sum.bit_length() as u64) + (shift as u64) <= 256,
+            "D38::exp: result out of range"
         );
         sum.shl(shift)
     } else {
-        sum.shr((-k) as u32)
+        // `shr` is total for any shift ≥ 256 (the magnitude underflows to
+        // zero), so clamp rather than truncate: a wrapped `(-k) as u32`
+        // could land on a SMALL shift and return a wrongly large value.
+        sum.shr(k.unsigned_abs().min(256) as u32)
     }
 }
 
@@ -614,6 +645,37 @@ fn exp2_result_int_digits(abs_raw: u128, scale: u32) -> u32 {
     (num.div_ceil(10u128.pow(13)).min(u32::MAX as u128 - 1) as u32) + 1
 }
 
+/// LOWER bound on the integer-digit count of `2^x` for the non-negative
+/// storage magnitude `abs_raw` at `scale` — the floor counterpart of the
+/// (deliberately over-stating) [`exp2_result_int_digits`]. Every rounding
+/// here errs DOWN: the fraction `r7` is floored, `301_029/10^6` under-
+/// approximates `log10 2`, and the final division is floored — so the
+/// returned count never exceeds the true `⌊x·log10 2⌋ + 1`. That is the
+/// safe direction for the [`exp2_wide_narrow_raw`] overflow gate: a cell
+/// it fires on is PROVABLY out of range, never a representable one.
+///
+/// The `q` cap matches the sibling's: at `q ≥ 180` the count is already
+/// ≈ 55 — past the 40-digit `i128` ceiling at EVERY scale — so capping
+/// keeps `x_e7 · 301_029` inside `u128` without weakening the gate.
+#[inline]
+fn exp2_result_int_digits_floor(abs_raw: u128, scale: u32) -> u32 {
+    let one_s = match 10u128.checked_pow(scale) {
+        Some(p) => p,
+        None => return 1,
+    };
+    let q = abs_raw / one_s; // integer part of |x|
+    let r = abs_raw % one_s; // fractional remainder, r < 10^scale
+    let q_capped = q.min(180);
+    let r7 = if scale <= 7 {
+        r * 10u128.pow(7 - scale)
+    } else {
+        r / 10u128.pow(scale - 7)
+    };
+    let x_e7 = q_capped * 10_000_000 + r7; // ≤ |x| · 10^7
+    let num = x_e7 * 301_029; // / 10^13 under-states |x|·log10 2
+    ((num / 10u128.pow(13)).min(u32::MAX as u128 - 1) as u32) + 1
+}
+
 /// Integer-regime / large-result `2^x` for the narrow tier, evaluated in the
 /// wider [`WNarrow`] work integer via the width-generic
 /// [`exp_generic::exp_fixed`], then narrowed with correct rounding. The
@@ -627,7 +689,32 @@ fn exp2_wide_narrow_raw(raw: i128, scale: u32, working_digits: u32, mode: Roundi
 
     let neg = raw < 0;
     let abs_raw = raw.unsigned_abs();
-    let k_lift = exp2_result_int_digits(abs_raw, scale);
+    // Storage overflow gate — BEFORE any working-scale arithmetic. The
+    // `k_lift` lift below grows the working scale `w` with the result's
+    // integer-digit count, so a deep-overflow argument inflates every
+    // dividend downstream (`x·ln 2`, the kernel's own `k` range-reduction
+    // divide) far past what the build's divide scratch provisions for
+    // in-range work — tripping an INTERNAL kernel assertion instead of the
+    // contractual panic. Analytic bound, exact for every scale: the
+    // result `2^x ≥ 10^(d−1)` for `d = int_digits(2^x)`, so its storage
+    // value is `≥ 10^(d−1+scale)`; `i128` holds values `< 1.8·10^38 <
+    // 10^39`, hence `d + scale ≥ 40` PROVES the result cannot be stored.
+    // `d` is the floor lower bound (never over-stated), so no
+    // representable cell can fire; cells between the true edge and this
+    // bound still flow to the kernel, whose post-narrowing fit check
+    // ([`narrow_round_mag`] → `None`) raises the SAME panic — and for
+    // those cells `d + scale ≤ 39` bounds the lift (`w ≤ scale +
+    // working_digits + 41 − scale`), keeping every dividend inside the
+    // scratch at every scale.
+    if raw > 0 && exp2_result_int_digits_floor(abs_raw, scale).saturating_add(scale) >= 40 {
+        crate::support::diagnostics::overflow_panic_with_scale("exp2", scale);
+    }
+    // The lift exists to keep guard digits ABOVE the result's integer
+    // digits. A negative argument has none (`2^x < 1`), so its lift is 0 —
+    // lifting by `int_digits(2^|x|)` would re-inflate `w` without bound for
+    // a deep-underflow argument (the mirror of the overflow band above),
+    // with zero precision benefit: the `2^k` reassembly shifts DOWN.
+    let k_lift = if neg { 0 } else { exp2_result_int_digits(abs_raw, scale) };
     let guard = working_digits + k_lift;
     let w = scale + guard;
     // x · ln 2 at scale `w`, formed in the wide work integer:
