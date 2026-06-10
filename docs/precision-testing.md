@@ -12,7 +12,7 @@ rounding mode. "Correctly rounded" is the strong reading of 0.5 ULP
 
 The contract is proved at `delta == 0` storage LSB against a
 high-precision [mpmath](https://mpmath.org/) oracle, for **every**
-[`RoundingMode`](../src/support/rounding.rs) — `HalfToEven`,
+[`RoundingMode`](https://github.com/mootable/decimal-scaled/blob/main/src/support/rounding.rs) — `HalfToEven`,
 `HalfAwayFromZero`, `HalfTowardZero`, `Trunc`, `Floor`, `Ceiling` —
 across **all twelve** decimal widths over a five-point scale set.
 

@@ -4,7 +4,7 @@ Catalogue of the published algorithms the crate evaluates, with
 academic citations and the source files where each is implemented.
 This is engineering credit for the *ideas* the crate's own code is
 built from. The crate incorporates no third-party source code; see
-[LICENSE-THIRD-PARTY](LICENSE-THIRD-PARTY).
+[LICENSE-THIRD-PARTY](https://github.com/mootable/decimal-scaled/blob/main/LICENSE-THIRD-PARTY).
 
 ## Integer arithmetic
 
@@ -528,7 +528,7 @@ Further reading:
 
 The crate's default rounding rule. Implementation in
 `src/support/rounding.rs::should_bump`, dispatched per
-[`RoundingMode`](src/support/rounding.rs) via a strategy hook.
+[`RoundingMode`](https://github.com/mootable/decimal-scaled/blob/main/src/support/rounding.rs) via a strategy hook.
 
 > IEEE Std 754-2019. **"IEEE Standard for Floating-Point Arithmetic."**
 > IEEE Standards Association.

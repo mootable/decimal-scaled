@@ -5,7 +5,7 @@ This guide is aimed at contributors who want to **tune a specific
 `Dxx<S>` value — and then **prove the win** with the project's
 existing perf infrastructure.
 
-It assumes you have read [`README.md`](README.md) and have a working
+It assumes you have read [`README.md`](https://github.com/mootable/decimal-scaled/blob/main/README.md) and have a working
 `cargo build --features wide,x-wide,xx-wide,macros`.
 
 The crate's correctness contract is fixed:
@@ -17,7 +17,7 @@ Performance tuning never trades that away.
 
 ## 1. The algorithm library
 
-The hot kernels live in [`src/algos/`](src/algos/), one subdirectory
+The hot kernels live in [`src/algos/`](https://github.com/mootable/decimal-scaled/tree/main/src/algos/), one subdirectory
 per mathematical family:
 
 ```
@@ -55,7 +55,7 @@ deleted** — an unwired kernel or a today-loser is a *kept alternative*
 ### Which kernel runs where — the policy matcher
 
 The wiring between **a typed value** and **a kernel** lives in
-[`src/policy/<func>.rs`](src/policy/) (decimal) /
+[`src/policy/<func>.rs`](https://github.com/mootable/decimal-scaled/tree/main/src/policy/) (decimal) /
 `src/int/policy/<func>.rs` (int). A policy file is **matcher-only** — it
 holds no algorithm bodies, only the choice. The canonical shape
 (`docs/ARCHITECTURE.md` → "Policy file structure"):
@@ -135,7 +135,7 @@ arm across its whole continuous win-region, not a single benched point.
 
 Worked example: writing a bespoke `sin/cos` kernel for `D57<SCALE>`
 at `SCALE ∈ 18..=22`. The shipped wide-tier
-[`src/algos/trig/sincos_tang.rs`](src/algos/trig/sincos_tang.rs)
+[`src/algos/trig/sincos_tang.rs`](https://github.com/mootable/decimal-scaled/blob/main/src/algos/trig/sincos_tang.rs)
 is the template; a narrower band uses the same shape with different
 reduction parameters.
 
@@ -218,21 +218,21 @@ cargo test --release --features wide,x-wide,xx-wide,macros
 The 0.5 ULP contract has dedicated test suites. They are part of the
 PR gate — if any of them fail your kernel does not land.
 
-- [`tests/precision_strict_05_ulp.rs`](tests/precision_strict_05_ulp.rs) — D38 0.5 ULP suite. Hand-computed truth values at D38<12> for every constant and strict transcendental, asserting the result is the *correctly-rounded* value — bit-exact (`delta == 0` storage LSB) against the hand reference. Compile-gated to `HalfToEven` (the crate-default rounding mode); the bit-exact-across-every-mode proof lives in `ulp_strict_golden.rs`.
-- [`tests/precision_wide_baseline.rs`](tests/precision_wide_baseline.rs) — D76 wide-tier 0.5 ULP measurement at D76<6>. Same `≤ 1 LSB` contract; constant `WIDE_TOLERANCE_LSB` makes the threshold explicit so a regression that drifts past it is loud. Gated to `HalfToEven`.
-- [`tests/wide_strict_transcendentals.rs`](tests/wide_strict_transcendentals.rs) — cross-witness suite for the wide tier. Computes a value at the target's storage and scale, computes the reference at a wider storage at the same scale, rescales, and asserts bit-exact or ±1 LSB agreement. The pattern to copy when adding a new bespoke kernel.
-- [`tests/narrow_strict_transcendentals.rs`](tests/narrow_strict_transcendentals.rs) — narrow tier (D18/D38) inherited-method coverage.
-- [`tests/d616_s308_lookup_parity.rs`](tests/d616_s308_lookup_parity.rs), [`tests/d924_s460_lookup_parity.rs`](tests/d924_s460_lookup_parity.rs), [`tests/d1232_s615_lookup_parity.rs`](tests/d1232_s615_lookup_parity.rs) — per-tier Tang-lookup-vs-wide-kernel parity at the design SCALE. Tight `≤ 1 LSB` agreement between the two implementation paths, plus `exp(ln(x))` round-trip identities. New Tang lookup bands must add a matching parity file at their target SCALE before the kernel is allowed in.
-- [`tests/perf_d462_s230_correctness.rs`](tests/perf_d462_s230_correctness.rs) — composed-identity witnesses (`cosh² − sinh² = 1`, `sin² + cos² = 1`, …) for the D462 Tang slot. The same shape works for any new bespoke-kernel slot.
-- [`tests/powf_integer_fastpath_parity.rs`](tests/powf_integer_fastpath_parity.rs) — bit-exact assertion of `powf_strict(D::from_i32(n)).to_bits() == powi(n).to_bits()` for the `|n| ≤ 64` fast path. Any future integer-exponent specialisation has to keep this contract.
-- [`tests/ulp_strict_golden.rs`](tests/ulp_strict_golden.rs) — external-oracle suite and the crate's **definitive correctness proof**. Reads pre-computed mpmath truth tables under `tests/golden/<func>_d<N>_s<S>.txt` and asserts the kernel result is the **correctly-rounded** value — `kernel == oracle` EXACTLY (`delta == 0` storage LSB, ZERO tolerance) — for **every** `RoundingMode` (`HalfToEven`, `HalfAwayFromZero`, `HalfTowardZero`, `Trunc`, `Floor`, `Ceiling`) across **all twelve decimal widths** at their design-target scale: D18<9>, D38<19>, D57<28>, D76<35>, D115<57>, D153<76>, D230<115>, D307<150>, D462<230>, D616<308>, D924<460>, D1232<615>. Each golden line stores `floor(f(x)·10^SCALE)` plus a fractional tie-class, from which the harness derives the correctly-rounded integer for each mode in-test (no per-mode tables). Catches kernel bugs that internal cross-witness paths mirror and miss. Regenerate the tables with `python scripts/gen_golden_precision.py` (requires `pip install mpmath`).
-- [`tests/ulp_proptest.rs`](tests/ulp_proptest.rs) — property-based ULP fuzz at D38<19> with a D76<19> cross-tier witness. Identities (`exp(ln(x)) ≈ x`, `sin² + cos² ≈ 1`, sign symmetries, …) with deterministic seeds and 100 cases per block.
+- [`tests/precision_strict_05_ulp.rs`](https://github.com/mootable/decimal-scaled/blob/main/tests/precision_strict_05_ulp.rs) — D38 0.5 ULP suite. Hand-computed truth values at D38<12> for every constant and strict transcendental, asserting the result is the *correctly-rounded* value — bit-exact (`delta == 0` storage LSB) against the hand reference. Compile-gated to `HalfToEven` (the crate-default rounding mode); the bit-exact-across-every-mode proof lives in `ulp_strict_golden.rs`.
+- [`tests/precision_wide_baseline.rs`](https://github.com/mootable/decimal-scaled/blob/main/tests/precision_wide_baseline.rs) — D76 wide-tier 0.5 ULP measurement at D76<6>. Same `≤ 1 LSB` contract; constant `WIDE_TOLERANCE_LSB` makes the threshold explicit so a regression that drifts past it is loud. Gated to `HalfToEven`.
+- [`tests/wide_strict_transcendentals.rs`](https://github.com/mootable/decimal-scaled/blob/main/tests/wide_strict_transcendentals.rs) — cross-witness suite for the wide tier. Computes a value at the target's storage and scale, computes the reference at a wider storage at the same scale, rescales, and asserts bit-exact or ±1 LSB agreement. The pattern to copy when adding a new bespoke kernel.
+- [`tests/narrow_strict_transcendentals.rs`](https://github.com/mootable/decimal-scaled/blob/main/tests/narrow_strict_transcendentals.rs) — narrow tier (D18/D38) inherited-method coverage.
+- [`tests/d616_s308_lookup_parity.rs`](https://github.com/mootable/decimal-scaled/blob/main/tests/d616_s308_lookup_parity.rs), [`tests/d924_s460_lookup_parity.rs`](https://github.com/mootable/decimal-scaled/blob/main/tests/d924_s460_lookup_parity.rs), [`tests/d1232_s615_lookup_parity.rs`](https://github.com/mootable/decimal-scaled/blob/main/tests/d1232_s615_lookup_parity.rs) — per-tier Tang-lookup-vs-wide-kernel parity at the design SCALE. Tight `≤ 1 LSB` agreement between the two implementation paths, plus `exp(ln(x))` round-trip identities. New Tang lookup bands must add a matching parity file at their target SCALE before the kernel is allowed in.
+- [`tests/perf_d462_s230_correctness.rs`](https://github.com/mootable/decimal-scaled/blob/main/tests/perf_d462_s230_correctness.rs) — composed-identity witnesses (`cosh² − sinh² = 1`, `sin² + cos² = 1`, …) for the D462 Tang slot. The same shape works for any new bespoke-kernel slot.
+- [`tests/powf_integer_fastpath_parity.rs`](https://github.com/mootable/decimal-scaled/blob/main/tests/powf_integer_fastpath_parity.rs) — bit-exact assertion of `powf_strict(D::from_i32(n)).to_bits() == powi(n).to_bits()` for the `|n| ≤ 64` fast path. Any future integer-exponent specialisation has to keep this contract.
+- [`tests/ulp_strict_golden.rs`](https://github.com/mootable/decimal-scaled/blob/main/tests/ulp_strict_golden.rs) — external-oracle suite and the crate's **definitive correctness proof**. Reads pre-computed mpmath truth tables under `tests/golden/<func>_d<N>_s<S>.txt` and asserts the kernel result is the **correctly-rounded** value — `kernel == oracle` EXACTLY (`delta == 0` storage LSB, ZERO tolerance) — for **every** `RoundingMode` (`HalfToEven`, `HalfAwayFromZero`, `HalfTowardZero`, `Trunc`, `Floor`, `Ceiling`) across **all twelve decimal widths** at their design-target scale: D18<9>, D38<19>, D57<28>, D76<35>, D115<57>, D153<76>, D230<115>, D307<150>, D462<230>, D616<308>, D924<460>, D1232<615>. Each golden line stores `floor(f(x)·10^SCALE)` plus a fractional tie-class, from which the harness derives the correctly-rounded integer for each mode in-test (no per-mode tables). Catches kernel bugs that internal cross-witness paths mirror and miss. Regenerate the tables with `python scripts/gen_golden_precision.py` (requires `pip install mpmath`).
+- [`tests/ulp_proptest.rs`](https://github.com/mootable/decimal-scaled/blob/main/tests/ulp_proptest.rs) — property-based ULP fuzz at D38<19> with a D76<19> cross-tier witness. Identities (`exp(ln(x)) ≈ x`, `sin² + cos² ≈ 1`, sign symmetries, …) with deterministic seeds and 100 cases per block.
 
-See [`docs/precision-testing.md`](docs/precision-testing.md) for the four-layer model and how to add coverage for a new tier.
+See [`docs/precision-testing.md`](https://mootable.github.io/decimal-scaled/precision-testing/) for the four-layer model and how to add coverage for a new tier.
 
 If your change adds a bespoke kernel for a new `(width, scale)` cell,
 **add cross-witness tests for that cell to
-[`wide_strict_transcendentals.rs`](tests/wide_strict_transcendentals.rs)
+[`wide_strict_transcendentals.rs`](https://github.com/mootable/decimal-scaled/blob/main/tests/wide_strict_transcendentals.rs)
 (or the matching narrow-tier file) in the same commit.** Use a
 wider-storage type at the same `SCALE` as the truth source — for
 example, a new D57<20> kernel's witness is D76<20> at the same scale.
@@ -345,12 +345,12 @@ permissions, and uploads its output to the Firefox Profiler web UI for
 inspection.
 
 The release profile already emits debug info (`[profile.release] debug = true`
-in [`Cargo.toml`](Cargo.toml)) so samples resolve to function names.
+in [`Cargo.toml`](https://github.com/mootable/decimal-scaled/blob/main/Cargo.toml)) so samples resolve to function names.
 Function-name resolution is on by default — you don't need to rebuild.
 
 ### Layer 3 — Local Criterion benches
 
-The full bench harness lives under [`benches/`](benches/) and uses
+The full bench harness lives under [`benches/`](https://github.com/mootable/decimal-scaled/tree/main/benches/) and uses
 [criterion](https://docs.rs/criterion/). Per-width benches follow the
 `full_matrix_d<width>` and `library_comparison_d<width>` naming
 conventions.
@@ -370,7 +370,7 @@ bench resolution floor — only trust ratios > ~1.5×.
 ### Layer 4 — Full matrix sweep on GitHub Actions
 
 For wider regression detection, trigger the
-[`bench-full`](.github/workflows/bench-full.yml) workflow:
+[`bench-full`](https://github.com/mootable/decimal-scaled/blob/main/.github/workflows/bench-full.yml) workflow:
 
 ```sh
 gh workflow run bench-full.yml --field bench_family=full_matrix
@@ -391,7 +391,7 @@ gh workflow run bench-full.yml --field bench_family=lib_cmp
 ### Layer 5 — Cross-version comparison
 
 To check that a perf win doesn't undo a previous one, trigger the
-[`bench-history`](.github/workflows/bench-history.yml) workflow:
+[`bench-history`](https://github.com/mootable/decimal-scaled/blob/main/.github/workflows/bench-history.yml) workflow:
 
 ```sh
 gh workflow run bench-history.yml
@@ -399,7 +399,7 @@ gh workflow run bench-history.yml
 
 Same Criterion harness against every published tag in the
 `v0.2.5..v0.3.3` band plus current `HEAD`. Each cell rewrites the
-[`bench-history/Cargo.toml`](bench-history/Cargo.toml) dep line to
+[`bench-history/Cargo.toml`](https://github.com/mootable/decimal-scaled/blob/main/bench-history/Cargo.toml) dep line to
 pin a different version; only the dependency changes per cell, so
 the comparison is genuinely like-for-like.
 
@@ -415,7 +415,7 @@ things and have very different escape hatches.
 
 ### Precision gate (hard, non-overridable)
 
-[`.github/workflows/precision.yml`](.github/workflows/precision.yml)
+[`.github/workflows/precision.yml`](https://github.com/mootable/decimal-scaled/blob/main/.github/workflows/precision.yml)
 runs the precision suite listed above — the four 0.5 ULP files, the
 per-tier Tang-lookup parity files, and the bespoke-slot correctness
 witnesses — on every pull request. **A failed precision check blocks
@@ -436,7 +436,7 @@ bench / docs workflows.
 
 ### Perf gate (soft, overridable)
 
-[`.github/workflows/codspeed.yml`](.github/workflows/codspeed.yml)
+[`.github/workflows/codspeed.yml`](https://github.com/mootable/decimal-scaled/blob/main/.github/workflows/codspeed.yml)
 runs three Criterion-based bench harnesses through
 [CodSpeed](https://codspeed.io/) — an instruction-count simulator
 built on [Valgrind](https://en.wikipedia.org/wiki/Valgrind/cachegrind).
@@ -446,9 +446,9 @@ plain Criterion-on-CI gate would suffer.
 
 The three bench targets:
 
-- [`benches/all_functions.rs`](benches/all_functions.rs) — 130-bench D38<12> full public-API sweep.
-- [`benches/mul_div_candidates.rs`](benches/mul_div_candidates.rs) — focused mul/div algorithm comparison.
-- [`benches/pr_gate.rs`](benches/pr_gate.rs) — wide-tier coverage at D38<19> / D57<20> / D307<150> across nine ops. Add cells here when you ship a kernel that the other two suites don't reach.
+- [`benches/all_functions.rs`](https://github.com/mootable/decimal-scaled/blob/main/benches/all_functions.rs) — 130-bench D38<12> full public-API sweep.
+- [`benches/mul_div_candidates.rs`](https://github.com/mootable/decimal-scaled/blob/main/benches/mul_div_candidates.rs) — focused mul/div algorithm comparison.
+- [`benches/pr_gate.rs`](https://github.com/mootable/decimal-scaled/blob/main/benches/pr_gate.rs) — wide-tier coverage at D38<19> / D57<20> / D307<150> across nine ops. Add cells here when you ship a kernel that the other two suites don't reach.
 
 CodSpeed leaves a comment on the PR with per-bench `%Δ` against the
 baseline and marks the check failed if any cell regressed past the
@@ -466,7 +466,7 @@ Use the label sparingly. The whole point of the gate is to catch
 unintended regressions; routinely dismissing it makes it noise.
 
 If your PR is large enough that the bench coverage in
-[`benches/pr_gate.rs`](benches/pr_gate.rs) doesn't reach your changed
+[`benches/pr_gate.rs`](https://github.com/mootable/decimal-scaled/blob/main/benches/pr_gate.rs) doesn't reach your changed
 cell, extend the harness in the same commit. The bench set is
 deliberately small (so per-PR wall time stays low) but it is not
 fixed in scope — new bespoke kernels should add a matching bench so
