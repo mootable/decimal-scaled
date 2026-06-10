@@ -4,7 +4,7 @@
 //! Integer square-root policy — the native-vs-Newton algorithm matcher.
 //!
 //! `Uint<N>::isqrt` delegates to [`dispatch`], which follows the canonical
-//! policy shape (see `docs/ARCHITECTURE.md` â†’ "Policy file structure"):
+//! policy shape (see `docs/ARCHITECTURE.md` → "Policy file structure"):
 //!
 //! 1. an [`Algorithm`] enum — the real isqrt algorithms, no `Default`
 //!    variant;
@@ -14,7 +14,7 @@
 //!    **exhaustive** `match algo` — no `_`, no panic.
 //!
 //! Because `select` is `const` and keyed only on the const generic `N`,
-//! the `const { â€¦ }` block folds per monomorphisation and the unchosen arm
+//! the `const { … }` block folds per monomorphisation and the unchosen arm
 //! is dead-arm-eliminated in release: each concrete `Uint<N>` compiles to a
 //! direct call to the chosen kernel, no runtime branch.
 //!
@@ -24,10 +24,10 @@
 //! const-`N` ladder in [`crate::int::algos::isqrt::isqrt_mag_fixed::isqrt_mag_fixed`], which
 //! this policy formalises:
 //!
-//! - **`N âˆˆ {1, 2}`** â†’ [`isqrt_native`]: single hardware instruction via
+//! - **`N ∈ {1, 2}`** → [`isqrt_native`]: single hardware instruction via
 //!   `u64::isqrt` (`N == 1`) or `u128::isqrt` (`N == 2`). The fastest path
 //!   at these widths; genuinely width-bespoke (no generic form).
-//! - **`N >= 3`** â†’ [`isqrt_newton`]: width-agnostic Newton iteration with a
+//! - **`N >= 3`** → [`isqrt_newton`]: width-agnostic Newton iteration with a
 //!   hardware-`f64::sqrt` seed over u64 limbs — one algorithm serving every
 //!   wider int. Today's `limbs_isqrt_u64` (now in `int/algos/roots.rs`).
 //!
@@ -47,13 +47,13 @@ use crate::int::algos::isqrt::isqrt_mag_fixed::isqrt_mag_fixed;
 use crate::int::algos::isqrt::isqrt_schoolbook::isqrt_schoolbook as isqrt_schoolbook_kernel;
 use crate::int::types::Uint;
 
-// â”€â”€ 1. the real isqrt algorithms — NAMED, no `Default` â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── 1. the real isqrt algorithms — NAMED, no `Default` ───────────────
 
 /// The integer square-root algorithms this policy chooses between. Variants
 /// are the CamelCase of each kernel fn's name minus the `isqrt_` function
 /// prefix — strict 1:1 with the kernel fns.
 ///
-/// Names follow RULES Â§4: `isqrt_native` â†’ `Native`, `isqrt_newton` â†’
+/// Names follow RULES §4: `isqrt_native` → `Native`, `isqrt_newton` →
 /// `Newton`.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
@@ -77,7 +77,7 @@ enum Algorithm {
     Schoolbook,
 }
 
-// â”€â”€ 2. the verdict â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── 2. the verdict ────────────────────────────────────────────────────
 
 /// A settled algorithm, or "the value decides". The isqrt picker always
 /// returns `ByAlgorithm`: the choice is fully determined by `N`. `ByValue`
@@ -90,13 +90,13 @@ enum Select<const N: usize> {
     ByValue(fn(&Uint<N>) -> Algorithm),
 }
 
-// â”€â”€ 3. the matcher: const, keyed on `N`, total over the key â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── 3. the matcher: const, keyed on `N`, total over the key ──────────
 
 /// Pick the isqrt algorithm for storage limb count `N`. Total over the key.
 ///
-/// - `N âˆˆ {1, 2}` â†’ [`Algorithm::Native`] (hardware single-instruction path).
-/// - `3 <= N < 64` â†’ [`Algorithm::Newton`] (generic limb Newton).
-/// - `N >= 64` (the widest tier, D1232) â†’ [`Algorithm::Karatsuba`]: the
+/// - `N ∈ {1, 2}` → [`Algorithm::Native`] (hardware single-instruction path).
+/// - `3 <= N < 64` → [`Algorithm::Newton`] (generic limb Newton).
+/// - `N >= 64` (the widest tier, D1232) → [`Algorithm::Karatsuba`]: the
 ///   half-width-divide recursion crosses over Newton here (the `isqrt_ab` A/B
 ///   win-region; below it Newton's lower constant factor wins).
 const fn select<const N: usize>() -> Select<N> {
@@ -107,12 +107,12 @@ const fn select<const N: usize>() -> Select<N> {
     }
 }
 
-// â”€â”€ algorithm fns: thin delegations to the existing kernels â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── algorithm fns: thin delegations to the existing kernels ──────────
 
-/// Native hardware integer square root for `Uint<N>` where `N âˆˆ {1, 2}`.
+/// Native hardware integer square root for `Uint<N>` where `N ∈ {1, 2}`.
 ///
 /// Delegates to [`isqrt_mag_fixed`] which const-splits on `N` internally:
-/// `N == 1` â†’ `u64::isqrt`, `N == 2` â†’ `u128::isqrt`. Both are single
+/// `N == 1` → `u64::isqrt`, `N == 2` → `u128::isqrt`. Both are single
 /// hardware instructions on modern ISAs.
 #[inline]
 pub(crate) fn isqrt_native<const N: usize>(x: Uint<N>) -> Uint<N> {
@@ -161,7 +161,7 @@ pub(crate) fn isqrt_schoolbook_policy<const N: usize>(x: Uint<N>) -> Uint<N> {
     isqrt_schoolbook_kernel(x.as_limbs(), &mut out);
     Uint::<N>::from_limbs(out)
 }
-// â”€â”€ 4. the dispatcher: fold the verdict, then dispatch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── 4. the dispatcher: fold the verdict, then dispatch ────────────────
 
 /// Integer square-root dispatcher for `Uint<N>`.
 ///

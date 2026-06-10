@@ -21,8 +21,10 @@
 //!
 //! With `M = 128` the residual `|t| < 1/257 ≈ 3.9·10⁻³`, so
 //! `|t²| < 1.5·10⁻⁵`; the artanh series `2·(t + t³/3 + t⁵/5 + ...)`
-//! converges fast. The table `ln(1 + i/M)` (one `ln_fixed` per slot) is
-//! memoised per thread per working scale by the tier's `Core`.
+//! converges fast. The table `ln(1 + i/M)` is baked as binary
+//! fixed-point consts (`ln_tang_table`); each lookup converts the one
+//! indexed slot to the working scale (`round(slot · 10^w / 2^B)`) —
+//! no runtime table build.
 //!
 //! ## Layering
 //!
