@@ -4084,7 +4084,12 @@ macro_rules! decl_wide_transcendental {
             pub fn sinh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let raw = self.to_bits();
                 let szero = <$Storage>::from_i128(0);
-                if raw != szero {
+                // `sinh(0) = 0` is the SOLE exact point; pin it so the
+                // never-exact narrowing below never bumps it.
+                if raw == szero {
+                    return self;
+                }
+                {
                     // Small-argument cubic band: `sinh(x) = x + x³/6 + …`,
                     // the cubic strictly positive yet below one ULP, so
                     // the true value sits just *above* the grid line
@@ -4126,16 +4131,30 @@ macro_rules! decl_wide_transcendental {
                 // `1/exp(-|x|)`, blowing the storage-ULP budget for large
                 // `|x|`. `sinh` is odd, so the sign of the input is
                 // reapplied to the (non-negative) `sinh(|x|)` working
-                // value — `round_to_storage_directed` reads the sign off
-                // the returned value and rounds each mode accordingly.
+                // value — the narrowing reads the sign off the returned
+                // value and rounds each mode accordingly.
                 let neg = raw < <$Storage>::from_i128(0);
                 // Two-core: composition runs on the wide `Wagm` work int.
                 let k_lift = $core::exp_result_int_digits::<$core::Wagm>($core::to_work_scaled_agm(raw, 0), SCALE);
                 let base_guard = $core::GUARD + k_lift;
-                Self::from_bits($core::round_to_storage_directed::<$core::Wagm>(
+                // Two-width near-min narrowing, exactly as `cosh_strict_with`:
+                // `sinh(x)` is irrational for every rational `x != 0`
+                // (`sinh(0)` is pinned above), so it is NEVER on a storage
+                // grid line — `never_exact = true`. The resolver's
+                // noise-proof escalation also covers the band-edge tiny
+                // arguments whose deciding Taylor term (`x⁷/5040`, …) sits
+                // far below the working scale yet within the next-wider work
+                // integer's reach (e.g. `sinh(1e-86)` at the D462 MAX scale,
+                // beyond `Wagm`'s width there).
+                let r = $crate::algos::support::wide_trig_core::round_to_storage_widening_g::<
+                    $Storage, $core::Wagm, $core::Wexp,
+                >(
                     base_guard,
                     SCALE,
                     mode,
+                    true,
+                    <$Storage>::MAX,
+                    <$Storage>::MIN,
                     |guard| {
                         let w = SCALE + guard;
                         let v = $core::to_work_scaled_agm(raw, guard);
@@ -4143,7 +4162,21 @@ macro_rules! decl_wide_transcendental {
                         let sh = $core::sinh_pos_wide_agm(av, w);
                         if neg { -sh } else { sh }
                     },
-                ))
+                    |guard| {
+                        let w = SCALE + guard;
+                        let v = $crate::algos::support::wide_trig_core::to_work_scaled_g::<
+                            $Storage, $core::Wexp,
+                        >(raw, guard);
+                        let av = if v < <$core::Wexp as $crate::int::types::traits::BigInt>::ZERO {
+                            -v
+                        } else {
+                            v
+                        };
+                        let sh = $crate::algos::exp::exp_generic::sinh_pos::<$core::Wexp>(av, w);
+                        if neg { -sh } else { sh }
+                    },
+                );
+                Self::from_bits(r)
             }
 
             /// Mode-aware sibling of [`Self::cosh_strict`].
