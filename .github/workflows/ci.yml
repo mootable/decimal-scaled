@@ -90,17 +90,19 @@ jobs:
         # default `cargo test` can run the narrow-tier subset.)
         run: cargo check
 
-  # GATE: the heavy mpmath-oracle golden suite, split out of `tests
-  # (gate)` so it runs in PARALLEL with it — and in RELEASE (≈ 285 s vs
-  # the debug multi-minute), so neither gate waits behind the other.
-  # `ulp_strict_golden` is gated behind the `golden` required-feature, so
-  # the `tests (gate)` job (which omits `golden`) skips it and this job
-  # owns it. On `release/*` this is the sole golden gate (precision.yml is
-  # main-only).
+  # GATE: the golden suite, split out of `tests (gate)` so it runs in
+  # PARALLEL with it, in RELEASE. Runs the `decimal-scale-test` gate —
+  # one erased subject over every band-edge (width, scale) cell across
+  # ALL SIX rounding modes (a directed-rounding regression shows only
+  # under Ceiling/Floor/Trunc), row-sampled via GOLDEN_SAMPLE for
+  # per-push latency (1-in-10 rows plus each file's edge lines, where
+  # the near-grid-line cases live). The FULL unsampled sweep is the
+  # dispatch-only golden (comprehensive) workflow. On `release/*` this
+  # is the sole golden gate (precision.yml is main-only).
   golden:
     name: golden (gate)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -119,15 +121,14 @@ jobs:
           restore-keys: |
             cargo-ci-golden-${{ runner.os }}-
 
-      - name: Install system libs (fontconfig for the plotters dev-dep)
-        # `cargo test` compiles ALL dev-dependencies regardless of `--test`
-        # scoping, and plotters (a dev-dep) pulls yeslogic-fontconfig-sys —
-        # so this job needs fontconfig just like `tests (gate)`.
-        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
-
-      - name: mpmath-oracle golden suite (release, golden feature)
-        # The `golden` feature unlocks the required-feature-gated target.
-        run: cargo test --release --features wide,x-wide,xx-wide,macros,golden --test ulp_strict_golden
+      - name: All-mode golden gate (release, sampled)
+        # `-p decimal-scale-test` scopes the build to the gate crate (the
+        # root crate's bench dev-deps — plotters/fontconfig — never
+        # compile). GOLDEN_SAMPLE keeps ~1-in-10 golden rows plus each
+        # file's first lines, so all six modes fit per-push latency.
+        env:
+          GOLDEN_SAMPLE: "10"
+        run: cargo test -p decimal-scale-test --release --test golden golden_all_modes -- --ignored --nocapture
 
   # GATE: the no_std + alloc build. The crate is `#![no_std]` under
   # non-default features, but no workflow exercised that build, so a

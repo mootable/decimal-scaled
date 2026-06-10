@@ -20,6 +20,7 @@ import os
 import sys
 from pathlib import Path
 
+from .exactness import enforce_truncation_marker
 from .functions import FUNCTIONS
 from .harvest import harvest
 from .oracle import OracleUnavailable, get_oracle
@@ -189,6 +190,11 @@ def _gen_line(item):
     except Exception as e:
         print(f"[flag] generator {gen.name()} failed {func}{inp}: {e}", file=sys.stderr)
         return func, None
+    # Honest terminate-vs-truncate marker: a stripped value stays stripped only
+    # when exactness is PROVABLE (theorem / exact inverse-check); a false exact
+    # from the adapters' zero-run heuristic is re-padded to the truncated form
+    # (identical digits, truthful claim). See oracle/exactness.py.
+    g = enforce_truncation_marker(func, inp, g, precision)
     annotations = _validate_line(func, inp, g, gen, validators, precision)
     if annotations is None:
         return func, None

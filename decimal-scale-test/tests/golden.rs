@@ -17,6 +17,8 @@
 
 mod common;
 
+use std::sync::Mutex;
+
 use decimal_scaled_golden::{
     ConsoleReporter, FilterLoader, GoldenRunner, InlineReporter, OverflowValidator, ParallelRunner,
     RoundingMode, RoundingValidator, RunCollector, RunOnce, RunSummary,
@@ -25,9 +27,15 @@ use decimal_scale_test::{thread_count, DsSubject, Filter, ALL_MODES, GEN_PRECISI
 
 use common::{sampled, CachingLoader};
 
+/// Serialises the gates: each swaps the process-global panic hook for its run, so two
+/// gates running on parallel test threads would race the take/set/restore sequence.
+static HOOK_GUARD: Mutex<()> = Mutex::new(());
+
 /// Run the (env-filtered) surface under the given default `modes` and return the tally.
 /// One `RunCollector` accumulates every selected `(mode, width, scale)` subject.
 fn run(default_modes: &[RoundingMode]) -> RunSummary {
+    // One gate at a time — the panic-hook swap below is process-global.
+    let _hook_guard = HOOK_GUARD.lock().unwrap_or_else(|p| p.into_inner());
     let filter = Filter::from_env();
     let modes = filter.modes(default_modes);
     let cells = filter.cells();

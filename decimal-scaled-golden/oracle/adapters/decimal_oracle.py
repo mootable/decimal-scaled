@@ -117,6 +117,8 @@ def _format(r: Decimal, precision: int) -> str:
         s = str(exact).rjust(frac_len + 1, "0")
         return f"{sign}{s[:-frac_len]}.{s[-frac_len:]}"
     scaled = scaled_guard // (10 ** TERM_GUARD)
+    if scaled == 0:
+        sign = ""  # never render a signed zero (-0.000…0)
     if precision == 0:
         return f"{sign}{scaled}"
     s = str(scaled).rjust(precision + 1, "0")

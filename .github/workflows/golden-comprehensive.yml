@@ -1,25 +1,30 @@
 name: "🔬 golden (comprehensive)"
 
-# The FULL mpmath-oracle golden sweep: `ulp_strict_golden`'s opt-in
-# `golden_autodiscover` test over EVERY `tests/golden/*.txt` table (~1.6k
-# across all tiers) — not just the curated `decl_band!` subset that the
-# per-push `ci` → `golden (gate)` job runs. It is multi-hour at the wide
-# tiers, so it lives in its OWN concurrency queue (queue-of-one), kept off
-# the `ci` and `bench-branch-compare` queues: a deep golden pass must never
-# delay a pre-merge gate or a perf compare, and must not be starved by them.
+# The FULL unsampled golden sweep: the `decimal-scale-test` gate over every
+# band-edge (width, scale) cell x EVERY golden row x ALL SIX rounding modes —
+# the per-push `ci` → `golden (gate)` job runs the same sweep row-SAMPLED
+# (GOLDEN_SAMPLE=10) for latency; this is the every-row deep pass. Multi-hour
+# at the wide tiers, so it lives in its OWN concurrency queue (queue-of-one),
+# kept off the `ci` and `bench-branch-compare` queues: a deep golden pass must
+# never delay a pre-merge gate or a perf compare, and must not be starved by
+# them.
 #
 # Trigger: workflow_dispatch only — run on demand against ANY ref (e.g.
 # release/0.5.0 to deep-verify a precision-sensitive change, or main before a
 # release). Manual-only by design: every multi-hour comprehensive run is then
-# deliberate, never auto-kicked by a push. The optional `filter` input maps to
-# GOLDEN_FILTER to narrow the sweep to file stems containing the substring
-# (e.g. `d924` for a ~1-minute single-tier scan, `mul_d`, etc.).
+# deliberate, never auto-kicked by a push. The optional inputs map to the
+# gate's GOLDEN_* env filters to narrow the sweep (e.g. funcs `exp,cosh`,
+# widths `924,1232`).
 
 on:
   workflow_dispatch:
     inputs:
-      filter:
-        description: "GOLDEN_FILTER substring (golden file-stem match; empty = ALL tables)"
+      funcs:
+        description: "GOLDEN_FUNCS comma list (e.g. exp,cosh; empty = ALL functions)"
+        required: false
+        default: ""
+      widths:
+        description: "GOLDEN_WIDTHS comma list (e.g. 924,1232; empty = ALL widths)"
         required: false
         default: ""
 
@@ -58,17 +63,15 @@ jobs:
           restore-keys: |
             cargo-golden-comprehensive-${{ runner.os }}-
 
-      - name: Install system libs (fontconfig for the plotters dev-dep)
-        # `cargo test` compiles ALL dev-dependencies regardless of `--test`
-        # scoping, and plotters (a dev-dep) pulls yeslogic-fontconfig-sys.
-        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
-
-      - name: Comprehensive auto-discovered golden sweep (release, golden feature)
-        # `--ignored` runs the `#[ignore]`d `golden_autodiscover` over every
-        # `tests/golden/*.txt`. `--nocapture` surfaces its per-table progress
-        # so a long run is not opaque. GOLDEN_FILTER (empty on push) narrows it.
+      - name: Comprehensive all-mode golden sweep (release, every row)
+        # `-p decimal-scale-test` scopes the build to the gate crate (the
+        # root crate's bench dev-deps never compile, so no fontconfig).
+        # No GOLDEN_SAMPLE: every golden row runs, across all six rounding
+        # modes. `--nocapture` streams the per-subject failures so a long
+        # run is not opaque. The optional inputs narrow the sweep.
         env:
-          GOLDEN_FILTER: ${{ github.event.inputs.filter }}
+          GOLDEN_FUNCS: ${{ github.event.inputs.funcs }}
+          GOLDEN_WIDTHS: ${{ github.event.inputs.widths }}
         run: |
-          cargo test --release --features wide,x-wide,xx-wide,macros,golden \
-            --test ulp_strict_golden -- --ignored --nocapture golden_autodiscover
+          cargo test -p decimal-scale-test --release --test golden \
+            golden_all_modes -- --ignored --nocapture
