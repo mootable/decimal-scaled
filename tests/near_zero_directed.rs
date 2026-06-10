@@ -229,10 +229,10 @@ fn sinh_deep_cubic_keeps_directed_nudge() {
 
 #[test]
 fn tanh_visible_deficit_keeps_compressing_nudge() {
-    // tanh(±1e-616) at scale 1231: the cubic deficit x³/3 survives at the
-    // carried precision (its 9-run below the leading digit is real) — tanh
-    // compresses, so Trunc and Floor round a positive argument one ULP
-    // toward zero / down; Ceiling and the nearest modes keep the grid line.
+    // tanh(±1e-616) at scale 1231: the cubic deficit x³/3 borrows a 9-run
+    // below the leading digit — tanh compresses, so Trunc and Floor round a
+    // positive argument one ULP toward zero / down; Ceiling and the nearest
+    // modes keep the grid line.
     let v = D1232::<1231>::from_str(&tiny(616)).unwrap();
     let down = v - D1232::<1231>::from_str(&tiny(1231)).unwrap();
     assert_eq!(v.tanh_strict_with(Trunc), down);
@@ -246,27 +246,35 @@ fn tanh_visible_deficit_keeps_compressing_nudge() {
 }
 
 #[test]
-fn tanh_deep_deficit_positive_tail_outcomes() {
-    // tanh(±1e-693): the cubic deficit's relative position (~10^-1386 of the
-    // value) lies past the carried precision — the carried value rounds back
-    // to exactly x and only the never-exact positive sub-resolution tail
-    // remains, so the outcomes flip to the just-above-the-line side: Ceiling
-    // rounds a positive argument up one ULP (Floor a negative one down);
-    // Trunc and the nearest modes keep raw. Checked at a deep scale and at
-    // the scale where the argument is a single ULP.
+fn tanh_deep_deficit_keeps_compressing_nudge() {
+    // tanh(±1e-693): the cubic deficit x³/3 sits at 10^-2080 — far below the
+    // storage scale, but tanh of a nonzero rational is irrational, so the
+    // deficit is strictly positive and the compressing nudge applies however
+    // deep it is: Trunc and Floor round a positive argument one ULP toward
+    // zero / down; Ceiling and the nearest modes keep raw. Checked at a deep
+    // scale and at the scale where the argument is a single ULP (where the
+    // toward-zero modes land on zero).
     let v = D1232::<1231>::from_str(&tiny(693)).unwrap();
-    assert_eq!(v.tanh_strict_with(Ceiling), plus_ulp!(D1232, 1231, v));
-    for mode in [Floor, Trunc, HalfToEven, HalfAwayFromZero, HalfTowardZero] {
+    let down = v - D1232::<1231>::from_str(&tiny(1231)).unwrap();
+    assert_eq!(v.tanh_strict_with(Trunc), down);
+    assert_eq!(v.tanh_strict_with(Floor), down);
+    assert_eq!(v.tanh_strict_with(Ceiling), v);
+    for mode in [HalfToEven, HalfAwayFromZero, HalfTowardZero] {
         assert_eq!(v.tanh_strict_with(mode), v, "pos {mode:?}");
     }
     let n = -v;
-    assert_eq!(n.tanh_strict_with(Floor), n - D1232::<1231>::from_str(&tiny(1231)).unwrap());
-    for mode in [Ceiling, Trunc, HalfToEven, HalfAwayFromZero, HalfTowardZero] {
+    assert_eq!(n.tanh_strict_with(Trunc), -down);
+    assert_eq!(n.tanh_strict_with(Ceiling), -down);
+    assert_eq!(n.tanh_strict_with(Floor), n);
+    for mode in [HalfToEven, HalfAwayFromZero, HalfTowardZero] {
         assert_eq!(n.tanh_strict_with(mode), n, "neg {mode:?}");
     }
     let u = D924::<693>::from_str(&tiny(693)).unwrap();
-    assert_eq!(u.tanh_strict_with(Ceiling), plus_ulp!(D924, 693, u));
-    for mode in [Floor, Trunc, HalfToEven, HalfAwayFromZero, HalfTowardZero] {
+    let zero = u - u;
+    assert_eq!(u.tanh_strict_with(Trunc), zero);
+    assert_eq!(u.tanh_strict_with(Floor), zero);
+    assert_eq!(u.tanh_strict_with(Ceiling), u);
+    for mode in [HalfToEven, HalfAwayFromZero, HalfTowardZero] {
         assert_eq!(u.tanh_strict_with(mode), u, "ulp pos {mode:?}");
     }
 }

@@ -325,37 +325,6 @@ fn exp_near_min_pin<C: WideTrigCore, const SCALE: u32>(
     })
 }
 
-/// The precision a transcendental value is CARRIED at, in significant digits
-/// relative to the value: the golden generation precision (1233 digits,
-/// `#gen_precision=1233`) plus its working guard (`TERM_GUARD(40) +
-/// WORK_GUARD(60)`). A deficit whose relative position lies deeper is
-/// absorbed by the carried value (it rounds back up onto the line above), so
-/// only the never-exact rule's strictly POSITIVE sub-resolution tail
-/// remains. Used by [`tanh_tiny_deficit_visible`] to pick between the true
-/// compressing nudge and the positive-tail outcome.
-const CARRIED_VALUE_PRECISION: u32 = 1333;
-
-/// Whether the tiny-band cubic deficit of `tanh` (`x³/3`, sitting just BELOW
-/// the grid line `|raw|` in magnitude) survives at the carried precision.
-/// The deficit borrows a 9-run from just below the leading digit, so while
-/// its RELATIVE position (`x²/3` of the value) is within
-/// [`CARRIED_VALUE_PRECISION`] it is real and visible; deeper, the carried
-/// value rounds back up to exactly `x` and only the never-exact positive
-/// sub-resolution tail remains. Visible ⟺ `absr² >= 3·10^(2·scale −
-/// CARRIED)` (always, when `2·scale` is within it); exact integer compare in
-/// the tier work int `W` (the band bounds `absr² <= 10^(4·scale/3)`, within
-/// `W`'s range).
-#[inline]
-pub(crate) fn tanh_tiny_deficit_visible<St: BigInt + Copy, W: BigInt>(absr: St, scale: u32) -> bool {
-    if 2 * scale <= CARRIED_VALUE_PRECISION {
-        return true;
-    }
-    let a: W = BigInt::resize_to::<W>(absr);
-    a * a
-        >= <W as BigInt>::from_i128(3)
-            * crate::consts::pow10::dispatch::<W>(2 * scale - CARRIED_VALUE_PRECISION)
-}
-
 /// `exp_strict` for a wide tier — generic over the tier `C`.
 ///
 /// `raw == 0` short-circuits to the type's `ONE` raw (`10^SCALE`) rather

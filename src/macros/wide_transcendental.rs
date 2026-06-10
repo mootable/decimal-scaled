@@ -4229,34 +4229,13 @@ macro_rules! decl_wide_transcendental {
                     let thresh_exp = SCALE - SCALE.div_ceil(3);
                     let thresh = <$Storage>::from_i128(10).pow(thresh_exp);
                     if raw.abs() <= thresh {
-                        // The compressing nudge applies while the cubic
-                        // deficit survives at the carried precision. Deeper,
-                        // the carried value IS `x` and only the never-exact
-                        // rule's strictly positive sub-resolution tail
-                        // remains — the just-ABOVE-the-grid-line outcome
-                        // (Ceiling up in magnitude for a positive argument,
-                        // Floor down for a negative one; Trunc and the
-                        // nearest modes keep `raw`).
                         return Self::from_bits(
-                            if $crate::algos::support::wide_trig_core::tanh_tiny_deficit_visible::<
-                                $Storage,
-                                $core::W,
-                            >(raw.abs(), SCALE)
-                            {
-                                $crate::support::rounding::tiny_odd_compressing_directed(
-                                    raw,
-                                    zero,
-                                    <$Storage>::from_i128(1),
-                                    mode,
-                                )
-                            } else {
-                                $crate::support::rounding::tiny_odd_expanding_directed(
-                                    raw,
-                                    zero,
-                                    <$Storage>::from_i128(1),
-                                    mode,
-                                )
-                            },
+                            $crate::support::rounding::tiny_odd_compressing_directed(
+                                raw,
+                                zero,
+                                <$Storage>::from_i128(1),
+                                mode,
+                            ),
                         );
                     }
                 }
