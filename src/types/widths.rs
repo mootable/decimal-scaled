@@ -447,17 +447,17 @@ crate::macros::helpers::decl_decimal_helpers!(wide D38);
 crate::macros::rounding_methods::decl_decimal_rounding_methods!(wide D38);
 // Overflow-variant families for add / sub / neg / rem: the macro's
 // shared `@common` arm. D38's hand-coded versions were byte-identical.
-// The mul / div variants stay hand-coded in `src/overflow_variants.rs`
-// because they route through the type-specific `mg_divide` path.
+// The mul / div variants come from the macro's `wide` arm, which runs
+// the intermediate product/quotient in the `$Wider` integer.
 crate::macros::overflow::decl_decimal_overflow_variants!(wide D38, crate::int::types::Int<2>, crate::int::types::Int<4>);
 // Add / Sub / Neg / Rem operator impls (and their `*Assign` forms): the
-// arithmetic macro's shared `@common` arm. Mul / Div stay hand-coded in
-// `src/arithmetic.rs` (the `mg_divide` 256-bit-widening path).
+// arithmetic macro's shared `@common` arm. Mul / Div come from the
+// macro's `wide` arm (the `$Wider` 256-bit-widening path).
 crate::macros::arithmetic::decl_decimal_arithmetic!(wide D38, crate::int::types::Int<2>, crate::int::types::Int<4>);
 // num-traits: Zero / One / Num / Bounded / Signed / Checked{Add,Sub,Mul,
 // Div,Rem,Neg} via the shared macro — D38's hand-coded impls were
-// equivalent. FromPrimitive / ToPrimitive / NumCast stay hand-coded in
-// `src/num_traits_impls.rs` (not part of the macro surface).
+// equivalent. FromPrimitive / ToPrimitive / NumCast come from
+// `decl_decimal_num_traits_conversions!` above.
 crate::macros::num_traits::decl_decimal_num_traits_basics!(D38);
 crate::macros::transcendental_trait::decl_decimal_transcendental_impl!(D38);
 
