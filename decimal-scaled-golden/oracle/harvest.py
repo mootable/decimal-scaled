@@ -1,47 +1,53 @@
-"""Harvest the per-function input set from the existing golden set
-(tests/golden/<func>_d*_s*.txt). Those files store inputs as RAW scaled integers at
-the scale S encoded in the filename; convert each back to a canonical decimal
-string (value = raw / 10^S), dedupe by value, keep only in-domain inputs."""
-import re
-from decimal import Decimal
+"""Read the per-function oracle input files: `tests/lead/<func>.lead` — the lead
+the generator transmutes into gold.
+
+A `.lead` file is the `.golden` shape minus the output column and the generation
+provenance: one case per line (`arity` space-separated decimal literals), split
+purely by FUNCTION — no width/scale anywhere (inputs are width-agnostic; the gate
+derives every (width, scale) cell from each input). A `//` comment line sets the
+WHY for every following input until the next comment — functional intent only
+("near-zero directed-rounding band", "regression: retired exp_underflow.rs pin"),
+carried by the generator into the `.golden` per-line provenance comment.
+
+Inputs are deduped by value (first why wins) and filtered to the function's
+domain; a line whose field count does not match the function's arity is skipped
+with a warning."""
+import sys
 from pathlib import Path
-from typing import List
+from typing import List, Optional, Tuple
 
 from .functions import FUNCTIONS
 
-_SCALE_RE = re.compile(r"_s(\d+)")
+# The why attached to inputs that precede any comment line.
+DEFAULT_WHY = "coverage"
 
 
-def _canon(d: Decimal) -> str:
-    s = format(d, "f")
-    if "." in s:
-        s = s.rstrip("0").rstrip(".")
-    return s if s not in ("", "-", "-0") else "0"
-
-
-def harvest(func: str, golden_dir: Path) -> List[List[str]]:
+def harvest(func: str, lead_dir: Path) -> List[Tuple[List[str], str]]:
+    """`(inputs, why)` for every in-domain case in `<lead_dir>/<func>.lead`."""
     f = FUNCTIONS[func]
+    path = Path(lead_dir) / f"{func}.lead"
+    if not path.exists():
+        return []
     seen = set()
-    out: List[List[str]] = []
-    for path in sorted(golden_dir.glob(f"{func}_d*_s*.txt")):
-        m = _SCALE_RE.search(path.name)
-        if not m:
+    out: List[Tuple[List[str], str]] = []
+    why: str = DEFAULT_WHY
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
             continue
-        denom = Decimal(10) ** int(m.group(1))
-        for line in path.read_text().splitlines():
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            fields = line.split("\t") if "\t" in line else line.split()
-            if len(fields) < f.arity:
-                continue
-            try:
-                inputs = [_canon(Decimal(fields[i]) / denom) for i in range(f.arity)]
-            except Exception:
-                continue
-            key = tuple(inputs)
-            if key in seen or not f.in_domain(inputs):
-                continue
-            seen.add(key)
-            out.append(inputs)
+        if line.startswith("//"):
+            text = line[2:].strip()
+            if text:
+                why = text
+            continue
+        fields = line.split()
+        if len(fields) != f.arity:
+            print(f"[warn] {path.name}: skipping line with {len(fields)} fields "
+                  f"(arity {f.arity}): {line[:60]}", file=sys.stderr)
+            continue
+        key = tuple(fields)
+        if key in seen or not f.in_domain(fields):
+            continue
+        seen.add(key)
+        out.append((fields, why))
     return out

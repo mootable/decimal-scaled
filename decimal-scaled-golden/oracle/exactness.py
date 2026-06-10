@@ -60,6 +60,20 @@ def _provably_exact(func: str, inputs: List[str], value: str) -> bool:
     a = x[0]
     b = x[1] if len(x) > 1 else None
 
+    # Arithmetic: directly computable as an exact rational (also reached via the
+    # flint boundary-straddle candidate check, where a terminating product/sum
+    # lands exactly on the pinning grid).
+    if func == "add":
+        return c == a + b
+    if func == "sub":
+        return c == a - b
+    if func == "mul":
+        return c == a * b
+    if func == "div":
+        return b != 0 and c == a / b
+    if func == "rem":
+        return b != 0 and c == a - b * int(a / b)
+
     # Pure-transcendental family: irrational for every in-domain nonzero rational
     # input (Lindemann-Weierstrass and corollaries) — exact ONLY at the known points.
     if func in ("exp", "sin", "tan", "asin", "atan", "sinh", "tanh", "asinh", "atanh"):
