@@ -13,9 +13,10 @@
 //! ```
 //!
 //! A two-stage range reduction collapses the post-stage-1 Taylor into a
-//! table multiply (`exp(c_j)` from a memoised `M`-entry table) plus a
-//! short Taylor on the tiny remainder `δ`. The result is reassembled as
-//! `2^(k+k_adj) · table[j] · e^δ`.
+//! table multiply (`exp(c_j)` read from the baked `M`-entry
+//! `exp_tang_table` consts, the indexed slot converted to the working
+//! scale per lookup) plus a short Taylor on the tiny remainder `δ`. The
+//! result is reassembled as `2^(k+k_adj) · table[j] · e^δ`.
 //!
 //! ## Layering
 //!
