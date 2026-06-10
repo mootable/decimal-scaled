@@ -3342,11 +3342,15 @@ macro_rules! decl_wide_transcendental {
             /// saturates to `ZERO` (a negative base with a fractional
             /// exponent is not real-valued).
             ///
-            /// Integer-exponent fast path: if `exp` is an exact integer
-            /// with `|n| <= INT_POWF_FAST_PATH_THRESHOLD` (= 64), routes
-            /// to `Self::powi(n)` (square-and-multiply on storage),
-            /// skipping the `exp(y·ln(x))` chain. `powi` is exact, so
-            /// the 0.5 ULP contract is preserved.
+            /// Integer-exponent fast path: when `exp` is an exact integer
+            /// `n` (`|n| <= 64`) and the base an exact integer, `base^n` is
+            /// an exact rational and its correctly-rounded value is emitted
+            /// directly by [`powi_exact_pin`], skipping the `exp(y·ln x)`
+            /// chain. The pin divides `10^SCALE` by the INTEGER `base^|n|`,
+            /// so the reciprocal is exact even at a near-max scale where the
+            /// scaled `base^|n|·10^SCALE` would overflow storage.
+            ///
+            /// [`powi_exact_pin`]: crate::algos::pow::powi_exact::powi_exact_pin
             #[inline]
             #[must_use]
             pub fn powf_strict(self, exp: Self) -> Self {
@@ -3354,22 +3358,25 @@ macro_rules! decl_wide_transcendental {
                 if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     return Self::ZERO;
                 }
-                if let ::core::option::Option::Some(n) = Self::powf_exp_as_small_int(exp) {
-                    // Gate the exact integer power on the storage range: an
-                    // out-of-range `x^|n|` DEFERS to the `exp(y·ln x)`
-                    // composition below (which panics uniformly on a
-                    // genuinely out-of-range result and computes an in-range
-                    // reciprocal correctly) rather than wrap. Bit-identical to
-                    // `self.powi(n)` for every in-range power.
-                    if n >= 0 {
-                        if let ::core::option::Option::Some(v) = self.checked_pow(n as u32) {
-                            return v;
-                        }
-                    } else if let ::core::option::Option::Some(p) =
-                        self.checked_pow(n.unsigned_abs())
-                    {
-                        return Self::ONE / p;
-                    }
+                // Exact integer-power pin: for an exact integer base and
+                // exponent, `base^n` is an exact rational whose correctly-
+                // rounded value comes from integer arithmetic alone. The pin
+                // divides `10^SCALE` by the INTEGER `base^|n|` directly, so a
+                // negative-exponent reciprocal is exact even when the scaled
+                // `base^|n|·10^SCALE` overflows storage (the case the old
+                // `checked_pow` fast path deferred to the to-nearest
+                // composition, mis-rounding directed modes by 1 LSB). `None`
+                // (fractional base/exponent, or a positive power out of range)
+                // defers to the composition below, which panics uniformly.
+                if let ::core::option::Option::Some(v) =
+                    $crate::algos::pow::powi_exact::powi_exact_pin::<$Storage, SCALE>(
+                        raw,
+                        exp.to_bits(),
+                        <$Storage>::MAX,
+                        $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                    )
+                {
+                    return Self::from_bits(v);
                 }
                 let w = SCALE + $core::GUARD;
                 // Two-core: composition runs on the wide `Wagm` work int.
@@ -3377,34 +3384,6 @@ macro_rules! decl_wide_transcendental {
                 let y = $core::to_work_agm(exp.to_bits());
                 let r = $core::exp_fixed_routed_agm::<SCALE>($core::mul_agm(y, ln_x, w), w);
                 Self::from_bits($core::round_to_storage_agm(r, w, SCALE))
-            }
-
-            /// Integer-exponent threshold for the [`Self::powf_strict`]
-            /// / [`Self::powf_strict_with`] fast path. At `|n| <= 64`,
-            /// `powi(n)` costs at most ~12 multiplications, well below
-            /// the `exp(y·ln(x))` chain.
-            const INT_POWF_FAST_PATH_THRESHOLD: i32 = 64;
-
-            /// Returns `Some(n)` if `exp` is an exact integer value
-            /// `n: i32` with `|n| <= INT_POWF_FAST_PATH_THRESHOLD`.
-            /// Used to gate the integer fast path on `powf_strict` and
-            /// `powf_strict_with`.
-            #[inline]
-            fn powf_exp_as_small_int(exp: Self) -> ::core::option::Option<i32> {
-                let raw = exp.to_bits();
-                let mult = Self::multiplier();
-                let zero = $crate::macros::wide_roots::wide_lit!($Storage, "0");
-                if raw % mult != zero {
-                    return ::core::option::Option::None;
-                }
-                let q = raw / mult;
-                let lo = $crate::macros::wide_roots::wide_lit!($Storage, "-64");
-                let hi = $crate::macros::wide_roots::wide_lit!($Storage, "64");
-                if q < lo || q > hi {
-                    return ::core::option::Option::None;
-                }
-                let q_i128: i128 = $crate::int::types::traits::BigInt::to_i128(q);
-                ::core::option::Option::Some(q_i128 as i32)
             }
 
             /// Sine of `self` (radians). Strict and correctly rounded.
@@ -3830,8 +3809,9 @@ macro_rules! decl_wide_transcendental {
 
             /// Mode-aware sibling of [`Self::powf_strict`].
             ///
-            /// Same integer-exponent fast path as [`Self::powf_strict`];
-            /// the `mode` argument is irrelevant for `powi` (exact).
+            /// Same exact integer-power pin as [`Self::powf_strict`], here
+            /// rounding any non-terminating / sub-resolution reciprocal under
+            /// the caller's `mode`.
             #[inline]
             #[must_use]
             pub fn powf_strict_with(
@@ -3843,32 +3823,27 @@ macro_rules! decl_wide_transcendental {
                 if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     return Self::ZERO;
                 }
-                if let ::core::option::Option::Some(n) = Self::powf_exp_as_small_int(exp) {
-                    // `x^n` for an exact integer `n` is `x^|n|` (exact
-                    // square-and-multiply) or its reciprocal `1 / x^|n|`.
-                    // The reciprocal is generally NOT exact (e.g. `93^-2`),
-                    // so it MUST be rounded under the caller's `mode` — using
-                    // the default-mode `powi` here would silently drop a
-                    // directed mode (Ceiling of a sub-resolution `x^-k` must
-                    // round up to 1, not truncate to 0).
-                    //
-                    // `checked_pow` gates the exact integer power on the
-                    // storage range: when `x^|n|` leaves it we DEFER to the
-                    // `exp(y·ln x)` composition below rather than wrap (the
-                    // `Mul` operator's release-wrap would otherwise return a
-                    // wrong representable value for `12² = 144` out of range,
-                    // or feed a wrapped `x^|n|` into the reciprocal). The
-                    // composition panics uniformly on a genuinely out-of-range
-                    // result and computes an in-range reciprocal correctly.
-                    if n >= 0 {
-                        if let ::core::option::Option::Some(v) = self.checked_pow(n as u32) {
-                            return v;
-                        }
-                    } else if let ::core::option::Option::Some(p) =
-                        self.checked_pow(n.unsigned_abs())
-                    {
-                        return Self::ONE.div_with(p, mode);
-                    }
+                // Exact integer-power pin — see [`Self::powf_strict`]. Uses
+                // the caller's `mode`: the reciprocal of a non-terminating
+                // power (e.g. `3^-2`) and a sub-resolution `base^-k` must round
+                // under the requested directed mode (Ceiling of a
+                // sub-resolution `base^-k` rounds up to 1, not down to 0). The
+                // pin divides the INTEGER `base^|n|`, so a terminating
+                // reciprocal is exact even when the scaled `base^|n|·10^SCALE`
+                // overflows storage — the case the old `checked_pow` fast path
+                // deferred to the to-nearest composition, mis-rounding Floor /
+                // Trunc by 1 LSB. `None` (fractional base/exponent, or a
+                // positive power out of range) defers to the composition below,
+                // which panics uniformly on a genuinely out-of-range result.
+                if let ::core::option::Option::Some(v) =
+                    $crate::algos::pow::powi_exact::powi_exact_pin::<$Storage, SCALE>(
+                        raw,
+                        exp.to_bits(),
+                        <$Storage>::MAX,
+                        mode,
+                    )
+                {
+                    return Self::from_bits(v);
                 }
                 // x^0.5 ≡ √x. The exp(0.5·ln x) chain loses a sub-ULP at a
                 // perfect-square base (e.g. 4^0.5), rounding 1 LSB short
