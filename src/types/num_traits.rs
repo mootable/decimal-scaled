@@ -46,4 +46,4 @@
 // D307 / D462 / D616 / D924 / D1232) gets the same surface. The D38
 // behaviour tests live in `decimal-scale-test/tests/api/num_traits.rs`
 // (`from_src_num_traits`); the macro emits the same code for the wide
-// widths and `macros_num_traits.rs` covers them.
+// widths, which the same file's `from_macros_num_traits` module covers.
