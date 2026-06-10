@@ -70,7 +70,85 @@ fn sin_band_lower_edge_near_half_pi_directed() {
     }
 }
 
+// ── cos at the band scales, argument hugging kπ ─────────────────────
+
+#[test]
+fn cos_band_near_pi_directed_steps_inside() {
+    // π truncated to 19 fraction digits: cos = −1 + δ²/2, strictly above
+    // −1 — Ceiling/Trunc step toward zero, Floor keeps −1.
+    let v = D57::<20>::from_str("3.1415926535897932384").unwrap();
+    let neg_one = -D57::<20>::ONE;
+    let just_above = neg_one + D57::<20>::from_str("0.00000000000000000001").unwrap();
+    assert_eq!(v.cos_strict_with(Ceiling), just_above);
+    assert_eq!(v.cos_strict_with(Trunc), just_above);
+    assert_eq!(v.cos_strict_with(Floor), neg_one);
+    for mode in [HalfToEven, HalfAwayFromZero, HalfTowardZero] {
+        assert_eq!(v.cos_strict_with(mode), neg_one, "{mode:?}");
+    }
+}
+
+#[test]
+fn cos_band_near_thousand_pi_directed_steps_inside() {
+    // 1000π truncated to 14 fraction digits: cos = 1 − δ²/2 with
+    // δ ≈ 8.5·10⁻¹⁵ (deviation ~3.6·10⁻²⁹, below the band's working
+    // scale) — Floor/Trunc step down one ULP, Ceiling keeps 1. Exercises
+    // the multi-revolution range reduction feeding the same extremum pin.
+    let v = D57::<20>::from_str("3141.59265358979323").unwrap();
+    let one = D57::<20>::ONE;
+    let just_below = one - D57::<20>::from_str("0.00000000000000000001").unwrap();
+    assert_eq!(v.cos_strict_with(Floor), just_below);
+    assert_eq!(v.cos_strict_with(Trunc), just_below);
+    assert_eq!(v.cos_strict_with(Ceiling), one);
+    for mode in [HalfToEven, HalfAwayFromZero, HalfTowardZero] {
+        assert_eq!(v.cos_strict_with(mode), one, "{mode:?}");
+    }
+}
+
+#[test]
+fn cos_band_upper_edge_near_pi_directed() {
+    // The band's upper edge (SCALE 22): π truncated to 22 fraction
+    // digits leaves δ ≈ 4.3·10⁻²³ (deviation ~9.4·10⁻⁴⁶, past the work
+    // integer's probe reach) — the never-resolvable extremum case at the
+    // band's other boundary.
+    let v = D57::<22>::from_str("3.1415926535897932384626").unwrap();
+    let neg_one = -D57::<22>::ONE;
+    let just_above = neg_one + D57::<22>::from_str("0.0000000000000000000001").unwrap();
+    assert_eq!(v.cos_strict_with(Ceiling), just_above);
+    assert_eq!(v.cos_strict_with(Trunc), just_above);
+    assert_eq!(v.cos_strict_with(Floor), neg_one);
+    for mode in [HalfToEven, HalfAwayFromZero, HalfTowardZero] {
+        assert_eq!(v.cos_strict_with(mode), neg_one, "{mode:?}");
+    }
+}
+
 // ── boundary OUT: cells the extremum adjust must not touch ──────────
+
+#[test]
+fn cos_band_zero_argument_stays_exactly_one() {
+    // cos(0) = 1 exactly (the SOLE grid-line case); the interior adjust
+    // must not step it down.
+    let v = D57::<20>::ZERO;
+    for mode in [Ceiling, Floor, Trunc, HalfToEven, HalfAwayFromZero, HalfTowardZero] {
+        assert_eq!(v.cos_strict_with(mode), D57::<20>::ONE, "{mode:?}");
+    }
+}
+
+#[test]
+fn cos_band_resolvable_near_extremum_rounds_normally() {
+    // cos(3.140681501) = −0.99999958490050777447|1846… — close to −1 but
+    // the residual is WITHIN the working scale's reach: the value is off
+    // the ±1 grid line, so the adjust must not fire and ordinary directed
+    // rounding decides (Floor steps away from zero, Ceiling/Trunc keep).
+    let v = D57::<20>::from_str("3.140681501").unwrap();
+    let toward_zero = D57::<20>::from_str("-0.99999958490050777447").unwrap();
+    let away = D57::<20>::from_str("-0.99999958490050777448").unwrap();
+    assert_eq!(v.cos_strict_with(Ceiling), toward_zero);
+    assert_eq!(v.cos_strict_with(Trunc), toward_zero);
+    assert_eq!(v.cos_strict_with(Floor), away);
+    for mode in [HalfToEven, HalfAwayFromZero, HalfTowardZero] {
+        assert_eq!(v.cos_strict_with(mode), toward_zero, "{mode:?}");
+    }
+}
 
 #[test]
 fn sin_band_zero_argument_stays_exact() {

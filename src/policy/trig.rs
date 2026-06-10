@@ -1293,7 +1293,9 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
     pub(crate) fn policy_cos(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<3, SCALE>(&self.0) {
             forward::Algorithm::Series => match SCALE {
-                18..=22 => trig::sincos_tang_3limb_s18_22::cos_strict::<SCALE>(self.0, mode),
+                // Shared directed-aware narrow-GUARD kernel — see the
+                // matching `policy_sin` arm above.
+                18..=22 => trig::sincos_narrow::cos_narrow_with_taylor::<crate::types::widths::wide_trig_d57::Core, SCALE, 8>(self.0, mode),
                 _ => crate::algos::support::wide_trig_core::cos_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
             },
             forward::Algorithm::Tang => {
