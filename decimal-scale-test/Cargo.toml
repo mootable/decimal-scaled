@@ -34,6 +34,13 @@ rounding-trunc = ["decimal-scaled/rounding-trunc"]
 rounding-floor = ["decimal-scaled/rounding-floor"]
 rounding-ceiling = ["decimal-scaled/rounding-ceiling"]
 
+# Serde wire-format round-trips in tests/api/serde.rs (JSON human-readable +
+# postcard binary forms). Test-only.
+[dev-dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+postcard = { version = "1", default-features = false, features = ["alloc"] }
+
 [[test]]
 name = "golden"
 required-features = ["wide", "x-wide", "xx-wide"]
