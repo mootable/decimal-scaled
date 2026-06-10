@@ -263,7 +263,12 @@ pub(crate) fn exp_fixed(v_w: Fixed, w: u32) -> Fixed {
 /// → squaring-Taylor → `2^k`-reassemble algorithm as the per-tier wide
 /// `exp_fixed`, just run in the wider `Int<24>` — one generic kernel, no
 /// per-tier copy.
-fn exp_wide_narrow_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
+fn exp_wide_narrow_raw(
+    raw: i128,
+    scale: u32,
+    working_digits: u32,
+    mode: RoundingMode,
+) -> Option<i128> {
     use crate::algos::exp::exp_generic;
 
     let w = scale + working_digits;
@@ -272,9 +277,7 @@ fn exp_wide_narrow_raw(raw: i128, scale: u32, working_digits: u32, mode: Roundin
     let v_w = if negative_input { -v_mag } else { v_mag };
 
     let ex = exp_generic::exp_fixed::<WNarrow>(v_w, w);
-    narrow_round_mag(ex, working_digits, mode, true, false).unwrap_or_else(|| {
-        crate::support::diagnostics::overflow_panic_with_scale("exp kernel", scale)
-    })
+    narrow_round_mag(ex, working_digits, mode, true, false)
 }
 
 /// Narrows a non-negative [`WNarrow`] working-scale magnitude `mag`
@@ -422,17 +425,27 @@ pub(crate) fn hyper_needs_wide_narrow(raw: i128, scale: u32, w: u32) -> bool {
 }
 
 /// `e^x` with caller-chosen `working_digits` above the storage scale.
+///
+/// Returns `None` when the correctly-rounded result does not fit the
+/// `i128` storage — the single out-of-range detection point; the policy
+/// dispatch wrapper turns it into the default form's panic and the
+/// `checked_` surface propagates it.
 #[inline]
 #[must_use]
-pub(crate) fn exp_with(raw: Int<2>, scale: u32, working_digits: u32, mode: RoundingMode) -> Int<2> {
-    Int::<2>::from_i128(exp_with_raw(raw.as_i128(), scale, working_digits, mode))
+pub(crate) fn exp_with(
+    raw: Int<2>,
+    scale: u32,
+    working_digits: u32,
+    mode: RoundingMode,
+) -> Option<Int<2>> {
+    exp_with_raw(raw.as_i128(), scale, working_digits, mode).map(Int::<2>::from_i128)
 }
 
 /// `i128` core of [`exp_with`].
 #[inline]
-fn exp_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
+fn exp_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> Option<i128> {
     if raw == 0 {
-        return 10_i128.pow(scale); // ONE for this scale
+        return Some(10_i128.pow(scale)); // ONE for this scale
     }
     let w = scale + working_digits;
     // The wider `WNarrow` work integer is needed for the cells the fast
@@ -453,25 +466,22 @@ fn exp_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) 
     let negative_input = raw < 0;
     let v_w = Fixed::from_u128_mag(raw.unsigned_abs(), false).mul_u128(10u128.pow(working_digits));
     let v_w = if negative_input { v_w.neg() } else { v_w };
-    exp_fixed(v_w, w)
-        .round_to_i128_with(w, scale, mode)
-        .unwrap_or_else(|| {
-            crate::support::diagnostics::overflow_panic_with_scale("exp kernel", scale)
-        })
+    exp_fixed(v_w, w).round_to_i128_with(w, scale, mode)
 }
 
 /// Strict variant — const-folded `working_digits = STRICT_GUARD`.
+/// `None` = result out of storage range (see [`exp_with`]).
 #[inline]
 #[must_use]
-pub(crate) fn exp_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    Int::<2>::from_i128(exp_strict_raw::<SCALE>(raw.as_i128(), mode))
+pub(crate) fn exp_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+    exp_strict_raw::<SCALE>(raw.as_i128(), mode).map(Int::<2>::from_i128)
 }
 
 /// `i128` core of [`exp_strict`].
 #[inline]
-fn exp_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+fn exp_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     if raw == 0 {
-        return 10_i128.pow(SCALE);
+        return Some(10_i128.pow(SCALE));
     }
     let w = SCALE + STRICT_GUARD;
     // See [`exp_with_raw`]: the integer-regime cells and ALL directed modes
@@ -483,11 +493,7 @@ fn exp_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     let negative_input = raw < 0;
     let v_w = Fixed::from_u128_mag(raw.unsigned_abs(), false).mul_u128(10u128.pow(STRICT_GUARD));
     let v_w = if negative_input { v_w.neg() } else { v_w };
-    exp_fixed(v_w, w)
-        .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| {
-            crate::support::diagnostics::overflow_panic_with_scale("exp kernel", SCALE)
-        })
+    exp_fixed(v_w, w).round_to_i128_with(w, SCALE, mode)
 }
 
 // ── exp2 kernel (D38, Fixed fallback) ─────────────────────────────
@@ -578,24 +584,32 @@ fn round_pow2_fraction(num: u128, p: u32, mode: RoundingMode) -> i128 {
 
 /// `2^x = exp(x · ln 2)` on the `Fixed` intermediate. Used by
 /// `policy::exp::exp2_dispatch` when the D57 borrow path is not available.
+/// Returns `None` when the correctly-rounded result does not fit the
+/// `i128` storage (the policy wrapper panics / the `checked_` surface
+/// propagates).
 #[inline]
 #[must_use]
-pub(crate) fn exp2_with(raw: Int<2>, scale: u32, working_digits: u32, mode: RoundingMode) -> Int<2> {
-    Int::<2>::from_i128(exp2_with_raw(raw.as_i128(), scale, working_digits, mode))
+pub(crate) fn exp2_with(
+    raw: Int<2>,
+    scale: u32,
+    working_digits: u32,
+    mode: RoundingMode,
+) -> Option<Int<2>> {
+    exp2_with_raw(raw.as_i128(), scale, working_digits, mode).map(Int::<2>::from_i128)
 }
 
 /// `i128` core of [`exp2_with`].
 #[inline]
-fn exp2_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
+fn exp2_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> Option<i128> {
     if raw == 0 {
-        return 10_i128.pow(scale);
+        return Some(10_i128.pow(scale));
     }
     // Exact-power pin: `exp2(integer k) = 2^k` is an exact algebraic
     // point (integer for `k >= 0`, `5^|k|·10^(scale−|k|)` for `k < 0`).
     // Emitting it directly stops the `exp(k·ln 2)` round-off from
     // bumping a directed mode by one LSB at the exact power.
     if let Some(pinned) = exp2_exact_pin(raw, scale, mode) {
-        return pinned;
+        return Some(pinned);
     }
     // Integer-regime gate (mirrors `exp_with_raw`): `2^x = e^(x·ln 2)` whose
     // result carries `k_lift` integer digits leaves the flat-`w` 256-bit
@@ -612,11 +626,7 @@ fn exp2_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode)
     let v_w = Fixed::from_u128_mag(raw.unsigned_abs(), false).mul_u128(10u128.pow(working_digits));
     let v_w = if negative_input { v_w.neg() } else { v_w };
     let arg_w = v_w.mul(wide_ln2(w), w);
-    exp_fixed(arg_w, w)
-        .round_to_i128_with(w, scale, mode)
-        .unwrap_or_else(|| {
-            crate::support::diagnostics::overflow_panic_with_scale("D38::exp2", scale)
-        })
+    exp_fixed(arg_w, w).round_to_i128_with(w, scale, mode)
 }
 
 /// Integer-digit count of `2^x` for the non-negative storage magnitude
@@ -684,7 +694,12 @@ fn exp2_result_int_digits_floor(abs_raw: u128, scale: u32) -> u32 {
 /// guard past the many integer digits — the narrow analogue of the wide-tier
 /// `exp2_guarded`'s `GUARD + k_lift`. [`narrow_round_mag`]'s `never_exact`
 /// gives the directed modes the sub-resolution residual a transcendental needs.
-fn exp2_wide_narrow_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
+fn exp2_wide_narrow_raw(
+    raw: i128,
+    scale: u32,
+    working_digits: u32,
+    mode: RoundingMode,
+) -> Option<i128> {
     use crate::algos::exp::exp_generic;
 
     let neg = raw < 0;
@@ -735,14 +750,13 @@ fn exp2_wide_narrow_raw(raw: i128, scale: u32, working_digits: u32, mode: Roundi
     };
     let arg = if neg { -arg_mag } else { arg_mag };
     let ex = exp_generic::exp_fixed::<WNarrow>(arg, w);
-    narrow_round_mag(ex, guard, mode, true, false).unwrap_or_else(|| {
-        crate::support::diagnostics::overflow_panic_with_scale("exp2", scale)
-    })
+    narrow_round_mag(ex, guard, mode, true, false)
 }
 
+/// `None` = result out of storage range (see [`exp2_with`]).
 #[inline]
 #[must_use]
-pub(crate) fn exp2_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
+pub(crate) fn exp2_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
     exp2_with(raw, SCALE, STRICT_GUARD, mode)
 }
 

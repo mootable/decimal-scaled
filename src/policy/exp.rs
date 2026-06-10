@@ -180,6 +180,24 @@ pub(crate) const fn is_tang<const N: usize, const SCALE: u32>() -> bool {
 #[inline]
 #[must_use]
 pub(crate) fn dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Int<N> {
+    checked_dispatch::<N, SCALE>(raw, mode).unwrap_or_else(|| {
+        crate::support::diagnostics::overflow_panic_with_scale("exp_strict", SCALE)
+    })
+}
+
+/// The `checked` primitive under [`dispatch`]: same routing, but the
+/// narrow kernels' out-of-range `None` propagates instead of panicking
+/// (the overflow contract's "detect once, apply the policy in the
+/// wrapper"). On the wide tiers the kernel-internal out-of-range panic
+/// is not yet threaded through (see
+/// `research/checked_wide_shell_patch.md`); those arms return `Some` of
+/// the kernel result and still panic on overflow.
+#[inline]
+#[must_use]
+pub(crate) fn checked_dispatch<const N: usize, const SCALE: u32>(
+    raw: Int<N>,
+    mode: RoundingMode,
+) -> Option<Int<N>> {
     match resolve::<N, SCALE>(&raw) {
         Algorithm::Series => series_routed::<N, SCALE>(raw, mode),
         #[cfg(feature = "_wide-support")]
@@ -198,16 +216,16 @@ pub(crate) fn dispatch_with<const N: usize, const SCALE: u32>(
     // Only the narrow tier honours caller working_digits (matching the
     // prior ExpPolicy routing, where wide exp_with_impl ignored it).
     match N {
-        1 | 2 => super::narrow_checked::<N>(
-            crate::algos::exp::exp_series_2limb::exp_with(
-                raw.resize_to::<Int<2>>(),
-                SCALE,
-                working_digits,
-                mode,
-            ),
-            "exp_with",
+        1 | 2 => crate::algos::exp::exp_series_2limb::exp_with(
+            raw.resize_to::<Int<2>>(),
             SCALE,
-        ),
+            working_digits,
+            mode,
+        )
+        .and_then(super::narrow_fit::<N>)
+        .unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("exp_with", SCALE)
+        }),
         _ => {
             let _ = working_digits;
             dispatch::<N, SCALE>(raw, mode)
@@ -216,64 +234,64 @@ pub(crate) fn dispatch_with<const N: usize, const SCALE: u32>(
 }
 
 #[inline]
-fn series_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Int<N> {
+fn series_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
     match N {
-        1 | 2 => super::narrow_checked::<N>(crate::algos::exp::exp_series_2limb::exp_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode), "exp_strict", SCALE),
+        1 | 2 => crate::algos::exp::exp_series_2limb::exp_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>(),
+        3 => Some(crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d76::Core, SCALE>(raw.resize_to::<Int<4>>(), mode).resize_to::<Int<N>>(),
+        4 => Some(crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d76::Core, SCALE>(raw.resize_to::<Int<4>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d115::Core, SCALE>(raw.resize_to::<Int<6>>(), mode).resize_to::<Int<N>>(),
+        6 => Some(crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d115::Core, SCALE>(raw.resize_to::<Int<6>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d153::Core, SCALE>(raw.resize_to::<Int<8>>(), mode).resize_to::<Int<N>>(),
+        8 => Some(crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d153::Core, SCALE>(raw.resize_to::<Int<8>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d230::Core, SCALE>(raw.resize_to::<Int<12>>(), mode).resize_to::<Int<N>>(),
+        12 => Some(crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d230::Core, SCALE>(raw.resize_to::<Int<12>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw.resize_to::<Int<16>>(), mode).resize_to::<Int<N>>(),
+        16 => Some(crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw.resize_to::<Int<16>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d462::Core, SCALE>(raw.resize_to::<Int<24>>(), mode).resize_to::<Int<N>>(),
+        24 => Some(crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d462::Core, SCALE>(raw.resize_to::<Int<24>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d616::Core, SCALE>(raw.resize_to::<Int<32>>(), mode).resize_to::<Int<N>>(),
+        32 => Some(crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d616::Core, SCALE>(raw.resize_to::<Int<32>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>(),
+        48 => Some(crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>(),
-        _ => super::narrow_checked::<N>(crate::algos::exp::exp_series_2limb::exp_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode), "exp_strict", SCALE),
+        64 => Some(crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>()),
+        _ => crate::algos::exp::exp_series_2limb::exp_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
     }
 }
 
 #[inline]
-fn schoolbook_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Int<N> {
+fn schoolbook_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
     match N {
-        1 | 2 => super::narrow_checked::<N>(crate::algos::exp::exp_schoolbook::exp_schoolbook_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode), "exp_strict", SCALE),
+        1 | 2 => super::narrow_fit::<N>(crate::algos::exp::exp_schoolbook::exp_schoolbook_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode)),
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>(),
+        3 => Some(crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d76::Core, SCALE>(raw.resize_to::<Int<4>>(), mode).resize_to::<Int<N>>(),
+        4 => Some(crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d76::Core, SCALE>(raw.resize_to::<Int<4>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d115::Core, SCALE>(raw.resize_to::<Int<6>>(), mode).resize_to::<Int<N>>(),
+        6 => Some(crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d115::Core, SCALE>(raw.resize_to::<Int<6>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(raw.resize_to::<Int<8>>(), mode).resize_to::<Int<N>>(),
+        8 => Some(crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(raw.resize_to::<Int<8>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d230::Core, SCALE>(raw.resize_to::<Int<12>>(), mode).resize_to::<Int<N>>(),
+        12 => Some(crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d230::Core, SCALE>(raw.resize_to::<Int<12>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw.resize_to::<Int<16>>(), mode).resize_to::<Int<N>>(),
+        16 => Some(crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw.resize_to::<Int<16>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d462::Core, SCALE>(raw.resize_to::<Int<24>>(), mode).resize_to::<Int<N>>(),
+        24 => Some(crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d462::Core, SCALE>(raw.resize_to::<Int<24>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d616::Core, SCALE>(raw.resize_to::<Int<32>>(), mode).resize_to::<Int<N>>(),
+        32 => Some(crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d616::Core, SCALE>(raw.resize_to::<Int<32>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>(),
+        48 => Some(crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>(),
-        _ => super::narrow_checked::<N>(crate::algos::exp::exp_schoolbook::exp_schoolbook_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode), "exp_strict", SCALE),
+        64 => Some(crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>()),
+        _ => super::narrow_fit::<N>(crate::algos::exp::exp_schoolbook::exp_schoolbook_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode)),
     }
 }
 
 #[cfg(feature = "_wide-support")]
 #[inline]
-fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Int<N> {
+fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
     match N {
         // D57: TWO continuous (M,G) sub-bands inside the merged Tang arm:
         // 0..=44 runs the (M=128, G=8) low-band kernel, 45..=56 the (M=512,
@@ -299,7 +317,7 @@ fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode
                 45..=56 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 512, 30, true, true, false>(r, mode),
                 _ => crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(r, mode),
             };
-            out.resize_to::<Int<N>>()
+            Some(out.resize_to::<Int<N>>())
         }
         // D76 (Int<4>): full-range Tang, M=512 G=30, the directed +
         // external-extra shape <true,true,false> — bit-identical to Series
@@ -312,7 +330,7 @@ fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode
         // INVALID by the validity wall, but the PRODUCTION tang_m512_g30 stays
         // bit-identical — the production config is the one wired here.)
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d76::Core, SCALE, 512, 30, true, true, false>(raw.resize_to::<Int<4>>(), mode).resize_to::<Int<N>>(),
+        4 => Some(crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d76::Core, SCALE, 512, 30, true, true, false>(raw.resize_to::<Int<4>>(), mode).resize_to::<Int<N>>()),
         // N >= 6: `select` routes EVERY scale to Series here (the 2026-05-29
         // post-bake storage-strict A/B showed Series/Schoolbook beat every Tang
         // config at D115/D153/D230/D307+, and Tang is INELIGIBLE at D1232 max
@@ -330,29 +348,44 @@ fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode
 #[inline]
 #[must_use]
 pub(crate) fn exp2_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Int<N> {
+    checked_exp2_dispatch::<N, SCALE>(raw, mode).unwrap_or_else(|| {
+        crate::support::diagnostics::overflow_panic_with_scale("exp2_strict", SCALE)
+    })
+}
+
+/// The `checked` primitive under [`exp2_dispatch`]: exact out-of-range
+/// `None` on the narrow tiers; the wide arms call the per-tier kernel
+/// shells, whose internal out-of-range panic is not yet threaded
+/// through (see `research/checked_wide_shell_patch.md`).
+#[inline]
+#[must_use]
+pub(crate) fn checked_exp2_dispatch<const N: usize, const SCALE: u32>(
+    raw: Int<N>,
+    mode: RoundingMode,
+) -> Option<Int<N>> {
     match N {
-        1 | 2 => super::narrow_checked::<N>(crate::algos::exp::exp_series_2limb::exp2_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode), "exp2_strict", SCALE),
+        1 | 2 => crate::algos::exp::exp_series_2limb::exp2_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => crate::types::widths::wide_trig_d57::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>(),
+        3 => Some(crate::types::widths::wide_trig_d57::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => crate::types::widths::wide_trig_d76::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<4>>(), mode).resize_to::<Int<N>>(),
+        4 => Some(crate::types::widths::wide_trig_d76::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<4>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => crate::types::widths::wide_trig_d115::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<6>>(), mode).resize_to::<Int<N>>(),
+        6 => Some(crate::types::widths::wide_trig_d115::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<6>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => crate::types::widths::wide_trig_d153::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<8>>(), mode).resize_to::<Int<N>>(),
+        8 => Some(crate::types::widths::wide_trig_d153::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<8>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => crate::types::widths::wide_trig_d230::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<12>>(), mode).resize_to::<Int<N>>(),
+        12 => Some(crate::types::widths::wide_trig_d230::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<12>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => crate::types::widths::wide_trig_d307::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<16>>(), mode).resize_to::<Int<N>>(),
+        16 => Some(crate::types::widths::wide_trig_d307::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<16>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => crate::types::widths::wide_trig_d462::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<24>>(), mode).resize_to::<Int<N>>(),
+        24 => Some(crate::types::widths::wide_trig_d462::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<24>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => crate::types::widths::wide_trig_d616::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<32>>(), mode).resize_to::<Int<N>>(),
+        32 => Some(crate::types::widths::wide_trig_d616::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<32>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => crate::types::widths::wide_trig_d924::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>(),
+        48 => Some(crate::types::widths::wide_trig_d924::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => crate::types::widths::wide_trig_d1232::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>(),
-        _ => super::narrow_checked::<N>(crate::algos::exp::exp_series_2limb::exp2_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode), "exp2_strict", SCALE),
+        64 => Some(crate::types::widths::wide_trig_d1232::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>()),
+        _ => crate::algos::exp::exp_series_2limb::exp2_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
     }
 }
 
@@ -360,7 +393,7 @@ pub(crate) fn exp2_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode:
 #[must_use]
 pub(crate) fn exp2_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, working_digits: u32, mode: RoundingMode) -> Int<N> {
     match N {
-        1 | 2 => super::narrow_checked::<N>(crate::algos::exp::exp_series_2limb::exp2_with(raw.resize_to::<Int<2>>(), SCALE, working_digits, mode), "exp2_with", SCALE),
+        1 | 2 => crate::algos::exp::exp_series_2limb::exp2_with(raw.resize_to::<Int<2>>(), SCALE, working_digits, mode).and_then(super::narrow_fit::<N>).unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("exp2_with", SCALE)),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => crate::types::widths::wide_trig_d57::exp2_approx_with_kernel::<SCALE>(raw.resize_to::<Int<3>>(), working_digits, mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -381,6 +414,6 @@ pub(crate) fn exp2_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, 
         48 => crate::types::widths::wide_trig_d924::exp2_approx_with_kernel::<SCALE>(raw.resize_to::<Int<48>>(), working_digits, mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => crate::types::widths::wide_trig_d1232::exp2_approx_with_kernel::<SCALE>(raw.resize_to::<Int<64>>(), working_digits, mode).resize_to::<Int<N>>(),
-        _ => super::narrow_checked::<N>(crate::algos::exp::exp_series_2limb::exp2_with(raw.resize_to::<Int<2>>(), SCALE, working_digits, mode), "exp2_with", SCALE),
+        _ => crate::algos::exp::exp_series_2limb::exp2_with(raw.resize_to::<Int<2>>(), SCALE, working_digits, mode).and_then(super::narrow_fit::<N>).unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("exp2_with", SCALE)),
     }
 }

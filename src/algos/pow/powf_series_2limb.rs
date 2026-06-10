@@ -184,13 +184,9 @@ pub(crate) fn powf_with<const SCALE: u32>(
     exp: Int<2>,
     working_digits: u32,
     mode: RoundingMode,
-) -> Int<2> {
-    Int::<2>::from_i128(powf_with_raw::<SCALE>(
-        base.as_i128(),
-        exp.as_i128(),
-        working_digits,
-        mode,
-    ))
+) -> Option<Int<2>> {
+    powf_with_raw::<SCALE>(base.as_i128(), exp.as_i128(), working_digits, mode)
+        .map(Int::<2>::from_i128)
 }
 
 /// `i128` core of [`powf_with`].
@@ -200,13 +196,13 @@ fn powf_with_raw<const SCALE: u32>(
     exp: i128,
     working_digits: u32,
     mode: RoundingMode,
-) -> i128 {
+) -> Option<i128> {
     if base <= 0 {
-        return 0;
+        return Some(0);
     }
     if let Some(n) = exp_as_small_int::<SCALE>(exp) {
         if let Some(v) = powi_raw_checked::<SCALE>(base, n, mode) {
-            return v;
+            return Some(v);
         }
         // `base^|n|` left the storage range. When the base is an exact
         // integer the result is still an exact rational — pin its
@@ -221,7 +217,7 @@ fn powf_with_raw<const SCALE: u32>(
             Int::<2>::MAX,
             mode,
         ) {
-            return v.as_i128();
+            return Some(v.as_i128());
         }
     }
     let w = SCALE + working_digits;
@@ -232,29 +228,27 @@ fn powf_with_raw<const SCALE: u32>(
     let y_w = if y_neg { y_w.neg() } else { y_w };
     let arg = y_w.mul(ln_x, w);
     powf_overflow_gate(arg, w, SCALE);
-    exp_fixed(arg, w)
-        .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| {
-            crate::support::diagnostics::overflow_panic_with_scale("powf kernel", SCALE)
-        })
+    exp_fixed(arg, w).round_to_i128_with(w, SCALE, mode)
 }
 
 /// Strict variant — const-folded `working_digits = STRICT_GUARD`.
+/// `None` = result out of storage range (non-positive bases saturate
+/// to `Some(0)`, matching the default form's documented behaviour).
 #[inline]
 #[must_use]
-pub(crate) fn powf_strict<const SCALE: u32>(base: Int<2>, exp: Int<2>, mode: RoundingMode) -> Int<2> {
-    Int::<2>::from_i128(powf_strict_raw::<SCALE>(base.as_i128(), exp.as_i128(), mode))
+pub(crate) fn powf_strict<const SCALE: u32>(base: Int<2>, exp: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+    powf_strict_raw::<SCALE>(base.as_i128(), exp.as_i128(), mode).map(Int::<2>::from_i128)
 }
 
 /// `i128` core of [`powf_strict`].
 #[inline]
-fn powf_strict_raw<const SCALE: u32>(base: i128, exp: i128, mode: RoundingMode) -> i128 {
+fn powf_strict_raw<const SCALE: u32>(base: i128, exp: i128, mode: RoundingMode) -> Option<i128> {
     if base <= 0 {
-        return 0;
+        return Some(0);
     }
     if let Some(n) = exp_as_small_int::<SCALE>(exp) {
         if let Some(v) = powi_raw_checked::<SCALE>(base, n, mode) {
-            return v;
+            return Some(v);
         }
         // `base^|n|` left the storage range. When the base is an exact
         // integer the result is still an exact rational — pin its
@@ -269,7 +263,7 @@ fn powf_strict_raw<const SCALE: u32>(base: i128, exp: i128, mode: RoundingMode) 
             Int::<2>::MAX,
             mode,
         ) {
-            return v.as_i128();
+            return Some(v.as_i128());
         }
     }
     let w = SCALE + STRICT_GUARD;
@@ -280,11 +274,7 @@ fn powf_strict_raw<const SCALE: u32>(base: i128, exp: i128, mode: RoundingMode) 
     let y_w = if y_neg { y_w.neg() } else { y_w };
     let arg = y_w.mul(ln_x, w);
     powf_overflow_gate(arg, w, SCALE);
-    exp_fixed(arg, w)
-        .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| {
-            crate::support::diagnostics::overflow_panic_with_scale("powf kernel", SCALE)
-        })
+    exp_fixed(arg, w).round_to_i128_with(w, SCALE, mode)
 }
 
 #[cfg(test)]
@@ -308,7 +298,7 @@ mod tests {
     ];
 
     fn powf(base: i128, exp: i128) -> i128 {
-        powf_strict_raw::<S>(base * ONE, exp * ONE, M)
+        powf_strict_raw::<S>(base * ONE, exp * ONE, M).expect("in range")
     }
 
     #[test]
@@ -327,7 +317,7 @@ mod tests {
         for mode in MODES {
             assert_eq!(
                 powf_strict_raw::<SC>(base * one, exp * one, mode),
-                one / divisor,
+                Some(one / divisor),
                 "base={base} exp={exp} scale={SC} mode={mode:?}"
             );
         }
