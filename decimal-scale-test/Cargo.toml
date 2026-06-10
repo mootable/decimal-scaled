@@ -57,3 +57,9 @@ postcard = { version = "1", default-features = false, features = ["alloc"] }
 [[test]]
 name = "golden"
 required-features = ["wide", "x-wide", "xx-wide"]
+
+# Nightly-only (`generic_const_exprs`): the cross-scale free-function surface.
+# `required-features` keeps the target out of every build that does not opt in.
+[[test]]
+name = "nightly_cross_scale"
+required-features = ["cross-scale-ops"]
