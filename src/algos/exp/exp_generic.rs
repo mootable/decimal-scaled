@@ -288,6 +288,81 @@ use crate::support::rounding::RoundingMode;
         scale_by_k::<S>(ln2_w, k as i128) + ln_m
     }
 
+    /// Argument-magnitude regime of `e^v` for a working-scale value `v_w`
+    /// at scale `w` in the work integer `S`, decided BEFORE the
+    /// `k = round(v / ln 2)` range-reduction division runs.
+    ///
+    /// [`exp_fixed`] / [`exp_internal_peak_bits`] first compute `k` with a
+    /// full work-integer divide whose dividend is `v_w · 10^w`. For an
+    /// argument deep past the representable range that division is itself
+    /// unsafe: the quotient `k` can exceed `i128` (so `round_to_nearest_int`
+    /// TRUNCATES it — a wrapped, even wrong-signed `k` that silently routes
+    /// an overflow down the underflow path, or vice versa), and the peak
+    /// model's `|k| · 30103` product can exceed `u128`. This classifier
+    /// bounds the argument analytically from its BIT LENGTH alone — no
+    /// division — so the deep bands never reach that arithmetic.
+    ///
+    /// Derivation (both bounds are SUFFICIENT conditions, never fired by a
+    /// representable cell):
+    ///
+    /// * **Overflow** (`v > 0`): the result `e^v` at scale `w` needs
+    ///   `e^v · 10^w < 2^BITS`, i.e. `v < BITS·ln 2 − w·ln 10`. With
+    ///   `R = ⌊BITS·6932/10000⌋ + 1 − ⌊w·23025/10000⌋ ≥ BITS·ln 2 − w·ln 10`
+    ///   (0.6932 over-approximates ln 2, 2.3025 under-approximates ln 10),
+    ///   and `|v| ≥ 2^(bl−1)/10^w` for `bl = bit_length(v_w)`, the result
+    ///   provably overflows `S` once
+    ///   `bl ≥ ⌈w·33220/10000⌉ + bits(R) + 2`
+    ///   (because `2^(bl−1) ≥ 2^⌈w·3.3220⌉ · 2^bits(R) · 2 ≥ 10^w · R`,
+    ///   with 3.3220 over-approximating log2 10 and `2^bits(R) ≥ R`).
+    /// * **Underflow** (`v < 0`): `e^v < 10^−(w+1)` — strictly below the
+    ///   working resolution — once `|v| ≥ (w+1)·ln 10`. With
+    ///   `U = ⌊(w+1)·23026/10000⌋ + 1 ≥ (w+1)·ln 10` (2.3026 over-
+    ///   approximates ln 10) the same bit-length argument gives the
+    ///   threshold `bl ≥ ⌈w·33220/10000⌉ + bits(U) + 2`.
+    ///
+    /// A cell that does NOT fire has `|v|` within a small constant factor of
+    /// the fired bound, so `|k| = |v|/ln 2` stays of order `BITS` — every
+    /// downstream `i128` / `u128` / `u32` use of `k` is then in range, and
+    /// the `k`-division dividend stays inside the divide scratch every
+    /// build provisions for its in-range work.
+    enum ArgRegime {
+        /// Argument small enough for the body's range reduction.
+        Fits,
+        /// `v > 0` and `e^v · 10^w` provably exceeds `S`'s capacity.
+        Overflow,
+        /// `v < 0` and `e^v` is provably below the working resolution.
+        Underflow,
+    }
+
+    /// Classifies `v_w` per [`ArgRegime`]'s analytic bounds. See the enum
+    /// docs for the derivation.
+    fn arg_regime<S: BigInt>(v_w: S, w: u32) -> ArgRegime {
+        if v_w == S::ZERO {
+            return ArgRegime::Fits;
+        }
+        let bl = bit_length::<S>(v_w) as u64;
+        // ⌈w · log2(10)⌉, over-approximated (33220/10000 ≥ log2 10).
+        let w_bits = ((w as u64) * 33220).div_ceil(10000);
+        // bits(x) = floor(log2 x) + 1, so 2^bits(x) ≥ x.
+        let bits_of = |x: u64| 64 - x.leading_zeros() as u64;
+        if v_w > S::ZERO {
+            let bits_ln2 = (<S as BigInt>::BITS as u64) * 6932 / 10000 + 1;
+            let w_ln10 = (w as u64) * 23025 / 10000;
+            // R ≥ BITS·ln2 − w·ln10; clamp at 1 (a degenerate `w` no caller
+            // forms — 10^w would not even fit S — but keep the math total).
+            let r = bits_ln2.saturating_sub(w_ln10).max(1);
+            if bl >= w_bits + bits_of(r) + 2 {
+                return ArgRegime::Overflow;
+            }
+        } else {
+            let u = ((w as u64) + 1) * 23026 / 10000 + 1;
+            if bl >= w_bits + bits_of(u) + 2 {
+                return ArgRegime::Underflow;
+            }
+        }
+        ArgRegime::Fits
+    }
+
     /// True worst-case bit-width the [`exp_fixed`] body reaches internally
     /// for a working-scale value `v_w` at scale `w`, in a work integer `S`
     /// of capacity `S::BITS` bits.
@@ -308,6 +383,23 @@ use crate::support::rounding::RoundingMode;
     /// per-tier `decl_wide_transcendental!` `exp_internal_peak_bits` /
     /// `exp_fits_w` / `hyper_fits_w` gates delegate to it.
     pub(crate) fn exp_internal_peak_bits<S: BigInt>(v_w: S, w: u32) -> u64 {
+        // Argument-magnitude pre-gate (see [`ArgRegime`]): a deep argument
+        // must not reach the `k` division below — its quotient can exceed
+        // `i128` and its dividend the divide scratch. BOTH non-`Fits`
+        // verdicts report an unbounded peak. For Overflow no `S` fits the
+        // result. For Underflow the VALUE is tiny, but this function models
+        // the peak of the UNGATED per-tier body its `exp_fits_w` callers
+        // would run — and that body's range reduction provisions
+        // `extra ≈ |k|·0.30103` digits even for a deep NEGATIVE `k`,
+        // pushing `w_ext` and the `k·ln2` term past the tier work integer
+        // (an `Int: mul overflow`). Reporting "does not fit" keeps such a
+        // cell on the wider-lift route the deep band always took, where
+        // [`exp_fixed`]'s own pre-gate / `k < -1` short-circuit returns the
+        // canonical smallest-positive value without forming any of that
+        // arithmetic.
+        if !matches!(arg_regime::<S>(v_w, w), ArgRegime::Fits) {
+            return u64::MAX;
+        }
         let one_w_pre = one::<S>(w);
         let l2_pre = ln2::<S>(w);
         let k = round_to_nearest_int(div_cached(v_w, l2_pre, one_w_pre), w);
@@ -315,7 +407,11 @@ use crate::support::rounding::RoundingMode;
         let extra: u32 = if abs_k_u128 == 0 {
             0
         } else {
-            let digits = (abs_k_u128 * 30103).div_ceil(100_000);
+            // Saturating: `Fits` bounds `|k|` to order `BITS`, far inside
+            // `u128`, but saturation keeps the model an UPPER bound (more
+            // digits → a larger modelled peak → the gate fires) even if a
+            // caller ever feeds an unclassified extreme.
+            let digits = abs_k_u128.saturating_mul(30103).div_ceil(100_000);
             let capped = digits.min((<S as BigInt>::BITS / 4) as u128) as u32;
             capped + 12 + (capped >> 2)
         };
@@ -325,8 +421,10 @@ use crate::support::rounding::RoundingMode;
         // `2·w_ext` decimal digits.
         let sqr_bits = 2 * w_ext * 3322 / 1000;
         // Reassembly peak: `sum << k` lifts the `w_ext`-digit Taylor sum by
-        // `|k|` bits.
-        let reasm_bits = w_ext * 3322 / 1000 + abs_k_u128 as u64;
+        // `|k|` bits. Saturating narrowing, same upper-bound rationale as
+        // the `digits` product above.
+        let reasm_bits =
+            (w_ext * 3322 / 1000).saturating_add(u64::try_from(abs_k_u128).unwrap_or(u64::MAX));
         let peak = if sqr_bits > reasm_bits { sqr_bits } else { reasm_bits };
         // Small safety slack on top of the modelled peak. The model can
         // under-count the TRUE internal peak by only a few bits: `sum` can
@@ -387,6 +485,22 @@ use crate::support::rounding::RoundingMode;
     where
         S::Scratch: ComputeLimbs,
     {
+        // Argument-magnitude pre-gate (see [`ArgRegime`]). The very first
+        // step below — `k = round(v / ln 2)` — is a full work-integer divide
+        // on the `v_w · 10^w` dividend; for a deep argument that division is
+        // the FIRST thing to break (an `i128`-truncated `k` silently flips
+        // an overflow into the underflow path, and the oversized dividend
+        // outruns the divide scratch a narrow build provisions), so the
+        // out-of-range verdict must come BEFORE it. A provable overflow is
+        // the uniform loud contract failure; a provable underflow returns
+        // the smallest positive working value exactly as the in-body
+        // short-circuits below do (the caller's rounding turns it into 0,
+        // or 1 ULP under Ceiling).
+        match arg_regime::<S>(v_w, w) {
+            ArgRegime::Overflow => panic!("exp_generic::exp_fixed: result out of range"),
+            ArgRegime::Underflow => return lit::<S>(1),
+            ArgRegime::Fits => {}
+        }
         let one_w_pre = one::<S>(w);
         let l2_pre = ln2::<S>(w);
         let pow10_w_pre = one_w_pre;
@@ -425,7 +539,9 @@ use crate::support::rounding::RoundingMode;
         let extra: u32 = if abs_k_u128 == 0 {
             0
         } else {
-            let digits = (abs_k_u128 * 30103).div_ceil(100_000);
+            // Saturating for the same upper-bound reason as the peak model;
+            // the pre-gate already bounds `|k|` to order `BITS` here.
+            let digits = abs_k_u128.saturating_mul(30103).div_ceil(100_000);
             let capped = digits.min((<S as BigInt>::BITS / 4) as u128) as u32;
             capped + 12 + (capped >> 2)
         };

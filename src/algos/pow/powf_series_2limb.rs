@@ -41,6 +41,43 @@ use crate::support::rounding::RoundingMode;
 /// so a fixed threshold is sufficient.
 pub(crate) const INT_FAST_PATH_THRESHOLD: i32 = 64;
 
+/// Analytic storage-overflow gate on the `exp(y·ln x)` composition's
+/// argument `arg = y·ln x` (a working-scale [`Fixed`] at scale `w`),
+/// run BEFORE [`exp_fixed`]. Panics with the contractual
+/// `"result out of range"` when the result `x^y = e^arg` provably cannot
+/// be stored.
+///
+/// Derivation, exact for every scale: `i128` holds values `< 1.8·10^38 <
+/// 10^39`, so the storage value `e^arg · 10^scale` overflows once
+/// `e^arg ≥ 10^(39−scale)`, i.e. `arg ≥ (39−scale)·ln 10`. The threshold
+/// uses `2.302586 > ln 10`, so a fired cell satisfies the true bound — a
+/// representable result can never fire. Cells between the true edge and
+/// this threshold still flow to the kernel, whose `round_to_i128_with`
+/// fit check raises the same panic; for those `arg < (39−scale)·2.302586
+/// + 1 ≤ 91` bounds the kernel's `2^k` reassembly (`k ≤ 132`), so the
+/// kernel's internal shift arithmetic stays in range. Without this gate a
+/// deep-overflow exponent reached the kernel's 256-bit reassembly
+/// assertion (loud but non-contractual), and an extreme one could wrap
+/// the `k` shift narrowing entirely.
+///
+/// The threshold magnitude `(39−scale)·2_302_586 · 10^(w−6)` fits `U256`
+/// for every working scale this kernel serves (`w ≤ 68`); `w < 6` (no
+/// real caller) skips the gate and leaves the kernel assert as backstop.
+#[inline]
+fn powf_overflow_gate(arg: Fixed, w: u32, scale: u32) {
+    if arg.negative || w < 6 {
+        return; // y·ln x < 0 ⇒ x^y < 1: never a storage overflow.
+    }
+    let thr = Fixed {
+        negative: false,
+        mag: Fixed::pow10(w - 6),
+    }
+    .mul_u128(((39 - scale) as u128) * 2_302_586);
+    if arg.ge_mag(thr) {
+        crate::support::diagnostics::overflow_panic_with_scale("powf kernel", scale);
+    }
+}
+
 /// `(a · b) / 10^SCALE` rounded under `mode`, formed in the 256-bit
 /// `Int<4>` widening so the product never overflows mid-step, then
 /// narrowed back to `i128` storage. Returns `None` when the rounded
@@ -193,7 +230,9 @@ fn powf_with_raw<const SCALE: u32>(
     let y_neg = exp < 0;
     let y_w = Fixed::from_u128_mag(exp.unsigned_abs(), false).mul_u128(pow);
     let y_w = if y_neg { y_w.neg() } else { y_w };
-    exp_fixed(y_w.mul(ln_x, w), w)
+    let arg = y_w.mul(ln_x, w);
+    powf_overflow_gate(arg, w, SCALE);
+    exp_fixed(arg, w)
         .round_to_i128_with(w, SCALE, mode)
         .unwrap_or_else(|| {
             crate::support::diagnostics::overflow_panic_with_scale("powf kernel", SCALE)
@@ -239,7 +278,9 @@ fn powf_strict_raw<const SCALE: u32>(base: i128, exp: i128, mode: RoundingMode) 
     let y_neg = exp < 0;
     let y_w = Fixed::from_u128_mag(exp.unsigned_abs(), false).mul_u128(pow);
     let y_w = if y_neg { y_w.neg() } else { y_w };
-    exp_fixed(y_w.mul(ln_x, w), w)
+    let arg = y_w.mul(ln_x, w);
+    powf_overflow_gate(arg, w, SCALE);
+    exp_fixed(arg, w)
         .round_to_i128_with(w, SCALE, mode)
         .unwrap_or_else(|| {
             crate::support::diagnostics::overflow_panic_with_scale("powf kernel", SCALE)
