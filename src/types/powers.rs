@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Power and root methods for [`D38`].
 //!
 //! # Methods

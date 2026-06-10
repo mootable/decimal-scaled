@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Division policy — the divisor-shape algorithm matcher.
 //!
 //! Canonical policy shape (see `docs/ARCHITECTURE.md` → "Policy file

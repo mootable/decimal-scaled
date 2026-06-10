@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Shared near-pole guard-digit sizing for the `tan` kernels.
 //!
 //! `tan(x)` is computed as `sin(r)/cos(r)` on the range-reduced residue

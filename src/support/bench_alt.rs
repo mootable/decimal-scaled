@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Bench-only alias wrappers for the per-type override policy.
 //!
 //! Per `OVERRIDE_POLICY.md`: every precision-bearing method has a

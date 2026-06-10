@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Macro-generated `Display` and `Debug` for the decimal widths.
 //!
 //! The algorithm is the same as `D38`'s hand-coded `Display` (in

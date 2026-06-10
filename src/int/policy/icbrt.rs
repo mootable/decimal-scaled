@@ -4,7 +4,7 @@
 //! Integer cube-root policy — the native-vs-Newton algorithm matcher.
 //!
 //! `Uint<N>::icbrt` and `Int<N>::icbrt` delegate to [`dispatch`], which
-//! follows the canonical policy shape (see `docs/ARCHITECTURE.md` â†’
+//! follows the canonical policy shape (see `docs/ARCHITECTURE.md` →
 //! "Policy file structure"):
 //!
 //! 1. an [`Algorithm`] enum — the real icbrt algorithms, no `Default`
@@ -15,7 +15,7 @@
 //!    **exhaustive** `match algo` — no `_`, no panic.
 //!
 //! Because `select` is `const` and keyed only on the const generic `N`,
-//! the `const { â€¦ }` block folds per monomorphisation and the unchosen arm
+//! the `const { … }` block folds per monomorphisation and the unchosen arm
 //! is dead-arm-eliminated in release: each concrete `Uint<N>` compiles to a
 //! direct call to the chosen kernel, no runtime branch.
 //!
@@ -49,7 +49,7 @@ use crate::int::algos::icbrt::icbrt_newton::icbrt_newton as icbrt_newton_kernel;
 use crate::int::algos::icbrt::icbrt_schoolbook::icbrt_schoolbook as icbrt_schoolbook_kernel;
 use crate::int::types::Uint;
 
-// â”€â”€ 1. the real icbrt algorithms — NAMED, no `Default` â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── 1. the real icbrt algorithms — NAMED, no `Default` ───────────────
 
 /// The integer cube-root algorithms this policy chooses between. Variants
 /// are the CamelCase of each kernel fn's name minus the `icbrt_` function
@@ -68,7 +68,7 @@ enum Algorithm {
     Schoolbook,
 }
 
-// â”€â”€ 2. the verdict â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── 2. the verdict ────────────────────────────────────────────────────
 
 /// A settled algorithm, or "the value decides". The icbrt picker always
 /// returns `ByAlgorithm(Newton)`: one algorithm serves every `N`. `ByValue`
@@ -81,7 +81,7 @@ enum Select<const N: usize> {
     ByValue(fn(&Uint<N>) -> Algorithm),
 }
 
-// â”€â”€ 3. the matcher: const, keyed on `N`, total over the key â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── 3. the matcher: const, keyed on `N`, total over the key ──────────
 
 /// Pick the icbrt algorithm for storage limb count `N`. Total over the key;
 /// [`Algorithm::Newton`] wins at every `N` (the `icbrt_ab` A/B beats the
@@ -91,7 +91,7 @@ const fn select<const N: usize>() -> Select<N> {
     Select::ByAlgorithm(Algorithm::Newton)
 }
 
-// â”€â”€ algorithm fns â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── algorithm fns ─────────────────────────────────────────────────────
 
 /// Newton integer cube root for `Uint<N>` — serves every `N`.
 ///
@@ -121,7 +121,7 @@ pub(crate) fn icbrt_schoolbook_policy<const N: usize>(x: Uint<N>) -> Uint<N> {
     Uint::<N>::from_limbs(out)
 }
 
-// â”€â”€ 4. the dispatcher: fold the verdict, then dispatch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── 4. the dispatcher: fold the verdict, then dispatch ────────────────
 
 /// Integer cube-root dispatcher for `Uint<N>`.
 ///

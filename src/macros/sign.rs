@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Macro-generated sign-aware inherent methods (`abs`, `signum`,
 //! `is_positive`, `is_negative`) for the decimal widths.
 //!

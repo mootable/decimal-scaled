@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! The [`WidthLE`] trait — encodes "this storage type can losslessly
 //! widen to that target storage type".
 //!

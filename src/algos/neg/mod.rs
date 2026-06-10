@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Decimal negation algorithm family.
 //!
 //! One algorithm: [`neg_int_layer`] — a sign flip needs no rescaling. The

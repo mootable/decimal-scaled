@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Lossy (f64-bridge) powers methods for D38.
 //!
 //! Companion to `types/powers.rs`. The plain methods here are the

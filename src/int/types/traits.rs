@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! The `BigInt` trait — the single integer-layer surface.
 //!
 //! One trait carries everything the decimal kernels and the wide-tier

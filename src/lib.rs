@@ -1899,7 +1899,7 @@ pub use crate::types::widths::{
 };
 
 
-// D18 — 64-bit storage, scale 0..=18.
+// D18 — 64-bit storage, scale 0..=17 (v0.4.0 cap: MAX_SCALE = name - 1).
 pub use crate::types::widths::{
     D18, D18s0, D18s1, D18s2, D18s3, D18s4, D18s5, D18s6, D18s7, D18s8, D18s9, D18s10, D18s11,
     D18s12, D18s13, D18s14, D18s15, D18s16, D18s17,
@@ -1910,6 +1910,11 @@ pub use crate::types::widths::{
 // can name a decimal's storage type, e.g. for `from_bits` / `to_bits`. The
 // fixed-width aliases (`Int256`, …) are the same types at specific `N`.
 pub use crate::int::types::{Int, Uint};
+
+// Wide-tier scale aliases (D76 and up) are a CURATED convenience subset,
+// unlike the exhaustive D18/D38 lists above. Every scale in a tier's range
+// is still valid — write `D76<S>` (etc.) directly for scales without an
+// alias.
 
 // D76 — 256-bit storage, behind the `d76` / `wide` features.
 #[cfg(any(feature = "d76", feature = "wide"))]

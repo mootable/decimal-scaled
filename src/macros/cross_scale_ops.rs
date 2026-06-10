@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Macro-generated cross-scale / cross-width constructor + comparator
 //! methods (`mul_of`, `add_of`, `sub_of`, `div_of`, `rem_of`,
 //! `max_of`, `min_of`, `clamp_of`, `cmp_of`, `eq_of`, `ne_of`,

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Macro-generated `from_f64` / `to_f64` / `to_f32`
 //! for narrow decimal widths, with rounding-mode-aware variants.
 //!

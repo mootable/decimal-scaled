@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Trigonometric policy — the per-`(N, SCALE)` algorithm matchers.
 //!
 //! `D<Int<N>, SCALE>::sin_strict_with(mode)` (and the cos / tan / atan /

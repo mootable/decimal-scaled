@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Cross-width decimal comparison — now handled by a single generic
 //! impl, not per-pair macro expansion.
 //!

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Floating-point power policy — the per-(N, SCALE) algorithm matcher.
 //!
 //! `D<Int<N>, SCALE>::powf_strict_with(exp, mode)` delegates directly to

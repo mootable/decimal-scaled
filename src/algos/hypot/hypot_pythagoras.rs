@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `hypot_pythagoras` -- decimal hypotenuse via the int-tier hypot.
 //!
 //! For two `D<Int<N>, SCALE>` values with raw storages `a` and `b`, the

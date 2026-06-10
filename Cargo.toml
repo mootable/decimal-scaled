@@ -2,7 +2,7 @@
 name = "decimal-scaled"
 version = "0.5.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.89"
 license = "MIT OR Apache-2.0"
 description = "Const-generic base-10 fixed-point decimals (D18/D38/D76/D153/D307 and the half-width tiers up to D1232) with integer-only transcendentals correctly rounded to within 0.5 ULP — exact at the type's last representable place. Deterministic across every platform; no_std-friendly."
 repository = "https://github.com/mootable/decimal-scaled"
@@ -794,6 +794,8 @@ harness = false
 required-features = ["wide", "x-wide", "macros", "bench-alt"]
 
 [lints.rust]
+# The crate is 100% safe Rust; keep it that way.
+unsafe_code = "forbid"
 unused_variables = "allow"
 dead_code = "allow"
 

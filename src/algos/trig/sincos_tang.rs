@@ -28,8 +28,9 @@
 //!
 //! With `M = 512` the residual `|δ| ≤ π/4096 ≈ 7.7·10⁻⁴`, so the
 //! `sin(δ)` / `cos(δ)` Taylor series converge in ~6-8 terms each. The
-//! `(sin(c_j), cos(c_j))` table is memoised per thread per `(w, M)` by
-//! the tier's `Core` (one `sin_cos_fixed` per slot, paid once).
+//! `(sin(c_j), cos(c_j))` entries are baked binary fixed-point consts
+//! (`sincos_tang_table`); `C::sincos_table_entry` converts the one
+//! indexed slot to the working scale per lookup — no runtime table.
 //!
 //! ## Layering
 //!

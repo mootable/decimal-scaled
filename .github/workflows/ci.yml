@@ -16,7 +16,7 @@ name: "✅ ci (pre-merge gates)"
 #     intra-doc links thus reach `main` before anyone notices. This
 #     workflow runs the same `-D warnings` doc build pre-merge.
 #
-# Gates (must pass): tests, no_std, docs.
+# Gates (must pass): tests, golden, no_std, docs, msrv.
 # Informational (never fails the build): clippy.
 
 on:
@@ -80,15 +80,15 @@ jobs:
         # test failure surfaces without waiting behind the golden run.
         run: cargo test --features wide,x-wide,xx-wide,macros
 
-      - name: Default-feature build check
-        # The crate's tests are feature-on — most exercise the wide
-        # tiers (D57…D1232, gated behind wide/x-wide/xx-wide), so they
-        # don't compile under default features. Verify the default
-        # *lib* builds rather than run the wide-tier tests with the
-        # wrong feature set; the full-feature test gate above covers
-        # behaviour. (TODO(0.5.0): gate the wide-tier test files so a
-        # default `cargo test` can run the narrow-tier subset.)
-        run: cargo check
+      - name: Default-feature test suite (narrow tiers)
+        # The wide-tier test files are feature-gated — file-top
+        # `#![cfg(feature = ...)]` module gates plus Cargo.toml
+        # `required-features` on the targets that name every tier — so
+        # a plain default `cargo test` compiles and runs the narrow-tier
+        # (D9/D18/D38) subset. This verifies the default-feature
+        # consumer surface BEHAVES, not merely builds; before the test
+        # files were gated, only a `cargo check` was possible here.
+        run: cargo test
 
   # GATE: the golden suite, split out of `tests (gate)` so it runs in
   # PARALLEL with it, in RELEASE. Runs the `decimal-scale-test` gate —
@@ -197,6 +197,48 @@ jobs:
         run: cargo doc --no-deps --features wide,x-wide,xx-wide,macros
         env:
           RUSTDOCFLAGS: "-D warnings"
+
+  # GATE: the MSRV. Until this job nothing built with a pinned-old
+  # toolchain — the other jobs all run `dtolnay/rust-toolchain@stable`,
+  # so a newer-stdlib call or language feature passed CI green and only
+  # broke consumers holding the documented MSRV. That had already
+  # happened: the manifests declared `rust-version = "1.85"`, but the
+  # lib needs let-chains (stable since 1.88) and `_`-inferred const
+  # generic arguments as in `dispatch::<_, SCALE>` (stable since 1.89).
+  # 1.89 is the measured floor (1.88 fails, 1.89 builds both feature
+  # sets), so this job pins 1.89 and the manifests' `rust-version`
+  # must match it. `cargo check` (not `cargo test`) keeps the job
+  # cheap: type-checking the lib is what catches MSRV drift; behaviour
+  # is covered by the stable-toolchain gates above.
+  msrv:
+    name: msrv (gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain (MSRV 1.89)
+        uses: dtolnay/rust-toolchain@1.89
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-ci-msrv-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'macros/Cargo.toml') }}
+          restore-keys: |
+            cargo-ci-msrv-${{ runner.os }}-
+
+      - name: MSRV lib check (wide tiers + macros)
+        # Lib-only `cargo check` (no examples/benches), so no system
+        # libs are required and the job stays minutes-cheap.
+        run: cargo check --features wide,x-wide,xx-wide,macros
+
+      - name: MSRV lib check (default features)
+        run: cargo check
 
   # INFORMATIONAL: clippy on the lib. The lib currently emits ~214
   # pre-existing macro-generated warnings, so a `-D warnings` clippy

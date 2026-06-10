@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Bespoke `atan_strict` kernel slot for `D57<SCALE>` with
 //! `SCALE ∈ 44..=56`.
 //!

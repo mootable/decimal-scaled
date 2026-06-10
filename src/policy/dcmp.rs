@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Decimal comparison policy — the per-`(N, M, S1, S2)` algorithm matcher
 //! for `PartialOrd<D<Int<M>, S2>> for D<Int<N>, S1>` and `Ord for
 //! D<Int<N>, S>`.

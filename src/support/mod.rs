@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Cross-cutting plumbing: rounding modes, error types, diagnostics,
 //! text I/O, serde glue, bench-alt aliases.
 //!

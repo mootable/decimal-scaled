@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `add_int_layer` — decimal addition via the `Int<N>` layer.
 
 use crate::int::types::Int;

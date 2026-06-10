@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Type definitions, per-width aliases, and per-family method shells.
 //!
 //! This bucket holds the generic `D<S, SCALE>` newtype, the per-width

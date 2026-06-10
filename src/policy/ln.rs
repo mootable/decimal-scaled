@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Natural-logarithm policy — the per-(N, SCALE) algorithm matcher
 //! (plus the derived log2 / log10; arbitrary-base log lives in
 //! `policy::log`).

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Mul policy — the per-`(N, SCALE)` algorithm matcher for decimal
 //! multiplication.
 //!

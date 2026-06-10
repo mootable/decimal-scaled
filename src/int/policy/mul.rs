@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Multiply policy — the schoolbook-vs-Karatsuba algorithm matcher.
 //!
 //! Like division, the integer multiply choice keys on the **runtime

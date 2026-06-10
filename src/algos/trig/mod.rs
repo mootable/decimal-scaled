@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Trigonometric algorithm family.
 //!
 //! Narrow tier (D18 / D38) carries forward + inverse + atan2 on

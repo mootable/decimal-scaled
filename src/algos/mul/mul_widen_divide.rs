@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `mul_widen_divide` -- decimal multiplication by the widen-then-divide
 //! method, generic over the storage width `N` only.
 //!

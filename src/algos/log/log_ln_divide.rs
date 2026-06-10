@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `log_ln_divide` — arbitrary-base logarithm by the ratio of natural logs.
 //!
 //! `log(self, base) = ln(self) / ln(base)`. This module holds the narrow-tier

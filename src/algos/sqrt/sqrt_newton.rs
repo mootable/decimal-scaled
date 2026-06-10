@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `sqrt_newton` — Newton integer square root of `raw · 10^SCALE`, with a
 //! single round step, computed directly over `u64` limbs.
 //!

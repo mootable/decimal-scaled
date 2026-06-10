@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Macro-generated overflow-aware arithmetic variants for the decimal
 //! widths that use a *uniform* mul/div pattern (D18, and the wide
 //! tier D76 / D153 / D307).

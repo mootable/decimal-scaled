@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Mathematical constants (`pi`, `e`, and more).
 //!
 //! The [`DecimalConstants`] trait carries the public surface; a single

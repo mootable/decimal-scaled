@@ -2,8 +2,8 @@
 //!
 //! D38 has a dedicated [`Serialize`] / [`Deserialize`] pair plus the
 //! richer [`decimal_serde::DecimalVisitor`] used for `#[serde(with =
-//! "...")]` field annotations. The wide tiers (D76 / D153 / D307)
-//! use a slimmer implementation emitted by `decl_wide_serde!`: a
+//! "...")]` field annotations. Every wide tier (D57 through D1232)
+//! uses a slimmer implementation emitted by `decl_wide_serde!`: a
 //! decimal-string wire format for human-readable serializers and a
 //! little-endian limb-bytes wire format for binary serializers.
 //! Cross-tier wire-format parity is intentional — a D38 produced
@@ -609,7 +609,7 @@ mod tests {
     }
 }
 
-// ─── Wide-tier serde (D76 / D153 / D307) ────────────────────────────
+// ─── Wide-tier serde (D57 through D1232) ────────────────────────────
 //
 // The wide-tier wire format mirrors D38's: a base-10 integer string
 // of the raw storage value for human-readable serializers, and the
@@ -619,8 +619,8 @@ mod tests {
 // carry the >128-bit storage anyway.
 
 /// Emits `Serialize` / `Deserialize` for a wide-tier decimal type
-/// (D76 / D153 / D307). `$bytes_len` is `mem::size_of::<$Storage>()`
-/// (e.g. 32 for `Int256`).
+/// (D57 through D1232). `$bytes_len` is `mem::size_of::<$Storage>()`
+/// (e.g. 32 for `Int<4>`).
 #[cfg(feature = "_wide-support")]
 macro_rules! decl_wide_serde {
     ($Type:ident, $Storage:ty, $bytes_len:literal) => {

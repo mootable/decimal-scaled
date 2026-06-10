@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Umbrella `decl_decimal_full!` macro: emits the *common* per-width
 //! surface in one invocation, replacing ~15 individual `decl_*!` calls
 //! per type in `types/widths.rs`.

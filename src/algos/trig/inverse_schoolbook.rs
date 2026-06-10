@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Inverse-trig schoolbook reference kernels -- asin / acos / atan2.
 //!
 //! Naive textbook realisations of the inverse family, registered as an
