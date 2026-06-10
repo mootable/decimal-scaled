@@ -20,10 +20,13 @@
 //! the narrow `Fixed` kernel (`powf_series_2limb`, `St = Int<2>`) and the
 //! wide schoolbook kernel (`pow_schoolbook`, `St = C::Storage`).
 //!
-//! Returns `None` (defer to the composition) whenever the pin does not apply:
-//! a non-integer exponent, a non-integer base, `|n|` above the fast-path
-//! threshold, or a positive power that genuinely overflows storage (the
-//! composition then panics uniformly, per the overflow contract).
+//! Returns `None` (defer to the composition) ONLY when the pin cannot prove
+//! anything: a non-integer exponent, a non-integer base, or `|n|` above the
+//! fast-path threshold. A positive integer power that overflows storage is a
+//! PROOF of out-of-range and panics here directly, per the overflow contract
+//! — the composition's to-nearest approximation could otherwise be
+//! directed-rounded (Floor / Trunc) back inside the range at an out-by-one
+//! boundary.
 
 use crate::int::types::traits::BigInt;
 use crate::support::rounding::{should_bump, RoundingMode};
@@ -37,9 +40,9 @@ use crate::support::rounding::{should_bump, RoundingMode};
 ///
 /// Returns `None` to signal "this pin does not apply — defer to the
 /// `exp(n · ln b)` composition": a fractional base or exponent (the genuinely
-/// transcendental case), `|n|` past the threshold, or a positive power out of
-/// range. For `n < 0` the result is always in `(0, 1]` and so always
-/// representable.
+/// transcendental case) or `|n|` past the threshold. A positive power out of
+/// range PANICS here (the overflow is proof). For `n < 0` the result is
+/// always in `(0, 1]` and so always representable.
 #[inline]
 pub(crate) fn powi_exact_pin<St: BigInt, const SCALE: u32>(
     base: St,
@@ -82,15 +85,21 @@ pub(crate) fn powi_exact_pin<St: BigInt, const SCALE: u32>(
 
     if n > 0 {
         // `b^n · 10^SCALE` — an exact integer when it fits the decimal range.
-        // `checked_pow` / `checked_mul` reject a storage overflow; the
-        // explicit `> storage_max` guard rejects a value that fits the raw
-        // integer but exceeds the tier's decimal maximum. Either way `None`
-        // defers to the composition, which panics on the genuine overflow.
-        let p = bv.checked_pow(k)?;
-        let v = p.checked_mul(one_s)?;
-        if v > storage_max {
-            return None;
-        }
+        // A `checked_pow` / `checked_mul` overflow, or a value past
+        // `storage_max`, is PROOF the exact `b^n` exceeds the decimal range
+        // (integer `b >= 2`, `n > 0`: the power is monotone): panic per the
+        // overflow contract (debug AND release) rather than deferring to the
+        // `exp(n·ln b)` composition, whose to-nearest approximation can
+        // directed-round (Floor / Trunc) back INSIDE the range at an
+        // out-by-one boundary (the `exp2(127)` hair case: `2^127` at scale 0
+        // is `i128::MAX + 1`).
+        let v = bv
+            .checked_pow(k)
+            .and_then(|p| p.checked_mul(one_s))
+            .filter(|v| *v <= storage_max)
+            .unwrap_or_else(|| {
+                crate::support::diagnostics::overflow_panic_with_scale("powf kernel", SCALE)
+            });
         Some(v)
     } else {
         // `b^-k = 1 / b^k`, stored as `round(10^SCALE / b^k)` — a strictly
