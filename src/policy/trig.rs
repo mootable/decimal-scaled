@@ -1271,7 +1271,11 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
     pub(crate) fn policy_sin(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<3, SCALE>(&self.0) {
             forward::Algorithm::Series => match SCALE {
-                18..=22 => trig::sincos_tang_3limb_s18_22::sin_strict::<SCALE>(self.0, mode),
+                // Same narrow-GUARD reclaim as the D153/D307/D462 bands,
+                // through the shared directed-aware generic (Ziv escalation
+                // + the bounded-extremum adjust); the bespoke single-shot
+                // D57 slot kept only for tan. GUARD=8 per the band's probe.
+                18..=22 => trig::sincos_narrow::sin_narrow_with_taylor::<crate::types::widths::wide_trig_d57::Core, SCALE, 8>(self.0, mode),
                 _ => crate::algos::support::wide_trig_core::sin_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
             },
             forward::Algorithm::Tang => {
@@ -1289,7 +1293,9 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
     pub(crate) fn policy_cos(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<3, SCALE>(&self.0) {
             forward::Algorithm::Series => match SCALE {
-                18..=22 => trig::sincos_tang_3limb_s18_22::cos_strict::<SCALE>(self.0, mode),
+                // Shared directed-aware narrow-GUARD kernel — see the
+                // matching `policy_sin` arm above.
+                18..=22 => trig::sincos_narrow::cos_narrow_with_taylor::<crate::types::widths::wide_trig_d57::Core, SCALE, 8>(self.0, mode),
                 _ => crate::algos::support::wide_trig_core::cos_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
             },
             forward::Algorithm::Tang => {
