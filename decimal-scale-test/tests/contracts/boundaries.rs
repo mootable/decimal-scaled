@@ -529,3 +529,175 @@ mod from_edge_cases {
         assert_eq!(back.to_bits(), 123_456);
     }
 }
+
+#[cfg(all(
+    not(feature = "fast"),
+    feature = "wide",
+    not(any(
+        feature = "rounding-half-away-from-zero",
+        feature = "rounding-half-toward-zero",
+        feature = "rounding-trunc",
+        feature = "rounding-floor",
+        feature = "rounding-ceiling",
+    )),
+))]
+mod from_wide_strict_transcendentals {
+    //! Domain-panic preconditions on the wide strict transcendental surface
+    //! (plain and `_with` siblings) plus the negative-base `powf` contract,
+    //! moved from `tests/wide_strict_transcendentals.rs`. The golden gate
+    //! cannot carry these: its leads are filtered to each function's domain,
+    //! so the out-of-domain panic contract is pinned here.
+
+    use decimal_scaled::{D38, D76, RoundingMode};
+
+    fn lift(n: D38<6>) -> D76<6> {
+        n.into()
+    }
+
+    // ─── Domain panics ─────────────────────────────────────────────────────
+
+    #[test]
+    #[should_panic(expected = "ln: argument must be positive")]
+    fn d76_ln_zero_panics() {
+        let _ = D76::<6>::ZERO.ln_strict();
+    }
+
+    #[test]
+    #[should_panic(expected = "ln: argument must be positive")]
+    fn d76_ln_negative_panics() {
+        let _ = (-D76::<6>::ONE).ln_strict();
+    }
+
+    #[test]
+    #[should_panic(expected = "log: argument must be positive")]
+    fn d76_log_zero_panics() {
+        let _ = D76::<6>::ZERO.log_strict(D76::<6>::from(2));
+    }
+
+    #[test]
+    #[should_panic(expected = "log: base must be positive")]
+    fn d76_log_base_zero_panics() {
+        let one: D76<6> = D38::<6>::ONE.into();
+        let _ = one.log_strict(D76::<6>::ZERO);
+    }
+
+    #[test]
+    #[should_panic(expected = "log: base must not equal 1")]
+    fn d76_log_base_one_panics() {
+        let one: D76<6> = D38::<6>::ONE.into();
+        let _ = one.log_strict(one);
+    }
+
+    #[test]
+    #[should_panic(expected = "asin: argument out of domain")]
+    fn d76_asin_out_of_domain_panics() {
+        let _ = lift(D38::<6>::from(2)).asin_strict();
+    }
+
+    #[test]
+    #[should_panic(expected = "acos: argument out of domain")]
+    fn d76_acos_out_of_domain_panics() {
+        let _ = lift(D38::<6>::from(2)).acos_strict();
+    }
+
+    #[test]
+    #[should_panic(expected = "acosh: argument must be >= 1")]
+    fn d76_acosh_below_one_panics() {
+        let _ = D76::<6>::ZERO.acosh_strict();
+    }
+
+    #[test]
+    #[should_panic(expected = "atanh: argument out of domain")]
+    fn d76_atanh_at_boundary_panics() {
+        let _ = lift(D38::<6>::ONE).atanh_strict();
+    }
+
+    // ─── _with-mode domain panics ──────────────────────────────────────────
+    //
+    // Each *_strict_with sibling has its own assertion guards; we exercise
+    // every one so caller errors surface with the expected message even when
+    // a non-default rounding mode is in flight.
+
+    #[test]
+    #[should_panic(expected = "ln: argument must be positive")]
+    fn d76_ln_with_zero_panics() {
+        let _ = D76::<6>::ZERO.ln_strict_with(RoundingMode::HalfToEven);
+    }
+
+    #[test]
+    #[should_panic(expected = "asin: argument out of domain")]
+    fn d76_asin_with_oob_panics() {
+        let _ = lift(D38::<6>::from(2)).asin_strict_with(RoundingMode::HalfToEven);
+    }
+
+    #[test]
+    #[should_panic(expected = "log: argument must be positive")]
+    fn d76_log_strict_with_zero_panics() {
+        let _ = D76::<6>::ZERO.log_strict_with(lift(D38::<6>::from(2)), RoundingMode::HalfToEven);
+    }
+
+    #[test]
+    #[should_panic(expected = "log: base must be positive")]
+    fn d76_log_strict_with_base_zero_panics() {
+        let one: D76<6> = D38::<6>::ONE.into();
+        let _ = one.log_strict_with(D76::<6>::ZERO, RoundingMode::HalfToEven);
+    }
+
+    #[test]
+    #[should_panic(expected = "log: base must not equal 1")]
+    fn d76_log_strict_with_base_one_panics() {
+        let one: D76<6> = D38::<6>::ONE.into();
+        let _ = one.log_strict_with(one, RoundingMode::HalfToEven);
+    }
+
+    #[test]
+    #[should_panic(expected = "log2: argument must be positive")]
+    fn d76_log2_strict_with_zero_panics() {
+        let _ = D76::<6>::ZERO.log2_strict_with(RoundingMode::HalfToEven);
+    }
+
+    #[test]
+    #[should_panic(expected = "log10: argument must be positive")]
+    fn d76_log10_strict_with_zero_panics() {
+        let _ = D76::<6>::ZERO.log10_strict_with(RoundingMode::HalfToEven);
+    }
+
+    #[test]
+    #[should_panic(expected = "ln_agm: argument must be positive")]
+    fn d76_ln_agm_with_zero_panics() {
+        let _ = D76::<6>::ZERO.ln_strict_agm_with(RoundingMode::HalfToEven);
+    }
+
+    #[test]
+    #[should_panic(expected = "acos: argument out of domain")]
+    fn d76_acos_strict_with_oob_panics() {
+        let _ = lift(D38::<6>::from(2)).acos_strict_with(RoundingMode::HalfToEven);
+    }
+
+    #[test]
+    #[should_panic(expected = "acosh: argument must be >= 1")]
+    fn d76_acosh_strict_with_below_one_panics() {
+        let _ = D76::<6>::ZERO.acosh_strict_with(RoundingMode::HalfToEven);
+    }
+
+    #[test]
+    #[should_panic(expected = "atanh: argument out of domain")]
+    fn d76_atanh_strict_with_boundary_panics() {
+        let _ = lift(D38::<6>::ONE).atanh_strict_with(RoundingMode::HalfToEven);
+    }
+
+    // ─── Negative-base powf ────────────────────────────────────────────────
+    //
+    // A negative base is outside the strict `powf` domain and returns ZERO by
+    // contract; the golden oracle's powf domain is `base >= 0`, so this stays
+    // a pinned contract rather than a golden lead.
+
+    #[test]
+    fn d76_powf_negative_base_is_zero() {
+        let two = lift(D38::<6>::from(2));
+        assert_eq!(
+            lift(D38::<6>::from(-2)).powf_strict(two),
+            D76::<6>::ZERO
+        );
+    }
+}

@@ -4365,3 +4365,7 @@
 -0.1713465340446913332347119
 -0.1743603143598281906762157526
 0.6731182602380123286298875817
+// regression: strict-suite cross-witness inputs (retired wide_strict_transcendentals.rs - small-argument Taylor-residual band)
+0.33333333333333333333
+// regression: retired trig_extremum_directed.rs pin (argument hugging pi at the band upper edge - the never-resolvable extremum deviation sits past the work integer's probe reach)
+3.1415926535897932384626
