@@ -29,6 +29,13 @@ pub(crate) mod powers;
 #[cfg(any(not(feature = "fast"), feature = "std"))]
 pub(crate) mod trig;
 
+// `checked_*` siblings of the strict transcendental family — one
+// generic impl over `(N, SCALE)`. Gated like [`trig`]: the checked
+// shells delegate to the same strict surface (including the trig
+// family), which a `fast`-without-`std` build does not carry.
+#[cfg(any(not(feature = "fast"), feature = "std"))]
+pub(crate) mod checked_transcendentals;
+
 // Fast (f64-bridge) transcendental shells.
 pub(crate) mod log_exp_fast;
 pub(crate) mod powers_fast;
