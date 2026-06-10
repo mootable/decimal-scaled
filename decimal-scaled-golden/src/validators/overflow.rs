@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `OverflowValidator` — out-of-range results, judged against the declared
 //! `Overflow` policy.
 

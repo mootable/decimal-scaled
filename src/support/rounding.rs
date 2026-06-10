@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Rounding-mode selector for scale-narrowing operations.
 //!
 //! Passed to every `*_with(mode)` sibling on every decimal width —

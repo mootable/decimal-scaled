@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `serde` integration for every decimal width.
 //!
 //! D38 has a dedicated [`Serialize`] / [`Deserialize`] pair plus the

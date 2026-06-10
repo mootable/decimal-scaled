@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 use crate::rounding::RoundingMode;
 
 /// A parsed singular golden value: sign, integer digits, and fraction digits,

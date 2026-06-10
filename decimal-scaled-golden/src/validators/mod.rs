@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Validation. One pure `Validator` trait — context in, `Option<Outcome>` out; the
 //! runner collects the verdicts. Validators only ever see the subject's output as an
 //! erased `Computed<String>`; `Value` never reaches them. The three have DISJOINT

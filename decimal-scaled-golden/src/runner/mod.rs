@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! The runner: drives a subject over the golden cases. `GoldenRunner` is the trait;
 //! `SeriesRunner` / `ParallelRunner` differ only in scheduling. The shared per-cell
 //! work (`run_cell`, the input filter) lives here.

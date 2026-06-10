@@ -170,7 +170,7 @@ cd decimal-scaled-golden
 pip install -r oracle/requirements.txt        # mpmath (BSD)
 pip install -r oracle/requirements-extra.txt  # optional: sympy (BSD), python-flint / gmpy2 (LGPL)
 
-# regenerate (inputs harvested from the legacy per-tier files in ../tests/golden):
+# regenerate (inputs harvested from the .lead files in ../tests/lead):
 python -m oracle.generate generate --functions sqrt,exp,ln --out golden --precision 1233 --jobs 8
 
 # re-check the committed set against the validator oracles:

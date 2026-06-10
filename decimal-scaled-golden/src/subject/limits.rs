@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `Limits` — the representability envelope.
 
 /// The subject's representability envelope at a value: what it can hold and how

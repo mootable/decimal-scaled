@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `ParallelRunner` — runs a subject one function at a time, distributing that
 //! function's cases across `threads` named workers pulling from a shared atomic
 //! work-index. Per-execution work is identical to serial; processing one function

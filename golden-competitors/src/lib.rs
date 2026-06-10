@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Competitor decimal-library subjects for the `decimal-scaled-golden` harness.
 //!
 //! Each wraps a third-party decimal library as a `DecimalSubject`, declaring only

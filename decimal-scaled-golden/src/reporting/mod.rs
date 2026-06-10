@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Reporting. A `Reporter` consumes finished runs and renders named file outputs
 //! (IO at the edge); `TsvReporter` emits the flattened per-cell TSV. An
 //! `InlineReporter` instead streams a human-readable summary straight to a writer —

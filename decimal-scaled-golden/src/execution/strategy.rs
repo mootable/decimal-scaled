@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `ExecutionStrategy` — the typed→string boundary, plus the erase/catch helpers
 //! the strategies share. It parses, computes, catches the subject's panics, and
 //! erases the closure's `Computed<Value>` to a `Value`-free `Computed<String>`.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! The `Reporter` trait + the named-output artifact it produces.
 
 use crate::collector::RunCollector;

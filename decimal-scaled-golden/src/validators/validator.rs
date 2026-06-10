@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! The pure `Validator` trait + the `ValidationContext` it judges against.
 
 use crate::string_decimal::within;

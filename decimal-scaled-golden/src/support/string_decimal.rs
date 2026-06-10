@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 use std::cmp::Ordering;
 
 /// Strip leading zeros; "" or all-zeros => "0".

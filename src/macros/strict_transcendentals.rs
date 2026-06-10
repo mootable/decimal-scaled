@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Macro-generated strict-mode transcendentals for the narrow decimal
 //! widths (D18), by delegation to the D38 strict path.
 //!

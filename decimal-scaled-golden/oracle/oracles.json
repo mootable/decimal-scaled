@@ -1,4 +1,0 @@
-{
-  "generator": "mpmath",
-  "validators": ["flint"]
-}

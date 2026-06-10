@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `RunOnce` — compute once, no timing (correctness).
 
 use crate::collector::{ExecutionCollector, ExecutionResult};

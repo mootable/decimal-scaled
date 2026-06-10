@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //
 //! Moller-Granlund magic-number division for `D38` rescale operations.

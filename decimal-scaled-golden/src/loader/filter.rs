@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `FilterLoader` — a `CaseLoader` decorator that subsets another loader's cases.
 
 use std::borrow::Cow;

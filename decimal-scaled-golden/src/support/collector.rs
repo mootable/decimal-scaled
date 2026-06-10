@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! The collector tree the runner fills as it runs:
 //! `RunCollector` ⊃ `SubjectCollector` ⊃ `FunctionCollector` ⊃ `ExecutionCollector`.
 //!

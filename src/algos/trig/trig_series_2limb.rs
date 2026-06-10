@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Trigonometric series kernels — sin / cos / tan / atan / asin / acos /
 //! atan2 plus the hyperbolic family, evaluated on the 256-bit `Fixed`
 //! guard-digit intermediate via `sin_fixed` / `atan_fixed`.

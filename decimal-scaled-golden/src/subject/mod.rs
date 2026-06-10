@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! The library-facing surface: the `DecimalSubject` trait a decimal library
 //! implements to be tested, plus the value types the runner reasons about
 //! (`Capabilities`, `Limits`, `Computed`). No subject impls live in this crate.

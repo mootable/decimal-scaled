@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 /// The six rounding modes a decimal library may apply at a lossy step.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum RoundingMode {

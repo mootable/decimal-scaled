@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Width-generic guard-digit `exp` core (always compiled).
 //!
 //! The per-tier `$core` modules (emitted by

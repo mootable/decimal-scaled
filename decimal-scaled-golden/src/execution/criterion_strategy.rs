@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `CriterionStrategy` — bench each cell with **criterion** (warmup, sampling,
 //! outlier handling) instead of `Timed`'s naive averaging. Feature-gated (`bench`).
 //!

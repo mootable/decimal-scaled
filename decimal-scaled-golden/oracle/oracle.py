@@ -1,7 +1,8 @@
 """Oracle interface + registry.
 
 Available oracles (each usable as GENERATOR or VALIDATOR -- same interface; the
-role is set by config in oracles.json, not by the oracle):
+role is set by GENERATOR_POLICY / VALIDATOR_ORDER in generate.py, CLI-overridable,
+not by the oracle):
   mpmath  - BSD                          - full coverage   - default generator
   sympy   - BSD                          - cross-check     - validator (wraps mpmath: weak independence)
   flint   - LGPL (python-flint / Arb)    - independent     - strong validator [optional: pip install python-flint]

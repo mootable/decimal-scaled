@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `decimal-scaled-golden` — the golden values + validation/reporting harness.
 //! Library-agnostic: a library implements `subject::DecimalSubject` (one per
 //! `(width, scale)` cell) to be validated/benched against the singular golden
