@@ -843,7 +843,7 @@ members = [
     ".",
     "./macros",
     "./decimal-scaled-golden",
-    "./golden-ds",
+    "./decimal-scale-test",
     "./golden-competitors",
 ]
 resolver = "3"

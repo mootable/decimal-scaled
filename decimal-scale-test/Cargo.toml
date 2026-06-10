@@ -1,9 +1,9 @@
 [package]
-name = "golden-ds"
+name = "decimal-scale-test"
 version = "0.1.0"
 edition = "2021"
 publish = false
-description = "decimal-scaled subjects + run adapters for the decimal-scaled-golden harness"
+description = "decimal-scaled test subjects + filterable golden gate over the decimal-scaled-golden harness"
 license = "MIT OR Apache-2.0"
 
 # This crate exists to isolate the heavy full-surface golden run (88 (width,scale)

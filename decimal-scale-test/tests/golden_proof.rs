@@ -1,13 +1,13 @@
 //! End-to-end proof: drive decimal-scaled through the decimal-scaled-golden
-//! harness at D38<19> against the golden proof set. One subject (`DsSubject<D38<19>>`,
-//! the same adapter `golden_multi` enumerates); the full 88-cell run is `golden_multi`.
+//! harness at D38<19> against the golden proof set. One erased subject
+//! (`DsSubject::new(38, 19)`, the same adapter the full surface enumerates); the
+//! full 88-cell run is the `golden` gate.
 
-use decimal_scaled::D38;
 use decimal_scaled_golden::{
     ExecutionResult, FileLoader, Function, GoldenRunner, Outcome, OverflowValidator, ParallelRunner,
     RoundingValidator, RunOnce,
 };
-use golden_ds::{golden_dir, thread_count, DsSubject, GEN_PRECISION};
+use decimal_scale_test::{golden_dir, thread_count, DsSubject, GEN_PRECISION};
 
 #[test]
 fn golden_proof_d38_s19() {
@@ -24,7 +24,7 @@ fn golden_proof_d38_s19() {
         ],
     };
     let funcs = [Function::Sqrt, Function::Ln, Function::Sin];
-    let subject = runner.run(&DsSubject::<D38<19>>::new(38, 19), &funcs);
+    let subject = runner.run(&DsSubject::new(38, 19), &funcs);
 
     let mut pass = 0usize;
     let mut bad = 0usize;

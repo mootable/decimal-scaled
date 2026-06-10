@@ -27,7 +27,7 @@ pub use execution::{ExecutionStrategy, RunOnce, Timed};
 #[cfg(feature = "bench")]
 pub use execution::CriterionStrategy;
 pub use function::Function;
-pub use loader::{CaseLoader, FileLoader, GoldenCase, GoldenValue};
+pub use loader::{CaseLoader, FileLoader, FilterLoader, GoldenCase, GoldenValue};
 pub use outcome::Outcome;
 pub use reporting::{
     ConsoleReporter, InlineReporter, ReportArtifact, ReportOutput, Reporter, RunSummary, TsvReporter,

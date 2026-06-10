@@ -3,7 +3,7 @@
 //! Each wraps a third-party decimal library as a `DecimalSubject`, declaring only
 //! the functions that library actually provides (the harness skips the rest) and
 //! its representability envelope. Comparison runs pair these with the decimal-scaled
-//! subjects (via `golden-ds`) on the same golden set, so every competitor is graded
+//! subjects (via `decimal-scale-test`) on the same golden set, so every competitor is graded
 //! side-by-side against decimal-scaled. Competitor crates are dependencies of THIS
 //! crate only — never the core library or the agnostic harness.
 

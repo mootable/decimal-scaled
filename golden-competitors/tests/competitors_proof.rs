@@ -1,6 +1,6 @@
 //! Proof that each competitor adapter runs end-to-end against the golden set through
-//! the harness, graded down to the competitor's own precision. Unlike `golden_multi`
-//! this is NOT a 0-bad gate — a competitor is *expected* to mis-round many values
+//! the harness, graded down to the competitor's own precision. Unlike the `golden`
+//! gate this is NOT a 0-bad gate — a competitor is *expected* to mis-round many values
 //! (that is the comparison); we only assert each computes a meaningful share
 //! correctly, and print the pass/skip/bad split so the contrast with decimal-scaled
 //! (0 bad across the whole surface) is visible.
@@ -12,7 +12,7 @@ use decimal_scaled_golden::{
 use golden_competitors::{
     BigDecimalSubject, DashuFloat, DecimalRsSubject, FastNum, GMath, F64, RustDecimal,
 };
-use golden_ds::{golden_dir, thread_count, FUNCS, GEN_PRECISION};
+use decimal_scale_test::{golden_dir, thread_count, FUNCS, GEN_PRECISION};
 
 use Function::*;
 

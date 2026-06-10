@@ -3,9 +3,11 @@
 //! (parsing is its private detail); `GoldenValue` is the parsed golden number.
 
 mod file;
+mod filter;
 mod loader;
 pub mod value;
 
 pub use file::FileLoader;
+pub use filter::FilterLoader;
 pub use loader::{CaseLoader, GoldenCase};
 pub use value::GoldenValue;
