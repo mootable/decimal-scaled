@@ -15,21 +15,21 @@ exclude_docs: |
   _data/
   *.draft
 
-# Source files in docs/ link out to the broader repo tree
-# (benches/, examples/, macros/, src/, root README) using
-# relative paths so the same files render correctly when
-# viewed directly on GitHub. Those targets aren't part of the
-# MkDocs site, so MkDocs would normally flag them as broken
-# under --strict. Demote out-of-tree link warnings to "ignore"
-# so the build still passes — real broken links inside docs/
-# still surface via the nav and absolute-link checks.
+# Links out of the docs tree (src/, benches/, macros/, root README,
+# LICENSE-THIRD-PARTY, ...) use absolute GitHub URLs, which render
+# correctly both on the published site and when the same file is
+# viewed on GitHub — including the staged root pages (ROADMAP,
+# CHANGELOG, ALGORITHMS, CONTRIBUTORS, SECURITY). That leaves every
+# remaining relative link pointing inside the site, so unresolved
+# relative links are real breakage: keep links.not_found at "warn"
+# (fatal under the CI --strict build).
 validation:
   nav:
     omitted_files: warn
     not_found: warn
     absolute_links: warn
   links:
-    not_found: ignore
+    not_found: warn
     absolute_links: ignore
     unrecognized_links: ignore
 
