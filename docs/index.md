@@ -34,17 +34,23 @@ Const-generic base-10 fixed-point decimals — twelve widths from **D18 to D1232
 
     [:octicons-arrow-right-24: getting-started.md](getting-started.md)
 
-- :material-book-open-page-variant: **Usage guides**
+- :material-book-open-page-variant: **Reference**
 
-    Per-topic deep-dives: widths, scales, strict-vs-fast routing, rounding, macros, Cargo features.
+    Per-topic reference pages: widths, rounding, conversions, serde, cross-scale operations, glossary.
 
-    [:octicons-arrow-right-24: widths.md](widths.md)
+    [:octicons-arrow-right-24: reference.md](reference.md)
 
-- :material-chart-line: **Benchmarks**
+- :material-chart-line: **Benchmarks & precision**
 
-    Per-width speed tables plus the §5 like-for-like library comparison vs the top crates.io peers.
+    Per-width speed tables plus the like-for-like library comparison vs the top crates.io peers.
 
     [:octicons-arrow-right-24: benchmarks.md](benchmarks.md)
+
+- :material-check-decagram: **Correctness, proven**
+
+    The four-layer validation story: golden oracle tables asserted bit-exact, for every rounding mode, across every shipped width.
+
+    [:octicons-arrow-right-24: precision-testing.md](precision-testing.md)
 
 - :material-code-tags: **API reference**
 
@@ -58,16 +64,11 @@ Const-generic base-10 fixed-point decimals — twelve widths from **D18 to D1232
 
     [:octicons-arrow-right-24: ALGORITHMS.md](ALGORITHMS.md)
 
-- :material-map: **Roadmap**
+- :material-map: **Project**
 
-    The wide-tier `÷ 10^SCALE`, `mul`, and transcendental-throughput gaps and the planned algorithmic fix per item.
+    Where the crate is heading, what changed in every release, and how to contribute.
 
-    [:octicons-arrow-right-24: ROADMAP.md](ROADMAP.md)
-
-- :material-history: **Changelog**
-
-    What changed in every release.
-
+    [:octicons-arrow-right-24: ROADMAP.md](ROADMAP.md) ·
     [:octicons-arrow-right-24: CHANGELOG.md](CHANGELOG.md)
 
 </div>

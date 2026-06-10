@@ -98,9 +98,12 @@ assert_eq!((x * y).to_bits(), 3150i128);   // 31.50  (rescaled by 10^SCALE)
 assert_eq!((x / y).to_bits(),  350i128);   //  3.50
 ```
 
-Overflow follows Rust's integer convention: debug builds panic, release
-builds wrap. For explicit control there is the full
-`checked_* / wrapping_* / saturating_* / overflowing_*` family:
+The default operators panic on overflow — in debug *and* release
+builds, identically at every width and scale. A fixed-width decimal
+has no infinity or NaN to absorb an out-of-range result, and silently
+returning a wrapped or saturated value would be a wrong number with no
+signal, so the default fails loudly. For explicit control there is the
+full `checked_* / wrapping_* / saturating_* / overflowing_*` family:
 
 ```rust
 # use decimal_scaled::D38s2;

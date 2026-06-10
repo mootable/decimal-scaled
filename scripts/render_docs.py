@@ -115,7 +115,7 @@ def number_word(n: int) -> str:
 
 
 def render_widths_table() -> str:
-    """The full thirteen-row tier table for docs/widths.md.
+    """The full tier table (one row per tiers.json entry) for docs/widths.md.
 
     `MAX_SCALE` is derived as `digits - 1` (the `MAX_SCALE = N - 1` rule)
     rather than stored, so the column can never drift from the digit

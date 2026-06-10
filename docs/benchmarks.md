@@ -8,7 +8,7 @@ decimal width is exercised at five scales — the per-tier set
 `SCALE`) — so the reader can see how cost scales with both storage
 width and `SCALE`.
 
-The benches live in [`benches/`](../benches/) and run under
+The benches live in [`benches/`](https://github.com/mootable/decimal-scaled/tree/main/benches/) and run under
 [criterion](https://docs.rs/criterion/). The baseline crates
 (`bnum`, `ruint`, `rust_decimal`, `fixed`, `i256`) are
 **dev-dependencies only** - they are never compiled into a normal
@@ -144,11 +144,11 @@ parentheses. `0 (0)` means correctly rounded: the stored value is
 bit-exact under that crate's reported mode.
 
 The tables below are **generated directly from the committed shootout
-result files** in [`results/precision/*.tsv`](../results/precision/)
+result files** in [`results/precision/*.tsv`](https://github.com/mootable/decimal-scaled/tree/main/results/precision/)
 — one TSV per library, produced by
-[`benches/lib_cmp_precision.rs`](../benches/lib_cmp_precision.rs) and
+[`benches/lib_cmp_precision.rs`](https://github.com/mootable/decimal-scaled/blob/main/benches/lib_cmp_precision.rs) and
 rendered to markdown by
-[`scripts/render_precision_table.py`](../scripts/render_precision_table.py).
+[`scripts/render_precision_table.py`](https://github.com/mootable/decimal-scaled/blob/main/scripts/render_precision_table.py).
 Every cell traces back to exactly one TSV row; nothing here is
 hand-typed. Regenerate with:
 
@@ -248,7 +248,7 @@ surface.
 
 The 0.4.4 precision-hole closure changed the rounding path, so its
 throughput cost was measured directly in
-[`benches/prec_fix_impact.rs`](../benches/prec_fix_impact.rs):
+[`benches/prec_fix_impact.rs`](https://github.com/mootable/decimal-scaled/blob/main/benches/prec_fix_impact.rs):
 
 - **Default / nearest path (`HalfToEven`):** flat versus 0.4.3 — no
   measurable regression on the common case.
@@ -771,7 +771,7 @@ then look at the per-width charts below to see what cost you'd pay.
 > standing example), we say so with the numbers attached. If
 > you maintain one of the libraries below and disagree with the
 > analysis, please review
-> [`benches/library_comparison.rs`](../benches/library_comparison.rs)
+> [`benches/library_comparison.rs`](https://github.com/mootable/decimal-scaled/blob/main/benches/library_comparison.rs)
 > and open a PR — we'll re-run the bench, refresh the tables,
 > and credit the fix.
 

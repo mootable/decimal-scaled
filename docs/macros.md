@@ -12,7 +12,7 @@ the 128-bit tier; everything below applies identically to the other
 entry points (substitute `MAX_SCALE` per-width). The full
 specification - including radix-prefix integers and the curated
 per-scale wrappers (`d38s12!`, `d18s6!`, …) - lives in
-[`macros/README.md`](../macros/README.md).
+[`macros/README.md`](https://github.com/mootable/decimal-scaled/blob/main/macros/README.md).
 
 Enable the macros with the `macros` feature (off by default):
 
@@ -135,4 +135,4 @@ operation is written once.
 The discipline: anything uniform across widths lives in a macro;
 anything genuinely width-specific (e.g. `D38`'s hand-rolled
 `mg_divide` multiply/divide path) stays hand-coded. See
-[`macros/README.md`](../macros/README.md) for the full specification.
+[`macros/README.md`](https://github.com/mootable/decimal-scaled/blob/main/macros/README.md) for the full specification.

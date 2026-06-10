@@ -1,6 +1,6 @@
 # Preview the MkDocs Material documentation site locally, exactly as the `docs.yml`
 # workflow builds it: fill the single-sourced generated regions (scripts/render_docs.py),
-# stage the four root pages the nav references under docs/ (MkDocs only reads docs/), then
+# stage the root pages the nav references under docs/ (MkDocs only reads docs/), then
 # serve (live, auto-reloading) or build a static site. The staged copies are build artifacts
 # and are removed again on exit, so the working tree stays clean.
 #
@@ -22,8 +22,10 @@ param(
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 $docs = Join-Path $repo 'docs'
-# Root pages the nav pulls in; MkDocs reads only under docs/, so copy them in for the build.
-$nav = 'ROADMAP.md', 'CHANGELOG.md', 'ALGORITHMS.md', 'CONTRIBUTORS.md'
+# Root pages the nav pulls in; MkDocs reads only under docs/, so copy them in for the
+# build. Keep in sync with the staging step in .github/workflows/docs.yml (the only
+# other copy of this list).
+$nav = 'ROADMAP.md', 'CHANGELOG.md', 'ALGORITHMS.md', 'CONTRIBUTORS.md', 'SECURITY.md'
 
 # Resolve how to invoke mkdocs: prefer the console script on PATH, else fall back to
 # `python -m mkdocs` (on Windows pip often installs the Scripts dir off PATH).

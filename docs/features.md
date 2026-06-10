@@ -11,7 +11,7 @@ decimal-scaled = { version = "0.5", default-features = false, features = ["alloc
 |---|---|---|
 | `std` | yes | The `f64`-bridge transcendentals (trig, log/exp, sqrt, …) and `from_f64` constructors. Pulls in `alloc`. |
 | `alloc` | yes | `Display::to_string` and `FromStr` on `no_std`. Required — targets without `alloc` are not supported. |
-| `serde` | yes | `Serialize` / `Deserialize` via `serde_helpers` (canonical-string form). |
+| `serde` | yes | `Serialize` / `Deserialize` via `serde_helpers` — raw-storage string wire format (see [Serde](serde.md)). |
 | `strict` | **yes** | Marks the build as on the strict path: plain `sqrt` / `ln` / etc. dispatch to the integer-only ≤ 0.5 ULP `*_strict` methods. `no_std`-friendly. Strict is *also* the dispatch when no feature is set at all — this feature mainly signals intent and survives a transitive `fast` flip from a downstream crate (which still resolves to strict). See [strict mode](strict-mode.md). |
 | `macros` | no | The `d38!` / `d76!` / etc. compile-time literal macros. See [the macro guide](macros.md). |
 | `fast` | no | Opt out of strict dispatch: plain methods forward to the f64 bridge for speed at the cost of platform-libm-dependent ≈ 16-digit precision. **Only takes effect when `strict` is NOT enabled.** Three-step opt-out: `default-features = false` + add `fast` + `std` + DON'T re-add `strict`. Both `*_strict` and `*_fast` named methods stay available regardless. |
@@ -80,7 +80,7 @@ across every wider tier pair. Every adjacent pair in the ladder has
 | Feature | Enables |
 |---|---|
 | `experimental-floats` | `f16` / `f128` entry points on the float bridge (`from_f16`, `to_f128`, …). Requires a nightly toolchain. |
-| `cross-scale-ops` | Auto-inferred cross-scale free functions under `decimal_scaled::cross` (`cross::mul(a, b)` etc.) via `generic_const_exprs`. Requires a nightly toolchain. The stable [`D{N}<S>::mul_of(a, b)`](cross-scale.md#layer-1---stable-explicit-target) explicit-target form is available without this feature. |
+| `cross-scale-ops` | Auto-inferred cross-scale free functions under `decimal_scaled::cross` (`cross::mul(a, b)` etc.) via `generic_const_exprs`. Requires a nightly toolchain. The stable [`D{N}<S>::mul_of(a, b)`](cross-scale.md#layer-1-stable-explicit-target) explicit-target form is available without this feature. |
 
 ## Common configurations
 
