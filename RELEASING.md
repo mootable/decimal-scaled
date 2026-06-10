@@ -162,14 +162,46 @@ to the release branch. Pull the branch after both runs land. The §4
 prose and §5 precision tables are still maintained by hand as below.
 
 If a run's regenerate job is skipped or you need a manual rebuild, the
-same steps run locally against a downloaded artifact set:
+push-button refresher runs the whole download → ingest → render →
+drift-check chain in one command:
+
+```sh
+# Discover the latest successful bench/precision artifacts on the
+# branch, refresh docs/benchmarks.md + results/precision/*.tsv, render
+# the GENERATED regions, verify the docs-drift check, and list the
+# changed files for review. Never commits. `--figures` additionally
+# re-renders the §5 comparison charts (a cargo release build).
+python scripts/release_docs_refresh.py --figures
+
+# Preview the plan (with the resolved run IDs) without touching files:
+python scripts/release_docs_refresh.py --dry-run --figures
+```
+
+Exit code 2 means "refreshed, changes left in the tree for review";
+review and commit them yourself. The same refresh runs as a CI job —
+dispatch `pre-release-docs.yml` on the release branch; it uploads the
+refreshed files as an artifact and opens a **draft PR** into the branch
+when anything changed.
+
+<details>
+<summary>Manual fallback — the individual steps the script automates</summary>
 
 ```sh
 gh run download <run-id> --dir bench-artifacts   # criterion-*-D*/ subdirs
 python scripts/full_matrix_ingest.py \
     --artifacts bench-artifacts --fill            # criterion JSON -> docs/benchmarks.md §1–§3
+# precision: download `lib-cmp-precision-results` from the latest
+# successful lib-cmp-precision run and copy its *.tsv files over
+# results/precision/
+python scripts/lib_cmp_ingest.py \
+    --artifacts bench-artifacts \
+    --existing target/medians.tsv --out target/medians.tsv
 cargo run --release --example chart_gen           # §5 figures -> docs/figures/library_comparison/*.png
+python scripts/render_docs.py                      # GENERATED regions
+python scripts/render_docs.py --check              # the docs-drift gate's check
 ```
+
+</details>
 
 - Update the "Bench machine … vX.Y.Z full_matrix sweep" provenance note
   in `benchmarks.md` to the new version and date.
