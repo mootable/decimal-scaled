@@ -6,10 +6,40 @@ publish = false
 description = "decimal-scaled test subjects + filterable golden gate over the decimal-scaled-golden harness"
 license = "MIT OR Apache-2.0"
 
-# This crate exists to isolate the heavy full-surface golden run (88 (width,scale)
-# cells × every strict transcendental ≈ thousands of monomorphisations) from the
-# core library's `cargo test`. The wide tiers are always on — the crate's whole
-# purpose is the wide gate.
+# This crate isolates the heavy full-surface golden run (every band-edge
+# (width,scale) cell x every strict transcendental = thousands of
+# monomorphisations) from the core library's `cargo test`, and hosts the
+# consolidated integration suite (10.11). Every root-crate feature is passed
+# through 1:1 so the suite runs under any feature set — including the
+# default-feature narrow build; the golden gate target pins its wide-tier
+# requirement via `required-features` below instead of hardcoding it on the
+# dependency line.
 [dependencies]
-decimal-scaled = { path = "..", features = ["wide", "x-wide", "xx-wide"] }
+decimal-scaled = { path = "..", default-features = false }
 decimal-scaled-golden = { path = "../decimal-scaled-golden" }
+
+[features]
+default  = ["std"]
+std      = ["decimal-scaled/std"]
+alloc    = ["decimal-scaled/alloc"]
+wide     = ["decimal-scaled/wide"]
+x-wide   = ["decimal-scaled/x-wide"]
+xx-wide  = ["decimal-scaled/xx-wide"]
+macros   = ["decimal-scaled/macros"]
+serde    = ["decimal-scaled/serde"]
+dyn      = ["decimal-scaled/dyn"]
+strict   = ["decimal-scaled/strict"]
+fast     = ["decimal-scaled/fast"]
+cross-scale-ops = ["decimal-scaled/cross-scale-ops"]
+# Compile-time default-RoundingMode selectors, mirrored from the root crate
+# so the def-rnd-gated test files keep their `#![cfg]` guards meaningful here.
+rounding-half-away-from-zero = ["decimal-scaled/rounding-half-away-from-zero"]
+rounding-half-toward-zero = ["decimal-scaled/rounding-half-toward-zero"]
+rounding-trunc = ["decimal-scaled/rounding-trunc"]
+rounding-floor = ["decimal-scaled/rounding-floor"]
+rounding-ceiling = ["decimal-scaled/rounding-ceiling"]
+
+# The full-surface golden gate is always a full-width run.
+[[test]]
+name = "golden"
+required-features = ["wide", "x-wide", "xx-wide"]
