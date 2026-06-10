@@ -90,7 +90,7 @@ fast = ["std"]
 bench-alt = []
 # Gates the heavy `ulp_strict_golden` mpmath-oracle suite (a `[[test]]`
 # `required-features`). OFF in the `tests (gate)` CI job so it stays fast;
-# ON in the dedicated `golden (gate)` job + precision.yml (run in release).
+# ON only for local/on-demand runs of the legacy suite (no workflow passes it).
 # A no-op feature — it only toggles whether that test target compiles/runs.
 golden = []
 # Compile-time selector for the default RoundingMode used by the
@@ -314,7 +314,7 @@ required-features = ["wide"]
 name = "ulp_strict_golden"
 # `golden` gates this heavy suite OUT of the `tests (gate)` CI job (which
 # does NOT pass `golden`) so that job stays fast (builds-all + the quick
-# suite); the dedicated `golden (gate)` CI job + precision.yml pass `golden`
+# suite); no CI workflow passes `golden` any more — the striped golden fleet
 # to build and run it (in release). Local: add `,golden` to run it.
 required-features = ["wide", "x-wide", "xx-wide", "golden"]
 

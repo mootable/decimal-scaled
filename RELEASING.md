@@ -53,9 +53,11 @@ the rest are **manual** and must be verified by hand before merge.
 - **ci (pre-merge gates)** — `ci.yml`, on every PR **and** push to
   `main` / `release/*`: `tests (gate)` (the full `cargo test` for the
   root crate and `decimal-scale-test`, widest and default feature
-  sets), `golden (gate)` (the full-surface golden run in release —
-  every band-edge `(width, scale)` cell, **all six rounding modes**,
-  row-sampled per push; 0 bad / 0 panic), plus `no_std`, `docs`
+  sets), the `golden-quick` stripe fleet (the full-surface golden run
+  in release — every band-edge `(width, scale)` cell, every row,
+  default mode, blocking; the `golden-comprehensive` fleet covers
+  **all six rounding modes** per push as a non-required check;
+  0 bad / 0 panic), plus `no_std`, `docs`
   (rustdoc `-D warnings`), and `msrv`. The precision guarantee is
   *enforced here, not assumed* — a kernel that rounds wrong turns the
   PR red.
@@ -259,7 +261,7 @@ gh pr create --base main --head release/<version> \
   (`.github/PULL_REQUEST_TEMPLATE/release.md`) — work through every box.
 - All merges into `main` go through a **PR** (branch-protection
   practice) — never push to `main` directly.
-- The PR must pass CI: the `ci.yml` gates (tests, golden, no_std,
+- The PR must pass CI: the `ci.yml` gates (tests, golden-quick + splice, no_std,
   docs, msrv), docs-drift, CodSpeed, and cargo-audit.
 - Review for: precision gate green, benchmarks refreshed, CHANGELOG and
   docs updated, version bumped.

@@ -232,15 +232,14 @@ relevant tier) and iterate against it directly.
 ## CI gate
 
 [`/.github/workflows/ci.yml`](https://github.com/mootable/decimal-scaled/blob/main/.github/workflows/ci.yml)
-enforces the contract on every PR and push. Its `golden (gate)` job
-runs the Layer-1 full-surface gate in release across all six rounding
-modes (row-sampled via `GOLDEN_SAMPLE` for per-push latency, plus
-each file's edge lines); the `tests (gate)` job runs the full
-`cargo test` — which includes the Layer-2 cross-witness suites and
-the Layer-4 proptest fuzz. The unsampled every-row deep pass is the
-dispatch-only
-[`golden (comprehensive)`](https://github.com/mootable/decimal-scaled/blob/main/.github/workflows/golden-comprehensive.yml)
-workflow. A failed correctness check blocks merge full stop — there
+enforces the contract on every PR and push. Its `golden-quick` stripe
+fleet runs the Layer-1 full-surface gate in release under the default
+rounding mode — every golden row, partitioned across parallel stripes
+(`GOLDEN_STRIPE`), nothing sampled away — and blocks the merge; the
+`golden-comprehensive` fleet repeats the full surface across all six
+rounding modes on every push as a non-blocking advisory check. The
+`tests (gate)` job runs the full `cargo test` — which includes the
+Layer-2 cross-witness suites and the Layer-4 proptest fuzz. A failed correctness check blocks merge full stop — there
 is no reviewer override.
 
 If your kernel change fails the gate: the contract is fixed at

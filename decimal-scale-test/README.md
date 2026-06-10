@@ -82,21 +82,20 @@ GOLDEN_WIDTHS=924,1232 GOLDEN_MODES=ceiling GOLDEN_FUNCS=exp,cosh GOLDEN_SAMPLE=
 
 ## CI wiring
 
-- **Per push** — the `golden (gate)` job in
-  [`ci.yml`](../.github/workflows/ci.yml) runs `golden_all_modes` in release
-  with `GOLDEN_SAMPLE=10` (~1-in-10 rows plus each file's edge lines), so all
-  six modes fit per-push latency. It runs in parallel with the regular test
-  job.
-- **On demand** — the
-  [`golden (comprehensive)`](../.github/workflows/golden-comprehensive.yml)
-  workflow (`workflow_dispatch` only) runs the same gate **unsampled**: every
-  golden row, every cell, all six modes — a multi-hour deep pass in its own
-  concurrency queue. Its optional `funcs` / `widths` inputs map onto
-  `GOLDEN_FUNCS` / `GOLDEN_WIDTHS` to narrow the sweep.
-- **Striped fleets** — `GOLDEN_STRIPE=k/n` is the building block for running
-  the **full** (unsampled) sweep as `n` parallel jobs: each job takes one
-  stripe of the row partition, writes its per-cell TSV and summary to
-  `GOLDEN_REPORT_DIR`, and uploads that directory as its artifact; an
-  aggregate step downloads every stripe and splices the TSVs back into the
-  combined surface report. Because the stripes are a partition, the fleet's
-  union is byte-for-byte the same coverage as one unsampled run.
+- **Per push (blocking)** — [`ci.yml`](../.github/workflows/ci.yml)'s
+  `golden-build` job compiles this crate's gate exe once in release and stages
+  just the binary; the `golden-quick` matrix then runs `golden_default`
+  (half-to-even) over the **full** row set as `STRIPE_COUNT` parallel stripes
+  (`GOLDEN_STRIPE=k/n` — a disjoint partition, nothing sampled away). Each
+  stripe posts its `summary.txt` to its job step-summary and uploads its
+  `GOLDEN_REPORT_DIR` mini report the moment it finishes; the
+  `golden-quick-splice` job recombines the stripes in order into the combined
+  surface artifact and fails if any stripe went missing.
+- **Per push (advisory)** — `golden-comprehensive` runs the same stripe fleet
+  across **all six rounding modes** (`golden_all_modes`), with its own splice.
+  It is not a required check: a red here means roll the push back or bisect,
+  never block the quick-gate merge loop.
+- **Tuning** — the stripe modulus is the single `STRIPE_COUNT` env at the top
+  of `ci.yml`; rebalance it from the per-stripe timings in the splice summary.
+  Because the stripes are a partition, the fleet's union is byte-for-byte the
+  same coverage as one unsharded run.
