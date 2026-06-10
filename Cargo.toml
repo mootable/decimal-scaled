@@ -50,7 +50,10 @@ rustdoc-args = ["--cfg", "docsrs"]
 # That gives ~16 decimal digits of platform-libm precision rather
 # than the deterministic 0.5 ULP strict path.
 default = ["std", "serde", "strict", "exact-scratch"]
-std = ["alloc"]
+# `std` requires `exact-scratch`: the std build's kernels assume the exact
+# per-N scratch sizing; a std build without it is NOT a supported
+# configuration (working-scale arithmetic can outgrow the blanket scratch).
+std = ["alloc", "exact-scratch"]
 alloc = []
 serde = ["dep:serde"]
 macros = ["dep:decimal_scaled_macros"]
