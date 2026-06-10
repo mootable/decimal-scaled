@@ -1,11 +1,14 @@
 # decimal-scale-test
 
 The `decimal-scaled` subjects for the
-[`decimal-scaled-golden`](../decimal-scaled-golden/README.md) harness, plus the
-filterable full-surface golden gate. The crate exists to isolate the heavy
-full-surface run (88 band-edge `(width, scale)` cells × every strict function ×
-six rounding modes) from the core library's `cargo test`; the wide tiers
-(`wide`, `x-wide`, `xx-wide`) are always on here.
+[`decimal-scaled-golden`](../decimal-scaled-golden/README.md) harness, the
+filterable full-surface golden gate, and the consolidated integration suite
+(`tests/api/`, `tests/contracts/`, `tests/regressions/`) migrated out of the
+root crate. The crate exists to isolate the heavy full-surface run (88
+band-edge `(width, scale)` cells × every strict function × six rounding modes)
+from the core library's `cargo test`; its features mirror the root crate's as
+passthroughs (default = the root's default set), and the golden gate pins its
+wide tiers (`wide`, `x-wide`, `xx-wide`) via `required-features`.
 
 ## The erased subject
 
@@ -31,21 +34,26 @@ them; run them explicitly:
 
 ```
 # default-mode gate (half-to-even, every cell):
-cargo test -p decimal-scale-test --release --test golden golden_default -- --ignored --nocapture
+cargo test -p decimal-scale-test --release --features wide,x-wide,xx-wide --test golden golden_default -- --ignored --nocapture
 
 # all six rounding modes (directed rounding shows regressions the default hides):
-cargo test -p decimal-scale-test --release --test golden golden_all_modes -- --ignored --nocapture
+cargo test -p decimal-scale-test --release --features wide,x-wide,xx-wide --test golden golden_all_modes -- --ignored --nocapture
 
 # the single-cell end-to-end proof (D38<19>, not ignored):
 cargo test -p decimal-scale-test --release --test golden_proof
 ```
 
+The crate's features mirror the root crate's, so the `golden` target pins its
+wide tiers via `required-features` — pass `--features wide,x-wide,xx-wide`
+explicitly (a plain default build covers only the narrow tiers).
+
 A gate passes only at **0 bad / 0 panic** (and at least one `Pass`).
 
-### `GOLDEN_*` env filters
+### `GOLDEN_*` env variables
 
 Every axis of the sweep is filterable from the command line (see `Filter` in
-`src/lib.rs`); an unset or empty variable means "all":
+`src/lib.rs`); an unset or empty variable means "all". The last three rows
+control execution and reporting rather than filtering:
 
 | Variable | Meaning | Example |
 | --- | --- | --- |
@@ -53,15 +61,23 @@ Every axis of the sweep is filterable from the command line (see `Filter` in
 | `GOLDEN_SCALES` | subset the cell scales | `GOLDEN_SCALES=0,19` |
 | `GOLDEN_MODES` | subset the rounding modes (aliases accepted: `ceil`, `bankers`, `half-away`, …) | `GOLDEN_MODES=ceiling,floor` |
 | `GOLDEN_FUNCS` | subset the functions (golden-file names) | `GOLDEN_FUNCS=exp,cosh` |
-| `GOLDEN_SAMPLE` | keep ~1-in-N golden rows, plus each file's first lines (the magnitude edges) | `GOLDEN_SAMPLE=50` |
+| `GOLDEN_SAMPLE` | keep ~1-in-N golden rows, plus each file's first lines (the magnitude edges) — a **subset** for local iteration | `GOLDEN_SAMPLE=50` |
+| `GOLDEN_STRIPE` | keep rows where `line % n == k` — stripe `k` of a disjoint `n`-way row **partition**: the stripes never overlap and their union is exactly the full set, so a fleet of `n` parallel jobs covers every row (unlike `GOLDEN_SAMPLE`'s subset) | `GOLDEN_STRIPE=3/20` |
 | `GOLDEN_THREADS` | cap worker threads (default = available cores) | `GOLDEN_THREADS=4` |
+| `GOLDEN_DIR` | override the compile-time path to the committed golden set, so a staged test executable can run on a machine other than the one that built it | `GOLDEN_DIR=/data/golden` |
+| `GOLDEN_REPORT_DIR` | additionally write the run's full per-cell `results.tsv` plus a one-line `summary.txt` into this directory — the per-stripe mini-report a CI job uploads as its artifact | `GOLDEN_REPORT_DIR=stripe-report` |
 
-An unrecognised list token is skipped with a stderr warning, never silently
-dropped. A typical focused investigation:
+`GOLDEN_SAMPLE` and `GOLDEN_STRIPE` compose: the stripe partitions the rows
+and the sample can still thin each stripe for local iteration. A malformed
+stripe (`k >= n`, or not `k/n`) is ignored with a stderr warning — an
+out-of-range stripe would otherwise silently run zero rows. An unrecognised
+list token is skipped with a stderr warning, never silently dropped. A typical
+focused investigation:
 
 ```
 GOLDEN_WIDTHS=924,1232 GOLDEN_MODES=ceiling GOLDEN_FUNCS=exp,cosh GOLDEN_SAMPLE=50 \
-  cargo test -p decimal-scale-test --release --test golden golden_default -- --ignored --nocapture
+  cargo test -p decimal-scale-test --release --features wide,x-wide,xx-wide \
+  --test golden golden_default -- --ignored --nocapture
 ```
 
 ## CI wiring
@@ -77,3 +93,10 @@ GOLDEN_WIDTHS=924,1232 GOLDEN_MODES=ceiling GOLDEN_FUNCS=exp,cosh GOLDEN_SAMPLE=
   golden row, every cell, all six modes — a multi-hour deep pass in its own
   concurrency queue. Its optional `funcs` / `widths` inputs map onto
   `GOLDEN_FUNCS` / `GOLDEN_WIDTHS` to narrow the sweep.
+- **Striped fleets** — `GOLDEN_STRIPE=k/n` is the building block for running
+  the **full** (unsampled) sweep as `n` parallel jobs: each job takes one
+  stripe of the row partition, writes its per-cell TSV and summary to
+  `GOLDEN_REPORT_DIR`, and uploads that directory as its artifact; an
+  aggregate step downloads every stripe and splices the TSVs back into the
+  combined surface report. Because the stripes are a partition, the fleet's
+  union is byte-for-byte the same coverage as one unsampled run.

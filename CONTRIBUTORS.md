@@ -212,21 +212,26 @@ calls it with `RoundingMode::HalfToEven`.
 ### Step 5 — Validate correctness BEFORE celebrating
 
 ```sh
+# The root crate's suites (cross-witness, probes, every target builds):
 cargo test --release --features wide,x-wide,xx-wide,macros
+
+# The consolidated integration suite (api / contracts / regressions):
+cargo test -p decimal-scale-test --features wide,x-wide,xx-wide,macros,serde,alloc,dyn
+
+# The full-surface golden gate, all six rounding modes:
+cargo test -p decimal-scale-test --release --features wide,x-wide,xx-wide --test golden golden_all_modes -- --ignored --nocapture
 ```
 
 The 0.5 ULP contract has dedicated test suites. They are part of the
 PR gate — if any of them fail your kernel does not land.
 
-- [`tests/precision_strict_05_ulp.rs`](https://github.com/mootable/decimal-scaled/blob/main/tests/precision_strict_05_ulp.rs) — D38 0.5 ULP suite. Hand-computed truth values at D38<12> for every constant and strict transcendental, asserting the result is the *correctly-rounded* value — bit-exact (`delta == 0` storage LSB) against the hand reference. Compile-gated to `HalfToEven` (the crate-default rounding mode); the bit-exact-across-every-mode proof lives in `ulp_strict_golden.rs`.
-- [`tests/precision_wide_baseline.rs`](https://github.com/mootable/decimal-scaled/blob/main/tests/precision_wide_baseline.rs) — D76 wide-tier 0.5 ULP measurement at D76<6>. Same `≤ 1 LSB` contract; constant `WIDE_TOLERANCE_LSB` makes the threshold explicit so a regression that drifts past it is loud. Gated to `HalfToEven`.
+- [`decimal-scale-test/tests/golden.rs`](https://github.com/mootable/decimal-scaled/blob/main/decimal-scale-test/tests/golden.rs) — the full-surface golden gate and the crate's **definitive correctness proof**. One erased subject drives the [`decimal-scaled-golden`](https://github.com/mootable/decimal-scaled/tree/main/decimal-scaled-golden) harness over **every band-edge `(width, scale)` cell** (88 cells, `D18<0>` … `D1232<1231>`) for every strict function under **every** `RoundingMode` (`HalfToEven`, `HalfAwayFromZero`, `HalfTowardZero`, `Trunc`, `Floor`, `Ceiling`), asserting the correctly-rounded value EXACTLY (`delta == 0` storage LSB, ZERO tolerance) and validating overflow panics against each cell's envelope. Passes only at **0 bad / 0 panic**. The `golden (gate)` CI job runs it per push (row-sampled); the `golden (comprehensive)` workflow runs it unsampled on demand. See the [`decimal-scale-test` README](https://github.com/mootable/decimal-scaled/blob/main/decimal-scale-test/README.md) for the `GOLDEN_*` filter variables.
+- [`tests/ulp_strict_golden.rs`](https://github.com/mootable/decimal-scaled/blob/main/tests/ulp_strict_golden.rs) — the independent second oracle. Reads pre-computed mpmath truth tables under `tests/golden/<func>_d<N>_s<S>.txt` and asserts the kernel result is the **correctly-rounded** value — `kernel == oracle` EXACTLY (`delta == 0` storage LSB) — for **every** `RoundingMode` across **all twelve decimal widths**, each over its five-point scale set `{0, S/4, S/2, 3S/4, S-1}`. Each golden line stores `floor(f(x)·10^SCALE)` plus a fractional tie-class, from which the harness derives the correctly-rounded integer for each mode in-test (no per-mode tables). Catches kernel bugs that internal cross-witness paths mirror and miss. Gated behind the root crate's `golden` Cargo feature (add `,golden` to the feature list to run it). Regenerate the tables with `python scripts/gen_golden_precision.py` (requires `pip install mpmath`).
 - [`tests/wide_strict_transcendentals.rs`](https://github.com/mootable/decimal-scaled/blob/main/tests/wide_strict_transcendentals.rs) — cross-witness suite for the wide tier. Computes a value at the target's storage and scale, computes the reference at a wider storage at the same scale, rescales, and asserts bit-exact or ±1 LSB agreement. The pattern to copy when adding a new bespoke kernel.
 - [`tests/narrow_strict_transcendentals.rs`](https://github.com/mootable/decimal-scaled/blob/main/tests/narrow_strict_transcendentals.rs) — narrow tier (D18/D38) inherited-method coverage.
-- [`tests/d616_s308_lookup_parity.rs`](https://github.com/mootable/decimal-scaled/blob/main/tests/d616_s308_lookup_parity.rs), [`tests/d924_s460_lookup_parity.rs`](https://github.com/mootable/decimal-scaled/blob/main/tests/d924_s460_lookup_parity.rs), [`tests/d1232_s615_lookup_parity.rs`](https://github.com/mootable/decimal-scaled/blob/main/tests/d1232_s615_lookup_parity.rs) — per-tier Tang-lookup-vs-wide-kernel parity at the design SCALE. Tight `≤ 1 LSB` agreement between the two implementation paths, plus `exp(ln(x))` round-trip identities. New Tang lookup bands must add a matching parity file at their target SCALE before the kernel is allowed in.
-- [`tests/perf_d462_s230_correctness.rs`](https://github.com/mootable/decimal-scaled/blob/main/tests/perf_d462_s230_correctness.rs) — composed-identity witnesses (`cosh² − sinh² = 1`, `sin² + cos² = 1`, …) for the D462 Tang slot. The same shape works for any new bespoke-kernel slot.
-- [`tests/powf_integer_fastpath_parity.rs`](https://github.com/mootable/decimal-scaled/blob/main/tests/powf_integer_fastpath_parity.rs) — bit-exact assertion of `powf_strict(D::from_i32(n)).to_bits() == powi(n).to_bits()` for the `|n| ≤ 64` fast path. Any future integer-exponent specialisation has to keep this contract.
-- [`tests/ulp_strict_golden.rs`](https://github.com/mootable/decimal-scaled/blob/main/tests/ulp_strict_golden.rs) — external-oracle suite and the crate's **definitive correctness proof**. Reads pre-computed mpmath truth tables under `tests/golden/<func>_d<N>_s<S>.txt` and asserts the kernel result is the **correctly-rounded** value — `kernel == oracle` EXACTLY (`delta == 0` storage LSB, ZERO tolerance) — for **every** `RoundingMode` (`HalfToEven`, `HalfAwayFromZero`, `HalfTowardZero`, `Trunc`, `Floor`, `Ceiling`) across **all twelve decimal widths** at their design-target scale: D18<9>, D38<19>, D57<28>, D76<35>, D115<57>, D153<76>, D230<115>, D307<150>, D462<230>, D616<308>, D924<460>, D1232<615>. Each golden line stores `floor(f(x)·10^SCALE)` plus a fractional tie-class, from which the harness derives the correctly-rounded integer for each mode in-test (no per-mode tables). Catches kernel bugs that internal cross-witness paths mirror and miss. Regenerate the tables with `python scripts/gen_golden_precision.py` (requires `pip install mpmath`).
-- [`tests/ulp_proptest.rs`](https://github.com/mootable/decimal-scaled/blob/main/tests/ulp_proptest.rs) — property-based ULP fuzz at D38<19> with a D76<19> cross-tier witness. Identities (`exp(ln(x)) ≈ x`, `sin² + cos² ≈ 1`, sign symmetries, …) with deterministic seeds and 100 cases per block.
+- [`decimal-scale-test/tests/regressions/ln_lookup_bands.rs`](https://github.com/mootable/decimal-scaled/blob/main/decimal-scale-test/tests/regressions/ln_lookup_bands.rs) — parity / no-panic coverage for the deep-scale Tang-lookup `ln_strict` bands, one parametrised arm per `(width, band)`. Off-grid bands (no golden cell lands inside them) keep the full `exp(ln(x))` round-trip parity plus band-edge no-panic bounds; on-grid bands (the golden gate pins the mid-band cell bit-exact) keep the band edges only. New Tang lookup bands must add a matching parity arm before the kernel is allowed in.
+- [`decimal-scale-test/tests/regressions/powf_integer.rs`](https://github.com/mootable/decimal-scaled/blob/main/decimal-scale-test/tests/regressions/powf_integer.rs) — bit-exact assertion of `powf_strict(D::try_from(n).unwrap()).to_bits() == powi(n).to_bits()` for the integer-exponent fast path, plus the wide-tier exact integer-power directed-rounding pins. Any future integer-exponent specialisation has to keep this contract.
+- [`decimal-scale-test/tests/proptest_identities.rs`](https://github.com/mootable/decimal-scaled/blob/main/decimal-scale-test/tests/proptest_identities.rs) — property-based ULP fuzz at D38<19> with a D76<19> cross-tier witness. Identities (`exp(ln(x)) ≈ x`, `sin² + cos² ≈ 1`, sign symmetries, …) with deterministic seeds and 100 cases per block.
 
 See [`docs/precision-testing.md`](https://mootable.github.io/decimal-scaled/precision-testing/) for the four-layer model and how to add coverage for a new tier.
 
@@ -415,22 +420,26 @@ things and have very different escape hatches.
 
 ### Precision gate (hard, non-overridable)
 
-[`.github/workflows/precision.yml`](https://github.com/mootable/decimal-scaled/blob/main/.github/workflows/precision.yml)
-runs the precision suite listed above — the four 0.5 ULP files, the
-per-tier Tang-lookup parity files, and the bespoke-slot correctness
-witnesses — on every pull request. **A failed precision check blocks
-merge full stop.** There is no reviewer override, no label dismissal,
-no waiver process. The contract is correctly-rounded to 0 storage LSB
-(bit-exact at the last representable place) under every `RoundingMode`
-— a kernel that drifts off the correctly-rounded result by even one
-LSB does not land, regardless of how good its perf numbers look.
+The [`ci.yml`](https://github.com/mootable/decimal-scaled/blob/main/.github/workflows/ci.yml)
+workflow enforces the precision suite listed above on every pull
+request. Its `golden (gate)` job runs the full-surface golden gate in
+release across all six rounding modes (row-sampled per push; the
+unsampled deep pass is the dispatch-only `golden (comprehensive)`
+workflow), and its `tests (gate)` job runs the full `cargo test` —
+the cross-witness suites, the regression reproducers, and the
+proptest fuzz. **A failed precision check blocks merge full stop.**
+There is no reviewer override, no label dismissal, no waiver process.
+The contract is correctly-rounded to 0 storage LSB (bit-exact at the
+last representable place) under every `RoundingMode` — a kernel that
+drifts off the correctly-rounded result by even one LSB does not
+land, regardless of how good its perf numbers look.
 
 If you hit a precision failure: the kernel parameters need adjustment
 (usually a wider `GUARD` constant, occasionally a different reduction
 shape). Treat it as a numerical bug to debug, not a CI friction to
 work around.
 
-This gate is a one-job workflow specifically so it can be marked
+The golden run is a separate job specifically so it can be marked
 *Required* in the repo branch-protection rules independently of the
 bench / docs workflows.
 

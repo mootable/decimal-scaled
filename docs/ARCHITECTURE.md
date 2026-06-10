@@ -813,13 +813,17 @@ the **exact correctly-rounded value at the storage scale (0 LSB of
 error)**, under *every* rounding mode and at *every* width. It is checked
 by independent layers (see `precision-testing.md`):
 
-1. **Hand-computed truth tables** at D38 — the smallest, human-audited net.
+1. **The full-surface golden gate** — the `decimal-scale-test` crate
+   drives the library-agnostic `decimal-scaled-golden` harness over every
+   band-edge (width, scale) cell for every strict function under all six
+   rounding modes, against the committed width-agnostic golden set; a run
+   passes only at 0 bad / 0 panic. CI runs it on every push.
 2. **Cross-witness** — compute at a tier, recompute the reference at a
    wider storage and rescale; catches storage-bit divergences.
-3. **mpmath golden tables** — an external oracle (computed at working
-   precision far wider than any tier) for every (function, tier); the
-   kernel must match the correctly-rounded oracle **exactly (delta == 0)**
-   for all six rounding modes across all widths.
+3. **mpmath golden tables** — an independently generated external oracle
+   (computed at working precision far wider than any tier) for every
+   (function, tier); the kernel must match the correctly-rounded oracle
+   **exactly (delta == 0)** for all six rounding modes across all widths.
 4. **Property fuzz** — identities like `exp(ln x) ≈ x`, `sin²+cos² ≈ 1`,
    and sign symmetries, with deterministic seeds.
 
