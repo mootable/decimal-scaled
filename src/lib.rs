@@ -22,16 +22,26 @@
 //! |------|---------|-------------|--------------|
 //! | [`D18<SCALE>`]   | `i64`     |   17 | always on |
 //! | [`D38<SCALE>`]   | `i128`    |   37 | always on |
-//! | [`D57<SCALE>`]   | 192-bit   |   56 | `d57` or `wide` |
-//! | [`D76<SCALE>`]   | 256-bit   |   75 | `d76` or `wide` |
-//! | [`D115<SCALE>`]  | 384-bit   |  114 | `d115` or `wide` |
-//! | [`D153<SCALE>`]  | 512-bit   |  152 | `d153` or `wide` |
-//! | [`D230<SCALE>`]  | 768-bit   |  229 | `d230` or `wide` |
-//! | [`D307<SCALE>`]  | 1024-bit  |  306 | `d307` or `wide` |
-//! | [`D462<SCALE>`]  | 1536-bit  |  461 | `d462` or `x-wide` |
-//! | [`D616<SCALE>`]  | 2048-bit  |  615 | `d616` or `x-wide` |
-//! | [`D924<SCALE>`]  | 3072-bit  |  923 | `d924` or `xx-wide` |
-//! | [`D1232<SCALE>`] | 4096-bit  | 1231 | `d1232` or `xx-wide` |
+#![cfg_attr(any(feature = "d57", feature = "wide"), doc = "| [`D57<SCALE>`]   | 192-bit   |   56 | `d57` or `wide` |")]
+#![cfg_attr(not(any(feature = "d57", feature = "wide")), doc = "| `D57<SCALE>`   | 192-bit   |   56 | `d57` or `wide` |")]
+#![cfg_attr(any(feature = "d76", feature = "wide"), doc = "| [`D76<SCALE>`]   | 256-bit   |   75 | `d76` or `wide` |")]
+#![cfg_attr(not(any(feature = "d76", feature = "wide")), doc = "| `D76<SCALE>`   | 256-bit   |   75 | `d76` or `wide` |")]
+#![cfg_attr(any(feature = "d115", feature = "wide"), doc = "| [`D115<SCALE>`]  | 384-bit   |  114 | `d115` or `wide` |")]
+#![cfg_attr(not(any(feature = "d115", feature = "wide")), doc = "| `D115<SCALE>`  | 384-bit   |  114 | `d115` or `wide` |")]
+#![cfg_attr(any(feature = "d153", feature = "wide"), doc = "| [`D153<SCALE>`]  | 512-bit   |  152 | `d153` or `wide` |")]
+#![cfg_attr(not(any(feature = "d153", feature = "wide")), doc = "| `D153<SCALE>`  | 512-bit   |  152 | `d153` or `wide` |")]
+#![cfg_attr(any(feature = "d230", feature = "wide"), doc = "| [`D230<SCALE>`]  | 768-bit   |  229 | `d230` or `wide` |")]
+#![cfg_attr(not(any(feature = "d230", feature = "wide")), doc = "| `D230<SCALE>`  | 768-bit   |  229 | `d230` or `wide` |")]
+#![cfg_attr(any(feature = "d307", feature = "wide"), doc = "| [`D307<SCALE>`]  | 1024-bit  |  306 | `d307` or `wide` |")]
+#![cfg_attr(not(any(feature = "d307", feature = "wide")), doc = "| `D307<SCALE>`  | 1024-bit  |  306 | `d307` or `wide` |")]
+#![cfg_attr(any(feature = "d462", feature = "x-wide"), doc = "| [`D462<SCALE>`]  | 1536-bit  |  461 | `d462` or `x-wide` |")]
+#![cfg_attr(not(any(feature = "d462", feature = "x-wide")), doc = "| `D462<SCALE>`  | 1536-bit  |  461 | `d462` or `x-wide` |")]
+#![cfg_attr(any(feature = "d616", feature = "x-wide"), doc = "| [`D616<SCALE>`]  | 2048-bit  |  615 | `d616` or `x-wide` |")]
+#![cfg_attr(not(any(feature = "d616", feature = "x-wide")), doc = "| `D616<SCALE>`  | 2048-bit  |  615 | `d616` or `x-wide` |")]
+#![cfg_attr(any(feature = "d924", feature = "xx-wide"), doc = "| [`D924<SCALE>`]  | 3072-bit  |  923 | `d924` or `xx-wide` |")]
+#![cfg_attr(not(any(feature = "d924", feature = "xx-wide")), doc = "| `D924<SCALE>`  | 3072-bit  |  923 | `d924` or `xx-wide` |")]
+#![cfg_attr(any(feature = "d1232", feature = "xx-wide"), doc = "| [`D1232<SCALE>`] | 4096-bit  | 1231 | `d1232` or `xx-wide` |")]
+#![cfg_attr(not(any(feature = "d1232", feature = "xx-wide")), doc = "| `D1232<SCALE>` | 4096-bit  | 1231 | `d1232` or `xx-wide` |")]
 //!
 //! Umbrellas: `wide` enables D57 / D76 / D115 / D153 / D230 / D307;
 //! `x-wide` adds D462 + D616; `xx-wide` adds D924 + D1232. Every

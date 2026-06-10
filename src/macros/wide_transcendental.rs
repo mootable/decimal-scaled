@@ -3355,12 +3355,10 @@ macro_rules! decl_wide_transcendental {
             /// Integer-exponent fast path: when `exp` is an exact integer
             /// `n` (`|n| <= 64`) and the base an exact integer, `base^n` is
             /// an exact rational and its correctly-rounded value is emitted
-            /// directly by [`powi_exact_pin`], skipping the `exp(y·ln x)`
-            /// chain. The pin divides `10^SCALE` by the INTEGER `base^|n|`,
-            /// so the reciprocal is exact even at a near-max scale where the
-            /// scaled `base^|n|·10^SCALE` would overflow storage.
-            ///
-            /// [`powi_exact_pin`]: crate::algos::pow::powi_exact::powi_exact_pin
+            /// directly by the internal `powi_exact_pin`, skipping the
+            /// `exp(y·ln x)` chain. The pin divides `10^SCALE` by the INTEGER
+            /// `base^|n|`, so the reciprocal is exact even at a near-max scale
+            /// where the scaled `base^|n|·10^SCALE` would overflow storage.
             #[inline]
             #[must_use]
             pub fn powf_strict(self, exp: Self) -> Self {
