@@ -869,9 +869,23 @@ detection, mirroring how `i64::overflowing_add` sits under `add` / `checked_add`
 
 Because the detection lives in one place and the wrapper is the only thing that
 varies, the tier/scale-invariance is structural: there is no per-tier branch left
-that can drift. Transcendentals expose the default (panic) + the `checked_` form;
-the exact arithmetic ops carry the full `checked_` / `wrapping_` / `saturating_` /
-`overflowing_` family.
+that can drift. The exact arithmetic ops carry the full `checked_` / `wrapping_` /
+`saturating_` / `overflowing_` family.
+
+The strict transcendentals expose the default (panic) + the `checked_` form:
+every `<fn>_strict` / `<fn>_strict_with` has a `checked_<fn>_strict` /
+`checked_<fn>_strict_with` sibling returning `Option<Self>`, emitted once as a
+single generic impl over `(N, SCALE)` (`src/types/checked_transcendentals.rs`).
+`None` covers both classes of panic: domain errors (`ln` of a non-positive
+value, `asin` outside `[-1, 1]`, …) are prechecked exactly in the shell at
+every tier, and out-of-range results propagate the kernel's own detection
+`Option` where that seam has been threaded — exactly on D18/D38 for the
+`exp` / `exp2` / `ln` / `log` / `log2` / `log10` / `powf` kernels and at every
+tier for `hypot`. The remaining detection points (inside the wide kernel
+shells, and the D38-width trig/hyperbolic/angle kernels) still panic in the
+checked form, identically to the default — never a silent wrong value — until
+the seam reaches them; `research/checked_wide_shell_patch.md` carries the
+completion plan, and each method's doc states its exact contract.
 
 ## Map of the source tree
 

@@ -290,8 +290,8 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///     ten.checked_exp2_strict_with(RoundingMode::HalfToEven),
     ///     Some(ten.exp2_strict_with(RoundingMode::HalfToEven)),
     /// );
-    /// // 2^200 has 61 integer digits — outside D38's 38.
-    /// assert_eq!(D38::<12>::from(200i64).checked_exp2_strict_with(RoundingMode::HalfToEven), None);
+    /// // 2^95 has 29 integer digits — outside D38<12>'s 26.
+    /// assert_eq!(D38::<12>::from(95i64).checked_exp2_strict_with(RoundingMode::HalfToEven), None);
     /// ```
     #[inline]
     #[must_use]
@@ -304,7 +304,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// ```
     /// use decimal_scaled::D38;
     /// assert!(D38::<12>::from(10i64).checked_exp2_strict().is_some());
-    /// assert_eq!(D38::<12>::from(200i64).checked_exp2_strict(), None);
+    /// assert_eq!(D38::<12>::from(95i64).checked_exp2_strict(), None);
     /// ```
     #[inline]
     #[must_use]
@@ -743,7 +743,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///     Some(one.sinh_strict_with(RoundingMode::HalfToEven)),
     /// );
     /// // sinh(40) ~ 1.2e17 exceeds D18<6>'s range but fits the D38 work width.
-    /// assert_eq!(D18::<6>::from(40i64).checked_sinh_strict_with(RoundingMode::HalfToEven), None);
+    /// assert_eq!(D18::<6>::from(40).checked_sinh_strict_with(RoundingMode::HalfToEven), None);
     /// ```
     #[inline]
     #[must_use]
@@ -757,7 +757,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// ```
     /// use decimal_scaled::{D18, D38};
     /// assert!(D38::<12>::ONE.checked_sinh_strict().is_some());
-    /// assert_eq!(D18::<6>::from(40i64).checked_sinh_strict(), None);
+    /// assert_eq!(D18::<6>::from(40).checked_sinh_strict(), None);
     /// ```
     #[inline]
     #[must_use]
@@ -783,7 +783,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///     Some(one.cosh_strict_with(RoundingMode::HalfToEven)),
     /// );
     /// // cosh(40) ~ 1.2e17 exceeds D18<6>'s range but fits the D38 work width.
-    /// assert_eq!(D18::<6>::from(40i64).checked_cosh_strict_with(RoundingMode::HalfToEven), None);
+    /// assert_eq!(D18::<6>::from(40).checked_cosh_strict_with(RoundingMode::HalfToEven), None);
     /// ```
     #[inline]
     #[must_use]
@@ -797,7 +797,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// ```
     /// use decimal_scaled::{D18, D38};
     /// assert!(D38::<12>::ONE.checked_cosh_strict().is_some());
-    /// assert_eq!(D18::<6>::from(40i64).checked_cosh_strict(), None);
+    /// assert_eq!(D18::<6>::from(40).checked_cosh_strict(), None);
     /// ```
     #[inline]
     #[must_use]
