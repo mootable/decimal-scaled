@@ -12,7 +12,10 @@ license = "MIT OR Apache-2.0"
 # decimal-scaled on the same golden set. The set mirrors the libraries the perf
 # benches compare against.
 [dependencies]
-decimal-scale-test = { path = "../decimal-scale-test" }
+# The shared decimal-scaled subject lives in decimal-scale-test's lib, which is
+# compiled only on a full-width build (its Cargo features are passthroughs now,
+# no longer hardcoded on its dependency line) — so name the tiers here.
+decimal-scale-test = { path = "../decimal-scale-test", features = ["wide", "x-wide", "xx-wide"] }
 decimal-scaled-golden = { path = "../decimal-scaled-golden" }
 
 rust_decimal = { version = "1", default-features = false, features = ["maths"] }
