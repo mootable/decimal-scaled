@@ -105,21 +105,50 @@ class FlintOracle(Oracle):
             result_digits = max(1, int(float(ar.log() / flint.arb(10).log())) + 2)
         bits_base = int((scale + result_digits + 60) * 3.3219281) + 128
         last = None
-        for attempt in range(8):
+        for attempt in range(10):
             flint.ctx.prec = bits_base << attempt
             r = _eval_flint(flint, func, [flint.arb(s) for s in inputs])
             mag = abs(r) * (flint.arb(10) ** scale)
             z = mag.floor().unique_fmpz()
             if z is None:
-                # An exact-integer value (e.g. exp2 of an integer = 2^n) makes the
-                # floor of the ball straddle the boundary; the ball itself still
-                # pins the unique integer. The ±1 cross-val tolerance absorbs the
-                # rare just-below-boundary truncation edge.
+                # The floor straddles an integer boundary: either the value IS that
+                # integer exactly (exp2 of an integer = 2^n), or it sits a
+                # sub-resolution distance to one side. Accepting the ball's pinned
+                # integer is correct ONLY in the exact case — for a sub-resolution
+                # DEFICIT (tanh(1e-k) = 1e-k - v^3/3 with the residual below any
+                # working window) it would round the truncation UP a digit, masking
+                # the true 9-run. So the pinned integer is accepted only when the
+                # candidate is PROVABLY exact; otherwise keep escalating precision
+                # until the floor itself resolves on the true side.
                 z = mag.unique_fmpz()
+                if z is not None and not _provably_exact_candidate(
+                    func, inputs, r < 0, int(z), scale
+                ):
+                    last = "floor straddles a boundary on a provably-inexact value"
+                    z = None
             if z is not None:
                 return _format(r < 0, int(z), precision)
-            last = "ball not tight enough"
+            last = last or "ball not tight enough"
         raise RuntimeError(f"flint: could not pin {func}{inputs} to {precision} digits ({last})")
+
+
+def _provably_exact_candidate(func, inputs, neg, scaled, scale):
+    """True when the boundary-straddling candidate `(-1)^neg * scaled / 10^scale`
+    (`scale` = the pinning scale, i.e. precision + GUARD) is provably the exact
+    result (theorem / rational inverse-check)."""
+    from ..exactness import _provably_exact
+
+    sign = "-" if neg and scaled != 0 else ""
+    s = str(scaled)
+    if scale == 0:
+        value = f"{sign}{s}"
+    else:
+        s = s.rjust(scale + 1, "0")
+        value = f"{sign}{s[:-scale]}.{s[-scale:]}"
+    try:
+        return _provably_exact(func, inputs, value)
+    except (ValueError, ZeroDivisionError, OverflowError):
+        return False
 
 
 register("flint", FlintOracle)
