@@ -39,7 +39,20 @@ rounding-trunc = ["decimal-scaled/rounding-trunc"]
 rounding-floor = ["decimal-scaled/rounding-floor"]
 rounding-ceiling = ["decimal-scaled/rounding-ceiling"]
 
+[dev-dependencies]
+# The relocated num-traits surface tests exercise the root crate's
+# num-traits impls directly.
+num-traits = { version = "0.2", default-features = false }
+
 # The full-surface golden gate is always a full-width run.
 [[test]]
 name = "golden"
 required-features = ["wide", "x-wide", "xx-wide"]
+
+# Mirror the root crate's rust-lint envelope so the relocated tests keep the
+# warning policy they were written under (e.g. deliberately unused bindings
+# in compile-surface tests).
+[lints.rust]
+unsafe_code = "forbid"
+unused_variables = "allow"
+dead_code = "allow"
