@@ -309,12 +309,8 @@ name = "ulp_report"
 required-features = ["wide"]
 
 # `ulp_strict_golden` pulls in the wide precision harness
-# (`tests/support/precision_subject_ds.rs`, which names every tier); both
-# it and the wide serde surface need the tier features.
-[[test]]
-name = "serde_surface"
-required-features = ["wide", "x-wide", "xx-wide"]
-
+# (`tests/support/precision_subject_ds.rs`, which names every tier), so it
+# needs the tier features.
 [[test]]
 name = "ulp_strict_golden"
 # `golden` gates this heavy suite OUT of the `tests (gate)` CI job (which

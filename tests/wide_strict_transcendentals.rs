@@ -1,12 +1,13 @@
 //! Coverage suite for `macros/wide_transcendental.rs` — D76 / D153 /
-//! D307 strict transcendentals, mode-aware `_with` siblings, AGM
-//! alternates, and the plain `*` dispatcher (under strict mode).
+//! D307 strict transcendentals plus the `_with`-sibling domain panics.
+//! The `_with`-delegation matrix, AGM alternates, and plain `*`
+//! dispatcher contracts moved to `decimal-scale-test`
+//! `tests/contracts/routing.rs`.
 //!
 //! The 0.5 ULP-at-storage contract for the wide tier is verified against
-//! the D38 strict result (already validated by
-//! `tests/precision_strict_05_ulp.rs`). The tolerance here is the same
-//! `WIDE_TOLERANCE_LSB = 1` used by the existing
-//! `precision_wide_baseline.rs` — within one LSB of the D38 result.
+//! the D38 strict result (validated by the `decimal-scale-test` golden
+//! gate). The tolerance is `WIDE_TOL_LSB = 1` — within one LSB of the
+//! D38 result.
 
 // The 0.5 ULP cross-witness uses the default `HalfToEven` truth from
 // `precision_strict_05_ulp.rs`. Compile-gate to the default-rounding
@@ -23,7 +24,7 @@
     )),
 ))]
 
-use decimal_scaled::{D38, D76};
+use decimal_scaled::{D38, D76, RoundingMode};
 
 const WIDE_TOL_LSB: i128 = 1;
 
@@ -317,241 +318,6 @@ fn d76_angle_conversion() {
         d76_bits_at_scale_6(lift(d180).to_radians_strict()),
         d180.to_radians_strict().to_bits(),
     );
-}
-
-// ─── AGM alternates ────────────────────────────────────────────────────
-
-#[test]
-fn d76_ln_agm() {
-    for v in [2_i64, 7, 100] {
-        let n = D38::<6>::from(v);
-        let agm = lift(n).ln_strict_agm();
-        let canonical = lift(n).ln_strict();
-        // AGM must agree with canonical within 1 LSB.
-        agree(
-            &format!("ln_agm({v}) vs ln({v})"),
-            d76_bits_at_scale_6(agm),
-            d76_bits_at_scale_6(canonical),
-        );
-    }
-}
-
-#[test]
-fn d76_exp_agm() {
-    let n = D38::<6>::ONE;
-    let agm = lift(n).exp_strict_agm();
-    let canonical = lift(n).exp_strict();
-    agree(
-        "exp_agm(1) vs exp(1)",
-        d76_bits_at_scale_6(agm),
-        d76_bits_at_scale_6(canonical),
-    );
-    // ZERO short-circuit
-    assert_eq!(D76::<6>::ZERO.exp_strict_agm(), D76::<6>::ONE);
-}
-
-// ─── Mode-aware _with siblings (D76 only) ──────────────────────────────
-//
-// Tarpaulin counts these lines distinct from `*_strict`. To cover them
-// we call each with multiple `RoundingMode` variants and check the
-// HalfToEven branch reproduces the plain `*_strict` result.
-
-use decimal_scaled::RoundingMode;
-
-#[test]
-fn d76_strict_with_modes() {
-    let two = lift(D38::<6>::from(2));
-    let ten = lift(D38::<6>::from(10));
-    let one = lift(D38::<6>::ONE);
-    let half = lift(D38::<6>::from_bits(decimal_scaled::Int::<2>::try_from(500_000_i128).unwrap()));
-
-    // HalfToEven matches the plain *_strict form bit-exactly.
-    assert_eq!(
-        two.ln_strict_with(RoundingMode::HalfToEven),
-        two.ln_strict()
-    );
-    assert_eq!(
-        two.log_strict_with(ten, RoundingMode::HalfToEven),
-        two.log_strict(ten)
-    );
-    assert_eq!(
-        two.log2_strict_with(RoundingMode::HalfToEven),
-        two.log2_strict()
-    );
-    assert_eq!(
-        ten.log10_strict_with(RoundingMode::HalfToEven),
-        ten.log10_strict()
-    );
-    assert_eq!(
-        one.exp_strict_with(RoundingMode::HalfToEven),
-        one.exp_strict()
-    );
-    assert_eq!(
-        ten.exp2_strict_with(RoundingMode::HalfToEven),
-        ten.exp2_strict()
-    );
-    assert_eq!(
-        two.powf_strict_with(ten, RoundingMode::HalfToEven),
-        two.powf_strict(ten)
-    );
-    assert_eq!(
-        one.sin_strict_with(RoundingMode::HalfToEven),
-        one.sin_strict()
-    );
-    assert_eq!(
-        one.cos_strict_with(RoundingMode::HalfToEven),
-        one.cos_strict()
-    );
-    assert_eq!(
-        one.tan_strict_with(RoundingMode::HalfToEven),
-        one.tan_strict()
-    );
-    assert_eq!(
-        one.atan_strict_with(RoundingMode::HalfToEven),
-        one.atan_strict()
-    );
-    assert_eq!(
-        half.asin_strict_with(RoundingMode::HalfToEven),
-        half.asin_strict()
-    );
-    assert_eq!(
-        half.acos_strict_with(RoundingMode::HalfToEven),
-        half.acos_strict()
-    );
-    // asin/acos boundary in the _with form:
-    assert_eq!(
-        one.asin_strict_with(RoundingMode::HalfToEven),
-        one.asin_strict()
-    );
-    assert_eq!(
-        one.acos_strict_with(RoundingMode::HalfToEven),
-        one.acos_strict()
-    );
-    assert_eq!(
-        one.atan2_strict_with(one, RoundingMode::HalfToEven),
-        one.atan2_strict(one)
-    );
-    // atan2 axis branches in the _with form:
-    assert_eq!(
-        D76::<6>::ZERO.atan2_strict_with(D76::<6>::ZERO, RoundingMode::HalfToEven),
-        D76::<6>::ZERO.atan2_strict(D76::<6>::ZERO)
-    );
-    assert_eq!(
-        one.atan2_strict_with(D76::<6>::ZERO, RoundingMode::HalfToEven),
-        one.atan2_strict(D76::<6>::ZERO)
-    );
-    assert_eq!(
-        (-one).atan2_strict_with(D76::<6>::ZERO, RoundingMode::HalfToEven),
-        (-one).atan2_strict(D76::<6>::ZERO)
-    );
-    assert_eq!(
-        D76::<6>::ZERO.atan2_strict_with(-one, RoundingMode::HalfToEven),
-        D76::<6>::ZERO.atan2_strict(-one)
-    );
-    assert_eq!(
-        one.sinh_strict_with(RoundingMode::HalfToEven),
-        one.sinh_strict()
-    );
-    assert_eq!(
-        one.cosh_strict_with(RoundingMode::HalfToEven),
-        one.cosh_strict()
-    );
-    assert_eq!(
-        one.tanh_strict_with(RoundingMode::HalfToEven),
-        one.tanh_strict()
-    );
-    assert_eq!(
-        one.asinh_strict_with(RoundingMode::HalfToEven),
-        one.asinh_strict()
-    );
-    assert_eq!(
-        D76::<6>::ZERO.asinh_strict_with(RoundingMode::HalfToEven),
-        D76::<6>::ZERO
-    );
-    let two_val = lift(D38::<6>::from(2));
-    assert_eq!(
-        two_val.acosh_strict_with(RoundingMode::HalfToEven),
-        two_val.acosh_strict()
-    );
-    assert_eq!(
-        half.atanh_strict_with(RoundingMode::HalfToEven),
-        half.atanh_strict()
-    );
-    assert_eq!(
-        one.to_degrees_strict_with(RoundingMode::HalfToEven),
-        one.to_degrees_strict()
-    );
-    assert_eq!(
-        one.to_radians_strict_with(RoundingMode::HalfToEven),
-        one.to_radians_strict()
-    );
-
-    // AGM _with siblings
-    assert_eq!(
-        two.ln_strict_agm_with(RoundingMode::HalfToEven),
-        two.ln_strict_agm()
-    );
-    assert_eq!(
-        one.exp_strict_agm_with(RoundingMode::HalfToEven),
-        one.exp_strict_agm()
-    );
-    // exp_strict_agm_with ZERO short-circuit
-    assert_eq!(
-        D76::<6>::ZERO.exp_strict_agm_with(RoundingMode::HalfToEven),
-        D76::<6>::ONE
-    );
-
-    // Non-HalfToEven modes — just call each variant to exercise the
-    // mode-dispatch code path. We don't assert on the exact value because
-    // the wide tier's _with rounding contract is "honour mode at the
-    // final storage round"; checking distinctness from HalfToEven is
-    // sufficient for coverage.
-    let _ = two.ln_strict_with(RoundingMode::Trunc);
-    let _ = two.ln_strict_with(RoundingMode::Floor);
-    let _ = two.ln_strict_with(RoundingMode::Ceiling);
-    let _ = one.sin_strict_with(RoundingMode::Trunc);
-    let _ = half.asin_strict_with(RoundingMode::Floor);
-}
-
-// ─── Plain dispatcher (strict mode only) ───────────────────────────────
-
-#[cfg(feature = "strict")]
-#[test]
-fn d76_plain_dispatcher_matches_strict() {
-    let one = lift(D38::<6>::ONE);
-    let two = lift(D38::<6>::from(2));
-    let ten = lift(D38::<6>::from(10));
-    let four = lift(D38::<6>::from(4));
-    let half = lift(D38::<6>::from_bits(decimal_scaled::Int::<2>::try_from(500_000_i128).unwrap()));
-    let twenty_seven = lift(D38::<6>::from(27));
-
-    assert_eq!(two.ln(), two.ln_strict());
-    assert_eq!(two.log(ten), two.log_strict(ten));
-    assert_eq!(two.log2(), two.log2_strict());
-    assert_eq!(ten.log10(), ten.log10_strict());
-    assert_eq!(one.exp(), one.exp_strict());
-    assert_eq!(ten.exp2(), ten.exp2_strict());
-    assert_eq!(two.powf(ten), two.powf_strict(ten));
-    assert_eq!(one.sin(), one.sin_strict());
-    assert_eq!(one.cos(), one.cos_strict());
-    assert_eq!(one.tan(), one.tan_strict());
-    assert_eq!(one.atan(), one.atan_strict());
-    assert_eq!(half.asin(), half.asin_strict());
-    assert_eq!(half.acos(), half.acos_strict());
-    assert_eq!(one.atan2(one), one.atan2_strict(one));
-    assert_eq!(one.sinh(), one.sinh_strict());
-    assert_eq!(one.cosh(), one.cosh_strict());
-    assert_eq!(one.tanh(), one.tanh_strict());
-    assert_eq!(one.asinh(), one.asinh_strict());
-    assert_eq!(two.acosh(), two.acosh_strict());
-    assert_eq!(half.atanh(), half.atanh_strict());
-    assert_eq!(one.to_degrees(), one.to_degrees_strict());
-    assert_eq!(one.to_radians(), one.to_radians_strict());
-
-    // Note: wide tier has no sqrt() / cbrt() in this dispatcher block —
-    // those go through wide_roots.rs separately. Force a touch:
-    let _ = four.sqrt_strict();
-    let _ = twenty_seven.cbrt_strict();
 }
 
 // ─── Domain panics ─────────────────────────────────────────────────────

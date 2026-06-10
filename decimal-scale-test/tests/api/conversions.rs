@@ -21,9 +21,9 @@ mod from_conversions {
     fn widen_narrow_one_tier_hop_narrow_arm() {
         use decimal_scaled::{D18s6, D38s6};
         let a = D18s6::from(123);
-        let b: D38s6 = a.widen(); // D18 → D38
+        let b: D38s6 = a.widen(); // D18 â†’ D38
         assert_eq!(b.to_bits(), i128::from(a.to_bits()));
-        let c: D18s6 = b.narrow().unwrap(); // D38 → D18
+        let c: D18s6 = b.narrow().unwrap(); // D38 â†’ D18
         assert_eq!(c.to_bits(), a.to_bits());
     }
 
@@ -293,7 +293,7 @@ mod from_conversions {
 
 mod from_identity_invariants {
     //! Phase-1 capstone (story 1.6): invariant / property tests that encode
-    //! the 1.1–1.5 rulings. Each test asserts; none silently no-ops.
+    //! the 1.1â€“1.5 rulings. Each test asserts; none silently no-ops.
     //!
     //! - 1.2  width round-trip: `narrow_n(widen_n(x)) == x`.
     //! - 1.3  cross-width AND cross-scale exact value-equality.
@@ -304,7 +304,7 @@ mod from_identity_invariants {
 
     use decimal_scaled::{D18s9, D38, D38s12, Int, D};
 
-    // ─── 1.2 — width round-trip: narrow_n(widen_n(x)) == x ────────────────
+    // â”€â”€â”€ 1.2 â€” width round-trip: narrow_n(widen_n(x)) == x â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     #[test]
     fn widen_then_narrow_is_identity_positive() {
@@ -340,7 +340,7 @@ mod from_identity_invariants {
         assert!(huge.narrow_n::<1>().is_none());
     }
 
-    // ─── 1.3 — cross-width / cross-scale exact value equality ─────────────
+    // â”€â”€â”€ 1.3 â€” cross-width / cross-scale exact value equality â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     #[test]
     fn cross_width_same_scale_value_equal() {
@@ -379,7 +379,7 @@ mod from_identity_invariants {
         assert!(!(half == 6_i32));
     }
 
-    // ─── 1.1 — conversion round-trips ─────────────────────────────────────
+    // â”€â”€â”€ 1.1 â€” conversion round-trips â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     #[test]
     fn from_int_to_int_round_trip() {
@@ -399,7 +399,7 @@ mod from_identity_invariants {
         }
     }
 
-    // ─── 1.4 — overflow contract ──────────────────────────────────────────
+    // â”€â”€â”€ 1.4 â€” overflow contract â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     #[test]
     fn checked_add_returns_none_on_overflow() {
@@ -412,7 +412,7 @@ mod from_identity_invariants {
     #[test]
     #[should_panic(expected = "overflow")]
     fn operator_add_panics_on_overflow() {
-        // The `+` operator panics on overflow in BOTH debug and release — a
+        // The `+` operator panics on overflow in BOTH debug and release â€” a
         // fixed-width decimal never silently wraps a wrong number. (The
         // explicit `wrapping_add` carries the modular behaviour.)
         let _ = D38s12::MAX + D38s12::ONE;
@@ -453,7 +453,7 @@ mod from_convert_cross_width_scale {
         D18::<S>::from_bits(Int::<1>::try_from(raw as i128).unwrap())
     }
 
-    // ── widen + scale-up (exact) ─────────────────────────────────────────
+    // â”€â”€ widen + scale-up (exact) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /// Widening to a wider tier and scaling UP appends zeros exactly; no
     /// rounding occurs and the result is `Ok`.
@@ -473,7 +473,7 @@ mod from_convert_cross_width_scale {
         assert_eq!(i128::from(out.to_bits()), 1_500_000);
     }
 
-    // ── widen + scale-down (rounding) ────────────────────────────────────
+    // â”€â”€ widen + scale-down (rounding) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /// Widening with a scale-DOWN rounds the discarded digits per the mode.
     /// 1.2345 @ D18<4> -> D38<2>: 1.2345 rounds half-to-even to 1.23 (the
@@ -501,7 +501,7 @@ mod from_convert_cross_width_scale {
         assert_eq!(i128::from(floor.to_bits()), 2);
     }
 
-    // ── narrow that fits (Ok, value preserved) ───────────────────────────
+    // â”€â”€ narrow that fits (Ok, value preserved) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /// Narrowing a value that fits the target storage at the same scale is
     /// exact and `Ok`.
@@ -513,7 +513,7 @@ mod from_convert_cross_width_scale {
         assert_eq!(i128::from(out.to_bits()), 750);
     }
 
-    // ── narrow that overflows (Err) ──────────────────────────────────────
+    // â”€â”€ narrow that overflows (Err) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /// Narrowing a magnitude that does not fit the target storage at the
     /// requested scale returns `Err(Overflow)`.
@@ -526,7 +526,7 @@ mod from_convert_cross_width_scale {
         assert_eq!(out, Err(ConvertError::Overflow));
     }
 
-    // ── precision-preserving narrow with scale-down ──────────────────────
+    // â”€â”€ precision-preserving narrow with scale-down â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /// The motivating case for rescaling at the SOURCE (wider) width before
     /// narrowing: a value that does NOT fit the target at the source scale,
@@ -547,7 +547,7 @@ mod from_convert_cross_width_scale {
         assert_eq!(i128::from(out.to_bits()), 500_000_000_000_000_000);
     }
 
-    // ── same width, same scale (identity) ────────────────────────────────
+    // â”€â”€ same width, same scale (identity) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /// Same width and same scale is the identity (bit-for-bit).
     #[test]
@@ -562,7 +562,7 @@ mod from_convert_cross_width_scale {
         assert_eq!(i128::from(widened.to_bits()), 9_999);
     }
 
-    // ── round-trip (lossless) ────────────────────────────────────────────
+    // â”€â”€ round-trip (lossless) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /// A lossless widen followed by the inverse narrow recovers the original
     /// value. Widening up in scale + width then narrowing back is exact when
@@ -599,7 +599,7 @@ mod from_macros_surface {
 
     use decimal_scaled::{D18, D38};
 
-    // ─── macros/int_methods.rs: from_int / from_intN ───────────────────────
+    // â”€â”€â”€ macros/int_methods.rs: from_int / from_intN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     #[test]
     fn from_int_narrow_signed() {
@@ -634,7 +634,7 @@ mod from_macros_surface {
         let _ = D18::<2>::from(7_u16);
         let _ = D18::<2>::from(7_u32);
     }
-    // ─── macros/float_bridge.rs: from_f32 / to_f32 / from_f64 / to_f64 ─────
+    // â”€â”€â”€ macros/float_bridge.rs: from_f32 / to_f32 / from_f64 / to_f64 â”€â”€â”€â”€â”€
 
     #[cfg(feature = "std")]
     #[test]
@@ -669,7 +669,7 @@ mod from_macros_surface {
         let v = D38::<2>::from_f64_with(1.5, RoundingMode::Trunc);
         assert_eq!(v.to_bits(), 150);
     }
-    // ─── macros/conversions.rs: TryFrom narrowing ──────────────────────────
+    // â”€â”€â”€ macros/conversions.rs: TryFrom narrowing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     #[test]
     fn try_from_d38_to_d18_in_range() {
@@ -686,7 +686,7 @@ mod from_macros_bitwise_and_overflow {
 
     use decimal_scaled::{D18, D38};
 
-    // ─── float_bridge: from_f64 boundary cases and rounding modes ──────────
+    // â”€â”€â”€ float_bridge: from_f64 boundary cases and rounding modes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     #[cfg(feature = "std")]
     #[test]
@@ -742,5 +742,152 @@ mod from_macros_bitwise_and_overflow {
                 let _ = D76::<2>::from_f64_with(1.005, mode);
             }
         }
+    }
+}
+
+#[cfg(feature = "wide")]
+mod from_widen_narrow_default {
+    //! Coverage of the `widen()` / `narrow()` hop methods on the legacy
+    //! D38 / D76 / D153 / D307 tiers â€” now updated to step through the
+    //! comprehensive ladder (D38 â†’ D57 â†’ D76 â†’ D115 â†’ D153 â†’ D230 â†’ D307
+    //! â†’ D462) rather than skipping straight to the next power-of-two
+    //! width. Plus the per-tier `Default` impl coverage.
+
+    use decimal_scaled::{D18, D38, D57, D76, D115};
+
+    #[test]
+    fn d38_widen_to_d57() {
+        let a = D38::<12>::from(7);
+        let w: D57<12> = a.widen();
+        let expected: D57<12> = a.into();
+        assert_eq!(w, expected);
+    }
+
+    #[test]
+    fn d76_narrow_to_d57_in_range() {
+        // D38 -> D57 -> D76 widens losslessly, then D76.narrow() back to
+        // D57 should recover the value.
+        let small: D57<12> = D38::<12>::from(7).into();
+        let w: D76<12> = small.widen();
+        let n: D57<12> = w.narrow().unwrap();
+        assert_eq!(n.to_bits().to_string(), small.to_bits().to_string());
+    }
+
+    #[test]
+    fn d76_narrow_to_d57_out_of_range_errors() {
+        // D76<0>::MAX is way above D57<0>::MAX
+        let w = D76::<0>::MAX;
+        let r: Result<D57<0>, _> = w.narrow();
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn d76_widen_to_d115() {
+        let a: D76<6> = D38::<6>::from(7).into();
+        let b: D115<6> = a.widen();
+        let n: D76<6> = b.narrow().unwrap();
+        assert_eq!(n, a);
+    }
+
+    #[test]
+    fn defaults_per_tier() {
+        assert_eq!(D76::<2>::default(), D76::<2>::ZERO);
+        #[cfg(feature = "x-wide")]
+        {
+            use decimal_scaled::{D153, D307};
+            assert_eq!(D153::<2>::default(), D153::<2>::ZERO);
+            assert_eq!(D307::<2>::default(), D307::<2>::ZERO);
+        }
+    }
+
+    #[cfg(feature = "x-wide")]
+    #[test]
+    fn d153_widen_to_d230_then_d307() {
+        use decimal_scaled::{D153, D230, D307};
+        let a: D153<6> = D76::<6>::from(7).widen().widen(); // D76 -> D115 -> D153
+        let b: D230<6> = a.widen();
+        let n: D153<6> = b.narrow().unwrap();
+        assert_eq!(n, a);
+
+        let c: D307<6> = b.widen();
+        let n: D230<6> = c.narrow().unwrap();
+        assert_eq!(n, b);
+
+        // Out-of-range narrow stays the same shape.
+        let big_153 = D153::<0>::MAX;
+        let r: Result<D115<0>, _> = big_153.narrow();
+        assert!(r.is_err());
+        let big_307 = D307::<0>::MAX;
+        let r: Result<D230<0>, _> = big_307.narrow();
+        assert!(r.is_err());
+    }
+
+    // â”€â”€â”€ Const-generic `widen_n` / `narrow_n` sugar (story 1.2.2) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+    #[test]
+    fn widen_n_d18_to_d38_lossless() {
+        // D18 (Int<1>) â†’ D38 (Int<2>), same scale, exact.
+        let a = D18::<9>::from(7);
+        let w: D38<9> = a.widen_n::<2>();
+        // Same logical value: widening sign-extends, scale unchanged.
+        assert_eq!(i128::from(w.to_bits()), i128::from(a.to_bits()));
+    }
+
+    #[test]
+    fn widen_n_is_const() {
+        // The const-generic sugar must be usable in const context â€” this is
+        // the property that distinguishes it from the trait `From` widen.
+        const A: D18<2> = D18::<2>::from_bits(decimal_scaled::Int::<1>::from_limbs([700]));
+        const W: D38<2> = A.widen_n::<2>();
+        assert_eq!(i128::from(W.to_bits()), 700);
+    }
+
+    #[test]
+    fn narrow_n_d38_to_d18_in_range_and_out() {
+        // In range: D38 value that fits Int<1> narrows back exactly.
+        let a = D38::<2>::from(7);
+        let n: Option<D18<2>> = a.narrow_n::<1>();
+        assert!(n.is_some());
+        assert_eq!(n.unwrap().to_bits(), 700);
+
+        // Out of range: D38::MAX cannot fit Int<1> â†’ None.
+        let big = D38::<0>::MAX;
+        let n: Option<D18<0>> = big.narrow_n::<1>();
+        assert!(n.is_none());
+    }
+
+    #[test]
+    fn narrow_n_const_is_const() {
+        const A: D38<0> = D38::<0>::from_bits(decimal_scaled::Int::<2>::from_limbs([5, 0]));
+        const N: Option<D18<0>> = A.narrow_n::<1>();
+        assert!(N.is_some());
+        assert_eq!(N.unwrap().to_bits(), 5);
+    }
+
+    // COMPILE-TIME LOCK â€” D18 (`Int<1>`) is the narrowest decimal storage,
+    // so it has no neighbour `narrow()` method (only `widen()`). The line
+    // below, if uncommented, must fail to compile (no such method) â€” this
+    // pins the "nothing narrower than Int<1>" contract.
+    //
+    //   let _ = D18::<2>::try_from(1).unwrap().narrow();   // E0599: no method `narrow`
+    //
+    // The const-generic `narrow_n::<0>()` likewise has no meaning: the int
+    // base's `try_narrow` debug-asserts `1 <= M`, so a width-0 storage is
+    // rejected rather than silently produced.
+
+    #[cfg(feature = "x-wide")]
+    #[test]
+    fn cross_width_narrowing_d76_to_d18_d9() {
+        // Cross-tier TryFrom skips multiple rungs in one hop; this isn't
+        // the `.narrow()` chain (which steps once) â€” it's the From /
+        // TryFrom matrix that's been comprehensive since 0.2.5.
+        let w: D76<2> = D38::<2>::from(7).into();
+        let n18: D18<2> = w.try_into().unwrap();
+        assert_eq!(n18.to_bits(), 700);
+
+        // Out of range.
+        let big = D76::<2>::MAX;
+        let r: Result<D18<2>, _> = big.try_into();
+        assert!(r.is_err());
     }
 }

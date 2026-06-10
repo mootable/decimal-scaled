@@ -6,48 +6,62 @@ publish = false
 description = "decimal-scaled test subjects + filterable golden gate over the decimal-scaled-golden harness"
 license = "MIT OR Apache-2.0"
 
-# This crate isolates the heavy full-surface golden run (every band-edge
-# (width,scale) cell x every strict transcendental = thousands of
-# monomorphisations) from the core library's `cargo test`, and hosts the
-# consolidated integration suite (10.11). Every root-crate feature is passed
-# through 1:1 so the suite runs under any feature set — including the
-# default-feature narrow build; the golden gate target pins its wide-tier
-# requirement via `required-features` below instead of hardcoding it on the
-# dependency line.
+# This crate exists to isolate the heavy full-surface golden run (88 (width,scale)
+# cells × every strict transcendental ≈ thousands of monomorphisations) from the
+# core library's `cargo test`. The decimal-scaled features are mirrored here as
+# passthroughs so each test target compiles under exactly the feature set it
+# declares; the golden gate pins its wide tiers via `required-features`.
 [dependencies]
 decimal-scaled = { path = "..", default-features = false }
 decimal-scaled-golden = { path = "../decimal-scaled-golden" }
 
 [features]
-default  = ["std"]
-std      = ["decimal-scaled/std"]
-alloc    = ["decimal-scaled/alloc"]
-wide     = ["decimal-scaled/wide"]
-x-wide   = ["decimal-scaled/x-wide"]
-xx-wide  = ["decimal-scaled/xx-wide"]
-macros   = ["decimal-scaled/macros"]
-serde    = ["decimal-scaled/serde"]
-dyn      = ["decimal-scaled/dyn"]
-strict   = ["decimal-scaled/strict"]
-fast     = ["decimal-scaled/fast"]
+# Mirror the root crate's DEFAULT set (std, serde, strict, exact-scratch) so a
+# plain `cargo test -p decimal-scale-test` exercises the migrated tests in the
+# same feature world the root's default `cargo test` always ran them in. A
+# bare-["std"] default would compile decimal-scaled in a configuration the
+# root CI never builds (std without exact-scratch/strict/serde).
+default = ["std", "serde", "strict", "exact-scratch"]
+std = ["alloc", "decimal-scaled/std"]
+alloc = ["decimal-scaled/alloc"]
+exact-scratch = ["decimal-scaled/exact-scratch"]
+# The wide umbrellas mirror the root's nesting (each umbrella turns on its
+# per-tier features) so migrated `#[cfg(feature = "dNN")]` gates keep firing
+# exactly as they did when the tests lived in the root crate.
+wide = ["d57", "d76", "d115", "d153", "d230", "d307", "decimal-scaled/wide"]
+x-wide = ["wide", "d462", "d616", "decimal-scaled/x-wide"]
+xx-wide = ["x-wide", "d924", "d1232", "decimal-scaled/xx-wide"]
+d57 = ["decimal-scaled/d57"]
+d76 = ["decimal-scaled/d76"]
+d115 = ["decimal-scaled/d115"]
+d153 = ["decimal-scaled/d153"]
+d230 = ["decimal-scaled/d230"]
+d307 = ["decimal-scaled/d307"]
+d462 = ["decimal-scaled/d462"]
+d616 = ["decimal-scaled/d616"]
+d924 = ["decimal-scaled/d924"]
+d1232 = ["decimal-scaled/d1232"]
+macros = ["decimal-scaled/macros"]
+serde = ["decimal-scaled/serde"]
+dyn = ["decimal-scaled/dyn"]
+strict = ["decimal-scaled/strict"]
+fast = ["decimal-scaled/fast"]
 cross-scale-ops = ["decimal-scaled/cross-scale-ops"]
-# Compile-time default-RoundingMode selectors, mirrored from the root crate
-# so the def-rnd-gated test files keep their `#![cfg]` guards meaningful here.
 rounding-half-away-from-zero = ["decimal-scaled/rounding-half-away-from-zero"]
 rounding-half-toward-zero = ["decimal-scaled/rounding-half-toward-zero"]
 rounding-trunc = ["decimal-scaled/rounding-trunc"]
 rounding-floor = ["decimal-scaled/rounding-floor"]
 rounding-ceiling = ["decimal-scaled/rounding-ceiling"]
 
+# Serde wire-format round-trips in tests/api/serde.rs (JSON human-readable +
+# postcard binary forms). Test-only.
 [dev-dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+postcard = { version = "1", default-features = false, features = ["alloc"] }
 # The relocated num-traits surface tests exercise the root crate's
 # num-traits impls directly.
 num-traits = { version = "0.2", default-features = false }
-
-# The full-surface golden gate is always a full-width run.
-[[test]]
-name = "golden"
-required-features = ["wide", "x-wide", "xx-wide"]
 
 # Mirror the root crate's rust-lint envelope so the relocated tests keep the
 # warning policy they were written under (e.g. deliberately unused bindings
@@ -56,3 +70,13 @@ required-features = ["wide", "x-wide", "xx-wide"]
 unsafe_code = "forbid"
 unused_variables = "allow"
 dead_code = "allow"
+
+[[test]]
+name = "golden"
+required-features = ["wide", "x-wide", "xx-wide"]
+
+# Nightly-only (`generic_const_exprs`): the cross-scale free-function surface.
+# `required-features` keeps the target out of every build that does not opt in.
+[[test]]
+name = "nightly_cross_scale"
+required-features = ["cross-scale-ops"]
