@@ -75,5 +75,16 @@ pub fn row_filter(
     stripe: Option<(usize, usize)>,
 ) -> impl Fn(Function, &GoldenCase) -> bool {
     let sampler = sampled(sample);
-    move |f, c| sampler(f, c) && stripe.is_none_or(|(k, n)| c.line % n == k)
+    // The raw file line CANNOT feed the modulo directly: every golden data row
+    // carries a `//` provenance line above it, so data lines stride by 2 and a
+    // raw `line % n` parity-locks (odd stripes empty, even stripes doubled).
+    // A multiplicative hash (Fibonacci/Knuth constant) decorrelates the stripe
+    // from any file layout while staying a deterministic PARTITION of the rows.
+    move |f, c| {
+        sampler(f, c)
+            && stripe.is_none_or(|(k, n)| {
+                let h = (c.line as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15) >> 32;
+                h as usize % n == k
+            })
+    }
 }
