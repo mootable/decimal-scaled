@@ -993,8 +993,7 @@ mod from_transcendental_overflow_uniform {
     //! here.
 
     // The strict surface is the default build; skip under a non-default
-    // rounding mode or the f64-bridge `fast` path (same gate as the sibling
-    // `narrow_strict_transcendentals` suite).
+    // rounding mode or the f64-bridge `fast` path.
     #![cfg(all(
         not(feature = "fast"),
         not(any(

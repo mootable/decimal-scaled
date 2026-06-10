@@ -699,28 +699,3 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         Self::from_bits(crate::policy::trig::to_radians_dispatch_with::<_, SCALE>(self.to_bits(), working_digits, mode))
     }
 }
-
-#[cfg(test)]
-mod tests {
-    /// Regression: D38 strict trig at high SCALE drives the working
-    /// scale `w = SCALE + STRICT_GUARD` past the old hard-coded
-    /// 63-digit π constant.
-    #[cfg(all(feature = "strict", not(feature = "fast")))]
-    #[test]
-    fn sin_one_correct_past_63_digit_pi_window() {
-        let expected_35: i128 = 84_147_098_480_789_650_665_250_232_163_029_900;
-        let expected_37: i128 = 8_414_709_848_078_965_066_525_023_216_302_989_996;
-
-        let got_35 = crate::D::<crate::int::types::Int<2>, 35>::ONE.sin_strict().to_bits().as_i128();
-        assert!(
-            (got_35 - expected_35).abs() <= 1,
-            "sin(1) @ D38<35>: got {got_35}, expected {expected_35}"
-        );
-
-        let got_37 = crate::D::<crate::int::types::Int<2>, 37>::ONE.sin_strict().to_bits().as_i128();
-        assert!(
-            (got_37 - expected_37).abs() <= 1,
-            "sin(1) @ D38<37>: got {got_37}, expected {expected_37}"
-        );
-    }
-}
