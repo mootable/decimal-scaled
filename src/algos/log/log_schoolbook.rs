@@ -177,7 +177,7 @@ mod tests {
         let rx = Int::<2>::from_i128(x);
         let rb = Int::<2>::from_i128(b);
         let got = log_schoolbook_strict::<S>(rx, rb, mode);
-        let expected = log_strict::<S>(rx, rb, mode);
+        let expected = log_strict::<S>(rx, rb, mode).expect("reference in range");
         assert_eq!(got, expected,
             "log schoolbook D38<{}> x={} b={} mode={:?}: {:?} != {:?}",
             S, x, b, mode, got, expected);

@@ -186,7 +186,7 @@ mod tests {
     fn check<const S: u32>(raw_i: i128, mode: RoundingMode) {
         let raw = Int::<2>::from_i128(raw_i);
         let got = ln_schoolbook_strict::<S>(raw, mode);
-        let expected = ln_strict::<S>(raw, mode);
+        let expected = ln_strict::<S>(raw, mode).expect("reference in range");
         assert_eq!(got, expected,
             "ln schoolbook D38<{}> raw={} mode={:?}: {:?} != {:?}",
             S, raw_i, mode, got, expected);

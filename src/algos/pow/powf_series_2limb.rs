@@ -353,9 +353,11 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "result out of range")]
-    fn out_of_range_positive_power_panics() {
-        // `10² = 100` exceeds the storage MAX (≈17) — must panic, not wrap.
-        let _ = powf(10, 2);
+    fn out_of_range_positive_power_signals_none() {
+        // `10² = 100` exceeds the storage MAX (≈17) — the kernel must
+        // signal `None` (the policy dispatch wrapper turns it into the
+        // default form's panic; the `checked_` surface propagates it),
+        // never a wrapped value.
+        assert_eq!(powf_strict_raw::<S>(10 * ONE, 2 * ONE, M), None);
     }
 }

@@ -835,11 +835,12 @@ mod fast_path_validity {
                         let wide = match std::panic::catch_unwind(|| {
                             exp_wide_narrow_raw(raw, scale, STRICT_GUARD, mode)
                         }) {
-                            Ok(v) => v,
+                            Ok(Some(v)) => v,
                             // Wide reference itself overflows i128 — the
                             // narrow tier cannot represent the result; both
-                            // paths panic, not a fast-vs-wide question.
-                            Err(_) => continue,
+                            // paths report out of range, not a fast-vs-wide
+                            // question.
+                            Ok(None) | Err(_) => continue,
                         };
                         let fast = fast_exp_raw_ungated(raw, scale, mode);
                         assert_eq!(
@@ -940,12 +941,10 @@ mod fast_path_validity {
             let fast_ns = t0.elapsed().as_nanos() as f64 / ITERS as f64;
             let t1 = Instant::now();
             for _ in 0..ITERS {
-                acc = acc.wrapping_add(exp_wide_narrow_raw(
-                    std::hint::black_box(raw),
-                    scale,
-                    STRICT_GUARD,
-                    mode,
-                ));
+                acc = acc.wrapping_add(
+                    exp_wide_narrow_raw(std::hint::black_box(raw), scale, STRICT_GUARD, mode)
+                        .unwrap_or(0),
+                );
             }
             let wide_ns = t1.elapsed().as_nanos() as f64 / ITERS as f64;
             std::hint::black_box(acc);
@@ -977,15 +976,15 @@ mod fast_path_validity {
             } else {
                 gfloor
             };
-            assert_eq!(got, want, "exp2(93.013986656) s9 mode={mode:?}");
+            assert_eq!(got, Some(want), "exp2(93.013986656) s9 mode={mode:?}");
         }
         // Integer-regime inputs whose result still fits i128 at scale 9:
         // 2^x·10^9 < i128::MAX ≈ 1.7·10^38 ⇒ x ≲ 97. (2^100·10^9 ≈ 1.3·10^39
         // overflows and correctly panics, so keep the sweep below that.)
         for &r in &[50_000_000_000_i128, 70_000_000_000, 90_000_000_000] {
-            let he = exp2_with_raw(r, S9, STRICT_GUARD, RoundingMode::HalfToEven);
-            let fl = exp2_with_raw(r, S9, STRICT_GUARD, RoundingMode::Floor);
-            let ce = exp2_with_raw(r, S9, STRICT_GUARD, RoundingMode::Ceiling);
+            let he = exp2_with_raw(r, S9, STRICT_GUARD, RoundingMode::HalfToEven).expect("in range");
+            let fl = exp2_with_raw(r, S9, STRICT_GUARD, RoundingMode::Floor).expect("in range");
+            let ce = exp2_with_raw(r, S9, STRICT_GUARD, RoundingMode::Ceiling).expect("in range");
             assert!(fl <= he && he <= ce, "exp2 rounding order violated at raw={r}");
             assert!(ce - fl <= 1, "exp2 floor/ceil differ by >1 at raw={r}");
         }
