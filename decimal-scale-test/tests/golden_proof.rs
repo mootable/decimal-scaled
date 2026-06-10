@@ -3,6 +3,10 @@
 //! (`DsSubject::new(38, 19)`, the same adapter the full surface enumerates); the
 //! full 88-cell run is the `golden` gate.
 
+// The erased `DsSubject` dispatch enumerates every tier, so the proof needs the
+// full-width build (same requirement the golden gate pins via `required-features`).
+#![cfg(all(feature = "wide", feature = "x-wide", feature = "xx-wide"))]
+
 use decimal_scaled_golden::{
     ExecutionResult, FileLoader, Function, GoldenRunner, Outcome, OverflowValidator, ParallelRunner,
     RoundingValidator, RunOnce,
