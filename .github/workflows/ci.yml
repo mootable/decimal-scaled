@@ -5,19 +5,20 @@ name: "✅ ci (pre-merge gates)"
 # broken docs, or a clippy regression is caught BEFORE merge — not
 # discovered post-merge or at release time.
 #
-# Why this exists alongside precision.yml / docs.yml:
-#   * precision.yml runs only the precision-specific `--test` files,
-#     so it never compiles the example/bench targets. The 0.4.4
-#     example-gating breakage (`karabench` / `profile_*` examples
-#     failing to build under the wrong feature set) was therefore
-#     invisible to CI. A FULL `cargo test` build — which compiles
-#     every target — would have caught it. This workflow runs that.
-#   * docs.yml only runs on push to `main`, i.e. AFTER merge. Broken
-#     intra-doc links thus reach `main` before anyone notices. This
-#     workflow runs the same `-D warnings` doc build pre-merge.
+# Golden gating is STRIPED, not sampled: `golden-build` compiles the
+# release gate exe ONCE and stages just the binary (the bbc pattern —
+# never the target/ dir); `golden-quick` fans the FULL input surface
+# out over `STRIPE_COUNT` parallel jobs via `GOLDEN_STRIPE=k/n` (a
+# disjoint row partition — union is every row, nothing sampled away)
+# under the default rounding mode and BLOCKS; `golden-comprehensive`
+# runs the same stripes across ALL SIX modes and is advisory (not a
+# required check — a red here means roll back or bisect the push).
+# Each stripe uploads a mini report (results.tsv + summary) readable
+# the moment it finishes; the splice jobs combine them in stripe
+# order into one surface report.
 #
-# Gates (must pass): tests, golden, no_std, docs, msrv.
-# Informational (never fails the build): clippy.
+# Gates (must pass): tests, golden-quick (+splice), no_std, docs, msrv.
+# Advisory (not required checks): golden-comprehensive, clippy.
 
 on:
   pull_request:
@@ -28,6 +29,12 @@ on:
 
 permissions:
   contents: read
+
+env:
+  # The golden stripe modulus — the ONE knob for shard count. Tune from
+  # the per-stripe timings in the splice summaries (owner 2026-06-11:
+  # start at 10, review the first run).
+  STRIPE_COUNT: "10"
 
 concurrency:
   # Match bench-branch-compare: let the in-progress run finish (don't waste a
@@ -40,8 +47,8 @@ jobs:
   # GATE: the full test suite. Builds every target (lib, tests,
   # examples, benches) under the widest stable feature set, then the
   # default-feature suite. Builds-all is the point — it is what would
-  # have caught the 0.4.4 example-gating breakage that precision.yml's
-  # per-file `--test` scope misses.
+  # have caught the 0.4.4 example-gating breakage that per-file
+  # `--test` scoping misses.
   tests:
     name: tests (gate)
     runs-on: ubuntu-latest
@@ -72,12 +79,11 @@ jobs:
       - name: Full test suite (wide tiers + macros)
         # The full `cargo test` — no `--test` scoping — so every
         # example and bench target is compiled as part of the run.
-        # NOTE: `golden` is intentionally NOT passed, so the heavy
-        # `ulp_strict_golden` mpmath-oracle suite (gated behind the
-        # `golden` required-feature) is excluded here — it has its own
-        # parallel `golden (gate)` job below, run in release. This keeps
-        # `tests (gate)` fast (builds-all + the quick suite) so a normal
-        # test failure surfaces without waiting behind the golden run.
+        # NOTE: `golden` is intentionally NOT passed, so the legacy
+        # `ulp_strict_golden` suite (gated behind the `golden`
+        # required-feature, retiring in the old-golden cleanup) is
+        # excluded; the golden surface is the striped release gate
+        # below.
         run: cargo test --features wide,x-wide,xx-wide,macros
 
       - name: Default-feature test suite (narrow tiers)
@@ -85,18 +91,18 @@ jobs:
         # `#![cfg(feature = ...)]` module gates plus Cargo.toml
         # `required-features` on the targets that name every tier — so
         # a plain default `cargo test` compiles and runs the narrow-tier
-        # (D9/D18/D38) subset. This verifies the default-feature
-        # consumer surface BEHAVES, not merely builds; before the test
-        # files were gated, only a `cargo check` was possible here.
+        # subset. This verifies the default-feature consumer surface
+        # BEHAVES, not merely builds.
         run: cargo test
 
       - name: Consolidated test suite (decimal-scale-test, full features)
         # The migrated integration suite lives in `decimal-scale-test`
-        # (10.11). The crate passes every feature through to the root
-        # crate, so this leg runs the widest stable surface. The heavy
-        # golden targets stay out of the way: `golden` carries
-        # `required-features` + `#[ignore]`, so only the quick tests run.
-        run: cargo test -p decimal-scale-test --features wide,x-wide,xx-wide,macros,serde,alloc,dyn
+        # (10.11). The crate's default features mirror the root default
+        # (std/serde/strict/exact-scratch), so only the non-default
+        # axes are spelled out. The heavy golden targets stay out of
+        # the way: `golden` carries `required-features` + `#[ignore]`,
+        # so only the quick tests run.
+        run: cargo test -p decimal-scale-test --features wide,x-wide,xx-wide,macros,dyn
 
       - name: Consolidated test suite (decimal-scale-test, default features)
         # Default-feature (narrow-tier) run of the migrated suite — the
@@ -105,19 +111,26 @@ jobs:
         # narrow-build-only).
         run: cargo test -p decimal-scale-test
 
-  # GATE: the golden suite, split out of `tests (gate)` so it runs in
-  # PARALLEL with it, in RELEASE. Runs the `decimal-scale-test` gate —
-  # one erased subject over every band-edge (width, scale) cell across
-  # ALL SIX rounding modes (a directed-rounding regression shows only
-  # under Ceiling/Floor/Trunc), row-sampled via GOLDEN_SAMPLE for
-  # per-push latency (1-in-10 rows plus each file's edge lines, where
-  # the near-grid-line cases live). The FULL unsampled sweep is the
-  # dispatch-only golden (comprehensive) workflow. On `release/*` this
-  # is the sole golden gate (precision.yml is main-only).
-  golden:
-    name: golden (gate)
+  # Emits the stripe-index matrix from STRIPE_COUNT so the shard count
+  # is a one-line change at the top of this file.
+  golden-plan:
+    name: golden (plan)
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 5
+    outputs:
+      stripes: ${{ steps.gen.outputs.stripes }}
+    steps:
+      - name: Generate stripe indices
+        id: gen
+        run: echo "stripes=$(python3 -c "import json, os; print(json.dumps(list(range(int(os.environ['STRIPE_COUNT'])))))")" >> "$GITHUB_OUTPUT"
+
+  # Compile the golden gate exe ONCE (release), stage just the binary —
+  # the bbc `build` pattern. The stripe jobs download the exe and run;
+  # no recompile, never an upload of target/.
+  golden-build:
+    name: golden (build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -136,17 +149,225 @@ jobs:
           restore-keys: |
             cargo-ci-golden-${{ runner.os }}-
 
-      - name: All-mode golden gate (release, sampled)
-        # `-p decimal-scale-test` scopes the build to the gate crate (the
-        # root crate's bench dev-deps — plotters/fontconfig — never
-        # compile). The wide-tier features are passed explicitly now that
-        # the crate's dependency line no longer hardcodes them (the
-        # `golden` target also pins them via `required-features`).
-        # GOLDEN_SAMPLE keeps ~1-in-10 golden rows plus each
-        # file's first lines, so all six modes fit per-push latency.
+      - name: Compile the golden gate (release, no run)
+        # `-p decimal-scale-test` scopes the build to the gate crate
+        # (the root crate's bench dev-deps — plotters/fontconfig —
+        # never compile).
+        run: cargo test -p decimal-scale-test --release --features wide,x-wide,xx-wide --test golden --no-run
+
+      - name: Stage the gate exe
+        run: |
+          set -euo pipefail
+          exe=$(ls -t target/release/deps/golden-* | grep -v '\.d$' | head -1)
+          mkdir -p staged
+          cp "$exe" staged/golden
+          chmod +x staged/golden
+          echo "staged: $exe"
+
+      - name: Upload the gate exe
+        uses: actions/upload-artifact@v7
+        with:
+          name: golden-exe
+          path: staged/
+          if-no-files-found: error
+          retention-days: 3
+
+  # GATE: the quick golden surface — FULL input set, every cell, the
+  # default rounding mode, partitioned over the stripe fleet. Each
+  # stripe posts its summary to the job step-summary and uploads its
+  # mini report immediately, so a finished stripe is readable while
+  # the rest still run.
+  golden-quick:
+    name: golden quick (stripe ${{ matrix.stripe }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [golden-plan, golden-build]
+    strategy:
+      fail-fast: false
+      matrix:
+        stripe: ${{ fromJSON(needs.golden-plan.outputs.stripes) }}
+
+    steps:
+      - name: Checkout (golden data)
+        uses: actions/checkout@v6
+
+      - name: Download the gate exe
+        uses: actions/download-artifact@v8
+        with:
+          name: golden-exe
+
+      - name: Run stripe (default mode, full rows)
         env:
-          GOLDEN_SAMPLE: "10"
-        run: cargo test -p decimal-scale-test --release --features wide,x-wide,xx-wide --test golden golden_all_modes -- --ignored --nocapture
+          GOLDEN_STRIPE: "${{ matrix.stripe }}/${{ env.STRIPE_COUNT }}"
+          GOLDEN_REPORT_DIR: stripe-report
+          GOLDEN_DIR: ${{ github.workspace }}/decimal-scaled-golden/golden
+        run: |
+          set -euo pipefail
+          chmod +x golden
+          ./golden golden_default --ignored --nocapture
+
+      - name: Mini report → step summary
+        if: always()
+        run: |
+          if [ -f stripe-report/summary.txt ]; then
+            cat stripe-report/summary.txt >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload stripe mini report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: golden-quick-stripe-${{ matrix.stripe }}
+          path: stripe-report/
+          if-no-files-found: warn
+          retention-days: 7
+
+  # GATE: splice the quick stripes back together in stripe order — one
+  # combined TSV + the per-stripe summary table. Also the single
+  # required check that proves EVERY stripe ran and reported.
+  golden-quick-splice:
+    name: golden quick (splice)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [golden-plan, golden-quick]
+
+    steps:
+      - name: Download all stripe reports
+        uses: actions/download-artifact@v8
+        with:
+          pattern: golden-quick-stripe-*
+          path: stripes/
+
+      - name: Splice in stripe order
+        env:
+          STRIPES: ${{ needs.golden-plan.outputs.stripes }}
+        run: |
+          set -euo pipefail
+          mkdir -p combined
+          : > combined/summaries.txt
+          head_done=0
+          for k in $(python3 -c "import json,os;print(' '.join(map(str, json.loads(os.environ['STRIPES']))))"); do
+            dir="stripes/golden-quick-stripe-${k}"
+            test -f "$dir/summary.txt" || { echo "MISSING stripe ${k} report" >&2; exit 1; }
+            cat "$dir/summary.txt" >> combined/summaries.txt
+            if [ "$head_done" -eq 0 ]; then
+              cat "$dir/results.tsv" > combined/results.tsv; head_done=1
+            else
+              tail -n +2 "$dir/results.tsv" >> combined/results.tsv
+            fi
+          done
+          {
+            echo "## golden quick — combined (default mode, full surface)"
+            echo '```'
+            cat combined/summaries.txt
+            echo '```'
+            echo "rows: $(($(wc -l < combined/results.tsv) - 1))"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload combined report
+        uses: actions/upload-artifact@v7
+        with:
+          name: golden-quick-combined
+          path: combined/
+          if-no-files-found: error
+          retention-days: 14
+
+  # ADVISORY: the comprehensive surface — the same stripe fleet, ALL
+  # SIX rounding modes, full rows. Not a required check (a red here
+  # means roll the push back or bisect — it must never block the
+  # quick-gate merge loop), but it runs on every push so directed-mode
+  # regressions surface within the hour, not at the next dispatch.
+  golden-comprehensive:
+    name: golden comprehensive (stripe ${{ matrix.stripe }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: [golden-plan, golden-build]
+    strategy:
+      fail-fast: false
+      matrix:
+        stripe: ${{ fromJSON(needs.golden-plan.outputs.stripes) }}
+
+    steps:
+      - name: Checkout (golden data)
+        uses: actions/checkout@v6
+
+      - name: Download the gate exe
+        uses: actions/download-artifact@v8
+        with:
+          name: golden-exe
+
+      - name: Run stripe (all six modes, full rows)
+        env:
+          GOLDEN_STRIPE: "${{ matrix.stripe }}/${{ env.STRIPE_COUNT }}"
+          GOLDEN_REPORT_DIR: stripe-report
+          GOLDEN_DIR: ${{ github.workspace }}/decimal-scaled-golden/golden
+        run: |
+          set -euo pipefail
+          chmod +x golden
+          ./golden golden_all_modes --ignored --nocapture
+
+      - name: Mini report → step summary
+        if: always()
+        run: |
+          if [ -f stripe-report/summary.txt ]; then
+            cat stripe-report/summary.txt >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload stripe mini report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: golden-comprehensive-stripe-${{ matrix.stripe }}
+          path: stripe-report/
+          if-no-files-found: warn
+          retention-days: 7
+
+  golden-comprehensive-splice:
+    name: golden comprehensive (splice)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [golden-plan, golden-comprehensive]
+
+    steps:
+      - name: Download all stripe reports
+        uses: actions/download-artifact@v8
+        with:
+          pattern: golden-comprehensive-stripe-*
+          path: stripes/
+
+      - name: Splice in stripe order
+        env:
+          STRIPES: ${{ needs.golden-plan.outputs.stripes }}
+        run: |
+          set -euo pipefail
+          mkdir -p combined
+          : > combined/summaries.txt
+          head_done=0
+          for k in $(python3 -c "import json,os;print(' '.join(map(str, json.loads(os.environ['STRIPES']))))"); do
+            dir="stripes/golden-comprehensive-stripe-${k}"
+            test -f "$dir/summary.txt" || { echo "MISSING stripe ${k} report" >&2; exit 1; }
+            cat "$dir/summary.txt" >> combined/summaries.txt
+            if [ "$head_done" -eq 0 ]; then
+              cat "$dir/results.tsv" > combined/results.tsv; head_done=1
+            else
+              tail -n +2 "$dir/results.tsv" >> combined/results.tsv
+            fi
+          done
+          {
+            echo "## golden comprehensive — combined (all six modes, full surface)"
+            echo '```'
+            cat combined/summaries.txt
+            echo '```'
+            echo "rows: $(($(wc -l < combined/results.tsv) - 1))"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload combined report
+        uses: actions/upload-artifact@v7
+        with:
+          name: golden-comprehensive-combined
+          path: combined/
+          if-no-files-found: error
+          retention-days: 14
 
   # GATE: the no_std + alloc build. The crate is `#![no_std]` under
   # non-default features, but no workflow exercised that build, so a
