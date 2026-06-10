@@ -794,6 +794,8 @@ harness = false
 required-features = ["wide", "x-wide", "macros", "bench-alt"]
 
 [lints.rust]
+# The crate is 100% safe Rust; keep it that way.
+unsafe_code = "forbid"
 unused_variables = "allow"
 dead_code = "allow"
 

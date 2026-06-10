@@ -34,3 +34,7 @@ proc-macro-crate = "3"
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs"]
+
+[lints.rust]
+# The crate is 100% safe Rust; keep it that way.
+unsafe_code = "forbid"
