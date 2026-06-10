@@ -367,6 +367,26 @@ pub(crate) fn sinh_tiny_excess_visible<St: BigInt + Copy, W: BigInt>(absr: St, s
             * crate::consts::pow10::dispatch::<W>(3 * scale - FRAC_PRECISION_HORIZON)
 }
 
+/// Whether the tiny-band cubic deficit of `tanh` (`x³/3`, sitting just BELOW
+/// the grid line `|raw|` in magnitude) survives into the golden value. The
+/// deficit borrows a 9-run from just below the leading digit, so once it
+/// exists it is always print-visible; it exists while its RELATIVE position
+/// (`x²/3` of the value) is within [`VALUE_PRECISION_HORIZON`] — deeper, the
+/// carried value rounds back up to exactly `x` and `tanh(x)` is `x` for
+/// every mode. Visible ⟺ `absr² >= 3·10^(2·scale − VALUE_HORIZON)` (always,
+/// when `2·scale` is within it); exact integer compare in the tier work int
+/// `W` (the band bounds `absr² <= 10^(4·scale/3)`, within `W`'s range).
+#[inline]
+pub(crate) fn tanh_tiny_deficit_visible<St: BigInt + Copy, W: BigInt>(absr: St, scale: u32) -> bool {
+    if 2 * scale <= VALUE_PRECISION_HORIZON {
+        return true;
+    }
+    let a: W = BigInt::resize_to::<W>(absr);
+    a * a
+        >= <W as BigInt>::from_i128(3)
+            * crate::consts::pow10::dispatch::<W>(2 * scale - VALUE_PRECISION_HORIZON)
+}
+
 /// `exp_strict` for a wide tier — generic over the tier `C`.
 ///
 /// `raw == 0` short-circuits to the type's `ONE` raw (`10^SCALE`) rather

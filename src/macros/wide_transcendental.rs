@@ -4265,14 +4265,25 @@ macro_rules! decl_wide_transcendental {
                     let thresh_exp = SCALE - SCALE.div_ceil(3);
                     let thresh = <$Storage>::from_i128(10).pow(thresh_exp);
                     if raw.abs() <= thresh {
-                        return Self::from_bits(
-                            $crate::support::rounding::tiny_odd_compressing_directed(
-                                raw,
-                                zero,
-                                <$Storage>::from_i128(1),
-                                mode,
-                            ),
-                        );
+                        // The directed nudge applies only while the cubic
+                        // deficit survives at the crate's precision horizon;
+                        // past it the carried value rounds back to exactly
+                        // `x` and no mode nudges.
+                        if $crate::algos::support::wide_trig_core::tanh_tiny_deficit_visible::<
+                            $Storage,
+                            $core::W,
+                        >(raw.abs(), SCALE)
+                        {
+                            return Self::from_bits(
+                                $crate::support::rounding::tiny_odd_compressing_directed(
+                                    raw,
+                                    zero,
+                                    <$Storage>::from_i128(1),
+                                    mode,
+                                ),
+                            );
+                        }
+                        return self;
                     }
                 }
                 // Saturation-edge lift. For a large `|x|` the intermediate

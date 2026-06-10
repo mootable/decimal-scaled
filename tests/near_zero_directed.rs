@@ -194,6 +194,45 @@ fn sinh_cubic_past_horizon_is_exact() {
     }
 }
 
+// ── tanh ────────────────────────────────────────────────────────────
+
+#[test]
+fn tanh_visible_deficit_keeps_directed_nudge() {
+    // tanh(±1e-616) at scale 1231: the cubic deficit x³/3 survives at the
+    // crate's precision (its 9-run below the leading digit is visible) —
+    // tanh compresses, so Trunc and Floor round a positive argument one ULP
+    // toward zero / down; Ceiling and the nearest modes keep the grid line.
+    let v = D1232::<1231>::from_str(&tiny(616)).unwrap();
+    let down = v - D1232::<1231>::from_str(&tiny(1231)).unwrap();
+    assert_eq!(v.tanh_strict_with(Trunc), down);
+    assert_eq!(v.tanh_strict_with(Floor), down);
+    assert_eq!(v.tanh_strict_with(Ceiling), v);
+    assert_eq!(v.tanh_strict_with(HalfToEven), v);
+    let n = -v;
+    assert_eq!(n.tanh_strict_with(Trunc), -down);
+    assert_eq!(n.tanh_strict_with(Ceiling), -down);
+    assert_eq!(n.tanh_strict_with(Floor), n);
+}
+
+#[test]
+fn tanh_deficit_past_horizon_is_exact() {
+    // tanh(±1e-693): the cubic deficit's relative position (~1387) lies past
+    // the carried value precision — the value rounds back to exactly x, so
+    // NO mode nudges. Checked both at a deep scale and at the scale where
+    // the argument is a single ULP (where a stale Trunc nudge would have
+    // collapsed it to zero).
+    let v = D1232::<1231>::from_str(&tiny(693)).unwrap();
+    for mode in [Ceiling, Floor, Trunc, HalfToEven, HalfAwayFromZero, HalfTowardZero] {
+        assert_eq!(v.tanh_strict_with(mode), v, "pos {mode:?}");
+        assert_eq!((-v).tanh_strict_with(mode), -v, "neg {mode:?}");
+    }
+    let u = D924::<693>::from_str(&tiny(693)).unwrap();
+    for mode in [Ceiling, Floor, Trunc, HalfToEven, HalfAwayFromZero, HalfTowardZero] {
+        assert_eq!(u.tanh_strict_with(mode), u, "ulp pos {mode:?}");
+        assert_eq!((-u).tanh_strict_with(mode), -u, "ulp neg {mode:?}");
+    }
+}
+
 // ── exp2 ────────────────────────────────────────────────────────────
 
 #[test]
