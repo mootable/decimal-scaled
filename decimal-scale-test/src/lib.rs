@@ -317,15 +317,21 @@ impl DecimalSubject for DsSubject {
 /// GOLDEN_MODES=ceiling,floor                  # subset the rounding modes
 /// GOLDEN_FUNCS=exp,cosh                       # subset the functions
 /// GOLDEN_SAMPLE=50                            # keep ~1-in-50 golden rows (+ the edges)
+/// GOLDEN_STRIPE=3/20                          # keep rows where line % 20 == 3 (a CI shard)
 /// ```
 ///
 /// An unset (or empty) list means "all"; `GOLDEN_SAMPLE` defaults to 1 (keep every row).
+/// `GOLDEN_STRIPE=k/n` partitions the rows round-robin across `n` parallel jobs: the
+/// stripes are disjoint and their union is exactly the full set (unlike `GOLDEN_SAMPLE`,
+/// which keeps a subset), so a striped fleet still checks every row. The modulus `n` is
+/// free — CI passes it from one workflow-level variable so the shard count is tunable.
 pub struct Filter {
     widths: Option<Vec<u32>>,
     scales: Option<Vec<u32>>,
     modes: Option<Vec<RoundingMode>>,
     funcs: Vec<Function>,
     sample: usize,
+    stripe: Option<(usize, usize)>,
 }
 
 impl Filter {
@@ -342,6 +348,7 @@ impl Filter {
                 .and_then(|s| s.trim().parse().ok())
                 .filter(|&n| n >= 1)
                 .unwrap_or(1),
+            stripe: env_nonempty("GOLDEN_STRIPE").and_then(|s| parse_stripe(&s)),
         }
     }
 
@@ -369,6 +376,25 @@ impl Filter {
     pub fn sample(&self) -> usize {
         self.sample
     }
+
+    /// The `(k, n)` row stripe (`GOLDEN_STRIPE=k/n`), or `None` for every row.
+    pub fn stripe(&self) -> Option<(usize, usize)> {
+        self.stripe
+    }
+}
+
+/// Parse `"k/n"` with `n >= 1` and `k < n`; anything else is rejected with a stderr
+/// warning (an out-of-range stripe would silently run zero rows).
+fn parse_stripe(s: &str) -> Option<(usize, usize)> {
+    let (k, n) = s.trim().split_once('/')?;
+    let parsed = match (k.trim().parse::<usize>(), n.trim().parse::<usize>()) {
+        (Ok(k), Ok(n)) if n >= 1 && k < n => Some((k, n)),
+        _ => None,
+    };
+    if parsed.is_none() {
+        eprintln!("GOLDEN_STRIPE: ignoring {s:?} (expected k/n with k < n)");
+    }
+    parsed
 }
 
 /// Parse a rounding-mode name (case-/separator-insensitive, with the common aliases).

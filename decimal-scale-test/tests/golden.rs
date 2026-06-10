@@ -21,11 +21,11 @@ use std::sync::Mutex;
 
 use decimal_scaled_golden::{
     ConsoleReporter, FilterLoader, GoldenRunner, InlineReporter, OverflowValidator, ParallelRunner,
-    RoundingMode, RoundingValidator, RunCollector, RunOnce, RunSummary,
+    Reporter, RoundingMode, RoundingValidator, RunCollector, RunOnce, RunSummary, TsvReporter,
 };
 use decimal_scale_test::{thread_count, DsSubject, Filter, ALL_MODES, GEN_PRECISION};
 
-use common::{sampled, CachingLoader};
+use common::{row_filter, CachingLoader};
 
 /// Serialises the gates: each swaps the process-global panic hook for its run, so two
 /// gates running on parallel test threads would race the take/set/restore sequence.
@@ -44,7 +44,10 @@ fn run(default_modes: &[RoundingMode]) -> RunSummary {
     let runner = ParallelRunner {
         threads: thread_count(),
         strategy: RunOnce,
-        loader: Box::new(FilterLoader::new(CachingLoader::golden(), sampled(filter.sample()))),
+        loader: Box::new(FilterLoader::new(
+            CachingLoader::golden(),
+            row_filter(filter.sample(), filter.stripe()),
+        )),
         validators: vec![
             Box::new(RoundingValidator { gen_precision: GEN_PRECISION }),
             Box::new(OverflowValidator),
@@ -64,9 +67,31 @@ fn run(default_modes: &[RoundingMode]) -> RunSummary {
     }
     std::panic::set_hook(prev_hook);
 
-    ConsoleReporter::gate()
-        .report(&[rc], &mut std::io::stderr())
-        .expect("write golden report")
+    let runs = [rc];
+    let summary = ConsoleReporter::gate()
+        .report(&runs, &mut std::io::stderr())
+        .expect("write golden report");
+
+    // CI stripe support: when `GOLDEN_REPORT_DIR` is set, also drop the full per-cell
+    // TSV plus a one-line summary into that directory. Each striped job uploads its
+    // directory as an artifact the moment it finishes (a mini report readable while
+    // other stripes still run); the aggregate job downloads every stripe and splices
+    // the TSVs into the combined surface report.
+    if let Some(dir) = std::env::var_os("GOLDEN_REPORT_DIR") {
+        let dir = std::path::PathBuf::from(dir);
+        std::fs::create_dir_all(&dir).expect("create GOLDEN_REPORT_DIR");
+        for output in TsvReporter.report(&runs).outputs {
+            std::fs::write(dir.join(&output.name), output.content).expect("write golden tsv");
+        }
+        let stripe = std::env::var("GOLDEN_STRIPE").unwrap_or_else(|_| "-".into());
+        std::fs::write(
+            dir.join("summary.txt"),
+            format!("stripe {stripe}: {summary}
+"),
+        )
+        .expect("write golden summary");
+    }
+    summary
 }
 
 fn check(s: RunSummary) {

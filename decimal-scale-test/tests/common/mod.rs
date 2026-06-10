@@ -24,9 +24,15 @@ impl CachingLoader {
         CachingLoader { inner: FileLoader::new(dir), cache: Mutex::new(HashMap::new()) }
     }
 
-    /// Caching loader over the committed golden set.
+    /// Caching loader over the committed golden set. `GOLDEN_DIR` overrides the
+    /// compile-time path — a staged CI exe runs on a different runner than the one
+    /// that built it, so the baked `CARGO_MANIFEST_DIR` is only valid while GHA
+    /// checkout paths stay deterministic; the env override removes that coupling.
     pub fn golden() -> CachingLoader {
-        CachingLoader::new(golden_dir())
+        match std::env::var("GOLDEN_DIR") {
+            Ok(dir) if !dir.trim().is_empty() => CachingLoader::new(&dir),
+            _ => CachingLoader::new(golden_dir()),
+        }
     }
 }
 
@@ -57,4 +63,17 @@ impl CaseLoader for CachingLoader {
 /// cases live). `n == 1` keeps everything.
 pub fn sampled(n: usize) -> impl Fn(Function, &GoldenCase) -> bool {
     move |_f, c| n <= 1 || c.line <= 4 || c.line % n == 0
+}
+
+/// Compose the 1-in-`sample` subset with an optional `(k, n)` row stripe
+/// (`GOLDEN_STRIPE=k/n`): the stripe keeps rows where `line % n == k`. Stripes are a
+/// PARTITION — disjoint, union = every row — so a fleet of `n` striped jobs covers the
+/// full surface with no overlap (and `sample` can still thin each stripe for local
+/// iteration).
+pub fn row_filter(
+    sample: usize,
+    stripe: Option<(usize, usize)>,
+) -> impl Fn(Function, &GoldenCase) -> bool {
+    let sampler = sampled(sample);
+    move |f, c| sampler(f, c) && stripe.is_none_or(|(k, n)| c.line % n == k)
 }
