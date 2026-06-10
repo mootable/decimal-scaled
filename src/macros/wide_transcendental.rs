@@ -4124,14 +4124,25 @@ macro_rules! decl_wide_transcendental {
                     let thresh_exp = SCALE - SCALE.div_ceil(3);
                     let thresh = <$Storage>::from_i128(10).pow(thresh_exp);
                     if raw.abs() <= thresh {
-                        return Self::from_bits(
-                            $crate::support::rounding::tiny_odd_expanding_directed(
-                                raw,
-                                szero,
-                                <$Storage>::from_i128(1),
-                                mode,
-                            ),
-                        );
+                        // The directed nudge applies only while the cubic is
+                        // within the crate's precision horizon; past it the
+                        // excess is below the crate's resolution and
+                        // `sinh(x)` is exactly `x` for every mode.
+                        if $crate::algos::support::wide_trig_core::sinh_tiny_excess_visible::<
+                            $Storage,
+                            $core::W,
+                        >(raw.abs(), SCALE)
+                        {
+                            return Self::from_bits(
+                                $crate::support::rounding::tiny_odd_expanding_directed(
+                                    raw,
+                                    szero,
+                                    <$Storage>::from_i128(1),
+                                    mode,
+                                ),
+                            );
+                        }
+                        return self;
                     }
                 }
                 // Large-argument lift. `sinh(x) ≈ e^|x|/2` carries

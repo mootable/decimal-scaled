@@ -348,6 +348,25 @@ fn exp_near_min_pin<C: WideTrigCore, const SCALE: u32>(
     })
 }
 
+/// Whether the tiny-band cubic excess of `sinh` (`x³/6`, sitting just ABOVE
+/// the grid line `|raw|` in magnitude) is visible at the crate's precision
+/// horizon: the truncation hides it once its leading digit passes
+/// [`FRAC_PRECISION_HORIZON`], i.e. visible ⟺ `absr³ >= 6·10^(3·scale −
+/// HORIZON)` (always, when `3·scale` is within the horizon). Exact integer
+/// compare in the tier work int `W` — the caller's band bounds `absr³ <=
+/// 10^(2·scale)`, within `W`'s range. Beyond the horizon the excess is below
+/// the crate's resolution and `sinh(x)` is exactly `x` for every mode.
+#[inline]
+pub(crate) fn sinh_tiny_excess_visible<St: BigInt + Copy, W: BigInt>(absr: St, scale: u32) -> bool {
+    if 3 * scale <= FRAC_PRECISION_HORIZON {
+        return true;
+    }
+    let a: W = BigInt::resize_to::<W>(absr);
+    a * a * a
+        >= <W as BigInt>::from_i128(6)
+            * crate::consts::pow10::dispatch::<W>(3 * scale - FRAC_PRECISION_HORIZON)
+}
+
 /// `exp_strict` for a wide tier — generic over the tier `C`.
 ///
 /// `raw == 0` short-circuits to the type's `ONE` raw (`10^SCALE`) rather

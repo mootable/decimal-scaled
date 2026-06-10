@@ -14,7 +14,7 @@ use core::str::FromStr;
 use decimal_scaled::RoundingMode::{
     Ceiling, Floor, HalfAwayFromZero, HalfToEven, HalfTowardZero, Trunc,
 };
-use decimal_scaled::{D1232, D38, D462, D57, D924};
+use decimal_scaled::{D1232, D38, D462, D57, D616, D924};
 
 /// `"0.(k−1 zeros)1"` — the literal for `10^-k`.
 fn tiny(k: usize) -> String {
@@ -161,6 +161,37 @@ fn cosh_truncation_tie_keeps_even_grid() {
     assert_eq!(v.cosh_strict_with(HalfAwayFromZero), up);
     assert_eq!(v.cosh_strict_with(Ceiling), up);
     assert_eq!(v.cosh_strict_with(Trunc), g);
+}
+
+// ── sinh ────────────────────────────────────────────────────────────
+
+#[test]
+fn sinh_visible_cubic_keeps_directed_nudge() {
+    // sinh(±1e-308) at scale 615: the cubic excess x³/6 (1.67·10^-925) is
+    // within the precision horizon — sinh expands, so Ceiling rounds a
+    // positive argument up one ULP (and Floor a negative one down); Trunc
+    // and the nearest modes keep the grid line.
+    let v = D616::<615>::from_str(&tiny(308)).unwrap();
+    assert_eq!(v.sinh_strict_with(Ceiling), plus_ulp!(D616, 615, v));
+    assert_eq!(v.sinh_strict_with(Trunc), v);
+    assert_eq!(v.sinh_strict_with(Floor), v);
+    assert_eq!(v.sinh_strict_with(HalfToEven), v);
+    let n = -v;
+    assert_eq!(n.sinh_strict_with(Floor), n - D616::<615>::from_str(&tiny(615)).unwrap());
+    assert_eq!(n.sinh_strict_with(Ceiling), n);
+    assert_eq!(n.sinh_strict_with(Trunc), n);
+}
+
+#[test]
+fn sinh_cubic_past_horizon_is_exact() {
+    // sinh(±1e-461) at scale 615: the cubic excess (at position 1384) lies
+    // past the precision horizon — sinh(x) is exactly x at the crate's
+    // resolution, so NO mode nudges.
+    let v = D616::<615>::from_str(&tiny(461)).unwrap();
+    for mode in [Ceiling, Floor, Trunc, HalfToEven, HalfAwayFromZero, HalfTowardZero] {
+        assert_eq!(v.sinh_strict_with(mode), v, "pos {mode:?}");
+        assert_eq!((-v).sinh_strict_with(mode), -v, "neg {mode:?}");
+    }
 }
 
 // ── exp2 ────────────────────────────────────────────────────────────
