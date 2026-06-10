@@ -2,7 +2,7 @@
 name = "decimal_scaled_macros"
 version = "0.5.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.89"
 license = "MIT OR Apache-2.0"
 description = "Compile-time decimal literal proc-macros for the decimal-scaled crate — one per width tier (`d18!`, `d38!`, `d57!`, `d76!`, `d115!`, `d153!`, `d230!`, `d307!`, `d462!`, `d616!`, `d924!`, `d1232!`)."
 repository = "https://github.com/mootable/decimal-scaled"
