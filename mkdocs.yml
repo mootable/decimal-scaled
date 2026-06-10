@@ -7,6 +7,14 @@ repo_name: mootable/decimal-scaled
 edit_uri: edit/main/docs/
 copyright: A Mootable open-source project.
 
+# Repo-facing material that lives under docs/ but must never become a
+# site page: docs/_data/ holds the render_docs.py source data (its
+# README would otherwise trip the strict nav.omitted_files gate), and
+# *.draft files are work-in-progress, not publishable content.
+exclude_docs: |
+  _data/
+  *.draft
+
 # Source files in docs/ link out to the broader repo tree
 # (benches/, examples/, macros/, src/, root README) using
 # relative paths so the same files render correctly when
