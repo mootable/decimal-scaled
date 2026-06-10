@@ -22,6 +22,13 @@ class Oracle(ABC):
     @abstractmethod
     def name(self) -> str: ...
 
+    def radix(self) -> str:
+        """The oracle's working radix: `"binary"` (mpmath/flint/mpfr — arbitrary
+        precision but base 2) or `"decimal"` (exact/decimal — base 10). Recorded in
+        a line comment when a binary validator disagrees with a base-10 generator, so
+        the radix-rounding difference is auditable."""
+        return "binary"
+
     @abstractmethod
     def supports(self, func: str) -> bool: ...
 

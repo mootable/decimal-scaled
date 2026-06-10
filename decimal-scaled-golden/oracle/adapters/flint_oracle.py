@@ -39,12 +39,36 @@ def _eval_flint(flint, func: str, x):
     return table[func]()
 
 
-def _format(neg: bool, scaled: int, precision: int) -> str:
-    sign = "-" if neg and scaled != 0 else ""
-    s = str(scaled)
+# Digits beyond `precision` used to decide termination: an all-zero guard means the
+# value terminated within `precision` and is stripped (marking it exact); otherwise it
+# is a genuine truncation. Matches the mpmath/decimal oracles' contract.
+GUARD = 40
+
+
+def _format(neg: bool, scaled_guard: int, precision: int) -> str:
+    """Signed `digits.digits` string from `scaled_guard = floor(|value| *
+    10^(precision+GUARD))` — pinned by Arb's rigorous interval, so an exact result is
+    pinned to the true integer (no point-float floor-one-below artifact). A value
+    terminating within `precision` digits is stripped to mark it exact; otherwise it is
+    truncated toward zero to exactly `precision` digits."""
+    sign = "-" if neg else ""
+    if scaled_guard % (10 ** GUARD) == 0:
+        exact = scaled_guard // (10 ** GUARD)  # value * 10^precision, exact
+        if exact == 0:
+            return "0"
+        z = 0
+        while z < precision and exact % 10 == 0:
+            exact //= 10
+            z += 1
+        frac_len = precision - z
+        if frac_len == 0:
+            return f"{sign}{exact}"
+        s = str(exact).rjust(frac_len + 1, "0")
+        return f"{sign}{s[:-frac_len]}.{s[-frac_len:]}"
+    scaled = scaled_guard // (10 ** GUARD)
     if precision == 0:
-        return f"{sign}{s}"
-    s = s.rjust(precision + 1, "0")
+        return f"{sign}{scaled}"
+    s = str(scaled).rjust(precision + 1, "0")
     return f"{sign}{s[:-precision]}.{s[-precision:]}"
 
 
@@ -69,18 +93,20 @@ class FlintOracle(Oracle):
         # digits (e.g. exp2(299) ≈ 10^90). Gauge the magnitude with a cheap first
         # pass, then size the precision and retry (doubling) until the Arb ball
         # pins a unique integer.
-        flint.ctx.prec = int((precision + 80) * 3.3219281) + 128
+        # Pin to precision+GUARD digits; the GUARD digits decide termination.
+        scale = precision + GUARD
+        flint.ctx.prec = int((scale + 80) * 3.3219281) + 128
         r = _eval_flint(flint, func, [flint.arb(s) for s in inputs])
         result_digits = 1
         ar = abs(r)
         if ar > flint.arb(0):
             result_digits = max(1, int(float(ar.log() / flint.arb(10).log())) + 2)
-        bits_base = int((precision + result_digits + 60) * 3.3219281) + 128
+        bits_base = int((scale + result_digits + 60) * 3.3219281) + 128
         last = None
         for attempt in range(8):
             flint.ctx.prec = bits_base << attempt
             r = _eval_flint(flint, func, [flint.arb(s) for s in inputs])
-            mag = abs(r) * (flint.arb(10) ** precision)
+            mag = abs(r) * (flint.arb(10) ** scale)
             z = mag.floor().unique_fmpz()
             if z is None:
                 # An exact-integer value (e.g. exp2 of an integer = 2^n) makes the
