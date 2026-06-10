@@ -596,25 +596,6 @@ macro_rules! decl_wide_transcendental {
                 )
             }
 
-            /// Near-min narrowing with positional residual handling — the
-            /// exp/cosh near-min resolver at one work rung, for `exp2`'s
-            /// `2^(±10^-k)` cells whose `ln 2`-tail residual can sit past the
-            /// crate's precision horizon. See
-            /// [`wide_trig_core::round_to_storage_near_min_g`].
-            pub(crate) fn round_to_storage_near_min<S: $crate::int::types::traits::BigInt>(
-                base_guard: u32,
-                target: u32,
-                mode: $crate::support::rounding::RoundingMode,
-                recompute: impl FnMut(u32) -> S,
-            ) -> $Storage
-            where
-                S::Scratch: $crate::int::types::compute_limbs::ComputeLimbs,
-            {
-                $crate::algos::support::wide_trig_core::round_to_storage_near_min_g::<$Storage, S>(
-                    base_guard, target, mode, <$Storage>::MAX, <$Storage>::MIN, recompute,
-                )
-            }
-
             /// Directed-rounding narrowing for a kernel whose true result is
             /// **never exactly representable** at the storage scale — a
             /// non-zero-argument transcendental (`exp`), whose value is
@@ -3088,13 +3069,7 @@ macro_rules! decl_wide_transcendental {
                 let k_lift = exp2_result_int_digits(raw, SCALE);
                 let base_guard = GUARD + k_lift;
                 // Two-core: composition runs on the wide `Wagm` work int.
-                // Near-min narrowing: a `2^(±10^-k)` result is `1 ± ln 2·10^-k
-                // + …` whose sub-storage residual (the `ln 2` digit tail) can
-                // sit past the precision horizon — the positional resolver
-                // rounds it as exactly the grid line there, where the plain
-                // directed escalation would never resolve the constant-ratio
-                // residual and keep the base bump.
-                round_to_storage_near_min::<Wagm>(base_guard, SCALE, mode, |guard| {
+                round_to_storage_directed::<Wagm>(base_guard, SCALE, mode, |guard| {
                     let w = SCALE + guard;
                     // Form the `x·ln 2` argument with the wide multiply in
                     // `Wexp` — the work integer `exp_fixed` runs the series in,
@@ -4124,25 +4099,14 @@ macro_rules! decl_wide_transcendental {
                     let thresh_exp = SCALE - SCALE.div_ceil(3);
                     let thresh = <$Storage>::from_i128(10).pow(thresh_exp);
                     if raw.abs() <= thresh {
-                        // The directed nudge applies only while the cubic is
-                        // within the crate's precision horizon; past it the
-                        // excess is below the crate's resolution and
-                        // `sinh(x)` is exactly `x` for every mode.
-                        if $crate::algos::support::wide_trig_core::sinh_tiny_excess_visible::<
-                            $Storage,
-                            $core::W,
-                        >(raw.abs(), SCALE)
-                        {
-                            return Self::from_bits(
-                                $crate::support::rounding::tiny_odd_expanding_directed(
-                                    raw,
-                                    szero,
-                                    <$Storage>::from_i128(1),
-                                    mode,
-                                ),
-                            );
-                        }
-                        return self;
+                        return Self::from_bits(
+                            $crate::support::rounding::tiny_odd_expanding_directed(
+                                raw,
+                                szero,
+                                <$Storage>::from_i128(1),
+                                mode,
+                            ),
+                        );
                     }
                 }
                 // Large-argument lift. `sinh(x) ≈ e^|x|/2` carries
@@ -4265,25 +4229,35 @@ macro_rules! decl_wide_transcendental {
                     let thresh_exp = SCALE - SCALE.div_ceil(3);
                     let thresh = <$Storage>::from_i128(10).pow(thresh_exp);
                     if raw.abs() <= thresh {
-                        // The directed nudge applies only while the cubic
-                        // deficit survives at the crate's precision horizon;
-                        // past it the carried value rounds back to exactly
-                        // `x` and no mode nudges.
-                        if $crate::algos::support::wide_trig_core::tanh_tiny_deficit_visible::<
-                            $Storage,
-                            $core::W,
-                        >(raw.abs(), SCALE)
-                        {
-                            return Self::from_bits(
+                        // The compressing nudge applies while the cubic
+                        // deficit survives at the carried precision. Deeper,
+                        // the carried value IS `x` and only the never-exact
+                        // rule's strictly positive sub-resolution tail
+                        // remains — the just-ABOVE-the-grid-line outcome
+                        // (Ceiling up in magnitude for a positive argument,
+                        // Floor down for a negative one; Trunc and the
+                        // nearest modes keep `raw`).
+                        return Self::from_bits(
+                            if $crate::algos::support::wide_trig_core::tanh_tiny_deficit_visible::<
+                                $Storage,
+                                $core::W,
+                            >(raw.abs(), SCALE)
+                            {
                                 $crate::support::rounding::tiny_odd_compressing_directed(
                                     raw,
                                     zero,
                                     <$Storage>::from_i128(1),
                                     mode,
-                                ),
-                            );
-                        }
-                        return self;
+                                )
+                            } else {
+                                $crate::support::rounding::tiny_odd_expanding_directed(
+                                    raw,
+                                    zero,
+                                    <$Storage>::from_i128(1),
+                                    mode,
+                                )
+                            },
+                        );
                     }
                 }
                 // Saturation-edge lift. For a large `|x|` the intermediate
