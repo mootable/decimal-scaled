@@ -10,16 +10,17 @@
 //! `golden-competitors` all share it. [`Filter`] reads the `GOLDEN_*` env vars so a
 //! `cargo test` run can target just the cells / modes / functions under investigation.
 
+#[cfg(all(feature = "wide", feature = "x-wide", feature = "xx-wide"))]
 use std::collections::BTreeMap;
 
-use decimal_scaled::{
-    DecimalArithmetic, DecimalTranscendental, D115, D1232, D153, D18, D230, D307, D38, D462, D57,
-    D616, D76, D924, RoundingMode as DsMode,
-};
+use decimal_scaled::{DecimalArithmetic, DecimalTranscendental, D18, D38, RoundingMode as DsMode};
+#[cfg(all(feature = "wide", feature = "x-wide", feature = "xx-wide"))]
+use decimal_scaled::{D115, D1232, D153, D230, D307, D462, D57, D616, D76, D924};
+#[cfg(all(feature = "wide", feature = "x-wide", feature = "xx-wide"))]
 use decimal_scaled_golden::{
-    Capabilities, Computed, DecimalSubject, FnSupport, Function, Limits, Overflow, Radix,
-    RoundingMode,
+    Capabilities, Computed, DecimalSubject, FnSupport, Limits, Overflow, Radix,
 };
+use decimal_scaled_golden::{Function, RoundingMode};
 
 /// Generation precision / rounding guard of the golden set (the file `#` header
 /// carries the authoritative values; these mirror them for the validators).
@@ -87,7 +88,9 @@ macro_rules! impl_ds_ops {
         }
     )+ };
 }
-impl_ds_ops!(D18, D38, D57, D76, D115, D153, D230, D307, D462, D616, D924, D1232);
+impl_ds_ops!(D18, D38);
+#[cfg(all(feature = "wide", feature = "x-wide", feature = "xx-wide"))]
+impl_ds_ops!(D57, D76, D115, D153, D230, D307, D462, D616, D924, D1232);
 
 /// The op only (after parse, before format). `d2` is the second operand for binary
 /// functions; a missing one is a golden-data fault and panics (the harness records it).
@@ -132,6 +135,7 @@ where
 /// an out-of-range result; the harness catches that as `Computed::Panic` and judges it
 /// against the cell's range. Parse of a harness-vetted (representable) input cannot
 /// fail; a failure is a golden-data fault and panics with the offending literal.
+#[cfg(all(feature = "wide", feature = "x-wide", feature = "xx-wide"))]
 fn compute_typed<D>(func: Function, inputs: &[String], m: DsMode) -> Computed<String>
 where
     D: DecimalArithmetic
@@ -152,6 +156,7 @@ where
 /// own MIN/MAX constants and its fixed fractional depth. No bit-width math leaks into the
 /// harness, and the magnitude envelope + fractional depth bound exactly what it can hold,
 /// so no separate significant-figure cap is needed.
+#[cfg(all(feature = "wide", feature = "x-wide", feature = "xx-wide"))]
 fn limits_typed<D>(scale: u32) -> Limits
 where
     D: DecimalArithmetic + core::fmt::Display,
@@ -167,6 +172,7 @@ where
 /// Enumerate the band-edge `(width, scale)` cells and fan the two leaf operations out
 /// to the concrete decimal type for each. `CELLS` is the public cell list; the two
 /// dispatch fns are the erased subject's only bridge to a concrete `D<SCALE>`.
+#[cfg(all(feature = "wide", feature = "x-wide", feature = "xx-wide"))]
 macro_rules! cells {
     ($($D:ident < $s:literal > => $w:literal),+ $(,)?) => {
         /// Every band-edge `(width, scale)` cell the full-surface gate enumerates.
@@ -190,6 +196,7 @@ macro_rules! cells {
     };
 }
 
+#[cfg(all(feature = "wide", feature = "x-wide", feature = "xx-wide"))]
 cells! {
     // D18 — Int<1>, 64-bit storage
     D18<0> => 18, D18<3> => 18, D18<4> => 18, D18<9> => 18, D18<13> => 18, D18<17> => 18,
@@ -231,6 +238,7 @@ cells! {
 /// `mode`. `Value = String`, so the whole harness pipeline monomorphises once; the
 /// concrete decimal type is reached only via the `(width, scale)` dispatch. The triple
 /// also rides in `Capabilities::config` as report metadata.
+#[cfg(all(feature = "wide", feature = "x-wide", feature = "xx-wide"))]
 #[derive(Clone, Copy)]
 pub struct DsSubject {
     pub width: u32,
@@ -238,6 +246,7 @@ pub struct DsSubject {
     pub mode: RoundingMode,
 }
 
+#[cfg(all(feature = "wide", feature = "x-wide", feature = "xx-wide"))]
 impl DsSubject {
     /// A subject tested under the default half-to-even rounding.
     pub fn new(width: u32, scale: u32) -> DsSubject {
@@ -252,6 +261,7 @@ impl DsSubject {
     }
 }
 
+#[cfg(all(feature = "wide", feature = "x-wide", feature = "xx-wide"))]
 impl DecimalSubject for DsSubject {
     type Value = String;
 
@@ -313,6 +323,11 @@ impl DecimalSubject for DsSubject {
 /// ```
 ///
 /// An unset (or empty) list means "all"; `GOLDEN_SAMPLE` defaults to 1 (keep every row).
+// The width/scale fields feed `cells()`, which only exists on the full-width build.
+#[cfg_attr(
+    not(all(feature = "wide", feature = "x-wide", feature = "xx-wide")),
+    allow(dead_code)
+)]
 pub struct Filter {
     widths: Option<Vec<u32>>,
     scales: Option<Vec<u32>>,
@@ -339,6 +354,7 @@ impl Filter {
     }
 
     /// The `(width, scale)` cells passing the width/scale filters.
+    #[cfg(all(feature = "wide", feature = "x-wide", feature = "xx-wide"))]
     pub fn cells(&self) -> Vec<(u32, u32)> {
         CELLS
             .iter()
@@ -415,6 +431,7 @@ fn env_list<T>(key: &str, parse: impl Fn(&str) -> Option<T>) -> Option<Vec<T>> {
 mod tests {
     use super::*;
 
+    #[cfg(all(feature = "wide", feature = "x-wide", feature = "xx-wide"))]
     #[test]
     fn cells_enumerates_every_band_edge() {
         // The 88 band-edge cells across the 12 widths, plus the four ln-lookup
@@ -425,6 +442,7 @@ mod tests {
         assert_eq!(CELLS.last(), Some(&(1232, 1231)));
     }
 
+    #[cfg(all(feature = "wide", feature = "x-wide", feature = "xx-wide"))]
     #[test]
     fn dispatch_round_trips_a_known_cell() {
         // sqrt(2) at D38<19> under half-to-even, via the erased dispatch: a 19-dp
@@ -439,6 +457,7 @@ mod tests {
         }
     }
 
+    #[cfg(all(feature = "wide", feature = "x-wide", feature = "xx-wide"))]
     #[test]
     fn limits_report_the_concrete_envelope() {
         let lim = dispatch_limits(38, 19);
