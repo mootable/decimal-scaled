@@ -5036,3 +5036,5 @@
 0.7423241137041995832567266243
 0.5318137288253169036038392702
 0.6728261941694814286717901991
+// regression: retired d115_wide_high_scale_no_overflow.rs and the ln lookup-parity round-trips (high-working-scale artanh-series intermediates used to overflow the work integer)
+1.5
