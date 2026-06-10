@@ -14,7 +14,7 @@ use core::str::FromStr;
 use decimal_scaled::RoundingMode::{
     Ceiling, Floor, HalfAwayFromZero, HalfToEven, HalfTowardZero, Trunc,
 };
-use decimal_scaled::{D1232, D462, D57, D924};
+use decimal_scaled::{D1232, D38, D462, D57, D924};
 
 /// `"0.(k−1 zeros)1"` — the literal for `10^-k`.
 fn tiny(k: usize) -> String {
@@ -111,6 +111,56 @@ fn exp_visible_quadratic_grid_point_with_invisible_cubic() {
     for mode in [Ceiling, Floor, Trunc, HalfToEven, HalfAwayFromZero, HalfTowardZero] {
         assert_eq!(n.exp_strict_with(mode), g, "{mode:?}");
     }
+}
+
+// ── cosh ────────────────────────────────────────────────────────────
+
+#[test]
+fn cosh_narrow_sub_resolution_excess_bumps_ceiling() {
+    // cosh(±1e-17) at D38<37>: the result is 1 + 5·10^-35 + 4.16·10^-70 —
+    // the x⁴/24 term sits below the narrow working scale but well within the
+    // precision horizon, so Ceiling must round the grid point up one ULP;
+    // Floor/Trunc and the nearest modes keep it. cosh is even.
+    let q2 = D38::<37>::from_str(&format!("0.{}5{}", "0".repeat(34), "0".repeat(2))).unwrap();
+    let g = D38::<37>::ONE + q2;
+    for v in [
+        D38::<37>::from_str(&tiny(17)).unwrap(),
+        -D38::<37>::from_str(&tiny(17)).unwrap(),
+    ] {
+        assert_eq!(v.cosh_strict_with(Ceiling), plus_ulp!(D38, 37, g));
+        assert_eq!(v.cosh_strict_with(Floor), g);
+        assert_eq!(v.cosh_strict_with(Trunc), g);
+        assert_eq!(v.cosh_strict_with(HalfToEven), g);
+    }
+}
+
+#[test]
+fn cosh_residual_past_horizon_is_exact() {
+    // cosh(±1e-693) at scale 923: the x²/2 excess (10^-1386/2) lies past the
+    // precision horizon — below the crate's resolution — so every mode,
+    // Ceiling included, returns exactly 1.
+    let v = D924::<923>::from_str(&tiny(693)).unwrap();
+    for mode in [Ceiling, Floor, Trunc, HalfToEven, HalfAwayFromZero, HalfTowardZero] {
+        assert_eq!(v.cosh_strict_with(mode), D924::<923>::ONE, "{mode:?}");
+        assert_eq!((-v).cosh_strict_with(mode), D924::<923>::ONE, "neg {mode:?}");
+    }
+}
+
+#[test]
+fn cosh_truncation_tie_keeps_even_grid() {
+    // cosh(±1e-308) at scale 616: the rest below the scale is exactly
+    // `5000…` at horizon precision (the deciding x⁴/24 term at position
+    // 1234 lies past the truncation line) — an exact half-ULP tie:
+    // HalfToEven (even last digit) and HalfTowardZero keep the grid point,
+    // HalfAwayFromZero and Ceiling round up.
+    let v = D1232::<616>::from_str(&tiny(308)).unwrap();
+    let g = D1232::<616>::ONE;
+    let up = plus_ulp!(D1232, 616, g);
+    assert_eq!(v.cosh_strict_with(HalfToEven), g);
+    assert_eq!(v.cosh_strict_with(HalfTowardZero), g);
+    assert_eq!(v.cosh_strict_with(HalfAwayFromZero), up);
+    assert_eq!(v.cosh_strict_with(Ceiling), up);
+    assert_eq!(v.cosh_strict_with(Trunc), g);
 }
 
 // ── exp2 ────────────────────────────────────────────────────────────

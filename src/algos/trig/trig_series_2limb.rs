@@ -1008,9 +1008,20 @@ pub(crate) fn cosh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: Ro
         return 10_i128.pow(scale);
     }
     let w = scale + working_digits;
-    // Integer-regime: route through the wider `WNarrow` work integer (see
-    // `sinh_with_raw`).
-    if crate::algos::exp::exp_series_2limb::hyper_needs_wide_narrow(raw, scale, w) {
+    // The wider `WNarrow` work integer is needed for:
+    //  1. integer-regime — the result exceeds the 256-bit `Fixed`'s headroom
+    //     (see `sinh_with_raw`); and
+    //  2. ALL directed modes — `cosh(x) > 1` is transcendental for `x != 0`
+    //     (an algebraic `cosh x` would make `e^x` algebraic), so the result is
+    //     never on a storage grid line; the fast path's flat-`w` rounding sees
+    //     a zero residual when the deciding term sits below `w` (e.g.
+    //     `cosh(1e-17)` at scale 37, whose `x⁴/24` lands at digit 70) and
+    //     misses the Ceiling bump the never-exact treatment supplies. Mirrors
+    //     the `exp_with_raw` directed gate; directed cosh is not the
+    //     common/benched cell, so the hot path is unaffected.
+    if crate::algos::exp::exp_series_2limb::hyper_needs_wide_narrow(raw, scale, w)
+        || !crate::support::rounding::is_nearest_mode(mode)
+    {
         return crate::algos::exp::exp_series_2limb::cosh_wide_narrow_raw(
             raw,
             scale,
@@ -1033,22 +1044,12 @@ pub(crate) fn cosh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: Ro
         mag: Fixed::pow10(w),
     };
     let enx = one_w.div(ex, w);
-    let result = ex
-        .add(enx)
+    ex.add(enx)
         .halve()
         .round_to_i128_with(w, scale, mode)
         .unwrap_or_else(|| {
             crate::support::diagnostics::overflow_panic_with_scale("D38::cosh", scale)
-        });
-    // cosh(x) > 1 strictly for x != 0 (raw == 0 returned 1.0 exactly above).
-    // Near the minimum the +x²/2 excess underflows the working scale, so the
-    // kernel rounds to exactly 1.0 and a directed-up mode cannot see that the
-    // true value sits just above the grid line — re-decide analytically.
-    let one_raw = 10_i128.pow(scale);
-    if result == one_raw {
-        return crate::support::rounding::tiny_above_line_directed(one_raw, 1, mode);
-    }
-    result
+        })
 }
 
 #[inline]
