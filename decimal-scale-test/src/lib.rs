@@ -321,16 +321,15 @@ pub struct Filter {
 }
 
 impl Filter {
-    /// Read the `GOLDEN_*` env vars into a filter.
+    /// Read the `GOLDEN_*` env vars into a filter. An unrecognised list token is
+    /// SKIPPED with a stderr warning (never a silent drop — a typo'd
+    /// `GOLDEN_FUNCS=copsh` would otherwise quietly widen or empty the run).
     pub fn from_env() -> Filter {
         Filter {
-            widths: env_u32_list("GOLDEN_WIDTHS"),
-            scales: env_u32_list("GOLDEN_SCALES"),
-            modes: env_nonempty("GOLDEN_MODES")
-                .map(|s| s.split(',').filter_map(parse_mode).collect()),
-            funcs: env_nonempty("GOLDEN_FUNCS")
-                .map(|s| s.split(',').filter_map(parse_func).collect::<Vec<_>>())
-                .unwrap_or_else(|| FUNCS.to_vec()),
+            widths: env_list("GOLDEN_WIDTHS", |t| t.parse::<u32>().ok()),
+            scales: env_list("GOLDEN_SCALES", |t| t.parse::<u32>().ok()),
+            modes: env_list("GOLDEN_MODES", parse_mode),
+            funcs: env_list("GOLDEN_FUNCS", parse_func).unwrap_or_else(|| FUNCS.to_vec()),
             sample: env_nonempty("GOLDEN_SAMPLE")
                 .and_then(|s| s.trim().parse().ok())
                 .filter(|&n| n >= 1)
@@ -393,10 +392,22 @@ fn env_nonempty(key: &str) -> Option<String> {
     std::env::var(key).ok().filter(|s| !s.trim().is_empty())
 }
 
-/// A comma-separated `u32` list from `key` (skipping unparseable items), or `None` when
-/// the var is unset/blank.
-fn env_u32_list(key: &str) -> Option<Vec<u32>> {
-    env_nonempty(key).map(|s| s.split(',').filter_map(|t| t.trim().parse::<u32>().ok()).collect())
+/// A comma-separated list from `key` parsed item-wise, or `None` when the var is
+/// unset/blank. An unparseable token is skipped WITH a stderr warning naming the
+/// variable and the token.
+fn env_list<T>(key: &str, parse: impl Fn(&str) -> Option<T>) -> Option<Vec<T>> {
+    env_nonempty(key).map(|s| {
+        s.split(',')
+            .filter_map(|t| {
+                let token = t.trim();
+                let v = parse(token);
+                if v.is_none() {
+                    eprintln!("{key}: ignoring unrecognised token {token:?}");
+                }
+                v
+            })
+            .collect()
+    })
 }
 
 #[cfg(test)]
