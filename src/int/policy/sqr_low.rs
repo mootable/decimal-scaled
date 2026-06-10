@@ -116,6 +116,17 @@ const fn select() -> Select {
     Select::ByAlgorithm(Algorithm::LowLimb)
 }
 
+/// Resolve the full verdict: the algorithm plus its own limb width for this
+/// `N`. A named `const fn` (rather than statements inline in `dispatch`'s
+/// `const { … }` block) because under `generic_const_exprs` (the nightly
+/// `cross-scale-ops` / `exact-scratch-nightly` builds) a generic anonymous
+/// constant only admits expression trees — a single call like this folds;
+/// a statement block does not.
+const fn resolve<const N: usize>() -> (Algorithm, LimbSize) {
+    let Select::ByAlgorithm(algo) = select();
+    (algo, algo.limb_size::<N>())
+}
+
 // ── 4. the dispatcher: resolve the algorithm, then its limb width ─────
 
 /// Truncated-low square `out = (x²) mod 2^(64·N)` — the single site
@@ -131,10 +142,7 @@ const fn select() -> Select {
 /// [`BigInt::wrapping_mul`]: crate::int::types::traits::BigInt::wrapping_mul
 #[inline]
 pub(crate) fn dispatch<const N: usize>(x: &[u64; N], out: &mut [u64; N]) {
-    let (algo, limb) = const {
-        let Select::ByAlgorithm(algo) = select();
-        (algo, algo.limb_size::<N>())
-    };
+    let (algo, limb) = const { resolve::<N>() };
     match (algo, limb) {
         (Algorithm::LowLimb, LimbSize::U64) => sqr_low_limb::<N, u64>(x, out),
         (Algorithm::LowLimb, LimbSize::U128) => sqr_low_limb::<N, u128>(x, out),

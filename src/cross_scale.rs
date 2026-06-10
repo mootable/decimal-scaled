@@ -149,9 +149,13 @@ pub trait WidenScale<W, const S_FROM: u32, const S_TO: u32> {
     fn widen_scale(self) -> D<W, S_TO>;
 }
 
-// Blanket implementations per concrete storage. Each width's
-// `rescale` is an inherent method, so we have to spell out the
-// storage type to dispatch.
+// Implementations per concrete storage. Each width's `rescale_with`
+// is an inherent method (emitted by `decl_decimal_rescale!` on the
+// `D<Int<N>, SCALE>` alias), so we have to spell out the storage type
+// to dispatch. Every decimal tier is `Int<N>`-backed; the always-built
+// tiers are D18 (`Int<1>`) and D38 (`Int<2>`), the rest follow the
+// same feature gates as their `decl_decimal_full!` emissions in
+// `types/widths.rs`.
 
 macro_rules! impl_widen_scale {
     ($Storage:ty) => {
@@ -172,9 +176,8 @@ macro_rules! impl_widen_scale {
     };
 }
 
-impl_widen_scale!(i32);
-impl_widen_scale!(i64);
-impl_widen_scale!(i128);
+impl_widen_scale!(crate::int::types::Int<1>);
+impl_widen_scale!(crate::int::types::Int<2>);
 
 #[cfg(any(feature = "d57", feature = "wide"))]
 impl_widen_scale!(crate::int::types::Int<3>);
