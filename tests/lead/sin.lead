@@ -4368,3 +4368,8 @@
 -0.4825260566591636914931473997
 -0.4179875393674923522144770699
 0.018826072484024279135934972
+// regression: strict-suite cross-witness inputs (retired wide_strict_transcendentals.rs and d115_wide_high_scale_no_overflow.rs - small-argument Taylor-residual band + the high-working-scale kernel input)
+0.33333333333333333333
+1.5
+// regression: retired trig_extremum_directed.rs pin (argument hugging pi/2 at the band lower edge - the bounded-extremum interior side decides the directed modes)
+1.570796326794896619

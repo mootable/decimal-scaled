@@ -4017,3 +4017,8 @@
 1.5 3
 0.1 5
 1.5 -1
+// regression: strict-suite cross-witness inputs (retired narrow/wide_strict_transcendentals.rs exact integer power)
+2 10
+// regression: retired range_boundary_overflow.rs pins (exact-power pin at the range boundary - the largest in-range power of two stays exact under every mode; one past it must overflow-panic under every mode rather than directed-round back inside the range)
+4 63
+4 64

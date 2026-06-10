@@ -4406,3 +4406,5 @@
 0.6475435476381373017599266804
 0.3143893462138001647150698164
 -0.6923623269092229875638344547
+// regression: strict-suite cross-witness inputs (retired wide_strict_transcendentals.rs - small-argument Taylor-residual band)
+0.33333333333333333333
