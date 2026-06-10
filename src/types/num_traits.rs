@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `num_traits`-bridge methods on every decimal width.
 //!
 //! `from_num` / `to_num` are saturating, never-panicking constructors

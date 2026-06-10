@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Hyperbolic + inverse-hyperbolic schoolbook reference kernels.
 //!
 //! Naive textbook realisations of sinh / cosh / tanh / asinh / acosh /

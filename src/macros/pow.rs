@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Integer-exponent power family — `pow` / `powi` and the
 //! `checked_*` / `wrapping_*` / `saturating_*` / `overflowing_*`
 //! overflow variants.

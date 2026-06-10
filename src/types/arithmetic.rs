@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Behaviour tests for [`D38`] arithmetic operators.
 //!
 //! The operator impls themselves (`Add`/`Sub`/`Neg`/`Rem` and the

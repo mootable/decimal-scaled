@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Per-width / limb-count algorithm-selection dispatch.
 //!
 //! The integer layer's counterpart to the decimal `policy/` bucket:

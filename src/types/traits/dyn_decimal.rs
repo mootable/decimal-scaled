@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Runtime-polymorphic façade over every concrete decimal width.
 //!
 //! `decimal-scaled` is built around the typed, monomorphised

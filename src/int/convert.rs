@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Width-generic, value-preserving decimal magnitude conversion.
 //!
 //! The decimal `convert_from` / `convert_from_with` constructors emitted

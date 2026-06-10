@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Const-generic fixed-width integer layer.
 //!
 //! The integer side of the crate, mirroring the decimal layer's

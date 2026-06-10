@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Newton–Raphson reciprocal divide for `n / 10^SCALE` at storage width.
 //!
 //! Research kernel — **not wired into the dispatcher**. Built behind a

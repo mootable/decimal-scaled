@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `div_native` -- decimal division via the hardware `i128` path, for narrow
 //! storage widths (`N <= 2`, i.e. D18 / D38).
 //!

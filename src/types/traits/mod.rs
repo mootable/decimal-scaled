@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Public trait surface for the decimal types.
 //!
 //! Six traits expose the cross-width API:

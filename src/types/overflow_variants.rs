@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Behaviour tests for [`D38`] overflow-aware arithmetic variants.
 //!
 //! The `checked_*` / `wrapping_*` / `saturating_*` / `overflowing_*`

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Add policy — the per-`(N, SCALE)` algorithm matcher for decimal addition.
 //!
 //! `D<Int<N>, SCALE>` addition delegates to [`AddPolicy::add_impl`], which

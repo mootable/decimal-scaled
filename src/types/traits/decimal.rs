@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! The [`Decimal`] trait — width-generic marker that requires the
 //! full surface (arithmetic + conversion + transcendentals + constants).
 //!

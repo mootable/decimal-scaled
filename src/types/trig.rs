@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Trigonometric, hyperbolic, and angle-conversion methods for [`D38`].
 //!
 //! # Surface

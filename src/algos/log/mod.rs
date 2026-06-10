@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Decimal arbitrary-base logarithm algorithm family.
 //!
 //! One algorithm: `LnDivide` -- `log(self, base) = ln(self) / ln(base)`.

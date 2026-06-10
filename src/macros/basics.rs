@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Macro-generated impls for the *basics* of every decimal width.
 //!
 //! What this macro emits, for a given `(Type, Storage, MAX_SCALE)`:

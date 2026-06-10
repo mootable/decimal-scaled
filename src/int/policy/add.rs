@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Add policy — the default-delegating algorithm matcher for integer addition.
 //!
 //! `Int<N>::wrapping_add` and the `Add` operator delegate to [`dispatch`],

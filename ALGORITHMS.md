@@ -4,7 +4,7 @@ Catalogue of the published algorithms the crate evaluates, with
 academic citations and the source files where each is implemented.
 This is engineering credit for the *ideas* the crate's own code is
 built from. The crate incorporates no third-party source code; see
-`LICENSES/THIRD-PARTY.md`.
+[LICENSE-THIRD-PARTY](LICENSE-THIRD-PARTY).
 
 ## Integer arithmetic
 

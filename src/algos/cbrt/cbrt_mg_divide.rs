@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `cbrt_mg_divide` — D38 cube-root kernel
 //! (`mg_divide::cbrt_raw_with_signed`).
 //!

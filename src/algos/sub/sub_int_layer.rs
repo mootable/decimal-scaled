@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `sub_int_layer` — decimal subtraction via the `Int<N>` layer.
 
 use crate::int::types::Int;

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Per-width emission of the [`crate::types::traits::dyn_decimal::DynDecimal`] impl.
 //!
 //! Invoked once per supported width with the full enumeration of legal

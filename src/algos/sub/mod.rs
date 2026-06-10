@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Decimal subtraction algorithm family.
 //!
 //! One algorithm: [`sub_int_layer`] — same-`SCALE` subtraction needs no

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Algorithm library for numerical kernels.
 //!
 //! Self-contained algorithm implementations grouped by mathematical

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! [`core::fmt`] formatters and [`core::str::FromStr`] for [`D38`].
 //! The same surface is emitted for every width via
 //! [`crate::macros::display::decl_decimal_display!`] and

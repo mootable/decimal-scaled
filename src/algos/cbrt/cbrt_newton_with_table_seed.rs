@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `cbrt_newton_with_table_seed` — bespoke cube-root kernel for the
 //! `(D57, SCALE == 20)` cell.
 //!

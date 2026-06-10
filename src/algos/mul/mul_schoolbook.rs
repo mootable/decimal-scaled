@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `mul_schoolbook` -- naive schoolbook decimal multiplication reference,
 //! generic over the storage width `N` only.
 //!
