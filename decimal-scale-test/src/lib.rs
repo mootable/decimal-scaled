@@ -10,6 +10,11 @@
 //! `golden-competitors` all share it. [`Filter`] reads the `GOLDEN_*` env vars so a
 //! `cargo test` run can target just the cells / modes / functions under investigation.
 
+// The subject enumerates every band-edge cell up to D1232, so it only exists on a
+// full-width build; narrower feature sets still compile the crate (empty) so the
+// migrated API/contract test targets can run under their own feature gates.
+#![cfg(all(feature = "wide", feature = "x-wide", feature = "xx-wide"))]
+
 use std::collections::BTreeMap;
 
 use decimal_scaled::{

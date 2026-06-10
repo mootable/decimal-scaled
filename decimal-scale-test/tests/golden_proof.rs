@@ -3,6 +3,10 @@
 //! (`DsSubject::new(38, 19)`, the same adapter the full surface enumerates); the
 //! full 88-cell run is the `golden` gate.
 
+// The erased subject's cell dispatch names every tier up to D1232, so the proof
+// (like the gate) needs the full-width build; narrower feature sets skip it.
+#![cfg(all(feature = "wide", feature = "x-wide", feature = "xx-wide"))]
+
 use decimal_scaled_golden::{
     ExecutionResult, FileLoader, Function, GoldenRunner, Outcome, OverflowValidator, ParallelRunner,
     RoundingValidator, RunOnce,
