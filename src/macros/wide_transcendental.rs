@@ -804,9 +804,16 @@ macro_rules! decl_wide_transcendental {
                 // it exactly under `mode` (`exp2(-1)=0.5` is the half-to-even
                 // tie → 0; a sub-resolution `2^k` only `Ceiling`-rounds up).
                 // For `k > 0` `exp2_exact_pow` returns `None` only on genuine
-                // overflow — defer to the kernel's panic-on-narrow there.
+                // overflow — PROOF the exact `2^k` exceeds the decimal range:
+                // panic per the overflow contract (debug AND release) rather
+                // than deferring to the `exp(k·ln 2)` composition, whose
+                // to-nearest approximation can directed-round (Floor / Trunc)
+                // back INSIDE the range at an out-by-one boundary.
                 if k >= 0 {
-                    return ::core::option::Option::None;
+                    $crate::support::diagnostics::overflow_panic_with_scale(
+                        concat!(stringify!($Type), "::exp2"),
+                        scale,
+                    );
                 }
                 let p = (k.unsigned_abs() as u32) - scale;
                 ::core::option::Option::Some(round_pow2_fraction(scale, p, mode))

@@ -482,10 +482,17 @@ fn exp2_exact_pin(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
     }
     let kk = k.unsigned_abs();
     if k > 0 {
-        // 2^k · 10^scale — exact integer when representable.
+        // 2^k · 10^scale — exact integer when representable. An overflow here
+        // is PROOF the exact result exceeds the decimal range: panic per the
+        // overflow contract (debug AND release) rather than deferring to the
+        // `exp(k·ln 2)` composition, whose to-nearest approximation can
+        // directed-round (Floor / Trunc) back INSIDE the range at an
+        // out-by-one boundary (`exp2(127)` at scale 0 is `i128::MAX + 1`).
         let mut v: i128 = one_s;
         for _ in 0..kk {
-            v = v.checked_mul(2)?;
+            v = v.checked_mul(2).unwrap_or_else(|| {
+                crate::support::diagnostics::overflow_panic_with_scale("D38::exp2", scale)
+            });
         }
         Some(v)
     } else if kk <= scale as u128 {
