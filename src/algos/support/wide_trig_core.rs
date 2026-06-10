@@ -741,10 +741,17 @@ where
         <S as BigInt>::BITS - m.leading_zeros()
     };
     let floor = pow10(ZIV_RESOLVE_FLOOR_POW10);
+    // The kernels' error is value-RELATIVE (~an ULP of the value at the
+    // working scale), so a result carrying `int_digits` integer digits has a
+    // noise floor of ~10^int_digits WORKING UNITS regardless of `w`: a
+    // fractional digit at depth `p` only clears that noise once
+    // `w > p + int_digits`. The probe horizon therefore extends by
+    // `int_digits` (the width cap already subtracts them, protecting the
+    // kernel's internal headroom).
     let max_guard_for = |int_digits: u32| -> u32 {
         let cap = (<S>::BITS / 8).saturating_sub(int_digits + 8);
         cap.saturating_sub(target)
-            .min(ZIV_PRECISION_HORIZON.saturating_sub(target))
+            .min((ZIV_PRECISION_HORIZON + int_digits).saturating_sub(target))
             .max(base_guard)
     };
     let int_digits_of = |v: St| -> u32 {
@@ -974,7 +981,16 @@ where
 {
     let (v1, resolved1) =
         near_min_resolve_g::<St, S1>(base_guard, target, mode, never_exact, st_max, st_min, recompute1);
-    if resolved1 || (<S1>::BITS / 8) >= ZIV_PRECISION_HORIZON {
+    // `S1` only proves a residual is past the probe horizon when its width
+    // actually reaches it — and a result carrying integer digits raises both
+    // the horizon AND the noise floor by that count (see the resolver), so
+    // the reach test must include them.
+    let int_digits = {
+        let m = if v1 < <St as BigInt>::ZERO { -v1 } else { v1 };
+        let bl = <St as BigInt>::BITS - m.leading_zeros();
+        ((bl as u64 * 30103 / 100_000) as u32 + 1).saturating_sub(target)
+    };
+    if resolved1 || (<S1>::BITS / 8) >= ZIV_PRECISION_HORIZON + int_digits {
         return v1;
     }
     near_min_resolve_g::<St, S2>(base_guard, target, mode, never_exact, st_max, st_min, recompute2).0

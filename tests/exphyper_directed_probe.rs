@@ -152,7 +152,14 @@ fn round_dec_str(exp: &str, scale: usize, mode: RoundingMode) -> String {
     }
 }
 
-/// Load the unary tiny `±1e-k` cases from one golden file.
+/// Load the unary cases from one golden file — every line in the probe's two
+/// coverage families:
+///  - NEAR-ZERO: `|x| < 0.1` (integer part `0`, first fraction digit `0`) —
+///    the analytic-pin / tiny-band domain, in full (no band filter);
+///  - LARGE: `|x| >= 100` — the huge-magnitude `e^x` family whose deciding
+///    fractional digits sit under the integer-digit noise floor.
+/// Mid-range inputs take the ordinary clear-residual fast paths and are the
+/// full golden gate's to sweep.
 fn load(name: &str) -> Vec<(String, String)> {
     let path = format!(
         "{}/decimal-scaled-golden/golden/{}.golden",
@@ -171,22 +178,34 @@ fn load(name: &str) -> Vec<(String, String)> {
             continue;
         };
         let mag = inp.trim_start_matches('-');
-        let Some((i, f)) = mag.split_once('.') else {
-            continue;
+        let (int_part, frac_part) = match mag.split_once('.') {
+            Some((i, f)) => (i, f),
+            None => (mag, ""),
         };
-        if i != "0" {
-            continue;
+        let near_zero = int_part == "0" && frac_part.starts_with('0');
+        let large = int_part != "0" && int_part.len() >= 3;
+        if near_zero || large {
+            out.push((inp.to_string(), exp.to_string()));
         }
-        let ftrim = f.trim_end_matches('0');
-        if ftrim.is_empty() || !ftrim.ends_with('1') {
-            continue;
-        }
-        if !ftrim[..ftrim.len() - 1].bytes().all(|b| b == b'0') {
-            continue;
-        }
-        out.push((inp.to_string(), exp.to_string()));
     }
     out
+}
+
+/// The input literal with insignificant trailing fraction zeros removed (the
+/// gate's representability rule counts SIGNIFICANT fraction digits).
+fn trim_input(inp: &str) -> String {
+    if !inp.contains('.') {
+        return inp.to_string();
+    }
+    inp.trim_end_matches('0').trim_end_matches('.').to_string()
+}
+
+/// Significant integer digits of the expected magnitude (leading sign/zeros
+/// stripped) — the result-fits-the-width pre-check.
+fn int_sig_digits(exp: &str) -> usize {
+    let mag = exp.trim_start_matches('-');
+    let int_part = mag.split_once('.').map_or(mag, |(i, _)| i);
+    int_part.trim_start_matches('0').len()
 }
 
 /// Short digest of a long rendered value: head plus the window around the
@@ -204,83 +223,156 @@ fn digest(a: &str, b: &str) -> String {
 }
 
 macro_rules! cell {
-    ($bad:expr, $cases:expr, $func:literal, $ty:ty, $tn:literal, $s:expr, $method:ident) => {{
+    ($bad:expr, $cases:expr, $func:literal, $ty:ty, $tn:literal, $s:expr, $wd:expr, $method:ident) => {{
         for (inp, exp) in $cases.iter() {
-            let k = sig_frac_digits(inp);
-            if k > $s || 4 * k < $s {
+            // Representable at the cell: significant fraction digits fit the
+            // scale (`from_str` rejects deeper literals; it also enforces the
+            // width's integer range on the input).
+            if sig_frac_digits(inp) > $s {
                 continue;
             }
-            let v = <$ty>::from_str(inp).unwrap();
+            let lit = trim_input(inp);
+            let Ok(v) = <$ty>::from_str(&lit) else {
+                continue;
+            };
+            // Result fits the width (an out-of-range result is the overflow
+            // contract's domain — it panics — not the rounding probe's).
+            if int_sig_digits(exp) > ($wd as usize) - ($s as usize) {
+                continue;
+            }
             for mode in MODES {
-                let got = v.$method(mode).to_string();
+                let got = ::std::panic::catch_unwind(::std::panic::AssertUnwindSafe(|| {
+                    v.$method(mode).to_string()
+                }));
                 let want = round_dec_str(exp, $s, mode);
-                if got != want {
-                    $bad.push(format!(
-                        "{} {}<{}> {:?} in=1e-{}{} {}",
-                        $func,
-                        $tn,
-                        $s,
-                        mode,
-                        k,
-                        if inp.starts_with('-') { "(neg)" } else { "(pos)" },
-                        digest(&got, &want)
-                    ));
+                match got {
+                    Ok(got) => {
+                        if got != want {
+                            $bad.push(format!(
+                                "{} {}<{}> {:?} in={} {}",
+                                $func,
+                                $tn,
+                                $s,
+                                mode,
+                                &inp[..inp.len().min(24)],
+                                digest(&got, &want)
+                            ));
+                        }
+                    }
+                    Err(_) => {
+                        $bad.push(format!(
+                            "{} {}<{}> {:?} in={} PANIC (want {})",
+                            $func,
+                            $tn,
+                            $s,
+                            mode,
+                            &inp[..inp.len().min(24)],
+                            &want[..want.len().min(24)]
+                        ));
+                    }
                 }
             }
         }
     }};
 }
 
+// The authoritative golden gate's full `(width, scale)` cell grid
+// (`decimal-scale-test/src/lib.rs` `cells!`), so the probe cannot under-cover
+// a gate cell again.
 macro_rules! all_cells {
     ($bad:expr, $cases:expr, $func:literal, $method:ident) => {{
-        cell!($bad, $cases, $func, D18<4>, "D18", 4, $method);
-        cell!($bad, $cases, $func, D18<9>, "D18", 9, $method);
-        cell!($bad, $cases, $func, D18<13>, "D18", 13, $method);
-        cell!($bad, $cases, $func, D18<17>, "D18", 17, $method);
-        cell!($bad, $cases, $func, D38<9>, "D38", 9, $method);
-        cell!($bad, $cases, $func, D38<19>, "D38", 19, $method);
-        cell!($bad, $cases, $func, D38<28>, "D38", 28, $method);
-        cell!($bad, $cases, $func, D38<37>, "D38", 37, $method);
-        cell!($bad, $cases, $func, D57<14>, "D57", 14, $method);
-        cell!($bad, $cases, $func, D57<28>, "D57", 28, $method);
-        cell!($bad, $cases, $func, D57<42>, "D57", 42, $method);
-        cell!($bad, $cases, $func, D57<56>, "D57", 56, $method);
-        cell!($bad, $cases, $func, D76<19>, "D76", 19, $method);
-        cell!($bad, $cases, $func, D76<38>, "D76", 38, $method);
-        cell!($bad, $cases, $func, D76<57>, "D76", 57, $method);
-        cell!($bad, $cases, $func, D76<75>, "D76", 75, $method);
-        cell!($bad, $cases, $func, D115<28>, "D115", 28, $method);
-        cell!($bad, $cases, $func, D115<57>, "D115", 57, $method);
-        cell!($bad, $cases, $func, D115<86>, "D115", 86, $method);
-        cell!($bad, $cases, $func, D115<114>, "D115", 114, $method);
-        cell!($bad, $cases, $func, D153<38>, "D153", 38, $method);
-        cell!($bad, $cases, $func, D153<76>, "D153", 76, $method);
-        cell!($bad, $cases, $func, D153<114>, "D153", 114, $method);
-        cell!($bad, $cases, $func, D153<152>, "D153", 152, $method);
-        cell!($bad, $cases, $func, D230<57>, "D230", 57, $method);
-        cell!($bad, $cases, $func, D230<115>, "D230", 115, $method);
-        cell!($bad, $cases, $func, D230<172>, "D230", 172, $method);
-        cell!($bad, $cases, $func, D230<229>, "D230", 229, $method);
-        cell!($bad, $cases, $func, D307<76>, "D307", 76, $method);
-        cell!($bad, $cases, $func, D307<153>, "D307", 153, $method);
-        cell!($bad, $cases, $func, D307<230>, "D307", 230, $method);
-        cell!($bad, $cases, $func, D307<306>, "D307", 306, $method);
-        cell!($bad, $cases, $func, D462<115>, "D462", 115, $method);
-        cell!($bad, $cases, $func, D462<231>, "D462", 231, $method);
-        cell!($bad, $cases, $func, D462<346>, "D462", 346, $method);
-        cell!($bad, $cases, $func, D462<461>, "D462", 461, $method);
-        cell!($bad, $cases, $func, D616<154>, "D616", 154, $method);
-        cell!($bad, $cases, $func, D616<308>, "D616", 308, $method);
-        cell!($bad, $cases, $func, D616<462>, "D616", 462, $method);
-        cell!($bad, $cases, $func, D616<615>, "D616", 615, $method);
-        cell!($bad, $cases, $func, D924<231>, "D924", 231, $method);
-        cell!($bad, $cases, $func, D924<462>, "D924", 462, $method);
-        cell!($bad, $cases, $func, D924<693>, "D924", 693, $method);
-        cell!($bad, $cases, $func, D924<923>, "D924", 923, $method);
-        cell!($bad, $cases, $func, D1232<308>, "D1232", 308, $method);
-        cell!($bad, $cases, $func, D1232<616>, "D1232", 616, $method);
-        cell!($bad, $cases, $func, D1232<924>, "D1232", 924, $method);
-        cell!($bad, $cases, $func, D1232<1231>, "D1232", 1231, $method);
+        cell!($bad, $cases, $func, D18<0>, "D18", 0, 18, $method);
+        cell!($bad, $cases, $func, D18<3>, "D18", 3, 18, $method);
+        cell!($bad, $cases, $func, D18<4>, "D18", 4, 18, $method);
+        cell!($bad, $cases, $func, D18<9>, "D18", 9, 18, $method);
+        cell!($bad, $cases, $func, D18<13>, "D18", 13, 18, $method);
+        cell!($bad, $cases, $func, D18<17>, "D18", 17, 18, $method);
+        cell!($bad, $cases, $func, D38<0>, "D38", 0, 38, $method);
+        cell!($bad, $cases, $func, D38<2>, "D38", 2, 38, $method);
+        cell!($bad, $cases, $func, D38<6>, "D38", 6, 38, $method);
+        cell!($bad, $cases, $func, D38<9>, "D38", 9, 38, $method);
+        cell!($bad, $cases, $func, D38<10>, "D38", 10, 38, $method);
+        cell!($bad, $cases, $func, D38<12>, "D38", 12, 38, $method);
+        cell!($bad, $cases, $func, D38<17>, "D38", 17, 38, $method);
+        cell!($bad, $cases, $func, D38<18>, "D38", 18, 38, $method);
+        cell!($bad, $cases, $func, D38<19>, "D38", 19, 38, $method);
+        cell!($bad, $cases, $func, D38<28>, "D38", 28, 38, $method);
+        cell!($bad, $cases, $func, D38<37>, "D38", 37, 38, $method);
+        cell!($bad, $cases, $func, D57<0>, "D57", 0, 57, $method);
+        cell!($bad, $cases, $func, D57<14>, "D57", 14, 57, $method);
+        cell!($bad, $cases, $func, D57<20>, "D57", 20, 57, $method);
+        cell!($bad, $cases, $func, D57<28>, "D57", 28, 57, $method);
+        cell!($bad, $cases, $func, D57<30>, "D57", 30, 57, $method);
+        cell!($bad, $cases, $func, D57<42>, "D57", 42, 57, $method);
+        cell!($bad, $cases, $func, D57<56>, "D57", 56, 57, $method);
+        cell!($bad, $cases, $func, D76<0>, "D76", 0, 76, $method);
+        cell!($bad, $cases, $func, D76<18>, "D76", 18, 76, $method);
+        cell!($bad, $cases, $func, D76<19>, "D76", 19, 76, $method);
+        cell!($bad, $cases, $func, D76<38>, "D76", 38, 76, $method);
+        cell!($bad, $cases, $func, D76<40>, "D76", 40, 76, $method);
+        cell!($bad, $cases, $func, D76<57>, "D76", 57, 76, $method);
+        cell!($bad, $cases, $func, D76<75>, "D76", 75, 76, $method);
+        cell!($bad, $cases, $func, D115<0>, "D115", 0, 115, $method);
+        cell!($bad, $cases, $func, D115<28>, "D115", 28, 115, $method);
+        cell!($bad, $cases, $func, D115<50>, "D115", 50, 115, $method);
+        cell!($bad, $cases, $func, D115<57>, "D115", 57, 115, $method);
+        cell!($bad, $cases, $func, D115<86>, "D115", 86, 115, $method);
+        cell!($bad, $cases, $func, D115<114>, "D115", 114, 115, $method);
+        cell!($bad, $cases, $func, D153<0>, "D153", 0, 153, $method);
+        cell!($bad, $cases, $func, D153<38>, "D153", 38, 153, $method);
+        cell!($bad, $cases, $func, D153<76>, "D153", 76, 153, $method);
+        cell!($bad, $cases, $func, D153<114>, "D153", 114, 153, $method);
+        cell!($bad, $cases, $func, D153<152>, "D153", 152, 153, $method);
+        cell!($bad, $cases, $func, D230<0>, "D230", 0, 230, $method);
+        cell!($bad, $cases, $func, D230<57>, "D230", 57, 230, $method);
+        cell!($bad, $cases, $func, D230<115>, "D230", 115, 230, $method);
+        cell!($bad, $cases, $func, D230<172>, "D230", 172, 230, $method);
+        cell!($bad, $cases, $func, D230<229>, "D230", 229, 230, $method);
+        cell!($bad, $cases, $func, D307<0>, "D307", 0, 307, $method);
+        cell!($bad, $cases, $func, D307<30>, "D307", 30, 307, $method);
+        cell!($bad, $cases, $func, D307<50>, "D307", 50, 307, $method);
+        cell!($bad, $cases, $func, D307<70>, "D307", 70, 307, $method);
+        cell!($bad, $cases, $func, D307<76>, "D307", 76, 307, $method);
+        cell!($bad, $cases, $func, D307<120>, "D307", 120, 307, $method);
+        cell!($bad, $cases, $func, D307<153>, "D307", 153, 307, $method);
+        cell!($bad, $cases, $func, D307<230>, "D307", 230, 307, $method);
+        cell!($bad, $cases, $func, D307<290>, "D307", 290, 307, $method);
+        cell!($bad, $cases, $func, D307<306>, "D307", 306, 307, $method);
+        cell!($bad, $cases, $func, D462<0>, "D462", 0, 462, $method);
+        cell!($bad, $cases, $func, D462<30>, "D462", 30, 462, $method);
+        cell!($bad, $cases, $func, D462<100>, "D462", 100, 462, $method);
+        cell!($bad, $cases, $func, D462<115>, "D462", 115, 462, $method);
+        cell!($bad, $cases, $func, D462<180>, "D462", 180, 462, $method);
+        cell!($bad, $cases, $func, D462<231>, "D462", 231, 462, $method);
+        cell!($bad, $cases, $func, D462<346>, "D462", 346, 462, $method);
+        cell!($bad, $cases, $func, D462<461>, "D462", 461, 462, $method);
+        cell!($bad, $cases, $func, D616<0>, "D616", 0, 616, $method);
+        cell!($bad, $cases, $func, D616<30>, "D616", 30, 616, $method);
+        cell!($bad, $cases, $func, D616<130>, "D616", 130, 616, $method);
+        cell!($bad, $cases, $func, D616<154>, "D616", 154, 616, $method);
+        cell!($bad, $cases, $func, D616<240>, "D616", 240, 616, $method);
+        cell!($bad, $cases, $func, D616<308>, "D616", 308, 616, $method);
+        cell!($bad, $cases, $func, D616<462>, "D616", 462, 616, $method);
+        cell!($bad, $cases, $func, D616<590>, "D616", 590, 616, $method);
+        cell!($bad, $cases, $func, D616<615>, "D616", 615, 616, $method);
+        cell!($bad, $cases, $func, D924<0>, "D924", 0, 924, $method);
+        cell!($bad, $cases, $func, D924<30>, "D924", 30, 924, $method);
+        cell!($bad, $cases, $func, D924<180>, "D924", 180, 924, $method);
+        cell!($bad, $cases, $func, D924<231>, "D924", 231, 924, $method);
+        cell!($bad, $cases, $func, D924<350>, "D924", 350, 924, $method);
+        cell!($bad, $cases, $func, D924<462>, "D924", 462, 924, $method);
+        cell!($bad, $cases, $func, D924<693>, "D924", 693, 924, $method);
+        cell!($bad, $cases, $func, D924<900>, "D924", 900, 924, $method);
+        cell!($bad, $cases, $func, D924<923>, "D924", 923, 924, $method);
+        cell!($bad, $cases, $func, D1232<0>, "D1232", 0, 1232, $method);
+        cell!($bad, $cases, $func, D1232<30>, "D1232", 30, 1232, $method);
+        cell!($bad, $cases, $func, D1232<250>, "D1232", 250, 1232, $method);
+        cell!($bad, $cases, $func, D1232<308>, "D1232", 308, 1232, $method);
+        cell!($bad, $cases, $func, D1232<470>, "D1232", 470, 1232, $method);
+        cell!($bad, $cases, $func, D1232<616>, "D1232", 616, 1232, $method);
+        cell!($bad, $cases, $func, D1232<924>, "D1232", 924, 1232, $method);
+        cell!($bad, $cases, $func, D1232<1200>, "D1232", 1200, 1232, $method);
+        cell!($bad, $cases, $func, D1232<1231>, "D1232", 1231, 1232, $method);
     }};
 }
 
