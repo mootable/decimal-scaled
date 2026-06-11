@@ -80,8 +80,11 @@ macro_rules! bench_width {
 fn bench_int_ops(c: &mut Criterion) {
     bench_width!(c, "Int256", Int<4>);
     bench_width!(c, "Int512", Int<8>);
+    bench_width!(c, "Int768", Int<12>);
     bench_width!(c, "Int1024", Int<16>);
+    bench_width!(c, "Int1536", Int<24>);
     bench_width!(c, "Int2048", Int<32>);
+    bench_width!(c, "Int3072", Int<48>);
     bench_width!(c, "Int4096", Int<64>);
 }
 

@@ -82,6 +82,10 @@ postcard = { version = "1", default-features = false, features = ["alloc"] }
 num-traits = { version = "0.2", default-features = false }
 # Property-based identity suite (tests/proptest_identities.rs).
 proptest = "1"
+# Live-vs-pinned-history microbenches (benches/add_history_ab.rs): same
+# criterion alias + self-pin affinity helper the root crate's benches use.
+criterion = { version = "4.6.0", default-features = false, features = ["cargo_bench_support"], package = "codspeed-criterion-compat" }
+core_affinity = "0.8"
 
 # Mirror the root crate's rust-lint envelope so the relocated tests keep the
 # warning policy they were written under (e.g. deliberately unused bindings
@@ -113,3 +117,12 @@ required-features = ["x-wide"]
 [[test]]
 name = "nightly_cross_scale"
 required-features = ["cross-scale-ops"]
+
+# Live-vs-0.4.4 decimal-add A/B at the bbc-regressed D462 cell (D616 control).
+# Lives here (not the root benches/) because only this crate carries the
+# pinned ds-044 dependency.
+[[bench]]
+name = "add_history_ab"
+path = "benches/add_history_ab.rs"
+harness = false
+required-features = ["x-wide", "history-044"]
