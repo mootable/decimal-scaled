@@ -85,7 +85,9 @@ def _provably_exact(func: str, inputs: List[str], value: str) -> bool:
     if func in ("acos", "acosh"):
         return a == 1  # = 0
     if func == "atan2":
-        return a == 0 and b is not None and b > 0  # atan2(0, +x) = 0
+        # atan2(0, +x) = 0 exactly; atan2(0, 0) = 0 by the IEEE 754 /
+        # library convention (atan2(0, -x) = pi is irrational - excluded).
+        return a == 0 and b is not None and b >= 0
 
     # Algebraic / power family: decide by exact rational inverse-check.
     if func == "sqrt":
