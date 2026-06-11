@@ -4511,3 +4511,8 @@
 -1090
 // regression: retired exp_underflow_wide.rs pin (tanh deep underflow - the internal exp of twice the argument underflows the working scale; must round to the signed unit, not panic)
 -1063
+// regression: work-rung escalation-cap fall-up (sin_d307_s153 Trunc, 1-ULP directed miss) - tiny arguments whose f(x) = x -/+ x^3-term (or 1 +/- d quadratic) deciding digit lies BETWEEN a narrow work-rung's Ziv cap and the tier work int's; an unresolved-at-rung walker must fall up to the tier width, never conclude from a cap-clamped probe
+0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003
+0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001
+0.000000000000000000000000000000000000000000000000000000000003
+-0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003

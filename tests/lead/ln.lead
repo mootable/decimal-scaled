@@ -5038,3 +5038,6 @@
 0.6728261941694814286717901991
 // regression: retired d115_wide_high_scale_no_overflow.rs and the ln lookup-parity round-trips (high-working-scale artanh-series intermediates used to overflow the work integer)
 1.5
+// regression: work-rung escalation-cap fall-up (sin_d307_s153 Trunc, 1-ULP directed miss) - tiny arguments whose f(x) = x -/+ x^3-term (or 1 +/- d quadratic) deciding digit lies BETWEEN a narrow work-rung's Ziv cap and the tier work int's; an unresolved-at-rung walker must fall up to the tier width, never conclude from a cap-clamped probe
+1.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003
+0.9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999997

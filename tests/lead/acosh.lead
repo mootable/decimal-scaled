@@ -4300,3 +4300,5 @@
 870992.2010668188564482321827
 421235.4663627093422383424016
 292606.6593951711968003822625
+// regression: work-rung escalation-cap fall-up (sin_d307_s153 Trunc, 1-ULP directed miss) - tiny arguments whose f(x) = x -/+ x^3-term (or 1 +/- d quadratic) deciding digit lies BETWEEN a narrow work-rung's Ziv cap and the tier work int's; an unresolved-at-rung walker must fall up to the tier width, never conclude from a cap-clamped probe
+1.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003
