@@ -31,6 +31,13 @@ proc-macro2 = "1"
 # original hard-coded path. See the README's "consumer crate
 # requirements" section for the unavoidable direct-dep rule.
 proc-macro-crate = "3"
+# Disambiguates a consumer that pins SEVERAL `decimal-scaled`
+# versions under Cargo renames beside the live dep (the
+# version-history test crate carries `ds-044`/`ds-033`):
+# `crate_name` returns whichever match it meets first, so the
+# manifest is probed directly for the un-renamed key. Already a
+# transitive dep of proc-macro-crate — no extra build cost.
+toml_edit = "0.25"
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs"]

@@ -78,6 +78,16 @@ struct Width {
 fn crate_root() -> proc_macro2::TokenStream {
     use proc_macro_crate::{FoundCrate, crate_name};
     use quote::quote;
+    // A consumer may pin SEVERAL `decimal-scaled` versions under Cargo
+    // renames beside the live dep (the version-history test crate
+    // carries `ds-044`/`ds-033`). `crate_name` returns whichever match
+    // it meets first — possibly a rename whose optional crate isn't
+    // even enabled — so the un-renamed `decimal-scaled` key wins
+    // whenever the manifest has one; the rename lookup is only trusted
+    // when it is the manifest's sole match.
+    if manifest_has_unrenamed_dep() {
+        return quote! { ::decimal_scaled };
+    }
     match crate_name("decimal-scaled") {
         Ok(FoundCrate::Itself) => quote! { ::decimal_scaled },
         Ok(FoundCrate::Name(name)) => {
@@ -86,6 +96,34 @@ fn crate_root() -> proc_macro2::TokenStream {
         }
         Err(_) => quote! { ::decimal_scaled },
     }
+}
+
+/// `true` when the consumer's manifest lists `decimal-scaled` under
+/// its own (un-renamed) key — i.e. the extern name `decimal_scaled`
+/// is in scope. A `decimal-scaled = { package = "<other>" }` rename
+/// of a DIFFERENT package does not count. Any read/parse failure
+/// returns `false` and defers to the `crate_name` lookup.
+fn manifest_has_unrenamed_dep() -> bool {
+    let Ok(dir) = std::env::var("CARGO_MANIFEST_DIR") else {
+        return false;
+    };
+    let Ok(text) = std::fs::read_to_string(std::path::Path::new(&dir).join("Cargo.toml")) else {
+        return false;
+    };
+    let Ok(doc) = text.parse::<toml_edit::DocumentMut>() else {
+        return false;
+    };
+    ["dependencies", "dev-dependencies", "build-dependencies"]
+        .iter()
+        .any(|table| {
+            doc.get(table)
+                .and_then(|t| t.get("decimal-scaled"))
+                .is_some_and(|dep| {
+                    dep.get("package")
+                        .and_then(|p| p.as_str())
+                        .is_none_or(|p| p == "decimal-scaled")
+                })
+        })
 }
 
 /// Build the absolute path to a decimal type (`<root>::D38`).
