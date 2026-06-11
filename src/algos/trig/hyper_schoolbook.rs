@@ -217,13 +217,18 @@ where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     <C::Wexp as crate::int::types::traits::BigInt>::Scratch:
         crate::int::types::compute_limbs::ComputeLimbs,
+    <C::W as crate::int::types::traits::BigInt>::Scratch:
+        crate::int::types::compute_limbs::ComputeLimbs,
 {
     use crate::algos::exp::exp_generic as eg;
-    use crate::algos::support::wide_trig_core::round_to_storage_directed_g;
+    use crate::algos::support::wide_trig_core::round_to_storage_directed_widening_g;
     let neg = raw < C::storage_zero();
     let k_lift = C::exp_result_int_digits(C::to_work_scaled(raw, 0), SCALE);
     let base_guard = C::GUARD + k_lift;
-    round_to_storage_directed_g::<C::Storage, Wk>(
+    // Two-width fall-up: an unresolved-at-rung-cap near-tie reruns the
+    // walker at the tier work width with the TIER kernel's closure,
+    // verbatim - see `round_to_storage_directed_widening_g`.
+    round_to_storage_directed_widening_g::<C::Storage, Wk, C::W>(
         base_guard,
         SCALE,
         mode,
@@ -240,6 +245,13 @@ where
             );
             if neg { eg::zero::<Wk>() - sh } else { sh }
         },
+        |guard| {
+            let w = SCALE + guard;
+            let v = C::to_work_scaled(raw, guard);
+            let av = if v < C::zero() { C::zero() - v } else { v };
+            let sh = C::sinh_pos_wide::<SCALE>(av, w);
+            if neg { C::zero() - sh } else { sh }
+        },
     )
 }
 
@@ -255,12 +267,15 @@ where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     <C::Wexp as crate::int::types::traits::BigInt>::Scratch:
         crate::int::types::compute_limbs::ComputeLimbs,
+    <C::W as crate::int::types::traits::BigInt>::Scratch:
+        crate::int::types::compute_limbs::ComputeLimbs,
 {
     use crate::algos::exp::exp_generic as eg;
-    use crate::algos::support::wide_trig_core::round_to_storage_directed_g;
+    use crate::algos::support::wide_trig_core::round_to_storage_directed_widening_g;
     let k_lift = C::exp_result_int_digits(C::to_work_scaled(raw, 0), SCALE);
     let base_guard = C::GUARD + k_lift;
-    round_to_storage_directed_g::<C::Storage, Wk>(
+    // Two-width fall-up - see [`sinh_schoolbook_g`].
+    round_to_storage_directed_widening_g::<C::Storage, Wk, C::W>(
         base_guard,
         SCALE,
         mode,
@@ -275,6 +290,12 @@ where
                 |av, w| eg::cosh_pos::<Wk>(av, w),
                 |av, w| eg::cosh_pos::<C::Wexp>(av, w),
             )
+        },
+        |guard| {
+            let w = SCALE + guard;
+            let v = C::to_work_scaled(raw, guard);
+            let av = if v < C::zero() { C::zero() - v } else { v };
+            C::cosh_pos_wide::<SCALE>(av, w)
         },
     )
 }
@@ -291,13 +312,16 @@ where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     <C::Wexp as crate::int::types::traits::BigInt>::Scratch:
         crate::int::types::compute_limbs::ComputeLimbs,
+    <C::W as crate::int::types::traits::BigInt>::Scratch:
+        crate::int::types::compute_limbs::ComputeLimbs,
 {
     use crate::algos::exp::exp_generic as eg;
-    use crate::algos::support::wide_trig_core::round_to_storage_directed_g;
+    use crate::algos::support::wide_trig_core::round_to_storage_directed_widening_g;
     let neg = raw < C::storage_zero();
     let k_lift = C::exp_result_int_digits(C::to_work_scaled(raw, 0), SCALE);
     let base_guard = C::GUARD + k_lift;
-    round_to_storage_directed_g::<C::Storage, Wk>(
+    // Two-width fall-up - see [`sinh_schoolbook_g`].
+    round_to_storage_directed_widening_g::<C::Storage, Wk, C::W>(
         base_guard,
         SCALE,
         mode,
@@ -313,6 +337,13 @@ where
                 |av, w| eg::tanh_pos::<C::Wexp>(av, w),
             );
             if neg { eg::zero::<Wk>() - th } else { th }
+        },
+        |guard| {
+            let w = SCALE + guard;
+            let v = C::to_work_scaled(raw, guard);
+            let av = if v < C::zero() { C::zero() - v } else { v };
+            let th = C::tanh_pos_wide::<SCALE>(av, w);
+            if neg { C::zero() - th } else { th }
         },
     )
 }
@@ -349,14 +380,20 @@ pub(crate) fn asinh_schoolbook_g<C: WideTrigCore, Wk: crate::int::types::traits:
 ) -> C::Storage
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+    <C::W as crate::int::types::traits::BigInt>::Scratch:
+        crate::int::types::compute_limbs::ComputeLimbs,
 {
     use crate::algos::exp::exp_generic as eg;
-    use crate::algos::support::wide_trig_core::{round_to_storage_directed_g, to_work_scaled_g};
+    use crate::algos::support::wide_trig_core::{
+        round_to_storage_directed_widening_g, to_work_scaled_g,
+    };
     if raw == C::storage_zero() {
         return C::storage_zero();
     }
     let neg = raw < C::storage_zero();
-    round_to_storage_directed_g::<C::Storage, Wk>(
+    // Two-width fall-up - the second closure is the tier kernel's,
+    // verbatim; see `round_to_storage_directed_widening_g`.
+    round_to_storage_directed_widening_g::<C::Storage, Wk, C::W>(
         C::GUARD,
         SCALE,
         mode,
@@ -378,6 +415,21 @@ where
             };
             if neg { eg::zero::<Wk>() - inner } else { inner }
         },
+        |guard| {
+            let w = SCALE + guard;
+            let one_w = C::one(w);
+            let v = C::to_work_scaled(raw, guard);
+            let ax = if v < C::zero() { C::zero() - v } else { v };
+            let inner = if ax >= one_w {
+                let inv = C::div(one_w, ax, w);
+                let root = C::sqrt_fixed(one_w + C::mul(inv, inv, w), w);
+                C::ln_fixed::<SCALE>(ax, w) + C::ln_fixed::<SCALE>(one_w + root, w)
+            } else {
+                let root = C::sqrt_fixed(C::mul(ax, ax, w) + one_w, w);
+                C::ln_fixed::<SCALE>(ax + root, w)
+            };
+            if neg { C::zero() - inner } else { inner }
+        },
     )
 }
 
@@ -394,10 +446,12 @@ pub(crate) fn acosh_schoolbook_g<C: WideTrigCore, Wk: crate::int::types::traits:
 ) -> C::Storage
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+    <C::W as crate::int::types::traits::BigInt>::Scratch:
+        crate::int::types::compute_limbs::ComputeLimbs,
 {
     use crate::algos::exp::exp_generic as eg;
     use crate::algos::support::wide_trig_core::{
-        round_to_storage_directed_near_special_g, to_work_scaled_g,
+        round_to_storage_directed_near_special_widening_g, to_work_scaled_g,
     };
     {
         let w0 = SCALE + C::GUARD;
@@ -405,7 +459,9 @@ where
             panic!("schoolbook acosh: argument must be >= 1");
         }
     }
-    round_to_storage_directed_near_special_g::<C::Storage, Wk>(
+    // Two-width fall-up (near-special form) - an at-cap unconfirmed walk
+    // reruns at the tier width with the tier kernel's closure, verbatim.
+    round_to_storage_directed_near_special_widening_g::<C::Storage, Wk, C::W>(
         C::GUARD,
         SCALE,
         mode,
@@ -427,6 +483,21 @@ where
                 eg::log1p_fixed::<Wk>(t + root, w)
             }
         },
+        |guard| {
+            let w = SCALE + guard;
+            let one_w = C::one(w);
+            let v = C::to_work_scaled(raw, guard);
+            let two_w = one_w + one_w;
+            if v >= two_w {
+                let inv = C::div(one_w, v, w);
+                let root = C::sqrt_fixed(one_w - C::mul(inv, inv, w), w);
+                C::ln_fixed::<SCALE>(v, w) + C::ln_fixed::<SCALE>(one_w + root, w)
+            } else {
+                let t = v - one_w;
+                let root = C::sqrt_fixed(C::mul(t, t + two_w, w), w);
+                C::log1p_fixed(t + root, w)
+            }
+        },
     )
 }
 
@@ -444,10 +515,12 @@ pub(crate) fn atanh_schoolbook_g<C: WideTrigCore, Wk: crate::int::types::traits:
 ) -> C::Storage
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+    <C::W as crate::int::types::traits::BigInt>::Scratch:
+        crate::int::types::compute_limbs::ComputeLimbs,
 {
     use crate::algos::exp::exp_generic as eg;
     use crate::algos::support::wide_trig_core::{
-        round_to_storage_directed_near_special_g, to_work_scaled_g,
+        round_to_storage_directed_near_special_widening_g, to_work_scaled_g,
     };
     {
         let w0 = SCALE + C::GUARD;
@@ -457,7 +530,8 @@ where
             panic!("schoolbook atanh: argument out of domain (-1, 1)");
         }
     }
-    round_to_storage_directed_near_special_g::<C::Storage, Wk>(
+    // Two-width fall-up (near-special form) - see [`acosh_schoolbook_g`].
+    round_to_storage_directed_near_special_widening_g::<C::Storage, Wk, C::W>(
         C::GUARD,
         SCALE,
         mode,
@@ -470,6 +544,12 @@ where
             let v = to_work_scaled_g::<C::Storage, Wk>(raw, guard);
             (eg::ln_fixed::<Wk>(one_w + v, w, ln2_w) - eg::ln_fixed::<Wk>(one_w - v, w, ln2_w))
                 >> 1
+        },
+        |guard| {
+            let w = SCALE + guard;
+            let one_w = C::one(w);
+            let v = C::to_work_scaled(raw, guard);
+            (C::ln_fixed::<SCALE>(one_w + v, w) - C::ln_fixed::<SCALE>(one_w - v, w)) >> 1
         },
     )
 }

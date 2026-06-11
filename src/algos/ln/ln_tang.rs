@@ -318,9 +318,10 @@ pub(crate) fn ln_tang_g<
 ) -> C::Storage
 where
     <Wk as BigInt>::Scratch: ComputeLimbs,
+    <C::W as BigInt>::Scratch: ComputeLimbs,
 {
     use crate::algos::support::wide_trig_core::{
-        round_to_storage_directed_g, round_to_storage_with_g, to_work_scaled_g,
+        round_to_storage_directed_widening_g, round_to_storage_with_g, to_work_scaled_g,
     };
     use crate::support::rounding::DEFAULT_ROUNDING_MODE;
 
@@ -335,6 +336,15 @@ where
             crate::consts::ln2_by_scale::<Wk>(SCALE + GUARD, DEFAULT_ROUNDING_MODE)
         } else {
             crate::consts::ln2_by_working_scale::<Wk>(ww, DEFAULT_ROUNDING_MODE)
+        }
+    };
+    // The tier-width `ln 2` for the fall-up recompute (identical closure
+    // shape at `C::W` - the `ln_tang` alias's own).
+    let ln2_w = |ww: u32| -> C::W {
+        if ww == SCALE + GUARD {
+            crate::consts::ln2_by_scale::<C::W>(SCALE + GUARD, DEFAULT_ROUNDING_MODE)
+        } else {
+            crate::consts::ln2_by_working_scale::<C::W>(ww, DEFAULT_ROUNDING_MODE)
         }
     };
     if DIRECTED {
@@ -363,21 +373,35 @@ where
             // with wide margin; excludes ordinary operands (e.g. x = 1.5).
             diff.bit_length() < (SCALE - SCALE / 4) * 3
         };
+        // Two-width fall-up: an unresolved-at-rung-cap near-tie reruns the
+        // walker at the tier work width `C::W` (the `ln_tang` alias's own
+        // realisation, verbatim) - see
+        // `wide_trig_core::round_to_storage_directed_widening_g`.
         let r = if use_extra {
-            round_to_storage_directed_g::<C::Storage, Wk>(
+            round_to_storage_directed_widening_g::<C::Storage, Wk, C::W>(
                 GUARD, SCALE, mode, C::storage_max(), C::storage_min(),
                 |guard| {
                     tang_ln_fixed_g::<Wk, CAP, true>(
                         to_work_scaled_g::<C::Storage, Wk>(raw, guard), SCALE + guard, ln2,
                     )
                 },
+                |guard| {
+                    tang_ln_fixed_g::<C::W, CAP, true>(
+                        to_work_scaled_g::<C::Storage, C::W>(raw, guard), SCALE + guard, ln2_w,
+                    )
+                },
             )
         } else {
-            round_to_storage_directed_g::<C::Storage, Wk>(
+            round_to_storage_directed_widening_g::<C::Storage, Wk, C::W>(
                 GUARD, SCALE, mode, C::storage_max(), C::storage_min(),
                 |guard| {
                     tang_ln_fixed_g::<Wk, CAP, false>(
                         to_work_scaled_g::<C::Storage, Wk>(raw, guard), SCALE + guard, ln2,
+                    )
+                },
+                |guard| {
+                    tang_ln_fixed_g::<C::W, CAP, false>(
+                        to_work_scaled_g::<C::Storage, C::W>(raw, guard), SCALE + guard, ln2_w,
                     )
                 },
             )

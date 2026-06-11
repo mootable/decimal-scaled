@@ -701,11 +701,16 @@ pub(crate) fn sin_series_g<C: WideTrigCore, Wk: BigInt, const SCALE: u32, const 
 ) -> C::Storage
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+    <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
     if raw == C::storage_zero() {
         return C::storage_zero();
     }
-    let r = round_to_storage_directed_g::<C::Storage, Wk>(
+    // Two-width fall-up: an unresolved-at-rung-cap near-tie reruns the
+    // walker at the tier work width `C::W` (the recompute closure is the
+    // tier kernel's, verbatim), so the conclusion is never weaker than
+    // the tier path's — see `round_to_storage_directed_widening_g`.
+    let r = round_to_storage_directed_widening_g::<C::Storage, Wk, C::W>(
         GUARD,
         SCALE,
         mode,
@@ -719,6 +724,7 @@ where
                 pi_at_rung::<Wk>(w, SCALE + GUARD),
             )
         },
+        |guard| C::sin_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard),
     );
     adjust_bounded_extremum::<C, SCALE>(r, raw, mode)
 }
@@ -734,11 +740,13 @@ pub(crate) fn cos_series_g<C: WideTrigCore, Wk: BigInt, const SCALE: u32, const 
 ) -> C::Storage
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+    <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
     if raw == C::storage_zero() {
         return C::storage_one(SCALE);
     }
-    let r = round_to_storage_directed_g::<C::Storage, Wk>(
+    // Two-width fall-up — see [`sin_series_g`].
+    let r = round_to_storage_directed_widening_g::<C::Storage, Wk, C::W>(
         GUARD,
         SCALE,
         mode,
@@ -752,6 +760,7 @@ where
                 pi_at_rung::<Wk>(w, SCALE + GUARD),
             )
         },
+        |guard| C::cos_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard),
     );
     adjust_bounded_extremum::<C, SCALE>(r, raw, mode)
 }
@@ -871,9 +880,11 @@ pub(crate) fn atan_series_g<
 ) -> C::Storage
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+    <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
     if DIRECTED {
-        round_to_storage_directed_g::<C::Storage, Wk>(
+        // Two-width fall-up — see [`sin_series_g`].
+        round_to_storage_directed_widening_g::<C::Storage, Wk, C::W>(
             GUARD,
             SCALE,
             mode,
@@ -887,6 +898,7 @@ where
                     pi_at_rung::<Wk>(w, SCALE + GUARD),
                 )
             },
+            |guard| C::atan_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard),
         )
     } else {
         let w = SCALE + GUARD;
@@ -1329,7 +1341,7 @@ pub(crate) fn round_to_storage_directed_g<St: BigInt + Copy, S: BigInt>(
 where
     S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
-    round_to_storage_directed_impl_g::<St, S>(base_guard, target, mode, false, false, st_max, st_min, recompute)
+    round_to_storage_directed_impl_g::<St, S>(base_guard, target, mode, false, false, st_max, st_min, recompute).0
 }
 
 /// `never_exact` directed narrowing (an irrational-valued kernel, e.g. `exp`):
@@ -1346,7 +1358,7 @@ pub(crate) fn round_to_storage_directed_never_exact_g<St: BigInt + Copy, S: BigI
 where
     S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
-    round_to_storage_directed_impl_g::<St, S>(base_guard, target, mode, false, true, st_max, st_min, recompute)
+    round_to_storage_directed_impl_g::<St, S>(base_guard, target, mode, false, true, st_max, st_min, recompute).0
 }
 
 /// Near-special-point directed narrowing (`acosh` at 1, `atanh` at ±1):
@@ -1363,7 +1375,86 @@ pub(crate) fn round_to_storage_directed_near_special_g<St: BigInt + Copy, S: Big
 where
     S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
-    round_to_storage_directed_impl_g::<St, S>(base_guard, target, mode, true, false, st_max, st_min, recompute)
+    round_to_storage_directed_impl_g::<St, S>(base_guard, target, mode, true, false, st_max, st_min, recompute).0
+}
+
+/// Two-width directed narrowing for the SCALE-derived work rungs: resolve
+/// at the rung `S1`; if the walker reaches `S1`'s escalation cap
+/// UNRESOLVED (the deciding digit lies beyond the rung's reach but
+/// possibly within the tier's), rerun the WHOLE walker at the wider tier
+/// work integer `S2`, so the conclusion is never weaker than the tier
+/// path's. The directed/nearest twin of the exp near-min
+/// [`round_to_storage_widening_g`] retry, and the rung families' fix for
+/// the at-cap base-narrowing endgame: an unresolved-at-rung tie used to
+/// conclude from the rung's probes, which under a DIRECTED mode can land
+/// one ULP on the wrong side of a sub-rung-resolution residual the tier
+/// width resolves (the `sin_d307_s153` Trunc defect — `sin(x) = x − x³/6`
+/// with the cube term between the two caps). A resolved-at-rung value is
+/// a CONFIRMED deciding digit the tier walker would find identically (the
+/// rung cap never exceeds the tier cap), and an unresolved cell reruns
+/// the tier walker verbatim — so the result is bit-identical to the tier
+/// path in every case, with the (overwhelmingly common) resolved fast
+/// path unchanged.
+#[inline]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn round_to_storage_directed_widening_g<St: BigInt + Copy, S1: BigInt, S2: BigInt>(
+    base_guard: u32,
+    target: u32,
+    mode: RoundingMode,
+    st_max: St,
+    st_min: St,
+    recompute1: impl FnMut(u32) -> S1,
+    recompute2: impl FnMut(u32) -> S2,
+) -> St
+where
+    S1::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+    S2::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    let (v, resolved) = round_to_storage_directed_impl_g::<St, S1>(
+        base_guard, target, mode, false, false, st_max, st_min, recompute1,
+    );
+    if resolved || <S1 as BigInt>::BITS >= <S2 as BigInt>::BITS {
+        return v;
+    }
+    round_to_storage_directed_impl_g::<St, S2>(
+        base_guard, target, mode, false, false, st_max, st_min, recompute2,
+    )
+    .0
+}
+
+/// Near-special two-width narrowing — the `force_confirm` sibling of
+/// [`round_to_storage_directed_widening_g`] (`acosh` at 1, `atanh` at
+/// ±1): an at-cap unconfirmed walk at the rung `S1` reruns at the tier
+/// `S2`, never concluding shallower than the tier path.
+#[inline]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn round_to_storage_directed_near_special_widening_g<
+    St: BigInt + Copy,
+    S1: BigInt,
+    S2: BigInt,
+>(
+    base_guard: u32,
+    target: u32,
+    mode: RoundingMode,
+    st_max: St,
+    st_min: St,
+    recompute1: impl FnMut(u32) -> S1,
+    recompute2: impl FnMut(u32) -> S2,
+) -> St
+where
+    S1::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+    S2::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    let (v, resolved) = round_to_storage_directed_impl_g::<St, S1>(
+        base_guard, target, mode, true, false, st_max, st_min, recompute1,
+    );
+    if resolved || <S1 as BigInt>::BITS >= <S2 as BigInt>::BITS {
+        return v;
+    }
+    round_to_storage_directed_impl_g::<St, S2>(
+        base_guard, target, mode, true, false, st_max, st_min, recompute2,
+    )
+    .0
 }
 
 fn round_to_storage_directed_impl_g<St: BigInt + Copy, S: BigInt>(
@@ -1375,7 +1466,7 @@ fn round_to_storage_directed_impl_g<St: BigInt + Copy, S: BigInt>(
     st_max: St,
     st_min: St,
     mut recompute: impl FnMut(u32) -> S,
-) -> St
+) -> (St, bool)
 where
     S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
@@ -1442,7 +1533,7 @@ where
         // trigger stays the wide band; the absolute `floor` below is only the
         // STOP test (signal vs noise), not the escalate trigger.
         if !force_confirm && dist0 > band_of(base_guard) {
-            return lo;
+            return (lo, true);
         }
         let int_digits = {
             let n = BigInt::resize_to::<S>(lo);
@@ -1466,19 +1557,28 @@ where
                 // — return the CLEAN base narrowing (the exact-tie answer the
                 // finite-precision oracle agrees with), NOT the deepest
                 // narrowing (which is dominated by kernel noise at this depth).
-                return if force_confirm { best } else { lo };
+                return (if force_confirm { best } else { lo }, false);
             }
             let step = (target + base_guard).max(base_guard);
-            let next_guard = guard.saturating_add(step).min(max_guard);
+            let unclamped = guard.saturating_add(step);
+            let next_guard = unclamped.min(max_guard);
+            // A probe whose depth was CLAMPED by this width's escalation cap
+            // diverges from the canonical (tier-width) probe sequence — any
+            // conclusion drawn from it is reported UNRESOLVED so a two-width
+            // caller falls up to the tier walker instead of trusting a
+            // cap-limited reading (e.g. a zero remainder that is only the
+            // deciding term underflowing at the clamped working scale).
+            let tainted = unclamped > max_guard;
             let (hi, hi_dist, _) = nearest_narrow(next_guard);
             if force_confirm {
                 if hi == best {
-                    return best;
+                    return (best, !tainted);
                 }
             } else if hi_dist > floor {
                 // Deciding digit is now a clear signal above the noise floor —
-                // this narrowing is trustworthy.
-                return hi;
+                // this narrowing is trustworthy (at an unclamped, canonical
+                // probe depth).
+                return (hi, !tainted);
             }
             guard = next_guard;
             best = hi;
@@ -1517,8 +1617,8 @@ where
     let band0 = band_of(base_guard);
     let near_grid = force_confirm || dist0 <= band0;
 
-    let signed = if !near_grid {
-        lo
+    let (signed, decided) = if !near_grid {
+        (lo, true)
     } else {
         let int_digits = {
             let m = if lo < lit(0) { -lo } else { lo };
@@ -1532,20 +1632,25 @@ where
         let mut guard = base_guard;
         loop {
             if guard >= max_guard {
-                break lo;
+                break (lo, false);
             }
             let step = (target + base_guard).max(base_guard);
-            let next_guard = guard.saturating_add(step).min(max_guard);
+            let unclamped = guard.saturating_add(step);
+            let next_guard = unclamped.min(max_guard);
+            // See the nearest branch: a cap-clamped probe departs from the
+            // canonical probe sequence, so its conclusion is reported
+            // UNRESOLVED for the two-width fall-up.
+            let tainted = unclamped > max_guard;
             let (hi, hi_dist, _hi_div) = directed_narrow(next_guard);
             let hi_band = band_of(next_guard);
             let resolved = hi_dist == lit(0) || hi_dist > hi_band;
             if hi == lo && resolved {
-                break hi;
+                break (hi, !tainted);
             }
             guard = next_guard;
             lo = hi;
         }
     };
 
-    narrow_range_checked_g::<St, S>(signed, st_max, st_min)
+    (narrow_range_checked_g::<St, S>(signed, st_max, st_min), decided)
 }

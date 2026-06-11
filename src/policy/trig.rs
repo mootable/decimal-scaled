@@ -365,7 +365,10 @@ pub(crate) mod forward_rung {
     pub(crate) fn sin_strict<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
         raw: C::Storage,
         mode: RoundingMode,
-    ) -> C::Storage {
+    ) -> C::Storage
+    where
+        <C::W as BigInt>::Scratch: ComputeLimbs,
+    {
         if in_budget::<C::Storage, SCALE, D_BUDGET>(&raw) {
             rung_match!(trig_rung, C, SCALE, sin_series_g, [SCALE, GUARD], raw, mode)
         } else {
@@ -378,7 +381,10 @@ pub(crate) mod forward_rung {
     pub(crate) fn cos_strict<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
         raw: C::Storage,
         mode: RoundingMode,
-    ) -> C::Storage {
+    ) -> C::Storage
+    where
+        <C::W as BigInt>::Scratch: ComputeLimbs,
+    {
         if in_budget::<C::Storage, SCALE, D_BUDGET>(&raw) {
             rung_match!(trig_rung, C, SCALE, cos_series_g, [SCALE, GUARD], raw, mode)
         } else {
@@ -433,7 +439,10 @@ pub(crate) mod forward_rung {
     >(
         raw: C::Storage,
         mode: RoundingMode,
-    ) -> C::Storage {
+    ) -> C::Storage
+    where
+        <C::W as BigInt>::Scratch: ComputeLimbs,
+    {
         if in_budget::<C::Storage, SCALE, D_BUDGET>(&raw) {
             rung_match!(trig_rung, C, SCALE, atan_series_g, [SCALE, GUARD, DIRECTED], raw, mode)
         } else if DIRECTED {
@@ -551,6 +560,7 @@ pub(crate) mod hyper_rung {
     ) -> C::Storage
     where
         <C::Wexp as BigInt>::Scratch: ComputeLimbs,
+        <C::W as BigInt>::Scratch: ComputeLimbs,
     {
         if in_budget::<C::Storage, SCALE, EXP_ARG_BUDGET>(&raw) {
             rung_match!(trig_rung, C, SCALE, sinh_schoolbook_g, [SCALE], raw, mode)
@@ -567,6 +577,7 @@ pub(crate) mod hyper_rung {
     ) -> C::Storage
     where
         <C::Wexp as BigInt>::Scratch: ComputeLimbs,
+        <C::W as BigInt>::Scratch: ComputeLimbs,
     {
         if in_budget::<C::Storage, SCALE, EXP_ARG_BUDGET>(&raw) {
             rung_match!(trig_rung, C, SCALE, cosh_schoolbook_g, [SCALE], raw, mode)
@@ -583,6 +594,7 @@ pub(crate) mod hyper_rung {
     ) -> C::Storage
     where
         <C::Wexp as BigInt>::Scratch: ComputeLimbs,
+        <C::W as BigInt>::Scratch: ComputeLimbs,
     {
         if in_budget::<C::Storage, SCALE, EXP_ARG_BUDGET>(&raw) {
             rung_match!(trig_rung, C, SCALE, tanh_schoolbook_g, [SCALE], raw, mode)
@@ -624,7 +636,11 @@ pub(crate) mod extra_rung {
     pub(crate) fn asinh_strict<C: WideTrigCore, const SCALE: u32>(
         raw: C::Storage,
         mode: RoundingMode,
-    ) -> C::Storage {
+    ) -> C::Storage
+    where
+        <C::W as crate::int::types::traits::BigInt>::Scratch:
+            crate::int::types::compute_limbs::ComputeLimbs,
+    {
         if in_budget::<C::Storage, SCALE, D_BUDGET>(&raw) {
             rung_match!(trig_rung, C, SCALE, asinh_schoolbook_g, [SCALE], raw, mode)
         } else {
@@ -639,7 +655,11 @@ pub(crate) mod extra_rung {
     pub(crate) fn acosh_strict<C: WideTrigCore, const SCALE: u32>(
         raw: C::Storage,
         mode: RoundingMode,
-    ) -> C::Storage {
+    ) -> C::Storage
+    where
+        <C::W as crate::int::types::traits::BigInt>::Scratch:
+            crate::int::types::compute_limbs::ComputeLimbs,
+    {
         if in_budget::<C::Storage, SCALE, D_BUDGET>(&raw) {
             rung_match!(near_special_rung, C, SCALE, acosh_schoolbook_g, [SCALE], raw, mode)
         } else {
@@ -654,7 +674,11 @@ pub(crate) mod extra_rung {
     pub(crate) fn atanh_strict<C: WideTrigCore, const SCALE: u32>(
         raw: C::Storage,
         mode: RoundingMode,
-    ) -> C::Storage {
+    ) -> C::Storage
+    where
+        <C::W as crate::int::types::traits::BigInt>::Scratch:
+            crate::int::types::compute_limbs::ComputeLimbs,
+    {
         if in_budget::<C::Storage, SCALE, D_BUDGET>(&raw) {
             rung_match!(near_special_rung, C, SCALE, atanh_schoolbook_g, [SCALE], raw, mode)
         } else {
@@ -3302,6 +3326,131 @@ mod forward_rung_tests {
                 crate::algos::support::wide_trig_core::atan_series::<Core, 0>(x.to_bits(), mode),
                 "atan(1e9) mode {mode:?}"
             );
+        }
+    }
+
+    /// Tiny-argument directed-contract anchors — the trig_rung_ab bench
+    /// assert set in its durable form (the merge-bounce regression:
+    /// sin_d307_s153 x0.3 mode Trunc). At high scale the bench's u128
+    /// input clamp makes every input TINY (raw = v·10^36 at SCALE 153 ⇒
+    /// x ≈ v·10^-117), so f(x) = x ∓ a sub-resolution x³-term whose
+    /// deciding digit lies BETWEEN the rung's escalation cap and the
+    /// tier's — exactly the band where an unresolved-at-rung walker must
+    /// FALL UP to the tier width instead of concluding from its base
+    /// narrowing (a 1-ULP directed-mode violation otherwise). Asserts
+    /// rung == tier for every family across all six modes at the
+    /// exposing cell D307<153> (and the s0/s306 neighbours via the
+    /// existing anchors).
+    #[test]
+    #[cfg(feature = "d307")]
+    fn d307_s153_tiny_argument_rung_matches_tier() {
+        type Core = crate::types::widths::wide_trig_d307::Core;
+        const G: u32 =
+            <Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD;
+        // The bench input set at SCALE 153: raw = {0.3, 1.0, 1.5, 3141}·10^36.
+        let p36 = crate::int::types::Int::<16>::from_i128(10i128.pow(36));
+        let raws = [
+            crate::int::types::Int::<16>::from_i128(3 * 10i128.pow(35)),
+            p36,
+            crate::int::types::Int::<16>::from_i128(15 * 10i128.pow(35)),
+            crate::int::types::Int::<16>::from_i128(3141) * p36,
+        ];
+        for raw in raws {
+            for mode in ALL_MODES {
+                assert_eq!(
+                    super::forward_rung::sin_strict::<Core, 153, G>(raw, mode),
+                    crate::algos::support::wide_trig_core::sin_series::<Core, 153>(raw, mode),
+                    "sin raw={raw:?} mode {mode:?}"
+                );
+                assert_eq!(
+                    super::forward_rung::cos_strict::<Core, 153, G>(raw, mode),
+                    crate::algos::support::wide_trig_core::cos_series::<Core, 153>(raw, mode),
+                    "cos raw={raw:?} mode {mode:?}"
+                );
+                assert_eq!(
+                    super::forward_rung::tan_strict::<Core, 153, G, true, true>(raw, mode),
+                    crate::algos::support::wide_trig_core::tan_series::<Core, 153>(raw, mode),
+                    "tan raw={raw:?} mode {mode:?}"
+                );
+                assert_eq!(
+                    super::forward_rung::atan_strict::<Core, 153, G, true>(raw, mode),
+                    crate::algos::support::wide_trig_core::atan_series::<Core, 153>(raw, mode),
+                    "atan raw={raw:?} mode {mode:?}"
+                );
+                assert_eq!(
+                    super::inverse_rung::asin_strict::<Core, 153>(raw, mode),
+                    crate::algos::trig::inverse_schoolbook::asin_schoolbook::<Core, 153>(raw, mode),
+                    "asin raw={raw:?} mode {mode:?}"
+                );
+                assert_eq!(
+                    super::hyper_rung::sinh_strict::<Core, 153>(raw, mode),
+                    crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<Core, 153>(raw, mode),
+                    "sinh raw={raw:?} mode {mode:?}"
+                );
+                assert_eq!(
+                    super::hyper_rung::tanh_strict::<Core, 153>(raw, mode),
+                    crate::algos::trig::hyper_schoolbook::tanh_schoolbook::<Core, 153>(raw, mode),
+                    "tanh raw={raw:?} mode {mode:?}"
+                );
+                assert_eq!(
+                    super::extra_rung::asinh_strict::<Core, 153>(raw, mode),
+                    crate::algos::trig::hyper_schoolbook::asinh_schoolbook::<Core, 153>(raw, mode),
+                    "asinh raw={raw:?} mode {mode:?}"
+                );
+                assert_eq!(
+                    super::extra_rung::atanh_strict::<Core, 153>(raw, mode),
+                    crate::algos::trig::hyper_schoolbook::atanh_schoolbook::<Core, 153>(raw, mode),
+                    "atanh raw={raw:?} mode {mode:?}"
+                );
+                assert_eq!(
+                    crate::policy::exp::series_at_rung::<Core, 153>(raw, mode),
+                    crate::algos::support::wide_trig_core::exp_series::<Core, 153>(raw, mode),
+                    "exp raw={raw:?} mode {mode:?}"
+                );
+            }
+        }
+    }
+
+    /// D1232<616> sibling of the tiny-argument anchor (the other bench
+    /// width): raw = {0.3, 1, 1.5}·10^36 at SCALE 616 ⇒ x ≈ v·10^-580,
+    /// deciding x³-terms near 3·580 digits — far beyond every rung cap,
+    /// inside the tier's reach at low scale ranks. Exercises the
+    /// fall-up at the widest ladder spread (sin/atan/sinh/asinh).
+    #[test]
+    #[cfg(feature = "d1232")]
+    fn d1232_s616_tiny_argument_rung_matches_tier() {
+        type Core = crate::types::widths::wide_trig_d1232::Core;
+        const G: u32 =
+            <Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD;
+        let p36 = crate::int::types::Int::<64>::from_i128(10i128.pow(36));
+        let raws = [
+            crate::int::types::Int::<64>::from_i128(3 * 10i128.pow(35)),
+            p36,
+            crate::int::types::Int::<64>::from_i128(15 * 10i128.pow(35)),
+        ];
+        for raw in raws {
+            for mode in ALL_MODES {
+                assert_eq!(
+                    super::forward_rung::sin_strict::<Core, 616, G>(raw, mode),
+                    crate::algos::support::wide_trig_core::sin_series::<Core, 616>(raw, mode),
+                    "sin raw={raw:?} mode {mode:?}"
+                );
+                assert_eq!(
+                    super::forward_rung::atan_strict::<Core, 616, G, true>(raw, mode),
+                    crate::algos::support::wide_trig_core::atan_series::<Core, 616>(raw, mode),
+                    "atan raw={raw:?} mode {mode:?}"
+                );
+                assert_eq!(
+                    super::hyper_rung::sinh_strict::<Core, 616>(raw, mode),
+                    crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<Core, 616>(raw, mode),
+                    "sinh raw={raw:?} mode {mode:?}"
+                );
+                assert_eq!(
+                    super::extra_rung::asinh_strict::<Core, 616>(raw, mode),
+                    crate::algos::trig::hyper_schoolbook::asinh_schoolbook::<Core, 616>(raw, mode),
+                    "asinh raw={raw:?} mode {mode:?}"
+                );
+            }
         }
     }
 
