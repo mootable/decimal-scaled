@@ -1,10 +1,10 @@
 name: "\U0001F4CF lib-cmp precision (LSBε shootout refresh)"
 
 # Comparative precision shootout. Runs the ONE precision-comparison path —
-# `benches/lib_cmp_precision`, built on the shared PrecisionSubject harness
-# that also backs the correctness gate (tests/ulp_strict_golden.rs). The
-# runner sweeps (method × width × scale) over decimal-scaled plus the five
-# peer libraries, scores every cell against the mpmath golden oracle,
+# the `lib_cmp_precision` bin in `golden-competitors`, built on the
+# `decimal-scaled-golden` harness that also backs the golden gate. The
+# runner sweeps (function × width × scale) over decimal-scaled plus the six
+# peer libraries, scores every cell against the multi-oracle golden set,
 # WRITES the deterministic per-library result files under
 # results/precision/<library>.tsv, and renders the LSBε(ULP) shootout table
 # FROM those committed files.
@@ -67,16 +67,13 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install system libs (fontconfig for plotters dev-dep)
-        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
-
       - name: Cache cargo registry + git
         uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: cargo-lib-cmp-precision-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'macros/Cargo.toml') }}
+          key: cargo-lib-cmp-precision-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'macros/Cargo.toml', 'golden-competitors/Cargo.toml', 'decimal-scale-test/Cargo.toml', 'decimal-scaled-golden/Cargo.toml') }}
           restore-keys: |
             cargo-lib-cmp-precision-${{ runner.os }}-
 
@@ -87,14 +84,15 @@ jobs:
         # coverage). The runner itself appends the fidelity report to
         # $GITHUB_STEP_SUMMARY (UTF-8, so the ×/→/ε glyphs render); we also
         # tee the full stdout into a file for the downloadable artifact.
-        # `harness = false` — accuracy harness, not timing.
+        # An accuracy runner, not a timing bench — release for the wide
+        # tiers' kernels, no criterion machinery.
         env:
           # Belt-and-suspenders so any tooling in the chain treats text as
           # UTF-8 (the Rust runner already emits UTF-8 to the summary file).
           PYTHONIOENCODING: utf-8
         run: |
-          cargo bench --bench lib_cmp_precision \
-            --features wide,x-wide,xx-wide,macros \
+          mkdir -p results/precision
+          cargo run --release -p golden-competitors --bin lib_cmp_precision \
             | tee results/precision/REPORT.md
 
       - name: Upload precision results + fidelity grade report
