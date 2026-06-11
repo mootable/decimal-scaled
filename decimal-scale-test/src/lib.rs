@@ -20,6 +20,11 @@
 // `required-features` in Cargo.toml.
 #![cfg(all(feature = "wide", feature = "x-wide", feature = "xx-wide"))]
 
+// Historical-release subjects for the version-history gates (tests/history.rs);
+// each pinned release compiles only behind its `history-*` feature.
+#[cfg(any(feature = "history-044", feature = "history-033"))]
+pub mod history;
+
 use std::collections::BTreeMap;
 
 use decimal_scaled::{
