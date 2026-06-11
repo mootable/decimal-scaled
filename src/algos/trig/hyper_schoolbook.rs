@@ -317,6 +317,163 @@ where
     )
 }
 
+/// `ln 2` at working scale `w` in the rung integer `Wk`: const-table
+/// keyed on the CONST base working scale on the hot path (`w ==
+/// base_w`, const-folds per monomorphisation — the rung sibling of the
+/// per-tier `ln2_cf`), the runtime-keyed lookup on the Ziv escalation
+/// path. Value-identical either way (same table entry). Mirrors
+/// `wide_trig_core::pi_at_rung` / `ln_series_g`'s ln2 threading.
+#[cfg(feature = "_wide-support")]
+#[inline]
+fn ln2_at_rung<Wk: crate::int::types::traits::BigInt>(w: u32, base_w: u32) -> Wk {
+    if w == base_w {
+        crate::consts::ln2_by_scale::<Wk>(base_w, crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    } else {
+        crate::consts::ln2_by_working_scale::<Wk>(
+            w,
+            crate::support::rounding::DEFAULT_ROUNDING_MODE,
+        )
+    }
+}
+
+/// Rung-generic [`asinh_schoolbook`] — `ln(x + √(x² + 1))` at an
+/// arbitrary work rung `Wk` (the ln is the width-generic
+/// `exp_generic::ln_fixed`, value-identical to the tier's `C::ln_fixed`
+/// — same kernel, `ln2` from the same per-scale table).
+#[cfg(feature = "_wide-support")]
+#[inline]
+#[must_use]
+pub(crate) fn asinh_schoolbook_g<C: WideTrigCore, Wk: crate::int::types::traits::BigInt, const SCALE: u32>(
+    raw: C::Storage,
+    mode: RoundingMode,
+) -> C::Storage
+where
+    Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    use crate::algos::exp::exp_generic as eg;
+    use crate::algos::support::wide_trig_core::{round_to_storage_directed_g, to_work_scaled_g};
+    if raw == C::storage_zero() {
+        return C::storage_zero();
+    }
+    let neg = raw < C::storage_zero();
+    round_to_storage_directed_g::<C::Storage, Wk>(
+        C::GUARD,
+        SCALE,
+        mode,
+        C::storage_max(),
+        C::storage_min(),
+        |guard| {
+            let w = SCALE + guard;
+            let ln2_w = ln2_at_rung::<Wk>(w, SCALE + C::GUARD);
+            let one_w = eg::one::<Wk>(w);
+            let v = to_work_scaled_g::<C::Storage, Wk>(raw, guard);
+            let ax = if v < eg::zero::<Wk>() { eg::zero::<Wk>() - v } else { v };
+            let inner = if ax >= one_w {
+                let inv = eg::div::<Wk>(one_w, ax, w);
+                let root = eg::sqrt_fixed::<Wk>(one_w + eg::mul::<Wk>(inv, inv, w), w);
+                eg::ln_fixed::<Wk>(ax, w, ln2_w) + eg::ln_fixed::<Wk>(one_w + root, w, ln2_w)
+            } else {
+                let root = eg::sqrt_fixed::<Wk>(eg::mul::<Wk>(ax, ax, w) + one_w, w);
+                eg::ln_fixed::<Wk>(ax + root, w, ln2_w)
+            };
+            if neg { eg::zero::<Wk>() - inner } else { inner }
+        },
+    )
+}
+
+/// Rung-generic [`acosh_schoolbook`] — `ln(x + √(x² − 1))`, `x ≥ 1`, at
+/// an arbitrary work rung `Wk` (the near-special walker; the policy's
+/// rung selector keys on `2·SCALE` so the forced confirm probe stays
+/// reachable — see `policy::work_rung::near_special_rung`).
+#[cfg(feature = "_wide-support")]
+#[inline]
+#[must_use]
+pub(crate) fn acosh_schoolbook_g<C: WideTrigCore, Wk: crate::int::types::traits::BigInt, const SCALE: u32>(
+    raw: C::Storage,
+    mode: RoundingMode,
+) -> C::Storage
+where
+    Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    use crate::algos::exp::exp_generic as eg;
+    use crate::algos::support::wide_trig_core::{
+        round_to_storage_directed_near_special_g, to_work_scaled_g,
+    };
+    {
+        let w0 = SCALE + C::GUARD;
+        if to_work_scaled_g::<C::Storage, Wk>(raw, C::GUARD) < eg::one::<Wk>(w0) {
+            panic!("schoolbook acosh: argument must be >= 1");
+        }
+    }
+    round_to_storage_directed_near_special_g::<C::Storage, Wk>(
+        C::GUARD,
+        SCALE,
+        mode,
+        C::storage_max(),
+        C::storage_min(),
+        |guard| {
+            let w = SCALE + guard;
+            let ln2_w = ln2_at_rung::<Wk>(w, SCALE + C::GUARD);
+            let one_w = eg::one::<Wk>(w);
+            let v = to_work_scaled_g::<C::Storage, Wk>(raw, guard);
+            let two_w = one_w + one_w;
+            if v >= two_w {
+                let inv = eg::div::<Wk>(one_w, v, w);
+                let root = eg::sqrt_fixed::<Wk>(one_w - eg::mul::<Wk>(inv, inv, w), w);
+                eg::ln_fixed::<Wk>(v, w, ln2_w) + eg::ln_fixed::<Wk>(one_w + root, w, ln2_w)
+            } else {
+                let t = v - one_w;
+                let root = eg::sqrt_fixed::<Wk>(eg::mul::<Wk>(t, t + two_w, w), w);
+                eg::log1p_fixed::<Wk>(t + root, w)
+            }
+        },
+    )
+}
+
+/// Rung-generic [`atanh_schoolbook`] — `½·ln((1+x)/(1−x))`, `|x| < 1`,
+/// at an arbitrary work rung `Wk` (the near-special walker — see
+/// [`acosh_schoolbook_g`]). The two logs stay SEPARATE exactly as the
+/// tier kernel computes them (the near-±1 ratio overflow analysis in
+/// the narrow sibling applies at any width).
+#[cfg(feature = "_wide-support")]
+#[inline]
+#[must_use]
+pub(crate) fn atanh_schoolbook_g<C: WideTrigCore, Wk: crate::int::types::traits::BigInt, const SCALE: u32>(
+    raw: C::Storage,
+    mode: RoundingMode,
+) -> C::Storage
+where
+    Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    use crate::algos::exp::exp_generic as eg;
+    use crate::algos::support::wide_trig_core::{
+        round_to_storage_directed_near_special_g, to_work_scaled_g,
+    };
+    {
+        let w0 = SCALE + C::GUARD;
+        let v0 = to_work_scaled_g::<C::Storage, Wk>(raw, C::GUARD);
+        let ax0 = if v0 < eg::zero::<Wk>() { eg::zero::<Wk>() - v0 } else { v0 };
+        if ax0 >= eg::one::<Wk>(w0) {
+            panic!("schoolbook atanh: argument out of domain (-1, 1)");
+        }
+    }
+    round_to_storage_directed_near_special_g::<C::Storage, Wk>(
+        C::GUARD,
+        SCALE,
+        mode,
+        C::storage_max(),
+        C::storage_min(),
+        |guard| {
+            let w = SCALE + guard;
+            let ln2_w = ln2_at_rung::<Wk>(w, SCALE + C::GUARD);
+            let one_w = eg::one::<Wk>(w);
+            let v = to_work_scaled_g::<C::Storage, Wk>(raw, guard);
+            (eg::ln_fixed::<Wk>(one_w + v, w, ln2_w) - eg::ln_fixed::<Wk>(one_w - v, w, ln2_w))
+                >> 1
+        },
+    )
+}
+
 // -- Narrow tier -- Int<2> storage, math in the 256-bit Fixed ---------
 
 #[inline]

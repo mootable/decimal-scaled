@@ -1147,27 +1147,10 @@ macro_rules! decl_wide_transcendental {
             where
                 S::Scratch: $crate::int::types::compute_limbs::ComputeLimbs,
             {
-                let one_w = $crate::algos::exp::exp_generic::one::<S>(w);
-                let two_w = one_w + one_w;
-                let pow10_w = one_w;
-                let u = $crate::algos::exp::exp_generic::div_cached::<S>(t, two_w + t, pow10_w);
-                let u2 = $crate::algos::exp::exp_generic::mul::<S>(u, u, w);
-                let mut sum = u;
-                let mut term = u;
-                let mut j: u128 = 1;
-                loop {
-                    term = $crate::algos::exp::exp_generic::mul::<S>(term, u2, w);
-                    let contrib = term / $crate::algos::exp::exp_generic::lit::<S>((2 * j + 1) as i128);
-                    if contrib == $crate::algos::exp::exp_generic::zero::<S>() {
-                        break;
-                    }
-                    sum = sum + contrib;
-                    j += 1;
-                    if j > SERIES_CAP {
-                        break;
-                    }
-                }
-                sum + sum
+                // Forwards to the single generic source
+                // (`exp_generic::log1p_fixed`) — no per-tier copy of the
+                // artanh-reformulated series (Constitution rule 2).
+                $crate::algos::exp::exp_generic::log1p_fixed::<S>(t, w)
             }
 
             /// `expm1(s) = exp(s) - 1` at working scale `w`, evaluated as

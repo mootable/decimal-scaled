@@ -158,6 +158,24 @@ pub(in crate::policy) const fn trig_rung<C: WideTrigCore, const SCALE: u32>() ->
 /// scale, not a point carve-out.
 pub(in crate::policy) const D_BUDGET: u32 = 8;
 
+/// Resolve the work rung for a NEAR-SPECIAL-POINT directed kernel
+/// (`acosh` at 1, `atanh` at ±1 — the `round_to_storage_directed_
+/// near_special` walkers, which `force_confirm` EVERY call with at
+/// least one escalated probe at `w₂ ≈ 2·(SCALE + GUARD)`). The budget
+/// is therefore keyed on `2·SCALE` (+ the shared [`TRIG_MARGIN`]) so
+/// the confirm probe is always REACHABLE inside the rung's escalation
+/// cap (`cap = 8·K − int_digits − 8` digits must clear
+/// `2·SCALE + 2·GUARD + int_digits`; `TRIG_MARGIN`'s 76 covers the
+/// `2·GUARD = 60` plus the small result-digit terms with room), and
+/// the rung's true bit capacity (~2.4× the budget digits) holds the
+/// ln kernel's `2·w₂` intermediates at that probe. Deeper unstable
+/// confirms beyond the rung cap fall back exactly as the tier does
+/// past ITS cap; the golden gate is the correctness wall.
+pub(in crate::policy) const fn near_special_rung<C: WideTrigCore, const SCALE: u32>() -> Rung {
+    let floor = <C::W as BigInt>::LIMBS;
+    rung_of(smallest_rung(2 * SCALE + TRIG_MARGIN, AVAIL_RUNGS[0], floor))
+}
+
 /// `true` iff `|x| < ~10^BUDGET` — a rung's admitted magnitude region.
 /// Conservative bit-length test (`332_192/100_000 < log2(10)`): never
 /// admits a value at or beyond `10^(SCALE + BUDGET)` raw units, so an

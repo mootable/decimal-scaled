@@ -593,6 +593,77 @@ pub(crate) mod hyper_rung {
 }
 
 // ══════════════════════════════════════════════════════════════════════
+// Inverse-hyperbolic SCALE-derived work-rung routing (asinh / acosh /
+// atanh)
+//
+// Same pattern as `forward_rung`; the kernels are ln/sqrt compositions
+// (`hyper_schoolbook::{asinh,acosh,atanh}_schoolbook_g`) whose ln
+// internals are escalation-safe at ANY rung (no exp-style `2^k`
+// blowup), so the only sizing concerns are (a) the lift's
+// representation — `D_BUDGET`-gated, exactly atan's axis — and (b) for
+// the NEAR-SPECIAL walkers (acosh / atanh force a confirm probe every
+// call) the confirm probe's reachability inside the rung's escalation
+// cap, which `work_rung::near_special_rung` keys on `2·SCALE`. asinh
+// (plain directed, single-probe fast path) rides the ordinary
+// `trig_rung`. atanh's domain is (-1, 1): like asin, its gate exists
+// only so an out-of-domain huge magnitude takes the tier path to the
+// identical domain panic.
+// ══════════════════════════════════════════════════════════════════════
+#[cfg(feature = "_wide-support")]
+pub(crate) mod extra_rung {
+    use super::super::work_rung::{in_budget, near_special_rung, rung_match, trig_rung, D_BUDGET};
+    use crate::algos::support::wide_trig_core::WideTrigCore;
+    use crate::algos::trig::hyper_schoolbook::{
+        acosh_schoolbook_g, asinh_schoolbook_g, atanh_schoolbook_g,
+    };
+    use crate::support::rounding::RoundingMode;
+
+    /// `asinh_strict` at the work rung; out-of-budget magnitudes fall to
+    /// the tier-width composition, bit-identical.
+    #[inline]
+    pub(crate) fn asinh_strict<C: WideTrigCore, const SCALE: u32>(
+        raw: C::Storage,
+        mode: RoundingMode,
+    ) -> C::Storage {
+        if in_budget::<C::Storage, SCALE, D_BUDGET>(&raw) {
+            rung_match!(trig_rung, C, SCALE, asinh_schoolbook_g, [SCALE], raw, mode)
+        } else {
+            crate::algos::trig::hyper_schoolbook::asinh_schoolbook::<C, SCALE>(raw, mode)
+        }
+    }
+
+    /// `acosh_strict` at the work rung (the near-special `2·SCALE`
+    /// selector); out-of-budget magnitudes fall to the tier-width
+    /// composition, bit-identical.
+    #[inline]
+    pub(crate) fn acosh_strict<C: WideTrigCore, const SCALE: u32>(
+        raw: C::Storage,
+        mode: RoundingMode,
+    ) -> C::Storage {
+        if in_budget::<C::Storage, SCALE, D_BUDGET>(&raw) {
+            rung_match!(near_special_rung, C, SCALE, acosh_schoolbook_g, [SCALE], raw, mode)
+        } else {
+            crate::algos::trig::hyper_schoolbook::acosh_schoolbook::<C, SCALE>(raw, mode)
+        }
+    }
+
+    /// `atanh_strict` at the work rung (the near-special `2·SCALE`
+    /// selector); out-of-budget magnitudes (all out of domain) fall to
+    /// the tier-width composition, bit-identical.
+    #[inline]
+    pub(crate) fn atanh_strict<C: WideTrigCore, const SCALE: u32>(
+        raw: C::Storage,
+        mode: RoundingMode,
+    ) -> C::Storage {
+        if in_budget::<C::Storage, SCALE, D_BUDGET>(&raw) {
+            rung_match!(near_special_rung, C, SCALE, atanh_schoolbook_g, [SCALE], raw, mode)
+        } else {
+            crate::algos::trig::hyper_schoolbook::atanh_schoolbook::<C, SCALE>(raw, mode)
+        }
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════
 // D38 inverse-trig "borrow D57" dispatch strategy
 //
 // The D38 inverse-trig family (atan / asin / acos / atan2) is qualitatively
@@ -1364,27 +1435,27 @@ macro_rules! wide_trig_extra_inherent {
     ($N:literal, $Core:ty) => {
         #[inline]
         pub(crate) fn policy_asinh(self, mode: RoundingMode) -> Self {
-            Self(crate::algos::trig::hyper_schoolbook::asinh_schoolbook::<$Core, SCALE>(self.0, mode))
+            Self(extra_rung::asinh_strict::<$Core, SCALE>(self.0, mode))
         }
         #[inline]
         pub(crate) fn policy_asinh_with(self, _wd: u32, mode: RoundingMode) -> Self {
-            Self(crate::algos::trig::hyper_schoolbook::asinh_schoolbook::<$Core, SCALE>(self.0, mode))
+            Self(extra_rung::asinh_strict::<$Core, SCALE>(self.0, mode))
         }
         #[inline]
         pub(crate) fn policy_acosh(self, mode: RoundingMode) -> Self {
-            Self(crate::algos::trig::hyper_schoolbook::acosh_schoolbook::<$Core, SCALE>(self.0, mode))
+            Self(extra_rung::acosh_strict::<$Core, SCALE>(self.0, mode))
         }
         #[inline]
         pub(crate) fn policy_acosh_with(self, _wd: u32, mode: RoundingMode) -> Self {
-            Self(crate::algos::trig::hyper_schoolbook::acosh_schoolbook::<$Core, SCALE>(self.0, mode))
+            Self(extra_rung::acosh_strict::<$Core, SCALE>(self.0, mode))
         }
         #[inline]
         pub(crate) fn policy_atanh(self, mode: RoundingMode) -> Self {
-            Self(crate::algos::trig::hyper_schoolbook::atanh_schoolbook::<$Core, SCALE>(self.0, mode))
+            Self(extra_rung::atanh_strict::<$Core, SCALE>(self.0, mode))
         }
         #[inline]
         pub(crate) fn policy_atanh_with(self, _wd: u32, mode: RoundingMode) -> Self {
-            Self(crate::algos::trig::hyper_schoolbook::atanh_schoolbook::<$Core, SCALE>(self.0, mode))
+            Self(extra_rung::atanh_strict::<$Core, SCALE>(self.0, mode))
         }
         #[inline]
         pub(crate) fn policy_to_degrees(self, mode: RoundingMode) -> Self {
@@ -3307,6 +3378,47 @@ mod forward_rung_tests {
                     super::hyper_rung::tanh_strict::<Core, 19>(x.to_bits(), mode),
                     crate::algos::trig::hyper_schoolbook::tanh_schoolbook::<Core, 19>(x.to_bits(), mode),
                     "tanh({v}) mode {mode:?}"
+                );
+            }
+        }
+    }
+
+    /// Inverse-hyperbolic rung anchors (D307<19>): the rung-routed
+    /// asinh / acosh / atanh must equal the tier-width compositions
+    /// bit-for-bit across the everyday spread (incl. the near-special
+    /// bands acosh→1⁺ and atanh→±1⁻ that exercise the forced confirm
+    /// probe) and an out-of-budget magnitude (tier fallback).
+    #[test]
+    #[cfg(feature = "d307")]
+    fn d307_extra_rung_matches_tier_kernels() {
+        type Core = crate::types::widths::wide_trig_d307::Core;
+        for v in ["0", "0.5", "1", "2", "1000000000", "-0.5", "-2"] {
+            let x: crate::D307<19> = v.parse().unwrap();
+            for mode in ALL_MODES {
+                assert_eq!(
+                    super::extra_rung::asinh_strict::<Core, 19>(x.to_bits(), mode),
+                    crate::algos::trig::hyper_schoolbook::asinh_schoolbook::<Core, 19>(x.to_bits(), mode),
+                    "asinh({v}) mode {mode:?}"
+                );
+            }
+        }
+        for v in ["1", "1.0000000000000000001", "1.5", "2", "1000", "1000000000"] {
+            let x: crate::D307<19> = v.parse().unwrap();
+            for mode in ALL_MODES {
+                assert_eq!(
+                    super::extra_rung::acosh_strict::<Core, 19>(x.to_bits(), mode),
+                    crate::algos::trig::hyper_schoolbook::acosh_schoolbook::<Core, 19>(x.to_bits(), mode),
+                    "acosh({v}) mode {mode:?}"
+                );
+            }
+        }
+        for v in ["0", "0.5", "0.9999999999999999999", "-0.9999999999999999999", "-0.5"] {
+            let x: crate::D307<19> = v.parse().unwrap();
+            for mode in ALL_MODES {
+                assert_eq!(
+                    super::extra_rung::atanh_strict::<Core, 19>(x.to_bits(), mode),
+                    crate::algos::trig::hyper_schoolbook::atanh_schoolbook::<Core, 19>(x.to_bits(), mode),
+                    "atanh({v}) mode {mode:?}"
                 );
             }
         }
