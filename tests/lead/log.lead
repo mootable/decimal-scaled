@@ -1642,3 +1642,7 @@
 0.1667310358158928310830995078 0.1033315760796755862536294078
 0.1712629792181122237228458671 0.01463756871840441487406714597
 0.9085239595784658587497584862 0.5107380721910816014090842621
+// regression: NARROW-tier (D18/D38) near-tie families - the Fixed-256 single shots (and sin/cos's 75-digit-capped escalation) could not see a deciding digit below w = SCALE+30: directed tiny-x (x = 1e-38 at D38<38>, x^3-term deviation at depth ~115; x = 1e-18 at D18<18>) and the even-function exact-half family (cos/cosh(c*10^-19) at D38<38>: 1 -/+ x^2/2 lands EXACTLY on the half, x^4/24 tail at depth ~77). Fixed by the clear-of-tie terminal + Int<24> Ziv walker (fix/narrow-tier-near-tie).
+8 4
+32 4
+8 16
