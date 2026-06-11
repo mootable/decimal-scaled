@@ -1,0 +1,342 @@
+//! Version-history correctness gates: the live crate beside pinned historical
+//! decimal-scaled releases, over the same golden set.
+//!
+//! Two gates (task 10.13, correctness side):
+//!
+//! - [`history_previous`] — live vs the immediately-previous release (0.4.4) ONLY,
+//!   with the RATCHET assertion: no cell that PASSED in 0.4.4 may fail in the live
+//!   crate. Newly-FIXED cells (0.4.4 fail → live pass) are the expected diff,
+//!   reported, never asserted. The per-function timing delta is reported beside it.
+//! - [`history_all`] — every adapted historical version in ONE shootout-style run:
+//!   per-subject tallies and the cross-version correctness table (with a median-ns
+//!   column per version), REPORTED, never asserted.
+//!
+//! Both run the `Timed` strategy as a free ride-along on the correctness run —
+//! one timed call per golden row, aggregated to per-function medians (timing is
+//! always reported, never asserted; the cell-granularity paired perf comparison
+//! over a small fixed input set is `CriterionStrategy`'s separate, later job).
+//! Both gates honour every `GOLDEN_*` env filter (`GOLDEN_WIDTHS` / `GOLDEN_SCALES` /
+//! `GOLDEN_MODES` / `GOLDEN_FUNCS` / `GOLDEN_SAMPLE` / `GOLDEN_STRIPE` /
+//! `GOLDEN_THREADS`), so a focused slice runs in seconds:
+//!
+//! ```text
+//! GOLDEN_WIDTHS=18 GOLDEN_FUNCS=exp,sqrt \
+//!   cargo test -p decimal-scale-test --release \
+//!     --features wide,x-wide,xx-wide,history-044 \
+//!     --test history history_previous -- --ignored --nocapture
+//! ```
+
+mod common;
+
+use std::collections::BTreeMap;
+use std::sync::Mutex;
+
+use decimal_scaled_golden::{
+    ConsoleReporter, ExecutionResult, FilterLoader, GoldenRunner, InlineReporter, Outcome,
+    OverflowValidator, ParallelRunner, RoundingMode, RoundingValidator, RunCollector,
+    SubjectCollector, Timed,
+};
+use decimal_scale_test::history::v044;
+use decimal_scale_test::{thread_count, DsSubject, Filter, GEN_PRECISION};
+
+use common::{row_filter, CachingLoader};
+
+/// Serialises the gates: each swaps the process-global panic hook for its run.
+static HOOK_GUARD: Mutex<()> = Mutex::new(());
+
+/// Timed-strategy executions per golden row: exactly ONE, so the wall-clock
+/// signal rides along the correctness run for free (one extra call per row,
+/// never a timing loop over the golden row set — the golden rows are correctness
+/// data; the cell-granularity paired perf map is `CriterionStrategy`'s separate
+/// job). Per-row noise washes out in the per-function MEDIANS reported below;
+/// the timing is advisory (reported, never asserted).
+const TIMED_EXECUTIONS: u32 = 1;
+
+fn runner(filter: &Filter) -> ParallelRunner<Timed> {
+    ParallelRunner {
+        threads: thread_count(),
+        strategy: Timed { number_of_executions: TIMED_EXECUTIONS },
+        loader: Box::new(FilterLoader::new(
+            CachingLoader::golden(),
+            row_filter(filter.sample(), filter.stripe()),
+        )),
+        validators: vec![
+            Box::new(RoundingValidator { gen_precision: GEN_PRECISION }),
+            Box::new(OverflowValidator),
+        ],
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Cell flattening — one comparable record per golden cell per subject.
+// ---------------------------------------------------------------------------
+
+/// How one cell went, judged against the subject's OWN declared contract.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Grade {
+    /// Not run (unrepresentable input for this cell / unsupported function).
+    Skip,
+    /// Every verdict is Pass (or the informational Precision).
+    Pass,
+    /// At least one failing verdict (mis-rounded / wrong-mode / error / panic).
+    Fail,
+}
+
+/// One cell across the comparison: `(width, scale, mode, function, golden line)`.
+type Key = (u32, u32, String, &'static str, usize);
+
+struct Cell {
+    grade: Grade,
+    timing: Option<u64>,
+    /// The worst failing verdict's tag, for the report.
+    detail: &'static str,
+}
+
+/// Flatten one subject's collector into keyed cells. The key carries the cell
+/// coordinates from the subject's report config plus the golden line, so the same
+/// golden case pairs exactly across versions.
+fn flatten(subject: &SubjectCollector, into: &mut BTreeMap<Key, Cell>) {
+    let cfg = |k: &str| subject.capabilities.config.get(k).cloned().unwrap_or_default();
+    let width: u32 = cfg("width").parse().expect("subject config carries width");
+    let scale: u32 = cfg("scale").parse().expect("subject config carries scale");
+    let mode = cfg("mode");
+    for fc in &subject.functions {
+        for cell in &fc.cells {
+            let grade = match cell.result() {
+                Some(ExecutionResult::Skipped) | None => Grade::Skip,
+                Some(ExecutionResult::HarnessError(_)) => Grade::Fail,
+                Some(ExecutionResult::Computed(_)) => {
+                    if cell.validations.iter().any(is_failure) {
+                        Grade::Fail
+                    } else {
+                        Grade::Pass
+                    }
+                }
+            };
+            let detail = match cell.result() {
+                Some(ExecutionResult::HarnessError(_)) => "harness-error",
+                _ => cell
+                    .validations
+                    .iter()
+                    .filter(|o| is_failure(o))
+                    .max_by_key(|o| o.severity())
+                    .map(|o| o.tag())
+                    .unwrap_or(""),
+            };
+            into.insert(
+                (width, scale, mode.clone(), fc.function.name(), cell.line),
+                Cell { grade, timing: cell.timing, detail },
+            );
+        }
+    }
+}
+
+/// A failing verdict (everything except Pass, the informational Precision, and
+/// the runner-level Skipped) — mirrors the console reporter's notion.
+fn is_failure(o: &Outcome) -> bool {
+    !matches!(o, Outcome::Pass | Outcome::Precision { .. } | Outcome::Skipped)
+}
+
+/// Run one version's subjects over `cells` × `modes` into a `RunCollector`.
+/// `subject` builds the version's erased subject for one `(width, scale, mode)`.
+fn run_version<S, F>(
+    runner: &ParallelRunner<Timed>,
+    filter: &Filter,
+    modes: &[RoundingMode],
+    cells: &[(u32, u32)],
+    subject: F,
+) -> RunCollector
+where
+    S: decimal_scaled_golden::DecimalSubject + Sync,
+    F: Fn(u32, u32, RoundingMode) -> S,
+{
+    let mut rc = RunCollector::new();
+    for &mode in modes {
+        for &(w, s) in cells {
+            rc.add(runner.run(&subject(w, s, mode), filter.funcs()));
+        }
+    }
+    rc
+}
+
+/// Median of a sorted-on-demand sample; `None` when empty.
+fn median(mut xs: Vec<u64>) -> Option<u64> {
+    if xs.is_empty() {
+        return None;
+    }
+    xs.sort_unstable();
+    Some(xs[xs.len() >> 1])
+}
+
+/// Per-function timing medians for one flattened version.
+fn timing_medians(cells: &BTreeMap<Key, Cell>) -> BTreeMap<&'static str, u64> {
+    let mut per_func: BTreeMap<&'static str, Vec<u64>> = BTreeMap::new();
+    for (&(_, _, _, func, _), cell) in cells {
+        if let Some(ns) = cell.timing {
+            per_func.entry(func).or_default().push(ns);
+        }
+    }
+    per_func.into_iter().filter_map(|(f, xs)| median(xs).map(|m| (f, m))).collect()
+}
+
+// ---------------------------------------------------------------------------
+// Gate 1 — history_previous: live vs 0.4.4, the ratchet.
+// ---------------------------------------------------------------------------
+
+/// Live vs the immediately-previous release (0.4.4) with the RATCHET assertion:
+/// no cell that PASSED in 0.4.4 may fail (or fall out of coverage) in the live
+/// crate. Newly-fixed cells and the per-function timing delta are REPORTED.
+/// `#[ignore]`d like the golden gates (the surface is heavy unfiltered); narrow
+/// with the `GOLDEN_*` env vars and run via `--ignored`.
+#[test]
+#[ignore = "version-history ratchet; run via --ignored (filter with GOLDEN_*)"]
+fn history_previous() {
+    let _hook_guard = HOOK_GUARD.lock().unwrap_or_else(|p| p.into_inner());
+    let filter = Filter::from_env();
+    let modes = filter.modes(&[RoundingMode::HalfToEven]);
+    let cells = filter.cells();
+    let runner = runner(&filter);
+
+    // Expected out-of-range cells panic (caught + validated as overflow); silence
+    // the default hook so the sweep isn't drowned in backtraces.
+    let prev_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let live_rc = run_version(&runner, &filter, &modes, &cells, DsSubject::with_mode);
+    let prev_rc = run_version(&runner, &filter, &modes, &cells, v044::Subject::with_mode);
+    std::panic::set_hook(prev_hook);
+
+    let mut live = BTreeMap::new();
+    let mut prev = BTreeMap::new();
+    live_rc.subjects.iter().for_each(|s| flatten(s, &mut live));
+    prev_rc.subjects.iter().for_each(|s| flatten(s, &mut prev));
+
+    // The ratchet walk.
+    let mut regressions: Vec<String> = Vec::new();
+    let mut coverage_losses: Vec<String> = Vec::new();
+    let mut fixed: Vec<String> = Vec::new();
+    let mut both_pass = 0usize;
+    let mut both_fail = 0usize;
+    for (key, p) in &prev {
+        let Some(l) = live.get(key) else { continue };
+        let (w, s, mode, func, line) = key;
+        let label = || format!("D{w}<{s}> {mode} {func} [{func}.golden:{line}]");
+        match (p.grade, l.grade) {
+            (Grade::Pass, Grade::Fail) => regressions.push(format!("{} ({})", label(), l.detail)),
+            (Grade::Pass, Grade::Skip) => coverage_losses.push(label()),
+            (Grade::Fail, Grade::Pass) => fixed.push(format!("{} (was {})", label(), p.detail)),
+            (Grade::Pass, Grade::Pass) => both_pass += 1,
+            (Grade::Fail, Grade::Fail) => both_fail += 1,
+            _ => {}
+        }
+    }
+
+    eprintln!("== history_previous: live vs decimal-scaled@{} ==", v044::VERSION);
+    eprintln!(
+        "ratchet: {} both-pass / {} both-fail / {} fixed in live / {} regressions / {} coverage losses",
+        both_pass,
+        both_fail,
+        fixed.len(),
+        regressions.len(),
+        coverage_losses.len()
+    );
+    for f in fixed.iter().take(20) {
+        eprintln!("  fixed: {f}");
+    }
+    if fixed.len() > 20 {
+        eprintln!("  ... and {} more fixed cells", fixed.len() - 20);
+    }
+    for c in &coverage_losses {
+        eprintln!("  coverage loss (passed in {}, skipped live): {c}", v044::VERSION);
+    }
+    for r in &regressions {
+        eprintln!("  REGRESSION: {r}");
+    }
+
+    // Timing delta (advisory): per-function medians, live vs previous.
+    let live_ns = timing_medians(&live);
+    let prev_ns = timing_medians(&prev);
+    eprintln!("-- timing (median ns/call across rows, ride-along advisory; reported, never asserted) --");
+    eprintln!("{:<8} {:>14} {:>14} {:>8}", "func", "live", v044::VERSION, "ratio");
+    for (func, &l) in &live_ns {
+        if let Some(&p) = prev_ns.get(func) {
+            let ratio = l as f64 / p.max(1) as f64;
+            eprintln!("{func:<8} {l:>14} {p:>14} {ratio:>8.2}");
+        }
+    }
+
+    assert!(both_pass + both_fail + fixed.len() > 0, "ratchet compared no cells");
+    assert!(
+        regressions.is_empty(),
+        "{} cell(s) passed in {} but fail in the live crate (listed above)",
+        regressions.len(),
+        v044::VERSION
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Gate 2 — history_all: every adapted version, one shootout-style run.
+// ---------------------------------------------------------------------------
+
+/// Every adapted historical version beside the live crate in ONE run: per-subject
+/// tallies and the cross-version correctness table with a median-ns column per
+/// version — all REPORTED, never asserted. Heavy; dispatch/on-demand only.
+#[test]
+#[ignore = "cross-version shootout; heavy, run on demand via --ignored --nocapture"]
+fn history_all() {
+    let _hook_guard = HOOK_GUARD.lock().unwrap_or_else(|p| p.into_inner());
+    let filter = Filter::from_env();
+    let modes = filter.modes(&[RoundingMode::HalfToEven]);
+    let cells = filter.cells();
+    let runner = runner(&filter);
+
+    let prev_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    // One RunCollector spans every version's subjects.
+    let mut rc = run_version(&runner, &filter, &modes, &cells, DsSubject::with_mode);
+    for s in run_version(&runner, &filter, &modes, &cells, v044::Subject::with_mode).subjects {
+        rc.add(s);
+    }
+    #[cfg(feature = "history-033")]
+    {
+        use decimal_scale_test::history::v033;
+        let shared: Vec<(u32, u32)> =
+            cells.iter().copied().filter(|c| v033::CELLS.contains(c)).collect();
+        for s in run_version(&runner, &filter, &modes, &shared, v033::Subject::with_mode).subjects {
+            rc.add(s);
+        }
+    }
+    std::panic::set_hook(prev_hook);
+
+    // Per-subject tallies (shootout preset), then the cross-version table.
+    let runs = [rc];
+    ConsoleReporter::shootout()
+        .report(&runs, &mut std::io::stderr())
+        .expect("write history_all report");
+
+    // Flatten per version (capabilities name distinguishes them).
+    let mut versions: BTreeMap<String, BTreeMap<Key, Cell>> = BTreeMap::new();
+    for subject in &runs[0].subjects {
+        let entry = versions.entry(subject.capabilities.name.clone()).or_default();
+        flatten(subject, entry);
+    }
+
+    eprintln!("== history_all: cross-version correctness (per function; reported, never asserted) ==");
+    for (version, cells) in &versions {
+        let medians = timing_medians(cells);
+        eprintln!("-- {version} --");
+        eprintln!("{:<8} {:>6} {:>6} {:>6} {:>14}", "func", "pass", "fail", "skip", "median-ns");
+        let mut per_func: BTreeMap<&'static str, (usize, usize, usize)> = BTreeMap::new();
+        for (&(_, _, _, func, _), cell) in cells {
+            let e = per_func.entry(func).or_default();
+            match cell.grade {
+                Grade::Pass => e.0 += 1,
+                Grade::Fail => e.1 += 1,
+                Grade::Skip => e.2 += 1,
+            }
+        }
+        for (func, (pass, fail, skip)) in &per_func {
+            let ns = medians.get(func).map(|n| n.to_string()).unwrap_or_else(|| "-".into());
+            eprintln!("{func:<8} {pass:>6} {fail:>6} {skip:>6} {ns:>14}");
+        }
+    }
+}

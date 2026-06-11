@@ -64,6 +64,51 @@ GOLDEN_WIDTHS=924,1232 GOLDEN_MODES=ceiling GOLDEN_FUNCS=exp,cosh GOLDEN_SAMPLE=
   cargo test -p decimal-scale-test --release --test golden golden_default -- --ignored --nocapture
 ```
 
+## Version-history gates
+
+`tests/history.rs` runs pinned **historical decimal-scaled releases** beside the
+live crate over the same golden set, via one erased adapter per version
+(`src/history.rs`, the same `Value = String` shape as `DsSubject`). The
+historical deps are version-pinned and optional, so the normal build never pays
+them:
+
+| Feature | Pulls | Adapter coverage |
+| --- | --- | --- |
+| `history-044` | `decimal-scaled = "=0.4.4"` (as `ds-044`) | every live band-edge cell (same tier table) |
+| `history-033` | `decimal-scaled = "=0.3.3"` (as `ds-033`) | the six widths whose names and digit capacities match the live surface (`D18`/`D38`/`D76`/`D153`/`D230`/`D307`); the 0.3.x odd tiers were `D56`/`D114`/`D461`/`D615`/`D923`/`D1231` and have no live counterpart |
+| `history` | both | — |
+
+Each adapter declares its era's contract honestly — strict transcendentals
+panic; narrow (`i64`/`i128`-storage) arithmetic wraps in release and panics in
+debug (`cfg!(debug_assertions)` keeps the declaration profile-faithful) — and a
+historical version FAILING cells is the expected, reported outcome, never
+adapted away. One genuine exception class: a function whose era API cannot run
+to completion is **omitted from the capability map** rather than declared
+(0.3.3's width-18 mode-taking transcendentals self-recurse to an uncatchable
+stack-overflow abort — there is no inherent `*_strict_with` behind its trait
+delegation — so only arithmetic is declared at `D18`; an abort would kill the
+whole gate, not fail the cell).
+
+Two gates, both `#[ignore]`d, both honouring every `GOLDEN_*` filter, both
+timing each call once as a free ride-along (medians reported, never asserted):
+
+- **`history_previous`** — live vs 0.4.4 only, with the **ratchet** assertion:
+  no cell that PASSED in 0.4.4 may fail (or fall out of coverage) in the live
+  crate. Newly-fixed cells and the per-function timing delta are reported.
+- **`history_all`** — every adapted version in one shootout-style run:
+  per-subject tallies plus the cross-version correctness table with a
+  median-ns column per version. Reported, never asserted; heavy, on-demand.
+
+```
+# the ratchet against 0.4.4 (narrow with GOLDEN_* for a focused slice):
+cargo test -p decimal-scale-test --release --features wide,x-wide,xx-wide,history-044 \
+  --test history history_previous -- --ignored --nocapture
+
+# the full cross-version table (0.4.4 + 0.3.3):
+cargo test -p decimal-scale-test --release --features wide,x-wide,xx-wide,history \
+  --test history history_all -- --ignored --nocapture
+```
+
 ## CI wiring
 
 - **Per push** — the `golden (gate)` job in

@@ -14,6 +14,12 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 decimal-scaled = { path = "..", default-features = false }
 decimal-scaled-golden = { path = "../decimal-scaled-golden" }
+# Historical releases for the version-history gates (tests/history.rs). Each is
+# version-pinned to the one release its adapter tracks and stays optional behind
+# its `history-*` feature, so the normal build never pays the (heavy, per-tier
+# macro-era) compile. Pre-1.0 Cargo coexists one version per minor family.
+ds-044 = { package = "decimal-scaled", version = "=0.4.4", optional = true }
+ds-033 = { package = "decimal-scaled", version = "=0.3.3", optional = true }
 
 [features]
 # Mirror the root crate's DEFAULT set (std, serde, strict, exact-scratch) so a
@@ -52,6 +58,18 @@ rounding-half-toward-zero = ["decimal-scaled/rounding-half-toward-zero"]
 rounding-trunc = ["decimal-scaled/rounding-trunc"]
 rounding-floor = ["decimal-scaled/rounding-floor"]
 rounding-ceiling = ["decimal-scaled/rounding-ceiling"]
+# Version-history gates (tests/history.rs): each history-* feature pulls one
+# pinned historical release and the tier features its adapter's cells need.
+# 0.4.4 shares the live tier table (D18..D1232), so it gets the full ladder;
+# 0.3.3's odd tiers were named differently (D56/D114/D461/D615/D923/D1231), so
+# its adapter covers only the six widths whose names AND digit capacities match
+# the live surface (D18/D38/D76/D153/D230/D307).
+history-044 = ["dep:ds-044", "ds-044/wide", "ds-044/x-wide", "ds-044/xx-wide"]
+# 0.3.3's per-tier features are under-gated solo (e.g. `d76` alone fails on the
+# D76->D56 narrowing) — the era was only ever built via its umbrellas, so its
+# adapter enables the umbrellas its six shared widths sit under.
+history-033 = ["dep:ds-033", "ds-033/wide", "ds-033/x-wide"]
+history = ["history-044", "history-033"]
 
 # Serde wire-format round-trips in tests/api/serde.rs (JSON human-readable +
 # postcard binary forms). Test-only.
@@ -76,6 +94,13 @@ dead_code = "allow"
 [[test]]
 name = "golden"
 required-features = ["wide", "x-wide", "xx-wide"]
+
+# Version-history correctness gates: live vs the pinned historical releases.
+# `history_previous` (the 0.4.4 ratchet) needs only history-044; the optional
+# 0.3.3 column of `history_all` lights up when history-033 is also enabled.
+[[test]]
+name = "history"
+required-features = ["wide", "x-wide", "xx-wide", "history-044"]
 
 # The hand-derived storage-semantics oracle (tests/sanity.rs) exercises the
 # x-wide tier directly.
