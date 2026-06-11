@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Render the precision LSBe (ULP) shootout markdown table FROM the
 committed `results/precision/*.tsv` files — the single source of truth
-produced by `benches/lib_cmp_precision.rs`.
+produced by `golden-competitors/src/bin/lib_cmp_precision.rs`.
 
 This is the Python sibling of the `render_from_files` routine in
-`benches/lib_cmp_precision.rs`: same column order, same cell format, so
+that runner: same column order, same cell format, so
 the README / docs tables can be regenerated without re-running the
 multi-minute oracle sweep. Every cell traces back to exactly one TSV
 row; nothing is hand-typed or recomputed.
@@ -22,7 +22,8 @@ import argparse
 import os
 import sys
 
-# Library row order — matches `libs` in benches/lib_cmp_precision.rs.
+# Library row order — matches `LIBS` in
+# golden-competitors/src/bin/lib_cmp_precision.rs.
 LIBS = [
     "decimal-scaled",
     "fastnum",
@@ -33,8 +34,9 @@ LIBS = [
     "g_math",
 ]
 
-# D-type -> canonical scale. These MUST equal Width::canonical_scale()
-# (tests/support/precision_harness.rs) for the rendered widths, AND must be
+# D-type -> canonical scale. These MUST equal the canonical scales in the
+# runner's WIDTHS table (golden-competitors/src/bin/lib_cmp_precision.rs)
+# for the rendered widths, AND must be
 # a scale actually present in the committed TSVs. A drift here silently
 # renders a non-canonical scale under the canonical-scale heading (e.g. an
 # easy operand mislabelled as the hard canonical scale).
