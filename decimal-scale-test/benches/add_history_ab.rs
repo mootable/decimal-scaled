@@ -63,10 +63,40 @@ fn bench_add_history(c: &mut Criterion) {
     bench_pair!(c, "D616s115", decimal_scaled::D616<115>, ds_044::D616<115>);
 }
 
+/// Live-vs-0.4.4 rows for the bbc trig/ln scale-0 cluster (sin D115<0> +33%,
+/// ln D115<0> +18%, ln D462<231> +36% in run 27322009266) — the same
+/// real-vs-GHA-artifact split the add rows settled for D462. Operands mirror
+/// the bbc bench exactly: trig argument 0, ln argument 2, at scale 0; the ln
+/// D462<231> cell uses the fractional "2.0" form.
+macro_rules! bench_unary_pair {
+    ($c:expr, $label:literal, $op:ident, $arg:literal, $Live:ty, $V044:ty) => {{
+        {
+            let x: $Live = $arg.parse().unwrap();
+            $c.bench_function(concat!("hist/", $label, "/live"), |bn| {
+                bn.iter(|| black_box(x).$op())
+            });
+        }
+        {
+            let x: $V044 = $arg.parse().unwrap();
+            $c.bench_function(concat!("hist/", $label, "/v044"), |bn| {
+                bn.iter(|| black_box(x).$op())
+            });
+        }
+    }};
+}
+
+fn bench_trig_ln_history(c: &mut Criterion) {
+    bench_unary_pair!(c, "sin_D115s0_x0", sin, "0", decimal_scaled::D115<0>, ds_044::D115<0>);
+    bench_unary_pair!(c, "cos_D115s0_x0", cos, "0", decimal_scaled::D115<0>, ds_044::D115<0>);
+    bench_unary_pair!(c, "sin_D307s0_x0", sin, "0", decimal_scaled::D307<0>, ds_044::D307<0>);
+    bench_unary_pair!(c, "ln_D115s0_x2", ln, "2", decimal_scaled::D115<0>, ds_044::D115<0>);
+    bench_unary_pair!(c, "ln_D462s231_x2", ln, "2.0", decimal_scaled::D462<231>, ds_044::D462<231>);
+}
+
 criterion_group! {
     name = benches;
     config = micro();
-    targets = bench_add_history
+    targets = bench_add_history, bench_trig_ln_history
 }
 
 /// Self-pins to the highest-index logical core (the quietest under Windows,
