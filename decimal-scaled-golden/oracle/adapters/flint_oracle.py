@@ -121,8 +121,13 @@ class FlintOracle(Oracle):
                 # candidate is PROVABLY exact; otherwise keep escalating precision
                 # until the floor itself resolves on the true side.
                 z = mag.unique_fmpz()
-                if z is not None and not _provably_exact_candidate(
-                    func, inputs, r < 0, int(z), scale
+                # Numeric proof first (owner 2026-06-11): a zero-radius zero
+                # residual ball proves the value IS the pinned integer; the
+                # theorem check stays as the backstop for exact values whose
+                # ball stayed inexact.
+                if z is not None and not (
+                    (mag - flint.arb(int(z))).is_zero()
+                    or _provably_exact_candidate(func, inputs, r < 0, int(z), scale)
                 ):
                     last = "floor straddles a boundary on a provably-inexact value"
                     z = None

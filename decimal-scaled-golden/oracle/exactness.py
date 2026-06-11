@@ -124,6 +124,43 @@ def _provably_exact(func: str, inputs: List[str], value: str) -> bool:
         rhs = _checked_pow(a, p)
         return lhs is not None and rhs is not None and lhs == rhs
 
+    # Numeric exactness certificate (owner 2026-06-11): evaluate the function as
+    # an Arb ball and SUBTRACT the candidate. Every ball provably contains the
+    # true value, so a zero-radius zero residual proves value == candidate (a
+    # point ball admits exactly one value); a provably-nonzero or undecidable
+    # residual ABSTAINS (the theorem routes above stay the backstop - e.g.
+    # sqrt(2)'s squared-residual ball contains 0 without being it). One-sided
+    # error: the certificate can fail to certify a rational value (status quo,
+    # stays truncated) but can never wrongly strip an inexact one.
+    return _flint_certifies_exact(func, inputs, value)
+
+
+def _flint_certifies_exact(func: str, inputs: List[str], value: str) -> bool:
+    try:
+        import flint  # lazy - the certificate abstains when flint is absent
+        from .adapters.flint_oracle import _eval_flint
+    except ImportError:
+        return False
+    neg = value.startswith("-")
+    digits = value.lstrip("-")
+    frac = len(digits.split(".")[1]) if "." in digits else 0
+    cand = int(digits.replace(".", ""))
+    if neg:
+        cand = -cand
+    # 10^frac as a python int converts to an EXACT arb (fmpz mantissa); the
+    # residual then needs enough working precision to stay exact when it is -
+    # escalate once before abstaining.
+    for prec in (4096, 4 * 4096):
+        flint.ctx.prec = max(prec, int(frac * 3.33) + 256)
+        try:
+            r = _eval_flint(flint, func, [flint.arb(s) for s in inputs])
+        except (NotImplementedError, ValueError):
+            return False
+        residual = r * flint.arb(10**frac) - flint.arb(cand)
+        if residual.is_zero():
+            return True
+        if residual != flint.arb(0):
+            return False
     return False
 
 
