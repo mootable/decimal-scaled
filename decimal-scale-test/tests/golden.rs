@@ -60,9 +60,28 @@ fn run(default_modes: &[RoundingMode]) -> RunSummary {
     let prev_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
     let mut rc = RunCollector::new();
+    // Per-subject progress to stderr (visible live under --nocapture): which
+    // (mode, width, scale) the sweep is on, where it is in the run, and how
+    // long each subject took — so a slow or stuck cell is identifiable from
+    // the log WHILE the job runs, not after.
+    let started = std::time::Instant::now();
+    let total = modes.len() * cells.len();
+    let mut done = 0usize;
     for &mode in &modes {
         for &(w, s) in &cells {
+            done += 1;
+            eprintln!(
+                "[{:>8.1}s] {done}/{total} {mode:?} D{w}<{s}> ({} fns)...",
+                started.elapsed().as_secs_f64(),
+                funcs.len(),
+            );
+            let cell_started = std::time::Instant::now();
             rc.add(runner.run(&DsSubject::with_mode(w, s, mode), funcs));
+            eprintln!(
+                "[{:>8.1}s] {done}/{total} {mode:?} D{w}<{s}> done in {:.1}s",
+                started.elapsed().as_secs_f64(),
+                cell_started.elapsed().as_secs_f64(),
+            );
         }
     }
     std::panic::set_hook(prev_hook);
