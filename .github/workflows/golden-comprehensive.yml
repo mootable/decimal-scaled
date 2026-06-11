@@ -121,11 +121,15 @@ jobs:
           chmod +x golden
           ./golden golden_all_modes --ignored --nocapture
 
-      - name: Mini report → step summary
+      - name: Mini report → log + step summary
         if: always()
         run: |
           if [ -f stripe-report/summary.txt ]; then
+            echo "=== stripe mini report ==="
+            cat stripe-report/summary.txt
             cat stripe-report/summary.txt >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::no stripe-report/summary.txt was produced (the gate exited before reporting)"
           fi
 
       - name: Upload stripe mini report
