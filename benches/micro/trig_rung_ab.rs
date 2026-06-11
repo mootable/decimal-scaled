@@ -24,9 +24,13 @@ use criterion::Criterion;
 use decimal_scaled::Int;
 use decimal_scaled::RoundingMode;
 use decimal_scaled::__bench_internals::{
-    cos_rung_d1232, cos_rung_d307, cos_series_d1232, cos_series_d307, int_from_mag_limbs,
-    sin_rung_d1232, sin_rung_d307, sin_series_d1232, sin_series_d307, tan_rung_d1232,
-    tan_rung_d307, tan_series_d1232, tan_series_d307,
+    asin_rung_d1232, asin_rung_d307, asin_schoolbook_d1232, asin_schoolbook_d307,
+    asinh_rung_d1232, asinh_rung_d307, asinh_schoolbook_d1232, asinh_schoolbook_d307,
+    atan_rung_d1232, atan_rung_d307, atan_series_d1232, atan_series_d307, cos_rung_d1232,
+    cos_rung_d307, cos_series_d1232, cos_series_d307, exp_rung_d1232, exp_rung_d307,
+    exp_series_d1232, exp_series_d307, int_from_mag_limbs, sin_rung_d1232, sin_rung_d307,
+    sin_series_d1232, sin_series_d307, sinh_rung_d1232, sinh_rung_d307, sinh_schoolbook_d1232,
+    sinh_schoolbook_d307, tan_rung_d1232, tan_rung_d307, tan_series_d1232, tan_series_d307,
 };
 
 #[path = "../support/ab_microbench.rs"]
@@ -81,15 +85,43 @@ fn big_input<const N: usize>(scale: u32) -> Vec<One<N>> {
     vec![One { label: "x1e9", raw: fromu::<N>(1_000_000_000 * p) }]
 }
 
-fn cell<const N: usize>(
+/// In-domain inputs for asin (|x| ≤ 1): the |x| ≤ 1/2 direct branch,
+/// the half-angle branch, and the exact endpoint.
+fn inputs_unit<const N: usize>(scale: u32) -> Vec<One<N>> {
+    let p = 10u128.pow(scale.min(36));
+    vec![
+        One { label: "x0.3", raw: fromu::<N>(3 * p / 10) },
+        One { label: "x0.9", raw: fromu::<N>(9 * p / 10) },
+        One { label: "x1.0", raw: fromu::<N>(p) },
+    ]
+}
+
+/// In-budget exp/sinh inputs (|x| < 10, the `EXP_ARG_BUDGET` region)
+/// plus the budget edge 9.5.
+fn inputs_small<const N: usize>(scale: u32) -> Vec<One<N>> {
+    let p = 10u128.pow(scale.min(36));
+    vec![
+        One { label: "x0.3", raw: fromu::<N>(3 * p / 10) },
+        One { label: "x1.0", raw: fromu::<N>(p) },
+        One { label: "x1.5", raw: fromu::<N>(p + p / 2) },
+        One { label: "x9.5", raw: fromu::<N>(9 * p + p / 2) },
+    ]
+}
+
+/// Out-of-budget exp/sinh probe (|x| = 50 ≥ 10, result still
+/// representable at the probed scales) — must route to the tier path.
+fn big_input_exp<const N: usize>(scale: u32) -> Vec<One<N>> {
+    let p = 10u128.pow(scale.min(34));
+    vec![One { label: "x50", raw: fromu::<N>(50 * p) }]
+}
+
+fn cell_with<const N: usize>(
     c: &mut Criterion,
     group: &str,
-    scale: u32,
+    ins: Vec<One<N>>,
     series: fn(Int<N>, RoundingMode) -> Int<N>,
     rung: fn(Int<N>, RoundingMode) -> Int<N>,
-    big: bool,
 ) {
-    let ins = if big { big_input::<N>(scale) } else { inputs::<N>(scale) };
     for o in &ins {
         for m in ALL_MODES {
             assert_eq!(rung(o.raw, m), series(o.raw, m), "{group} {} mode {m:?}", o.label);
@@ -105,6 +137,18 @@ fn cell<const N: usize>(
             ("tier", Box::new(move |o: One<N>| series(o.raw, MODE))),
         ],
     );
+}
+
+fn cell<const N: usize>(
+    c: &mut Criterion,
+    group: &str,
+    scale: u32,
+    series: fn(Int<N>, RoundingMode) -> Int<N>,
+    rung: fn(Int<N>, RoundingMode) -> Int<N>,
+    big: bool,
+) {
+    let ins = if big { big_input::<N>(scale) } else { inputs::<N>(scale) };
+    cell_with::<N>(c, group, ins, series, rung);
 }
 
 fn benches(c: &mut Criterion) {
@@ -132,6 +176,44 @@ fn benches(c: &mut Criterion) {
     cell::<64>(c, "tan_d1232_s0", 0, tan_series_d1232::<0>, tan_rung_d1232::<0>, false);
     cell::<64>(c, "tan_d1232_s616", 616, tan_series_d1232::<616>, tan_rung_d1232::<616>, false);
     cell::<64>(c, "sin_d1232_s0_big", 0, sin_series_d1232::<0>, sin_rung_d1232::<0>, true);
+
+    // ── Rung follow-ups: atan / asin / sinh / exp tier-vs-rung ─────────
+    // atan (the biggest remaining s0 cells) — full inputs() spread, the
+    // out-of-budget probe, anchor scales at both widths.
+    cell::<16>(c, "atan_d307_s0", 0, atan_series_d307::<0>, atan_rung_d307::<0>, false);
+    cell::<16>(c, "atan_d307_s153", 153, atan_series_d307::<153>, atan_rung_d307::<153>, false);
+    cell::<16>(c, "atan_d307_s306", 306, atan_series_d307::<306>, atan_rung_d307::<306>, false);
+    cell::<16>(c, "atan_d307_s0_big", 0, atan_series_d307::<0>, atan_rung_d307::<0>, true);
+    cell::<64>(c, "atan_d1232_s0", 0, atan_series_d1232::<0>, atan_rung_d1232::<0>, false);
+    cell::<64>(c, "atan_d1232_s616", 616, atan_series_d1232::<616>, atan_rung_d1232::<616>, false);
+    cell::<64>(c, "atan_d1232_s1231", 1231, atan_series_d1232::<1231>, atan_rung_d1232::<1231>, false);
+
+    // asin (the inverse composition; acos/atan2 share its kernel shape).
+    cell_with::<16>(c, "asin_d307_s0", inputs_unit::<16>(0), asin_schoolbook_d307::<0>, asin_rung_d307::<0>);
+    cell_with::<16>(c, "asin_d307_s153", inputs_unit::<16>(153), asin_schoolbook_d307::<153>, asin_rung_d307::<153>);
+    cell_with::<64>(c, "asin_d1232_s0", inputs_unit::<64>(0), asin_schoolbook_d1232::<0>, asin_rung_d1232::<0>);
+    cell_with::<64>(c, "asin_d1232_s616", inputs_unit::<64>(616), asin_schoolbook_d1232::<616>, asin_rung_d1232::<616>);
+
+    // sinh (the exp-identity composition; cosh/tanh share its shape) —
+    // the EXP_ARG_BUDGET region + the out-of-budget |x| = 50 probe.
+    cell_with::<16>(c, "sinh_d307_s0", inputs_small::<16>(0), sinh_schoolbook_d307::<0>, sinh_rung_d307::<0>);
+    cell_with::<16>(c, "sinh_d307_s153", inputs_small::<16>(153), sinh_schoolbook_d307::<153>, sinh_rung_d307::<153>);
+    cell_with::<16>(c, "sinh_d307_s0_big", big_input_exp::<16>(0), sinh_schoolbook_d307::<0>, sinh_rung_d307::<0>);
+    cell_with::<64>(c, "sinh_d1232_s0", inputs_small::<64>(0), sinh_schoolbook_d1232::<0>, sinh_rung_d1232::<0>);
+    cell_with::<64>(c, "sinh_d1232_s616", inputs_small::<64>(616), sinh_schoolbook_d1232::<616>, sinh_rung_d1232::<616>);
+
+    // asinh (the ln/sqrt composition; acosh/atanh share its shape, at
+    // the near-special 2·SCALE selector).
+    cell_with::<16>(c, "asinh_d307_s0", inputs_small::<16>(0), asinh_schoolbook_d307::<0>, asinh_rung_d307::<0>);
+    cell_with::<16>(c, "asinh_d307_s153", inputs_small::<16>(153), asinh_schoolbook_d307::<153>, asinh_rung_d307::<153>);
+    cell_with::<64>(c, "asinh_d1232_s0", inputs_small::<64>(0), asinh_schoolbook_d1232::<0>, asinh_rung_d1232::<0>);
+
+    // exp (the Series storage-strict path).
+    cell_with::<16>(c, "exp_d307_s0", inputs_small::<16>(0), exp_series_d307::<0>, exp_rung_d307::<0>);
+    cell_with::<16>(c, "exp_d307_s153", inputs_small::<16>(153), exp_series_d307::<153>, exp_rung_d307::<153>);
+    cell_with::<16>(c, "exp_d307_s0_big", big_input_exp::<16>(0), exp_series_d307::<0>, exp_rung_d307::<0>);
+    cell_with::<64>(c, "exp_d1232_s0", inputs_small::<64>(0), exp_series_d1232::<0>, exp_rung_d1232::<0>);
+    cell_with::<64>(c, "exp_d1232_s616", inputs_small::<64>(616), exp_series_d1232::<616>, exp_rung_d1232::<616>);
 }
 
 fn main() {

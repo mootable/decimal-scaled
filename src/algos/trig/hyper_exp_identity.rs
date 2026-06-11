@@ -79,12 +79,24 @@ pub(crate) fn sinh_exp_identity_with_tang<
 ) -> C::Storage
 where
     <C::Wagm as BigInt>::Scratch: ComputeLimbs,
+    <C::Wexp as BigInt>::Scratch: ComputeLimbs,
 {
     let w = SCALE + GUARD;
     let v = C::to_work_scaled_agm(raw, GUARD);
     let (ex, enx) = ex_enx_agm::<C, M, IE>(v, w);
     let r = (ex - enx) / eg::lit::<C::Wagm>(2);
-    C::round_to_storage_with_agm(r, w, SCALE, mode)
+    // Near-tie escape — see `wide_trig_core::tan_series` / the asin(3e-60)
+    // family: a fixed-w single shot cannot see a deciding digit below w.
+    // Clear-of-band residuals keep the single-shot cost; the band falls to
+    // the Ziv-escalating generic kernel (rare).
+    match crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<
+        C::Storage,
+        C::Wagm,
+    >(r, w, SCALE, mode, C::storage_max(), C::storage_min())
+    {
+        Some(st) => st,
+        None => crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<C, SCALE>(raw, mode),
+    }
 }
 
 /// `cosh_strict` for a wide tier — see [`sinh_exp_identity_with_tang`].
@@ -103,6 +115,7 @@ pub(crate) fn cosh_exp_identity_with_tang<
 ) -> C::Storage
 where
     <C::Wagm as BigInt>::Scratch: ComputeLimbs,
+    <C::Wexp as BigInt>::Scratch: ComputeLimbs,
 {
     // Route the narrowing through the shared directed/near-tie Ziv escalation
     // (on the wide `Wagm`), matching `cosh_schoolbook`. `cosh(x) = 1 + x²/2 +
@@ -151,6 +164,7 @@ pub(crate) fn tanh_exp_identity_with_tang<
 ) -> C::Storage
 where
     <C::Wagm as BigInt>::Scratch: ComputeLimbs,
+    <C::Wexp as BigInt>::Scratch: ComputeLimbs,
 {
     let zero = C::storage_zero();
     if raw != zero {
@@ -173,5 +187,16 @@ where
     let v = C::to_work_scaled_agm(raw, GUARD);
     let (ex, enx) = ex_enx_agm::<C, M, IE>(v, w);
     let r = eg::div::<C::Wagm>(ex - enx, ex + enx, w);
-    C::round_to_storage_with_agm(r, w, SCALE, mode)
+    // Near-tie escape — see `wide_trig_core::tan_series` / the asin(3e-60)
+    // family: a fixed-w single shot cannot see a deciding digit below w.
+    // Clear-of-band residuals keep the single-shot cost; the band falls to
+    // the Ziv-escalating generic kernel (rare).
+    match crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<
+        C::Storage,
+        C::Wagm,
+    >(r, w, SCALE, mode, C::storage_max(), C::storage_min())
+    {
+        Some(st) => st,
+        None => crate::algos::trig::hyper_schoolbook::tanh_schoolbook::<C, SCALE>(raw, mode),
+    }
 }

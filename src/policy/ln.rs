@@ -257,7 +257,10 @@ fn tang_at_rung<
 >(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> C::Storage
+where
+    <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
     use crate::algos::ln::ln_tang::ln_tang_g;
     match const { ln_rung::<C, SCALE>() } {
         Rung::W3 => ln_tang_g::<C, Int<3>, SCALE, G, CAP, DIR, IE>(raw, mode),
@@ -452,5 +455,46 @@ pub(crate) fn log10_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>,
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => crate::types::widths::wide_trig_d1232::log10_approx_with_kernel::<SCALE>(raw.resize_to::<Int<64>>(), working_digits, mode).resize_to::<Int<N>>(),
         _ => crate::algos::ln::ln_series_2limb::log10_with(raw.resize_to::<Int<2>>(), SCALE, working_digits, mode).and_then(super::narrow_fit::<N>).unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("log10_with", SCALE)),
+    }
+}
+
+#[cfg(test)]
+mod tang_rung_tests {
+    //! Light anchor for the ln work-rung fall-up (the `policy::trig`
+    //! tiny-argument test shape): the rung-routed Tang path must equal
+    //! the tier-width `ln_tang` bit-for-bit on the near-1 family
+    //! `ln(1 + δ) = δ − δ²/2 + …` whose deciding quadratic term sits
+    //! beyond the rung's escalation cap (an unresolved-at-rung walk must
+    //! fall up to the tier width), plus ordinary anchors.
+
+    #[cfg(feature = "d307")]
+    const ALL_MODES: [crate::support::rounding::RoundingMode; 6] = [
+        crate::support::rounding::RoundingMode::HalfToEven,
+        crate::support::rounding::RoundingMode::HalfAwayFromZero,
+        crate::support::rounding::RoundingMode::HalfTowardZero,
+        crate::support::rounding::RoundingMode::Trunc,
+        crate::support::rounding::RoundingMode::Floor,
+        crate::support::rounding::RoundingMode::Ceiling,
+    ];
+
+    #[test]
+    #[cfg(feature = "d307")]
+    fn d307_s153_tang_rung_matches_tier() {
+        type Core = crate::types::widths::wide_trig_d307::Core;
+        let one = crate::int::types::Int::<16>::from_i128(10i128).pow(153);
+        let tiny = crate::int::types::Int::<16>::from_i128(3 * 10i128.pow(35));
+        // 1 ± 3·10^-118 (the near-1 quadratic-term band), plus ordinary 2.0
+        // and 0.5 anchors.
+        let half = one / crate::int::types::Int::<16>::from_i128(2); // 0.5 (= 5·10^152)
+        let raws = [one + tiny, one - tiny, one + one, half];
+        for raw in raws {
+            for mode in ALL_MODES {
+                assert_eq!(
+                    super::tang_at_rung::<Core, 153, 10, 400, true, false>(raw, mode),
+                    crate::algos::ln::ln_tang::ln_tang::<Core, 153, 10, 400, true, false>(raw, mode),
+                    "ln raw={raw:?} mode {mode:?}"
+                );
+            }
+        }
     }
 }

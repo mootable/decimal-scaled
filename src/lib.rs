@@ -1634,6 +1634,146 @@ pub mod __bench_internals {
         crate::policy::trig::forward_rung::tan_strict::<crate::types::widths::wide_trig_d1232::Core, SCALE, { <crate::types::widths::wide_trig_d1232::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true, true>(raw, mode)
     }
 
+    // Rung-follow-up bench seam — tier-width kernel vs the rung-routed
+    // production path for the atan / inverse / hyperbolic / exp families
+    // (`benches/micro/trig_rung_ab.rs` extensions).
+    #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn atan_series_d307<const SCALE: u32>(
+        raw: crate::int::types::Int<16>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<16> {
+        crate::algos::support::wide_trig_core::atan_series::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn atan_rung_d307<const SCALE: u32>(
+        raw: crate::int::types::Int<16>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<16> {
+        crate::policy::trig::forward_rung::atan_strict::<crate::types::widths::wide_trig_d307::Core, SCALE, { <crate::types::widths::wide_trig_d307::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true>(raw, mode)
+    }
+    #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn asin_schoolbook_d307<const SCALE: u32>(
+        raw: crate::int::types::Int<16>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<16> {
+        crate::algos::trig::inverse_schoolbook::asin_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn asin_rung_d307<const SCALE: u32>(
+        raw: crate::int::types::Int<16>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<16> {
+        crate::policy::trig::inverse_rung::asin_strict::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn sinh_schoolbook_d307<const SCALE: u32>(
+        raw: crate::int::types::Int<16>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<16> {
+        crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn sinh_rung_d307<const SCALE: u32>(
+        raw: crate::int::types::Int<16>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<16> {
+        crate::policy::trig::hyper_rung::sinh_strict::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn exp_rung_d307<const SCALE: u32>(
+        raw: crate::int::types::Int<16>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<16> {
+        crate::policy::exp::series_at_rung::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn asinh_schoolbook_d307<const SCALE: u32>(
+        raw: crate::int::types::Int<16>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<16> {
+        crate::algos::trig::hyper_schoolbook::asinh_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn asinh_rung_d307<const SCALE: u32>(
+        raw: crate::int::types::Int<16>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<16> {
+        crate::policy::trig::extra_rung::asinh_strict::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    #[inline(never)]
+    pub fn atan_series_d1232<const SCALE: u32>(
+        raw: crate::int::types::Int<64>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<64> {
+        crate::algos::support::wide_trig_core::atan_series::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    #[inline(never)]
+    pub fn atan_rung_d1232<const SCALE: u32>(
+        raw: crate::int::types::Int<64>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<64> {
+        crate::policy::trig::forward_rung::atan_strict::<crate::types::widths::wide_trig_d1232::Core, SCALE, { <crate::types::widths::wide_trig_d1232::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true>(raw, mode)
+    }
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    #[inline(never)]
+    pub fn asin_schoolbook_d1232<const SCALE: u32>(
+        raw: crate::int::types::Int<64>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<64> {
+        crate::algos::trig::inverse_schoolbook::asin_schoolbook::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    #[inline(never)]
+    pub fn asin_rung_d1232<const SCALE: u32>(
+        raw: crate::int::types::Int<64>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<64> {
+        crate::policy::trig::inverse_rung::asin_strict::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    #[inline(never)]
+    pub fn sinh_rung_d1232<const SCALE: u32>(
+        raw: crate::int::types::Int<64>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<64> {
+        crate::policy::trig::hyper_rung::sinh_strict::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    #[inline(never)]
+    pub fn exp_rung_d1232<const SCALE: u32>(
+        raw: crate::int::types::Int<64>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<64> {
+        crate::policy::exp::series_at_rung::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    #[inline(never)]
+    pub fn asinh_schoolbook_d1232<const SCALE: u32>(
+        raw: crate::int::types::Int<64>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<64> {
+        crate::algos::trig::hyper_schoolbook::asinh_schoolbook::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    #[inline(never)]
+    pub fn asinh_rung_d1232<const SCALE: u32>(
+        raw: crate::int::types::Int<64>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<64> {
+        crate::policy::trig::extra_rung::asinh_strict::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw, mode)
+    }
+
     /// `to_radians` candidates for the `to_radians_ab` microbench (the
     /// wide-tier angle-conversion regression vs 0.4.4). `direct` calls the
     /// `MulPiRatio` kernel straight on the tier `Core` (no policy / resize

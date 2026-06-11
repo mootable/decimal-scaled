@@ -157,3 +157,77 @@ pub(in crate::policy) const fn trig_rung<C: WideTrigCore, const SCALE: u32>() ->
 /// the tier-width path. Continuous region: every `|x| < ~10^8` at every
 /// scale, not a point carve-out.
 pub(in crate::policy) const D_BUDGET: u32 = 8;
+
+/// Resolve the work rung for a NEAR-SPECIAL-POINT directed kernel
+/// (`acosh` at 1, `atanh` at ±1 — the `round_to_storage_directed_
+/// near_special` walkers, which `force_confirm` EVERY call with at
+/// least one escalated probe at `w₂ ≈ 2·(SCALE + GUARD)`). The budget
+/// is therefore keyed on `2·SCALE` (+ the shared [`TRIG_MARGIN`]) so
+/// the confirm probe is always REACHABLE inside the rung's escalation
+/// cap (`cap = 8·K − int_digits − 8` digits must clear
+/// `2·SCALE + 2·GUARD + int_digits`; `TRIG_MARGIN`'s 76 covers the
+/// `2·GUARD = 60` plus the small result-digit terms with room), and
+/// the rung's true bit capacity (~2.4× the budget digits) holds the
+/// ln kernel's `2·w₂` intermediates at that probe. Deeper unstable
+/// confirms beyond the rung cap fall back exactly as the tier does
+/// past ITS cap; the golden gate is the correctness wall.
+pub(in crate::policy) const fn near_special_rung<C: WideTrigCore, const SCALE: u32>() -> Rung {
+    let floor = <C::W as BigInt>::LIMBS;
+    rung_of(smallest_rung(2 * SCALE + TRIG_MARGIN, AVAIL_RUNGS[0], floor))
+}
+
+/// `true` iff `|x| < ~10^BUDGET` — a rung's admitted magnitude region.
+/// Conservative bit-length test (`332_192/100_000 < log2(10)`): never
+/// admits a value at or beyond `10^(SCALE + BUDGET)` raw units, so an
+/// admitted argument's integer digits provably fit the rung's budget;
+/// the sliver it under-admits just below the boundary takes the
+/// (correct, slower) tier path. One compare against a compile-time
+/// constant. Shared by the forward / inverse / hyperbolic / exp rung
+/// gates (each passes its family's budget).
+#[inline]
+pub(in crate::policy) fn in_budget<St: BigInt, const SCALE: u32, const BUDGET: u32>(
+    raw: &St,
+) -> bool {
+    let bl = crate::algos::exp::exp_generic::bit_length::<St>(*raw) as u64;
+    bl * 100_000 <= ((SCALE + BUDGET) as u64) * 332_192
+}
+
+/// The const-folded work-rung match: one macro emits the 13-arm ladder
+/// match per kernel call so the ladder stays single-source (the
+/// `policy::ln::tang_at_rung` shape). `$sel` is the policy-internal
+/// rung selector (`trig_rung`, …) resolved in the caller's scope;
+/// `$kernel` the rung-generic kernel (imported by the calling module).
+macro_rules! rung_match {
+    ($sel:ident, $C:ty, $SCALE:ident, $kernel:ident, [$($k:tt)*], $($arg:expr),+ $(,)?) => {
+        match const { $sel::<$C, $SCALE>() } {
+            crate::policy::work_rung::Rung::W3 => $kernel::<$C, crate::int::types::Int<3>, $($k)*>($($arg),+),
+            crate::policy::work_rung::Rung::W4 => $kernel::<$C, crate::int::types::Int<4>, $($k)*>($($arg),+),
+            crate::policy::work_rung::Rung::W6 => $kernel::<$C, crate::int::types::Int<6>, $($k)*>($($arg),+),
+            crate::policy::work_rung::Rung::W8 => $kernel::<$C, crate::int::types::Int<8>, $($k)*>($($arg),+),
+            crate::policy::work_rung::Rung::W12 => $kernel::<$C, crate::int::types::Int<12>, $($k)*>($($arg),+),
+            crate::policy::work_rung::Rung::W16 => $kernel::<$C, crate::int::types::Int<16>, $($k)*>($($arg),+),
+            crate::policy::work_rung::Rung::W24 => $kernel::<$C, crate::int::types::Int<24>, $($k)*>($($arg),+),
+            crate::policy::work_rung::Rung::W32 => $kernel::<$C, crate::int::types::Int<32>, $($k)*>($($arg),+),
+            crate::policy::work_rung::Rung::W48 => $kernel::<$C, crate::int::types::Int<48>, $($k)*>($($arg),+),
+            crate::policy::work_rung::Rung::W64 => $kernel::<$C, crate::int::types::Int<64>, $($k)*>($($arg),+),
+            crate::policy::work_rung::Rung::W96 => $kernel::<$C, crate::int::types::Int<96>, $($k)*>($($arg),+),
+            crate::policy::work_rung::Rung::W128 => $kernel::<$C, crate::int::types::Int<128>, $($k)*>($($arg),+),
+            crate::policy::work_rung::Rung::W176 => $kernel::<$C, crate::int::types::Int<176>, $($k)*>($($arg),+),
+        }
+    };
+}
+pub(in crate::policy) use rung_match;
+
+/// Max integer digits of `|x|` admitted to the exp / hyperbolic rungs —
+/// the RESULT-MAGNITUDE axis (`e^|x|` grows with `x`, so the rung is
+/// valid only where the result's integer-digit lift and the exp
+/// kernel's internal `2^k` extension provably fit). `|x| < 10` bounds
+/// the result lift to `exp_result_int_digits ≤ ~8` digits and the
+/// internal `extra` to ≤ ~18 digits, which [`TRIG_MARGIN`]'s budget
+/// clears at every scale (the base-probe peak `2·(SCALE + GUARD +
+/// k_lift + extra)` digits against the rung's `~2.4 × 8·K` true digit
+/// capacity, plus the per-probe `exp_peak_fits` belt in the kernel
+/// itself). Larger `|x|` takes the tier-width path. Continuous region —
+/// the everyday hyperbolic/exp argument band — not a point carve-out;
+/// an A/B re-bench may widen it later.
+pub(in crate::policy) const EXP_ARG_BUDGET: u32 = 1;

@@ -4934,3 +4934,6 @@
 -0.3000690881230526088195154325 0.6717510636835213845219941262
 // regression: strict-suite cross-witness inputs (retired wide_strict_transcendentals.rs - the both-zero axis case of the quadrant sweep)
 0 0
+// regression: single-shot wide narrowings get a near-tie escape (asin.golden D462<180> HalfToEven, x=3e-60: x^3/6 = 4.5 ULP exact + positive x^5 tail must round UP) - band-scale exact-partial inputs for the D57 lookup kernels, the Tang bands, and tan's thirds-half family
+0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003 1
+0.0000006 1

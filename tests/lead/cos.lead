@@ -4369,3 +4369,10 @@
 0.33333333333333333333
 // regression: retired trig_extremum_directed.rs pin (argument hugging pi at the band upper edge - the never-resolvable extremum deviation sits past the work integer's probe reach)
 3.1415926535897932384626
+// regression: work-rung escalation-cap fall-up (sin_d307_s153 Trunc, 1-ULP directed miss) - tiny arguments whose f(x) = x -/+ x^3-term (or 1 +/- d quadratic) deciding digit lies BETWEEN a narrow work-rung's Ziv cap and the tier work int's; an unresolved-at-rung walker must fall up to the tier width, never conclude from a cap-clamped probe
+0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003
+0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001
+0.000000000000000000000000000000000000000000000000000000000003
+// regression: single-shot wide narrowings get a near-tie escape (asin.golden D462<180> HalfToEven, x=3e-60: x^3/6 = 4.5 ULP exact + positive x^5 tail must round UP) - band-scale exact-partial inputs for the D57 lookup kernels, the Tang bands, and tan's thirds-half family
+0.0000006
+0.00000000000006

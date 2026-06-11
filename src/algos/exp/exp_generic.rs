@@ -306,6 +306,48 @@ use crate::support::rounding::RoundingMode;
         scale_by_k::<S>(ln2_w, k as i128) + ln_m
     }
 
+    /// `log1p(t) = ln(1 + t)` at working scale `w`, evaluated without
+    /// ever forming `1 + t` — generic over the work integer `S` (the
+    /// single source; the per-tier `decl_wide_transcendental!`
+    /// `log1p_fixed` forwards here).
+    ///
+    /// Uses the Goldberg/Higham reformulation
+    /// `log1p(t) = 2·artanh(t / (2 + t))`: `2 + t` is benign (no
+    /// near-equal subtraction for `t > -1`) and the divide is
+    /// well-conditioned, so `u ~ t/2` carries every significant digit of
+    /// `t`, removing the catastrophic cancellation of the naive
+    /// `ln(1 + t)` at the source. Domain: `t > -1` (the caller guards).
+    ///
+    /// Reference: N. J. Higham, *Accuracy and Stability of Numerical
+    /// Algorithms* 2nd ed. (2002), 1.14.1 and Problem 1.4; J.-M. Muller,
+    /// *Elementary Functions* 3rd ed. (2016), 4.4.
+    pub(crate) fn log1p_fixed<S: BigInt>(t: S, w: u32) -> S
+    where
+        S::Scratch: ComputeLimbs,
+    {
+        let one_w = one::<S>(w);
+        let two_w = one_w + one_w;
+        let pow10_w = one_w;
+        let u = div_cached::<S>(t, two_w + t, pow10_w);
+        let u2 = mul::<S>(u, u, w);
+        let mut sum = u;
+        let mut term = u;
+        let mut j: u128 = 1;
+        loop {
+            term = mul::<S>(term, u2, w);
+            let contrib = term / lit::<S>((2 * j + 1) as i128);
+            if contrib == zero::<S>() {
+                break;
+            }
+            sum = sum + contrib;
+            j += 1;
+            if j > SERIES_CAP {
+                break;
+            }
+        }
+        sum + sum
+    }
+
     /// Argument-magnitude regime of `e^v` for a working-scale value `v_w`
     /// at scale `w` in the work integer `S`, decided BEFORE the
     /// `k = round(v / ln 2)` range-reduction division runs.
