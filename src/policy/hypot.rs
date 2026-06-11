@@ -98,20 +98,35 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(
 where
     Limbs<N>: ComputeLimbs,
 {
+    // `SCALE` is used only to label the out-of-range panic.
+    checked_dispatch::<N, SCALE>(a, b, mode).unwrap_or_else(|| {
+        crate::support::diagnostics::overflow_panic_with_scale("hypot", SCALE)
+    })
+}
+
+/// The `checked` primitive under [`dispatch`]: the kernel's own
+/// out-of-range `None` propagates instead of panicking. `dispatch` is
+/// the unwrap-or-panic wrapper over this single detection point (the
+/// overflow contract's "detect once, apply the policy in the wrapper").
+#[inline]
+#[must_use]
+pub(crate) fn checked_dispatch<const N: usize, const SCALE: u32>(
+    a: Int<N>,
+    b: Int<N>,
+    mode: RoundingMode,
+) -> Option<Int<N>>
+where
+    Limbs<N>: ComputeLimbs,
+{
     // Both operands carry the same `10^SCALE`, so it divides out of the
-    // root; `SCALE` is used only to label the out-of-range panic.
+    // root.
     let algo = match const { select::<N, SCALE>() } {
         Select::ByAlgorithm(a) => a,
         Select::ByValue(f) => f(&a),
     };
     match algo {
-        Algorithm::Pythagoras => hypot::hypot_pythagoras::hypot_pythagoras::<N>(a, b, mode)
-            .unwrap_or_else(|| {
-                crate::support::diagnostics::overflow_panic_with_scale("hypot", SCALE)
-            }),
-        Algorithm::Schoolbook => hypot::hypot_pythagoras::hypot_pythagoras::<N>(a, b, mode)
-            .unwrap_or_else(|| {
-                crate::support::diagnostics::overflow_panic_with_scale("hypot", SCALE)
-            }),
+        Algorithm::Pythagoras | Algorithm::Schoolbook => {
+            hypot::hypot_pythagoras::hypot_pythagoras::<N>(a, b, mode)
+        }
     }
 }

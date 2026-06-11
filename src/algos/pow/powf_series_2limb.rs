@@ -43,9 +43,11 @@ pub(crate) const INT_FAST_PATH_THRESHOLD: i32 = 64;
 
 /// Analytic storage-overflow gate on the `exp(y·ln x)` composition's
 /// argument `arg = y·ln x` (a working-scale [`Fixed`] at scale `w`),
-/// run BEFORE [`exp_fixed`]. Panics with the contractual
-/// `"result out of range"` when the result `x^y = e^arg` provably cannot
-/// be stored.
+/// run BEFORE [`exp_fixed`]. Returns `true` when the result
+/// `x^y = e^arg` provably cannot be stored: the kernel signals its
+/// out-of-range `None` (the policy dispatch wrapper applies the default
+/// form's contractual `"result out of range"` panic; the `checked_`
+/// surface propagates the `None`).
 ///
 /// Derivation, exact for every scale: `i128` holds values `< 1.8·10^38 <
 /// 10^39`, so the storage value `e^arg · 10^scale` overflows once
@@ -53,7 +55,7 @@ pub(crate) const INT_FAST_PATH_THRESHOLD: i32 = 64;
 /// uses `2.302586 > ln 10`, so a fired cell satisfies the true bound — a
 /// representable result can never fire. Cells between the true edge and
 /// this threshold still flow to the kernel, whose `round_to_i128_with`
-/// fit check raises the same panic; for those `arg < (39−scale)·2.302586
+/// fit check signals the same `None`; for those `arg < (39−scale)·2.302586
 /// + 1 ≤ 91` bounds the kernel's `2^k` reassembly (`k ≤ 132`), so the
 /// kernel's internal shift arithmetic stays in range. Without this gate a
 /// deep-overflow exponent reached the kernel's 256-bit reassembly
@@ -64,18 +66,16 @@ pub(crate) const INT_FAST_PATH_THRESHOLD: i32 = 64;
 /// for every working scale this kernel serves (`w ≤ 68`); `w < 6` (no
 /// real caller) skips the gate and leaves the kernel assert as backstop.
 #[inline]
-fn powf_overflow_gate(arg: Fixed, w: u32, scale: u32) {
+fn powf_overflow_gate(arg: Fixed, w: u32, scale: u32) -> bool {
     if arg.negative || w < 6 {
-        return; // y·ln x < 0 ⇒ x^y < 1: never a storage overflow.
+        return false; // y·ln x < 0 ⇒ x^y < 1: never a storage overflow.
     }
     let thr = Fixed {
         negative: false,
         mag: Fixed::pow10(w - 6),
     }
     .mul_u128(((39 - scale) as u128) * 2_302_586);
-    if arg.ge_mag(thr) {
-        crate::support::diagnostics::overflow_panic_with_scale("powf kernel", scale);
-    }
+    arg.ge_mag(thr)
 }
 
 /// `(a · b) / 10^SCALE` rounded under `mode`, formed in the 256-bit
@@ -184,13 +184,9 @@ pub(crate) fn powf_with<const SCALE: u32>(
     exp: Int<2>,
     working_digits: u32,
     mode: RoundingMode,
-) -> Int<2> {
-    Int::<2>::from_i128(powf_with_raw::<SCALE>(
-        base.as_i128(),
-        exp.as_i128(),
-        working_digits,
-        mode,
-    ))
+) -> Option<Int<2>> {
+    powf_with_raw::<SCALE>(base.as_i128(), exp.as_i128(), working_digits, mode)
+        .map(Int::<2>::from_i128)
 }
 
 /// `i128` core of [`powf_with`].
@@ -200,28 +196,34 @@ fn powf_with_raw<const SCALE: u32>(
     exp: i128,
     working_digits: u32,
     mode: RoundingMode,
-) -> i128 {
+) -> Option<i128> {
     if base <= 0 {
-        return 0;
+        return Some(0);
     }
     if let Some(n) = exp_as_small_int::<SCALE>(exp) {
         if let Some(v) = powi_raw_checked::<SCALE>(base, n, mode) {
-            return v;
+            return Some(v);
         }
         // `base^|n|` left the storage range. When the base is an exact
         // integer the result is still an exact rational — pin its
         // correctly-directed-rounded value (`10^SCALE / base^|n|` for a
         // negative `n`) so a directed mode is not 1 LSB off, rather than
         // defer to the to-nearest `exp(y·ln x)` composition. A fractional
-        // base or a genuinely out-of-range positive power returns `None`
-        // and falls through to the composition (which panics on overflow).
-        if let Some(v) = crate::algos::pow::powi_exact::powi_exact_pin::<Int<2>, SCALE>(
+        // base defers to the composition; a genuinely out-of-range positive
+        // power is the pin's PROOF of overflow — signal the kernel's `None`
+        // (the policy dispatch wrapper applies the default form's panic, the
+        // `checked_` surface propagates) instead of deferring, whose
+        // to-nearest approximation could directed-round back inside range.
+        use crate::algos::pow::powi_exact::ExactPin;
+        match crate::algos::pow::powi_exact::powi_exact_pin_checked::<Int<2>, SCALE>(
             Int::<2>::from_i128(base),
             Int::<2>::from_i128(exp),
             Int::<2>::MAX,
             mode,
         ) {
-            return v.as_i128();
+            ExactPin::Value(v) => return Some(v.as_i128()),
+            ExactPin::OutOfRange => return None,
+            ExactPin::Defer => {}
         }
     }
     let w = SCALE + working_digits;
@@ -231,45 +233,51 @@ fn powf_with_raw<const SCALE: u32>(
     let y_w = Fixed::from_u128_mag(exp.unsigned_abs(), false).mul_u128(pow);
     let y_w = if y_neg { y_w.neg() } else { y_w };
     let arg = y_w.mul(ln_x, w);
-    powf_overflow_gate(arg, w, SCALE);
-    exp_fixed(arg, w)
-        .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| {
-            crate::support::diagnostics::overflow_panic_with_scale("powf kernel", SCALE)
-        })
+    if powf_overflow_gate(arg, w, SCALE) {
+        return None;
+    }
+    exp_fixed(arg, w).round_to_i128_with(w, SCALE, mode)
 }
 
 /// Strict variant — const-folded `working_digits = STRICT_GUARD`.
+/// `None` = result out of storage range (non-positive bases saturate
+/// to `Some(0)`, matching the default form's documented behaviour).
 #[inline]
 #[must_use]
-pub(crate) fn powf_strict<const SCALE: u32>(base: Int<2>, exp: Int<2>, mode: RoundingMode) -> Int<2> {
-    Int::<2>::from_i128(powf_strict_raw::<SCALE>(base.as_i128(), exp.as_i128(), mode))
+pub(crate) fn powf_strict<const SCALE: u32>(base: Int<2>, exp: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+    powf_strict_raw::<SCALE>(base.as_i128(), exp.as_i128(), mode).map(Int::<2>::from_i128)
 }
 
 /// `i128` core of [`powf_strict`].
 #[inline]
-fn powf_strict_raw<const SCALE: u32>(base: i128, exp: i128, mode: RoundingMode) -> i128 {
+fn powf_strict_raw<const SCALE: u32>(base: i128, exp: i128, mode: RoundingMode) -> Option<i128> {
     if base <= 0 {
-        return 0;
+        return Some(0);
     }
     if let Some(n) = exp_as_small_int::<SCALE>(exp) {
         if let Some(v) = powi_raw_checked::<SCALE>(base, n, mode) {
-            return v;
+            return Some(v);
         }
         // `base^|n|` left the storage range. When the base is an exact
         // integer the result is still an exact rational — pin its
         // correctly-directed-rounded value (`10^SCALE / base^|n|` for a
         // negative `n`) so a directed mode is not 1 LSB off, rather than
         // defer to the to-nearest `exp(y·ln x)` composition. A fractional
-        // base or a genuinely out-of-range positive power returns `None`
-        // and falls through to the composition (which panics on overflow).
-        if let Some(v) = crate::algos::pow::powi_exact::powi_exact_pin::<Int<2>, SCALE>(
+        // base defers to the composition; a genuinely out-of-range positive
+        // power is the pin's PROOF of overflow — signal the kernel's `None`
+        // (the policy dispatch wrapper applies the default form's panic, the
+        // `checked_` surface propagates) instead of deferring, whose
+        // to-nearest approximation could directed-round back inside range.
+        use crate::algos::pow::powi_exact::ExactPin;
+        match crate::algos::pow::powi_exact::powi_exact_pin_checked::<Int<2>, SCALE>(
             Int::<2>::from_i128(base),
             Int::<2>::from_i128(exp),
             Int::<2>::MAX,
             mode,
         ) {
-            return v.as_i128();
+            ExactPin::Value(v) => return Some(v.as_i128()),
+            ExactPin::OutOfRange => return None,
+            ExactPin::Defer => {}
         }
     }
     let w = SCALE + STRICT_GUARD;
@@ -279,12 +287,10 @@ fn powf_strict_raw<const SCALE: u32>(base: i128, exp: i128, mode: RoundingMode) 
     let y_w = Fixed::from_u128_mag(exp.unsigned_abs(), false).mul_u128(pow);
     let y_w = if y_neg { y_w.neg() } else { y_w };
     let arg = y_w.mul(ln_x, w);
-    powf_overflow_gate(arg, w, SCALE);
-    exp_fixed(arg, w)
-        .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| {
-            crate::support::diagnostics::overflow_panic_with_scale("powf kernel", SCALE)
-        })
+    if powf_overflow_gate(arg, w, SCALE) {
+        return None;
+    }
+    exp_fixed(arg, w).round_to_i128_with(w, SCALE, mode)
 }
 
 #[cfg(test)]
@@ -308,7 +314,7 @@ mod tests {
     ];
 
     fn powf(base: i128, exp: i128) -> i128 {
-        powf_strict_raw::<S>(base * ONE, exp * ONE, M)
+        powf_strict_raw::<S>(base * ONE, exp * ONE, M).expect("in range")
     }
 
     #[test]
@@ -327,7 +333,7 @@ mod tests {
         for mode in MODES {
             assert_eq!(
                 powf_strict_raw::<SC>(base * one, exp * one, mode),
-                one / divisor,
+                Some(one / divisor),
                 "base={base} exp={exp} scale={SC} mode={mode:?}"
             );
         }
@@ -363,9 +369,11 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "result out of range")]
-    fn out_of_range_positive_power_panics() {
-        // `10² = 100` exceeds the storage MAX (≈17) — must panic, not wrap.
-        let _ = powf(10, 2);
+    fn out_of_range_positive_power_signals_none() {
+        // `10² = 100` exceeds the storage MAX (≈17) — the kernel must
+        // signal `None` (the policy dispatch wrapper turns it into the
+        // default form's panic; the `checked_` surface propagates it),
+        // never a wrapped value.
+        assert_eq!(powf_strict_raw::<S>(10 * ONE, 2 * ONE, M), None);
     }
 }

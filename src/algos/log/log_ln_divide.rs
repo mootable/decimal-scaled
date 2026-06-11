@@ -60,13 +60,13 @@ pub(crate) fn log_ln_divide_d18_approx<const SCALE: u32>(
 }
 
 /// D38 strict `log(self, base)` via the `ln::ln_series_2limb` 256-bit log
-/// kernel, on raw storage.
+/// kernel, on raw storage. `None` = result out of storage range.
 #[inline]
 pub(crate) fn log_ln_divide_d38<const SCALE: u32>(
     raw: Int<2>,
     base_raw: Int<2>,
     mode: RoundingMode,
-) -> Int<2> {
+) -> Option<Int<2>> {
     crate::algos::ln::ln_series_2limb::log_strict::<SCALE>(raw, base_raw, mode)
 }
 
@@ -78,6 +78,6 @@ pub(crate) fn log_ln_divide_d38_approx<const SCALE: u32>(
     base_raw: Int<2>,
     working_digits: u32,
     mode: RoundingMode,
-) -> Int<2> {
+) -> Option<Int<2>> {
     crate::algos::ln::ln_series_2limb::log_with(raw, base_raw, SCALE, working_digits, mode)
 }

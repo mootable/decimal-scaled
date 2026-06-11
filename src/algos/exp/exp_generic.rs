@@ -488,6 +488,22 @@ use crate::support::rounding::RoundingMode;
     where
         S::Scratch: ComputeLimbs,
     {
+        try_exp_fixed::<S>(v_w, w)
+            .unwrap_or_else(|| panic!("exp_generic::exp_fixed: result out of range"))
+    }
+
+    /// Option-returning core of [`exp_fixed`] — the `checked_` seam's
+    /// primitive. `None` means the internal squaring / `2^k`-reassembly
+    /// peak provably exceeds the work integer `S`'s capacity, i.e. the
+    /// result is out of range for any storage `S` serves at scale `w`:
+    /// the seamed narrow kernels propagate it (their policy dispatch
+    /// wrapper applies the default form's contractual panic), while
+    /// [`exp_fixed`] panics directly for the unseamed callers — one
+    /// detection, each wrapper applies its policy.
+    pub(crate) fn try_exp_fixed<S: BigInt>(v_w: S, w: u32) -> Option<S>
+    where
+        S::Scratch: ComputeLimbs,
+    {
         // Argument-magnitude pre-gate (see [`ArgRegime`]). The very first
         // step below — `k = round(v / ln 2)` — is a full work-integer divide
         // on the `v_w · 10^w` dividend; for a deep argument that division is
@@ -495,13 +511,13 @@ use crate::support::rounding::RoundingMode;
         // an overflow into the underflow path, and the oversized dividend
         // outruns the divide scratch a narrow build provisions), so the
         // out-of-range verdict must come BEFORE it. A provable overflow is
-        // the uniform loud contract failure; a provable underflow returns
+        // the uniform out-of-range signal; a provable underflow returns
         // the smallest positive working value exactly as the in-body
         // short-circuits below do (the caller's rounding turns it into 0,
         // or 1 ULP under Ceiling).
         match arg_regime::<S>(v_w, w) {
-            ArgRegime::Overflow => panic!("exp_generic::exp_fixed: result out of range"),
-            ArgRegime::Underflow => return lit::<S>(1),
+            ArgRegime::Overflow => return None,
+            ArgRegime::Underflow => return Some(lit::<S>(1)),
             ArgRegime::Fits => {}
         }
         let one_w_pre = one::<S>(w);
@@ -519,7 +535,7 @@ use crate::support::rounding::RoundingMode;
         if k < -1 {
             let neg = (-(k + 1)) as u128;
             if neg.saturating_mul(30103) >= (w as u128).saturating_mul(100_000) {
-                return lit::<S>(1);
+                return Some(lit::<S>(1));
             }
         }
         // Overflow guard (positive results only). For `k >= 0`, `e^v >= 1` and
@@ -529,14 +545,16 @@ use crate::support::rounding::RoundingMode;
         // and the caller's post-narrowing fit check — seeing only the wrapped,
         // small value — would never fire, letting a far-out-of-range result
         // escape as a wrong (often zero) value. A fixed-width decimal has no
-        // ∞/NaN, so there is nothing to return: PANIC, uniform across every
-        // tier and scale, in both debug and release. The caller runs this in
-        // the WIDEST work integer it can (`Wexp` / `WNarrow`); the panic fires
-        // only when even that cannot hold the peak — a genuinely
-        // unrepresentable result. (`k < 0` is the underflow direction, handled
-        // by the short-circuits above and below — never panicked.)
+        // ∞/NaN, so there is nothing to return: signal out-of-range, uniform
+        // across every tier and scale, in both debug and release (the
+        // [`exp_fixed`] wrapper panics; the seamed callers propagate `None`).
+        // The caller runs this in the WIDEST work integer it can (`Wexp` /
+        // `WNarrow`); the verdict fires only when even that cannot hold the
+        // peak — a genuinely unrepresentable result. (`k < 0` is the
+        // underflow direction, handled by the short-circuits above and
+        // below — never out of range.)
         if k >= 0 && !exp_peak_fits::<S>(v_w, w) {
-            panic!("exp_generic::exp_fixed: result out of range");
+            return None;
         }
         let abs_k_u128 = if k < 0 { -k } else { k } as u128;
         let extra: u32 = if abs_k_u128 == 0 {
@@ -597,7 +615,7 @@ use crate::support::rounding::RoundingMode;
         let scaled_at_w_ext = if k >= 0 {
             let shift = k as u32;
             if bit_length(sum) + shift >= <S as BigInt>::BITS {
-                panic!("exp_generic::exp_fixed: result out of range");
+                return None;
             }
             sum << shift
         } else {
@@ -611,7 +629,7 @@ use crate::support::rounding::RoundingMode;
                 // bare zero loses positivity and rounds Ceiling to 0 (a
                 // correctly-rounded defect). Reached only by direct e^(negative)
                 // — the hyperbolics call `exp_fixed` on |x| >= 0.
-                return lit::<S>(1);
+                return Some(lit::<S>(1));
             }
             sum >> (neg_k as u32)
         };
@@ -628,9 +646,9 @@ use crate::support::rounding::RoundingMode;
         // `e^v >= 1`, so a 0 result would mean the working width overflowed,
         // and masking it as 1 would hide the defect rather than fix it.
         if k < 0 && result == zero::<S>() {
-            lit::<S>(1)
+            Some(lit::<S>(1))
         } else {
-            result
+            Some(result)
         }
     }
 

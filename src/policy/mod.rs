@@ -69,10 +69,23 @@ pub(crate) fn narrow_checked<const N: usize>(
     method: &str,
     scale: u32,
 ) -> crate::int::types::Int<N> {
+    narrow_fit::<N>(wide).unwrap_or_else(|| {
+        crate::support::diagnostics::overflow_panic_with_scale(method, scale)
+    })
+}
+
+/// `Option` primitive under [`narrow_checked`]: `None` when the `Int<2>`
+/// value does not survive the round-trip to `Int<N>` (i.e. it does not
+/// fit the narrower storage). The `checked_*` dispatch paths propagate
+/// the `None`; the default paths panic via [`narrow_checked`].
+#[inline]
+pub(crate) fn narrow_fit<const N: usize>(
+    wide: crate::int::types::Int<2>,
+) -> Option<crate::int::types::Int<N>> {
     use crate::int::types::traits::BigInt;
     let out = wide.resize_to::<crate::int::types::Int<N>>();
     if out.resize_to::<crate::int::types::Int<2>>() != wide {
-        crate::support::diagnostics::overflow_panic_with_scale(method, scale);
+        return None;
     }
-    out
+    Some(out)
 }

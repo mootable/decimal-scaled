@@ -182,7 +182,7 @@ mod tests {
         let rb = Int::<2>::from_i128(base);
         let re = Int::<2>::from_i128(exp);
         let got = pow_schoolbook_strict::<S>(rb, re, mode);
-        let expected = powf_strict::<S>(rb, re, mode);
+        let expected = powf_strict::<S>(rb, re, mode).expect("reference in range");
         assert_eq!(got, expected,
             "pow schoolbook D38<{}> base={} exp={} mode={:?}: {:?} != {:?}",
             S, base, exp, mode, got, expected);

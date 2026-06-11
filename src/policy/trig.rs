@@ -2753,3 +2753,113 @@ pub(crate) fn atan2_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>,
         _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atan2_with(crate::D::<crate::int::types::Int<2>, SCALE>(other.resize_to::<crate::int::types::Int<2>>()), wd, mode).0.resize_to::<Int<N>>(),
     }
 }
+
+// ── `checked_*` hop dispatchers ───────────────────────────────────────
+//
+// The `checked_<fn>_strict_with` surface for the methods whose WIDE
+// `*_strict_with` shells are inline kernel compositions (emitted by
+// `decl_wide_transcendental!`), not policy-dispatch delegates: sinh,
+// cosh, tanh, asin, acos, atan2, asinh, acosh, atanh, to_degrees,
+// to_radians. Bit-identity with the default form is the contract, so
+// each arm hops to the SAME inherent `*_strict_with` shell the default
+// surface runs — never a parallel kernel route.
+//
+// The `N == 1` arm runs the D38 shell and re-applies the D18
+// `try_into` fit as [`super::narrow_fit`], so a result that fits the
+// D38 work width but not D18 storage is an exact `None` (the condition
+// the default D18 shell panics on). Out-of-range detection INSIDE the
+// D38 / wide shells is not yet threaded through (see
+// `research/checked_wide_shell_patch.md`): those still panic,
+// identically to the default form.
+
+macro_rules! checked_hop_dispatch {
+    ($name:ident, $method:ident) => {
+        #[inline]
+        #[must_use]
+        pub(crate) fn $name<const N: usize, const SCALE: u32>(
+            raw: Int<N>,
+            mode: RoundingMode,
+        ) -> Option<Int<N>> {
+            match N {
+                1 => super::narrow_fit::<N>(
+                    crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).$method(mode).0,
+                ),
+                2 => Some(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).$method(mode).0.resize_to::<Int<N>>()),
+                #[cfg(any(feature = "d57", feature = "wide"))]
+                3 => Some(crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).$method(mode).0.resize_to::<Int<N>>()),
+                #[cfg(any(feature = "d76", feature = "wide"))]
+                4 => Some(crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).$method(mode).0.resize_to::<Int<N>>()),
+                #[cfg(any(feature = "d115", feature = "wide"))]
+                6 => Some(crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).$method(mode).0.resize_to::<Int<N>>()),
+                #[cfg(any(feature = "d153", feature = "wide"))]
+                8 => Some(crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).$method(mode).0.resize_to::<Int<N>>()),
+                #[cfg(any(feature = "d230", feature = "wide"))]
+                12 => Some(crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).$method(mode).0.resize_to::<Int<N>>()),
+                #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+                16 => Some(crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).$method(mode).0.resize_to::<Int<N>>()),
+                #[cfg(any(feature = "d462", feature = "x-wide"))]
+                24 => Some(crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).$method(mode).0.resize_to::<Int<N>>()),
+                #[cfg(any(feature = "d616", feature = "x-wide"))]
+                32 => Some(crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).$method(mode).0.resize_to::<Int<N>>()),
+                #[cfg(any(feature = "d924", feature = "xx-wide"))]
+                48 => Some(crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).$method(mode).0.resize_to::<Int<N>>()),
+                #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+                64 => Some(crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).$method(mode).0.resize_to::<Int<N>>()),
+                _ => super::narrow_fit::<N>(
+                    crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).$method(mode).0,
+                ),
+            }
+        }
+    };
+}
+
+checked_hop_dispatch!(checked_sinh_dispatch, sinh_strict_with);
+checked_hop_dispatch!(checked_cosh_dispatch, cosh_strict_with);
+checked_hop_dispatch!(checked_tanh_dispatch, tanh_strict_with);
+checked_hop_dispatch!(checked_asin_dispatch, asin_strict_with);
+checked_hop_dispatch!(checked_acos_dispatch, acos_strict_with);
+checked_hop_dispatch!(checked_asinh_dispatch, asinh_strict_with);
+checked_hop_dispatch!(checked_acosh_dispatch, acosh_strict_with);
+checked_hop_dispatch!(checked_atanh_dispatch, atanh_strict_with);
+checked_hop_dispatch!(checked_to_degrees_dispatch, to_degrees_strict_with);
+checked_hop_dispatch!(checked_to_radians_dispatch, to_radians_strict_with);
+
+/// Binary (`y.atan2(x)`) sibling of the [`checked_hop_dispatch!`]
+/// emissions; same hop shape, second operand threaded through.
+#[inline]
+#[must_use]
+pub(crate) fn checked_atan2_dispatch<const N: usize, const SCALE: u32>(
+    raw: Int<N>,
+    other: Int<N>,
+    mode: RoundingMode,
+) -> Option<Int<N>> {
+    match N {
+        1 => super::narrow_fit::<N>(
+            crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).atan2_strict_with(crate::D::<crate::int::types::Int<2>, SCALE>(other.resize_to::<crate::int::types::Int<2>>()), mode).0,
+        ),
+        2 => Some(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).atan2_strict_with(crate::D::<crate::int::types::Int<2>, SCALE>(other.resize_to::<crate::int::types::Int<2>>()), mode).0.resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        3 => Some(crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).atan2_strict_with(crate::D::<crate::int::types::Int<3>, SCALE>(other.resize_to::<crate::int::types::Int<3>>()), mode).0.resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d76", feature = "wide"))]
+        4 => Some(crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).atan2_strict_with(crate::D::<crate::int::types::Int<4>, SCALE>(other.resize_to::<crate::int::types::Int<4>>()), mode).0.resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d115", feature = "wide"))]
+        6 => Some(crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).atan2_strict_with(crate::D::<crate::int::types::Int<6>, SCALE>(other.resize_to::<crate::int::types::Int<6>>()), mode).0.resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d153", feature = "wide"))]
+        8 => Some(crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).atan2_strict_with(crate::D::<crate::int::types::Int<8>, SCALE>(other.resize_to::<crate::int::types::Int<8>>()), mode).0.resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d230", feature = "wide"))]
+        12 => Some(crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).atan2_strict_with(crate::D::<crate::int::types::Int<12>, SCALE>(other.resize_to::<crate::int::types::Int<12>>()), mode).0.resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+        16 => Some(crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).atan2_strict_with(crate::D::<crate::int::types::Int<16>, SCALE>(other.resize_to::<crate::int::types::Int<16>>()), mode).0.resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d462", feature = "x-wide"))]
+        24 => Some(crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).atan2_strict_with(crate::D::<crate::int::types::Int<24>, SCALE>(other.resize_to::<crate::int::types::Int<24>>()), mode).0.resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d616", feature = "x-wide"))]
+        32 => Some(crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).atan2_strict_with(crate::D::<crate::int::types::Int<32>, SCALE>(other.resize_to::<crate::int::types::Int<32>>()), mode).0.resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d924", feature = "xx-wide"))]
+        48 => Some(crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).atan2_strict_with(crate::D::<crate::int::types::Int<48>, SCALE>(other.resize_to::<crate::int::types::Int<48>>()), mode).0.resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+        64 => Some(crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).atan2_strict_with(crate::D::<crate::int::types::Int<64>, SCALE>(other.resize_to::<crate::int::types::Int<64>>()), mode).0.resize_to::<Int<N>>()),
+        _ => super::narrow_fit::<N>(
+            crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).atan2_strict_with(crate::D::<crate::int::types::Int<2>, SCALE>(other.resize_to::<crate::int::types::Int<2>>()), mode).0,
+        ),
+    }
+}

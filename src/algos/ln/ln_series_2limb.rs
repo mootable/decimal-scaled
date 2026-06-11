@@ -156,20 +156,27 @@ pub(crate) fn ln_fixed(v_w: Fixed, w: u32) -> Fixed {
 /// Called by both `ln_strict_with` (with `working_digits = STRICT_GUARD`)
 /// and `ln_approx_with` (with the caller's value).
 ///
-/// Returns the raw `i128` storage at the input's scale.
+/// Returns the raw `i128` storage at the input's scale; `None` when the
+/// correctly-rounded result does not fit the storage (the policy wrapper
+/// panics / the `checked_` surface propagates).
 #[inline]
 #[must_use]
-pub(crate) fn ln_with(raw: Int<2>, scale: u32, working_digits: u32, mode: RoundingMode) -> Int<2> {
-    Int::<2>::from_i128(ln_with_raw(raw.as_i128(), scale, working_digits, mode))
+pub(crate) fn ln_with(
+    raw: Int<2>,
+    scale: u32,
+    working_digits: u32,
+    mode: RoundingMode,
+) -> Option<Int<2>> {
+    ln_with_raw(raw.as_i128(), scale, working_digits, mode).map(Int::<2>::from_i128)
 }
 
 /// `i128` core of [`ln_with`].
 #[inline]
-fn ln_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
+fn ln_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> Option<i128> {
     assert!(raw > 0, "ln kernel: argument must be positive");
     let one_bits: i128 = 10_i128.pow(scale);
     if raw == one_bits {
-        return 0;
+        return Some(0);
     }
     let delta = raw - one_bits;
     let ln1p_band: i128 = 10_i128.pow(scale.saturating_sub(1) / 2);
@@ -184,15 +191,11 @@ fn ln_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -
         // 0.5 LSB and `δ` misrounded the tie (ln(0.999) at s6/s18/s28). Directed
         // modes need the true residual sign (the value sits sub-LSB to one side
         // of `δ`), so they fall through to the full working-scale kernel below.
-        return delta;
+        return Some(delta);
     }
     let w = scale + working_digits;
     let v_w = Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(working_digits));
-    ln_fixed(v_w, w)
-        .round_to_i128_with(w, scale, mode)
-        .unwrap_or_else(|| {
-            crate::support::diagnostics::overflow_panic_with_scale("ln kernel", scale)
-        })
+    ln_fixed(v_w, w).round_to_i128_with(w, scale, mode)
 }
 
 /// Strict variant — fixed to `STRICT_GUARD` working digits. Equivalent
@@ -201,17 +204,17 @@ fn ln_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -
 /// one optimal kernel per `SCALE`.
 #[inline]
 #[must_use]
-pub(crate) fn ln_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    Int::<2>::from_i128(ln_strict_raw::<SCALE>(raw.as_i128(), mode))
+pub(crate) fn ln_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+    ln_strict_raw::<SCALE>(raw.as_i128(), mode).map(Int::<2>::from_i128)
 }
 
 /// `i128` core of [`ln_strict`].
 #[inline]
-fn ln_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+fn ln_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     assert!(raw > 0, "ln kernel: argument must be positive");
     let one_bits: i128 = 10_i128.pow(SCALE);
     if raw == one_bits {
-        return 0;
+        return Some(0);
     }
     let delta = raw - one_bits;
     let ln1p_band: i128 = 10_i128.pow(SCALE.saturating_sub(1) / 2);
@@ -222,15 +225,11 @@ fn ln_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
         // The linear approximation `δ` is then the correctly nearest-rounded
         // result inside the band; directed modes need the residual sign and
         // fall through to the full kernel.
-        return delta;
+        return Some(delta);
     }
     let w = SCALE + STRICT_GUARD;
     let v_w = Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(STRICT_GUARD));
-    ln_fixed(v_w, w)
-        .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| {
-            crate::support::diagnostics::overflow_panic_with_scale("ln kernel", SCALE)
-        })
+    ln_fixed(v_w, w).round_to_i128_with(w, SCALE, mode)
 }
 
 // ── log / log2 / log10 kernels (D38, Fixed fallback) ──────────────
@@ -322,14 +321,15 @@ pub(crate) fn log_with(
     scale: u32,
     working_digits: u32,
     mode: RoundingMode,
-) -> Int<2> {
-    Int::<2>::from_i128(log_with_raw(
+) -> Option<Int<2>> {
+    log_with_raw(
         raw.as_i128(),
         base_raw.as_i128(),
         scale,
         working_digits,
         mode,
-    ))
+    )
+    .map(Int::<2>::from_i128)
 }
 
 /// `i128` core of [`log_with`].
@@ -340,7 +340,7 @@ fn log_with_raw(
     scale: u32,
     working_digits: u32,
     mode: RoundingMode,
-) -> i128 {
+) -> Option<i128> {
     assert!(raw > 0, "D38::log: argument must be positive");
     assert!(base_raw > 0, "D38::log: base must be positive");
     let w = scale + working_digits;
@@ -364,30 +364,29 @@ fn log_with_raw(
         _ => 0,
     };
     if let Some(pinned) = log_exact_int_pin(raw, base_int, scale, k) {
-        return pinned;
+        return Some(pinned);
     }
-    ratio.round_to_i128_with(w, scale, mode).unwrap_or_else(|| {
-        crate::support::diagnostics::overflow_panic_with_scale("D38::log", scale)
-    })
+    ratio.round_to_i128_with(w, scale, mode)
 }
 
-/// Const-folded strict variant of [`log_with`].
+/// Const-folded strict variant of [`log_with`]. `None` = result out of
+/// storage range.
 #[inline]
 #[must_use]
-pub(crate) fn log_strict<const SCALE: u32>(raw: Int<2>, base_raw: Int<2>, mode: RoundingMode) -> Int<2> {
+pub(crate) fn log_strict<const SCALE: u32>(raw: Int<2>, base_raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
     log_with(raw, base_raw, SCALE, STRICT_GUARD, mode)
 }
 
 /// `log2(v) = ln(v) / ln(2)`, `Fixed`-wide fallback for D38.
 #[inline]
 #[must_use]
-pub(crate) fn log2_with(raw: Int<2>, scale: u32, working_digits: u32, mode: RoundingMode) -> Int<2> {
-    Int::<2>::from_i128(log2_with_raw(raw.as_i128(), scale, working_digits, mode))
+pub(crate) fn log2_with(raw: Int<2>, scale: u32, working_digits: u32, mode: RoundingMode) -> Option<Int<2>> {
+    log2_with_raw(raw.as_i128(), scale, working_digits, mode).map(Int::<2>::from_i128)
 }
 
 /// `i128` core of [`log2_with`].
 #[inline]
-fn log2_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
+fn log2_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> Option<i128> {
     assert!(raw > 0, "D38::log2: argument must be positive");
     let w = scale + working_digits;
     let v_w = Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(working_digits));
@@ -395,29 +394,28 @@ fn log2_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode)
     // Exact-power pin: `value == 2^k` ⇒ result is exactly `k`.
     let k = ratio.round_to_nearest_int(w);
     if let Some(pinned) = log_exact_int_pin(raw, 2, scale, k) {
-        return pinned;
+        return Some(pinned);
     }
-    ratio.round_to_i128_with(w, scale, mode).unwrap_or_else(|| {
-        crate::support::diagnostics::overflow_panic_with_scale("D38::log2", scale)
-    })
+    ratio.round_to_i128_with(w, scale, mode)
 }
 
+/// `None` = result out of storage range.
 #[inline]
 #[must_use]
-pub(crate) fn log2_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
+pub(crate) fn log2_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
     log2_with(raw, SCALE, STRICT_GUARD, mode)
 }
 
 /// `log10(v) = ln(v) / ln(10)`, `Fixed`-wide fallback for D38.
 #[inline]
 #[must_use]
-pub(crate) fn log10_with(raw: Int<2>, scale: u32, working_digits: u32, mode: RoundingMode) -> Int<2> {
-    Int::<2>::from_i128(log10_with_raw(raw.as_i128(), scale, working_digits, mode))
+pub(crate) fn log10_with(raw: Int<2>, scale: u32, working_digits: u32, mode: RoundingMode) -> Option<Int<2>> {
+    log10_with_raw(raw.as_i128(), scale, working_digits, mode).map(Int::<2>::from_i128)
 }
 
 /// `i128` core of [`log10_with`].
 #[inline]
-fn log10_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
+fn log10_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> Option<i128> {
     assert!(raw > 0, "D38::log10: argument must be positive");
     let w = scale + working_digits;
     let v_w = Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(working_digits));
@@ -425,15 +423,14 @@ fn log10_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode
     // Exact-power pin: `value == 10^k` ⇒ result is exactly `k`.
     let k = ratio.round_to_nearest_int(w);
     if let Some(pinned) = log_exact_int_pin(raw, 10, scale, k) {
-        return pinned;
+        return Some(pinned);
     }
-    ratio.round_to_i128_with(w, scale, mode).unwrap_or_else(|| {
-        crate::support::diagnostics::overflow_panic_with_scale("D38::log10", scale)
-    })
+    ratio.round_to_i128_with(w, scale, mode)
 }
 
+/// `None` = result out of storage range.
 #[inline]
 #[must_use]
-pub(crate) fn log10_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
+pub(crate) fn log10_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
     log10_with(raw, SCALE, STRICT_GUARD, mode)
 }
