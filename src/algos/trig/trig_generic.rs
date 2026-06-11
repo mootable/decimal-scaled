@@ -148,6 +148,90 @@ where
     sin_fixed::<S>((pi_w >> 1) - v_w, w, pi_w)
 }
 
+/// Taylor series for `atan` on a reduced `|x| < 1`, at scale `w`.
+///
+/// `atan(x) = x − x³/3 + x⁵/5 − …`
+fn atan_taylor<S: BigInt>(x: S, w: u32) -> S
+where
+    S::Scratch: ComputeLimbs,
+{
+    let x2 = eg::mul::<S>(x, x, w);
+    let mut sum = x;
+    let mut term = x;
+    let mut k: u128 = 1;
+    loop {
+        term = eg::mul::<S>(term, x2, w);
+        let contrib = term / eg::lit::<S>((2 * k + 1) as i128);
+        if contrib == eg::zero::<S>() {
+            break;
+        }
+        if k % 2 == 1 {
+            sum = sum - contrib;
+        } else {
+            sum = sum + contrib;
+        }
+        k += 1;
+        if k > eg::SERIES_CAP {
+            break;
+        }
+    }
+    sum
+}
+
+/// Arctangent of a working-scale value `v_w` (`= x · 10^w`) at scale `w`,
+/// with `π` supplied at the same scale (`pi_w = π · 10^w`) — only the
+/// `π/2` complement of the `|x| > 1` reciprocal fold consumes it.
+/// Result in `(−π/2, π/2)`.
+///
+/// Reciprocal fold (`atan(x) = π/2 − atan(1/x)` for `x > 1`), then
+/// argument halvings `atan(x) = 2·atan(x/(1+√(1+x²)))` (count keyed on
+/// the working scale — the per-tier break-even analysis in the original
+/// kernel), then the [`atan_taylor`] series on the reduced argument.
+///
+/// ## Argument-magnitude validity
+///
+/// Unlike [`sin_fixed`]'s mod-τ reduction, the fold loses NO precision
+/// proportional to `digits(|x|)` — the reciprocal's relative error stays
+/// one working ULP, so there is no per-integer-digit guard cost. The
+/// only `|x|` axis is REPRESENTATION: the lifted `v_w` (and the fold's
+/// `10^(2w)` divide numerator) must fit `S` — a caller choosing a narrow
+/// work width must bound `digits(|x|)` so the lift fits (the work-rung
+/// selector's gate; see `policy::work_rung`).
+pub(crate) fn atan_fixed<S: BigInt>(v_w: S, w: u32, pi_w: S) -> S
+where
+    S::Scratch: ComputeLimbs,
+{
+    let one_w = eg::one::<S>(w);
+    let sign = v_w < eg::zero::<S>();
+    let mut x = if sign { -v_w } else { v_w };
+    let mut add_half_pi = false;
+    if x > one_w {
+        x = eg::div::<S>(one_w, x, w);
+        add_half_pi = true;
+    }
+    // Argument halvings: atan(x) = 2·atan(x/(1+√(1+x²))). Count keyed on
+    // the working scale (the original per-tier kernel's break-even sweet
+    // spots — wider working scale → more halvings worth taking).
+    let halvings: u32 = if w < 60 {
+        5
+    } else if w < 110 {
+        6
+    } else {
+        7
+    };
+    let pow10_w = one_w;
+    for _ in 0..halvings {
+        let x2 = eg::mul::<S>(x, x, w);
+        let denom = one_w + eg::sqrt_fixed::<S>(one_w + x2, w);
+        x = eg::div_cached::<S>(x, denom, pow10_w);
+    }
+    let mut result = atan_taylor::<S>(x, w) << halvings;
+    if add_half_pi {
+        result = (pi_w >> 1) - result;
+    }
+    if sign { -result } else { result }
+}
+
 /// Joint sine + cosine of a working-scale value at scale `w`.
 ///
 /// One Taylor series + one wide sqrt + one wide mul, vs two independent

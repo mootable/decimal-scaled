@@ -351,7 +351,7 @@ pub(crate) mod hyper {
 pub(crate) mod forward_rung {
     use super::super::work_rung::{trig_rung, Rung, D_BUDGET};
     use crate::algos::support::wide_trig_core::{
-        cos_series_g, sin_series_g, tan_series_g, WideTrigCore,
+        atan_series_g, cos_series_g, sin_series_g, tan_series_g, WideTrigCore,
     };
     use crate::int::types::compute_limbs::ComputeLimbs;
     use crate::int::types::traits::BigInt;
@@ -449,6 +449,34 @@ pub(crate) mod forward_rung {
             crate::algos::trig::sincos_narrow::tan_narrow_with_taylor::<C, SCALE, GUARD, NEAR_POLE>(
                 raw, mode,
             )
+        }
+    }
+
+    /// `atan_strict` at the work rung. `DIRECTED` selects the tier-GUARD
+    /// Ziv shape (`atan_series`) vs the narrow-band single-shot shape
+    /// (`atan_narrow`); the out-of-budget fallback is the matching
+    /// pre-rung kernel, bit-identical to today. atan's gate guards only
+    /// REPRESENTATION (the lift of `|x|`'s integer digits into the rung
+    /// — the reciprocal fold loses no precision per digit of `|x|`, so
+    /// unlike sin/cos there is no reduction-error axis); `D_BUDGET`
+    /// bounds it conservatively with the same continuous `|x| < ~10^8`
+    /// region, budgeted inside `work_rung::TRIG_MARGIN`.
+    #[inline]
+    pub(crate) fn atan_strict<
+        C: WideTrigCore,
+        const SCALE: u32,
+        const GUARD: u32,
+        const DIRECTED: bool,
+    >(
+        raw: C::Storage,
+        mode: RoundingMode,
+    ) -> C::Storage {
+        if in_budget::<C, SCALE>(&raw) {
+            rung_match!(C, SCALE, atan_series_g, [SCALE, GUARD, DIRECTED], raw, mode)
+        } else if DIRECTED {
+            crate::algos::support::wide_trig_core::atan_series::<C, SCALE>(raw, mode)
+        } else {
+            crate::algos::support::wide_trig_core::atan_narrow::<C, SCALE, GUARD>(raw, mode)
         }
     }
 }
@@ -1377,11 +1405,11 @@ macro_rules! wide_trig_forward_series {
         pub(crate) fn policy_atan(self, mode: RoundingMode) -> Self {
             Self(match forward::resolve::<$N, SCALE>(&self.0) {
                 forward::Algorithm::Series => {
-                    crate::algos::support::wide_trig_core::atan_series::<$Core, SCALE>(self.0, mode)
+                    forward_rung::atan_strict::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true>(self.0, mode)
                 }
                 #[cfg(feature = "_wide-support")]
                 forward::Algorithm::Tang => {
-                    crate::algos::support::wide_trig_core::atan_series::<$Core, SCALE>(self.0, mode)
+                    forward_rung::atan_strict::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true>(self.0, mode)
                 }
                 #[allow(dead_code)]
                 forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::atan_schoolbook::<$Core, SCALE>(self.0, mode),
@@ -1389,7 +1417,7 @@ macro_rules! wide_trig_forward_series {
         }
         #[inline]
         pub(crate) fn policy_atan_with(self, _wd: u32, mode: RoundingMode) -> Self {
-            Self(crate::algos::support::wide_trig_core::atan_series::<$Core, SCALE>(self.0, mode))
+            Self(forward_rung::atan_strict::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true>(self.0, mode))
         }
     };
 }
@@ -1467,8 +1495,9 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
     pub(crate) fn policy_atan(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<3, SCALE>(&self.0) {
             forward::Algorithm::Series => match SCALE {
-                18..=22 => crate::algos::support::wide_trig_core::atan_narrow::<crate::types::widths::wide_trig_d57::Core, SCALE, 10>(self.0, mode),
-                _ => crate::algos::support::wide_trig_core::atan_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
+                // Both bands run at the SCALE-derived work rung.
+                18..=22 => forward_rung::atan_strict::<crate::types::widths::wide_trig_d57::Core, SCALE, 10, false>(self.0, mode),
+                _ => forward_rung::atan_strict::<crate::types::widths::wide_trig_d57::Core, SCALE, { <crate::types::widths::wide_trig_d57::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true>(self.0, mode),
             },
             forward::Algorithm::Tang => {
                 trig::atan_tang_3limb_s44_56::atan_strict::<SCALE>(self.0, mode)
@@ -1700,9 +1729,9 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<8>, SCALE> {
     #[inline]
     pub(crate) fn policy_atan(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<8, SCALE>(&self.0) {
-            forward::Algorithm::Series => crate::algos::support::wide_trig_core::atan_series::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
+            forward::Algorithm::Series => forward_rung::atan_strict::<crate::types::widths::wide_trig_d153::Core, SCALE, { <crate::types::widths::wide_trig_d153::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true>(self.0, mode),
             forward::Algorithm::Tang => {
-                crate::algos::support::wide_trig_core::atan_narrow::<crate::types::widths::wide_trig_d153::Core, SCALE, 12>(self.0, mode)
+                forward_rung::atan_strict::<crate::types::widths::wide_trig_d153::Core, SCALE, 12, false>(self.0, mode)
             }
             #[allow(dead_code)]
             forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::atan_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
@@ -1825,9 +1854,9 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
     #[inline]
     pub(crate) fn policy_atan(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<16, SCALE>(&self.0) {
-            forward::Algorithm::Series => crate::algos::support::wide_trig_core::atan_series::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
+            forward::Algorithm::Series => forward_rung::atan_strict::<crate::types::widths::wide_trig_d307::Core, SCALE, { <crate::types::widths::wide_trig_d307::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true>(self.0, mode),
             forward::Algorithm::Tang => {
-                crate::algos::support::wide_trig_core::atan_narrow::<crate::types::widths::wide_trig_d307::Core, SCALE, 10>(self.0, mode)
+                forward_rung::atan_strict::<crate::types::widths::wide_trig_d307::Core, SCALE, 10, false>(self.0, mode)
             }
             #[allow(dead_code)]
             forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::atan_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
@@ -1941,9 +1970,9 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<24>, SCALE> {
     #[inline]
     pub(crate) fn policy_atan(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<24, SCALE>(&self.0) {
-            forward::Algorithm::Series => crate::algos::support::wide_trig_core::atan_series::<crate::types::widths::wide_trig_d462::Core, SCALE>(self.0, mode),
+            forward::Algorithm::Series => forward_rung::atan_strict::<crate::types::widths::wide_trig_d462::Core, SCALE, { <crate::types::widths::wide_trig_d462::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true>(self.0, mode),
             forward::Algorithm::Tang => {
-                crate::algos::support::wide_trig_core::atan_narrow::<crate::types::widths::wide_trig_d462::Core, SCALE, 12>(self.0, mode)
+                forward_rung::atan_strict::<crate::types::widths::wide_trig_d462::Core, SCALE, 12, false>(self.0, mode)
             }
             #[allow(dead_code)]
             forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::atan_schoolbook::<crate::types::widths::wide_trig_d462::Core, SCALE>(self.0, mode),
@@ -3043,6 +3072,30 @@ mod forward_rung_tests {
                     crate::algos::support::wide_trig_core::tan_series::<Core, 0>(x.to_bits(), mode),
                     "tan({v}) mode {mode:?}"
                 );
+                assert_eq!(
+                    super::forward_rung::atan_strict::<Core, 0, G, true>(x.to_bits(), mode),
+                    crate::algos::support::wide_trig_core::atan_series::<Core, 0>(x.to_bits(), mode),
+                    "atan({v}) mode {mode:?}"
+                );
+            }
+        }
+    }
+
+    /// D307 Tang-band shape anchor: the single-shot narrow-GUARD rung
+    /// path (`DIRECTED = false`, band GUARD 10) must equal the tier
+    /// `atan_narrow` band kernel bit-for-bit.
+    #[test]
+    #[cfg(feature = "d307")]
+    fn d307_band_atan_rung_matches_tier_narrow() {
+        type Core = crate::types::widths::wide_trig_d307::Core;
+        for v in ["1", "-1", "2", "3141"] {
+            let x: crate::D307<150> = v.parse().unwrap();
+            for mode in ALL_MODES {
+                assert_eq!(
+                    super::forward_rung::atan_strict::<Core, 150, 10, false>(x.to_bits(), mode),
+                    crate::algos::support::wide_trig_core::atan_narrow::<Core, 150, 10>(x.to_bits(), mode),
+                    "atan({v}) band mode {mode:?}"
+                );
             }
         }
     }
@@ -3061,6 +3114,11 @@ mod forward_rung_tests {
                 super::forward_rung::sin_strict::<Core, 0, G>(x.to_bits(), mode),
                 crate::algos::support::wide_trig_core::sin_series::<Core, 0>(x.to_bits(), mode),
                 "sin(1e9) mode {mode:?}"
+            );
+            assert_eq!(
+                super::forward_rung::atan_strict::<Core, 0, G, true>(x.to_bits(), mode),
+                crate::algos::support::wide_trig_core::atan_series::<Core, 0>(x.to_bits(), mode),
+                "atan(1e9) mode {mode:?}"
             );
         }
     }

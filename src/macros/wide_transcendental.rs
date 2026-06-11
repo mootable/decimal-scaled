@@ -1749,31 +1749,6 @@ macro_rules! decl_wide_transcendental {
                 }
             }
 
-            /// Taylor series for `atan` on `|x| < 1`, at scale `w`.
-            pub(crate) fn atan_taylor(x: W, w: u32) -> W {
-                let x2 = mul(x, x, w);
-                let mut sum = x;
-                let mut term = x;
-                let mut k: u128 = 1;
-                loop {
-                    term = mul(term, x2, w);
-                    let contrib = term / lit(2 * k + 1);
-                    if contrib == zero() {
-                        break;
-                    }
-                    if k % 2 == 1 {
-                        sum = sum - contrib;
-                    } else {
-                        sum = sum + contrib;
-                    }
-                    k += 1;
-                    if k > SERIES_CAP {
-                        break;
-                    }
-                }
-                sum
-            }
-
             /// `π` at working scale `w`, rounded under the crate default
             /// mode from the per-width compile-time reference.
             pub(crate) fn pi(w: u32) -> W {
@@ -1867,48 +1842,22 @@ macro_rules! decl_wide_transcendental {
 
             /// Arctangent of a working-scale value, result in
             /// `(−π/2, π/2)`.
+            ///
+            /// Delegates to the width-generic kernel
+            /// (`trig_generic::atan_fixed`) — the single source for the
+            /// tier work integer `W` and the SCALE-derived work rungs
+            /// (Constitution rule 2: one generic algorithm). The
+            /// const-folded `pi_cf::<SCALE>(w)` is threaded in so this
+            /// primitive path keeps its compile-time `π` (the generic
+            /// kernel takes `π` as a parameter and uses only its `π/2`
+            /// half for the reciprocal-fold complement) — the same
+            /// shape as [`sin_fixed`].
             pub(crate) fn atan_fixed<const SCALE: u32>(v_w: W, w: u32) -> W {
-                let one_w = one(w);
-                let sign = v_w < zero();
-                let mut x = if sign { -v_w } else { v_w };
-                let mut add_half_pi = false;
-                if x > one_w {
-                    x = div(one_w, x, w);
-                    add_half_pi = true;
-                }
-                // Argument halvings: atan(x) = 2·atan(x/(1+√(1+x²))).
-                //
-                // Each halving reduces |x| by a factor ≈ 2, so the
-                // Taylor series convergence rate gains ~log₂(4) = 2
-                // bits per term. Cost per halving: 1 wide mul + 1 wide
-                // sqrt + 1 wide div ≈ 7 µs at D307. Savings per
-                // halving: ~p_bits/halvings² Taylor terms × ~1.5 µs.
-                //
-                // The break-even (where one more halving costs more
-                // than the term savings) sits around halvings ≈
-                // log₂(p_bits/halving_cost), which lands at 6–7 for
-                // D153/D307 and 5–6 for D76. We pick the per-tier
-                // sweet spot from w (the working scale = SCALE + GUARD
-                // decimal digits): wider working scale → more halvings
-                // worth taking.
-                let halvings: u32 = if w < 60 {
-                    5 // D38-equivalent guard (~50 digits)
-                } else if w < 110 {
-                    6 // D76 / D153 light-end
-                } else {
-                    7 // D153 heavy / D307
-                };
-                let pow10_w = pow10_table(w);
-                for _ in 0..halvings {
-                    let x2 = mul(x, x, w);
-                    let denom = one_w + sqrt_fixed(one_w + x2, w);
-                    x = div_cached(x, denom, pow10_w);
-                }
-                let mut result = atan_taylor(x, w) << halvings;
-                if add_half_pi {
-                    result = half_pi::<SCALE>(w) - result;
-                }
-                if sign { -result } else { result }
+                $crate::algos::trig::trig_generic::atan_fixed::<W>(
+                    v_w,
+                    w,
+                    pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                )
             }
 
             // ── Tang lookup tables (ln / exp) ──────────────────────────

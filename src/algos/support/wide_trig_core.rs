@@ -775,6 +775,70 @@ where
     )
 }
 
+/// Rung-generic `atan_strict` — the inverse-tangent kernel run at an
+/// arbitrary work rung `Wk` (decoupled from `C::W`; mirrors
+/// [`sin_series_g`]). One kernel covers the two existing tier shapes,
+/// preserved value-for-value per call site:
+///
+/// - `DIRECTED = true` — the tier-`GUARD` Ziv shape ([`atan_series`]):
+///   directed narrowing with escalation at the rung.
+/// - `DIRECTED = false` — the narrow-band single-shot shape
+///   ([`atan_narrow`], band `GUARD` 10/12): one kernel evaluation at
+///   `w = SCALE + GUARD`, one narrowing, no escalation (the band guard
+///   leaves the working error far below half a storage ULP).
+///
+/// `π` at the rung comes from the same per-scale constant table as the
+/// per-tier `pi_cf` (`pi_by_scale` keyed on the const `SCALE + GUARD` on
+/// the hot path) — and only its `π/2` half is consumed, by the `|x| > 1`
+/// reciprocal-fold complement. Unlike sin/cos there is NO precision loss
+/// proportional to `digits(|x|)` (no mod-τ cancellation); the `|x|` axis
+/// is purely the lift's representation capacity, gated by the policy
+/// (`forward_rung::atan_strict`).
+#[cfg(feature = "_wide-support")]
+#[inline]
+#[must_use]
+pub(crate) fn atan_series_g<
+    C: WideTrigCore,
+    Wk: BigInt,
+    const SCALE: u32,
+    const GUARD: u32,
+    const DIRECTED: bool,
+>(
+    raw: C::Storage,
+    mode: RoundingMode,
+) -> C::Storage
+where
+    Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    if DIRECTED {
+        round_to_storage_directed_g::<C::Storage, Wk>(
+            GUARD,
+            SCALE,
+            mode,
+            C::storage_max(),
+            C::storage_min(),
+            |guard| {
+                let w = SCALE + guard;
+                crate::algos::trig::trig_generic::atan_fixed::<Wk>(
+                    to_work_scaled_g::<C::Storage, Wk>(raw, guard),
+                    w,
+                    pi_at_rung::<Wk>(w, SCALE + GUARD),
+                )
+            },
+        )
+    } else {
+        let w = SCALE + GUARD;
+        let r = crate::algos::trig::trig_generic::atan_fixed::<Wk>(
+            to_work_scaled_g::<C::Storage, Wk>(raw, GUARD),
+            w,
+            pi_at_rung::<Wk>(w, w),
+        );
+        round_to_storage_with_g::<C::Storage, Wk>(
+            r, w, SCALE, mode, C::storage_max(), C::storage_min(),
+        )
+    }
+}
+
 /// `π` at working scale `w` in the rung integer `Wk`: the per-scale
 /// constant table keyed on the CONST base working scale on the hot path
 /// (`w == base_w`, const-folds per monomorphisation — the rung sibling
@@ -782,7 +846,7 @@ where
 /// escalation path. Value-identical either way (same table entry).
 #[cfg(feature = "_wide-support")]
 #[inline]
-fn pi_at_rung<Wk: BigInt>(w: u32, base_w: u32) -> Wk {
+pub(crate) fn pi_at_rung<Wk: BigInt>(w: u32, base_w: u32) -> Wk {
     if w == base_w {
         crate::consts::pi_by_scale::<Wk>(base_w, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     } else {
