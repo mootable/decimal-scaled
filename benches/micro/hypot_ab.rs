@@ -184,10 +184,21 @@ fn bench_hypot(c: &mut Criterion) {
     hypot_cell!(c, 8, "N8_D153");
     hypot_cell!(c, 12, "N12_D230");
     hypot_cell!(c, 16, "N16_D307");
-    hypot_cell!(c, 24, "N24_D462");
-    hypot_cell!(c, 32, "N32_D616");
-    hypot_cell!(c, 48, "N48_D924");
-    hypot_cell!(c, 64, "N64_D1232");
+    // The N >= 24 cells root a 2N-limb radicand through isqrt_newton, whose
+    // build-max scratch is sized by the widest ENABLED tier — at the declared
+    // minimum features (`wide`, MAX_WORK_N = 16, 40 limbs) a 48-limb radicand
+    // overruns it (range-end panic). Gate each band to the feature set whose
+    // scratch actually carries it.
+    #[cfg(feature = "x-wide")]
+    {
+        hypot_cell!(c, 24, "N24_D462");
+        hypot_cell!(c, 32, "N32_D616");
+    }
+    #[cfg(feature = "xx-wide")]
+    {
+        hypot_cell!(c, 48, "N48_D924");
+        hypot_cell!(c, 64, "N64_D1232");
+    }
 }
 
 fn main() {
