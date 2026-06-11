@@ -39,7 +39,10 @@ jobs:
   refresh:
     name: refresh results/precision
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # The band-edge surface (92 cells x 28 functions x 7 libraries) is
+    # larger than the old per-tier sweep; the runner parallelises across
+    # the runner's cores, but allow headroom on a cold cache.
+    timeout-minutes: 60
     permissions:
       # Push the regenerated results/precision/*.tsv back to the branch
       # this run executed on.
