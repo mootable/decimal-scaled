@@ -467,7 +467,12 @@ macro_rules! decl_wide_transcendental {
             /// `BigInt::resize_to` magnitude/sign bridge, then scales by
             /// `10^GUARD`.
             pub(crate) fn to_work(raw: $Storage) -> W {
-                $crate::int::types::traits::BigInt::resize_to::<W>(raw) * pow10_table(GUARD)
+                // `10^GUARD` first: the truncated-low schoolbook skips the
+                // zero limbs of its FIRST operand, and the guard power is the
+                // sparse one (1-2 limbs vs the full storage width). The
+                // wrapping low product is commutative — bit-identical to the
+                // previous `resize * pow10` order.
+                pow10_table(GUARD) * $crate::int::types::traits::BigInt::resize_to::<W>(raw)
             }
 
             /// Runtime-guard variant of [`to_work`]: scales raw by
@@ -475,7 +480,8 @@ macro_rules! decl_wide_transcendental {
             /// the `_approx` family where the guard width is chosen at
             /// call time.
             pub(crate) fn to_work_scaled(raw: $Storage, working_digits: u32) -> W {
-                $crate::int::types::traits::BigInt::resize_to::<W>(raw) * pow10_table(working_digits)
+                // Sparse `10^digits` operand first — see [`to_work`].
+                pow10_table(working_digits) * $crate::int::types::traits::BigInt::resize_to::<W>(raw)
             }
 
             /// Work-int-generic lift-up (the SCALE-derived "work rung" path):

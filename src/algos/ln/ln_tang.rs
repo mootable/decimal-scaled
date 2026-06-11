@@ -190,13 +190,12 @@ where
     // Stage 2: pick i. Boundary `m = 1` short-circuits: ln(m) = 0, so
     // ln(v) = k · ln(2).
     let result_at_w_ext = if m_w == one_w {
-        if k >= 0 {
-            ln2(w_ext) * eg::lit::<S>(k as i128)
-        } else if k < 0 {
-            -(ln2(w_ext) * eg::lit::<S>((-k) as i128))
-        } else {
-            eg::zero::<S>()
-        }
+        // k·ln2 as an n-by-1-word product (`scale_by_k`, O(limbs)) — the
+        // same value the previous full-width `ln2 * lit(k)` schoolbook
+        // multiply produced (|k| < BITS, and k·ln2 at scale w_ext fits the
+        // rung by construction, so the product never wraps), at a fraction
+        // of the cost. Matches `exp_generic::ln_fixed`'s shape.
+        eg::scale_by_k::<S>(ln2(w_ext), k as i128)
     } else {
         // i ∈ [0, M); when m = 2 exactly (rare boundary post-rounding),
         // clamp to M-1 so the table lookup stays in range, then the
@@ -233,13 +232,9 @@ where
         }
         let ln_m = sum + sum + ln_table_entry_baked::<S>(w_ext, i_idx, pow10_w);
 
-        // Final: ln(v) = k · ln(2) + ln(m).
-        let k_ln2 = if k >= 0 {
-            ln2(w_ext) * eg::lit::<S>(k as i128)
-        } else {
-            -(ln2(w_ext) * eg::lit::<S>((-k) as i128))
-        };
-        k_ln2 + ln_m
+        // Final: ln(v) = k · ln(2) + ln(m). k·ln2 via the one-word
+        // `scale_by_k` product (see the `m == one_w` arm above).
+        eg::scale_by_k::<S>(ln2(w_ext), k as i128) + ln_m
     };
 
     if !INTERNAL_EXTRA || extra == 0 {
@@ -420,4 +415,32 @@ where
     <C::W as BigInt>::Scratch: ComputeLimbs,
 {
     ln_tang_g::<C, C::W, SCALE, GUARD, CAP, DIRECTED, INTERNAL_EXTRA>(raw, mode)
+}
+
+#[cfg(test)]
+mod tests {
+    /// The bbc-benched D462<231> ln(2.0) cell: the exact-power-of-two
+    /// operand takes the `m == one_w` short-circuit (`ln(v) = k·ln2`) and
+    /// must produce the correctly-rounded 231-digit value — pins the
+    /// `scale_by_k` k·ln2 product and the direct-injection constant fold
+    /// against the prior full-multiply shapes.
+    #[test]
+    #[cfg(feature = "d462")]
+    fn ln_d462_s231_power_of_two_short_circuit() {
+        let x: crate::D462<231> = "2.0".parse().unwrap();
+        let r = x.ln();
+        let expect: crate::D462<231> = "0.693147180559945309417232121458176568075500134360255254120680009493393621969694715605863326996418687542001481020570685733685520235758130557032670751635075961930727570828371435190307038623891673471123350115364497955239120475172681575".parse().unwrap();
+        assert_eq!(r, expect);
+    }
+
+    /// The bbc-benched D115<0> ln(2) cell: SCALE = 0 now routes the Tang
+    /// arm (the historic s0 Series gap); ln(2) = 0.693… rounds to 1 at
+    /// scale 0 under the default nearest mode.
+    #[test]
+    #[cfg(feature = "d115")]
+    fn ln_d115_s0_routes_and_rounds() {
+        let x: crate::D115<0> = "2".parse().unwrap();
+        let one: crate::D115<0> = "1".parse().unwrap();
+        assert_eq!(x.ln(), one);
+    }
 }

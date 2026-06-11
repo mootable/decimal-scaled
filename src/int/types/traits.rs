@@ -179,6 +179,16 @@ pub trait BigInt:
     /// inverse of [`BigInt::mag_into_u128`].
     fn from_mag_sign_u128(mag: &[u128], negative: bool) -> Self;
 
+    /// Rebuilds `Self` from a little-endian u64-limb magnitude and a sign
+    /// — the u64-limb sibling of [`BigInt::from_mag_sign_u128`]. Copies
+    /// the low `min(mag.len(), LIMBS)` limbs (zero-extending above,
+    /// truncating below) and applies the sign. A little-endian u64 limb
+    /// slice IS the value (`Σ mag[i]·2^(64·i)`), so the injection is a
+    /// direct copy; the constant-table fold (`consts::table::limbs_to_w`)
+    /// is the hot caller — every baked `pow10` / `ln2` / `pi` lookup
+    /// builds its work integer through here.
+    fn from_mag_sign_u64(mag: &[u64], negative: bool) -> Self;
+
     // ── Reductions (defaults) ────────────────────────────────────────
 
     #[inline]
@@ -408,6 +418,13 @@ impl<const N: usize> BigInt for Int<N> {
             i += 1;
         }
         self.is_negative()
+    }
+
+    /// Direct little-endian u64 limb injection: the low `min(len, N)`
+    /// limbs are copied (the slice IS the value), then the sign applied.
+    #[inline]
+    fn from_mag_sign_u64(mag: &[u64], negative: bool) -> Self {
+        Int::from_mag_limbs(mag, negative)
     }
 
     /// Direct u128 → u64 limb unpack into this type's magnitude. Only

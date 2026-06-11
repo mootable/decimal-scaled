@@ -636,7 +636,13 @@ pub(crate) fn to_work_scaled_g<St: BigInt, S: BigInt>(raw: St, working_digits: u
 where
     S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
-    BigInt::resize_to::<S>(raw) * crate::algos::exp::exp_generic::pow10::<S>(working_digits)
+    // `10^d` first: the truncated-low schoolbook (`mul_low_fixed`) skips the
+    // zero limbs of its FIRST operand, and `10^d` is the sparse one (a guard
+    // of <= 38 digits spans 1-2 limbs while the lifted value spans the whole
+    // storage width), so the lift costs one inner row per `10^d` limb instead
+    // of one per value limb. The wrapping low product is commutative —
+    // bit-identical to the previous `resize * pow10` order.
+    crate::algos::exp::exp_generic::pow10::<S>(working_digits) * BigInt::resize_to::<S>(raw)
 }
 
 /// Work-int-generic narrowing of a working-scale value `v` (at scale `w`) down
@@ -1069,6 +1075,9 @@ where
         <S as BigInt>::BITS - m.leading_zeros()
     };
     let floor = pow10(ZIV_RESOLVE_FLOOR_POW10);
+    // The near-tie band at guard `g` is `divisor/1000 = 10^(g-3)` — a table
+    // lookup, not a work-integer divide (the divisor is always `10^g`).
+    let band_of = |g: u32| -> S { if g >= 3 { pow10(g - 3) } else { lit(0) } };
     if is_nearest_mode(mode) {
         // Round to nearest at a working scale `target + guard`, reporting the
         // sub-storage residual's distance to the half-ULP boundary
@@ -1111,17 +1120,20 @@ where
                 panic!("wide-tier strict transcendental: result out of range");
             }
             let narrowed = BigInt::resize_to::<St>(signed);
-            let half = divisor / lit(2);
+            // `divisor = 10^guard` is even for every guard >= 1 (and the
+            // guard-0 degenerate `1/2 == 1 >> 1 == 0`), so the half-ULP
+            // boundary is an exact one-bit shift — not a divide.
+            let half = divisor >> 1;
             let dist_half = if rem < half { half - rem } else { rem - half };
             (narrowed, dist_half, divisor)
         };
-        let (lo, dist0, divisor0) = nearest_narrow(base_guard);
+        let (lo, dist0, _divisor0) = nearest_narrow(base_guard);
         // Ordinary input — residual clear of the half boundary by more than the
         // (generous) `divisor/1000` near-tie band — keep the single base
         // narrowing (bit-identical to the prior single-shot path). The escalate
         // trigger stays the wide band; the absolute `floor` below is only the
         // STOP test (signal vs noise), not the escalate trigger.
-        if !force_confirm && dist0 > divisor0 / lit(1000) {
+        if !force_confirm && dist0 > band_of(base_guard) {
             return lo;
         }
         let int_digits = {
@@ -1192,9 +1204,9 @@ where
         (signed, dist, divisor)
     };
 
-    let (mut lo, dist0, divisor0) = directed_narrow(base_guard);
+    let (mut lo, dist0, _divisor0) = directed_narrow(base_guard);
 
-    let band0 = divisor0 / lit(1000);
+    let band0 = band_of(base_guard);
     let near_grid = force_confirm || dist0 <= band0;
 
     let signed = if !near_grid {
@@ -1216,8 +1228,8 @@ where
             }
             let step = (target + base_guard).max(base_guard);
             let next_guard = guard.saturating_add(step).min(max_guard);
-            let (hi, hi_dist, hi_div) = directed_narrow(next_guard);
-            let hi_band = hi_div / lit(1000);
+            let (hi, hi_dist, _hi_div) = directed_narrow(next_guard);
+            let hi_band = band_of(next_guard);
             let resolved = hi_dist == lit(0) || hi_dist > hi_band;
             if hi == lo && resolved {
                 break hi;
