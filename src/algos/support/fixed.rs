@@ -749,13 +749,10 @@ impl Fixed {
     /// Like [`round_to_i128_with`](Self::round_to_i128_with) but also reports
     /// whether the sub-target working residual was exactly zero — i.e. whether
     /// the value sits *exactly* on the storage grid line at this working scale
-    /// `w`. The escalating directed-rounding loop (the narrow-tier analogue of
-    /// the wide path's `round_to_storage_directed`) uses the flag: when a
-    /// directed mode lands on a grid line (`exact == true`) the true value may
-    /// be a sub-`w` residual to one side (a near-extremum cos/sin, where
-    /// `1∓f = δ²/2` falls below the base guard), so the caller re-evaluates at
-    /// a higher guard to recover the residual sign; a genuinely exact value
-    /// stays exact at every guard.
+    /// `w`. (The strict narrow terminals now decide grid/half proximity through
+    /// [`round_to_i128_clear_of_tie`](Self::round_to_i128_clear_of_tie) + the
+    /// Ziv walkers; the exactness flag remains for callers that only need the
+    /// on-grid signal.)
     #[inline]
     pub(crate) fn round_to_i128_with_exact(
         self,
@@ -786,7 +783,25 @@ impl Fixed {
         let divisor = Fixed::pow10(shift);
         let (q, r) = divmod_u256_by_pow10(self.mag, divisor, shift);
         let exact = is_zero_u256(r);
-        let rounded = if exact {
+        self.finish_round_to_i128(q, r, divisor, mode).map(|v| (v, exact))
+    }
+
+    /// Shared rounding tail of [`round_to_i128_with_exact`] /
+    /// [`round_to_i128_clear_of_tie`]: folds the split `(q, r)` of the
+    /// magnitude at `divisor = 10^shift` to the signed `i128` storage
+    /// value under `mode`. `None` = does not fit `i128`.
+    ///
+    /// [`round_to_i128_with_exact`]: Self::round_to_i128_with_exact
+    /// [`round_to_i128_clear_of_tie`]: Self::round_to_i128_clear_of_tie
+    #[inline]
+    fn finish_round_to_i128(
+        self,
+        q: U256,
+        r: U256,
+        divisor: U256,
+        mode: crate::support::rounding::RoundingMode,
+    ) -> Option<i128> {
+        let rounded = if is_zero_u256(r) {
             q
         } else {
             // |r| is r (already a magnitude); comp = divisor - r.
@@ -814,7 +829,58 @@ impl Fixed {
         } else {
             m as i128
         };
-        Some((v, exact))
+        Some(v)
+    }
+
+    /// Single-shot narrowing with a NEAR-TIE escape hatch — the `Fixed`
+    /// sibling of `wide_trig_core::round_to_storage_clear_of_tie_g`.
+    /// Rounds exactly as [`round_to_i128_with`](Self::round_to_i128_with)
+    /// PROVIDED the sub-storage residual is clear of the mode's deciding
+    /// boundary (the half-ULP line for the nearest modes, the grid line
+    /// for the directed ones) by more than the near-tie band
+    /// (`divisor/1000`, the shared Ziv escalate trigger). Returns the
+    /// outer `None` when the residual sits inside the band: the value's
+    /// TRUE deciding digit may then lie below `w`'s resolution (an exact
+    /// rational Taylor partial landing exactly ON a boundary with the
+    /// transcendental tail below the fixed working scale — the narrow
+    /// analogue of the wide `asin(3e-60)` family), and the caller must
+    /// escalate through the Ziv walker instead of concluding from this
+    /// single shot. The inner `Option` is the usual does-not-fit-`i128`
+    /// signal. One `div_rem` — the clear path costs what the plain
+    /// narrowing cost.
+    #[inline]
+    pub(crate) fn round_to_i128_clear_of_tie(
+        self,
+        w: u32,
+        target: u32,
+        mode: crate::support::rounding::RoundingMode,
+    ) -> Option<Option<i128>> {
+        let shift = w - target;
+        if shift < 3 {
+            // Degenerate guard: no band to measure — round directly.
+            return Some(self.round_to_i128_with(w, target, mode));
+        }
+        let divisor = Fixed::pow10(shift);
+        let (q, r) = divmod_u256_by_pow10(self.mag, divisor, shift);
+        let band = Fixed::pow10(shift - 3);
+        let dist = if crate::support::rounding::is_nearest_mode(mode) {
+            // Distance to the half-ULP boundary (divisor is even, the
+            // halve is exact).
+            let half = halve_u256(divisor);
+            if ge_u256(half, r) {
+                sub_u256(half, r)
+            } else {
+                sub_u256(r, half)
+            }
+        } else {
+            // Distance to the grid line (zero or divisor side).
+            let comp = sub_u256(divisor, r);
+            if ge_u256(comp, r) { r } else { comp }
+        };
+        if !matches!(cmp_u256(dist, band), core::cmp::Ordering::Greater) {
+            return None;
+        }
+        Some(self.finish_round_to_i128(q, r, divisor, mode))
     }
 }
 

@@ -109,7 +109,11 @@ pub(crate) fn tan_narrow_with_taylor<
 >(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> C::Storage
+where
+    <C::W as crate::int::types::traits::BigInt>::Scratch:
+        crate::int::types::compute_limbs::ComputeLimbs,
+{
     if raw == C::storage_zero() {
         return C::storage_zero();
     }

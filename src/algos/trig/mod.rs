@@ -38,5 +38,8 @@ pub(crate) mod near_pole_tan;
 pub(crate) mod sincos_narrow;
 #[cfg(feature = "_wide-support")]
 pub(crate) mod sincos_tang;
-#[cfg(feature = "_wide-support")]
+// Always compiled (NOT gated behind `_wide-support`), like `exp_generic`:
+// the narrow D18/D38 near-tie Ziv escalation (`support::narrow_ziv`)
+// recomputes its trig probes through these width-generic kernels in the
+// default build.
 pub(crate) mod trig_generic;

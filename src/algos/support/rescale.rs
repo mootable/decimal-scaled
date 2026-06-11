@@ -76,7 +76,15 @@ const fn select(scale: u32, width_bits: u32) -> Algorithm {
     // 1850 = `consts::newton_recip::NEWTON_RECIP_MAX_SCALE` (the baked cap);
     // literal here so this always-compiled `select` doesn't depend on the
     // wide-gated const.
-    if scale >= 200 && scale <= 1850 && width_limbs >= 24 && width_limbs <= 132 {
+    // VALIDITY WALL (not a perf threshold): `newton_reciprocal::precompute`
+    // refines through the build-max slice-divide blanket
+    // (`MAX_SINGLE_LIMBS = 4·MAX_WORK_N + 2`), so the arm is only RUNNABLE
+    // where that blanket covers the work width. Every wide build satisfies
+    // this for the whole benched 24..=132 band; the NARROW default build
+    // (`MAX_WORK_N = 2`) cannot serve its own `Int<24>` near-tie-walker
+    // work, which must stay on `MgChain` (Newton never won narrow anyway).
+    let blanket_ok = width_limbs as usize <= 4 * crate::int::algos::support::limbs::MAX_WORK_N;
+    if scale >= 200 && scale <= 1850 && width_limbs >= 24 && width_limbs <= 132 && blanket_ok {
         return Algorithm::Newton;
     }
     Algorithm::MgChain

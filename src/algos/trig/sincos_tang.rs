@@ -63,7 +63,11 @@ fn sin_cos_strict<C: WideTrigCore, const SCALE: u32, const M: u32>(
     raw: C::Storage,
     mode: RoundingMode,
     which: Which,
-) -> C::Storage {
+) -> C::Storage
+where
+    <C::W as crate::int::types::traits::BigInt>::Scratch:
+        crate::int::types::compute_limbs::ComputeLimbs,
+{
     // sin(0) = 0, cos(0) = 1 short-circuits — matches `wide_kernel`.
     if raw == C::storage_zero() {
         return match which {
@@ -195,7 +199,11 @@ fn sin_cos_strict<C: WideTrigCore, const SCALE: u32, const M: u32>(
 pub(crate) fn sin_tang_with_taylor<C: WideTrigCore, const SCALE: u32, const M: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> C::Storage
+where
+    <C::W as crate::int::types::traits::BigInt>::Scratch:
+        crate::int::types::compute_limbs::ComputeLimbs,
+{
     sin_cos_strict::<C, SCALE, M>(raw, mode, Which::Sin)
 }
 
@@ -205,6 +213,10 @@ pub(crate) fn sin_tang_with_taylor<C: WideTrigCore, const SCALE: u32, const M: u
 pub(crate) fn cos_tang_with_taylor<C: WideTrigCore, const SCALE: u32, const M: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> C::Storage
+where
+    <C::W as crate::int::types::traits::BigInt>::Scratch:
+        crate::int::types::compute_limbs::ComputeLimbs,
+{
     sin_cos_strict::<C, SCALE, M>(raw, mode, Which::Cos)
 }

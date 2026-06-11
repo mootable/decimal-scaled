@@ -24,8 +24,10 @@
 //!
 //! Returns the raw `i128` storage at the input's scale.
 
+use crate::algos::exp::exp_generic as eg;
 use crate::algos::exp::exp_series_2limb::exp_fixed;
 use crate::algos::support::fixed::Fixed;
+use crate::algos::support::narrow_ziv::{self, WZiv};
 use crate::algos::ln::ln_series_2limb::{STRICT_GUARD, ln_fixed};
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
@@ -292,7 +294,89 @@ fn powf_strict_raw<const SCALE: u32>(base: i128, exp: i128, mode: RoundingMode) 
     if powf_overflow_gate(arg, w, SCALE) {
         return None;
     }
-    exp_fixed(arg, w).round_to_i128_with(w, SCALE, mode)
+    let v = exp_fixed(arg, w);
+    match v.round_to_i128_clear_of_tie(w, SCALE, mode) {
+        Some(r) => r,
+        // Near a boundary. The constructible family is the EXACT rational
+        // power reached through the composition (`powf(4, 0.5) = 2`,
+        // `powf(225, 0.5) = 15` — the composition's value lands a
+        // kernel-error hair OFF the exact grid value, so a directed mode
+        // stepped 1 LSB off the exact power). Exact integer arithmetic
+        // (the rational-power pin) decides those — a composition's
+        // SYSTEMATIC relative error keeps a depth-stable position, so no
+        // escalation can settle an exactly-boundary-valued cell. A nearest
+        // exact-HALF powf value is PROVEN impossible for on-grid `(x, y)`
+        // (the 2-adic/5-adic argument in the pin's docs), so only grid
+        // candidates can verify; the walker resolves the genuinely
+        // transcendental near-ties.
+        None => {
+            if let Some(num2) =
+                v.double().round_to_i128_with(w, SCALE, RoundingMode::HalfToEven)
+            {
+                if let Some(pinned) = powf_rational_pin(base, exp, SCALE, num2) {
+                    return Some(pinned);
+                }
+            }
+            narrow_ziv::walk_checked(
+                v.round_to_i128_with(w, SCALE, mode),
+                STRICT_GUARD,
+                SCALE,
+                mode,
+                |g| powf_ziv(base, exp, SCALE, g),
+            )
+        }
+    }
+}
+
+/// One `WZiv` `exp(y·ln x)` probe at working scale `scale + g`.
+fn powf_ziv(base: i128, exp: i128, scale: u32, g: u32) -> WZiv {
+    let w = scale + g;
+    let ln_x = eg::ln_fixed::<WZiv>(narrow_ziv::lift(base, g), w, narrow_ziv::ln2_w(w));
+    let arg = eg::mul::<WZiv>(narrow_ziv::lift(exp, g), ln_x, w);
+    eg::exp_fixed::<WZiv>(arg, w)
+}
+
+/// Exact rational-power pin for the strict powf near-tie terminal — the
+/// powf sibling of `ln_series_2limb::log_rational_pow_pin`. `num2` is
+/// the boundary candidate in half-ULPs at `scale` (the working value
+/// doubled and nearest-rounded). With the exponent `y = p/q` (the input
+/// reduced — exact by construction) the claim `x^y == num2/(2·10^scale)`
+/// is the integer identity `x^p == v^q` over the reduced fractions,
+/// verified with the bounded checked ladder. Only an EVEN `num2` (a grid
+/// candidate) can verify — an exact-half powf value is impossible for
+/// on-grid `(x, y)`: `x^y = (2k+1)/(2·10^S)` forces `x = u^q` with
+/// `den(u^p) = 2^(S+1)·5^S`, whose 2-/5-adic exponents demand
+/// `p | S+1` AND `p | S` ⇒ `p = 1`, and then `den(x) = (2^(S+1)·5^S)^q`
+/// cannot divide `10^S` — so the half-candidate arm is unreachable and
+/// simply returns `None`. A verified grid value is returned for every
+/// mode (it IS the exact result).
+fn powf_rational_pin(base: i128, exp: i128, scale: u32, num2: i128) -> Option<i128> {
+    use crate::algos::ln::ln_series_2limb::{gcd_u128, pow_bounded, reduce_fraction};
+    if num2 <= 0 || num2 & 1 == 1 || exp == 0 || base <= 0 {
+        // x > 0 ⇒ x^y > 0; half candidates can't verify (see above);
+        // y == 0 is the exact-1 case the integer fast path already pins.
+        return None;
+    }
+    let one_s = 10u128.pow(scale);
+    // y = p/q in lowest terms (sign split off).
+    let y_neg = exp < 0;
+    let g = gcd_u128(exp.unsigned_abs(), one_s);
+    let p = exp.unsigned_abs() / g;
+    let q = one_s / g;
+    // x and the candidate v as reduced fractions.
+    let (xn, xd) = reduce_fraction(base as u128, one_s);
+    let (vn, vd) = reduce_fraction((num2 / 2) as u128, one_s);
+    // x^(±p/q) == v  ⇔  x^(±p) == v^q  ⇔ (positive y) xn^p == vn^q ∧
+    // xd^p == vd^q; (negative y) xd^p == vn^q ∧ xn^p == vd^q.
+    let (tn, td) = if y_neg { (xd, xn) } else { (xn, xd) };
+    let lx_n = pow_bounded(tn, p)?;
+    let lx_d = pow_bounded(td, p)?;
+    let rv_n = pow_bounded(vn, q)?;
+    let rv_d = pow_bounded(vd, q)?;
+    if lx_n != rv_n || lx_d != rv_d {
+        return None;
+    }
+    Some(num2 / 2)
 }
 
 #[cfg(test)]
@@ -368,6 +452,36 @@ mod tests {
         assert_eq!(powf(2, -3), ONE / 8); // 0.125
         assert_eq!(powf(4, -2), ONE / 16); // 0.0625
         assert_eq!(powf(17, 1), 17 * ONE); // at the in-range edge
+    }
+
+    // Near-tie pins (see `trig_series_2limb::near_tie_pins`): exact
+    // algebraic powers reached through the exp(y·ln x) composition. The
+    // composition's value lands a kernel-error hair OFF the exact grid
+    // value, so a directed mode stepped 1 LSB off the exact power
+    // (failing-first). The fixed terminal walks the near-tie and the
+    // walker's at-cap grid snap restores the exact value. Oracle: exact
+    // integer arithmetic (4^(1/2) = 2, 225^(1/2) = 15, 2.25^(1/2) = 1.5).
+    #[test]
+    fn sqrt_like_exact_powers_are_directed_exact() {
+        let one19 = 10_i128.pow(19);
+        let half = 5 * 10_i128.pow(18); // 0.5 at scale 19
+        for mode in MODES {
+            assert_eq!(
+                powf_strict_raw::<19>(4 * one19, half, mode),
+                Some(2 * one19),
+                "powf(4, 0.5) mode={mode:?}"
+            );
+            assert_eq!(
+                powf_strict_raw::<19>(225 * one19, half, mode),
+                Some(15 * one19),
+                "powf(225, 0.5) mode={mode:?}"
+            );
+            assert_eq!(
+                powf_strict_raw::<19>(225 * one19 / 100, half, mode),
+                Some(15 * one19 / 10),
+                "powf(2.25, 0.5) mode={mode:?}"
+            );
+        }
     }
 
     #[test]

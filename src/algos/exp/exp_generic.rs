@@ -56,10 +56,94 @@ use crate::support::rounding::RoundingMode;
     pub(crate) fn bit_length<S: BigInt>(v: S) -> u32 {
         <S as BigInt>::BITS - abs(v).leading_zeros()
     }
+    /// Unpacks a non-negative `S` magnitude into a little-endian u64 limb
+    /// buffer through the trait's u128 magnitude exit (`mag_into_u128`).
+    /// `dst` must be freshly zeroed and at least `S`'s width.
+    pub(crate) fn unpack_mag<S: BigInt>(v: S, dst: &mut [u64])
+    where
+        S::Scratch: ComputeLimbs,
+    {
+        let mut tmp = <S::Scratch as ComputeLimbs>::single_u128();
+        v.mag_into_u128(tmp.as_mut());
+        let mut i = 0;
+        for &x in tmp.as_ref() {
+            if i < dst.len() {
+                dst[i] = x as u64;
+                i += 1;
+            }
+            if i < dst.len() {
+                dst[i] = (x >> 64) as u64;
+                i += 1;
+            }
+        }
+    }
+
+    /// `div_rem` with EXACT per-width Knuth scratch — the value-generic
+    /// divide the guard-digit kernels and the Ziv walkers route through.
+    ///
+    /// The blanket `Int<N>::div_rem` operator sizes its Knuth
+    /// normalisation scratch from the build-max `MAX_WORK_N` blanket,
+    /// which the narrow default build keeps at the STORAGE width
+    /// (2 limbs, `MAX_SINGLE_LIMBS = 10`) — far below the `Int<24>` work
+    /// integer the narrow near-tie Ziv escalation probes in (numerators
+    /// up to the full 24 limbs). Here the scratch comes from `S`'s own
+    /// carrier — `single_buffered_u64()` is exactly Knuth's
+    /// `num.len() + 2` normalised-dividend requirement — so the divide is
+    /// exact-per-width at EVERY build instead of leaning on the blanket
+    /// (the exact-scratch migration the `compute_limbs` blanket docs call
+    /// for). Engine choice follows the divide matcher's own
+    /// `select_for_limbs` verdict; the u128-limb refinement (divisors of
+    /// ≥ 24 limbs, which no narrow probe and no in-range work value here
+    /// produces) falls to the value-identical base-2⁶⁴ Knuth. Truncated
+    /// semantics, identical to `Int::div_rem`.
+    pub(crate) fn div_rem_exact<S: BigInt>(n: S, d: S) -> (S, S)
+    where
+        S::Scratch: ComputeLimbs,
+    {
+        use crate::int::policy::div_rem::{select_for_limbs, Algorithm};
+        let n_neg = n < S::ZERO;
+        let d_neg = d < S::ZERO;
+        let mut nbuf = <S::Scratch as ComputeLimbs>::single_u64();
+        let mut dbuf = <S::Scratch as ComputeLimbs>::single_u64();
+        unpack_mag(abs(n), nbuf.as_mut());
+        unpack_mag(abs(d), dbuf.as_mut());
+        let mut qbuf = <S::Scratch as ComputeLimbs>::single_u64();
+        let mut rbuf = <S::Scratch as ComputeLimbs>::single_u64();
+        match select_for_limbs(nbuf.as_ref(), dbuf.as_ref()) {
+            // Single-limb divisor: the hardware remainder engine, no
+            // normalisation scratch involved.
+            Algorithm::Rem => crate::int::algos::div::div_rem::div_rem(
+                nbuf.as_ref(),
+                dbuf.as_ref(),
+                qbuf.as_mut(),
+                rbuf.as_mut(),
+            ),
+            // Knuth — with exact caller-sized scratch (see above).
+            _ => {
+                let mut u = <S::Scratch as ComputeLimbs>::single_buffered_u64();
+                let mut v = <S::Scratch as ComputeLimbs>::single_buffered_u64();
+                crate::int::algos::div::div_knuth::div_knuth_into(
+                    nbuf.as_ref(),
+                    dbuf.as_ref(),
+                    qbuf.as_mut(),
+                    rbuf.as_mut(),
+                    u.as_mut(),
+                    v.as_mut(),
+                );
+            }
+        }
+        let q = S::from_mag_sign_u64(qbuf.as_ref(), n_neg != d_neg);
+        let r = S::from_mag_sign_u64(rbuf.as_ref(), n_neg);
+        (q, r)
+    }
+
     /// Half-to-even round of `numerator / divisor` for `S`.
     #[inline]
-    pub(crate) fn round_div<S: BigInt>(n: S, d: S) -> S {
-        let (q, r) = n.div_rem(d);
+    pub(crate) fn round_div<S: BigInt>(n: S, d: S) -> S
+    where
+        S::Scratch: ComputeLimbs,
+    {
+        let (q, r) = div_rem_exact(n, d);
         if r == S::ZERO {
             return q;
         }
@@ -144,13 +228,19 @@ use crate::support::rounding::RoundingMode;
     }
     /// Loop-friendly `mul` with a precomputed `10^w` divisor.
     #[inline]
-    fn mul_cached<S: BigInt>(a: S, b: S, pow10_w: S) -> S {
+    fn mul_cached<S: BigInt>(a: S, b: S, pow10_w: S) -> S
+    where
+        S::Scratch: ComputeLimbs,
+    {
         round_div(a.wrapping_mul_low_u128(b), pow10_w)
     }
     /// `(a · 10^w) / b`, rounded half-to-even (precomputed numerator
     /// factor).
     #[inline]
-    pub(crate) fn div_cached<S: BigInt>(a: S, b: S, pow10_w: S) -> S {
+    pub(crate) fn div_cached<S: BigInt>(a: S, b: S, pow10_w: S) -> S
+    where
+        S::Scratch: ComputeLimbs,
+    {
         round_div(a.wrapping_mul_low_u128(pow10_w), b)
     }
     /// `a · n` for a small unsigned multiplier.
@@ -175,9 +265,12 @@ use crate::support::rounding::RoundingMode;
     }
     /// Rounds a working-scale value to the nearest integer (ties away
     /// from zero); used for the range-reduction quotient.
-    pub(crate) fn round_to_nearest_int<S: BigInt>(v: S, w: u32) -> i128 {
+    pub(crate) fn round_to_nearest_int<S: BigInt>(v: S, w: u32) -> i128
+    where
+        S::Scratch: ComputeLimbs,
+    {
         let divisor = pow10::<S>(w);
-        let (q, r) = v.div_rem(divisor);
+        let (q, r) = div_rem_exact(v, divisor);
         let half = divisor >> 1;
         let qi = if abs(r) >= half {
             if v < S::ZERO { q - S::ONE } else { q + S::ONE }
@@ -216,9 +309,12 @@ use crate::support::rounding::RoundingMode;
         // + monotone-downward loop converge to the identical floor either way.
         let seed = crate::algos::support::seed_bridge::sqrt_seed_w::<S>(n);
         let x0 = if seed <= zero::<S>() { lit::<S>(1) } else { seed };
-        let mut x = (x0 + n / x0) >> 1;
+        // `div_rem_exact` (not the `/` operator): the Newton divides run at
+        // the full work width, past the narrow build's blanket divide
+        // scratch — see [`div_rem_exact`].
+        let mut x = (x0 + div_rem_exact(n, x0).0) >> 1;
         loop {
-            let y = (x + n / x) >> 1;
+            let y = (x + div_rem_exact(n, x).0) >> 1;
             if y >= x {
                 return x;
             }
@@ -457,12 +553,76 @@ use crate::support::rounding::RoundingMode;
         // [`exp_fixed`]'s own pre-gate / `k < -1` short-circuit returns the
         // canonical smallest-positive value without forming any of that
         // arithmetic.
+        //
+        // UNBOUNDED (no `S::Scratch` clause): the per-tier gate shells the
+        // `decl_wide_transcendental!` macro emits (`exp_fits_w` /
+        // `hyper_fits_w`) call this through a bare `<S: BigInt>` signature,
+        // so the `k` estimate keeps the blanket `div_rem` route — the
+        // status-quo path, whose per-tier operands the build blanket has
+        // always covered. The exact-scratch path ([`try_exp_fixed`]) feeds
+        // its own `k` to [`exp_peak_bits_model`] instead.
         if !matches!(arg_regime::<S>(v_w, w), ArgRegime::Fits) {
             return u64::MAX;
         }
         let one_w_pre = one::<S>(w);
         let l2_pre = ln2::<S>(w);
-        let k = round_to_nearest_int(div_cached(v_w, l2_pre, one_w_pre), w);
+        let k = round_to_nearest_int_blanket(
+            round_div_blanket(v_w.wrapping_mul_low_u128(one_w_pre), l2_pre),
+            w,
+        );
+        exp_peak_bits_model::<S>(w, k)
+    }
+
+    /// Blanket-scratch sibling of [`round_div`] (the `Int` operator's own
+    /// `div_rem`), kept ONLY for [`exp_internal_peak_bits`]'s macro-facing
+    /// unbounded signature — see there.
+    fn round_div_blanket<S: BigInt>(n: S, d: S) -> S {
+        let (q, r) = n.div_rem(d);
+        if r == S::ZERO {
+            return q;
+        }
+        let ar = abs(r);
+        let comp = abs(d) - ar;
+        let cmp_r = if ar < comp {
+            ::core::cmp::Ordering::Less
+        } else if ar > comp {
+            ::core::cmp::Ordering::Greater
+        } else {
+            ::core::cmp::Ordering::Equal
+        };
+        let q_is_odd = q.bit(0);
+        let result_positive = (n < S::ZERO) == (d < S::ZERO);
+        if crate::support::rounding::should_bump(
+            RoundingMode::HalfToEven,
+            cmp_r,
+            q_is_odd,
+            result_positive,
+        ) {
+            if result_positive { q + S::ONE } else { q - S::ONE }
+        } else {
+            q
+        }
+    }
+
+    /// Blanket-scratch sibling of [`round_to_nearest_int`] — see
+    /// [`round_div_blanket`].
+    fn round_to_nearest_int_blanket<S: BigInt>(v: S, w: u32) -> i128 {
+        let divisor = pow10::<S>(w);
+        let (q, r) = v.div_rem(divisor);
+        let half = divisor >> 1;
+        let qi = if abs(r) >= half {
+            if v < S::ZERO { q - S::ONE } else { q + S::ONE }
+        } else {
+            q
+        };
+        crate::int::types::traits::BigInt::to_i128(qi)
+    }
+
+    /// The pure peak model for an ALREADY-computed range-reduction `k` —
+    /// the divide-free tail of [`exp_internal_peak_bits`], shared with
+    /// [`try_exp_fixed`] (which holds `k` from its own exact-scratch
+    /// divide and must not re-derive it through the blanket).
+    fn exp_peak_bits_model<S: BigInt>(w: u32, k: i128) -> u64 {
         let abs_k_u128 = if k < 0 { -k } else { k } as u128;
         let extra: u32 = if abs_k_u128 == 0 {
             0
@@ -610,7 +770,7 @@ use crate::support::rounding::RoundingMode;
         // peak — a genuinely unrepresentable result. (`k < 0` is the
         // underflow direction, handled by the short-circuits above and
         // below — never out of range.)
-        if k >= 0 && !exp_peak_fits::<S>(v_w, w) {
+        if k >= 0 && exp_peak_bits_model::<S>(w, k) >= <S as BigInt>::BITS as u64 {
             return None;
         }
         let abs_k_u128 = if k < 0 { -k } else { k } as u128;
@@ -747,7 +907,10 @@ use crate::support::rounding::RoundingMode;
     /// `(a · 10^w) / b`, rounded half-to-even (the generic sibling of
     /// the per-tier `$core::div`).
     #[inline]
-    pub(crate) fn div<S: BigInt>(a: S, b: S, w: u32) -> S {
+    pub(crate) fn div<S: BigInt>(a: S, b: S, w: u32) -> S
+    where
+        S::Scratch: ComputeLimbs,
+    {
         // `(a·10^w)/b`, half-to-even. `10^w` comes from the `pow10` POLICY
         // (`pow10::dispatch`, via `pow10::<S>`), NOT a per-tier baked static;
         // the numerator product is the u128-packed truncated-low mul (the
@@ -792,7 +955,9 @@ use crate::support::rounding::RoundingMode;
         // tanh(|x|) rounds to 1 − 10^−w; return that directly.
         let thr_x = (w as i128) * 1152 / 1000 + 2;
         let saturated = one_w - lit::<S>(1);
-        if av_w / one_w > lit::<S>(thr_x) {
+        // `div_rem_exact` (not the `/` operator) — the narrow build's
+        // blanket divide scratch is below this work width.
+        if div_rem_exact(av_w, one_w).0 > lit::<S>(thr_x) {
             return saturated;
         }
         // Below `thr_x` use the negative-exponent identity tanh(|x|) =

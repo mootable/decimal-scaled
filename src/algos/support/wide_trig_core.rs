@@ -626,7 +626,10 @@ pub(crate) fn adjust_ln_near_one<C: WideTrigCore, const SCALE: u32>(
 pub(crate) fn tan_series<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> C::Storage
+where
+    <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
     if raw == C::storage_zero() {
         return C::storage_zero(); // tan(0) = 0, the sole exact point
     }
@@ -1082,7 +1085,10 @@ where
 /// their magnitude into garbage bounds). The `LIMBS` compare const-folds per
 /// monomorphisation.
 #[inline]
-fn narrow_range_checked_g<St: BigInt + Copy, S: BigInt>(signed: S, st_max: St, st_min: St) -> St {
+fn narrow_range_checked_g<St: BigInt + Copy, S: BigInt>(signed: S, st_max: St, st_min: St) -> St
+where
+    S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
     if <S as BigInt>::LIMBS >= <St as BigInt>::LIMBS {
         let max_w = BigInt::resize_to::<S>(st_max);
         let min_w = BigInt::resize_to::<S>(st_min);
@@ -1090,7 +1096,18 @@ fn narrow_range_checked_g<St: BigInt + Copy, S: BigInt>(signed: S, st_max: St, s
             panic!("wide-tier strict transcendental: result out of range");
         }
     }
-    BigInt::resize_to::<St>(signed)
+    // Down-resize through `S`'s EXACT scratch (`unpack_mag` +
+    // `from_mag_sign_u64`), not the width-erased `resize_to` blanket: the
+    // narrow default build sizes that blanket's `MAX_U128_LIMB` buffer to
+    // its 2-limb storage, below the `Int<24>` work integer the narrow
+    // near-tie walkers run in. The up-resizes above are from the SMALLER
+    // `St` (its own width bounds the blanket buffer), so they stay.
+    let neg = signed < <S as BigInt>::ZERO;
+    let mag = if neg { -signed } else { signed };
+    let mut buf =
+        <S::Scratch as crate::int::types::compute_limbs::ComputeLimbs>::single_u64();
+    crate::algos::exp::exp_generic::unpack_mag(mag, buf.as_mut());
+    St::from_mag_sign_u64(buf.as_ref(), neg)
 }
 
 /// Work-int-generic narrowing of a working-scale value `v` (at scale `w`) down
@@ -1224,7 +1241,9 @@ where
         let neg = v < lit(0);
         let mag = if neg { -v } else { v };
         let divisor = pow10(g);
-        let (q, rem) = mag.div_rem(divisor);
+        // Exact per-width Knuth scratch (the narrow build's blanket is sized
+        // to its 2-limb storage; the walkers probe in `Int<24>`).
+        let (q, rem) = crate::algos::exp::exp_generic::div_rem_exact(mag, divisor);
         (neg, q, rem, divisor)
     };
 
@@ -1459,7 +1478,10 @@ pub(crate) fn round_to_storage_clear_of_tie_g<St: BigInt + Copy, S: BigInt>(
     mode: RoundingMode,
     st_max: St,
     st_min: St,
-) -> Option<St> {
+) -> Option<St>
+where
+    S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
     use crate::support::rounding::{is_nearest_mode, should_bump};
     let lit = |n: i128| <S as BigInt>::from_i128(n);
     let shift = w - target;
@@ -1681,7 +1703,9 @@ where
             let neg = v < lit(0);
             let mag = if neg { -v } else { v };
             let divisor = pow10(guard);
-            let (q, rem) = mag.div_rem(divisor);
+            // Exact per-width Knuth scratch (the narrow build's blanket is sized
+            // to its 2-limb storage; the walkers probe in `Int<24>`).
+            let (q, rem) = crate::algos::exp::exp_generic::div_rem_exact(mag, divisor);
             let q_mag = if rem != lit(0) {
                 let comp = divisor - rem;
                 let bump = crate::support::rounding::should_bump(
@@ -1769,7 +1793,9 @@ where
         let neg = v < lit(0);
         let mag = if neg { -v } else { v };
         let divisor = pow10(shift);
-        let (q, rem) = mag.div_rem(divisor);
+        // Exact per-width Knuth scratch (the narrow build's blanket is sized
+        // to its 2-limb storage; the walkers probe in `Int<24>`).
+        let (q, rem) = crate::algos::exp::exp_generic::div_rem_exact(mag, divisor);
         let result_positive = !neg;
         let residual_present = rem != lit(0) || never_exact;
         let bump = residual_present

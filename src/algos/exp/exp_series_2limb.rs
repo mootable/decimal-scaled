@@ -18,6 +18,7 @@
 
 use crate::algos::pow::powi_exact::ExactPin;
 use crate::algos::support::fixed::Fixed;
+use crate::algos::support::narrow_ziv::{self, WZiv};
 use crate::algos::ln::ln_series_2limb::{STRICT_GUARD, wide_ln2};
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
@@ -288,6 +289,59 @@ fn exp_wide_narrow_raw(
     narrow_round_mag(ex, working_digits, mode, true, false)
 }
 
+/// Whether the sub-storage residual of the non-negative working
+/// magnitude `mag` (at `shift` digits above storage) is clear of the
+/// mode's deciding boundary by more than the near-tie band
+/// (`divisor/1000`) — the [`WNarrow`] sibling of
+/// [`Fixed::round_to_i128_clear_of_tie`]'s band check. `false` = the
+/// strict caller must escalate through the Ziv walker.
+#[inline]
+fn wnarrow_residual_clear(mag: WNarrow, shift: u32, mode: RoundingMode) -> bool {
+    let divisor = crate::consts::pow10::dispatch::<WNarrow>(shift);
+    let (_q, rem) = mag.div_rem(divisor);
+    let band = if shift >= 3 {
+        crate::consts::pow10::dispatch::<WNarrow>(shift - 3)
+    } else {
+        WNarrow::ZERO
+    };
+    let dist = if crate::support::rounding::is_nearest_mode(mode) {
+        let half = divisor >> 1;
+        if rem < half { half - rem } else { rem - half }
+    } else {
+        let comp = divisor - rem;
+        if rem < comp { rem } else { comp }
+    };
+    dist > band
+}
+
+/// One `WZiv` exp probe at working scale `scale + g` (`WZiv` and
+/// [`WNarrow`] are the same `Int<24>`).
+fn exp_ziv(raw: i128, scale: u32, g: u32) -> WZiv {
+    crate::algos::exp::exp_generic::exp_fixed::<WZiv>(narrow_ziv::lift(raw, g), scale + g)
+}
+
+/// Strict-path integer-regime / directed `e^x` — the wide-[`WNarrow`]
+/// single shot with the near-tie protected terminal: a clear residual
+/// keeps the old single-shot cost; a near-tie escalates through the
+/// never-exact Ziv walker (`e^x` is transcendental for every `x ≠ 0`).
+fn exp_wide_narrow_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
+    use crate::algos::exp::exp_generic;
+
+    let w = scale + STRICT_GUARD;
+    let negative_input = raw < 0;
+    let v_mag = WNarrow::from_i128(raw.unsigned_abs() as i128)
+        * crate::consts::pow10::dispatch::<WNarrow>(STRICT_GUARD);
+    let v_w = if negative_input { -v_mag } else { v_mag };
+    let ex = exp_generic::try_exp_fixed::<WNarrow>(v_w, w)?;
+    let base = narrow_round_mag(ex, STRICT_GUARD, mode, true, false);
+    if wnarrow_residual_clear(ex, STRICT_GUARD, mode) {
+        return base;
+    }
+    narrow_ziv::walk_checked_never_exact(base, STRICT_GUARD, scale, mode, |g| {
+        exp_ziv(raw, scale, g)
+    })
+}
+
 /// Narrows a non-negative [`WNarrow`] working-scale magnitude `mag`
 /// (`= value · 10^w`, `value > 0` and irrational at a non-trivial
 /// argument) to a signed `i128` storage value at scale `w − shift` under
@@ -494,14 +548,26 @@ fn exp_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i12
     let w = SCALE + STRICT_GUARD;
     // See [`exp_with_raw`]: the integer-regime cells and ALL directed modes
     // route through the wider `WNarrow` work integer; every other
-    // NEAREST-mode common cell stays on the fast `Fixed` path.
+    // NEAREST-mode common cell stays on the fast `Fixed` path. Both
+    // terminals are near-tie protected (clear-of-tie single shot, Ziv
+    // walker behind it).
     if !narrow_fixed_fits(raw, SCALE, w) || !crate::support::rounding::is_nearest_mode(mode) {
-        return exp_wide_narrow_raw(raw, SCALE, STRICT_GUARD, mode);
+        return exp_wide_narrow_strict_raw(raw, SCALE, mode);
     }
     let negative_input = raw < 0;
     let v_w = Fixed::from_u128_mag(raw.unsigned_abs(), false).mul_u128(10u128.pow(STRICT_GUARD));
     let v_w = if negative_input { v_w.neg() } else { v_w };
-    exp_fixed(v_w, w).round_to_i128_with(w, SCALE, mode)
+    let v = exp_fixed(v_w, w);
+    match v.round_to_i128_clear_of_tie(w, SCALE, mode) {
+        Some(r) => r,
+        None => narrow_ziv::walk_checked_never_exact(
+            v.round_to_i128_with(w, SCALE, mode),
+            STRICT_GUARD,
+            SCALE,
+            mode,
+            |g| exp_ziv(raw, SCALE, g),
+        ),
+    }
 }
 
 // ── exp2 kernel (D38, Fixed fallback) ─────────────────────────────
@@ -731,6 +797,18 @@ fn exp2_wide_narrow_raw(
     working_digits: u32,
     mode: RoundingMode,
 ) -> Option<i128> {
+    let (ex, guard) = exp2_wide_narrow_eval(raw, scale, working_digits)?;
+    narrow_round_mag(ex, guard, mode, true, false)
+}
+
+/// The [`exp2_wide_narrow_raw`] evaluation: the `(value · 10^(scale +
+/// guard), guard)` pair before the narrowing terminal, shared by the
+/// approx single shot and the strict near-tie protected terminal.
+fn exp2_wide_narrow_eval(
+    raw: i128,
+    scale: u32,
+    working_digits: u32,
+) -> Option<(WNarrow, u32)> {
     use crate::algos::exp::exp_generic;
 
     let neg = raw < 0;
@@ -785,14 +863,68 @@ fn exp2_wide_narrow_raw(
     // `try_exp_fixed`: see [`exp_wide_narrow_raw`] — an out-of-range
     // verdict from the generic kernel propagates as this kernel's `None`.
     let ex = exp_generic::try_exp_fixed::<WNarrow>(arg, w)?;
-    narrow_round_mag(ex, guard, mode, true, false)
+    Some((ex, guard))
 }
 
-/// `None` = result out of storage range (see [`exp2_with`]).
+/// One `WZiv` `exp(x·ln 2)` probe at working scale `scale + g`. No
+/// `k_lift` is applied at the probe — the walker's escalation cap
+/// already subtracts the result's integer-digit count, so the probe
+/// keeps its guard digits without an explicit lift.
+fn exp2_ziv(raw: i128, scale: u32, g: u32) -> WZiv {
+    use crate::algos::exp::exp_generic as eg;
+    let w = scale + g;
+    let arg = eg::mul::<WZiv>(narrow_ziv::lift(raw, g), narrow_ziv::ln2_w(w), w);
+    eg::exp_fixed::<WZiv>(arg, w)
+}
+
+/// `None` = result out of storage range (see [`exp2_with`]). The strict
+/// terminal is near-tie protected on both branches (the exact-power pin
+/// already removes every rational `2^x`; `2^x` is irrational for every
+/// other on-grid `x`, so the never-exact walker polarity is sound).
 #[inline]
 #[must_use]
 pub(crate) fn exp2_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
-    exp2_with(raw, SCALE, STRICT_GUARD, mode)
+    exp2_strict_raw(raw.as_i128(), SCALE, mode).map(Int::<2>::from_i128)
+}
+
+/// `i128` core of [`exp2_strict`].
+fn exp2_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
+    if raw == 0 {
+        return Some(10_i128.pow(scale));
+    }
+    match exp2_exact_pin(raw, scale, mode) {
+        ExactPin::Value(pinned) => return Some(pinned),
+        ExactPin::OutOfRange => return None,
+        ExactPin::Defer => {}
+    }
+    let abs_raw = raw.unsigned_abs();
+    if exp2_result_int_digits(abs_raw, scale) > FAST_MAX_RESULT_DIGITS {
+        // Integer-regime: the lifted wide single shot, near-tie protected.
+        let (ex, guard) = exp2_wide_narrow_eval(raw, scale, STRICT_GUARD)?;
+        let base = narrow_round_mag(ex, guard, mode, true, false);
+        if wnarrow_residual_clear(ex, guard, mode) {
+            return base;
+        }
+        return narrow_ziv::walk_checked_never_exact(base, STRICT_GUARD, scale, mode, |g| {
+            exp2_ziv(raw, scale, g)
+        });
+    }
+    let w = scale + STRICT_GUARD;
+    let negative_input = raw < 0;
+    let v_w = Fixed::from_u128_mag(abs_raw, false).mul_u128(10u128.pow(STRICT_GUARD));
+    let v_w = if negative_input { v_w.neg() } else { v_w };
+    let arg_w = v_w.mul(wide_ln2(w), w);
+    let v = exp_fixed(arg_w, w);
+    match v.round_to_i128_clear_of_tie(w, scale, mode) {
+        Some(r) => r,
+        None => narrow_ziv::walk_checked_never_exact(
+            v.round_to_i128_with(w, scale, mode),
+            STRICT_GUARD,
+            scale,
+            mode,
+            |g| exp2_ziv(raw, scale, g),
+        ),
+    }
 }
 
 // ── Fast-path validity wall ────────────────────────────────────────

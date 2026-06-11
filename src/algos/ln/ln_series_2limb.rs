@@ -27,7 +27,9 @@
 //!
 //! Panics on `raw <= 0` (the typed method's contract).
 
+use crate::algos::exp::exp_generic as eg;
 use crate::algos::support::fixed::Fixed;
+use crate::algos::support::narrow_ziv::{self, WZiv};
 use crate::int::types::Int;
 use crate::support::rounding::{RoundingMode, is_nearest_mode};
 
@@ -229,7 +231,150 @@ fn ln_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128
     }
     let w = SCALE + STRICT_GUARD;
     let v_w = Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(STRICT_GUARD));
-    ln_fixed(v_w, w).round_to_i128_with(w, SCALE, mode)
+    let lv = ln_fixed(v_w, w);
+    match lv.round_to_i128_clear_of_tie(w, SCALE, mode) {
+        Some(r) => r,
+        // Near-tie: the directed deep-near-1 family (`ln(1 ± k·10^-S)`
+        // leaves the `δ²/2` deviation below the fixed working scale once
+        // `δ² < 2·10^(S−30)`) and any nearest near-half — escalate. The
+        // walker resolves every constructible member (deviation depth
+        // ≤ 2·38 = 76 ≪ the `WZiv` reach).
+        None => narrow_ziv::walk_checked(
+            lv.round_to_i128_with(w, SCALE, mode),
+            STRICT_GUARD,
+            SCALE,
+            mode,
+            |g| ln_ziv(raw, SCALE, g),
+        ),
+    }
+}
+
+/// One `WZiv` ln probe at working scale `scale + g`.
+fn ln_ziv(raw: i128, scale: u32, g: u32) -> WZiv {
+    let w = scale + g;
+    eg::ln_fixed::<WZiv>(narrow_ziv::lift(raw, g), w, narrow_ziv::ln2_w(w))
+}
+
+/// One `WZiv` `ln(x)/ln(b)` ratio probe at working scale `scale + g`.
+/// `b_num2` selects the base: positive = the storage `b_raw` (general
+/// log), `-2` / `-10` = the constant bases (log2 / log10, whose scaled
+/// storage form can overflow `i128` at the maximal scale).
+fn log_ratio_ziv(x_raw: i128, b_sel: i128, scale: u32, g: u32) -> WZiv {
+    let w = scale + g;
+    let ln2 = narrow_ziv::ln2_w(w);
+    let lx = eg::ln_fixed::<WZiv>(narrow_ziv::lift(x_raw, g), w, ln2);
+    let lb = match b_sel {
+        -2 => ln2,
+        -10 => narrow_ziv::ln10_w(w),
+        b_raw => eg::ln_fixed::<WZiv>(narrow_ziv::lift(b_raw, g), w, ln2),
+    };
+    eg::div::<WZiv>(lx, lb, w)
+}
+
+/// Greatest common divisor (Euclid) on `u128`.
+pub(crate) fn gcd_u128(mut a: u128, mut b: u128) -> u128 {
+    while b != 0 {
+        let t = a % b;
+        a = b;
+        b = t;
+    }
+    a
+}
+
+/// `base^e` in [`WZiv`], `None` when the result would exceed the bounded
+/// bit budget (1500 bits — inside `Int<24>`'s 1536 with sign headroom).
+/// Square-and-multiply; the bit-length pre-check bounds every
+/// intermediate, so no step can overflow.
+pub(crate) fn pow_bounded(base: u128, e: u128) -> Option<WZiv> {
+    if base == 0 {
+        return None; // domain-asserted positive inputs; 0 never verifies
+    }
+    let bl = (128 - base.leading_zeros()) as u128;
+    // Saturating: `e` can be as large as `10^scale` (an irreducible
+    // candidate denominator), so the budget product must not wrap.
+    if bl.saturating_mul(e) > 1500 {
+        return None;
+    }
+    let mut acc = WZiv::from_i128(1);
+    let mut b = WZiv::from_u128(base);
+    let mut k = e;
+    while k > 0 {
+        if k & 1 == 1 {
+            acc = acc * b;
+        }
+        k >>= 1;
+        if k > 0 {
+            b = b * b;
+        }
+    }
+    Some(acc)
+}
+
+/// Exact rational-power pin for the strict log near-tie terminal.
+///
+/// `num2` is the boundary CANDIDATE in half-ULPs at `scale` (the working
+/// ratio doubled and rounded to the nearest integer): even = a grid
+/// candidate (a directed near-grid tie, e.g. `log_4(8) = 3/2` on the
+/// scale-19 grid), odd = a half candidate (a nearest near-half tie, e.g.
+/// `log_4(32) = 5/2` at scale 0). Verifies `log_(bn/bd)(xn/xd) ==
+/// num2/(2·10^scale)` EXACTLY via the integer identity `x^q == b^p`
+/// (`p/q` = the candidate in lowest terms; `pow_bounded` caps the
+/// verification at sizes [`WZiv`] holds — an unverifiable candidate
+/// defers to the walker). On a verified exact value the result is
+/// decided by exact integer arithmetic: a grid candidate IS the result;
+/// a half candidate applies the mode's tie rule. This is what makes the
+/// constructible exact-rational families deterministic — the working
+/// residual at any finite scale is kernel noise around the boundary,
+/// which no escalation can settle.
+fn log_rational_pow_pin(
+    xn: u128,
+    xd: u128,
+    bn: u128,
+    bd: u128,
+    scale: u32,
+    num2: i128,
+    mode: RoundingMode,
+) -> Option<i128> {
+    if num2 == 0 {
+        return None; // r = 0 ⇔ x == 1, pinned upstream
+    }
+    let den: u128 = 2 * 10u128.pow(scale);
+    let neg = num2 < 0;
+    let num = num2.unsigned_abs();
+    let g = gcd_u128(num, den);
+    let p = num / g;
+    let q = den / g;
+    // log_b(x) = ±p/q ⇔ x^q == b^(±p): for the negative sign the base
+    // fraction inverts.
+    let (tn, td) = if neg { (bd, bn) } else { (bn, bd) };
+    let lx_n = pow_bounded(xn, q)?;
+    let lx_d = pow_bounded(xd, q)?;
+    let rb_n = pow_bounded(tn, p)?;
+    let rb_d = pow_bounded(td, p)?;
+    if lx_n != rb_n || lx_d != rb_d {
+        return None;
+    }
+    // Exact value num2/(2·10^scale): fold the half-ULP form to storage.
+    let q_mag = num / 2;
+    if num & 1 == 0 {
+        return Some(if neg { -(q_mag as i128) } else { q_mag as i128 });
+    }
+    // Exactly on the half between q_mag and q_mag + 1 (magnitude side):
+    // the mode's tie rule, by exact integer arithmetic.
+    let bump = crate::support::rounding::should_bump(
+        mode,
+        core::cmp::Ordering::Equal,
+        q_mag & 1 == 1,
+        !neg,
+    );
+    let m = (q_mag + u128::from(bump)) as i128;
+    Some(if neg { -m } else { m })
+}
+
+/// Reduces `a / b` to lowest terms.
+pub(crate) fn reduce_fraction(a: u128, b: u128) -> (u128, u128) {
+    let g = gcd_u128(a, b);
+    (a / g, b / g)
 }
 
 // ── log / log2 / log10 kernels (D38, Fixed fallback) ──────────────
@@ -369,12 +514,69 @@ fn log_with_raw(
     ratio.round_to_i128_with(w, scale, mode)
 }
 
-/// Const-folded strict variant of [`log_with`]. `None` = result out of
-/// storage range.
+/// Const-folded strict variant of [`log_with`] with the near-tie
+/// protected terminal: the exact-integer pin, then the clear-of-tie
+/// single shot, then (near a boundary) the exact rational-power pin —
+/// `log_4(8) = 3/2` exactly on the scale-19 grid, `log_4(32) = 5/2`
+/// exactly on the scale-0 half — and finally the Ziv walker for the
+/// genuinely transcendental near-ties. `None` = result out of storage
+/// range.
 #[inline]
 #[must_use]
 pub(crate) fn log_strict<const SCALE: u32>(raw: Int<2>, base_raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
-    log_with(raw, base_raw, SCALE, STRICT_GUARD, mode)
+    log_strict_raw(raw.as_i128(), base_raw.as_i128(), SCALE, mode).map(Int::<2>::from_i128)
+}
+
+/// `i128` core of [`log_strict`].
+fn log_strict_raw(raw: i128, base_raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
+    assert!(raw > 0, "D38::log: argument must be positive");
+    assert!(base_raw > 0, "D38::log: base must be positive");
+    let w = scale + STRICT_GUARD;
+    let pow = 10u128.pow(STRICT_GUARD);
+    let v_w = Fixed::from_u128_mag(raw as u128, false).mul_u128(pow);
+    let b_w = Fixed::from_u128_mag(base_raw as u128, false).mul_u128(pow);
+    let ln_b = ln_fixed(b_w, w);
+    assert!(
+        !ln_b.is_zero(),
+        "D38::log: base must not equal 1 (ln(1) is zero)"
+    );
+    let ratio = ln_fixed(v_w, w).div(ln_b, w);
+    // Exact-power pin (see `log_with_raw`).
+    let k = ratio.round_to_nearest_int(w);
+    let base_int = match 10i128.checked_pow(scale) {
+        Some(one_s) if base_raw % one_s == 0 => base_raw / one_s,
+        _ => 0,
+    };
+    if let Some(pinned) = log_exact_int_pin(raw, base_int, scale, k) {
+        return Some(pinned);
+    }
+    match ratio.round_to_i128_clear_of_tie(w, scale, mode) {
+        Some(r) => r,
+        None => {
+            // Near a boundary: try the exact rational-power pin before
+            // walking (an exact rational log never resolves by escalation
+            // — the residual at every depth is kernel noise around the
+            // boundary).
+            if let Some(num2) = ratio.double().round_to_i128_with(w, scale, RoundingMode::HalfToEven)
+            {
+                let one_s = 10u128.pow(scale);
+                let (xn, xd) = reduce_fraction(raw as u128, one_s);
+                let (bn, bd) = reduce_fraction(base_raw as u128, one_s);
+                if let Some(pinned) =
+                    log_rational_pow_pin(xn, xd, bn, bd, scale, num2, mode)
+                {
+                    return Some(pinned);
+                }
+            }
+            narrow_ziv::walk_checked(
+                ratio.round_to_i128_with(w, scale, mode),
+                STRICT_GUARD,
+                scale,
+                mode,
+                |g| log_ratio_ziv(raw, base_raw, scale, g),
+            )
+        }
+    }
 }
 
 /// `log2(v) = ln(v) / ln(2)`, `Fixed`-wide fallback for D38.
@@ -399,11 +601,36 @@ fn log2_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode)
     ratio.round_to_i128_with(w, scale, mode)
 }
 
-/// `None` = result out of storage range.
+/// `None` = result out of storage range. The strict terminal is
+/// near-tie protected; `log2` of an on-grid rational is integer (the
+/// exact pin) or IRRATIONAL (`2^(p/q)` is rational only for `q | p`), so
+/// no rational-power pin is needed — the walker covers the rest.
 #[inline]
 #[must_use]
 pub(crate) fn log2_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
-    log2_with(raw, SCALE, STRICT_GUARD, mode)
+    log2_strict_raw(raw.as_i128(), SCALE, mode).map(Int::<2>::from_i128)
+}
+
+/// `i128` core of [`log2_strict`].
+fn log2_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
+    assert!(raw > 0, "D38::log2: argument must be positive");
+    let w = scale + STRICT_GUARD;
+    let v_w = Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(STRICT_GUARD));
+    let ratio = ln_fixed(v_w, w).div(wide_ln2(w), w);
+    let k = ratio.round_to_nearest_int(w);
+    if let Some(pinned) = log_exact_int_pin(raw, 2, scale, k) {
+        return Some(pinned);
+    }
+    match ratio.round_to_i128_clear_of_tie(w, scale, mode) {
+        Some(r) => r,
+        None => narrow_ziv::walk_checked(
+            ratio.round_to_i128_with(w, scale, mode),
+            STRICT_GUARD,
+            scale,
+            mode,
+            |g| log_ratio_ziv(raw, -2, scale, g),
+        ),
+    }
 }
 
 /// `log10(v) = ln(v) / ln(10)`, `Fixed`-wide fallback for D38.
@@ -428,9 +655,208 @@ fn log10_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode
     ratio.round_to_i128_with(w, scale, mode)
 }
 
-/// `None` = result out of storage range.
+/// `None` = result out of storage range. Near-tie protected like
+/// [`log2_strict`] (`log10` of an on-grid rational is integer or
+/// irrational).
 #[inline]
 #[must_use]
 pub(crate) fn log10_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
-    log10_with(raw, SCALE, STRICT_GUARD, mode)
+    log10_strict_raw(raw.as_i128(), SCALE, mode).map(Int::<2>::from_i128)
+}
+
+/// `i128` core of [`log10_strict`].
+fn log10_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
+    assert!(raw > 0, "D38::log10: argument must be positive");
+    let w = scale + STRICT_GUARD;
+    let v_w = Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(STRICT_GUARD));
+    let ratio = ln_fixed(v_w, w).div(wide_ln10(w), w);
+    let k = ratio.round_to_nearest_int(w);
+    if let Some(pinned) = log_exact_int_pin(raw, 10, scale, k) {
+        return Some(pinned);
+    }
+    match ratio.round_to_i128_clear_of_tie(w, scale, mode) {
+        Some(r) => r,
+        None => narrow_ziv::walk_checked(
+            ratio.round_to_i128_with(w, scale, mode),
+            STRICT_GUARD,
+            scale,
+            mode,
+            |g| log_ratio_ziv(raw, -10, scale, g),
+        ),
+    }
+}
+
+// ── Near-tie pins (see `trig_series_2limb::near_tie_pins`) ───────────
+#[cfg(test)]
+mod near_tie_pins {
+    use super::*;
+
+    #[test]
+    fn ln_directed_near_one_deep_d38_s38() {
+        // ln(1 + 1e-38) = δ − δ²/2 + … with δ = 1 ULP exactly: the true
+        // value is δ·(1 − 5e-39), strictly below the grid line δ by a
+        // deviation (depth 76.3) under every reachable fixed working
+        // scale. Concavity decides: Floor/Trunc → 0, Ceiling → 1.
+        // failing-first: the single shot at w = 68 saw a zero residual
+        // and returned δ = 1 for Floor/Trunc. Oracle: the exact rational
+        // partial + the strictly-negative tail (narrow_tie_derive.py).
+        let raw = Int::<2>::from_i128(10_i128.pow(38) + 1);
+        assert_eq!(
+            ln_strict::<38>(raw, RoundingMode::Floor).map(|v| v.as_i128()),
+            Some(0),
+            "ln Floor"
+        );
+        assert_eq!(
+            ln_strict::<38>(raw, RoundingMode::Trunc).map(|v| v.as_i128()),
+            Some(0),
+            "ln Trunc"
+        );
+        assert_eq!(
+            ln_strict::<38>(raw, RoundingMode::Ceiling).map(|v| v.as_i128()),
+            Some(1),
+            "ln Ceiling"
+        );
+        // below 1: ln(1 − 1e-38) = −δ − δ²/2: strictly below −δ.
+        let raw_lo = Int::<2>::from_i128(10_i128.pow(38) - 1);
+        assert_eq!(
+            ln_strict::<38>(raw_lo, RoundingMode::Floor).map(|v| v.as_i128()),
+            Some(-2),
+            "ln(1−ulp) Floor"
+        );
+        assert_eq!(
+            ln_strict::<38>(raw_lo, RoundingMode::Trunc).map(|v| v.as_i128()),
+            Some(-1),
+            "ln(1−ulp) Trunc"
+        );
+    }
+
+    #[test]
+    fn ln_directed_deep_band_sweep() {
+        // deep zone: deviation delta^2/(2*10^S) below 10^-(S+30) working
+        // resolution <=> delta^2 < 2*10^(S-30)... in working units at w:
+        // dev_working = delta^2/(2*10^S)*10^30 < 1 <=> delta^2 < 2*10^(S-30)
+        let mut bad = 0u32;
+        for s in 31u32..=38 {
+            let one: i128 = 10_i128.pow(s);
+            let max_d = ((2.0 * 10f64.powi(s as i32 - 30)).sqrt() as i128).max(1);
+            let mut d: i128 = 1;
+            while d <= max_d {
+                let raw = Int::<2>::from_i128(one + d);
+                let fl = ln_strict_dyn(s, raw, RoundingMode::Floor);
+                let ce = ln_strict_dyn(s, raw, RoundingMode::Ceiling);
+                if fl != Some(d - 1) || ce != Some(d) {
+                    println!("LIVE ln(1+{d}ulp) S={s}: Floor={fl:?} (want {}), Ceil={ce:?} (want {d})", d-1);
+                    bad += 1;
+                }
+                let raw_lo = Int::<2>::from_i128(one - d);
+                let fl2 = ln_strict_dyn(s, raw_lo, RoundingMode::Floor);
+                let tr2 = ln_strict_dyn(s, raw_lo, RoundingMode::Trunc);
+                if fl2 != Some(-d - 1) || tr2 != Some(-d) {
+                    println!("LIVE ln(1-{d}ulp) S={s}: Floor={fl2:?} (want {}), Trunc={tr2:?} (want {})", -d-1, -d);
+                    bad += 1;
+                }
+                d = if d < 20 { d + 1 } else { d + d / 3 };
+            }
+        }
+        assert_eq!(bad, 0, "ln deep directed band has live misrounds");
+    }
+
+    fn ln_strict_dyn(s: u32, raw: Int<2>, mode: RoundingMode) -> Option<i128> {
+        // The STRICT path (const-scale): the fixed near-tie terminal.
+        let v = match s {
+            31 => ln_strict::<31>(raw, mode),
+            32 => ln_strict::<32>(raw, mode),
+            33 => ln_strict::<33>(raw, mode),
+            34 => ln_strict::<34>(raw, mode),
+            35 => ln_strict::<35>(raw, mode),
+            36 => ln_strict::<36>(raw, mode),
+            37 => ln_strict::<37>(raw, mode),
+            38 => ln_strict::<38>(raw, mode),
+            _ => unreachable!(),
+        };
+        v.map(|v| v.as_i128())
+    }
+
+    #[test]
+    fn log_fractional_base_high_scale_budget_product_does_not_wrap() {
+        // regression: the rational-pin budget product `bl * e` wrapped u128
+        // for an irreducible candidate denominator (q ~ 2*10^37) on
+        // log(0.1096614350149675660535769418, 0.0182017066872921546105935121)
+        // at D38<37> (the golden log.golden:18 panic). The saturating
+        // budget must DEFER (walker), never wrap.
+        let xr: i128 = 1096614350149675660535769418_i128 * 1_000_000_000;
+        let br: i128 = 182017066872921546105935121_i128 * 1_000_000_000;
+        for mode in [
+            RoundingMode::HalfToEven,
+            RoundingMode::Floor,
+            RoundingMode::Ceiling,
+        ] {
+            let r = log_strict_raw(xr, br, 37, mode);
+            assert!(r.is_some(), "log fractional-base s37 mode={mode:?}");
+        }
+    }
+
+    #[test]
+    fn log_rational_exact_d38() {
+        // log_4(8) = 3/2 EXACTLY (8² = 4³): on the storage grid at
+        // SCALE 19, so every mode must return exactly 1.5. failing-first:
+        // the ln(8)/ln(4) single shot lands a hair off the grid line and
+        // the directed modes stepped 1 LSB off the exact power.
+        let one19 = 10_i128.pow(19);
+        let x = Int::<2>::from_i128(8 * one19);
+        let b = Int::<2>::from_i128(4 * one19);
+        for mode in [
+            RoundingMode::HalfToEven,
+            RoundingMode::HalfAwayFromZero,
+            RoundingMode::HalfTowardZero,
+            RoundingMode::Floor,
+            RoundingMode::Ceiling,
+            RoundingMode::Trunc,
+        ] {
+            assert_eq!(
+                log_strict_raw(x.as_i128(), b.as_i128(), 19, mode),
+                Some(15 * one19 / 10),
+                "log_4(8) mode={mode:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn log_rational_half_tie_s0() {
+        // log_4(32) = 5/2 EXACTLY (32² = 4⁵): at SCALE 0 the true value
+        // sits EXACTLY on the half between 2 and 3 — a genuine tie that
+        // only exact integer arithmetic can certify (the working-scale
+        // residual is kernel noise around the half). HalfToEven → 2
+        // (even), HalfAwayFromZero → 3, HalfTowardZero → 2.
+        let x = Int::<2>::from_i128(32);
+        let b = Int::<2>::from_i128(4);
+        assert_eq!(
+            log_strict_raw(x.as_i128(), b.as_i128(), 0, RoundingMode::HalfToEven),
+            Some(2),
+            "log_4(32) HalfToEven"
+        );
+        assert_eq!(
+            log_strict_raw(x.as_i128(), b.as_i128(), 0, RoundingMode::HalfAwayFromZero),
+            Some(3),
+            "log_4(32) HalfAwayFromZero"
+        );
+        assert_eq!(
+            log_strict_raw(x.as_i128(), b.as_i128(), 0, RoundingMode::HalfTowardZero),
+            Some(2),
+            "log_4(32) HalfTowardZero"
+        );
+        // log_16(8) = 3/4 (8⁴ = 16³): a half-tie at SCALE 1 (7.5 tenths).
+        let x8 = Int::<2>::from_i128(80);
+        let b16 = Int::<2>::from_i128(160);
+        assert_eq!(
+            log_strict_raw(x8.as_i128(), b16.as_i128(), 1, RoundingMode::HalfToEven),
+            Some(8),
+            "log_16(8) s1 HalfToEven"
+        );
+        assert_eq!(
+            log_strict_raw(x8.as_i128(), b16.as_i128(), 1, RoundingMode::HalfTowardZero),
+            Some(7),
+            "log_16(8) s1 HalfTowardZero"
+        );
+    }
 }
