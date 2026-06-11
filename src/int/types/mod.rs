@@ -1035,26 +1035,23 @@ impl<const N: usize> Int<N> {
 
     /// Checked signed addition: `None` on two's-complement overflow.
     /// Overflow happens only when both operands share a sign and the
-    /// result's sign differs from it.
+    /// result's sign differs from it. Routes through the add policy's
+    /// checked door to the FUSED single-pass kernel (ripple + overflow
+    /// verdict in one traversal) — the previous layered shape
+    /// (`wrapping_add` then three sign reads then an `Option` rewrap)
+    /// measured ≈2× the bare loop at 24 limbs in inter-layer moves.
     #[inline]
     pub const fn checked_add(self, rhs: Self) -> Option<Self> {
-        let r = self.wrapping_add(rhs);
-        let sa = self.is_negative();
-        let sb = rhs.is_negative();
-        let sr = r.is_negative();
-        if sa == sb && sr != sa { None } else { Some(r) }
+        crate::int::policy::add::dispatch_checked(self, rhs)
     }
 
-    /// Checked signed subtraction: `None` on two's-complement overflow.
+    /// Checked signed subtraction: `None` on two's-complement overflow
+    /// (the operands' signs differ and the result takes the subtrahend's
+    /// sign). Routes through the sub policy's checked door to the fused
+    /// single-pass kernel — see [`Self::checked_add`].
     #[inline]
     pub const fn checked_sub(self, rhs: Self) -> Option<Self> {
-        let r = self.wrapping_sub(rhs);
-        let sa = self.is_negative();
-        let sb = rhs.is_negative();
-        let sr = r.is_negative();
-        // Overflow when the operands' signs differ and the result takes
-        // the subtrahend's sign.
-        if sa != sb && sr != sa { None } else { Some(r) }
+        crate::int::policy::sub::dispatch_checked(self, rhs)
     }
 
     /// Checked signed multiplication: `None` if the true product does

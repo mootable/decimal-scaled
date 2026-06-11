@@ -108,3 +108,22 @@ pub(crate) const fn dispatch<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
         Algorithm::Schoolbook => sub_ripple_borrow(a, b),
     }
 }
+
+/// Checked door over the SAME verdict: routes to the fused single-pass
+/// checked kernel (`sub_ripple_borrow_checked` — borrow ripple + overflow
+/// verdict in one traversal, the `Option` returned directly).
+/// `Int::checked_sub` (and through it the decimal `-` operator's
+/// panic-on-overflow contract) enters here — the fused-add rationale, see
+/// `int::policy::add::dispatch_checked`.
+#[inline]
+pub(crate) const fn dispatch_checked<const N: usize>(a: Int<N>, b: Int<N>) -> Option<Int<N>> {
+    let algo = match const { select::<N>() } {
+        Select::ByAlgorithm(a) => a,
+        Select::ByValue(_) => Algorithm::RippleBorrow,
+    };
+    match algo {
+        Algorithm::RippleBorrow | Algorithm::Schoolbook => {
+            crate::int::algos::sub::sub_ripple_borrow::sub_ripple_borrow_checked(a, b)
+        }
+    }
+}

@@ -105,3 +105,23 @@ pub(crate) const fn dispatch<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
         Algorithm::Schoolbook => add_ripple_carry(a, b),
     }
 }
+
+/// Checked door over the SAME verdict: routes to the fused
+/// single-pass checked kernel (`add_ripple_carry_checked` — ripple +
+/// overflow verdict in one traversal, the `Option` returned directly).
+/// `Int::checked_add` (and through it the decimal `+` operator's
+/// panic-on-overflow contract) enters here; the layered
+/// `wrapping_add`-then-sign-check shape it replaces measured ≈2× the
+/// bare loop at 24 limbs in by-value moves between the layers.
+#[inline]
+pub(crate) const fn dispatch_checked<const N: usize>(a: Int<N>, b: Int<N>) -> Option<Int<N>> {
+    let algo = match const { select::<N>() } {
+        Select::ByAlgorithm(a) => a,
+        Select::ByValue(_) => Algorithm::RippleCarry,
+    };
+    match algo {
+        Algorithm::RippleCarry | Algorithm::Schoolbook => {
+            crate::int::algos::add::add_ripple_carry::add_ripple_carry_checked(a, b)
+        }
+    }
+}
