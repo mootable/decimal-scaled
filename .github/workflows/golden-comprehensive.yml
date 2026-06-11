@@ -1,0 +1,185 @@
+name: "🌕 golden comprehensive (advisory)"
+
+# The full six-mode golden surface — every row, every cell, all six
+# rounding modes — on every push, in its OWN workflow so the ci.yml
+# quick gate's verdict never waits on it and the two never share a
+# run's runner allocation. ADVISORY by design: this is not a required
+# check; a red here means roll the push back or bisect, never block
+# the quick-gate merge loop (owner 2026-06-11).
+#
+# Same stripe mechanics as the quick gate: build the release gate exe
+# once, stage just the binary (the bbc pattern), fan the FULL row set
+# over STRIPE_COUNT disjoint stripes (GOLDEN_STRIPE=k/n), each stripe
+# posting its mini report the moment it finishes, then splice the
+# stripes back together in order.
+
+on:
+  push:
+    branches:
+      - main
+      - "release/*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # The stripe modulus — tune from the per-stripe timings in the splice
+  # summary. Independent of ci.yml's knob so the heavier six-mode sweep
+  # can shard wider if needed.
+  STRIPE_COUNT: "10"
+
+concurrency:
+  # Serial queue per ref, like ci.yml/bbc: an in-progress sweep finishes,
+  # a newer push supersedes only the QUEUED run.
+  group: golden-comprehensive-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      stripes: ${{ steps.gen.outputs.stripes }}
+    steps:
+      - name: Generate stripe indices
+        id: gen
+        run: echo "stripes=$(python3 -c "import json, os; print(json.dumps(list(range(int(os.environ['STRIPE_COUNT'])))))")" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-ci-golden-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'macros/Cargo.toml') }}
+          restore-keys: |
+            cargo-ci-golden-${{ runner.os }}-
+
+      - name: Compile the golden gate (release, no run)
+        # `-p decimal-scale-test` scopes the build to the gate crate (the
+        # root crate's bench dev-deps never compile). Shares the quick
+        # gate's cache key, so this is usually a warm rebuild.
+        run: cargo test -p decimal-scale-test --release --features wide,x-wide,xx-wide --test golden --no-run
+
+      - name: Stage the gate exe
+        run: |
+          set -euo pipefail
+          exe=$(ls -t target/release/deps/golden-* | grep -v '\.d$' | head -1)
+          mkdir -p staged
+          cp "$exe" staged/golden
+          chmod +x staged/golden
+          echo "staged: $exe"
+
+      - name: Upload the gate exe
+        uses: actions/upload-artifact@v7
+        with:
+          name: golden-exe
+          path: staged/
+          if-no-files-found: error
+          retention-days: 3
+
+  stripes:
+    name: stripe ${{ matrix.stripe }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: [plan, build]
+    strategy:
+      fail-fast: false
+      matrix:
+        stripe: ${{ fromJSON(needs.plan.outputs.stripes) }}
+
+    steps:
+      - name: Checkout (golden data)
+        uses: actions/checkout@v6
+
+      - name: Download the gate exe
+        uses: actions/download-artifact@v8
+        with:
+          name: golden-exe
+
+      - name: Run stripe (all six modes, full rows)
+        env:
+          GOLDEN_STRIPE: "${{ matrix.stripe }}/${{ env.STRIPE_COUNT }}"
+          GOLDEN_REPORT_DIR: stripe-report
+          GOLDEN_DIR: ${{ github.workspace }}/decimal-scaled-golden/golden
+        run: |
+          set -euo pipefail
+          chmod +x golden
+          ./golden golden_all_modes --ignored --nocapture
+
+      - name: Mini report → step summary
+        if: always()
+        run: |
+          if [ -f stripe-report/summary.txt ]; then
+            cat stripe-report/summary.txt >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload stripe mini report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: golden-comprehensive-stripe-${{ matrix.stripe }}
+          path: stripe-report/
+          if-no-files-found: warn
+          retention-days: 7
+
+  splice:
+    name: splice
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [plan, stripes]
+
+    steps:
+      - name: Download all stripe reports
+        uses: actions/download-artifact@v8
+        with:
+          pattern: golden-comprehensive-stripe-*
+          path: stripes/
+
+      - name: Splice in stripe order
+        env:
+          STRIPES: ${{ needs.plan.outputs.stripes }}
+        run: |
+          set -euo pipefail
+          mkdir -p combined
+          : > combined/summaries.txt
+          head_done=0
+          for k in $(python3 -c "import json,os;print(' '.join(map(str, json.loads(os.environ['STRIPES']))))"); do
+            dir="stripes/golden-comprehensive-stripe-${k}"
+            test -f "$dir/summary.txt" || { echo "MISSING stripe ${k} report" >&2; exit 1; }
+            cat "$dir/summary.txt" >> combined/summaries.txt
+            if [ "$head_done" -eq 0 ]; then
+              cat "$dir/results.tsv" > combined/results.tsv; head_done=1
+            else
+              tail -n +2 "$dir/results.tsv" >> combined/results.tsv
+            fi
+          done
+          {
+            echo "## golden comprehensive — combined (all six modes, full surface)"
+            echo '```'
+            cat combined/summaries.txt
+            echo '```'
+            echo "rows: $(($(wc -l < combined/results.tsv) - 1))"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload combined report
+        uses: actions/upload-artifact@v7
+        with:
+          name: golden-comprehensive-combined
+          path: combined/
+          if-no-files-found: error
+          retention-days: 14

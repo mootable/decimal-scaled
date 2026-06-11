@@ -10,15 +10,14 @@ name: "✅ ci (pre-merge gates)"
 # never the target/ dir); `golden-quick` fans the FULL input surface
 # out over `STRIPE_COUNT` parallel jobs via `GOLDEN_STRIPE=k/n` (a
 # disjoint row partition — union is every row, nothing sampled away)
-# under the default rounding mode and BLOCKS; `golden-comprehensive`
-# runs the same stripes across ALL SIX modes and is advisory (not a
-# required check — a red here means roll back or bisect the push).
-# Each stripe uploads a mini report (results.tsv + summary) readable
-# the moment it finishes; the splice jobs combine them in stripe
-# order into one surface report.
+# under the default rounding mode and BLOCKS. The six-mode sweep lives
+# in its OWN workflow (golden-comprehensive.yml) so this gate's verdict
+# never waits on it. Each stripe uploads a mini report (results.tsv +
+# summary) readable the moment it finishes; the splice job combines
+# them in stripe order into one surface report.
 #
 # Gates (must pass): tests, golden-quick (+splice), no_std, docs, msrv.
-# Advisory (not required checks): golden-comprehensive, clippy.
+# Advisory (never fails the build): clippy.
 
 on:
   pull_request:
@@ -268,103 +267,6 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: golden-quick-combined
-          path: combined/
-          if-no-files-found: error
-          retention-days: 14
-
-  # ADVISORY: the comprehensive surface — the same stripe fleet, ALL
-  # SIX rounding modes, full rows. Not a required check (a red here
-  # means roll the push back or bisect — it must never block the
-  # quick-gate merge loop), but it runs on every push so directed-mode
-  # regressions surface within the hour, not at the next dispatch.
-  golden-comprehensive:
-    name: golden comprehensive (stripe ${{ matrix.stripe }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    needs: [golden-plan, golden-build]
-    strategy:
-      fail-fast: false
-      matrix:
-        stripe: ${{ fromJSON(needs.golden-plan.outputs.stripes) }}
-
-    steps:
-      - name: Checkout (golden data)
-        uses: actions/checkout@v6
-
-      - name: Download the gate exe
-        uses: actions/download-artifact@v8
-        with:
-          name: golden-exe
-
-      - name: Run stripe (all six modes, full rows)
-        env:
-          GOLDEN_STRIPE: "${{ matrix.stripe }}/${{ env.STRIPE_COUNT }}"
-          GOLDEN_REPORT_DIR: stripe-report
-          GOLDEN_DIR: ${{ github.workspace }}/decimal-scaled-golden/golden
-        run: |
-          set -euo pipefail
-          chmod +x golden
-          ./golden golden_all_modes --ignored --nocapture
-
-      - name: Mini report → step summary
-        if: always()
-        run: |
-          if [ -f stripe-report/summary.txt ]; then
-            cat stripe-report/summary.txt >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-      - name: Upload stripe mini report
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: golden-comprehensive-stripe-${{ matrix.stripe }}
-          path: stripe-report/
-          if-no-files-found: warn
-          retention-days: 7
-
-  golden-comprehensive-splice:
-    name: golden comprehensive (splice)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    needs: [golden-plan, golden-comprehensive]
-
-    steps:
-      - name: Download all stripe reports
-        uses: actions/download-artifact@v8
-        with:
-          pattern: golden-comprehensive-stripe-*
-          path: stripes/
-
-      - name: Splice in stripe order
-        env:
-          STRIPES: ${{ needs.golden-plan.outputs.stripes }}
-        run: |
-          set -euo pipefail
-          mkdir -p combined
-          : > combined/summaries.txt
-          head_done=0
-          for k in $(python3 -c "import json,os;print(' '.join(map(str, json.loads(os.environ['STRIPES']))))"); do
-            dir="stripes/golden-comprehensive-stripe-${k}"
-            test -f "$dir/summary.txt" || { echo "MISSING stripe ${k} report" >&2; exit 1; }
-            cat "$dir/summary.txt" >> combined/summaries.txt
-            if [ "$head_done" -eq 0 ]; then
-              cat "$dir/results.tsv" > combined/results.tsv; head_done=1
-            else
-              tail -n +2 "$dir/results.tsv" >> combined/results.tsv
-            fi
-          done
-          {
-            echo "## golden comprehensive — combined (all six modes, full surface)"
-            echo '```'
-            cat combined/summaries.txt
-            echo '```'
-            echo "rows: $(($(wc -l < combined/results.tsv) - 1))"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload combined report
-        uses: actions/upload-artifact@v7
-        with:
-          name: golden-comprehensive-combined
           path: combined/
           if-no-files-found: error
           retention-days: 14
