@@ -79,6 +79,7 @@ pub(crate) fn sinh_exp_identity_with_tang<
 ) -> C::Storage
 where
     <C::Wagm as BigInt>::Scratch: ComputeLimbs,
+    <C::Wexp as BigInt>::Scratch: ComputeLimbs,
 {
     let w = SCALE + GUARD;
     let v = C::to_work_scaled_agm(raw, GUARD);
@@ -114,6 +115,7 @@ pub(crate) fn cosh_exp_identity_with_tang<
 ) -> C::Storage
 where
     <C::Wagm as BigInt>::Scratch: ComputeLimbs,
+    <C::Wexp as BigInt>::Scratch: ComputeLimbs,
 {
     // Route the narrowing through the shared directed/near-tie Ziv escalation
     // (on the wide `Wagm`), matching `cosh_schoolbook`. `cosh(x) = 1 + x²/2 +
@@ -162,6 +164,7 @@ pub(crate) fn tanh_exp_identity_with_tang<
 ) -> C::Storage
 where
     <C::Wagm as BigInt>::Scratch: ComputeLimbs,
+    <C::Wexp as BigInt>::Scratch: ComputeLimbs,
 {
     let zero = C::storage_zero();
     if raw != zero {

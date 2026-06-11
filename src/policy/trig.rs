@@ -538,6 +538,26 @@ pub(crate) mod inverse_rung {
     }
 }
 
+// The hyper Tang band kernels (`hyper_exp_identity`, narrow guard 8/10,
+// no `e^|x|` integer-digit lift) are valid only while the result's
+// integer-digit growth is ZERO — `|x| < ln 10 ≈ 2.302`, gated
+// conservatively at `|x| ≤ 2` (continuous region; the exp amplification
+// eats one guard digit per integer digit of `e^|x|`, so a larger
+// argument blows the band guard — mis-rounds from |x| ≈ 10, work-int
+// panics past |x| ≈ 65, exposed when the `_strict_with` shells started
+// delegating through the policy). Out-of-range magnitudes take the
+// canonical Ziv-escalated kernels, golden-proven across the whole
+// argument range.
+#[cfg(feature = "_wide-support")]
+#[inline]
+fn hyper_band_in_range<const N: usize, const SCALE: u32>(raw: &crate::int::types::Int<N>) -> bool {
+    use crate::int::types::traits::BigInt as _;
+    let zero = crate::int::types::Int::<N>::ZERO;
+    let a = if *raw < zero { zero - *raw } else { *raw };
+    a <= crate::int::types::Int::<N>::from_i128(2)
+        * crate::consts::pow10::dispatch::<crate::int::types::Int<N>>(SCALE)
+}
+
 // ══════════════════════════════════════════════════════════════════════
 // Hyperbolic-family SCALE-derived work-rung routing (sinh / cosh / tanh)
 //
@@ -571,8 +591,8 @@ pub(crate) mod hyper_rung {
         mode: RoundingMode,
     ) -> C::Storage
     where
+        <C::Wagm as BigInt>::Scratch: ComputeLimbs,
         <C::Wexp as BigInt>::Scratch: ComputeLimbs,
-        <C::W as BigInt>::Scratch: ComputeLimbs,
     {
         if in_budget::<C::Storage, SCALE, EXP_ARG_BUDGET>(&raw) {
             rung_match!(trig_rung, C, SCALE, sinh_schoolbook_g, [SCALE], raw, mode)
@@ -588,8 +608,8 @@ pub(crate) mod hyper_rung {
         mode: RoundingMode,
     ) -> C::Storage
     where
+        <C::Wagm as BigInt>::Scratch: ComputeLimbs,
         <C::Wexp as BigInt>::Scratch: ComputeLimbs,
-        <C::W as BigInt>::Scratch: ComputeLimbs,
     {
         if in_budget::<C::Storage, SCALE, EXP_ARG_BUDGET>(&raw) {
             rung_match!(trig_rung, C, SCALE, cosh_schoolbook_g, [SCALE], raw, mode)
@@ -605,8 +625,8 @@ pub(crate) mod hyper_rung {
         mode: RoundingMode,
     ) -> C::Storage
     where
+        <C::Wagm as BigInt>::Scratch: ComputeLimbs,
         <C::Wexp as BigInt>::Scratch: ComputeLimbs,
-        <C::W as BigInt>::Scratch: ComputeLimbs,
     {
         if in_budget::<C::Storage, SCALE, EXP_ARG_BUDGET>(&raw) {
             rung_match!(trig_rung, C, SCALE, tanh_schoolbook_g, [SCALE], raw, mode)
@@ -650,7 +670,7 @@ pub(crate) mod extra_rung {
         mode: RoundingMode,
     ) -> C::Storage
     where
-        <C::W as crate::int::types::traits::BigInt>::Scratch:
+        <C::Wagm as crate::int::types::traits::BigInt>::Scratch:
             crate::int::types::compute_limbs::ComputeLimbs,
     {
         if in_budget::<C::Storage, SCALE, D_BUDGET>(&raw) {
@@ -669,7 +689,7 @@ pub(crate) mod extra_rung {
         mode: RoundingMode,
     ) -> C::Storage
     where
-        <C::W as crate::int::types::traits::BigInt>::Scratch:
+        <C::Wagm as crate::int::types::traits::BigInt>::Scratch:
             crate::int::types::compute_limbs::ComputeLimbs,
     {
         if in_budget::<C::Storage, SCALE, D_BUDGET>(&raw) {
@@ -688,7 +708,7 @@ pub(crate) mod extra_rung {
         mode: RoundingMode,
     ) -> C::Storage
     where
-        <C::W as crate::int::types::traits::BigInt>::Scratch:
+        <C::Wagm as crate::int::types::traits::BigInt>::Scratch:
             crate::int::types::compute_limbs::ComputeLimbs,
     {
         if in_budget::<C::Storage, SCALE, D_BUDGET>(&raw) {
@@ -1785,7 +1805,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
     pub(crate) fn policy_sinh(self, mode: RoundingMode) -> Self {
         Self(match hyper::resolve::<3, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
-                18..=22 => trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8, 128, false>(self.0, mode),
+                18..=22 if hyper_band_in_range::<3, SCALE>(&self.0) => trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8, 128, false>(self.0, mode),
                 _ => return Self(hyper_rung::sinh_strict::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
@@ -1800,7 +1820,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
     pub(crate) fn policy_cosh(self, mode: RoundingMode) -> Self {
         Self(match hyper::resolve::<3, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
-                18..=22 => trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8, 128, false>(self.0, mode),
+                18..=22 if hyper_band_in_range::<3, SCALE>(&self.0) => trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8, 128, false>(self.0, mode),
                 _ => return Self(hyper_rung::cosh_strict::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
@@ -1815,7 +1835,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
     pub(crate) fn policy_tanh(self, mode: RoundingMode) -> Self {
         Self(match hyper::resolve::<3, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
-                18..=22 => trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8, 128, false>(self.0, mode),
+                18..=22 if hyper_band_in_range::<3, SCALE>(&self.0) => trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8, 128, false>(self.0, mode),
                 _ => return Self(hyper_rung::tanh_strict::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
@@ -1850,7 +1870,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<6>, SCALE> {
     pub(crate) fn policy_sinh(self, mode: RoundingMode) -> Self {
         Self(match hyper::resolve::<6, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
-                50..=60 => trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 8, 128, false>(self.0, mode),
+                50..=60 if hyper_band_in_range::<6, SCALE>(&self.0) => trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 8, 128, false>(self.0, mode),
                 _ => return Self(crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<crate::types::widths::wide_trig_d115::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
@@ -1865,7 +1885,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<6>, SCALE> {
     pub(crate) fn policy_cosh(self, mode: RoundingMode) -> Self {
         Self(match hyper::resolve::<6, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
-                50..=60 => trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 8, 128, false>(self.0, mode),
+                50..=60 if hyper_band_in_range::<6, SCALE>(&self.0) => trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 8, 128, false>(self.0, mode),
                 _ => return Self(crate::algos::trig::hyper_schoolbook::cosh_schoolbook::<crate::types::widths::wide_trig_d115::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
@@ -1880,7 +1900,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<6>, SCALE> {
     pub(crate) fn policy_tanh(self, mode: RoundingMode) -> Self {
         Self(match hyper::resolve::<6, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
-                50..=60 => trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 8, 128, false>(self.0, mode),
+                50..=60 if hyper_band_in_range::<6, SCALE>(&self.0) => trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 8, 128, false>(self.0, mode),
                 _ => return Self(crate::algos::trig::hyper_schoolbook::tanh_schoolbook::<crate::types::widths::wide_trig_d115::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
@@ -1966,7 +1986,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<8>, SCALE> {
     pub(crate) fn policy_sinh(self, mode: RoundingMode) -> Self {
         Self(match hyper::resolve::<8, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
-                70..=82 => trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, 128, true>(self.0, mode),
+                70..=82 if hyper_band_in_range::<8, SCALE>(&self.0) => trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, 128, true>(self.0, mode),
                 _ => return Self(hyper_rung::sinh_strict::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
@@ -1981,7 +2001,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<8>, SCALE> {
     pub(crate) fn policy_cosh(self, mode: RoundingMode) -> Self {
         Self(match hyper::resolve::<8, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
-                70..=82 => trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, 128, true>(self.0, mode),
+                70..=82 if hyper_band_in_range::<8, SCALE>(&self.0) => trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, 128, true>(self.0, mode),
                 _ => return Self(hyper_rung::cosh_strict::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
@@ -1996,7 +2016,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<8>, SCALE> {
     pub(crate) fn policy_tanh(self, mode: RoundingMode) -> Self {
         Self(match hyper::resolve::<8, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
-                70..=82 => trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, 128, true>(self.0, mode),
+                70..=82 if hyper_band_in_range::<8, SCALE>(&self.0) => trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, 128, true>(self.0, mode),
                 _ => return Self(hyper_rung::tanh_strict::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
@@ -2091,7 +2111,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
     pub(crate) fn policy_sinh(self, mode: RoundingMode) -> Self {
         Self(match hyper::resolve::<16, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
-                140..=160 => trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, 8, 128, false>(self.0, mode),
+                140..=160 if hyper_band_in_range::<16, SCALE>(&self.0) => trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, 8, 128, false>(self.0, mode),
                 _ => return Self(hyper_rung::sinh_strict::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
@@ -2106,7 +2126,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
     pub(crate) fn policy_cosh(self, mode: RoundingMode) -> Self {
         Self(match hyper::resolve::<16, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
-                140..=160 => trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, 8, 128, false>(self.0, mode),
+                140..=160 if hyper_band_in_range::<16, SCALE>(&self.0) => trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, 8, 128, false>(self.0, mode),
                 _ => return Self(hyper_rung::cosh_strict::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
@@ -2121,7 +2141,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
     pub(crate) fn policy_tanh(self, mode: RoundingMode) -> Self {
         Self(match hyper::resolve::<16, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
-                140..=160 => trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, 8, 128, false>(self.0, mode),
+                140..=160 if hyper_band_in_range::<16, SCALE>(&self.0) => trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, 8, 128, false>(self.0, mode),
                 _ => return Self(hyper_rung::tanh_strict::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
@@ -3569,6 +3589,75 @@ mod forward_rung_tests {
         bench_grid_cell!(Core, 64, 616, false);
         bench_grid_cell!(Core, 64, 924, false);
         bench_grid_cell!(Core, 64, 1231, false);
+    }
+
+    /// HYPER default-vs-`_with` symmetry pins at a deep-cubic cell.
+    ///
+    /// D462<461>, x = 1e-168 (raw = 10^293, inside the analytic
+    /// small-argument band |raw| <= 10^(S - ceil(S/3)) = 10^307): the
+    /// odd-series cubic (x^3/6 for sinh/asinh, x^3/3 for tanh/atanh)
+    /// sits at fraction depth ~3*168 = 504+ digits - BEYOND the D462
+    /// work int's escalation cap (~8*64 - 9 = 503) - yet its SIGN is
+    /// analytically certain, so every mode's answer is exact integer
+    /// arithmetic on raw: expanding (sinh, atanh: |f(x)| > |x|) gives
+    /// Ceiling = raw+1, Floor/Trunc = raw; compressing (tanh, asinh)
+    /// gives Floor/Trunc = raw-1, Ceiling = raw; nearest = raw (cubic
+    /// well under half a ULP in the band). The macro `_strict_with`
+    /// shells pinned sinh/tanh analytically while the POLICY-routed
+    /// default path walked to its cap and concluded from the grid -
+    /// the asymmetry this test pins (it FAILED pre-hoist on sinh
+    /// Ceiling and tanh/asinh Floor, and exposed that asinh/atanh had
+    /// no band on EITHER path). Also asserts default == _with(DEFAULT)
+    /// for the whole family at this cell and an ordinary cell.
+    #[test]
+    #[cfg(feature = "d462")]
+    fn d462_s461_hyper_deep_cubic_default_with_symmetry() {
+        use crate::int::types::Int;
+        let raw = Int::<24>::from_i128(10).pow(293);
+        let one = Int::<24>::from_i128(1);
+        let x = crate::D::<Int<24>, 461>(raw);
+        for mode in ALL_MODES {
+            let nearest = crate::support::rounding::is_nearest_mode(mode);
+            // sinh / atanh: expanding odd (true value just ABOVE raw).
+            let expand = if nearest {
+                raw
+            } else {
+                match mode {
+                    crate::support::rounding::RoundingMode::Ceiling => raw + one,
+                    _ => raw,
+                }
+            };
+            // tanh / asinh: compressing odd (true value just BELOW raw).
+            let compress = if nearest {
+                raw
+            } else {
+                match mode {
+                    crate::support::rounding::RoundingMode::Ceiling => raw,
+                    _ => raw - one,
+                }
+            };
+            assert_eq!(x.sinh_strict_with(mode).0, expand, "sinh mode {mode:?}");
+            assert_eq!(super::sinh_dispatch::<24, 461>(raw, mode), expand, "sinh dispatch {mode:?}");
+            assert_eq!(x.tanh_strict_with(mode).0, compress, "tanh mode {mode:?}");
+            assert_eq!(super::tanh_dispatch::<24, 461>(raw, mode), compress, "tanh dispatch {mode:?}");
+            assert_eq!(x.asinh_strict_with(mode).0, compress, "asinh mode {mode:?}");
+            assert_eq!(super::asinh_dispatch::<24, 461>(raw, mode), compress, "asinh dispatch {mode:?}");
+            assert_eq!(x.atanh_strict_with(mode).0, expand, "atanh mode {mode:?}");
+            assert_eq!(super::atanh_dispatch::<24, 461>(raw, mode), expand, "atanh dispatch {mode:?}");
+        }
+        // Default == _with(DEFAULT) for the whole family, deep + ordinary.
+        let half = Int::<24>::from_i128(5) * Int::<24>::from_i128(10).pow(460);
+        for v in [raw, half] {
+            let y = crate::D::<Int<24>, 461>(v);
+            let m = crate::support::rounding::DEFAULT_ROUNDING_MODE;
+            assert_eq!(y.sinh_strict(), y.sinh_strict_with(m), "sinh default");
+            assert_eq!(y.cosh_strict(), y.cosh_strict_with(m), "cosh default");
+            assert_eq!(y.tanh_strict(), y.tanh_strict_with(m), "tanh default");
+            assert_eq!(y.asinh_strict(), y.asinh_strict_with(m), "asinh default");
+            assert_eq!(y.atanh_strict(), y.atanh_strict_with(m), "atanh default");
+            let z = crate::D::<Int<24>, 461>(v + Int::<24>::from_i128(10).pow(461)); // >= 1 for acosh
+            assert_eq!(z.acosh_strict(), z.acosh_strict_with(m), "acosh default");
+        }
     }
 
     /// Inverse-family rung anchors (D307<19>): the rung-routed asin /

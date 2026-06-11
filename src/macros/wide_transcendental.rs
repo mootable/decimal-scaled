@@ -2343,6 +2343,9 @@ macro_rules! decl_wide_transcendental {
                     tanh_pos_wide::<SCALE>(av_w, w)
                 }
                 #[inline]
+                fn ln_fixed_routed_agm<const SCALE: u32>(v_w: Wagm, w: u32) -> Wagm {
+                    ln_fixed_routed_agm::<SCALE>(v_w, w)
+                }
                 fn round_to_storage_directed_near_special(
                     base_guard: u32,
                     target: u32,
@@ -3860,371 +3863,58 @@ macro_rules! decl_wide_transcendental {
 
             /// Mode-aware sibling of [`Self::sinh_strict`].
             ///
-            /// Uses the `exp(-v) = 1/exp(v)` identity to replace the
-            /// second `exp_fixed` call with one wide divide. Wide-tier
-            /// `exp_fixed` is dominated by the Tang-table reduction +
-            /// Taylor series and costs ~10-20× more than a wide
-            /// divide; the identity drops the per-call wall-clock
-            /// roughly 40%.
+            /// Delegates to the policy dispatch exactly as the default-
+            /// mode sibling does (`policy::trig::sinh_dispatch`), so BOTH
+            /// public entries share the one canonical kernel
+            /// (`hyper_schoolbook::sinh_schoolbook`, which now carries
+            /// this shell's former analytic small-argument band, exact
+            /// pins, and `never_exact` two-width widening).
             #[inline]
             #[must_use]
             pub fn sinh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let raw = self.to_bits();
-                let szero = <$Storage>::from_i128(0);
-                // `sinh(0) = 0` is the SOLE exact point; pin it so the
-                // never-exact narrowing below never bumps it.
-                if raw == szero {
-                    return self;
-                }
-                {
-                    // Small-argument cubic band: `sinh(x) = x + x³/6 + …`,
-                    // the cubic strictly positive yet below one ULP, so
-                    // the true value sits just *above* the grid line
-                    // `raw` (in magnitude). No finite-precision `exp`
-                    // path resolves the sub-ULP cubic — the
-                    // `(e^x − e^-x)/2` difference collapses to exactly
-                    // `raw` (or one LSB short) — so we return the
-                    // analytic directed decision. `sinh` is odd, so the
-                    // band is symmetric. The threshold mirrors `tanh`'s:
-                    // the cubic clears half a storage ULP only once
-                    // `|raw| > ~10^(2·SCALE/3)`.
-                    let thresh_exp = SCALE - SCALE.div_ceil(3);
-                    let thresh = <$Storage>::from_i128(10).pow(thresh_exp);
-                    if raw.abs() <= thresh {
-                        return Self::from_bits(
-                            $crate::support::rounding::tiny_odd_expanding_directed(
-                                raw,
-                                szero,
-                                <$Storage>::from_i128(1),
-                                mode,
-                            ),
-                        );
-                    }
-                }
-                // Large-argument lift. `sinh(x) ≈ e^|x|/2` carries
-                // `~|x|·log10(e)` integer-part digits; the `exp_fixed`
-                // result holds those at the high end of the working
-                // integer, so its ≤ 0.5 LSB-of-w relative error becomes
-                // an absolute error of `~10^(int_digits)` storage LSB on
-                // narrowing. Lift the base working scale by the same
-                // `⌈|x|·log10(e)⌉` digits (the `exp` `2^k` reassembly
-                // budget) so that absolute error stays sub-storage-ULP.
-                // Always feed `exp_fixed` the *positive* magnitude `|v|`,
-                // so the dominant `e^|x|` term is computed directly and
-                // accurately. The reciprocal then gives the tiny
-                // `e^-|x|`. Computing `exp(-|x|)` directly and
-                // reciprocating instead would amplify the small term's
-                // relative error into a large absolute error in the huge
-                // `1/exp(-|x|)`, blowing the storage-ULP budget for large
-                // `|x|`. `sinh` is odd, so the sign of the input is
-                // reapplied to the (non-negative) `sinh(|x|)` working
-                // value — the narrowing reads the sign off the returned
-                // value and rounds each mode accordingly.
-                let neg = raw < <$Storage>::from_i128(0);
-                // Two-core: composition runs on the wide `Wagm` work int.
-                let k_lift = $core::exp_result_int_digits::<$core::Wagm>($core::to_work_scaled_agm(raw, 0), SCALE);
-                let base_guard = $core::GUARD + k_lift;
-                // Two-width near-min narrowing, exactly as `cosh_strict_with`:
-                // `sinh(x)` is irrational for every rational `x != 0`
-                // (`sinh(0)` is pinned above), so it is NEVER on a storage
-                // grid line — `never_exact = true`. The resolver's
-                // noise-proof escalation also covers the band-edge tiny
-                // arguments whose deciding Taylor term (`x⁷/5040`, …) sits
-                // far below the working scale yet within the next-wider work
-                // integer's reach (e.g. `sinh(1e-86)` at the D462 MAX scale,
-                // beyond `Wagm`'s width there).
-                let r = $crate::algos::support::wide_trig_core::round_to_storage_widening_g::<
-                    $Storage, $core::Wagm, $core::Wexp,
-                >(
-                    base_guard,
-                    SCALE,
-                    mode,
-                    true,
-                    <$Storage>::MAX,
-                    <$Storage>::MIN,
-                    |guard| {
-                        let w = SCALE + guard;
-                        let v = $core::to_work_scaled_agm(raw, guard);
-                        let av = if v < $core::zero_agm() { -v } else { v };
-                        let sh = $core::sinh_pos_wide_agm(av, w);
-                        if neg { -sh } else { sh }
-                    },
-                    |guard| {
-                        let w = SCALE + guard;
-                        let v = $crate::algos::support::wide_trig_core::to_work_scaled_g::<
-                            $Storage, $core::Wexp,
-                        >(raw, guard);
-                        let av = if v < <$core::Wexp as $crate::int::types::traits::BigInt>::ZERO {
-                            -v
-                        } else {
-                            v
-                        };
-                        let sh = $crate::algos::exp::exp_generic::sinh_pos::<$core::Wexp>(av, w);
-                        if neg { -sh } else { sh }
-                    },
-                );
-                Self::from_bits(r)
+                Self::from_bits($crate::policy::trig::sinh_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::cosh_strict`].
-            ///
-            /// Same `exp(-v) = 1/exp(v)` identity as
-            /// [`Self::sinh_strict_with`]; one `exp_fixed` plus one
-            /// divide replaces two `exp_fixed`s.
+            /// Mode-aware sibling of [`Self::cosh_strict`] — policy
+            /// dispatch, see [`Self::sinh_strict_with`].
             #[inline]
             #[must_use]
             pub fn cosh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                // `cosh(0) = 1` is the SOLE exact case (the golden stores it as a
-                // terminating `1`); pin it so the `never_exact` directed nudge below
-                // never bumps it.
-                if self == Self::ZERO {
-                    return Self::ONE;
-                }
-                let raw = self.to_bits();
-                // Large-argument lift: see `sinh_strict_with`. `cosh` is
-                // even, so we always evaluate at `|v|` — feeding the
-                // positive magnitude keeps the dominant `e^|x|` term
-                // direct and accurate (see `sinh_strict_with` for why the
-                // sign matters to the budget).
-                // Two-core: composition runs on the wide `Wagm` work int.
-                let k_lift = $core::exp_result_int_digits::<$core::Wagm>($core::to_work_scaled_agm(raw, 0), SCALE);
-                let base_guard = $core::GUARD + k_lift;
-                // Two-width near-min widening (the `Wagm` composition int, then the
-                // wider `Wexp`). `cosh(x) = 1 + x²/2 + x⁴/24 + …` is transcendental
-                // and strictly > 1 for every x ≠ 0, so — exactly like `exp` — it is
-                // NEVER on a storage grid line: `never_exact = true`. The widening
-                // resolves the directed side from the `x²/2` residual (at digit ≈
-                // `2·SCALE`) when it lies within the precision horizon; PAST the
-                // horizon the `never_exact` rule still nudges by the KNOWN sign
-                // (cosh > 1 ⇒ Ceiling rounds up, Floor/Trunc stay), which the oracle
-                // — storing cosh to its full precision (a non-zero residual below the
-                // scale) — agrees with. The `cosh(0) = 1` exact case is pinned above.
-                let r = $crate::algos::support::wide_trig_core::round_to_storage_widening_g::<
-                    $Storage, $core::Wagm, $core::Wexp,
-                >(
-                    base_guard,
-                    SCALE,
-                    mode,
-                    true,
-                    <$Storage>::MAX,
-                    <$Storage>::MIN,
-                    |guard| {
-                        let w = SCALE + guard;
-                        let v = $core::to_work_scaled_agm(raw, guard);
-                        let av = if v < $core::zero_agm() { -v } else { v };
-                        $core::cosh_pos_wide_agm(av, w)
-                    },
-                    |guard| {
-                        let w = SCALE + guard;
-                        let v = $crate::algos::support::wide_trig_core::to_work_scaled_g::<
-                            $Storage, $core::Wexp,
-                        >(raw, guard);
-                        let av = if v < <$core::Wexp as $crate::int::types::traits::BigInt>::ZERO {
-                            -v
-                        } else {
-                            v
-                        };
-                        $crate::algos::exp::exp_generic::cosh_pos::<$core::Wexp>(av, w)
-                    },
-                );
-                Self::from_bits(r)
+                Self::from_bits($crate::policy::trig::cosh_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::tanh_strict`].
-            ///
-            /// Same `exp(-v) = 1/exp(v)` identity as
-            /// [`Self::sinh_strict_with`].
+            /// Mode-aware sibling of [`Self::tanh_strict`] — policy
+            /// dispatch, see [`Self::sinh_strict_with`] (the canonical
+            /// kernel carries this shell's former cubic band, all-nines
+            /// saturation fast path, and capped exp lift).
             #[inline]
             #[must_use]
             pub fn tanh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let raw = self.to_bits();
-                let zero = <$Storage>::from_i128(0);
-                if raw != zero {
-                    // Small-argument linear band: tanh(x) = x − x³/3 + … ,
-                    // the cubic below one ULP yet strictly positive, so the
-                    // true value sits just inside the grid line `raw`. No
-                    // finite-precision exp path can resolve the sub-ULP
-                    // cubic, so the directed result is the analytic decision
-                    // (nearest modes return `raw`).
-                    let thresh_exp = SCALE - SCALE.div_ceil(3);
-                    let thresh = <$Storage>::from_i128(10).pow(thresh_exp);
-                    if raw.abs() <= thresh {
-                        return Self::from_bits(
-                            $crate::support::rounding::tiny_odd_compressing_directed(
-                                raw,
-                                zero,
-                                <$Storage>::from_i128(1),
-                                mode,
-                            ),
-                        );
-                    }
-                }
-                let neg = raw < zero;
-                // Saturation onset at the BASE working scale: the
-                // `1 − tanh(|x|) = 2·e^(−2|x|)·(1 − …)` deficit's leading
-                // digit sits at fractional position `~2|x|·log10 e =
-                // 0.86859·|x|`; once that passes `SCALE + GUARD` every digit
-                // the narrowing keeps is a `9` — return the all-nines
-                // working value directly (its sub-resolution deficit rounds
-                // each mode correctly) instead of running the kernel at a
-                // working scale the deficit cannot reach. Integer compare:
-                // `|x| > (SCALE + GUARD + 2)/0.86859`.
-                let sat_x = ((SCALE as u128 + $core::GUARD as u128 + 2) * 100_000 / 86_859) as i128;
-                if raw.abs() / <$Storage>::from_i128(10).pow(SCALE) > <$Storage>::from_i128(sat_x) {
-                    return Self::from_bits($core::round_to_storage_directed::<$core::Wagm>(
-                        $core::GUARD,
-                        SCALE,
-                        mode,
-                        |guard| {
-                            let w = SCALE + guard;
-                            let sat = $core::one_agm(w)
-                                - <$core::Wagm as $crate::int::types::traits::BigInt>::ONE;
-                            if neg { -sat } else { sat }
-                        },
-                    ));
-                }
-                // Below the onset: the intermediate `e^|x|` carries
-                // `~|x|·log10(e)` integer digits; lift the base working scale
-                // by that count so the `(ex − enx)/(ex + enx)` ratio keeps
-                // `enx = e^-|x|` resolved with a full guard below the storage
-                // LSB. The lift estimator is a power-of-two UPPER bound on
-                // `|x|`, so cap it by the analytic tanh bound — outside
-                // saturation `0.86859·|x| <= SCALE + GUARD + 3`, hence
-                // `int_digits(e^|x|) = 0.43429·|x| <= (SCALE + GUARD)/2 + 2`
-                // — an over-lift would push the `e^(−2|x|)` evaluation past
-                // the work integer's internal headroom and corrupt `enx`.
-                // `tanh` is odd; evaluate at `|v|` (so the dominant `e^|x|`
-                // term is direct and accurate, see `sinh_strict_with`) and
-                // reapply the input sign to the non-negative `tanh(|x|)`
-                // working value.
-                // Two-core: composition runs on the wide `Wagm` work int.
-                let k_lift = $core::exp_result_int_digits::<$core::Wagm>($core::to_work_scaled_agm(raw, 0), SCALE)
-                    .min((SCALE + $core::GUARD) / 2 + 2);
-                let base_guard = $core::GUARD + k_lift;
-                Self::from_bits($core::round_to_storage_directed::<$core::Wagm>(
-                    base_guard,
-                    SCALE,
-                    mode,
-                    |guard| {
-                        let w = SCALE + guard;
-                        let v = $core::to_work_scaled_agm(raw, guard);
-                        let av = if v < $core::zero_agm() { -v } else { v };
-                        let th = $core::tanh_pos_wide_agm(av, w);
-                        if neg { -th } else { th }
-                    },
-                ))
+                Self::from_bits($crate::policy::trig::tanh_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::asinh_strict`].
+            /// Mode-aware sibling of [`Self::asinh_strict`] — policy
+            /// dispatch, see [`Self::sinh_strict_with`].
             #[inline]
             #[must_use]
             pub fn asinh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let raw = self.to_bits();
-                if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    return Self::ZERO;
-                }
-                let neg = raw < $crate::macros::wide_roots::wide_lit!($Storage, "0");
-                // Two-core: composition recompute runs on the wide `Wagm`.
-                Self::from_bits($core::round_to_storage_directed::<$core::Wagm>(
-                    $core::GUARD,
-                    SCALE,
-                    mode,
-                    |guard| {
-                        let w = SCALE + guard;
-                        let one_w = $core::one_agm(w);
-                        let v = $core::to_work_scaled_agm(raw, guard);
-                        let ax = if v < $core::zero_agm() { -v } else { v };
-                        // asinh @ MAX scale (input ±1) loses sub-w precision
-                        // in the sqrt step before ln; tang_ln_fixed's
-                        // INTERNAL_EXTRA residue-signal can't detect that
-                        // caller-side loss. Keep on Series (`ln_fixed_series_agm`)
-                        // until ln_fixed_routed gains a PRE_RESIDUE flag (memory
-                        // project_050_asinh_max_tang_residue).
-                        let inner = if ax >= one_w {
-                            let inv = $core::div_agm(one_w, ax, w);
-                            let root = $core::sqrt_fixed_agm(one_w + $core::mul_agm(inv, inv, w), w);
-                            $core::ln_fixed_series_agm(ax, w) + $core::ln_fixed_series_agm(one_w + root, w)
-                        } else {
-                            let root = $core::sqrt_fixed_agm($core::mul_agm(ax, ax, w) + one_w, w);
-                            $core::ln_fixed_series_agm(ax + root, w)
-                        };
-                        if neg { -inner } else { inner }
-                    },
-                ))
+                Self::from_bits($crate::policy::trig::asinh_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::acosh_strict`].
+            /// Mode-aware sibling of [`Self::acosh_strict`] — policy
+            /// dispatch, see [`Self::sinh_strict_with`].
             #[inline]
             #[must_use]
             pub fn acosh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let raw = self.to_bits();
-                {
-                    // Domain check at the base guard.
-                    let w0 = SCALE + $core::GUARD;
-                    if $core::to_work_agm(raw) < $core::one_agm(w0) {
-                        panic!(concat!(stringify!($Type), "::acosh: argument must be >= 1"));
-                    }
-                }
-                // Two-core: composition recompute runs on the wide `Wagm`.
-                Self::from_bits($core::round_to_storage_directed_near_special::<$core::Wagm>(
-                    $core::GUARD,
-                    SCALE,
-                    mode,
-                    |guard| {
-                        let w = SCALE + guard;
-                        let one_w = $core::one_agm(w);
-                        let v = $core::to_work_scaled_agm(raw, guard);
-                        let two_w = one_w + one_w;
-                        if v >= two_w {
-                            let inv = $core::div_agm(one_w, v, w);
-                            let root = $core::sqrt_fixed_agm(one_w - $core::mul_agm(inv, inv, w), w);
-                            $core::ln_fixed_routed_agm::<SCALE>(v, w) + $core::ln_fixed_routed_agm::<SCALE>(one_w + root, w)
-                        } else {
-                            // Near 1: acosh(1+t) = log1p(t +
-                            // sqrt(t*(t+2))). The gap `t = v - one_w` is
-                            // exact, so `v^2 - 1 = t*(t+2)` avoids the
-                            // `mul(v,v) - one_w` cancellation as `v -> 1`.
-                            let t = v - one_w;
-                            let root = $core::sqrt_fixed_agm($core::mul_agm(t, t + two_w, w), w);
-                            $core::log1p_fixed::<$core::Wagm>(t + root, w)
-                        }
-                    },
-                ))
+                Self::from_bits($crate::policy::trig::acosh_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::atanh_strict`].
+            /// Mode-aware sibling of [`Self::atanh_strict`] — policy
+            /// dispatch, see [`Self::sinh_strict_with`].
             #[inline]
             #[must_use]
             pub fn atanh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let raw = self.to_bits();
-                {
-                    // Domain check at the base guard.
-                    let w0 = SCALE + $core::GUARD;
-                    let v0 = $core::to_work_agm(raw);
-                    let ax0 = if v0 < $core::zero_agm() { -v0 } else { v0 };
-                    if ax0 >= $core::one_agm(w0) {
-                        panic!(concat!(
-                            stringify!($Type),
-                            "::atanh: argument out of domain (-1, 1)"
-                        ));
-                    }
-                }
-                // Two-core: composition recompute runs on the wide `Wagm`.
-                Self::from_bits($core::round_to_storage_directed_near_special::<$core::Wagm>(
-                    $core::GUARD,
-                    SCALE,
-                    mode,
-                    |guard| {
-                        let w = SCALE + guard;
-                        let one_w = $core::one_agm(w);
-                        let v = $core::to_work_scaled_agm(raw, guard);
-                        // Gap form (1/2)*[ln(1+x) - ln(1-x)]: `one_w
-                        // - v` is the exact working-scale gap, so neither
-                        // `ln_fixed` argument suffers the `(1-x)`
-                        // cancellation the ratio form does near +-1.
-                        ($core::ln_fixed_routed_agm::<SCALE>(one_w + v, w) - $core::ln_fixed_routed_agm::<SCALE>(one_w - v, w)) >> 1
-                    },
-                ))
+                Self::from_bits($crate::policy::trig::atanh_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
             /// Mode-aware sibling of [`Self::to_degrees_strict`].

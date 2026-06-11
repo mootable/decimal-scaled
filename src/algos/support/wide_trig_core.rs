@@ -209,6 +209,14 @@ pub(crate) trait WideTrigCore {
     /// [`Self::sinh_pos_wide`].
     fn tanh_pos_wide<const SCALE: u32>(av_w: Self::W, w: u32) -> Self::W;
 
+    /// Tang/Series-ROUTED working-scale natural log on the wide
+    /// composition integer [`Self::Wagm`] — the per-tier
+    /// `ln_fixed_routed_agm` (Tang where `policy::ln::is_tang` routes
+    /// it, Series otherwise; the per-tier Tang CAP is a macro literal,
+    /// which is why this is a trait binding rather than a free generic).
+    /// Consumed by the acosh / atanh canonical kernels.
+    fn ln_fixed_routed_agm<const SCALE: u32>(v_w: Self::Wagm, w: u32) -> Self::Wagm;
+
     /// Directed-rounding narrowing with Ziv escalation, forcing a
     /// confirm recompute even in nearest modes — the acosh / atanh
     /// near-special path (the residual can sit on a rounding boundary).
