@@ -85,6 +85,26 @@ macro_rules! bench_unary_pair {
     }};
 }
 
+/// Live-vs-0.4.4 binary-op rows: mul D230<229> (+12% bbc, replicated ×4 —
+/// the last real arithmetic focus row). bbc operands: 2 × 3 at scale 229
+/// (fractional forms "2.0"/"3.5" at s>0 per op_str).
+fn bench_mul_history(c: &mut Criterion) {
+    {
+        let a: decimal_scaled::D230<229> = "2.0".parse().unwrap();
+        let b: decimal_scaled::D230<229> = "3.5".parse().unwrap();
+        c.bench_function("hist/mul_D230s229/live", |bn| {
+            bn.iter(|| black_box(a) * black_box(b))
+        });
+    }
+    {
+        let a: ds_044::D230<229> = "2.0".parse().unwrap();
+        let b: ds_044::D230<229> = "3.5".parse().unwrap();
+        c.bench_function("hist/mul_D230s229/v044", |bn| {
+            bn.iter(|| black_box(a) * black_box(b))
+        });
+    }
+}
+
 fn bench_trig_ln_history(c: &mut Criterion) {
     bench_unary_pair!(c, "sin_D115s0_x0", sin, "0", decimal_scaled::D115<0>, ds_044::D115<0>);
     bench_unary_pair!(c, "cos_D115s0_x0", cos, "0", decimal_scaled::D115<0>, ds_044::D115<0>);
@@ -96,7 +116,7 @@ fn bench_trig_ln_history(c: &mut Criterion) {
 criterion_group! {
     name = benches;
     config = micro();
-    targets = bench_add_history, bench_trig_ln_history
+    targets = bench_add_history, bench_trig_ln_history, bench_mul_history
 }
 
 /// Self-pins to the highest-index logical core (the quietest under Windows,

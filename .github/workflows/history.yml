@@ -1,0 +1,74 @@
+# SPDX-FileCopyrightText: 2026 John Moxley
+# SPDX-License-Identifier: MIT OR Apache-2.0
+name: "🕰 history gates (advisory)"
+
+# The version-history correctness gates (task 10.13): the live crate beside
+# the pinned historical releases (ds-044, ds-033) over the same golden set.
+# `history_previous` carries the RATCHET assertion (no cell that passed in
+# 0.4.4 may fail live); `history_all` is the cross-version shootout report
+# with per-function timing medians (reported, never asserted).
+#
+# Own workflow, ADVISORY, like golden-comprehensive: the pinned historical
+# crates are heavy per-tier-era compiles the quick ci.yml gate must never
+# pay, and a red ratchet means roll back / bisect, not block the merge loop.
+# Striped over GOLDEN_STRIPE (the gates honour every GOLDEN_* filter).
+
+on:
+  push:
+    branches:
+      - main
+      - "release/*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  STRIPE_COUNT: "4"
+
+concurrency:
+  # Serial queue per ref, like ci.yml/bbc: an in-progress run finishes, a
+  # newer push supersedes only the QUEUED run.
+  group: history-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      stripes: ${{ steps.gen.outputs.stripes }}
+    steps:
+      - name: Generate stripe indices
+        id: gen
+        run: echo "stripes=$(python3 -c "import json, os; print(json.dumps(list(range(int(os.environ['STRIPE_COUNT'])))))")" >> "$GITHUB_OUTPUT"
+
+  history:
+    name: history (stripe ${{ matrix.stripe }})
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        stripe: ${{ fromJSON(needs.plan.outputs.stripes) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: history-gates
+
+      - name: History gates (ratchet + shootout), stripe ${{ matrix.stripe }}/${{ env.STRIPE_COUNT }}
+        env:
+          GOLDEN_STRIPE: "${{ matrix.stripe }}/${{ env.STRIPE_COUNT }}"
+        run: |
+          cargo test -p decimal-scale-test --release \
+            --features wide,x-wide,xx-wide,history \
+            --test history -- --ignored --nocapture --test-threads=1
