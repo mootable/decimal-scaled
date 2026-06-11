@@ -347,58 +347,15 @@ pub(crate) mod hyper {
 // surface is the Ziv escalation cap, budgeted analytically in
 // `work_rung::TRIG_MARGIN` and walled by the golden gate).
 // ══════════════════════════════════════════════════════════════════════
-/// The const-folded work-rung match: one macro emits the 13-arm match
-/// per kernel call so the ladder stays single-source (the
-/// `policy::ln::tang_at_rung` shape). `$sel` is the policy-internal
-/// rung selector (`trig_rung`, …) resolved in the caller's scope;
-/// `$kernel` the rung-generic kernel (imported by the calling module).
-#[cfg(feature = "_wide-support")]
-macro_rules! rung_match {
-    ($sel:ident, $C:ty, $SCALE:ident, $kernel:ident, [$($k:tt)*], $($arg:expr),+ $(,)?) => {
-        match const { $sel::<$C, $SCALE>() } {
-            crate::policy::work_rung::Rung::W3 => $kernel::<$C, crate::int::types::Int<3>, $($k)*>($($arg),+),
-            crate::policy::work_rung::Rung::W4 => $kernel::<$C, crate::int::types::Int<4>, $($k)*>($($arg),+),
-            crate::policy::work_rung::Rung::W6 => $kernel::<$C, crate::int::types::Int<6>, $($k)*>($($arg),+),
-            crate::policy::work_rung::Rung::W8 => $kernel::<$C, crate::int::types::Int<8>, $($k)*>($($arg),+),
-            crate::policy::work_rung::Rung::W12 => $kernel::<$C, crate::int::types::Int<12>, $($k)*>($($arg),+),
-            crate::policy::work_rung::Rung::W16 => $kernel::<$C, crate::int::types::Int<16>, $($k)*>($($arg),+),
-            crate::policy::work_rung::Rung::W24 => $kernel::<$C, crate::int::types::Int<24>, $($k)*>($($arg),+),
-            crate::policy::work_rung::Rung::W32 => $kernel::<$C, crate::int::types::Int<32>, $($k)*>($($arg),+),
-            crate::policy::work_rung::Rung::W48 => $kernel::<$C, crate::int::types::Int<48>, $($k)*>($($arg),+),
-            crate::policy::work_rung::Rung::W64 => $kernel::<$C, crate::int::types::Int<64>, $($k)*>($($arg),+),
-            crate::policy::work_rung::Rung::W96 => $kernel::<$C, crate::int::types::Int<96>, $($k)*>($($arg),+),
-            crate::policy::work_rung::Rung::W128 => $kernel::<$C, crate::int::types::Int<128>, $($k)*>($($arg),+),
-            crate::policy::work_rung::Rung::W176 => $kernel::<$C, crate::int::types::Int<176>, $($k)*>($($arg),+),
-        }
-    };
-}
-
 #[cfg(feature = "_wide-support")]
 pub(crate) mod forward_rung {
-    use super::super::work_rung::{trig_rung, D_BUDGET};
+    use super::super::work_rung::{in_budget, rung_match, trig_rung, D_BUDGET};
     use crate::algos::support::wide_trig_core::{
         atan_series_g, cos_series_g, sin_series_g, tan_series_g, WideTrigCore,
     };
     use crate::int::types::compute_limbs::ComputeLimbs;
     use crate::int::types::traits::BigInt;
     use crate::support::rounding::RoundingMode;
-
-    /// `true` iff `|x| < ~10^BUDGET` — a rung's admitted magnitude
-    /// region. Conservative bit-length test (`332_192/100_000 <
-    /// log2(10)`): never admits a value at or beyond `10^(SCALE +
-    /// BUDGET)` raw units, so an admitted argument's integer digits
-    /// provably fit the rung's budget; the sliver it under-admits just
-    /// below the boundary takes the (correct, slower) tier path. One
-    /// compare against a compile-time constant. Shared by the forward /
-    /// inverse / hyperbolic rung gates (each passes its family's
-    /// budget).
-    #[inline]
-    pub(in crate::policy::trig) fn in_budget<C: WideTrigCore, const SCALE: u32, const BUDGET: u32>(
-        raw: &C::Storage,
-    ) -> bool {
-        let bl = crate::algos::exp::exp_generic::bit_length::<C::Storage>(*raw) as u64;
-        bl * 100_000 <= ((SCALE + BUDGET) as u64) * 332_192
-    }
 
     /// `sin_strict` at the work rung; out-of-budget magnitudes fall to
     /// the tier-width narrow-GUARD kernel (at `GUARD = C::GUARD` that is
@@ -409,7 +366,7 @@ pub(crate) mod forward_rung {
         raw: C::Storage,
         mode: RoundingMode,
     ) -> C::Storage {
-        if in_budget::<C, SCALE, D_BUDGET>(&raw) {
+        if in_budget::<C::Storage, SCALE, D_BUDGET>(&raw) {
             rung_match!(trig_rung, C, SCALE, sin_series_g, [SCALE, GUARD], raw, mode)
         } else {
             crate::algos::trig::sincos_narrow::sin_narrow_with_taylor::<C, SCALE, GUARD>(raw, mode)
@@ -422,7 +379,7 @@ pub(crate) mod forward_rung {
         raw: C::Storage,
         mode: RoundingMode,
     ) -> C::Storage {
-        if in_budget::<C, SCALE, D_BUDGET>(&raw) {
+        if in_budget::<C::Storage, SCALE, D_BUDGET>(&raw) {
             rung_match!(trig_rung, C, SCALE, cos_series_g, [SCALE, GUARD], raw, mode)
         } else {
             crate::algos::trig::sincos_narrow::cos_narrow_with_taylor::<C, SCALE, GUARD>(raw, mode)
@@ -447,7 +404,7 @@ pub(crate) mod forward_rung {
     where
         <C::W as BigInt>::Scratch: ComputeLimbs,
     {
-        if in_budget::<C, SCALE, D_BUDGET>(&raw) {
+        if in_budget::<C::Storage, SCALE, D_BUDGET>(&raw) {
             rung_match!(trig_rung, C, SCALE, tan_series_g, [SCALE, GUARD, NEAR_POLE, SUB_GUARD], raw, mode)
         } else if SUB_GUARD {
             crate::algos::support::wide_trig_core::tan_series::<C, SCALE>(raw, mode)
@@ -477,7 +434,7 @@ pub(crate) mod forward_rung {
         raw: C::Storage,
         mode: RoundingMode,
     ) -> C::Storage {
-        if in_budget::<C, SCALE, D_BUDGET>(&raw) {
+        if in_budget::<C::Storage, SCALE, D_BUDGET>(&raw) {
             rung_match!(trig_rung, C, SCALE, atan_series_g, [SCALE, GUARD, DIRECTED], raw, mode)
         } else if DIRECTED {
             crate::algos::support::wide_trig_core::atan_series::<C, SCALE>(raw, mode)
@@ -509,8 +466,7 @@ pub(crate) mod forward_rung {
 // ══════════════════════════════════════════════════════════════════════
 #[cfg(feature = "_wide-support")]
 pub(crate) mod inverse_rung {
-    use super::super::work_rung::{trig_rung, D_BUDGET};
-    use super::forward_rung::in_budget;
+    use super::super::work_rung::{in_budget, rung_match, trig_rung, D_BUDGET};
     use crate::algos::support::wide_trig_core::WideTrigCore;
     use crate::algos::trig::inverse_schoolbook::{
         acos_schoolbook_g, asin_schoolbook_g, atan2_schoolbook_g,
@@ -524,7 +480,7 @@ pub(crate) mod inverse_rung {
         raw: C::Storage,
         mode: RoundingMode,
     ) -> C::Storage {
-        if in_budget::<C, SCALE, D_BUDGET>(&raw) {
+        if in_budget::<C::Storage, SCALE, D_BUDGET>(&raw) {
             rung_match!(trig_rung, C, SCALE, asin_schoolbook_g, [SCALE], raw, mode)
         } else {
             crate::algos::trig::inverse_schoolbook::asin_schoolbook::<C, SCALE>(raw, mode)
@@ -537,7 +493,7 @@ pub(crate) mod inverse_rung {
         raw: C::Storage,
         mode: RoundingMode,
     ) -> C::Storage {
-        if in_budget::<C, SCALE, D_BUDGET>(&raw) {
+        if in_budget::<C::Storage, SCALE, D_BUDGET>(&raw) {
             rung_match!(trig_rung, C, SCALE, acos_schoolbook_g, [SCALE], raw, mode)
         } else {
             crate::algos::trig::inverse_schoolbook::acos_schoolbook::<C, SCALE>(raw, mode)
@@ -553,7 +509,7 @@ pub(crate) mod inverse_rung {
         x_raw: C::Storage,
         mode: RoundingMode,
     ) -> C::Storage {
-        if in_budget::<C, SCALE, D_BUDGET>(&y_raw) && in_budget::<C, SCALE, D_BUDGET>(&x_raw) {
+        if in_budget::<C::Storage, SCALE, D_BUDGET>(&y_raw) && in_budget::<C::Storage, SCALE, D_BUDGET>(&x_raw) {
             rung_match!(trig_rung, C, SCALE, atan2_schoolbook_g, [SCALE], y_raw, x_raw, mode)
         } else {
             crate::algos::trig::inverse_schoolbook::atan2_schoolbook::<C, SCALE>(y_raw, x_raw, mode)
@@ -577,8 +533,7 @@ pub(crate) mod inverse_rung {
 // ══════════════════════════════════════════════════════════════════════
 #[cfg(feature = "_wide-support")]
 pub(crate) mod hyper_rung {
-    use super::super::work_rung::{trig_rung, EXP_ARG_BUDGET};
-    use super::forward_rung::in_budget;
+    use super::super::work_rung::{in_budget, rung_match, trig_rung, EXP_ARG_BUDGET};
     use crate::algos::support::wide_trig_core::WideTrigCore;
     use crate::algos::trig::hyper_schoolbook::{
         cosh_schoolbook_g, sinh_schoolbook_g, tanh_schoolbook_g,
@@ -597,7 +552,7 @@ pub(crate) mod hyper_rung {
     where
         <C::Wexp as BigInt>::Scratch: ComputeLimbs,
     {
-        if in_budget::<C, SCALE, EXP_ARG_BUDGET>(&raw) {
+        if in_budget::<C::Storage, SCALE, EXP_ARG_BUDGET>(&raw) {
             rung_match!(trig_rung, C, SCALE, sinh_schoolbook_g, [SCALE], raw, mode)
         } else {
             crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<C, SCALE>(raw, mode)
@@ -613,7 +568,7 @@ pub(crate) mod hyper_rung {
     where
         <C::Wexp as BigInt>::Scratch: ComputeLimbs,
     {
-        if in_budget::<C, SCALE, EXP_ARG_BUDGET>(&raw) {
+        if in_budget::<C::Storage, SCALE, EXP_ARG_BUDGET>(&raw) {
             rung_match!(trig_rung, C, SCALE, cosh_schoolbook_g, [SCALE], raw, mode)
         } else {
             crate::algos::trig::hyper_schoolbook::cosh_schoolbook::<C, SCALE>(raw, mode)
@@ -629,7 +584,7 @@ pub(crate) mod hyper_rung {
     where
         <C::Wexp as BigInt>::Scratch: ComputeLimbs,
     {
-        if in_budget::<C, SCALE, EXP_ARG_BUDGET>(&raw) {
+        if in_budget::<C::Storage, SCALE, EXP_ARG_BUDGET>(&raw) {
             rung_match!(trig_rung, C, SCALE, tanh_schoolbook_g, [SCALE], raw, mode)
         } else {
             crate::algos::trig::hyper_schoolbook::tanh_schoolbook::<C, SCALE>(raw, mode)

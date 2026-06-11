@@ -375,6 +375,68 @@ where
     )
 }
 
+/// Rung-generic `exp_strict` — the Series exp kernel run at an
+/// arbitrary work rung `Wk` (decoupled from `C::W`; mirrors
+/// [`sin_series_g`]). Identical pins ([`exp_near_min_pin`], the zero
+/// pin) and the identical two-width near-min widening as
+/// [`exp_series`], with the PRIMARY width swapped from `C::W` to the
+/// rung: each Ziv probe regime-splits on the exact
+/// [`crate::algos::exp::exp_generic::exp_peak_fits`] model (the same
+/// gate the per-tier `exp_fixed` routes `exp_fixed_wide` with) — the
+/// fast path runs `exp_fixed::<Wk>`, a probe whose internal
+/// squaring/`2^k` peak outgrows the rung lifts to the tier's `C::Wexp`
+/// and narrows the (always-rung-representable) probe VALUE back. The
+/// widening RETRY stays at `C::Wexp`, unchanged: a near-tie unresolved
+/// at the rung's smaller cap retries there, reaching at least the
+/// tier's resolution depth. The policy gate bounds `|x|` (the
+/// result-magnitude axis, `work_rung::EXP_ARG_BUDGET`) so the everyday
+/// region stays on the rung's fast path.
+#[cfg(feature = "_wide-support")]
+#[inline]
+#[must_use]
+pub(crate) fn exp_series_g<C: WideTrigCore, Wk: BigInt, const SCALE: u32>(
+    raw: C::Storage,
+    mode: RoundingMode,
+) -> C::Storage
+where
+    Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+    <C::Wexp as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    use crate::algos::exp::exp_generic as eg;
+    if raw == C::storage_zero() {
+        return C::storage_one(SCALE);
+    }
+    if let Some(r) = exp_near_min_pin::<C, SCALE>(raw, mode) {
+        return r;
+    }
+    round_to_storage_widening_g::<C::Storage, Wk, C::Wexp>(
+        C::GUARD,
+        SCALE,
+        mode,
+        true,
+        C::storage_max(),
+        C::storage_min(),
+        |guard| {
+            let w = SCALE + guard;
+            let v = to_work_scaled_g::<C::Storage, Wk>(raw, guard);
+            if eg::exp_peak_fits::<Wk>(v, w) {
+                eg::exp_fixed::<Wk>(v, w)
+            } else {
+                eg::resize_or_panic::<C::Wexp, Wk>(eg::exp_fixed::<C::Wexp>(
+                    to_work_scaled_g::<C::Storage, C::Wexp>(raw, guard),
+                    w,
+                ))
+            }
+        },
+        |guard| {
+            eg::exp_fixed::<C::Wexp>(
+                to_work_scaled_g::<C::Storage, C::Wexp>(raw, guard),
+                SCALE + guard,
+            )
+        },
+    )
+}
+
 /// `ln_strict` for a wide tier — generic over the tier `C`. Panics if
 /// `raw <= 0`. Replaces the per-tier `ln_strict_<tier>` wrappers.
 #[inline]

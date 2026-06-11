@@ -233,30 +233,61 @@ pub(crate) fn dispatch_with<const N: usize, const SCALE: u32>(
     }
 }
 
+// The SCALE-derived work-rung routing for the wide-tier Series arm
+// (the `policy::trig::forward_rung` shape): a Series-INTERNAL second
+// axis — NOT in the `select` verdict, NOT on [`Algorithm`] — consulted
+// only inside `series_routed` below. The gate admits the everyday
+// `|x| < 10^EXP_ARG_BUDGET` band (the RESULT-MAGNITUDE axis: `e^x`'s
+// integer-digit lift and the kernel's internal `2^k` extension must
+// fit the rung — `work_rung::EXP_ARG_BUDGET` documents the budget) and
+// the const-folded rung match monomorphises the ONE generic kernel
+// (`wide_trig_core::exp_series_g`) at the narrowest valid `Int<K>`;
+// out-of-budget magnitudes run the tier-width `exp_series`,
+// bit-identical. The kernel's per-probe `exp_peak_fits` belt keeps the
+// analytic gate hit-rate-only, never correctness-bearing.
+#[cfg(feature = "_wide-support")]
+#[inline]
+fn series_at_rung<C: crate::algos::support::wide_trig_core::WideTrigCore, const SCALE: u32>(
+    raw: C::Storage,
+    mode: RoundingMode,
+) -> C::Storage
+where
+    <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+    <C::Wexp as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    use super::work_rung::{in_budget, rung_match, trig_rung, EXP_ARG_BUDGET};
+    use crate::algos::support::wide_trig_core::exp_series_g;
+    if in_budget::<C::Storage, SCALE, EXP_ARG_BUDGET>(&raw) {
+        rung_match!(trig_rung, C, SCALE, exp_series_g, [SCALE], raw, mode)
+    } else {
+        crate::algos::support::wide_trig_core::exp_series::<C, SCALE>(raw, mode)
+    }
+}
+
 #[inline]
 fn series_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
     match N {
         1 | 2 => crate::algos::exp::exp_series_2limb::exp_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => Some(crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>()),
+        3 => Some(series_at_rung::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => Some(crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d76::Core, SCALE>(raw.resize_to::<Int<4>>(), mode).resize_to::<Int<N>>()),
+        4 => Some(series_at_rung::<crate::types::widths::wide_trig_d76::Core, SCALE>(raw.resize_to::<Int<4>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => Some(crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d115::Core, SCALE>(raw.resize_to::<Int<6>>(), mode).resize_to::<Int<N>>()),
+        6 => Some(series_at_rung::<crate::types::widths::wide_trig_d115::Core, SCALE>(raw.resize_to::<Int<6>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => Some(crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d153::Core, SCALE>(raw.resize_to::<Int<8>>(), mode).resize_to::<Int<N>>()),
+        8 => Some(series_at_rung::<crate::types::widths::wide_trig_d153::Core, SCALE>(raw.resize_to::<Int<8>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => Some(crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d230::Core, SCALE>(raw.resize_to::<Int<12>>(), mode).resize_to::<Int<N>>()),
+        12 => Some(series_at_rung::<crate::types::widths::wide_trig_d230::Core, SCALE>(raw.resize_to::<Int<12>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => Some(crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw.resize_to::<Int<16>>(), mode).resize_to::<Int<N>>()),
+        16 => Some(series_at_rung::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw.resize_to::<Int<16>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => Some(crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d462::Core, SCALE>(raw.resize_to::<Int<24>>(), mode).resize_to::<Int<N>>()),
+        24 => Some(series_at_rung::<crate::types::widths::wide_trig_d462::Core, SCALE>(raw.resize_to::<Int<24>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => Some(crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d616::Core, SCALE>(raw.resize_to::<Int<32>>(), mode).resize_to::<Int<N>>()),
+        32 => Some(series_at_rung::<crate::types::widths::wide_trig_d616::Core, SCALE>(raw.resize_to::<Int<32>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => Some(crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>()),
+        48 => Some(series_at_rung::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => Some(crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>()),
+        64 => Some(series_at_rung::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>()),
         _ => crate::algos::exp::exp_series_2limb::exp_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
     }
 }
@@ -415,5 +446,43 @@ pub(crate) fn exp2_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, 
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => crate::types::widths::wide_trig_d1232::exp2_approx_with_kernel::<SCALE>(raw.resize_to::<Int<64>>(), working_digits, mode).resize_to::<Int<N>>(),
         _ => crate::algos::exp::exp_series_2limb::exp2_with(raw.resize_to::<Int<2>>(), SCALE, working_digits, mode).and_then(super::narrow_fit::<N>).unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("exp2_with", SCALE)),
+    }
+}
+
+#[cfg(test)]
+mod series_rung_tests {
+    //! Light anchor tests for the exp work-rung routing (the
+    //! `policy::trig::forward_rung` test shape): the rung-routed Series
+    //! path must equal the tier-width `exp_series` bit-for-bit on
+    //! representative values — in-budget anchors (incl. the budget edge
+    //! 9.9 and negative arguments), the near-min pin band, AND an
+    //! out-of-budget magnitude that exercises the gate's tier fallback.
+    //! Routing/threshold choices are NOT pinned (policy tests stay
+    //! light); the golden gate is the correctness wall.
+
+    #[cfg(feature = "d307")]
+    const ALL_MODES: [crate::support::rounding::RoundingMode; 6] = [
+        crate::support::rounding::RoundingMode::HalfToEven,
+        crate::support::rounding::RoundingMode::HalfAwayFromZero,
+        crate::support::rounding::RoundingMode::HalfTowardZero,
+        crate::support::rounding::RoundingMode::Trunc,
+        crate::support::rounding::RoundingMode::Floor,
+        crate::support::rounding::RoundingMode::Ceiling,
+    ];
+
+    #[test]
+    #[cfg(feature = "d307")]
+    fn d307_exp_rung_matches_tier_kernel() {
+        type Core = crate::types::widths::wide_trig_d307::Core;
+        for v in ["0", "0.5", "1", "1.5", "9.9", "-1", "-9.9", "0.0000000001", "50", "-50"] {
+            let x: crate::D307<19> = v.parse().unwrap();
+            for mode in ALL_MODES {
+                assert_eq!(
+                    super::series_at_rung::<Core, 19>(x.to_bits(), mode),
+                    crate::algos::support::wide_trig_core::exp_series::<Core, 19>(x.to_bits(), mode),
+                    "exp({v}) mode {mode:?}"
+                );
+            }
+        }
     }
 }
