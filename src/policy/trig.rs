@@ -3454,6 +3454,111 @@ mod forward_rung_tests {
         }
     }
 
+    /// The trig_rung_ab bench assert surface in durable debug form: the
+    /// bench's input recipe (x·10^min(SCALE,36) raws — tiny values at
+    /// high scale, the rung-cap fall-up band) swept over the bench's
+    /// scale grid with the bench's PER-FAMILY input sets (forward trig
+    /// gets the full spread + the 1e9 out-of-budget probe; asin its unit
+    /// domain; sinh/exp/asinh the EXP_ARG_BUDGET region + the x50
+    /// out-of-budget probe at s0), rung == tier across all six modes.
+    macro_rules! bench_grid_cell {
+        ($Core:ty, $N:literal, $SCALE:literal, $with_big:expr) => {{
+            type C = $Core;
+            const G: u32 = <C as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD;
+            let p = crate::int::types::Int::<$N>::from_i128(10i128).pow(($SCALE as u32).min(36));
+            let ten = crate::int::types::Int::<$N>::from_i128(10);
+            let i = |n: i128| crate::int::types::Int::<$N>::from_i128(n);
+            // Forward trig: {0.3, 1.0, 1.5, 3141}·p (+ 1e9·p at s0).
+            let mut fwd = vec![p * i(3) / ten, p, p + (p >> 1), p * i(3141)];
+            if $with_big {
+                fwd.push(p * i(1_000_000_000));
+            }
+            for raw in fwd {
+                for mode in ALL_MODES {
+                    assert_eq!(
+                        super::forward_rung::sin_strict::<C, $SCALE, G>(raw, mode),
+                        crate::algos::support::wide_trig_core::sin_series::<C, $SCALE>(raw, mode),
+                        "sin s{} raw={raw:?} mode {mode:?}", $SCALE
+                    );
+                    assert_eq!(
+                        super::forward_rung::cos_strict::<C, $SCALE, G>(raw, mode),
+                        crate::algos::support::wide_trig_core::cos_series::<C, $SCALE>(raw, mode),
+                        "cos s{} raw={raw:?} mode {mode:?}", $SCALE
+                    );
+                    assert_eq!(
+                        super::forward_rung::tan_strict::<C, $SCALE, G, true, true>(raw, mode),
+                        crate::algos::support::wide_trig_core::tan_series::<C, $SCALE>(raw, mode),
+                        "tan s{} raw={raw:?} mode {mode:?}", $SCALE
+                    );
+                    assert_eq!(
+                        super::forward_rung::atan_strict::<C, $SCALE, G, true>(raw, mode),
+                        crate::algos::support::wide_trig_core::atan_series::<C, $SCALE>(raw, mode),
+                        "atan s{} raw={raw:?} mode {mode:?}", $SCALE
+                    );
+                }
+            }
+            // asin: the unit-domain set {0.3, 0.9, 1.0}·p.
+            for raw in [p * i(3) / ten, p * i(9) / ten, p] {
+                for mode in ALL_MODES {
+                    assert_eq!(
+                        super::inverse_rung::asin_strict::<C, $SCALE>(raw, mode),
+                        crate::algos::trig::inverse_schoolbook::asin_schoolbook::<C, $SCALE>(raw, mode),
+                        "asin s{} raw={raw:?} mode {mode:?}", $SCALE
+                    );
+                }
+            }
+            // sinh / exp / asinh: the EXP_ARG_BUDGET set {0.3, 1, 1.5, 9.5}·p
+            // (+ the 50·p out-of-budget probe at s0).
+            let mut small = vec![p * i(3) / ten, p, p + (p >> 1), p * i(9) + (p >> 1)];
+            if $with_big {
+                small.push(p * i(50));
+            }
+            for raw in small {
+                for mode in ALL_MODES {
+                    assert_eq!(
+                        super::hyper_rung::sinh_strict::<C, $SCALE>(raw, mode),
+                        crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<C, $SCALE>(raw, mode),
+                        "sinh s{} raw={raw:?} mode {mode:?}", $SCALE
+                    );
+                    assert_eq!(
+                        crate::policy::exp::series_at_rung::<C, $SCALE>(raw, mode),
+                        crate::algos::support::wide_trig_core::exp_series::<C, $SCALE>(raw, mode),
+                        "exp s{} raw={raw:?} mode {mode:?}", $SCALE
+                    );
+                    assert_eq!(
+                        super::extra_rung::asinh_strict::<C, $SCALE>(raw, mode),
+                        crate::algos::trig::hyper_schoolbook::asinh_schoolbook::<C, $SCALE>(raw, mode),
+                        "asinh s{} raw={raw:?} mode {mode:?}", $SCALE
+                    );
+                }
+            }
+        }};
+    }
+
+    /// D307 bench grid: scales {0, 76, 153, 229, 306}.
+    #[test]
+    #[cfg(feature = "d307")]
+    fn d307_bench_grid_rung_matches_tier() {
+        type Core = crate::types::widths::wide_trig_d307::Core;
+        bench_grid_cell!(Core, 16, 0, true);
+        bench_grid_cell!(Core, 16, 76, false);
+        bench_grid_cell!(Core, 16, 153, false);
+        bench_grid_cell!(Core, 16, 229, false);
+        bench_grid_cell!(Core, 16, 306, false);
+    }
+
+    /// D1232 bench grid: scales {0, 308, 616, 924, 1231}.
+    #[test]
+    #[cfg(feature = "d1232")]
+    fn d1232_bench_grid_rung_matches_tier() {
+        type Core = crate::types::widths::wide_trig_d1232::Core;
+        bench_grid_cell!(Core, 64, 0, true);
+        bench_grid_cell!(Core, 64, 308, false);
+        bench_grid_cell!(Core, 64, 616, false);
+        bench_grid_cell!(Core, 64, 924, false);
+        bench_grid_cell!(Core, 64, 1231, false);
+    }
+
     /// Inverse-family rung anchors (D307<19>): the rung-routed asin /
     /// acos / atan2 must equal the tier-width compositions bit-for-bit
     /// across the domain spread (incl. the |x| > 1/2 half-angle branch
