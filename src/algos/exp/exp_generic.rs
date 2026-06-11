@@ -160,9 +160,11 @@ use crate::support::rounding::RoundingMode;
             a * S::from_i128(n as i128)
         }
     }
-    /// `k · c` where `k` is a signed range-reduction count.
+    /// `k · c` where `k` is a signed range-reduction count. An n-by-1-word
+    /// product (`checked_mul_u64`) — O(limbs), not the full schoolbook —
+    /// since `|k|` always fits one word on the range-reduction paths.
     #[inline]
-    fn scale_by_k<S: BigInt>(c: S, k: i128) -> S {
+    pub(crate) fn scale_by_k<S: BigInt>(c: S, k: i128) -> S {
         if k >= 0 {
             mul_u(c, k as u128)
         } else {
@@ -253,6 +255,17 @@ use crate::support::rounding::RoundingMode;
                 break m;
             }
         };
+
+        // Exact power-of-two boundary `m = 1` short-circuits: ln(m) = 0,
+        // so ln(v) = k·ln2 exactly. Bit-identical to falling through —
+        // each `sqrt_fixed(10^w, w)` returns `10^w` exactly (isqrt of the
+        // perfect square `10^2w`), `t = (m−1)/(m+1) = 0`, and the artanh
+        // series' first term is already zero — but skips the multi-level
+        // sqrt reduction those steps would burn. Mirrors the Tang kernel's
+        // `m == one_w` arm.
+        if m_w == one_w {
+            return scale_by_k::<S>(ln2_w, k as i128);
+        }
 
         // Multi-level sqrt argument reduction: `l ≈ √p_bits / 4`.
         let p_bits = w.saturating_mul(3).saturating_add(1);
