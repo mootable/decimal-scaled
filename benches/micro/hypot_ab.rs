@@ -22,6 +22,10 @@
 //!   non-zero (the NEW u256 scalar fast branch engages). This is the decimal
 //!   `s >= 19` slow band the old `fit_one`-only gate cliffed into Pythagoras;
 //!   `u128_fast` should win here at every width >= 2.
+//! - `two_low` — both operands JUST over one limb (`[2^64, 2^68)`, high limb
+//!   1..16): the u256 arm's LOW band, the decimal `s >= 19` regime at small
+//!   real values (the bbc `hypot D38<19>` cell's `3.0`/`4.0` operands live
+//!   here). Fewer Newton iterations than `two`'s ~127-bit operands.
 //! - `multi`  — operands span the full width (the fast branch falls through to
 //!   Pythagoras). Here `u128_fast` adds only the `fit_one` guard, so it should
 //!   be statistically TIED with `pythagoras` and never a meaningful loss.
@@ -98,6 +102,20 @@ fn inputs<const N: usize>() -> Vec<HIn<N>> {
         }
         Int::<N>::from_limbs(out)
     };
+    // A magnitude that JUST exceeds one u64 limb (high limb in 1..16, value in
+    // [2^64, 2^68)) -- the LOW band of the u256 scalar fast arm. This is the
+    // decimal `s >= 19` regime at small real values (e.g. the bbc `hypot
+    // D38<19>` cell's `3.0`/`4.0` operands, raw 3e19/4e19 with high limb 1):
+    // the root has ~65-68 bits, so the Newton iteration count differs from the
+    // `two` shape's ~127-bit operands. A continuous region, not a point pin.
+    let two_low = |s: &mut u64| {
+        let mut out = [0u64; N];
+        out[0] = mix(s);
+        if N >= 2 {
+            out[1] = (mix(s) & 0xF) | 1; // high limb 1..=15
+        }
+        Int::<N>::from_limbs(out)
+    };
     // A magnitude that spans the FULL storage width (top limb non-zero, top
     // sign bit cleared so the operand itself is a valid positive Int<N>).
     let full = |s: &mut u64| {
@@ -116,6 +134,7 @@ fn inputs<const N: usize>() -> Vec<HIn<N>> {
     vec![
         HIn { label: "single", a: single(&mut s), b: single(&mut s) },
         HIn { label: "two", a: two(&mut s), b: two(&mut s) },
+        HIn { label: "two_low", a: two_low(&mut s), b: two_low(&mut s) },
         HIn { label: "multi", a: full(&mut s), b: full(&mut s) },
         HIn { label: "skew", a: single(&mut s), b: full(&mut s) },
     ]
