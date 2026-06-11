@@ -13,12 +13,11 @@
 //! `golden-competitors` all share it. [`Filter`] reads the `GOLDEN_*` env vars so a
 //! `cargo test` run can target just the cells / modes / functions under investigation.
 
-// The subjects enumerate every decimal tier (D18..D1232), so the crate body
-// needs the full wide feature ladder; a narrower build (e.g. the
-// default-feature leg of the consolidated test suite) compiles this crate
-// empty. The golden gate target pins the same requirement via
-// `required-features` in Cargo.toml.
-#![cfg(all(feature = "wide", feature = "x-wide", feature = "xx-wide"))]
+// The subject dispatch fans out per tier behind that tier's feature, so the
+// crate compiles at ANY feature set: a default (narrow) build carries the
+// D18/D38 cells and the golden gate sweeps just those; wider builds add
+// their tiers' cells. `Filter::cells()` drops cells whose tier is not
+// compiled, so CELLS itself stays the full grid as data.
 
 // Historical-release subjects for the version-history gates (tests/history.rs);
 // each pinned release compiles only behind its `history-*` feature.
@@ -27,10 +26,7 @@ pub mod history;
 
 use std::collections::BTreeMap;
 
-use decimal_scaled::{
-    DecimalArithmetic, DecimalTranscendental, D115, D1232, D153, D18, D230, D307, D38, D462, D57,
-    D616, D76, D924, RoundingMode as DsMode,
-};
+use decimal_scaled::{DecimalArithmetic, DecimalTranscendental, RoundingMode as DsMode};
 use decimal_scaled_golden::{
     Capabilities, Computed, DecimalSubject, FnSupport, Function, Limits, Overflow, Radix,
     RoundingMode,
@@ -95,14 +91,27 @@ pub trait DsOps: Sized {
     fn ds_div_with(self, o: Self, m: DsMode) -> Self;
 }
 macro_rules! impl_ds_ops {
-    ($($D:ident),+ $(,)?) => { $(
-        impl<const S: u32> DsOps for $D<S> {
+    ($( $(#[$cfg:meta])* $D:ident ),+ $(,)?) => { $(
+        $(#[$cfg])*
+        impl<const S: u32> DsOps for decimal_scaled::$D<S> {
             fn ds_mul_with(self, o: Self, m: DsMode) -> Self { self.mul_with(o, m) }
             fn ds_div_with(self, o: Self, m: DsMode) -> Self { self.div_with(o, m) }
         }
     )+ };
 }
-impl_ds_ops!(D18, D38, D57, D76, D115, D153, D230, D307, D462, D616, D924, D1232);
+impl_ds_ops!(
+    D18, D38,
+    #[cfg(feature = "d57")] D57,
+    #[cfg(feature = "d76")] D76,
+    #[cfg(feature = "d115")] D115,
+    #[cfg(feature = "d153")] D153,
+    #[cfg(feature = "d230")] D230,
+    #[cfg(feature = "d307")] D307,
+    #[cfg(feature = "d462")] D462,
+    #[cfg(feature = "d616")] D616,
+    #[cfg(feature = "d924")] D924,
+    #[cfg(feature = "d1232")] D1232,
+);
 
 /// The op only (after parse, before format). `d2` is the second operand for binary
 /// functions; a missing one is a golden-data fault and panics (the harness records it).
@@ -183,22 +192,61 @@ where
 /// to the concrete decimal type for each. `CELLS` is the public cell list; the two
 /// dispatch fns are the erased subject's only bridge to a concrete `D<SCALE>`.
 macro_rules! cells {
-    ($($D:ident < $s:literal > => $w:literal),+ $(,)?) => {
-        /// Every band-edge `(width, scale)` cell the full-surface gate enumerates.
-        pub const CELLS: &[(u32, u32)] = &[ $( ($w, $s) ),+ ];
+    ($( $(#[$cfg:meta])* $D:ident => $w:literal { $($s:literal),+ $(,)? } );+ $(;)?) => {
+        /// Every band-edge `(width, scale)` cell of the full-surface grid — pure DATA,
+        /// present in every build. Whether a cell is RUNNABLE in this build is
+        /// [`tier_compiled`]; [`Filter::cells`] applies it, so a narrow build sweeps
+        /// the D18/D38 cells and wider builds add their tiers.
+        pub const CELLS: &[(u32, u32)] = &[ $( $( ($w, $s), )+ )+ ];
+
+        /// Is this width's decimal tier compiled into the current build?
+        pub const fn tier_compiled(width: u32) -> bool {
+            match width {
+                $( $(#[$cfg])* $w => true, )+
+                _ => false,
+            }
+        }
+
+        /// Per-tier dispatch leaves: one `cfg`-gated child module per tier (the
+        /// scale match inside needs no gating — the whole module vanishes with
+        /// its feature), and a width match with one arm per tier.
+        mod tier_dispatch {
+            $(
+                $(#[$cfg])*
+                #[allow(non_snake_case)]
+                pub mod $D {
+                    use decimal_scaled_golden::{Computed, Function, Limits};
+                    use decimal_scaled::RoundingMode as DsMode;
+                    pub fn compute(
+                        scale: u32, func: Function, inputs: &[String], m: DsMode,
+                    ) -> Computed<String> {
+                        match scale {
+                            $( $s => crate::compute_typed::<decimal_scaled::$D<$s>>(func, inputs, m), )+
+                            _ => panic!("no decimal-scaled cell for (width={}, scale={scale})", $w),
+                        }
+                    }
+                    pub fn limits(scale: u32) -> Limits {
+                        match scale {
+                            $( $s => crate::limits_typed::<decimal_scaled::$D<$s>>($s), )+
+                            _ => panic!("no decimal-scaled cell for (width={}, scale={scale})", $w),
+                        }
+                    }
+                }
+            )+
+        }
 
         fn dispatch_compute(
             width: u32, scale: u32, func: Function, inputs: &[String], m: DsMode,
         ) -> Computed<String> {
-            match (width, scale) {
-                $( ($w, $s) => compute_typed::<$D<$s>>(func, inputs, m), )+
+            match width {
+                $( $(#[$cfg])* $w => tier_dispatch::$D::compute(scale, func, inputs, m), )+
                 _ => panic!("no decimal-scaled cell for (width={width}, scale={scale})"),
             }
         }
 
         fn dispatch_limits(width: u32, scale: u32) -> Limits {
-            match (width, scale) {
-                $( ($w, $s) => limits_typed::<$D<$s>>($s), )+
+            match width {
+                $( $(#[$cfg])* $w => tier_dispatch::$D::limits(scale), )+
                 _ => panic!("no decimal-scaled cell for (width={width}, scale={scale})"),
             }
         }
@@ -206,40 +254,40 @@ macro_rules! cells {
 }
 
 cells! {
-    // D18 — Int<1>, 64-bit storage
-    D18<0> => 18, D18<3> => 18, D18<4> => 18, D18<9> => 18, D18<13> => 18, D18<17> => 18,
-    // D38 — Int<2>, 128-bit
-    D38<0> => 38, D38<2> => 38, D38<6> => 38, D38<9> => 38, D38<10> => 38, D38<12> => 38,
-    D38<17> => 38, D38<18> => 38, D38<19> => 38, D38<28> => 38, D38<37> => 38,
+    // D18 — Int<1>, 64-bit storage (always compiled)
+    D18 => 18 { 0, 3, 4, 9, 13, 17 };
+    // D38 — Int<2>, 128-bit (always compiled)
+    D38 => 38 { 0, 2, 6, 9, 10, 12, 17, 18, 19, 28, 37 };
     // D57 — Int<3>, 192-bit
-    D57<0> => 57, D57<14> => 57, D57<20> => 57, D57<28> => 57, D57<30> => 57, D57<42> => 57,
-    D57<56> => 57,
+    #[cfg(feature = "d57")]
+    D57 => 57 { 0, 14, 20, 28, 30, 42, 56 };
     // D76 — Int<4>, 256-bit
-    D76<0> => 76, D76<18> => 76, D76<19> => 76, D76<38> => 76, D76<40> => 76, D76<57> => 76,
-    D76<75> => 76,
+    #[cfg(feature = "d76")]
+    D76 => 76 { 0, 18, 19, 38, 40, 57, 75 };
     // D115 — Int<6>, 384-bit
-    D115<0> => 115, D115<28> => 115, D115<50> => 115, D115<57> => 115, D115<86> => 115,
-    D115<114> => 115,
+    #[cfg(feature = "d115")]
+    D115 => 115 { 0, 28, 50, 57, 86, 114 };
     // D153 — Int<8>, 512-bit
-    D153<0> => 153, D153<38> => 153, D153<76> => 153, D153<114> => 153, D153<152> => 153,
+    #[cfg(feature = "d153")]
+    D153 => 153 { 0, 38, 76, 114, 152 };
     // D230 — Int<12>, 768-bit
-    D230<0> => 230, D230<57> => 230, D230<115> => 230, D230<172> => 230, D230<229> => 230,
+    #[cfg(feature = "d230")]
+    D230 => 230 { 0, 57, 115, 172, 229 };
     // D307 — Int<16>, 1024-bit (s290: the ln lookup band s285-295)
-    D307<0> => 307, D307<30> => 307, D307<50> => 307, D307<70> => 307, D307<76> => 307,
-    D307<120> => 307, D307<153> => 307, D307<230> => 307, D307<290> => 307, D307<306> => 307,
+    #[cfg(feature = "d307")]
+    D307 => 307 { 0, 30, 50, 70, 76, 120, 153, 230, 290, 306 };
     // D462 — Int<24>, 1536-bit
-    D462<0> => 462, D462<30> => 462, D462<100> => 462, D462<115> => 462, D462<180> => 462,
-    D462<231> => 462, D462<346> => 462, D462<461> => 462,
+    #[cfg(feature = "d462")]
+    D462 => 462 { 0, 30, 100, 115, 180, 231, 346, 461 };
     // D616 — Int<32>, 2048-bit (s590: the ln lookup band s585-595)
-    D616<0> => 616, D616<30> => 616, D616<130> => 616, D616<154> => 616, D616<240> => 616,
-    D616<308> => 616, D616<462> => 616, D616<590> => 616, D616<615> => 616,
+    #[cfg(feature = "d616")]
+    D616 => 616 { 0, 30, 130, 154, 240, 308, 462, 590, 615 };
     // D924 — Int<48>, 3072-bit (s900: the ln lookup band s895-905)
-    D924<0> => 924, D924<30> => 924, D924<180> => 924, D924<231> => 924, D924<350> => 924,
-    D924<462> => 924, D924<693> => 924, D924<900> => 924, D924<923> => 924,
+    #[cfg(feature = "d924")]
+    D924 => 924 { 0, 30, 180, 231, 350, 462, 693, 900, 923 };
     // D1232 — Int<64>, 4096-bit (s1200: the ln lookup band s1195-1205)
-    D1232<0> => 1232, D1232<30> => 1232, D1232<250> => 1232, D1232<308> => 1232,
-    D1232<470> => 1232, D1232<616> => 1232, D1232<924> => 1232, D1232<1200> => 1232,
-    D1232<1231> => 1232,
+    #[cfg(feature = "d1232")]
+    D1232 => 1232 { 0, 30, 250, 308, 470, 616, 924, 1200, 1231 };
 }
 
 /// One erased decimal-scaled subject: a `(width, scale)` cell tested under one rounding
@@ -360,11 +408,13 @@ impl Filter {
         }
     }
 
-    /// The `(width, scale)` cells passing the width/scale filters.
+    /// The `(width, scale)` cells passing the width/scale filters, restricted to
+    /// the tiers this build actually compiles (a narrow build sweeps D18/D38).
     pub fn cells(&self) -> Vec<(u32, u32)> {
         CELLS
             .iter()
             .copied()
+            .filter(|(w, _)| tier_compiled(*w))
             .filter(|(w, _)| self.widths.as_ref().is_none_or(|ws| ws.contains(w)))
             .filter(|(_, s)| self.scales.as_ref().is_none_or(|ss| ss.contains(s)))
             .collect()

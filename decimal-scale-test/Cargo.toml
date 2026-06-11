@@ -91,9 +91,9 @@ unsafe_code = "forbid"
 unused_variables = "allow"
 dead_code = "allow"
 
-[[test]]
-name = "golden"
-required-features = ["wide", "x-wide", "xx-wide"]
+# The golden gate runs at ANY feature set: the subject dispatch is per-tier
+# feature-gated, so a default (narrow) build sweeps the D18/D38 cells and a
+# full-width build sweeps all 92.
 
 # Version-history correctness gates: live vs the pinned historical releases.
 # `history_previous` (the 0.4.4 ratchet) needs only history-044; the optional
