@@ -120,6 +120,157 @@ pub(crate) fn atan2_schoolbook<C: WideTrigCore, const SCALE: u32>(
     C::round_to_storage_with(r, w, SCALE, mode)
 }
 
+// ── Rung-generic shells (the SCALE-derived work-rung surface) ─────────
+//
+// The same compositions run at an arbitrary work rung `Wk` (decoupled
+// from `C::W`), so the policy can run them at the minimal valid work
+// width (mirrors `wide_trig_core::sin_series_g` / `atan_series_g`;
+// the `C::W`-bound kernels above stay the tier-width realisation,
+// value-identical — every leaf is the identical width-agnostic
+// `exp_generic` integer op the per-tier core forwards to, and `π` comes
+// from the same per-scale constant table).
+
+/// Rung-generic [`asin_work`] — `π` supplied at the working scale
+/// (only its `π/2` half is consumed).
+#[cfg(feature = "_wide-support")]
+#[inline]
+fn asin_work_g<Wk: crate::int::types::traits::BigInt>(v: Wk, w: u32, pi_w: Wk) -> Wk
+where
+    Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    use crate::algos::exp::exp_generic as eg;
+    let one_w = eg::one::<Wk>(w);
+    let zero = eg::zero::<Wk>();
+    let abs_v = if v < zero { zero - v } else { v };
+    let half_w = one_w >> 1;
+    if abs_v == one_w {
+        let hp = pi_w >> 1;
+        if v < zero { zero - hp } else { hp }
+    } else if abs_v <= half_w {
+        let denom = eg::sqrt_fixed::<Wk>(one_w - eg::mul::<Wk>(v, v, w), w);
+        crate::algos::trig::trig_generic::atan_fixed::<Wk>(eg::div::<Wk>(v, denom, w), w, pi_w)
+    } else {
+        let inner = (one_w - abs_v) >> 1;
+        let inner_sqrt = eg::sqrt_fixed::<Wk>(inner, w);
+        let inner_denom =
+            eg::sqrt_fixed::<Wk>(one_w - eg::mul::<Wk>(inner_sqrt, inner_sqrt, w), w);
+        let inner_asin = crate::algos::trig::trig_generic::atan_fixed::<Wk>(
+            eg::div::<Wk>(inner_sqrt, inner_denom, w),
+            w,
+            pi_w,
+        );
+        let result_abs = (pi_w >> 1) - inner_asin - inner_asin;
+        if v < zero { zero - result_abs } else { result_abs }
+    }
+}
+
+/// Rung-generic [`asin_schoolbook`] — the atan-of-ratio composition at
+/// an arbitrary work rung `Wk`. Panics if |x| > 1 (the policy gate only
+/// admits magnitudes whose lift provably fits the rung, so the domain
+/// check fires at the rung exactly as at the tier width).
+#[cfg(feature = "_wide-support")]
+#[inline]
+#[must_use]
+pub(crate) fn asin_schoolbook_g<C: WideTrigCore, Wk: crate::int::types::traits::BigInt, const SCALE: u32>(
+    raw: C::Storage,
+    mode: RoundingMode,
+) -> C::Storage
+where
+    Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    use crate::algos::exp::exp_generic as eg;
+    use crate::algos::support::wide_trig_core::{pi_at_rung, round_to_storage_with_g, to_work_scaled_g};
+    let w = SCALE + C::GUARD;
+    let one_w = eg::one::<Wk>(w);
+    let zero = eg::zero::<Wk>();
+    let v0 = to_work_scaled_g::<C::Storage, Wk>(raw, C::GUARD);
+    let abs_v0 = if v0 < zero { zero - v0 } else { v0 };
+    if abs_v0 > one_w {
+        panic!("schoolbook asin: argument out of domain [-1, 1]");
+    }
+    let r = asin_work_g::<Wk>(v0, w, pi_at_rung::<Wk>(w, w));
+    round_to_storage_with_g::<C::Storage, Wk>(r, w, SCALE, mode, C::storage_max(), C::storage_min())
+}
+
+/// Rung-generic [`acos_schoolbook`] — `π/2 − asin(x)` at an arbitrary
+/// work rung `Wk`. Panics if |x| > 1.
+#[cfg(feature = "_wide-support")]
+#[inline]
+#[must_use]
+pub(crate) fn acos_schoolbook_g<C: WideTrigCore, Wk: crate::int::types::traits::BigInt, const SCALE: u32>(
+    raw: C::Storage,
+    mode: RoundingMode,
+) -> C::Storage
+where
+    Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    use crate::algos::exp::exp_generic as eg;
+    use crate::algos::support::wide_trig_core::{pi_at_rung, round_to_storage_with_g, to_work_scaled_g};
+    let w = SCALE + C::GUARD;
+    let one_w = eg::one::<Wk>(w);
+    let zero = eg::zero::<Wk>();
+    let v0 = to_work_scaled_g::<C::Storage, Wk>(raw, C::GUARD);
+    let abs_v0 = if v0 < zero { zero - v0 } else { v0 };
+    if abs_v0 > one_w {
+        panic!("schoolbook acos: argument out of domain [-1, 1]");
+    }
+    let pi_w = pi_at_rung::<Wk>(w, w);
+    let r = (pi_w >> 1) - asin_work_g::<Wk>(v0, w, pi_w);
+    round_to_storage_with_g::<C::Storage, Wk>(r, w, SCALE, mode, C::storage_max(), C::storage_min())
+}
+
+/// Rung-generic [`atan2_schoolbook`] — quadrant-resolved `atan(y/x)` at
+/// an arbitrary work rung `Wk` (both operands gated by the policy).
+#[cfg(feature = "_wide-support")]
+#[inline]
+#[must_use]
+pub(crate) fn atan2_schoolbook_g<C: WideTrigCore, Wk: crate::int::types::traits::BigInt, const SCALE: u32>(
+    y_raw: C::Storage,
+    x_raw: C::Storage,
+    mode: RoundingMode,
+) -> C::Storage
+where
+    Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    use crate::algos::exp::exp_generic as eg;
+    use crate::algos::support::wide_trig_core::{pi_at_rung, round_to_storage_with_g, to_work_scaled_g};
+    use crate::algos::trig::trig_generic::atan_fixed;
+    let w = SCALE + C::GUARD;
+    let z = C::storage_zero();
+    let pi_w = pi_at_rung::<Wk>(w, w);
+    let r = if x_raw == z {
+        if y_raw > z {
+            pi_w >> 1
+        } else if y_raw < z {
+            eg::zero::<Wk>() - (pi_w >> 1)
+        } else {
+            eg::zero::<Wk>()
+        }
+    } else {
+        let y = to_work_scaled_g::<C::Storage, Wk>(y_raw, C::GUARD);
+        let x = to_work_scaled_g::<C::Storage, Wk>(x_raw, C::GUARD);
+        let zero_w = eg::zero::<Wk>();
+        let abs_y = if y < zero_w { zero_w - y } else { y };
+        let abs_x = if x < zero_w { zero_w - x } else { x };
+        let base = if abs_x >= abs_y {
+            atan_fixed::<Wk>(eg::div::<Wk>(y, x, w), w, pi_w)
+        } else {
+            let inv = atan_fixed::<Wk>(eg::div::<Wk>(x, y, w), w, pi_w);
+            let hp = pi_w >> 1;
+            let same_sign = (y < zero_w) == (x < zero_w);
+            if same_sign { hp - inv } else { (zero_w - hp) - inv }
+        };
+        if x_raw > z {
+            base
+        } else if y_raw >= z {
+            base + pi_w
+        } else {
+            base - pi_w
+        }
+    };
+    round_to_storage_with_g::<C::Storage, Wk>(r, w, SCALE, mode, C::storage_max(), C::storage_min())
+}
+
 #[inline]
 fn asin_work_narrow(v: Fixed, w: u32) -> Fixed {
     let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
