@@ -614,6 +614,185 @@ pub(crate) fn atan_narrow<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
     C::round_to_storage_with(r, w, SCALE, mode)
 }
 
+/// Rung-generic `sin_strict` — the forward-trig Series kernel run at an
+/// arbitrary work rung `Wk` (decoupled from `C::W`), so the policy can
+/// run it at the minimal valid work width for low-scale cells (mirrors
+/// [`ln_series_g`]; the tier-width [`sin_series`] keeps the trait-bound
+/// realisation, value-identical — the integer ops are width-agnostic, so
+/// the only divergence surface is the Ziv cap `Wk::BITS/8`, budgeted by
+/// `policy::work_rung::trig_rung`). `GUARD` is the base guard: the tier
+/// `GUARD` (30) on the Series cells, the band guard (8/10) on the
+/// narrow-GUARD band cells — one kernel serves both shapes (the explicit
+/// `raw == 0` pin is value-identical to the unpinned tier path: the
+/// kernel computes the exact grid value either way).
+///
+/// `π` at the rung comes from the same per-scale constant table as the
+/// per-tier `pi_cf` (`pi_by_scale` keyed on the const `SCALE + GUARD` on
+/// the hot path — value-identical to `pi_by_working_scale` at the same
+/// scale, only the const-fold seam differs).
+#[cfg(feature = "_wide-support")]
+#[inline]
+#[must_use]
+pub(crate) fn sin_series_g<C: WideTrigCore, Wk: BigInt, const SCALE: u32, const GUARD: u32>(
+    raw: C::Storage,
+    mode: RoundingMode,
+) -> C::Storage
+where
+    Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    if raw == C::storage_zero() {
+        return C::storage_zero();
+    }
+    let r = round_to_storage_directed_g::<C::Storage, Wk>(
+        GUARD,
+        SCALE,
+        mode,
+        C::storage_max(),
+        C::storage_min(),
+        |guard| {
+            let w = SCALE + guard;
+            crate::algos::trig::trig_generic::sin_fixed::<Wk>(
+                to_work_scaled_g::<C::Storage, Wk>(raw, guard),
+                w,
+                pi_at_rung::<Wk>(w, SCALE + GUARD),
+            )
+        },
+    );
+    adjust_bounded_extremum::<C, SCALE>(r, raw, mode)
+}
+
+/// Rung-generic `cos_strict` — see [`sin_series_g`]. Standalone
+/// `cos_fixed` path (cofunction identity, one `sin_fixed`, no sqrt).
+#[cfg(feature = "_wide-support")]
+#[inline]
+#[must_use]
+pub(crate) fn cos_series_g<C: WideTrigCore, Wk: BigInt, const SCALE: u32, const GUARD: u32>(
+    raw: C::Storage,
+    mode: RoundingMode,
+) -> C::Storage
+where
+    Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    if raw == C::storage_zero() {
+        return C::storage_one(SCALE);
+    }
+    let r = round_to_storage_directed_g::<C::Storage, Wk>(
+        GUARD,
+        SCALE,
+        mode,
+        C::storage_max(),
+        C::storage_min(),
+        |guard| {
+            let w = SCALE + guard;
+            crate::algos::trig::trig_generic::cos_fixed::<Wk>(
+                to_work_scaled_g::<C::Storage, Wk>(raw, guard),
+                w,
+                pi_at_rung::<Wk>(w, SCALE + GUARD),
+            )
+        },
+    );
+    adjust_bounded_extremum::<C, SCALE>(r, raw, mode)
+}
+
+/// Rung-generic `tan_strict` — see [`sin_series_g`]. One kernel covers
+/// the two existing tan shapes, preserved bit-for-bit per call site:
+///
+/// - `NEAR_POLE = true, SUB_GUARD = true` — the tier-`GUARD` Series
+///   shape ([`tan_series`]): the base probe sizes a per-call lift
+///   (`near_pole_tan::tan_extra_digits`) MINUS the guard already paid.
+/// - `NEAR_POLE = true, SUB_GUARD = false` — the narrow-band shape
+///   (`sincos_narrow::tan_narrow_with_taylor` with its probe): the full
+///   per-call lift on top of the band guard.
+/// - `NEAR_POLE = false` — the band shape without the probe (the band
+///   guard already covers the worst case): one divide + one narrowing.
+///
+/// The rare near-pole recompute (`extra > 0`) runs at the TIER work
+/// width `C::W` — capacity for the unbounded per-call lift is exactly
+/// what the tier `$Work` is sized for, and the probe value (hence
+/// `extra`) is bit-identical at the rung, so the recompute reproduces
+/// the tier path exactly.
+#[cfg(feature = "_wide-support")]
+#[inline]
+#[must_use]
+pub(crate) fn tan_series_g<
+    C: WideTrigCore,
+    Wk: BigInt,
+    const SCALE: u32,
+    const GUARD: u32,
+    const NEAR_POLE: bool,
+    const SUB_GUARD: bool,
+>(
+    raw: C::Storage,
+    mode: RoundingMode,
+) -> C::Storage
+where
+    Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+    <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    use crate::algos::exp::exp_generic as eg;
+
+    if raw == C::storage_zero() {
+        return C::storage_zero();
+    }
+    let w0 = SCALE + GUARD;
+    let (sin0, cos0) = crate::algos::trig::trig_generic::sin_cos_fixed::<Wk>(
+        to_work_scaled_g::<C::Storage, Wk>(raw, GUARD),
+        w0,
+        pi_at_rung::<Wk>(w0, w0),
+    );
+    if cos0 == eg::zero::<Wk>() {
+        panic!("wide-tier tan: cosine is zero (argument is an odd multiple of pi/2)");
+    }
+    let probe = eg::div::<Wk>(sin0, cos0, w0);
+    if !NEAR_POLE {
+        return round_to_storage_with_g::<C::Storage, Wk>(
+            probe, w0, SCALE, mode, C::storage_max(), C::storage_min(),
+        );
+    }
+    let extra_raw =
+        crate::algos::trig::near_pole_tan::tan_extra_digits(eg::bit_length::<Wk>(probe), w0);
+    let extra = if SUB_GUARD { extra_raw.saturating_sub(GUARD) } else { extra_raw };
+    if extra == 0 {
+        return round_to_storage_with_g::<C::Storage, Wk>(
+            probe, w0, SCALE, mode, C::storage_max(), C::storage_min(),
+        );
+    }
+    // Near-pole recompute at the tier work width (the `w` here is off the
+    // hot `SCALE + GUARD` path, so π comes from the runtime-keyed table —
+    // exactly the per-tier `pi_cf` fallback the tier path takes).
+    let w = w0 + extra;
+    let (sin_w, cos_w) = crate::algos::trig::trig_generic::sin_cos_fixed::<C::W>(
+        to_work_scaled_g::<C::Storage, C::W>(raw, GUARD + extra),
+        w,
+        crate::consts::pi_by_working_scale::<C::W>(
+            w,
+            crate::support::rounding::DEFAULT_ROUNDING_MODE,
+        ),
+    );
+    let r = eg::div::<C::W>(sin_w, cos_w, w);
+    round_to_storage_with_g::<C::Storage, C::W>(
+        r, w, SCALE, mode, C::storage_max(), C::storage_min(),
+    )
+}
+
+/// `π` at working scale `w` in the rung integer `Wk`: the per-scale
+/// constant table keyed on the CONST base working scale on the hot path
+/// (`w == base_w`, const-folds per monomorphisation — the rung sibling
+/// of the per-tier `pi_cf`), the runtime-keyed lookup on the Ziv
+/// escalation path. Value-identical either way (same table entry).
+#[cfg(feature = "_wide-support")]
+#[inline]
+fn pi_at_rung<Wk: BigInt>(w: u32, base_w: u32) -> Wk {
+    if w == base_w {
+        crate::consts::pi_by_scale::<Wk>(base_w, crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    } else {
+        crate::consts::pi_by_working_scale::<Wk>(
+            w,
+            crate::support::rounding::DEFAULT_ROUNDING_MODE,
+        )
+    }
+}
+
 // ─── Work-int-generic narrowing / lift free fns (the SCALE-derived work-rung
 //     surface) ─────────────────────────────────────────────────────────────
 //
@@ -645,6 +824,26 @@ where
     crate::algos::exp::exp_generic::pow10::<S>(working_digits) * BigInt::resize_to::<S>(raw)
 }
 
+/// Narrow a working-scale `signed` value (in the work int `S`) to storage
+/// `St`, panicking when it exceeds the storage range. When `S` is NARROWER
+/// than `St` (the work-rung case — a rung below the storage width admitted
+/// by the trig magnitude gate) every `S`-representable value fits the wider
+/// storage, so the bounds check is vacuously true and skipped — `st_max` /
+/// `st_min` cannot even be represented in `S` (a down-resize would truncate
+/// their magnitude into garbage bounds). The `LIMBS` compare const-folds per
+/// monomorphisation.
+#[inline]
+fn narrow_range_checked_g<St: BigInt + Copy, S: BigInt>(signed: S, st_max: St, st_min: St) -> St {
+    if <S as BigInt>::LIMBS >= <St as BigInt>::LIMBS {
+        let max_w = BigInt::resize_to::<S>(st_max);
+        let min_w = BigInt::resize_to::<S>(st_min);
+        if signed > max_w || signed < min_w {
+            panic!("wide-tier strict transcendental: result out of range");
+        }
+    }
+    BigInt::resize_to::<St>(signed)
+}
+
 /// Work-int-generic narrowing of a working-scale value `v` (at scale `w`) down
 /// to storage scale `target`, rounded under `mode`, into storage `St`.
 /// `st_max`/`st_min` are `St::MAX`/`MIN`, caller-supplied.
@@ -668,12 +867,7 @@ where
     } else {
         crate::algos::support::rescale::dispatch_wide_pow10::<S>(v, shift, mode)
     };
-    let max_w = BigInt::resize_to::<S>(st_max);
-    let min_w = BigInt::resize_to::<S>(st_min);
-    if rounded > max_w || rounded < min_w {
-        panic!("wide-tier strict transcendental: result out of range");
-    }
-    BigInt::resize_to::<St>(rounded)
+    narrow_range_checked_g::<St, S>(rounded, st_max, st_min)
 }
 
 /// Absolute floor (`10^4` work-integer units) separating a genuine deciding-
@@ -765,14 +959,7 @@ where
         let m = if n < lit(0) { -n } else { n };
         ((bit_length(m) as u64 * 30103 / 100_000) as u32 + 1).saturating_sub(target)
     };
-    let range_check = |signed: S| -> St {
-        let max_w = BigInt::resize_to::<S>(st_max);
-        let min_w = BigInt::resize_to::<S>(st_min);
-        if signed > max_w || signed < min_w {
-            panic!("wide-tier strict transcendental: result out of range");
-        }
-        BigInt::resize_to::<St>(signed)
-    };
+    let range_check = |signed: S| -> St { narrow_range_checked_g::<St, S>(signed, st_max, st_min) };
     let finish = |neg: bool, q: S, bump: bool| -> St {
         let q_mag = if bump { q + lit(1) } else { q };
         range_check(if neg { -q_mag } else { q_mag })
@@ -1114,12 +1301,7 @@ where
                 q
             };
             let signed = if neg { -q_mag } else { q_mag };
-            let max_w = BigInt::resize_to::<S>(st_max);
-            let min_w = BigInt::resize_to::<S>(st_min);
-            if signed > max_w || signed < min_w {
-                panic!("wide-tier strict transcendental: result out of range");
-            }
-            let narrowed = BigInt::resize_to::<St>(signed);
+            let narrowed = narrow_range_checked_g::<St, S>(signed, st_max, st_min);
             // `divisor = 10^guard` is even for every guard >= 1 (and the
             // guard-0 degenerate `1/2 == 1 >> 1 == 0`), so the half-ULP
             // boundary is an exact one-bit shift — not a divide.
@@ -1239,10 +1421,5 @@ where
         }
     };
 
-    let max_w = BigInt::resize_to::<S>(st_max);
-    let min_w = BigInt::resize_to::<S>(st_min);
-    if signed > max_w || signed < min_w {
-        panic!("wide-tier strict transcendental: result out of range");
-    }
-    BigInt::resize_to::<St>(signed)
+    narrow_range_checked_g::<St, S>(signed, st_max, st_min)
 }

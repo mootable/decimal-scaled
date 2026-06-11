@@ -1821,147 +1821,48 @@ macro_rules! decl_wide_transcendental {
                 $crate::consts::rad_per_deg_by_working_scale::<W>(w, mode)
             }
 
-            /// Taylor series for `sin` on a reduced `r ∈ [0, π/4]`.
-            ///
-            /// `sin(r) = r − r³/3! + r⁵/5! − …`
-            fn sin_taylor(r: W, w: u32) -> W {
-                let r2 = mul(r, r, w);
-                let mut sum = r;
-                let mut term = r;
-                let mut k: u128 = 1;
-                loop {
-                    term = mul(term, r2, w) / lit((2 * k) * (2 * k + 1));
-                    if term == zero() {
-                        break;
-                    }
-                    if k % 2 == 1 {
-                        sum = sum - term;
-                    } else {
-                        sum = sum + term;
-                    }
-                    k += 1;
-                    if k > SERIES_CAP {
-                        break;
-                    }
-                }
-                sum
-            }
-
-            /// Taylor series for `cos` on a reduced `r ∈ [0, π/4]`.
-            ///
-            /// `cos(r) = 1 − r²/2! + r⁴/4! − r⁶/6! + …`
-            ///
-            /// Converges faster than [`sin_taylor`] at the same `r`
-            /// because the leading `1` dominates the small even-power
-            /// corrections — used as the "upper-half" branch of
-            /// [`sin_fixed`] when the reduced argument exceeds π/4.
-            fn cos_taylor(r: W, w: u32) -> W {
-                let r2 = mul(r, r, w);
-                let one_w = one(w);
-                let mut sum = one_w;
-                let mut term = one_w;
-                let mut k: u128 = 1;
-                loop {
-                    term = mul(term, r2, w) / lit((2 * k - 1) * (2 * k));
-                    if term == zero() {
-                        break;
-                    }
-                    if k % 2 == 1 {
-                        sum = sum - term;
-                    } else {
-                        sum = sum + term;
-                    }
-                    k += 1;
-                    if k > SERIES_CAP {
-                        break;
-                    }
-                }
-                sum
-            }
-
             /// Sine of a working-scale value.
             ///
-            /// Reduces to `|r| ≤ π/2` via mod-τ; then folds to
-            /// `r ∈ [0, π/2]` via `sin(π − x) = sin(x)`; then routes
-            /// to `sin_taylor` if `r ≤ π/4` or `cos_taylor(π/2 − r)`
-            /// otherwise. The `[0, π/4]` window halves the convergence
-            /// argument and roughly halves the Taylor term count, and
-            /// cos converges faster than sin at the same argument
-            /// because of the constant-1 leading term.
+            /// Delegates to the width-generic kernel
+            /// (`trig_generic::sin_fixed`) — the single source for the
+            /// tier work integer `W` and the SCALE-derived work rungs
+            /// (Constitution rule 2: one generic algorithm). The
+            /// const-folded `pi_cf::<SCALE>(w)` is threaded in so this
+            /// primitive path keeps its compile-time `π` (the generic
+            /// kernel takes `π` as a parameter, so it stays free of the
+            /// `SCALE` const) — the same shape as [`ln_fixed`]'s `ln2`.
             pub(crate) fn sin_fixed<const SCALE: u32>(v_w: W, w: u32) -> W {
-                let pi_w = pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE);
-                let tau = pi_w + pi_w;
-                let hp = pi_w >> 1;
-                let qp = hp >> 1; // π/4
-                let q = round_to_nearest_int(div(v_w, tau, w), w);
-                let r = v_w - scale_by_k(tau, q);
-                let neg = r < zero();
-                let abs_r = if neg { -r } else { r };
-                let reduced = if abs_r >= hp { pi_w - abs_r } else { abs_r };
-                let s = if reduced > qp {
-                    // sin(reduced) = cos(π/2 − reduced); the cos
-                    // argument lies in [0, π/4].
-                    cos_taylor(hp - reduced, w)
-                } else {
-                    sin_taylor(reduced, w)
-                };
-                if neg { -s } else { s }
+                $crate::algos::trig::trig_generic::sin_fixed::<W>(
+                    v_w,
+                    w,
+                    pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                )
             }
 
-            /// Joint sine + cosine of a working-scale value.
-            ///
-            /// Replaces two independent `sin_fixed(...)` calls (one
-            /// for sin, one for `sin(x + π/2)` = cos) with a single
-            /// sin evaluation plus a sqrt:
-            ///
-            /// - Reduce mod τ and fold to `|r| ∈ [0, π/2]`, tracking
-            ///   both signs (sin from the mod-τ residue, cos from
-            ///   whether the unfolded `|r|` exceeded `π/2`).
-            /// - Evaluate `|sin(reduced)|` via the same `sin_taylor`
-            ///   or `cos_taylor` branch as `sin_fixed`.
-            /// - Recover `|cos(reduced)|` from the Pythagorean
-            ///   identity: `√(1 − sin²)`.
-            /// - Apply the cached signs.
-            ///
-            /// One Taylor series + one wide sqrt + one wide mul,
-            /// vs the historic two independent Taylor evaluations.
-            /// Halves the wall-clock when both are needed.
+            /// Joint sine + cosine of a working-scale value: one Taylor
+            /// series + one wide sqrt (`√(1 − sin²)`) vs two independent
+            /// Taylor evaluations. Delegates to the width-generic kernel
+            /// (`trig_generic::sin_cos_fixed`) with the const-folded `π`
+            /// threaded in — see [`sin_fixed`].
             pub(crate) fn sin_cos_fixed<const SCALE: u32>(v_w: W, w: u32) -> (W, W) {
-                let pi_w = pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE);
-                let tau = pi_w + pi_w;
-                let hp = pi_w >> 1;
-                let qp = hp >> 1;
-                let q = round_to_nearest_int(div(v_w, tau, w), w);
-                let r = v_w - scale_by_k(tau, q);
-                let sin_neg = r < zero();
-                let abs_r = if sin_neg { -r } else { r };
-                let cos_neg = abs_r > hp; // |r| > π/2 → cos negative.
-                let reduced = if cos_neg { pi_w - abs_r } else { abs_r };
-                let s_abs = if reduced > qp {
-                    cos_taylor(hp - reduced, w)
-                } else {
-                    sin_taylor(reduced, w)
-                };
-                // cos² + sin² = 1 ⇒ |cos| = √(1 − sin²).
-                let one_w = one(w);
-                let s2 = mul(s_abs, s_abs, w);
-                let cos_abs = sqrt_fixed(one_w - s2, w);
-                let sin_result = if sin_neg { -s_abs } else { s_abs };
-                let cos_result = if cos_neg { -cos_abs } else { cos_abs };
-                (sin_result, cos_result)
+                $crate::algos::trig::trig_generic::sin_cos_fixed::<W>(
+                    v_w,
+                    w,
+                    pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                )
             }
 
             /// Cosine of a working-scale value via the cofunction
-            /// identity `cos(x) = sin(π/2 − x)`.
-            ///
-            /// Used by the standalone `cos_strict` kernel path: one
-            /// `sin_fixed` evaluation, no sqrt — strictly cheaper than
-            /// the `sin_cos_fixed` path when only `cos` is needed.
-            /// `sin_cos_fixed` remains the right choice when both
-            /// outputs are wanted (one Taylor + one sqrt vs two
-            /// Taylors).
+            /// identity `cos(x) = sin(π/2 − x)` — one sin evaluation, no
+            /// sqrt. Delegates to the width-generic kernel
+            /// (`trig_generic::cos_fixed`) with the const-folded `π`
+            /// threaded in — see [`sin_fixed`].
             pub(crate) fn cos_fixed<const SCALE: u32>(v_w: W, w: u32) -> W {
-                sin_fixed::<SCALE>(half_pi::<SCALE>(w) - v_w, w)
+                $crate::algos::trig::trig_generic::cos_fixed::<W>(
+                    v_w,
+                    w,
+                    pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                )
             }
 
             /// Arctangent of a working-scale value, result in

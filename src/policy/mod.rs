@@ -44,6 +44,10 @@ pub(crate) mod sub;
 pub(crate) mod to_degrees;
 pub(crate) mod to_radians;
 pub(crate) mod trig;
+// Shared policy-layer support: the SCALE-derived work-rung selector
+// (`ln` Tang + forward trig). Private to the policy layer.
+#[cfg(feature = "_wide-support")]
+pub(crate) mod work_rung;
 
 // ── Narrow-tier checked narrow ──────────────────────────────────────
 //

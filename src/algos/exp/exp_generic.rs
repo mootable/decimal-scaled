@@ -27,8 +27,10 @@ use crate::int::types::traits::BigInt;
 use crate::support::rounding::RoundingMode;
 
     /// Hard cap on series iterations — a safety net; every series
-    /// terminates far sooner by reaching a zero term.
-    const SERIES_CAP: u128 = 20_000;
+    /// terminates far sooner by reaching a zero term. Shared with the
+    /// width-generic trig kernels (`algos::trig::trig_generic`), which
+    /// mirror the per-tier cores' identical cap.
+    pub(crate) const SERIES_CAP: u128 = 20_000;
 
     #[inline]
     pub(crate) fn lit<S: BigInt>(n: i128) -> S {

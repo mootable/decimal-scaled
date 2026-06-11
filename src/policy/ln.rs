@@ -229,93 +229,17 @@ fn schoolbook_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: Roundi
     }
 }
 
-/// The SCALE-derived work-rung for the Tang `ln` kernel (the L7 work-width
-/// campaign). A Tang-INTERNAL second axis — NOT in the `select` verdict, NOT on
-/// [`Algorithm`]: consulted only inside the Tang routing path. The chosen rung
-/// monomorphises the ONE generic kernel `ln_tang_g` at a narrower work integer
-/// for sub-max-scale cells (where the tier's full `$Work` is over-wide),
-/// const-folded away per `(N, SCALE)`. Variants are the ComputeLimbs widths the
-/// ladder can span (min storage `Int<3>` .. max ln floor `Int<176>`).
+// The SCALE-derived work-rung machinery (the `Rung` ladder + the
+// `ln_rung` selector) lives in the shared policy-support module
+// `super::work_rung` — one ladder + walker for `ln` and the forward
+// trig (`policy::trig`), no per-policy copies. A Tang-INTERNAL second
+// axis — NOT in the `select` verdict, NOT on [`Algorithm`]: consulted
+// only inside the Tang routing path below.
 #[cfg(feature = "_wide-support")]
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Rung {
-    W3,
-    W4,
-    W6,
-    W8,
-    W12,
-    W16,
-    W24,
-    W32,
-    W48,
-    W64,
-    W96,
-    W128,
-    W176,
-}
-
-/// The candidate rung ladder (ascending ComputeLimbs widths). Every wide tier's
-/// storage width AND `$Work` floor is a member, so `pick_rung_limbs` can always
-/// land on an enumerated width.
-#[cfg(feature = "_wide-support")]
-const AVAIL_RUNGS: [usize; 13] = [3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 176];
-
-/// Smallest available width (limbs) whose directed-Ziv cap (`limbs·8` decimal
-/// digits, = `BITS/8`) clears `SCALE + MARGIN`, clamped to `[storage, floor]`.
-/// If even `floor` cannot clear it (the tier's max-scale extreme), `floor` is
-/// the answer — and there it reproduces the current per-tier `$Work`, so the
-/// max-scale cells stay bit-identical.
-///
-/// `MARGIN` is the directed-Ziv escalation headroom above the working scale.
-/// Wide tiers (storage >= 16 limbs) use `MARGIN = 24`: their near-grid-line
-/// validity is monotone, so the tighter margin lands the narrowest valid rung.
-/// Narrow tiers (storage < 16) keep `MARGIN = 51`: their validity is
-/// non-monotone near the grid line, so no single tighter margin is safe — `51`
-/// is never too aggressive, at the cost of some missed narrowing. Each tier
-/// carries only its own width (rule 6); the golden gate is the correctness wall.
-#[cfg(feature = "_wide-support")]
-const fn pick_rung_limbs(scale: u32, storage: usize, floor: usize) -> usize {
-    // Per-tier margin (measured map): wide tiers tighten to 24, narrow stay safe at 51.
-    let margin: u32 = if storage >= 16 { 24 } else { 51 };
-    let need = scale + margin;
-    let mut i = 0;
-    while i < AVAIL_RUNGS.len() {
-        let w = AVAIL_RUNGS[i];
-        if w >= storage && w <= floor && (w as u32) * 8 > need {
-            return w;
-        }
-        i += 1;
-    }
-    floor
-}
-
-/// Resolve the work rung for tier `C` at `SCALE` — derives `[storage, floor]`
-/// from `C`'s own associated types (`C::Storage`, `C::W` = the tier's `$Work`),
-/// so ONE generic selector serves every wide tier (no per-tier ladder, no extra
-/// const knob — the BigRule's "inspect your own types" allowance).
-#[cfg(feature = "_wide-support")]
-const fn work_rung<C: WideTrigCore, const SCALE: u32>() -> Rung {
-    let storage = <C::Storage as BigInt>::LIMBS;
-    let floor = <C::W as BigInt>::LIMBS;
-    match pick_rung_limbs(SCALE, storage, floor) {
-        3 => Rung::W3,
-        4 => Rung::W4,
-        6 => Rung::W6,
-        8 => Rung::W8,
-        12 => Rung::W12,
-        16 => Rung::W16,
-        24 => Rung::W24,
-        32 => Rung::W32,
-        48 => Rung::W48,
-        64 => Rung::W64,
-        96 => Rung::W96,
-        128 => Rung::W128,
-        _ => Rung::W176,
-    }
-}
+use super::work_rung::{ln_rung, Rung};
 
 /// The Tang arm (every wide tier): pick the work rung, then call the ONE generic
-/// kernel [`ln_tang_g`] at that rung. `const { work_rung::<C, SCALE>() }` folds
+/// kernel [`ln_tang_g`] at that rung. `const { ln_rung::<C, SCALE>() }` folds
 /// per monomorphisation, so a concrete `D###<S>` collapses to a single direct
 /// call at exactly one `Int<K>` — no runtime branch, no binary bloat (the
 /// unchosen arms are dead-arm-eliminated). The rung never surfaces above this fn
@@ -335,7 +259,7 @@ fn tang_at_rung<
     mode: RoundingMode,
 ) -> C::Storage {
     use crate::algos::ln::ln_tang::ln_tang_g;
-    match const { work_rung::<C, SCALE>() } {
+    match const { ln_rung::<C, SCALE>() } {
         Rung::W3 => ln_tang_g::<C, Int<3>, SCALE, G, CAP, DIR, IE>(raw, mode),
         Rung::W4 => ln_tang_g::<C, Int<4>, SCALE, G, CAP, DIR, IE>(raw, mode),
         Rung::W6 => ln_tang_g::<C, Int<6>, SCALE, G, CAP, DIR, IE>(raw, mode),

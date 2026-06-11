@@ -38,3 +38,5 @@ pub(crate) mod near_pole_tan;
 pub(crate) mod sincos_narrow;
 #[cfg(feature = "_wide-support")]
 pub(crate) mod sincos_tang;
+#[cfg(feature = "_wide-support")]
+pub(crate) mod trig_generic;
