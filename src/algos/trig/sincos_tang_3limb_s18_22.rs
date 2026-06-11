@@ -71,5 +71,17 @@ pub(crate) fn tan_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> I
         panic!("D57::tan: cosine is zero (argument is an odd multiple of pi/2)");
     }
     let r = core::div(sin_w, cos_w, w);
-    core::round_to_storage_with(r, w, SCALE, mode)
+    // Near-tie escape — see `wide_trig_core::tan_series` / the asin(3e-60)
+    // family: a fixed-w single shot cannot see a deciding digit below w.
+    // Clear-of-band residuals keep the single-shot cost; the band falls to
+    // the Ziv-escalating generic kernel (rare).
+    match crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<Int<3>, _>(
+        r, w, SCALE, mode, Int::<3>::MAX, Int::<3>::MIN,
+    ) {
+        Some(st) => st,
+        None => crate::algos::support::wide_trig_core::tan_series::<
+            crate::types::widths::wide_trig_d57::Core,
+            SCALE,
+        >(raw, mode),
+    }
 }

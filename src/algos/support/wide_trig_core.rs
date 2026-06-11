@@ -627,6 +627,9 @@ pub(crate) fn tan_series<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
 ) -> C::Storage {
+    if raw == C::storage_zero() {
+        return C::storage_zero(); // tan(0) = 0, the sole exact point
+    }
     let w0 = SCALE + C::GUARD;
     let (sin0, cos0) = C::sin_cos_fixed::<SCALE>(C::to_work(raw), w0);
     if cos0 == C::zero() {
@@ -636,12 +639,46 @@ pub(crate) fn tan_series<C: WideTrigCore, const SCALE: u32>(
     let extra = crate::algos::trig::near_pole_tan::tan_extra_digits(C::bit_length(probe), w0)
         .saturating_sub(C::GUARD);
     if extra == 0 {
-        return C::round_to_storage_with(probe, w0, SCALE, mode);
+        // Near-tie escape: a fixed-w single shot cannot see a deciding
+        // digit below w (`tan(x) = x + x^3/3 + ...` lands an exact
+        // rational partial on a boundary with the deciding tail deeper -
+        // the asin(3e-60) family). Clear-of-band residuals keep the
+        // single-shot cost; the band escalates through the walker.
+        if let Some(st) = round_to_storage_clear_of_tie_g::<C::Storage, C::W>(
+            probe, w0, SCALE, mode, C::storage_max(), C::storage_min(),
+        ) {
+            return st;
+        }
+        return tan_walker::<C, SCALE>(raw, C::GUARD, mode);
     }
     let w = w0 + extra;
     let (sin_w, cos_w) = C::sin_cos_fixed::<SCALE>(C::to_work_scaled(raw, C::GUARD + extra), w);
     let r = C::div(sin_w, cos_w, w);
-    C::round_to_storage_with(r, w, SCALE, mode)
+    if let Some(st) = round_to_storage_clear_of_tie_g::<C::Storage, C::W>(
+        r, w, SCALE, mode, C::storage_max(), C::storage_min(),
+    ) {
+        return st;
+    }
+    tan_walker::<C, SCALE>(raw, C::GUARD + extra, mode)
+}
+
+/// The tier-width Ziv walker for `tan` near a rounding boundary: the
+/// ratio recomputed per probe at `w = SCALE + guard`, escalating from
+/// the (near-pole-lifted) `base_guard`. Reached only from the near-tie
+/// band of the single-shot terminals above / in the rung kernel.
+fn tan_walker<C: WideTrigCore, const SCALE: u32>(
+    raw: C::Storage,
+    base_guard: u32,
+    mode: RoundingMode,
+) -> C::Storage {
+    C::round_to_storage_directed(base_guard, SCALE, mode, &mut |guard| {
+        let w = SCALE + guard;
+        let (s, c) = C::sin_cos_fixed::<SCALE>(C::to_work_scaled(raw, guard), w);
+        if c == C::zero() {
+            panic!("wide-tier tan: cosine is zero (argument is an odd multiple of pi/2)");
+        }
+        C::div(s, c, w)
+    })
 }
 
 /// `atan_strict` for a wide tier — generic over the tier `C`. Result in
@@ -670,10 +707,14 @@ pub(crate) fn atan_narrow<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
     raw: C::Storage,
     mode: RoundingMode,
 ) -> C::Storage {
-    let w = SCALE + GUARD;
-    let v_w = C::to_work_scaled(raw, GUARD);
-    let r = C::atan_fixed::<SCALE>(v_w, w);
-    C::round_to_storage_with(r, w, SCALE, mode)
+    // Ziv-escalated narrowing from the band guard (NOT a single shot):
+    // `atan(x) = x - x^3/3 + ...` lands an exact rational partial on a
+    // rounding boundary with the deciding tail below the band's fixed
+    // working scale (the asin(3e-60) family). The walker's base probe is
+    // the same single evaluation; clear-of-band inputs exit there.
+    C::round_to_storage_directed(GUARD, SCALE, mode, &mut |guard| {
+        C::atan_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard)
+    })
 }
 
 /// Rung-generic `sin_strict` — the forward-trig Series kernel run at an
@@ -816,17 +857,26 @@ where
     }
     let probe = eg::div::<Wk>(sin0, cos0, w0);
     if !NEAR_POLE {
-        return round_to_storage_with_g::<C::Storage, Wk>(
+        // Near-tie escape — see [`tan_series`]: clear-of-band residuals
+        // keep the single-shot cost; the band escalates (rung first,
+        // tier fall-up).
+        if let Some(st) = round_to_storage_clear_of_tie_g::<C::Storage, Wk>(
             probe, w0, SCALE, mode, C::storage_max(), C::storage_min(),
-        );
+        ) {
+            return st;
+        }
+        return tan_walker_rung_g::<C, Wk, SCALE>(raw, GUARD, mode);
     }
     let extra_raw =
         crate::algos::trig::near_pole_tan::tan_extra_digits(eg::bit_length::<Wk>(probe), w0);
     let extra = if SUB_GUARD { extra_raw.saturating_sub(GUARD) } else { extra_raw };
     if extra == 0 {
-        return round_to_storage_with_g::<C::Storage, Wk>(
+        if let Some(st) = round_to_storage_clear_of_tie_g::<C::Storage, Wk>(
             probe, w0, SCALE, mode, C::storage_max(), C::storage_min(),
-        );
+        ) {
+            return st;
+        }
+        return tan_walker_rung_g::<C, Wk, SCALE>(raw, GUARD, mode);
     }
     // Near-pole recompute at the tier work width (the `w` here is off the
     // hot `SCALE + GUARD` path, so π comes from the runtime-keyed table —
@@ -841,8 +891,56 @@ where
         ),
     );
     let r = eg::div::<C::W>(sin_w, cos_w, w);
-    round_to_storage_with_g::<C::Storage, C::W>(
+    if let Some(st) = round_to_storage_clear_of_tie_g::<C::Storage, C::W>(
         r, w, SCALE, mode, C::storage_max(), C::storage_min(),
+    ) {
+        return st;
+    }
+    tan_walker::<C, SCALE>(raw, GUARD + extra, mode)
+}
+
+/// Two-width near-tie walker for the rung `tan` shapes: the ratio
+/// recomputed per probe at the rung `Wk` (π from the same per-scale
+/// table), an unresolved-at-rung-cap walk falling up to the tier-width
+/// [`tan_walker`] closure. Reached only from the near-tie band.
+#[cfg(feature = "_wide-support")]
+fn tan_walker_rung_g<C: WideTrigCore, Wk: BigInt, const SCALE: u32>(
+    raw: C::Storage,
+    base_guard: u32,
+    mode: RoundingMode,
+) -> C::Storage
+where
+    Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+    <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    use crate::algos::exp::exp_generic as eg;
+    let base_w = SCALE + base_guard;
+    round_to_storage_directed_widening_g::<C::Storage, Wk, C::W>(
+        base_guard,
+        SCALE,
+        mode,
+        C::storage_max(),
+        C::storage_min(),
+        |guard| {
+            let w = SCALE + guard;
+            let (s, c) = crate::algos::trig::trig_generic::sin_cos_fixed::<Wk>(
+                to_work_scaled_g::<C::Storage, Wk>(raw, guard),
+                w,
+                pi_at_rung::<Wk>(w, base_w),
+            );
+            if c == eg::zero::<Wk>() {
+                panic!("wide-tier tan: cosine is zero (argument is an odd multiple of pi/2)");
+            }
+            eg::div::<Wk>(s, c, w)
+        },
+        |guard| {
+            let w = SCALE + guard;
+            let (s, c) = C::sin_cos_fixed::<SCALE>(C::to_work_scaled(raw, guard), w);
+            if c == C::zero() {
+                panic!("wide-tier tan: cosine is zero (argument is an odd multiple of pi/2)");
+            }
+            C::div(s, c, w)
+        },
     )
 }
 
@@ -901,14 +999,27 @@ where
             |guard| C::atan_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard),
         )
     } else {
-        let w = SCALE + GUARD;
-        let r = crate::algos::trig::trig_generic::atan_fixed::<Wk>(
-            to_work_scaled_g::<C::Storage, Wk>(raw, GUARD),
-            w,
-            pi_at_rung::<Wk>(w, w),
-        );
-        round_to_storage_with_g::<C::Storage, Wk>(
-            r, w, SCALE, mode, C::storage_max(), C::storage_min(),
+        // Band shape: same Ziv-escalated two-width walker, from the band
+        // guard (the single-shot it replaces could not see a deciding
+        // digit below the band's fixed working scale — see
+        // [`atan_narrow`]). `DIRECTED` still selects the policy-side
+        // out-of-budget fallback kernel; the narrowing machinery is one.
+        let base_w = SCALE + GUARD;
+        round_to_storage_directed_widening_g::<C::Storage, Wk, C::W>(
+            GUARD,
+            SCALE,
+            mode,
+            C::storage_max(),
+            C::storage_min(),
+            |guard| {
+                let w = SCALE + guard;
+                crate::algos::trig::trig_generic::atan_fixed::<Wk>(
+                    to_work_scaled_g::<C::Storage, Wk>(raw, guard),
+                    w,
+                    pi_at_rung::<Wk>(w, base_w),
+                )
+            },
+            |guard| C::atan_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard),
         )
     }
 }
@@ -1325,6 +1436,72 @@ where
         return v1;
     }
     near_min_resolve_g::<St, S2>(base_guard, target, mode, never_exact, st_max, st_min, recompute2).0
+}
+
+/// Single-shot narrowing with a NEAR-TIE escape hatch. Rounds a
+/// working-scale value `v` (at scale `w`) to storage exactly as
+/// [`round_to_storage_with_g`] would — PROVIDED the sub-storage residual
+/// is clear of the mode's deciding boundary (the half-ULP line for the
+/// nearest modes, the grid line for the directed ones) by more than the
+/// near-tie band (`divisor/1000`, the shared Ziv escalate trigger).
+/// Returns `None` when the residual sits inside the band: the value's
+/// TRUE deciding digit may then lie below `w`'s resolution (the
+/// `asin(3·10⁻⁶⁰)` family — an exact rational partial sum landing
+/// exactly ON a boundary with a transcendental tail below the fixed
+/// working scale), and the caller must escalate through the full Ziv
+/// walker instead of concluding from this single shot. One `div_rem` —
+/// the clear path costs what the plain narrowing cost.
+#[inline]
+pub(crate) fn round_to_storage_clear_of_tie_g<St: BigInt + Copy, S: BigInt>(
+    v: S,
+    w: u32,
+    target: u32,
+    mode: RoundingMode,
+    st_max: St,
+    st_min: St,
+) -> Option<St> {
+    use crate::support::rounding::{is_nearest_mode, should_bump};
+    let lit = |n: i128| <S as BigInt>::from_i128(n);
+    let shift = w - target;
+    if shift == 0 {
+        // Already at storage scale: the value IS the answer (no residual).
+        return Some(narrow_range_checked_g::<St, S>(v, st_max, st_min));
+    }
+    let neg = v < lit(0);
+    let mag = if neg { -v } else { v };
+    let divisor = crate::consts::pow10::dispatch::<S>(shift);
+    let (q, rem) = mag.div_rem(divisor);
+    let band = if shift >= 3 {
+        crate::consts::pow10::dispatch::<S>(shift - 3)
+    } else {
+        lit(0)
+    };
+    let bump = if is_nearest_mode(mode) {
+        // Distance to the half-ULP boundary (divisor is even for shift >= 1).
+        let half = divisor >> 1;
+        let dist = if rem < half { half - rem } else { rem - half };
+        if dist <= band {
+            return None;
+        }
+        rem != lit(0)
+            && should_bump(mode, rem.cmp(&(divisor - rem)), q.bit(0), !neg)
+    } else {
+        // Distance to the grid line.
+        let dist = if rem < divisor - rem { rem } else { divisor - rem };
+        if dist <= band {
+            return None;
+        }
+        rem != lit(0)
+            && match mode {
+                RoundingMode::Trunc => false,
+                RoundingMode::Floor => neg,
+                RoundingMode::Ceiling => !neg,
+                _ => unreachable!(),
+            }
+    };
+    let q_mag = if bump { q + lit(1) } else { q };
+    let signed = if neg { -q_mag } else { q_mag };
+    Some(narrow_range_checked_g::<St, S>(signed, st_max, st_min))
 }
 
 /// Work-int-generic directed-rounding narrowing with Ziv escalation. `St` =

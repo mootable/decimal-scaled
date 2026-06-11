@@ -174,7 +174,19 @@ fn sin_cos_strict<C: WideTrigCore, const SCALE: u32, const M: u32>(
         Which::Sin => sin_x,
         Which::Cos => cos_x,
     };
-    C::round_to_storage_with(result, w, SCALE, mode)
+    // Near-tie escape — see `wide_trig_core::tan_series` / the asin(3e-60)
+    // family: a fixed-w single shot cannot see a deciding digit below w.
+    // Clear-of-band residuals keep the single-shot cost; the band falls to
+    // the Ziv-escalating generic kernel (rare).
+    match crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<C::Storage, C::W>(
+        result, w, SCALE, mode, C::storage_max(), C::storage_min(),
+    ) {
+        Some(st) => st,
+        None => match which {
+            Which::Sin => crate::algos::support::wide_trig_core::sin_series::<C, SCALE>(raw, mode),
+            Which::Cos => crate::algos::support::wide_trig_core::cos_series::<C, SCALE>(raw, mode),
+        },
+    }
 }
 
 /// Tang `sin_strict` for a wide tier — generic over `C`, `SCALE`, `M`.

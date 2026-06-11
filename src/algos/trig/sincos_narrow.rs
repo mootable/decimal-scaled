@@ -119,18 +119,52 @@ pub(crate) fn tan_narrow_with_taylor<
     if cos0 == C::zero() {
         panic!("wide-tier tan: cosine is zero (argument is an odd multiple of pi/2)");
     }
+    // Near-tie escapes — see `wide_trig_core::tan_series`: clear-of-band
+    // residuals keep the single-shot cost; the band escalates through
+    // the ratio walker (a deciding digit can sit below the fixed w).
+    let tie_walker = |base_guard: u32| -> C::Storage {
+        C::round_to_storage_directed(base_guard, SCALE, mode, &mut |guard| {
+            let w = SCALE + guard;
+            let (s, c) = C::sin_cos_fixed::<SCALE>(C::to_work_scaled(raw, guard), w);
+            if c == C::zero() {
+                panic!("wide-tier tan: cosine is zero (argument is an odd multiple of pi/2)");
+            }
+            C::div(s, c, w)
+        })
+    };
     if !NEAR_POLE {
         let r = C::div(sin0, cos0, w0);
-        return C::round_to_storage_with(r, w0, SCALE, mode);
+        if let Some(st) = crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<
+            C::Storage,
+            C::W,
+        >(r, w0, SCALE, mode, C::storage_max(), C::storage_min())
+        {
+            return st;
+        }
+        return tie_walker(GUARD);
     }
     let probe = C::div(sin0, cos0, w0);
     let extra = super::near_pole_tan::tan_extra_digits(C::bit_length(probe), w0);
     if extra == 0 {
-        return C::round_to_storage_with(probe, w0, SCALE, mode);
+        if let Some(st) = crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<
+            C::Storage,
+            C::W,
+        >(probe, w0, SCALE, mode, C::storage_max(), C::storage_min())
+        {
+            return st;
+        }
+        return tie_walker(GUARD);
     }
     let w = w0 + extra;
     let v_w = C::to_work_scaled(raw, GUARD + extra);
     let (sin_w, cos_w) = C::sin_cos_fixed::<SCALE>(v_w, w);
     let r = C::div(sin_w, cos_w, w);
-    C::round_to_storage_with(r, w, SCALE, mode)
+    if let Some(st) = crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<
+        C::Storage,
+        C::W,
+    >(r, w, SCALE, mode, C::storage_max(), C::storage_min())
+    {
+        return st;
+    }
+    tie_walker(GUARD + extra)
 }

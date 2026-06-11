@@ -85,7 +85,19 @@ pub(crate) fn asin_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> 
     let w = SCALE + GUARD_NARROW;
     let v = core::to_work_scaled(raw, GUARD_NARROW);
     let r = asin_fixed::<SCALE>(v, w);
-    core::round_to_storage_with(r, w, SCALE, mode)
+    // Near-tie escape — see `wide_trig_core::tan_series` / the asin(3e-60)
+    // family: a fixed-w single shot cannot see a deciding digit below w.
+    // Clear-of-band residuals keep the single-shot cost; the band falls to
+    // the Ziv-escalating generic kernel (rare).
+    match crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<Int<3>, _>(
+        r, w, SCALE, mode, Int::<3>::MAX, Int::<3>::MIN,
+    ) {
+        Some(st) => st,
+        None => crate::algos::trig::inverse_schoolbook::asin_schoolbook::<
+            crate::types::widths::wide_trig_d57::Core,
+            SCALE,
+        >(raw, mode),
+    }
 }
 
 /// `acos_strict` for `D57<SCALE>` with `SCALE ∈ 18..=22`.
@@ -96,7 +108,19 @@ pub(crate) fn acos_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> 
     let v = core::to_work_scaled(raw, GUARD_NARROW);
     let asin_w = asin_fixed::<SCALE>(v, w);
     let r = core::half_pi::<SCALE>(w) - asin_w;
-    core::round_to_storage_with(r, w, SCALE, mode)
+    // Near-tie escape — see `wide_trig_core::tan_series` / the asin(3e-60)
+    // family: a fixed-w single shot cannot see a deciding digit below w.
+    // Clear-of-band residuals keep the single-shot cost; the band falls to
+    // the Ziv-escalating generic kernel (rare).
+    match crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<Int<3>, _>(
+        r, w, SCALE, mode, Int::<3>::MAX, Int::<3>::MIN,
+    ) {
+        Some(st) => st,
+        None => crate::algos::trig::inverse_schoolbook::acos_schoolbook::<
+            crate::types::widths::wide_trig_d57::Core,
+            SCALE,
+        >(raw, mode),
+    }
 }
 
 /// `atan2_strict` for `D57<SCALE>` with `SCALE ∈ 18..=22`.
@@ -139,5 +163,17 @@ pub(crate) fn atan2_strict<const SCALE: u32>(
             base - core::pi_cf::<SCALE>(w, crate::support::rounding::DEFAULT_ROUNDING_MODE)
         }
     };
-    core::round_to_storage_with(r, w, SCALE, mode)
+    // Near-tie escape — see `wide_trig_core::tan_series` / the asin(3e-60)
+    // family: a fixed-w single shot cannot see a deciding digit below w.
+    // Clear-of-band residuals keep the single-shot cost; the band falls to
+    // the Ziv-escalating generic kernel (rare).
+    match crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<Int<3>, _>(
+        r, w, SCALE, mode, Int::<3>::MAX, Int::<3>::MIN,
+    ) {
+        Some(st) => st,
+        None => crate::algos::trig::inverse_schoolbook::atan2_schoolbook::<
+            crate::types::widths::wide_trig_d57::Core,
+            SCALE,
+        >(y_raw, x_raw, mode),
+    }
 }

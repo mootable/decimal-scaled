@@ -48,15 +48,23 @@ pub(crate) fn asin_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
 ) -> C::Storage {
-    let w = SCALE + C::GUARD;
-    let one_w = C::one(w);
+    let w0 = SCALE + C::GUARD;
+    let one_w0 = C::one(w0);
     let v0 = C::to_work(raw);
     let abs_v0 = if v0 < C::zero() { C::zero() - v0 } else { v0 };
-    if abs_v0 > one_w {
+    if abs_v0 > one_w0 {
         panic!("schoolbook asin: argument out of domain [-1, 1]");
     }
-    let r = asin_work::<C, SCALE>(v0, w);
-    C::round_to_storage_with(r, w, SCALE, mode)
+    // Ziv-escalated narrowing (NOT a single shot): the composition's true
+    // value can sit a sub-resolution distance from a rounding boundary
+    // while the fixed-w partial lands exactly ON it — asin(3·10⁻⁶⁰) at
+    // SCALE 180 has x³/6 = 4.5 ULP EXACT and the deciding +3x⁵/40 tail at
+    // fraction depth ~298, beyond any fixed GUARD. The walker's base
+    // probe is this same single evaluation (clear-of-band inputs exit
+    // there, no cost added); a near-tie escalates the working scale.
+    C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
+        asin_work::<C, SCALE>(C::to_work_scaled(raw, guard), SCALE + guard)
+    })
 }
 
 /// Schoolbook acos for a wide tier -- pi/2 - asin(x). Panics if |x| > 1.
@@ -66,15 +74,18 @@ pub(crate) fn acos_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
 ) -> C::Storage {
-    let w = SCALE + C::GUARD;
-    let one_w = C::one(w);
+    let w0 = SCALE + C::GUARD;
+    let one_w0 = C::one(w0);
     let v0 = C::to_work(raw);
     let abs_v0 = if v0 < C::zero() { C::zero() - v0 } else { v0 };
-    if abs_v0 > one_w {
+    if abs_v0 > one_w0 {
         panic!("schoolbook acos: argument out of domain [-1, 1]");
     }
-    let r = C::half_pi::<SCALE>(w) - asin_work::<C, SCALE>(v0, w);
-    C::round_to_storage_with(r, w, SCALE, mode)
+    // Ziv-escalated narrowing — see [`asin_schoolbook`].
+    C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
+        let w = SCALE + guard;
+        C::half_pi::<SCALE>(w) - asin_work::<C, SCALE>(C::to_work_scaled(raw, guard), w)
+    })
 }
 
 /// Schoolbook atan2 for a wide tier -- quadrant-resolved atan(y/x).
@@ -85,39 +96,52 @@ pub(crate) fn atan2_schoolbook<C: WideTrigCore, const SCALE: u32>(
     x_raw: C::Storage,
     mode: RoundingMode,
 ) -> C::Storage {
-    let w = SCALE + C::GUARD;
+    // Ziv-escalated narrowing — see [`asin_schoolbook`] (atan2(y, 1) with
+    // tiny exact y is the atan partial-sum family).
+    C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
+        atan2_work::<C, SCALE>(y_raw, x_raw, guard)
+    })
+}
+
+/// One working-scale atan2 evaluation at `w = SCALE + guard` — the
+/// quadrant-resolved composition body shared by the walker probes.
+#[inline]
+fn atan2_work<C: WideTrigCore, const SCALE: u32>(
+    y_raw: C::Storage,
+    x_raw: C::Storage,
+    guard: u32,
+) -> C::W {
+    let w = SCALE + guard;
     let z = C::storage_zero();
-    let r = if x_raw == z {
-        if y_raw > z {
+    if x_raw == z {
+        return if y_raw > z {
             C::half_pi::<SCALE>(w)
         } else if y_raw < z {
             C::zero() - C::half_pi::<SCALE>(w)
         } else {
             C::zero()
-        }
-    } else {
-        let y = C::to_work(y_raw);
-        let x = C::to_work(x_raw);
-        let zero_w = C::zero();
-        let abs_y = if y < zero_w { zero_w - y } else { y };
-        let abs_x = if x < zero_w { zero_w - x } else { x };
-        let base = if abs_x >= abs_y {
-            C::atan_fixed::<SCALE>(C::div(y, x, w), w)
-        } else {
-            let inv = C::atan_fixed::<SCALE>(C::div(x, y, w), w);
-            let hp = C::half_pi::<SCALE>(w);
-            let same_sign = (y < zero_w) == (x < zero_w);
-            if same_sign { hp - inv } else { (zero_w - hp) - inv }
         };
-        if x_raw > z {
-            base
-        } else if y_raw >= z {
-            base + C::pi::<SCALE>(w)
-        } else {
-            base - C::pi::<SCALE>(w)
-        }
+    }
+    let y = C::to_work_scaled(y_raw, guard);
+    let x = C::to_work_scaled(x_raw, guard);
+    let zero_w = C::zero();
+    let abs_y = if y < zero_w { zero_w - y } else { y };
+    let abs_x = if x < zero_w { zero_w - x } else { x };
+    let base = if abs_x >= abs_y {
+        C::atan_fixed::<SCALE>(C::div(y, x, w), w)
+    } else {
+        let inv = C::atan_fixed::<SCALE>(C::div(x, y, w), w);
+        let hp = C::half_pi::<SCALE>(w);
+        let same_sign = (y < zero_w) == (x < zero_w);
+        if same_sign { hp - inv } else { (zero_w - hp) - inv }
     };
-    C::round_to_storage_with(r, w, SCALE, mode)
+    if x_raw > z {
+        base
+    } else if y_raw >= z {
+        base + C::pi::<SCALE>(w)
+    } else {
+        base - C::pi::<SCALE>(w)
+    }
 }
 
 // ── Rung-generic shells (the SCALE-derived work-rung surface) ─────────
@@ -177,19 +201,40 @@ pub(crate) fn asin_schoolbook_g<C: WideTrigCore, Wk: crate::int::types::traits::
 ) -> C::Storage
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+    <C::W as crate::int::types::traits::BigInt>::Scratch:
+        crate::int::types::compute_limbs::ComputeLimbs,
 {
     use crate::algos::exp::exp_generic as eg;
-    use crate::algos::support::wide_trig_core::{pi_at_rung, round_to_storage_with_g, to_work_scaled_g};
-    let w = SCALE + C::GUARD;
-    let one_w = eg::one::<Wk>(w);
+    use crate::algos::support::wide_trig_core::{
+        pi_at_rung, round_to_storage_directed_widening_g, to_work_scaled_g,
+    };
+    let w0 = SCALE + C::GUARD;
+    let one_w0 = eg::one::<Wk>(w0);
     let zero = eg::zero::<Wk>();
     let v0 = to_work_scaled_g::<C::Storage, Wk>(raw, C::GUARD);
     let abs_v0 = if v0 < zero { zero - v0 } else { v0 };
-    if abs_v0 > one_w {
+    if abs_v0 > one_w0 {
         panic!("schoolbook asin: argument out of domain [-1, 1]");
     }
-    let r = asin_work_g::<Wk>(v0, w, pi_at_rung::<Wk>(w, w));
-    round_to_storage_with_g::<C::Storage, Wk>(r, w, SCALE, mode, C::storage_max(), C::storage_min())
+    // Ziv-escalated two-width narrowing — see the tier [`asin_schoolbook`]
+    // (the asin(3e-60) partial-sum family): rung probes first, an
+    // unresolved-at-rung-cap walk falls up to the tier width.
+    round_to_storage_directed_widening_g::<C::Storage, Wk, C::W>(
+        C::GUARD,
+        SCALE,
+        mode,
+        C::storage_max(),
+        C::storage_min(),
+        |guard| {
+            let w = SCALE + guard;
+            asin_work_g::<Wk>(
+                to_work_scaled_g::<C::Storage, Wk>(raw, guard),
+                w,
+                pi_at_rung::<Wk>(w, w0),
+            )
+        },
+        |guard| asin_work::<C, SCALE>(C::to_work_scaled(raw, guard), SCALE + guard),
+    )
 }
 
 /// Rung-generic [`acos_schoolbook`] — `π/2 − asin(x)` at an arbitrary
@@ -203,20 +248,39 @@ pub(crate) fn acos_schoolbook_g<C: WideTrigCore, Wk: crate::int::types::traits::
 ) -> C::Storage
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+    <C::W as crate::int::types::traits::BigInt>::Scratch:
+        crate::int::types::compute_limbs::ComputeLimbs,
 {
     use crate::algos::exp::exp_generic as eg;
-    use crate::algos::support::wide_trig_core::{pi_at_rung, round_to_storage_with_g, to_work_scaled_g};
-    let w = SCALE + C::GUARD;
-    let one_w = eg::one::<Wk>(w);
+    use crate::algos::support::wide_trig_core::{
+        pi_at_rung, round_to_storage_directed_widening_g, to_work_scaled_g,
+    };
+    let w0 = SCALE + C::GUARD;
+    let one_w0 = eg::one::<Wk>(w0);
     let zero = eg::zero::<Wk>();
     let v0 = to_work_scaled_g::<C::Storage, Wk>(raw, C::GUARD);
     let abs_v0 = if v0 < zero { zero - v0 } else { v0 };
-    if abs_v0 > one_w {
+    if abs_v0 > one_w0 {
         panic!("schoolbook acos: argument out of domain [-1, 1]");
     }
-    let pi_w = pi_at_rung::<Wk>(w, w);
-    let r = (pi_w >> 1) - asin_work_g::<Wk>(v0, w, pi_w);
-    round_to_storage_with_g::<C::Storage, Wk>(r, w, SCALE, mode, C::storage_max(), C::storage_min())
+    // Ziv-escalated two-width narrowing — see [`asin_schoolbook_g`].
+    round_to_storage_directed_widening_g::<C::Storage, Wk, C::W>(
+        C::GUARD,
+        SCALE,
+        mode,
+        C::storage_max(),
+        C::storage_min(),
+        |guard| {
+            let w = SCALE + guard;
+            let pi_w = pi_at_rung::<Wk>(w, w0);
+            (pi_w >> 1)
+                - asin_work_g::<Wk>(to_work_scaled_g::<C::Storage, Wk>(raw, guard), w, pi_w)
+        },
+        |guard| {
+            let w = SCALE + guard;
+            C::half_pi::<SCALE>(w) - asin_work::<C, SCALE>(C::to_work_scaled(raw, guard), w)
+        },
+    )
 }
 
 /// Rung-generic [`atan2_schoolbook`] — quadrant-resolved `atan(y/x)` at
@@ -231,44 +295,72 @@ pub(crate) fn atan2_schoolbook_g<C: WideTrigCore, Wk: crate::int::types::traits:
 ) -> C::Storage
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+    <C::W as crate::int::types::traits::BigInt>::Scratch:
+        crate::int::types::compute_limbs::ComputeLimbs,
+{
+    use crate::algos::support::wide_trig_core::round_to_storage_directed_widening_g;
+    let w0 = SCALE + C::GUARD;
+    // Ziv-escalated two-width narrowing — see [`asin_schoolbook_g`].
+    round_to_storage_directed_widening_g::<C::Storage, Wk, C::W>(
+        C::GUARD,
+        SCALE,
+        mode,
+        C::storage_max(),
+        C::storage_min(),
+        |guard| atan2_work_g::<C, Wk, SCALE>(y_raw, x_raw, guard, w0),
+        |guard| atan2_work::<C, SCALE>(y_raw, x_raw, guard),
+    )
+}
+
+/// One rung-width atan2 evaluation at `w = SCALE + guard` — the
+/// quadrant-resolved composition body shared by the rung walker probes
+/// (`base_w0` keys the hot-path const-fold of `π`).
+#[cfg(feature = "_wide-support")]
+#[inline]
+fn atan2_work_g<C: WideTrigCore, Wk: crate::int::types::traits::BigInt, const SCALE: u32>(
+    y_raw: C::Storage,
+    x_raw: C::Storage,
+    guard: u32,
+    base_w0: u32,
+) -> Wk
+where
+    Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
     use crate::algos::exp::exp_generic as eg;
-    use crate::algos::support::wide_trig_core::{pi_at_rung, round_to_storage_with_g, to_work_scaled_g};
+    use crate::algos::support::wide_trig_core::{pi_at_rung, to_work_scaled_g};
     use crate::algos::trig::trig_generic::atan_fixed;
-    let w = SCALE + C::GUARD;
+    let w = SCALE + guard;
     let z = C::storage_zero();
-    let pi_w = pi_at_rung::<Wk>(w, w);
-    let r = if x_raw == z {
-        if y_raw > z {
+    let pi_w = pi_at_rung::<Wk>(w, base_w0);
+    if x_raw == z {
+        return if y_raw > z {
             pi_w >> 1
         } else if y_raw < z {
             eg::zero::<Wk>() - (pi_w >> 1)
         } else {
             eg::zero::<Wk>()
-        }
-    } else {
-        let y = to_work_scaled_g::<C::Storage, Wk>(y_raw, C::GUARD);
-        let x = to_work_scaled_g::<C::Storage, Wk>(x_raw, C::GUARD);
-        let zero_w = eg::zero::<Wk>();
-        let abs_y = if y < zero_w { zero_w - y } else { y };
-        let abs_x = if x < zero_w { zero_w - x } else { x };
-        let base = if abs_x >= abs_y {
-            atan_fixed::<Wk>(eg::div::<Wk>(y, x, w), w, pi_w)
-        } else {
-            let inv = atan_fixed::<Wk>(eg::div::<Wk>(x, y, w), w, pi_w);
-            let hp = pi_w >> 1;
-            let same_sign = (y < zero_w) == (x < zero_w);
-            if same_sign { hp - inv } else { (zero_w - hp) - inv }
         };
-        if x_raw > z {
-            base
-        } else if y_raw >= z {
-            base + pi_w
-        } else {
-            base - pi_w
-        }
+    }
+    let y = to_work_scaled_g::<C::Storage, Wk>(y_raw, guard);
+    let x = to_work_scaled_g::<C::Storage, Wk>(x_raw, guard);
+    let zero_w = eg::zero::<Wk>();
+    let abs_y = if y < zero_w { zero_w - y } else { y };
+    let abs_x = if x < zero_w { zero_w - x } else { x };
+    let base = if abs_x >= abs_y {
+        atan_fixed::<Wk>(eg::div::<Wk>(y, x, w), w, pi_w)
+    } else {
+        let inv = atan_fixed::<Wk>(eg::div::<Wk>(x, y, w), w, pi_w);
+        let hp = pi_w >> 1;
+        let same_sign = (y < zero_w) == (x < zero_w);
+        if same_sign { hp - inv } else { (zero_w - hp) - inv }
     };
-    round_to_storage_with_g::<C::Storage, Wk>(r, w, SCALE, mode, C::storage_max(), C::storage_min())
+    if x_raw > z {
+        base
+    } else if y_raw >= z {
+        base + pi_w
+    } else {
+        base - pi_w
+    }
 }
 
 #[inline]
@@ -492,6 +584,60 @@ mod tests {
                     atan2_schoolbook_narrow::<S38>(d38(y).0, d38(x).0, mode),
                     d38(y).atan2_strict_with(d38(x), mode).0,
                     "atan2 schoolbook != routed at y={y} x={x} mode={mode:?}"
+                );
+            }
+        }
+    }
+
+    // The asin near-half deciding-tail cell the regenerated golden gate
+    // caught (D462<180>, HalfToEven, x = 3e-60): asin(x) = x + x^3/6 +
+    // 3x^5/40 + ...; x is exact, so x^3/6 = 27e-180/6 = 4.5e-180 EXACTLY
+    // 4.5 storage ULPs, and the 3x^5/40 term (~1.8e-298, positive) puts
+    // the true value STRICTLY above the half - HalfToEven must round UP
+    // to raw + 5. A single-shot narrowing at w = SCALE + GUARD = 210
+    // sees exactly the half (the x^5 term underflows) and ties-to-even
+    // DOWN to raw + 4 - the pre-existing defect the Ziv escalation
+    // fixes. Oracle: the exact rational partial sum above (mpmath
+    // confirms via the regenerated asin.golden row).
+    #[cfg(feature = "d462")]
+    mod near_half_tail_d462 {
+        use super::*;
+        use crate::int::types::Int;
+
+        #[test]
+        fn asin_3e60_d462_s180_rounds_above_the_half() {
+            type Core = crate::types::widths::wide_trig_d462::Core;
+            let raw = Int::<24>::from_i128(3) * Int::<24>::from_i128(10).pow(120);
+            let expect_nearest = raw + Int::<24>::from_i128(5); // x + 4.5+ ULP, above half
+            let expect_floor = raw + Int::<24>::from_i128(4);
+            // Tier kernel.
+            assert_eq!(
+                asin_schoolbook::<Core, 180>(raw, RoundingMode::HalfToEven),
+                expect_nearest,
+                "tier asin HalfToEven"
+            );
+            assert_eq!(
+                asin_schoolbook::<Core, 180>(raw, RoundingMode::Floor),
+                expect_floor,
+                "tier asin Floor"
+            );
+            assert_eq!(
+                asin_schoolbook::<Core, 180>(raw, RoundingMode::Ceiling),
+                expect_nearest,
+                "tier asin Ceiling"
+            );
+            // Public path (policy -> rung walker -> tier fall-up).
+            let x = crate::D::<Int<24>, 180>(raw);
+            assert_eq!(
+                x.asin_strict_with(RoundingMode::HalfToEven).0,
+                expect_nearest,
+                "public asin HalfToEven"
+            );
+            for mode in MODES {
+                assert_eq!(
+                    x.asin_strict_with(mode).0,
+                    asin_schoolbook::<Core, 180>(raw, mode),
+                    "public == tier at mode {mode:?}"
                 );
             }
         }

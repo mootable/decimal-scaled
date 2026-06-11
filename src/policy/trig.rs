@@ -488,7 +488,11 @@ pub(crate) mod inverse_rung {
     pub(crate) fn asin_strict<C: WideTrigCore, const SCALE: u32>(
         raw: C::Storage,
         mode: RoundingMode,
-    ) -> C::Storage {
+    ) -> C::Storage
+    where
+        <C::W as crate::int::types::traits::BigInt>::Scratch:
+            crate::int::types::compute_limbs::ComputeLimbs,
+    {
         if in_budget::<C::Storage, SCALE, D_BUDGET>(&raw) {
             rung_match!(trig_rung, C, SCALE, asin_schoolbook_g, [SCALE], raw, mode)
         } else {
@@ -501,7 +505,11 @@ pub(crate) mod inverse_rung {
     pub(crate) fn acos_strict<C: WideTrigCore, const SCALE: u32>(
         raw: C::Storage,
         mode: RoundingMode,
-    ) -> C::Storage {
+    ) -> C::Storage
+    where
+        <C::W as crate::int::types::traits::BigInt>::Scratch:
+            crate::int::types::compute_limbs::ComputeLimbs,
+    {
         if in_budget::<C::Storage, SCALE, D_BUDGET>(&raw) {
             rung_match!(trig_rung, C, SCALE, acos_schoolbook_g, [SCALE], raw, mode)
         } else {
@@ -517,7 +525,11 @@ pub(crate) mod inverse_rung {
         y_raw: C::Storage,
         x_raw: C::Storage,
         mode: RoundingMode,
-    ) -> C::Storage {
+    ) -> C::Storage
+    where
+        <C::W as crate::int::types::traits::BigInt>::Scratch:
+            crate::int::types::compute_limbs::ComputeLimbs,
+    {
         if in_budget::<C::Storage, SCALE, D_BUDGET>(&y_raw) && in_budget::<C::Storage, SCALE, D_BUDGET>(&x_raw) {
             rung_match!(trig_rung, C, SCALE, atan2_schoolbook_g, [SCALE], y_raw, x_raw, mode)
         } else {
