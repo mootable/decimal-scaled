@@ -101,8 +101,8 @@ fn div2<const S: u32>(c: &mut Criterion, label: &str) {
 // ---- decimal multiply: native vs widen-divide ----
 
 fn mul1<const S: u32>(c: &mut Criterion, label: &str) {
-    let m = Int::<1>::TEN.pow(S);
-    let nat = move |p: Pair<1>| dec_mul_native::<1, S>(p.a, p.b, m, MODE);
+    // `dec_mul_native` derives its 10^S multiplier from the const `S` now.
+    let nat = move |p: Pair<1>| dec_mul_native::<1, S>(p.a, p.b, MODE);
     let wid = move |p: Pair<1>| dec_mul_widen_divide_n1::<S>(p.a, p.b, MODE);
     for p in operand_set::<1>(28) {
         assert_eq!(nat(p.clone()), wid(p.clone()), "mul1 {label} {}", p.label);
@@ -113,8 +113,8 @@ fn mul1<const S: u32>(c: &mut Criterion, label: &str) {
 }
 
 fn mul2<const S: u32>(c: &mut Criterion, label: &str) {
-    let m = Int::<2>::TEN.pow(S);
-    let nat = move |p: Pair<2>| dec_mul_native::<2, S>(p.a, p.b, m, MODE);
+    // `dec_mul_native` derives its 10^S multiplier from the const `S` now.
+    let nat = move |p: Pair<2>| dec_mul_native::<2, S>(p.a, p.b, MODE);
     let wid = move |p: Pair<2>| dec_mul_widen_divide_n2::<S>(p.a, p.b, MODE);
     for p in operand_set::<2>(56) {
         assert_eq!(nat(p.clone()), wid(p.clone()), "mul2 {label} {}", p.label);
