@@ -48,44 +48,52 @@ use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
-/// `floor(sqrt(n))` for a `u128`, exact.
+/// `(floor(sqrt(n)), n - floor(sqrt(n))²)` for a `u128`, exact.
 ///
 /// Seeds from the shared seed library's `u128` over-estimate
 /// ([`sqrt_seed_u128`]), then runs the integer Newton averaging step
-/// `x <- (x + n/x)/2`. From a guaranteed over-estimate that recurrence is
-/// monotone-decreasing and lands on `floor(sqrt(n))` or `floor+1`; a single
-/// down-correction `if` then pins the exact floor.
+/// `x <- (x + n/x)/2`. The iterates hold the invariant
+/// `x >= floor(sqrt(n))` (over-estimate seed; and for any `x >= floor` the
+/// next iterate `y >= floor` too -- write `x = floor + t`, then
+/// `n/x >= floor² / (floor+t) >= floor - t`, so `x + n/x >= 2·floor`). Under
+/// that invariant `x² <= n  <=>  x == floor`, so the exit is a cheap SQUARE
+/// test instead of the old stall-confirm divide plus floor-correction divide
+/// (two full `u128` divides saved per call; the square is a couple of
+/// hardware multiplies). On a stall (`y >= x`) with `x² > n`, `x` is
+/// `floor + 1` (a stall only happens at `floor` or `floor + 1`), so one step
+/// down lands on the floor and the square test exits on the next pass. The
+/// remainder `n - x²` falls out of the exit test for free -- it is exactly
+/// what the rounding step needs.
 ///
 /// An f64-`sqrt` seed of the *full* `n` was tried but rejected: for `n` near
 /// `2^128` the f64 root carries an absolute error of order `2^12`, and when
-/// that lands on the *under* side it is no longer an over-estimate, so Newton
-/// terminates early and the floor correction degrades to a linear `x -= 1`
-/// walk -- thousands of `u128` divides on the worst inputs. The library seed
-/// is a guaranteed over-estimate, so the descent is always the fast quadratic
-/// one and the std/no_std paths are identical.
+/// that lands on the *under* side it is no longer an over-estimate, breaking
+/// the invariant the exit test relies on. The library seed is a guaranteed
+/// over-estimate, so the descent is always the fast quadratic one and the
+/// std/no_std paths are identical.
 ///
 /// [`sqrt_seed_u128`]: crate::algo_x_support::seed::sqrt_seed_u128
 #[inline]
-fn isqrt_u128(n: u128) -> u128 {
+fn isqrt_u128(n: u128) -> (u128, u128) {
     if n == 0 {
-        return 0;
+        return (0, 0);
     }
     let bits = 128 - n.leading_zeros();
     let mut x: u128 = crate::algo_x_support::seed::sqrt_seed_u128(n, bits);
-    // Newton averaging: x <- (x + n/x)/2. Monotone-decreasing from an
-    // over-estimate; stop when it stops decreasing (x is then floor or floor+1).
     loop {
-        let y = (x + n / x) >> 1;
-        if y >= x {
-            break;
+        // Floor test by squaring (`x >= floor` invariant => `x² <= n` iff
+        // `x == floor`). `checked_mul`: `x >= 2^64` means `x² >= 2^128 > n`,
+        // so an overflowing square can never be the floor.
+        if let Some(xx) = x.checked_mul(x) {
+            if xx <= n {
+                return (x, n - xx);
+            }
         }
-        x = y;
+        // Newton averaging step; on a stall (`y >= x`, x = floor+1 here
+        // since the square test above excluded the floor) step down once.
+        let y = (x + n / x) >> 1;
+        x = if y >= x { x - 1 } else { y };
     }
-    // Single floor correction: x is floor or floor+1, so at most one step.
-    if x > n / x {
-        x -= 1;
-    }
-    x
 }
 
 /// Full `128 × 128 -> 256` product `x · x`, as a little-endian `[u64; 4]`.
@@ -246,12 +254,16 @@ fn knuth_d_256_by_128(n: [u64; 4], d: u128) -> u128 {
     (q[0] as u128) | ((q[1] as u128) << 64)
 }
 
-/// `floor(sqrt(n))` for a `u256` radicand `n` (`[u64; 4]`, `n < 2^256`), exact.
-/// Returns the floor root as a `u128` (it is `< 2^128`). Same f64-seeded
-/// over-estimate Newton structure as [`isqrt_u128`], but `n / x` is the fixed
-/// scalar [`div_u256_by_u128`] (hardware `u128 / u64` digit estimates).
+/// `(floor(sqrt(n)), n - floor(sqrt(n))²)` for a `u256` radicand `n`
+/// (`[u64; 4]`, `n < 2^256`), exact. The floor root is a `u128` (it is
+/// `< 2^128`); the remainder is a `u256` (it can reach `2·root < 2^129`).
+/// Same seeded over-estimate Newton structure and square-test exit as
+/// [`isqrt_u128`] (same invariant, same two-divides-saved rationale -- here
+/// each saved divide is a full [`div_u256_by_u128`] Knuth step, the dominant
+/// cost of the routine), but `n / x` is the fixed scalar
+/// [`div_u256_by_u128`] (hardware `u128 / u64` digit estimates).
 #[inline]
-fn isqrt_u256(n: [u64; 4]) -> u128 {
+fn isqrt_u256(n: [u64; 4]) -> (u128, [u64; 4]) {
     // Bit length of the 256-bit magnitude.
     let bits: u32 = if n[3] != 0 {
         192 + (64 - n[3].leading_zeros())
@@ -263,7 +275,7 @@ fn isqrt_u256(n: [u64; 4]) -> u128 {
         64 - n[0].leading_zeros()
     };
     if bits == 0 {
-        return 0;
+        return (0, [0u64; 4]);
     }
     // Over-estimate seed of sqrt(n) from the shared, proven seed library. Its
     // `sqrt_seed(&[u64], bits, out)` leaf is `&[u64]`-generic and width-agnostic
@@ -301,23 +313,25 @@ fn isqrt_u256(n: [u64; 4]) -> u128 {
         x == u128::MAX || cmp_u256(sq_u256(x), n) >= 0,
         "isqrt_u256 seed under-estimate: seed={x} n={n:?}"
     );
-    // Newton averaging: x <- (x + n/x)/2, monotone-decreasing from the
-    // over-estimate. n/x is the fixed u256/u128 scalar division.
+    // Newton averaging with the square-test exit (see [`isqrt_u128`]): the
+    // iterates hold `x >= floor(sqrt(n))`, so `x² <= n` iff `x == floor`,
+    // and the exit square doubles as the exact remainder the rounding step
+    // needs. n/x is the fixed u256/u128 scalar division.
     loop {
+        // `x <= u128::MAX`, so `x²` fits the u256 exactly.
+        let xsq = sq_u256(x);
+        if cmp_u256(xsq, n) <= 0 {
+            let (rem, _borrow) = sub_u256(n, xsq); // n >= x², no borrow
+            return (x, rem);
+        }
         let nx = div_u256_by_u128(n, x);
         // (x + n/x)/2 -- both < 2^129 here only transiently; x <= 2^128 and
         // nx <= x, so x + nx <= 2^129. Compute the average without overflow.
         let y = avg_u128(x, nx);
-        if y >= x {
-            break;
-        }
-        x = y;
+        // Stall (`y >= x`) with `x² > n` means x = floor+1: one step down
+        // lands on the floor; the square test exits on the next pass.
+        x = if y >= x { x - 1 } else { y };
     }
-    // Single floor correction: x is floor or floor+1.
-    if div_u256_by_u128(n, x) < x {
-        x -= 1;
-    }
-    x
 }
 
 /// `(a + b) / 2` for two `u128` without overflowing the intermediate sum
@@ -370,8 +384,7 @@ where
             if n == 0 {
                 return Some(Int::<N>::ZERO);
             }
-            let q = isqrt_u128(n);
-            let rem = n - q * q; // exact remainder, n - floor(sqrt n)²
+            let (q, rem) = isqrt_u128(n); // rem = n - floor(sqrt n)², exact
             return finish::<N>(q, rem != 0, rem > q, mode);
         }
         // sum carried past bit 128: fall through to the u256 / wide paths.
@@ -392,14 +405,11 @@ where
             if n == [0u64; 4] {
                 return Some(Int::<N>::ZERO);
             }
-            let q = isqrt_u256(n);
-            // exact remainder rem = n - q². q² < 2^256 (q < 2^128), so the
-            // subtraction stays in u256; compare against q for the round.
-            let qsq = sq_u256(q);
-            let (rem, _b) = sub_u256(n, qsq); // rem = n - q² >= 0, < 2·q+1 < 2^129
-            // rem < 2^129 but actually <= 2q < 2^129; fit a u128? rem can be up
-            // to 2q which may reach 2^129-2 (> u128) when q ~ 2^128. Compare via
-            // the 256-bit value directly.
+            // The exact remainder rem = n - q² comes fused out of the root
+            // (its square-test exit already computed q²). rem <= 2q, which may
+            // reach 2^129-2 (> u128) when q ~ 2^128 -- compare via the 256-bit
+            // value directly.
+            let (q, rem) = isqrt_u256(n);
             let rem_nonzero = rem != [0u64; 4];
             let rem_gt_q = cmp_u256_u128(rem, q) > 0;
             return finish::<N>(q, rem_nonzero, rem_gt_q, mode);
@@ -554,7 +564,7 @@ mod tests {
             let q = sq_u256(x);
             let low = (q[0] as u128) | ((q[1] as u128) << 64);
             assert_eq!(low, x.wrapping_mul(x), "low128 x={x}");
-            assert_eq!(isqrt_u256(q), x, "roundtrip x={x}");
+            assert_eq!(isqrt_u256(q), (x, [0u64; 4]), "roundtrip x={x}");
         }
     }
 
@@ -571,18 +581,23 @@ mod tests {
                 continue;
             }
             let rsq = sq_u256(r);
-            // perfect square: floor sqrt == r.
-            assert_eq!(isqrt_u256(rsq), r, "perfect square r={r}");
+            // perfect square: floor sqrt == r, remainder exactly zero.
+            assert_eq!(isqrt_u256(rsq), (r, [0u64; 4]), "perfect square r={r}");
             // r² + delta for delta in [0, 2r] still has floor sqrt == r
-            // (since (r+1)² = r² + 2r + 1). Use delta = r (in range, < 2r+1).
+            // (since (r+1)² = r² + 2r + 1). Use delta = r (in range, < 2r+1):
+            // the fused remainder must come back as exactly delta.
             let (rsq_plus, carry) = super::add_u256(rsq, [r as u64, (r >> 64) as u64, 0, 0]);
             if !carry {
-                assert_eq!(isqrt_u256(rsq_plus), r, "r²+r, r={r}");
+                assert_eq!(
+                    isqrt_u256(rsq_plus),
+                    (r, [r as u64, (r >> 64) as u64, 0, 0]),
+                    "r²+r, r={r}"
+                );
             }
             // r² - 1 (when r >= 1) has floor sqrt == r-1.
             let (rsq_minus, borrow) = super::sub_u256(rsq, [1, 0, 0, 0]);
             if !borrow {
-                assert_eq!(isqrt_u256(rsq_minus), r - 1, "r²-1, r={r}");
+                assert_eq!(isqrt_u256(rsq_minus).0, r - 1, "r²-1, r={r}");
             }
         }
     }
@@ -685,7 +700,7 @@ mod tests {
                     "seed under-estimate: k={k} shift={shift} seed={seed} n={n:?}"
                 );
                 // (b) isqrt matches the independent bit-by-bit reference floor.
-                let got = isqrt_u256(n);
+                let got = isqrt_u256(n).0;
                 let want = isqrt_u256_ref(n);
                 assert_eq!(got, want, "floor mismatch: k={k} shift={shift} n={n:?}");
             }
@@ -711,7 +726,7 @@ mod tests {
             let (n, carry) = super::add_u256(maxsq, [d as u64, (d >> 64) as u64, 0, 0]);
             assert!(!carry, "n must stay < 2^256 (d={d})");
             // (a) no debug panic on the capped seed; (b) exact floor.
-            let got = isqrt_u256(n);
+            let got = isqrt_u256(n).0;
             let want = isqrt_u256_ref(n);
             assert_eq!(want, max, "reference floor must be 2^128-1 (d={d})");
             assert_eq!(got, want, "isqrt_u256 saturation-zone floor (d={d}) n={n:?}");
@@ -721,7 +736,7 @@ mod tests {
         for _ in 0..500 {
             // n near 2^256: set the top limb high, fill the rest randomly.
             let n = [mix(&mut s), mix(&mut s), mix(&mut s), mix(&mut s) | (1u64 << 63)];
-            assert_eq!(isqrt_u256(n), isqrt_u256_ref(n), "near-2^256 floor n={n:?}");
+            assert_eq!(isqrt_u256(n).0, isqrt_u256_ref(n), "near-2^256 floor n={n:?}");
         }
 
         // Full-kernel cross-check on the reachable N>=3 saturation input:

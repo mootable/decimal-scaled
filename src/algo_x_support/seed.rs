@@ -44,28 +44,41 @@
 //! `shift = bits − min(64, bits)` and `top = ⌊n / 2^shift⌋` — the top `≤64`
 //! significant bits (leading 1 at bit 63 when `bits ≥ 64`). Then
 //! `n = top·2^shift + r` with `0 ≤ r < 2^shift`. The `std` body forms a strict
-//! integer over-estimate `seed_int` of `√top` (of `√(2·top)` when `shift` is
-//! odd) via `⌊f64::sqrt(top)⌋ + [frac≠0] + 1` — note the **always-`+1`** — and
-//! returns `seed_int · 2^h` with `h = ⌊shift/2⌋`.
+//! **fixed-point** over-estimate `seed_int` of `√top · 2^F` (of `√(2·top) · 2^F`
+//! when `shift` is odd), with `F = min(h, SEED_FRAC_BITS)` fractional bits and
+//! `h = ⌊shift/2⌋`, via `⌊f64::sqrt(top) · 2^F⌋ + [frac≠0] + 1` — note the
+//! **always-`+1`** — and returns `seed_int · 2^{h−F}`. (`F = 0` recovers the
+//! plain integer form; the fractional bits exist so a big `2^h` placement does
+//! not balloon the integer-quantisation margin to a relative `2^{-31}` — with
+//! them the seed is accurate to a relative `~2^{-49}`, which is what keeps the
+//! consumers' Newton divide count at ~1 for roots up to ~98 bits.)
 //!
-//! **Even `shift = 2h`.** `√n ≤ √((top+1)·2^{2h}) = √(top+1)·2^h`. The
-//! always-`+1` gives `seed_int ≥ √top + 1`, and the elementary inequality
-//! `(√t + 1)² = t + 2√t + 1 ≥ t + 1` yields `√top + 1 ≥ √(top+1)`. Hence
-//! `seed = seed_int·2^h ≥ √(top+1)·2^h ≥ √n`. ∎
+//! **Even `shift = 2h`.** `√n ≤ √((top+1)·2^{2h}) = √(top+1)·2^h`, so it
+//! suffices that `seed_int ≥ √(top+1)·2^F`. The body gives
+//! `seed_int ≥ √top·2^F − d + 1` where `d` is the f64 deficit (next paragraph,
+//! `d < 0.4`), and the gap to cover is
+//! `(√(top+1) − √top)·2^F = 2^F/(√(top+1)+√top) ≤ 2^{F−32.5} ≤ 2^{−15.5}`
+//! (`top ≥ 2^{63}` whenever `shift ≥ 1`; for `shift = 0` the window is exact,
+//! `F = h = 0`, and the original integer-lemma `(√t+1)² ≥ t+1` applies).
+//! Since `1 − d > 0.6 > 2^{−15.5}`, `seed = seed_int·2^{h−F} ≥ √n`. ∎
 //! The always-`+1` is **essential**: it closes the perfect-square-`top` case
 //! (`⌊√top⌋ = √top` exactly), where the low bits `r` push `√n` strictly above
 //! `√top·2^h`. Without it the seed under-estimates there — a failure of
 //! density `2^{-32}` that uniform-random tests practically never hit.
 //!
-//! **Odd `shift = 2h+1`.** `√n ≤ √(2(top+1))·2^h`. The body first over-estimates
-//! `√2·√top = √(2·top)`, so `seed_int ≥ √(2·top) + 1 ≥ √(2(top+1))` by the same
-//! lemma; hence `seed ≥ √n`. ∎
+//! **Odd `shift = 2h+1`.** `√n ≤ √(2(top+1))·2^h`; the body over-estimates
+//! `√2·√top·2^F = √(2·top)·2^F`, the gap `(√(2(top+1))−√(2·top))·2^F ≤ 2^{−15}`
+//! and the deficit bound below still leave the `+1` dominant; hence
+//! `seed ≥ √n`. ∎
 //!
-//! **f64 rounding.** `top ≤ 2^64` rounds to the nearest f64 (`< 2^11`
-//! absolute for the largest `top`) and `f64::sqrt` is correctly rounded, so the
-//! deficit in `⌊f64::sqrt(top)⌋` is `< 1` — dominated by the always-`+1`. The
-//! `core::f64::consts::SQRT_2` constant's `~2^{-52}` relative error is `≪ 1`
-//! absolute at these magnitudes, likewise covered.
+//! **f64 rounding (the deficit `d`).** `top ≤ 2^64` rounds to the nearest f64
+//! (relative `≤ 2^{−53}`), `f64::sqrt` is correctly rounded (`≤ 2^{−53}`), the
+//! odd-shift `SQRT_2` constant + multiply add `≤ 2·2^{−53}`, and the `· 2^F`
+//! scale is EXACT (power of two). Total relative deficit `≤ ~2^{−51}` on a
+//! magnitude `√(2·top)·2^F ≤ 2^{32.5+F} ≤ 2^{49.5}` (with
+//! `SEED_FRAC_BITS = 17`), i.e. `d < 0.4` absolute — dominated by the
+//! always-`+1`. This bound is why `SEED_FRAC_BITS` must stay `≤ 17`: at higher
+//! `F` the deficit approaches/exceeds 1 and the `+1` no longer covers it.
 //!
 //! **no_std / tiny-`n` path.** Returns `2^⌈bits/2⌉`; since `n < 2^bits`,
 //! `√n < 2^{bits/2} ≤ 2^⌈bits/2⌉`. ∎
@@ -81,6 +94,15 @@
 //!
 //! Hasselgren's trick / seed strategy — Crandall & Pomerance 2005, "Prime
 //! Numbers: A Computational Perspective" §9.2.1.
+
+/// Fractional fixed-point bits the `std` sqrt seed bodies keep below the
+/// integer part of the unscaled window root (capped by the placement shift
+/// `h`). The cap is part of the over-estimate PROOF (module doc, "f64
+/// rounding"): at `F ≤ 17` the f64 deficit stays `< 0.4` absolute so the
+/// always-`+1` margin still strictly covers it — do NOT raise this without
+/// re-deriving that bound.
+#[cfg(feature = "std")]
+const SEED_FRAC_BITS: u32 = 17;
 
 /// Extract the top (most significant) 64 significant bits of the
 /// little-endian `u64` magnitude `n`, given its bit length `bits` (the seed
@@ -148,12 +170,27 @@ pub(crate) fn sqrt_seed(n: &[u64], bits: u32, out: &mut [u64]) {
         } else {
             (seed_f64, shift / 2)
         };
-        let truncated = seed_f64 as u128;
-        let frac_nonzero = (truncated as f64) != seed_f64;
+        // Keep `frac_bits` of the f64 mantissa's FRACTIONAL bits in fixed
+        // point before placing: quantising `seed_f64` to a bare integer first
+        // (the old form) costs the seed everything below 1 ulp of the
+        // ~2^32-magnitude window root, so after the `· 2^half_shift`
+        // placement the margin balloons to a relative ~2^-31 and every
+        // big-shift Newton consumer pays ~2 extra divide iterations to win
+        // those bits back. Scaling by `2^frac_bits` (an EXACT power-of-two
+        // f64 multiply) keeps the seed accurate to a relative ~2^-49 instead.
+        // The over-estimate proof carries over (module doc): with
+        // `frac_bits <= 17` the scaled magnitude is `<= 2^49.5`, so the f64
+        // path's total relative deficit (~2^-51) is `< 0.4` absolute and the
+        // always-`+1` still strictly dominates it plus the perfect-square-top
+        // gap `(sqrt(top+1)-sqrt(top))·2^frac_bits <= 2^-15`.
+        let frac_bits = half_shift.min(SEED_FRAC_BITS);
+        let scaled = seed_f64 * (1u64 << frac_bits) as f64;
+        let truncated = scaled as u128;
+        let frac_nonzero = (truncated as f64) != scaled;
         let seed_int: u128 = truncated
             .saturating_add(if frac_nonzero { 1 } else { 0 })
             .saturating_add(1);
-        place_seed(seed_int, half_shift, out, work);
+        place_seed(seed_int, half_shift - frac_bits, out, work);
         return;
     }
 
@@ -196,14 +233,19 @@ pub(crate) fn sqrt_seed_u128(n: u128, bits: u32) -> u128 {
         } else {
             (seed_f64, shift / 2)
         };
-        let truncated = seed_f64 as u128;
-        let frac_nonzero = (truncated as f64) != seed_f64;
-        // +1 for any truncated fraction, +1 for a strict over-estimate
-        // (mirrors `sqrt_seed`'s std body).
+        // Fixed-point fractional bits, exactly as in `sqrt_seed`'s std body
+        // (see the comment there): an EXACT power-of-two scale keeps the
+        // placed seed accurate to a relative ~2^-49 instead of ~2^-31, saving
+        // the Newton consumers ~2 divide iterations at big shifts. Same
+        // over-estimate margin (+1 fraction round-up, +1 strict).
+        let frac_bits = half_shift.min(SEED_FRAC_BITS);
+        let scaled = seed_f64 * (1u64 << frac_bits) as f64;
+        let truncated = scaled as u128;
+        let frac_nonzero = (truncated as f64) != scaled;
         let seed_int = truncated
             .saturating_add(if frac_nonzero { 1 } else { 0 })
             .saturating_add(1);
-        return seed_int << half_shift;
+        return seed_int << (half_shift - frac_bits);
     }
     // no_std (and `std` tiny-`n`): classical 1-bit over-estimate `2^ceil(bits/2)`.
     1u128 << bits.div_ceil(2)
