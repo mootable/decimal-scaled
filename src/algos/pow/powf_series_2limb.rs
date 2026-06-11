@@ -78,24 +78,26 @@ fn powf_overflow_gate(arg: Fixed, w: u32, scale: u32) -> bool {
     arg.ge_mag(thr)
 }
 
-/// `(a · b) / 10^SCALE` rounded under `mode`, formed in the 256-bit
-/// `Int<4>` widening so the product never overflows mid-step, then
-/// narrowed back to `i128` storage. Returns `None` when the rounded
-/// result does not fit `i128` — the signal [`powi_raw_checked`] uses to
-/// defer to the overflow-safe `exp(y·ln x)` composition rather than
-/// compute a partial power that has left the storage range.
+/// `(a · b) / 10^SCALE` rounded under `mode`, on `i128` storage. Returns
+/// `None` when the rounded result does not fit `i128` — the signal
+/// [`powi_raw_checked`] uses to defer to the overflow-safe `exp(y·ln x)`
+/// composition rather than compute a partial power that has left the
+/// storage range.
 ///
-/// Bit-identical to the prior `mul_widen_divide::<2, SCALE>` for every
-/// in-range result: the value and rounding are width-independent, so the
-/// narrowed `i128` matches exactly.
+/// Delegates to [`mul_div_pow10_with`] — the tiered narrow engine the
+/// decimal mul path runs on: a pure-`i128` multiply when the product
+/// fits (the common band; at `SCALE == 0` the whole op is one
+/// `checked_mul`), the `u128`-product hardware-divide band above it,
+/// and the full 256-bit widening only when genuinely needed. The prior
+/// shape paid the 256-bit `mul_widen_divide::<4, SCALE>` machinery
+/// unconditionally — the dominant cost of the bbc powf D18<0> cell.
+/// Value and rounding are engine-independent (the same correctly-rounded
+/// `(a·b)/10^SCALE`), so results are bit-identical.
+///
+/// [`mul_div_pow10_with`]: crate::algos::support::mg_divide::mul_div_pow10_with
 #[inline]
 fn mul_div_scale_checked<const SCALE: u32>(a: i128, b: i128, mode: RoundingMode) -> Option<i128> {
-    crate::algos::mul::mul_widen_divide::mul_widen_divide::<4, SCALE>(
-        Int::<4>::from_i128(a),
-        Int::<4>::from_i128(b),
-        mode,
-    )
-    .try_to_i128()
+    crate::algos::support::mg_divide::mul_div_pow10_with::<SCALE>(a, b, mode)
 }
 
 /// Integer-exponent square-and-multiply on raw `i128` storage at `SCALE`,
