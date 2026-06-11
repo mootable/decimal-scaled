@@ -117,7 +117,7 @@ fn mul_div_scale_checked<const SCALE: u32>(a: i128, b: i128, mode: RoundingMode)
 /// `div_widen_scale` (a genuine downward cross-tier call to the int layer).
 #[inline]
 fn powi_raw_checked<const SCALE: u32>(base: i128, n: i32, mode: RoundingMode) -> Option<i128> {
-    let one_s: Int<2> = Int::<2>::TEN.pow(SCALE);
+    let one_s: Int<2> = const { crate::consts::pow10::dispatch_int::<2>(SCALE) };
     if n == 0 {
         return Some(one_s.as_i128());
     }
@@ -145,7 +145,7 @@ fn powi_raw_checked<const SCALE: u32>(base: i128, n: i32, mode: RoundingMode) ->
             crate::algos::div::div_widen_scale::div_widen_scale::<2>(
                 one_s,
                 Int::<2>::from_i128(acc),
-                Int::<2>::TEN.pow(SCALE),
+                const { crate::consts::pow10::dispatch_int::<2>(SCALE) },
                 mode,
             )
             .as_i128(),
@@ -157,7 +157,7 @@ fn powi_raw_checked<const SCALE: u32>(base: i128, n: i32, mode: RoundingMode) ->
 /// integer value `n` that fits `i32` and `|n| <= INT_FAST_PATH_THRESHOLD`.
 #[inline]
 fn exp_as_small_int<const SCALE: u32>(exp_raw: i128) -> Option<i32> {
-    let mult = 10_i128.pow(SCALE);
+    let mult = const { crate::consts::pow10::dispatch_i128(SCALE) };
     if exp_raw % mult != 0 {
         return None;
     }
