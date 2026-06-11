@@ -157,3 +157,17 @@ pub(in crate::policy) const fn trig_rung<C: WideTrigCore, const SCALE: u32>() ->
 /// the tier-width path. Continuous region: every `|x| < ~10^8` at every
 /// scale, not a point carve-out.
 pub(in crate::policy) const D_BUDGET: u32 = 8;
+
+/// Max integer digits of `|x|` admitted to the exp / hyperbolic rungs —
+/// the RESULT-MAGNITUDE axis (`e^|x|` grows with `x`, so the rung is
+/// valid only where the result's integer-digit lift and the exp
+/// kernel's internal `2^k` extension provably fit). `|x| < 10` bounds
+/// the result lift to `exp_result_int_digits ≤ ~8` digits and the
+/// internal `extra` to ≤ ~18 digits, which [`TRIG_MARGIN`]'s budget
+/// clears at every scale (the base-probe peak `2·(SCALE + GUARD +
+/// k_lift + extra)` digits against the rung's `~2.4 × 8·K` true digit
+/// capacity, plus the per-probe `exp_peak_fits` belt in the kernel
+/// itself). Larger `|x|` takes the tier-width path. Continuous region —
+/// the everyday hyperbolic/exp argument band — not a point carve-out;
+/// an A/B re-bench may widen it later.
+pub(in crate::policy) const EXP_ARG_BUDGET: u32 = 1;

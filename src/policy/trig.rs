@@ -562,6 +562,82 @@ pub(crate) mod inverse_rung {
 }
 
 // ══════════════════════════════════════════════════════════════════════
+// Hyperbolic-family SCALE-derived work-rung routing (sinh / cosh / tanh)
+//
+// Same pattern as `forward_rung`, with the RESULT-MAGNITUDE value axis
+// (`e^|x|` grows with `x`): the gate admits `|x| < 10^EXP_ARG_BUDGET`,
+// bounding the result's integer-digit lift (`exp_result_int_digits`)
+// and the exp kernel's internal `2^k` extension to what
+// `work_rung::TRIG_MARGIN` budgets at the rung. The rung kernels
+// (`hyper_schoolbook::*_schoolbook_g`) ALSO regime-split per Ziv probe
+// on the exact `exp_peak_fits` model (the tier's own `hyper_fits_w`
+// gate), lifting a too-deep probe to `C::Wexp` — so the analytic gate
+// here governs only the fast path's hit-rate, never correctness.
+// Out-of-budget magnitudes run the tier-width kernels, bit-identical.
+// ══════════════════════════════════════════════════════════════════════
+#[cfg(feature = "_wide-support")]
+pub(crate) mod hyper_rung {
+    use super::super::work_rung::{trig_rung, EXP_ARG_BUDGET};
+    use super::forward_rung::in_budget;
+    use crate::algos::support::wide_trig_core::WideTrigCore;
+    use crate::algos::trig::hyper_schoolbook::{
+        cosh_schoolbook_g, sinh_schoolbook_g, tanh_schoolbook_g,
+    };
+    use crate::int::types::compute_limbs::ComputeLimbs;
+    use crate::int::types::traits::BigInt;
+    use crate::support::rounding::RoundingMode;
+
+    /// `sinh_strict` at the work rung; out-of-budget magnitudes fall to
+    /// the tier-width exp-identity kernel, bit-identical.
+    #[inline]
+    pub(crate) fn sinh_strict<C: WideTrigCore, const SCALE: u32>(
+        raw: C::Storage,
+        mode: RoundingMode,
+    ) -> C::Storage
+    where
+        <C::Wexp as BigInt>::Scratch: ComputeLimbs,
+    {
+        if in_budget::<C, SCALE, EXP_ARG_BUDGET>(&raw) {
+            rung_match!(trig_rung, C, SCALE, sinh_schoolbook_g, [SCALE], raw, mode)
+        } else {
+            crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<C, SCALE>(raw, mode)
+        }
+    }
+
+    /// `cosh_strict` at the work rung — see [`sinh_strict`].
+    #[inline]
+    pub(crate) fn cosh_strict<C: WideTrigCore, const SCALE: u32>(
+        raw: C::Storage,
+        mode: RoundingMode,
+    ) -> C::Storage
+    where
+        <C::Wexp as BigInt>::Scratch: ComputeLimbs,
+    {
+        if in_budget::<C, SCALE, EXP_ARG_BUDGET>(&raw) {
+            rung_match!(trig_rung, C, SCALE, cosh_schoolbook_g, [SCALE], raw, mode)
+        } else {
+            crate::algos::trig::hyper_schoolbook::cosh_schoolbook::<C, SCALE>(raw, mode)
+        }
+    }
+
+    /// `tanh_strict` at the work rung — see [`sinh_strict`].
+    #[inline]
+    pub(crate) fn tanh_strict<C: WideTrigCore, const SCALE: u32>(
+        raw: C::Storage,
+        mode: RoundingMode,
+    ) -> C::Storage
+    where
+        <C::Wexp as BigInt>::Scratch: ComputeLimbs,
+    {
+        if in_budget::<C, SCALE, EXP_ARG_BUDGET>(&raw) {
+            rung_match!(trig_rung, C, SCALE, tanh_schoolbook_g, [SCALE], raw, mode)
+        } else {
+            crate::algos::trig::hyper_schoolbook::tanh_schoolbook::<C, SCALE>(raw, mode)
+        }
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════
 // D38 inverse-trig "borrow D57" dispatch strategy
 //
 // The D38 inverse-trig family (atan / asin / acos / atan2) is qualitatively
@@ -1384,38 +1460,38 @@ macro_rules! wide_trig_hyper_inherent {
         #[inline]
         pub(crate) fn policy_sinh(self, mode: RoundingMode) -> Self {
             match hyper::resolve::<$N, SCALE>(&self.0) {
-                hyper::Algorithm::ExpIdentity => Self(crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<$Core, SCALE>(self.0, mode)),
+                hyper::Algorithm::ExpIdentity => Self(hyper_rung::sinh_strict::<$Core, SCALE>(self.0, mode)),
                 #[allow(dead_code)]
                 hyper::Algorithm::Schoolbook => Self(crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<$Core, SCALE>(self.0, mode)),
             }
         }
         #[inline]
         pub(crate) fn policy_sinh_with(self, _wd: u32, mode: RoundingMode) -> Self {
-            Self(crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<$Core, SCALE>(self.0, mode))
+            Self(hyper_rung::sinh_strict::<$Core, SCALE>(self.0, mode))
         }
         #[inline]
         pub(crate) fn policy_cosh(self, mode: RoundingMode) -> Self {
             match hyper::resolve::<$N, SCALE>(&self.0) {
-                hyper::Algorithm::ExpIdentity => Self(crate::algos::trig::hyper_schoolbook::cosh_schoolbook::<$Core, SCALE>(self.0, mode)),
+                hyper::Algorithm::ExpIdentity => Self(hyper_rung::cosh_strict::<$Core, SCALE>(self.0, mode)),
                 #[allow(dead_code)]
                 hyper::Algorithm::Schoolbook => Self(crate::algos::trig::hyper_schoolbook::cosh_schoolbook::<$Core, SCALE>(self.0, mode)),
             }
         }
         #[inline]
         pub(crate) fn policy_cosh_with(self, _wd: u32, mode: RoundingMode) -> Self {
-            Self(crate::algos::trig::hyper_schoolbook::cosh_schoolbook::<$Core, SCALE>(self.0, mode))
+            Self(hyper_rung::cosh_strict::<$Core, SCALE>(self.0, mode))
         }
         #[inline]
         pub(crate) fn policy_tanh(self, mode: RoundingMode) -> Self {
             match hyper::resolve::<$N, SCALE>(&self.0) {
-                hyper::Algorithm::ExpIdentity => Self(crate::algos::trig::hyper_schoolbook::tanh_schoolbook::<$Core, SCALE>(self.0, mode)),
+                hyper::Algorithm::ExpIdentity => Self(hyper_rung::tanh_strict::<$Core, SCALE>(self.0, mode)),
                 #[allow(dead_code)]
                 hyper::Algorithm::Schoolbook => Self(crate::algos::trig::hyper_schoolbook::tanh_schoolbook::<$Core, SCALE>(self.0, mode)),
             }
         }
         #[inline]
         pub(crate) fn policy_tanh_with(self, _wd: u32, mode: RoundingMode) -> Self {
-            Self(crate::algos::trig::hyper_schoolbook::tanh_schoolbook::<$Core, SCALE>(self.0, mode))
+            Self(hyper_rung::tanh_strict::<$Core, SCALE>(self.0, mode))
         }
     };
 }
@@ -1648,7 +1724,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
         Self(match hyper::resolve::<3, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
                 18..=22 => trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8, 128, false>(self.0, mode),
-                _ => return Self(crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode)),
+                _ => return Self(hyper_rung::sinh_strict::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
             hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::sinh_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
@@ -1663,7 +1739,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
         Self(match hyper::resolve::<3, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
                 18..=22 => trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8, 128, false>(self.0, mode),
-                _ => return Self(crate::algos::trig::hyper_schoolbook::cosh_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode)),
+                _ => return Self(hyper_rung::cosh_strict::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
             hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::cosh_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
@@ -1678,7 +1754,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
         Self(match hyper::resolve::<3, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
                 18..=22 => trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8, 128, false>(self.0, mode),
-                _ => return Self(crate::algos::trig::hyper_schoolbook::tanh_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode)),
+                _ => return Self(hyper_rung::tanh_strict::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
             hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::tanh_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
@@ -1829,7 +1905,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<8>, SCALE> {
         Self(match hyper::resolve::<8, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
                 70..=82 => trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, 128, true>(self.0, mode),
-                _ => return Self(crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode)),
+                _ => return Self(hyper_rung::sinh_strict::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
             hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::sinh_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
@@ -1844,7 +1920,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<8>, SCALE> {
         Self(match hyper::resolve::<8, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
                 70..=82 => trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, 128, true>(self.0, mode),
-                _ => return Self(crate::algos::trig::hyper_schoolbook::cosh_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode)),
+                _ => return Self(hyper_rung::cosh_strict::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
             hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::cosh_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
@@ -1859,7 +1935,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<8>, SCALE> {
         Self(match hyper::resolve::<8, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
                 70..=82 => trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, 128, true>(self.0, mode),
-                _ => return Self(crate::algos::trig::hyper_schoolbook::tanh_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode)),
+                _ => return Self(hyper_rung::tanh_strict::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
             hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::tanh_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
@@ -1954,7 +2030,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
         Self(match hyper::resolve::<16, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
                 140..=160 => trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, 8, 128, false>(self.0, mode),
-                _ => return Self(crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode)),
+                _ => return Self(hyper_rung::sinh_strict::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
             hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::sinh_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
@@ -1969,7 +2045,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
         Self(match hyper::resolve::<16, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
                 140..=160 => trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, 8, 128, false>(self.0, mode),
-                _ => return Self(crate::algos::trig::hyper_schoolbook::cosh_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode)),
+                _ => return Self(hyper_rung::cosh_strict::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
             hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::cosh_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
@@ -1984,7 +2060,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
         Self(match hyper::resolve::<16, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
                 140..=160 => trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, 8, 128, false>(self.0, mode),
-                _ => return Self(crate::algos::trig::hyper_schoolbook::tanh_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode)),
+                _ => return Self(hyper_rung::tanh_strict::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
             hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::tanh_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
@@ -3245,6 +3321,37 @@ mod forward_rung_tests {
                     super::inverse_rung::atan2_strict::<Core, 19>(yd.to_bits(), xd.to_bits(), mode),
                     crate::algos::trig::inverse_schoolbook::atan2_schoolbook::<Core, 19>(yd.to_bits(), xd.to_bits(), mode),
                     "atan2({y}, {x}) mode {mode:?}"
+                );
+            }
+        }
+    }
+
+    /// Hyperbolic-family rung anchors (D307<19>): the rung-routed sinh /
+    /// cosh / tanh must equal the tier-width exp-identity kernels
+    /// bit-for-bit across the everyday spread (incl. the in-budget edge
+    /// 9.9 and the tanh near-saturation shape), and the out-of-budget
+    /// |x| = 50 must take the tier fallback.
+    #[test]
+    #[cfg(feature = "d307")]
+    fn d307_hyper_rung_matches_tier_kernels() {
+        type Core = crate::types::widths::wide_trig_d307::Core;
+        for v in ["0", "0.3", "1", "1.5", "9.9", "-1", "-9.9", "50"] {
+            let x: crate::D307<19> = v.parse().unwrap();
+            for mode in ALL_MODES {
+                assert_eq!(
+                    super::hyper_rung::sinh_strict::<Core, 19>(x.to_bits(), mode),
+                    crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<Core, 19>(x.to_bits(), mode),
+                    "sinh({v}) mode {mode:?}"
+                );
+                assert_eq!(
+                    super::hyper_rung::cosh_strict::<Core, 19>(x.to_bits(), mode),
+                    crate::algos::trig::hyper_schoolbook::cosh_schoolbook::<Core, 19>(x.to_bits(), mode),
+                    "cosh({v}) mode {mode:?}"
+                );
+                assert_eq!(
+                    super::hyper_rung::tanh_strict::<Core, 19>(x.to_bits(), mode),
+                    crate::algos::trig::hyper_schoolbook::tanh_schoolbook::<Core, 19>(x.to_bits(), mode),
+                    "tanh({v}) mode {mode:?}"
                 );
             }
         }

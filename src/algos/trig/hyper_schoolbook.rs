@@ -155,6 +155,168 @@ pub(crate) fn atanh_schoolbook<C: WideTrigCore, const SCALE: u32>(
     })
 }
 
+// ── Rung-generic shells (the SCALE-derived work-rung surface) ─────────
+//
+// The exp-identity compositions run at an arbitrary work rung `Wk`
+// (decoupled from `C::W`), mirroring `wide_trig_core::sin_series_g`.
+// Each Ziv probe regime-splits exactly as the per-tier
+// `sinh_pos_wide` does: the fast path runs the width-generic
+// `exp_generic::{sinh,cosh,tanh}_pos` at the rung when the exp
+// squaring-reassembly peak provably fits `Wk`
+// (`exp_generic::exp_peak_fits` — the SAME model the tier's
+// `hyper_fits_w` gate uses), else the probe lifts to the tier's wide
+// `C::Wexp` and narrows the (always-rung-representable) probe VALUE
+// back — so a deep escalation probe whose internal peak outgrows the
+// rung still computes, value-identical to the tier path at the same
+// working scale. The policy gate bounds `|x|` so the everyday region
+// stays on the rung's fast path (see `policy::work_rung::EXP_ARG_BUDGET`).
+
+/// Per-probe hyperbolic regime split at the rung — see the module note
+/// above. `f_rung` / `f_wide` are the SAME identity at the two widths.
+#[cfg(feature = "_wide-support")]
+#[inline]
+fn hyper_probe_g<C: WideTrigCore, Wk: crate::int::types::traits::BigInt>(
+    raw: C::Storage,
+    guard: u32,
+    w: u32,
+    f_rung: impl Fn(Wk, u32) -> Wk,
+    f_wide: impl Fn(C::Wexp, u32) -> C::Wexp,
+) -> Wk
+where
+    Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+    <C::Wexp as crate::int::types::traits::BigInt>::Scratch:
+        crate::int::types::compute_limbs::ComputeLimbs,
+{
+    use crate::algos::exp::exp_generic as eg;
+    use crate::algos::support::wide_trig_core::to_work_scaled_g;
+    let v = to_work_scaled_g::<C::Storage, Wk>(raw, guard);
+    let av = if v < eg::zero::<Wk>() { eg::zero::<Wk>() - v } else { v };
+    if eg::exp_peak_fits::<Wk>(av, w) {
+        f_rung(av, w)
+    } else {
+        let v_e = to_work_scaled_g::<C::Storage, C::Wexp>(raw, guard);
+        let av_e = if v_e < eg::zero::<C::Wexp>() {
+            eg::zero::<C::Wexp>() - v_e
+        } else {
+            v_e
+        };
+        eg::resize_or_panic::<C::Wexp, Wk>(f_wide(av_e, w))
+    }
+}
+
+/// Rung-generic [`sinh_schoolbook`] — the `(e^x − e^-x)/2` identity at
+/// an arbitrary work rung `Wk`.
+#[cfg(feature = "_wide-support")]
+#[inline]
+#[must_use]
+pub(crate) fn sinh_schoolbook_g<C: WideTrigCore, Wk: crate::int::types::traits::BigInt, const SCALE: u32>(
+    raw: C::Storage,
+    mode: RoundingMode,
+) -> C::Storage
+where
+    Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+    <C::Wexp as crate::int::types::traits::BigInt>::Scratch:
+        crate::int::types::compute_limbs::ComputeLimbs,
+{
+    use crate::algos::exp::exp_generic as eg;
+    use crate::algos::support::wide_trig_core::round_to_storage_directed_g;
+    let neg = raw < C::storage_zero();
+    let k_lift = C::exp_result_int_digits(C::to_work_scaled(raw, 0), SCALE);
+    let base_guard = C::GUARD + k_lift;
+    round_to_storage_directed_g::<C::Storage, Wk>(
+        base_guard,
+        SCALE,
+        mode,
+        C::storage_max(),
+        C::storage_min(),
+        |guard| {
+            let w = SCALE + guard;
+            let sh = hyper_probe_g::<C, Wk>(
+                raw,
+                guard,
+                w,
+                |av, w| eg::sinh_pos::<Wk>(av, w),
+                |av, w| eg::sinh_pos::<C::Wexp>(av, w),
+            );
+            if neg { eg::zero::<Wk>() - sh } else { sh }
+        },
+    )
+}
+
+/// Rung-generic [`cosh_schoolbook`] — see [`sinh_schoolbook_g`].
+#[cfg(feature = "_wide-support")]
+#[inline]
+#[must_use]
+pub(crate) fn cosh_schoolbook_g<C: WideTrigCore, Wk: crate::int::types::traits::BigInt, const SCALE: u32>(
+    raw: C::Storage,
+    mode: RoundingMode,
+) -> C::Storage
+where
+    Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+    <C::Wexp as crate::int::types::traits::BigInt>::Scratch:
+        crate::int::types::compute_limbs::ComputeLimbs,
+{
+    use crate::algos::exp::exp_generic as eg;
+    use crate::algos::support::wide_trig_core::round_to_storage_directed_g;
+    let k_lift = C::exp_result_int_digits(C::to_work_scaled(raw, 0), SCALE);
+    let base_guard = C::GUARD + k_lift;
+    round_to_storage_directed_g::<C::Storage, Wk>(
+        base_guard,
+        SCALE,
+        mode,
+        C::storage_max(),
+        C::storage_min(),
+        |guard| {
+            let w = SCALE + guard;
+            hyper_probe_g::<C, Wk>(
+                raw,
+                guard,
+                w,
+                |av, w| eg::cosh_pos::<Wk>(av, w),
+                |av, w| eg::cosh_pos::<C::Wexp>(av, w),
+            )
+        },
+    )
+}
+
+/// Rung-generic [`tanh_schoolbook`] — see [`sinh_schoolbook_g`].
+#[cfg(feature = "_wide-support")]
+#[inline]
+#[must_use]
+pub(crate) fn tanh_schoolbook_g<C: WideTrigCore, Wk: crate::int::types::traits::BigInt, const SCALE: u32>(
+    raw: C::Storage,
+    mode: RoundingMode,
+) -> C::Storage
+where
+    Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+    <C::Wexp as crate::int::types::traits::BigInt>::Scratch:
+        crate::int::types::compute_limbs::ComputeLimbs,
+{
+    use crate::algos::exp::exp_generic as eg;
+    use crate::algos::support::wide_trig_core::round_to_storage_directed_g;
+    let neg = raw < C::storage_zero();
+    let k_lift = C::exp_result_int_digits(C::to_work_scaled(raw, 0), SCALE);
+    let base_guard = C::GUARD + k_lift;
+    round_to_storage_directed_g::<C::Storage, Wk>(
+        base_guard,
+        SCALE,
+        mode,
+        C::storage_max(),
+        C::storage_min(),
+        |guard| {
+            let w = SCALE + guard;
+            let th = hyper_probe_g::<C, Wk>(
+                raw,
+                guard,
+                w,
+                |av, w| eg::tanh_pos::<Wk>(av, w),
+                |av, w| eg::tanh_pos::<C::Wexp>(av, w),
+            );
+            if neg { eg::zero::<Wk>() - th } else { th }
+        },
+    )
+}
+
 // -- Narrow tier -- Int<2> storage, math in the 256-bit Fixed ---------
 
 #[inline]
