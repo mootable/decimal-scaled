@@ -247,7 +247,7 @@ pub(crate) fn dispatch_with<const N: usize, const SCALE: u32>(
 // analytic gate hit-rate-only, never correctness-bearing.
 #[cfg(feature = "_wide-support")]
 #[inline]
-fn series_at_rung<C: crate::algos::support::wide_trig_core::WideTrigCore, const SCALE: u32>(
+pub(crate) fn series_at_rung<C: crate::algos::support::wide_trig_core::WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
 ) -> C::Storage
