@@ -88,11 +88,6 @@ fast = ["std"]
 # side without recompiling. Off by default — adds build time and binary
 # size for no runtime benefit unless you're benching.
 bench-alt = []
-# Gates the heavy `ulp_strict_golden` mpmath-oracle suite (a `[[test]]`
-# `required-features`). OFF in the `tests (gate)` CI job so it stays fast;
-# ON only for local/on-demand runs of the legacy suite (no workflow passes it).
-# A no-op feature — it only toggles whether that test target compiles/runs.
-golden = []
 # Compile-time selector for the default RoundingMode used by the
 # no-arg `rescale` family (and any future default-rounding methods).
 # If none of these is enabled, the default is HalfToEven (IEEE-754
@@ -215,8 +210,8 @@ g_math = "0.4"
 fastnum = { version = "0.7", default-features = false, features = ["std"] }
 bigdecimal = "0.4"
 dashu-float = "0.4"
-# dashu-int provides IBig for the deep-scale shootout's exact base-10
-# integer scaling of dashu-float results (benches/lib_cmp_precision.rs).
+# dashu-int provides IBig for exact base-10 integer scaling of dashu-float
+# results in the comparison benches.
 dashu-int = { version = "0.4", default-features = false, features = ["std"] }
 decimal-rs = "0.1"
 scientific = "0.5"
@@ -306,32 +301,6 @@ required-features = ["wide", "x-wide", "xx-wide"]
 [[example]]
 name = "ulp_report"
 required-features = ["wide"]
-
-# `ulp_strict_golden` pulls in the wide precision harness
-# (`tests/support/precision_subject_ds.rs`, which names every tier), so it
-# needs the tier features.
-[[test]]
-name = "ulp_strict_golden"
-# `golden` gates this heavy suite OUT of the `tests (gate)` CI job (which
-# does NOT pass `golden`) so that job stays fast (builds-all + the quick
-# suite); no CI workflow passes `golden` any more — the striped golden fleet
-# to build and run it (in release). Local: add `,golden` to run it.
-required-features = ["wide", "x-wide", "xx-wide", "golden"]
-
-# `micro_golden` is the FAST agent-validation subset of `ulp_strict_golden`
-# (same harness + same `lsbe == 0` zero-tolerance assertion, capped rows);
-# wide-feature gated so a plain `cargo build --all-targets` skips it.
-[[test]]
-name = "micro_golden"
-required-features = ["wide", "x-wide", "xx-wide"]
-
-# `atan_tang_band_accuracy` is a focused zero-tolerance gate for the D57
-# atan Tang band (SCALE 44..=56) — the cells `ulp_strict_golden`'s D57
-# row (run at SCALE 28) does not cover. Validates the baked-table atan
-# path is correctly rounded at the band edge. Wide-feature gated.
-[[test]]
-name = "atan_tang_band_accuracy"
-required-features = ["wide", "x-wide", "xx-wide"]
 
 [[bench]]
 name = "mul_div_candidates"
@@ -754,20 +723,6 @@ name = "lib_cmp_d1232"
 path = "benches/libcmp/lib_cmp_d1232.rs"
 harness = false
 required-features = ["xx-wide"]
-
-# Library-agnostic precision shootout — NOT a timing bench. The ONE
-# precision-comparison path: sweeps every PrecisionSubject (decimal-scaled
-# + dashu-float / rust_decimal / fastnum / decimal-rs / bigdecimal) over
-# the mpmath golden oracle via the shared harness in tests/support/,
-# writes the deterministic per-library result files under
-# results/precision/, and renders the LSBε/ULP shootout table FROM those
-# committed files. `harness = false` with a plain `fn main` — no
-# criterion timing machinery.
-[[bench]]
-name = "lib_cmp_precision"
-path = "benches/libcmp/lib_cmp_precision.rs"
-harness = false
-required-features = ["wide", "x-wide", "xx-wide", "macros"]
 
 [[bench]]
 name = "prec_fix_impact"

@@ -78,11 +78,8 @@ jobs:
       - name: Full test suite (wide tiers + macros)
         # The full `cargo test` — no `--test` scoping — so every
         # example and bench target is compiled as part of the run.
-        # NOTE: `golden` is intentionally NOT passed, so the legacy
-        # `ulp_strict_golden` suite (gated behind the `golden`
-        # required-feature, retiring in the old-golden cleanup) is
-        # excluded; the golden surface is the striped release gate
-        # below.
+        # The golden surface is the striped release gate below, not
+        # part of this job.
         run: cargo test --features wide,x-wide,xx-wide,macros
 
       - name: Default-feature test suite (narrow tiers)

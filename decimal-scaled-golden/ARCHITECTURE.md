@@ -250,6 +250,14 @@ with `guard = 2`). Those guard digits are spent *deciding* the rounding, so the 
 can actually **verify** is `gen_precision − guard` (≈ 1231 = the widest scale itself). We can
 never verify a subject deeper than that, so grading depth is clamped to it:
 
+> **Potential TODO (owner consideration, 2026-06-11):** replace the two trailing
+> guard digits with a single generator-emitted rounding-HINT character (exact /
+> residual-above / residual-below / tie). The generator PROVES the residual class
+> (floor-truth pinning + the residual-ball exactness certificate), so the hint is
+> declarative where the guard digits are inferred, and it covers residuals smaller
+> than the guard window. Costs a loader/classifier rewrite + a full regen; revisit
+> at the next format migration (e.g. a gen_precision change).
+
 ```
 grade_precision = min(subject.max_precision, oracle_limits.max_precision)  // = gen_precision − guard
 oracle_limited  = subject.max_precision > oracle_limits.max_precision

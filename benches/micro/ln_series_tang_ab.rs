@@ -17,7 +17,7 @@
 //! Tang and Series are asserted bit-identical across the value spread × six
 //! modes before timing (the validity wall). ln's domain is x > 0, so arguments
 //! are x ∈ {0.5, 2.0, 7.5}. Correct rounding over the widened range is gated by
-//! the `ulp_strict_golden` ln cells (the near-grid-line directed-mode case the
+//! the golden-gate ln cells (the near-grid-line directed-mode case the
 //! 3-value spread cannot probe).
 //!
 //! Run with:

@@ -889,7 +889,7 @@ mod from_hypot_edge_cases {
     //!
     //! The numeric VALUE coverage for `hypot` (Pythagorean triples, the
     //! non-perfect `√` cases, and the adversarial seam/band-edge inputs) now
-    //! lives in the shared golden set under `tests/golden/hypot_d*_s*.txt`
+    //! lives in the shared golden set (`decimal-scaled-golden/golden/hypot.golden`)
     //! and is checked, bit-exact across all six rounding modes, by
     //! `tests/ulp_strict_golden.rs` — the single source of truth. What
     //! remains here are the cases golden's `(input, floor, cls)` →
