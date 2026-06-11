@@ -319,6 +319,141 @@ pub(crate) mod hyper {
 }
 
 // ══════════════════════════════════════════════════════════════════════
+// Forward-family SCALE-derived work-rung routing (sin / cos / tan)
+//
+// The wide tiers historically ran every forward-trig kernel in the
+// TIER-FIXED work integer `C::W` regardless of scale — at SCALE 0 the
+// working scale is only `GUARD = 30` digits yet D1232 computed sin in
+// `Int<176>`. The helpers below key the work integer on the working
+// scale instead: a const-folded rung match (shared selector
+// `policy::work_rung::trig_rung`) monomorphises the ONE generic kernel
+// (`wide_trig_core::{sin,cos,tan}_series_g`) at the narrowest valid
+// `Int<K>`, with dead arms eliminated. A rung-INTERNAL second axis —
+// NOT in the `select` verdict, NOT on `Algorithm` (the `policy::ln`
+// Tang-rung shape).
+//
+// THE VALUE AXIS (trig-specific — `ln` has no analogue): the mod-τ
+// range reduction loses one guard digit per integer digit of `|x|`
+// (`r = v − q·τ` with `τ` correctly rounded ⇒ error ≈ `q = |x|/2π`
+// working units), so a small rung is only valid where the argument's
+// integer-digit count provably fits the rung's budget. The runtime
+// magnitude gate below (`|x| < 10^D_BUDGET`, one bit-length compare —
+// the irreducible ByValue residue) admits the continuous everyday
+// region to the rung and routes everything larger to the EXACT
+// pre-rung tier-width path (`sin_series` / `sincos_narrow` /
+// `tan_series`), bit-identical to today at every out-of-budget value.
+// Within the gate the rung value is bit-identical to the tier value by
+// construction (width-agnostic integer ops; the only divergence
+// surface is the Ziv escalation cap, budgeted analytically in
+// `work_rung::TRIG_MARGIN` and walled by the golden gate).
+// ══════════════════════════════════════════════════════════════════════
+#[cfg(feature = "_wide-support")]
+pub(crate) mod forward_rung {
+    use super::super::work_rung::{trig_rung, Rung, D_BUDGET};
+    use crate::algos::support::wide_trig_core::{
+        cos_series_g, sin_series_g, tan_series_g, WideTrigCore,
+    };
+    use crate::int::types::compute_limbs::ComputeLimbs;
+    use crate::int::types::traits::BigInt;
+    use crate::int::types::Int;
+    use crate::support::rounding::RoundingMode;
+
+    /// `true` iff `|x| < ~10^D_BUDGET` — the rung's admitted magnitude
+    /// region. Conservative bit-length test (`332_192/100_000 <
+    /// log2(10)`): never admits a value at or beyond `10^(SCALE +
+    /// D_BUDGET)` raw units, so an admitted argument's integer digits
+    /// provably fit the rung's reduction budget; the sliver it
+    /// under-admits just below the boundary takes the (correct,
+    /// slower) tier path. One compare against a compile-time constant.
+    #[inline]
+    fn in_budget<C: WideTrigCore, const SCALE: u32>(raw: &C::Storage) -> bool {
+        let bl = crate::algos::exp::exp_generic::bit_length::<C::Storage>(*raw) as u64;
+        bl * 100_000 <= ((SCALE + D_BUDGET) as u64) * 332_192
+    }
+
+    /// Forward-trig rung dispatch: the const-folded rung match. One
+    /// macro emits the 13-arm match per kernel call so the ladder stays
+    /// single-source (the `policy::ln::tang_at_rung` shape).
+    macro_rules! rung_match {
+        ($C:ty, $SCALE:ident, $kernel:ident, [$($k:tt)*], $raw:expr, $mode:expr) => {
+            match const { trig_rung::<$C, $SCALE>() } {
+                Rung::W3 => $kernel::<$C, Int<3>, $($k)*>($raw, $mode),
+                Rung::W4 => $kernel::<$C, Int<4>, $($k)*>($raw, $mode),
+                Rung::W6 => $kernel::<$C, Int<6>, $($k)*>($raw, $mode),
+                Rung::W8 => $kernel::<$C, Int<8>, $($k)*>($raw, $mode),
+                Rung::W12 => $kernel::<$C, Int<12>, $($k)*>($raw, $mode),
+                Rung::W16 => $kernel::<$C, Int<16>, $($k)*>($raw, $mode),
+                Rung::W24 => $kernel::<$C, Int<24>, $($k)*>($raw, $mode),
+                Rung::W32 => $kernel::<$C, Int<32>, $($k)*>($raw, $mode),
+                Rung::W48 => $kernel::<$C, Int<48>, $($k)*>($raw, $mode),
+                Rung::W64 => $kernel::<$C, Int<64>, $($k)*>($raw, $mode),
+                Rung::W96 => $kernel::<$C, Int<96>, $($k)*>($raw, $mode),
+                Rung::W128 => $kernel::<$C, Int<128>, $($k)*>($raw, $mode),
+                Rung::W176 => $kernel::<$C, Int<176>, $($k)*>($raw, $mode),
+            }
+        };
+    }
+
+    /// `sin_strict` at the work rung; out-of-budget magnitudes fall to
+    /// the tier-width narrow-GUARD kernel (at `GUARD = C::GUARD` that is
+    /// value-identical to `sin_series` — same directed narrowing, same
+    /// extremum adjust; the zero pin is an exact identity).
+    #[inline]
+    pub(crate) fn sin_strict<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
+        raw: C::Storage,
+        mode: RoundingMode,
+    ) -> C::Storage {
+        if in_budget::<C, SCALE>(&raw) {
+            rung_match!(C, SCALE, sin_series_g, [SCALE, GUARD], raw, mode)
+        } else {
+            crate::algos::trig::sincos_narrow::sin_narrow_with_taylor::<C, SCALE, GUARD>(raw, mode)
+        }
+    }
+
+    /// `cos_strict` at the work rung — see [`sin_strict`].
+    #[inline]
+    pub(crate) fn cos_strict<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
+        raw: C::Storage,
+        mode: RoundingMode,
+    ) -> C::Storage {
+        if in_budget::<C, SCALE>(&raw) {
+            rung_match!(C, SCALE, cos_series_g, [SCALE, GUARD], raw, mode)
+        } else {
+            crate::algos::trig::sincos_narrow::cos_narrow_with_taylor::<C, SCALE, GUARD>(raw, mode)
+        }
+    }
+
+    /// `tan_strict` at the work rung. `SUB_GUARD` selects the tier-GUARD
+    /// Series probe shape (`tan_series`, lift minus the guard already
+    /// paid) vs the narrow-band shape (full lift); the out-of-budget
+    /// fallback is the matching pre-rung kernel, bit-identical to today.
+    #[inline]
+    pub(crate) fn tan_strict<
+        C: WideTrigCore,
+        const SCALE: u32,
+        const GUARD: u32,
+        const NEAR_POLE: bool,
+        const SUB_GUARD: bool,
+    >(
+        raw: C::Storage,
+        mode: RoundingMode,
+    ) -> C::Storage
+    where
+        <C::W as BigInt>::Scratch: ComputeLimbs,
+    {
+        if in_budget::<C, SCALE>(&raw) {
+            rung_match!(C, SCALE, tan_series_g, [SCALE, GUARD, NEAR_POLE, SUB_GUARD], raw, mode)
+        } else if SUB_GUARD {
+            crate::algos::support::wide_trig_core::tan_series::<C, SCALE>(raw, mode)
+        } else {
+            crate::algos::trig::sincos_narrow::tan_narrow_with_taylor::<C, SCALE, GUARD, NEAR_POLE>(
+                raw, mode,
+            )
+        }
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════
 // D38 inverse-trig "borrow D57" dispatch strategy
 //
 // The D38 inverse-trig family (atan / asin / acos / atan2) is qualitatively
@@ -1188,11 +1323,11 @@ macro_rules! wide_trig_forward_series {
         pub(crate) fn policy_sin(self, mode: RoundingMode) -> Self {
             Self(match forward::resolve::<$N, SCALE>(&self.0) {
                 forward::Algorithm::Series => {
-                    crate::algos::support::wide_trig_core::sin_series::<$Core, SCALE>(self.0, mode)
+                    forward_rung::sin_strict::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode)
                 }
                 #[cfg(feature = "_wide-support")]
                 forward::Algorithm::Tang => {
-                    crate::algos::support::wide_trig_core::sin_series::<$Core, SCALE>(self.0, mode)
+                    forward_rung::sin_strict::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode)
                 }
                 #[allow(dead_code)]
                 forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::sin_schoolbook::<$Core, SCALE>(self.0, mode),
@@ -1200,17 +1335,17 @@ macro_rules! wide_trig_forward_series {
         }
         #[inline]
         pub(crate) fn policy_sin_with(self, _wd: u32, mode: RoundingMode) -> Self {
-            Self(crate::algos::support::wide_trig_core::sin_series::<$Core, SCALE>(self.0, mode))
+            Self(forward_rung::sin_strict::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode))
         }
         #[inline]
         pub(crate) fn policy_cos(self, mode: RoundingMode) -> Self {
             Self(match forward::resolve::<$N, SCALE>(&self.0) {
                 forward::Algorithm::Series => {
-                    crate::algos::support::wide_trig_core::cos_series::<$Core, SCALE>(self.0, mode)
+                    forward_rung::cos_strict::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode)
                 }
                 #[cfg(feature = "_wide-support")]
                 forward::Algorithm::Tang => {
-                    crate::algos::support::wide_trig_core::cos_series::<$Core, SCALE>(self.0, mode)
+                    forward_rung::cos_strict::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode)
                 }
                 #[allow(dead_code)]
                 forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::cos_schoolbook::<$Core, SCALE>(self.0, mode),
@@ -1218,17 +1353,17 @@ macro_rules! wide_trig_forward_series {
         }
         #[inline]
         pub(crate) fn policy_cos_with(self, _wd: u32, mode: RoundingMode) -> Self {
-            Self(crate::algos::support::wide_trig_core::cos_series::<$Core, SCALE>(self.0, mode))
+            Self(forward_rung::cos_strict::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode))
         }
         #[inline]
         pub(crate) fn policy_tan(self, mode: RoundingMode) -> Self {
             Self(match forward::resolve_tan::<$N, SCALE>(&self.0) {
                 forward::Algorithm::Series => {
-                    crate::algos::support::wide_trig_core::tan_series::<$Core, SCALE>(self.0, mode)
+                    forward_rung::tan_strict::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true, true>(self.0, mode)
                 }
                 #[cfg(feature = "_wide-support")]
                 forward::Algorithm::Tang => {
-                    crate::algos::support::wide_trig_core::tan_series::<$Core, SCALE>(self.0, mode)
+                    forward_rung::tan_strict::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true, true>(self.0, mode)
                 }
                 #[allow(dead_code)]
                 forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::tan_schoolbook::<$Core, SCALE>(self.0, mode),
@@ -1236,7 +1371,7 @@ macro_rules! wide_trig_forward_series {
         }
         #[inline]
         pub(crate) fn policy_tan_with(self, _wd: u32, mode: RoundingMode) -> Self {
-            Self(crate::algos::support::wide_trig_core::tan_series::<$Core, SCALE>(self.0, mode))
+            Self(forward_rung::tan_strict::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true, true>(self.0, mode))
         }
         #[inline]
         pub(crate) fn policy_atan(self, mode: RoundingMode) -> Self {
@@ -1275,8 +1410,9 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
                 // through the shared directed-aware generic (Ziv escalation
                 // + the bounded-extremum adjust); the bespoke single-shot
                 // D57 slot kept only for tan. GUARD=8 per the band's probe.
-                18..=22 => trig::sincos_narrow::sin_narrow_with_taylor::<crate::types::widths::wide_trig_d57::Core, SCALE, 8>(self.0, mode),
-                _ => crate::algos::support::wide_trig_core::sin_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
+                // Both bands run at the SCALE-derived work rung.
+                18..=22 => forward_rung::sin_strict::<crate::types::widths::wide_trig_d57::Core, SCALE, 8>(self.0, mode),
+                _ => forward_rung::sin_strict::<crate::types::widths::wide_trig_d57::Core, SCALE, { <crate::types::widths::wide_trig_d57::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode),
             },
             forward::Algorithm::Tang => {
                 trig::sincos_tang::sin_tang_with_taylor::<crate::types::widths::wide_trig_d57::Core, SCALE, 512>(self.0, mode)
@@ -1295,8 +1431,8 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
             forward::Algorithm::Series => match SCALE {
                 // Shared directed-aware narrow-GUARD kernel — see the
                 // matching `policy_sin` arm above.
-                18..=22 => trig::sincos_narrow::cos_narrow_with_taylor::<crate::types::widths::wide_trig_d57::Core, SCALE, 8>(self.0, mode),
-                _ => crate::algos::support::wide_trig_core::cos_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
+                18..=22 => forward_rung::cos_strict::<crate::types::widths::wide_trig_d57::Core, SCALE, 8>(self.0, mode),
+                _ => forward_rung::cos_strict::<crate::types::widths::wide_trig_d57::Core, SCALE, { <crate::types::widths::wide_trig_d57::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode),
             },
             forward::Algorithm::Tang => {
                 trig::sincos_tang::cos_tang_with_taylor::<crate::types::widths::wide_trig_d57::Core, SCALE, 512>(self.0, mode)
@@ -1314,11 +1450,11 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
         Self(match forward::resolve_tan::<3, SCALE>(&self.0) {
             forward::Algorithm::Series => match SCALE {
                 18..=22 => trig::sincos_tang_3limb_s18_22::tan_strict::<SCALE>(self.0, mode),
-                _ => crate::algos::support::wide_trig_core::tan_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
+                _ => forward_rung::tan_strict::<crate::types::widths::wide_trig_d57::Core, SCALE, { <crate::types::widths::wide_trig_d57::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true, true>(self.0, mode),
             },
             // tan has no D57 Tang band; the arm is dead-arm-eliminated
             // (forwards to the generic kernel for exhaustiveness).
-            forward::Algorithm::Tang => crate::algos::support::wide_trig_core::tan_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
+            forward::Algorithm::Tang => forward_rung::tan_strict::<crate::types::widths::wide_trig_d57::Core, SCALE, { <crate::types::widths::wide_trig_d57::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true, true>(self.0, mode),
             #[allow(dead_code)]
             forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::tan_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
         })
@@ -1519,9 +1655,9 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<8>, SCALE> {
     #[inline]
     pub(crate) fn policy_sin(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<8, SCALE>(&self.0) {
-            forward::Algorithm::Series => crate::algos::support::wide_trig_core::sin_series::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
+            forward::Algorithm::Series => forward_rung::sin_strict::<crate::types::widths::wide_trig_d153::Core, SCALE, { <crate::types::widths::wide_trig_d153::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode),
             forward::Algorithm::Tang => {
-                trig::sincos_narrow::sin_narrow_with_taylor::<crate::types::widths::wide_trig_d153::Core, SCALE, 10>(self.0, mode)
+                forward_rung::sin_strict::<crate::types::widths::wide_trig_d153::Core, SCALE, 10>(self.0, mode)
             }
             #[allow(dead_code)]
             forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::sin_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
@@ -1534,9 +1670,9 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<8>, SCALE> {
     #[inline]
     pub(crate) fn policy_cos(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<8, SCALE>(&self.0) {
-            forward::Algorithm::Series => crate::algos::support::wide_trig_core::cos_series::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
+            forward::Algorithm::Series => forward_rung::cos_strict::<crate::types::widths::wide_trig_d153::Core, SCALE, { <crate::types::widths::wide_trig_d153::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode),
             forward::Algorithm::Tang => {
-                trig::sincos_narrow::cos_narrow_with_taylor::<crate::types::widths::wide_trig_d153::Core, SCALE, 10>(self.0, mode)
+                forward_rung::cos_strict::<crate::types::widths::wide_trig_d153::Core, SCALE, 10>(self.0, mode)
             }
             #[allow(dead_code)]
             forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::cos_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
@@ -1549,9 +1685,9 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<8>, SCALE> {
     #[inline]
     pub(crate) fn policy_tan(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve_tan::<8, SCALE>(&self.0) {
-            forward::Algorithm::Series => crate::algos::support::wide_trig_core::tan_series::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
+            forward::Algorithm::Series => forward_rung::tan_strict::<crate::types::widths::wide_trig_d153::Core, SCALE, { <crate::types::widths::wide_trig_d153::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true, true>(self.0, mode),
             forward::Algorithm::Tang => {
-                trig::sincos_narrow::tan_narrow_with_taylor::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, true>(self.0, mode)
+                forward_rung::tan_strict::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, true, false>(self.0, mode)
             }
             #[allow(dead_code)]
             forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::tan_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
@@ -1644,9 +1780,9 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
     #[inline]
     pub(crate) fn policy_sin(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<16, SCALE>(&self.0) {
-            forward::Algorithm::Series => crate::algos::support::wide_trig_core::sin_series::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
+            forward::Algorithm::Series => forward_rung::sin_strict::<crate::types::widths::wide_trig_d307::Core, SCALE, { <crate::types::widths::wide_trig_d307::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode),
             forward::Algorithm::Tang => {
-                trig::sincos_narrow::sin_narrow_with_taylor::<crate::types::widths::wide_trig_d307::Core, SCALE, 8>(self.0, mode)
+                forward_rung::sin_strict::<crate::types::widths::wide_trig_d307::Core, SCALE, 8>(self.0, mode)
             }
             #[allow(dead_code)]
             forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::sin_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
@@ -1659,9 +1795,9 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
     #[inline]
     pub(crate) fn policy_cos(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<16, SCALE>(&self.0) {
-            forward::Algorithm::Series => crate::algos::support::wide_trig_core::cos_series::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
+            forward::Algorithm::Series => forward_rung::cos_strict::<crate::types::widths::wide_trig_d307::Core, SCALE, { <crate::types::widths::wide_trig_d307::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode),
             forward::Algorithm::Tang => {
-                trig::sincos_narrow::cos_narrow_with_taylor::<crate::types::widths::wide_trig_d307::Core, SCALE, 8>(self.0, mode)
+                forward_rung::cos_strict::<crate::types::widths::wide_trig_d307::Core, SCALE, 8>(self.0, mode)
             }
             #[allow(dead_code)]
             forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::cos_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
@@ -1674,9 +1810,9 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
     #[inline]
     pub(crate) fn policy_tan(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve_tan::<16, SCALE>(&self.0) {
-            forward::Algorithm::Series => crate::algos::support::wide_trig_core::tan_series::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
+            forward::Algorithm::Series => forward_rung::tan_strict::<crate::types::widths::wide_trig_d307::Core, SCALE, { <crate::types::widths::wide_trig_d307::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true, true>(self.0, mode),
             forward::Algorithm::Tang => {
-                trig::sincos_narrow::tan_narrow_with_taylor::<crate::types::widths::wide_trig_d307::Core, SCALE, 8, true>(self.0, mode)
+                forward_rung::tan_strict::<crate::types::widths::wide_trig_d307::Core, SCALE, 8, true, false>(self.0, mode)
             }
             #[allow(dead_code)]
             forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::tan_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
@@ -1760,9 +1896,9 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<24>, SCALE> {
     #[inline]
     pub(crate) fn policy_sin(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<24, SCALE>(&self.0) {
-            forward::Algorithm::Series => crate::algos::support::wide_trig_core::sin_series::<crate::types::widths::wide_trig_d462::Core, SCALE>(self.0, mode),
+            forward::Algorithm::Series => forward_rung::sin_strict::<crate::types::widths::wide_trig_d462::Core, SCALE, { <crate::types::widths::wide_trig_d462::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode),
             forward::Algorithm::Tang => {
-                trig::sincos_narrow::sin_narrow_with_taylor::<crate::types::widths::wide_trig_d462::Core, SCALE, 10>(self.0, mode)
+                forward_rung::sin_strict::<crate::types::widths::wide_trig_d462::Core, SCALE, 10>(self.0, mode)
             }
             #[allow(dead_code)]
             forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::sin_schoolbook::<crate::types::widths::wide_trig_d462::Core, SCALE>(self.0, mode),
@@ -1775,9 +1911,9 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<24>, SCALE> {
     #[inline]
     pub(crate) fn policy_cos(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<24, SCALE>(&self.0) {
-            forward::Algorithm::Series => crate::algos::support::wide_trig_core::cos_series::<crate::types::widths::wide_trig_d462::Core, SCALE>(self.0, mode),
+            forward::Algorithm::Series => forward_rung::cos_strict::<crate::types::widths::wide_trig_d462::Core, SCALE, { <crate::types::widths::wide_trig_d462::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode),
             forward::Algorithm::Tang => {
-                trig::sincos_narrow::cos_narrow_with_taylor::<crate::types::widths::wide_trig_d462::Core, SCALE, 10>(self.0, mode)
+                forward_rung::cos_strict::<crate::types::widths::wide_trig_d462::Core, SCALE, 10>(self.0, mode)
             }
             #[allow(dead_code)]
             forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::cos_schoolbook::<crate::types::widths::wide_trig_d462::Core, SCALE>(self.0, mode),
@@ -1790,9 +1926,9 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<24>, SCALE> {
     #[inline]
     pub(crate) fn policy_tan(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve_tan::<24, SCALE>(&self.0) {
-            forward::Algorithm::Series => crate::algos::support::wide_trig_core::tan_series::<crate::types::widths::wide_trig_d462::Core, SCALE>(self.0, mode),
+            forward::Algorithm::Series => forward_rung::tan_strict::<crate::types::widths::wide_trig_d462::Core, SCALE, { <crate::types::widths::wide_trig_d462::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true, true>(self.0, mode),
             forward::Algorithm::Tang => {
-                trig::sincos_narrow::tan_narrow_with_taylor::<crate::types::widths::wide_trig_d462::Core, SCALE, 10, false>(self.0, mode)
+                forward_rung::tan_strict::<crate::types::widths::wide_trig_d462::Core, SCALE, 10, false, false>(self.0, mode)
             }
             #[allow(dead_code)]
             forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::tan_schoolbook::<crate::types::widths::wide_trig_d462::Core, SCALE>(self.0, mode),
@@ -2861,5 +2997,71 @@ pub(crate) fn checked_atan2_dispatch<const N: usize, const SCALE: u32>(
         _ => super::narrow_fit::<N>(
             crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).atan2_strict_with(crate::D::<crate::int::types::Int<2>, SCALE>(other.resize_to::<crate::int::types::Int<2>>()), mode).0,
         ),
+    }
+}
+
+#[cfg(test)]
+mod forward_rung_tests {
+    //! Light anchor tests for the forward-trig work-rung routing (the
+    //! `policy::ln` test shape): the rung-routed public path must equal
+    //! the tier-width kernel bit-for-bit on representative values —
+    //! in-budget low-scale anchors AND an out-of-budget magnitude that
+    //! exercises the gate's tier fallback. Routing/threshold choices are
+    //! NOT pinned (policy tests stay light); the golden gate is the
+    //! correctness wall.
+
+    #[cfg(feature = "d307")]
+    const ALL_MODES: [crate::support::rounding::RoundingMode; 6] = [
+        crate::support::rounding::RoundingMode::HalfToEven,
+        crate::support::rounding::RoundingMode::HalfAwayFromZero,
+        crate::support::rounding::RoundingMode::HalfTowardZero,
+        crate::support::rounding::RoundingMode::Trunc,
+        crate::support::rounding::RoundingMode::Floor,
+        crate::support::rounding::RoundingMode::Ceiling,
+    ];
+
+    /// D307<0> rung anchors: the gate admits |x| < ~10^8 and the rung
+    /// match folds to Int<12>; the values must equal the tier-width
+    /// Series kernel across the everyday inputs and the near-π-multiple
+    /// 3141 (4 integer digits, in-budget — the reduction-precision axis).
+    #[test]
+    #[cfg(feature = "d307")]
+    fn d307_s0_rung_matches_tier_kernel() {
+        type Core = crate::types::widths::wide_trig_d307::Core;
+        const G: u32 =
+            <Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD;
+        for v in ["1", "-1", "2", "3141", "-1570"] {
+            let x: crate::D307<0> = v.parse().unwrap();
+            for mode in ALL_MODES {
+                assert_eq!(
+                    super::forward_rung::sin_strict::<Core, 0, G>(x.to_bits(), mode),
+                    crate::algos::support::wide_trig_core::sin_series::<Core, 0>(x.to_bits(), mode),
+                    "sin({v}) mode {mode:?}"
+                );
+                assert_eq!(
+                    super::forward_rung::tan_strict::<Core, 0, G, true, true>(x.to_bits(), mode),
+                    crate::algos::support::wide_trig_core::tan_series::<Core, 0>(x.to_bits(), mode),
+                    "tan({v}) mode {mode:?}"
+                );
+            }
+        }
+    }
+
+    /// Out-of-budget magnitude (10^9 rad > the 10^8 gate): the rung path
+    /// must take the tier fallback and still equal the tier kernel.
+    #[test]
+    #[cfg(feature = "d307")]
+    fn d307_s0_out_of_budget_falls_back_to_tier() {
+        type Core = crate::types::widths::wide_trig_d307::Core;
+        const G: u32 =
+            <Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD;
+        let x: crate::D307<0> = "1000000000".parse().unwrap();
+        for mode in ALL_MODES {
+            assert_eq!(
+                super::forward_rung::sin_strict::<Core, 0, G>(x.to_bits(), mode),
+                crate::algos::support::wide_trig_core::sin_series::<Core, 0>(x.to_bits(), mode),
+                "sin(1e9) mode {mode:?}"
+            );
+        }
     }
 }

@@ -1011,6 +1011,16 @@ path = "benches/micro/trig_wide_tang_bisect.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
+# trig_rung_ab: forward-trig SCALE-derived work-rung A/B -- tier-width Series
+# vs the rung-routed production path (gate + const-folded rung match) at
+# D307/D1232 across the scale axis, plus an out-of-budget large-|x| probe.
+# Validity-walled (rung == tier bit-identity across six modes) before timing.
+[[bench]]
+name = "trig_rung_ab"
+path = "benches/micro/trig_rung_ab.rs"
+harness = false
+required-features = ["x-wide", "xx-wide", "bench-alt"]
+
 # hyper_wide_tang_ab: tests the 2026-05-28 audit Finding #4 "Pattern A" lead --
 # does Tang-composed (e^x, e^-x) hyperbolic beat the current schoolbook (Series-
 # composed) at D462/D616/D924/D1232? Five-point coarse-scale sweep x {sinh, cosh,

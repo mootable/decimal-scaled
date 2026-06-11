@@ -1534,6 +1534,106 @@ pub mod __bench_internals {
         crate::algos::support::wide_trig_core::atan_narrow::<crate::types::widths::wide_trig_d462::Core, SCALE, GUARD>(raw, mode)
     }
 
+    // Forward-trig SCALE-derived work-rung bench seam — tier-width Series
+    // vs the rung-routed production path (gate + const-folded rung match)
+    // for the low-scale work-rung A/B (`benches/micro/trig_rung_ab.rs`).
+    #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn sin_series_d307<const SCALE: u32>(
+        raw: crate::int::types::Int<16>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<16> {
+        crate::algos::support::wide_trig_core::sin_series::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn sin_rung_d307<const SCALE: u32>(
+        raw: crate::int::types::Int<16>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<16> {
+        crate::policy::trig::forward_rung::sin_strict::<crate::types::widths::wide_trig_d307::Core, SCALE, { <crate::types::widths::wide_trig_d307::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(raw, mode)
+    }
+    #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn cos_series_d307<const SCALE: u32>(
+        raw: crate::int::types::Int<16>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<16> {
+        crate::algos::support::wide_trig_core::cos_series::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn cos_rung_d307<const SCALE: u32>(
+        raw: crate::int::types::Int<16>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<16> {
+        crate::policy::trig::forward_rung::cos_strict::<crate::types::widths::wide_trig_d307::Core, SCALE, { <crate::types::widths::wide_trig_d307::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(raw, mode)
+    }
+    #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn tan_series_d307<const SCALE: u32>(
+        raw: crate::int::types::Int<16>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<16> {
+        crate::algos::support::wide_trig_core::tan_series::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn tan_rung_d307<const SCALE: u32>(
+        raw: crate::int::types::Int<16>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<16> {
+        crate::policy::trig::forward_rung::tan_strict::<crate::types::widths::wide_trig_d307::Core, SCALE, { <crate::types::widths::wide_trig_d307::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true, true>(raw, mode)
+    }
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    #[inline(never)]
+    pub fn sin_series_d1232<const SCALE: u32>(
+        raw: crate::int::types::Int<64>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<64> {
+        crate::algos::support::wide_trig_core::sin_series::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    #[inline(never)]
+    pub fn sin_rung_d1232<const SCALE: u32>(
+        raw: crate::int::types::Int<64>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<64> {
+        crate::policy::trig::forward_rung::sin_strict::<crate::types::widths::wide_trig_d1232::Core, SCALE, { <crate::types::widths::wide_trig_d1232::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(raw, mode)
+    }
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    #[inline(never)]
+    pub fn cos_series_d1232<const SCALE: u32>(
+        raw: crate::int::types::Int<64>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<64> {
+        crate::algos::support::wide_trig_core::cos_series::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    #[inline(never)]
+    pub fn cos_rung_d1232<const SCALE: u32>(
+        raw: crate::int::types::Int<64>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<64> {
+        crate::policy::trig::forward_rung::cos_strict::<crate::types::widths::wide_trig_d1232::Core, SCALE, { <crate::types::widths::wide_trig_d1232::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(raw, mode)
+    }
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    #[inline(never)]
+    pub fn tan_series_d1232<const SCALE: u32>(
+        raw: crate::int::types::Int<64>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<64> {
+        crate::algos::support::wide_trig_core::tan_series::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    #[inline(never)]
+    pub fn tan_rung_d1232<const SCALE: u32>(
+        raw: crate::int::types::Int<64>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<64> {
+        crate::policy::trig::forward_rung::tan_strict::<crate::types::widths::wide_trig_d1232::Core, SCALE, { <crate::types::widths::wide_trig_d1232::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true, true>(raw, mode)
+    }
+
     /// `to_radians` candidates for the `to_radians_ab` microbench (the
     /// wide-tier angle-conversion regression vs 0.4.4). `direct` calls the
     /// `MulPiRatio` kernel straight on the tier `Core` (no policy / resize
