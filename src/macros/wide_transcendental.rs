@@ -3091,26 +3091,11 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn log_strict(self, base: Self) -> Self {
-                let raw = self.to_bits();
-                let braw = base.to_bits();
-                let z = $crate::macros::wide_roots::wide_lit!($Storage, "0");
-                if raw <= z {
-                    panic!(concat!(
-                        stringify!($Type),
-                        "::log: argument must be positive"
-                    ));
-                }
-                if braw <= z {
-                    panic!(concat!(stringify!($Type), "::log: base must be positive"));
-                }
-                let w = SCALE + $core::GUARD;
-                // Two-core: composition runs on the wide `Wagm` work int.
-                let ln_b = $core::ln_fixed_routed_agm::<SCALE>($core::to_work_agm(braw), w);
-                if ln_b == $core::zero_agm() {
-                    panic!(concat!(stringify!($Type), "::log: base must not equal 1"));
-                }
-                let r = $core::div_agm($core::ln_fixed_routed_agm::<SCALE>($core::to_work_agm(raw), w), ln_b, w);
-                Self::from_bits($core::round_to_storage_agm(r, w, SCALE))
+                // Delegate to the mode-aware sibling at the default rounding
+                // mode (the exp2 pattern): ONE kernel for both public entries —
+                // the former inline no-mode composition was a second,
+                // single-shot implementation the `_with` path did not share.
+                self.log_strict_with(base, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Base-2 logarithm. Strict and correctly rounded. Panics if
@@ -3118,21 +3103,11 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn log2_strict(self) -> Self {
-                let raw = self.to_bits();
-                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    panic!(concat!(
-                        stringify!($Type),
-                        "::log2: argument must be positive"
-                    ));
-                }
-                let w = SCALE + $core::GUARD;
-                // Two-core: composition runs on the wide `Wagm` work int.
-                let r = $core::div_agm(
-                    $core::ln_fixed_routed_agm::<SCALE>($core::to_work_agm(raw), w),
-                    $core::ln2_cf_agm::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
-                    w,
-                );
-                Self::from_bits($core::round_to_storage_agm(r, w, SCALE))
+                // Delegate to the mode-aware sibling at the default rounding
+                // mode (the exp2 pattern): ONE kernel for both public entries —
+                // the former inline no-mode composition was a second,
+                // single-shot implementation the `_with` path did not share.
+                self.log2_strict_with($crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Base-10 logarithm. Strict and correctly rounded. Panics
@@ -3140,21 +3115,11 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn log10_strict(self) -> Self {
-                let raw = self.to_bits();
-                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    panic!(concat!(
-                        stringify!($Type),
-                        "::log10: argument must be positive"
-                    ));
-                }
-                let w = SCALE + $core::GUARD;
-                // Two-core: composition runs on the wide `Wagm` work int.
-                let r = $core::div_agm(
-                    $core::ln_fixed_routed_agm::<SCALE>($core::to_work_agm(raw), w),
-                    $core::ln10_cf_agm::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
-                    w,
-                );
-                Self::from_bits($core::round_to_storage_agm(r, w, SCALE))
+                // Delegate to the mode-aware sibling at the default rounding
+                // mode (the exp2 pattern): ONE kernel for both public entries —
+                // the former inline no-mode composition was a second,
+                // single-shot implementation the `_with` path did not share.
+                self.log10_strict_with($crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// `e^self`. Strict and correctly rounded. Panics if the
@@ -3204,62 +3169,11 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn powf_strict(self, exp: Self) -> Self {
-                let raw = self.to_bits();
-                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    return Self::ZERO;
-                }
-                // Exact integer-power pin: for an exact integer base and
-                // exponent, `base^n` is an exact rational whose correctly-
-                // rounded value comes from integer arithmetic alone. The pin
-                // divides `10^SCALE` by the INTEGER `base^|n|` directly, so a
-                // negative-exponent reciprocal is exact even when the scaled
-                // `base^|n|·10^SCALE` overflows storage (the case the old
-                // `checked_pow` fast path deferred to the to-nearest
-                // composition, mis-rounding directed modes by 1 LSB). `None`
-                // (fractional base/exponent, or a positive power out of range)
-                // defers to the composition below, which panics uniformly.
-                if let ::core::option::Option::Some(v) =
-                    $crate::algos::pow::powi_exact::powi_exact_pin::<$Storage, SCALE>(
-                        raw,
-                        exp.to_bits(),
-                        <$Storage>::MAX,
-                        $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                    )
-                {
-                    return Self::from_bits(v);
-                }
-                // Fractional-base integer-exponent fast path: the pin handles
-                // integer bases only, but a terminating-decimal base to a small
-                // integer power is still EXACT whenever every chain step
-                // divides out `10^SCALE` (`2.5^2 = 6.25`); a negative exponent
-                // feeds the exact chain through one correctly-rounded division
-                // (correct even for a non-terminating reciprocal). Overflow or
-                // inexact chains defer to the guarded composition.
-                if let ::core::option::Option::Some(n) =
-                    $crate::algos::pow::powi_exact::exp_as_small_int_raw::<$Storage, SCALE>(
-                        exp.to_bits(),
-                    )
-                {
-                    if n == 0 {
-                        return Self::ONE;
-                    }
-                    if let ::core::option::Option::Some(v) =
-                        $crate::algos::pow::powi_exact::powi_terminating_pin::<$Storage, SCALE>(
-                            raw,
-                            n,
-                            <$Storage>::MAX,
-                            $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                        )
-                    {
-                        return Self::from_bits(v);
-                    }
-                }
-                let w = SCALE + $core::GUARD;
-                // Two-core: composition runs on the wide `Wagm` work int.
-                let ln_x = $core::ln_fixed_routed_agm::<SCALE>($core::to_work_agm(raw), w);
-                let y = $core::to_work_agm(exp.to_bits());
-                let r = $core::exp_fixed_routed_agm::<SCALE>($core::mul_agm(y, ln_x, w), w);
-                Self::from_bits($core::round_to_storage_agm(r, w, SCALE))
+                // Delegate to the mode-aware sibling at the default rounding
+                // mode (the exp2 pattern): ONE kernel for both public entries —
+                // the former inline no-mode composition was a second,
+                // single-shot implementation the `_with` path did not share.
+                self.powf_strict_with(exp, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Sine of `self` (radians). Strict and correctly rounded.

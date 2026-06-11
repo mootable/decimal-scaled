@@ -551,7 +551,6 @@ pub(crate) mod inverse_rung {
 #[cfg(feature = "_wide-support")]
 #[inline]
 fn hyper_band_in_range<const N: usize, const SCALE: u32>(raw: &crate::int::types::Int<N>) -> bool {
-    use crate::int::types::traits::BigInt as _;
     let zero = crate::int::types::Int::<N>::ZERO;
     let a = if *raw < zero { zero - *raw } else { *raw };
     a <= crate::int::types::Int::<N>::from_i128(2)
