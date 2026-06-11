@@ -1068,10 +1068,6 @@ where
         let m = if v < <S as BigInt>::ZERO { -v } else { v };
         <S as BigInt>::BITS - m.leading_zeros()
     };
-    let round_to_storage_with = |v: S, w: u32, t: u32, m: RoundingMode| -> St {
-        round_to_storage_with_g::<St, S>(v, w, t, m, st_max, st_min)
-    };
-
     let floor = pow10(ZIV_RESOLVE_FLOOR_POW10);
     if is_nearest_mode(mode) {
         // Round to nearest at a working scale `target + guard`, reporting the
@@ -1082,24 +1078,50 @@ where
         // just past an exact half). While `dist_half` sits inside the floor the
         // residual is the kernel's own working-scale rounding noise, not a real
         // deciding digit, so the narrowing is a Table-Maker's-Dilemma tie.
-        let mut nearest_narrow = |guard: u32| -> (St, S) {
-            let w = target + guard;
+        // ONE `div_rem` per narrowing: the quotient + remainder of the same
+        // division yield BOTH the correctly-rounded value (the standard
+        // `r` vs `m − r` comparison through `should_bump`, exactly
+        // [`round_mag_with_mode`]'s rule — bit-identical to routing through
+        // `round_to_storage_with`) AND the `dist_half` tie distance. The
+        // previous shape divided twice (once inside `round_to_storage_with`,
+        // once for the remainder) plus a divide-by-two for `half` — measured
+        // at >50% of a wide `sin(0)` call (the bbc trig-s0 cluster).
+        let mut nearest_narrow = |guard: u32| -> (St, S, S) {
             let v = recompute(guard);
-            let narrowed = round_to_storage_with(v, w, target, mode);
-            let mag = if v < lit(0) { -v } else { v };
+            let neg = v < lit(0);
+            let mag = if neg { -v } else { v };
             let divisor = pow10(guard);
-            let rem = mag.div_rem(divisor).1;
+            let (q, rem) = mag.div_rem(divisor);
+            let q_mag = if rem != lit(0) {
+                let comp = divisor - rem;
+                let bump = crate::support::rounding::should_bump(
+                    mode,
+                    rem.cmp(&comp),
+                    q.bit(0),
+                    !neg,
+                );
+                if bump { q + lit(1) } else { q }
+            } else {
+                q
+            };
+            let signed = if neg { -q_mag } else { q_mag };
+            let max_w = BigInt::resize_to::<S>(st_max);
+            let min_w = BigInt::resize_to::<S>(st_min);
+            if signed > max_w || signed < min_w {
+                panic!("wide-tier strict transcendental: result out of range");
+            }
+            let narrowed = BigInt::resize_to::<St>(signed);
             let half = divisor / lit(2);
             let dist_half = if rem < half { half - rem } else { rem - half };
-            (narrowed, dist_half)
+            (narrowed, dist_half, divisor)
         };
-        let (lo, dist0) = nearest_narrow(base_guard);
+        let (lo, dist0, divisor0) = nearest_narrow(base_guard);
         // Ordinary input — residual clear of the half boundary by more than the
         // (generous) `divisor/1000` near-tie band — keep the single base
         // narrowing (bit-identical to the prior single-shot path). The escalate
         // trigger stays the wide band; the absolute `floor` below is only the
         // STOP test (signal vs noise), not the escalate trigger.
-        if !force_confirm && dist0 > pow10(base_guard) / lit(1000) {
+        if !force_confirm && dist0 > divisor0 / lit(1000) {
             return lo;
         }
         let int_digits = {
@@ -1128,7 +1150,7 @@ where
             }
             let step = (target + base_guard).max(base_guard);
             let next_guard = guard.saturating_add(step).min(max_guard);
-            let (hi, hi_dist) = nearest_narrow(next_guard);
+            let (hi, hi_dist, _) = nearest_narrow(next_guard);
             if force_confirm {
                 if hi == best {
                     return best;

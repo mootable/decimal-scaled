@@ -371,6 +371,12 @@ path = "benches/micro/int_ops_micro.rs"
 harness = false
 required-features = ["wide"]
 
+[[bench]]
+name = "wide_round_shell"
+path = "benches/micro/wide_round_shell.rs"
+harness = false
+required-features = ["wide", "x-wide"]
+
 # Decimal / fixed-point backend comparison: native `D38` / `D76` vs
 # `bnum`-backed `D76`, `rust_decimal`, and `fixed` — arithmetic and
 # transcendentals (including the fast vs strict variants). Needs the
