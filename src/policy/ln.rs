@@ -58,17 +58,21 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // (N, SCALE) cell across {0, S/4, S/2, 3S/4, S-1} for every wide
         // tier, with zero validity failures. So Tang owns the whole range
         // at every tier — narrow-wide AND wide — not just point ranges
-        // snapped to benchmarked cells (the prior Class-I gate shape). The narrow
-        // tiers exclude SCALE=0 because the narrow-wide validation
-        // (`ln_series_tang_ab`) was only run for SCALE >= 1.
+        // snapped to benchmarked cells (the prior Class-I gate shape).
+        // SCALE = 0 is included at every tier: the historic s0 exclusion at
+        // N = 3/6/8 was a validation-coverage gap (`ln_series_tang_ab` had
+        // only been run for SCALE >= 1), not a validity wall — it left the
+        // s0 cells on the Series kernel the same map shows Tang beating at
+        // every neighbouring scale (the bbc ln D115<0>/D153<0> regressions).
+        // The golden gate covers the s0 band edge at these widths.
         #[cfg(any(feature = "d57", feature = "wide"))]
-        (3, 1..=56) => Select::ByAlgorithm(Algorithm::Tang),
+        (3, 0..=56) => Select::ByAlgorithm(Algorithm::Tang),
         #[cfg(any(feature = "d76", feature = "wide"))]
         (4, 0..=75) => Select::ByAlgorithm(Algorithm::Tang),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        (6, 1..=114) => Select::ByAlgorithm(Algorithm::Tang),
+        (6, 0..=114) => Select::ByAlgorithm(Algorithm::Tang),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        (8, 1..=152) => Select::ByAlgorithm(Algorithm::Tang),
+        (8, 0..=152) => Select::ByAlgorithm(Algorithm::Tang),
         #[cfg(any(feature = "d230", feature = "wide"))]
         (12, 0..=229) => Select::ByAlgorithm(Algorithm::Tang),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
