@@ -11,7 +11,11 @@ name: "🕰 history gates (advisory)"
 # Own workflow, ADVISORY, like golden-comprehensive: the pinned historical
 # crates are heavy per-tier-era compiles the quick ci.yml gate must never
 # pay, and a red ratchet means roll back / bisect, not block the merge loop.
-# Striped over GOLDEN_STRIPE (the gates honour every GOLDEN_* filter).
+#
+# Compile ONCE, then fan out (the golden-quick/bbc pattern): the build job
+# compiles the history test exe and stages JUST the binary; each stripe
+# downloads it and runs its `GOLDEN_STRIPE=k/n` row partition directly —
+# no per-stripe recompile of the heavy historical crates.
 
 on:
   push:
@@ -24,7 +28,7 @@ permissions:
   contents: read
 
 env:
-  STRIPE_COUNT: "4"
+  STRIPE_COUNT: "20"
 
 concurrency:
   # Serial queue per ref, like ci.yml/bbc: an in-progress run finishes, a
@@ -44,15 +48,10 @@ jobs:
         id: gen
         run: echo "stripes=$(python3 -c "import json, os; print(json.dumps(list(range(int(os.environ['STRIPE_COUNT'])))))")" >> "$GITHUB_OUTPUT"
 
-  history:
-    name: history (stripe ${{ matrix.stripe }})
-    needs: plan
+  build:
+    name: build
     runs-on: ubuntu-latest
-    timeout-minutes: 150
-    strategy:
-      fail-fast: false
-      matrix:
-        stripe: ${{ fromJSON(needs.plan.outputs.stripes) }}
+    timeout-minutes: 90
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -60,15 +59,67 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+      - name: Cache cargo registry
+        uses: actions/cache@v4
         with:
-          shared-key: history-gates
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-history-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'decimal-scale-test/Cargo.toml') }}
+          restore-keys: |
+            cargo-history-${{ runner.os }}-
 
-      - name: History gates (ratchet + shootout), stripe ${{ matrix.stripe }}/${{ env.STRIPE_COUNT }}
+      - name: Compile the history gates (release, no run)
+        run: cargo test -p decimal-scale-test --release --features wide,x-wide,xx-wide,history --test history --no-run
+
+      - name: Stage the gate exe
+        run: |
+          set -euo pipefail
+          exe=$(ls -t target/release/deps/history-* | grep -v '\.d$' | head -1)
+          mkdir -p staged
+          cp "$exe" staged/history
+          chmod +x staged/history
+          echo "staged: $exe"
+
+      - name: Upload the gate exe
+        uses: actions/upload-artifact@v7
+        with:
+          name: history-exe
+          path: staged/
+          if-no-files-found: error
+          retention-days: 3
+
+  history:
+    name: history (stripe ${{ matrix.stripe }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: [plan, build]
+    strategy:
+      fail-fast: false
+      matrix:
+        stripe: ${{ fromJSON(needs.plan.outputs.stripes) }}
+    steps:
+      - name: Checkout (golden data)
+        uses: actions/checkout@v6
+
+      - name: Download the gate exe
+        uses: actions/download-artifact@v8
+        with:
+          name: history-exe
+
+      - name: Run stripe (ratchet + shootout)
         env:
           GOLDEN_STRIPE: "${{ matrix.stripe }}/${{ env.STRIPE_COUNT }}"
+          GOLDEN_DIR: ${{ github.workspace }}/decimal-scaled-golden/golden
+        # --test-threads=1: the two gates report per-function timing
+        # medians as a ride-along; running them concurrently on the
+        # 2-core runner would corrupt each other's medians.
+        # The awk pipe timestamps every line (slow-vs-stuck is decidable
+        # from the live log); --nocapture streams the harness's per-cell
+        # progress lines as they happen.
         run: |
-          cargo test -p decimal-scale-test --release \
-            --features wide,x-wide,xx-wide,history \
-            --test history -- --ignored --nocapture --test-threads=1
+          set -euo pipefail
+          chmod +x history
+          ./history --ignored --nocapture --test-threads=1 2>&1 \
+            | awk '{ print strftime("[%H:%M:%S]"), $0; fflush() }'
+          exit "${PIPESTATUS[0]}"
