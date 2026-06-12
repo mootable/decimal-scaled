@@ -927,6 +927,61 @@ fn exp2_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
     }
 }
 
+// Deep-underflow directed-rounding regression (golden exp.golden:4748):
+// `exp(-62.17530480440519)` ≈ 9.945e-28 (mpmath/flint-validated) is a
+// strictly positive SUB-RESOLUTION result at scales >= 14, so the
+// correctly-rounded storage value is 1 ULP under Ceiling and 0 under every
+// other mode. The directed modes escalate through the never-exact Ziv
+// walker (the residual sits inside the near-tie band at every probe
+// depth); the walker's cap-clamped deepest probe runs the generic exp
+// kernel past its internal squaring peak (`k = -90`, `w_ext = 231` in
+// `Int<24>` — the 2·w_ext-digit peak tops the sign bit), handing back a
+// NEGATIVE probe that used to be trusted as the answer — inverting
+// Ceiling to 0 and Floor to -1. The walker now returns the clean base
+// narrowing at an unresolved cap (`wide_trig_core::
+// round_to_storage_directed_impl_g`); this pins the whole band's verdict
+// at the kernel layer for every mode.
+#[cfg(test)]
+mod deep_underflow_directed {
+    use super::*;
+
+    const ALL_MODES: [RoundingMode; 6] = [
+        RoundingMode::HalfToEven,
+        RoundingMode::HalfAwayFromZero,
+        RoundingMode::HalfTowardZero,
+        RoundingMode::Ceiling,
+        RoundingMode::Floor,
+        RoundingMode::Trunc,
+    ];
+
+    /// `-62.17530480440519` lifted onto the storage grid at `scale`
+    /// (exact for every `scale >= 14`).
+    fn raw_at(scale: u32) -> i128 {
+        -6_217_530_480_440_519 * 10_i128.pow(scale - 14)
+    }
+
+    #[test]
+    fn exp_deep_underflow_rounds_correctly_all_modes() {
+        // const-generic SCALE forces a literal per scale; same band, same
+        // predicate (result magnitude strictly below the storage LSB).
+        let cells: [(u32, fn(RoundingMode) -> Option<i128>); 3] = [
+            (17, |m| exp_strict_raw::<17>(raw_at(17), m)),
+            (18, |m| exp_strict_raw::<18>(raw_at(18), m)),
+            (19, |m| exp_strict_raw::<19>(raw_at(19), m)),
+        ];
+        for (scale, run) in cells {
+            for mode in ALL_MODES {
+                let want = if mode == RoundingMode::Ceiling { 1 } else { 0 };
+                assert_eq!(
+                    run(mode),
+                    Some(want),
+                    "exp(-62.17530480440519) scale={scale} mode={mode:?}"
+                );
+            }
+        }
+    }
+}
+
 // ── Fast-path validity wall ────────────────────────────────────────
 // The narrow exp gate (`exp_with_raw` / `exp_strict_raw`) routes a cell
 // to the fast 256-bit `Fixed` path only where it is bit-identical to the
