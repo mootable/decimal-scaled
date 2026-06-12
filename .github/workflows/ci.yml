@@ -51,7 +51,15 @@ jobs:
   tests:
     name: tests (gate)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
+    env:
+      # The full-feature dev-profile compile of decimal-scale-test (the
+      # rung kernels × 13 ladder widths plus the narrow Int<24> Ziv
+      # machinery, all with debuginfo) OOMs the hosted runner at the
+      # default parallelism — the service SIGTERMs the job (exit 143,
+      # observed 2026-06-12; same class as the history.yml build fix).
+      # Two parallel rustc units keep the peak inside the runner.
+      CARGO_BUILD_JOBS: "2"
 
     steps:
       - name: Checkout
