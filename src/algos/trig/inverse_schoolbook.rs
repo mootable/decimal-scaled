@@ -416,17 +416,19 @@ fn asin_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 
 #[must_use]
 fn acos_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     use crate::types::consts::DecimalConstants;
-    // Exact endpoint identities, matching the routed `acos_strict_raw`:
-    // acos(0) = pi/2, acos(1) = 0, acos(-1) = pi -- pinned to the
-    // correctly-rounded constant so the directed modes agree bit-exactly.
-    if raw == 0 {
+    // Endpoint pins, matching the routed `acos_strict_raw`: acos(1) = 0
+    // is EXACT (pinned for every mode); acos(0) = pi/2 and acos(-1) = pi
+    // are IRRATIONAL, so their half-even-baked constants hold for the
+    // NEAREST modes only — directed modes fall through to the series +
+    // mode-aware rounding (the 2026-06-12 wrong-mode find).
+    if raw == 0 && crate::support::rounding::is_nearest_mode(mode) {
         return <crate::D<Int<2>, SCALE> as DecimalConstants>::half_pi().0.as_i128();
     }
     let one_bits: i128 = 10_i128.pow(SCALE);
     if raw == one_bits {
         return 0;
     }
-    if raw == -one_bits {
+    if raw == -one_bits && crate::support::rounding::is_nearest_mode(mode) {
         return <crate::D<Int<2>, SCALE> as DecimalConstants>::pi().0.as_i128();
     }
     let w = SCALE + STRICT_GUARD;
@@ -575,16 +577,30 @@ mod tests {
     #[test]
     fn acos_schoolbook_narrow_endpoints_are_correctly_rounded() {
         use crate::types::consts::DecimalConstants;
-        // External oracle = the mpmath-pinned DecimalConstants: acos(0) =
-        // pi/2, acos(1) = 0, acos(-1) = pi. The schoolbook returns these
-        // exactly across every mode (the constant is correctly rounded).
+        // External oracle = the mpmath-pinned DecimalConstants for the
+        // NEAREST modes (acos(0) = pi/2, acos(-1) = pi are irrational, so
+        // the half-even-baked constant is only the nearest-modes answer);
+        // acos(1) = 0 is exact in every mode. Directed modes must agree
+        // with the routed kernel's mode-aware computation bit-exactly.
         let one_bits: i128 = 10_i128.pow(S38);
         let half_pi = <D<Int<2>, S38> as DecimalConstants>::half_pi().0;
         let pi = <D<Int<2>, S38> as DecimalConstants>::pi().0;
-        for &mode in &MODES {
+        for mode in [RoundingMode::HalfToEven, RoundingMode::HalfAwayFromZero] {
             assert_eq!(acos_schoolbook_narrow::<S38>(d38(0).0, mode), half_pi);
-            assert_eq!(acos_schoolbook_narrow::<S38>(d38(one_bits).0, mode), Int::<2>::from_i128(0));
             assert_eq!(acos_schoolbook_narrow::<S38>(d38(-one_bits).0, mode), pi);
+        }
+        for &mode in &MODES {
+            assert_eq!(acos_schoolbook_narrow::<S38>(d38(one_bits).0, mode), Int::<2>::from_i128(0));
+            assert_eq!(
+                acos_schoolbook_narrow::<S38>(d38(0).0, mode),
+                d38(0).acos_strict_with(mode).0,
+                "acos(0) schoolbook != routed at mode={mode:?}"
+            );
+            assert_eq!(
+                acos_schoolbook_narrow::<S38>(d38(-one_bits).0, mode),
+                d38(-one_bits).acos_strict_with(mode).0,
+                "acos(-1) schoolbook != routed at mode={mode:?}"
+            );
         }
     }
 

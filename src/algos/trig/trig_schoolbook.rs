@@ -155,16 +155,20 @@ fn atan_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 
     if raw == 0 {
         return 0;
     }
-    // atan(1) = pi/4 exactly -- the textbook identity at the endpoints.
-    // The reduced arctan series loses a ULP precisely at |x| == 1 (its
-    // slowest-converging point), so the schoolbook takes the exact
-    // quarter-pi constant there, matching the correctly-rounded result.
+    // atan(±1) = ±pi/4 -- the endpoint pin, NEAREST MODES ONLY: the baked
+    // quarter-pi constant is rounded half-to-even (correct for both
+    // nearest modes; an exact half-tie is impossible for an irrational),
+    // while a directed mode needs the directed digits, so it falls
+    // through to the series + mode-aware rounding (matching the routed
+    // `atan_strict_raw`; the 2026-06-12 wrong-mode find).
     let one_bits: i128 = 10_i128.pow(SCALE);
-    if raw == one_bits {
-        return <crate::D<Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
-    }
-    if raw == -one_bits {
-        return -<crate::D<Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
+    if crate::support::rounding::is_nearest_mode(mode) {
+        if raw == one_bits {
+            return <crate::D<Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
+        }
+        if raw == -one_bits {
+            return -<crate::D<Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
+        }
     }
     let w = SCALE + STRICT_GUARD;
     atan_fixed(to_fixed(raw), w)

@@ -762,11 +762,18 @@ pub(crate) fn atan_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -
         return 0;
     }
     let one_bits: i128 = 10_i128.pow(SCALE);
-    if raw == one_bits {
-        return <crate::D<crate::int::types::Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
-    }
-    if raw == -one_bits {
-        return -<crate::D<crate::int::types::Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
+    // atan(±1) = ±π/4: the baked constant is rounded HALF-TO-EVEN, so the
+    // pin is correct only for the nearest modes (an exact half-tie is
+    // impossible for an irrational, so half-away agrees). Directed modes
+    // fall through to the guarded computation + mode-aware rounding (the
+    // six-mode comprehensive gate's wrong-mode find, 2026-06-12).
+    if is_nearest_mode(mode) {
+        if raw == one_bits {
+            return <crate::D<crate::int::types::Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
+        }
+        if raw == -one_bits {
+            return -<crate::D<crate::int::types::Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
+        }
     }
     if raw.abs() <= small_x_linear_threshold::<SCALE>() && is_nearest_mode(mode) {
         return raw;
@@ -791,11 +798,14 @@ pub(crate) fn atan_with_raw<const SCALE: u32>(
         return 0;
     }
     let one_bits: i128 = 10_i128.pow(SCALE);
-    if raw == one_bits {
-        return <crate::D<crate::int::types::Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
-    }
-    if raw == -one_bits {
-        return -<crate::D<crate::int::types::Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
+    // atan(±1) pin: nearest modes only — see `atan_strict_raw`.
+    if is_nearest_mode(mode) {
+        if raw == one_bits {
+            return <crate::D<crate::int::types::Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
+        }
+        if raw == -one_bits {
+            return -<crate::D<crate::int::types::Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
+        }
     }
     if raw.abs() <= small_x_linear_threshold::<SCALE>() && is_nearest_mode(mode) {
         return raw;
@@ -920,14 +930,18 @@ pub(crate) fn asin_with_raw<const SCALE: u32>(
 #[inline]
 #[must_use]
 pub(crate) fn acos_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
-    if raw == 0 {
+    // acos(0) = π/2 and acos(−1) = π are IRRATIONAL: the baked constants
+    // are half-even-rounded, so those pins hold for nearest modes only;
+    // directed modes fall through to the mode-aware computation.
+    // acos(1) = 0 is EXACT — mode-independent, pinned for every mode.
+    if raw == 0 && is_nearest_mode(mode) {
         return <crate::D<crate::int::types::Int<2>, SCALE> as DecimalConstants>::half_pi().0.as_i128();
     }
     let one_bits: i128 = 10_i128.pow(SCALE);
     if raw == one_bits {
         return 0;
     }
-    if raw == -one_bits {
+    if raw == -one_bits && is_nearest_mode(mode) {
         return <crate::D<crate::int::types::Int<2>, SCALE> as DecimalConstants>::pi().0.as_i128();
     }
     let w = SCALE + STRICT_GUARD;
@@ -981,14 +995,15 @@ pub(crate) fn acos_with_raw<const SCALE: u32>(
     working_digits: u32,
     mode: RoundingMode,
 ) -> i128 {
-    if raw == 0 {
+    // acos endpoint pins: nearest modes only — see `acos_strict_raw`.
+    if raw == 0 && is_nearest_mode(mode) {
         return <crate::D<crate::int::types::Int<2>, SCALE> as DecimalConstants>::half_pi().0.as_i128();
     }
     let one_bits: i128 = 10_i128.pow(SCALE);
     if raw == one_bits {
         return 0;
     }
-    if raw == -one_bits {
+    if raw == -one_bits && is_nearest_mode(mode) {
         return <crate::D<crate::int::types::Int<2>, SCALE> as DecimalConstants>::pi().0.as_i128();
     }
     let w = SCALE + working_digits;
