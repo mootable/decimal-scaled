@@ -618,6 +618,20 @@ use crate::support::rounding::RoundingMode;
         crate::int::types::traits::BigInt::to_i128(qi)
     }
 
+    /// Number of repeated-squaring levels the [`try_exp_fixed`] Taylor core
+    /// runs at working scale `w_ext`: the largest `n ≥ 1` with
+    /// `(n+1)² ≤ p_bits` for `p_bits = 3·w_ext + 1` (so `n ≈ √(3·w_ext)`).
+    /// Shared by the body and the `k < 0` internal-peak clamp, which must
+    /// evaluate the chain depth at the CLAMPED width.
+    fn squaring_levels(w_ext: u32) -> u32 {
+        let p_bits = w_ext.saturating_mul(3).saturating_add(1);
+        let mut n: u32 = 1;
+        while (n + 1) * (n + 1) <= p_bits {
+            n += 1;
+        }
+        n
+    }
+
     /// The pure peak model for an ALREADY-computed range-reduction `k` —
     /// the divide-free tail of [`exp_internal_peak_bits`], shared with
     /// [`try_exp_fixed`] (which holds `k` from its own exact-scratch
@@ -711,12 +725,17 @@ use crate::support::rounding::RoundingMode;
 
     /// Option-returning core of [`exp_fixed`] — the `checked_` seam's
     /// primitive. `None` means the internal squaring / `2^k`-reassembly
-    /// peak provably exceeds the work integer `S`'s capacity, i.e. the
-    /// result is out of range for any storage `S` serves at scale `w`:
-    /// the seamed narrow kernels propagate it (their policy dispatch
-    /// wrapper applies the default form's contractual panic), while
-    /// [`exp_fixed`] panics directly for the unseamed callers — one
-    /// detection, each wrapper applies its policy.
+    /// peak provably exceeds the work integer `S`'s capacity: for `k ≥ 0`
+    /// the result itself is out of range for any storage `S` serves at
+    /// scale `w`; for `k < 0` (where the result is small but the
+    /// working-precision lift peaks just as high) it means even the
+    /// capacity-clamped working precision cannot deliver the digits the
+    /// caller needs — either way the value cannot be computed in `S`
+    /// without wrapping, and `None` is the explicit signal in place of a
+    /// silently wrapped value. The seamed narrow kernels propagate it
+    /// (their policy dispatch wrapper applies the default form's
+    /// contractual panic), while [`exp_fixed`] panics directly for the
+    /// unseamed callers — one detection, each wrapper applies its policy.
     pub(crate) fn try_exp_fixed<S: BigInt>(v_w: S, w: u32) -> Option<S>
     where
         S::Scratch: ComputeLimbs,
@@ -784,6 +803,83 @@ use crate::support::rounding::RoundingMode;
             capped + 12 + (capped >> 2)
         };
 
+        // `k < 0` internal-peak clamp. The `k >= 0` gate above does not cover
+        // the negative-`k` band, yet the squaring chain's peak grows with
+        // `w_ext = w + extra` REGARDLESS of `k`'s sign: every squaring forms
+        // the full symmetric product `sum²` (`wrapping_sqr_low_u128`) BEFORE
+        // its `÷10^w_ext`, and `sum` reaches up to `√2·10^w_ext`
+        // (`e^(ln2/2)`, `s` at the range-reduction band edge), so the peak
+        // intermediate reaches `2·10^(2·w_ext)`. For a deep-negative `k` the
+        // un-clamped `extra ≈ 1.25·|k|·log10(2) + 12` pushes that peak past
+        // `S`'s capacity and the low-bits square WRAPS — `S`'s sign bit sets
+        // and a NEGATIVE "e^x" is handed back (the exp(-62.175)·10^184
+        // Int<24> instance: `k = -90`, `extra = 47`, `w_ext = 231`,
+        // `e^s·10^462 = 1.0219·2^1535`). Bound the peak and clamp `extra` so
+        // it provably fits; the clamp only ENGAGES where the un-clamped path
+        // is past the provable-fit line, so every cell that fits today keeps
+        // its bit-identical path.
+        //
+        // Capacity bound (sufficient no-wrap condition): the chain's largest
+        // intermediate is `sum² < 2·10^(2·w_ext)·(1+ε)` with
+        // `ε ≤ 2^(n+1)·(T+2)·10^-w_ext ≪ 2^-30` (the chain's accumulated
+        // relative error, see the precision floor below), and the signed `S`
+        // holds magnitudes below `2^(BITS-1)`. So it suffices that
+        //   bits(2.0…·10^(2·w_ext)) ≤ 2·w_ext·log2(10) + 2  ≤  BITS − 2.
+        // With the rational over-approximation log2(10) < 3322/1000 this is
+        // implied by the integer condition
+        //   w_ext · 6644 ≤ (BITS − 4) · 1000,
+        // i.e. `w_ext ≤ W_EXT_CAP = (BITS − 4)·1000 / 6644` (floor). For
+        // Int<24> (BITS = 1536): W_EXT_CAP = 230 — worst-case peak
+        // `2·10^460 = 0.0166·2^1535` (fits), while the defect instance's
+        // `w_ext = 231` reaches `1.0219·2^1535` (wraps). Every other
+        // intermediate is strictly smaller: `|v_ext| ≤ (|k|+1)·ln2·10^w_ext`
+        // (bits ≈ log2|k| + w_ext·3.33 ≪ 2·w_ext·3.32), the `k·ln2` term is
+        // the same size, and each Taylor `term·s_red` product is bounded by
+        // `sum²`'s width.
+        //
+        // Precision floor (the clamp must not degrade correctness): with the
+        // clamped `extra_c` the kernel's absolute error at the caller's scale
+        // `w`, in units of `10^-w`, is bounded by
+        //   err ≤ [√2·(2^n·(T+2) + |k|/2) · 2^-|k| + 1] · 10^-extra_c + 0.5
+        // where `n = squaring_levels(w + extra_c)` (each squaring doubles the
+        // chain's relative error and adds a half-unit rounding), `T ≤ 1.2·n+4`
+        // is the Taylor term count (so `√2·(2^n·(T+2) + |k|/2) ≤ 2^(n+10)`,
+        // using `|k| < 2^15` from the `Fits` pre-gate + `k < -1`
+        // short-circuit), and the `2^-|k|` attenuation is the `sum >> |k|`
+        // down-shift every `k < 0` reassembly applies — a deep-negative `k`
+        // shrinks the chain noise by exactly the factor the result shrinks.
+        // The `+1` is the shift-truncation unit and `0.5` the final rounded
+        // `÷10^extra_c`. So `err ≤ 1` once
+        //   extra_c ≥ ceil( max(0, n + 10 − |k|) · log10(2) ) + 1
+        // (`10^(0.30103·b) ≥ 2^b`). A clamped cell that cannot meet this
+        // floor genuinely needs more precision than `S` can hold at this `w`
+        // — return the explicit `None` (the try_* contract's insufficient /
+        // out-of-range signal), NEVER a silently wrapped value. At the
+        // established instance (w = 184, |k| = 90): extra_c = 230 − 184 = 46,
+        // n = squaring_levels(230) = 26, deficit = max(0, 36 − 90) = 0,
+        // floor = 1 ≤ 46 — the clamp delivers with margin.
+        let extra: u32 = if k >= 0 {
+            extra
+        } else {
+            let w_ext_cap = ((<S as BigInt>::BITS as u64 - 4) * 1000 / 6644) as u32;
+            if (w as u64) + (extra as u64) <= w_ext_cap as u64 {
+                // Peak provably fits — the unchanged, bit-identical path.
+                extra
+            } else {
+                let extra_c = w_ext_cap.saturating_sub(w);
+                let n_c = squaring_levels(w + extra_c) as u64;
+                // `|k|` is far below u64 here (`Fits` bounds it to order
+                // BITS); the `min` only keeps the cast total.
+                let abs_k_u64 = abs_k_u128.min(u64::MAX as u128) as u64;
+                let deficit_bits = (n_c + 10).saturating_sub(abs_k_u64);
+                let floor_extra = (deficit_bits * 30103).div_ceil(100_000) as u32 + 1;
+                if extra_c < floor_extra {
+                    return None;
+                }
+                extra_c
+            }
+        };
+
         let w_ext = w + extra;
         let v_ext = if extra == 0 {
             v_w
@@ -794,11 +890,7 @@ use crate::support::rounding::RoundingMode;
         let l2 = ln2::<S>(w_ext);
         let s = v_ext - scale_by_k(l2, k);
 
-        let p_bits = w_ext.saturating_mul(3).saturating_add(1);
-        let mut n: u32 = 1;
-        while (n + 1) * (n + 1) <= p_bits {
-            n += 1;
-        }
+        let n = squaring_levels(w_ext);
 
         let s_red = s >> n;
         let mut sum = one_w + s_red;
@@ -980,6 +1072,40 @@ use crate::support::rounding::RoundingMode;
 mod tests {
     use super::*;
     use crate::int::types::Int;
+
+    /// Regression: the `k < 0` internal-peak wrap (2026-06-13). A
+    /// deep-negative argument at a deep (cap-clamped Ziv probe) working
+    /// scale — `exp(-62.175)` at `w = 184` in `Int<24>` (the narrow tiers'
+    /// `WZiv`, 1536 bits) — range-reduces to `k = -90`, provisioning
+    /// `extra = 47`, `w_ext = 231`; the final squaring then forms
+    /// `e^s·10^462 = 1.0219·2^1535`, past the sign bit, and the un-guarded
+    /// kernel handed back a WRAPPED, NEGATIVE "e^x" (≈ -9.5e156 for a true
+    /// value of +9.948e156). The `k < 0` clamp caps `w_ext` at the
+    /// provable-fit line (230 for Int<24>) instead. Asserts the guard
+    /// delivers the true value — positive AND correct to well past the
+    /// margin a wrapped or precision-starved value could fake:
+    /// e^-62.175 · 10^184 = 9.94811020348122892…e156 (mpmath, 250 dps).
+    #[test]
+    fn exp_fixed_k_negative_internal_peak_clamped_int24() {
+        // v = -62.175 · 10^184 = -62175 · 10^181
+        let w: u32 = 184;
+        let v = lit::<Int<24>>(-62175) * pow10::<Int<24>>(181);
+        let r = try_exp_fixed::<Int<24>>(v, w)
+            .expect("in-range e^-62.175 at w=184 must not signal out-of-range");
+        assert!(
+            r > zero::<Int<24>>(),
+            "e^-62.175 must be strictly positive (a negative value is the wrap)"
+        );
+        // Tight oracle window: 9948110203481228920 · 10^138 < r·10^-184·10^184
+        // < 9948110203481228921 · 10^138 (19 leading digits of the mpmath
+        // value) — far beyond what the clamped precision could miss.
+        let lo = lit::<Int<24>>(9_948_110_203_481_228_920) * pow10::<Int<24>>(138);
+        let hi = lit::<Int<24>>(9_948_110_203_481_228_921) * pow10::<Int<24>>(138);
+        assert!(
+            r > lo && r < hi,
+            "e^-62.175 · 10^184 outside its 19-digit oracle window"
+        );
+    }
 
     /// Defect-B regression (2026-06-12): a deep-negative `exp_fixed` at a
     /// working scale `w ≥ 200` in D115's `Wexp = Int<64>` panicked on
