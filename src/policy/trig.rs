@@ -3276,7 +3276,16 @@ mod forward_rung_tests {
     //! NOT pinned (policy tests stay light); the golden gate is the
     //! correctness wall.
 
-    #[cfg(feature = "d307")]
+    // Consumed by the d307, d462, and d1232 tests below (and the
+    // bench_grid_cell! invocations) — gated on the union of consuming
+    // tiers so a single-tier build of any of them compiles.
+    #[cfg(any(
+        feature = "d307",
+        feature = "d462",
+        feature = "d616",
+        feature = "d924",
+        feature = "d1232"
+    ))]
     const ALL_MODES: [crate::support::rounding::RoundingMode; 6] = [
         crate::support::rounding::RoundingMode::HalfToEven,
         crate::support::rounding::RoundingMode::HalfAwayFromZero,
