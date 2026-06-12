@@ -7,44 +7,47 @@
 //! `Value = String`, so the harness pipeline (runner → collectors → validators →
 //! reporter) monomorphises ONCE rather than once per concrete `D<SCALE>` cell. The
 //! per-cell concrete work — parse, compute, format, and the storage envelope — is
-//! reached through a `(width, scale)` match (`cells!`) that fans out to the concrete
-//! decimal type only at the two leaf functions ([`compute`], `limits`). The subject
-//! lives here (not in a test) so the full-surface gate, the single-cell proof, and
-//! `golden-competitors` all share it. [`Filter`] reads the `GOLDEN_*` env vars so a
-//! `cargo test` run can target just the cells / modes / functions under investigation.
+//! the `decimal-scaled-cells` crate's `(width, scale)` fan-out (`cells!`), which
+//! this subject reaches through its two concrete, non-generic shim entry points
+//! (`dispatch_compute` / `dispatch_limits`). That placement is deliberate: the
+//! fan-out's heavy monomorphisations compile ONCE in the cells leaf rlib instead
+//! of once per consuming target (this lib's rlib AND its unit-test harness used
+//! to pay the full bill each). The subject lives here (not in a test) so the
+//! full-surface gate, the single-cell proof, and `golden-competitors` all share
+//! it. [`Filter`] reads the `GOLDEN_*` env vars so a `cargo test` run can target
+//! just the cells / modes / functions under investigation.
 
-// The subject dispatch fans out per tier behind that tier's feature, so the
-// crate compiles at ANY feature set: a default (narrow) build carries the
-// D18/D38 cells and the golden gate sweeps just those; wider builds add
-// their tiers' cells. `Filter::cells()` drops cells whose tier is not
-// compiled, so CELLS itself stays the full grid as data.
+// The cells fan-out is per-tier feature-gated (this crate forwards each tier
+// feature to decimal-scaled-cells), so the crate compiles at ANY feature set:
+// a default (narrow) build carries the D18/D38 cells and the golden gate
+// sweeps just those; wider builds add their tiers' cells. `Filter::cells()`
+// drops cells whose tier is not compiled, so CELLS itself stays the full grid
+// as data.
 
 // Historical-release subjects for the version-history gates (tests/history.rs);
-// each pinned release compiles only behind its `history-*` feature.
+// relocated to decimal-scaled-cells (the same compile-once placement), each
+// pinned release compiling only behind its `history-*` feature.
 #[cfg(any(feature = "history-044", feature = "history-033"))]
-pub mod history;
+pub use decimal_scaled_cells::history;
 
 use std::collections::BTreeMap;
 
-use decimal_scaled::{DecimalArithmetic, DecimalTranscendental, RoundingMode as DsMode};
+use decimal_scaled::RoundingMode as DsMode;
 use decimal_scaled_golden::{
     Capabilities, Computed, DecimalSubject, FnSupport, Function, Limits, Overflow, Radix,
     RoundingMode,
 };
 
+// The cell-shim surface this crate's subjects and consumers were built on:
+// the full band-edge grid (`CELLS` + `tier_compiled`), the function list, and
+// the typed op bridge (`compute` + `DsOps`) — re-exported so existing
+// consumers (golden-competitors, the history gates) keep their import paths.
+pub use decimal_scaled_cells::{compute, tier_compiled, DsOps, CELLS, FUNCS};
+
 /// Generation precision / rounding guard of the golden set (the file `#` header
 /// carries the authoritative values; these mirror them for the validators).
 pub const GEN_PRECISION: usize = 1233;
 pub const GUARD: usize = 2;
-
-/// Every function the golden set covers (a missing file just contributes no cases).
-pub const FUNCS: &[Function] = &[
-    Function::Sqrt, Function::Cbrt, Function::Exp, Function::Ln, Function::Log2, Function::Log10,
-    Function::Exp2, Function::Sin, Function::Cos, Function::Tan, Function::Atan, Function::Asin,
-    Function::Acos, Function::Sinh, Function::Cosh, Function::Tanh, Function::Asinh, Function::Acosh,
-    Function::Atanh, Function::Log, Function::Atan2, Function::Powf, Function::Hypot, Function::Add,
-    Function::Sub, Function::Mul, Function::Div, Function::Rem,
-];
 
 /// Every rounding mode, in report order — directed rounding (Ceiling/Floor/Trunc) is
 /// swept alongside the three nearest modes, since a fixed-width decimal rounds its
@@ -82,212 +85,6 @@ pub fn ds_mode(m: RoundingMode) -> DsMode {
         RoundingMode::Floor => DsMode::Floor,
         RoundingMode::Trunc => DsMode::Trunc,
     }
-}
-
-/// Inherent rounded mul/div aren't on a width-generic trait, so bridge them
-/// locally — one delegating impl per width, scale-generic.
-pub trait DsOps: Sized {
-    fn ds_mul_with(self, o: Self, m: DsMode) -> Self;
-    fn ds_div_with(self, o: Self, m: DsMode) -> Self;
-}
-macro_rules! impl_ds_ops {
-    ($( $(#[$cfg:meta])* $D:ident ),+ $(,)?) => { $(
-        $(#[$cfg])*
-        impl<const S: u32> DsOps for decimal_scaled::$D<S> {
-            fn ds_mul_with(self, o: Self, m: DsMode) -> Self { self.mul_with(o, m) }
-            fn ds_div_with(self, o: Self, m: DsMode) -> Self { self.div_with(o, m) }
-        }
-    )+ };
-}
-impl_ds_ops!(
-    D18, D38,
-    #[cfg(feature = "d57")] D57,
-    #[cfg(feature = "d76")] D76,
-    #[cfg(feature = "d115")] D115,
-    #[cfg(feature = "d153")] D153,
-    #[cfg(feature = "d230")] D230,
-    #[cfg(feature = "d307")] D307,
-    #[cfg(feature = "d462")] D462,
-    #[cfg(feature = "d616")] D616,
-    #[cfg(feature = "d924")] D924,
-    #[cfg(feature = "d1232")] D1232,
-);
-
-/// The op only (after parse, before format). `d2` is the second operand for binary
-/// functions; a missing one is a golden-data fault and panics (the harness records it).
-pub fn compute<D>(func: Function, x: D, d2: Option<D>, m: DsMode) -> D
-where
-    D: DecimalArithmetic + DecimalTranscendental + DsOps + Copy,
-{
-    let bin = || d2.expect("binary function needs two operands");
-    match func {
-        Function::Sqrt => x.sqrt_strict_with(m),
-        Function::Cbrt => x.cbrt_strict_with(m),
-        Function::Exp => x.exp_strict_with(m),
-        Function::Ln => x.ln_strict_with(m),
-        Function::Log2 => x.log2_strict_with(m),
-        Function::Log10 => x.log10_strict_with(m),
-        Function::Exp2 => x.exp2_strict_with(m),
-        Function::Sin => x.sin_strict_with(m),
-        Function::Cos => x.cos_strict_with(m),
-        Function::Tan => x.tan_strict_with(m),
-        Function::Atan => x.atan_strict_with(m),
-        Function::Asin => x.asin_strict_with(m),
-        Function::Acos => x.acos_strict_with(m),
-        Function::Sinh => x.sinh_strict_with(m),
-        Function::Cosh => x.cosh_strict_with(m),
-        Function::Tanh => x.tanh_strict_with(m),
-        Function::Asinh => x.asinh_strict_with(m),
-        Function::Acosh => x.acosh_strict_with(m),
-        Function::Atanh => x.atanh_strict_with(m),
-        Function::Log => x.log_strict_with(bin(), m),
-        Function::Atan2 => x.atan2_strict_with(bin(), m),
-        Function::Powf => x.powf_strict_with(bin(), m),
-        Function::Hypot => x.hypot_strict_with(bin(), m),
-        Function::Add => x + bin(),
-        Function::Sub => x - bin(),
-        Function::Mul => x.ds_mul_with(bin(), m),
-        Function::Div => x.ds_div_with(bin(), m),
-        Function::Rem => x % bin(),
-    }
-}
-
-/// Parse → compute → format at one concrete decimal type `D`. The strict op panics on
-/// an out-of-range result; the harness catches that as `Computed::Panic` and judges it
-/// against the cell's range. Parse of a harness-vetted (representable) input cannot
-/// fail; a failure is a golden-data fault and panics with the offending literal.
-fn compute_typed<D>(func: Function, inputs: &[String], m: DsMode) -> Computed<String>
-where
-    D: DecimalArithmetic
-        + DecimalTranscendental
-        + DsOps
-        + core::str::FromStr
-        + core::fmt::Display
-        + Copy,
-{
-    let parse =
-        |s: &str| s.parse::<D>().unwrap_or_else(|_| panic!("could not parse representable input {s:?}"));
-    let x = parse(&inputs[0]);
-    let d2 = inputs.get(1).map(|s| parse(s));
-    Computed::Value(compute(func, x, d2, m).to_string())
-}
-
-/// The exact storage envelope of one concrete decimal type, in decimal — decimal-scaled's
-/// own MIN/MAX constants and its fixed fractional depth. No bit-width math leaks into the
-/// harness, and the magnitude envelope + fractional depth bound exactly what it can hold,
-/// so no separate significant-figure cap is needed.
-fn limits_typed<D>(scale: u32) -> Limits
-where
-    D: DecimalArithmetic + core::fmt::Display,
-{
-    Limits {
-        min_value: Some(<D as DecimalArithmetic>::MIN.to_string()),
-        max_value: Some(<D as DecimalArithmetic>::MAX.to_string()),
-        max_precision: scale,
-        max_significant_digits: None,
-    }
-}
-
-/// Enumerate the band-edge `(width, scale)` cells and fan the two leaf operations out
-/// to the concrete decimal type for each. `CELLS` is the public cell list; the two
-/// dispatch fns are the erased subject's only bridge to a concrete `D<SCALE>`.
-macro_rules! cells {
-    ($( $(#[$cfg:meta])* $D:ident => $w:literal { $($s:literal),+ $(,)? } );+ $(;)?) => {
-        /// Every band-edge `(width, scale)` cell of the full-surface grid — pure DATA,
-        /// present in every build. Whether a cell is RUNNABLE in this build is
-        /// [`tier_compiled`]; [`Filter::cells`] applies it, so a narrow build sweeps
-        /// the D18/D38 cells and wider builds add their tiers.
-        pub const CELLS: &[(u32, u32)] = &[ $( $( ($w, $s), )+ )+ ];
-
-        /// Is this width's decimal tier compiled into the current build?
-        pub const fn tier_compiled(width: u32) -> bool {
-            match width {
-                $( $(#[$cfg])* $w => true, )+
-                _ => false,
-            }
-        }
-
-        /// Per-tier dispatch leaves: one `cfg`-gated child module per tier (the
-        /// scale match inside needs no gating — the whole module vanishes with
-        /// its feature), and a width match with one arm per tier.
-        mod tier_dispatch {
-            $(
-                $(#[$cfg])*
-                #[allow(non_snake_case)]
-                pub mod $D {
-                    use decimal_scaled_golden::{Computed, Function, Limits};
-                    use decimal_scaled::RoundingMode as DsMode;
-                    pub fn compute(
-                        scale: u32, func: Function, inputs: &[String], m: DsMode,
-                    ) -> Computed<String> {
-                        match scale {
-                            $( $s => crate::compute_typed::<decimal_scaled::$D<$s>>(func, inputs, m), )+
-                            _ => panic!("no decimal-scaled cell for (width={}, scale={scale})", $w),
-                        }
-                    }
-                    pub fn limits(scale: u32) -> Limits {
-                        match scale {
-                            $( $s => crate::limits_typed::<decimal_scaled::$D<$s>>($s), )+
-                            _ => panic!("no decimal-scaled cell for (width={}, scale={scale})", $w),
-                        }
-                    }
-                }
-            )+
-        }
-
-        fn dispatch_compute(
-            width: u32, scale: u32, func: Function, inputs: &[String], m: DsMode,
-        ) -> Computed<String> {
-            match width {
-                $( $(#[$cfg])* $w => tier_dispatch::$D::compute(scale, func, inputs, m), )+
-                _ => panic!("no decimal-scaled cell for (width={width}, scale={scale})"),
-            }
-        }
-
-        fn dispatch_limits(width: u32, scale: u32) -> Limits {
-            match width {
-                $( $(#[$cfg])* $w => tier_dispatch::$D::limits(scale), )+
-                _ => panic!("no decimal-scaled cell for (width={width}, scale={scale})"),
-            }
-        }
-    };
-}
-
-cells! {
-    // D18 — Int<1>, 64-bit storage (always compiled)
-    D18 => 18 { 0, 3, 4, 9, 13, 17 };
-    // D38 — Int<2>, 128-bit (always compiled)
-    D38 => 38 { 0, 2, 6, 9, 10, 12, 17, 18, 19, 28, 37 };
-    // D57 — Int<3>, 192-bit
-    #[cfg(feature = "d57")]
-    D57 => 57 { 0, 14, 20, 28, 30, 42, 56 };
-    // D76 — Int<4>, 256-bit
-    #[cfg(feature = "d76")]
-    D76 => 76 { 0, 18, 19, 38, 40, 57, 75 };
-    // D115 — Int<6>, 384-bit
-    #[cfg(feature = "d115")]
-    D115 => 115 { 0, 28, 50, 57, 86, 114 };
-    // D153 — Int<8>, 512-bit
-    #[cfg(feature = "d153")]
-    D153 => 153 { 0, 38, 76, 114, 152 };
-    // D230 — Int<12>, 768-bit
-    #[cfg(feature = "d230")]
-    D230 => 230 { 0, 57, 115, 172, 229 };
-    // D307 — Int<16>, 1024-bit (s290: the ln lookup band s285-295)
-    #[cfg(feature = "d307")]
-    D307 => 307 { 0, 30, 50, 70, 76, 120, 153, 230, 290, 306 };
-    // D462 — Int<24>, 1536-bit
-    #[cfg(feature = "d462")]
-    D462 => 462 { 0, 30, 100, 115, 180, 231, 346, 461 };
-    // D616 — Int<32>, 2048-bit (s590: the ln lookup band s585-595)
-    #[cfg(feature = "d616")]
-    D616 => 616 { 0, 30, 130, 154, 240, 308, 462, 590, 615 };
-    // D924 — Int<48>, 3072-bit (s900: the ln lookup band s895-905)
-    #[cfg(feature = "d924")]
-    D924 => 924 { 0, 30, 180, 231, 350, 462, 693, 900, 923 };
-    // D1232 — Int<64>, 4096-bit (s1200: the ln lookup band s1195-1205)
-    #[cfg(feature = "d1232")]
-    D1232 => 1232 { 0, 30, 250, 308, 470, 616, 924, 1200, 1231 };
 }
 
 /// One erased decimal-scaled subject: a `(width, scale)` cell tested under one rounding
@@ -349,7 +146,7 @@ impl DecimalSubject for DsSubject {
     }
 
     fn limits(&self, _value: &str) -> Limits {
-        dispatch_limits(self.width, self.scale)
+        decimal_scaled_cells::dispatch_limits(self.width, self.scale)
     }
 
     fn execute(
@@ -361,7 +158,8 @@ impl DecimalSubject for DsSubject {
         let (width, scale, m) = (self.width, self.scale, ds_mode(mode));
         // The strict op panics on overflow; the harness catches that as
         // `Computed::Panic` (a test failure judged against the cell's range).
-        move |inputs| dispatch_compute(width, scale, func, inputs, m)
+        // The per-cell concrete work is the cells crate's compile-once shim.
+        move |inputs| decimal_scaled_cells::dispatch_compute(width, scale, func, inputs, m)
     }
 }
 
@@ -518,9 +316,12 @@ mod tests {
 
     #[test]
     fn dispatch_round_trips_a_known_cell() {
-        // sqrt(2) at D38<19> under half-to-even, via the erased dispatch: a 19-dp
-        // value on the right prefix (not pinned digit-for-digit, to stay robust).
-        let out = dispatch_compute(38, 19, Function::Sqrt, &["2".to_string()], DsMode::HalfToEven);
+        // sqrt(2) at D38<19> under half-to-even, via the erased dispatch (the
+        // cells crate's compile-once shim): a 19-dp value on the right prefix
+        // (not pinned digit-for-digit, to stay robust).
+        let out = decimal_scaled_cells::dispatch_compute(
+            38, 19, Function::Sqrt, &["2".to_string()], DsMode::HalfToEven,
+        );
         match out {
             Computed::Value(v) => {
                 assert!(v.starts_with("1.41421356237309"), "got {v}");
@@ -532,7 +333,7 @@ mod tests {
 
     #[test]
     fn limits_report_the_concrete_envelope() {
-        let lim = dispatch_limits(38, 19);
+        let lim = decimal_scaled_cells::dispatch_limits(38, 19);
         assert_eq!(lim.max_precision, 19);
         assert!(lim.min_value.as_deref().unwrap().starts_with('-'));
         assert!(lim.max_value.is_some());
