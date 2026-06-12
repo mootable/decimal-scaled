@@ -340,3 +340,107 @@ fn history_all() {
         }
     }
 }
+
+/// Adapter proofs relocated from the history module's unit tests when the
+/// adapters moved to decimal-scaled-cells (whose lib deliberately carries no
+/// unit-test harness — the compile-once placement): the live-cell sync guards
+/// and the basic compute proofs per version.
+mod adapter_proofs {
+    use decimal_scaled_golden::{Computed, DecimalSubject, Function};
+
+    /// `true` when the live cell list contains `cell` — the sync guard between a
+    /// version's `CELLS` and the live surface.
+    fn live_cell(cell: &(u32, u32)) -> bool {
+        decimal_scale_test::CELLS.contains(cell)
+    }
+
+    /// Prove an adapter computes at all: sqrt(2) at D38<19> through the erased
+    /// dispatch yields the 19-place prefix every era agrees on.
+    fn proves_sqrt2_at_d38_19<S: DecimalSubject<Value = String>>(subject: &S) {
+        let op = subject.execute(
+            Function::Sqrt,
+            decimal_scaled_golden::RoundingMode::HalfToEven,
+            decimal_scaled_golden::Overflow::Panic,
+        );
+        match op(&["2".to_string()]) {
+            Computed::Value(v) => {
+                assert!(v.starts_with("1.41421356237309"), "got {v}");
+                assert_eq!(v.split_once('.').unwrap().1.len(), 19, "19 fractional digits");
+            }
+            other => panic!("expected Value, got {other:?}"),
+        }
+    }
+
+    /// Prove a binary function works too (the HistOps mul bridge): 1.5 * 2 = 3.
+    fn proves_mul_at_d18_3<S: DecimalSubject<Value = String>>(subject: &S) {
+        let op = subject.execute(
+            Function::Mul,
+            decimal_scaled_golden::RoundingMode::HalfToEven,
+            decimal_scaled_golden::Overflow::Panic,
+        );
+        match op(&["1.5".to_string(), "2".to_string()]) {
+            Computed::Value(v) => assert_eq!(v, "3.000"),
+            other => panic!("expected Value, got {other:?}"),
+        }
+    }
+
+    mod v044_proof {
+        use super::{live_cell, proves_mul_at_d18_3, proves_sqrt2_at_d38_19};
+        use decimal_scale_test::history::v044;
+
+        #[test]
+        fn computes_sqrt_and_mul() {
+            proves_sqrt2_at_d38_19(&v044::Subject::new(38, 19));
+            proves_mul_at_d18_3(&v044::Subject::new(18, 3));
+        }
+
+        #[test]
+        fn cells_match_the_live_surface_exactly() {
+            // 0.4.4 shares the live tier table, so its cell list IS the live one.
+            assert_eq!(v044::CELLS, decimal_scale_test::CELLS);
+            assert!(v044::CELLS.iter().all(live_cell));
+        }
+    }
+
+    #[cfg(feature = "history-033")]
+    mod v033_proof {
+        use super::{live_cell, proves_mul_at_d18_3, proves_sqrt2_at_d38_19};
+        use decimal_scale_test::history::v033;
+
+        #[test]
+        fn computes_sqrt_and_mul() {
+            proves_sqrt2_at_d38_19(&v033::Subject::new(38, 19));
+            proves_mul_at_d18_3(&v033::Subject::new(18, 3));
+        }
+
+        #[test]
+        fn width_18_omits_the_aborting_transcendental_surface() {
+            use decimal_scaled_golden::{DecimalSubject, Function};
+            // 0.3.3's D18 `*_strict_with` trait surface self-recurses to an
+            // uncatchable stack-overflow abort, so it must NOT be declared;
+            // arithmetic stays declared, and width 38 keeps the full surface.
+            let caps18 = v033::Subject::new(18, 3).capabilities();
+            assert!(caps18.function(Function::Sqrt).is_none());
+            assert!(caps18.function(Function::Exp).is_none());
+            assert!(caps18.function(Function::Mul).is_some());
+            assert!(caps18.function(Function::Rem).is_some());
+            let caps38 = v033::Subject::new(38, 19).capabilities();
+            assert!(caps38.function(Function::Sqrt).is_some());
+            assert!(caps38.function(Function::Atan2).is_some());
+        }
+
+        #[test]
+        fn cells_are_the_live_subset_at_the_shared_widths() {
+            // Every 0.3.3 cell is a live cell, and it covers EVERY live cell at
+            // the six shared widths (none silently dropped).
+            assert!(v033::CELLS.iter().all(live_cell));
+            let shared = [18, 38, 76, 153, 230, 307];
+            let expected: Vec<(u32, u32)> = decimal_scale_test::CELLS
+                .iter()
+                .copied()
+                .filter(|(w, _)| shared.contains(w))
+                .collect();
+            assert_eq!(v033::CELLS, expected.as_slice());
+        }
+    }
+}

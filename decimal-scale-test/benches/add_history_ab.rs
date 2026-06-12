@@ -15,6 +15,14 @@
 //!
 //! Run (the bench self-pins to the machine's highest core):
 //! `cargo bench -p decimal-scale-test --features x-wide,history-044 --bench add_history_ab`
+//!
+//! DELIBERATELY TYPED — not routed through the decimal-scaled-cells shims:
+//! those erase to `&[String] -> Computed<String>`, so the shim call carries
+//! parse + format inside it, which would land INSIDE the timed closure here
+//! and (a) stop measuring the bare op, (b) break the live-vs-pinned A/B
+//! symmetry (ds-044 has no shim side). The timed loops below stay alloc-free
+//! over pre-parsed operands; the per-cell instantiations this bench compiles
+//! are its own measurement subjects, not duplicated harness cells.
 
 use criterion::{criterion_group, Criterion};
 use std::hint::black_box;

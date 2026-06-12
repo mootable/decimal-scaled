@@ -13,13 +13,17 @@ license = "MIT OR Apache-2.0"
 # declares; the golden gate pins its wide tiers via `required-features`.
 [dependencies]
 decimal-scaled = { path = "..", default-features = false }
+# The band-edge cell fan-out (the heavy monomorphisations) compiles ONCE in
+# the decimal-scaled-cells leaf rlib; this crate's subjects call its concrete
+# shim entry points. Every tier/feature below forwards to it so the cells
+# crate always compiles exactly the tiers this build enables.
+decimal-scaled-cells = { path = "../decimal-scaled-cells", default-features = false }
 decimal-scaled-golden = { path = "../decimal-scaled-golden" }
 # Historical releases for the version-history gates (tests/history.rs). Each is
 # version-pinned to the one release its adapter tracks and stays optional behind
 # its `history-*` feature, so the normal build never pays the (heavy, per-tier
 # macro-era) compile. Pre-1.0 Cargo coexists one version per minor family.
 ds-044 = { package = "decimal-scaled", version = "=0.4.4", optional = true }
-ds-033 = { package = "decimal-scaled", version = "=0.3.3", optional = true }
 
 [features]
 # Mirror the root crate's DEFAULT set (std, serde, strict, exact-scratch) so a
@@ -28,29 +32,30 @@ ds-033 = { package = "decimal-scaled", version = "=0.3.3", optional = true }
 # bare-["std"] default would compile decimal-scaled in a configuration the
 # root CI never builds (std without exact-scratch/strict/serde).
 default = ["std", "serde", "strict", "exact-scratch"]
-std = ["alloc", "decimal-scaled/std"]
-alloc = ["decimal-scaled/alloc"]
-exact-scratch = ["decimal-scaled/exact-scratch"]
+std = ["alloc", "decimal-scaled/std", "decimal-scaled-cells/std"]
+alloc = ["decimal-scaled/alloc", "decimal-scaled-cells/alloc"]
+exact-scratch = ["decimal-scaled/exact-scratch", "decimal-scaled-cells/exact-scratch"]
 # The wide umbrellas mirror the root's nesting (each umbrella turns on its
 # per-tier features) so migrated `#[cfg(feature = "dNN")]` gates keep firing
-# exactly as they did when the tests lived in the root crate.
-wide = ["d57", "d76", "d115", "d153", "d230", "d307", "decimal-scaled/wide"]
-x-wide = ["wide", "d462", "d616", "decimal-scaled/x-wide"]
-xx-wide = ["x-wide", "d924", "d1232", "decimal-scaled/xx-wide"]
-d57 = ["decimal-scaled/d57"]
-d76 = ["decimal-scaled/d76"]
-d115 = ["decimal-scaled/d115"]
-d153 = ["decimal-scaled/d153"]
-d230 = ["decimal-scaled/d230"]
-d307 = ["decimal-scaled/d307"]
-d462 = ["decimal-scaled/d462"]
-d616 = ["decimal-scaled/d616"]
-d924 = ["decimal-scaled/d924"]
-d1232 = ["decimal-scaled/d1232"]
+# exactly as they did when the tests lived in the root crate. Each tier also
+# forwards to decimal-scaled-cells so the cell shims compile the same tiers.
+wide = ["d57", "d76", "d115", "d153", "d230", "d307", "decimal-scaled/wide", "decimal-scaled-cells/wide"]
+x-wide = ["wide", "d462", "d616", "decimal-scaled/x-wide", "decimal-scaled-cells/x-wide"]
+xx-wide = ["x-wide", "d924", "d1232", "decimal-scaled/xx-wide", "decimal-scaled-cells/xx-wide"]
+d57 = ["decimal-scaled/d57", "decimal-scaled-cells/d57"]
+d76 = ["decimal-scaled/d76", "decimal-scaled-cells/d76"]
+d115 = ["decimal-scaled/d115", "decimal-scaled-cells/d115"]
+d153 = ["decimal-scaled/d153", "decimal-scaled-cells/d153"]
+d230 = ["decimal-scaled/d230", "decimal-scaled-cells/d230"]
+d307 = ["decimal-scaled/d307", "decimal-scaled-cells/d307"]
+d462 = ["decimal-scaled/d462", "decimal-scaled-cells/d462"]
+d616 = ["decimal-scaled/d616", "decimal-scaled-cells/d616"]
+d924 = ["decimal-scaled/d924", "decimal-scaled-cells/d924"]
+d1232 = ["decimal-scaled/d1232", "decimal-scaled-cells/d1232"]
 macros = ["decimal-scaled/macros"]
-serde = ["decimal-scaled/serde"]
+serde = ["decimal-scaled/serde", "decimal-scaled-cells/serde"]
 dyn = ["decimal-scaled/dyn"]
-strict = ["decimal-scaled/strict"]
+strict = ["decimal-scaled/strict", "decimal-scaled-cells/strict"]
 fast = ["decimal-scaled/fast"]
 cross-scale-ops = ["decimal-scaled/cross-scale-ops"]
 rounding-half-away-from-zero = ["decimal-scaled/rounding-half-away-from-zero"]
@@ -64,11 +69,16 @@ rounding-ceiling = ["decimal-scaled/rounding-ceiling"]
 # 0.3.3's odd tiers were named differently (D56/D114/D461/D615/D923/D1231), so
 # its adapter covers only the six widths whose names AND digit capacities match
 # the live surface (D18/D38/D76/D153/D230/D307).
-history-044 = ["dep:ds-044", "ds-044/wide", "ds-044/x-wide", "ds-044/xx-wide"]
+# The history adapters (the erased per-version subjects) live in
+# decimal-scaled-cells; the direct ds-044 dep stays here for the typed
+# live-vs-pinned A/B bench (benches/add_history_ab.rs), which must call the
+# pinned release directly in its timed loop.
+history-044 = ["dep:ds-044", "ds-044/wide", "ds-044/x-wide", "ds-044/xx-wide", "decimal-scaled-cells/history-044"]
 # 0.3.3's per-tier features are under-gated solo (e.g. `d76` alone fails on the
 # D76->D56 narrowing) — the era was only ever built via its umbrellas, so its
-# adapter enables the umbrellas its six shared widths sit under.
-history-033 = ["dep:ds-033", "ds-033/wide", "ds-033/x-wide"]
+# adapter (in decimal-scaled-cells) enables the umbrellas its six shared
+# widths sit under. Nothing in this package calls 0.3.3 directly any more.
+history-033 = ["decimal-scaled-cells/history-033"]
 history = ["history-044", "history-033"]
 
 # Serde wire-format round-trips in tests/api/serde.rs (JSON human-readable +

@@ -794,6 +794,7 @@ members = [
     ".",
     "./macros",
     "./decimal-scaled-golden",
+    "./decimal-scaled-cells",
     "./decimal-scale-test",
     "./golden-competitors",
 ]
