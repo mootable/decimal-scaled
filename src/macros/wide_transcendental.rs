@@ -5013,6 +5013,7 @@ mod tests {
     /// correctly rounded — to within a couple of ULP (a small slack
     /// absorbs the two paths' independent final-rounding of values that
     /// land near a half-ULP boundary).
+    #[cfg(feature = "d76")]
     #[test]
     fn wide_transcendentals_match_d38() {
         // Raw bit-patterns at SCALE = 6 spanning a useful range.
@@ -5128,20 +5129,32 @@ mod tests {
     }
 
     /// Bit-exact identity points hold across all three wide tiers.
+    #[cfg(any(feature = "d76", feature = "d153", feature = "d307"))]
     #[test]
     fn wide_transcendental_identities() {
+        #[cfg(feature = "d76")]
         assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ONE.ln_strict(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
+        #[cfg(feature = "d76")]
         assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.exp_strict(), crate::D::<crate::int::types::Int<4>, 6>::ONE);
+        #[cfg(feature = "d76")]
         assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.sin_strict(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
+        #[cfg(feature = "d76")]
         assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.sinh_strict(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
+        #[cfg(feature = "d76")]
         assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.atan_strict(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
 
+        #[cfg(feature = "d153")]
         assert_eq!(crate::D::<crate::int::types::Int<8>, 6>::ONE.ln_strict(), crate::D::<crate::int::types::Int<8>, 6>::ZERO);
+        #[cfg(feature = "d153")]
         assert_eq!(crate::D::<crate::int::types::Int<8>, 6>::ZERO.exp_strict(), crate::D::<crate::int::types::Int<8>, 6>::ONE);
+        #[cfg(feature = "d153")]
         assert_eq!(crate::D::<crate::int::types::Int<8>, 6>::ZERO.cos_strict(), crate::D::<crate::int::types::Int<8>, 6>::ONE);
 
+        #[cfg(feature = "d307")]
         assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::ONE.ln_strict(), crate::D::<crate::int::types::Int<16>, 6>::ZERO);
+        #[cfg(feature = "d307")]
         assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::ZERO.exp_strict(), crate::D::<crate::int::types::Int<16>, 6>::ONE);
+        #[cfg(feature = "d307")]
         assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::ZERO.cosh_strict(), crate::D::<crate::int::types::Int<16>, 6>::ONE);
     }
 
@@ -5149,6 +5162,7 @@ mod tests {
     /// 1976 / Newton-on-AGM) are correctly rounded by the same
     /// contract as the canonical artanh / Taylor paths, so they must
     /// agree to within a couple of ULP at storage scale.
+    #[cfg(feature = "d76")]
     #[test]
     fn wide_agm_matches_taylor_at_storage_scale() {
         let positives = [1i64, 250_000, 500_000, 1_000_000, 2_718_282, 7_500_000];
@@ -5186,13 +5200,20 @@ mod tests {
     }
 
     /// Identity points: AGM `ln(1) = 0`, AGM `exp(0) = 1`.
+    #[cfg(any(feature = "d76", feature = "d153", feature = "d307"))]
     #[test]
     fn wide_agm_identity_points() {
+        #[cfg(feature = "d76")]
         assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ONE.ln_strict_agm(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
+        #[cfg(feature = "d76")]
         assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.exp_strict_agm(), crate::D::<crate::int::types::Int<4>, 6>::ONE);
+        #[cfg(feature = "d153")]
         assert_eq!(crate::D::<crate::int::types::Int<8>, 6>::ONE.ln_strict_agm(), crate::D::<crate::int::types::Int<8>, 6>::ZERO);
+        #[cfg(feature = "d153")]
         assert_eq!(crate::D::<crate::int::types::Int<8>, 6>::ZERO.exp_strict_agm(), crate::D::<crate::int::types::Int<8>, 6>::ONE);
+        #[cfg(feature = "d307")]
         assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::ONE.ln_strict_agm(), crate::D::<crate::int::types::Int<16>, 6>::ZERO);
+        #[cfg(feature = "d307")]
         assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::ZERO.exp_strict_agm(), crate::D::<crate::int::types::Int<16>, 6>::ONE);
     }
 
@@ -5200,6 +5221,7 @@ mod tests {
     /// mode. Picks a transcendental whose true value lands strictly
     /// between two storage representable values so the rounding mode
     /// actually changes the result.
+    #[cfg(feature = "d76")]
     #[test]
     fn wide_strict_with_honours_mode() {
         use crate::support::rounding::RoundingMode;
@@ -5241,35 +5263,49 @@ mod tests {
     /// `guard_agm` precision lift the AGM path now holds 0.5 ULP
     /// at every wide-tier storage scale; this test retains its
     /// historic D76<20> / D153<20> coverage as a smoke gate.
+    #[cfg(any(feature = "d76", feature = "d153"))]
     #[test]
     fn wide_agm_moderate_scale_round_trip() {
-        let x = crate::D::<crate::int::types::Int<4>, 20>::from_int(3);
-        let back = x.ln_strict_agm().exp_strict_agm();
-        let delta = (back.to_bits().as_i128() - x.to_bits().as_i128()).abs();
-        assert!(delta <= 8, "AGM exp(ln(3)) at D76<20> delta {delta}");
+        #[cfg(feature = "d76")]
+        {
+            let x = crate::D::<crate::int::types::Int<4>, 20>::from_int(3);
+            let back = x.ln_strict_agm().exp_strict_agm();
+            let delta = (back.to_bits().as_i128() - x.to_bits().as_i128()).abs();
+            assert!(delta <= 8, "AGM exp(ln(3)) at D76<20> delta {delta}");
+        }
 
-        let y = crate::D::<crate::int::types::Int<8>, 20>::from_int(2);
-        let back = y.exp_strict_agm().ln_strict_agm();
-        let delta = (back.to_bits().as_i128() - y.to_bits().as_i128()).abs();
-        assert!(delta <= 8, "AGM ln(exp(2)) at D153<20> delta {delta}");
+        #[cfg(feature = "d153")]
+        {
+            let y = crate::D::<crate::int::types::Int<8>, 20>::from_int(2);
+            let back = y.exp_strict_agm().ln_strict_agm();
+            let delta = (back.to_bits().as_i128() - y.to_bits().as_i128()).abs();
+            assert!(delta <= 8, "AGM ln(exp(2)) at D153<20> delta {delta}");
+        }
     }
 
     /// Exercises a scale beyond D38's range, where delegation is
     /// impossible and the wide guard-digit core is the only path.
     /// `exp(ln(x)) ≈ x` and `ln(exp(x)) ≈ x` round-trips.
+    #[cfg(any(feature = "d76", feature = "d307"))]
     #[test]
     fn wide_only_scale_round_trips() {
         // D76<50>: well past D38's max scale of 38. The round-trip
         // result fits i128 comfortably, so compare there.
-        let x = crate::D::<crate::int::types::Int<4>, 50>::from_int(3);
-        let back = x.ln_strict().exp_strict();
-        let delta = (back.to_bits().as_i128() - x.to_bits().as_i128()).abs();
-        assert!(delta <= 8, "exp(ln(3)) at D76<50> delta {delta}");
+        #[cfg(feature = "d76")]
+        {
+            let x = crate::D::<crate::int::types::Int<4>, 50>::from_int(3);
+            let back = x.ln_strict().exp_strict();
+            let delta = (back.to_bits().as_i128() - x.to_bits().as_i128()).abs();
+            assert!(delta <= 8, "exp(ln(3)) at D76<50> delta {delta}");
+        }
 
         // D307<150>: deep scale, only the wide core can serve it.
-        let y = crate::D::<crate::int::types::Int<16>, 150>::from_int(2);
-        let back = y.exp_strict().ln_strict();
-        let delta = (back.to_bits().as_i128() - y.to_bits().as_i128()).abs();
-        assert!(delta <= 8, "ln(exp(2)) at D307<150> delta {delta}");
+        #[cfg(feature = "d307")]
+        {
+            let y = crate::D::<crate::int::types::Int<16>, 150>::from_int(2);
+            let back = y.exp_strict().ln_strict();
+            let delta = (back.to_bits().as_i128() - y.to_bits().as_i128()).abs();
+            assert!(delta <= 8, "ln(exp(2)) at D307<150> delta {delta}");
+        }
     }
 }

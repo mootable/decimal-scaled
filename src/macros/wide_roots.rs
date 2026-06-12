@@ -174,43 +174,69 @@ macro_rules! decl_wide_roots {
 
 pub(crate) use {decl_wide_roots, wide_lit};
 
-#[cfg(all(test, not(feature = "fast")))]
+// The sampler tests below instantiate the wide-tier widths `Int<4>` (D76),
+// `Int<8>` (D153), and `Int<16>` (D307). Each width's `D<Int<N>, SCALE>`
+// surface is production-real only when its own tier feature is enabled, so
+// every reference is gated to exactly that `dNN` tier — never an umbrella
+// broader than the width used. The module guard is the precise union of the
+// tiers exercised here (d76 / d153 / d307); a single-tier build that enables
+// none of them (e.g. `--features d57`) compiles no empty test body. Tests
+// that touch only a subset carry their own per-tier (or union) `#[cfg]`.
+#[cfg(all(
+    test,
+    not(feature = "fast"),
+    any(feature = "d76", feature = "d153", feature = "d307")
+))]
 mod tests {
 
     #[test]
     fn sqrt_perfect_squares_are_exact() {
+        #[cfg(feature = "d76")]
         assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::from_int(4).sqrt_strict(), crate::D::<crate::int::types::Int<4>, 6>::from_int(2));
+        #[cfg(feature = "d76")]
         assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::from_int(9).sqrt_strict(), crate::D::<crate::int::types::Int<4>, 6>::from_int(3));
+        #[cfg(feature = "d76")]
         assert_eq!(
             crate::D::<crate::int::types::Int<4>, 6>::from_int(144).sqrt_strict(),
             crate::D::<crate::int::types::Int<4>, 6>::from_int(12)
         );
+        #[cfg(feature = "d153")]
         assert_eq!(
             crate::D::<crate::int::types::Int<8>, 6>::from_int(25).sqrt_strict(),
             crate::D::<crate::int::types::Int<8>, 6>::from_int(5)
         );
+        #[cfg(feature = "d307")]
         assert_eq!(
             crate::D::<crate::int::types::Int<16>, 6>::from_int(81).sqrt_strict(),
             crate::D::<crate::int::types::Int<16>, 6>::from_int(9)
         );
     }
 
+    #[cfg(any(feature = "d76", feature = "d307"))]
     #[test]
     fn sqrt_zero_and_negative_saturate() {
+        #[cfg(feature = "d76")]
         assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.sqrt_strict(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
+        #[cfg(feature = "d76")]
         assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::from_int(-4).sqrt_strict(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
+        #[cfg(feature = "d307")]
         assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::from_int(-1).sqrt_strict(), crate::D::<crate::int::types::Int<16>, 6>::ZERO);
     }
 
     #[test]
     fn cbrt_perfect_cubes_are_exact() {
+        #[cfg(feature = "d76")]
         assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::from_int(8).cbrt_strict(), crate::D::<crate::int::types::Int<4>, 6>::from_int(2));
+        #[cfg(feature = "d76")]
         assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::from_int(27).cbrt_strict(), crate::D::<crate::int::types::Int<4>, 6>::from_int(3));
+        #[cfg(feature = "d76")]
         assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::from_int(-8).cbrt_strict(), crate::D::<crate::int::types::Int<4>, 6>::from_int(-2));
+        #[cfg(feature = "d153")]
         assert_eq!(
             crate::D::<crate::int::types::Int<8>, 6>::from_int(125).cbrt_strict(),
             crate::D::<crate::int::types::Int<8>, 6>::from_int(5)
         );
+        #[cfg(feature = "d307")]
         assert_eq!(
             crate::D::<crate::int::types::Int<16>, 6>::from_int(-64).cbrt_strict(),
             crate::D::<crate::int::types::Int<16>, 6>::from_int(-4)
@@ -219,14 +245,18 @@ mod tests {
 
     #[test]
     fn cbrt_zero_is_zero() {
+        #[cfg(feature = "d76")]
         assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.cbrt_strict(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
+        #[cfg(feature = "d153")]
         assert_eq!(crate::D::<crate::int::types::Int<8>, 6>::ZERO.cbrt_strict(), crate::D::<crate::int::types::Int<8>, 6>::ZERO);
+        #[cfg(feature = "d307")]
         assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::ZERO.cbrt_strict(), crate::D::<crate::int::types::Int<16>, 6>::ZERO);
     }
 
     /// The wide-tier roots are correctly rounded, so for any scale the
     /// D38 and D76 results must agree bit-for-bit (both land on the
     /// IEEE-754 round-to-nearest value).
+    #[cfg(feature = "d76")]
     #[test]
     fn wide_roots_match_d38() {
         for raw in [2i64, 3, 5, 7, 10, 123, 1_000, 999_983] {
@@ -241,16 +271,21 @@ mod tests {
 
     /// Exercises a scale beyond D38's range, where delegation is
     /// impossible and the wide path is the only implementation.
+    #[cfg(any(feature = "d76", feature = "d307"))]
     #[test]
     fn sqrt_cbrt_at_wide_only_scale() {
         // D76<50>: 4.0 -> 2.0, 8.0 -> 2.0.
+        #[cfg(feature = "d76")]
         assert_eq!(crate::D::<crate::int::types::Int<4>, 50>::from_int(4).sqrt_strict(), crate::D::<crate::int::types::Int<4>, 50>::from_int(2));
+        #[cfg(feature = "d76")]
         assert_eq!(crate::D::<crate::int::types::Int<4>, 50>::from_int(8).cbrt_strict(), crate::D::<crate::int::types::Int<4>, 50>::from_int(2));
         // D307<150>: well past any narrower tier.
+        #[cfg(feature = "d307")]
         assert_eq!(
             crate::D::<crate::int::types::Int<16>, 150>::from_int(9).sqrt_strict(),
             crate::D::<crate::int::types::Int<16>, 150>::from_int(3)
         );
+        #[cfg(feature = "d307")]
         assert_eq!(
             crate::D::<crate::int::types::Int<16>, 150>::from_int(27).cbrt_strict(),
             crate::D::<crate::int::types::Int<16>, 150>::from_int(3)
