@@ -4026,3 +4026,5 @@
 4 0.5
 225 0.5
 2.25 0.5
+// regression: retired band-edge powf underflow-Ceiling pin (gen_band_edge_wiring.py DEFECTS d57..d1232 powf_s0) - b^-k a tiny positive (<0.5) at SCALE 0 must round UP to 1 under Ceiling and DOWN to 0 under every other mode; 2^-200 is the exact-decimal witness
+2 -200
