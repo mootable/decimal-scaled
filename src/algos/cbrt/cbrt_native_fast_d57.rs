@@ -295,7 +295,24 @@ pub(crate) fn cbrt_native_fast_b<const N: usize, const W: usize>(
 
 // ── bit-identity test (NOT run here — run by the full suite) ───────
 
-#[cfg(all(test, feature = "std"))]
+// Same gating rationale as `cbrt_native`'s test module: these candidates run
+// Newton in a wide work `Int<W>`, whose `n / (x·x)` build-max Knuth-divide
+// scratch (`4·MAX_WORK_N + 2` u64) only covers `W` once a wide tier raises
+// MAX_WORK_N to 16. Each test/case is gated to exactly the `dNN` tier whose
+// storage width it instantiates; the module guard is the precise union of
+// those tiers (d57..d307). Tests only — the kernels stay un-gated.
+#[cfg(all(
+    test,
+    feature = "std",
+    any(
+        feature = "d57",
+        feature = "d76",
+        feature = "d115",
+        feature = "d153",
+        feature = "d230",
+        feature = "d307"
+    )
+))]
 mod tests {
     use super::{cbrt_native_fast_a, cbrt_native_fast_b};
     use crate::algos::cbrt::cbrt_native::cbrt_native;
@@ -339,6 +356,8 @@ mod tests {
         Int::<N>::from_mag_limbs(&mag, neg)
     }
 
+    // D57 storage (N=3), work `Int<6>`.
+    #[cfg(feature = "d57")]
     #[test]
     fn fast_candidates_match_native_d57_s20() {
         let raws: [i128; 11] = [
@@ -357,6 +376,17 @@ mod tests {
         check_cell::<3, 6>(20, &raws);
     }
 
+    // Multi-tier sweep over D76..D307 (no D57 case); whole-fn gate is the
+    // union of those tiers so a D57-only or D462+ build drops the fn whole
+    // (no empty body), and each cell carries its own `dNN` gate so a
+    // single-tier build runs exactly its own width.
+    #[cfg(any(
+        feature = "d76",
+        feature = "d115",
+        feature = "d153",
+        feature = "d230",
+        feature = "d307"
+    ))]
     #[test]
     fn fast_candidates_match_native_other_cells() {
         let raws: [i128; 7] = [
@@ -368,11 +398,17 @@ mod tests {
             -((1i128 << 120) | 0x1357),
             i128::MAX,
         ];
+        #[cfg(feature = "d76")]
         check_cell::<4, 8>(35, &raws);
+        #[cfg(feature = "d115")]
         check_cell::<6, 12>(57, &raws);
+        #[cfg(feature = "d153")]
         check_cell::<8, 16>(75, &raws);
+        #[cfg(feature = "d153")]
         check_cell::<8, 16>(76, &raws);
+        #[cfg(feature = "d230")]
         check_cell::<12, 25>(115, &raws);
+        #[cfg(feature = "d307")]
         check_cell::<16, 32>(150, &raws);
     }
 
@@ -383,6 +419,15 @@ mod tests {
     /// widest and a too-small `W` would overflow (release-mode UB). The fast
     /// `a` arm (the production seed) must stay bit-identical to the
     /// oracle-gated `cbrt_native`.
+    // 3N work widths (W = 9/12/18/24) for D57/D76/D115/D153. Whole-fn gate
+    // is the union of those tiers; each `chk!` carries its own `dNN` gate so
+    // a single-tier build runs exactly its width.
+    #[cfg(any(
+        feature = "d57",
+        feature = "d76",
+        feature = "d115",
+        feature = "d153"
+    ))]
     #[test]
     fn fast_a_routed_3n_widths_near_max() {
         for &neg in &[false, true] {
@@ -397,9 +442,13 @@ mod tests {
                         )+
                     }};
                 }
+                #[cfg(feature = "d57")]
                 chk!(3, 9, 0, 20, 28, 57);
+                #[cfg(feature = "d76")]
                 chk!(4, 12, 0, 20, 35, 76);
+                #[cfg(feature = "d115")]
                 chk!(6, 18, 0, 25, 57, 115);
+                #[cfg(feature = "d153")]
                 chk!(8, 24, 0, 25, 75, 153);
             }
         }
@@ -418,12 +467,19 @@ mod tests {
                         assert_eq!(cbrt_native_fast_b::<$n, $w>(raw, pow, mode), want, "B near_max N={} neg={neg} mode={mode:?}", $n);
                     }};
                 }
+                #[cfg(feature = "d57")]
                 chk!(3, 6, 20);
+                #[cfg(feature = "d76")]
                 chk!(4, 8, 35);
+                #[cfg(feature = "d115")]
                 chk!(6, 12, 57);
+                #[cfg(feature = "d153")]
                 chk!(8, 16, 75);
+                #[cfg(feature = "d153")]
                 chk!(8, 16, 76);
+                #[cfg(feature = "d230")]
                 chk!(12, 25, 115);
+                #[cfg(feature = "d307")]
                 chk!(16, 32, 150);
             }
         }
