@@ -98,7 +98,7 @@ jobs:
         # debuginfo drop).
         run: |
           set -euo pipefail
-          ( while true; do free -m | awk '/^Mem:/{printf "[mem %s] used %5d MB | avail %5d MB\n", strftime("%H:%M:%S"), $3, $7}'; sleep 15; done ) &
+          ( while true; do m=$(free -m | awk '/^Mem:/{print $7}'); d=$(df -BM --output=avail . | tail -1 | tr -dc 0-9); echo "[res $(date +%H:%M:%S)] mem avail ${m} MB | disk avail ${d} MB"; sleep 15; done ) &
           SAMPLER=$!
           cargo build --release -p golden-competitors --bin lib_cmp_precision
           kill "$SAMPLER" || true
