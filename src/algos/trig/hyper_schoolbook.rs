@@ -1317,6 +1317,124 @@ mod tests {
         }
     }
 
+    // Defect-B regression (2026-06-12): large-|x| hyperbolic and
+    // deep-negative exp/exp2 cells whose results are IN RANGE for the tier
+    // (D115 raw max = 2^383 − 1 ≈ 1.97e115) PANICKED on baked-table-less
+    // builds (single-tier `dNN` / `wide`-umbrella): the rescale matcher's
+    // Newton arm fell back to a per-call Knuth divide whose dividend —
+    // `even(width_limbs + w_ext/19 + 3) + 1` u64 limbs — outran the
+    // build-max divide blanket (67 > 66 limbs at `width_limbs = 42`,
+    // `w_ext = 407`, `MAX_WORK_N = 16`). Fixed in `rescale::select` (the
+    // Newton arm is gated to the table-baking `x-wide`/`xx-wide` builds)
+    // and `NewtonReciprocal::precompute` (the fallback now sizes its own
+    // Knuth scratch). Inputs are the golden d115 panic rows
+    // (sinh.golden:3296/8150, cosh.golden:3322/3350/3352/7270, exp/exp2
+    // deep negatives).
+    #[cfg(any(feature = "d115", feature = "wide"))]
+    mod wide_d115_defect_b {
+        use super::*;
+
+        #[test]
+        fn sinh_cosh_large_arg_in_range_d115_s0() {
+            // All in range: cosh(257) ≈ 1.2e111 .. sinh(266) ≈ 1.66e115 <
+            // 2^383 − 1 ≈ 1.97e115. sinh/cosh(|x|) ≥ e^|x|/2 > 10^110 for
+            // |x| ≥ 257 (257·log10(e) ≈ 111.6).
+            let floor_mag = Int::<6>::TEN.pow(110);
+            for &x in &[257i128, 259, 263, 264, 265, 266] {
+                let pos = Int::<6>::from_i128(x);
+                let neg = Int::<6>::from_i128(-x);
+                for &mode in &MODES {
+                    let c = D::<Int<6>, 0>(pos).cosh_strict_with(mode).0;
+                    let s = D::<Int<6>, 0>(pos).sinh_strict_with(mode).0;
+                    assert!(c > floor_mag, "cosh({x}) too small, mode {mode:?}");
+                    assert!(s > floor_mag, "sinh({x}) too small, mode {mode:?}");
+                    assert!(c >= s, "cosh({x}) < sinh({x}), mode {mode:?}");
+                    // Even / odd symmetry against the negative-argument rows.
+                    // cosh is even: same value, same mode, same result. sinh
+                    // is odd, so directed modes flip across the negation:
+                    // round_Floor(-v) = -round_Ceiling(v); the nearest modes
+                    // and Trunc are sign-symmetric.
+                    assert_eq!(
+                        D::<Int<6>, 0>(neg).cosh_strict_with(mode).0,
+                        c,
+                        "cosh(-{x}) != cosh({x}), mode {mode:?}"
+                    );
+                    let flipped = match mode {
+                        RoundingMode::Floor => RoundingMode::Ceiling,
+                        RoundingMode::Ceiling => RoundingMode::Floor,
+                        m => m,
+                    };
+                    let s_flipped = D::<Int<6>, 0>(pos).sinh_strict_with(flipped).0;
+                    assert_eq!(
+                        D::<Int<6>, 0>(neg).sinh_strict_with(mode).0,
+                        Int::<6>::ZERO - s_flipped,
+                        "sinh(-{x}) != -sinh({x}) under the flipped mode, mode {mode:?}"
+                    );
+                }
+            }
+        }
+
+        #[test]
+        fn cosh_large_arg_in_range_d115_s57() {
+            // cosh.golden:7270 — cosh(133.6131707362966849971232805) at
+            // D115<57>: ≈ e^133.61/2 ≈ 5.3e57, raw ≈ 5.3e114 < 2^383 − 1.
+            // raw = 133.6131707362966849971232805 · 10^57 (28 significant
+            // digits, 25 of them fractional → ·10^32 to reach scale 57).
+            let raw = Int::<6>::from_i128(1_336_131_707_362_966_849_971_232_805)
+                * Int::<6>::TEN.pow(32);
+            let floor_mag = Int::<6>::TEN.pow(114);
+            for &mode in &MODES {
+                let c = D::<Int<6>, 57>(raw).cosh_strict_with(mode).0;
+                assert!(c > floor_mag, "cosh(133.61..) too small, mode {mode:?}");
+                assert_eq!(
+                    D::<Int<6>, 57>(Int::<6>::ZERO - raw).cosh_strict_with(mode).0,
+                    c,
+                    "cosh(-133.61..) != cosh(133.61..), mode {mode:?}"
+                );
+            }
+        }
+
+        #[test]
+        fn exp_exp2_deep_negative_in_range_d115() {
+            // 0 < e^x, 2^x < 10^-SCALE for these arguments, so every mode
+            // rounds to 0 except Ceiling, which gives exactly 1 ulp.
+            let one_ulp = Int::<6>::from_i128(1);
+            for &x in &[-357i128, -391, -436, -1013, -1089] {
+                for &mode in &MODES {
+                    let expect = if mode == RoundingMode::Ceiling {
+                        one_ulp
+                    } else {
+                        Int::<6>::ZERO
+                    };
+                    // Scale 0.
+                    let r0 = Int::<6>::from_i128(x);
+                    assert_eq!(
+                        D::<Int<6>, 0>(r0).exp_strict_with(mode).0,
+                        expect,
+                        "exp({x}) at s0, mode {mode:?}"
+                    );
+                    assert_eq!(
+                        D::<Int<6>, 0>(r0).exp2_strict_with(mode).0,
+                        expect,
+                        "exp2({x}) at s0, mode {mode:?}"
+                    );
+                    // Scale 50 (the deep-escalation band).
+                    let r50 = Int::<6>::from_i128(x) * Int::<6>::TEN.pow(50);
+                    assert_eq!(
+                        D::<Int<6>, 50>(r50).exp_strict_with(mode).0,
+                        expect,
+                        "exp({x}) at s50, mode {mode:?}"
+                    );
+                    assert_eq!(
+                        D::<Int<6>, 50>(r50).exp2_strict_with(mode).0,
+                        expect,
+                        "exp2({x}) at s50, mode {mode:?}"
+                    );
+                }
+            }
+        }
+    }
+
     #[cfg(any(feature = "d57", feature = "wide"))]
     mod wide_d57 {
         use super::*;

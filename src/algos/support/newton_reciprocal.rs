@@ -67,7 +67,6 @@
 //! The Newton-iteration view of the same reciprocal is
 //! Wikipedia — [Division algorithm § Newton–Raphson division](https://en.wikipedia.org/wiki/Division_algorithm#Newton%E2%80%93Raphson_division).
 
-use crate::int::algos::div::div_fixed::div_rem_mag_slice;
 use crate::int::algos::support::limbs::{cmp, sub_assign};
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 
@@ -247,12 +246,43 @@ impl NewtonReciprocal {
             let mut num = [0u64; MAX_R_U64];
             num[k_u64] = 1u64;
             let mut rem = [0u64; MAX_POW_U64];
-            div_rem_mag_slice(
-                &num[..k_u64 + 1],
-                &pow_scale[..pow_len],
-                &mut r[..k_u64 + 1],
-                &mut rem[..pow_len],
-            );
+            // EXACT module-sized Knuth scratch — never the build-max slice
+            // blanket. The dividend spans `k_u64 + 1 ≤ MAX_R_U64` limbs
+            // (asserted above), which exceeds the blanket divide's
+            // `MAX_SINGLE_LIMBS = 4·MAX_WORK_N + 2` normalisation buffer on
+            // a narrow-blanket build (67 > 66 limbs at `width_limbs = 42`,
+            // `scale = 407` under `MAX_WORK_N = 16` — the defect-B in-range
+            // panic). Knuth needs `num.len() + 2` / `den.len()` zeroed
+            // limbs, so size both from this module's own ceilings
+            // (`MAX_R_U64 + 2` ≥ `k_u64 + 3`, `MAX_POW_U64` ≥ `pow_len`),
+            // route on the divide matcher's own shape verdict, and call the
+            // engine's `_into` door — the exact-scratch pattern
+            // `int::policy::div_rem::dispatch`'s doc sanctions (the
+            // `exp_generic::div_rem_exact` precedent; the u128-limb
+            // refinement falls to the value-identical base-2⁶⁴ Knuth).
+            use crate::int::policy::div_rem::{select_for_limbs, Algorithm};
+            match select_for_limbs(&num[..k_u64 + 1], &pow_scale[..pow_len]) {
+                // Single-limb divisor: hardware remainder, no normalisation
+                // scratch involved.
+                Algorithm::Rem => crate::int::algos::div::div_rem::div_rem(
+                    &num[..k_u64 + 1],
+                    &pow_scale[..pow_len],
+                    &mut r[..k_u64 + 1],
+                    &mut rem[..pow_len],
+                ),
+                _ => {
+                    let mut u = [0u64; MAX_R_U64 + 2];
+                    let mut v = [0u64; MAX_POW_U64];
+                    crate::int::algos::div::div_knuth::div_knuth_into(
+                        &num[..k_u64 + 1],
+                        &pow_scale[..pow_len],
+                        &mut r[..k_u64 + 1],
+                        &mut rem[..pow_len],
+                        &mut u,
+                        &mut v,
+                    );
+                }
+            }
         }
 
         // -- u128-packed mirrors ----------------------------------
@@ -822,6 +852,7 @@ mod tests {
     #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
     #[test]
     fn baked_newton_recip_matches_runtime_divide() {
+        use crate::int::algos::div::div_fixed::div_rem_mag_slice;
         for &width_limbs in &[16usize, 24, 32, 48, 64, 96, 128, 132] {
             for &scale in &[1u32, 38, 39, 77, 200, 461, 615, 924, 1231, 1850] {
                 let pow_len = (scale as usize / 19 + 3).max(1);
