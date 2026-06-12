@@ -81,6 +81,13 @@ If a "simple" dispatch surfaces real diagnosis mid-flight, pull it back and re-d
 higher tier rather than letting the smaller model improvise. The coordinator reviews every
 diff regardless of the model that produced it.
 
+**Concurrency budget — 6 points (owner 2026-06-12).** Concurrent subagents are budgeted by
+model: `fable` costs **4**, `opus` costs **2**, `sonnet` costs **1**; the points of all
+*currently running* agents must total **≤ 6** (e.g. one fable + one opus, or one fable + two
+sonnets, or three opus). A returning agent frees its points for the next dispatch. The budget
+supersedes the older one-agent-at-a-time rule; the disjoint-file-area partition rule still
+applies to everything running concurrently.
+
 ## Every agent prompt MUST include
 
 ### 1. Verify your base — NON-destructive (no reset, ever)
