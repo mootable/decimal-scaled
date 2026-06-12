@@ -975,3 +975,33 @@ use crate::support::rounding::RoundingMode;
         }
         div(one_w - m, one_w + m, w)
     }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::int::types::Int;
+
+    /// Defect-B regression (2026-06-12): a deep-negative `exp_fixed` at a
+    /// working scale `w ≥ 200` in D115's `Wexp = Int<64>` panicked on
+    /// baked-table-less builds — `w_ext = w + extra(|k|)` pushed the
+    /// per-Taylor-term `÷10^w_ext` into the rescale Newton arm, whose
+    /// per-call Knuth fallback dividend (`even(width + w_ext/19 + 3) + 1`
+    /// u64 limbs) outran the build-max divide blanket (66 limbs at
+    /// `MAX_WORK_N = 16`). The result itself is comfortably in range:
+    /// `e^-357` at scale 200 is `10^(200 − 357·log10(e)) ≈ 8.8e44`.
+    /// Pins the kernel at the exact shape that panicked: `v = -357·10^200`,
+    /// `w = 200`, `S = Int<64>` (D115's production `Wexp`).
+    #[cfg(any(feature = "d115", feature = "wide"))]
+    #[test]
+    fn exp_fixed_deep_negative_large_working_scale_int64() {
+        let w: u32 = 200;
+        let v = lit::<Int<64>>(-357) * pow10::<Int<64>>(w);
+        let r = exp_fixed::<Int<64>>(v, w);
+        // 357·log10(e) ≈ 155.057, so 10^44 < e^-357 · 10^200 < 10^45.
+        assert!(r > zero::<Int<64>>(), "e^-357 must stay strictly positive");
+        assert!(
+            r > pow10::<Int<64>>(44) && r < pow10::<Int<64>>(45),
+            "e^-357 at working scale 200 out of its analytic bounds"
+        );
+    }
+}
