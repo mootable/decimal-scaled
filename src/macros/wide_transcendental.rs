@@ -3665,6 +3665,28 @@ macro_rules! decl_wide_transcendental {
                     let w0 = SCALE + $core::GUARD;
                     let ln_x0 = $core::ln_fixed_routed_agm::<SCALE>($core::to_work_agm(raw), w0);
                     let arg0 = $core::mul_agm($core::to_work_agm(eraw), ln_x0, w0);
+                    // Analytic storage-overflow gate, BEFORE the
+                    // result-sized lift below: a deep-overflow argument
+                    // (`e^arg` provably past storage) would size `k_lift`
+                    // in the hundreds and push the working scale past the
+                    // work integer's safe ceiling, where the lifted `ln`'s
+                    // table product silently WRAPS to a near-zero garbage
+                    // `ln x` that defuses every downstream overflow check
+                    // (the `1.5^1000.5` D76 deep-band defect). Panic
+                    // contractually here instead — the gate is a provable
+                    // SUFFICIENT bound, so no representable cell fires it
+                    // (see `algos::pow::powf_overflow_gate`).
+                    if $crate::algos::pow::powf_overflow_gate::powf_overflow_gate_g::<$core::Wagm>(
+                        arg0,
+                        w0,
+                        <$Storage as $crate::int::types::traits::BigInt>::BITS,
+                        SCALE,
+                    ) {
+                        $crate::support::diagnostics::overflow_panic_with_scale(
+                            "powf_strict",
+                            SCALE,
+                        );
+                    }
                     // `arg0` is the exp argument at scale `w0`; narrow it
                     // to scale `SCALE` to feed the `e^|·|` digit sizer
                     // (squaring-safe capped).
