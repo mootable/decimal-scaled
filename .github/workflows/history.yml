@@ -76,7 +76,13 @@ jobs:
         # the hosted runner's memory and the service SIGTERMs the job
         # (exit 143, observed 2026-06-12). Halving the parallelism keeps
         # peak memory inside the runner; the cargo cache keeps the wall
-        # time inside the timeout.
+        # time inside the timeout. CARGO_PROFILE_RELEASE_DEBUG drops the
+        # workspace's `[profile.release] debug = true` (local samply
+        # symbolization) — full debuginfo over the full-width build OOMs
+        # a SINGLE rustc, which -j 2 cannot cap (the same kill took out
+        # the golden-comprehensive and lib-cmp-precision builds).
+        env:
+          CARGO_PROFILE_RELEASE_DEBUG: "false"
         run: cargo test -p decimal-scale-test --release --features wide,x-wide,xx-wide,history --test history --no-run -j 2
 
       - name: Stage the gate exe

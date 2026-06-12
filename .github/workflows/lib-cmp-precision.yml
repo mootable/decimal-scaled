@@ -65,6 +65,13 @@ jobs:
       # default parallelism — "runner lost communication" (the exit-143
       # class fixed the same way in ci.yml and history.yml, 2026-06-12).
       CARGO_BUILD_JOBS: "2"
+      # The workspace sets `[profile.release] debug = true` (local samply
+      # symbolization). Generating full debuginfo over the full-width
+      # monomorphised subject surface is what OOM-kills the single rustc
+      # compiling golden-competitors (exit 143 survives -j 2). The staged
+      # exe is only ever executed by the stripes — debuginfo serves
+      # nothing here, so drop it for this build alone.
+      CARGO_PROFILE_RELEASE_DEBUG: "false"
     steps:
       - name: Checkout
         uses: actions/checkout@v6

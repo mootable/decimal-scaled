@@ -73,6 +73,16 @@ jobs:
         # `-p decimal-scale-test` scopes the build to the gate crate (the
         # root crate's bench dev-deps never compile). Shares the quick
         # gate's cache key, so this is usually a warm rebuild.
+        env:
+          # The exit-143 memory-kill class (2026-06-12): cap the parallel
+          # rustc units AND drop the workspace's `[profile.release]
+          # debug = true` (kept for local samply symbolization) — full
+          # debuginfo over the full-width monomorphised gate is what OOMs
+          # the single rustc compiling decimal-scale-test. The staged exe
+          # is only executed by the stripes; the harness reports failures
+          # with its own per-case output, never backtraces.
+          CARGO_BUILD_JOBS: "2"
+          CARGO_PROFILE_RELEASE_DEBUG: "false"
         run: cargo test -p decimal-scale-test --release --features wide,x-wide,xx-wide --test golden --no-run
 
       - name: Stage the gate exe
