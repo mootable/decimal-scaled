@@ -5,21 +5,26 @@ name: "\U0001F4CF lib-cmp precision (LSBε shootout refresh)"
 # `decimal-scaled-golden` harness that also backs the golden gate. The
 # runner sweeps (function × width × scale) over decimal-scaled plus the six
 # peer libraries, scores every cell against the multi-oracle golden set,
-# WRITES the deterministic per-library result files under
-# results/precision/<library>.tsv, and renders the LSBε(ULP) shootout table
-# FROM those committed files.
+# and WRITES the deterministic per-library result files under
+# results/precision/<library>.tsv — the single source of truth the README
+# precision tables render from.
 #
-# This workflow self-refreshes: after the run it commits the regenerated
-# results/precision/*.tsv straight back to the branch the run executed on,
-# so the committed result files (the single source of truth for the README
-# precision tables) never drift from the harness output. The self-commit
-# pattern mirrors the `regenerate` job in bench-full.yml.
+# Compile ONCE, then fan out (the golden-quick/history pattern, owner
+# 2026-06-12): the build job compiles the runner with capped parallelism
+# (the full-width live crate + seven peer crates OOM the hosted runner at
+# default -j — the exit-143 class) and stages just the binary; each stripe
+# downloads it and sweeps its GOLDEN_STRIPE row partition (the bin's
+# `Filter::from_env()` is the same harness filter the golden gate uses);
+# the aggregate job splices the per-library partial TSVs (one header set,
+# data rows merged and canonically sorted) and self-commits the result
+# back to the branch the run executed on. The per-stripe REPORT renders
+# are uploaded as stripe artifacts; the committed TSVs are the truth the
+# docs pipeline re-renders from.
 #
 # Triggers (advisory — NOT a required status check / merge gate):
 #   * pull_request (base = main) — runs on any PR INTO main so a kernel
 #     change that shifts an LSBε cell or a fidelity grade shows up under
-#     review (refreshes the result files on the PR branch + surfaces the
-#     fidelity grade report on the run's step summary).
+#     review.
 #   * workflow_dispatch — manual run on any branch (the dispatch button
 #     only appears once this file is on the default branch main).
 
@@ -31,84 +36,172 @@ on:
 permissions:
   contents: read
 
+env:
+  STRIPE_COUNT: "10"
+
 concurrency:
   group: lib-cmp-precision-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  refresh:
-    name: refresh results/precision
+  plan:
+    name: plan
     runs-on: ubuntu-latest
-    # The band-edge surface (92 cells x 28 functions x 7 libraries) is
-    # larger than the old per-tier sweep; the runner parallelises across
-    # the runner's cores, but allow headroom on a cold cache.
-    timeout-minutes: 60
-    permissions:
-      # Push the regenerated results/precision/*.tsv back to the branch
-      # this run executed on.
-      contents: write
-
+    timeout-minutes: 5
+    outputs:
+      stripes: ${{ steps.gen.outputs.stripes }}
     steps:
-      - name: Checkout the run's ref
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ github.head_ref || github.ref_name }}
+      - name: Generate stripe indices
+        id: gen
+        run: echo "stripes=$(python3 -c "import json, os; print(json.dumps(list(range(int(os.environ['STRIPE_COUNT'])))))")" >> "$GITHUB_OUTPUT"
 
-      - name: Guard — never self-commit to a default/protected branch
-        env:
-          REF: ${{ github.head_ref || github.ref_name }}
-        run: |
-          set -euo pipefail
-          case "$REF" in
-            main|master)
-              echo "::error::refusing to self-commit precision results to '$REF'"
-              exit 1
-              ;;
-          esac
-          echo "Will refresh + commit results/precision on '$REF'."
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # The release compile of golden-competitors (seven peer crates + the
+      # live crate at full width) starves the hosted runner's memory at
+      # default parallelism — "runner lost communication" (the exit-143
+      # class fixed the same way in ci.yml and history.yml, 2026-06-12).
+      CARGO_BUILD_JOBS: "2"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache cargo registry + git
-        uses: actions/cache@v5
+      - name: Cache cargo registry
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: cargo-lib-cmp-precision-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'macros/Cargo.toml', 'golden-competitors/Cargo.toml', 'decimal-scale-test/Cargo.toml', 'decimal-scaled-golden/Cargo.toml') }}
+          key: cargo-libcmp-precision-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'golden-competitors/Cargo.toml') }}
           restore-keys: |
-            cargo-lib-cmp-precision-${{ runner.os }}-
+            cargo-libcmp-precision-${{ runner.os }}-
 
-      - name: Run the comparative precision runner
-        # Writes results/precision/*.tsv, renders the LSBε(ULP) shootout
-        # tables, and renders the fidelity grade report (per-function +
-        # overall worst/aggregate dual-grade, the rubric, per-library
-        # coverage). The runner itself appends the fidelity report to
-        # $GITHUB_STEP_SUMMARY (UTF-8, so the ×/→/ε glyphs render); we also
-        # tee the full stdout into a file for the downloadable artifact.
-        # An accuracy runner, not a timing bench — release for the wide
-        # tiers' kernels, no criterion machinery.
-        env:
-          # Belt-and-suspenders so any tooling in the chain treats text as
-          # UTF-8 (the Rust runner already emits UTF-8 to the summary file).
-          PYTHONIOENCODING: utf-8
+      - name: Compile the precision runner (release)
+        run: cargo build --release -p golden-competitors --bin lib_cmp_precision
+
+      - name: Stage the runner exe
         run: |
-          mkdir -p results/precision
-          cargo run --release -p golden-competitors --bin lib_cmp_precision \
-            | tee results/precision/REPORT.md
+          set -euo pipefail
+          mkdir -p staged
+          cp target/release/lib_cmp_precision staged/lib_cmp_precision
+          chmod +x staged/lib_cmp_precision
 
-      - name: Upload precision results + fidelity grade report
-        # Single downloadable artifact: the per-library TSVs plus the
-        # rendered shootout + fidelity grade table (REPORT.md).
+      - name: Upload the runner exe
+        uses: actions/upload-artifact@v7
+        with:
+          name: lib-cmp-precision-exe
+          path: staged/
+          if-no-files-found: error
+          retention-days: 3
+
+  shoot:
+    name: shoot (stripe ${{ matrix.stripe }})
+    needs: [plan, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        stripe: ${{ fromJSON(needs.plan.outputs.stripes) }}
+    steps:
+      - name: Checkout (golden data)
+        uses: actions/checkout@v6
+
+      - name: Download the runner exe
+        uses: actions/download-artifact@v8
+        with:
+          name: lib-cmp-precision-exe
+
+      - name: Run stripe ${{ matrix.stripe }}/${{ env.STRIPE_COUNT }}
+        env:
+          GOLDEN_STRIPE: "${{ matrix.stripe }}/${{ env.STRIPE_COUNT }}"
+          GOLDEN_DIR: ${{ github.workspace }}/decimal-scaled-golden/golden
+          PYTHONIOENCODING: utf-8
+        # Timestamped, streamed output (slow-vs-stuck decidable from the
+        # live log — the history.yml lesson); the stripe's REPORT render is
+        # kept as an artifact beside its partial TSVs.
+        run: |
+          set -euo pipefail
+          chmod +x lib_cmp_precision
+          mkdir -p results/precision
+          ./lib_cmp_precision 2>&1 \
+            | awk '{ print strftime("[%H:%M:%S]"), $0; fflush() }' \
+            | tee results/precision/REPORT-stripe-${{ matrix.stripe }}.md
+          exit "${PIPESTATUS[0]}"
+
+      - name: Upload stripe partials (TSVs + report)
         uses: actions/upload-artifact@v7
         if: always()
         with:
+          name: lib-cmp-precision-stripe-${{ matrix.stripe }}
+          path: results/precision/
+          if-no-files-found: error
+          retention-days: 7
+
+  aggregate:
+    name: aggregate + self-commit
+    needs: [plan, shoot]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      # Push the regenerated results/precision/*.tsv back to the branch
+      # this run executed on (the bench-full.yml self-refresh pattern).
+      contents: write
+    steps:
+      - name: Checkout (for the self-commit)
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+
+      - name: Download all stripe partials
+        uses: actions/download-artifact@v8
+        with:
+          pattern: lib-cmp-precision-stripe-*
+          path: stripes/
+
+      - name: Splice the per-library TSVs (one header set, canonical row order)
+        run: |
+          set -euo pipefail
+          python3 - <<'EOF'
+          import os, glob
+          out_dir = "results/precision"
+          os.makedirs(out_dir, exist_ok=True)
+          # Discover the per-library file names across every stripe.
+          names = sorted({os.path.basename(p)
+                          for p in glob.glob("stripes/*/**/*.tsv", recursive=True)})
+          assert names, "no stripe TSVs downloaded"
+          for name in names:
+              headers, rows = None, []
+              for part in sorted(glob.glob(f"stripes/*/**/{name}", recursive=True)):
+                  with open(part, encoding="utf-8") as f:
+                      lines = f.read().splitlines()
+                  h = [l for l in lines if l.startswith("#")]
+                  headers = headers or h
+                  rows += [l for l in lines if l and not l.startswith("#")]
+              # Canonical order: the key columns (method, width, scale,
+              # rounding) — deterministic regardless of stripe timing.
+              def key(line):
+                  c = line.split("\t")
+                  return (c[0], int(c[1]) if c[1].isdigit() else c[1],
+                          int(c[2]) if c[2].isdigit() else c[2], c[3])
+              rows = sorted(set(rows), key=key)
+              with open(os.path.join(out_dir, name), "w", encoding="utf-8", newline="\n") as f:
+                  f.write("\n".join(headers + rows) + "\n")
+              print(f"{name}: {len(rows)} rows")
+          EOF
+
+      - name: Upload the combined results
+        uses: actions/upload-artifact@v7
+        with:
           name: lib-cmp-precision-results
-          path: |
-            results/precision/*.tsv
-            results/precision/REPORT.md
-          if-no-files-found: warn
+          path: results/precision/*.tsv
+          if-no-files-found: error
 
       - name: Commit refreshed precision results back to the run's branch
         env:
@@ -117,13 +210,10 @@ jobs:
           set -euo pipefail
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Only the committed TSV source of truth — REPORT.md is an
-          # artifact-only render, not a tracked file.
           git add results/precision/*.tsv
           if git diff --cached --quiet; then
-            echo "No precision result changes to commit."
+            echo "results unchanged — nothing to commit"
             exit 0
           fi
-          # Plain message, no attribution trailer (commit-hygiene gate).
-          git commit -m "results(precision): regenerate from lib_cmp_precision sweep"
-          git push origin "HEAD:${REF}"
+          git commit -m "results(precision): refresh from the striped lib-cmp run"
+          git push origin "HEAD:$REF"
