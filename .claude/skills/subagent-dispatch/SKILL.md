@@ -64,6 +64,22 @@ instead of working on the stale base.)
   CPU-pin concurrent *benches* (`coordinator-perf-multiagent` / `pin_run.ps1`); never run an
   unpinned measurement while siblings are active.
 
+## Model selection — match the model to the work (owner 2026-06-12)
+
+Set the Agent tool's `model` parameter per dispatch, judged from the charter (not the file
+count):
+
+- **simple** → `sonnet` — mechanical edits, applying an already-reviewed patch, doc/config
+  touch-ups, a scripted refactor with no judgment calls.
+- **medium** → `opus` — well-scoped multi-file work, mirroring an existing pattern (e.g. a CI
+  shard matrix that copies an established one), test re-gating, focused harness work.
+- **complicated** → `fable` — anything needing real diagnosis: kernel/rounding/wide-band
+  fixes, shared high-blast-radius code, macro machinery, policy-mapper measurement runs.
+
+If a "simple" dispatch surfaces real diagnosis mid-flight, pull it back and re-dispatch at the
+higher tier rather than letting the smaller model improvise. The coordinator reviews every
+diff regardless of the model that produced it.
+
 ## Every agent prompt MUST include
 
 ### 1. Verify your base — NON-destructive (no reset, ever)
