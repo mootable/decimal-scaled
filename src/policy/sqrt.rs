@@ -55,12 +55,6 @@ enum Algorithm {
     /// [`Self::Native`] (which seeds Newton in a tight `Int<W>` instead of
     /// re-entering the int `isqrt` policy's build-max slice) and no longer
     /// selected by `select`.
-    ///
-    /// Gated with the kernel: it only exists when D57 is compiled in, so the
-    /// variant and its dispatch arm are gated together (the policy stays
-    /// exhaustive in both configs — see `docs/ARCHITECTURE.md`
-    /// "Feature-flagging a variation").
-    #[cfg(any(feature = "d57", feature = "wide"))]
     #[allow(dead_code)]
     NewtonWithTableSeed,
     /// [`sqrt::sqrt_native::sqrt_native`] — `f64`-seeded Newton run directly
@@ -77,10 +71,12 @@ enum Algorithm {
     /// generic slice [`Self::Newton`]. Bit-identical to [`Self::Newton`]
     /// across all six modes.
     ///
-    /// Gated with the kernel: each tier only exists when compiled in, so the
-    /// variant, its `select` arms, and its dispatch arms are gated together
-    /// (the policy stays exhaustive in both configs).
-    #[cfg(any(feature = "d57", feature = "wide"))]
+    /// NOT feature-gated: variant and arms always present so routing is
+    /// feature-INDEPENDENT (a single-wide-tier build routes that tier exactly
+    /// as a full build does). Reached only at the `N` its tier instantiates,
+    /// so dead-arm-eliminated without that tier; `#[allow(dead_code)]` covers
+    /// the narrow-only build where it is never constructed.
+    #[allow(dead_code)]
     Native,
     /// Schoolbook reference tag -- delegates to
     /// [`sqrt::sqrt_newton::sqrt_newton`], which uses the same
@@ -132,9 +128,11 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // exactly). They keep only their high-scale `Native` cells below,
         // where the radicand is genuinely wide.
         //
-        // Gated with the kernel: each tier's cells only exist when the tier
-        // is compiled in (the policy stays exhaustive in both configs).
-        #[cfg(any(feature = "d57", feature = "wide"))]
+        // Feature-INDEPENDENT routing: these arms key only on `(N, SCALE)`,
+        // never on which tiers are compiled. Reached only at the `N` their
+        // tier instantiates, so an always-present arm is dead without that
+        // tier and correct with it — the SAME verdict either way (a feature
+        // gate here was the tier-splitting routing defect).
         (3, _) // D57, W=6
         | (4, _) // D76, W=8
         => Select::ByAlgorithm(Algorithm::Native),
@@ -157,9 +155,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // (Class I "continuous win-region" gate); each cell routed to
         // Native is bit-identical to Newton across all six modes and a
         // measured win.
-        #[cfg(any(feature = "d57", feature = "wide"))]
         (6, s) if s >= 24 => Select::ByAlgorithm(Algorithm::Native), // D115, W=12
-        #[cfg(any(feature = "d57", feature = "wide"))]
         (8, s) if s >= 32 => Select::ByAlgorithm(Algorithm::Native), // D153, W=16
         // Per-tier crossovers tightened by adaptive-bisection in
         // `root_kernel_ab.rs` (cores 18-19, 2026-05-28): the conservative
@@ -169,17 +165,11 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // routed cells just above the gate. The refined thresholds below
         // sit at the true bisected crossover per tier; the architecture-
         // review Class I check (continuous win-region) requires this.
-        #[cfg(any(feature = "d57", feature = "wide"))]
         (12, s) if s >= 70 => Select::ByAlgorithm(Algorithm::Native), // D230, W=24
-        #[cfg(any(feature = "d57", feature = "wide"))]
         (16, s) if s >= 64 => Select::ByAlgorithm(Algorithm::Native), // D307, W=32
-        #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
         (24, s) if s >= 96 => Select::ByAlgorithm(Algorithm::Native), // D462, W=48
-        #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
         (32, s) if s >= 160 => Select::ByAlgorithm(Algorithm::Native), // D616, W=64
-        #[cfg(feature = "xx-wide")]
         (48, s) if s >= 260 => Select::ByAlgorithm(Algorithm::Native), // D924, W=96
-        #[cfg(feature = "xx-wide")]
         (64, s) if s >= 256 => Select::ByAlgorithm(Algorithm::Native), // D1232, W=128
         // Everything else (wider tiers at low/mid scales) — generic Newton
         // over the int layer's width-agnostic slice `isqrt`.
@@ -221,7 +211,6 @@ where
                 .resize_to::<Int<N>>()
         }
         // (D57, 20): the bespoke kernel works on `Int<3>` storage.
-        #[cfg(any(feature = "d57", feature = "wide"))]
         Algorithm::NewtonWithTableSeed => {
             sqrt::sqrt_newton_with_table_seed::sqrt_newton_with_table_seed(
                 raw.resize_to::<Int<3>>(),
@@ -235,7 +224,6 @@ where
         // so each monomorphisation keeps exactly one arm and the rest are
         // dead-arm-eliminated in release. The `_ => Newton` fallback never
         // fires for a cell `select` routed to `Native`.
-        #[cfg(any(feature = "d57", feature = "wide"))]
         Algorithm::Native => match N {
             // All wide tiers run at the full-range work width `W = 2N`, which
             // covers `mag · 10^SCALE` for every valid SCALE of the tier (the
@@ -250,13 +238,9 @@ where
             8 => sqrt::sqrt_native::sqrt_native::<N, 16>(raw, const { Int::<16>::TEN.pow(SCALE) }, mode),
             12 => sqrt::sqrt_native::sqrt_native::<N, 24>(raw, const { Int::<24>::TEN.pow(SCALE) }, mode),
             16 => sqrt::sqrt_native::sqrt_native::<N, 32>(raw, const { Int::<32>::TEN.pow(SCALE) }, mode),
-            #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
             24 => sqrt::sqrt_native::sqrt_native::<N, 48>(raw, const { Int::<48>::TEN.pow(SCALE) }, mode),
-            #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
             32 => sqrt::sqrt_native::sqrt_native::<N, 64>(raw, const { Int::<64>::TEN.pow(SCALE) }, mode),
-            #[cfg(feature = "xx-wide")]
             48 => sqrt::sqrt_native::sqrt_native::<N, 96>(raw, const { Int::<96>::TEN.pow(SCALE) }, mode),
-            #[cfg(feature = "xx-wide")]
             64 => sqrt::sqrt_native::sqrt_native::<N, 128>(raw, const { Int::<128>::TEN.pow(SCALE) }, mode),
             _ => sqrt::sqrt_newton::sqrt_newton::<N>(raw, SCALE, mode),
         },

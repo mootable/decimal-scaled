@@ -60,8 +60,10 @@
 //! Seed strategy citation: Hasselgren / Crandall & Pomerance 2005, "Prime
 //! Numbers: A Computational Perspective" §9.2.1 (Newton integer roots from
 //! an `f64` bootstrap seed). Implemented from the text; no external code.
-
-#![cfg(any(feature = "d57", feature = "wide"))]
+//!
+//! NOT feature-gated: this generic kernel is referenced by the
+//! feature-independent `cbrt` policy, so it must compile in every build. It
+//! is dead-arm-eliminated wherever its `(N, SCALE)` cells are not reached.
 
 #[cfg(feature = "std")]
 use crate::algo_x_support::seed::extract_top_u64;

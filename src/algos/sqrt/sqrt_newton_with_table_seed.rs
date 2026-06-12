@@ -38,8 +38,9 @@
 //! Result is bit-for-bit identical to [`crate::algos::sqrt::sqrt_newton`]
 //! under all six [`RoundingMode`] values; only the integer width and the
 //! seed source change.
-
-#![cfg(any(feature = "d57", feature = "wide"))]
+//!
+//! NOT feature-gated: referenced by the feature-independent `sqrt` policy (as
+//! a kept reference seam), so it compiles in every build.
 
 use crate::int::types::traits::BigInt;
 use crate::int::types::Int;

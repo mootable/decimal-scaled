@@ -68,19 +68,19 @@ enum Algorithm {
     /// across all six modes (the rounding tail is shared); the seed falls back
     /// to the top-bits path past the f64 range.
     ///
-    /// Gated with the kernel: each routed `(N, SCALE)` cell only exists
-    /// when its tier is compiled in, so the variant, its `select` arms,
-    /// and its dispatch arms are gated together (the policy stays
-    /// exhaustive in both configs — see `docs/ARCHITECTURE.md`
-    /// "Feature-flagging a variation").
-    #[cfg(any(feature = "d57", feature = "wide"))]
+    /// NOT feature-gated: the variant and its `select`/`dispatch` arms are
+    /// always present so routing is feature-INDEPENDENT (a build with a
+    /// single wide tier routes that tier exactly as a full build does). The
+    /// arms are reached only at the `N` their tier instantiates, so they are
+    /// dead-arm-eliminated in any build without that tier; `#[allow(dead_code)]`
+    /// covers the narrow-only build where the variant is never constructed.
+    #[allow(dead_code)]
     Native,
     /// [`cbrt::cbrt_newton_with_table_seed::cbrt_newton_with_table_seed`]
     /// — the prior `Int<6>` + int-`icbrt` arm for `(D57, 20)`. Superseded
     /// by [`Self::Native`] (the int-`icbrt` scratch churn made it ~2×
     /// slower); kept as an explicit benchmarkable reference seam, never
     /// selected by `select`.
-    #[cfg(any(feature = "d57", feature = "wide"))]
     #[allow(dead_code)]
     NewtonWithTableSeed,
     /// Schoolbook reference tag -- delegates to
@@ -133,9 +133,14 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // blanket `W = 3N` would regress them (rule 6 — size each width
         // exactly). They keep only their high-scale `Native` cells below.
         //
-        // Gated with the kernel; each tier's cells are unreachable when the
-        // tier isn't built (the policy stays exhaustive in both configs).
-        #[cfg(any(feature = "d57", feature = "wide"))]
+        // The routing is feature-INDEPENDENT: these arms key only on
+        // `(N, SCALE)`, never on which tiers are compiled in. A cell is
+        // reached only when its `N` is actually instantiated (which requires
+        // its tier), so an always-present arm is dead in a build without that
+        // tier and correct in one with it — the SAME verdict either way. (A
+        // feature gate here made the same type route differently depending on
+        // which other tiers the build enabled — the tier-splitting routing
+        // defect.)
         (3, _) // D57, W=9
         | (4, _) // D76, W=12
         => Select::ByAlgorithm(Algorithm::Native),
@@ -151,21 +156,13 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // 8·N` gate sits just inside the win region (every routed cell wins,
         // none below is regressed). At the benchmarked max-scale (S-1) cells this
         // recovers 1.4–2.9× over the slice (bit-identical, all six modes).
-        #[cfg(any(feature = "d57", feature = "wide"))]
         (6, s) if s >= 48 => Select::ByAlgorithm(Algorithm::Native), // D115, W=18
-        #[cfg(any(feature = "d57", feature = "wide"))]
         (8, s) if s >= 64 => Select::ByAlgorithm(Algorithm::Native), // D153, W=24
-        #[cfg(any(feature = "d57", feature = "wide"))]
         (12, s) if s >= 96 => Select::ByAlgorithm(Algorithm::Native), // D230, W=36
-        #[cfg(any(feature = "d57", feature = "wide"))]
         (16, s) if s >= 128 => Select::ByAlgorithm(Algorithm::Native), // D307, W=48
-        #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
         (24, s) if s >= 192 => Select::ByAlgorithm(Algorithm::Native), // D462, W=72
-        #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
         (32, s) if s >= 256 => Select::ByAlgorithm(Algorithm::Native), // D616, W=96
-        #[cfg(feature = "xx-wide")]
         (48, s) if s >= 384 => Select::ByAlgorithm(Algorithm::Native), // D924, W=144
-        #[cfg(feature = "xx-wide")]
         (64, s) if s >= 512 => Select::ByAlgorithm(Algorithm::Native), // D1232, W=192
         // Everything else (wider tiers at low/mid scales) — generic Newton
         // over the int layer's width-agnostic slice `icbrt`.
@@ -212,7 +209,6 @@ where
         // generics), so each monomorphisation keeps exactly one arm and
         // the rest are dead-arm-eliminated in release. The `_ => Newton`
         // fallback never fires for a cell `select` routed to `Native`.
-        #[cfg(any(feature = "d57", feature = "wide"))]
         // Native cells use the 0.4.4-style full-radicand f64 cbrt seed
         // (`cbrt_native_fast_a`): a tight seed (vs the shipped top-64-bits
         // seed that over-shoots ∛n by ~2.5×) cuts the Newton divide count,
@@ -231,17 +227,12 @@ where
             8 => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 24>(raw, const { Int::<24>::TEN.pow(2 * SCALE) }, mode),
             12 => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 36>(raw, const { Int::<36>::TEN.pow(2 * SCALE) }, mode),
             16 => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 48>(raw, const { Int::<48>::TEN.pow(2 * SCALE) }, mode),
-            #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
             24 => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 72>(raw, const { Int::<72>::TEN.pow(2 * SCALE) }, mode),
-            #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
             32 => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 96>(raw, const { Int::<96>::TEN.pow(2 * SCALE) }, mode),
-            #[cfg(feature = "xx-wide")]
             48 => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 144>(raw, const { Int::<144>::TEN.pow(2 * SCALE) }, mode),
-            #[cfg(feature = "xx-wide")]
             64 => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 192>(raw, const { Int::<192>::TEN.pow(2 * SCALE) }, mode),
             _ => cbrt::cbrt_newton::cbrt_newton::<N>(raw, SCALE, mode),
         },
-        #[cfg(any(feature = "d57", feature = "wide"))]
         Algorithm::NewtonWithTableSeed => {
             cbrt::cbrt_newton_with_table_seed::cbrt_newton_with_table_seed(
                 raw.resize_to::<Int<3>>(),

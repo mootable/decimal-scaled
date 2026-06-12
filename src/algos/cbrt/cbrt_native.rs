@@ -36,8 +36,9 @@
 //! (a tight concrete `Int<W>` vs the slice's build-max scratch) and the
 //! seed source change. See [`crate::algos::cbrt::cbrt_newton`] for the
 //! Newton + half-step rounding algorithm.
-
-#![cfg(any(feature = "d57", feature = "wide"))]
+//!
+//! NOT feature-gated: referenced by the feature-independent `cbrt` policy, so
+//! it compiles in every build and is dead-arm-eliminated where unreached.
 
 use crate::algo_x_support::seed::cbrt_seed;
 use crate::int::types::traits::BigInt;

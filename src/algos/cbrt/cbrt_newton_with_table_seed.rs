@@ -29,8 +29,9 @@
 //! (`Int<6>` vs the generic `Int<12>`) and the seed source change. See
 //! [`crate::algos::cbrt::cbrt_newton`] for the Newton + half-step
 //! rounding algorithm.
-
-#![cfg(any(feature = "d57", feature = "wide"))]
+//!
+//! NOT feature-gated: referenced by the feature-independent `cbrt` policy (as
+//! a kept reference seam), so it compiles in every build.
 
 use crate::int::types::traits::BigInt;
 use crate::int::types::Int;
