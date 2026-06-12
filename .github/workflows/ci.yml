@@ -60,6 +60,11 @@ jobs:
       # observed 2026-06-12; same class as the history.yml build fix).
       # Two parallel rustc units keep the peak inside the runner.
       CARGO_BUILD_JOBS: "2"
+      # line-tables-only: full dev debuginfo is most of a test compile's
+      # memory/size; line tables keep file:line backtraces usable while
+      # shedding the bulk (the exit-143 memory class, proven by the
+      # lib-cmp sampler: a single rustc can peak past the 16 GB runner).
+      CARGO_PROFILE_DEV_DEBUG: "line-tables-only"
 
     steps:
       - name: Checkout
@@ -82,6 +87,20 @@ jobs:
         # The full `cargo test` builds every target including the
         # chart_gen example, which pulls plotters → yeslogic-fontconfig-sys.
         run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
+
+      - name: Add swap for the compile's memory peak
+        # PROVEN cause (lib-cmp-precision run 27393313247, -j 1 + sampler):
+        # a single rustc on a full-width monomorphised target can peak past
+        # the runner's 16 GB and the service SIGTERMs the job (exit 143).
+        # Disk-backed swap absorbs the short spike.
+        run: |
+          set -euo pipefail
+          SWAP=/mnt/swapfile2
+          sudo fallocate -l 12G "$SWAP" 2>/dev/null || { SWAP=/swapfile2; sudo fallocate -l 8G "$SWAP"; }
+          sudo chmod 600 "$SWAP"
+          sudo mkswap "$SWAP"
+          sudo swapon "$SWAP"
+          free -h
 
       - name: Full test suite (wide tiers + macros)
         # The full `cargo test` — no `--test` scoping — so every
@@ -153,10 +172,28 @@ jobs:
           restore-keys: |
             cargo-ci-golden-${{ runner.os }}-
 
+      - name: Add swap for the compile's memory peak
+        # PROVEN cause (lib-cmp-precision run 27393313247, -j 1 + sampler):
+        # the single rustc compiling the full-width monomorphised gate
+        # peaks past the runner's 16 GB → SIGTERM (exit 143). Swap absorbs
+        # the spike. (Follow-up: port the width-shard build pattern from
+        # golden-comprehensive.yml once it proves out.)
+        run: |
+          set -euo pipefail
+          SWAP=/mnt/swapfile2
+          sudo fallocate -l 12G "$SWAP" 2>/dev/null || { SWAP=/swapfile2; sudo fallocate -l 8G "$SWAP"; }
+          sudo chmod 600 "$SWAP"
+          sudo mkswap "$SWAP"
+          sudo swapon "$SWAP"
+          free -h
+
       - name: Compile the golden gate (release, no run)
         # `-p decimal-scale-test` scopes the build to the gate crate
         # (the root crate's bench dev-deps — plotters/fontconfig —
         # never compile).
+        env:
+          CARGO_BUILD_JOBS: "2"
+          CARGO_PROFILE_RELEASE_DEBUG: "false"
         run: cargo test -p decimal-scale-test --release --features wide,x-wide,xx-wide --test golden --no-run
 
       - name: Stage the gate exe

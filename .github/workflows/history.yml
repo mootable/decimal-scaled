@@ -69,6 +69,21 @@ jobs:
           restore-keys: |
             cargo-history-${{ runner.os }}-
 
+      - name: Add swap for the compile's memory peak
+        # PROVEN cause (lib-cmp-precision run 27393313247, -j 1 + sampler):
+        # one rustc compiling a full-width monomorphised gate binary peaks
+        # past the runner's 16 GB and the service SIGTERMs it (exit 143).
+        # This job compiles THREE full-width crates (live + ds-044 + ds-033)
+        # into one binary — the heaviest of the class. Swap absorbs the spike.
+        run: |
+          set -euo pipefail
+          SWAP=/mnt/swapfile2
+          sudo fallocate -l 12G "$SWAP" 2>/dev/null || { SWAP=/swapfile2; sudo fallocate -l 8G "$SWAP"; }
+          sudo chmod 600 "$SWAP"
+          sudo mkswap "$SWAP"
+          sudo swapon "$SWAP"
+          free -h
+
       - name: Compile the history gates (release, no run)
         # -j 2: the live crate at full width PLUS both pinned historical
         # crates (the per-tier-era ds-044 at xx-wide) in release is the
@@ -88,7 +103,7 @@ jobs:
         # evidence curve; -j 1 maximises headroom meanwhile.
         run: |
           set -euo pipefail
-          ( while true; do m=$(free -m | awk '/^Mem:/{print $7}'); d=$(df -BM --output=avail . | tail -1 | tr -dc 0-9); echo "[res $(date +%H:%M:%S)] mem avail ${m} MB | disk avail ${d} MB"; sleep 15; done ) &
+          ( while true; do m=$(free -m | awk '/^Mem:/{print $7}'); s=$(free -m | awk '/^Swap:/{print $4}'); d=$(df -BM --output=avail . | tail -1 | tr -dc 0-9); echo "[res $(date +%H:%M:%S)] mem avail ${m} MB | swap free ${s} MB | disk avail ${d} MB"; sleep 15; done ) &
           SAMPLER=$!
           cargo test -p decimal-scale-test --release --features wide,x-wide,xx-wide,history --test history --no-run -j 1
           kill "$SAMPLER" || true

@@ -7,11 +7,18 @@ name: "🌕 golden comprehensive (advisory)"
 # check; a red here means roll the push back or bisect, never block
 # the quick-gate merge loop (owner 2026-06-11).
 #
-# Same stripe mechanics as the quick gate: build the release gate exe
-# once, stage just the binary (the bbc pattern), fan the FULL row set
-# over STRIPE_COUNT disjoint stripes (GOLDEN_STRIPE=k/n), each stripe
-# posting its mini report the moment it finishes, then splice the
-# stripes back together in order.
+# SHARDED BY WIDTH (owner 2026-06-12): the gate exe is built once per
+# WIDTH TIER (`--features <tier>`; `narrow` = the base D18/D38 build),
+# because the single full-width binary is not buildable on a hosted
+# runner — one rustc carrying every tier's monomorphisations peaks past
+# the runner's 16 GB (proven by the in-step sampler on the lib-cmp
+# build, run 27393313247: 15.9 GB used / 80 MB avail at -j 1 → SIGTERM
+# exit 143). Each shard exe contains ONLY its tier's cells (the per-tier
+# dispatch gating), so the width shard partitions the surface for free;
+# WITHIN a shard the rows still stripe (GOLDEN_STRIPE=k/n) so the heavy
+# wide tiers stay inside the job timeout. The splice stitches
+# shard × stripe mini reports back together. Coverage is UNCHANGED —
+# full rows, all six modes.
 
 on:
   push:
@@ -24,10 +31,10 @@ permissions:
   contents: read
 
 env:
-  # The stripe modulus — tune from the per-stripe timings in the splice
-  # summary. Independent of ci.yml's knob so the heavier six-mode sweep
-  # can shard wider if needed.
-  STRIPE_COUNT: "10"
+  # Stripes WITHIN each width shard — tune from the per-stripe timings
+  # in the splice summary (the wide tiers dominate; narrow stripes are
+  # cheap either way).
+  STRIPE_COUNT: "3"
 
 concurrency:
   # Serial queue per ref, like ci.yml/bbc: an in-progress sweep finishes,
@@ -41,16 +48,39 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      stripes: ${{ steps.gen.outputs.stripes }}
+      cells: ${{ steps.gen.outputs.cells }}
     steps:
-      - name: Generate stripe indices
+      - name: Generate the shard × stripe matrix
         id: gen
-        run: echo "stripes=$(python3 -c "import json, os; print(json.dumps(list(range(int(os.environ['STRIPE_COUNT'])))))")" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "cells=$(python3 - <<'EOF'
+          import json, os
+          shards = ["narrow", "d57", "d76", "d115", "d153", "d230",
+                    "d307", "d462", "d616", "d924", "d1232"]
+          n = int(os.environ["STRIPE_COUNT"])
+          print(json.dumps([{"shard": s, "stripe": k} for s in shards for k in range(n)]))
+          EOF
+          )" >> "$GITHUB_OUTPUT"
 
   build:
-    name: build
+    name: build (${{ matrix.shard }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { shard: narrow, feat: "" }
+          - { shard: d57,    feat: "d57" }
+          - { shard: d76,    feat: "d76" }
+          - { shard: d115,   feat: "d115" }
+          - { shard: d153,   feat: "d153" }
+          - { shard: d230,   feat: "d230" }
+          - { shard: d307,   feat: "d307" }
+          - { shard: d462,   feat: "d462" }
+          - { shard: d616,   feat: "d616" }
+          - { shard: d924,   feat: "d924" }
+          - { shard: d1232,  feat: "d1232" }
 
     steps:
       - name: Checkout
@@ -69,27 +99,19 @@ jobs:
           restore-keys: |
             cargo-ci-golden-${{ runner.os }}-
 
-      - name: Compile the golden gate (release, no run)
-        # `-p decimal-scale-test` scopes the build to the gate crate (the
-        # root crate's bench dev-deps never compile). Shares the quick
-        # gate's cache key, so this is usually a warm rebuild.
+      - name: Compile the shard gate exe (release, no run)
         env:
-          # The exit-143 memory-kill class (2026-06-12): cap the parallel
-          # rustc units AND drop the workspace's `[profile.release]
-          # debug = true` (kept for local samply symbolization) — full
-          # debuginfo over the full-width monomorphised gate is what OOMs
-          # the single rustc compiling decimal-scale-test. The staged exe
-          # is only executed by the stripes; the harness reports failures
-          # with its own per-case output, never backtraces.
-          # -j 1: the kill survived -j 2 + the debuginfo drop; serialize
-          # fully while the in-step memory sampler establishes the curve.
-          CARGO_BUILD_JOBS: "1"
+          # Modest insurance on the now-slim per-tier build: two parallel
+          # rustc units, no release debuginfo (the workspace keeps
+          # `debug = true` for local samply; it serves nothing here).
+          CARGO_BUILD_JOBS: "2"
           CARGO_PROFILE_RELEASE_DEBUG: "false"
         run: |
           set -euo pipefail
-          ( while true; do m=$(free -m | awk '/^Mem:/{print $7}'); d=$(df -BM --output=avail . | tail -1 | tr -dc 0-9); echo "[res $(date +%H:%M:%S)] mem avail ${m} MB | disk avail ${d} MB"; sleep 15; done ) &
+          ( while true; do m=$(free -m | awk '/^Mem:/{print $7}'); echo "[res $(date +%H:%M:%S)] mem avail ${m} MB"; sleep 30; done ) &
           SAMPLER=$!
-          cargo test -p decimal-scale-test --release --features wide,x-wide,xx-wide --test golden --no-run
+          FEAT="${{ matrix.feat }}"
+          cargo test -p decimal-scale-test --release ${FEAT:+--features "$FEAT"} --test golden --no-run
           kill "$SAMPLER" || true
 
       - name: Stage the gate exe
@@ -104,31 +126,31 @@ jobs:
       - name: Upload the gate exe
         uses: actions/upload-artifact@v7
         with:
-          name: golden-exe
+          name: golden-exe-${{ matrix.shard }}
           path: staged/
           if-no-files-found: error
           retention-days: 3
 
   stripes:
-    name: stripe ${{ matrix.stripe }}
+    name: ${{ matrix.shard }} stripe ${{ matrix.stripe }}
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     needs: [plan, build]
     strategy:
       fail-fast: false
       matrix:
-        stripe: ${{ fromJSON(needs.plan.outputs.stripes) }}
+        include: ${{ fromJSON(needs.plan.outputs.cells) }}
 
     steps:
       - name: Checkout (golden data)
         uses: actions/checkout@v6
 
-      - name: Download the gate exe
+      - name: Download the shard gate exe
         uses: actions/download-artifact@v8
         with:
-          name: golden-exe
+          name: golden-exe-${{ matrix.shard }}
 
-      - name: Run stripe (all six modes, full rows)
+      - name: Run stripe (all six modes, the shard's full rows)
         env:
           GOLDEN_STRIPE: "${{ matrix.stripe }}/${{ env.STRIPE_COUNT }}"
           GOLDEN_REPORT_DIR: stripe-report
@@ -142,7 +164,7 @@ jobs:
         if: always()
         run: |
           if [ -f stripe-report/summary.txt ]; then
-            echo "=== stripe mini report ==="
+            echo "=== ${{ matrix.shard }} stripe ${{ matrix.stripe }} mini report ==="
             cat stripe-report/summary.txt
             cat stripe-report/summary.txt >> "$GITHUB_STEP_SUMMARY"
           else
@@ -153,7 +175,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: golden-comprehensive-stripe-${{ matrix.stripe }}
+          name: golden-comprehensive-${{ matrix.shard }}-s${{ matrix.stripe }}
           path: stripe-report/
           if-no-files-found: warn
           retention-days: 7
@@ -168,20 +190,20 @@ jobs:
       - name: Download all stripe reports
         uses: actions/download-artifact@v8
         with:
-          pattern: golden-comprehensive-stripe-*
+          pattern: golden-comprehensive-*
           path: stripes/
 
-      - name: Splice in stripe order
+      - name: Splice in shard × stripe order
         env:
-          STRIPES: ${{ needs.plan.outputs.stripes }}
+          CELLS: ${{ needs.plan.outputs.cells }}
         run: |
           set -euo pipefail
           mkdir -p combined
           : > combined/summaries.txt
           head_done=0
-          for k in $(python3 -c "import json,os;print(' '.join(map(str, json.loads(os.environ['STRIPES']))))"); do
-            dir="stripes/golden-comprehensive-stripe-${k}"
-            test -f "$dir/summary.txt" || { echo "MISSING stripe ${k} report" >&2; exit 1; }
+          for cell in $(python3 -c "import json,os;print(' '.join(f\"{c['shard']}-s{c['stripe']}\" for c in json.loads(os.environ['CELLS'])))"); do
+            dir="stripes/golden-comprehensive-${cell}"
+            test -f "$dir/summary.txt" || { echo "MISSING ${cell} report" >&2; exit 1; }
             cat "$dir/summary.txt" >> combined/summaries.txt
             if [ "$head_done" -eq 0 ]; then
               cat "$dir/results.tsv" > combined/results.tsv; head_done=1
@@ -190,7 +212,7 @@ jobs:
             fi
           done
           {
-            echo "## golden comprehensive — combined (all six modes, full surface)"
+            echo "## golden comprehensive — combined (all six modes, full surface, width-sharded)"
             echo '```'
             cat combined/summaries.txt
             echo '```'

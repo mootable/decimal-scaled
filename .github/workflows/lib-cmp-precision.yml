@@ -9,17 +9,22 @@ name: "\U0001F4CF lib-cmp precision (LSBε shootout refresh)"
 # results/precision/<library>.tsv — the single source of truth the README
 # precision tables render from.
 #
-# Compile ONCE, then fan out (the golden-quick/history pattern, owner
-# 2026-06-12): the build job compiles the runner with capped parallelism
-# (the full-width live crate + seven peer crates OOM the hosted runner at
-# default -j — the exit-143 class) and stages just the binary; each stripe
-# downloads it and sweeps its GOLDEN_STRIPE row partition (the bin's
-# `Filter::from_env()` is the same harness filter the golden gate uses);
-# the aggregate job splices the per-library partial TSVs (one header set,
-# data rows merged and canonically sorted) and self-commits the result
-# back to the branch the run executed on. The per-stripe REPORT renders
-# are uploaded as stripe artifacts; the committed TSVs are the truth the
-# docs pipeline re-renders from.
+# SHARDED BY WIDTH, SCORED AT THE CANONICAL MID SCALE ONLY (owner
+# 2026-06-12): one job per width, each building its own SLIM runner
+# (`--features <tier>` via the passthroughs in golden-competitors/
+# Cargo.toml) and sweeping ONLY that width's canonical S/2 cell
+# (GOLDEN_WIDTHS + GOLDEN_SCALES — the same scale the shootout tables
+# render at, so the committed TSVs and the README tables stay in step).
+# The single full-width binary is NOT buildable on a hosted runner — one
+# rustc carrying all 88 cells' monomorphisations peaks past the 16 GB the
+# runner has (proven by the in-step sampler, run 27393313247: 15.9 GB
+# used / 80 MB avail at -j 1 → SIGTERM, exit 143). Sharding bounds every
+# compile to one tier's surface. The aggregate job splices the
+# per-library partial TSVs (one header set, data rows merged and
+# canonically sorted) and self-commits the result back to the branch the
+# run executed on. No historical decimal-scaled version is anywhere in
+# this path (decimal-scale-test's ds-044/ds-033 pins are optional,
+# history-gate-only features — never enabled here).
 #
 # Triggers (advisory — NOT a required status check / merge gate):
 #   * pull_request (base = main) — runs on any PR INTO main so a kernel
@@ -36,44 +41,37 @@ on:
 permissions:
   contents: read
 
-env:
-  STRIPE_COUNT: "10"
-
 concurrency:
   group: lib-cmp-precision-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  plan:
-    name: plan
+  shoot:
+    name: shoot (${{ matrix.shard }})
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      stripes: ${{ steps.gen.outputs.stripes }}
-    steps:
-      - name: Generate stripe indices
-        id: gen
-        run: echo "stripes=$(python3 -c "import json, os; print(json.dumps(list(range(int(os.environ['STRIPE_COUNT'])))))")" >> "$GITHUB_OUTPUT"
-
-  build:
-    name: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    env:
-      # The release compile of golden-competitors (seven peer crates + the
-      # live crate at full width) starves the hosted runner's memory at
-      # default parallelism — "runner lost communication" (the exit-143
-      # class fixed the same way in ci.yml and history.yml, 2026-06-12).
-      # -j 1: the kill survived -j 2 AND the debuginfo drop — serialize
-      # fully while the in-step memory sampler establishes the real curve.
-      CARGO_BUILD_JOBS: "1"
-      # The workspace sets `[profile.release] debug = true` (local samply
-      # symbolization). Generating full debuginfo over the full-width
-      # monomorphised subject surface is what OOM-kills the single rustc
-      # compiling golden-competitors (exit 143 survives -j 2). The staged
-      # exe is only ever executed by the stripes — debuginfo serves
-      # nothing here, so drop it for this build alone.
-      CARGO_PROFILE_RELEASE_DEBUG: "false"
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        # One shard per WIDTH. d18/d38 share the narrow base build (no
+        # tier feature); each shard sweeps exactly its width's canonical
+        # mid-scale cell via GOLDEN_WIDTHS/GOLDEN_SCALES (which also stops
+        # wider builds re-running the base D18/D38 cells). The scale is
+        # each width's `canonical_scale` in lib_cmp_precision.rs — keep
+        # the two lists in step.
+        include:
+          - { shard: d18,   feat: "",      width: 18,   scale: 9 }
+          - { shard: d38,   feat: "",      width: 38,   scale: 19 }
+          - { shard: d57,   feat: "d57",   width: 57,   scale: 28 }
+          - { shard: d76,   feat: "d76",   width: 76,   scale: 38 }
+          - { shard: d115,  feat: "d115",  width: 115,  scale: 57 }
+          - { shard: d153,  feat: "d153",  width: 153,  scale: 76 }
+          - { shard: d230,  feat: "d230",  width: 230,  scale: 115 }
+          - { shard: d307,  feat: "d307",  width: 307,  scale: 153 }
+          - { shard: d462,  feat: "d462",  width: 462,  scale: 231 }
+          - { shard: d616,  feat: "d616",  width: 616,  scale: 308 }
+          - { shard: d924,  feat: "d924",  width: 924,  scale: 462 }
+          - { shard: d1232, feat: "d1232", width: 1232, scale: 616 }
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -82,7 +80,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cache cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -91,80 +89,50 @@ jobs:
           restore-keys: |
             cargo-libcmp-precision-${{ runner.os }}-
 
-      - name: Compile the precision runner (release)
-        # The sampler prints available memory every 15 s beside the compile
-        # so an exit-143 kill leaves a memory curve in the log (diagnosis
-        # evidence, not guesswork — the kill has now survived -j 2 and the
-        # debuginfo drop).
+      - name: Compile the shard runner (release)
+        env:
+          # Modest insurance on a now-slim build: two parallel rustc
+          # units, and no release debuginfo (the workspace keeps
+          # `debug = true` for local samply; it serves nothing here).
+          CARGO_BUILD_JOBS: "2"
+          CARGO_PROFILE_RELEASE_DEBUG: "false"
         run: |
           set -euo pipefail
-          ( while true; do m=$(free -m | awk '/^Mem:/{print $7}'); d=$(df -BM --output=avail . | tail -1 | tr -dc 0-9); echo "[res $(date +%H:%M:%S)] mem avail ${m} MB | disk avail ${d} MB"; sleep 15; done ) &
+          ( while true; do m=$(free -m | awk '/^Mem:/{print $7}'); echo "[res $(date +%H:%M:%S)] mem avail ${m} MB"; sleep 30; done ) &
           SAMPLER=$!
-          cargo build --release -p golden-competitors --bin lib_cmp_precision
+          FEAT="${{ matrix.feat }}"
+          cargo build --release -p golden-competitors --bin lib_cmp_precision ${FEAT:+--features "$FEAT"}
           kill "$SAMPLER" || true
 
-      - name: Stage the runner exe
-        run: |
-          set -euo pipefail
-          mkdir -p staged
-          cp target/release/lib_cmp_precision staged/lib_cmp_precision
-          chmod +x staged/lib_cmp_precision
-
-      - name: Upload the runner exe
-        uses: actions/upload-artifact@v7
-        with:
-          name: lib-cmp-precision-exe
-          path: staged/
-          if-no-files-found: error
-          retention-days: 3
-
-  shoot:
-    name: shoot (stripe ${{ matrix.stripe }})
-    needs: [plan, build]
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        stripe: ${{ fromJSON(needs.plan.outputs.stripes) }}
-    steps:
-      - name: Checkout (golden data)
-        uses: actions/checkout@v6
-
-      - name: Download the runner exe
-        uses: actions/download-artifact@v8
-        with:
-          name: lib-cmp-precision-exe
-
-      - name: Run stripe ${{ matrix.stripe }}/${{ env.STRIPE_COUNT }}
+      - name: Run the shard sweep (canonical mid-scale cell only)
         env:
-          GOLDEN_STRIPE: "${{ matrix.stripe }}/${{ env.STRIPE_COUNT }}"
           GOLDEN_DIR: ${{ github.workspace }}/decimal-scaled-golden/golden
+          GOLDEN_WIDTHS: "${{ matrix.width }}"
+          GOLDEN_SCALES: "${{ matrix.scale }}"
           PYTHONIOENCODING: utf-8
         # Timestamped, streamed output (slow-vs-stuck decidable from the
-        # live log — the history.yml lesson); the stripe's REPORT render is
-        # kept as an artifact beside its partial TSVs.
+        # live log); the shard's REPORT render is kept as an artifact
+        # beside its partial TSVs.
         run: |
           set -euo pipefail
-          chmod +x lib_cmp_precision
           mkdir -p results/precision
-          ./lib_cmp_precision 2>&1 \
+          ./target/release/lib_cmp_precision 2>&1 \
             | awk '{ print strftime("[%H:%M:%S]"), $0; fflush() }' \
-            | tee results/precision/REPORT-stripe-${{ matrix.stripe }}.md
+            | tee results/precision/REPORT-shard-${{ matrix.shard }}.md
           exit "${PIPESTATUS[0]}"
 
-      - name: Upload stripe partials (TSVs + report)
+      - name: Upload shard partials (TSVs + report)
         uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: lib-cmp-precision-stripe-${{ matrix.stripe }}
+          name: lib-cmp-precision-shard-${{ matrix.shard }}
           path: results/precision/
           if-no-files-found: error
           retention-days: 7
 
   aggregate:
     name: aggregate + self-commit
-    needs: [plan, shoot]
+    needs: [shoot]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -177,11 +145,11 @@ jobs:
         with:
           ref: ${{ github.head_ref || github.ref_name }}
 
-      - name: Download all stripe partials
+      - name: Download all shard partials
         uses: actions/download-artifact@v8
         with:
-          pattern: lib-cmp-precision-stripe-*
-          path: stripes/
+          pattern: lib-cmp-precision-shard-*
+          path: shards/
 
       - name: Splice the per-library TSVs (one header set, canonical row order)
         run: |
@@ -190,20 +158,20 @@ jobs:
           import os, glob
           out_dir = "results/precision"
           os.makedirs(out_dir, exist_ok=True)
-          # Discover the per-library file names across every stripe.
+          # Discover the per-library file names across every shard.
           names = sorted({os.path.basename(p)
-                          for p in glob.glob("stripes/*/**/*.tsv", recursive=True)})
-          assert names, "no stripe TSVs downloaded"
+                          for p in glob.glob("shards/*/**/*.tsv", recursive=True)})
+          assert names, "no shard TSVs downloaded"
           for name in names:
               headers, rows = None, []
-              for part in sorted(glob.glob(f"stripes/*/**/{name}", recursive=True)):
+              for part in sorted(glob.glob(f"shards/*/**/{name}", recursive=True)):
                   with open(part, encoding="utf-8") as f:
                       lines = f.read().splitlines()
                   h = [l for l in lines if l.startswith("#")]
                   headers = headers or h
                   rows += [l for l in lines if l and not l.startswith("#")]
               # Canonical order: the key columns (method, width, scale,
-              # rounding) — deterministic regardless of stripe timing.
+              # rounding) — deterministic regardless of shard timing.
               def key(line):
                   c = line.split("\t")
                   return (c[0], int(c[1]) if c[1].isdigit() else c[1],
@@ -233,5 +201,5 @@ jobs:
             echo "results unchanged — nothing to commit"
             exit 0
           fi
-          git commit -m "results(precision): refresh from the striped lib-cmp run"
+          git commit -m "results(precision): refresh from the width-sharded lib-cmp run"
           git push origin "HEAD:$REF"
