@@ -188,6 +188,10 @@ fn timing_medians(cells: &BTreeMap<Key, Cell>) -> BTreeMap<&'static str, u64> {
 /// crate. Newly-fixed cells and the per-function timing delta are REPORTED.
 /// `#[ignore]`d like the golden gates (the surface is heavy unfiltered); narrow
 /// with the `GOLDEN_*` env vars and run via `--ignored`.
+///
+/// SPECIALIST gate (owner ruling 2026-06-12): a deliberate opt-in cost switch, NOT a
+/// parked/orphan ignore. CI venue: history.yml (runs with `-- --ignored`).
+/// The workspace zero-ignore mandate applies to every other test.
 #[test]
 #[ignore = "version-history ratchet; run via --ignored (filter with GOLDEN_*)"]
 fn history_previous() {
@@ -280,6 +284,10 @@ fn history_previous() {
 /// Every adapted historical version beside the live crate in ONE run: per-subject
 /// tallies and the cross-version correctness table with a median-ns column per
 /// version — all REPORTED, never asserted. Heavy; dispatch/on-demand only.
+///
+/// SPECIALIST gate (owner ruling 2026-06-12): a deliberate opt-in cost switch, NOT a
+/// parked/orphan ignore. CI venue: history.yml (runs with `-- --ignored`).
+/// The workspace zero-ignore mandate applies to every other test.
 #[test]
 #[ignore = "cross-version shootout; heavy, run on demand via --ignored --nocapture"]
 fn history_all() {

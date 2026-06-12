@@ -124,6 +124,10 @@ fn check(s: RunSummary) {
 /// `cargo test` never trips the heavy full-surface run — the CI golden job opts in with
 /// `--ignored` (and the `GOLDEN_*` env vars can narrow it). Run:
 /// `cargo test -p decimal-scale-test --release --test golden golden_default -- --ignored --nocapture`
+///
+/// SPECIALIST gate (owner ruling 2026-06-12): a deliberate opt-in cost switch, NOT a
+/// parked/orphan ignore. CI venue: ci.yml golden quick shards (runs with `-- --ignored`).
+/// The workspace zero-ignore mandate applies to every other test.
 #[test]
 #[ignore = "full-surface golden; run via --ignored"]
 fn golden_default() {
@@ -132,6 +136,10 @@ fn golden_default() {
 
 /// All six rounding modes across the full surface — heavy, so `#[ignore]`d. Directed
 /// rounding (Ceiling/Floor/Trunc) shows regressions the default mode hides.
+///
+/// SPECIALIST gate (owner ruling 2026-06-12): a deliberate opt-in cost switch, NOT a
+/// parked/orphan ignore. CI venue: golden-comprehensive.yml (runs with `-- --ignored`).
+/// The workspace zero-ignore mandate applies to every other test.
 #[test]
 #[ignore = "full six-mode surface; run via --ignored --nocapture"]
 fn golden_all_modes() {
