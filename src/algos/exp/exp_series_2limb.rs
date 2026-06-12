@@ -1117,66 +1117,6 @@ mod fast_path_validity {
         );
     }
 
-    // Focused timing A/B at the gate seam: the FAST `Fixed` path (what the
-    // tightened gate now picks for the common nearest-mode cells) vs the
-    // WIDE `WNarrow=Int<24>` path (what the over-broad 9.3 gate wrongly
-    // picked for them). Run with `--ignored --nocapture` for the numbers;
-    // ignored by default so it never slows the normal `--lib` run.
-    #[test]
-    #[ignore = "timing A/B — run with --ignored --nocapture"]
-    fn timing_fast_vs_wide_common_cells() {
-        use std::time::Instant;
-        // (raw, scale, label) — all common nearest-mode cells the gate now
-        // keeps fast; result stays in-range for both paths.
-        let cells: &[(i128, u32, &str)] = &[
-            (15 * 10i128.pow(18), 19, "exp(1.5) D38 s19"),
-            (27 * 10i128.pow(18) / 10, 19, "exp(2.7) D38 s19"),
-            (5 * 10i128.pow(30) / 10, 30, "exp(0.5) D38 s30"),
-            (5 * 10i128.pow(37) / 10, 37, "exp(0.5) D38 s37"),
-            (9 * 10i128.pow(9), 9, "exp(9) D18 s9"),
-            (15 * 10i128.pow(17), 17, "exp(1.5) D18 s17"),
-            // The high-scale small-|x| cells the corrected digit-gate now
-            // keeps FAST (previously forced WIDE by the denominator-overflow
-            // bug) — the bench-branch-compare `exp_D38_s37`/`cosh`/`sinh`
-            // regression operands (`exp(0.1)`). The speedup column here is the
-            // measured fast-vs-wide gain these cells recover.
-            (10i128.pow(36), 37, "exp(0.1) D38 s37"),
-            (10i128.pow(37), 38, "exp(0.1) D38 s38"),
-            (10i128.pow(35), 36, "exp(0.1) D38 s36"),
-            (15 * 10i128.pow(36) / 10, 37, "exp(1.5) D38 s37"),
-        ];
-        let mode = RoundingMode::HalfToEven;
-        const ITERS: u32 = 200_000;
-        for &(raw, scale, label) in cells {
-            // warm + skip any cell whose result is out of i128 range
-            if fast_exp_raw_ungated(raw, scale, mode).is_none() {
-                continue;
-            }
-            let _ = exp_wide_narrow_raw(raw, scale, STRICT_GUARD, mode);
-            let t0 = Instant::now();
-            let mut acc = 0i128;
-            for _ in 0..ITERS {
-                acc = acc.wrapping_add(
-                    fast_exp_raw_ungated(std::hint::black_box(raw), scale, mode).unwrap_or(0),
-                );
-            }
-            let fast_ns = t0.elapsed().as_nanos() as f64 / ITERS as f64;
-            let t1 = Instant::now();
-            for _ in 0..ITERS {
-                acc = acc.wrapping_add(
-                    exp_wide_narrow_raw(std::hint::black_box(raw), scale, STRICT_GUARD, mode)
-                        .unwrap_or(0),
-                );
-            }
-            let wide_ns = t1.elapsed().as_nanos() as f64 / ITERS as f64;
-            std::hint::black_box(acc);
-            println!(
-                "{label:22}: fast={fast_ns:7.1}ns  wide={wide_ns:8.1}ns  speedup={:.2}x",
-                wide_ns / fast_ns
-            );
-        }
-    }
-
     // Integer-regime exp2 regression (the golden exp2_d38_s9 defect): 2^x
     // whose result has many integer digits (2^93 ≈ 10^28) left the flat-`w`
     // 256-bit `Fixed` too few fractional guard digits and mis-rounded the
