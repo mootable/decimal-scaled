@@ -73,8 +73,9 @@ count):
   touch-ups, a scripted refactor with no judgment calls.
 - **medium** → `opus` — well-scoped multi-file work, mirroring an existing pattern (e.g. a CI
   shard matrix that copies an established one), test re-gating, focused harness work.
-- **complicated** → `fable` — anything needing real diagnosis: kernel/rounding/wide-band
-  fixes, shared high-blast-radius code, macro machinery, policy-mapper measurement runs.
+- **complicated** → the **highest available model** — `fable`, or `opus` if Fable is not
+  available — anything needing real diagnosis: kernel/rounding/wide-band fixes, shared
+  high-blast-radius code, macro machinery, policy-mapper measurement runs.
 
 If a "simple" dispatch surfaces real diagnosis mid-flight, pull it back and re-dispatch at the
 higher tier rather than letting the smaller model improvise. The coordinator reviews every
