@@ -13,7 +13,9 @@ mod from_serde_surface {
 
     use core::marker::PhantomData;
     use decimal_scaled::serde_helpers::decimal_serde::DecimalVisitor;
-    use decimal_scaled::{D38, D38s12};
+    #[cfg(any(feature = "wide", feature = "x-wide"))]
+    use decimal_scaled::D38;
+    use decimal_scaled::D38s12;
     use serde::de::Visitor;
     use serde::de::value::Error as DeError;
 
