@@ -3,9 +3,10 @@
 # scheduled task — PROMPT-FREE (no per-run UAC), driven from the (non-elevated)
 # Bash tool. The coordinator's headless samply runner for this repo.
 #
-# One-time setup (owner, elevated terminal):
+# One-time setup (owner, elevated terminal; <repo> = the absolute Windows
+# path of this checkout):
 #   schtasks /create /tn SamplyElevated /tr "powershell.exe -NoProfile \
-#     -ExecutionPolicy Bypass -File C:\Users\jacko\RustroverProjects\decimal_scaled\trace\samply_elevated.ps1" \
+#     -ExecutionPolicy Bypass -File <repo>\trace\samply_elevated.ps1" \
 #     /sc once /st 00:00 /rl highest /f
 # The task (RunLevel=Highest) runs trace/samply_elevated.ps1, which reads the
 # 3-line job spec trace/samply_job.txt (exe / criterion-filter / out-profile) and runs:
@@ -20,7 +21,10 @@
 #         relative cost; for NAMED Rust frames run interactively (opens Firefox):
 #           samply record -- <exe> <filter>
 set -u
-BASE="C:/Users/jacko/RustroverProjects/decimal_scaled"
+# Repo root derived from this script's location. Git-for-Windows prints the
+# mixed form (C:/...), which towin() below turns into the backslashed paths
+# the elevated PowerShell task expects in the job spec.
+BASE="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel)"
 EXE="${1:?usage: run_samply.sh <exe-path> <criterion-filter> [out.json.gz]}"
 FILTER="${2:?usage: run_samply.sh <exe-path> <criterion-filter> [out.json.gz]}"
 OUT="${3:-$BASE/trace/prof_samply.json.gz}"
