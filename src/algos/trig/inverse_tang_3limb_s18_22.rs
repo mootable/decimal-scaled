@@ -8,12 +8,12 @@
 //! `wide_trig_core::atan_narrow`) — the inverse-trig
 //! family routes through `atan_fixed` plus `sqrt_fixed` and a small
 //! amount of `mul` / `div`. At `SCALE ∈ 18..=22` the same narrow-GUARD
-//! trick applies: `GUARD_NARROW = 14` (matching atan, slightly larger
-//! than the sincos/exp/ln 12 to accommodate the extra `sqrt_fixed`
-//! and `atan_fixed` series drift).
+//! trick applies: `GUARD_NARROW = 10` (matching the atan narrow slot,
+//! slightly larger than the sincos/exp 8 to accommodate the extra
+//! `sqrt_fixed` and `atan_fixed` series drift).
 //!
 //! Per-call working width drops from `SCALE + 30 = 48..52` to
-//! `SCALE + 14 = 32..36`.
+//! `SCALE + 10 = 28..32`.
 //!
 //! ## Algorithm (asin, the most expensive)
 //!
@@ -27,7 +27,7 @@
 //!
 //! ## Correctness
 //!
-//! Error budget at working scale `w = SCALE + 14`:
+//! Error budget at working scale `w = SCALE + 10`:
 //!
 //! - One `sqrt_fixed`: ≤ 0.5 LSB-of-w.
 //! - One `mul` (for `1 − v²`): ≤ 0.5 LSB-of-w.
@@ -36,9 +36,10 @@
 //! - Final round-to-storage: ≤ 0.5 LSB-of-w.
 //!
 //! Half-angle branch doubles the sqrt + adds an outer sub/double;
-//! cumulative budget is still ≤ ~30 LSB-of-w. With `GUARD_NARROW = 14`
-//! that's `30·10⁻¹⁴` in storage units — 13 orders of magnitude below
-//! half a storage ULP for any `SCALE ≤ 22`.
+//! cumulative budget is still ≤ ~30 LSB-of-w. With `GUARD_NARROW = 10`
+//! that's `30·10⁻¹⁰ = 3·10⁻⁹` of a storage ULP — over 8 orders of
+//! magnitude below the half-ULP line for any `SCALE ≤ 22` (and the
+//! near-tie band the wide campaign added walks anything closer).
 
 #![cfg(any(feature = "d57", feature = "wide"))]
 

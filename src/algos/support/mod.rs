@@ -21,6 +21,10 @@
 
 pub(crate) mod fixed;
 pub(crate) mod mg_divide;
+// Narrow-tier (D18/D38) near-tie Ziv escalation plumbing: the WZiv work
+// integer + thin walker bindings the narrow strict kernels escalate
+// through when a `Fixed` single shot lands inside the near-tie band.
+pub(crate) mod narrow_ziv;
 pub(crate) mod rescale;
 
 // Typed-`W` Newton-root seed bridge over the cross-algorithm seed leaf

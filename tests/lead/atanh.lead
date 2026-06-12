@@ -4149,3 +4149,6 @@
 // regression: hyper default-vs-_with asymmetry (tanh dispatch Trunc D462<461>, x=1e-168) - the odd-cubic deciding digit beyond every escalation cap, resolvable only by the analytic small-argument band now carried by the canonical kernels on both public entries
 0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001
 -0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001
+// regression: NARROW-tier (D18/D38) near-tie families - the Fixed-256 single shots (and sin/cos's 75-digit-capped escalation) could not see a deciding digit below w = SCALE+30: directed tiny-x (x = 1e-38 at D38<38>, x^3-term deviation at depth ~115; x = 1e-18 at D18<18>) and the even-function exact-half family (cos/cosh(c*10^-19) at D38<38>: 1 -/+ x^2/2 lands EXACTLY on the half, x^4/24 tail at depth ~77). Fixed by the clear-of-tie terminal + Int<24> Ziv walker (fix/narrow-tier-near-tie).
+0.00000000000000000000000000000000000001
+0.000000000000000001

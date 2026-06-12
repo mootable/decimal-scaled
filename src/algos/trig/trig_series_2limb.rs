@@ -21,9 +21,12 @@
 //! - `|raw| <= small_x_linear_threshold` returns `raw` itself
 //!   (linear band where the result is exact at storage precision).
 
+use crate::algos::exp::exp_generic as eg;
 use crate::algos::exp::exp_series_2limb::exp_fixed;
 use crate::algos::support::fixed::Fixed;
+use crate::algos::support::narrow_ziv::{self, WZiv};
 use crate::algos::ln::ln_series_2limb::{STRICT_GUARD, ln_fixed};
+use crate::algos::trig::trig_generic as tg;
 use crate::int::types::Int;
 use crate::support::rounding::{RoundingMode, is_nearest_mode};
 use crate::types::consts::DecimalConstants;
@@ -472,58 +475,159 @@ pub(crate) fn atan_fixed(v_w: Fixed, w: u32) -> Fixed {
     if sign { result.neg() } else { result }
 }
 
-// ── sin ────────────────────────────────────────────────────────────
+// ── Near-tie Ziv escalation (the narrow walker recomputes) ─────────
+//
+// The strict kernels narrow their `Fixed` single shot through
+// `Fixed::round_to_i128_clear_of_tie`: a residual clear of the mode's
+// deciding boundary exits at today's cost, a near-tie escalates through
+// the SAME generic Ziv walkers the wide tiers run (via
+// `support::narrow_ziv`), recomputing in the wider `WZiv = Int<24>` work
+// integer with the width-generic kernels (`trig_generic`,
+// `exp_generic`). This replaces the old `round_fixed_trig_directed`
+// shape — a directed-only escalation hard-capped at the 75-digit
+// `Fixed` constant window that treated a still-exact residual at the
+// cap as exact (mis-rounding e.g. `sin(1e-38)` Floor at D38<38>, whose
+// `x³/6` deviation sits at fraction depth 115) and left the nearest
+// modes entirely single-shot (mis-rounding the even-function exact-half
+// family, e.g. `cosh(1e-19)` HalfToEven at D38<38>). `WZiv` probes to
+// ~192 digits, past every constructible narrow-tier deciding depth
+// (≤ 3·38 = 114); see `narrow_ziv`.
 
-/// Largest working scale the narrow `Fixed` trig kernels escalate to: the
-/// embedded π (`wide_pi`) is exact to 75 digits and `10^75` sits safely inside
-/// the 256-bit `Fixed`, so directed-mode escalation stops here.
-const MAX_FIXED_TRIG_W: u32 = 75;
+/// One `WZiv` sin probe at working scale `SCALE + g`.
+fn sin_ziv(raw: i128, scale: u32, g: u32) -> WZiv {
+    let w = scale + g;
+    tg::sin_fixed::<WZiv>(narrow_ziv::lift(raw, g), w, narrow_ziv::pi_w(w))
+}
 
-/// Guard increment per directed-mode Ziv escalation step.
-const TRIG_GUARD_STEP: u32 = 8;
+/// One `WZiv` cos probe at working scale `SCALE + g`.
+fn cos_ziv(raw: i128, scale: u32, g: u32) -> WZiv {
+    let w = scale + g;
+    tg::cos_fixed::<WZiv>(narrow_ziv::lift(raw, g), w, narrow_ziv::pi_w(w))
+}
 
-/// Directed-mode rounding with Ziv escalation for the narrow `Fixed` trig
-/// kernels — the narrow-tier analogue of the wide path's
-/// `round_to_storage_directed`. Nearest modes round ONCE at `base_guard` (the
-/// common, benchmarked path — byte-identical to a plain `round_to_i128_with`).
-/// Directed modes (Trunc / Floor / Ceiling) need the residual SIGN: when the
-/// value lands exactly on a storage grid line at the base working scale, the
-/// true value may be a sub-resolution residual to one side. A near-extremum
-/// `cos`/`sin` is the canonical case — `cos`/`sin` near `kπ` equal `±1 ∓ δ²/2`,
-/// and for an argument within the input granularity of `kπ` the `δ²/2`
-/// deviation falls *below* the base guard, so at the base working scale the
-/// kernel rounds to exactly `±1` and a directed mode cannot see which side the
-/// true value lies on (the golden `cos`/`sin` near-`kπ` cells). Re-evaluate
-/// `eval(working_digits)` at increasing guard until the residual resolves,
-/// capped at [`MAX_FIXED_TRIG_W`] (where the value is treated as exact).
-#[inline]
-fn round_fixed_trig_directed(
-    scale: u32,
-    base_guard: u32,
-    mode: RoundingMode,
-    fn_name: &'static str,
-    mut eval: impl FnMut(u32) -> Fixed,
-) -> i128 {
-    let overflow = || crate::support::diagnostics::overflow_panic_with_scale(fn_name, scale);
-    if is_nearest_mode(mode) {
-        let w = scale + base_guard;
-        return eval(base_guard)
-            .round_to_i128_with(w, scale, mode)
-            .unwrap_or_else(|| overflow());
+/// One `WZiv` tan probe (the sin/cos ratio) at working scale `SCALE + g`.
+fn tan_ziv(raw: i128, scale: u32, g: u32) -> WZiv {
+    let w = scale + g;
+    let (s, c) = tg::sin_cos_fixed::<WZiv>(narrow_ziv::lift(raw, g), w, narrow_ziv::pi_w(w));
+    assert!(
+        c != WZiv::from_i128(0),
+        "tan: cosine is zero (argument is an odd multiple of pi/2)"
+    );
+    eg::div::<WZiv>(s, c, w)
+}
+
+/// One `WZiv` atan probe at working scale `SCALE + g`.
+fn atan_ziv(raw: i128, scale: u32, g: u32) -> WZiv {
+    let w = scale + g;
+    tg::atan_fixed::<WZiv>(narrow_ziv::lift(raw, g), w, narrow_ziv::pi_w(w))
+}
+
+/// The asin composition on a `WZiv` working value — the generic mirror
+/// of the `Fixed` body (`atan(x/√(1−x²))` below ½, the half-angle
+/// reduction above).
+pub(crate) fn asin_work_ziv(v: WZiv, w: u32) -> WZiv {
+    let zero = WZiv::from_i128(0);
+    let one_w = eg::one::<WZiv>(w);
+    let pi = narrow_ziv::pi_w(w);
+    let hp = pi >> 1;
+    let neg = v < zero;
+    let av = if neg { -v } else { v };
+    if av == one_w {
+        return if neg { -hp } else { hp };
     }
-    let max_guard = MAX_FIXED_TRIG_W.saturating_sub(scale).max(base_guard);
-    let mut guard = base_guard;
-    loop {
-        let w = scale + guard;
-        let (v, exact) = eval(guard)
-            .round_to_i128_with_exact(w, scale, mode)
-            .unwrap_or_else(|| (overflow(), true));
-        if !exact || guard >= max_guard {
-            return v;
-        }
-        guard += TRIG_GUARD_STEP;
+    let half_w = one_w >> 1;
+    let r = if av < half_w {
+        let denom = eg::sqrt_fixed::<WZiv>(one_w - eg::mul::<WZiv>(av, av, w), w);
+        tg::atan_fixed::<WZiv>(eg::div::<WZiv>(av, denom, w), w, pi)
+    } else {
+        let inner = (one_w - av) >> 1;
+        let inner_sqrt = eg::sqrt_fixed::<WZiv>(inner, w);
+        let inner_denom =
+            eg::sqrt_fixed::<WZiv>(one_w - eg::mul::<WZiv>(inner_sqrt, inner_sqrt, w), w);
+        let inner_asin =
+            tg::atan_fixed::<WZiv>(eg::div::<WZiv>(inner_sqrt, inner_denom, w), w, pi);
+        hp - inner_asin - inner_asin
+    };
+    if neg { -r } else { r }
+}
+
+/// One `WZiv` asin probe at working scale `SCALE + g`.
+pub(crate) fn asin_ziv(raw: i128, scale: u32, g: u32) -> WZiv {
+    let w = scale + g;
+    asin_work_ziv(narrow_ziv::lift(raw, g), w)
+}
+
+/// One `WZiv` acos probe (`π/2 − asin`) at working scale `SCALE + g`.
+pub(crate) fn acos_ziv(raw: i128, scale: u32, g: u32) -> WZiv {
+    let w = scale + g;
+    (narrow_ziv::pi_w(w) >> 1) - asin_work_ziv(narrow_ziv::lift(raw, g), w)
+}
+
+/// One `WZiv` atan2 probe (quadrant-resolved max-branch ratio) at
+/// working scale `SCALE + g` — the generic mirror of [`atan2_kernel`].
+pub(crate) fn atan2_ziv(y_raw: i128, x_raw: i128, scale: u32, g: u32) -> WZiv {
+    let w = scale + g;
+    let zero = WZiv::from_i128(0);
+    let pi = narrow_ziv::pi_w(w);
+    let hp = pi >> 1;
+    if x_raw == 0 {
+        return if y_raw > 0 {
+            hp
+        } else if y_raw < 0 {
+            -hp
+        } else {
+            zero
+        };
+    }
+    let y = narrow_ziv::lift(y_raw, g);
+    let x = narrow_ziv::lift(x_raw, g);
+    let ay = if y < zero { -y } else { y };
+    let ax = if x < zero { -x } else { x };
+    let base = if ax >= ay {
+        tg::atan_fixed::<WZiv>(eg::div::<WZiv>(y, x, w), w, pi)
+    } else {
+        let inv = tg::atan_fixed::<WZiv>(eg::div::<WZiv>(x, y, w), w, pi);
+        let same_sign = (y < zero) == (x < zero);
+        if same_sign { hp - inv } else { (-hp) - inv }
+    };
+    if x_raw > 0 {
+        base
+    } else if y_raw >= 0 {
+        base + pi
+    } else {
+        base - pi
     }
 }
+
+/// Directed-mode post-adjust for the ±1-bounded forward functions — the
+/// raw-`i128` mirror of the wide `adjust_bounded_extremum`. `|sin| < 1`
+/// and `|cos| < 1` STRICTLY for every representable argument (`π/2` is
+/// irrational, so no grid argument hits the extremum), so a downward
+/// mode can never correctly produce exactly ±1: `result == ±1` under
+/// Floor / Trunc (toward zero on the matching sign) is the
+/// sub-resolution overshoot — step one LSB inside. A no-op everywhere
+/// else.
+fn adjust_bounded_extremum_raw(result: i128, scale: u32, mode: RoundingMode) -> i128 {
+    if is_nearest_mode(mode) {
+        return result;
+    }
+    let one = 10_i128.pow(scale);
+    if result == one {
+        match mode {
+            RoundingMode::Floor | RoundingMode::Trunc => one - 1,
+            _ => result,
+        }
+    } else if result == -one {
+        match mode {
+            RoundingMode::Ceiling | RoundingMode::Trunc => -one + 1,
+            _ => result,
+        }
+    } else {
+        result
+    }
+}
+
+// ── sin ────────────────────────────────────────────────────────────
 
 #[inline]
 #[must_use]
@@ -534,9 +638,14 @@ pub(crate) fn sin_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) ->
     if raw.abs() <= small_x_linear_threshold::<SCALE>() && is_nearest_mode(mode) {
         return raw;
     }
-    round_fixed_trig_directed(SCALE, STRICT_GUARD, mode, "sin", |g| {
-        sin_fixed(to_fixed_w(raw, g), SCALE + g)
-    })
+    let w = SCALE + STRICT_GUARD;
+    let r = match sin_fixed(to_fixed(raw), w).round_to_i128_clear_of_tie(w, SCALE, mode) {
+        Some(v) => v.unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("sin", SCALE)
+        }),
+        None => narrow_ziv::walk(STRICT_GUARD, SCALE, mode, |g| sin_ziv(raw, SCALE, g)),
+    };
+    adjust_bounded_extremum_raw(r, SCALE, mode)
 }
 
 #[inline]
@@ -566,10 +675,15 @@ pub(crate) fn cos_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) ->
     if raw == 0 {
         return 10_i128.pow(SCALE);
     }
-    round_fixed_trig_directed(SCALE, STRICT_GUARD, mode, "cos", |g| {
-        let w = SCALE + g;
-        sin_fixed(to_fixed_w(raw, g).add(wide_half_pi(w)), w)
-    })
+    let w = SCALE + STRICT_GUARD;
+    let v = sin_fixed(to_fixed(raw).add(wide_half_pi(w)), w);
+    let r = match v.round_to_i128_clear_of_tie(w, SCALE, mode) {
+        Some(v) => v.unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("cos", SCALE)
+        }),
+        None => narrow_ziv::walk(STRICT_GUARD, SCALE, mode, |g| cos_ziv(raw, SCALE, g)),
+    };
+    adjust_bounded_extremum_raw(r, SCALE, mode)
 }
 
 #[inline]
@@ -606,10 +720,12 @@ pub(crate) fn tan_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) ->
         !cos_w.is_zero(),
         "tan: cosine is zero (argument is an odd multiple of pi/2)"
     );
-    sin_w
-        .div(cos_w, w)
-        .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("tan", SCALE))
+    match sin_w.div(cos_w, w).round_to_i128_clear_of_tie(w, SCALE, mode) {
+        Some(v) => v.unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("tan", SCALE)
+        }),
+        None => narrow_ziv::walk(STRICT_GUARD, SCALE, mode, |g| tan_ziv(raw, SCALE, g)),
+    }
 }
 
 #[inline]
@@ -656,9 +772,12 @@ pub(crate) fn atan_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -
         return raw;
     }
     let w = SCALE + STRICT_GUARD;
-    atan_fixed(to_fixed(raw), w)
-        .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("atan", SCALE))
+    match atan_fixed(to_fixed(raw), w).round_to_i128_clear_of_tie(w, SCALE, mode) {
+        Some(v) => v.unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("atan", SCALE)
+        }),
+        None => narrow_ziv::walk(STRICT_GUARD, SCALE, mode, |g| atan_ziv(raw, SCALE, g)),
+    }
 }
 
 #[inline]
@@ -712,32 +831,33 @@ pub(crate) fn asin_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -
         !(abs_v.ge_mag(one_w) && abs_v != one_w),
         "asin: argument out of domain [-1, 1]"
     );
-    if abs_v == one_w {
+    let asin_w = if abs_v == one_w {
         let hp = wide_half_pi(w);
-        let hp = if v.negative { hp.neg() } else { hp };
-        return hp.round_to_i128_with(w, SCALE, mode).unwrap_or_else(|| {
-            crate::support::diagnostics::overflow_panic_with_scale("asin", SCALE)
-        });
-    }
-    let half_w = one_w.halve();
-    let asin_w = if !abs_v.ge_mag(half_w) {
-        let denom = one_w.sub(v.mul(v, w)).sqrt(w);
-        atan_fixed(v.div(denom, w), w)
+        if v.negative { hp.neg() } else { hp }
     } else {
-        let inner = one_w.sub(abs_v).halve();
-        let inner_sqrt = inner.sqrt(w);
-        let inner_denom = one_w.sub(inner_sqrt.mul(inner_sqrt, w)).sqrt(w);
-        let inner_asin = atan_fixed(inner_sqrt.div(inner_denom, w), w);
-        let result_abs = wide_half_pi(w).sub(inner_asin).sub(inner_asin);
-        if v.negative {
-            result_abs.neg()
+        let half_w = one_w.halve();
+        if !abs_v.ge_mag(half_w) {
+            let denom = one_w.sub(v.mul(v, w)).sqrt(w);
+            atan_fixed(v.div(denom, w), w)
         } else {
-            result_abs
+            let inner = one_w.sub(abs_v).halve();
+            let inner_sqrt = inner.sqrt(w);
+            let inner_denom = one_w.sub(inner_sqrt.mul(inner_sqrt, w)).sqrt(w);
+            let inner_asin = atan_fixed(inner_sqrt.div(inner_denom, w), w);
+            let result_abs = wide_half_pi(w).sub(inner_asin).sub(inner_asin);
+            if v.negative {
+                result_abs.neg()
+            } else {
+                result_abs
+            }
         }
     };
-    asin_w
-        .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("asin", SCALE))
+    match asin_w.round_to_i128_clear_of_tie(w, SCALE, mode) {
+        Some(v) => v.unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("asin", SCALE)
+        }),
+        None => narrow_ziv::walk(STRICT_GUARD, SCALE, mode, |g| asin_ziv(raw, SCALE, g)),
+    }
 }
 
 #[inline]
@@ -843,10 +963,15 @@ pub(crate) fn acos_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -
             result_abs
         }
     };
-    wide_half_pi(w)
+    match wide_half_pi(w)
         .sub(asin_w)
-        .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("acos", SCALE))
+        .round_to_i128_clear_of_tie(w, SCALE, mode)
+    {
+        Some(v) => v.unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("acos", SCALE)
+        }),
+        None => narrow_ziv::walk(STRICT_GUARD, SCALE, mode, |g| acos_ziv(raw, SCALE, g)),
+    }
 }
 
 #[inline]
@@ -911,9 +1036,16 @@ pub(crate) fn acos_with_raw<const SCALE: u32>(
 #[must_use]
 pub(crate) fn atan2_strict_raw<const SCALE: u32>(y_raw: i128, x_raw: i128, mode: RoundingMode) -> i128 {
     let w = SCALE + STRICT_GUARD;
-    atan2_kernel(to_fixed(y_raw), to_fixed(x_raw), y_raw, w)
-        .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("atan2", SCALE))
+    match atan2_kernel(to_fixed(y_raw), to_fixed(x_raw), y_raw, w)
+        .round_to_i128_clear_of_tie(w, SCALE, mode)
+    {
+        Some(v) => v.unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("atan2", SCALE)
+        }),
+        None => narrow_ziv::walk(STRICT_GUARD, SCALE, mode, |g| {
+            atan2_ziv(y_raw, x_raw, SCALE, g)
+        }),
+    }
 }
 
 #[inline]
@@ -945,7 +1077,67 @@ pub(crate) fn atan2_with_raw<const SCALE: u32>(
 #[inline]
 #[must_use]
 pub(crate) fn sinh_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    sinh_with(raw, SCALE, STRICT_GUARD, mode)
+    Int::<2>::from_i128(sinh_strict_raw(raw.as_i128(), SCALE, mode))
+}
+
+/// One signed `Fixed` sinh evaluation at `w = scale + working_digits` —
+/// the `(e^|x| − e^-|x|)/2` identity body shared by the strict and
+/// approx terminals. Evaluates at `|v|` so the dominant `e^|x|` term is
+/// computed directly and accurately; the reciprocal gives the tiny
+/// `e^-|x|` (computing `exp(-|x|)` directly and reciprocating would
+/// amplify the small term's relative error into a large absolute
+/// error). sinh is odd: the input sign is reapplied to the non-negative
+/// `sinh(|x|)`.
+fn sinh_eval_fixed(raw: i128, working_digits: u32, w: u32) -> Fixed {
+    let v = to_fixed_w(raw, working_digits);
+    let av = Fixed {
+        negative: false,
+        mag: v.mag,
+    };
+    let ex = exp_fixed(av, w);
+    let one_w = Fixed {
+        negative: false,
+        mag: Fixed::pow10(w),
+    };
+    let enx = one_w.div(ex, w);
+    let sh = ex.sub(enx).halve();
+    if raw < 0 { sh.neg() } else { sh }
+}
+
+/// One `WZiv` sinh probe at working scale `scale + g`.
+fn sinh_ziv(raw: i128, scale: u32, g: u32) -> WZiv {
+    let w = scale + g;
+    let v = narrow_ziv::lift(raw, g);
+    let av = if v < WZiv::from_i128(0) { -v } else { v };
+    let sh = eg::sinh_pos::<WZiv>(av, w);
+    if raw < 0 { -sh } else { sh }
+}
+
+/// Strict-path `i128` core of [`sinh_strict`]: the `Fixed` fast shot
+/// narrows through the clear-of-tie terminal; a near-tie (and the
+/// integer-regime cells, whose base probe is the same wider-work single
+/// shot the old path took) escalates through the Ziv walker.
+fn sinh_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> i128 {
+    if raw == 0 {
+        return 0;
+    }
+    if raw.abs() <= small_x_linear_threshold_scale(scale) {
+        // sinh(x) = x + x³/6 + … : within the linear band the cubic is
+        // below one ULP yet strictly positive, so the true value sits
+        // just *above* the grid line `raw` (in magnitude) — the analytic
+        // decision, exact at every depth.
+        return crate::support::rounding::tiny_odd_expanding_directed(raw, 0, 1, mode);
+    }
+    let w = scale + STRICT_GUARD;
+    if crate::algos::exp::exp_series_2limb::hyper_needs_wide_narrow(raw, scale, w) {
+        return narrow_ziv::walk(STRICT_GUARD, scale, mode, |g| sinh_ziv(raw, scale, g));
+    }
+    match sinh_eval_fixed(raw, STRICT_GUARD, w).round_to_i128_clear_of_tie(w, scale, mode) {
+        Some(v) => v.unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("D38::sinh", scale)
+        }),
+        None => narrow_ziv::walk(STRICT_GUARD, scale, mode, |g| sinh_ziv(raw, scale, g)),
+    }
 }
 
 #[inline]
@@ -974,13 +1166,25 @@ pub(crate) fn sinh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: Ro
             mode,
         );
     }
+    sinh_eval_fixed(raw, working_digits, w)
+        .round_to_i128_with(w, scale, mode)
+        .unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("D38::sinh", scale)
+        })
+}
+
+#[inline]
+#[must_use]
+pub(crate) fn cosh_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
+    Int::<2>::from_i128(cosh_strict_raw(raw.as_i128(), SCALE, mode))
+}
+
+/// One non-negative `Fixed` cosh evaluation at `w = scale +
+/// working_digits` — the `(e^|x| + e^-|x|)/2` identity body shared by
+/// the strict and approx terminals. cosh is even; evaluating at `|v|`
+/// keeps the dominant `e^|x|` term direct (see [`sinh_eval_fixed`]).
+fn cosh_eval_fixed(raw: i128, working_digits: u32, w: u32) -> Fixed {
     let v = to_fixed_w(raw, working_digits);
-    // Evaluate at |v| so the dominant `e^|x|` term is computed directly
-    // and accurately; the reciprocal gives the tiny `e^-|x|`. (Computing
-    // `exp(-|x|)` directly and reciprocating would amplify the small
-    // term's relative error into a large absolute error.) sinh is odd,
-    // so the input sign is reapplied to the non-negative `sinh(|x|)`.
-    let neg = raw < 0;
     let av = Fixed {
         negative: false,
         mag: v.mag,
@@ -991,17 +1195,43 @@ pub(crate) fn sinh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: Ro
         mag: Fixed::pow10(w),
     };
     let enx = one_w.div(ex, w);
-    let sh = ex.sub(enx).halve();
-    let sh = if neg { sh.neg() } else { sh };
-    sh.round_to_i128_with(w, scale, mode).unwrap_or_else(|| {
-        crate::support::diagnostics::overflow_panic_with_scale("D38::sinh", scale)
-    })
+    ex.add(enx).halve()
 }
 
-#[inline]
-#[must_use]
-pub(crate) fn cosh_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    cosh_with(raw, SCALE, STRICT_GUARD, mode)
+/// One `WZiv` cosh probe at working scale `scale + g`.
+fn cosh_ziv(raw: i128, scale: u32, g: u32) -> WZiv {
+    let w = scale + g;
+    let v = narrow_ziv::lift(raw, g);
+    let av = if v < WZiv::from_i128(0) { -v } else { v };
+    eg::cosh_pos::<WZiv>(av, w)
+}
+
+/// Strict-path `i128` core of [`cosh_strict`]. `cosh(x) > 1` is
+/// transcendental for every `x ≠ 0` (the `never_exact` walker polarity:
+/// the exact-half/grid families — `cosh(1e-19)` at D38<38> lands
+/// `1 + x²/2` EXACTLY on the half with the `x⁴/24` tail at depth 77 —
+/// always carry a strictly positive tail). The `Fixed` fast shot now
+/// serves every mode; near-ties (including every directed cell the old
+/// path detoured through the wide single shot for) escalate through the
+/// walker, which resolves the deciding digit instead of assuming it.
+fn cosh_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> i128 {
+    if raw == 0 {
+        return 10_i128.pow(scale);
+    }
+    let w = scale + STRICT_GUARD;
+    if crate::algos::exp::exp_series_2limb::hyper_needs_wide_narrow(raw, scale, w) {
+        return narrow_ziv::walk_never_exact(STRICT_GUARD, scale, mode, |g| {
+            cosh_ziv(raw, scale, g)
+        });
+    }
+    match cosh_eval_fixed(raw, STRICT_GUARD, w).round_to_i128_clear_of_tie(w, scale, mode) {
+        Some(v) => v.unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("D38::cosh", scale)
+        }),
+        None => narrow_ziv::walk_never_exact(STRICT_GUARD, scale, mode, |g| {
+            cosh_ziv(raw, scale, g)
+        }),
+    }
 }
 
 #[inline]
@@ -1032,23 +1262,7 @@ pub(crate) fn cosh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: Ro
             mode,
         );
     }
-    let v = to_fixed_w(raw, working_digits);
-    // cosh is even; evaluate at |v| so the dominant `e^|x|` term is
-    // computed directly (see `sinh_with` for why the sign matters: a
-    // negative argument would otherwise reciprocate the small
-    // `e^-|x|` and amplify its relative error).
-    let av = Fixed {
-        negative: false,
-        mag: v.mag,
-    };
-    let ex = exp_fixed(av, w);
-    let one_w = Fixed {
-        negative: false,
-        mag: Fixed::pow10(w),
-    };
-    let enx = one_w.div(ex, w);
-    ex.add(enx)
-        .halve()
+    cosh_eval_fixed(raw, working_digits, w)
         .round_to_i128_with(w, scale, mode)
         .unwrap_or_else(|| {
             crate::support::diagnostics::overflow_panic_with_scale("D38::cosh", scale)
@@ -1058,7 +1272,81 @@ pub(crate) fn cosh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: Ro
 #[inline]
 #[must_use]
 pub(crate) fn tanh_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    tanh_with(raw, SCALE, STRICT_GUARD, mode)
+    Int::<2>::from_i128(tanh_strict_raw(raw.as_i128(), SCALE, mode))
+}
+
+/// One `WZiv` tanh probe at working scale `scale + g`.
+fn tanh_ziv(raw: i128, scale: u32, g: u32) -> WZiv {
+    let w = scale + g;
+    let v = narrow_ziv::lift(raw, g);
+    let av = if v < WZiv::from_i128(0) { -v } else { v };
+    let th = eg::tanh_pos::<WZiv>(av, w);
+    if raw < 0 { -th } else { th }
+}
+
+/// Strict-path `i128` core of [`tanh_strict`]: the linear band and the
+/// all-nines saturation region stay ANALYTIC (the band's sub-ULP cubic
+/// and the saturation's `1 − 10^-w` shape are proven, so no tie check
+/// is needed there); the middle region narrows through the clear-of-tie
+/// terminal with the Ziv walker behind it.
+fn tanh_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> i128 {
+    if raw == 0 {
+        return 0;
+    }
+    if raw.abs() <= small_x_linear_threshold_scale(scale) {
+        // tanh(x) = x − x³/3 + … : analytic directed decision (see
+        // `tanh_with_raw`).
+        return crate::support::rounding::tiny_odd_compressing_directed(raw, 0, 1, mode);
+    }
+    let w = scale + STRICT_GUARD;
+    match tanh_eval_fixed(raw, STRICT_GUARD, w) {
+        // Saturated all-nines: tanh(|x|) ∈ (1 − 10^-w, 1) analytically —
+        // every mode rounds the all-nines value correctly (nearest → 1,
+        // Floor/Trunc → 1 − 10^-S, Ceiling → 1); no tie to resolve.
+        (th, true) => th.round_to_i128_with(w, scale, mode).unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("D38::tanh", scale)
+        }),
+        (th, false) => match th.round_to_i128_clear_of_tie(w, scale, mode) {
+            Some(v) => v.unwrap_or_else(|| {
+                crate::support::diagnostics::overflow_panic_with_scale("D38::tanh", scale)
+            }),
+            None => narrow_ziv::walk(STRICT_GUARD, scale, mode, |g| tanh_ziv(raw, scale, g)),
+        },
+    }
+}
+
+/// One signed `Fixed` tanh evaluation at `w = scale + working_digits`,
+/// returning `(value, saturated)` — `saturated == true` is the analytic
+/// all-nines region (`|x|` past the `2·e^(−2|x|) < 10^-w` onset, or the
+/// `m` underflow just inside it), where the value is exactly the
+/// largest working value below 1 and needs no tie analysis.
+fn tanh_eval_fixed(raw: i128, working_digits: u32, w: u32) -> (Fixed, bool) {
+    let one_w = Fixed {
+        negative: false,
+        mag: Fixed::pow10(w),
+    };
+    let neg = raw < 0;
+    // Large |x| via the NEGATIVE-exponent identity tanh(|x|) = (1 − m)/(1 + m),
+    // m = e^(−2|x|) — see `tanh_with_raw` for the overflow-gap derivation.
+    let scale = w - working_digits;
+    let thr_x = (w as i128) * 1152 / 1000 + 2;
+    let saturated = one_w.sub(Fixed::from_u128_mag(1, false));
+    let (th, sat) = if raw.abs() / 10_i128.pow(scale) > thr_x {
+        (saturated, true)
+    } else {
+        let v = to_fixed_w(raw, working_digits);
+        let av = Fixed {
+            negative: false,
+            mag: v.mag,
+        };
+        let m = exp_fixed(av.double().neg(), w);
+        if m.is_zero() {
+            (saturated, true)
+        } else {
+            (one_w.sub(m).div(one_w.add(m), w), false)
+        }
+    };
+    (if neg { th.neg() } else { th }, sat)
 }
 
 #[inline]
@@ -1076,45 +1364,13 @@ pub(crate) fn tanh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: Ro
         return crate::support::rounding::tiny_odd_compressing_directed(raw, 0, 1, mode);
     }
     let w = scale + working_digits;
-    let one_w = Fixed {
-        negative: false,
-        mag: Fixed::pow10(w),
-    };
-    // tanh is odd; the input sign is reapplied to the non-negative tanh(|x|).
-    let neg = raw < 0;
-    // Large |x| via the NEGATIVE-exponent identity tanh(|x|) = (1 − m)/(1 + m),
-    // m = e^(−2|x|) = (e^|x| − e^−|x|)/(e^|x| + e^−|x|) ÷ (e^|x|/e^−|x|) — exact.
-    // Forming the dominant e^(+|x|) directly overflows the 256-bit `Fixed` once
-    // |x| ≳ (256·ln2 − w·ln10) (≈ 44 at w = 58), BELOW the all-nines saturation
-    // onset |x| ≳ 1.1513·w (`thr_x`) — leaving a panic GAP between them. The
-    // identity sidesteps it: for large |x|, m is TINY (|x| = 48 → m = e^−96 ≈
-    // 1e−42, trivially inside `Fixed` at scale w), and is formed by `exp_fixed`
-    // on the NEGATIVE argument −2|x| whose `2^k` reassembly shifts DOWN, never
-    // the overflowing up-shift. So this is the correctly-rounded tanh across the
-    // whole large-|x| range. Mirrors `exp_generic::tanh_pos` (the wide path).
-    let thr_x = (w as i128) * 1152 / 1000 + 2;
-    // Largest working value below 1 (value 1 − 10^−w): the all-nines saturation
-    // the caller rounds to ±1 (nearest/away/up) or ±(1−10^−w) (Floor/Trunc).
-    let saturated = one_w.sub(Fixed::from_u128_mag(1, false));
-    let th = if raw.abs() / 10_i128.pow(scale) > thr_x {
-        // Past the onset 2·e^(−2|x|) < 10^−w: skip forming e^(−2|x|) entirely.
-        saturated
-    } else {
-        let v = to_fixed_w(raw, working_digits);
-        let av = Fixed {
-            negative: false,
-            mag: v.mag,
-        };
-        let m = exp_fixed(av.double().neg(), w);
-        if m.is_zero() {
-            // |x| just under `thr_x`: m underflowed the working scale, so tanh
-            // is all-nines too — same saturation, keeping the boundary continuous.
-            saturated
-        } else {
-            one_w.sub(m).div(one_w.add(m), w)
-        }
-    };
-    let th = if neg { th.neg() } else { th };
+    // The body lives in `tanh_eval_fixed`: the NEGATIVE-exponent identity
+    // tanh(|x|) = (1 − m)/(1 + m), m = e^(−2|x|) — exact and overflow-safe
+    // across the whole large-|x| range (forming e^(+|x|) directly
+    // overflows the 256-bit `Fixed` once |x| ≳ 256·ln2 − w·ln10, BELOW
+    // the all-nines saturation onset |x| ≳ 1.1513·w, the old panic GAP);
+    // mirrors `exp_generic::tanh_pos` (the wide path).
+    let (th, _saturated) = tanh_eval_fixed(raw, working_digits, w);
     th.round_to_i128_with(w, scale, mode).unwrap_or_else(|| {
         crate::support::diagnostics::overflow_panic_with_scale("D38::tanh", scale)
     })
@@ -1123,19 +1379,14 @@ pub(crate) fn tanh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: Ro
 #[inline]
 #[must_use]
 pub(crate) fn asinh_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    asinh_with(raw, SCALE, STRICT_GUARD, mode)
+    Int::<2>::from_i128(asinh_strict_raw(raw.as_i128(), SCALE, mode))
 }
 
-#[inline]
-#[must_use]
-pub(crate) fn asinh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
-    if raw == 0 {
-        return 0;
-    }
-    if raw.abs() <= small_x_linear_threshold_scale(scale) && is_nearest_mode(mode) {
-        return raw;
-    }
-    let w = scale + working_digits;
+/// One signed `Fixed` asinh evaluation at `w = scale + working_digits`
+/// — `ln(|x| + √(x²+1))` (the reciprocal form above 1 keeps the `x²`
+/// product inside the 256-bit `Fixed`), shared by the strict and approx
+/// terminals. asinh is odd; the sign is reapplied.
+fn asinh_eval_fixed(raw: i128, working_digits: u32, w: u32) -> Fixed {
     let one_w = Fixed {
         negative: false,
         mag: Fixed::pow10(w),
@@ -1153,8 +1404,57 @@ pub(crate) fn asinh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: R
         let root = ax.mul(ax, w).add(one_w).sqrt(w);
         ln_fixed(ax.add(root), w)
     };
-    let signed = if raw < 0 { inner.neg() } else { inner };
-    signed
+    if raw < 0 { inner.neg() } else { inner }
+}
+
+/// One `WZiv` asinh probe at working scale `scale + g`.
+fn asinh_ziv(raw: i128, scale: u32, g: u32) -> WZiv {
+    let w = scale + g;
+    let zero = WZiv::from_i128(0);
+    let one_w = eg::one::<WZiv>(w);
+    let ln2 = narrow_ziv::ln2_w(w);
+    let v = narrow_ziv::lift(raw, g);
+    let av = if v < zero { -v } else { v };
+    let inner = if av >= one_w {
+        let inv = eg::div::<WZiv>(one_w, av, w);
+        let root = eg::sqrt_fixed::<WZiv>(one_w + eg::mul::<WZiv>(inv, inv, w), w);
+        eg::ln_fixed::<WZiv>(av, w, ln2) + eg::ln_fixed::<WZiv>(one_w + root, w, ln2)
+    } else {
+        let root = eg::sqrt_fixed::<WZiv>(eg::mul::<WZiv>(av, av, w) + one_w, w);
+        eg::ln_fixed::<WZiv>(av + root, w, ln2)
+    };
+    if raw < 0 { -inner } else { inner }
+}
+
+/// Strict-path `i128` core of [`asinh_strict`] — clear-of-tie terminal
+/// with the Ziv walker behind it.
+fn asinh_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> i128 {
+    if raw == 0 {
+        return 0;
+    }
+    if raw.abs() <= small_x_linear_threshold_scale(scale) && is_nearest_mode(mode) {
+        return raw;
+    }
+    let w = scale + STRICT_GUARD;
+    match asinh_eval_fixed(raw, STRICT_GUARD, w).round_to_i128_clear_of_tie(w, scale, mode) {
+        Some(v) => v.unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("D38::asinh", scale)
+        }),
+        None => narrow_ziv::walk(STRICT_GUARD, scale, mode, |g| asinh_ziv(raw, scale, g)),
+    }
+}
+
+#[inline]
+#[must_use]
+pub(crate) fn asinh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
+    if raw == 0 {
+        return 0;
+    }
+    if raw.abs() <= small_x_linear_threshold_scale(scale) && is_nearest_mode(mode) {
+        return raw;
+    }
+    let w = scale + working_digits;
+    asinh_eval_fixed(raw, working_digits, w)
         .round_to_i128_with(w, scale, mode)
         .unwrap_or_else(|| {
             crate::support::diagnostics::overflow_panic_with_scale("D38::asinh", scale)
@@ -1164,17 +1464,13 @@ pub(crate) fn asinh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: R
 #[inline]
 #[must_use]
 pub(crate) fn acosh_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    acosh_with(raw, SCALE, STRICT_GUARD, mode)
+    Int::<2>::from_i128(acosh_strict_raw(raw.as_i128(), SCALE, mode))
 }
 
-#[inline]
-#[must_use]
-pub(crate) fn acosh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
-    let one_bits: i128 = 10_i128.pow(scale);
-    if raw == one_bits {
-        return 0;
-    }
-    let w = scale + working_digits;
+/// One `Fixed` acosh evaluation at `w = scale + working_digits` —
+/// `ln(x + √(x²−1))` (reciprocal form above 2), shared by the strict
+/// and approx terminals. Asserts the `x ≥ 1` domain.
+fn acosh_eval_fixed(raw: i128, working_digits: u32, w: u32) -> Fixed {
     let one_w = Fixed {
         negative: false,
         mag: Fixed::pow10(w),
@@ -1185,35 +1481,115 @@ pub(crate) fn acosh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: R
         "D38::acosh: argument must be >= 1"
     );
     let two_w = one_w.double();
-    let inner = if v.ge_mag(two_w) {
+    if v.ge_mag(two_w) {
         let inv = one_w.div(v, w);
         let root = one_w.sub(inv.mul(inv, w)).sqrt(w);
         ln_fixed(v, w).add(ln_fixed(one_w.add(root), w))
     } else {
         let root = v.mul(v, w).sub(one_w).sqrt(w);
         ln_fixed(v.add(root), w)
-    };
-    inner.round_to_i128_with(w, scale, mode).unwrap_or_else(|| {
-        crate::support::diagnostics::overflow_panic_with_scale("D38::acosh", scale)
-    })
+    }
+}
+
+/// One `WZiv` acosh probe at working scale `scale + g`.
+fn acosh_ziv(raw: i128, scale: u32, g: u32) -> WZiv {
+    let w = scale + g;
+    let one_w = eg::one::<WZiv>(w);
+    let ln2 = narrow_ziv::ln2_w(w);
+    let v = narrow_ziv::lift(raw, g);
+    let two_w = one_w + one_w;
+    if v >= two_w {
+        let inv = eg::div::<WZiv>(one_w, v, w);
+        let root = eg::sqrt_fixed::<WZiv>(one_w - eg::mul::<WZiv>(inv, inv, w), w);
+        eg::ln_fixed::<WZiv>(v, w, ln2) + eg::ln_fixed::<WZiv>(one_w + root, w, ln2)
+    } else {
+        let root = eg::sqrt_fixed::<WZiv>(eg::mul::<WZiv>(v, v, w) - one_w, w);
+        eg::ln_fixed::<WZiv>(v + root, w, ln2)
+    }
+}
+
+/// Strict-path `i128` core of [`acosh_strict`] — clear-of-tie terminal
+/// with the near-special walker (the wide acosh shape: a forced confirm
+/// near the `x = 1` special point) behind it.
+fn acosh_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> i128 {
+    let one_bits: i128 = 10_i128.pow(scale);
+    if raw == one_bits {
+        return 0;
+    }
+    let w = scale + STRICT_GUARD;
+    match acosh_eval_fixed(raw, STRICT_GUARD, w).round_to_i128_clear_of_tie(w, scale, mode) {
+        Some(v) => v.unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("D38::acosh", scale)
+        }),
+        None => narrow_ziv::walk_near_special(STRICT_GUARD, scale, mode, |g| {
+            acosh_ziv(raw, scale, g)
+        }),
+    }
+}
+
+#[inline]
+#[must_use]
+pub(crate) fn acosh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
+    let one_bits: i128 = 10_i128.pow(scale);
+    if raw == one_bits {
+        return 0;
+    }
+    let w = scale + working_digits;
+    acosh_eval_fixed(raw, working_digits, w)
+        .round_to_i128_with(w, scale, mode)
+        .unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("D38::acosh", scale)
+        })
 }
 
 #[inline]
 #[must_use]
 pub(crate) fn atanh_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    atanh_with(raw, SCALE, STRICT_GUARD, mode)
+    Int::<2>::from_i128(atanh_strict_raw(raw.as_i128(), SCALE, mode))
 }
 
-#[inline]
-#[must_use]
-pub(crate) fn atanh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
+/// One `WZiv` atanh probe at working scale `scale + g` — the
+/// overflow-safe two-log GAP form `½·(ln(1+|x|) − ln(1−|x|))` (the
+/// near-±1 ratio overflow never arises), sign reapplied.
+fn atanh_ziv(raw: i128, scale: u32, g: u32) -> WZiv {
+    let w = scale + g;
+    let zero = WZiv::from_i128(0);
+    let one_w = eg::one::<WZiv>(w);
+    let ln2 = narrow_ziv::ln2_w(w);
+    let v = narrow_ziv::lift(raw, g);
+    let av = if v < zero { -v } else { v };
+    let inner =
+        (eg::ln_fixed::<WZiv>(one_w + av, w, ln2) - eg::ln_fixed::<WZiv>(one_w - av, w, ln2)) >> 1;
+    if raw < 0 { -inner } else { inner }
+}
+
+/// Strict-path `i128` core of [`atanh_strict`] — clear-of-tie terminal
+/// with the near-special walker (the wide atanh shape: a forced confirm
+/// near the ±1 special points) behind it. The exposing family is the
+/// tiny-x partial (`atanh(1e-38)` at D38<38>: `x³/3` deviation at depth
+/// 115, strictly positive → Ceiling must step up).
+fn atanh_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> i128 {
     if raw == 0 {
         return 0;
     }
     if raw.abs() <= small_x_linear_threshold_scale(scale) && is_nearest_mode(mode) {
         return raw;
     }
-    let w = scale + working_digits;
+    let w = scale + STRICT_GUARD;
+    match atanh_eval_fixed(raw, STRICT_GUARD, w).round_to_i128_clear_of_tie(w, scale, mode) {
+        Some(v) => v.unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("D38::atanh", scale)
+        }),
+        None => narrow_ziv::walk_near_special(STRICT_GUARD, scale, mode, |g| {
+            atanh_ziv(raw, scale, g)
+        }),
+    }
+}
+
+/// One signed `Fixed` atanh evaluation at `w = scale + working_digits`
+/// — the value-gated ratio/gap split shared by the strict and approx
+/// terminals (see the gate derivation in the body).
+fn atanh_eval_fixed(raw: i128, working_digits: u32, w: u32) -> Fixed {
     let one_w = Fixed {
         negative: false,
         mag: Fixed::pow10(w),
@@ -1227,6 +1603,27 @@ pub(crate) fn atanh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: R
         !ax.ge_mag(one_w),
         "D38::atanh: argument out of domain (-1, 1)"
     );
+    // Ratio form below |x| ≤ 0.98, gap form near ±1 — see `atanh_with_raw`.
+    if one_w.sub(ax).mul_u128(50).ge_mag(one_w) {
+        let r = one_w.add(v).div(one_w.sub(v), w);
+        ln_fixed(r, w).halve()
+    } else {
+        let ln_num = ln_fixed(one_w.add(v), w);
+        let ln_den = ln_fixed(one_w.sub(v), w);
+        ln_num.sub(ln_den).halve()
+    }
+}
+
+#[inline]
+#[must_use]
+pub(crate) fn atanh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
+    if raw == 0 {
+        return 0;
+    }
+    if raw.abs() <= small_x_linear_threshold_scale(scale) && is_nearest_mode(mode) {
+        return raw;
+    }
+    let w = scale + working_digits;
     // atanh(x) = ½·ln((1+x)/(1-x)), value-gated on |x|:
     //
     //  - |x| ≤ 0.98 (1−|x| ≥ 0.02): the 1-log RATIO form ½·ln((1+x)/(1-x)) —
@@ -1244,23 +1641,9 @@ pub(crate) fn atanh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: R
     //    each lie in (0, 2) and fit; `ln_fixed` handles arguments below 1.
     //
     // Gate in `Fixed` magnitudes: `50·(1−|x|)·10^w ≥ 10^w` ⟺ `1−|x| ≥ 0.02`
-    // (the `50·(1−|x|)·10^w ≤ 5·10⁷⁶` intermediate fits 2²⁵⁶).
-    if one_w.sub(ax).mul_u128(50).ge_mag(one_w) {
-        // Ratio form: R = (1+x)/(1-x) at working scale w (both 1±x are positive
-        // for |x| < 1, so R > 0; R < 1 for x < 0). One `ln_fixed`.
-        let r = one_w.add(v).div(one_w.sub(v), w);
-        return ln_fixed(r, w)
-            .halve()
-            .round_to_i128_with(w, scale, mode)
-            .unwrap_or_else(|| {
-                crate::support::diagnostics::overflow_panic_with_scale("D38::atanh", scale)
-            });
-    }
-    let ln_num = ln_fixed(one_w.add(v), w);
-    let ln_den = ln_fixed(one_w.sub(v), w);
-    ln_num
-        .sub(ln_den)
-        .halve()
+    // (the `50·(1−|x|)·10^w ≤ 5·10⁷⁶` intermediate fits 2²⁵⁶). The split
+    // body is shared with the strict terminal in [`atanh_eval_fixed`].
+    atanh_eval_fixed(raw, working_digits, w)
         .round_to_i128_with(w, scale, mode)
         .unwrap_or_else(|| {
             crate::support::diagnostics::overflow_panic_with_scale("D38::atanh", scale)
@@ -1332,6 +1715,194 @@ pub(crate) fn to_radians_with_raw(
 fn small_x_linear_threshold_scale(scale: u32) -> i128 {
     let thresh_exp = scale.saturating_sub(scale.div_ceil(3));
     10_i128.pow(thresh_exp)
+}
+
+// ── Near-tie pins: the narrow single-shot / capped-escalation defect ──
+// The same constructible class the regenerated golden caught on the wide
+// tiers (asin(3e-60) D462<180>): an EXACT input whose Taylor partial lands
+// exactly ON a rounding boundary (the grid line for directed modes, the
+// half for nearest) with the deciding transcendental tail BELOW the fixed
+// working scale w = SCALE + 30 (and, for sin/cos, below the old 75-digit
+// escalation cap). Oracle for every expected value: the exact rational
+// Taylor partial + the strict tail sign (mpmath-confirmed,
+// trace/narrow_tie_derive.py derivations):
+//
+//  directed tiny-x at D38<38>, raw = 1 (x = 1e-38):
+//    sin(x)  = x − x³/6 + …      deviation −1.67e-115 → Floor/Trunc 0
+//    cos(x)  = 1 − x²/2 + …      deviation −5e-77     → Floor/Trunc 10³⁸−1
+//    tan(x)  = x + x³/3 + …      deviation +3.3e-77   → Ceiling 2
+//    atan(x) = x − x³/3 + …      deviation −3.3e-77   → Floor/Trunc 0
+//    asin(x) = x + x³/6 + …      deviation +1.67e-77  → Ceiling 2
+//    asinh(x)= x − x³/6 + …      deviation −1.67e-77  → Floor/Trunc 0
+//    atanh(x)= x + x³/3 + …      deviation +3.3e-77   → Ceiling 2
+//
+//  nearest exact-half (even functions; x = c·10^(−S/2), S even ≥ 34, the
+//  x²/2 term is EXACTLY (c²/2) ULPs and the +x⁴/24 tail hides below w):
+//    cosh(1e-19) D38<38> = 1 + 0.5 ULP + 4.2e-78 → every nearest mode
+//      rounds UP to 10³⁸ + 1 (the computed exact half tied-to-even DOWN).
+//    cos(1e-19)  D38<38> = 1 − 0.5 ULP + 4.2e-78 → every nearest mode
+//      rounds UP to 10³⁸ (HalfTowardZero kept the floor pre-fix).
+#[cfg(test)]
+mod near_tie_pins {
+    use super::*;
+
+    const S38: u32 = 38;
+    const ONE38: i128 = 10_i128.pow(38);
+
+    #[test]
+    fn sin_directed_tiny_x_d38_s38() {
+        // failing-first: the old escalation capped at w = 75 < deviation
+        // depth 115 and treated the grid-exact residual as exact.
+        assert_eq!(sin_strict_raw::<S38>(1, RoundingMode::Floor), 0, "sin Floor");
+        assert_eq!(sin_strict_raw::<S38>(1, RoundingMode::Trunc), 0, "sin Trunc");
+        assert_eq!(sin_strict_raw::<S38>(1, RoundingMode::Ceiling), 1, "sin Ceiling");
+        // odd-function mirror: sin(−1e-38) = −(x − x³/6) ∈ (−1 ULP, 0).
+        assert_eq!(sin_strict_raw::<S38>(-1, RoundingMode::Ceiling), 0, "sin(−x) Ceiling");
+        assert_eq!(sin_strict_raw::<S38>(-1, RoundingMode::Floor), -1, "sin(−x) Floor");
+    }
+
+    #[test]
+    fn cos_directed_tiny_x_d38_s38() {
+        // deviation 5e-39 ULPs (depth 76.3) — below even the 75-digit cap.
+        assert_eq!(cos_strict_raw::<S38>(1, RoundingMode::Floor), ONE38 - 1, "cos Floor");
+        assert_eq!(cos_strict_raw::<S38>(1, RoundingMode::Trunc), ONE38 - 1, "cos Trunc");
+        assert_eq!(cos_strict_raw::<S38>(1, RoundingMode::Ceiling), ONE38, "cos Ceiling");
+    }
+
+    #[test]
+    fn tan_directed_tiny_x_d38_s38() {
+        assert_eq!(tan_strict_raw::<S38>(1, RoundingMode::Ceiling), 2, "tan Ceiling");
+        assert_eq!(tan_strict_raw::<S38>(1, RoundingMode::Floor), 1, "tan Floor");
+        assert_eq!(tan_strict_raw::<S38>(-1, RoundingMode::Floor), -2, "tan(−x) Floor");
+    }
+
+    #[test]
+    fn atan_directed_tiny_x_d38_s38() {
+        assert_eq!(atan_strict_raw::<S38>(1, RoundingMode::Floor), 0, "atan Floor");
+        assert_eq!(atan_strict_raw::<S38>(1, RoundingMode::Trunc), 0, "atan Trunc");
+        assert_eq!(atan_strict_raw::<S38>(1, RoundingMode::Ceiling), 1, "atan Ceiling");
+    }
+
+    #[test]
+    fn asin_directed_tiny_x_d38_s38() {
+        assert_eq!(asin_strict_raw::<S38>(1, RoundingMode::Ceiling), 2, "asin Ceiling");
+        assert_eq!(asin_strict_raw::<S38>(1, RoundingMode::Floor), 1, "asin Floor");
+    }
+
+    #[test]
+    fn asinh_directed_tiny_x_d38_s38() {
+        assert_eq!(asinh_strict_raw(1, S38, RoundingMode::Floor), 0, "asinh Floor");
+        assert_eq!(asinh_strict_raw(1, S38, RoundingMode::Ceiling), 1, "asinh Ceiling");
+    }
+
+    #[test]
+    fn atanh_directed_tiny_x_d38_s38() {
+        assert_eq!(atanh_strict_raw(1, S38, RoundingMode::Ceiling), 2, "atanh Ceiling");
+        assert_eq!(atanh_strict_raw(1, S38, RoundingMode::Floor), 1, "atanh Floor");
+    }
+
+    #[test]
+    fn atan2_directed_tiny_ratio_d38_s38() {
+        // atan2(1e-38, 1) = atan(1e-38) — the same partial-sum family
+        // through the ratio path.
+        assert_eq!(
+            atan2_strict_raw::<S38>(1, ONE38, RoundingMode::Floor),
+            0,
+            "atan2 Floor"
+        );
+        assert_eq!(
+            atan2_strict_raw::<S38>(1, ONE38, RoundingMode::Ceiling),
+            1,
+            "atan2 Ceiling"
+        );
+    }
+
+    #[test]
+    fn tan_directed_tiny_x_d18_s18() {
+        // D18 (SCALE ≤ 18, widened through the same Int<2> kernels):
+        // tan(1e-18) deviation 3.3e-55 is below the single shot w = 48.
+        assert_eq!(tan_strict_raw::<18>(1, RoundingMode::Ceiling), 2, "tan D18 Ceiling");
+        // control: sin at D18 resolved already via the 75-digit escalation
+        // (deviation depth 55 ≤ 75) — must keep resolving post-fix.
+        assert_eq!(sin_strict_raw::<18>(1, RoundingMode::Floor), 0, "sin D18 Floor");
+    }
+
+    #[test]
+    fn cosh_nearest_exact_half_d38_s38() {
+        // cosh(1e-19) = 1 + 0.5 ULP + 4.2e-78: the partial 1 + x²/2 lands
+        // EXACTLY on the half (x²/2 = 0.5·10⁻³⁸ exact) and the positive
+        // x⁴/24 tail (depth 77.4) decides UP — every nearest mode → +1.
+        let raw = 10_i128.pow(19);
+        for (mode, what) in [
+            (RoundingMode::HalfToEven, "HalfToEven"),
+            (RoundingMode::HalfAwayFromZero, "HalfAwayFromZero"),
+            (RoundingMode::HalfTowardZero, "HalfTowardZero"),
+        ] {
+            assert_eq!(
+                cosh_strict_raw(raw, S38, mode),
+                ONE38 + 1,
+                "cosh(1e-19) {what}"
+            );
+        }
+        // the c = 3 family member: cosh(3e-19) = 1 + 4.5 ULP + tail → +5.
+        assert_eq!(
+            cosh_strict_raw(3 * raw, S38, RoundingMode::HalfToEven),
+            ONE38 + 5,
+            "cosh(3e-19) HalfToEven"
+        );
+    }
+
+    #[test]
+    fn cos_nearest_exact_half_d38_s38() {
+        // cos(1e-19) = 1 − 0.5 ULP + 4.2e-78: above the half → UP to 1.0
+        // under every nearest mode (HalfTowardZero kept the floor pre-fix).
+        let raw = 10_i128.pow(19);
+        for (mode, what) in [
+            (RoundingMode::HalfToEven, "HalfToEven"),
+            (RoundingMode::HalfAwayFromZero, "HalfAwayFromZero"),
+            (RoundingMode::HalfTowardZero, "HalfTowardZero"),
+        ] {
+            assert_eq!(
+                cos_strict_raw::<S38>(raw, mode),
+                ONE38,
+                "cos(1e-19) {what}"
+            );
+        }
+    }
+
+    #[test]
+    fn cos_nearest_exact_half_d38_s36() {
+        // second scale of the even-S family: cos(1e-18) at SCALE 36.
+        let one36 = 10_i128.pow(36);
+        assert_eq!(
+            cos_strict_raw::<36>(10_i128.pow(18), RoundingMode::HalfTowardZero),
+            one36,
+            "cos(1e-18) s36 HalfTowardZero"
+        );
+        assert_eq!(
+            cosh_strict_raw(10_i128.pow(18), 36, RoundingMode::HalfToEven),
+            one36 + 1,
+            "cosh(1e-18) s36 HalfToEven"
+        );
+    }
+
+    #[test]
+    fn public_path_d38_and_d18_directed_tiny_x() {
+        // The policy/public route must agree with the fixed kernels in
+        // every build (default: trig_series_2limb; wide: borrow-D57 for
+        // the inverse family, walker-fixed by the wide campaign).
+        let x38 = crate::D::<Int<2>, 38>(Int::<2>::from_i128(1));
+        assert_eq!(x38.sin_strict_with(RoundingMode::Floor).0.as_i128(), 0, "public sin Floor");
+        assert_eq!(x38.tan_strict_with(RoundingMode::Ceiling).0.as_i128(), 2, "public tan Ceiling");
+        assert_eq!(x38.asin_strict_with(RoundingMode::Ceiling).0.as_i128(), 2, "public asin Ceiling");
+        assert_eq!(
+            x38.cosh_strict_with(RoundingMode::HalfToEven).0.as_i128(),
+            10_i128.pow(38),
+            "public cosh(1e-38) HalfToEven (1 + x²/2 = 1 + 5e-77 → 1)"
+        );
+        let x18 = crate::D::<Int<1>, 18>(Int::<1>::from_i128(1));
+        assert_eq!(x18.tan_strict_with(RoundingMode::Ceiling).0.as_i128(), 2, "public D18 tan Ceiling");
+    }
 }
 
 // ── sinh / cosh fast-path validity wall ────────────────────────────

@@ -399,9 +399,17 @@ fn asin_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 
         !(abs_v.ge_mag(one_w) && abs_v != one_w),
         "asin: argument out of domain [-1, 1]"
     );
-    asin_work_narrow(v, w)
-        .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("asin", SCALE))
+    // Near-tie protected terminal, mirroring the routed
+    // `trig_series_2limb::asin_strict_raw` (the schoolbook is the
+    // bit-exact reference, so it must decide ties the same way).
+    match asin_work_narrow(v, w).round_to_i128_clear_of_tie(w, SCALE, mode) {
+        Some(v) => v.unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("asin", SCALE)
+        }),
+        None => crate::algos::support::narrow_ziv::walk(STRICT_GUARD, SCALE, mode, |g| {
+            crate::algos::trig::trig_series_2limb::asin_ziv(raw, SCALE, g)
+        }),
+    }
 }
 
 #[inline]
@@ -429,19 +437,35 @@ fn acos_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 
         !(abs_v.ge_mag(one_w) && abs_v != one_w),
         "acos: argument out of domain [-1, 1]"
     );
-    wide_half_pi(w)
+    // Near-tie protected terminal — see `asin_schoolbook_raw`.
+    match wide_half_pi(w)
         .sub(asin_work_narrow(v, w))
-        .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("acos", SCALE))
+        .round_to_i128_clear_of_tie(w, SCALE, mode)
+    {
+        Some(v) => v.unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("acos", SCALE)
+        }),
+        None => crate::algos::support::narrow_ziv::walk(STRICT_GUARD, SCALE, mode, |g| {
+            crate::algos::trig::trig_series_2limb::acos_ziv(raw, SCALE, g)
+        }),
+    }
 }
 
 #[inline]
 #[must_use]
 fn atan2_schoolbook_raw<const SCALE: u32>(y_raw: i128, x_raw: i128, mode: RoundingMode) -> i128 {
     let w = SCALE + STRICT_GUARD;
-    atan2_kernel(to_fixed(y_raw), to_fixed(x_raw), y_raw, w)
-        .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("atan2", SCALE))
+    // Near-tie protected terminal — see `asin_schoolbook_raw`.
+    match atan2_kernel(to_fixed(y_raw), to_fixed(x_raw), y_raw, w)
+        .round_to_i128_clear_of_tie(w, SCALE, mode)
+    {
+        Some(v) => v.unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("atan2", SCALE)
+        }),
+        None => crate::algos::support::narrow_ziv::walk(STRICT_GUARD, SCALE, mode, |g| {
+            crate::algos::trig::trig_series_2limb::atan2_ziv(y_raw, x_raw, SCALE, g)
+        }),
+    }
 }
 
 /// Narrow schoolbook asin for Int<2> storage.
