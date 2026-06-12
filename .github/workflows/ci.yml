@@ -35,11 +35,16 @@ permissions:
   contents: read
 
 concurrency:
-  # Match bench-branch-compare: let the in-progress run finish (don't waste a
-  # near-complete tests/golden gate), and let a newer push supersede the QUEUED
-  # run only (queue-of-1).
+  # Validate only the LATEST tip: the gates are now width-sharded and fast
+  # (a ~20-min wall of small parallel jobs) and every push is locally gated
+  # before it lands, so a newer push DELIBERATELY cancels the in-progress and
+  # queued runs rather than waiting them out — a superseded tip's verdict is
+  # stale the moment a newer tip exists, so re-validating it is wasted runner
+  # time. (TRIAL, 2026-06-12; revert to `cancel-in-progress: false` if it
+  # proves wrong.) bench-branch-compare stays serial/deferred — its per-tip
+  # benchmark artifacts are each real data and must not be cancelled.
   group: ci-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   # GATE: the full test suite. Builds every target (lib, tests,
