@@ -138,9 +138,32 @@ pub(crate) fn cbrt_native_d57s20(raw: Int<3>, mode: RoundingMode) -> Int<3> {
     cbrt_native::<3, 6>(raw, const { crate::consts::pow10::dispatch_int::<6>(2 * 20) }, mode)
 }
 
-#[cfg(all(test, feature = "std"))]
+// These tests drive Newton directly in a wide work `Int<W>`; the
+// `n / (x·x)` step's build-max Knuth-divide scratch is sized
+// `4·MAX_WORK_N + 2` u64 limbs, which only covers the work width `W` once a
+// wide tier raises `MAX_WORK_N` to 16 (a narrow/default build sizes it 2).
+// So each test/case is gated to exactly the `dNN` tier whose storage width
+// `N` it instantiates — the tier that makes that width production-real AND
+// the scratch large enough. The module guard is the precise union of those
+// tiers (d57..d307); below it, each case carries its own tier gate. Gating
+// the TESTS only — the kernel itself stays un-gated (it must compile in
+// every build).
+#[cfg(all(
+    test,
+    feature = "std",
+    any(
+        feature = "d57",
+        feature = "d76",
+        feature = "d115",
+        feature = "d153",
+        feature = "d230",
+        feature = "d307"
+    )
+))]
 mod tests {
-    use super::{cbrt_native, cbrt_native_d57s20};
+    use super::cbrt_native;
+    #[cfg(feature = "d57")]
+    use super::cbrt_native_d57s20;
     use crate::algos::cbrt::cbrt_newton::cbrt_newton;
     use crate::int::types::Int;
     use crate::support::rounding::RoundingMode;
@@ -175,6 +198,8 @@ mod tests {
         }
     }
 
+    // D57 storage (N=3), work `Int<6>`.
+    #[cfg(feature = "d57")]
     #[test]
     fn cbrt_native_matches_generic_newton_d57_s20_all_modes() {
         // Raw storages of D57<20> values: v has raw v * 10^20.
@@ -194,6 +219,8 @@ mod tests {
         check_cell::<3, 6>(SCALE, &raws);
     }
 
+    // D76 storage (N=4), work `Int<8>`.
+    #[cfg(feature = "d76")]
     #[test]
     fn cbrt_native_matches_generic_newton_d76_s35() {
         // D76 (N=4) @ SCALE=35, work width Int<8>.
@@ -209,6 +236,8 @@ mod tests {
         check_cell::<4, 8>(35, &raws);
     }
 
+    // D153 storage (N=8), work `Int<16>`.
+    #[cfg(feature = "d153")]
     #[test]
     fn cbrt_native_matches_generic_newton_d153_s75() {
         // D153 (N=8) @ SCALE=75, work width Int<16>.
@@ -222,6 +251,8 @@ mod tests {
         check_cell::<8, 16>(75, &raws);
     }
 
+    // D57 storage (N=3) via `cbrt_native_d57s20`.
+    #[cfg(feature = "d57")]
     #[test]
     fn cbrt_native_zero_is_zero() {
         for mode in ALL_MODES {
@@ -229,6 +260,8 @@ mod tests {
         }
     }
 
+    // D57 storage (N=3) via `cbrt_native_d57s20`.
+    #[cfg(feature = "d57")]
     #[test]
     fn cbrt_native_perfect_cube_eight_is_two() {
         // value 8.0 -> raw 8e20; cbrt = 2.0 -> raw 2e20.
@@ -255,14 +288,25 @@ mod tests {
 
     #[test]
     fn cbrt_native_near_max_magnitude_all_cells() {
+        // One assertion per routed cell, each gated to the `dNN` tier whose
+        // storage width `N` it instantiates (W up to 32 — safe once the
+        // tier sets MAX_WORK_N=16). Every covered tier appears here, so any
+        // single-tier build runs exactly its own cell.
         for &neg in &[false, true] {
             for mode in ALL_MODES {
+                #[cfg(feature = "d57")]
                 assert_eq!(cbrt_native::<3, 6>(near_max::<3>(neg), Int::<6>::TEN.pow(2 * 20), mode), cbrt_newton::<3>(near_max::<3>(neg), 20, mode), "D57 neg={neg} mode {mode:?}");
+                #[cfg(feature = "d76")]
                 assert_eq!(cbrt_native::<4, 8>(near_max::<4>(neg), Int::<8>::TEN.pow(2 * 35), mode), cbrt_newton::<4>(near_max::<4>(neg), 35, mode), "D76 neg={neg} mode {mode:?}");
+                #[cfg(feature = "d115")]
                 assert_eq!(cbrt_native::<6, 12>(near_max::<6>(neg), Int::<12>::TEN.pow(2 * 57), mode), cbrt_newton::<6>(near_max::<6>(neg), 57, mode), "D115 neg={neg} mode {mode:?}");
+                #[cfg(feature = "d153")]
                 assert_eq!(cbrt_native::<8, 16>(near_max::<8>(neg), Int::<16>::TEN.pow(2 * 75), mode), cbrt_newton::<8>(near_max::<8>(neg), 75, mode), "D153s75 neg={neg} mode {mode:?}");
+                #[cfg(feature = "d153")]
                 assert_eq!(cbrt_native::<8, 16>(near_max::<8>(neg), Int::<16>::TEN.pow(2 * 76), mode), cbrt_newton::<8>(near_max::<8>(neg), 76, mode), "D153s76 neg={neg} mode {mode:?}");
+                #[cfg(feature = "d230")]
                 assert_eq!(cbrt_native::<12, 25>(near_max::<12>(neg), Int::<25>::TEN.pow(2 * 115), mode), cbrt_newton::<12>(near_max::<12>(neg), 115, mode), "D230 neg={neg} mode {mode:?}");
+                #[cfg(feature = "d307")]
                 assert_eq!(cbrt_native::<16, 32>(near_max::<16>(neg), Int::<32>::TEN.pow(2 * 150), mode), cbrt_newton::<16>(near_max::<16>(neg), 150, mode), "D307 neg={neg} mode {mode:?}");
             }
         }

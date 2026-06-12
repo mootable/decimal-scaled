@@ -118,21 +118,89 @@ jobs:
         # BEHAVES, not merely builds.
         run: cargo test
 
-      - name: Consolidated test suite (decimal-scale-test, full features)
-        # The migrated integration suite lives in `decimal-scale-test`
-        # (10.11). The crate's default features mirror the root default
-        # (std/serde/strict/exact-scratch), so only the non-default
-        # axes are spelled out. The heavy golden targets stay out of
-        # the way: `golden` carries `required-features` + `#[ignore]`,
-        # so only the quick tests run.
-        run: cargo test -p decimal-scale-test --features wide,x-wide,xx-wide,macros,dyn
-
+      # NOTE: the full-feature consolidated leg (`cargo test -p
+      # decimal-scale-test --features wide,x-wide,xx-wide,macros,dyn`) lived
+      # here but OOMed the runner (exit 143: one test binary monomorphising
+      # all 13 widths peaked past 16 GB even with -j2 + line-tables + swap).
+      # It now runs width-sharded in the `tests-consolidated` matrix job
+      # below; this job keeps the default-feature consolidated leg.
       - name: Consolidated test suite (decimal-scale-test, default features)
         # Default-feature (narrow-tier) run of the migrated suite — the
         # feature passthrough exists exactly so this leg keeps covering
         # the narrow build (several historical regressions were
         # narrow-build-only).
         run: cargo test -p decimal-scale-test
+
+  # GATE: the migrated integration suite (decimal-scale-test), WIDTH-SHARDED.
+  # Replaces the single full-feature consolidated leg that OOMed the runner
+  # (exit 143: one test binary monomorphising all 13 widths peaked past the
+  # 16 GB runner even with -j2 + line-tables-only + swap). Each shard builds
+  # exactly ONE width tier — a supported config since d4735e4c made policy
+  # routing feature-independent — so no single rustc carries the whole ladder.
+  # Mirrors the per-tier `--features <tier>` shard pattern in
+  # golden-comprehensive.yml; the union of all shards reproduces the removed
+  # leg's coverage. fail-fast off so a slow/failed tier doesn't mask others.
+  tests-consolidated:
+    name: tests consolidated (${{ matrix.shard }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # The same insurance the OOM leg carried: two parallel rustc units and
+      # line-tables-only debuginfo keep a single-tier shard's peak well inside
+      # the runner (the exit-143 memory class).
+      CARGO_BUILD_JOBS: "2"
+      CARGO_PROFILE_DEV_DEBUG: "line-tables-only"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { shard: narrow, feat: "macros,dyn" }
+          - { shard: d57,    feat: "d57,macros,dyn" }
+          - { shard: d76,    feat: "d76,macros,dyn" }
+          - { shard: d115,   feat: "d115,macros,dyn" }
+          - { shard: d153,   feat: "d153,macros,dyn" }
+          - { shard: d230,   feat: "d230,macros,dyn" }
+          - { shard: d307,   feat: "d307,macros,dyn" }
+          - { shard: d462,   feat: "d462,macros,dyn" }
+          - { shard: d616,   feat: "d616,macros,dyn" }
+          - { shard: d924,   feat: "d924,macros,dyn" }
+          - { shard: d1232,  feat: "d1232,macros,dyn" }
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-ci-tests-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'macros/Cargo.toml') }}
+          restore-keys: |
+            cargo-ci-tests-${{ runner.os }}-
+
+      - name: Add swap for the compile's memory peak
+        # Copied from the `tests` job: disk-backed swap absorbs the short
+        # compile spike (the exit-143 memory class) as cheap insurance on top
+        # of the now single-tier build.
+        run: |
+          set -euo pipefail
+          SWAP=/mnt/swapfile2
+          sudo fallocate -l 12G "$SWAP" 2>/dev/null || { SWAP=/swapfile2; sudo fallocate -l 8G "$SWAP"; }
+          sudo chmod 600 "$SWAP"
+          sudo mkswap "$SWAP"
+          sudo swapon "$SWAP"
+          free -h
+
+      - name: Consolidated test suite (${{ matrix.shard }} tier)
+        # `-p decimal-scale-test` scopes to the gate crate, so the root
+        # crate's plotters/fontconfig bench dev-deps never compile (no system
+        # libs needed). One width tier + macros,dyn per shard.
+        run: cargo test -p decimal-scale-test --features ${{ matrix.feat }}
 
   # Emits the stripe-index matrix from STRIPE_COUNT so the shard count
   # is a one-line change at the top of this file.
