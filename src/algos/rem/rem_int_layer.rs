@@ -4,6 +4,7 @@
 //! `rem_int_layer` -- decimal remainder via the `Int<N>` layer.
 
 use crate::int::algos::div::div_knuth::div_knuth_into;
+use crate::int::algos::div::div_knuth_u128_limb::div_knuth_u128_limb_into;
 use crate::int::policy::div_rem::{select_for_limbs, Algorithm};
 use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
 use crate::int::types::Int;
@@ -34,13 +35,13 @@ use crate::int::types::Int;
 /// ([`select_for_limbs`](crate::int::policy::div_rem::select_for_limbs)) and
 /// resolves the remainder via the chosen engine with **exact `ComputeLimbs`
 /// scratch** (`single_buffered_u64`, `N + 2` per width) instead of the `Rem`
-/// operator's build-max `[u64; MAX_SINGLE_LIMBS]` Knuth buffers. The balanced
-/// `a % b` shape never presents the wide `num ≥ 2·den` form the u128 /
-/// Burnikel–Ziegler engines require, so every verdict resolves to a correct
-/// Knuth divide ([`div_knuth_into`] routes a single-limb divisor to the
-/// hardware path internally) — but consulting the matcher (rather than
-/// hardcoding the engine) means a future engine the matcher picks for this
-/// shape reaches the kernel instead of being silently bypassed. Sizing the
+/// operator's build-max `[u64; MAX_SINGLE_LIMBS]` Knuth buffers. The operands'
+/// SIGNIFICANT lengths are independent inside one `Int<N>`, so at wide `N` a
+/// long dividend over an even mid-width divisor genuinely reaches the u128
+/// engine's `num ≥ 2·den` shape (e.g. `N = 64`: a 64-sig-limb dividend `%` a
+/// 24-sig-limb even divisor) — every verdict is honored with its own engine
+/// ([`div_knuth_into`] routes a single-limb divisor to the hardware path
+/// internally). Sizing the
 /// normalised `u`/`v` to the operand width drops the build-max memset that
 /// dominated the wide-tier remainder (98% of the cost at D57 … 12% at
 /// D1232). The bare `Rem` operator must stay build-max (blanket over all `N`,
@@ -153,13 +154,33 @@ where
     // the normalised dividend `u` (`num.len() + 2`) and divisor `v`.
     let mut u = Limbs::<N>::single_buffered_u64();
     let mut v = Limbs::<N>::single_buffered_u64();
-    // Exhaustive over the verdict: the balanced shape only ever yields `Rem`
-    // or `Knuth`, both correct via `div_knuth_into`; the wide-only engines are
-    // unreachable here but listed so adding an engine forces a decision.
+    // Exhaustive over the verdict (no `_`, so adding an engine forces a
+    // decision here). Significant lengths are independent inside one
+    // `Int<N>`, so the wide `num ≥ 2·den` u128 shape IS reachable at wide
+    // `N` (audit 2026-06-12 G1) — honor that verdict rather than collapse
+    // it onto Knuth.
     match select_for_limbs(a_abs.as_limbs(), b_abs.as_limbs()) {
+        Algorithm::KnuthU128Limb => {
+            // Operands are ≤ `N` limbs (one family step below
+            // `div_widen_scale`'s `2N` dividend): the engine's minima are
+            // `u64buf ≥ num.len()+2` / `u ≥ ⌈(num.len()+2)/2⌉ + 1`, met by
+            // the shared `single_buffered_u64` normalisation buffers and
+            // `double_u128` / `single_u128` packed scratch.
+            let mut u128_u = Limbs::<N>::double_u128();
+            let mut u128_v = Limbs::<N>::single_u128();
+            div_knuth_u128_limb_into(
+                a_abs.as_limbs(),
+                b_abs.as_limbs(),
+                &mut quot,
+                &mut rem,
+                u.as_mut(),
+                v.as_mut(),
+                u128_u.as_mut(),
+                u128_v.as_mut(),
+            );
+        }
         Algorithm::Rem
         | Algorithm::Knuth
-        | Algorithm::KnuthU128Limb
         | Algorithm::BurnikelZieglerWithKnuth
         | Algorithm::Schoolbook => div_knuth_into(
             a_abs.as_limbs(),
@@ -253,5 +274,83 @@ mod tests {
             rem_int_layer_divmod::<8>(ia, ib),
             "full-width fall-through"
         );
+    }
+
+    /// The wide `num ≥ 2·den` shape — a long dividend over an even
+    /// mid-width divisor inside ONE `Int<N>` — genuinely reaches the
+    /// matcher's `KnuthU128Limb` verdict (significant lengths are
+    /// independent of `N`), so the divmod must honor it with the u128
+    /// engine. Bit-identity wall: for operand pairs that PROVABLY route to
+    /// `KnuthU128Limb` (asserted per pair), the remainder via
+    /// [`rem_int_layer`] equals the [`div_knuth_into`] reference on the
+    /// same magnitudes. Int-layer only (`Int<64>` + exact `ComputeLimbs`
+    /// scratch — in the exact-scratch width list regardless of decimal
+    /// tiers); gated on `exact-scratch` because the build-max blanket of a
+    /// narrow no-default-features build undersizes 64-limb scratch.
+    #[cfg(feature = "exact-scratch")]
+    #[test]
+    fn u128_verdict_shape_matches_knuth_reference() {
+        use crate::int::algos::div::div_knuth::div_knuth_into;
+        use crate::int::policy::div_rem::{select_for_limbs, Algorithm};
+
+        const N: usize = 64;
+        let mut state: u64 = 0xA076_1D64_78BD_642F;
+        let mut next = || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        // Significant-limb shapes meeting the matcher's u128 gate:
+        // den_n even, den_n >= U128_DIV_THRESHOLD (24), num_m >= 2*den_n.
+        let shapes: &[(usize, usize)] = &[(64, 24), (64, 32), (48, 24), (56, 28), (50, 24)];
+        for (case, &(num_n, den_n)) in shapes.iter().enumerate() {
+            for round in 0..8 {
+                let mut a_lim = [0u64; N];
+                let mut b_lim = [0u64; N];
+                for x in a_lim[..num_n].iter_mut() {
+                    *x = next();
+                }
+                for x in b_lim[..den_n].iter_mut() {
+                    *x = next();
+                }
+                // Keep the dividend magnitude in signed-positive range when
+                // it spans all N limbs, and pin both top limbs nonzero so
+                // the significant lengths are exactly (num_n, den_n).
+                if num_n == N {
+                    a_lim[N - 1] &= !(1u64 << 63);
+                }
+                a_lim[num_n - 1] |= 1;
+                b_lim[den_n - 1] |= 1;
+
+                // The pair must provably route to the u128 engine — this is
+                // what makes the test exercise the new arm, not Knuth.
+                assert!(
+                    select_for_limbs(&a_lim, &b_lim) == Algorithm::KnuthU128Limb,
+                    "case {case}: ({num_n},{den_n}) sig limbs must route to KnuthU128Limb"
+                );
+
+                // Reference remainder: the base-2^64 Knuth engine on the
+                // same magnitudes (zeroed u/v, >= num.len()+2 / den.len()).
+                let mut quot = [0u64; N];
+                let mut rem = [0u64; N];
+                let mut u = [0u64; N + 2];
+                let mut v = [0u64; N + 2];
+                div_knuth_into(&a_lim, &b_lim, &mut quot, &mut rem, &mut u, &mut v);
+
+                // All four sign combinations; the remainder carries the
+                // dividend's sign.
+                let a_neg = round & 1 == 1;
+                let b_neg = round & 2 == 2;
+                let ia = Int::<N>::from_mag_limbs(&a_lim, a_neg);
+                let ib = Int::<N>::from_mag_limbs(&b_lim, b_neg);
+                let expected = Int::<N>::from_mag_limbs(&rem, a_neg);
+                assert_eq!(
+                    rem_int_layer::<N>(ia, ib),
+                    expected,
+                    "case {case} round {round}: ({num_n},{den_n}) a_neg={a_neg} b_neg={b_neg}"
+                );
+            }
+        }
     }
 }
