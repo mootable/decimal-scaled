@@ -14,6 +14,7 @@
 use crate::algos::exp::exp_series_2limb::exp_fixed;
 use crate::algos::ln::ln_series_2limb::{STRICT_GUARD, ln_fixed};
 use crate::algos::support::fixed::Fixed;
+#[cfg(feature = "_wide-support")]
 use crate::algos::support::wide_trig_core::WideTrigCore;
 use crate::algos::trig::trig_series_2limb::to_fixed;
 use crate::int::types::Int;
