@@ -790,9 +790,26 @@ pub(crate) fn newton_rescale_arm(
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(feature = "wide")]
+    // These two imports back the `newton_matches_mg_chain_*` validity-wall
+    // tests, which exist only for the larger storage tiers (d307 … d1232).
+    // Gate the imports to exactly that union of tiers — NOT the `wide`
+    // umbrella, which is false under a single-tier build (`--features d307`)
+    // and so dropped the imports while the d307 test still compiled.
+    #[cfg(any(
+        feature = "d307",
+        feature = "d462",
+        feature = "d616",
+        feature = "d924",
+        feature = "d1232"
+    ))]
     use crate::algos::support::mg_divide::div_wide_pow10_chain;
-    #[cfg(feature = "wide")]
+    #[cfg(any(
+        feature = "d307",
+        feature = "d462",
+        feature = "d616",
+        feature = "d924",
+        feature = "d1232"
+    ))]
     use crate::int::types::Int;
     use crate::support::rounding::RoundingMode;
 
