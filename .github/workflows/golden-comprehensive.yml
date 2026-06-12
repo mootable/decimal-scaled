@@ -55,10 +55,17 @@ jobs:
         run: |
           echo "cells=$(python3 - <<'EOF'
           import json, os
-          shards = ["narrow", "d57", "d76", "d115", "d153", "d230",
-                    "d307", "d462", "d616", "d924", "d1232"]
+          # (shard, the GOLDEN_WIDTHS its stripes run). Every shard exe also
+          # carries the always-compiled D18/D38 cells, so each stripe MUST
+          # width-filter or every shard re-runs the narrow cells (the
+          # duplicate-bad fan-out of the first sharded run).
+          shards = [("narrow", "18,38"), ("d57", "57"), ("d76", "76"),
+                    ("d115", "115"), ("d153", "153"), ("d230", "230"),
+                    ("d307", "307"), ("d462", "462"), ("d616", "616"),
+                    ("d924", "924"), ("d1232", "1232")]
           n = int(os.environ["STRIPE_COUNT"])
-          print(json.dumps([{"shard": s, "stripe": k} for s in shards for k in range(n)]))
+          print(json.dumps([{"shard": s, "widths": w, "stripe": k}
+                            for (s, w) in shards for k in range(n)]))
           EOF
           )" >> "$GITHUB_OUTPUT"
 
@@ -153,6 +160,7 @@ jobs:
       - name: Run stripe (all six modes, the shard's full rows)
         env:
           GOLDEN_STRIPE: "${{ matrix.stripe }}/${{ env.STRIPE_COUNT }}"
+          GOLDEN_WIDTHS: "${{ matrix.widths }}"
           GOLDEN_REPORT_DIR: stripe-report
           GOLDEN_DIR: ${{ github.workspace }}/decimal-scaled-golden/golden
         run: |
