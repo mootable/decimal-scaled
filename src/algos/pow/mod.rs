@@ -22,6 +22,12 @@
 //!   `Algorithm::Schoolbook` variant.
 
 pub(crate) mod powf_series_2limb;
+/// Width-generic analytic storage-overflow gate for the wide-tier
+/// `exp(y·ln x)` composition -- the wide sibling of the narrow kernel's
+/// internal `powf_overflow_gate`. Run by the per-tier `powf_strict_with`
+/// shells BEFORE the result-sized working lift, so a deep-overflow cell
+/// panics contractually instead of wrapping the lifted `ln`.
+pub(crate) mod powf_overflow_gate;
 /// Exact integer-power pin shared by the narrow + wide `powf` kernels: when
 /// the base and exponent are exact integers, `base^exp` is an exact rational
 /// and its correctly-directed-rounded value is emitted directly instead of

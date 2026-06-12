@@ -157,10 +157,20 @@ WORKING_NARROW = 512
 
 # Gate strings. The base band is needed by every wide-support build.
 BASE_CFG = 'feature = "_wide-support"'
-# The x-wide band (513..=1024) is reached by D462/D616 (and any build that
-# turns those on directly or via x-wide).
-XW_CFG = 'any(feature = "d462", feature = "d616", feature = "x-wide")'
-# The xx-wide band (1025..=2048) is reached by D924/D1232 (or xx-wide).
+# The x-wide band (513..=1024) is reached by D462/D616 — and ALSO by the
+# xx-wide-group tiers (D924/D1232): a band is a contiguous SCALE RANGE, and
+# a wider tier's working scales pass THROUGH it on the way to its own cap
+# (e.g. D1232 cosh's exp composition requests ln2 at a scale inside the
+# x-wide range — a `--features d1232` single-tier build must compile this
+# band or that lookup panics on the table hole instead of reaching the
+# contractual overflow site). Gate every band by ALL tiers at or above it,
+# never just its own feature group.
+XW_CFG = (
+    'any(feature = "d462", feature = "d616", feature = "d924", '
+    'feature = "d1232", feature = "x-wide", feature = "xx-wide")'
+)
+# The xx-wide band (1025..=2048) is reached by D924/D1232 (or xx-wide) only —
+# it is the TOP band, so no wider tier passes through it.
 XXW_CFG = 'any(feature = "d924", feature = "d1232", feature = "xx-wide")'
 
 # ── Oracle precision ──────────────────────────────────────────────────
@@ -356,22 +366,18 @@ def main():
     w("use crate::support::rounding::RoundingMode;")
     w("")
     w("/// Builds the work integer `W` holding `floor(const * 10^scale)`")
-    w("/// from a narrow little-endian `limbs` slice by Horner-folding the")
-    w("/// limbs high-to-low into a zeroed `W` (the high limbs stay zero —")
-    w("/// the value never changes with width). Width transform = \"add")
-    w("/// empty (zero) limbs\". `W::BITS >= 64` for every work integer, so")
-    w("/// the `<< 64` never loses a limb of a value the const-fold path")
-    w("/// requests (its magnitude fits the tier's reference width by")
-    w("/// construction).")
+    w("/// from a narrow little-endian `limbs` slice by DIRECT limb injection:")
+    w("/// a little-endian u64 limb slice IS the value (`Σ limbs[i]·2^(64·i)`),")
+    w("/// so the low `min(len, W::LIMBS)` limbs are copied and the rest stay")
+    w("/// zero — bit-identical to the previous high-to-low Horner fold")
+    w("/// (`acc = (acc << 64) | limb`), which kept the same low limbs but paid")
+    w("/// a full-`W`-width shift + OR + rebuild PER SOURCE LIMB (O(len · W)")
+    w("/// instead of O(len)). The fold was a measured hot frame in the wide")
+    w("/// `ln`/`exp` shells, where every `pow10`/`ln2`/`pi` lookup runs this on")
+    w("/// a multi-limb entry at a 32-limb-plus work integer.")
     w("#[inline]")
     w("pub(crate) fn limbs_to_w<W: BigInt>(limbs: &[u64]) -> W {")
-    w("    let mut acc = W::ZERO;")
-    w("    let mut i = limbs.len();")
-    w("    while i > 0 {")
-    w("        i -= 1;")
-    w("        acc = (acc << 64) | W::from_mag_sign_u128(&[limbs[i] as u128], false);")
-    w("    }")
-    w("    acc")
+    w("    W::from_mag_sign_u64(limbs, false)")
     w("}")
     w("")
     w("/// Applies `mode` to a `(floor-limbs, round_up)` table entry,")
