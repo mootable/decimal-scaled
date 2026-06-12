@@ -64,7 +64,9 @@ jobs:
       # live crate at full width) starves the hosted runner's memory at
       # default parallelism — "runner lost communication" (the exit-143
       # class fixed the same way in ci.yml and history.yml, 2026-06-12).
-      CARGO_BUILD_JOBS: "2"
+      # -j 1: the kill survived -j 2 AND the debuginfo drop — serialize
+      # fully while the in-step memory sampler establishes the real curve.
+      CARGO_BUILD_JOBS: "1"
       # The workspace sets `[profile.release] debug = true` (local samply
       # symbolization). Generating full debuginfo over the full-width
       # monomorphised subject surface is what OOM-kills the single rustc
@@ -90,7 +92,16 @@ jobs:
             cargo-libcmp-precision-${{ runner.os }}-
 
       - name: Compile the precision runner (release)
-        run: cargo build --release -p golden-competitors --bin lib_cmp_precision
+        # The sampler prints available memory every 15 s beside the compile
+        # so an exit-143 kill leaves a memory curve in the log (diagnosis
+        # evidence, not guesswork — the kill has now survived -j 2 and the
+        # debuginfo drop).
+        run: |
+          set -euo pipefail
+          ( while true; do free -m | awk '/^Mem:/{printf "[mem %s] used %5d MB | avail %5d MB\n", strftime("%H:%M:%S"), $3, $7}'; sleep 15; done ) &
+          SAMPLER=$!
+          cargo build --release -p golden-competitors --bin lib_cmp_precision
+          kill "$SAMPLER" || true
 
       - name: Stage the runner exe
         run: |

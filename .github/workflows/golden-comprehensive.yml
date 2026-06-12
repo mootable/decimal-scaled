@@ -81,9 +81,16 @@ jobs:
           # the single rustc compiling decimal-scale-test. The staged exe
           # is only executed by the stripes; the harness reports failures
           # with its own per-case output, never backtraces.
-          CARGO_BUILD_JOBS: "2"
+          # -j 1: the kill survived -j 2 + the debuginfo drop; serialize
+          # fully while the in-step memory sampler establishes the curve.
+          CARGO_BUILD_JOBS: "1"
           CARGO_PROFILE_RELEASE_DEBUG: "false"
-        run: cargo test -p decimal-scale-test --release --features wide,x-wide,xx-wide --test golden --no-run
+        run: |
+          set -euo pipefail
+          ( while true; do free -m | awk '/^Mem:/{printf "[mem %s] used %5d MB | avail %5d MB\n", strftime("%H:%M:%S"), $3, $7}'; sleep 15; done ) &
+          SAMPLER=$!
+          cargo test -p decimal-scale-test --release --features wide,x-wide,xx-wide --test golden --no-run
+          kill "$SAMPLER" || true
 
       - name: Stage the gate exe
         run: |
