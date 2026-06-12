@@ -70,7 +70,14 @@ jobs:
             cargo-history-${{ runner.os }}-
 
       - name: Compile the history gates (release, no run)
-        run: cargo test -p decimal-scale-test --release --features wide,x-wide,xx-wide,history --test history --no-run
+        # -j 2: the live crate at full width PLUS both pinned historical
+        # crates (the per-tier-era ds-044 at xx-wide) in release is the
+        # heaviest compile in the repo; four parallel rustc units exceed
+        # the hosted runner's memory and the service SIGTERMs the job
+        # (exit 143, observed 2026-06-12). Halving the parallelism keeps
+        # peak memory inside the runner; the cargo cache keeps the wall
+        # time inside the timeout.
+        run: cargo test -p decimal-scale-test --release --features wide,x-wide,xx-wide,history --test history --no-run -j 2
 
       - name: Stage the gate exe
         run: |
