@@ -1831,6 +1831,10 @@ where
     let (signed, decided) = if !near_grid {
         (lo, true)
     } else {
+        // The clean base narrowing — the unresolved endgame's answer (see
+        // the cap break below). Captured BEFORE the loop starts rolling
+        // `lo` through the deeper probes.
+        let base = lo;
         let int_digits = {
             let m = if lo < lit(0) { -lo } else { lo };
             let bl = bit_length(m);
@@ -1843,7 +1847,19 @@ where
         let mut guard = base_guard;
         loop {
             if guard >= max_guard {
-                break (lo, false);
+                // Cap reached without a resolved deciding digit: the digit
+                // lies below the work integer's reach (the Table-Maker's-
+                // Dilemma residue). Mirror the nearest branch's endgame:
+                // `force_confirm` (acosh/atanh) trusts its last stable
+                // narrowing; otherwise return the CLEAN BASE narrowing —
+                // never the deepest probe's, which at this depth is
+                // dominated by kernel noise, and at the cap-CLAMPED working
+                // scale can even be a wrapped kernel value (the deep-
+                // underflow `exp` probe's internal squaring peak tops the
+                // work integer's sign bit, handing the walker a NEGATIVE
+                // "e^x" that inverts the directed bump — the
+                // exp(-62.175…) D38 s17–19 Ceiling/Floor inversion).
+                break (if force_confirm { lo } else { base }, false);
             }
             let step = (target + base_guard).max(base_guard);
             let unclamped = guard.saturating_add(step);
@@ -1853,8 +1869,18 @@ where
             // UNRESOLVED for the two-width fall-up.
             let tainted = unclamped > max_guard;
             let (hi, hi_dist, _hi_div) = directed_narrow(next_guard);
-            let hi_band = band_of(next_guard);
-            let resolved = hi_dist == lit(0) || hi_dist > hi_band;
+            // A deciding digit is a genuine SIGNAL once its distance to the
+            // grid line clears the ABSOLUTE kernel-noise floor — the same
+            // rule the nearest branch applies to its half-boundary
+            // distance. The old relative `divisor/1000` band scales with
+            // the working scale, so a SUB-RESOLUTION residual (e.g. a
+            // deep-underflow `exp`, value ≪ 1 storage ULP) could never
+            // clear it and every such walk ran to the cap — where the
+            // deepest probe, not the clean base, used to be trusted.
+            // Resolution still demands two consecutive probes agree on the
+            // narrowing (`hi == lo`), a stricter consistency requirement
+            // than the nearest branch's single floor-clearing probe.
+            let resolved = hi_dist == lit(0) || hi_dist > floor;
             if hi == lo && resolved {
                 break (hi, !tainted);
             }
@@ -1864,4 +1890,90 @@ where
     };
 
     (narrow_range_checked_g::<St, S>(signed, st_max, st_min), decided)
+}
+
+// Directed-walker contract tests: a strictly positive SUB-RESOLUTION
+// residual (value ≪ 1 storage ULP — the deep-underflow `exp` shape) must
+// round Ceiling → 1 ULP and Floor/Trunc/nearest → 0 under the
+// `never_exact` walker, even when the deepest (cap-clamped) probe is
+// POISONED — the stand-in for a work-integer-wrapped kernel value (the
+// generic exp kernel's internal squaring peak can top the work integer's
+// sign bit at the cap-clamped working scale, handing the walker a
+// NEGATIVE "e^x"). Before the fix the directed branch could never resolve
+// a sub-resolution residual (the relative `divisor/1000` stop band scales
+// with the working scale) and at the cap trusted the DEEPEST probe — so
+// the poisoned probe inverted Ceiling to 0 and Floor to -1.
+#[cfg(test)]
+mod directed_walker_contract {
+    use super::*;
+    use crate::int::types::Int;
+    use crate::support::rounding::RoundingMode;
+
+    type S = Int<24>;
+    type St = Int<2>;
+    const BASE_GUARD: u32 = 30;
+    const TARGET: u32 = 17;
+
+    const ALL_MODES: [RoundingMode; 6] = [
+        RoundingMode::HalfToEven,
+        RoundingMode::HalfAwayFromZero,
+        RoundingMode::HalfTowardZero,
+        RoundingMode::Ceiling,
+        RoundingMode::Floor,
+        RoundingMode::Trunc,
+    ];
+
+    fn run(mode: RoundingMode, recompute: impl FnMut(u32) -> S) -> i128 {
+        round_to_storage_directed_never_exact_g::<St, S>(
+            BASE_GUARD,
+            TARGET,
+            mode,
+            St::MAX,
+            St::MIN,
+            recompute,
+        )
+        .as_i128()
+    }
+
+    /// Negated probe value — the wrapped-kernel stand-in. Any probe at
+    /// guard >= 150 is past every canonical (unclamped) depth for this
+    /// `(TARGET, BASE_GUARD)`, i.e. only the cap-clamped probe lands
+    /// there; poisoning the whole tail keeps the test robust if the
+    /// step arithmetic ever changes.
+    const POISON_FROM: u32 = 150;
+
+    // A genuine sub-resolution positive (≈9.95e-28 storage ULPs): its
+    // grid-line distance clears the ABSOLUTE kernel-noise floor at the
+    // first escalation probe, so the walk resolves at a canonical depth
+    // and the poisoned tail is never consulted.
+    #[test]
+    fn sub_resolution_positive_resolves_correctly_despite_poisoned_tail() {
+        for mode in ALL_MODES {
+            let got = run(mode, |g| {
+                let v = <S as BigInt>::from_i128(995)
+                    * crate::consts::pow10::dispatch::<S>(g - BASE_GUARD);
+                if g >= POISON_FROM { -v } else { v }
+            });
+            let want = if mode == RoundingMode::Ceiling { 1 } else { 0 };
+            assert_eq!(got, want, "sub-resolution positive, mode={mode:?}");
+        }
+    }
+
+    // A residual at kernel-noise scale (5 work units, below the resolve
+    // floor at EVERY depth — the Table-Maker's-Dilemma stand-in): the walk
+    // runs to the cap unresolved, and the endgame must return the CLEAN
+    // BASE narrowing (never-exact: Ceiling → 1, others → 0), never the
+    // deepest probe's — which here is poisoned negative and would invert
+    // Ceiling to 0 and Floor to -1.
+    #[test]
+    fn unresolved_cap_returns_clean_base_not_deepest_probe() {
+        for mode in ALL_MODES {
+            let got = run(mode, |g| {
+                let v = <S as BigInt>::from_i128(5);
+                if g >= POISON_FROM { -v } else { v }
+            });
+            let want = if mode == RoundingMode::Ceiling { 1 } else { 0 };
+            assert_eq!(got, want, "noise-scale residual at cap, mode={mode:?}");
+        }
+    }
 }
