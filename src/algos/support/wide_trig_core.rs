@@ -1845,21 +1845,31 @@ where
         let max_guard = cap_digits.saturating_sub(target).max(base_guard);
 
         let mut guard = base_guard;
+        // Whether the LAST probe's grid-line distance cleared the absolute
+        // noise floor — a genuine, representable deciding digit (a real
+        // residual only GROWS with depth, so a final floor-clearing probe is
+        // signal even without a second confirming probe; the asin(1e-38)
+        // D38<38> Ceiling deviation `x³/6` at ULP-depth 77 first becomes
+        // visible exactly at the rung's cap-clamped probe).
+        let mut last_resolved = false;
         loop {
             if guard >= max_guard {
-                // Cap reached without a resolved deciding digit: the digit
-                // lies below the work integer's reach (the Table-Maker's-
-                // Dilemma residue). Mirror the nearest branch's endgame:
-                // `force_confirm` (acosh/atanh) trusts its last stable
-                // narrowing; otherwise return the CLEAN BASE narrowing —
-                // never the deepest probe's, which at this depth is
+                // Cap reached. `force_confirm` (acosh/atanh) trusts its
+                // last stable narrowing. A walk whose FINAL probe resolved
+                // (cleared the noise floor) but had no deeper probe left to
+                // confirm against trusts that probe — discarding it for the
+                // base would invert a deciding digit first visible at the
+                // cap. Otherwise — no probe ever cleared the floor (the
+                // Table-Maker's-Dilemma residue) — return the CLEAN BASE
+                // narrowing, mirroring the nearest branch's endgame: never
+                // an unresolved deepest probe, which at this depth is
                 // dominated by kernel noise, and at the cap-CLAMPED working
                 // scale can even be a wrapped kernel value (the deep-
                 // underflow `exp` probe's internal squaring peak tops the
                 // work integer's sign bit, handing the walker a NEGATIVE
                 // "e^x" that inverts the directed bump — the
                 // exp(-62.175…) D38 s17–19 Ceiling/Floor inversion).
-                break (if force_confirm { lo } else { base }, false);
+                break (if force_confirm || last_resolved { lo } else { base }, false);
             }
             let step = (target + base_guard).max(base_guard);
             let unclamped = guard.saturating_add(step);
@@ -1886,6 +1896,7 @@ where
             }
             guard = next_guard;
             lo = hi;
+            last_resolved = resolved;
         }
     };
 
@@ -1976,4 +1987,48 @@ mod directed_walker_contract {
             assert_eq!(got, want, "noise-scale residual at cap, mode={mode:?}");
         }
     }
+
+    // A deciding digit first visible ONLY at the cap-clamped final probe —
+    // the asin(1e-38) D38<38> shape (CI fallout of the cap-endgame fix):
+    // value = 1 ULP + 1.667e-77 ULPs, walked at the D57 borrow path's
+    // Int<16> rung (max_guard = 128 − 8 − 38 = 82, first probe 30+68 = 98
+    // clamped to 82). The base probe lands EXACTLY on grid (the deviation
+    // is below w = 68's resolution); the single cap-clamped probe shows the
+    // genuine residual (1.667e5 work units, above the noise floor) — the
+    // endgame must TRUST that resolved final probe (Ceiling → 2), not
+    // discard it for the on-grid base (Ceiling → 1, the regression).
+    #[test]
+    fn deciding_digit_first_visible_at_cap_probe_is_trusted() {
+        type Rung = Int<16>;
+        for (mode, want) in [
+            (RoundingMode::Ceiling, 2_i128),
+            (RoundingMode::Floor, 1),
+            (RoundingMode::Trunc, 1),
+            (RoundingMode::HalfToEven, 1),
+        ] {
+            let got = round_to_storage_directed_g::<St, Rung>(
+                BASE_GUARD,
+                TARGET_ASIN,
+                mode,
+                St::MAX,
+                St::MIN,
+                |g| {
+                    // 10^g + ⌊1.667·10^(g−77)⌋ — the deviation appears at
+                    // ULP-depth 77 (asin's x³/6 for x = 1e-38).
+                    let one = crate::consts::pow10::dispatch::<Rung>(g);
+                    if g >= 80 {
+                        one + <Rung as BigInt>::from_i128(1667)
+                            * crate::consts::pow10::dispatch::<Rung>(g - 80)
+                    } else {
+                        one
+                    }
+                },
+            )
+            .as_i128();
+            assert_eq!(got, want, "late-visible deciding digit, mode={mode:?}");
+        }
+    }
+
+    /// The asin-shape test's storage scale (D38<38>).
+    const TARGET_ASIN: u32 = 38;
 }
