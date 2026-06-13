@@ -2,16 +2,16 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! The runner: drives a subject over the golden cases. `GoldenRunner` is the trait;
-//! `SeriesRunner` / `ParallelRunner` differ only in scheduling. The shared per-cell
+//! `SequentialRunner` / `ParallelRunner` differ only in scheduling. The shared per-cell
 //! work (`run_cell`, the input filter) lives here.
 
 mod parallel;
 mod runner;
-mod series;
+mod sequential;
 
 pub use parallel::ParallelRunner;
 pub use runner::GoldenRunner;
-pub use series::SeriesRunner;
+pub use sequential::SequentialRunner;
 
 use crate::string_decimal::within;
 use crate::collector::ExecutionCollector;
@@ -150,7 +150,7 @@ mod tests {
 
     #[test]
     fn series_runs_a_cell_and_passes() {
-        let runner = SeriesRunner {
+        let runner = SequentialRunner {
             strategy: RunOnce,
             loader: Box::new(FixedLoader),
             validators: vec![Box::new(RoundingValidator { gen_precision: 1233 })],
@@ -174,7 +174,7 @@ mod tests {
                 Limits { min_value: None, max_value: None, max_precision: 1231, max_significant_digits: None }
             }
         }
-        let runner = SeriesRunner {
+        let runner = SequentialRunner {
             strategy: RunOnce,
             loader: Box::new(PreciseLoader),
             validators: vec![Box::new(RoundingValidator { gen_precision: 1233 })],
@@ -208,7 +208,7 @@ mod tests {
             loader: Box::new(ManyLoader),
             validators: vec![Box::new(RoundingValidator { gen_precision: 1233 })],
         };
-        let ser = SeriesRunner {
+        let ser = SequentialRunner {
             strategy: RunOnce,
             loader: Box::new(ManyLoader),
             validators: vec![Box::new(RoundingValidator { gen_precision: 1233 })],

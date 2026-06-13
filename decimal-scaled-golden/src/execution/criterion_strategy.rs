@@ -7,7 +7,7 @@
 //! It changes neither the `ExecutionStrategy` trait nor the runners. criterion needs
 //! `&mut Criterion`, which lives as a `RefCell<Criterion>` ON THIS STRUCT (the trait's
 //! `&self` is untouched) — and that `RefCell` makes `CriterionStrategy` `!Sync`, so
-//! `ParallelRunner` (`E: Sync`) cannot compile with it while `SeriesRunner` accepts it.
+//! `ParallelRunner` (`E: Sync`) cannot compile with it while `SequentialRunner` accepts it.
 //! criterion's "serial, quiet machine" requirement is thus enforced at compile time,
 //! for free. The `RefCell` is load-bearing — do NOT replace it with a `Mutex`.
 //!
@@ -15,7 +15,7 @@
 //! every `iter*` → `()`; estimates land in `target/criterion/…` + stdout/HTML), so the
 //! strategy *drives* criterion and criterion's own report is the artifact; the cell's
 //! `timing` stays `None`. Pair ONLY with a small curated loader (criterion is hundreds
-//! of ms per benched id) and `SeriesRunner`.
+//! of ms per benched id) and `SequentialRunner`.
 
 use std::cell::RefCell;
 
@@ -29,7 +29,7 @@ use crate::subject::{Computed, DecimalSubject, Overflow};
 use super::strategy::{compute_erased, parse_vals, ExecutionStrategy};
 
 /// Benches each cell's operation with criterion. `!Sync` by construction (holds a
-/// `RefCell<Criterion>`), so it is `SeriesRunner`-only.
+/// `RefCell<Criterion>`), so it is `SequentialRunner`-only.
 pub struct CriterionStrategy {
     crit: RefCell<Criterion>,
 }
