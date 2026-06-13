@@ -63,15 +63,13 @@ the rest are **manual** and must be verified by hand before merge.
   PR red.
 - **docs-drift** — `docs-drift.yml`; `render_docs.py --check` on every
   PR, failing on any stale GENERATED doc region.
-- **Run benchmarks** — `codspeed.yml`; the CodSpeed harness job. The
-  benches must compile and run (this is a required context).
 - **cargo-audit** — RustSec advisory check.
 
-> **CodSpeed Performance Analysis is advisory, never a gate.** It is
-> configured *Informational on failure* (PR comment *On Change*), so it
-> reports perf shifts on the PR but never blocks the merge, and it is
-> **not** in the branch-protection required contexts. Perf is a signal;
-> correctness (the precision gate) is the release blocker.
+> **Performance is advisory, never a gate.** Perf is tracked
+> out-of-band by the `bench-branch-compare` workflow (run on demand,
+> not a per-PR required context): it reports branch-vs-release shifts
+> but never blocks the merge. Perf is a signal; correctness (the
+> precision gate) is the release blocker.
 
 ### Manual — run / verify before merge (NOT auto-gated)
 
@@ -262,7 +260,7 @@ gh pr create --base main --head release/<version> \
 - All merges into `main` go through a **PR** (branch-protection
   practice) — never push to `main` directly.
 - The PR must pass CI: the `ci.yml` gates (tests, golden-quick + splice, no_std,
-  docs, msrv), docs-drift, CodSpeed, and cargo-audit.
+  docs, msrv), docs-drift, and cargo-audit.
 - Review for: precision gate green, benchmarks refreshed, CHANGELOG and
   docs updated, version bumped.
 - Pushing docs to the release branch during the sweep is safe — docs do

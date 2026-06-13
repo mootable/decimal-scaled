@@ -187,7 +187,7 @@ decimal_scaled_macros = { path = "macros", version = "0.5.0", default-features =
 tracing = { version = "0.1", default-features = false, features = ["std"], optional = true }
 
 [dev-dependencies]
-criterion = { version = "4.6.0", default-features = false, features = ["cargo_bench_support", "html_reports"], package = "codspeed-criterion-compat" }
+criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
 i256 = { version = "0.2", default-features = false }
 serde_json = "1"
 postcard = { version = "1", default-features = false, features = ["alloc"] }
@@ -322,8 +322,8 @@ path = "benches/micro/int_to_string_base1e19.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide"]
 
-# Per-PR perf-regression gate, driven by CodSpeed under simulation
-# instrumentation. See .github/workflows/codspeed.yml.
+# Per-PR perf-regression micro-bench gate, run with plain criterion
+# (a small, focused set). Bench file: benches/micro/pr_gate.rs.
 [[bench]]
 name = "pr_gate"
 path = "benches/micro/pr_gate.rs"

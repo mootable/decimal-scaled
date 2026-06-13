@@ -93,8 +93,8 @@ num-traits = { version = "0.2", default-features = false }
 # Property-based identity suite (tests/proptest_identities.rs).
 proptest = "1"
 # Live-vs-pinned-history microbenches (benches/add_history_ab.rs): same
-# criterion alias + self-pin affinity helper the root crate's benches use.
-criterion = { version = "4.6.0", default-features = false, features = ["cargo_bench_support"], package = "codspeed-criterion-compat" }
+# criterion dev-dep + self-pin affinity helper the root crate's benches use.
+criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
 core_affinity = "0.8"
 
 # Mirror the root crate's rust-lint envelope so the relocated tests keep the

@@ -415,8 +415,9 @@ the harness as the API surface stabilises.
 
 ## 5. PR gates
 
-Two gates run on every pull request. They protect very different
-things and have very different escape hatches.
+One hard gate runs on every pull request — the precision gate. It is
+non-overridable. Performance is tracked out-of-band (see the
+benchmarking workflows above), advisory and never a merge blocker.
 
 ### Precision gate (hard, non-overridable)
 
@@ -443,59 +444,21 @@ The golden run is a separate job specifically so it can be marked
 *Required* in the repo branch-protection rules independently of the
 bench / docs workflows.
 
-### Perf gate (soft, overridable)
+### Perf (advisory, never a gate)
 
-[`.github/workflows/codspeed.yml`](https://github.com/mootable/decimal-scaled/blob/main/.github/workflows/codspeed.yml)
-runs three Criterion-based bench harnesses through
-[CodSpeed](https://codspeed.io/) — an instruction-count simulator
-built on [Valgrind](https://en.wikipedia.org/wiki/Valgrind/cachegrind).
-Sub-1% noise on shared CI runners, so a 5% regression is reliably
-detectable instead of disappearing in the wall-time floor that a
-plain Criterion-on-CI gate would suffer.
+Performance is not a merge gate. It is tracked out-of-band by the
+benchmarking workflows described above — the
+[`bench-branch-compare`](https://github.com/mootable/decimal-scaled/blob/main/.github/workflows/bench-branch-compare.yml)
+workflow compares a branch against the released baseline across the
+width/scale surface, and the
+[`benches/micro/pr_gate.rs`](https://github.com/mootable/decimal-scaled/blob/main/benches/micro/pr_gate.rs)
+micro-bench gives a small focused criterion set for local checks.
+These report perf shifts but never block the merge: perf is a signal;
+correctness (the precision gate) is the release blocker.
 
-The three bench targets:
-
-- [`benches/all_functions.rs`](https://github.com/mootable/decimal-scaled/blob/main/benches/all_functions.rs) — 130-bench D38<12> full public-API sweep.
-- [`benches/mul_div_candidates.rs`](https://github.com/mootable/decimal-scaled/blob/main/benches/mul_div_candidates.rs) — focused mul/div algorithm comparison.
-- [`benches/pr_gate.rs`](https://github.com/mootable/decimal-scaled/blob/main/benches/pr_gate.rs) — wide-tier coverage at D38<19> / D57<20> / D307<150> across nine ops. Add cells here when you ship a kernel that the other two suites don't reach.
-
-CodSpeed leaves a comment on the PR with per-bench `%Δ` against the
-baseline and marks the check failed if any cell regressed past the
-configured threshold. **Override path: a reviewer applies the
-`perf-regression-acknowledged` label to the PR.** Legitimate reasons:
-
-- A bug fix that costs perf (e.g. a missing rounding step that was
-  giving false speedups).
-- A correctness refactor whose perf hit will be recovered by a
-  follow-up kernel.
-- A new feature whose code path is intentionally slower (e.g. a new
-  rounding mode).
-
-Use the label sparingly. The whole point of the gate is to catch
-unintended regressions; routinely dismissing it makes it noise.
-
-If your PR is large enough that the bench coverage in
-[`benches/pr_gate.rs`](https://github.com/mootable/decimal-scaled/blob/main/benches/pr_gate.rs) doesn't reach your changed
-cell, extend the harness in the same commit. The bench set is
-deliberately small (so per-PR wall time stays low) but it is not
-fixed in scope — new bespoke kernels should add a matching bench so
-future PRs can see regressions against the new path.
-
-### Repo-owner setup (one-time)
-
-The CodSpeed gate needs:
-
-1. The [CodSpeed GitHub App](https://github.com/marketplace/codspeed)
-   installed on the repo (free for OSS).
-2. The workflow's `permissions: id-token: write` grants OIDC auth —
-   no separate API token secret is needed in the v4 action flow.
-3. Branch-protection rules on `main` to mark **both** the `precision`
-   and `CodSpeed` workflows as Required. The precision check cannot
-   be dismissed by reviewers; the CodSpeed check can be dismissed
-   only via the `perf-regression-acknowledged` label.
-
-The first PR after setup establishes the baseline; subsequent PRs
-compare against it.
+When you ship a new bespoke kernel for a `(width, scale)` cell the
+existing benches don't reach, add a matching bench in the same commit
+so future runs can see regressions against the new path.
 
 ---
 

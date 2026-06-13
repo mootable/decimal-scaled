@@ -13,4 +13,4 @@ publish = false
 bench = ["dep:criterion"]
 
 [dependencies]
-criterion = { version = "4.6.0", package = "codspeed-criterion-compat", optional = true, default-features = false, features = ["cargo_bench_support"] }
+criterion = { version = "0.5", optional = true, default-features = false, features = ["cargo_bench_support"] }
