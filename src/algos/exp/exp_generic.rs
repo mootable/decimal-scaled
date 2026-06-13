@@ -20,8 +20,6 @@
 //! narrow default build reaches it for the integer-regime D38 cells whose
 //! 256-bit `Fixed` intermediate cannot host the lift.
 
-#![allow(unused)]
-
 use crate::int::types::compute_limbs::ComputeLimbs;
 use crate::int::types::traits::BigInt;
 use crate::support::rounding::RoundingMode;
