@@ -52,10 +52,9 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // Series across the operand spread × all six modes at each cell):
         // s0 4.81×, s10 2.81×, s17 2.96×, s22 2.91×, s23 2.26×, s28 2.32×,
         // s33 2.29×, s38 19.3×, s42 1.90×, s44 2.27×, s45 1.52×, s56 44.6×.
-        // The old gate `(3, 18..=22) | (3, 45..=56)` left the s23..=44 GAP on
-        // Series — the cause of the bench-branch-compare powf_D57_s42 3.64×
-        // regression (powf's inner exp(y·ln x) lands at storage SCALE=42 in
-        // that gap → Series). Cover the WHOLE D57 scale range through the
+        // A gap in the routed D57 scales would drop powf's inner exp(y·ln x)
+        // (which lands at storage SCALE=42) onto the slow Series `_` arm.
+        // Cover the WHOLE D57 scale range through the
         // small-`|x|` value gate (Tang's `k·ln 2` lift fits the work width
         // only for small `|x|`; large-`|x|` routes to Series, which is always
         // valid — matching the existing D76/D115/D153/D230 wide-tier pattern).
@@ -69,23 +68,21 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // Series squaring core at EVERY D76 scale, including the MAX scale
         // (s75), where the map ranks Series ~16× slower than Tang and every
         // Tang candidate is bit-identical to Series (zero validity failures).
-        // The old gate stopped at s74, so the MAX scale `exp_D76_s75` cell —
-        // the bench-branch-compare 6.41× regression — fell through to the
-        // slow Series `_` arm (a Class-I single-cell boundary miss). Cover the
+        // The MAX scale `exp_D76_s75` cell must be covered or it falls
+        // through to the slow Series `_` arm (a Class-I single-cell boundary
+        // miss). Cover the
         // WHOLE D76 scale range (0..=75, the design max) through the
         // small-`|x|` value gate so no scale is left on the Series path.
         #[cfg(any(feature = "d76", feature = "wide"))]
         (4, 0..=75) => Select::ByValue(wide_tang_gate::<N, SCALE>),
         // Narrow-wide tiers (N = 6/8/12/16) — the storage-strict exp path.
-        // RE-MAPPED 2026-05-29 against the freshly-baked exp Tang rodata table
-        // (`src/algos/support/exp_tang_table.rs`, commits b390abd9/6f5929d4):
-        // the OLD Tang rectangles here were tuned BEFORE the bake (when the
-        // table was a per-call Series recompute), so they over-routed Tang.
-        // The post-bake N-way A/B `benches/micro/exp_wide_series_tang_ab.rs`
+        // Mapped against the exp Tang rodata table
+        // (`src/algos/support/exp_tang_table.rs`).
+        // The N-way A/B `benches/micro/exp_wide_series_tang_ab.rs`
         // (PINNED core 22, Series vs 3 Tang configs vs Schoolbook, validity-
         // gated bit-identical to Series × all six modes) shows SERIES (the
-        // generic squaring core) now BEATS every Tang config at EVERY scale at
-        // these tiers — the table bake did not move Tang ahead, and Tang's
+        // generic squaring core) BEATS every Tang config at EVERY scale at
+        // these tiers — Tang's
         // table-multiply + post-reduction Taylor costs MORE than Series's
         // adaptive Smith `r/2^n` from D115 up. Measured medians (Tang =
         // production tang_m512_g30, ratio = Series-faster-by):
@@ -156,8 +153,8 @@ fn resolve<const N: usize, const SCALE: u32>(raw: &Int<N>) -> Algorithm {
 /// operating point from the storage-strict [`select`] above: it runs at the
 /// caller's working width `w` (a few extra digits) with the kernel's
 /// `INTERNAL_EXTRA` lift covering arbitrary `|k|`, NOT at storage SCALE with
-/// the small-`|x|` value gate. The two were the same query before 2026-05-29,
-/// but the storage-strict exp A/B (`exp_wide_series_tang_ab`) remapped
+/// the small-`|x|` value gate. The storage-strict exp A/B
+/// (`exp_wide_series_tang_ab`) routes
 /// D115/D153/D230/D307 OFF Tang at storage scale on measured evidence; that
 /// evidence does NOT cover the composition operating point (different `w`,
 /// different `|k|` regime), and the hyperbolic working-scale path is a
@@ -335,10 +332,10 @@ fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode
         // covers the large-`|k|` case the merged Tang gate now exposes (at
         // GAP scales the value gate `wide_tang_gate` admits `|x|` up to ~100,
         // where `|k|·log10 2 ≈ 30` digits exceeds the narrow base guard);
-        // DIRECTED enables Ziv escalation for the directed modes. The old
-        // `<false,false,false>` shape worked for the narrow `18..=22` /
-        // `45..=56` bands only because the storage-bit constraint at those
-        // SCALEs implicitly bounded `|x|` to the small-`|k|` regime.
+        // DIRECTED enables Ziv escalation for the directed modes. A
+        // `<false,false,false>` shape would suffice only for the narrow `18..=22` /
+        // `45..=56` bands, where the storage-bit constraint at those
+        // SCALEs implicitly bounds `|x|` to the small-`|k|` regime.
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => {
             let r = raw.resize_to::<Int<3>>();
@@ -361,8 +358,8 @@ fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode
         // bit-identical — the production config is the one wired here.)
         #[cfg(any(feature = "d76", feature = "wide"))]
         4 => Some(crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d76::Core, SCALE, 512, 30, true, true, false>(raw.resize_to::<Int<4>>(), mode).resize_to::<Int<N>>()),
-        // N >= 6: `select` routes EVERY scale to Series here (the 2026-05-29
-        // post-bake storage-strict A/B showed Series/Schoolbook beat every Tang
+        // N >= 6: `select` routes EVERY scale to Series here (the
+        // storage-strict A/B showed Series/Schoolbook beat every Tang
         // config at D115/D153/D230/D307+, and Tang is INELIGIBLE at D1232 max
         // scale — see the `select` comment), so `tang_routed` is never reached
         // for N >= 6. The per-tier Tang kernels (`exp_tang::<wide_trig_dNNN>`)
