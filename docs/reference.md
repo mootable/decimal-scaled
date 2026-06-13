@@ -19,8 +19,8 @@ Related pages elsewhere on the site:
 - [Decimal literals — the `d*!` macros](macros.md), [strict vs fast
   transcendentals](strict-mode.md), and [Cargo features](features.md)
   under **Getting started**.
-- [Benchmarks](benchmarks.md) and [library comparisons](comparisons.md)
-  under **Benchmarks & precision**.
+- [Performance](performance.md) and [library comparisons](comparisons.md)
+  under **Bench**.
 - [Architecture](ARCHITECTURE.md), [Algorithms](ALGORITHMS.md), and
   [precision testing](precision-testing.md) under **Architecture &
   internals**.

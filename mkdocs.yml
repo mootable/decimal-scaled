@@ -107,10 +107,12 @@ nav:
       - Serde: serde.md
       - Cross-scale operations: cross-scale.md
       - Glossary: glossary.md
-  - Benchmarks & precision:
-      - The golden harness: golden.md
-      - benchmarks.md
-      - Library comparisons: comparisons.md
+  - Bench:
+      - Harness: golden.md
+      - Performance: performance.md
+      - Precision: precision.md
+      - History: history.md
+      - Comparisons: comparisons.md
   - Architecture & internals:
       - Architecture: ARCHITECTURE.md
       - Algorithms: ALGORITHMS.md

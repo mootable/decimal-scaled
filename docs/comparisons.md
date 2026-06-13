@@ -204,5 +204,56 @@ capability the alternatives below do not offer:
 
 For series functions the strict form costs ~700× the fast bridge;
 `sqrt_strict` is the exception — algebraic, so it ties the fast form.
-Full head-to-head measurements against `bnum`, `ruint`, `rust_decimal`,
-and `fixed` are in [`benchmarks.md`](benchmarks.md).
+Full head-to-head timings are on the [Performance](performance.md) page; the
+per-library precision shootout is below.
+
+## Precision vs other crates
+
+Worst-case transcendental error of each library against the multi-oracle golden
+set, as **LSBε** (low-order bits in error) with the worst [ULP][ulp] distance in
+parentheses; `0 (0)` means correctly rounded. Generated from the committed
+`results/precision/*.tsv` the library cross-comparison CI run produces.
+
+[ulp]: https://en.wikipedia.org/wiki/Unit_in_the_last_place
+
+### Scale 19 (`D38<19>`)
+
+<!-- BEGIN GENERATED:precision:D38 -->
+| library | mode | acos | acosh | add | asin | asinh | atan | atan2 | atanh | cbrt | cos | cosh | div | exp | exp2 | hypot | ln | log | log10 | log2 | mul | powf | rem | sin | sinh | sqrt | sub | tan | tanh |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| decimal-scaled | HalfToEven | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
+| fastnum | HalfAwayFromZero | n/a | n/a | 0 (0) | n/a | n/a | n/a | n/a | n/a | 0 (0) | 4146 (inf) | n/a | 0 (0) | 2917 (inf) | 2120 (inf) | n/a | 0 (0) | n/a | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 4143 (inf) | n/a | 0 (0) | 0 (0) | 66 (6.5e19) | n/a |
+| rust_decimal | HalfToEven | n/a | n/a | 0 (0) | n/a | n/a | n/a | n/a | n/a | n/a | 0 (0) | n/a | 0 (0) | 34 (1.5e10) | n/a | n/a | 31 (1.1e9) | n/a | 0 (0) | n/a | 0 (0) | 0 (0) | 0 (0) | 0 (0) | n/a | 1 (1.00) | 0 (0) | 37 (7.3e10) | n/a |
+| dashu-float | HalfAwayFromZero | n/a | n/a | 0 (0) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 (0) | n/a | n/a | n/a | 0 (0) | n/a | n/a | n/a | 0 (0) | n/a | 66 (7.0e19) | n/a | n/a | n/a | 0 (0) | n/a | n/a |
+| decimal-rs | HalfAwayFromZero | n/a | n/a | 0 (0) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 (0) | 273 (9.5e81) | n/a | n/a | 0 (0) | n/a | n/a | n/a | 0 (0) | 0 (0) | 0 (0) | n/a | n/a | 0 (0) | 0 (0) | n/a | n/a |
+| bigdecimal | HalfToEven | n/a | n/a | 0 (0) | n/a | n/a | n/a | n/a | n/a | 0 (0) | n/a | n/a | 0 (0) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 (0) | n/a | 0 (0) | n/a | n/a | 0 (0) | 0 (0) | n/a | n/a |
+| g_math | HalfAwayFromZero | 65 (3.1e19) | 0 (0) | 0 (0) | 65 (3.1e19) | 64 (1.8e19) | 64 (1.6e19) | 66 (6.3e19) | 69 (4.0e20) | n/a | 0 (0) | 0 (0) | 0 (0) | 65 (2.3e19) | n/a | n/a | 0 (0) | n/a | n/a | n/a | 66 (3.9e19) | 70 (6.6e20) | n/a | 64 (1.6e19) | 65 (2.3e19) | 0 (0) | 0 (0) | 65 (2.7e19) | 64 (1.5e19) |
+<!-- END GENERATED:precision:D38 -->
+
+### Wide tier (`D76<38>`)
+
+<!-- BEGIN GENERATED:precision:D76 -->
+| library | mode | sqrt | cbrt | exp | ln | sin | cos | tan | atan |
+|---|---|---|---|---|---|---|---|---|---|
+| decimal-scaled | HalfToEven | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
+| fastnum | HalfAwayFromZero | 0 (0) | 0 (0) | 2980 (inf) | 0 (0) | 4206 (inf) | 4206 (inf) | 130 (2.5e38) | n/a |
+| rust_decimal | HalfToEven | 1 (1.00) | n/a | 33 (5.9e9) | 2 (2.00) | 22 (3.3e6) | 2 (2.00) | 66 (4.3e19) | n/a |
+| dashu-float | HalfAwayFromZero | n/a | n/a | n/a | 0 (0) | n/a | n/a | n/a | n/a |
+| decimal-rs | HalfAwayFromZero | 2 (3.00) | n/a | 260 (1.2e77) | 4 (1.0e1) | n/a | n/a | n/a | n/a |
+| bigdecimal | HalfToEven | 0 (0) | 0 (0) | n/a | n/a | n/a | n/a | n/a | n/a |
+| g_math | HalfAwayFromZero | 0 (0) | n/a | 101 (2.3e30) | 0 (0) | 101 (1.7e30) | 0 (0) | 102 (2.9e30) | 101 (1.6e30) |
+<!-- END GENERATED:precision:D76 -->
+
+### Deep scale (`D307<153>`)
+
+<!-- BEGIN GENERATED:precision:D307 -->
+| library | mode | sqrt | cbrt | exp | ln | sin | cos | tan | atan |
+|---|---|---|---|---|---|---|---|---|---|
+| decimal-scaled | HalfToEven | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
+| fastnum | HalfAwayFromZero | 0 (0) | 0 (0) | 2555 (inf) | 0 (0) | 4246 (inf) | 4246 (inf) | 170 (2.5e50) | n/a |
+| rust_decimal | HalfToEven | 1 (1.00) | n/a | 31 (1.2e9) | 2 (2.00) | 8 (2.0e2) | 2 (2.00) | 66 (4.3e19) | n/a |
+| dashu-float | HalfAwayFromZero | n/a | n/a | n/a | 0 (0) | n/a | n/a | n/a | n/a |
+| decimal-rs | HalfAwayFromZero | 2 (3.00) | n/a | 273 (9.5e81) | 4 (1.3e1) | n/a | n/a | n/a | n/a |
+| bigdecimal | HalfToEven | 0 (0) | 0 (0) | n/a | n/a | n/a | n/a | n/a | n/a |
+| g_math | HalfAwayFromZero | 0 (0) | n/a | 101 (2.3e30) | 0 (0) | 101 (1.7e30) | 0 (0) | 102 (2.9e30) | 101 (1.6e30) |
+<!-- END GENERATED:precision:D307 -->
