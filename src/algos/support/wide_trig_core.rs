@@ -1194,6 +1194,15 @@ fn dec_digits_g<S: BigInt>(v: S) -> u32 {
 /// Ceiling (positive result) / Floor (negative) nudge one ULP off the grid
 /// line and an unresolved half-ULP boundary rounds as ABOVE half for the
 /// nearest modes. A widening caller may still retry at a wider integer.
+/// `recompute` is a `&mut dyn FnMut` trait object, NOT an `impl FnMut`
+/// generic: the walker body is large and every distinct closure type would
+/// mint a full copy of it per call site (the dominant IR-volume entry at
+/// the wide gate builds), while a trait object keeps ONE instantiation per
+/// `(St, S)` pair. The dyn indirection is perf-acceptable — each
+/// `recompute` call evaluates a whole transcendental kernel at the probed
+/// guard, and the walker itself sits on the rare Ziv escalation path (the
+/// hot path narrows single-shot and never enters it) — and it matches the
+/// `WideTrigCore` trait surface, which already passes `&mut dyn FnMut`.
 #[allow(clippy::too_many_arguments)]
 fn near_min_resolve_g<St: BigInt + Copy, S: BigInt>(
     base_guard: u32,
@@ -1202,7 +1211,7 @@ fn near_min_resolve_g<St: BigInt + Copy, S: BigInt>(
     never_exact: bool,
     st_max: St,
     st_min: St,
-    mut recompute: impl FnMut(u32) -> S,
+    recompute: &mut dyn FnMut(u32) -> S,
 ) -> (St, bool)
 where
     S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
@@ -1441,15 +1450,16 @@ pub(crate) fn round_to_storage_widening_g<St: BigInt + Copy, S1: BigInt, S2: Big
     never_exact: bool,
     st_max: St,
     st_min: St,
-    recompute1: impl FnMut(u32) -> S1,
-    recompute2: impl FnMut(u32) -> S2,
+    mut recompute1: impl FnMut(u32) -> S1,
+    mut recompute2: impl FnMut(u32) -> S2,
 ) -> St
 where
     S1::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     S2::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
-    let (v1, resolved1) =
-        near_min_resolve_g::<St, S1>(base_guard, target, mode, never_exact, st_max, st_min, recompute1);
+    let (v1, resolved1) = near_min_resolve_g::<St, S1>(
+        base_guard, target, mode, never_exact, st_max, st_min, &mut recompute1,
+    );
     // `S1` only proves a residual is past the probe horizon when its width
     // actually reaches it — and a result carrying integer digits raises both
     // the horizon AND the noise floor by that count (see the resolver), so
@@ -1462,7 +1472,10 @@ where
     if resolved1 || (<S1>::BITS / 8) >= ZIV_PRECISION_HORIZON + int_digits {
         return v1;
     }
-    near_min_resolve_g::<St, S2>(base_guard, target, mode, never_exact, st_max, st_min, recompute2).0
+    near_min_resolve_g::<St, S2>(
+        base_guard, target, mode, never_exact, st_max, st_min, &mut recompute2,
+    )
+    .0
 }
 
 /// Single-shot narrowing with a NEAR-TIE escape hatch. Rounds a
@@ -1543,12 +1556,15 @@ pub(crate) fn round_to_storage_directed_g<St: BigInt + Copy, S: BigInt>(
     mode: RoundingMode,
     st_max: St,
     st_min: St,
-    recompute: impl FnMut(u32) -> S,
+    mut recompute: impl FnMut(u32) -> S,
 ) -> St
 where
     S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
-    round_to_storage_directed_impl_g::<St, S>(base_guard, target, mode, false, false, st_max, st_min, recompute).0
+    round_to_storage_directed_impl_g::<St, S>(
+        base_guard, target, mode, false, false, st_max, st_min, &mut recompute,
+    )
+    .0
 }
 
 /// `never_exact` directed narrowing (an irrational-valued kernel, e.g. `exp`):
@@ -1560,12 +1576,15 @@ pub(crate) fn round_to_storage_directed_never_exact_g<St: BigInt + Copy, S: BigI
     mode: RoundingMode,
     st_max: St,
     st_min: St,
-    recompute: impl FnMut(u32) -> S,
+    mut recompute: impl FnMut(u32) -> S,
 ) -> St
 where
     S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
-    round_to_storage_directed_impl_g::<St, S>(base_guard, target, mode, false, true, st_max, st_min, recompute).0
+    round_to_storage_directed_impl_g::<St, S>(
+        base_guard, target, mode, false, true, st_max, st_min, &mut recompute,
+    )
+    .0
 }
 
 /// Near-special-point directed narrowing (`acosh` at 1, `atanh` at ±1):
@@ -1577,12 +1596,15 @@ pub(crate) fn round_to_storage_directed_near_special_g<St: BigInt + Copy, S: Big
     mode: RoundingMode,
     st_max: St,
     st_min: St,
-    recompute: impl FnMut(u32) -> S,
+    mut recompute: impl FnMut(u32) -> S,
 ) -> St
 where
     S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
-    round_to_storage_directed_impl_g::<St, S>(base_guard, target, mode, true, false, st_max, st_min, recompute).0
+    round_to_storage_directed_impl_g::<St, S>(
+        base_guard, target, mode, true, false, st_max, st_min, &mut recompute,
+    )
+    .0
 }
 
 /// Two-width directed narrowing for the SCALE-derived work rungs: resolve
@@ -1610,21 +1632,21 @@ pub(crate) fn round_to_storage_directed_widening_g<St: BigInt + Copy, S1: BigInt
     mode: RoundingMode,
     st_max: St,
     st_min: St,
-    recompute1: impl FnMut(u32) -> S1,
-    recompute2: impl FnMut(u32) -> S2,
+    mut recompute1: impl FnMut(u32) -> S1,
+    mut recompute2: impl FnMut(u32) -> S2,
 ) -> St
 where
     S1::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     S2::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
     let (v, resolved) = round_to_storage_directed_impl_g::<St, S1>(
-        base_guard, target, mode, false, false, st_max, st_min, recompute1,
+        base_guard, target, mode, false, false, st_max, st_min, &mut recompute1,
     );
     if resolved || <S1 as BigInt>::BITS >= <S2 as BigInt>::BITS {
         return v;
     }
     round_to_storage_directed_impl_g::<St, S2>(
-        base_guard, target, mode, false, false, st_max, st_min, recompute2,
+        base_guard, target, mode, false, false, st_max, st_min, &mut recompute2,
     )
     .0
 }
@@ -1645,25 +1667,33 @@ pub(crate) fn round_to_storage_directed_near_special_widening_g<
     mode: RoundingMode,
     st_max: St,
     st_min: St,
-    recompute1: impl FnMut(u32) -> S1,
-    recompute2: impl FnMut(u32) -> S2,
+    mut recompute1: impl FnMut(u32) -> S1,
+    mut recompute2: impl FnMut(u32) -> S2,
 ) -> St
 where
     S1::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     S2::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
     let (v, resolved) = round_to_storage_directed_impl_g::<St, S1>(
-        base_guard, target, mode, true, false, st_max, st_min, recompute1,
+        base_guard, target, mode, true, false, st_max, st_min, &mut recompute1,
     );
     if resolved || <S1 as BigInt>::BITS >= <S2 as BigInt>::BITS {
         return v;
     }
     round_to_storage_directed_impl_g::<St, S2>(
-        base_guard, target, mode, true, false, st_max, st_min, recompute2,
+        base_guard, target, mode, true, false, st_max, st_min, &mut recompute2,
     )
     .0
 }
 
+/// `recompute` is a `&mut dyn FnMut` trait object, NOT an `impl FnMut`
+/// generic — see [`near_min_resolve_g`]: one walker instantiation per
+/// `(St, S)` instead of one per call-site closure type. Perf-acceptable
+/// because the walker is the RARE Ziv escalation machinery (the hot path
+/// narrows single-shot; each `recompute` call is a whole kernel
+/// evaluation, dwarfing the indirect call), and it matches the
+/// `WideTrigCore` trait surface, which already passes `&mut dyn FnMut`.
+#[allow(clippy::too_many_arguments)]
 fn round_to_storage_directed_impl_g<St: BigInt + Copy, S: BigInt>(
     base_guard: u32,
     target: u32,
@@ -1672,7 +1702,7 @@ fn round_to_storage_directed_impl_g<St: BigInt + Copy, S: BigInt>(
     never_exact: bool,
     st_max: St,
     st_min: St,
-    mut recompute: impl FnMut(u32) -> S,
+    recompute: &mut dyn FnMut(u32) -> S,
 ) -> (St, bool)
 where
     S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
