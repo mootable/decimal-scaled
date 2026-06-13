@@ -742,7 +742,7 @@ pub(crate) fn tiny_x_deep_directed_adjust<St: BigInt, const SCALE: u32>(
     let j_star = if j_min % 2 == 1 { j_min } else { j_min + 1 };
     // `j* = 3` is the linear band's [`tiny_x_linear_directed`] pre-empt; only the
     // deeper terms reach here. The upper bound excludes the non-tiny corner.
-    if j_star < 5 || j_star > TINY_X_DEEP_JMAX {
+    if !(5..=TINY_X_DEEP_JMAX).contains(&j_star) {
         return r;
     }
     // The deciding term must be BEYOND the walker's reach (else it RESOLVED `r`

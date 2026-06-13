@@ -31888,19 +31888,14 @@ fn reconstruct<W: BigInt>(slot: &[u64; SINCOS_TANG_LIMBS], w: u32, pow10_w: W) -
     // even on the narrowest work integer (same budget as the `ln`
     // pilot). Round the limb count up; clamp to the stored width.
     let need_bits = (w as u64) * 3322 / 1000 + 64;
-    let mut p = ((need_bits + 63) / 64) as usize;
-    if p < 1 {
-        p = 1;
-    }
-    if p > SINCOS_TANG_LIMBS {
-        p = SINCOS_TANG_LIMBS;
-    }
+    let mut p = need_bits.div_ceil(64) as usize;
+    p = p.clamp(1, SINCOS_TANG_LIMBS);
     // Zero-extend the top `p` limbs (MS-first) into W:
     //   slot_hi = sum_{k=0..p-1} slot[k] · 2^(64·(p−1−k)).
     let mut slot_hi = W::ZERO;
-    for k in 0..p {
+    for s in slot.iter().take(p) {
         slot_hi = (slot_hi << 64)
-            | W::from_mag_sign_u128(&[slot[k] as u128], false);
+            | W::from_mag_sign_u128(&[*s as u128], false);
     }
     let bp = (64 * p) as u32;
     let scaled = slot_hi * pow10_w;

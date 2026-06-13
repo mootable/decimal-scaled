@@ -175,8 +175,8 @@ where
                 raw,
                 guard,
                 w,
-                |av, w| eg::sinh_pos::<C::Wagm>(av, w),
-                |av, w| eg::sinh_pos::<C::Wexp>(av, w),
+                eg::sinh_pos::<C::Wagm>,
+                eg::sinh_pos::<C::Wexp>,
             );
             if neg { eg::zero::<C::Wagm>() - sh } else { sh }
         },
@@ -228,8 +228,8 @@ where
                 raw,
                 guard,
                 w,
-                |av, w| eg::cosh_pos::<C::Wagm>(av, w),
-                |av, w| eg::cosh_pos::<C::Wexp>(av, w),
+                eg::cosh_pos::<C::Wagm>,
+                eg::cosh_pos::<C::Wexp>,
             )
         },
         |guard| {
@@ -288,7 +288,7 @@ where
                     let enx = eg::div::<C::Wagm>(eg::one::<C::Wagm>(w), ex, w);
                     eg::div::<C::Wagm>(ex - enx, ex + enx, w)
                 },
-                |av, w| eg::tanh_pos::<C::Wexp>(av, w),
+                eg::tanh_pos::<C::Wexp>,
             );
             if neg { eg::zero::<C::Wagm>() - th } else { th }
         },
@@ -538,7 +538,7 @@ where
                 guard,
                 w,
                 |av, w| eg::sinh_pos::<Wk>(av, w),
-                |av, w| eg::sinh_pos::<C::Wexp>(av, w),
+                eg::sinh_pos::<C::Wexp>,
             );
             if neg { eg::zero::<Wk>() - sh } else { sh }
         },
@@ -589,7 +589,7 @@ where
                 guard,
                 w,
                 |av, w| eg::cosh_pos::<Wk>(av, w),
-                |av, w| eg::cosh_pos::<C::Wexp>(av, w),
+                eg::cosh_pos::<C::Wexp>,
             )
         },
         |guard| {
@@ -648,7 +648,7 @@ where
                     let enx = eg::div::<Wk>(eg::one::<Wk>(w), ex, w);
                     eg::div::<Wk>(ex - enx, ex + enx, w)
                 },
-                |av, w| eg::tanh_pos::<C::Wexp>(av, w),
+                eg::tanh_pos::<C::Wexp>,
             );
             if neg { eg::zero::<Wk>() - th } else { th }
         },
@@ -667,7 +667,7 @@ where
                     let enx = eg::div::<C::Wagm>(eg::one::<C::Wagm>(w), ex, w);
                     eg::div::<C::Wagm>(ex - enx, ex + enx, w)
                 },
-                |av, w| eg::tanh_pos::<C::Wexp>(av, w),
+                eg::tanh_pos::<C::Wexp>,
             );
             if neg { eg::zero::<C::Wagm>() - th } else { th }
         },
