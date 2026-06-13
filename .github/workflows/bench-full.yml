@@ -21,10 +21,6 @@ name: "\U0001FA91 bench-full (matrix per width)"
 # regression detection — do NOT compare across runs as absolute
 # numbers, and do NOT replace `docs/benchmarks.md` numbers (those
 # come from a known dedicated machine).
-#
-# For < 1 % noise on the same shared runner pool, layer CodSpeed
-# (codspeed.io OSS plan) on top of the `full_matrix_d*` benches in
-# a follow-up workflow — see `research/free_bench_platforms_2026-05-18.md`.
 
 on:
   workflow_dispatch:

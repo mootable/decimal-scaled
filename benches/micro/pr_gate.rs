@@ -1,11 +1,9 @@
-//! Per-PR perf-regression bench harness, run by the CodSpeed
-//! integration (see `.github/workflows/bench-pr-gate.yml`).
-//!
-//! Deliberately small — CodSpeed runs every bench under Valgrind
-//! instrumentation, so each `bench_function` call is expensive in
-//! wall-time even though it produces sub-1%-noise instruction counts.
-//! Keep the set focused on the cells most likely to regress under
+//! Per-PR perf-regression micro-bench harness — a small, focused
+//! `criterion` bench over the cells most likely to regress under
 //! kernel tuning work.
+//!
+//! Deliberately small so each run stays quick; the set is kept tight
+//! and focused rather than exhaustive.
 //!
 //! Coverage:
 //!
@@ -22,9 +20,7 @@
 //! add a matching bench here so the per-PR gate covers regressions
 //! against the new path.
 
-// `criterion` is aliased to `codspeed-criterion-compat` in Cargo.toml,
-// so this import resolves to the CodSpeed-instrumented surface when
-// run under `cargo codspeed`, and plain Criterion otherwise.
+// Plain `criterion`, the workspace's bench toolchain.
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use decimal_scaled::{D38, D57, D307};
 

@@ -12,15 +12,11 @@ name: "\U0001FA91 bench-trial"
 #     dominated by checkout + toolchain install + build, not the
 #     benchmark itself.
 #   * Manual trigger only. We do NOT auto-run on push because every
-#     run would burn the unlimited-but-shared CI capacity and we
-#     don't have CodSpeed regression detection wired up yet.
+#     run would burn the unlimited-but-shared CI capacity.
 #
-# Once this trial passes, the next steps are:
-#   1. Wire CodSpeed (instruction-count simulation; <1 % noise on
-#      shared GHA CPUs) per
-#      `research/free_bench_platforms_2026-05-18.md`.
-#   2. Add a second job that runs the longer `full_matrix_d*` or
-#      `lib_cmp_d*` sweeps split per width so each fits the 6 h cap.
+# Once this trial passes, the next step is to add a second job that
+# runs the longer `full_matrix_d*` or `lib_cmp_d*` sweeps split per
+# width so each fits the 6 h cap.
 #
 # Standard runner spec (2 vCPU, 7 GB RAM, 14 GB SSD shared CPU) means
 # wall-clock numbers WILL have 20–50 % run-to-run variance per the

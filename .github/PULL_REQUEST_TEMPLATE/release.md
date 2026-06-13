@@ -14,7 +14,6 @@
 ## Automatic gates (CI — must be green)
 
 - [ ] 📐 Precision (0.5 ULP gate) — `ci.yml` `golden (gate)` at 0 bad / 0 panic, all 6 modes, every band-edge `(width, scale)` cell; `tests (gate)` green (incl. proptest ULP fuzz)
-- [ ] CodSpeed — no unexpected perf regression
 - [ ] cargo-audit — clean
 
 ## Manual checks (verified before merge)

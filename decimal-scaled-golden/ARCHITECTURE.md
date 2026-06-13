@@ -412,9 +412,9 @@ validators, and any number of libraries with different `Value` types compose.
   result. It does **not** change the `ExecutionStrategy` trait or add a runner:
 
   - **Optional dependency, zero-dep default.** The crate keeps its no-dependency
-    posture; `bench` pulls `codspeed-criterion-compat` (API-identical to criterion,
-    with `cargo_bench_support`; the workspace's single bench toolchain) as an
-    `optional` dep, and the strategy module is `#[cfg(feature = "bench")]`-gated.
+    posture; `bench` pulls `criterion` (with `cargo_bench_support`; the
+    workspace's single bench toolchain) as an `optional` dep, and the strategy
+    module is `#[cfg(feature = "bench")]`-gated.
   - **No Runner variant — enforced by the type system.** criterion needs `&mut
     Criterion`, which lives as a `RefCell<Criterion>` *on the struct* (the trait's
     `&self` is untouched). That `RefCell` makes `CriterionStrategy` `!Sync`, so

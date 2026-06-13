@@ -36,6 +36,10 @@ land alongside.
   that served only `D9` are gone.
 - **`Unsigned` trait removed.** The internal marker trait carried no
   live impls after the native backend was dropped.
+- **CodSpeed perf-tracking removed.** The `codspeed.yml` workflow and
+  the `codspeed-criterion-compat` bench alias are gone; the benches
+  now build directly against the upstream `criterion` crate, and perf
+  is tracked through the `bench-branch-compare` workflow.
 
 ### Changed
 
@@ -226,8 +230,8 @@ land alongside.
 - **`RELEASING.md` and release PR checklist template.** The release
   system of record (versioning policy, branch workflow, docs +
   benchmark refresh, publish steps) is codified in `RELEASING.md`
-  and a PR checklist template. CodSpeed is noted as advisory (not a
-  required gate).
+  and a PR checklist template. Performance benchmarking is advisory
+  (not a required gate).
 
 ## [0.4.4] — 2026-05-21
 
