@@ -39,15 +39,16 @@ macro_rules! historical_subject {
         $(#[$mod_doc:meta])*
         mod $m:ident, crate $ds:ident, version $ver:literal,
         supports $supports:expr,
-        types { $($T:ident),+ $(,)? },
-        cells { $($D:ident < $s:literal > => $w:literal),+ $(,)? }
+        cells {
+            $( $(#[$cfg:meta])* $D:ident => $w:literal { $($s:literal),+ $(,)? } );+ $(;)?
+        }
     ) => {
         $(#[$mod_doc])*
         pub mod $m {
             use std::collections::BTreeMap;
 
             use $ds::{
-                DecimalArithmetic, DecimalTranscendental, RoundingMode as HistMode, $($T),+
+                DecimalArithmetic, DecimalTranscendental, RoundingMode as HistMode,
             };
             use decimal_scaled_golden::{
                 Capabilities, Computed, DecimalSubject, FnSupport, Function, Limits, Overflow,
@@ -62,7 +63,7 @@ macro_rules! historical_subject {
             /// The live band-edge `(width, scale)` cells this version also exposes
             /// (a subset of [`crate::CELLS`]; the sync is asserted in
             /// decimal-scale-test's `tests/history.rs` gate).
-            pub const CELLS: &[(u32, u32)] = &[ $( ($w, $s) ),+ ];
+            pub const CELLS: &[(u32, u32)] = &[ $( $( ($w, $s), )+ )+ ];
 
             /// Map the harness rounding mode onto this era's `RoundingMode` — the
             /// six variants are identical across 0.3.x..0.5.0, but each crate
@@ -85,7 +86,8 @@ macro_rules! historical_subject {
                 fn h_div_with(self, o: Self, m: HistMode) -> Self;
             }
             $(
-                impl<const S: u32> HistOps for $T<S> {
+                $(#[$cfg])*
+                impl<const S: u32> HistOps for $ds::$D<S> {
                     fn h_mul_with(self, o: Self, m: HistMode) -> Self { self.mul_with(o, m) }
                     fn h_div_with(self, o: Self, m: HistMode) -> Self { self.div_with(o, m) }
                 }
@@ -164,11 +166,47 @@ macro_rules! historical_subject {
                 }
             }
 
+            /// Per-tier dispatch leaves: one `cfg`-gated child module per tier (the
+            /// scale match inside needs no gating — the whole module vanishes with
+            /// its feature, so a shard build instantiates ONLY its own tier's cells),
+            /// and a width match with one arm per tier. Mirrors the live
+            /// [`crate`] `cells!` fan-out so each history shard compiles only its tier.
+            mod tier_dispatch {
+                $(
+                    $(#[$cfg])*
+                    #[allow(non_snake_case)]
+                    pub mod $D {
+                        use decimal_scaled_golden::{Computed, Function, Limits};
+                        use $ds::RoundingMode as HistMode;
+                        pub fn compute(
+                            scale: u32, func: Function, inputs: &[String], m: HistMode,
+                        ) -> Computed<String> {
+                            match scale {
+                                $( $s => super::super::compute_typed::<$ds::$D<$s>>(func, inputs, m), )+
+                                _ => panic!(
+                                    "no decimal-scaled {} cell for (width={}, scale={scale})",
+                                    super::super::VERSION, $w
+                                ),
+                            }
+                        }
+                        pub fn limits(scale: u32) -> Limits {
+                            match scale {
+                                $( $s => super::super::limits_typed::<$ds::$D<$s>>($s), )+
+                                _ => panic!(
+                                    "no decimal-scaled {} cell for (width={}, scale={scale})",
+                                    super::super::VERSION, $w
+                                ),
+                            }
+                        }
+                    }
+                )+
+            }
+
             fn dispatch_compute(
                 width: u32, scale: u32, func: Function, inputs: &[String], m: HistMode,
             ) -> Computed<String> {
-                match (width, scale) {
-                    $( ($w, $s) => compute_typed::<$D<$s>>(func, inputs, m), )+
+                match width {
+                    $( $(#[$cfg])* $w => tier_dispatch::$D::compute(scale, func, inputs, m), )+
                     _ => panic!(
                         "no decimal-scaled {} cell for (width={width}, scale={scale})", VERSION
                     ),
@@ -176,8 +214,8 @@ macro_rules! historical_subject {
             }
 
             fn dispatch_limits(width: u32, scale: u32) -> Limits {
-                match (width, scale) {
-                    $( ($w, $s) => limits_typed::<$D<$s>>($s), )+
+                match width {
+                    $( $(#[$cfg])* $w => tier_dispatch::$D::limits(scale), )+
                     _ => panic!(
                         "no decimal-scaled {} cell for (width={width}, scale={scale})", VERSION
                     ),
@@ -287,42 +325,41 @@ historical_subject! {
     /// every golden function at every width.
     mod v044, crate ds_044, version "0.4.4",
     supports |_width, _func| true,
-    types { D18, D38, D57, D76, D115, D153, D230, D307, D462, D616, D924, D1232 },
     cells {
-        // D18 — i64 storage in this era
-        D18<0> => 18, D18<3> => 18, D18<4> => 18, D18<9> => 18, D18<13> => 18, D18<17> => 18,
-        // D38 — i128
-        D38<0> => 38, D38<2> => 38, D38<6> => 38, D38<9> => 38, D38<10> => 38, D38<12> => 38,
-        D38<17> => 38, D38<18> => 38, D38<19> => 38, D38<28> => 38, D38<37> => 38,
+        // D18 — i64 storage in this era (always compiled, like the live narrow tier)
+        D18 => 18 { 0, 3, 4, 9, 13, 17 };
+        // D38 — i128 (always compiled)
+        D38 => 38 { 0, 2, 6, 9, 10, 12, 17, 18, 19, 28, 37 };
         // D57 — 192-bit
-        D57<0> => 57, D57<14> => 57, D57<20> => 57, D57<28> => 57, D57<30> => 57, D57<42> => 57,
-        D57<56> => 57,
+        #[cfg(feature = "d57")]
+        D57 => 57 { 0, 14, 20, 28, 30, 42, 56 };
         // D76 — 256-bit
-        D76<0> => 76, D76<18> => 76, D76<19> => 76, D76<38> => 76, D76<40> => 76, D76<57> => 76,
-        D76<75> => 76,
+        #[cfg(feature = "d76")]
+        D76 => 76 { 0, 18, 19, 38, 40, 57, 75 };
         // D115 — 384-bit
-        D115<0> => 115, D115<28> => 115, D115<50> => 115, D115<57> => 115, D115<86> => 115,
-        D115<114> => 115,
+        #[cfg(feature = "d115")]
+        D115 => 115 { 0, 28, 50, 57, 86, 114 };
         // D153 — 512-bit
-        D153<0> => 153, D153<38> => 153, D153<76> => 153, D153<114> => 153, D153<152> => 153,
+        #[cfg(feature = "d153")]
+        D153 => 153 { 0, 38, 76, 114, 152 };
         // D230 — 768-bit
-        D230<0> => 230, D230<57> => 230, D230<115> => 230, D230<172> => 230, D230<229> => 230,
+        #[cfg(feature = "d230")]
+        D230 => 230 { 0, 57, 115, 172, 229 };
         // D307 — 1024-bit
-        D307<0> => 307, D307<30> => 307, D307<50> => 307, D307<70> => 307, D307<76> => 307,
-        D307<120> => 307, D307<153> => 307, D307<230> => 307, D307<290> => 307, D307<306> => 307,
+        #[cfg(feature = "d307")]
+        D307 => 307 { 0, 30, 50, 70, 76, 120, 153, 230, 290, 306 };
         // D462 — 1536-bit
-        D462<0> => 462, D462<30> => 462, D462<100> => 462, D462<115> => 462, D462<180> => 462,
-        D462<231> => 462, D462<346> => 462, D462<461> => 462,
+        #[cfg(feature = "d462")]
+        D462 => 462 { 0, 30, 100, 115, 180, 231, 346, 461 };
         // D616 — 2048-bit
-        D616<0> => 616, D616<30> => 616, D616<130> => 616, D616<154> => 616, D616<240> => 616,
-        D616<308> => 616, D616<462> => 616, D616<590> => 616, D616<615> => 616,
+        #[cfg(feature = "d616")]
+        D616 => 616 { 0, 30, 130, 154, 240, 308, 462, 590, 615 };
         // D924 — 3072-bit
-        D924<0> => 924, D924<30> => 924, D924<180> => 924, D924<231> => 924, D924<350> => 924,
-        D924<462> => 924, D924<693> => 924, D924<900> => 924, D924<923> => 924,
+        #[cfg(feature = "d924")]
+        D924 => 924 { 0, 30, 180, 231, 350, 462, 693, 900, 923 };
         // D1232 — 4096-bit
-        D1232<0> => 1232, D1232<30> => 1232, D1232<250> => 1232, D1232<308> => 1232,
-        D1232<470> => 1232, D1232<616> => 1232, D1232<924> => 1232, D1232<1200> => 1232,
-        D1232<1231> => 1232,
+        #[cfg(feature = "d1232")]
+        D1232 => 1232 { 0, 30, 250, 308, 470, 616, 924, 1200, 1231 };
     }
 }
 
@@ -347,23 +384,23 @@ historical_subject! {
         use Function::*;
         width > 18 || matches!(func, Add | Sub | Mul | Div | Rem)
     },
-    types { D18, D38, D76, D153, D230, D307 },
     cells {
-        // D18 — i64 storage in this era
-        D18<0> => 18, D18<3> => 18, D18<4> => 18, D18<9> => 18, D18<13> => 18, D18<17> => 18,
-        // D38 — i128
-        D38<0> => 38, D38<2> => 38, D38<6> => 38, D38<9> => 38, D38<10> => 38, D38<12> => 38,
-        D38<17> => 38, D38<18> => 38, D38<19> => 38, D38<28> => 38, D38<37> => 38,
+        // D18 — i64 storage in this era (always compiled, like the live narrow tier)
+        D18 => 18 { 0, 3, 4, 9, 13, 17 };
+        // D38 — i128 (always compiled)
+        D38 => 38 { 0, 2, 6, 9, 10, 12, 17, 18, 19, 28, 37 };
         // D76 — 256-bit
-        D76<0> => 76, D76<18> => 76, D76<19> => 76, D76<38> => 76, D76<40> => 76, D76<57> => 76,
-        D76<75> => 76,
+        #[cfg(feature = "d76")]
+        D76 => 76 { 0, 18, 19, 38, 40, 57, 75 };
         // D153 — 512-bit
-        D153<0> => 153, D153<38> => 153, D153<76> => 153, D153<114> => 153, D153<152> => 153,
+        #[cfg(feature = "d153")]
+        D153 => 153 { 0, 38, 76, 114, 152 };
         // D230 — 768-bit
-        D230<0> => 230, D230<57> => 230, D230<115> => 230, D230<172> => 230, D230<229> => 230,
+        #[cfg(feature = "d230")]
+        D230 => 230 { 0, 57, 115, 172, 229 };
         // D307 — 1024-bit
-        D307<0> => 307, D307<30> => 307, D307<50> => 307, D307<70> => 307, D307<76> => 307,
-        D307<120> => 307, D307<153> => 307, D307<230> => 307, D307<290> => 307, D307<306> => 307,
+        #[cfg(feature = "d307")]
+        D307 => 307 { 0, 30, 50, 70, 76, 120, 153, 230, 290, 306 };
     }
 }
 
