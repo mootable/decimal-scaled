@@ -856,7 +856,18 @@ mod tests {
     /// reciprocal independently (10^scale via a *10 chain, then the production
     /// divide) and compare to `consts::newton_recip_le`, across every baked
     /// width and a scale sweep incl. the band edges.
-    #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
+    ///
+    /// Gated to `xx-wide` (the test must not exceed production scope): this
+    /// sweep spans the FULL baked grid (`width_limbs` up to `NEWTON_RECIP_MAX_W`
+    /// = 132, `scale` up to `NEWTON_RECIP_MAX_SCALE` = 1850), so the independent
+    /// recompute divides numerators of up to `width_limbs + pow_len + 1 ≈ 233`
+    /// u64 limbs — wider than ANY value a narrower build can form. Only the
+    /// xx-wide build's slice-divide scratch (`MAX_SINGLE_LIMBS = 4·MAX_WORK_N + 2`
+    /// = 258) holds them; under `wide,x-wide` it is 130 and the recompute would
+    /// overrun it. The baked table is build-invariant `static` data, so
+    /// verifying it where the widest entry is recomputable validates the table
+    /// for every build.
+    #[cfg(feature = "xx-wide")]
     #[test]
     fn baked_newton_recip_matches_runtime_divide() {
         use crate::int::algos::div::div_fixed::div_rem_mag_slice;
