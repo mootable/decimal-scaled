@@ -9,7 +9,7 @@ across types without an explicit `.widen()` - the crate ships a
 
 | Layer | API shape | Toolchain | Notes |
 |-------|-----------|-----------|-------|
-| 1 (stable) | `D{N}<SCALE>::{op}_of(a, b)` on every width | stable 1.85+ | Target width and SCALE chosen by the caller via the receiver type. |
+| 1 (stable) | `D{N}<SCALE>::{op}_of(a, b)` on every width | stable | Target width and SCALE chosen by the caller via the receiver type. |
 | 2 (nightly) | `decimal_scaled::cross::{op}(a, b)` free functions | nightly | Output type auto-inferred (`max(SCALE_a, SCALE_b)`) via `generic_const_exprs`. |
 
 Both layers preserve the same **0.5 ULP correctness contract** as

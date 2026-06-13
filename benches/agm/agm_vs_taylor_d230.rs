@@ -7,7 +7,8 @@
 //! is that AGM still LOSES here against the Brent-reduced artanh
 //! path. This bench captures the data point so the picture is
 //! complete; promotion to a width override would require a
-//! `OVERRIDE_POLICY.md`-margin win.
+//! benchmarked-margin win (see the `src/support/bench_alt.rs` module
+//! docs for the override policy).
 //!
 //! Both paths are correctly-rounded to 0.5 ULP at storage scale.
 //! `ln_strict_agm` runs at the lifted working scale

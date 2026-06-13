@@ -187,9 +187,12 @@ native mode:
 
 `decimal-scaled` is `0 (0)` across the entire surface — correctly
 rounded on every function, and that holds for all six rounding modes
-and all twelve widths (`D18` … `D1232`). `fastnum` is the closest
-peer: correctly rounded almost everywhere, failing only `tan`
-(67 LSBε) and `asinh` (58 LSBε) at this scale. `dashu-float` is
+and all twelve widths (`D18` … `D1232`). `fastnum` is correctly
+rounded on the algebraic and logarithmic surface (`sqrt`, `cbrt`,
+`ln`, `log10`, `log2`), but does **not range-reduce large arguments**,
+so `exp` (2917 LSBε), `exp2` (2120), `sin` (4143), and `cos` (4146)
+collapse to a wholly wrong result at this scale, and `tan` lands
+66 LSBε out. `dashu-float` is
 correctly rounded on the `exp` / `ln` / `sqrt` surface it exposes.
 `rust_decimal`, `decimal-rs`, and `bigdecimal` carry genuine
 1-or-more-LSB gaps on the functions they implement. `g_math` —
@@ -200,10 +203,13 @@ the empirical refutation of that claim at the matched 19-digit width.
 ### Wide tier (`D76<38>`)
 
 The 38-digit subset that has an oracle table. `decimal-scaled` is
-`0 (0)` across this surface. The peers reach this scale: `fastnum` is
-correctly rounded except `ln`, and `dashu-float` is correctly rounded
-on the `sqrt`/`exp`/`ln` surface it exposes, while `rust_decimal`,
-`decimal-rs`, and `g_math` carry gaps of tens to hundreds of LSBε.
+`0 (0)` across this surface. Of the peers that reach this scale,
+`fastnum` is correctly rounded on `sqrt` / `cbrt` / `ln` but — again
+not range-reducing large arguments — is wholly wrong on `exp`, `sin`,
+and `cos` (and 130 LSBε out on `tan`); `dashu-float` is correctly
+rounded on the `sqrt`/`exp`/`ln` surface it exposes, while
+`rust_decimal`, `decimal-rs`, and `g_math` carry gaps of tens to
+hundreds of LSBε.
 
 <!-- BEGIN GENERATED:precision:D76 -->
 | library | mode | sqrt | cbrt | exp | ln | sin | cos | tan | atan |
@@ -223,7 +229,10 @@ stays correctly rounded on the surface it exposes.
 ### Deep scale (`D307<153>`)
 
 The same surface at a 153-digit scale, against the golden
-oracle. `decimal-scaled` is `0 (0)` across the full surface. The peers
+oracle. `decimal-scaled` is `0 (0)` across the full surface. `fastnum`
+stays correctly rounded on `sqrt` / `cbrt` / `ln` here too, but its
+large-argument `exp` / `sin` / `cos` remain wholly wrong — the
+range-reduction gap does not close with scale. The other peers
 that reach this depth diverge from the true value — `dashu-float` and
 `bigdecimal`'s context `sqrt`/`cbrt` by tens to hundreds of LSBε, and
 `rust_decimal`, `decimal-rs`, and `g_math` by large margins on `exp`
@@ -267,7 +276,7 @@ throughput cost was measured directly in
 
 <!-- TODO: regenerate all §1 timing tables at the new 5-point scales
      {0, S/4, S/2, 3S/4, S-1} post-push. The per-tier scale columns
-     below (e.g. D18 s=0/9/18, D9 s=0/5/9) still reflect the old
+     below (e.g. D18 s=0/9/18) still reflect the old
      sampling; numbers are stale until the next full_matrix sweep. -->
 
 Operands `a = from_int(2)`, `b = from_int(1)` - both in-range
@@ -282,17 +291,6 @@ at every public type×scale combo. Six ops: add / sub / mul / div
 > pipeline / steal-budget jitter; wide-tier ns+ values are
 > reliable. See the run-conditions note at the bottom of this page
 > for the full caveat.
-
-### D9 - 32 bits
-
-| op | s = 0 | s = 5 | s = 9 |
-|---|---|---|---|
-| add | 933.57 ps | 933.27 ps | 933.13 ps |
-| sub | 933.11 ps | 933.3 ps | 933.21 ps |
-| mul | 933.26 ps | 1.5562 ns | 1.5552 ns |
-| div | 1.8667 ns | 2.1833 ns | 2.1768 ns |
-| rem | 1.8658 ns | 1.8668 ns | 1.8657 ns |
-| neg | 622.25 ps | 622.19 ps | 622.13 ps |
 
 ### D18 - 64 bits
 
@@ -484,8 +482,6 @@ for `ln` / `sin` / `sqrt` and `0.5` for `exp`.
 
 | type / s | ln noise | exp noise | sin noise | sqrt noise |
 |----------|---------:|----------:|----------:|-----------:|
-| D9<5>      |   0 |   0 |   0 |   0 |
-| D9<9>      |   0 |   0 |   0 |   0 |
 | D18<9>     |   0 |   0 |   0 |   0 |
 | D18<18>    |   2 |   3 |   2 |   3 |
 | D38<19>    |   3 |   4 |   3 |   3 |
@@ -509,7 +505,7 @@ that f64's 53-bit mantissa imposes.
 
 **Reading the table.**
 
-- **D9 and D18 at low scale (≤ 9)** suffer no precision loss —
+- **D18 at low scale (≤ 9)** suffers no precision loss —
   the result has at most 9 fractional digits and f64 has ~16
   digits of headroom.
 - **D38 and below, scale ≤ 19**, lose only 2–4 trailing digits.
@@ -567,14 +563,14 @@ platforms, `no_std`-compatible, 0.5 ULP at storage.
 > ceiling, not a steady-state cost. Wide-tier numbers carry the
 > same caveat at a smaller multiple (1.5–2×).
 
-### D9 / D18 / D38 strict
+### D18 / D38 strict
 
-| fn | D9 (s=5) | D18 (s=9) | D38 (s=19) |
-|---|---|---|---|
-| ln | 6.7669 µs | 6.9353 µs | 8.1117 µs |
-| exp | 6.2344 µs | 6.9092 µs | 7.6812 µs |
-| sin | 8.8738 µs | 5.9569 µs | 6.7603 µs |
-| sqrt | 19.936 ns | 20.78 ns | 31.694 ns |
+| fn | D18 (s=9) | D38 (s=19) |
+|---|---|---|
+| ln | 6.9353 µs | 8.1117 µs |
+| exp | 6.9092 µs | 7.6812 µs |
+| sin | 5.9569 µs | 6.7603 µs |
+| sqrt | 20.78 ns | 31.694 ns |
 
 ### Wide-tier strict - D57 / D76 / D115 / D153 / D230 / D307 / D462 / D616 / D924 / D1232
 

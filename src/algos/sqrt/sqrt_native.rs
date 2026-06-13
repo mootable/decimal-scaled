@@ -9,7 +9,7 @@
 //!
 //! The generic slice `isqrt`
 //! ([`crate::int::algos::isqrt::isqrt_newton::isqrt_newton`]) is
-//! width-agnostic over a **build-max** scratch buffer (`compute_limbs(2)`
+//! width-agnostic over a **build-max** scratch buffer (`MAX_DOUBLE_LIMBS`
 //! limbs — up to ~288 limbs for the widest enabled tier), which it zeroes
 //! several times per Newton iteration (`sq`, `q`, `r`, …). For the small
 //! radicands of the mid-scale wide cells that fixed-cost buffer churn

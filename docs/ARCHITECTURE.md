@@ -306,9 +306,9 @@ the **width-erased** ones, blanket over *every* `N`:
   in the per-width `exact-scratch` build, so the bound would cascade
   unboundedly. These stay build-max.
 - the **width-erased slice-divide engines** (`div_knuth`,
-  `div_burnikel_ziegler_with_knuth`, `div_knuth_u128_limb`) and
-  `int_fmt::fmt_into(&[u64])` — they take a bare `&[u64]` of *runtime* length
-  by design; there is no `N` to size against.
+  `div_burnikel_ziegler_with_knuth`, `div_knuth_u128_limb`) — they take a
+  bare `&[u64]` of *runtime* length by design; there is no `N` to size
+  against.
 
 The bare operators are also cold — decimal ops route through the
 `ComputeLimbs` kernels, not the `Int<N>` operator — so the build-max blanket
@@ -318,9 +318,11 @@ Paths that *look* like exceptions but are **not** — a concrete `N` or const
 `SCALE` is in scope, so they must use `ComputeLimbs`:
 
 - `Display` / radix formatting (`int_fmt`): `N` is the monomorphised width at
-  `impl<const N> Display for Int<N>`. (The byte-output buffer it hands the
-  width-erased `fmt_into(&[u64])` legitimately stays build-max; only its
-  *limb* scratch, if any, would be exact.)
+  `impl<const N> Display for Int<N>`, and `fmt_into::<N>(&[u64], …)` now
+  carries that const `N` (bounded `Limbs<N>: ComputeLimbs`). Both its limb
+  scratch (`Limbs::<N>::single_u64()`) and the caller's byte-output buffer
+  (`digit_formatting_limbs_u8()`, `20N + 2` bytes) are sized **exactly
+  per-`N`** — no build-max here.
 - `newton_reciprocal`: its reciprocal/pow buffer lengths are functions of the
   work width *and* the divide exponent, and the exponent derives from the
   const `SCALE` that the decimal policy dispatch carries (keyed on

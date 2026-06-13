@@ -3,7 +3,7 @@
 
 //! Bench-only alias wrappers for the per-type override policy.
 //!
-//! Per `OVERRIDE_POLICY.md`: every precision-bearing method has a
+//! The per-type override policy: every precision-bearing method has a
 //! canonical name (`f_strict` / `f_lossy`) plus, where applicable,
 //! a `_default` and `_override` variant. The canonical name is the
 //! chosen winner; the other variant exists too but is opt-in via

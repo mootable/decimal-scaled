@@ -83,7 +83,8 @@ dyn = ["alloc"]
 fast = ["std"]
 # Compiles BOTH the macro-default and the per-type override
 # implementations for every method that has them. Default builds compile
-# only the chosen winner (see OVERRIDE_POLICY.md). With `bench-alt` on
+# only the chosen winner (see the `src/support/bench_alt.rs` module
+# docs). With `bench-alt` on
 # benchmarks can call `*_strict_default` and `*_strict_override` side by
 # side without recompiling. Off by default — adds build time and binary
 # size for no runtime benefit unless you're benching.
