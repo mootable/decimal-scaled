@@ -22,22 +22,28 @@
 
 use crate::int::algos::support::limbs::{add_assign, sub_assign};
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
-use crate::int::types::compute_limbs::Limb;
+use crate::int::types::compute_limbs::{ComputeLimbs, Limb, Limbs};
 
-// ---- Scratch size constants -------------------------------------------------
+// ---- Slice-entry scratch (width-erased build-max) ---------------------------
 
-/// Stack scratch for the u64 Karatsuba kernel, in u64 limbs.
-///
-/// K(n) <= 12n + O(log n) per the geometric recursion. For n = 256
-/// (Int<256>, the widest tier) that is ~3072; rounded up with headroom.
-pub(crate) const KARATSUBA_SCRATCH_LIMBS: usize = 3200;
+/// The widest equal-length product the crate forms: Int<256> -- the widest
+/// transcendental work integer (4*MAX_WORK_N at the xx-wide tier). The
+/// int-layer multiply matcher (int::policy::mul) engages Karatsuba only at
+/// even N >= 128, and no work width exceeds 256 (a wider operand would route
+/// through the concrete-N kernel's exact ComputeLimbs scratch, not this slice
+/// path), so the WIDTH-ERASED slice entries below cover up to this width.
+const KARATSUBA_MAX_WIDTH: usize = 256;
 
-/// Stack scratch for the u128-packed Karatsuba, in u128 limbs.
-///
-/// The u128 variant operates on h = n/2 u128 limbs, so scratch is
-/// karatsuba_scratch_needed_th(n/2, th) u128 limbs -- half of
-/// KARATSUBA_SCRATCH_LIMBS by the same geometric argument.
-pub(crate) const KARATSUBA_SCRATCH_U128: usize = KARATSUBA_SCRATCH_LIMBS / 2 + 8;
+/// Build-max stack scratch (in u64 limbs) for the WIDTH-ERASED slice Karatsuba
+/// entries mul_karatsuba / mul_karatsuba_forced. Those take &[u64] of RUNTIME
+/// length, so they cannot size per-N and use this sanctioned build-max blanket
+/// (like the width-erased slice-divide engines). It is sized to the deepest
+/// recursion (the threshold floor 4) at the widest width via the kernel's own
+/// recursion arithmetic -- derived, not a frozen guess. The concrete-N kernel
+/// mul_karatsuba_limb sources its EXACT per-N scratch from ComputeLimbs instead
+/// (no build-max on the hot wide-multiply path -- Constitution rule 6).
+pub(crate) const KARATSUBA_SCRATCH_LIMBS: usize =
+    karatsuba_scratch_needed_th(KARATSUBA_MAX_WIDTH, 4);
 
 // ---- u64 entry points (existing slice-based interface, unchanged) -----------
 
@@ -108,7 +114,9 @@ pub(crate) fn mul_karatsuba_limb<const N: usize, L: Limb>(
     b: &[u64; N],
     out: &mut [u64],
     threshold: usize,
-) {
+) where
+    Limbs<N>: ComputeLimbs,
+{
     let h = L::packed_len(N);
     debug_assert!(h > 0 && h <= N);
     // Pack operands into L-space. [L; N] is always >= packed_len(N) <= N.
@@ -124,21 +132,29 @@ pub(crate) fn mul_karatsuba_limb<const N: usize, L: Limb>(
     let ratio: usize = if h < N { 2 } else { 1 };
     let threshold_packed = (threshold / ratio).max(4);
 
-    // Product buffer: 2*h packed-limb slots.
-    // [L; 2*N] covers both limb types (u64: 2h=2N; u128: 2h=N, rest unused).
-    // Scratch: KARATSUBA_SCRATCH_U128 slots, enough for u128 at N=256 and
-    // also enough for u64 with h <= N/2 (identical scratch geometry).
-    // [L; KARATSUBA_SCRATCH_U128] is 1608 limbs, >> 2*h for any benched N (max 2*64=128).
-    let mut prod = [L::ZERO; KARATSUBA_SCRATCH_U128];
-    let mut scratch = [L::ZERO; KARATSUBA_SCRATCH_U128];
+    // EXACT per-N Karatsuba work buffer (Constitution rule 6), sourced from
+    // ComputeLimbs on Limbs<N>: ONE stack array of
+    //   2*h + karatsuba_scratch_needed_th(h, 4)  L-limbs   (h = packed_len(N)),
+    // carved into the 2*h-limb product window and the recursion scratch. Sizing
+    // the scratch to the threshold FLOOR (4 -- the kernel's recursion base)
+    // makes it the exact worst case over every caller `threshold`, so each width
+    // carries ONLY its own frame -- no widest-tier blanket on this concrete-N
+    // path. (`L::karatsuba` picks the u64 form (2N + scratch over N limbs) or
+    // the u128 form (2h + scratch over h = N/2 limbs) for this limb type.)
+    let mut work = L::karatsuba::<Limbs<N>>();
+    let work = work.as_mut();
+    let (prod, scratch) = work.split_at_mut(2 * h);
 
-    karatsuba_rec_limb::<L>(
-        &ap[..h],
-        &bp[..h],
-        &mut prod[..2 * h],
-        &mut scratch,
+    debug_assert!(
+        scratch.len() >= karatsuba_scratch_needed_th(h, threshold_packed),
+        "Karatsuba scratch overflow: h={}, threshold_packed={}, need={}, have={}",
+        h,
         threshold_packed,
+        karatsuba_scratch_needed_th(h, threshold_packed),
+        scratch.len(),
     );
+
+    karatsuba_rec_limb::<L>(&ap[..h], &bp[..h], &mut *prod, scratch, threshold_packed);
 
     L::unpack(&prod[..2 * h], &mut out[..2 * N]);
 }

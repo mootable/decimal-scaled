@@ -55,6 +55,19 @@
 //! | `quad`             | `[u64; 4N]`         | `[u128; 2N]`                 |
 //! | `quad_buffered`    | `[u64; 4N+⌈N/2⌉]`  | `[u128; ⌈(4N+⌈N/2⌉)/2⌉]`   |
 //!
+//! A further axis sits APART from the packed pattern above: the **Karatsuba
+//! work buffer** (`karatsuba`, holding `[product | recursion-scratch]`) for
+//! the recursive wide multiply (`mul_karatsuba_limb`). Its `~12N` recursion
+//! geometry is not a clean limb-multiple, so — per *"Adding a higher multiple
+//! is expected"* — it is its own axis, sized per-`N` straight from the
+//! kernel's recursion via [`karatsuba_scratch_needed_th`]. Unlike the family
+//! above, the two element forms are NOT the same value packed: each sizes the
+//! kernel that runs in THAT limb type — the `u64` form over `N` limbs, the
+//! `u128` form over `⌈N/2⌉` limbs (genuinely half the work). Each is
+//! `2·h + karatsuba_scratch_needed_th(h, 4)` of its element (`h = N` for u64,
+//! `N/2` for u128); the `+…(·, 4)` term is the deepest recursion (the kernel's
+//! threshold floor), the exact worst case over every caller threshold.
+//!
 //! Two `u8` text-output buffers sit beside the limb family on a separate
 //! axis — the `Display`/radix `fmt` drain a rendered `Int<N>`/`Uint<N>`
 //! writes into: `digit_formatting_limbs_u8` (`[u8; 20N+2]`, the decimal and
@@ -79,6 +92,7 @@
 // expression. The plain division is the correct, portable form here.
 #![allow(clippy::manual_div_ceil)]
 
+use crate::int::algos::mul::mul_karatsuba::karatsuba_scratch_needed_th;
 use crate::int::algos::support::limbs::{max_n_limbs, MAX_WORK_N};
 
 /// The **limb carrier** — a zero-sized sizing marker, parameterised by the
@@ -165,6 +179,18 @@ const MAX_SINGLE_BUF_U128: usize = (MAX_SINGLE_LIMBS + 1) / 2;
 const MAX_DOUBLE_U128: usize = (MAX_DOUBLE_LIMBS + 1) / 2;
 /// Build-max `quad`/`quad_buffered` u128 — `⌈max_n_limbs(4)/2⌉`.
 const MAX_QUAD_U128: usize = (MAX_QUADRUPLE_LIMBS + 1) / 2;
+/// Build-max `karatsuba` u64 — the widest recursive multiply the build forms
+/// (`N = 4·MAX_WORK_N`, the widest work integer): the `2N`-u64 product window
+/// plus the deepest-recursion scratch `karatsuba_scratch_needed_th(N, 4)` (the
+/// threshold-floor worst case). The default-blanket (no-`exact-scratch`) form's
+/// Karatsuba buffer; the per-`N` `exact-scratch` impl sizes each width exactly.
+const MAX_KARATSUBA_U64: usize =
+    2 * (4 * MAX_WORK_N) + karatsuba_scratch_needed_th(4 * MAX_WORK_N, 4);
+/// Build-max `karatsuba` u128 — the widest even work width (`N = 4·MAX_WORK_N`)
+/// packs to `h = 2·MAX_WORK_N` u128 limbs: the `2h`-u128 product window plus
+/// `karatsuba_scratch_needed_th(h, 4)`.
+const MAX_KARATSUBA_U128: usize =
+    2 * (2 * MAX_WORK_N) + karatsuba_scratch_needed_th(2 * MAX_WORK_N, 4);
 
 // The build-max blanket constructors still called from the genuinely-`N`-less
 // blanket paths (the `Int<N>` operators, `BigInt` methods, schoolbook
@@ -288,6 +314,10 @@ pub(crate) trait Limb: Copy + PartialEq + Ord {
     type Quad<I: ComputeLimbs>: AsMut<[Self]> + AsRef<[Self]>;
     /// `quad_buffered` (`4N`-value + radicand slack) buffer.
     type QuadBuffered<I: ComputeLimbs>: AsMut<[Self]> + AsRef<[Self]>;
+    /// `karatsuba` ([product | recursion-scratch]) work buffer in this limb
+    /// type — sized for the kernel that runs in THIS limb type (the u64 kernel
+    /// over `N` limbs, the u128 kernel over `⌈N/2⌉`).
+    type Karatsuba<I: ComputeLimbs>: AsMut<[Self]> + AsRef<[Self]>;
     /// Fetch a freshly zeroed `single` buffer in this limb type.
     fn single<I: ComputeLimbs>() -> Self::Single<I>;
     /// Fetch a freshly zeroed `single_buffered` buffer in this limb type.
@@ -300,6 +330,8 @@ pub(crate) trait Limb: Copy + PartialEq + Ord {
     fn quad<I: ComputeLimbs>() -> Self::Quad<I>;
     /// Fetch a freshly zeroed `quad_buffered` buffer in this limb type.
     fn quad_buffered<I: ComputeLimbs>() -> Self::QuadBuffered<I>;
+    /// Fetch a freshly zeroed `karatsuba` work buffer in this limb type.
+    fn karatsuba<I: ComputeLimbs>() -> Self::Karatsuba<I>;
 }
 
 impl Limb for u64 {
@@ -352,6 +384,7 @@ impl Limb for u64 {
     type DoubleBuffered<I: ComputeLimbs> = I::DoubleBufferedU64;
     type Quad<I: ComputeLimbs> = I::QuadU64;
     type QuadBuffered<I: ComputeLimbs> = I::QuadBufferedU64;
+    type Karatsuba<I: ComputeLimbs> = I::KaratsubaU64;
     #[inline]
     fn single<I: ComputeLimbs>() -> Self::Single<I> {
         I::single_u64()
@@ -375,6 +408,10 @@ impl Limb for u64 {
     #[inline]
     fn quad_buffered<I: ComputeLimbs>() -> Self::QuadBuffered<I> {
         I::quad_buffered_u64()
+    }
+    #[inline]
+    fn karatsuba<I: ComputeLimbs>() -> Self::Karatsuba<I> {
+        I::karatsuba_u64()
     }
 }
 
@@ -443,6 +480,7 @@ impl Limb for u128 {
     type DoubleBuffered<I: ComputeLimbs> = I::DoubleBufferedU128;
     type Quad<I: ComputeLimbs> = I::QuadU128;
     type QuadBuffered<I: ComputeLimbs> = I::QuadBufferedU128;
+    type Karatsuba<I: ComputeLimbs> = I::KaratsubaU128;
     #[inline]
     fn single<I: ComputeLimbs>() -> Self::Single<I> {
         I::single_u128()
@@ -466,6 +504,10 @@ impl Limb for u128 {
     #[inline]
     fn quad_buffered<I: ComputeLimbs>() -> Self::QuadBuffered<I> {
         I::quad_buffered_u128()
+    }
+    #[inline]
+    fn karatsuba<I: ComputeLimbs>() -> Self::Karatsuba<I> {
+        I::karatsuba_u128()
     }
 }
 
@@ -512,6 +554,14 @@ pub(crate) trait ComputeLimbs {
     type QuadBufferedU64: AsMut<[u64]> + AsRef<[u64]>;
     /// `[u128; ⌈(4N + ⌈N/2⌉)/2⌉]` — packed-u128 `quad_buffered`.
     type QuadBufferedU128: AsMut<[u128]> + AsRef<[u128]>;
+    /// `[u64; 2N + karatsuba_scratch_needed_th(N, 4)]` — the u64 Karatsuba
+    /// work buffer: the `2N`-u64 product window followed by the recursion
+    /// scratch at the deepest split (threshold floor 4). `[product | scratch]`.
+    type KaratsubaU64: AsMut<[u64]> + AsRef<[u64]>;
+    /// `[u128; 2⌊N/2⌋ + karatsuba_scratch_needed_th(⌊N/2⌋, 4)]` — the
+    /// u128-packed Karatsuba work buffer over `h = ⌊N/2⌋` u128 limbs: the
+    /// `2h`-u128 product window followed by the half-width recursion scratch.
+    type KaratsubaU128: AsMut<[u128]> + AsRef<[u128]>;
     /// `[u8; 20N + 2]` — the decimal-rendering output buffer. An
     /// `Int<N>`/`Uint<N>` is `N·64` bits, so its base-10 form is
     /// `⌈64·N·log10(2)⌉ ≈ 19.27·N` digits; `20N + 2` is the exact per-`N`
@@ -550,6 +600,10 @@ pub(crate) trait ComputeLimbs {
     fn quad_buffered_u64() -> Self::QuadBufferedU64;
     /// A freshly zeroed `[u128; ⌈(4N + ⌈N/2⌉)/2⌉]` buffer.
     fn quad_buffered_u128() -> Self::QuadBufferedU128;
+    /// A freshly zeroed u64 Karatsuba `[product | scratch]` work buffer.
+    fn karatsuba_u64() -> Self::KaratsubaU64;
+    /// A freshly zeroed u128-packed Karatsuba `[product | scratch]` work buffer.
+    fn karatsuba_u128() -> Self::KaratsubaU128;
     /// A freshly zeroed `[u8; 20N + 2]` decimal-rendering output buffer.
     fn digit_formatting_limbs_u8() -> Self::DigitFormattingU8;
     /// A freshly zeroed `[u8; 64N + 2]` bit-radix rendering output buffer.
@@ -561,8 +615,8 @@ pub(crate) trait ComputeLimbs {
 mod imp {
     use super::{
         ComputeLimbs, Limbs, MAX_BIT_FMT_U8, MAX_DIGIT_FMT_U8, MAX_DOUBLE_LIMBS, MAX_DOUBLE_U128,
-        MAX_QUADRUPLE_LIMBS, MAX_QUAD_U128, MAX_SINGLE_BUF_U128, MAX_SINGLE_LIMBS, MAX_SINGLE_U128,
-        MAX_SINGLE_U64,
+        MAX_KARATSUBA_U128, MAX_KARATSUBA_U64, MAX_QUADRUPLE_LIMBS, MAX_QUAD_U128,
+        MAX_SINGLE_BUF_U128, MAX_SINGLE_LIMBS, MAX_SINGLE_U128, MAX_SINGLE_U64,
     };
 
     // The blanket build-max impl: every buffer is its `MAX_*` blanket size.
@@ -584,6 +638,8 @@ mod imp {
         type QuadU128 = [u128; MAX_QUAD_U128];
         type QuadBufferedU64 = [u64; MAX_QUADRUPLE_LIMBS];
         type QuadBufferedU128 = [u128; MAX_QUAD_U128];
+        type KaratsubaU64 = [u64; MAX_KARATSUBA_U64];
+        type KaratsubaU128 = [u128; MAX_KARATSUBA_U128];
         type DigitFormattingU8 = [u8; MAX_DIGIT_FMT_U8];
         type BitFormattingU8 = [u8; MAX_BIT_FMT_U8];
         #[inline]
@@ -635,6 +691,14 @@ mod imp {
             [0u128; MAX_QUAD_U128]
         }
         #[inline]
+        fn karatsuba_u64() -> Self::KaratsubaU64 {
+            [0u64; MAX_KARATSUBA_U64]
+        }
+        #[inline]
+        fn karatsuba_u128() -> Self::KaratsubaU128 {
+            [0u128; MAX_KARATSUBA_U128]
+        }
+        #[inline]
         fn digit_formatting_limbs_u8() -> Self::DigitFormattingU8 {
             [0u8; MAX_DIGIT_FMT_U8]
         }
@@ -649,6 +713,7 @@ mod imp {
 #[cfg(all(feature = "exact-scratch", not(feature = "exact-scratch-nightly")))]
 mod imp {
     use super::{ComputeLimbs, Limbs};
+    use crate::int::algos::mul::mul_karatsuba::karatsuba_scratch_needed_th;
 
     /// `impl ComputeLimbs for Limbs<$n>` per concrete width — every buffer a
     /// size literal. `single` = `n` (value width), `single_buffered` = `n+2`
@@ -671,6 +736,9 @@ mod imp {
                 type QuadU128 = [u128; 2 * $n];
                 type QuadBufferedU64 = [u64; 4 * $n + ($n + 1) / 2];
                 type QuadBufferedU128 = [u128; (4 * $n + ($n + 1) / 2 + 1) / 2];
+                type KaratsubaU64 = [u64; 2 * $n + karatsuba_scratch_needed_th($n, 4)];
+                type KaratsubaU128 =
+                    [u128; 2 * ($n / 2) + karatsuba_scratch_needed_th($n / 2, 4)];
                 type DigitFormattingU8 = [u8; 20 * $n + 2];
                 type BitFormattingU8 = [u8; 64 * $n + 2];
                 #[inline]
@@ -722,6 +790,14 @@ mod imp {
                     [0u128; (4 * $n + ($n + 1) / 2 + 1) / 2]
                 }
                 #[inline]
+                fn karatsuba_u64() -> Self::KaratsubaU64 {
+                    [0u64; 2 * $n + karatsuba_scratch_needed_th($n, 4)]
+                }
+                #[inline]
+                fn karatsuba_u128() -> Self::KaratsubaU128 {
+                    [0u128; 2 * ($n / 2) + karatsuba_scratch_needed_th($n / 2, 4)]
+                }
+                #[inline]
                 fn digit_formatting_limbs_u8() -> Self::DigitFormattingU8 {
                     [0u8; 20 * $n + 2]
                 }
@@ -747,6 +823,7 @@ mod imp {
 #[cfg(feature = "exact-scratch-nightly")]
 mod imp {
     use super::{ComputeLimbs, Limbs};
+    use crate::int::algos::mul::mul_karatsuba::karatsuba_scratch_needed_th;
     use crate::int::algos::support::limbs::n_limbs;
 
     impl<const N: usize> ComputeLimbs for Limbs<N>
@@ -761,6 +838,8 @@ mod imp {
         [(); 4 * N]:,
         [(); n_limbs(4, N)]:,
         [(); (n_limbs(4, N) + 1) / 2]:,
+        [(); 2 * N + karatsuba_scratch_needed_th(N, 4)]:,
+        [(); 2 * (N / 2) + karatsuba_scratch_needed_th(N / 2, 4)]:,
         [(); 20 * N + 2]:,
         [(); 64 * N + 2]:,
     {
@@ -776,6 +855,8 @@ mod imp {
         type QuadU128 = [u128; 2 * N];
         type QuadBufferedU64 = [u64; n_limbs(4, N)];
         type QuadBufferedU128 = [u128; (n_limbs(4, N) + 1) / 2];
+        type KaratsubaU64 = [u64; 2 * N + karatsuba_scratch_needed_th(N, 4)];
+        type KaratsubaU128 = [u128; 2 * (N / 2) + karatsuba_scratch_needed_th(N / 2, 4)];
         type DigitFormattingU8 = [u8; 20 * N + 2];
         type BitFormattingU8 = [u8; 64 * N + 2];
         #[inline]
@@ -825,6 +906,14 @@ mod imp {
         #[inline]
         fn quad_buffered_u128() -> Self::QuadBufferedU128 {
             [0u128; (n_limbs(4, N) + 1) / 2]
+        }
+        #[inline]
+        fn karatsuba_u64() -> Self::KaratsubaU64 {
+            [0u64; 2 * N + karatsuba_scratch_needed_th(N, 4)]
+        }
+        #[inline]
+        fn karatsuba_u128() -> Self::KaratsubaU128 {
+            [0u128; 2 * (N / 2) + karatsuba_scratch_needed_th(N / 2, 4)]
         }
         #[inline]
         fn digit_formatting_limbs_u8() -> Self::DigitFormattingU8 {
