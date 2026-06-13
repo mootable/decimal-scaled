@@ -41,7 +41,7 @@
 //! microbench (per-width, per-shape; pinned core 22) measured `u128_fast`
 //! ~3.5x faster than `pythagoras` on single-`u64`-limb operands (`single`) and
 //! ~2.0-2.5x faster on two-`u64`-limb operands (`two` -- the decimal `s >= 19`
-//! slow band the old `fit_one`-only gate cliffed into Pythagoras) at every tier
+//! slow band that would otherwise fall to Pythagoras) at every tier
 //! from `N=2` through `N=64`, and statistically TIED on full-width
 //! (`multi`/`skew`) operands where the fast branch falls through. So the fast
 //! path strictly dominates the plain Pythagoras path at every width;

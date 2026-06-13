@@ -21,8 +21,8 @@
 //!   f64-seeded Newton whose only divide is a FIXED `u256 / u128` long
 //!   division -- a scalar routine, not the multi-precision dispatcher). This
 //!   covers ALL of D38 (`Int<2>`) and the entire low magnitude band of every
-//!   wider tier, which is exactly the decimal `s >= 19` slow band the wide
-//!   `fit_one`-only gate used to cliff into [`hypot_pythagoras`] for.
+//!   wider tier — exactly the decimal `s >= 19` slow band that would
+//!   otherwise fall to the multi-precision [`hypot_pythagoras`] path.
 //!
 //! The round step is the SAME exact remainder test in both arms (`n - q² > q`
 //! for the half modes, `n - q² != 0` for ceiling), so the delivered value is
@@ -57,7 +57,7 @@ use crate::support::rounding::RoundingMode;
 /// next iterate `y >= floor` too -- write `x = floor + t`, then
 /// `n/x >= floor² / (floor+t) >= floor - t`, so `x + n/x >= 2·floor`). Under
 /// that invariant `x² <= n  <=>  x == floor`, so the exit is a cheap SQUARE
-/// test instead of the old stall-confirm divide plus floor-correction divide
+/// test rather than a stall-confirm divide plus floor-correction divide
 /// (two full `u128` divides saved per call; the square is a couple of
 /// hardware multiplies). On a stall (`y >= x`) with `x² > n`, `x` is
 /// `floor + 1` (a stall only happens at `floor` or `floor + 1`), so one step
@@ -707,7 +707,7 @@ mod tests {
         }
     }
 
-    /// SATURATION-ZONE regression: when the library over-estimate touches
+    /// SATURATION-ZONE edge case: when the library over-estimate touches
     /// `2^128` the seed is capped to `u128::MAX = 2^128-1`, and for `n` just
     /// above `(2^128-1)²` the true floor IS `2^128-1` -- so the capped seed is
     /// correct yet `seed² < n`. The over-estimate `debug_assert` must admit this

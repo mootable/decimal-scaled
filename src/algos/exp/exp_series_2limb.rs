@@ -55,13 +55,13 @@ fn exp_result_int_digits(raw: i128, scale: u32) -> u32 {
     //
     // Forming `raw · 434295` and `10^scale · 1_000_000` directly both
     // overflow `u128` for in-range cells (`raw ≈ 1.7e38`, and any
-    // `scale ≥ 33` makes `10^scale·10^6 > u128::MAX`). The old code
-    // returned `u32::MAX` ("does not fit") whenever the DENOMINATOR
-    // overflowed — but that is wrong: a SMALL argument at a HIGH scale
+    // `scale ≥ 33` makes `10^scale·10^6 > u128::MAX`). Returning
+    // `u32::MAX` ("does not fit") whenever the DENOMINATOR
+    // overflows is wrong: a SMALL argument at a HIGH scale
     // (e.g. `exp(0.1)` at scale 37, `raw = 10^36`) has a tiny result that
-    // fits the fast path, yet `10^37·10^6` overflows and the gate forced
-    // the cell onto the expensive wide `WNarrow` path. That mis-routing is
-    // exactly the D38/cosh/sinh high-scale exp regression.
+    // fits the fast path, yet `10^37·10^6` overflows and would force
+    // the cell onto the expensive wide `WNarrow` path — mis-routing the
+    // D38/cosh/sinh high-scale exp cells.
     //
     // The integer-digit count of `e^x` is governed by the MAGNITUDE of
     // `x = raw / 10^scale`, which never overflows even when `raw·434295`
@@ -322,7 +322,7 @@ fn exp_ziv(raw: i128, scale: u32, g: u32) -> WZiv {
 
 /// Strict-path integer-regime / directed `e^x` — the wide-[`WNarrow`]
 /// single shot with the near-tie protected terminal: a clear residual
-/// keeps the old single-shot cost; a near-tie escalates through the
+/// keeps the cheap single-shot cost; a near-tie escalates through the
 /// never-exact Ziv walker (`e^x` is transcendental for every `x ≠ 0`).
 fn exp_wide_narrow_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
     use crate::algos::exp::exp_generic;
@@ -521,7 +521,7 @@ fn exp_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) 
     //     cannot resolve). Directed exp is not the common/benched cell, so
     //     keeping it on the wide path costs nothing on the hot path.
     // Every other (NEAREST-mode, non-integer-regime) cell — the COMMON
-    // narrow exp the regression was about — stays on the fast path.
+    // narrow exp — stays on the fast path.
     if !narrow_fixed_fits(raw, scale, w) || !crate::support::rounding::is_nearest_mode(mode) {
         return exp_wide_narrow_raw(raw, scale, working_digits, mode);
     }
@@ -927,7 +927,7 @@ fn exp2_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
     }
 }
 
-// Deep-underflow directed-rounding regression (golden exp.golden:4748):
+// Deep-underflow directed-rounding guard (golden exp.golden:4748):
 // `exp(-62.17530480440519)` ≈ 9.945e-28 (mpmath/flint-validated) is a
 // strictly positive SUB-RESOLUTION result at scales >= 14, so the
 // correctly-rounded storage value is 1 ULP under Ceiling and 0 under every
@@ -936,8 +936,8 @@ fn exp2_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
 // depth); the walker's cap-clamped deepest probe runs the generic exp
 // kernel past its internal squaring peak (`k = -90`, `w_ext = 231` in
 // `Int<24>` — the 2·w_ext-digit peak tops the sign bit), handing back a
-// NEGATIVE probe that used to be trusted as the answer — inverting
-// Ceiling to 0 and Floor to -1. The walker now returns the clean base
+// NEGATIVE probe — which would invert
+// Ceiling to 0 and Floor to -1 if trusted. The walker returns the clean base
 // narrowing at an unresolved cap (`wide_trig_core::
 // round_to_storage_directed_impl_g`); this pins the whole band's verdict
 // at the kernel layer for every mode.
@@ -1117,10 +1117,10 @@ mod fast_path_validity {
         );
     }
 
-    // Integer-regime exp2 regression (the golden exp2_d38_s9 defect): 2^x
-    // whose result has many integer digits (2^93 ≈ 10^28) left the flat-`w`
-    // 256-bit `Fixed` too few fractional guard digits and mis-rounded the
-    // last ULPs. The gate now routes such cells to `exp2_wide_narrow_raw`.
+    // Integer-regime exp2 guard (the golden exp2_d38_s9 defect): 2^x
+    // whose result has many integer digits (2^93 ≈ 10^28) leaves the flat-`w`
+    // 256-bit `Fixed` too few fractional guard digits, mis-rounding the
+    // last ULPs. The gate routes such cells to `exp2_wide_narrow_raw`.
     // Pin the exposing cell (class "Low": every mode → floor, except Ceiling
     // → floor+1) plus a small integer-regime sweep checking the rounding
     // order stays consistent (floor ≤ nearest ≤ ceil, ceil − floor ≤ 1).

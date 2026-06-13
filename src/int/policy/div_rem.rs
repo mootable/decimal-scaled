@@ -168,12 +168,11 @@ pub(crate) const BZ_THRESHOLD: usize = 65;
 /// | 32    | **u128 1.42×** |
 ///
 /// Clean u128 win from **den_n = 24** upward (cross-checked: den_n=24 is u128
-/// 1.10–1.11× across two independent runs) — lowered from `32`, since the
-/// faster u128 engine now wins the 24–30 band it previously tied/lost. u128
+/// 1.10–1.11× across two independent runs). u128
 /// is routed for an **even** divisor `≥ 24` limbs with a `≥ 2·n` dividend,
 /// INCLUDING the den_n ≥ 65 working widths the decimal `÷10^w` rescale + wide
-/// transcendentals reach (same map: u128 beat the old Burnikel–Ziegler
-/// routing 1.68–1.78× at den_n 96/128). The balanced shape (square `rem` /
+/// transcendentals reach (same map: u128 wins 1.68–1.78× over
+/// Burnikel–Ziegler at den_n 96/128). The balanced shape (square `rem` /
 /// the `Int<N>` `/` operator) and every narrow/odd divisor stay base-2⁶⁴
 /// Knuth, where u128 loses ~1.5×. The engine itself falls back to `div_knuth`
 /// for odd / `< 4`-limb divisors, so the matcher gate is the perf carve-out.
@@ -231,10 +230,10 @@ pub(crate) fn select_for_limbs(num: &[u64], den: &[u64]) -> Algorithm {
         // Wide (`2n`-dividend) even divisor → the u128 limb-width engine. This
         // covers the WHOLE even-divisor wide region from `U128_DIV_THRESHOLD`
         // up, INCLUDING the den_n ≥ 65 working widths the decimal `÷10^w`
-        // rescale + wide transcendentals reach: the policy-map (af3011f6)
-        // measured u128 beating the old Burnikel–Ziegler routing there
-        // 1.68–1.78× (96/128 limbs), so BZ is no longer routed (the balanced
-        // shape stays Knuth — u128 loses it ~1.5×).
+        // rescale + wide transcendentals reach: the policy-map
+        // measured u128 beating Burnikel–Ziegler there
+        // 1.68–1.78× (96/128 limbs), so this region routes u128, not BZ (the
+        // balanced shape stays Knuth — u128 loses it ~1.5×).
         if den_n.is_multiple_of(2) && num_m >= 2 * den_n {
             return Algorithm::KnuthU128Limb;
         }

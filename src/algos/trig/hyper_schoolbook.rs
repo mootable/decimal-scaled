@@ -25,19 +25,19 @@ use crate::support::rounding::RoundingMode;
 //
 // These kernels are the ONE realisation behind BOTH public entries
 // (`sinh_strict` via the policy dispatch AND `sinh_strict_with`, which
-// now delegates to the same dispatch — the rounding-mode-sibling
-// convention). They carry everything the per-tier macro shells used to
-// hold shell-side only: the exact-point pins, the analytic
+// delegates to the same dispatch — the rounding-mode-sibling
+// convention). They carry the full shell-side surface: the exact-point pins,
+// the analytic
 // small-argument odd-cubic bands, tanh's all-nines saturation fast path
 // and its k-lift cap, the `never_exact` two-width widening for
 // sinh/cosh, the `Wagm` composition width, and the Tang-routed
 // working-scale ln for acosh/atanh (Series for asinh — the MAX-scale
-// tang pre-residue caveat). The default-mode policy path previously
-// lacked the pins/bands, so a deep-cubic directed cell (the
-// tanh(1e-168) D462<461> Trunc pin) diverged between the two entries.
+// tang pre-residue caveat). Sharing the one realisation keeps a
+// deep-cubic directed cell (the tanh(1e-168) D462<461> Trunc pin) from
+// diverging between the two entries.
 
-/// Analytic small-argument odd-cubic pin — the macro shells' band,
-/// hoisted (and EXTENDED to asinh/atanh, which had it on NEITHER path).
+/// Analytic small-argument odd-cubic pin — applied across the family,
+/// asinh/atanh included.
 ///
 /// For an odd function `f(x) = x ± x³·c + …` (c = 1/6 or 1/3) and
 /// `0 < |raw| ≤ 10^(SCALE − ⌈SCALE/3⌉)`, the cubic correction is below
@@ -1224,10 +1224,10 @@ mod tests {
         }
     }
 
-    // Large |x| at a HIGH scale (28) — the band the old `(e^|x| ± e^-|x|)` form
-    // could not reach. At w = SCALE + 30 = 58 the dominant e^(+|x|) overflows the
+    // Large |x| at a HIGH scale (28) — the band the `(e^|x| ± e^-|x|)` form
+    // cannot reach. At w = SCALE + 30 = 58 the dominant e^(+|x|) overflows the
     // 256-bit `Fixed` once |x| ≳ 44, yet the saturation onset sits at |x| ≳ 1.1513·w
-    // ≈ 67, so |x| in [44, 67] used to PANIC (the 18 D38<28> defect cells). The
+    // ≈ 67, so |x| in [44, 67] would PANIC under that form (the 18 D38<28> cells). The
     // negative-exponent form tanh = (1 − e^-2|x|)/(1 + e^-2|x|) never forms e^(+|x|),
     // so these compute (no panic) AND still agree with the routed kernel bit-for-bit.
     #[test]
@@ -1315,8 +1315,8 @@ mod tests {
         }
     }
 
-    // atanh near |x| = 1 at a HIGH scale (28) — the band where the old ratio
-    // form `ln((1+x)/(1-x))` overflowed the 256-bit `Fixed`. The ratio reaches
+    // atanh near |x| = 1 at a HIGH scale (28) — the band where the ratio
+    // form `ln((1+x)/(1-x))` overflows the 256-bit `Fixed`. The ratio reaches
     // ~2·10^SCALE there, and the working-scale divide widens it by 10^(SCALE+30),
     // so it exceeds U256 once SCALE >= ~24 (hence the scale-12 cases above could
     // never catch this). The two-log form keeps both operands in (0, 2); it must
@@ -1350,17 +1350,19 @@ mod tests {
         }
     }
 
-    // Defect-B regression (2026-06-12): large-|x| hyperbolic and
+    // Large-|x| hyperbolic and
     // deep-negative exp/exp2 cells whose results are IN RANGE for the tier
-    // (D115 raw max = 2^383 − 1 ≈ 1.97e115) PANICKED on baked-table-less
-    // builds (single-tier `dNN` / `wide`-umbrella): the rescale matcher's
-    // Newton arm fell back to a per-call Knuth divide whose dividend —
-    // `even(width_limbs + w_ext/19 + 3) + 1` u64 limbs — outran the
+    // (D115 raw max = 2^383 − 1 ≈ 1.97e115) must compute without PANIC on
+    // baked-table-less
+    // builds (single-tier `dNN` / `wide`-umbrella). The risk: the rescale
+    // matcher's Newton arm falling back to a per-call Knuth divide whose
+    // dividend —
+    // `even(width_limbs + w_ext/19 + 3) + 1` u64 limbs — outruns the
     // build-max divide blanket (67 > 66 limbs at `width_limbs = 42`,
-    // `w_ext = 407`, `MAX_WORK_N = 16`). Fixed in `rescale::select` (the
-    // Newton arm is gated to the table-baking `x-wide`/`xx-wide` builds)
-    // and `NewtonReciprocal::precompute` (the fallback now sizes its own
-    // Knuth scratch). Inputs are the golden d115 panic rows
+    // `w_ext = 407`, `MAX_WORK_N = 16`). `rescale::select` gates the
+    // Newton arm to the table-baking `x-wide`/`xx-wide` builds,
+    // and `NewtonReciprocal::precompute` sizes its own
+    // Knuth scratch. Inputs are the golden d115 rows
     // (sinh.golden:3296/8150, cosh.golden:3322/3350/3352/7270, exp/exp2
     // deep negatives).
     #[cfg(any(feature = "d115", feature = "wide"))]

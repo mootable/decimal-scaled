@@ -99,8 +99,8 @@ use crate::int::policy::mul::dispatch_slice as mul_slice;
 // Constitution rule 6). Over-sizing here costs constant per-call stack,
 // not per-tier code duplication.
 //
-// The 8192 / 12288 / 16384 / 32768 widths the 2026-05-28 audit also
-// identified (D462 Wexp / D1232 Work / D924 Wide / D616 Wexp / D924
+// The 8192 / 12288 / 16384 / 32768 widths (D462 Wexp / D1232 Work /
+// D924 Wide / D616 Wexp / D924
 // Wexp / D1232 Wide / D1232 Wexp) are deferred. At those widths the
 // Newton precompute's `2^k / 10^scale` numerator at the AGM-widened
 // scale exceeds the routed `div_knuth`'s `MAX_SINGLE_LIMBS = 258`
@@ -170,7 +170,7 @@ pub struct NewtonReciprocal {
     // Populated once at the end of `precompute` by pairwise packing the
     // u64 limbs above (`limb = lo | hi << 64`). The u128 Newton kernel
     // (`div_newton_u128`) consumes these directly with NO per-call pack,
-    // recovering the v0.4.4 u128-slice mul throughput at the cost of one
+    // achieving u128-slice mul throughput at the cost of one
     // extra pack pass during the (already amortised) precompute.
     /// Reciprocal limbs packed as u128 pairs, live count `r_u128_len`.
     r_u128: [u128; MAX_R_U128],
@@ -425,7 +425,7 @@ fn div_newton(
 // Mirrors `div_newton` but operates entirely on packed u128 limb slices.
 // The precomputed `r_u128`/`pow_u128` are consumed directly with NO per-call
 // pack/unpack; the per-call operand (n) and output (quot, rem) all stay
-// in u128 throughout. Recovers the v0.4.4 `limbs_mul`-style throughput
+// in u128 throughout. Achieves `limbs_mul`-style throughput
 // (half the limb count, ~1/4 the partial products per schoolbook) by
 // paying the pack cost ONCE in the amortised `precompute`.
 
@@ -651,8 +651,8 @@ pub(crate) fn newton_pow10_mag_u128_packed(
 /// cell run the u128-packed Newton kernel? Continuous width region per
 /// Constitution rule 6 + Class I (never a per-scale carve-out).
 ///
-/// 2026-05-28 audit extension: the u128-packed kernel wins at the
-/// existing 1536–4096 band and at the new 6144 width (`newton_vs_mg`
+/// The u128-packed kernel wins at the
+/// 1536–4096 band and the 6144 width (`newton_vs_mg`
 /// integrated bench, cores 22–23, sees u128 1.18–3.46× over MG and
 /// 1.0–1.24× over u64 across s115–s953).
 ///
@@ -1134,7 +1134,7 @@ mod tests {
         assert_u64_u128_match(1231, 64, 32, 31, 1u128, (7, 0xdeadbeef_feedface_u128));
     }
 
-    // ── Wider-width validity wall (audit 2026-05-28) ──────────────────
+    // ── Wider-width validity wall ──────────────────
     //
     // Int<96> / Int<128> / Int<192> exercised at the benchmarked anchor scales
     // and the maxima. Bit-identical agreement with the Knuth-routed

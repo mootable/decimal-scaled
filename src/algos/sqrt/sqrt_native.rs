@@ -13,7 +13,7 @@
 //! limbs — up to ~288 limbs for the widest enabled tier), which it zeroes
 //! several times per Newton iteration (`sq`, `q`, `r`, …). For the small
 //! radicands of the mid-scale wide cells that fixed-cost buffer churn
-//! dominates the real arithmetic, regressing those cells vs prod 0.4.4.
+//! dominates the real arithmetic, so the slice `isqrt` is slow for those cells.
 //! This kernel instead runs Newton directly in a concrete `Int<W>` (whose
 //! width `W` the policy picks per `(N, SCALE)` cell to just cover
 //! `mag · 10^SCALE`), so each `n / x` is one Knuth divide on tight

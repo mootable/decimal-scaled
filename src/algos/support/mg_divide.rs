@@ -324,7 +324,7 @@ pub(crate) fn div_pow10_mag_u128(
 /// extracted from [`div_wide_pow10_chain`]; shared with the
 /// `Int<N>`-only decimal `mul` kernel.
 ///
-/// Recovers v0.4.4's approach: a **chain of `⌈scale / 38⌉` Möller–Granlund
+/// Uses a **chain of `⌈scale / 38⌉` Möller–Granlund
 /// `÷10^38` magnitude passes**, run DIRECTLY on the caller's exact-width
 /// u128 magnitude slice (no transcode to a build-max u64 Knuth buffer).
 /// Each pass is one branchless MG 2-by-1 magic-multiply per live u128 limb
@@ -1131,8 +1131,8 @@ pub(crate) fn mul_div_pow10_with<const SCALE: u32>(
     // magic-divide when the unsigned product overflows u128 too. The
     // u128 fast path covers the operand band sqrt(i128::MAX) < |op| <
     // sqrt(u128::MAX), i.e. ~1.3e19 < |op| < ~1.8e19 — the SCALE 19
-    // typical-input window that previously paid the full mul_u128_to_u256 +
-    // div_exp_fast_2word machinery for no reason.
+    // typical-input window, sparing it the full mul_u128_to_u256 +
+    // div_exp_fast_2word machinery.
     let ua = a.unsigned_abs();
     let ub = b.unsigned_abs();
     let exp = crate::D::<crate::int::types::Int<2>, SCALE>::multiplier().as_i128() as u128;
@@ -2405,7 +2405,7 @@ mod tests {
     ///
     /// The width-adaptive buffer (`N = W::U128_LIMBS`) must still hand
     /// `Int<256>` its full 128-limb buffer. This test sets a bit above
-    /// the old 8192-bit ceiling (so the value is unrepresentable in a
+    /// the 8192-bit ceiling (so the value is unrepresentable in a
     /// 64-limb buffer) and divides by `10^w` at a working scale
     /// `w ≥ 620` (D1232's wide-transcendental band). With truncation
     /// the high bits vanish and the quotient diverges from the

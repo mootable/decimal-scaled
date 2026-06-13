@@ -160,7 +160,7 @@ fn atan_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 
     // nearest modes; an exact half-tie is impossible for an irrational),
     // while a directed mode needs the directed digits, so it falls
     // through to the series + mode-aware rounding (matching the routed
-    // `atan_strict_raw`; the 2026-06-12 wrong-mode find).
+    // `atan_strict_raw`).
     let one_bits: i128 = 10_i128.pow(SCALE);
     if crate::support::rounding::is_nearest_mode(mode) {
         if raw == one_bits {
@@ -296,12 +296,12 @@ mod tests {
         }
     }
 
-    /// Near-extremum directed-rounding regression (the golden `cos_d38_s28`
+    /// Near-extremum directed-rounding guard (the golden `cos_d38_s28`
     /// defect). `cos(x)` for `x = ±3141.59…` (a truncation of `1000π`) equals
     /// `1 − δ²/2`, just below `1`; at D38 s28 the deviation `δ²/2 ≈ 10⁻⁶⁰`
-    /// sits far below the base working scale. Before the Ziv-escalation fix the
-    /// narrow kernel rounded to exactly `1.0` at the base guard, so Trunc/Floor
-    /// wrongly returned `10²⁸` instead of the floor `10²⁸ − 1`. The escalation
+    /// sits far below the base working scale. Without Ziv escalation the
+    /// narrow kernel would round to exactly `1.0` at the base guard, so Trunc/Floor
+    /// would wrongly return `10²⁸` instead of the floor `10²⁸ − 1`. The escalation
     /// lifts the guard until the sub-resolution residual resolves: Trunc/Floor
     /// keep the floor, the nearest modes + Ceiling round up (golden class High,
     /// `frac > 0.5`). Values are the golden `cos_d38_s28` `(floor, cls=High)`.
