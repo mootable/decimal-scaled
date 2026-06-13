@@ -11,13 +11,13 @@ documentation = "https://mootable.github.io/decimal-scaled/"
 readme = "README.md"
 keywords = ["decimal", "fixed-point", "deterministic", "no-std", "precision"]
 categories = ["mathematics", "no-std", "science", "finance"]
-exclude = [
-    ".github/",
-    "bash.exe.stackdump",
-    "research/",
-    "tarpaulin.toml",
-    "scripts/",
-    "docs/benchmarks*.draft",
+include = [
+    "src/**",
+    "/README.md",
+    "/CHANGELOG.md",
+    "/CONTRIBUTORS.md",
+    "/LICENSE*",
+    "/LICENSES/**",
 ]
 
 # docs.rs renders the doc build with whichever features are enabled
