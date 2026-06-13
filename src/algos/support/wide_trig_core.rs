@@ -511,10 +511,28 @@ where
 pub(crate) fn sin_series<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
-    let r = C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
-        C::sin_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard)
-    });
+) -> C::Storage
+where
+    <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    // Linear-band analytic directed decision (relocated DOWN from the policy
+    // layer so the bare tier kernel and the rung-dispatched path agree): the
+    // cubic deciding digit sits below the work integer's Ziv reach AND the
+    // const-table provisioning, so only the analytic sign resolves it.
+    if let Some(v) = tiny_x_linear_directed::<C::Storage, SCALE>(raw, mode, false) {
+        return v;
+    }
+    let (r, decided) = round_to_storage_directed_decided_g::<C::Storage, C::W>(
+        C::GUARD,
+        SCALE,
+        mode,
+        C::storage_max(),
+        C::storage_min(),
+        |guard| C::sin_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard),
+    );
+    // Deep sub-resolution band (deciding `x^{j*}`, `j* ≥ 5`): the walker is
+    // mode-blind (`decided == false`); the sign is analytic (`sin` alternates).
+    let r = tiny_x_deep_directed_adjust::<C::Storage, SCALE>(r, decided, raw, mode, true, <C::W as BigInt>::BITS);
     adjust_bounded_extremum::<C, SCALE>(r, raw, mode)
 }
 
@@ -642,6 +660,106 @@ pub(crate) fn tiny_x_linear_directed<St: BigInt, const SCALE: u32>(
     })
 }
 
+/// Upper bound on the deciding Taylor-term index `j*` that the deep-band
+/// directed post-adjust ([`tiny_x_deep_directed_adjust`]) handles. `j* ≤ JMAX`
+/// is equivalent to `|x| < 10^(−SCALE/JMAX)` — a CONTINUOUS tiny-argument band
+/// (Class I), not a per-cell fit: a smaller `|x|` raises the leading-digit
+/// position `k`, which lowers `j*`. The bound keeps the post-adjust off NON-tiny
+/// arguments (whose `k = 1` gives `j* ≈ SCALE`, far above `JMAX`) so a rare
+/// deep Table-Maker tie at an ordinary magnitude is never mistaken for the
+/// analytic tiny-`x` regime. `41` spans every deep sub-resolution cell the
+/// odd-series trig kernels reach (the comprehensive-gate find is `j* = 7`),
+/// with wide headroom; the `decided == false` gate (below) is the real
+/// validity wall, this only excludes the non-tiny corner.
+const TINY_X_DEEP_JMAX: u32 = 41;
+
+/// Analytic directed post-adjust for the DEEP sub-resolution band of the odd
+/// forward/inverse trig functions — the generalisation of
+/// [`tiny_x_linear_directed`] past its `j* = 3` (cubic) reach.
+///
+/// For a tiny `x = m·10^(−k)` whose LEADING odd Taylor terms terminate exactly
+/// on the storage grid (so `f(x)` rounds to a grid value `G` under nearest),
+/// the directed side is decided by the first SUB-resolution odd term `x^{j*}`
+/// (`j* =` smallest odd `j` with `j·k > SCALE`). Its sign is analytically
+/// certain: `sin`/`atan` alternate (`+` for `j* ≡ 1 (mod 4)`, `−` for `j* ≡ 3`),
+/// `tan`/`asin` are always `+` (every coefficient positive). At a wide tier
+/// `x^{j*}` sits at fractional depth `j*·k`, BEYOND both the work integer's Ziv
+/// reach AND the const-table provisioning, so the directed walker returns the
+/// mode-blind grid value `G` (`decided == false`) — the `±3·10^(−120)` @ D616
+/// s615 find, deciding `x⁷` at depth ~841.
+///
+/// TWO conditions must hold for the adjust to fire — and they are independent:
+/// 1. `decided == false`: the walker gave up at its escalation cap.
+/// 2. `j*·k > reach`: the deciding term sits BEYOND the walker's reach
+///    (`reach = work_bits/8 − 8`, the directed `BITS/8` cap with the
+///    bounded-result trig `int_digits = 0`). This is the load-bearing test:
+///    `decided == false` ALONE is not "mode-blind" — the walker can RESOLVE
+///    the deciding term correctly yet still report `decided == false` when its
+///    CONFIRM probe lands on the cap-clamped (`tainted`) rung. Only when the
+///    term is genuinely past `reach` is `r` the mode-blind grid value `G`.
+///
+/// When both hold the value is on the grid (`r == G`, every above-scale term
+/// terminated — an off-grid value's non-terminating tail is at depth `~SCALE`,
+/// well WITHIN `reach`, so the walker resolves it and `j*·k ≤ reach` keeps this
+/// off). The result is `G ± 1 ULP` per the deciding sign via the same
+/// [`tiny_odd_expanding_directed`] / [`tiny_odd_compressing_directed`] step the
+/// linear band uses. `alternating` selects the sign rule (`true` = `sin`/`atan`,
+/// `false` = `tan`/`asin`); `work_bits` is the tier work integer's `BITS`
+/// (`C::W` — the deepest width the widening walker reaches). A no-op for nearest
+/// modes, `decided == true`, `raw == 0`, `SCALE == 0`, `|x| ≥ 1`, `j*` outside
+/// `[5, JMAX]`, or `j*·k ≤ reach`.
+#[inline]
+pub(crate) fn tiny_x_deep_directed_adjust<St: BigInt, const SCALE: u32>(
+    r: St,
+    decided: bool,
+    raw: St,
+    mode: RoundingMode,
+    alternating: bool,
+    work_bits: u32,
+) -> St {
+    if decided || crate::support::rounding::is_nearest_mode(mode) || SCALE == 0 {
+        return r;
+    }
+    let zero = <St as BigInt>::ZERO;
+    if raw == zero {
+        return r;
+    }
+    let absr = if raw < zero { zero - raw } else { raw };
+    // Leading-digit position `k`: `|x| = |raw|·10^(−SCALE)` and `|x| ≈ 10^(−k)`,
+    // so `k = SCALE − digits(|raw|) + 1`. `|x| ≥ 1` (digits > SCALE) is not tiny.
+    let digits = dec_digits_g::<St>(absr);
+    if digits == 0 || digits > SCALE {
+        return r;
+    }
+    let k = SCALE - digits + 1;
+    if k == 0 {
+        return r;
+    }
+    // `j*` = smallest ODD `j` with `j·k > SCALE`. `floor(SCALE/k)+1` is the
+    // smallest integer with the property (`(⌊SCALE/k⌋+1)·k = ⌊SCALE/k⌋·k + k >
+    // SCALE` since `k > SCALE mod k`); round up to the next odd.
+    let j_min = SCALE / k + 1;
+    let j_star = if j_min % 2 == 1 { j_min } else { j_min + 1 };
+    // `j* = 3` is the linear band's [`tiny_x_linear_directed`] pre-empt; only the
+    // deeper terms reach here. The upper bound excludes the non-tiny corner.
+    if j_star < 5 || j_star > TINY_X_DEEP_JMAX {
+        return r;
+    }
+    // The deciding term must be BEYOND the walker's reach (else it RESOLVED `r`
+    // correctly — see the doc). `j*·k` is its fractional depth.
+    let reach = (work_bits / 8).saturating_sub(8);
+    if j_star.saturating_mul(k) <= reach {
+        return r;
+    }
+    let expanding = if alternating { j_star % 4 == 1 } else { true };
+    let one = <St as BigInt>::ONE;
+    if expanding {
+        crate::support::rounding::tiny_odd_expanding_directed(r, zero, one, mode)
+    } else {
+        crate::support::rounding::tiny_odd_compressing_directed(r, zero, one, mode)
+    }
+}
+
 /// Directed-rounding post-adjust for `ln` very near `x = 1`.
 ///
 /// Concavity gives `ln(x) < x − 1` STRICTLY for every `x ≠ 1`, and `ln(x)`
@@ -699,6 +817,11 @@ where
     if raw == C::storage_zero() {
         return C::storage_zero(); // tan(0) = 0, the sole exact point
     }
+    // Analytic tiny-`x` directed decision (relocated from the policy layer) —
+    // `tan(x) = x + x³/3 + …` EXPANDS (every Taylor coefficient is positive).
+    if let Some(v) = tiny_x_linear_directed::<C::Storage, SCALE>(raw, mode, true) {
+        return v;
+    }
     let w0 = SCALE + C::GUARD;
     let (sin0, cos0) = C::sin_cos_fixed::<SCALE>(C::to_work(raw), w0);
     if cos0 == C::zero() {
@@ -739,15 +862,29 @@ fn tan_walker<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     base_guard: u32,
     mode: RoundingMode,
-) -> C::Storage {
-    C::round_to_storage_directed(base_guard, SCALE, mode, &mut |guard| {
-        let w = SCALE + guard;
-        let (s, c) = C::sin_cos_fixed::<SCALE>(C::to_work_scaled(raw, guard), w);
-        if c == C::zero() {
-            panic!("wide-tier tan: cosine is zero (argument is an odd multiple of pi/2)");
-        }
-        C::div(s, c, w)
-    })
+) -> C::Storage
+where
+    <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    let (r, decided) = round_to_storage_directed_decided_g::<C::Storage, C::W>(
+        base_guard,
+        SCALE,
+        mode,
+        C::storage_max(),
+        C::storage_min(),
+        |guard| {
+            let w = SCALE + guard;
+            let (s, c) = C::sin_cos_fixed::<SCALE>(C::to_work_scaled(raw, guard), w);
+            if c == C::zero() {
+                panic!("wide-tier tan: cosine is zero (argument is an odd multiple of pi/2)");
+            }
+            C::div(s, c, w)
+        },
+    );
+    // Deep sub-resolution tiny-`x` band (`j* ≥ 5`): `tan` always EXPANDS.
+    // A near-pole tie (`|x| ≈ π/2`, not tiny) has `j*` far above `JMAX`, so
+    // the adjust is a no-op there.
+    tiny_x_deep_directed_adjust::<C::Storage, SCALE>(r, decided, raw, mode, false, <C::W as BigInt>::BITS)
 }
 
 /// `atan_strict` for a wide tier — generic over the tier `C`. Result in
@@ -757,10 +894,24 @@ fn tan_walker<C: WideTrigCore, const SCALE: u32>(
 pub(crate) fn atan_series<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
-    C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
-        C::atan_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard)
-    })
+) -> C::Storage
+where
+    <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    // Analytic tiny-`x` directed decision (relocated from the policy layer) —
+    // `atan` alternates like `sin` (`atan(x) = x − x³/3 + x⁵/5 − …`).
+    if let Some(v) = tiny_x_linear_directed::<C::Storage, SCALE>(raw, mode, false) {
+        return v;
+    }
+    let (r, decided) = round_to_storage_directed_decided_g::<C::Storage, C::W>(
+        C::GUARD,
+        SCALE,
+        mode,
+        C::storage_max(),
+        C::storage_min(),
+        |guard| C::atan_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard),
+    );
+    tiny_x_deep_directed_adjust::<C::Storage, SCALE>(r, decided, raw, mode, true, <C::W as BigInt>::BITS)
 }
 
 /// Narrow-`GUARD` single-shot `atan_strict` for a wide tier — generic
@@ -816,11 +967,17 @@ where
     if raw == C::storage_zero() {
         return C::storage_zero();
     }
+    // Analytic tiny-`x` directed decision — the SAME pre-empt the tier
+    // [`sin_series`] carries (relocated from the policy layer), so this
+    // rung-dispatched path and the bare tier kernel agree.
+    if let Some(v) = tiny_x_linear_directed::<C::Storage, SCALE>(raw, mode, false) {
+        return v;
+    }
     // Two-width fall-up: an unresolved-at-rung-cap near-tie reruns the
     // walker at the tier work width `C::W` (the recompute closure is the
     // tier kernel's, verbatim), so the conclusion is never weaker than
     // the tier path's — see `round_to_storage_directed_widening_g`.
-    let r = round_to_storage_directed_widening_g::<C::Storage, Wk, C::W>(
+    let (r, decided) = round_to_storage_directed_widening_decided_g::<C::Storage, Wk, C::W>(
         GUARD,
         SCALE,
         mode,
@@ -836,6 +993,7 @@ where
         },
         |guard| C::sin_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard),
     );
+    let r = tiny_x_deep_directed_adjust::<C::Storage, SCALE>(r, decided, raw, mode, true, <C::W as BigInt>::BITS);
     adjust_bounded_extremum::<C, SCALE>(r, raw, mode)
 }
 
@@ -915,6 +1073,11 @@ where
     if raw == C::storage_zero() {
         return C::storage_zero();
     }
+    // Analytic tiny-`x` directed decision — the SAME pre-empt the tier
+    // [`tan_series`] carries (relocated from the policy layer).
+    if let Some(v) = tiny_x_linear_directed::<C::Storage, SCALE>(raw, mode, true) {
+        return v;
+    }
     let w0 = SCALE + GUARD;
     let (sin0, cos0) = crate::algos::trig::trig_generic::sin_cos_fixed::<Wk>(
         to_work_scaled_g::<C::Storage, Wk>(raw, GUARD),
@@ -984,7 +1147,7 @@ where
 {
     use crate::algos::exp::exp_generic as eg;
     let base_w = SCALE + base_guard;
-    round_to_storage_directed_widening_g::<C::Storage, Wk, C::W>(
+    let (r, decided) = round_to_storage_directed_widening_decided_g::<C::Storage, Wk, C::W>(
         base_guard,
         SCALE,
         mode,
@@ -1010,7 +1173,9 @@ where
             }
             C::div(s, c, w)
         },
-    )
+    );
+    // Deep sub-resolution tiny-`x` band (`j* ≥ 5`): `tan` always EXPANDS.
+    tiny_x_deep_directed_adjust::<C::Storage, SCALE>(r, decided, raw, mode, false, <C::W as BigInt>::BITS)
 }
 
 /// Rung-generic `atan_strict` — the inverse-tangent kernel run at an
@@ -1049,9 +1214,14 @@ where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
-    if DIRECTED {
+    // Analytic tiny-`x` directed decision — the SAME pre-empt the tier
+    // [`atan_series`] carries (relocated from the policy layer).
+    if let Some(v) = tiny_x_linear_directed::<C::Storage, SCALE>(raw, mode, false) {
+        return v;
+    }
+    let (r, decided) = if DIRECTED {
         // Two-width fall-up — see [`sin_series_g`].
-        round_to_storage_directed_widening_g::<C::Storage, Wk, C::W>(
+        round_to_storage_directed_widening_decided_g::<C::Storage, Wk, C::W>(
             GUARD,
             SCALE,
             mode,
@@ -1074,7 +1244,7 @@ where
         // [`atan_narrow`]). `DIRECTED` still selects the policy-side
         // out-of-budget fallback kernel; the narrowing machinery is one.
         let base_w = SCALE + GUARD;
-        round_to_storage_directed_widening_g::<C::Storage, Wk, C::W>(
+        round_to_storage_directed_widening_decided_g::<C::Storage, Wk, C::W>(
             GUARD,
             SCALE,
             mode,
@@ -1090,7 +1260,9 @@ where
             },
             |guard| C::atan_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard),
         )
-    }
+    };
+    // Deep sub-resolution band (`j* ≥ 5`): `atan` alternates like `sin`.
+    tiny_x_deep_directed_adjust::<C::Storage, SCALE>(r, decided, raw, mode, true, <C::W as BigInt>::BITS)
 }
 
 /// `π` at working scale `w` in the rung integer `Wk`: the per-scale
@@ -1625,6 +1797,28 @@ where
     .0
 }
 
+/// As [`round_to_storage_directed_g`] but RETAINS the walker's `decided`
+/// verdict (`false` once it gives up at the escalation cap — mode-blind). The
+/// odd forward/inverse trig kernels read it to drive
+/// [`tiny_x_deep_directed_adjust`]; every other caller keeps the `.0`-only
+/// wrapper. Bit-identical narrowing — only the discarded boolean differs.
+#[inline]
+pub(crate) fn round_to_storage_directed_decided_g<St: BigInt + Copy, S: BigInt>(
+    base_guard: u32,
+    target: u32,
+    mode: RoundingMode,
+    st_max: St,
+    st_min: St,
+    mut recompute: impl FnMut(u32) -> S,
+) -> (St, bool)
+where
+    S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    round_to_storage_directed_impl_g::<St, S>(
+        base_guard, target, mode, false, false, st_max, st_min, &mut recompute,
+    )
+}
+
 /// `never_exact` directed narrowing (an irrational-valued kernel, e.g. `exp`):
 /// a zero working residual is a sub-resolution positive residual.
 #[inline]
@@ -1707,6 +1901,36 @@ where
         base_guard, target, mode, false, false, st_max, st_min, &mut recompute2,
     )
     .0
+}
+
+/// As [`round_to_storage_directed_widening_g`] but RETAINS the final `decided`
+/// verdict (the rung's when it resolves or is the widest, else the tier
+/// fall-up's). The odd forward/inverse trig rung kernels read it for
+/// [`tiny_x_deep_directed_adjust`]. Bit-identical narrowing.
+#[inline]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn round_to_storage_directed_widening_decided_g<St: BigInt + Copy, S1: BigInt, S2: BigInt>(
+    base_guard: u32,
+    target: u32,
+    mode: RoundingMode,
+    st_max: St,
+    st_min: St,
+    mut recompute1: impl FnMut(u32) -> S1,
+    mut recompute2: impl FnMut(u32) -> S2,
+) -> (St, bool)
+where
+    S1::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+    S2::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    let (v, resolved) = round_to_storage_directed_impl_g::<St, S1>(
+        base_guard, target, mode, false, false, st_max, st_min, &mut recompute1,
+    );
+    if resolved || <S1 as BigInt>::BITS >= <S2 as BigInt>::BITS {
+        return (v, resolved);
+    }
+    round_to_storage_directed_impl_g::<St, S2>(
+        base_guard, target, mode, false, false, st_max, st_min, &mut recompute2,
+    )
 }
 
 /// Near-special two-width narrowing — the `force_confirm` sibling of
@@ -2219,5 +2443,75 @@ mod tiny_x_directed_pins {
     #[test]
     fn asin_expanding_d153_series_band() {
         pin!(152, 120, asin_strict_with, true, "asin s152");
+    }
+}
+
+/// Wide-tier DEEP-band tiny-x DIRECTED rounding pins — the generalisation past
+/// the linear ([`tiny_x_directed_pins`]) band, where the LEADING odd Taylor
+/// terms terminate exactly on the grid and a DEEPER odd term (`x⁷`, `j* = 7`)
+/// decides. The comprehensive-gate find: `±3·10⁻¹²⁰` @ D616 s615 (the `x⁷`
+/// digit sits at fractional depth ~841, past the `Int<96>` work integer's reach
+/// AND the const tables, so the directed walker is mode-blind and only the
+/// analytic [`tiny_x_deep_directed_adjust`] sign resolves it). This pins the
+/// DIRECTED adjustment RELATIVE to the nearest grid value `G` (`G ≠ x` here, the
+/// deep-band signature — asserted explicitly); `G`'s own accuracy is the golden
+/// gate's job. EXPANDING (`tan`/`asin`, `j* ≡ 1 mod 4` for the alternating pair)
+/// pushes OUT, COMPRESSING (`sin`/`atan`, `j* = 7 ≡ 3 mod 4`) pulls IN.
+#[cfg(all(test, any(feature = "d616", feature = "x-wide")))]
+mod tiny_x_deep_directed_pins {
+    use crate::int::types::{traits::BigInt, Int};
+    use crate::support::rounding::RoundingMode::{
+        Ceiling, Floor, HalfAwayFromZero, HalfToEven, HalfTowardZero, Trunc,
+    };
+
+    const ULP: Int<32> = <Int<32> as BigInt>::ONE;
+
+    /// Pin all six modes for one `D616<SCALE>` function at `±3·10^(−KNEG)`
+    /// (raw `±3·10^(SCALE−KNEG)`). `G` is the crate's own NEAREST result (the
+    /// terminating partial sum, `≠ x`); the directed modes must be `G ± 1 ULP`
+    /// per the deciding term's sign.
+    macro_rules! pin_deep {
+        ($scale:literal, $kneg:literal, $f:ident, $expanding:expr, $label:literal) => {{
+            let r = Int::<32>::from_i128(3)
+                * crate::consts::pow10::dispatch::<Int<32>>($scale - $kneg);
+            let x = crate::D::<Int<32>, $scale>(r);
+            let nx = crate::D::<Int<32>, $scale>(-r);
+            let g = x.$f(HalfToEven).0; // the on-grid nearest value
+            let ng = nx.$f(HalfToEven).0;
+            // Deep-band signature: the nearest value is the terminating partial
+            // sum, strictly off the raw linear term `x`.
+            assert_ne!(g, r, "{}: expected the DEEP band (G != x)", $label);
+            for m in [HalfToEven, HalfAwayFromZero, HalfTowardZero] {
+                assert_eq!(x.$f(m).0, g, "{} (+x) {:?}", $label, m);
+                assert_eq!(nx.$f(m).0, ng, "{} (−x) {:?}", $label, m);
+            }
+            if $expanding {
+                assert_eq!(x.$f(Ceiling).0, g + ULP, "{} (+x) Ceiling", $label);
+                assert_eq!(x.$f(Floor).0, g, "{} (+x) Floor", $label);
+                assert_eq!(x.$f(Trunc).0, g, "{} (+x) Trunc", $label);
+                assert_eq!(nx.$f(Floor).0, ng - ULP, "{} (−x) Floor", $label);
+                assert_eq!(nx.$f(Ceiling).0, ng, "{} (−x) Ceiling", $label);
+                assert_eq!(nx.$f(Trunc).0, ng, "{} (−x) Trunc", $label);
+            } else {
+                assert_eq!(x.$f(Floor).0, g - ULP, "{} (+x) Floor", $label);
+                assert_eq!(x.$f(Trunc).0, g - ULP, "{} (+x) Trunc", $label);
+                assert_eq!(x.$f(Ceiling).0, g, "{} (+x) Ceiling", $label);
+                assert_eq!(nx.$f(Ceiling).0, ng + ULP, "{} (−x) Ceiling", $label);
+                assert_eq!(nx.$f(Trunc).0, ng + ULP, "{} (−x) Trunc", $label);
+                assert_eq!(nx.$f(Floor).0, ng, "{} (−x) Floor", $label);
+            }
+        }};
+    }
+
+    #[test]
+    fn sin_atan_compressing_d616_s615_deep() {
+        pin_deep!(615, 120, sin_strict_with, false, "sin s615");
+        pin_deep!(615, 120, atan_strict_with, false, "atan s615");
+    }
+
+    #[test]
+    fn tan_asin_expanding_d616_s615_deep() {
+        pin_deep!(615, 120, tan_strict_with, true, "tan s615");
+        pin_deep!(615, 120, asin_strict_with, true, "asin s615");
     }
 }
