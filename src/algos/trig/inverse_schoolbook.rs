@@ -121,12 +121,54 @@ pub(crate) fn atan2_schoolbook<C: WideTrigCore, const SCALE: u32>(
     y_raw: C::Storage,
     x_raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> C::Storage
+where
+    <C::W as crate::int::types::traits::BigInt>::Scratch:
+        crate::int::types::compute_limbs::ComputeLimbs,
+{
+    use crate::algos::support::wide_trig_core::{
+        round_to_storage_directed_decided_g, tiny_x_deep_directed_adjust, tiny_x_linear_directed,
+    };
     // Ziv-escalated narrowing — see [`asin_schoolbook`] (atan2(y, 1) with
-    // tiny exact y is the atan partial-sum family).
-    C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
-        atan2_work::<C, SCALE>(y_raw, x_raw, guard)
-    })
+    // tiny exact y is the atan partial-sum family). Retain the walker's
+    // `decided` verdict so the analytic tiny-result directed decisions can fire.
+    let (r, decided) = round_to_storage_directed_decided_g::<C::Storage, C::W>(
+        C::GUARD,
+        SCALE,
+        mode,
+        C::storage_max(),
+        C::storage_min(),
+        |guard| atan2_work::<C, SCALE>(y_raw, x_raw, guard),
+    );
+    // atan2(y, x) with x > 0 and |y/x| tiny reduces to atan(y/x) near 0, whose
+    // result `r` is the in-band grid value `round(atan(y/x))`. atan COMPRESSES
+    // (`atan z = z − z³/3 + …`) and ALTERNATES, so the directed side is
+    // analytic — `tiny_x_linear_directed`'s compressing form (j* = 3) and
+    // `tiny_x_deep_directed_adjust`'s alternating form (j* ≥ 5), keyed on `r`.
+    //
+    // BOTH adjusts are gated on the walker being mode-blind (`!decided`):
+    // unlike the forward kernels, whose input is always exactly on the storage
+    // grid, atan2's deciding term is the cubic of the RATIO y/x. For a general
+    // `x` whose ratio is OFF the grid, the leading rounding residual sits at a
+    // reachable depth, the walker resolves the direction (`decided == true`),
+    // and that answer must stand — the analytic helpers would wrongly override
+    // it. Only an on-grid leading term (x > 0, |y/x| exactly tiny, e.g. x = 1)
+    // leaves the deciding odd term sub-resolution and the walker mode-blind.
+    // Off the tiny-result region (results near ±π/2, ±π, ordinary angles) `r`
+    // is large and both helpers no-op regardless.
+    if !decided {
+        if let Some(v) = tiny_x_linear_directed::<C::Storage, SCALE>(r, mode, false) {
+            return v;
+        }
+    }
+    tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
+        r,
+        decided,
+        r,
+        mode,
+        true,
+        <C::W as crate::int::types::traits::BigInt>::BITS,
+    )
 }
 
 /// One working-scale atan2 evaluation at `w = SCALE + guard` — the
@@ -339,10 +381,14 @@ where
     <C::W as crate::int::types::traits::BigInt>::Scratch:
         crate::int::types::compute_limbs::ComputeLimbs,
 {
-    use crate::algos::support::wide_trig_core::round_to_storage_directed_widening_g;
+    use crate::algos::support::wide_trig_core::{
+        round_to_storage_directed_widening_decided_g, tiny_x_deep_directed_adjust,
+        tiny_x_linear_directed,
+    };
     let w0 = SCALE + C::GUARD;
-    // Ziv-escalated two-width narrowing — see [`asin_schoolbook_g`].
-    round_to_storage_directed_widening_g::<C::Storage, Wk, C::W>(
+    // Ziv-escalated two-width narrowing — see [`asin_schoolbook_g`] — retaining
+    // the `decided` verdict for the analytic tiny-result directed decisions.
+    let (r, decided) = round_to_storage_directed_widening_decided_g::<C::Storage, Wk, C::W>(
         C::GUARD,
         SCALE,
         mode,
@@ -350,6 +396,23 @@ where
         C::storage_min(),
         |guard| atan2_work_g::<C, Wk, SCALE>(y_raw, x_raw, guard, w0),
         |guard| atan2_work::<C, SCALE>(y_raw, x_raw, guard),
+    );
+    // See the tier [`atan2_schoolbook`]: atan2 reduces to atan(y/x) — compresses
+    // and alternates — and both adjusts are gated on `!decided` so an off-grid
+    // general-`x` ratio keeps the walker's resolved answer. The widening walker
+    // falls up to the tier width `C::W`, whose `BITS` set the deep-band reach.
+    if !decided {
+        if let Some(v) = tiny_x_linear_directed::<C::Storage, SCALE>(r, mode, false) {
+            return v;
+        }
+    }
+    tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
+        r,
+        decided,
+        r,
+        mode,
+        true,
+        <C::W as crate::int::types::traits::BigInt>::BITS,
     )
 }
 
