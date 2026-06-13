@@ -136,7 +136,7 @@ pub(crate) fn div_knuth_u128_limb_into(
     // refinement reads `v[n128 - 2]`. Everything else — odd `n64` (no exact
     // u128 form), or `n64 < 4` — defers to base-2⁶⁴ Knuth, reusing the
     // caller's (now zeroed) u64 scratch as Knuth's `u`/`v`.
-    if n64 < 4 || n64 % 2 != 0 {
+    if n64 < 4 || !n64.is_multiple_of(2) {
         crate::int::algos::div::div_knuth::div_knuth_into(num, den, quot, rem, u64buf, v64buf);
         return;
     }

@@ -224,7 +224,7 @@ fn knuth_d_256_by_128(n: [u64; 4], d: u128) -> u128 {
         let m0 = qh as u128 * v0 as u128; // weight 2^(64j)
         let m1 = qh as u128 * v1 as u128; // weight 2^(64(j+1))
         let p_lo = m0 as u64;
-        let p_mid = ((m0 >> 64) + (m1 as u64 as u128)) as u128; // limb j+1 column
+        let p_mid = (m0 >> 64) + (m1 as u64 as u128); // limb j+1 column
         let p_hi = (p_mid >> 64) + (m1 >> 64); // limb j+2 column
         let p_mid = p_mid as u64;
         let p_hi = p_hi as u64;
