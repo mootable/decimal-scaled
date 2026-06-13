@@ -226,11 +226,11 @@ integer; it is carried by a separate **zero-sized limb carrier**,
 
 The value integer names its carrier through the **`BigInt::Scratch`
 associated type** (`type Scratch = Limbs<N>` in `impl BigInt for Int<N>`,
-`src/int/types/traits.rs`) — *the sanctioned new surface*: the value integer
+`src/int/types/traits.rs`) — *the sanctioned surface*: the value integer
 merely *names* its scratch carrier, it does not *carry* the scratch. This
-**severs the old `ComputeInt: BigInt` supertrait cycle**: when scratch was a
+**avoids a `ComputeInt: BigInt` supertrait cycle**: if scratch were a
 capability bounded by `ComputeInt: BigInt`, a blanket `BigInt` method (or
-`Int<N>` operator) could not require `ComputeInt` without a cycle. Now
+`Int<N>` operator) could not require `ComputeInt` without a cycle.
 `ComputeLimbs` does not require `BigInt`, and `BigInt` only *names* its
 carrier, so:
 
