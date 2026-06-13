@@ -315,6 +315,28 @@ pub(crate) fn cbrt_seed(n: &[u64], bits: u32, out: &mut [u64]) {
     }
 }
 
+/// Full-radicand `f64` cube-root seed: `value.cbrt()`, where `value` is the
+/// radicand's `f64` approximation (`Int::<W>::as_f64()`). This is the tight
+/// 0.4.4-style seed — the cube root of the WHOLE radicand, not the top-bits
+/// window [`cbrt_seed`] extracts — correctly rounded to ~53 bits, so it sits
+/// within ~`2⁻⁵²` *relative* of `∛n`. The caller bridges the result back to
+/// `Int<W>` (`from_f64`) and lifts it above `⌈∛n⌉` with one Newton pre-step
+/// before the downward-monotone loop, so the floor cube root is reached
+/// identically regardless of the seed's tightness.
+///
+/// **Std-only — no `no_std` arm.** Unlike [`cbrt_seed`], the full-radicand
+/// recipe has no pure-integer analogue: it is the inherent `f64::cbrt`
+/// intrinsic applied to the whole magnitude. A `no_std` cube-root kernel
+/// seeds through [`cbrt_seed`] (the top-bits window) instead, so this leaf is
+/// gated to `std` exactly like its sole caller
+/// (`cbrt_native_fast::icbrt_w_f64_full`). The caller MUST guarantee `value`
+/// is finite and in range (`as_f64` would otherwise saturate to `±inf`).
+#[cfg(feature = "std")]
+#[inline]
+pub(crate) fn cbrt_seed_f64_full(value: f64) -> f64 {
+    value.cbrt()
+}
+
 /// Place `seed_int << half_shift` into `out` (OR-ed), then guarantee a
 /// non-zero seed. Pure primitive limb writes — part of the leaf, shared by
 /// both `std` seed bodies.
