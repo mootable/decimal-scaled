@@ -31886,10 +31886,14 @@ fn reconstruct<W: BigInt>(slot: &[u64; SINCOS_TANG_LIMBS], w: u32, pow10_w: W) -
     // 64-bit (one-limb) guard so the converted slot rounds correctly
     // yet the conversion product `slot_hi · 10^w` stays inside `W`
     // even on the narrowest work integer (same budget as the `ln`
-    // pilot). Round the limb count up; clamp to the stored width.
+    // pilot). Round the limb count up; assert it fits the stored width.
     let need_bits = (w as u64) * 3322 / 1000 + 64;
-    let mut p = need_bits.div_ceil(64) as usize;
-    p = p.clamp(1, SINCOS_TANG_LIMBS);
+    let p_full = need_bits.div_ceil(64) as usize;
+    assert!(
+        p_full <= SINCOS_TANG_LIMBS,
+        "sincos_tang: working scale {w} out of generated range ({SINCOS_TANG_LIMBS} limbs)"
+    );
+    let p = p_full.max(1);
     // Zero-extend the top `p` limbs (MS-first) into W:
     //   slot_hi = sum_{k=0..p-1} slot[k] · 2^(64·(p−1−k)).
     let mut slot_hi = W::ZERO;
