@@ -2153,6 +2153,25 @@ where
             let storage_digits = (bl as u64 * 30103 / 100_000) as u32 + 1;
             storage_digits.saturating_sub(target)
         };
+        // DELIBERATELY the bare `BITS/8` work-integer cap — NOT `.min(
+        // ZIV_PRECISION_HORIZON)` like the nearest branch above. The two
+        // boundaries serve different masters: nearest gives up at the horizon
+        // because a half-ULP tie past the shipped ~1232-digit oracle is
+        // unverifiable, and giving up early still yields the correct nearest
+        // answer (snap to the grid value `G`). A DIRECTED sub-resolution
+        // residual past the horizon is the opposite — its SIGN still decides
+        // `G` vs `G ± 1`, and that decision is owned by the analytic
+        // [`tiny_x_deep_directed_adjust`], which fires exactly when the
+        // deciding term lies beyond `reach = work_bits/8 − 8` — the EXACT
+        // complement of this `cap_digits` (bounded trig ⇒ `int_digits = 0`).
+        // So the walker MUST own every deciding term up to `BITS/8`: clamping
+        // here to the horizon would lower the give-up boundary below `reach`,
+        // leaving cells with `j*·k ∈ (horizon, reach]` reported mode-blind
+        // (`decided == false`) yet UN-adjusted by the helper (its `j*·k ≤
+        // reach` returns `r` unchanged) — a directed mis-round. `BITS/8` is
+        // also the const-table-safe cap (`pi`/`ln2`/`sincos` are provisioned
+        // per width to ≈`BITS/8`), so probing to it never requests a const
+        // past the generated table.
         let cap_digits = (<S>::BITS / 8).saturating_sub(int_digits + 8);
         let max_guard = cap_digits.saturating_sub(target).max(base_guard);
 
