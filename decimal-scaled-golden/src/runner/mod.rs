@@ -17,7 +17,7 @@ use crate::string_decimal::within;
 use crate::collector::ExecutionCollector;
 use crate::execution::ExecutionStrategy;
 use crate::function::Function;
-use crate::loader::{GoldenCase, GoldenValue};
+use crate::loader::{select_radix_output, GoldenCase, GoldenValue};
 use crate::subject::{Capabilities, DecimalSubject, FnSupport, Limits};
 use crate::validators::{ValidationContext, Validator};
 
@@ -46,7 +46,11 @@ fn run_cell<S: DecimalSubject, E: ExecutionStrategy>(
     strategy.execute(subject, &case.inputs, function, support.mode, support.overflow, &mut cell);
 
     if !validators.is_empty() {
-        if let Some(golden) = GoldenValue::parse(&case.output_raw) {
+        // Select-then-parse: the subject's STORAGE radix drives which `radix:value`
+        // golden entry it is graded against (spec §1.2). A no-`:` field is today's
+        // single value, returned verbatim — so the untagged corpus is unaffected.
+        let chosen = select_radix_output(&case.output_raw, subject.storage_radix());
+        if let Some(golden) = GoldenValue::parse(chosen) {
             let limits = subject.limits(&case.output_raw);
             cell.oracle_limited = limits.max_precision > oracle.max_precision;
             // Collect verdicts while the context borrows the cell's result, then

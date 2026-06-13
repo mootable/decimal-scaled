@@ -6,7 +6,7 @@
 use crate::function::Function;
 use crate::rounding::RoundingMode;
 
-use super::{Capabilities, Computed, Limits, Overflow};
+use super::{Capabilities, Computed, Limits, Overflow, Radix};
 
 /// A decimal implementation under test, pinned to exactly one `(width, scale)`
 /// cell, typed to its native `Value`. **Pure**: it parses, computes, and formats.
@@ -18,6 +18,23 @@ pub trait DecimalSubject {
 
     /// Identity, radix, per-function support, and report metadata.
     fn capabilities(&self) -> Capabilities;
+
+    /// How the library STORES values — the radix that DRIVES golden value selection:
+    /// the value-chooser grades the subject against the `radix:value` entry tagged for
+    /// this radix (falling back to the untagged catch-all), at this radix's reach.
+    /// `Decimal` by default; a binary-backed subject (f64, f32, a Q-format type)
+    /// overrides it to `Binary` so it is graded against the `2` value.
+    fn storage_radix(&self) -> Radix {
+        Radix::Decimal
+    }
+
+    /// The radix the library ROUNDS in. Defaults to `storage_radix()`; the override
+    /// hook for the rarer library that rounds in a different radix than it stores
+    /// (none does today). It refines the directed-rounding comparison, not value
+    /// selection — selection is driven by `storage_radix()`.
+    fn rounding_radix(&self) -> Radix {
+        self.storage_radix()
+    }
 
     /// A short human label for this subject — used in diagnostics such as the
     /// `ParallelRunner`'s worker thread names. Defaults to the `capabilities`

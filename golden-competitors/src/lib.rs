@@ -106,7 +106,7 @@ impl DecimalSubject for RustDecimal {
         }
         Capabilities {
             name: "rust_decimal".into(),
-            radix: Radix::Decimal,
+            radix: self.storage_radix(),
             config: BTreeMap::new(),
             functions,
         }
@@ -233,10 +233,16 @@ impl DecimalSubject for F64 {
         }
         Capabilities {
             name: "f64".into(),
-            radix: Radix::Binary,
+            radix: self.storage_radix(),
             config: BTreeMap::new(),
             functions,
         }
+    }
+
+    fn storage_radix(&self) -> Radix {
+        // IEEE-754 double stores on the binary `2^-k` grid, so it is graded against
+        // the golden `2` value (spec §1.2) at its own binary reach (~16 digits).
+        Radix::Binary
     }
 
     fn string_to_value(&self, s: &str) -> f64 {
@@ -272,6 +278,139 @@ impl DecimalSubject for F64 {
         move |inputs| {
             let x = inputs[0];
             classify_f64(match func {
+                Function::Sqrt => x.sqrt(),
+                Function::Cbrt => x.cbrt(),
+                Function::Exp => x.exp(),
+                Function::Ln => x.ln(),
+                Function::Log2 => x.log2(),
+                Function::Log10 => x.log10(),
+                Function::Exp2 => x.exp2(),
+                Function::Sin => x.sin(),
+                Function::Cos => x.cos(),
+                Function::Tan => x.tan(),
+                Function::Atan => x.atan(),
+                Function::Asin => x.asin(),
+                Function::Acos => x.acos(),
+                Function::Sinh => x.sinh(),
+                Function::Cosh => x.cosh(),
+                Function::Tanh => x.tanh(),
+                Function::Asinh => x.asinh(),
+                Function::Acosh => x.acosh(),
+                Function::Atanh => x.atanh(),
+                Function::Log => x.log(inputs[1]),
+                Function::Atan2 => x.atan2(inputs[1]),
+                Function::Powf => x.powf(inputs[1]),
+                Function::Hypot => x.hypot(inputs[1]),
+                Function::Add => x + inputs[1],
+                Function::Sub => x - inputs[1],
+                Function::Mul => x * inputs[1],
+                Function::Div => x / inputs[1],
+                Function::Rem => x % inputs[1],
+            })
+        }
+    }
+}
+
+/// `f32` — the platform's native IEEE-754 binary single (~7 significant decimal
+/// digits), via std's inherent float methods. Like f64 it provides EVERY function in
+/// the set, and its radix is `Binary` (it stores and rounds on the `2^-k` grid), so it
+/// is graded against the golden `2` value (spec §1.2) at its own binary reach. With
+/// only a 24-bit significand it mis-rounds the decimal golden constantly — including it
+/// (spec §5 Q-C) shows how a narrow binary float fares. NaN -> `NonReal::NaN`; ±inf
+/// (overflow) -> the signed infinities.
+pub struct F32;
+
+impl F32 {
+    const FUNCS: &'static [Function] = &[
+        Function::Sqrt, Function::Cbrt, Function::Exp, Function::Ln, Function::Log2,
+        Function::Log10, Function::Exp2, Function::Sin, Function::Cos, Function::Tan,
+        Function::Atan, Function::Asin, Function::Acos, Function::Sinh, Function::Cosh,
+        Function::Tanh, Function::Asinh, Function::Acosh, Function::Atanh, Function::Log,
+        Function::Atan2, Function::Powf, Function::Hypot, Function::Add, Function::Sub,
+        Function::Mul, Function::Div, Function::Rem,
+    ];
+    /// f32's significant-digit reach: a 24-bit significand → 24·log10(2) ≈ 7.22, so
+    /// ~7 reliable significant decimal digits — the storage-radix grade depth (Q-A/Q-C).
+    const SIG_DIGITS: u32 = 7;
+    /// Cap on graded fractional places (a sub-1 value carries ~7 fractional digits;
+    /// floor(24·log10(2)) = 7). Mirrors f64's `FRAC_CAP`; here it equals `SIG_DIGITS`
+    /// because 7 already sits under the true 7.22-digit reach, so there is no
+    /// over-statement to shave (f64's 16 slightly over-states 15.95, hence its 15).
+    const FRAC_CAP: u32 = 7;
+}
+
+fn classify_f32(v: f32) -> Computed<f32> {
+    if v.is_nan() {
+        Computed::NonReal(NonReal::NaN)
+    } else if v.is_infinite() {
+        Computed::NonReal(if v > 0.0 { NonReal::PositiveInfinity } else { NonReal::NegativeInfinity })
+    } else {
+        Computed::Value(v)
+    }
+}
+
+impl DecimalSubject for F32 {
+    type Value = f32;
+
+    fn name(&self) -> String {
+        "f32".into()
+    }
+
+    fn capabilities(&self) -> Capabilities {
+        let mut functions = BTreeMap::new();
+        for &f in Self::FUNCS {
+            functions.insert(
+                f,
+                FnSupport { mode: RoundingMode::HalfToEven, overflow: Overflow::Infinity },
+            );
+        }
+        Capabilities {
+            name: "f32".into(),
+            radix: self.storage_radix(),
+            config: BTreeMap::new(),
+            functions,
+        }
+    }
+
+    fn storage_radix(&self) -> Radix {
+        // IEEE-754 single stores on the binary `2^-k` grid → graded against the golden
+        // `2` value (spec §1.2) at its own ~7-digit binary reach (spec §5 Q-C).
+        Radix::Binary
+    }
+
+    fn string_to_value(&self, s: &str) -> f32 {
+        s.parse::<f32>().unwrap_or_else(|e| panic!("f32 could not parse {s:?}: {e}"))
+    }
+
+    fn value_to_string(&self, v: &f32) -> String {
+        // The shortest decimal that round-trips to this f32; graded to f32's depth.
+        format!("{v}")
+    }
+
+    fn limits(&self, value: &str) -> Limits {
+        // f32 carries ~7 reliable significant digits, so its representable fractional
+        // depth is 7 − int_digits, capped at FRAC_CAP. A flat cap over-claims the moment
+        // |x| >= 10, manufacturing artifact MisRounded rather than honest
+        // binary-vs-decimal misses; grading a constant ~7 significant digits is fair.
+        let max_precision = Self::SIG_DIGITS.saturating_sub(int_digits(value)).min(Self::FRAC_CAP);
+        Limits {
+            min_value: Some(format!("{}", f32::MIN)),
+            max_value: Some(format!("{}", f32::MAX)),
+            max_precision,
+            // ~7 reliable figures: a longer literal isn't f32-representable -> skip.
+            max_significant_digits: Some(Self::SIG_DIGITS),
+        }
+    }
+
+    fn execute(
+        &self,
+        func: Function,
+        _mode: RoundingMode,
+        _overflow: Overflow,
+    ) -> impl Fn(&[f32]) -> Computed<f32> {
+        move |inputs| {
+            let x = inputs[0];
+            classify_f32(match func {
                 Function::Sqrt => x.sqrt(),
                 Function::Cbrt => x.cbrt(),
                 Function::Exp => x.exp(),
@@ -358,7 +497,7 @@ impl DecimalSubject for BigDecimalSubject {
         }
         Capabilities {
             name: "bigdecimal".into(),
-            radix: Radix::Decimal,
+            radix: self.storage_radix(),
             config: BTreeMap::new(),
             functions,
         }
@@ -463,7 +602,7 @@ impl DecimalSubject for DashuFloat {
         }
         Capabilities {
             name: "dashu-float".into(),
-            radix: Radix::Decimal,
+            radix: self.storage_radix(),
             config: BTreeMap::new(),
             functions,
         }
@@ -575,7 +714,7 @@ impl DecimalSubject for FastNum {
         }
         Capabilities {
             name: "fastnum".into(),
-            radix: Radix::Decimal,
+            radix: self.storage_radix(),
             config: BTreeMap::new(),
             functions,
         }
@@ -673,7 +812,7 @@ impl DecimalSubject for DecimalRsSubject {
         }
         Capabilities {
             name: "decimal-rs".into(),
-            radix: Radix::Decimal,
+            radix: self.storage_radix(),
             config: BTreeMap::new(),
             functions,
         }
@@ -757,7 +896,8 @@ use g_math::canonical::{evaluate, gmath_parse, LazyExpr};
 /// the op is built lazily and only realised (evaluated to a decimal string) in
 /// `value_to_string`, where an out-of-range result fails evaluation and surfaces as
 /// a panic the harness catches (matching the declared `Panic` overflow policy).
-/// Results grade to 30 fractional places, within the Q128.128 fractional reach.
+/// Results grade to 38 fractional places — g_math's own binary reach (Q128.128 →
+/// 128·log10(2) ≈ 38 decimal digits), against the golden `2` value (spec §5 Q-A).
 pub struct GMath;
 
 impl GMath {
@@ -770,9 +910,13 @@ impl GMath {
         Function::Powf, Function::Atan2,
         Function::Add, Function::Sub, Function::Mul, Function::Div,
     ];
-    /// Fractional grading depth, within the Q128.128 fractional reach (~38 digits).
-    const PRECISION: u32 = 30;
-    /// Decimal digits requested when realising a result to a string.
+    /// Fractional grading depth = g_math's OWN binary reach (Q128.128 → 128 fractional
+    /// bits → 128·log10(2) ≈ 38 decimal digits), per the radix-aware grade-depth rule
+    /// (spec §5 Q-A): a binary subject is graded at its storage-radix reach against the
+    /// golden `2` value, NOT clamped to the shallower decimal shootout depth (30 hid its
+    /// binary divergence). `REALISE_DIGITS` realises deeper, so the graded digits exist.
+    const PRECISION: u32 = 38;
+    /// Decimal digits requested when realising a result to a string (> `PRECISION`).
     const REALISE_DIGITS: usize = 60;
 }
 
@@ -788,7 +932,7 @@ impl DecimalSubject for GMath {
         for &f in Self::FUNCS {
             // The FASC canonical pipeline rounds half-away-from-zero on the decimal
             // compute path (and to-nearest on the 2^-128 grid for bare-integer
-            // inputs), both accurate well past the 30-digit grade depth. The grader
+            // inputs), both accurate well past the 38-digit grade depth. The grader
             // re-rounds g_math's deeper output to that depth under this declared
             // mode, so half-away-from-zero is the faithful declaration. An
             // out-of-range result fails evaluation -> panic, caught as
@@ -800,10 +944,17 @@ impl DecimalSubject for GMath {
         }
         Capabilities {
             name: "g_math".into(),
-            radix: Radix::Decimal,
+            radix: self.storage_radix(),
             config: BTreeMap::new(),
             functions,
         }
+    }
+
+    fn storage_radix(&self) -> Radix {
+        // g_math stores on its Q128.128 binary grid (the decimal surface is I/O), so
+        // storage drives selection to the golden `2` value (spec §1.2). Graded at its
+        // own binary reach (~38 digits), not clamped to the shallow decimal depth.
+        Radix::Binary
     }
 
     fn string_to_value(&self, s: &str) -> LazyExpr {

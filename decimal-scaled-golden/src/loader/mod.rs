@@ -8,9 +8,11 @@
 mod file;
 mod filter;
 mod loader;
+mod radix;
 pub mod value;
 
 pub use file::FileLoader;
 pub use filter::FilterLoader;
 pub use loader::{CaseLoader, GoldenCase};
+pub use radix::select_radix_output;
 pub use value::GoldenValue;
