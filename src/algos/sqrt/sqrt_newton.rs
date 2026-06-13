@@ -7,8 +7,7 @@
 //! For a `D<Int<N>, SCALE>` value with raw storage `r`, the logical value
 //! is `r / 10^SCALE`, so the square-root raw storage is
 //! `round(sqrt(r · 10^SCALE))`. The radicand `|r| · 10^SCALE` is formed in
-//! a local limb scratch buffer (it spans up to `2N` limbs, which is why a
-//! wider *type* used to be threaded in), the exact integer square root is
+//! a local limb scratch buffer (it spans up to `2N` limbs), the exact integer square root is
 //! taken via the int layer's width-agnostic slice kernel
 //! ([`crate::int::algos::isqrt::isqrt_newton::isqrt_newton`]), and a single
 //! round-to-nearest step lands the result on the type's last representable

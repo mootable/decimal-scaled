@@ -359,12 +359,12 @@ where
 mod tests {
     //! Deep-underflow correctness for the Tang `exp` path.
     //!
-    //! Regression for the wide-tier max-scale misround: at D76<75> the Tang
+    //! At D76<75> the Tang
     //! `wide_tang_gate` admits large negative arguments (`e^(−34..−58)`, all
-    //! representable), but the old `EXTERNAL_EXTRA` guard inflated the working
-    //! scale `w` by `≈ |k|·log10 2` digits — even though the `k < 0`
+    //! representable). An `EXTERNAL_EXTRA` guard must NOT inflate the working
+    //! scale `w` by `≈ |k|·log10 2` digits for these — the `k < 0`
     //! reassembly is an error-shrinking RIGHT shift that needs no such guard.
-    //! That pushed the table-entry product `slot_hi · 10^w` past the tier work
+    //! Such inflation pushes the table-entry product `slot_hi · 10^w` past the tier work
     //! integer `Int<16>` (1024 bits), silently wrapping the `exp(c_j)` factor
     //! (~25 % error). The wider D307<75> tier runs the Series path and is the
     //! oracle: `exp` rounded to scale 75 is the same value at every storage
@@ -402,17 +402,18 @@ mod tests {
 
 #[cfg(all(test, any(feature = "d57", feature = "d76", feature = "wide")))]
 mod powf_deep_underflow_regression {
-    //! Regression (powf.golden:8048, 2026-06-13): `powf("2","-200") = 2^-200
+    //! Guard (powf.golden:8048): `powf("2","-200") = 2^-200
     //! ≈ 6.223e-61` at a mid storage scale is a sub-resolution positive — it
     //! MUST round to 0 under the nearest / Floor / Trunc modes and to one
     //! storage ULP under Ceiling at every scale `< 61`. The `exp(y·ln x)`
-    //! composition's `k_lift` sizer ignored the exp argument's SIGN: a deeply
+    //! composition's `k_lift` sizer must account for the exp argument's SIGN:
+    //! sizing a deeply
     //! negative argument (`-200·ln 2 ≈ -138.6`, whose result `e^-138.6 < 1`
-    //! needs zero lift) was sized a ~90-digit lift, inflating the working
+    //! needs zero lift) a ~90-digit lift would inflate the working
     //! scale until the non-widening `mul_agm(y, ln_x, w)` low product
-    //! overflowed the `Wagm` work integer and WRAPPED the exp argument to
+    //! overflows the `Wagm` work integer and WRAPS the exp argument to
     //! ≈ -0.21, returning `e^-0.21 ≈ 0.808` — a magnitude-class error at
-    //! D57<28/30/42> and D76 mid-scales. Two coordinated fixes: (a) the powf
+    //! D57<28/30/42> and D76 mid-scales. Two coordinated guards: (a) the powf
     //! shell takes no lift for a negative argument (mirrors
     //! `exp2_result_int_digits`); (b) the Tang deep-underflow branch returns
     //! the smallest positive working value (mirrors `exp_generic`), not bare

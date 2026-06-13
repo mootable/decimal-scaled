@@ -41,9 +41,7 @@ use crate::support::rounding::RoundingMode;
 
 /// Joint `(eˣ, e⁻ˣ)` pair at the wide composition work width `C::Wagm`
 /// (the two-core split). One Tang `exp` call + one reciprocal divide. `M`
-/// is the tier's Tang table size, `IE` its `INTERNAL_EXTRA` flag — the same
-/// pair the per-tier `policy::trig` arm previously baked into the passed
-/// `tang_exp_fixed` fn pointer.
+/// is the tier's Tang table size, `IE` its `INTERNAL_EXTRA` flag.
 #[inline]
 fn ex_enx_agm<C: WideTrigCore, const M: u32, const IE: bool>(
     v: C::Wagm,

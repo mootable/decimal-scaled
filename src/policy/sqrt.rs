@@ -53,7 +53,7 @@ enum Algorithm {
     /// — `f64`-seeded narrow-work bespoke for the `(D57, 20)` cell, kept as
     /// an explicit benchmarkable reference seam. Superseded by
     /// [`Self::Native`] (which seeds Newton in a tight `Int<W>` instead of
-    /// re-entering the int `isqrt` policy's build-max slice) and no longer
+    /// re-entering the int `isqrt` policy's build-max slice) and not
     /// selected by `select`.
     #[allow(dead_code)]
     NewtonWithTableSeed,
@@ -147,7 +147,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // built via a const-folded `pow`, root in an exactly-sized integer)
         // wins decisively. The TRUE crossover is **per-tier** and NOT the
         // uniform `SCALE >= 4·N` shape: a second-pass adaptive bisection
-        // (`root_kernel_ab.rs`, cores 18-19, 2026-05-28) found the slice
+        // (`root_kernel_ab.rs`, cores 18-19) found the slice
         // win-band reached further into the threshold-routed region for
         // D230/D616/D924 than the `4N` shape assumed — at routed cells
         // just above `4N`, slice was beating Native 1.06–1.27×. The
@@ -158,7 +158,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         (6, s) if s >= 24 => Select::ByAlgorithm(Algorithm::Native), // D115, W=12
         (8, s) if s >= 32 => Select::ByAlgorithm(Algorithm::Native), // D153, W=16
         // Per-tier crossovers tightened by adaptive-bisection in
-        // `root_kernel_ab.rs` (cores 18-19, 2026-05-28): the conservative
+        // `root_kernel_ab.rs` (cores 18-19): the conservative
         // `s >= 4N` heuristic placed several thresholds INSIDE the slice
         // win-band (the slice's build-max scratch cost is smaller than the
         // tight `Int<2N>` Knuth divide here), so native lost 1.06–1.27× at

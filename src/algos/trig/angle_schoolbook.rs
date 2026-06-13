@@ -14,7 +14,7 @@
 //!   by pi at the working scale).
 //! - to_radians(x) = x * pi / 180  (multiply by pi, divide by 180).
 //!
-//! Wide path uses the new `WideTrigCore::mul` + the `pi` constant + the
+//! Wide path uses the `WideTrigCore::mul` + the `pi` constant + the
 //! `lit(180)` literal binding; narrow path uses the `Fixed` work int and
 //! `wide_pi`. NEVER calls a decimal `*_strict_with` on its own value.
 //! Identical composition + narrowing as the routed kernel, so it matches

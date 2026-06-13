@@ -26,7 +26,7 @@ use crate::int::types::Int;
 /// 128-bit line while the dividend stays smaller — D76 s38 onward).
 /// (2) When both operand magnitudes fit a single 128-bit word it takes a
 /// hardware `u128 % u128` (no scratch, no shape classifier, no Knuth setup),
-/// recovering v0.4.4's `limbs_divmod` "Fast Path A" generically — the scale-0
+/// a single-word fast path applied generically — the scale-0
 /// bare-integer / small-`k` shape where the divmod setup dwarfs the divide.
 /// Both are bit-identical to the divmod below, so they only change which path
 /// runs, never the result.
@@ -92,8 +92,8 @@ where
         return a;
     }
 
-    // Small-operand fast path (recovers v0.4.4's `limbs_divmod` "Fast Path A"
-    // generically): when both magnitudes fit a single 128-bit word, take the
+    // Small-operand fast path (single-word, applied generically across
+    // widths): when both magnitudes fit a single 128-bit word, take the
     // hardware `u128 % u128` and re-apply the dividend's sign — bypassing the
     // `select_for_limbs` shape classifier, the `single_buffered_u64` scratch
     // and the Knuth normalise/shift setup that `div_knuth_into` runs even on
@@ -157,7 +157,7 @@ where
     // Exhaustive over the verdict (no `_`, so adding an engine forces a
     // decision here). Significant lengths are independent inside one
     // `Int<N>`, so the wide `num ≥ 2·den` u128 shape IS reachable at wide
-    // `N` (audit 2026-06-12 G1) — honor that verdict rather than collapse
+    // `N` — honor that verdict rather than collapse
     // it onto Knuth.
     match select_for_limbs(a_abs.as_limbs(), b_abs.as_limbs()) {
         Algorithm::KnuthU128Limb => {

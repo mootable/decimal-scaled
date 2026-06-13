@@ -18,8 +18,8 @@
 //! The substring `"{method}: result out of range"` is held stable
 //! across crate versions so existing
 //! `#[should_panic(expected = "...")]` tests continue to match; the
-//! trailing `— SCALE={scale}` is the new diagnostic surface added
-//! to tell the caller which compile-time `SCALE` instantiation
+//! trailing `— SCALE={scale}` is the diagnostic surface that tells
+//! the caller which compile-time `SCALE` instantiation
 //! tripped the bound (the panic site otherwise can't identify which
 //! `Dxx<S>` it came from when the same code path serves many
 //! monomorphisations).

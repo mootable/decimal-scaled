@@ -13,8 +13,8 @@
 //! separate zero-sized sizing marker [`Limbs<N>`] (the LIMB CARRIER, never
 //! instantiated). The value integer names its carrier through the
 //! [`BigInt::Scratch`](crate::int::types::traits::BigInt::Scratch)
-//! associated type (`Int<N>::Scratch = Limbs<N>`). This severs the old
-//! `ComputeInt: BigInt` supertrait cycle: `ComputeLimbs` no longer requires
+//! associated type (`Int<N>::Scratch = Limbs<N>`). This avoids a
+//! `ComputeInt: BigInt` supertrait cycle: `ComputeLimbs` does not require
 //! `BigInt`, and `BigInt` merely *names* its scratch carrier — so a helper
 //! generic over a value integer `W: BigInt` reaches scratch as
 //! `W::Scratch::single_u128()` without `W` itself carrying a scratch bound.

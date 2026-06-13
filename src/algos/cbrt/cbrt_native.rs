@@ -3,8 +3,7 @@
 
 //! `cbrt_native` -- bespoke cube-root kernel that runs Newton directly in a
 //! tight, concrete work integer `Int<W>` with an `f64::cbrt` Newton seed,
-//! instead of through the width-agnostic int slice `icbrt` (mirrors prod
-//! 0.4.4's narrow-work cbrt).
+//! instead of through the width-agnostic int slice `icbrt`.
 //!
 //! # Why a bespoke arm rather than the int `icbrt` slice
 //!
@@ -14,7 +13,7 @@
 //! several times per Newton iteration (`sq`, `q`, `r`, `y`, `rem3`). For
 //! the small radicands of the mid-scale wide cells that fixed-cost buffer
 //! churn dominates the arithmetic, so routing the slice `icbrt` there
-//! regressed those cells vs 0.4.4. This kernel instead runs Newton
+//! is slow for those cells. This kernel instead runs Newton
 //! directly in a concrete `Int<W>` (whose width `W` the policy picks per
 //! `(N, SCALE)` cell to just cover `mag · 10^(2·SCALE)`), so each
 //! `n / x²` is one wide multiply + one Knuth divide on tight operands with

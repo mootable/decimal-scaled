@@ -8,7 +8,7 @@
 //! [`crate::policy::trig::inverse::Algorithm`]. Correctness reference +
 //! A/B microbench partner for the routed `Atan` kernels; `select` never
 //! routes here. Each is the textbook composition over the leaf atan
-//! kernel + the new work-int `sqrt_fixed` leaf, dispatched DOWN to the
+//! kernel + the work-int `sqrt_fixed` leaf, dispatched DOWN to the
 //! `Int<N>` layer. NEVER calls a decimal `*_strict_with` on its own
 //! value (the inversion dec-trig had to avoid). Identical composition +
 //! narrowing as the routed kernel, so it matches bit-exactly.
@@ -582,7 +582,7 @@ fn acos_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 
     // is EXACT (pinned for every mode); acos(0) = pi/2 and acos(-1) = pi
     // are IRRATIONAL, so their half-even-baked constants hold for the
     // NEAREST modes only — directed modes fall through to the series +
-    // mode-aware rounding (the 2026-06-12 wrong-mode find).
+    // mode-aware rounding.
     if raw == 0 && crate::support::rounding::is_nearest_mode(mode) {
         return <crate::D<Int<2>, SCALE> as DecimalConstants>::half_pi().0.as_i128();
     }
@@ -852,8 +852,8 @@ mod tests {
     // value G and takes a SINGLE analytic step from it (compress for j*=3, then
     // alternating: expand for j*=5, compress for j*=7, ...). Validated across
     // the LINEAR -> DEEP band transition at MANY scales (not one cell), all six
-    // modes, with a single-step invariant (|directed - G| <= 1 ULP, never 2 -
-    // the double-step regression returned G∓2).
+    // modes, with a single-step invariant (|directed - G| <= 1 ULP, never 2 —
+    // a double-step would return G∓2).
     //
     // Generic over the tier `C` and the const scale `S`; `coeff * 10^-big_k` is
     // the tiny argument (x = 1). The expected step is derived from the analytic
@@ -921,7 +921,7 @@ mod tests {
     // is RESOLVED, putting the partial OFF the grid). The kernel must return the
     // directed WALKER's result (Floor != Ceiling), NOT an analytic step from the
     // mode-blind G — the residual decider is z^7/7, not z^{j*}. A forced-analytic
-    // kernel (the round-2 regression) would disagree with the walker, so this
+    // kernel would disagree with the walker, so this
     // pins the off-grid routing. `coeff` may be NEGATIVE.
     #[cfg(any(feature = "d924", feature = "d1232"))]
     fn assert_atan2_offgrid_uses_walker<C: WideTrigCore, const S: u32>(coeff: i128, big_k: u32)

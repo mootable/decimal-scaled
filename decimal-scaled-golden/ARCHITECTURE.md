@@ -42,10 +42,9 @@ the section.
   is a distinct process from running the tests/benches, which consume the committed
   files. They are never run together.
 
-This crate **replaces** the old in-tree golden infrastructure: the
-per-`(width, scale)` golden files, `tests/ulp_strict_golden.rs` (`decl_band!` /
-`band_edges`), the band-edge wiring scripts, and the `lib_cmp_*` benches all
-collapse into the single shared golden set + agnostic runner described here.
+This crate is the single shared golden set + agnostic runner described here:
+one golden set and one runner cover every `(width, scale)`, rather than
+per-file golden data plus band-edge wiring.
 
 ---
 
@@ -250,7 +249,7 @@ with `guard = 2`). Those guard digits are spent *deciding* the rounding, so the 
 can actually **verify** is `gen_precision − guard` (≈ 1231 = the widest scale itself). We can
 never verify a subject deeper than that, so grading depth is clamped to it:
 
-> **Potential TODO (owner consideration, 2026-06-11):** replace the two trailing
+> **Potential TODO (owner consideration):** replace the two trailing
 > guard digits with a single generator-emitted rounding-HINT character (exact /
 > residual-above / residual-below / tie). The generator PROVES the residual class
 > (floor-truth pinning + the residual-ball exactness certificate), so the hint is

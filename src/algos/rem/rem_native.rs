@@ -13,7 +13,7 @@
 //! * **`N == 1` (D18):** native `i64 %` on the `i64` storage values.
 //! * **`N == 2` (D38):** native `i128 %` on the `i128` storage values.
 //!
-//! This is exactly 0.4.4 native D18 / D38 remainder (`self.0 % rhs.0`). It
+//! This is the native D18 / D38 remainder (`self.0 % rhs.0`). It
 //! bypasses the generic [`rem_int_layer`](crate::algos::rem::rem_int_layer)
 //! path, which unpacks both operands to unsigned magnitudes, runs the
 //! const-`N` `div_rem` divmod, and rebuilds a signed `Int<N>` with sign

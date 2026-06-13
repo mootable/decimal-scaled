@@ -20,7 +20,7 @@
 //!   to the baked entry (zero-extended into `W`) or a const `TEN.pow`; a
 //!   runtime `exp` is one in-range branch then the single table read.
 //! * [`dispatch_int`] — a `const fn` returning `Int<N>`, for the const-`EXP`
-//!   sites that previously wrote `const { Int::<N>::TEN.pow(EXP) }` — now
+//!   sites needing a `const { Int::<N>::TEN.pow(EXP) }` value:
 //!   **table-sourced** while still folding to a compile-time constant.
 //! * [`dispatch_i128`] — the narrow-`i128` door for the D18/D38 hardware
 //!   paths (the value's low one or two limbs).

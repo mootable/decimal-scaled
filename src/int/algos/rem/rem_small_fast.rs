@@ -3,8 +3,8 @@
 
 //! Small-magnitude hardware-`%` signed remainder for any `Int<N>`.
 //!
-//! [`rem_small_fast`] is the width-agnostic recovery of v0.4.4's
-//! `limbs_divmod` "Fast Path A" (both operands fit one 128-bit word → a
+//! [`rem_small_fast`] is the width-agnostic single-word fast path
+//! (both operands fit one 128-bit word → a
 //! single hardware divide, no scratch, no shape classification). It runs at
 //! EVERY width `N`, gated on the operand VALUE rather than the const width:
 //!
@@ -22,7 +22,7 @@
 //! * otherwise it falls back to [`rem_via_div_rem`] (the division-policy
 //!   path) for the genuinely-wide case.
 //!
-//! This is the scale-0 (small integer operand) recovery: at wide tiers the
+//! This is the scale-0 (small integer operand) fast path: at wide tiers the
 //! decimal integer operands are frequently a small `k` (or `k · 10^scale`
 //! that still fits a word) where building and walking `N`-limb scratch is
 //! pure overhead. The fast path is correct for ALL `N` — the magnitude check

@@ -4,10 +4,10 @@
 //! Narrow-tier (D18 / D38) near-tie Ziv escalation plumbing.
 //!
 //! The narrow strict kernels evaluate on the 256-bit `Fixed`
-//! intermediate at the fixed working scale `w = SCALE + STRICT_GUARD`
-//! and historically narrowed in a SINGLE shot (or, for sin/cos, an
-//! escalation hard-capped at the 75-digit `Fixed` constant window).
-//! That terminal mis-rounds any input whose deciding digit lies below
+//! intermediate at the fixed working scale `w = SCALE + STRICT_GUARD`.
+//! A SINGLE-shot narrowing (or, for sin/cos, an
+//! escalation hard-capped at the 75-digit `Fixed` constant window)
+//! mis-rounds any input whose deciding digit lies below
 //! the fixed working scale — the constructible family is an exact
 //! rational Taylor partial landing exactly ON a rounding boundary with
 //! the transcendental tail below reach (`sin(1e-38)` at D38<38> has its

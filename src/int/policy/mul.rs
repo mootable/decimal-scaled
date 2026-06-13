@@ -103,8 +103,7 @@ enum Select {
 /// u64/u128 raced 24..256, pinned) plus the `mul_kara_thresh_ab` recursion-depth
 /// sweep localize the crossover to `(96, 128]`: schoolbook-u128 wins `N <= 96`,
 /// the u128-packed recursive Karatsuba wins `N >= 128` by **1.34x at N=128 and
-/// 1.39x at N=256** (vs the old one-level Karatsuba which lost everywhere — the
-/// reason this was `usize::MAX`). Only EVEN `N` reaches Karatsuba (so it always
+/// 1.39x at N=256**. Only EVEN `N` reaches Karatsuba (so it always
 /// packs to `u128`); odd / `< 128` widths stay schoolbook. The exact crossover
 /// in `(96, 128]` is academic — no shipped storage tier (<=64) or work width
 /// (96/128/192/256) lies strictly between 96 and 128.

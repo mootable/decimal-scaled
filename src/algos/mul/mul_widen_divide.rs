@@ -176,7 +176,7 @@ where
     // not the buffer width, so strip the leading-zero high limbs and size
     // `select` + the baked-Newton apply on the real length — otherwise the
     // wide-tier `÷10^SCALE` Newton runs at the full `2N` width regardless of the
-    // operand magnitude (the L6 `mul_D1232` regression). Bit-identical: the
+    // operand magnitude. Bit-identical: the
     // quotient `<= ` the numerator, so the trimmed high limbs stay zero and
     // `narrow_mag_to_int` reads the full `mag` unchanged.
     let mut sig = mag.len();
@@ -205,8 +205,8 @@ mod overflow_tests {
     }
 
     /// D57 (`Int<3>`, the only odd-`N` wide tier): an out-of-range product must
-    /// PANIC, while an in-range product stays bit-identical. The overflow used to
-    /// slip the high 64 bits of the top half-used u128 limb and silently wrap.
+    /// PANIC, while an in-range product stays bit-identical. Without the panic, the
+    /// overflow would slip the high 64 bits of the top half-used u128 limb and silently wrap.
     #[test]
     fn mul_widen_divide_d57_overflow_panics_in_range_exact() {
         let mode = RoundingMode::HalfToEven;

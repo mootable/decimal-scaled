@@ -125,8 +125,8 @@ pub(crate) mod forward {
 
     /// Pick the sin / cos / atan algorithm for storage limb count `N` and
     /// decimal `SCALE`. Total over the key; the `_` arm is the generic
-    /// `Series` default. Reproduces the legacy `(W, SCALE)` triplet
-    /// routing: the Tang bands divert to `Tang`; every other cell —
+    /// `Series` default. Routes on the `(W, SCALE)` triplet
+    /// key: the Tang bands divert to `Tang`; every other cell —
     /// including the narrow-GUARD low bands realised as a `Series` kernel
     /// — runs `Series`.
     ///
@@ -149,12 +149,11 @@ pub(crate) mod forward {
             // (GUARD=12) — a narrowed-GUARD Taylor reclaim that runs the
             // same `sin_fixed`/`cos_fixed`/`atan_fixed` cores but at the
             // band's smaller working width (vs the tier's default
-            // GUARD=30). The 2026-05-28 bisection (`trig_wide_tang_bisect`)
+            // GUARD=30). The bisection (`trig_wide_tang_bisect`)
             // showed narrow_g10/g12 wins by 1.0×–2.4× at every probed
             // s0/50/100/150/180/200/210/218/225/230/235/240/260/290/330/400/450
             // across sin/cos/tan/atan (3 inputs × 6 rounding modes,
-            // bit-identical to Series), refuting the prior 225..=235
-            // point-range gate (Audit Finding #2, untested). One inner
+            // bit-identical to Series). One inner
             // outlier (sin s230, Series +1.11×) is bench noise: neighbours
             // s225 / s235 / s240 all show narrow wins for sin.
             #[cfg(any(feature = "d462", feature = "x-wide"))]
@@ -321,10 +320,10 @@ pub(crate) mod hyper {
 // ══════════════════════════════════════════════════════════════════════
 // Forward-family SCALE-derived work-rung routing (sin / cos / tan)
 //
-// The wide tiers historically ran every forward-trig kernel in the
-// TIER-FIXED work integer `C::W` regardless of scale — at SCALE 0 the
-// working scale is only `GUARD = 30` digits yet D1232 computed sin in
-// `Int<176>`. The helpers below key the work integer on the working
+// A TIER-FIXED work integer `C::W` regardless of scale is wasteful at low
+// scale — at SCALE 0 the working scale is only `GUARD = 30` digits, far
+// below a tier width like D1232's `Int<176>`. The helpers below key the
+// work integer on the working
 // scale instead: a const-folded rung match (shared selector
 // `policy::work_rung::trig_rung`) monomorphises the ONE generic kernel
 // (`wide_trig_core::{sin,cos,tan}_series_g`) at the narrowest valid
@@ -1179,7 +1178,7 @@ impl_narrow_trig!(
 // `ExpIdentity` (hyper); each `match algo` is exhaustive over the gated
 // real variants and dead-arm-eliminated. The forward family runs the
 // bespoke `trig_series_2limb` series kernel directly (it beats the widen-and-back
-// path ~2× since the 0.4.2 MG-routed `Fixed` primitives). The inverse
+// path ~2×). The inverse
 // family borrows D57 when present (the wide_kernel atan is ~2× faster than
 // the `trig_series_2limb` adaptive-halvings path; asin/acos/atan2 compose atan, so
 // they inherit the gap) and runs `trig_series_2limb` without D57.
@@ -3384,7 +3383,7 @@ mod forward_rung_tests {
     }
 
     /// Tiny-argument directed-contract anchors — the trig_rung_ab bench
-    /// assert set in its durable form (the merge-bounce regression:
+    /// assert set in its durable form (guards
     /// sin_d307_s153 x0.3 mode Trunc). At high scale the bench's u128
     /// input clamp makes every input TINY (raw = v·10^36 at SCALE 153 ⇒
     /// x ≈ v·10^-117), so f(x) = x ∓ a sub-resolution x³-term whose

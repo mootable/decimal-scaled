@@ -223,7 +223,7 @@ fn ln_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128
     if delta.abs() <= ln1p_band && is_nearest_mode(mode) {
         // See `ln_with_raw`: the band exponent ⌊(S−1)/2⌋ keeps the omitted
         // quadratic term ≤ 0.05 LSB — strictly clear of the half-ULP tie for
-        // every S (the old ⌊S/2⌋ hit exactly 0.5 LSB at the edge for even S).
+        // every S (a ⌊S/2⌋ band hits exactly 0.5 LSB at the edge for even S).
         // The linear approximation `δ` is then the correctly nearest-rounded
         // result inside the band; directed modes need the residual sign and
         // fall through to the full kernel.
@@ -289,7 +289,7 @@ pub(crate) fn pow_bounded(base: u128, e: u128) -> Option<WZiv> {
     if base == 0 {
         return None; // domain-asserted positive inputs; 0 never verifies
     }
-    let bl = (128 - base.leading_zeros()) as u128;
+    let bl = (128 - base.leading_zeros()) as u128;
     // Saturating: `e` can be as large as `10^scale` (an irreducible
     // candidate denominator), so the budget product must not wrap.
     if bl.saturating_mul(e) > 1500 {
@@ -779,7 +779,7 @@ mod near_tie_pins {
 
     #[test]
     fn log_fractional_base_high_scale_budget_product_does_not_wrap() {
-        // regression: the rational-pin budget product `bl * e` wrapped u128
+        // the rational-pin budget product `bl * e` can wrap u128
         // for an irreducible candidate denominator (q ~ 2*10^37) on
         // log(0.1096614350149675660535769418, 0.0182017066872921546105935121)
         // at D38<37> (the golden log.golden:18 panic). The saturating

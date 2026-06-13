@@ -54,9 +54,9 @@ pub(crate) enum Algorithm {
     Knuth,
     /// [`div_burnikel_ziegler_with_knuth`] — Burnikel–Ziegler outer
     /// chunking, recursing to Knuth as its base case. Registered but
-    /// **unrouted**: the policy-map (af3011f6) measured it slowest or
+    /// **unrouted**: the policy-map measured it slowest or
     /// near-slowest at every den_n ≥ 65 working width (u128-limb Knuth wins
-    /// that region 1.68–1.78×), so `select_for_limbs` no longer returns it.
+    /// that region 1.68–1.78×), so `select_for_limbs` does not return it.
     /// Kept as a future-ready alternative — it can only win once the back-
     /// multiply turns sub-quadratic at ≤128 limbs — and reachable via its
     /// `#[cfg(test)]` differential. `#[allow(dead_code)]` suppresses the
@@ -99,11 +99,11 @@ enum Select {
 
 // ── policy data: the benched crossover threshold ──────────────────────
 
-/// Burnikel–Ziegler engagement threshold, in u64 limbs. **No longer a
+/// Burnikel–Ziegler engagement threshold, in u64 limbs. **Not a
 /// routing threshold** — [`select_for_limbs`] does not return BZ (the
-/// policy-map af3011f6 showed it losing across the whole supported surface;
+/// policy-map showed it losing across the whole supported surface;
 /// the den_n ≥ 65 region routes to [`Algorithm::KnuthU128Limb`] instead).
-/// This const is now read ONLY by [`div_burnikel_ziegler_with_knuth`]'s own
+/// This const is read ONLY by [`div_burnikel_ziegler_with_knuth`]'s own
 /// engagement guard (keeping BZ reachable via its `#[cfg(test)]` differential
 /// + the bench seam): a divisor of at least this many effective limbs whose
 /// dividend is `≥ 2·n` runs the BZ chunking, otherwise it shorts to Knuth.
@@ -143,7 +143,7 @@ enum Select {
 /// cross-scale dividend reaches 128 limbs), so a threshold of `65`
 /// guarantees every supported divide takes the faster Knuth engine while
 /// leaving the engine + gate intact for a future true recursive-BZ
-/// kernel. (Lowering toward the legacy `8`/`16` would *regress* every
+/// kernel. (Lowering toward `8`/`16` would *regress* every
 /// D307+ wide divide by engaging the slower block engine.)
 pub(crate) const BZ_THRESHOLD: usize = 65;
 
@@ -153,7 +153,7 @@ pub(crate) const BZ_THRESHOLD: usize = 65;
 /// **Benched** (`div_kernel_ab`, u128 base-2¹²⁸ vs u64 base-2⁶⁴, wide `2n`/`n`
 /// shape — the decimal `/` scaled-numerator shape; the limb-width win
 /// materialises only on this shape). After the q̂-reciprocal was hoisted out
-/// of the per-digit loop (~12–15% faster u128), the policy-map (af3011f6)
+/// of the per-digit loop (~12–15% faster u128), the policy-map
 /// bisected the even-`n` crossover cleanly between 22 and 24:
 ///
 /// | den_n | wide `2n`/`n`   |
@@ -168,12 +168,11 @@ pub(crate) const BZ_THRESHOLD: usize = 65;
 /// | 32    | **u128 1.42×** |
 ///
 /// Clean u128 win from **den_n = 24** upward (cross-checked: den_n=24 is u128
-/// 1.10–1.11× across two independent runs) — lowered from `32`, since the
-/// faster u128 engine now wins the 24–30 band it previously tied/lost. u128
+/// 1.10–1.11× across two independent runs). u128
 /// is routed for an **even** divisor `≥ 24` limbs with a `≥ 2·n` dividend,
 /// INCLUDING the den_n ≥ 65 working widths the decimal `÷10^w` rescale + wide
-/// transcendentals reach (same map: u128 beat the old Burnikel–Ziegler
-/// routing 1.68–1.78× at den_n 96/128). The balanced shape (square `rem` /
+/// transcendentals reach (same map: u128 wins 1.68–1.78× over
+/// Burnikel–Ziegler at den_n 96/128). The balanced shape (square `rem` /
 /// the `Int<N>` `/` operator) and every narrow/odd divisor stay base-2⁶⁴
 /// Knuth, where u128 loses ~1.5×. The engine itself falls back to `div_knuth`
 /// for odd / `< 4`-limb divisors, so the matcher gate is the perf carve-out.
@@ -231,10 +230,10 @@ pub(crate) fn select_for_limbs(num: &[u64], den: &[u64]) -> Algorithm {
         // Wide (`2n`-dividend) even divisor → the u128 limb-width engine. This
         // covers the WHOLE even-divisor wide region from `U128_DIV_THRESHOLD`
         // up, INCLUDING the den_n ≥ 65 working widths the decimal `÷10^w`
-        // rescale + wide transcendentals reach: the policy-map (af3011f6)
-        // measured u128 beating the old Burnikel–Ziegler routing there
-        // 1.68–1.78× (96/128 limbs), so BZ is no longer routed (the balanced
-        // shape stays Knuth — u128 loses it ~1.5×).
+        // rescale + wide transcendentals reach: the policy-map
+        // measured u128 beating Burnikel–Ziegler there
+        // 1.68–1.78× (96/128 limbs), so this region routes u128, not BZ (the
+        // balanced shape stays Knuth — u128 loses it ~1.5×).
         if den_n.is_multiple_of(2) && num_m >= 2 * den_n {
             return Algorithm::KnuthU128Limb;
         }

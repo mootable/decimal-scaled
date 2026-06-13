@@ -232,9 +232,9 @@ width - the long tail remains reachable via the explicit
 | D153 | `d153s0!`, `d153s35!`, `d153s75!`, `d153s150!`, `d153s152!` |
 | D307 | `d307s0!`, `d307s35!`, `d307s150!`, `d307s300!`, `d307s306!` |
 
-Per-scale wrappers at the old `MAX_SCALE == name` cap (`d18s18!`,
-`d38s38!`, `d76s76!`, `d153s153!`, `d307s307!`) were
-removed in 0.4.0 along with the matching scale aliases.
+There are no per-scale wrappers at the `MAX_SCALE == name` boundary
+(`d18s18!`, `d38s38!`, `d76s76!`, `d153s153!`, `d307s307!`): the scale cap
+is `MAX_SCALE == name - 1`.
 
 Each wrapper forwards every other qualifier unchanged:
 

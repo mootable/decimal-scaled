@@ -23,11 +23,11 @@ const SCRATCH_LIMBS: usize = max_n_limbs(2);
 /// `out = floor(sqrt(n))`. Newton iteration on top of the runtime divide
 /// dispatcher.
 ///
-/// History: this routine previously called the *const* `div_rem` per
-/// iteration, which routes multi-limb divisors through the O(bits²)
-/// shift-subtract path. At Int<64> (n=64 u64 limbs) that dominates wall
+/// Uses [`div_rem_dispatch`] (not the *const* `div_rem`) per iteration: the
+/// const path routes multi-limb divisors through the O(bits²)
+/// shift-subtract path, which at Int<64> (n=64 u64 limbs) dominates wall
 /// time — Newton converges in ~log₂(b) ≈ 12 iterations, each one a
-/// `~65k`-limb-op divmod. Switching to [`div_rem_dispatch`] gets
+/// `~65k`-limb-op divmod. The dispatcher gets
 /// Knuth-base-2⁶⁴ per iteration (~`~32²` = 1024 limb-ops), worth ~40× on
 /// D307 sqrt.
 pub(crate) fn isqrt_newton(n: &[u64], out: &mut [u64]) {

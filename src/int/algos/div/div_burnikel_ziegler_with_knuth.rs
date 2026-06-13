@@ -358,7 +358,7 @@ pub(crate) fn bz_chunk_core_forced(num: &[u64], den: &[u64], quot: &mut [u64], r
 }
 
 // The differentials below all drive the recursion at the widest WORKING widths
-// (`den_n` up to ~69, the regression range), so they require the xx-wide divide
+// (`den_n` up to ~69), so they require the xx-wide divide
 // scratch and are gated on it — gating the whole module keeps the narrow default
 // build free of unused-import / dead-helper warnings.
 #[cfg(all(test, feature = "xx-wide"))]

@@ -172,7 +172,7 @@ pub(crate) fn sqrt_seed(n: &[u64], bits: u32, out: &mut [u64]) {
         };
         // Keep `frac_bits` of the f64 mantissa's FRACTIONAL bits in fixed
         // point before placing: quantising `seed_f64` to a bare integer first
-        // (the old form) costs the seed everything below 1 ulp of the
+        // costs the seed everything below 1 ulp of the
         // ~2^32-magnitude window root, so after the `· 2^half_shift`
         // placement the margin balloons to a relative ~2^-31 and every
         // big-shift Newton consumer pays ~2 extra divide iterations to win
@@ -317,7 +317,7 @@ pub(crate) fn cbrt_seed(n: &[u64], bits: u32, out: &mut [u64]) {
 
 /// Full-radicand `f64` cube-root seed: `value.cbrt()`, where `value` is the
 /// radicand's `f64` approximation (`Int::<W>::as_f64()`). This is the tight
-/// 0.4.4-style seed — the cube root of the WHOLE radicand, not the top-bits
+/// seed — the cube root of the WHOLE radicand, not the top-bits
 /// window [`cbrt_seed`] extracts — correctly rounded to ~53 bits, so it sits
 /// within ~`2⁻⁵²` *relative* of `∛n`. The caller bridges the result back to
 /// `Int<W>` (`from_f64`) and lifts it above `⌈∛n⌉` with one Newton pre-step

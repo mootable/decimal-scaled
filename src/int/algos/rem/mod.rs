@@ -14,8 +14,8 @@ pub(crate) mod rem_native;
 // the sign-magnitude round trip the shipped rem_native still pays.
 pub(crate) mod rem_native_direct;
 pub(crate) mod rem_schoolbook;
-// width-agnostic small-magnitude hardware-`%` fast path (recovers v0.4.4's
-// "Fast Path A"): value-gated, valid at every N, falls back to via_div_rem
+// width-agnostic small-magnitude hardware-`%` fast path: value-gated,
+// valid at every N, falls back to via_div_rem
 // for genuinely-wide operands.
 pub(crate) mod rem_small_fast;
 pub(crate) mod rem_via_div_rem;

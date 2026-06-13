@@ -483,12 +483,12 @@ pub(crate) fn atan_fixed(v_w: Fixed, w: u32) -> Fixed {
 // the SAME generic Ziv walkers the wide tiers run (via
 // `support::narrow_ziv`), recomputing in the wider `WZiv = Int<24>` work
 // integer with the width-generic kernels (`trig_generic`,
-// `exp_generic`). This replaces the old `round_fixed_trig_directed`
-// shape — a directed-only escalation hard-capped at the 75-digit
-// `Fixed` constant window that treated a still-exact residual at the
-// cap as exact (mis-rounding e.g. `sin(1e-38)` Floor at D38<38>, whose
-// `x³/6` deviation sits at fraction depth 115) and left the nearest
-// modes entirely single-shot (mis-rounding the even-function exact-half
+// `exp_generic`). This escalation handles the constructible cases a
+// directed-only escalation hard-capped at the 75-digit
+// `Fixed` constant window would miss: a still-exact residual at the
+// cap treated as exact (mis-rounding e.g. `sin(1e-38)` Floor at D38<38>, whose
+// `x³/6` deviation sits at fraction depth 115), and the nearest
+// modes left entirely single-shot (mis-rounding the even-function exact-half
 // family, e.g. `cosh(1e-19)` HalfToEven at D38<38>). `WZiv` probes to
 // ~192 digits, past every constructible narrow-tier deciding depth
 // (≤ 3·38 = 114); see `narrow_ziv`.
@@ -765,8 +765,7 @@ pub(crate) fn atan_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -
     // atan(±1) = ±π/4: the baked constant is rounded HALF-TO-EVEN, so the
     // pin is correct only for the nearest modes (an exact half-tie is
     // impossible for an irrational, so half-away agrees). Directed modes
-    // fall through to the guarded computation + mode-aware rounding (the
-    // six-mode comprehensive gate's wrong-mode find, 2026-06-12).
+    // fall through to the guarded computation + mode-aware rounding.
     if is_nearest_mode(mode) {
         if raw == one_bits {
             return <crate::D<crate::int::types::Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
@@ -1130,8 +1129,8 @@ fn sinh_ziv(raw: i128, scale: u32, g: u32) -> WZiv {
 
 /// Strict-path `i128` core of [`sinh_strict`]: the `Fixed` fast shot
 /// narrows through the clear-of-tie terminal; a near-tie (and the
-/// integer-regime cells, whose base probe is the same wider-work single
-/// shot the old path took) escalates through the Ziv walker.
+/// integer-regime cells, whose base probe is a wider-work single
+/// shot) escalates through the Ziv walker.
 fn sinh_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> i128 {
     if raw == 0 {
         return 0;
@@ -1383,7 +1382,7 @@ pub(crate) fn tanh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: Ro
     // tanh(|x|) = (1 − m)/(1 + m), m = e^(−2|x|) — exact and overflow-safe
     // across the whole large-|x| range (forming e^(+|x|) directly
     // overflows the 256-bit `Fixed` once |x| ≳ 256·ln2 − w·ln10, BELOW
-    // the all-nines saturation onset |x| ≳ 1.1513·w, the old panic GAP);
+    // the all-nines saturation onset |x| ≳ 1.1513·w);
     // mirrors `exp_generic::tanh_pos` (the wide path).
     let (th, _saturated) = tanh_eval_fixed(raw, working_digits, w);
     th.round_to_i128_with(w, scale, mode).unwrap_or_else(|| {
@@ -1733,11 +1732,11 @@ fn small_x_linear_threshold_scale(scale: u32) -> i128 {
 }
 
 // ── Near-tie pins: the narrow single-shot / capped-escalation defect ──
-// The same constructible class the regenerated golden caught on the wide
+// The same constructible class seen on the wide
 // tiers (asin(3e-60) D462<180>): an EXACT input whose Taylor partial lands
 // exactly ON a rounding boundary (the grid line for directed modes, the
 // half for nearest) with the deciding transcendental tail BELOW the fixed
-// working scale w = SCALE + 30 (and, for sin/cos, below the old 75-digit
+// working scale w = SCALE + 30 (and, for sin/cos, below the 75-digit
 // escalation cap). Oracle for every expected value: the exact rational
 // Taylor partial + the strict tail sign (mpmath-confirmed,
 // trace/narrow_tie_derive.py derivations):
@@ -1766,8 +1765,8 @@ mod near_tie_pins {
 
     #[test]
     fn sin_directed_tiny_x_d38_s38() {
-        // failing-first: the old escalation capped at w = 75 < deviation
-        // depth 115 and treated the grid-exact residual as exact.
+        // a w = 75 escalation cap is below deviation
+        // depth 115 and would treat the grid-exact residual as exact.
         assert_eq!(sin_strict_raw::<S38>(1, RoundingMode::Floor), 0, "sin Floor");
         assert_eq!(sin_strict_raw::<S38>(1, RoundingMode::Trunc), 0, "sin Trunc");
         assert_eq!(sin_strict_raw::<S38>(1, RoundingMode::Ceiling), 1, "sin Ceiling");

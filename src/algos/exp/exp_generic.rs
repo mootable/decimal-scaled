@@ -221,7 +221,7 @@ use crate::support::rounding::RoundingMode;
         // product) for even-limb work widths, ~1/4 the partial products;
         // falls back to the base-2^64 schoolbook for odd N. This is the hot
         // Taylor-term / squaring multiply, run at `Wexp` (up to Int<256>) for
-        // exp + the hyperbolics — the fix for the ~12× wide-tier regression.
+        // exp + the hyperbolics.
         round_div_pow10(a.wrapping_mul_low_u128(b), w)
     }
     /// Loop-friendly `mul` with a precomputed `10^w` divisor.
@@ -1073,7 +1073,7 @@ mod tests {
     use super::*;
     use crate::int::types::Int;
 
-    /// Regression: the `k < 0` internal-peak wrap (2026-06-13). A
+    /// The `k < 0` internal-peak wrap: a
     /// deep-negative argument at a deep (cap-clamped Ziv probe) working
     /// scale — `exp(-62.175)` at `w = 184` in `Int<24>` (the narrow tiers'
     /// `WZiv`, 1536 bits) — range-reduces to `k = -90`, provisioning
@@ -1107,15 +1107,15 @@ mod tests {
         );
     }
 
-    /// Defect-B regression (2026-06-12): a deep-negative `exp_fixed` at a
-    /// working scale `w ≥ 200` in D115's `Wexp = Int<64>` panicked on
-    /// baked-table-less builds — `w_ext = w + extra(|k|)` pushed the
+    /// A deep-negative `exp_fixed` at a
+    /// working scale `w ≥ 200` in D115's `Wexp = Int<64>` must not panic on
+    /// baked-table-less builds — `w_ext = w + extra(|k|)` pushes the
     /// per-Taylor-term `÷10^w_ext` into the rescale Newton arm, whose
     /// per-call Knuth fallback dividend (`even(width + w_ext/19 + 3) + 1`
-    /// u64 limbs) outran the build-max divide blanket (66 limbs at
+    /// u64 limbs) can outrun the build-max divide blanket (66 limbs at
     /// `MAX_WORK_N = 16`). The result itself is comfortably in range:
     /// `e^-357` at scale 200 is `10^(200 − 357·log10(e)) ≈ 8.8e44`.
-    /// Pins the kernel at the exact shape that panicked: `v = -357·10^200`,
+    /// Pins the kernel at the exact shape: `v = -357·10^200`,
     /// `w = 200`, `S = Int<64>` (D115's production `Wexp`).
     #[cfg(any(feature = "d115", feature = "wide"))]
     #[test]

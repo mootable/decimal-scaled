@@ -8,13 +8,12 @@
 //! `wide_trig_<tier>` module against a tier-specific work integer `W`
 //! (e.g. `Int<16>` for D307) and tier-specific constant tables. The
 //! per-family wide-tier kernels (`algos::{exp,ln,trig}::wide_kernel`)
-//! historically shipped one thin `*_strict_<tier>` wrapper per tier per
-//! function — 60 near-identical 3-to-20-line bodies differing only by
-//! the work integer `W`, the storage integer, and the `core` module.
+//! run through six generic `*_series` functions ([`exp_series`],
+//! [`ln_series`], [`sin_series`], [`cos_series`], [`tan_series`],
+//! [`atan_series`]) instead of one thin `*_strict_<tier>` wrapper per tier
+//! per function.
 //!
-//! [`WideTrigCore`] is the trait that lets those 60 wrappers collapse to
-//! six generic `*_series` functions ([`exp_series`], [`ln_series`],
-//! [`sin_series`], [`cos_series`], [`tan_series`], [`atan_series`]).
+//! [`WideTrigCore`] is the trait that backs those six generic functions.
 //! `W` and the storage integer cannot be computed from a single const
 //! parameter on stable rust (`W = Int<2N>` needs `generic_const_exprs`),
 //! so each tier binds them as **associated types** on a per-tier `Core`
@@ -1380,8 +1379,8 @@ where
 /// error); a residual-to-boundary distance above this is a real deciding digit,
 /// below it is noise. Once a deciding term is representable its signal grows
 /// 10× per extra working digit, so it clears the floor within a handful of
-/// digits. Using an ABSOLUTE floor (not the old `divisor/1000`, which scales
-/// with the working scale and so never fired for a near-min input) is what lets
+/// digits. Using an ABSOLUTE floor (not a relative `divisor/1000`, which scales
+/// with the working scale and so never fires for a near-min input) is what lets
 /// the loop tell "resolved" from "spinning on kernel noise" — and so return the
 /// clean exact-tie base narrowing instead of a noise-driven deep misround.
 const ZIV_RESOLVE_FLOOR_POW10: u32 = 4;
@@ -1866,8 +1865,8 @@ where
 /// work integer `S2`, so the conclusion is never weaker than the tier
 /// path's. The directed/nearest twin of the exp near-min
 /// [`round_to_storage_widening_g`] retry, and the rung families' fix for
-/// the at-cap base-narrowing endgame: an unresolved-at-rung tie used to
-/// conclude from the rung's probes, which under a DIRECTED mode can land
+/// the at-cap base-narrowing endgame: an unresolved-at-rung tie that
+/// concludes from the rung's probes can, under a DIRECTED mode, land
 /// one ULP on the wrong side of a sub-rung-resolution residual the tier
 /// width resolves (the `sin_d307_s153` Trunc defect — `sin(x) = x − x³/6`
 /// with the cube term between the two caps). A resolved-at-rung value is
@@ -2213,11 +2212,11 @@ where
             // A deciding digit is a genuine SIGNAL once its distance to the
             // grid line clears the ABSOLUTE kernel-noise floor — the same
             // rule the nearest branch applies to its half-boundary
-            // distance. The old relative `divisor/1000` band scales with
+            // distance. A relative `divisor/1000` band would scale with
             // the working scale, so a SUB-RESOLUTION residual (e.g. a
             // deep-underflow `exp`, value ≪ 1 storage ULP) could never
-            // clear it and every such walk ran to the cap — where the
-            // deepest probe, not the clean base, used to be trusted.
+            // clear it and every such walk would run to the cap — where the
+            // deepest probe, not the clean base, would be trusted.
             // Resolution still demands two consecutive probes agree on the
             // narrowing (`hi == lo`), a stricter consistency requirement
             // than the nearest branch's single floor-clearing probe.
@@ -2347,7 +2346,7 @@ mod directed_walker_contract {
     // is below w = 68's resolution); the single cap-clamped probe shows the
     // genuine residual (1.667e5 work units, above the noise floor) — the
     // endgame must TRUST that resolved final probe (Ceiling → 2), not
-    // discard it for the on-grid base (Ceiling → 1, the regression).
+    // discard it for the on-grid base (Ceiling → 1, the wrong answer).
     #[test]
     fn deciding_digit_first_visible_at_cap_probe_is_trusted() {
         type Rung = Int<16>;

@@ -176,8 +176,8 @@ macro_rules! decl_wide_transcendental {
             /// and the opt-in AGM run in `Wagm`, which is wide enough for
             /// their directed-Ziv guard ceiling (`~Wagm::BITS/8 − SCALE`),
             /// their integer-digit `k_lift`, and the `resize_to::<Wagm>` of a
-            /// large `Wexp`-computed result. Sized per tier in `widths.rs`
-            /// (the old single shared work width); `W` is narrowed beneath it.
+            /// large `Wexp`-computed result. Sized per tier in `widths.rs`;
+            /// `W` is narrowed beneath it.
             pub(crate) type Wagm = $AgmWork;
 
             /// Guard digits added below the type's own scale.
@@ -3605,8 +3605,8 @@ macro_rules! decl_wide_transcendental {
                 // sub-resolution `base^-k` rounds up to 1, not down to 0). The
                 // pin divides the INTEGER `base^|n|`, so a terminating
                 // reciprocal is exact even when the scaled `base^|n|·10^SCALE`
-                // overflows storage — the case the old `checked_pow` fast path
-                // deferred to the to-nearest composition, mis-rounding Floor /
+                // overflows storage — the case a `checked_pow` fast path
+                // would defer to the to-nearest composition, mis-rounding Floor /
                 // Trunc by 1 LSB. `None` (fractional base/exponent, or a
                 // positive power out of range) defers to the composition below,
                 // which panics uniformly on a genuinely out-of-range result.
@@ -3777,12 +3777,12 @@ macro_rules! decl_wide_transcendental {
             /// Delegates to the policy dispatch exactly as the default-
             /// mode sibling does (`policy::trig::asin_dispatch`), so BOTH
             /// public entry points share the one Ziv-escalated kernel.
-            /// The old inline single-shot composition here could not see
+            /// An inline single-shot composition could not see
             /// a deciding digit below the fixed working scale — the
             /// `asin(3e-60)` family has `x^3/6` EXACTLY 4.5 storage ULPs
             /// with the deciding `3x^5/40` tail far below `SCALE + GUARD`,
-            /// so HalfToEven mis-rounded the half (the asin.golden D462
-            /// <180> regression). The policy kernel's escalating walker
+            /// so HalfToEven would mis-round the half (guards asin.golden D462
+            /// <180>). The policy kernel's escalating walker
             /// resolves it.
             #[inline]
             #[must_use]
@@ -4952,7 +4952,7 @@ mod tests {
 
     /// Validity wall for the baked binary Tang `ln` table: on every
     /// shipped wide tier, the baked `ln_table_entry` accessor reproduces
-    /// the OLD per-call `ln_fixed` Series recompute (to within the artanh
+    /// the per-call `ln_fixed` Series recompute (to within the artanh
     /// reconstruction's working-LSB tolerance) for all 129 slots across
     /// the reachable working-scale band. If this passes, swapping the
     /// Series recompute for the baked slice does not move the `ln` result.
@@ -4983,7 +4983,7 @@ mod tests {
 
     /// Validity wall for the baked binary Tang `(sin, cos)` table: on
     /// every shipped wide tier, the baked `sincos_table_entry` accessor
-    /// reproduces the OLD per-call `sin_cos_fixed` Series recompute (to
+    /// reproduces the per-call `sin_cos_fixed` Series recompute (to
     /// within a small working-LSB tolerance) for all `M + 1` slots across
     /// the reachable working-scale band. If this passes, swapping the
     /// Series recompute for the baked slice does not move the sin/cos/tan
@@ -5015,7 +5015,7 @@ mod tests {
 
     /// Validity wall for the baked binary Tang `exp` table: on every
     /// shipped wide tier, the baked `exp_table_entry` accessor reproduces
-    /// the OLD per-call `exp_fixed` Series recompute (to within a tight
+    /// the per-call `exp_fixed` Series recompute (to within a tight
     /// working-LSB tolerance) for all `M` lattice slots across the
     /// reachable working-scale band. If this passes, swapping the Series
     /// recompute for the baked slice does not move the `exp` (or the
