@@ -149,7 +149,10 @@ where
     // divide instead of 2N. Hardcoding Knuth is the matcher's choice for this
     // shape: the dividend fits N limbs (≤ the divisor width `n`), so the u128
     // engine's `dividend ≥ 2n` precondition is false and `select_for_limbs`
-    // always returns Knuth here — re-verify if a new `div_rem` engine is added.
+    // always returns Knuth here. Class-G caveat: this direct engine call is
+    // sound ONLY while the matcher's verdict for this shape IS Knuth; MUST
+    // be re-verified whenever an Algorithm arm joins `int::policy::div_rem`
+    // (a new engine winning for small-`n` dividends would void this fast path).
     let lz_a = a.unsigned_abs().leading_zeros();
     let lz_m = mult.unsigned_abs().leading_zeros();
     if lz_a + lz_m > <Int<N>>::BITS {

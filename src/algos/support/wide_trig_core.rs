@@ -1920,6 +1920,26 @@ where
             // Resolution still demands two consecutive probes agree on the
             // narrowing (`hi == lo`), a stricter consistency requirement
             // than the nearest branch's single floor-clearing probe.
+            //
+            // `hi_dist == lit(0)`: a probe landing EXACTLY on a grid line
+            // (working-scale remainder == 0) at a depth ABOVE the true
+            // deviation also counts as resolved when paired with `hi == lo`.
+            // `directed_narrow` already handles the zero remainder correctly
+            // (`residual_present = rem != lit(0) || never_exact` keeps the
+            // directed bump active when `never_exact` is set), so `hi` IS
+            // the right directed answer; `hi == lo` confirms a second,
+            // independent depth reached the same conclusion. This is sound
+            // for every CURRENT ladder: the step formula (`target +
+            // base_guard`, ≥68 digits in the wide tiers) spans a 10^68×
+            // depth gap, making coincidental paired exact-zero remainders
+            // impossible unless the residual is genuinely sub-resolution to
+            // the ZIV_PRECISION_HORIZON. A future ladder with a stride SHORT
+            // enough to straddle a genuine residual would be pathological —
+            // canonical form: stride k digits, true deviation at depth D+k,
+            // so depth-D and depth-(D+k) both produce exact-zero remainders
+            // while depth-(D+2k) would show the genuine non-zero residual;
+            // the hi==lo+dist==0 pair would then fire early on an answer
+            // that a proper confirming probe would overturn.
             let resolved = hi_dist == lit(0) || hi_dist > floor;
             if hi == lo && resolved {
                 break (hi, !tainted);
