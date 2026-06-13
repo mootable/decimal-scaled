@@ -16,8 +16,8 @@
 //! always reported, never asserted; the cell-granularity paired perf comparison
 //! over a small fixed input set is `CriterionStrategy`'s separate, later job).
 //! Both gates honour every `GOLDEN_*` env filter (`GOLDEN_WIDTHS` / `GOLDEN_SCALES` /
-//! `GOLDEN_MODES` / `GOLDEN_FUNCS` / `GOLDEN_SAMPLE` / `GOLDEN_STRIPE` /
-//! `GOLDEN_THREADS`), so a focused slice runs in seconds:
+//! `GOLDEN_MODES` / `GOLDEN_FUNCS` / `GOLDEN_SAMPLE` / `GOLDEN_STRIPE`), so a focused
+//! slice runs in seconds (the gates run sequentially, so `GOLDEN_THREADS` is inert):
 //!
 //! ```text
 //! GOLDEN_WIDTHS=18 GOLDEN_FUNCS=exp,sqrt \
@@ -33,11 +33,11 @@ use std::sync::Mutex;
 
 use decimal_scaled_golden::{
     ConsoleReporter, ExecutionResult, FilterLoader, GoldenRunner, InlineReporter, Outcome,
-    OverflowValidator, ParallelRunner, RoundingMode, RoundingValidator, RunCollector,
+    OverflowValidator, RoundingMode, RoundingValidator, RunCollector, SequentialRunner,
     SubjectCollector, Timed,
 };
 use decimal_scale_test::history::v044;
-use decimal_scale_test::{thread_count, DsSubject, Filter, GEN_PRECISION};
+use decimal_scale_test::{DsSubject, Filter, GEN_PRECISION};
 
 use common::{row_filter, CachingLoader};
 
@@ -52,9 +52,12 @@ static HOOK_GUARD: Mutex<()> = Mutex::new(());
 /// the timing is advisory (reported, never asserted).
 const TIMED_EXECUTIONS: u32 = 1;
 
-fn runner(filter: &Filter) -> ParallelRunner<Timed> {
-    ParallelRunner {
-        threads: thread_count(),
+/// The history gates run SEQUENTIALLY (not `ParallelRunner`): each shard carries
+/// few enough golden rows that serial execution stays affordable, and a single
+/// thread keeps the ride-along `Timed` medians contention-free — no cross-core
+/// scheduling jitter in the per-row wall-clock the timing table reports.
+fn runner(filter: &Filter) -> SequentialRunner<Timed> {
+    SequentialRunner {
         strategy: Timed { number_of_executions: TIMED_EXECUTIONS },
         loader: Box::new(FilterLoader::new(
             CachingLoader::golden(),
@@ -140,7 +143,7 @@ fn is_failure(o: &Outcome) -> bool {
 /// Run one version's subjects over `cells` × `modes` into a `RunCollector`.
 /// `subject` builds the version's erased subject for one `(width, scale, mode)`.
 fn run_version<S, F>(
-    runner: &ParallelRunner<Timed>,
+    runner: &SequentialRunner<Timed>,
     filter: &Filter,
     modes: &[RoundingMode],
     cells: &[(u32, u32)],
