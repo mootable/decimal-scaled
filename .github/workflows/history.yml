@@ -15,24 +15,19 @@ name: "🕰 history gates (advisory)"
 # WIDTH-SHARDED build+run (the ci.yml golden-quick / tests-consolidated
 # pattern): one matrix job per width tier builds exactly that tier's release
 # gate exe AND runs it in the SAME job (no artifact handoff), then
-# `GOLDEN_WIDTHS`-filters the run to its own tier's widths. The earlier
-# design compiled ONE monolithic `--features wide,x-wide,xx-wide,history`
-# binary (the full live + ds-044 + ds-033 cell fan-out in one rustc) and
-# fanned the run out over row stripes — that build exhausted the runner's
-# 16 GB + 12 GB swap and the service SIGTERMed it (exit 143, run
-# 27447768863). Sharding the LIVE (per-tier `cfg`-gated) cell fan-out down to
-# a single tier per job is the structural fix, the same one golden-quick made
-# for the golden gate.
+# `GOLDEN_WIDTHS`-filters the run to its own tier's widths. Sharding the LIVE
+# (per-tier `cfg`-gated) cell fan-out down to a single tier per job keeps each
+# job's rustc within the runner's memory — the same structural fix golden-quick
+# made for the golden gate (a single all-tier build does not fit).
 #
 # NOTE — heavier than a golden-quick shard: unlike the golden gate, each
 # history shard also pulls the pinned historical crates (ds-044 always;
 # ds-033 on the shards whose widths 0.3.3 adapts) AND the v044/v033 adapter
 # cell fan-out, which is NOT tier-`cfg`-gated (it instantiates its whole
 # ladder whenever its `history-*` feature is on — only the LIVE fan-out
-# narrows per tier). The first green run validated ~1.5 GB peak per shard,
-# well inside the runner's 16 GB; the disk-backed swap and CARGO_BUILD_JOBS
-# parallelism cap have been removed. The resource sampler is retained as
-# cheap evidence should a future change spike memory again.
+# narrows per tier). Peak is ~1.5 GB per shard, well inside the runner's
+# 16 GB; the resource sampler in the run step is kept as cheap evidence
+# should a future change spike memory again.
 
 on:
   push:
@@ -117,8 +112,8 @@ jobs:
         # streams the per-cell progress.
         # The awk pipe timestamps every line (slow-vs-stuck is decidable from the
         # live log) and `tee` stages the log for upload. The resource sampler
-        # prints memory + disk beside the compile so a returning spike leaves an
-        # evidence curve rather than a bare exit 143.
+        # prints memory + disk beside the compile so a returning memory spike
+        # leaves an evidence curve rather than a bare OOM kill.
         env:
           GOLDEN_WIDTHS: "${{ matrix.widths }}"
           GOLDEN_DIR: ${{ github.workspace }}/decimal-scaled-golden/golden
