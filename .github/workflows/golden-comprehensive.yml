@@ -30,12 +30,6 @@ on:
 permissions:
   contents: read
 
-env:
-  # Stripes WITHIN each width shard — tune from the per-stripe timings
-  # in the splice summary (the wide tiers dominate; narrow stripes are
-  # cheap either way).
-  STRIPE_COUNT: "3"
-
 concurrency:
   # Serial queue per ref, like ci.yml/bbc: an in-progress sweep finishes,
   # a newer push supersedes only the QUEUED run.
@@ -54,7 +48,7 @@ jobs:
         id: gen
         run: |
           echo "cells=$(python3 - <<'EOF'
-          import json, os
+          import json
           # (shard, the GOLDEN_WIDTHS its stripes run). Every shard exe also
           # carries the always-compiled D18/D38 cells, so each stripe MUST
           # width-filter or every shard re-runs the narrow cells (the
@@ -63,9 +57,18 @@ jobs:
                     ("d115", "115"), ("d153", "153"), ("d230", "230"),
                     ("d307", "307"), ("d462", "462"), ("d616", "616"),
                     ("d924", "924"), ("d1232", "1232")]
-          n = int(os.environ["STRIPE_COUNT"])
-          print(json.dumps([{"shard": s, "widths": w, "stripe": k}
-                            for (s, w) in shards for k in range(n)]))
+          # Stripe count PER WIDTH TIER (owner 2026-06-13): the wide tiers
+          # dominate the per-stripe wall time, so they fan out into more,
+          # thinner stripes to stay inside the job timeout; every other
+          # shard takes the default of 4. Each matrix entry carries its own
+          # `total`, so the stripe job gets GOLDEN_STRIPE=k/n with THAT
+          # shard's own n (k = 0..n-1 — the harness's disjoint row partition,
+          # line % n == k, self-consistent for any n).
+          STRIPES = {"d1232": 10, "d924": 8, "d616": 6}
+          print(json.dumps([{"shard": s, "widths": w, "stripe": k,
+                             "total": STRIPES.get(s, 4)}
+                            for (s, w) in shards
+                            for k in range(STRIPES.get(s, 4))]))
           EOF
           )" >> "$GITHUB_OUTPUT"
 
@@ -139,7 +142,7 @@ jobs:
           retention-days: 3
 
   stripes:
-    name: ${{ matrix.shard }} stripe ${{ matrix.stripe }}
+    name: ${{ matrix.shard }} stripe ${{ matrix.stripe }}/${{ matrix.total }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     needs: [plan, build]
@@ -159,7 +162,7 @@ jobs:
 
       - name: Run stripe (all six modes, the shard's full rows)
         env:
-          GOLDEN_STRIPE: "${{ matrix.stripe }}/${{ env.STRIPE_COUNT }}"
+          GOLDEN_STRIPE: "${{ matrix.stripe }}/${{ matrix.total }}"
           GOLDEN_WIDTHS: "${{ matrix.widths }}"
           GOLDEN_REPORT_DIR: stripe-report
           GOLDEN_DIR: ${{ github.workspace }}/decimal-scaled-golden/golden
