@@ -833,11 +833,11 @@ pub mod __bench_internals {
     /// pre-step) for the `root_kernel_ab` A/B against `cbrt_native_d57s20`.
     #[cfg(any(feature = "d57", feature = "wide"))]
     #[inline(never)]
-    pub fn cbrt_native_fast_d57s20(
+    pub fn cbrt_native_fast_3limb_s20(
         raw: crate::int::types::Int<3>,
         mode: crate::RoundingMode,
     ) -> crate::int::types::Int<3> {
-        crate::algos::cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<3, 6>(
+        crate::algos::cbrt::cbrt_native_fast::cbrt_native_fast_a::<3, 6>(
             raw,
             const { crate::int::types::Int::<6>::TEN.pow(40) },
             mode,
@@ -909,7 +909,7 @@ pub mod __bench_internals {
         raw: crate::int::types::Int<N>,
         mode: crate::RoundingMode,
     ) -> crate::int::types::Int<N> {
-        crate::algos::cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, W>(
+        crate::algos::cbrt::cbrt_native_fast::cbrt_native_fast_a::<N, W>(
             raw,
             const { crate::int::types::Int::<W>::TEN.pow(2 * SCALE) },
             mode,
@@ -927,7 +927,7 @@ pub mod __bench_internals {
         raw: crate::int::types::Int<N>,
         mode: crate::RoundingMode,
     ) -> crate::int::types::Int<N> {
-        crate::algos::cbrt::cbrt_native_fast_d57::cbrt_native_fast_b::<N, W>(
+        crate::algos::cbrt::cbrt_native_fast::cbrt_native_fast_b::<N, W>(
             raw,
             const { crate::int::types::Int::<W>::TEN.pow(2 * SCALE) },
             mode,
