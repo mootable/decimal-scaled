@@ -107,11 +107,16 @@ not exposed by that crate, or the width/scale isn't representable.
 
 **`decimal-scaled` is `0 (0)` on the entire surface** — and that holds
 for all six rounding modes and all twelve widths (`D18` … `D1232`).
-`fastnum` is the closest peer: correctly rounded almost everywhere,
-missing only `tan` (67 LSBε) and `asinh` (58 LSBε) at this scale.
-`dashu-float` is correctly rounded on the `exp` / `ln` / `sqrt` surface
-it exposes. `rust_decimal`, `decimal-rs`, and `bigdecimal` carry genuine
-1-or-more-LSB gaps on the functions they implement. `g_math` — which
+`fastnum` is correctly rounded on `sqrt` / `cbrt` / `ln`, but it does
+**not range-reduce large arguments**, so `exp` (2917 LSBε), `sin`
+(4143), and `cos` (4146) collapse to a wholly wrong result at this
+scale — e.g. `cos(3141)` returns ≈ `-2.7e1228` rather than `0.829` —
+and `tan` lands 66 LSBε (6.5e19 ULP) out. Large-argument range
+reduction is exactly the step decimal-scaled gets right, which is why
+its `0 (0)` holds where fastnum's does not. `dashu-float` is correctly
+rounded on the `exp` / `ln` / `sqrt` surface it exposes. `rust_decimal`,
+`decimal-rs`, and `bigdecimal` carry genuine 1-or-more-LSB gaps on the
+functions they implement. `g_math` — which
 advertises "0 ULP transcendentals" — is in fact tens of LSBε off on most
 of its surface here (`exp` 65 LSBε, `sin` 64, `tan` 65), the empirical
 refutation of that claim at the matched 19-digit width.

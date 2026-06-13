@@ -584,8 +584,8 @@ wider reference constants in `wide.rs` for D153/D307 and beyond. Sources:
   win asymptotically as working scale grows. Currently exposed as
   the alternate path; the canonical `ln_strict` / `exp_strict` stays
   on the artanh / Taylor implementations until a bench at the
-  relevant working scale shows AGM winning by the
-  `OVERRIDE_POLICY.md` margin. *Caveat:* the present
+  relevant working scale shows AGM winning by a benchmarked
+  margin. *Caveat:* the present
   implementation runs the AGM iteration at the same working scale
   `w` as the artanh path; at storage scales beyond ~30 the early-
   phase `sqrt(a·b)` step's truncation error amplifies and the

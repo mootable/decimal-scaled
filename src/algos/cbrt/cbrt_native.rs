@@ -9,7 +9,7 @@
 //! # Why a bespoke arm rather than the int `icbrt` slice
 //!
 //! The generic slice `icbrt` ([`crate::int::algos::icbrt::icbrt_newton`])
-//! is width-agnostic over a build-max scratch buffer (`compute_limbs(4)`
+//! is width-agnostic over a build-max scratch buffer (`MAX_QUADRUPLE_LIMBS`
 //! limbs — up to ~288 limbs for the widest enabled tier), which it zeroes
 //! several times per Newton iteration (`sq`, `q`, `r`, `y`, `rem3`). For
 //! the small radicands of the mid-scale wide cells that fixed-cost buffer

@@ -66,6 +66,41 @@ widen-compute-narrow delegation):
 | Inverse hyperbolic | `asinh_strict`, `acosh_strict`, `atanh_strict` |
 | Angle conversion | `to_degrees_strict`, `to_radians_strict` |
 
+## Checked siblings — `checked_*_strict`
+
+The default strict form **panics** on a domain error (`ln` of a
+non-positive value, `asin` outside `[-1, 1]`, …) or when the
+correctly-rounded result does not fit the storage range. Every strict
+transcendental in the table above also ships a non-panicking
+**`checked_`** pair returning `Option<Self>`:
+
+- `checked_<fn>_strict_with(self, …, mode) -> Option<Self>`
+- `checked_<fn>_strict(self, …) -> Option<Self>` — the default-mode sibling.
+
+```rust
+use decimal_scaled::D38s12;
+
+let neg: D38s12 = (-2i64).into();
+assert_eq!(neg.checked_ln_strict(), None);                // domain error -> None
+
+let two: D38s12 = 2i64.into();
+assert_eq!(two.checked_sqrt_strict(), Some(two.sqrt_strict())); // in range
+```
+
+`None` covers exactly the inputs the default form would reject:
+
+- **Domain errors** (`asin`, `acos`, `acosh`, `ln`, `log`, `log2`,
+  `log10`, `atanh`): `None` on the out-of-domain inputs, at every tier.
+- **Out-of-range results** (`exp`, `ln`, `hypot`, …): `None` when the
+  correctly-rounded result does not fit storage — exact on `D18` / `D38`;
+  on the wide tiers an out-of-range result still panics where the kernel
+  seam is not yet threaded (each method's API docs state which applies).
+- **Total methods** (`sqrt`, `cbrt`, `sin`, `cos`, `atan`, `atan2`,
+  `tanh`, `asinh`, `to_radians`, …) cannot fail and always return `Some`.
+
+Both forms run the same policy-dispatched kernel, so an in-range
+`checked_*` result is **bit-identical** to the default form's.
+
 ## The `strict` feature
 
 ```toml
