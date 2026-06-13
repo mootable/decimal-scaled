@@ -72,9 +72,8 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// `Some(self.ln_strict_with(mode))`, bit-identical.
     ///
     /// Out-of-range detection: exact on D18/D38; on the wide tiers an
-    /// out-of-range result still panics (kernel seam pending — see
-    /// `research/checked_wide_shell_patch.md`). Domain errors return
-    /// `None` at every tier.
+    /// out-of-range result still panics (kernel seam not yet reached).
+    /// Domain errors return `None` at every tier.
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
@@ -116,9 +115,8 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// `Some(self.log_strict_with(base, mode))`, bit-identical.
     ///
     /// Out-of-range detection: exact on D18/D38; on the wide tiers an
-    /// out-of-range result still panics (the wide kernel-shell seam is
-    /// pending — see `research/checked_wide_shell_patch.md`). Domain
-    /// errors return `None` at every tier.
+    /// out-of-range result still panics (wide kernel-shell seam not yet
+    /// reached). Domain errors return `None` at every tier.
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
@@ -160,8 +158,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// the storage range. Otherwise bit-identical `Some`.
     ///
     /// Out-of-range detection: exact on D18/D38; on the wide tiers an
-    /// out-of-range result still panics (wide kernel-shell seam pending
-    /// — see `research/checked_wide_shell_patch.md`).
+    /// out-of-range result still panics (wide kernel-shell seam not yet reached).
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
@@ -201,8 +198,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// the storage range. Otherwise bit-identical `Some`.
     ///
     /// Out-of-range detection: exact on D18/D38; on the wide tiers an
-    /// out-of-range result still panics (wide kernel-shell seam pending
-    /// — see `research/checked_wide_shell_patch.md`).
+    /// out-of-range result still panics (wide kernel-shell seam not yet reached).
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
@@ -242,8 +238,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// `Some(self.exp_strict_with(mode))`, bit-identical.
     ///
     /// Out-of-range detection: exact on D18/D38; on the wide tiers an
-    /// out-of-range result still panics (kernel seam pending — see
-    /// `research/checked_wide_shell_patch.md`).
+    /// out-of-range result still panics (kernel seam not yet reached).
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
@@ -280,8 +275,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// range. Otherwise bit-identical `Some`.
     ///
     /// Out-of-range detection: exact on D18/D38; on the wide tiers an
-    /// out-of-range result still panics (wide kernel-shell seam pending
-    /// — see `research/checked_wide_shell_patch.md`).
+    /// out-of-range result still panics (wide kernel-shell seam not yet reached).
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
@@ -323,8 +317,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// form. `None` means the result does not fit the storage range.
     ///
     /// Out-of-range detection: exact on D18/D38; on the wide tiers an
-    /// out-of-range result still panics (wide kernel-shell seam pending
-    /// — see `research/checked_wide_shell_patch.md`).
+    /// out-of-range result still panics (wide kernel-shell seam not yet reached).
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
@@ -552,8 +545,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// storage range (near those asymptotes). Both conditions are
     /// detected inside the kernels at every tier; this checked form
     /// currently panics on them identically to the default form
-    /// (kernel seam pending — see
-    /// `research/checked_wide_shell_patch.md`). For every other input
+    /// (kernel seam not yet reached). For every other input
     /// it returns bit-identical `Some`.
     ///
     /// ```
@@ -732,8 +724,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// Out-of-range detection: exact on D18 (a result that fits the
     /// D38 work width but not D18 storage is `None`); detection deeper
-    /// in the kernels (D38 and the wide tiers) still panics (kernel
-    /// seam pending — see `research/checked_wide_shell_patch.md`).
+    /// in the kernels (D38 and the wide tiers) still panics (kernel seam not yet reached).
     ///
     /// ```
     /// use decimal_scaled::{D18, D38, RoundingMode};
@@ -772,8 +763,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// Out-of-range detection: exact on D18 (a result that fits the
     /// D38 work width but not D18 storage is `None`); detection deeper
-    /// in the kernels (D38 and the wide tiers) still panics (kernel
-    /// seam pending — see `research/checked_wide_shell_patch.md`).
+    /// in the kernels (D38 and the wide tiers) still panics (kernel seam not yet reached).
     ///
     /// ```
     /// use decimal_scaled::{D18, D38, RoundingMode};
@@ -908,8 +898,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// logarithmic blow-up just inside ±1 at a near-maximum scale) is
     /// `None` on D18 when it fits the D38 work width; detection deeper
     /// in the kernels still panics, identically to the default form
-    /// (kernel seam pending — see
-    /// `research/checked_wide_shell_patch.md`). Otherwise bit-identical
+    /// (kernel seam not yet reached). Otherwise bit-identical
     /// `Some`.
     ///
     /// ```
@@ -956,8 +945,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// Out-of-range detection: exact on D18 (a result that fits the
     /// D38 work width but not D18 storage is `None`); detection deeper
-    /// in the kernels (D38 and the wide tiers) still panics (kernel
-    /// seam pending — see `research/checked_wide_shell_patch.md`).
+    /// in the kernels (D38 and the wide tiers) still panics (kernel seam not yet reached).
     ///
     /// ```
     /// use decimal_scaled::{D18, D38, RoundingMode};

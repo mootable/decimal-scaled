@@ -127,8 +127,7 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: Roun
 /// The `checked` primitive under [`dispatch`]: same routing, but the
 /// narrow kernels' out-of-range `None` propagates instead of panicking.
 /// On the wide tiers the kernel-internal out-of-range panic is not yet
-/// threaded through (see `research/checked_wide_shell_patch.md`); those
-/// arms return `Some` of the kernel result and still panic on overflow.
+/// threaded through; those arms return `Some` of the kernel result and still panic on overflow.
 /// Domain errors (`raw <= 0`) stay kernel panics — the `checked_`
 /// surface prechecks the domain before calling here.
 #[inline]
@@ -325,7 +324,7 @@ pub(crate) fn log2_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode:
 /// The `checked` primitive under [`log2_dispatch`]: exact out-of-range
 /// `None` on the narrow tiers; the wide arms call the per-tier kernel
 /// shells, whose internal out-of-range panic is not yet threaded
-/// through (see `research/checked_wide_shell_patch.md`).
+/// through.
 #[inline]
 #[must_use]
 pub(crate) fn checked_log2_dispatch<const N: usize, const SCALE: u32>(

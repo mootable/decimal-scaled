@@ -888,8 +888,7 @@ every tier, and out-of-range results propagate the kernel's own detection
 tier for `hypot`. The remaining detection points (inside the wide kernel
 shells, and the D38-width trig/hyperbolic/angle kernels) still panic in the
 checked form, identically to the default — never a silent wrong value — until
-the seam reaches them; `research/checked_wide_shell_patch.md` carries the
-completion plan, and each method's doc states its exact contract.
+the seam reaches them; each method's doc states its exact contract.
 
 ## Map of the source tree
 
