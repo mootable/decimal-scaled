@@ -153,9 +153,9 @@ pub trait BigInt:
     /// The value as a signed 128-bit integer (truncating to the low 128
     /// bits; the inverse of [`BigInt::from_i128`]).
     fn to_i128(self) -> i128;
-    /// `self * n` for an unsigned 64-bit multiplier (panics on overflow,
-    /// matching `Mul`-operator semantics).
-    fn checked_mul_u64(self, n: u64) -> Self;
+    /// `self * n` for an unsigned 64-bit multiplier (panics on overflow —
+    /// the default-form contract, matching `Mul`-operator semantics).
+    fn mul_u64(self, n: u64) -> Self;
     /// Nearest-`f64` value of `self` (lossy above 53 significant bits).
     fn to_f64(self) -> f64;
     /// Truncating conversion from `f64` (saturating on out-of-range).
@@ -371,8 +371,8 @@ impl<const N: usize> BigInt for Int<N> {
     }
 
     #[inline]
-    fn checked_mul_u64(self, n: u64) -> Self {
-        Int::checked_mul_u64(self, n)
+    fn mul_u64(self, n: u64) -> Self {
+        Int::mul_u64(self, n)
     }
 
     #[inline]

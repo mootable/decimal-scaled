@@ -245,13 +245,13 @@ use crate::support::rounding::RoundingMode;
     #[inline]
     fn mul_u<S: BigInt>(a: S, n: u128) -> S {
         if n <= u64::MAX as u128 {
-            a.checked_mul_u64(n as u64)
+            a.mul_u64(n as u64)
         } else {
             a * S::from_i128(n as i128)
         }
     }
     /// `k · c` where `k` is a signed range-reduction count. An n-by-1-word
-    /// product (`checked_mul_u64`) — O(limbs), not the full schoolbook —
+    /// product (`mul_u64`) — O(limbs), not the full schoolbook —
     /// since `|k|` always fits one word on the range-reduction paths.
     #[inline]
     pub(crate) fn scale_by_k<S: BigInt>(c: S, k: i128) -> S {

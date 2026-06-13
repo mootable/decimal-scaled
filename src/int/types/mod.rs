@@ -1297,11 +1297,11 @@ impl<const N: usize> Int<N> {
     }
 
     /// `self · (n as Self)` with the sign of `self`, panicking on
-    /// overflow. Computes the n-by-1-word product (the same limb
-    /// recurrence as `mul_schoolbook_into`) and rejects a non-zero top
-    /// carry.
+    /// overflow (the default-form contract). Computes the n-by-1-word
+    /// product (the same limb recurrence as `mul_schoolbook_into`) and
+    /// rejects a non-zero top carry.
     #[inline]
-    pub fn checked_mul_u64(self, n: u64) -> Self {
+    pub fn mul_u64(self, n: u64) -> Self {
         let mag = *self.unsigned_abs().as_limbs();
         let mut prod = [0u64; N];
         let mut carry: u64 = 0;
@@ -3759,28 +3759,28 @@ mod tests {
     }
 
     #[test]
-    fn int_checked_mul_u64_matches_wide_mul() {
+    fn int_mul_u64_matches_wide_mul() {
         let v = Int::<4>::from_i128(123_456_789);
         assert_eq!(
-            v.checked_mul_u64(1000),
+            v.mul_u64(1000),
             Int::<4>::from_i128(123_456_789_000)
         );
         // Sign preserved.
         let n = Int::<4>::from_i128(-123_456_789);
         assert_eq!(
-            n.checked_mul_u64(1000),
+            n.mul_u64(1000),
             Int::<4>::from_i128(-123_456_789_000)
         );
         // Times zero / one.
-        assert_eq!(v.checked_mul_u64(0), Int::<4>::ZERO);
-        assert_eq!(v.checked_mul_u64(1), v);
+        assert_eq!(v.mul_u64(0), Int::<4>::ZERO);
+        assert_eq!(v.mul_u64(1), v);
     }
 
     #[test]
     #[should_panic(expected = "mul overflow")]
-    fn int_checked_mul_u64_overflow_panics() {
+    fn int_mul_u64_overflow_panics() {
         // max_value * 2 overflows the signed range.
-        let _ = Int::<4>::max_value().checked_mul_u64(2);
+        let _ = Int::<4>::max_value().mul_u64(2);
     }
 
     #[test]
@@ -3818,8 +3818,8 @@ mod tests {
             // bit / leading_zeros
             assert!(twelve.bit(2) && twelve.bit(3) && !twelve.bit(0));
             assert!(<T as BigInt>::ONE.leading_zeros() == <T as BigInt>::BITS - 1);
-            // checked_mul_u64 / f64 round-trips
-            assert!(twelve.checked_mul_u64(10) == <T as BigInt>::from_i128(120));
+            // mul_u64 / f64 round-trips
+            assert!(twelve.mul_u64(10) == <T as BigInt>::from_i128(120));
             assert!(twelve.to_f64() == 12.0);
             assert!(<T as BigInt>::from_f64_val(7.9) == <T as BigInt>::from_i128(7));
         }
