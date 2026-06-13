@@ -689,10 +689,16 @@ pub(crate) fn div_wide_pow10_newton_with<W: crate::int::types::traits::BigInt>(
     // magnitude slice in place (shared with the `Int<N>`-only decimal
     // `mul` kernel, which builds its product directly in u128 scratch).
     //
-    // Buffer sized to 256 u128 limbs to fit the widest tier exercised
-    // (`Int<512>` = 32768-bit, 256 u128 limbs). The kernel is sliced
-    // to `W::U128_LIMBS` so narrower widths don't pay the wide cost.
-    let mut mag_u128 = [0u128; 256];
+    // Build-max u128 magnitude buffer for this genuinely-`N`-less
+    // `W: BigInt` path: `max_u128_limb()` = `MAX_U128_LIMB` = `4·MAX_WORK_N`
+    // u128 limbs — the widest work value any build forms (`Int<512>` =
+    // 32768-bit = 256 u128 at xx-wide), tracking `MAX_WORK_N` so a narrower
+    // build does NOT carry the widest tier's buffer. (The exact-per-`W`
+    // `single_u128()` is wrong here: its blanket size only covers up to
+    // `Int<256>`, so it would under-size the `Int<512>` work integer under a
+    // non-`exact-scratch` build.) The kernel is sliced to `W::U128_LIMBS` so
+    // narrower widths don't pay the wide cost.
+    let mut mag_u128 = crate::int::types::compute_limbs::max_u128_limb();
     let limbs = <W as crate::int::types::traits::BigInt>::U128_LIMBS;
     let mag = &mut mag_u128[..limbs];
     let neg = n.mag_into_u128(mag);

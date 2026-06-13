@@ -123,7 +123,7 @@ fn round_and_narrow<const N: usize, const W: usize>(
 #[cfg(feature = "std")]
 #[inline]
 fn icbrt_w_f64_full<const W: usize>(n: Int<W>) -> Int<W> {
-    let seed_f64 = n.as_f64().cbrt();
+    let seed_f64 = crate::algo_x_support::seed::cbrt_seed_f64_full(n.as_f64());
     let seed = Int::<W>::from_f64(seed_f64);
     let x0 = if seed <= Int::<W>::ZERO { Int::<W>::ONE } else { seed };
     let three = Int::<W>::from_i128(3);
