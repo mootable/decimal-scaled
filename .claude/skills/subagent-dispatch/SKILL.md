@@ -73,35 +73,36 @@ count):
   touch-ups, a scripted refactor with no judgment calls.
 - **medium** → `opus` — well-scoped multi-file work, mirroring an existing pattern (e.g. a CI
   shard matrix that copies an established one), test re-gating, focused harness work.
-- **complicated** → the **highest available model** — `fable`, or `opus` if Fable is not
-  available — anything needing real diagnosis: kernel/rounding/wide-band fixes, shared
-  high-blast-radius code, macro machinery, policy-mapper measurement runs.
+- **complicated** → `opus` (the highest available model) — anything needing real diagnosis:
+  kernel/rounding/wide-band fixes, shared high-blast-radius code, macro machinery,
+  policy-mapper measurement runs.
 
 The real axis is **how obvious the solution is, not how deep the domain is** (owner
 2026-06-13): Opus is very capable — when the fix path is clear/well-specified, `opus` is the
-right choice even in kernel/rounding territory; `fable` buys error-resistance where the ground
-is AMBIGUOUS (open diagnosis, contested design, subtle correctness trade-offs). When
-dispatching diagnosis-first work to `opus`, add a stop-clause: "if the root cause isn't crisp
-once diagnosed, STOP at the diagnosis and report" — the coordinator re-dispatches the fix at
-the higher tier.
+right choice even in kernel/rounding territory. Where the ground is AMBIGUOUS (open diagnosis,
+contested design, subtle correctness trade-offs), still dispatch `opus` but add a stop-clause:
+"if the root cause isn't crisp once diagnosed, STOP at the diagnosis and report" — the
+coordinator then makes the architecture-defining call itself, or re-scopes the task, before
+re-dispatching.
 
 If a "simple" dispatch surfaces real diagnosis mid-flight, pull it back and re-dispatch at the
 higher tier rather than letting the smaller model improvise. The coordinator reviews every
 diff regardless of the model that produced it.
 
-**Concurrency budget — 6 points (owner 2026-06-12).** Concurrent subagents are budgeted by
-model: `fable` costs **4**, `opus` costs **2**, `sonnet` costs **1**; the points of all
-*currently running* agents must total **≤ 6** (e.g. one fable + one opus, or one fable + two
-sonnets, or three opus). A returning agent frees its points for the next dispatch. The budget
+**Concurrency budget — cost per model; the total is set PER SESSION by the owner (not fixed
+here).** Concurrent subagents are budgeted by model: `opus` costs **2**, `sonnet` costs **1**.
+The owner states the session's point budget (and any max-agent count) at the start of / during
+each session — there is NO budget number baked into this skill; use whatever cap is currently in
+force, and if none has been stated, ask. The points of all *currently running* agents must total
+**≤ the session budget**. A returning agent frees its points for the next dispatch. The budget
 supersedes the older one-agent-at-a-time rule; the disjoint-file-area partition rule still
 applies to everything running concurrently.
 
-**ENFORCE BY SUMMING POINTS BEFORE EVERY DISPATCH (owner 2026-06-13 — I overran to 7).** Before
-launching, add up the points of all running agents and confirm the new agent's cost fits the
-remaining headroom — do NOT think in "free agent slots." **1 free point dispatches a `sonnet`
-ONLY**; an `opus` (2) needs 2 free, a `fable` (4) needs 4 free. If the next-priority task wants
-a higher tier than the headroom allows, either pick a lower-cost task that fits OR wait for a
-running agent to return — never overrun the cap to fit a 2-point task into a 1-point gap.
+**ENFORCE BY SUMMING POINTS BEFORE EVERY DISPATCH.** Before launching, add up the points of all
+running agents and confirm the new agent's cost fits the remaining headroom — do NOT think in
+"free agent slots." **1 free point dispatches a `sonnet` ONLY**; an `opus` (2) needs 2 free. If
+the next-priority task can't fit the headroom, either pick a lower-cost task that fits OR wait
+for a running agent to return — never overrun the cap.
 
 ## Every agent prompt MUST include
 
