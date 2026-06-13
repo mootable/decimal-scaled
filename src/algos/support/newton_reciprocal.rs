@@ -52,12 +52,19 @@
 //! `precompute` call can produce an `R` anywhere from ~18 to 144 u64
 //! limbs. `Int::<N>::div_rem` fixes `N` at monomorphisation, so the
 //! variable-width reciprocal divide cannot be expressed through it. The
-//! per-call multiplies are likewise schoolbook over variable-length live
-//! slices. The kernel therefore stays on raw `u64` slices — but it
-//! reaches the dispatching divmod through the int-**algos** layer
+//! per-call multiplies are likewise over variable-length live slices. The
+//! kernel therefore stays on raw `u64` slices — but it routes its work
+//! through the dispatching matchers rather than hardcoding a leaf kernel:
+//! the divmod through the int-**algos** layer
 //! ([`crate::int::algos::div::div_rem_mag_slice`], which fronts the
-//! divisor-shape policy and picks the optimal engine), never the
-//! `int::policy` layer directly, keeping the decimal→int layering intact.
+//! divisor-shape policy and picks the optimal engine), and the u64 kernel's
+//! per-call multiplies through the mul matcher's runtime-length slice door
+//! ([`crate::int::policy::mul::dispatch_slice`] — the sanctioned entry for
+//! bare-`&[u64]` slice callers), so the matcher chooses the multiply engine
+//! (schoolbook / Karatsuba) per operand shape. The u128-packed sibling
+//! ([`div_newton_u128`]) keeps its own local u128 schoolbook — the slice
+//! door is `u64`-only (no `u128` matcher door exists). All are DOWN-calls
+//! into the int matchers, so the decimal→int layering stays intact.
 //!
 //! # Reference
 //!
@@ -68,7 +75,7 @@
 //! Wikipedia — [Division algorithm § Newton–Raphson division](https://en.wikipedia.org/wiki/Division_algorithm#Newton%E2%80%93Raphson_division).
 
 use crate::int::algos::support::limbs::{cmp, sub_assign};
-use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
+use crate::int::policy::mul::dispatch_slice as mul_slice;
 
 // ── Fixed buffer sizing (in u64 limbs) ──────────────────────────────
 //
@@ -360,7 +367,7 @@ fn div_newton(
     let prod_len = n.len() + r.len();
     debug_assert!(prod_len <= MAX_PROD_U64, "product buffer too small");
     let mut prod = [0u64; MAX_PROD_U64];
-    mul_schoolbook(n, r, &mut prod[..prod_len]);
+    mul_slice(n, r, &mut prod[..prod_len]);
 
     // q_approx = prod >> (64 * k_u64)
     let lo = table.k_u64.min(prod_len);
@@ -376,7 +383,7 @@ fn div_newton(
     let prod2_len = quot.len() + pow_scale.len();
     debug_assert!(prod2_len <= MAX_PROD_U64, "product buffer too small");
     let mut prod2 = [0u64; MAX_PROD_U64];
-    mul_schoolbook(quot, pow_scale, &mut prod2[..prod2_len]);
+    mul_slice(quot, pow_scale, &mut prod2[..prod2_len]);
 
     // rem = n - prod2 (mod 2^width), held in n.len()+1 limbs.
     let rem_len = n.len() + 1;
