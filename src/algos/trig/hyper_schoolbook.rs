@@ -258,7 +258,9 @@ where
         crate::int::types::compute_limbs::ComputeLimbs,
 {
     use crate::algos::exp::exp_generic as eg;
-    use crate::algos::support::wide_trig_core::round_to_storage_directed_g;
+    use crate::algos::support::wide_trig_core::{
+        round_to_storage_directed_decided_g, tiny_x_deep_directed_adjust,
+    };
     if let Some(p) = hyper_tiny_pin::<C, SCALE, false>(raw, mode) {
         return p;
     }
@@ -267,7 +269,7 @@ where
     }
     let neg = raw < C::storage_zero();
     let base_guard = C::GUARD + tanh_k_lift::<C, SCALE>(raw);
-    round_to_storage_directed_g::<C::Storage, C::Wagm>(
+    let (r, decided) = round_to_storage_directed_decided_g::<C::Storage, C::Wagm>(
         base_guard,
         SCALE,
         mode,
@@ -292,6 +294,18 @@ where
             );
             if neg { eg::zero::<C::Wagm>() - th } else { th }
         },
+    );
+    // Deep sub-resolution band (j* ≥ 5, below the linear pin's reach): tanh's
+    // Maclaurin signs ALTERNATE (+,−,+,−), like sin/atan/asinh, so
+    // `alternating = true`. The walker is mode-blind there; the deciding odd
+    // term's sign is analytic. A guarded no-op outside the deep-tiny region.
+    tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
+        r,
+        decided,
+        raw,
+        mode,
+        true,
+        <C::Wagm as crate::int::types::traits::BigInt>::BITS,
     )
 }
 
@@ -313,17 +327,17 @@ where
 {
     use crate::algos::exp::exp_generic as eg;
     use crate::algos::support::wide_trig_core::{
-        round_to_storage_directed_g, to_work_scaled_g,
+        round_to_storage_directed_decided_g, tiny_x_deep_directed_adjust, to_work_scaled_g,
     };
     if raw == C::storage_zero() {
         return C::storage_zero();
     }
-    // asinh(x) = x − x³/6 + … : compressing.
+    // asinh(x) = x − x³/6 + … : compressing (the j* = 3 linear band).
     if let Some(p) = hyper_tiny_pin::<C, SCALE, false>(raw, mode) {
         return p;
     }
     let neg = raw < C::storage_zero();
-    round_to_storage_directed_g::<C::Storage, C::Wagm>(
+    let (r, decided) = round_to_storage_directed_decided_g::<C::Storage, C::Wagm>(
         C::GUARD,
         SCALE,
         mode,
@@ -345,6 +359,19 @@ where
             };
             if neg { eg::zero::<C::Wagm>() - inner } else { inner }
         },
+    );
+    // Deep sub-resolution band (j* ≥ 5, below the linear pin's reach): asinh's
+    // Maclaurin signs ALTERNATE (+,−,+,−), like sin/atan, so `alternating =
+    // true`. The walker is mode-blind there (`!decided`, the deciding odd term
+    // past its reach); the term's sign is analytic. The proven golden-
+    // comprehensive find: asinh(±3e-117) at D462 s461 / D616 s615 (j* = 5).
+    tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
+        r,
+        decided,
+        raw,
+        mode,
+        true,
+        <C::Wagm as crate::int::types::traits::BigInt>::BITS,
     )
 }
 
@@ -617,7 +644,9 @@ where
         crate::int::types::compute_limbs::ComputeLimbs,
 {
     use crate::algos::exp::exp_generic as eg;
-    use crate::algos::support::wide_trig_core::round_to_storage_directed_widening_g;
+    use crate::algos::support::wide_trig_core::{
+        round_to_storage_directed_widening_decided_g, tiny_x_deep_directed_adjust,
+    };
     // The canonical pins — identical to the tier kernel. The saturation
     // fast path is unreachable at the rung (the policy gate admits
     // |x| < 10, far below the onset) but kept for kernel-level callers.
@@ -629,8 +658,9 @@ where
     }
     let neg = raw < C::storage_zero();
     let base_guard = C::GUARD + tanh_k_lift::<C, SCALE>(raw);
-    // Two-width fall-up to the tier walker width `Wagm`.
-    round_to_storage_directed_widening_g::<C::Storage, Wk, C::Wagm>(
+    // Two-width fall-up to the tier walker width `Wagm`; retain `decided` for
+    // the deep-band analytic adjust.
+    let (r, decided) = round_to_storage_directed_widening_decided_g::<C::Storage, Wk, C::Wagm>(
         base_guard,
         SCALE,
         mode,
@@ -671,6 +701,16 @@ where
             );
             if neg { eg::zero::<C::Wagm>() - th } else { th }
         },
+    );
+    // Deep sub-resolution band (j* ≥ 5): tanh alternates — see the tier
+    // [`tanh_schoolbook`]. The widening walker falls up to `C::Wagm`.
+    tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
+        r,
+        decided,
+        raw,
+        mode,
+        true,
+        <C::Wagm as crate::int::types::traits::BigInt>::BITS,
     )
 }
 
@@ -711,7 +751,7 @@ where
 {
     use crate::algos::exp::exp_generic as eg;
     use crate::algos::support::wide_trig_core::{
-        round_to_storage_directed_widening_g, to_work_scaled_g,
+        round_to_storage_directed_widening_decided_g, tiny_x_deep_directed_adjust, to_work_scaled_g,
     };
     if raw == C::storage_zero() {
         return C::storage_zero();
@@ -723,8 +763,9 @@ where
     }
     let neg = raw < C::storage_zero();
     // Two-width fall-up to the tier walker width `Wagm` - the second
-    // closure is the tier kernel's, verbatim.
-    round_to_storage_directed_widening_g::<C::Storage, Wk, C::Wagm>(
+    // closure is the tier kernel's, verbatim. Retain the `decided` verdict
+    // for the deep-band analytic adjust.
+    let (r, decided) = round_to_storage_directed_widening_decided_g::<C::Storage, Wk, C::Wagm>(
         C::GUARD,
         SCALE,
         mode,
@@ -762,6 +803,16 @@ where
             };
             if neg { eg::zero::<C::Wagm>() - inner } else { inner }
         },
+    );
+    // Deep sub-resolution band (j* ≥ 5): asinh alternates — see the tier
+    // [`asinh_schoolbook`]. The widening walker falls up to `C::Wagm`.
+    tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
+        r,
+        decided,
+        raw,
+        mode,
+        true,
+        <C::Wagm as crate::int::types::traits::BigInt>::BITS,
     )
 }
 
