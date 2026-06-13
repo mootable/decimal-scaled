@@ -192,12 +192,22 @@ jobs:
           retention-days: 7
 
   splice:
-    name: splice
+    name: splice + self-commit
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [plan, stripes]
+    permissions:
+      # Self-commit the combined full-surface results back to the run's branch
+      # (the lib-cmp-precision aggregate pattern; a GITHUB_TOKEN push does not
+      # re-trigger workflows, so there is no refresh loop).
+      contents: write
 
     steps:
+      - name: Checkout (for the self-commit)
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref_name }}
+
       - name: Download all stripe reports
         uses: actions/download-artifact@v8
         with:
@@ -229,6 +239,23 @@ jobs:
             echo '```'
             echo "rows: $(($(wc -l < combined/results.tsv) - 1))"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit the full-surface golden results to results/golden/
+        run: |
+          set -euo pipefail
+          mkdir -p results/golden
+          # The full per-cell × all-six-modes surface — collect everything, so a
+          # later docs table is a render-only change, never a re-run.
+          cp combined/results.tsv results/golden/results.tsv
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add results/golden/results.tsv
+          if git diff --cached --quiet; then
+            echo "golden results unchanged — nothing to commit"
+            exit 0
+          fi
+          git commit -m "results(golden): refresh the full-surface correctness data"
+          git push origin "HEAD:${{ github.ref_name }}"
 
       - name: Upload combined report
         uses: actions/upload-artifact@v7

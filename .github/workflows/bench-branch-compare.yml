@@ -247,6 +247,11 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      # Self-commit the timing medians back to the run's branch (the
+      # lib-cmp-precision aggregate pattern; a GITHUB_TOKEN push does not
+      # re-trigger workflows, so there is no refresh loop).
+      contents: write
     steps:
       - name: Checkout (for summarise.py)
         uses: actions/checkout@v6
@@ -309,6 +314,25 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           # Bundle the combined criterion tree into the aggregate dir too.
           cp -a target/criterion aggregate/criterion
+
+      - name: Commit the timing medians to results/timing/
+        run: |
+          set -euo pipefail
+          tsv=bench-compare/aggregate/bbc_medians.tsv
+          if [ ! -f "$tsv" ]; then echo "no bbc_medians.tsv produced — skipping commit"; exit 0; fi
+          mkdir -p results/timing
+          # The full benched (op × width × scale) surface — collect everything,
+          # so a later docs table is a render-only change, never a re-run.
+          cp "$tsv" results/timing/bbc_medians.tsv
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add results/timing/bbc_medians.tsv
+          if git diff --cached --quiet; then
+            echo "timing medians unchanged — nothing to commit"
+            exit 0
+          fi
+          git commit -m "results(timing): refresh from the bench-branch-compare run"
+          git push origin "HEAD:${{ inputs.ref || github.ref_name }}"
 
       - name: Upload single aggregate artifact
         if: always()

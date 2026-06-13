@@ -433,6 +433,33 @@ fn history_all() {
         flatten(subject, entry);
     }
 
+    // Publish the full cross-version surface as a committable TSV when CI sets
+    // HISTORY_REPORT_DIR (collect everything — every version × cell × mode; the
+    // docs render a slim view, so a later table never needs a re-run). One file
+    // per shard (named by the shard's GOLDEN_WIDTHS) so the CI aggregate splices
+    // without collision.
+    if let Some(dir) = std::env::var_os("HISTORY_REPORT_DIR") {
+        let dir = std::path::PathBuf::from(dir);
+        std::fs::create_dir_all(&dir).expect("create HISTORY_REPORT_DIR");
+        let mut out = String::from("version\tfunction\twidth\tscale\tmode\tline\tgrade\tnanos\n");
+        for (version, cells) in &versions {
+            for (key, cell) in cells {
+                let (w, s, mode, func, line) = key;
+                let grade = match cell.grade {
+                    Grade::Pass => "pass",
+                    Grade::Fail => "fail",
+                    Grade::Skip => "skip",
+                };
+                let ns = cell.timing.map(|n| n.to_string()).unwrap_or_default();
+                out.push_str(&format!(
+                    "{version}\t{func}\t{w}\t{s}\t{mode}\t{line}\t{grade}\t{ns}\n"
+                ));
+            }
+        }
+        let shard = std::env::var("GOLDEN_WIDTHS").unwrap_or_else(|_| "all".into()).replace(',', "_");
+        std::fs::write(dir.join(format!("history-{shard}.tsv")), out).expect("write history tsv");
+    }
+
     eprintln!("== history_all: cross-version correctness (per function; reported, never asserted) ==");
     for (version, cells) in &versions {
         let medians = timing_medians(cells);

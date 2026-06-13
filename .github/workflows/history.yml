@@ -118,6 +118,9 @@ jobs:
           GOLDEN_WIDTHS: "${{ matrix.widths }}"
           GOLDEN_DIR: ${{ github.workspace }}/decimal-scaled-golden/golden
           HISTORY_PARALLEL: "${{ matrix.par }}"
+          # history_all writes the full cross-version surface here (one TSV per
+          # shard); the aggregate job splices + self-commits it to results/history/.
+          HISTORY_REPORT_DIR: history-report
         run: |
           set -euo pipefail
           ( while true; do m=$(free -m | awk '/^Mem:/{print $7}'); s=$(free -m | awk '/^Swap:/{print $4}'); d=$(df -BM --output=avail . | tail -1 | tr -dc 0-9); echo "[res $(date +%H:%M:%S)] mem avail ${m} MB | swap free ${s} MB | disk avail ${d} MB"; sleep 15; done ) &
@@ -136,3 +139,69 @@ jobs:
           path: history-${{ matrix.shard }}.log
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Upload the shard cross-version TSV
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: history-tsv-${{ matrix.shard }}
+          path: history-report/*.tsv
+          if-no-files-found: warn
+          retention-days: 7
+
+  aggregate:
+    name: aggregate + self-commit
+    needs: history
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # Self-commit the spliced cross-version correctness data back to the run's
+      # branch (a GITHUB_TOKEN push does not re-trigger workflows — no loop).
+      contents: write
+    steps:
+      - name: Checkout (for the self-commit)
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Download all shard TSVs
+        uses: actions/download-artifact@v8
+        with:
+          pattern: history-tsv-*
+          path: shards/
+
+      - name: Splice + self-commit the cross-version correctness data
+        run: |
+          set -euo pipefail
+          python3 - <<'EOF'
+          import glob, os
+          rows, header = [], None
+          for p in sorted(glob.glob("shards/**/*.tsv", recursive=True)):
+              lines = open(p, encoding="utf-8").read().splitlines()
+              if not lines:
+                  continue
+              header = header or lines[0]
+              rows += [l for l in lines[1:] if l]
+          if header is None:
+              print("no history TSVs downloaded — nothing to write")
+              raise SystemExit(0)
+          os.makedirs("results/history", exist_ok=True)
+          rows = sorted(set(rows))
+          with open("results/history/history.tsv", "w", encoding="utf-8", newline="\n") as f:
+              f.write(header + "\n" + "\n".join(rows) + "\n")
+          print(f"history.tsv: {len(rows)} rows")
+          EOF
+          if [ ! -f results/history/history.tsv ]; then
+            echo "no history.tsv produced — skipping commit"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add results/history/history.tsv
+          if git diff --cached --quiet; then
+            echo "history results unchanged — nothing to commit"
+            exit 0
+          fi
+          git commit -m "results(history): refresh the cross-version correctness data"
+          git push origin "HEAD:${{ github.ref_name }}"
