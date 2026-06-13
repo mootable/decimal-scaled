@@ -235,7 +235,7 @@ pub(crate) fn select_for_limbs(num: &[u64], den: &[u64]) -> Algorithm {
         // measured u128 beating the old Burnikel–Ziegler routing there
         // 1.68–1.78× (96/128 limbs), so BZ is no longer routed (the balanced
         // shape stays Knuth — u128 loses it ~1.5×).
-        if den_n % 2 == 0 && num_m >= 2 * den_n {
+        if den_n.is_multiple_of(2) && num_m >= 2 * den_n {
             return Algorithm::KnuthU128Limb;
         }
     }

@@ -118,7 +118,7 @@ const fn select() -> Select {
         // u128 result). Everything else (unequal, odd, or below ENGAGE) takes
         // the fixed-width schoolbook. For Int<N>×Int<N> both lengths are N, so
         // this folds to a const verdict on N per monomorphisation.
-        let take_karatsuba = a_len == b_len && a_len >= KARATSUBA_ENGAGE && a_len % 2 == 0;
+        let take_karatsuba = a_len == b_len && a_len >= KARATSUBA_ENGAGE && a_len.is_multiple_of(2);
         if take_karatsuba {
             Algorithm::Karatsuba
         } else {

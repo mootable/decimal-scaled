@@ -75,7 +75,7 @@ pub(crate) const fn toom3_scratch_needed(n: usize, threshold: usize) -> usize {
     if n < threshold {
         return 0;
     }
-    let k = (n + 2) / 3 + 1;
+    let k = n.div_ceil(3) + 1;
     26 * k + toom3_scratch_needed(k, threshold)
 }
 
@@ -191,7 +191,7 @@ fn toom3_rec_limb<L: Limb>(
     }
 
     // Split: k = ceil(n/3); parts a0,a1 are k limbs, a2 is n-2k limbs.
-    let k = (n + 2) / 3;
+    let k = n.div_ceil(3);
     let k2 = (2 * k).min(n);
     let a0 = &a[..k];
     let a1 = &a[k..k2];

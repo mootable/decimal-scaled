@@ -79,7 +79,7 @@ pub(crate) const fn cube_fused_comba<const N: usize>(x: Uint<N>) -> Uint<N> {
                 // p = x_i · x_j · x_k, up to 192 bits, held as (p_lo:u128, p_hi:u64).
                 let ab = xi * xj; // ≤ (2^64−1)² < 2^128
                 let ab_lo = ab as u64 as u128;
-                let ab_hi = (ab >> 64) as u128;
+                let ab_hi = ab >> 64;
                 // (ab_lo + ab_hi·2^64) · xk
                 let t0 = ab_lo * xk; // ≤ 2^128
                 let t1 = ab_hi * xk; // ≤ 2^128
