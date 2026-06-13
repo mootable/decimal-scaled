@@ -258,9 +258,7 @@ where
         crate::int::types::compute_limbs::ComputeLimbs,
 {
     use crate::algos::exp::exp_generic as eg;
-    use crate::algos::support::wide_trig_core::{
-        round_to_storage_directed_decided_g, tiny_x_deep_directed_adjust,
-    };
+    use crate::algos::support::wide_trig_core::round_to_storage_directed_g;
     if let Some(p) = hyper_tiny_pin::<C, SCALE, false>(raw, mode) {
         return p;
     }
@@ -269,7 +267,13 @@ where
     }
     let neg = raw < C::storage_zero();
     let base_guard = C::GUARD + tanh_k_lift::<C, SCALE>(raw);
-    let (r, decided) = round_to_storage_directed_decided_g::<C::Storage, C::Wagm>(
+    // No deep-band analytic adjust: unlike asinh's ln composition (whose
+    // partial lands exactly on the storage grid, so the walker is uniformly
+    // mode-blind there), tanh's exp-ratio composition exposes the deciding
+    // residual to the walker at a reachable depth — the directed probes
+    // resolve to distinct grid values, so the walker already rounds correctly
+    // and an analytic `tiny_x_deep_directed_adjust` would mis-fire.
+    round_to_storage_directed_g::<C::Storage, C::Wagm>(
         base_guard,
         SCALE,
         mode,
@@ -294,18 +298,6 @@ where
             );
             if neg { eg::zero::<C::Wagm>() - th } else { th }
         },
-    );
-    // Deep sub-resolution band (j* ≥ 5, below the linear pin's reach): tanh's
-    // Maclaurin signs ALTERNATE (+,−,+,−), like sin/atan/asinh, so
-    // `alternating = true`. The walker is mode-blind there; the deciding odd
-    // term's sign is analytic. A guarded no-op outside the deep-tiny region.
-    tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
-        r,
-        decided,
-        raw,
-        mode,
-        true,
-        <C::Wagm as crate::int::types::traits::BigInt>::BITS,
     )
 }
 
@@ -644,9 +636,7 @@ where
         crate::int::types::compute_limbs::ComputeLimbs,
 {
     use crate::algos::exp::exp_generic as eg;
-    use crate::algos::support::wide_trig_core::{
-        round_to_storage_directed_widening_decided_g, tiny_x_deep_directed_adjust,
-    };
+    use crate::algos::support::wide_trig_core::round_to_storage_directed_widening_g;
     // The canonical pins — identical to the tier kernel. The saturation
     // fast path is unreachable at the rung (the policy gate admits
     // |x| < 10, far below the onset) but kept for kernel-level callers.
@@ -658,9 +648,10 @@ where
     }
     let neg = raw < C::storage_zero();
     let base_guard = C::GUARD + tanh_k_lift::<C, SCALE>(raw);
-    // Two-width fall-up to the tier walker width `Wagm`; retain `decided` for
-    // the deep-band analytic adjust.
-    let (r, decided) = round_to_storage_directed_widening_decided_g::<C::Storage, Wk, C::Wagm>(
+    // Two-width fall-up to the tier walker width `Wagm`. No deep-band analytic
+    // adjust — see the tier [`tanh_schoolbook`] (the exp-ratio composition
+    // resolves the directed residual; the adjust would mis-fire).
+    round_to_storage_directed_widening_g::<C::Storage, Wk, C::Wagm>(
         base_guard,
         SCALE,
         mode,
@@ -701,16 +692,6 @@ where
             );
             if neg { eg::zero::<C::Wagm>() - th } else { th }
         },
-    );
-    // Deep sub-resolution band (j* ≥ 5): tanh alternates — see the tier
-    // [`tanh_schoolbook`]. The widening walker falls up to `C::Wagm`.
-    tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
-        r,
-        decided,
-        raw,
-        mode,
-        true,
-        <C::Wagm as crate::int::types::traits::BigInt>::BITS,
     )
 }
 
@@ -1587,4 +1568,69 @@ mod tests {
         }
     }
 
+    // The deep-band tiny-x directed cell the six-mode golden-comprehensive
+    // gate caught for asinh (proven). At D462 = Int<24>, s461, x = 3e-117:
+    // k = 117, j* = 5 - the resolvable x^3 term lands the partial exactly on
+    // the storage grid (uniformly mode-blind), and the deciding sub-resolution
+    // +3x^5/40 term decides the directed side. asinh (x - x^3/6 + 3x^5/40 -
+    // ...) has a POSITIVE x^5 term, so the true value sits ABOVE the grid in
+    // magnitude - EXPANDING. The grid value G is taken from the directed-
+    // adjust-free nearest mode (x^3 is resolvable, so G != raw).
+    //
+    // tanh is deliberately NOT covered here: its exp-ratio composition
+    // resolves the directed residual in the walker (the probes return
+    // distinct grid values, not a uniform mode-blind G), so it neither needs
+    // nor tolerates the analytic deep adjust.
+    #[cfg(feature = "d462")]
+    mod deep_tiny_directed_d462 {
+        use super::*;
+        use crate::int::types::Int;
+
+        type Core = crate::types::widths::wide_trig_d462::Core;
+        const S: u32 = 461;
+
+        // raw for 3e-117 at s461: 3 * 10^(461-117) = 3 * 10^344.
+        fn raw_pos() -> Int<24> {
+            Int::<24>::from_i128(3) * Int::<24>::from_i128(10).pow(344)
+        }
+
+        #[test]
+        fn asinh_3e117_d462_s461_deep_expands() {
+            let raw = raw_pos();
+            let zero = Int::<24>::from_i128(0);
+            let one = Int::<24>::from_i128(1);
+            // positive, expanding: Ceiling -> G+1, Floor/Trunc -> G.
+            let g = asinh_schoolbook::<Core, S>(raw, RoundingMode::HalfToEven);
+            assert_eq!(
+                asinh_schoolbook::<Core, S>(raw, RoundingMode::Ceiling),
+                g + one,
+                "asinh(+) Ceiling steps up"
+            );
+            assert_eq!(asinh_schoolbook::<Core, S>(raw, RoundingMode::Floor), g, "asinh(+) Floor stays");
+            assert_eq!(asinh_schoolbook::<Core, S>(raw, RoundingMode::Trunc), g, "asinh(+) Trunc stays");
+            // negative (odd): nearest = -G; expanding -> Floor -> -G-1, Ceiling/Trunc -> -G.
+            let gn = asinh_schoolbook::<Core, S>(zero - raw, RoundingMode::HalfToEven);
+            assert_eq!(gn, zero - g, "asinh(-) nearest = -G");
+            assert_eq!(
+                asinh_schoolbook::<Core, S>(zero - raw, RoundingMode::Floor),
+                gn - one,
+                "asinh(-) Floor steps down"
+            );
+            assert_eq!(
+                asinh_schoolbook::<Core, S>(zero - raw, RoundingMode::Ceiling),
+                gn,
+                "asinh(-) Ceiling stays"
+            );
+            assert_eq!(asinh_schoolbook::<Core, S>(zero - raw, RoundingMode::Trunc), gn, "asinh(-) Trunc stays");
+            // public path routes to the same kernel (rung == tier).
+            let x = D::<Int<24>, S>(raw);
+            for mode in MODES {
+                assert_eq!(
+                    x.asinh_strict_with(mode).0,
+                    asinh_schoolbook::<Core, S>(raw, mode),
+                    "asinh public == tier {mode:?}"
+                );
+            }
+        }
+    }
 }
