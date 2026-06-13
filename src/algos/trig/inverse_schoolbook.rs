@@ -121,54 +121,50 @@ pub(crate) fn atan2_schoolbook<C: WideTrigCore, const SCALE: u32>(
     y_raw: C::Storage,
     x_raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
-where
-    <C::W as crate::int::types::traits::BigInt>::Scratch:
-        crate::int::types::compute_limbs::ComputeLimbs,
-{
+) -> C::Storage {
     use crate::algos::support::wide_trig_core::{
-        round_to_storage_directed_decided_g, tiny_x_deep_directed_adjust, tiny_x_linear_directed,
+        tiny_x_deep_directed_adjust, tiny_x_linear_directed,
     };
-    // Ziv-escalated narrowing — see [`asin_schoolbook`] (atan2(y, 1) with
-    // tiny exact y is the atan partial-sum family). Retain the walker's
-    // `decided` verdict so the analytic tiny-result directed decisions can fire.
-    let (r, decided) = round_to_storage_directed_decided_g::<C::Storage, C::W>(
-        C::GUARD,
-        SCALE,
-        mode,
-        C::storage_max(),
-        C::storage_min(),
-        |guard| atan2_work::<C, SCALE>(y_raw, x_raw, guard),
-    );
-    // atan2(y, x) with x > 0 and |y/x| tiny reduces to atan(y/x) near 0, whose
-    // result `r` is the in-band grid value `round(atan(y/x))`. atan COMPRESSES
-    // (`atan z = z − z³/3 + …`) and ALTERNATES, so the directed side is
-    // analytic — `tiny_x_linear_directed`'s compressing form (j* = 3) and
-    // `tiny_x_deep_directed_adjust`'s alternating form (j* ≥ 5), keyed on `r`.
+    let zero = C::storage_zero();
+    // Tiny-result directed PRE-EMPT (mirrors asin's tiny-x linear pre-empt).
+    // atan2(y, x) with x > 0 and |y/x| tiny reduces to atan(y/x) near 0 — the
+    // only tiny, ±π-offset-free result. Its deciding odd Taylor term is
+    // sub-resolution, so the directed walker cannot place it (and POST-stepping
+    // a directed walker output double-counts in the linear band / under-fires on
+    // a false-positive `decided`). Instead recover the NEAREST grid value G
+    // (nearest rounding IS correct there — the deciding term is < ½ ULP, never a
+    // tie) and take a SINGLE analytic step from G: `atan z = z − z³/3 + z⁵/5 − …`
+    // COMPRESSES (cubic −) and ALTERNATES, so `tiny_x_linear_directed`'s
+    // compressing form (j* = 3) and `tiny_x_deep_directed_adjust`'s alternating
+    // form (j* ≥ 5) place the directed neighbour exactly one ULP from G.
     //
-    // BOTH adjusts are gated on the walker being mode-blind (`!decided`):
-    // unlike the forward kernels, whose input is always exactly on the storage
-    // grid, atan2's deciding term is the cubic of the RATIO y/x. For a general
-    // `x` whose ratio is OFF the grid, the leading rounding residual sits at a
-    // reachable depth, the walker resolves the direction (`decided == true`),
-    // and that answer must stand — the analytic helpers would wrongly override
-    // it. Only an on-grid leading term (x > 0, |y/x| exactly tiny, e.g. x = 1)
-    // leaves the deciding odd term sub-resolution and the walker mode-blind.
-    // Off the tiny-result region (results near ±π/2, ±π, ordinary angles) `r`
-    // is large and both helpers no-op regardless.
-    if !decided {
-        if let Some(v) = tiny_x_linear_directed::<C::Storage, SCALE>(r, mode, false) {
+    // |G|'s tininess self-gates the band (the helpers no-op for a non-tiny |G|),
+    // so an ordinary result, and x ≤ 0 (a near-±π result), fall straight through
+    // to the ordinary narrowing below — unchanged. Only the directed modes pay
+    // the extra nearest narrowing, and only when x > 0.
+    if !crate::support::rounding::is_nearest_mode(mode) && x_raw > zero {
+        let g = C::round_to_storage_directed(C::GUARD, SCALE, RoundingMode::HalfToEven, &mut |guard| {
+            atan2_work::<C, SCALE>(y_raw, x_raw, guard)
+        });
+        if let Some(v) = tiny_x_linear_directed::<C::Storage, SCALE>(g, mode, false) {
             return v;
         }
+        let stepped = tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
+            g,
+            false,
+            g,
+            mode,
+            true,
+            <C::W as crate::int::types::traits::BigInt>::BITS,
+        );
+        if stepped != g {
+            return stepped;
+        }
     }
-    tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
-        r,
-        decided,
-        r,
-        mode,
-        true,
-        <C::W as crate::int::types::traits::BigInt>::BITS,
-    )
+    // Nearest modes, and non-tiny directed results: the ordinary narrowing.
+    C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
+        atan2_work::<C, SCALE>(y_raw, x_raw, guard)
+    })
 }
 
 /// One working-scale atan2 evaluation at `w = SCALE + guard` — the
@@ -382,13 +378,41 @@ where
         crate::int::types::compute_limbs::ComputeLimbs,
 {
     use crate::algos::support::wide_trig_core::{
-        round_to_storage_directed_widening_decided_g, tiny_x_deep_directed_adjust,
-        tiny_x_linear_directed,
+        round_to_storage_directed_widening_g, tiny_x_deep_directed_adjust, tiny_x_linear_directed,
     };
     let w0 = SCALE + C::GUARD;
-    // Ziv-escalated two-width narrowing — see [`asin_schoolbook_g`] — retaining
-    // the `decided` verdict for the analytic tiny-result directed decisions.
-    let (r, decided) = round_to_storage_directed_widening_decided_g::<C::Storage, Wk, C::W>(
+    let zero = C::storage_zero();
+    // Tiny-result directed PRE-EMPT — see the tier [`atan2_schoolbook`]: recover
+    // the NEAREST grid value G (via the two-width nearest narrowing) and take a
+    // SINGLE analytic step from G (atan compresses + alternates). Never step a
+    // directed-walker output. |G|'s tininess self-gates; x ≤ 0 / non-tiny fall
+    // through to the ordinary widening narrowing below.
+    if !crate::support::rounding::is_nearest_mode(mode) && x_raw > zero {
+        let g = round_to_storage_directed_widening_g::<C::Storage, Wk, C::W>(
+            C::GUARD,
+            SCALE,
+            RoundingMode::HalfToEven,
+            C::storage_max(),
+            C::storage_min(),
+            |guard| atan2_work_g::<C, Wk, SCALE>(y_raw, x_raw, guard, w0),
+            |guard| atan2_work::<C, SCALE>(y_raw, x_raw, guard),
+        );
+        if let Some(v) = tiny_x_linear_directed::<C::Storage, SCALE>(g, mode, false) {
+            return v;
+        }
+        let stepped = tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
+            g,
+            false,
+            g,
+            mode,
+            true,
+            <C::W as crate::int::types::traits::BigInt>::BITS,
+        );
+        if stepped != g {
+            return stepped;
+        }
+    }
+    round_to_storage_directed_widening_g::<C::Storage, Wk, C::W>(
         C::GUARD,
         SCALE,
         mode,
@@ -396,23 +420,6 @@ where
         C::storage_min(),
         |guard| atan2_work_g::<C, Wk, SCALE>(y_raw, x_raw, guard, w0),
         |guard| atan2_work::<C, SCALE>(y_raw, x_raw, guard),
-    );
-    // See the tier [`atan2_schoolbook`]: atan2 reduces to atan(y/x) — compresses
-    // and alternates — and both adjusts are gated on `!decided` so an off-grid
-    // general-`x` ratio keeps the walker's resolved answer. The widening walker
-    // falls up to the tier width `C::W`, whose `BITS` set the deep-band reach.
-    if !decided {
-        if let Some(v) = tiny_x_linear_directed::<C::Storage, SCALE>(r, mode, false) {
-            return v;
-        }
-    }
-    tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
-        r,
-        decided,
-        r,
-        mode,
-        true,
-        <C::W as crate::int::types::traits::BigInt>::BITS,
     )
 }
 
@@ -788,90 +795,162 @@ mod tests {
     }
 
     // The tiny-RESULT directed cells the six-mode golden-comprehensive gate
-    // caught for atan2: atan2(y, 1) with tiny y reduces to atan(y), whose
-    // sub-resolution odd Taylor term decides the directed side. atan(z) =
-    // z - z^3/3 + z^5/5 - ...; the directed result is the analytic neighbour
-    // of the nearest grid value, keyed on the RESULT. D462 = Int<24>, s461.
+    // caught for atan2: atan2(y, 1) with x>0 and tiny y reduces to atan(y),
+    // whose sub-resolution odd Taylor term decides the directed side.
+    // atan(z) = z - z^3/3 + z^5/5 - ...: the kernel recovers the NEAREST grid
+    // value G and takes a SINGLE analytic step from it (compress for j*=3, then
+    // alternating: expand for j*=5, compress for j*=7, ...). Validated across
+    // the LINEAR -> DEEP band transition at MANY scales (not one cell), all six
+    // modes, with a single-step invariant (|directed - G| <= 1 ULP, never 2 -
+    // the double-step regression returned G∓2).
+    //
+    // Generic over the tier `C` and the const scale `S`; `coeff * 10^-big_k` is
+    // the tiny argument (x = 1). The expected step is derived from the analytic
+    // band: j* = first ODD j with j*k > S; atan alternates, so the deciding term
+    // EXPANDS iff j* % 4 == 1.
+    #[cfg(any(feature = "d462", feature = "d307"))]
+    fn assert_atan2_tiny_single_step<C: WideTrigCore, const S: u32>(coeff: i128, big_k: u32) {
+        use crate::int::types::traits::BigInt;
+        let p = |n: u32| crate::consts::pow10::dispatch::<C::Storage>(n);
+        let one = <C::Storage as BigInt>::from_i128(1);
+        let y = <C::Storage as BigInt>::from_i128(coeff) * p(S - big_k);
+        let x = p(S); // 1.0
+        let g = atan2_schoolbook::<C, S>(y, x, RoundingMode::HalfToEven);
+        assert_eq!(
+            atan2_schoolbook::<C, S>(y, x, RoundingMode::HalfAwayFromZero),
+            g,
+            "nearest modes agree S={S} k={big_k}"
+        );
+        let j_min = S / big_k + 1;
+        let j_star = if j_min % 2 == 1 { j_min } else { j_min + 1 };
+        let expanding = j_star % 4 == 1;
+        // Positive result (y>0, x>0).
+        let (floor_e, trunc_e, ceil_e) = if expanding {
+            (g, g, g + one)
+        } else {
+            (g - one, g - one, g)
+        };
+        assert_eq!(
+            atan2_schoolbook::<C, S>(y, x, RoundingMode::Floor),
+            floor_e,
+            "Floor S={S} k={big_k} j*={j_star} expanding={expanding}"
+        );
+        assert_eq!(
+            atan2_schoolbook::<C, S>(y, x, RoundingMode::Trunc),
+            trunc_e,
+            "Trunc S={S} k={big_k} j*={j_star} expanding={expanding}"
+        );
+        assert_eq!(
+            atan2_schoolbook::<C, S>(y, x, RoundingMode::Ceiling),
+            ceil_e,
+            "Ceiling S={S} k={big_k} j*={j_star} expanding={expanding}"
+        );
+        // Single-step invariant: every directed result within ONE ULP of G.
+        for m in [RoundingMode::Floor, RoundingMode::Trunc, RoundingMode::Ceiling] {
+            let r = atan2_schoolbook::<C, S>(y, x, m);
+            let d = if r < g { g - r } else { r - g };
+            assert!(d <= one, "single-step |r-G|<=1 S={S} k={big_k} mode={m:?}");
+        }
+    }
+
     #[cfg(feature = "d462")]
     mod tiny_directed_d462 {
         use super::*;
         use crate::int::types::Int;
-
         type Core = crate::types::widths::wide_trig_d462::Core;
-        const S: u32 = 461;
 
-        fn p10(n: u32) -> Int<24> {
-            Int::<24>::from_i128(10).pow(n)
+        // atan2(3e-117, 1) sweeping the LINEAR band (j*=3, S where 3*117=351 > S)
+        // into the DEEP band (j*=5, 351 <= S < 585), plus the atan2(1e-38, 1)
+        // family (the new d153 break). Every scale, all six modes, single-step.
+        #[test]
+        fn atan2_tiny_linear_to_deep_sweep() {
+            // 3e-117: linear up to s350, deep (j*=5) from s351.
+            assert_atan2_tiny_single_step::<Core, 120>(3, 117);
+            assert_atan2_tiny_single_step::<Core, 180>(3, 117);
+            assert_atan2_tiny_single_step::<Core, 231>(3, 117);
+            assert_atan2_tiny_single_step::<Core, 290>(3, 117);
+            assert_atan2_tiny_single_step::<Core, 346>(3, 117); // linear (351>346)
+            assert_atan2_tiny_single_step::<Core, 400>(3, 117); // deep j*=5
+            assert_atan2_tiny_single_step::<Core, 461>(3, 117); // deep j*=5
+            // 1e-38 (the new d153 break): coeff=1's z^3/3 = 10^-3k/3 is NON-
+            // integer, so the resolved partial is on-grid ONLY in the LINEAR
+            // band (z^3 sub-resolution, j*=3); the deep band is off-grid and the
+            // walker decides it (not the analytic single step). Test linear only.
+            assert_atan2_tiny_single_step::<Core, 76>(1, 38); // linear (114>76)
+            assert_atan2_tiny_single_step::<Core, 113>(1, 38); // linear (114>113)
         }
 
-        // LINEAR band: atan2(3e-200, 1). z = 3e-200, k = 200, j* = 3 (depth
-        // 600 > s461 + walker reach) - EVERY correction term sub-resolution,
-        // so the grid value is exactly raw_y = 3*10^(461-200). atan COMPRESSES
-        // (|atan z| < |z|): Floor/Trunc step DOWN one ULP, Ceiling/nearest stay.
+        // Public path (policy -> rung -> tier) == tier kernel, one linear + one
+        // deep cell across all six modes (the rung==tier invariant).
         #[test]
-        fn atan2_3e200_d462_s461_linear_compresses() {
-            let y = Int::<24>::from_i128(3) * p10(261);
-            let x = p10(S); // 1.0
-            let one = Int::<24>::from_i128(1);
-            let grid = y; // all corrections sub-resolution
-            assert_eq!(
-                atan2_schoolbook::<Core, S>(y, x, RoundingMode::HalfToEven),
-                grid,
-                "linear nearest = z"
-            );
-            assert_eq!(
-                atan2_schoolbook::<Core, S>(y, x, RoundingMode::Floor),
-                grid - one,
-                "linear Floor steps down"
-            );
-            assert_eq!(
-                atan2_schoolbook::<Core, S>(y, x, RoundingMode::Trunc),
-                grid - one,
-                "linear Trunc steps down"
-            );
-            assert_eq!(
-                atan2_schoolbook::<Core, S>(y, x, RoundingMode::Ceiling),
-                grid,
-                "linear Ceiling stays"
-            );
+        fn atan2_public_eq_tier() {
+            check::<180>(3, 117); // linear
+            check::<461>(3, 117); // deep
+            fn check<const S: u32>(coeff: i128, big_k: u32) {
+                let p = |n: u32| Int::<24>::from_i128(10).pow(n);
+                let y = Int::<24>::from_i128(coeff) * p(S - big_k);
+                let x = p(S);
+                let yd = crate::D::<Int<24>, S>(y);
+                let xd = crate::D::<Int<24>, S>(x);
+                for mode in MODES {
+                    assert_eq!(
+                        yd.atan2_strict_with(xd, mode).0,
+                        atan2_schoolbook::<Core, S>(y, x, mode),
+                        "public==tier S={S} k={big_k} mode={mode:?}"
+                    );
+                }
+            }
         }
 
-        // DEEP band: atan2(3e-117, 1). z = 3e-117, k = 117, j* = 5 - the
-        // z^3/3 term (depth 351) IS resolvable, so the grid value G is NOT
-        // raw_y (take it from the directed-adjust-free nearest mode); the
-        // deciding +z^5/5 term (depth 585) is sub-resolution and POSITIVE -
-        // EXPANDING. Ceiling steps UP, Floor/Trunc stay.
+        // Non-tiny sanity: atan2(1, 1) = pi/4 (~0.785, NOT tiny). The pre-empt's
+        // |G| check no-ops, so the directed modes are the ordinary rounding -
+        // ordered and within 1 ULP, never a spurious analytic step.
         #[test]
-        fn atan2_3e117_d462_s461_deep_expands() {
-            let y = Int::<24>::from_i128(3) * p10(344);
-            let x = p10(S);
+        fn atan2_nontiny_no_spurious_step() {
+            let one_val = Int::<24>::from_i128(10).pow(461);
             let one = Int::<24>::from_i128(1);
-            let g = atan2_schoolbook::<Core, S>(y, x, RoundingMode::HalfToEven);
-            assert_eq!(
-                atan2_schoolbook::<Core, S>(y, x, RoundingMode::Ceiling),
-                g + one,
-                "deep Ceiling steps up"
-            );
-            assert_eq!(
-                atan2_schoolbook::<Core, S>(y, x, RoundingMode::Floor),
-                g,
-                "deep Floor stays"
-            );
-            assert_eq!(
-                atan2_schoolbook::<Core, S>(y, x, RoundingMode::Trunc),
-                g,
-                "deep Trunc stays"
-            );
-            // public path routes to the same kernel (rung == tier).
-            let yd = crate::D::<Int<24>, S>(y);
-            let xd = crate::D::<Int<24>, S>(x);
+            let f = atan2_schoolbook::<Core, 461>(one_val, one_val, RoundingMode::Floor);
+            let n = atan2_schoolbook::<Core, 461>(one_val, one_val, RoundingMode::HalfToEven);
+            let c = atan2_schoolbook::<Core, 461>(one_val, one_val, RoundingMode::Ceiling);
+            assert!(f <= n && n <= c, "non-tiny atan2(1,1) directed ordered");
+            assert!(c - f <= one, "non-tiny atan2(1,1) Ceiling-Floor <= 1 ULP (no spurious step)");
+            let d = crate::D::<Int<24>, 461>(one_val);
             for mode in MODES {
                 assert_eq!(
-                    yd.atan2_strict_with(xd, mode).0,
-                    atan2_schoolbook::<Core, S>(y, x, mode),
-                    "atan2 public == tier at mode {mode:?}"
+                    d.atan2_strict_with(d, mode).0,
+                    atan2_schoolbook::<Core, 461>(one_val, one_val, mode),
+                    "non-tiny public==tier mode={mode:?}"
                 );
             }
+        }
+    }
+
+    #[cfg(feature = "d307")]
+    mod tiny_directed_d307 {
+        use super::*;
+        type Core = crate::types::widths::wide_trig_d307::Core;
+
+        // atan2(3e-117, 1) is LINEAR (j*=3) across D307's whole scale range
+        // (351 > every supported scale) - the exact cells the gate flagged
+        // (s120, s153, s230, s290, s306). 3e-117 needs scale >= 117 to be
+        // representable. All six modes, single-step.
+        #[test]
+        fn atan2_3e117_linear_sweep() {
+            assert_atan2_tiny_single_step::<Core, 120>(3, 117);
+            assert_atan2_tiny_single_step::<Core, 153>(3, 117);
+            assert_atan2_tiny_single_step::<Core, 230>(3, 117);
+            assert_atan2_tiny_single_step::<Core, 290>(3, 117);
+            assert_atan2_tiny_single_step::<Core, 306>(3, 117);
+        }
+
+        // A DEEP cell on D307 via a less-tiny input: atan2(3e-70, 1) at s290 has
+        // j*=5 (3*70=210 resolvable, 5*70=350 sub-resolution); s200 is still
+        // linear (210>200) - the linear->deep transition within one tier.
+        #[test]
+        fn atan2_3e70_linear_to_deep() {
+            assert_atan2_tiny_single_step::<Core, 200>(3, 70); // linear j*=3
+            assert_atan2_tiny_single_step::<Core, 250>(3, 70); // deep j*=5
+            assert_atan2_tiny_single_step::<Core, 290>(3, 70); // deep j*=5
         }
     }
 
