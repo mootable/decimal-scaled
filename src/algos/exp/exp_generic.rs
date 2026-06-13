@@ -1060,7 +1060,9 @@ use crate::support::rounding::RoundingMode;
         // on the NEGATIVE argument −2|x| (its 2^k reassembly shifts DOWN, never
         // the overflowing up-shift), so e^(+|x|) is never formed; the identity is
         // the exact tanh. Mirrors `trig_series_2limb::tanh_with_raw` (the narrow
-        // path). `m == 0` (deep saturation just under `thr_x`) → `saturated`.
+        // path). `m == 0` (defensive: unreachable since `exp_fixed` on a negative argument
+        // returns >= 1 via the ArgRegime::Underflow short-circuit in
+        // `try_exp_fixed` -- retained as a belt-and-suspenders guard).
         let m = exp_fixed::<S>(-(av_w + av_w), w);
         if m == lit::<S>(0) {
             return saturated;

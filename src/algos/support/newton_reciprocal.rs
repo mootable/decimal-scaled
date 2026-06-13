@@ -227,7 +227,7 @@ impl NewtonReciprocal {
         // correction absorbs the +1 ULP. The u64 kernel sees the bumped
         // `k_u64` too — bit-identical correction either way.
         let k_u64_raw = width_limbs + pow_len;
-        let k_u64 = if k_u64_raw % 2 == 0 { k_u64_raw } else { k_u64_raw + 1 };
+        let k_u64 = if k_u64_raw.is_multiple_of(2) { k_u64_raw } else { k_u64_raw + 1 };
 
         debug_assert!(k_u64 < MAX_R_U64, "num buffer too small");
 
@@ -665,7 +665,7 @@ const fn newton_u128_wins(width_bits: u32) -> bool {
     // 128-bit-multiple (even-u64, the packing precondition) instead. Perf-only:
     // both apply paths are bit-identical. (8192 / D1232 max-scale stays u64 — the
     // band's upper edge is unconfirmed there; a separate item.)
-    width_bits % 128 == 0 && width_bits >= 1536 && width_bits <= 8192
+    width_bits.is_multiple_of(128) && width_bits >= 1536 && width_bits <= 8192
 }
 
 /// Full `n / 10^SCALE` with rounding for a `BigInt`-backed value.

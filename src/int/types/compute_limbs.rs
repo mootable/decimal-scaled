@@ -250,7 +250,7 @@ impl LimbSize {
     /// widths actually win the u128 packing) is a microbench tuning follow-up.
     #[inline]
     pub(crate) const fn for_packing(n: usize) -> Self {
-        if n % 2 == 0 {
+        if n.is_multiple_of(2) {
             LimbSize::U128
         } else {
             LimbSize::U64
