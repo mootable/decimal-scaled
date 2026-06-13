@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! `SeriesRunner` — runs the subject's executions serially.
+//! `SequentialRunner` — runs the subject's executions serially.
 
 use crate::collector::{FunctionCollector, SubjectCollector};
 use crate::execution::ExecutionStrategy;
@@ -14,13 +14,13 @@ use super::run_cell;
 use super::runner::GoldenRunner;
 
 /// Runs the subject's executions serially.
-pub struct SeriesRunner<E: ExecutionStrategy> {
+pub struct SequentialRunner<E: ExecutionStrategy> {
     pub strategy: E,
     pub loader: Box<dyn CaseLoader>,
     pub validators: Vec<Box<dyn Validator + Sync>>,
 }
 
-impl<E: ExecutionStrategy> GoldenRunner for SeriesRunner<E> {
+impl<E: ExecutionStrategy> GoldenRunner for SequentialRunner<E> {
     fn run<S: DecimalSubject + Sync>(&self, subject: &S, functions: &[Function]) -> SubjectCollector {
         let caps = subject.capabilities();
         let oracle = self.loader.oracle_limits();

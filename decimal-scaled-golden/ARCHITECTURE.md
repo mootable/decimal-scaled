@@ -418,7 +418,7 @@ validators, and any number of libraries with different `Value` types compose.
   - **No Runner variant — enforced by the type system.** criterion needs `&mut
     Criterion`, which lives as a `RefCell<Criterion>` *on the struct* (the trait's
     `&self` is untouched). That `RefCell` makes `CriterionStrategy` `!Sync`, so
-    `ParallelRunner` (`E: Sync`) cannot compile with it while `SeriesRunner` accepts
+    `ParallelRunner` (`E: Sync`) cannot compile with it while `SequentialRunner` accepts
     it — criterion's "serial, quiet machine" requirement is enforced at compile
     time, for free. The `RefCell` is load-bearing; do not "fix" it to a `Mutex`.
   - **criterion's report is the artifact; `timing` stays `None`.** criterion exposes
@@ -513,7 +513,7 @@ verdicts, and an `oracle_limited` flag (set when grading was clamped to the orac
 depth, §4.3). `SubjectCollector` carries the subject's `Capabilities`
 (so reporting has the `config` width/scale/etc. for the report).
 
-Two `GoldenRunner` impls share this pipeline: `SeriesRunner` (serial) and
+Two `GoldenRunner` impls share this pipeline: `SequentialRunner` (serial) and
 `ParallelRunner` (a work-queue over the subject's executions). They differ only
 in scheduling; the per-cell work is identical.
 
@@ -702,7 +702,7 @@ src/
 
   runner/             # GoldenRunner — drives a subject over the golden cases
     runner.rs         #   the trait
-    series.rs         #   SeriesRunner
+    sequential.rs     #   SequentialRunner
     parallel.rs       #   ParallelRunner
 
   validators/         # Validator — scores a finished cell

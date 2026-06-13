@@ -43,7 +43,7 @@ CaseLoader → GoldenRunner → ExecutionStrategy → validators → collectors 
   `FilterLoader` decorates any loader with a keep-predicate so a gate can run a
   subset of the rows. The loader also supplies `oracle_limits()` — the golden
   set's verifiable depth, `gen_precision − guard`.
-- **`GoldenRunner`** (`src/runner/`) — `SeriesRunner` (serial) and
+- **`GoldenRunner`** (`src/runner/`) — `SequentialRunner` (serial) and
   `ParallelRunner` (a work queue over the subject's executions). Both drive an
   **`ExecutionStrategy`** (`src/execution/`): `RunOnce` for correctness, `Timed`
   for naive timing with the parse hoisted out of the timed span, and

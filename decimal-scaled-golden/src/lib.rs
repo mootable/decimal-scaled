@@ -36,7 +36,7 @@ pub use reporting::{
     ConsoleReporter, InlineReporter, ReportArtifact, ReportOutput, Reporter, RunSummary, TsvReporter,
 };
 pub use rounding::RoundingMode;
-pub use runner::{GoldenRunner, ParallelRunner, SeriesRunner};
+pub use runner::{GoldenRunner, ParallelRunner, SequentialRunner};
 pub use subject::{
     Capabilities, Computed, DecimalSubject, FnSupport, Limits, NonReal, Overflow, Radix,
 };
