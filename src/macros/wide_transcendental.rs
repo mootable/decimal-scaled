@@ -3696,7 +3696,24 @@ macro_rules! decl_wide_transcendental {
                         SCALE,
                         $crate::support::rounding::RoundingMode::Trunc,
                     );
-                    $core::exp_result_int_digits::<$core::Wagm>($core::to_work_scaled_agm(arg_at_scale, 0), SCALE)
+                    // `e^arg` grows integer digits ONLY for a POSITIVE
+                    // argument; for a negative argument `e^arg ∈ (0, 1)` has
+                    // zero integer digits and needs NO lift. Sizing a lift
+                    // there would inflate the working scale `w = SCALE +
+                    // GUARD + k_lift` until the non-widening low-product
+                    // `mul_agm(y, ln_x, w)` overflows the `Wagm` work integer
+                    // (its `y·ln_x` exceeds `Wagm::BITS`) and WRAPS the exp
+                    // argument to garbage — the deep-underflow misround
+                    // (`powf("2","-200")` at D57/D76 mid-scales returned
+                    // `e^-0.21 ≈ 0.808` instead of the sub-resolution 0). The
+                    // sign gate mirrors `exp2_result_int_digits`'s
+                    // negative-argument early return and the Tang/Series
+                    // `extra = 0 for k ≤ 0` reassembly asymmetry.
+                    if arg_at_scale < $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                        0
+                    } else {
+                        $core::exp_result_int_digits::<$core::Wagm>($core::to_work_scaled_agm(arg_at_scale, 0), SCALE)
+                    }
                 };
                 let base_guard = $core::GUARD + k_lift;
                 Self::from_bits($core::round_to_storage_directed::<$core::Wagm>(
