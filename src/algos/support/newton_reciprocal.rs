@@ -271,6 +271,13 @@ impl NewtonReciprocal {
                     &mut rem[..pow_len],
                 ),
                 _ => {
+                    // Verdict collapse: any non-Rem algorithm (including the
+                    // u128-limb verdict) funnels here and runs Knuth. Correct
+                    // for every current `pow_scale`-denominator shape — the
+                    // u128 engine's large-dividend precondition is not met —
+                    // but MUST be re-verified whenever an Algorithm arm joins
+                    // `int::policy::div_rem`; a new engine winning for these
+                    // shapes would need an explicit arm, not a silent Knuth fall.
                     let mut u = [0u64; MAX_R_U64 + 2];
                     let mut v = [0u64; MAX_POW_U64];
                     crate::int::algos::div::div_knuth::div_knuth_into(
