@@ -15967,11 +15967,15 @@ pub(crate) fn exp_table_entry_baked<W: BigInt>(w: u32, idx: usize, m: u32, pow10
     // yet the conversion product `slot_hi · 10^w` (≈ bp + w·log2(10)
     // ≈ 2·w·log2(10) + 64) stays inside `W`. The stored slot is a
     // pure fraction (< 1), identical to the ln pilot, so this sizing
-    // is the same. Round the limb count up; clamp to the stored
+    // is the same. Round the limb count up; assert it fits the stored
     // width.
     let need_bits = (w as u64) * 3322 / 1000 + 64;
-    let mut p = need_bits.div_ceil(64) as usize;
-    p = p.clamp(1, EXP_TANG_LIMBS);
+    let p_full = need_bits.div_ceil(64) as usize;
+    assert!(
+        p_full <= EXP_TANG_LIMBS,
+        "exp_tang: working scale {w} out of generated range ({EXP_TANG_LIMBS} limbs)"
+    );
+    let p = p_full.max(1);
     // Zero-extend the top `p` limbs (MS-first) into W:
     //   slot_hi = sum_{k=0..p-1} slot[k] · 2^(64·(p−1−k)).
     let mut slot_hi = W::ZERO;

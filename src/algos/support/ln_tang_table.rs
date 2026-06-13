@@ -4079,10 +4079,14 @@ pub(crate) fn ln_table_entry_baked<W: BigInt>(w: u32, idx: usize, pow10_w: W) ->
     // ≈ 2·w·log2(10) + 64 ≈ 0.83·W::BITS + 64 at the `w = W::BITS/8`
     // cap) stays inside `W` even on the narrowest work integer
     // (Int<16> = 1024 bits: 0.83·1024 + 64 ≈ 914 < 1024). Round the
-    // limb count up; clamp to the stored width.
+    // limb count up; assert it fits the stored width.
     let need_bits = (w as u64) * 3322 / 1000 + 64;
-    let mut p = need_bits.div_ceil(64) as usize;
-    p = p.clamp(1, LN_TANG_LIMBS);
+    let p_full = need_bits.div_ceil(64) as usize;
+    assert!(
+        p_full <= LN_TANG_LIMBS,
+        "ln_tang: working scale {w} out of generated range ({LN_TANG_LIMBS} limbs)"
+    );
+    let p = p_full.max(1);
     // Zero-extend the top `p` limbs (MS-first) into W:
     //   slot_hi = sum_{k=0..p-1} slot[k] · 2^(64·(p−1−k)).
     let mut slot_hi = W::ZERO;
