@@ -189,8 +189,7 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: Roun
 /// narrow kernels' out-of-range `None` propagates instead of panicking
 /// (the overflow contract's "detect once, apply the policy in the
 /// wrapper"). On the wide tiers the kernel-internal out-of-range panic
-/// is not yet threaded through (see
-/// `research/checked_wide_shell_patch.md`); those arms return `Some` of
+/// is not yet threaded through; those arms return `Some` of
 /// the kernel result and still panic on overflow.
 #[inline]
 #[must_use]
@@ -387,7 +386,7 @@ pub(crate) fn exp2_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode:
 /// The `checked` primitive under [`exp2_dispatch`]: exact out-of-range
 /// `None` on the narrow tiers; the wide arms call the per-tier kernel
 /// shells, whose internal out-of-range panic is not yet threaded
-/// through (see `research/checked_wide_shell_patch.md`).
+/// through.
 #[inline]
 #[must_use]
 pub(crate) fn checked_exp2_dispatch<const N: usize, const SCALE: u32>(

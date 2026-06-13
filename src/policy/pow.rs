@@ -71,8 +71,7 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(
 /// surface takes (the wide production route does NOT go through
 /// [`dispatch`]'s `pow_schoolbook` matcher seam, and bit-identity with
 /// the default form is the contract) — so a wide out-of-range result
-/// still panics inside that shell (see
-/// `research/checked_wide_shell_patch.md`).
+/// still panics inside that shell.
 #[inline]
 #[must_use]
 pub(crate) fn checked_dispatch<const N: usize, const SCALE: u32>(

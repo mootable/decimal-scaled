@@ -3170,8 +3170,7 @@ pub(crate) fn atan2_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>,
 // `try_into` fit as [`super::narrow_fit`], so a result that fits the
 // D38 work width but not D18 storage is an exact `None` (the condition
 // the default D18 shell panics on). Out-of-range detection INSIDE the
-// D38 / wide shells is not yet threaded through (see
-// `research/checked_wide_shell_patch.md`): those still panic,
+// D38 / wide shells is not yet threaded through: those still panic,
 // identically to the default form.
 
 macro_rules! checked_hop_dispatch {

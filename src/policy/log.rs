@@ -59,7 +59,7 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(
 /// The `checked` primitive under [`dispatch`]: exact out-of-range
 /// `None` on the narrow tiers; the wide arms call the per-tier kernel
 /// shells, whose internal out-of-range panic is not yet threaded
-/// through (see `research/checked_wide_shell_patch.md`). Domain errors
+/// through. Domain errors
 /// stay kernel panics — the `checked_` surface prechecks the domain.
 #[inline]
 #[must_use]
