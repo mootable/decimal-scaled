@@ -4635,3 +4635,6 @@
 // regression: work-rung escalation-cap fall-up (sin_d307_s153 Trunc, 1-ULP directed miss) - tiny arguments whose f(x) = x -/+ x^3-term (or 1 +/- d quadratic) deciding digit lies BETWEEN a narrow work-rung's Ziv cap and the tier work int's; an unresolved-at-rung walker must fall up to the tier width, never conclude from a cap-clamped probe
 0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003
 -0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003
+// edge: large-negative argument at a deep band-edge scale (large |k| range reduction - the old Tang-table-overflow regime). The rewritten exp ArgRegime pre-gate + k<0 internal-peak clamp must round e^x correctly where the result still fits (exp(-50) D76<57>, exp(-100) D153<114>, exp(-200) D307<290>) and short-circuit to the smallest positive value where it underflows.
+-200
+-300
