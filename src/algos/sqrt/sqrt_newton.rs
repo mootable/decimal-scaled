@@ -21,12 +21,14 @@
 //! *type* (which stable Rust cannot name from `N`), and therefore no
 //! per-tier work-width binding in the policy. The integer work dispatches
 //! *down* to the int layer's slice kernels: `isqrt_newton` for the root and
-//! [`crate::int::algos::mul::mul_schoolbook::mul_schoolbook`] for the
-//! products, with the `limbs` primitives for the rest.
+//! the multiply matcher's slice door
+//! [`crate::int::policy::mul::dispatch_slice`] for the products (so the
+//! schoolbook-vs-Karatsuba choice is the matcher's, not hardcoded), with the
+//! `limbs` primitives for the rest.
 //!
 //! Returns `Int::<N>::ZERO` for `raw <= 0` (saturate-not-panic).
 
-use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
+use crate::int::policy::mul::dispatch_slice as mul_slice;
 use crate::int::algos::isqrt::isqrt_newton::isqrt_newton;
 use crate::int::algos::support::limbs::{cmp_cross, is_zero, sub_assign};
 use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
@@ -72,7 +74,7 @@ where
             for t in tmp[..out].iter_mut() {
                 *t = 0;
             }
-            mul_schoolbook(&n[..nl], &[10u64], &mut tmp[..out]);
+            mul_slice(&n[..nl], &[10u64], &mut tmp[..out]);
             n[..out].copy_from_slice(&tmp[..out]);
             nl = sig_len(&n[..out]);
         }
@@ -88,7 +90,7 @@ where
     let mut qsq_buf = Limbs::<N>::double_buffered_u64();
     let qsq = qsq_buf.as_mut();
     let qsq_cap = qsq.len();
-    mul_schoolbook(&q[..ql], &q[..ql], &mut qsq[..(2 * ql).min(qsq_cap)]);
+    mul_slice(&q[..ql], &q[..ql], &mut qsq[..(2 * ql).min(qsq_cap)]);
     let mut diff_buf = Limbs::<N>::double_buffered_u64();
     let diff = diff_buf.as_mut();
     diff[..nl].copy_from_slice(&n[..nl]);

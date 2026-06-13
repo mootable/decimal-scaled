@@ -35,7 +35,7 @@
 
 use crate::int::algos::div::div_knuth::div_knuth_into;
 use crate::int::algos::div::div_knuth_u128_limb::div_knuth_u128_limb_into;
-use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
+use crate::int::policy::mul::dispatch_slice as mul_slice;
 use crate::int::policy::div_rem::{select_for_limbs, Algorithm};
 use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
 use crate::int::types::Int;
@@ -198,7 +198,7 @@ where
     for slot in num[..nlen].iter_mut() {
         *slot = 0;
     }
-    mul_schoolbook(&a_mag[..al], &m_mag[..ml], &mut num[..nlen]);
+    mul_slice(&a_mag[..al], &m_mag[..ml], &mut num[..nlen]);
     let ntop = sig_len(&num[..nlen]);
 
     // q = num / b, r = num % b (magnitudes, via the int layer).

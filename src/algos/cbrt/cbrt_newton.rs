@@ -19,13 +19,13 @@
 //! (radicand `≤ 4N` limbs, the cube-comparison rounding) is done in a limb
 //! scratch buffer rather than a work *type* `Int<4N>` (unnameable from `N` on
 //! stable). Integer work dispatches *down* to the int slice kernels:
-//! `icbrt_newton` for the root and
-//! [`crate::int::algos::mul::mul_schoolbook::mul_schoolbook`] for the cube
-//! comparisons. No work-width parameter; the policy stays a pure `(N, SCALE)`
-//! matcher.
+//! `icbrt_newton` for the root and the multiply matcher's slice door
+//! [`crate::int::policy::mul::dispatch_slice`] for the cube comparisons (so
+//! the schoolbook-vs-Karatsuba choice is the matcher's, not hardcoded). No
+//! work-width parameter; the policy stays a pure `(N, SCALE)` matcher.
 
 use crate::int::algos::icbrt::icbrt_newton::icbrt_newton;
-use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
+use crate::int::policy::mul::dispatch_slice as mul_slice;
 use crate::int::algos::support::limbs::{cmp_cross, shl};
 use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
 use crate::int::types::Int;
@@ -59,7 +59,7 @@ where
         for t in tmp[..out].iter_mut() {
             *t = 0;
         }
-        mul_schoolbook(&dst[..len], &[10u64], &mut tmp[..out]);
+        mul_slice(&dst[..len], &[10u64], &mut tmp[..out]);
         dst[..out].copy_from_slice(&tmp[..out]);
         len = sig_len(&dst[..out]);
     }
@@ -77,13 +77,13 @@ where
     let sq = sq_buf.as_mut();
     let sq_cap = sq.len();
     let sq_len = (2 * la).min(sq_cap);
-    mul_schoolbook(&a[..la], &a[..la], &mut sq[..sq_len]);
+    mul_slice(&a[..la], &a[..la], &mut sq[..sq_len]);
     let sq_sig = sig_len(&sq[..sq_len]);
     let out_len = (sq_sig + la).min(sq_cap);
     for o in out[..out_len].iter_mut() {
         *o = 0;
     }
-    mul_schoolbook(&sq[..sq_sig], &a[..la], &mut out[..out_len]);
+    mul_slice(&sq[..sq_sig], &a[..la], &mut out[..out_len]);
     sig_len(&out[..out_len])
 }
 
