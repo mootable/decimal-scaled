@@ -2,23 +2,19 @@
 
 ## From integers
 
-`From<iN>` / `From<uN>` scale the integer by `10^SCALE`:
+Integer construction is **fallible** — `TryFrom<iN>` / `TryFrom<uN>` — because
+scaling the integer by `10^SCALE` can overflow the storage. Near a width's top
+scale even small inputs exceed the range, so every primitive-integer source
+returns a `Result` rather than silently wrapping:
 
 ```rust
 # use decimal_scaled::D38s2;
-let a: D38s2 = 7i32.into();          // 7.00
-let b: D38s2 = 7i64.into();          // 7.00 - widest infallible integer source
-let c: D38s2 = (-3i32).into();       // -3.00
-```
+let a = D38s2::try_from(7i32).unwrap();        // 7.00
+let b = D38s2::try_from(7i64).unwrap();        // 7.00
+let c = D38s2::try_from(-3i32).unwrap();       // -3.00
 
-`From` is provided for the integer types narrower than the storage.
-For `i128` / `u128` into `D38`, where the scaled value can overflow,
-the conversion is `TryFrom` instead:
-
-```rust
-# use decimal_scaled::D38s2;
-let ok  = D38s2::try_from(100_i128);          // Ok
-let bad = D38s2::try_from(i128::MAX);         // Err(ConvertError::Overflow)
+let ok  = D38s2::try_from(100_i128);           // Ok(100.00)
+let bad = D38s2::try_from(i128::MAX);          // Err(ConvertError::Overflow)
 ```
 
 ## To integers - `to_int`

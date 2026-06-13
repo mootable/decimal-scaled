@@ -32,7 +32,7 @@ let x = d38!(1.564232);                        // D38<6>
 assert_eq!(x.to_string(), "1.564232");
 
 let price: D38s12 = "19.99".parse().unwrap();
-let qty: D38s12   = 3i64.into();               // integer, scaled by 10^SCALE
+let qty = D38s12::try_from(3i64).unwrap();     // integer, scaled by 10^SCALE (fallible)
 let total = price * qty;                       // 59.97 exactly
 
 assert_eq!(total.to_string(), "59.97");

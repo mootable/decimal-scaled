@@ -77,13 +77,15 @@ land alongside.
   (and the matching `Uint*`) re-exports are gone — name the storage
   as the const-generic `Int<N>` / `Uint<N>` instead (e.g. `Int<4>`
   for the former `Int256`).
-- **BREAKING: `from_int` / `from_i32` on the decimal types are now
-  `pub(crate)`.** The integer-construction surface is the idiomatic
-  `From` / `TryFrom` traits instead: `let d: D38<2> = 20i64.into();`
-  (infallible, scaled by `10^SCALE`) or `D38::<2>::try_from(20i128)?`
-  (fallible from `i128` / `u128`). The inherent `from_int` /
-  `from_i32` constructors are retained internally but are no longer
-  part of the public API.
+- **BREAKING: integer → decimal construction is now `TryFrom`, not
+  `From`.** Every primitive-integer source (`i8`…`i64`, `u8`…`u64`,
+  `i128`, `u128`) builds a decimal via `TryFrom`, returning
+  `ConvertError::Overflow` when `value * 10^SCALE` exceeds the storage:
+  `let d = D38::<2>::try_from(20i64)?;`. Scaling can overflow even for
+  small inputs near a width's top scale, so the old infallible
+  `From<iN>` impls (which silently wrapped on overflow) are removed,
+  along with the `DecimalConvert::from_i32` trait method and the
+  inherent `from_int` / `from_i32` constructors.
 - **Uniform overflow & domain contract — strict ops panic by
   default.** A strict transcendental panics on a domain error
   (`ln` of a non-positive value, `asin` outside `[-1, 1]`, …) or an

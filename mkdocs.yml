@@ -1,7 +1,7 @@
 site_name: decimal-scaled
 site_description: Const-generic base-10 fixed-point decimals for Rust — bit-exact, 0.5 ULP, no_std-friendly.
 site_url: https://mootable.github.io/decimal-scaled/
-site_author: John Moxley
+site_author: Jack Moxley
 repo_url: https://github.com/mootable/decimal-scaled
 repo_name: mootable/decimal-scaled
 edit_uri: edit/main/docs/
@@ -108,6 +108,7 @@ nav:
       - Cross-scale operations: cross-scale.md
       - Glossary: glossary.md
   - Benchmarks & precision:
+      - The golden harness: golden.md
       - benchmarks.md
       - Library comparisons: comparisons.md
   - Architecture & internals:

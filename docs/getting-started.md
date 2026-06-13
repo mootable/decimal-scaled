@@ -52,12 +52,13 @@ use decimal_scaled::{D38s2, d38};
 // 1. Compile-time literal macro (scale inferred - see the macro guide).
 let a = d38!(19.99);
 
-// 2. From an integer, scaled by 10^SCALE, via the `From` / `into` surface.
-let b: D38s2 = 20i64.into();            // 20.00
-let c: D38s2 = (-5i64).into();          // -5.00
-
-// 3. Fallible construction from i128 / u128, scaled by 10^SCALE.
+// 2. From an integer, scaled by 10^SCALE - fallible (TryFrom), because
+//    scaling can overflow the storage near a width's top scale.
 use core::convert::TryFrom;
+let b = D38s2::try_from(20i64).unwrap();    // 20.00
+let c = D38s2::try_from(-5i64).unwrap();    // -5.00
+
+// 3. The same TryFrom surface covers the widest integer sources (i128 / u128).
 let d = D38s2::try_from(19i128).unwrap();   // 19.00
 
 // 4. Parsing a string.

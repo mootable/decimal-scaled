@@ -58,6 +58,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "docs" / "_data"
 PRECISION_DIR = ROOT / "results" / "precision"
+GOLDEN_DIR = ROOT / "decimal-scaled-golden" / "golden"
 
 # The precision-table renderer lives alongside this script. Import it as
 # a module so the doc tables come from exactly the same code path (and
@@ -156,6 +157,29 @@ def render_width_count_word() -> str:
     return f"{number_word(len(tiers))} storage widths"
 
 
+def golden_counts() -> tuple[int, int]:
+    """`(total golden values, number of functions)` read straight from the
+    committed `decimal-scaled-golden/golden/*.au` files: one data line per
+    value, one file per function. A data line starts with a digit or a `-`;
+    `#` metadata, `//` provenance, and blank lines are skipped — the same
+    lines the harness loader treats as cases."""
+    files = sorted(GOLDEN_DIR.glob("*.au"))
+    total = 0
+    for f in files:
+        for line in f.read_text(encoding="utf-8").splitlines():
+            s = line.lstrip()
+            if s and (s[0].isdigit() or s[0] == "-"):
+                total += 1
+    return total, len(files)
+
+
+def render_golden_counts() -> str:
+    """Inline count for docs/golden.md, e.g. `101,809 answers across 28
+    functions`, counted from the golden files so it tracks regeneration."""
+    total, funcs = golden_counts()
+    return f"{total:,} answers across {funcs} functions"
+
+
 # Precision-table builders. Each returns the markdown table body for one
 # width (and, where the doc shows a subset, one method ordering), read
 # straight from the committed `results/precision/*.tsv` files via
@@ -192,6 +216,7 @@ REGIONS: dict[str, tuple[str, "callable"]] = {
     "widths:count": ("docs/widths.md", render_width_count_word),
     "install:dependency": ("README.md", render_install_dependency),
     "precision:D38:readme": ("README.md", render_precision_d38_readme),
+    "golden:counts": ("docs/golden.md", render_golden_counts),
     "precision:D38": ("docs/benchmarks.md", render_precision_d38),
     "precision:D76": ("docs/benchmarks.md", render_precision_d76),
     "precision:D307": ("docs/benchmarks.md", render_precision_d307),

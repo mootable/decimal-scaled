@@ -13,6 +13,16 @@ The crate's correctness contract is fixed:
 strict transcendentals, identical bit-patterns across platforms.
 Performance tuning never trades that away.
 
+> **`no_std` builds — a contributor gotcha.** The library is `no_std`, and
+> `cargo check --no-default-features --lib` is green. Do **not** expect
+> `cargo check --no-default-features --all-targets` to pass, though: the repo's
+> own tests, benches, and examples use `std` (the Rust test harness itself
+> requires it), so they cannot compile under `no_std`. That failure is a
+> property of the dev targets, not the shipped crate — a consumer depending on
+> `decimal-scaled` with `default-features = false` only ever compiles the
+> (green) library, never these targets. Check the no_std surface with
+> `--lib`, not `--all-targets`.
+
 ---
 
 ## 1. The algorithm library
