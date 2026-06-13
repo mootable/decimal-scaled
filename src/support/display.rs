@@ -1,12 +1,13 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! [`core::fmt`] formatters and [`core::str::FromStr`] for [`D38`].
-//! The same surface is emitted for every width via
+//! [`core::fmt`] formatters and [`core::str::FromStr`] for the decimal
+//! widths. `Display` / `Debug` and `FromStr` are emitted per width via
 //! [`crate::macros::display::decl_decimal_display!`] and
-//! [`crate::macros::from_str::decl_decimal_from_str!`]; this file
-//! contains the hand-written D38 implementation and serves as the
-//! shape reference for the macro emissions.
+//! [`crate::macros::from_str::decl_decimal_from_str!`]; the
+//! scientific-notation formatters ([`fmt::LowerExp`] / [`fmt::UpperExp`])
+//! and the shared [`parse_components`] front-end live here as single
+//! generic implementations covering every width.
 //!
 //! # Parser factoring
 //!
@@ -35,7 +36,13 @@
 //! # Scientific notation
 //!
 //! [`fmt::LowerExp`] and [`fmt::UpperExp`] emit scientific notation (`1.5e0`
-//! / `1.5E0`). Trailing zeros in the mantissa are stripped.
+//! / `1.5E0`). Trailing zeros in the mantissa are stripped. Unlike
+//! `Display` / `Debug` (emitted per width by the macro so `Debug` can name
+//! its concrete type), these are a SINGLE generic `impl` over
+//! `D<Int<N>, SCALE>` covering every width: scientific notation reshapes the
+//! magnitude's decimal digit string and places the point per the const
+//! `SCALE`, independent of limb count, so one generic kernel serves all
+//! tiers.
 //!
 //! # Storage-level radix formats
 //!
@@ -65,6 +72,9 @@
 
 use core::fmt;
 
+use crate::int::types::Int;
+use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
+use crate::support::int_fmt::fmt_into;
 use crate::types::widths::ParseError;
 
 #[cfg(feature = "alloc")]
@@ -78,9 +88,20 @@ extern crate alloc;
 
 // ──────────────────────────────────────────────────────────────────────
 // LowerExp / UpperExp -- scientific notation
+//
+// A SINGLE generic blanket over `D<Int<N>, SCALE>` (the same shape as the
+// `PartialEq` / `Ord` blankets in `types/unified.rs`), so every width gets
+// `{:e}` / `{:E}` from one source. Scientific notation reshapes the
+// magnitude's decimal digit string and places the point per the const
+// `SCALE`; it is independent of limb count, so no per-tier impl is needed.
+// `Debug` stays macro-emitted because it must name its concrete type; these
+// formatters name nothing, so the generic impl is sound and collision-free.
 // ──────────────────────────────────────────────────────────────────────
 
-impl<const SCALE: u32> fmt::LowerExp for crate::D<crate::int::types::Int<2>, SCALE> {
+impl<const N: usize, const SCALE: u32> fmt::LowerExp for crate::D<Int<N>, SCALE>
+where
+    Limbs<N>: ComputeLimbs,
+{
     /// Formats the value in scientific notation with a lowercase `e`.
     ///
     /// Trailing zeros in the mantissa are stripped, so `1.500000000000`
@@ -102,11 +123,14 @@ impl<const SCALE: u32> fmt::LowerExp for crate::D<crate::int::types::Int<2>, SCA
     /// assert_eq!(format!("{sub:e}"), "1.5e-3");
     /// ```
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        format_exp(self.0.as_i128(), SCALE, false, f)
+        format_exp::<N>(self.0, SCALE, false, f)
     }
 }
 
-impl<const SCALE: u32> fmt::UpperExp for crate::D<crate::int::types::Int<2>, SCALE> {
+impl<const N: usize, const SCALE: u32> fmt::UpperExp for crate::D<Int<N>, SCALE>
+where
+    Limbs<N>: ComputeLimbs,
+{
     /// Formats the value in scientific notation with an uppercase `E`.
     ///
     /// Identical to [`fmt::LowerExp`] except the exponent separator is `E`.
@@ -124,39 +148,45 @@ impl<const SCALE: u32> fmt::UpperExp for crate::D<crate::int::types::Int<2>, SCA
     /// assert_eq!(format!("{v:E}"), "1.5E0");
     /// ```
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        format_exp(self.0.as_i128(), SCALE, true, f)
+        format_exp::<N>(self.0, SCALE, true, f)
     }
 }
 
-/// Shared implementation for `LowerExp` and `UpperExp`.
+/// Shared scientific-notation kernel for `LowerExp` and `UpperExp`, generic
+/// over the storage width `N`.
 ///
-/// Builds the decimal digit string in a fixed 40-byte stack buffer
-/// (a `u128` has at most 39 digits) so no heap allocation is needed.
+/// Extracts the magnitude's decimal digit string via the same per-width
+/// [`fmt_into`] path that `Int<N>` / `Uint<N>`'s `Display` use — writing into
+/// the per-`N` `digit_formatting_limbs_u8` stack buffer, so no heap is
+/// touched — then places the decimal point after the leading digit and emits
+/// the exponent `(digits − 1) − SCALE`. Width-agnostic: the reshaping only
+/// sees the digit string and the scale.
 ///
 /// # Precision
 ///
 /// Strict: all arithmetic is integer-only; result is bit-exact.
-fn format_exp(raw: i128, scale: u32, upper: bool, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+fn format_exp<const N: usize>(
+    value: Int<N>,
+    scale: u32,
+    upper: bool,
+    f: &mut fmt::Formatter<'_>,
+) -> fmt::Result
+where
+    Limbs<N>: ComputeLimbs,
+{
     let exp_char = if upper { 'E' } else { 'e' };
-    if raw == 0 {
+    if value.is_zero() {
         return write!(f, "0{exp_char}0");
     }
-    let negative = raw < 0;
-    let mag: u128 = raw.unsigned_abs();
+    let negative = value.is_negative();
 
-    // Collect decimal digits of `mag` LSB-first into the buffer,
-    // then reverse to get MSB-first order.
-    let mut buf = [0u8; 40];
-    let mut len = 0usize;
-    let mut n = mag;
-    while n > 0 {
-        let digit = (n % 10) as u8;
-        buf[len] = b'0' + digit;
-        len += 1;
-        n /= 10;
-    }
-    buf[..len].reverse();
-    let digits = &buf[..len];
+    // Decimal digits of the magnitude, MSB-first with no leading zeros,
+    // written into the per-`N` formatting buffer (the identical extraction
+    // path the integer `Display` impls take — pure stack, no heap).
+    let mag = *value.unsigned_abs().as_limbs();
+    let mut buf = Limbs::<N>::digit_formatting_limbs_u8();
+    let digits = fmt_into::<N>(&mag, 10, true, buf.as_mut()).as_bytes();
+    let len = digits.len();
 
     // The decimal exponent for the leading digit is `(len - 1) - scale`.
     let exp: i32 = (len as i32 - 1) - scale as i32;
@@ -176,10 +206,9 @@ fn format_exp(raw: i128, scale: u32, upper: bool, f: &mut fmt::Formatter<'_>) ->
         // Single-digit mantissa: emit without a decimal point.
         write!(f, "{mantissa_int}{exp_char}{exp}")
     } else {
-        f.write_fmt(format_args!("{mantissa_int}."))?;
         // mantissa_frac contains only ASCII digit bytes; from_utf8 cannot fail.
         let frac_str = core::str::from_utf8(mantissa_frac).map_err(|_| fmt::Error)?;
-        write!(f, "{frac_str}{exp_char}{exp}")
+        write!(f, "{mantissa_int}.{frac_str}{exp_char}{exp}")
     }
 }
 

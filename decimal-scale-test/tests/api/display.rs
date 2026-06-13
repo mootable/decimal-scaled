@@ -450,3 +450,117 @@ mod from_src_display {
         }
     }
 }
+
+/// Width-uniform scientific-notation (`{:e}` / `{:E}`) coverage.
+///
+/// `LowerExp` / `UpperExp` are a SINGLE generic `impl` over
+/// `D<Int<N>, SCALE>`, so every decimal width must format identically. These
+/// assert the shared convention across a narrow tier (`D18` = `Int<1>`, `D38`
+/// = `Int<2>`) and a wide tier (`D307` = `Int<16>`, `D1232` = `Int<64>`). The
+/// wide cases drive genuinely multi-limb magnitudes (> 128 bits) through the
+/// digit-extraction path — the case the old `D38`-only `i128` impl could not
+/// reach (and would not even compile for these tiers).
+#[cfg(any(feature = "std", feature = "alloc"))]
+mod exp_width_uniform {
+    // ── Narrow tiers: D18 (Int<1>), D38 (Int<2>) ──
+    mod narrow {
+        use decimal_scaled::{D18s6, D38s12, Int};
+
+        #[test]
+        fn d18_lower_exp_integers() {
+            assert_eq!(format!("{:e}", D18s6::ONE), "1e0");
+            assert_eq!(format!("{:e}", D18s6::try_from(15).unwrap()), "1.5e1");
+            assert_eq!(format!("{:e}", D18s6::try_from(150).unwrap()), "1.5e2");
+        }
+
+        #[test]
+        fn d18_upper_exp() {
+            assert_eq!(format!("{:E}", D18s6::ONE), "1E0");
+            assert_eq!(format!("{:E}", D18s6::try_from(15).unwrap()), "1.5E1");
+        }
+
+        #[test]
+        fn d18_negative_and_zero() {
+            assert_eq!(format!("{:e}", D18s6::try_from(-15).unwrap()), "-1.5e1");
+            assert_eq!(format!("{:e}", D18s6::ZERO), "0e0");
+        }
+
+        #[test]
+        fn d18_subunit_negative_exponent() {
+            // 0.015 = 15_000 at SCALE 6 -> 1.5e-2.
+            let v = D18s6::from_bits(Int::<1>::try_from(15_000_i128).unwrap());
+            assert_eq!(format!("{v:e}"), "1.5e-2");
+        }
+
+        #[test]
+        fn d38_matches_convention() {
+            assert_eq!(format!("{:e}", D38s12::try_from(15).unwrap()), "1.5e1");
+            assert_eq!(format!("{:E}", D38s12::try_from(15).unwrap()), "1.5E1");
+        }
+    }
+
+    // ── Wide tier: D307 (Int<16> = 16 u64 limbs) ──
+    #[cfg(feature = "d307")]
+    mod wide_d307 {
+        use decimal_scaled::Int;
+
+        /// A 50-digit integer (~2^163, three u64 limbs) formats with a full
+        /// multi-digit mantissa — the case the old `i128` impl could not
+        /// represent. SCALE 0, so the decimal value equals the literal.
+        #[test]
+        fn d307_wide_magnitude_multidigit_mantissa() {
+            let v: decimal_scaled::D307<0> =
+                "12345678901234567890123456789012345678901234567891"
+                    .parse()
+                    .unwrap();
+            assert_eq!(
+                format!("{v:e}"),
+                "1.2345678901234567890123456789012345678901234567891e49"
+            );
+            assert_eq!(
+                format!("{v:E}"),
+                "1.2345678901234567890123456789012345678901234567891E49"
+            );
+        }
+
+        /// `15` at SCALE 50: raw = 15·10^50 (~2^170) is genuinely multi-limb;
+        /// the trailing zeros strip back to a `1.5e1` mantissa.
+        #[test]
+        fn d307_high_scale_strips_to_simple_mantissa() {
+            let v = decimal_scaled::D307::<50>::try_from(15).unwrap();
+            assert_eq!(format!("{v:e}"), "1.5e1");
+            let neg = decimal_scaled::D307::<50>::try_from(-15).unwrap();
+            assert_eq!(format!("{neg:e}"), "-1.5e1");
+        }
+
+        /// Sub-unit value -> negative exponent on the wide monomorphisation.
+        #[test]
+        fn d307_subunit_negative_exponent_and_zero() {
+            // 15 / 10^20 = 1.5e-19.
+            let v = decimal_scaled::D307::<20>::from_bits(Int::<16>::try_from(15_i128).unwrap());
+            assert_eq!(format!("{v:e}"), "1.5e-19");
+            assert_eq!(format!("{:e}", decimal_scaled::D307::<5>::ZERO), "0e0");
+        }
+    }
+
+    // ── Wide tier: D1232 (Int<64> = 64 u64 limbs) ──
+    #[cfg(feature = "d1232")]
+    mod wide_d1232 {
+        /// `7` at SCALE 300: raw = 7·10^300 (~2^998, sixteen of the 64 u64
+        /// limbs) — single-digit mantissa through the widest tier.
+        #[test]
+        fn d1232_wide_magnitude_single_digit_mantissa() {
+            let v = decimal_scaled::D1232::<300>::try_from(7).unwrap();
+            assert_eq!(format!("{v:e}"), "7e0");
+            let neg = decimal_scaled::D1232::<300>::try_from(-7).unwrap();
+            assert_eq!(format!("{neg:E}"), "-7E0");
+        }
+
+        /// Multi-digit mantissa at a small scale on the widest tier.
+        #[test]
+        fn d1232_multidigit_mantissa() {
+            let v = decimal_scaled::D1232::<2>::try_from(12345).unwrap();
+            assert_eq!(format!("{v:e}"), "1.2345e4");
+        }
+    }
+}
