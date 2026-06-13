@@ -72,18 +72,22 @@ jobs:
         # out), which the gate handles gracefully. `widths`: the GOLDEN_WIDTHS
         # this shard sweeps; the union is the full surface (narrow carries the
         # always-compiled D18/D38 cells, so it needs no tier feature).
+        # `par`: thread count for `HISTORY_PARALLEL`; present (= "8") on wide shards
+        # (d115+) where a full sequential sweep exceeds CI budget; absent on narrow/d57/d76
+        # which stay sequential for contention-free timing medians. When `par` is absent
+        # the matrix substitution expands to an empty string → SequentialRunner.
         include:
-          - { shard: narrow, feat: "history-044,history-033",      widths: "18,38" }
-          - { shard: d57,    feat: "d57,history-044",              widths: "57"    }
-          - { shard: d76,    feat: "d76,history-044,history-033",   widths: "76"    }
-          - { shard: d115,   feat: "d115,history-044",             widths: "115"   }
-          - { shard: d153,   feat: "d153,history-044,history-033",  widths: "153"   }
-          - { shard: d230,   feat: "d230,history-044,history-033",  widths: "230"   }
-          - { shard: d307,   feat: "d307,history-044,history-033",  widths: "307"   }
-          - { shard: d462,   feat: "d462,history-044",             widths: "462"   }
-          - { shard: d616,   feat: "d616,history-044",             widths: "616"   }
-          - { shard: d924,   feat: "d924,history-044",             widths: "924"   }
-          - { shard: d1232,  feat: "d1232,history-044",            widths: "1232"  }
+          - { shard: narrow, feat: "history-044,history-033",      widths: "18,38"  }
+          - { shard: d57,    feat: "d57,history-044",              widths: "57"     }
+          - { shard: d76,    feat: "d76,history-044,history-033",  widths: "76"     }
+          - { shard: d115,   feat: "d115,history-044",             widths: "115",   par: "8" }
+          - { shard: d153,   feat: "d153,history-044,history-033", widths: "153",   par: "8" }
+          - { shard: d230,   feat: "d230,history-044,history-033", widths: "230",   par: "8" }
+          - { shard: d307,   feat: "d307,history-044,history-033", widths: "307",   par: "8" }
+          - { shard: d462,   feat: "d462,history-044",             widths: "462",   par: "8" }
+          - { shard: d616,   feat: "d616,history-044",             widths: "616",   par: "8" }
+          - { shard: d924,   feat: "d924,history-044",             widths: "924",   par: "8" }
+          - { shard: d1232,  feat: "d1232,history-044",            widths: "1232",  par: "8" }
 
     steps:
       - name: Checkout
@@ -118,6 +122,7 @@ jobs:
         env:
           GOLDEN_WIDTHS: "${{ matrix.widths }}"
           GOLDEN_DIR: ${{ github.workspace }}/decimal-scaled-golden/golden
+          HISTORY_PARALLEL: "${{ matrix.par }}"
         run: |
           set -euo pipefail
           ( while true; do m=$(free -m | awk '/^Mem:/{print $7}'); s=$(free -m | awk '/^Swap:/{print $4}'); d=$(df -BM --output=avail . | tail -1 | tr -dc 0-9); echo "[res $(date +%H:%M:%S)] mem avail ${m} MB | swap free ${s} MB | disk avail ${d} MB"; sleep 15; done ) &
