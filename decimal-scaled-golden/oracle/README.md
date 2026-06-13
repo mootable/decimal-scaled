@@ -1,6 +1,6 @@
 # Golden oracle generation tool
 
-Generates and revalidates the singular golden set (`golden/<func>.golden`,
+Generates and revalidates the singular golden set (`golden/<func>.au`,
 signed `digits.digits` values to `GEN_PRECISION = 1233` fractional digits plus
 `GUARD = 2` guard digits). Each value is computed by one per-function
 **generator** oracle and cross-checked by every other available **validator**
@@ -11,22 +11,22 @@ crate reads — it never links an oracle.
 
 | File | Role |
 | --- | --- |
-| `generate.py` | The CLI (`generate` / `revalidate`): harvests inputs, computes each line with the function's generator, cross-validates, writes `golden/<func>.golden` with a per-line provenance comment. Holds `GENERATOR_POLICY`, `DEFAULT_GENERATOR`, `VALIDATOR_ORDER`, `ACCEPT_ULPS`. |
-| `harvest.py` | Reads the `.lead` input layer (below): dedup, domain filter, and the per-input WHY carried into the provenance comment. |
+| `generate.py` | The CLI (`generate` / `revalidate`): harvests inputs, computes each line with the function's generator, cross-validates, writes `golden/<func>.au` with a per-line provenance comment. Holds `GENERATOR_POLICY`, `DEFAULT_GENERATOR`, `VALIDATOR_ORDER`, `ACCEPT_ULPS`. |
+| `harvest.py` | Reads the `.pb` input layer (below): dedup, domain filter, and the per-input WHY carried into the provenance comment. |
 | `oracle.py` | The `Oracle` interface (name / radix / supports / value) and the registry the adapters self-register into. |
 | `exactness.py` | The terminate-vs-truncate decision: a value stays stripped (claiming exactness) only when exactness is PROVABLE — by irrationality theorem or exact rational inverse-check; everything else is re-padded to the full truncated form. |
 | `functions.py` | Function registry mirroring the Rust `Function` enum: arity + in-domain predicate per function. |
 | `adapters/` | One adapter per oracle backend: `fraction` (exact rational), `decimal` (correctly-rounded base 10), `flint` (FLINT/Arb rigorous intervals), `mpmath`, `mpfr` (gmpy2/MPFR), `sympy`. |
 
-## The `.lead` input layer
+## The `.pb` input layer
 
-Inputs live in `../../tests/lead/<func>.lead` — the lead the generator
-transmutes into gold. A `.lead` file is the `.golden` shape minus the output
+Inputs live in `../lead/<func>.pb` — the lead the generator
+transmutes into gold. A `.pb` file is the `.au` shape minus the output
 column: one case per line (`arity` space-separated decimal literals), split
 purely by function, with no width or scale anywhere (inputs are width-agnostic;
 the gate derives every `(width, scale)` cell from each input). A `//` comment
 line sets the WHY for every following input until the next comment; the
-generator carries that WHY into the `.golden` per-line provenance comment.
+generator carries that WHY into the `.au` per-line provenance comment.
 
 ## The radix oracle policy
 
@@ -65,7 +65,7 @@ pip install -r oracle/requirements.txt            # mpmath (BSD)
 # optional extra validators (sympy BSD; python-flint / gmpy2 are LGPL, not bundled):
 pip install -r oracle/requirements-extra.txt
 
-# generate a few functions (inputs from ../tests/lead/<func>.lead):
+# generate a few functions (inputs from lead/<func>.pb):
 python -m oracle.generate generate --functions sqrt,exp,ln,sin --out golden --precision 1233
 
 # re-check the committed golden set against the validators:

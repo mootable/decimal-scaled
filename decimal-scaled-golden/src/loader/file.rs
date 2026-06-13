@@ -29,10 +29,10 @@ impl FileLoader {
     pub fn new(dir: impl Into<PathBuf>) -> FileLoader {
         let dir = dir.into();
         let (gen_precision, guard) =
-            read_golden_header(&dir, "golden").unwrap_or((DEFAULT_GEN_PRECISION, DEFAULT_GUARD));
+            read_golden_header(&dir, "au").unwrap_or((DEFAULT_GEN_PRECISION, DEFAULT_GUARD));
         FileLoader {
             dir,
-            extension: "golden",
+            extension: "au",
             oracle: Limits {
                 min_value: None,
                 max_value: None,

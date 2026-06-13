@@ -5,7 +5,7 @@
 //! `a / b` is purely the INT divide (no rescale); at higher scales the
 //! `÷10^w` rescale (a second divide that grows with scale) dominates. Sweeping
 //! WIDTH shows the int-divide's width-scaling. The operands are the
-//! `tests/golden/div_d<N>_s<S>.txt` pairs (full-width, near-tie, carry, max
+//! `decimal-scaled-golden/golden/div.au` pairs (full-width, near-tie, carry, max
 //! magnitude), so the profile sees the value-dependent edge cases.
 //!
 //! Run ONE `<width>_s<scale>_<branch|prod>` per invocation so symbolized frames
@@ -88,7 +88,7 @@ where
 /// so every `(width, scale)` cell reads the same file and parses at its own
 /// type (which carries the scale).
 const GOLDEN_DIV: &str =
-    concat!(env!("CARGO_MANIFEST_DIR"), "/../decimal-scaled-golden/golden/div.golden");
+    concat!(env!("CARGO_MANIFEST_DIR"), "/../decimal-scaled-golden/golden/div.au");
 
 /// One `(width, scale)` cell → a branch arm and a prod arm.
 macro_rules! cell {

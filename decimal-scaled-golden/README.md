@@ -12,7 +12,7 @@ The crate has three parts:
    plus loaders, runners, execution strategies, validators, and reporters. Zero
    dependencies by default (the optional `bench` feature pulls criterion for the
    `CriterionStrategy`).
-2. **The golden data** (`golden/`) — one `.golden` file per function (28
+2. **The golden data** (`golden/`) — one `.au` file per function (28
    functions: `sqrt`, `cbrt`, `exp`, `ln`, `log2`, `log10`, `exp2`, the trig /
    inverse-trig / hyperbolic / inverse-hyperbolic set, `log`, `atan2`, `powf`,
    `hypot`, and `add`/`sub`/`mul`/`div`/`rem`), each value stored once to 1233
@@ -170,7 +170,7 @@ cd decimal-scaled-golden
 pip install -r oracle/requirements.txt        # mpmath (BSD)
 pip install -r oracle/requirements-extra.txt  # optional: sympy (BSD), python-flint / gmpy2 (LGPL)
 
-# regenerate (inputs harvested from the .lead files in ../tests/lead):
+# regenerate (inputs harvested from the .pb files in lead/):
 python -m oracle.generate generate --functions sqrt,exp,ln --out golden --precision 1233 --jobs 8
 
 # re-check the committed set against the validator oracles:

@@ -327,7 +327,7 @@ fn history_previous() {
     for (key, p) in &prev {
         let Some(l) = live.get(key) else { continue };
         let (w, s, mode, func, line) = key;
-        let label = || format!("D{w}<{s}> {mode} {func} [{func}.golden:{line}]");
+        let label = || format!("D{w}<{s}> {mode} {func} [{func}.au:{line}]");
         match (p.grade, l.grade) {
             (Grade::Pass, Grade::Fail) => regressions.push(format!("{} ({})", label(), l.detail)),
             (Grade::Pass, Grade::Skip) => coverage_losses.push(label()),

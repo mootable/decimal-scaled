@@ -1,13 +1,13 @@
-"""Read the per-function oracle input files: `tests/lead/<func>.lead` — the lead
+"""Read the per-function oracle input files: `lead/<func>.pb` — the lead
 the generator transmutes into gold.
 
-A `.lead` file is the `.golden` shape minus the output column and the generation
+A `.pb` file is the `.au` shape minus the output column and the generation
 provenance: one case per line (`arity` space-separated decimal literals), split
 purely by FUNCTION — no width/scale anywhere (inputs are width-agnostic; the gate
 derives every (width, scale) cell from each input). A `//` comment line sets the
 WHY for every following input until the next comment — functional intent only
 ("near-zero directed-rounding band", "regression: retired exp_underflow.rs pin"),
-carried by the generator into the `.golden` per-line provenance comment.
+carried by the generator into the `.au` per-line provenance comment.
 
 Inputs are deduped by value (first why wins) and filtered to the function's
 domain; a line whose field count does not match the function's arity is skipped
@@ -23,9 +23,9 @@ DEFAULT_WHY = "coverage"
 
 
 def harvest(func: str, lead_dir: Path) -> List[Tuple[List[str], str]]:
-    """`(inputs, why)` for every in-domain case in `<lead_dir>/<func>.lead`."""
+    """`(inputs, why)` for every in-domain case in `<lead_dir>/<func>.pb`."""
     f = FUNCTIONS[func]
-    path = Path(lead_dir) / f"{func}.lead"
+    path = Path(lead_dir) / f"{func}.pb"
     if not path.exists():
         return []
     seen = set()
