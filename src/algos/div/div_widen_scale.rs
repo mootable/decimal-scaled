@@ -142,8 +142,7 @@ where
     // When `lz(|a|) + lz(10^SCALE) > Int<N>::BITS` the product fits Int<N>, so
     // divide in N limbs and skip the 2N widen machinery (the ×10^SCALE into a
     // double-buffered scratch, the 2N-sized divide setup). Mirrors
-    // `mul_widen_divide`'s fits-Int<N> arm and recovers v0.4.4's `div_with`
-    // fast path — the narrow balanced `div@low-scale` recovery (at SCALE==0,
+    // `mul_widen_divide`'s fits-Int<N> arm (at SCALE==0,
     // `mult == 1`, so it engages for any operand with ≥2 leading zero bits).
     // Bit-identical: the same `round(|a|·10^SCALE / |b|)`, an N-limb Knuth
     // divide instead of 2N. Hardcoding Knuth is the matcher's choice for this

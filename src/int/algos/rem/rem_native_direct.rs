@@ -11,15 +11,14 @@
 //! the remainder on the UNSIGNED magnitudes — it calls `unsigned_abs()`
 //! (a `neg_dispatch` round trip on a negative operand) on both inputs,
 //! takes `u128 % u128`, then rebuilds the signed result via
-//! `from_mag_limbs`. That mirrors 0.4.4 correctness but adds sign-magnitude
-//! conversion overhead that 0.4.4's narrow tiers never paid: 0.4.4 D18/D38
-//! `Rem` was `self.0 % rhs.0` — a single hardware `i64 %` / `i128 %`
-//! directly on the two's-complement storage primitive, no magnitude trip.
+//! `from_mag_limbs`. That is correct but adds sign-magnitude
+//! conversion overhead: a single hardware `i64 %` / `i128 %`
+//! directly on the two's-complement storage primitive needs no magnitude trip.
 //!
 //! For `N <= 2` the `Int<N>` limbs ARE the i64/i128 two's-complement value
-//! (see [`crate::int::types::Int::as_i128`]'s `N <= 2` fast path, commit
-//! 3da3553), so the remainder can be the hardware signed `%` on that value
-//! directly — recovering the exact 0.4.4 instruction sequence. The only
+//! (see [`crate::int::types::Int::as_i128`]'s `N <= 2` fast path),
+//! so the remainder can be the hardware signed `%` on that value
+//! directly. The only
 //! hazard a signed `%` carries is the `i128::MIN % -1` overflow trap; we
 //! guard it explicitly and return zero (the mathematically-correct
 //! remainder, matching `wrapping_rem`), so the result is bit-identical to

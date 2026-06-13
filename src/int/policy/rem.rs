@@ -36,8 +36,8 @@
 //!   takes the same hardware `u128 % u128` whenever BOTH magnitudes fit a
 //!   single word — bypassing the `[u64; N]` quotient scratch and the
 //!   `div_rem::dispatch` shape classifier — and falls back to the multi-limb
-//!   divmod ([`rem_via_div_rem`]'s path) otherwise. This recovers v0.4.4's
-//!   single-word "Fast Path A" generically (one kernel, value-gated, valid
+//!   divmod ([`rem_via_div_rem`]'s path) otherwise. This is a
+//!   single-word fast path applied generically (one kernel, value-gated, valid
 //!   at every `N`). Benched (`rem_kernel_ab`): `small_fast` beats the bare
 //!   `via_div_rem` 1.1–2.6× on small operands (the scale-0 shape) at every
 //!   wide tier and is at parity on full-width operands. The multi-limb
@@ -98,7 +98,7 @@ enum Algorithm {
     /// when both operand magnitudes fit a single `u128` it takes a hardware
     /// `u128 % u128` (no `[u64; N]` quotient scratch, no `div_rem::dispatch`
     /// shape classifier); otherwise it falls back to the same divmod
-    /// [`Self::ViaDivRem`] takes. Recovers v0.4.4's single-word "Fast Path A"
+    /// [`Self::ViaDivRem`] takes. A single-word fast path applied
     /// generically. Routed for every wide tier (`N >= 3`): the integer
     /// remainder operands are frequently small (a bare integer, a scale-0
     /// decimal), where the full divmod setup dwarfs the divide. Benched
@@ -155,8 +155,8 @@ const fn select<const N: usize>() -> Select<N> {
         // N >= 3: the FULL-width magnitude exceeds u128, but the operands are
         // frequently small (a bare integer, a scale-0 decimal). `SmallFast`
         // takes a hardware `u128 % u128` whenever both magnitudes fit one
-        // word and falls back to the same divmod otherwise — recovering
-        // v0.4.4's single-word fast path generically. Benched
+        // word and falls back to the same divmod otherwise — a
+        // single-word fast path applied generically. Benched
         // (`rem_kernel_ab`): it beats the bare `via_div_rem` 1.1–2.6× on
         // small operands at every wide tier and ties on full-width operands,
         // so the wide band routes `SmallFast`. (A remainder-only Knuth pass

@@ -3,7 +3,7 @@
 
 //! candidate: faster D57 cbrt, not wired.
 //!
-//! Drop-in candidate kernels for the regressed `(D57, SCALE == 20)` cube-root
+//! Drop-in candidate kernels for the `(D57, SCALE == 20)` cube-root
 //! cell (and, where the radicand stays inside the `f64` range, the other
 //! `Native`-routed mid-scale wide cells). Each is **bit-for-bit identical** to
 //! [`crate::algos::cbrt::cbrt_native::cbrt_native`] /
@@ -11,39 +11,31 @@
 //! [`RoundingMode`] values — only the Newton *seed* (hence the iteration
 //! count) differs. NOT wired into any policy.
 //!
-//! # Diagnosis — why the shipped `cbrt_native` regressed ~2× vs 0.4.4
+//! # Why the seed matters
 //!
 //! The cost of each Newton cube-root step `s ← (2s + n/s²)/3` is one wide
 //! multiply plus one Knuth divide on `Int<W>` operands (`O(W²)`); the
 //! iteration *count* is therefore the whole game once `W` is fixed. That
 //! count is set by how close the seed lands to `∛n`.
 //!
-//! * **0.4.4** (`lookup_d57_s20::icbrt_f64_seeded`, tag `v0.4.4`) seeded
-//!   straight off the **full** ~230-bit radicand: `n.as_f64().cbrt()` then
-//!   `from_f64`. `as_f64` keeps 53 mantissa bits and `f64::cbrt` is
-//!   correctly rounded, so the seed sat within ~2⁻⁵² *relative* of `∛n`.
-//!   One unconditional pre-step lifted it above `⌈∛n⌉` and ~2 monotone
-//!   steps finished — roughly 3 divides total.
-//!
-//! * **0.5.0** (`cbrt_native::icbrt_w_seeded` →
-//!   [`crate::algo_x_support::seed::cbrt_seed`], `src/algo_x_support/seed.rs:132`)
-//!   extracts only the **top 64 bits** of `n` and scales the cube root of
-//!   that window back by `2^(shift/3)`. The width-agnostic design is sound,
-//!   but the residue handling is coarse: for `shift % 3 == r ≠ 0` it
-//!   multiplies the f64 cube root by the *integer* `2^r` (`seed.rs:146`,
-//!   `raw * (1u64 << rem3) as f64` → ×2 for r=1, ×4 for r=2) instead of the
-//!   true `2^(r/3)` (×1.2599 for r=1, ×1.5874 for r=2), then adds a further
-//!   `+2` margin (`seed.rs:155`). So the seed over-shoots `∛n` by up to
-//!   ~2.52× (the worst `r=2` case: `4 / 2^(2/3) ≈ 2.52`), versus 0.4.4's
-//!   ~1+2⁻⁵². A 2.5× over-estimate costs the monotone-decrease loop several
-//!   extra `O(W²)` divides — the measured ~2× regression at D57<20>.
+//! The shipped seed (`cbrt_native::icbrt_w_seeded` →
+//! [`crate::algo_x_support::seed::cbrt_seed`], `src/algo_x_support/seed.rs:132`)
+//! extracts only the **top 64 bits** of `n` and scales the cube root of
+//! that window back by `2^(shift/3)`. The width-agnostic design is sound,
+//! but the residue handling is coarse: for `shift % 3 == r ≠ 0` it
+//! multiplies the f64 cube root by the *integer* `2^r` (`seed.rs:146`,
+//! `raw * (1u64 << rem3) as f64` → ×2 for r=1, ×4 for r=2) instead of the
+//! true `2^(r/3)` (×1.2599 for r=1, ×1.5874 for r=2), then adds a further
+//! `+2` margin (`seed.rs:155`). So the seed over-shoots `∛n` by up to
+//! ~2.52× (the worst `r=2` case: `4 / 2^(2/3) ≈ 2.52`). A 2.5× over-estimate
+//! costs the monotone-decrease loop several extra `O(W²)` divides.
 //!
 //! # The fix
 //!
-//! Recover 0.4.4's tight seed without giving up the no-overflow property the
+//! Tighten the seed without giving up the no-overflow property the
 //! top-bits design bought. Two candidates:
 //!
-//! * [`cbrt_native_fast_a`] — the literal 0.4.4 recipe: `n.as_f64().cbrt()`
+//! * [`cbrt_native_fast_a`] — full-radicand `n.as_f64().cbrt()`
 //!   on the whole radicand. Valid for D57<20> because the radicand
 //!   `mag · 10^40 ≤ 10^97` is far below `f64::MAX ≈ 1.8·10^308`; the
 //!   `f64`-range guard makes it safe to *offer* at the other native cells
@@ -107,10 +99,10 @@ fn round_and_narrow<const N: usize, const W: usize>(
     signed.resize_to::<Int<N>>()
 }
 
-// ── candidate A: full-radicand f64::cbrt seed (the 0.4.4 recipe) ────────
+// ── candidate A: full-radicand f64::cbrt seed ────────
 
 /// `⌊∛n⌋` over `Int<W>`, seeded from the **full** radicand via
-/// `n.as_f64().cbrt()` (the 0.4.4 `icbrt_f64_seeded` recipe). Caller MUST
+/// `n.as_f64().cbrt()`. Caller MUST
 /// guarantee `n` is within the `f64` range (`bit_length ≲ 1023`); the
 /// `cbrt_native_fast_a` entry guards this and falls back otherwise.
 ///

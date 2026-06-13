@@ -54,10 +54,10 @@ enum Algorithm {
     /// is chosen per `(N, SCALE)` cell in the dispatch arm to just cover
     /// `mag · 10^(2·SCALE)`), rather than through the width-agnostic int
     /// `icbrt` policy, whose build-max scratch buffer churn dominated the
-    /// small mid-scale radicands. The seed is the 0.4.4 **full-radicand**
-    /// f64 cbrt seed (commit routing the Native cells to `cbrt_native_fast_a`):
-    /// a tight seed that cuts the Newton divide count, vs the earlier shipped
-    /// top-64-bits seed which over-shot ∛n by ~2.5× and regressed cbrt@D57/D76.
+    /// small mid-scale radicands. The seed is the **full-radicand**
+    /// f64 cbrt seed:
+    /// a tight seed that cuts the Newton divide count, vs the
+    /// top-64-bits seed which over-shoots ∛n by ~2.5×.
     /// Routed by `N` for D57/D76 (N = 3/4) at every scale, and for the wider
     /// tiers D115..D1232 (N = 6..64) at high scale only (`SCALE >= 8·N` — the
     /// empirical crossover where the tight `Int<3N>` overtakes the slice; the
@@ -209,10 +209,10 @@ where
         // generics), so each monomorphisation keeps exactly one arm and
         // the rest are dead-arm-eliminated in release. The `_ => Newton`
         // fallback never fires for a cell `select` routed to `Native`.
-        // Native cells use the 0.4.4-style full-radicand f64 cbrt seed
-        // (`cbrt_native_fast_a`): a tight seed (vs the shipped top-64-bits
-        // seed that over-shoots ∛n by ~2.5×) cuts the Newton divide count,
-        // recovering the cbrt_D57/D76 regression. Bit-identical (the rounding
+        // Native cells use the full-radicand f64 cbrt seed
+        // (`cbrt_native_fast_a`): a tight seed (vs the top-64-bits
+        // seed that over-shoots ∛n by ~2.5×) cuts the Newton divide count.
+        // Bit-identical (the rounding
         // tail is shared); falls back to the top-bits seed past the f64 range.
         Algorithm::Native => match N {
             // All wide tiers run at the full-range work width `W = 3N`, which

@@ -18,8 +18,7 @@
 //!   rescale divide is therefore an `i128 / u64` schoolbook divide -- two
 //!   hardware `divq` instructions via
 //!   [`crate::macros::arithmetic::i128_divrem_by_u64_with_mode`] -- not the
-//!   LLVM `__divti3` soft-call an `i128 / i128` would lower to. This mirrors
-//!   0.4.4 native D18 mul.
+//!   LLVM `__divti3` soft-call an `i128 / i128` would lower to.
 //! * **`N == 2` (D38):** the product can exceed `i128` and `10^SCALE` can
 //!   exceed `u64` (`SCALE` up to 37), so the rescale is delegated to the
 //!   shared `i128` / `256`-bit kernel

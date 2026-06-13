@@ -50,7 +50,7 @@
 //!
 //! Concrete scale aliases such as `D38s12 = D38<12>` are emitted for every
 //! supported `SCALE`. `SCALE = MAX_SCALE + 1` (i.e. `SCALE = N` for `D{N}`) is
-//! rejected at compile time: the v0.4.0 scale cap fixes `MAX_SCALE = N - 1` so
+//! rejected at compile time: the scale cap fixes `MAX_SCALE = N - 1` so
 //! every legal scale retains at least one integer digit of headroom.
 //!
 //! The width-generic [`Decimal`] trait carries the surface that is identical
@@ -399,8 +399,8 @@ pub mod __bench_internals {
     mul_toom3_limb_wrappers!(mul_toom3_u64_192, mul_toom3_u128_192, 192);
     mul_toom3_limb_wrappers!(mul_toom3_u64_256, mul_toom3_u128_256, 256);
     /// Division engine candidates exposed for the `div_kernel_ab`
-    /// microbench (the dispatch-seam A/B that recovers the WIDE integer
-    /// division regression). Both take little-endian u64 magnitude limb
+    /// microbench (the dispatch-seam A/B for the WIDE integer division
+    /// path). Both take little-endian u64 magnitude limb
     /// slices; `quot` / `rem` are written by the engine.
     #[inline(never)]
     pub fn div_knuth_slice(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
@@ -498,7 +498,7 @@ pub mod __bench_internals {
         crate::int::algos::rem::rem_schoolbook::rem_schoolbook::<N>(a, b)
     }
     /// Width-agnostic small-magnitude hardware-`%` fast path candidate (the
-    /// value-gated recovery of v0.4.4's single-word "Fast Path A"; falls
+    /// value-gated single-word fast path; falls
     /// back to `via_div_rem` for genuinely-wide operands).
     #[inline(never)]
     pub fn rem_small_fast<const N: usize>(
@@ -738,8 +738,8 @@ pub mod __bench_internals {
         crate::algos::mul::mul_widen_divide::mul_widen_divide::<2, SCALE>(a, b, mode)
     }
     /// Generic-`N` decimal widen-then-divide multiply, exposed so the
-    /// wide-tier `÷10^w` rescale (the measured `mul` regression cluster:
-    /// D76/D115/D153 at high scale) can be measured at its real storage
+    /// wide-tier `÷10^w` rescale (the D76/D115/D153 high-scale `mul`
+    /// cells) can be measured at its real storage
     /// width and scale.
     #[inline(never)]
     #[allow(private_bounds)]
@@ -781,11 +781,11 @@ pub mod __bench_internals {
     {
         crate::algos::rem::rem_int_layer::rem_int_layer_divmod::<N>(a, b)
     }
-    /// The OLD wide decimal-remainder path: `Int::wrapping_rem` (the const
+    /// The `Int::wrapping_rem` wide decimal-remainder path (the const
     /// single-algorithm `div_rem`, whose multi-limb fallback is an
     /// `O(bit_len)` binary shift-subtract). Exposed so `rem_kernel_ab` can
-    /// A/B the recovered operator/Knuth `rem_int_layer` against the
-    /// regressed path it replaced, on the live-bench `k * 10^SCALE` shape.
+    /// A/B it against the operator/Knuth `rem_int_layer`,
+    /// on the live-bench `k * 10^SCALE` shape.
     #[inline(never)]
     pub fn int_wrapping_rem_slice<const N: usize>(
         a: crate::int::types::Int<N>,
@@ -801,10 +801,10 @@ pub mod __bench_internals {
         crate::algos::rem::rem_native::rem_native::<N>(a, b)
     }
     /// Root kernels exposed for the `root_kernel_ab` microbench (the
-    /// dispatch-seam A/B recovering the D57<20> cbrt regression vs prod
-    /// 0.4.4). `sqrt_mg` / `sqrt_newton_slice` are kept as the D38 sqrt
-    /// reference seam (the kernel was confirmed unchanged vs 0.4.4 and
-    /// stays on the 256-bit arm; the hot u128 path is ~25 ns). `cbrt_*`
+    /// dispatch-seam A/B for the D57<20> cbrt candidates).
+    /// `sqrt_mg` / `sqrt_newton_slice` are kept as the D38 sqrt
+    /// reference seam (stays on the 256-bit arm; the hot u128 path is
+    /// ~25 ns). `cbrt_*`
     /// are the D57<20> candidates: the f64-seeded `Int<6>` native arm vs
     /// the `Int<6>` + int-`icbrt` table-seed arm vs the generic slice.
     #[inline(never)]
@@ -829,7 +829,7 @@ pub mod __bench_internals {
     ) -> crate::int::types::Int<3> {
         crate::algos::cbrt::cbrt_native::cbrt_native_d57s20(raw, mode)
     }
-    /// Candidate D57<20> cube root (0.4.4 full-radicand f64 seed + Newton
+    /// Candidate D57<20> cube root (full-radicand f64 seed + Newton
     /// pre-step) for the `root_kernel_ab` A/B against `cbrt_native_d57s20`.
     #[cfg(any(feature = "d57", feature = "wide"))]
     #[inline(never)]
@@ -899,7 +899,7 @@ pub mod __bench_internals {
             mode,
         )
     }
-    /// `cbrt_native_fast_a` candidate: 0.4.4 full-radicand f64 cbrt seed (with
+    /// `cbrt_native_fast_a` candidate: full-radicand f64 cbrt seed (with
     /// shipped-seed fallback past the f64 range). The kernel currently routed
     /// by `policy::cbrt::Native` at every routed cell. Exposed for the wide
     /// `(N, W, SCALE)` A/B against `cbrt_native_w` and the slice.
@@ -1775,12 +1775,12 @@ pub mod __bench_internals {
     }
 
     /// `to_radians` candidates for the `to_radians_ab` microbench (the
-    /// wide-tier angle-conversion regression vs 0.4.4). `direct` calls the
+    /// wide-tier angle-conversion path). `direct` calls the
     /// `MulPiRatio` kernel straight on the tier `Core` (no policy / resize
     /// indirection); `public` goes through the full public method path
     /// (`D::to_radians_strict_with` -> `to_radians_dispatch` ->
     /// `to_radians::dispatch` -> `mul_pi_ratio_routed`). The gap between the
-    /// two is the dispatch/resize overhead the rewrite added.
+    /// two is the dispatch/resize overhead.
     macro_rules! to_radians_bench {
         ($direct:ident, $public:ident, $n:literal, $core:ident, $feat:literal) => {
             #[cfg(any(feature = $feat, feature = "wide"))]
@@ -1834,14 +1834,14 @@ pub mod __bench_internals {
     // exactly `10^w`. Two strategies do this bit-identically (audited in
     // `algos::support::mg_divide::tests::round_div_*`):
     //   - SLOW: generic Knuth `div_rem` by `10^w` + half-to-even (the
-    //     macro-local `round_div` the band used before the recovery);
+    //     macro-local `round_div`);
     //   - FAST: the MG / Newton power-of-10 kernel `round_div_pow10`.
     // Exposed generic over the work-integer `W` so ONE pair covers every
     // wide work width the `div_recover_ab` sweep walks.
 
     /// SLOW path: half-to-even `round(n / 10^w)` via the generic Knuth
     /// `div_rem` reference (mirrors the macro-local `round_div` with a
-    /// `10^w` divisor — the pre-recovery transcendental-band reduce).
+    /// `10^w` divisor).
     #[inline(never)]
     #[allow(private_bounds)]
     pub fn round_div_pow10_slow<W: crate::int::types::traits::BigInt>(n: W, w: u32) -> W {
@@ -1998,17 +1998,17 @@ pub mod __bench_internals {
         shim!(d307, crate::int::types::Int<16>, "x-wide");
         // `Int<24>` = 1536-bit storage; matches D462 storage, but ALSO the
         // production Work integer used by D230 (Int<12> storage doubles to
-        // Int<24> for the wide-trig `Work` type). The measured regression cells
+        // Int<24> for the wide-trig `Work` type). The cells
         // `exp_D230_s{172,229}` rescale at this width, so the Newton-vs-MG
         // dispatch decision needs `1536`-bit data — hence the dedicated shim
-        // (the previous d307/d616/d924/d1232 set skipped 1536).
+        // (the d307/d616/d924/d1232 set skips 1536).
         shim!(d462, crate::int::types::Int<24>, "x-wide");
         shim!(d616, crate::int::types::Int<32>, "x-wide");
         shim!(d924, crate::int::types::Int<48>, "xx-wide");
         shim!(d1232, crate::int::types::Int<64>, "xx-wide");
-        // Wider tier added 2026-05-28: Int<96>=6144 = D230 Wexp /
+        // Int<96>=6144 = D230 Wexp /
         // D924 Work. Bench-validated cells extend the Newton-vs-MG
-        // matrix beyond the original 1536-4096 band.
+        // matrix beyond the 1536-4096 band.
         //
         // 8192 / 12288 / 16384 / 32768 are NOT exposed here: their
         // Newton precompute numerator at the AGM-widened scales
@@ -2020,7 +2020,7 @@ pub mod __bench_internals {
     }
 
     /// `Int<N>` wrapping_neg candidates exposed for the `neg_kernel_ab`
-    /// dispatch-seam A/B microbench (the wide-tier neg recovery).
+    /// dispatch-seam A/B microbench (the wide-tier neg path).
     ///
     /// Three candidates, all bit-identical:
     /// - `neg_fused_split` — the production routed kernel: limb-0
@@ -2104,21 +2104,19 @@ pub mod cross_scale;
 #[cfg(feature = "cross-scale-ops")]
 pub use crate::cross_scale as cross;
 
-// `bitwise` and `num_traits_impls` used to live here as test-only
-// modules; their tests now run as Cargo integration tests under
-// `tests/`. The macro-generated impls themselves are emitted by
+// `bitwise` and `num_traits_impls` tests run as Cargo integration
+// tests under `tests/`. The macro-generated impls themselves are emitted by
 // `decl_decimal_bitwise!` / `decl_decimal_num_traits_basics!` from
 // `types/widths.rs`, alongside every other surface.
 //
 // The integer layer is unconditional. D38's strict transcendentals use
-// `Int512` as their guard-digit work integer (replacing the previous
-// `algos::support::fixed::Fixed` 256-bit sign-magnitude type), so the wide-
+// `Int512` as their guard-digit work integer, so the wide-
 // integer family must be available in every feature configuration —
 // not just `feature = "wide"` builds. Compile-time impact is modest:
 // ~2k LOC of self-contained limb arithmetic plus the const-generic
 // `Int<N>` / `Uint<N>` monomorphisations.
-// 0.5.0 const-generic integer layer. The integer side of the crate
-// now mirrors the decimal layer's bucket split, all under `int/`:
+// The integer side of the crate
+// mirrors the decimal layer's bucket split, all under `int/`:
 // `int::types` (the `Int<N>`/`Uint<N>` types + named `IntXXXX`
 // aliases), `int::policy` (algorithm-selection dispatch), and
 // `int::algos` (width-matched algorithms, including the raw slice limb
@@ -2143,7 +2141,7 @@ pub use crate::types::unified::D;
 pub use crate::types::traits::dyn_decimal::{DecimalWidth, DynDecimal, RawStorage};
 
 // D38 — the 128-bit foundation, plus every scale alias D38s0..=D38s37
-// (v0.4.0 cap: MAX_SCALE = name - 1).
+// (scale cap: MAX_SCALE = name - 1).
 pub use crate::types::widths::{
     D38, D38s0, D38s1, D38s2, D38s3, D38s4, D38s5, D38s6, D38s7, D38s8, D38s9, D38s10, D38s11,
     D38s12, D38s13, D38s14, D38s15, D38s16, D38s17, D38s18, D38s19, D38s20, D38s21, D38s22, D38s23,
@@ -2152,7 +2150,7 @@ pub use crate::types::widths::{
 };
 
 
-// D18 — 64-bit storage, scale 0..=17 (v0.4.0 cap: MAX_SCALE = name - 1).
+// D18 — 64-bit storage, scale 0..=17 (scale cap: MAX_SCALE = name - 1).
 pub use crate::types::widths::{
     D18, D18s0, D18s1, D18s2, D18s3, D18s4, D18s5, D18s6, D18s7, D18s8, D18s9, D18s10, D18s11,
     D18s12, D18s13, D18s14, D18s15, D18s16, D18s17,

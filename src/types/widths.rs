@@ -7,7 +7,7 @@
 //! storage of the matching size. The stored integer equals
 //! `actual_value * 10^SCALE`. Widths:
 //!
-//! `MAX_SCALE = name - 1` for every width (the v0.4.0 cap guaranteeing
+//! `MAX_SCALE = name - 1` for every width (the scale cap guaranteeing
 //! at least one integer digit of headroom at every legal `SCALE`):
 //!
 //! | Type | Storage | `MAX_SCALE` |
@@ -23,7 +23,7 @@
 //! round-trips are exact and the types are safe to embed in C-ABI
 //! plugin payloads when the underlying integer matches a primitive.
 
-/// Scaled fixed-point decimal with 128-bit storage. Now a type alias
+/// Scaled fixed-point decimal with 128-bit storage. A type alias
 /// of the unified [`crate::D`] generic decimal type: `D38<S>` is
 /// `D<i128, S>`. Both spellings are interchangeable.
 ///
@@ -69,7 +69,7 @@ pub type D38<const SCALE: u32> = crate::D<crate::int::types::Int<2>, SCALE>;
 /// `D38<S>` fields.
 ///
 /// Implemented on the underlying `crate::D<decimal_scaled::Int<2>, SCALE>` because
-/// `D38<SCALE>` is now an alias of that type. `ZERO` is emitted by
+/// `D38<SCALE>` is an alias of that type. `ZERO` is emitted by
 /// the basics macro further down in this file.
 impl<const SCALE: u32> Default for crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
@@ -379,7 +379,7 @@ pub type D38s36 = D38<36>;
 /// least one integer digit (`|x| >= 1`) for every representable value.
 /// `10^38 < i128::MAX < 10^39`, so the storage could in principle hold a
 /// scale-38 representation, but doing so would leave `|x| < 1.7` with no
-/// integer-digit headroom -- the v0.4.0 cap rules this out by design.
+/// integer-digit headroom -- the scale cap rules this out by design.
 /// Math constants lose precision above `SCALE = 35`; see `D38s36`.
 ///
 /// # Precision
@@ -404,8 +404,7 @@ crate::macros::from_str::decl_decimal_from_str!(wide D38, crate::int::types::Int
 crate::macros::storage_formatters::decl_decimal_storage_formatters!(D38);
 // Bitwise operators (BitAnd/Or/Xor/Not, Shl/Shr) and bit-manipulation
 // methods (unsigned_shr, rotate_*, *_zeros, count_*, *_power_of_two) on
-// the raw storage. Previously hand-coded for D38 only; now a shared
-// macro so every width has the surface.
+// the raw storage. A shared macro gives every width the surface.
 crate::macros::bitwise::decl_decimal_bitwise!(wide D38, crate::int::types::Int<2>);
 // Euclidean / floor / ceil division, abs_diff, midpoint, and the
 // is_zero / is_normal / is_nan / is_infinite / is_finite predicates.
@@ -517,9 +516,9 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
 
 /// Scaled fixed-point decimal with 64-bit storage. See [`D38`] for the
 /// shape documentation; D18 has the same surface scaled to `i64` and
-/// `MAX_SCALE = 17` (the v0.4.0 cap: `MAX_SCALE = name - 1`).
+/// `MAX_SCALE = 17` (the scale cap: `MAX_SCALE = name - 1`).
 ///
-/// Now a type alias of the unified [`crate::D`] generic decimal type:
+/// A type alias of the unified [`crate::D`] generic decimal type:
 /// `D18<S>` is `D<i64, S>`. Both spellings are interchangeable. The
 /// `#[repr(transparent)]` layout over `i64` is preserved through the
 /// alias because the underlying [`crate::D`] is itself
@@ -529,7 +528,7 @@ pub type D18<const SCALE: u32> = crate::D<crate::int::types::Int<1>, SCALE>;
 /// `Default` returns `ZERO`.
 ///
 /// Implemented on the underlying `crate::D<Int<1>, SCALE>` because
-/// `D18<SCALE>` is now an alias of that type. `ZERO` is emitted by
+/// `D18<SCALE>` is an alias of that type. `ZERO` is emitted by
 /// the basics macro further down in this file.
 impl<const SCALE: u32> Default for crate::D<crate::int::types::Int<1>, SCALE> {
     #[inline]
@@ -632,7 +631,7 @@ pub type D18s15 = D18<15>;
 pub type D18s16 = D18<16>;
 /// Scale alias: `D18<17>`. 1 LSB = 10^-17. Range ±92.
 ///
-/// Maximum supported scale (v0.4.0 cap: `MAX_SCALE = name - 1`
+/// Maximum supported scale (scale cap: `MAX_SCALE = name - 1`
 /// guarantees at least one integer digit at every legal SCALE).
 pub type D18s17 = D18<17>;
 
@@ -645,7 +644,7 @@ pub type D18s17 = D18<17>;
 
 /// Scaled fixed-point decimal with 256-bit storage. See [`D38`] for the
 /// shape documentation; D76 has the same surface scaled to a 256-bit
-/// signed integer and `MAX_SCALE = 75`. Now a type alias of the unified
+/// signed integer and `MAX_SCALE = 75`. A type alias of the unified
 /// [`crate::D`] generic decimal type: `D76<S>` is
 /// `D<crate::int::types::Int<4>, S>`. Both spellings are interchangeable.
 ///
@@ -662,7 +661,7 @@ pub type D76<const SCALE: u32> = crate::D<crate::int::types::Int<4>, SCALE>;
 /// `Int<4>`.
 ///
 /// Implemented on the underlying `crate::D<crate::int::types::Int<4>, SCALE>`
-/// because `D76<SCALE>` is now an alias of that type. `ZERO` is emitted
+/// because `D76<SCALE>` is an alias of that type. `ZERO` is emitted
 /// by the basics macro further down in this file.
 #[cfg(any(feature = "d76", feature = "wide"))]
 impl<const SCALE: u32> Default for crate::D<crate::int::types::Int<4>, SCALE> {
@@ -791,7 +790,7 @@ pub type D76s64 = D76<64>;
 #[cfg(any(feature = "d76", feature = "wide"))]
 pub type D76s70 = D76<70>;
 /// Scale alias: `D76<75>`. 1 LSB = 10^-75. Maximum supported scale
-/// (v0.4.0 cap: `MAX_SCALE = name - 1`).
+/// (scale cap: `MAX_SCALE = name - 1`).
 #[cfg(any(feature = "d76", feature = "wide"))]
 pub type D76s75 = D76<75>;
 
@@ -802,7 +801,7 @@ pub type D76s75 = D76<75>;
 
 /// Scaled fixed-point decimal with 512-bit storage. See [`D38`] for the
 /// shape documentation; D153 has the same surface scaled to a 512-bit
-/// signed integer and `MAX_SCALE = 152`. Now a type alias of the unified
+/// signed integer and `MAX_SCALE = 152`. A type alias of the unified
 /// [`crate::D`] generic decimal type: `D153<S>` is
 /// `D<crate::int::types::Int<8>, S>`. Both spellings are interchangeable.
 ///
@@ -819,7 +818,7 @@ pub type D153<const SCALE: u32> = crate::D<crate::int::types::Int<8>, SCALE>;
 /// `Int<8>`.
 ///
 /// Implemented on the underlying `crate::D<crate::int::types::Int<8>, SCALE>`
-/// because `D153<SCALE>` is now an alias of that type. `ZERO` is emitted
+/// because `D153<SCALE>` is an alias of that type. `ZERO` is emitted
 /// by the basics macro further down in this file.
 #[cfg(any(feature = "d153", feature = "wide"))]
 impl<const SCALE: u32> Default for crate::D<crate::int::types::Int<8>, SCALE> {
@@ -942,7 +941,7 @@ pub type D153s140 = D153<140>;
 #[cfg(any(feature = "d153", feature = "wide"))]
 pub type D153s150 = D153<150>;
 /// Scale alias: `D153<152>`. 1 LSB = 10^-152. Maximum supported scale
-/// (v0.4.0 cap: `MAX_SCALE = name - 1`).
+/// (scale cap: `MAX_SCALE = name - 1`).
 #[cfg(any(feature = "d153", feature = "wide"))]
 pub type D153s152 = D153<152>;
 
@@ -953,7 +952,7 @@ pub type D153s152 = D153<152>;
 
 /// Scaled fixed-point decimal with 1024-bit storage. See [`D38`] for
 /// the shape documentation; D307 has the same surface scaled to a
-/// 1024-bit signed integer and `MAX_SCALE = 306`. Now a type alias of
+/// 1024-bit signed integer and `MAX_SCALE = 306`. A type alias of
 /// the unified [`crate::D`] generic decimal type: `D307<S>` is
 /// `D<crate::int::types::Int<16>, S>`. Both spellings are interchangeable.
 ///
@@ -970,7 +969,7 @@ pub type D307<const SCALE: u32> = crate::D<crate::int::types::Int<16>, SCALE>;
 /// `Int<16>`.
 ///
 /// Implemented on the underlying `crate::D<crate::int::types::Int<16>, SCALE>`
-/// because `D307<SCALE>` is now an alias of that type. `ZERO` is emitted
+/// because `D307<SCALE>` is an alias of that type. `ZERO` is emitted
 /// by the basics macro further down in this file.
 #[cfg(any(feature = "d307", feature = "wide"))]
 impl<const SCALE: u32> Default for crate::D<crate::int::types::Int<16>, SCALE> {
@@ -1112,7 +1111,7 @@ pub type D307s275 = D307<275>;
 #[cfg(any(feature = "d307", feature = "wide"))]
 pub type D307s300 = D307<300>;
 /// Scale alias: `D307<306>`. 1 LSB = 10^-306. Maximum supported scale
-/// (v0.4.0 cap: `MAX_SCALE = name - 1`).
+/// (scale cap: `MAX_SCALE = name - 1`).
 #[cfg(any(feature = "d307", feature = "wide"))]
 pub type D307s306 = D307<306>;
 
@@ -1133,7 +1132,7 @@ pub type D307s306 = D307<306>;
 
 /// Scaled fixed-point decimal with 192-bit storage. Half-width tier
 /// between D38 and D76 — useful when the D38 i128 ceiling is in
-/// reach but D76's 256-bit storage is wasteful. Now a type alias of
+/// reach but D76's 256-bit storage is wasteful. A type alias of
 /// the unified [`crate::D`] generic decimal type: `D57<S>` is
 /// `D<crate::int::types::Int<3>, S>`. Both spellings are interchangeable.
 ///
@@ -1149,7 +1148,7 @@ pub type D57<const SCALE: u32> = crate::D<crate::int::types::Int<3>, SCALE>;
 /// `Int<3>`.
 ///
 /// Implemented on the underlying `crate::D<crate::int::types::Int<3>, SCALE>`
-/// because `D57<SCALE>` is now an alias of that type. `ZERO` is emitted
+/// because `D57<SCALE>` is an alias of that type. `ZERO` is emitted
 /// by the basics macro further down in this file.
 #[cfg(any(feature = "d57", feature = "wide"))]
 impl<const SCALE: u32> Default for crate::D<crate::int::types::Int<3>, SCALE> {
@@ -1209,14 +1208,14 @@ pub type D57s48 = D57<48>;
 #[cfg(any(feature = "d57", feature = "wide"))]
 pub type D57s52 = D57<52>;
 /// Scale alias: `D57<56>`. 1 LSB = 10^-56. Maximum supported scale
-/// (v0.4.0 cap: `MAX_SCALE = name - 1`).
+/// (scale cap: `MAX_SCALE = name - 1`).
 #[cfg(any(feature = "d57", feature = "wide"))]
 pub type D57s56 = D57<56>;
 
 // ── D115 (384-bit / 6 u64 limbs) ───────────────────────────────────────
 
 /// Scaled fixed-point decimal with 384-bit storage. Half-width tier
-/// between D76 and D153. Now a type alias of the unified [`crate::D`]
+/// between D76 and D153. A type alias of the unified [`crate::D`]
 /// generic decimal type: `D115<S>` is `D<crate::int::types::Int<6>, S>`.
 /// Both spellings are interchangeable.
 ///
@@ -1232,7 +1231,7 @@ pub type D115<const SCALE: u32> = crate::D<crate::int::types::Int<6>, SCALE>;
 /// `Int<6>`.
 ///
 /// Implemented on the underlying `crate::D<crate::int::types::Int<6>, SCALE>`
-/// because `D115<SCALE>` is now an alias of that type. `ZERO` is emitted
+/// because `D115<SCALE>` is an alias of that type. `ZERO` is emitted
 /// by the basics macro further down in this file.
 #[cfg(any(feature = "d115", feature = "wide"))]
 impl<const SCALE: u32> Default for crate::D<crate::int::types::Int<6>, SCALE> {
@@ -1290,14 +1289,14 @@ pub type D115s100 = D115<100>;
 #[cfg(any(feature = "d115", feature = "wide"))]
 pub type D115s110 = D115<110>;
 /// Scale alias: `D115<114>`. 1 LSB = 10^-114. Maximum supported scale
-/// (v0.4.0 cap: `MAX_SCALE = name - 1`).
+/// (scale cap: `MAX_SCALE = name - 1`).
 #[cfg(any(feature = "d115", feature = "wide"))]
 pub type D115s114 = D115<114>;
 
 // ── D230 (768-bit / 12 u64 limbs) ──────────────────────────────────────
 
 /// Scaled fixed-point decimal with 768-bit storage. Half-width tier
-/// between D153 and D307. Now a type alias of the unified [`crate::D`]
+/// between D153 and D307. A type alias of the unified [`crate::D`]
 /// generic decimal type: `D230<S>` is `D<crate::int::types::Int<12>, S>`.
 /// Both spellings are interchangeable.
 ///
@@ -1313,7 +1312,7 @@ pub type D230<const SCALE: u32> = crate::D<crate::int::types::Int<12>, SCALE>;
 /// `Int<12>`.
 ///
 /// Implemented on the underlying `crate::D<crate::int::types::Int<12>, SCALE>`
-/// because `D230<SCALE>` is now an alias of that type. `ZERO` is emitted
+/// because `D230<SCALE>` is an alias of that type. `ZERO` is emitted
 /// by the basics macro further down in this file.
 #[cfg(any(feature = "d230", feature = "wide"))]
 impl<const SCALE: u32> Default for crate::D<crate::int::types::Int<12>, SCALE> {
@@ -1371,14 +1370,14 @@ pub type D230s215 = D230<215>;
 #[cfg(any(feature = "d230", feature = "wide"))]
 pub type D230s225 = D230<225>;
 /// Scale alias: `D230<229>`. 1 LSB = 10^-229. Maximum supported scale
-/// (v0.4.0 cap: `MAX_SCALE = name - 1`).
+/// (scale cap: `MAX_SCALE = name - 1`).
 #[cfg(any(feature = "d230", feature = "wide"))]
 pub type D230s229 = D230<229>;
 
 // ── D462 (1536-bit / 24 u64 limbs) ─────────────────────────────────────
 
 /// Scaled fixed-point decimal with 1536-bit storage. Half-width tier
-/// between D307 and D616. Now a type alias of the unified [`crate::D`]
+/// between D307 and D616. A type alias of the unified [`crate::D`]
 /// generic decimal type: `D462<S>` is `D<crate::int::types::Int<24>, S>`.
 /// Both spellings are interchangeable.
 ///
@@ -1394,7 +1393,7 @@ pub type D462<const SCALE: u32> = crate::D<crate::int::types::Int<24>, SCALE>;
 /// `Int<24>`.
 ///
 /// Implemented on the underlying `crate::D<crate::int::types::Int<24>, SCALE>`
-/// because `D462<SCALE>` is now an alias of that type. `ZERO` is emitted
+/// because `D462<SCALE>` is an alias of that type. `ZERO` is emitted
 /// by the basics macro further down in this file.
 #[cfg(any(feature = "d462", feature = "x-wide"))]
 impl<const SCALE: u32> Default for crate::D<crate::int::types::Int<24>, SCALE> {
@@ -1452,7 +1451,7 @@ pub type D462s440 = D462<440>;
 #[cfg(any(feature = "d462", feature = "x-wide"))]
 pub type D462s460 = D462<460>;
 /// Scale alias: `D462<461>`. 1 LSB = 10^-461. Maximum supported scale
-/// (v0.4.0 cap: `MAX_SCALE = name - 1`).
+/// (scale cap: `MAX_SCALE = name - 1`).
 #[cfg(any(feature = "d462", feature = "x-wide"))]
 pub type D462s461 = D462<461>;
 
@@ -1460,7 +1459,7 @@ pub type D462s461 = D462<461>;
 
 /// Scaled fixed-point decimal with 2048-bit storage. New top tier
 /// beyond D307; supports correctly-rounded transcendentals at scale
-/// up to 616 decimal digits. Now a type alias of the unified
+/// up to 616 decimal digits. A type alias of the unified
 /// [`crate::D`] generic decimal type: `D616<S>` is
 /// `D<crate::int::types::Int<32>, S>`. Both spellings are interchangeable.
 ///
@@ -1476,7 +1475,7 @@ pub type D616<const SCALE: u32> = crate::D<crate::int::types::Int<32>, SCALE>;
 /// `Int<32>`.
 ///
 /// Implemented on the underlying `crate::D<crate::int::types::Int<32>, SCALE>`
-/// because `D616<SCALE>` is now an alias of that type. `ZERO` is emitted
+/// because `D616<SCALE>` is an alias of that type. `ZERO` is emitted
 /// by the basics macro further down in this file.
 #[cfg(any(feature = "d616", feature = "x-wide"))]
 impl<const SCALE: u32> Default for crate::D<crate::int::types::Int<32>, SCALE> {
@@ -1534,14 +1533,14 @@ pub type D616s555 = D616<555>;
 #[cfg(any(feature = "d616", feature = "x-wide"))]
 pub type D616s600 = D616<600>;
 /// Scale alias: `D616<615>`. 1 LSB = 10^-615. Maximum supported scale
-/// (v0.4.0 cap: `MAX_SCALE = name - 1`).
+/// (scale cap: `MAX_SCALE = name - 1`).
 #[cfg(any(feature = "d616", feature = "x-wide"))]
 pub type D616s615 = D616<615>;
 
 // ── D924 (3072-bit / 48 u64 limbs) ─────────────────────────────────────
 
 /// Scaled fixed-point decimal with 3072-bit storage. Half-width tier
-/// between D616 and D1232; supports SCALE up to 924 digits. Now a type
+/// between D616 and D1232; supports SCALE up to 924 digits. A type
 /// alias of the unified [`crate::D`] generic decimal type: `D924<S>`
 /// is `D<crate::int::types::Int<48>, S>`. Both spellings are interchangeable.
 ///
@@ -1557,7 +1556,7 @@ pub type D924<const SCALE: u32> = crate::D<crate::int::types::Int<48>, SCALE>;
 /// `Int<48>`.
 ///
 /// Implemented on the underlying `crate::D<crate::int::types::Int<48>, SCALE>`
-/// because `D924<SCALE>` is now an alias of that type. `ZERO` is emitted
+/// because `D924<SCALE>` is an alias of that type. `ZERO` is emitted
 /// by the basics macro further down in this file.
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
 impl<const SCALE: u32> Default for crate::D<crate::int::types::Int<48>, SCALE> {
@@ -1621,14 +1620,14 @@ pub type D924s900 = D924<900>;
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
 pub type D924s920 = D924<920>;
 /// Scale alias: `D924<923>`. 1 LSB = 10^-923. Maximum supported scale
-/// (v0.4.0 cap: `MAX_SCALE = name - 1`).
+/// (scale cap: `MAX_SCALE = name - 1`).
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
 pub type D924s923 = D924<923>;
 
 // ── D1232 (4096-bit / 64 u64 limbs) ────────────────────────────────────
 
 /// Scaled fixed-point decimal with 4096-bit storage. Widest tier
-/// shipped; supports SCALE up to 1232 digits. Now a type alias of the
+/// shipped; supports SCALE up to 1232 digits. A type alias of the
 /// unified [`crate::D`] generic decimal type: `D1232<S>` is
 /// `D<crate::int::types::Int<64>, S>`. Both spellings are interchangeable.
 ///
@@ -1644,7 +1643,7 @@ pub type D1232<const SCALE: u32> = crate::D<crate::int::types::Int<64>, SCALE>;
 /// `Int<64>`.
 ///
 /// Implemented on the underlying `crate::D<crate::int::types::Int<64>, SCALE>`
-/// because `D1232<SCALE>` is now an alias of that type. `ZERO` is emitted
+/// because `D1232<SCALE>` is an alias of that type. `ZERO` is emitted
 /// by the basics macro further down in this file.
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
 impl<const SCALE: u32> Default for crate::D<crate::int::types::Int<64>, SCALE> {
@@ -1710,7 +1709,7 @@ pub type D1232s1220 = D1232<1220>;
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
 pub type D1232s1230 = D1232<1230>;
 /// Scale alias: `D1232<1231>`. 1 LSB = 10^-1231. Maximum supported scale
-/// (v0.4.0 cap: `MAX_SCALE = name - 1`).
+/// (scale cap: `MAX_SCALE = name - 1`).
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
 pub type D1232s1231 = D1232<1231>;
 

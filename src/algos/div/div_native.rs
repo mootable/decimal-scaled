@@ -19,8 +19,7 @@
 //!   [`crate::macros::arithmetic::i128_divrem_by_u64_with_mode`] -- not the
 //!   LLVM `__divti3` soft-call an `i128 / i128` (the `apply_rounding`
 //!   double-divmod) would lower to. `b`'s sign is folded into the numerator so
-//!   the directed-rounding tie-break sees the true quotient sign. This mirrors
-//!   0.4.4 native D18 div.
+//!   the directed-rounding tie-break sees the true quotient sign.
 //! * **`N == 2` (D38):** the divisor can be a full `i128` and the scaled
 //!   numerator can exceed `i128`, so the rescale delegates to the shared
 //!   hardware kernel
