@@ -216,10 +216,30 @@ where
     } else {
         let neg_k = (-k_total) as u32;
         if neg_k as u128 >= eg::bit_length::<S>(exp_s) as u128 {
-            eg::zero::<S>()
+            // Deep underflow: `e^v` (`v < 0` here, since `k_total < 0`) is
+            // strictly positive but below the working resolution. Return the
+            // smallest positive working value (`1 = 10^-w_ext`), NOT a bare
+            // zero, so the caller's directed narrowing keeps the sign —
+            // Ceiling rounds UP to one storage ULP while Floor / Trunc /
+            // nearest still give 0. A bare zero loses positivity and rounds
+            // Ceiling to 0 (the `powf("2","-200")` mid-scale defect). This
+            // matches `exp_generic::try_exp_fixed`'s deep-underflow return.
+            eg::lit::<S>(1)
         } else {
             exp_s >> neg_k
         }
+    };
+
+    // `e^v > 0` for every finite `v`: a zero result on the `k_total < 0`
+    // (underflow) branch is genuine sub-resolution underflow, NOT a true
+    // zero — return the smallest positive working value so the directed
+    // narrowing keeps the sign (Ceiling → 1 ULP). Mirrors the `exp_generic`
+    // catch-all; restricted to `k_total < 0`, the only regime where
+    // underflow to 0 is physical.
+    let scaled_at_w_ext = if k_total < 0 && scaled_at_w_ext == eg::zero::<S>() {
+        eg::lit::<S>(1)
+    } else {
+        scaled_at_w_ext
     };
 
     if !INTERNAL_EXTRA || extra == 0 {
@@ -377,5 +397,98 @@ mod tests {
                 assert_eq!(got, want, "exp({s}) D76<75> vs D307<75> oracle, mode {m:?}");
             }
         }
+    }
+}
+
+#[cfg(all(test, any(feature = "d57", feature = "d76", feature = "wide")))]
+mod powf_deep_underflow_regression {
+    //! Regression (powf.golden:8048, 2026-06-13): `powf("2","-200") = 2^-200
+    //! ≈ 6.223e-61` at a mid storage scale is a sub-resolution positive — it
+    //! MUST round to 0 under the nearest / Floor / Trunc modes and to one
+    //! storage ULP under Ceiling at every scale `< 61`. The `exp(y·ln x)`
+    //! composition's `k_lift` sizer ignored the exp argument's SIGN: a deeply
+    //! negative argument (`-200·ln 2 ≈ -138.6`, whose result `e^-138.6 < 1`
+    //! needs zero lift) was sized a ~90-digit lift, inflating the working
+    //! scale until the non-widening `mul_agm(y, ln_x, w)` low product
+    //! overflowed the `Wagm` work integer and WRAPPED the exp argument to
+    //! ≈ -0.21, returning `e^-0.21 ≈ 0.808` — a magnitude-class error at
+    //! D57<28/30/42> and D76 mid-scales. Two coordinated fixes: (a) the powf
+    //! shell takes no lift for a negative argument (mirrors
+    //! `exp2_result_int_digits`); (b) the Tang deep-underflow branch returns
+    //! the smallest positive working value (mirrors `exp_generic`), not bare
+    //! zero, so Ceiling rounds the sub-resolution positive up to 1 ULP.
+
+    use crate::RoundingMode;
+
+    /// The five modes that round a sub-resolution positive DOWN to 0.
+    const DOWN_MODES: [RoundingMode; 5] = [
+        RoundingMode::HalfToEven,
+        RoundingMode::HalfAwayFromZero,
+        RoundingMode::HalfTowardZero,
+        RoundingMode::Trunc,
+        RoundingMode::Floor,
+    ];
+
+    /// `"0.00…01"` — one storage ULP at `scale` (the smallest positive).
+    fn one_ulp_str(scale: usize) -> String {
+        let mut s = String::from("0.");
+        for _ in 0..scale - 1 {
+            s.push('0');
+        }
+        s.push('1');
+        s
+    }
+
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[test]
+    fn powf_2_neg200_d57_mid_scales_six_modes() {
+        use crate::types::widths::D57;
+        // s28 is the exact golden cell; s42 a second mid-scale, both < 61.
+        macro_rules! check_d57 {
+            ($s:literal) => {{
+                let base: D57<$s> = "2".parse().unwrap();
+                let exp: D57<$s> = "-200".parse().unwrap();
+                let zero: D57<$s> = "0".parse().unwrap();
+                let one_ulp: D57<$s> = one_ulp_str($s).parse().unwrap();
+                for m in DOWN_MODES {
+                    assert_eq!(
+                        base.powf_strict_with(exp, m), zero,
+                        "D57<{}> powf(2,-200) {m:?} must round the sub-resolution positive to 0", $s
+                    );
+                }
+                assert_eq!(
+                    base.powf_strict_with(exp, RoundingMode::Ceiling), one_ulp,
+                    "D57<{}> powf(2,-200) Ceiling must round the sub-resolution positive up to 1 ULP", $s
+                );
+            }};
+        }
+        check_d57!(28);
+        check_d57!(42);
+    }
+
+    #[cfg(any(feature = "d76", feature = "wide"))]
+    #[test]
+    fn powf_2_neg200_d76_mid_scales_six_modes() {
+        use crate::types::widths::D76;
+        macro_rules! check_d76 {
+            ($s:literal) => {{
+                let base: D76<$s> = "2".parse().unwrap();
+                let exp: D76<$s> = "-200".parse().unwrap();
+                let zero: D76<$s> = "0".parse().unwrap();
+                let one_ulp: D76<$s> = one_ulp_str($s).parse().unwrap();
+                for m in DOWN_MODES {
+                    assert_eq!(
+                        base.powf_strict_with(exp, m), zero,
+                        "D76<{}> powf(2,-200) {m:?} must round the sub-resolution positive to 0", $s
+                    );
+                }
+                assert_eq!(
+                    base.powf_strict_with(exp, RoundingMode::Ceiling), one_ulp,
+                    "D76<{}> powf(2,-200) Ceiling must round the sub-resolution positive up to 1 ULP", $s
+                );
+            }};
+        }
+        check_d76!(40);
+        check_d76!(50);
     }
 }
