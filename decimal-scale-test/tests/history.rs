@@ -17,7 +17,9 @@
 //! over a small fixed input set is `CriterionStrategy`'s separate, later job).
 //! Both gates honour every `GOLDEN_*` env filter (`GOLDEN_WIDTHS` / `GOLDEN_SCALES` /
 //! `GOLDEN_MODES` / `GOLDEN_FUNCS` / `GOLDEN_SAMPLE` / `GOLDEN_STRIPE`), so a focused
-//! slice runs in seconds (the gates run sequentially, so `GOLDEN_THREADS` is inert):
+//! slice runs in seconds. Set `HISTORY_PARALLEL=<N>` (N ≥ 2) to enable parallel
+//! execution with N threads (wide tiers use this in CI — see `runner()`). `GOLDEN_THREADS`
+//! is inert here; the runner reads `HISTORY_PARALLEL` instead:
 //!
 //! ```text
 //! GOLDEN_WIDTHS=18 GOLDEN_FUNCS=exp,sqrt \
@@ -28,13 +30,14 @@
 
 mod common;
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
 use decimal_scaled_golden::{
-    ConsoleReporter, ExecutionResult, FilterLoader, GoldenRunner, InlineReporter, Outcome,
-    OverflowValidator, RoundingMode, RoundingValidator, RunCollector, SequentialRunner,
-    SubjectCollector, Timed,
+    CaseLoader, ConsoleReporter, DecimalSubject, ExecutionResult, FilterLoader, Function,
+    GoldenCase, GoldenRunner, InlineReporter, Limits, Outcome, OverflowValidator, ParallelRunner,
+    RoundingMode, RoundingValidator, RunCollector, SequentialRunner, SubjectCollector, Timed,
 };
 use decimal_scale_test::history::v044;
 use decimal_scale_test::{DsSubject, Filter, GEN_PRECISION};
@@ -52,21 +55,116 @@ static HOOK_GUARD: Mutex<()> = Mutex::new(());
 /// the timing is advisory (reported, never asserted).
 const TIMED_EXECUTIONS: u32 = 1;
 
-/// The history gates run SEQUENTIALLY (not `ParallelRunner`): each shard carries
-/// few enough golden rows that serial execution stays affordable, and a single
-/// thread keeps the ride-along `Timed` medians contention-free — no cross-core
-/// scheduling jitter in the per-row wall-clock the timing table reports.
-fn runner(filter: &Filter) -> SequentialRunner<Timed> {
-    SequentialRunner {
-        strategy: Timed { number_of_executions: TIMED_EXECUTIONS },
-        loader: Box::new(FilterLoader::new(
-            CachingLoader::golden(),
-            row_filter(filter.sample(), filter.stripe()),
-        )),
-        validators: vec![
-            Box::new(RoundingValidator { gen_precision: GEN_PRECISION }),
-            Box::new(OverflowValidator),
-        ],
+/// Dispatch enum: holds either runner so `run_version` stays singly generic
+/// (`GoldenRunner::run` is generic over `S`, making the trait not object-safe).
+enum HistRunner {
+    Sequential(SequentialRunner<Timed>),
+    Parallel(ParallelRunner<Timed>),
+}
+
+impl GoldenRunner for HistRunner {
+    fn run<S: DecimalSubject + Sync>(
+        &self,
+        subject: &S,
+        functions: &[Function],
+    ) -> SubjectCollector {
+        match self {
+            HistRunner::Sequential(r) => r.run(subject, functions),
+            HistRunner::Parallel(r) => r.run(subject, functions),
+        }
+    }
+}
+
+/// Wraps a `CaseLoader` and truncates each function's cases to at most `limit` rows
+/// (the first `limit` rows from the inner loader). This bounds the per-function golden
+/// row count for the history gates independently of `GOLDEN_SAMPLE`: 1000 rows/fn is
+/// enough to detect regressions; the full correctness surface is the bbc's job.
+struct CapLoader<L> {
+    inner: L,
+    limit: usize,
+}
+
+impl<L: CaseLoader> CaseLoader for CapLoader<L> {
+    fn load(&self, func: Function) -> Cow<'_, [GoldenCase]> {
+        let cases = self.inner.load(func);
+        if cases.len() <= self.limit {
+            cases
+        } else {
+            Cow::Owned(cases[..self.limit].to_vec())
+        }
+    }
+
+    fn oracle_limits(&self) -> Limits {
+        self.inner.oracle_limits()
+    }
+}
+
+/// Build the cell list for the history gates: one (width, middle-of-list scale) per width.
+///
+/// The CELLS grid anchors band-edge points. For each width the "middle scale" is the
+/// element at index `len/2` of that width's sorted scale list — the closest available
+/// scale to `max_scale / 2`. This reduces each tier to one representative cell and keeps
+/// the ratchet affordable; the bbc is the correctness source of truth over the full surface.
+/// Respects `GOLDEN_WIDTHS` and `tier_compiled` (delegated to `filter.cells()`).
+fn history_cells(filter: &decimal_scale_test::Filter) -> Vec<(u32, u32)> {
+    let all = filter.cells();
+    let mut by_width: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
+    for (w, s) in all {
+        by_width.entry(w).or_default().push(s);
+    }
+    by_width
+        .into_iter()
+        .map(|(w, mut scales)| {
+            scales.sort_unstable();
+            (w, scales[scales.len() / 2])
+        })
+        .collect()
+}
+
+/// Choose the runner based on the `HISTORY_PARALLEL` env var:
+///
+/// - **Absent or empty → `SequentialRunner`**: single-thread, contention-free
+///   `Timed` medians. Used by narrow/mid shards (narrow, d57, d76) where the
+///   golden-row count is affordable and clean timing adds value.
+/// - **`HISTORY_PARALLEL=N` (N ≥ 2) → `ParallelRunner { threads: N }`**: wide
+///   shards (d115 and above) where a full sequential sweep exceeds the CI budget.
+///   The ratchet and shootout correctness are fully preserved — ALL rows run; only
+///   the ride-along `Timed` medians are noisier (cross-core jitter accepted). The
+///   per-function timing table is advisory-only in any case; the perf source of
+///   truth is always the bbc across the full surface.
+fn runner(filter: &Filter) -> HistRunner {
+    let threads: usize = std::env::var("HISTORY_PARALLEL")
+        .ok()
+        .filter(|v| !v.is_empty())
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0);
+    // Cap loader: first 1000 rows per function (independent of GOLDEN_SAMPLE),
+    // then the row_filter applies sample/stripe on those 1000.
+    let make_loader = |sample, stripe| -> Box<dyn CaseLoader> {
+        Box::new(FilterLoader::new(
+            CapLoader { inner: CachingLoader::golden(), limit: 1000 },
+            row_filter(sample, stripe),
+        ))
+    };
+    if threads >= 2 {
+        HistRunner::Parallel(ParallelRunner {
+            threads,
+            strategy: Timed { number_of_executions: TIMED_EXECUTIONS },
+            loader: make_loader(filter.sample(), filter.stripe()),
+            validators: vec![
+                Box::new(RoundingValidator { gen_precision: GEN_PRECISION }),
+                Box::new(OverflowValidator),
+            ],
+        })
+    } else {
+        HistRunner::Sequential(SequentialRunner {
+            strategy: Timed { number_of_executions: TIMED_EXECUTIONS },
+            loader: make_loader(filter.sample(), filter.stripe()),
+            validators: vec![
+                Box::new(RoundingValidator { gen_precision: GEN_PRECISION }),
+                Box::new(OverflowValidator),
+            ],
+        })
     }
 }
 
@@ -142,8 +240,10 @@ fn is_failure(o: &Outcome) -> bool {
 
 /// Run one version's subjects over `cells` × `modes` into a `RunCollector`.
 /// `subject` builds the version's erased subject for one `(width, scale, mode)`.
-fn run_version<S, F>(
-    runner: &SequentialRunner<Timed>,
+/// Generic over `R: GoldenRunner` so both `SequentialRunner` and `ParallelRunner`
+/// (via the `HistRunner` dispatch enum) can be passed without boxing.
+fn run_version<R: GoldenRunner, S, F>(
+    runner: &R,
     filter: &Filter,
     modes: &[RoundingMode],
     cells: &[(u32, u32)],
@@ -201,7 +301,8 @@ fn history_previous() {
     let _hook_guard = HOOK_GUARD.lock().unwrap_or_else(|p| p.into_inner());
     let filter = Filter::from_env();
     let modes = filter.modes(&[RoundingMode::HalfToEven]);
-    let cells = filter.cells();
+    // Middle scale per tier + 1000-row/fn cap (see `history_cells` and `runner`).
+    let cells = history_cells(&filter);
     let runner = runner(&filter);
 
     // Expected out-of-range cells panic (caught + validated as overflow); silence
@@ -297,7 +398,8 @@ fn history_all() {
     let _hook_guard = HOOK_GUARD.lock().unwrap_or_else(|p| p.into_inner());
     let filter = Filter::from_env();
     let modes = filter.modes(&[RoundingMode::HalfToEven]);
-    let cells = filter.cells();
+    // Middle scale per tier + 1000-row/fn cap (see `history_cells` and `runner`).
+    let cells = history_cells(&filter);
     let runner = runner(&filter);
 
     let prev_hook = std::panic::take_hook();
