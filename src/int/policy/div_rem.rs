@@ -54,9 +54,9 @@ pub(crate) enum Algorithm {
     Knuth,
     /// [`div_burnikel_ziegler_with_knuth`] — Burnikel–Ziegler outer
     /// chunking, recursing to Knuth as its base case. Registered but
-    /// **unrouted**: the policy-map (af3011f6) measured it slowest or
+    /// **unrouted**: the policy-map measured it slowest or
     /// near-slowest at every den_n ≥ 65 working width (u128-limb Knuth wins
-    /// that region 1.68–1.78×), so `select_for_limbs` no longer returns it.
+    /// that region 1.68–1.78×), so `select_for_limbs` does not return it.
     /// Kept as a future-ready alternative — it can only win once the back-
     /// multiply turns sub-quadratic at ≤128 limbs — and reachable via its
     /// `#[cfg(test)]` differential. `#[allow(dead_code)]` suppresses the
@@ -99,11 +99,11 @@ enum Select {
 
 // ── policy data: the benched crossover threshold ──────────────────────
 
-/// Burnikel–Ziegler engagement threshold, in u64 limbs. **No longer a
+/// Burnikel–Ziegler engagement threshold, in u64 limbs. **Not a
 /// routing threshold** — [`select_for_limbs`] does not return BZ (the
-/// policy-map af3011f6 showed it losing across the whole supported surface;
+/// policy-map showed it losing across the whole supported surface;
 /// the den_n ≥ 65 region routes to [`Algorithm::KnuthU128Limb`] instead).
-/// This const is now read ONLY by [`div_burnikel_ziegler_with_knuth`]'s own
+/// This const is read ONLY by [`div_burnikel_ziegler_with_knuth`]'s own
 /// engagement guard (keeping BZ reachable via its `#[cfg(test)]` differential
 /// + the bench seam): a divisor of at least this many effective limbs whose
 /// dividend is `≥ 2·n` runs the BZ chunking, otherwise it shorts to Knuth.
@@ -143,7 +143,7 @@ enum Select {
 /// cross-scale dividend reaches 128 limbs), so a threshold of `65`
 /// guarantees every supported divide takes the faster Knuth engine while
 /// leaving the engine + gate intact for a future true recursive-BZ
-/// kernel. (Lowering toward the legacy `8`/`16` would *regress* every
+/// kernel. (Lowering toward `8`/`16` would *regress* every
 /// D307+ wide divide by engaging the slower block engine.)
 pub(crate) const BZ_THRESHOLD: usize = 65;
 
@@ -153,7 +153,7 @@ pub(crate) const BZ_THRESHOLD: usize = 65;
 /// **Benched** (`div_kernel_ab`, u128 base-2¹²⁸ vs u64 base-2⁶⁴, wide `2n`/`n`
 /// shape — the decimal `/` scaled-numerator shape; the limb-width win
 /// materialises only on this shape). After the q̂-reciprocal was hoisted out
-/// of the per-digit loop (~12–15% faster u128), the policy-map (af3011f6)
+/// of the per-digit loop (~12–15% faster u128), the policy-map
 /// bisected the even-`n` crossover cleanly between 22 and 24:
 ///
 /// | den_n | wide `2n`/`n`   |

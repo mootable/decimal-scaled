@@ -1831,7 +1831,7 @@ mod tests {
 
     /// Reference div that always uses the 256-bit widening path,
     /// bypassing both the i128 and the u128 fast paths. Used to
-    /// cross-check the new u128 fast path in `div_pow10_div_with`.
+    /// cross-check the u128 fast path in `div_pow10_div_with`.
     fn div_pow10_div_reference<const SCALE: u32>(
         a: i128,
         b: i128,

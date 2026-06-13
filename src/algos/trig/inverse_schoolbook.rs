@@ -8,7 +8,7 @@
 //! [`crate::policy::trig::inverse::Algorithm`]. Correctness reference +
 //! A/B microbench partner for the routed `Atan` kernels; `select` never
 //! routes here. Each is the textbook composition over the leaf atan
-//! kernel + the new work-int `sqrt_fixed` leaf, dispatched DOWN to the
+//! kernel + the work-int `sqrt_fixed` leaf, dispatched DOWN to the
 //! `Int<N>` layer. NEVER calls a decimal `*_strict_with` on its own
 //! value (the inversion dec-trig had to avoid). Identical composition +
 //! narrowing as the routed kernel, so it matches bit-exactly.

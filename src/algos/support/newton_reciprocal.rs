@@ -86,7 +86,7 @@ use crate::int::policy::mul::dispatch_slice as mul_slice;
 //
 //   pow_scale : pow_u64 = scale/19 + 3 ≤ 100 u64 (at w_prime ≤ 1850)
 //   r         : (k_u64 + 1) = (width + pow + 1) ≤ 96 + 100 + 1 = 197 u64
-//   mag (n)   : 96 u64 (Int<96>); legacy 4096 path still uses ≤ 64
+//   mag (n)   : 96 u64 (Int<96>); the 4096 path uses ≤ 64
 //   product   : n.len() + r.len() ≤ 128 + 200 = 328 u64
 //
 // All buffers are over-sized to a single ceiling that covers every
@@ -1171,7 +1171,7 @@ mod tests {
         assert_eq!(got, want, "Newton differs from MG chain at Int<96> s=953");
     }
 
-    // u64 vs u128 bit-identity at the new 6144 width covered by
+    // u64 vs u128 bit-identity at the 6144 width covered by
     // `newton_u128_wins` — production-shape cells across the D924
     // SCALE band AND the AGM-widened scales the strict_agm transcendentals
     // exercise.

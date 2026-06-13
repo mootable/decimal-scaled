@@ -53,7 +53,7 @@ enum Algorithm {
     /// — `f64`-seeded narrow-work bespoke for the `(D57, 20)` cell, kept as
     /// an explicit benchmarkable reference seam. Superseded by
     /// [`Self::Native`] (which seeds Newton in a tight `Int<W>` instead of
-    /// re-entering the int `isqrt` policy's build-max slice) and no longer
+    /// re-entering the int `isqrt` policy's build-max slice) and not
     /// selected by `select`.
     #[allow(dead_code)]
     NewtonWithTableSeed,

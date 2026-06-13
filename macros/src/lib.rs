@@ -615,7 +615,7 @@ fn is_radix_digit(c: char, radix: u32) -> bool {
 type ParsedQualifiers = (Option<(u32, Span)>, Option<(u32, Span)>, bool);
 
 /// Re-parse the qualifier segments to find `scale N` / `radix N` /
-/// `rounded`. Equivalent to the old `parse_qualifiers` but works on
+/// `rounded`. Equivalent to `parse_qualifiers` but works on
 /// token-vec segments instead of a `ParseStream`.
 fn parse_qualifier_segments(
     segments: &[Vec<TokenTree>],

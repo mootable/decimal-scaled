@@ -1715,25 +1715,25 @@ pub type D1232s1231 = D1232<1231>;
 
 // ─── Cross-tier next-neighbour widen/narrow chain ─────────────────────
 //
-// The historical .widen() / .narrow() methods on D38/D76/D153/D307
+// The .widen() / .narrow() methods on D38/D76/D153/D307
 // follow the power-of-two storage sequence (D38→D76→D153→D307). The
-// 0.2.6 tier ladder fills in half-widths between each pair plus
-// extends to D1232; the complete ladder is:
+// full tier ladder fills in half-widths between each pair and
+// extends to D1232:
 //
 //   D18 → D38 → D57 → D76 → D115 → D153 → D230 → D307 →
 //   D462 → D616 → D924 → D1232
 //
-// The next-neighbour .widen() / .narrow() methods on the new tiers go
+// The next-neighbour .widen() / .narrow() methods on the half-width tiers go
 // to the immediate adjacent rung (D57.widen() → D76, D76.widen()
 // already returns D153 which is the existing power-of-two next-up,
 // etc.). The cross-tier From / TryFrom impls below cover the
-// neighbour pairs that weren't already declared by the legacy
+// neighbour pairs that weren't already declared by the power-of-two
 // D38/D76/D153/D307 blocks.
 //
-// Coverage strategy: declare every NEW adjacent pair both ways. The
-// existing legacy declarations (D18/D18/D38↔D76, D38/D76↔D153,
+// Coverage strategy: declare every half-width adjacent pair both ways. The
+// power-of-two-sequence declarations (D18/D18/D38↔D76, D38/D76↔D153,
 // D76/D153↔D307) stay where they are; this block adds the conversions
-// that hop through the new tiers (D38↔D57, D57↔D76, D76↔D115, etc.).
+// that hop through the half-width tiers (D38↔D57, D57↔D76, D76↔D115, etc.).
 
 // D38 ↔ D57
 #[cfg(any(feature = "d57", feature = "wide"))]
@@ -1849,10 +1849,10 @@ crate::macros::conversions::decl_cross_width_widening!(wide D1232, crate::int::t
 ))]
 crate::macros::conversions::decl_cross_width_narrowing!(wide D924, crate::int::types::Int<48>, D1232, crate::int::types::Int<64>);
 
-// .widen() / .narrow() methods on the new tiers — each points at the
-// IMMEDIATE neighbour in the comprehensive ladder above. The legacy
-// .widen() / .narrow() on D38/D76/D153/D307 are unchanged (still go
-// to the power-of-two next-up) for source compatibility; users who
+// .widen() / .narrow() methods on the half-width tiers — each points at the
+// IMMEDIATE neighbour in the comprehensive ladder above. The power-of-two
+// .widen() / .narrow() on D38/D76/D153/D307 go
+// to the power-of-two next-up for source compatibility; users who
 // want to traverse through the half-widths should use the methods
 // declared here, or the From / TryFrom impls directly.
 

@@ -107,7 +107,7 @@ pub(crate) const EXTERNAL_EXTRA_DIGITS: u32 = 12;
 /// ln has a two-sided residual whereas exp's caller pins the sign via
 /// `round_to_storage_directed_never_exact`.
 ///
-/// `INTERNAL_EXTRA = false` runs natively at `w` (legacy path; the
+/// `INTERNAL_EXTRA = false` runs natively at `w` (the
 /// outer Ziv-escalation loop in [`ln_tang`] handles the bias by
 /// growing `guard` when the cap leaves room). Set `false` only for
 /// callers that already widen their `w` externally.

@@ -19,7 +19,7 @@
 //!
 //! This is the SAME overhead the rem-only sibling
 //! [`crate::int::algos::rem::rem_native_direct`] removes, and the SAME
-//! overhead `3da3553` removed from `Int::as_i128`. For `N <= 2` the limbs
+//! overhead `Int::as_i128` avoids. For `N <= 2` the limbs
 //! ARE the i64/i128 two's-complement value (see `Int::as_i128`'s `N <= 2`
 //! fast path), and hardware signed `/` and `%` already implement
 //! truncating-toward-zero with the exact sign rules `div_rem`

@@ -125,8 +125,8 @@ pub(crate) mod forward {
 
     /// Pick the sin / cos / atan algorithm for storage limb count `N` and
     /// decimal `SCALE`. Total over the key; the `_` arm is the generic
-    /// `Series` default. Reproduces the legacy `(W, SCALE)` triplet
-    /// routing: the Tang bands divert to `Tang`; every other cell —
+    /// `Series` default. Routes on the `(W, SCALE)` triplet
+    /// key: the Tang bands divert to `Tang`; every other cell —
     /// including the narrow-GUARD low bands realised as a `Series` kernel
     /// — runs `Series`.
     ///

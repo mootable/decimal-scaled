@@ -48,8 +48,8 @@ pub trait BigInt:
     /// The compute-scratch carrier for this value integer — the zero-sized
     /// [`Limbs<N>`](crate::int::types::compute_limbs::Limbs) marker that owns
     /// the per-`N` [`ComputeLimbs`](crate::int::types::compute_limbs::ComputeLimbs)
-    /// buffers. This is the sanctioned bridge that severs the old
-    /// `ComputeInt: BigInt` supertrait cycle: scratch is no longer a
+    /// buffers. This is the sanctioned bridge that avoids a
+    /// `ComputeInt: BigInt` supertrait cycle: scratch is not a
     /// capability OF the value integer, the value integer merely *names* its
     /// carrier here. A helper generic over a value integer `W: BigInt`
     /// reaches scratch as `W::Scratch::single_u128()`.
