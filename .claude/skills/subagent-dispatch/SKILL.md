@@ -96,6 +96,13 @@ sonnets, or three opus). A returning agent frees its points for the next dispatc
 supersedes the older one-agent-at-a-time rule; the disjoint-file-area partition rule still
 applies to everything running concurrently.
 
+**ENFORCE BY SUMMING POINTS BEFORE EVERY DISPATCH (owner 2026-06-13 — I overran to 7).** Before
+launching, add up the points of all running agents and confirm the new agent's cost fits the
+remaining headroom — do NOT think in "free agent slots." **1 free point dispatches a `sonnet`
+ONLY**; an `opus` (2) needs 2 free, a `fable` (4) needs 4 free. If the next-priority task wants
+a higher tier than the headroom allows, either pick a lower-cost task that fits OR wait for a
+running agent to return — never overrun the cap to fit a 2-point task into a 1-point gap.
+
 ## Every agent prompt MUST include
 
 ### 1. Verify your base — NON-destructive (no reset, ever)
