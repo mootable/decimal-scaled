@@ -47,13 +47,25 @@ fn asin_work<C: WideTrigCore, const SCALE: u32>(v: C::W, w: u32) -> C::W {
 pub(crate) fn asin_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> C::Storage
+where
+    <C::W as crate::int::types::traits::BigInt>::Scratch:
+        crate::int::types::compute_limbs::ComputeLimbs,
+{
+    use crate::algos::support::wide_trig_core::{
+        round_to_storage_directed_decided_g, tiny_x_deep_directed_adjust, tiny_x_linear_directed,
+    };
     let w0 = SCALE + C::GUARD;
     let one_w0 = C::one(w0);
     let v0 = C::to_work(raw);
     let abs_v0 = if v0 < C::zero() { C::zero() - v0 } else { v0 };
     if abs_v0 > one_w0 {
         panic!("schoolbook asin: argument out of domain [-1, 1]");
+    }
+    // Analytic tiny-`x` directed decision (relocated from the policy layer) —
+    // `asin(x) = x + x³/6 + …` EXPANDS (every Taylor coefficient is positive).
+    if let Some(v) = tiny_x_linear_directed::<C::Storage, SCALE>(raw, mode, true) {
+        return v;
     }
     // Ziv-escalated narrowing (NOT a single shot): the composition's true
     // value can sit a sub-resolution distance from a rounding boundary
@@ -62,9 +74,23 @@ pub(crate) fn asin_schoolbook<C: WideTrigCore, const SCALE: u32>(
     // fraction depth ~298, beyond any fixed GUARD. The walker's base
     // probe is this same single evaluation (clear-of-band inputs exit
     // there, no cost added); a near-tie escalates the working scale.
-    C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
-        asin_work::<C, SCALE>(C::to_work_scaled(raw, guard), SCALE + guard)
-    })
+    let (r, decided) = round_to_storage_directed_decided_g::<C::Storage, C::W>(
+        C::GUARD,
+        SCALE,
+        mode,
+        C::storage_max(),
+        C::storage_min(),
+        |guard| asin_work::<C, SCALE>(C::to_work_scaled(raw, guard), SCALE + guard),
+    );
+    // Deep sub-resolution band (`j* ≥ 5`): `asin` always EXPANDS.
+    tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
+        r,
+        decided,
+        raw,
+        mode,
+        false,
+        <C::W as crate::int::types::traits::BigInt>::BITS,
+    )
 }
 
 /// Schoolbook acos for a wide tier -- pi/2 - asin(x). Panics if |x| > 1.
@@ -206,7 +232,8 @@ where
 {
     use crate::algos::exp::exp_generic as eg;
     use crate::algos::support::wide_trig_core::{
-        pi_at_rung, round_to_storage_directed_widening_g, to_work_scaled_g,
+        pi_at_rung, round_to_storage_directed_widening_decided_g, tiny_x_deep_directed_adjust,
+        tiny_x_linear_directed, to_work_scaled_g,
     };
     let w0 = SCALE + C::GUARD;
     let one_w0 = eg::one::<Wk>(w0);
@@ -216,10 +243,15 @@ where
     if abs_v0 > one_w0 {
         panic!("schoolbook asin: argument out of domain [-1, 1]");
     }
+    // Analytic tiny-`x` directed decision — the SAME pre-empt the tier
+    // [`asin_schoolbook`] carries (relocated from the policy layer).
+    if let Some(v) = tiny_x_linear_directed::<C::Storage, SCALE>(raw, mode, true) {
+        return v;
+    }
     // Ziv-escalated two-width narrowing — see the tier [`asin_schoolbook`]
     // (the asin(3e-60) partial-sum family): rung probes first, an
     // unresolved-at-rung-cap walk falls up to the tier width.
-    round_to_storage_directed_widening_g::<C::Storage, Wk, C::W>(
+    let (r, decided) = round_to_storage_directed_widening_decided_g::<C::Storage, Wk, C::W>(
         C::GUARD,
         SCALE,
         mode,
@@ -234,6 +266,15 @@ where
             )
         },
         |guard| asin_work::<C, SCALE>(C::to_work_scaled(raw, guard), SCALE + guard),
+    );
+    // Deep sub-resolution band (`j* ≥ 5`): `asin` always EXPANDS.
+    tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
+        r,
+        decided,
+        raw,
+        mode,
+        false,
+        <C::W as crate::int::types::traits::BigInt>::BITS,
     )
 }
 
