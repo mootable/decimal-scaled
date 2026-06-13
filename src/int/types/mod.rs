@@ -26,8 +26,8 @@ pub use traits::BigInt;
 use crate::int::algos::div::div_fixed::div_rem_mag_fixed;
 use crate::int::algos::div::div_rem::div_rem;
 use crate::int::algos::support::limbs::{
-    add_assign_fixed, bit_len_fixed, cmp_cross, cmp_fixed, is_zero_fixed, shl, shl_fixed,
-    shr_fixed, sub_assign_fixed,
+    add_assign_fixed, bit_len_fixed, cmp_cross, cmp_fixed, is_zero_fixed, max_n_limbs, shl,
+    shl_fixed, shr_fixed, sub_assign_fixed,
 };
 use crate::int::algos::mul::mul_schoolbook::{mul_low_fixed, mul_schoolbook};
 use crate::int::policy::add::dispatch as add_dispatch;
@@ -2076,8 +2076,9 @@ impl<const N: usize> Int<N> {
     ///
     /// `const`, `core`-only, no allocation: the `10^scale_diff` divisor and
     /// the quotient/remainder are built in fixed staging buffers (the same
-    /// 288-limb width the wide tiers stage products through), and the
-    /// division reuses [`div_rem`].
+    /// `max_n_limbs(4)` width the wide tiers stage products through — `288`
+    /// limbs at xx-wide, scaling down with `MAX_WORK_N`), and the division
+    /// reuses [`div_rem`].
     pub(crate) const fn cmp_cross_scaled<const M: usize>(
         self,
         other: Int<M>,
@@ -2100,9 +2101,11 @@ impl<const N: usize> Int<N> {
         let mag_cmp = if scale_diff == 0 {
             cmp_cross(a.as_limbs(), b.as_limbs())
         } else {
-            // Build the divisor 10^scale_diff in a fixed staging buffer
-            // (288 limbs covers every shipped width / scale).
-            let mut pow = [0u64; 288];
+            // Build the divisor 10^scale_diff in a fixed staging buffer.
+            // `max_n_limbs(4)` (= 288 at xx-wide) is the wide-tier staging
+            // width, tracking MAX_WORK_N so a narrower build does not carry
+            // the widest tier's buffer; it covers every shipped width/scale.
+            let mut pow = [0u64; max_n_limbs(4)];
             pow[0] = 1;
             let mut e = 0;
             while e < scale_diff {
@@ -2119,8 +2122,8 @@ impl<const N: usize> Int<N> {
             }
 
             // |self| = q · 10^scale_diff + r.
-            let mut q = [0u64; 288];
-            let mut r = [0u64; 288];
+            let mut q = [0u64; max_n_limbs(4)];
+            let mut r = [0u64; max_n_limbs(4)];
             div_rem(a.as_limbs(), &pow, &mut q, &mut r);
 
             // Compare quotient against |other|; tie-break on remainder.
