@@ -13,7 +13,7 @@ use criterion::Criterion;
 use decimal_scaled::Int;
 use decimal_scaled::RoundingMode;
 use decimal_scaled::__bench_internals::{
-    cbrt_native_d57s20, cbrt_native_fast_a_w, cbrt_native_fast_b_w, cbrt_native_fast_d57s20,
+    cbrt_native_d57s20, cbrt_native_fast_a_w, cbrt_native_fast_b_w, cbrt_native_fast_3limb_s20,
     cbrt_native_w, cbrt_newton_slice, cbrt_newton_slice_n, cbrt_table_seed_d57s20,
     int_from_mag_limbs, sqrt_mg, sqrt_native_w, sqrt_newton_slice, sqrt_newton_slice_n,
 };
@@ -100,13 +100,13 @@ fn bench_cbrt(c: &mut Criterion) {
     let nat = |o: OneD57| cbrt_native_d57s20(o.raw, MODE);
     let tbl = |o: OneD57| cbrt_table_seed_d57s20(o.raw, MODE);
     let slc = |o: OneD57| cbrt_newton_slice::<S>(o.raw, MODE);
-    let fst = |o: OneD57| cbrt_native_fast_d57s20(o.raw, MODE);
+    let fst = |o: OneD57| cbrt_native_fast_3limb_s20(o.raw, MODE);
     for o in cbrt_inputs() {
         for m in ALL_MODES {
             let r_nat = cbrt_native_d57s20(o.raw, m);
             let r_tbl = cbrt_table_seed_d57s20(o.raw, m);
             let r_slc = cbrt_newton_slice::<S>(o.raw, m);
-            let r_fst = cbrt_native_fast_d57s20(o.raw, m);
+            let r_fst = cbrt_native_fast_3limb_s20(o.raw, m);
             assert_eq!(r_nat, r_slc, "cbrt native vs slice {} mode {m:?}", o.label);
             assert_eq!(r_tbl, r_slc, "cbrt table vs slice {} mode {m:?}", o.label);
             assert_eq!(r_fst, r_slc, "cbrt fast vs slice {} mode {m:?}", o.label);

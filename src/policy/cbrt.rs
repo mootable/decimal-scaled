@@ -49,7 +49,7 @@ enum Algorithm {
     /// [`cbrt::cbrt_mg_divide::cbrt_mg_divide`] — hand-tuned 384-bit
     /// cube root for the `Int<2>` storage (D38, and D18 widened to it).
     MgDivide,
-    /// [`cbrt::cbrt_native_fast_d57::cbrt_native_fast_a`] — `f64`-seeded
+    /// [`cbrt::cbrt_native_fast::cbrt_native_fast_a`] — `f64`-seeded
     /// Newton run directly in a tight, concrete `Int<W>` (the work width `W`
     /// is chosen per `(N, SCALE)` cell in the dispatch arm to just cover
     /// `mag · 10^(2·SCALE)`), rather than through the width-agnostic int
@@ -221,16 +221,16 @@ where
             // at the tier's max scale, so 192N bits = 3N limbs suffice).
             // `10^(2·SCALE)` folds at compile time. The `_ => Newton` fallback
             // is dead for any cell `select` routes to `Native`.
-            3 => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 9>(raw, const { Int::<9>::TEN.pow(2 * SCALE) }, mode),
-            4 => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 12>(raw, const { Int::<12>::TEN.pow(2 * SCALE) }, mode),
-            6 => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 18>(raw, const { Int::<18>::TEN.pow(2 * SCALE) }, mode),
-            8 => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 24>(raw, const { Int::<24>::TEN.pow(2 * SCALE) }, mode),
-            12 => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 36>(raw, const { Int::<36>::TEN.pow(2 * SCALE) }, mode),
-            16 => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 48>(raw, const { Int::<48>::TEN.pow(2 * SCALE) }, mode),
-            24 => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 72>(raw, const { Int::<72>::TEN.pow(2 * SCALE) }, mode),
-            32 => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 96>(raw, const { Int::<96>::TEN.pow(2 * SCALE) }, mode),
-            48 => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 144>(raw, const { Int::<144>::TEN.pow(2 * SCALE) }, mode),
-            64 => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 192>(raw, const { Int::<192>::TEN.pow(2 * SCALE) }, mode),
+            3 => cbrt::cbrt_native_fast::cbrt_native_fast_a::<N, 9>(raw, const { Int::<9>::TEN.pow(2 * SCALE) }, mode),
+            4 => cbrt::cbrt_native_fast::cbrt_native_fast_a::<N, 12>(raw, const { Int::<12>::TEN.pow(2 * SCALE) }, mode),
+            6 => cbrt::cbrt_native_fast::cbrt_native_fast_a::<N, 18>(raw, const { Int::<18>::TEN.pow(2 * SCALE) }, mode),
+            8 => cbrt::cbrt_native_fast::cbrt_native_fast_a::<N, 24>(raw, const { Int::<24>::TEN.pow(2 * SCALE) }, mode),
+            12 => cbrt::cbrt_native_fast::cbrt_native_fast_a::<N, 36>(raw, const { Int::<36>::TEN.pow(2 * SCALE) }, mode),
+            16 => cbrt::cbrt_native_fast::cbrt_native_fast_a::<N, 48>(raw, const { Int::<48>::TEN.pow(2 * SCALE) }, mode),
+            24 => cbrt::cbrt_native_fast::cbrt_native_fast_a::<N, 72>(raw, const { Int::<72>::TEN.pow(2 * SCALE) }, mode),
+            32 => cbrt::cbrt_native_fast::cbrt_native_fast_a::<N, 96>(raw, const { Int::<96>::TEN.pow(2 * SCALE) }, mode),
+            48 => cbrt::cbrt_native_fast::cbrt_native_fast_a::<N, 144>(raw, const { Int::<144>::TEN.pow(2 * SCALE) }, mode),
+            64 => cbrt::cbrt_native_fast::cbrt_native_fast_a::<N, 192>(raw, const { Int::<192>::TEN.pow(2 * SCALE) }, mode),
             _ => cbrt::cbrt_newton::cbrt_newton::<N>(raw, SCALE, mode),
         },
         Algorithm::NewtonWithTableSeed => {
