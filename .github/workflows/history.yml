@@ -12,10 +12,27 @@ name: "🕰 history gates (advisory)"
 # crates are heavy per-tier-era compiles the quick ci.yml gate must never
 # pay, and a red ratchet means roll back / bisect, not block the merge loop.
 #
-# Compile ONCE, then fan out (the golden-quick/bbc pattern): the build job
-# compiles the history test exe and stages JUST the binary; each stripe
-# downloads it and runs its `GOLDEN_STRIPE=k/n` row partition directly —
-# no per-stripe recompile of the heavy historical crates.
+# WIDTH-SHARDED build+run (the ci.yml golden-quick / tests-consolidated
+# pattern): one matrix job per width tier builds exactly that tier's release
+# gate exe AND runs it in the SAME job (no artifact handoff), then
+# `GOLDEN_WIDTHS`-filters the run to its own tier's widths. The earlier
+# design compiled ONE monolithic `--features wide,x-wide,xx-wide,history`
+# binary (the full live + ds-044 + ds-033 cell fan-out in one rustc) and
+# fanned the run out over row stripes — that build exhausted the runner's
+# 16 GB + 12 GB swap and the service SIGTERMed it (exit 143, run
+# 27447768863). Sharding the LIVE (per-tier `cfg`-gated) cell fan-out down to
+# a single tier per job is the structural fix, the same one golden-quick made
+# for the golden gate.
+#
+# NOTE — heavier than a golden-quick shard: unlike the golden gate, each
+# history shard also pulls the pinned historical crates (ds-044 always;
+# ds-033 on the shards whose widths 0.3.3 adapts) AND the v044/v033 adapter
+# cell fan-out, which is NOT tier-`cfg`-gated (it instantiates its whole
+# ladder whenever its `history-*` feature is on — only the LIVE fan-out
+# narrows per tier). So each shard keeps the monolithic build's memory
+# hedges that golden-quick could drop: disk-backed swap, `CARGO_BUILD_JOBS=2`
+# to cap the concurrent-rustc peak, and the resource sampler beside the
+# compile. Tighten these once a green run proves the per-shard headroom.
 
 on:
   push:
@@ -27,31 +44,54 @@ on:
 permissions:
   contents: read
 
-env:
-  STRIPE_COUNT: "20"
-
 concurrency:
-  # Serial queue per ref, like ci.yml/bbc: an in-progress run finishes, a
-  # newer push supersedes only the QUEUED run.
+  # Serial queue per ref, like ci.yml/bbc: a queued run waits its turn for the
+  # in-progress run to finish (deferred, never cancelled).
   group: history-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  plan:
-    name: plan
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      stripes: ${{ steps.gen.outputs.stripes }}
-    steps:
-      - name: Generate stripe indices
-        id: gen
-        run: echo "stripes=$(python3 -c "import json, os; print(json.dumps(list(range(int(os.environ['STRIPE_COUNT'])))))")" >> "$GITHUB_OUTPUT"
-
-  build:
-    name: build
+  history:
+    name: history (${{ matrix.shard }})
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    env:
+      # Cap the concurrent-rustc peak: a history shard compiles the single-tier
+      # live cells PLUS the ungated v044/v033 adapter fan-out PLUS the ds-044
+      # (and, on shared-width shards, ds-033) dependency crates, so it is
+      # materially heavier than a golden-quick shard. Two parallel rustc units
+      # keep the peak inside the runner (the same exit-143 hedge ci.yml's
+      # `tests` job uses), backed by swap below.
+      CARGO_BUILD_JOBS: "2"
+      # Drop the workspace's `[profile.release] debug = true` (local samply
+      # symbolization) — pure build-time/memory weight this gate never needs.
+      CARGO_PROFILE_RELEASE_DEBUG: "false"
+    strategy:
+      # One slow/failed tier must not mask the others — each shard IS the gate
+      # for its own widths (a missing/red shard is its own red job).
+      fail-fast: false
+      matrix:
+        # `feat`: this shard's live tier + the historical features. `history-044`
+        # rides every shard (the ratchet needs the 0.4.4 subject at every
+        # width). `history-033` rides only the shards whose widths 0.3.3 adapts
+        # (18/38/76/153/230/307) — elsewhere the `history_all` 0.3.3 column is
+        # simply absent (its `#[cfg(feature = "history-033")]` block compiles
+        # out), which the gate handles gracefully. `widths`: the GOLDEN_WIDTHS
+        # this shard sweeps; the union is the full surface (narrow carries the
+        # always-compiled D18/D38 cells, so it needs no tier feature).
+        include:
+          - { shard: narrow, feat: "history-044,history-033",      widths: "18,38" }
+          - { shard: d57,    feat: "d57,history-044",              widths: "57"    }
+          - { shard: d76,    feat: "d76,history-044,history-033",   widths: "76"    }
+          - { shard: d115,   feat: "d115,history-044",             widths: "115"   }
+          - { shard: d153,   feat: "d153,history-044,history-033",  widths: "153"   }
+          - { shard: d230,   feat: "d230,history-044,history-033",  widths: "230"   }
+          - { shard: d307,   feat: "d307,history-044,history-033",  widths: "307"   }
+          - { shard: d462,   feat: "d462,history-044",             widths: "462"   }
+          - { shard: d616,   feat: "d616,history-044",             widths: "616"   }
+          - { shard: d924,   feat: "d924,history-044",             widths: "924"   }
+          - { shard: d1232,  feat: "d1232,history-044",            widths: "1232"  }
+
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -59,7 +99,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache cargo registry
+      - name: Cache cargo registry + git
         uses: actions/cache@v4
         with:
           path: |
@@ -70,11 +110,10 @@ jobs:
             cargo-history-${{ runner.os }}-
 
       - name: Add swap for the compile's memory peak
-        # PROVEN cause (lib-cmp-precision run 27393313247, -j 1 + sampler):
-        # one rustc compiling a full-width monomorphised gate binary peaks
-        # past the runner's 16 GB and the service SIGTERMs it (exit 143).
-        # This job compiles THREE full-width crates (live + ds-044 + ds-033)
-        # into one binary — the heaviest of the class. Swap absorbs the spike.
+        # The history shard carries the ungated v044/v033 adapter fan-out plus
+        # the historical dependency crates on top of its single live tier, so it
+        # keeps the swap hedge golden-quick could drop. Disk-backed swap absorbs
+        # the short compile spike (the exit-143 memory class).
         run: |
           set -euo pipefail
           SWAP=/mnt/swapfile2
@@ -84,80 +123,35 @@ jobs:
           sudo swapon "$SWAP"
           free -h
 
-      - name: Compile the history gates (release, no run)
-        # Full parallelism — the -j1 era is over. Post-cells, the heavy
-        # band-edge + history-adapter monomorphisation lives in ONE
-        # decimal-scaled-cells rlib that the history test binary LINKS rather
-        # than re-instantiates, so this compile no longer fans the per-tier-era
-        # ds-044/ds-033 widths out across many parallel rustc units the way the
-        # pre-cells build did. That fan-out was what peaked past the runner's
-        # 16 GB and let the service SIGTERM the job (exit 143, the lib-cmp /
-        # golden-comprehensive class) — the cap was the mitigation for it, and
-        # with the rlib carrying the monomorphisation it is no longer needed, so
-        # the build runs at the runner's default parallelism. The cargo cache
-        # keeps the wall inside the timeout. CARGO_PROFILE_RELEASE_DEBUG still
-        # drops the workspace's `[profile.release] debug = true` (local samply
-        # symbolization) — pure build-time/memory weight this gate never needs.
+      - name: Build + run the history shard (ratchet + shootout, this tier's widths)
+        # Build + run in ONE invocation (golden-quick's no-artifact-handoff
+        # shape): compile this tier's history exe, then run both gates over only
+        # this tier's widths. `--test-threads=1`: the two gates report
+        # per-function timing medians as a ride-along, and concurrent runs on the
+        # 2-core runner would corrupt each other's medians. `--ignored` runs the
+        # two `#[ignore]`d gates; `--nocapture` streams the per-cell progress.
+        # The awk pipe timestamps every line (slow-vs-stuck is decidable from the
+        # live log) and `tee` stages the log for upload. The resource sampler
+        # prints memory + disk beside the compile so a returning spike leaves an
+        # evidence curve rather than a bare exit 143.
         env:
-          CARGO_PROFILE_RELEASE_DEBUG: "false"
-        # The resource sampler prints memory + disk beside the compile as cheap
-        # insurance for this first post-cells validation run: if the spike ever
-        # returns it leaves an evidence curve rather than a bare exit 143.
+          GOLDEN_WIDTHS: "${{ matrix.widths }}"
+          GOLDEN_DIR: ${{ github.workspace }}/decimal-scaled-golden/golden
         run: |
           set -euo pipefail
           ( while true; do m=$(free -m | awk '/^Mem:/{print $7}'); s=$(free -m | awk '/^Swap:/{print $4}'); d=$(df -BM --output=avail . | tail -1 | tr -dc 0-9); echo "[res $(date +%H:%M:%S)] mem avail ${m} MB | swap free ${s} MB | disk avail ${d} MB"; sleep 15; done ) &
           SAMPLER=$!
-          cargo test -p decimal-scale-test --release --features wide,x-wide,xx-wide,history --test history --no-run
-          kill "$SAMPLER" || true
+          trap 'kill "$SAMPLER" 2>/dev/null || true' EXIT
+          cargo test -p decimal-scale-test --release --features "${{ matrix.feat }}" --test history \
+            -- --ignored --nocapture --test-threads=1 2>&1 \
+            | awk '{ print strftime("[%H:%M:%S]"), $0; fflush() }' \
+            | tee "history-${{ matrix.shard }}.log"
 
-      - name: Stage the gate exe
-        run: |
-          set -euo pipefail
-          exe=$(ls -t target/release/deps/history-* | grep -v '\.d$' | head -1)
-          mkdir -p staged
-          cp "$exe" staged/history
-          chmod +x staged/history
-          echo "staged: $exe"
-
-      - name: Upload the gate exe
+      - name: Upload the shard log
+        if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: history-exe
-          path: staged/
-          if-no-files-found: error
-          retention-days: 3
-
-  history:
-    name: history (stripe ${{ matrix.stripe }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    needs: [plan, build]
-    strategy:
-      fail-fast: false
-      matrix:
-        stripe: ${{ fromJSON(needs.plan.outputs.stripes) }}
-    steps:
-      - name: Checkout (golden data)
-        uses: actions/checkout@v6
-
-      - name: Download the gate exe
-        uses: actions/download-artifact@v8
-        with:
-          name: history-exe
-
-      - name: Run stripe (ratchet + shootout)
-        env:
-          GOLDEN_STRIPE: "${{ matrix.stripe }}/${{ env.STRIPE_COUNT }}"
-          GOLDEN_DIR: ${{ github.workspace }}/decimal-scaled-golden/golden
-        # --test-threads=1: the two gates report per-function timing
-        # medians as a ride-along; running them concurrently on the
-        # 2-core runner would corrupt each other's medians.
-        # The awk pipe timestamps every line (slow-vs-stuck is decidable
-        # from the live log); --nocapture streams the harness's per-cell
-        # progress lines as they happen.
-        run: |
-          set -euo pipefail
-          chmod +x history
-          ./history --ignored --nocapture --test-threads=1 2>&1 \
-            | awk '{ print strftime("[%H:%M:%S]"), $0; fflush() }'
-          exit "${PIPESTATUS[0]}"
+          name: history-${{ matrix.shard }}
+          path: history-${{ matrix.shard }}.log
+          if-no-files-found: warn
+          retention-days: 7

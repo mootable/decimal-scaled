@@ -112,9 +112,17 @@ dead_code = "allow"
 # Version-history correctness gates: live vs the pinned historical releases.
 # `history_previous` (the 0.4.4 ratchet) needs only history-044; the optional
 # 0.3.3 column of `history_all` lights up when history-033 is also enabled.
+# Only `history-044` is REQUIRED (not the wide-tier umbrellas): the live cell
+# fan-out is per-tier feature-gated, so the gate compiles and runs at ANY tier
+# set, and history.yml builds it WIDTH-SHARDED — one tier per shard, narrow
+# through d1232 (mirroring ci.yml's golden-quick) — so the monolithic
+# `wide,x-wide,xx-wide` build that OOMed the runner is never compiled. Each
+# shard `GOLDEN_WIDTHS`-filters to its own tier's widths; the union covers the
+# full surface. `history-033` rides along only on shards whose widths 0.3.3
+# adapts (18/38/76/153/230/307).
 [[test]]
 name = "history"
-required-features = ["wide", "x-wide", "xx-wide", "history-044"]
+required-features = ["history-044"]
 
 # The hand-derived storage-semantics oracle (tests/sanity.rs) exercises the
 # x-wide tier directly.
