@@ -210,7 +210,7 @@ pub(crate) fn div_knuth_u128_limb_into(
 #[cfg(test)]
 mod tests {
     use super::div_knuth_u128_limb;
-    #[cfg(feature = "wide")]
+    #[cfg(feature = "xx-wide")]
     use super::div_knuth_u128_limb_into;
     use crate::int::algos::div::div_knuth::div_knuth;
 
