@@ -192,23 +192,23 @@ mod tests {
     #[test]
     fn sqrt_perfect_squares_are_exact() {
         #[cfg(feature = "d76")]
-        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::from_int(4).sqrt_strict(), crate::D::<crate::int::types::Int<4>, 6>::from_int(2));
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::try_from(4_i128).unwrap().sqrt_strict(), crate::D::<crate::int::types::Int<4>, 6>::try_from(2_i128).unwrap());
         #[cfg(feature = "d76")]
-        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::from_int(9).sqrt_strict(), crate::D::<crate::int::types::Int<4>, 6>::from_int(3));
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::try_from(9_i128).unwrap().sqrt_strict(), crate::D::<crate::int::types::Int<4>, 6>::try_from(3_i128).unwrap());
         #[cfg(feature = "d76")]
         assert_eq!(
-            crate::D::<crate::int::types::Int<4>, 6>::from_int(144).sqrt_strict(),
-            crate::D::<crate::int::types::Int<4>, 6>::from_int(12)
+            crate::D::<crate::int::types::Int<4>, 6>::try_from(144_i128).unwrap().sqrt_strict(),
+            crate::D::<crate::int::types::Int<4>, 6>::try_from(12_i128).unwrap()
         );
         #[cfg(feature = "d153")]
         assert_eq!(
-            crate::D::<crate::int::types::Int<8>, 6>::from_int(25).sqrt_strict(),
-            crate::D::<crate::int::types::Int<8>, 6>::from_int(5)
+            crate::D::<crate::int::types::Int<8>, 6>::try_from(25_i128).unwrap().sqrt_strict(),
+            crate::D::<crate::int::types::Int<8>, 6>::try_from(5_i128).unwrap()
         );
         #[cfg(feature = "d307")]
         assert_eq!(
-            crate::D::<crate::int::types::Int<16>, 6>::from_int(81).sqrt_strict(),
-            crate::D::<crate::int::types::Int<16>, 6>::from_int(9)
+            crate::D::<crate::int::types::Int<16>, 6>::try_from(81_i128).unwrap().sqrt_strict(),
+            crate::D::<crate::int::types::Int<16>, 6>::try_from(9_i128).unwrap()
         );
     }
 
@@ -218,28 +218,28 @@ mod tests {
         #[cfg(feature = "d76")]
         assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.sqrt_strict(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
         #[cfg(feature = "d76")]
-        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::from_int(-4).sqrt_strict(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::try_from(-4_i128).unwrap().sqrt_strict(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
         #[cfg(feature = "d307")]
-        assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::from_int(-1).sqrt_strict(), crate::D::<crate::int::types::Int<16>, 6>::ZERO);
+        assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::try_from(-1_i128).unwrap().sqrt_strict(), crate::D::<crate::int::types::Int<16>, 6>::ZERO);
     }
 
     #[test]
     fn cbrt_perfect_cubes_are_exact() {
         #[cfg(feature = "d76")]
-        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::from_int(8).cbrt_strict(), crate::D::<crate::int::types::Int<4>, 6>::from_int(2));
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::try_from(8_i128).unwrap().cbrt_strict(), crate::D::<crate::int::types::Int<4>, 6>::try_from(2_i128).unwrap());
         #[cfg(feature = "d76")]
-        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::from_int(27).cbrt_strict(), crate::D::<crate::int::types::Int<4>, 6>::from_int(3));
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::try_from(27_i128).unwrap().cbrt_strict(), crate::D::<crate::int::types::Int<4>, 6>::try_from(3_i128).unwrap());
         #[cfg(feature = "d76")]
-        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::from_int(-8).cbrt_strict(), crate::D::<crate::int::types::Int<4>, 6>::from_int(-2));
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::try_from(-8_i128).unwrap().cbrt_strict(), crate::D::<crate::int::types::Int<4>, 6>::try_from(-2_i128).unwrap());
         #[cfg(feature = "d153")]
         assert_eq!(
-            crate::D::<crate::int::types::Int<8>, 6>::from_int(125).cbrt_strict(),
-            crate::D::<crate::int::types::Int<8>, 6>::from_int(5)
+            crate::D::<crate::int::types::Int<8>, 6>::try_from(125_i128).unwrap().cbrt_strict(),
+            crate::D::<crate::int::types::Int<8>, 6>::try_from(5_i128).unwrap()
         );
         #[cfg(feature = "d307")]
         assert_eq!(
-            crate::D::<crate::int::types::Int<16>, 6>::from_int(-64).cbrt_strict(),
-            crate::D::<crate::int::types::Int<16>, 6>::from_int(-4)
+            crate::D::<crate::int::types::Int<16>, 6>::try_from(-64_i128).unwrap().cbrt_strict(),
+            crate::D::<crate::int::types::Int<16>, 6>::try_from(-4_i128).unwrap()
         );
     }
 
@@ -260,7 +260,7 @@ mod tests {
     #[test]
     fn wide_roots_match_d38() {
         for raw in [2i64, 3, 5, 7, 10, 123, 1_000, 999_983] {
-            let narrow = crate::D::<crate::int::types::Int<2>, 6>::from_int(raw);
+            let narrow = crate::D::<crate::int::types::Int<2>, 6>::try_from(raw).unwrap();
             let wide: crate::D<crate::int::types::Int<4>, 6> = narrow.into();
             let narrow_sqrt: crate::D<crate::int::types::Int<4>, 6> = narrow.sqrt_strict().into();
             assert_eq!(wide.sqrt_strict(), narrow_sqrt, "sqrt mismatch for {raw}");
@@ -276,19 +276,19 @@ mod tests {
     fn sqrt_cbrt_at_wide_only_scale() {
         // D76<50>: 4.0 -> 2.0, 8.0 -> 2.0.
         #[cfg(feature = "d76")]
-        assert_eq!(crate::D::<crate::int::types::Int<4>, 50>::from_int(4).sqrt_strict(), crate::D::<crate::int::types::Int<4>, 50>::from_int(2));
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 50>::try_from(4_i128).unwrap().sqrt_strict(), crate::D::<crate::int::types::Int<4>, 50>::try_from(2_i128).unwrap());
         #[cfg(feature = "d76")]
-        assert_eq!(crate::D::<crate::int::types::Int<4>, 50>::from_int(8).cbrt_strict(), crate::D::<crate::int::types::Int<4>, 50>::from_int(2));
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 50>::try_from(8_i128).unwrap().cbrt_strict(), crate::D::<crate::int::types::Int<4>, 50>::try_from(2_i128).unwrap());
         // D307<150>: well past any narrower tier.
         #[cfg(feature = "d307")]
         assert_eq!(
-            crate::D::<crate::int::types::Int<16>, 150>::from_int(9).sqrt_strict(),
-            crate::D::<crate::int::types::Int<16>, 150>::from_int(3)
+            crate::D::<crate::int::types::Int<16>, 150>::try_from(9_i128).unwrap().sqrt_strict(),
+            crate::D::<crate::int::types::Int<16>, 150>::try_from(3_i128).unwrap()
         );
         #[cfg(feature = "d307")]
         assert_eq!(
-            crate::D::<crate::int::types::Int<16>, 150>::from_int(27).cbrt_strict(),
-            crate::D::<crate::int::types::Int<16>, 150>::from_int(3)
+            crate::D::<crate::int::types::Int<16>, 150>::try_from(27_i128).unwrap().cbrt_strict(),
+            crate::D::<crate::int::types::Int<16>, 150>::try_from(3_i128).unwrap()
         );
     }
 }

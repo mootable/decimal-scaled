@@ -18,10 +18,10 @@ use decimal_scaled::D924;
 use std::hint::black_box;
 
 fn bench_pair<const S_KERNEL: u32, const S_LOOKUP: u32>(c: &mut Criterion, label: &str) {
-    let half_k = D924::<S_KERNEL>::from(1) / D924::<S_KERNEL>::from(2);
-    let one_p_half_k = D924::<S_KERNEL>::from(1) + half_k;
-    let half_l = D924::<S_LOOKUP>::from(1) / D924::<S_LOOKUP>::from(2);
-    let one_p_half_l = D924::<S_LOOKUP>::from(1) + half_l;
+    let half_k = D924::<S_KERNEL>::try_from(1_i64).unwrap() / D924::<S_KERNEL>::try_from(2_i64).unwrap();
+    let one_p_half_k = D924::<S_KERNEL>::try_from(1_i64).unwrap() + half_k;
+    let half_l = D924::<S_LOOKUP>::try_from(1_i64).unwrap() / D924::<S_LOOKUP>::try_from(2_i64).unwrap();
+    let one_p_half_l = D924::<S_LOOKUP>::try_from(1_i64).unwrap() + half_l;
 
     // Warm both code paths (lookup table seeds, etc.).
     let _ = one_p_half_l.ln_strict();

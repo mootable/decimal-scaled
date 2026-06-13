@@ -182,15 +182,15 @@ fn bench_arithmetic(c: &mut Criterion) {
 fn bench_conversions(c: &mut Criterion) {
     let mut g = c.benchmark_group("conversions");
 
-    // From<integer>
-    g.bench_function("From_i8", |bn| bn.iter(|| D::from(black_box(42_i8))));
-    g.bench_function("From_i16", |bn| bn.iter(|| D::from(black_box(4242_i16))));
-    g.bench_function("From_i32", |bn| bn.iter(|| D::from(black_box(424_242_i32))));
-    g.bench_function("From_i64", |bn| bn.iter(|| D::from(black_box(424_242_i64))));
-    g.bench_function("From_u8", |bn| bn.iter(|| D::from(black_box(42_u8))));
-    g.bench_function("From_u16", |bn| bn.iter(|| D::from(black_box(4242_u16))));
-    g.bench_function("From_u32", |bn| bn.iter(|| D::from(black_box(424_242_u32))));
-    g.bench_function("From_u64", |bn| bn.iter(|| D::from(black_box(424_242_u64))));
+    // TryFrom<integer>
+    g.bench_function("TryFrom_i8", |bn| bn.iter(|| D::try_from(black_box(42_i8))));
+    g.bench_function("TryFrom_i16", |bn| bn.iter(|| D::try_from(black_box(4242_i16))));
+    g.bench_function("TryFrom_i32", |bn| bn.iter(|| D::try_from(black_box(424_242_i32))));
+    g.bench_function("TryFrom_i64", |bn| bn.iter(|| D::try_from(black_box(424_242_i64))));
+    g.bench_function("TryFrom_u8", |bn| bn.iter(|| D::try_from(black_box(42_u8))));
+    g.bench_function("TryFrom_u16", |bn| bn.iter(|| D::try_from(black_box(4242_u16))));
+    g.bench_function("TryFrom_u32", |bn| bn.iter(|| D::try_from(black_box(424_242_u32))));
+    g.bench_function("TryFrom_u64", |bn| bn.iter(|| D::try_from(black_box(424_242_u64))));
 
     // TryFrom<wide integer / float>
     g.bench_function("TryFrom_i128", |bn| {

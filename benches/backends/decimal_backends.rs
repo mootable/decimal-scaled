@@ -72,7 +72,7 @@ fn bench_arithmetic(c: &mut Criterion) {
 
     // Native-storage tier: i64, i128.
     six_ops!(g, "D18", D18::<12>::try_from(A).unwrap(), D18::<12>::try_from(B).unwrap());
-    six_ops!(g, "D38", D38::<12>::from(A), D38::<12>::from(B));
+    six_ops!(g, "D38", D38::<12>::try_from(A).unwrap(), D38::<12>::try_from(B).unwrap());
 
     // Wide tier (256-bit and up, hand-rolled wide integers). Only
     // the powers-of-two D types are exposed publicly so far; the
@@ -122,7 +122,7 @@ fn bench_transcendentals(c: &mut Criterion) {
     let ours128 = D38::<9>::from_bits(
         decimal_scaled::Int::<2>::try_from(2_345_678_901_i128).unwrap(),
     );
-    let ours256 = D76::<9>::from(2);
+    let ours256 = D76::<9>::try_from(2_i64).unwrap();
     let rd = Decimal::new(2_345_678_901, 9);
 
     macro_rules! one_arg {

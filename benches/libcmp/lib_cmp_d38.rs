@@ -32,8 +32,8 @@ const TRANSC: usize = 19;
 // transcendental kernels only at the reference scale).
 macro_rules! ds_scale {
     ($g:expr, $s:literal) => {{
-        let a = D38::<$s>::from(2);
-        let b = D38::<$s>::from(1);
+        let a = D38::<$s>::try_from(2_i32).unwrap();
+        let b = D38::<$s>::try_from(1_i32).unwrap();
         arith_copy!($g, "decimal-scaled", a, b);
         if $s == TRANSC {
             $g.bench_function("decimal-scaled/ln", |bn| bn.iter(|| black_box(a).ln_strict()));

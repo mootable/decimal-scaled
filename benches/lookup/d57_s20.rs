@@ -23,10 +23,10 @@ fn bench(c: &mut Criterion) {
 
     // Inputs: a midrange value (=1.5) for log/sin/sqrt/cbrt, a small
     // for exp (=0.5), and a 2-arg pair for mul/div.
-    let half: D = D::from(1) / D::from(2);
-    let one_p_half: D = D::from(1) + half; // 1.5
-    let two: D = D::from(2);
-    let one: D = D::from(1);
+    let half: D = D::try_from(1_i64).unwrap() / D::try_from(2_i64).unwrap();
+    let one_p_half: D = D::try_from(1_i64).unwrap() + half; // 1.5
+    let two: D = D::try_from(2_i64).unwrap();
+    let one: D = D::try_from(1_i64).unwrap();
 
     g.bench_function("arith/mul", |bn| {
         bn.iter(|| black_box(two) * black_box(one))

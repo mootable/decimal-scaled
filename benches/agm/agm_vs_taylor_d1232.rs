@@ -23,7 +23,7 @@ use decimal_scaled::D1232;
 use std::hint::black_box;
 
 fn bench_at<const SCALE: u32>(c: &mut Criterion, label: &str) {
-    let three: D1232<SCALE> = D1232::<SCALE>::from(3);
+    let three: D1232<SCALE> = D1232::<SCALE>::try_from(3_i64).unwrap();
 
     // Warm both code paths (table seeds, etc.).
     let _ = three.ln_strict();

@@ -39,19 +39,19 @@ fn main() {
     println!("identify which mode they used.");
 
     // e = 2.71828...
-    let e_hi = Hi::from(1).exp_strict();
+    let e_hi = Hi::try_from(1_i64).unwrap().exp_strict();
     print_candidates("exp(1) = e", e_hi);
 
     // sin(1)
-    let sin1_hi = Hi::from(1).sin_strict();
+    let sin1_hi = Hi::try_from(1_i64).unwrap().sin_strict();
     print_candidates("sin(1)", sin1_hi);
 
     // ln(2)
-    let ln2_hi = Hi::from(2).ln_strict();
+    let ln2_hi = Hi::try_from(2_i64).unwrap().ln_strict();
     print_candidates("ln(2)", ln2_hi);
 
     // sqrt(2)
-    let sqrt2_hi = Hi::from(2).sqrt_strict();
+    let sqrt2_hi = Hi::try_from(2_i64).unwrap().sqrt_strict();
     print_candidates("sqrt(2)", sqrt2_hi);
 
     println!("\n# External library outputs at SCALE=19");
@@ -83,8 +83,8 @@ fn main() {
     println!("  sqrt(2)  = {:.19}", two.sqrt().unwrap());
 
     println!("\n## decimal-scaled D38<19> strict (HalfToEven default)");
-    println!("  exp(1)   = {}", D38::<19>::from(1).exp_strict());
-    println!("  sin(1)   = {}", D38::<19>::from(1).sin_strict());
-    println!("  ln(2)    = {}", D38::<19>::from(2).ln_strict());
-    println!("  sqrt(2)  = {}", D38::<19>::from(2).sqrt_strict());
+    println!("  exp(1)   = {}", D38::<19>::try_from(1_i64).unwrap().exp_strict());
+    println!("  sin(1)   = {}", D38::<19>::try_from(1_i64).unwrap().sin_strict());
+    println!("  ln(2)    = {}", D38::<19>::try_from(2_i64).unwrap().ln_strict());
+    println!("  sqrt(2)  = {}", D38::<19>::try_from(2_i64).unwrap().sqrt_strict());
 }

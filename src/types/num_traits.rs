@@ -31,7 +31,7 @@
 //!
 //! // `from_num` routes any `T: ToPrimitive` through `NumCast`:
 //! let d = D38s12::from_num(42_i32);
-//! assert_eq!(d, D38s12::from(42_i32));
+//! assert_eq!(d, D38s12::try_from(42_i32).unwrap());
 //!
 //! // `to_num` returns any `T: NumCast + Bounded`, saturating on
 //! // out-of-range targets.

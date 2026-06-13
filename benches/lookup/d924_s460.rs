@@ -20,11 +20,11 @@ fn bench(c: &mut Criterion) {
     g.sample_size(10);
     g.measurement_time(std::time::Duration::from_secs(8));
 
-    let half: D = D::from(1) / D::from(2);
-    let one_p_half: D = D::from(1) + half;
-    let two: D = D::from(2);
-    let one: D = D::from(1);
-    let three: D = D::from(3);
+    let half: D = D::try_from(1_i64).unwrap() / D::try_from(2_i64).unwrap();
+    let one_p_half: D = D::try_from(1_i64).unwrap() + half;
+    let two: D = D::try_from(2_i64).unwrap();
+    let one: D = D::try_from(1_i64).unwrap();
+    let three: D = D::try_from(3_i64).unwrap();
 
     // Warm the per-thread Tang ln table so the first measured iteration
     // doesn't pay the one-shot M*ln_fixed seed cost.

@@ -5307,7 +5307,7 @@ mod tests {
     fn wide_agm_moderate_scale_round_trip() {
         #[cfg(feature = "d76")]
         {
-            let x = crate::D::<crate::int::types::Int<4>, 20>::from_int(3);
+            let x = crate::D::<crate::int::types::Int<4>, 20>::try_from(3_i128).unwrap();
             let back = x.ln_strict_agm().exp_strict_agm();
             let delta = (back.to_bits().as_i128() - x.to_bits().as_i128()).abs();
             assert!(delta <= 8, "AGM exp(ln(3)) at D76<20> delta {delta}");
@@ -5315,7 +5315,7 @@ mod tests {
 
         #[cfg(feature = "d153")]
         {
-            let y = crate::D::<crate::int::types::Int<8>, 20>::from_int(2);
+            let y = crate::D::<crate::int::types::Int<8>, 20>::try_from(2_i128).unwrap();
             let back = y.exp_strict_agm().ln_strict_agm();
             let delta = (back.to_bits().as_i128() - y.to_bits().as_i128()).abs();
             assert!(delta <= 8, "AGM ln(exp(2)) at D153<20> delta {delta}");
@@ -5332,7 +5332,7 @@ mod tests {
         // result fits i128 comfortably, so compare there.
         #[cfg(feature = "d76")]
         {
-            let x = crate::D::<crate::int::types::Int<4>, 50>::from_int(3);
+            let x = crate::D::<crate::int::types::Int<4>, 50>::try_from(3_i128).unwrap();
             let back = x.ln_strict().exp_strict();
             let delta = (back.to_bits().as_i128() - x.to_bits().as_i128()).abs();
             assert!(delta <= 8, "exp(ln(3)) at D76<50> delta {delta}");
@@ -5341,7 +5341,7 @@ mod tests {
         // D307<150>: deep scale, only the wide core can serve it.
         #[cfg(feature = "d307")]
         {
-            let y = crate::D::<crate::int::types::Int<16>, 150>::from_int(2);
+            let y = crate::D::<crate::int::types::Int<16>, 150>::try_from(2_i128).unwrap();
             let back = y.exp_strict().ln_strict();
             let delta = (back.to_bits().as_i128() - y.to_bits().as_i128()).abs();
             assert!(delta <= 8, "ln(exp(2)) at D307<150> delta {delta}");

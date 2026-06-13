@@ -24,8 +24,8 @@ use decimal_scaled::D924;
 use std::hint::black_box;
 
 fn bench_at<const SCALE: u32>(c: &mut Criterion, label: &str) {
-    let three: D924<SCALE> = D924::<SCALE>::from(3);
-    let half: D924<SCALE> = D924::<SCALE>::from(1) / D924::<SCALE>::from(2);
+    let three: D924<SCALE> = D924::<SCALE>::try_from(3_i64).unwrap();
+    let half: D924<SCALE> = D924::<SCALE>::try_from(1_i64).unwrap() / D924::<SCALE>::try_from(2_i64).unwrap();
 
     // Warm both code paths (table seeds, etc.).
     let _ = three.ln_strict();
