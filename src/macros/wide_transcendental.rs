@@ -408,14 +408,14 @@ macro_rules! decl_wide_transcendental {
             /// `a · n` for a small unsigned multiplier.
             ///
             /// When `n` fits a single u64 limb, routes through the
-            /// n-by-1-word `checked_mul_u64` specialisation
+            /// n-by-1-word `mul_u64` specialisation
             /// (`L` widening muls instead of the generic `L²`
             /// outer-product loop). For `n > u64::MAX` falls back
             /// to the generic `a * lit(n)` `Mul` operator path.
             #[inline]
             fn mul_u(a: W, n: u128) -> W {
                 if n <= u64::MAX as u128 {
-                    a.checked_mul_u64(n as u64)
+                    a.mul_u64(n as u64)
                 } else {
                     a * lit(n)
                 }
