@@ -387,11 +387,9 @@ macro_rules! decl_decimal_basics {
                 SCALE
             }
 
-            // Integer conversion.
-            #[inline]
-            fn from_i32(value: i32) -> Self {
-                $Type::<SCALE>::from_i32(value)
-            }
+            // Integer conversion (to-integer direction only; construction
+            // from a primitive integer is the fallible `TryFrom<iN>`
+            // surface on each concrete width).
             #[inline]
             fn to_int(self) -> i64 {
                 $Type::<SCALE>::to_int(self)

@@ -416,11 +416,11 @@ mod tests {
         assert_eq!(back, D38s12::ZERO);
     }
 
-    /// Negative values round-trip through JSON. `from(-5_i32)` stores
+    /// Negative values round-trip through JSON. `try_from(-5_i32)` stores
     /// `-5 * 10^12 = -5_000_000_000_000`.
     #[test]
     fn json_negative_round_trips() {
-        let v = D38s12::from(-5_i32);
+        let v = D38s12::try_from(-5_i32).unwrap();
         let json = serde_json::to_string(&v).unwrap();
         assert_eq!(json, "\"-5000000000000\"");
         let back: D38s12 = serde_json::from_str(&json).unwrap();
@@ -525,7 +525,7 @@ mod tests {
 
     #[test]
     fn postcard_negative_round_trips() {
-        let v = D38s12::from(-5_i32);
+        let v = D38s12::try_from(-5_i32).unwrap();
         let bytes: alloc::vec::Vec<u8> = postcard::to_allocvec(&v).unwrap();
         let back: D38s12 = postcard::from_bytes(&bytes).unwrap();
         assert_eq!(back, v);
@@ -569,7 +569,7 @@ mod tests {
     /// to `to_le_bytes`, matches the binary wire representation directly.
     #[test]
     fn cross_format_json_string_matches_le_bytes() {
-        let v = D38s12::from(42_i32);
+        let v = D38s12::try_from(42_i32).unwrap();
         let json = serde_json::to_string(&v).unwrap();
         let inner = json.trim_matches('"');
         let parsed: i128 = inner.parse().unwrap();
@@ -603,7 +603,7 @@ mod tests {
         }
 
         let h = Holder {
-            length: D38s12::from(7_i32),
+            length: D38s12::try_from(7_i32).unwrap(),
         };
         let json = serde_json::to_string(&h).unwrap();
         assert_eq!(json, r#"{"length":"7000000000000"}"#);
@@ -754,7 +754,7 @@ mod wide_serde_tests {
 
     #[test]
     fn d76_human_readable_round_trip() {
-        let v = crate::D::<crate::int::types::Int<4>, 12>::from_int(1_234_567_i128);
+        let v = crate::D::<crate::int::types::Int<4>, 12>::try_from(1_234_567_i128).unwrap();
         let json = serde_json::to_string(&v).unwrap();
         let back: crate::D<crate::int::types::Int<4>, 12> = serde_json::from_str(&json).unwrap();
         assert_eq!(back, v);
@@ -762,7 +762,7 @@ mod wide_serde_tests {
 
     #[test]
     fn d76_negative_human_readable_round_trip() {
-        let v = -crate::D::<crate::int::types::Int<4>, 12>::from_int(987_654_321_i128);
+        let v = -crate::D::<crate::int::types::Int<4>, 12>::try_from(987_654_321_i128).unwrap();
         let json = serde_json::to_string(&v).unwrap();
         let back: crate::D<crate::int::types::Int<4>, 12> = serde_json::from_str(&json).unwrap();
         assert_eq!(back, v);
@@ -771,7 +771,7 @@ mod wide_serde_tests {
     #[test]
     fn d76_binary_round_trip() {
         // postcard is a binary, non-self-describing format.
-        let v = crate::D::<crate::int::types::Int<4>, 12>::from_int(42_i128);
+        let v = crate::D::<crate::int::types::Int<4>, 12>::try_from(42_i128).unwrap();
         let bytes = postcard::to_allocvec(&v).unwrap();
         let back: crate::D<crate::int::types::Int<4>, 12> = postcard::from_bytes(&bytes).unwrap();
         assert_eq!(back, v);

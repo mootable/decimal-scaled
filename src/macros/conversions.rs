@@ -4,54 +4,65 @@
 //! Macro-generated conversions between primitive types and the decimal
 //! widths.
 //!
-//! Two surfaces live here:
+//! Every primitive-int → decimal conversion is **fallible**: scaling the
+//! input by `multiplier()` (= `10^SCALE`) can overflow the destination
+//! storage (near a width's top scale even tiny inputs exceed the range),
+//! so each is a `TryFrom` returning [`ConvertError::Overflow`] rather
+//! than silently wrapping.
 //!
-//! - **Infallible `From<$Src>`** — emitted by [`decl_from_primitive!`]
-//! for source types that always fit the destination. Multiplies the
-//! input by `multiplier()` (= `10^SCALE`); overflow follows Rust's
-//! default integer arithmetic (debug-mode panic, release-mode wrap).
-//! - **Fallible `TryFrom<$Src>`** — emitted by [`decl_try_from_i128!`],
-//! [`decl_try_from_u128!`], [`decl_try_from_i64!`],
-//! [`decl_try_from_u64!`], [`decl_try_from_f64!`], and
-//! [`decl_try_from_f32!`] for sources where the scaled magnitude may
-//! exceed the destination's range, or where the input may be
-//! non-finite (`f32` / `f64`). Returns
-//! [`ConvertError::Overflow`] / [`ConvertError::NotFinite`] instead of
-//! panicking. The `i64` / `u64` `TryFrom` macros serve the 64-bit
-//! storage tier ([`D18`]), where `value * 10^SCALE` need not fit `i64`;
-//! wider tiers get an infallible `From<i64>` / `From<u64>` instead. The
-//! `f64` / `f32` path rounds to the type's scale via the crate-default
-//! `RoundingMode`.
+//! - **`TryFrom<$Src>` for the primitive integers** — emitted by
+//! [`decl_try_from_primitive!`]. Each delegates to the width's
+//! `TryFrom<i128>` via the lossless `$Src -> i128` widen (every
+//! `i8..=u64` source fits `i128`).
+//! - **`TryFrom<i128>` / `TryFrom<u128>`** — emitted by
+//! [`decl_try_from_i128!`] / [`decl_try_from_u128!`]: a `checked_mul`
+//! by the multiplier with a range-check against the storage.
+//! - **`TryFrom<i64>` / `TryFrom<u64>`** — emitted by
+//! [`decl_try_from_i64!`] / [`decl_try_from_u64!`] for the 64-bit
+//! storage tier ([`D18`]) only, where `value * 10^SCALE` need not fit
+//! `i64`; the wider tiers get their `i64` / `u64` `TryFrom` from
+//! [`decl_try_from_primitive!`].
+//! - **`TryFrom<f64>` / `TryFrom<f32>`** — emitted by
+//! [`decl_try_from_f64!`] / [`decl_try_from_f32!`]: non-finite inputs
+//! return [`ConvertError::NotFinite`], finite-but-out-of-range return
+//! [`ConvertError::Overflow`], and in-range values round to the type's
+//! scale via the crate-default `RoundingMode`.
 //!
 //! Plus [`decl_decimal_int_conversion_methods!`] which emits
-//! `from_int` / `from_i32` / `to_int` / `to_int_with` on each width.
+//! `to_int` / `to_int_with` on each width.
 //!
 //! [`ConvertError::Overflow`]: $crate::support::error::ConvertError::Overflow
 //! [`ConvertError::NotFinite`]: $crate::support::error::ConvertError::NotFinite
 
-/// Generates `From<$Src> for $Type<SCALE>` that scales the value by
-/// `10^SCALE` and stores it in `$Storage`. The cast `value as $Storage`
-/// happens first when the source is narrower than the storage, which
-/// is the lossless case; the subsequent multiply is the overflow risk.
-macro_rules! decl_from_primitive {
-    // Wide storage: the primitive widens into wide
-    // storage via the `BigInt` cast, then scales by `10^SCALE`.
+/// Generates `TryFrom<$Src> for $Type<SCALE>` for a primitive integer
+/// source, scaling the value by `10^SCALE` into `$Storage`. Returns
+/// `Err(ConvertError::Overflow)` when the scaled magnitude exceeds the
+/// storage's representable range — scaling can overflow even for tiny
+/// inputs near a width's top scale, so the conversion is fallible.
+///
+/// The body delegates to the width's `TryFrom<i128>` via the lossless
+/// `$Src -> i128` widen: every `i8..=u64` source fits `i128`, so the
+/// single `as i128` cast cannot lose information and the `checked_mul`
+/// + range-check live in one place ([`decl_try_from_i128!`]). `$Storage`
+/// is matched for call-site symmetry with the other conversion macros
+/// but is unused in the delegating body.
+macro_rules! decl_try_from_primitive {
     (wide $Type:ident, $Storage:ty, $Src:ty) => {
-        impl<const SCALE: u32> ::core::convert::From<$Src> for $Type<SCALE> {
+        impl<const SCALE: u32> ::core::convert::TryFrom<$Src> for $Type<SCALE> {
+            type Error = $crate::support::error::ConvertError;
             /// Constructs from an integer by scaling to `value * 10^SCALE`.
-            /// Overflows follow the wide integer's default arithmetic semantics
-            /// (debug-mode panic, release-mode wrap).
+            /// Returns `Err(ConvertError::Overflow)` when the scaled
+            /// magnitude exceeds the storage range.
             #[inline]
-            fn from(value: $Src) -> Self {
-                let widened: $Storage = <$Storage>::from_i128(value as i128);
-                Self(widened * Self::multiplier())
+            fn try_from(value: $Src) -> ::core::result::Result<Self, Self::Error> {
+                <Self as ::core::convert::TryFrom<i128>>::try_from(value as i128)
             }
         }
     };
 
 }
 
-pub(crate) use decl_from_primitive;
+pub(crate) use decl_try_from_primitive;
 
 /// Generates `From<$Src<SCALE>> for $Dest<SCALE>` for a lossless
 /// widening conversion (e.g. D18, D18 -> D38). `$SrcStorage`
@@ -194,12 +205,11 @@ pub(crate) use decl_try_from_u128;
 /// Emits `TryFrom<i64> for $Type<SCALE>`, delegating to the width's
 /// `TryFrom<i128>` path via the lossless `i64 -> i128` widen.
 ///
-/// This is the standard fallible integer surface for the 64-bit-storage
-/// tier ([`D18`]): `i64 * 10^SCALE` overflows `i64` storage for every
-/// `SCALE >= 1`, so an infallible `From<i64>` would be wrong for the
-/// general `(i64, Int<1>, SCALE)` cell. Wider tiers (D38+) already get a
-/// `From<i64>` from [`decl_from_primitive!`] because their storage holds
-/// the scaled magnitude; this macro is only wired up for D18.
+/// This is the fallible integer surface for the 64-bit-storage tier
+/// ([`D18`]): `i64 * 10^SCALE` overflows `i64` storage for every
+/// `SCALE >= 1`. Wider tiers (D38+) get their `TryFrom<i64>` from
+/// [`decl_try_from_primitive!`]; this macro is only wired up for D18 so
+/// no `(Src, Dest)` pair gets two impls.
 macro_rules! decl_try_from_i64 {
     // Storage-agnostic: forwards `i64` through the width's `TryFrom<i128>`.
     // `$Storage` is matched for call-site symmetry but unused.
@@ -224,9 +234,9 @@ pub(crate) use decl_try_from_i64;
 ///
 /// `u64::MAX` exceeds `i64::MAX`, so even at `SCALE == 0` a `u64` need
 /// not fit the signed 64-bit storage of [`D18`]; the conversion is
-/// fallible for every `(u64, Int<1>, SCALE)` cell, hence `TryFrom`
-/// rather than `From`. Only wired up for D18 (wider tiers get
-/// `From<u64>` from [`decl_from_primitive!`]).
+/// fallible for every `(u64, Int<1>, SCALE)` cell. Only wired up for D18
+/// (wider tiers get their `TryFrom<u64>` from
+/// [`decl_try_from_primitive!`]).
 macro_rules! decl_try_from_u64 {
     // Storage-agnostic: forwards `u64` through the width's `TryFrom<u128>`.
     // `$Storage` is matched for call-site symmetry but unused.
@@ -338,34 +348,17 @@ macro_rules! decl_try_from_f32 {
 pub(crate) use decl_try_from_f32;
 pub(crate) use decl_try_from_f64;
 
-/// Emits the named integer constructors and `to_int` /
-/// `to_int_with` on a decimal type. `$Storage` is the storage
-/// integer; `$IntSrc` is the wider integer source for `from_int`
-/// (typically `i64` for D18/D38). `from_int` and
-/// `from_i32` scale directly (they do not depend on a `From<iN>` impl
-/// existing for the width).
+/// Emits the `to_int` / `to_int_with` integer readers on a decimal
+/// type. `$Storage` is the storage integer. Construction from an
+/// integer is the fallible `TryFrom<iN>` surface (see
+/// [`decl_try_from_primitive!`] / [`decl_try_from_i128!`]); this macro
+/// only emits the to-integer direction.
 macro_rules! decl_decimal_int_conversion_methods {
-    // Wide storage. The rounding logic mirrors the native
-    // arm but is carried in the wide storage type throughout; the
-    // `i128` source widens via the `BigInt` cast, and the final
-    // saturating narrow to `i64` also goes through the `BigInt` cast.
-    (wide $Type:ident, $Storage:ty, $IntSrc:ty) => {
+    // Wide storage. The rounding logic is carried in the wide storage
+    // type throughout; the final saturating narrow to `i64` goes through
+    // the `BigInt` cast.
+    (wide $Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> $Type<SCALE> {
-            /// Constructs from an integer source, scaling by `10^SCALE`.
-            /// Overflow follows the wide integer's default arithmetic semantics.
-            #[inline]
-            pub(crate) fn from_int(value: $IntSrc) -> Self {
-                let widened: $Storage = <$Storage>::from_i128(value as i128);
-                Self(widened * Self::multiplier())
-            }
-
-            /// Constructs from an `i32`, scaling by `10^SCALE`.
-            #[inline]
-            pub(crate) fn from_i32(value: i32) -> Self {
-                let widened: $Storage = <$Storage>::from_i128(value as i128);
-                Self(widened * Self::multiplier())
-            }
-
             /// Converts to `i64` using the crate default rounding mode.
             /// Saturates to `i64::MAX` / `i64::MIN` when the rounded
             /// integer part falls outside `i64`'s range.

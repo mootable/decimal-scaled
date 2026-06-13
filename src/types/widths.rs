@@ -412,31 +412,31 @@ crate::macros::int_methods::decl_decimal_int_methods!(wide D38, crate::int::type
 // FromPrimitive / ToPrimitive / NumCast via the shared macro.
 crate::macros::num_traits::decl_decimal_num_traits_conversions!(wide D38, crate::int::types::Int<2>);
 crate::macros::float_bridge::decl_decimal_float_bridge!(wide D38, crate::int::types::Int<2>);
-crate::macros::conversions::decl_from_primitive!(wide D38, crate::int::types::Int<2>, i8);
-crate::macros::conversions::decl_from_primitive!(wide D38, crate::int::types::Int<2>, i16);
-crate::macros::conversions::decl_from_primitive!(wide D38, crate::int::types::Int<2>, i32);
-crate::macros::conversions::decl_from_primitive!(wide D38, crate::int::types::Int<2>, i64);
-crate::macros::conversions::decl_from_primitive!(wide D38, crate::int::types::Int<2>, u8);
-crate::macros::conversions::decl_from_primitive!(wide D38, crate::int::types::Int<2>, u16);
-crate::macros::conversions::decl_from_primitive!(wide D38, crate::int::types::Int<2>, u32);
-crate::macros::conversions::decl_from_primitive!(wide D38, crate::int::types::Int<2>, u64);
+crate::macros::conversions::decl_try_from_primitive!(wide D38, crate::int::types::Int<2>, i8);
+crate::macros::conversions::decl_try_from_primitive!(wide D38, crate::int::types::Int<2>, i16);
+crate::macros::conversions::decl_try_from_primitive!(wide D38, crate::int::types::Int<2>, i32);
+crate::macros::conversions::decl_try_from_primitive!(wide D38, crate::int::types::Int<2>, i64);
+crate::macros::conversions::decl_try_from_primitive!(wide D38, crate::int::types::Int<2>, u8);
+crate::macros::conversions::decl_try_from_primitive!(wide D38, crate::int::types::Int<2>, u16);
+crate::macros::conversions::decl_try_from_primitive!(wide D38, crate::int::types::Int<2>, u32);
+crate::macros::conversions::decl_try_from_primitive!(wide D38, crate::int::types::Int<2>, u64);
 crate::macros::conversions::decl_try_from_i128!(wide D38, crate::int::types::Int<2>);
 crate::macros::conversions::decl_try_from_u128!(wide D38, crate::int::types::Int<2>);
 crate::macros::conversions::decl_try_from_i128!(wide D18, crate::int::types::Int<1>);
 crate::macros::conversions::decl_try_from_u128!(wide D18, crate::int::types::Int<1>);
-// D18 (i64 storage): `i64` / `u64` cannot be infallible `From` because
-// `value * 10^SCALE` overflows the 64-bit storage for SCALE >= 1 (and a
-// `u64` above `i64::MAX` overflows even at SCALE 0), so the standard
-// surface for these source types on the 64-bit tier is `TryFrom`.
-// Wider tiers (D38+) get `From<i64>` / `From<u64>` from
-// `decl_from_primitive!` because their storage holds the scaled value.
+// D18 (i64 storage): `i64` / `u64` get a dedicated `TryFrom` here rather
+// than going through `decl_try_from_primitive!` because `value * 10^SCALE`
+// overflows the 64-bit storage for SCALE >= 1 (and a `u64` above
+// `i64::MAX` overflows even at SCALE 0). The wider tiers (D38+) get their
+// `i64` / `u64` `TryFrom` from `decl_try_from_primitive!`, so wiring these
+// only for D18 keeps any `(Src, Dest)` pair from getting two impls.
 crate::macros::conversions::decl_try_from_i64!(wide D18, crate::int::types::Int<1>);
 crate::macros::conversions::decl_try_from_u64!(wide D18, crate::int::types::Int<1>);
 crate::macros::conversions::decl_try_from_f64!(wide D38, crate::int::types::Int<2>);
 crate::macros::conversions::decl_try_from_f32!(wide D38, crate::int::types::Int<2>);
 crate::macros::conversions::decl_try_from_f64!(wide D18, crate::int::types::Int<1>);
 crate::macros::conversions::decl_try_from_f32!(wide D18, crate::int::types::Int<1>);
-crate::macros::conversions::decl_decimal_int_conversion_methods!(wide D38, crate::int::types::Int<2>, i64);
+crate::macros::conversions::decl_decimal_int_conversion_methods!(wide D38, crate::int::types::Int<2>);
 // abs / signum / is_positive / is_negative, min / max / clamp / recip /
 // copysign, and floor / ceil / round / trunc / fract are emitted by the
 // shared macros — D38's hand-coded versions were byte-identical to the
@@ -486,7 +486,7 @@ crate::macros::transcendental_trait::decl_decimal_transcendental_impl!(D38);
 // they land: `*_lossy_override` opt-in companion, canonical name
 // reserved for the chosen-winner implementation.
 
-crate::macros::conversions::decl_decimal_int_conversion_methods!(wide D18, crate::int::types::Int<1>, i64);
+crate::macros::conversions::decl_decimal_int_conversion_methods!(wide D18, crate::int::types::Int<1>);
 
 // ─── D38 narrow ───────────────────────────────────────────────────────
 // D38::widen is wide-tier-only and is emitted further down in the
@@ -539,12 +539,12 @@ impl<const SCALE: u32> Default for crate::D<crate::int::types::Int<1>, SCALE> {
 
 crate::macros::basics::decl_decimal_basics!(wide D18, crate::int::types::Int<1>, 17);
 crate::macros::arithmetic::decl_decimal_arithmetic!(wide D18, crate::int::types::Int<1>, crate::int::types::Int<2>);
-crate::macros::conversions::decl_from_primitive!(wide D18, crate::int::types::Int<1>, i8);
-crate::macros::conversions::decl_from_primitive!(wide D18, crate::int::types::Int<1>, i16);
-crate::macros::conversions::decl_from_primitive!(wide D18, crate::int::types::Int<1>, i32);
-crate::macros::conversions::decl_from_primitive!(wide D18, crate::int::types::Int<1>, u8);
-crate::macros::conversions::decl_from_primitive!(wide D18, crate::int::types::Int<1>, u16);
-crate::macros::conversions::decl_from_primitive!(wide D18, crate::int::types::Int<1>, u32);
+crate::macros::conversions::decl_try_from_primitive!(wide D18, crate::int::types::Int<1>, i8);
+crate::macros::conversions::decl_try_from_primitive!(wide D18, crate::int::types::Int<1>, i16);
+crate::macros::conversions::decl_try_from_primitive!(wide D18, crate::int::types::Int<1>, i32);
+crate::macros::conversions::decl_try_from_primitive!(wide D18, crate::int::types::Int<1>, u8);
+crate::macros::conversions::decl_try_from_primitive!(wide D18, crate::int::types::Int<1>, u16);
+crate::macros::conversions::decl_try_from_primitive!(wide D18, crate::int::types::Int<1>, u32);
 crate::macros::display::decl_decimal_display!(wide D18, crate::int::types::Uint<1>);
 crate::macros::overflow::decl_decimal_overflow_variants!(wide D18, crate::int::types::Int<1>, crate::int::types::Int<2>);
 crate::macros::num_traits::decl_decimal_num_traits_basics!(D18);

@@ -20,7 +20,7 @@ const MODES: [RoundingMode; 6] = [
 ];
 
 fn d38(v: i64) -> D38<10> {
-    D38::<10>::from(v)
+    D38::<10>::try_from(v).unwrap()
 }
 
 // ── Some == bit-identical default, across modes and widths ──────────
@@ -82,8 +82,8 @@ fn d38_checked_matches_default_across_modes() {
 
 #[test]
 fn d18_checked_matches_default_across_modes() {
-    let x = D18::<6>::from(3);
-    let y = D18::<6>::from(2);
+    let x = D18::<6>::try_from(3_i32).unwrap();
+    let y = D18::<6>::try_from(2_i32).unwrap();
     for mode in MODES {
         assert_eq!(x.checked_ln_strict_with(mode), Some(x.ln_strict_with(mode)));
         assert_eq!(x.checked_exp_strict_with(mode), Some(x.exp_strict_with(mode)));
@@ -215,7 +215,7 @@ fn atanh_domain_default_panics() {
 fn exp_overflow_none_narrow() {
     // e^120 has 53 integer digits; D38<10> holds 28.
     assert_eq!(d38(120).checked_exp_strict(), None);
-    assert_eq!(D18::<6>::from(50).checked_exp_strict(), None);
+    assert_eq!(D18::<6>::try_from(50_i32).unwrap().checked_exp_strict(), None);
     for mode in MODES {
         assert_eq!(d38(120).checked_exp_strict_with(mode), None);
     }
@@ -256,7 +256,7 @@ fn exp_overflow_default_panics() {
 #[test]
 #[should_panic(expected = "result out of range")]
 fn exp_overflow_default_panics_d18() {
-    let _ = D18::<6>::from(50).exp_strict();
+    let _ = D18::<6>::try_from(50_i32).unwrap().exp_strict();
 }
 
 #[test]
@@ -352,8 +352,8 @@ fn hypot_overflow_default_panics() {
 #[test]
 fn d18_narrowing_none() {
     // sinh(40) ~ 1.2e17 > D18<6> max (~9.2e12) but far inside D38<6>.
-    assert_eq!(D18::<6>::from(40).checked_sinh_strict(), None);
-    assert_eq!(D18::<6>::from(40).checked_cosh_strict(), None);
+    assert_eq!(D18::<6>::try_from(40_i32).unwrap().checked_sinh_strict(), None);
+    assert_eq!(D18::<6>::try_from(40_i32).unwrap().checked_cosh_strict(), None);
     // MAX * (180/pi) leaves D18 range, fits the D38 work width.
     assert_eq!(D18::<6>::MAX.checked_to_degrees_strict(), None);
 }
@@ -361,7 +361,7 @@ fn d18_narrowing_none() {
 #[test]
 #[should_panic(expected = "result out of range")]
 fn d18_sinh_default_panics() {
-    let _ = D18::<6>::from(40).sinh_strict();
+    let _ = D18::<6>::try_from(40_i32).unwrap().sinh_strict();
 }
 
 #[test]
@@ -394,7 +394,7 @@ mod wide {
     use decimal_scaled::D76;
 
     fn d76(v: i64) -> D76<30> {
-        D76::<30>::from(v)
+        D76::<30>::try_from(v).unwrap()
     }
 
     #[test]

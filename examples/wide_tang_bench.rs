@@ -30,7 +30,7 @@ fn time<F: FnMut()>(label: &str, mut f: F) {
 
 macro_rules! suite {
     ($ty:ident, $scale:literal) => {{
-        let a = $ty::<$scale>::ONE / $ty::<$scale>::from(2);
+        let a = $ty::<$scale>::ONE / $ty::<$scale>::try_from(2_i64).unwrap();
         time(concat!(stringify!($ty), "<", stringify!($scale), ">::exp(0.5)"), || {
             black_box(black_box(a).exp_strict());
         });

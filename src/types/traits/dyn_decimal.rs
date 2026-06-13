@@ -19,8 +19,8 @@
 //!
 //! ```ignore
 //! use decimal_scaled::{D38, DynDecimal};
-//! let lhs: Box<dyn DynDecimal> = Box::new(D38::<2>::from_i32(150));
-//! let rhs: Box<dyn DynDecimal> = Box::new(D38::<5>::from_i32(2));
+//! let lhs: Box<dyn DynDecimal> = Box::new(D38::<2>::try_from(150_i32).unwrap());
+//! let rhs: Box<dyn DynDecimal> = Box::new(D38::<5>::try_from(2_i32).unwrap());
 //! let sum = lhs.add(&*rhs).expect("same width: D38");
 //! // sum is a D38 at the wider scale (5).
 //! ```

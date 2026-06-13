@@ -11,7 +11,7 @@
 //!   `decl_cross_width_narrowing!`) take pairs of `(source, target)`
 //!   types — they're emitted at the call site once per pair, outside
 //!   the umbrella.
-//! - **`decl_from_primitive!`** is invoked once per primitive
+//! - **`decl_try_from_primitive!`** is invoked once per primitive
 //!   (i8..i64, u8..u64). Could be inlined into the umbrella but the
 //!   eight-line repetition is already terse.
 //!
@@ -135,19 +135,19 @@ macro_rules! decl_decimal_full {
         $crate::macros::fast_transcendentals::decl_fast_transcendentals_via_f64!($Type);
         $crate::macros::pow::decl_decimal_pow!($Type);
         $crate::macros::num_traits::decl_decimal_num_traits_conversions!(wide $Type, $Storage);
-        $crate::macros::conversions::decl_from_primitive!(wide $Type, $Storage, i8);
-        $crate::macros::conversions::decl_from_primitive!(wide $Type, $Storage, i16);
-        $crate::macros::conversions::decl_from_primitive!(wide $Type, $Storage, i32);
-        $crate::macros::conversions::decl_from_primitive!(wide $Type, $Storage, i64);
-        $crate::macros::conversions::decl_from_primitive!(wide $Type, $Storage, u8);
-        $crate::macros::conversions::decl_from_primitive!(wide $Type, $Storage, u16);
-        $crate::macros::conversions::decl_from_primitive!(wide $Type, $Storage, u32);
-        $crate::macros::conversions::decl_from_primitive!(wide $Type, $Storage, u64);
+        $crate::macros::conversions::decl_try_from_primitive!(wide $Type, $Storage, i8);
+        $crate::macros::conversions::decl_try_from_primitive!(wide $Type, $Storage, i16);
+        $crate::macros::conversions::decl_try_from_primitive!(wide $Type, $Storage, i32);
+        $crate::macros::conversions::decl_try_from_primitive!(wide $Type, $Storage, i64);
+        $crate::macros::conversions::decl_try_from_primitive!(wide $Type, $Storage, u8);
+        $crate::macros::conversions::decl_try_from_primitive!(wide $Type, $Storage, u16);
+        $crate::macros::conversions::decl_try_from_primitive!(wide $Type, $Storage, u32);
+        $crate::macros::conversions::decl_try_from_primitive!(wide $Type, $Storage, u64);
         $crate::macros::conversions::decl_try_from_i128!(wide $Type, $Storage);
         $crate::macros::conversions::decl_try_from_u128!(wide $Type, $Storage);
         $crate::macros::conversions::decl_try_from_f64!(wide $Type, $Storage);
         $crate::macros::conversions::decl_try_from_f32!(wide $Type, $Storage);
-        $crate::macros::conversions::decl_decimal_int_conversion_methods!(wide $Type, $Storage, i128);
+        $crate::macros::conversions::decl_decimal_int_conversion_methods!(wide $Type, $Storage);
         $crate::macros::float_bridge::decl_decimal_float_bridge!(wide $Type, $Storage);
         $crate::macros::rescale::decl_decimal_rescale!(wide $Type, $Storage);
         $crate::macros::rounding_methods::decl_decimal_rounding_methods!(wide $Type);

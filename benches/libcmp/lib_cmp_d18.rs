@@ -21,8 +21,8 @@ macro_rules! tier_scale {
     ($c:expr, $s:literal) => {{
         let mut g = $c.benchmark_group(concat!("lib_cmp/64bit_s", $s));
 
-        let a = D18::<$s>::from(2);
-        let b = D18::<$s>::from(1);
+        let a = D18::<$s>::try_from(2_i32).unwrap();
+        let b = D18::<$s>::try_from(1_i32).unwrap();
         arith_copy!(g, "decimal-scaled", a, b);
 
         {
