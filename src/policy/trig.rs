@@ -351,7 +351,8 @@ pub(crate) mod hyper {
 pub(crate) mod forward_rung {
     use super::super::work_rung::{in_budget, rung_match, trig_rung, D_BUDGET};
     use crate::algos::support::wide_trig_core::{
-        atan_series_g, cos_series_g, sin_series_g, tan_series_g, WideTrigCore,
+        atan_series_g, cos_series_g, sin_series_g, tan_series_g, tiny_x_linear_directed,
+        WideTrigCore,
     };
     use crate::int::types::compute_limbs::ComputeLimbs;
     use crate::int::types::traits::BigInt;
@@ -369,6 +370,12 @@ pub(crate) mod forward_rung {
     where
         <C::W as BigInt>::Scratch: ComputeLimbs,
     {
+        // sin(x) = x − x³/6 + … (COMPRESSING): the sub-ULP cubic tail sits
+        // past the work integer's Ziv reach at a wide tier, so a directed
+        // tiny-x decision is analytic, not kernel-resolved.
+        if let Some(r) = tiny_x_linear_directed::<C::Storage, SCALE>(raw, mode, false) {
+            return r;
+        }
         if in_budget::<C::Storage, SCALE, D_BUDGET>(&raw) {
             rung_match!(trig_rung, C, SCALE, sin_series_g, [SCALE, GUARD], raw, mode)
         } else {
@@ -410,6 +417,12 @@ pub(crate) mod forward_rung {
     where
         <C::W as BigInt>::Scratch: ComputeLimbs,
     {
+        // tan(x) = x + x³/3 + … (EXPANDING): see [`sin_strict`] — the
+        // directed tiny-x decision is analytic (the cubic deciding digit is
+        // below the work integer's escalation reach at a wide tier).
+        if let Some(r) = tiny_x_linear_directed::<C::Storage, SCALE>(raw, mode, true) {
+            return r;
+        }
         if in_budget::<C::Storage, SCALE, D_BUDGET>(&raw) {
             rung_match!(trig_rung, C, SCALE, tan_series_g, [SCALE, GUARD, NEAR_POLE, SUB_GUARD], raw, mode)
         } else if SUB_GUARD {
@@ -443,6 +456,12 @@ pub(crate) mod forward_rung {
     where
         <C::W as BigInt>::Scratch: ComputeLimbs,
     {
+        // atan(x) = x − x³/3 + … (COMPRESSING): see [`sin_strict`] — the
+        // directed tiny-x decision is analytic (the cubic deciding digit is
+        // below the work integer's escalation reach at a wide tier).
+        if let Some(r) = tiny_x_linear_directed::<C::Storage, SCALE>(raw, mode, false) {
+            return r;
+        }
         if in_budget::<C::Storage, SCALE, D_BUDGET>(&raw) {
             rung_match!(trig_rung, C, SCALE, atan_series_g, [SCALE, GUARD, DIRECTED], raw, mode)
         } else if DIRECTED {
@@ -476,7 +495,7 @@ pub(crate) mod forward_rung {
 #[cfg(feature = "_wide-support")]
 pub(crate) mod inverse_rung {
     use super::super::work_rung::{in_budget, rung_match, trig_rung, D_BUDGET};
-    use crate::algos::support::wide_trig_core::WideTrigCore;
+    use crate::algos::support::wide_trig_core::{tiny_x_linear_directed, WideTrigCore};
     use crate::algos::trig::inverse_schoolbook::{
         acos_schoolbook_g, asin_schoolbook_g, atan2_schoolbook_g,
     };
@@ -493,6 +512,13 @@ pub(crate) mod inverse_rung {
         <C::W as crate::int::types::traits::BigInt>::Scratch:
             crate::int::types::compute_limbs::ComputeLimbs,
     {
+        // asin(x) = x + x³/6 + … (EXPANDING): the directed tiny-x decision
+        // is analytic — the cubic deciding digit is below the work integer's
+        // Ziv reach at a wide tier (`acos` near 0 has no such band: its value
+        // π/2 − x carries a resolvable residual from the irrational π/2).
+        if let Some(r) = tiny_x_linear_directed::<C::Storage, SCALE>(raw, mode, true) {
+            return r;
+        }
         if in_budget::<C::Storage, SCALE, D_BUDGET>(&raw) {
             rung_match!(trig_rung, C, SCALE, asin_schoolbook_g, [SCALE], raw, mode)
         } else {
