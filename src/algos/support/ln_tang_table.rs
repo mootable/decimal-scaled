@@ -4081,19 +4081,14 @@ pub(crate) fn ln_table_entry_baked<W: BigInt>(w: u32, idx: usize, pow10_w: W) ->
     // (Int<16> = 1024 bits: 0.83·1024 + 64 ≈ 914 < 1024). Round the
     // limb count up; clamp to the stored width.
     let need_bits = (w as u64) * 3322 / 1000 + 64;
-    let mut p = ((need_bits + 63) / 64) as usize;
-    if p < 1 {
-        p = 1;
-    }
-    if p > LN_TANG_LIMBS {
-        p = LN_TANG_LIMBS;
-    }
+    let mut p = need_bits.div_ceil(64) as usize;
+    p = p.clamp(1, LN_TANG_LIMBS);
     // Zero-extend the top `p` limbs (MS-first) into W:
     //   slot_hi = sum_{k=0..p-1} slot[k] · 2^(64·(p−1−k)).
     let mut slot_hi = W::ZERO;
-    for k in 0..p {
+    for s in slot.iter().take(p) {
         slot_hi = (slot_hi << 64)
-            | W::from_mag_sign_u128(&[slot[k] as u128], false);
+            | W::from_mag_sign_u128(&[*s as u128], false);
     }
     let bp = (64 * p) as u32;
     // `10^w` in `W` — supplied by the caller from the kernel's baked

@@ -110,10 +110,7 @@ fn resolve<const N: usize, const SCALE: u32>(raw: &Int<N>) -> Algorithm {
 #[inline]
 #[must_use]
 pub(crate) const fn is_tang<const N: usize, const SCALE: u32>() -> bool {
-    match select::<N, SCALE>() {
-        Select::ByAlgorithm(Algorithm::Tang) => true,
-        _ => false,
-    }
+    matches!(select::<N, SCALE>(), Select::ByAlgorithm(Algorithm::Tang))
 }
 
 #[inline]
