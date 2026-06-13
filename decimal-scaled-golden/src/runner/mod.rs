@@ -51,7 +51,11 @@ fn run_cell<S: DecimalSubject, E: ExecutionStrategy>(
         // single value, returned verbatim — so the untagged corpus is unaffected.
         let chosen = select_radix_output(&case.output_raw, subject.storage_radix());
         if let Some(golden) = GoldenValue::parse(chosen) {
-            let limits = subject.limits(&case.output_raw);
+            // Classify the CHOSEN value, not the raw (possibly tagged) field: a
+            // value-aware subject's `limits` reads digits off the value string, so a
+            // tagged field like `10:1.5,2:1.6` would feed it garbage (collapsing its
+            // depth). Byte-identical on the untagged corpus (chosen == output_raw).
+            let limits = subject.limits(chosen);
             cell.oracle_limited = limits.max_precision > oracle.max_precision;
             // Collect verdicts while the context borrows the cell's result, then
             // release the borrow before pushing them back into the cell.
@@ -271,5 +275,70 @@ mod tests {
         assert!(input_representable(&Capped4, "1234"));     // 4 figures — fits
         assert!(!input_representable(&Capped4, "12345"));   // 5 figures — skipped
         assert!(!input_representable(&Capped4, "10000"));   // trailing zeros count
+    }
+
+    /// A value-aware Binary subject whose grade depth is the fraction-digit count of
+    /// the value it is handed, and which emits `1.61` — one place off the golden `1.6`
+    /// at the SECOND decimal. The cell passes only if `limits` is fed the CHOSEN value
+    /// `"1.6"` (depth 1, so the 2nd-decimal miss is below the graded digit); feeding it
+    /// the raw tagged field `"10:1.5,2:1.6"` would deepen the grade and surface a false
+    /// MisRounded. Guards the select-then-classify wiring (limits sees the chosen value).
+    struct BinaryDepthFromValue;
+    impl DecimalSubject for BinaryDepthFromValue {
+        type Value = f64;
+        fn capabilities(&self) -> Capabilities {
+            let mut functions = BTreeMap::new();
+            functions.insert(
+                Function::Sqrt,
+                FnSupport { mode: RoundingMode::HalfToEven, overflow: Overflow::Panic },
+            );
+            Capabilities { name: "bin".into(), radix: Radix::Binary, config: BTreeMap::new(), functions }
+        }
+        fn storage_radix(&self) -> Radix {
+            Radix::Binary
+        }
+        fn string_to_value(&self, s: &str) -> f64 {
+            s.parse().unwrap_or(0.0)
+        }
+        fn value_to_string(&self, _v: &f64) -> String {
+            "1.61".to_string()
+        }
+        fn limits(&self, value: &str) -> Limits {
+            let depth = value
+                .split_once('.')
+                .map(|(_, f)| f.trim_end_matches('0').len())
+                .unwrap_or(0) as u32;
+            Limits { min_value: None, max_value: None, max_precision: depth, max_significant_digits: None }
+        }
+        fn execute(&self, _f: Function, _m: RoundingMode, _o: Overflow) -> impl Fn(&[f64]) -> Computed<f64> {
+            |_| Computed::Value(1.61)
+        }
+    }
+
+    #[test]
+    fn limits_classify_the_chosen_radix_value_not_the_raw_field() {
+        struct TaggedLoader;
+        impl CaseLoader for TaggedLoader {
+            fn load(&self, _f: Function) -> Cow<'_, [GoldenCase]> {
+                Cow::Owned(vec![GoldenCase {
+                    inputs: vec!["4".into()],
+                    output_raw: "10:1.5,2:1.6".into(),
+                    line: 0,
+                }])
+            }
+            fn oracle_limits(&self) -> Limits {
+                Limits { min_value: None, max_value: None, max_precision: 1231, max_significant_digits: None }
+            }
+        }
+        let runner = SequentialRunner {
+            strategy: RunOnce,
+            loader: Box::new(TaggedLoader),
+            validators: vec![Box::new(RoundingValidator { gen_precision: 1233 })],
+        };
+        let sc = runner.run(&BinaryDepthFromValue, &[Function::Sqrt]);
+        // Binary subject selects "1.6"; `limits` sees "1.6" (depth 1), so the
+        // 2nd-decimal miss in the emitted 1.61 is below the graded digit -> Pass.
+        // Classifying the raw "10:1.5,2:1.6" instead would grade deeper and fail.
+        assert_eq!(sc.functions[0].cells[0].validations, vec![Outcome::Pass]);
     }
 }

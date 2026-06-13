@@ -49,7 +49,7 @@ use decimal_scaled_golden::{
     RunOnce,
 };
 use golden_competitors::{
-    BigDecimalSubject, DashuFloat, DecimalRsSubject, FastNum, GMath, RustDecimal,
+    BigDecimalSubject, DashuFloat, DecimalRsSubject, FastNum, GMath, RustDecimal, F32,
 };
 
 /// Cap on golden inputs scored per cell. Accuracy, not timing — a couple
@@ -68,8 +68,10 @@ const SAMPLE_CAP: usize = 200;
 const TABLE_WIDTHS: [&str; 3] = ["D38", "D76", "D307"];
 
 /// The library roster, in render order. Single source for the per-library
-/// TSV files, the per-width tables, and the grade report.
-const LIBS: [&str; 7] = [
+/// TSV files, the per-width tables, and the grade report. `f32` is a binary
+/// subject (graded against the golden `2` value at its ~7-digit reach, owner
+/// Q-C) — appended after the other binary-backed peer (g_math).
+const LIBS: [&str; 8] = [
     "decimal-scaled",
     "fastnum",
     "rust_decimal",
@@ -77,6 +79,7 @@ const LIBS: [&str; 7] = [
     "decimal-rs",
     "bigdecimal",
     "g_math",
+    "f32",
 ];
 
 /// The twelve decimal tiers: `(name, digit capacity, canonical scale)`. The
@@ -502,6 +505,7 @@ fn main() {
             score!("decimal-rs", DecimalRsSubject);
             score!("bigdecimal", BigDecimalSubject);
             score!("g_math", GMath);
+            score!("f32", F32);
         }
     }
 
