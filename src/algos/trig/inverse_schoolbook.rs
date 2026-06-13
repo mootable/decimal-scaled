@@ -787,6 +787,94 @@ mod tests {
         }
     }
 
+    // The tiny-RESULT directed cells the six-mode golden-comprehensive gate
+    // caught for atan2: atan2(y, 1) with tiny y reduces to atan(y), whose
+    // sub-resolution odd Taylor term decides the directed side. atan(z) =
+    // z - z^3/3 + z^5/5 - ...; the directed result is the analytic neighbour
+    // of the nearest grid value, keyed on the RESULT. D462 = Int<24>, s461.
+    #[cfg(feature = "d462")]
+    mod tiny_directed_d462 {
+        use super::*;
+        use crate::int::types::Int;
+
+        type Core = crate::types::widths::wide_trig_d462::Core;
+        const S: u32 = 461;
+
+        fn p10(n: u32) -> Int<24> {
+            Int::<24>::from_i128(10).pow(n)
+        }
+
+        // LINEAR band: atan2(3e-200, 1). z = 3e-200, k = 200, j* = 3 (depth
+        // 600 > s461 + walker reach) - EVERY correction term sub-resolution,
+        // so the grid value is exactly raw_y = 3*10^(461-200). atan COMPRESSES
+        // (|atan z| < |z|): Floor/Trunc step DOWN one ULP, Ceiling/nearest stay.
+        #[test]
+        fn atan2_3e200_d462_s461_linear_compresses() {
+            let y = Int::<24>::from_i128(3) * p10(261);
+            let x = p10(S); // 1.0
+            let one = Int::<24>::from_i128(1);
+            let grid = y; // all corrections sub-resolution
+            assert_eq!(
+                atan2_schoolbook::<Core, S>(y, x, RoundingMode::HalfToEven),
+                grid,
+                "linear nearest = z"
+            );
+            assert_eq!(
+                atan2_schoolbook::<Core, S>(y, x, RoundingMode::Floor),
+                grid - one,
+                "linear Floor steps down"
+            );
+            assert_eq!(
+                atan2_schoolbook::<Core, S>(y, x, RoundingMode::Trunc),
+                grid - one,
+                "linear Trunc steps down"
+            );
+            assert_eq!(
+                atan2_schoolbook::<Core, S>(y, x, RoundingMode::Ceiling),
+                grid,
+                "linear Ceiling stays"
+            );
+        }
+
+        // DEEP band: atan2(3e-117, 1). z = 3e-117, k = 117, j* = 5 - the
+        // z^3/3 term (depth 351) IS resolvable, so the grid value G is NOT
+        // raw_y (take it from the directed-adjust-free nearest mode); the
+        // deciding +z^5/5 term (depth 585) is sub-resolution and POSITIVE -
+        // EXPANDING. Ceiling steps UP, Floor/Trunc stay.
+        #[test]
+        fn atan2_3e117_d462_s461_deep_expands() {
+            let y = Int::<24>::from_i128(3) * p10(344);
+            let x = p10(S);
+            let one = Int::<24>::from_i128(1);
+            let g = atan2_schoolbook::<Core, S>(y, x, RoundingMode::HalfToEven);
+            assert_eq!(
+                atan2_schoolbook::<Core, S>(y, x, RoundingMode::Ceiling),
+                g + one,
+                "deep Ceiling steps up"
+            );
+            assert_eq!(
+                atan2_schoolbook::<Core, S>(y, x, RoundingMode::Floor),
+                g,
+                "deep Floor stays"
+            );
+            assert_eq!(
+                atan2_schoolbook::<Core, S>(y, x, RoundingMode::Trunc),
+                g,
+                "deep Trunc stays"
+            );
+            // public path routes to the same kernel (rung == tier).
+            let yd = crate::D::<Int<24>, S>(y);
+            let xd = crate::D::<Int<24>, S>(x);
+            for mode in MODES {
+                assert_eq!(
+                    yd.atan2_strict_with(xd, mode).0,
+                    atan2_schoolbook::<Core, S>(y, x, mode),
+                    "atan2 public == tier at mode {mode:?}"
+                );
+            }
+        }
+    }
+
     // wide tier: D57, scale 19.
     #[cfg(any(feature = "d57", feature = "wide"))]
     mod wide_d57 {
