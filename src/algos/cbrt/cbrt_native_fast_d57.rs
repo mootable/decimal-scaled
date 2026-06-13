@@ -65,8 +65,6 @@
 //! feature-independent `cbrt` policy, so it must compile in every build. It
 //! is dead-arm-eliminated wherever its `(N, SCALE)` cells are not reached.
 
-#[cfg(feature = "std")]
-use crate::algo_x_support::seed::extract_top_u64;
 use crate::int::types::traits::BigInt;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
@@ -204,51 +202,26 @@ pub(crate) fn cbrt_native_fast_a<const N: usize, const W: usize>(
 
 // ── candidate B: width-safe top-bits seed with exact 2^(r/3) residue ────
 
-/// `⌊∛n⌋` over `Int<W>`, seeded from the top 64 bits like the shipped path
-/// but with the **exact** fractional `2^(r/3)` residue multiplier (vs the
-/// shipped coarse `2^r`) and a single `+1` margin (vs `+2`). This keeps the
-/// no-overflow property at any width while cutting the seed over-shoot from
-/// ~2.5× to ~1×, so the monotone loop needs fewer divides.
+/// `⌊∛n⌋` over `Int<W>`, seeded from the shared seed library
+/// [`crate::algo_x_support::seed::cbrt_seed`] — the width-safe top-64-bits
+/// bootstrap with the **exact** fractional `2^(r/3)` residue multiplier and
+/// guaranteed over-estimate `+1` margin (the tight residue this candidate
+/// originally pioneered now lives in the library, so all callers share it).
+/// Under `std` the library bootstraps from hardware `f64::cbrt`; under
+/// `no_std` it is the classical pure-integer `2^⌈bits/3⌉` — both
+/// over-estimates, so the kernel stays platform-agnostic.
 ///
-/// Correctness is unchanged: the seed is still a finite positive value and
-/// the downward-monotone Newton loop self-corrects to `⌊∛n⌋` from *any*
-/// positive start. The unconditional pre-step guarantees we begin at or
-/// above `⌈∛n⌉` even if the tighter seed slightly under-shoots.
-#[cfg(feature = "std")]
+/// Correctness is unchanged: the library seed is a finite positive
+/// over-estimate and the downward-monotone Newton loop self-corrects to
+/// `⌊∛n⌋`. The unconditional pre-step (one redundant Newton step from a
+/// guaranteed over-estimate) is retained to keep candidate B's loop shape.
 #[inline]
 fn icbrt_w_tight_topbits<const W: usize>(n: Int<W>) -> Int<W> {
     let bits = n.bit_length();
     let mag = n.unsigned_abs();
-    // Mirror cbrt_seed's path for the tiny-n fallback band.
-    let x0 = if bits >= 9 {
-        let (top_u64, shift) = extract_top_u64(mag.as_limbs(), bits);
-        let rem3 = shift % 3;
-        // Exact fractional residue: cbrt(top) · 2^(rem3/3).
-        let factor = match rem3 {
-            1 => 1.259_921_049_894_873_2_f64, // 2^(1/3)
-            2 => 1.587_401_051_968_199_5_f64,  // 2^(2/3)
-            _ => 1.0_f64,
-        };
-        let seed_f64 = (top_u64 as f64).cbrt() * factor;
-        let half_shift = shift / 3;
-        let truncated = seed_f64 as u128;
-        let frac_nonzero = (truncated as f64) != seed_f64;
-        let seed_int: u128 = truncated.saturating_add(if frac_nonzero { 1 } else { 0 });
-        // Place seed_int << half_shift into an Int<W>.
-        let lo = seed_int as u64;
-        let hi = (seed_int >> 64) as u64;
-        let mut limbs = [0u64; W];
-        limbs[0] = lo;
-        if W > 1 {
-            limbs[1] = hi;
-        }
-        let base = Int::<W>::from_mag_limbs(&limbs, false);
-        base << half_shift
-    } else {
-        // 2^ceil(bits/3) classical 1-bit seed.
-        let e = bits.div_ceil(3);
-        Int::<W>::ONE << e
-    };
+    let mut seed_limbs = [0u64; W];
+    crate::algo_x_support::seed::cbrt_seed(mag.as_limbs(), bits, &mut seed_limbs);
+    let x0 = Int::<W>::from_mag_limbs(&seed_limbs, false);
     let x0 = if x0 <= Int::<W>::ZERO { Int::<W>::ONE } else { x0 };
     let three = Int::<W>::from_i128(3);
     // Unconditional pre-step: AM-GM lifts any positive seed to ≥ ⌈∛n⌉, so a
@@ -267,8 +240,8 @@ fn icbrt_w_tight_topbits<const W: usize>(n: Int<W>) -> Int<W> {
 }
 
 /// candidate B entry — bit-identical drop-in for `cbrt_native`, width-safe at
-/// every native cell (no `f64`-range guard needed), with a tighter top-bits
-/// seed. `no_std` delegates to the shipped seed.
+/// every native cell (no `f64`-range guard needed), seeded from the shared
+/// seed library on both `std` and `no_std` (the leaf cfg-swaps internally).
 #[inline]
 #[must_use]
 pub(crate) fn cbrt_native_fast_b<const N: usize, const W: usize>(
@@ -285,10 +258,9 @@ pub(crate) fn cbrt_native_fast_b<const N: usize, const W: usize>(
     let mag = if negative { -widened } else { widened };
     let n: Int<W> = mag * pow10_2scale;
 
-    #[cfg(feature = "std")]
+    // The seed library is std/no_std-agnostic (it cfg-swaps internally), so
+    // a single call covers both builds — no per-build kernel split.
     let q = icbrt_w_tight_topbits::<W>(n);
-    #[cfg(not(feature = "std"))]
-    let q = icbrt_w_shipped_seed::<W>(n);
 
     round_and_narrow::<N, W>(q, n, negative, mode)
 }

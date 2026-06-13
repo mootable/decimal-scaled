@@ -643,10 +643,20 @@ pub(crate) fn isqrt_256(hi: u128, lo: u128) -> u128 {
     } else {
         128 - lo.leading_zeros()
     };
-    // Initial overestimate q0 = 2^ceil(bits/2) ≥ sqrt(N). With N < 2^254
-    // this is at most 2^127, so it fits in u128 and `N / q0` cannot
-    // overflow 128 bits.
-    let mut q: u128 = 1u128 << bits.div_ceil(2);
+    // Initial over-estimate from the shared seed library: under `std` the
+    // hardware `f64::sqrt` of the top 64 bits (~53 correct bits → ~1-2
+    // Newton iterations), under `no_std` the classical `2^ceil(bits/2)`.
+    // Both are guaranteed over-estimates `>= sqrt(N)` (the load-bearing
+    // invariant — keeps `N / q < 2^128` so the divide's `.expect` is safe
+    // and the downward-monotone loop never floor-walks), and converge to
+    // the identical floor either way. The proof holds at any width (module
+    // doc), so the u256 radicand seeds through the slice leaf. `N` packs
+    // little-endian into four u64 limbs; the seed `< 2^127` (`N < 2^254`)
+    // reads back from the low two.
+    let n_limbs = [lo as u64, (lo >> 64) as u64, hi as u64, (hi >> 64) as u64];
+    let mut seed_limbs = [0u64; 4];
+    crate::algo_x_support::seed::sqrt_seed(&n_limbs, bits, &mut seed_limbs);
+    let mut q: u128 = (seed_limbs[0] as u128) | ((seed_limbs[1] as u128) << 64);
     loop {
         // q ≥ sqrt(N) on every iteration, so N / q ≤ sqrt(N) < 2^127
         // and the divide always succeeds.
@@ -904,8 +914,27 @@ fn icbrt_384(n: [u128; 3]) -> u128 {
     } else {
         128 - n[0].leading_zeros()
     };
-    // Overestimate y0 = 2^ceil(bits/3) >= cbrt(N); <= 2^127 for N < 2^381.
-    let mut y: u128 = 1u128 << (bits.div_ceil(3).min(127));
+    // Initial over-estimate from the shared seed library: under `std` the
+    // hardware `f64::cbrt` of the top 64 bits with the exact `2^(r/3)`
+    // residue (→ ~1-2 Newton iterations), under `no_std` the classical
+    // `2^ceil(bits/3)`. Both are guaranteed over-estimates `>= cbrt(N)` (so
+    // `N / y² < 2^128`, keeping `div_384_by_256`'s u128-quotient assumption
+    // valid and the downward-monotone loop off the floor-walk), converging
+    // to the identical floor either way. The over-estimate proof holds at
+    // any width, so the u384 radicand seeds through the slice leaf. `N`
+    // packs little-endian into six u64 limbs; the seed `< 2^127`
+    // (`N < 2^381`) reads back from the low two.
+    let n_limbs = [
+        n[0] as u64,
+        (n[0] >> 64) as u64,
+        n[1] as u64,
+        (n[1] >> 64) as u64,
+        n[2] as u64,
+        (n[2] >> 64) as u64,
+    ];
+    let mut seed_limbs = [0u64; 6];
+    crate::algo_x_support::seed::cbrt_seed(&n_limbs, bits, &mut seed_limbs);
+    let mut y: u128 = (seed_limbs[0] as u128) | ((seed_limbs[1] as u128) << 64);
     loop {
         // y² as a 256-bit divisor.
         let (yy_hi, yy_lo) = mul_u128_to_u256(y, y);
