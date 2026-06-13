@@ -105,10 +105,12 @@ jobs:
       - name: Build + run the history shard (ratchet + shootout, this tier's widths)
         # Build + run in ONE invocation (golden-quick's no-artifact-handoff
         # shape): compile this tier's history exe, then run both gates over only
-        # this tier's widths. `--test-threads=1`: the two gates report
-        # per-function timing medians as a ride-along, and concurrent runs on the
-        # 2-core runner would corrupt each other's medians. `--ignored` runs the
-        # two `#[ignore]`d gates; `--nocapture` streams the per-cell progress.
+        # this tier's widths. The two gates serialise THEMSELVES via the in-test
+        # `HOOK_GUARD` mutex (each holds it for its whole run while it swaps the
+        # process-global panic hook), so their ride-along timing medians can't
+        # overlap regardless of the test-runner thread count — no `--test-threads`
+        # cap needed. `--ignored` runs the two `#[ignore]`d gates; `--nocapture`
+        # streams the per-cell progress.
         # The awk pipe timestamps every line (slow-vs-stuck is decidable from the
         # live log) and `tee` stages the log for upload. The resource sampler
         # prints memory + disk beside the compile so a returning spike leaves an
@@ -122,7 +124,7 @@ jobs:
           SAMPLER=$!
           trap 'kill "$SAMPLER" 2>/dev/null || true' EXIT
           cargo test -p decimal-scale-test --release --features "${{ matrix.feat }}" --test history \
-            -- --ignored --nocapture --test-threads=1 2>&1 \
+            -- --ignored --nocapture 2>&1 \
             | awk '{ print strftime("[%H:%M:%S]"), $0; fflush() }' \
             | tee "history-${{ matrix.shard }}.log"
 
