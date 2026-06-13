@@ -12,13 +12,26 @@
 //! does an **exhaustive** `match algo` to a pure kernel in
 //! [`crate::int::algos::support::limbs`].
 //!
+//! **One classifier, two doors** (`docs/ARCHITECTURE.md` → "Const entry +
+//! slice entry"). The length classifier ([`select`]'s `ByShape`) backs TWO
+//! entry points over the SAME decision:
+//! - [`dispatch`] — the const-`N` door for `Int<N>×Int<N>` callers (the
+//!   wide-transcendental work-muls): the lengths are both `N`, so the
+//!   classifier folds to a const verdict per monomorphisation and additionally
+//!   takes the [`LimbSize`] (`u64`/`u128`) axis. The hot path.
+//! - [`dispatch_slice`] — the runtime-length door for genuine slice callers
+//!   (the decimal slice roots and the rescale product path) that hold bare
+//!   `&[u64]` of runtime length and no `N`. It runs the IDENTICAL classifier
+//!   on `a.len()`/`b.len()` and routes to the `u64` slice kernels — no const
+//!   `N` means no `u128` packing, but the product is bit-identical.
+//!
 //! The kernels ([`mul_schoolbook`] / [`mul_karatsuba`]) stay pure; this
 //! file owns the *choice* — the benched crossover ([`KARATSUBA_ENGAGE`]) and
 //! recursion depth ([`KARATSUBA_RECURSE`]) are policy DATA here, not magic
 //! numbers in a kernel.
 
 use crate::int::algos::mul::mul_karatsuba::{mul_karatsuba, mul_karatsuba_limb};
-use crate::int::algos::mul::mul_schoolbook::mul_full_limb;
+use crate::int::algos::mul::mul_schoolbook::{mul_full_limb, mul_schoolbook};
 use crate::int::types::compute_limbs::{ComputeLimbs, Limbs, LimbSize};
 
 // ── 1. the real multiply algorithms — NAMED, no `Default` ─────────────
@@ -172,6 +185,158 @@ where
                 *o = 0;
             }
             mul_karatsuba(a, b, out, KARATSUBA_RECURSE);
+        }
+    }
+}
+
+/// Runtime-length **slice door** over the SAME [`select`] length classifier as
+/// the const [`dispatch`] (`docs/ARCHITECTURE.md` → "Const entry + slice
+/// entry — one length/shape classifier, two doors"). For the genuine slice
+/// callers — the decimal slice roots (`sqrt_newton`, `cbrt_newton`) and the
+/// rescale product path (`div_widen_scale`) — whose operands are bare `&[u64]`
+/// of runtime length with no `N` in their types, so they cannot take the const
+/// door. They route here instead of reaching past the matcher to a hardcoded
+/// kernel (the Class-G bypass this door removes).
+///
+/// The classifier is run on the runtime `a.len()`/`b.len()`: equal-length EVEN
+/// operands at or above [`KARATSUBA_ENGAGE`] take the recursive Karatsuba
+/// ([`mul_karatsuba`], recursing to schoolbook at [`KARATSUBA_RECURSE`]);
+/// everything else (unequal, odd, or below the engage point) takes the slice
+/// schoolbook ([`mul_schoolbook`]). The product is **bit-identical** to a plain
+/// `mul_schoolbook` call on the same operands at every shape.
+///
+/// # Limb width
+///
+/// The slice door runs the **`u64`** kernels only. The [`LimbSize`] (`u128`-
+/// packing) axis the const door takes needs a compile-time `N` to size the
+/// packed `[L; N]` / `ComputeLimbs` buffers, which a runtime-length slice does
+/// not have — so it stays `u64`. That axis is a const-door-only optimisation;
+/// the result is the same integer either way.
+///
+/// # Caller contract
+///
+/// `out` must be **zeroed by the caller** and sized `>= a.len() + b.len()`
+/// (exactly the existing [`mul_schoolbook`] contract — every converted caller
+/// already satisfies it). No scratch parameter: the Karatsuba slice entry
+/// self-sizes its own (sanctioned width-erased build-max) scratch internally.
+/// The Karatsuba arm additionally needs `a.len() == b.len()`, which the
+/// classifier guarantees before it is reached (it only engages Karatsuba for
+/// equal even lengths `>= KARATSUBA_ENGAGE`).
+#[inline]
+pub(crate) fn dispatch_slice(a: &[u64], b: &[u64], out: &mut [u64]) {
+    // The SAME classifier as the const door, evaluated on the operands' runtime
+    // lengths instead of folded on `N`.
+    let algo = match const { select() } {
+        Select::ByAlgorithm(alg) => alg,
+        Select::ByShape(classify) => classify(a.len(), b.len()),
+    };
+    match algo {
+        Algorithm::Schoolbook => mul_schoolbook(a, b, out),
+        Algorithm::Karatsuba => mul_karatsuba(a, b, out, KARATSUBA_RECURSE),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{dispatch_slice, mul_schoolbook};
+
+    /// [`dispatch_slice`] is **bit-identical** to a plain [`mul_schoolbook`]
+    /// over the same operands at every shape it classifies — the routing-blind
+    /// correctness guarantee both doors share (every multiply algorithm is the
+    /// same product). The equal-length EVEN widths at/above the current engage
+    /// point (128) drive the door's Karatsuba arm, so a mis-wired Karatsuba arm
+    /// (wrong threshold, un-zeroed `out`, wrong kernel) would surface as a
+    /// mismatch HERE; the unequal / odd / sub-engage shapes drive the schoolbook
+    /// arm. This asserts only that the *product* is correct, never *which* arm
+    /// ran — routing stays the matcher's tunable, which policy tests don't pin.
+    #[test]
+    fn dispatch_slice_bit_identical_to_schoolbook() {
+        // SplitMix64 — Vigna 2014, public-domain reference algorithm.
+        let mut state: u64 = 0xD15C_0DED_51CE_D006;
+        let mut next = || -> u64 {
+            state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+            let mut z = state;
+            z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            z ^ (z >> 31)
+        };
+
+        // Operand-length pairs spanning every arm of the classifier. The engage
+        // point is 128 (equal + even + `>= 128` ⇒ Karatsuba); these reach it.
+        const SHAPES: &[(usize, usize)] = &[
+            // equal even < engage, equal odd, small → schoolbook
+            (1, 1),
+            (2, 2),
+            (4, 4),
+            (16, 16),
+            (64, 64),
+            (17, 17),
+            (33, 33),
+            (129, 129),
+            // equal EVEN >= engage → Karatsuba arm
+            (128, 128),
+            (130, 130),
+            (192, 192),
+            (256, 256),
+            // unequal (incl. the single-limb ×10 / scaled-numerator shapes) → schoolbook
+            (1, 288),
+            (288, 1),
+            (64, 1),
+            (100, 128),
+            (127, 128),
+        ];
+
+        let edge_fill = |buf: &mut [u64], kind: usize, next: &mut dyn FnMut() -> u64| match kind {
+            0 => buf.iter_mut().for_each(|x| *x = 0),
+            1 => buf.iter_mut().for_each(|x| *x = u64::MAX),
+            2 => {
+                buf.iter_mut().for_each(|x| *x = 0);
+                if let Some(last) = buf.last_mut() {
+                    *last = u64::MAX;
+                }
+            }
+            3 => {
+                buf.iter_mut().for_each(|x| *x = 0);
+                buf[0] = u64::MAX;
+            }
+            _ => buf.iter_mut().for_each(|x| *x = next()),
+        };
+
+        for &(la, lb) in SHAPES {
+            let mut pairs: Vec<(Vec<u64>, Vec<u64>)> = Vec::new();
+            for ka in 0..5 {
+                for kb in 0..5 {
+                    let mut a = vec![0u64; la];
+                    let mut b = vec![0u64; lb];
+                    edge_fill(&mut a, ka, &mut next);
+                    edge_fill(&mut b, kb, &mut next);
+                    pairs.push((a, b));
+                }
+            }
+            let randoms = if la.max(lb) <= 16 { 40 } else { 8 };
+            for _ in 0..randoms {
+                let mut a = vec![0u64; la];
+                let mut b = vec![0u64; lb];
+                for x in a.iter_mut() {
+                    *x = next();
+                }
+                for x in b.iter_mut() {
+                    *x = next();
+                }
+                pairs.push((a, b));
+            }
+
+            for (a, b) in &pairs {
+                // `out` zeroed + sized `a.len() + b.len()` — the door's contract.
+                let mut oracle = vec![0u64; la + lb];
+                mul_schoolbook(a, b, &mut oracle);
+                let mut got = vec![0u64; la + lb];
+                dispatch_slice(a, b, &mut got);
+                assert_eq!(
+                    got, oracle,
+                    "dispatch_slice != mul_schoolbook at shape ({la}, {lb})\na={a:?}\nb={b:?}"
+                );
+            }
         }
     }
 }
