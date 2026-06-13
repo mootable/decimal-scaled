@@ -19,6 +19,7 @@ Usage:
     python scripts/render_precision_table.py            # all widths
 """
 import argparse
+import math
 import os
 import sys
 
@@ -56,6 +57,13 @@ def fmt_ulp(max_ulp):
         return "0"
     if u == 0.0:
         return "0"
+    # A catastrophically-wrong competitor cell records a non-finite ULP
+    # distance (e.g. a true value at a zero crossing). Rust's renderer
+    # parses these back and `{:.1e}` prints them verbatim — `inf` / `NaN`.
+    if math.isinf(u):
+        return "inf"
+    if math.isnan(u):
+        return "NaN"
     if u < 10.0:
         return f"{u:.2f}"
     # Rust's {:.1e} prints `1.1e20` (no `+`, no zero-padded exponent);

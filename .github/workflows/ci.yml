@@ -11,13 +11,10 @@ name: "✅ ci (pre-merge gates)"
 # the FULL input surface for its own widths under the default rounding
 # mode and BLOCKS; the harness asserts pass>0 so a zero-cell shard fails
 # (the zero-work guard), and `fail-fast: false` keeps one tier's failure
-# from masking another. This replaces the earlier single full-width
-# `golden (build)` exe, which timed out at its 30-min cap on every run
-# (the monolithic `--features wide,x-wide,xx-wide --test golden --no-run`
-# release compile no longer fits) and so silently SKIPPED the downstream
-# stripes — the per-tier width shard is the structural fix, mirroring the
-# `tests-consolidated` job below and golden-comprehensive.yml. The
-# six-mode sweep lives in its OWN workflow (golden-comprehensive.yml) so
+# from masking another. The per-tier width shard is the structural shape
+# (a single all-width release compile does not fit the 30-min cap),
+# mirroring the `tests-consolidated` job below and golden-comprehensive.yml.
+# The six-mode sweep lives in its OWN workflow (golden-comprehensive.yml) so
 # this gate's verdict never waits on it. Each shard uploads a mini report
 # (results.tsv + summary) readable the moment it finishes.
 #
@@ -59,15 +56,14 @@ jobs:
     env:
       # The full-feature dev-profile compile of decimal-scale-test (the
       # rung kernels × 13 ladder widths plus the narrow Int<24> Ziv
-      # machinery, all with debuginfo) OOMs the hosted runner at the
-      # default parallelism — the service SIGTERMs the job (exit 143,
-      # observed 2026-06-12; same class as the history.yml build fix).
-      # Two parallel rustc units keep the peak inside the runner.
+      # machinery, all with debuginfo) can OOM the hosted runner at the
+      # default parallelism. Two parallel rustc units keep the peak inside
+      # the runner.
       CARGO_BUILD_JOBS: "2"
       # line-tables-only: full dev debuginfo is most of a test compile's
       # memory/size; line tables keep file:line backtraces usable while
-      # shedding the bulk (the exit-143 memory class, proven by the
-      # lib-cmp sampler: a single rustc can peak past the 16 GB runner).
+      # shedding the bulk (a single rustc can otherwise peak past the
+      # 16 GB runner).
       CARGO_PROFILE_DEV_DEBUG: "line-tables-only"
 
     steps:
@@ -93,10 +89,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
 
       - name: Add swap for the compile's memory peak
-        # PROVEN cause (lib-cmp-precision run 27393313247, -j 1 + sampler):
-        # a single rustc on a full-width monomorphised target can peak past
-        # the runner's 16 GB and the service SIGTERMs the job (exit 143).
-        # Disk-backed swap absorbs the short spike.
+        # A single rustc on a full-width monomorphised target can peak past
+        # the runner's 16 GB; disk-backed swap absorbs the short spike.
         run: |
           set -euo pipefail
           SWAP=/mnt/swapfile2
@@ -123,11 +117,10 @@ jobs:
         run: cargo test
 
       # NOTE: the full-feature consolidated leg (`cargo test -p
-      # decimal-scale-test --features wide,x-wide,xx-wide,macros,dyn`) lived
-      # here but OOMed the runner (exit 143: one test binary monomorphising
-      # all 13 widths peaked past 16 GB even with -j2 + line-tables + swap).
-      # It now runs width-sharded in the `tests-consolidated` matrix job
-      # below; this job keeps the default-feature consolidated leg.
+      # decimal-scale-test --features wide,x-wide,xx-wide,macros,dyn`) runs
+      # width-sharded in the `tests-consolidated` matrix job below — one test
+      # binary monomorphising all 13 widths exceeds the runner's memory. This
+      # job keeps the default-feature consolidated leg.
       - name: Consolidated test suite (decimal-scale-test, default features)
         # Default-feature (narrow-tier) run of the migrated suite — the
         # feature passthrough exists exactly so this leg keeps covering
@@ -136,24 +129,21 @@ jobs:
         run: cargo test -p decimal-scale-test
 
   # GATE: the migrated integration suite (decimal-scale-test), WIDTH-SHARDED.
-  # Replaces the single full-feature consolidated leg that OOMed the runner
-  # (exit 143: one test binary monomorphising all 13 widths peaked past the
-  # 16 GB runner even with -j2 + line-tables-only + swap). Each shard builds
-  # exactly ONE width tier — a supported config since d4735e4c made policy
-  # routing feature-independent — so no single rustc carries the whole ladder.
+  # Each shard builds exactly ONE width tier — a supported config since policy
+  # routing became feature-independent — so no single rustc carries the whole
+  # ladder (a single all-width test binary exceeds the runner's memory).
   # Mirrors the per-tier `--features <tier>` shard pattern in
-  # golden-comprehensive.yml; the union of all shards reproduces the removed
-  # leg's coverage. fail-fast off so a slow/failed tier doesn't mask others.
+  # golden-comprehensive.yml; the union of all shards covers the full surface.
+  # fail-fast off so a slow/failed tier doesn't mask others.
   tests-consolidated:
     name: tests consolidated (${{ matrix.shard }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      # Post-cells the heavy monomorphisation lives in the decimal-scaled-cells
-      # rlib the shard links, so a single-tier build is light and runs at the
-      # runner's default parallelism — the old -j2 cap was pre-cells insurance
-      # against the exit-143 OOM and is no longer needed. line-tables-only
-      # debuginfo stays as cheap weight-shedding insurance.
+      # The heavy monomorphisation lives in the decimal-scaled-cells rlib the
+      # shard links, so a single-tier build is light and runs at the runner's
+      # default parallelism (no -j cap needed). line-tables-only debuginfo
+      # stays as cheap weight-shedding insurance.
       CARGO_PROFILE_DEV_DEBUG: "line-tables-only"
     strategy:
       fail-fast: false
@@ -189,9 +179,9 @@ jobs:
             cargo-ci-tests-${{ runner.os }}-
 
       - name: Add swap for the compile's memory peak
-        # Copied from the `tests` job: disk-backed swap absorbs the short
-        # compile spike (the exit-143 memory class) as cheap insurance on top
-        # of the now single-tier build.
+        # Copied from the `tests` job: disk-backed swap absorbs a short
+        # compile-memory spike as cheap insurance on top of the single-tier
+        # build.
         run: |
           set -euo pipefail
           SWAP=/mnt/swapfile2
@@ -226,13 +216,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      # The single-tier compile is slim post-cells (the decimal-scaled-cells
-      # rlib carries the heavy monomorphisation the shard links), so it runs at
-      # the runner's default parallelism — the old -j2 cap was pre-cells OOM
-      # insurance the width shard already made unnecessary. No swap step either,
-      # for the same reason: the per-tier build does not OOM, like
-      # golden-comprehensive's per-tier builds, which run swap-free. No release
-      # debuginfo keeps the compile slim.
+      # The single-tier compile is slim (the decimal-scaled-cells rlib carries
+      # the heavy monomorphisation the shard links), so it runs at the runner's
+      # default parallelism with no -j cap and no swap step — the per-tier build
+      # does not OOM, like golden-comprehensive's per-tier builds, which run
+      # swap-free. No release debuginfo keeps the compile slim.
       CARGO_PROFILE_RELEASE_DEBUG: "false"
     strategy:
       fail-fast: false

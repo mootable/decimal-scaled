@@ -1,6 +1,6 @@
 # decimal-scaled
 
-[![crates.io](https://img.shields.io/crates/v/decimal-scaled.svg)](https://crates.io/crates/decimal-scaled) [![docs.rs](https://docs.rs/decimal-scaled/badge.svg)](https://docs.rs/decimal-scaled) [![MSRV](https://img.shields.io/badge/MSRV-1.85-blue.svg)](https://blog.rust-lang.org/) [![License](https://img.shields.io/crates/l/decimal-scaled.svg)](#license) [![site](https://github.com/mootable/decimal-scaled/actions/workflows/docs.yml/badge.svg?branch=main&label=site)](https://github.com/mootable/decimal-scaled/actions/workflows/docs.yml) [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12895/badge)](https://www.bestpractices.dev/projects/12895) [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/mootable/decimal-scaled/badge)](https://securityscorecards.dev/viewer/?uri=github.com/mootable/decimal-scaled) [![cargo-audit](https://github.com/mootable/decimal-scaled/actions/workflows/cargo-audit.yml/badge.svg?branch=main)](https://github.com/mootable/decimal-scaled/actions/workflows/cargo-audit.yml) [![CodeQL](https://github.com/mootable/decimal-scaled/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/mootable/decimal-scaled/actions/workflows/codeql.yml)
+[![crates.io](https://img.shields.io/crates/v/decimal-scaled.svg)](https://crates.io/crates/decimal-scaled) [![docs.rs](https://docs.rs/decimal-scaled/badge.svg)](https://docs.rs/decimal-scaled) [![MSRV](https://img.shields.io/badge/MSRV-1.89-blue.svg)](https://blog.rust-lang.org/) [![License](https://img.shields.io/crates/l/decimal-scaled.svg)](#license) [![site](https://github.com/mootable/decimal-scaled/actions/workflows/docs.yml/badge.svg?branch=main&label=site)](https://github.com/mootable/decimal-scaled/actions/workflows/docs.yml) [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12895/badge)](https://www.bestpractices.dev/projects/12895) [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/mootable/decimal-scaled/badge)](https://securityscorecards.dev/viewer/?uri=github.com/mootable/decimal-scaled) [![cargo-audit](https://github.com/mootable/decimal-scaled/actions/workflows/cargo-audit.yml/badge.svg?branch=main)](https://github.com/mootable/decimal-scaled/actions/workflows/cargo-audit.yml) [![CodeQL](https://github.com/mootable/decimal-scaled/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/mootable/decimal-scaled/actions/workflows/codeql.yml)
 
 **[Docs](https://mootable.github.io/decimal-scaled/)** • **[Benchmarks](https://mootable.github.io/decimal-scaled/benchmarks/)** • **[Algorithms](https://mootable.github.io/decimal-scaled/ALGORITHMS/)** • **[Roadmap](https://mootable.github.io/decimal-scaled/ROADMAP/)** • **[API reference](https://docs.rs/decimal-scaled)**
 
@@ -92,12 +92,12 @@ committed shootout result files:
 | library | mode | sqrt | cbrt | exp | ln | sin | cos | tan | atan | asinh |
 |---|---|---|---|---|---|---|---|---|---|---|
 | decimal-scaled | HalfToEven | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
-| fastnum | HalfAwayFromZero | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 67 (1.1e20) | 0 (0) | 58 (2.0e17) |
-| rust_decimal | HalfToEven | 1 (1.00) | n/a | 33 (7.2e9) | 31 (1.1e9) | 1 (1.00) | 1 (1.00) | 36 (4.3e10) | n/a | n/a |
-| dashu-float | HalfAwayFromZero | 0 (0) | n/a | 0 (0) | 0 (0) | n/a | n/a | n/a | n/a | n/a |
-| decimal-rs | HalfToEven | 1 (1.00) | n/a | 1 (1.00) | 1 (1.00) | n/a | n/a | n/a | n/a | n/a |
-| bigdecimal | HalfToEven | 1 (1.00) | 1 (1.00) | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
-| g_math | HalfToEven | 6 (5.0e1) | n/a | 65 (2.3e19) | 6 (5.0e1) | 64 (1.7e19) | 6 (5.0e1) | 65 (2.1e19) | 64 (1.6e19) | 64 (1.8e19) |
+| fastnum | HalfAwayFromZero | 0 (0) | 0 (0) | 2917 (inf) | 0 (0) | 4143 (inf) | 4146 (inf) | 66 (6.5e19) | n/a | n/a |
+| rust_decimal | HalfToEven | 1 (1.00) | n/a | 34 (1.5e10) | 31 (1.1e9) | 0 (0) | 0 (0) | 37 (7.3e10) | n/a | n/a |
+| dashu-float | HalfAwayFromZero | n/a | n/a | n/a | 0 (0) | n/a | n/a | n/a | n/a | n/a |
+| decimal-rs | HalfAwayFromZero | 0 (0) | n/a | 273 (9.5e81) | 0 (0) | n/a | n/a | n/a | n/a | n/a |
+| bigdecimal | HalfToEven | 0 (0) | 0 (0) | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| g_math | HalfAwayFromZero | 0 (0) | n/a | 65 (2.3e19) | 0 (0) | 64 (1.6e19) | 0 (0) | 65 (2.7e19) | 64 (1.6e19) | 64 (1.8e19) |
 <!-- END GENERATED:precision:D38:readme -->
 
 `0 (0)` = correctly rounded (0 LSBε, bit-exact under that crate's
