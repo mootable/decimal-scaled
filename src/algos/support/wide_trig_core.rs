@@ -584,6 +584,64 @@ pub(crate) fn adjust_bounded_extremum<C: WideTrigCore, const SCALE: u32>(
     }
 }
 
+/// Analytic directed rounding for the tiny-argument linear band of the odd
+/// forward/inverse trig functions whose Maclaurin series is
+/// `f(x) = x + c·x³ + …` with `|c| ≤ 1/3` (`sin`, `tan`, `atan`, `asin`).
+///
+/// For `|x| < 10^(−⌈SCALE/3⌉)` — i.e. `|raw| ≤ 10^(SCALE − ⌈SCALE/3⌉)` in
+/// storage units — the cubic correction `|c·x³|` stays below half a storage
+/// ULP, so `f(x)` rounds to exactly `x` (= `raw`) under the nearest modes
+/// while sitting a STRICTLY-signed sub-ULP cubic tail off the grid line: the
+/// directed result is then determined analytically by the tail's sign,
+/// EXPANDING (`|f| > |x|`: `tan` `+x³/3`, `asin` `+x³/6`) or COMPRESSING
+/// (`|f| < |x|`: `sin` `−x³/6`, `atan` `−x³/3`).
+///
+/// This is the wide-tier sibling of the narrow tier's
+/// `small_x_linear_threshold` + [`tiny_odd_expanding_directed`] /
+/// [`tiny_odd_compressing_directed`] pair
+/// (`crate::support::rounding`). At a wide tier the cubic deciding digit
+/// sits at fractional depth `≈ 3·SCALE`, far beyond the work integer's Ziv
+/// escalation reach, so the directed walker cannot resolve it and falls to a
+/// mode-blind grid value (the comprehensive-gate wrong-mode find: `tan`/`sin`
+/// of `1e-117`/`3e-60`-class arguments at D153/D307/D616). The analytic
+/// decision is the only correct source there. Returns `Some(result)` for a
+/// directed mode with `raw` inside the band; `None` otherwise (nearest modes,
+/// `SCALE == 0`, `raw == 0`, or `|raw|` outside the band) — the caller then
+/// runs its normal kernel, unchanged.
+#[inline]
+pub(crate) fn tiny_x_linear_directed<St: BigInt, const SCALE: u32>(
+    raw: St,
+    mode: RoundingMode,
+    expanding: bool,
+) -> Option<St> {
+    // Only the directed modes are at risk; the nearest modes round to `raw`,
+    // which the kernel already produces in-band. `SCALE == 0` has no sub-unit
+    // linear band (only `x = 0` is "tiny", and that is the kernel's exact pin).
+    if crate::support::rounding::is_nearest_mode(mode) || SCALE == 0 {
+        return None;
+    }
+    let zero = <St as BigInt>::ZERO;
+    if raw == zero {
+        return None; // f(0) is the kernel's exact-zero pin
+    }
+    let absr = if raw < zero { zero - raw } else { raw };
+    // The small-x linear band exponent, conservative by one digit (matches the
+    // narrow `small_x_linear_threshold`): `|raw| ≤ 10^(SCALE − ⌈SCALE/3⌉)`.
+    let thresh_exp = SCALE - SCALE.div_ceil(3);
+    // One table-read + one compare exits for every normal-magnitude argument.
+    if absr > crate::consts::pow10::dispatch::<St>(thresh_exp) {
+        return None;
+    }
+    // `one` is ONE STORAGE ULP (the integer `1`), the step the directed
+    // decision adds/drops — NOT `10^SCALE` (the value 1.0).
+    let one = <St as BigInt>::ONE;
+    Some(if expanding {
+        crate::support::rounding::tiny_odd_expanding_directed(raw, zero, one, mode)
+    } else {
+        crate::support::rounding::tiny_odd_compressing_directed(raw, zero, one, mode)
+    })
+}
+
 /// Directed-rounding post-adjust for `ln` very near `x = 1`.
 ///
 /// Concavity gives `ln(x) < x − 1` STRICTLY for every `x ≠ 1`, and `ln(x)`
@@ -2081,4 +2139,85 @@ mod directed_walker_contract {
 
     /// The asin-shape test's storage scale (D38<38>).
     const TARGET_ASIN: u32 = 38;
+}
+
+/// Wide-tier tiny-x DIRECTED rounding pins (the comprehensive-gate
+/// wrong-mode find): for a sub-resolution-cubic argument the deciding
+/// cubic digit sits at fractional depth `≈ 3·SCALE`, past the work
+/// integer's Ziv reach, so the directed result is the analytic
+/// [`tiny_x_linear_directed`] decision — EXPANDING (`tan`/`asin`,
+/// `|f| > |x|`) pushes the magnitude OUT by one ULP, COMPRESSING
+/// (`sin`/`atan`, `|f| < |x|`) pulls it IN — NOT the mode-blind grid value
+/// the pre-fix narrowing returned. The three nearest modes round to `x`.
+/// Covers both the Tang band (D153<76>) and the Series band (D153<152>),
+/// each side of zero, through the public strict path.
+#[cfg(all(test, any(feature = "d153", feature = "wide")))]
+mod tiny_x_directed_pins {
+    use crate::int::types::{traits::BigInt, Int};
+    use crate::support::rounding::RoundingMode::{
+        Ceiling, Floor, HalfAwayFromZero, HalfToEven, HalfTowardZero, Trunc,
+    };
+
+    const ULP: Int<8> = <Int<8> as BigInt>::ONE;
+
+    /// Pin all six modes for one wide-tier `D153<SCALE>` function at the
+    /// tiny argument `±3·10^(−KNEG)` (raw `±3·10^(SCALE−KNEG)`, built
+    /// directly — the parser takes no scientific notation). `expanding`
+    /// selects the cubic-tail direction: EXPANDING (`|f| > |x|`,
+    /// `tan`/`asin`) pushes the magnitude OUT by one ULP only under the
+    /// away-from-`x` directed mode (Ceiling for `+x`, Floor for `−x`);
+    /// COMPRESSING (`|f| < |x|`, `sin`/`atan`) pulls it IN by one ULP under
+    /// the toward-zero directed modes. The three nearest modes round to `x`.
+    macro_rules! pin {
+        ($scale:literal, $kneg:literal, $f:ident, $expanding:expr, $label:literal) => {{
+            let r = Int::<8>::from_i128(3)
+                * crate::consts::pow10::dispatch::<Int<8>>($scale - $kneg);
+            let x = crate::D::<Int<8>, $scale>(r);
+            let nr = -r;
+            let nx = crate::D::<Int<8>, $scale>(nr);
+            for m in [HalfToEven, HalfAwayFromZero, HalfTowardZero] {
+                assert_eq!(x.$f(m).0, r, "{} (+x) {:?}", $label, m);
+                assert_eq!(nx.$f(m).0, nr, "{} (−x) {:?}", $label, m);
+            }
+            if $expanding {
+                assert_eq!(x.$f(Ceiling).0, r + ULP, "{} (+x) Ceiling", $label);
+                assert_eq!(x.$f(Floor).0, r, "{} (+x) Floor", $label);
+                assert_eq!(x.$f(Trunc).0, r, "{} (+x) Trunc", $label);
+                assert_eq!(nx.$f(Floor).0, nr - ULP, "{} (−x) Floor", $label);
+                assert_eq!(nx.$f(Ceiling).0, nr, "{} (−x) Ceiling", $label);
+                assert_eq!(nx.$f(Trunc).0, nr, "{} (−x) Trunc", $label);
+            } else {
+                assert_eq!(x.$f(Floor).0, r - ULP, "{} (+x) Floor", $label);
+                assert_eq!(x.$f(Trunc).0, r - ULP, "{} (+x) Trunc", $label);
+                assert_eq!(x.$f(Ceiling).0, r, "{} (+x) Ceiling", $label);
+                assert_eq!(nx.$f(Ceiling).0, nr + ULP, "{} (−x) Ceiling", $label);
+                assert_eq!(nx.$f(Trunc).0, nr + ULP, "{} (−x) Trunc", $label);
+                assert_eq!(nx.$f(Floor).0, nr, "{} (−x) Floor", $label);
+            }
+        }};
+    }
+
+    #[test]
+    fn tan_expanding_d153_tang_and_series_bands() {
+        // 3e-60 @ s76 → Tang band (70..=82); 3e-120 @ s152 → Series band —
+        // both sit in the linear band so the analytic decision applies.
+        pin!(76, 60, tan_strict_with, true, "tan s76");
+        pin!(152, 120, tan_strict_with, true, "tan s152");
+    }
+
+    #[test]
+    fn sin_compressing_d153_tang_and_series_bands() {
+        pin!(76, 60, sin_strict_with, false, "sin s76");
+        pin!(152, 120, sin_strict_with, false, "sin s152");
+    }
+
+    #[test]
+    fn atan_compressing_d153_series_band() {
+        pin!(152, 120, atan_strict_with, false, "atan s152");
+    }
+
+    #[test]
+    fn asin_expanding_d153_series_band() {
+        pin!(152, 120, asin_strict_with, true, "asin s152");
+    }
 }
