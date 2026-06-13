@@ -77,6 +77,14 @@ count):
   available — anything needing real diagnosis: kernel/rounding/wide-band fixes, shared
   high-blast-radius code, macro machinery, policy-mapper measurement runs.
 
+The real axis is **how obvious the solution is, not how deep the domain is** (owner
+2026-06-13): Opus is very capable — when the fix path is clear/well-specified, `opus` is the
+right choice even in kernel/rounding territory; `fable` buys error-resistance where the ground
+is AMBIGUOUS (open diagnosis, contested design, subtle correctness trade-offs). When
+dispatching diagnosis-first work to `opus`, add a stop-clause: "if the root cause isn't crisp
+once diagnosed, STOP at the diagnosis and report" — the coordinator re-dispatches the fix at
+the higher tier.
+
 If a "simple" dispatch surfaces real diagnosis mid-flight, pull it back and re-dispatch at the
 higher tier rather than letting the smaller model improvise. The coordinator reviews every
 diff regardless of the model that produced it.
