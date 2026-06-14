@@ -169,6 +169,12 @@
   grid-template-columns: 1fr;
   gap: 0.75rem;
 }
+/* The per-op graphs are inline SVGs declared width:100%, but Material sizes
+   <figure> to fit-content, which clamps them to the SVG's ~460px intrinsic
+   width — roughly half the panel. Let the figure and its SVG fill the column
+   so the graph scales to the full central-panel width. */
+.md-typeset .perf-grid figure { width: 100%; margin-inline: 0; }
+.md-typeset .perf-grid figure svg { width: 100%; height: auto; }
 
 /* ── Hero / landing page motifs ────────────────────────────── */
 .md-typeset .hero-row {
