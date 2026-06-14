@@ -117,15 +117,30 @@
   color: #1F2128;
 }
 
-/* ── Tables: tighten + brand-tint header row ───────────────── */
+/* ── Tables: shrink-to-content + brand-tint header row ──────── */
 .md-typeset table:not([class]) {
   font-size: 0.78rem;
 }
+/* Three Material defaults conspire to keep a table far wider than its
+   content: cell padding of 0.9375em 1.25em, a 5rem min-width on every
+   header cell, and width:100% on the wrapped table. Override all three so
+   a table (e.g. the ✓ precision surface) fits its widest cell instead of
+   the page; keep wide tables horizontally scrollable. */
+.md-typeset table:not([class]) :is(th, td) {
+  padding: 0.3em 0.55em;
+}
 .md-typeset table:not([class]) th {
+  min-width: 0;
   background: var(--md-accent-fg-color--transparent);
   font-family: "Outfit", sans-serif;
   font-weight: 600;
   color: var(--md-primary-fg-color);
+}
+.md-typeset__table table:not([class]) {
+  width: auto;
+}
+.md-typeset__table {
+  overflow-x: auto;
 }
 
 /* ── Hero / landing page motifs ────────────────────────────── */
