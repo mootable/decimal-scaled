@@ -68,10 +68,11 @@ static HOOK_GUARD: Mutex<()> = Mutex::new(());
 /// (the timing is advisory: reported, never asserted).
 const TIMED_EXECUTIONS: u32 = 1;
 
-/// Cap on golden rows timed per function (per cell). A couple hundred single-call
-/// samples spread across the file's magnitude range give a stable median while
-/// keeping the wide-tier kernels — and the seven-subject fan-out — affordable.
-const ROW_CAP: usize = 200;
+/// Cap on golden rows timed per function (per cell). Up to a thousand single-call
+/// samples spread across the file's magnitude range give a stable median (and a
+/// representative min/max spread) while keeping the wide-tier kernels — and the
+/// seven-subject fan-out — affordable.
+const ROW_CAP: usize = 1000;
 
 /// The library roster, decimal-scaled first, in render order — mirrors the
 /// precision shootout's `LIBS` so the Comparisons page roster matches the Precision

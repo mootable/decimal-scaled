@@ -77,8 +77,9 @@ impl GoldenRunner for HistRunner {
 
 /// Wraps a `CaseLoader` and truncates each function's cases to at most `limit` rows
 /// (the first `limit` rows from the inner loader). This bounds the per-function golden
-/// row count for the history gates independently of `GOLDEN_SAMPLE`: 1000 rows/fn is
-/// enough to detect regressions; the full correctness surface is the bbc's job.
+/// row count for the history gates independently of `GOLDEN_SAMPLE`: 2000 rows/fn is
+/// enough to detect regressions (and give a representative min/max spread); the full
+/// correctness surface is the bbc's job.
 struct CapLoader<L> {
     inner: L,
     limit: usize,
@@ -158,7 +159,7 @@ fn runner(filter: &Filter) -> HistRunner {
     // then the row_filter applies sample/stripe on those 1000.
     let make_loader = |sample, stripe| -> Box<dyn CaseLoader> {
         Box::new(FilterLoader::new(
-            CapLoader { inner: CachingLoader::golden(), limit: 1000 },
+            CapLoader { inner: CachingLoader::golden(), limit: 2000 },
             row_filter(sample, stripe),
         ))
     };
