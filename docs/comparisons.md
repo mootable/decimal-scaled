@@ -54,7 +54,7 @@ size of the integer part.
 
 | Library | Precision model | Working precision |
 | :-- | :-- | :-- |
-| `decimal-scaled` | Fixed-point — fixed fractional digits (the scale) | the timed scale (9–470) |
+| `decimal-scaled` | Fixed-point — fixed fractional digits (the scale) | the timed scale (9–38; 30 at most tiers) |
 | `g_math` | Fixed-point — Q128.128 | ~38 fractional digits |
 | `rust_decimal` | Significant-figure, input-driven scale | up to 28 significant digits |
 | `decimal-rs` | Significant-figure, input-driven scale | up to 38 significant digits |
@@ -73,15 +73,18 @@ digits the library produces, which depends on the operation:
 - **Transcendentals and division** don't terminate — even an integer input gives an
   irrational or repeating result, so each library produces fractional digits up to its
   *own* working precision (the table above). For `decimal-scaled` that amount is the
-  timed scale, which grows from 9 at the narrow tiers to 470 at the widest.
+  timed scale above — 30 at most tiers, 9–38 on the lower ones — close to what
+  `rust_decimal`, `decimal-rs` and `g_math` produce.
 
-**So the relative work crosses over.** At the narrow tiers `decimal-scaled` produces
-*fewer* output digits than the ~28–38-digit libraries — which therefore read as
-slower — and at the wide tiers it produces far *more*, so they read as faster. Scale
-30 sits near that crossover, which is why it is the fairest single point to compare at;
-but a library timed at a lower precision is doing **less work**, not the same work
-faster, and `dashu-float` / `bigdecimal` carry far more than 30 throughout, so they
-read as slow everywhere.
+**So how to read the timings.** Pinned to ~30 fractional digits, `decimal-scaled`
+carries a precision close to `rust_decimal`, `decimal-rs` and `g_math` at every width,
+so the comparison is like-for-like on *precision*. What it does **not** equalise is
+*storage*: a `decimal-scaled` value keeps its full tier width — D1232 is a 1232-digit
+fixed type — even when only 30 fractional digits are in play, so the wide tiers cost
+more per call than a small-coefficient library doing the same 30-digit maths.
+`dashu-float` and `bigdecimal` carry far more than 30 digits throughout, so they read
+as slow everywhere; and a library producing fewer digits than 30 is doing **less
+work**, not the same work faster.
 
 <!-- BEGIN GENERATED:comparisons:body -->
 ## Arithmetic
