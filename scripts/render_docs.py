@@ -63,6 +63,7 @@ GOLDEN_RESULTS = ROOT / "results" / "golden" / "summary.tsv"
 CELLS_SRC = ROOT / "decimal-scaled-cells" / "src" / "lib.rs"
 ROUNDING_SRC = ROOT / "decimal-scaled-golden" / "src" / "support" / "rounding.rs"
 TIMING_RESULTS = ROOT / "results" / "timing" / "bbc_medians.tsv"
+HISTORY_RESULTS = ROOT / "results" / "history" / "history.tsv"
 
 # The precision-table renderer lives alongside this script. Import it as
 # a module so the doc tables come from exactly the same code path (and
@@ -376,6 +377,34 @@ def _ns_decade(d: int) -> str:
     return f"{10 ** d:g} ns"
 
 
+def _units_legend(ns_values) -> str:
+    """The page's helper table mapping each time unit that actually appears to its
+    size in nanoseconds (e.g. `us | 10^3 ns`)."""
+    unit_by_power = {power: label for label, power in _TIME_UNITS}
+    used = sorted({_unit_of(v)[1] for v in ns_values})
+    rows = ["| Unit | In nanoseconds |", "| :-- | --: |"]
+    rows += [f"| {unit_by_power[p]} | 10{str(p).translate(_SUP)} ns |" for p in used]
+    return "\n".join(rows)
+
+
+def _width_int_table(widths) -> str:
+    """The decimal-tier reference map (from tiers.json), for the widths present:
+    `Width | Decimals | Integer | Bits` (e.g. `D18 | 18 | Int<1> | 64`)."""
+    tiers = {t["digits"]: t for t in load_tiers()}
+    rows = ["| Width | Decimals | Integer | Bits |", "| :-- | --: | :-- | --: |"]
+    for w in sorted(widths):
+        t = tiers.get(w)
+        if t:
+            rows.append(f"| {t['name']} | {t['digits']} | `{t['int']}` | {t['bits']} |")
+    return "\n".join(rows)
+
+
+def render_bench_widths() -> str:
+    """The decimal-tier -> integer-width reference table for the right column of
+    the Performance/History page headers (every tier, from tiers.json)."""
+    return _width_int_table([t["digits"] for t in load_tiers()])
+
+
 def _pos_labels(p: int) -> list[str]:
     """Band-edge column labels for `p` sampled scales: `0`, the fractions, `max`."""
     if p <= 1:
@@ -465,21 +494,23 @@ def _perf_svg(widths: list[int], P: int, series: dict[int, list]) -> str:
     return "".join(p)
 
 
+def render_performance_units() -> str:
+    """The time-unit legend for the Performance page header (left column)."""
+    rows = _timing_rows()
+    return _units_legend([r[3] for r in rows]) if rows else _PENDING_PERF
+
+
 def render_performance() -> str:
     """One section per op: a width x scale timing table beside a log-time vs width
-    graph, each cell in its own natural unit; led by a units legend of the units
-    that actually appear. All from results/timing/bbc_medians.tsv."""
+    graph, each cell in its own natural unit. All from results/timing/bbc_medians.tsv.
+    The units legend + width map render into the page header (separate regions)."""
     rows = _timing_rows()
     if not rows:
         return _PENDING_PERF
     by_op: dict[str, list] = {}
     for r in rows:
         by_op.setdefault(r[0], []).append(r)
-    unit_by_power = {power: label for label, power in _TIME_UNITS}
-    used = sorted({_unit_of(r[3])[1] for r in rows})
-    legend = ["| Unit | In nanoseconds |", "| :-- | --: |"]
-    legend += [f"| {unit_by_power[power]} | 10{str(power).translate(_SUP)} ns |" for power in used]
-    out = ["\n".join(legend), ""]
+    out = []
     for op in sorted(by_op):
         widths, P, series = _perf_series(by_op[op])
         head = "| Width | " + " | ".join(_pos_labels(P)) + " |"
@@ -507,6 +538,157 @@ def render_performance() -> str:
     return "\n".join(out).rstrip()
 
 
+# --- History page (docs/history.md) — generated from results/history/ ---------
+#
+# The history gates (history.yml / tests/history.rs) time the live crate beside
+# the pinned releases (0.4.4, 0.3.3) over ONE representative cell per width (the
+# middle-band scale, single mode), reported never asserted. The aggregate job
+# self-commits results/history/history.tsv as per-(function, width, version)
+# median nanoseconds:  function  width  version  nanos
+# `version` is the subject's capability name — `decimal-scaled` (live) or
+# `decimal-scaled@X.Y.Z`. One section per op: a width x version table (median time
+# + the slowdown vs the latest release) beside a log-time-vs-width graph with one
+# line per version.
+
+_PENDING_HIST = "_Pending the first history-gates CI run — this renders from `results/history/history.tsv`._"
+_HIST_HEADER = ["function", "width", "version", "nanos"]
+# Distinct line colours per version; newest gets the primary brand tone.
+_VER_COLORS = ["var(--md-primary-fg-color)", "var(--md-accent-fg-color)",
+               "var(--dusk-purple,#7A6A8E)", "#367594", "#787A79"]
+
+
+def _hist_version_label(name: str) -> str:
+    """A subject capability name -> a clean version: the live `decimal-scaled` ->
+    the current crate version; `decimal-scaled@X.Y.Z` -> `X.Y.Z`."""
+    if name.startswith("decimal-scaled@"):
+        return name.split("@", 1)[1]
+    if name == "decimal-scaled":
+        return crate_version()
+    return name
+
+
+def _semver_key(v: str) -> tuple:
+    return tuple(int(x) if x.isdigit() else 0 for x in v.split("."))
+
+
+def _history_rows() -> list[tuple[str, int, str, float]] | None:
+    """`(function, width, version_label, ns)` per cell, or None if the summary is
+    absent / not on the current schema (renders pending rather than garbage)."""
+    if not HISTORY_RESULTS.exists():
+        return None
+    lines = HISTORY_RESULTS.read_text(encoding="utf-8").splitlines()
+    if not lines or lines[0].split("\t")[:4] != _HIST_HEADER:
+        return None
+    rows = []
+    for line in lines[1:]:
+        c = line.split("\t")
+        if len(c) >= 4 and c[1].isdigit():
+            rows.append((c[0], int(c[1]), _hist_version_label(c[2]), float(c[3])))
+    return rows
+
+
+def _history_svg(widths: list[int], versions: list[str], latest: str,
+                 cells: dict[tuple[int, str], float]) -> str:
+    """Log-time(y) vs width(x), one polyline per version (distinct colours, the
+    latest release boldest) with a small in-graph legend."""
+    import math
+    flat = [cells[(w, v)] for w in widths for v in versions if (w, v) in cells]
+    if len(flat) < 2 or len(widths) < 2:
+        return ""
+    lo, hi = math.floor(math.log10(min(flat))), math.ceil(math.log10(max(flat)))
+    if hi <= lo:
+        hi = lo + 1
+    W, H, L, Rm, Tm, Bm = 460, 262, 52, 10, 30, 30  # extra top margin for the legend
+    pw, ph, n = W - L - Rm, H - Tm - Bm, len(widths)
+    xp = lambda i: L + pw * i / (n - 1)
+    yp = lambda ns: Tm + ph * (hi - math.log10(ns)) / (hi - lo)
+    colour = {v: _VER_COLORS[k % len(_VER_COLORS)]
+              for k, v in enumerate(sorted(versions, key=_semver_key, reverse=True))}
+    p = [f'<svg viewBox="0 0 {W} {H}" width="100%" style="height:auto;'
+         f'color:var(--md-default-fg-color--light)" xmlns="http://www.w3.org/2000/svg">']
+    for d in range(lo, hi + 1):
+        y = yp(10 ** d)
+        p.append(f'<line x1="{L}" y1="{y:.1f}" x2="{L + pw}" y2="{y:.1f}" '
+                 f'stroke="currentColor" stroke-opacity="0.15"/>')
+        p.append(f'<text x="{L - 6}" y="{y + 3:.1f}" text-anchor="end" font-size="9" '
+                 f'fill="currentColor">{_ns_decade(d)}</text>')
+    for i, w in enumerate(widths):
+        p.append(f'<text x="{xp(i):.1f}" y="{Tm + ph + 12}" text-anchor="middle" '
+                 f'font-size="8" fill="currentColor">{w}</text>')
+    lx = L  # legend across the top margin
+    for v in versions:
+        p.append(f'<line x1="{lx}" y1="20" x2="{lx + 14}" y2="20" stroke="{colour[v]}" stroke-width="2"/>')
+        p.append(f'<text x="{lx + 17}" y="23" font-size="9" fill="currentColor">{v}</text>')
+        lx += 24 + 7 * len(v)
+    for v in versions:
+        line = [(xp(i), cells[(w, v)]) for i, w in enumerate(widths) if (w, v) in cells]
+        if len(line) < 2:
+            continue
+        pts = " ".join(f"{x:.1f},{yp(val):.1f}" for x, val in line)
+        p.append(f'<polyline points="{pts}" fill="none" stroke="{colour[v]}" '
+                 f'stroke-width="{2.0 if v == latest else 1.3}"/>')
+    p.append(f'<line x1="{L}" y1="{Tm}" x2="{L}" y2="{Tm + ph}" stroke="currentColor" stroke-opacity="0.4"/>')
+    p.append(f'<line x1="{L}" y1="{Tm + ph}" x2="{L + pw}" y2="{Tm + ph}" stroke="currentColor" stroke-opacity="0.4"/>')
+    p.append("</svg>")
+    return "".join(p)
+
+
+def render_history_units() -> str:
+    """The time-unit legend for the History page header (left column)."""
+    rows = _history_rows()
+    return _units_legend([ns for *_x, ns in rows]) if rows else _PENDING_HIST
+
+
+def render_history() -> str:
+    """One section per op: a width x version table (median time + slowdown vs the
+    latest release) beside a per-version log-time graph. From results/history/.
+    The units legend + width map render into the page header (separate regions)."""
+    rows = _history_rows()
+    if not rows:
+        return _PENDING_HIST
+    versions = sorted({v for _fn, _w, v, _ns in rows}, key=_semver_key)
+    latest = versions[-1]
+    by_op: dict[str, dict[tuple[int, str], float]] = {}
+    for fn, w, v, ns in rows:
+        by_op.setdefault(fn, {})[(w, v)] = ns
+    out = []
+    for op in sorted(by_op):
+        cells = by_op[op]
+        widths = sorted({w for (w, _v) in cells})
+        head = "| Width | " + " | ".join(versions) + " |"
+        rule = "| :-- | " + " | ".join(["--:"] * len(versions)) + " |"
+        trows = [head, rule]
+        for w in widths:
+            ref = cells.get((w, latest))
+            row = []
+            for v in versions:
+                ns = cells.get((w, v))
+                if ns is None:
+                    row.append("·")
+                elif v == latest or not ref:
+                    row.append(_fmt_ns(ns))
+                else:
+                    row.append(f"{_fmt_ns(ns)} ({ns / ref:.2g}×)")
+            trows.append(f"| D{w} | " + " | ".join(row) + " |")
+        out += [
+            f"### `{op}`",
+            "",
+            '<div class="grid perf-grid" markdown>',
+            "",
+            "\n".join(trows),
+            "",
+            "<figure>",
+            _history_svg(widths, versions, latest, cells),
+            "<figcaption>Median time vs width (log scale), one line per release; "
+            "the multiplier is the slowdown relative to the latest.</figcaption>",
+            "</figure>",
+            "",
+            "</div>",
+            "",
+        ]
+    return "\n".join(out).rstrip()
+
+
 # `key -> (target file relative to ROOT, builder)`.
 REGIONS: dict[str, tuple[str, "callable"]] = {
     "widths:table": ("docs/widths.md", render_widths_table),
@@ -516,7 +698,12 @@ REGIONS: dict[str, tuple[str, "callable"]] = {
     "golden:counts": ("docs/golden.md", render_golden_counts),
     "precision:stats": ("docs/precision.md", render_precision_stats),
     "precision:surface": ("docs/precision.md", render_precision_surface),
+    "performance:units": ("docs/performance.md", render_performance_units),
+    "performance:widths": ("docs/performance.md", render_bench_widths),
     "performance:body": ("docs/performance.md", render_performance),
+    "history:units": ("docs/history.md", render_history_units),
+    "history:widths": ("docs/history.md", render_bench_widths),
+    "history:body": ("docs/history.md", render_history),
     "precision:D38": ("docs/comparisons.md", render_precision_d38),
     "precision:D76": ("docs/comparisons.md", render_precision_d76),
     "precision:D307": ("docs/comparisons.md", render_precision_d307),

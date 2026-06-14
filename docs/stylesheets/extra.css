@@ -143,6 +143,21 @@
   overflow-x: auto;
 }
 
+/* ── Bench page header: description + units fill the left, the width
+      reference table sits at its natural size on the right ──────── */
+.md-typeset .bench-header {
+  display: grid;
+  grid-template-columns: 1fr max-content;
+  gap: 1.5rem;
+  align-items: start;
+  margin: 1em 0 1.5em;
+}
+@media (max-width: 50em) {
+  .md-typeset .bench-header {
+    grid-template-columns: 1fr;   /* stack on narrow screens */
+  }
+}
+
 /* ── Hero / landing page motifs ────────────────────────────── */
 .md-typeset .hero-row {
   display: grid;
