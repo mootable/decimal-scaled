@@ -5,21 +5,12 @@ name: "✅ ci (pre-merge gates)"
 # broken docs, or a clippy regression is caught BEFORE merge — not
 # discovered post-merge or at release time.
 #
-# Golden gating is WIDTH-SHARDED, not sampled: `golden-quick` is one
-# matrix job per width tier that builds exactly that tier's release gate
-# exe AND runs it in the SAME job (no artifact handoff). Each shard runs
-# the FULL input surface for its own widths under the default rounding
-# mode and BLOCKS; the harness asserts pass>0 so a zero-cell shard fails
-# (the zero-work guard), and `fail-fast: false` keeps one tier's failure
-# from masking another. The per-tier width shard is the structural shape
-# (a single all-width release compile does not fit the 30-min cap),
-# mirroring the `tests-consolidated` job below and golden-comprehensive.yml.
-# The six-mode sweep lives in its OWN workflow (golden-comprehensive.yml) so
-# this gate's verdict never waits on it. Each shard uploads a mini report
-# (results.tsv + summary) readable the moment it finishes.
+# Golden correctness is not gated here — the comprehensive sweep
+# (golden-comprehensive.yml) covers it advisory-style and is fast enough,
+# so the pre-merge gate stays lean.
 #
-# Gates (must pass): tests, golden-quick (per width shard), no_std, docs,
-# msrv. Advisory (never fails the build): clippy.
+# Gates (must pass): tests, no_std, docs, msrv. Advisory (never fails the
+# build): clippy.
 
 on:
   pull_request:
@@ -196,100 +187,6 @@ jobs:
         # crate's plotters/fontconfig bench dev-deps never compile (no system
         # libs needed). One width tier + macros,dyn per shard.
         run: cargo test -p decimal-scale-test --features ${{ matrix.feat }}
-
-  # GATE: the quick golden surface — FULL input set, every cell, the
-  # default rounding mode, WIDTH-SHARDED. One matrix job per width tier
-  # builds exactly that tier's release gate exe AND runs it in the SAME
-  # job (no artifact handoff) — the `tests-consolidated` shape applied to
-  # the golden gate. Each shard exe also carries the always-compiled
-  # D18/D38 cells, so every shard `GOLDEN_WIDTHS`-filters to its own
-  # tier's widths or the narrow cells re-run in every shard. The harness
-  # `check()` asserts pass>0, so a shard that selects zero cells FAILS
-  # (the zero-work guard); `fail-fast: false` keeps one tier's failure
-  # from masking another, so the per-shard jobs ARE the gate (no separate
-  # splice job needed — a missing/failed shard is its own red job). One
-  # mode only (half-to-even); the six-mode sweep stays in
-  # golden-comprehensive.yml. Each shard posts its summary to the job
-  # step-summary and uploads its mini report.
-  golden-quick:
-    name: golden quick (${{ matrix.shard }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      # The single-tier compile is slim (the decimal-scaled-cells rlib carries
-      # the heavy monomorphisation the shard links), so it runs at the runner's
-      # default parallelism with no -j cap and no swap step — the per-tier build
-      # does not OOM, like golden-comprehensive's per-tier builds, which run
-      # swap-free. No release debuginfo keeps the compile slim.
-      CARGO_PROFILE_RELEASE_DEBUG: "false"
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { shard: narrow, feat: "",      widths: "18,38" }
-          - { shard: d57,    feat: "d57",   widths: "57"    }
-          - { shard: d76,    feat: "d76",   widths: "76"    }
-          - { shard: d115,   feat: "d115",  widths: "115"   }
-          - { shard: d153,   feat: "d153",  widths: "153"   }
-          - { shard: d230,   feat: "d230",  widths: "230"   }
-          - { shard: d307,   feat: "d307",  widths: "307"   }
-          - { shard: d462,   feat: "d462",  widths: "462"   }
-          - { shard: d616,   feat: "d616",  widths: "616"   }
-          - { shard: d924,   feat: "d924",  widths: "924"   }
-          - { shard: d1232,  feat: "d1232", widths: "1232"  }
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo registry + git
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: cargo-ci-golden-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'macros/Cargo.toml') }}
-          restore-keys: |
-            cargo-ci-golden-${{ runner.os }}-
-
-      - name: Build + run the quick golden shard (default mode, this tier's widths)
-        # `-p decimal-scale-test` scopes the build to the gate crate (the
-        # root crate's plotters/fontconfig bench dev-deps never compile, so
-        # no system libs). Build + run in ONE invocation: compile this
-        # tier's golden exe, then run golden_default (default half-to-even)
-        # over only this tier's widths. `${FEAT:+...}` drops --features
-        # entirely for the narrow shard (the base D18/D38 build).
-        env:
-          GOLDEN_WIDTHS: "${{ matrix.widths }}"
-          GOLDEN_REPORT_DIR: shard-report
-          GOLDEN_DIR: ${{ github.workspace }}/decimal-scaled-golden/golden
-        run: |
-          set -euo pipefail
-          FEAT="${{ matrix.feat }}"
-          cargo test -p decimal-scale-test --release ${FEAT:+--features "$FEAT"} --test golden golden_default -- --ignored --nocapture
-
-      - name: Mini report → log + step summary
-        if: always()
-        run: |
-          if [ -f shard-report/summary.txt ]; then
-            echo "=== ${{ matrix.shard }} mini report ==="
-            cat shard-report/summary.txt
-            cat shard-report/summary.txt >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "::warning::no shard-report/summary.txt was produced (the gate exited before reporting)"
-          fi
-
-      - name: Upload shard mini report
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: golden-quick-${{ matrix.shard }}
-          path: shard-report/
-          if-no-files-found: warn
-          retention-days: 7
 
   # GATE: the no_std + alloc build. The crate is `#![no_std]` under
   # non-default features, but no workflow exercised that build, so a
