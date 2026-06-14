@@ -249,7 +249,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       # Self-commit the timing medians back to the run's branch (the
-      # lib-cmp-precision aggregate pattern; a GITHUB_TOKEN push does not
+      # same self-render aggregate pattern; a GITHUB_TOKEN push does not
       # re-trigger workflows, so there is no refresh loop).
       contents: write
     steps:

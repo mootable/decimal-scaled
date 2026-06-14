@@ -198,7 +198,7 @@ jobs:
     needs: [plan, stripes]
     permissions:
       # Self-commit the combined full-surface results back to the run's branch
-      # (the lib-cmp-precision aggregate pattern; a GITHUB_TOKEN push does not
+      # (the same self-render aggregate pattern; a GITHUB_TOKEN push does not
       # re-trigger workflows, so there is no refresh loop).
       contents: write
 

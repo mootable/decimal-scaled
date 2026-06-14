@@ -10,8 +10,8 @@ name: "📊 lib-perf (peer-crate timing over golden)"
 # rows, single mode, with the `Timed` strategy as a ride-along (one timed call per
 # golden row). Timing is REPORTED, never asserted.
 #
-# This is the precision shootout's perf twin: lib-cmp-precision.yml scores the same
-# subjects for correctness; this one times them. Its aggregate self-commits
+# This is the TIMING counterpart to the golden correctness gate; it self-renders the
+# Comparisons page the way golden self-renders Precision. Its aggregate self-commits
 # results/lib_cmp/medians.tsv (function/width/library/nanos/min/max) — the Comparisons-page
 # data source (docs/comparisons.md, rendered by scripts/render_docs.py).
 #
