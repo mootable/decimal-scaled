@@ -1,1463 +1,1201 @@
-bit	scale	op	library	median_ns
-64	0	add	decimal-scaled	1.006
-64	0	add	fastnum	9.639
-64	0	add	fixed_i32f32	0.933
-64	0	add	rust_decimal	8.714
-64	0	div	decimal-scaled	4.356
-64	0	div	fastnum	8.626
-64	0	div	fixed_i32f32	5.290
-64	0	div	rust_decimal	7.272
-64	0	mul	decimal-scaled	0.945
-64	0	mul	fastnum	11.499
-64	0	mul	fixed_i32f32	1.017
-64	0	mul	rust_decimal	6.679
-64	0	neg	decimal-scaled	0.623
-64	0	neg	fastnum	5.598
-64	0	neg	fixed_i32f32	0.622
-64	0	neg	rust_decimal	2.488
-64	0	rem	decimal-scaled	1.868
-64	0	rem	fastnum	18.245
-64	0	rem	fixed_i32f32	2.177
-64	0	rem	rust_decimal	11.981
-64	0	sub	decimal-scaled	1.090
-64	0	sub	fastnum	10.425
-64	0	sub	fixed_i32f32	0.934
-64	0	sub	rust_decimal	9.024
-64	4	add	decimal-scaled	1.006
-64	4	add	fastnum	9.650
-64	4	add	fixed_i32f32	0.933
-64	4	add	rust_decimal	8.713
-64	4	div	decimal-scaled	4.473
-64	4	div	fastnum	8.630
-64	4	div	fixed_i32f32	5.293
-64	4	div	rust_decimal	7.275
-64	4	mul	decimal-scaled	2.833
-64	4	mul	fastnum	10.877
-64	4	mul	fixed_i32f32	1.018
-64	4	mul	rust_decimal	6.684
-64	4	neg	decimal-scaled	0.623
-64	4	neg	fastnum	5.598
-64	4	neg	fixed_i32f32	0.623
-64	4	neg	rust_decimal	2.483
-64	4	rem	decimal-scaled	1.867
-64	4	rem	fastnum	18.270
-64	4	rem	fixed_i32f32	2.177
-64	4	rem	rust_decimal	11.979
-64	4	sub	decimal-scaled	1.090
-64	4	sub	fastnum	10.424
-64	4	sub	fixed_i32f32	0.934
-64	4	sub	rust_decimal	9.025
-64	9	add	decimal-scaled	1.007
-64	9	add	fastnum	9.645
-64	9	add	fixed_i32f32	0.934
-64	9	add	rust_decimal	8.716
-64	9	div	decimal-scaled	4.560
-64	9	div	fastnum	8.619
-64	9	div	fixed_i32f32	5.291
-64	9	div	rust_decimal	7.265
-64	9	mul	decimal-scaled	2.912
-64	9	mul	fastnum	10.842
-64	9	mul	fixed_i32f32	1.017
-64	9	mul	rust_decimal	6.659
-64	9	neg	decimal-scaled	0.623
-64	9	neg	fastnum	5.599
-64	9	neg	fixed_i32f32	0.623
-64	9	neg	rust_decimal	2.504
-64	9	rem	decimal-scaled	1.867
-64	9	rem	fastnum	18.278
-64	9	rem	fixed_i32f32	2.177
-64	9	rem	rust_decimal	11.937
-64	9	sub	decimal-scaled	1.089
-64	9	sub	fastnum	10.374
-64	9	sub	fixed_i32f32	0.934
-64	9	sub	rust_decimal	9.025
-64	13	add	decimal-scaled	1.007
-64	13	add	fastnum	9.646
-64	13	add	fixed_i32f32	0.934
-64	13	add	rust_decimal	10.329
-64	13	div	decimal-scaled	6.847
-64	13	div	fastnum	8.649
-64	13	div	fixed_i32f32	5.292
-64	13	div	rust_decimal	11.092
-64	13	mul	decimal-scaled	5.634
-64	13	mul	fastnum	10.852
-64	13	mul	fixed_i32f32	1.018
-64	13	mul	rust_decimal	9.184
-64	13	neg	decimal-scaled	0.623
-64	13	neg	fastnum	5.601
-64	13	neg	fixed_i32f32	0.622
-64	13	neg	rust_decimal	2.506
-64	13	rem	decimal-scaled	2.178
-64	13	rem	fastnum	18.099
-64	13	rem	fixed_i32f32	2.178
-64	13	rem	rust_decimal	12.008
-64	13	sub	decimal-scaled	1.090
-64	13	sub	fastnum	10.384
-64	13	sub	fixed_i32f32	0.934
-64	13	sub	rust_decimal	10.607
-64	17	add	decimal-scaled	1.058
-64	17	add	fastnum	9.242
-64	17	add	fixed_i32f32	0.590
-64	17	add	rust_decimal	9.510
-64	17	div	decimal-scaled	7.377
-64	17	div	fastnum	7.877
-64	17	div	fixed_i32f32	4.904
-64	17	div	rust_decimal	11.491
-64	17	mul	decimal-scaled	5.341
-64	17	mul	fastnum	8.773
-64	17	mul	fixed_i32f32	0.598
-64	17	mul	rust_decimal	22.121
-64	17	neg	decimal-scaled	0.576
-64	17	neg	fastnum	5.194
-64	17	neg	fixed_i32f32	0.576
-64	17	neg	rust_decimal	1.971
-64	17	rem	decimal-scaled	2.884
-64	17	rem	fastnum	17.752
-64	17	rem	fixed_i32f32	2.879
-64	17	rem	rust_decimal	10.510
-64	17	sub	decimal-scaled	1.108
-64	17	sub	fastnum	10.672
-64	17	sub	fixed_i32f32	0.589
-64	17	sub	rust_decimal	9.507
-128	0	add	bigdecimal	60.492
-128	0	add	dashu-float	95.675
-128	0	add	decimal-rs	12.028
-128	0	add	decimal-scaled	2.172
-128	0	add	fastnum	14.575
-128	0	add	fixed_i64f64	2.109
-128	0	add	rust_decimal	10.328
-128	0	div	bigdecimal	38.591
-128	0	div	dashu-float	98.002
-128	0	div	decimal-rs	116.365
-128	0	div	decimal-scaled	8.639
-128	0	div	fastnum	7.432
-128	0	div	fixed_i64f64	29.818
-128	0	div	rust_decimal	7.319
-128	0	mul	bigdecimal	43.298
-128	0	mul	dashu-float	84.940
-128	0	mul	decimal-rs	12.356
-128	0	mul	decimal-scaled	3.758
-128	0	mul	fastnum	10.585
-128	0	mul	fixed_i64f64	2.460
-128	0	mul	rust_decimal	6.267
-128	0	neg	bigdecimal	17.233
-128	0	neg	dashu-float	6.328
-128	0	neg	decimal-rs	3.030
-128	0	neg	decimal-scaled	1.644
-128	0	neg	fastnum	7.032
-128	0	neg	fixed_i64f64	1.406
-128	0	neg	rust_decimal	2.788
-128	0	rem	bigdecimal	66.512
-128	0	rem	dashu-float	59.615
-128	0	rem	decimal-rs	13.171
-128	0	rem	decimal-scaled	7.555
-128	0	rem	fastnum	30.590
-128	0	rem	fixed_i64f64	14.405
-128	0	rem	rust_decimal	12.099
-128	0	sub	bigdecimal	54.487
-128	0	sub	dashu-float	96.157
-128	0	sub	decimal-rs	12.090
-128	0	sub	decimal-scaled	2.170
-128	0	sub	fastnum	10.278
-128	0	sub	fixed_i64f64	2.109
-128	0	sub	rust_decimal	10.276
-128	9	add	bigdecimal	59.254
-128	9	add	dashu-float	98.327
-128	9	add	decimal-rs	12.022
-128	9	add	decimal-scaled	2.169
-128	9	add	fastnum	14.567
-128	9	add	fixed_i64f64	2.108
-128	9	add	rust_decimal	10.352
-128	9	div	bigdecimal	43.900
-128	9	div	dashu-float	97.853
-128	9	div	decimal-rs	129.323
-128	9	div	decimal-scaled	9.804
-128	9	div	fastnum	7.438
-128	9	div	fixed_i64f64	29.814
-128	9	div	rust_decimal	7.317
-128	9	mul	bigdecimal	51.700
-128	9	mul	dashu-float	86.951
-128	9	mul	decimal-rs	47.108
-128	9	mul	decimal-scaled	10.610
-128	9	mul	fastnum	10.577
-128	9	mul	fixed_i64f64	2.461
-128	9	mul	rust_decimal	6.266
-128	9	neg	bigdecimal	16.879
-128	9	neg	dashu-float	6.937
-128	9	neg	decimal-rs	3.112
-128	9	neg	decimal-scaled	1.640
-128	9	neg	fastnum	7.157
-128	9	neg	fixed_i64f64	1.405
-128	9	neg	rust_decimal	2.788
-128	9	rem	bigdecimal	66.792
-128	9	rem	dashu-float	60.043
-128	9	rem	decimal-rs	13.163
-128	9	rem	decimal-scaled	7.540
-128	9	rem	fastnum	31.381
-128	9	rem	fixed_i64f64	14.406
-128	9	rem	rust_decimal	12.094
-128	9	sub	bigdecimal	55.358
-128	9	sub	dashu-float	98.279
-128	9	sub	decimal-rs	12.083
-128	9	sub	decimal-scaled	2.163
-128	9	sub	fastnum	11.730
-128	9	sub	fixed_i64f64	2.108
-128	9	sub	rust_decimal	10.282
-128	19	add	bigdecimal	57.498
-128	19	add	dashu-float	98.650
-128	19	add	decimal-rs	12.428
-128	19	add	decimal-scaled	2.167
-128	19	add	fastnum	14.068
-128	19	add	fixed_i64f64	2.109
-128	19	add	rust_decimal	11.975
-128	19	atan	decimal-scaled	7381.562
-128	19	atan	fastnum	23.151
-128	19	atan	g_math	37785.036
-128	19	cos	decimal-scaled	7768.923
-128	19	cos	fastnum	19019.256
-128	19	cos	g_math	26728.329
-128	19	cos	rust_decimal	3507.729
-128	19	cosh	decimal-scaled	12574.481
-128	19	cosh	fastnum	14063.370
-128	19	cosh	g_math	6501.395
-128	19	div	bigdecimal	44.129
-128	19	div	dashu-float	96.020
-128	19	div	decimal-rs	129.317
-128	19	div	decimal-scaled	8.861
-128	19	div	fastnum	7.432
-128	19	div	fixed_i64f64	29.892
-128	19	div	rust_decimal	10.699
-128	19	exp	dashu-float	262497.774
-128	19	exp	decimal-rs	72.205
-128	19	exp	decimal-scaled	8329.620
-128	19	exp	fastnum	12579.807
-128	19	exp	g_math	2853.233
-128	19	exp	rust_decimal	267.474
-128	19	ln	dashu-float	80145.193
-128	19	ln	decimal-rs	3888.452
-128	19	ln	decimal-scaled	385.291
-128	19	ln	fastnum	67.549
-128	19	ln	g_math	1110.052
-128	19	ln	rust_decimal	5341.010
-128	19	mul	bigdecimal	53.508
-128	19	mul	dashu-float	86.362
-128	19	mul	decimal-rs	61.087
-128	19	mul	decimal-scaled	11.700
-128	19	mul	fastnum	10.586
-128	19	mul	fixed_i64f64	2.461
-128	19	mul	g_math	282.234
-128	19	mul	rust_decimal	39.946
-128	19	neg	bigdecimal	17.581
-128	19	neg	dashu-float	6.329
-128	19	neg	decimal-rs	3.028
-128	19	neg	decimal-scaled	1.644
-128	19	neg	fastnum	7.143
-128	19	neg	fixed_i64f64	1.406
-128	19	neg	rust_decimal	2.791
-128	19	rem	bigdecimal	74.937
-128	19	rem	dashu-float	67.135
-128	19	rem	decimal-rs	13.201
-128	19	rem	decimal-scaled	7.494
-128	19	rem	fastnum	30.391
-128	19	rem	fixed_i64f64	14.408
-128	19	rem	rust_decimal	22.794
-128	19	sin	decimal-scaled	7871.298
-128	19	sin	fastnum	8980.819
-128	19	sin	g_math	26781.148
-128	19	sin	rust_decimal	3424.869
-128	19	sinh	decimal-scaled	12572.972
-128	19	sinh	fastnum	14122.606
-128	19	sinh	g_math	6502.153
-128	19	sqrt	bigdecimal	3054.392
-128	19	sqrt	decimal-rs	2118.103
-128	19	sqrt	decimal-scaled	32.535
-128	19	sqrt	fastnum	20.048
-128	19	sqrt	g_math	6096.705
-128	19	sqrt	rust_decimal	878.232
-128	19	sub	bigdecimal	49.170
-128	19	sub	dashu-float	97.862
-128	19	sub	decimal-rs	12.804
-128	19	sub	decimal-scaled	2.166
-128	19	sub	fastnum	10.277
-128	19	sub	fixed_i64f64	2.108
-128	19	sub	rust_decimal	13.081
-128	19	tan	decimal-scaled	14462.897
-128	19	tan	fastnum	29449.293
-128	19	tan	g_math	27639.997
-128	19	tan	rust_decimal	4681.166
-128	19	tanh	decimal-scaled	12595.039
-128	19	tanh	fastnum	15298.623
-128	19	tanh	g_math	14658.363
-128	28	add	bigdecimal	62.654
-128	28	add	dashu-float	95.652
-128	28	add	decimal-rs	12.031
-128	28	add	decimal-scaled	2.170
-128	28	add	fastnum	14.599
-128	28	add	fixed_i64f64	2.110
-128	28	add	rust_decimal	11.972
-128	28	div	bigdecimal	58.179
-128	28	div	dashu-float	97.951
-128	28	div	decimal-rs	130.194
-128	28	div	decimal-scaled	809.721
-128	28	div	fastnum	7.437
-128	28	div	fixed_i64f64	29.851
-128	28	div	rust_decimal	11.028
-128	28	mul	bigdecimal	66.154
-128	28	mul	dashu-float	85.716
-128	28	mul	decimal-rs	78.432
-128	28	mul	decimal-scaled	27.791
-128	28	mul	fastnum	10.581
-128	28	mul	fixed_i64f64	2.462
-128	28	mul	rust_decimal	104.222
-128	28	neg	bigdecimal	19.331
-128	28	neg	dashu-float	6.331
-128	28	neg	decimal-rs	2.997
-128	28	neg	decimal-scaled	1.637
-128	28	neg	fastnum	7.108
-128	28	neg	fixed_i64f64	1.406
-128	28	neg	rust_decimal	2.786
-128	28	rem	bigdecimal	189.658
-128	28	rem	dashu-float	59.650
-128	28	rem	decimal-rs	14.889
-128	28	rem	decimal-scaled	12.962
-128	28	rem	fastnum	30.394
-128	28	rem	fixed_i64f64	14.413
-128	28	rem	rust_decimal	23.786
-128	28	sub	bigdecimal	62.997
-128	28	sub	dashu-float	96.189
-128	28	sub	decimal-rs	12.090
-128	28	sub	decimal-scaled	2.165
-128	28	sub	fastnum	10.285
-128	28	sub	fixed_i64f64	2.110
-128	28	sub	rust_decimal	13.038
-128	37	add	bigdecimal	57.240
-128	37	add	dashu-float	99.491
-128	37	add	decimal-scaled	2.173
-128	37	add	fastnum	14.066
-128	37	add	fixed_i64f64	2.109
-128	37	div	bigdecimal	48.394
-128	37	div	dashu-float	96.009
-128	37	div	decimal-scaled	1058.607
-128	37	div	fastnum	7.434
-128	37	div	fixed_i64f64	29.870
-128	37	mul	bigdecimal	65.955
-128	37	mul	dashu-float	87.122
-128	37	mul	decimal-scaled	27.898
-128	37	mul	fastnum	10.597
-128	37	mul	fixed_i64f64	2.460
-128	37	neg	bigdecimal	17.236
-128	37	neg	dashu-float	6.330
-128	37	neg	decimal-scaled	1.646
-128	37	neg	fastnum	7.078
-128	37	neg	fixed_i64f64	1.406
-128	37	rem	bigdecimal	188.633
-128	37	rem	dashu-float	61.987
-128	37	rem	decimal-scaled	14.196
-128	37	rem	fastnum	30.405
-128	37	rem	fixed_i64f64	14.411
-128	37	sub	bigdecimal	53.612
-128	37	sub	dashu-float	98.742
-128	37	sub	decimal-scaled	2.154
-128	37	sub	fastnum	10.281
-128	37	sub	fixed_i64f64	2.109
-192	0	add	bigdecimal	50.633
-192	0	add	dashu-float	82.734
-192	0	add	decimal-scaled	2.735
-192	0	div	bigdecimal	38.305
-192	0	div	dashu-float	79.560
-192	0	div	decimal-scaled	36.770
-192	0	mul	bigdecimal	40.218
-192	0	mul	dashu-float	70.911
-192	0	mul	decimal-scaled	6.855
-192	0	neg	bigdecimal	16.499
-192	0	neg	dashu-float	5.586
-192	0	neg	decimal-scaled	1.974
-192	0	rem	bigdecimal	65.409
-192	0	rem	dashu-float	46.983
-192	0	rem	decimal-scaled	8.101
-192	0	sub	bigdecimal	45.056
-192	0	sub	dashu-float	82.654
-192	0	sub	decimal-scaled	2.791
-192	14	add	bigdecimal	57.834
-192	14	add	dashu-float	96.166
-192	14	add	decimal-scaled	2.950
-192	14	div	bigdecimal	45.155
-192	14	div	dashu-float	95.473
-192	14	div	decimal-scaled	44.019
-192	14	mul	bigdecimal	50.823
-192	14	mul	dashu-float	85.535
-192	14	mul	decimal-scaled	23.135
-192	14	neg	bigdecimal	17.229
-192	14	neg	dashu-float	6.328
-192	14	neg	decimal-scaled	1.905
-192	14	rem	bigdecimal	74.124
-192	14	rem	dashu-float	59.366
-192	14	rem	decimal-scaled	8.093
-192	14	sub	bigdecimal	54.522
-192	14	sub	dashu-float	96.713
-192	14	sub	decimal-scaled	2.917
-192	28	add	bigdecimal	48.172
-192	28	add	dashu-float	82.757
-192	28	add	decimal-scaled	2.726
-192	28	atan	decimal-scaled	10594.709
-192	28	cos	decimal-scaled	5245.283
-192	28	cosh	decimal-scaled	8464.548
-192	28	div	bigdecimal	52.529
-192	28	div	dashu-float	79.708
-192	28	div	decimal-scaled	57.631
-192	28	exp	dashu-float	291187.295
-192	28	exp	decimal-scaled	5463.068
-192	28	ln	dashu-float	113292.617
-192	28	ln	decimal-scaled	398.638
-192	28	mul	bigdecimal	68.922
-192	28	mul	dashu-float	70.891
-192	28	mul	decimal-scaled	32.825
-192	28	neg	bigdecimal	15.899
-192	28	neg	dashu-float	5.590
-192	28	neg	decimal-scaled	1.974
-192	28	rem	bigdecimal	217.170
-192	28	rem	dashu-float	47.068
-192	28	rem	decimal-scaled	12.512
-192	28	sin	decimal-scaled	5336.090
-192	28	sinh	decimal-scaled	8467.488
-192	28	sqrt	decimal-scaled	478.858
-192	28	sub	bigdecimal	44.875
-192	28	sub	dashu-float	82.633
-192	28	sub	decimal-scaled	2.792
-192	28	tan	decimal-scaled	6526.320
-192	28	tanh	decimal-scaled	8705.108
-192	42	add	bigdecimal	48.753
-192	42	add	dashu-float	83.822
-192	42	add	decimal-scaled	2.730
-192	42	div	bigdecimal	195.521
-192	42	div	dashu-float	79.049
-192	42	div	decimal-scaled	97.569
-192	42	mul	bigdecimal	97.930
-192	42	mul	dashu-float	72.145
-192	42	mul	decimal-scaled	72.226
-192	42	neg	bigdecimal	15.887
-192	42	neg	dashu-float	5.584
-192	42	neg	decimal-scaled	1.975
-192	42	rem	bigdecimal	186.121
-192	42	rem	dashu-float	46.075
-192	42	rem	decimal-scaled	48.280
-192	42	sub	bigdecimal	45.401
-192	42	sub	dashu-float	83.529
-192	42	sub	decimal-scaled	2.793
-192	56	add	bigdecimal	49.640
-192	56	add	dashu-float	84.998
-192	56	add	decimal-scaled	2.733
-192	56	div	bigdecimal	196.716
-192	56	div	dashu-float	80.397
-192	56	div	decimal-scaled	97.396
-192	56	mul	bigdecimal	96.831
-192	56	mul	dashu-float	70.903
-192	56	mul	decimal-scaled	73.121
-192	56	neg	bigdecimal	16.197
-192	56	neg	dashu-float	5.593
-192	56	neg	decimal-scaled	1.974
-192	56	rem	bigdecimal	187.186
-192	56	rem	dashu-float	48.952
-192	56	rem	decimal-scaled	48.463
-192	56	sub	bigdecimal	45.427
-192	56	sub	dashu-float	84.556
-192	56	sub	decimal-scaled	2.791
-256	0	add	bigdecimal	53.531
-256	0	add	dashu-float	80.178
-256	0	add	decimal-scaled	3.702
-256	0	add	fastnum	14.461
-256	0	div	bigdecimal	39.266
-256	0	div	dashu-float	81.060
-256	0	div	decimal-scaled	39.265
-256	0	div	fastnum	9.038
-256	0	mul	bigdecimal	40.937
-256	0	mul	dashu-float	70.759
-256	0	mul	decimal-scaled	8.099
-256	0	mul	fastnum	23.394
-256	0	neg	bigdecimal	16.675
-256	0	neg	dashu-float	5.588
-256	0	neg	decimal-scaled	2.527
-256	0	neg	fastnum	8.088
-256	0	rem	bigdecimal	65.696
-256	0	rem	dashu-float	47.791
-256	0	rem	decimal-scaled	9.620
-256	0	rem	fastnum	113.821
-256	0	sub	bigdecimal	47.765
-256	0	sub	dashu-float	79.834
-256	0	sub	decimal-scaled	3.693
-256	0	sub	fastnum	16.803
-256	19	add	bigdecimal	48.770
-256	19	add	dashu-float	79.761
-256	19	add	decimal-scaled	3.716
-256	19	add	fastnum	14.471
-256	19	div	bigdecimal	44.885
-256	19	div	dashu-float	81.069
-256	19	div	decimal-scaled	48.660
-256	19	div	fastnum	9.037
-256	19	mul	bigdecimal	55.557
-256	19	mul	dashu-float	70.642
-256	19	mul	decimal-scaled	23.796
-256	19	mul	fastnum	23.347
-256	19	neg	bigdecimal	15.894
-256	19	neg	dashu-float	5.593
-256	19	neg	decimal-scaled	2.535
-256	19	neg	fastnum	8.095
-256	19	rem	bigdecimal	69.993
-256	19	rem	dashu-float	50.187
-256	19	rem	decimal-scaled	9.634
-256	19	rem	fastnum	117.207
-256	19	sub	bigdecimal	46.330
-256	19	sub	dashu-float	79.500
-256	19	sub	decimal-scaled	3.688
-256	19	sub	fastnum	16.794
-256	38	add	bigdecimal	40.047
-256	38	add	dashu-float	67.905
-256	38	add	decimal-scaled	3.747
-256	38	add	fastnum	12.962
-256	38	atan	decimal-scaled	12394.603
-256	38	atan	fastnum	94.599
-256	38	cos	decimal-scaled	5606.723
-256	38	cos	fastnum	90484.169
-256	38	cosh	decimal-scaled	9432.775
-256	38	cosh	fastnum	51603.985
-256	38	div	bigdecimal	43.411
-256	38	div	dashu-float	66.530
-256	38	div	decimal-scaled	62.720
-256	38	div	fastnum	8.042
-256	38	exp	dashu-float	369155.270
-256	38	exp	decimal-scaled	7391.105
-256	38	exp	fastnum	47017.818
-256	38	ln	dashu-float	171766.985
-256	38	ln	decimal-scaled	355.753
-256	38	ln	fastnum	164.025
-256	38	mul	bigdecimal	62.563
-256	38	mul	dashu-float	61.351
-256	38	mul	decimal-scaled	35.619
-256	38	mul	fastnum	18.308
-256	38	neg	bigdecimal	13.910
-256	38	neg	dashu-float	4.413
-256	38	neg	decimal-scaled	2.043
-256	38	neg	fastnum	5.471
-256	38	rem	bigdecimal	212.667
-256	38	rem	dashu-float	43.439
-256	38	rem	decimal-scaled	11.312
-256	38	rem	fastnum	112.673
-256	38	sin	decimal-scaled	5800.592
-256	38	sin	fastnum	32282.887
-256	38	sinh	decimal-scaled	9477.752
-256	38	sinh	fastnum	51612.736
-256	38	sqrt	bigdecimal	2817.995
-256	38	sqrt	decimal-scaled	545.702
-256	38	sqrt	fastnum	82.392
-256	38	sub	bigdecimal	38.016
-256	38	sub	dashu-float	67.461
-256	38	sub	decimal-scaled	3.576
-256	38	sub	fastnum	15.016
-256	38	tan	decimal-scaled	7297.069
-256	38	tan	fastnum	127860.624
-256	38	tanh	decimal-scaled	9694.487
-256	38	tanh	fastnum	56495.849
-256	57	add	bigdecimal	49.117
-256	57	add	dashu-float	80.719
-256	57	add	decimal-scaled	3.705
-256	57	add	fastnum	14.453
-256	57	div	bigdecimal	189.302
-256	57	div	dashu-float	79.827
-256	57	div	decimal-scaled	100.120
-256	57	div	fastnum	9.034
-256	57	mul	bigdecimal	98.143
-256	57	mul	dashu-float	70.347
-256	57	mul	decimal-scaled	80.835
-256	57	mul	fastnum	23.382
-256	57	neg	bigdecimal	16.020
-256	57	neg	dashu-float	5.553
-256	57	neg	decimal-scaled	2.527
-256	57	neg	fastnum	8.086
-256	57	rem	bigdecimal	175.570
-256	57	rem	dashu-float	50.129
-256	57	rem	decimal-scaled	52.090
-256	57	rem	fastnum	114.457
-256	57	sub	bigdecimal	45.550
-256	57	sub	dashu-float	80.105
-256	57	sub	decimal-scaled	3.683
-256	57	sub	fastnum	16.780
-256	75	add	bigdecimal	56.422
-256	75	add	dashu-float	98.505
-256	75	add	decimal-scaled	4.168
-256	75	add	fastnum	16.473
-256	75	div	bigdecimal	186.839
-256	75	div	dashu-float	94.255
-256	75	div	decimal-scaled	131.519
-256	75	div	fastnum	8.466
-256	75	mul	bigdecimal	96.362
-256	75	mul	dashu-float	85.748
-256	75	mul	decimal-scaled	107.721
-256	75	mul	fastnum	23.041
-256	75	neg	bigdecimal	17.241
-256	75	neg	dashu-float	6.328
-256	75	neg	decimal-scaled	2.909
-256	75	neg	fastnum	7.091
-256	75	rem	bigdecimal	198.149
-256	75	rem	dashu-float	61.463
-256	75	rem	decimal-scaled	64.628
-256	75	rem	fastnum	109.815
-256	75	sub	bigdecimal	54.428
-256	75	sub	dashu-float	98.827
-256	75	sub	decimal-scaled	4.106
-256	75	sub	fastnum	17.708
-384	0	add	bigdecimal	60.475
-384	0	add	dashu-float	98.044
-384	0	add	decimal-scaled	6.308
-384	0	div	bigdecimal	39.481
-384	0	div	dashu-float	95.293
-384	0	div	decimal-scaled	64.150
-384	0	mul	bigdecimal	42.569
-384	0	mul	dashu-float	90.383
-384	0	mul	decimal-scaled	16.230
-384	0	neg	bigdecimal	16.872
-384	0	neg	dashu-float	6.327
-384	0	neg	decimal-scaled	3.727
-384	0	rem	bigdecimal	67.029
-384	0	rem	dashu-float	58.396
-384	0	rem	decimal-scaled	15.655
-384	0	sub	bigdecimal	52.214
-384	0	sub	dashu-float	96.545
-384	0	sub	decimal-scaled	6.800
-384	28	add	bigdecimal	57.330
-384	28	add	dashu-float	95.597
-384	28	add	decimal-scaled	6.296
-384	28	div	bigdecimal	47.778
-384	28	div	dashu-float	97.867
-384	28	div	decimal-scaled	83.530
-384	28	mul	bigdecimal	65.009
-384	28	mul	dashu-float	84.446
-384	28	mul	decimal-scaled	51.864
-384	28	neg	bigdecimal	16.880
-384	28	neg	dashu-float	6.328
-384	28	neg	decimal-scaled	3.724
-384	28	rem	bigdecimal	179.523
-384	28	rem	dashu-float	59.549
-384	28	rem	decimal-scaled	18.336
-384	28	sub	bigdecimal	55.148
-384	28	sub	dashu-float	95.465
-384	28	sub	decimal-scaled	6.802
-384	57	add	bigdecimal	49.521
-384	57	add	dashu-float	84.049
-384	57	add	decimal-scaled	5.747
-384	57	atan	decimal-scaled	23399.833
-384	57	cos	decimal-scaled	11896.713
-384	57	cosh	decimal-scaled	12243.965
-384	57	div	bigdecimal	183.019
-384	57	div	dashu-float	79.078
-384	57	div	decimal-scaled	103.339
-384	57	exp	dashu-float	522653.364
-384	57	exp	decimal-scaled	16565.044
-384	57	ln	dashu-float	313569.005
-384	57	ln	decimal-scaled	564.963
-384	57	mul	bigdecimal	100.080
-384	57	mul	dashu-float	72.606
-384	57	mul	decimal-scaled	81.993
-384	57	neg	bigdecimal	15.882
-384	57	neg	dashu-float	5.581
-384	57	neg	decimal-scaled	3.494
-384	57	rem	bigdecimal	213.562
-384	57	rem	dashu-float	46.032
-384	57	rem	decimal-scaled	59.462
-384	57	sin	decimal-scaled	12044.310
-384	57	sinh	decimal-scaled	11497.623
-384	57	sqrt	decimal-scaled	962.288
-384	57	sub	bigdecimal	45.750
-384	57	sub	dashu-float	83.418
-384	57	sub	decimal-scaled	6.273
-384	57	tan	decimal-scaled	14539.726
-384	57	tanh	decimal-scaled	12138.253
-384	86	add	bigdecimal	51.877
-384	86	add	dashu-float	85.359
-384	86	add	decimal-scaled	5.750
-384	86	div	bigdecimal	192.338
-384	86	div	dashu-float	80.337
-384	86	div	decimal-scaled	168.289
-384	86	mul	bigdecimal	110.799
-384	86	mul	dashu-float	70.711
-384	86	mul	decimal-scaled	201.730
-384	86	neg	bigdecimal	15.700
-384	86	neg	dashu-float	5.585
-384	86	neg	decimal-scaled	3.762
-384	86	rem	bigdecimal	183.948
-384	86	rem	dashu-float	48.969
-384	86	rem	decimal-scaled	67.852
-384	86	sub	bigdecimal	46.586
-384	86	sub	dashu-float	84.293
-384	86	sub	decimal-scaled	6.282
-384	114	add	bigdecimal	51.822
-384	114	add	dashu-float	82.758
-384	114	add	decimal-scaled	5.742
-384	114	div	bigdecimal	194.964
-384	114	div	dashu-float	79.950
-384	114	div	decimal-scaled	206.758
-384	114	mul	bigdecimal	120.787
-384	114	mul	dashu-float	70.745
-384	114	mul	decimal-scaled	226.158
-384	114	neg	bigdecimal	15.588
-384	114	neg	dashu-float	5.575
-384	114	neg	decimal-scaled	3.758
-384	114	rem	bigdecimal	188.166
-384	114	rem	dashu-float	46.941
-384	114	rem	decimal-scaled	73.927
-384	114	sub	bigdecimal	47.584
-384	114	sub	dashu-float	82.117
-384	114	sub	decimal-scaled	6.273
-512	0	add	bigdecimal	39.651
-512	0	add	dashu-float	67.915
-512	0	add	decimal-scaled	5.760
-512	0	add	fastnum	20.322
-512	0	div	bigdecimal	30.490
-512	0	div	dashu-float	78.424
-512	0	div	decimal-scaled	54.772
-512	0	div	fastnum	10.828
-512	0	mul	bigdecimal	32.034
-512	0	mul	dashu-float	61.797
-512	0	mul	decimal-scaled	15.550
-512	0	mul	fastnum	66.800
-512	0	neg	bigdecimal	12.911
-512	0	neg	dashu-float	4.414
-512	0	neg	decimal-scaled	4.251
-512	0	neg	fastnum	5.759
-512	0	rem	bigdecimal	52.679
-512	0	rem	dashu-float	43.345
-512	0	rem	decimal-scaled	16.224
-512	0	rem	fastnum	142.355
-512	0	sub	bigdecimal	37.865
-512	0	sub	dashu-float	66.975
-512	0	sub	decimal-scaled	8.212
-512	0	sub	fastnum	21.530
-512	38	add	bigdecimal	56.962
-512	38	add	dashu-float	95.114
-512	38	add	decimal-scaled	8.153
-512	38	add	fastnum	28.709
-512	38	div	bigdecimal	48.603
-512	38	div	dashu-float	93.876
-512	38	div	decimal-scaled	102.120
-512	38	div	fastnum	13.362
-512	38	mul	bigdecimal	66.175
-512	38	mul	dashu-float	86.323
-512	38	mul	decimal-scaled	57.460
-512	38	mul	fastnum	87.541
-512	38	neg	bigdecimal	17.586
-512	38	neg	dashu-float	6.329
-512	38	neg	decimal-scaled	5.005
-512	38	neg	fastnum	7.764
-512	38	rem	bigdecimal	183.590
-512	38	rem	dashu-float	62.671
-512	38	rem	decimal-scaled	22.888
-512	38	rem	fastnum	187.872
-512	38	sub	bigdecimal	53.151
-512	38	sub	dashu-float	96.220
-512	38	sub	decimal-scaled	9.960
-512	38	sub	fastnum	28.269
-512	76	add	bigdecimal	57.143
-512	76	add	dashu-float	97.025
-512	76	add	decimal-scaled	8.154
-512	76	add	fastnum	28.673
-512	76	atan	decimal-scaled	24463.074
-512	76	atan	fastnum	130.381
-512	76	cos	decimal-scaled	14129.554
-512	76	cos	fastnum	792079.488
-512	76	cosh	decimal-scaled	18922.822
-512	76	cosh	fastnum	251836.425
-512	76	div	bigdecimal	187.731
-512	76	div	dashu-float	94.079
-512	76	div	decimal-scaled	146.637
-512	76	div	fastnum	13.358
-512	76	exp	dashu-float	732068.585
-512	76	exp	decimal-scaled	21932.520
-512	76	exp	fastnum	226844.358
-512	76	ln	dashu-float	475746.924
-512	76	ln	decimal-scaled	697.153
-512	76	ln	fastnum	223.195
-512	76	mul	bigdecimal	96.164
-512	76	mul	dashu-float	84.492
-512	76	mul	decimal-scaled	121.848
-512	76	mul	fastnum	87.478
-512	76	neg	bigdecimal	17.227
-512	76	neg	dashu-float	6.327
-512	76	neg	decimal-scaled	5.484
-512	76	neg	fastnum	7.743
-512	76	rem	bigdecimal	188.889
-512	76	rem	dashu-float	61.431
-512	76	rem	decimal-scaled	95.580
-512	76	rem	fastnum	179.276
-512	76	sin	decimal-scaled	12813.378
-512	76	sin	fastnum	139941.758
-512	76	sinh	decimal-scaled	19000.321
-512	76	sinh	fastnum	251861.600
-512	76	sqrt	decimal-scaled	1568.796
-512	76	sqrt	fastnum	107.431
-512	76	sub	bigdecimal	53.987
-512	76	sub	dashu-float	97.006
-512	76	sub	decimal-scaled	9.974
-512	76	sub	fastnum	28.268
-512	76	tan	decimal-scaled	14953.717
-512	76	tan	fastnum	957844.722
-512	76	tanh	decimal-scaled	19688.693
-512	76	tanh	fastnum	277125.535
-512	114	add	bigdecimal	57.285
-512	114	add	dashu-float	96.851
-512	114	add	decimal-scaled	8.160
-512	114	add	fastnum	28.756
-512	114	div	bigdecimal	211.355
-512	114	div	dashu-float	94.393
-512	114	div	decimal-scaled	236.802
-512	114	div	fastnum	13.362
-512	114	mul	bigdecimal	118.466
-512	114	mul	dashu-float	85.316
-512	114	mul	decimal-scaled	260.987
-512	114	mul	fastnum	87.558
-512	114	neg	bigdecimal	16.528
-512	114	neg	dashu-float	6.329
-512	114	neg	decimal-scaled	5.475
-512	114	neg	fastnum	7.772
-512	114	rem	bigdecimal	203.214
-512	114	rem	dashu-float	62.314
-512	114	rem	decimal-scaled	90.009
-512	114	rem	fastnum	178.454
-512	114	sub	bigdecimal	55.172
-512	114	sub	dashu-float	96.565
-512	114	sub	decimal-scaled	9.973
-512	114	sub	fastnum	28.284
-512	152	add	bigdecimal	41.923
-512	152	add	dashu-float	68.669
-512	152	add	decimal-scaled	5.747
-512	152	add	fastnum	20.405
-512	152	div	bigdecimal	226.501
-512	152	div	dashu-float	66.829
-512	152	div	decimal-scaled	298.468
-512	152	div	fastnum	10.964
-512	152	mul	bigdecimal	127.260
-512	152	mul	dashu-float	61.702
-512	152	mul	decimal-scaled	336.878
-512	152	mul	fastnum	66.838
-512	152	neg	bigdecimal	12.665
-512	152	neg	dashu-float	4.359
-512	152	neg	decimal-scaled	4.717
-512	152	neg	fastnum	5.761
-512	152	rem	bigdecimal	217.715
-512	152	rem	dashu-float	43.616
-512	152	rem	decimal-scaled	88.834
-512	152	rem	fastnum	143.280
-512	152	sub	bigdecimal	40.062
-512	152	sub	dashu-float	67.506
-512	152	sub	decimal-scaled	8.225
-512	152	sub	fastnum	21.641
-768	0	add	bigdecimal	50.179
-768	0	add	dashu-float	83.466
-768	0	add	decimal-scaled	16.939
-768	0	div	bigdecimal	37.657
-768	0	div	dashu-float	78.515
-768	0	div	decimal-scaled	92.174
-768	0	mul	bigdecimal	39.534
-768	0	mul	dashu-float	71.112
-768	0	mul	decimal-scaled	29.929
-768	0	neg	bigdecimal	16.503
-768	0	neg	dashu-float	5.607
-768	0	neg	decimal-scaled	7.135
-768	0	rem	bigdecimal	63.593
-768	0	rem	dashu-float	47.152
-768	0	rem	decimal-scaled	36.369
-768	0	sub	bigdecimal	45.410
-768	0	sub	dashu-float	82.230
-768	0	sub	decimal-scaled	19.233
-768	57	add	bigdecimal	40.520
-768	57	add	dashu-float	69.352
-768	57	add	decimal-scaled	15.111
-768	57	div	bigdecimal	184.468
-768	57	div	dashu-float	67.793
-768	57	div	decimal-scaled	137.146
-768	57	mul	bigdecimal	81.910
-768	57	mul	dashu-float	62.134
-768	57	mul	decimal-scaled	107.959
-768	57	neg	bigdecimal	12.790
-768	57	neg	dashu-float	4.655
-768	57	neg	decimal-scaled	6.210
-768	57	rem	bigdecimal	178.938
-768	57	rem	dashu-float	43.046
-768	57	rem	decimal-scaled	81.271
-768	57	sub	bigdecimal	38.394
-768	57	sub	dashu-float	69.317
-768	57	sub	decimal-scaled	16.598
-768	115	add	bigdecimal	49.817
-768	115	add	dashu-float	82.605
-768	115	add	decimal-scaled	17.669
-768	115	atan	decimal-scaled	40284.463
-768	115	cos	decimal-scaled	22654.130
-768	115	cosh	decimal-scaled	29751.906
-768	115	div	bigdecimal	195.797
-768	115	div	dashu-float	79.590
-768	115	div	decimal-scaled	237.098
-768	115	exp	dashu-float	1080198.542
-768	115	exp	decimal-scaled	29582.980
-768	115	ln	dashu-float	785852.892
-768	115	ln	decimal-scaled	969.164
-768	115	mul	bigdecimal	119.708
-768	115	mul	dashu-float	70.556
-768	115	mul	decimal-scaled	290.101
-768	115	neg	bigdecimal	15.887
-768	115	neg	dashu-float	5.604
-768	115	neg	decimal-scaled	8.101
-768	115	rem	bigdecimal	195.989
-768	115	rem	dashu-float	47.151
-768	115	rem	decimal-scaled	102.209
-768	115	sin	decimal-scaled	24209.896
-768	115	sinh	decimal-scaled	30081.691
-768	115	sqrt	decimal-scaled	2363.284
-768	115	sub	bigdecimal	46.317
-768	115	sub	dashu-float	86.556
-768	115	sub	decimal-scaled	19.484
-768	115	tan	decimal-scaled	26802.576
-768	115	tanh	decimal-scaled	30506.504
-768	172	add	bigdecimal	54.041
-768	172	add	dashu-float	85.165
-768	172	add	decimal-scaled	17.075
-768	172	div	bigdecimal	231.128
-768	172	div	dashu-float	80.078
-768	172	div	decimal-scaled	372.443
-768	172	mul	bigdecimal	156.391
-768	172	mul	dashu-float	70.792
-768	172	mul	decimal-scaled	497.869
-768	172	neg	bigdecimal	16.208
-768	172	neg	dashu-float	5.604
-768	172	neg	decimal-scaled	8.106
-768	172	rem	bigdecimal	225.722
-768	172	rem	dashu-float	49.307
-768	172	rem	decimal-scaled	115.277
-768	172	sub	bigdecimal	48.149
-768	172	sub	dashu-float	84.318
-768	172	sub	decimal-scaled	19.442
-768	229	add	bigdecimal	60.119
-768	229	add	dashu-float	82.681
-768	229	add	decimal-scaled	17.136
-768	229	div	bigdecimal	253.803
-768	229	div	dashu-float	79.652
-768	229	div	decimal-scaled	546.833
-768	229	mul	bigdecimal	200.222
-768	229	mul	dashu-float	70.588
-768	229	mul	decimal-scaled	965.804
-768	229	neg	bigdecimal	16.201
-768	229	neg	dashu-float	5.608
-768	229	neg	decimal-scaled	8.111
-768	229	rem	bigdecimal	246.091
-768	229	rem	dashu-float	47.187
-768	229	rem	decimal-scaled	128.016
-768	229	sub	bigdecimal	53.934
-768	229	sub	dashu-float	87.569
-768	229	sub	decimal-scaled	19.505
-1024	0	add	bigdecimal	44.822
-1024	0	add	dashu-float	75.248
-1024	0	add	decimal-scaled	19.434
-1024	0	div	bigdecimal	31.650
-1024	0	div	dashu-float	74.551
-1024	0	div	decimal-scaled	106.884
-1024	0	mul	bigdecimal	34.388
-1024	0	mul	dashu-float	67.517
-1024	0	mul	decimal-scaled	41.602
-1024	0	neg	bigdecimal	13.640
-1024	0	neg	dashu-float	4.911
-1024	0	neg	decimal-scaled	9.549
-1024	0	rem	bigdecimal	53.915
-1024	0	rem	dashu-float	46.185
-1024	0	rem	decimal-scaled	40.175
-1024	0	sub	bigdecimal	42.450
-1024	0	sub	dashu-float	75.323
-1024	0	sub	decimal-scaled	25.624
-1024	76	add	bigdecimal	48.980
-1024	76	add	dashu-float	89.821
-1024	76	add	decimal-scaled	23.357
-1024	76	div	bigdecimal	187.141
-1024	76	div	dashu-float	79.825
-1024	76	div	decimal-scaled	215.533
-1024	76	mul	bigdecimal	99.447
-1024	76	mul	dashu-float	70.643
-1024	76	mul	decimal-scaled	173.109
-1024	76	neg	bigdecimal	15.872
-1024	76	neg	dashu-float	5.579
-1024	76	neg	decimal-scaled	11.818
-1024	76	rem	bigdecimal	178.124
-1024	76	rem	dashu-float	48.957
-1024	76	rem	decimal-scaled	105.871
-1024	76	sub	bigdecimal	44.818
-1024	76	sub	dashu-float	89.958
-1024	76	sub	decimal-scaled	26.915
-1024	153	add	bigdecimal	51.484
-1024	153	add	dashu-float	84.747
-1024	153	add	decimal-scaled	23.314
-1024	153	atan	decimal-scaled	54603.667
-1024	153	cos	decimal-scaled	30671.633
-1024	153	cosh	decimal-scaled	50382.265
-1024	153	div	bigdecimal	211.442
-1024	153	div	dashu-float	78.759
-1024	153	div	decimal-scaled	350.793
-1024	153	exp	dashu-float	1583673.805
-1024	153	exp	decimal-scaled	45537.138
-1024	153	ln	dashu-float	1212156.118
-1024	153	ln	decimal-scaled	995.114
-1024	153	mul	bigdecimal	153.728
-1024	153	mul	dashu-float	72.300
-1024	153	mul	decimal-scaled	455.999
-1024	153	neg	bigdecimal	15.569
-1024	153	neg	dashu-float	5.589
-1024	153	neg	decimal-scaled	11.811
-1024	153	rem	bigdecimal	206.132
-1024	153	rem	dashu-float	45.795
-1024	153	rem	decimal-scaled	127.491
-1024	153	sin	decimal-scaled	30881.968
-1024	153	sinh	decimal-scaled	50746.248
-1024	153	sqrt	decimal-scaled	3710.474
-1024	153	sub	bigdecimal	46.770
-1024	153	sub	dashu-float	83.828
-1024	153	sub	decimal-scaled	26.815
-1024	153	tan	decimal-scaled	35366.271
-1024	153	tanh	decimal-scaled	51716.835
-1024	230	add	bigdecimal	55.362
-1024	230	add	dashu-float	82.993
-1024	230	add	decimal-scaled	23.323
-1024	230	div	bigdecimal	251.465
-1024	230	div	dashu-float	78.610
-1024	230	div	decimal-scaled	566.769
-1024	230	mul	bigdecimal	251.808
-1024	230	mul	dashu-float	70.851
-1024	230	mul	decimal-scaled	1020.521
-1024	230	neg	bigdecimal	15.888
-1024	230	neg	dashu-float	5.587
-1024	230	neg	decimal-scaled	11.814
-1024	230	rem	bigdecimal	242.606
-1024	230	rem	dashu-float	46.799
-1024	230	rem	decimal-scaled	144.397
-1024	230	sub	bigdecimal	50.725
-1024	230	sub	dashu-float	81.966
-1024	230	sub	decimal-scaled	27.204
-1024	306	add	bigdecimal	63.787
-1024	306	add	dashu-float	84.765
-1024	306	add	decimal-scaled	23.313
-1024	306	div	bigdecimal	286.568
-1024	306	div	dashu-float	78.770
-1024	306	div	decimal-scaled	833.565
-1024	306	mul	bigdecimal	267.711
-1024	306	mul	dashu-float	72.436
-1024	306	mul	decimal-scaled	1407.358
-1024	306	neg	bigdecimal	16.195
-1024	306	neg	dashu-float	5.559
-1024	306	neg	decimal-scaled	11.811
-1024	306	rem	bigdecimal	263.596
-1024	306	rem	dashu-float	45.825
-1024	306	rem	decimal-scaled	164.378
-1024	306	sub	bigdecimal	60.539
-1024	306	sub	dashu-float	83.921
-1024	306	sub	decimal-scaled	26.828
-1536	0	add	bigdecimal	49.840
-1536	0	add	dashu-float	82.237
-1536	0	add	decimal-scaled	35.651
-1536	0	div	bigdecimal	37.352
-1536	0	div	dashu-float	79.574
-1536	0	div	decimal-scaled	204.113
-1536	0	mul	bigdecimal	39.876
-1536	0	mul	dashu-float	70.648
-1536	0	mul	decimal-scaled	82.703
-1536	0	neg	bigdecimal	16.182
-1536	0	neg	dashu-float	5.608
-1536	0	neg	decimal-scaled	17.835
-1536	0	rem	bigdecimal	63.391
-1536	0	rem	dashu-float	47.213
-1536	0	rem	decimal-scaled	88.505
-1536	0	sub	bigdecimal	45.321
-1536	0	sub	dashu-float	86.616
-1536	0	sub	decimal-scaled	44.844
-1536	115	add	bigdecimal	50.976
-1536	115	add	dashu-float	85.161
-1536	115	add	decimal-scaled	35.484
-1536	115	div	bigdecimal	198.347
-1536	115	div	dashu-float	79.958
-1536	115	div	decimal-scaled	399.139
-1536	115	mul	bigdecimal	121.626
-1536	115	mul	dashu-float	70.763
-1536	115	mul	decimal-scaled	399.809
-1536	115	neg	bigdecimal	15.577
-1536	115	neg	dashu-float	5.607
-1536	115	neg	decimal-scaled	17.536
-1536	115	rem	bigdecimal	190.045
-1536	115	rem	dashu-float	60.280
-1536	115	rem	decimal-scaled	164.966
-1536	115	sub	bigdecimal	46.380
-1536	115	sub	dashu-float	84.344
-1536	115	sub	decimal-scaled	43.807
-1536	231	add	bigdecimal	64.879
-1536	231	add	dashu-float	96.614
-1536	231	add	decimal-scaled	42.236
-1536	231	atan	decimal-scaled	124308.730
-1536	231	cos	decimal-scaled	82953.333
-1536	231	cosh	decimal-scaled	109441.709
-1536	231	div	bigdecimal	153.197
-1536	231	div	dashu-float	95.919
-1536	231	div	decimal-scaled	657.205
-1536	231	exp	dashu-float	2778719.722
-1536	231	exp	decimal-scaled	107048.488
-1536	231	ln	dashu-float	2389830.952
-1536	231	ln	decimal-scaled	3674.963
-1536	231	mul	bigdecimal	207.040
-1536	231	mul	dashu-float	85.084
-1536	231	mul	decimal-scaled	1329.287
-1536	231	neg	bigdecimal	16.885
-1536	231	neg	dashu-float	6.328
-1536	231	neg	decimal-scaled	19.692
-1536	231	rem	bigdecimal	153.553
-1536	231	rem	dashu-float	59.146
-1536	231	rem	decimal-scaled	189.283
-1536	231	sin	decimal-scaled	82002.095
-1536	231	sinh	decimal-scaled	109121.594
-1536	231	sqrt	decimal-scaled	6199.725
-1536	231	sub	bigdecimal	62.224
-1536	231	sub	dashu-float	96.521
-1536	231	sub	decimal-scaled	53.779
-1536	231	tan	decimal-scaled	91763.803
-1536	231	tanh	decimal-scaled	110543.495
-1536	346	add	bigdecimal	68.032
-1536	346	add	dashu-float	96.441
-1536	346	add	decimal-scaled	43.609
-1536	346	div	bigdecimal	278.857
-1536	346	div	dashu-float	95.650
-1536	346	div	decimal-scaled	1144.330
-1536	346	mul	bigdecimal	307.194
-1536	346	mul	dashu-float	84.644
-1536	346	mul	decimal-scaled	1892.272
-1536	346	neg	bigdecimal	17.230
-1536	346	neg	dashu-float	6.328
-1536	346	neg	decimal-scaled	19.702
-1536	346	rem	bigdecimal	278.678
-1536	346	rem	dashu-float	59.271
-1536	346	rem	decimal-scaled	240.834
-1536	346	sub	bigdecimal	63.515
-1536	346	sub	dashu-float	95.497
-1536	346	sub	decimal-scaled	55.369
-1536	461	add	bigdecimal	62.303
-1536	461	add	dashu-float	85.114
-1536	461	add	decimal-scaled	35.443
-1536	461	div	bigdecimal	297.295
-1536	461	div	dashu-float	79.960
-1536	461	div	decimal-scaled	1351.071
-1536	461	mul	bigdecimal	438.518
-1536	461	mul	dashu-float	70.840
-1536	461	mul	decimal-scaled	2454.302
-1536	461	neg	bigdecimal	16.209
-1536	461	neg	dashu-float	5.608
-1536	461	neg	decimal-scaled	17.536
-1536	461	rem	bigdecimal	291.911
-1536	461	rem	dashu-float	49.375
-1536	461	rem	decimal-scaled	245.620
-1536	461	sub	bigdecimal	60.493
-1536	461	sub	dashu-float	84.286
-1536	461	sub	decimal-scaled	43.800
-2048	0	add	bigdecimal	57.851
-2048	0	add	dashu-float	96.144
-2048	0	add	decimal-scaled	65.991
-2048	0	div	bigdecimal	39.441
-2048	0	div	dashu-float	95.393
-2048	0	div	decimal-scaled	252.670
-2048	0	mul	bigdecimal	42.869
-2048	0	mul	dashu-float	85.016
-2048	0	mul	decimal-scaled	109.980
-2048	0	neg	bigdecimal	16.874
-2048	0	neg	dashu-float	6.328
-2048	0	neg	decimal-scaled	29.944
-2048	0	rem	bigdecimal	65.089
-2048	0	rem	dashu-float	59.411
-2048	0	rem	decimal-scaled	128.530
-2048	0	sub	bigdecimal	54.418
-2048	0	sub	dashu-float	95.631
-2048	0	sub	decimal-scaled	71.201
-2048	154	add	bigdecimal	61.139
-2048	154	add	dashu-float	96.785
-2048	154	add	decimal-scaled	73.928
-2048	154	div	bigdecimal	136.419
-2048	154	div	dashu-float	97.069
-2048	154	div	decimal-scaled	629.051
-2048	154	mul	bigdecimal	159.478
-2048	154	mul	dashu-float	84.149
-2048	154	mul	decimal-scaled	742.385
-2048	154	neg	bigdecimal	16.186
-2048	154	neg	dashu-float	6.330
-2048	154	neg	decimal-scaled	24.335
-2048	154	rem	bigdecimal	134.243
-2048	154	rem	dashu-float	59.443
-2048	154	rem	decimal-scaled	195.412
-2048	154	sub	bigdecimal	57.221
-2048	154	sub	dashu-float	95.246
-2048	154	sub	decimal-scaled	78.188
-2048	308	add	bigdecimal	83.157
-2048	308	add	dashu-float	96.249
-2048	308	add	decimal-scaled	58.262
-2048	308	atan	decimal-scaled	226029.818
-2048	308	cos	decimal-scaled	161168.248
-2048	308	cosh	decimal-scaled	182595.118
-2048	308	div	bigdecimal	174.454
-2048	308	div	dashu-float	95.250
-2048	308	div	decimal-scaled	975.121
-2048	308	exp	dashu-float	4216318.500
-2048	308	exp	decimal-scaled	178060.717
-2048	308	ln	dashu-float	3830185.536
-2048	308	ln	decimal-scaled	1783.359
-2048	308	mul	bigdecimal	296.020
-2048	308	mul	dashu-float	86.365
-2048	308	mul	decimal-scaled	1798.589
-2048	308	neg	bigdecimal	16.883
-2048	308	neg	dashu-float	6.327
-2048	308	neg	decimal-scaled	24.704
-2048	308	rem	bigdecimal	181.419
-2048	308	rem	dashu-float	59.684
-2048	308	rem	decimal-scaled	234.378
-2048	308	sin	decimal-scaled	155276.292
-2048	308	sinh	decimal-scaled	182187.897
-2048	308	sqrt	decimal-scaled	10442.043
-2048	308	sub	bigdecimal	84.877
-2048	308	sub	dashu-float	95.894
-2048	308	sub	decimal-scaled	64.193
-2048	308	tan	decimal-scaled	169966.490
-2048	308	tanh	decimal-scaled	183748.926
-2048	462	add	bigdecimal	115.820
-2048	462	add	dashu-float	96.346
-2048	462	add	decimal-scaled	58.247
-2048	462	div	bigdecimal	310.665
-2048	462	div	dashu-float	95.400
-2048	462	div	decimal-scaled	1490.155
-2048	462	mul	bigdecimal	448.963
-2048	462	mul	dashu-float	85.617
-2048	462	mul	decimal-scaled	2774.194
-2048	462	neg	bigdecimal	16.176
-2048	462	neg	dashu-float	6.330
-2048	462	neg	decimal-scaled	24.690
-2048	462	rem	bigdecimal	321.519
-2048	462	rem	dashu-float	59.745
-2048	462	rem	decimal-scaled	301.468
-2048	462	sub	bigdecimal	66.795
-2048	462	sub	dashu-float	95.901
-2048	462	sub	decimal-scaled	64.104
-2048	615	add	bigdecimal	66.623
-2048	615	add	dashu-float	82.583
-2048	615	add	decimal-scaled	50.671
-2048	615	div	bigdecimal	347.137
-2048	615	div	dashu-float	78.490
-2048	615	div	decimal-scaled	2125.546
-2048	615	mul	bigdecimal	698.935
-2048	615	mul	dashu-float	70.979
-2048	615	mul	decimal-scaled	3759.432
-2048	615	neg	bigdecimal	15.892
-2048	615	neg	dashu-float	5.607
-2048	615	neg	decimal-scaled	21.633
-2048	615	rem	bigdecimal	314.473
-2048	615	rem	dashu-float	46.627
-2048	615	rem	decimal-scaled	297.778
-2048	615	sub	bigdecimal	60.425
-2048	615	sub	dashu-float	82.352
-2048	615	sub	decimal-scaled	49.640
-3072	0	add	bigdecimal	58.083
-3072	0	add	dashu-float	96.882
-3072	0	add	decimal-scaled	91.712
-3072	0	div	bigdecimal	38.013
-3072	0	div	dashu-float	95.313
-3072	0	div	decimal-scaled	385.082
-3072	0	mul	bigdecimal	41.504
-3072	0	mul	dashu-float	85.364
-3072	0	mul	decimal-scaled	164.094
-3072	0	neg	bigdecimal	17.232
-3072	0	neg	dashu-float	6.334
-3072	0	neg	decimal-scaled	54.204
-3072	0	rem	bigdecimal	66.214
-3072	0	rem	dashu-float	59.599
-3072	0	rem	decimal-scaled	147.447
-3072	0	sub	bigdecimal	54.464
-3072	0	sub	dashu-float	95.455
-3072	0	sub	decimal-scaled	90.755
-3072	231	add	bigdecimal	56.571
-3072	231	add	dashu-float	89.472
-3072	231	add	decimal-scaled	77.358
-3072	231	div	bigdecimal	151.296
-3072	231	div	dashu-float	79.650
-3072	231	div	decimal-scaled	989.591
-3072	231	mul	bigdecimal	226.476
-3072	231	mul	dashu-float	70.885
-3072	231	mul	decimal-scaled	1425.030
-3072	231	neg	bigdecimal	15.581
-3072	231	neg	dashu-float	5.591
-3072	231	neg	decimal-scaled	75.728
-3072	231	rem	bigdecimal	141.093
-3072	231	rem	dashu-float	50.965
-3072	231	rem	decimal-scaled	235.096
-3072	231	sub	bigdecimal	55.497
-3072	231	sub	dashu-float	89.524
-3072	231	sub	decimal-scaled	93.348
-3072	462	add	bigdecimal	118.154
-3072	462	add	dashu-float	97.648
-3072	462	add	decimal-scaled	93.415
-3072	462	atan	decimal-scaled	477085.730
-3072	462	cos	decimal-scaled	335408.693
-3072	462	cosh	decimal-scaled	383687.012
-3072	462	div	bigdecimal	288.749
-3072	462	div	dashu-float	95.662
-3072	462	div	decimal-scaled	2139.824
-3072	462	exp	dashu-float	8047384.357
-3072	462	exp	decimal-scaled	380426.777
-3072	462	ln	dashu-float	7951286.571
-3072	462	ln	decimal-scaled	2785.535
-3072	462	mul	bigdecimal	449.074
-3072	462	mul	dashu-float	87.349
-3072	462	mul	decimal-scaled	2914.994
-3072	462	neg	bigdecimal	16.526
-3072	462	neg	dashu-float	6.329
-3072	462	neg	decimal-scaled	73.556
-3072	462	rem	bigdecimal	289.692
-3072	462	rem	dashu-float	59.579
-3072	462	rem	decimal-scaled	333.107
-3072	462	sin	decimal-scaled	335489.869
-3072	462	sinh	decimal-scaled	382678.060
-3072	462	sqrt	decimal-scaled	16983.139
-3072	462	sub	bigdecimal	66.009
-3072	462	sub	dashu-float	96.560
-3072	462	sub	decimal-scaled	89.921
-3072	462	tan	decimal-scaled	361376.288
-3072	462	tanh	decimal-scaled	400804.419
-3072	693	add	bigdecimal	65.402
-3072	693	add	dashu-float	68.726
-3072	693	add	decimal-scaled	75.153
-3072	693	div	bigdecimal	321.685
-3072	693	div	dashu-float	65.811
-3072	693	div	decimal-scaled	2321.447
-3072	693	mul	bigdecimal	607.680
-3072	693	mul	dashu-float	59.514
-3072	693	mul	decimal-scaled	4019.099
-3072	693	neg	bigdecimal	16.290
-3072	693	neg	dashu-float	4.296
-3072	693	neg	decimal-scaled	59.183
-3072	693	rem	bigdecimal	321.435
-3072	693	rem	dashu-float	42.336
-3072	693	rem	decimal-scaled	293.134
-3072	693	sub	bigdecimal	64.036
-3072	693	sub	dashu-float	67.568
-3072	693	sub	decimal-scaled	82.576
-3072	923	add	bigdecimal	76.828
-3072	923	add	dashu-float	89.348
-3072	923	add	decimal-scaled	77.103
-3072	923	div	bigdecimal	439.771
-3072	923	div	dashu-float	79.728
-3072	923	div	decimal-scaled	4352.605
-3072	923	mul	bigdecimal	1316.767
-3072	923	mul	dashu-float	70.844
-3072	923	mul	decimal-scaled	7491.888
-3072	923	neg	bigdecimal	17.772
-3072	923	neg	dashu-float	5.912
-3072	923	neg	decimal-scaled	75.691
-3072	923	rem	bigdecimal	409.377
-3072	923	rem	dashu-float	49.304
-3072	923	rem	decimal-scaled	408.098
-3072	923	sub	bigdecimal	71.339
-3072	923	sub	dashu-float	89.367
-3072	923	sub	decimal-scaled	90.796
-4096	0	add	bigdecimal	51.596
-4096	0	add	dashu-float	82.445
-4096	0	add	decimal-scaled	108.054
-4096	0	div	bigdecimal	38.067
-4096	0	div	dashu-float	78.288
-4096	0	div	decimal-scaled	509.786
-4096	0	mul	bigdecimal	40.278
-4096	0	mul	dashu-float	70.738
-4096	0	mul	decimal-scaled	201.714
-4096	0	neg	bigdecimal	15.910
-4096	0	neg	dashu-float	5.597
-4096	0	neg	decimal-scaled	57.662
-4096	0	rem	bigdecimal	62.694
-4096	0	rem	dashu-float	47.129
-4096	0	rem	decimal-scaled	178.627
-4096	0	sub	bigdecimal	45.592
-4096	0	sub	dashu-float	82.381
-4096	0	sub	decimal-scaled	108.276
-4096	308	add	bigdecimal	81.470
-4096	308	add	dashu-float	97.908
-4096	308	add	decimal-scaled	117.501
-4096	308	div	bigdecimal	172.921
-4096	308	div	dashu-float	95.917
-4096	308	div	decimal-scaled	1801.017
-4096	308	mul	bigdecimal	297.377
-4096	308	mul	dashu-float	85.437
-4096	308	mul	decimal-scaled	2328.246
-4096	308	neg	bigdecimal	16.887
-4096	308	neg	dashu-float	6.327
-4096	308	neg	decimal-scaled	80.760
-4096	308	rem	bigdecimal	184.073
-4096	308	rem	dashu-float	59.008
-4096	308	rem	decimal-scaled	325.161
-4096	308	sub	bigdecimal	84.315
-4096	308	sub	dashu-float	97.804
-4096	308	sub	decimal-scaled	118.313
-4096	616	add	bigdecimal	63.745
-4096	616	add	dashu-float	83.613
-4096	616	add	decimal-scaled	110.077
-4096	616	atan	decimal-scaled	724857.043
-4096	616	cos	decimal-scaled	530742.735
-4096	616	cosh	decimal-scaled	514250.351
-4096	616	div	bigdecimal	307.709
-4096	616	div	dashu-float	78.568
-4096	616	div	decimal-scaled	3352.716
-4096	616	exp	dashu-float	13712602.375
-4096	616	exp	decimal-scaled	511100.850
-4096	616	ln	dashu-float	13712698.500
-4096	616	ln	decimal-scaled	3924.166
-4096	616	mul	bigdecimal	674.357
-4096	616	mul	dashu-float	72.321
-4096	616	mul	decimal-scaled	4411.976
-4096	616	neg	bigdecimal	16.003
-4096	616	neg	dashu-float	5.584
-4096	616	neg	decimal-scaled	78.550
-4096	616	rem	bigdecimal	304.601
-4096	616	rem	dashu-float	45.888
-4096	616	rem	decimal-scaled	454.440
-4096	616	sin	decimal-scaled	541098.789
-4096	616	sinh	decimal-scaled	516805.149
-4096	616	sqrt	decimal-scaled	28207.194
-4096	616	sub	bigdecimal	60.637
-4096	616	sub	dashu-float	83.106
-4096	616	sub	decimal-scaled	110.699
-4096	616	tan	decimal-scaled	571248.229
-4096	616	tanh	decimal-scaled	517453.089
-4096	924	add	bigdecimal	75.978
-4096	924	add	dashu-float	83.656
-4096	924	add	decimal-scaled	116.891
-4096	924	div	bigdecimal	407.016
-4096	924	div	dashu-float	78.594
-4096	924	div	decimal-scaled	4320.662
-4096	924	mul	bigdecimal	1278.919
-4096	924	mul	dashu-float	72.446
-4096	924	mul	decimal-scaled	8203.658
-4096	924	neg	bigdecimal	17.455
-4096	924	neg	dashu-float	5.595
-4096	924	neg	decimal-scaled	75.194
-4096	924	rem	bigdecimal	395.199
-4096	924	rem	dashu-float	46.141
-4096	924	rem	decimal-scaled	463.606
-4096	924	sub	bigdecimal	69.944
-4096	924	sub	dashu-float	83.212
-4096	924	sub	decimal-scaled	116.397
-4096	1231	add	bigdecimal	85.420
-4096	1231	add	dashu-float	82.032
-4096	1231	add	decimal-scaled	111.105
-4096	1231	div	bigdecimal	494.633
-4096	1231	div	dashu-float	79.398
-4096	1231	div	decimal-scaled	6971.598
-4096	1231	mul	bigdecimal	1987.157
-4096	1231	mul	dashu-float	70.457
-4096	1231	mul	decimal-scaled	13171.683
-4096	1231	neg	bigdecimal	20.285
-4096	1231	neg	dashu-float	5.581
-4096	1231	neg	decimal-scaled	76.890
-4096	1231	rem	bigdecimal	487.791
-4096	1231	rem	dashu-float	47.145
-4096	1231	rem	decimal-scaled	561.920
-4096	1231	sub	bigdecimal	78.824
-4096	1231	sub	dashu-float	84.347
-4096	1231	sub	decimal-scaled	111.703
+function	width	library	nanos
+acos	18	decimal-scaled	64415
+acos	18	g_math	180
+acos	38	decimal-scaled	61812
+acos	38	g_math	170
+acos	57	decimal-scaled	14086
+acos	57	g_math	191
+acos	76	decimal-scaled	15163
+acos	76	g_math	123
+acos	115	decimal-scaled	45640
+acos	115	g_math	230
+acos	153	decimal-scaled	53986
+acos	153	g_math	201
+acos	230	decimal-scaled	81959
+acos	230	g_math	220
+acos	307	decimal-scaled	100736
+acos	307	g_math	224
+acos	462	decimal-scaled	165022
+acos	462	g_math	216
+acos	616	decimal-scaled	258913
+acos	616	g_math	230
+acos	924	decimal-scaled	478900
+acos	924	g_math	231
+acos	1232	decimal-scaled	903642
+acos	1232	g_math	210
+acosh	18	decimal-scaled	43114
+acosh	18	g_math	170
+acosh	38	decimal-scaled	45972
+acosh	38	g_math	170
+acosh	57	decimal-scaled	58111
+acosh	57	g_math	180
+acosh	76	decimal-scaled	54278
+acosh	76	g_math	118
+acosh	115	decimal-scaled	199672
+acosh	115	g_math	201
+acosh	153	decimal-scaled	284642
+acosh	153	g_math	191
+acosh	230	decimal-scaled	582977
+acosh	230	g_math	211
+acosh	307	decimal-scaled	613232
+acosh	307	g_math	206
+acosh	462	decimal-scaled	1169082
+acosh	462	g_math	201
+acosh	616	decimal-scaled	2329152
+acosh	616	g_math	216
+acosh	924	decimal-scaled	7262660
+acosh	924	g_math	220
+acosh	1232	decimal-scaled	14038762
+acosh	1232	g_math	190
+add	18	bigdecimal	130
+add	18	dashu-float	255
+add	18	decimal-rs	50
+add	18	decimal-scaled	246
+add	18	fastnum	70
+add	18	g_math	140
+add	18	rust_decimal	60
+add	38	bigdecimal	130
+add	38	dashu-float	255
+add	38	decimal-rs	56
+add	38	decimal-scaled	316
+add	38	fastnum	70
+add	38	g_math	111
+add	38	rust_decimal	60
+add	57	bigdecimal	130
+add	57	dashu-float	250
+add	57	decimal-rs	50
+add	57	decimal-scaled	801
+add	57	fastnum	70
+add	57	g_math	111
+add	57	rust_decimal	60
+add	76	bigdecimal	110
+add	76	dashu-float	208
+add	76	decimal-rs	34
+add	76	decimal-scaled	1035
+add	76	fastnum	54
+add	76	g_math	96
+add	76	rust_decimal	46
+add	115	bigdecimal	200
+add	115	dashu-float	396
+add	115	decimal-rs	70
+add	115	decimal-scaled	2915
+add	115	fastnum	110
+add	115	g_math	190
+add	115	rust_decimal	80
+add	153	bigdecimal	180
+add	153	dashu-float	406
+add	153	decimal-rs	80
+add	153	decimal-scaled	4714
+add	153	fastnum	100
+add	153	g_math	190
+add	153	rust_decimal	70
+add	230	bigdecimal	175
+add	230	dashu-float	350
+add	230	decimal-rs	70
+add	230	decimal-scaled	9990
+add	230	fastnum	91
+add	230	g_math	180
+add	230	rust_decimal	70
+add	307	bigdecimal	215
+add	307	dashu-float	388
+add	307	decimal-rs	70
+add	307	decimal-scaled	15546
+add	307	fastnum	98
+add	307	g_math	212
+add	307	rust_decimal	72
+add	462	bigdecimal	180
+add	462	dashu-float	410
+add	462	decimal-rs	81
+add	462	decimal-scaled	28733
+add	462	fastnum	111
+add	462	g_math	210
+add	462	rust_decimal	70
+add	616	bigdecimal	180
+add	616	dashu-float	360
+add	616	decimal-rs	70
+add	616	decimal-scaled	49423
+add	616	fastnum	100
+add	616	g_math	180
+add	616	rust_decimal	80
+add	924	bigdecimal	190
+add	924	dashu-float	406
+add	924	decimal-rs	70
+add	924	decimal-scaled	96239
+add	924	fastnum	120
+add	924	g_math	201
+add	924	rust_decimal	80
+add	1232	bigdecimal	191
+add	1232	dashu-float	401
+add	1232	decimal-rs	66
+add	1232	decimal-scaled	158928
+add	1232	fastnum	111
+add	1232	g_math	200
+add	1232	rust_decimal	70
+asin	18	decimal-scaled	58176
+asin	18	g_math	190
+asin	38	decimal-scaled	60614
+asin	38	g_math	180
+asin	57	decimal-scaled	13890
+asin	57	g_math	200
+asin	76	decimal-scaled	14978
+asin	76	g_math	130
+asin	115	decimal-scaled	45435
+asin	115	g_math	230
+asin	153	decimal-scaled	50815
+asin	153	g_math	200
+asin	230	decimal-scaled	80612
+asin	230	g_math	240
+asin	307	decimal-scaled	100646
+asin	307	g_math	231
+asin	462	decimal-scaled	163309
+asin	462	g_math	221
+asin	616	decimal-scaled	258798
+asin	616	g_math	240
+asin	924	decimal-scaled	486274
+asin	924	g_math	211
+asin	1232	decimal-scaled	907799
+asin	1232	g_math	201
+asinh	18	decimal-scaled	36954
+asinh	18	g_math	170
+asinh	38	decimal-scaled	39243
+asinh	38	g_math	160
+asinh	57	decimal-scaled	14292
+asinh	57	g_math	170
+asinh	76	decimal-scaled	11346
+asinh	76	g_math	120
+asinh	115	decimal-scaled	50424
+asinh	115	g_math	211
+asinh	153	decimal-scaled	54332
+asinh	153	g_math	190
+asinh	230	decimal-scaled	96386
+asinh	230	g_math	220
+asinh	307	decimal-scaled	121069
+asinh	307	g_math	214
+asinh	462	decimal-scaled	214849
+asinh	462	g_math	210
+asinh	616	decimal-scaled	369347
+asinh	616	g_math	230
+asinh	924	decimal-scaled	695367
+asinh	924	g_math	216
+asinh	1232	decimal-scaled	1603280
+asinh	1232	g_math	201
+atan	18	decimal-scaled	6425
+atan	18	g_math	150
+atan	38	decimal-scaled	4687
+atan	38	g_math	140
+atan	57	decimal-scaled	11722
+atan	57	g_math	150
+atan	76	decimal-scaled	12197
+atan	76	g_math	113
+atan	115	decimal-scaled	39253
+atan	115	g_math	191
+atan	153	decimal-scaled	40796
+atan	153	g_math	181
+atan	230	decimal-scaled	70762
+atan	230	g_math	210
+atan	307	decimal-scaled	93920
+atan	307	g_math	223
+atan	462	decimal-scaled	132150
+atan	462	g_math	210
+atan	616	decimal-scaled	228558
+atan	616	g_math	230
+atan	924	decimal-scaled	401466
+atan	924	g_math	210
+atan	1232	decimal-scaled	751862
+atan	1232	g_math	190
+atan2	18	decimal-scaled	42748
+atan2	18	g_math	160
+atan2	38	decimal-scaled	45678
+atan2	38	g_math	160
+atan2	57	decimal-scaled	12664
+atan2	57	g_math	170
+atan2	76	decimal-scaled	13911
+atan2	76	g_math	112
+atan2	115	decimal-scaled	43271
+atan2	115	g_math	221
+atan2	153	decimal-scaled	51480
+atan2	153	g_math	221
+atan2	230	decimal-scaled	79320
+atan2	230	g_math	230
+atan2	307	decimal-scaled	100266
+atan2	307	g_math	216
+atan2	462	decimal-scaled	167892
+atan2	462	g_math	251
+atan2	616	decimal-scaled	268628
+atan2	616	g_math	231
+atan2	924	decimal-scaled	506131
+atan2	924	g_math	241
+atan2	1232	decimal-scaled	966645
+atan2	1232	g_math	201
+atanh	18	decimal-scaled	10696
+atanh	18	g_math	160
+atanh	38	decimal-scaled	11316
+atanh	38	g_math	160
+atanh	57	decimal-scaled	51927
+atanh	57	g_math	170
+atanh	76	decimal-scaled	50361
+atanh	76	g_math	117
+atanh	115	decimal-scaled	181328
+atanh	115	g_math	200
+atanh	153	decimal-scaled	265967
+atanh	153	g_math	191
+atanh	230	decimal-scaled	544043
+atanh	230	g_math	221
+atanh	307	decimal-scaled	568452
+atanh	307	g_math	212
+atanh	462	decimal-scaled	1097580
+atanh	462	g_math	201
+atanh	616	decimal-scaled	5118372
+atanh	616	g_math	210
+atanh	924	decimal-scaled	7037398
+atanh	924	g_math	221
+atanh	1232	decimal-scaled	13173588
+atanh	1232	g_math	190
+cbrt	18	bigdecimal	117589
+cbrt	18	decimal-scaled	5989
+cbrt	18	fastnum	814784
+cbrt	38	bigdecimal	117449
+cbrt	38	decimal-scaled	8933
+cbrt	38	fastnum	814036
+cbrt	57	bigdecimal	117639
+cbrt	57	decimal-scaled	1342
+cbrt	57	fastnum	814208
+cbrt	76	bigdecimal	102195
+cbrt	76	decimal-scaled	2054
+cbrt	76	fastnum	676939
+cbrt	115	bigdecimal	185888
+cbrt	115	decimal-scaled	6212
+cbrt	115	fastnum	2511926
+cbrt	153	bigdecimal	185647
+cbrt	153	decimal-scaled	9387
+cbrt	153	fastnum	1628502
+cbrt	230	bigdecimal	202827
+cbrt	230	decimal-scaled	20280
+cbrt	230	fastnum	1405496
+cbrt	307	bigdecimal	179015
+cbrt	307	decimal-scaled	30613
+cbrt	307	fastnum	1310392
+cbrt	462	bigdecimal	185830
+cbrt	462	decimal-scaled	53469
+cbrt	462	fastnum	3338098
+cbrt	616	bigdecimal	202574
+cbrt	616	decimal-scaled	90684
+cbrt	616	fastnum	4029302
+cbrt	924	bigdecimal	185916
+cbrt	924	decimal-scaled	178311
+cbrt	924	fastnum	1194184
+cbrt	1232	bigdecimal	185634
+cbrt	1232	decimal-scaled	310242
+cbrt	1232	fastnum	1201400
+cos	18	decimal-scaled	6590
+cos	18	fastnum	1082969
+cos	18	g_math	151
+cos	18	rust_decimal	3435
+cos	38	decimal-scaled	7066
+cos	38	fastnum	1078873
+cos	38	g_math	160
+cos	38	rust_decimal	3455
+cos	57	decimal-scaled	6250
+cos	57	fastnum	1083082
+cos	57	g_math	160
+cos	57	rust_decimal	3440
+cos	76	decimal-scaled	6622
+cos	76	fastnum	919045
+cos	76	g_math	115
+cos	76	rust_decimal	3244
+cos	115	decimal-scaled	21921
+cos	115	fastnum	1282918
+cos	115	g_math	210
+cos	115	rust_decimal	4508
+cos	153	decimal-scaled	23719
+cos	153	fastnum	1288527
+cos	153	g_math	190
+cos	153	rust_decimal	4404
+cos	230	decimal-scaled	42855
+cos	230	fastnum	1468281
+cos	230	g_math	230
+cos	230	rust_decimal	4652
+cos	307	decimal-scaled	55258
+cos	307	fastnum	1216373
+cos	307	g_math	219
+cos	307	rust_decimal	4850
+cos	462	decimal-scaled	89958
+cos	462	fastnum	1266693
+cos	462	g_math	191
+cos	462	rust_decimal	4418
+cos	616	decimal-scaled	170492
+cos	616	fastnum	1412660
+cos	616	g_math	221
+cos	616	rust_decimal	4707
+cos	924	decimal-scaled	344454
+cos	924	fastnum	1291150
+cos	924	g_math	210
+cos	924	rust_decimal	4478
+cos	1232	decimal-scaled	686930
+cos	1232	fastnum	1284101
+cos	1232	g_math	200
+cos	1232	rust_decimal	3832
+cosh	18	decimal-scaled	10741
+cosh	18	g_math	140
+cosh	38	decimal-scaled	11392
+cosh	38	g_math	140
+cosh	57	decimal-scaled	9764
+cosh	57	g_math	160
+cosh	76	decimal-scaled	10654
+cosh	76	g_math	103
+cosh	115	decimal-scaled	37610
+cosh	115	g_math	190
+cosh	153	decimal-scaled	42720
+cosh	153	g_math	180
+cosh	230	decimal-scaled	61989
+cosh	230	g_math	180
+cosh	307	decimal-scaled	79824
+cosh	307	g_math	188
+cosh	462	decimal-scaled	141483
+cosh	462	g_math	200
+cosh	616	decimal-scaled	219004
+cosh	616	g_math	180
+cosh	924	decimal-scaled	594174
+cosh	924	g_math	190
+cosh	1232	decimal-scaled	1076541
+cosh	1232	g_math	170
+div	18	bigdecimal	260169
+div	18	dashu-float	3255
+div	18	decimal-rs	231
+div	18	decimal-scaled	230
+div	18	fastnum	1192
+div	18	g_math	161
+div	18	rust_decimal	100
+div	38	bigdecimal	260234
+div	38	dashu-float	3190
+div	38	decimal-rs	240
+div	38	decimal-scaled	370
+div	38	fastnum	1182
+div	38	g_math	170
+div	38	rust_decimal	100
+div	57	bigdecimal	260115
+div	57	dashu-float	3250
+div	57	decimal-rs	221
+div	57	decimal-scaled	812
+div	57	fastnum	1187
+div	57	g_math	140
+div	57	rust_decimal	100
+div	76	bigdecimal	234922
+div	76	dashu-float	2789
+div	76	decimal-rs	185
+div	76	decimal-scaled	1076
+div	76	fastnum	1120
+div	76	g_math	138
+div	76	rust_decimal	74
+div	115	bigdecimal	401671
+div	115	dashu-float	4774
+div	115	decimal-rs	280
+div	115	decimal-scaled	2746
+div	115	fastnum	1432
+div	115	g_math	210
+div	115	rust_decimal	120
+div	153	bigdecimal	399281
+div	153	dashu-float	4684
+div	153	decimal-rs	291
+div	153	decimal-scaled	4137
+div	153	fastnum	1418
+div	153	g_math	221
+div	153	rust_decimal	110
+div	230	bigdecimal	428058
+div	230	dashu-float	4872
+div	230	decimal-rs	280
+div	230	decimal-scaled	8408
+div	230	fastnum	1502
+div	230	g_math	186
+div	230	rust_decimal	130
+div	307	bigdecimal	421284
+div	307	dashu-float	4784
+div	307	decimal-rs	267
+div	307	decimal-scaled	13095
+div	307	fastnum	1436
+div	307	g_math	259
+div	307	rust_decimal	122
+div	462	bigdecimal	400875
+div	462	dashu-float	4668
+div	462	decimal-rs	301
+div	462	decimal-scaled	25798
+div	462	fastnum	1372
+div	462	g_math	196
+div	462	rust_decimal	110
+div	616	bigdecimal	426786
+div	616	dashu-float	4887
+div	616	decimal-rs	291
+div	616	decimal-scaled	46268
+div	616	fastnum	1452
+div	616	g_math	190
+div	616	rust_decimal	130
+div	924	bigdecimal	403009
+div	924	dashu-float	4668
+div	924	decimal-rs	281
+div	924	decimal-scaled	93714
+div	924	fastnum	1363
+div	924	g_math	231
+div	924	rust_decimal	120
+div	1232	bigdecimal	406172
+div	1232	dashu-float	4699
+div	1232	decimal-rs	261
+div	1232	decimal-scaled	162084
+div	1232	fastnum	1428
+div	1232	g_math	210
+div	1232	rust_decimal	106
+exp	18	decimal-rs	9454
+exp	18	decimal-scaled	7200
+exp	18	fastnum	467840
+exp	18	g_math	130
+exp	18	rust_decimal	4487
+exp	38	decimal-rs	9454
+exp	38	decimal-scaled	7641
+exp	38	fastnum	467210
+exp	38	g_math	130
+exp	38	rust_decimal	4517
+exp	57	decimal-rs	9504
+exp	57	decimal-scaled	5958
+exp	57	fastnum	466436
+exp	57	g_math	141
+exp	57	rust_decimal	4622
+exp	76	decimal-rs	8142
+exp	76	decimal-scaled	7977
+exp	76	fastnum	424930
+exp	76	g_math	103
+exp	76	rust_decimal	4187
+exp	115	decimal-rs	11130
+exp	115	decimal-scaled	30307
+exp	115	fastnum	559626
+exp	115	g_math	190
+exp	115	rust_decimal	5445
+exp	153	decimal-rs	11221
+exp	153	decimal-scaled	41187
+exp	153	fastnum	553930
+exp	153	g_math	180
+exp	153	rust_decimal	5310
+exp	230	decimal-rs	11968
+exp	230	decimal-scaled	59360
+exp	230	fastnum	591315
+exp	230	g_math	201
+exp	230	rust_decimal	5669
+exp	307	decimal-rs	10615
+exp	307	decimal-scaled	111761
+exp	307	fastnum	567044
+exp	307	g_math	212
+exp	307	rust_decimal	5894
+exp	462	decimal-rs	11020
+exp	462	decimal-scaled	148366
+exp	462	fastnum	576506
+exp	462	g_math	180
+exp	462	rust_decimal	5430
+exp	616	decimal-rs	11817
+exp	616	decimal-scaled	288067
+exp	616	fastnum	589978
+exp	616	g_math	190
+exp	616	rust_decimal	5774
+exp	924	decimal-rs	11050
+exp	924	decimal-scaled	526474
+exp	924	fastnum	569082
+exp	924	g_math	181
+exp	924	rust_decimal	5480
+exp	1232	decimal-rs	11051
+exp	1232	decimal-scaled	988065
+exp	1232	fastnum	562992
+exp	1232	g_math	161
+exp	1232	rust_decimal	5355
+exp2	18	decimal-scaled	6970
+exp2	18	fastnum	1690105
+exp2	38	decimal-scaled	7501
+exp2	38	fastnum	1690466
+exp2	57	decimal-scaled	14391
+exp2	57	fastnum	1690410
+exp2	76	decimal-scaled	14513
+exp2	76	fastnum	1417507
+exp2	115	decimal-scaled	63368
+exp2	115	fastnum	1975231
+exp2	153	decimal-scaled	72876
+exp2	153	fastnum	1924475
+exp2	230	decimal-scaled	150252
+exp2	230	fastnum	2140268
+exp2	307	decimal-scaled	245698
+exp2	307	fastnum	1904623
+exp2	462	decimal-scaled	304957
+exp2	462	fastnum	1961565
+exp2	616	decimal-scaled	1043574
+exp2	616	fastnum	2198472
+exp2	924	decimal-scaled	1415099
+exp2	924	fastnum	1934004
+exp2	1232	decimal-scaled	5625702
+exp2	1232	fastnum	1915536
+hypot	18	decimal-scaled	261
+hypot	38	decimal-scaled	356
+hypot	57	decimal-scaled	852
+hypot	76	decimal-scaled	1405
+hypot	115	decimal-scaled	3646
+hypot	153	decimal-scaled	5400
+hypot	230	decimal-scaled	10536
+hypot	307	decimal-scaled	15851
+hypot	462	decimal-scaled	29635
+hypot	616	decimal-scaled	51486
+hypot	924	decimal-scaled	101789
+hypot	1232	decimal-scaled	168607
+ln	18	dashu-float	64916319
+ln	18	decimal-rs	5408
+ln	18	decimal-scaled	6920
+ln	18	fastnum	3553446
+ln	18	g_math	141
+ln	18	rust_decimal	8753
+ln	38	dashu-float	64758678
+ln	38	decimal-rs	5388
+ln	38	decimal-scaled	7331
+ln	38	fastnum	3548247
+ln	38	g_math	140
+ln	38	rust_decimal	8763
+ln	57	dashu-float	64966019
+ln	57	decimal-rs	5358
+ln	57	decimal-scaled	2854
+ln	57	fastnum	3549063
+ln	57	g_math	150
+ln	57	rust_decimal	8733
+ln	76	dashu-float	56027037
+ln	76	decimal-rs	4696
+ln	76	decimal-scaled	3491
+ln	76	fastnum	2979029
+ln	76	g_math	109
+ln	76	rust_decimal	8136
+ln	115	dashu-float	203962425
+ln	115	decimal-rs	6422
+ln	115	decimal-scaled	9388
+ln	115	fastnum	10029262
+ln	115	g_math	190
+ln	115	rust_decimal	10861
+ln	153	dashu-float	208768862
+ln	153	decimal-rs	6392
+ln	153	decimal-scaled	12774
+ln	153	fastnum	10042637
+ln	153	g_math	180
+ln	153	rust_decimal	10800
+ln	230	dashu-float	223578316
+ln	230	decimal-rs	6991
+ln	230	decimal-scaled	25699
+ln	230	fastnum	10394698
+ln	230	g_math	201
+ln	230	rust_decimal	11507
+ln	307	dashu-float	208432070
+ln	307	decimal-rs	6163
+ln	307	decimal-scaled	30992
+ln	307	fastnum	9877559
+ln	307	g_math	198
+ln	307	rust_decimal	12125
+ln	462	dashu-float	205348433
+ln	462	decimal-rs	6402
+ln	462	decimal-scaled	62305
+ln	462	fastnum	10072490
+ln	462	g_math	171
+ln	462	rust_decimal	10780
+ln	616	dashu-float	217266188
+ln	616	decimal-rs	6870
+ln	616	decimal-scaled	113598
+ln	616	fastnum	10636617
+ln	616	g_math	200
+ln	616	rust_decimal	11537
+ln	924	dashu-float	206975722
+ln	924	decimal-rs	6372
+ln	924	decimal-scaled	231861
+ln	924	fastnum	10029087
+ln	924	g_math	200
+ln	924	rust_decimal	10851
+ln	1232	dashu-float	206171993
+ln	1232	decimal-rs	6472
+ln	1232	decimal-scaled	468359
+ln	1232	fastnum	10000396
+ln	1232	g_math	170
+ln	1232	rust_decimal	10810
+log	18	decimal-scaled	17556
+log	38	decimal-scaled	18958
+log	57	decimal-scaled	16254
+log	76	decimal-scaled	16566
+log	115	decimal-scaled	63894
+log	153	decimal-scaled	80906
+log	230	decimal-scaled	149812
+log	307	decimal-scaled	223362
+log	462	decimal-scaled	352365
+log	616	decimal-scaled	721648
+log	924	decimal-scaled	1563045
+log	1232	decimal-scaled	5814121
+log10	18	decimal-scaled	11037
+log10	18	fastnum	3561198
+log10	18	rust_decimal	9524
+log10	38	decimal-scaled	11933
+log10	38	fastnum	3557476
+log10	38	rust_decimal	9464
+log10	57	decimal-scaled	9283
+log10	57	fastnum	3549802
+log10	57	rust_decimal	9564
+log10	76	decimal-scaled	9640
+log10	76	fastnum	2983034
+log10	76	rust_decimal	9001
+log10	115	decimal-scaled	36142
+log10	115	fastnum	10060814
+log10	115	rust_decimal	12263
+log10	153	decimal-scaled	44694
+log10	153	fastnum	10063622
+log10	153	rust_decimal	12042
+log10	230	decimal-scaled	80708
+log10	230	fastnum	12331378
+log10	230	rust_decimal	12930
+log10	307	decimal-scaled	121418
+log10	307	fastnum	9905426
+log10	307	rust_decimal	13448
+log10	462	decimal-scaled	187924
+log10	462	fastnum	10057702
+log10	462	rust_decimal	12022
+log10	616	decimal-scaled	379406
+log10	616	fastnum	10422482
+log10	616	rust_decimal	12929
+log10	924	decimal-scaled	802552
+log10	924	fastnum	10054940
+log10	924	rust_decimal	12153
+log10	1232	decimal-scaled	1520786
+log10	1232	fastnum	10044647
+log10	1232	rust_decimal	11491
+log2	18	decimal-scaled	11417
+log2	18	fastnum	3559285
+log2	38	decimal-scaled	12108
+log2	38	fastnum	3564991
+log2	57	decimal-scaled	9499
+log2	57	fastnum	3557765
+log2	76	decimal-scaled	9584
+log2	76	fastnum	2991501
+log2	115	decimal-scaled	36363
+log2	115	fastnum	10060404
+log2	153	decimal-scaled	44694
+log2	153	fastnum	9932351
+log2	230	decimal-scaled	80412
+log2	230	fastnum	10462631
+log2	307	decimal-scaled	121592
+log2	307	fastnum	9915910
+log2	462	decimal-scaled	187349
+log2	462	fastnum	10051219
+log2	616	decimal-scaled	378079
+log2	616	fastnum	10442209
+log2	924	decimal-scaled	797873
+log2	924	fastnum	10050958
+log2	1232	decimal-scaled	1533269
+log2	1232	fastnum	10040915
+mul	18	bigdecimal	111
+mul	18	dashu-float	200
+mul	18	decimal-rs	90
+mul	18	decimal-scaled	280
+mul	18	fastnum	121
+mul	18	g_math	111
+mul	18	rust_decimal	60
+mul	38	bigdecimal	110
+mul	38	dashu-float	201
+mul	38	decimal-rs	90
+mul	38	decimal-scaled	421
+mul	38	fastnum	120
+mul	38	g_math	111
+mul	38	rust_decimal	60
+mul	57	bigdecimal	110
+mul	57	dashu-float	191
+mul	57	decimal-rs	90
+mul	57	decimal-scaled	746
+mul	57	fastnum	121
+mul	57	g_math	110
+mul	57	rust_decimal	50
+mul	76	bigdecimal	104
+mul	76	dashu-float	182
+mul	76	decimal-rs	70
+mul	76	decimal-scaled	970
+mul	76	fastnum	122
+mul	76	g_math	98
+mul	76	rust_decimal	37
+mul	115	bigdecimal	180
+mul	115	dashu-float	340
+mul	115	decimal-rs	100
+mul	115	decimal-scaled	2554
+mul	115	fastnum	230
+mul	115	g_math	190
+mul	115	rust_decimal	65
+mul	153	bigdecimal	160
+mul	153	dashu-float	326
+mul	153	decimal-rs	101
+mul	153	decimal-scaled	2620
+mul	153	fastnum	200
+mul	153	g_math	190
+mul	153	rust_decimal	60
+mul	230	bigdecimal	180
+mul	230	dashu-float	290
+mul	230	decimal-rs	110
+mul	230	decimal-scaled	8878
+mul	230	fastnum	200
+mul	230	g_math	180
+mul	230	rust_decimal	65
+mul	307	bigdecimal	200
+mul	307	dashu-float	335
+mul	307	decimal-rs	100
+mul	307	decimal-scaled	13794
+mul	307	fastnum	230
+mul	307	g_math	222
+mul	307	rust_decimal	65
+mul	462	bigdecimal	170
+mul	462	dashu-float	321
+mul	462	decimal-rs	111
+mul	462	decimal-scaled	26694
+mul	462	fastnum	206
+mul	462	g_math	196
+mul	462	rust_decimal	60
+mul	616	bigdecimal	170
+mul	616	dashu-float	291
+mul	616	decimal-rs	110
+mul	616	decimal-scaled	46403
+mul	616	fastnum	196
+mul	616	g_math	180
+mul	616	rust_decimal	70
+mul	924	bigdecimal	170
+mul	924	dashu-float	320
+mul	924	decimal-rs	100
+mul	924	decimal-scaled	92152
+mul	924	fastnum	230
+mul	924	g_math	200
+mul	924	rust_decimal	60
+mul	1232	bigdecimal	176
+mul	1232	dashu-float	321
+mul	1232	decimal-rs	110
+mul	1232	decimal-scaled	157406
+mul	1232	fastnum	191
+mul	1232	g_math	186
+mul	1232	rust_decimal	61
+powf	18	decimal-rs	15102
+powf	18	decimal-scaled	350
+powf	18	fastnum	5350700
+powf	18	g_math	150
+powf	18	rust_decimal	12629
+powf	38	decimal-rs	15132
+powf	38	decimal-scaled	451
+powf	38	fastnum	5345531
+powf	38	g_math	150
+powf	38	rust_decimal	12639
+powf	57	decimal-rs	15048
+powf	57	decimal-scaled	15733
+powf	57	fastnum	5344430
+powf	57	g_math	160
+powf	57	rust_decimal	12658
+powf	76	decimal-rs	12836
+powf	76	decimal-scaled	15432
+powf	76	fastnum	4468758
+powf	76	g_math	110
+powf	76	rust_decimal	11736
+powf	115	decimal-rs	17648
+powf	115	decimal-scaled	62912
+powf	115	fastnum	15104848
+powf	115	g_math	211
+powf	115	rust_decimal	15990
+powf	153	decimal-rs	17708
+powf	153	decimal-scaled	77850
+powf	153	fastnum	15104266
+powf	153	g_math	201
+powf	153	rust_decimal	15940
+powf	230	decimal-rs	19194
+powf	230	decimal-scaled	144558
+powf	230	fastnum	18602873
+powf	230	g_math	230
+powf	230	rust_decimal	17086
+powf	307	decimal-rs	16957
+powf	307	decimal-scaled	208430
+powf	307	fastnum	11881316
+powf	307	g_math	225
+powf	307	rust_decimal	17540
+powf	462	decimal-rs	17607
+powf	462	decimal-scaled	340087
+powf	462	fastnum	16574361
+powf	462	g_math	201
+powf	462	rust_decimal	15740
+powf	616	decimal-rs	19088
+powf	616	decimal-scaled	775763
+powf	616	fastnum	15493698
+powf	616	g_math	210
+powf	616	rust_decimal	17185
+powf	924	decimal-rs	17532
+powf	924	decimal-scaled	1839163
+powf	924	fastnum	12095056
+powf	924	g_math	230
+powf	924	rust_decimal	15719
+powf	1232	decimal-rs	17768
+powf	1232	decimal-scaled	5399288
+powf	1232	fastnum	15143526
+powf	1232	g_math	211
+powf	1232	rust_decimal	15850
+rem	18	bigdecimal	211
+rem	18	dashu-float	291
+rem	18	decimal-rs	70
+rem	18	decimal-scaled	240
+rem	18	fastnum	200
+rem	18	rust_decimal	101
+rem	38	bigdecimal	200
+rem	38	dashu-float	290
+rem	38	decimal-rs	70
+rem	38	decimal-scaled	321
+rem	38	fastnum	200
+rem	38	rust_decimal	91
+rem	57	bigdecimal	201
+rem	57	dashu-float	290
+rem	57	decimal-rs	70
+rem	57	decimal-scaled	681
+rem	57	fastnum	200
+rem	57	rust_decimal	100
+rem	76	bigdecimal	183
+rem	76	dashu-float	240
+rem	76	decimal-rs	54
+rem	76	decimal-scaled	954
+rem	76	fastnum	169
+rem	76	rust_decimal	82
+rem	115	bigdecimal	241
+rem	115	dashu-float	431
+rem	115	decimal-rs	80
+rem	115	decimal-scaled	2504
+rem	115	fastnum	320
+rem	115	rust_decimal	130
+rem	153	bigdecimal	270
+rem	153	dashu-float	371
+rem	153	decimal-rs	85
+rem	153	decimal-scaled	3777
+rem	153	fastnum	290
+rem	153	rust_decimal	141
+rem	230	bigdecimal	231
+rem	230	dashu-float	361
+rem	230	decimal-rs	80
+rem	230	decimal-scaled	8282
+rem	230	fastnum	270
+rem	230	rust_decimal	130
+rem	307	bigdecimal	249
+rem	307	dashu-float	402
+rem	307	decimal-rs	90
+rem	307	decimal-scaled	12505
+rem	307	fastnum	250
+rem	307	rust_decimal	122
+rem	462	bigdecimal	270
+rem	462	dashu-float	390
+rem	462	decimal-rs	120
+rem	462	decimal-scaled	26114
+rem	462	fastnum	271
+rem	462	rust_decimal	121
+rem	616	bigdecimal	250
+rem	616	dashu-float	380
+rem	616	decimal-rs	80
+rem	616	decimal-scaled	45357
+rem	616	fastnum	271
+rem	616	rust_decimal	130
+rem	924	bigdecimal	271
+rem	924	dashu-float	400
+rem	924	decimal-rs	80
+rem	924	decimal-scaled	90809
+rem	924	fastnum	291
+rem	924	rust_decimal	120
+rem	1232	bigdecimal	231
+rem	1232	dashu-float	381
+rem	1232	decimal-rs	80
+rem	1232	decimal-scaled	157781
+rem	1232	fastnum	290
+rem	1232	rust_decimal	120
+sin	18	decimal-scaled	6690
+sin	18	fastnum	442874
+sin	18	g_math	150
+sin	18	rust_decimal	3364
+sin	38	decimal-scaled	7131
+sin	38	fastnum	439529
+sin	38	g_math	150
+sin	38	rust_decimal	3375
+sin	57	decimal-scaled	6199
+sin	57	fastnum	441453
+sin	57	g_math	160
+sin	57	rust_decimal	3355
+sin	76	decimal-scaled	6555
+sin	76	fastnum	394396
+sin	76	g_math	111
+sin	76	rust_decimal	3206
+sin	115	decimal-scaled	22582
+sin	115	fastnum	552733
+sin	115	g_math	200
+sin	115	rust_decimal	4488
+sin	153	decimal-scaled	22141
+sin	153	fastnum	520392
+sin	153	g_math	190
+sin	153	rust_decimal	4448
+sin	230	decimal-scaled	42895
+sin	230	fastnum	591915
+sin	230	g_math	210
+sin	230	rust_decimal	4657
+sin	307	decimal-scaled	54058
+sin	307	fastnum	531913
+sin	307	g_math	218
+sin	307	rust_decimal	4906
+sin	462	decimal-scaled	90242
+sin	462	fastnum	552617
+sin	462	g_math	201
+sin	462	rust_decimal	4428
+sin	616	decimal-scaled	171714
+sin	616	fastnum	572828
+sin	616	g_math	210
+sin	616	rust_decimal	4687
+sin	924	decimal-scaled	348247
+sin	924	fastnum	524555
+sin	924	g_math	200
+sin	924	rust_decimal	4449
+sin	1232	decimal-scaled	664338
+sin	1232	fastnum	541216
+sin	1232	g_math	200
+sin	1232	rust_decimal	4418
+sinh	18	decimal-scaled	10711
+sinh	18	g_math	140
+sinh	38	decimal-scaled	11446
+sinh	38	g_math	150
+sinh	57	decimal-scaled	9855
+sinh	57	g_math	140
+sinh	76	decimal-scaled	10586
+sinh	76	g_math	107
+sinh	115	decimal-scaled	35165
+sinh	115	g_math	200
+sinh	153	decimal-scaled	42519
+sinh	153	g_math	171
+sinh	230	decimal-scaled	62184
+sinh	230	g_math	190
+sinh	307	decimal-scaled	103194
+sinh	307	g_math	213
+sinh	462	decimal-scaled	149298
+sinh	462	g_math	191
+sinh	616	decimal-scaled	317896
+sinh	616	g_math	190
+sinh	924	decimal-scaled	610915
+sinh	924	g_math	220
+sinh	1232	decimal-scaled	1083684
+sinh	1232	g_math	190
+sqrt	18	bigdecimal	71436
+sqrt	18	decimal-rs	5202
+sqrt	18	decimal-scaled	250
+sqrt	18	fastnum	146982
+sqrt	18	g_math	140
+sqrt	18	rust_decimal	2393
+sqrt	38	bigdecimal	71175
+sqrt	38	decimal-rs	5208
+sqrt	38	decimal-scaled	340
+sqrt	38	fastnum	145034
+sqrt	38	g_math	130
+sqrt	38	rust_decimal	2389
+sqrt	57	bigdecimal	71386
+sqrt	57	decimal-rs	5213
+sqrt	57	decimal-scaled	1111
+sqrt	57	fastnum	143998
+sqrt	57	g_math	121
+sqrt	57	rust_decimal	2378
+sqrt	76	bigdecimal	63148
+sqrt	76	decimal-rs	4396
+sqrt	76	decimal-scaled	1444
+sqrt	76	fastnum	120682
+sqrt	76	g_math	88
+sqrt	76	rust_decimal	2032
+sqrt	115	bigdecimal	106499
+sqrt	115	decimal-rs	5861
+sqrt	115	decimal-scaled	4098
+sqrt	115	fastnum	177772
+sqrt	115	g_math	170
+sqrt	115	rust_decimal	2810
+sqrt	153	bigdecimal	106709
+sqrt	153	decimal-rs	5851
+sqrt	153	decimal-scaled	5720
+sqrt	153	fastnum	176635
+sqrt	153	g_math	150
+sqrt	153	rust_decimal	2805
+sqrt	230	bigdecimal	116185
+sqrt	230	decimal-rs	6429
+sqrt	230	decimal-scaled	9930
+sqrt	230	fastnum	189447
+sqrt	230	g_math	150
+sqrt	230	rust_decimal	2939
+sqrt	307	bigdecimal	105875
+sqrt	307	decimal-rs	5782
+sqrt	307	decimal-scaled	14463
+sqrt	307	fastnum	183464
+sqrt	307	g_math	166
+sqrt	307	rust_decimal	3109
+sqrt	462	bigdecimal	106337
+sqrt	462	decimal-rs	5872
+sqrt	462	decimal-scaled	25668
+sqrt	462	fastnum	182240
+sqrt	462	g_math	160
+sqrt	462	rust_decimal	2795
+sqrt	616	bigdecimal	116252
+sqrt	616	decimal-rs	6414
+sqrt	616	decimal-scaled	42153
+sqrt	616	fastnum	185580
+sqrt	616	g_math	180
+sqrt	616	rust_decimal	2894
+sqrt	924	bigdecimal	106728
+sqrt	924	decimal-rs	5876
+sqrt	924	decimal-scaled	79267
+sqrt	924	fastnum	174469
+sqrt	924	g_math	170
+sqrt	924	rust_decimal	2755
+sqrt	1232	bigdecimal	107272
+sqrt	1232	decimal-rs	5941
+sqrt	1232	decimal-scaled	131216
+sqrt	1232	fastnum	175244
+sqrt	1232	g_math	151
+sqrt	1232	rust_decimal	2775
+sub	18	bigdecimal	120
+sub	18	dashu-float	211
+sub	18	decimal-rs	60
+sub	18	decimal-scaled	235
+sub	18	fastnum	80
+sub	18	g_math	130
+sub	18	rust_decimal	60
+sub	38	bigdecimal	120
+sub	38	dashu-float	210
+sub	38	decimal-rs	51
+sub	38	decimal-scaled	306
+sub	38	fastnum	80
+sub	38	g_math	110
+sub	38	rust_decimal	60
+sub	57	bigdecimal	121
+sub	57	dashu-float	206
+sub	57	decimal-rs	60
+sub	57	decimal-scaled	801
+sub	57	fastnum	80
+sub	57	g_math	110
+sub	57	rust_decimal	60
+sub	76	bigdecimal	112
+sub	76	dashu-float	183
+sub	76	decimal-rs	36
+sub	76	decimal-scaled	1030
+sub	76	fastnum	62
+sub	76	g_math	96
+sub	76	rust_decimal	48
+sub	115	bigdecimal	181
+sub	115	dashu-float	331
+sub	115	decimal-rs	60
+sub	115	decimal-scaled	2886
+sub	115	fastnum	110
+sub	115	g_math	200
+sub	115	rust_decimal	80
+sub	153	bigdecimal	180
+sub	153	dashu-float	321
+sub	153	decimal-rs	60
+sub	153	decimal-scaled	4689
+sub	153	fastnum	120
+sub	153	g_math	191
+sub	153	rust_decimal	70
+sub	230	bigdecimal	170
+sub	230	dashu-float	290
+sub	230	decimal-rs	60
+sub	230	decimal-scaled	10145
+sub	230	fastnum	110
+sub	230	g_math	180
+sub	230	rust_decimal	80
+sub	307	bigdecimal	198
+sub	307	dashu-float	330
+sub	307	decimal-rs	64
+sub	307	decimal-scaled	15394
+sub	307	fastnum	116
+sub	307	g_math	214
+sub	307	rust_decimal	70
+sub	462	bigdecimal	190
+sub	462	dashu-float	351
+sub	462	decimal-rs	80
+sub	462	decimal-scaled	28623
+sub	462	fastnum	110
+sub	462	g_math	200
+sub	462	rust_decimal	70
+sub	616	bigdecimal	170
+sub	616	dashu-float	300
+sub	616	decimal-rs	60
+sub	616	decimal-scaled	50184
+sub	616	fastnum	110
+sub	616	g_math	180
+sub	616	rust_decimal	80
+sub	924	bigdecimal	180
+sub	924	dashu-float	330
+sub	924	decimal-rs	70
+sub	924	decimal-scaled	96228
+sub	924	fastnum	150
+sub	924	g_math	196
+sub	924	rust_decimal	80
+sub	1232	bigdecimal	190
+sub	1232	dashu-float	330
+sub	1232	decimal-rs	60
+sub	1232	decimal-scaled	158958
+sub	1232	fastnum	120
+sub	1232	g_math	191
+sub	1232	rust_decimal	70
+tan	18	decimal-scaled	12248
+tan	18	fastnum	1474637
+tan	18	g_math	160
+tan	18	rust_decimal	4627
+tan	38	decimal-scaled	12939
+tan	38	fastnum	1494105
+tan	38	g_math	141
+tan	38	rust_decimal	4607
+tan	57	decimal-scaled	7802
+tan	57	fastnum	1482082
+tan	57	g_math	160
+tan	57	rust_decimal	4597
+tan	76	decimal-scaled	8310
+tan	76	fastnum	1252186
+tan	76	g_math	109
+tan	76	rust_decimal	3950
+tan	115	decimal-scaled	24927
+tan	115	fastnum	4479854
+tan	115	g_math	200
+tan	115	rust_decimal	4418
+tan	153	decimal-scaled	27141
+tan	153	fastnum	3422252
+tan	153	g_math	190
+tan	153	rust_decimal	4408
+tan	230	decimal-scaled	49655
+tan	230	fastnum	4593691
+tan	230	g_math	230
+tan	230	rust_decimal	4687
+tan	307	decimal-scaled	63907
+tan	307	fastnum	4273521
+tan	307	g_math	217
+tan	307	rust_decimal	4669
+tan	462	decimal-scaled	100862
+tan	462	fastnum	4230922
+tan	462	g_math	191
+tan	462	rust_decimal	4388
+tan	616	decimal-scaled	187718
+tan	616	fastnum	4632203
+tan	616	g_math	210
+tan	616	rust_decimal	4707
+tan	924	decimal-scaled	375062
+tan	924	fastnum	2437079
+tan	924	g_math	201
+tan	924	rust_decimal	4388
+tan	1232	decimal-scaled	730336
+tan	1232	fastnum	2614858
+tan	1232	g_math	180
+tan	1232	rust_decimal	4308
+tanh	18	decimal-scaled	10696
+tanh	18	g_math	160
+tanh	38	decimal-scaled	11307
+tanh	38	g_math	161
+tanh	57	decimal-scaled	9960
+tanh	57	g_math	170
+tanh	76	decimal-scaled	10636
+tanh	76	g_math	118
+tanh	115	decimal-scaled	35286
+tanh	115	g_math	201
+tanh	153	decimal-scaled	42890
+tanh	153	g_math	200
+tanh	230	decimal-scaled	58849
+tanh	230	g_math	211
+tanh	307	decimal-scaled	79520
+tanh	307	g_math	226
+tanh	462	decimal-scaled	138422
+tanh	462	g_math	200
+tanh	616	decimal-scaled	210391
+tanh	616	g_math	210
+tanh	924	decimal-scaled	402298
+tanh	924	g_math	221
+tanh	1232	decimal-scaled	785916
+tanh	1232	g_math	200
