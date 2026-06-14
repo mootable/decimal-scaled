@@ -141,16 +141,35 @@ where
     }
 }
 
-/// Enumerate the band-edge `(width, scale)` cells and fan the two leaf operations out
-/// to the concrete decimal type for each. `CELLS` is the public cell list; the two
-/// dispatch fns are the concrete shim entry points every subject routes through.
+/// Enumerate the `(width, scale)` cells and fan the two leaf operations out to the
+/// concrete decimal type for each. Two cell lists fall out of one fan-out:
+/// [`GOLDEN_CELLS`] — the band-edge correctness/history grid (the golden gate and the
+/// version-history pins walk this) — and [`CELLS`], its union with the extra
+/// lib-compare-only scales (`; compare ...` per tier). [`CELLS`] is what
+/// [`dispatch_compute`] covers and what `DsSubject` can run; the lib-compare bench
+/// FILTERS it by [`COMPARE_SCALES`], so the comparison's scale choices never enlarge
+/// the golden grid — the benches stay decoupled, sharing only this compile-once
+/// monomorphisation home. The two dispatch fns are the concrete shim entry points
+/// every subject routes through.
 macro_rules! cells {
-    ($( $(#[$cfg:meta])* $D:ident => $w:literal { $($s:literal),+ $(,)? } );+ $(;)?) => {
-        /// Every band-edge `(width, scale)` cell of the full-surface grid — pure DATA,
-        /// present in every build. Whether a cell is RUNNABLE in this build is
-        /// [`tier_compiled`]; the test crate's `Filter::cells` applies it, so a narrow
-        /// build sweeps the D18/D38 cells and wider builds add their tiers.
-        pub const CELLS: &[(u32, u32)] = &[ $( $( ($w, $s), )+ )+ ];
+    ($(
+        $(#[$cfg:meta])* $D:ident => $w:literal {
+            $($s:literal),+ $(,)?
+            $(; compare $($cs:literal),+ $(,)?)?
+        }
+    );+ $(;)?) => {
+        /// The band-edge `(width, scale)` correctness grid — the golden gate and the
+        /// version-history pins walk exactly this (NOT the lib-compare-only scales).
+        pub const GOLDEN_CELLS: &[(u32, u32)] = &[ $( $( ($w, $s), )+ )+ ];
+
+        /// Every COMPILED `(width, scale)` cell: the golden grid PLUS the
+        /// lib-compare-only scales (`; compare ...`). What [`dispatch_compute`] covers
+        /// and `DsSubject` can run; whether a cell is RUNNABLE in this build is
+        /// [`tier_compiled`]. Golden/history filter to [`GOLDEN_CELLS`]; the lib-compare
+        /// bench filters to the [`COMPARE_SCALES`] subset, so its scale choices never
+        /// enlarge the golden grid (the benches share only this compile-once home).
+        pub const CELLS: &[(u32, u32)] =
+            &[ $( $( ($w, $s), )+ $( $( ($w, $cs), )+ )? )+ ];
 
         /// Is this width's decimal tier compiled into the current build?
         pub const fn tier_compiled(width: u32) -> bool {
@@ -175,12 +194,14 @@ macro_rules! cells {
                     ) -> Computed<String> {
                         match scale {
                             $( $s => crate::compute_typed::<decimal_scaled::$D<$s>>(func, inputs, m), )+
+                            $( $( $cs => crate::compute_typed::<decimal_scaled::$D<$cs>>(func, inputs, m), )+ )?
                             _ => panic!("no decimal-scaled cell for (width={}, scale={scale})", $w),
                         }
                     }
                     pub fn limits(scale: u32) -> Limits {
                         match scale {
                             $( $s => crate::limits_typed::<decimal_scaled::$D<$s>>($s), )+
+                            $( $( $cs => crate::limits_typed::<decimal_scaled::$D<$cs>>($cs), )+ )?
                             _ => panic!("no decimal-scaled cell for (width={}, scale={scale})", $w),
                         }
                     }
@@ -212,6 +233,11 @@ macro_rules! cells {
     };
 }
 
+// The `; compare <scales>` tail on a tier adds the lib-compare-only cells the bench
+// needs at that width — exactly the COMPARE_SCALES that are not already a golden cell
+// of the tier (and that the tier can hold). Golden/history never walk these; the
+// lib-compare bench selects them via COMPARE_SCALES. D18/D38 list none because every
+// COMPARE_SCALE they can hold (17; 17/28/37) is already a golden cell.
 cells! {
     // D18 — Int<1>, 64-bit storage (always compiled)
     D18 => 18 { 0, 3, 4, 9, 13, 17 };
@@ -219,32 +245,40 @@ cells! {
     D38 => 38 { 0, 2, 6, 9, 10, 12, 17, 18, 19, 28, 37 };
     // D57 — Int<3>, 192-bit
     #[cfg(feature = "d57")]
-    D57 => 57 { 0, 14, 20, 28, 30, 42, 56 };
+    D57 => 57 { 0, 14, 20, 28, 30, 42, 56 ; compare 17, 37 };
     // D76 — Int<4>, 256-bit
     #[cfg(feature = "d76")]
-    D76 => 76 { 0, 18, 19, 38, 40, 57, 75 };
+    D76 => 76 { 0, 18, 19, 38, 40, 57, 75 ; compare 17, 28, 37 };
     // D115 — Int<6>, 384-bit
     #[cfg(feature = "d115")]
-    D115 => 115 { 0, 28, 50, 57, 86, 114 };
+    D115 => 115 { 0, 28, 50, 57, 86, 114 ; compare 17, 37 };
     // D153 — Int<8>, 512-bit
     #[cfg(feature = "d153")]
-    D153 => 153 { 0, 38, 76, 114, 152 };
+    D153 => 153 { 0, 38, 76, 114, 152 ; compare 17, 28, 37 };
     // D230 — Int<12>, 768-bit
     #[cfg(feature = "d230")]
-    D230 => 230 { 0, 30, 57, 115, 172, 229 };
+    D230 => 230 { 0, 30, 57, 115, 172, 229 ; compare 17, 28, 37, 152 };
     // D307 — Int<16>, 1024-bit (s290: the ln lookup band s285-295)
     #[cfg(feature = "d307")]
-    D307 => 307 { 0, 30, 50, 70, 76, 120, 153, 230, 290, 306 };
+    D307 => 307 { 0, 30, 50, 70, 76, 120, 153, 230, 290, 306 ; compare 17, 28, 37, 152 };
     // D462 — Int<24>, 1536-bit
     #[cfg(feature = "d462")]
-    D462 => 462 { 0, 30, 100, 115, 180, 231, 346, 461 };
+    D462 => 462 { 0, 30, 100, 115, 180, 231, 346, 461 ; compare 17, 28, 37, 152 };
     // D616 — Int<32>, 2048-bit (s590: the ln lookup band s585-595)
     #[cfg(feature = "d616")]
-    D616 => 616 { 0, 30, 130, 154, 240, 308, 462, 590, 615 };
+    D616 => 616 { 0, 30, 130, 154, 240, 308, 462, 590, 615 ; compare 17, 28, 37, 152 };
     // D924 — Int<48>, 3072-bit (s900: the ln lookup band s895-905)
     #[cfg(feature = "d924")]
-    D924 => 924 { 0, 30, 180, 231, 350, 462, 693, 900, 923 };
+    D924 => 924 { 0, 30, 180, 231, 350, 462, 693, 900, 923 ; compare 17, 28, 37, 152 };
     // D1232 — Int<64>, 4096-bit (s1200: the ln lookup band s1195-1205)
     #[cfg(feature = "d1232")]
-    D1232 => 1232 { 0, 30, 250, 308, 470, 616, 924, 1200, 1231 };
+    D1232 => 1232 { 0, 30, 250, 308, 470, 616, 924, 1200, 1231 ; compare 17, 28, 37, 152 };
 }
+
+/// The fixed decimal-scaled SCALES the lib-compare bench times each width at — one per
+/// peer-precision level: **17** (D18 ceiling / narrow anchor), **28** (rust_decimal),
+/// **37** (D38 ceiling = decimal-rs & g_math's 38 significant digits), **152** (D153
+/// ceiling ≈ fastnum's 154). The bench selects, per width, those of these the tier can
+/// hold; golden/history never see them. Each is present at every holding tier — either
+/// already a golden cell or added via that tier's `; compare` tail above.
+pub const COMPARE_SCALES: &[u32] = &[17, 28, 37, 152];

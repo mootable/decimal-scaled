@@ -12,8 +12,10 @@ name: "📊 lib-perf (peer-crate timing over golden)"
 #
 # This is the TIMING counterpart to the golden correctness gate; it self-renders the
 # Comparisons page the way golden self-renders Precision. Its aggregate self-commits
-# results/lib_cmp/medians.tsv (function/width/library/nanos/min/max) — the Comparisons-page
-# data source (docs/comparisons.md, rendered by scripts/render_docs.py).
+# results/lib_cmp/medians.tsv (function/width/library/scale/nanos/min/max) — the
+# Comparisons-page data source (docs/comparisons.md, rendered by scripts/render_docs.py).
+# decimal-scaled is timed at several comparison SCALES per width (one line per
+# peer-precision level), hence the per-row `scale` column.
 #
 # WIDTH-SHARDED build+run (the history.yml shape): one matrix job per width tier
 # builds exactly that tier's lib_perf exe AND runs it in the SAME job (no artifact
@@ -166,10 +168,11 @@ jobs:
           python3 - <<'EOF'
           import collections, glob, os, statistics
           # Shard rows are PER-LINE: library function width scale mode line grade nanos.
-          # The Comparisons page needs per-(function, width, library) MEDIAN nanoseconds
-          # (one representative cell per width, so the median is over that cell's golden
-          # rows); collapse the line + scale dimensions to one median here.
-          vals = collections.defaultdict(list)  # (function, width, library) -> [nanos]
+          # The Comparisons page needs per-(function, width, library, SCALE) MEDIAN
+          # nanoseconds — decimal-scaled is timed at several comparison SCALES per width
+          # (one line per peer-precision level: 17/28/37/152), so scale is part of the
+          # key now; only the per-line dimension collapses to a median here.
+          vals = collections.defaultdict(list)  # (function, width, library, scale) -> [nanos]
           for p in sorted(glob.glob("shards/**/*.tsv", recursive=True)):
               with open(p, encoding="utf-8") as f:
                   next(f, None)  # header
@@ -178,22 +181,23 @@ jobs:
                       # library=0 function=1 width=2 scale=3 mode=4 line=5 grade=6 nanos=7
                       if len(c) >= 8 and c[7]:
                           try:
-                              vals[(c[1], c[2], c[0])].append(int(c[7]))
+                              vals[(c[1], c[2], c[0], c[3])].append(int(c[7]))
                           except ValueError:
                               pass
           if not vals:
               print("no lib-perf rows — nothing to write")
               raise SystemExit(0)
           os.makedirs("results/lib_cmp", exist_ok=True)
-          def wkey(w):
-              return int(w) if w.isdigit() else 0
+          def ikey(x):
+              return int(x) if x.isdigit() else 0
           with open("results/lib_cmp/medians.tsv", "w", encoding="utf-8", newline="\n") as o:
-              # `nanos` is the median per cell; `min`/`max` bound that cell's samples so
-              # the Comparisons chart can draw a min–max band around each library's line.
-              o.write("function\twidth\tlibrary\tnanos\tmin\tmax\n")
-              for (fn, w, lib) in sorted(vals, key=lambda k: (k[0], wkey(k[1]), k[2])):
-                  s = vals[(fn, w, lib)]
-                  o.write(f"{fn}\t{w}\t{lib}\t{statistics.median(s):.0f}\t{min(s):.0f}\t{max(s):.0f}\n")
+              # `nanos` is the median per (cell, scale); `min`/`max` bound its samples so
+              # the Comparisons chart can draw a min–max band around each line and a
+              # whisker on each peer marker.
+              o.write("function\twidth\tlibrary\tscale\tnanos\tmin\tmax\n")
+              for (fn, w, lib, sc) in sorted(vals, key=lambda k: (k[0], ikey(k[1]), k[2], ikey(k[3]))):
+                  s = vals[(fn, w, lib, sc)]
+                  o.write(f"{fn}\t{w}\t{lib}\t{sc}\t{statistics.median(s):.0f}\t{min(s):.0f}\t{max(s):.0f}\n")
           print(f"medians.tsv rows: {len(vals)}")
           EOF
           if [ ! -f results/lib_cmp/medians.tsv ]; then
@@ -205,8 +209,9 @@ jobs:
           # Re-render docs from the fresh medians in the SAME commit (self-heal: the
           # committed page never lags the data; docs-drift stays green). The
           # Comparisons renderer (_libcmp_rows in scripts/render_docs.py) reads this
-          # file's schema directly (function/width/library/nanos/min/max — one
-          # mid-of-band cell per width, columns = libraries; min/max feed the band).
+          # file's schema directly (function/width/library/scale/nanos/min/max —
+          # decimal-scaled as one line per comparison scale, peers as markers at their
+          # capacity width; min/max feed the bands/whiskers).
           python3 scripts/render_docs.py
           git add results/lib_cmp/medians.tsv
           git add -u README.md docs/

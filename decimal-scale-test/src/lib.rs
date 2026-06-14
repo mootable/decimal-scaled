@@ -42,7 +42,9 @@ use decimal_scaled_golden::{
 // the full band-edge grid (`CELLS` + `tier_compiled`), the function list, and
 // the typed op bridge (`compute` + `DsOps`) — re-exported so existing
 // consumers (golden-competitors, the history gates) keep their import paths.
-pub use decimal_scaled_cells::{compute, tier_compiled, DsOps, CELLS, FUNCS};
+pub use decimal_scaled_cells::{
+    compute, tier_compiled, DsOps, CELLS, COMPARE_SCALES, FUNCS, GOLDEN_CELLS,
+};
 
 /// Generation precision / rounding guard of the golden set (the file `#` header
 /// carries the authoritative values; these mirror them for the validators).
@@ -206,10 +208,29 @@ impl Filter {
         }
     }
 
-    /// The `(width, scale)` cells passing the width/scale filters, restricted to
-    /// the tiers this build actually compiles (a narrow build sweeps D18/D38).
+    /// The golden band-edge `(width, scale)` cells passing the width/scale filters,
+    /// restricted to the tiers this build actually compiles (a narrow build sweeps
+    /// D18/D38). The golden gate and the version-history pins walk these — NOT the
+    /// lib-compare-only scales (see [`Filter::compare_cells`]).
     pub fn cells(&self) -> Vec<(u32, u32)> {
-        CELLS
+        self.select(GOLDEN_CELLS)
+    }
+
+    /// The lib-compare cells: the [`COMPARE_SCALES`] subset of the full COMPILED grid
+    /// passing the same filters — per width, those of {17, 28, 37, 152} the tier can
+    /// hold. Decoupled from [`Filter::cells`] so the comparison's precision choices
+    /// never enlarge the golden grid; the two gates share only the compile-once cells.
+    pub fn compare_cells(&self) -> Vec<(u32, u32)> {
+        self.select(CELLS)
+            .into_iter()
+            .filter(|(_, s)| COMPARE_SCALES.contains(s))
+            .collect()
+    }
+
+    /// The width/scale/tier-compiled filter shared by [`Filter::cells`] and
+    /// [`Filter::compare_cells`].
+    fn select(&self, cells: &[(u32, u32)]) -> Vec<(u32, u32)> {
+        cells
             .iter()
             .copied()
             .filter(|(w, _)| tier_compiled(*w))
@@ -306,14 +327,17 @@ mod tests {
 
     #[test]
     fn cells_enumerates_every_band_edge() {
-        // The 88 band-edge cells across the 12 widths, plus the four ln-lookup
-        // band cells (D307<290>, D616<590>, D924<900>, D1232<1200>) and the
-        // D230<30> cell added so the scale-30 library/version comparison has an
-        // exact-30 cell at D230 (its band otherwise jumps 0 -> 57); spot-check
-        // the count and edges.
-        assert_eq!(CELLS.len(), 93);
-        assert_eq!(CELLS.first(), Some(&(18, 0)));
-        assert_eq!(CELLS.last(), Some(&(1232, 1231)));
+        // GOLDEN_CELLS is the band-edge correctness grid: the 88 band-edge cells
+        // across the 12 widths, plus the four ln-lookup band cells (D307<290>,
+        // D616<590>, D924<900>, D1232<1200>) and the D230<30> cell. CELLS is its
+        // union with the 34 lib-compare-only scales (the `; compare` tails the
+        // lib-perf bench times at; golden/history never walk them) — spot-check both
+        // counts, the golden edges, and that the union contains the golden grid.
+        assert_eq!(GOLDEN_CELLS.len(), 93);
+        assert_eq!(GOLDEN_CELLS.first(), Some(&(18, 0)));
+        assert_eq!(GOLDEN_CELLS.last(), Some(&(1232, 1231)));
+        assert_eq!(CELLS.len(), 127);
+        assert!(GOLDEN_CELLS.iter().all(|c| CELLS.contains(c)));
     }
 
     #[test]

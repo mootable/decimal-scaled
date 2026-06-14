@@ -15,8 +15,9 @@ A fast, precise, decimal library.
 - **Decimal storage** — unlike floating point, `1.1` is exactly `1.1`.
 - **Multiple rounding modes** — six in total, `HalfToEven` by default.
 - **Up to 4 Kb numbers** — twelve widths, `D18` to `D1232`.
+- **Choose your precision at compile time** — from 0 to one less than the width. i.e. D1232 can carry a precision of 1231 digits.
 - **`no_std` friendly** — the strict, integer-only path needs no `std`.
-- **Validated by <!-- BEGIN GENERATED:home:tested -->56,809,422<!-- END GENERATED:home:tested --> value tests** — every width × scale × rounding mode.
+- **Validated by <!-- BEGIN GENERATED:home:tested -->71,469,918<!-- END GENERATED:home:tested --> value tests** — every width × scale × rounding mode.
 
 <div class="hero-install"><span class="prompt">$ </span>cargo add decimal-scaled</div>
 

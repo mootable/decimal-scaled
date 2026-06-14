@@ -505,10 +505,11 @@ fn history_all() {
 mod adapter_proofs {
     use decimal_scaled_golden::{Computed, DecimalSubject, Function};
 
-    /// `true` when the live cell list contains `cell` — the sync guard between a
-    /// version's `CELLS` and the live surface.
+    /// `true` when the live GOLDEN grid contains `cell` — the sync guard between a
+    /// version's `CELLS` and the live correctness surface. The pins track
+    /// `GOLDEN_CELLS`, not the lib-compare-only scales (a live-build bench concern).
     fn live_cell(cell: &(u32, u32)) -> bool {
-        decimal_scale_test::CELLS.contains(cell)
+        decimal_scale_test::GOLDEN_CELLS.contains(cell)
     }
 
     /// Prove an adapter computes at all: sqrt(2) at D38<19> through the erased
@@ -553,8 +554,10 @@ mod adapter_proofs {
 
         #[test]
         fn cells_match_the_live_surface_exactly() {
-            // 0.4.4 shares the live tier table, so its cell list IS the live one.
-            assert_eq!(v044::CELLS, decimal_scale_test::CELLS);
+            // 0.4.4 shares the live tier table, so its cell list IS the live GOLDEN
+            // grid — the correctness surface, NOT the lib-compare-only scales, which
+            // are a live-build bench concern the history pins deliberately exclude.
+            assert_eq!(v044::CELLS, decimal_scale_test::GOLDEN_CELLS);
             assert!(v044::CELLS.iter().all(live_cell));
         }
     }
@@ -588,11 +591,12 @@ mod adapter_proofs {
 
         #[test]
         fn cells_are_the_live_subset_at_the_shared_widths() {
-            // Every 0.3.3 cell is a live cell, and it covers EVERY live cell at
-            // the six shared widths (none silently dropped).
+            // Every 0.3.3 cell is a live GOLDEN cell, and it covers EVERY golden cell
+            // at the six shared widths (none silently dropped). The lib-compare-only
+            // scales are excluded — the pins track the correctness grid, not the bench.
             assert!(v033::CELLS.iter().all(live_cell));
             let shared = [18, 38, 76, 153, 230, 307];
-            let expected: Vec<(u32, u32)> = decimal_scale_test::CELLS
+            let expected: Vec<(u32, u32)> = decimal_scale_test::GOLDEN_CELLS
                 .iter()
                 .copied()
                 .filter(|(w, _)| shared.contains(w))

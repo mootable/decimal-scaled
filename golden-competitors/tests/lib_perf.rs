@@ -13,21 +13,26 @@
 //! `decimal-scale-test`, which `golden-competitors` already depends on, so this is
 //! the one crate that can pair both sides on the same harness.
 //!
-//! Like the history gate this is a FILTERED slice of golden — one representative
-//! scale-30 cell per width, capped rows per function, a single mode — so
-//! the timing run is cheap; the full correctness surface is the golden gate's job.
-//! Each subject runs over the cell's golden rows with the `Timed` strategy as a
-//! free ride-along (exactly ONE timed call per golden row), aggregated to per-cell
-//! medians downstream. Timing is always REPORTED, never asserted (this is a perf
-//! bench, not a correctness gate). Each competitor declares only the functions its
-//! library exposes, so a missing `(function, library)` cell simply does not emit
-//! (the docs render the gap).
+//! Like the history gate this is a FILTERED slice of golden — per width the
+//! COMPARE_SCALES cells (17, 28, 37, 152, where the tier holds them), capped rows per
+//! function, a single mode — so the timing run is cheap; the full correctness surface
+//! is the golden gate's job. These comparison cells come from a DIFFERENT filter than
+//! the golden grid (`Filter::compare_cells` vs `Filter::cells`) over the one
+//! compile-once cell grid, so the comparison's precision choices never enlarge the
+//! golden/history surface. Each subject runs over a cell's golden rows with the
+//! `Timed` strategy as a free ride-along (exactly ONE timed call per golden row),
+//! aggregated to per-cell medians downstream. Timing is always REPORTED, never
+//! asserted (this is a perf bench, not a correctness gate). Each competitor declares
+//! only the functions its library exposes, so a missing `(function, library)` cell
+//! simply does not emit (the docs render the gap).
 //!
-//! decimal-scaled is timed at scale 30 (the nearest compiled scale to 30 per width —
-//! the peers' effective precision); every competitor runs over the
-//! same golden rows and the harness skips the inputs it cannot represent, so a
-//! fixed-precision peer drops out on the wide tiers (an honest gap), and a peer
-//! that has no equivalent for a function never emits a row for it.
+//! decimal-scaled is timed at each of the COMPARE_SCALES a width can hold — one line
+//! per peer-precision level: 17 (narrow anchor), 28 (rust_decimal), 37 (D38 ceiling =
+//! decimal-rs / g_math's 38 significant digits), 152 (D153 ceiling ≈ fastnum's 154).
+//! A like-for-like SPEED comparison needs comparable PRECISION per call, so each peer
+//! is read beside the decimal-scaled line nearest its own precision. Every competitor
+//! runs over the same golden rows and the harness skips the inputs it cannot
+//! represent, so a peer that has no equivalent for a function never emits a row for it.
 //!
 //! Honours the `GOLDEN_*` env filters (`GOLDEN_WIDTHS` / `GOLDEN_SCALES` /
 //! `GOLDEN_MODES` / `GOLDEN_FUNCS`), so a focused slice runs in seconds. Set
@@ -53,9 +58,7 @@ use decimal_scaled_golden::{
 };
 
 use decimal_scale_test::{golden_dir, DsSubject, Filter, GEN_PRECISION, GUARD};
-use golden_competitors::{
-    BigDecimalSubject, DashuFloat, DecimalRsSubject, FastNum, GMath, RustDecimal,
-};
+use golden_competitors::{DecimalRsSubject, FastNum, GMath, RustDecimal};
 
 /// Serialises the gate's run: it swaps the process-global panic hook (competitor
 /// overflow / domain edges panic by contract, caught by the harness) and the
@@ -74,20 +77,15 @@ const TIMED_EXECUTIONS: u32 = 1;
 /// seven-subject fan-out — affordable.
 const ROW_CAP: usize = 1000;
 
-/// The library roster, decimal-scaled first, in render order — mirrors the
-/// precision shootout's `LIBS` so the Comparisons page roster matches the Precision
-/// page's. (`golden-competitors` also carries an `F64` reference subject; it is a
-/// binary-radix baseline, not a peer decimal crate, so it is excluded here exactly
-/// as the precision shootout excludes it.)
-const LIBS: [&str; 7] = [
-    "decimal-scaled",
-    "fastnum",
-    "rust_decimal",
-    "dashu-float",
-    "decimal-rs",
-    "bigdecimal",
-    "g_math",
-];
+/// The library roster, decimal-scaled first, in render order. The FIXED-precision
+/// peers only: each plots as one marker at its capacity width on the Comparisons
+/// graph. `bigdecimal` and `dashu-float` are PARKED here — their working width is
+/// driven by the input values, not a fixed capacity, so they have no single marker
+/// position on a width axis; recovering their per-call operating width is deferred to
+/// a later release. (`golden-competitors` also carries an `F64` reference subject — a
+/// binary-radix baseline, not a peer decimal crate — excluded here as in the
+/// precision shootout.)
+const LIBS: [&str; 5] = ["decimal-scaled", "fastnum", "rust_decimal", "decimal-rs", "g_math"];
 
 /// Dispatch enum so the per-subject run stays singly generic (`GoldenRunner::run`
 /// is generic over `S`, which makes the trait not object-safe).
@@ -167,41 +165,15 @@ impl CaseLoader for CappedLoader {
     }
 }
 
-/// One representative cell per width, pinned to **scale 30** — the precision the
-/// peer libraries effectively compute at (~28-38 digits; see [`compare_scale`]). A
-/// like-for-like speed comparison needs comparable work per call, so decimal-scaled
-/// is timed at ~30 fractional digits rather than its full per-width reach (hundreds
-/// of digits at the wide tiers the peers never match). Each width takes the compiled
-/// scale nearest 30; a width too narrow for 30 (only D18, MAX_SCALE 17) falls back
-/// to half its max scale. Respects `GOLDEN_WIDTHS`/`GOLDEN_SCALES` and the
-/// compiled-tier set (delegated to `filter.cells()`).
-fn lib_cells(filter: &Filter) -> Vec<(u32, u32)> {
-    let mut by_width: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
-    for (w, s) in filter.cells() {
-        by_width.entry(w).or_default().push(s);
-    }
-    by_width
-        .into_iter()
-        .map(|(w, mut scales)| {
-            scales.sort_unstable();
-            (w, compare_scale(&scales))
-        })
-        .collect()
-}
-
-/// The comparison scale for one width's sorted compiled-scale list: **30** (the
-/// peers' effective precision) where the width can hold it, else the nearest
-/// compiled scale to 30. A width too narrow for 30 (max scale < 30 — only D18)
-/// targets half its max scale instead, so it still does a representative fraction
-/// of work rather than its full reach.
-fn compare_scale(scales: &[u32]) -> u32 {
-    let max_scale = *scales.last().expect("each width has at least one compiled cell");
-    let target = if max_scale >= 30 { 30 } else { max_scale / 2 };
-    *scales
-        .iter()
-        .min_by_key(|&&s| (s as i64 - target as i64).abs())
-        .expect("each width has at least one compiled cell")
-}
+// The lib-compare cells decimal-scaled is timed at come from `Filter::compare_cells`:
+// per width, the COMPARE_SCALES (17, 28, 37, 152) the tier can hold — one comparison
+// LINE per peer-precision level (17 narrow anchor; 28 = rust_decimal; 37 = D38 ceiling
+// = decimal-rs / g_math's 38 significant digits; 152 = D153 ceiling ≈ fastnum's 154).
+// A like-for-like SPEED comparison needs comparable PRECISION per call, so each peer
+// is read beside the decimal-scaled line at its own precision. `compare_cells` honours
+// `GOLDEN_WIDTHS`/`GOLDEN_SCALES` and the compiled-tier set and never touches the
+// golden grid, so this bench and the golden gate stay decoupled (different filters
+// over the one compile-once cell grid).
 
 /// Build the runner, honouring `LIBPERF_PARALLEL`:
 ///
@@ -349,7 +321,7 @@ fn lib_perf_all() {
     let _hook_guard = HOOK_GUARD.lock().unwrap_or_else(|p| p.into_inner());
     let filter = Filter::from_env();
     let modes = filter.modes(&[RoundingMode::HalfToEven]);
-    let cells = lib_cells(&filter);
+    let cells = filter.compare_cells();
     let funcs = filter.funcs();
     let runner = runner();
 
@@ -362,14 +334,15 @@ fn lib_perf_all() {
     let mut per_lib: BTreeMap<&'static str, BTreeMap<Key, Cell>> = BTreeMap::new();
     for &(w, s) in &cells {
         for &mode in &modes {
-            // decimal-scaled at this tier's scale-30 cell, then every peer over the same
-            // golden rows (the harness skips the inputs each peer cannot represent).
+            // decimal-scaled at this (width, comparison-scale) cell, then every peer
+            // over the same golden rows (the harness skips the inputs each peer cannot
+            // represent). Peers are precision-fixed, so they repeat ~identically across
+            // a width's comparison scales — the extra samples only steady their median,
+            // and the renderer collapses each peer to one marker at its capacity width.
             collect(&runner, &DsSubject::with_mode(w, s, mode), funcs, "decimal-scaled", w, s, mode, &mut per_lib);
             collect(&runner, &FastNum, funcs, "fastnum", w, s, mode, &mut per_lib);
             collect(&runner, &RustDecimal, funcs, "rust_decimal", w, s, mode, &mut per_lib);
-            collect(&runner, &DashuFloat, funcs, "dashu-float", w, s, mode, &mut per_lib);
             collect(&runner, &DecimalRsSubject, funcs, "decimal-rs", w, s, mode, &mut per_lib);
-            collect(&runner, &BigDecimalSubject, funcs, "bigdecimal", w, s, mode, &mut per_lib);
             collect(&runner, &GMath, funcs, "g_math", w, s, mode, &mut per_lib);
         }
     }
