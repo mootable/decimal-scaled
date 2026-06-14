@@ -78,7 +78,9 @@ impl UrlLoader {
         }
         let url = format!("{}{}.au", self.base_url, func.name());
         match ureq::get(&url).call() {
-            Ok(resp) => match resp.into_string() {
+            // ureq 3: the body is read via `body_mut()`. Raise the read limit well
+            // above the largest golden file (~8 MB) so a big `.au` is never truncated.
+            Ok(mut resp) => match resp.body_mut().with_config().limit(64 * 1024 * 1024).read_to_string() {
                 Ok(body) => {
                     if let Err(e) = std::fs::write(&path, body) {
                         eprintln!("UrlLoader: caching {}: {e}", path.display());
