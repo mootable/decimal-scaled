@@ -30,10 +30,14 @@ name: "🕰 history gates (advisory)"
 # should a future change spike memory again.
 
 on:
+  # Pushes to `main` only (NOT release/*) + on-demand. This gate SELF-COMMITS its
+  # refreshed per-version timing medians; on a release branch with an open PR, the bot
+  # self-commit churns the PR head onto a commit the REQUIRED gates never run on, so
+  # the PR can't go green. The release branch refreshes via workflow_dispatch; `main`
+  # re-renders post-merge.
   push:
     branches:
       - main
-      - "release/*"
   workflow_dispatch:
 
 permissions:

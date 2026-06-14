@@ -30,9 +30,9 @@ name: "\U0001FA83 bench-branch-compare (branch vs latest tag)"
 # so this does NOT need to live on the default branch.
 
 on:
-  push:
-    branches:
-      - 'release/**'
+  # On-demand only. This branch-vs-latest-tag bench SELF-COMMITS its timing medians;
+  # a push trigger on a release branch with an open PR would churn the PR head onto a
+  # bot commit the REQUIRED gates never run on. Run it against any ref via dispatch.
   workflow_dispatch:
     inputs:
       ref:

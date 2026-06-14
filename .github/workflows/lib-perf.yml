@@ -28,10 +28,14 @@ name: "📊 lib-perf (peer-crate timing over golden)"
 # button only appears once this file is on the default branch main).
 
 on:
+  # Pushes to `main` only (NOT release/*) + on-demand. This bench SELF-COMMITS its
+  # refreshed timing medians; on a release branch that has an open PR, the bot
+  # self-commit churns the PR head onto a commit the REQUIRED gates never run on, so
+  # the PR can't go green. The release branch refreshes via workflow_dispatch; the
+  # committed pages stay current and `main` re-renders post-merge.
   push:
     branches:
       - main
-      - "release/*"
   workflow_dispatch:
 
 permissions:
