@@ -15,14 +15,16 @@ decimal-scaled = { version = "0.5", default-features = false, features = ["alloc
 | `strict` | **yes** | Marks the build as on the strict path: plain `sqrt` / `ln` / etc. dispatch to the integer-only ≤ 0.5 ULP `*_strict` methods. `no_std`-friendly. Strict is *also* the dispatch when no feature is set at all — this feature mainly signals intent and survives a transitive `fast` flip from a downstream crate (which still resolves to strict). See [strict mode](strict-mode.md). |
 | `macros` | no | The `d38!` / `d76!` / etc. compile-time literal macros. See [the macro guide](macros.md). |
 | `fast` | no | Opt out of strict dispatch: plain methods forward to the f64 bridge for speed at the cost of platform-libm-dependent ≈ 16-digit precision. **Only takes effect when `strict` is NOT enabled.** Three-step opt-out: `default-features = false` + add `fast` + `std` + DON'T re-add `strict`. Both `*_strict` and `*_fast` named methods stay available regardless. |
-| `dyn` | no | Object-safe `DynDecimal` trait + `DecimalWidth` / `RawStorage` enums for runtime-polymorphic decimal handles. Ships impls for D18 / D38. See [Runtime polymorphism](#runtime-polymorphism). |
+| `dyn` | no | Object-safe `DynDecimal` trait + `DecimalWidth` / `RawStorage` enums for runtime-polymorphic decimal handles. Enables `alloc` (the boxed returns are the façade's sanctioned heap path). Ships impls for D18 / D38. See [Runtime polymorphism](#runtime-polymorphism). |
 
 Notes:
 
-- The `*_strict` methods (`sqrt_strict`, `ln_strict`, …) are compiled
-  **regardless of the `strict` feature** — only `fast` removes
-  them. `strict` only controls whether the *plain* methods (`sqrt`,
-  `ln`, …) dispatch to the strict path.
+- The `*_strict` and `*_fast` named methods (`sqrt_strict`,
+  `ln_strict`, `sqrt_fast`, …) are **always compiled, regardless of any
+  feature flag** — no feature removes them (the only gate is that
+  `*_fast` needs `std` for the f64 bridge). The `strict` / `fast`
+  features only choose what the *plain* methods (`sqrt`, `ln`, …)
+  resolve to.
 - With `strict` on, the plain transcendentals use the integer path even
   if `std` is also enabled.
 - The strict methods are held to the

@@ -10,7 +10,7 @@ A fast, precise, decimal library.
 - **Multiple rounding modes** — six in total, `HalfToEven` by default.
 - **Up to 4 Kb numbers** — twelve widths, `D18` to `D1232`.
 - **`no_std` friendly** — the strict, integer-only path needs no `std`.
-- **Validated by <!-- BEGIN GENERATED:readme:tested -->56,198,568<!-- END GENERATED:readme:tested --> value tests** — every width × scale × rounding mode.
+- **Validated by <!-- BEGIN GENERATED:readme:tested -->56,809,422<!-- END GENERATED:readme:tested --> value tests** — every width × scale × rounding mode.
 
 ---
 

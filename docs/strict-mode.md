@@ -157,6 +157,39 @@ along with `std`+`serde`) and (b) add the `fast` feature plus
 the only way to land on `*_fast` for `sqrt` / `ln` / etc. is to
 explicitly opt out of strict.
 
+## The `*_approx` family — caller-controlled precision
+
+Alongside `*_strict` and `*_fast` there is a third transcendental
+surface: `*_approx(working_digits: u32)` and its mode-aware sibling
+`*_approx_with(working_digits, mode)`. It runs the **same integer
+series as the strict path**, but with a caller-supplied `working_digits`
+cutoff in place of the strict guard-digit budget. Fewer guard digits
+means a shorter series and less wide-integer work, so the cost drops
+roughly linearly with the digits you cut — the trade is that you give
+up the guaranteed ≤ 0.5 ULP correct rounding in exchange for a working
+precision you dial in yourself.
+
+Like `*_strict`, the `*_approx` methods are **always compiled** — no
+Cargo feature adds or removes them. The full series is covered: `ln`,
+`log`, `log2`, `log10`, `exp`, `exp2`, `powf`, `sin`, `cos`, `tan`,
+`atan`, `asin`, `acos`, `atan2`, `sinh`, `cosh`, `tanh`, `asinh`,
+`acosh`, `atanh`, `to_degrees`, `to_radians` — each as an
+`*_approx(working_digits)` form plus an `*_approx_with(working_digits,
+mode)` sibling.
+
+```rust
+use decimal_scaled::D38s12;
+
+let x = D38s12::try_from(2i64).unwrap();
+
+// Strict: guaranteed <= 0.5 ULP at storage scale.
+let exact = x.ln_strict();
+
+// Approx: the same series, but only ~20 guard digits of work —
+// faster, with no correct-rounding guarantee.
+let quick = x.ln_approx(20);
+```
+
 ## The 0.5 ULP accuracy guarantee
 
 Every strict method is held to the **[IEEE 754](https://en.wikipedia.org/wiki/IEEE_754)
@@ -194,7 +227,13 @@ All wide tiers (`D57` / `D76` / `D115` / `D153` / `D230` / `D307`
 under the `wide` umbrella; `D462` / `D616` under `x-wide`; `D924` /
 `D1232` under `xx-wide`) ship the full strict transcendental
 surface — every method has a `*_strict` form plus a mode-aware
-`*_strict_with(mode)` sibling. Two alternate implementations are
+`*_strict_with(mode)` sibling. The wide tiers also expose
+paired-output transcendentals that compute both members of a pair in
+one pass and return `(Self, Self)`: `sin_cos_strict` /
+`sin_cos_strict_with` (sine and cosine together) and `sinh_cosh_strict`
+/ `sinh_cosh_strict_with` (hyperbolic sine and cosine together), each
+with matching `*_approx` / `*_approx_with` forms (`sin_cos_approx`,
+`sinh_cosh_approx`, …). Two alternate implementations are
 also exposed: `ln_strict_agm` and `exp_strict_agm` use the
 quadratically-convergent Brent–Salamin / Newton path that scales
 better than the artanh / Taylor canonical at very high working

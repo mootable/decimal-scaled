@@ -55,24 +55,25 @@ Further reading:
 - Niels Möller's homepage: <https://www.lysator.liu.se/~nisse/>
 - Torbjörn Granlund's homepage (GMP project): <https://gmplib.org/~tege/>
 
-### Limb storage shape — `[u64; 2·N]`
+### Limb storage shape — `[u64; N]`
 
-The wide-integer types (the eight power-of-two widths `Int256`,
-`Int512`, `Int1024`, `Int2048`, `Int4096`, `Int8192`, `Int12288`,
-`Int16384` plus the half-width siblings `Int192`, `Int384`, `Int768`,
-`Int1536`, `Int3072`, `Int6144`) are stored as little-endian
-`[u64; L]` arrays where `L` is the bit-width divided by 64. The choice exposes native `u64 × u64 →
-u128` and `u128 / u64` hardware instructions directly (Zen 4 / Intel
-Golden Cove issue one widening 64×64 mul per cycle in steady state)
-where the historical `[u128; N]` layout had to soft-emulate every
-mul as four `u64 × u64` sub-products plus a nested carry chain. The
-public `from_limbs_le([u128; N])` / `limbs_le() -> [u128; N]` API
-preserves its u128-shaped signatures via a 4-line const-fn boundary
-conversion, so the wire format and downstream pattern-matching stay
-bit-stable.
+The wide integer is a single const-generic type, `Int<N>` (and its
+unsigned sibling `Uint<N>`), stored as a little-endian `[u64; N]`
+array of `N` u64 limbs — one type for every width, not a family of
+per-tier `IntNNN` types. A power-of-two width is just `N = bits / 64`
+(e.g. `Int<4>` is 256-bit, `Int<8>` is 512-bit), and the half-width
+tiers fall out at the in-between `N`. The `[u64; N]` choice exposes
+native `u64 × u64 → u128` and `u128 / u64` hardware instructions
+directly (Zen 4 / Intel Golden Cove issue one widening 64×64 mul per
+cycle in steady state) where a `[u128; N]` layout would have to
+soft-emulate every mul as four `u64 × u64` sub-products plus a nested
+carry chain. The public `from_limbs_le(limbs: [u64; N]) -> Self` /
+`limbs_le(self) -> [u64; N]` API takes and returns the `[u64; N]`
+limbs directly — each body is a one-line move (`Self { limbs }` /
+`self.limbs`), with no shape conversion.
 
-Implementation: the `[u64; N]` storage and `from_limbs_le` / `limbs_le` boundary
-conversions in `src/int/types/mod.rs`; the primitive limb operations
+Implementation: the `[u64; N]` storage and `from_limbs_le` / `limbs_le`
+accessors in `src/int/types/mod.rs`; the primitive limb operations
 (add, shift, compare) in `src/int/algos/support/limbs.rs`.
 
 ### Base-2⁶⁴ schoolbook multiplication
