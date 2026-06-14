@@ -5,7 +5,7 @@ All notable changes to `decimal-scaled` are documented here.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.0] — Unreleased
+## [0.5.0] — 2026-06-14
 
 An architecture release. Every decimal width is now backed by the
 const-generic `Int<N>` / `Uint<N>` integer layer introduced in this
