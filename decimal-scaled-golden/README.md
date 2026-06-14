@@ -21,8 +21,33 @@ The crate has three parts:
    computes every value with a per-function generator oracle and cross-checks it
    against every other available oracle before a line is accepted.
 
-`decimal-scaled-golden`'s design is specified in [`ARCHITECTURE.md`](ARCHITECTURE.md);
+`decimal-scaled-golden`'s design is specified in [`ARCHITECTURE.md`](https://github.com/mootable/decimal-scaled/blob/main/decimal-scaled-golden/ARCHITECTURE.md);
 this README is the practical front door.
+
+## Getting the golden data
+
+The published crate ships the **harness only** — the golden set is ~130 MB, far
+over the crates.io package limit, so it is not bundled. Two ways to get it:
+
+- **`UrlLoader`** (the `net` feature) fetches each function's file on demand over
+  HTTPS and caches it locally — zero setup. It defaults to the matching
+  `v<major>.<minor>` release tag of this repo (e.g. `v0.5`), so you always get
+  your minor's latest, non-regressing corpus:
+
+  ```toml
+  decimal-scaled-golden = { version = "0.5", features = ["net"] }
+  ```
+
+  ```rust
+  // Fetches from the repo at the default tag, caching under the system temp dir.
+  // Override the location with the DECIMAL_SCALED_GOLDEN_CACHE env var, or pin a
+  // ref with UrlLoader::from_ref("v0.5").
+  let loader = decimal_scaled_golden::UrlLoader::default();
+  ```
+
+- **`FileLoader`** reads a local copy — clone the repo (or download the
+  `decimal-scaled-golden/golden/` directory) and point it at the path. Best for
+  offline / CI use where you vendor the data.
 
 ## The harness
 

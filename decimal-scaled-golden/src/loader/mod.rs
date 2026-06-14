@@ -8,9 +8,13 @@
 mod file;
 mod filter;
 mod loader;
+#[cfg(feature = "net")]
+mod url;
 pub mod value;
 
 pub use file::FileLoader;
 pub use filter::FilterLoader;
 pub use loader::{CaseLoader, GoldenCase};
+#[cfg(feature = "net")]
+pub use url::{UrlLoader, DEFAULT_REF};
 pub use value::GoldenValue;

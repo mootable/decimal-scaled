@@ -1,16 +1,37 @@
 [package]
 name = "decimal-scaled-golden"
-version = "0.1.0"
+version = "0.5.0"
 edition = "2021"
 description = "Library-agnostic golden value set, validator, and comparison harness for decimal libraries"
 license = "MIT OR Apache-2.0"
-publish = false
+repository = "https://github.com/mootable/decimal-scaled"
+homepage = "https://github.com/mootable/decimal-scaled"
+documentation = "https://docs.rs/decimal-scaled-golden"
+readme = "README.md"
+keywords = ["golden", "oracle", "decimal", "testing", "precision"]
+categories = ["development-tools::testing", "mathematics"]
+# The published crate is the HARNESS ONLY — the loader, validators, and
+# comparison strategies. The committed golden value set under `golden/` is
+# ~130 MB (far over the crates.io package-size limit) and is consumed at
+# runtime via a path (no compile-time bundling), so it is deliberately NOT
+# packaged; downstream users point the loader at their own golden directory.
+include = [
+    "src/**",
+    "/README.md",
+]
 
 [features]
+# Both optional features keep the DEFAULT build zero-dep and library-agnostic; each
+# pulls exactly one dependency, only when turned on.
+#
 # `bench` adds the `CriterionStrategy` (§5.2): a criterion-backed ExecutionStrategy
-# for timing a small curated cell set. Off by default so the crate stays zero-dep
-# and library-agnostic; turning it on pulls the workspace's single bench toolchain.
+# for timing a small curated cell set.
 bench = ["dep:criterion"]
+# `net` adds the `UrlLoader` (loader/url.rs): fetch + locally cache the golden set
+# over HTTPS, so the published crate ships the harness only (the ~130 MB corpus is far
+# over the crates.io package limit) yet still works out of the box. Pulls `ureq`.
+net = ["dep:ureq"]
 
 [dependencies]
 criterion = { version = "0.5", optional = true, default-features = false, features = ["cargo_bench_support"] }
+ureq = { version = "2", optional = true }
