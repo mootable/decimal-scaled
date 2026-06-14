@@ -245,15 +245,29 @@ jobs:
           set -euo pipefail
           mkdir -p results/golden
           # The raw per-input surface is ~56M rows (~4.7 GB) — far past GitHub's
-          # 100 MB file limit. Collapse the per-INPUT dimension into pass/fail
-          # counts per (function, width, scale, mode): ~15K rows, which still
-          # drives every docs table (surface, per-mode, per-function) and flags
-          # any cell where an input failed. The full per-input data stays the
-          # uploaded artifact below, not git.
+          # 100 MB file limit. Collapse the per-INPUT dimension into three honest
+          # outcome buckets per (function, width, scale, mode): ~15K rows, which
+          # drive every docs table (surface, per-mode, per-function) and the
+          # pass/fail counts the Precision page shows under each cell. The full
+          # per-input data stays the uploaded artifact below, not git.
           python3 - <<'PY'
           import collections
+          # Each row is one INPUT. Bucket its outcome into pass / fail / n-a:
+          #   PASS = a correctly-rounded result.
+          #   FAIL = the real correctness failures the (green) golden gate asserts
+          #          against (severity >= WrongMode): a mis-rounding, a wrong-mode
+          #          result, a library error, a timeout, a panic, a harness error.
+          #   n-a  = everything else — "skipped" (the tier can't represent the
+          #          cell / the subject doesn't expose it) and "non-real" /
+          #          "absent" / "value" (an input outside the function's domain,
+          #          e.g. acos of |x|>1 -> non-real). NEITHER pass nor fail.
+          # Keeping n-a as its own bucket (not folded into "bad") is the fix: the
+          # prior aggregate counted everything-but-"pass" as bad, so domain/skip
+          # inputs read as thousands of failures while the gate stayed green.
           PASS = {"pass", "pass-oracle-limited"}
-          agg = collections.defaultdict(lambda: [0, 0])  # (fn,w,s,mode) -> [checks, bad]
+          FAIL = {"mis-rounded", "wrong-mode", "error", "timeout", "panic",
+                  "harness-error"}
+          agg = collections.defaultdict(lambda: [0, 0, 0])  # (fn,w,s,mode)->[pass,fail,na]
           with open("combined/results.tsv", encoding="utf-8") as f:
               next(f, None)  # header
               for line in f:
@@ -261,23 +275,33 @@ jobs:
                   if len(c) < 6:
                       continue
                   a = agg[(c[1], c[2], c[3], c[4])]
-                  a[0] += 1
-                  if c[5] not in PASS:
+                  if c[5] in PASS:
+                      a[0] += 1
+                  elif c[5] in FAIL:
                       a[1] += 1
+                  else:
+                      a[2] += 1
           with open("results/golden/summary.tsv", "w", encoding="utf-8", newline="\n") as o:
-              o.write("function\twidth\tscale\tmode\tchecks\tbad\n")
-              for (fn, w, s, m), (chk, bad) in sorted(agg.items()):
-                  o.write(f"{fn}\t{w}\t{s}\t{m}\t{chk}\t{bad}\n")
+              o.write("function\twidth\tscale\tmode\tpassed\tfailed\tna\n")
+              for (fn, w, s, m), (p, fl, na) in sorted(agg.items()):
+                  o.write(f"{fn}\t{w}\t{s}\t{m}\t{p}\t{fl}\t{na}\n")
           print(f"summary rows: {len(agg)}")
           PY
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Re-render the docs that read this summary (the Precision surface renders
+          # straight from results/golden/) so the committed pages never lag the
+          # data — this is the self-heal: a refreshed summary AND its rendered page
+          # land in the SAME commit, keeping the docs-drift gate green. stdlib-only,
+          # no extra deps.
+          python3 scripts/render_docs.py
           git add results/golden/summary.tsv
+          git add -u README.md docs/
           if git diff --cached --quiet; then
-            echo "golden summary unchanged — nothing to commit"
+            echo "golden summary + docs unchanged — nothing to commit"
             exit 0
           fi
-          git commit -m "results(golden): refresh the per-cell correctness summary"
+          git commit -m "results(golden): refresh correctness summary + render Precision page"
           # Incorporate any concurrent results/ self-commit (disjoint files) so
           # the push isn't rejected non-fast-forward.
           git pull --rebase origin "${{ github.ref_name }}" || true

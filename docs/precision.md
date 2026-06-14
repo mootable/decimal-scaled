@@ -16,11 +16,13 @@ The data on this page is generated and committed directly from the
 and auto-rendered here; there is **no manual editing**. If we ever fail our
 guarantee, we want you to know.
 
-Each `✓` is `0` bits of error — the exact correctly-rounded value — across every
-function and all six rounding modes at that cell. Columns are the five sampled
-scale positions per tier (`s=0` … `max`); the full per-scale surface lives in
+Each row is a function, each column a storage width. A `✓` means `0` bits of
+error — the exact correctly-rounded value — across every scale and all six
+rounding modes at that width, with the number of checks verified correct beneath
+it. A `✗` marks a cell with at least one failure, the count of failing checks
+beneath. Inputs outside a function's domain or a tier's range aren't checks, so
+they count toward neither. The full per-scale, per-mode surface lives in
 [`results/golden/`](https://github.com/mootable/decimal-scaled/tree/main/results/golden).
-A regression shows the bits of error instead.
 
 <!-- BEGIN GENERATED:precision:surface -->
 _Pending the first golden-comprehensive CI run — this renders from `results/golden/summary.tsv`._

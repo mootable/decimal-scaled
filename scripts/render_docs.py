@@ -62,6 +62,7 @@ GOLDEN_DIR = ROOT / "decimal-scaled-golden" / "golden"
 GOLDEN_RESULTS = ROOT / "results" / "golden" / "summary.tsv"
 CELLS_SRC = ROOT / "decimal-scaled-cells" / "src" / "lib.rs"
 ROUNDING_SRC = ROOT / "decimal-scaled-golden" / "src" / "support" / "rounding.rs"
+TIMING_RESULTS = ROOT / "results" / "timing" / "bbc_medians.tsv"
 
 # The precision-table renderer lives alongside this script. Import it as
 # a module so the doc tables come from exactly the same code path (and
@@ -187,41 +188,32 @@ def render_golden_counts() -> str:
 #
 # The golden-comprehensive CI run self-commits results/golden/summary.tsv: the
 # per-input surface AGGREGATED to one row per (function, width, scale, mode):
-#   function  width  scale  mode  checks  bad
-# (`bad` = checks not correctly rounded). The raw per-input rows (~56M, ~4.7 GB)
-# are the run's uploaded artifact, never git — the aggregate drives every table
-# and flags any failing cell.
+#   function  width  scale  mode  passed  failed  na
+# where each per-input outcome falls in exactly one bucket — `passed` (correctly
+# rounded), `failed` (a real correctness failure: mis-rounded / wrong-mode /
+# error / timeout / panic), or `na` (not a check: an out-of-tier "skipped" or an
+# out-of-domain "non-real" input). The raw per-input rows (~56M, ~4.7 GB) are the
+# run's uploaded artifact, never git — this aggregate drives every table.
 
-_POS_LABELS = ["s=0", "¼", "½", "¾", "max"]
 _PENDING = "_Pending the first golden-comprehensive CI run — this renders from `results/golden/summary.tsv`._"
+_GOLDEN_HEADER = ["function", "width", "scale", "mode", "passed", "failed", "na"]
 
 
-def _golden_rows() -> list[tuple[str, int, int, str, int, int]] | None:
-    """`(function, width, scale, mode, checks, bad)` per cell, or None if
-    results/golden/summary.tsv isn't committed yet (pre first CI run)."""
+def _golden_rows() -> list[tuple[str, int, int, str, int, int, int]] | None:
+    """`(function, width, scale, mode, passed, failed, na)` per cell, or None if
+    results/golden/summary.tsv is absent or not yet on the current schema (an
+    older/sample file renders the surface as pending, never as garbage)."""
     if not GOLDEN_RESULTS.exists():
         return None
+    lines = GOLDEN_RESULTS.read_text(encoding="utf-8").splitlines()
+    if not lines or lines[0].split("\t")[:7] != _GOLDEN_HEADER:
+        return None
     rows = []
-    for line in GOLDEN_RESULTS.read_text(encoding="utf-8").splitlines()[1:]:
+    for line in lines[1:]:
         c = line.split("\t")
-        if len(c) >= 6 and c[1].isdigit() and c[2].isdigit():
-            rows.append((c[0], int(c[1]), int(c[2]), c[3], int(c[4]), int(c[5])))
+        if len(c) >= 7 and c[1].isdigit() and c[2].isdigit():
+            rows.append((c[0], int(c[1]), int(c[2]), c[3], int(c[4]), int(c[5]), int(c[6])))
     return rows
-
-
-def _surface_positions(rows) -> list[tuple[int, list[int]]]:
-    """Per width, five evenly-indexed sampled scales (min, ~1/4, ~1/2, ~3/4,
-    max) — a normalized view of each tier's own (ragged) scale set."""
-    scales: dict[int, set[int]] = {}
-    for r in rows:
-        scales.setdefault(r[1], set()).add(r[2])
-    out = []
-    for w in sorted(scales):
-        ss = sorted(scales[w])
-        n = len(ss)
-        idx = sorted({0, n // 4, n // 2, (3 * n) // 4, n - 1})
-        out.append((w, [ss[i] for i in idx]))
-    return out
 
 
 def golden_surface_cells() -> int:
@@ -260,36 +252,41 @@ def render_precision_stats() -> str:
     )
 
 
-def _surface_grid(cell_fn) -> str:
-    """Shared width x normalized-scale-position table; `cell_fn(width, scale)`
-    renders each cell from the per-cell rows."""
+def render_precision_surface() -> str:
+    """The correctly-rounded surface: one ROW per function, one COLUMN per
+    storage width. Each cell collapses every scale and rounding mode for that
+    `(function, width)` to a single verdict with its count beneath: `✓` over the
+    number of checks verified correctly-rounded when nothing failed, else `✗`
+    over the number of failing checks; `·` where the surface carries no data for
+    that pair. (Out-of-domain / out-of-tier inputs are `na`, counted in neither.)"""
     rows = _golden_rows()
     if not rows:
         return _PENDING
-    by_cell: dict[tuple[int, int], list] = {}
-    for r in rows:
-        by_cell.setdefault((r[1], r[2]), []).append(r)
-    grid = _surface_positions(rows)
-    ncol = max((len(p) for _w, p in grid), default=0)
-    head = "| Width | " + " | ".join(_POS_LABELS[:ncol]) + " |"
-    rule = "|" + "|".join(["---"] * (ncol + 1)) + "|"
+    agg: dict[tuple[str, int], list[int]] = {}  # (fn,w) -> [passed, failed]
+    for fn, w, _s, _m, p, fl, _na in rows:
+        a = agg.setdefault((fn, w), [0, 0])
+        a[0] += p
+        a[1] += fl
+    funcs = sorted({fn for fn, _w in agg})
+    widths = sorted({w for _fn, w in agg})
+    head = "| Function | " + " | ".join(f"D{w}" for w in widths) + " |"
+    # Function column left-aligned; the per-width verdict columns centred so the
+    # ✓ / ✗ marks (and the count stacked beneath via <br>) sit under their headers.
+    rule = "| :-- | " + " | ".join([":-:"] * len(widths)) + " |"
     out = [head, rule]
-    for w, positions in grid:
-        cells = [cell_fn(by_cell.get((w, s), [])) for s in positions]
-        cells += [""] * (ncol - len(cells))
-        out.append(f"| D{w} | " + " | ".join(cells) + " |")
+    for fn in funcs:
+        cells = []
+        for w in widths:
+            if (fn, w) not in agg:
+                cells.append("·")
+            else:
+                passed, failed = agg[(fn, w)]
+                if failed == 0:
+                    cells.append(f"✓<br>{passed:,}")
+                else:
+                    cells.append(f"✗<br>{failed:,}")
+        out.append(f"| `{fn}` | " + " | ".join(cells) + " |")
     return "\n".join(out)
-
-
-def render_precision_surface() -> str:
-    """The correctly-rounded surface; `✓` = 0 bad checks at that cell (across
-    every function and rounding mode), else the count of bad checks."""
-    def cell(cell_rows):
-        if not cell_rows:
-            return "·"
-        bad = sum(r[5] for r in cell_rows)
-        return "✓" if bad == 0 else f"✗ {bad}"
-    return _surface_grid(cell)
 
 
 # Precision-table builders. Each returns the markdown table body for one
