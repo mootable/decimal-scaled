@@ -46,3 +46,8 @@ updates:
       - dependencies
       - dependabot
       - github-actions
+    ignore:
+      # dtolnay/rust-toolchain@1.89 is the MSRV pin for the `msrv (gate)` job — it
+      # deliberately matches Cargo.toml `rust-version`. Raising the MSRV is a manual,
+      # paired change (Cargo.toml + the job together), never an automatic action bump.
+      - dependency-name: "dtolnay/rust-toolchain"
