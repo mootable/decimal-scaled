@@ -3514,6 +3514,11 @@ mod forward_rung_tests {
     /// gets the full spread + the 1e9 out-of-budget probe; asin its unit
     /// domain; sinh/exp/asinh the EXP_ARG_BUDGET region + the x50
     /// out-of-budget probe at s0), rung == tier across all six modes.
+    // Defined only when a consuming test is compiled: its invocations live in `#[test]`
+    // grids gated `#[cfg(feature = "d307")]` / `#[cfg(feature = "d1232")]` below, so gate
+    // the definition on `test` AND those tiers — then no build (test or not, narrow or
+    // wide) carries an uninvoked macro.
+    #[cfg(all(test, any(feature = "d307", feature = "d1232")))]
     macro_rules! bench_grid_cell {
         ($Core:ty, $N:literal, $SCALE:literal, $with_big:expr) => {{
             type C = $Core;

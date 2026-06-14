@@ -9,10 +9,10 @@
 //! heavy-monomorphisation bill, and pays it AGAIN for every additional target
 //! that re-instantiates the same cells (a lib's own unit-test harness, a second
 //! test binary). This crate is the compile-once home for that bill: the
-//! [`cells!`]-generated fan-out — parse → compute → format ([`dispatch_compute`])
+//! `cells!`-generated fan-out — parse → compute → format ([`dispatch_compute`])
 //! and the storage envelope ([`dispatch_limits`]), per cell — compiles here,
 //! exactly once, into a leaf rlib. The subjects above it (the erased
-//! `DsSubject` in decimal-scale-test, the historical adapters in [`history`])
+//! `DsSubject` in decimal-scale-test, the historical adapters in `history`)
 //! call these concrete, non-generic entry points and stay light.
 //!
 //! Pure codegen placement: no new types, no algorithm bodies, no per-tier
