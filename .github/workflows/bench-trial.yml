@@ -65,7 +65,7 @@ jobs:
         # `yeslogic-fontconfig-sys` via its `ttf` feature, which links
         # to libfontconfig at build time. Standard ubuntu-latest
         # doesn't have it pre-installed.
-        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
+        run: sudo rm -f /etc/apt/sources.list.d/*microsoft* /etc/apt/sources.list.d/*azure* 2>/dev/null || true; sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
 
       - name: Cache cargo registry + git
         uses: actions/cache@v5

@@ -76,7 +76,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install system libs (fontconfig for plotters dev-dep)
-        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
+        run: sudo rm -f /etc/apt/sources.list.d/*microsoft* /etc/apt/sources.list.d/*azure* 2>/dev/null || true; sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
 
       - name: Cache cargo registry + git
         uses: actions/cache@v5
@@ -181,7 +181,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install system libs (fontconfig for plotters dev-dep)
-        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
+        run: sudo rm -f /etc/apt/sources.list.d/*microsoft* /etc/apt/sources.list.d/*azure* 2>/dev/null || true; sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
 
       - name: Download every Criterion artifact from this run
         uses: actions/download-artifact@v8

@@ -87,7 +87,7 @@ jobs:
           echo "Will refresh docs for '$REF'."
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.x"
 
@@ -97,7 +97,7 @@ jobs:
 
       - name: Install system libs (figures only - fontconfig for plotters)
         if: inputs.figures
-        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
+        run: sudo rm -f /etc/apt/sources.list.d/*microsoft* /etc/apt/sources.list.d/*azure* 2>/dev/null || true; sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
 
       - name: Run the refresh
         id: refresh

@@ -56,7 +56,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install system libs
-        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
+        run: sudo rm -f /etc/apt/sources.list.d/*microsoft* /etc/apt/sources.list.d/*azure* 2>/dev/null || true; sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
 
       - name: Cache cargo registry + git
         uses: actions/cache@v5
@@ -175,7 +175,7 @@ jobs:
 
     steps:
       - name: Install system libs (criterion runtime)
-        run: sudo apt-get update && sudo apt-get install -y libfontconfig1
+        run: sudo rm -f /etc/apt/sources.list.d/*microsoft* /etc/apt/sources.list.d/*azure* 2>/dev/null || true; sudo apt-get update && sudo apt-get install -y libfontconfig1
 
       - name: Download compiled bench exes
         uses: actions/download-artifact@v8

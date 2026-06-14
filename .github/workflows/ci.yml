@@ -86,7 +86,7 @@ jobs:
       - name: Install system libs (fontconfig for the plotters dev-dep)
         # The full `cargo test` builds every target including the
         # chart_gen example, which pulls plotters → yeslogic-fontconfig-sys.
-        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
+        run: sudo rm -f /etc/apt/sources.list.d/*microsoft* /etc/apt/sources.list.d/*azure* 2>/dev/null || true; sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
 
       - name: Add swap for the compile's memory peak
         # A single rustc on a full-width monomorphised target can peak past
