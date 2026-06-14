@@ -240,21 +240,47 @@ jobs:
             echo "rows: $(($(wc -l < combined/results.tsv) - 1))"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Commit the full-surface golden results to results/golden/
+      - name: Aggregate + commit the golden summary to results/golden/
         run: |
           set -euo pipefail
           mkdir -p results/golden
-          # The full per-cell × all-six-modes surface — collect everything, so a
-          # later docs table is a render-only change, never a re-run.
-          cp combined/results.tsv results/golden/results.tsv
+          # The raw per-input surface is ~56M rows (~4.7 GB) — far past GitHub's
+          # 100 MB file limit. Collapse the per-INPUT dimension into pass/fail
+          # counts per (function, width, scale, mode): ~15K rows, which still
+          # drives every docs table (surface, per-mode, per-function) and flags
+          # any cell where an input failed. The full per-input data stays the
+          # uploaded artifact below, not git.
+          python3 - <<'PY'
+          import collections
+          PASS = {"pass", "pass-oracle-limited"}
+          agg = collections.defaultdict(lambda: [0, 0])  # (fn,w,s,mode) -> [checks, bad]
+          with open("combined/results.tsv", encoding="utf-8") as f:
+              next(f, None)  # header
+              for line in f:
+                  c = line.rstrip("\n").split("\t")
+                  if len(c) < 6:
+                      continue
+                  a = agg[(c[1], c[2], c[3], c[4])]
+                  a[0] += 1
+                  if c[5] not in PASS:
+                      a[1] += 1
+          with open("results/golden/summary.tsv", "w", encoding="utf-8", newline="\n") as o:
+              o.write("function\twidth\tscale\tmode\tchecks\tbad\n")
+              for (fn, w, s, m), (chk, bad) in sorted(agg.items()):
+                  o.write(f"{fn}\t{w}\t{s}\t{m}\t{chk}\t{bad}\n")
+          print(f"summary rows: {len(agg)}")
+          PY
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add results/golden/results.tsv
+          git add results/golden/summary.tsv
           if git diff --cached --quiet; then
-            echo "golden results unchanged — nothing to commit"
+            echo "golden summary unchanged — nothing to commit"
             exit 0
           fi
-          git commit -m "results(golden): refresh the full-surface correctness data"
+          git commit -m "results(golden): refresh the per-cell correctness summary"
+          # Incorporate any concurrent results/ self-commit (disjoint files) so
+          # the push isn't rejected non-fast-forward.
+          git pull --rebase origin "${{ github.ref_name }}" || true
           git push origin "HEAD:${{ github.ref_name }}"
 
       - name: Upload combined report

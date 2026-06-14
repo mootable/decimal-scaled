@@ -59,6 +59,9 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "docs" / "_data"
 PRECISION_DIR = ROOT / "results" / "precision"
 GOLDEN_DIR = ROOT / "decimal-scaled-golden" / "golden"
+GOLDEN_RESULTS = ROOT / "results" / "golden" / "summary.tsv"
+CELLS_SRC = ROOT / "decimal-scaled-cells" / "src" / "lib.rs"
+ROUNDING_SRC = ROOT / "decimal-scaled-golden" / "src" / "support" / "rounding.rs"
 
 # The precision-table renderer lives alongside this script. Import it as
 # a module so the doc tables come from exactly the same code path (and
@@ -180,6 +183,115 @@ def render_golden_counts() -> str:
     return f"{total:,} answers across {funcs} functions"
 
 
+# --- Precision page (docs/precision.md) — generated from results/golden/ -----
+#
+# The golden-comprehensive CI run self-commits results/golden/summary.tsv: the
+# per-input surface AGGREGATED to one row per (function, width, scale, mode):
+#   function  width  scale  mode  checks  bad
+# (`bad` = checks not correctly rounded). The raw per-input rows (~56M, ~4.7 GB)
+# are the run's uploaded artifact, never git — the aggregate drives every table
+# and flags any failing cell.
+
+_POS_LABELS = ["s=0", "¼", "½", "¾", "max"]
+_PENDING = "_Pending the first golden-comprehensive CI run — this renders from `results/golden/summary.tsv`._"
+
+
+def _golden_rows() -> list[tuple[str, int, int, str, int, int]] | None:
+    """`(function, width, scale, mode, checks, bad)` per cell, or None if
+    results/golden/summary.tsv isn't committed yet (pre first CI run)."""
+    if not GOLDEN_RESULTS.exists():
+        return None
+    rows = []
+    for line in GOLDEN_RESULTS.read_text(encoding="utf-8").splitlines()[1:]:
+        c = line.split("\t")
+        if len(c) >= 6 and c[1].isdigit() and c[2].isdigit():
+            rows.append((c[0], int(c[1]), int(c[2]), c[3], int(c[4]), int(c[5])))
+    return rows
+
+
+def _surface_positions(rows) -> list[tuple[int, list[int]]]:
+    """Per width, five evenly-indexed sampled scales (min, ~1/4, ~1/2, ~3/4,
+    max) — a normalized view of each tier's own (ragged) scale set."""
+    scales: dict[int, set[int]] = {}
+    for r in rows:
+        scales.setdefault(r[1], set()).add(r[2])
+    out = []
+    for w in sorted(scales):
+        ss = sorted(scales[w])
+        n = len(ss)
+        idx = sorted({0, n // 4, n // 2, (3 * n) // 4, n - 1})
+        out.append((w, [ss[i] for i in idx]))
+    return out
+
+
+def golden_surface_cells() -> int:
+    """The number of `(width, scale)` combinations — counted from the `cells!`
+    macro invocation, the single source of the band-edge surface."""
+    text = CELLS_SRC.read_text(encoding="utf-8")
+    m = re.search(r"cells!\s*\{(.*?)\n\}", text, re.S)
+    body = m.group(1) if m else ""
+    return sum(
+        len([x for x in braces.split(",") if x.strip()])
+        for braces in re.findall(r"=>\s*\d+\s*\{([^}]*)\}", body)
+    )
+
+
+def rounding_mode_count() -> int:
+    """The number of rounding modes — the `RoundingMode` enum's variant count."""
+    text = ROUNDING_SRC.read_text(encoding="utf-8")
+    m = re.search(r"enum RoundingMode\s*\{(.*?)\}", text, re.S)
+    body = m.group(1) if m else ""
+    return len(re.findall(r"^\s*[A-Z]\w+\s*,", body, re.M))
+
+
+def render_precision_stats() -> str:
+    """The Precision-page headline stats line — derived entirely from the test
+    DEFINITION (the golden files, the `cells!` surface, the `RoundingMode`
+    enum), so it is complete without a CI run. `total = inputs x (width,scale)
+    x modes`."""
+    cases, funcs = golden_counts()
+    cells = golden_surface_cells()
+    modes = rounding_mode_count()
+    total = cases * cells * modes
+    return (
+        f"We execute {cases:,} specialised inputs across all {funcs} functions, on "
+        f"{cells} widths and scales, under all {modes} rounding modes, resulting "
+        f"in {total:,} separate checks."
+    )
+
+
+def _surface_grid(cell_fn) -> str:
+    """Shared width x normalized-scale-position table; `cell_fn(width, scale)`
+    renders each cell from the per-cell rows."""
+    rows = _golden_rows()
+    if not rows:
+        return _PENDING
+    by_cell: dict[tuple[int, int], list] = {}
+    for r in rows:
+        by_cell.setdefault((r[1], r[2]), []).append(r)
+    grid = _surface_positions(rows)
+    ncol = max((len(p) for _w, p in grid), default=0)
+    head = "| Width | " + " | ".join(_POS_LABELS[:ncol]) + " |"
+    rule = "|" + "|".join(["---"] * (ncol + 1)) + "|"
+    out = [head, rule]
+    for w, positions in grid:
+        cells = [cell_fn(by_cell.get((w, s), [])) for s in positions]
+        cells += [""] * (ncol - len(cells))
+        out.append(f"| D{w} | " + " | ".join(cells) + " |")
+    return "\n".join(out)
+
+
+def render_precision_surface() -> str:
+    """The correctly-rounded surface; `✓` = 0 bad checks at that cell (across
+    every function and rounding mode), else the count of bad checks."""
+    def cell(cell_rows):
+        if not cell_rows:
+            return "·"
+        bad = sum(r[5] for r in cell_rows)
+        return "✓" if bad == 0 else f"✗ {bad}"
+    return _surface_grid(cell)
+
+
 # Precision-table builders. Each returns the markdown table body for one
 # width (and, where the doc shows a subset, one method ordering), read
 # straight from the committed `results/precision/*.tsv` files via
@@ -217,6 +329,8 @@ REGIONS: dict[str, tuple[str, "callable"]] = {
     "install:dependency": ("README.md", render_install_dependency),
     "precision:D38:readme": ("README.md", render_precision_d38_readme),
     "golden:counts": ("docs/golden.md", render_golden_counts),
+    "precision:stats": ("docs/precision.md", render_precision_stats),
+    "precision:surface": ("docs/precision.md", render_precision_surface),
     "precision:D38": ("docs/comparisons.md", render_precision_d38),
     "precision:D76": ("docs/comparisons.md", render_precision_d76),
     "precision:D307": ("docs/comparisons.md", render_precision_d307),

@@ -1,16 +1,27 @@
 # Precision
 
-`decimal-scaled` is **correctly rounded** — within 0.5 ULP, i.e. `0` bits of
-error — on every function, at every width and scale, under all six rounding
-modes. That is the headline guarantee, and this page shows the whole surface.
+**`decimal-scaled` is perfectly precise** — correctly rounded to within 0.5 ULP,
+i.e. **0 bits of error**.
 
-The data is **generated from CI**: the *golden comprehensive* run checks every
-`(width, scale)` cell, in all six rounding modes, against the oracle-validated
-golden set, and commits the per-cell results to `results/golden/`, which this
-page renders. Refreshed on each release PR.
+<!-- BEGIN GENERATED:precision:stats -->
+We execute 101,809 specialised inputs across all 28 functions, on 92 widths and scales, under all 6 rounding modes, resulting in 56,198,568 separate checks.
+<!-- END GENERATED:precision:stats -->
 
-<!-- The width x scale grid (each cell = our result) and the rounding-mode table
-     (6/6 = all six modes correctly rounded) land here once the golden pipeline
-     is wired (see research/bench_docs_pipeline.md, step 2). Until the first
-     golden-comprehensive run on the release PR populates results/golden/, this
-     page is intentionally a stub. -->
+Each golden case was gathered from the codebase failing, from theory, from
+destructive testing of our own code, and from destructive testing of other
+libraries — collated into a behemoth of meanness.
+
+The data on this page is generated and committed directly from the
+[golden-comprehensive CI job](https://github.com/mootable/decimal-scaled/actions/workflows/golden-comprehensive.yml)
+and auto-rendered here; there is **no manual editing**. If we ever fail our
+guarantee, we want you to know.
+
+Each `✓` is `0` bits of error — the exact correctly-rounded value — across every
+function and all six rounding modes at that cell. Columns are the five sampled
+scale positions per tier (`s=0` … `max`); the full per-scale surface lives in
+[`results/golden/`](https://github.com/mootable/decimal-scaled/tree/main/results/golden).
+A regression shows the bits of error instead.
+
+<!-- BEGIN GENERATED:precision:surface -->
+_Pending the first golden-comprehensive CI run — this renders from `results/golden/summary.tsv`._
+<!-- END GENERATED:precision:surface -->
