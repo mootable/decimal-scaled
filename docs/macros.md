@@ -1,8 +1,10 @@
 # The `d*!` macros
 
-The crate exposes one proc-macro per public width - `d18!`,
-`d38!`, plus `d76!` / `d153!` / `d307!` under the wide-tier feature
-flags. Each parses a numeric literal (or inline expression),
+The crate exposes one proc-macro per public width — `d18!` and `d38!`
+always, and `d57!` / `d76!` / `d115!` / `d153!` / `d230!` / `d307!` /
+`d462!` / `d616!` / `d924!` / `d1232!` under the wide-tier feature flags
+(twelve in all, one per tier). Each parses a numeric literal (or inline
+expression),
 picks or is told a scale, and expands to a
 `D<N><SCALE>::from_bits(...)` call. There is no runtime parsing and
 the scale lands in the type.

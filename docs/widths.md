@@ -112,7 +112,8 @@ fn sum_all<D: Decimal + core::ops::Add<Output = D>>(xs: &[D]) -> D {
 - **Overflow variants**: every `checked_*` / `wrapping_*` /
   `saturating_*` / `overflowing_*` of `add` / `sub` / `mul` / `div` /
   `rem` / `neg`.
-- **Integer conversion**: `from_i32`, `to_int`, `to_int_with`.
+- **Integer conversion**: `to_int`, `to_int_with` (construction from an
+  integer is the fallible `TryFrom<iN>` surface).
 - **Float bridge** (gated on `std`): `from_f64`, `from_f64_with`,
   `to_f64`, `to_f32`.
 - **Default reductions**: `is_zero`, `is_one`, `is_normal`, `sum`,
@@ -122,7 +123,7 @@ A few methods are deliberately not on the trait because their
 signature varies per width or the trait can't represent them — see
 the [trait reference](https://docs.rs/decimal-scaled/latest/decimal_scaled/trait.Decimal.html)
 for the full out-of-scope list (`rescale<TARGET>` needs a
-const-generic method param; the per-width infallible `From<iN>`
+const-generic method param; the per-width fallible `TryFrom<iN>`
 integer conversions live on the concrete types; transcendentals
 are feature-gated).
 

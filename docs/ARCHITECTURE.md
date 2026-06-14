@@ -813,20 +813,15 @@ bit-exact fixtures.
 return the value within 0.5 ULP of the true real value — equivalently,
 the **exact correctly-rounded value at the storage scale (0 LSB of
 error)**, under *every* rounding mode and at *every* width. It is checked
-by independent layers (see `precision-testing.md`):
+by two independent layers (see the [Harness](golden.md) page):
 
 1. **The full-surface golden gate** — the `decimal-scale-test` crate
    drives the library-agnostic `decimal-scaled-golden` harness over every
    band-edge (width, scale) cell for every strict function under all six
-   rounding modes, against the committed width-agnostic golden set; a run
+   rounding modes, against the committed width-agnostic golden set
+   (each answer agreed by independent high-precision oracles); a run
    passes only at 0 bad / 0 panic. CI runs it on every push.
-2. **Cross-witness** — compute at a tier, recompute the reference at a
-   wider storage and rescale; catches storage-bit divergences.
-3. **mpmath golden tables** — an independently generated external oracle
-   (computed at working precision far wider than any tier) for every
-   (function, tier); the kernel must match the correctly-rounded oracle
-   **exactly (delta == 0)** for all six rounding modes across all widths.
-4. **Property fuzz** — identities like `exp(ln x) ≈ x`, `sin²+cos² ≈ 1`,
+2. **Property fuzz** — identities like `exp(ln x) ≈ x`, `sin²+cos² ≈ 1`,
    and sign symmetries, with deterministic seeds.
 
 The integer backends carry their own bit-exact tests (each algorithm

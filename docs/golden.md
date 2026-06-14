@@ -393,8 +393,8 @@ lead/<fn>.pb   ─▶   python -m oracle.generate   ─▶   golden/<fn>.au
 
 ```sh
 cd decimal-scaled-golden
-pip install -r oracle/requirements.txt          # mpmath (BSD)
-pip install -r oracle/requirements-extra.txt    # optional: sympy, python-flint / gmpy2
+pip install -r oracle/requirements.txt          # the oracle's core deps (BSD)
+pip install -r oracle/requirements-extra.txt    # optional: extra cross-check oracles
 
 # regenerate just the functions you changed (inputs come from lead/):
 python -m oracle.generate generate   --functions sqrt,exp,ln --out golden --precision 1233 --jobs 4
@@ -408,3 +408,67 @@ Generating is a maintainer step, separate from running the tests — the tests o
 commit the regenerated `.au` file alongside your `.pb` change. (`--jobs` defaults to
 about 80% of your cores; keep it modest on a shared machine — regenerating everything
 is a long compute.)
+
+## Property fuzz
+
+Alongside the golden gate, `decimal-scale-test/tests/proptest_identities.rs` checks
+identities that hold without an external oracle:
+
+- `exp(ln(x)) ≈ x` for positive `x`
+- `ln(exp(x)) ≈ x` for `x` in `[0, 30]`
+- `sin² + cos² ≈ 1` over a wide real domain
+- `sqrt(x)² ≈ x` for non-negative `x`
+- `cbrt(x)³ ≈ x` for real `x`
+- `atan(tan(x)) ≈ x` over `(-π/4, π/4)`
+- `tanh(atanh(x)) ≈ x` over `(-1, 1)`
+- sign symmetries: `sin(-x) = -sin(x)`, `cos(-x) = cos(x)`, `atan(-x) = -atan(x)`, `cbrt(-x) = -cbrt(x)`
+
+Each block runs 100 cases with a deterministic seed, so a counterexample minimises the
+same way every run.
+
+## Hard-input categories
+
+The golden set is seeded with ten classes of deliberately hard inputs, each drawn from
+the correctly-rounding literature (the papers, not their test vectors):
+
+1. **Half-ULP-tie boundaries** — inputs whose true result lands within 0.45 LSB of a
+   half-tie at the storage scale.
+   *Reference:* Lefèvre, Muller & Toma, "Toward correctly rounded transcendentals"
+   (1998); Muller, *Elementary Functions — Algorithms and Implementation* (3rd ed.,
+   2016), §10 "Table maker's dilemma".
+2. **Catastrophic cancellation** — `ln(1 + ε)`, `exp(tiny)`, `cos(tiny) ≈ 1 - x²/2`,
+   `sin(tiny) ≈ x`, `sqrt(1 + ε)`, `cbrt(1 + ε)`.
+   *Reference:* Goldberg, "What every computer scientist should know about
+   floating-point arithmetic" (1991) §3; Higham, *Accuracy and Stability of Numerical
+   Algorithms* (2nd ed., 2002), §1.7.
+3. **Range-reduction breakpoints** — `sin`/`cos` near k·π/2, `tan` near k·π/4, `exp`
+   near k·ln 2, `atan` near 1.
+   *Reference:* Payne & Hanek, "Radian reduction for trigonometric functions" (1983);
+   Muller (2016), §11.
+4. **Removable singularity / asymptote** — `tan` near π/2 + δ, `ln` near 0+,
+   `atan(huge)`, `sqrt` near 0+.
+   *Reference:* Kahan archive, "Branch cuts for complex elementary functions" (1987).
+5. **Inverse-identity round-trip stress** — `sin` near π/2, `atan(tan(k·π/8))`,
+   `exp(ln(small))`, `sqrt(x²)`, `cbrt(x³)`.
+   *Reference:* Brent & Zimmermann, *Modern Computer Arithmetic* (2010), §4.2 "Inverse
+   functions".
+6. **Perfect-power ± ULP for roots** — `sqrt(n² ± 1)`, `cbrt(n³ ± 1)` for small integer
+   `n`.
+   *Reference:* Brent & Zimmermann (2010), §3.5 "Square root", §3.6 "k-th root".
+7. **Constant edges** — inputs at named constants (π, π/2, π/4, e, ln 2, …) ± a few
+   LSBs.
+   *Reference:* IEEE 754-2019 standard, §9 "Recommended correctly rounded functions";
+   Muller (2016), §9.
+8. **Argument-halving cascade** — `atan` near `tan(0.35 · 2⁻ⁿ)` for the per-width
+   halving count `n`.
+   *Reference:* Muller (2016), §6 on argument reduction; the per-width cascade table in
+   [Algorithms](ALGORITHMS.md).
+9. **Stage-2 argument reduction edge for `exp`** — inputs near the chosen breakpoint
+   `v / 2ⁿ` for `n ≈ √(precision_bits)`.
+   *Reference:* Tang, "Table-driven implementation of the exponential function in IEEE
+   floating-point arithmetic" (1989).
+10. **Tang-lookup band edges** — `ln` and `exp` inputs at the table-index breakpoints
+    `T_i = 1 + i / 2ᵏ` for `k ∈ {7, 8, 9}` and at the secondary-index breakpoints
+    `j/N · ln 2` for `j = 0..N-1`, `N ∈ {32, 64, 128}`.
+    *References:* Tang (1989); Gal & Bachelis, "An accurate elementary mathematical
+    library for the IEEE floating-point standard" (1991).

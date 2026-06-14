@@ -13,10 +13,10 @@ Advisories:
 
   https://github.com/mootable/decimal-scaled/security/advisories/new
 
-If you cannot use GitHub Security Advisories, email the maintainer at
-**jackokmoxley@gmail.com** with subject line `decimal-scaled security`
-and a brief description; the maintainer will follow up to coordinate
-a private channel.
+If you cannot use GitHub Security Advisories, open a regular
+[GitHub issue](https://github.com/mootable/decimal-scaled/issues) with a
+brief description — leave out exploit specifics — and the maintainer will
+follow up to arrange a private channel.
 
 Please include:
 

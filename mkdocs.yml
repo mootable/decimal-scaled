@@ -113,10 +113,9 @@ nav:
       - Precision: precision.md
       - History: history.md
       - Comparisons: comparisons.md
-  - Architecture & internals:
+  - Architecture:
       - Architecture: ARCHITECTURE.md
       - Algorithms: ALGORITHMS.md
-      - Precision testing & golden validation: precision-testing.md
   - Project:
       - Roadmap: ROADMAP.md
       - Changelog: CHANGELOG.md

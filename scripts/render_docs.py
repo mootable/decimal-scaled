@@ -254,6 +254,14 @@ def render_precision_stats() -> str:
     )
 
 
+def render_home_tested() -> str:
+    """The total value-test count for the home page (inputs × (width,scale) ×
+    rounding modes) — the same product the Precision page reports, so the two
+    can never disagree."""
+    cases, _funcs = golden_counts()
+    return f"{cases * golden_surface_cells() * rounding_mode_count():,}"
+
+
 def render_precision_surface() -> str:
     """The correctly-rounded surface: one ROW per function, one COLUMN per
     storage width. Each cell collapses every scale and rounding mode for that
@@ -703,10 +711,10 @@ def render_history() -> str:
 _PENDING_CMP = "_Pending the first lib-cmp-perf CI run — this renders from `results/lib_cmp/medians.tsv`._"
 _CMP_HEADER = ["bit", "scale", "op", "library", "median_ns"]
 _OURS = "decimal-scaled"
-# decimal-scaled first (primary brand tone), then a distinct colour per peer.
-_LIB_COLORS = ["var(--md-primary-fg-color)", "var(--md-accent-fg-color)",
-               "var(--dusk-purple,#7A6A8E)", "#367594", "#9C5BA6", "#5E8C3A",
-               "#B5663C", "#787A79"]
+# decimal-scaled first — a vivid blue that pops against the muted peer palette;
+# then a distinct, lower-key colour per peer.
+_LIB_COLORS = ["#2563eb", "#C68A2E", "#7A6A8E", "#367594", "#9C5BA6",
+               "#5E8C3A", "#B5663C", "#9aa0a6"]
 
 
 def _libcmp_rows():
@@ -853,6 +861,7 @@ REGIONS: dict[str, tuple[str, "callable"]] = {
     "widths:table": ("docs/widths.md", render_widths_table),
     "widths:count": ("docs/widths.md", render_width_count_word),
     "install:dependency": ("README.md", render_install_dependency),
+    "home:tested": ("docs/index.md", render_home_tested),
     "precision:D38:readme": ("README.md", render_precision_d38_readme),
     "golden:counts": ("docs/golden.md", render_golden_counts),
     "precision:stats": ("docs/precision.md", render_precision_stats),

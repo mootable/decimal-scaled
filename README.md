@@ -76,14 +76,12 @@ The two guarantees nothing else on crates.io currently combines:
 ## Correctly rounded across the whole surface
 
 Worst-case error of each transcendental, measured against a
-high-precision [mpmath][mpmath] oracle (worst result across every tested
-input). Each cell is the **LSBε** — *least significant bits in error*,
-the count of low-order bits of the stored value that are wrong — with
-the worst **[ULP][ULP]** distance from the true value in parentheses.
-`0 (0)` means correctly rounded: the stored value is bit-exact under
-that crate's reported mode.
-
-[mpmath]: https://mpmath.org/
+high-precision oracle (worst result across every tested input). Each
+cell is the **LSBε** — *least significant bits in error*, the count of
+low-order bits of the stored value that are wrong — with the worst
+**[ULP][ULP]** distance from the true value in parentheses. `0 (0)`
+means correctly rounded: the stored value is bit-exact under that
+crate's reported mode.
 
 Measured at a 19-digit scale (`D38<19>`), generated straight from the
 committed shootout result files:
@@ -122,12 +120,9 @@ of its surface here (`exp` 65 LSBε, `sin` 64, `tan` 65), the empirical
 refutation of that claim at the matched 19-digit width.
 
 *Scope of this table:* it shows a representative slice of the full
-22-function surface at `D38<19>` under each crate's native mode; the
-complete per-method, per-width tables (`D38`, the `D76` subset, and the
-deep-scale `D307<153>` tier) are generated from the same result files by
-[`scripts/render_precision_table.py`](scripts/render_precision_table.py)
-and reproduced in the
-[benchmarks](https://mootable.github.io/decimal-scaled/benchmarks/).
+transcendental surface at `D38<19>` under each crate's native mode,
+generated from the committed `results/precision/*.tsv` shootout files by
+[`scripts/render_precision_table.py`](scripts/render_precision_table.py).
 decimal-scaled's `0 (0)` holds across **all six rounding modes** and
 **all twelve widths**.
 

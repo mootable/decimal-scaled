@@ -2,8 +2,8 @@
 
 The per-topic reference pages, in one screen. New to the crate? Start
 with [Getting started](getting-started.md) instead; the deep-dive on
-how correctness is proven lives under
-[Precision testing](precision-testing.md).
+how correctness is proven lives on the [Harness](golden.md) page under
+**Bench**.
 
 | Topic | What it covers |
 |---|---|
@@ -21,7 +21,6 @@ Related pages elsewhere on the site:
   under **Getting started**.
 - [Performance](performance.md) and [library comparisons](comparisons.md)
   under **Bench**.
-- [Architecture](ARCHITECTURE.md), [Algorithms](ALGORITHMS.md), and
-  [precision testing](precision-testing.md) under **Architecture &
-  internals**.
+- [Architecture](ARCHITECTURE.md) and [Algorithms](ALGORITHMS.md) under
+  **Architecture**.
 - The full [API reference (rustdoc)](https://mootable.github.io/decimal-scaled/api/decimal_scaled/).
