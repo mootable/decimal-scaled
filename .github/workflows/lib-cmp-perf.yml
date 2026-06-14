@@ -26,24 +26,19 @@ name: "\U0001F4DA lib-cmp perf (peer-crate timing, width × scale)"
 # main / release/* — runs the comparison and self-commits the medians + rendered
 # Comparisons page so it can be reviewed (the golden/bbc/history self-render
 # pattern); (2) pull_request whose BASE is main; (3) manual workflow_dispatch.
-# The self-commit runs on push/dispatch only — a PR's merge ref isn't pushable,
-# so PR runs stay artifact-only.
+# ARTIFACT-ONLY: the per-(function, width, library) data the Comparisons page
+# renders is produced by the golden-harness lib-perf bench (lib-perf.yml) instead;
+# this criterion bench keeps its per-SCALE detail as a downloadable artifact and
+# no longer self-commits to results/lib_cmp/.
 
 on:
-  push:
-    branches:
-      - main
-      - "release/*"
   pull_request:
     branches: [main]
   workflow_dispatch:
 
 concurrency:
-  # Serial queue per ref (the golden/bbc/history convention): a queued run waits
-  # for the in-progress one rather than cancelling it, so a self-committing run
-  # always finishes.
   group: lib-cmp-perf-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -219,10 +214,6 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    permissions:
-      # Self-commit the peer-timing medians + rendered Comparisons page back to the
-      # dispatched branch (a GITHUB_TOKEN push does not re-trigger workflows — no loop).
-      contents: write
     steps:
       - name: Checkout (for summarise_libcmp.py)
         uses: actions/checkout@v6
@@ -261,30 +252,6 @@ jobs:
             cat aggregate/lib_cmp_table.md
           } >> "$GITHUB_STEP_SUMMARY"
           cp -a target/criterion aggregate/criterion
-
-      - name: Commit medians to results/lib_cmp/ + render Comparisons
-        # push / dispatch only: a pull_request runs on an unpushable merge ref.
-        if: github.event_name != 'pull_request'
-        run: |
-          set -euo pipefail
-          tsv=aggregate/lib_cmp_medians.tsv
-          if [ ! -f "$tsv" ]; then echo "no lib_cmp_medians.tsv produced — skipping"; exit 0; fi
-          mkdir -p results/lib_cmp
-          cp "$tsv" results/lib_cmp/medians.tsv
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Re-render the Comparisons page from the fresh medians in the SAME commit
-          # (self-heal: the committed page never lags the data; docs-drift stays green).
-          python3 scripts/render_docs.py
-          git add results/lib_cmp/medians.tsv
-          git add -u README.md docs/
-          if git diff --cached --quiet; then
-            echo "lib-cmp medians + docs unchanged — nothing to commit"
-            exit 0
-          fi
-          git commit -m "results(lib-cmp): refresh peer-timing medians + render Comparisons page"
-          git pull --rebase origin "${{ github.ref_name }}" || true
-          git push origin "HEAD:${{ github.ref_name }}"
 
       - name: Upload single aggregate artifact
         if: always()

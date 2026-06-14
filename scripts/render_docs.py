@@ -700,16 +700,15 @@ def render_history() -> str:
 
 # --- Comparisons page (docs/comparisons.md) — speed vs peer crates ------------
 #
-# The library-comparison bench (lib-cmp-perf.yml / benches/libcmp) times
-# decimal-scaled against the peer crates over (op, width, scale); its aggregate
-# self-commits results/lib_cmp/medians.tsv:  bit  scale  op  library  median_ns
-# (bit = the integer bit-width, e.g. 64 -> D18). One section per op: a width x
-# library table (median time + the slowdown vs decimal-scaled) beside a grouped
-# bar chart (one bar per library per width). ONE representative scale per width
-# — the quarter-band scale, ~typical peer usage (peers sit well below max scale).
+# The library-perf bench (lib-perf.yml / golden-competitors/tests/lib_perf.rs)
+# times decimal-scaled beside the peer crates over the golden set, at one
+# representative (middle-of-band) cell per width; its aggregate self-commits
+# results/lib_cmp/medians.tsv:  function  width  library  nanos. One section per
+# function: a width x library table (median time + the slowdown vs decimal-scaled)
+# beside a grouped bar chart (one bar per library per width).
 
-_PENDING_CMP = "_Pending the first lib-cmp-perf CI run — this renders from `results/lib_cmp/medians.tsv`._"
-_CMP_HEADER = ["bit", "scale", "op", "library", "median_ns"]
+_PENDING_CMP = "_Pending the first lib-perf CI run — this renders from `results/lib_cmp/medians.tsv`._"
+_CMP_HEADER = ["function", "width", "library", "nanos"]
 _OURS = "decimal-scaled"
 # decimal-scaled first — a vivid blue that pops against the muted peer palette;
 # then a distinct, lower-key colour per peer.
@@ -718,31 +717,20 @@ _LIB_COLORS = ["#2563eb", "#C68A2E", "#7A6A8E", "#367594", "#9C5BA6",
 
 
 def _libcmp_rows():
-    """`(op, width, library, ns)` at each width's MIDDLE scale, or None if the
-    summary is absent / not on the current schema. `bit` -> decimal width via
-    tiers.json."""
+    """`(function, width, library, ns)` per cell — the lib-perf aggregate already
+    emits one middle-of-band cell per width — or None if the summary is absent /
+    not on the current schema."""
     if not LIBCMP_RESULTS.exists():
         return None
     lines = LIBCMP_RESULTS.read_text(encoding="utf-8").splitlines()
-    if not lines or lines[0].split("\t")[:5] != _CMP_HEADER:
+    if not lines or lines[0].split("\t")[:4] != _CMP_HEADER:
         return None
-    bit_to_w = {t["bits"]: t["digits"] for t in load_tiers()}
-    raw, scales_by = [], {}  # raw: (op,width,scale,lib,ns); scales_by: (op,width)->{scale}
+    rows = []
     for line in lines[1:]:
-        c = line.split("\t")
-        if len(c) < 5 or not c[0].isdigit():
-            continue
-        w = bit_to_w.get(int(c[0]))
-        if w is None:
-            continue
-        raw.append((c[2], w, int(c[1]), c[3], float(c[4])))
-        scales_by.setdefault((c[2], w), set()).add(int(c[1]))
-    # Representative scale per width = the QUARTER-band point (index len/4 of the
-    # band-edge set {0, S/4, S/2, 3S/4, S-1}). Peer decimal libraries are used
-    # well below a tier's max scale, so ¼ models real usage better than the
-    # midpoint — an approximation (several peers are fixed-width).
-    rep = {k: sorted(ss)[len(ss) // 4] for k, ss in scales_by.items()}
-    return [(op, w, lib, ns) for (op, w, s, lib, ns) in raw if s == rep[(op, w)]]
+        c = line.split("\t")  # function width library nanos
+        if len(c) >= 4 and c[1].isdigit():
+            rows.append((c[0], int(c[1]), c[2], float(c[3])))
+    return rows
 
 
 def _comparisons_svg(widths, libs, colour, cells) -> str:
@@ -846,7 +834,7 @@ def render_comparisons() -> str:
             "",
             "<figure>",
             _comparisons_svg(widths, present, colour, cells),
-            "<figcaption>Median time per library at each width (log scale, quarter-band "
+            "<figcaption>Median time per library at each width (log scale, middle-of-band "
             "scale); a missing bar means that library has no equivalent at that width.</figcaption>",
             "</figure>",
             "",
