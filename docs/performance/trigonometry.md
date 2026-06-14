@@ -213,32 +213,6 @@ map, and how these timings are measured.
 
 </div>
 
-### `neg`
-
-<div class="grid perf-grid" markdown>
-
-| Width | 0 | ¼ | ½ | ¾ | max |
-| :-- | --: | --: | --: | --: | --: |
-| D18 | 0.622 ns | 0.702 ns | 0.622 ns | 0.703 ns | 0.703 ns |
-| D38 | 1.33 ns | 1.45 ns | 1.33 ns | 1.45 ns | 1.32 ns |
-| D57 | 1.74 ns | 1.74 ns | 1.87 ns | 1.87 ns | 1.87 ns |
-| D76 | 1.33 ns | 2.1 ns | 2.16 ns | 2.1 ns | 2.63 ns |
-| D115 | 3.17 ns | 3.17 ns | 2.86 ns | 3.25 ns | 3.25 ns |
-| D153 | 3.81 ns | 3.82 ns | 4.29 ns | 4.3 ns | 4.29 ns |
-| D230 | 5.86 ns | 4.29 ns | 7.16 ns | 7.24 ns | 7.16 ns |
-| D307 | 12.3 ns | 12.5 ns | 11.1 ns | 11.1 ns | 12.5 ns |
-| D462 | 17.5 ns | 16.7 ns | 28.7 ns | 15.3 ns | 14.9 ns |
-| D616 | 19 ns | 35.1 ns | 21.8 ns | 21.9 ns | 22 ns |
-| D924 | 54.9 ns | 75.5 ns | 84.8 ns | 86.7 ns | 94 ns |
-| D1232 | 54.4 ns | 69.9 ns | 44 ns | 69.7 ns | 69.9 ns |
-
-<figure>
-<svg viewBox="0 0 460 240" width="100%" style="height:auto;color:var(--md-default-fg-color--light)" xmlns="http://www.w3.org/2000/svg"><line x1="52" y1="210.0" x2="450" y2="210.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="213.0" text-anchor="end" font-size="9" fill="currentColor">0.1 ns</text><line x1="52" y1="143.3" x2="450" y2="143.3" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="146.3" text-anchor="end" font-size="9" fill="currentColor">1 ns</text><line x1="52" y1="76.7" x2="450" y2="76.7" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="79.7" text-anchor="end" font-size="9" fill="currentColor">10 ns</text><line x1="52" y1="10.0" x2="450" y2="10.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="13.0" text-anchor="end" font-size="9" fill="currentColor">100 ns</text><text x="52.0" y="222" text-anchor="middle" font-size="8" fill="currentColor">18</text><text x="88.2" y="222" text-anchor="middle" font-size="8" fill="currentColor">38</text><text x="124.4" y="222" text-anchor="middle" font-size="8" fill="currentColor">57</text><text x="160.5" y="222" text-anchor="middle" font-size="8" fill="currentColor">76</text><text x="196.7" y="222" text-anchor="middle" font-size="8" fill="currentColor">115</text><text x="232.9" y="222" text-anchor="middle" font-size="8" fill="currentColor">153</text><text x="269.1" y="222" text-anchor="middle" font-size="8" fill="currentColor">230</text><text x="305.3" y="222" text-anchor="middle" font-size="8" fill="currentColor">307</text><text x="341.5" y="222" text-anchor="middle" font-size="8" fill="currentColor">462</text><text x="377.6" y="222" text-anchor="middle" font-size="8" fill="currentColor">616</text><text x="413.8" y="222" text-anchor="middle" font-size="8" fill="currentColor">924</text><text x="450.0" y="222" text-anchor="middle" font-size="8" fill="currentColor">1232</text><polygon points="52.0,157.1 88.2,135.2 124.4,127.3 160.5,135.0 196.7,110.0 232.9,104.6 269.1,92.1 305.3,70.8 341.5,60.4 377.6,58.1 413.8,27.3 450.0,27.6 450.0,20.4 413.8,11.8 377.6,53.9 341.5,65.1 305.3,70.2 269.1,86.3 232.9,101.1 196.7,109.2 160.5,115.3 124.4,125.2 88.2,135.2 52.0,153.5" fill="var(--md-primary-fg-color)" fill-opacity="0.10"/><polyline points="52.0,157.1 88.2,135.2 124.4,127.3 160.5,135.0 196.7,110.0 232.9,104.6 269.1,92.1 305.3,70.8 341.5,60.4 377.6,58.1 413.8,27.3 450.0,27.6" fill="none" stroke="var(--md-primary-fg-color)" stroke-width="1.6"/><polyline points="52.0,153.6 88.2,132.6 124.4,127.3 160.5,121.8 196.7,110.0 232.9,104.5 269.1,101.2 305.3,70.2 341.5,61.9 377.6,40.3 413.8,18.1 450.0,20.4" fill="none" stroke="var(--md-primary-fg-color)" stroke-width="1.0" stroke-dasharray="3 3"/><polyline points="52.0,157.1 88.2,135.1 124.4,125.2 160.5,121.0 196.7,112.9 232.9,101.2 269.1,86.3 305.3,73.7 341.5,46.1 377.6,54.1 413.8,14.8 450.0,33.8" fill="none" stroke="var(--md-primary-fg-color)" stroke-width="1.0" stroke-dasharray="3 3"/><polyline points="52.0,153.5 88.2,132.6 124.4,125.2 160.5,121.9 196.7,109.2 232.9,101.1 269.1,86.0 305.3,73.7 341.5,64.4 377.6,53.9 413.8,14.1 450.0,20.4" fill="none" stroke="var(--md-primary-fg-color)" stroke-width="1.0" stroke-dasharray="3 3"/><polyline points="52.0,153.5 88.2,135.2 124.4,125.2 160.5,115.3 196.7,109.2 232.9,101.1 269.1,86.3 305.3,70.2 341.5,65.1 377.6,53.9 413.8,11.8 450.0,20.4" fill="none" stroke="var(--md-primary-fg-color)" stroke-width="1.6"/><line x1="52" y1="10" x2="52" y2="210" stroke="currentColor" stroke-opacity="0.4"/><line x1="52" y1="210" x2="450" y2="210" stroke="currentColor" stroke-opacity="0.4"/></svg>
-<figcaption>Median time vs width (log scale). Solid: scale 0 and max; dashed: the intermediate band-edge scales.</figcaption>
-</figure>
-
-</div>
-
 ### `sin`
 
 <div class="grid perf-grid" markdown>

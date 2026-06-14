@@ -493,7 +493,7 @@ _CATEGORY_LABELS = {
     "trigonometry": "Trigonometry",
 }
 _CATEGORY_OPS = {
-    "arithmetic": ("add", "sub", "mul", "div", "rem"),
+    "arithmetic": ("add", "sub", "mul", "div", "rem", "neg"),
     "roots-and-exponents": (
         "sqrt", "cbrt", "exp", "exp2", "ln", "log", "log2", "log10", "powf", "hypot",
     ),
