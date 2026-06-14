@@ -120,7 +120,11 @@ jobs:
           HISTORY_PARALLEL: "${{ matrix.par }}"
           # history_all writes the full cross-version surface here (one TSV per
           # shard); the aggregate job splices + self-commits it to results/history/.
-          HISTORY_REPORT_DIR: history-report
+          # ABSOLUTE path: `cargo test` runs the test binary with CWD = the package
+          # dir (decimal-scale-test/), so a relative dir would land there while the
+          # upload step looks at the workspace root — the mismatch that left the
+          # earlier run with no history-tsv artifacts and an empty aggregate.
+          HISTORY_REPORT_DIR: ${{ github.workspace }}/history-report
         run: |
           set -euo pipefail
           ( while true; do m=$(free -m | awk '/^Mem:/{print $7}'); s=$(free -m | awk '/^Swap:/{print $4}'); d=$(df -BM --output=avail . | tail -1 | tr -dc 0-9); echo "[res $(date +%H:%M:%S)] mem avail ${m} MB | swap free ${s} MB | disk avail ${d} MB"; sleep 15; done ) &
