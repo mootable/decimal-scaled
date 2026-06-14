@@ -19,7 +19,11 @@ across **[Arithmetic](comparisons/arithmetic.md)**,
 </div>
 
 <!-- BEGIN GENERATED:comparisons:units -->
-_Pending the first lib-perf CI run — this renders from `results/lib_cmp/medians.tsv`._
+| Unit | In nanoseconds |
+| :-- | --: |
+| ns | 10⁰ ns |
+| µs | 10³ ns |
+| ms | 10⁶ ns |
 <!-- END GENERATED:comparisons:units -->
 
 </div>
