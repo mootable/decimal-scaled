@@ -294,11 +294,13 @@ def render_precision_surface() -> str:
 #
 # bench-branch-compare self-commits results/timing/bbc_medians.tsv:
 #   op  width  scale  prod_ns  branch_ns  delta_ns  delta_pct  ratio
-# `branch_ns` is THIS build's median for that (op, width, scale). One section per
-# op: a width x scale table (each cell in its own natural time unit — values span
-# up to ~6 decades, so a single per-table unit is unreadable) beside a
-# log-time-vs-width graph (solid lines for scale 0 and the max scale, dashed for
-# the intermediate band-edge scales, a light fill between the two solid lines).
+# `branch_ns` is THIS build's median for that (op, width, scale). The page is a
+# SECTION: an index (header + units + width map) plus three category sub-pages, each
+# one section per op — a width x scale table (each cell in its own natural time unit —
+# values span up to ~6 decades, so a single per-table unit is unreadable) beside a
+# log-time-vs-width graph (solid lines for scale 0 and the max scale, dashed for the
+# intermediate band-edge scales, a light fill between the two solid lines). bbc has
+# no per-call distribution, so the Performance graphs carry no min–max band.
 
 _PENDING_PERF = "_Pending the first bench-branch-compare CI run — this renders from `results/timing/bbc_medians.tsv`._"
 
@@ -477,65 +479,109 @@ def render_performance_units() -> str:
     return _units_legend([r[3] for r in rows]) if rows else _PENDING_PERF
 
 
-# Functions split into two groups for the bench-page heading hierarchy: the five
-# arithmetic ops, then everything else (the transcendental / algebraic-function
-# surface). Each group becomes an `## <group>` h2 above its `### <op>` sections, so
-# the left nav (toc.integrate) folds as `Page -> Arithmetic / Transcendentals -> op`.
-_ARITHMETIC_OPS = ("add", "sub", "mul", "div", "rem")
+# --- Op classification -----------------------------------------------------
+#
+# Each bench surface (Performance / History / Comparisons) is a SECTION whose
+# three category sub-pages each render only their own ops. `op_category` routes a
+# function name to its category; the labels name the pages and the section
+# headings; the order fixes the page order. The member sets are by function name
+# as it appears in the bench data.
+_CATEGORY_ORDER = ("arithmetic", "roots-and-exponents", "trigonometry")
+_CATEGORY_LABELS = {
+    "arithmetic": "Arithmetic",
+    "roots-and-exponents": "Roots and Exponents",
+    "trigonometry": "Trigonometry",
+}
+_CATEGORY_OPS = {
+    "arithmetic": ("add", "sub", "mul", "div", "rem"),
+    "roots-and-exponents": (
+        "sqrt", "cbrt", "exp", "exp2", "ln", "log", "log2", "log10", "powf", "hypot",
+    ),
+    "trigonometry": (
+        "sin", "cos", "tan", "asin", "acos", "atan", "atan2",
+        "sinh", "cosh", "tanh", "asinh", "acosh", "atanh",
+        "to_degrees", "to_radians",
+    ),
+}
+_OP_CATEGORY = {op: cat for cat, ops in _CATEGORY_OPS.items() for op in ops}
+_warned_ops: set[str] = set()
 
 
-def _grouped_ops(ops) -> list[tuple[str | None, str]]:
-    """`(group_header_or_None, op)` for every op: the Arithmetic group first, then
-    Transcendentals, each alphabetical. The header string is non-None only on the
-    FIRST op of a group, so a caller emits each `##` heading exactly once."""
-    arith = sorted(o for o in ops if o in _ARITHMETIC_OPS)
-    trans = sorted(o for o in ops if o not in _ARITHMETIC_OPS)
-    rows: list[tuple[str | None, str]] = []
-    for group, label in ((arith, "Arithmetic"), (trans, "Transcendentals")):
-        for i, op in enumerate(group):
-            rows.append((label if i == 0 else None, op))
-    return rows
+def op_category(op: str) -> str:
+    """The category an op renders under: `arithmetic`, `roots-and-exponents`, or
+    `trigonometry`. An op in no listed set falls back to trigonometry (so a new
+    function still renders somewhere), logged once per name."""
+    cat = _OP_CATEGORY.get(op)
+    if cat is None:
+        if op not in _warned_ops:
+            _warned_ops.add(op)
+            print(f"render_docs: op '{op}' is in no category — rendering under trigonometry")
+        return "trigonometry"
+    return cat
 
 
-def render_performance() -> str:
-    """One section per op, grouped under `## Arithmetic` / `## Transcendentals`: a
-    width x scale timing table beside a log-time vs width graph, each cell in its own
-    natural unit. All from results/timing/bbc_medians.tsv. The units legend + width
-    map render into the page header (separate regions)."""
+def _ops_in_category(ops, category: str) -> list[str]:
+    """The ops from `ops` belonging to `category`, alphabetical."""
+    return sorted(o for o in ops if op_category(o) == category)
+
+
+def _perf_op_section(op: str, op_rows) -> list[str]:
+    """The `### op` block for one operation: the width x scale timing table beside
+    its log-time-vs-width graph, each cell in its own natural unit."""
+    widths, P, series = _perf_series(op_rows)
+    head = "| Width | " + " | ".join(_pos_labels(P)) + " |"
+    rule = "| :-- | " + " | ".join(["--:"] * P) + " |"
+    trows = [head, rule]
+    for w in widths:
+        cells = [(_fmt_ns(v) if v is not None else "·") for v in series[w]]
+        trows.append(f"| D{w} | " + " | ".join(cells) + " |")
+    return [
+        f"### `{op}`",
+        "",
+        '<div class="grid perf-grid" markdown>',
+        "",
+        "\n".join(trows),
+        "",
+        "<figure>",
+        _perf_svg(widths, P, series),
+        "<figcaption>Median time vs width (log scale). Solid: scale 0 and max; "
+        "dashed: the intermediate band-edge scales.</figcaption>",
+        "</figure>",
+        "",
+        "</div>",
+        "",
+    ]
+
+
+def _render_perf_category(category: str) -> str:
+    """The body of one Performance category sub-page: just the `### op` sections for
+    that category (the page IS the category, so no `## category` header). All from
+    results/timing/bbc_medians.tsv."""
     rows = _timing_rows()
     if not rows:
         return _PENDING_PERF
     by_op: dict[str, list] = {}
     for r in rows:
         by_op.setdefault(r[0], []).append(r)
-    out = []
-    for header, op in _grouped_ops(by_op):
-        if header:
-            out += [f"## {header}", ""]
-        widths, P, series = _perf_series(by_op[op])
-        head = "| Width | " + " | ".join(_pos_labels(P)) + " |"
-        rule = "| :-- | " + " | ".join(["--:"] * P) + " |"
-        trows = [head, rule]
-        for w in widths:
-            cells = [(_fmt_ns(v) if v is not None else "·") for v in series[w]]
-            trows.append(f"| D{w} | " + " | ".join(cells) + " |")
-        out += [
-            f"### `{op}`",
-            "",
-            '<div class="grid perf-grid" markdown>',
-            "",
-            "\n".join(trows),
-            "",
-            "<figure>",
-            _perf_svg(widths, P, series),
-            "<figcaption>Median time vs width (log scale). Solid: scale 0 and max; "
-            "dashed: the intermediate band-edge scales.</figcaption>",
-            "</figure>",
-            "",
-            "</div>",
-            "",
-        ]
+    ops = _ops_in_category(by_op, category)
+    if not ops:
+        return f"_No {_CATEGORY_LABELS[category].lower()} functions in this dataset._"
+    out: list[str] = []
+    for op in ops:
+        out += _perf_op_section(op, by_op[op])
     return "\n".join(out).rstrip()
+
+
+def render_performance_arithmetic() -> str:
+    return _render_perf_category("arithmetic")
+
+
+def render_performance_roots() -> str:
+    return _render_perf_category("roots-and-exponents")
+
+
+def render_performance_trig() -> str:
+    return _render_perf_category("trigonometry")
 
 
 # --- History page (docs/history.md) — generated from results/history/ ---------
@@ -544,11 +590,13 @@ def render_performance() -> str:
 # the pinned releases (0.4.4, 0.3.3) over ONE representative cell per width (the
 # middle-band scale, single mode), reported never asserted. The aggregate job
 # self-commits results/history/history.tsv as per-(function, width, version)
-# median nanoseconds:  function  width  version  nanos
-# `version` is the subject's capability name — `decimal-scaled` (live) or
-# `decimal-scaled@X.Y.Z`. One section per op: a width x version table (median time
-# + the slowdown vs the latest release) beside a log-time-vs-width graph with one
-# line per version.
+# nanoseconds:  function  width  version  nanos  min  max  (`nanos` is the cell
+# median; `min`/`max` bound its samples for the graph band — absent on the older
+# 4-column TSV, which then renders bandless). `version` is the subject's capability
+# name — `decimal-scaled` (live) or `decimal-scaled@X.Y.Z`. The page is a SECTION:
+# an index (header + units + width map) plus three category sub-pages, each a width
+# x version table (median time + the slowdown vs the latest release) beside a
+# log-time-vs-width graph with one banded line per version.
 
 _PENDING_HIST = "_Pending the first history-gates CI run — this renders from `results/history/history.tsv`._"
 _HIST_HEADER = ["function", "width", "version", "nanos"]
@@ -571,9 +619,12 @@ def _semver_key(v: str) -> tuple:
     return tuple(int(x) if x.isdigit() else 0 for x in v.split("."))
 
 
-def _history_rows() -> list[tuple[str, int, str, float]] | None:
-    """`(function, width, version_label, ns)` per cell, or None if the summary is
-    absent / not on the current schema (renders pending rather than garbage)."""
+def _history_rows() -> list[tuple[str, int, str, float, float, float]] | None:
+    """`(function, width, version_label, median_ns, lo_ns, hi_ns)` per cell, or None
+    if the summary is absent / not on the current schema (renders pending rather than
+    garbage). `lo`/`hi` are the min/max columns when present (the band); on the older
+    4-column TSV both equal the median, so the page renders with no band. The header
+    guard checks only the first four columns, so old and new TSVs both pass."""
     if not HISTORY_RESULTS.exists():
         return None
     lines = HISTORY_RESULTS.read_text(encoding="utf-8").splitlines()
@@ -583,16 +634,23 @@ def _history_rows() -> list[tuple[str, int, str, float]] | None:
     for line in lines[1:]:
         c = line.split("\t")
         if len(c) >= 4 and c[1].isdigit():
-            rows.append((c[0], int(c[1]), _hist_version_label(c[2]), float(c[3])))
+            med = float(c[3])
+            lo = float(c[4]) if len(c) >= 6 and c[4] else med
+            hi = float(c[5]) if len(c) >= 6 and c[5] else med
+            rows.append((c[0], int(c[1]), _hist_version_label(c[2]), med, lo, hi))
     return rows
 
 
 def _history_svg(widths: list[int], versions: list[str], latest: str,
-                 cells: dict[tuple[int, str], float]) -> str:
+                 cells: dict[tuple[int, str], tuple[float, float, float]]) -> str:
     """Log-time(y) vs width(x), one polyline per version (distinct colours, the
-    latest release boldest) with a small in-graph legend."""
+    latest release boldest) with a small in-graph legend. Each version also draws a
+    translucent min–max band BEHIND the median lines; a version whose band is
+    degenerate (lo==hi at every point, e.g. the older single-sample TSV) draws none.
+    `cells` maps `(width, version) -> (median, lo, hi)`."""
     import math
-    flat = [cells[(w, v)] for w in widths for v in versions if (w, v) in cells]
+    flat = [v for w in widths for ver in versions if (w, ver) in cells
+            for v in cells[(w, ver)]]
     if len(flat) < 2 or len(widths) < 2:
         return ""
     lo, hi = math.floor(math.log10(min(flat))), math.ceil(math.log10(max(flat)))
@@ -620,8 +678,15 @@ def _history_svg(widths: list[int], versions: list[str], latest: str,
         p.append(f'<line x1="{lx}" y1="20" x2="{lx + 14}" y2="20" stroke="{colour[v]}" stroke-width="2"/>')
         p.append(f'<text x="{lx + 17}" y="23" font-size="9" fill="currentColor">{v}</text>')
         lx += 24 + 7 * len(v)
-    for v in versions:
-        line = [(xp(i), cells[(w, v)]) for i, w in enumerate(widths) if (w, v) in cells]
+    for v in versions:  # min–max bands first, behind the median lines
+        seg = [(xp(i), *cells[(w, v)]) for i, w in enumerate(widths) if (w, v) in cells]
+        if len(seg) < 2 or all(m == lo_ == hi_ for _x, m, lo_, hi_ in seg):
+            continue
+        top = " ".join(f"{x:.1f},{yp(hi_):.1f}" for x, _m, _lo, hi_ in seg)
+        bot = " ".join(f"{x:.1f},{yp(lo_):.1f}" for x, _m, lo_, _hi in reversed(seg))
+        p.append(f'<polygon points="{top} {bot}" fill="{colour[v]}" fill-opacity="0.12"/>')
+    for v in versions:  # median lines on top
+        line = [(xp(i), cells[(w, v)][0]) for i, w in enumerate(widths) if (w, v) in cells]
         if len(line) < 2:
             continue
         pts = " ".join(f"{x:.1f},{yp(val):.1f}" for x, val in line)
@@ -636,59 +701,79 @@ def _history_svg(widths: list[int], versions: list[str], latest: str,
 def render_history_units() -> str:
     """The time-unit legend for the History page header (left column)."""
     rows = _history_rows()
-    return _units_legend([ns for *_x, ns in rows]) if rows else _PENDING_HIST
+    return _units_legend([r[3] for r in rows]) if rows else _PENDING_HIST
 
 
-def render_history() -> str:
-    """One section per op: a width x version table (median time + slowdown vs the
-    latest release) beside a per-version log-time graph. From results/history/.
-    The units legend + width map render into the page header (separate regions)."""
+def _history_op_section(op: str, cells, versions: list[str], latest: str) -> list[str]:
+    """The `### op` block for one operation: the width x version table (median time +
+    slowdown vs the latest release) beside its per-version log-time graph. `cells`
+    maps `(width, version) -> (median, lo, hi)` for this op only."""
+    widths = sorted({w for (w, _v) in cells})
+    head = "| Width | " + " | ".join(versions) + " |"
+    rule = "| :-- | " + " | ".join(["--:"] * len(versions)) + " |"
+    trows = [head, rule]
+    for w in widths:
+        ref = cells.get((w, latest))
+        ref_med = ref[0] if ref else None
+        row = []
+        for v in versions:
+            cell = cells.get((w, v))
+            if cell is None:
+                row.append("·")
+            elif v == latest or not ref_med:
+                row.append(_fmt_ns(cell[0]))
+            else:
+                row.append(f"{_fmt_ns(cell[0])} ({cell[0] / ref_med:.2g}×)")
+        trows.append(f"| D{w} | " + " | ".join(row) + " |")
+    return [
+        f"### `{op}`",
+        "",
+        '<div class="grid perf-grid" markdown>',
+        "",
+        "\n".join(trows),
+        "",
+        "<figure>",
+        _history_svg(widths, versions, latest, cells),
+        "<figcaption>Median time vs width (log scale), one line per release with a "
+        "shaded min–max band; the multiplier is the slowdown relative to the latest."
+        "</figcaption>",
+        "</figure>",
+        "",
+        "</div>",
+        "",
+    ]
+
+
+def _render_history_category(category: str) -> str:
+    """The body of one History category sub-page: just the `### op` sections for that
+    category (the page IS the category). From results/history/history.tsv."""
     rows = _history_rows()
     if not rows:
         return _PENDING_HIST
-    versions = sorted({v for _fn, _w, v, _ns in rows}, key=_semver_key)
+    versions = sorted({v for _fn, _w, v, *_ in rows}, key=_semver_key)
     latest = versions[-1]
-    by_op: dict[str, dict[tuple[int, str], float]] = {}
-    for fn, w, v, ns in rows:
-        by_op.setdefault(fn, {})[(w, v)] = ns
-    out = []
-    for header, op in _grouped_ops(by_op):
-        if header:
-            out += [f"## {header}", ""]
-        cells = by_op[op]
-        widths = sorted({w for (w, _v) in cells})
-        head = "| Width | " + " | ".join(versions) + " |"
-        rule = "| :-- | " + " | ".join(["--:"] * len(versions)) + " |"
-        trows = [head, rule]
-        for w in widths:
-            ref = cells.get((w, latest))
-            row = []
-            for v in versions:
-                ns = cells.get((w, v))
-                if ns is None:
-                    row.append("·")
-                elif v == latest or not ref:
-                    row.append(_fmt_ns(ns))
-                else:
-                    row.append(f"{_fmt_ns(ns)} ({ns / ref:.2g}×)")
-            trows.append(f"| D{w} | " + " | ".join(row) + " |")
-        out += [
-            f"### `{op}`",
-            "",
-            '<div class="grid perf-grid" markdown>',
-            "",
-            "\n".join(trows),
-            "",
-            "<figure>",
-            _history_svg(widths, versions, latest, cells),
-            "<figcaption>Median time vs width (log scale), one line per release; "
-            "the multiplier is the slowdown relative to the latest.</figcaption>",
-            "</figure>",
-            "",
-            "</div>",
-            "",
-        ]
+    by_op: dict[str, dict[tuple[int, str], tuple[float, float, float]]] = {}
+    for fn, w, v, med, lo, hi in rows:
+        by_op.setdefault(fn, {})[(w, v)] = (med, lo, hi)
+    ops = _ops_in_category(by_op, category)
+    if not ops:
+        return f"_No {_CATEGORY_LABELS[category].lower()} functions in this dataset._"
+    out: list[str] = []
+    for op in ops:
+        out += _history_op_section(op, by_op[op], versions, latest)
     return "\n".join(out).rstrip()
+
+
+def render_history_arithmetic() -> str:
+    return _render_history_category("arithmetic")
+
+
+def render_history_roots() -> str:
+    return _render_history_category("roots-and-exponents")
+
+
+def render_history_trig() -> str:
+    return _render_history_category("trigonometry")
 
 
 # --- Comparisons page (docs/comparisons.md) — speed vs peer crates ------------
@@ -696,9 +781,13 @@ def render_history() -> str:
 # The library-perf bench (lib-perf.yml / golden-competitors/tests/lib_perf.rs)
 # times decimal-scaled beside the peer crates over the golden set, at one
 # representative (middle-of-band) cell per width; its aggregate self-commits
-# results/lib_cmp/medians.tsv:  function  width  library  nanos. One section per
-# function: a width x library table (median time + the slowdown vs decimal-scaled)
-# beside a grouped bar chart (one bar per library per width).
+# results/lib_cmp/medians.tsv:  function  width  library  nanos  min  max  (`nanos`
+# is the cell median; `min`/`max` bound its samples for the graph band — absent on
+# the older 4-column TSV, which then renders bandless). The page is a SECTION: an
+# index (header + units + the per-library precision model + the input-distribution
+# table) plus three category sub-pages, each a width x library table (median time +
+# the slowdown vs decimal-scaled) beside a line-per-library graph with a min–max
+# band (a gap where a library is absent at a width).
 
 _PENDING_CMP = "_Pending the first lib-perf CI run — this renders from `results/lib_cmp/medians.tsv`._"
 _CMP_HEADER = ["function", "width", "library", "nanos"]
@@ -710,9 +799,12 @@ _LIB_COLORS = ["#2563eb", "#C68A2E", "#7A6A8E", "#367594", "#9C5BA6",
 
 
 def _libcmp_rows():
-    """`(function, width, library, ns)` per cell — the lib-perf aggregate already
-    emits one middle-of-band cell per width — or None if the summary is absent /
-    not on the current schema."""
+    """`(function, width, library, median_ns, lo_ns, hi_ns)` per cell — the lib-perf
+    aggregate already emits one middle-of-band cell per width — or None if the
+    summary is absent / not on the current schema. `lo`/`hi` are the min/max columns
+    when present (the band); on the older 4-column TSV both equal the median, so the
+    chart renders with no band. The header guard checks only the first four columns,
+    so old and new TSVs both pass."""
     if not LIBCMP_RESULTS.exists():
         return None
     lines = LIBCMP_RESULTS.read_text(encoding="utf-8").splitlines()
@@ -720,29 +812,47 @@ def _libcmp_rows():
         return None
     rows = []
     for line in lines[1:]:
-        c = line.split("\t")  # function width library nanos
+        c = line.split("\t")  # function width library nanos [min max]
         if len(c) >= 4 and c[1].isdigit():
-            rows.append((c[0], int(c[1]), c[2], float(c[3])))
+            med = float(c[3])
+            lo = float(c[4]) if len(c) >= 6 and c[4] else med
+            hi = float(c[5]) if len(c) >= 6 and c[5] else med
+            rows.append((c[0], int(c[1]), c[2], med, lo, hi))
     return rows
 
 
+def _contiguous_runs(idxs: list[int]) -> list[list[int]]:
+    """Split sorted indices into maximal runs of consecutive integers, so a polyline
+    breaks where a library is absent at a width."""
+    runs: list[list[int]] = []
+    cur: list[int] = []
+    for i in idxs:
+        if cur and i != cur[-1] + 1:
+            runs.append(cur)
+            cur = []
+        cur.append(i)
+    if cur:
+        runs.append(cur)
+    return runs
+
+
 def _comparisons_svg(widths, libs, colour, cells) -> str:
-    """Grouped bar chart: x = width (a cluster per width), y = time (log), one bar
-    per library; an absent (width, library) leaves a gap. `colour` is the stable
-    per-library palette so a library keeps its colour across every op."""
+    """Log-time(y) vs width(x), one polyline per library in its stable colour with a
+    translucent min–max band behind it; the line breaks (and the band with it) where
+    a library is absent at a width, and an isolated single-width point shows as a dot.
+    `colour` is the stable per-library palette so a library keeps its colour across
+    every op; `cells` maps `(width, library) -> (median, lo, hi)`."""
     import math
-    flat = [cells[(w, l)] for w in widths for l in libs if (w, l) in cells]
-    if not flat or not widths:
+    flat = [v for w in widths for l in libs if (w, l) in cells for v in cells[(w, l)]]
+    if not flat or len(widths) < 2:
         return ""
     lo, hi = math.floor(math.log10(min(flat))), math.ceil(math.log10(max(flat)))
     if hi <= lo:
         hi = lo + 1
     W, H, L, Rm, Tm, Bm = 460, 290, 52, 10, 44, 30  # top margin holds the legend
     pw, ph, n = W - L - Rm, H - Tm - Bm, len(widths)
-    gw = pw / n                       # per-width group width
-    inner = gw * 0.82                 # bars span 82% of the group, centred
-    bw = inner / max(len(libs), 1)
     base = Tm + ph
+    xp = lambda i: L + pw * i / (n - 1)
 
     def yp(ns):
         return Tm + ph * (hi - math.log10(ns)) / (hi - lo)
@@ -755,16 +865,30 @@ def _comparisons_svg(widths, libs, colour, cells) -> str:
                  f'stroke="currentColor" stroke-opacity="0.15"/>')
         p.append(f'<text x="{L - 6}" y="{y + 3:.1f}" text-anchor="end" font-size="9" '
                  f'fill="currentColor">{_ns_decade(d)}</text>')
-    for i, w in enumerate(widths):    # grouped bars + width label
-        gx = L + gw * i + (gw - inner) / 2
-        p.append(f'<text x="{L + gw * (i + 0.5):.1f}" y="{base + 12}" text-anchor="middle" '
+    for i, w in enumerate(widths):    # x (width) labels
+        p.append(f'<text x="{xp(i):.1f}" y="{base + 12}" text-anchor="middle" '
                  f'font-size="8" fill="currentColor">{w}</text>')
-        for j, l in enumerate(libs):
-            if (w, l) not in cells:
+    runs = {l: _contiguous_runs([i for i, w in enumerate(widths) if (w, l) in cells])
+            for l in libs}
+    for l in libs:                    # min–max bands first, behind the lines
+        for run in runs[l]:
+            if len(run) < 2:
                 continue
-            y = yp(cells[(w, l)])
-            p.append(f'<rect x="{gx + bw * j:.1f}" y="{y:.1f}" '
-                     f'width="{max(bw - 0.4, 0.6):.1f}" height="{base - y:.1f}" fill="{colour[l]}"/>')
+            seg = [(xp(i), *cells[(widths[i], l)]) for i in run]
+            if all(m == lo_ == hi_ for _x, m, lo_, hi_ in seg):
+                continue
+            top = " ".join(f"{x:.1f},{yp(hi_):.1f}" for x, _m, _lo, hi_ in seg)
+            bot = " ".join(f"{x:.1f},{yp(lo_):.1f}" for x, _m, lo_, _hi in reversed(seg))
+            p.append(f'<polygon points="{top} {bot}" fill="{colour[l]}" fill-opacity="0.12"/>')
+    for l in libs:                    # median lines (+ isolated dots) on top
+        for run in runs[l]:
+            pts = [(xp(i), yp(cells[(widths[i], l)][0])) for i in run]
+            if len(pts) == 1:
+                x, y = pts[0]
+                p.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="1.6" fill="{colour[l]}"/>')
+            else:
+                pl = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
+                p.append(f'<polyline points="{pl}" fill="none" stroke="{colour[l]}" stroke-width="1.6"/>')
     lx, ly = L, 12                    # legend, wrapping to a second row if needed
     for l in libs:
         wl = 16 + 6 * len(l)
@@ -782,63 +906,198 @@ def _comparisons_svg(widths, libs, colour, cells) -> str:
 def render_comparisons_units() -> str:
     """The time-unit legend for the Comparisons page header (left column)."""
     rows = _libcmp_rows()
-    return _units_legend([ns for *_x, ns in rows]) if rows else _PENDING_CMP
+    return _units_legend([r[3] for r in rows]) if rows else _PENDING_CMP
 
 
-def render_comparisons() -> str:
-    """One section per op: a width x library table (median time + slowdown vs
-    decimal-scaled; our column time-only) beside a grouped bar chart. From
-    results/lib_cmp/medians.tsv with decimal-scaled timed at scale 30 (the nearest
-    compiled scale to 30 per width — the peers' effective precision)."""
+def _comparisons_op_section(op: str, cells, libs: list[str], colour) -> list[str]:
+    """The `### op` block for one operation: the width x library table (median time +
+    slowdown vs decimal-scaled; our column time-only) beside its line+band chart.
+    `cells` maps `(width, library) -> (median, lo, hi)` for this op only."""
+    widths = sorted({w for (w, _l) in cells})
+    present = [l for l in libs if any((w, l) in cells for w in widths)]
+    head = "| Width | " + " | ".join(present) + " |"
+    rule = "| :-- | " + " | ".join(["--:"] * len(present)) + " |"
+    trows = [head, rule]
+    for w in widths:
+        ref = cells.get((w, _OURS))
+        ref_med = ref[0] if ref else None
+        row = []
+        for l in present:
+            cell = cells.get((w, l))
+            if cell is None:
+                row.append("·")
+            elif l == _OURS or not ref_med:
+                row.append(_fmt_ns(cell[0]))
+            else:
+                row.append(f"{_fmt_ns(cell[0])} ({cell[0] / ref_med:.2g}×)")
+        trows.append(f"| D{w} | " + " | ".join(row) + " |")
+    return [
+        f"### `{op}`",
+        "",
+        '<div class="grid perf-grid" markdown>',
+        "",
+        "\n".join(trows),
+        "",
+        "<figure>",
+        _comparisons_svg(widths, present, colour, cells),
+        "<figcaption>Median time per library at each width (log scale; decimal-scaled "
+        "at scale 30, or the nearest compiled scale per width), with a shaded min–max "
+        "band; a gap means that library has no equivalent at that width.</figcaption>",
+        "</figure>",
+        "",
+        "</div>",
+        "",
+    ]
+
+
+def _render_comparisons_category(category: str) -> str:
+    """The body of one Comparisons category sub-page: just the `### op` sections for
+    that category (the page IS the category). From results/lib_cmp/medians.tsv with
+    decimal-scaled timed at scale 30 (the nearest compiled scale to 30 per width — the
+    peers' effective precision)."""
     rows = _libcmp_rows()
     if not rows:
         return _PENDING_CMP
     by_op = {}
-    for op, w, lib, ns in rows:
-        by_op.setdefault(op, {})[(w, lib)] = ns
-    all_libs = sorted({lib for _op, _w, lib, _ns in rows})
+    for op, w, lib, med, lo, hi in rows:
+        by_op.setdefault(op, {})[(w, lib)] = (med, lo, hi)
+    all_libs = sorted({lib for _op, _w, lib, *_ in rows})
     libs = ([_OURS] if _OURS in all_libs else []) + [l for l in all_libs if l != _OURS]
     colour = {l: _LIB_COLORS[k % len(_LIB_COLORS)] for k, l in enumerate(libs)}
-    out = []
-    for header, op in _grouped_ops(by_op):
-        if header:
-            out += [f"## {header}", ""]
-        cells = by_op[op]
-        widths = sorted({w for (w, _l) in cells})
-        present = [l for l in libs if any((w, l) in cells for w in widths)]
-        head = "| Width | " + " | ".join(present) + " |"
-        rule = "| :-- | " + " | ".join(["--:"] * len(present)) + " |"
-        trows = [head, rule]
-        for w in widths:
-            ref = cells.get((w, _OURS))
-            row = []
-            for l in present:
-                ns = cells.get((w, l))
-                if ns is None:
-                    row.append("·")
-                elif l == _OURS or not ref:
-                    row.append(_fmt_ns(ns))
-                else:
-                    row.append(f"{_fmt_ns(ns)} ({ns / ref:.2g}×)")
-            trows.append(f"| D{w} | " + " | ".join(row) + " |")
-        out += [
-            f"### `{op}`",
-            "",
-            '<div class="grid perf-grid" markdown>',
-            "",
-            "\n".join(trows),
-            "",
-            "<figure>",
-            _comparisons_svg(widths, present, colour, cells),
-            "<figcaption>Median time per library at each width (log scale; decimal-scaled "
-            "at scale 30, or the nearest compiled scale per width); a missing bar means "
-            "that library has no equivalent at that width.</figcaption>",
-            "</figure>",
-            "",
-            "</div>",
-            "",
-        ]
+    ops = _ops_in_category(by_op, category)
+    if not ops:
+        return f"_No {_CATEGORY_LABELS[category].lower()} functions in this dataset._"
+    out: list[str] = []
+    for op in ops:
+        out += _comparisons_op_section(op, by_op[op], libs, colour)
     return "\n".join(out).rstrip()
+
+
+def render_comparisons_arithmetic() -> str:
+    return _render_comparisons_category("arithmetic")
+
+
+def render_comparisons_roots() -> str:
+    return _render_comparisons_category("roots-and-exponents")
+
+
+def render_comparisons_trig() -> str:
+    return _render_comparisons_category("trigonometry")
+
+
+# --- Comparisons input distribution (docs/comparisons.md) ---------------------
+#
+# Characterises the golden inputs the comparison runs over: per function, from its
+# committed `decimal-scaled-golden/golden/<fn>.au` file, the count of input fields
+# and the spread of their fractional- / significant-digit counts plus the integer
+# share. Inputs are every data line's first `arity` fields (the last is the expected
+# output), matching the harness loader; `arity` is 2 for the binary functions.
+_BINARY_FUNCS = frozenset(
+    {"log", "atan2", "powf", "hypot", "add", "sub", "mul", "div", "rem"}
+)
+_CMP_INPUTS_PENDING = (
+    "_Pending the golden set — generated from the committed files under "
+    "`decimal-scaled-golden/golden/`._"
+)
+
+
+def _parse_decimal(token: str):
+    """`(fractional_digits, significant_digits, is_integer)` for one decimal token
+    (`123.0045`, `-7`, `1e-38`), or None if it is not a decimal number. Fractional
+    digits fold in any `eN` exponent (so `1e-38` is 38, `1.5e2` is 0); significant
+    digits count from the first non-zero digit, and a pure integer's trailing zeros
+    are not significant. An integer is scale 0 — zero fractional digits."""
+    s = token.strip()
+    if not s:
+        return None
+    if s[0] in "+-":
+        s = s[1:]
+    exp = 0
+    for ec in ("e", "E"):
+        if ec in s:
+            mant, _, e = s.partition(ec)
+            try:
+                exp = int(e)
+            except ValueError:
+                return None
+            s = mant
+            break
+    int_part, _dot, frac_part = s.partition(".")
+    digits = int_part + frac_part
+    if not digits or not digits.isdigit():
+        return None
+    frac_digits = max(0, len(frac_part) - exp)
+    stripped = digits.lstrip("0")
+    if not stripped:
+        sig = 0
+    elif not frac_part:
+        sig = len(stripped.rstrip("0")) or 1
+    else:
+        sig = len(stripped)
+    return frac_digits, sig, frac_digits == 0
+
+
+def _golden_input_stats(path: Path, arity: int):
+    """Read one golden `.au` file once; return `(count, fracs, sigs, n_int)` over its
+    input fields — every data line's first `arity` fields — or None if it has none.
+    `#` metadata, `//` comments and blank lines are skipped and a line whose field
+    count != arity + 1 is ignored, matching the harness loader."""
+    fracs: list[int] = []
+    sigs: list[int] = []
+    n_int = 0
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        text = raw.strip()
+        if not text or text.startswith("#") or text.startswith("//"):
+            continue
+        fields = [f for f in text.replace("\t", " ").split(" ") if f]
+        if len(fields) != arity + 1:
+            continue
+        for tok in fields[:arity]:
+            parsed = _parse_decimal(tok)
+            if parsed is None:
+                continue
+            frac, sig, is_int = parsed
+            fracs.append(frac)
+            sigs.append(sig)
+            if is_int:
+                n_int += 1
+    if not fracs:
+        return None
+    return len(fracs), fracs, sigs, n_int
+
+
+def _fmt_mmm(vals) -> str:
+    """`min / mean / max` for a list of integer digit counts (mean to one decimal)."""
+    return f"{min(vals)} / {sum(vals) / len(vals):.1f} / {max(vals)}"
+
+
+def render_comparisons_inputs() -> str:
+    """The input-distribution table for the Comparisons index: per function, the
+    count of input fields and the min/mean/max of their fractional- and
+    significant-digit counts, plus the integer share. Functions in category order."""
+    if not GOLDEN_DIR.exists():
+        return _CMP_INPUTS_PENDING
+    files = {p.stem: p for p in GOLDEN_DIR.glob("*.au")}
+    if not files:
+        return _CMP_INPUTS_PENDING
+    rows = [
+        "| Function | Inputs | Fractional digits (min/mean/max) "
+        "| Significant digits (min/mean/max) | % integer |",
+        "| :-- | --: | :-- | :-- | --: |",
+    ]
+    any_row = False
+    for category in _CATEGORY_ORDER:
+        for fn in sorted(f for f in files if op_category(f) == category):
+            stats = _golden_input_stats(files[fn], 2 if fn in _BINARY_FUNCS else 1)
+            if stats is None:
+                continue
+            n, fracs, sigs, n_int = stats
+            rows.append(
+                f"| `{fn}` | {n:,} | {_fmt_mmm(fracs)} | {_fmt_mmm(sigs)} "
+                f"| {100 * n_int / n:.0f}% |"
+            )
+            any_row = True
+    return "\n".join(rows) if any_row else _CMP_INPUTS_PENDING
 
 
 # `key -> (target file relative to ROOT, builder)`.
@@ -853,12 +1112,19 @@ REGIONS: dict[str, tuple[str, "callable"]] = {
     "precision:surface": ("docs/precision.md", render_precision_surface),
     "performance:units": ("docs/performance.md", render_performance_units),
     "performance:widths": ("docs/performance.md", render_bench_widths),
-    "performance:body": ("docs/performance.md", render_performance),
+    "performance:body:arithmetic": ("docs/performance/arithmetic.md", render_performance_arithmetic),
+    "performance:body:roots": ("docs/performance/roots-and-exponents.md", render_performance_roots),
+    "performance:body:trig": ("docs/performance/trigonometry.md", render_performance_trig),
     "history:units": ("docs/history.md", render_history_units),
     "history:widths": ("docs/history.md", render_bench_widths),
-    "history:body": ("docs/history.md", render_history),
+    "history:body:arithmetic": ("docs/history/arithmetic.md", render_history_arithmetic),
+    "history:body:roots": ("docs/history/roots-and-exponents.md", render_history_roots),
+    "history:body:trig": ("docs/history/trigonometry.md", render_history_trig),
     "comparisons:units": ("docs/comparisons.md", render_comparisons_units),
-    "comparisons:body": ("docs/comparisons.md", render_comparisons),
+    "comparisons:inputs": ("docs/comparisons.md", render_comparisons_inputs),
+    "comparisons:body:arithmetic": ("docs/comparisons/arithmetic.md", render_comparisons_arithmetic),
+    "comparisons:body:roots": ("docs/comparisons/roots-and-exponents.md", render_comparisons_roots),
+    "comparisons:body:trig": ("docs/comparisons/trigonometry.md", render_comparisons_trig),
 }
 
 

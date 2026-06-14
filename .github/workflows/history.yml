@@ -201,9 +201,12 @@ jobs:
               raise SystemExit(0)
           os.makedirs("results/history", exist_ok=True)
           with open("results/history/history.tsv", "w", encoding="utf-8", newline="\n") as o:
-              o.write("function\twidth\tversion\tnanos\n")
+              # `nanos` is the median per cell; `min`/`max` bound that cell's samples so
+              # the History chart can draw a min–max band around each release's line.
+              o.write("function\twidth\tversion\tnanos\tmin\tmax\n")
               for (fn, w, ver) in sorted(vals):
-                  o.write(f"{fn}\t{w}\t{ver}\t{statistics.median(vals[(fn, w, ver)]):.0f}\n")
+                  s = vals[(fn, w, ver)]
+                  o.write(f"{fn}\t{w}\t{ver}\t{statistics.median(s):.0f}\t{min(s):.0f}\t{max(s):.0f}\n")
           print(f"history.tsv rows: {len(vals)}")
           EOF
           if [ ! -f results/history/history.tsv ]; then

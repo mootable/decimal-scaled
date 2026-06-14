@@ -12,7 +12,7 @@ name: "📊 lib-perf (peer-crate timing over golden)"
 #
 # This is the precision shootout's perf twin: lib-cmp-precision.yml scores the same
 # subjects for correctness; this one times them. Its aggregate self-commits
-# results/lib_cmp/medians.tsv (function/width/library/nanos) — the Comparisons-page
+# results/lib_cmp/medians.tsv (function/width/library/nanos/min/max) — the Comparisons-page
 # data source (docs/comparisons.md, rendered by scripts/render_docs.py).
 #
 # WIDTH-SHARDED build+run (the history.yml shape): one matrix job per width tier
@@ -188,9 +188,12 @@ jobs:
           def wkey(w):
               return int(w) if w.isdigit() else 0
           with open("results/lib_cmp/medians.tsv", "w", encoding="utf-8", newline="\n") as o:
-              o.write("function\twidth\tlibrary\tnanos\n")
+              # `nanos` is the median per cell; `min`/`max` bound that cell's samples so
+              # the Comparisons chart can draw a min–max band around each library's line.
+              o.write("function\twidth\tlibrary\tnanos\tmin\tmax\n")
               for (fn, w, lib) in sorted(vals, key=lambda k: (k[0], wkey(k[1]), k[2])):
-                  o.write(f"{fn}\t{w}\t{lib}\t{statistics.median(vals[(fn, w, lib)]):.0f}\n")
+                  s = vals[(fn, w, lib)]
+                  o.write(f"{fn}\t{w}\t{lib}\t{statistics.median(s):.0f}\t{min(s):.0f}\t{max(s):.0f}\n")
           print(f"medians.tsv rows: {len(vals)}")
           EOF
           if [ ! -f results/lib_cmp/medians.tsv ]; then
@@ -201,10 +204,9 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           # Re-render docs from the fresh medians in the SAME commit (self-heal: the
           # committed page never lags the data; docs-drift stays green). The
-          # Comparisons renderer (render_comparisons / _libcmp_rows in
-          # scripts/render_docs.py) reads this file's schema directly
-          # (function/width/library/nanos — one mid-of-band cell per width, columns
-          # = libraries).
+          # Comparisons renderer (_libcmp_rows in scripts/render_docs.py) reads this
+          # file's schema directly (function/width/library/nanos/min/max — one
+          # mid-of-band cell per width, columns = libraries; min/max feed the band).
           python3 scripts/render_docs.py
           git add results/lib_cmp/medians.tsv
           git add -u README.md docs/

@@ -109,10 +109,22 @@ nav:
       - Glossary: glossary.md
   - Bench:
       - Harness: golden.md
-      - Performance: performance.md
+      - Performance:
+          - performance.md
+          - Arithmetic: performance/arithmetic.md
+          - Roots and Exponents: performance/roots-and-exponents.md
+          - Trigonometry: performance/trigonometry.md
       - Precision: precision.md
-      - History: history.md
-      - Comparisons: comparisons.md
+      - History:
+          - history.md
+          - Arithmetic: history/arithmetic.md
+          - Roots and Exponents: history/roots-and-exponents.md
+          - Trigonometry: history/trigonometry.md
+      - Comparisons:
+          - comparisons.md
+          - Arithmetic: comparisons/arithmetic.md
+          - Roots and Exponents: comparisons/roots-and-exponents.md
+          - Trigonometry: comparisons/trigonometry.md
   - Architecture:
       - Architecture: ARCHITECTURE.md
       - Algorithms: ALGORITHMS.md
