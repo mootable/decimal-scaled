@@ -64,6 +64,7 @@ CELLS_SRC = ROOT / "decimal-scaled-cells" / "src" / "lib.rs"
 ROUNDING_SRC = ROOT / "decimal-scaled-golden" / "src" / "support" / "rounding.rs"
 TIMING_RESULTS = ROOT / "results" / "timing" / "bbc_medians.tsv"
 HISTORY_RESULTS = ROOT / "results" / "history" / "history.tsv"
+LIBCMP_RESULTS = ROOT / "results" / "lib_cmp" / "medians.tsv"
 
 # The precision-table renderer lives alongside this script. Import it as
 # a module so the doc tables come from exactly the same code path (and
@@ -689,6 +690,164 @@ def render_history() -> str:
     return "\n".join(out).rstrip()
 
 
+# --- Comparisons page (docs/comparisons.md) — speed vs peer crates ------------
+#
+# The library-comparison bench (lib-cmp-perf.yml / benches/libcmp) times
+# decimal-scaled against the peer crates over (op, width, scale); its aggregate
+# self-commits results/lib_cmp/medians.tsv:  bit  scale  op  library  median_ns
+# (bit = the integer bit-width, e.g. 64 -> D18). One section per op: a width x
+# library table (median time + the slowdown vs decimal-scaled) beside a grouped
+# bar chart (one bar per library per width). ONE representative scale per width
+# — the quarter-band scale, ~typical peer usage (peers sit well below max scale).
+
+_PENDING_CMP = "_Pending the first lib-cmp-perf CI run — this renders from `results/lib_cmp/medians.tsv`._"
+_CMP_HEADER = ["bit", "scale", "op", "library", "median_ns"]
+_OURS = "decimal-scaled"
+# decimal-scaled first (primary brand tone), then a distinct colour per peer.
+_LIB_COLORS = ["var(--md-primary-fg-color)", "var(--md-accent-fg-color)",
+               "var(--dusk-purple,#7A6A8E)", "#367594", "#9C5BA6", "#5E8C3A",
+               "#B5663C", "#787A79"]
+
+
+def _libcmp_rows():
+    """`(op, width, library, ns)` at each width's MIDDLE scale, or None if the
+    summary is absent / not on the current schema. `bit` -> decimal width via
+    tiers.json."""
+    if not LIBCMP_RESULTS.exists():
+        return None
+    lines = LIBCMP_RESULTS.read_text(encoding="utf-8").splitlines()
+    if not lines or lines[0].split("\t")[:5] != _CMP_HEADER:
+        return None
+    bit_to_w = {t["bits"]: t["digits"] for t in load_tiers()}
+    raw, scales_by = [], {}  # raw: (op,width,scale,lib,ns); scales_by: (op,width)->{scale}
+    for line in lines[1:]:
+        c = line.split("\t")
+        if len(c) < 5 or not c[0].isdigit():
+            continue
+        w = bit_to_w.get(int(c[0]))
+        if w is None:
+            continue
+        raw.append((c[2], w, int(c[1]), c[3], float(c[4])))
+        scales_by.setdefault((c[2], w), set()).add(int(c[1]))
+    # Representative scale per width = the QUARTER-band point (index len/4 of the
+    # band-edge set {0, S/4, S/2, 3S/4, S-1}). Peer decimal libraries are used
+    # well below a tier's max scale, so ¼ models real usage better than the
+    # midpoint — an approximation (several peers are fixed-width).
+    rep = {k: sorted(ss)[len(ss) // 4] for k, ss in scales_by.items()}
+    return [(op, w, lib, ns) for (op, w, s, lib, ns) in raw if s == rep[(op, w)]]
+
+
+def _comparisons_svg(widths, libs, colour, cells) -> str:
+    """Grouped bar chart: x = width (a cluster per width), y = time (log), one bar
+    per library; an absent (width, library) leaves a gap. `colour` is the stable
+    per-library palette so a library keeps its colour across every op."""
+    import math
+    flat = [cells[(w, l)] for w in widths for l in libs if (w, l) in cells]
+    if not flat or not widths:
+        return ""
+    lo, hi = math.floor(math.log10(min(flat))), math.ceil(math.log10(max(flat)))
+    if hi <= lo:
+        hi = lo + 1
+    W, H, L, Rm, Tm, Bm = 460, 290, 52, 10, 44, 30  # top margin holds the legend
+    pw, ph, n = W - L - Rm, H - Tm - Bm, len(widths)
+    gw = pw / n                       # per-width group width
+    inner = gw * 0.82                 # bars span 82% of the group, centred
+    bw = inner / max(len(libs), 1)
+    base = Tm + ph
+
+    def yp(ns):
+        return Tm + ph * (hi - math.log10(ns)) / (hi - lo)
+
+    p = [f'<svg viewBox="0 0 {W} {H}" width="100%" style="height:auto;'
+         f'color:var(--md-default-fg-color--light)" xmlns="http://www.w3.org/2000/svg">']
+    for d in range(lo, hi + 1):       # y gridlines + decade labels
+        y = yp(10 ** d)
+        p.append(f'<line x1="{L}" y1="{y:.1f}" x2="{L + pw}" y2="{y:.1f}" '
+                 f'stroke="currentColor" stroke-opacity="0.15"/>')
+        p.append(f'<text x="{L - 6}" y="{y + 3:.1f}" text-anchor="end" font-size="9" '
+                 f'fill="currentColor">{_ns_decade(d)}</text>')
+    for i, w in enumerate(widths):    # grouped bars + width label
+        gx = L + gw * i + (gw - inner) / 2
+        p.append(f'<text x="{L + gw * (i + 0.5):.1f}" y="{base + 12}" text-anchor="middle" '
+                 f'font-size="8" fill="currentColor">{w}</text>')
+        for j, l in enumerate(libs):
+            if (w, l) not in cells:
+                continue
+            y = yp(cells[(w, l)])
+            p.append(f'<rect x="{gx + bw * j:.1f}" y="{y:.1f}" '
+                     f'width="{max(bw - 0.4, 0.6):.1f}" height="{base - y:.1f}" fill="{colour[l]}"/>')
+    lx, ly = L, 12                    # legend, wrapping to a second row if needed
+    for l in libs:
+        wl = 16 + 6 * len(l)
+        if lx + wl > L + pw:
+            lx, ly = L, ly + 13
+        p.append(f'<rect x="{lx}" y="{ly}" width="9" height="9" fill="{colour[l]}"/>')
+        p.append(f'<text x="{lx + 12}" y="{ly + 8}" font-size="8.5" fill="currentColor">{l}</text>')
+        lx += wl
+    p.append(f'<line x1="{L}" y1="{Tm}" x2="{L}" y2="{base}" stroke="currentColor" stroke-opacity="0.4"/>')
+    p.append(f'<line x1="{L}" y1="{base}" x2="{L + pw}" y2="{base}" stroke="currentColor" stroke-opacity="0.4"/>')
+    p.append("</svg>")
+    return "".join(p)
+
+
+def render_comparisons_units() -> str:
+    """The time-unit legend for the Comparisons page header (left column)."""
+    rows = _libcmp_rows()
+    return _units_legend([ns for *_x, ns in rows]) if rows else _PENDING_CMP
+
+
+def render_comparisons() -> str:
+    """One section per op: a width x library table (median time + slowdown vs
+    decimal-scaled; our column time-only) beside a grouped bar chart. From
+    results/lib_cmp/medians.tsv at each width's quarter-band scale."""
+    rows = _libcmp_rows()
+    if not rows:
+        return _PENDING_CMP
+    by_op = {}
+    for op, w, lib, ns in rows:
+        by_op.setdefault(op, {})[(w, lib)] = ns
+    all_libs = sorted({lib for _op, _w, lib, _ns in rows})
+    libs = ([_OURS] if _OURS in all_libs else []) + [l for l in all_libs if l != _OURS]
+    colour = {l: _LIB_COLORS[k % len(_LIB_COLORS)] for k, l in enumerate(libs)}
+    out = []
+    for op in sorted(by_op):
+        cells = by_op[op]
+        widths = sorted({w for (w, _l) in cells})
+        present = [l for l in libs if any((w, l) in cells for w in widths)]
+        head = "| Width | " + " | ".join(present) + " |"
+        rule = "| :-- | " + " | ".join(["--:"] * len(present)) + " |"
+        trows = [head, rule]
+        for w in widths:
+            ref = cells.get((w, _OURS))
+            row = []
+            for l in present:
+                ns = cells.get((w, l))
+                if ns is None:
+                    row.append("·")
+                elif l == _OURS or not ref:
+                    row.append(_fmt_ns(ns))
+                else:
+                    row.append(f"{_fmt_ns(ns)} ({ns / ref:.2g}×)")
+            trows.append(f"| D{w} | " + " | ".join(row) + " |")
+        out += [
+            f"### `{op}`",
+            "",
+            '<div class="grid perf-grid" markdown>',
+            "",
+            "\n".join(trows),
+            "",
+            "<figure>",
+            _comparisons_svg(widths, present, colour, cells),
+            "<figcaption>Median time per library at each width (log scale, quarter-band "
+            "scale); a missing bar means that library has no equivalent at that width.</figcaption>",
+            "</figure>",
+            "",
+            "</div>",
+            "",
+        ]
+    return "\n".join(out).rstrip()
+
+
 # `key -> (target file relative to ROOT, builder)`.
 REGIONS: dict[str, tuple[str, "callable"]] = {
     "widths:table": ("docs/widths.md", render_widths_table),
@@ -704,9 +863,8 @@ REGIONS: dict[str, tuple[str, "callable"]] = {
     "history:units": ("docs/history.md", render_history_units),
     "history:widths": ("docs/history.md", render_bench_widths),
     "history:body": ("docs/history.md", render_history),
-    "precision:D38": ("docs/comparisons.md", render_precision_d38),
-    "precision:D76": ("docs/comparisons.md", render_precision_d76),
-    "precision:D307": ("docs/comparisons.md", render_precision_d307),
+    "comparisons:units": ("docs/comparisons.md", render_comparisons_units),
+    "comparisons:body": ("docs/comparisons.md", render_comparisons),
 }
 
 
