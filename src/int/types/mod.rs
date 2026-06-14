@@ -1,0 +1,4542 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+//! Const-generic fixed-width integers.
+//!
+//! A single `Uint<const LIMBS: usize>` / `Int<const LIMBS: usize>` pair
+//! parameterised by the number of 64-bit little-endian limbs, replacing
+//! the family of named `IntXXXX` / `UintXXXX` types. Bit width is
+//! derived (`BITS = LIMBS * 64`); every width this crate uses
+//! (256 … 16384 bits) is a clean multiple of 64, so the limb count is
+//! the natural single parameter — it sidesteps the
+//! `LIMBS = ceil(BITS / 64)` derivation that a `BITS`-parameterised type
+//! cannot express on stable Rust.
+//!
+//! Storage is `[u64; LIMBS]`, matching the limb representation the
+//! arithmetic primitives already use. Methods delegate to the
+//! width-matched limb algorithms; because `LIMBS` is a compile-time
+//! constant, the limb loops unroll and any `match LIMBS` arms const-fold
+//! per monomorphisation — no runtime dispatch.
+
+pub(crate) mod traits;
+pub(crate) mod compute_limbs;
+
+pub use traits::BigInt;
+
+use crate::int::algos::div::div_fixed::div_rem_mag_fixed;
+use crate::int::algos::div::div_rem::div_rem;
+use crate::int::algos::support::limbs::{
+    add_assign_fixed, bit_len_fixed, cmp_cross, cmp_fixed, is_zero_fixed, max_n_limbs, shl,
+    shl_fixed, shr_fixed, sub_assign_fixed,
+};
+use crate::int::algos::mul::mul_schoolbook::{mul_low_fixed, mul_schoolbook};
+use crate::int::policy::add::dispatch as add_dispatch;
+use crate::int::policy::cmp::dispatch as cmp_dispatch;
+use crate::int::policy::cube::dispatch as cube_dispatch;
+use crate::int::policy::div_rem::dispatch as div_rem_dispatch;
+use crate::int::policy::eq::dispatch as eq_dispatch;
+use crate::int::policy::icbrt::dispatch as icbrt_dispatch;
+use crate::int::policy::hypot::dispatch as hypot_dispatch;
+use crate::int::policy::isqrt::dispatch as isqrt_dispatch;
+use crate::int::policy::mul::dispatch as mul_fast;
+use crate::int::policy::neg::dispatch as neg_dispatch;
+use crate::int::policy::sum_sq::dispatch as sum_sq_dispatch;
+use crate::int::policy::pow::dispatch as pow_dispatch;
+use crate::int::policy::rem::dispatch as rem_dispatch;
+use crate::int::policy::sqr::dispatch as sqr_dispatch;
+use crate::int::policy::sub::dispatch as sub_dispatch;
+use crate::support::int_fmt::fmt_into;
+use core::cmp::Ordering;
+use core::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Rem, Shl, Shr, Sub};
+
+/// Unsigned fixed-width integer of `N` little-endian 64-bit limbs.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct Uint<const N: usize> {
+    limbs: [u64; N],
+}
+
+/// Signed (two's-complement) fixed-width integer of `N` little-endian
+/// 64-bit limbs.
+//
+// `PartialEq` / `PartialOrd` / `Ord` are NOT derived: a single generic
+// `impl<N, M>` cross-width surface (below) covers same-width comparison
+// too, so a derived same-width impl would collide. `Eq` is still derived
+// (it only needs the `PartialEq<Self>` the generic impl provides).
+#[derive(Clone, Copy, Eq, Hash, Debug)]
+pub struct Int<const N: usize> {
+    limbs: [u64; N],
+}
+
+impl<const N: usize> Uint<N> {
+    /// Number of 64-bit limbs.
+    pub const LIMBS: usize = N;
+    /// Bit width (`LIMBS * 64`). `u32` so it composes directly with the
+    /// `leading_zeros` / `count_ones` `u32` surface and matches the
+    /// historic named-type `BITS` constant.
+    pub const BITS: u32 = (N as u32) * 64;
+
+    /// Additive identity.
+    pub const ZERO: Self = Self { limbs: [0; N] };
+    /// Multiplicative identity.
+    pub const ONE: Self = {
+        let mut limbs = [0u64; N];
+        limbs[0] = 1;
+        Self { limbs }
+    };
+    /// Largest representable value (all limbs set).
+    pub const MAX: Self = Self {
+        limbs: [u64::MAX; N],
+    };
+
+    /// Constructs from raw little-endian limbs.
+    #[inline]
+    pub const fn from_limbs(limbs: [u64; N]) -> Self {
+        Self { limbs }
+    }
+
+    /// Borrows the raw little-endian limbs.
+    #[inline]
+    pub const fn as_limbs(&self) -> &[u64; N] {
+        &self.limbs
+    }
+
+    /// Wrapping addition (modulo `2^BITS`).
+    #[inline]
+    pub fn wrapping_add(mut self, rhs: Self) -> Self {
+        add_assign_fixed(&mut self.limbs, &rhs.limbs);
+        self
+    }
+
+    /// Wrapping subtraction (modulo `2^BITS`).
+    #[inline]
+    pub fn wrapping_sub(mut self, rhs: Self) -> Self {
+        sub_assign_fixed(&mut self.limbs, &rhs.limbs);
+        self
+    }
+
+    /// Wrapping multiplication (modulo `2^BITS`).
+    ///
+    /// Schoolbook multiply truncated to the low `N` limbs. Only the
+    /// product limbs that land below `2^BITS` are kept, so no
+    /// `[u64; 2*N]` output buffer is needed — the higher partial
+    /// products are simply never written. Carries that would land at or
+    /// above limb `N` are discarded, which is exactly the modular
+    /// reduction.
+    #[inline]
+    pub fn wrapping_mul(self, rhs: Self) -> Self {
+        let mut out = [0u64; N];
+        mul_low_fixed(&self.limbs, &rhs.limbs, &mut out);
+        Self { limbs: out }
+    }
+
+    /// Wrapping square (`self²` modulo `2^BITS`). Named entry point for
+    /// the open-coded `x * x` pattern. Thin delegator DOWN to the sqr
+    /// policy (`sqr_dispatch`): half-product squaring via the
+    /// `sqr_low_fixed` kernel — each cross term is formed once and doubled,
+    /// so the limb-multiply count is `N(N+1)/2` rather than the `N²` of a
+    /// general multiply.
+    #[inline]
+    pub const fn wrapping_sqr(self) -> Self {
+        sqr_dispatch(self)
+    }
+
+    /// Wrapping cube (`self³` modulo `2^BITS`). Named entry point for the
+    /// open-coded `x * x * x` pattern. Thin delegator DOWN to the cube
+    /// policy (`cube_dispatch`): `sqr` then one multiply via the const
+    /// kernels — no cheaper form exists below two multiplies.
+    #[inline]
+    pub const fn wrapping_cube(self) -> Self {
+        cube_dispatch(self)
+    }
+
+    /// Checked addition: `None` on overflow past `2^BITS`.
+    #[inline]
+    pub fn checked_add(mut self, rhs: Self) -> Option<Self> {
+        let carry = add_assign_fixed(&mut self.limbs, &rhs.limbs);
+        if carry { None } else { Some(self) }
+    }
+
+    /// Checked subtraction: `None` if the result would be negative.
+    #[inline]
+    pub fn checked_sub(mut self, rhs: Self) -> Option<Self> {
+        let borrow = sub_assign_fixed(&mut self.limbs, &rhs.limbs);
+        if borrow { None } else { Some(self) }
+    }
+
+    /// Checked multiplication: `None` if the true product does not fit
+    /// `2^BITS`.
+    #[inline]
+    pub fn checked_mul(self, rhs: Self) -> Option<Self> {
+        let (a, b) = (&self.limbs, &rhs.limbs);
+        let mut out = [0u64; N];
+        let mut overflow = false;
+        let mut i = 0;
+        while i < N {
+            let ai = a[i];
+            if ai != 0 {
+                let mut carry: u64 = 0;
+                let mut j = 0;
+                while j < N {
+                    let prod = (ai as u128) * (b[j] as u128);
+                    if i + j < N {
+                        let v = prod + (out[i + j] as u128) + (carry as u128);
+                        out[i + j] = v as u64;
+                        carry = (v >> 64) as u64;
+                    } else if prod != 0 || carry != 0 {
+                        // Any product or carry landing at/above limb `N`
+                        // means the true product exceeds the width.
+                        overflow = true;
+                        carry = 0;
+                    }
+                    j += 1;
+                }
+                if carry != 0 {
+                    // Row carry would spill into limb `i + N >= N`.
+                    overflow = true;
+                }
+            }
+            i += 1;
+        }
+        if overflow {
+            None
+        } else {
+            Some(Self { limbs: out })
+        }
+    }
+
+    /// Wrapping division. Panics on a zero divisor, matching the
+    /// behaviour of the primitive unsigned integer types.
+    #[inline]
+    pub fn wrapping_div(self, rhs: Self) -> Self {
+        assert!(!rhs.is_zero(), "attempt to divide by zero");
+        let mut quot = [0u64; N];
+        let mut rem = [0u64; N];
+        div_rem(&self.limbs, &rhs.limbs, &mut quot, &mut rem);
+        Self { limbs: quot }
+    }
+
+    /// Wrapping remainder. Panics on a zero divisor, matching the
+    /// behaviour of the primitive unsigned integer types.
+    #[inline]
+    pub fn wrapping_rem(self, rhs: Self) -> Self {
+        assert!(
+            !rhs.is_zero(),
+            "attempt to calculate the remainder with a divisor of zero"
+        );
+        let mut quot = [0u64; N];
+        let mut rem = [0u64; N];
+        div_rem(&self.limbs, &rhs.limbs, &mut quot, &mut rem);
+        Self { limbs: rem }
+    }
+
+    /// Bitwise AND.
+    // Operator-named inherent kernels (bitand/bitor/bitxor/not/shl/shr):
+    // deliberately NOT the std ops traits — const-usable, and `shl`/`shr` take
+    // a `u32` shift rather than the `Shl<Rhs>`/`Shr<Rhs>` shape (the std ops
+    // are implemented separately). Allow the look-alike-trait-method lint.
+    #[allow(clippy::should_implement_trait)]
+    #[inline]
+    pub fn bitand(self, rhs: Self) -> Self {
+        let mut out = [0u64; N];
+        let mut i = 0;
+        while i < N {
+            out[i] = self.limbs[i] & rhs.limbs[i];
+            i += 1;
+        }
+        Self { limbs: out }
+    }
+
+    /// Bitwise OR.
+    #[allow(clippy::should_implement_trait)]
+    #[inline]
+    pub fn bitor(self, rhs: Self) -> Self {
+        let mut out = [0u64; N];
+        let mut i = 0;
+        while i < N {
+            out[i] = self.limbs[i] | rhs.limbs[i];
+            i += 1;
+        }
+        Self { limbs: out }
+    }
+
+    /// Bitwise XOR.
+    #[allow(clippy::should_implement_trait)]
+    #[inline]
+    pub fn bitxor(self, rhs: Self) -> Self {
+        let mut out = [0u64; N];
+        let mut i = 0;
+        while i < N {
+            out[i] = self.limbs[i] ^ rhs.limbs[i];
+            i += 1;
+        }
+        Self { limbs: out }
+    }
+
+    /// Bitwise NOT (ones' complement).
+    #[allow(clippy::should_implement_trait)]
+    #[inline]
+    pub fn not(self) -> Self {
+        let mut out = [0u64; N];
+        let mut i = 0;
+        while i < N {
+            out[i] = !self.limbs[i];
+            i += 1;
+        }
+        Self { limbs: out }
+    }
+
+    /// Logical left shift by `shift` bits (modulo `2^BITS`).
+    #[allow(clippy::should_implement_trait)]
+    #[inline]
+    pub fn shl(self, shift: u32) -> Self {
+        let mut out = [0u64; N];
+        shl_fixed(&self.limbs, shift, &mut out);
+        Self { limbs: out }
+    }
+
+    /// Logical right shift by `shift` bits.
+    #[allow(clippy::should_implement_trait)]
+    #[inline]
+    pub fn shr(self, shift: u32) -> Self {
+        let mut out = [0u64; N];
+        shr_fixed(&self.limbs, shift, &mut out);
+        Self { limbs: out }
+    }
+
+    /// `true` when every limb is zero.
+    #[inline]
+    pub fn is_zero(&self) -> bool {
+        is_zero_fixed(&self.limbs)
+    }
+
+    /// Bit length (significant bits): `0` for zero, else
+    /// `floor(log2(self)) + 1`, equivalently `BITS - leading_zeros`.
+    ///
+    /// For an unsigned value there is no sign, so magnitude and stored
+    /// representation coincide — `bit_length` and the `uN`-contract
+    /// bit-count methods below agree by construction.
+    #[inline]
+    pub const fn bit_length(&self) -> u32 {
+        bit_len_fixed(&self.limbs)
+    }
+
+    /// Number of leading zero bits in the `BITS`-wide representation,
+    /// matching the primitive `uN::leading_zeros` contract:
+    /// `BITS - bit_length`, and `BITS` for zero.
+    #[inline]
+    pub const fn leading_zeros(&self) -> u32 {
+        Self::BITS - self.bit_length()
+    }
+
+    /// `true` when the value equals one.
+    #[inline]
+    pub fn is_one(&self) -> bool {
+        if N == 0 || self.limbs[0] != 1 {
+            return false;
+        }
+        let mut i = 1;
+        while i < N {
+            if self.limbs[i] != 0 {
+                return false;
+            }
+            i += 1;
+        }
+        true
+    }
+
+    /// Wrapping exponentiation by squaring (`self^exp` modulo `2^BITS`).
+    /// `self^0 == 1`. Thin delegator DOWN to the pow policy
+    /// (`pow_dispatch`): binary square-and-multiply over the const
+    /// kernels; optimal for the small fixed exponents the root iteration
+    /// needs (`k-1`, `k`).
+    #[inline]
+    pub const fn wrapping_pow(self, exp: u32) -> Self {
+        pow_dispatch(self, exp)
+    }
+
+    /// Exponentiation by squaring, returning `None` if the true power
+    /// overflows `2^BITS`. `self^0 == 1`.
+    #[inline]
+    pub fn checked_pow(self, mut exp: u32) -> Option<Self> {
+        let mut acc = Self::ONE;
+        let mut base = self;
+        loop {
+            if exp & 1 == 1 {
+                acc = acc.checked_mul(base)?;
+            }
+            exp >>= 1;
+            if exp == 0 {
+                break;
+            }
+            base = base.checked_mul(base)?;
+        }
+        Some(acc)
+    }
+
+    /// Exponentiation by squaring. Routes through the pow policy
+    /// (`pow_dispatch`): binary square-and-multiply at every `N`.
+    /// Result is `self^exp` modulo `2^BITS`; `self^0 == 1`.
+    #[inline]
+    pub fn pow(self, exp: u32) -> Self {
+        pow_dispatch(self, exp)
+    }
+
+    /// Integer square root: the largest `r` with `r² <= self`.
+    /// Routes through the isqrt policy (`isqrt_dispatch`):
+    /// `N ∈ {1, 2}` takes the hardware native path; `N >= 3` takes
+    /// the Newton limb kernel.
+    #[inline]
+    pub fn isqrt(self) -> Self {
+        isqrt_dispatch(self)
+    }
+
+    /// Integer square: `self²` modulo `2^BITS`. Routes through the sqr
+    /// policy (`sqr_dispatch`): half-product squaring kernel at every `N`.
+    #[inline]
+    pub fn sqr(self) -> Self {
+        sqr_dispatch(self)
+    }
+
+    /// Integer cube: `self³` modulo `2^BITS`. Routes through the cube
+    /// policy (`cube_dispatch`): sqr-then-multiply at every `N`.
+    #[inline]
+    pub fn cube(self) -> Self {
+        cube_dispatch(self)
+    }
+
+    /// Integer cube root: `floor(self^(1/3))`. Routes through the icbrt
+    /// policy (`icbrt_dispatch`):
+    /// `N ∈ {1, 2}` takes the narrow path; `N >= 3` takes the Newton
+    /// limb kernel with an `f64::cbrt` seed.
+    #[inline]
+    pub fn icbrt(self) -> Self {
+        icbrt_dispatch(self)
+    }
+
+    /// Integer `k`th root: returns `(root, exact)` where
+    /// `root = floor(self^(1/k))` and `exact` is `true` iff
+    /// `root^k == self`. `k` must be `>= 1`.
+    ///
+    /// Brent–Zimmermann RootInt (Modern Computer Arithmetic §1.5.2): the
+    /// integer projection of Newton's iteration
+    /// `u = ((k-1)·s + m / s^(k-1)) / k`, started from an upper bound on
+    /// the root and run until the monotone-decreasing sequence first
+    /// fails to decrease (`u >= s`), at which point `s` is the floor
+    /// root. The seed is the no_std-safe bit-length bound
+    /// `2^ceil(bit_length / k)` — a clean upper bound since
+    /// `(2^ceil(L/k))^k >= 2^L > m`. `k == 2` reuses the dedicated
+    /// [`Self::isqrt`]; `k == 3` is the cube root.
+    pub fn root_int(self, k: u32) -> (Self, bool) {
+        debug_assert!(k >= 1, "root_int requires k >= 1");
+        // Degenerate / trivial roots.
+        if k == 1 {
+            return (self, true);
+        }
+        if self.is_zero() {
+            return (Self::ZERO, true);
+        }
+        if self.is_one() {
+            return (Self::ONE, true);
+        }
+        if k == 2 {
+            let r = self.isqrt();
+            return (r, r.wrapping_sqr() == self);
+        }
+
+        // Seed: 2^ceil(bit_length / k) is an upper bound on the root.
+        let len = self.bit_length();
+        let seed_shift = len.div_ceil(k);
+        // ceil(len/k) <= len for k >= 2, so the seed fits the width.
+        let mut s = Self::ONE.shl(seed_shift);
+
+        // Newton: s decreases monotonically while above the root.
+        loop {
+            // t = (k-1)*s + m / s^(k-1)
+            let pow_km1 = s.wrapping_pow(k - 1);
+            // pow_km1 is non-zero (s >= 1), so the divide is defined.
+            let quot = self.wrapping_div(pow_km1);
+            let mut t = Self::ZERO;
+            let mut c = 0;
+            while c < k - 1 {
+                t = t.wrapping_add(s);
+                c += 1;
+            }
+            t = t.wrapping_add(quot);
+            // u = t / k
+            let u = t.wrapping_div(Self::from_u64(k as u64));
+            if u >= s {
+                break;
+            }
+            s = u;
+        }
+
+        let exact = s.checked_pow(k).is_some_and(|p| p == self);
+        (s, exact)
+    }
+
+    /// Constructs from a `u64`, zero-extending into the high limbs.
+    #[inline]
+    pub(crate) fn from_u64(value: u64) -> Self {
+        let mut limbs = [0u64; N];
+        if N > 0 {
+            limbs[0] = value;
+        }
+        Self { limbs }
+    }
+
+    /// Builds from an unsigned 128-bit value, zero-extending the upper
+    /// limbs. **Truncating** for `Uint<1>` (the high 64 bits of `v` are
+    /// discarded); use the checked `TryFrom` conversion when `v` may
+    /// not fit.
+    #[inline]
+    pub(crate) const fn from_u128(v: u128) -> Self {
+        let mut limbs = [0u64; N];
+        if N > 0 {
+            limbs[0] = v as u64;
+        }
+        if N > 1 {
+            limbs[1] = (v >> 64) as u64;
+        }
+        Self { limbs }
+    }
+
+    /// Exact value conversion from `u128`, or `None` if `v` does not fit
+    /// `Uint<N>` (only possible for `N < 2`). For `N >= 2` every `u128` fits.
+    #[inline]
+    pub(crate) const fn try_from_u128(v: u128) -> Option<Self> {
+        if N >= 2 || v <= u64::MAX as u128 {
+            Some(Self::from_u128(v))
+        } else {
+            None
+        }
+    }
+
+    /// Reinterprets the bit pattern as the signed sibling.
+    #[inline]
+    pub const fn cast_signed(self) -> Int<N> {
+        Int::from_limbs(self.limbs)
+    }
+
+    /// Approximate `f64` value (positive; truncated toward zero on
+    /// overflow).
+    pub fn as_f64(self) -> f64 {
+        let radix: f64 = 18_446_744_073_709_551_616.0; // 2^64
+        let mut acc = 0.0f64;
+        let mut i = N;
+        while i > 0 {
+            i -= 1;
+            acc = acc * radix + self.limbs[i] as f64;
+        }
+        acc
+    }
+
+    /// Set-bit count across all limbs, matching the primitive
+    /// `uN::count_ones` contract.
+    #[inline]
+    pub const fn count_ones(self) -> u32 {
+        let mut total = 0;
+        let mut i = 0;
+        while i < N {
+            total += self.limbs[i].count_ones();
+            i += 1;
+        }
+        total
+    }
+
+    /// `true` when exactly one bit is set.
+    #[inline]
+    pub const fn is_power_of_two(self) -> bool {
+        self.count_ones() == 1
+    }
+
+    /// Smallest power of two `>= self` (`1` for zero), wrapping on
+    /// overflow.
+    pub fn next_power_of_two(self) -> Self {
+        if self.is_zero() {
+            return Self::ONE;
+        }
+        if self.is_power_of_two() {
+            return self;
+        }
+        let bits = self.bit_length();
+        let mut out = [0u64; N];
+        if (bits as usize) < N * 64 {
+            out[(bits / 64) as usize] = 1u64 << (bits % 64);
+        }
+        Self { limbs: out }
+    }
+
+    /// Parses an unsigned decimal string. Only base 10 is supported.
+    pub const fn from_str_radix(s: &str, radix: u32) -> Result<Self, ()> {
+        if radix != 10 {
+            return Err(());
+        }
+        let bytes = s.as_bytes();
+        if bytes.is_empty() {
+            return Err(());
+        }
+        let mut acc = [0u64; N];
+        let mut k = 0;
+        while k < bytes.len() {
+            let ch = bytes[k];
+            if ch < b'0' || ch > b'9' {
+                return Err(());
+            }
+            let d = (ch - b'0') as u64;
+            let mut carry: u64 = d;
+            let mut j = 0;
+            while j < N {
+                let p = (acc[j] as u128) * 10u128 + (carry as u128);
+                acc[j] = p as u64;
+                carry = (p >> 64) as u64;
+                j += 1;
+            }
+            k += 1;
+        }
+        Ok(Self { limbs: acc })
+    }
+}
+
+impl<const N: usize> Add for Uint<N> {
+    type Output = Self;
+    #[inline]
+    fn add(self, rhs: Self) -> Self {
+        self.wrapping_add(rhs)
+    }
+}
+
+impl<const N: usize> Sub for Uint<N> {
+    type Output = Self;
+    #[inline]
+    fn sub(self, rhs: Self) -> Self {
+        self.wrapping_sub(rhs)
+    }
+}
+
+impl<const N: usize> Mul for Uint<N> {
+    type Output = Self;
+    #[inline]
+    fn mul(self, rhs: Self) -> Self {
+        self.wrapping_mul(rhs)
+    }
+}
+
+impl<const N: usize> BitAnd for Uint<N> {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, rhs: Self) -> Self {
+        Uint::bitand(self, rhs)
+    }
+}
+
+impl<const N: usize> BitOr for Uint<N> {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, rhs: Self) -> Self {
+        Uint::bitor(self, rhs)
+    }
+}
+
+impl<const N: usize> BitXor for Uint<N> {
+    type Output = Self;
+    #[inline]
+    fn bitxor(self, rhs: Self) -> Self {
+        Uint::bitxor(self, rhs)
+    }
+}
+
+impl<const N: usize> Not for Uint<N> {
+    type Output = Self;
+    #[inline]
+    fn not(self) -> Self {
+        Uint::not(self)
+    }
+}
+
+impl<const N: usize> Shl<u32> for Uint<N> {
+    type Output = Self;
+    #[inline]
+    fn shl(self, shift: u32) -> Self {
+        Uint::shl(self, shift)
+    }
+}
+
+impl<const N: usize> Shr<u32> for Uint<N> {
+    type Output = Self;
+    #[inline]
+    fn shr(self, shift: u32) -> Self {
+        Uint::shr(self, shift)
+    }
+}
+
+// Truncating unsigned division / remainder via the dispatching divmod
+// (Knuth / Burnikel–Ziegler), matching the macro `$U` operators so the
+// const-generic and named unsigned types share one divide algorithm.
+
+impl<const N: usize> Div for Uint<N> {
+    type Output = Self;
+    #[inline]
+    fn div(self, rhs: Self) -> Self {
+        let mut q = [0u64; N];
+        let mut r = [0u64; N];
+        div_rem_dispatch(&self.limbs, &rhs.limbs, &mut q, &mut r);
+        Self { limbs: q }
+    }
+}
+
+impl<const N: usize> Rem for Uint<N> {
+    type Output = Self;
+    #[inline]
+    fn rem(self, rhs: Self) -> Self {
+        let mut q = [0u64; N];
+        let mut r = [0u64; N];
+        div_rem_dispatch(&self.limbs, &rhs.limbs, &mut q, &mut r);
+        Self { limbs: r }
+    }
+}
+
+impl<const N: usize> PartialOrd for Uint<N> {
+    #[inline]
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<const N: usize> Ord for Uint<N> {
+    #[inline]
+    fn cmp(&self, other: &Self) -> Ordering {
+        match cmp_fixed(&self.limbs, &other.limbs) {
+            -1 => Ordering::Less,
+            1 => Ordering::Greater,
+            _ => Ordering::Equal,
+        }
+    }
+}
+
+impl<const N: usize> Int<N> {
+    /// Number of 64-bit limbs.
+    pub const LIMBS: usize = N;
+    /// Bit width (`LIMBS * 64`). `u32` so it composes directly with the
+    /// `leading_zeros` / `count_ones` `u32` surface and matches the
+    /// historic named-type `BITS` constant.
+    pub const BITS: u32 = (N as u32) * 64;
+
+    /// Additive identity.
+    pub const ZERO: Self = Self { limbs: [0; N] };
+    /// Multiplicative identity.
+    pub const ONE: Self = {
+        let mut limbs = [0u64; N];
+        limbs[0] = 1;
+        Self { limbs }
+    };
+    /// Most positive representable value (`2^(BITS-1) - 1`).
+    pub const MAX: Self = {
+        let mut limbs = [u64::MAX; N];
+        limbs[N - 1] = i64::MAX as u64;
+        Self { limbs }
+    };
+    /// Most negative representable value (`-2^(BITS-1)`).
+    pub const MIN: Self = {
+        let mut limbs = [0u64; N];
+        limbs[N - 1] = 1u64 << 63;
+        Self { limbs }
+    };
+
+    /// Constructs from raw little-endian two's-complement limbs.
+    #[inline]
+    pub const fn from_limbs(limbs: [u64; N]) -> Self {
+        Self { limbs }
+    }
+
+    /// Borrows the raw little-endian limbs.
+    #[inline]
+    pub const fn as_limbs(&self) -> &[u64; N] {
+        &self.limbs
+    }
+
+    /// `true` when every limb is zero.
+    #[inline]
+    pub const fn is_zero(&self) -> bool {
+        is_zero_fixed(&self.limbs)
+    }
+
+    /// `true` when the value is strictly negative (top bit set).
+    #[inline]
+    pub const fn is_negative(&self) -> bool {
+        N > 0 && (self.limbs[N - 1] >> 63) == 1
+    }
+
+    /// `true` when the value is strictly positive (non-zero and the
+    /// sign bit clear).
+    #[inline]
+    pub const fn is_positive(&self) -> bool {
+        !self.is_negative() && !self.is_zero()
+    }
+
+    /// Two's-complement wrapping negation (`!self + 1`). `MIN` negates
+    /// to itself, as with the primitive signed integers.
+    #[inline]
+    pub const fn wrapping_neg(self) -> Self {
+        neg_dispatch(self)
+    }
+
+    /// Wrapping addition (modulo `2^BITS`). Identical bit pattern to the
+    /// unsigned add — two's-complement makes signed and unsigned
+    /// addition the same operation.
+    #[inline]
+    pub const fn wrapping_add(self, rhs: Self) -> Self {
+        add_dispatch(self, rhs)
+    }
+
+    /// Wrapping subtraction (modulo `2^BITS`).
+    #[inline]
+    pub const fn wrapping_sub(self, rhs: Self) -> Self {
+        sub_dispatch(self, rhs)
+    }
+
+    /// Wrapping multiplication (modulo `2^BITS`). The low `N` limbs of a
+    /// two's-complement product are independent of the operand signs, so
+    /// this is the same truncated schoolbook the unsigned type uses.
+    #[inline]
+    pub const fn wrapping_mul(self, rhs: Self) -> Self {
+        let mut out = [0u64; N];
+        mul_low_fixed(&self.limbs, &rhs.limbs, &mut out);
+        Self { limbs: out }
+    }
+
+    /// Absolute value (wrapping: `MIN.abs() == MIN`).
+    #[inline]
+    pub const fn abs(self) -> Self {
+        if self.is_negative() {
+            self.wrapping_neg()
+        } else {
+            self
+        }
+    }
+
+    /// Sign: `-1`, `0`, or `1` as the value is negative, zero, or
+    /// positive.
+    #[inline]
+    pub fn signum(&self) -> i32 {
+        if self.is_zero() {
+            0
+        } else if self.is_negative() {
+            -1
+        } else {
+            1
+        }
+    }
+
+    /// Constructs from an `i64`, sign-extending into the high limbs.
+    #[inline]
+    pub(crate) const fn from_i64(value: i64) -> Self {
+        // Negative values fill the upper limbs with all-ones so the
+        // two's-complement representation matches at every width.
+        let fill = if value < 0 { u64::MAX } else { 0 };
+        let mut limbs = [fill; N];
+        if N > 0 {
+            limbs[0] = value as u64;
+        }
+        Self { limbs }
+    }
+
+    /// Constructs from an `i8` (always representable; sign-extends).
+    #[inline]
+    pub(crate) const fn from_i8(value: i8) -> Self {
+        Self::from_i64(value as i64)
+    }
+
+    /// Constructs from an `i16` (always representable; sign-extends).
+    #[inline]
+    pub(crate) const fn from_i16(value: i16) -> Self {
+        Self::from_i64(value as i64)
+    }
+
+    /// Constructs from an `i32` (always representable; sign-extends).
+    #[inline]
+    pub(crate) const fn from_i32(value: i32) -> Self {
+        Self::from_i64(value as i64)
+    }
+
+    /// Constructs from a `u8` (always representable; zero-extends).
+    #[inline]
+    pub(crate) const fn from_u8(value: u8) -> Self {
+        Self::from_u64_unsigned(value as u64)
+    }
+
+    /// Constructs from a `u16` (always representable; zero-extends).
+    #[inline]
+    pub(crate) const fn from_u16(value: u16) -> Self {
+        Self::from_u64_unsigned(value as u64)
+    }
+
+    /// Constructs from a `u32` (always representable; zero-extends).
+    #[inline]
+    pub(crate) const fn from_u32(value: u32) -> Self {
+        Self::from_u64_unsigned(value as u64)
+    }
+
+    /// Zero-extends an unsigned 64-bit value into limb 0. Internal helper
+    /// for the unsigned `from_*` family; the public fitting check is in
+    /// [`Self::try_from_u64`].
+    #[inline]
+    const fn from_u64_unsigned(value: u64) -> Self {
+        let mut limbs = [0u64; N];
+        if N > 0 {
+            limbs[0] = value;
+        }
+        Self { limbs }
+    }
+
+    /// Exact conversion from a `u64`, or `None` if it does not fit
+    /// `Int<N>`. Only `N == 1` (the `i64` floor) can fail, when the value
+    /// exceeds `i64::MAX`; every wider tier holds all of `u64`.
+    #[inline]
+    pub(crate) const fn try_from_u64(value: u64) -> Option<Self> {
+        if N >= 2 || value <= i64::MAX as u64 {
+            Some(Self::from_u64_unsigned(value))
+        } else {
+            None
+        }
+    }
+
+    /// Exact conversion from an `i128`, or `None` if it does not fit
+    /// `Int<N>`. Only `N == 1` (64-bit storage) can fail; `N >= 2` holds
+    /// every `i128`.
+    #[inline]
+    pub(crate) const fn try_from_i128(v: i128) -> Option<Self> {
+        let mag = v.unsigned_abs();
+        let built = Self::from_mag_limbs(&[mag as u64, (mag >> 64) as u64], v < 0);
+        if N >= 2 || built.as_i128() == v {
+            Some(built)
+        } else {
+            None
+        }
+    }
+
+    /// Exact conversion from a `u128`, or `None` if it does not fit
+    /// `Int<N>`. `N == 1` fails above `i64::MAX`; `N == 2` fails above
+    /// `i128::MAX` (the sign bit); `N >= 3` holds every `u128`.
+    #[inline]
+    pub(crate) const fn try_from_u128(v: u128) -> Option<Self> {
+        let built = Self::from_mag_limbs(&[v as u64, (v >> 64) as u64], false);
+        if N >= 3 {
+            Some(built)
+        } else if built.is_negative() {
+            // Magnitude landed in the sign bit of the N-limb storage.
+            None
+        } else if N >= 2 || built.as_i128() as u128 == v {
+            Some(built)
+        } else {
+            None
+        }
+    }
+
+    /// Lossless `i64` value, valid on the `N == 1` tier where `Int<N>`
+    /// *is* an `i64`. The trait form is `From<Int<1>> for i64`.
+    #[inline]
+    pub(crate) const fn to_i64(self) -> i64 {
+        self.as_i128() as i64
+    }
+
+    /// Lossless `i128` value, valid on the `N <= 2` tiers where every
+    /// `Int<N>` fits an `i128`. The trait forms are `From<Int<1>>` /
+    /// `From<Int<2>> for i128`.
+    #[inline]
+    pub(crate) const fn to_i128(self) -> i128 {
+        self.as_i128()
+    }
+
+    /// Exact `i32` value, or `None` if out of range.
+    #[inline]
+    pub(crate) fn try_to_i32(self) -> Option<i32> {
+        match self.to_i128_checked() {
+            Some(v) if v >= i32::MIN as i128 && v <= i32::MAX as i128 => Some(v as i32),
+            _ => None,
+        }
+    }
+
+    /// Exact `u32` value, or `None` if negative or out of range.
+    #[inline]
+    pub(crate) fn try_to_u32(self) -> Option<u32> {
+        match self.to_u128_checked() {
+            Some(v) if v <= u32::MAX as u128 => Some(v as u32),
+            _ => None,
+        }
+    }
+
+    /// Exact `i64` value, or `None` if out of range.
+    #[inline]
+    pub(crate) fn try_to_i64(self) -> Option<i64> {
+        match self.to_i128_checked() {
+            Some(v) if v >= i64::MIN as i128 && v <= i64::MAX as i128 => Some(v as i64),
+            _ => None,
+        }
+    }
+
+    /// Exact `u64` value, or `None` if negative or out of range.
+    #[inline]
+    pub(crate) fn try_to_u64(self) -> Option<u64> {
+        match self.to_u128_checked() {
+            Some(v) if v <= u64::MAX as u128 => Some(v as u64),
+            _ => None,
+        }
+    }
+
+    /// Exact `i128` value, or `None` if out of range. Surface alias of
+    /// [`Self::to_i128_checked`].
+    #[inline]
+    pub(crate) fn try_to_i128(self) -> Option<i128> {
+        self.to_i128_checked()
+    }
+
+    /// Exact `u128` value, or `None` if negative or out of range. Surface
+    /// alias of [`Self::to_u128_checked`].
+    #[inline]
+    pub(crate) fn try_to_u128(self) -> Option<u128> {
+        self.to_u128_checked()
+    }
+
+    /// `true` when the value equals one.
+    #[inline]
+    pub fn is_one(&self) -> bool {
+        if N == 0 || self.limbs[0] != 1 {
+            return false;
+        }
+        let mut i = 1;
+        while i < N {
+            if self.limbs[i] != 0 {
+                return false;
+            }
+            i += 1;
+        }
+        true
+    }
+
+    /// Most negative representable value (`-2^(BITS-1)`).
+    #[inline]
+    pub fn min_value() -> Self {
+        let mut limbs = [0u64; N];
+        if N > 0 {
+            limbs[N - 1] = 1u64 << 63;
+        }
+        Self { limbs }
+    }
+
+    /// Most positive representable value (`2^(BITS-1) - 1`).
+    #[inline]
+    pub fn max_value() -> Self {
+        let mut limbs = [u64::MAX; N];
+        if N > 0 {
+            limbs[N - 1] = u64::MAX >> 1;
+        }
+        Self { limbs }
+    }
+
+    /// Checked signed addition: `None` on two's-complement overflow.
+    /// Overflow happens only when both operands share a sign and the
+    /// result's sign differs from it. Routes through the add policy's
+    /// checked door to the FUSED single-pass kernel (ripple + overflow
+    /// verdict in one traversal) — the previous layered shape
+    /// (`wrapping_add` then three sign reads then an `Option` rewrap)
+    /// measured ≈2× the bare loop at 24 limbs in inter-layer moves.
+    #[inline]
+    pub const fn checked_add(self, rhs: Self) -> Option<Self> {
+        crate::int::policy::add::dispatch_checked(self, rhs)
+    }
+
+    /// Checked signed subtraction: `None` on two's-complement overflow
+    /// (the operands' signs differ and the result takes the subtrahend's
+    /// sign). Routes through the sub policy's checked door to the fused
+    /// single-pass kernel — see [`Self::checked_add`].
+    #[inline]
+    pub const fn checked_sub(self, rhs: Self) -> Option<Self> {
+        crate::int::policy::sub::dispatch_checked(self, rhs)
+    }
+
+    /// Checked signed multiplication: `None` if the true product does
+    /// not fit the signed range. Computed via magnitudes so it reuses
+    /// the unsigned overflow check, then re-signs.
+    #[inline]
+    pub fn checked_mul(self, rhs: Self) -> Option<Self> {
+        if self.is_zero() || rhs.is_zero() {
+            return Some(Self::ZERO);
+        }
+        let neg = self.is_negative() ^ rhs.is_negative();
+        let ma = Uint::<N>::from_limbs(*self.abs().as_limbs());
+        let mb = Uint::<N>::from_limbs(*rhs.abs().as_limbs());
+        let prod = ma.checked_mul(mb)?;
+        let signed = Self::from_limbs(*prod.as_limbs());
+        if neg {
+            let r = signed.wrapping_neg();
+            // Negative magnitude must not exceed |MIN|; the round-trip
+            // through wrapping_neg detects the single MIN-magnitude case.
+            if r.is_negative() || r.is_zero() {
+                Some(r)
+            } else {
+                None
+            }
+        } else if signed.is_negative() {
+            // Positive magnitude landed in the sign bit → overflow.
+            None
+        } else {
+            Some(signed)
+        }
+    }
+
+    /// Wrapping exponentiation by squaring (`self^exp` modulo `2^BITS`).
+    /// `self^0 == 1`. Thin delegator DOWN to the pow policy
+    /// (`pow_dispatch`) on the unsigned reinterpretation: binary
+    /// square-and-multiply over the const kernels. The low `N` limbs of a
+    /// power are sign-independent, so reinterpreting as `Uint<N>` and back
+    /// preserves the two's-complement result.
+    #[inline]
+    pub const fn wrapping_pow(self, exp: u32) -> Self {
+        Self::from_limbs(*pow_dispatch(self.cast_unsigned(), exp).as_limbs())
+    }
+
+    /// Exponentiation by squaring, returning `None` on signed overflow.
+    #[inline]
+    pub fn checked_pow(self, mut exp: u32) -> Option<Self> {
+        let mut acc = Self::ONE;
+        let mut base = self;
+        loop {
+            if exp & 1 == 1 {
+                acc = acc.checked_mul(base)?;
+            }
+            exp >>= 1;
+            if exp == 0 {
+                break;
+            }
+            base = base.checked_mul(base)?;
+        }
+        Some(acc)
+    }
+
+    /// Wrapping square (`self²` modulo `2^BITS`). Thin delegator DOWN to
+    /// the sqr policy (`sqr_dispatch`) on the unsigned reinterpretation:
+    /// half-product squaring via the const kernel. The low `N` limbs of a
+    /// square are sign-independent, so reinterpreting as `Uint<N>` and back
+    /// preserves the two's-complement result.
+    #[inline]
+    pub const fn wrapping_sqr(self) -> Self {
+        Self::from_limbs(*sqr_dispatch(self.cast_unsigned()).as_limbs())
+    }
+
+    /// Wrapping cube (`self³` modulo `2^BITS`). Thin delegator DOWN to the
+    /// cube policy (`cube_dispatch`) on the unsigned reinterpretation:
+    /// `sqr` then one multiply via the const kernels. The low `N` limbs are
+    /// sign-independent, so reinterpreting as `Uint<N>` and back preserves
+    /// the two's-complement result.
+    #[inline]
+    pub const fn wrapping_cube(self) -> Self {
+        Self::from_limbs(*cube_dispatch(self.cast_unsigned()).as_limbs())
+    }
+
+    /// MAGNITUDE bit length: `0` for zero, else `floor(log2|self|) + 1`
+    /// — the number of significant bits of the absolute value `|self|`.
+    ///
+    /// This is a *distinct concept* from the primitive bit-count methods
+    /// ([`Self::leading_zeros`], [`Self::trailing_zeros`],
+    /// [`Self::count_ones`], [`Self::count_zeros`]), which read the
+    /// two's-complement representation. `bit_length` ignores the sign:
+    /// `(-5).bit_length() == 5.bit_length() == 3`. It is kept public for
+    /// internal normalisation use (root/reciprocal seeds, shift amounts).
+    ///
+    /// At `MIN` the magnitude is `2^(BITS-1)`, so
+    /// `MIN.bit_length() == BITS` (one more than `MAX.bit_length()`,
+    /// which is `BITS - 1`).
+    #[inline]
+    pub const fn bit_length(&self) -> u32 {
+        bit_len_fixed(self.abs().as_limbs())
+    }
+
+    /// Leading zero bits of the two's-complement representation, matching
+    /// the primitive `iN::leading_zeros` contract. A negative value has its
+    /// sign bit (the MSB) set, so it has zero leading zeros; a non-negative
+    /// value's leading-zero count is `BITS - bit_length` (`BITS` for zero).
+    ///
+    /// `MIN` is negative, so `MIN.leading_zeros() == 0`. `MAX` is the
+    /// largest non-negative value (`0b0111…1`), so `MAX.leading_zeros()
+    /// == 1`. Note this is the two's-complement count, NOT a magnitude
+    /// count — contrast [`Self::bit_length`].
+    #[inline]
+    pub const fn leading_zeros(&self) -> u32 {
+        if self.is_negative() {
+            0
+        } else {
+            Self::BITS - self.bit_length()
+        }
+    }
+
+    // ── Int<N> / Uint<N> parity surface ─────────────────────────
+    //
+    // The methods below give the const-generic `Int<N>` the surface the
+    // kernel-facing `BigInt` trait and the public `IntXXXX` type aliases
+    // expect. Most delegate to the existing inherent methods or the
+    // `Uint<N>` twin.
+
+    /// Integer constant `10`, used by decimal-scale `10^scale`
+    /// rescaling.
+    pub const TEN: Self = {
+        let mut limbs = [0u64; N];
+        if N > 0 {
+            limbs[0] = 10;
+        }
+        Self { limbs }
+    };
+
+    /// `|self|` as the unsigned twin. `MIN` maps to `2^(BITS-1)`.
+    #[inline]
+    pub const fn unsigned_abs(self) -> Uint<N> {
+        Uint::from_limbs(*self.abs().as_limbs())
+    }
+
+    /// Two's-complement negation. Alias of [`Self::wrapping_neg`].
+    #[inline]
+    pub fn negate(self) -> Self {
+        self.wrapping_neg()
+    }
+
+    /// Truncating quotient and remainder `(self / rhs, self % rhs)` in a
+    /// single divmod call. The quotient truncates toward zero and the
+    /// remainder takes the sign of the dividend. Routes through the
+    /// const-`N` fast-arm (`div_rem_mag_fixed`): native `u64` idiv at
+    /// `N == 1`, native `u128` divide at `N == 2`, and the dispatching
+    /// divmod (Knuth / Burnikel–Ziegler) for wider `N`. Panics on a zero
+    /// divisor.
+    #[inline]
+    pub fn div_rem(self, rhs: Self) -> (Self, Self) {
+        assert!(!rhs.is_zero(), "attempt to divide by zero");
+        let neg_q = self.is_negative() ^ rhs.is_negative();
+        let neg_r = self.is_negative();
+        let mut quot = [0u64; N];
+        let mut rem = [0u64; N];
+        div_rem_mag_fixed::<N>(
+            self.unsigned_abs().as_limbs(),
+            rhs.unsigned_abs().as_limbs(),
+            &mut quot,
+            &mut rem,
+        );
+        let q = Self::from_mag_limbs(&quot, neg_q);
+        let r = Self::from_mag_limbs(&rem, neg_r);
+        (q, r)
+    }
+
+    /// Builds a signed value from a non-negative magnitude limb slice
+    /// and a sign, truncating the magnitude into `N` limbs.
+    #[inline]
+    pub(crate) const fn from_mag_limbs(mag: &[u64], negative: bool) -> Self {
+        let mut out = [0u64; N];
+        let n = if mag.len() < N { mag.len() } else { N };
+        let mut i = 0;
+        while i < n {
+            out[i] = mag[i];
+            i += 1;
+        }
+        let v = Self { limbs: out };
+        // Inherent `const` zero-check (avoids the non-const `BigInt`
+        // trait method that name-resolution would otherwise pick here).
+        if negative && !is_zero_fixed(&v.limbs) {
+            v.wrapping_neg()
+        } else {
+            v
+        }
+    }
+
+    /// `true` if bit `idx` of the two's-complement representation is set.
+    #[inline]
+    pub const fn bit(self, idx: u32) -> bool {
+        let limb = (idx / 64) as usize;
+        if limb >= N {
+            return self.is_negative();
+        }
+        (self.limbs[limb] >> (idx % 64)) & 1 == 1
+    }
+
+    /// Builds from a signed 128-bit value. **Truncating** for `Int<1>`
+    /// (the high 64 bits of `v` are discarded); use the checked `TryFrom`
+    /// conversion when `v` may not fit.
+    #[inline]
+    pub(crate) const fn from_i128(v: i128) -> Self {
+        // Narrow non-limb fast path (const-folds): for N<=2 write the
+        // two's-complement limbs directly (truncating for N==1), skipping the
+        // magnitude split + `wrapping_neg` re-sign. Bit-identical to the
+        // magnitude path (two's-complement negation commutes with low-64
+        // truncation).
+        if N <= 2 {
+            let mut limbs = [0u64; N];
+            limbs[0] = v as u64;
+            if N == 2 {
+                limbs[1] = (v >> 64) as u64;
+            }
+            return Self { limbs };
+        }
+        let mag = v.unsigned_abs();
+        Self::from_mag_limbs(&[mag as u64, (mag >> 64) as u64], v < 0)
+    }
+
+    /// Builds from an unsigned 128-bit value.
+    #[inline]
+    pub(crate) const fn from_u128(v: u128) -> Self {
+        Self::from_mag_limbs(&[v as u64, (v >> 64) as u64], false)
+    }
+
+    /// Builds directly from the little-endian u64 limb array. Alias of
+    /// [`Self::from_limbs`] under the historic `from_limbs_le` public name.
+    #[inline]
+    pub const fn from_limbs_le(limbs: [u64; N]) -> Self {
+        Self { limbs }
+    }
+
+    /// Returns the little-endian u64 limbs by value. Symmetric with
+    /// [`Self::from_limbs_le`].
+    #[inline]
+    pub const fn limbs_le(self) -> [u64; N] {
+        self.limbs
+    }
+
+    /// `self · (n as Self)` with the sign of `self`, panicking on
+    /// overflow (the default-form contract). Computes the n-by-1-word
+    /// product (the same limb recurrence as `mul_schoolbook_into`) and
+    /// rejects a non-zero top carry.
+    #[inline]
+    pub fn mul_u64(self, n: u64) -> Self {
+        let mag = *self.unsigned_abs().as_limbs();
+        let mut prod = [0u64; N];
+        let mut carry: u64 = 0;
+        let mut i = 0;
+        while i < N {
+            let p = (mag[i] as u128) * (n as u128) + (carry as u128);
+            prod[i] = p as u64;
+            carry = (p >> 64) as u64;
+            i += 1;
+        }
+        if carry != 0 {
+            panic!("Int: mul overflow");
+        }
+        let negative = self.is_negative();
+        let r = Self::from_mag_limbs(&prod, negative);
+        // `from_mag_limbs` only mishandles the `mag == 2^(BITS-1)` edge:
+        // legal as MIN for `negative`, overflow otherwise.
+        if !r.is_zero() && r.is_negative() != negative {
+            panic!("Int: mul overflow");
+        }
+        r
+    }
+
+    /// Exact `i128` value, or `None` if it does not fit.
+    pub fn to_i128_checked(self) -> Option<i128> {
+        let negative = self.is_negative();
+        let mag = *self.unsigned_abs().as_limbs();
+        // First two u64 limbs make up the low u128; the rest must be 0.
+        let mut i = 2;
+        while i < N {
+            if mag[i] != 0 {
+                return None;
+            }
+            i += 1;
+        }
+        let lo = if N > 0 { mag[0] as u128 } else { 0 };
+        let hi = if N > 1 { mag[1] as u128 } else { 0 };
+        let lo_u128 = lo | (hi << 64);
+        if negative {
+            if lo_u128 <= (i128::MAX as u128) + 1 {
+                Some((lo_u128 as i128).wrapping_neg())
+            } else {
+                None
+            }
+        } else if lo_u128 <= i128::MAX as u128 {
+            Some(lo_u128 as i128)
+        } else {
+            None
+        }
+    }
+
+    /// Exact `u128` value, or `None` if negative / too large.
+    pub fn to_u128_checked(self) -> Option<u128> {
+        if self.is_negative() {
+            return None;
+        }
+        let mut i = 2;
+        while i < N {
+            if self.limbs[i] != 0 {
+                return None;
+            }
+            i += 1;
+        }
+        let lo = if N > 0 { self.limbs[0] as u128 } else { 0 };
+        let hi = if N > 1 { self.limbs[1] as u128 } else { 0 };
+        Some(lo | (hi << 64))
+    }
+
+    /// Approximate `f64` value of `self` (lossy above 53 significant
+    /// bits).
+    pub fn to_f64(self) -> f64 {
+        let mag = *self.unsigned_abs().as_limbs();
+        let radix: f64 = 18_446_744_073_709_551_616.0; // 2^64
+        let mut acc = 0.0f64;
+        let mut i = N;
+        while i > 0 {
+            i -= 1;
+            acc = acc * radix + mag[i] as f64;
+        }
+        if self.is_negative() { -acc } else { acc }
+    }
+
+    /// Approximate `f32` value of `self` (round-to-nearest; lossy above
+    /// 24 significant bits). Routes through the `f64` accumulation to keep
+    /// one summation path.
+    pub fn to_f32(self) -> f32 {
+        self.to_f64() as f32
+    }
+
+    /// Exact conversion from an `f64`, or `None` when `v` is NaN, ±inf,
+    /// has a fractional part, or lies outside the `Int<N>` range.
+    ///
+    /// `const`: classification and decomposition go through the const
+    /// `f64::to_bits` plus integer/bit ops only — never the non-const
+    /// `is_finite` / `fract` / float-`as` paths.
+    pub(crate) const fn try_from_f64(v: f64) -> Option<Self> {
+        let bits = v.to_bits();
+        let negative = (bits >> 63) & 1 == 1;
+        let exp = ((bits >> 52) & 0x7ff) as i32;
+        let mant = bits & 0x000f_ffff_ffff_ffff;
+        if exp == 0x7ff {
+            // NaN / ±inf.
+            return None;
+        }
+        if exp == 0 {
+            // ±0 is exact zero; a subnormal is a non-zero |v| < 1, i.e.
+            // never an integer.
+            return if mant == 0 { Some(Self::ZERO) } else { None };
+        }
+        let significand = (1u64 << 52) | mant; // 53-bit normalized value
+        let shift = exp - 1075; // (exp - 1023) - 52
+        Self::from_significand_shift(significand, shift, negative)
+    }
+
+    /// Exact conversion from an `f32`, or `None` on NaN, ±inf, a
+    /// fractional part, or out-of-range. Decomposes via the const
+    /// `f32::to_bits` (8-bit exponent, 23-bit mantissa, bias 127, 24-bit
+    /// significand) with integer/bit ops only — `const` for the same
+    /// reason as [`Self::try_from_f64`].
+    pub(crate) const fn try_from_f32(v: f32) -> Option<Self> {
+        let bits = v.to_bits();
+        let negative = (bits >> 31) & 1 == 1;
+        let exp = ((bits >> 23) & 0xff) as i32;
+        let mant = (bits & 0x007f_ffff) as u64;
+        if exp == 0xff {
+            // NaN / ±inf.
+            return None;
+        }
+        if exp == 0 {
+            return if mant == 0 { Some(Self::ZERO) } else { None };
+        }
+        let significand = (1u64 << 23) | mant; // 24-bit normalized value
+        let shift = exp - 150; // (exp - 127) - 23
+        Self::from_significand_shift(significand, shift, negative)
+    }
+
+    /// Builds `Int<N>` from `(-1)^sign * significand * 2^shift`, where
+    /// `significand` fits in 64 bits. Returns `None` when the value has a
+    /// fractional part (`shift < 0` with low bits set) or does not fit the
+    /// signed `Int<N>` range. Pure const integer/bit arithmetic — no float
+    /// ops — so both float entry points are `const`.
+    const fn from_significand_shift(significand: u64, shift: i32, negative: bool) -> Option<Self> {
+        if shift < 0 {
+            let s = (-shift) as u32;
+            if s >= 64 {
+                // Whole value is fractional (|v| < 1, non-zero) — not an
+                // integer.
+                return None;
+            }
+            if significand & ((1u64 << s) - 1) != 0 {
+                // Fractional bits set — not an integer.
+                return None;
+            }
+            let mag = significand >> s; // integral, fits a single limb
+            let built = Self::from_mag_limbs(&[mag], negative);
+            Self::accept_signed(built, negative)
+        } else {
+            // Place `significand` left-shifted by `shift` into an N-limb
+            // magnitude, rejecting any bit that lands beyond limb N-1.
+            let s = shift as u32;
+            let limb_off = (s / 64) as usize;
+            let bit_off = s % 64;
+            let mut mag = [0u64; N];
+            // Low chunk into limb `limb_off`; carry into the next limb.
+            let lo = significand << bit_off;
+            // The part of `significand` pushed past this limb's top.
+            let hi = if bit_off == 0 {
+                0
+            } else {
+                significand >> (64 - bit_off)
+            };
+            if limb_off < N {
+                mag[limb_off] = lo;
+            } else if lo != 0 {
+                return None;
+            }
+            if hi != 0 {
+                if limb_off + 1 < N {
+                    mag[limb_off + 1] = hi;
+                } else {
+                    return None;
+                }
+            }
+            let built = Self::from_mag_limbs(&mag, negative);
+            Self::accept_signed(built, negative)
+        }
+    }
+
+    /// Sign-overflow gate shared by the float builders: a zero is always
+    /// fine; otherwise the built sign must match the requested one, which
+    /// rejects a positive magnitude that wrapped into the sign bit while
+    /// still admitting the exact `MIN` edge (magnitude `2^(bits-1)` with
+    /// the sign set, which `wrapping_neg` reproduces as itself).
+    #[inline]
+    const fn accept_signed(built: Self, negative: bool) -> Option<Self> {
+        // Inherent const zero-check (the `BigInt::is_zero` trait method
+        // name-resolution would otherwise pick is not const).
+        if is_zero_fixed(&built.limbs) {
+            Some(built)
+        } else if built.is_negative() != negative {
+            None
+        } else {
+            Some(built)
+        }
+    }
+
+    /// Builds from an `f64`, truncating toward zero. Saturates to
+    /// `MIN` / `MAX` on out-of-range; non-finite maps to `ZERO`.
+    pub fn from_f64(v: f64) -> Self {
+        if !v.is_finite() {
+            return Self::ZERO;
+        }
+        let negative = v < 0.0;
+        let mut m = if negative { -v } else { v };
+        let radix: f64 = 18_446_744_073_709_551_616.0; // 2^64
+        let mut limbs = [0u64; N];
+        let mut i = 0;
+        while m >= 1.0 && i < N {
+            let rem = m % radix;
+            limbs[i] = rem as u64;
+            m = (m - rem) / radix;
+            i += 1;
+        }
+        if m >= 1.0 {
+            return if negative {
+                Self::min_value()
+            } else {
+                Self::max_value()
+            };
+        }
+        Self::from_mag_limbs(&limbs, negative)
+    }
+
+    /// Parses a signed decimal magnitude from `s`. Accepts an optional
+    /// leading `-`, then ASCII digits. Only `radix == 10` is supported;
+    /// any other value returns `Err(())`.
+    pub const fn from_str_radix(s: &str, radix: u32) -> Result<Self, ()> {
+        if radix != 10 {
+            return Err(());
+        }
+        let bytes = s.as_bytes();
+        let (negative, start): (bool, usize) = if !bytes.is_empty() && bytes[0] == b'-' {
+            (true, 1)
+        } else {
+            (false, 0)
+        };
+        if start >= bytes.len() {
+            return Err(());
+        }
+        // acc = acc * 10 + d per digit, truncating into N limbs — the
+        // same Horner recurrence the macro runs through `mul_schoolbook`
+        // + `add_assign`, but the low-N-limb multiply-by-10 is
+        // folded into one n-by-1-word pass (no `2*N` staging buffer).
+        let mut acc = [0u64; N];
+        let mut k = start;
+        while k < bytes.len() {
+            let ch = bytes[k];
+            if ch < b'0' || ch > b'9' {
+                return Err(());
+            }
+            let d = (ch - b'0') as u64;
+            let mut carry: u64 = d;
+            let mut j = 0;
+            while j < N {
+                let p = (acc[j] as u128) * 10u128 + (carry as u128);
+                acc[j] = p as u64;
+                carry = (p >> 64) as u64;
+                j += 1;
+            }
+            k += 1;
+        }
+        Ok(Self::from_mag_limbs(&acc, negative))
+    }
+
+    // ── Named-type API parity (the `IntXXXX` alias surface) ─────
+    //
+    // The methods below complete the inherent surface the `IntXXXX = Int<N>`
+    // type aliases expose, so every named-type call site keeps resolving.
+
+    /// Integer power: `self^exp` (wrapping on overflow). Alias of
+    /// [`Self::wrapping_pow`] under the `pow` name.
+    #[inline]
+    pub const fn pow(self, exp: u32) -> Self {
+        self.wrapping_pow(exp)
+    }
+
+    /// Integer square root of the magnitude (`floor(sqrt(|self|))`),
+    /// returned non-negative. Delegates to the unsigned sibling which
+    /// routes through `isqrt_dispatch`.
+    #[inline]
+    pub fn isqrt(self) -> Self {
+        Self::from_limbs(*self.unsigned_abs().isqrt().as_limbs())
+    }
+
+    /// Integer square: `self²` modulo `2^BITS`. Routes through the sqr
+    /// policy (`sqr_dispatch`) on the unsigned reinterpretation, then
+    /// reinterprets back as signed. Equivalent to `wrapping_sqr`.
+    #[inline]
+    pub fn sqr(self) -> Self {
+        self.wrapping_sqr()
+    }
+
+    /// Integer cube: `self³` modulo `2^BITS`. Routes through the cube
+    /// policy (`cube_dispatch`) on the unsigned reinterpretation, then
+    /// reinterprets back as signed. Equivalent to `wrapping_cube`.
+    #[inline]
+    pub fn cube(self) -> Self {
+        self.wrapping_cube()
+    }
+
+    /// Integer cube root of the magnitude (`floor(cbrt(|self|))`),
+    /// returned non-negative. Delegates to the unsigned sibling which
+    /// routes through `icbrt_dispatch`.
+    #[inline]
+    pub fn icbrt(self) -> Self {
+        Self::from_limbs(*self.unsigned_abs().icbrt().as_limbs())
+    }
+
+    /// Integer hypotenuse: `round(sqrt(self^2 + other^2))` without
+    /// intermediate overflow of the radicand. Routes through the hypot
+    /// policy (`hypot_dispatch`): the radicand `self^2 + other^2` is formed
+    /// in a wider limb scratch buffer and the floor root is taken via the
+    /// integer slice `isqrt`, then a single round step under `mode` lands
+    /// the result. Returns [`None`] when the rounded result does not fit
+    /// the signed range of `Int<N>` (true overflow). The sign of each
+    /// operand drops out of the squaring; `hypot(0, 0) = 0` and
+    /// `hypot(0, x) = |x|`.
+    #[inline]
+    #[must_use]
+    pub(crate) fn hypot(
+        self,
+        other: Self,
+        mode: crate::support::rounding::RoundingMode,
+    ) -> Option<Self>
+    where
+        crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
+    {
+        hypot_dispatch::<N>(self, other, mode)
+    }
+
+    /// Sum of squares: `self^2 + other^2`, the sqrt-free magnitude
+    /// primitive. Routes through the sum-of-squares policy
+    /// (`sum_sq_dispatch`): the radicand is formed in a wider limb scratch
+    /// buffer (the same former [`Self::hypot`] roots), so there is no
+    /// intermediate truncation. Returns [`None`] when `self^2 + other^2`
+    /// exceeds the signed range of `Int<N>` (true overflow). The sign of
+    /// each operand drops out of the squaring, so the result is always
+    /// non-negative. Comparing two `sum_sq` values orders the same as
+    /// comparing the corresponding [`Self::hypot`] values (the root is
+    /// monotonic), which is why a distance comparison can skip the root.
+    #[inline]
+    #[must_use]
+    pub(crate) fn sum_sq(self, other: Self) -> Option<Self>
+    where
+        crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
+    {
+        sum_sq_dispatch::<N>(self, other)
+    }
+
+    /// Reinterprets the bit pattern as the unsigned sibling.
+    #[inline]
+    pub const fn cast_unsigned(self) -> Uint<N> {
+        Uint::from_limbs(self.limbs)
+    }
+
+    /// Approximate `f64` value. Alias of [`Self::to_f64`], matching the
+    /// macro's `as_f64` name.
+    #[inline]
+    pub fn as_f64(self) -> f64 {
+        self.to_f64()
+    }
+
+    /// Count of set bits across the two's-complement representation,
+    /// matching the primitive `iN::count_ones` contract — the limbs are
+    /// read as stored, so negative values count their sign-extended
+    /// one-bits. `(-1).count_ones() == BITS` (all-ones), and
+    /// `MIN.count_ones() == 1` (only the sign bit). This is a
+    /// two's-complement count, not a magnitude count.
+    #[inline]
+    pub const fn count_ones(self) -> u32 {
+        let mut total = 0;
+        let mut i = 0;
+        while i < N {
+            total += self.limbs[i].count_ones();
+            i += 1;
+        }
+        total
+    }
+
+    /// Count of clear bits across the two's-complement representation,
+    /// matching the primitive `iN::count_zeros` contract
+    /// (`BITS - count_ones`). `(-1).count_zeros() == 0` and
+    /// `MIN.count_zeros() == BITS - 1`.
+    #[inline]
+    pub const fn count_zeros(self) -> u32 {
+        Self::BITS - self.count_ones()
+    }
+
+    /// Number of trailing zero bits of the two's-complement
+    /// representation, matching the primitive `iN::trailing_zeros`
+    /// contract; `BITS` for zero. `MIN` has only its sign bit set, so
+    /// `MIN.trailing_zeros() == BITS - 1`. This reads the stored limbs,
+    /// not the magnitude — contrast [`Self::bit_length`].
+    #[inline]
+    pub const fn trailing_zeros(self) -> u32 {
+        let mut i = 0;
+        while i < N {
+            if self.limbs[i] != 0 {
+                return i as u32 * 64 + self.limbs[i].trailing_zeros();
+            }
+            i += 1;
+        }
+        Self::BITS
+    }
+
+    /// Checked negation: `None` exactly at `MIN` (whose negation
+    /// overflows the signed range).
+    #[inline]
+    pub const fn checked_neg(self) -> Option<Self> {
+        if eq_dispatch(self, Self::MIN) {
+            None
+        } else {
+            Some(self.wrapping_neg())
+        }
+    }
+
+    /// Checked division: `None` on a zero divisor.
+    #[inline]
+    pub const fn checked_div(self, rhs: Self) -> Option<Self> {
+        if is_zero_fixed(&rhs.limbs) {
+            None
+        } else {
+            Some(self.wrapping_div(rhs))
+        }
+    }
+
+    /// Checked remainder: `None` on a zero divisor, and `None` for the
+    /// `MIN % -1` overflow case (the paired division `MIN / -1` overflows
+    /// the signed range), matching the primitive integer contract.
+    #[inline]
+    pub const fn checked_rem(self, rhs: Self) -> Option<Self> {
+        if is_zero_fixed(&rhs.limbs) || self.is_min_neg_one(rhs) {
+            // Zero divisor, or the `MIN % -1` overflow case (its paired
+            // `MIN / -1` division overflows the signed range).
+            None
+        } else {
+            Some(self.wrapping_rem(rhs))
+        }
+    }
+
+    /// `true` when `self == MIN` and `rhs == -1` — the remainder/division
+    /// overflow case where `MIN / -1` exceeds the signed range.
+    #[inline]
+    const fn is_min_neg_one(self, rhs: Self) -> bool {
+        cmp_fixed(&self.limbs, &Self::MIN.limbs) == 0
+            && cmp_fixed(&rhs.wrapping_neg().limbs, &Self::ONE.limbs) == 0
+    }
+
+    /// Euclidean division: the quotient that leaves a non-negative
+    /// remainder.
+    #[inline]
+    pub const fn div_euclid(self, rhs: Self) -> Self {
+        let q = self.wrapping_div(rhs);
+        let r = self.wrapping_rem(rhs);
+        if r.is_negative() {
+            if rhs.is_negative() {
+                q.wrapping_add(Self::ONE)
+            } else {
+                q.wrapping_sub(Self::ONE)
+            }
+        } else {
+            q
+        }
+    }
+
+    /// Euclidean remainder — always non-negative.
+    #[inline]
+    pub const fn rem_euclid(self, rhs: Self) -> Self {
+        let r = self.wrapping_rem(rhs);
+        if r.is_negative() {
+            r.wrapping_add(rhs.abs())
+        } else {
+            r
+        }
+    }
+
+    /// Wrapping addition paired with the two's-complement overflow flag.
+    #[inline]
+    pub const fn overflowing_add(self, rhs: Self) -> (Self, bool) {
+        let r = self.wrapping_add(rhs);
+        let sa = self.is_negative();
+        let sb = rhs.is_negative();
+        let sr = r.is_negative();
+        (r, sa == sb && sr != sa)
+    }
+
+    /// Wrapping subtraction paired with the two's-complement overflow
+    /// flag.
+    #[inline]
+    pub const fn overflowing_sub(self, rhs: Self) -> (Self, bool) {
+        let r = self.wrapping_sub(rhs);
+        let sa = self.is_negative();
+        let sb = rhs.is_negative();
+        let sr = r.is_negative();
+        (r, sa != sb && sr != sa)
+    }
+
+    /// Wrapping negation paired with the overflow flag (`true` only at
+    /// `MIN`).
+    #[inline]
+    pub const fn overflowing_neg(self) -> (Self, bool) {
+        let ov = cmp_fixed(&self.limbs, &Self::MIN.limbs) == 0;
+        (self.wrapping_neg(), ov)
+    }
+
+    /// Wrapping remainder paired with an overflow flag. The flag is `true`
+    /// only for `MIN % -1` (whose paired division overflows the signed
+    /// range), in which case the remainder is `0`; otherwise `false`.
+    #[inline]
+    pub const fn overflowing_rem(self, rhs: Self) -> (Self, bool) {
+        if self.is_min_neg_one(rhs) {
+            (Self::ZERO, true)
+        } else {
+            (self.wrapping_rem(rhs), false)
+        }
+    }
+
+    /// Saturating addition: clamps to `MIN` / `MAX` on overflow.
+    #[inline]
+    pub const fn saturating_add(self, rhs: Self) -> Self {
+        match self.checked_add(rhs) {
+            Some(v) => v,
+            None => {
+                if self.is_negative() {
+                    Self::MIN
+                } else {
+                    Self::MAX
+                }
+            }
+        }
+    }
+
+    /// Saturating subtraction: clamps to `MIN` / `MAX` on overflow.
+    #[inline]
+    pub const fn saturating_sub(self, rhs: Self) -> Self {
+        match self.checked_sub(rhs) {
+            Some(v) => v,
+            None => {
+                if self.is_negative() {
+                    Self::MIN
+                } else {
+                    Self::MAX
+                }
+            }
+        }
+    }
+
+    /// Saturating negation: `MIN` saturates to `MAX`.
+    #[inline]
+    pub const fn saturating_neg(self) -> Self {
+        match self.checked_neg() {
+            Some(v) => v,
+            None => Self::MAX,
+        }
+    }
+
+    /// Rotates the bits left by `n` (modulo `BITS`).
+    #[inline]
+    pub fn rotate_left(self, n: u32) -> Self {
+        let bits = Self::BITS;
+        let n = n % bits;
+        if n == 0 {
+            return self;
+        }
+        let u = self.cast_unsigned();
+        Self::from_limbs(((u.shl(n)) | (u.shr(bits - n))).limbs)
+    }
+
+    /// Rotates the bits right by `n` (modulo `BITS`).
+    #[inline]
+    pub fn rotate_right(self, n: u32) -> Self {
+        self.rotate_left(Self::BITS - (n % Self::BITS))
+    }
+
+    /// Truncating cast to `u128` (low 128 magnitude bits, sign ignored).
+    /// **Truncating** — discards any higher limbs and the sign; use
+    /// [`Self::to_u128_checked`] (or `TryFrom`) when the value may not
+    /// fit or may be negative.
+    #[inline]
+    pub(crate) const fn as_u128(self) -> u128 {
+        let mag = *self.unsigned_abs().as_limbs();
+        let lo = if N > 0 { mag[0] as u128 } else { 0 };
+        let hi = if N > 1 { mag[1] as u128 } else { 0 };
+        lo | (hi << 64)
+    }
+
+    /// Truncating cast to `i128` (low 128 bits, sign-applied).
+    /// **Truncating** — for `Int<3+>` any value outside the `i128` range
+    /// loses its high limbs; use [`Self::to_i128_checked`] (or `TryFrom`)
+    /// when the value may not fit.
+    #[inline]
+    pub(crate) const fn as_i128(self) -> i128 {
+        // Narrow non-limb fast path (const-folds per monomorphisation): for
+        // N<=2 the limbs ARE the i64/i128 two's-complement value, so skip the
+        // `unsigned_abs`/`wrapping_neg` sign-magnitude round trip (which costs
+        // two `neg_dispatch` calls on a negative operand). Always fits i128
+        // for N<=2; bit-identical to the magnitude path below.
+        if N <= 2 {
+            if N == 1 {
+                return (self.limbs[0] as i64) as i128;
+            }
+            let lo = self.limbs[0] as u128;
+            let hi = self.limbs[1] as u128;
+            return (lo | (hi << 64)) as i128;
+        }
+        let mag = *self.unsigned_abs().as_limbs();
+        let lo = if N > 0 { mag[0] as u128 } else { 0 };
+        let hi = if N > 1 { mag[1] as u128 } else { 0 };
+        let combined = lo | (hi << 64);
+        if self.is_negative() {
+            (combined as i128).wrapping_neg()
+        } else {
+            combined as i128
+        }
+    }
+
+    /// Widening / narrowing cast to any other [`BigInt`] type, via the
+    /// shared magnitude + sign bridge. Matches the macro's
+    /// `resize::<T>()` signature so the decimal-tier code that calls
+    /// `storage.resize::<$Wider>()` resolves against `Int<N>`.
+    #[inline]
+    pub(crate) fn resize<T: crate::int::types::traits::BigInt>(self) -> T {
+        use crate::int::types::traits::BigInt as _;
+        self.resize_to::<T>()
+    }
+
+    /// Truncating division toward zero. Panics on a zero divisor.
+    /// Matches the macro's `wrapping_div` (single-limb-aware
+    /// `div_rem`, not the dispatching `div_rem`).
+    #[inline]
+    pub const fn wrapping_div(self, rhs: Self) -> Self {
+        if is_zero_fixed(&rhs.limbs) {
+            panic!("attempt to divide by zero");
+        }
+        let negative = self.is_negative() ^ rhs.is_negative();
+        let mut q = [0u64; N];
+        let mut r = [0u64; N];
+        div_rem(
+            self.unsigned_abs().as_limbs(),
+            rhs.unsigned_abs().as_limbs(),
+            &mut q,
+            &mut r,
+        );
+        Self::from_mag_limbs(&q, negative)
+    }
+
+    /// Truncating remainder; result carries the sign of `self`. Panics
+    /// on a zero divisor. Matches the macro's `wrapping_rem`.
+    #[inline]
+    pub const fn wrapping_rem(self, rhs: Self) -> Self {
+        if is_zero_fixed(&rhs.limbs) {
+            panic!("attempt to calculate the remainder with a divisor of zero");
+        }
+        let mut q = [0u64; N];
+        let mut r = [0u64; N];
+        div_rem(
+            self.unsigned_abs().as_limbs(),
+            rhs.unsigned_abs().as_limbs(),
+            &mut q,
+            &mut r,
+        );
+        Self::from_mag_limbs(&r, self.is_negative())
+    }
+
+    /// Full `self · rhs` product widened into a `W: BigInt`, in one
+    /// step (no double trip through the magnitude staging buffer). Used
+    /// by the wide-tier `Mul` operator to compute
+    /// `Storage * Storage → Wider`. Matches the macro's `widen_mul`.
+    #[inline]
+    pub(crate) fn widen_mul<W>(self, rhs: Self) -> W
+    where
+        W: crate::int::types::traits::BigInt,
+        W::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+        crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
+    {
+        use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
+        let negative = self.is_negative() ^ rhs.is_negative();
+        let a = *self.unsigned_abs().as_limbs();
+        let b = *rhs.unsigned_abs().as_limbs();
+        // Full product spans 2·N u64 limbs — sized exactly by the source's
+        // `ComputeLimbs::double_buffered_u64()` (no build-max blanket). Route through
+        // the equal-length multiply dispatcher: both operands are `[u64; N]`,
+        // so this is the single site every wide tier's full product flows
+        // through. The dispatcher base-cases to schoolbook below
+        // `KARATSUBA_THRESHOLD_U64` (every shipped tier) and engages the
+        // non-allocating Karatsuba kernel at or above it.
+        let mut prod_buf = <Limbs<N> as ComputeLimbs>::double_buffered_u64();
+        let prod = prod_buf.as_mut();
+        mul_fast::<N>(&a, &b, &mut prod[..2 * N]);
+        // Pack the `2·N`-u64 product into `N` u128 limbs for the kept
+        // `BigInt::from_mag_sign_u128` bridge. The result `W` holds the
+        // product, so its scratch carrier's `single_u128()` buffer (`≥ N`)
+        // sizes the packed magnitude exactly.
+        let mut u128_buf = <W::Scratch as ComputeLimbs>::single_u128();
+        let u128_prod = u128_buf.as_mut();
+        let mut i = 0;
+        while i < N {
+            u128_prod[i] = (prod[2 * i] as u128) | ((prod[2 * i + 1] as u128) << 64);
+            i += 1;
+        }
+        W::from_mag_sign_u128(&u128_prod[..N], negative)
+    }
+}
+
+impl<const N: usize> Int<N> {
+    /// Const cross-width signed comparison `Int<N>` vs `Int<M>`, returning
+    /// `core::cmp::Ordering`. No widening copy is made: the sign is
+    /// compared first (a negative value is always less than a non-negative
+    /// one); when the signs agree the magnitudes are compared
+    /// length-aware via [`cmp_cross`] over the `unsigned_abs`
+    /// limbs (the longer magnitude's surplus high limbs must be zero for
+    /// equality, else it is the larger). For two negatives the larger
+    /// magnitude is the smaller value, so the magnitude order is flipped.
+    #[inline]
+    pub(crate) const fn cmp_cross<const M: usize>(self, other: Int<M>) -> Ordering {
+        let sn = self.is_negative();
+        let so = other.is_negative();
+        if sn && !so {
+            return Ordering::Less;
+        }
+        if !sn && so {
+            return Ordering::Greater;
+        }
+        // Same sign: compare magnitudes length-aware.
+        let a = self.unsigned_abs();
+        let b = other.unsigned_abs();
+        let c = cmp_cross(a.as_limbs(), b.as_limbs());
+        // For two negatives the larger magnitude is the smaller value.
+        let c = if sn { -c } else { c };
+        if c < 0 {
+            Ordering::Less
+        } else if c > 0 {
+            Ordering::Greater
+        } else {
+            Ordering::Equal
+        }
+    }
+}
+
+impl<const N: usize> Int<N> {
+    /// Const cross-width, cross-*scale* signed comparison: compares
+    /// `self` against `other · 10^scale_diff`, returning
+    /// [`core::cmp::Ordering`]. Used by the decimal layer to compare two
+    /// `D<Int<_>, S>` values at *different* `SCALE`s without materialising
+    /// a widened product (no `generic_const_exprs`, no computed type).
+    ///
+    /// # Approach (scale-down-with-remainder, overflow-free)
+    ///
+    /// Rather than scale `other` *up* by `10^scale_diff` (which can
+    /// overflow `M`'s width), this scales `self` *down* by the same
+    /// factor — division can never overflow. With magnitudes
+    /// `|self| = q · 10^scale_diff + r` (`0 ≤ r < 10^scale_diff`):
+    ///
+    /// * compare the quotient `q` against `|other|`;
+    /// * on a magnitude tie, a nonzero remainder `r` means `|self|` is the
+    ///   larger magnitude (it carries extra low digits `other` lacks).
+    ///
+    /// Signs are resolved first (a negative is always less than a
+    /// non-negative); for two negatives the larger magnitude is the
+    /// smaller value, so the magnitude order is flipped. `scale_diff == 0`
+    /// degenerates to a plain cross-width magnitude compare.
+    ///
+    /// `const`, `core`-only, no allocation: the `10^scale_diff` divisor and
+    /// the quotient/remainder are built in fixed staging buffers (the same
+    /// `max_n_limbs(4)` width the wide tiers stage products through — `288`
+    /// limbs at xx-wide, scaling down with `MAX_WORK_N`), and the division
+    /// reuses [`div_rem`].
+    pub(crate) const fn cmp_cross_scaled<const M: usize>(
+        self,
+        other: Int<M>,
+        scale_diff: u32,
+    ) -> Ordering {
+        let sn = self.is_negative();
+        let so = other.is_negative();
+        if sn && !so {
+            return Ordering::Less;
+        }
+        if !sn && so {
+            return Ordering::Greater;
+        }
+
+        // Same sign (or one/both zero): compare magnitudes. `mag_cmp` is
+        // the i32 sign of `|self|` − `|other| · 10^scale_diff`.
+        let a = self.unsigned_abs();
+        let b = other.unsigned_abs();
+
+        let mag_cmp = if scale_diff == 0 {
+            cmp_cross(a.as_limbs(), b.as_limbs())
+        } else {
+            // Build the divisor 10^scale_diff in a fixed staging buffer.
+            // `max_n_limbs(4)` (= 288 at xx-wide) is the wide-tier staging
+            // width, tracking MAX_WORK_N so a narrower build does not carry
+            // the widest tier's buffer; it covers every shipped width/scale.
+            let mut pow = [0u64; max_n_limbs(4)];
+            pow[0] = 1;
+            let mut e = 0;
+            while e < scale_diff {
+                // pow *= 10, propagating carry across limbs.
+                let mut carry: u128 = 0;
+                let mut i = 0;
+                while i < pow.len() {
+                    let prod = (pow[i] as u128) * 10u128 + carry;
+                    pow[i] = prod as u64;
+                    carry = prod >> 64;
+                    i += 1;
+                }
+                e += 1;
+            }
+
+            // |self| = q · 10^scale_diff + r.
+            let mut q = [0u64; max_n_limbs(4)];
+            let mut r = [0u64; max_n_limbs(4)];
+            div_rem(a.as_limbs(), &pow, &mut q, &mut r);
+
+            // Compare quotient against |other|; tie-break on remainder.
+            let c = cmp_cross(&q, b.as_limbs());
+            if c != 0 {
+                c
+            } else {
+                // Quotients equal: a nonzero remainder makes |self| larger.
+                let mut rk = 0;
+                let mut nz = false;
+                while rk < r.len() {
+                    if r[rk] != 0 {
+                        nz = true;
+                        break;
+                    }
+                    rk += 1;
+                }
+                if nz {
+                    1
+                } else {
+                    0
+                }
+            }
+        };
+
+        // For two negatives, the larger magnitude is the smaller value.
+        let c = if sn { -mag_cmp } else { mag_cmp };
+        if c < 0 {
+            Ordering::Less
+        } else if c > 0 {
+            Ordering::Greater
+        } else {
+            Ordering::Equal
+        }
+    }
+}
+
+impl<const N: usize> Int<N> {
+    /// Const EXACT comparison of the decimal value `self / 10^scale`
+    /// against the exact dyadic value of an `f64`, returning
+    /// [`core::cmp::Ordering`]. This is *value* equality, NOT a lossy
+    /// round-trip: an `f64` has an exact rational value `m · 2^e`, and
+    /// this compares `self / 10^scale` against it by cross-multiplying to
+    /// integers (overflow-free in fixed staging buffers, riding
+    /// [`cmp_cross`]).
+    ///
+    /// `value` MUST be finite — the caller rejects `NaN` / `±inf` before
+    /// calling (those compare unequal to every decimal).
+    ///
+    /// # Approach
+    ///
+    /// Decompose `value = (-1)^sign · m · 2^e` from its IEEE-754 bits
+    /// (`m` the 53-bit-or-subnormal integer mantissa, `e` the unbiased
+    /// power-of-two exponent). The magnitudes satisfy
+    /// `|self| / 10^scale  ==  m · 2^e` iff:
+    ///
+    /// * `e ≥ 0`:  `|self|          ==  m · 2^e · 10^scale`
+    /// * `e < 0`:  `|self| · 2^(−e)  ==  m · 10^scale`
+    ///
+    /// both sides being non-negative integers. Signs are resolved first
+    /// (a negative is always less than a non-negative; for two negatives
+    /// the magnitude order is flipped). `m == 0` is the float zero.
+    pub(crate) const fn cmp_f64_exact(self, scale: u32, value: f64) -> Ordering {
+        let bits = value.to_bits();
+        let fsign = (bits >> 63) != 0;
+        let exp_field = ((bits >> 52) & 0x7ff) as i32;
+        let frac = bits & 0x000f_ffff_ffff_ffff;
+        // Mantissa `m` and unbiased power-of-two exponent `e`.
+        let (m, e): (u64, i32) = if exp_field == 0 {
+            // Subnormal (or zero): no implicit leading bit.
+            (frac, -1074)
+        } else {
+            (frac | 0x0010_0000_0000_0000, exp_field - 1075)
+        };
+
+        let sn = self.is_negative();
+        let fzero = m == 0;
+        // Resolve signs. The float's zero has no sign for ordering.
+        if fzero {
+            // value == 0: compare against self's sign / zeroness.
+            let self_limbs = self.as_limbs();
+            let mut nz = false;
+            let mut k = 0;
+            while k < self_limbs.len() {
+                if self_limbs[k] != 0 {
+                    nz = true;
+                    break;
+                }
+                k += 1;
+            }
+            if !nz {
+                return Ordering::Equal;
+            }
+            return if sn { Ordering::Less } else { Ordering::Greater };
+        }
+        if sn && !fsign {
+            return Ordering::Less;
+        }
+        if !sn && fsign {
+            return Ordering::Greater;
+        }
+
+        // Same sign, both nonzero: compare magnitudes.
+        // Build the two non-negative integer sides in fixed staging
+        // buffers (288 u64 limbs covers every shipped width / scale /
+        // f64 exponent: D307 magnitude ≤ 16 limbs, 10^scale ≤ 16 limbs,
+        // 2^1074 ≤ 17 limbs — products stay well under 288).
+        let a = self.unsigned_abs();
+        let a_limbs = a.as_limbs();
+
+        // 10^scale in a buffer.
+        let mut pow10 = [0u64; 288];
+        pow10[0] = 1;
+        let mut pe = 0;
+        while pe < scale {
+            let mut carry: u128 = 0;
+            let mut i = 0;
+            while i < pow10.len() {
+                let prod = (pow10[i] as u128) * 10u128 + carry;
+                pow10[i] = prod as u64;
+                carry = prod >> 64;
+                i += 1;
+            }
+            pe += 1;
+        }
+
+        let m_limbs = [m];
+
+        let mut lhs = [0u64; 288];
+        let mut rhs = [0u64; 288];
+
+        if e >= 0 {
+            // lhs = |self|; rhs = m · 2^e · 10^scale.
+            let mut i = 0;
+            while i < a_limbs.len() {
+                lhs[i] = a_limbs[i];
+                i += 1;
+            }
+            // tmp = m · 10^scale
+            let mut tmp = [0u64; 288];
+            mul_schoolbook(&m_limbs, &pow10, &mut tmp);
+            // rhs = tmp << e
+            shl(&tmp, e as u32, &mut rhs);
+        } else {
+            // lhs = |self| · 2^(−e); rhs = m · 10^scale.
+            shl(a_limbs, (-e) as u32, &mut lhs);
+            mul_schoolbook(&m_limbs, &pow10, &mut rhs);
+        }
+
+        let mag_cmp = cmp_cross(&lhs, &rhs);
+        // For two negatives the larger magnitude is the smaller value.
+        let c = if sn { -mag_cmp } else { mag_cmp };
+        if c < 0 {
+            Ordering::Less
+        } else if c > 0 {
+            Ordering::Greater
+        } else {
+            Ordering::Equal
+        }
+    }
+}
+
+// One generic comparison surface across widths. The `N == M` case is
+// covered here too, so `Int<N>` carries no separate same-width
+// `PartialEq` / `PartialOrd` / `Ord` impl (a derived or hand-written
+// same-width comparison would collide — E0119). `Eq` is still derived:
+// it only requires the `PartialEq<Self>` this generic impl provides.
+impl<const N: usize, const M: usize> PartialEq<Int<M>> for Int<N> {
+    #[inline]
+    fn eq(&self, other: &Int<M>) -> bool {
+        self.cmp_cross(*other) == Ordering::Equal
+    }
+}
+
+impl<const N: usize, const M: usize> PartialOrd<Int<M>> for Int<N> {
+    #[inline]
+    fn partial_cmp(&self, other: &Int<M>) -> Option<Ordering> {
+        Some(self.cmp_cross(*other))
+    }
+}
+
+// `i128` interop for the 128-bit storage `Int<2>` (D38's backend).
+// `Int<2>` *is* an `i128`, so the comparison is the direct `as_i128`
+// value — no widening round-trip. This lets `to_bits()` results compare
+// against `i128` literals without an explicit conversion at the call
+// site. Deliberately `Int<2>`-only: for wider tiers an `i128` comparison
+// would be a lossy narrowing and is not offered.
+// `Int<2>` *is* a 128-bit integer, so the conversion to `i128` is exact
+// (the trait form of `as_i128`). Enables `i128::from(int2)` / `.into()`.
+impl From<Int<2>> for i128 {
+    #[inline]
+    fn from(v: Int<2>) -> i128 {
+        v.as_i128()
+    }
+}
+
+impl PartialEq<i128> for Int<2> {
+    #[inline]
+    fn eq(&self, other: &i128) -> bool {
+        self.as_i128() == *other
+    }
+}
+impl PartialEq<Int<2>> for i128 {
+    #[inline]
+    fn eq(&self, other: &Int<2>) -> bool {
+        *self == other.as_i128()
+    }
+}
+impl PartialOrd<i128> for Int<2> {
+    #[inline]
+    fn partial_cmp(&self, other: &i128) -> Option<Ordering> {
+        self.as_i128().partial_cmp(other)
+    }
+}
+impl PartialOrd<Int<2>> for i128 {
+    #[inline]
+    fn partial_cmp(&self, other: &Int<2>) -> Option<Ordering> {
+        self.partial_cmp(&other.as_i128())
+    }
+}
+
+// `i64` interop for the 64-bit storage `Int<1>` (D18's backend). `Int<1>`
+// *is* an `i64`, so the bridge is the direct value (its `as_i128()` is the
+// sign-extended `i64`) — letting `to_bits()` results compare against `i64`
+// literals without an explicit conversion. Deliberately `Int<1>`-only.
+impl From<Int<1>> for i64 {
+    #[inline]
+    fn from(v: Int<1>) -> i64 {
+        v.as_i128() as i64
+    }
+}
+// `Int<1>` is 64-bit, so widening to `i128` is exact.
+impl From<Int<1>> for i128 {
+    #[inline]
+    fn from(v: Int<1>) -> i128 {
+        v.as_i128()
+    }
+}
+impl PartialEq<i64> for Int<1> {
+    #[inline]
+    fn eq(&self, other: &i64) -> bool {
+        self.as_i128() == *other as i128
+    }
+}
+impl PartialEq<Int<1>> for i64 {
+    #[inline]
+    fn eq(&self, other: &Int<1>) -> bool {
+        *self as i128 == other.as_i128()
+    }
+}
+impl PartialOrd<i64> for Int<1> {
+    #[inline]
+    fn partial_cmp(&self, other: &i64) -> Option<Ordering> {
+        self.as_i128().partial_cmp(&(i128::from(*other)))
+    }
+}
+impl PartialOrd<Int<1>> for i64 {
+    #[inline]
+    fn partial_cmp(&self, other: &Int<1>) -> Option<Ordering> {
+        i128::from(*self).partial_cmp(&other.as_i128())
+    }
+}
+
+impl<const N: usize> Ord for Int<N> {
+    #[inline]
+    fn cmp(&self, other: &Self) -> Ordering {
+        // Same-width total order, routing through the cmp policy dispatcher
+        // so the algorithm seam exists at a single point and the `const {
+        // select::<N>() }` block folds the choice per monomorphisation.
+        cmp_dispatch(*self, *other)
+    }
+}
+
+impl<const N: usize> Add for Int<N> {
+    type Output = Self;
+    #[inline]
+    fn add(self, rhs: Self) -> Self {
+        add_dispatch(self, rhs)
+    }
+}
+
+impl<const N: usize> Sub for Int<N> {
+    type Output = Self;
+    #[inline]
+    fn sub(self, rhs: Self) -> Self {
+        self.wrapping_sub(rhs)
+    }
+}
+
+impl<const N: usize> Mul for Int<N> {
+    type Output = Self;
+    #[inline]
+    fn mul(self, rhs: Self) -> Self {
+        self.wrapping_mul(rhs)
+    }
+}
+
+impl<const N: usize> BitAnd for Int<N> {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, rhs: Self) -> Self {
+        let mut out = [0u64; N];
+        let mut i = 0;
+        while i < N {
+            out[i] = self.limbs[i] & rhs.limbs[i];
+            i += 1;
+        }
+        Self { limbs: out }
+    }
+}
+
+impl<const N: usize> BitOr for Int<N> {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, rhs: Self) -> Self {
+        let mut out = [0u64; N];
+        let mut i = 0;
+        while i < N {
+            out[i] = self.limbs[i] | rhs.limbs[i];
+            i += 1;
+        }
+        Self { limbs: out }
+    }
+}
+
+impl<const N: usize> BitXor for Int<N> {
+    type Output = Self;
+    #[inline]
+    fn bitxor(self, rhs: Self) -> Self {
+        let mut out = [0u64; N];
+        let mut i = 0;
+        while i < N {
+            out[i] = self.limbs[i] ^ rhs.limbs[i];
+            i += 1;
+        }
+        Self { limbs: out }
+    }
+}
+
+impl<const N: usize> Not for Int<N> {
+    type Output = Self;
+    #[inline]
+    fn not(self) -> Self {
+        let mut out = [0u64; N];
+        let mut i = 0;
+        while i < N {
+            out[i] = !self.limbs[i];
+            i += 1;
+        }
+        Self { limbs: out }
+    }
+}
+
+impl<const N: usize> Shl<u32> for Int<N> {
+    type Output = Self;
+    #[inline]
+    fn shl(self, shift: u32) -> Self {
+        let mut out = [0u64; N];
+        shl_fixed(&self.limbs, shift, &mut out);
+        Self { limbs: out }
+    }
+}
+
+impl<const N: usize> Shr<u32> for Int<N> {
+    type Output = Self;
+    #[inline]
+    fn shr(self, shift: u32) -> Self {
+        // Arithmetic (sign-preserving) right shift — matches Rust's signed
+        // `>>` and the prior macro `Int*` types the transcendental range
+        // reduction relies on. Two's-complement: x >> s == !((!x) >> s) for x < 0.
+        let neg = self.is_negative();
+        let src = if neg { !self } else { self };
+        let mut out = [0u64; N];
+        shr_fixed(&src.limbs, shift, &mut out);
+        let shifted = Self { limbs: out };
+        if neg { !shifted } else { shifted }
+    }
+}
+
+impl<const N: usize> Neg for Int<N> {
+    type Output = Self;
+    #[inline]
+    fn neg(self) -> Self {
+        self.wrapping_neg()
+    }
+}
+
+// ── Div / Rem ───────────────────────────────────────────────────────
+//
+// Truncating signed division / remainder, delegating to the dispatching
+// `div_rem` so the operators share the macro types' divide algorithm
+// (`div_rem_dispatch`: Knuth / Burnikel–Ziegler for multi-limb
+// divisors). These supertraits are what `BigInt` requires.
+
+impl<const N: usize> Div for Int<N> {
+    type Output = Self;
+    #[inline]
+    fn div(self, rhs: Self) -> Self {
+        self.div_rem(rhs).0
+    }
+}
+
+impl<const N: usize> Rem for Int<N> {
+    type Output = Self;
+    #[inline]
+    fn rem(self, rhs: Self) -> Self {
+        rem_dispatch(self, rhs)
+    }
+}
+
+// ── Display / FromStr ───────────────────────────────────────────────
+//
+// Delegate to the shared limb fmt / parse path, so the const-generic
+// surface round-trips identically across every width.
+
+impl<const N: usize> core::fmt::Display for Uint<N>
+where
+    crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        // Exact per-`N` decimal output buffer (`20N + 2` bytes), drawn from
+        // the `Limbs<N>` scratch carrier; the formatter writes the base-10
+        // digits from its tail.
+        let mut buf =
+            <crate::int::types::compute_limbs::Limbs<N> as crate::int::types::compute_limbs::ComputeLimbs>::digit_formatting_limbs_u8();
+        let s = fmt_into::<N>(&self.limbs, 10, true, buf.as_mut());
+        f.pad_integral(true, "", s)
+    }
+}
+
+impl<const N: usize> core::fmt::Display for Int<N>
+where
+    crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let mag = *self.unsigned_abs().as_limbs();
+        // Exact per-`N` decimal output buffer (`20N + 2` bytes): an `Int<N>`
+        // is `64N` bits, so its base-10 form is `⌈64·N·log10(2)⌉ ≈ 19.27·N`
+        // digits, comfortably within `20N + 2`. Drawn from the `Limbs<N>`
+        // scratch carrier; the formatter writes the digits from its tail.
+        let mut buf =
+            <crate::int::types::compute_limbs::Limbs<N> as crate::int::types::compute_limbs::ComputeLimbs>::digit_formatting_limbs_u8();
+        let s = fmt_into::<N>(&mag, 10, true, buf.as_mut());
+        f.pad_integral(!self.is_negative() || self.is_zero(), "", s)
+    }
+}
+
+impl<const N: usize> core::str::FromStr for Int<N> {
+    type Err = ();
+    #[inline]
+    fn from_str(s: &str) -> Result<Self, ()> {
+        Self::from_str_radix(s, 10)
+    }
+}
+
+// ── Radix formatting (raw two's-complement bit pattern) ─────────────
+//
+// `LowerHex` / `UpperHex` / `Octal` / `Binary` print the raw limb bit
+// pattern (not a signed magnitude), matching the macro `$S` impls. Each
+// draws its output buffer exact-per-`N` from the `Limbs<N>` scratch carrier:
+// hex (`16N` digits) fits the `digit_formatting_limbs_u8` decimal buffer
+// (`20N + 2`); octal (`⌈64N/3⌉`) and binary (`64N`, one byte per bit) take
+// the wider `bit_formatting_limbs_u8` buffer (`64N + 2`).
+
+impl<const N: usize> core::fmt::LowerHex for Int<N>
+where
+    crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let mut buf =
+            <crate::int::types::compute_limbs::Limbs<N> as crate::int::types::compute_limbs::ComputeLimbs>::digit_formatting_limbs_u8();
+        let s = fmt_into::<N>(&self.limbs, 16, true, buf.as_mut());
+        f.pad_integral(true, "0x", s)
+    }
+}
+
+impl<const N: usize> core::fmt::UpperHex for Int<N>
+where
+    crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let mut buf =
+            <crate::int::types::compute_limbs::Limbs<N> as crate::int::types::compute_limbs::ComputeLimbs>::digit_formatting_limbs_u8();
+        let s = fmt_into::<N>(&self.limbs, 16, false, buf.as_mut());
+        f.pad_integral(true, "0x", s)
+    }
+}
+
+impl<const N: usize> core::fmt::Octal for Int<N>
+where
+    crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let mut buf =
+            <crate::int::types::compute_limbs::Limbs<N> as crate::int::types::compute_limbs::ComputeLimbs>::bit_formatting_limbs_u8();
+        let s = fmt_into::<N>(&self.limbs, 8, true, buf.as_mut());
+        f.pad_integral(true, "0o", s)
+    }
+}
+
+impl<const N: usize> core::fmt::Binary for Int<N>
+where
+    crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let mut buf =
+            <crate::int::types::compute_limbs::Limbs<N> as crate::int::types::compute_limbs::ComputeLimbs>::bit_formatting_limbs_u8();
+        let s = fmt_into::<N>(&self.limbs, 2, true, buf.as_mut());
+        f.pad_integral(true, "0b", s)
+    }
+}
+
+// ── Width conversion: widen (lossless) / narrow (fallible) ─────────
+//
+// `Uint<N>` and `Uint<M>` are different-sized stack types, so a value
+// conversion builds a fresh `[u64; M]` — there is no heap allocation,
+// and reinterpreting across widths via `transmute` would be unsound
+// (different size and layout). `resize` writes each destination limb
+// exactly once via `array::from_fn`; `widen` is the infallible extend
+// and `narrow` the information-preserving truncation. Stable Rust
+// cannot constrain `M >= N` / `M <= N` in the type system, so the
+// direction is enforced by `debug_assert!` plus, for `narrow`, the
+// `Option` return.
+
+impl<const N: usize> Uint<N> {
+    /// Resizes to `M` limbs: zero-extends when widening, drops the high
+    /// limbs when narrowing. Direction-agnostic and infallible.
+    ///
+    /// Named `resize_n` (not `resize`) so the const-generic width bridge
+    /// does not collide with the type-generic `Int::resize` the named-
+    /// type API expects.
+    #[inline]
+    pub const fn resize_n<const M: usize>(self) -> Uint<M> {
+        let mut out = [0u64; M];
+        let mut i = 0;
+        while i < M {
+            if i < N {
+                out[i] = self.limbs[i];
+            }
+            i += 1;
+        }
+        Uint::from_limbs(out)
+    }
+
+    /// Widens to a wider `Uint<M>` (`M >= N`), zero-extending the new
+    /// high limbs. Lossless.
+    #[inline]
+    pub fn widen<const M: usize>(self) -> Uint<M> {
+        debug_assert!(M >= N, "widen requires M >= N");
+        self.resize_n::<M>()
+    }
+
+    /// Narrows to a narrower `Uint<M>` (`M <= N`). Returns `None` if any
+    /// discarded high limb is non-zero (the value does not fit `M`).
+    #[inline]
+    pub fn narrow<const M: usize>(self) -> Option<Uint<M>> {
+        debug_assert!(M <= N, "narrow requires M <= N");
+        let keep = if M < N { M } else { N };
+        let mut i = keep;
+        while i < N {
+            if self.limbs[i] != 0 {
+                return None;
+            }
+            i += 1;
+        }
+        Some(self.resize_n::<M>())
+    }
+}
+
+impl<const N: usize> Int<N> {
+    /// Resizes to `M` limbs: sign-extends when widening, drops the high
+    /// limbs when narrowing. Direction-agnostic and infallible
+    /// (narrowing may change the represented value).
+    ///
+    /// Named `resize_n` (not `resize`) so the const-generic width bridge
+    /// does not collide with the type-generic `Int::resize` the named-
+    /// type API expects (the magnitude-bridge cast over any `BigInt`).
+    ///
+    /// Infallible two's-complement width conversion `Int<N> -> Int<M>`,
+    /// const and direction-agnostic. Copies the overlapping limbs; when
+    /// widening, fills the new high limbs with the sign (all-ones if the
+    /// source is negative, else zero); when narrowing, drops the surplus
+    /// high limbs (which may change the represented value). This is the
+    /// canonical internal resize that the const fallible `try_narrow` and
+    /// the `Int<->Int` magnitude bridge build on.
+    #[inline]
+    pub(crate) const fn resize_n<const M: usize>(self) -> Int<M> {
+        let fill = if self.is_negative() { u64::MAX } else { 0 };
+        let mut out = [0u64; M];
+        let mut i = 0;
+        while i < M {
+            out[i] = if i < N { self.limbs[i] } else { fill };
+            i += 1;
+        }
+        Int::from_limbs(out)
+    }
+
+    /// Const fallible narrow `Int<N> -> Int<M>` (`1 <= M <= N`). Returns
+    /// `Some` only when every discarded high limb is a pure sign-extension
+    /// of the narrowed value's top bit — i.e. the value fits `M` limbs as
+    /// two's complement — and `None` otherwise. The const base for the
+    /// future public fallible narrow.
+    #[inline]
+    pub(crate) const fn try_narrow<const M: usize>(self) -> Option<Int<M>> {
+        debug_assert!(M >= 1 && M <= N, "try_narrow requires 1 <= M <= N");
+        let sign_fill = if (self.limbs[M - 1] >> 63) == 1 {
+            u64::MAX
+        } else {
+            0
+        };
+        let mut i = M;
+        while i < N {
+            if self.limbs[i] != sign_fill {
+                return None;
+            }
+            i += 1;
+        }
+        Some(self.resize_n::<M>())
+    }
+
+    /// Widens to a wider `Int<M>` (`M >= N`), sign-extending. Lossless.
+    #[inline]
+    pub fn widen<const M: usize>(self) -> Int<M> {
+        debug_assert!(M >= N, "widen requires M >= N");
+        self.resize_n::<M>()
+    }
+
+    /// Narrows to a narrower `Int<M>` (`1 <= M <= N`). Returns `None`
+    /// unless every discarded high limb is a pure sign-extension of the
+    /// narrowed value's top bit — i.e. the value fits `M` limbs as
+    /// two's complement.
+    #[inline]
+    pub fn narrow<const M: usize>(self) -> Option<Int<M>> {
+        self.try_narrow::<M>()
+    }
+}
+
+
+
+// ── std-aligned primitive conversions ───────────────────────────────
+// Infallible widening (the source always fits `Int<N>` / `Uint<N>` for
+// N >= 1, judged against the `N == 1` = `i64` floor) is `From`. Fallible
+// narrowing (the value may exceed the target range) is `TryFrom`,
+// returning [`ConvertError::Overflow`]. Each impl is a thin one-line
+// delegate to the inherent const base. `Into` / `TryInto` come for free.
+
+// ── IN: primitive → Int<N> ───────────────────────────────────────────
+macro_rules! int_from_signed {
+    ($($prim:ty => $base:ident),+) => {$(
+        impl<const N: usize> From<$prim> for Int<N> {
+            #[inline]
+            fn from(v: $prim) -> Self { Self::$base(v) }
+        }
+    )+};
+}
+int_from_signed!(i8 => from_i8, i16 => from_i16, i32 => from_i32, i64 => from_i64);
+
+macro_rules! int_from_unsigned {
+    ($($prim:ty => $base:ident),+) => {$(
+        impl<const N: usize> From<$prim> for Int<N> {
+            #[inline]
+            fn from(v: $prim) -> Self { Self::$base(v) }
+        }
+    )+};
+}
+int_from_unsigned!(u8 => from_u8, u16 => from_u16, u32 => from_u32);
+
+macro_rules! uint_from_unsigned {
+    ($($prim:ty),+) => {$(
+        impl<const N: usize> From<$prim> for Uint<N> {
+            #[inline]
+            fn from(v: $prim) -> Self { Self::from_u64(v as u64) }
+        }
+    )+};
+}
+uint_from_unsigned!(u8, u16, u32, u64);
+
+// Fallible IN: `u64` can overflow `Int<1>`; `i128` / `u128` can overflow
+// the narrow tiers (see the inherent `try_from_*`).
+impl<const N: usize> TryFrom<u64> for Int<N> {
+    type Error = crate::support::error::ConvertError;
+    #[inline]
+    fn try_from(v: u64) -> Result<Self, Self::Error> {
+        Self::try_from_u64(v).ok_or(crate::support::error::ConvertError::Overflow)
+    }
+}
+
+impl<const N: usize> TryFrom<i128> for Int<N> {
+    type Error = crate::support::error::ConvertError;
+    #[inline]
+    fn try_from(v: i128) -> Result<Self, Self::Error> {
+        Self::try_from_i128(v).ok_or(crate::support::error::ConvertError::Overflow)
+    }
+}
+
+impl<const N: usize> TryFrom<u128> for Int<N> {
+    type Error = crate::support::error::ConvertError;
+    #[inline]
+    fn try_from(v: u128) -> Result<Self, Self::Error> {
+        Self::try_from_u128(v).ok_or(crate::support::error::ConvertError::Overflow)
+    }
+}
+
+// ── OUT: Int<N> → primitive ──────────────────────────────────────────
+// `i64` / `i128` are always representable on the fitting tiers, so those
+// are infallible `From` (declared above: `From<Int<1>> for i64`,
+// `From<Int<1>>` / `From<Int<2>> for i128`). The std blanket
+// `impl<T,U: From<T>> TryFrom<T> for U` then derives the matching
+// `TryFrom` for those tiers, so a generic `TryFrom<Int<N>> for i64`/`i128`
+// is omitted to avoid the coherence conflict. The remaining widths /
+// targets are genuinely fallible:
+impl<const N: usize> TryFrom<Int<N>> for i32 {
+    type Error = crate::support::error::ConvertError;
+    #[inline]
+    fn try_from(v: Int<N>) -> Result<Self, Self::Error> {
+        v.try_to_i32().ok_or(crate::support::error::ConvertError::Overflow)
+    }
+}
+
+impl<const N: usize> TryFrom<Int<N>> for u32 {
+    type Error = crate::support::error::ConvertError;
+    #[inline]
+    fn try_from(v: Int<N>) -> Result<Self, Self::Error> {
+        v.try_to_u32().ok_or(crate::support::error::ConvertError::Overflow)
+    }
+}
+
+impl<const N: usize> TryFrom<Int<N>> for u64 {
+    type Error = crate::support::error::ConvertError;
+    #[inline]
+    fn try_from(v: Int<N>) -> Result<Self, Self::Error> {
+        v.try_to_u64().ok_or(crate::support::error::ConvertError::Overflow)
+    }
+}
+
+impl<const N: usize> TryFrom<Int<N>> for u128 {
+    type Error = crate::support::error::ConvertError;
+    #[inline]
+    fn try_from(v: Int<N>) -> Result<Self, Self::Error> {
+        v.try_to_u128().ok_or(crate::support::error::ConvertError::Overflow)
+    }
+}
+
+impl<const N: usize> TryFrom<u128> for Uint<N> {
+    type Error = crate::support::error::ConvertError;
+    #[inline]
+    fn try_from(v: u128) -> Result<Self, Self::Error> {
+        Self::try_from_u128(v).ok_or(crate::support::error::ConvertError::Overflow)
+    }
+}
+
+// ── Floats ───────────────────────────────────────────────────────────
+// Float → Int<N> is fallible (NaN, ±inf, non-integer, out-of-range), so
+// `TryFrom`. There is no `From<Int<N>> for f64/f32`: that direction is
+// lossy above the mantissa width and is offered only as the inherent
+// `to_f64` / `to_f32` round-to-nearest methods.
+impl<const N: usize> TryFrom<f64> for Int<N> {
+    type Error = crate::support::error::ConvertError;
+    #[inline]
+    fn try_from(v: f64) -> Result<Self, Self::Error> {
+        Self::try_from_f64(v).ok_or(crate::support::error::ConvertError::Overflow)
+    }
+}
+
+impl<const N: usize> TryFrom<f32> for Int<N> {
+    type Error = crate::support::error::ConvertError;
+    #[inline]
+    fn try_from(v: f32) -> Result<Self, Self::Error> {
+        Self::try_from_f32(v).ok_or(crate::support::error::ConvertError::Overflow)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::int::algos::mul::mul_schoolbook::{mul_low_fixed, mul_schoolbook_fixed};
+
+    #[test]
+    fn try_from_i128_detects_narrow_overflow() {
+        // Int<2> (128-bit) holds every i128.
+        assert_eq!(Int::<2>::try_from_i128(i128::MAX), Some(Int::<2>::from_i128(i128::MAX)));
+        assert_eq!(Int::<2>::try_from_i128(i128::MIN), Some(Int::<2>::from_i128(i128::MIN)));
+        // Int<1> (64-bit) holds only the i64 range.
+        assert_eq!(Int::<1>::try_from_i128(i64::MAX as i128 + 1), None);
+        assert_eq!(Int::<1>::try_from_i128(i64::MIN as i128 - 1), None);
+        assert_eq!(
+            Int::<1>::try_from_i128(i64::MAX as i128),
+            Some(Int::<1>::from_i64(i64::MAX))
+        );
+        // TryFrom mirrors it.
+        assert!(<Int<1> as TryFrom<i128>>::try_from(i64::MAX as i128 + 1).is_err());
+        assert_eq!(<Int<2> as TryFrom<i128>>::try_from(-5_i128), Ok(Int::<2>::from_i64(-5)));
+    }
+
+    #[test]
+    fn try_from_u128_detects_narrow_overflow() {
+        // Uint twin: every u128 fits Uint<2+>; Uint<1> only holds u64.
+        assert_eq!(Uint::<2>::try_from_u128(u128::MAX), Some(Uint::<2>::from_u128(u128::MAX)));
+        assert_eq!(Uint::<1>::try_from_u128(u64::MAX as u128 + 1), None);
+        assert_eq!(Uint::<1>::try_from_u128(u64::MAX as u128), Some(Uint::<1>::from_u64(u64::MAX)));
+        assert!(<Uint<1> as TryFrom<u128>>::try_from(u64::MAX as u128 + 1).is_err());
+        // Int<N> u128 entry: Int<1> fails above i64::MAX, Int<2> above i128::MAX.
+        assert_eq!(Int::<1>::try_from_u128(u64::MAX as u128), None);
+        assert_eq!(Int::<2>::try_from_u128(u128::MAX), None);
+        assert_eq!(Int::<3>::try_from_u128(u128::MAX), Some(Int::<3>::from_u128(u128::MAX)));
+        assert!(<Int<2> as TryFrom<u128>>::try_from(u128::MAX).is_err());
+    }
+
+    #[test]
+    fn try_from_u64_and_out_conversions_at_edges() {
+        // u64 entry: Int<1> rejects above i64::MAX, wider tiers accept.
+        assert!(<Int<1> as TryFrom<u64>>::try_from(u64::MAX).is_err());
+        assert_eq!(<Int<2> as TryFrom<u64>>::try_from(u64::MAX), Ok(Int::<2>::from_u128(u64::MAX as u128)));
+        // OUT lossless: Int<1> -> i64, Int<2> -> i128 are exact From.
+        assert_eq!(i128::from(Int::<2>::MAX), i128::MAX);
+        assert_eq!(i128::from(Int::<2>::MIN), i128::MIN);
+        assert_eq!(i64::from(Int::<1>::from_i64(-123)), -123_i64);
+        // OUT fallible: a wide value out of i128 range rejects (inherent
+        // base; i128 has no generic TryFrom — it is From-derived on N<=2).
+        let big = Int::<3>::from_u128(u128::MAX);
+        assert_eq!(big.try_to_i128(), None);
+        assert_eq!(<i32 as TryFrom<Int<4>>>::try_from(Int::<4>::from_i64(-7)), Ok(-7_i32));
+        assert!(<u32 as TryFrom<Int<4>>>::try_from(Int::<4>::from_i64(-1)).is_err());
+    }
+
+    #[test]
+    fn float_conversions_reject_and_round_trip() {
+        // Rejections.
+        assert_eq!(Int::<2>::try_from_f64(f64::NAN), None);
+        assert_eq!(Int::<2>::try_from_f64(f64::INFINITY), None);
+        assert_eq!(Int::<2>::try_from_f64(f64::NEG_INFINITY), None);
+        assert_eq!(Int::<2>::try_from_f64(0.5), None);
+        assert_eq!(Int::<2>::try_from_f64(3.5), None);
+        assert_eq!(Int::<2>::try_from_f32(f32::NAN), None);
+        assert_eq!(Int::<2>::try_from_f32(f32::INFINITY), None);
+        assert_eq!(Int::<2>::try_from_f32(0.5), None);
+        assert_eq!(Int::<2>::try_from_f32(3.5), None);
+        assert_eq!(Int::<1>::try_from_f64(1e30), None); // out of i64 range
+        // ±0 maps to ZERO.
+        assert_eq!(Int::<2>::try_from_f64(0.0), Some(Int::<2>::ZERO));
+        assert_eq!(Int::<2>::try_from_f64(-0.0), Some(Int::<2>::ZERO));
+        assert_eq!(Int::<2>::try_from_f32(0.0), Some(Int::<2>::ZERO));
+        assert_eq!(Int::<2>::try_from_f32(-0.0), Some(Int::<2>::ZERO));
+        // In-range integers round-trip exactly.
+        assert_eq!(Int::<4>::try_from_f64(42.0), Some(Int::<4>::from_i64(42)));
+        assert_eq!(Int::<4>::try_from_f64(-42.0), Some(Int::<4>::from_i64(-42)));
+        assert_eq!(Int::<4>::try_from_f32(7.0), Some(Int::<4>::from_i64(7)));
+        assert_eq!(Int::<4>::try_from_f32(-7.0), Some(Int::<4>::from_i64(-7)));
+        // TryFrom mirrors the helper.
+        assert!(<Int<2> as TryFrom<f64>>::try_from(f64::NAN).is_err());
+        assert_eq!(<Int<2> as TryFrom<f64>>::try_from(-9.0), Ok(Int::<2>::from_i64(-9)));
+        assert_eq!(<Int<2> as TryFrom<f32>>::try_from(-9.0), Ok(Int::<2>::from_i64(-9)));
+        // OUT to_f64 / to_f32 round-trip small values.
+        assert_eq!(Int::<4>::from_i64(123).to_f64(), 123.0);
+        assert_eq!(Int::<4>::from_i64(-123).to_f64(), -123.0);
+        assert_eq!(Int::<4>::from_i64(123).to_f32(), 123.0_f32);
+    }
+
+    #[test]
+    fn float_conversions_wide_and_boundaries() {
+        // A large exact integer (2^64) needs two limbs: it overflows
+        // Int<1> but fits Int<2>.
+        let big = 2f64.powi(64); // exactly representable
+        assert_eq!(Int::<1>::try_from_f64(big), None);
+        assert_eq!(
+            Int::<2>::try_from_f64(big),
+            Some(Int::<2>::from_u128(1u128 << 64))
+        );
+
+        // 2^63 is exactly i64::MAX + 1 — just over the Int<1> positive
+        // range, so it must reject.
+        let two_63 = 2f64.powi(63);
+        assert_eq!(Int::<1>::try_from_f64(two_63), None);
+        // i64::MAX itself (2^63 - 1) is not f64-exact, but 2^63 - 2^10 is;
+        // confirm a representable value strictly below the cap fits.
+        let near_max = (i64::MAX - 1023) as f64; // exact in f64
+        assert_eq!(near_max as i64, i64::MAX - 1023);
+        assert_eq!(
+            Int::<1>::try_from_f64(near_max),
+            Some(Int::<1>::from_i64(i64::MAX - 1023))
+        );
+
+        // The MIN edge: -2^63 == i64::MIN fits Int<1> exactly.
+        let min_edge = -(2f64.powi(63));
+        assert_eq!(
+            Int::<1>::try_from_f64(min_edge),
+            Some(Int::<1>::from_i64(i64::MIN))
+        );
+        // One magnitude bit past the negative edge does not fit.
+        assert_eq!(Int::<1>::try_from_f64(-(2f64.powi(64))), None);
+
+        // f32 analogues: 2^24 fits Int<1>; the round-trip is exact.
+        let two_24 = 2f32.powi(24);
+        assert_eq!(
+            Int::<1>::try_from_f32(two_24),
+            Some(Int::<1>::from_i64(1 << 24))
+        );
+    }
+
+    #[test]
+    fn float_conversions_are_const() {
+        // Proves the float→int path is usable in const context.
+        const X: Option<Int<2>> = Int::<2>::try_from_f64(42.0);
+        const Y: Option<Int<2>> = Int::<2>::try_from_f32(42.0);
+        assert_eq!(X, Some(Int::<2>::from_i64(42)));
+        assert_eq!(Y, Some(Int::<2>::from_i64(42)));
+    }
+
+    #[test]
+    fn from_traits_are_infallible_for_fitting_prims() {
+        assert_eq!(Int::<1>::from(-7_i32), Int::<1>::from_i64(-7));
+        assert_eq!(Int::<4>::from(42_i64), Int::<4>::from_i64(42));
+        assert_eq!(Uint::<1>::from(7_u32), Uint::<1>::from_u64(7));
+        assert_eq!(Uint::<4>::from(u64::MAX), Uint::<4>::from_u64(u64::MAX));
+    }
+
+    /// The `BigInt` / `BigInt` surface must compile and
+    /// behave through a fully generic bound, for both signed and
+    /// unsigned fixed-width integers.
+    #[test]
+    fn fixed_int_trait_surface() {
+        fn exercises<T: BigInt>(seven: T, three: T) {
+            assert_eq!(T::LIMBS as u32 * 64, T::BITS);
+            assert!(T::ZERO.is_zero());
+            assert!(T::ONE.is_one());
+            assert!(!T::ZERO.is_one());
+
+            // Operators via the supertrait bounds.
+            let ten = seven + three;
+            assert_eq!(ten - three, seven);
+            assert_eq!(ten, seven.wrapping_add(three));
+            assert_eq!(seven.wrapping_sub(three) + three, seven);
+
+            // Bitwise / shift surface.
+            let _ = (seven & three) | (seven ^ three);
+            let _ = !T::ZERO;
+            assert_eq!((T::ONE << 4) >> 4, T::ONE);
+
+            // Checked arithmetic returns Some for in-range work.
+            assert_eq!(seven.checked_add(three), Some(ten));
+            assert!(seven.checked_mul(three).is_some());
+
+            // Powers and optimisable functions agree with each other.
+            assert_eq!(three.sqr(), three * three);
+            assert_eq!(three.cube(), three * three * three);
+            assert_eq!(three.pow(2), three.sqr());
+            assert_eq!(three.wrapping_pow(3), three.cube());
+            assert_eq!(three.checked_pow(2), Some(three.sqr()));
+
+            // bit_length / leading_zeros consistency.
+            assert_eq!(T::ONE.bit_length(), 1);
+            assert_eq!(T::ZERO.bit_length(), 0);
+            assert_eq!(T::ONE.leading_zeros(), T::BITS - 1);
+
+            // Reductions and the limb round-trip.
+            let items = [T::ONE, T::ONE, T::ONE];
+            assert_eq!(T::sum(items), three);
+            assert_eq!(T::product([three, T::ONE]), three);
+            assert_eq!(T::from_limbs(seven.to_limbs()), seven);
+        }
+
+        exercises(Int::<4>::from_i64(7), Int::<4>::from_i64(3));
+        exercises(Int::<6>::from_i64(7), Int::<6>::from_i64(3));
+    }
+
+    /// The truncated low-`N` product must equal the low `N` limbs of
+    /// the full `2N`-limb schoolbook product, across widths and edges.
+    #[test]
+    fn limbs_mul_low_matches_full_product_low_half() {
+        fn check<const N: usize, const D: usize>(a: [u64; N], b: [u64; N]) {
+            debug_assert!(D == 2 * N);
+            let mut full = [0u64; D];
+            mul_schoolbook_fixed::<N, D>(&a, &b, &mut full);
+            let mut low = [0u64; N];
+            mul_low_fixed::<N>(&a, &b, &mut low);
+            let mut expected = [0u64; N];
+            expected.copy_from_slice(&full[..N]);
+            assert_eq!(low, expected, "low-half mismatch for {a:?} * {b:?}");
+        }
+
+        // Width 4 (256-bit): zero, one, MAX, cross-limb spans.
+        check::<4, 8>([0, 0, 0, 0], [0, 0, 0, 0]);
+        check::<4, 8>([1, 0, 0, 0], [u64::MAX, u64::MAX, u64::MAX, u64::MAX]);
+        check::<4, 8>([u64::MAX; 4], [u64::MAX; 4]);
+        check::<4, 8>([0, 1, 0, 0], [0, 1, 0, 0]); // 2^64 * 2^64
+        check::<4, 8>(
+            [0xDEAD_BEEF, 0xCAFE_F00D, 0x1234, 0x5678_9ABC],
+            [0xFEED_FACE, 0x0BAD_C0DE, 0x9999, 0x0000_0001],
+        );
+        // Width 2 and width 6 to exercise other monomorphisations.
+        check::<2, 4>([u64::MAX, u64::MAX], [3, 0]);
+        check::<6, 12>([7, 8, 9, 10, 11, 12], [1, 2, 3, 4, 5, 6]);
+    }
+
+    /// The dedicated squaring kernel must be bit-exact against the
+    /// general truncated product `x · x` at every width and edge case.
+    #[test]
+    fn dedicated_sqr_matches_general_mul() {
+        fn check<const N: usize>(x: [u64; N]) {
+            let a = Uint::<N>::from_limbs(x);
+            assert_eq!(
+                a.wrapping_sqr(),
+                a.wrapping_mul(a),
+                "sqr != mul(self,self) for {x:?}"
+            );
+        }
+
+        // Width 4: 0, 1, MAX, single-limb, cross-limb, full-width.
+        check::<4>([0, 0, 0, 0]);
+        check::<4>([1, 0, 0, 0]);
+        check::<4>([u64::MAX; 4]);
+        check::<4>([0x1234_5678, 0, 0, 0]);
+        check::<4>([u64::MAX, u64::MAX, 0, 0]);
+        check::<4>([0xDEAD_BEEF_CAFE_F00D, 0x0123_4567_89AB_CDEF, 0xFEDC, 0x99]);
+        // Carry-heavy: every limb all-ones but the top.
+        check::<4>([u64::MAX, u64::MAX, u64::MAX, 0]);
+        // Other widths / monomorphisations.
+        check::<1>([u64::MAX]);
+        check::<2>([u64::MAX, u64::MAX]);
+        check::<6>([7, 8, 9, 10, 11, 12]);
+        check::<8>([u64::MAX, 1, u64::MAX, 2, u64::MAX, 3, u64::MAX, 4]);
+        // A pseudo-random sweep across width 5.
+        let mut state = 0x9E37_79B9_7F4A_7C15u64;
+        let mut next = || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        for _ in 0..64 {
+            check::<5>([next(), next(), next(), next(), next()]);
+        }
+    }
+
+    #[test]
+    fn uint_sqr_cube_match_naive() {
+        let x = Uint::<4>::from_limbs([123_456_789, 0, 0, 0]);
+        assert_eq!(x.wrapping_sqr(), x.wrapping_mul(x));
+        assert_eq!(x.wrapping_cube(), x.wrapping_mul(x).wrapping_mul(x));
+
+        // A value spanning two limbs, to exercise cross-limb products.
+        let y = Uint::<4>::from_limbs([0xDEAD_BEEF_CAFE, 0x1234_5678, 0, 0]);
+        assert_eq!(y.wrapping_sqr(), y.wrapping_mul(y));
+        assert_eq!(y.wrapping_cube(), y.wrapping_mul(y).wrapping_mul(y));
+    }
+
+    /// `root_int(k)` must return `floor(m^(1/k))` with the correct
+    /// exactness flag: `root^k <= m < (root+1)^k`, and `exact` iff
+    /// `root^k == m`. Checked against a brute-force reference for small
+    /// `m` and `k in {2,3,5}` across widths, plus cross-checking k=2
+    /// against the shipped isqrt and large perfect-power exactness.
+    // Exercises Int<8> roots (isqrt/icbrt work widths) beyond the narrow
+    // build's int-kernel scratch; runs where the wide tiers are compiled.
+    #[cfg(feature = "_wide-support")]
+    #[test]
+    fn root_int_floor_and_exactness() {
+        // Brute-force floor kth root of a small u128.
+        fn brute(m: u128, k: u32) -> (u128, bool) {
+            if m == 0 {
+                return (0, true);
+            }
+            let mut r: u128 = 0;
+            // Smallest r with (r+1)^k > m, capped to avoid overflow.
+            while {
+                let next = r + 1;
+                next.checked_pow(k).is_some_and(|p| p <= m)
+            } {
+                r += 1;
+            }
+            (r, r.pow(k) == m)
+        }
+
+        fn check<const N: usize>(m: u128, k: u32) {
+            let lo = (m & 0xFFFF_FFFF_FFFF_FFFF) as u64;
+            let hi = (m >> 64) as u64;
+            let mut limbs = [0u64; N];
+            limbs[0] = lo;
+            if N > 1 {
+                limbs[1] = hi;
+            }
+            let n = Uint::<N>::from_limbs(limbs);
+            let (root, exact) = n.root_int(k);
+            let (eroot, eexact) = brute(m, k);
+            let root_lo = root.as_limbs()[0] as u128
+                | ((if N > 1 { root.as_limbs()[1] as u128 } else { 0 }) << 64);
+            assert_eq!(root_lo, eroot, "root mismatch for m={m}, k={k}");
+            assert_eq!(exact, eexact, "exact flag mismatch for m={m}, k={k}");
+
+            // The defining bracket, computed in-width.
+            let rk = root.pow(k);
+            assert!(rk <= n, "root^k > m for m={m}, k={k}");
+            let next = root.wrapping_add(Uint::<N>::ONE);
+            // (root+1)^k overflowing the width still satisfies > m.
+            if let Some(p) = next.checked_pow(k) { assert!(p > n, "(root+1)^k <= m for m={m}, k={k}") }
+        }
+
+        let samples: [u128; 14] = [
+            0,
+            1,
+            2,
+            7,
+            8,
+            9,
+            26,
+            27,
+            28,
+            1000,
+            1023,
+            1024,
+            1_000_000,
+            u64::MAX as u128,
+        ];
+        for &m in &samples {
+            for k in [2u32, 3, 5] {
+                check::<4>(m, k);
+                check::<2>(m, k);
+                check::<8>(m, k);
+            }
+        }
+
+        // k=2 cross-check against shipped isqrt for a wide value.
+        let big = Uint::<4>::from_limbs([0xFFFF_FFFF_FFFF_FFFF, 0x1234_5678, 0, 0]);
+        assert_eq!(big.root_int(2).0, big.isqrt());
+
+        // Large exact perfect cube: (2^40)^3 = 2^120.
+        let base = Uint::<4>::ONE.shl(40);
+        let cube = base.wrapping_cube();
+        let (r, exact) = cube.root_int(3);
+        assert_eq!(r, base);
+        assert!(exact);
+        // One less than a perfect cube is not exact and floors down.
+        let (r2, exact2) = cube.wrapping_sub(Uint::<4>::ONE).root_int(3);
+        assert_eq!(r2, base.wrapping_sub(Uint::<4>::ONE));
+        assert!(!exact2);
+    }
+
+    #[test]
+    fn uint_widen_zero_extends() {
+        let a = Uint::<2>::from_limbs([7, 8]);
+        let w = a.widen::<4>();
+        assert_eq!(*w.as_limbs(), [7, 8, 0, 0]);
+        assert_eq!(a.resize_n::<4>(), w);
+    }
+
+    #[test]
+    fn uint_narrow_checks_dropped_limbs() {
+        let fits = Uint::<4>::from_limbs([7, 8, 0, 0]);
+        assert_eq!(*fits.narrow::<2>().unwrap().as_limbs(), [7, 8]);
+
+        let too_big = Uint::<4>::from_limbs([7, 8, 1, 0]);
+        assert!(too_big.narrow::<2>().is_none());
+
+        // widen → narrow round-trips losslessly.
+        let a = Uint::<2>::from_limbs([3, 4]);
+        assert_eq!(a.widen::<4>().narrow::<2>().unwrap(), a);
+    }
+
+    #[test]
+    fn int_widen_sign_extends() {
+        // -1 is all-ones; sign-extension keeps it all-ones at any width.
+        let neg = Int::<2>::from_i64(-1);
+        assert_eq!(*neg.widen::<4>().as_limbs(), [u64::MAX; 4]);
+        assert_eq!(neg.widen::<4>(), Int::<4>::from_i64(-1));
+        // Positive values zero-extend.
+        let pos = Int::<2>::from_i64(5);
+        assert_eq!(*pos.widen::<4>().as_limbs(), [5, 0, 0, 0]);
+    }
+
+    #[test]
+    fn int_narrow_requires_sign_consistency() {
+        // Negative value whose dropped limbs are all the sign fill: fits.
+        let neg = Int::<4>::from_i64(-1);
+        assert_eq!(neg.narrow::<2>().unwrap(), Int::<2>::from_i64(-1));
+        // Positive magnitude with a non-sign high limb: does not fit.
+        let big = Int::<4>::from_limbs([0, 0, 1, 0]);
+        assert!(big.narrow::<2>().is_none());
+        // Negative top bit but a dropped limb that isn't all-ones: no fit.
+        let weird = Int::<4>::from_limbs([1, 0, 0, u64::MAX]);
+        assert!(weird.narrow::<2>().is_none());
+        // Small value round-trips.
+        let p = Int::<2>::from_i64(42);
+        assert_eq!(p.widen::<4>().narrow::<2>().unwrap(), p);
+    }
+
+    #[test]
+    fn int_resize_const_two_complement() {
+        // Widen round-trips: positive zero-extends, value preserved.
+        let pos = Int::<2>::from_i64(123);
+        let wide: Int<4> = pos.resize_n::<4>();
+        assert_eq!(*wide.as_limbs(), [123, 0, 0, 0]);
+        assert_eq!(wide.resize_n::<2>(), pos);
+
+        // Sign-extend of negatives: high limbs all-ones, value preserved.
+        let neg = Int::<2>::from_i64(-7);
+        let wneg: Int<4> = neg.resize_n::<4>();
+        assert_eq!(*wneg.as_limbs(), [(-7i64) as u64, u64::MAX, u64::MAX, u64::MAX]);
+        assert_eq!(wneg, Int::<4>::from_i64(-7));
+
+        // Truncate drops the surplus high limbs.
+        let v = Int::<4>::from_limbs([1, 2, 3, 4]);
+        assert_eq!(*v.resize_n::<2>().as_limbs(), [1, 2]);
+
+        // try_narrow Some/None at the signed boundary.
+        // -1 narrows: dropped limbs are the sign fill.
+        assert_eq!(Int::<4>::from_i64(-1).try_narrow::<2>().unwrap(), Int::<2>::from_i64(-1));
+        // A positive value with a set high limb does not fit.
+        assert!(Int::<4>::from_limbs([0, 0, 1, 0]).try_narrow::<2>().is_none());
+        // 2^63 is positive and fits Int<2> but NOT Int<1>: narrowing to
+        // one limb would set the top bit, flipping it negative, and the
+        // dropped high limb (0) is not the negative sign fill — so None.
+        let too_big = Int::<2>::from_limbs([0x8000_0000_0000_0000, 0]);
+        assert!(too_big.try_narrow::<1>().is_none());
+        // i64::MIN genuinely fits Int<1>: try_narrow returns Some.
+        let min2 = Int::<2>::from_i64(i64::MIN);
+        assert_eq!(min2.try_narrow::<1>().unwrap(), Int::<1>::from_i64(i64::MIN));
+        // Its widening then narrowing round-trips.
+        assert_eq!(min2.resize_n::<4>().try_narrow::<2>().unwrap(), min2);
+
+        // Const evaluation smoke: resize_n is usable in const context.
+        const W: Int<4> = Int::<2>::from_i64(-7).resize_n::<4>();
+        assert_eq!(W, Int::<4>::from_i64(-7));
+    }
+
+    #[test]
+    fn bit_count_is_const() {
+        // const-smoke: these compile only if the inherent methods are
+        // `const fn`. Called fully-qualified so the inherent `&self` impl
+        // is selected over the (non-const) `BigInt` trait method of the
+        // same name, which takes `self` by value and would otherwise win
+        // value-receiver method resolution.
+        const Z: u32 = Int::<2>::leading_zeros(&Int::<2>::MAX);
+        const BL: u32 = Int::<2>::bit_length(&Int::<2>::MAX);
+        const UZ: u32 = Uint::<2>::leading_zeros(&Uint::<2>::MAX);
+        const UBL: u32 = Uint::<2>::bit_length(&Uint::<2>::MAX);
+        // Int<2>::MAX is positive with the sign bit clear: 1 leading zero,
+        // bit_length = 127.
+        assert_eq!(Z, 1);
+        assert_eq!(BL, 127);
+        // Uint<2>::MAX is all-ones: 0 leading zeros, full 128-bit length.
+        assert_eq!(UZ, 0);
+        assert_eq!(UBL, 128);
+    }
+
+    #[test]
+    fn int_cross_width_comparison() {
+        // Equal values across widths compare ==.
+        let a = Int::<1>::from_i64(5);
+        let b = Int::<2>::from_i64(5);
+        assert!(a == b);
+        assert!(b == a);
+        assert_eq!(a.partial_cmp(&b), Some(Ordering::Equal));
+
+        // Ordering across widths.
+        let small = Int::<1>::from_i64(3);
+        let big = Int::<2>::from_i64(100);
+        assert!(small < big);
+        assert!(big > small);
+
+        // A value only fitting the wider type still orders right: 2^70
+        // lives in Int<2> (and up) but exceeds Int<1>; it must compare
+        // greater than any Int<1>.
+        let huge = Int::<2>::from_limbs([0, 64]); // 64 * 2^64 = 2^70
+        assert!(huge > Int::<1>::MAX);
+        assert!(Int::<1>::from_i64(-1) < huge);
+
+        // Negatives: -1 (Int<1>) vs 1 (Int<2>) — neg < pos.
+        assert!(Int::<1>::from_i64(-1) < Int::<2>::from_i64(1));
+        // Two negatives across widths: larger magnitude is the smaller.
+        assert!(Int::<1>::from_i64(-100) < Int::<2>::from_i64(-3));
+        assert!(Int::<2>::from_i64(-3) > Int::<1>::from_i64(-100));
+        // Equal negatives across widths.
+        assert!(Int::<1>::from_i64(-7) == Int::<2>::from_i64(-7));
+
+        // Same-type Ord still sorts a Vec.
+        let mut v = vec![
+            Int::<2>::from_i64(3),
+            Int::<2>::from_i64(-10),
+            Int::<2>::from_i64(0),
+            Int::<2>::from_i64(7),
+        ];
+        v.sort();
+        assert_eq!(
+            v,
+            vec![
+                Int::<2>::from_i64(-10),
+                Int::<2>::from_i64(0),
+                Int::<2>::from_i64(3),
+                Int::<2>::from_i64(7),
+            ]
+        );
+    }
+
+    #[test]
+    fn consts_and_round_trip() {
+        assert_eq!(Uint::<4>::LIMBS, 4);
+        assert_eq!(Uint::<4>::BITS, 256);
+        assert_eq!(*Uint::<4>::ZERO.as_limbs(), [0, 0, 0, 0]);
+        assert_eq!(*Uint::<4>::ONE.as_limbs(), [1, 0, 0, 0]);
+        assert_eq!(*Uint::<4>::MAX.as_limbs(), [u64::MAX; 4]);
+
+        let v = Uint::<4>::from_limbs([7, 8, 9, 10]);
+        assert_eq!(*v.as_limbs(), [7, 8, 9, 10]);
+    }
+
+    #[test]
+    fn widths_have_expected_bits() {
+        assert_eq!(Int::<4>::BITS, 256);
+        assert_eq!(Int::<64>::BITS, 4096);
+        assert_eq!(Uint::<16>::LIMBS, 16);
+    }
+
+    #[test]
+    fn wrapping_sub_borrows_across_limbs() {
+        // 2^64 - 1 ... computed as 0 - 1 wrapping, then check a clean borrow.
+        let a = Uint::<4>::from_limbs([0, 1, 0, 0]);
+        let d = a.wrapping_sub(Uint::<4>::ONE);
+        assert_eq!(*d.as_limbs(), [u64::MAX, 0, 0, 0]);
+
+        // 0 - 1 wraps to all-ones (modulo 2^256).
+        let wrap = Uint::<4>::ZERO.wrapping_sub(Uint::<4>::ONE);
+        assert_eq!(*wrap.as_limbs(), [u64::MAX; 4]);
+    }
+
+    #[test]
+    fn unsigned_ordering() {
+        let small = Uint::<4>::from_limbs([5, 0, 0, 0]);
+        let big = Uint::<4>::from_limbs([0, 1, 0, 0]); // 2^64 > 5
+        assert!(small < big);
+        assert!(big > small);
+        assert_eq!(small, small);
+        assert!(Uint::<4>::ZERO < Uint::<4>::MAX);
+        // round-trips through derived PartialOrd helpers
+        assert_eq!(small.max(big), big);
+    }
+
+    #[test]
+    fn wrapping_add_carries_across_limbs() {
+        // (2^64 - 1) + 1 carries into the next limb.
+        let a = Uint::<4>::from_limbs([u64::MAX, 0, 0, 0]);
+        let sum = a.wrapping_add(Uint::<4>::ONE);
+        assert_eq!(*sum.as_limbs(), [0, 1, 0, 0]);
+
+        // All-ones + 1 wraps to zero (modulo 2^256).
+        let wrap = Uint::<4>::MAX.wrapping_add(Uint::<4>::ONE);
+        assert_eq!(*wrap.as_limbs(), [0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn uint_wrapping_mul_cross_limb_product() {
+        // 2^64 * 2^64 = 2^128 — lands exactly in limb 2.
+        let a = Uint::<4>::from_limbs([0, 1, 0, 0]);
+        let p = a.wrapping_mul(a);
+        assert_eq!(*p.as_limbs(), [0, 0, 1, 0]);
+
+        // (2^64 - 1) * 3 = 3*2^64 - 3 = [u64::MAX - 2, 2, 0, 0].
+        let m = Uint::<4>::from_limbs([u64::MAX, 0, 0, 0]);
+        let three = Uint::<4>::from_limbs([3, 0, 0, 0]);
+        let q = m.wrapping_mul(three);
+        assert_eq!(*q.as_limbs(), [u64::MAX - 2, 2, 0, 0]);
+
+        // Multiply by one is identity.
+        let v = Uint::<4>::from_limbs([7, 8, 9, 10]);
+        assert_eq!(v.wrapping_mul(Uint::<4>::ONE), v);
+    }
+
+    #[test]
+    fn uint_wrapping_mul_truncates_modulo_width() {
+        // 2^192 * 2^192 = 2^384, fully above 2^256 → wraps to zero.
+        let hi = Uint::<4>::from_limbs([0, 0, 0, 1]);
+        assert_eq!(hi.wrapping_mul(hi), Uint::<4>::ZERO);
+
+        // MAX * MAX mod 2^256: (2^256 - 1)^2 = 2^512 - 2^257 + 1.
+        // mod 2^256 that is 1 (since 2^512 and 2^257 are both 0 mod
+        // 2^256). So the low limb is 1, the rest zero.
+        let r = Uint::<4>::MAX.wrapping_mul(Uint::<4>::MAX);
+        assert_eq!(*r.as_limbs(), [1, 0, 0, 0]);
+    }
+
+    #[test]
+    fn uint_checked_add_sub_overflow() {
+        assert_eq!(
+            Uint::<4>::ONE.checked_add(Uint::<4>::ONE),
+            Some(Uint::<4>::from_limbs([2, 0, 0, 0]))
+        );
+        // MAX + 1 overflows.
+        assert_eq!(Uint::<4>::MAX.checked_add(Uint::<4>::ONE), None);
+
+        assert_eq!(
+            Uint::<4>::from_limbs([5, 0, 0, 0]).checked_sub(Uint::<4>::from_limbs([3, 0, 0, 0])),
+            Some(Uint::<4>::from_limbs([2, 0, 0, 0]))
+        );
+        // 0 - 1 underflows.
+        assert_eq!(Uint::<4>::ZERO.checked_sub(Uint::<4>::ONE), None);
+    }
+
+    #[test]
+    fn uint_checked_mul_overflow() {
+        // 2^64 * 2^64 = 2^128 fits in 256 bits.
+        let a = Uint::<4>::from_limbs([0, 1, 0, 0]);
+        assert_eq!(a.checked_mul(a), Some(Uint::<4>::from_limbs([0, 0, 1, 0])));
+        // 2^192 * 2^192 overflows 256 bits.
+        let hi = Uint::<4>::from_limbs([0, 0, 0, 1]);
+        assert_eq!(hi.checked_mul(hi), None);
+        // MAX * 2 overflows.
+        assert_eq!(
+            Uint::<4>::MAX.checked_mul(Uint::<4>::from_limbs([2, 0, 0, 0])),
+            None
+        );
+    }
+
+    #[test]
+    fn uint_div_rem_with_remainder() {
+        // 1000 / 7 = 142 r 6.
+        let n = Uint::<4>::from_limbs([1000, 0, 0, 0]);
+        let d = Uint::<4>::from_limbs([7, 0, 0, 0]);
+        assert_eq!(*n.wrapping_div(d).as_limbs(), [142, 0, 0, 0]);
+        assert_eq!(*n.wrapping_rem(d).as_limbs(), [6, 0, 0, 0]);
+
+        // 2^128 / 2^64 = 2^64, remainder 0.
+        let big = Uint::<4>::from_limbs([0, 0, 1, 0]);
+        let by = Uint::<4>::from_limbs([0, 1, 0, 0]);
+        assert_eq!(*big.wrapping_div(by).as_limbs(), [0, 1, 0, 0]);
+        assert!(big.wrapping_rem(by).is_zero());
+    }
+
+    #[test]
+    #[should_panic(expected = "divide by zero")]
+    fn uint_div_by_zero_panics() {
+        let _ = Uint::<4>::ONE.wrapping_div(Uint::<4>::ZERO);
+    }
+
+    #[test]
+    fn uint_bitwise_ops() {
+        let a = Uint::<4>::from_limbs([0b1100, 0xFF, 0, 0]);
+        let b = Uint::<4>::from_limbs([0b1010, 0x0F, 0, 0]);
+        assert_eq!(*(a & b).as_limbs(), [0b1000, 0x0F, 0, 0]);
+        assert_eq!(*(a | b).as_limbs(), [0b1110, 0xFF, 0, 0]);
+        assert_eq!(*(a ^ b).as_limbs(), [0b0110, 0xF0, 0, 0]);
+        assert_eq!(*(!Uint::<4>::ZERO).as_limbs(), [u64::MAX; 4]);
+    }
+
+    #[test]
+    fn uint_shifts() {
+        let one = Uint::<4>::ONE;
+        // 1 << 64 lands in limb 1.
+        assert_eq!(*(one << 64).as_limbs(), [0, 1, 0, 0]);
+        // 1 << 130 = limb 2 bit 2.
+        assert_eq!(*(one << 130).as_limbs(), [0, 0, 0b100, 0]);
+        // Right shift back.
+        let v = Uint::<4>::from_limbs([0, 0, 0b100, 0]);
+        assert_eq!(*(v >> 130).as_limbs(), [1, 0, 0, 0]);
+        // Shift past the width drops everything.
+        assert_eq!(one << 256, Uint::<4>::ZERO);
+    }
+
+    #[test]
+    fn uint_is_zero_bitlen_leading_zeros() {
+        assert!(Uint::<4>::ZERO.is_zero());
+        assert!(!Uint::<4>::ONE.is_zero());
+        assert_eq!(Uint::<4>::ZERO.bit_length(), 0);
+        assert_eq!(Uint::<4>::ONE.bit_length(), 1);
+        // 2^64 has bit length 65.
+        let b = Uint::<4>::from_limbs([0, 1, 0, 0]);
+        assert_eq!(b.bit_length(), 65);
+        assert_eq!(b.leading_zeros(), 256 - 65);
+        assert_eq!(Uint::<4>::ZERO.leading_zeros(), 256);
+        assert_eq!(Uint::<4>::MAX.leading_zeros(), 0);
+    }
+
+    #[test]
+    fn uint_operator_traits_delegate() {
+        let a = Uint::<4>::from_limbs([10, 0, 0, 0]);
+        let b = Uint::<4>::from_limbs([3, 0, 0, 0]);
+        assert_eq!(*(a + b).as_limbs(), [13, 0, 0, 0]);
+        assert_eq!(*(a - b).as_limbs(), [7, 0, 0, 0]);
+        assert_eq!(*(a * b).as_limbs(), [30, 0, 0, 0]);
+    }
+
+    #[test]
+    fn int_from_i64_sign_extends() {
+        // Positive: only the low limb is set.
+        assert_eq!(*Int::<4>::from_i64(5).as_limbs(), [5, 0, 0, 0]);
+        // -1 sign-extends to all-ones.
+        assert_eq!(*Int::<4>::from_i64(-1).as_limbs(), [u64::MAX; 4]);
+        // -2 → low limb u64::MAX - 1, upper limbs all-ones.
+        assert_eq!(
+            *Int::<4>::from_i64(-2).as_limbs(),
+            [u64::MAX - 1, u64::MAX, u64::MAX, u64::MAX]
+        );
+        assert!(Int::<4>::from_i64(-1).is_negative());
+        assert!(Int::<4>::from_i64(1).is_positive());
+        assert!(Int::<4>::from_i64(0).is_zero());
+    }
+
+    #[test]
+    fn int_wrapping_neg_two_complement() {
+        let five = Int::<4>::from_i64(5);
+        let neg_five = five.wrapping_neg();
+        assert_eq!(neg_five, Int::<4>::from_i64(-5));
+        // Negating twice returns the original.
+        assert_eq!(neg_five.wrapping_neg(), five);
+        // -1 negates to 1.
+        assert_eq!(Int::<4>::from_i64(-1).wrapping_neg(), Int::<4>::ONE);
+        // Neg operator delegates.
+        assert_eq!(-five, neg_five);
+    }
+
+    #[test]
+    fn int_add_sub_mul_with_signs() {
+        let a = Int::<4>::from_i64(7);
+        let b = Int::<4>::from_i64(-3);
+        // 7 + (-3) = 4
+        assert_eq!(a.wrapping_add(b), Int::<4>::from_i64(4));
+        // 7 - (-3) = 10
+        assert_eq!(a.wrapping_sub(b), Int::<4>::from_i64(10));
+        // 7 * (-3) = -21
+        assert_eq!(a.wrapping_mul(b), Int::<4>::from_i64(-21));
+        // (-3) * (-3) = 9
+        assert_eq!(b.wrapping_mul(b), Int::<4>::from_i64(9));
+        // operator delegation
+        assert_eq!(a + b, Int::<4>::from_i64(4));
+        assert_eq!(a - b, Int::<4>::from_i64(10));
+        assert_eq!(a * b, Int::<4>::from_i64(-21));
+    }
+
+    #[test]
+    fn int_mul_crosses_limbs_with_sign() {
+        // 2^64 * (-1) = -2^64.
+        let big = Int::<4>::from_i64(0).wrapping_add(Int::<4>::from_limbs([0, 1, 0, 0]));
+        let neg = big.wrapping_mul(Int::<4>::from_i64(-1));
+        assert_eq!(neg, big.wrapping_neg());
+        // -2^64 should be [0, u64::MAX, u64::MAX, u64::MAX].
+        assert_eq!(*neg.as_limbs(), [0, u64::MAX, u64::MAX, u64::MAX]);
+    }
+
+    #[test]
+    fn int_abs_signum() {
+        assert_eq!(Int::<4>::from_i64(-9).abs(), Int::<4>::from_i64(9));
+        assert_eq!(Int::<4>::from_i64(9).abs(), Int::<4>::from_i64(9));
+        assert_eq!(Int::<4>::from_i64(-9).signum(), -1);
+        assert_eq!(Int::<4>::from_i64(9).signum(), 1);
+        assert_eq!(Int::<4>::from_i64(0).signum(), 0);
+    }
+
+    #[test]
+    fn int_from_i128_round_trips() {
+        for v in [
+            0i128,
+            1,
+            -1,
+            42,
+            -42,
+            i64::MAX as i128,
+            i64::MIN as i128,
+            i128::MAX,
+            i128::MIN,
+            123_456_789_012_345_678,
+        ] {
+            let a = Int::<4>::from_i128(v);
+            assert_eq!(a.to_i128_checked(), Some(v), "round-trip i128 {v}");
+            let b = Int::<8>::from_i128(v);
+            assert_eq!(b.to_i128_checked(), Some(v), "round-trip i128 {v} (N=8)");
+        }
+        // from_u128 of a value above i128::MAX is not representable as i128.
+        let big = Int::<4>::from_u128(u128::MAX);
+        assert_eq!(big.to_i128_checked(), None);
+        assert_eq!(big.to_u128_checked(), Some(u128::MAX));
+        // Negative has no u128.
+        assert_eq!(Int::<4>::from_i128(-1).to_u128_checked(), None);
+    }
+
+    #[test]
+    fn int_from_str_radix_and_display_round_trip() {
+        let cases = [
+            "0",
+            "1",
+            "-1",
+            "42",
+            "-42",
+            "1000000000000000000000",
+            "-340282366920938463463374607431768211455",
+        ];
+        for s in cases {
+            let v = Int::<4>::from_str_radix(s, 10).unwrap();
+            assert_eq!(format!("{v}"), s, "display round-trip {s}");
+            // FromStr delegates to from_str_radix(_, 10).
+            let v2: Int<4> = s.parse().unwrap();
+            assert_eq!(v, v2);
+        }
+        // Non-base-10 and malformed input reject.
+        assert!(Int::<4>::from_str_radix("10", 16).is_err());
+        assert!(Int::<4>::from_str_radix("12x", 10).is_err());
+        assert!(Int::<4>::from_str_radix("", 10).is_err());
+        assert!(Int::<4>::from_str_radix("-", 10).is_err());
+    }
+
+    #[test]
+    fn int_div_rem_signs_match_truncating() {
+        // Truncating division: quotient truncates toward zero, remainder
+        // carries the sign of the dividend.
+        let cases: [(i128, i128); 6] = [
+            (1000, 7),
+            (-1000, 7),
+            (1000, -7),
+            (-1000, -7),
+            (7, 1000),
+            (-7, 1000),
+        ];
+        for (a, b) in cases {
+            let (q, r) = Int::<4>::from_i128(a).div_rem(Int::<4>::from_i128(b));
+            assert_eq!(q.to_i128_checked(), Some(a / b), "quot {a}/{b}");
+            assert_eq!(r.to_i128_checked(), Some(a % b), "rem {a}%{b}");
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "divide by zero")]
+    fn int_div_rem_by_zero_panics() {
+        let _ = Int::<4>::ONE.div_rem(Int::<4>::ZERO);
+    }
+
+    #[test]
+    fn int_bit_reads_twos_complement() {
+        let v = Int::<4>::from_i128(0b1010);
+        assert!(!v.bit(0));
+        assert!(v.bit(1));
+        assert!(!v.bit(2));
+        assert!(v.bit(3));
+        // Above the value's set bits: clear for positive.
+        assert!(!v.bit(200));
+        // Negative: high bits read as the sign extension (all ones).
+        let neg = Int::<4>::from_i128(-1);
+        assert!(neg.bit(0));
+        assert!(neg.bit(255));
+        assert!(neg.bit(1000)); // out of range → sign bit
+    }
+
+    #[test]
+    fn int_mul_u64_matches_wide_mul() {
+        let v = Int::<4>::from_i128(123_456_789);
+        assert_eq!(
+            v.mul_u64(1000),
+            Int::<4>::from_i128(123_456_789_000)
+        );
+        // Sign preserved.
+        let n = Int::<4>::from_i128(-123_456_789);
+        assert_eq!(
+            n.mul_u64(1000),
+            Int::<4>::from_i128(-123_456_789_000)
+        );
+        // Times zero / one.
+        assert_eq!(v.mul_u64(0), Int::<4>::ZERO);
+        assert_eq!(v.mul_u64(1), v);
+    }
+
+    #[test]
+    #[should_panic(expected = "mul overflow")]
+    fn int_mul_u64_overflow_panics() {
+        // max_value * 2 overflows the signed range.
+        let _ = Int::<4>::max_value().mul_u64(2);
+    }
+
+    #[test]
+    fn int_div_rem_operators_match_div_rem() {
+        // The Div / Rem operators must agree with the inherent div_rem,
+        // which is what BigInt requires as supertraits.
+        let a = Int::<4>::from_i128(-1000);
+        let b = Int::<4>::from_i128(7);
+        assert_eq!(a / b, Int::<4>::from_i128(-1000 / 7));
+        assert_eq!(a % b, Int::<4>::from_i128(-1000 % 7));
+        let (q, r) = a.div_rem(b);
+        assert_eq!(a / b, q);
+        assert_eq!(a % b, r);
+    }
+
+    // Exercises Int<8> isqrt (work width 9) beyond the narrow build's scratch.
+    #[cfg(feature = "_wide-support")]
+    #[test]
+    fn int_wide_storage_surface() {
+        use crate::int::types::traits::BigInt;
+        fn exercises<T: BigInt>() {
+            assert!(<T as BigInt>::ZERO == <T as BigInt>::from_i128(0));
+            assert!(<T as BigInt>::ONE == <T as BigInt>::from_i128(1));
+            assert!(<T as BigInt>::TEN == <T as BigInt>::from_i128(10));
+
+            let twelve = <T as BigInt>::from_i128(12);
+            let three = <T as BigInt>::from_i128(3);
+            // pow / isqrt
+            assert!(three.pow(3) == <T as BigInt>::from_i128(27));
+            assert!(<T as BigInt>::from_i128(144).isqrt() == <T as BigInt>::from_i128(12));
+            // div_rem
+            let (q, r) = twelve.div_rem(<T as BigInt>::from_i128(5));
+            assert!(q == <T as BigInt>::from_i128(2));
+            assert!(r == <T as BigInt>::from_i128(2));
+            // bit / leading_zeros
+            assert!(twelve.bit(2) && twelve.bit(3) && !twelve.bit(0));
+            assert!(<T as BigInt>::ONE.leading_zeros() == <T as BigInt>::BITS - 1);
+            // mul_u64 / f64 round-trips
+            assert!(twelve.mul_u64(10) == <T as BigInt>::from_i128(120));
+            assert!(twelve.to_f64() == 12.0);
+            assert!(<T as BigInt>::from_f64_val(7.9) == <T as BigInt>::from_i128(7));
+        }
+        exercises::<Int<4>>();
+        exercises::<Int<8>>();
+
+        // resize_to widens/narrows across the family.
+        let v = Int::<4>::from_i128(-123_456_789);
+        let w: Int<8> = BigInt::resize_to(v);
+        assert_eq!(w.to_i128_checked(), Some(-123_456_789));
+        let back: Int<4> = BigInt::resize_to(w);
+        assert_eq!(back, v);
+    }
+
+    // Perfect-square round-trip at Int<8> exceeds the narrow build's scratch.
+    #[cfg(feature = "_wide-support")]
+    #[test]
+    fn int_isqrt_matches_uint_magnitude() {
+        use crate::int::types::traits::BigInt;
+        // Signed isqrt is the magnitude isqrt (macro parity).
+        let n = Int::<4>::from_i128(1_000_000_000_000);
+        let r = BigInt::isqrt(n);
+        assert_eq!(r, Int::<4>::from_i128(1_000_000));
+        // Perfect square round-trip at width 8.
+        let big = Int::<8>::from_i128(987_654_321);
+        let sq = big.checked_mul(big).unwrap();
+        assert_eq!(BigInt::isqrt(sq), big);
+    }
+
+    /// `Uint<N>::sqr` must equal `x * x` at every tested width; the policy
+    /// dispatcher must agree with `wrapping_sqr`.
+    #[test]
+    fn uint_sqr_policy_matches_wrapping_sqr() {
+        fn check<const N: usize>(limbs: [u64; N]) {
+            let x = Uint::<N>::from_limbs(limbs);
+            assert_eq!(x.sqr(), x.wrapping_sqr(), "sqr mismatch at {limbs:?}");
+            assert_eq!(x.sqr(), x.wrapping_mul(x), "sqr != x*x at {limbs:?}");
+        }
+        // Width 1
+        check::<1>([0]);
+        check::<1>([1]);
+        check::<1>([u64::MAX]);
+        check::<1>([12345]);
+        // Width 2
+        check::<2>([0, 0]);
+        check::<2>([1, 0]);
+        check::<2>([u64::MAX, u64::MAX]);
+        check::<2>([0xDEAD_BEEF, 0x1234]);
+        // Width 4
+        check::<4>([u64::MAX, u64::MAX, u64::MAX, u64::MAX]);
+        check::<4>([0x1234_5678_9ABC_DEF0, 0xFEDC_BA98, 0, 0]);
+        // Width 6
+        check::<6>([7, 8, 9, 10, 11, 12]);
+    }
+
+    /// `Uint<N>::cube` must equal `x * x * x` at every tested width.
+    #[test]
+    fn uint_cube_policy_matches_wrapping_cube() {
+        fn check<const N: usize>(limbs: [u64; N]) {
+            let x = Uint::<N>::from_limbs(limbs);
+            assert_eq!(x.cube(), x.wrapping_cube(), "cube mismatch at {limbs:?}");
+            assert_eq!(
+                x.cube(),
+                x.wrapping_mul(x).wrapping_mul(x),
+                "cube != x*x*x at {limbs:?}"
+            );
+        }
+        check::<1>([0]);
+        check::<1>([1]);
+        check::<1>([3]);
+        check::<1>([u64::MAX]);
+        check::<2>([0, 0]);
+        check::<2>([1, 0]);
+        check::<2>([100, 0]);
+        check::<2>([u64::MAX, u64::MAX]);
+        check::<4>([5, 0, 0, 0]);
+        check::<4>([0x1234, 0x5678, 0, 0]);
+    }
+
+    /// `Int<N>::sqr` and `Int<N>::cube` must match their wrapping siblings.
+    #[test]
+    fn int_sqr_cube_match_wrapping() {
+        fn check<const N: usize>(v: i128) {
+            let x = Int::<N>::from_i128(v);
+            assert_eq!(x.sqr(), x.wrapping_sqr(), "int sqr mismatch v={v}");
+            assert_eq!(x.cube(), x.wrapping_cube(), "int cube mismatch v={v}");
+        }
+        for v in [0i128, 1, -1, 12, -12, 100, -100, 1_000_000, -1_000_000] {
+            check::<4>(v);
+            check::<8>(v);
+        }
+    }
+
+    /// `Uint<N>::icbrt` must return `floor(x^(1/3))` for a range of
+    /// values: perfect cubes, non-cubes, 0, 1, and large values.
+    #[test]
+    fn uint_icbrt_floor_correctness() {
+        // Brute-force floor cube-root of a u64, used as oracle for small inputs.
+        fn brute_cbrt(n: u64) -> u64 {
+            if n == 0 {
+                return 0;
+            }
+            let mut r: u64 = 0;
+            while (r + 1).checked_mul((r + 1) * (r + 1) + r + 1)
+                .is_some_and(|p| p <= n)
+                || (r + 1).checked_pow(3).is_some_and(|p| p <= n)
+            {
+                r += 1;
+            }
+            r
+        }
+
+        fn check<const N: usize>(n: u64) {
+            let x = Uint::<N>::from_u64(n);
+            let root = x.icbrt();
+            let root_u64 = root.as_limbs()[0];
+            let expected = brute_cbrt(n);
+            assert_eq!(root_u64, expected, "icbrt({n}) = {root_u64}, expected {expected}");
+            // Higher limbs of root must be zero for a u64 input.
+            for i in 1..N {
+                assert_eq!(root.as_limbs()[i], 0, "icbrt({n}) high limb {i} nonzero");
+            }
+        }
+
+        // Perfect cubes.
+        for n in [0u64, 1, 8, 27, 64, 125, 216, 343, 512, 729, 1000,
+                  1_000_000_000u64, 8_000_000_000u64] {
+            check::<1>(n);
+            check::<2>(n);
+            check::<4>(n);
+        }
+
+        // Non-cubes (floor must be correct).
+        for n in [2u64, 3, 4, 5, 6, 7, 9, 10, 26, 28, 63, 65, 999,
+                  1_000_000_001u64] {
+            check::<1>(n);
+            check::<2>(n);
+            check::<4>(n);
+        }
+
+        // Boundary cases: 0 and 1.
+        check::<1>(0);
+        check::<1>(1);
+        check::<4>(0);
+        check::<4>(1);
+
+        // Large 64-bit values.
+        for n in [u64::MAX, u64::MAX - 1, u64::MAX - 100, 1 << 60, 1 << 48] {
+            check::<2>(n);
+            check::<4>(n);
+        }
+    }
+
+    /// `Uint<N>::icbrt` for values spanning multiple limbs (N >= 3 path).
+    /// The cube root of a 2-limb value still fits in a single u64; we
+    /// verify the floor identity `r³ <= x < (r+1)³`.
+    #[test]
+    fn uint_icbrt_wide_floor_identity() {
+        fn check_wide<const N: usize>(limbs: [u64; N]) {
+            let x = Uint::<N>::from_limbs(limbs);
+            let r = x.icbrt();
+            // Verify r³ <= x.
+            let r3 = r.wrapping_pow(3);
+            assert!(
+                r3 <= x,
+                "icbrt violated: r³ > x for {limbs:?}"
+            );
+            // Verify (r+1)³ > x (i.e. r is the floor).
+            let r1 = r.wrapping_add(Uint::<N>::ONE);
+            let r1_3 = r1.wrapping_pow(3);
+            // (r+1)³ wraps to 0 only if r+1 itself wraps (i.e. r == MAX),
+            // which for a cube root of a representable value cannot happen.
+            assert!(
+                r1_3 > x || r1 == Uint::<N>::ZERO,
+                "icbrt not floor: (r+1)³ <= x for {limbs:?}"
+            );
+        }
+
+        // Perfect cubes in 2 limbs (root fits one limb).
+        // 10^18 cubed = 10^54 — too large; use modest values.
+        // 1_000_000^3 = 10^18, which fits 2 limbs (u64 goes to ~1.8 * 10^19).
+        let m = 1_000_000u64;
+        let m3 = m * m * m; // 10^18, fits u64
+        check_wide::<4>([m3, 0, 0, 0]);
+        check_wide::<4>([m3 + 1, 0, 0, 0]);
+        check_wide::<4>([m3 - 1, 0, 0, 0]);
+
+        // A 2-limb value: combine two u64 halves.
+        let hi = 1u64;
+        let lo = 0u64;
+        check_wide::<4>([lo, hi, 0, 0]); // 2^64
+
+        check_wide::<4>([u64::MAX, u64::MAX, 0, 0]); // near 2^128
+
+        // Width 6 (N >= 3, Newton path for sure).
+        check_wide::<6>([m3, 0, 0, 0, 0, 0]);
+        check_wide::<6>([u64::MAX, u64::MAX, u64::MAX, 0, 0, 0]); // near 2^192
+    }
+
+    /// `Int<N>::icbrt` must return the unsigned cube root of the magnitude.
+    #[test]
+    fn int_icbrt_magnitude() {
+        for v in [0i128, 1, -1, 8, -8, 27, -27, 1000, -1000] {
+            let x = Int::<4>::from_i128(v);
+            let expected = Int::<4>::from_i128((v.unsigned_abs() as f64).cbrt() as i128);
+            let got = x.icbrt();
+            assert_eq!(got, expected, "int icbrt({v}) mismatch");
+        }
+    }
+
+    #[test]
+    fn int_wideint_mag_sign_round_trips() {
+        use crate::int::types::traits::BigInt;
+        // mag_into_u128 / from_mag_sign_u128 round-trip for signed
+        // values, including the magnitude + sign split.
+        for v in [0i128, 1, -1, 123_456_789_012_345_678, -987_654_321] {
+            let a = Int::<4>::from_i128(v);
+            let mut mag = [0u128; 2];
+            let neg = a.mag_into_u128(&mut mag);
+            assert_eq!(neg, a.is_negative());
+            assert_eq!(Int::<4>::from_mag_sign_u128(&mag, neg), a, "mag/sign {v}");
+        }
+        // U128_LIMBS = ceil(N/2): even and odd N.
+        assert_eq!(<Int<4> as BigInt>::U128_LIMBS, 2);
+        assert_eq!(<Int<3> as BigInt>::U128_LIMBS, 2);
+        assert_eq!(<Int<8> as BigInt>::U128_LIMBS, 4);
+
+        // mag_into_u128 / from_mag_sign_u128 round-trip (the hot-path
+        // buffer bypass), including the odd-N tail at N=3.
+        let v3 = Int::<3>::from_i128(-170_141_183_460_469_231_731);
+        let mut buf = [0u128; 2];
+        let neg = v3.mag_into_u128(&mut buf);
+        assert_eq!(Int::<3>::from_mag_sign_u128(&buf, neg), v3);
+
+        let v4 = Int::<4>::from_i128(i128::MIN);
+        let mut buf4 = [0u128; 2];
+        let neg4 = v4.mag_into_u128(&mut buf4);
+        assert_eq!(Int::<4>::from_mag_sign_u128(&buf4, neg4), v4);
+    }
+
+    #[test]
+    fn int_to_from_f64_and_negate_ten() {
+        assert_eq!(Int::<4>::from_i64(5).to_f64(), 5.0);
+        assert_eq!(Int::<4>::from_i64(-5).to_f64(), -5.0);
+        assert_eq!(Int::<4>::from_f64(42.9), Int::<4>::from_i64(42));
+        assert_eq!(Int::<4>::from_f64(-42.9), Int::<4>::from_i64(-42));
+        // Non-finite maps to ZERO.
+        assert_eq!(Int::<4>::from_f64(f64::NAN), Int::<4>::ZERO);
+        // negate is wrapping_neg; TEN const is 10.
+        assert_eq!(Int::<4>::from_i64(5).negate(), Int::<4>::from_i64(-5));
+        assert_eq!(Int::<4>::TEN, Int::<4>::from_i64(10));
+        // from_limbs_le / limbs_le round-trip.
+        let v = Int::<4>::from_i128(-9_876_543_210);
+        assert_eq!(Int::<4>::from_limbs_le(v.limbs_le()), v);
+    }
+
+    #[test]
+    fn int_signed_ordering() {
+        let neg = Int::<4>::from_i64(-5);
+        let zero = Int::<4>::ZERO;
+        let pos = Int::<4>::from_i64(5);
+        // Negative < zero < positive even though -5's limbs are larger
+        // unsigned than 5's.
+        assert!(neg < zero);
+        assert!(zero < pos);
+        assert!(neg < pos);
+        // Two negatives compare by magnitude with sign accounted for.
+        assert!(Int::<4>::from_i64(-10) < Int::<4>::from_i64(-1));
+        assert_eq!(neg.max(pos), pos);
+        assert_eq!(neg.min(pos), neg);
+        assert_eq!(pos.cmp(&pos), Ordering::Equal);
+    }
+}
+
+/// Feasibility proof for the unified narrow-tier divide path: the same
+/// `widen_mul` → `div_wide_pow10` pipeline the wide tiers already
+/// run must produce the correct `(a · b) / 10^scale` at the narrow
+/// limb widths `N = 1` (`Int64`) and `N = 2` (`Int128`) that the
+/// D18/D38-unify steps will rewire onto. This locks in the
+/// `widen_mul::<wider>` then `div_wide_pow10::<wider>`
+/// composition before any decimal type is rewired; it is additive and
+/// asserts only — no behaviour is changed here.
+#[cfg(all(test, feature = "wide"))]
+mod unified_mg_feasibility {
+    use super::Int;
+    use crate::algos::support::mg_divide::div_wide_pow10;
+    use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
+    use crate::int::types::traits::BigInt;
+    use crate::support::rounding::RoundingMode;
+
+    /// `(a · b) / 10^scale` through the unified pipeline, computed as
+    /// `Int<N>::widen_mul::<Int<M>>` (full product into the wider type)
+    /// then `div_wide_pow10::<Int<M>>`. The wider type's u128 magnitude
+    /// width is read from its scratch carrier's [`ComputeLimbs`] buffer
+    /// (`single_u128`) inside the divide — the `Limbs<N>` carrier IS the
+    /// mechanism for the wider work intermediate, so no work-width const
+    /// parameter is named. Returns the scaled wider-width quotient.
+    fn scaled<const N: usize, const M: usize>(a: Int<N>, b: Int<N>, scale: u32) -> Int<M>
+    where
+        Limbs<N>: ComputeLimbs,
+        Int<M>: BigInt,
+        Limbs<M>: ComputeLimbs,
+        <Int<M> as BigInt>::Scratch: ComputeLimbs,
+    {
+        let prod: Int<M> = a.widen_mul::<Int<M>>(b);
+        div_wide_pow10::<Int<M>>(prod, scale, RoundingMode::HalfToEven)
+    }
+
+    /// N = 2 → widen to N = 4, scale 5 (the plan's anchor case).
+    #[test]
+    fn n2_widen4_scale5() {
+        let a = Int::<2>::from_i64(123456789);
+        let b = Int::<2>::from_i64(987654321);
+        let got = scaled::<2, 4>(a, b, 5);
+        assert_eq!(got, Int::<4>::from_i64(1219326311126));
+    }
+
+    /// N = 1 → widen to N = 2, scale 3 (the plan's anchor case).
+    #[test]
+    fn n1_widen2_scale3() {
+        let a = Int::<1>::from_i64(123456);
+        let b = Int::<1>::from_i64(654321);
+        let got = scaled::<1, 2>(a, b, 3);
+        assert_eq!(got, Int::<2>::from_i64(80779853));
+    }
+
+    /// Round-trip: `(x · 10^k) / 10^k == x` at both narrow widths. The
+    /// widen_mul forms `x · 10^k` exactly in the wider type and the MG
+    /// divide undoes it with no residue.
+    #[test]
+    fn round_trip_mul_then_div() {
+        // N = 1 → 2: x = 4242, k = 4.
+        let x1 = 4242i64;
+        let ten_pow_4 = Int::<1>::from_i64(10_000);
+        let rt1 = scaled::<1, 2>(Int::<1>::from_i64(x1), ten_pow_4, 4);
+        assert_eq!(rt1, Int::<2>::from_i64(x1));
+
+        // N = 2 → 4: x = 9_876_543_210, k = 7.
+        let x2 = 9_876_543_210i64;
+        let ten_pow_7 = Int::<2>::from_i64(10_000_000);
+        let rt2 = scaled::<2, 4>(Int::<2>::from_i64(x2), ten_pow_7, 7);
+        assert_eq!(rt2, Int::<4>::from_i64(x2));
+    }
+
+    /// Scale-0 identity: callers short-circuit `scale == 0` as a no-op
+    /// (`div_wide_pow10` is only ever invoked for `1..=38`), so the
+    /// scaled value at scale 0 is exactly the full widen_mul product.
+    /// This locks that contract for the narrow widths.
+    #[test]
+    fn scale_zero_is_widen_mul_identity() {
+        // N = 1 → 2.
+        let a1 = Int::<1>::from_i64(123456);
+        let b1 = Int::<1>::from_i64(654321);
+        let prod1: Int<2> = a1.widen_mul::<Int<2>>(b1);
+        assert_eq!(prod1, Int::<2>::from_i64(123456 * 654321));
+
+        // N = 2 → 4.
+        let a2 = Int::<2>::from_i64(123456789);
+        let b2 = Int::<2>::from_i64(987654321);
+        let prod2: Int<4> = a2.widen_mul::<Int<4>>(b2);
+        assert_eq!(prod2, Int::<4>::from_i64(123456789i64 * 987654321i64));
+    }
+
+    /// Max-operand case at each narrow width: the widest product the
+    /// source width can hold must widen and scale without truncation.
+    #[test]
+    fn max_operand_each_width() {
+        // N = 1: u64::MAX-ish operands. Use the largest i64 magnitudes
+        // whose product the widen_mul (into N = 2) holds exactly, then
+        // scale by 10^9 and check against the u128 reference.
+        let a1 = Int::<1>::from_i64(i64::MAX);
+        let b1 = Int::<1>::from_i64(i64::MAX);
+        let got1 = scaled::<1, 2>(a1, b1, 9);
+        let exact1 = (i64::MAX as i128) * (i64::MAX as i128);
+        let pow9 = 1_000_000_000i128;
+        let q1 = exact1 / pow9;
+        let r1 = exact1 % pow9;
+        // HalfToEven bump when the remainder is past the halfway point.
+        let half = pow9 / 2;
+        let expect1 = if r1 > half || (r1 == half && (q1 & 1) == 1) {
+            q1 + 1
+        } else {
+            q1
+        };
+        assert_eq!(got1, Int::<2>::from_i128(expect1));
+
+        // N = 2: the most-positive signed operand (2^127 - 1) squared,
+        // widened into N = 4, then scaled by 10^20. Compare against the
+        // exact reference reconstructed from the full 256-bit product.
+        let big = Int::<2>::MAX; // 2^127 - 1
+        let got2 = scaled::<2, 4>(big, big, 20);
+        let prod2: Int<4> = big.widen_mul::<Int<4>>(big);
+        // Exact (2^127 - 1)^2 / 10^20, HalfToEven, via the wider type's
+        // own div_rem against 10^20 built in Int<4>.
+        let pow20 = Int::<4>::TEN.pow(20);
+        let (q2, r2) = prod2.div_rem(pow20);
+        let half20 = pow20.div_rem(Int::<4>::from_i64(2)).0;
+        let expect2 = match r2.cmp(&half20) {
+            core::cmp::Ordering::Greater => q2.wrapping_add(Int::<4>::ONE),
+            core::cmp::Ordering::Equal => {
+                if (q2.as_limbs()[0] & 1) == 1 {
+                    q2.wrapping_add(Int::<4>::ONE)
+                } else {
+                    q2
+                }
+            }
+            core::cmp::Ordering::Less => q2,
+        };
+        assert_eq!(got2, expect2);
+    }
+}
+
+#[cfg(test)]
+mod bit_count_contract_tests {
+    use super::{Int, Uint};
+
+    /// `Int<N>`'s four bit-count methods must match the `iN`
+    /// two's-complement contract at every edge, and `bit_length` must
+    /// stay magnitude-based. Where the value fits a primitive we assert
+    /// against `i64`/`i128`; otherwise against the known answer.
+    #[test]
+    fn int_bit_counts_match_signed_contract_at_edges() {
+        // ── Int<1> (64-bit): cross-check directly against i64. ──
+        for v in [0_i64, 1, -1, i64::MAX, i64::MIN, 42, -42, 1 << 40, -(1 << 40)] {
+            let x = Int::<1>::from_i64(v);
+            assert_eq!(x.leading_zeros(), v.leading_zeros(), "i64 lz {v}");
+            assert_eq!(x.trailing_zeros(), v.trailing_zeros(), "i64 tz {v}");
+            assert_eq!(x.count_ones(), v.count_ones(), "i64 popcount {v}");
+            assert_eq!(x.count_zeros(), v.count_zeros(), "i64 cz {v}");
+            // bit_length is magnitude-based: significant bits of |v|.
+            let mag_bits = 64 - v.unsigned_abs().leading_zeros();
+            assert_eq!(x.bit_length(), mag_bits, "i64 bit_length {v}");
+        }
+
+        // ── Int<2> (128-bit): cross-check directly against i128. ──
+        for v in [
+            0_i128,
+            1,
+            -1,
+            i128::MAX,
+            i128::MIN,
+            (1_i128 << 64),       // 2^64 — limb boundary
+            (1_i128 << 64) - 1,   // 2^64 - 1 — fills the low limb
+            -(1_i128 << 64),
+            i64::MAX as i128,
+            i64::MIN as i128,
+        ] {
+            let x = Int::<2>::from_i128(v);
+            assert_eq!(x.leading_zeros(), v.leading_zeros(), "i128 lz {v}");
+            assert_eq!(x.trailing_zeros(), v.trailing_zeros(), "i128 tz {v}");
+            assert_eq!(x.count_ones(), v.count_ones(), "i128 popcount {v}");
+            assert_eq!(x.count_zeros(), v.count_zeros(), "i128 cz {v}");
+            let mag_bits = 128 - v.unsigned_abs().leading_zeros();
+            assert_eq!(x.bit_length(), mag_bits, "i128 bit_length {v}");
+        }
+
+        // ── Int<4> (256-bit): values beyond i128 — assert the known
+        //    two's-complement answer directly. ──
+        const B: u32 = Int::<4>::BITS; // 256
+
+        // Zero: BITS leading zeros, BITS trailing zeros, no ones,
+        // BITS clear bits, zero magnitude bits.
+        let z = Int::<4>::ZERO;
+        assert_eq!(z.leading_zeros(), B);
+        assert_eq!(z.trailing_zeros(), B);
+        assert_eq!(z.count_ones(), 0);
+        assert_eq!(z.count_zeros(), B);
+        assert_eq!(z.bit_length(), 0);
+
+        // One.
+        let one = Int::<4>::ONE;
+        assert_eq!(one.leading_zeros(), B - 1);
+        assert_eq!(one.trailing_zeros(), 0);
+        assert_eq!(one.count_ones(), 1);
+        assert_eq!(one.count_zeros(), B - 1);
+        assert_eq!(one.bit_length(), 1);
+
+        // -1 == all ones in two's complement: sign bit set so zero
+        // leading zeros, every bit a one, zero trailing zeros.
+        // Magnitude is 1, so bit_length is 1.
+        let neg_one = Int::<4>::from_i64(-1);
+        assert_eq!(*neg_one.as_limbs(), [u64::MAX; 4]);
+        assert_eq!(neg_one.leading_zeros(), 0);
+        assert_eq!(neg_one.trailing_zeros(), 0);
+        assert_eq!(neg_one.count_ones(), B);
+        assert_eq!(neg_one.count_zeros(), 0);
+        assert_eq!(neg_one.bit_length(), 1);
+
+        // MAX == 0b0111…1: top bit clear, the rest set.
+        let max = Int::<4>::MAX;
+        assert_eq!(max.leading_zeros(), 1);
+        assert_eq!(max.trailing_zeros(), 0);
+        assert_eq!(max.count_ones(), B - 1);
+        assert_eq!(max.count_zeros(), 1);
+        assert_eq!(max.bit_length(), B - 1); // magnitude is 2^(B-1) - 1
+
+        // MIN == 0b1000…0: only the sign bit set. Negative → zero
+        // leading zeros; the single set bit is the top one, so
+        // trailing_zeros == BITS-1; magnitude |MIN| == 2^(B-1).
+        let min = Int::<4>::MIN;
+        assert_eq!(min.leading_zeros(), 0);
+        assert_eq!(min.trailing_zeros(), B - 1);
+        assert_eq!(min.count_ones(), 1);
+        assert_eq!(min.count_zeros(), B - 1);
+        assert_eq!(min.bit_length(), B); // |MIN| = 2^(B-1) ⇒ B significant bits
+
+        // Limb-boundary magnitudes: 2^64 and 2^64 - 1 in Int<4>.
+        let two_64 = Int::<4>::from_u128(1u128 << 64);
+        assert_eq!(two_64.trailing_zeros(), 64);
+        assert_eq!(two_64.count_ones(), 1);
+        assert_eq!(two_64.leading_zeros(), B - 65);
+        assert_eq!(two_64.bit_length(), 65);
+
+        let two_64_m1 = Int::<4>::from_u128((1u128 << 64) - 1);
+        assert_eq!(two_64_m1.trailing_zeros(), 0);
+        assert_eq!(two_64_m1.count_ones(), 64);
+        assert_eq!(two_64_m1.leading_zeros(), B - 64);
+        assert_eq!(two_64_m1.bit_length(), 64);
+    }
+
+    /// `Uint<N>`'s bit-count surface (`leading_zeros`, `count_ones`,
+    /// `bit_length`) must match the `uN` contract at the edges.
+    #[test]
+    fn uint_bit_counts_match_unsigned_contract_at_edges() {
+        // ── Uint<1> (64-bit): cross-check against u64. ──
+        for v in [0_u64, 1, u64::MAX, 42, 1 << 40] {
+            let x = Uint::<1>::from_u64(v);
+            assert_eq!(x.leading_zeros(), v.leading_zeros(), "u64 lz {v}");
+            assert_eq!(x.count_ones(), v.count_ones(), "u64 popcount {v}");
+            // For unsigned, bit_length == BITS - leading_zeros.
+            assert_eq!(x.bit_length(), 64 - v.leading_zeros(), "u64 bit_length {v}");
+        }
+
+        // ── Uint<2> (128-bit): cross-check against u128, incl. limb
+        //    boundary 2^64 / 2^64 - 1. ──
+        for v in [0_u128, 1, u128::MAX, 1u128 << 64, (1u128 << 64) - 1] {
+            let x = Uint::<2>::from_u128(v);
+            assert_eq!(x.leading_zeros(), v.leading_zeros(), "u128 lz {v}");
+            assert_eq!(x.count_ones(), v.count_ones(), "u128 popcount {v}");
+            assert_eq!(x.bit_length(), 128 - v.leading_zeros(), "u128 bit_length {v}");
+        }
+
+        // ── Uint<4> (256-bit): values beyond u128 — known answers. ──
+        const B: u32 = Uint::<4>::BITS; // 256
+        let zero = Uint::<4>::ZERO;
+        assert_eq!(zero.leading_zeros(), B);
+        assert_eq!(zero.count_ones(), 0);
+        assert_eq!(zero.bit_length(), 0);
+
+        // All-ones (Uint MAX): no leading zeros, every bit set.
+        let umax = Uint::<4>::from_limbs([u64::MAX; 4]);
+        assert_eq!(umax.leading_zeros(), 0);
+        assert_eq!(umax.count_ones(), B);
+        assert_eq!(umax.bit_length(), B);
+
+        // 2^64 across the low limb boundary.
+        let two_64 = Uint::<4>::from_u128(1u128 << 64);
+        assert_eq!(two_64.count_ones(), 1);
+        assert_eq!(two_64.leading_zeros(), B - 65);
+        assert_eq!(two_64.bit_length(), 65);
+    }
+}
+
+/// Behavioural sanity checks for the const-generic `Int<N>` / `Uint<N>`
+/// public surface, exercising the limb kernels end-to-end through the
+/// type API (add/sub/neg, mul/div/rem, overflow, parse/pow, ordering /
+/// resize, isqrt / f64, the unsigned bit helpers, and `as_u128`).
+#[cfg(test)]
+mod hint_tests {
+    use super::{Int, Uint};
+
+    #[test]
+    fn signed_add_sub_neg() {
+        let a = Int::<4>::from_i128(5);
+        let b = Int::<4>::from_i128(3);
+        assert_eq!(a.wrapping_add(b), Int::<4>::from_i128(8));
+        assert_eq!(a.wrapping_sub(b), Int::<4>::from_i128(2));
+        assert_eq!(b.wrapping_sub(a), Int::<4>::from_i128(-2));
+        assert_eq!(a.negate(), Int::<4>::from_i128(-5));
+        assert_eq!(Int::<4>::ZERO.negate(), Int::<4>::ZERO);
+    }
+
+    #[test]
+    fn signed_mul_div_rem() {
+        let six = Int::<8>::from_i128(6);
+        let two = Int::<8>::from_i128(2);
+        let three = Int::<8>::from_i128(3);
+        assert_eq!(six.wrapping_mul(three), Int::<8>::from_i128(18));
+        assert_eq!(six.wrapping_div(two), three);
+        assert_eq!(
+            Int::<8>::from_i128(7).wrapping_rem(three),
+            Int::<8>::from_i128(1)
+        );
+        assert_eq!(
+            Int::<8>::from_i128(-7).wrapping_rem(three),
+            Int::<8>::from_i128(-1)
+        );
+        assert_eq!(six.negate().wrapping_mul(three), Int::<8>::from_i128(-18));
+    }
+
+    #[test]
+    fn checked_overflow() {
+        assert_eq!(Int::<4>::MAX.checked_add(Int::<4>::ONE), None);
+        assert_eq!(Int::<4>::MIN.checked_sub(Int::<4>::ONE), None);
+        assert_eq!(Int::<4>::MIN.checked_neg(), None);
+        assert_eq!(
+            Int::<4>::from_i128(2).checked_add(Int::<4>::from_i128(3)),
+            Some(Int::<4>::from_i128(5))
+        );
+    }
+
+    #[test]
+    fn from_str_and_pow() {
+        let ten = Int::<16>::from_str_radix("10", 10).unwrap();
+        assert_eq!(ten, Int::<16>::from_i128(10));
+        assert_eq!(ten.pow(3), Int::<16>::from_i128(1000));
+        let big = Int::<16>::from_str_radix("10", 10).unwrap().pow(40);
+        let from_str =
+            Int::<16>::from_str_radix("10000000000000000000000000000000000000000", 10).unwrap();
+        assert_eq!(big, from_str);
+        assert_eq!(
+            Int::<4>::from_str_radix("-42", 10).unwrap(),
+            Int::<4>::from_i128(-42)
+        );
+    }
+
+    #[test]
+    fn ordering_and_resize() {
+        assert!(Int::<4>::from_i128(-1) < Int::<4>::ZERO);
+        assert!(Int::<4>::MIN < Int::<4>::MAX);
+        let v = Int::<4>::from_i128(-123_456_789);
+        let wide: Int<16> = v.resize();
+        let back: Int<4> = wide.resize();
+        assert_eq!(back, v);
+        assert_eq!(wide, Int::<16>::from_i128(-123_456_789));
+    }
+
+    // Int<8> isqrt (work width 9) exceeds the narrow build's int scratch.
+    #[cfg(feature = "_wide-support")]
+    #[test]
+    fn isqrt_and_f64() {
+        assert_eq!(Int::<8>::from_i128(144).isqrt(), Int::<8>::from_i128(12));
+        assert_eq!(Int::<4>::from_i128(1_000_000).as_f64(), 1_000_000.0);
+        assert_eq!(Int::<4>::from_f64(-2_500.0), Int::<4>::from_i128(-2500));
+    }
+
+    /// `Uint<4>` (the unsigned macro emission) supports the same
+    /// bit/sign-manipulation surface as the signed sibling.
+    #[test]
+    fn uint256_is_zero_and_bit_helpers() {
+        let zero = Uint::<4>::ZERO;
+        let one = Uint::<4>::from_str_radix("1", 10).unwrap();
+        let two = Uint::<4>::from_str_radix("2", 10).unwrap();
+        assert!(zero.is_zero());
+        assert!(!one.is_zero());
+        assert!(one.is_power_of_two());
+        assert!(two.is_power_of_two());
+        let three = Uint::<4>::from_str_radix("3", 10).unwrap();
+        assert!(!three.is_power_of_two());
+        assert_eq!(zero.next_power_of_two(), one);
+        assert_eq!(one.next_power_of_two(), one);
+        let four = Uint::<4>::from_str_radix("4", 10).unwrap();
+        assert_eq!(three.next_power_of_two(), four);
+        assert_eq!(zero.count_ones(), 0);
+        assert_eq!(one.count_ones(), 1);
+        assert_eq!(zero.leading_zeros(), Uint::<4>::BITS);
+        assert_eq!(one.leading_zeros(), Uint::<4>::BITS - 1);
+    }
+
+    #[test]
+    fn uint256_parse_arithmetic_and_pow() {
+        assert!(Uint::<4>::from_str_radix("10", 2).is_err());
+        assert!(Uint::<4>::from_str_radix("1a", 10).is_err());
+        let two = Uint::<4>::from_str_radix("2", 10).unwrap();
+        let three = Uint::<4>::from_str_radix("3", 10).unwrap();
+        let six = Uint::<4>::from_str_radix("6", 10).unwrap();
+        let seven = Uint::<4>::from_str_radix("7", 10).unwrap();
+        assert_eq!(three - two, Uint::<4>::from_str_radix("1", 10).unwrap());
+        assert_eq!(six / two, three);
+        assert_eq!(seven % three, Uint::<4>::from_str_radix("1", 10).unwrap());
+        let five = Uint::<4>::from_str_radix("5", 10).unwrap();
+        let four = Uint::<4>::from_str_radix("4", 10).unwrap();
+        let one = Uint::<4>::from_str_radix("1", 10).unwrap();
+        assert_eq!(five & four, four);
+        assert_eq!(five | one, five);
+        assert_eq!(five ^ four, one);
+        let p10 = two.pow(10);
+        assert_eq!(p10, Uint::<4>::from_str_radix("1024", 10).unwrap());
+        let signed = three.cast_signed();
+        assert_eq!(signed, Int::<4>::from_i128(3));
+    }
+
+    /// `Int::<4>::bit` reports the two's-complement bit at any index.
+    #[test]
+    fn signed_bit_and_trailing_zeros() {
+        let v = Int::<4>::from_i128(0b1100);
+        assert!(v.bit(2));
+        assert!(v.bit(3));
+        assert!(!v.bit(0));
+        assert!(!v.bit(1));
+        assert!(!v.bit(1000));
+        let n = Int::<4>::from_i128(-1);
+        assert!(n.bit(1000));
+        assert_eq!(Int::<4>::from_i128(8).trailing_zeros(), 3);
+        assert_eq!(Int::<4>::ZERO.trailing_zeros(), Int::<4>::BITS);
+    }
+
+    /// `Int::<4>::as_u128` returns the low 128 magnitude bits.
+    #[test]
+    fn as_u128_returns_low_magnitude_bits() {
+        let src = Int::<4>::from_i128(123_456_789);
+        let dst: u128 = src.as_u128();
+        assert_eq!(dst, 123_456_789);
+        let dst: u128 = Int::<4>::ZERO.as_u128();
+        assert_eq!(dst, 0);
+    }
+}

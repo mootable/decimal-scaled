@@ -1,29 +1,29 @@
-[package]
+﻿[package]
 name = "decimal-scaled"
-version = "0.4.4"
+version = "0.5.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.89"
 license = "MIT OR Apache-2.0"
-description = "Const-generic base-10 fixed-point decimals (D9/D18/D38/D76/D153/D307) with integer-only transcendentals correctly rounded to within 0.5 ULP — exact at the type's last representable place. Deterministic across every platform; no_std-friendly."
+description = "Const-generic base-10 fixed-point decimals (D18/D38/D76/D153/D307 and the half-width tiers up to D1232) with integer-only transcendentals correctly rounded to within 0.5 ULP — exact at the type's last representable place. Deterministic across every platform; no_std-friendly."
 repository = "https://github.com/mootable/decimal-scaled"
 homepage = "https://github.com/mootable/decimal-scaled"
 documentation = "https://mootable.github.io/decimal-scaled/"
 readme = "README.md"
 keywords = ["decimal", "fixed-point", "deterministic", "no-std", "precision"]
 categories = ["mathematics", "no-std", "science", "finance"]
-exclude = [
-    ".github/",
-    "bash.exe.stackdump",
-    "research/",
-    "tarpaulin.toml",
-    "scripts/",
-    "docs/benchmarks*.draft",
+include = [
+    "src/**",
+    "/README.md",
+    "/CHANGELOG.md",
+    "/CONTRIBUTORS.md",
+    "/LICENSE*",
+    "/LICENSES/**",
 ]
 
 # docs.rs renders the doc build with whichever features are enabled
 # here, not the crate's default-feature set. Turning on the wide
 # tiers, the macros, and serde means every public type and macro
-# (D9/D18/D38/D76/D153/D307, all `dNN!` proc-macros, `serde_helpers`)
+# (D18/D38/D76/D153/D307, all `dNN!` proc-macros, `serde_helpers`)
 # is visible on the rendered page. Experimental-floats and the
 # mutually-exclusive `rounding-*` flags are deliberately omitted so
 # the docs build doesn't require nightly or pick a non-default
@@ -45,12 +45,15 @@ rustdoc-args = ["--cfg", "docsrs"]
 # To opt out and use the f64 bridge instead you have to take all
 # three steps: (a) `default-features = false`, (b) explicitly add
 # `fast` + `std`, and (c) NOT re-add `strict`:
-#   decimal-scaled = { version = "0.3.1", default-features = false,
+#   decimal-scaled = { version = "0.5.0", default-features = false,
 #                      features = ["std", "serde", "fast"] }
 # That gives ~16 decimal digits of platform-libm precision rather
 # than the deterministic 0.5 ULP strict path.
-default = ["std", "serde", "strict"]
-std = ["alloc"]
+default = ["std", "serde", "strict", "exact-scratch"]
+# `std` requires `exact-scratch`: the std build's kernels assume the exact
+# per-N scratch sizing; a std build without it is NOT a supported
+# configuration (working-scale arithmetic can outgrow the blanket scratch).
+std = ["alloc", "exact-scratch"]
 alloc = []
 serde = ["dep:serde"]
 macros = ["dep:decimal_scaled_macros"]
@@ -62,17 +65,26 @@ strict = []
 # Runtime-polymorphic façade. Adds the `DynDecimal` object-safe trait
 # and `DecimalWidth` enum, with a blanket impl bridging every concrete
 # `Dxx<S>` type. Off by default — typed `Decimal` users pay nothing.
-# Boxing cost (heap allocation per binary op) is the price of erasure.
-dyn = []
+# Boxing cost (heap allocation per binary op) is the price of erasure,
+# so the façade pulls in `alloc` (its `Box`/`String` returns are the
+# crate's only sanctioned heap path; the typed `Decimal` core stays
+# heap-free).
+dyn = ["alloc"]
 # Opt out of strict dispatch: plain transcendentals forward to the
 # f64 bridge. Only takes effect when `strict` is NOT enabled — if
 # both are present, strict wins. Both `*_strict` and `*_fast`
 # named methods are emitted regardless of which feature is on; this
 # feature only chooses what plain `*` resolves to.
-fast = []
+#
+# Implies `std`: the f64 bridge uses the inherent `f64` transcendental
+# intrinsics (`sin`/`cos`/`exp`/…), which are std-only under the crate's
+# float policy (std owns floats; no_std is integer-only, never libm). So
+# `fast` is a std-build convenience and cannot combine with `no_std`.
+fast = ["std"]
 # Compiles BOTH the macro-default and the per-type override
 # implementations for every method that has them. Default builds compile
-# only the chosen winner (see OVERRIDE_POLICY.md). With `bench-alt` on
+# only the chosen winner (see the `src/support/bench_alt.rs` module
+# docs). With `bench-alt` on
 # benchmarks can call `*_strict_default` and `*_strict_override` side by
 # side without recompiling. Off by default — adds build time and binary
 # size for no runtime benefit unless you're benching.
@@ -101,30 +113,60 @@ experimental-floats = []
 # explicit-target form is the only cross-scale entry point.
 # Requires the nightly toolchain.
 cross-scale-ops = []
-# Wide decimal tiers (D76 / D153 / D307). Each width is independently
-# opt-in; `wide` is the umbrella for the 256-bit / 512-bit tiers and
-# `x-wide` adds the 1024-bit tier. They are backed by the in-tree
-# hand-rolled wide-integer types in `crate::wide_int` — no external
-# big-integer dependency. D9 / D18 / D38 use primitive storage and
-# need none of this.
-wide = ["d57", "d76", "d115", "d153", "d230"]
-d57 = []
-d76 = []
-d115 = []
-d153 = []
-d230 = []
-# Very-wide tier (D307+). Gated separately because its strict-
-# transcendental work integers run into thousands of bits and inflate
-# build time vs the narrower wide tiers.
-x-wide = ["d307", "d462", "d616"]
-d307 = []
-d462 = []
-d616 = []
-# Extra-wide tier (D924+). Pulls in the Int12288 / Int16384 work
-# integers — multi-second compile-time cost for the macro emission.
-xx-wide = ["d924", "d1232"]
-d924 = []
-d1232 = []
+# Root-kernel work-scratch sizing. Default (neither feature) sizes the
+# scratch buffers to the build-max width and applies it uniformly. With
+# `exact-scratch` (stable) each storage width gets a per-`Int<N>` impl
+# sized exactly `mult·N + ceil(N/2)` — smaller frames, no nightly.
+# `exact-scratch-nightly` does the same per-`N` sizing with one blanket
+# impl via `generic_const_exprs` (the const-expr stays in that impl block).
+# See `crate::int::types::compute_limbs`.
+exact-scratch = []
+exact-scratch-nightly = ["exact-scratch"]
+# Wide decimal tiers (D57 … D1232). Each width is independently opt-in
+# (`d57` … `d1232`), and the umbrellas NEST: `wide` = D57/D76/D115/D153/
+# D230/D307, `x-wide` = `wide` + D462 + D616, `xx-wide` = `x-wide` + D924 +
+# D1232 — so a wider umbrella enables every tier up to it. All are backed by
+# the in-tree const-generic `Int<N>` integers in `crate::int` — no external
+# big-integer dependency. D18 / D38 use primitive i64 / i128 storage and need
+# none of this.
+# Internal marker: enabled by EVERY wide-family tier (d57 … d1232) so
+# the shared wide-tier support code (the `wide_roots` /
+# `wide_transcendental` macro modules, the `decl_wide_serde` macro, the
+# `DecimalConstants` / `Int` imports in `consts/wide.rs`, etc.) is
+# compiled in whenever any single wide tier is on. Not meant to be set
+# directly by downstreams — turn on a concrete tier (or an umbrella)
+# instead. Without this marker each shared-support `cfg` would have to
+# enumerate all twelve tier features by hand and a single-tier build
+# (`--features d57`) would miss the support it depends on.
+#
+# Heap-free (Phase 9): the wide-tier transcendental lookup tables used to
+# be heap-cached (`thread_local!` + `alloc::vec::Vec`); those runtime
+# caches were removed in favour of stateless on-stack recompute, so the
+# wide-support path no longer needs `alloc`. This marker pulls in NO
+# features — `_wide-support = []` keeps it as the heap-free backstop: a
+# `no_std` single-tier build (`--no-default-features --features d57`) gets
+# no `alloc`, so any reintroduced `alloc::vec::Vec` on the wide path is a
+# hard compile error rather than a silent heap allocation. (`std` still
+# pulls `alloc` for the std build; that is the std backend's own affair.)
+_wide-support = []
+wide = ["d57", "d76", "d115", "d153", "d230", "d307"]
+d57 = ["_wide-support"]
+d76 = ["_wide-support"]
+d115 = ["_wide-support"]
+d153 = ["_wide-support"]
+d230 = ["_wide-support"]
+# Very-wide tiers (D462 + D616), nesting `wide`. Gated separately because
+# their strict-transcendental work integers run into thousands of bits and
+# inflate build time vs the narrower wide tiers.
+x-wide = ["wide", "d462", "d616"]
+d307 = ["_wide-support"]
+d462 = ["_wide-support"]
+d616 = ["_wide-support"]
+# Extra-wide tiers (D924 + D1232), nesting `x-wide`. Pulls in the Int12288 /
+# Int16384 work integers — multi-second compile-time cost for the macro emission.
+xx-wide = ["x-wide", "d924", "d1232"]
+d924 = ["_wide-support"]
+d1232 = ["_wide-support"]
 # Internal perf-investigation feature: emits `tracing::info_span!`
 # blocks at the section boundaries of the wide-tier strict
 # transcendental cores (`exp_fixed`, `ln_fixed`, …). With
@@ -136,12 +178,17 @@ perf-trace = ["dep:tracing"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"], optional = true }
+# No `libm`: the crate's float policy is std-owns-floats / no_std-is-
+# integer-only, so we never use `num_traits::Float` (which is the only
+# part needing libm under no_std). num-traits is kept solely for the
+# `FromPrimitive`/`ToPrimitive`/`NumCast` bridge used by `from_num`/
+# `to_num`, none of which require libm.
 num-traits = { version = "0.2", default-features = false }
-decimal_scaled_macros = { path = "macros", version = "0.4.4", default-features = false, optional = true }
+decimal_scaled_macros = { path = "macros", version = "0.5.0", default-features = false, optional = true }
 tracing = { version = "0.1", default-features = false, features = ["std"], optional = true }
 
 [dev-dependencies]
-criterion = { version = "4.6.0", default-features = false, features = ["cargo_bench_support", "html_reports"], package = "codspeed-criterion-compat" }
+criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
 i256 = { version = "0.2", default-features = false }
 serde_json = "1"
 postcard = { version = "1", default-features = false, features = ["alloc"] }
@@ -164,20 +211,17 @@ g_math = "0.4"
 fastnum = { version = "0.7", default-features = false, features = ["std"] }
 bigdecimal = "0.4"
 dashu-float = "0.4"
-# dashu-int provides IBig for the deep-scale shootout's exact base-10
-# integer scaling of dashu-float results (benches/lib_cmp_precision.rs).
+# dashu-int provides IBig for exact base-10 integer scaling of dashu-float
+# results in the comparison benches.
 dashu-int = { version = "0.4", default-features = false, features = ["std"] }
 decimal-rs = "0.1"
 scientific = "0.5"
 # Chart generation for docs/figures/library_comparison/*.png — pure
 # Rust, no Python dep. Driven by examples/chart_gen.rs.
 plotters = { version = "0.3", default-features = false, features = ["bitmap_backend", "bitmap_encoder", "line_series", "ttf"] }
-# Property-based fuzz coverage for the strict transcendentals — see
-# tests/ulp_proptest.rs. Pinned 1.x for deterministic, fixed-seed
-# minimisation when a counterexample is found.
-proptest = "1"
-# Pin the bench process to a single core for the precision-fix impact
-# microbench (benches/prec_fix_impact.rs) to cut scheduler jitter.
+# Pin the bench process to a single core (int_ops_micro + the
+# precision-fix impact microbench) so the criterion timing loop doesn't
+# migrate cross-core mid-measurement. Cross-platform, MIT/Apache. Bench-only.
 core_affinity = "0.8"
 
 # Profiling / internal-benchmark examples need extra features; gating them
@@ -188,6 +232,22 @@ name = "karabench"
 required-features = ["bench-alt"]
 
 [[example]]
+name = "karabench_u64"
+required-features = ["bench-alt"]
+
+[[example]]
+name = "int_div_probe"
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
+[[example]]
+name = "ln_probe"
+required-features = ["wide", "x-wide", "xx-wide"]
+
+[[example]]
+name = "atan_probe"
+required-features = ["wide", "x-wide", "xx-wide"]
+
+[[example]]
 name = "profile_atan_perfetto"
 required-features = ["perf-trace"]
 
@@ -195,18 +255,85 @@ required-features = ["perf-trace"]
 name = "profile_exp_perfetto"
 required-features = ["perf-trace"]
 
+# Examples/tests that reference the wide-only decimal tiers (D57…D1232)
+# must declare the tier features they use, so a default `cargo build
+# --all-targets` (narrow tiers only) skips them instead of failing to
+# build with E0432 unresolved-import on the wide types.
+[[example]]
+name = "agm_mpmath_validate"
+required-features = ["x-wide", "xx-wide"]
+
+[[example]]
+name = "divbench"
+required-features = ["wide", "x-wide"]
+
+[[example]]
+name = "expbench"
+required-features = ["wide", "x-wide"]
+
+[[example]]
+name = "hyper_recover"
+required-features = ["wide", "x-wide", "xx-wide"]
+
+[[example]]
+name = "profile_exp"
+required-features = ["x-wide"]
+
+[[example]]
+name = "rounding_mode_probe"
+required-features = ["wide"]
+
+[[example]]
+name = "mul_toom3_probe"
+required-features = ["wide", "bench-alt"]
+
+[[example]]
+name = "profile_rescale"
+required-features = ["wide", "x-wide", "xx-wide", "macros", "bench-alt"]
+
+[[example]]
+name = "sqrtbench"
+required-features = ["wide", "x-wide"]
+
+[[example]]
+name = "test_pi"
+required-features = ["wide", "x-wide", "xx-wide"]
+
+[[example]]
+name = "ulp_report"
+required-features = ["wide"]
+
 [[bench]]
 name = "mul_div_candidates"
+path = "benches/micro/mul_div_candidates.rs"
 harness = false
 
-# Per-PR perf-regression gate, driven by CodSpeed under simulation
-# instrumentation. See .github/workflows/codspeed.yml.
+[[bench]]
+name = "dec_mul_wide_ab"
+path = "benches/micro/dec_mul_wide_ab.rs"
+harness = false
+required-features = ["wide", "x-wide"]
+
+# Focused micro-bench for the wide-int decimal `to_string` base case
+# (#38): base-10^19 19-digit chunking vs the historic one-divide-per-
+# digit loop, across Int256 / Int512 / Int1024 / Int4096.
+[[bench]]
+name = "int_to_string_base1e19"
+path = "benches/micro/int_to_string_base1e19.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide"]
+
+# Per-PR perf-regression micro-bench gate, run with plain criterion
+# (a small, focused set). Bench file: benches/micro/pr_gate.rs.
 [[bench]]
 name = "pr_gate"
+path = "benches/micro/pr_gate.rs"
 harness = false
+required-features = ["wide"]
 
 [[bench]]
 name = "all_functions"
+path = "benches/support/all_functions.rs"
 harness = false
 
 # Focused micro-bench for the powf_strict integer-exponent fast path
@@ -215,6 +342,7 @@ harness = false
 # (slow exp(y · ln x) path) across D38<19>, D76<35>, D307<150>.
 [[bench]]
 name = "powf_integer"
+path = "benches/micro/powf_integer.rs"
 harness = false
 required-features = ["wide", "x-wide"]
 
@@ -223,6 +351,7 @@ required-features = ["wide", "x-wide"]
 # entry points (ln/exp were borrowed by commit 09e7ea9).
 [[bench]]
 name = "d38_s33_log10_micro"
+path = "benches/lookup/d38_s33_log10_micro.rs"
 harness = false
 required-features = ["wide"]
 
@@ -230,8 +359,24 @@ required-features = ["wide"]
 # `bnum` / `ruint`. Needs the wide tier.
 [[bench]]
 name = "wide_int_backends"
+path = "benches/backends/wide_int_backends.rs"
 harness = false
 required-features = ["wide"]
+
+# Per-width baseline for the in-tree wide signed integers
+# (`Int256` … `Int4096`): add/sub/mul/div/rem, pow, square, cube.
+# Microbench-scale snapshot for tracking integer-algorithm changes.
+[[bench]]
+name = "int_ops_micro"
+path = "benches/micro/int_ops_micro.rs"
+harness = false
+required-features = ["wide"]
+
+[[bench]]
+name = "wide_round_shell"
+path = "benches/micro/wide_round_shell.rs"
+harness = false
+required-features = ["wide", "x-wide"]
 
 # Decimal / fixed-point backend comparison: native `D38` / `D76` vs
 # `bnum`-backed `D76`, `rust_decimal`, and `fixed` — arithmetic and
@@ -239,6 +384,7 @@ required-features = ["wide"]
 # wide tier.
 [[bench]]
 name = "decimal_backends"
+path = "benches/backends/decimal_backends.rs"
 harness = false
 required-features = ["wide"]
 
@@ -246,6 +392,7 @@ required-features = ["wide"]
 # (Int256-widening) algorithm head-to-head.
 [[bench]]
 name = "d_w128_mul_div_paths"
+path = "benches/micro/d_w128_mul_div_paths.rs"
 harness = false
 required-features = ["wide"]
 
@@ -253,6 +400,7 @@ required-features = ["wide"]
 # Research bench — informs ALGORITHMS.md "Evaluated and not used".
 [[bench]]
 name = "newton_vs_mg"
+path = "benches/micro/newton_vs_mg.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
@@ -261,6 +409,7 @@ required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 # driven promotion has a data point.
 [[bench]]
 name = "agm_vs_taylor"
+path = "benches/agm/agm_vs_taylor.rs"
 harness = false
 required-features = ["x-wide"]
 
@@ -270,6 +419,7 @@ required-features = ["x-wide"]
 # override decision on the deep mid-storage band.
 [[bench]]
 name = "agm_vs_taylor_d616"
+path = "benches/agm/agm_vs_taylor_d616.rs"
 harness = false
 required-features = ["x-wide"]
 
@@ -278,6 +428,7 @@ required-features = ["x-wide"]
 # D616 measurements (SCALE 250/300/400/500) all showed AGM LOSING.
 [[bench]]
 name = "agm_vs_taylor_d924"
+path = "benches/agm/agm_vs_taylor_d924.rs"
 harness = false
 required-features = ["xx-wide"]
 
@@ -288,73 +439,9 @@ required-features = ["xx-wide"]
 # point for completeness.
 [[bench]]
 name = "agm_vs_taylor_d230"
+path = "benches/agm/agm_vs_taylor_d230.rs"
 harness = false
 required-features = ["wide"]
-
-# Per-width full_matrix slice — one bench binary per decimal width.
-# Each runs the arith + strict (+ lossy, narrow only) families for
-# just its width, plus any cross-crate baseline that matches the
-# width (rust_decimal under D38, bnum under D76, fixed::I64F64 under
-# D18). Splitting per-width keeps a power-loss / lid-close near the
-# end of a sweep from wiping out completed widths' criterion data.
-[[bench]]
-name = "full_matrix_d9"
-harness = false
-
-[[bench]]
-name = "full_matrix_d18"
-harness = false
-
-[[bench]]
-name = "full_matrix_d38"
-harness = false
-
-[[bench]]
-name = "full_matrix_d57"
-harness = false
-required-features = ["wide"]
-
-[[bench]]
-name = "full_matrix_d76"
-harness = false
-
-[[bench]]
-name = "full_matrix_d115"
-harness = false
-required-features = ["wide"]
-
-[[bench]]
-name = "full_matrix_d153"
-harness = false
-
-[[bench]]
-name = "full_matrix_d230"
-harness = false
-required-features = ["wide"]
-
-[[bench]]
-name = "full_matrix_d307"
-harness = false
-
-[[bench]]
-name = "full_matrix_d462"
-harness = false
-required-features = ["x-wide"]
-
-[[bench]]
-name = "full_matrix_d616"
-harness = false
-required-features = ["x-wide"]
-
-[[bench]]
-name = "full_matrix_d924"
-harness = false
-required-features = ["xx-wide"]
-
-[[bench]]
-name = "full_matrix_d1232"
-harness = false
-required-features = ["xx-wide"]
 
 # Like-for-like comparison vs `g_math` (another fixed-point crate that
 # claims "0 ULP transcendentals"). Runs at decimal precision matched
@@ -363,6 +450,7 @@ required-features = ["xx-wide"]
 # D76<35> baseline.
 [[bench]]
 name = "g_math_comparison"
+path = "benches/backends/g_math_comparison.rs"
 harness = false
 required-features = ["wide"]
 
@@ -372,6 +460,7 @@ required-features = ["wide"]
 # the full lib_cmp_d{N} sweep.
 [[bench]]
 name = "quick_div"
+path = "benches/micro/quick_div.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide"]
 
@@ -380,6 +469,7 @@ required-features = ["wide", "x-wide", "xx-wide"]
 # SCALE 20 kernel tuning before kicking the full sweeps.
 [[bench]]
 name = "d57_s20"
+path = "benches/lookup/d57_s20.rs"
 harness = false
 required-features = ["wide"]
 
@@ -389,6 +479,7 @@ required-features = ["wide"]
 # `1..=38` window. Used to probe MG-routing wins on hot loops.
 [[bench]]
 name = "d76_s6"
+path = "benches/lookup/d76_s6.rs"
 harness = false
 required-features = ["wide"]
 
@@ -397,6 +488,7 @@ required-features = ["wide"]
 # narrow-GUARD and Tang-lookup wins on the D153 hot paths.
 [[bench]]
 name = "d153_s76"
+path = "benches/lookup/d153_s76.rs"
 harness = false
 required-features = ["wide"]
 
@@ -406,6 +498,7 @@ required-features = ["wide"]
 # the D616 hot paths.
 [[bench]]
 name = "d616_s308"
+path = "benches/lookup/d616_s308.rs"
 harness = false
 required-features = ["x-wide"]
 
@@ -414,6 +507,7 @@ required-features = ["x-wide"]
 # from the underlying Int8192 primitive cost.
 [[bench]]
 name = "d616_lookup_baseline"
+path = "benches/lookup/d616_lookup_baseline.rs"
 harness = false
 required-features = ["x-wide"]
 
@@ -423,6 +517,7 @@ required-features = ["x-wide"]
 # the D924 hot paths.
 [[bench]]
 name = "d924_s460"
+path = "benches/lookup/d924_s460.rs"
 harness = false
 required-features = ["xx-wide"]
 
@@ -431,11 +526,13 @@ required-features = ["xx-wide"]
 # Int12288 primitive cost.
 [[bench]]
 name = "d924_lookup_baseline"
+path = "benches/lookup/d924_lookup_baseline.rs"
 # Side-by-side D1232 ln at SCALE 600 (wide_kernel) vs SCALE 615 (Tang
 # lookup). Isolates the lookup-vs-kernel speedup from the underlying
 # Int16384 primitive cost.
 [[bench]]
 name = "d1232_lookup_baseline"
+path = "benches/lookup/d1232_lookup_baseline.rs"
 harness = false
 required-features = ["xx-wide"]
 
@@ -445,12 +542,14 @@ required-features = ["xx-wide"]
 # lose to AGM at the deep end of the scale range.
 [[bench]]
 name = "agm_vs_taylor_d1232"
+path = "benches/agm/agm_vs_taylor_d1232.rs"
 harness = false
 required-features = ["xx-wide"]
 
 # Gate bench for the per-L fixed-array mul specialisation.
 [[bench]]
 name = "m2_mul_fixed"
+path = "benches/micro/m2_mul_fixed.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
@@ -459,6 +558,7 @@ required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 # operand. Validates the n×1 schoolbook win across every wide tier.
 [[bench]]
 name = "m2_mul_u64_into"
+path = "benches/micro/m2_mul_u64_into.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
@@ -468,101 +568,32 @@ required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 # our 3 new fast paths, etc.).
 [[bench]]
 name = "atan_inputs"
+path = "benches/support/atan_inputs.rs"
 harness = false
 required-features = ["wide"]
 
 # Gate for ln_approx(working_digits) — caller-controlled precision.
 [[bench]]
 name = "m2_ln_approx"
+path = "benches/micro/m2_ln_approx.rs"
 harness = false
 required-features = ["wide"]
-
-
-
-
-# Per-width library_comparison benches. Each runs ONE tier's full
-# peer comparison so `cargo bench --bench lib_cmp_d307` iterates
-# in minutes. Run them all sequentially for a full matrix sweep.
-[[bench]]
-name = "lib_cmp_d9"
-harness = false
-
-[[bench]]
-name = "lib_cmp_d18"
-harness = false
-
-[[bench]]
-name = "lib_cmp_d38"
-harness = false
-
-[[bench]]
-name = "lib_cmp_d57"
-harness = false
-required-features = ["wide"]
-
-[[bench]]
-name = "lib_cmp_d76"
-harness = false
-required-features = ["wide"]
-
-[[bench]]
-name = "lib_cmp_d115"
-harness = false
-required-features = ["wide"]
-
-[[bench]]
-name = "lib_cmp_d153"
-harness = false
-required-features = ["wide"]
-
-[[bench]]
-name = "lib_cmp_d230"
-harness = false
-required-features = ["wide"]
-
-[[bench]]
-name = "lib_cmp_d307"
-harness = false
-required-features = ["wide"]
-
-[[bench]]
-name = "lib_cmp_d462"
-harness = false
-required-features = ["x-wide"]
-
-[[bench]]
-name = "lib_cmp_d616"
-harness = false
-required-features = ["x-wide"]
-
-[[bench]]
-name = "lib_cmp_d924"
-harness = false
-required-features = ["xx-wide"]
-
-[[bench]]
-name = "lib_cmp_d1232"
-harness = false
-required-features = ["xx-wide"]
-
-# Precision (accuracy) shootout — NOT a timing bench. Runs the eight
-# transcendentals over the golden input roster at a common 19-digit
-# comparison scale and reports each library's continuous distance from
-# the true value (computed by the proven-correctly-rounded D76<35>
-# oracle), in ULPs, alongside the rounding mode each library uses.
-# Emits a markdown table for docs/benchmarks.md. `harness = false`
-# with a plain `fn main` — no criterion timing machinery.
-[[bench]]
-name = "lib_cmp_precision"
-harness = false
-required-features = ["wide", "x-wide"]
 
 [[bench]]
 name = "prec_fix_impact"
+path = "benches/micro/prec_fix_impact.rs"
 harness = false
 required-features = ["wide", "x-wide", "macros"]
 
+[[bench]]
+name = "div_recover_ab"
+path = "benches/micro/div_recover_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "macros", "bench-alt"]
+
 [lints.rust]
+# The crate is 100% safe Rust; keep it that way.
+unsafe_code = "forbid"
 unused_variables = "allow"
 dead_code = "allow"
 
@@ -611,6 +642,10 @@ bool_to_int_with_if = "allow"
 members = [
     ".",
     "./macros",
+    "./decimal-scaled-golden",
+    "./decimal-scaled-cells",
+    "./decimal-scale-test",
+    "./golden-competitors",
 ]
 resolver = "3"
 
@@ -624,3 +659,330 @@ resolver = "3"
 # so runtime perf and shipped binary size are unchanged.
 [profile.release]
 debug = true
+
+# A/B microbench worked example: schoolbook vs forced-Karatsuba multiply
+# kernel at two widths, driven by the reusable `ab_microbench` support
+# module (benches/ab_microbench.rs). The fast pre-check for a multiply
+# policy `Select` arm. Kernels come from `__bench_internals` (bench-alt).
+[[bench]]
+name = "mul_kernel_ab"
+path = "benches/micro/mul_kernel_ab.rs"
+harness = false
+required-features = ["wide", "bench-alt"]
+
+# hypot_ab: dispatch-seam A/B for the integer hypot policy — the production
+# Pythagoras path vs the native-u128 narrow fast path (the D38 regression).
+[[bench]]
+name = "hypot_ab"
+path = "benches/micro/hypot_ab.rs"
+harness = false
+required-features = ["wide", "bench-alt"]
+
+# isqrt_ab: N-way dispatch-seam A/B for the integer isqrt policy — native
+# (hardware u64/u128, N<=2) vs newton (f64-seeded + Knuth div) vs schoolbook
+# (bitwise reference), across the full width sweep × magnitude classes
+# (incl. perfect-square ±1 floor-correction edges).
+[[bench]]
+name = "isqrt_ab"
+path = "benches/micro/isqrt_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
+# icbrt_ab: N-way dispatch-seam A/B for the integer icbrt policy — newton
+# (f64-cbrt-seeded Brent–Zimmermann, the wired kernel for every N) vs
+# schoolbook (bitwise restoring reference), across the full width sweep ×
+# radicand magnitude classes (incl. perfect-cube ±1 floor-correction edges).
+[[bench]]
+name = "icbrt_ab"
+path = "benches/micro/icbrt_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
+# int_cube_eq_ab: dispatch-seam A/B for the integer cube and eq policies —
+# cube schoolbook (sqr-then-multiply, wired) vs comba (fused product-scanning
+# candidate); eq limbwise (cmp-kernel reuse, wired) vs xor_fold (branchless
+# OR-fold candidate), across the storage-width sweep N.
+[[bench]]
+name = "int_cube_eq_ab"
+path = "benches/micro/int_cube_eq_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
+# sum_sq_ab: N-way dispatch-seam A/B for the integer sum-of-squares policy —
+# schoolbook (the wired kernel, each square a general x*x product) vs comba
+# (a kept alternative, symmetric product-scanning square ~L^2/2 mults),
+# across the full width sweep x operand significant-limb magnitude classes.
+[[bench]]
+name = "sum_sq_ab"
+path = "benches/micro/sum_sq_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
+# pow_ab: N-way dispatch-seam A/B for the integer exponentiation policy —
+# square_and_multiply (O(log exp), the wired kernel) vs schoolbook (O(exp)
+# repeated multiply, the reference), across the full width sweep x exponent
+# magnitude classes (e2..e31). Confirms the square-and-multiply routing.
+[[bench]]
+name = "pow_ab"
+path = "benches/micro/pow_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
+# to_radians_ab: dispatch-seam A/B for the wide-tier to_radians angle
+# conversion — the public method path (through the double dispatch +
+# resize_to round-trips) vs the MulPiRatio kernel called directly. Isolates
+# the routing overhead behind the to_radians regression vs 0.4.4.
+[[bench]]
+name = "to_radians_ab"
+path = "benches/micro/to_radians_ab.rs"
+harness = false
+required-features = ["wide", "bench-alt"]
+
+# to_radians_baseline: per-call public-method timing matched to the
+# v0.4.4 to_radians_v044 baseline (same tiers/scales/inputs) for a direct
+# 0.4.4-vs-0.5.0 comparison.
+[[bench]]
+name = "to_radians_baseline"
+path = "benches/micro/to_radians_baseline.rs"
+harness = false
+required-features = ["wide"]
+
+# {exp,ln,trig}_series_tang_ab: dispatch-seam A/Bs for the transcendental
+# Series-vs-Tang policy choice. The `policy::{exp,ln,trig}::select` Tang bands
+# were tuned via kernel-ISOLATION benches; these A/B the production Tang kernel
+# vs the generic Series kernel at the band edges (in-band + just-out probes),
+# bit-identity-asserted before timing, on the `wide`-buildable narrow-wide
+# tiers (D57/D115/D153).
+[[bench]]
+name = "exp_series_tang_ab"
+path = "benches/micro/exp_series_tang_ab.rs"
+harness = false
+required-features = ["wide", "bench-alt"]
+
+[[bench]]
+name = "ln_series_tang_ab"
+path = "benches/micro/ln_series_tang_ab.rs"
+harness = false
+required-features = ["wide", "bench-alt"]
+
+[[bench]]
+name = "trig_series_tang_ab"
+path = "benches/micro/trig_series_tang_ab.rs"
+harness = false
+required-features = ["wide", "bench-alt"]
+
+# mul_low_u128_ab: pilot A/B for the wide-tier exp/powf Taylor
+# work-multiply -- the truncated-low base-2^64 `mul_low_fixed` vs the
+# u128-packed `mul_low_fixed_u128` candidate at the D616/D924/D1232 work
+# integer widths (N = 128/192/256) plus the storage widths for reference.
+[[bench]]
+name = "mul_low_u128_ab"
+path = "benches/micro/mul_low_u128_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
+# mul_full_ab: N-way A/B for the int::policy::mul FULL equal-length product
+# -- slice schoolbook (reference) vs the fixed-width mul_full_limb::<N,u64>,
+# the u128-packed mul_full_limb::<N,u128> (even N), and one-level Karatsuba,
+# across N = 2..64. Localizes the u64/u128 LimbSize crossover and the
+# schoolbook/Karatsuba threshold; bit-identicality asserted before timing.
+[[bench]]
+name = "mul_full_ab"
+path = "benches/micro/mul_full_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
+# mul_toom3_ab: N-way A/B for the Toom-Cook 3-way integer multiply (step-1 bench)
+# The int-mul policy map: every fixed-array candidate (schoolbook/Karatsuba/
+# Toom-3 x u64/u128) raced per width across 24..256 (step-2 measure).
+[[bench]]
+name = "mul_toom3_ab"
+path = "benches/micro/mul_toom3_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
+# Karatsuba-u128 recursion-threshold sweep at the crossover region (step-2 tuning).
+[[bench]]
+name = "mul_kara_thresh_ab"
+path = "benches/micro/mul_kara_thresh_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
+# sqr_low_u128_ab: pilot A/B for the wide-tier exp/powf Smith-squaring
+# work-square -- the truncated-low base-2^64 `sqr_low_limb::<N, u64>` vs the
+# u128-packed `sqr_low_limb::<N, u128>` candidate at the D616/D924/D1232 work
+# integer widths (N = 128/192/256) plus the storage widths for reference.
+[[bench]]
+name = "sqr_low_u128_ab"
+path = "benches/micro/sqr_low_u128_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
+# sqr_full_ab: N-way A/B for the int::policy::sqr truncated-low square across
+# the full width axis N = 2..64 -- the const half_product (production arm) vs
+# the const schoolbook (route-through-mul baseline) vs the non-const
+# sqr_low_limb u64/u128 LimbSize arms (the sqr_low policy's axis), all gated
+# bit-identical before timing. Maps which const algorithm sqr must route to
+# and confirms the u128 win lives only in the non-const sqr_low policy.
+[[bench]]
+name = "sqr_full_ab"
+path = "benches/micro/sqr_full_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
+# exp_wide_series_tang_ab: the N-way width x scale x algorithm map for wide
+# exp -- Series (with the u128 square) vs single-shot Tang at D307..D1232,
+# at the bbc SCALE 30 and the tiers' narrow bands, validity-gated (Tang ==
+# Series across all six modes) before timing. Decides which wide Tang arms
+# (if any) to wire; supersedes the stale wide-exp research framing.
+[[bench]]
+name = "exp_wide_series_tang_ab"
+path = "benches/micro/exp_wide_series_tang_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
+# exp_wide_tang_bisect: targeted Tang/Series crossover bisection for D307 and
+# D462, supplementing the 5-point coarse map. D307: probes s90/s100/s115/s130
+# to localize the s76..s153 crossover. D462: probes s58 (s0..s115 midpoint) +
+# s115 (the ~tie boundary) to confirm whether Tang has a winning sub-region.
+[[bench]]
+name = "exp_wide_tang_bisect"
+path = "benches/micro/exp_wide_tang_bisect.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
+# trig_wide_tang_bisect: targeted narrow-Taylor / Series crossover bisection for
+# D462 forward-trig (sin/cos/tan/atan), the audit Finding #2 untested band
+# (24, 225..=235). Probes inside (s225/s230/s235) + outward (s210/s218 below,
+# s240/s260/s290 above) — same shape as `exp_wide_tang_bisect`.
+[[bench]]
+name = "trig_wide_tang_bisect"
+path = "benches/micro/trig_wide_tang_bisect.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
+# trig_rung_ab: forward-trig SCALE-derived work-rung A/B -- tier-width Series
+# vs the rung-routed production path (gate + const-folded rung match) at
+# D307/D1232 across the scale axis, plus an out-of-budget large-|x| probe.
+# Validity-walled (rung == tier bit-identity across six modes) before timing.
+[[bench]]
+name = "trig_rung_ab"
+path = "benches/micro/trig_rung_ab.rs"
+harness = false
+required-features = ["x-wide", "xx-wide", "bench-alt"]
+
+# hyper_wide_tang_ab: tests the 2026-05-28 audit Finding #4 "Pattern A" lead --
+# does Tang-composed (e^x, e^-x) hyperbolic beat the current schoolbook (Series-
+# composed) at D462/D616/D924/D1232? Five-point coarse-scale sweep x {sinh, cosh,
+# tanh}, three Tang configs, validity-walled against schoolbook bit-identity.
+[[bench]]
+name = "hyper_wide_tang_ab"
+path = "benches/micro/hyper_wide_tang_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
+# ln_wide_series_tang_ab: the N-way width x scale x algorithm map for wide
+# ln -- Series (multi-level-sqrt argument reduction) vs Tang (table-driven,
+# no sqrts) across every wide tier D76..D1232 at the 5-point scale set
+# {0, S/4, S/2, 3S/4, S-1}, validity-gated (Tang == Series across all six
+# modes) before timing. Establishes the continuous Tang win-region per tier
+# so the policy/ln Tang gates can be widened off their bbc-cell point ranges.
+# The wide-transcendental BAND regression task.
+[[bench]]
+name = "ln_wide_series_tang_ab"
+path = "benches/micro/ln_wide_series_tang_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
+# rem_kernel_ab: dispatch-seam A/B for the remainder policy `select` arm.
+# div_kernel_ab: dispatch-seam A/B for the integer division ENGINE
+# (Knuth base-2⁶⁴ vs Burnikel-Ziegler chunking vs Knuth base-2¹²⁸) at the
+# wide limb counts, full-storage-width `balanced` and `wide_num` shapes.
+[[bench]]
+name = "div_kernel_ab"
+path = "benches/micro/div_kernel_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
+# div_pow10_ab: the REAL per-term `÷10^w` divide shape the wide-tier
+# transcendentals run (divisor = power of ten, ~w/19 limbs), ranking the
+# production routing, base-2⁶⁴ Knuth, our base-2¹²⁸ Knuth, and a faithful
+# port of v0.4.4's u128-limb Knuth (MG 2-by-1 q̂) — the 0.4.4-vs-ours
+# comparison for the wide-divide regression.
+[[bench]]
+name = "div_pow10_ab"
+path = "benches/micro/div_pow10_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
+# dec_mul_rescale_ab: whole-op decimal `mul` at the bbc regression-cluster
+# cells (D57/D76/D115/D153/D230 at high scale), exercising the production
+# `mul_widen_divide` + `÷10^SCALE` rescale chain — the lever for the cluster.
+[[bench]]
+name = "dec_mul_rescale_ab"
+path = "benches/micro/dec_mul_rescale_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
+# div_bz_validity_probe: establishes whether a multiply-based recursive
+# Burnikel-Ziegler divide can beat Knuth at division-reachable widths by
+# timing one n-by-n schoolbook multiply against a full div_knuth(2n, n).
+[[bench]]
+name = "div_bz_validity_probe"
+path = "benches/micro/div_bz_validity_probe.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
+[[bench]]
+name = "rem_kernel_ab"
+path = "benches/micro/rem_kernel_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
+# int_unary_kernel_ab: dispatch-seam A/B for the INT unary policies with a
+# registered reference arm -- sqr (half_product vs schoolbook), pow
+# (square_and_multiply vs schoolbook), isqrt / icbrt (f64-seeded Newton vs
+# the bitwise schoolbook reference). Confirms each `select` arm routes to
+# the benched winner across narrow + wide widths.
+[[bench]]
+name = "int_unary_kernel_ab"
+path = "benches/micro/int_unary_kernel_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
+# neg_kernel_ab: dispatch-seam A/B for the INT-tier `neg` policy -- the
+# wide-tier `neg_D462`/`D616`/`D924`/`D1232` regression recovery.
+# fused_split (limb-0 special-cased, the routed kernel) vs two_pass
+# (NOT loop + full-width add_assign_fixed of [1,0,...,0], the previous
+# routed shape) vs fused_open (single-pass dependent-chain reference).
+# Bit-identical; A/B confirms fused_split is the wide-tier winner
+# (D462/D616/D924/D1232 by 1.40x-1.83x vs two_pass).
+[[bench]]
+name = "neg_kernel_ab"
+path = "benches/micro/neg_kernel_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
+# mul_div_native_ab: dispatch-seam A/B for the narrow decimal mul/div
+# policies (native hardware-i128 vs the generic widen kernels at N <= 2).
+[[bench]]
+name = "mul_div_native_ab"
+path = "benches/micro/mul_div_native_ab.rs"
+harness = false
+required-features = ["wide", "bench-alt"]
+
+# root_kernel_ab: dispatch-seam A/B for the root policies -- D38 hypot /
+# sqrt (256-bit mg_divide vs the slice path) and D57<20> cbrt (f64-seeded
+# Int<6> Newton vs the int-icbrt table-seed arm vs the generic slice).
+[[bench]]
+name = "root_kernel_ab"
+path = "benches/micro/root_kernel_ab.rs"
+harness = false
+required-features = ["wide", "bench-alt"]
+
+# The wide-tier Tang/Series benchmark example uses the wide decimal types
+# (D307..D1232), which only exist under the wide feature umbrellas. Gate it so a
+# default / `--all-targets` build does not try to compile it without them.
+[[example]]
+name = "wide_tang_bench"
+required-features = ["wide", "x-wide", "xx-wide"]

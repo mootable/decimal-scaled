@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Nightly-gated auto-inferred cross-scale operations.
 //!
 //! Free functions [`cross::mul`], [`cross::add`], [`cross::sub`],
@@ -44,14 +47,12 @@ pub const fn max_const(a: u32, b: u32) -> u32 {
 /// ```ignore
 /// # // (Doctest is `ignore`d because the feature requires nightly.)
 /// use decimal_scaled::{D38, cross};
-/// let a: D38<6> = D38::<6>::from_int(7);
-/// let b: D38<12> = D38::<12>::from_int(11);
+/// let a: D38<6> = D38::<6>::try_from(7).unwrap();
+/// let b: D38<12> = D38::<12>::try_from(11).unwrap();
 /// let c = cross::mul(a, b); // D38<12>, value = 77
 /// ```
 #[inline]
-pub fn mul<W, const S1: u32, const S2: u32>(
-    a: D<W, S1>, b: D<W, S2>,
-) -> D<W, { max_const(S1, S2) }>
+pub fn mul<W, const S1: u32, const S2: u32>(a: D<W, S1>, b: D<W, S2>) -> D<W, { max_const(S1, S2) }>
 where
     W: Copy,
     D<W, S1>: WidenScale<W, S1, { max_const(S1, S2) }>,
@@ -69,7 +70,9 @@ where
 /// crate; rescaling to `max_const(S1, S2)` is exact for both inputs.
 #[inline]
 pub fn mul_with<W, const S1: u32, const S2: u32>(
-    a: D<W, S1>, b: D<W, S2>, _mode: RoundingMode,
+    a: D<W, S1>,
+    b: D<W, S2>,
+    _mode: RoundingMode,
 ) -> D<W, { max_const(S1, S2) }>
 where
     W: Copy,
@@ -82,9 +85,7 @@ where
 
 /// Same-width cross-scale add.
 #[inline]
-pub fn add<W, const S1: u32, const S2: u32>(
-    a: D<W, S1>, b: D<W, S2>,
-) -> D<W, { max_const(S1, S2) }>
+pub fn add<W, const S1: u32, const S2: u32>(a: D<W, S1>, b: D<W, S2>) -> D<W, { max_const(S1, S2) }>
 where
     W: Copy,
     D<W, S1>: WidenScale<W, S1, { max_const(S1, S2) }>,
@@ -98,9 +99,7 @@ where
 
 /// Same-width cross-scale subtract.
 #[inline]
-pub fn sub<W, const S1: u32, const S2: u32>(
-    a: D<W, S1>, b: D<W, S2>,
-) -> D<W, { max_const(S1, S2) }>
+pub fn sub<W, const S1: u32, const S2: u32>(a: D<W, S1>, b: D<W, S2>) -> D<W, { max_const(S1, S2) }>
 where
     W: Copy,
     D<W, S1>: WidenScale<W, S1, { max_const(S1, S2) }>,
@@ -114,9 +113,7 @@ where
 
 /// Same-width cross-scale divide.
 #[inline]
-pub fn div<W, const S1: u32, const S2: u32>(
-    a: D<W, S1>, b: D<W, S2>,
-) -> D<W, { max_const(S1, S2) }>
+pub fn div<W, const S1: u32, const S2: u32>(a: D<W, S1>, b: D<W, S2>) -> D<W, { max_const(S1, S2) }>
 where
     W: Copy,
     D<W, S1>: WidenScale<W, S1, { max_const(S1, S2) }>,
@@ -130,9 +127,7 @@ where
 
 /// Same-width cross-scale remainder.
 #[inline]
-pub fn rem<W, const S1: u32, const S2: u32>(
-    a: D<W, S1>, b: D<W, S2>,
-) -> D<W, { max_const(S1, S2) }>
+pub fn rem<W, const S1: u32, const S2: u32>(a: D<W, S1>, b: D<W, S2>) -> D<W, { max_const(S1, S2) }>
 where
     W: Copy,
     D<W, S1>: WidenScale<W, S1, { max_const(S1, S2) }>,
@@ -154,9 +149,13 @@ pub trait WidenScale<W, const S_FROM: u32, const S_TO: u32> {
     fn widen_scale(self) -> D<W, S_TO>;
 }
 
-// Blanket implementations per concrete storage. Each width's
-// `rescale` is an inherent method, so we have to spell out the
-// storage type to dispatch.
+// Implementations per concrete storage. Each width's `rescale_with`
+// is an inherent method (emitted by `decl_decimal_rescale!` on the
+// `D<Int<N>, SCALE>` alias), so we have to spell out the storage type
+// to dispatch. Every decimal tier is `Int<N>`-backed; the always-built
+// tiers are D18 (`Int<1>`) and D38 (`Int<2>`), the rest follow the
+// same feature gates as their `decl_decimal_full!` emissions in
+// `types/widths.rs`.
 
 macro_rules! impl_widen_scale {
     ($Storage:ty) => {
@@ -177,27 +176,26 @@ macro_rules! impl_widen_scale {
     };
 }
 
-impl_widen_scale!(i32);
-impl_widen_scale!(i64);
-impl_widen_scale!(i128);
+impl_widen_scale!(crate::int::types::Int<1>);
+impl_widen_scale!(crate::int::types::Int<2>);
 
 #[cfg(any(feature = "d57", feature = "wide"))]
-impl_widen_scale!(crate::wide_int::Int192);
+impl_widen_scale!(crate::int::types::Int<3>);
 #[cfg(any(feature = "d76", feature = "wide"))]
-impl_widen_scale!(crate::wide_int::Int256);
+impl_widen_scale!(crate::int::types::Int<4>);
 #[cfg(any(feature = "d115", feature = "wide"))]
-impl_widen_scale!(crate::wide_int::Int384);
+impl_widen_scale!(crate::int::types::Int<6>);
 #[cfg(any(feature = "d153", feature = "wide"))]
-impl_widen_scale!(crate::wide_int::Int512);
+impl_widen_scale!(crate::int::types::Int<8>);
 #[cfg(any(feature = "d230", feature = "wide"))]
-impl_widen_scale!(crate::wide_int::Int768);
+impl_widen_scale!(crate::int::types::Int<12>);
 #[cfg(any(feature = "d307", feature = "wide"))]
-impl_widen_scale!(crate::wide_int::Int1024);
+impl_widen_scale!(crate::int::types::Int<16>);
 #[cfg(any(feature = "d462", feature = "x-wide"))]
-impl_widen_scale!(crate::wide_int::Int1536);
+impl_widen_scale!(crate::int::types::Int<24>);
 #[cfg(any(feature = "d616", feature = "x-wide"))]
-impl_widen_scale!(crate::wide_int::Int2048);
+impl_widen_scale!(crate::int::types::Int<32>);
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
-impl_widen_scale!(crate::wide_int::Int3072);
+impl_widen_scale!(crate::int::types::Int<48>);
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-impl_widen_scale!(crate::wide_int::Int4096);
+impl_widen_scale!(crate::int::types::Int<64>);

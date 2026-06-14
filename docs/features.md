@@ -2,7 +2,7 @@
 
 ```toml
 [dependencies]
-decimal-scaled = { version = "0.4", default-features = false, features = ["alloc"] }
+decimal-scaled = { version = "0.5", default-features = false, features = ["alloc"] }
 ```
 
 ## Core features
@@ -11,18 +11,20 @@ decimal-scaled = { version = "0.4", default-features = false, features = ["alloc
 |---|---|---|
 | `std` | yes | The `f64`-bridge transcendentals (trig, log/exp, sqrt, …) and `from_f64` constructors. Pulls in `alloc`. |
 | `alloc` | yes | `Display::to_string` and `FromStr` on `no_std`. Required — targets without `alloc` are not supported. |
-| `serde` | yes | `Serialize` / `Deserialize` via `serde_helpers` (canonical-string form). |
+| `serde` | yes | `Serialize` / `Deserialize` via `serde_helpers` — raw-storage string wire format (see [Serde](serde.md)). |
 | `strict` | **yes** | Marks the build as on the strict path: plain `sqrt` / `ln` / etc. dispatch to the integer-only ≤ 0.5 ULP `*_strict` methods. `no_std`-friendly. Strict is *also* the dispatch when no feature is set at all — this feature mainly signals intent and survives a transitive `fast` flip from a downstream crate (which still resolves to strict). See [strict mode](strict-mode.md). |
 | `macros` | no | The `d38!` / `d76!` / etc. compile-time literal macros. See [the macro guide](macros.md). |
 | `fast` | no | Opt out of strict dispatch: plain methods forward to the f64 bridge for speed at the cost of platform-libm-dependent ≈ 16-digit precision. **Only takes effect when `strict` is NOT enabled.** Three-step opt-out: `default-features = false` + add `fast` + `std` + DON'T re-add `strict`. Both `*_strict` and `*_fast` named methods stay available regardless. |
-| `dyn` | no | Object-safe `DynDecimal` trait + `DecimalWidth` / `RawStorage` enums for runtime-polymorphic decimal handles. Ships impls for D9 / D18 / D38. See [Runtime polymorphism](#runtime-polymorphism). |
+| `dyn` | no | Object-safe `DynDecimal` trait + `DecimalWidth` / `RawStorage` enums for runtime-polymorphic decimal handles. Enables `alloc` (the boxed returns are the façade's sanctioned heap path). Ships impls for D18 / D38. See [Runtime polymorphism](#runtime-polymorphism). |
 
 Notes:
 
-- The `*_strict` methods (`sqrt_strict`, `ln_strict`, …) are compiled
-  **regardless of the `strict` feature** — only `fast` removes
-  them. `strict` only controls whether the *plain* methods (`sqrt`,
-  `ln`, …) dispatch to the strict path.
+- The `*_strict` and `*_fast` named methods (`sqrt_strict`,
+  `ln_strict`, `sqrt_fast`, …) are **always compiled, regardless of any
+  feature flag** — no feature removes them (the only gate is that
+  `*_fast` needs `std` for the f64 bridge). The `strict` / `fast`
+  features only choose what the *plain* methods (`sqrt`, `ln`, …)
+  resolve to.
 - With `strict` on, the plain transcendentals use the integer path even
   if `std` is also enabled.
 - The strict methods are held to the
@@ -48,10 +50,10 @@ Exactly one of these may be enabled to change the crate-wide default
 
 ## Wide-tier features
 
-The wide decimal types use an in-tree, hand-rolled wide-integer
-module (`crate::wide_int`); there is no external big-integer
-dependency. They are opt-in per width, with three umbrella features
-covering increasing precision ranges.
+The wide decimal types are backed by an in-tree const-generic big
+integer, `Int<N>` over `N` u64 limbs (internal to the crate); there is
+no external big-integer dependency. They are opt-in per width, with
+three umbrella features covering increasing precision ranges.
 
 | Feature | Enables |
 |---|---|
@@ -80,37 +82,37 @@ across every wider tier pair. Every adjacent pair in the ladder has
 | Feature | Enables |
 |---|---|
 | `experimental-floats` | `f16` / `f128` entry points on the float bridge (`from_f16`, `to_f128`, …). Requires a nightly toolchain. |
-| `cross-scale-ops` | Auto-inferred cross-scale free functions under `decimal_scaled::cross` (`cross::mul(a, b)` etc.) via `generic_const_exprs`. Requires a nightly toolchain. The stable [`D{N}<S>::mul_of(a, b)`](cross-scale.md#layer-1---stable-explicit-target) explicit-target form is available without this feature. |
+| `cross-scale-ops` | Auto-inferred cross-scale free functions under `decimal_scaled::cross` (`cross::mul(a, b)` etc.) via `generic_const_exprs`. Requires a nightly toolchain. The stable [`D{N}<S>::mul_of(a, b)`](cross-scale.md#layer-1-stable-explicit-target) explicit-target form is available without this feature. |
 
 ## Common configurations
 
 ```toml
 # Default — std, serde, and the integer-only ≤ 0.5 ULP `*_strict`
 # transcendentals dispatched by plain `sin` / `ln` / `sqrt`.
-decimal-scaled = "0.4"
+decimal-scaled = "0.5"
 
 # `no_std`, still with serde and the deterministic strict path.
-decimal-scaled = { version = "0.4", default-features = false,
+decimal-scaled = { version = "0.5", default-features = false,
                    features = ["serde", "alloc", "strict"] }
 
 # Add the half-width and wider tiers (D57–D307).
-decimal-scaled = { version = "0.4", features = ["wide", "macros"] }
+decimal-scaled = { version = "0.5", features = ["wide", "macros"] }
 
 # Add the extra-wide tiers (D462 / D616) on top of wide.
-decimal-scaled = { version = "0.4", features = ["x-wide", "macros"] }
+decimal-scaled = { version = "0.5", features = ["x-wide", "macros"] }
 
 # Add the xx-wide tiers (D924 / D1232) — research-grade precision.
-decimal-scaled = { version = "0.4", features = ["xx-wide", "macros"] }
+decimal-scaled = { version = "0.5", features = ["xx-wide", "macros"] }
 
 # Bank-statement rounding: HalfAwayFromZero as the crate-wide default.
-decimal-scaled = { version = "0.4",
+decimal-scaled = { version = "0.5",
                    features = ["wide", "rounding-half-away-from-zero"] }
 
 # Speed over determinism — plain transcendentals dispatch to the f64
 # bridge (~16 decimal digits of platform-libm precision). The
 # `*_strict` named methods remain available for the parts of your
 # code that need them.
-decimal-scaled = { version = "0.4", default-features = false,
+decimal-scaled = { version = "0.5", default-features = false,
                    features = ["std", "fast"] }
 ```
 
@@ -129,8 +131,8 @@ The `dyn` feature adds a deliberately small, object-safe trait
 use decimal_scaled::{D38, DynDecimal, DecimalWidth};
 
 let values: Vec<Box<dyn DynDecimal>> = vec![
-    Box::new(D38::<2>::from_i32(150)),  // 1.50
-    Box::new(D38::<5>::from_i32(2)),    // 2.00000
+    Box::new(D38::<2>::try_from(150i32).unwrap()),   // 150.00
+    Box::new(D38::<5>::try_from(2i32).unwrap()),     // 2.00000
 ];
 let sum = values[0].add(&*values[1]).unwrap();
 assert_eq!(sum.width(), DecimalWidth::D38);
@@ -149,7 +151,7 @@ Semantics:
   `DynDecimal::as_any().downcast_ref::<Dxx<S>>()` once you know the
   concrete type.
 
-Scope: the `dyn` feature ships impls for **D9, D18, and D38** only.
+Scope: the `dyn` feature ships impls for **D18 and D38** only.
 Wider tiers would require enumerating up to 1232 scale instantiations
 per binary op per width and serve compute-bound code where the boxing
 cost of `dyn` is wrong anyway. The `DecimalWidth` / `RawStorage` enums

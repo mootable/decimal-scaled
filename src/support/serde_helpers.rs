@@ -1,9 +1,12 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `serde` integration for every decimal width.
 //!
 //! D38 has a dedicated [`Serialize`] / [`Deserialize`] pair plus the
 //! richer [`decimal_serde::DecimalVisitor`] used for `#[serde(with =
-//! "...")]` field annotations. The wide tiers (D76 / D153 / D307)
-//! use a slimmer implementation emitted by `decl_wide_serde!`: a
+//! "...")]` field annotations. Every wide tier (D57 through D1232)
+//! uses a slimmer implementation emitted by `decl_wide_serde!`: a
 //! decimal-string wire format for human-readable serializers and a
 //! little-endian limb-bytes wire format for binary serializers.
 //! Cross-tier wire-format parity is intentional — a D38 produced
@@ -39,16 +42,14 @@
 
 use core::marker::PhantomData;
 
-use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Visitor};
 
 #[cfg(feature = "alloc")]
 use alloc::string::ToString;
 
-use crate::types::widths::D38;
-
 // ── Serialize ─────────────────────────────────────────────────────────
 
-impl<const SCALE: u32> Serialize for D38<SCALE> {
+impl<const SCALE: u32> Serialize for crate::D<crate::int::types::Int<2>, SCALE> {
     /// Serialise `self` as a base-10 integer string for human-readable
     /// formats, or as 16 little-endian bytes for binary formats.
     ///
@@ -78,14 +79,14 @@ impl<const SCALE: u32> Serialize for D38<SCALE> {
             }
         } else {
             // Binary path: emit the raw i128 as 16 little-endian bytes.
-            serializer.serialize_bytes(&self.0.to_le_bytes())
+            serializer.serialize_bytes(&self.0.as_i128().to_le_bytes())
         }
     }
 }
 
 // ── Deserialize ───────────────────────────────────────────────────────
 
-impl<'de, const SCALE: u32> Deserialize<'de> for D38<SCALE> {
+impl<'de, const SCALE: u32> Deserialize<'de> for crate::D<crate::int::types::Int<2>, SCALE> {
     /// Deserialise from a base-10 integer string (human-readable
     /// formats), 16 little-endian bytes (binary formats), or a native
     /// integer (self-describing binary formats such as CBOR).
@@ -131,7 +132,7 @@ impl<'de, const SCALE: u32> Deserialize<'de> for D38<SCALE> {
 /// `#[serde(with = ...)]` on fields in generic containing types or in
 /// newtype wrappers where the trait impl may be shadowed.
 pub mod decimal_serde {
-    use super::{Serializer, D38, Serialize, Deserializer, Deserialize, PhantomData, Visitor};
+    use super::{Deserialize, Deserializer, PhantomData, Serialize, Serializer, Visitor};
 
     /// Serialise `v` using the `D38` wire format.
     ///
@@ -143,7 +144,7 @@ pub mod decimal_serde {
     /// Strict: all arithmetic is integer-only; result is bit-exact.
     #[inline]
     pub fn serialize<const SCALE: u32, S: Serializer>(
-        v: &D38<SCALE>,
+        v: &crate::D<crate::int::types::Int<2>, SCALE>,
         s: S,
     ) -> Result<S::Ok, S::Error> {
         v.serialize(s)
@@ -160,8 +161,8 @@ pub mod decimal_serde {
     #[inline]
     pub fn deserialize<'de, const SCALE: u32, D: Deserializer<'de>>(
         d: D,
-    ) -> Result<D38<SCALE>, D::Error> {
-        D38::<SCALE>::deserialize(d)
+    ) -> Result<crate::D<crate::int::types::Int<2>, SCALE>, D::Error> {
+        crate::D::<crate::int::types::Int<2>, SCALE>::deserialize(d)
     }
 
     /// Visitor that backs [`deserialize`]. Public so external helper
@@ -180,7 +181,7 @@ pub mod decimal_serde {
     pub struct DecimalVisitor<const SCALE: u32>(pub PhantomData<()>);
 
     impl<'de, const SCALE: u32> Visitor<'de> for DecimalVisitor<SCALE> {
-        type Value = D38<SCALE>;
+        type Value = crate::D<crate::int::types::Int<2>, SCALE>;
 
         fn expecting(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
             f.write_str(
@@ -212,13 +213,9 @@ pub mod decimal_serde {
                     "decimal-scaled: leading `+` is not part of the canonical wire format",
                 ));
             }
-            v.parse::<i128>()
-                .map(D38::<SCALE>::from_bits)
-                .map_err(|_| {
-                    serde::de::Error::custom(
-                        "decimal-scaled: expected a base-10 i128 integer string",
-                    )
-                })
+            v.parse::<i128>().map(|n| crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(n))).map_err(|_| {
+                serde::de::Error::custom("decimal-scaled: expected a base-10 i128 integer string")
+            })
         }
 
         fn visit_borrowed_str<E: serde::de::Error>(self, v: &'de str) -> Result<Self::Value, E> {
@@ -243,13 +240,10 @@ pub mod decimal_serde {
                     &"exactly 16 little-endian bytes for an i128",
                 )
             })?;
-            Ok(D38::<SCALE>::from_bits(i128::from_le_bytes(arr)))
+            Ok(crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(i128::from_le_bytes(arr))))
         }
 
-        fn visit_borrowed_bytes<E: serde::de::Error>(
-            self,
-            v: &'de [u8],
-        ) -> Result<Self::Value, E> {
+        fn visit_borrowed_bytes<E: serde::de::Error>(self, v: &'de [u8]) -> Result<Self::Value, E> {
             self.visit_bytes(v)
         }
 
@@ -270,48 +264,46 @@ pub mod decimal_serde {
         // serialise path.
 
         fn visit_i8<E: serde::de::Error>(self, v: i8) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(i128::from(v)))
+            Ok(crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(i128::from(v))))
         }
 
         fn visit_i16<E: serde::de::Error>(self, v: i16) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(i128::from(v)))
+            Ok(crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(i128::from(v))))
         }
 
         fn visit_i32<E: serde::de::Error>(self, v: i32) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(i128::from(v)))
+            Ok(crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(i128::from(v))))
         }
 
         fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(i128::from(v)))
+            Ok(crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(i128::from(v))))
         }
 
         fn visit_i128<E: serde::de::Error>(self, v: i128) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(v))
+            Ok(crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(v)))
         }
 
         fn visit_u8<E: serde::de::Error>(self, v: u8) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(i128::from(v)))
+            Ok(crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(i128::from(v))))
         }
 
         fn visit_u16<E: serde::de::Error>(self, v: u16) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(i128::from(v)))
+            Ok(crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(i128::from(v))))
         }
 
         fn visit_u32<E: serde::de::Error>(self, v: u32) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(i128::from(v)))
+            Ok(crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(i128::from(v))))
         }
 
         fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(i128::from(v)))
+            Ok(crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(i128::from(v))))
         }
 
         fn visit_u128<E: serde::de::Error>(self, v: u128) -> Result<Self::Value, E> {
             // u128 values above i128::MAX cannot be represented; reject
             // explicitly rather than wrapping silently.
-            i128::try_from(v).map(D38::<SCALE>::from_bits).map_err(|_| {
-                serde::de::Error::custom(
-                    "decimal-scaled: u128 value exceeds i128 storage range",
-                )
+            i128::try_from(v).map(|n| crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(n))).map_err(|_| {
+                serde::de::Error::custom("decimal-scaled: u128 value exceeds i128 storage range")
             })
         }
 
@@ -331,10 +323,10 @@ pub mod decimal_serde {
 #[cfg(all(test, feature = "alloc", feature = "serde"))]
 mod tests {
     use super::*;
-    use crate::types::widths::{D38, D38s12};
-    use serde::de::value::{Error as DeError, StrDeserializer};
-    use serde::de::IntoDeserializer;
+    use crate::types::widths::D38s12;
     use alloc::format;
+    use serde::de::IntoDeserializer;
+    use serde::de::value::{Error as DeError, StrDeserializer};
 
     // ── String wire form round-trips ──────────────────────────────────
 
@@ -351,8 +343,7 @@ mod tests {
     #[test]
     fn visitor_accepts_scaled_one_str() {
         let visitor = decimal_serde::DecimalVisitor::<12>(PhantomData);
-        let v: D38s12 =
-            <_ as Visitor>::visit_str::<DeError>(visitor, "1000000000000").unwrap();
+        let v: D38s12 = <_ as Visitor>::visit_str::<DeError>(visitor, "1000000000000").unwrap();
         assert_eq!(v, D38s12::ONE);
     }
 
@@ -361,8 +352,7 @@ mod tests {
     #[test]
     fn visitor_rejects_decimal_point_str() {
         let visitor = decimal_serde::DecimalVisitor::<12>(PhantomData);
-        let res: Result<D38s12, _> =
-            <_ as Visitor>::visit_str::<DeError>(visitor, "1.5");
+        let res: Result<D38s12, _> = <_ as Visitor>::visit_str::<DeError>(visitor, "1.5");
         assert!(res.is_err(), "expected reject; got Ok({:?})", res);
     }
 
@@ -381,8 +371,7 @@ mod tests {
     #[test]
     fn visitor_accepts_u64_max() {
         let visitor = decimal_serde::DecimalVisitor::<12>(PhantomData);
-        let v: D38s12 =
-            <_ as Visitor>::visit_u64::<DeError>(visitor, u64::MAX).unwrap();
+        let v: D38s12 = <_ as Visitor>::visit_u64::<DeError>(visitor, u64::MAX).unwrap();
         assert_eq!(v.to_bits(), u64::MAX as i128);
     }
 
@@ -391,10 +380,8 @@ mod tests {
     #[test]
     fn visitor_rejects_u128_above_i128_max() {
         let visitor = decimal_serde::DecimalVisitor::<12>(PhantomData);
-        let res: Result<D38s12, _> = <_ as Visitor>::visit_u128::<DeError>(
-            visitor,
-            (i128::MAX as u128) + 1,
-        );
+        let res: Result<D38s12, _> =
+            <_ as Visitor>::visit_u128::<DeError>(visitor, (i128::MAX as u128) + 1);
         assert!(res.is_err(), "expected overflow reject; got Ok({:?})", res);
     }
 
@@ -429,11 +416,11 @@ mod tests {
         assert_eq!(back, D38s12::ZERO);
     }
 
-    /// Negative values round-trip through JSON. `from(-5_i32)` stores
+    /// Negative values round-trip through JSON. `try_from(-5_i32)` stores
     /// `-5 * 10^12 = -5_000_000_000_000`.
     #[test]
     fn json_negative_round_trips() {
-        let v = D38s12::from(-5_i32);
+        let v = D38s12::try_from(-5_i32).unwrap();
         let json = serde_json::to_string(&v).unwrap();
         assert_eq!(json, "\"-5000000000000\"");
         let back: D38s12 = serde_json::from_str(&json).unwrap();
@@ -463,7 +450,7 @@ mod tests {
     #[test]
     fn json_string_matches_i128_to_string() {
         let raw: i128 = -123_456_789_012_345_678_901_234_567_890_i128;
-        let v = D38s12::from_bits(raw);
+        let v = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
         let json = serde_json::to_string(&v).unwrap();
         assert_eq!(json, format!("\"{}\"", raw));
     }
@@ -523,7 +510,7 @@ mod tests {
         let bytes: alloc::vec::Vec<u8> = postcard::to_allocvec(&D38s12::ONE).unwrap();
         // Verify the raw 16 LE bytes appear somewhere in the postcard
         // output (postcard may prepend a varint length prefix).
-        let raw = D38s12::ONE.to_bits().to_le_bytes();
+        let raw = D38s12::ONE.to_bits().as_i128().to_le_bytes();
         assert!(bytes.windows(16).any(|w| w == raw));
         let back: D38s12 = postcard::from_bytes(&bytes).unwrap();
         assert_eq!(back, D38s12::ONE);
@@ -538,7 +525,7 @@ mod tests {
 
     #[test]
     fn postcard_negative_round_trips() {
-        let v = D38s12::from(-5_i32);
+        let v = D38s12::try_from(-5_i32).unwrap();
         let bytes: alloc::vec::Vec<u8> = postcard::to_allocvec(&v).unwrap();
         let back: D38s12 = postcard::from_bytes(&bytes).unwrap();
         assert_eq!(back, v);
@@ -563,12 +550,16 @@ mod tests {
     /// the MSB.
     #[test]
     fn postcard_byte_order_matches_le() {
-        let v = D38s12::from_bits(0x0123_4567_89AB_CDEF_FEDC_BA98_7654_3210_i128);
+        let v = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(0x0123_4567_89AB_CDEF_FEDC_BA98_7654_3210_i128));
         let bytes: alloc::vec::Vec<u8> = postcard::to_allocvec(&v).unwrap();
-        let raw = v.to_bits().to_le_bytes();
+        let raw = v.to_bits().as_i128().to_le_bytes();
         let found = bytes.windows(16).position(|w| w == raw);
-        assert!(found.is_some(), "expected raw LE bytes embedded; got {:?}", bytes);
-        assert_eq!(raw[0], 0x10);  // LSB of the i128
+        assert!(
+            found.is_some(),
+            "expected raw LE bytes embedded; got {:?}",
+            bytes
+        );
+        assert_eq!(raw[0], 0x10); // LSB of the i128
         assert_eq!(raw[15], 0x01); // MSB of the i128
     }
 
@@ -578,12 +569,12 @@ mod tests {
     /// to `to_le_bytes`, matches the binary wire representation directly.
     #[test]
     fn cross_format_json_string_matches_le_bytes() {
-        let v = D38s12::from(42_i32);
+        let v = D38s12::try_from(42_i32).unwrap();
         let json = serde_json::to_string(&v).unwrap();
         let inner = json.trim_matches('"');
         let parsed: i128 = inner.parse().unwrap();
         let json_bytes = parsed.to_le_bytes();
-        let direct_bytes = v.to_bits().to_le_bytes();
+        let direct_bytes = v.to_bits().as_i128().to_le_bytes();
         assert_eq!(json_bytes, direct_bytes);
     }
 
@@ -593,8 +584,8 @@ mod tests {
     #[test]
     fn cross_scale_wire_is_storage_only() {
         let raw: i128 = 1_500_000_000_000;
-        let v12 = D38::<12>::from_bits(raw);
-        let v6 = D38::<6>::from_bits(raw);
+        let v12 = crate::D::<crate::int::types::Int<2>, 12>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
+        let v6 = crate::D::<crate::int::types::Int<2>, 6>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
         assert_eq!(serde_json::to_string(&v12).unwrap(), "\"1500000000000\"");
         assert_eq!(serde_json::to_string(&v6).unwrap(), "\"1500000000000\"");
     }
@@ -608,11 +599,11 @@ mod tests {
         #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
         struct Holder {
             #[serde(with = "crate::serde_helpers::decimal_serde")]
-            length: D38<12>,
+            length: crate::D<crate::int::types::Int<2>, 12>,
         }
 
         let h = Holder {
-            length: D38s12::from(7_i32),
+            length: D38s12::try_from(7_i32).unwrap(),
         };
         let json = serde_json::to_string(&h).unwrap();
         assert_eq!(json, r#"{"length":"7000000000000"}"#);
@@ -621,7 +612,7 @@ mod tests {
     }
 }
 
-// ─── Wide-tier serde (D76 / D153 / D307) ────────────────────────────
+// ─── Wide-tier serde (D57 through D1232) ────────────────────────────
 //
 // The wide-tier wire format mirrors D38's: a base-10 integer string
 // of the raw storage value for human-readable serializers, and the
@@ -631,9 +622,9 @@ mod tests {
 // carry the >128-bit storage anyway.
 
 /// Emits `Serialize` / `Deserialize` for a wide-tier decimal type
-/// (D76 / D153 / D307). `$bytes_len` is `mem::size_of::<$Storage>()`
-/// (e.g. 32 for `Int256`).
-#[cfg(any(feature = "d76", feature = "d153", feature = "d307", feature = "wide", feature = "x-wide"))]
+/// (D57 through D1232). `$bytes_len` is `mem::size_of::<$Storage>()`
+/// (e.g. 32 for `Int<4>`).
+#[cfg(feature = "_wide-support")]
 macro_rules! decl_wide_serde {
     ($Type:ident, $Storage:ty, $bytes_len:literal) => {
         impl<const SCALE: u32> Serialize for $crate::types::widths::$Type<SCALE> {
@@ -692,11 +683,17 @@ macro_rules! decl_wide_serde {
                         })?;
                         Ok(<$crate::types::widths::$Type<S>>::from_bits(parsed))
                     }
-                    fn visit_borrowed_str<E: serde::de::Error>(self, v: &'de str) -> Result<Self::Value, E> {
+                    fn visit_borrowed_str<E: serde::de::Error>(
+                        self,
+                        v: &'de str,
+                    ) -> Result<Self::Value, E> {
                         self.visit_str(v)
                     }
                     #[cfg(feature = "alloc")]
-                    fn visit_string<E: serde::de::Error>(self, v: alloc::string::String) -> Result<Self::Value, E> {
+                    fn visit_string<E: serde::de::Error>(
+                        self,
+                        v: alloc::string::String,
+                    ) -> Result<Self::Value, E> {
                         self.visit_str(&v)
                     }
                     fn visit_bytes<E: serde::de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
@@ -710,9 +707,14 @@ macro_rules! decl_wide_serde {
                             buf.copy_from_slice(&v[i * 8..(i + 1) * 8]);
                             *limb = u64::from_le_bytes(buf);
                         }
-                        Ok(<$crate::types::widths::$Type<S>>::from_bits(<$Storage>::from_limbs_le(limbs)))
+                        Ok(<$crate::types::widths::$Type<S>>::from_bits(
+                            <$Storage>::from_limbs_le(limbs),
+                        ))
                     }
-                    fn visit_borrowed_bytes<E: serde::de::Error>(self, v: &'de [u8]) -> Result<Self::Value, E> {
+                    fn visit_borrowed_bytes<E: serde::de::Error>(
+                        self,
+                        v: &'de [u8],
+                    ) -> Result<Self::Value, E> {
                         self.visit_bytes(v)
                     }
                 }
@@ -727,52 +729,51 @@ macro_rules! decl_wide_serde {
 }
 
 #[cfg(any(feature = "d57", feature = "wide"))]
-decl_wide_serde!(D57, crate::wide_int::Int192, 24);
+decl_wide_serde!(D57, crate::int::types::Int<3>, 24);
 #[cfg(any(feature = "d76", feature = "wide"))]
-decl_wide_serde!(D76, crate::wide_int::Int256, 32);
+decl_wide_serde!(D76, crate::int::types::Int<4>, 32);
 #[cfg(any(feature = "d115", feature = "wide"))]
-decl_wide_serde!(D115, crate::wide_int::Int384, 48);
+decl_wide_serde!(D115, crate::int::types::Int<6>, 48);
 #[cfg(any(feature = "d153", feature = "wide"))]
-decl_wide_serde!(D153, crate::wide_int::Int512, 64);
+decl_wide_serde!(D153, crate::int::types::Int<8>, 64);
 #[cfg(any(feature = "d230", feature = "wide"))]
-decl_wide_serde!(D230, crate::wide_int::Int768, 96);
+decl_wide_serde!(D230, crate::int::types::Int<12>, 96);
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-decl_wide_serde!(D307, crate::wide_int::Int1024, 128);
+decl_wide_serde!(D307, crate::int::types::Int<16>, 128);
 #[cfg(any(feature = "d462", feature = "x-wide"))]
-decl_wide_serde!(D462, crate::wide_int::Int1536, 192);
+decl_wide_serde!(D462, crate::int::types::Int<24>, 192);
 #[cfg(any(feature = "d616", feature = "x-wide"))]
-decl_wide_serde!(D616, crate::wide_int::Int2048, 256);
+decl_wide_serde!(D616, crate::int::types::Int<32>, 256);
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
-decl_wide_serde!(D924, crate::wide_int::Int3072, 384);
+decl_wide_serde!(D924, crate::int::types::Int<48>, 384);
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-decl_wide_serde!(D1232, crate::wide_int::Int4096, 512);
+decl_wide_serde!(D1232, crate::int::types::Int<64>, 512);
 
 #[cfg(all(test, feature = "wide"))]
 mod wide_serde_tests {
-    use crate::D76;
 
     #[test]
     fn d76_human_readable_round_trip() {
-        let v = D76::<12>::from_int(1_234_567_i128);
+        let v = crate::D::<crate::int::types::Int<4>, 12>::try_from(1_234_567_i128).unwrap();
         let json = serde_json::to_string(&v).unwrap();
-        let back: D76<12> = serde_json::from_str(&json).unwrap();
+        let back: crate::D<crate::int::types::Int<4>, 12> = serde_json::from_str(&json).unwrap();
         assert_eq!(back, v);
     }
 
     #[test]
     fn d76_negative_human_readable_round_trip() {
-        let v = -D76::<12>::from_int(987_654_321_i128);
+        let v = -crate::D::<crate::int::types::Int<4>, 12>::try_from(987_654_321_i128).unwrap();
         let json = serde_json::to_string(&v).unwrap();
-        let back: D76<12> = serde_json::from_str(&json).unwrap();
+        let back: crate::D<crate::int::types::Int<4>, 12> = serde_json::from_str(&json).unwrap();
         assert_eq!(back, v);
     }
 
     #[test]
     fn d76_binary_round_trip() {
         // postcard is a binary, non-self-describing format.
-        let v = D76::<12>::from_int(42_i128);
+        let v = crate::D::<crate::int::types::Int<4>, 12>::try_from(42_i128).unwrap();
         let bytes = postcard::to_allocvec(&v).unwrap();
-        let back: D76<12> = postcard::from_bytes(&bytes).unwrap();
+        let back: crate::D<crate::int::types::Int<4>, 12> = postcard::from_bytes(&bytes).unwrap();
         assert_eq!(back, v);
     }
 }

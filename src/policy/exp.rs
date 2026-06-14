@@ -1,267 +1,484 @@
-//! Exponential policy.
-//!
-//! Same cascade shape as [`crate::policy::ln`]: narrow tier on the
-//! `Fixed` 256-bit intermediate, wide tier on per-tier `exp_strict`
-//! kernels in [`crate::algos::exp::wide_kernel`]. The wide-tier macro
-//! does not ship a runtime-`working_digits` variant of `exp_fixed`, so
-//! the wide-tier `*_with_impl` methods ignore the caller-supplied
-//! digits and delegate to the strict path.
-//!
-//! Functions covered: `exp` (natural) and `exp2` (base-2).
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::algos::exp;
-use crate::types::widths::{D9, D18, D38};
+//! Exponential policy — the per-(N, SCALE) algorithm matcher (plus the
+//! derived exp2).
+//!
+//! `D<Int<N>, SCALE>::exp_strict_with(mode)` delegates directly to the one
+//! shared [`dispatch`] generic function — the canonical matcher-only
+//! policy shape (see `docs/ARCHITECTURE.md`), mirrored from `sqrt`:
+//!
+//! 1. an [`Algorithm`] enum — Series / Tang / Schoolbook, no `Default`;
+//! 2. a [`Select`] verdict;
+//! 3. a `const fn` [`select`] keyed on `(N, SCALE)`, total over the key;
+//! 4. dispatch via `const { select::<N, SCALE>() }`, then an exhaustive
+//!    `match algo` — no `_`, no panic.
+//!
+//! The narrow tiers run the 256-bit `Fixed` kernel (`exp_series_2limb`,
+//! D18 widened to Int<2>); the wide tiers run the tier-generic `exp_series`
+//! over `WideTrigCore`, or the per-tier `exp_tang` band kernel, reached by
+//! a `match N` with `resize_to` bridges (identity at the matched `N`).
+//!
+//! exp2 is derived (`2^x = exp(x·ln2)` with an exact-power pin) and routes
+//! DOWN to the narrow `exp_series_2limb::exp2_*` kernels or the wide
+//! per-tier `wide_trig_<tier>::exp2_{strict,approx}_with_kernel` free fns —
+//! never back through a sibling decimal policy.
+
+use crate::int::types::traits::BigInt;
+use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
-pub(crate) trait ExpPolicy: Sized {
-    /// `e^self` (strict, const-folded `SCALE + STRICT_GUARD`).
-    fn exp_impl(self, mode: RoundingMode) -> Self;
-
-    /// `e^self` with caller-chosen working digits.
-    fn exp_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self;
-
-    /// `2^self` (strict, const-folded `SCALE + STRICT_GUARD`).
-    fn exp2_impl(self, mode: RoundingMode) -> Self;
-
-    /// `2^self` with caller-chosen working digits.
-    fn exp2_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self;
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Algorithm {
+    Series,
+    #[cfg(feature = "_wide-support")]
+    Tang,
+    #[allow(dead_code)]
+    Schoolbook,
 }
 
-// ── Narrow tier — widen-to-D38 cascade ─────────────────────────────
-
-macro_rules! impl_exp_widen {
-    ($T:ident, $exp_strict:path, $exp_with:path) => {
-        impl<const SCALE: u32> ExpPolicy for $T<SCALE> {
-            #[inline]
-            fn exp_impl(self, mode: RoundingMode) -> Self {
-                $exp_strict(self, mode)
-            }
-            #[inline]
-            fn exp_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self {
-                $exp_with(self, working_digits, mode)
-            }
-            #[inline]
-            fn exp2_impl(self, mode: RoundingMode) -> Self {
-                let wide: D38<SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.exp2_strict_with(mode))
-                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($T), "::exp2"), SCALE,
-                    ))
-            }
-            #[inline]
-            fn exp2_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self {
-                let wide: D38<SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.exp2_approx_with(working_digits, mode))
-                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($T), "::exp2"), SCALE,
-                    ))
-            }
-        }
-    };
+#[derive(Clone, Copy)]
+enum Select<const N: usize> {
+    ByAlgorithm(Algorithm),
+    #[allow(dead_code)]
+    ByValue(fn(&Int<N>) -> Algorithm),
 }
 
-impl_exp_widen!(D9, exp::widen_to_d38::exp_strict_d9, exp::widen_to_d38::exp_with_d9);
-impl_exp_widen!(D18, exp::widen_to_d38::exp_strict_d18, exp::widen_to_d38::exp_with_d18);
-
-// ── D38 — see `crate::policy::ln` for the borrow-D57 rationale. ────
-
-// D38 — use the in-tree `Fixed`-256 `exp_fixed` directly. The
-// borrow_d57 path was retained earlier when D38's bespoke kernel was
-// ~2× slower than D57's wide_kernel at matched precision. With the
-// 0.4.2 MG-routed `Fixed::mul` / `div_small` / `divmod_u256_by_pow10`
-// fast paths the D38-native kernel beats the borrow-and-back round
-// trip across the whole SCALE range — measured ~2× faster at
-// SCALE 19 (10-12 µs versus 22 µs on the GHA shared-runner pool).
-impl<const SCALE: u32> ExpPolicy for D38<SCALE> {
-    #[inline]
-    fn exp_impl(self, mode: RoundingMode) -> Self {
-        Self(exp::fixed_d38::exp_strict::<SCALE>(self.0, mode))
-    }
-    #[inline]
-    fn exp_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self {
-        Self(exp::fixed_d38::exp_with(self.0, SCALE, working_digits, mode))
-    }
-    #[inline]
-    fn exp2_impl(self, mode: RoundingMode) -> Self {
-        Self(exp::fixed_d38::exp2_strict::<SCALE>(self.0, mode))
-    }
-    #[inline]
-    fn exp2_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self {
-        Self(exp::fixed_d38::exp2_with(self.0, SCALE, working_digits, mode))
-    }
-}
-
-// ── Wide tiers — width default: per-tier wide_kernel ────────────────
-//
-// `exp_with_impl` / `exp2_with_impl` for wide tiers ignore
-// `working_digits` and fall through to the strict path; see module
-// docs for the rationale. `exp2_impl` delegates to the inherent
-// `*_strict_with` shell emitted by `decl_wide_transcendental!` since
-// the wide-tier core's `exp_fixed` plus per-tier `ln2(w)` compose
-// `exp2` in a way that doesn't have a free-function equivalent in
-// `algos::exp::wide_kernel` today.
-
-macro_rules! impl_wide_exp {
-    ($T:ident, $exp:path) => {
-        impl<const SCALE: u32> ExpPolicy for crate::types::widths::$T<SCALE> {
-            #[inline]
-            fn exp_impl(self, mode: RoundingMode) -> Self {
-                Self($exp(self.0, mode, SCALE))
-            }
-            #[inline]
-            fn exp_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-                Self($exp(self.0, mode, SCALE))
-            }
-            #[inline]
-            fn exp2_impl(self, mode: RoundingMode) -> Self {
-                self.exp2_strict_with(mode)
-            }
-            #[inline]
-            fn exp2_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-                self.exp2_strict_with(mode)
-            }
-        }
-    };
-}
-
-// D57 — bespoke arm so `exp_impl` can divert SCALE ∈ 45..=56 through
-// the lookup table before falling back to the generic `wide_kernel`.
-
-#[cfg(any(feature = "d57", feature = "wide"))]
-impl<const SCALE: u32> ExpPolicy for crate::types::widths::D57<SCALE> {
-    #[inline]
-    fn exp_impl(self, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 18..=22) {
-            return Self(exp::lookup_d57_s18_22_tang::exp_strict::<SCALE>(self.0, mode));
-        }
-        if matches!(SCALE, 45..=56) {
-            return Self(exp::lookup_d57_s45_56::exp_strict::<SCALE>(self.0, mode));
-        }
-        Self(exp::wide_kernel::exp_strict_d57(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn exp_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 18..=22) {
-            return Self(exp::lookup_d57_s18_22_tang::exp_strict::<SCALE>(self.0, mode));
-        }
-        if matches!(SCALE, 45..=56) {
-            return Self(exp::lookup_d57_s45_56::exp_strict::<SCALE>(self.0, mode));
-        }
-        Self(exp::wide_kernel::exp_strict_d57(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn exp2_impl(self, mode: RoundingMode) -> Self {
-        self.exp2_strict_with(mode)
-    }
-    #[inline]
-    fn exp2_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        self.exp2_strict_with(mode)
+const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
+    match (N, SCALE) {
+        // D57 (Int<3>): the seam A/B (`benches/micro/exp_series_tang_ab.rs`)
+        // sweeps the full SCALE range at the production Tang config and shows
+        // Tang beats Series at EVERY D57 scale (validity bit-identical to
+        // Series across the operand spread × all six modes at each cell):
+        // s0 4.81×, s10 2.81×, s17 2.96×, s22 2.91×, s23 2.26×, s28 2.32×,
+        // s33 2.29×, s38 19.3×, s42 1.90×, s44 2.27×, s45 1.52×, s56 44.6×.
+        // A gap in the routed D57 scales would drop powf's inner exp(y·ln x)
+        // (which lands at storage SCALE=42) onto the slow Series `_` arm.
+        // Cover the WHOLE D57 scale range through the
+        // small-`|x|` value gate (Tang's `k·ln 2` lift fits the work width
+        // only for small `|x|`; large-`|x|` routes to Series, which is always
+        // valid — matching the existing D76/D115/D153/D230 wide-tier pattern).
+        // `tang_routed` splits 0..=44 (M=128,G=8) vs 45..=56 (M=512,G=30) per
+        // the seam A/B's per-cell (M,G) ranking; the boundary at s45 is where
+        // the two configs tie.
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        (3, 0..=56) => Select::ByValue(wide_tang_gate::<N, SCALE>),
+        // D76 (Int<4>): the full width × scale A/B
+        // (`benches/micro/exp_wide_series_tang_ab.rs`) shows Tang beats the
+        // Series squaring core at EVERY D76 scale, including the MAX scale
+        // (s75), where the map ranks Series ~16× slower than Tang and every
+        // Tang candidate is bit-identical to Series (zero validity failures).
+        // The MAX scale `exp_D76_s75` cell must be covered or it falls
+        // through to the slow Series `_` arm (a Class-I single-cell boundary
+        // miss). Cover the
+        // WHOLE D76 scale range (0..=75, the design max) through the
+        // small-`|x|` value gate so no scale is left on the Series path.
+        #[cfg(any(feature = "d76", feature = "wide"))]
+        (4, 0..=75) => Select::ByValue(wide_tang_gate::<N, SCALE>),
+        // Narrow-wide tiers (N = 6/8/12/16) — the storage-strict exp path.
+        // Mapped against the exp Tang rodata table
+        // (`src/algos/support/exp_tang_table.rs`).
+        // The N-way A/B `benches/micro/exp_wide_series_tang_ab.rs`
+        // (PINNED core 22, Series vs 3 Tang configs vs Schoolbook, validity-
+        // gated bit-identical to Series × all six modes) shows SERIES (the
+        // generic squaring core) BEATS every Tang config at EVERY scale at
+        // these tiers — Tang's
+        // table-multiply + post-reduction Taylor costs MORE than Series's
+        // adaptive Smith `r/2^n` from D115 up. Measured medians (Tang =
+        // production tang_m512_g30, ratio = Series-faster-by):
+        //   D115: s0 1.55×, s28 1.40× (Schoolbook≈Series winner), s57 1.29×,
+        //         s86 (Series wins), s113 1.28× — Series/Schoolbook are the
+        //         top two at all five samples; Tang ranks #3+ everywhere.
+        //   D153: s0 1.40×, s38 (Series), s76 (Schoolbook), s114, s151 —
+        //         Series/Schoolbook always the top two; Tang #3+.
+        //   D230: s0 1.65×, s57, s115, s228 — Series/Schoolbook top two. The
+        //         lone s172 cell shows tang_m512 +5% over Series, but it is a
+        //         single non-continuous point bracketed by s115 (Series) and
+        //         s228 (Series) — bench noise, NOT a continuous win-region, so
+        //         per architectural-review Class I it is NOT carved out.
+        //   D307: s0 1.79×, s76 1.59×, s153, s230, s305 — Series/Schoolbook
+        //         top two at every sample; Tang #3+ across the whole range.
+        // So D115/D153/D230/D307 fall through to the `_` Series arm at EVERY
+        // scale — no Tang gate. (Schoolbook ties Series within ~2-13% noise at
+        // these tiers — same Fixed Smith core — and is the unrouted reference;
+        // Series stays the canonical wide kernel, so the `_` arm is Series.)
+        //
+        // The WIDEST tiers (N >= 24: D462/D616/D924/D1232) likewise fall
+        // through to Series: it is measured faster than Tang at every
+        // confirmed scale, the lead widening as N grows, because Tang's
+        // table-multiply plus post-reduction Taylor needs more wide
+        // multiplies than Series's adaptive Smith r/2^n at these widths —
+        // eliminating the `k·ln 2` reduction does not pay for the longer
+        // Taylor. And at the D1232 MAX scale single-shot Tang is not even
+        // bit-identical to Series (its `k·ln 2` lift overflows the guard,
+        // so the validity wall rules it INELIGIBLE regardless of speed).
+        // No Tang gate for N >= 24 — the `_` Series arm owns them.
+        _ => Select::ByAlgorithm(Algorithm::Series),
     }
 }
 
-#[cfg(any(feature = "d76", feature = "wide"))]
-impl_wide_exp!(D76, exp::wide_kernel::exp_strict_d76);
-
-// D115 — bespoke arm so `exp_impl` can divert SCALE = 57 through the
-// Tang-style narrow-GUARD lookup before falling back to `wide_kernel`.
-#[cfg(any(feature = "d115", feature = "wide"))]
-impl<const SCALE: u32> ExpPolicy for crate::types::widths::D115<SCALE> {
-    #[inline]
-    fn exp_impl(self, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 50..=60) {
-            return Self(exp::lookup_d115_s57_tang::exp_strict::<SCALE>(self.0, mode));
-        }
-        Self(exp::wide_kernel::exp_strict_d115(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn exp_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 50..=60) {
-            return Self(exp::lookup_d115_s57_tang::exp_strict::<SCALE>(self.0, mode));
-        }
-        Self(exp::wide_kernel::exp_strict_d115(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn exp2_impl(self, mode: RoundingMode) -> Self {
-        self.exp2_strict_with(mode)
-    }
-    #[inline]
-    fn exp2_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        self.exp2_strict_with(mode)
+/// Value gate for the wide-tier low-scale Tang rectangles: Tang is correct
+/// only while its `k·ln 2` working-scale lift fits the work width, i.e. for
+/// small `|x|`. Route Tang for `|x| < 100`, else Series (always valid).
+///
+/// `|x| < 100` ⇔ `|raw| < 10^(SCALE+2)`, tested conservatively on the bit
+/// length: `|raw| < 2^B ≤ 10^(SCALE+2)` when `B = ⌊(SCALE+2)·log2 10⌋`
+/// (`log2 10 ≈ 3.32192`, taken as `332192/100000`, rounded DOWN so `2^B`
+/// never exceeds `10^(SCALE+2)` — never routes an out-of-range value to Tang).
+#[cfg(feature = "_wide-support")]
+fn wide_tang_gate<const N: usize, const SCALE: u32>(raw: &Int<N>) -> Algorithm {
+    let max_bits = (SCALE + 2) * 332_192 / 100_000;
+    if BigInt::bit_length(*raw) <= max_bits {
+        Algorithm::Tang
+    } else {
+        Algorithm::Series
     }
 }
 
-// D153 — bespoke arm so `exp_impl` can divert SCALE ∈ 70..=82 through
-// the Tang-style narrow-GUARD lookup. See
-// [`crate::algos::exp::lookup_d153_s70_82_tang`].
-#[cfg(any(feature = "d153", feature = "wide"))]
-impl<const SCALE: u32> ExpPolicy for crate::types::widths::D153<SCALE> {
-    #[inline]
-    fn exp_impl(self, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 70..=82) {
-            return Self(exp::lookup_d153_s70_82_tang::exp_strict::<SCALE>(self.0, mode));
-        }
-        Self(exp::wide_kernel::exp_strict_d153(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn exp_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 70..=82) {
-            return Self(exp::lookup_d153_s70_82_tang::exp_strict::<SCALE>(self.0, mode));
-        }
-        Self(exp::wide_kernel::exp_strict_d153(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn exp2_impl(self, mode: RoundingMode) -> Self {
-        self.exp2_strict_with(mode)
-    }
-    #[inline]
-    fn exp2_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        self.exp2_strict_with(mode)
+#[inline]
+fn resolve<const N: usize, const SCALE: u32>(raw: &Int<N>) -> Algorithm {
+    match const { select::<N, SCALE>() } {
+        Select::ByAlgorithm(a) => a,
+        Select::ByValue(f) => f(raw),
     }
 }
 
-#[cfg(any(feature = "d230", feature = "wide"))]
-impl_wide_exp!(D230, exp::wide_kernel::exp_strict_d230);
+/// Returns `true` iff the WORKING-SCALE composition surface should route
+/// `e^{stuff}` through Tang (`tang_exp_fixed::<C, M, true>`) rather than the
+/// Series `exp_fixed` for this `(N, SCALE)` cell.
+///
+/// Consumed by the working-scale `exp_fixed_routed<SCALE>` surface emitted per
+/// tier by `decl_wide_transcendental!` — the composition sites for `exp2`,
+/// `powf`, and the hyperbolics (`sinh`/`cosh`/`tanh`). This is a DISTINCT
+/// operating point from the storage-strict [`select`] above: it runs at the
+/// caller's working width `w` (a few extra digits) with the kernel's
+/// `INTERNAL_EXTRA` lift covering arbitrary `|k|`, NOT at storage SCALE with
+/// the small-`|x|` value gate. The storage-strict exp A/B
+/// (`exp_wide_series_tang_ab`) routes
+/// D115/D153/D230/D307 OFF Tang at storage scale on measured evidence; that
+/// evidence does NOT cover the composition operating point (different `w`,
+/// different `|k|` regime), and the hyperbolic working-scale path is a
+/// separately-benched WIN that must not be silently retargeted — so the
+/// working-scale gate is kept independent and unchanged here (Tang for the
+/// narrow-wide tiers N ∈ {3,4,6,8,12,16}; Series for N >= 24, matching the
+/// pre-remap routing). A future composition-path A/B (sinh/cosh/tanh/powf/exp2
+/// at working scale) can re-key this gate on its own measurements.
+#[cfg(feature = "_wide-support")]
+#[inline]
+#[must_use]
+pub(crate) const fn is_tang<const N: usize, const SCALE: u32>() -> bool {
+    let _ = SCALE;
+    // The narrow-wide tiers ran Tang at working scale before the storage-strict
+    // remap; preserve that for the composition surface (no measurement says to
+    // change it). N >= 24 was — and stays — Series.
+    matches!(N, 3 | 4 | 6 | 8 | 12 | 16)
+}
 
-// D307 — Tang exp surface dispatch was bench-trialed at SCALE 150 and
-// showed a ~5% regression on `exp(2)` against the canonical
-// `wide_kernel::exp_strict_d307`. D307's Int1024 working integer is
-// approaching the Tang-exp crossover identified at D462/D616
-// (Int3072+ where adaptive Smith r/2^n in `exp_fixed` matches the
-// Tang table-multiply cost). Surface `exp_impl` therefore keeps the
-// generic `wide_kernel`. The `tang_exp_fixed` machinery is still
-// retained for the hyperbolic kernels at SCALE 140..=160, where the
-// shared lift + narrow-GUARD pattern wins despite the wash on exp
-// itself.
-#[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-impl_wide_exp!(D307, exp::wide_kernel::exp_strict_d307);
+#[inline]
+#[must_use]
+pub(crate) fn dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Int<N> {
+    checked_dispatch::<N, SCALE>(raw, mode).unwrap_or_else(|| {
+        crate::support::diagnostics::overflow_panic_with_scale("exp_strict", SCALE)
+    })
+}
 
-// D462 — Tang exp probed at SCALE 225..=235 and LOST (~75% regression
-// against the canonical `wide_kernel::exp_strict_d462`). At Int3072
-// working width the Tang post-reduction Taylor needs ~95 wide mults
-// (one per term) vs. the canonical Smith r/2^n path's ~28 wide
-// squarings — the table-elimination of the `k·ln 2` reduction does
-// not pay for the longer Taylor at this depth. See
-// `src/algos/exp/lookup_d462_s225_235_tang.rs` for the kernel left in
-// place behind `cfg(test)` so the algorithm-lab probe can re-run.
-// Dispatch keeps the canonical macro emission via `impl_wide_exp!`.
-#[cfg(any(feature = "d462", feature = "x-wide"))]
-impl_wide_exp!(D462, exp::wide_kernel::exp_strict_d462);
+/// The `checked` primitive under [`dispatch`]: same routing, but the
+/// narrow kernels' out-of-range `None` propagates instead of panicking
+/// (the overflow contract's "detect once, apply the policy in the
+/// wrapper"). On the wide tiers the kernel-internal out-of-range panic
+/// is not yet threaded through; those arms return `Some` of
+/// the kernel result and still panic on overflow.
+#[inline]
+#[must_use]
+pub(crate) fn checked_dispatch<const N: usize, const SCALE: u32>(
+    raw: Int<N>,
+    mode: RoundingMode,
+) -> Option<Int<N>> {
+    match resolve::<N, SCALE>(&raw) {
+        Algorithm::Series => series_routed::<N, SCALE>(raw, mode),
+        #[cfg(feature = "_wide-support")]
+        Algorithm::Tang => tang_routed::<N, SCALE>(raw, mode),
+        Algorithm::Schoolbook => schoolbook_routed::<N, SCALE>(raw, mode),
+    }
+}
 
-// D616 — width default via `impl_wide_exp!`. The Tang-lookup exp at
-// SCALE 300..=315 was bench-trialled and rejected: at D616's Int8192
-// working integer the wide_kernel `exp_fixed` (with the adaptive Smith
-// r/2^n already applied) runs in ~230 µs, while the table-multiply
-// Tang lookup runs at ~250 µs — i.e. break-even at best. The Tang
-// table multiply on a 1024-byte working integer is the same cost
-// class as the Smith squaring tail the lookup is meant to elide, so
-// no win materialises at this depth. The lookup module stays in tree
-// (it ships the `tang_exp_fixed` helper the hyperbolic kernels need)
-// but is NOT wired in policy.
-#[cfg(any(feature = "d616", feature = "x-wide"))]
-impl_wide_exp!(D616, exp::wide_kernel::exp_strict_d616);
+#[inline]
+#[must_use]
+pub(crate) fn dispatch_with<const N: usize, const SCALE: u32>(
+    raw: Int<N>,
+    working_digits: u32,
+    mode: RoundingMode,
+) -> Int<N> {
+    // Only the narrow tier honours caller working_digits (matching the
+    // prior ExpPolicy routing, where wide exp_with_impl ignored it).
+    match N {
+        1 | 2 => crate::algos::exp::exp_series_2limb::exp_with(
+            raw.resize_to::<Int<2>>(),
+            SCALE,
+            working_digits,
+            mode,
+        )
+        .and_then(super::narrow_fit::<N>)
+        .unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("exp_with", SCALE)
+        }),
+        _ => {
+            let _ = working_digits;
+            dispatch::<N, SCALE>(raw, mode)
+        }
+    }
+}
 
-#[cfg(any(feature = "d924", feature = "xx-wide"))]
-impl_wide_exp!(D924, exp::wide_kernel::exp_strict_d924);
+// The SCALE-derived work-rung routing for the wide-tier Series arm
+// (the `policy::trig::forward_rung` shape): a Series-INTERNAL second
+// axis — NOT in the `select` verdict, NOT on [`Algorithm`] — consulted
+// only inside `series_routed` below. The gate admits the everyday
+// `|x| < 10^EXP_ARG_BUDGET` band (the RESULT-MAGNITUDE axis: `e^x`'s
+// integer-digit lift and the kernel's internal `2^k` extension must
+// fit the rung — `work_rung::EXP_ARG_BUDGET` documents the budget) and
+// the const-folded rung match monomorphises the ONE generic kernel
+// (`wide_trig_core::exp_series_g`) at the narrowest valid `Int<K>`;
+// out-of-budget magnitudes run the tier-width `exp_series`,
+// bit-identical. The kernel's per-probe `exp_peak_fits` belt keeps the
+// analytic gate hit-rate-only, never correctness-bearing.
+#[cfg(feature = "_wide-support")]
+#[inline]
+pub(crate) fn series_at_rung<C: crate::algos::support::wide_trig_core::WideTrigCore, const SCALE: u32>(
+    raw: C::Storage,
+    mode: RoundingMode,
+) -> C::Storage
+where
+    <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+    <C::Wexp as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    use super::work_rung::{in_budget, rung_match, trig_rung, EXP_ARG_BUDGET};
+    use crate::algos::support::wide_trig_core::exp_series_g;
+    if in_budget::<C::Storage, SCALE, EXP_ARG_BUDGET>(&raw) {
+        rung_match!(trig_rung, C, SCALE, exp_series_g, [SCALE], raw, mode)
+    } else {
+        crate::algos::support::wide_trig_core::exp_series::<C, SCALE>(raw, mode)
+    }
+}
 
-#[cfg(any(feature = "d1232", feature = "xx-wide"))]
-impl_wide_exp!(D1232, exp::wide_kernel::exp_strict_d1232);
+#[inline]
+fn series_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
+    match N {
+        1 | 2 => crate::algos::exp::exp_series_2limb::exp_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        3 => Some(series_at_rung::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d76", feature = "wide"))]
+        4 => Some(series_at_rung::<crate::types::widths::wide_trig_d76::Core, SCALE>(raw.resize_to::<Int<4>>(), mode).resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d115", feature = "wide"))]
+        6 => Some(series_at_rung::<crate::types::widths::wide_trig_d115::Core, SCALE>(raw.resize_to::<Int<6>>(), mode).resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d153", feature = "wide"))]
+        8 => Some(series_at_rung::<crate::types::widths::wide_trig_d153::Core, SCALE>(raw.resize_to::<Int<8>>(), mode).resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d230", feature = "wide"))]
+        12 => Some(series_at_rung::<crate::types::widths::wide_trig_d230::Core, SCALE>(raw.resize_to::<Int<12>>(), mode).resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+        16 => Some(series_at_rung::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw.resize_to::<Int<16>>(), mode).resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d462", feature = "x-wide"))]
+        24 => Some(series_at_rung::<crate::types::widths::wide_trig_d462::Core, SCALE>(raw.resize_to::<Int<24>>(), mode).resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d616", feature = "x-wide"))]
+        32 => Some(series_at_rung::<crate::types::widths::wide_trig_d616::Core, SCALE>(raw.resize_to::<Int<32>>(), mode).resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d924", feature = "xx-wide"))]
+        48 => Some(series_at_rung::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+        64 => Some(series_at_rung::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>()),
+        _ => crate::algos::exp::exp_series_2limb::exp_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
+    }
+}
+
+#[inline]
+fn schoolbook_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
+    match N {
+        1 | 2 => super::narrow_fit::<N>(crate::algos::exp::exp_schoolbook::exp_schoolbook_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode)),
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        3 => Some(crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d76", feature = "wide"))]
+        4 => Some(crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d76::Core, SCALE>(raw.resize_to::<Int<4>>(), mode).resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d115", feature = "wide"))]
+        6 => Some(crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d115::Core, SCALE>(raw.resize_to::<Int<6>>(), mode).resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d153", feature = "wide"))]
+        8 => Some(crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(raw.resize_to::<Int<8>>(), mode).resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d230", feature = "wide"))]
+        12 => Some(crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d230::Core, SCALE>(raw.resize_to::<Int<12>>(), mode).resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+        16 => Some(crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw.resize_to::<Int<16>>(), mode).resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d462", feature = "x-wide"))]
+        24 => Some(crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d462::Core, SCALE>(raw.resize_to::<Int<24>>(), mode).resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d616", feature = "x-wide"))]
+        32 => Some(crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d616::Core, SCALE>(raw.resize_to::<Int<32>>(), mode).resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d924", feature = "xx-wide"))]
+        48 => Some(crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+        64 => Some(crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>()),
+        _ => super::narrow_fit::<N>(crate::algos::exp::exp_schoolbook::exp_schoolbook_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode)),
+    }
+}
+
+#[cfg(feature = "_wide-support")]
+#[inline]
+fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
+    match N {
+        // D57: TWO continuous (M,G) sub-bands inside the merged Tang arm:
+        // 0..=44 runs the (M=128, G=8) low-band kernel, 45..=56 the (M=512,
+        // G=30) high-band kernel. The split is the same shape the seam A/B
+        // (`benches/micro/exp_series_tang_ab.rs`) already confirmed at the
+        // edges (s44 (128,8)=2.27× vs s45 (512,30)=1.52× — close wall-clocks,
+        // not a regression); inside 0..=44 (128,8) beats (512,30) by ~1.5× at
+        // every gap cell (s23/s28/s33/s38/s42/s44), so the boundary stays at
+        // 45. Flags <true,true,false> = DIRECTED + EXTERNAL_EXTRA (matching the
+        // D76/D115/D153/D230 wide-tier shape): the EXTERNAL_EXTRA guard lift
+        // covers the large-`|k|` case the merged Tang gate now exposes (at
+        // GAP scales the value gate `wide_tang_gate` admits `|x|` up to ~100,
+        // where `|k|·log10 2 ≈ 30` digits exceeds the narrow base guard);
+        // DIRECTED enables Ziv escalation for the directed modes. A
+        // `<false,false,false>` shape would suffice only for the narrow `18..=22` /
+        // `45..=56` bands, where the storage-bit constraint at those
+        // SCALEs implicitly bounds `|x|` to the small-`|k|` regime.
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        3 => {
+            let r = raw.resize_to::<Int<3>>();
+            let out = match SCALE {
+                0..=44 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 128, 8, true, true, false>(r, mode),
+                45..=56 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 512, 30, true, true, false>(r, mode),
+                _ => crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(r, mode),
+            };
+            Some(out.resize_to::<Int<N>>())
+        }
+        // D76 (Int<4>): full-range Tang, M=512 G=30, the directed +
+        // external-extra shape <true,true,false> — bit-identical to Series
+        // across the spread × all six modes at every sampled scale (s0/s19/s38/
+        // s57/s74) in the wide A/B (`exp_wide_series_tang_ab`), where Tang wins
+        // 1.05-1.20× at every scale (and the value-gate sweep shows Tang wins
+        // 8-10× for `|x|` 10..110 where Series's reduction blows up). The
+        // `select` gate (small `|x|`) keeps it valid; large-`|x|` falls through
+        // to Series. (NOTE: at s74 the *tang_m512_g60* probe was reported
+        // INVALID by the validity wall, but the PRODUCTION tang_m512_g30 stays
+        // bit-identical — the production config is the one wired here.)
+        #[cfg(any(feature = "d76", feature = "wide"))]
+        4 => Some(crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d76::Core, SCALE, 512, 30, true, true, false>(raw.resize_to::<Int<4>>(), mode).resize_to::<Int<N>>()),
+        // N >= 6: `select` routes EVERY scale to Series here (the
+        // storage-strict A/B showed Series/Schoolbook beat every Tang
+        // config at D115/D153/D230/D307+, and Tang is INELIGIBLE at D1232 max
+        // scale — see the `select` comment), so `tang_routed` is never reached
+        // for N >= 6. The per-tier Tang kernels (`exp_tang::<wide_trig_dNNN>`)
+        // remain available as kept alternatives in `algos/exp/exp_tang.rs` for
+        // a future re-bench; no stale `tang_routed` delegation is kept for them
+        // — the `_` arm below is the single source of truth that they run
+        // Series. (The working-scale composition surface for these tiers routes
+        // via `is_tang` / `exp_fixed_routed`, NOT through here.)
+        _ => series_routed::<N, SCALE>(raw, mode),
+    }
+}
+
+#[inline]
+#[must_use]
+pub(crate) fn exp2_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Int<N> {
+    checked_exp2_dispatch::<N, SCALE>(raw, mode).unwrap_or_else(|| {
+        crate::support::diagnostics::overflow_panic_with_scale("exp2_strict", SCALE)
+    })
+}
+
+/// The `checked` primitive under [`exp2_dispatch`]: exact out-of-range
+/// `None` on the narrow tiers; the wide arms call the per-tier kernel
+/// shells, whose internal out-of-range panic is not yet threaded
+/// through.
+#[inline]
+#[must_use]
+pub(crate) fn checked_exp2_dispatch<const N: usize, const SCALE: u32>(
+    raw: Int<N>,
+    mode: RoundingMode,
+) -> Option<Int<N>> {
+    match N {
+        1 | 2 => crate::algos::exp::exp_series_2limb::exp2_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        3 => Some(crate::types::widths::wide_trig_d57::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d76", feature = "wide"))]
+        4 => Some(crate::types::widths::wide_trig_d76::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<4>>(), mode).resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d115", feature = "wide"))]
+        6 => Some(crate::types::widths::wide_trig_d115::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<6>>(), mode).resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d153", feature = "wide"))]
+        8 => Some(crate::types::widths::wide_trig_d153::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<8>>(), mode).resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d230", feature = "wide"))]
+        12 => Some(crate::types::widths::wide_trig_d230::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<12>>(), mode).resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+        16 => Some(crate::types::widths::wide_trig_d307::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<16>>(), mode).resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d462", feature = "x-wide"))]
+        24 => Some(crate::types::widths::wide_trig_d462::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<24>>(), mode).resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d616", feature = "x-wide"))]
+        32 => Some(crate::types::widths::wide_trig_d616::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<32>>(), mode).resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d924", feature = "xx-wide"))]
+        48 => Some(crate::types::widths::wide_trig_d924::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>()),
+        #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+        64 => Some(crate::types::widths::wide_trig_d1232::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>()),
+        _ => crate::algos::exp::exp_series_2limb::exp2_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
+    }
+}
+
+#[inline]
+#[must_use]
+pub(crate) fn exp2_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, working_digits: u32, mode: RoundingMode) -> Int<N> {
+    match N {
+        1 | 2 => crate::algos::exp::exp_series_2limb::exp2_with(raw.resize_to::<Int<2>>(), SCALE, working_digits, mode).and_then(super::narrow_fit::<N>).unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("exp2_with", SCALE)),
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        3 => crate::types::widths::wide_trig_d57::exp2_approx_with_kernel::<SCALE>(raw.resize_to::<Int<3>>(), working_digits, mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d76", feature = "wide"))]
+        4 => crate::types::widths::wide_trig_d76::exp2_approx_with_kernel::<SCALE>(raw.resize_to::<Int<4>>(), working_digits, mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d115", feature = "wide"))]
+        6 => crate::types::widths::wide_trig_d115::exp2_approx_with_kernel::<SCALE>(raw.resize_to::<Int<6>>(), working_digits, mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d153", feature = "wide"))]
+        8 => crate::types::widths::wide_trig_d153::exp2_approx_with_kernel::<SCALE>(raw.resize_to::<Int<8>>(), working_digits, mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d230", feature = "wide"))]
+        12 => crate::types::widths::wide_trig_d230::exp2_approx_with_kernel::<SCALE>(raw.resize_to::<Int<12>>(), working_digits, mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+        16 => crate::types::widths::wide_trig_d307::exp2_approx_with_kernel::<SCALE>(raw.resize_to::<Int<16>>(), working_digits, mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d462", feature = "x-wide"))]
+        24 => crate::types::widths::wide_trig_d462::exp2_approx_with_kernel::<SCALE>(raw.resize_to::<Int<24>>(), working_digits, mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d616", feature = "x-wide"))]
+        32 => crate::types::widths::wide_trig_d616::exp2_approx_with_kernel::<SCALE>(raw.resize_to::<Int<32>>(), working_digits, mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d924", feature = "xx-wide"))]
+        48 => crate::types::widths::wide_trig_d924::exp2_approx_with_kernel::<SCALE>(raw.resize_to::<Int<48>>(), working_digits, mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+        64 => crate::types::widths::wide_trig_d1232::exp2_approx_with_kernel::<SCALE>(raw.resize_to::<Int<64>>(), working_digits, mode).resize_to::<Int<N>>(),
+        _ => crate::algos::exp::exp_series_2limb::exp2_with(raw.resize_to::<Int<2>>(), SCALE, working_digits, mode).and_then(super::narrow_fit::<N>).unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("exp2_with", SCALE)),
+    }
+}
+
+#[cfg(test)]
+mod series_rung_tests {
+    //! Light anchor tests for the exp work-rung routing (the
+    //! `policy::trig::forward_rung` test shape): the rung-routed Series
+    //! path must equal the tier-width `exp_series` bit-for-bit on
+    //! representative values — in-budget anchors (incl. the budget edge
+    //! 9.9 and negative arguments), the near-min pin band, AND an
+    //! out-of-budget magnitude that exercises the gate's tier fallback.
+    //! Routing/threshold choices are NOT pinned (policy tests stay
+    //! light); the golden gate is the correctness wall.
+
+    #[cfg(feature = "d307")]
+    const ALL_MODES: [crate::support::rounding::RoundingMode; 6] = [
+        crate::support::rounding::RoundingMode::HalfToEven,
+        crate::support::rounding::RoundingMode::HalfAwayFromZero,
+        crate::support::rounding::RoundingMode::HalfTowardZero,
+        crate::support::rounding::RoundingMode::Trunc,
+        crate::support::rounding::RoundingMode::Floor,
+        crate::support::rounding::RoundingMode::Ceiling,
+    ];
+
+    #[test]
+    #[cfg(feature = "d307")]
+    fn d307_exp_rung_matches_tier_kernel() {
+        type Core = crate::types::widths::wide_trig_d307::Core;
+        for v in ["0", "0.5", "1", "1.5", "9.9", "-1", "-9.9", "0.0000000001", "50", "-50"] {
+            let x: crate::D307<19> = v.parse().unwrap();
+            for mode in ALL_MODES {
+                assert_eq!(
+                    super::series_at_rung::<Core, 19>(x.to_bits(), mode),
+                    crate::algos::support::wide_trig_core::exp_series::<Core, 19>(x.to_bits(), mode),
+                    "exp({v}) mode {mode:?}"
+                );
+            }
+        }
+    }
+}

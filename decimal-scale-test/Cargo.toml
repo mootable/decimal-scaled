@@ -1,0 +1,146 @@
+[package]
+name = "decimal-scale-test"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "decimal-scaled test subjects + filterable golden gate over the decimal-scaled-golden harness"
+license = "MIT OR Apache-2.0"
+
+# This crate exists to isolate the heavy full-surface golden run (88 (width,scale)
+# cells × every strict transcendental ≈ thousands of monomorphisations) from the
+# core library's `cargo test`. The decimal-scaled features are mirrored here as
+# passthroughs so each test target compiles under exactly the feature set it
+# declares; the golden gate pins its wide tiers via `required-features`.
+[dependencies]
+decimal-scaled = { path = "..", default-features = false }
+# The band-edge cell fan-out (the heavy monomorphisations) compiles ONCE in
+# the decimal-scaled-cells leaf rlib; this crate's subjects call its concrete
+# shim entry points. Every tier/feature below forwards to it so the cells
+# crate always compiles exactly the tiers this build enables.
+decimal-scaled-cells = { path = "../decimal-scaled-cells", default-features = false }
+decimal-scaled-golden = { path = "../decimal-scaled-golden" }
+# Historical releases for the version-history gates (tests/history.rs). Each is
+# version-pinned to the one release its adapter tracks and stays optional behind
+# its `history-*` feature, so the normal build never pays the (heavy, per-tier
+# macro-era) compile. Pre-1.0 Cargo coexists one version per minor family.
+ds-044 = { package = "decimal-scaled", version = "=0.4.4", optional = true }
+
+[features]
+# Mirror the root crate's DEFAULT set (std, serde, strict, exact-scratch) so a
+# plain `cargo test -p decimal-scale-test` exercises the migrated tests in the
+# same feature world the root's default `cargo test` always ran them in. A
+# bare-["std"] default would compile decimal-scaled in a configuration the
+# root CI never builds (std without exact-scratch/strict/serde).
+default = ["std", "serde", "strict", "exact-scratch"]
+std = ["alloc", "decimal-scaled/std", "decimal-scaled-cells/std"]
+alloc = ["decimal-scaled/alloc", "decimal-scaled-cells/alloc"]
+exact-scratch = ["decimal-scaled/exact-scratch", "decimal-scaled-cells/exact-scratch"]
+# The wide umbrellas mirror the root's nesting (each umbrella turns on its
+# per-tier features) so migrated `#[cfg(feature = "dNN")]` gates keep firing
+# exactly as they did when the tests lived in the root crate. Each tier also
+# forwards to decimal-scaled-cells so the cell shims compile the same tiers.
+wide = ["d57", "d76", "d115", "d153", "d230", "d307", "decimal-scaled/wide", "decimal-scaled-cells/wide"]
+x-wide = ["wide", "d462", "d616", "decimal-scaled/x-wide", "decimal-scaled-cells/x-wide"]
+xx-wide = ["x-wide", "d924", "d1232", "decimal-scaled/xx-wide", "decimal-scaled-cells/xx-wide"]
+d57 = ["decimal-scaled/d57", "decimal-scaled-cells/d57"]
+d76 = ["decimal-scaled/d76", "decimal-scaled-cells/d76"]
+d115 = ["decimal-scaled/d115", "decimal-scaled-cells/d115"]
+d153 = ["decimal-scaled/d153", "decimal-scaled-cells/d153"]
+d230 = ["decimal-scaled/d230", "decimal-scaled-cells/d230"]
+d307 = ["decimal-scaled/d307", "decimal-scaled-cells/d307"]
+d462 = ["decimal-scaled/d462", "decimal-scaled-cells/d462"]
+d616 = ["decimal-scaled/d616", "decimal-scaled-cells/d616"]
+d924 = ["decimal-scaled/d924", "decimal-scaled-cells/d924"]
+d1232 = ["decimal-scaled/d1232", "decimal-scaled-cells/d1232"]
+macros = ["decimal-scaled/macros"]
+serde = ["decimal-scaled/serde", "decimal-scaled-cells/serde"]
+dyn = ["decimal-scaled/dyn"]
+strict = ["decimal-scaled/strict", "decimal-scaled-cells/strict"]
+fast = ["decimal-scaled/fast"]
+cross-scale-ops = ["decimal-scaled/cross-scale-ops"]
+rounding-half-away-from-zero = ["decimal-scaled/rounding-half-away-from-zero"]
+rounding-half-toward-zero = ["decimal-scaled/rounding-half-toward-zero"]
+rounding-trunc = ["decimal-scaled/rounding-trunc"]
+rounding-floor = ["decimal-scaled/rounding-floor"]
+rounding-ceiling = ["decimal-scaled/rounding-ceiling"]
+# Version-history gates (tests/history.rs): each history-* feature pulls one
+# pinned historical release and the tier features its adapter's cells need.
+# 0.4.4 shares the live tier table (D18..D1232), so it gets the full ladder;
+# 0.3.3's odd tiers were named differently (D56/D114/D461/D615/D923/D1231), so
+# its adapter covers only the six widths whose names AND digit capacities match
+# the live surface (D18/D38/D76/D153/D230/D307).
+# The history adapters (the erased per-version subjects) live in
+# decimal-scaled-cells; the direct ds-044 dep stays here for the typed
+# live-vs-pinned A/B bench (benches/add_history_ab.rs), which must call the
+# pinned release directly in its timed loop.
+history-044 = ["dep:ds-044", "ds-044/wide", "ds-044/x-wide", "ds-044/xx-wide", "decimal-scaled-cells/history-044"]
+# 0.3.3's per-tier features are under-gated solo (e.g. `d76` alone fails on the
+# D76->D56 narrowing) — the era was only ever built via its umbrellas, so its
+# adapter (in decimal-scaled-cells) enables the umbrellas its six shared
+# widths sit under. Nothing in this package calls 0.3.3 directly any more.
+history-033 = ["decimal-scaled-cells/history-033"]
+history = ["history-044", "history-033"]
+
+# Serde wire-format round-trips in tests/api/serde.rs (JSON human-readable +
+# postcard binary forms). Test-only.
+[dev-dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+postcard = { version = "1", default-features = false, features = ["alloc"] }
+# The relocated num-traits surface tests exercise the root crate's
+# num-traits impls directly.
+num-traits = { version = "0.2", default-features = false }
+# Property-based identity suite (tests/proptest_identities.rs).
+proptest = "1"
+# Live-vs-pinned-history microbenches (benches/add_history_ab.rs): same
+# criterion dev-dep + self-pin affinity helper the root crate's benches use.
+criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
+core_affinity = "0.8"
+
+# Mirror the root crate's rust-lint envelope so the relocated tests keep the
+# warning policy they were written under (e.g. deliberately unused bindings
+# in compile-surface tests).
+[lints.rust]
+unsafe_code = "forbid"
+unused_variables = "allow"
+dead_code = "allow"
+
+# The golden gate runs at ANY feature set: the subject dispatch is per-tier
+# feature-gated, so a default (narrow) build sweeps the D18/D38 cells and a
+# full-width build sweeps all 92.
+
+# Version-history correctness gates: live vs the pinned historical releases.
+# `history_previous` (the 0.4.4 ratchet) needs only history-044; the optional
+# 0.3.3 column of `history_all` lights up when history-033 is also enabled.
+# Only `history-044` is REQUIRED (not the wide-tier umbrellas): the live cell
+# fan-out is per-tier feature-gated, so the gate compiles and runs at ANY tier
+# set, and history.yml builds it WIDTH-SHARDED — one tier per shard, narrow
+# through d1232 (mirroring ci.yml's golden-quick) — so the monolithic
+# `wide,x-wide,xx-wide` build that OOMed the runner is never compiled. Each
+# shard `GOLDEN_WIDTHS`-filters to its own tier's widths; the union covers the
+# full surface. `history-033` rides along only on shards whose widths 0.3.3
+# adapts (18/38/76/153/230/307).
+[[test]]
+name = "history"
+required-features = ["history-044"]
+
+# The hand-derived storage-semantics oracle (tests/sanity.rs) exercises the
+# x-wide tier directly.
+[[test]]
+name = "sanity"
+required-features = ["x-wide"]
+
+# Nightly-only (`generic_const_exprs`): the cross-scale free-function surface.
+# `required-features` keeps the target out of every build that does not opt in.
+[[test]]
+name = "nightly_cross_scale"
+required-features = ["cross-scale-ops"]
+
+# Live-vs-0.4.4 decimal-add A/B at the bbc-regressed D462 cell (D616 control).
+# Lives here (not the root benches/) because only this crate carries the
+# pinned ds-044 dependency.
+[[bench]]
+name = "add_history_ab"
+path = "benches/add_history_ab.rs"
+harness = false
+required-features = ["x-wide", "history-044"]

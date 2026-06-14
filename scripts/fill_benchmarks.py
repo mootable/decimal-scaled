@@ -1,25 +1,35 @@
-"""Parse criterion stdout from the full_matrix bench runs and
-substitute the timings (with per-row winner emboldened) into the
-docs/benchmarks.md.draft template.
+"""SUPERSEDED — use ``scripts/full_matrix_ingest.py --fill`` instead.
 
-Run from the crate root:
-    python scripts/fill_benchmarks.py
+This module parses criterion *stdout* logs from the full_matrix bench
+runs and substitutes the timings into ``docs/benchmarks.md.draft``. It
+depends on transient log files and a hand-kept placeholder map, so the
+release refresh now reads the criterion JSON artifacts directly:
+
+    gh run download <run-id> --dir bench-artifacts
+    python scripts/full_matrix_ingest.py --artifacts bench-artifacts --fill
+
+That fills §1–§3 of ``docs/benchmarks.md`` end-to-end from
+``*/new/estimates.json`` with no stdout capture and no manual step.
+This file is kept only for the rare case of reconstructing tables from
+an archived stdout log.
+
+Run from the crate root (log paths optional; defaults look in the
+user temp dir where the bench runs teed their stdout):
+    python scripts/fill_benchmarks.py [arith.log transc.log ...]
 """
 
 from __future__ import annotations
 
 import re
+import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-LOGS = [
-    ROOT / ".." / ".." / ".." / "tmp" / "full_matrix_arith.log",
-    ROOT / ".." / ".." / ".." / "tmp" / "full_matrix_transc.log",
-]
-# Fallback paths since /tmp on Windows resolves differently.
+_TMP = Path(tempfile.gettempdir())
 LOG_CANDIDATES = [
-    r"C:\Users\jacko\AppData\Local\Temp\full_matrix_arith.log",
-    r"C:\Users\jacko\AppData\Local\Temp\full_matrix_transc2.log",
+    _TMP / "full_matrix_arith.log",
+    _TMP / "full_matrix_transc2.log",
 ]
 DRAFT = ROOT / "docs" / "benchmarks.md.draft"
 OUT = ROOT / "docs" / "benchmarks.md"
@@ -289,7 +299,8 @@ def main() -> None:
     add_lossy_rows()
     add_strict_rows()
 
-    timings = parse_logs([Path(p) for p in LOG_CANDIDATES])
+    logs = [Path(p) for p in sys.argv[1:]] or [Path(p) for p in LOG_CANDIDATES]
+    timings = parse_logs(logs)
     print(f"loaded {len(timings)} bench measurements")
 
     placeholder_map = build_placeholder_map()

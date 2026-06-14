@@ -1,8 +1,11 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Correctly-rounded strict transcendentals for the wide decimal tiers
 //! (D76 / D153 / D307).
 //!
 //! D38 and the narrow tiers run their strict transcendentals on the
-//! 256-bit `algos::fixed_d38::Fixed` guard-digit intermediate; D9 / D18
+//! 256-bit `algos::support::fixed::Fixed` guard-digit intermediate; D18
 //! delegate into D38. The wide tiers cannot widen into D38 — their
 //! scale range exceeds it — so they need their own guard-digit core.
 //!
@@ -10,9 +13,9 @@
 //! `$Work` chosen per tier to be wide enough to hold the working-scale
 //! products without overflow:
 //!
-//! - D76 → `I1024` (working scale ≤ 106 digits);
-//! - D153 → `I2048` (working scale ≤ 183 digits);
-//! - D307 → `I4096` (working scale ≤ 337 digits).
+//! - D76 → `Int<16>` (working scale ≤ 106 digits);
+//! - D153 → `Int<32>` (working scale ≤ 183 digits);
+//! - D307 → `Int<64>` (working scale ≤ 337 digits).
 //!
 //! A working value `x` is held as the `$Work` integer `x · 10^w`, where
 //! `w = SCALE + GUARD` and `GUARD = 30` guard digits. the wide integers
@@ -81,365 +84,28 @@
 //!
 //! [`RoundingMode`]: crate::support::rounding::RoundingMode
 
-/// Width-generic guard-digit `exp` core.
+/// Emits the per-tier `pow10_table(w)` door onto the `pow10` int policy.
 ///
-/// The per-tier `$core` modules emit an `exp_fixed` bound to one work
-/// integer `W`. Near the storage-overflow edge at high scale the
-/// `e^|x|` result carries many integer digits, so the caller's
-/// working-scale lift (≈ the result's integer-digit count) *plus*
-/// `exp_fixed`'s own internal `2^k`-reassembly lift (≈ the same size)
-/// *plus* the squaring peak inside the Taylor reassembly can exceed
-/// `W`'s decimal capacity — the value can no longer be held at the
-/// precision needed to round correctly, and the old `exp_lift_cap`
-/// clamped the lift so the kernel would not overflow (at the cost of
-/// 1+ LSB of accuracy on those cells).
-///
-/// This module lifts the `exp_fixed` body out to a free function
-/// generic over any [`WideStorage`] integer `S`, so the large-result
-/// regime can run it in the *next-wider* integer `WW` (e.g. D76's
-/// `Int1024` → `Int2048`, D462's `Int4096` → `Int8192`) where the full
-/// lift + squaring peak fit, then narrow correctly-rounded back to the
-/// tier's storage. The tier `$core::exp_fixed` becomes a thin wrapper
-/// over `exp_generic::exp_fixed::<W>`; nothing about the small / normal
-/// regime changes.
-pub(crate) mod exp_generic {
-    #![allow(unused)]
-    use crate::wide_int::WideStorage;
-    use crate::support::rounding::RoundingMode;
-
-    /// Hard cap on series iterations — a safety net; every series
-    /// terminates far sooner by reaching a zero term.
-    const SERIES_CAP: u128 = 20_000;
-
-    #[inline]
-    fn lit<S: WideStorage>(n: i128) -> S {
-        S::from_i128(n)
-    }
-    #[inline]
-    fn zero<S: WideStorage>() -> S {
-        S::ZERO
-    }
-    #[inline]
-    fn abs<S: WideStorage>(v: S) -> S {
-        if v < S::ZERO { -v } else { v }
-    }
-    #[inline]
-    fn pow10<S: WideStorage>(n: u32) -> S {
-        S::TEN.pow(n)
-    }
-    #[inline]
-    fn one<S: WideStorage>(w: u32) -> S {
-        pow10::<S>(w)
-    }
-    /// Bit length of `|v|` (0 for zero).
-    fn bit_length<S: WideStorage>(v: S) -> u32 {
-        S::BITS - abs(v).leading_zeros()
-    }
-    /// Half-to-even round of `numerator / divisor` for `S`.
-    #[inline]
-    fn round_div<S: WideStorage>(n: S, d: S) -> S {
-        let (q, r) = n.div_rem(d);
-        if r == S::ZERO {
-            return q;
-        }
-        let ar = abs(r);
-        let comp = abs(d) - ar;
-        let cmp_r = if ar < comp {
-            ::core::cmp::Ordering::Less
-        } else if ar > comp {
-            ::core::cmp::Ordering::Greater
-        } else {
-            ::core::cmp::Ordering::Equal
-        };
-        let q_is_odd = q.bit(0);
-        let result_positive = (n < S::ZERO) == (d < S::ZERO);
-        if crate::support::rounding::should_bump(
-            RoundingMode::HalfToEven,
-            cmp_r,
-            q_is_odd,
-            result_positive,
-        ) {
-            if result_positive { q + S::ONE } else { q - S::ONE }
-        } else {
-            q
-        }
-    }
-    /// Half-to-even quotient `n / 10^w`.
-    #[inline]
-    fn round_div_pow10<S: WideStorage>(n: S, w: u32) -> S {
-        if w == 0 {
-            return n;
-        }
-        round_div(n, pow10::<S>(w))
-    }
-    /// `(a · b) / 10^w`, rounded half-to-even.
-    #[inline]
-    fn mul<S: WideStorage>(a: S, b: S, w: u32) -> S {
-        round_div_pow10(a * b, w)
-    }
-    /// Loop-friendly `mul` with a precomputed `10^w` divisor.
-    #[inline]
-    fn mul_cached<S: WideStorage>(a: S, b: S, pow10_w: S) -> S {
-        round_div(a * b, pow10_w)
-    }
-    /// `(a · 10^w) / b`, rounded half-to-even (precomputed numerator
-    /// factor).
-    #[inline]
-    fn div_cached<S: WideStorage>(a: S, b: S, pow10_w: S) -> S {
-        round_div(a * pow10_w, b)
-    }
-    /// `a · n` for a small unsigned multiplier.
-    #[inline]
-    fn mul_u<S: WideStorage>(a: S, n: u128) -> S {
-        if n <= u64::MAX as u128 {
-            a.checked_mul_u64(n as u64)
-        } else {
-            a * S::from_i128(n as i128)
-        }
-    }
-    /// `k · c` where `k` is a signed range-reduction count.
-    #[inline]
-    fn scale_by_k<S: WideStorage>(c: S, k: i128) -> S {
-        if k >= 0 {
-            mul_u(c, k as u128)
-        } else {
-            -mul_u(c, k.unsigned_abs())
-        }
-    }
-    /// Rounds a working-scale value to the nearest integer (ties away
-    /// from zero); used for the range-reduction quotient.
-    fn round_to_nearest_int<S: WideStorage>(v: S, w: u32) -> i128 {
-        let divisor = pow10::<S>(w);
-        let (q, r) = v.div_rem(divisor);
-        let half = divisor >> 1;
-        let qi = if abs(r) >= half {
-            if v < S::ZERO { q - S::ONE } else { q + S::ONE }
-        } else {
-            q
-        };
-        crate::wide_int::wide_cast::<S, i128>(qi)
-    }
-
-    /// `ln 2` at working scale `w`, via `2·artanh(1/3)`. Recomputed per
-    /// call (the wider path is only taken on the rare large-result
-    /// regime, so memoisation is not worth the per-`S` thread-local).
-    fn ln2<S: WideStorage>(w: u32) -> S {
-        let t = one::<S>(w) / lit::<S>(3);
-        let t2 = mul(t, t, w);
-        let mut sum = t;
-        let mut term = t;
-        let mut j: u128 = 1;
-        loop {
-            term = mul(term, t2, w);
-            let contrib = term / lit::<S>((2 * j + 1) as i128);
-            if contrib == S::ZERO {
-                break;
-            }
-            sum = sum + contrib;
-            j += 1;
-            if j > SERIES_CAP {
-                break;
-            }
-        }
-        sum + sum
-    }
-
-    /// `e^v` for a working-scale value `v`, generic over the work
-    /// integer `S`. Mirrors the per-tier `$core::exp_fixed` exactly
-    /// (range-reduce `v = k·ln2 + s`, extend the working scale by
-    /// `extra` to absorb the `2^k` amplification, run the
-    /// repeated-squaring Taylor core, reassemble `2^k · exp(s)`), but
-    /// stays width-generic so the caller can run it in a wider integer
-    /// for the large-result regime.
-    pub(crate) fn exp_fixed<S: WideStorage>(v_w: S, w: u32) -> S {
-        let one_w_pre = one::<S>(w);
-        let l2_pre = ln2::<S>(w);
-        let pow10_w_pre = one_w_pre;
-        let k = round_to_nearest_int(div_cached(v_w, l2_pre, pow10_w_pre), w);
-        let abs_k_u128 = if k < 0 { -k } else { k } as u128;
-        let extra: u32 = if abs_k_u128 == 0 {
-            0
-        } else {
-            let digits = (abs_k_u128 * 30103 + 99_999) / 100_000;
-            let capped = digits.min((S::BITS / 4) as u128) as u32;
-            capped + 12 + (capped >> 2)
-        };
-
-        let w_ext = w + extra;
-        let v_ext = if extra == 0 { v_w } else { v_w * pow10::<S>(extra) };
-        let one_w = one::<S>(w_ext);
-        let l2 = ln2::<S>(w_ext);
-        let pow10_w = one_w;
-        let s = v_ext - scale_by_k(l2, k);
-
-        let p_bits = w_ext.saturating_mul(3).saturating_add(1);
-        let mut n: u32 = 1;
-        while (n + 1) * (n + 1) <= p_bits {
-            n += 1;
-        }
-
-        let s_red = s >> n;
-        let mut sum = one_w + s_red;
-        let mut term = s_red;
-        let mut iter: u128 = 2;
-        loop {
-            term = mul_cached(term, s_red, pow10_w) / lit::<S>(iter as i128);
-            if term == S::ZERO {
-                break;
-            }
-            sum = sum + term;
-            iter += 1;
-            if iter > SERIES_CAP {
-                break;
-            }
-        }
-
-        let mut squared = sum;
-        let mut i = 0;
-        while i < n {
-            squared = mul_cached(squared, squared, pow10_w);
-            i += 1;
-        }
-        let sum = squared;
-
-        let scaled_at_w_ext = if k >= 0 {
-            let shift = k as u32;
-            if bit_length(sum) + shift >= S::BITS {
-                panic!("exp_generic::exp_fixed: result overflows the working width");
-            }
-            sum << shift
-        } else {
-            let neg_k = -k as u128;
-            if neg_k >= bit_length(sum) as u128 {
-                return zero::<S>();
-            }
-            sum >> (neg_k as u32)
-        };
-        if extra == 0 {
-            scaled_at_w_ext
-        } else {
-            round_div_pow10(scaled_at_w_ext, extra)
-        }
-    }
-
-    /// `(a · 10^w) / b`, rounded half-to-even (the generic sibling of
-    /// the per-tier `$core::div`).
-    #[inline]
-    fn div<S: WideStorage>(a: S, b: S, w: u32) -> S {
-        round_div(a * pow10::<S>(w), b)
-    }
-
-    /// `sinh(|x|)` at working scale `w` for a non-negative working
-    /// value `av_w` (= `|x|·10^w`), computed entirely in `S`:
-    /// `(e^|x| − e^-|x|)/2`. The dominant `e^|x|` term is evaluated
-    /// directly (`exp_fixed`) and the small `e^-|x|` via reciprocal, so
-    /// the small term's relative error stays a small *absolute* error.
-    pub(crate) fn sinh_pos<S: WideStorage>(av_w: S, w: u32) -> S {
-        let ex = exp_fixed::<S>(av_w, w);
-        let enx = div(one::<S>(w), ex, w);
-        (ex - enx) >> 1
-    }
-
-    /// `cosh(|x|) = (e^|x| + e^-|x|)/2` at working scale `w`. See
-    /// [`sinh_pos`].
-    pub(crate) fn cosh_pos<S: WideStorage>(av_w: S, w: u32) -> S {
-        let ex = exp_fixed::<S>(av_w, w);
-        let enx = div(one::<S>(w), ex, w);
-        (ex + enx) >> 1
-    }
-
-    /// `tanh(|x|) = (e^|x| − e^-|x|)/(e^|x| + e^-|x|)` at working scale
-    /// `w`. See [`sinh_pos`].
-    pub(crate) fn tanh_pos<S: WideStorage>(av_w: S, w: u32) -> S {
-        let ex = exp_fixed::<S>(av_w, w);
-        let enx = div(one::<S>(w), ex, w);
-        div(ex - enx, ex + enx, w)
-    }
-}
-
-/// Emits the per-tier `pow10_cached(w)` helper. Two flavours:
-///
-/// - `with_const_table` — emits a `static POW10_TABLE: [W; max_scale+GUARD+1]`
-///   initialised at compile time (one `wrapping_mul` per entry, chained
-///   from the previous) and indexes it directly for in-range `w`. Out
-///   of range falls back to the TLS `Vec<(u32, W)>` cache.
-/// - `no_const_table` — keeps the TLS cache path only. Used on tiers
-///   where the const-eval step budget can't build the table in stable
-///   rust (D924, D1232).
+/// `10^w` keyed on the working width `w`, routed through
+/// [`crate::consts::pow10::dispatch`] — the single int policy for `10^exp`
+/// (the generated `POW10` limb table, with a `TEN.pow` fallback past the
+/// band). For a const `w` (the tier `SCALE`, `GUARD`, etc.) `dispatch`
+/// const-folds to the literal `W`; for a runtime `w` it is the policy's
+/// table lookup. No per-tier `static POW10_TABLE` is baked: that duplicated
+/// the policy's table once per tier in `.rodata`. The `$table_mode` /
+/// `$max_scale` arguments are vestigial (every tier now routes identically)
+/// and accepted only to keep the per-tier emission call shape unchanged.
 #[doc(hidden)]
 #[macro_export]
-macro_rules! decl_pow10_cached {
-    (with_const_table, $max_scale:literal) => {
-        /// Upper bound on the strict-path working width
-        /// `w = SCALE + GUARD`. Sizes the const `POW10_TABLE`.
-        pub(crate) const POW10_TABLE_MAX_W: u32 = ($max_scale as u32) + GUARD;
-        /// `10^w` lookup table, built at compile time by chaining
-        /// `wrapping_mul(10)` from `1`. Covers every
-        /// `w ∈ 0..=POW10_TABLE_MAX_W` — i.e. the entire strict
-        /// path. The `_approx` family with `working_digits > GUARD`
-        /// can exceed this range; those fall through to the runtime
-        /// cache below.
-        ///
-        /// Memory cost: `(POW10_TABLE_MAX_W + 1) · sizeof(W)`. For
-        /// D76 that's ~13 KB (Int1024); for D307 ~170 KB (Int4096).
-        /// The table lives in `.rodata` once per tier in builds that
-        /// enable the tier. In a hot loop a single `w` value is reused,
-        /// so only one cache line is touched repeatedly — the table
-        /// size matters for binary footprint, not per-call cache
-        /// locality.
-        pub(crate) static POW10_TABLE: [W; (POW10_TABLE_MAX_W + 1) as usize] = {
-            let mut table = [<W>::from_u128(0); (POW10_TABLE_MAX_W + 1) as usize];
-            let ten = <W>::from_u128(10);
-            table[0] = <W>::from_u128(1);
-            let mut i: usize = 1;
-            let len = (POW10_TABLE_MAX_W + 1) as usize;
-            while i < len {
-                table[i] = table[i - 1].wrapping_mul(ten);
-                i += 1;
-            }
-            table
-        };
-        /// Memoised companion to [`pow10`] keyed on `w`.
-        ///
-        /// For `w` within the strict-path range
-        /// (`0..=POW10_TABLE_MAX_W`) returns the precomputed table
-        /// entry — a single static load, no TLS / RefCell overhead.
-        /// For larger `w` (only reachable via `_approx` with
-        /// `working_digits > GUARD`) falls back to the legacy
-        /// per-thread `Vec<(u32, W)>` cache so we don't blow the
-        /// binary footprint on the rare path.
-        ///
-        /// The in-range path uses `get_unchecked` to skip the bounds
-        /// check — safe because the preceding `w <= POW10_TABLE_MAX_W`
-        /// branch guarantees `w as usize < POW10_TABLE.len()` (the
-        /// table is sized `POW10_TABLE_MAX_W + 1`).
+macro_rules! decl_pow10_table {
+    ($table_mode:tt, $max_scale:literal) => {
         #[inline]
-        pub(crate) fn pow10_cached(w: u32) -> W {
-            if w <= POW10_TABLE_MAX_W {
-                // SAFETY: `w <= POW10_TABLE_MAX_W` implies
-                // `w as usize <= POW10_TABLE_MAX_W as usize <
-                // POW10_TABLE.len()` since the table length is
-                // `POW10_TABLE_MAX_W + 1`. `u32 as usize` is
-                // lossless on all supported targets.
-                return unsafe { *POW10_TABLE.get_unchecked(w as usize) };
-            }
-            cached(&POW10_CACHE_GET, w, pow10)
-        }
-    };
-    (no_const_table, $max_scale:literal) => {
-        /// Memoised companion to [`pow10`] keyed on `w`. This tier's
-        /// max scale puts the const-table build past the stable-rust
-        /// const-eval step budget, so we keep the legacy TLS
-        /// `Vec<(u32, W)>` cache. Typical occupancy is 1-3 entries
-        /// per thread (one per user-chosen SCALE), so the linear scan
-        /// is cheaper than the table-build would be.
-        #[inline]
-        pub(crate) fn pow10_cached(w: u32) -> W {
-            cached(&POW10_CACHE_GET, w, pow10)
+        pub(crate) fn pow10_table(w: u32) -> W {
+            $crate::consts::pow10::dispatch::<W>(w)
         }
     };
 }
-pub(crate) use decl_pow10_cached;
+pub(crate) use decl_pow10_table;
 
 /// Emits the strict transcendental surface for a wide decimal tier.
 ///
@@ -457,16 +123,28 @@ pub(crate) use decl_pow10_cached;
 ///   `POW10_TABLE`. Used for D38..=D616 where the const-eval step
 ///   budget can build the table at compile time.
 /// - `$Type, $Storage, $Work, $core, $max_scale, no_const_table`
-///   — keeps the legacy TLS `Vec<(u32, W)>` cache only. Used for
-///   D924 / D1232 where the table-build's `limbs_mul × max_scale`
+///   — recomputes `10^w` on the stack each call (no const table). Used
+///   for D924 / D1232 where the table-build's `limbs_mul × max_scale`
 ///   work exceeds the stable-rust const-eval step budget.
 macro_rules! decl_wide_transcendental {
-    ($Type:ident, $Storage:ty, $Work:ty, $Wexp:ty, $core:ident, $max_scale:literal) => {
+    ($Type:ident, $Storage:ty, $Work:ty, $Wexp:ty, $AgmWork:ty, $core:ident, $max_scale:literal,
+     $n_limbs:literal, $ln_tang_cap:literal, $exp_tang_m:literal) => {
         $crate::macros::wide_transcendental::decl_wide_transcendental!(
-            $Type, $Storage, $Work, $Wexp, $core, $max_scale, with_const_table
+            $Type,
+            $Storage,
+            $Work,
+            $Wexp,
+            $AgmWork,
+            $core,
+            $max_scale,
+            with_const_table,
+            $n_limbs,
+            $ln_tang_cap,
+            $exp_tang_m
         );
     };
-    ($Type:ident, $Storage:ty, $Work:ty, $Wexp:ty, $core:ident, $max_scale:literal, $table_mode:ident) => {
+    ($Type:ident, $Storage:ty, $Work:ty, $Wexp:ty, $AgmWork:ty, $core:ident, $max_scale:literal, $table_mode:ident,
+     $n_limbs:literal, $ln_tang_cap:literal, $exp_tang_m:literal) => {
         /// Per-tier guard-digit transcendental core. Every function
         /// works on `$Work` integers interpreted at a working scale `w`
         /// passed explicitly alongside the value.
@@ -490,6 +168,17 @@ macro_rules! decl_wide_transcendental {
             /// the squaring peak all fit, then narrow correctly-rounded
             /// to storage.
             pub(crate) type Wexp = $Wexp;
+
+            /// The WIDE composition/AGM work integer (the two-core split).
+            /// The default PRIMITIVE strict path (ln/exp/sin/cos/atan Tang)
+            /// runs in the NARROW [`W`]; the COMPOSITION functions
+            /// (`log`/`log2`/`log10`, `exp2`, `sinh`/`cosh`/`tanh`, `powf`)
+            /// and the opt-in AGM run in `Wagm`, which is wide enough for
+            /// their directed-Ziv guard ceiling (`~Wagm::BITS/8 − SCALE`),
+            /// their integer-digit `k_lift`, and the `resize_to::<Wagm>` of a
+            /// large `Wexp`-computed result. Sized per tier in `widths.rs`;
+            /// `W` is narrowed beneath it.
+            pub(crate) type Wagm = $AgmWork;
 
             /// Guard digits added below the type's own scale.
             ///
@@ -517,7 +206,7 @@ macro_rules! decl_wide_transcendental {
             /// below one storage ULP. The very first iteration step,
             /// `sqrt(a · b)`, takes the geometric mean of two values
             /// with relative magnitude `b/a ≈ 4/s ≈ 2^-(p/2)`.
-            /// `mul_cached` rounds `a · b` to scale `w` and that
+            /// `mul` rounds `a · b` to scale `w` and that
             /// rounding sheds `~ulp(w) · a/b ≈ 2^(p/2 - w)` of
             /// relative error into the AGM intermediate. To absorb
             /// that and still hit a 0.5-ULP-at-storage final, the
@@ -534,7 +223,7 @@ macro_rules! decl_wide_transcendental {
             /// AGM range-reduction shift to use the full
             /// `W::BITS - bl(v)` headroom rather than only half of
             /// it), the residual precision loss at the storage
-            /// scale comes from accumulated `mul_cached` /
+            /// scale comes from accumulated `mul` /
             /// `sqrt_fixed` half-LSB rounding over `~log₂(p)`
             /// AGM iterations. A constant `+24` lift absorbs
             /// that residue with margin across every shipped
@@ -550,7 +239,7 @@ macro_rules! decl_wide_transcendental {
                 // With canonical `w = SCALE + GUARD`, that means
                 // `guard_agm = SCALE − GUARD`, yielding `w' = 2·SCALE`.
                 // A small extra `+ 4` covers the rounded-intermediate
-                // `mul_cached` / `sqrt_fixed` half-LSB accumulation
+                // `mul` / `sqrt_fixed` half-LSB accumulation
                 // over `~log₂(p)` AGM iterations.
                 if scale > GUARD - 4 {
                     scale - GUARD + 4
@@ -583,7 +272,7 @@ macro_rules! decl_wide_transcendental {
                 // exponentiate to a u32 upper bound on int_part.
                 let av = abs(v_w_at_scale);
                 let bl_v = bit_length(av);
-                let bl_one_s = bit_length(pow10_cached(scale));
+                let bl_one_s = bit_length(pow10_table(scale));
                 if bl_v <= bl_one_s {
                     // |v| < 1, no integer part — minimal lift.
                     return 5;
@@ -614,7 +303,7 @@ macro_rules! decl_wide_transcendental {
 
             #[inline]
             pub(crate) fn lit(n: u128) -> W {
-                $crate::wide_int::wide_cast(n)
+                <W as $crate::int::types::traits::BigInt>::from_mag_sign_u128(&[n], false)
             }
             #[inline]
             pub(crate) fn zero() -> W {
@@ -628,10 +317,10 @@ macro_rules! decl_wide_transcendental {
             pub(crate) fn pow10(n: u32) -> W {
                 lit(10).pow(n)
             }
-            $crate::macros::wide_transcendental::decl_pow10_cached!($table_mode, $max_scale);
+            $crate::macros::wide_transcendental::decl_pow10_table!($table_mode, $max_scale);
             #[inline]
             pub(crate) fn one(w: u32) -> W {
-                pow10_cached(w)
+                pow10_table(w)
             }
             /// Half-to-even round of `(numerator / divisor)` for
             /// the signed wide integer `W`. Pulled out so the
@@ -644,25 +333,11 @@ macro_rules! decl_wide_transcendental {
             /// (two dispatcher calls = two full Knuth runs).
             #[inline]
             fn round_div(n: W, d: W) -> W {
-                let (q, r) = n.div_rem(d);
-                if r == lit(0) {
-                    return q;
-                }
-                let ar = abs(r);
-                let comp = abs(d) - ar;
-                let cmp_r = ar.cmp(&comp);
-                let q_is_odd = q.bit(0);
-                let result_positive = (n < lit(0)) == (d < lit(0));
-                if $crate::support::rounding::should_bump(
-                    $crate::support::rounding::RoundingMode::HalfToEven,
-                    cmp_r,
-                    q_is_odd,
-                    result_positive,
-                ) {
-                    if result_positive { q + lit(1) } else { q - lit(1) }
-                } else {
-                    q
-                }
+                // Forwards to the single generic source
+                // (`exp_generic::round_div`) — no per-tier copy of the
+                // half-to-even divide logic. `W` is concrete here so the
+                // monomorphisation is the same one direct call.
+                $crate::algos::exp::exp_generic::round_div::<W>(n, d)
             }
             /// Half-to-even quotient `n / 10^w`, selecting the
             /// fastest available divide kernel.
@@ -672,7 +347,7 @@ macro_rules! decl_wide_transcendental {
             /// inner loop — ~5 ops per u128 numerator limb — which
             /// dominates the generic Knuth Algorithm D path on
             /// pipelined CPUs. Audit `round_div_audit_mg_matches_*`
-            /// in `algos::mg_divide::tests` shows bit-exact agreement
+            /// in `algos::support::mg_divide::tests` shows bit-exact agreement
             /// with the generic `div_rem` reference across
             /// 380 000 + 190 000 random inputs.
             ///
@@ -684,35 +359,18 @@ macro_rules! decl_wide_transcendental {
             /// each one a base-`2^128` MG long-divide, with
             /// combined-remainder bookkeeping that yields bit-exact
             /// half-to-even. The chain audit
-            /// (`round_div_chain_audit_*` in `algos::mg_divide::tests`)
+            /// (`round_div_chain_audit_*` in `algos::support::mg_divide::tests`)
             /// confirms agreement with the schoolbook `div_rem`
             /// reference on 380K + 190K random inputs across every
             /// `RoundingMode` and `w ∈ 39..=100`.
             #[inline]
             fn round_div_pow10(n: W, w: u32) -> W {
-                if w == 0 {
-                    return n;
-                }
-                if w <= 38 {
-                    return $crate::algos::mg_divide::div_wide_pow10_with::<W, { <W as $crate::wide_int::WideInt>::U128_LIMBS }>(
-                        n,
-                        w,
-                        $crate::support::rounding::RoundingMode::HalfToEven,
-                    );
-                }
-                // Newton vs MG chain dispatch (see the matrix in
-                // [`crate::algos::newton_reciprocal::dispatch_wide_pow10_with`]).
-                // For most wide-tier `$Work` integers `W::BITS` lands
-                // outside the bench-validated cells (Int8192 /
-                // Int12288 / Int16384) and the dispatcher forwards to
-                // MG; the routing is here so a future bench at the
-                // larger widths can promote without touching this
-                // site.
-                $crate::algos::newton_reciprocal::dispatch_wide_pow10_with::<W, { <W as $crate::wide_int::WideInt>::U128_LIMBS }>(
-                    n,
-                    w,
-                    $crate::support::rounding::RoundingMode::HalfToEven,
-                )
+                // Forwards to the single generic source
+                // (`exp_generic::round_div_pow10`), which routes the `w > 38`
+                // rescale through the rescale matcher (baked-Newton / MgChain
+                // per `(scale, width)`, + the 9.24 magnitude-trim). `W`
+                // concrete here ⇒ one direct call.
+                $crate::algos::exp::exp_generic::round_div_pow10::<W>(n, w)
             }
             /// `(a · b) / 10^w`, rounded half-to-even. The
             /// rounded variant replaces the previous truncating
@@ -722,46 +380,42 @@ macro_rules! decl_wide_transcendental {
             /// the series-evaluation core.
             #[inline]
             pub(crate) fn mul(a: W, b: W, w: u32) -> W {
-                round_div_pow10(a * b, w)
-            }
-            /// Loop-friendly variant of [`mul`] that takes a
-            /// precomputed `10^w` divisor. Use inside Taylor /
-            /// AGM / Newton loops where `w` is constant across
-            /// every iteration — saves one `lit(10).pow(w)`
-            /// recomputation per call (which for D307<150> at w=180
-            /// is itself a full Int4096 power of ~50 µs).
-            ///
-            /// `mul_cached` keeps the legacy generic-divide path
-            /// because the caller has already paid for `pow10_w` and
-            /// we don't know `w` at this call boundary. For the MG
-            /// fast path use [`mul`] (or [`mul_w_pow10`] when both
-            /// inputs are needed).
-            #[inline]
-            pub(crate) fn mul_cached(a: W, b: W, pow10_w: W) -> W {
-                round_div(a * b, pow10_w)
+                // Forwards to the single generic source (`exp_generic::mul`):
+                // the u128-packed truncated-low product `(a·b) mod 2^(64·N)`
+                // then `÷10^w` — the per-term Series multiply. No per-tier
+                // copy of the multiply logic. `W` concrete ⇒ one direct call.
+                $crate::algos::exp::exp_generic::mul::<W>(a, b, w)
             }
             /// `(a · 10^w) / b`, rounded half-to-even.
             #[inline]
             pub(crate) fn div(a: W, b: W, w: u32) -> W {
-                round_div(a * pow10_cached(w), b)
+                // Forwards to the single generic source (`exp_generic::div`),
+                // which sources `10^w` from the `pow10` POLICY
+                // (`pow10::dispatch`) — NOT the per-tier `pow10_table` static.
+                // `W` concrete ⇒ one direct call.
+                $crate::algos::exp::exp_generic::div::<W>(a, b, w)
             }
             /// Loop-friendly variant of [`div`] taking a precomputed
             /// `10^w` numerator factor.
             #[inline]
             pub(crate) fn div_cached(a: W, b: W, pow10_w: W) -> W {
-                round_div(a * pow10_w, b)
+                // Forwards to the single generic source
+                // (`exp_generic::div_cached`): `(a·10^w)/b` with the `10^w`
+                // numerator factor precomputed by the caller (no `pow10`
+                // accessor here). `W` concrete ⇒ one direct call.
+                $crate::algos::exp::exp_generic::div_cached::<W>(a, b, pow10_w)
             }
             /// `a · n` for a small unsigned multiplier.
             ///
             /// When `n` fits a single u64 limb, routes through the
-            /// n-by-1-word `checked_mul_u64` specialisation
+            /// n-by-1-word `mul_u64` specialisation
             /// (`L` widening muls instead of the generic `L²`
             /// outer-product loop). For `n > u64::MAX` falls back
             /// to the generic `a * lit(n)` `Mul` operator path.
             #[inline]
             fn mul_u(a: W, n: u128) -> W {
                 if n <= u64::MAX as u128 {
-                    a.checked_mul_u64(n as u64)
+                    a.mul_u64(n as u64)
                 } else {
                     a * lit(n)
                 }
@@ -798,54 +452,56 @@ macro_rules! decl_wide_transcendental {
             /// AM-GM (`(x + n/x)/2 ≥ √n`), so the seed direction is
             /// irrelevant to correctness.
             pub(crate) fn sqrt_fixed(v: W, w: u32) -> W {
-                let av = abs(v);
-                debug_assert!(
-                    bit_length(av) + (w as u32) * 4 < W::BITS,
-                    "sqrt_fixed: |v| * 10^w overflows the working width"
-                );
-                let n = av * pow10_cached(w);
-                #[cfg(feature = "std")]
-                {
-                    // `f64::MAX` exponent is 1024; cap a few bits below
-                    // to keep the squared seed comfortably inside.
-                    if bit_length(n) < 1000 && n > zero() {
-                        let seed_f64 = n.as_f64().sqrt();
-                        let seed = W::from_f64(seed_f64);
-                        let x0 = if seed <= zero() { lit(1) } else { seed };
-                        // Unconditional first Newton step. AM-GM
-                        // ⇒ result ≥ ⌈√n⌉ regardless of f64 rounding.
-                        let mut x = (x0 + n / x0) >> 1;
-                        loop {
-                            let y = (x + n / x) >> 1;
-                            if y >= x {
-                                return x;
-                            }
-                            x = y;
-                        }
-                    }
-                }
-                n.isqrt()
+                // Delegates to the width-generic kernel
+                // (`exp_generic::sqrt_fixed`) — single source for the narrow
+                // primitive `W` and the wide composition `Wagm` (rule 2). Same
+                // seed-library bootstrap + monotone-downward Newton.
+                crate::algos::exp::exp_generic::sqrt_fixed::<W>(v, w)
             }
 
             /// Builds a working-scale value from the type's raw storage:
             /// `raw · 10^GUARD` (raw is `value · 10^SCALE`, the result
             /// is `value · 10^(SCALE+GUARD)`).
             ///
-            /// Uses [`wide_cast`] instead of `.resize::<W>()` so the
-            /// macro accepts both wide-int and primitive `$Storage`
-            /// (`i128` for D38).
-            ///
-            /// [`wide_cast`]: $crate::wide_int::wide_cast
+            /// Widens `$Storage` into the work integer `W` via the
+            /// `BigInt::resize_to` magnitude/sign bridge, then scales by
+            /// `10^GUARD`.
             pub(crate) fn to_work(raw: $Storage) -> W {
-                $crate::wide_int::wide_cast::<$Storage, W>(raw) * pow10_cached(GUARD)
+                // `10^GUARD` first: the truncated-low schoolbook skips the
+                // zero limbs of its FIRST operand, and the guard power is the
+                // sparse one (1-2 limbs vs the full storage width). The
+                // wrapping low product is commutative — bit-identical to the
+                // previous `resize * pow10` order.
+                pow10_table(GUARD) * $crate::int::types::traits::BigInt::resize_to::<W>(raw)
             }
 
             /// Runtime-guard variant of [`to_work`]: scales raw by
             /// `10^working_digits` instead of the const `GUARD`. Used by
             /// the `_approx` family where the guard width is chosen at
             /// call time.
-            pub(crate) fn to_work_w(raw: $Storage, working_digits: u32) -> W {
-                $crate::wide_int::wide_cast::<$Storage, W>(raw) * pow10_cached(working_digits)
+            pub(crate) fn to_work_scaled(raw: $Storage, working_digits: u32) -> W {
+                // Sparse `10^digits` operand first — see [`to_work`].
+                pow10_table(working_digits) * $crate::int::types::traits::BigInt::resize_to::<W>(raw)
+            }
+
+            /// Work-int-generic lift-up (the SCALE-derived "work rung" path):
+            /// widens `$Storage` into an arbitrary work integer `S` and scales
+            /// by `10^working_digits`. The narrow primitive [`to_work_scaled`]
+            /// keeps its fast baked `pow10_table` at `W` (byte-identical); this
+            /// generic sibling serves a rung `S` narrower/other than `W`,
+            /// sourcing `10^digits` from the width-generic `exp_generic::pow10`.
+            /// The narrowing side is already work-int-generic
+            /// ([`round_to_storage_with_g`] / [`round_to_storage_directed`]),
+            /// so this completes the rung-generic Tang surface (see the L7
+            /// work-width campaign). Purely additive — no existing call rerouted.
+            pub(crate) fn to_work_scaled_g<S: $crate::int::types::traits::BigInt>(
+                raw: $Storage,
+                working_digits: u32,
+            ) -> S
+            where
+                S::Scratch: $crate::int::types::compute_limbs::ComputeLimbs,
+            {
+                $crate::algos::support::wide_trig_core::to_work_scaled_g::<$Storage, S>(raw, working_digits)
             }
 
             /// Rounds a working-scale value down to scale `target` using
@@ -858,43 +514,53 @@ macro_rules! decl_wide_transcendental {
             /// wide-tier `*_strict` honours the active `rounding-*`
             /// feature flag instead of always rounding half-to-even.
             pub(crate) fn round_to_storage(v: W, w: u32, target: u32) -> $Storage {
-                round_to_storage_with(v, w, target, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                round_to_storage_with(
+                    v,
+                    w,
+                    target,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// Mode-aware variant of [`round_to_storage`].
             ///
             /// When the narrowing distance `w - target` is in `1..=38`
-            /// the single-chunk MG kernel `div_wide_pow10_with` serves
+            /// the single-chunk MG kernel `div_wide_pow10` serves
             /// every mode directly. For `shift > 38` the chain-MG
-            /// kernel `div_wide_pow10_chain_with` does the same via
+            /// kernel `div_wide_pow10_chain` does the same via
             /// repeated `÷ 10^38` with combined-remainder bookkeeping
             /// (bit-exact for every `RoundingMode`; see
-            /// `round_div_chain_audit_*` in `algos::mg_divide::tests`).
+            /// `round_div_chain_audit_*` in `algos::support::mg_divide::tests`).
             pub(crate) fn round_to_storage_with(
                 v: W,
                 w: u32,
                 target: u32,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> $Storage {
-                let shift = w - target;
-                let rounded = if shift == 0 {
-                    v
-                } else if shift <= 38 {
-                    $crate::algos::mg_divide::div_wide_pow10_with::<W, { <W as $crate::wide_int::WideInt>::U128_LIMBS }>(v, shift, mode)
-                } else {
-                    // Newton vs MG chain dispatch — see the matrix
-                    // in [`crate::algos::newton_reciprocal::dispatch_wide_pow10_with`].
-                    $crate::algos::newton_reciprocal::dispatch_wide_pow10_with::<W, { <W as $crate::wide_int::WideInt>::U128_LIMBS }>(v, shift, mode)
-                };
-                let max_w = $crate::wide_int::wide_cast::<$Storage, W>(<$Storage>::MAX);
-                let min_w = $crate::wide_int::wide_cast::<$Storage, W>(<$Storage>::MIN);
-                if rounded > max_w || rounded < min_w {
-                    panic!(concat!(
-                        stringify!($Type),
-                        " strict transcendental: result out of range"
-                    ));
-                }
-                $crate::wide_int::wide_cast::<W, $Storage>(rounded)
+                // The narrow primitive `W` path; delegates to the work-int-
+                // generic narrowing so the wide compositions can narrow a
+                // `Wagm`-computed value to storage through the same code.
+                round_to_storage_with_g::<W>(v, w, target, mode)
+            }
+
+            /// Work-int-generic narrowing of a working-scale value `v` (at
+            /// scale `w`) down to storage scale `target`, rounded under `mode`.
+            /// Input width `S` is the primitive narrow `W` OR the wide
+            /// composition `Wagm` (two-core split); output is always the tier's
+            /// `$Storage`. The `÷10^shift` divides are already width-generic
+            /// (`div_wide_pow10::<S>` / `dispatch_wide_pow10::<S>`).
+            pub(crate) fn round_to_storage_with_g<S: $crate::int::types::traits::BigInt>(
+                v: S,
+                w: u32,
+                target: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> $Storage
+            where
+                S::Scratch: $crate::int::types::compute_limbs::ComputeLimbs,
+            {
+                $crate::algos::support::wide_trig_core::round_to_storage_with_g::<$Storage, S>(
+                    v, w, target, mode, <$Storage>::MAX, <$Storage>::MIN,
+                )
             }
 
             /// Directed-rounding narrowing with Ziv escalation.
@@ -925,13 +591,45 @@ macro_rules! decl_wide_transcendental {
             /// Standard directed narrowing: the base-guard evaluation
             /// is trusted unless its residual sits within the kernel
             /// error band of a grid line, in which case it Ziv-escalates.
-            pub(crate) fn round_to_storage_directed(
+            pub(crate) fn round_to_storage_directed<S: $crate::int::types::traits::BigInt>(
                 base_guard: u32,
                 target: u32,
                 mode: $crate::support::rounding::RoundingMode,
-                recompute: impl FnMut(u32) -> W,
-            ) -> $Storage {
-                round_to_storage_directed_impl(base_guard, target, mode, false, recompute)
+                recompute: impl FnMut(u32) -> S,
+            ) -> $Storage
+            where
+                S::Scratch: $crate::int::types::compute_limbs::ComputeLimbs,
+            {
+                $crate::algos::support::wide_trig_core::round_to_storage_directed_g::<$Storage, S>(
+                    base_guard, target, mode, <$Storage>::MAX, <$Storage>::MIN, recompute,
+                )
+            }
+
+            /// Directed-rounding narrowing for a kernel whose true result is
+            /// **never exactly representable** at the storage scale — a
+            /// non-zero-argument transcendental (`exp`), whose value is
+            /// irrational (Lindemann–Weierstrass) and so always sits strictly
+            /// between two storage grid lines. Identical to
+            /// [`round_to_storage_directed`] except a working residual of
+            /// exactly zero is treated as a genuine sub-resolution positive
+            /// residual: Ceiling rounds UP to the next grid line, Floor / Trunc
+            /// keep the floor, nearest modes are unaffected. This is the only
+            /// correctly-rounded answer when the deciding residual lands below
+            /// the work integer's resolution (e.g. `exp(-10^-S)` just under
+            /// `1.0`, whose residual is at scale ~`2S`). The caller MUST pin its
+            /// algebraic-exact inputs (`exp 0` etc.) before reaching here.
+            pub(crate) fn round_to_storage_directed_never_exact<S: $crate::int::types::traits::BigInt>(
+                base_guard: u32,
+                target: u32,
+                mode: $crate::support::rounding::RoundingMode,
+                recompute: impl FnMut(u32) -> S,
+            ) -> $Storage
+            where
+                S::Scratch: $crate::int::types::compute_limbs::ComputeLimbs,
+            {
+                $crate::algos::support::wide_trig_core::round_to_storage_directed_never_exact_g::<$Storage, S>(
+                    base_guard, target, mode, <$Storage>::MAX, <$Storage>::MIN, recompute,
+                )
             }
 
             /// Near-special-point directed narrowing for the derived
@@ -945,195 +643,24 @@ macro_rules! decl_wide_transcendental {
             /// (rather than trusting a "clear" residual that the residual
             /// kernel error could itself have placed on the wrong side),
             /// so the answer is correctly rounded under every mode.
-            pub(crate) fn round_to_storage_directed_near_special(
+            pub(crate) fn round_to_storage_directed_near_special<S: $crate::int::types::traits::BigInt>(
                 base_guard: u32,
                 target: u32,
                 mode: $crate::support::rounding::RoundingMode,
-                recompute: impl FnMut(u32) -> W,
-            ) -> $Storage {
-                round_to_storage_directed_impl(base_guard, target, mode, true, recompute)
-            }
-
-            fn round_to_storage_directed_impl(
-                base_guard: u32,
-                target: u32,
-                mode: $crate::support::rounding::RoundingMode,
-                force_confirm: bool,
-                mut recompute: impl FnMut(u32) -> W,
-            ) -> $Storage {
-                use $crate::support::rounding::{is_nearest_mode, RoundingMode};
-
-                let base_w = target + base_guard;
-                if is_nearest_mode(mode) {
-                    if !force_confirm {
-                        return round_to_storage_with(recompute(base_guard), base_w, target, mode);
-                    }
-                    // A single narrowing at `base_guard` is correctly
-                    // rounded whenever the working approximation lies
-                    // within half a storage ULP of the true value -- the
-                    // usual case the `GUARD` budget guarantees. Near a
-                    // special point (`atanh` at `+-1`, `acosh` at `1`) the
-                    // kernel's residual error grows, and a single
-                    // narrowing at the base guard can round to the wrong
-                    // storage neighbour even after the gap/log1p
-                    // reformulation removes the catastrophic cancellation.
-                    // Confirm the base narrowing against a wider-guard
-                    // recompute (Ziv): when two successive working scales
-                    // narrow to the same storage integer the result is
-                    // trustworthy. This mirrors the directed-mode loop
-                    // below but compares the rounded storage value
-                    // directly, since a nearest decision depends on the
-                    // whole residual, not just its sign. The guard is
-                    // capped from the result's integer-digit count exactly
-                    // as the directed loop is, so the recompute never
-                    // overflows `W`.
-                    let mut nearest_narrow = |guard: u32| -> $Storage {
-                        let w = target + guard;
-                        round_to_storage_with(recompute(guard), w, target, mode)
-                    };
-                    let lo = nearest_narrow(base_guard);
-                    let int_digits = {
-                        let n = $crate::wide_int::wide_cast::<$Storage, W>(lo);
-                        let m = if n < lit(0) { -n } else { n };
-                        let bl = bit_length(m);
-                        let storage_digits = (bl as u64 * 30103 / 100_000) as u32 + 1;
-                        storage_digits.saturating_sub(target)
-                    };
-                    let cap_digits = (<W>::BITS / 8).saturating_sub(int_digits + 8);
-                    let max_guard = cap_digits.saturating_sub(target).max(base_guard);
-                    let mut guard = base_guard;
-                    let mut best = lo;
-                    loop {
-                        if guard >= max_guard {
-                            break;
-                        }
-                        let step = (target + base_guard).max(base_guard);
-                        let next_guard = guard.saturating_add(step).min(max_guard);
-                        let hi = nearest_narrow(next_guard);
-                        if hi == best {
-                            break;
-                        }
-                        guard = next_guard;
-                        best = hi;
-                    }
-                    return best;
-                }
-
-                // Directed answer: the truncated/bumped magnitude derived
-                // from the *true* residual sign. The working value carries a
-                // kernel error that, near a storage grid line, can flip that
-                // sign. `directed_narrow` returns both the rounded result and
-                // the residual position so the caller can tell when the value
-                // sits near a grid line (and the decision is untrustworthy).
-                let mut directed_narrow = |guard: u32| -> (W, W, W) {
-                    let w = target + guard;
-                    let v = recompute(guard);
-                    let shift = w - target;
-                    let neg = v < lit(0);
-                    let mag = if neg { -v } else { v };
-                    let divisor = pow10(shift);
-                    let (q, rem) = mag.div_rem(divisor);
-                    let result_positive = !neg;
-                    let bump = rem != lit(0)
-                        && match mode {
-                            RoundingMode::Trunc => false,
-                            RoundingMode::Floor => !result_positive,
-                            RoundingMode::Ceiling => result_positive,
-                            _ => unreachable!(),
-                        };
-                    let q_mag = if bump { q + lit(1) } else { q };
-                    let signed = if neg { -q_mag } else { q_mag };
-                    // Distance from the nearer grid line, in working-scale
-                    // units: min(rem, divisor − rem).
-                    let dist = if rem < divisor - rem { rem } else { divisor - rem };
-                    (signed, dist, divisor)
-                };
-
-                // Ziv escalation. Evaluate at `base_guard`; if the residual
-                // sits well clear of either grid line (`dist` exceeds a
-                // generous fraction of the working ULP grid), the directed
-                // decision is trustworthy and we are done. Otherwise recompute
-                // at a wider guard until two consecutive evaluations agree —
-                // the residual band the kernel error spans shrinks each step,
-                // so every non-algebraic input converges. Exact algebraic
-                // points (`exp 0`, `ln 1`, `sin 0`, exact quadrant multiples)
-                // are resolved by the caller before reaching here.
-                //
-                // Guard is capped so the recompute never overflows `W`: the
-                // result needs `int_digits + target + guard` significant
-                // digits, and `W` holds about `BITS · 0.3` of them. We size
-                // the cap from the result's integer-digit count (taken from
-                // the base evaluation) leaving a safety margin.
-                let (mut lo, dist0, divisor0) = directed_narrow(base_guard);
-
-                // "Near a grid line": within 1/1000 of the working ULP grid.
-                // Comfortably above any kernel rounding noise yet far below
-                // the residual of an ordinary (non-boundary) input.
-                let band0 = divisor0 / lit(1000);
-                let near_grid = force_confirm || dist0 <= band0;
-
-                let signed = if !near_grid {
-                    lo
-                } else {
-                    // Capacity of `W` in decimal digits (~BITS·log10(2)),
-                    // minus the result's integer-digit count and a margin,
-                    // bounds how far we may escalate without overflow.
-                    let int_digits = {
-                        let m = if lo < lit(0) { -lo } else { lo };
-                        // `lo` is the storage value (integer part scaled by
-                        // 10^target), so its decimal length minus `target`
-                        // is the integer-part digit count. Approximate the
-                        // length via bit length.
-                        let bl = bit_length(m);
-                        let storage_digits = (bl as u64 * 30103 / 100_000) as u32 + 1;
-                        storage_digits.saturating_sub(target)
-                    };
-                    // Some kernels form wide intermediate scratch — e.g.
-                    // `sqrt_fixed` asserts `bit_length(|v|) + 4·w < W::BITS`,
-                    // i.e. roughly `7·w_decimal < W::BITS`. Cap the total
-                    // working scale at `W::BITS / 8` decimal digits (leaving
-                    // ~12% headroom over the tightest scratch) so the
-                    // recompute never overflows. Subtract the result's
-                    // integer digits and a small margin.
-                    let cap_digits = (<W>::BITS / 8)
-                        .saturating_sub(int_digits + 8);
-                    let max_guard = cap_digits.saturating_sub(target).max(base_guard);
-
-                    let mut guard = base_guard;
-                    loop {
-                        if guard >= max_guard {
-                            break lo;
-                        }
-                        // Step past `target` so a result term that only
-                        // materialises at guard ≈ target (the `+x` of
-                        // `exp(x) = 1 + x + …` for `|x| ≈ 10^-target`) is
-                        // reached, then confirm with a further step.
-                        let step = (target + base_guard).max(base_guard);
-                        let next_guard = guard.saturating_add(step).min(max_guard);
-                        let (hi, _, _) = directed_narrow(next_guard);
-                        if hi == lo {
-                            break lo;
-                        }
-                        guard = next_guard;
-                        lo = hi;
-                    }
-                };
-
-                let max_w = $crate::wide_int::wide_cast::<$Storage, W>(<$Storage>::MAX);
-                let min_w = $crate::wide_int::wide_cast::<$Storage, W>(<$Storage>::MIN);
-                if signed > max_w || signed < min_w {
-                    panic!(concat!(
-                        stringify!($Type),
-                        " strict transcendental: result out of range"
-                    ));
-                }
-                $crate::wide_int::wide_cast::<W, $Storage>(signed)
+                recompute: impl FnMut(u32) -> S,
+            ) -> $Storage
+            where
+                S::Scratch: $crate::int::types::compute_limbs::ComputeLimbs,
+            {
+                $crate::algos::support::wide_trig_core::round_to_storage_directed_near_special_g::<$Storage, S>(
+                    base_guard, target, mode, <$Storage>::MAX, <$Storage>::MIN, recompute,
+                )
             }
 
             /// Rounds a working-scale value to the nearest integer (ties
             /// away from zero). Used for the range-reduction quotient.
             pub(crate) fn round_to_nearest_int(v: W, w: u32) -> i128 {
-                let divisor = pow10_cached(w);
+                let divisor = pow10_table(w);
                 let (q, r) = v.div_rem(divisor);
                 let half = divisor >> 1;
                 let qi = if abs(r) >= half {
@@ -1141,7 +668,7 @@ macro_rules! decl_wide_transcendental {
                 } else {
                     q
                 };
-                $crate::wide_int::wide_cast::<W, i128>(qi)
+                $crate::int::types::traits::BigInt::to_i128(qi)
             }
 
             /// Exact-integer logarithm witness for `log_base(value)`.
@@ -1168,36 +695,44 @@ macro_rules! decl_wide_transcendental {
             /// base_raw^(−k) == 10^(scale·(−k + 1))`. Overflow of the
             /// power short-circuits to `false` (a value that large is not
             /// a representable exact power at this width).
-            pub(crate) fn log_is_exact_int(value_raw: W, base_raw: W, scale: u32, k: i128) -> bool {
-                let one_s = pow10_cached(scale);
+            pub(crate) fn log_is_exact_int<S: $crate::int::types::traits::BigInt>(
+                value_raw: S,
+                base_raw: S,
+                scale: u32,
+                k: i128,
+            ) -> bool {
+                let one_s = $crate::algos::exp::exp_generic::pow10::<S>(scale);
                 if k == 0 {
                     return value_raw == one_s;
                 }
                 // Reduce to the integer domain so the running power never
                 // carries the `· 10^scale` factor (which tips into a wider
-                // limb tier or overflows `W` at high scale). An integer
-                // `base^k = value` can only be an exact storage point when
-                // `base` is itself an exact integer multiple of `10^scale`
-                // (only the near-1 ill-conditioning probes are not, and
-                // those are never exact powers).
+                // limb tier or overflows the work int at high scale). An
+                // integer `base^k = value` can only be an exact storage point
+                // when `base` is itself an exact integer multiple of
+                // `10^scale` (only the near-1 ill-conditioning probes are not,
+                // and those are never exact powers).
                 let (bq, br) = base_raw.div_rem(one_s);
-                if br != lit(0) {
+                if br != S::ZERO {
                     return false;
                 }
                 let base_int = bq;
                 let kk = k.unsigned_abs();
-                let limit_bits = W::BITS - 4;
+                let limit_bits = <S as $crate::int::types::traits::BigInt>::BITS - 4;
                 if k > 0 {
                     // value == base^|k|: require `value` itself integral.
                     let (vq, vr) = value_raw.div_rem(one_s);
-                    if vr != lit(0) {
+                    if vr != S::ZERO {
                         return false;
                     }
                     let value_int = vq;
-                    let mut pow = lit(1);
+                    let mut pow = S::ONE;
                     let mut i: u128 = 0;
                     while i < kk {
-                        if bit_length(pow) + bit_length(base_int) >= limit_bits {
+                        if $crate::algos::exp::exp_generic::bit_length::<S>(pow)
+                            + $crate::algos::exp::exp_generic::bit_length::<S>(base_int)
+                            >= limit_bits
+                        {
                             return false;
                         }
                         pow = pow * base_int;
@@ -1210,7 +745,10 @@ macro_rules! decl_wide_transcendental {
                     let mut cur = value_raw;
                     let mut i: u128 = 0;
                     while i < kk {
-                        if bit_length(cur) + bit_length(base_int) >= limit_bits {
+                        if $crate::algos::exp::exp_generic::bit_length::<S>(cur)
+                            + $crate::algos::exp::exp_generic::bit_length::<S>(base_int)
+                            >= limit_bits
+                        {
                             return false;
                         }
                         cur = cur * base_int;
@@ -1233,35 +771,114 @@ macro_rules! decl_wide_transcendental {
             /// type's `$Storage`. Panics if out of range, matching
             /// `round_to_storage_with`.
             pub(crate) fn narrow_to_storage(v: W) -> $Storage {
-                let max_w = $crate::wide_int::wide_cast::<$Storage, W>(<$Storage>::MAX);
-                let min_w = $crate::wide_int::wide_cast::<$Storage, W>(<$Storage>::MIN);
+                let max_w = $crate::int::types::traits::BigInt::resize_to::<W>(<$Storage>::MAX);
+                let min_w = $crate::int::types::traits::BigInt::resize_to::<W>(<$Storage>::MIN);
                 if v > max_w || v < min_w {
                     panic!(concat!(
                         stringify!($Type),
                         " strict transcendental: result out of range"
                     ));
                 }
-                $crate::wide_int::wide_cast::<W, $Storage>(v)
+                $crate::int::types::traits::BigInt::resize_to::<$Storage>(v)
             }
 
-            /// Exact-power pin for `exp2`: if the storage raw `raw`
-            /// (= `x · 10^scale`) is an exact integer `x = k` and `2^k`
-            /// is representable at the storage scale, returns the exact
-            /// `$Storage` result; else `None` (fall through to the kernel).
-            pub(crate) fn exp2_exact_pin(raw: $Storage, scale: u32) -> ::core::option::Option<$Storage> {
-                let raw_w = wide_cast_storage(raw);
-                let one_s = pow10_cached(scale);
+            /// Exact-power pin for `exp2`: when the storage raw `raw`
+            /// (= `x · 10^scale`) is an exact integer `x = k`,
+            /// `exp2(k) = 2^k` is an exact algebraic point — a dyadic
+            /// rational, never a transcendental residual. Returns the
+            /// **correctly-rounded** `$Storage` result under `mode`,
+            /// computed from exact integer arithmetic (so the working-scale
+            /// series can never bump it across a tie or grid line); `None`
+            /// only when `x` is not an exact integer (the genuinely
+            /// transcendental case the kernel handles).
+            pub(crate) fn exp2_exact_pin(
+                raw: $Storage,
+                scale: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> ::core::option::Option<$Storage> {
+                let raw_w = widen_storage(raw);
+                let one_s = pow10_table(scale);
                 let (kq, kr) = raw_w.div_rem(one_s);
                 if kr != lit(0) {
                     return ::core::option::Option::None;
                 }
-                let k = $crate::wide_int::wide_cast::<W, i128>(kq);
-                exp2_exact_pow(k, scale).map(narrow_to_storage)
+                let k = $crate::int::types::traits::BigInt::to_i128(kq);
+                // The exactly-representable powers (`k ≥ 0`, or `k < 0` with
+                // `|k| ≤ scale`) land on the storage grid with no rounding.
+                if let ::core::option::Option::Some(v) = exp2_exact_pow(k, scale) {
+                    return ::core::option::Option::Some(narrow_to_storage(v));
+                }
+                // `k < 0`, `|k| > scale`: `2^k · 10^scale = 5^scale / 2^p`
+                // (`p = |k| − scale ≥ 1`) is a proper dyadic fraction. Round
+                // it exactly under `mode` (`exp2(-1)=0.5` is the half-to-even
+                // tie → 0; a sub-resolution `2^k` only `Ceiling`-rounds up).
+                // For `k > 0` `exp2_exact_pow` returns `None` only on genuine
+                // overflow — PROOF the exact `2^k` exceeds the decimal range:
+                // panic per the overflow contract (debug AND release) rather
+                // than deferring to the `exp(k·ln 2)` composition, whose
+                // to-nearest approximation can directed-round (Floor / Trunc)
+                // back INSIDE the range at an out-by-one boundary.
+                if k >= 0 {
+                    $crate::support::diagnostics::overflow_panic_with_scale(
+                        concat!(stringify!($Type), "::exp2"),
+                        scale,
+                    );
+                }
+                let p = (k.unsigned_abs() as u32) - scale;
+                ::core::option::Option::Some(round_pow2_fraction(scale, p, mode))
+            }
+
+            /// Correctly-rounded `$Storage` value of the dyadic fraction
+            /// `5^scale / 2^p` (`p ≥ 1`) — the `exp2(k)` storage value when
+            /// `k = −(p + scale)`. The result is strictly positive and at
+            /// most `5^scale / 2`, so it always fits storage.
+            ///
+            /// `q = num >> p`, residual `r = num mod 2^p`; the half-way
+            /// divisor is `2^p` so the tie compares `2·r` with `2^p`. When
+            /// `2^p` exceeds the working width the quotient is `0` and the
+            /// whole `num` is a sub-half positive residual (only `Ceiling`
+            /// rounds up).
+            fn round_pow2_fraction(
+                scale: u32,
+                p: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> $Storage {
+                let num = lit(5).pow(scale);
+                // When `2^p` does not fit the SIGNED working width it strictly
+                // exceeds `2·num` (since `num < 2^(BITS-1)` and `p ≥ BITS-1`),
+                // so `q = 0` and the residual `num` sits strictly below half —
+                // a sub-resolution positive value (only `Ceiling` rounds up).
+                // The bound is `BITS-1`, not `BITS`: `lit(1) << (BITS-1)` sets
+                // the SIGN bit, so `denom` would be NEGATIVE and the `2·r` vs
+                // `denom` tie comparison would read `Greater` (positive > neg)
+                // — misrounding the sub-half residual UP under nearest. (The
+                // golden `exp2(-1053)@D57<30>` / `exp2(-2097)@D115<50>` land
+                // exactly on `p = BITS-1` for their work integer.)
+                if p >= <W as $crate::int::types::traits::BigInt>::BITS - 1 {
+                    let bump = $crate::support::rounding::should_bump(
+                        mode,
+                        ::core::cmp::Ordering::Less,
+                        false,
+                        true,
+                    );
+                    return narrow_to_storage(if bump { lit(1) } else { lit(0) });
+                }
+                let denom = lit(1) << p;
+                let (q, r) = num.div_rem(denom);
+                if r.is_zero() {
+                    return narrow_to_storage(q);
+                }
+                let twice_r = r << 1;
+                let cmp_r = twice_r.cmp(&denom);
+                let q_is_odd = q.bit(0);
+                let bump =
+                    $crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, true);
+                narrow_to_storage(if bump { q + lit(1) } else { q })
             }
 
             #[inline]
-            fn wide_cast_storage(raw: $Storage) -> W {
-                $crate::wide_int::wide_cast::<$Storage, W>(raw)
+            fn widen_storage(raw: $Storage) -> W {
+                $crate::int::types::traits::BigInt::resize_to::<W>(raw)
             }
 
             /// Integer-digit count of the `exp2` result `2^x` for the
@@ -1290,7 +907,7 @@ macro_rules! decl_wide_transcendental {
             /// inside `Wexp`'s `~BITS·log10(2)` decimal capacity. We size
             /// the cap from that bound (with a safety margin). Because
             /// `Wexp` is the next-wider tier for every shipped width
-            /// (and D1232's own `Int16384` already holds the peak at its
+            /// (and D1232's own `Int<256>` already holds the peak at its
             /// `MAX_SCALE`), the full `needed` lift fits and the cell
             /// rounds correctly; the cap only fires for genuinely
             /// out-of-range inputs, which then panic on narrowing.
@@ -1301,36 +918,63 @@ macro_rules! decl_wide_transcendental {
                 let base = 2 * (scale as u128 + GUARD as u128) + 64;
                 let head = wexp_digits.saturating_sub(base) * 10 / 45;
                 let lift = needed.min(head);
-                if lift > u32::MAX as u128 { u32::MAX } else { lift as u32 }
+                if lift > u32::MAX as u128 {
+                    u32::MAX
+                } else {
+                    lift as u32
+                }
             }
 
             /// Upper bound on the integer-digit count of `2^x` (the `exp2`
             /// result) for storage raw `raw` (= `x · 10^scale`), capped by
             /// [`exp_lift_cap`] for use as the large-result lift.
+            ///
+            /// For `x < 0`, `2^x < 1`: the result has NO integer-digit growth, so
+            /// the lift is 0. Using `|x|` here (as if the result were `2^|x|`)
+            /// over-lifts the working scale by hundreds of digits for a large
+            /// negative argument, corrupting the lifted-scale `exp` evaluation —
+            /// the `exp2_strict_with` vs `exp2_strict` divergence.
             pub(crate) fn exp2_result_int_digits(raw: $Storage, scale: u32) -> u32 {
-                exp_lift_cap(pow_result_digits(abs(wide_cast_storage(raw)), scale, 30103), scale)
+                if raw < $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    return 0;
+                }
+                exp_lift_cap(pow_result_digits(widen_storage(raw), scale, 30103), scale)
             }
 
             /// Upper bound on the integer-digit count of `e^|v|` (the
             /// `sinh`/`cosh`/`exp` result) for a storage-scale magnitude
             /// `mag_at_scale` (= `|v| · 10^scale`), capped by
             /// [`exp_lift_cap`].
-            pub(crate) fn exp_result_int_digits(mag_at_scale: W, scale: u32) -> u32 {
-                exp_lift_cap(pow_result_digits(abs(mag_at_scale), scale, 43429), scale)
+            pub(crate) fn exp_result_int_digits<S: $crate::int::types::traits::BigInt>(
+                mag_at_scale: S,
+                scale: u32,
+            ) -> u32 {
+                let m = if mag_at_scale < S::ZERO { -mag_at_scale } else { mag_at_scale };
+                exp_lift_cap(pow_result_digits::<S>(m, scale, 43429), scale)
             }
 
             /// Shared estimator: `⌈|x| · factor / 100000⌉` decimal digits,
             /// where `x = av / 10^scale` and `factor` is `log10(base)·1e5`
             /// (`30103` for `2^x`, `43429` for `e^x`). Returns `0` when
             /// `|x| < 1` (the result has no integer-digit growth).
-            fn pow_result_digits(av: W, scale: u32, factor: u128) -> u128 {
-                let bl_v = bit_length(av);
-                let bl_one = bit_length(pow10_cached(scale));
+            fn pow_result_digits<S: $crate::int::types::traits::BigInt>(
+                av: S,
+                scale: u32,
+                factor: u128,
+            ) -> u128 {
+                let bl_v = $crate::algos::exp::exp_generic::bit_length::<S>(av);
+                let bl_one = $crate::algos::exp::exp_generic::bit_length::<S>(
+                    $crate::algos::exp::exp_generic::pow10::<S>(scale),
+                );
                 if bl_v <= bl_one {
                     return 0;
                 }
                 let log2_int = bl_v - bl_one + 1;
-                let int_upper = if log2_int >= 127 { u128::MAX } else { 1u128 << log2_int };
+                let int_upper = if log2_int >= 127 {
+                    u128::MAX
+                } else {
+                    1u128 << log2_int
+                };
                 (int_upper.saturating_mul(factor) / 100_000) as u128
             }
 
@@ -1343,7 +987,7 @@ macro_rules! decl_wide_transcendental {
             /// when not exactly representable, so the caller falls through
             /// to the working-scale kernel.
             pub(crate) fn exp2_exact_pow(k: i128, scale: u32) -> ::core::option::Option<W> {
-                let one_s = pow10_cached(scale);
+                let one_s = pow10_table(scale);
                 if k == 0 {
                     return ::core::option::Option::Some(one_s);
                 }
@@ -1367,7 +1011,7 @@ macro_rules! decl_wide_transcendental {
                     if (kk as u128) > scale as u128 {
                         return ::core::option::Option::None;
                     }
-                    let mut v = pow10_cached(scale - kk as u32);
+                    let mut v = pow10_table(scale - kk as u32);
                     let five = lit(5);
                     let mut i: u128 = 0;
                     while i < kk {
@@ -1391,103 +1035,93 @@ macro_rules! decl_wide_transcendental {
                 }
             }
 
-            /// `ln 2` at working scale `w`. Thread-local memoised
-            /// per `w` (std feature) so the artanh series runs once
-            /// per `(thread, working-scale)` pair, not per call.
-            pub(crate) fn ln2(w: u32) -> W {
-                cached(&LN2_CACHE_GET, w, ln2_compute)
-            }
-            fn ln2_compute(w: u32) -> W {
-                let t = one(w) / lit(3);
-                let t2 = mul(t, t, w);
-                let mut sum = t;
-                let mut term = t;
-                let mut j: u128 = 1;
-                loop {
-                    term = mul(term, t2, w);
-                    let contrib = term / lit(2 * j + 1);
-                    if contrib == zero() {
-                        break;
-                    }
-                    sum = sum + contrib;
-                    j += 1;
-                    if j > SERIES_CAP {
-                        break;
-                    }
+            /// `π` const-folded at the base working scale `SCALE + GUARD`
+            /// for this `(W, SCALE)` cell — no runtime divide. The common
+            /// (non-Ziv-escalated) path fetches the baked constant; any
+            /// other `w` (a Ziv escalation) falls to the runtime
+            /// [`pi_with`].
+            #[inline]
+            pub(crate) fn pi_cf<const SCALE: u32>(
+                w: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> W {
+                if w == SCALE + GUARD {
+                    // Hot path: source `π` from the per-scale oracle table
+                    // keyed on the CONST working scale — const-folds to one
+                    // entry per monomorphisation, zero-extends into `W`.
+                    return $crate::consts::pi_by_scale::<W>(SCALE + GUARD, mode);
                 }
-                sum + sum
+                // Ziv-escalation path (`w != SCALE + GUARD`): a STATIC LOOKUP of
+                // the table at the runtime working scale — not a recompute. The
+                // table covers the full Ziv band (W::BITS/8) for π.
+                $crate::consts::pi_by_working_scale::<W>(w, mode)
+            }
+
+            /// `ln 2` const-folded at the base working scale — see
+            /// [`pi_cf`].
+            #[inline]
+            pub(crate) fn ln2_cf<const SCALE: u32>(
+                w: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> W {
+                if w == SCALE + GUARD {
+                    // Hot path: source `ln 2` from the per-scale oracle
+                    // table keyed on the CONST working scale — see `pi_cf`.
+                    return $crate::consts::ln2_by_scale::<W>(SCALE + GUARD, mode);
+                }
+                // Ziv path: static lookup at the runtime working scale (table
+                // covers ln2's full Ziv band) — not a recompute.
+                $crate::consts::ln2_by_working_scale::<W>(w, mode)
+            }
+
+            /// `ln 10` const-folded at the base working scale — see
+            /// [`pi_cf`].
+            #[inline]
+            pub(crate) fn ln10_cf<const SCALE: u32>(
+                w: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> W {
+                if w == SCALE + GUARD {
+                    // Hot path: source `ln 10` from the per-scale oracle
+                    // table keyed on the CONST working scale — see `pi_cf`.
+                    return $crate::consts::ln10_by_scale::<W>(SCALE + GUARD, mode);
+                }
+                // Ziv path: static lookup at the runtime working scale (table
+                // covers ln10's full Ziv band) — not a recompute.
+                $crate::consts::ln10_by_working_scale::<W>(w, mode)
+            }
+
+
+            /// `ln 2` at working scale `w`, rounded under the crate
+            /// default mode from the per-width compile-time reference.
+            pub(crate) fn ln2(w: u32) -> W {
+                ln2_with(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+            }
+            /// `ln 2` at working scale `w`, rounded under `mode`. Static
+            /// lookup of the unified per-scale table (System A), replacing
+            /// the System-B `const_rounded` recompute off a per-width string.
+            pub(crate) fn ln2_with(w: u32, mode: $crate::support::rounding::RoundingMode) -> W {
+                $crate::consts::ln2_by_working_scale::<W>(w, mode)
             }
 
             /// Natural logarithm of a positive working-scale value.
             ///
             /// Range-reduces `v = 2^k · m` with `m ∈ [1, 2)`, evaluates
             /// `ln(m) = 2·artanh((m−1)/(m+1))`, returns `k·ln 2 + ln(m)`.
-            pub(crate) fn ln_fixed(v_w: W, w: u32) -> W {
-                let one_w = one(w);
-                let two_w = one_w + one_w;
-                let pow10_w = one_w;
-                let mut k: i32 = bit_length(v_w) as i32 - bit_length(one_w) as i32;
-                let mut m_w = loop {
-                    let m = if k >= 0 {
-                        v_w >> (k as u32)
-                    } else {
-                        v_w << ((-k) as u32)
-                    };
-                    if m >= two_w {
-                        k += 1;
-                    } else if m < one_w {
-                        k -= 1;
-                    } else {
-                        break m;
-                    }
-                };
-
-                // Multi-level sqrt argument reduction (Brent 1976,
-                // fastnum's approach). After `l` sqrt operations,
-                // `m ← m^(1/2^l)`, so `|t| = |(m-1)/(m+1)|` shrinks
-                // geometrically and the artanh series converges in
-                // `~p / (2 + 2l)` pair-terms instead of `~p / 2`.
-                // Each sqrt costs ~one wide isqrt; the term saving
-                // dominates around `l ≈ log₂(term_savings_per_sqrt)`
-                // — empirically `l ≈ √p_bits / 4` is the sweet spot.
-                let p_bits = w.saturating_mul(3).saturating_add(1);
-                let mut sqrt_l: u32 = 0;
-                {
-                    let mut n: u32 = 0;
-                    while (n + 1) * (n + 1) <= p_bits {
-                        n += 1;
-                    }
-                    sqrt_l = n / 4;
-                }
-                let mut i = 0;
-                while i < sqrt_l {
-                    m_w = sqrt_fixed(m_w, w);
-                    i += 1;
-                }
-
-                let t = div_cached(m_w - one_w, m_w + one_w, pow10_w);
-                let t2 = mul_cached(t, t, pow10_w);
-                let mut sum = t;
-                let mut term = t;
-                let mut j: u128 = 1;
-                loop {
-                    term = mul_cached(term, t2, pow10_w);
-                    let contrib = term / lit(2 * j + 1);
-                    if contrib == zero() {
-                        break;
-                    }
-                    sum = sum + contrib;
-                    j += 1;
-                    if j > SERIES_CAP {
-                        break;
-                    }
-                }
-                // ln(m) = 2^(l+1) · artanh(t) = sum << (sqrt_l + 1).
-                // With sqrt_l=0 this collapses to the historic
-                // `2·sum` formula; with sqrt_l>0 it folds in the
-                // `2^l` factor from the unhalved-argument identity.
-                let ln_m = sum << (sqrt_l + 1);
-                scale_by_k(ln2(w), k as i128) + ln_m
+            pub(crate) fn ln_fixed<const SCALE: u32>(v_w: W, w: u32) -> W {
+                // Delegates to the width-generic kernel
+                // (`exp_generic::ln_fixed`) — the single source for both the
+                // narrow primitive `W` and the wide composition `Wagm`
+                // (two-core split, Constitution rule 2: one generic algorithm).
+                // The const-folded `ln2_cf::<SCALE>(w)` is threaded in so this
+                // primitive path keeps its compile-time `ln2` (the generic
+                // kernel itself takes `ln2` as a parameter, so it stays free of
+                // the `SCALE` const).
+                crate::algos::exp::exp_generic::ln_fixed::<W>(
+                    v_w,
+                    w,
+                    ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                )
             }
 
             /// `log1p(t) = ln(1 + t)` at working scale `w`, evaluated
@@ -1509,28 +1143,14 @@ macro_rules! decl_wide_transcendental {
             /// Numerical Algorithms* 2nd ed. (2002), 1.14.1 and Problem
             /// 1.4; J.-M. Muller, *Elementary Functions* 3rd ed. (2016),
             /// 4.4.
-            pub(crate) fn log1p_fixed(t: W, w: u32) -> W {
-                let one_w = one(w);
-                let two_w = one_w + one_w;
-                let pow10_w = one_w;
-                let u = div_cached(t, two_w + t, pow10_w);
-                let u2 = mul_cached(u, u, pow10_w);
-                let mut sum = u;
-                let mut term = u;
-                let mut j: u128 = 1;
-                loop {
-                    term = mul_cached(term, u2, pow10_w);
-                    let contrib = term / lit(2 * j + 1);
-                    if contrib == zero() {
-                        break;
-                    }
-                    sum = sum + contrib;
-                    j += 1;
-                    if j > SERIES_CAP {
-                        break;
-                    }
-                }
-                sum + sum
+            pub(crate) fn log1p_fixed<S: $crate::int::types::traits::BigInt>(t: S, w: u32) -> S
+            where
+                S::Scratch: $crate::int::types::compute_limbs::ComputeLimbs,
+            {
+                // Forwards to the single generic source
+                // (`exp_generic::log1p_fixed`) — no per-tier copy of the
+                // artanh-reformulated series (Constitution rule 2).
+                $crate::algos::exp::exp_generic::log1p_fixed::<S>(t, w)
             }
 
             /// `expm1(s) = exp(s) - 1` at working scale `w`, evaluated as
@@ -1547,12 +1167,11 @@ macro_rules! decl_wide_transcendental {
             /// Reference: J.-M. Muller, *Elementary Functions* 3rd ed.
             /// (2016), 4.4; Higham 1.14.1.
             pub(crate) fn expm1_fixed(s: W, w: u32) -> W {
-                let pow10_w = one(w);
                 let mut sum = s;
                 let mut term = s;
                 let mut iter: u128 = 2;
                 loop {
-                    term = mul_cached(term, s, pow10_w) / lit(iter);
+                    term = mul(term, s, w) / lit(iter);
                     if term == zero() {
                         break;
                     }
@@ -1565,12 +1184,16 @@ macro_rules! decl_wide_transcendental {
                 sum
             }
 
-            /// `ln 10` at working scale `w`. Memoised, see [`ln2`].
+            /// `ln 10` at working scale `w`, rounded under the crate
+            /// default mode from the per-width compile-time reference.
             pub(crate) fn ln10(w: u32) -> W {
-                cached(&LN10_CACHE_GET, w, ln10_compute)
+                ln10_with(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
-            fn ln10_compute(w: u32) -> W {
-                ln_fixed(one(w) * lit(10), w)
+            /// `ln 10` at working scale `w`, rounded under `mode`. Static
+            /// lookup of the unified per-scale table (System A), replacing
+            /// the System-B `const_rounded` recompute off a per-width string.
+            pub(crate) fn ln10_with(w: u32, mode: $crate::support::rounding::RoundingMode) -> W {
+                $crate::consts::ln10_by_working_scale::<W>(w, mode)
             }
 
             /// Natural log of a positive working-scale value via the
@@ -1605,7 +1228,7 @@ macro_rules! decl_wide_transcendental {
             /// Calling at the unlifted scale `w` exhibits the
             /// historical `~p/2` precision drop past `w ~ 40`
             /// described in Brent 1976 §3.
-            pub(crate) fn ln_fixed_agm(v_w: W, w: u32) -> W {
+            pub(crate) fn ln_fixed_agm<const SCALE: u32>(v_w: W, w: u32) -> W {
                 let one_w = one(w);
                 // p_bits ≈ working-scale precision in bits, w · log2(10).
                 // 332/100 is the integer rational just above log2(10).
@@ -1621,7 +1244,7 @@ macro_rules! decl_wide_transcendental {
                 // additive `+ 24` over the asymptotic minimum
                 // covers the bookkeeping bits the cancellation in
                 // `agm_part − m·ln 2` consumes plus the few-LSB
-                // safety the rounded-intermediate `mul_cached` /
+                // safety the rounded-intermediate `mul` /
                 // `sqrt_fixed` accumulation contributes over
                 // `~log₂(p)` iterations.
                 let safety = 2 + ((p_bits.max(1) as u32).ilog2() / 2) as i32;
@@ -1652,20 +1275,23 @@ macro_rules! decl_wide_transcendental {
                 let mut a = one_w;
                 let mut b = y_w;
                 let iter_cap = 80u32;
-                let pow10_w_agm = pow10_cached(w);
                 for _ in 0..iter_cap {
                     let next_a = (a + b) >> 1;
-                    let next_b = sqrt_fixed(mul_cached(a, b, pow10_w_agm), w);
-                    let d = if next_a >= next_b { next_a - next_b } else { next_b - next_a };
+                    let next_b = sqrt_fixed(mul(a, b, w), w);
+                    let d = if next_a >= next_b {
+                        next_a - next_b
+                    } else {
+                        next_b - next_a
+                    };
                     a = next_a;
                     b = next_b;
                     if d <= lit(2) {
                         break;
                     }
                 }
-                let pi_w = pi(w);
+                let pi_w = pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE);
                 let agm_part = div(pi_w, a + a, w);
-                agm_part - scale_by_k(ln2(w), m as i128)
+                agm_part - scale_by_k(ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), m as i128)
             }
 
             /// Exponential of a working-scale value via Newton's
@@ -1681,9 +1307,9 @@ macro_rules! decl_wide_transcendental {
             /// Range-reduces `v = k·ln 2 + s` first (same trick as
             /// `exp_fixed`) so the Newton seed and iterations stay in
             /// a small absolute range, then reassembles `2^k · exp(s)`.
-            pub(crate) fn exp_fixed_agm(v_w: W, w: u32) -> W {
+            pub(crate) fn exp_fixed_agm<const SCALE: u32>(v_w: W, w: u32) -> W {
                 let one_w = one(w);
-                let l2 = ln2(w);
+                let l2 = ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE);
                 let k = round_to_nearest_int(div(v_w, l2, w), w);
                 let s = v_w - scale_by_k(l2, k);
                 // Newton seed: low-order Taylor (1 + s + s²/2). Within
@@ -1695,7 +1321,7 @@ macro_rules! decl_wide_transcendental {
                 }
                 let iter_cap = 80u32;
                 for _ in 0..iter_cap {
-                    let ln_x = ln_fixed_agm(x, w);
+                    let ln_x = ln_fixed_agm::<SCALE>(x, w);
                     let delta = s - ln_x;
                     if abs(delta) <= lit(2) {
                         x = mul(x, one_w + delta, w);
@@ -1738,11 +1364,24 @@ macro_rules! decl_wide_transcendental {
             /// (`float/src/exp.rs`); the trick traces back to Brent
             /// 1976 §3 ("binary-splitting for exp via repeated
             /// squaring of a reduced argument").
-            pub(crate) fn exp_fixed(v_w: W, w: u32) -> W {
+            pub(crate) fn exp_fixed<const SCALE: u32>(v_w: W, w: u32) -> W {
                 #[cfg(feature = "perf-trace")]
-                let _exp_span = $crate::tracing::info_span!(concat!(
-                    stringify!($Type), "::exp_fixed"
-                )).entered();
+                let _exp_span =
+                    $crate::tracing::info_span!(concat!(stringify!($Type), "::exp_fixed"))
+                        .entered();
+
+                // Large-result routing: when `e^v`'s integer-digit growth
+                // plus the internal `2^k` reassembly would overflow the
+                // tier's own work integer `W` (a large positive `v` at low
+                // SCALE — e.g. exp(1061) at D462<0>, a ~461-digit result
+                // that fits storage but not the `W`-scale lift), run the
+                // body in the wider `Wexp` and narrow back. Mirrors the
+                // `hyper_fits_w` regime split the hyperbolics use. The
+                // normal / small regime keeps the fast `W` path — the check
+                // is a few leading-zero / shift ops.
+                if !exp_fits_w::<SCALE>(v_w, w) {
+                    return exp_fixed_wide(v_w, w);
+                }
 
                 // Cache 10^w once — used as divisor in every Taylor
                 // iteration and squaring step below. At D307<150>
@@ -1783,7 +1422,7 @@ macro_rules! decl_wide_transcendental {
                 // 2016), §11.1 — range-reduction error budget with the
                 // `2^k · exp(s)` reassembly.
                 let one_w_pre = one(w);
-                let l2_pre = ln2(w);
+                let l2_pre = ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE);
                 let pow10_w_pre = one_w_pre;
                 let k = round_to_nearest_int(div_cached(v_w, l2_pre, pow10_w_pre), w);
                 let abs_k_u128 = if k < 0 { -k } else { k } as u128;
@@ -1798,7 +1437,7 @@ macro_rules! decl_wide_transcendental {
                     // narrowing.
                     //
                     // `|k|·log10(2) = |k| · 30103 / 100000`. Round up:
-                    let digits = (abs_k_u128 * 30103 + 99_999) / 100_000;
+                    let digits = (abs_k_u128 * 30103).div_ceil(100_000);
                     // Cap at the type's working width to avoid blowing up
                     // `pow10(extra)`; if `|k|` is so large the result
                     // would overflow storage anyway, the caller's
@@ -1814,7 +1453,7 @@ macro_rules! decl_wide_transcendental {
                 let w_ext = w + extra;
                 let v_ext = if extra == 0 { v_w } else { v_w * pow10(extra) };
                 let one_w = one(w_ext);
-                let l2 = ln2(w_ext);
+                let l2 = ln2_cf::<SCALE>(w_ext, $crate::support::rounding::DEFAULT_ROUNDING_MODE);
                 let pow10_w = one_w;
                 let s = v_ext - scale_by_k(l2, k);
 
@@ -1838,7 +1477,17 @@ macro_rules! decl_wide_transcendental {
                 let mut term = s_red;
                 let mut iter: u128 = 2;
                 loop {
-                    term = mul_cached(term, s_red, pow10_w) / lit(iter);
+                    // Taylor term: low-half u128-packed product
+                    // (`wrapping_mul_low_u128`) reduced by `÷10^(w_ext)`
+                    // through the fast MG `round_div_pow10` kernel (the
+                    // divisor is always exactly the power of ten `10^w_ext`).
+                    // Mirrors the blessed `exp_generic::exp_fixed` Taylor
+                    // step; bit-identical to the prior `round_div` reduction
+                    // (audited power-of-10 equivalence) at MG speed.
+                    term = round_div_pow10(
+                        $crate::int::types::traits::BigInt::wrapping_mul_low_u128(term, s_red),
+                        w_ext,
+                    ) / lit(iter);
                     if term == zero() {
                         break;
                     }
@@ -1856,7 +1505,19 @@ macro_rules! decl_wide_transcendental {
                 let mut squared = sum;
                 let mut i = 0;
                 while i < n {
-                    squared = mul_cached(squared, squared, pow10_w);
+                    // Low-half symmetric SQUARE through the limb-width matcher
+                    // (`wrapping_sqr_low_u128` → `int::policy::sqr_low`): the
+                    // u128-packed `sqr_low_limb` on even work widths (half the
+                    // limbs), bit-identical to the low-`BITS` of `x²`, reduced
+                    // by `÷10^(w_ext)` through the fast MG `round_div_pow10`
+                    // kernel (the divisor is always the power of ten
+                    // `10^w_ext`). The squaring sibling of the Taylor step;
+                    // bit-identical to the prior generic `round_div` at MG
+                    // speed. Mirrors `exp_generic::exp_fixed`.
+                    squared = round_div_pow10(
+                        $crate::int::types::traits::BigInt::wrapping_sqr_low_u128(squared),
+                        w_ext,
+                    );
                     i += 1;
                 }
                 let sum = squared;
@@ -1877,14 +1538,42 @@ macro_rules! decl_wide_transcendental {
                 } else {
                     let neg_k = -k as u128;
                     if neg_k >= bit_length(sum) as u128 {
-                        return zero();
+                        // Deep underflow: e^v (v < 0 here, since k < 0) is
+                        // strictly positive but below the working resolution.
+                        // Return the smallest positive working value (1 = 10^-w),
+                        // NOT zero, so the directed narrowing keeps the sign —
+                        // Ceiling rounds up to 1 ULP while Floor / Trunc /
+                        // nearest still give 0. A bare zero loses positivity and
+                        // rounds Ceiling to 0 (a correctly-rounded defect the
+                        // SCALE-30 golden cells catch). Reached only by direct
+                        // e^(negative); the hyperbolics call exp on |x| >= 0.
+                        return lit(1);
                     }
                     sum >> (neg_k as u32)
                 };
-                if extra == 0 {
+                let result = if extra == 0 {
                     scaled_at_w_ext
                 } else {
                     round_div_pow10(scaled_at_w_ext, extra)
+                };
+                // e^v > 0 for every finite v: a zero result here is genuine
+                // underflow of `e^(negative)` below the working resolution,
+                // NOT a true zero. Return the smallest positive working value
+                // (1 = 10^-w) so the directed narrowing keeps the sign —
+                // Ceiling rounds up to 1 ULP, Floor / Trunc / nearest still
+                // give 0. A bare zero rounds Ceiling to 0 (a correctly-rounded
+                // defect the SCALE-30 golden cells catch).
+                //
+                // The clamp is restricted to `k < 0` (the only regime where
+                // underflow to 0 is physical). For `k >= 0` (a large positive
+                // argument) `e^v >= 1`, so a 0 result would mean the `W`-scale
+                // lift overflowed; masking that as 1 would hide the defect.
+                // The `exp_fits_w` routing above sends those cases to the
+                // wider path before they reach here.
+                if k < 0 && result == zero() {
+                    lit(1)
+                } else {
+                    result
                 }
             }
 
@@ -1897,383 +1586,1396 @@ macro_rules! decl_wide_transcendental {
             ///
             /// `Wexp` is the next-wider `Int` for every tier except
             /// D1232 (already widest); there `Wexp == W`, and the full
-            /// lift fits because D1232's `Int16384` holds the squaring
+            /// lift fits because D1232's `Int<256>` holds the squaring
             /// peak at its `MAX_SCALE` anyway. Used by the near-overflow
             /// -edge `sinh`/`cosh`/`exp2`/`tanh` cells; the normal /
             /// small regime keeps the fast `exp_fixed` path on `W`.
             pub(crate) fn exp_fixed_wide(v_w: W, w: u32) -> W {
-                let v_wide = $crate::wide_int::wide_cast::<W, Wexp>(v_w);
-                let r_wide = $crate::macros::wide_transcendental::exp_generic::exp_fixed::<Wexp>(v_wide, w);
-                $crate::wide_int::wide_cast::<Wexp, W>(r_wide)
+                let v_wide = $crate::int::types::traits::BigInt::resize_to::<Wexp>(v_w);
+                let r_wide =
+                    $crate::algos::exp::exp_generic::exp_fixed::<Wexp>(v_wide, w);
+                // Narrow back to the tier work integer, PANICKING (not
+                // truncating) if the `Wexp`-computed result is out of the
+                // tier's range — see `exp_generic::resize_or_panic`.
+                $crate::algos::exp::exp_generic::resize_or_panic::<Wexp, W>(r_wide)
             }
 
-            /// `sinh(|x|)` at working scale `w`, composed entirely in the
-            /// wider work integer [`Wexp`] so the huge `e^|x|` term, the
-            /// `1/e^|x|` reciprocal (whose numerator `10^(2w)` would
-            /// overflow `W` on the small-`W`/high-scale tiers like
-            /// D462), and the `(e^|x| − e^-|x|)/2` sum all fit. The
-            /// composed `sinh(|x|)` itself fits `W`, so the final cast is
-            /// lossless. The caller reapplies the input sign (sinh is
-            /// odd).
-            pub(crate) fn sinh_pos_wide(av_w: W, w: u32) -> W {
-                let av_wide = $crate::wide_int::wide_cast::<W, Wexp>(av_w);
-                let r = $crate::macros::wide_transcendental::exp_generic::sinh_pos::<Wexp>(av_wide, w);
-                $crate::wide_int::wide_cast::<Wexp, W>(r)
+            /// Whether the hyperbolic composition fits the tier's own work
+            /// integer `W` at working scale `w` for the magnitude `av_w`
+            /// (`= |x|·10^w`), so the fast per-tier kernels (cached `ln2` /
+            /// `pow10` / `exp_fixed`) can run directly instead of lifting to
+            /// [`Wexp`].
+            ///
+            /// Two intermediates must fit `W`:
+            /// - the `1/e^|x|` reciprocal numerator `10^(2w)` — `2w` digits;
+            /// - the `exp_fixed` internal peak — modelled by the width-generic
+            ///   `exp_generic::exp_peak_fits` (the true `2·w_ext` squaring +
+            ///   `2^k` reassembly peak; the single source the kernel's own
+            ///   overflow guard uses).
+            ///
+            /// The squaring peak `2·w_ext` already dominates `2w` (since
+            /// `w_ext ≥ w`), so the exp peak bounds the whole composition.
+            #[inline]
+            fn hyper_fits_w<S: $crate::int::types::traits::BigInt>(av_w: S, w: u32) -> bool {
+                $crate::algos::exp::exp_generic::exp_peak_fits::<S>(av_w, w)
             }
 
-            /// `cosh(|x|)` at working scale `w`, composed in [`Wexp`].
-            /// See [`sinh_pos_wide`].
-            pub(crate) fn cosh_pos_wide(av_w: W, w: u32) -> W {
-                let av_wide = $crate::wide_int::wide_cast::<W, Wexp>(av_w);
-                let r = $crate::macros::wide_transcendental::exp_generic::cosh_pos::<Wexp>(av_wide, w);
-                $crate::wide_int::wide_cast::<Wexp, W>(r)
+            /// Whether a direct `exp_fixed(v_w, w)` fits the tier's own work
+            /// integer `W`.
+            ///
+            /// Models the real `exp_fixed` squaring-reassembly peak via the
+            /// width-generic `exp_generic::exp_peak_fits` (the single source
+            /// the kernel's own overflow guard uses): when the `2·w_ext`
+            /// square or the `2^k` reassembly would exceed `W`'s bit capacity
+            /// the body would silently wrap (`wrapping_sqr_low_u128` truncates
+            /// to the low bits, so an overflowed square returns 0), so the
+            /// caller routes the value through the wider [`exp_fixed_wide`] /
+            /// [`Wexp`] path instead. The normal / small regime keeps the
+            /// fast `W` path.
+            #[inline]
+            fn exp_fits_w<const SCALE: u32>(v_w: W, w: u32) -> bool {
+                $crate::algos::exp::exp_generic::exp_peak_fits::<W>(v_w, w)
             }
 
-            /// `tanh(|x|)` at working scale `w`, composed in [`Wexp`].
-            /// See [`sinh_pos_wide`]. The caller reapplies the input
-            /// sign (tanh is odd).
-            pub(crate) fn tanh_pos_wide(av_w: W, w: u32) -> W {
-                let av_wide = $crate::wide_int::wide_cast::<W, Wexp>(av_w);
-                let r = $crate::macros::wide_transcendental::exp_generic::tanh_pos::<Wexp>(av_wide, w);
-                $crate::wide_int::wide_cast::<Wexp, W>(r)
-            }
-
-            /// Taylor series for `atan` on `|x| < 1`, at scale `w`.
-            pub(crate) fn atan_taylor(x: W, w: u32) -> W {
-                let pow10_w = pow10_cached(w);
-                let x2 = mul_cached(x, x, pow10_w);
-                let mut sum = x;
-                let mut term = x;
-                let mut k: u128 = 1;
-                loop {
-                    term = mul_cached(term, x2, pow10_w);
-                    let contrib = term / lit(2 * k + 1);
-                    if contrib == zero() {
-                        break;
-                    }
-                    if k % 2 == 1 {
-                        sum = sum - contrib;
-                    } else {
-                        sum = sum + contrib;
-                    }
-                    k += 1;
-                    if k > SERIES_CAP {
-                        break;
-                    }
+            /// `sinh(|x|)` at working scale `w` for a non-negative working
+            /// value. The normal / small regime runs the fast per-tier
+            /// kernels directly on `W` (cached `ln2` / `pow10`); only the
+            /// near-overflow-edge regime — where the `1/e^|x|` reciprocal
+            /// numerator `10^(2w)` would overflow `W` (small-`W`/high-scale
+            /// tiers like D462, or any tier at a large-result argument) —
+            /// lifts the whole composition to the wider [`Wexp`]. See
+            /// [`hyper_fits_w`]. The caller reapplies the input sign (sinh
+            /// is odd).
+            pub(crate) fn sinh_pos_wide<const SCALE: u32>(av_w: W, w: u32) -> W {
+                if hyper_fits_w(av_w, w) {
+                    let ex = exp_fixed::<SCALE>(av_w, w);
+                    let enx = div(one(w), ex, w);
+                    (ex - enx) >> 1
+                } else {
+                    let av_wide = $crate::int::types::traits::BigInt::resize_to::<Wexp>(av_w);
+                    let r = $crate::algos::exp::exp_generic::sinh_pos::<Wexp>(
+                        av_wide, w,
+                    );
+                    $crate::algos::exp::exp_generic::resize_or_panic::<Wexp, W>(r)
                 }
-                sum
             }
 
-            /// `π` at working scale `w`, via Machin's formula.
-            /// Memoised per `w` (std feature); see [`ln2`].
+            /// `cosh(|x|) = (e^|x| + e^-|x|)/2` at working scale `w`. See
+            /// [`sinh_pos_wide`] for the `W`-vs-[`Wexp`] regime split.
+            pub(crate) fn cosh_pos_wide<const SCALE: u32>(av_w: W, w: u32) -> W {
+                if hyper_fits_w(av_w, w) {
+                    let ex = exp_fixed::<SCALE>(av_w, w);
+                    let enx = div(one(w), ex, w);
+                    (ex + enx) >> 1
+                } else {
+                    let av_wide = $crate::int::types::traits::BigInt::resize_to::<Wexp>(av_w);
+                    let r = $crate::algos::exp::exp_generic::cosh_pos::<Wexp>(
+                        av_wide, w,
+                    );
+                    $crate::algos::exp::exp_generic::resize_or_panic::<Wexp, W>(r)
+                }
+            }
+
+            /// `tanh(|x|) = (e^|x| − e^-|x|)/(e^|x| + e^-|x|)` at working
+            /// scale `w`. See [`sinh_pos_wide`] for the regime split. The
+            /// caller reapplies the input sign (tanh is odd).
+            pub(crate) fn tanh_pos_wide<const SCALE: u32>(av_w: W, w: u32) -> W {
+                if hyper_fits_w(av_w, w) {
+                    let ex = exp_fixed::<SCALE>(av_w, w);
+                    let enx = div(one(w), ex, w);
+                    div(ex - enx, ex + enx, w)
+                } else {
+                    let av_wide = $crate::int::types::traits::BigInt::resize_to::<Wexp>(av_w);
+                    let r = $crate::algos::exp::exp_generic::tanh_pos::<Wexp>(
+                        av_wide, w,
+                    );
+                    $crate::algos::exp::exp_generic::resize_or_panic::<Wexp, W>(r)
+                }
+            }
+
+            /// `Wagm` siblings of [`sinh_pos_wide`] / [`cosh_pos_wide`] /
+            /// [`tanh_pos_wide`] — same regime split (fast `Wagm` exp_fixed
+            /// when it fits, else lift to `Wexp`), narrowing the `Wexp` result
+            /// to `Wagm`. Bit-identical while `Wagm == $Work`. Used by the
+            /// hyperbolic compositions in the two-core split.
+            pub(crate) fn sinh_pos_wide_agm(av_w: Wagm, w: u32) -> Wagm {
+                if hyper_fits_w(av_w, w) {
+                    let ex = $crate::algos::exp::exp_generic::exp_fixed::<Wagm>(av_w, w);
+                    let enx = div_agm(one_agm(w), ex, w);
+                    (ex - enx) >> 1
+                } else {
+                    let av_wide = $crate::int::types::traits::BigInt::resize_to::<Wexp>(av_w);
+                    let r = $crate::algos::exp::exp_generic::sinh_pos::<Wexp>(av_wide, w);
+                    $crate::algos::exp::exp_generic::resize_or_panic::<Wexp, Wagm>(r)
+                }
+            }
+            pub(crate) fn cosh_pos_wide_agm(av_w: Wagm, w: u32) -> Wagm {
+                if hyper_fits_w(av_w, w) {
+                    let ex = $crate::algos::exp::exp_generic::exp_fixed::<Wagm>(av_w, w);
+                    let enx = div_agm(one_agm(w), ex, w);
+                    (ex + enx) >> 1
+                } else {
+                    let av_wide = $crate::int::types::traits::BigInt::resize_to::<Wexp>(av_w);
+                    let r = $crate::algos::exp::exp_generic::cosh_pos::<Wexp>(av_wide, w);
+                    $crate::algos::exp::exp_generic::resize_or_panic::<Wexp, Wagm>(r)
+                }
+            }
+            pub(crate) fn tanh_pos_wide_agm(av_w: Wagm, w: u32) -> Wagm {
+                if hyper_fits_w(av_w, w) {
+                    let ex = $crate::algos::exp::exp_generic::exp_fixed::<Wagm>(av_w, w);
+                    let enx = div_agm(one_agm(w), ex, w);
+                    div_agm(ex - enx, ex + enx, w)
+                } else {
+                    let av_wide = $crate::int::types::traits::BigInt::resize_to::<Wexp>(av_w);
+                    let r = $crate::algos::exp::exp_generic::tanh_pos::<Wexp>(av_wide, w);
+                    $crate::algos::exp::exp_generic::resize_or_panic::<Wexp, Wagm>(r)
+                }
+            }
+
+            /// `π` at working scale `w`, rounded under the crate default
+            /// mode from the per-width compile-time reference.
             pub(crate) fn pi(w: u32) -> W {
-                cached(&PI_CACHE_GET, w, pi_compute)
+                pi_with(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
-            fn pi_compute(w: u32) -> W {
-                let a = atan_taylor(one(w) / lit(5), w);
-                let b = atan_taylor(one(w) / lit(239), w);
-                mul_u(a, 16) - mul_u(b, 4)
+            /// `π` at working scale `w`, rounded under `mode`.
+            pub(crate) fn pi_with(w: u32, mode: $crate::support::rounding::RoundingMode) -> W {
+                $crate::consts::pi_by_working_scale::<W>(w, mode)
             }
 
-            // ── Thread-local memoisation for pi / ln2 / ln10 ───────────
-            //
-            // Each helper computes its constant once per thread per
-            // working scale `w` (typically only one or two distinct `w`
-            // values per process, matching the user's SCALE choices).
-            // Subsequent calls hit the cache and return in ~few ns
-            // vs the 50-150 µs the series evaluation would cost.
-            //
-            // The cache is a tiny `Vec<(u32, W)>` per thread —
-            // typical occupancy is 1-3 entries (one per SCALE the
-            // user computes at). Linear scan is faster than any
-            // hash structure at that scale.
-            //
-            // Gated on the `std` feature for `thread_local!`. Under
-            // `no_std` the wrappers degrade to direct computation —
-            // no cache, no contention concerns.
+            /// `π/2` at working scale `w`. Routes `π` through the
+            /// const-folded [`pi_cf`] so the common (`w == SCALE + GUARD`)
+            /// path reads the baked constant rather than re-running the
+            /// runtime divide.
+            pub(crate) fn half_pi<const SCALE: u32>(w: u32) -> W {
+                pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE) >> 1
+            }
 
-            #[cfg(feature = "std")]
-            fn cached<F>(slot_get: &dyn Fn() -> &'static ::std::thread::LocalKey<::core::cell::RefCell<alloc::vec::Vec<(u32, W)>>>, w: u32, compute: F) -> W
-            where
-                F: FnOnce(u32) -> W,
-            {
-                let slot = slot_get();
-                let hit = slot.with(|c| {
-                    let cache = c.borrow();
-                    for &(cw, cv) in cache.iter() {
-                        if cw == w {
-                            return ::core::option::Option::Some(cv);
-                        }
-                    }
-                    ::core::option::Option::None
-                });
-                if let ::core::option::Option::Some(v) = hit {
-                    return v;
+            /// `180/π` (degrees per radian) at working scale `w`, sourced
+            /// from the per-scale oracle table. On the common
+            /// (`w == SCALE + GUARD`) path the const-folded
+            /// [`crate::consts::deg_per_rad_by_scale`]
+            /// reads the baked entry keyed on the const scale; any other
+            /// `w` (no Ziv escalation reaches this in the angle kernels,
+            /// but keep it total) falls to the runtime-keyed `by_working_scale`.
+            pub(crate) fn deg_per_rad_cf<const SCALE: u32>(
+                w: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> W {
+                if w == SCALE + GUARD {
+                    return $crate::consts::deg_per_rad_by_scale::<W>(SCALE + GUARD, mode);
                 }
-                let v = compute(w);
-                slot.with(|c| {
-                    c.borrow_mut().push((w, v));
-                });
-                v
+                $crate::consts::deg_per_rad_by_working_scale::<W>(w, mode)
             }
 
-            #[cfg(not(feature = "std"))]
-            fn cached<F>(_slot_get: &(), w: u32, compute: F) -> W
-            where
-                F: FnOnce(u32) -> W,
-            {
-                compute(w)
-            }
-
-            #[cfg(feature = "std")]
-            fn pi_cache_get() -> &'static ::std::thread::LocalKey<::core::cell::RefCell<alloc::vec::Vec<(u32, W)>>> {
-                ::std::thread_local! {
-                    static SLOT: ::core::cell::RefCell<alloc::vec::Vec<(u32, W)>> = const {
-                        ::core::cell::RefCell::new(alloc::vec::Vec::new())
-                    };
+            /// `π/180` (radians per degree) at working scale `w` — see
+            /// [`deg_per_rad_cf`].
+            pub(crate) fn rad_per_deg_cf<const SCALE: u32>(
+                w: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> W {
+                if w == SCALE + GUARD {
+                    return $crate::consts::rad_per_deg_by_scale::<W>(SCALE + GUARD, mode);
                 }
-                &SLOT
-            }
-            #[cfg(feature = "std")]
-            fn ln2_cache_get() -> &'static ::std::thread::LocalKey<::core::cell::RefCell<alloc::vec::Vec<(u32, W)>>> {
-                ::std::thread_local! {
-                    static SLOT: ::core::cell::RefCell<alloc::vec::Vec<(u32, W)>> = const {
-                        ::core::cell::RefCell::new(alloc::vec::Vec::new())
-                    };
-                }
-                &SLOT
-            }
-            #[cfg(feature = "std")]
-            fn ln10_cache_get() -> &'static ::std::thread::LocalKey<::core::cell::RefCell<alloc::vec::Vec<(u32, W)>>> {
-                ::std::thread_local! {
-                    static SLOT: ::core::cell::RefCell<alloc::vec::Vec<(u32, W)>> = const {
-                        ::core::cell::RefCell::new(alloc::vec::Vec::new())
-                    };
-                }
-                &SLOT
-            }
-            #[cfg(feature = "std")]
-            fn pow10_cache_get() -> &'static ::std::thread::LocalKey<::core::cell::RefCell<alloc::vec::Vec<(u32, W)>>> {
-                ::std::thread_local! {
-                    static SLOT: ::core::cell::RefCell<alloc::vec::Vec<(u32, W)>> = const {
-                        ::core::cell::RefCell::new(alloc::vec::Vec::new())
-                    };
-                }
-                &SLOT
-            }
-
-            #[cfg(feature = "std")]
-            const PI_CACHE_GET: fn() -> &'static ::std::thread::LocalKey<::core::cell::RefCell<alloc::vec::Vec<(u32, W)>>> = pi_cache_get;
-            #[cfg(feature = "std")]
-            const LN2_CACHE_GET: fn() -> &'static ::std::thread::LocalKey<::core::cell::RefCell<alloc::vec::Vec<(u32, W)>>> = ln2_cache_get;
-            #[cfg(feature = "std")]
-            const LN10_CACHE_GET: fn() -> &'static ::std::thread::LocalKey<::core::cell::RefCell<alloc::vec::Vec<(u32, W)>>> = ln10_cache_get;
-            #[cfg(feature = "std")]
-            const POW10_CACHE_GET: fn() -> &'static ::std::thread::LocalKey<::core::cell::RefCell<alloc::vec::Vec<(u32, W)>>> = pow10_cache_get;
-
-            #[cfg(not(feature = "std"))]
-            const PI_CACHE_GET: () = ();
-            #[cfg(not(feature = "std"))]
-            const LN2_CACHE_GET: () = ();
-            #[cfg(not(feature = "std"))]
-            const LN10_CACHE_GET: () = ();
-            #[cfg(not(feature = "std"))]
-            const POW10_CACHE_GET: () = ();
-            /// `π/2` at working scale `w`.
-            pub(crate) fn half_pi(w: u32) -> W {
-                pi(w) >> 1
-            }
-
-            /// Taylor series for `sin` on a reduced `r ∈ [0, π/4]`.
-            ///
-            /// `sin(r) = r − r³/3! + r⁵/5! − …`
-            fn sin_taylor(r: W, w: u32) -> W {
-                let pow10_w = pow10_cached(w);
-                let r2 = mul_cached(r, r, pow10_w);
-                let mut sum = r;
-                let mut term = r;
-                let mut k: u128 = 1;
-                loop {
-                    term = mul_cached(term, r2, pow10_w) / lit((2 * k) * (2 * k + 1));
-                    if term == zero() {
-                        break;
-                    }
-                    if k % 2 == 1 {
-                        sum = sum - term;
-                    } else {
-                        sum = sum + term;
-                    }
-                    k += 1;
-                    if k > SERIES_CAP {
-                        break;
-                    }
-                }
-                sum
-            }
-
-            /// Taylor series for `cos` on a reduced `r ∈ [0, π/4]`.
-            ///
-            /// `cos(r) = 1 − r²/2! + r⁴/4! − r⁶/6! + …`
-            ///
-            /// Converges faster than [`sin_taylor`] at the same `r`
-            /// because the leading `1` dominates the small even-power
-            /// corrections — used as the "upper-half" branch of
-            /// [`sin_fixed`] when the reduced argument exceeds π/4.
-            fn cos_taylor(r: W, w: u32) -> W {
-                let pow10_w = pow10_cached(w);
-                let r2 = mul_cached(r, r, pow10_w);
-                let one_w = one(w);
-                let mut sum = one_w;
-                let mut term = one_w;
-                let mut k: u128 = 1;
-                loop {
-                    term = mul_cached(term, r2, pow10_w)
-                        / lit((2 * k - 1) * (2 * k));
-                    if term == zero() {
-                        break;
-                    }
-                    if k % 2 == 1 {
-                        sum = sum - term;
-                    } else {
-                        sum = sum + term;
-                    }
-                    k += 1;
-                    if k > SERIES_CAP {
-                        break;
-                    }
-                }
-                sum
+                $crate::consts::rad_per_deg_by_working_scale::<W>(w, mode)
             }
 
             /// Sine of a working-scale value.
             ///
-            /// Reduces to `|r| ≤ π/2` via mod-τ; then folds to
-            /// `r ∈ [0, π/2]` via `sin(π − x) = sin(x)`; then routes
-            /// to `sin_taylor` if `r ≤ π/4` or `cos_taylor(π/2 − r)`
-            /// otherwise. The `[0, π/4]` window halves the convergence
-            /// argument and roughly halves the Taylor term count, and
-            /// cos converges faster than sin at the same argument
-            /// because of the constant-1 leading term.
-            pub(crate) fn sin_fixed(v_w: W, w: u32) -> W {
-                let pi_w = pi(w);
-                let tau = pi_w + pi_w;
-                let hp = pi_w >> 1;
-                let qp = hp >> 1; // π/4
-                let q = round_to_nearest_int(div(v_w, tau, w), w);
-                let r = v_w - scale_by_k(tau, q);
-                let neg = r < zero();
-                let abs_r = if neg { -r } else { r };
-                let reduced = if abs_r >= hp { pi_w - abs_r } else { abs_r };
-                let s = if reduced > qp {
-                    // sin(reduced) = cos(π/2 − reduced); the cos
-                    // argument lies in [0, π/4].
-                    cos_taylor(hp - reduced, w)
-                } else {
-                    sin_taylor(reduced, w)
-                };
-                if neg { -s } else { s }
+            /// Delegates to the width-generic kernel
+            /// (`trig_generic::sin_fixed`) — the single source for the
+            /// tier work integer `W` and the SCALE-derived work rungs
+            /// (Constitution rule 2: one generic algorithm). The
+            /// const-folded `pi_cf::<SCALE>(w)` is threaded in so this
+            /// primitive path keeps its compile-time `π` (the generic
+            /// kernel takes `π` as a parameter, so it stays free of the
+            /// `SCALE` const) — the same shape as [`ln_fixed`]'s `ln2`.
+            pub(crate) fn sin_fixed<const SCALE: u32>(v_w: W, w: u32) -> W {
+                $crate::algos::trig::trig_generic::sin_fixed::<W>(
+                    v_w,
+                    w,
+                    pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                )
             }
 
-            /// Joint sine + cosine of a working-scale value.
-            ///
-            /// Replaces two independent `sin_fixed(...)` calls (one
-            /// for sin, one for `sin(x + π/2)` = cos) with a single
-            /// sin evaluation plus a sqrt:
-            ///
-            /// - Reduce mod τ and fold to `|r| ∈ [0, π/2]`, tracking
-            ///   both signs (sin from the mod-τ residue, cos from
-            ///   whether the unfolded `|r|` exceeded `π/2`).
-            /// - Evaluate `|sin(reduced)|` via the same `sin_taylor`
-            ///   or `cos_taylor` branch as `sin_fixed`.
-            /// - Recover `|cos(reduced)|` from the Pythagorean
-            ///   identity: `√(1 − sin²)`.
-            /// - Apply the cached signs.
-            ///
-            /// One Taylor series + one wide sqrt + one wide mul,
-            /// vs the historic two independent Taylor evaluations.
-            /// Halves the wall-clock when both are needed.
-            pub(crate) fn sin_cos_fixed(v_w: W, w: u32) -> (W, W) {
-                let pi_w = pi(w);
-                let tau = pi_w + pi_w;
-                let hp = pi_w >> 1;
-                let qp = hp >> 1;
-                let q = round_to_nearest_int(div(v_w, tau, w), w);
-                let r = v_w - scale_by_k(tau, q);
-                let sin_neg = r < zero();
-                let abs_r = if sin_neg { -r } else { r };
-                let cos_neg = abs_r > hp; // |r| > π/2 → cos negative.
-                let reduced = if cos_neg { pi_w - abs_r } else { abs_r };
-                let s_abs = if reduced > qp {
-                    cos_taylor(hp - reduced, w)
-                } else {
-                    sin_taylor(reduced, w)
-                };
-                // cos² + sin² = 1 ⇒ |cos| = √(1 − sin²).
-                let one_w = one(w);
-                let s2 = mul(s_abs, s_abs, w);
-                let cos_abs = sqrt_fixed(one_w - s2, w);
-                let sin_result = if sin_neg { -s_abs } else { s_abs };
-                let cos_result = if cos_neg { -cos_abs } else { cos_abs };
-                (sin_result, cos_result)
+            /// Joint sine + cosine of a working-scale value: one Taylor
+            /// series + one wide sqrt (`√(1 − sin²)`) vs two independent
+            /// Taylor evaluations. Delegates to the width-generic kernel
+            /// (`trig_generic::sin_cos_fixed`) with the const-folded `π`
+            /// threaded in — see [`sin_fixed`].
+            pub(crate) fn sin_cos_fixed<const SCALE: u32>(v_w: W, w: u32) -> (W, W) {
+                $crate::algos::trig::trig_generic::sin_cos_fixed::<W>(
+                    v_w,
+                    w,
+                    pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                )
             }
 
             /// Cosine of a working-scale value via the cofunction
-            /// identity `cos(x) = sin(π/2 − x)`.
-            ///
-            /// Used by the standalone `cos_strict` kernel path: one
-            /// `sin_fixed` evaluation, no sqrt — strictly cheaper than
-            /// the `sin_cos_fixed` path when only `cos` is needed.
-            /// `sin_cos_fixed` remains the right choice when both
-            /// outputs are wanted (one Taylor + one sqrt vs two
-            /// Taylors).
-            pub(crate) fn cos_fixed(v_w: W, w: u32) -> W {
-                sin_fixed(half_pi(w) - v_w, w)
+            /// identity `cos(x) = sin(π/2 − x)` — one sin evaluation, no
+            /// sqrt. Delegates to the width-generic kernel
+            /// (`trig_generic::cos_fixed`) with the const-folded `π`
+            /// threaded in — see [`sin_fixed`].
+            pub(crate) fn cos_fixed<const SCALE: u32>(v_w: W, w: u32) -> W {
+                $crate::algos::trig::trig_generic::cos_fixed::<W>(
+                    v_w,
+                    w,
+                    pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                )
             }
 
             /// Arctangent of a working-scale value, result in
             /// `(−π/2, π/2)`.
-            pub(crate) fn atan_fixed(v_w: W, w: u32) -> W {
-                let one_w = one(w);
-                let sign = v_w < zero();
-                let mut x = if sign { -v_w } else { v_w };
-                let mut add_half_pi = false;
-                if x > one_w {
-                    x = div(one_w, x, w);
-                    add_half_pi = true;
+            ///
+            /// Delegates to the width-generic kernel
+            /// (`trig_generic::atan_fixed`) — the single source for the
+            /// tier work integer `W` and the SCALE-derived work rungs
+            /// (Constitution rule 2: one generic algorithm). The
+            /// const-folded `pi_cf::<SCALE>(w)` is threaded in so this
+            /// primitive path keeps its compile-time `π` (the generic
+            /// kernel takes `π` as a parameter and uses only its `π/2`
+            /// half for the reciprocal-fold complement) — the same
+            /// shape as [`sin_fixed`].
+            pub(crate) fn atan_fixed<const SCALE: u32>(v_w: W, w: u32) -> W {
+                $crate::algos::trig::trig_generic::atan_fixed::<W>(
+                    v_w,
+                    w,
+                    pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                )
+            }
+
+            // ── Tang lookup tables (ln / exp) ──────────────────────────
+            //
+            // The tier-generic `ln_tang` / `exp_tang` kernels
+            // (`algos::ln::ln_tang`, `algos::exp::exp_tang`) drive the
+            // table through the `WideTrigCore::{ln,exp}_table_entry`
+            // trait methods, which forward here. Each entry is a pure
+            // function of its `(w, idx[, M])` key and is computed on the
+            // stack on demand — one slot per call, no stored table.
+
+            /// Tang ln table size — `ln(1 + i/M)`, `i ∈ [0, M]`.
+            const LN_TANG_M: u32 = 128;
+
+            // ── Tang lookup-table entries ──────────────────────────────
+            //
+            // The Tang exp / sincos kernels index a value-independent table
+            // `T(w)[idx]` (identical for every call at the same `(w, M)`).
+            // Each call needs exactly ONE slot; for exp / sincos it is still
+            // computed directly on the stack — stateless and heap-free —
+            // because those per-slot builders call the runtime `*_fixed`
+            // BigInt kernels (`exp_fixed` / `sin_cos_fixed`), which are not
+            // `const fn`.
+            //
+            // The `ln` table (`ln(1 + i/M)`, M = 128) is the pilot for the
+            // BAKED binary Tang store: each slot is precomputed ONCE by an
+            // mpmath oracle as a binary fixed-point `round(ln(1+i/M) · 2^B)`
+            // (committed rodata in `algos::support::ln_tang_table`), then
+            // SLICED + reconstructed to working scale `w` per call (one
+            // multiply + one shift) — far cheaper than the `ln_fixed` Series
+            // it replaces. The `SCALE` const is unused on the baked path
+            // (the binary table is scale-independent); it is kept on the
+            // signature only to match the trait forwarder. exp / sincos stay
+            // on the Series recompute (a later job replicates the pilot).
+            mod tang_table {
+                use super::*;
+
+                /// `ln(1 + idx/M)` at working scale `w` (`idx ∈ [0, M]`),
+                /// from the baked binary Tang table. idx = 0 → ln(1) = 0.
+                #[inline]
+                pub(super) fn ln_table_entry<const SCALE: u32>(w: u32, idx: usize) -> W {
+                    $crate::algos::support::ln_tang_table::ln_table_entry_baked::<W>(w, idx, pow10_table(w))
                 }
-                // Argument halvings: atan(x) = 2·atan(x/(1+√(1+x²))).
-                //
-                // Each halving reduces |x| by a factor ≈ 2, so the
-                // Taylor series convergence rate gains ~log₂(4) = 2
-                // bits per term. Cost per halving: 1 wide mul + 1 wide
-                // sqrt + 1 wide div ≈ 7 µs at D307. Savings per
-                // halving: ~p_bits/halvings² Taylor terms × ~1.5 µs.
-                //
-                // The break-even (where one more halving costs more
-                // than the term savings) sits around halvings ≈
-                // log₂(p_bits/halving_cost), which lands at 6–7 for
-                // D153/D307 and 5–6 for D76. We pick the per-tier
-                // sweet spot from w (the working scale = SCALE + GUARD
-                // decimal digits): wider working scale → more halvings
-                // worth taking.
-                let halvings: u32 = if w < 60 {
-                    5  // D38-equivalent guard (~50 digits)
-                } else if w < 110 {
-                    6  // D76 / D153 light-end
+
+                /// `exp(idx · ln2 / m)` at working scale `w`
+                /// (`idx ∈ [0, m)`), from the baked binary Tang table.
+                /// idx = 0 → exp(0) = 1. Replaces the per-call
+                /// `exp_fixed` Series recompute. The `SCALE` const is
+                /// unused on the baked path (the binary table is
+                /// scale-independent); kept on the signature to match the
+                /// trait forwarder.
+                #[inline]
+                pub(super) fn exp_table_entry<const SCALE: u32>(w: u32, idx: usize, m: u32) -> W {
+                    $crate::algos::support::exp_tang_table::exp_table_entry_baked::<W>(w, idx, m, pow10_table(w))
+                }
+
+                /// `(sin(c_j), cos(c_j))` with `c_j = idx · π / (4·m)` at
+                /// working scale `w` (`idx ∈ [0, m]`), from the baked
+                /// binary Tang table. idx = 0 → (sin 0, cos 0) = (0, 1).
+                ///
+                /// BAKED binary Tang store: each `(sin, cos)` pair is
+                /// precomputed ONCE by an mpmath oracle as binary
+                /// fixed-point `round(value · 2^B)` (committed rodata in
+                /// `algos::support::sincos_tang_table`), then SLICED +
+                /// reconstructed to working scale `w` per call (one
+                /// multiply + one shift per component) — far cheaper than
+                /// the `sin_cos_fixed` Series it replaces. `SCALE` is
+                /// unused on the baked path (the binary table is
+                /// scale-independent); it is kept on the signature only to
+                /// match the trait forwarder.
+                #[inline]
+                pub(super) fn sincos_table_entry<const SCALE: u32>(w: u32, idx: usize, m: u32) -> (W, W) {
+                    $crate::algos::support::sincos_tang_table::sincos_table_entry_baked::<W>(
+                        w,
+                        idx,
+                        m,
+                        pow10_table(w),
+                    )
+                }
+            }
+
+            /// Differential validity wall for the baked binary Tang `ln`
+            /// table: the baked accessor
+            /// (`ln_tang_table::ln_table_entry_baked`) must reproduce the
+            /// `ln_fixed` Series recompute it replaced, to within the
+            /// artanh reconstruction's working-LSB tolerance, for EVERY
+            /// table slot `i ∈ [0, 128]` across sampled working scales this
+            /// tier can request (`w = SCALE + GUARD`, plus the wide
+            /// Ziv-escalation band up to the `W::BITS/8` cap).
+            ///
+            /// The REFERENCE is the Series evaluated at a much higher guard
+            /// (`w + REF_EXTRA` digits) and narrowed back to `w` — at that
+            /// depth the `ln_fixed` Series has converged, so the narrowed
+            /// value is the correctly-rounded `round(ln(1+i/M) · 10^w)`
+            /// oracle proxy. The OLD per-call Series ran at `w` itself,
+            /// where (especially at the minimal guard `w = GUARD`, SCALE=0)
+            /// it carried tens of working-LSBs of its own truncation error
+            /// — the very imprecision the baked oracle table removes. We
+            /// therefore validate the baked entry against the CONVERGED
+            /// reference (tight tolerance), not the low-guard Series. The
+            /// reconstruction re-rounds with GUARD digits + Ziv on top, so
+            /// the entry only needs ~1-ULP accuracy; the assert's slack sits
+            /// far below the storage ULP the GUARD budget protects.
+            #[cfg(test)]
+            pub(crate) fn ln_table_baked_vs_series(tier: &str) {
+                // Extra guard digits at which the `ln_fixed` Series has
+                // fully converged relative to the target scale `w`.
+                const REF_EXTRA: u32 = 40;
+                // Correctly-rounded `round(ln(1+idx/M) · 10^w)` reference:
+                // Series at `w + REF_EXTRA`, narrowed back to `w` by a
+                // round-half-up divide by `10^REF_EXTRA`.
+                fn ref_slot(w: u32, idx: usize) -> W {
+                    if idx == 0 {
+                        return zero();
+                    }
+                    let w_hi = w + REF_EXTRA;
+                    let one_hi = one(w_hi);
+                    let scaled = (one_hi * lit(idx as u128)) / lit(128u128);
+                    let hi = ln_fixed::<0>(one_hi + scaled, w_hi);
+                    // narrow w_hi -> w, round half up (values are positive).
+                    let p = pow10(REF_EXTRA);
+                    let half = p / lit(2);
+                    (hi + half) / p
+                }
+                // The directed/nearest narrowing caps the WORKING scale at
+                // `W::BITS / 8` decimal digits (the baked accessor handles
+                // the full cap). The Series REFERENCE, however, runs at
+                // `w + REF_EXTRA` and forms wide `sqrt_fixed` scratch that
+                // needs ~`4·w` headroom, so we can only build a converged
+                // reference well below the cap. Sample `w` up to a quarter
+                // of `W::BITS / 8` (leaving ample `sqrt_fixed` headroom) —
+                // that already spans every common `w = SCALE + GUARD` for
+                // the tier plus a healthy slice of the Ziv band.
+                let cap = <W as $crate::int::types::traits::BigInt>::BITS / 8;
+                let max_w = (cap / 4).saturating_sub(REF_EXTRA).max(GUARD);
+                let tol = lit(2); // working LSBs of allowed disagreement
+                let mut max_diff: W = zero();
+                let mut w = GUARD; // smallest reachable working scale (SCALE=0)
+                while w <= max_w {
+                    for idx in 0..=128usize {
+                        let baked = $crate::algos::support::ln_tang_table::ln_table_entry_baked::<W>(w, idx, pow10_table(w));
+                        let refv = ref_slot(w, idx);
+                        let diff = if baked >= refv { baked - refv } else { refv - baked };
+                        if diff > max_diff {
+                            max_diff = diff;
+                        }
+                        assert!(
+                            diff <= tol,
+                            "{tier}: baked ln_table_entry disagrees with converged Series at w={w} i={idx} by {diff:?} working LSBs (tol {tol:?})"
+                        );
+                    }
+                    w += if w < GUARD + 6 { 1 } else { 37 };
+                }
+                // Separately exercise the BAKED accessor right up to the
+                // full directed-narrow cap `W::BITS / 8` (where no Series
+                // reference can be built) to prove the conversion product
+                // `slot_hi · 10^w` never overflows `W` at the production
+                // ceiling. A panic here = an overflow; the values are
+                // checked for monotone sanity (0 < L_1 < L_64 < L_128).
+                let mut wc = max_w;
+                while wc <= cap {
+                    let z = $crate::algos::support::ln_tang_table::ln_table_entry_baked::<W>(wc, 0, pow10_table(wc));
+                    let a = $crate::algos::support::ln_tang_table::ln_table_entry_baked::<W>(wc, 1, pow10_table(wc));
+                    let b = $crate::algos::support::ln_tang_table::ln_table_entry_baked::<W>(wc, 64, pow10_table(wc));
+                    let c = $crate::algos::support::ln_tang_table::ln_table_entry_baked::<W>(wc, 128, pow10_table(wc));
+                    assert!(
+                        z == zero() && a > zero() && b > a && c > b,
+                        "{tier}: baked ln_table_entry not sane at cap w={wc}"
+                    );
+                    if wc == cap { break; }
+                    wc = (wc + 53).min(cap);
+                }
+                eprintln!("ln_table_baked_vs_series {tier}: max |baked-ref| = {max_diff:?} working LSBs (tol {tol:?}, ref max_w {max_w}, cap {cap})");
+            }
+
+            /// Differential validity wall for the baked binary Tang
+            /// `(sin(c_j), cos(c_j))` table: the baked accessor
+            /// (`sincos_tang_table::sincos_table_entry_baked`) must
+            /// reproduce the `sin_cos_fixed` Series recompute it replaced,
+            /// to within a small working-LSB tolerance, for EVERY table
+            /// slot `j ∈ [0, M]` across sampled working scales this tier
+            /// can request.
+            ///
+            /// The REFERENCE is the Series evaluated at a much higher guard
+            /// (`w + REF_EXTRA` digits) and narrowed back to `w` — at that
+            /// depth the `sin_cos_fixed` Series has converged, so the
+            /// narrowed value is the correctly-rounded `round(value · 10^w)`
+            /// oracle proxy. The OLD per-call Series ran at `w` itself,
+            /// where (especially at the minimal guard) it carried its own
+            /// truncation error — the imprecision the baked oracle table
+            /// removes. We therefore validate the baked entry against the
+            /// CONVERGED reference (tight tolerance), not the low-guard
+            /// Series. The final sin/cos/tan re-rounds with GUARD digits +
+            /// Ziv on top, so the entry only needs ~1-ULP accuracy.
+            #[cfg(test)]
+            pub(crate) fn sincos_table_baked_vs_series(tier: &str) {
+                use crate::algos::support::sincos_tang_table::SINCOS_TANG_M;
+                // Extra guard digits at which the `sin_cos_fixed` Series has
+                // fully converged relative to the target scale `w`.
+                const REF_EXTRA: u32 = 40;
+                let m = SINCOS_TANG_M;
+                // Correctly-rounded `round(value · 10^w)` reference pair:
+                // `sin_cos_fixed` at `w + REF_EXTRA`, narrowed back to `w`
+                // by a round-half-up divide by `10^REF_EXTRA`. For idx = 0
+                // the pair is exactly `(0, 10^w)`.
+                fn ref_pair(w: u32, idx: usize, m: u32) -> (W, W) {
+                    if idx == 0 {
+                        return (zero(), one(w));
+                    }
+                    let w_hi = w + REF_EXTRA;
+                    let cj_hi = (pi_cf::<0>(w_hi, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                        * lit(idx as u128))
+                        / lit((4 * m) as u128);
+                    let (s_hi, c_hi) = sin_cos_fixed::<0>(cj_hi, w_hi);
+                    let p = pow10(REF_EXTRA);
+                    let half = p / lit(2);
+                    ((s_hi + half) / p, (c_hi + half) / p)
+                }
+                // Match `ln_table_baked_vs_series`: the directed/nearest
+                // narrowing caps the WORKING scale at `W::BITS / 8` decimal
+                // digits (the baked accessor handles the full cap). The
+                // Series REFERENCE runs at `w + REF_EXTRA` and forms wide
+                // scratch, so we sample `w` up to a quarter of `W::BITS / 8`
+                // — already spanning every common `w = SCALE + GUARD` plus a
+                // healthy slice of the Ziv band.
+                let cap = <W as $crate::int::types::traits::BigInt>::BITS / 8;
+                let max_w = (cap / 4).saturating_sub(REF_EXTRA).max(GUARD);
+                let tol = lit(2); // working LSBs of allowed disagreement
+                let mut max_diff: W = zero();
+                let mut w = GUARD; // smallest reachable working scale (SCALE=0)
+                while w <= max_w {
+                    for idx in 0..=(m as usize) {
+                        let (bs, bc) = $crate::algos::support::sincos_tang_table::sincos_table_entry_baked::<W>(w, idx, m, pow10_table(w));
+                        let (rs, rc) = ref_pair(w, idx, m);
+                        let ds = if bs >= rs { bs - rs } else { rs - bs };
+                        let dc = if bc >= rc { bc - rc } else { rc - bc };
+                        if ds > max_diff { max_diff = ds; }
+                        if dc > max_diff { max_diff = dc; }
+                        assert!(
+                            ds <= tol && dc <= tol,
+                            "{tier}: baked sincos_table_entry disagrees with converged Series at w={w} idx={idx} by (sin {ds:?}, cos {dc:?}) working LSBs (tol {tol:?})"
+                        );
+                    }
+                    w += if w < GUARD + 6 { 1 } else { 37 };
+                }
+                // Separately exercise the BAKED accessor right up to the
+                // full directed-narrow cap `W::BITS / 8` (where no Series
+                // reference can be built) to prove the conversion product
+                // never overflows `W` at the production ceiling. A panic
+                // here = an overflow; the values are checked for sanity.
+                // Sampling `c_1 = π/(4M)` (near 0: sin tiny, cos ≈ 1),
+                // `c_h = π/8` at idx = M/2 (sin < cos, both > 0), and
+                // `c_M = π/4` at idx = M (sin = cos = √2/2 exactly), all
+                // strictly inside `(0, 10^wc)`; and idx = 0 → `(0, 10^wc)`.
+                let mut wc = max_w;
+                while wc <= cap {
+                    let pw = pow10_table(wc);
+                    let (z_s, z_c) = $crate::algos::support::sincos_tang_table::sincos_table_entry_baked::<W>(wc, 0, m, pw);
+                    let (a_s, a_c) = $crate::algos::support::sincos_tang_table::sincos_table_entry_baked::<W>(wc, 1, m, pw);
+                    let (h_s, h_c) = $crate::algos::support::sincos_tang_table::sincos_table_entry_baked::<W>(wc, (m / 2) as usize, m, pw);
+                    let (m_s, m_c) = $crate::algos::support::sincos_tang_table::sincos_table_entry_baked::<W>(wc, m as usize, m, pw);
+                    assert!(
+                        // idx = 0 → (0, 1):
+                        z_s == zero() && z_c == pw
+                            // idx = 1 (near 0): 0 < sin < cos < 1:
+                            && a_s > zero() && a_s < a_c && a_c < pw
+                            // idx = M/2 (π/8): sin and cos increase/decrease
+                            // monotonically from idx=1, both strictly in (0,1),
+                            // sin still < cos:
+                            && h_s > a_s && h_s < h_c && h_c < a_c && h_c < pw
+                            // idx = M (π/4): sin = cos = √2/2, both > the
+                            // idx=M/2 sin and < the idx=M/2 cos:
+                            && m_s == m_c && m_s > h_s && m_c < h_c && m_s < pw,
+                        "{tier}: baked sincos_table_entry not sane at cap w={wc}"
+                    );
+                    if wc == cap { break; }
+                    wc = (wc + 53).min(cap);
+                }
+                eprintln!("sincos_table_baked_vs_series {tier}: max |baked-ref| = {max_diff:?} working LSBs (tol {tol:?}, ref max_w {max_w}, cap {cap})");
+            }
+
+            /// Differential validity wall for the baked binary Tang `exp`
+            /// table: the baked accessor
+            /// (`exp_tang_table::exp_table_entry_baked`) must reproduce the
+            /// OLD per-call `exp_fixed` Series recompute it replaced, to
+            /// within a tight working-LSB tolerance, for EVERY table slot
+            /// `idx ∈ [0, M)` this tier can request (`M = $exp_tang_m`),
+            /// across sampled working scales (`w = SCALE + GUARD`, plus the
+            /// Ziv-escalation band up to a safe fraction of the
+            /// `W::BITS/8` cap).
+            ///
+            /// As with the `ln` wall, the REFERENCE is the Series evaluated
+            /// at a much higher guard (`w + REF_EXTRA` digits) and narrowed
+            /// back to `w` — at that depth the `exp_fixed` Series has
+            /// converged, so the narrowed value is the correctly-rounded
+            /// `round(exp(idx·ln2/M) · 10^w)` oracle proxy. The OLD per-call
+            /// Series ran at `w` itself (carrying its own truncation error,
+            /// the imprecision the baked oracle removes), so we validate the
+            /// baked entry against the CONVERGED reference. The
+            /// reconstruction re-rounds with GUARD digits + Ziv on top, so
+            /// the entry only needs ~1-ULP accuracy.
+            #[cfg(test)]
+            pub(crate) fn exp_table_baked_vs_series(tier: &str) {
+                const M: u32 = $exp_tang_m;
+                // Extra guard digits at which the `exp_fixed` Series has
+                // fully converged relative to the target scale `w`.
+                const REF_EXTRA: u32 = 40;
+                // Correctly-rounded `round(exp(idx·ln2/M) · 10^w)`
+                // reference: Series at `w + REF_EXTRA`, narrowed back to `w`
+                // by a round-half-up divide by `10^REF_EXTRA`. exp(c_j) > 0,
+                // so the positive-narrowing bias applies.
+                fn ref_slot(w: u32, idx: usize, m: u32) -> W {
+                    if idx == 0 {
+                        return one(w);
+                    }
+                    let w_hi = w + REF_EXTRA;
+                    let cj_hi = (ln2_cf::<0>(w_hi, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                        * lit(idx as u128)) / lit(m as u128);
+                    let hi = exp_fixed::<0>(cj_hi, w_hi);
+                    // narrow w_hi -> w, round half up (values are positive).
+                    let p = pow10(REF_EXTRA);
+                    let half = p / lit(2);
+                    (hi + half) / p
+                }
+                // Sample `w` up to a safe fraction of the directed-narrow
+                // cap `W::BITS / 8`. The Series REFERENCE runs at
+                // `w + REF_EXTRA` and the `exp_fixed` reduction forms wide
+                // internal scratch, so we keep a generous headroom (a
+                // quarter of the cap) — that already spans every common
+                // `w = SCALE + GUARD` for the tier plus a slice of the Ziv
+                // band. The baked accessor itself is exercised to the full
+                // cap by the `ln` wall's cap sweep (same conversion shape).
+                let cap = <W as $crate::int::types::traits::BigInt>::BITS / 8;
+                let max_w = (cap / 4).saturating_sub(REF_EXTRA).max(GUARD);
+                let tol = lit(2); // working LSBs of allowed disagreement
+                let mut max_diff: W = zero();
+                let mut w = GUARD; // smallest reachable working scale (SCALE=0)
+                while w <= max_w {
+                    for idx in 0..M as usize {
+                        let baked = $crate::algos::support::exp_tang_table::exp_table_entry_baked::<W>(w, idx, M, pow10_table(w));
+                        let refv = ref_slot(w, idx, M);
+                        let diff = if baked >= refv { baked - refv } else { refv - baked };
+                        if diff > max_diff {
+                            max_diff = diff;
+                        }
+                        assert!(
+                            diff <= tol,
+                            "{tier}: baked exp_table_entry disagrees with converged Series at w={w} idx={idx} M={M} by {diff:?} working LSBs (tol {tol:?})"
+                        );
+                    }
+                    w += if w < GUARD + 6 { 1 } else { 37 };
+                }
+                eprintln!("exp_table_baked_vs_series {tier}: max |baked-ref| = {max_diff:?} working LSBs (tol {tol:?}, M {M}, ref max_w {max_w}, cap {cap})");
+            }
+
+            /// Zero-sized per-tier marker implementing
+            /// [`crate::algos::support::wide_trig_core::WideTrigCore`].
+            /// Binds this tier's work integer [`W`] / [`Wexp`] and the
+            /// storage integer as the trait's associated types so the
+            /// generic `*_series` functions can drive the tier through
+            /// the trait. The methods forward to the per-tier free
+            /// functions emitted above; collapsing those bodies to one
+            /// `BigInt`-generic core (the `exp_generic` precedent) is a
+            /// later, local change behind this surface.
+            pub(crate) struct Core;
+
+            impl $crate::algos::support::wide_trig_core::WideTrigCore for Core {
+                type W = W;
+                type Wexp = Wexp;
+                type Wagm = Wagm;
+                type Storage = $Storage;
+                const GUARD: u32 = GUARD;
+
+                #[inline]
+                fn storage_zero() -> $Storage {
+                    <$Storage as $crate::int::types::traits::BigInt>::ZERO
+                }
+                #[inline]
+                fn storage_one(scale: u32) -> $Storage {
+                    <$Storage as $crate::int::types::traits::BigInt>::TEN.pow(scale)
+                }
+                #[inline]
+                fn storage_max() -> $Storage {
+                    <$Storage>::MAX
+                }
+                #[inline]
+                fn storage_min() -> $Storage {
+                    <$Storage>::MIN
+                }
+                #[inline]
+                fn zero() -> W {
+                    zero()
+                }
+                #[inline]
+                fn to_work_scaled(raw: $Storage, working_digits: u32) -> W {
+                    to_work_scaled(raw, working_digits)
+                }
+                #[inline]
+                fn to_work(raw: $Storage) -> W {
+                    to_work(raw)
+                }
+                #[inline]
+                fn round_to_storage_with(
+                    v: W,
+                    w: u32,
+                    target: u32,
+                    mode: $crate::support::rounding::RoundingMode,
+                ) -> $Storage {
+                    round_to_storage_with(v, w, target, mode)
+                }
+                #[inline]
+                fn to_work_scaled_agm(raw: $Storage, working_digits: u32) -> Wagm {
+                    to_work_scaled_agm(raw, working_digits)
+                }
+                #[inline]
+                fn round_to_storage_with_agm(
+                    v: Wagm,
+                    w: u32,
+                    target: u32,
+                    mode: $crate::support::rounding::RoundingMode,
+                ) -> $Storage {
+                    round_to_storage_with_g::<Wagm>(v, w, target, mode)
+                }
+                #[inline]
+                fn round_to_storage_directed(
+                    base_guard: u32,
+                    target: u32,
+                    mode: $crate::support::rounding::RoundingMode,
+                    recompute: &mut dyn FnMut(u32) -> W,
+                ) -> $Storage {
+                    round_to_storage_directed(base_guard, target, mode, recompute)
+                }
+                #[inline]
+                fn round_to_storage_directed_never_exact(
+                    base_guard: u32,
+                    target: u32,
+                    mode: $crate::support::rounding::RoundingMode,
+                    recompute: &mut dyn FnMut(u32) -> W,
+                ) -> $Storage {
+                    round_to_storage_directed_never_exact(base_guard, target, mode, recompute)
+                }
+                #[inline]
+                fn exp_fixed<const SCALE: u32>(v_w: W, w: u32) -> W {
+                    exp_fixed::<SCALE>(v_w, w)
+                }
+                #[inline]
+                fn ln_fixed<const SCALE: u32>(v_w: W, w: u32) -> W {
+                    ln_fixed::<SCALE>(v_w, w)
+                }
+                #[inline]
+                fn sin_fixed<const SCALE: u32>(v_w: W, w: u32) -> W {
+                    sin_fixed::<SCALE>(v_w, w)
+                }
+                #[inline]
+                fn cos_fixed<const SCALE: u32>(v_w: W, w: u32) -> W {
+                    cos_fixed::<SCALE>(v_w, w)
+                }
+                #[inline]
+                fn sin_cos_fixed<const SCALE: u32>(v_w: W, w: u32) -> (W, W) {
+                    sin_cos_fixed::<SCALE>(v_w, w)
+                }
+                #[inline]
+                fn atan_fixed<const SCALE: u32>(v_w: W, w: u32) -> W {
+                    atan_fixed::<SCALE>(v_w, w)
+                }
+                #[inline]
+                fn div(a: W, b: W, w: u32) -> W {
+                    div(a, b, w)
+                }
+                #[inline]
+                fn mul(a: W, b: W, w: u32) -> W {
+                    mul(a, b, w)
+                }
+                #[inline]
+                fn sqrt_fixed(v: W, w: u32) -> W {
+                    sqrt_fixed(v, w)
+                }
+                #[inline]
+                fn log1p_fixed(t: W, w: u32) -> W {
+                    log1p_fixed(t, w)
+                }
+                #[inline]
+                fn bit_length(v: W) -> u32 {
+                    bit_length(v)
+                }
+                #[inline]
+                fn exp_result_int_digits(mag_at_scale: W, scale: u32) -> u32 {
+                    exp_result_int_digits(mag_at_scale, scale)
+                }
+                #[inline]
+                fn sinh_pos_wide<const SCALE: u32>(av_w: W, w: u32) -> W {
+                    sinh_pos_wide::<SCALE>(av_w, w)
+                }
+                #[inline]
+                fn cosh_pos_wide<const SCALE: u32>(av_w: W, w: u32) -> W {
+                    cosh_pos_wide::<SCALE>(av_w, w)
+                }
+                #[inline]
+                fn tanh_pos_wide<const SCALE: u32>(av_w: W, w: u32) -> W {
+                    tanh_pos_wide::<SCALE>(av_w, w)
+                }
+                #[inline]
+                fn ln_fixed_routed_agm<const SCALE: u32>(v_w: Wagm, w: u32) -> Wagm {
+                    ln_fixed_routed_agm::<SCALE>(v_w, w)
+                }
+                fn round_to_storage_directed_near_special(
+                    base_guard: u32,
+                    target: u32,
+                    mode: $crate::support::rounding::RoundingMode,
+                    recompute: &mut dyn FnMut(u32) -> W,
+                ) -> $Storage {
+                    round_to_storage_directed_near_special(base_guard, target, mode, recompute)
+                }
+                #[inline]
+                fn one(w: u32) -> W {
+                    one(w)
+                }
+                #[inline]
+                fn lit(n: u128) -> W {
+                    lit(n)
+                }
+                #[inline]
+                fn ln2<const SCALE: u32>(w: u32) -> W {
+                    ln2_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                }
+                #[inline]
+                fn div_cached(a: W, b: W, pow10_w: W) -> W {
+                    div_cached(a, b, pow10_w)
+                }
+                #[inline]
+                fn round_to_nearest_int(v: W, w: u32) -> i128 {
+                    round_to_nearest_int(v, w)
+                }
+                #[inline]
+                fn pow10(n: u32) -> W {
+                    pow10(n)
+                }
+                #[inline]
+                fn w_bits() -> u32 {
+                    <W as $crate::int::types::traits::BigInt>::BITS
+                }
+                #[inline]
+                fn ln_table_entry<const SCALE: u32>(w: u32, idx: usize) -> W {
+                    tang_table::ln_table_entry::<SCALE>(w, idx)
+                }
+                #[inline]
+                fn exp_table_entry<const SCALE: u32>(w: u32, idx: usize, m: u32) -> W {
+                    tang_table::exp_table_entry::<SCALE>(w, idx, m)
+                }
+                #[inline]
+                fn pi<const SCALE: u32>(w: u32) -> W {
+                    pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                }
+                #[inline]
+                fn half_pi<const SCALE: u32>(w: u32) -> W {
+                    half_pi::<SCALE>(w)
+                }
+                #[inline]
+                fn deg_per_rad<const SCALE: u32>(w: u32) -> W {
+                    deg_per_rad_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                }
+                #[inline]
+                fn rad_per_deg<const SCALE: u32>(w: u32) -> W {
+                    rad_per_deg_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                }
+                #[inline]
+                fn sincos_table_entry<const SCALE: u32>(w: u32, idx: usize, m: u32) -> (W, W) {
+                    tang_table::sincos_table_entry::<SCALE>(w, idx, m)
+                }
+            }
+
+            // ── Matcher-routed working-scale `ln`/`exp` surfaces ────────
+            //
+            // The bypass-fix Class-G remediation. These wrap `ln_fixed`
+            // and `exp_fixed` with the SAME scale gates as
+            // `policy::ln::select` / `policy::exp::select` — routed via the
+            // central `policy::{ln,exp}::is_tang::<N, SCALE>` const fns so
+            // the routed surface tracks any future policy widening
+            // automatically (no hand-kept duplicate). When the policy
+            // routes Tang, the call lands in the working-scale shared
+            // surface `tang_ln_fixed` / `tang_exp_fixed` (the same
+            // surfaces `ln_tang` / `exp_tang` wrap at storage level); the
+            // storage-level Ziv/EXTERNAL_EXTRA widening that the storage
+            // kernels add OVER `tang_*_fixed` is the caller's concern at
+            // the working-scale composition sites (`powf_strict`,
+            // `log_*_with_kernel`, `asinh_strict`, …), which size their
+            // own working guard from the composition's `|k|`-amplifying
+            // arithmetic before calling here.
+            //
+            // For `exp_fixed_routed`, `tang_exp_fixed` runs with
+            // `INTERNAL_EXTRA = true` so the kernel's own `extra` lift
+            // covers arbitrary `|k|` — matching the working-scale Tang
+            // surface the trig hyperbolics already use in `policy::trig`
+            // (e.g. D153 sinh/cosh/tanh, `tang_exp_fixed::<C, 128, true>`).
+            // This is what makes the routed surface safe to use without
+            // re-checking the policy's `ByValue` small-`|x|` gate at the
+            // call site: the kernel absorbs the lift internally.
+            //
+            // `M` / `CAP` are the per-tier values supplied by the macro
+            // call (`$exp_tang_m`, `$ln_tang_cap`) — chosen to mirror the
+            // dominant per-tier values from `policy::ln::tang_routed` /
+            // `policy::exp::tang_routed`. The routed surfaces use one
+            // `(M, CAP)` per tier; per-scale-band M-splits (e.g. D57's
+            // 18..=22 vs 45..=56 in `policy::exp`) collapse to the
+            // dominant tier value here because the working-scale routed
+            // surface is single-source-per-tier.
+
+            /// Tang/Series-routed working-scale `ln(v_w) -> v_w` for this
+            /// tier. Bit-equivalent to the previous direct `ln_fixed`
+            /// call wherever the policy routes Series; routes through
+            /// the shared `tang_ln_fixed` surface (the same one
+            /// `ln_tang` wraps at storage level) wherever the policy
+            /// routes Tang. The bypass-fix call sites
+            /// (`log_strict_with_kernel`, `log2_*_with_kernel`,
+            /// `log10_*_with_kernel`, `powf_strict`, `powf_strict_with`,
+            /// `asinh_strict`, `acosh_strict`, `atanh_strict`, and their
+            /// `_with` siblings) go through this instead of `ln_fixed`
+            /// directly, so the wide-tier log family now inherits the
+            /// matcher's Tang routing (the Class-G remediation).
+            #[cfg(feature = "_wide-support")]
+            #[inline]
+            pub(crate) fn ln_fixed_routed<const SCALE: u32>(v_w: W, w: u32) -> W {
+                if const { $crate::policy::ln::is_tang::<$n_limbs, SCALE>() } {
+                    // INTERNAL_EXTRA = true: run at extended working scale
+                    // `w + 12` and residual-preserving narrow back to `w`,
+                    // so the directed-rounding Ziv escalation in the caller
+                    // (e.g. asinh_strict_with @ MAX scale) sees a residual
+                    // sign bit-identical to Series's `ln_fixed`. Mirrors the
+                    // `true, true` flags every `policy::ln::tang_routed`
+                    // arm now uses.
+                    $crate::algos::ln::ln_tang::tang_ln_fixed::<Core, $ln_tang_cap, false, SCALE>(v_w, w)
                 } else {
-                    7  // D153 heavy / D307
-                };
-                let pow10_w = pow10_cached(w);
-                for _ in 0..halvings {
-                    let x2 = mul_cached(x, x, pow10_w);
-                    let denom = one_w + sqrt_fixed(one_w + x2, w);
-                    x = div_cached(x, denom, pow10_w);
+                    ln_fixed::<SCALE>(v_w, w)
                 }
-                let mut result = atan_taylor(x, w) << halvings;
-                if add_half_pi {
-                    result = half_pi(w) - result;
+            }
+            #[cfg(not(feature = "_wide-support"))]
+            #[inline]
+            pub(crate) fn ln_fixed_routed<const SCALE: u32>(v_w: W, w: u32) -> W {
+                ln_fixed::<SCALE>(v_w, w)
+            }
+
+            /// Tang/Series-routed working-scale `exp(v_w) -> v_w` for
+            /// this tier. Bit-equivalent to the previous direct
+            /// `exp_fixed` call wherever the policy routes Series;
+            /// routes through `tang_exp_fixed::<Core, M, true>` (the
+            /// `INTERNAL_EXTRA` lift handles arbitrary `|k|`) wherever
+            /// the policy routes Tang. The bypass-fix call sites
+            /// (`exp2_strict`, `exp2_strict_with_kernel`, `powf_strict`,
+            /// `powf_strict_with`, `sinh_cosh_strict`, plus the per-mode
+            /// `_with` siblings) go through this instead of `exp_fixed`
+            /// directly. The `exp_strict` dispatcher still routes through
+            /// `policy::exp::dispatch` so its `ByValue` gate (which
+            /// chooses Series for large-`|x|` to skip Tang's `2^k`
+            /// reassembly amplification at storage) remains in effect at
+            /// the strict-narrowing layer; the working-scale composition
+            /// sites just need a fast `e^{stuff}` and let
+            /// `tang_exp_fixed`'s internal `extra` lift cover the
+            /// large-`|k|` case.
+            #[cfg(feature = "_wide-support")]
+            #[inline]
+            pub(crate) fn exp_fixed_routed<const SCALE: u32>(v_w: W, w: u32) -> W {
+                if const { $crate::policy::exp::is_tang::<$n_limbs, SCALE>() } {
+                    $crate::algos::exp::exp_tang::tang_exp_fixed::<Core, $exp_tang_m, true, SCALE>(v_w, w)
+                } else {
+                    exp_fixed::<SCALE>(v_w, w)
                 }
-                if sign { -result } else { result }
+            }
+            #[cfg(not(feature = "_wide-support"))]
+            #[inline]
+            pub(crate) fn exp_fixed_routed<const SCALE: u32>(v_w: W, w: u32) -> W {
+                exp_fixed::<SCALE>(v_w, w)
+            }
+
+            // ── Wagm (composition / AGM wide-work) bridges ─────────────
+            //
+            // The two-core split: the PRIMITIVES (ln/exp/sin/cos/atan) run on
+            // `$Work` (`W`, narrowed per tier); the COMPOSITIONS + AGM run on
+            // `Wagm` (`$AgmWork`, kept wide enough for their guard ceiling and
+            // intermediate growth). These are thin storage<->Wagm boundary
+            // bridges + the routed ln/exp at `Wagm` (delegating to the SAME
+            // generic kernels `W` uses) — no algorithm logic is duplicated.
+            // While `Wagm == $Work` they are bit-identical to the `W` path.
+            #[inline]
+            pub(crate) fn to_work_agm(raw: $Storage) -> Wagm {
+                $crate::int::types::traits::BigInt::resize_to::<Wagm>(raw)
+                    * $crate::algos::exp::exp_generic::pow10::<Wagm>(GUARD)
+            }
+            #[inline]
+            pub(crate) fn to_work_scaled_agm(raw: $Storage, working_digits: u32) -> Wagm {
+                $crate::int::types::traits::BigInt::resize_to::<Wagm>(raw)
+                    * $crate::algos::exp::exp_generic::pow10::<Wagm>(working_digits)
+            }
+            #[inline]
+            pub(crate) fn one_agm(w: u32) -> Wagm {
+                $crate::algos::exp::exp_generic::pow10::<Wagm>(w)
+            }
+            #[inline]
+            pub(crate) fn zero_agm() -> Wagm {
+                <Wagm as $crate::int::types::traits::BigInt>::ZERO
+            }
+            #[inline]
+            pub(crate) fn round_to_storage_agm(v: Wagm, w: u32, target: u32) -> $Storage {
+                round_to_storage_with_g::<Wagm>(
+                    v,
+                    w,
+                    target,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
+            }
+            #[inline]
+            pub(crate) fn div_agm(a: Wagm, b: Wagm, w: u32) -> Wagm {
+                $crate::algos::exp::exp_generic::div::<Wagm>(a, b, w)
+            }
+            #[inline]
+            pub(crate) fn round_to_nearest_int_agm(v: Wagm, w: u32) -> i128 {
+                $crate::algos::exp::exp_generic::round_to_nearest_int::<Wagm>(v, w)
+            }
+            #[inline]
+            pub(crate) fn mul_agm(a: Wagm, b: Wagm, w: u32) -> Wagm {
+                $crate::algos::exp::exp_generic::mul::<Wagm>(a, b, w)
+            }
+            #[inline]
+            pub(crate) fn sqrt_fixed_agm(v: Wagm, w: u32) -> Wagm {
+                $crate::algos::exp::exp_generic::sqrt_fixed::<Wagm>(v, w)
+            }
+            /// `ln 2` const-folded at the base working scale for the
+            /// wide composition core — the `Wagm` sibling of [`ln2_cf`].
+            /// On the common path (`w == SCALE + GUARD`) the lookup keys
+            /// on the CONST working scale and folds to one table entry per
+            /// monomorphisation; the Ziv-escalation path falls back to the
+            /// runtime static lookup. Bit-identical to a bare
+            /// `ln2_by_working_scale::<Wagm>(w, mode)` (same table entry,
+            /// same rounding) — it only recovers the const-fold.
+            #[inline]
+            pub(crate) fn ln2_cf_agm<const SCALE: u32>(
+                w: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> Wagm {
+                if w == SCALE + GUARD {
+                    return $crate::consts::ln2_by_scale::<Wagm>(SCALE + GUARD, mode);
+                }
+                $crate::consts::ln2_by_working_scale::<Wagm>(w, mode)
+            }
+            /// `ln 10` const-folded at the base working scale for the wide
+            /// composition core — the `Wagm` sibling of [`ln10_cf`]. See
+            /// [`ln2_cf_agm`]; bit-identical to `ln10_by_working_scale`.
+            #[inline]
+            pub(crate) fn ln10_cf_agm<const SCALE: u32>(
+                w: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> Wagm {
+                if w == SCALE + GUARD {
+                    return $crate::consts::ln10_by_scale::<Wagm>(SCALE + GUARD, mode);
+                }
+                $crate::consts::ln10_by_working_scale::<Wagm>(w, mode)
+            }
+            /// Series `ln(v) -> v` at `Wagm` (the `Wagm` sibling of the
+            /// Series-only `ln_fixed`) — used where a composition pins Series
+            /// (e.g. `asinh` near MAX scale). Distinct from `ln_fixed_agm`
+            /// (the Brent-Salamin AGM ln). `ln 2` from the unified table at
+            /// `Wagm` under the feature-flagged default rounding mode.
+            #[inline]
+            pub(crate) fn ln_fixed_series_agm(v_w: Wagm, w: u32) -> Wagm {
+                $crate::algos::exp::exp_generic::ln_fixed::<Wagm>(
+                    v_w,
+                    w,
+                    $crate::consts::ln2_by_working_scale::<Wagm>(
+                        w,
+                        $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                    ),
+                )
+            }
+            /// Tang/Series-routed `ln(v) -> v` at the wide composition work
+            /// width `Wagm` — the `Wagm` sibling of [`ln_fixed_routed`],
+            /// calling the SAME generic kernels (`tang_ln_fixed_g` /
+            /// `exp_generic::ln_fixed`) with `ln 2` from the unified table at
+            /// `Wagm` (the crate's feature-flagged default rounding mode).
+            #[cfg(feature = "_wide-support")]
+            #[inline]
+            pub(crate) fn ln_fixed_routed_agm<const SCALE: u32>(v_w: Wagm, w: u32) -> Wagm {
+                if const { $crate::policy::ln::is_tang::<$n_limbs, SCALE>() } {
+                    $crate::algos::ln::ln_tang::tang_ln_fixed_g::<Wagm, $ln_tang_cap, false>(
+                        v_w,
+                        w,
+                        |ww| {
+                            ln2_cf_agm::<SCALE>(
+                                ww,
+                                $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                            )
+                        },
+                    )
+                } else {
+                    $crate::algos::exp::exp_generic::ln_fixed::<Wagm>(
+                        v_w,
+                        w,
+                        ln2_cf_agm::<SCALE>(
+                            w,
+                            $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                        ),
+                    )
+                }
+            }
+            #[cfg(not(feature = "_wide-support"))]
+            #[inline]
+            pub(crate) fn ln_fixed_routed_agm<const SCALE: u32>(v_w: Wagm, w: u32) -> Wagm {
+                $crate::algos::exp::exp_generic::ln_fixed::<Wagm>(
+                    v_w,
+                    w,
+                    ln2_cf_agm::<SCALE>(
+                        w,
+                        $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                    ),
+                )
+            }
+            /// Tang/Series-routed `exp(v) -> v` at the wide composition work
+            /// width `Wagm` — the `Wagm` sibling of [`exp_fixed_routed`],
+            /// calling the SAME generic kernels (`tang_exp_fixed_g` /
+            /// `exp_generic::exp_fixed`) with `ln 2` from the unified table at
+            /// `Wagm` (the crate's feature-flagged default rounding mode).
+            #[cfg(feature = "_wide-support")]
+            #[inline]
+            pub(crate) fn exp_fixed_routed_agm<const SCALE: u32>(v_w: Wagm, w: u32) -> Wagm {
+                if const { $crate::policy::exp::is_tang::<$n_limbs, SCALE>() } {
+                    $crate::algos::exp::exp_tang::tang_exp_fixed_g::<Wagm, $exp_tang_m, true>(
+                        v_w,
+                        w,
+                        |ww| {
+                            ln2_cf_agm::<SCALE>(
+                                ww,
+                                $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                            )
+                        },
+                    )
+                } else {
+                    $crate::algos::exp::exp_generic::exp_fixed::<Wagm>(v_w, w)
+                }
+            }
+            #[cfg(not(feature = "_wide-support"))]
+            #[inline]
+            pub(crate) fn exp_fixed_routed_agm<const SCALE: u32>(v_w: Wagm, w: u32) -> Wagm {
+                $crate::algos::exp::exp_generic::exp_fixed::<Wagm>(v_w, w)
+            }
+            /// `Wagm` sibling of [`exp_fixed_wide`]: the near-overflow exp
+            /// path that lifts to `Wexp` for the squaring peak, then narrows
+            /// back — here to `Wagm` instead of `W`. The `Wexp` computation is
+            /// the SAME generic kernel, so it is bit-identical while
+            /// `Wagm == $Work`.
+            #[inline]
+            pub(crate) fn exp_fixed_wide_agm(v_w: Wagm, w: u32) -> Wagm {
+                let v_wide = $crate::int::types::traits::BigInt::resize_to::<Wexp>(v_w);
+                let r_wide = $crate::algos::exp::exp_generic::exp_fixed::<Wexp>(v_wide, w);
+                // Narrow back to `Wagm`, panicking on an out-of-range result
+                // rather than truncating — see `exp_generic::resize_or_panic`.
+                $crate::algos::exp::exp_generic::resize_or_panic::<Wexp, Wagm>(r_wide)
+            }
+            /// `Wagm` sibling of the macro `exp_fixed`: the GATED Series exp —
+            /// the fast `Wagm` kernel when the squaring peak fits, else the
+            /// `Wexp` lift ([`exp_fixed_wide_agm`]). Distinct from
+            /// `exp_fixed_agm` (the Brent-Salamin AGM exp). Bit-identical to
+            /// `exp_fixed::<SCALE>` on `W` while `Wagm == $Work`.
+            #[inline]
+            pub(crate) fn exp_fixed_series_agm(v_w: Wagm, w: u32) -> Wagm {
+                if $crate::algos::exp::exp_generic::exp_peak_fits::<Wagm>(v_w, w) {
+                    $crate::algos::exp::exp_generic::exp_fixed::<Wagm>(v_w, w)
+                } else {
+                    exp_fixed_wide_agm(v_w, w)
+                }
+            }
+
+            // ── log-base algorithm kernels (LnDivide) ──────────────────
+            //
+            // The arbitrary-base logarithm `log(x, b) = ln(x)/ln(b)` for
+            // the wide tiers. These hold the real computation (exact-power
+            // pin + directed-rounding Ziv escalation) so the impl lives in
+            // the algorithm, NOT in the inherent `log_*_with` method. The
+            // `log` policy (`policy::log`) calls these *down*; the inherent
+            // `log_strict_with` / `log_approx_with` methods delegate *down*
+            // to that policy. They take and return the tier's raw `$Storage`
+            // integer (the typed shell wraps with `from_bits`).
+
+            /// Strict-guard `log(x, base)` under `mode`, on raw storage.
+            /// Mirrors the prior inherent `log_strict_with` body verbatim.
+            #[inline]
+            pub(crate) fn log_strict_with_kernel<const SCALE: u32>(
+                raw: $Storage,
+                braw: $Storage,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> $Storage {
+                let z = $crate::macros::wide_roots::wide_lit!($Storage, "0");
+                if raw <= z {
+                    panic!(concat!(
+                        stringify!($Type),
+                        "::log: argument must be positive"
+                    ));
+                }
+                if braw <= z {
+                    panic!(concat!(stringify!($Type), "::log: base must be positive"));
+                }
+                // Probe at the base guard to reject base == 1. Two-core:
+                // the composition runs on the wide `Wagm` work int.
+                let w0 = SCALE + GUARD;
+                let ln_b0 = ln_fixed_routed_agm::<SCALE>(to_work_agm(braw), w0);
+                if ln_b0 == zero_agm() {
+                    panic!(concat!(stringify!($Type), "::log: base must not equal 1"));
+                }
+                // Exact-power pin: `self == base^k` ⇒ result is exactly
+                // the integer `k` (see `log10_strict_with`).
+                {
+                    let r0 = div_agm(ln_fixed_routed_agm::<SCALE>(to_work_agm(raw), w0), ln_b0, w0);
+                    let k = round_to_nearest_int_agm(r0, w0);
+                    if log_is_exact_int::<Wagm>(to_work_scaled_agm(raw, 0), to_work_scaled_agm(braw, 0), SCALE, k) {
+                        return exact_int_at_scale(k, SCALE);
+                    }
+                }
+                // Route the final narrowing through the directed-rounding
+                // Ziv escalation: recompute `ln(self)/ln(base)` at the
+                // requested guard so Trunc/Floor/Ceiling decide on the
+                // true residual sign, not the base-guard approximation.
+                round_to_storage_directed::<Wagm>(GUARD, SCALE, mode, |guard| {
+                    let w = SCALE + guard;
+                    let ln_b = ln_fixed_routed_agm::<SCALE>(to_work_scaled_agm(braw, guard), w);
+                    div_agm(ln_fixed_routed_agm::<SCALE>(to_work_scaled_agm(raw, guard), w), ln_b, w)
+                })
+            }
+
+            /// Approx-guard `log(x, base)` with caller-chosen
+            /// `working_digits` and `mode`, on raw storage. Mirrors the
+            /// prior inherent `log_approx_with` body (the
+            /// `working_digits == GUARD` short-circuit to the strict path
+            /// is handled by the caller's typed shell).
+            #[inline]
+            pub(crate) fn log_approx_with_kernel<const SCALE: u32>(
+                raw: $Storage,
+                braw: $Storage,
+                working_digits: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> $Storage {
+                let z = $crate::macros::wide_roots::wide_lit!($Storage, "0");
+                if raw <= z {
+                    panic!(concat!(
+                        stringify!($Type),
+                        "::log: argument must be positive"
+                    ));
+                }
+                if braw <= z {
+                    panic!(concat!(stringify!($Type), "::log: base must be positive"));
+                }
+                let w = SCALE + working_digits;
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let ln_b = ln_fixed_routed_agm::<SCALE>(to_work_scaled_agm(braw, working_digits), w);
+                if ln_b == zero_agm() {
+                    panic!(concat!(stringify!($Type), "::log: base must not equal 1"));
+                }
+                let r = div_agm(ln_fixed_routed_agm::<SCALE>(to_work_scaled_agm(raw, working_digits), w), ln_b, w);
+                round_to_storage_with_g::<Wagm>(r, w, SCALE, mode)
+            }
+
+            /// Strict-guard `log2(x)` under `mode`, on raw storage.
+            /// Mirrors the inherent `log2_strict_with` body verbatim;
+            /// the `policy::ln` dispatch routes here so `log2` never
+            /// re-enters a sibling decimal policy.
+            #[inline]
+            pub(crate) fn log2_strict_with_kernel<const SCALE: u32>(
+                raw: $Storage,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> $Storage {
+                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    panic!(concat!(stringify!($Type), "::log2: argument must be positive"));
+                }
+                {
+                    // Two-core: composition runs on the wide `Wagm` work int.
+                    let w0 = SCALE + GUARD;
+                    let r0 = div_agm(
+                        ln_fixed_routed_agm::<SCALE>(to_work_agm(raw), w0),
+                        ln2_cf_agm::<SCALE>(w0, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                        w0,
+                    );
+                    let k = round_to_nearest_int_agm(r0, w0);
+                    let base2 = one_agm(SCALE) + one_agm(SCALE);
+                    if log_is_exact_int::<Wagm>(to_work_scaled_agm(raw, 0), base2, SCALE, k) {
+                        return exact_int_at_scale(k, SCALE);
+                    }
+                }
+                round_to_storage_directed::<Wagm>(GUARD, SCALE, mode, |guard| {
+                    let w = SCALE + guard;
+                    div_agm(
+                        ln_fixed_routed_agm::<SCALE>(to_work_scaled_agm(raw, guard), w),
+                        ln2_cf_agm::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                        w,
+                    )
+                })
+            }
+
+            /// Approx-guard `log2(x)` with caller-chosen `working_digits`.
+            #[inline]
+            pub(crate) fn log2_approx_with_kernel<const SCALE: u32>(
+                raw: $Storage,
+                working_digits: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> $Storage {
+                if working_digits == GUARD {
+                    return log2_strict_with_kernel::<SCALE>(raw, mode);
+                }
+                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    panic!(concat!(stringify!($Type), "::log2: argument must be positive"));
+                }
+                let w = SCALE + working_digits;
+                let r = div_agm(ln_fixed_routed_agm::<SCALE>(to_work_scaled_agm(raw, working_digits), w), ln2_cf_agm::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), w);
+                round_to_storage_with_g::<Wagm>(r, w, SCALE, mode)
+            }
+
+            /// Strict-guard `log10(x)` under `mode`, on raw storage.
+            #[inline]
+            pub(crate) fn log10_strict_with_kernel<const SCALE: u32>(
+                raw: $Storage,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> $Storage {
+                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    panic!(concat!(stringify!($Type), "::log10: argument must be positive"));
+                }
+                {
+                    // Two-core: composition runs on the wide `Wagm` work int.
+                    let w0 = SCALE + GUARD;
+                    let r0 = div_agm(
+                        ln_fixed_routed_agm::<SCALE>(to_work_agm(raw), w0),
+                        ln10_cf_agm::<SCALE>(w0, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                        w0,
+                    );
+                    let k = round_to_nearest_int_agm(r0, w0);
+                    let base10 = one_agm(SCALE + 1);
+                    if log_is_exact_int::<Wagm>(to_work_scaled_agm(raw, 0), base10, SCALE, k) {
+                        return exact_int_at_scale(k, SCALE);
+                    }
+                }
+                round_to_storage_directed::<Wagm>(GUARD, SCALE, mode, |guard| {
+                    let w = SCALE + guard;
+                    div_agm(
+                        ln_fixed_routed_agm::<SCALE>(to_work_scaled_agm(raw, guard), w),
+                        ln10_cf_agm::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                        w,
+                    )
+                })
+            }
+
+            /// Approx-guard `log10(x)` with caller-chosen `working_digits`.
+            #[inline]
+            pub(crate) fn log10_approx_with_kernel<const SCALE: u32>(
+                raw: $Storage,
+                working_digits: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> $Storage {
+                if working_digits == GUARD {
+                    return log10_strict_with_kernel::<SCALE>(raw, mode);
+                }
+                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    panic!(concat!(stringify!($Type), "::log10: argument must be positive"));
+                }
+                let w = SCALE + working_digits;
+                let r = div_agm(ln_fixed_routed_agm::<SCALE>(to_work_scaled_agm(raw, working_digits), w), ln10_cf_agm::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), w);
+                round_to_storage_with_g::<Wagm>(r, w, SCALE, mode)
+            }
+
+            /// Strict-guard `exp2(x) = 2^x` under `mode`, on raw storage.
+            /// Mirrors the inherent `exp2_strict_with` body verbatim; the
+            /// `policy::exp` dispatch routes here so `exp2` never re-enters
+            /// a sibling decimal policy.
+            #[inline]
+            pub(crate) fn exp2_strict_with_kernel<const SCALE: u32>(
+                raw: $Storage,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> $Storage {
+                if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    return <$Storage as $crate::int::types::traits::BigInt>::TEN.pow(SCALE);
+                }
+                if let ::core::option::Option::Some(v) = exp2_exact_pin(raw, SCALE, mode) {
+                    return v;
+                }
+                let k_lift = exp2_result_int_digits(raw, SCALE);
+                let base_guard = GUARD + k_lift;
+                // Two-core: composition runs on the wide `Wagm` work int.
+                round_to_storage_directed::<Wagm>(base_guard, SCALE, mode, |guard| {
+                    let w = SCALE + guard;
+                    // Form the `x·ln 2` argument with the wide multiply in
+                    // `Wexp` — the work integer `exp_fixed` runs the series in,
+                    // and the width `exp_lift_cap` sized the `k_lift` lift
+                    // against. The lifted working scale makes the
+                    // `x·10^w · ln 2·10^w` intermediate span `2·w` digits; the
+                    // narrower `Wagm` cannot hold that for a large
+                    // (out-of-range) argument, so a `Wagm` multiply would
+                    // `wrapping_mul` it down to a small in-range value —
+                    // silently returning a wrong, representable result for a
+                    // `2^x` that must overflow (the `exp2_strict_with` vs
+                    // `exp2_strict` divergence). `exp_lift_cap` bounds `2·w`
+                    // inside `Wexp`, so the multiply is exact there and
+                    // `exp_fixed::<Wexp>`'s peak gate (then `resize_or_panic`)
+                    // panics uniformly on a genuinely out-of-range result,
+                    // exactly as the natural `exp` does. In-range cells stay
+                    // bit-identical: the argument value itself fits `Wagm`;
+                    // only its squared-scale intermediate did not.
+                    let arg = $crate::algos::exp::exp_generic::mul::<Wexp>(
+                        $crate::int::types::traits::BigInt::resize_to::<Wexp>(
+                            to_work_scaled_agm(raw, guard),
+                        ),
+                        $crate::int::types::traits::BigInt::resize_to::<Wexp>(
+                            ln2_cf_agm::<SCALE>(
+                                w,
+                                $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                            ),
+                        ),
+                        w,
+                    );
+                    $crate::algos::exp::exp_generic::resize_or_panic::<Wexp, Wagm>(
+                        $crate::algos::exp::exp_generic::exp_fixed::<Wexp>(arg, w),
+                    )
+                })
+            }
+
+            /// Approx-guard `exp2(x)` with caller-chosen `working_digits`.
+            #[inline]
+            pub(crate) fn exp2_approx_with_kernel<const SCALE: u32>(
+                raw: $Storage,
+                working_digits: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> $Storage {
+                if working_digits == GUARD {
+                    return exp2_strict_with_kernel::<SCALE>(raw, mode);
+                }
+                if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    return <$Storage as $crate::int::types::traits::BigInt>::TEN.pow(SCALE);
+                }
+                let w = SCALE + working_digits;
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let arg = mul_agm(to_work_scaled_agm(raw, working_digits), ln2_cf_agm::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), w);
+                let r = exp_fixed_routed_agm::<SCALE>(arg, w);
+                round_to_storage_with_g::<Wagm>(r, w, SCALE, mode)
             }
         }
 
@@ -2286,10 +2988,10 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn ln_strict(self) -> Self {
-                <Self as $crate::policy::ln::LnPolicy>::ln_impl(
-                    self,
+                Self::from_bits($crate::policy::ln::dispatch::<_, SCALE>(
+                    self.to_bits(),
                     $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                ))
             }
 
             /// Natural logarithm via the Brent–Salamin AGM (1976).
@@ -2320,7 +3022,7 @@ macro_rules! decl_wide_transcendental {
             /// the chain-MG kernel at these widths: the artanh inner
             /// loop runs ~`O(p)` rounded multiplies whose constant per
             /// step is far smaller than the AGM iteration's
-            /// `sqrt_fixed` + `mul_cached` pair at the *doubled*
+            /// `sqrt_fixed` + `mul` pair at the *doubled*
             /// working scale the precision lift demands. The AGM
             /// path remains available via this method (and the
             /// `bench-alt` feature) for downstream apps that need the
@@ -2331,7 +3033,10 @@ macro_rules! decl_wide_transcendental {
             pub fn ln_strict_agm(self) -> Self {
                 let raw = self.to_bits();
                 if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    panic!(concat!(stringify!($Type), "::ln_agm: argument must be positive"));
+                    panic!(concat!(
+                        stringify!($Type),
+                        "::ln_agm: argument must be positive"
+                    ));
                 }
                 // Brent §3 precision lift: run the AGM at
                 // w' = SCALE + GUARD + guard_agm(SCALE) so the half-LSB
@@ -2341,8 +3046,8 @@ macro_rules! decl_wide_transcendental {
                 // `round_to_storage` narrows the wider working
                 // result back to `SCALE`.
                 let w_prime = SCALE + $core::GUARD + $core::guard_agm(SCALE);
-                let r = $core::ln_fixed_agm(
-                    $core::to_work_w(raw, $core::GUARD + $core::guard_agm(SCALE)),
+                let r = $core::ln_fixed_agm::<SCALE>(
+                    $core::to_work_scaled(raw, $core::GUARD + $core::guard_agm(SCALE)),
                     w_prime,
                 );
                 Self::from_bits($core::round_to_storage(r, w_prime, SCALE))
@@ -2372,14 +3077,11 @@ macro_rules! decl_wide_transcendental {
                 // |v| above ~3 leaks the amplified residue into the
                 // storage scale (validated empirically against mpmath
                 // at SCALE up to 615).
-                let raw_w = $core::to_work_w(raw, 0);
+                let raw_w = $core::to_work_scaled(raw, 0);
                 let k_lift = $core::exp_agm_k_lift_from_w(raw_w, SCALE);
                 let lift = $core::GUARD + $core::guard_agm(SCALE) + k_lift;
                 let w_prime = SCALE + lift;
-                let r = $core::exp_fixed_agm(
-                    $core::to_work_w(raw, lift),
-                    w_prime,
-                );
+                let r = $core::exp_fixed_agm::<SCALE>($core::to_work_scaled(raw, lift), w_prime);
                 Self::from_bits($core::round_to_storage(r, w_prime, SCALE))
             }
 
@@ -2389,22 +3091,11 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn log_strict(self, base: Self) -> Self {
-                let raw = self.to_bits();
-                let braw = base.to_bits();
-                let z = $crate::macros::wide_roots::wide_lit!($Storage, "0");
-                if raw <= z {
-                    panic!(concat!(stringify!($Type), "::log: argument must be positive"));
-                }
-                if braw <= z {
-                    panic!(concat!(stringify!($Type), "::log: base must be positive"));
-                }
-                let w = SCALE + $core::GUARD;
-                let ln_b = $core::ln_fixed($core::to_work(braw), w);
-                if ln_b == $core::zero() {
-                    panic!(concat!(stringify!($Type), "::log: base must not equal 1"));
-                }
-                let r = $core::div($core::ln_fixed($core::to_work(raw), w), ln_b, w);
-                Self::from_bits($core::round_to_storage(r, w, SCALE))
+                // Delegate to the mode-aware sibling at the default rounding
+                // mode (the exp2 pattern): ONE kernel for both public entries —
+                // the former inline no-mode composition was a second,
+                // single-shot implementation the `_with` path did not share.
+                self.log_strict_with(base, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Base-2 logarithm. Strict and correctly rounded. Panics if
@@ -2412,13 +3103,11 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn log2_strict(self) -> Self {
-                let raw = self.to_bits();
-                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    panic!(concat!(stringify!($Type), "::log2: argument must be positive"));
-                }
-                let w = SCALE + $core::GUARD;
-                let r = $core::div($core::ln_fixed($core::to_work(raw), w), $core::ln2(w), w);
-                Self::from_bits($core::round_to_storage(r, w, SCALE))
+                // Delegate to the mode-aware sibling at the default rounding
+                // mode (the exp2 pattern): ONE kernel for both public entries —
+                // the former inline no-mode composition was a second,
+                // single-shot implementation the `_with` path did not share.
+                self.log2_strict_with($crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Base-10 logarithm. Strict and correctly rounded. Panics
@@ -2426,13 +3115,11 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn log10_strict(self) -> Self {
-                let raw = self.to_bits();
-                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    panic!(concat!(stringify!($Type), "::log10: argument must be positive"));
-                }
-                let w = SCALE + $core::GUARD;
-                let r = $core::div($core::ln_fixed($core::to_work(raw), w), $core::ln10(w), w);
-                Self::from_bits($core::round_to_storage(r, w, SCALE))
+                // Delegate to the mode-aware sibling at the default rounding
+                // mode (the exp2 pattern): ONE kernel for both public entries —
+                // the former inline no-mode composition was a second,
+                // single-shot implementation the `_with` path did not share.
+                self.log10_strict_with($crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// `e^self`. Strict and correctly rounded. Panics if the
@@ -2443,10 +3130,10 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn exp_strict(self) -> Self {
-                <Self as $crate::policy::exp::ExpPolicy>::exp_impl(
-                    self,
+                Self::from_bits($crate::policy::exp::dispatch::<_, SCALE>(
+                    self.to_bits(),
                     $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                ))
             }
 
             /// `2^self`, as `exp(self · ln 2)`. Strict and correctly
@@ -2454,14 +3141,17 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn exp2_strict(self) -> Self {
-                let raw = self.to_bits();
-                if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    return Self::ONE;
-                }
-                let w = SCALE + $core::GUARD;
-                let arg = $core::mul($core::to_work(raw), $core::ln2(w), w);
-                let r = $core::exp_fixed(arg, w);
-                Self::from_bits($core::round_to_storage(r, w, SCALE))
+                // Delegate to the mode-aware kernel at the default rounding mode
+                // so the no-mode path shares BOTH the exact-power pin and the
+                // Wexp-correct argument formation. The former inline `Wagm`
+                // composition lacked both: it skipped `exp2_exact_pin` (~3 ULP
+                // on exact powers like 2^97) and formed `x·ln2` in `Wagm`, which
+                // wraps an out-of-range result instead of panicking (the
+                // documented exp2_strict_with vs exp2_strict divergence).
+                Self::from_bits($core::exp2_strict_with_kernel::<SCALE>(
+                    self.to_bits(),
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                ))
             }
 
             /// `self` raised to the power `exp`, as `exp(exp · ln self)`.
@@ -2469,60 +3159,21 @@ macro_rules! decl_wide_transcendental {
             /// saturates to `ZERO` (a negative base with a fractional
             /// exponent is not real-valued).
             ///
-            /// Integer-exponent fast path: if `exp` is an exact integer
-            /// with `|n| <= INT_POWF_FAST_PATH_THRESHOLD` (= 64), routes
-            /// to `Self::powi(n)` (square-and-multiply on storage),
-            /// skipping the `exp(y·ln(x))` chain. `powi` is exact, so
-            /// the 0.5 ULP contract is preserved.
+            /// Integer-exponent fast path: when `exp` is an exact integer
+            /// `n` (`|n| <= 64`) and the base an exact integer, `base^n` is
+            /// an exact rational and its correctly-rounded value is emitted
+            /// directly by the internal `powi_exact_pin`, skipping the
+            /// `exp(y·ln x)` chain. The pin divides `10^SCALE` by the INTEGER
+            /// `base^|n|`, so the reciprocal is exact even at a near-max scale
+            /// where the scaled `base^|n|·10^SCALE` would overflow storage.
             #[inline]
             #[must_use]
             pub fn powf_strict(self, exp: Self) -> Self {
-                let raw = self.to_bits();
-                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    return Self::ZERO;
-                }
-                if let ::core::option::Option::Some(n) = Self::powf_exp_as_small_int(exp) {
-                    return self.powi(n);
-                }
-                let w = SCALE + $core::GUARD;
-                let ln_x = $core::ln_fixed($core::to_work(raw), w);
-                let y = $core::to_work(exp.to_bits());
-                let r = $core::exp_fixed($core::mul(y, ln_x, w), w);
-                Self::from_bits($core::round_to_storage(r, w, SCALE))
-            }
-
-            /// Integer-exponent threshold for the [`Self::powf_strict`]
-            /// / [`Self::powf_strict_with`] fast path. At `|n| <= 64`,
-            /// `powi(n)` costs at most ~12 multiplications, well below
-            /// the `exp(y·ln(x))` chain.
-            const INT_POWF_FAST_PATH_THRESHOLD: i32 = 64;
-
-            /// Returns `Some(n)` if `exp` is an exact integer value
-            /// `n: i32` with `|n| <= INT_POWF_FAST_PATH_THRESHOLD`.
-            /// Used to gate the integer fast path on `powf_strict` and
-            /// `powf_strict_with`.
-            #[inline]
-            fn powf_exp_as_small_int(exp: Self) -> ::core::option::Option<i32> {
-                let raw = exp.to_bits();
-                let mult = Self::multiplier();
-                let zero = $crate::macros::wide_roots::wide_lit!($Storage, "0");
-                if raw % mult != zero {
-                    return ::core::option::Option::None;
-                }
-                let q = raw / mult;
-                let lo = $crate::macros::wide_roots::wide_lit!(
-                    $Storage,
-                    "-64"
-                );
-                let hi = $crate::macros::wide_roots::wide_lit!(
-                    $Storage,
-                    "64"
-                );
-                if q < lo || q > hi {
-                    return ::core::option::Option::None;
-                }
-                let q_i128: i128 = $crate::wide_int::wide_cast::<$Storage, i128>(q);
-                ::core::option::Option::Some(q_i128 as i32)
+                // Delegate to the mode-aware sibling at the default rounding
+                // mode (the exp2 pattern): ONE kernel for both public entries —
+                // the former inline no-mode composition was a second,
+                // single-shot implementation the `_with` path did not share.
+                self.powf_strict_with(exp, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Sine of `self` (radians). Strict and correctly rounded.
@@ -2532,10 +3183,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn sin_strict(self) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::sin_impl(
-                    self,
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                Self::from_bits($crate::policy::trig::sin_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
             /// Cosine of `self` (radians). Strict and correctly
@@ -2550,10 +3198,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn cos_strict(self) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::cos_impl(
-                    self,
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                Self::from_bits($crate::policy::trig::cos_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
             /// Joint sine and cosine of `self` (radians), returned
@@ -2572,12 +3217,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn sin_cos_strict(self) -> (Self, Self) {
-                let w = SCALE + $core::GUARD;
-                let (s, c) = $core::sin_cos_fixed($core::to_work(self.to_bits()), w);
-                (
-                    Self::from_bits($core::round_to_storage(s, w, SCALE)),
-                    Self::from_bits($core::round_to_storage(c, w, SCALE)),
-                )
+                self.sin_cos_strict_with($crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Tangent of `self` (radians), as `sin / cos`. Strict and
@@ -2588,10 +3228,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn tan_strict(self) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::tan_impl(
-                    self,
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                Self::from_bits($crate::policy::trig::tan_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
             /// Arctangent of `self`, in radians, in `(−π/2, π/2)`.
@@ -2602,10 +3239,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn atan_strict(self) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::atan_impl(
-                    self,
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                Self::from_bits($crate::policy::trig::atan_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
             /// Arcsine of `self`, in radians, in `[−π/2, π/2]`.
@@ -2631,10 +3265,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn asin_strict(self) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::asin_impl(
-                    self,
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                Self::from_bits($crate::policy::trig::asin_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
             /// Arccosine of `self`, in radians, in `[0, π]`, as
@@ -2644,10 +3275,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn acos_strict(self) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::acos_impl(
-                    self,
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                Self::from_bits($crate::policy::trig::acos_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
             /// Four-quadrant arctangent of `self` (`y`) and `other`
@@ -2656,11 +3284,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn atan2_strict(self, other: Self) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::atan2_impl(
-                    self,
-                    other,
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                Self::from_bits($crate::policy::trig::atan2_dispatch::<_, SCALE>(self.to_bits(), other.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
             /// Hyperbolic sine, as `(eˣ − e⁻ˣ)/2`. Strict and correctly
@@ -2671,10 +3295,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn sinh_strict(self) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::sinh_impl(
-                    self,
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                Self::from_bits($crate::policy::trig::sinh_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
             /// Hyperbolic cosine, as `(eˣ + e⁻ˣ)/2`. Strict and
@@ -2685,10 +3306,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn cosh_strict(self) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::cosh_impl(
-                    self,
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                Self::from_bits($crate::policy::trig::cosh_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
             /// Hyperbolic tangent, as `sinh / cosh`. Strict and
@@ -2704,10 +3322,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn tanh_strict(self) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::tanh_impl(
-                    self,
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                Self::from_bits($crate::policy::trig::tanh_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
             /// Joint hyperbolic sine and cosine of `self`, returned
@@ -2721,16 +3336,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn sinh_cosh_strict(self) -> (Self, Self) {
-                let w = SCALE + $core::GUARD;
-                let v = $core::to_work(self.to_bits());
-                let ex = $core::exp_fixed(v, w);
-                let enx = $core::div($core::one(w), ex, w);
-                let sinh = (ex - enx) >> 1;
-                let cosh = (ex + enx) >> 1;
-                (
-                    Self::from_bits($core::round_to_storage(sinh, w, SCALE)),
-                    Self::from_bits($core::round_to_storage(cosh, w, SCALE)),
-                )
+                self.sinh_cosh_strict_with($crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Inverse hyperbolic sine, as
@@ -2745,23 +3351,29 @@ macro_rules! decl_wide_transcendental {
                     return Self::ZERO;
                 }
                 let w = SCALE + $core::GUARD;
-                let one_w = $core::one(w);
-                let v = $core::to_work(raw);
-                let ax = if v < $core::zero() { -v } else { v };
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let one_w = $core::one_agm(w);
+                let v = $core::to_work_agm(raw);
+                let ax = if v < $core::zero_agm() { -v } else { v };
+                // asinh @ MAX scale (input ±1) loses sub-w precision in the
+                // sqrt step before ln; tang_ln_fixed's INTERNAL_EXTRA
+                // residue-signal can't detect that caller-side loss. Keep
+                // on Series (`ln_fixed_agm`) until ln_fixed_routed gains a
+                // PRE_RESIDUE flag (memory project_050_asinh_max_tang_residue).
                 let inner = if ax >= one_w {
-                    let inv = $core::div(one_w, ax, w);
-                    let root = $core::sqrt_fixed(one_w + $core::mul(inv, inv, w), w);
-                    $core::ln_fixed(ax, w) + $core::ln_fixed(one_w + root, w)
+                    let inv = $core::div_agm(one_w, ax, w);
+                    let root = $core::sqrt_fixed_agm(one_w + $core::mul_agm(inv, inv, w), w);
+                    $core::ln_fixed_series_agm(ax, w) + $core::ln_fixed_series_agm(one_w + root, w)
                 } else {
-                    let root = $core::sqrt_fixed($core::mul(ax, ax, w) + one_w, w);
-                    $core::ln_fixed(ax + root, w)
+                    let root = $core::sqrt_fixed_agm($core::mul_agm(ax, ax, w) + one_w, w);
+                    $core::ln_fixed_series_agm(ax + root, w)
                 };
                 let signed = if raw < $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     -inner
                 } else {
                     inner
                 };
-                Self::from_bits($core::round_to_storage(signed, w, SCALE))
+                Self::from_bits($core::round_to_storage_agm(signed, w, SCALE))
             }
 
             /// Inverse hyperbolic cosine, as `ln(x + √(x² − 1))`,
@@ -2771,16 +3383,17 @@ macro_rules! decl_wide_transcendental {
             #[must_use]
             pub fn acosh_strict(self) -> Self {
                 let w = SCALE + $core::GUARD;
-                let one_w = $core::one(w);
-                let v = $core::to_work(self.to_bits());
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let one_w = $core::one_agm(w);
+                let v = $core::to_work_agm(self.to_bits());
                 if v < one_w {
                     panic!(concat!(stringify!($Type), "::acosh: argument must be >= 1"));
                 }
                 let two_w = one_w + one_w;
                 let inner = if v >= two_w {
-                    let inv = $core::div(one_w, v, w);
-                    let root = $core::sqrt_fixed(one_w - $core::mul(inv, inv, w), w);
-                    $core::ln_fixed(v, w) + $core::ln_fixed(one_w + root, w)
+                    let inv = $core::div_agm(one_w, v, w);
+                    let root = $core::sqrt_fixed_agm(one_w - $core::mul_agm(inv, inv, w), w);
+                    $core::ln_fixed_routed_agm::<SCALE>(v, w) + $core::ln_fixed_routed_agm::<SCALE>(one_w + root, w)
                 } else {
                     // Near 1: acosh(1+t) = log1p(t + sqrt(t*(t+2))).
                     // `t = v - one_w` is the exact gap above 1, so
@@ -2789,10 +3402,10 @@ macro_rules! decl_wide_transcendental {
                     // as `v -> 1`, and `log1p` avoids re-forming `1 + arg`
                     // when the gap (hence `arg`) is tiny.
                     let t = v - one_w;
-                    let root = $core::sqrt_fixed($core::mul(t, t + two_w, w), w);
-                    $core::log1p_fixed(t + root, w)
+                    let root = $core::sqrt_fixed_agm($core::mul_agm(t, t + two_w, w), w);
+                    $core::log1p_fixed::<$core::Wagm>(t + root, w)
                 };
-                Self::from_bits($core::round_to_storage(inner, w, SCALE))
+                Self::from_bits($core::round_to_storage_agm(inner, w, SCALE))
             }
 
             /// Inverse hyperbolic tangent, as `ln((1+x)/(1−x)) / 2`,
@@ -2802,19 +3415,26 @@ macro_rules! decl_wide_transcendental {
             #[must_use]
             pub fn atanh_strict(self) -> Self {
                 let w = SCALE + $core::GUARD;
-                let one_w = $core::one(w);
-                let v = $core::to_work(self.to_bits());
-                let ax = if v < $core::zero() { -v } else { v };
+                // Two-core: the composition runs on the wide `Wagm` work int
+                // (its ln + the gap-form subtraction), narrowing back to
+                // storage at the end — so a narrowed primitive `$Work` does
+                // not clip the composition's precision.
+                let one_w = $core::one_agm(w);
+                let v = $core::to_work_agm(self.to_bits());
+                let ax = if v < $core::zero_agm() { -v } else { v };
                 if ax >= one_w {
-                    panic!(concat!(stringify!($Type), "::atanh: argument out of domain (-1, 1)"));
+                    panic!(concat!(
+                        stringify!($Type),
+                        "::atanh: argument out of domain (-1, 1)"
+                    ));
                 }
                 // Gap form: atanh(x) = (1/2)*[ln(1+x) - ln(1-x)].
                 // `one_w - v` is the exact working-scale gap (`v` is the
                 // storage input lifted by appending guard zeros), so
                 // neither `ln_fixed` argument suffers the `(1-x)`
                 // catastrophic cancellation the ratio form does near +-1.
-                let r = ($core::ln_fixed(one_w + v, w) - $core::ln_fixed(one_w - v, w)) >> 1;
-                Self::from_bits($core::round_to_storage(r, w, SCALE))
+                let r = ($core::ln_fixed_routed_agm::<SCALE>(one_w + v, w) - $core::ln_fixed_routed_agm::<SCALE>(one_w - v, w)) >> 1;
+                Self::from_bits($core::round_to_storage_agm(r, w, SCALE))
             }
 
             /// Convert radians to degrees: `self · (180 / π)`. Strict
@@ -2825,14 +3445,14 @@ macro_rules! decl_wide_transcendental {
             pub fn to_degrees_strict(self) -> Self {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
-                debug_assert!(
-                    $core::bit_length(v) + 8 < <$Work>::BITS,
-                    concat!(stringify!($Type),
-                        "::to_degrees: |self| * 180 overflows the working integer")
-                );
-                let r = $core::div(
-                    v * $crate::macros::wide_roots::wide_lit!($Work, "180"),
-                    $core::pi(w),
+                // `x * 180/π`: multiply by the const-folded `deg_per_rad`
+                // (180/π) constant instead of dividing by the runtime-
+                // recomputed `pi(w)`. Same value, but no per-call π
+                // rescale (`const_rounded`) and no divide — mirrors
+                // `to_radians_strict`'s `pi_cf` multiply path.
+                let r = $core::mul(
+                    v,
+                    $core::deg_per_rad_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
                     w,
                 );
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
@@ -2848,8 +3468,11 @@ macro_rules! decl_wide_transcendental {
             pub fn to_radians_strict(self) -> Self {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
-                let r = $core::mul(v, $core::pi(w), w)
-                    / $crate::macros::wide_roots::wide_lit!($Work, "180");
+                let r = $core::mul(
+                    v,
+                    $core::pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                    w,
+                ) / $crate::macros::wide_roots::wide_lit!($Work, "180");
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
             }
 
@@ -2869,7 +3492,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn ln_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <Self as $crate::policy::ln::LnPolicy>::ln_impl(self, mode)
+                Self::from_bits($crate::policy::ln::dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
             /// Mode-aware sibling of [`Self::ln_strict_agm`].
@@ -2878,11 +3501,14 @@ macro_rules! decl_wide_transcendental {
             pub fn ln_strict_agm_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let raw = self.to_bits();
                 if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    panic!(concat!(stringify!($Type), "::ln_agm: argument must be positive"));
+                    panic!(concat!(
+                        stringify!($Type),
+                        "::ln_agm: argument must be positive"
+                    ));
                 }
                 let w_prime = SCALE + $core::GUARD + $core::guard_agm(SCALE);
-                let r = $core::ln_fixed_agm(
-                    $core::to_work_w(raw, $core::GUARD + $core::guard_agm(SCALE)),
+                let r = $core::ln_fixed_agm::<SCALE>(
+                    $core::to_work_scaled(raw, $core::GUARD + $core::guard_agm(SCALE)),
                     w_prime,
                 );
                 Self::from_bits($core::round_to_storage_with(r, w_prime, SCALE, mode))
@@ -2891,63 +3517,38 @@ macro_rules! decl_wide_transcendental {
             /// Mode-aware sibling of [`Self::exp_strict_agm`].
             #[inline]
             #[must_use]
-            pub fn exp_strict_agm_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn exp_strict_agm_with(
+                self,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> Self {
                 let raw = self.to_bits();
                 if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     return Self::ONE;
                 }
                 // See `exp_strict_agm` for the `k_lift` rationale.
-                let raw_w = $core::to_work_w(raw, 0);
+                let raw_w = $core::to_work_scaled(raw, 0);
                 let k_lift = $core::exp_agm_k_lift_from_w(raw_w, SCALE);
                 let lift = $core::GUARD + $core::guard_agm(SCALE) + k_lift;
                 let w_prime = SCALE + lift;
-                let r = $core::exp_fixed_agm(
-                    $core::to_work_w(raw, lift),
-                    w_prime,
-                );
+                let r = $core::exp_fixed_agm::<SCALE>($core::to_work_scaled(raw, lift), w_prime);
                 Self::from_bits($core::round_to_storage_with(r, w_prime, SCALE, mode))
             }
 
             /// Mode-aware sibling of [`Self::log_strict`].
+            ///
+            /// Body delegates *down* to `policy::log::dispatch`, which
+            /// routes to the `LnDivide` kernel (`$core::log_strict_with_kernel`).
             #[inline]
             #[must_use]
-            pub fn log_strict_with(self, base: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let raw = self.to_bits();
-                let braw = base.to_bits();
-                let z = $crate::macros::wide_roots::wide_lit!($Storage, "0");
-                if raw <= z {
-                    panic!(concat!(stringify!($Type), "::log: argument must be positive"));
-                }
-                if braw <= z {
-                    panic!(concat!(stringify!($Type), "::log: base must be positive"));
-                }
-                // Probe at the base guard to reject base == 1.
-                let w0 = SCALE + $core::GUARD;
-                let ln_b0 = $core::ln_fixed($core::to_work(braw), w0);
-                if ln_b0 == $core::zero() {
-                    panic!(concat!(stringify!($Type), "::log: base must not equal 1"));
-                }
-                // Exact-power pin: `self == base^k` ⇒ result is exactly
-                // the integer `k` (see `log10_strict_with`).
-                {
-                    let r0 = $core::div($core::ln_fixed($core::to_work(raw), w0), ln_b0, w0);
-                    let k = $core::round_to_nearest_int(r0, w0);
-                    if $core::log_is_exact_int(
-                        $core::to_work_w(raw, 0), $core::to_work_w(braw, 0), SCALE, k,
-                    ) {
-                        return Self::from_bits($core::exact_int_at_scale(k, SCALE));
-                    }
-                }
-                // Route the final narrowing through the directed-rounding
-                // Ziv escalation: recompute `ln(self)/ln(base)` at the
-                // requested guard so Trunc/Floor/Ceiling decide on the
-                // true residual sign, not the base-guard approximation.
-                Self::from_bits($core::round_to_storage_directed(
-                    $core::GUARD, SCALE, mode, |guard| {
-                        let w = SCALE + guard;
-                        let ln_b = $core::ln_fixed($core::to_work_w(braw, guard), w);
-                        $core::div($core::ln_fixed($core::to_work_w(raw, guard), w), ln_b, w)
-                    },
+            pub fn log_strict_with(
+                self,
+                base: Self,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> Self {
+                Self::from_bits($crate::policy::log::dispatch::<_, SCALE>(
+                    self.to_bits(),
+                    base.to_bits(),
+                    mode,
                 ))
             }
 
@@ -2955,57 +3556,14 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn log2_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let raw = self.to_bits();
-                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    panic!(concat!(stringify!($Type), "::log2: argument must be positive"));
-                }
-                // Exact-power pin: `self == 2^k` ⇒ result is exactly `k`
-                // (see `log10_strict_with`).
-                {
-                    let w0 = SCALE + $core::GUARD;
-                    let r0 = $core::div($core::ln_fixed($core::to_work(raw), w0), $core::ln2(w0), w0);
-                    let k = $core::round_to_nearest_int(r0, w0);
-                    let base2 = $core::pow10_cached(SCALE) + $core::pow10_cached(SCALE); // 2 · 10^SCALE
-                    if $core::log_is_exact_int($core::to_work_w(raw, 0), base2, SCALE, k) {
-                        return Self::from_bits($core::exact_int_at_scale(k, SCALE));
-                    }
-                }
-                Self::from_bits($core::round_to_storage_directed(
-                    $core::GUARD, SCALE, mode, |guard| {
-                        let w = SCALE + guard;
-                        $core::div($core::ln_fixed($core::to_work_w(raw, guard), w), $core::ln2(w), w)
-                    },
-                ))
+                Self::from_bits($core::log2_strict_with_kernel::<SCALE>(self.to_bits(), mode))
             }
 
             /// Mode-aware sibling of [`Self::log10_strict`].
             #[inline]
             #[must_use]
             pub fn log10_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let raw = self.to_bits();
-                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    panic!(concat!(stringify!($Type), "::log10: argument must be positive"));
-                }
-                // Exact-power pin: if `self == 10^k` the result is exactly
-                // the integer `k` (residual provably zero), so every mode
-                // returns `k` and no directed bump is taken. Without this
-                // the `ln(self)/ln 10` round-off lands a hair off the grid
-                // line and Floor/Ceiling/Trunc bump by one LSB.
-                {
-                    let w0 = SCALE + $core::GUARD;
-                    let r0 = $core::div($core::ln_fixed($core::to_work(raw), w0), $core::ln10(w0), w0);
-                    let k = $core::round_to_nearest_int(r0, w0);
-                    let base10 = $core::pow10_cached(SCALE + 1); // 10 · 10^SCALE
-                    if $core::log_is_exact_int($core::to_work_w(raw, 0), base10, SCALE, k) {
-                        return Self::from_bits($core::exact_int_at_scale(k, SCALE));
-                    }
-                }
-                Self::from_bits($core::round_to_storage_directed(
-                    $core::GUARD, SCALE, mode, |guard| {
-                        let w = SCALE + guard;
-                        $core::div($core::ln_fixed($core::to_work_w(raw, guard), w), $core::ln10(w), w)
-                    },
-                ))
+                Self::from_bits($core::log10_strict_with_kernel::<SCALE>(self.to_bits(), mode))
             }
 
             /// Mode-aware sibling of [`Self::exp_strict`]. Delegates
@@ -3014,64 +3572,74 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn exp_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <Self as $crate::policy::exp::ExpPolicy>::exp_impl(self, mode)
+                Self::from_bits($crate::policy::exp::dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
             /// Mode-aware sibling of [`Self::exp2_strict`].
             #[inline]
             #[must_use]
             pub fn exp2_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let raw = self.to_bits();
-                if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    return Self::ONE;
-                }
-                // Exact-power pin: `exp2(integer k) = 2^k` is an exact
-                // algebraic point. Detect an integer argument and emit the
-                // exact `2^k` so a directed mode never bumps it by one LSB
-                // (the `exp(k·ln 2)` round-off otherwise lands a hair off
-                // the grid line).
-                // Exact-power pin handles the `2^k` integer-result cases.
-                if let ::core::option::Option::Some(v) = $core::exp2_exact_pin(raw, SCALE) {
-                    return Self::from_bits(v);
-                }
-                // Large-result lift: `2^x` carries `~|x|·log10(2)` integer
-                // digits, and `exp_fixed` narrows to the working scale `w`
-                // before returning, so the second narrowing here (w →
-                // SCALE) consumes the guard budget twice. Lift the base
-                // working scale by the result's integer-digit count so the
-                // final narrowing still sees a full guard. The lift is
-                // capped to keep `exp_fixed`'s internal `2^k` reassembly +
-                // post-Taylor squarings inside the working integer; for a
-                // `2^x` whose result is so large the squaring would exceed
-                // `W` (only the inputs whose result nears the storage
-                // overflow edge), the lift is clamped and the cell may
-                // still lose LSBs — those remain in the strict-golden
-                // ignore list, tracked as the wide-tier `exp_fixed`
-                // squaring-width limit.
-                let k_lift = $core::exp2_result_int_digits(raw, SCALE);
-                let base_guard = $core::GUARD + k_lift;
-                Self::from_bits($core::round_to_storage_directed(
-                    base_guard, SCALE, mode, |guard| {
-                        let w = SCALE + guard;
-                        let arg = $core::mul($core::to_work_w(raw, guard), $core::ln2(w), w);
-                        $core::exp_fixed_wide(arg, w)
-                    },
-                ))
+                Self::from_bits($core::exp2_strict_with_kernel::<SCALE>(self.to_bits(), mode))
             }
 
             /// Mode-aware sibling of [`Self::powf_strict`].
             ///
-            /// Same integer-exponent fast path as [`Self::powf_strict`];
-            /// the `mode` argument is irrelevant for `powi` (exact).
+            /// Same exact integer-power pin as [`Self::powf_strict`], here
+            /// rounding any non-terminating / sub-resolution reciprocal under
+            /// the caller's `mode`.
             #[inline]
             #[must_use]
-            pub fn powf_strict_with(self, exp: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn powf_strict_with(
+                self,
+                exp: Self,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> Self {
                 let raw = self.to_bits();
                 if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     return Self::ZERO;
                 }
-                if let ::core::option::Option::Some(n) = Self::powf_exp_as_small_int(exp) {
-                    return self.powi(n);
+                // Exact integer-power pin — see [`Self::powf_strict`]. Uses
+                // the caller's `mode`: the reciprocal of a non-terminating
+                // power (e.g. `3^-2`) and a sub-resolution `base^-k` must round
+                // under the requested directed mode (Ceiling of a
+                // sub-resolution `base^-k` rounds up to 1, not down to 0). The
+                // pin divides the INTEGER `base^|n|`, so a terminating
+                // reciprocal is exact even when the scaled `base^|n|·10^SCALE`
+                // overflows storage — the case a `checked_pow` fast path
+                // would defer to the to-nearest composition, mis-rounding Floor /
+                // Trunc by 1 LSB. `None` (fractional base/exponent, or a
+                // positive power out of range) defers to the composition below,
+                // which panics uniformly on a genuinely out-of-range result.
+                if let ::core::option::Option::Some(v) =
+                    $crate::algos::pow::powi_exact::powi_exact_pin::<$Storage, SCALE>(
+                        raw,
+                        exp.to_bits(),
+                        <$Storage>::MAX,
+                        mode,
+                    )
+                {
+                    return Self::from_bits(v);
+                }
+                // Fractional-base integer-exponent fast path — see
+                // [`Self::powf_strict`]; here under the caller's `mode`.
+                if let ::core::option::Option::Some(n) =
+                    $crate::algos::pow::powi_exact::exp_as_small_int_raw::<$Storage, SCALE>(
+                        exp.to_bits(),
+                    )
+                {
+                    if n == 0 {
+                        return Self::ONE;
+                    }
+                    if let ::core::option::Option::Some(v) =
+                        $crate::algos::pow::powi_exact::powi_terminating_pin::<$Storage, SCALE>(
+                            raw,
+                            n,
+                            <$Storage>::MAX,
+                            mode,
+                        )
+                    {
+                        return Self::from_bits(v);
+                    }
                 }
                 // x^0.5 ≡ √x. The exp(0.5·ln x) chain loses a sub-ULP at a
                 // perfect-square base (e.g. 4^0.5), rounding 1 LSB short
@@ -3091,23 +3659,72 @@ macro_rules! decl_wide_transcendental {
                 // lift from a base-guard probe of the exp argument so the
                 // `exp_fixed` relative error stays sub-storage-ULP after
                 // narrowing (same budget sinh/cosh use, see those).
+                // Two-core: composition runs on the wide `Wagm` work int
+                // (the exp argument `y·ln x` can exceed a narrowed `$Work`).
                 let k_lift = {
                     let w0 = SCALE + $core::GUARD;
-                    let ln_x0 = $core::ln_fixed($core::to_work(raw), w0);
-                    let arg0 = $core::mul($core::to_work(eraw), ln_x0, w0);
+                    let ln_x0 = $core::ln_fixed_routed_agm::<SCALE>($core::to_work_agm(raw), w0);
+                    let arg0 = $core::mul_agm($core::to_work_agm(eraw), ln_x0, w0);
+                    // Analytic storage-overflow gate, BEFORE the
+                    // result-sized lift below: a deep-overflow argument
+                    // (`e^arg` provably past storage) would size `k_lift`
+                    // in the hundreds and push the working scale past the
+                    // work integer's safe ceiling, where the lifted `ln`'s
+                    // table product silently WRAPS to a near-zero garbage
+                    // `ln x` that defuses every downstream overflow check
+                    // (the `1.5^1000.5` D76 deep-band defect). Panic
+                    // contractually here instead — the gate is a provable
+                    // SUFFICIENT bound, so no representable cell fires it
+                    // (see `algos::pow::powf_overflow_gate`).
+                    if $crate::algos::pow::powf_overflow_gate::powf_overflow_gate_g::<$core::Wagm>(
+                        arg0,
+                        w0,
+                        <$Storage as $crate::int::types::traits::BigInt>::BITS,
+                        SCALE,
+                    ) {
+                        $crate::support::diagnostics::overflow_panic_with_scale(
+                            "powf_strict",
+                            SCALE,
+                        );
+                    }
                     // `arg0` is the exp argument at scale `w0`; narrow it
                     // to scale `SCALE` to feed the `e^|·|` digit sizer
                     // (squaring-safe capped).
-                    let arg_at_scale = $core::round_to_storage_with(arg0, w0, SCALE, $crate::support::rounding::RoundingMode::Trunc);
-                    $core::exp_result_int_digits($core::to_work_w(arg_at_scale, 0), SCALE)
+                    let arg_at_scale = $core::round_to_storage_with_g::<$core::Wagm>(
+                        arg0,
+                        w0,
+                        SCALE,
+                        $crate::support::rounding::RoundingMode::Trunc,
+                    );
+                    // `e^arg` grows integer digits ONLY for a POSITIVE
+                    // argument; for a negative argument `e^arg ∈ (0, 1)` has
+                    // zero integer digits and needs NO lift. Sizing a lift
+                    // there would inflate the working scale `w = SCALE +
+                    // GUARD + k_lift` until the non-widening low-product
+                    // `mul_agm(y, ln_x, w)` overflows the `Wagm` work integer
+                    // (its `y·ln_x` exceeds `Wagm::BITS`) and WRAPS the exp
+                    // argument to garbage — the deep-underflow misround
+                    // (`powf("2","-200")` at D57/D76 mid-scales returned
+                    // `e^-0.21 ≈ 0.808` instead of the sub-resolution 0). The
+                    // sign gate mirrors `exp2_result_int_digits`'s
+                    // negative-argument early return and the Tang/Series
+                    // `extra = 0 for k ≤ 0` reassembly asymmetry.
+                    if arg_at_scale < $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                        0
+                    } else {
+                        $core::exp_result_int_digits::<$core::Wagm>($core::to_work_scaled_agm(arg_at_scale, 0), SCALE)
+                    }
                 };
                 let base_guard = $core::GUARD + k_lift;
-                Self::from_bits($core::round_to_storage_directed(
-                    base_guard, SCALE, mode, |guard| {
+                Self::from_bits($core::round_to_storage_directed::<$core::Wagm>(
+                    base_guard,
+                    SCALE,
+                    mode,
+                    |guard| {
                         let w = SCALE + guard;
-                        let ln_x = $core::ln_fixed($core::to_work_w(raw, guard), w);
-                        let y = $core::to_work_w(eraw, guard);
-                        $core::exp_fixed($core::mul(y, ln_x, w), w)
+                        let ln_x = $core::ln_fixed_routed_agm::<SCALE>($core::to_work_scaled_agm(raw, guard), w);
+                        let y = $core::to_work_scaled_agm(eraw, guard);
+                        $core::exp_fixed_routed_agm::<SCALE>($core::mul_agm(y, ln_x, w), w)
                     },
                 ))
             }
@@ -3118,7 +3735,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn sin_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::sin_impl(self, mode)
+                Self::from_bits($crate::policy::trig::sin_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
             /// Mode-aware sibling of [`Self::cos_strict`]. Delegates
@@ -3134,7 +3751,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn cos_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::cos_impl(self, mode)
+                Self::from_bits($crate::policy::trig::cos_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
             /// Mode-aware sibling of [`Self::tan_strict`]. Delegates
@@ -3143,7 +3760,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn tan_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::tan_impl(self, mode)
+                Self::from_bits($crate::policy::trig::tan_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
             /// Mode-aware sibling of [`Self::atan_strict`]. Delegates
@@ -3152,390 +3769,121 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn atan_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::atan_impl(self, mode)
+                Self::from_bits($crate::policy::trig::atan_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::asin_strict`]. Same
-            /// two-range kernel; see the unmodified docs there for
-            /// the algorithm.
+            /// Mode-aware sibling of [`Self::asin_strict`].
+            ///
+            /// Delegates to the policy dispatch exactly as the default-
+            /// mode sibling does (`policy::trig::asin_dispatch`), so BOTH
+            /// public entry points share the one Ziv-escalated kernel.
+            /// An inline single-shot composition could not see
+            /// a deciding digit below the fixed working scale — the
+            /// `asin(3e-60)` family has `x^3/6` EXACTLY 4.5 storage ULPs
+            /// with the deciding `3x^5/40` tail far below `SCALE + GUARD`,
+            /// so HalfToEven would mis-round the half (guards asin.golden D462
+            /// <180>). The policy kernel's escalating walker
+            /// resolves it.
             #[inline]
             #[must_use]
             pub fn asin_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let w = SCALE + $core::GUARD;
-                let one_w = $core::one(w);
-                let v = $core::to_work(self.to_bits());
-                let abs_v = if v < $core::zero() { -v } else { v };
-                if abs_v > one_w {
-                    panic!(concat!(stringify!($Type), "::asin: argument out of domain [-1, 1]"));
-                }
-                let half_w = one_w >> 1;
-                let r = if abs_v == one_w {
-                    let hp = $core::half_pi(w);
-                    if v < $core::zero() { -hp } else { hp }
-                } else if abs_v <= half_w {
-                    let denom = $core::sqrt_fixed(one_w - $core::mul(v, v, w), w);
-                    $core::atan_fixed($core::div(v, denom, w), w)
-                } else {
-                    let inner = (one_w - abs_v) >> 1;
-                    let inner_sqrt = $core::sqrt_fixed(inner, w);
-                    let inner_denom = $core::sqrt_fixed(
-                        one_w - $core::mul(inner_sqrt, inner_sqrt, w),
-                        w,
-                    );
-                    let inner_asin = $core::atan_fixed(
-                        $core::div(inner_sqrt, inner_denom, w),
-                        w,
-                    );
-                    let result_abs = $core::half_pi(w) - inner_asin - inner_asin;
-                    if v < $core::zero() { -result_abs } else { result_abs }
-                };
-                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+                Self::from_bits($crate::policy::trig::asin_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::acos_strict`].
+            /// Mode-aware sibling of [`Self::acos_strict`] — policy
+            /// dispatch, see [`Self::asin_strict_with`].
             #[inline]
             #[must_use]
             pub fn acos_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let w = SCALE + $core::GUARD;
-                let one_w = $core::one(w);
-                let v = $core::to_work(self.to_bits());
-                let abs_v = if v < $core::zero() { -v } else { v };
-                if abs_v > one_w {
-                    panic!(concat!(stringify!($Type), "::acos: argument out of domain [-1, 1]"));
-                }
-                let half_w = one_w >> 1;
-                let asin_w = if abs_v == one_w {
-                    let hp = $core::half_pi(w);
-                    if v < $core::zero() { -hp } else { hp }
-                } else if abs_v <= half_w {
-                    let denom = $core::sqrt_fixed(one_w - $core::mul(v, v, w), w);
-                    $core::atan_fixed($core::div(v, denom, w), w)
-                } else {
-                    let inner = (one_w - abs_v) >> 1;
-                    let inner_sqrt = $core::sqrt_fixed(inner, w);
-                    let inner_denom = $core::sqrt_fixed(
-                        one_w - $core::mul(inner_sqrt, inner_sqrt, w),
-                        w,
-                    );
-                    let inner_asin = $core::atan_fixed(
-                        $core::div(inner_sqrt, inner_denom, w),
-                        w,
-                    );
-                    let result_abs = $core::half_pi(w) - inner_asin - inner_asin;
-                    if v < $core::zero() { -result_abs } else { result_abs }
-                };
-                let r = $core::half_pi(w) - asin_w;
-                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+                Self::from_bits($crate::policy::trig::acos_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::atan2_strict`]. Same
-            /// max-branch + quadrant logic.
+            /// Mode-aware sibling of [`Self::atan2_strict`] — policy
+            /// dispatch, see [`Self::asin_strict_with`].
             #[inline]
             #[must_use]
-            pub fn atan2_strict_with(self, other: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let w = SCALE + $core::GUARD;
-                let z = $crate::macros::wide_roots::wide_lit!($Storage, "0");
-                let yraw = self.to_bits();
-                let xraw = other.to_bits();
-                let r = if xraw == z {
-                    if yraw > z {
-                        $core::half_pi(w)
-                    } else if yraw < z {
-                        -$core::half_pi(w)
-                    } else {
-                        $core::zero()
-                    }
-                } else {
-                    let y = $core::to_work(yraw);
-                    let x = $core::to_work(xraw);
-                    let zero_w = $core::zero();
-                    // Max-branch: feed atan_fixed whichever of y/x or
-                    // x/y has |·| ≤ 1, so the argument-halving cascade
-                    // doesn't blow up. The historic `atan(y/x)`-only
-                    // path lost ~log₂(|y/x|) bits of precision when
-                    // |y| ≫ |x|; the swap recovers them via the
-                    // identity `atan(t) = sign(t)·π/2 − atan(1/t)`
-                    // for `|t| > 1`.
-                    let abs_y = if y < zero_w { -y } else { y };
-                    let abs_x = if x < zero_w { -x } else { x };
-                    let base = if abs_x >= abs_y {
-                        $core::atan_fixed($core::div(y, x, w), w)
-                    } else {
-                        let inv = $core::atan_fixed($core::div(x, y, w), w);
-                        let hp = $core::half_pi(w);
-                        // sign(y/x): same iff y and x agree in sign.
-                        let same_sign = (y < zero_w) == (x < zero_w);
-                        if same_sign { hp - inv } else { -hp - inv }
-                    };
-                    if xraw > z {
-                        base
-                    } else if yraw >= z {
-                        base + $core::pi(w)
-                    } else {
-                        base - $core::pi(w)
-                    }
-                };
-                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            pub fn atan2_strict_with(
+                self,
+                other: Self,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> Self {
+                Self::from_bits($crate::policy::trig::atan2_dispatch::<_, SCALE>(
+                    self.to_bits(),
+                    other.to_bits(),
+                    mode,
+                ))
             }
 
             /// Mode-aware sibling of [`Self::sinh_strict`].
             ///
-            /// Uses the `exp(-v) = 1/exp(v)` identity to replace the
-            /// second `exp_fixed` call with one wide divide. Wide-tier
-            /// `exp_fixed` is dominated by the Tang-table reduction +
-            /// Taylor series and costs ~10-20× more than a wide
-            /// divide; the identity drops the per-call wall-clock
-            /// roughly 40%.
+            /// Delegates to the policy dispatch exactly as the default-
+            /// mode sibling does (`policy::trig::sinh_dispatch`), so BOTH
+            /// public entries share the one canonical kernel
+            /// (`hyper_schoolbook::sinh_schoolbook`, which now carries
+            /// this shell's former analytic small-argument band, exact
+            /// pins, and `never_exact` two-width widening).
             #[inline]
             #[must_use]
             pub fn sinh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let raw = self.to_bits();
-                let szero = <$Storage>::from_i128(0);
-                if raw != szero {
-                    // Small-argument cubic band: `sinh(x) = x + x³/6 + …`,
-                    // the cubic strictly positive yet below one ULP, so
-                    // the true value sits just *above* the grid line
-                    // `raw` (in magnitude). No finite-precision `exp`
-                    // path resolves the sub-ULP cubic — the
-                    // `(e^x − e^-x)/2` difference collapses to exactly
-                    // `raw` (or one LSB short) — so we return the
-                    // analytic directed decision. `sinh` is odd, so the
-                    // band is symmetric. The threshold mirrors `tanh`'s:
-                    // the cubic clears half a storage ULP only once
-                    // `|raw| > ~10^(2·SCALE/3)`.
-                    let thresh_exp = SCALE - (SCALE + 2) / 3;
-                    let thresh = <$Storage>::from_i128(10).pow(thresh_exp);
-                    if raw.abs() <= thresh {
-                        return Self::from_bits(
-                            $crate::support::rounding::tiny_odd_expanding_directed(
-                                raw,
-                                szero,
-                                <$Storage>::from_i128(1),
-                                mode,
-                            ),
-                        );
-                    }
-                }
-                // Large-argument lift. `sinh(x) ≈ e^|x|/2` carries
-                // `~|x|·log10(e)` integer-part digits; the `exp_fixed`
-                // result holds those at the high end of the working
-                // integer, so its ≤ 0.5 LSB-of-w relative error becomes
-                // an absolute error of `~10^(int_digits)` storage LSB on
-                // narrowing. Lift the base working scale by the same
-                // `⌈|x|·log10(e)⌉` digits (the `exp` `2^k` reassembly
-                // budget) so that absolute error stays sub-storage-ULP.
-                // Always feed `exp_fixed` the *positive* magnitude `|v|`,
-                // so the dominant `e^|x|` term is computed directly and
-                // accurately. The reciprocal then gives the tiny
-                // `e^-|x|`. Computing `exp(-|x|)` directly and
-                // reciprocating instead would amplify the small term's
-                // relative error into a large absolute error in the huge
-                // `1/exp(-|x|)`, blowing the storage-ULP budget for large
-                // `|x|`. `sinh` is odd, so the sign of the input is
-                // reapplied to the (non-negative) `sinh(|x|)` working
-                // value — `round_to_storage_directed` reads the sign off
-                // the returned value and rounds each mode accordingly.
-                let neg = raw < <$Storage>::from_i128(0);
-                let k_lift = $core::exp_result_int_digits($core::to_work_w(raw, 0), SCALE);
-                let base_guard = $core::GUARD + k_lift;
-                Self::from_bits($core::round_to_storage_directed(
-                    base_guard, SCALE, mode, |guard| {
-                        let w = SCALE + guard;
-                        let v = $core::to_work_w(raw, guard);
-                        let av = if v < $core::zero() { -v } else { v };
-                        let sh = $core::sinh_pos_wide(av, w);
-                        if neg { -sh } else { sh }
-                    },
-                ))
+                Self::from_bits($crate::policy::trig::sinh_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::cosh_strict`].
-            ///
-            /// Same `exp(-v) = 1/exp(v)` identity as
-            /// [`Self::sinh_strict_with`]; one `exp_fixed` plus one
-            /// divide replaces two `exp_fixed`s.
+            /// Mode-aware sibling of [`Self::cosh_strict`] — policy
+            /// dispatch, see [`Self::sinh_strict_with`].
             #[inline]
             #[must_use]
             pub fn cosh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let raw = self.to_bits();
-                // Large-argument lift: see `sinh_strict_with`. `cosh` is
-                // even, so we always evaluate at `|v|` — feeding the
-                // positive magnitude keeps the dominant `e^|x|` term
-                // direct and accurate (see `sinh_strict_with` for why the
-                // sign matters to the budget).
-                let k_lift = $core::exp_result_int_digits($core::to_work_w(raw, 0), SCALE);
-                let base_guard = $core::GUARD + k_lift;
-                Self::from_bits($core::round_to_storage_directed(
-                    base_guard, SCALE, mode, |guard| {
-                        let w = SCALE + guard;
-                        let v = $core::to_work_w(raw, guard);
-                        let av = if v < $core::zero() { -v } else { v };
-                        $core::cosh_pos_wide(av, w)
-                    },
-                ))
+                Self::from_bits($crate::policy::trig::cosh_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::tanh_strict`].
-            ///
-            /// Same `exp(-v) = 1/exp(v)` identity as
-            /// [`Self::sinh_strict_with`].
+            /// Mode-aware sibling of [`Self::tanh_strict`] — policy
+            /// dispatch, see [`Self::sinh_strict_with`] (the canonical
+            /// kernel carries this shell's former cubic band, all-nines
+            /// saturation fast path, and capped exp lift).
             #[inline]
             #[must_use]
             pub fn tanh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let raw = self.to_bits();
-                let zero = <$Storage>::from_i128(0);
-                if raw != zero {
-                    // Small-argument linear band: tanh(x) = x − x³/3 + … ,
-                    // the cubic below one ULP yet strictly positive, so the
-                    // true value sits just inside the grid line `raw`. No
-                    // finite-precision exp path can resolve the sub-ULP
-                    // cubic, so the directed result is the analytic decision
-                    // (nearest modes return `raw`).
-                    let thresh_exp = SCALE - (SCALE + 2) / 3;
-                    let thresh = <$Storage>::from_i128(10).pow(thresh_exp);
-                    if raw.abs() <= thresh {
-                        return Self::from_bits(
-                            $crate::support::rounding::tiny_odd_compressing_directed(
-                                raw,
-                                zero,
-                                <$Storage>::from_i128(1),
-                                mode,
-                            ),
-                        );
-                    }
-                }
-                // Saturation-edge lift. For a large `|x|` the intermediate
-                // `e^|x|` carries `~|x|·log10(e)` integer digits and runs
-                // its squaring core past `W` — so `exp_fixed_wide` runs it
-                // in the wider work integer [`Wexp`]. The result `tanh(x)`
-                // itself is in `[-1, 1]` (no result lift needed), but the
-                // `(ex − enx)/(ex + enx)` ratio needs the tiny `enx = e^-|x|`
-                // resolved to keep the directed-rounding decision correct;
-                // lift the base working scale by the `e^|x|` integer-digit
-                // count so `enx` keeps a full guard below the storage LSB.
-                // `tanh` is odd; evaluate at `|v|` (so the dominant
-                // `e^|x|` term is direct and accurate, see
-                // `sinh_strict_with`) and reapply the input sign to the
-                // non-negative `tanh(|x|)` working value.
-                let neg = raw < zero;
-                let k_lift = $core::exp_result_int_digits($core::to_work_w(raw, 0), SCALE);
-                let base_guard = $core::GUARD + k_lift;
-                Self::from_bits($core::round_to_storage_directed(
-                    base_guard, SCALE, mode, |guard| {
-                        let w = SCALE + guard;
-                        let v = $core::to_work_w(raw, guard);
-                        let av = if v < $core::zero() { -v } else { v };
-                        let th = $core::tanh_pos_wide(av, w);
-                        if neg { -th } else { th }
-                    },
-                ))
+                Self::from_bits($crate::policy::trig::tanh_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::asinh_strict`].
+            /// Mode-aware sibling of [`Self::asinh_strict`] — policy
+            /// dispatch, see [`Self::sinh_strict_with`].
             #[inline]
             #[must_use]
             pub fn asinh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let raw = self.to_bits();
-                if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    return Self::ZERO;
-                }
-                let neg = raw < $crate::macros::wide_roots::wide_lit!($Storage, "0");
-                Self::from_bits($core::round_to_storage_directed(
-                    $core::GUARD, SCALE, mode, |guard| {
-                        let w = SCALE + guard;
-                        let one_w = $core::one(w);
-                        let v = $core::to_work_w(raw, guard);
-                        let ax = if v < $core::zero() { -v } else { v };
-                        let inner = if ax >= one_w {
-                            let inv = $core::div(one_w, ax, w);
-                            let root = $core::sqrt_fixed(one_w + $core::mul(inv, inv, w), w);
-                            $core::ln_fixed(ax, w) + $core::ln_fixed(one_w + root, w)
-                        } else {
-                            let root = $core::sqrt_fixed($core::mul(ax, ax, w) + one_w, w);
-                            $core::ln_fixed(ax + root, w)
-                        };
-                        if neg { -inner } else { inner }
-                    },
-                ))
+                Self::from_bits($crate::policy::trig::asinh_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::acosh_strict`].
+            /// Mode-aware sibling of [`Self::acosh_strict`] — policy
+            /// dispatch, see [`Self::sinh_strict_with`].
             #[inline]
             #[must_use]
             pub fn acosh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let raw = self.to_bits();
-                {
-                    // Domain check at the base guard.
-                    let w0 = SCALE + $core::GUARD;
-                    if $core::to_work(raw) < $core::one(w0) {
-                        panic!(concat!(stringify!($Type), "::acosh: argument must be >= 1"));
-                    }
-                }
-                Self::from_bits($core::round_to_storage_directed_near_special(
-                    $core::GUARD, SCALE, mode, |guard| {
-                        let w = SCALE + guard;
-                        let one_w = $core::one(w);
-                        let v = $core::to_work_w(raw, guard);
-                        let two_w = one_w + one_w;
-                        if v >= two_w {
-                            let inv = $core::div(one_w, v, w);
-                            let root = $core::sqrt_fixed(one_w - $core::mul(inv, inv, w), w);
-                            $core::ln_fixed(v, w) + $core::ln_fixed(one_w + root, w)
-                        } else {
-                            // Near 1: acosh(1+t) = log1p(t +
-                            // sqrt(t*(t+2))). The gap `t = v - one_w` is
-                            // exact, so `v^2 - 1 = t*(t+2)` avoids the
-                            // `mul(v,v) - one_w` cancellation as `v -> 1`.
-                            let t = v - one_w;
-                            let root = $core::sqrt_fixed($core::mul(t, t + two_w, w), w);
-                            $core::log1p_fixed(t + root, w)
-                        }
-                    },
-                ))
+                Self::from_bits($crate::policy::trig::acosh_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::atanh_strict`].
+            /// Mode-aware sibling of [`Self::atanh_strict`] — policy
+            /// dispatch, see [`Self::sinh_strict_with`].
             #[inline]
             #[must_use]
             pub fn atanh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let raw = self.to_bits();
-                {
-                    // Domain check at the base guard.
-                    let w0 = SCALE + $core::GUARD;
-                    let v0 = $core::to_work(raw);
-                    let ax0 = if v0 < $core::zero() { -v0 } else { v0 };
-                    if ax0 >= $core::one(w0) {
-                        panic!(concat!(stringify!($Type), "::atanh: argument out of domain (-1, 1)"));
-                    }
-                }
-                Self::from_bits($core::round_to_storage_directed_near_special(
-                    $core::GUARD, SCALE, mode, |guard| {
-                        let w = SCALE + guard;
-                        let one_w = $core::one(w);
-                        let v = $core::to_work_w(raw, guard);
-                        // Gap form (1/2)*[ln(1+x) - ln(1-x)]: `one_w
-                        // - v` is the exact working-scale gap, so neither
-                        // `ln_fixed` argument suffers the `(1-x)`
-                        // cancellation the ratio form does near +-1.
-                        ($core::ln_fixed(one_w + v, w) - $core::ln_fixed(one_w - v, w)) >> 1
-                    },
-                ))
+                Self::from_bits($crate::policy::trig::atanh_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
             /// Mode-aware sibling of [`Self::to_degrees_strict`].
             #[inline]
             #[must_use]
-            pub fn to_degrees_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn to_degrees_strict_with(
+                self,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> Self {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
-                debug_assert!(
-                    $core::bit_length(v) + 8 < <$Work>::BITS,
-                    concat!(stringify!($Type),
-                        "::to_degrees: |self| * 180 overflows the working integer")
-                );
-                let r = $core::div(
-                    v * $crate::macros::wide_roots::wide_lit!($Work, "180"),
-                    $core::pi(w),
+                // See `to_degrees_strict`: const-folded `deg_per_rad`
+                // multiply, no runtime `pi(w)` recompute, no divide.
+                let r = $core::mul(
+                    v,
+                    $core::deg_per_rad_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
                     w,
                 );
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
@@ -3544,40 +3892,80 @@ macro_rules! decl_wide_transcendental {
             /// Mode-aware sibling of [`Self::to_radians_strict`].
             #[inline]
             #[must_use]
-            pub fn to_radians_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn to_radians_strict_with(
+                self,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> Self {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
-                let r = $core::mul(v, $core::pi(w), w)
-                    / $crate::macros::wide_roots::wide_lit!($Work, "180");
+                let r = $core::mul(
+                    v,
+                    $core::pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                    w,
+                ) / $crate::macros::wide_roots::wide_lit!($Work, "180");
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 
             /// Mode-aware sibling of [`Self::sin_cos_strict`].
             #[inline]
             #[must_use]
-            pub fn sin_cos_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> (Self, Self) {
+            pub fn sin_cos_strict_with(
+                self,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> (Self, Self) {
+                // One shared kernel evaluation; each component takes the
+                // near-tie escape (a deciding digit can sit below the
+                // fixed w - the asin(3e-60) family), falling to the
+                // Ziv-escalated single-function path when inside the band.
                 let w = SCALE + $core::GUARD;
-                let (s, c) = $core::sin_cos_fixed($core::to_work(self.to_bits()), w);
-                (
-                    Self::from_bits($core::round_to_storage_with(s, w, SCALE, mode)),
-                    Self::from_bits($core::round_to_storage_with(c, w, SCALE, mode)),
-                )
+                let (s, c) = $core::sin_cos_fixed::<SCALE>($core::to_work(self.to_bits()), w);
+                let sin_bits = match $crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<$Storage, _>(
+                    s, w, SCALE, mode, <$Storage>::MAX, <$Storage>::MIN,
+                ) {
+                    ::core::option::Option::Some(st) => st,
+                    ::core::option::Option::None => self.sin_strict_with(mode).to_bits(),
+                };
+                let cos_bits = match $crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<$Storage, _>(
+                    c, w, SCALE, mode, <$Storage>::MAX, <$Storage>::MIN,
+                ) {
+                    ::core::option::Option::Some(st) => st,
+                    ::core::option::Option::None => self.cos_strict_with(mode).to_bits(),
+                };
+                (Self::from_bits(sin_bits), Self::from_bits(cos_bits))
             }
 
             /// Mode-aware sibling of [`Self::sinh_cosh_strict`].
             #[inline]
             #[must_use]
-            pub fn sinh_cosh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> (Self, Self) {
+            pub fn sinh_cosh_strict_with(
+                self,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> (Self, Self) {
+                // One shared exp evaluation; each component takes the
+                // near-tie escape (sinh(x) = x + x^3/6 + ... lands exact
+                // rational partials on rounding boundaries), falling to
+                // the analytically-pinned / Ziv-escalated single-function
+                // path when inside the band.
                 let w = SCALE + $core::GUARD;
-                let v = $core::to_work(self.to_bits());
-                let ex = $core::exp_fixed(v, w);
-                let enx = $core::div($core::one(w), ex, w);
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let v = $core::to_work_agm(self.to_bits());
+                let ex = $core::exp_fixed_series_agm(v, w);
+                let enx = $core::div_agm($core::one_agm(w), ex, w);
                 let sinh = (ex - enx) >> 1;
                 let cosh = (ex + enx) >> 1;
-                (
-                    Self::from_bits($core::round_to_storage_with(sinh, w, SCALE, mode)),
-                    Self::from_bits($core::round_to_storage_with(cosh, w, SCALE, mode)),
-                )
+                let sinh_bits = match $crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<$Storage, $core::Wagm>(
+                    sinh, w, SCALE, mode, <$Storage>::MAX, <$Storage>::MIN,
+                ) {
+                    ::core::option::Option::Some(st) => st,
+                    ::core::option::Option::None => self.sinh_strict_with(mode).to_bits(),
+                };
+                let cosh_bits = match $crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<$Storage, $core::Wagm>(
+                    cosh, w, SCALE, mode, <$Storage>::MAX, <$Storage>::MIN,
+                ) {
+                    ::core::option::Option::Some(st) => st,
+                    ::core::option::Option::None => self.cosh_strict_with(mode).to_bits(),
+                };
+                (Self::from_bits(sinh_bits), Self::from_bits(cosh_bits))
             }
 
             // ─── *_approx(working_digits) family ─────────────────────
@@ -3590,7 +3978,10 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn ln_approx(self, working_digits: u32) -> Self {
-                self.ln_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                self.ln_approx_with(
+                    working_digits,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// Natural log with caller-chosen guard digits AND rounding mode.
@@ -3606,10 +3997,13 @@ macro_rules! decl_wide_transcendental {
                 }
                 let raw = self.to_bits();
                 if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    panic!(concat!(stringify!($Type), "::ln: argument must be positive"));
+                    panic!(concat!(
+                        stringify!($Type),
+                        "::ln: argument must be positive"
+                    ));
                 }
                 let w = SCALE + working_digits;
-                let r = $core::ln_fixed($core::to_work_w(raw, working_digits), w);
+                let r = $core::ln_fixed_routed::<SCALE>($core::to_work_scaled(raw, working_digits), w);
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 
@@ -3617,10 +4011,19 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn log_approx(self, base: Self, working_digits: u32) -> Self {
-                self.log_approx_with(base, working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                self.log_approx_with(
+                    base,
+                    working_digits,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// Log to chosen base with caller-chosen guard digits AND rounding mode.
+            ///
+            /// Body delegates *down* to
+            /// `policy::log::dispatch_with`, which routes to the `LnDivide`
+            /// kernel (`$core::log_approx_with_kernel`, or the strict kernel
+            /// when `working_digits == GUARD`).
             #[inline]
             #[must_use]
             pub fn log_approx_with(
@@ -3629,36 +4032,22 @@ macro_rules! decl_wide_transcendental {
                 working_digits: u32,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
-                if working_digits == $core::GUARD {
-                    return self.log_strict_with(base, mode);
-                }
-                let raw = self.to_bits();
-                let braw = base.to_bits();
-                let z = $crate::macros::wide_roots::wide_lit!($Storage, "0");
-                if raw <= z {
-                    panic!(concat!(stringify!($Type), "::log: argument must be positive"));
-                }
-                if braw <= z {
-                    panic!(concat!(stringify!($Type), "::log: base must be positive"));
-                }
-                let w = SCALE + working_digits;
-                let ln_b = $core::ln_fixed($core::to_work_w(braw, working_digits), w);
-                if ln_b == $core::zero() {
-                    panic!(concat!(stringify!($Type), "::log: base must not equal 1"));
-                }
-                let r = $core::div(
-                    $core::ln_fixed($core::to_work_w(raw, working_digits), w),
-                    ln_b,
-                    w,
-                );
-                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+                Self::from_bits($crate::policy::log::dispatch_with::<_, SCALE>(
+                    self.to_bits(),
+                    base.to_bits(),
+                    working_digits,
+                    mode,
+                ))
             }
 
             /// Log base 2 with caller-chosen guard digits.
             #[inline]
             #[must_use]
             pub fn log2_approx(self, working_digits: u32) -> Self {
-                self.log2_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                self.log2_approx_with(
+                    working_digits,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// Log base 2 with caller-chosen guard digits AND rounding mode.
@@ -3669,27 +4058,17 @@ macro_rules! decl_wide_transcendental {
                 working_digits: u32,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
-                if working_digits == $core::GUARD {
-                    return self.log2_strict_with(mode);
-                }
-                let raw = self.to_bits();
-                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    panic!(concat!(stringify!($Type), "::log2: argument must be positive"));
-                }
-                let w = SCALE + working_digits;
-                let r = $core::div(
-                    $core::ln_fixed($core::to_work_w(raw, working_digits), w),
-                    $core::ln2(w),
-                    w,
-                );
-                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+                Self::from_bits($core::log2_approx_with_kernel::<SCALE>(self.to_bits(), working_digits, mode))
             }
 
             /// Log base 10 with caller-chosen guard digits.
             #[inline]
             #[must_use]
             pub fn log10_approx(self, working_digits: u32) -> Self {
-                self.log10_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                self.log10_approx_with(
+                    working_digits,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// Log base 10 with caller-chosen guard digits AND rounding mode.
@@ -3700,27 +4079,17 @@ macro_rules! decl_wide_transcendental {
                 working_digits: u32,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
-                if working_digits == $core::GUARD {
-                    return self.log10_strict_with(mode);
-                }
-                let raw = self.to_bits();
-                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    panic!(concat!(stringify!($Type), "::log10: argument must be positive"));
-                }
-                let w = SCALE + working_digits;
-                let r = $core::div(
-                    $core::ln_fixed($core::to_work_w(raw, working_digits), w),
-                    $core::ln10(w),
-                    w,
-                );
-                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+                Self::from_bits($core::log10_approx_with_kernel::<SCALE>(self.to_bits(), working_digits, mode))
             }
 
             /// `eˣ` with caller-chosen guard digits.
             #[inline]
             #[must_use]
             pub fn exp_approx(self, working_digits: u32) -> Self {
-                self.exp_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                self.exp_approx_with(
+                    working_digits,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// `eˣ` with caller-chosen guard digits AND rounding mode.
@@ -3739,7 +4108,7 @@ macro_rules! decl_wide_transcendental {
                     return Self::ONE;
                 }
                 let w = SCALE + working_digits;
-                let r = $core::exp_fixed($core::to_work_w(raw, working_digits), w);
+                let r = $core::exp_fixed_routed::<SCALE>($core::to_work_scaled(raw, working_digits), w);
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 
@@ -3747,7 +4116,10 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn exp2_approx(self, working_digits: u32) -> Self {
-                self.exp2_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                self.exp2_approx_with(
+                    working_digits,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// `2ˣ` with caller-chosen guard digits AND rounding mode.
@@ -3758,24 +4130,18 @@ macro_rules! decl_wide_transcendental {
                 working_digits: u32,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
-                if working_digits == $core::GUARD {
-                    return self.exp2_strict_with(mode);
-                }
-                let raw = self.to_bits();
-                if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    return Self::ONE;
-                }
-                let w = SCALE + working_digits;
-                let arg = $core::mul($core::to_work_w(raw, working_digits), $core::ln2(w), w);
-                let r = $core::exp_fixed(arg, w);
-                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+                Self::from_bits($core::exp2_approx_with_kernel::<SCALE>(self.to_bits(), working_digits, mode))
             }
 
             /// `xʸ` with caller-chosen guard digits.
             #[inline]
             #[must_use]
             pub fn powf_approx(self, exp: Self, working_digits: u32) -> Self {
-                self.powf_approx_with(exp, working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                self.powf_approx_with(
+                    exp,
+                    working_digits,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// `xʸ` with caller-chosen guard digits AND rounding mode.
@@ -3795,17 +4161,21 @@ macro_rules! decl_wide_transcendental {
                     return Self::ZERO;
                 }
                 let w = SCALE + working_digits;
-                let ln_x = $core::ln_fixed($core::to_work_w(raw, working_digits), w);
-                let y = $core::to_work_w(exp.to_bits(), working_digits);
-                let r = $core::exp_fixed($core::mul(y, ln_x, w), w);
-                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let ln_x = $core::ln_fixed_routed_agm::<SCALE>($core::to_work_scaled_agm(raw, working_digits), w);
+                let y = $core::to_work_scaled_agm(exp.to_bits(), working_digits);
+                let r = $core::exp_fixed_routed_agm::<SCALE>($core::mul_agm(y, ln_x, w), w);
+                Self::from_bits($core::round_to_storage_with_g::<$core::Wagm>(r, w, SCALE, mode))
             }
 
             /// Sine with caller-chosen guard digits.
             #[inline]
             #[must_use]
             pub fn sin_approx(self, working_digits: u32) -> Self {
-                self.sin_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                self.sin_approx_with(
+                    working_digits,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// Sine with caller-chosen guard digits AND rounding mode.
@@ -3820,7 +4190,7 @@ macro_rules! decl_wide_transcendental {
                     return self.sin_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let r = $core::sin_fixed($core::to_work_w(self.to_bits(), working_digits), w);
+                let r = $core::sin_fixed::<SCALE>($core::to_work_scaled(self.to_bits(), working_digits), w);
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 
@@ -3828,7 +4198,10 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn cos_approx(self, working_digits: u32) -> Self {
-                self.cos_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                self.cos_approx_with(
+                    working_digits,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// Cosine with caller-chosen guard digits AND rounding mode.
@@ -3843,8 +4216,8 @@ macro_rules! decl_wide_transcendental {
                     return self.cos_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let arg = $core::to_work_w(self.to_bits(), working_digits) + $core::half_pi(w);
-                let r = $core::sin_fixed(arg, w);
+                let arg = $core::to_work_scaled(self.to_bits(), working_digits) + $core::half_pi::<SCALE>(w);
+                let r = $core::sin_fixed::<SCALE>(arg, w);
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 
@@ -3852,7 +4225,10 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn sin_cos_approx(self, working_digits: u32) -> (Self, Self) {
-                self.sin_cos_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                self.sin_cos_approx_with(
+                    working_digits,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// Joint sine/cosine with caller-chosen guard digits AND rounding mode.
@@ -3867,10 +4243,8 @@ macro_rules! decl_wide_transcendental {
                     return self.sin_cos_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let (s, c) = $core::sin_cos_fixed(
-                    $core::to_work_w(self.to_bits(), working_digits),
-                    w,
-                );
+                let (s, c) =
+                    $core::sin_cos_fixed::<SCALE>($core::to_work_scaled(self.to_bits(), working_digits), w);
                 (
                     Self::from_bits($core::round_to_storage_with(s, w, SCALE, mode)),
                     Self::from_bits($core::round_to_storage_with(c, w, SCALE, mode)),
@@ -3881,7 +4255,10 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn tan_approx(self, working_digits: u32) -> Self {
-                self.tan_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                self.tan_approx_with(
+                    working_digits,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// Tangent with caller-chosen guard digits AND rounding mode.
@@ -3896,10 +4273,8 @@ macro_rules! decl_wide_transcendental {
                     return self.tan_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let (sin_w, cos_w) = $core::sin_cos_fixed(
-                    $core::to_work_w(self.to_bits(), working_digits),
-                    w,
-                );
+                let (sin_w, cos_w) =
+                    $core::sin_cos_fixed::<SCALE>($core::to_work_scaled(self.to_bits(), working_digits), w);
                 if cos_w == $core::zero() {
                     panic!(concat!(
                         stringify!($Type),
@@ -3914,7 +4289,10 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn atan_approx(self, working_digits: u32) -> Self {
-                self.atan_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                self.atan_approx_with(
+                    working_digits,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// Arctangent with caller-chosen guard digits AND rounding mode.
@@ -3929,7 +4307,7 @@ macro_rules! decl_wide_transcendental {
                     return self.atan_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let r = $core::atan_fixed($core::to_work_w(self.to_bits(), working_digits), w);
+                let r = $core::atan_fixed::<SCALE>($core::to_work_scaled(self.to_bits(), working_digits), w);
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 
@@ -3937,7 +4315,10 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn asin_approx(self, working_digits: u32) -> Self {
-                self.asin_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                self.asin_approx_with(
+                    working_digits,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// Arcsine with caller-chosen guard digits AND rounding mode.
@@ -3953,31 +4334,33 @@ macro_rules! decl_wide_transcendental {
                 }
                 let w = SCALE + working_digits;
                 let one_w = $core::one(w);
-                let v = $core::to_work_w(self.to_bits(), working_digits);
+                let v = $core::to_work_scaled(self.to_bits(), working_digits);
                 let abs_v = if v < $core::zero() { -v } else { v };
                 if abs_v > one_w {
-                    panic!(concat!(stringify!($Type), "::asin: argument out of domain [-1, 1]"));
+                    panic!(concat!(
+                        stringify!($Type),
+                        "::asin: argument out of domain [-1, 1]"
+                    ));
                 }
                 let half_w = one_w >> 1;
                 let r = if abs_v == one_w {
-                    let hp = $core::half_pi(w);
+                    let hp = $core::half_pi::<SCALE>(w);
                     if v < $core::zero() { -hp } else { hp }
                 } else if abs_v <= half_w {
                     let denom = $core::sqrt_fixed(one_w - $core::mul(v, v, w), w);
-                    $core::atan_fixed($core::div(v, denom, w), w)
+                    $core::atan_fixed::<SCALE>($core::div(v, denom, w), w)
                 } else {
                     let inner = (one_w - abs_v) >> 1;
                     let inner_sqrt = $core::sqrt_fixed(inner, w);
-                    let inner_denom = $core::sqrt_fixed(
-                        one_w - $core::mul(inner_sqrt, inner_sqrt, w),
-                        w,
-                    );
-                    let inner_asin = $core::atan_fixed(
-                        $core::div(inner_sqrt, inner_denom, w),
-                        w,
-                    );
-                    let result_abs = $core::half_pi(w) - inner_asin - inner_asin;
-                    if v < $core::zero() { -result_abs } else { result_abs }
+                    let inner_denom =
+                        $core::sqrt_fixed(one_w - $core::mul(inner_sqrt, inner_sqrt, w), w);
+                    let inner_asin = $core::atan_fixed::<SCALE>($core::div(inner_sqrt, inner_denom, w), w);
+                    let result_abs = $core::half_pi::<SCALE>(w) - inner_asin - inner_asin;
+                    if v < $core::zero() {
+                        -result_abs
+                    } else {
+                        result_abs
+                    }
                 };
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
@@ -3986,7 +4369,10 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn acos_approx(self, working_digits: u32) -> Self {
-                self.acos_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                self.acos_approx_with(
+                    working_digits,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// Arccosine with caller-chosen guard digits AND rounding mode.
@@ -4002,33 +4388,35 @@ macro_rules! decl_wide_transcendental {
                 }
                 let w = SCALE + working_digits;
                 let one_w = $core::one(w);
-                let v = $core::to_work_w(self.to_bits(), working_digits);
+                let v = $core::to_work_scaled(self.to_bits(), working_digits);
                 let abs_v = if v < $core::zero() { -v } else { v };
                 if abs_v > one_w {
-                    panic!(concat!(stringify!($Type), "::acos: argument out of domain [-1, 1]"));
+                    panic!(concat!(
+                        stringify!($Type),
+                        "::acos: argument out of domain [-1, 1]"
+                    ));
                 }
                 let half_w = one_w >> 1;
                 let asin_w = if abs_v == one_w {
-                    let hp = $core::half_pi(w);
+                    let hp = $core::half_pi::<SCALE>(w);
                     if v < $core::zero() { -hp } else { hp }
                 } else if abs_v <= half_w {
                     let denom = $core::sqrt_fixed(one_w - $core::mul(v, v, w), w);
-                    $core::atan_fixed($core::div(v, denom, w), w)
+                    $core::atan_fixed::<SCALE>($core::div(v, denom, w), w)
                 } else {
                     let inner = (one_w - abs_v) >> 1;
                     let inner_sqrt = $core::sqrt_fixed(inner, w);
-                    let inner_denom = $core::sqrt_fixed(
-                        one_w - $core::mul(inner_sqrt, inner_sqrt, w),
-                        w,
-                    );
-                    let inner_asin = $core::atan_fixed(
-                        $core::div(inner_sqrt, inner_denom, w),
-                        w,
-                    );
-                    let result_abs = $core::half_pi(w) - inner_asin - inner_asin;
-                    if v < $core::zero() { -result_abs } else { result_abs }
+                    let inner_denom =
+                        $core::sqrt_fixed(one_w - $core::mul(inner_sqrt, inner_sqrt, w), w);
+                    let inner_asin = $core::atan_fixed::<SCALE>($core::div(inner_sqrt, inner_denom, w), w);
+                    let result_abs = $core::half_pi::<SCALE>(w) - inner_asin - inner_asin;
+                    if v < $core::zero() {
+                        -result_abs
+                    } else {
+                        result_abs
+                    }
                 };
-                let r = $core::half_pi(w) - asin_w;
+                let r = $core::half_pi::<SCALE>(w) - asin_w;
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 
@@ -4036,7 +4424,11 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn atan2_approx(self, other: Self, working_digits: u32) -> Self {
-                self.atan2_approx_with(other, working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                self.atan2_approx_with(
+                    other,
+                    working_digits,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// Four-quadrant arctangent with caller-chosen guard digits AND rounding mode.
@@ -4057,22 +4449,25 @@ macro_rules! decl_wide_transcendental {
                 let xraw = other.to_bits();
                 let r = if xraw == z {
                     if yraw > z {
-                        $core::half_pi(w)
+                        $core::half_pi::<SCALE>(w)
                     } else if yraw < z {
-                        -$core::half_pi(w)
+                        -$core::half_pi::<SCALE>(w)
                     } else {
                         $core::zero()
                     }
                 } else {
-                    let y = $core::to_work_w(yraw, working_digits);
-                    let x = $core::to_work_w(xraw, working_digits);
-                    let base = $core::atan_fixed($core::div(y, x, w), w);
+                    let y = $core::to_work_scaled(yraw, working_digits);
+                    let x = $core::to_work_scaled(xraw, working_digits);
+                    let base = $core::atan_fixed::<SCALE>($core::div(y, x, w), w);
+                    // const-folded `π` (baked, no per-call `pi(w)` rescale);
+                    // `SCALE` is the impl's const so this folds to the table entry.
+                    let pi_w = $core::pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE);
                     if xraw > z {
                         base
                     } else if yraw >= z {
-                        base + $core::pi(w)
+                        base + pi_w
                     } else {
-                        base - $core::pi(w)
+                        base - pi_w
                     }
                 };
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
@@ -4082,7 +4477,10 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn sinh_approx(self, working_digits: u32) -> Self {
-                self.sinh_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                self.sinh_approx_with(
+                    working_digits,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// Hyperbolic sine with caller-chosen guard digits AND rounding mode.
@@ -4097,18 +4495,22 @@ macro_rules! decl_wide_transcendental {
                     return self.sinh_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let v = $core::to_work_w(self.to_bits(), working_digits);
-                let ex = $core::exp_fixed(v, w);
-                let enx = $core::div($core::one(w), ex, w);
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let v = $core::to_work_scaled_agm(self.to_bits(), working_digits);
+                let ex = $core::exp_fixed_series_agm(v, w);
+                let enx = $core::div_agm($core::one_agm(w), ex, w);
                 let r = (ex - enx) >> 1;
-                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+                Self::from_bits($core::round_to_storage_with_g::<$core::Wagm>(r, w, SCALE, mode))
             }
 
             /// Hyperbolic cosine with caller-chosen guard digits.
             #[inline]
             #[must_use]
             pub fn cosh_approx(self, working_digits: u32) -> Self {
-                self.cosh_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                self.cosh_approx_with(
+                    working_digits,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// Hyperbolic cosine with caller-chosen guard digits AND rounding mode.
@@ -4123,18 +4525,22 @@ macro_rules! decl_wide_transcendental {
                     return self.cosh_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let v = $core::to_work_w(self.to_bits(), working_digits);
-                let ex = $core::exp_fixed(v, w);
-                let enx = $core::div($core::one(w), ex, w);
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let v = $core::to_work_scaled_agm(self.to_bits(), working_digits);
+                let ex = $core::exp_fixed_series_agm(v, w);
+                let enx = $core::div_agm($core::one_agm(w), ex, w);
                 let r = (ex + enx) >> 1;
-                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+                Self::from_bits($core::round_to_storage_with_g::<$core::Wagm>(r, w, SCALE, mode))
             }
 
             /// Hyperbolic tangent with caller-chosen guard digits.
             #[inline]
             #[must_use]
             pub fn tanh_approx(self, working_digits: u32) -> Self {
-                self.tanh_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                self.tanh_approx_with(
+                    working_digits,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// Hyperbolic tangent with caller-chosen guard digits AND rounding mode.
@@ -4149,18 +4555,22 @@ macro_rules! decl_wide_transcendental {
                     return self.tanh_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let v = $core::to_work_w(self.to_bits(), working_digits);
-                let ex = $core::exp_fixed(v, w);
-                let enx = $core::div($core::one(w), ex, w);
-                let r = $core::div(ex - enx, ex + enx, w);
-                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let v = $core::to_work_scaled_agm(self.to_bits(), working_digits);
+                let ex = $core::exp_fixed_series_agm(v, w);
+                let enx = $core::div_agm($core::one_agm(w), ex, w);
+                let r = $core::div_agm(ex - enx, ex + enx, w);
+                Self::from_bits($core::round_to_storage_with_g::<$core::Wagm>(r, w, SCALE, mode))
             }
 
             /// Joint sinh/cosh with caller-chosen guard digits.
             #[inline]
             #[must_use]
             pub fn sinh_cosh_approx(self, working_digits: u32) -> (Self, Self) {
-                self.sinh_cosh_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                self.sinh_cosh_approx_with(
+                    working_digits,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// Joint sinh/cosh with caller-chosen guard digits AND rounding mode.
@@ -4175,14 +4585,15 @@ macro_rules! decl_wide_transcendental {
                     return self.sinh_cosh_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let v = $core::to_work_w(self.to_bits(), working_digits);
-                let ex = $core::exp_fixed(v, w);
-                let enx = $core::div($core::one(w), ex, w);
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let v = $core::to_work_scaled_agm(self.to_bits(), working_digits);
+                let ex = $core::exp_fixed_series_agm(v, w);
+                let enx = $core::div_agm($core::one_agm(w), ex, w);
                 let sinh = (ex - enx) >> 1;
                 let cosh = (ex + enx) >> 1;
                 (
-                    Self::from_bits($core::round_to_storage_with(sinh, w, SCALE, mode)),
-                    Self::from_bits($core::round_to_storage_with(cosh, w, SCALE, mode)),
+                    Self::from_bits($core::round_to_storage_with_g::<$core::Wagm>(sinh, w, SCALE, mode)),
+                    Self::from_bits($core::round_to_storage_with_g::<$core::Wagm>(cosh, w, SCALE, mode)),
                 )
             }
 
@@ -4190,7 +4601,10 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn asinh_approx(self, working_digits: u32) -> Self {
-                self.asinh_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                self.asinh_approx_with(
+                    working_digits,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// Inverse hyperbolic sine with caller-chosen guard digits AND rounding mode.
@@ -4209,30 +4623,39 @@ macro_rules! decl_wide_transcendental {
                     return Self::ZERO;
                 }
                 let w = SCALE + working_digits;
-                let one_w = $core::one(w);
-                let v = $core::to_work_w(raw, working_digits);
-                let ax = if v < $core::zero() { -v } else { v };
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let one_w = $core::one_agm(w);
+                let v = $core::to_work_scaled_agm(raw, working_digits);
+                let ax = if v < $core::zero_agm() { -v } else { v };
+                // asinh @ MAX scale (input ±1) loses sub-w precision in the
+                // sqrt step before ln; tang_ln_fixed's INTERNAL_EXTRA
+                // residue-signal can't detect that caller-side loss. Keep
+                // on Series (`ln_fixed_series_agm`) until ln_fixed_routed gains
+                // a PRE_RESIDUE flag (memory project_050_asinh_max_tang_residue).
                 let inner = if ax >= one_w {
-                    let inv = $core::div(one_w, ax, w);
-                    let root = $core::sqrt_fixed(one_w + $core::mul(inv, inv, w), w);
-                    $core::ln_fixed(ax, w) + $core::ln_fixed(one_w + root, w)
+                    let inv = $core::div_agm(one_w, ax, w);
+                    let root = $core::sqrt_fixed_agm(one_w + $core::mul_agm(inv, inv, w), w);
+                    $core::ln_fixed_series_agm(ax, w) + $core::ln_fixed_series_agm(one_w + root, w)
                 } else {
-                    let root = $core::sqrt_fixed($core::mul(ax, ax, w) + one_w, w);
-                    $core::ln_fixed(ax + root, w)
+                    let root = $core::sqrt_fixed_agm($core::mul_agm(ax, ax, w) + one_w, w);
+                    $core::ln_fixed_series_agm(ax + root, w)
                 };
                 let signed = if raw < $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     -inner
                 } else {
                     inner
                 };
-                Self::from_bits($core::round_to_storage_with(signed, w, SCALE, mode))
+                Self::from_bits($core::round_to_storage_with_g::<$core::Wagm>(signed, w, SCALE, mode))
             }
 
             /// Inverse hyperbolic cosine with caller-chosen guard digits.
             #[inline]
             #[must_use]
             pub fn acosh_approx(self, working_digits: u32) -> Self {
-                self.acosh_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                self.acosh_approx_with(
+                    working_digits,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// Inverse hyperbolic cosine with caller-chosen guard digits AND rounding mode.
@@ -4247,16 +4670,17 @@ macro_rules! decl_wide_transcendental {
                     return self.acosh_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let one_w = $core::one(w);
-                let v = $core::to_work_w(self.to_bits(), working_digits);
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let one_w = $core::one_agm(w);
+                let v = $core::to_work_scaled_agm(self.to_bits(), working_digits);
                 if v < one_w {
                     panic!(concat!(stringify!($Type), "::acosh: argument must be >= 1"));
                 }
                 let two_w = one_w + one_w;
                 let inner = if v >= two_w {
-                    let inv = $core::div(one_w, v, w);
-                    let root = $core::sqrt_fixed(one_w - $core::mul(inv, inv, w), w);
-                    $core::ln_fixed(v, w) + $core::ln_fixed(one_w + root, w)
+                    let inv = $core::div_agm(one_w, v, w);
+                    let root = $core::sqrt_fixed_agm(one_w - $core::mul_agm(inv, inv, w), w);
+                    $core::ln_fixed_routed_agm::<SCALE>(v, w) + $core::ln_fixed_routed_agm::<SCALE>(one_w + root, w)
                 } else {
                     // Near 1: acosh(1+t) = log1p(t + sqrt(t*(t+2))).
                     // `t = v - one_w` is the exact gap above 1, so
@@ -4265,17 +4689,20 @@ macro_rules! decl_wide_transcendental {
                     // as `v -> 1`, and `log1p` avoids re-forming `1 + arg`
                     // when the gap (hence `arg`) is tiny.
                     let t = v - one_w;
-                    let root = $core::sqrt_fixed($core::mul(t, t + two_w, w), w);
-                    $core::log1p_fixed(t + root, w)
+                    let root = $core::sqrt_fixed_agm($core::mul_agm(t, t + two_w, w), w);
+                    $core::log1p_fixed::<$core::Wagm>(t + root, w)
                 };
-                Self::from_bits($core::round_to_storage_with(inner, w, SCALE, mode))
+                Self::from_bits($core::round_to_storage_with_g::<$core::Wagm>(inner, w, SCALE, mode))
             }
 
             /// Inverse hyperbolic tangent with caller-chosen guard digits.
             #[inline]
             #[must_use]
             pub fn atanh_approx(self, working_digits: u32) -> Self {
-                self.atanh_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                self.atanh_approx_with(
+                    working_digits,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// Inverse hyperbolic tangent with caller-chosen guard digits AND rounding mode.
@@ -4290,26 +4717,33 @@ macro_rules! decl_wide_transcendental {
                     return self.atanh_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let one_w = $core::one(w);
-                let v = $core::to_work_w(self.to_bits(), working_digits);
-                let ax = if v < $core::zero() { -v } else { v };
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let one_w = $core::one_agm(w);
+                let v = $core::to_work_scaled_agm(self.to_bits(), working_digits);
+                let ax = if v < $core::zero_agm() { -v } else { v };
                 if ax >= one_w {
-                    panic!(concat!(stringify!($Type), "::atanh: argument out of domain (-1, 1)"));
+                    panic!(concat!(
+                        stringify!($Type),
+                        "::atanh: argument out of domain (-1, 1)"
+                    ));
                 }
                 // Gap form: atanh(x) = (1/2)*[ln(1+x) - ln(1-x)].
                 // `one_w - v` is the exact working-scale gap (`v` is the
                 // storage input lifted by appending guard zeros), so
                 // neither `ln_fixed` argument suffers the `(1-x)`
                 // catastrophic cancellation the ratio form does near +-1.
-                let r = ($core::ln_fixed(one_w + v, w) - $core::ln_fixed(one_w - v, w)) >> 1;
-                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+                let r = ($core::ln_fixed_routed_agm::<SCALE>(one_w + v, w) - $core::ln_fixed_routed_agm::<SCALE>(one_w - v, w)) >> 1;
+                Self::from_bits($core::round_to_storage_with_g::<$core::Wagm>(r, w, SCALE, mode))
             }
 
             /// Radians-to-degrees with caller-chosen guard digits.
             #[inline]
             #[must_use]
             pub fn to_degrees_approx(self, working_digits: u32) -> Self {
-                self.to_degrees_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                self.to_degrees_approx_with(
+                    working_digits,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// Radians-to-degrees with caller-chosen guard digits AND rounding mode.
@@ -4324,15 +4758,17 @@ macro_rules! decl_wide_transcendental {
                     return self.to_degrees_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let v = $core::to_work_w(self.to_bits(), working_digits);
+                let v = $core::to_work_scaled(self.to_bits(), working_digits);
                 debug_assert!(
                     $core::bit_length(v) + 8 < <$Work>::BITS,
-                    concat!(stringify!($Type),
-                        "::to_degrees: |self| * 180 overflows the working integer")
+                    concat!(
+                        stringify!($Type),
+                        "::to_degrees: |self| * 180 overflows the working integer"
+                    )
                 );
                 let r = $core::div(
                     v * $crate::macros::wide_roots::wide_lit!($Work, "180"),
-                    $core::pi(w),
+                    $core::pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
                     w,
                 );
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
@@ -4342,7 +4778,10 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn to_radians_approx(self, working_digits: u32) -> Self {
-                self.to_radians_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                self.to_radians_approx_with(
+                    working_digits,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// Degrees-to-radians with caller-chosen guard digits AND rounding mode.
@@ -4357,8 +4796,8 @@ macro_rules! decl_wide_transcendental {
                     return self.to_radians_strict_with(mode);
                 }
                 let w = SCALE + working_digits;
-                let v = $core::to_work_w(self.to_bits(), working_digits);
-                let r = $core::mul(v, $core::pi(w), w)
+                let v = $core::to_work_scaled(self.to_bits(), working_digits);
+                let r = $core::mul(v, $core::pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE), w)
                     / $crate::macros::wide_roots::wide_lit!($Work, "180");
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
@@ -4510,13 +4949,110 @@ pub(crate) use decl_wide_transcendental;
 
 #[cfg(all(test, not(feature = "fast")))]
 mod tests {
-    use crate::{D38, D76, D153, D307};
+
+    /// Validity wall for the baked binary Tang `ln` table: on every
+    /// shipped wide tier, the baked `ln_table_entry` accessor reproduces
+    /// the per-call `ln_fixed` Series recompute (to within the artanh
+    /// reconstruction's working-LSB tolerance) for all 129 slots across
+    /// the reachable working-scale band. If this passes, swapping the
+    /// Series recompute for the baked slice does not move the `ln` result.
+    #[test]
+    fn ln_table_baked_vs_series_all_tiers() {
+        use crate::types::widths::*;
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        wide_trig_d57::ln_table_baked_vs_series("D57");
+        #[cfg(any(feature = "d76", feature = "wide"))]
+        wide_trig_d76::ln_table_baked_vs_series("D76");
+        #[cfg(any(feature = "d115", feature = "wide"))]
+        wide_trig_d115::ln_table_baked_vs_series("D115");
+        #[cfg(any(feature = "d153", feature = "wide"))]
+        wide_trig_d153::ln_table_baked_vs_series("D153");
+        #[cfg(any(feature = "d230", feature = "wide"))]
+        wide_trig_d230::ln_table_baked_vs_series("D230");
+        #[cfg(any(feature = "d307", feature = "x-wide"))]
+        wide_trig_d307::ln_table_baked_vs_series("D307");
+        #[cfg(any(feature = "d462", feature = "x-wide"))]
+        wide_trig_d462::ln_table_baked_vs_series("D462");
+        #[cfg(any(feature = "d616", feature = "x-wide"))]
+        wide_trig_d616::ln_table_baked_vs_series("D616");
+        #[cfg(any(feature = "d924", feature = "xx-wide"))]
+        wide_trig_d924::ln_table_baked_vs_series("D924");
+        #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+        wide_trig_d1232::ln_table_baked_vs_series("D1232");
+    }
+
+    /// Validity wall for the baked binary Tang `(sin, cos)` table: on
+    /// every shipped wide tier, the baked `sincos_table_entry` accessor
+    /// reproduces the per-call `sin_cos_fixed` Series recompute (to
+    /// within a small working-LSB tolerance) for all `M + 1` slots across
+    /// the reachable working-scale band. If this passes, swapping the
+    /// Series recompute for the baked slice does not move the sin/cos/tan
+    /// result.
+    #[test]
+    fn sincos_table_baked_vs_series_all_tiers() {
+        use crate::types::widths::*;
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        wide_trig_d57::sincos_table_baked_vs_series("D57");
+        #[cfg(any(feature = "d76", feature = "wide"))]
+        wide_trig_d76::sincos_table_baked_vs_series("D76");
+        #[cfg(any(feature = "d115", feature = "wide"))]
+        wide_trig_d115::sincos_table_baked_vs_series("D115");
+        #[cfg(any(feature = "d153", feature = "wide"))]
+        wide_trig_d153::sincos_table_baked_vs_series("D153");
+        #[cfg(any(feature = "d230", feature = "wide"))]
+        wide_trig_d230::sincos_table_baked_vs_series("D230");
+        #[cfg(any(feature = "d307", feature = "x-wide"))]
+        wide_trig_d307::sincos_table_baked_vs_series("D307");
+        #[cfg(any(feature = "d462", feature = "x-wide"))]
+        wide_trig_d462::sincos_table_baked_vs_series("D462");
+        #[cfg(any(feature = "d616", feature = "x-wide"))]
+        wide_trig_d616::sincos_table_baked_vs_series("D616");
+        #[cfg(any(feature = "d924", feature = "xx-wide"))]
+        wide_trig_d924::sincos_table_baked_vs_series("D924");
+        #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+        wide_trig_d1232::sincos_table_baked_vs_series("D1232");
+    }
+
+    /// Validity wall for the baked binary Tang `exp` table: on every
+    /// shipped wide tier, the baked `exp_table_entry` accessor reproduces
+    /// the per-call `exp_fixed` Series recompute (to within a tight
+    /// working-LSB tolerance) for all `M` lattice slots across the
+    /// reachable working-scale band. If this passes, swapping the Series
+    /// recompute for the baked slice does not move the `exp` (or the
+    /// hyperbolic `sinh`/`cosh`/`tanh`, which reuse `tang_exp_fixed`)
+    /// result.
+    #[test]
+    fn exp_table_baked_vs_series_all_tiers() {
+        use crate::types::widths::*;
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        wide_trig_d57::exp_table_baked_vs_series("D57");
+        #[cfg(any(feature = "d76", feature = "wide"))]
+        wide_trig_d76::exp_table_baked_vs_series("D76");
+        #[cfg(any(feature = "d115", feature = "wide"))]
+        wide_trig_d115::exp_table_baked_vs_series("D115");
+        #[cfg(any(feature = "d153", feature = "wide"))]
+        wide_trig_d153::exp_table_baked_vs_series("D153");
+        #[cfg(any(feature = "d230", feature = "wide"))]
+        wide_trig_d230::exp_table_baked_vs_series("D230");
+        #[cfg(any(feature = "d307", feature = "x-wide"))]
+        wide_trig_d307::exp_table_baked_vs_series("D307");
+        #[cfg(any(feature = "d462", feature = "x-wide"))]
+        wide_trig_d462::exp_table_baked_vs_series("D462");
+        #[cfg(any(feature = "d616", feature = "x-wide"))]
+        wide_trig_d616::exp_table_baked_vs_series("D616");
+        #[cfg(any(feature = "d924", feature = "xx-wide"))]
+        wide_trig_d924::exp_table_baked_vs_series("D924");
+        #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+        wide_trig_d1232::exp_table_baked_vs_series("D1232");
+    }
+
 
     /// The wide-tier strict transcendentals are correctly rounded, so
     /// at any scale they must agree with the D38 strict path — itself
     /// correctly rounded — to within a couple of ULP (a small slack
     /// absorbs the two paths' independent final-rounding of values that
     /// land near a half-ULP boundary).
+    #[cfg(feature = "d76")]
     #[test]
     fn wide_transcendentals_match_d38() {
         // Raw bit-patterns at SCALE = 6 spanning a useful range.
@@ -4534,54 +5070,138 @@ mod tests {
         }
 
         for raw in positives {
-            let n = D38::<6>::from_bits(raw as i128);
-            let w = D76::<6>::from_bits(crate::wide_int::wide_cast::<i128, crate::wide_int::I256>(raw as i128));
-            agree("ln", raw, w.ln_strict().to_bits().resize::<i128>(), n.ln_strict().to_bits());
-            agree("log2", raw, w.log2_strict().to_bits().resize::<i128>(), n.log2_strict().to_bits());
-            agree("log10", raw, w.log10_strict().to_bits().resize::<i128>(), n.log10_strict().to_bits());
+            let n = crate::D::<crate::int::types::Int<2>, 6>::from_bits(crate::int::types::Int::<2>::from_i128(raw as i128));
+            let w = crate::D::<crate::int::types::Int<4>, 6>::from_bits(crate::int::types::Int::<4>::from_i128(
+                raw as i128,
+            ));
+            agree(
+                "ln",
+                raw,
+                w.ln_strict().to_bits().as_i128(),
+                n.ln_strict().to_bits().as_i128(),
+            );
+            agree(
+                "log2",
+                raw,
+                w.log2_strict().to_bits().as_i128(),
+                n.log2_strict().to_bits().as_i128(),
+            );
+            agree(
+                "log10",
+                raw,
+                w.log10_strict().to_bits().as_i128(),
+                n.log10_strict().to_bits().as_i128(),
+            );
         }
         for raw in all {
-            let n = D38::<6>::from_bits(raw as i128);
-            let w = D76::<6>::from_bits(crate::wide_int::wide_cast::<i128, crate::wide_int::I256>(raw as i128));
-            agree("exp", raw, w.exp_strict().to_bits().resize::<i128>(), n.exp_strict().to_bits());
-            agree("sin", raw, w.sin_strict().to_bits().resize::<i128>(), n.sin_strict().to_bits());
-            agree("cos", raw, w.cos_strict().to_bits().resize::<i128>(), n.cos_strict().to_bits());
-            agree("atan", raw, w.atan_strict().to_bits().resize::<i128>(), n.atan_strict().to_bits());
-            agree("sinh", raw, w.sinh_strict().to_bits().resize::<i128>(), n.sinh_strict().to_bits());
-            agree("cosh", raw, w.cosh_strict().to_bits().resize::<i128>(), n.cosh_strict().to_bits());
-            agree("tanh", raw, w.tanh_strict().to_bits().resize::<i128>(), n.tanh_strict().to_bits());
+            let n = crate::D::<crate::int::types::Int<2>, 6>::from_bits(crate::int::types::Int::<2>::from_i128(raw as i128));
+            let w = crate::D::<crate::int::types::Int<4>, 6>::from_bits(crate::int::types::Int::<4>::from_i128(
+                raw as i128,
+            ));
+            agree(
+                "exp",
+                raw,
+                w.exp_strict().to_bits().as_i128(),
+                n.exp_strict().to_bits().as_i128(),
+            );
+            agree(
+                "sin",
+                raw,
+                w.sin_strict().to_bits().as_i128(),
+                n.sin_strict().to_bits().as_i128(),
+            );
+            agree(
+                "cos",
+                raw,
+                w.cos_strict().to_bits().as_i128(),
+                n.cos_strict().to_bits().as_i128(),
+            );
+            agree(
+                "atan",
+                raw,
+                w.atan_strict().to_bits().as_i128(),
+                n.atan_strict().to_bits().as_i128(),
+            );
+            agree(
+                "sinh",
+                raw,
+                w.sinh_strict().to_bits().as_i128(),
+                n.sinh_strict().to_bits().as_i128(),
+            );
+            agree(
+                "cosh",
+                raw,
+                w.cosh_strict().to_bits().as_i128(),
+                n.cosh_strict().to_bits().as_i128(),
+            );
+            agree(
+                "tanh",
+                raw,
+                w.tanh_strict().to_bits().as_i128(),
+                n.tanh_strict().to_bits().as_i128(),
+            );
         }
         for raw in unit_range {
-            let n = D38::<6>::from_bits(raw as i128);
-            let w = D76::<6>::from_bits(crate::wide_int::wide_cast::<i128, crate::wide_int::I256>(raw as i128));
-            agree("asin", raw, w.asin_strict().to_bits().resize::<i128>(), n.asin_strict().to_bits());
-            agree("acos", raw, w.acos_strict().to_bits().resize::<i128>(), n.acos_strict().to_bits());
-            agree("atanh", raw, w.atanh_strict().to_bits().resize::<i128>(), n.atanh_strict().to_bits());
+            let n = crate::D::<crate::int::types::Int<2>, 6>::from_bits(crate::int::types::Int::<2>::from_i128(raw as i128));
+            let w = crate::D::<crate::int::types::Int<4>, 6>::from_bits(crate::int::types::Int::<4>::from_i128(
+                raw as i128,
+            ));
+            agree(
+                "asin",
+                raw,
+                w.asin_strict().to_bits().as_i128(),
+                n.asin_strict().to_bits().as_i128(),
+            );
+            agree(
+                "acos",
+                raw,
+                w.acos_strict().to_bits().as_i128(),
+                n.acos_strict().to_bits().as_i128(),
+            );
+            agree(
+                "atanh",
+                raw,
+                w.atanh_strict().to_bits().as_i128(),
+                n.atanh_strict().to_bits().as_i128(),
+            );
         }
     }
 
     /// Bit-exact identity points hold across all three wide tiers.
+    #[cfg(any(feature = "d76", feature = "d153", feature = "d307"))]
     #[test]
     fn wide_transcendental_identities() {
-        assert_eq!(D76::<6>::ONE.ln_strict(), D76::<6>::ZERO);
-        assert_eq!(D76::<6>::ZERO.exp_strict(), D76::<6>::ONE);
-        assert_eq!(D76::<6>::ZERO.sin_strict(), D76::<6>::ZERO);
-        assert_eq!(D76::<6>::ZERO.sinh_strict(), D76::<6>::ZERO);
-        assert_eq!(D76::<6>::ZERO.atan_strict(), D76::<6>::ZERO);
+        #[cfg(feature = "d76")]
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ONE.ln_strict(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
+        #[cfg(feature = "d76")]
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.exp_strict(), crate::D::<crate::int::types::Int<4>, 6>::ONE);
+        #[cfg(feature = "d76")]
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.sin_strict(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
+        #[cfg(feature = "d76")]
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.sinh_strict(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
+        #[cfg(feature = "d76")]
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.atan_strict(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
 
-        assert_eq!(D153::<6>::ONE.ln_strict(), D153::<6>::ZERO);
-        assert_eq!(D153::<6>::ZERO.exp_strict(), D153::<6>::ONE);
-        assert_eq!(D153::<6>::ZERO.cos_strict(), D153::<6>::ONE);
+        #[cfg(feature = "d153")]
+        assert_eq!(crate::D::<crate::int::types::Int<8>, 6>::ONE.ln_strict(), crate::D::<crate::int::types::Int<8>, 6>::ZERO);
+        #[cfg(feature = "d153")]
+        assert_eq!(crate::D::<crate::int::types::Int<8>, 6>::ZERO.exp_strict(), crate::D::<crate::int::types::Int<8>, 6>::ONE);
+        #[cfg(feature = "d153")]
+        assert_eq!(crate::D::<crate::int::types::Int<8>, 6>::ZERO.cos_strict(), crate::D::<crate::int::types::Int<8>, 6>::ONE);
 
-        assert_eq!(D307::<6>::ONE.ln_strict(), D307::<6>::ZERO);
-        assert_eq!(D307::<6>::ZERO.exp_strict(), D307::<6>::ONE);
-        assert_eq!(D307::<6>::ZERO.cosh_strict(), D307::<6>::ONE);
+        #[cfg(feature = "d307")]
+        assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::ONE.ln_strict(), crate::D::<crate::int::types::Int<16>, 6>::ZERO);
+        #[cfg(feature = "d307")]
+        assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::ZERO.exp_strict(), crate::D::<crate::int::types::Int<16>, 6>::ONE);
+        #[cfg(feature = "d307")]
+        assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::ZERO.cosh_strict(), crate::D::<crate::int::types::Int<16>, 6>::ONE);
     }
 
     /// AGM-based `ln_strict_agm` and `exp_strict_agm` (Brent–Salamin
     /// 1976 / Newton-on-AGM) are correctly rounded by the same
     /// contract as the canonical artanh / Taylor paths, so they must
     /// agree to within a couple of ULP at storage scale.
+    #[cfg(feature = "d76")]
     #[test]
     fn wide_agm_matches_taylor_at_storage_scale() {
         let positives = [1i64, 250_000, 500_000, 1_000_000, 2_718_282, 7_500_000];
@@ -4595,44 +5215,52 @@ mod tests {
         }
 
         for raw in positives {
-            let w = D76::<6>::from_bits(
-                crate::wide_int::wide_cast::<i128, crate::wide_int::I256>(raw as i128),
-            );
+            let w = crate::D::<crate::int::types::Int<4>, 6>::from_bits(crate::int::types::Int::<4>::from_i128(
+                raw as i128,
+            ));
             agree(
                 "ln",
                 raw,
-                w.ln_strict_agm().to_bits().resize::<i128>(),
-                w.ln_strict().to_bits().resize::<i128>(),
+                w.ln_strict_agm().to_bits().as_i128(),
+                w.ln_strict().to_bits().as_i128(),
             );
         }
         for raw in all {
-            let w = D76::<6>::from_bits(
-                crate::wide_int::wide_cast::<i128, crate::wide_int::I256>(raw as i128),
-            );
+            let w = crate::D::<crate::int::types::Int<4>, 6>::from_bits(crate::int::types::Int::<4>::from_i128(
+                raw as i128,
+            ));
             agree(
                 "exp",
                 raw,
-                w.exp_strict_agm().to_bits().resize::<i128>(),
-                w.exp_strict().to_bits().resize::<i128>(),
+                w.exp_strict_agm().to_bits().as_i128(),
+                w.exp_strict().to_bits().as_i128(),
             );
         }
     }
 
     /// Identity points: AGM `ln(1) = 0`, AGM `exp(0) = 1`.
+    #[cfg(any(feature = "d76", feature = "d153", feature = "d307"))]
     #[test]
     fn wide_agm_identity_points() {
-        assert_eq!(D76::<6>::ONE.ln_strict_agm(), D76::<6>::ZERO);
-        assert_eq!(D76::<6>::ZERO.exp_strict_agm(), D76::<6>::ONE);
-        assert_eq!(D153::<6>::ONE.ln_strict_agm(), D153::<6>::ZERO);
-        assert_eq!(D153::<6>::ZERO.exp_strict_agm(), D153::<6>::ONE);
-        assert_eq!(D307::<6>::ONE.ln_strict_agm(), D307::<6>::ZERO);
-        assert_eq!(D307::<6>::ZERO.exp_strict_agm(), D307::<6>::ONE);
+        #[cfg(feature = "d76")]
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ONE.ln_strict_agm(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
+        #[cfg(feature = "d76")]
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.exp_strict_agm(), crate::D::<crate::int::types::Int<4>, 6>::ONE);
+        #[cfg(feature = "d153")]
+        assert_eq!(crate::D::<crate::int::types::Int<8>, 6>::ONE.ln_strict_agm(), crate::D::<crate::int::types::Int<8>, 6>::ZERO);
+        #[cfg(feature = "d153")]
+        assert_eq!(crate::D::<crate::int::types::Int<8>, 6>::ZERO.exp_strict_agm(), crate::D::<crate::int::types::Int<8>, 6>::ONE);
+        #[cfg(feature = "d307")]
+        assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::ONE.ln_strict_agm(), crate::D::<crate::int::types::Int<16>, 6>::ZERO);
+        #[cfg(feature = "d307")]
+        assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::ZERO.exp_strict_agm(), crate::D::<crate::int::types::Int<16>, 6>::ONE);
     }
 
     /// `*_strict_with(mode)` siblings honour the explicit rounding
     /// mode. Picks a transcendental whose true value lands strictly
     /// between two storage representable values so the rounding mode
     /// actually changes the result.
+    #[cfg(feature = "d76")]
     #[test]
     fn wide_strict_with_honours_mode() {
         use crate::support::rounding::RoundingMode;
@@ -4648,12 +5276,12 @@ mod tests {
         // A clean way: positive number with HTE rounding up. exp(1) =
         // 2.7182818... at SCALE=6: 2.718281 cut, fractional 0.8 →
         // HTE rounds up to 2.718282, Trunc keeps 2.718281.
-        let n = D76::<6>::ONE;
+        let n = crate::D::<crate::int::types::Int<4>, 6>::ONE;
         let hte = n.exp_strict_with(RoundingMode::HalfToEven);
         let trunc = n.exp_strict_with(RoundingMode::Trunc);
         assert!(
-            hte.to_bits().resize::<i128>() - trunc.to_bits().resize::<i128>() == 1
-                || hte.to_bits().resize::<i128>() - trunc.to_bits().resize::<i128>() == 0,
+            hte.to_bits().as_i128() - trunc.to_bits().as_i128() == 1
+                || hte.to_bits().as_i128() - trunc.to_bits().as_i128() == 0,
             "exp(1) HTE vs Trunc: hte={}, trunc={}",
             hte,
             trunc,
@@ -4674,35 +5302,49 @@ mod tests {
     /// `guard_agm` precision lift the AGM path now holds 0.5 ULP
     /// at every wide-tier storage scale; this test retains its
     /// historic D76<20> / D153<20> coverage as a smoke gate.
+    #[cfg(any(feature = "d76", feature = "d153"))]
     #[test]
     fn wide_agm_moderate_scale_round_trip() {
-        let x = D76::<20>::from_int(3);
-        let back = x.ln_strict_agm().exp_strict_agm();
-        let delta = (back.to_bits().resize::<i128>() - x.to_bits().resize::<i128>()).abs();
-        assert!(delta <= 8, "AGM exp(ln(3)) at D76<20> delta {delta}");
+        #[cfg(feature = "d76")]
+        {
+            let x = crate::D::<crate::int::types::Int<4>, 20>::try_from(3_i128).unwrap();
+            let back = x.ln_strict_agm().exp_strict_agm();
+            let delta = (back.to_bits().as_i128() - x.to_bits().as_i128()).abs();
+            assert!(delta <= 8, "AGM exp(ln(3)) at D76<20> delta {delta}");
+        }
 
-        let y = D153::<20>::from_int(2);
-        let back = y.exp_strict_agm().ln_strict_agm();
-        let delta = (back.to_bits().resize::<i128>() - y.to_bits().resize::<i128>()).abs();
-        assert!(delta <= 8, "AGM ln(exp(2)) at D153<20> delta {delta}");
+        #[cfg(feature = "d153")]
+        {
+            let y = crate::D::<crate::int::types::Int<8>, 20>::try_from(2_i128).unwrap();
+            let back = y.exp_strict_agm().ln_strict_agm();
+            let delta = (back.to_bits().as_i128() - y.to_bits().as_i128()).abs();
+            assert!(delta <= 8, "AGM ln(exp(2)) at D153<20> delta {delta}");
+        }
     }
 
     /// Exercises a scale beyond D38's range, where delegation is
     /// impossible and the wide guard-digit core is the only path.
     /// `exp(ln(x)) ≈ x` and `ln(exp(x)) ≈ x` round-trips.
+    #[cfg(any(feature = "d76", feature = "d307"))]
     #[test]
     fn wide_only_scale_round_trips() {
         // D76<50>: well past D38's max scale of 38. The round-trip
         // result fits i128 comfortably, so compare there.
-        let x = D76::<50>::from_int(3);
-        let back = x.ln_strict().exp_strict();
-        let delta = (back.to_bits().resize::<i128>() - x.to_bits().resize::<i128>()).abs();
-        assert!(delta <= 8, "exp(ln(3)) at D76<50> delta {delta}");
+        #[cfg(feature = "d76")]
+        {
+            let x = crate::D::<crate::int::types::Int<4>, 50>::try_from(3_i128).unwrap();
+            let back = x.ln_strict().exp_strict();
+            let delta = (back.to_bits().as_i128() - x.to_bits().as_i128()).abs();
+            assert!(delta <= 8, "exp(ln(3)) at D76<50> delta {delta}");
+        }
 
         // D307<150>: deep scale, only the wide core can serve it.
-        let y = D307::<150>::from_int(2);
-        let back = y.exp_strict().ln_strict();
-        let delta = (back.to_bits().resize::<i128>() - y.to_bits().resize::<i128>()).abs();
-        assert!(delta <= 8, "ln(exp(2)) at D307<150> delta {delta}");
+        #[cfg(feature = "d307")]
+        {
+            let y = crate::D::<crate::int::types::Int<16>, 150>::try_from(2_i128).unwrap();
+            let back = y.exp_strict().ln_strict();
+            let delta = (back.to_bits().as_i128() - y.to_bits().as_i128()).abs();
+            assert!(delta <= 8, "ln(exp(2)) at D307<150> delta {delta}");
+        }
     }
 }

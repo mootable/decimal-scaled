@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Scale-changing operations for every decimal width.
 //!
 //! Each `Dxx<SCALE>` carries its scale in the type. Converting between
@@ -24,11 +27,10 @@
 //! Overflow on the scale-up direction is detected via `checked_mul`
 //! and panics with a clear message in both debug and release builds.
 
-use crate::types::widths::{D38, D9, D18};
+use crate::types::widths::{D18, D38};
 
 // The rescale / rescale_with methods are emitted by
 // `crate::macros::rescale::decl_decimal_rescale!` — same macro for
 // every width; wide tiers receive it from `macros::full`.
-crate::macros::rescale::decl_decimal_rescale!(D38, i128);
-crate::macros::rescale::decl_decimal_rescale!(D18, i64);
-crate::macros::rescale::decl_decimal_rescale!(D9, i32);
+crate::macros::rescale::decl_decimal_rescale!(wide D38, crate::int::types::Int<2>);
+crate::macros::rescale::decl_decimal_rescale!(wide D18, crate::int::types::Int<1>);

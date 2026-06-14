@@ -1,0 +1,48 @@
+[package]
+name = "golden-competitors"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "competitor decimal-library subjects + comparison runs for the decimal-scaled-golden harness"
+license = "MIT OR Apache-2.0"
+
+# Competitor libraries live ONLY here (never in the core library or the agnostic
+# harness). Comparison runs carry the decimal-scaled subjects too, via
+# decimal-scale-test, so each competitor is graded side-by-side against
+# decimal-scaled on the same golden set. The set mirrors the libraries the perf
+# benches compare against.
+[dependencies]
+# The shared decimal-scaled subject lives in decimal-scale-test's lib; its
+# width tiers are passthrough FEATURES below (not hardcoded here) so the
+# lib-cmp-precision CI builds ONE WIDTH SHARD per job — a single rustc
+# carrying the whole monomorphised surface peaks past a hosted runner's
+# 16 GB (the exit-143 kill, proven 2026-06-12). A full local run wants
+# `--features xx-wide`.
+decimal-scale-test = { path = "../decimal-scale-test" }
+decimal-scaled-golden = { path = "../decimal-scaled-golden" }
+
+rust_decimal = { version = "1", default-features = false, features = ["maths"] }
+bigdecimal = "0.4"
+dashu-float = "0.4"
+fastnum = { version = "0.7", default-features = false, features = ["std"] }
+decimal-rs = "0.1"
+g_math = { version = "0.4", features = ["balanced"] }
+
+[features]
+# Width-tier passthroughs onto the decimal-scaled subject (mirroring
+# decimal-scale-test's own passthrough set). Default = the narrow base
+# (D18/D38). The CI precision shootout builds one tier per shard; the
+# umbrellas serve full local runs.
+d57 = ["decimal-scale-test/d57"]
+d76 = ["decimal-scale-test/d76"]
+d115 = ["decimal-scale-test/d115"]
+d153 = ["decimal-scale-test/d153"]
+d230 = ["decimal-scale-test/d230"]
+d307 = ["decimal-scale-test/d307"]
+d462 = ["decimal-scale-test/d462"]
+d616 = ["decimal-scale-test/d616"]
+d924 = ["decimal-scale-test/d924"]
+d1232 = ["decimal-scale-test/d1232"]
+wide = ["decimal-scale-test/wide"]
+x-wide = ["decimal-scale-test/x-wide"]
+xx-wide = ["decimal-scale-test/xx-wide"]

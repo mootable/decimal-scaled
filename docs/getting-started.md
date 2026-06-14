@@ -4,14 +4,14 @@
 
 ```toml
 [dependencies]
-decimal-scaled = "0.4"
+decimal-scaled = "0.5"
 ```
 
 `no_std` (drops `std` and `serde`, keeps `alloc`):
 
 ```toml
 [dependencies]
-decimal-scaled = { version = "0.4", default-features = false }
+decimal-scaled = { version = "0.5", default-features = false }
 ```
 
 See [Cargo features](features.md) for the full list.
@@ -39,7 +39,7 @@ type Cents = D38s2;          // == D38<2>
 type Pico  = D38<12>;        // same as D38s12
 ```
 
-For the narrower (`D9`, `D18`) and wider tiers (`D57` / `D76` /
+For the narrower (`D18`) and wider tiers (`D57` / `D76` /
 `D115` / `D153` / `D230` / `D307` for the `wide` umbrella; `D462` /
 `D616` under `x-wide`; `D924` / `D1232` under `xx-wide`), see [the
 width family](widths.md).
@@ -52,12 +52,14 @@ use decimal_scaled::{D38s2, d38};
 // 1. Compile-time literal macro (scale inferred - see the macro guide).
 let a = d38!(19.99);
 
-// 2. From an integer, scaled by 10^SCALE.
-let b = D38s2::from_int(20);            // 20.00
-let c = D38s2::from_i32(-5);            // -5.00
+// 2. From an integer, scaled by 10^SCALE - fallible (TryFrom), because
+//    scaling can overflow the storage near a width's top scale.
+use core::convert::TryFrom;
+let b = D38s2::try_from(20i64).unwrap();    // 20.00
+let c = D38s2::try_from(-5i64).unwrap();    // -5.00
 
-// 3. From the raw storage integer directly (raw = value × 10^SCALE).
-let d = D38s2::from_bits(1999);         // 19.99
+// 3. The same TryFrom surface covers the widest integer sources (i128 / u128).
+let d = D38s2::try_from(19i128).unwrap();   // 19.00
 
 // 4. Parsing a string.
 use core::str::FromStr;
@@ -69,13 +71,14 @@ let one  = D38s2::ONE;                  // raw = 100 at scale 2
 ```
 
 `from_bits` / `to_bits` are the exact round-trip into and out of the
-storage integer:
+storage integer. The storage is the const-generic `Int<N>` (`Int<2>`
+for `D38`), so build the raw value through it:
 
 ```rust
-# use decimal_scaled::D38s2;
-let v = D38s2::from_bits(1999);
-assert_eq!(v.to_bits(), 1999);
-assert_eq!(D38s2::multiplier(), 100);   // 10^SCALE
+# use decimal_scaled::{D38s2, Int};
+let v = D38s2::from_bits(Int::<2>::from(1999i64));
+assert_eq!(v.to_bits(), 1999i128);      // `Int<2>` compares with `i128`
+assert_eq!(D38s2::multiplier(), Int::<2>::from(100i64));   // 10^SCALE
 assert_eq!(v.scale(), 2);                // the const generic, as a value
 ```
 
@@ -86,19 +89,22 @@ implemented. Operands must share the same type (same width *and* scale)
 - mixing scales is deliberately a compile error; convert explicitly.
 
 ```rust
-# use decimal_scaled::D38s2;
-let x = D38s2::from_bits(1050);   // 10.50
-let y = D38s2::from_bits(300);    //  3.00
+# use decimal_scaled::{D38s2, Int};
+let x = D38s2::from_bits(Int::<2>::from(1050i64));   // 10.50
+let y = D38s2::from_bits(Int::<2>::from(300i64));    //  3.00
 
-assert_eq!((x + y).to_bits(), 1350);   // 13.50
-assert_eq!((x - y).to_bits(),  750);   //  7.50
-assert_eq!((x * y).to_bits(), 3150);   // 31.50  (rescaled by 10^SCALE)
-assert_eq!((x / y).to_bits(),  350);   //  3.50
+assert_eq!((x + y).to_bits(), 1350i128);   // 13.50
+assert_eq!((x - y).to_bits(),  750i128);   //  7.50
+assert_eq!((x * y).to_bits(), 3150i128);   // 31.50  (rescaled by 10^SCALE)
+assert_eq!((x / y).to_bits(),  350i128);   //  3.50
 ```
 
-Overflow follows Rust's integer convention: debug builds panic, release
-builds wrap. For explicit control there is the full
-`checked_* / wrapping_* / saturating_* / overflowing_*` family:
+The default operators panic on overflow — in debug *and* release
+builds, identically at every width and scale. A fixed-width decimal
+has no infinity or NaN to absorb an out-of-range result, and silently
+returning a wrapped or saturated value would be a wrong number with no
+signal, so the default fails loudly. For explicit control there is the
+full `checked_* / wrapping_* / saturating_* / overflowing_*` family:
 
 ```rust
 # use decimal_scaled::D38s2;
@@ -113,8 +119,8 @@ and value; `LowerHex` / `UpperHex` / `Octal` / `Binary` format the raw
 storage integer.
 
 ```rust
-# use decimal_scaled::D38s2;
-let v = D38s2::from_bits(-2050);
+# use decimal_scaled::{D38s2, Int};
+let v = D38s2::from_bits(Int::<2>::from(-2050i64));
 assert_eq!(format!("{v}"), "-20.50");
 assert_eq!(format!("{v:?}"), "D38<2>(-20.50)");
 ```
@@ -132,13 +138,13 @@ releases imposed.
 operate at the type's scale:
 
 ```rust
-# use decimal_scaled::D38s2;
-let v = D38s2::from_bits(1250);   // 12.50
-assert_eq!(v.floor().to_bits(), 1200);
-assert_eq!(v.ceil().to_bits(),  1300);
-assert_eq!(v.round().to_bits(), 1300);
-assert_eq!(v.trunc().to_bits(), 1200);
-assert_eq!(v.fract().to_bits(),   50);
+# use decimal_scaled::{D38s2, Int};
+let v = D38s2::from_bits(Int::<2>::from(1250i64));   // 12.50
+assert_eq!(v.floor().to_bits(), 1200i128);
+assert_eq!(v.ceil().to_bits(),  1300i128);
+assert_eq!(v.round().to_bits(), 1300i128);
+assert_eq!(v.trunc().to_bits(), 1200i128);
+assert_eq!(v.fract().to_bits(),   50i128);
 ```
 
 To round to a *different* scale, use `rescale` - see the
@@ -148,7 +154,7 @@ To round to a *different* scale, use `rescale` - see the
 
 - [Conversions](conversions.md) — integers, floats, and cross-width.
 - [Cross-scale operations](cross-scale.md) — mixing widths and SCALEs in one expression via `mul_of` / `add_of` / `cmp_of` / `clamp_of` / etc., plus the nightly-gated `cross::mul(a, b)` auto-inferred form.
-- [The width family](widths.md) — choosing one of the thirteen widths from D9 to D1232.
+- [The width family](widths.md) — choosing one of the twelve widths from D18 to D1232.
 - [The `d38!` macro](macros.md) — ergonomic compile-time literals.
 - [Rounding modes](rounding.md) — switching from HalfToEven to Floor, Ceiling, Trunc, etc., per call or crate-wide.
 - [Strict vs fast transcendentals](strict-mode.md) — when to reach for `*_fast` and what you give up.

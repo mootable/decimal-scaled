@@ -1,6 +1,6 @@
 # The width family
 
-`decimal-scaled` ships thirteen storage widths. They all share the same
+`decimal-scaled` ships <!-- BEGIN GENERATED:widths:count -->twelve storage widths<!-- END GENERATED:widths:count -->. They all share the same
 API shape — the same methods, the same const generic `SCALE`, the same
 `Decimal` trait impl — and differ only in the size of the backing
 integer, which sets the range and the maximum usable scale.
@@ -12,21 +12,22 @@ guarantees at least one integer digit at every legal `SCALE` (and so
 every representable value has a sign-and-integer-part to render). The
 overall scaffold:
 
+<!-- BEGIN GENERATED:widths:table -->
 | Type | Constructor macro | Underlying signed integer | `MAX_SCALE` | Max value at SCALE 0 | Required feature |
 |---|---|---|---|---|---|
-| `D9<S>`    | `d9!`    | `i32` (32 bits)        |   8  | ±2.1 × 10⁹    | always available |
-| `D18<S>`   | `d18!`   | `i64` (64 bits)        |  17  | ±9.2 × 10¹⁸   | always available |
-| `D38<S>`   | `d38!`   | `i128` (128 bits)      |  37  | ±1.7 × 10³⁸   | always available |
-| `D57<S>`   | `d57!`   | `Int192` (192 bits)    |  56  | ±3.1 × 10⁵⁷   | `d57` / `wide`   |
-| `D76<S>`   | `d76!`   | `Int256` (256 bits)    |  75  | ±5.8 × 10⁷⁶   | `d76` / `wide`   |
-| `D115<S>`  | `d115!`  | `Int384` (384 bits)    | 114  | ±2.0 × 10¹¹⁵  | `d115` / `wide`  |
-| `D153<S>`  | `d153!`  | `Int512` (512 bits)    | 152  | ±6.7 × 10¹⁵³  | `d153` / `wide`  |
-| `D230<S>`  | `d230!`  | `Int768` (768 bits)    | 229  | ±7.7 × 10²³⁰  | `d230` / `wide`  |
-| `D307<S>`  | `d307!`  | `Int1024` (1024 bits)  | 306  | ±9.0 × 10³⁰⁷  | `d307` / `wide`  |
-| `D462<S>`  | `d462!`  | `Int1536` (1536 bits)  | 461  | ±1.0 × 10⁴⁶²  | `d462` / `x-wide`|
-| `D616<S>`  | `d616!`  | `Int2048` (2048 bits)  | 615  | ±1.6 × 10⁶¹⁶  | `d616` / `x-wide`|
-| `D924<S>`  | `d924!`  | `Int3072` (3072 bits)  | 923  | ±2.3 × 10⁹²⁴  | `d924` / `xx-wide`|
-| `D1232<S>` | `d1232!` | `Int4096` (4096 bits)  | 1231 | ±2.7 × 10¹²³² | `d1232` / `xx-wide`|
+| `D18<S>` | `d18!` | `Int<1>` (64 bits) | 17 | ±9.2 × 10¹⁸ | always available |
+| `D38<S>` | `d38!` | `Int<2>` (128 bits) | 37 | ±1.7 × 10³⁸ | always available |
+| `D57<S>` | `d57!` | `Int<3>` (192 bits) | 56 | ±3.1 × 10⁵⁷ | `d57` / `wide` |
+| `D76<S>` | `d76!` | `Int<4>` (256 bits) | 75 | ±5.8 × 10⁷⁶ | `d76` / `wide` |
+| `D115<S>` | `d115!` | `Int<6>` (384 bits) | 114 | ±2.0 × 10¹¹⁵ | `d115` / `wide` |
+| `D153<S>` | `d153!` | `Int<8>` (512 bits) | 152 | ±6.7 × 10¹⁵³ | `d153` / `wide` |
+| `D230<S>` | `d230!` | `Int<12>` (768 bits) | 229 | ±7.7 × 10²³⁰ | `d230` / `wide` |
+| `D307<S>` | `d307!` | `Int<16>` (1024 bits) | 306 | ±9.0 × 10³⁰⁷ | `d307` / `wide` |
+| `D462<S>` | `d462!` | `Int<24>` (1536 bits) | 461 | ±1.0 × 10⁴⁶² | `d462` / `x-wide` |
+| `D616<S>` | `d616!` | `Int<32>` (2048 bits) | 615 | ±1.6 × 10⁶¹⁶ | `d616` / `x-wide` |
+| `D924<S>` | `d924!` | `Int<48>` (3072 bits) | 923 | ±2.3 × 10⁹²⁴ | `d924` / `xx-wide` |
+| `D1232<S>` | `d1232!` | `Int<64>` (4096 bits) | 1231 | ±2.7 × 10¹²³² | `d1232` / `xx-wide` |
+<!-- END GENERATED:widths:table -->
 
 The half-width tiers (`D57`, `D115`, `D230`, `D462`, `D924`) fill in
 the storage-cost gap between each pair of power-of-two widths, so you
@@ -45,7 +46,7 @@ The range at a given scale is roughly `storage_max / 10^SCALE`. Pick
 the *narrowest* width whose range covers your values at the scale you
 need — narrower storage is faster and smaller.
 
-- **`D9` / `D18`** — native integer storage, single-instruction add /
+- **`D18`** — native integer storage, single-instruction add /
   sub / compare. `D18` at `SCALE = 9` covers ±9.2 × 10⁹ with
   nanosecond-grade fractional precision.
 - **`D38`** — the default choice. At `SCALE = 12` the range is roughly
@@ -71,7 +72,7 @@ need — narrower storage is faster and smaller.
 Each width exposes curated `…s<N>` aliases for common scales:
 
 ```rust
-use decimal_scaled::{D9s2, D18s9, D38s12};
+use decimal_scaled::{D18s9, D38s12};
 # #[cfg(feature = "wide")]
 use decimal_scaled::{D76s35, D153s75, D307s150};
 ```
@@ -111,7 +112,8 @@ fn sum_all<D: Decimal + core::ops::Add<Output = D>>(xs: &[D]) -> D {
 - **Overflow variants**: every `checked_*` / `wrapping_*` /
   `saturating_*` / `overflowing_*` of `add` / `sub` / `mul` / `div` /
   `rem` / `neg`.
-- **Integer conversion**: `from_i32`, `to_int`, `to_int_with`.
+- **Integer conversion**: `to_int`, `to_int_with` (construction from an
+  integer is the fallible `TryFrom<iN>` surface).
 - **Float bridge** (gated on `std`): `from_f64`, `from_f64_with`,
   `to_f64`, `to_f32`.
 - **Default reductions**: `is_zero`, `is_one`, `is_normal`, `sum`,
@@ -121,8 +123,9 @@ A few methods are deliberately not on the trait because their
 signature varies per width or the trait can't represent them — see
 the [trait reference](https://docs.rs/decimal-scaled/latest/decimal_scaled/trait.Decimal.html)
 for the full out-of-scope list (`rescale<TARGET>` needs a
-const-generic method param; `from_int` takes a per-width source
-integer; transcendentals are feature-gated).
+const-generic method param; the per-width fallible `TryFrom<iN>`
+integer conversions live on the concrete types; transcendentals
+are feature-gated).
 
 Reach for `Decimal` when writing code that must work across widths;
 otherwise the concrete type is the canonical surface.
@@ -139,13 +142,13 @@ Widening is lossless and infallible (`From`); narrowing is fallible
 
 ```rust
 # use decimal_scaled::{D18s2, D38s2};
-let small: D18s2  = D18s2::from_bits(150);
+let small: D18s2  = "1.50".parse().unwrap();
 let wide:  D38s2 = small.into();              // lossless widen
 let back:  D18s2  = wide.try_into().unwrap();  // fallible narrow
 ```
 
 Every adjacent pair in the comprehensive ladder
-(D9 → D18 → D38 → D57 → D76 → D115 → D153 → D230 → D307 →
+(D18 → D38 → D57 → D76 → D115 → D153 → D230 → D307 →
 D462 → D616 → D924 → D1232) has a `From` / `TryFrom` pair plus
 `.widen()` / `.narrow()` helper methods that step **one rung**
 in either direction. Chain them to skip multiple rungs, or use
@@ -155,7 +158,7 @@ narrower or wider tier.
 ```rust
 # #[cfg(feature = "wide")] {
 use decimal_scaled::{D38, D57, D115};
-let a: D38<6> = D38::<6>::from_int(7);
+let a: D38<6> = D38::<6>::try_from(7i64).unwrap();
 let b: D57<6> = a.widen();          // one rung up
 let c: D115<6> = b.widen().widen(); // two more rungs: D57 → D76 → D115
 let _: D38<6> = c.try_into().unwrap();   // skip-jump back via TryFrom
@@ -168,10 +171,11 @@ let _: D38<6> = c.try_into().unwrap();   // skip-jump back via TryFrom
   `d462`, `d616`, `d924`, `d1232`) or by umbrella (`wide` for
   D57–D307, `x-wide` adds D462 / D616, `xx-wide` adds D924 /
   D1232).
-- Storage is the in-tree hand-rolled wide-integer module
-  (`crate::wide_int`); there is no external big-integer
-  dependency. The wide-int type never appears in your code — you
-  work through `from_bits` / `to_bits` and the normal arithmetic.
+- Storage is an in-tree const-generic big integer, `Int<N>` over
+  `N` u64 limbs (internal to the crate; there is no external
+  big-integer dependency). The backend type never appears in your
+  code — you work through `from_bits` / `to_bits` and the normal
+  arithmetic.
 - The full surface is shipped on the wide tier: cross-type
   `PartialEq` against every primitive integer and float, the
   0.5-ULP-correctly-rounded strict transcendentals (with

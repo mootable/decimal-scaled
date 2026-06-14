@@ -7,7 +7,7 @@
 //! cargo run --release --example fast_vs_strict_ulp --features "wide x-wide xx-wide fast"
 //! ```
 
-use decimal_scaled::{D9, D18, D38};
+use decimal_scaled::{D18, D38};
 #[cfg(feature = "wide")]
 use decimal_scaled::{D57, D76, D115, D153, D230, D307};
 #[cfg(feature = "x-wide")]
@@ -37,7 +37,9 @@ fn digits_disagree<T: ToString>(strict_bits: T, fast_bits: T) -> usize {
     diff_digits.len().min(a.len().max(b.len()))
 }
 
-fn strip_sign(s: &str) -> &str { s.trim_start_matches('-') }
+fn strip_sign(s: &str) -> &str {
+    s.trim_start_matches('-')
+}
 
 /// Decimal-string absolute difference: returns the digit string of
 /// `|a − b|` without leading zeros. Both inputs are digit strings
@@ -52,13 +54,20 @@ fn subtract_abs(a: &str, b: &str) -> String {
     let small: Vec<u8> = small.bytes().rev().map(|c| c - b'0').collect();
     let mut out = Vec::with_capacity(big.len());
     let mut borrow: i16 = 0;
-    for i in 0..big.len() {
+    for (i, &big_d) in big.iter().enumerate() {
         let s = small.get(i).copied().unwrap_or(0) as i16;
-        let mut d = big[i] as i16 - s - borrow;
-        if d < 0 { d += 10; borrow = 1; } else { borrow = 0; }
+        let mut d = big_d as i16 - s - borrow;
+        if d < 0 {
+            d += 10;
+            borrow = 1;
+        } else {
+            borrow = 0;
+        }
         out.push(d as u8 + b'0');
     }
-    while out.len() > 1 && *out.last().unwrap() == b'0' { out.pop(); }
+    while out.len() > 1 && *out.last().unwrap() == b'0' {
+        out.pop();
+    }
     out.reverse();
     String::from_utf8(out).unwrap()
 }
@@ -69,7 +78,7 @@ macro_rules! row {
         // ln / sin / sqrt all take 1.5; exp uses x - 1 = 0.5 to
         // keep e^x in the storage range of every tier (D9<9>'s
         // max is ~2.1, so e^1 ≈ 2.71 already overflows).
-        let half = x - <$T>::from_int(1);
+        let half = x - <$T>::try_from(1).unwrap();
         let s_ln = x.ln_strict().to_bits();
         let f_ln = x.ln_fast().to_bits();
         let s_exp = half.exp_strict().to_bits();
@@ -97,30 +106,83 @@ fn main() {
     println!();
     println!("| type / s   | ln noise | exp noise | sin noise | sqrt noise |");
     println!("|------------|----------|-----------|-----------|------------|");
-
-    row!(D9<5>,   "D9<5>",   D9::<5>::from_int(1) + D9::<5>::from_int(1) / D9::<5>::from_int(2));
-    row!(D9<9>,   "D9<9>",   D9::<9>::from_int(1) + D9::<9>::from_int(1) / D9::<9>::from_int(2));
-    row!(D18<9>,  "D18<9>",  D18::<9>::from_int(1) + D18::<9>::from_int(1) / D18::<9>::from_int(2));
-    row!(D18<18>, "D18<18>", D18::<18>::from_int(1) + D18::<18>::from_int(1) / D18::<18>::from_int(2));
-    row!(D38<19>, "D38<19>", D38::<19>::from_int(1) + D38::<19>::from_int(1) / D38::<19>::from_int(2));
-    row!(D38<38>, "D38<38>", D38::<38>::from_bits(15_000_000_000_000_000_000_000_000_000_000_000_000_i128));
+    row!(
+        D18<9>,
+        "D18<9>",
+        D18::<9>::try_from(1_i32).unwrap() + D18::<9>::try_from(1_i32).unwrap() / D18::<9>::try_from(2_i32).unwrap()
+    );
+    row!(
+        D18<18>,
+        "D18<18>",
+        D18::<18>::try_from(1_i32).unwrap() + D18::<18>::try_from(1_i32).unwrap() / D18::<18>::try_from(2_i32).unwrap()
+    );
+    row!(
+        D38<19>,
+        "D38<19>",
+        D38::<19>::try_from(1_i32).unwrap() + D38::<19>::try_from(1_i32).unwrap() / D38::<19>::try_from(2_i32).unwrap()
+    );
+    row!(
+        D38<38>,
+        "D38<38>",
+        D38::<38>::from_bits(decimal_scaled::Int::<2>::try_from(15_000_000_000_000_000_000_000_000_000_000_000_000_i128).unwrap())
+    );
     #[cfg(feature = "wide")]
     {
-        row!(D57<28>,  "D57<28>",  D57::<28>::from_int(1) + D57::<28>::from_int(1) / D57::<28>::from_int(2));
-        row!(D76<35>,  "D76<35>",  D76::<35>::from_int(1) + D76::<35>::from_int(1) / D76::<35>::from_int(2));
-        row!(D115<57>, "D115<57>", D115::<57>::from_int(1) + D115::<57>::from_int(1) / D115::<57>::from_int(2));
-        row!(D153<75>, "D153<75>", D153::<75>::from_int(1) + D153::<75>::from_int(1) / D153::<75>::from_int(2));
-        row!(D230<115>,"D230<115>",D230::<115>::from_int(1) + D230::<115>::from_int(1) / D230::<115>::from_int(2));
-        row!(D307<150>,"D307<150>",D307::<150>::from_int(1) + D307::<150>::from_int(1) / D307::<150>::from_int(2));
+        row!(
+            D57<28>,
+            "D57<28>",
+            D57::<28>::try_from(1_i64).unwrap() + D57::<28>::try_from(1_i64).unwrap() / D57::<28>::try_from(2_i64).unwrap()
+        );
+        row!(
+            D76<35>,
+            "D76<35>",
+            D76::<35>::try_from(1_i64).unwrap() + D76::<35>::try_from(1_i64).unwrap() / D76::<35>::try_from(2_i64).unwrap()
+        );
+        row!(
+            D115<57>,
+            "D115<57>",
+            D115::<57>::try_from(1_i64).unwrap() + D115::<57>::try_from(1_i64).unwrap() / D115::<57>::try_from(2_i64).unwrap()
+        );
+        row!(
+            D153<75>,
+            "D153<75>",
+            D153::<75>::try_from(1_i64).unwrap() + D153::<75>::try_from(1_i64).unwrap() / D153::<75>::try_from(2_i64).unwrap()
+        );
+        row!(
+            D230<115>,
+            "D230<115>",
+            D230::<115>::try_from(1_i64).unwrap() + D230::<115>::try_from(1_i64).unwrap() / D230::<115>::try_from(2_i64).unwrap()
+        );
+        row!(
+            D307<150>,
+            "D307<150>",
+            D307::<150>::try_from(1_i64).unwrap() + D307::<150>::try_from(1_i64).unwrap() / D307::<150>::try_from(2_i64).unwrap()
+        );
     }
     #[cfg(feature = "x-wide")]
     {
-        row!(D462<230>,"D462<230>",D462::<230>::from_int(1) + D462::<230>::from_int(1) / D462::<230>::from_int(2));
-        row!(D616<308>,"D616<308>",D616::<308>::from_int(1) + D616::<308>::from_int(1) / D616::<308>::from_int(2));
+        row!(
+            D462<230>,
+            "D462<230>",
+            D462::<230>::try_from(1_i64).unwrap() + D462::<230>::try_from(1_i64).unwrap() / D462::<230>::try_from(2_i64).unwrap()
+        );
+        row!(
+            D616<308>,
+            "D616<308>",
+            D616::<308>::try_from(1_i64).unwrap() + D616::<308>::try_from(1_i64).unwrap() / D616::<308>::try_from(2_i64).unwrap()
+        );
     }
     #[cfg(feature = "xx-wide")]
     {
-        row!(D924<461>,"D924<461>",D924::<461>::from_int(1) + D924::<461>::from_int(1) / D924::<461>::from_int(2));
-        row!(D1232<616>,"D1232<616>",D1232::<616>::from_int(1) + D1232::<616>::from_int(1) / D1232::<616>::from_int(2));
+        row!(
+            D924<461>,
+            "D924<461>",
+            D924::<461>::try_from(1_i64).unwrap() + D924::<461>::try_from(1_i64).unwrap() / D924::<461>::try_from(2_i64).unwrap()
+        );
+        row!(
+            D1232<616>,
+            "D1232<616>",
+            D1232::<616>::try_from(1_i64).unwrap() + D1232::<616>::try_from(1_i64).unwrap() / D1232::<616>::try_from(2_i64).unwrap()
+        );
     }
 }

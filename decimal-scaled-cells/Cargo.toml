@@ -1,0 +1,70 @@
+[package]
+name = "decimal-scaled-cells"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Concrete band-edge (width, scale) cell shims over decimal-scaled — the compile-once home for the golden harness's heavy monomorphisations"
+license = "MIT OR Apache-2.0"
+
+# Internal test infrastructure. Every generic decimal-scaled kernel
+# monomorphises in the crate that INSTANTIATES it, and stable rustc shares no
+# generic instantiations across crates — so the band-edge cell fan-out
+# (~thousands of heavy wide-transcendental instantiations) must live in a leaf
+# rlib that compiles ONCE. This crate is that leaf: it exposes concrete,
+# non-generic entry points per cell (parse -> compute -> format, and the
+# storage envelope), and the test crates above it stay light.
+[lib]
+# No unit-test or doctest harness target: either would recompile the whole
+# heavy fan-out a SECOND time per `cargo test` sweep — the exact duplicate
+# this crate exists to remove. The shims' behaviour is tested where it has a
+# real venue: decimal-scale-test's lib tests (the live dispatch) and its
+# tests/history.rs (the historical adapters).
+test = false
+doctest = false
+
+[dependencies]
+decimal-scaled = { path = "..", default-features = false }
+decimal-scaled-golden = { path = "../decimal-scaled-golden" }
+# Historical releases for the version-history adapters (the `history` module).
+# Version-pinned to the one release each adapter tracks; optional behind the
+# matching `history-*` feature so the normal build never pays the (heavy,
+# per-tier macro-era) compile.
+ds-044 = { package = "decimal-scaled", version = "=0.4.4", optional = true }
+ds-033 = { package = "decimal-scaled", version = "=0.3.3", optional = true }
+
+[features]
+# Mirror the root crate's DEFAULT set (std, serde, strict, exact-scratch) so a
+# plain build of this crate compiles decimal-scaled in the same feature world
+# the root CI always builds.
+default = ["std", "serde", "strict", "exact-scratch"]
+std = ["alloc", "decimal-scaled/std"]
+alloc = ["decimal-scaled/alloc"]
+exact-scratch = ["decimal-scaled/exact-scratch"]
+strict = ["decimal-scaled/strict"]
+serde = ["decimal-scaled/serde"]
+# The tier features mirror the root's nesting (each umbrella turns on its
+# per-tier features) so the per-tier `cfg`s inside the cell fan-out fire
+# exactly as the equivalent decimal-scaled tier features do, and a
+# single-tier shard build compiles only its tier's shims.
+wide = ["d57", "d76", "d115", "d153", "d230", "d307", "decimal-scaled/wide"]
+x-wide = ["wide", "d462", "d616", "decimal-scaled/x-wide"]
+xx-wide = ["x-wide", "d924", "d1232", "decimal-scaled/xx-wide"]
+d57 = ["decimal-scaled/d57"]
+d76 = ["decimal-scaled/d76"]
+d115 = ["decimal-scaled/d115"]
+d153 = ["decimal-scaled/d153"]
+d230 = ["decimal-scaled/d230"]
+d307 = ["decimal-scaled/d307"]
+d462 = ["decimal-scaled/d462"]
+d616 = ["decimal-scaled/d616"]
+d924 = ["decimal-scaled/d924"]
+d1232 = ["decimal-scaled/d1232"]
+# Version-history adapters: each history-* feature pulls one pinned historical
+# release and the tier features its adapter's cells need (the same mapping
+# decimal-scale-test carried when the adapters lived there — 0.4.4 shares the
+# live tier table so it gets the full ladder; 0.3.3's odd tiers were named
+# differently, so its adapter covers only the six shared widths and enables
+# the umbrellas they sit under).
+history-044 = ["dep:ds-044", "ds-044/wide", "ds-044/x-wide", "ds-044/xx-wide"]
+history-033 = ["dep:ds-033", "ds-033/wide", "ds-033/x-wide"]
+history = ["history-044", "history-033"]

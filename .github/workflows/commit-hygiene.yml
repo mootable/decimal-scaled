@@ -1,0 +1,55 @@
+name: commit-hygiene
+
+# Rejects commit messages that carry machine-attribution trailers.
+# These slipped into history once via squash-aggregated trailers; this
+# gate makes it impossible to repeat.
+#
+# Trigger: every pull request. Scans each commit in the PR range
+# (base..HEAD) and fails if any message matches the forbidden patterns.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: No attribution trailers
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Scan PR commit messages
+        env:
+          # Force a UTF-8 locale so the robot-emoji byte sequence and
+          # case-insensitive matching behave consistently.
+          LC_ALL: C.UTF-8
+          LANG: C.UTF-8
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "${{ github.base_ref }}"
+          range="origin/${{ github.base_ref }}..HEAD"
+
+          # Case-insensitive forbidden patterns. The robot emoji is the
+          # literal U+1F916 glyph.
+          patterns='co-authored-by:.*(claude|anthropic)|noreply@anthropic|generated with claude|🤖'
+
+          # %H then %B (full message) for every commit, one line each.
+          # -a forces text mode so the emoji bytes don't trip grep's
+          # binary-file detection and the offending line still prints.
+          hits="$(git log --format='%H%n%B' "$range" \
+            | grep -i -a -E -e "$patterns" || true)"
+
+          if [ -n "$hits" ]; then
+            echo "::error::Forbidden attribution trailer found in a PR commit message."
+            echo "$hits" | while IFS= read -r line; do
+              echo "::error::offending line: $line"
+            done
+            exit 1
+          fi
+
+          echo "OK: no attribution trailers in $range"

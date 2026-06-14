@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Lossy (f64-bridge) `log_exp` methods for D38.
 //!
 //! Companion to `types/log_exp.rs`. The plain methods here are the
@@ -5,10 +8,8 @@
 //! fast set). When strict is on, the dispatcher in the
 //! _strict file shadows these.
 
-use crate::types::widths::D38;
 
-impl<const SCALE: u32> D38<SCALE> {
-
+impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     /// Returns the natural logarithm (base e) of `self`.
     ///
     /// # Precision
@@ -46,8 +47,8 @@ impl<const SCALE: u32> D38<SCALE> {
     /// ```ignore
     /// use decimal_scaled::D38s12;
     /// // log_2(8) is approximately 3 within f64 precision.
-    /// let eight = D38s12::from_int(8);
-    /// let two = D38s12::from_int(2);
+    /// let eight = D38s12::try_from(8).unwrap();
+    /// let two = D38s12::try_from(2).unwrap();
     /// let result = eight.log(two);
     /// ```
     #[cfg(feature = "std")]
@@ -148,19 +149,43 @@ impl<const SCALE: u32> D38<SCALE> {
 }
 
 #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
-impl<const SCALE: u32> D38<SCALE> {
+impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     /// Plain dispatcher: forwards to [`Self::ln_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn ln(self) -> Self { self.ln_fast() }
+    #[inline]
+    #[must_use]
+    pub fn ln(self) -> Self {
+        self.ln_fast()
+    }
     /// Plain dispatcher: forwards to [`Self::log_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn log(self, base: Self) -> Self { self.log_fast(base) }
+    #[inline]
+    #[must_use]
+    pub fn log(self, base: Self) -> Self {
+        self.log_fast(base)
+    }
     /// Plain dispatcher: forwards to [`Self::log2_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn log2(self) -> Self { self.log2_fast() }
+    #[inline]
+    #[must_use]
+    pub fn log2(self) -> Self {
+        self.log2_fast()
+    }
     /// Plain dispatcher: forwards to [`Self::log10_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn log10(self) -> Self { self.log10_fast() }
+    #[inline]
+    #[must_use]
+    pub fn log10(self) -> Self {
+        self.log10_fast()
+    }
     /// Plain dispatcher: forwards to [`Self::exp_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn exp(self) -> Self { self.exp_fast() }
+    #[inline]
+    #[must_use]
+    pub fn exp(self) -> Self {
+        self.exp_fast()
+    }
     /// Plain dispatcher: forwards to [`Self::exp2_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn exp2(self) -> Self { self.exp2_fast() }
+    #[inline]
+    #[must_use]
+    pub fn exp2(self) -> Self {
+        self.exp2_fast()
+    }
 }
 
 #[cfg(all(test, any(not(feature = "strict"), feature = "fast")))]
@@ -234,9 +259,9 @@ mod tests {
     /// `log2(8) ~= 3` within tolerance.
     #[test]
     fn log2_of_eight_is_three() {
-        let eight = D38s12::from_int(8);
+        let eight = D38s12::try_from(8_i64).unwrap();
         let result = eight.log2();
-        let expected = D38s12::from_int(3);
+        let expected = D38s12::try_from(3_i64).unwrap();
         assert!(
             within_lsb(result, expected, LOG_EXP_TOLERANCE_LSB),
             "log2(8) bits {}, expected 3 bits {} (delta {})",
@@ -249,9 +274,9 @@ mod tests {
     /// `log10(1000) ~= 3` within tolerance.
     #[test]
     fn log10_of_thousand_is_three() {
-        let thousand = D38s12::from_int(1000);
+        let thousand = D38s12::try_from(1000_i64).unwrap();
         let result = thousand.log10();
-        let expected = D38s12::from_int(3);
+        let expected = D38s12::try_from(3_i64).unwrap();
         assert!(
             within_lsb(result, expected, LOG_EXP_TOLERANCE_LSB),
             "log10(1000) bits {}, expected 3 bits {} (delta {})",
@@ -266,9 +291,9 @@ mod tests {
     fn log10_of_power_of_ten() {
         // n = 1, 2, 4, 6 chosen to stay well within f64's range at SCALE=12.
         for n in [1_i64, 2, 4, 6] {
-            let pow_of_ten = D38s12::from_int(10_i64.pow(n as u32));
+            let pow_of_ten = D38s12::try_from(10_i64.pow(n as u32)).unwrap();
             let result = pow_of_ten.log10();
-            let expected = D38s12::from_int(n);
+            let expected = D38s12::try_from(n).unwrap();
             assert!(
                 within_lsb(result, expected, LOG_EXP_TOLERANCE_LSB),
                 "log10(10^{n}) bits {}, expected {n} bits {} (delta {})",
@@ -283,9 +308,9 @@ mod tests {
     #[test]
     fn log2_of_power_of_two() {
         for n in [1_i64, 2, 4, 8, 16] {
-            let pow_of_two = D38s12::from_int(2_i64.pow(n as u32));
+            let pow_of_two = D38s12::try_from(2_i64.pow(n as u32)).unwrap();
             let result = pow_of_two.log2();
-            let expected = D38s12::from_int(n);
+            let expected = D38s12::try_from(n).unwrap();
             assert!(
                 within_lsb(result, expected, LOG_EXP_TOLERANCE_LSB),
                 "log2(2^{n}) bits {}, expected {n} bits {} (delta {})",
@@ -314,7 +339,7 @@ mod tests {
             45_678_912_345_679_i128, // ~45.678912
             78_901_234_567_890_i128, // ~78.901234
         ] {
-            let x = D38s12::from_bits(raw);
+            let x = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let recovered = x.ln().exp();
             assert!(
                 within_lsb(recovered, x, ROUND_TRIP_TOLERANCE_LSB),
@@ -343,7 +368,9 @@ mod tests {
     /// `ln(exp(x)) ~= x` for moderate `x` -- the inverse round-trip.
     #[test]
     fn ln_of_exp_round_trip() {
-        if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
+        if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN {
+            return;
+        }
         // Moderate inputs; large positive inputs approach D38s12 magnitude limit.
         for raw in [
             -2_345_678_901_234_i128, // ~-2.345678
@@ -352,7 +379,7 @@ mod tests {
             1_234_567_890_123_i128,  // ~1.234567
             7_890_123_456_789_i128,  // ~7.890123
         ] {
-            let x = D38s12::from_bits(raw);
+            let x = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let recovered = x.exp().ln();
             assert!(
                 within_lsb(recovered, x, FOUR_LSB),
@@ -370,12 +397,12 @@ mod tests {
     fn log_base_e_matches_ln() {
         let e = D38s12::e();
         for raw in [
-            500_000_000_000_i128,    // 0.5
-            1_234_567_890_123_i128,  // ~1.234567
-            4_567_891_234_567_i128,  // ~4.567891
-            7_890_123_456_789_i128,  // ~7.890123
+            500_000_000_000_i128,   // 0.5
+            1_234_567_890_123_i128, // ~1.234567
+            4_567_891_234_567_i128, // ~4.567891
+            7_890_123_456_789_i128, // ~7.890123
         ] {
-            let x = D38s12::from_bits(raw);
+            let x = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let via_log = x.log(e);
             let via_ln = x.ln();
             assert!(
@@ -390,14 +417,14 @@ mod tests {
     /// `log(self, 2) ~= log2(self)` -- consistency check for base 2.
     #[test]
     fn log_base_two_matches_log2() {
-        let two = D38s12::from_int(2);
+        let two = D38s12::try_from(2_i64).unwrap();
         for raw in [
-            500_000_000_000_i128,    // 0.5
-            1_234_567_890_123_i128,  // ~1.234567
-            4_567_891_234_567_i128,  // ~4.567891
-            7_890_123_456_789_i128,  // ~7.890123
+            500_000_000_000_i128,   // 0.5
+            1_234_567_890_123_i128, // ~1.234567
+            4_567_891_234_567_i128, // ~4.567891
+            7_890_123_456_789_i128, // ~7.890123
         ] {
-            let x = D38s12::from_bits(raw);
+            let x = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let via_log = x.log(two);
             let via_log2 = x.log2();
             assert!(
@@ -412,14 +439,14 @@ mod tests {
     /// `log(self, 10) ~= log10(self)` -- consistency check for base 10.
     #[test]
     fn log_base_ten_matches_log10() {
-        let ten = D38s12::from_int(10);
+        let ten = D38s12::try_from(10_i64).unwrap();
         for raw in [
-            500_000_000_000_i128,    // 0.5
-            1_234_567_890_123_i128,  // ~1.234567
-            4_567_891_234_567_i128,  // ~4.567891
-            7_890_123_456_789_i128,  // ~7.890123
+            500_000_000_000_i128,   // 0.5
+            1_234_567_890_123_i128, // ~1.234567
+            4_567_891_234_567_i128, // ~4.567891
+            7_890_123_456_789_i128, // ~7.890123
         ] {
-            let x = D38s12::from_bits(raw);
+            let x = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let via_log = x.log(ten);
             let via_log10 = x.log10();
             assert!(
@@ -436,8 +463,8 @@ mod tests {
     #[test]
     fn exp2_matches_integer_power_of_two() {
         for n in [0_i64, 1, 2, 4, 8] {
-            let result = D38s12::from_int(n).exp2();
-            let expected = D38s12::from_int(2_i64.pow(n as u32));
+            let result = D38s12::try_from(n).unwrap().exp2();
+            let expected = D38s12::try_from(2_i64.pow(n as u32)).unwrap();
             assert!(
                 within_lsb(result, expected, LOG_EXP_TOLERANCE_LSB),
                 "exp2({n}) bits {}, expected 2^{n} bits {} (delta {})",
@@ -448,4 +475,3 @@ mod tests {
         }
     }
 }
-

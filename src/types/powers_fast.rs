@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Lossy (f64-bridge) powers methods for D38.
 //!
 //! Companion to `types/powers.rs`. The plain methods here are the
@@ -5,10 +8,8 @@
 //! fast set). When strict is on, the dispatcher in the
 //! _strict file shadows these.
 
-use crate::types::widths::D38;
 
-impl<const SCALE: u32> D38<SCALE> {
-
+impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     /// Raises `self` to the power `exp` via the f64 bridge.
     ///
     /// Converts both operands to f64, calls `f64::powf`, then converts
@@ -26,15 +27,15 @@ impl<const SCALE: u32> D38<SCALE> {
     ///
     /// ```ignore
     /// use decimal_scaled::D38s12;
-    /// let two = D38s12::from_int(2);
-    /// let three = D38s12::from_int(3);
+    /// let two = D38s12::try_from(2).unwrap();
+    /// let three = D38s12::try_from(3).unwrap();
     /// // 2^3 = 8, within f64 precision.
     /// assert!((two.powf(three).to_f64() - 8.0).abs() < 1e-9);
     /// ```
     #[cfg(feature = "std")]
     #[inline]
     #[must_use]
-    pub fn powf_fast(self, exp: D38<SCALE>) -> Self {
+    pub fn powf_fast(self, exp: crate::D<crate::int::types::Int<2>, SCALE>) -> Self {
         Self::from_f64(self.to_f64().powf(exp.to_f64()))
     }
 
@@ -84,7 +85,7 @@ impl<const SCALE: u32> D38<SCALE> {
     ///
     /// ```ignore
     /// use decimal_scaled::D38s12;
-    /// let neg_eight = D38s12::from_int(-8);
+    /// let neg_eight = D38s12::try_from(-8).unwrap();
     /// let result = neg_eight.cbrt();
     /// assert!((result.to_f64() - (-2.0_f64)).abs() < 1e-9);
     /// ```
@@ -96,7 +97,6 @@ impl<const SCALE: u32> D38<SCALE> {
     }
 
     // Integer power variant family.
-
 
     /// Returns `sqrt(self^2 + other^2)` without intermediate overflow.
     ///
@@ -127,8 +127,8 @@ impl<const SCALE: u32> D38<SCALE> {
     ///
     /// ```ignore
     /// use decimal_scaled::D38s12;
-    /// let three = D38s12::from_int(3);
-    /// let four = D38s12::from_int(4);
+    /// let three = D38s12::try_from(3).unwrap();
+    /// let four = D38s12::try_from(4).unwrap();
     /// // Pythagorean triple: hypot(3, 4) ~= 5.
     /// assert!((three.hypot(four).to_f64() - 5.0).abs() < 1e-9);
     /// ```
@@ -155,13 +155,29 @@ impl<const SCALE: u32> D38<SCALE> {
 }
 
 #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
-impl<const SCALE: u32> D38<SCALE> {
+impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     /// Plain dispatcher: forwards to [`Self::powf_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn powf(self, exp: D38<SCALE>) -> Self { self.powf_fast(exp) }
+    #[inline]
+    #[must_use]
+    pub fn powf(self, exp: crate::D<crate::int::types::Int<2>, SCALE>) -> Self {
+        self.powf_fast(exp)
+    }
     /// Plain dispatcher: forwards to [`Self::sqrt_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn sqrt(self) -> Self { self.sqrt_fast() }
+    #[inline]
+    #[must_use]
+    pub fn sqrt(self) -> Self {
+        self.sqrt_fast()
+    }
     /// Plain dispatcher: forwards to [`Self::cbrt_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn cbrt(self) -> Self { self.cbrt_fast() }
+    #[inline]
+    #[must_use]
+    pub fn cbrt(self) -> Self {
+        self.cbrt_fast()
+    }
     /// Plain dispatcher: forwards to [`Self::hypot_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn hypot(self, other: Self) -> Self { self.hypot_fast(other) }
+    #[inline]
+    #[must_use]
+    pub fn hypot(self, other: Self) -> Self {
+        self.hypot_fast(other)
+    }
 }

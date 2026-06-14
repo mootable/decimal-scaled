@@ -1,0 +1,359 @@
+name: "\U0001FA83 bench-branch-compare (branch vs latest tag)"
+
+# Side-by-side Criterion comparison of the latest published release ("prod",
+# the baseline) against the branch under test, using the shared
+# `bench-compare/benches/compare_common.rs` harness. Both versions are linked
+# into each per-width bench binary (prod via the renamed `prod` dep pinned to
+# the newest published version, the branch via the `path = ".."` dep) and run
+# through the shared public-function surface.
+#
+# The sweep now fans out over BOTH width AND scale: each per-width bench file
+# instantiates the op set at that tier's scale set (dedup{0, S/2, S-1, 30 if
+# 30<=S-1}; S = the tier's max SCALE), naming criterion groups
+# `<op>_D###_s<scale>` so a single scale is selectable by a criterion
+# name-filter (`-- s<scale>`). This surfaces SCALE-dependent regressions the
+# old single-scale (all wide tiers @ scale-30) bench hid.
+#
+# Job graph — compile ONCE, then fan out, then join:
+#   build     : pin prod, `cargo bench --no-run` for ALL width targets once,
+#               upload the compiled criterion exes + Cargo.lock as `bbc-compiled`.
+#   bench      : matrix of explicit (width, scale) cells; download `bbc-compiled`,
+#               invoke the prebuilt exe directly with a `-- s<scale>` name-filter
+#               (NO recompile), upload that cell's criterion subtree.
+#   aggregate  : needs ALL bench cells; merge every cell into one criterion tree,
+#               run summarise.py -> a worst-first (op x width x scale) regression
+#               table printed to the run summary, plus a single `bbc-aggregate`
+#               artifact (combined tree + medians .tsv + rendered .md).
+#
+# Triggers: (1) push to a release branch (queue-of-1 via the concurrency block);
+# (2) manual workflow_dispatch against any ref. Push runs from the branch itself,
+# so this does NOT need to live on the default branch.
+
+on:
+  # On-demand only. This branch-vs-latest-tag bench SELF-COMMITS its timing medians;
+  # a push trigger on a release branch with an open PR would churn the PR head onto a
+  # bot commit the REQUIRED gates never run on. Run it against any ref via dispatch.
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch / tag / SHA to benchmark against prod, the latest published release (defaults to the branch the run is launched from)."
+        required: false
+        type: string
+        default: ""
+
+concurrency:
+  group: bench-branch-compare-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # ------------------------------------------------------------------
+  # build: pin prod and compile EVERY width's bench exe ONCE. The compiled
+  # criterion executables + the resolved Cargo.lock are uploaded so the bench
+  # cells run them directly with a scale name-filter — no per-cell recompile.
+  build:
+    name: "\U0001FA83 build (compile all widths once)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout (${{ inputs.ref || github.ref_name }})
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system libs
+        run: sudo rm -f /etc/apt/sources.list.d/*microsoft* /etc/apt/sources.list.d/*azure* 2>/dev/null || true; sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-branch-compare-${{ runner.os }}-${{ hashFiles('bench-compare/benches/compare_common.rs') }}
+          restore-keys: |
+            cargo-branch-compare-${{ runner.os }}-
+
+      - name: Pin prod to the latest published release
+        working-directory: bench-compare
+        run: |
+          set -euo pipefail
+          LATEST=$(curl -s -H 'User-Agent: decimal-scaled-bench (github.com/mootable/decimal-scaled)' https://crates.io/api/v1/crates/decimal-scaled | python3 -c "import sys,json; d=json.load(sys.stdin); c=d['crate']; print(c.get('max_stable_version') or c['newest_version'])")
+          echo "latest published tag = $LATEST"
+          echo "PROD_VERSION=$LATEST" >> "$GITHUB_ENV"
+          sed -i -E "s|^prod = .*|prod = { package = \"decimal-scaled\", version = \"=$LATEST\", default-features = false, features = [\"std\", \"strict\", \"wide\", \"x-wide\", \"xx-wide\"] }|" Cargo.toml
+
+      - name: Compile every width bench exe (no run)
+        working-directory: bench-compare
+        run: |
+          set -euo pipefail
+          echo "--- dep lines ---"; grep -E '^(decimal-scaled|prod)' Cargo.toml
+          # One compile of the whole bench target set; the cells just run the exes.
+          cargo bench --no-run
+          echo "--- compiled compare exes ---"
+          ls -1 target/release/deps/compare_d*-* | grep -v '\.d$' || true
+
+      - name: Stage the compiled exes + lockfile
+        working-directory: bench-compare
+        run: |
+          set -euo pipefail
+          mkdir -p staged/deps
+          # The criterion bench executables only (drop the cargo `.d` depfiles).
+          for f in target/release/deps/compare_d*-*; do
+            case "$f" in
+              *.d) ;;                      # skip depfiles
+              *) cp "$f" staged/deps/ ;;
+            esac
+          done
+          cp Cargo.lock staged/Cargo.lock
+          echo "PROD_VERSION=${PROD_VERSION}" > staged/prod_version.env
+          echo "--- staged ---"; ls -1 staged/deps/
+
+      - name: Upload compiled bench exes
+        uses: actions/upload-artifact@v7
+        with:
+          name: bbc-compiled
+          path: bench-compare/staged/
+          if-no-files-found: error
+          retention-days: 7
+
+  # ------------------------------------------------------------------
+  # bench: one job per (width, scale) cell. Downloads the prebuilt exes and
+  # runs ONLY that cell by invoking the matching exe with a `-- s<scale>`
+  # criterion name-filter. No toolchain, no recompile.
+  bench:
+    name: "\U0001FA83 ${{ matrix.width }} s${{ matrix.scale }}"
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      # Explicit (width, scale) pairs — scales differ per width, so the matrix
+      # must be an `include:` list, not a cross-product. Per #1:
+      # scales = {0, S/4, S/2, 3S/4, S-1}, S = the tier's max SCALE (no 30).
+      matrix:
+        include:
+          - { width: D18,   scale: 0 }
+          - { width: D18,   scale: 4 }
+          - { width: D18,   scale: 9 }
+          - { width: D18,   scale: 13 }
+          - { width: D18,   scale: 17 }
+          - { width: D38,   scale: 0 }
+          - { width: D38,   scale: 9 }
+          - { width: D38,   scale: 19 }
+          - { width: D38,   scale: 28 }
+          - { width: D38,   scale: 37 }
+          - { width: D57,   scale: 0 }
+          - { width: D57,   scale: 14 }
+          - { width: D57,   scale: 28 }
+          - { width: D57,   scale: 42 }
+          - { width: D57,   scale: 56 }
+          - { width: D76,   scale: 0 }
+          - { width: D76,   scale: 19 }
+          - { width: D76,   scale: 38 }
+          - { width: D76,   scale: 57 }
+          - { width: D76,   scale: 75 }
+          - { width: D115,  scale: 0 }
+          - { width: D115,  scale: 28 }
+          - { width: D115,  scale: 57 }
+          - { width: D115,  scale: 86 }
+          - { width: D115,  scale: 114 }
+          - { width: D153,  scale: 0 }
+          - { width: D153,  scale: 38 }
+          - { width: D153,  scale: 76 }
+          - { width: D153,  scale: 114 }
+          - { width: D153,  scale: 152 }
+          - { width: D230,  scale: 0 }
+          - { width: D230,  scale: 57 }
+          - { width: D230,  scale: 115 }
+          - { width: D230,  scale: 172 }
+          - { width: D230,  scale: 229 }
+          - { width: D307,  scale: 0 }
+          - { width: D307,  scale: 76 }
+          - { width: D307,  scale: 153 }
+          - { width: D307,  scale: 230 }
+          - { width: D307,  scale: 306 }
+          - { width: D462,  scale: 0 }
+          - { width: D462,  scale: 115 }
+          - { width: D462,  scale: 231 }
+          - { width: D462,  scale: 346 }
+          - { width: D462,  scale: 461 }
+          - { width: D616,  scale: 0 }
+          - { width: D616,  scale: 154 }
+          - { width: D616,  scale: 308 }
+          - { width: D616,  scale: 462 }
+          - { width: D616,  scale: 615 }
+          - { width: D924,  scale: 0 }
+          - { width: D924,  scale: 231 }
+          - { width: D924,  scale: 462 }
+          - { width: D924,  scale: 693 }
+          - { width: D924,  scale: 923 }
+          - { width: D1232, scale: 0 }
+          - { width: D1232, scale: 308 }
+          - { width: D1232, scale: 616 }
+          - { width: D1232, scale: 924 }
+          - { width: D1232, scale: 1231 }
+
+    steps:
+      - name: Install system libs (criterion runtime)
+        run: sudo rm -f /etc/apt/sources.list.d/*microsoft* /etc/apt/sources.list.d/*azure* 2>/dev/null || true; sudo apt-get update && sudo apt-get install -y libfontconfig1
+
+      - name: Download compiled bench exes
+        uses: actions/download-artifact@v8
+        with:
+          name: bbc-compiled
+          path: bbc-compiled
+
+      - name: Run cell ${{ matrix.width }} s${{ matrix.scale }}
+        run: |
+          set -euo pipefail
+          WIDTH_LC=$(echo "${{ matrix.width }}" | tr '[:upper:]' '[:lower:]')
+          # Resolve the hashed exe name by globbing: compare_<width_lc>-<hash>.
+          EXE=$(ls bbc-compiled/deps/compare_${WIDTH_LC}-* | grep -v '\.d$' | head -1)
+          if [ -z "$EXE" ]; then echo "no exe for compare_${WIDTH_LC}"; exit 1; fi
+          chmod +x "$EXE"
+          # Each benched id is `<op>_D###_s<scale>/<side>`. Filtering on the
+          # `_s<scale>/` substring (with the trailing group/function separator)
+          # selects EXACTLY this scale's groups and no other: e.g. `_s30/` does
+          # NOT match `_s306/` because the `/` lands right after the scale.
+          # (Verified locally on D307, whose set contains both 30 and 306.)
+          FILTER="_s${{ matrix.scale }}/"
+          echo "running: $EXE --bench $FILTER --"
+          "$EXE" --bench "$FILTER" --
+          echo "--- produced groups ---"
+          ls -1 target/criterion 2>/dev/null || true
+
+      - name: Upload cell criterion subtree
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bbc-${{ matrix.width }}-s${{ matrix.scale }}
+          path: target/criterion/
+          if-no-files-found: warn
+          retention-days: 7
+
+  # ------------------------------------------------------------------
+  # aggregate: the final join. Needs every bench cell, merges them into one
+  # criterion tree, renders the worst-first regression table to the run summary
+  # and bundles ONE downloadable artifact (tree + medians .tsv + table .md).
+  aggregate:
+    name: "\U0001FA83 aggregate (worst-first regression table)"
+    needs: bench
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      # Self-commit the timing medians back to the run's branch (the
+      # same self-render aggregate pattern; a GITHUB_TOKEN push does not
+      # re-trigger workflows, so there is no refresh loop).
+      contents: write
+    steps:
+      - name: Checkout (for summarise.py)
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Re-derive prod version for the table header
+        run: |
+          set -euo pipefail
+          LATEST=$(curl -s -H 'User-Agent: decimal-scaled-bench (github.com/mootable/decimal-scaled)' https://crates.io/api/v1/crates/decimal-scaled | python3 -c "import sys,json; d=json.load(sys.stdin); c=d['crate']; print(c.get('max_stable_version') or c['newest_version'])")
+          echo "PROD_VERSION=$LATEST" >> "$GITHUB_ENV"
+
+      - name: Download every (width, scale) bench cell
+        uses: actions/download-artifact@v8
+        with:
+          # No `name` -> every artifact this run uploaded, each into a subdir
+          # named after the artifact (bbc-D18-s0/, bbc-D307-s153/, ...).
+          # We only care about the `bbc-<width>-s<scale>` cells (the
+          # `bbc-compiled` exe blob is harmless extra weight).
+          path: bbc-cells
+
+      - name: Merge every cell into one criterion tree
+        run: |
+          set -euo pipefail
+          mkdir -p bench-compare/target/criterion
+          shopt -s nullglob
+          # Each cell artifact is the cell's `target/criterion` subtree directly.
+          for d in bbc-cells/bbc-*-s*/; do
+            # Skip the compiled-exe artifact if it matched the glob.
+            [ -d "$d" ] || continue
+            case "$d" in *bbc-compiled*) continue;; esac
+            echo "merging $d"
+            cp -a "$d/." bench-compare/target/criterion/ 2>/dev/null || true
+          done
+          # List once to a file, then sample/count from the file. Piping
+          # `ls` straight into `head` makes `ls` race a closed pipe once
+          # head has its 40 lines -> SIGPIPE -> "write error: Broken pipe"
+          # -> non-zero -> `set -o pipefail` aborts the whole job. Reading
+          # head/wc from a file sidesteps the pipe entirely.
+          ls -1 bench-compare/target/criterion > /tmp/bbc_groups.txt
+          echo "--- merged group dirs (sample) ---"
+          head -40 /tmp/bbc_groups.txt
+          echo "--- group count ---"
+          wc -l < /tmp/bbc_groups.txt
+
+      - name: Collate -> worst-first regression table (+ tsv + md)
+        working-directory: bench-compare
+        env:
+          BENCH_REF: ${{ inputs.ref || github.ref_name }}
+          PYTHONIOENCODING: utf-8
+        run: |
+          set -euo pipefail
+          mkdir -p aggregate
+          # Print to stdout (raw log) AND capture the table for the step summary.
+          python3 summarise.py --tsv aggregate/bbc_medians.tsv --md aggregate/bbc_table.md | tee aggregate/bbc_table.txt
+          # Append the rendered markdown to the GitHub Actions run summary UI.
+          {
+            echo ""
+            cat aggregate/bbc_table.md
+          } >> "$GITHUB_STEP_SUMMARY"
+          # Bundle the combined criterion tree into the aggregate dir too.
+          cp -a target/criterion aggregate/criterion
+
+      - name: Commit the timing medians to results/timing/
+        # Self-commit only when the run targets its own branch HEAD: a push event
+        # (inputs.ref unset) or a dispatch with no ref override. A dispatch against
+        # an explicit tag/SHA/other-branch stays artifact-only — `HEAD:<tag-or-sha>`
+        # is never a valid push target, and rendered docs belong to a branch.
+        if: ${{ !inputs.ref }}
+        run: |
+          set -euo pipefail
+          tsv=bench-compare/aggregate/bbc_medians.tsv
+          if [ ! -f "$tsv" ]; then echo "no bbc_medians.tsv produced — skipping commit"; exit 0; fi
+          mkdir -p results/timing
+          # The full benched (op × width × scale) surface — collect everything,
+          # so a later docs table is a render-only change, never a re-run.
+          cp "$tsv" results/timing/bbc_medians.tsv
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Re-render the docs that read these medians (the Performance page renders
+          # straight from results/timing/) so the committed page never lags the
+          # data — the refreshed TSV and its rendered page land in the SAME commit,
+          # keeping the docs-drift gate green. stdlib-only, no extra deps.
+          python3 scripts/render_docs.py
+          git add results/timing/bbc_medians.tsv
+          git add -u README.md docs/
+          if git diff --cached --quiet; then
+            echo "timing medians + docs unchanged — nothing to commit"
+            exit 0
+          fi
+          git commit -m "results(timing): refresh medians + render Performance page"
+          # Incorporate any concurrent results/ self-commit (disjoint files) so
+          # the push isn't rejected non-fast-forward. The step only runs when
+          # inputs.ref is unset, so github.ref_name is the run's own branch.
+          git pull --rebase origin "${{ github.ref_name }}" || true
+          git push origin "HEAD:${{ github.ref_name }}"
+
+      - name: Upload single aggregate artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bbc-aggregate
+          path: bench-compare/aggregate/
+          if-no-files-found: warn
+          retention-days: 30

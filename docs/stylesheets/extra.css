@@ -117,16 +117,64 @@
   color: #1F2128;
 }
 
-/* ── Tables: tighten + brand-tint header row ───────────────── */
+/* ── Tables: shrink-to-content + brand-tint header row ──────── */
 .md-typeset table:not([class]) {
   font-size: 0.78rem;
 }
+/* Three Material defaults conspire to keep a table far wider than its
+   content: cell padding of 0.9375em 1.25em, a 5rem min-width on every
+   header cell, and width:100% on the wrapped table. Override all three so
+   a table (e.g. the ✓ precision surface) fits its widest cell instead of
+   the page; keep wide tables horizontally scrollable. */
+.md-typeset table:not([class]) :is(th, td) {
+  padding: 0.3em 0.55em;
+}
 .md-typeset table:not([class]) th {
+  min-width: 0;
   background: var(--md-accent-fg-color--transparent);
   font-family: "Outfit", sans-serif;
   font-weight: 600;
   color: var(--md-primary-fg-color);
 }
+.md-typeset__table table:not([class]) {
+  width: auto;
+}
+.md-typeset__table {
+  overflow-x: auto;
+}
+
+/* ── Bench page header: description + units fill the left, the width
+      reference table sits at its natural size on the right ──────── */
+.md-typeset .bench-header {
+  display: grid;
+  grid-template-columns: 1fr max-content;
+  gap: 1.5rem;
+  align-items: start;
+  margin: 1em 0 1.5em;
+}
+@media (max-width: 50em) {
+  .md-typeset .bench-header {
+    grid-template-columns: 1fr;   /* stack on narrow screens */
+  }
+}
+/* Keep the header's two columns from overflowing into each other: the
+   description wraps (min-width:0), the width table keeps its natural size,
+   and the 1.5rem grid gap holds a comfortable (>= 0.5em) column gap. */
+.md-typeset .bench-header > * { min-width: 0; }
+
+/* Per-op bench sections (table + graph): stack the graph BELOW the table at
+   full width. The side-by-side layout crowded the graph and let its labels
+   overlap the table; a single column reads cleanly. */
+.md-typeset .grid.perf-grid {
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+/* The per-op graphs are inline SVGs declared width:100%, but Material sizes
+   <figure> to fit-content, which clamps them to the SVG's ~460px intrinsic
+   width — roughly half the panel. Let the figure and its SVG fill the column
+   so the graph scales to the full central-panel width. */
+.md-typeset .perf-grid figure { width: 100%; margin-inline: 0; }
+.md-typeset .perf-grid figure svg { width: 100%; height: auto; }
 
 /* ── Hero / landing page motifs ────────────────────────────── */
 .md-typeset .hero-row {

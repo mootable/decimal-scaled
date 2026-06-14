@@ -1,25 +1,39 @@
-//! Floating-point power algorithm family — narrow-tier kernels.
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+//! Floating-point power algorithm family -- narrow-tier kernels.
 //!
-//! Only D9 / D18 / D38 have policy-routed `powf_strict` today. The wide
+//! Only D18 / D38 have policy-routed `powf_strict` today. The wide
 //! tiers still ship `powf` through their per-tier macro shells; migrating
 //! those mirrors the deferral on [`crate::algos::ln`] / [`crate::algos::exp`].
 //!
-//! `powf` is the composition `exp(y · ln(x))` performed entirely in the
+//! `powf` is the composition `exp(y * ln(x))` performed entirely in the
 //! 256-bit `Fixed` guard-digit intermediate, so the round-trip never
 //! drops precision below the working scale before the final rounding.
 //!
 //! Variants:
 //!
-//! - [`fixed_d38`] — D38's hand-tuned `powf` on the `Fixed` intermediate,
+//! - [`powf_series_2limb`] -- D38's hand-tuned `powf` on the `Fixed` intermediate,
 //!   carrying the four-variant matrix entry shape (strict + approx, each
-//!   with an explicit-rounding sibling). Retained as the D57-disabled
-//!   fallback for the D38 surface.
-//! - [`borrow_d57`] — D38 widen → D57 inherent `powf_strict_with` /
-//!   `powf_approx_with` → narrow back. Picks up the ln + exp wide-tier
-//!   speedups in composed form. Gated on `d57` / `wide`.
-//! - [`widen_to_d38`] — D9 / D18 widen → `fixed_d38::powf` → narrow.
+//!   with an explicit-rounding sibling). The D38 realisation of the
+//!   `powf_exp_with_ln` (`ExpWithLn`) algorithm.
+//! - [`pow_schoolbook`] -- correctness reference: naive `exp(y*ln(x))`
+//!   using the schoolbook exp and ln. Registered as the unrouted
+//!   `Algorithm::Schoolbook` variant.
 
-#[cfg(any(feature = "d57", feature = "wide"))]
-pub(crate) mod borrow_d57;
-pub(crate) mod fixed_d38;
-pub(crate) mod widen_to_d38;
+pub(crate) mod powf_series_2limb;
+/// Width-generic analytic storage-overflow gate for the wide-tier
+/// `exp(y·ln x)` composition -- the wide sibling of the narrow kernel's
+/// internal `powf_overflow_gate`. Run by the per-tier `powf_strict_with`
+/// shells BEFORE the result-sized working lift, so a deep-overflow cell
+/// panics contractually instead of wrapping the lifted `ln`.
+pub(crate) mod powf_overflow_gate;
+/// Exact integer-power pin shared by the narrow + wide `powf` kernels: when
+/// the base and exponent are exact integers, `base^exp` is an exact rational
+/// and its correctly-directed-rounded value is emitted directly instead of
+/// the to-nearest `exp(exp*ln base)` composition.
+pub(crate) mod powi_exact;
+/// Schoolbook floating-point power -- naive `exp(y*ln(x))` composition,
+/// correctness reference. Registered as the unrouted `Algorithm::Schoolbook`
+/// arm; not connected to `select`.
+pub(crate) mod pow_schoolbook;

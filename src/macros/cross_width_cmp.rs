@@ -1,70 +1,32 @@
-//! Macro-generated `PartialEq` / `PartialOrd` operator overloads
-//! between adjacent decimal widths at the *same* `SCALE`.
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+//! Cross-width decimal comparison — now handled by a single generic
+//! impl, not per-pair macro expansion.
 //!
-//! With these in place, ordinary `==` / `<` / etc. work across widths
-//! without an explicit `.widen()`:
+//! Previously this module emitted a `PartialEq` / `PartialOrd` pair per
+//! adjacent `(narrower, wider)` decimal-width pair at the same `SCALE`,
+//! widening the narrower operand into the wider storage before
+//! deferring to the wider storage's `Ord` / `Eq`.
+//!
+//! That matrix is superseded by a single generic pair in
+//! `src/types/unified.rs`:
 //!
 //! ```ignore
-//! let a: D38<12> = D38::<12>::from_int(5);
-//! let b: D18<12> = D18::<12>::from_int(5);
-//! assert!(a == b);   // stable on cross-width same-SCALE
-//! assert!(b < D38::<12>::from_int(6));
+//! impl<const N: usize, const M: usize, const S: u32>
+//!     PartialEq<D<Int<M>, S>> for D<Int<N>, S> { /* .. */ }
+//! impl<const N: usize, const M: usize, const S: u32>
+//!     PartialOrd<D<Int<M>, S>> for D<Int<N>, S> { /* .. */ }
 //! ```
 //!
-//! The matrix is bidirectional: each (narrower, wider) pair gets both
-//! `impl PartialEq<Wider<S>> for Narrower<S>` and
-//! `impl PartialEq<Narrower<S>> for Wider<S>`. Same for `PartialOrd`.
+//! which delegates to the int-layer cross-width comparator
+//! (`Int::cmp_cross`) on the storages at the same `SCALE`. One
+//! instantiation covers every width combination, including the
+//! same-type (`N == M`) case, so no per-pair widening macro is needed.
 //!
-//! Cross-SCALE comparators live on the nightly-gated `cross-scale-ops`
-//! feature; see `src/cross_scale.rs`. The cross-SCALE case requires
-//! `generic_const_exprs` to compute the common-scale type at the impl
-//! site, which is not yet stable.
-
-/// Emits `PartialEq` and `PartialOrd` between two decimal widths at
-/// the *same* `SCALE`. Both directions of each trait are emitted.
-///
-/// The comparison widens the narrower operand to the wider storage
-/// via `WidthLE::widen_into` and then defers to the wider storage's
-/// `Ord` / `Eq`.
-macro_rules! decl_cross_width_eq_ord {
-    ($Narrower:ident, $NarrowStorage:ty, $Wider:ident, $WideStorage:ty) => {
-        // Narrower<S> == Wider<S>
-        impl<const SCALE: u32> ::core::cmp::PartialEq<$Wider<SCALE>> for $Narrower<SCALE> {
-            #[inline]
-            fn eq(&self, other: &$Wider<SCALE>) -> bool {
-                let widened: $WideStorage =
-                    <$NarrowStorage as $crate::WidthLE<$WideStorage>>::widen_into(self.0);
-                widened == other.0
-            }
-        }
-        // Wider<S> == Narrower<S>
-        impl<const SCALE: u32> ::core::cmp::PartialEq<$Narrower<SCALE>> for $Wider<SCALE> {
-            #[inline]
-            fn eq(&self, other: &$Narrower<SCALE>) -> bool {
-                let widened: $WideStorage =
-                    <$NarrowStorage as $crate::WidthLE<$WideStorage>>::widen_into(other.0);
-                self.0 == widened
-            }
-        }
-        // Narrower<S> < Wider<S> etc.
-        impl<const SCALE: u32> ::core::cmp::PartialOrd<$Wider<SCALE>> for $Narrower<SCALE> {
-            #[inline]
-            fn partial_cmp(&self, other: &$Wider<SCALE>) -> ::core::option::Option<::core::cmp::Ordering> {
-                let widened: $WideStorage =
-                    <$NarrowStorage as $crate::WidthLE<$WideStorage>>::widen_into(self.0);
-                ::core::cmp::PartialOrd::partial_cmp(&widened, &other.0)
-            }
-        }
-        // Wider<S> < Narrower<S> etc.
-        impl<const SCALE: u32> ::core::cmp::PartialOrd<$Narrower<SCALE>> for $Wider<SCALE> {
-            #[inline]
-            fn partial_cmp(&self, other: &$Narrower<SCALE>) -> ::core::option::Option<::core::cmp::Ordering> {
-                let widened: $WideStorage =
-                    <$NarrowStorage as $crate::WidthLE<$WideStorage>>::widen_into(other.0);
-                ::core::cmp::PartialOrd::partial_cmp(&self.0, &widened)
-            }
-        }
-    };
-}
-
-pub(crate) use decl_cross_width_eq_ord;
+//! ```ignore
+//! let a: D38<12> = D38::<12>::try_from(5).unwrap();
+//! let b: D18<12> = D18::<12>::try_from(5).unwrap();
+//! assert!(a == b);   // cross-width, same SCALE
+//! assert!(b < D38::<12>::try_from(6).unwrap());
+//! ```

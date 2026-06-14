@@ -1,0 +1,39 @@
+# Third-party attributions
+
+`decimal-scaled` incorporates no third-party source code. Every kernel
+is implemented from first principles against the published papers
+cited in [ALGORITHMS.md](ALGORITHMS.md); no external reference
+implementation was copied, ported, or adapted. The project's own
+license texts live in [`LICENSES/`](LICENSES/) — MIT OR Apache-2.0,
+at your option.
+
+The crates below are dependencies resolved by Cargo from crates.io.
+Their source code is not vendored into or distributed with this
+repository; each is used under its own license as listed.
+
+## `decimal-scaled` runtime dependencies
+
+| Crate        | License             | Role                                                        |
+| ------------ | ------------------- | ----------------------------------------------------------- |
+| `num-traits` | MIT OR Apache-2.0   | `FromPrimitive`/`ToPrimitive`/`NumCast` conversion bridge   |
+| `serde`      | MIT OR Apache-2.0   | optional (`serde` feature) — serialization derives          |
+| `tracing`    | MIT                 | optional (`perf-trace` feature) — performance-trace spans   |
+
+`decimal_scaled_macros` (optional, `macros` feature) is part of this
+project and carries the same MIT OR Apache-2.0 terms.
+
+## `decimal_scaled_macros` build-time dependencies
+
+Used only while expanding the `dNN!` proc-macros at compile time;
+nothing from these crates appears in consumer binaries.
+
+| Crate              | License           |
+| ------------------ | ----------------- |
+| `syn`              | MIT OR Apache-2.0 |
+| `quote`            | MIT OR Apache-2.0 |
+| `proc-macro2`      | MIT OR Apache-2.0 |
+| `proc-macro-crate` | MIT OR Apache-2.0 |
+
+Development-only dependencies (benchmark baselines, test harnesses)
+are declared under `[dev-dependencies]` / `[target.*]` tables in
+`Cargo.toml` and are never part of the published artifact.

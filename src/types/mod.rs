@@ -1,10 +1,12 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Type definitions, per-width aliases, and per-family method shells.
 //!
 //! This bucket holds the generic `D<S, SCALE>` newtype, the per-width
-//! aliases (`D9`, `D18`, `D38`, …), the `DecimalConstants` constants
+//! aliases (`D18`, `D38`, …), the `DecimalConstants` constants
 //! surface, the public-trait surface in [`traits`], and the per-family
-//! inherent-impl shells (`arithmetic`, `overflow_variants`,
-//! `log_exp`, `trig`, `powers`, …).
+//! inherent-impl shells (`log_exp`, `trig`, `powers`, …).
 //!
 //! Lower-layer kernels live in [`crate::algos`] and routing lives in
 //! [`crate::policy`]; this bucket is the typed surface that calls into
@@ -12,24 +14,29 @@
 
 pub(crate) mod traits;
 
+pub(crate) mod consts;
 pub(crate) mod unified;
 pub(crate) mod widths;
-pub(crate) mod consts;
 
-pub(crate) mod arithmetic;
-pub(crate) mod overflow_variants;
-pub(crate) mod rescale;
 pub(crate) mod num_traits;
+pub(crate) mod rescale;
 
 // Strict (integer-only) transcendental shells. Strict is the crate's
 // default; the lossy f64-bridge variants below carry the explicit
 // `_fast` suffix to mark them as the opt-in.
 pub(crate) mod log_exp;
+pub(crate) mod powers;
 #[cfg(any(not(feature = "fast"), feature = "std"))]
 pub(crate) mod trig;
-pub(crate) mod powers;
+
+// `checked_*` siblings of the strict transcendental family — one
+// generic impl over `(N, SCALE)`. Gated like [`trig`]: the checked
+// shells delegate to the same strict surface (including the trig
+// family), which a `fast`-without-`std` build does not carry.
+#[cfg(any(not(feature = "fast"), feature = "std"))]
+pub(crate) mod checked_transcendentals;
 
 // Fast (f64-bridge) transcendental shells.
 pub(crate) mod log_exp_fast;
-pub(crate) mod trig_fast;
 pub(crate) mod powers_fast;
+pub(crate) mod trig_fast;

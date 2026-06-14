@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Integer-exponent power family — `pow` / `powi` and the
 //! `checked_*` / `wrapping_*` / `saturating_*` / `overflowing_*`
 //! overflow variants.
@@ -105,7 +108,11 @@ macro_rules! decl_decimal_pow {
                 match self.checked_pow(exp) {
                     ::core::option::Option::Some(v) => v,
                     ::core::option::Option::None => {
-                        if neg { Self::MIN } else { Self::MAX }
+                        if neg {
+                            Self::MIN
+                        } else {
+                            Self::MAX
+                        }
                     }
                 }
             }

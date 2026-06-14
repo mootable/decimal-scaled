@@ -1,11 +1,14 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Construction macros for `decimal-scaled`.
 //!
 //! See `macros/README.md` for the full spec. This crate now ships:
 //!
-//! - `d9!(…)`, `d18!(…)`, `d38!(…)` — narrow-tier entry points
+//! - `d18!(…)`, `d38!(…)` — narrow-tier entry points
 //!   (i32 / i64 / i128 storage).
 //! - `d76!(…)`, `d153!(…)`, `d307!(…)` — wide-tier entry points
-//!   (Int256 / Int512 / Int1024 storage). Available when the
+//!   (Int::<4> / Int::<8> / Int::<16> storage). Available when the
 //!   parent crate's `d76` / `d153` / `d307` (or umbrella `wide` /
 //!   `x-wide`) feature is on.
 //! - Per-scale wrappers `d9s2!`, `d38s12!`, etc. live in the parent
@@ -29,9 +32,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2, TokenTree};
 use quote::quote;
-use syn::{
-    Expr, ExprLit, ExprUnary, Lit, Result, UnOp,
-};
+use syn::{Expr, ExprLit, ExprUnary, Lit, Result, UnOp};
 
 // ── Width descriptor ───────────────────────────────────────────────────
 
@@ -53,8 +54,8 @@ struct Width {
     /// Storage type for the inline-expression form's `let _v: …`
     /// anchor. For narrow widths this is a primitive (`"i32"` /
     /// `"i64"` / `"i128"`) and used as-is. For wide widths it's a
-    /// leaf inside the decimal-scaled crate (`"Int256"` /
-    /// `"Int512"` / `"Int1024"`) and prefixed with the resolved
+    /// leaf inside the decimal-scaled crate (`"Int::<4>"` /
+    /// `"Int::<8>"` / `"Int::<16>"`) and prefixed with the resolved
     /// root path at emit time.
     storage_path: &'static str,
     /// `true` for D76 / D153 / D307 (hand-rolled wide integer
@@ -75,8 +76,18 @@ struct Width {
 /// proc-macro mechanism to resolve transitive deps. The
 /// fixed-macro-style wrapper pattern hits the same limit.
 fn crate_root() -> proc_macro2::TokenStream {
-    use proc_macro_crate::{crate_name, FoundCrate};
+    use proc_macro_crate::{FoundCrate, crate_name};
     use quote::quote;
+    // A consumer may pin SEVERAL `decimal-scaled` versions under Cargo
+    // renames beside the live dep (the version-history test crate
+    // carries `ds-044`/`ds-033`). `crate_name` returns whichever match
+    // it meets first — possibly a rename whose optional crate isn't
+    // even enabled — so the un-renamed `decimal-scaled` key wins
+    // whenever the manifest has one; the rename lookup is only trusted
+    // when it is the manifest's sole match.
+    if manifest_has_unrenamed_dep() {
+        return quote! { ::decimal_scaled };
+    }
     match crate_name("decimal-scaled") {
         Ok(FoundCrate::Itself) => quote! { ::decimal_scaled },
         Ok(FoundCrate::Name(name)) => {
@@ -85,6 +96,34 @@ fn crate_root() -> proc_macro2::TokenStream {
         }
         Err(_) => quote! { ::decimal_scaled },
     }
+}
+
+/// `true` when the consumer's manifest lists `decimal-scaled` under
+/// its own (un-renamed) key — i.e. the extern name `decimal_scaled`
+/// is in scope. A `decimal-scaled = { package = "<other>" }` rename
+/// of a DIFFERENT package does not count. Any read/parse failure
+/// returns `false` and defers to the `crate_name` lookup.
+fn manifest_has_unrenamed_dep() -> bool {
+    let Ok(dir) = std::env::var("CARGO_MANIFEST_DIR") else {
+        return false;
+    };
+    let Ok(text) = std::fs::read_to_string(std::path::Path::new(&dir).join("Cargo.toml")) else {
+        return false;
+    };
+    let Ok(doc) = text.parse::<toml_edit::DocumentMut>() else {
+        return false;
+    };
+    ["dependencies", "dev-dependencies", "build-dependencies"]
+        .iter()
+        .any(|table| {
+            doc.get(table)
+                .and_then(|t| t.get("decimal-scaled"))
+                .is_some_and(|dep| {
+                    dep.get("package")
+                        .and_then(|p| p.as_str())
+                        .is_none_or(|p| p == "decimal-scaled")
+                })
+        })
 }
 
 /// Build the absolute path to a decimal type (`<root>::D38`).
@@ -100,113 +139,108 @@ fn type_path(width: Width) -> proc_macro2::TokenStream {
 fn storage_path_tokens(width: Width) -> proc_macro2::TokenStream {
     if width.wide {
         let root = crate_root();
-        let leaf = proc_macro2::Ident::new(width.storage_path, proc_macro2::Span::call_site());
+        // Parsed (not a bare `Ident`) so a storage leaf may carry generic
+        // args, e.g. D38's `Int::<2>`. Plain leaves like `Int::<4>` parse to a
+        // single ident, unchanged.
+        let leaf: proc_macro2::TokenStream = width
+            .storage_path
+            .parse()
+            .expect("storage_path is a valid type path");
         quote::quote! { #root :: #leaf }
     } else {
         width.storage_path.parse().unwrap()
     }
 }
 
-const D9: Width = Width {
-    name: "d9",
-    max_scale: 8,
-    type_leaf: "D9",
-    storage_path: "i32",
-    wide: false,
-};
 const D18: Width = Width {
     name: "d18",
     max_scale: 17,
     type_leaf: "D18",
-    storage_path: "i64",
-    wide: false,
+    // D18 now backs onto `Int<1>` (was `i64`); emit via the wide path.
+    storage_path: "Int::<1>",
+    wide: true,
 };
 const D38: Width = Width {
     name: "d38",
     max_scale: 37,
     type_leaf: "D38",
-    storage_path: "i128",
-    wide: false,
+    // D38 now backs onto `Int<2>` (was `i128`); emit via the wide
+    // `from_str_radix` path so the raw bits build at the storage type.
+    storage_path: "Int::<2>",
+    wide: true,
 };
 const D76: Width = Width {
     name: "d76",
     max_scale: 75,
     type_leaf: "D76",
-    storage_path: "Int256",
+    storage_path: "Int::<4>",
     wide: true,
 };
 const D153: Width = Width {
     name: "d153",
     max_scale: 152,
     type_leaf: "D153",
-    storage_path: "Int512",
+    storage_path: "Int::<8>",
     wide: true,
 };
 const D307: Width = Width {
     name: "d307",
     max_scale: 306,
     type_leaf: "D307",
-    storage_path: "Int1024",
+    storage_path: "Int::<16>",
     wide: true,
 };
 const D57: Width = Width {
     name: "d57",
     max_scale: 56,
     type_leaf: "D57",
-    storage_path: "Int192",
+    storage_path: "Int::<3>",
     wide: true,
 };
 const D115: Width = Width {
     name: "d115",
     max_scale: 114,
     type_leaf: "D115",
-    storage_path: "Int384",
+    storage_path: "Int::<6>",
     wide: true,
 };
 const D230: Width = Width {
     name: "d230",
     max_scale: 229,
     type_leaf: "D230",
-    storage_path: "Int768",
+    storage_path: "Int::<12>",
     wide: true,
 };
 const D462: Width = Width {
     name: "d462",
     max_scale: 461,
     type_leaf: "D462",
-    storage_path: "Int1536",
+    storage_path: "Int::<24>",
     wide: true,
 };
 const D616: Width = Width {
     name: "d616",
     max_scale: 615,
     type_leaf: "D616",
-    storage_path: "Int2048",
+    storage_path: "Int::<32>",
     wide: true,
 };
 const D924: Width = Width {
     name: "d924",
     max_scale: 923,
     type_leaf: "D924",
-    storage_path: "Int3072",
+    storage_path: "Int::<48>",
     wide: true,
 };
 const D1232: Width = Width {
     name: "d1232",
     max_scale: 1231,
     type_leaf: "D1232",
-    storage_path: "Int4096",
+    storage_path: "Int::<64>",
     wide: true,
 };
 
 // ── Public proc-macro entry points ────────────────────────────────────
-
-/// `d9!` — construct a `decimal_scaled::D9<SCALE>` value at
-/// compile time. See the crate-level docs and `macros/README.md`.
-#[proc_macro]
-pub fn d9(input: TokenStream) -> TokenStream {
-    expand_for(D9, input)
-}
 
 /// `d18!` — construct a `decimal_scaled::D18<SCALE>` value at
 /// compile time. See the crate-level docs and `macros/README.md`.
@@ -329,16 +363,16 @@ fn parse_invocation(tokens: TokenStream2, width: Width) -> Result<Invocation> {
     // parser to use, since `radix 16` lets `1.A3` be a literal.
     let mut explicit_radix: Option<(u32, Span)> = None;
     for seg in &segments[1..] {
-        if let Some((kw, _)) = seg.first().zip(seg.get(1)) {
-            if let TokenTree::Ident(id) = kw {
-                if id.to_string() == "radix" {
-                    if let TokenTree::Literal(lit) = &seg[1] {
-                        if let Ok(r) = lit.to_string().parse::<u32>() {
-                            explicit_radix = Some((r, lit.span()));
-                        }
-                    }
-                }
-            }
+        let Some((TokenTree::Ident(id), TokenTree::Literal(lit))) =
+            seg.first().zip(seg.get(1))
+        else {
+            continue;
+        };
+        if id != "radix" {
+            continue;
+        }
+        if let Ok(r) = lit.to_string().parse::<u32>() {
+            explicit_radix = Some((r, lit.span()));
         }
     }
 
@@ -352,9 +386,8 @@ fn parse_invocation(tokens: TokenStream2, width: Width) -> Result<Invocation> {
         // Custom radix-fractional path. We've already established
         // a non-decimal radix, so parse the qualifiers normally and
         // skip pick_radix.
-        let (scale_qualifier, _radix_q, rounded) =
-            parse_qualifier_segments(&segments[1..], width)?;
-        return Ok(Invocation::Literal {
+        let (scale_qualifier, _radix_q, rounded) = parse_qualifier_segments(&segments[1..], width)?;
+        return Ok(Invocation::Literal(LiteralForm {
             width,
             digits,
             sign,
@@ -363,7 +396,7 @@ fn parse_invocation(tokens: TokenStream2, width: Width) -> Result<Invocation> {
             rounded,
             radix_literal: true,
             value_span,
-        });
+        }));
     }
 
     // Standard Rust-Expr path. Re-assemble the value tokens for the
@@ -377,9 +410,8 @@ fn parse_invocation(tokens: TokenStream2, width: Width) -> Result<Invocation> {
 
     if let Some((sign, raw_str, lit_span)) = try_decimal_literal(&value_expr) {
         let radix = pick_radix(&raw_str, radix_qualifier, lit_span)?;
-        let (digits, natural_scale) =
-            parse_value_token(&raw_str, lit_span, radix)?;
-        Ok(Invocation::Literal {
+        let (digits, natural_scale) = parse_value_token(&raw_str, lit_span, radix)?;
+        Ok(Invocation::Literal(LiteralForm {
             width,
             digits,
             sign,
@@ -388,7 +420,7 @@ fn parse_invocation(tokens: TokenStream2, width: Width) -> Result<Invocation> {
             rounded,
             radix_literal: radix != 10,
             value_span,
-        })
+        }))
     } else {
         if let Some((_, radix_span)) = radix_qualifier {
             return Err(syn::Error::new(
@@ -422,7 +454,9 @@ fn split_top_commas(tokens: TokenStream2) -> Vec<Vec<TokenTree>> {
     let mut out: Vec<Vec<TokenTree>> = vec![Vec::new()];
     for tt in tokens {
         match &tt {
-            TokenTree::Punct(p) if p.as_char() == ',' && p.spacing() == proc_macro2::Spacing::Alone => {
+            TokenTree::Punct(p)
+                if p.as_char() == ',' && p.spacing() == proc_macro2::Spacing::Alone =>
+            {
                 out.push(Vec::new());
             }
             _ => out.last_mut().unwrap().push(tt),
@@ -530,10 +564,8 @@ fn try_radix_fractional(
         int_part
     };
 
-    let int_cleaned: String =
-        cleaned_int.chars().filter(|c| *c != '_').collect();
-    let frac_cleaned: String =
-        frac_part.chars().filter(|c| *c != '_').collect();
+    let int_cleaned: String = cleaned_int.chars().filter(|c| *c != '_').collect();
+    let frac_cleaned: String = frac_part.chars().filter(|c| *c != '_').collect();
 
     if int_cleaned.is_empty() {
         return Err(syn::Error::new(
@@ -561,9 +593,7 @@ fn try_radix_fractional(
         Err(_) => {
             return Err(syn::Error::new(
                 span,
-                format!(
-                    "digit string `{combined}` overflows i128 when parsed in radix {radix}"
-                ),
+                format!("digit string `{combined}` overflows i128 when parsed in radix {radix}"),
             ));
         }
     };
@@ -576,16 +606,21 @@ fn try_radix_fractional(
 }
 
 fn is_radix_digit(c: char, radix: u32) -> bool {
-    c.to_digit(radix).is_some()
+    c.is_digit(radix)
 }
 
+/// Parsed qualifier triple: `(scale N, radix N, rounded)`, where each
+/// `Option<(u32, Span)>` carries the value and its source span for
+/// diagnostics.
+type ParsedQualifiers = (Option<(u32, Span)>, Option<(u32, Span)>, bool);
+
 /// Re-parse the qualifier segments to find `scale N` / `radix N` /
-/// `rounded`. Equivalent to the old `parse_qualifiers` but works on
+/// `rounded`. Equivalent to `parse_qualifiers` but works on
 /// token-vec segments instead of a `ParseStream`.
 fn parse_qualifier_segments(
     segments: &[Vec<TokenTree>],
     width: Width,
-) -> Result<(Option<(u32, Span)>, Option<(u32, Span)>, bool)> {
+) -> Result<ParsedQualifiers> {
     let _ = width;
     let mut scale: Option<(u32, Span)> = None;
     let mut radix: Option<(u32, Span)> = None;
@@ -654,9 +689,7 @@ fn parse_qualifier_segments(
             other => {
                 return Err(syn::Error::new(
                     kw.span(),
-                    format!(
-                        "unknown qualifier `{other}`; expected one of: scale, radix, rounded"
-                    ),
+                    format!("unknown qualifier `{other}`; expected one of: scale, radix, rounded"),
                 ));
             }
         }
@@ -675,24 +708,29 @@ fn tt_span(tt: &TokenTree) -> Span {
 
 // ── Invocation model ──────────────────────────────────────────────────
 
+/// The fully-parsed payload of a literal-form invocation. Grouped into
+/// one struct so it travels as a single argument (rather than the eight
+/// positional parameters the codegen would otherwise take).
+struct LiteralForm {
+    width: Width,
+    /// Signed magnitude as a decimal digit string (no sign, no
+    /// dot — already shifted so digits represent `value · 10^natural_scale`).
+    digits: String,
+    /// `-1` for negative literals, `+1` for non-negative.
+    sign: i128,
+    natural_scale: u32,
+    scale_qualifier: Option<(u32, Span)>,
+    rounded: bool,
+    /// `true` for radix-prefixed (non-decimal) literals. For
+    /// these, the parsed magnitude *is* the storage bits — the
+    /// target scale only labels the resulting type, no
+    /// additional shift is applied.
+    radix_literal: bool,
+    value_span: Span,
+}
+
 enum Invocation {
-    Literal {
-        width: Width,
-        /// Signed magnitude as a decimal digit string (no sign, no
-        /// dot — already shifted so digits represent `value · 10^natural_scale`).
-        digits: String,
-        /// `-1` for negative literals, `+1` for non-negative.
-        sign: i128,
-        natural_scale: u32,
-        scale_qualifier: Option<(u32, Span)>,
-        rounded: bool,
-        /// `true` for radix-prefixed (non-decimal) literals. For
-        /// these, the parsed magnitude *is* the storage bits — the
-        /// target scale only labels the resulting type, no
-        /// additional shift is applied.
-        radix_literal: bool,
-        value_span: Span,
-    },
+    Literal(LiteralForm),
     Expression {
         width: Width,
         expr: Expr,
@@ -704,25 +742,7 @@ enum Invocation {
 impl Invocation {
     fn expand(self) -> TokenStream {
         match self {
-            Invocation::Literal {
-                width,
-                digits,
-                sign,
-                natural_scale,
-                scale_qualifier,
-                rounded,
-                radix_literal,
-                value_span,
-            } => expand_literal(
-                width,
-                digits,
-                sign,
-                natural_scale,
-                scale_qualifier,
-                rounded,
-                radix_literal,
-                value_span,
-            ),
+            Invocation::Literal(form) => expand_literal(form),
             Invocation::Expression {
                 width,
                 expr,
@@ -738,20 +758,14 @@ impl Invocation {
 /// Resolve the effective radix for a literal. Reconciles an explicit
 /// `radix N` qualifier with a Rust prefix (`0x`, `0o`, `0b`); reports
 /// a conflict if the two disagree.
-fn pick_radix(
-    raw: &str,
-    qualifier: Option<(u32, Span)>,
-    span: Span,
-) -> Result<u32> {
-    let prefix_radix = if let Some(stripped) = raw.strip_prefix("0x").or_else(|| raw.strip_prefix("0X")) {
-        Some((16, stripped))
-    } else if let Some(stripped) = raw.strip_prefix("0o").or_else(|| raw.strip_prefix("0O")) {
-        Some((8, stripped))
-    } else if let Some(stripped) = raw.strip_prefix("0b").or_else(|| raw.strip_prefix("0B")) {
-        Some((2, stripped))
-    } else {
-        None
-    };
+fn pick_radix(raw: &str, qualifier: Option<(u32, Span)>, _span: Span) -> Result<u32> {
+    let prefix_radix = [("0x", "0X", 16u32), ("0o", "0O", 8), ("0b", "0B", 2)]
+        .into_iter()
+        .find_map(|(lower, upper, radix)| {
+            raw.strip_prefix(lower)
+                .or_else(|| raw.strip_prefix(upper))
+                .map(|stripped| (radix, stripped))
+        });
     match (prefix_radix, qualifier) {
         (None, None) => Ok(10),
         (None, Some((r, _))) => Ok(r),
@@ -761,27 +775,22 @@ fn pick_radix(
             sp,
             format!("radix qualifier ({r}) disagrees with literal prefix (radix {p})"),
         )),
-    }.map_err(|e: syn::Error| {
-        // Force the span to point at the literal when the disagreement
-        // error was produced inside the closure above (no-op for the
-        // common path).
-        let _ = span;
-        e
-    })
+    }
 }
 
 // ── Literal-form codegen ─────────────────────────────────────────────
 
-fn expand_literal(
-    width: Width,
-    digits: String,
-    sign: i128,
-    natural_scale: u32,
-    scale_qualifier: Option<(u32, Span)>,
-    rounded: bool,
-    radix_literal: bool,
-    value_span: Span,
-) -> TokenStream {
+fn expand_literal(form: LiteralForm) -> TokenStream {
+    let LiteralForm {
+        width,
+        digits,
+        sign,
+        natural_scale,
+        scale_qualifier,
+        rounded,
+        radix_literal,
+        value_span,
+    } = form;
     let (target_scale, scale_span) = match scale_qualifier {
         Some((n, sp)) => (n, sp),
         None => (natural_scale, value_span),
@@ -848,7 +857,11 @@ fn expand_literal(
             );
         }
         if exact {
-            shifted_digits = if kept.is_empty() { "0".to_string() } else { kept.to_string() };
+            shifted_digits = if kept.is_empty() {
+                "0".to_string()
+            } else {
+                kept.to_string()
+            };
         } else {
             // Half-to-even on the kept|dropped boundary.
             shifted_digits = round_half_to_even(kept, dropped, sign < 0);
@@ -875,7 +888,10 @@ fn emit_narrow(
         Err(_) => {
             return error(
                 value_span,
-                format!("scaled value overflows i128 before narrowing to {}'s storage", width.name.to_uppercase()),
+                format!(
+                    "scaled value overflows i128 before narrowing to {}'s storage",
+                    width.name.to_uppercase()
+                ),
             );
         }
     };
@@ -924,12 +940,7 @@ fn emit_narrow(
     out.into()
 }
 
-fn emit_wide(
-    width: Width,
-    target_scale: u32,
-    sign: i128,
-    digits: &str,
-) -> TokenStream {
+fn emit_wide(width: Width, target_scale: u32, sign: i128, digits: &str) -> TokenStream {
     let signed_str = if sign < 0 {
         format!("-{digits}")
     } else {
@@ -952,12 +963,7 @@ fn emit_wide(
 
 // ── Expression-form codegen ───────────────────────────────────────────
 
-fn expand_expression(
-    width: Width,
-    expr: Expr,
-    scale: u32,
-    scale_span: Span,
-) -> TokenStream {
+fn expand_expression(width: Width, expr: Expr, scale: u32, scale_span: Span) -> TokenStream {
     if scale > width.max_scale {
         return error(
             scale_span,
@@ -970,8 +976,30 @@ fn expand_expression(
     }
     let tp = type_path(width);
     let sp = storage_path_tokens(width);
-    let err_msg = format!("{}! overflow: expression * 10^SCALE exceeds storage range", width.name);
-    let out = if width.wide {
+    let err_msg = format!(
+        "{}! overflow: expression * 10^SCALE exceeds storage range",
+        width.name
+    );
+    let out = if width.wide && (width.storage_path == "Int::<2>" || width.storage_path == "Int::<1>") {
+        // D38 / D18: the storage is `Int<2>` / `Int<1>`, but an expression
+        // value is naturally an `i128` / `i64`-valued expression (as it was
+        // when these stored `i128` / `i64`). Bridge it to the storage type so
+        // callers keep the ergonomic `dNN!(some_int_expr, scale N)` form.
+        let bridged = if width.storage_path == "Int::<1>" {
+            quote! { <#sp as ::core::convert::From<i64>>::from((#expr) as i64) }
+        } else {
+            quote! { <#sp as ::core::convert::TryFrom<i128>>::try_from((#expr) as i128).unwrap() }
+        };
+        quote! {
+            #tp :: <#scale> :: from_bits({
+                let _v: #sp = #bridged;
+                let mult: #sp = <#sp>::from_str_radix("10", 10)
+                    .expect("dNN! mult literal")
+                    .pow(#scale);
+                _v.checked_mul(mult).expect(#err_msg)
+            })
+        }
+    } else if width.wide {
         quote! {
             #tp :: <#scale> :: from_bits({
                 let _v: #sp = (#expr);
@@ -1131,19 +1159,23 @@ fn expr_span(expr: &Expr) -> Span {
 /// string from an explicit `radix N` qualifier; mid-fractional non-
 /// decimal forms (`1.A3, radix 16`) are rejected — `syn` doesn't
 /// tokenise them as a single literal anyway.
-fn parse_value_token(
-    raw: &str,
-    span: Span,
-    radix: u32,
-) -> Result<(String, u32)> {
+fn parse_value_token(raw: &str, span: Span, radix: u32) -> Result<(String, u32)> {
     // Reject Rust type suffixes (1.5_f64 etc.).
     for (i, c) in raw.char_indices() {
-        if (c == 'i' || c == 'u') || (c == 'f' && i > 0 && !raw[..i].contains('.') && !raw[..i].chars().last().map_or(false, |x| x.is_ascii_digit())) {
+        if (c == 'i' || c == 'u')
+            || (c == 'f'
+                && i > 0
+                && !raw[..i].contains('.')
+                && !raw[..i]
+                    .chars()
+                    .last()
+                    .is_some_and(|x| x.is_ascii_digit()))
+        {
             // No-op: we'll handle the `f`/`i`/`u` filter via parse failures.
             let _ = i;
         }
     }
-    if let Some(idx) = raw.find(|c: char| c == 'f') {
+    if let Some(idx) = raw.find('f') {
         // `1_f64`-style suffix.
         if idx > 0 && raw.as_bytes()[idx - 1] == b'_' {
             return Err(syn::Error::new(
@@ -1152,7 +1184,7 @@ fn parse_value_token(
             ));
         }
     }
-    if let Some(idx) = raw.rfind(|c: char| c == 'i' || c == 'u') {
+    if let Some(idx) = raw.rfind(['i', 'u']) {
         // Ignore the `i` in `radix` (impossible here — `raw` is the
         // value token only) and the `i` that follows a digit
         // (`0o755_i32`).
@@ -1170,12 +1202,14 @@ fn parse_value_token(
 
     // Non-decimal: accept Rust-prefix forms and bare digit strings.
     // Strip prefix if present and verify it matches `radix`.
-    let digits_part = strip_radix_prefix(raw).map(|(p, rest)| {
-        // p must match radix; if not, the caller's pick_radix already
-        // flagged it.
-        let _ = p;
-        rest
-    }).unwrap_or(raw);
+    let digits_part = strip_radix_prefix(raw)
+        .map(|(p, rest)| {
+            // p must match radix; if not, the caller's pick_radix already
+            // flagged it.
+            let _ = p;
+            rest
+        })
+        .unwrap_or(raw);
 
     if digits_part.contains('.') {
         return Err(syn::Error::new(
@@ -1199,9 +1233,7 @@ fn parse_value_token(
         Err(_) => {
             return Err(syn::Error::new(
                 span,
-                format!(
-                    "digit string `{cleaned}` is not valid in radix {radix} or overflows i128"
-                ),
+                format!("digit string `{cleaned}` is not valid in radix {radix} or overflows i128"),
             ));
         }
     };
@@ -1270,7 +1302,11 @@ fn parse_decimal_token(raw: &str, span: Span) -> Result<(String, u32)> {
     // Strip leading zeros so the digit string canonicalises to its
     // numerical magnitude.
     let trimmed = digits.trim_start_matches('0');
-    let digits = if trimmed.is_empty() { "0".to_string() } else { trimmed.to_string() };
+    let digits = if trimmed.is_empty() {
+        "0".to_string()
+    } else {
+        trimmed.to_string()
+    };
 
     // Apply scientific exponent: natural_scale = max(0, mantissa_scale - sci_exp).
     let signed_natural = (mantissa_scale as i64) - (sci_exp as i64);

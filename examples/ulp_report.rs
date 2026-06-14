@@ -45,21 +45,30 @@ fn parse_decimal_string_to_d19_bits(s: &str) -> i128 {
     sign * (int_value * 10_i128.pow(19) + frac_value)
 }
 
-fn ulp(a: i128, b: i128) -> u128 {
+fn ulp<A: Into<i128>, B: Into<i128>>(a: A, b: B) -> u128 {
+    // Accepts D38's `Int<2>` to_bits (via `From<Int<2>> for i128`) and plain
+    // `i128` reference values alike.
+    let (a, b): (i128, i128) = (a.into(), b.into());
     a.wrapping_sub(b).unsigned_abs()
 }
 
 fn main() {
     println!("# Transcendental ULP errors at D38<19> (1 ULP = 10⁻¹⁹)");
     println!();
-    println!("Baseline: `D76<19>` integer-only `*_strict` (≥ 49 effective working digits, rounded back to 19).");
+    println!(
+        "Baseline: `D76<19>` integer-only `*_strict` (≥ 49 effective working digits, rounded back to 19)."
+    );
     println!();
-    println!("| op    | decimal-scaled | fastnum | rust_decimal | dashu-float | decimal-rs | bigdecimal | g_math |");
-    println!("|-------|----------------|---------|--------------|-------------|------------|------------|--------|");
+    println!(
+        "| op    | decimal-scaled | fastnum | rust_decimal | dashu-float | decimal-rs | bigdecimal | g_math |"
+    );
+    println!(
+        "|-------|----------------|---------|--------------|-------------|------------|------------|--------|"
+    );
 
     // ── ln(2) ──────────────────────────────────────────────
-    let base_ln = ref19_to_bits(Ref19::from_int(2).ln_strict());
-    let ds_ln = D38::<19>::from_int(2).ln_strict().to_bits();
+    let base_ln = ref19_to_bits(Ref19::try_from(2_i64).unwrap().ln_strict());
+    let ds_ln = D38::<19>::try_from(2_i64).unwrap().ln_strict().to_bits();
     let fn_ln = parse_decimal_string_to_d19_bits(&format!("{}", dec128!(2).ln()));
     let rd_ln = parse_decimal_string_to_d19_bits(&format!(
         "{:.19}",
@@ -67,7 +76,10 @@ fn main() {
     ));
     let db_ln = parse_decimal_string_to_d19_bits(&format!(
         "{:.19}",
-        DBig::from_parts(2.into(), 0).with_precision(19).value().ln()
+        DBig::from_parts(2.into(), 0)
+            .with_precision(19)
+            .value()
+            .ln()
     ));
     let dr_ln = parse_decimal_string_to_d19_bits(&format!(
         "{}",
@@ -91,8 +103,8 @@ fn main() {
     );
 
     // ── exp(1) — i.e. e ─────────────────────────────────────
-    let base_exp = ref19_to_bits(Ref19::from_int(1).exp_strict());
-    let ds_exp = D38::<19>::from_int(1).exp_strict().to_bits();
+    let base_exp = ref19_to_bits(Ref19::try_from(1_i64).unwrap().exp_strict());
+    let ds_exp = D38::<19>::try_from(1_i64).unwrap().exp_strict().to_bits();
     let fn_exp = parse_decimal_string_to_d19_bits(&format!("{}", dec128!(1).exp()));
     let rd_exp = parse_decimal_string_to_d19_bits(&format!(
         "{:.19}",
@@ -100,7 +112,10 @@ fn main() {
     ));
     let db_exp = parse_decimal_string_to_d19_bits(&format!(
         "{:.19}",
-        DBig::from_parts(1.into(), 0).with_precision(19).value().exp()
+        DBig::from_parts(1.into(), 0)
+            .with_precision(19)
+            .value()
+            .exp()
     ));
     let dr_exp = parse_decimal_string_to_d19_bits(&format!(
         "{}",
@@ -122,8 +137,8 @@ fn main() {
     );
 
     // ── sin(1) ─────────────────────────────────────────────
-    let base_sin = ref19_to_bits(Ref19::from_int(1).sin_strict());
-    let ds_sin = D38::<19>::from_int(1).sin_strict().to_bits();
+    let base_sin = ref19_to_bits(Ref19::try_from(1_i64).unwrap().sin_strict());
+    let ds_sin = D38::<19>::try_from(1_i64).unwrap().sin_strict().to_bits();
     let fn_sin = parse_decimal_string_to_d19_bits(&format!("{}", dec128!(1).sin()));
     let rd_sin = parse_decimal_string_to_d19_bits(&format!(
         "{:.19}",
@@ -143,8 +158,8 @@ fn main() {
     );
 
     // ── sqrt(2) ────────────────────────────────────────────
-    let base_sqrt = ref19_to_bits(Ref19::from_int(2).sqrt_strict());
-    let ds_sqrt = D38::<19>::from_int(2).sqrt_strict().to_bits();
+    let base_sqrt = ref19_to_bits(Ref19::try_from(2_i64).unwrap().sqrt_strict());
+    let ds_sqrt = D38::<19>::try_from(2_i64).unwrap().sqrt_strict().to_bits();
     let fn_sqrt = parse_decimal_string_to_d19_bits(&format!("{}", dec128!(2).sqrt()));
     let rd_sqrt = parse_decimal_string_to_d19_bits(&format!(
         "{:.19}",

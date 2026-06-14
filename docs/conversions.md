@@ -2,23 +2,19 @@
 
 ## From integers
 
-`From<iN>` / `From<uN>` scale the integer by `10^SCALE`:
+Integer construction is **fallible** — `TryFrom<iN>` / `TryFrom<uN>` — because
+scaling the integer by `10^SCALE` can overflow the storage. Near a width's top
+scale even small inputs exceed the range, so every primitive-integer source
+returns a `Result` rather than silently wrapping:
 
 ```rust
 # use decimal_scaled::D38s2;
-let a: D38s2 = 7i32.into();          // 7.00
-let b = D38s2::from_int(7i64);       // 7.00 - widest integer source
-let c = D38s2::from_i32(-3);         // -3.00
-```
+let a = D38s2::try_from(7i32).unwrap();        // 7.00
+let b = D38s2::try_from(7i64).unwrap();        // 7.00
+let c = D38s2::try_from(-3i32).unwrap();       // -3.00
 
-`From` is provided for the integer types narrower than the storage.
-For `i128` / `u128` into `D38`, where the scaled value can overflow,
-the conversion is `TryFrom` instead:
-
-```rust
-# use decimal_scaled::D38s2;
-let ok  = D38s2::try_from(100_i128);          // Ok
-let bad = D38s2::try_from(i128::MAX);         // Err(ConvertError::Overflow)
+let ok  = D38s2::try_from(100_i128);           // Ok(100.00)
+let bad = D38s2::try_from(i128::MAX);          // Err(ConvertError::Overflow)
 ```
 
 ## To integers - `to_int`
@@ -30,7 +26,7 @@ method, so it comes as a `_with` pair:
 ```rust
 use decimal_scaled::{D38s2, RoundingMode};
 
-let v = D38s2::from_bits(250);   // 2.50
+let v: D38s2 = "2.50".parse().unwrap();   // 2.50
 assert_eq!(v.to_int(), 2);                                  // HalfToEven
 assert_eq!(v.to_int_with(RoundingMode::HalfAwayFromZero), 3);
 assert_eq!(v.to_int_with(RoundingMode::Ceiling), 3);
@@ -68,10 +64,9 @@ entry points (`from_f16`, `to_f128`, …) are also available.
 Widening (to a larger storage) is lossless and infallible - `From`:
 
 ```rust
-# use decimal_scaled::{D9s2, D18s2, D38s2};
-let small: D9s2  = D9s2::from_bits(150);
-let mid:   D18s2  = small.into();
-let wide:  D38s2 = small.into();      // skip-widening works too
+# use decimal_scaled::{D18s2, D38s2};
+let small: D18s2 = "1.50".parse().unwrap();
+let wide:  D38s2 = small.into();      // lossless widen to a larger storage
 ```
 
 Narrowing (to a smaller storage) is fallible - `TryFrom` - because the
@@ -79,7 +74,7 @@ value may not fit:
 
 ```rust
 # use decimal_scaled::{D18s2, D38s2};
-let wide = D38s2::from_bits(150);
+let wide: D38s2 = "1.50".parse().unwrap();
 let ok:  D18s2 = wide.try_into().unwrap();
 
 let huge = D38s2::MAX;
@@ -98,3 +93,11 @@ family, including the wide tier (e.g. `D38 → D76` widening,
 Note that cross-width conversions keep the *scale* unchanged. To change
 both width and scale, compose a cross-width conversion with a
 [`rescale`](rounding.md).
+
+## Serde wire format
+
+Serialisation has its own page: with the `serde` feature, the wire
+format is the **raw scaled-integer storage** — not the displayed
+decimal value — and a system that misses that distinction reads every
+value `10^SCALE` times too large. See [Serde](serde.md) for the wire
+format, the cross-system scale contract, and the binary encodings.

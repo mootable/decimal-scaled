@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Unified decimal type: `D<S, const SCALE: u32>` — a generic
 //! `#[repr(transparent)]` wrapper over the storage integer `S`.
 //!
@@ -15,8 +18,8 @@
 //! # Storage parameterisation
 //!
 //! `S` is the storage integer. For the narrow primitive tiers
-//! `S` is `i32` (D9), `i64` (D18), `i128` (D38). For the wide tiers
-//! `S` is one of the `crate::wide_int::Int{192,256,384,…,4096}`
+//! `S` is `i64` (D18), `i128` (D38). For the wide tiers
+//! `S` is one of the `crate::int::types::Int{192,256,384,…,4096}`
 //! types.
 //!
 //! Methods on `D<S, SCALE>` are added per-`S` in the macros / impl
@@ -40,7 +43,7 @@
 //!
 //! # Compatibility
 //!
-//! Existing names (`D9`, `D18`, `D38`, `D57`, …, `D1232`) become
+//! Existing names (`D18`, `D38`, `D57`, …, `D1232`) become
 //! type aliases of `D<…, SCALE>`. Source-compatible. The
 //! `#[repr(transparent)]` layout is preserved per storage, so the
 //! raw-bytes representation of `D38<5>` is unchanged.
@@ -72,26 +75,51 @@ impl<S: Copy, const SCALE: u32> Copy for D<S, SCALE> {}
 // `D<S, SCALE>` would collide with those macro-emitted impls once
 // the per-width types are aliases of `D<…, SCALE>`.
 
-impl<S: PartialEq, const SCALE: u32> PartialEq for D<S, SCALE> {
+// Equality / ordering. The `D` type is always `Int<N>`-backed, so these
+// impls are bound to `Int` storage and delegate to the policy dispatchers
+// in `policy::dcmp` / `policy::deq`. ONE generic `PartialEq` / `PartialOrd`
+// pair, parameterised over both widths (`N`, `M`) AND both scales (`S1`,
+// `S2`), covers every `(width, scale) × (width, scale)` combination — the
+// same-type case (`N == M`, `S1 == S2`) is just one instantiation, so no
+// separate same-type impl is needed (a derived or hand-written same-type
+// comparison would collide — E0119). This 4-param impl subsumes (and
+// replaces) the earlier 3-param same-scale impl for the same coherence
+// reason.
+//
+// The `S1 == S2` branch const-folds in the policy dispatcher, so the
+// common same-scale path monomorphises to a plain cross-width compare
+// (`Int::cmp_cross`, no multiply); only `S1 != S2` reaches the cross-scale
+// comparator (`Int::cmp_cross_scaled`), oriented so the higher-scale (more
+// decimal digits) operand is the one scaled down by `10^|S1−S2|`.
+use crate::int::types::Int;
+
+impl<const N: usize, const M: usize, const S1: u32, const S2: u32> PartialEq<D<Int<M>, S2>>
+    for D<Int<N>, S1>
+{
     #[inline]
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
+    fn eq(&self, other: &D<Int<M>, S2>) -> bool {
+        crate::policy::deq::deq_dispatch::<N, M, S1, S2>(self.0, other.0)
     }
 }
 
-impl<S: Eq, const SCALE: u32> Eq for D<S, SCALE> {}
+// `Eq` requires only `PartialEq<Self>`, provided by the generic above
+// (the `N == M`, `S1 == S2` instantiation).
+impl<const N: usize, const S: u32> Eq for D<Int<N>, S> {}
 
-impl<S: PartialOrd, const SCALE: u32> PartialOrd for D<S, SCALE> {
+impl<const N: usize, const M: usize, const S1: u32, const S2: u32> PartialOrd<D<Int<M>, S2>>
+    for D<Int<N>, S1>
+{
     #[inline]
-    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
-        self.0.partial_cmp(&other.0)
+    fn partial_cmp(&self, other: &D<Int<M>, S2>) -> Option<core::cmp::Ordering> {
+        Some(crate::policy::dcmp::dcmp_dispatch::<N, M, S1, S2>(self.0, other.0))
     }
 }
 
-impl<S: Ord, const SCALE: u32> Ord for D<S, SCALE> {
+// Same-type total order via the policy dispatcher (same-scale fast path).
+impl<const N: usize, const S: u32> Ord for D<Int<N>, S> {
     #[inline]
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
-        self.0.cmp(&other.0)
+        crate::policy::dcmp::dcmp_dispatch::<N, N, S, S>(self.0, other.0)
     }
 }
 

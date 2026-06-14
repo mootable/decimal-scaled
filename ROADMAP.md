@@ -1,10 +1,11 @@
 # Roadmap
 
 Known performance gaps and planned improvements. Tracked by tier
-of the §5 Library-comparison benchmark in
-[`docs/benchmarks.md`](docs/benchmarks.md). Cells where
-`decimal-scaled` already wins are out of scope - these are the
-loss columns and how we plan to close them.
+against the library-comparison data on the
+[Comparisons](https://mootable.github.io/decimal-scaled/comparisons/)
+and [Performance](https://mootable.github.io/decimal-scaled/performance/)
+benchmark pages. Cells where `decimal-scaled` already wins are out of
+scope - these are the loss columns and how we plan to close them.
 
 The crate's **accuracy** invariants are not on this roadmap.
 `decimal-scaled` is 0 ULP correctly-rounded on every
@@ -23,40 +24,54 @@ exactness when they need it and an opt-out when they don't.
 | **0.4.0** (shipped) | Foundation release — `src/` six-bucket layout (`types/`, `algos/`, `macros/`, `wide_int/`, `consts/`, `prelude/`); type renames D56 family → D57; FromStr wide-tier fix; OpenSSF Best Practices + Scorecard + cargo-audit CI; REUSE LICENSES/. |
 | **0.4.1** (shipped) | Cosmetic-only — dropped the `DecimalConsts` alias. No perf delta. |
 | **0.4.2** (shipped) | Tang ln ladder 13×-34× across narrow-GUARD bands (D57<18-22> through D1232<610-620>); AGM crossover empirically located at SCALE 1000 (3× past textbook 300 digits); D18 mul/div -60% / -47%; chain-MG bit-exact half-to-even for w > 38; `limbs_mul_u64_into<L, LP1>` primitive; benchmarks.md refresh. |
-| **0.4.3** (shipped) | See "0.4.3 candidates" section. Tang completion sweep (5 deeper bands: D230<115>, D307<290>, D616<590>, D924<900>, D1232<1200>); const POW10_TABLE for D38–D616; powf integer-exponent fast path (107× at D38<19> for `x.powf(2.0)`); cross-scale `_of` API + nightly `cross::*` auto-inference; precision-coverage expansion (mpmath golden tables + proptest fuzz + CI gate); parity-test tightening to ±1 LSB. |
-| **0.4.4** (this release) | **Full correct-rounding completion** — every `*_strict` transcendental is 0 LSBε / ≤ 0.5 ULP under all six rounding modes, all thirteen widths, across the whole 22-function surface (directed-rounding Ziv escalation; correctly-rounded derived functions; log1p/gap reformulation for `acosh`/`atanh`; sign-stable + wider-work-int hyperbolics; exact-power pins). Strict-golden suite: 286 cells, 0 ignored, delta==0 vs an external mpmath oracle. |
-| **0.5.0** (incoming) | **Integer / decimal architecture rewrite** — a unified const-generic `Int<N>` / `Uint<N>` backend (the named `IntXXXX` become aliases) plus a reusable width-matched integer-algorithm layer with method parity to the decimals; a base/std/no_std policy collapse keyed on a const-folded `(width, SCALE)` match; non-allocating stack-scratch Karatsuba with the threshold re-swept to the measured crossover; and the 0.4.4 precision corrections folded in. See the "0.5.0 architecture" section. |
+| **0.4.3** (shipped) | See "0.4.3 candidates" section. Tang completion sweep (5 deeper bands: D230<115>, D307<290>, D616<590>, D924<900>, D1232<1200>); const POW10_TABLE for D38–D616; powf integer-exponent fast path (107× at D38<19> for `x.powf(2.0)`); cross-scale `_of` API + nightly `cross::*` auto-inference; precision-coverage expansion (external-oracle golden tables + proptest fuzz + CI gate); parity-test tightening to ±1 LSB. |
+| **0.4.4** (shipped 2026-05-21) | **Full correct-rounding completion** — every `*_strict` transcendental is 0 LSBε / ≤ 0.5 ULP under all six rounding modes, all thirteen widths, across the whole 22-function surface (directed-rounding Ziv escalation; correctly-rounded derived functions; log1p/gap reformulation for `acosh`/`atanh`; sign-stable + wider-work-int hyperbolics; exact-power pins). Strict-golden suite: 286 cells, 0 ignored, delta==0 vs an external oracle. |
+| **0.5.0** (incoming) | **Integer / decimal architecture rewrite** — a unified const-generic `Int<N>` / `Uint<N>` backend (the named `IntXXXX` aliases are *removed*; name storage as `Int<N>`) plus a reusable width-matched integer-algorithm layer with method parity to the decimals; the native (primitive-storage) decimal backend removed; a `(width, SCALE)` const-folded policy-matcher dispatch layer; the 32-bit `D9` tier removed; and the 0.4.4 precision corrections folded in. Non-allocating stack-scratch Karatsuba is wired but gated above every shipped width (schoolbook still wins). See the "0.5.0 architecture" section. |
 | **0.5+** (proposed) | RNG surface; public `expm1` / `log1p`; GDA `round-up` / `round-05up` modes; the DB / serialisation adapter crates (incl. CBOR tag-4); the ecosystem crates (`-math`, `-finance`, the lazy/reactive expression engine); ecosystem trait impls (`approx`, `Euclid`/`Inv`/`Pow`, nalgebra/ndarray); standards-conformance evidence (`dectest` rounding vectors, I-JSON round-trip). Each lands when it earns its place; none gate 1.0. |
 | **1.0.0** | The version stays pre-1.0 until either (a) the wide-tier `mul` / `div` numbers are *competitive with the best peer* at every shipped width — currently the `dashu-float` heap-arbitrary-precision baseline, which we trail by ~14× to ~100× at the wide tiers — *or* (b) the gap has a clearly-defensible structural reason (different storage shape, different precision invariant, different ULP contract) documented per row in the benchmarks. Adapter + ecosystem crates (per the sections below) ship at their own pace and do not gate the core 1.0. |
 
-## 0.5.0 architecture (incoming)
+## 0.5.0 architecture
 
 0.5.0 is a structural release. It does **not** change the accuracy
 contract — it re-lays the foundations so the integer backend and the
 decimal front-ends share one vocabulary and the dispatch is provably
-zero-cost.
+zero-cost. The backend unification, policy-matcher dispatch, and the
+precision corrections are merged; the remaining transcendental-kernel
+generic collapse and full per-`(N, SCALE)` matcher coverage continue
+in Phase 6.
 
-- **Unified `Int<N>` / `Uint<N>` backend.** One const-generic wide
-  integer over `[u64; N]` replaces the hand-named `IntXXXX` family (kept
-  as `pub type` aliases). A reusable width-matched integer-algorithm
-  layer (add / sub / mul / div / shift / `sqr` / `cube` / `root_int`)
-  gives the integers full method parity with the decimals behind a
-  `FixedInt` trait that mirrors `DecimalArithmetic`.
-- **base / std / no_std policy.** Each function's dispatch collapses to a
-  const-folded `match (width, SCALE)` (the `base` table), a `no_std`
-  pointer to it, and a `std` layer carrying only the benchmarked-faster
-  overrides — so the rich per-tier policy compiles to one direct call per
-  monomorphisation, with no runtime dispatch.
+- **Unified `Int<N>` / `Uint<N>` backend (merged).** One const-generic
+  wide integer over `[u64; N]` replaces the hand-named `IntXXXX` family
+  — the named aliases are *removed*; storage is named as `Int<N>` (e.g.
+  `Int<4>` for the former `Int256`). A reusable width-matched
+  integer-algorithm layer (add / sub / mul / div / shift / `isqrt` /
+  cube / `div_rem`) gives the integers full method parity with the
+  decimals behind the single `BigInt` trait. The native
+  (primitive-storage) decimal backend is removed; every tier routes
+  through `Int<N>`. The 32-bit `D9` tier is removed.
+- **`(width, SCALE)` policy-matcher dispatch (merged).** Each
+  transcendental family's dispatch collapses to a const-folded
+  `const fn select::<N, SCALE>()` returning an `Algorithm` enum,
+  invoked through an inline `const { … }` match — so the rich
+  per-tier policy compiles to one direct call per monomorphisation
+  with no runtime dispatch. The `std` / `no_std` split (memoised
+  table cache vs recompute) lives behind `src/policy/` shims.
+  **Phase 6 (in progress):** collapsing the transcendental kernels to
+  fully generic forms and extending the matcher to complete per-`(N,
+  SCALE)` coverage across every family.
 - **Integer perf pass.** Non-allocating stack-scratch Karatsuba (no
-  `Vec`, `no_std`-capable) with `KARATSUBA_THRESHOLD_U64` re-swept to the
-  measured u64 crossover; it unblocks the wide-tier Burnikel–Ziegler and
-  Karatsuba-sqrt work.
-- **Precision corrections folded in.** The full 0.4.4 correct-rounding
-  work merges forward, with the delta==0 strict-golden suite kept as a
-  permanent regression gate.
+  `Vec`, `no_std`-capable) is wired into `widen_mul`, but
+  `KARATSUBA_THRESHOLD_U64` sits above every shipped width — the
+  LLVM-unrolled schoolbook still wins at all currently-emitted limb
+  counts, so the crossover is parked for GHA bench validation. It
+  remains the prerequisite for any future wide-tier Burnikel–Ziegler
+  and Karatsuba-sqrt work.
+- **Precision corrections folded in (merged).** The full 0.4.4
+  correct-rounding work is carried forward, with the delta==0
+  strict-golden suite kept as a permanent regression gate.
 
-The 0.5.0 architecture is documented in the Architecture overview that
-ships with 0.5.0.
+The 0.5.0 architecture is documented in the Architecture overview
+(`docs/ARCHITECTURE.md`) that ships with 0.5.0.
 
 ## Shipped recently in 0.3.x
 
@@ -69,7 +84,7 @@ Tactical perf and fast-path wins, with bench evidence in
 | Adaptive halvings in `atan_fixed` (halve while `|y| > ~0.2`, max 8; was fixed 3) | 3-5× on atan with small / reciprocal-reduced inputs (D38<19>: `atan(0.001)` 44 → 14 µs; `atan(1e8)` 44 → 8 µs) |
 | 17 trig fast paths: zero / ±1 / small-x linear band for `atan`, `sin`, `cos`, `tan`, `asin`, `acos`, `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh`, `to_degrees`, `to_radians` | ~1000-10000× on the fast-path inputs (`atan(0)` 68 µs → 5 ns; `atan(1e-7)` 68 µs → 5 ns); best-in-class small-x atan vs both fastnum and g_math |
 | `ln(1) = 0` + `ln(1+ε) ≈ ε` linear-band fast paths in `ln_strict` | <10 ns on fast-path inputs vs prior 1.4 µs |
-| Per-width bench split: `benches/lib_cmp_d{N}.rs` for D9 through D1232 | minutes vs hours per-tier iteration; was a 0.3.x infrastructure TODO, now done |
+| Per-width bench split: `benches/lib_cmp_d{N}.rs` for D18 through D1232 | minutes vs hours per-tier iteration; was a 0.3.x infrastructure TODO, now done |
 | Profiling infrastructure: `perf-trace` feature, section spans in `exp_fixed` / `atan_fixed`, samply + perfetto example drivers + parser scripts | establishes the M2-gate discipline used through the rest of this work |
 | `benches/atan_inputs.rs` — input-class atan timing (decimal-scaled vs fastnum vs g_math) | exposed two bench-validity issues (fastnum `atan(|x|>1)` = NaN, fastnum `ln(2)` = const lookup) — recorded in `docs/benchmarks.md` |
 
@@ -140,7 +155,7 @@ width - a precision cliff that's hard to communicate.
 | approach | status | expected win |
 |---|---|---|
 | Tang table-driven `ln` / `exp` / `sin_cos` / `atan` / hyperbolic at narrow-GUARD bands | **shipped 0.4.2 + extended 0.4.3-candidate** | 3-34× over artanh / Taylor at the gated `(width, scale)` bands; full ladder D57<18-22> → D1232<610-620>. See [`ALGORITHMS.md`](ALGORITHMS.md) Tang section. |
-| `*_approx(working_digits: u32)` family — same series as `*_strict` but with caller-controlled working-scale cutoff | TODO | linear cost reduction proportional to the requested digit cut |
+| `*_approx(working_digits: u32)` family — same series as `*_strict` but with caller-controlled working-scale cutoff | **shipped 0.5.0** | linear cost reduction proportional to the requested digit cut |
 | Document the precision cliff of `*_fast` on wide tiers more loudly | TODO | non-code; reader expectations |
 | Newton-on-AGM `ln` / `exp` paths past D153 — quadratic convergence, asymptotically wins where the artanh series stalls | partial (`bench-alt`) | Crossover empirically located at SCALE 1000 (3× past textbook 300 digits) thanks to the well-tuned chain-MG artanh path. Currently exposed as the alternate path; promotion gated on AGM precision lift (queued as 0.4.3-candidate B) since the present implementation runs intermediate AGM steps at the working scale and loses precision past ~30. |
 
@@ -148,7 +163,7 @@ width - a precision cliff that's hard to communicate.
 
 ## More decimal widths - fill the tier ladder
 
-Tier ladder is now complete from 32-bit storage (D9) up to 4096-bit
+Tier ladder is now complete from 64-bit storage (D18) up to 4096-bit
 storage (D1232), covering every multiple-of-64 step. The half-step
 tiers between each power-of-two (D57, D115, D230, D462, D924) shipped
 in 0.3.0 and let callers pay only for the precision they need
@@ -156,7 +171,6 @@ without jumping a full storage doubling.
 
 | storage bits | type | safe decimal digits | status |
 |---|---|---|---|
-| 32   | `D9`    | 9    | shipped |
 | 64   | `D18`   | 18   | shipped |
 | 128  | `D38`   | 38   | shipped |
 | 192  | `D57`   | 57   | shipped (0.3.0) |
@@ -175,10 +189,10 @@ Sub-64-bit-limb tiers (the previous D14 / D28 entries at 48- and
 `[u64; N]`-shaped and the per-step gain over D18 or D38 doesn't
 justify the limb-fragment book-keeping.
 
-Each new tier needs its own `IntN` storage in `crate::wide_int`,
-the corresponding `MAX_SCALE` plumbing, and matching wide-int +
-strict transcendental kernels (the macros already generate the
-per-tier code once the storage type exists). Cargo features
+Each new tier needs the matching `Int<N>` limb count wired into
+`src/int/`, the corresponding `MAX_SCALE` plumbing, and matching
+integer + strict transcendental kernels (the macros already generate
+the per-tier code once the storage width is registered). Cargo features
 follow the existing `wide` / `x-wide` pattern - probably a new
 `xx-wide` / `xxx-wide` gate for the additions past D307 to keep
 default build times sane.
@@ -187,7 +201,7 @@ default build times sane.
 
 ## Narrow-tier - already competitive
 
-D9 / D18 / D38 arithmetic already matches or beats
+D18 / D38 arithmetic already matches or beats
 `fixed::I*F*` (the only directly-comparable competitor at these
 widths). D38 transcendentals are 1.47 µs `ln`, 40.5 µs `exp` at
 s=19, vs `fastnum`'s 16 ns / 8.92 µs - but those are

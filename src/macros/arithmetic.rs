@@ -1,13 +1,15 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Macro-generated arithmetic operator overloads for the decimal
-//! widths that use a *uniform* mul/div pattern (D9, D18, and the wide
+//! widths that use a *uniform* mul/div pattern (D18, and the wide
 //! tier D76 / D153 / D307).
 //!
-//! For D9 / D18 the storage type is a primitive (`i32` / `i64`) and a
-//! native wider integer (`i64` / `i128`) carries the mul/div widening
-//! step. For D76 / D153 / D307 the storage type is a hand-rolled wide integer
-//! fixed-width integer and the widening type is the next size up
-//! up; the only thing that changes is *how* the `10^SCALE` literal and
-//! the width casts are spelled.
+//! Every decimal width stores its value in an `Int<N>` and carries the
+//! mul/div widening step in the next size up (`Int<1>`→`Int<2>` for D18,
+//! `Int<2>`→`Int<4>` for the wide tier, …); the only thing that changes
+//! across widths is *how* the `10^SCALE` literal and the width casts are
+//! spelled.
 //!
 //! D38 is the exception: its mul/div go through the hand-rolled
 //! 256-bit `mg_divide` path and are not generated here.
@@ -18,56 +20,27 @@
 //! that keeps `self` / `rhs` in the same macro hygiene context as the
 //! method signature.
 //!
-//! Overflow semantics mirror Rust's default integer arithmetic:
-//! debug-mode panic on overflow, release-mode wrap. Explicit-overflow
-//! variants (`checked_*`, `saturating_*`, `wrapping_*`) live in a
-//! companion module.
+//! The default operators panic on overflow in BOTH debug and release — a
+//! fixed-width decimal has no ±∞/NaN, so silently returning a wrapped value
+//! is a wrong number with no signal (following `rust_decimal` / .NET
+//! `Decimal`, deliberately NOT the integer wrap-in-release default). The
+//! explicit-overflow variants (`checked_*`, `saturating_*`, `wrapping_*`,
+//! `overflowing_*`) live in a companion module and keep their own
+//! modular / `None` / clamp / flag policies.
+//!
+//! ## Overflow contract (how it is implemented)
+//!
+//! The decimal operators layer the panic-on-overflow contract on top of the
+//! `Int<N>` storage, whose own operators and kernels are deliberately
+//! *modular* (wrapping) so the bignum algorithms stay composable. The
+//! contract lives only here, at the decimal-operator layer: the default
+//! `Add` / `Sub` / `Neg` / `Rem` and the `Mul` / `Div` value paths route
+//! through the per-function policy dispatch, whose kernels detect overflow
+//! once and `panic!` (or unwrap the `checked_*` primitive) unconditionally —
+//! built from `Int<N>`'s `checked_*` methods plus `core` `panic!`, so
+//! `no_std` still builds. The explicit variants apply their own policy
+//! around the same detection.
 
-/// Rounds `n / m` (truncating-toward-zero quotient) according to
-/// `$mode` (a [`RoundingMode`]) for *primitive* signed integer types
-/// (`i32` / `i64` / `i128`).
-///
-/// Mode-specific behaviour is delegated to
-/// [`crate::support::rounding::should_bump`], which receives the three
-/// pre-computed inputs every mode needs: the `|r|` vs `|m|−|r|`
-/// ordering (the round-up test without the `2·|r|` overflow risk),
-/// the parity of the truncated quotient, and the result sign. The
-/// caller bumps the quotient by ±1 in the result direction.
-///
-/// Passing `crate::support::rounding::DEFAULT_ROUNDING_MODE` yields the
-/// crate-wide default (IEEE-754 round-half-to-even unless a
-/// `rounding-*` feature overrides it).
-///
-/// [`RoundingMode`]: crate::support::rounding::RoundingMode
-macro_rules! round_with_mode_native {
-    ($n:expr, $m:expr, $mode:expr) => {{
-        let n = $n;
-        let m = $m;
-        let mode = $mode;
-        let q = n / m;
-        let r = n % m;
-        if r == 0 {
-            q
-        } else {
-            let abs_r = if r < 0 { -r } else { r };
-            let abs_m = if m < 0 { -m } else { m };
-            let comp = abs_m - abs_r;
-            let cmp_r = abs_r.cmp(&comp);
-            let q_is_odd = (q & 1) != 0;
-            let result_positive = (n < 0) == (m < 0);
-            if $crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive) {
-                if result_positive {
-                    q + 1
-                } else {
-                    q - 1
-                }
-            } else {
-                q
-            }
-        }
-    }};
-}
-pub(crate) use round_with_mode_native;
 
 /// Divides a signed `i128` magnitude-bearing numerator by an unsigned
 /// `u64` divisor magnitude using two hardware `divq` instructions (one
@@ -95,7 +68,7 @@ pub(crate) use round_with_mode_native;
 ///
 /// # Precision
 ///
-/// Strict: identical bit-for-bit result to `round_with_mode_native!`
+/// Strict: identical bit-for-bit result to [`round_with_mode_wide!`]
 /// at the same `(n, m, mode)`. Proof: both compute
 /// `n.signum() * (|n| / m_mag)` for the truncated quotient (Rust signed
 /// `/` truncates toward zero, identical to `(-|n|/m_mag) * sign(n)`
@@ -135,7 +108,11 @@ pub(crate) fn i128_divrem_by_u64_with_mode(
 
     if r_mag == 0 {
         // No remainder — exact. Restore sign.
-        return if n_neg { -(q_mag as i128) } else { q_mag as i128 };
+        return if n_neg {
+            -(q_mag as i128)
+        } else {
+            q_mag as i128
+        };
     }
 
     // `should_bump` needs the same three pre-computed inputs the macro
@@ -156,12 +133,12 @@ pub(crate) fn i128_divrem_by_u64_with_mode(
     }
 }
 
-/// Wide-storage counterpart of [`round_with_mode_native!`] — the same
-/// strategy-pattern dispatch over [`crate::support::rounding::should_bump`],
-/// adapted to a hand-rolled wide integer `$W`. Uses
-/// `<$W>::from_i128(0/1)` for the small constants and the type's
-/// operators throughout.
-#[cfg(any(feature = "d76", feature = "d153", feature = "d307", feature = "wide", feature = "x-wide"))]
+/// Rounds a widened division residual using a strategy-pattern dispatch
+/// over [`crate::support::rounding::should_bump`], expressed in terms of
+/// the `Int<N>` storage `$W`. Uses `<$W>::from_i128(0/1)` for the small
+/// constants and the type's operators throughout.
+// Always available: D18 / D38 (default features) route their Div /
+// checked_div / wrapping_div through this rounding step too.
 macro_rules! round_with_mode_wide {
     ($n:expr, $m:expr, $W:ty, $mode:expr) => {{
         let n = $n;
@@ -185,30 +162,22 @@ macro_rules! round_with_mode_wide {
             };
             let result_positive = (n < zero) == (m < zero);
             if $crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive) {
-                if result_positive {
-                    q + one
-                } else {
-                    q - one
-                }
+                if result_positive { q + one } else { q - one }
             } else {
                 q
             }
         }
     }};
 }
-#[cfg(any(feature = "d76", feature = "d153", feature = "d307", feature = "wide", feature = "x-wide"))]
 pub(crate) use round_with_mode_wide;
 
 /// Generates the standard arithmetic operator overloads for a decimal
 /// width `$Type<SCALE>`.
 ///
-/// - `decl_decimal_arithmetic!(D9, i32, i64)` — *native* storage; the
-/// widening type is a primitive integer, `as`-casts and the
-/// `(10 as $Wider)` literal carry the mul/div step.
-/// - `decl_decimal_arithmetic!(wide D76, I256, I512)` — *wide*
-/// storage; the widening type is a hand-rolled wide integer, the `WideInt` cast
-/// carries the width casts and `from_str_radix` builds the
-/// `10^SCALE` factor.
+/// Invoked as `decl_decimal_arithmetic!(wide D76, Int<4>, Int<8>)`: the
+/// storage is an `Int<N>` and the widening type the next size up. The
+/// `BigInt` cast carries the width casts and `from_str_radix` builds the
+/// `10^SCALE` factor (`Int<N>` has no `as` literal cast).
 macro_rules! decl_decimal_arithmetic {
     // Wide storage.
     (wide $Type:ident, $Storage:ty, $Wider:ty) => {
@@ -262,65 +231,12 @@ macro_rules! decl_decimal_arithmetic {
             /// with D38 — avoiding the generic schoolbook divide for
             /// the common case. Larger scales fall through to the
             /// slower `n / (10^SCALE)` path.
+            ///
+            /// Routes through the generic `crate::policy::mul::dispatch`
+            /// matcher; `N` is inferred from `self.0: Int<N>`.
             #[inline]
             pub fn mul_with(self, rhs: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                // Fast path: if the product fits `$Storage` exactly,
-                // skip the widen → mg_divide-in-`$Wider` → narrow
-                // chain. The check is one `leading_zeros` per operand
-                // on the storage type's `[u64; L]` limbs (4 ops for
-                // Int256, 6 for Int384, …); negligible vs the
-                // 4 × L² limb mul that follows. When the path is
-                // taken we save (a) one set of `$Storage → $Wider`
-                // resizes, (b) one `$Wider → $Storage` resize at
-                // exit, and (c) the wider half of the MG divide's
-                // entry / exit `mag_into_u128` / `from_mag_sign_u128`
-                // limb copy.
-                //
-                // The condition `lz_a + lz_b > $Storage::BITS` is
-                // sufficient for the unsigned magnitude product to
-                // fit in `$Storage::BITS - 1` bits (i.e. the signed
-                // sign-bit slot stays clear). `leading_zeros` on the
-                // signed `$Storage` is computed over
-                // `unsigned_abs(self).leading_zeros()` so it already
-                // accounts for the sign-bit asymmetry; `.MIN` is the
-                // only value with magnitude `2^(BITS - 1)`, and at
-                // `lz = 0` the test fails so MIN takes the slow
-                // path.
-                let lz_a = self.0.leading_zeros();
-                let lz_b = rhs.0.leading_zeros();
-                if lz_a + lz_b > <$Storage>::BITS {
-                    let n: $Storage = self.0.wrapping_mul(rhs.0);
-                    let scaled = if SCALE == 0 {
-                        n
-                    } else if SCALE <= 38 {
-                        $crate::algos::mg_divide::div_wide_pow10_with::<$Storage, { <$Storage as $crate::wide_int::WideInt>::U128_LIMBS }>(n, SCALE, mode)
-                    } else {
-                        // Newton vs MG chain dispatch: cells in the
-                        // bench-validated matrix (Int2048 ≥ s200,
-                        // Int3072 ≥ s200, Int4096 ≥ s400) route to
-                        // Newton; everything else stays on MG. See
-                        // [`crate::algos::newton_reciprocal::dispatch_wide_pow10_with`].
-                        $crate::algos::newton_reciprocal::dispatch_wide_pow10_with::<$Storage, { <$Storage as $crate::wide_int::WideInt>::U128_LIMBS }>(n, SCALE, mode)
-                    };
-                    return Self(scaled);
-                }
-
-                // `widen_mul` does the `$Storage × $Storage → $Wider`
-                // product in one step — no Int{2W} wrapping mul with
-                // half-empty operands, and no double trip through the
-                // 64-limb `WideInt::to_mag_sign` buffer.
-                let n: $Wider = self.0.widen_mul::<$Wider>(rhs.0);
-                let scaled = if SCALE == 0 {
-                    n
-                } else if SCALE <= 38 {
-                    $crate::algos::mg_divide::div_wide_pow10_with::<$Wider, { <$Wider as $crate::wide_int::WideInt>::U128_LIMBS }>(n, SCALE, mode)
-                } else {
-                    // Width-dispatch as above; the slow path's `$Wider`
-                    // numerator hits the same matrix (e.g. D307's
-                    // `$Wider = Int2048` routes Newton at SCALE ≥ 200).
-                    $crate::algos::newton_reciprocal::dispatch_wide_pow10_with::<$Wider, { <$Wider as $crate::wide_int::WideInt>::U128_LIMBS }>(n, SCALE, mode)
-                };
-                Self(scaled.resize::<$Storage>())
+                Self($crate::policy::mul::dispatch::<_, SCALE>(self.0, rhs.0, mode))
             }
 
             /// Divide two values of the same scale, rounding the
@@ -335,40 +251,12 @@ macro_rules! decl_decimal_arithmetic {
             /// type's `multiplier()` const (already evaluated at the
             /// `$Storage` width) widened to `$Wider`, avoiding the
             /// per-call `pow(SCALE)` on the wider type.
+            ///
+            /// Routes through the generic `crate::policy::div::dispatch`
+            /// matcher; `N` is inferred from `self.0: Int<N>`.
             #[inline]
             pub fn div_with(self, rhs: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                // Fast path: when `self * 10^SCALE` fits `$Storage`
-                // exactly (`leading_zeros(self) + leading_zeros(10^SCALE) >
-                // $Storage::BITS`), skip the widen-to-$Wider chain
-                // and divide in $Storage. The divisor `rhs` already
-                // fits $Storage by construction. Saves one
-                // $Storage→$Wider resize on `rhs`, one $Wider→$Storage
-                // resize on the result, and shrinks the Knuth divmod
-                // from $Wider-limbs to $Storage-limbs.
-                //
-                // `$Type::<SCALE>::multiplier()` is a `const` -- its
-                // `leading_zeros()` collapses at compile time when
-                // SCALE is a const, so the branch's predicate is one
-                // `leading_zeros` call on `self.0`.
-                let mult: $Storage = $Type::<SCALE>::multiplier();
-                let lz_n = self.0.leading_zeros();
-                let lz_m = mult.leading_zeros();
-                if lz_n + lz_m > <$Storage>::BITS {
-                    let n: $Storage = self.0.wrapping_mul(mult);
-                    let result =
-                        $crate::macros::arithmetic::round_with_mode_wide!(n, rhs.0, $Storage, mode);
-                    return Self(result);
-                }
-
-                let b: $Wider = rhs.0.resize::<$Wider>();
-                // `self.0 * multiplier()` both fit `$Storage` for any
-                // representable `SCALE`, so the full product fits
-                // `$Wider` exactly; `widen_mul` avoids the
-                // resize-to-`$Wider` round trip on both operands.
-                let n: $Wider = self.0.widen_mul::<$Wider>($Type::<SCALE>::multiplier());
-                let result =
-                    $crate::macros::arithmetic::round_with_mode_wide!(n, b, $Wider, mode);
-                Self(result.resize::<$Storage>())
+                Self($crate::policy::div::dispatch::<_, SCALE>(self.0, rhs.0, mode))
             }
         }
 
@@ -380,246 +268,72 @@ macro_rules! decl_decimal_arithmetic {
         }
     };
 
-    // Native (primitive integer) storage — `i64`-widening branch (D9).
-    //
-    // Storage is `i32`, widening is `i64`. The rebalance divisor
-    // `10^SCALE` (SCALE <= 9) and the runtime divisor `rhs.0`
-    // (`|rhs.0| <= i32::MAX`) both fit a single 32-bit word, so the
-    // `i64 / i64` divide LLVM emits is a single hardware `idivq` —
-    // already optimal. No `i128_divrem_by_u64` fast path applies.
-    ($Type:ident, $Storage:ty, i64) => {
-        $crate::macros::arithmetic::decl_decimal_arithmetic!(@common $Type, $Storage);
-        $crate::macros::arithmetic::decl_decimal_arithmetic!(@native_i64_wider $Type, $Storage);
-    };
-
-    // Native (primitive integer) storage — `i128`-widening branch (D18).
-    //
-    // Storage is `i64`, widening is `i128`. The naive `i128 / i128`
-    // divide lowers to LLVM's `__divti3` soft-call (≈10 ns) even
-    // though both the rebalance divisor `10^SCALE` (SCALE <= 18, fits
-    // u64) and the runtime divisor `rhs.0.unsigned_abs()` (i64
-    // magnitude, fits u64) are u64. Routing through
-    // `i128_divrem_by_u64_with_mode` replaces the soft-call with
-    // two hardware `divq` instructions, cutting D18 mul/div ~60%.
-    ($Type:ident, $Storage:ty, i128) => {
-        $crate::macros::arithmetic::decl_decimal_arithmetic!(@common $Type, $Storage);
-        $crate::macros::arithmetic::decl_decimal_arithmetic!(@native_i128_wider $Type, $Storage);
-    };
-
-    // i64-widening body: original code, unchanged.
-    (@native_i64_wider $Type:ident, $Storage:ty) => {
-        impl<const SCALE: u32> ::core::ops::Mul for $Type<SCALE> {
-            type Output = Self;
-            /// Multiply two values of the same scale. Widens to `i64`
-            /// to hold `a · b` exactly, divides by `10^SCALE` using the
-            /// crate-default [`RoundingMode`] (IEEE-754 round-to-nearest;
-            /// within 0.5 ULP), and narrows back to `$Storage`. See
-            /// [`Self::mul_with`] to choose a non-default rounding mode.
-            ///
-            /// [`RoundingMode`]: $crate::support::rounding::RoundingMode
-            #[inline]
-            fn mul(self, rhs: Self) -> Self {
-                self.mul_with(rhs, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
-            }
-        }
-
-        impl<const SCALE: u32> ::core::ops::MulAssign for $Type<SCALE> {
-            #[inline]
-            fn mul_assign(&mut self, rhs: Self) {
-                *self = *self * rhs;
-            }
-        }
-
-        impl<const SCALE: u32> ::core::ops::Div for $Type<SCALE> {
-            type Output = Self;
-            /// Divide two values of the same scale using the crate-default
-            /// `RoundingMode` (within 0.5 ULP).
-            #[inline]
-            fn div(self, rhs: Self) -> Self {
-                self.div_with(rhs, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
-            }
-        }
-
-        impl<const SCALE: u32> $Type<SCALE> {
-            /// Multiply two values of the same scale, rounding the
-            /// scale-narrowing step according to `mode`. Within 0.5 ULP
-            /// for the half-* family.
-            #[inline]
-            pub fn mul_with(self, rhs: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let a = self.0 as i64;
-                let b = rhs.0 as i64;
-                let m = (10i64).pow(SCALE);
-                let n = a * b;
-                let scaled =
-                    $crate::macros::arithmetic::round_with_mode_native!(n, m, mode);
-                Self(scaled as $Storage)
-            }
-
-            /// Divide two values of the same scale, rounding the
-            /// scale-narrowing step according to `mode`. Within 0.5 ULP
-            /// for the half-* family.
-            #[inline]
-            pub fn div_with(self, rhs: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let a = self.0 as i64;
-                let b = rhs.0 as i64;
-                let m = (10i64).pow(SCALE);
-                let n = a * m;
-                let result =
-                    $crate::macros::arithmetic::round_with_mode_native!(n, b, mode);
-                Self(result as $Storage)
-            }
-        }
-
-        impl<const SCALE: u32> ::core::ops::DivAssign for $Type<SCALE> {
-            #[inline]
-            fn div_assign(&mut self, rhs: Self) {
-                *self = *self / rhs;
-            }
-        }
-    };
-
-    // i128-widening body: u128/u64 schoolbook fast path.
-    (@native_i128_wider $Type:ident, $Storage:ty) => {
-        impl<const SCALE: u32> ::core::ops::Mul for $Type<SCALE> {
-            type Output = Self;
-            /// Multiply two values of the same scale. Widens to `i128`
-            /// to hold `a · b` exactly, divides by `10^SCALE` via the
-            /// `u128/u64` schoolbook fast path (hardware `divq`, not
-            /// LLVM `__divti3`), and narrows back to `$Storage`. See
-            /// [`Self::mul_with`] to choose a non-default rounding mode.
-            ///
-            /// [`RoundingMode`]: $crate::support::rounding::RoundingMode
-            #[inline]
-            fn mul(self, rhs: Self) -> Self {
-                self.mul_with(rhs, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
-            }
-        }
-
-        impl<const SCALE: u32> ::core::ops::MulAssign for $Type<SCALE> {
-            #[inline]
-            fn mul_assign(&mut self, rhs: Self) {
-                *self = *self * rhs;
-            }
-        }
-
-        impl<const SCALE: u32> ::core::ops::Div for $Type<SCALE> {
-            type Output = Self;
-            /// Divide two values of the same scale. The numerator
-            /// `a · 10^SCALE` is widened to `i128`; the final divide
-            /// by `rhs.0` (an `i64`-storage operand) takes the
-            /// `u128/u64` hardware-divide fast path. Within 0.5 ULP.
-            #[inline]
-            fn div(self, rhs: Self) -> Self {
-                self.div_with(rhs, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
-            }
-        }
-
-        impl<const SCALE: u32> $Type<SCALE> {
-            /// Multiply two values of the same scale, rounding the
-            /// scale-narrowing step according to `mode`. Within 0.5 ULP
-            /// for the half-* family.
-            ///
-            /// For `SCALE = 0` the multiplier is 1; the i128 product is
-            /// returned directly. For `SCALE >= 1` the divide-by-
-            /// `10^SCALE` step uses
-            /// `i128_divrem_by_u64_with_mode`, replacing the
-            /// `__divti3` soft-call with two hardware `divq` instructions.
-            #[inline]
-            pub fn mul_with(self, rhs: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let a = self.0 as i128;
-                let b = rhs.0 as i128;
-                let n = a * b;
-                let scaled: i128 = if SCALE == 0 {
-                    n
-                } else {
-                    // SCALE in 1..=18 implies 10^SCALE <= 10^18 < 2^60,
-                    // fits u64. Compile-time constant, const-folded.
-                    let m_mag: u64 = (10u64).pow(SCALE);
-                    $crate::macros::arithmetic::i128_divrem_by_u64_with_mode(n, m_mag, mode)
-                };
-                Self(scaled as $Storage)
-            }
-
-            /// Divide two values of the same scale, rounding the
-            /// scale-narrowing step according to `mode`. Within 0.5 ULP
-            /// for the half-* family.
-            ///
-            /// The numerator is `a · 10^SCALE` as `i128`; the divisor
-            /// is `rhs.0` cast to its unsigned-magnitude `u64`. The
-            /// final divide is the same `u128/u64` schoolbook fast path
-            /// that [`Self::mul_with`] uses.
-            #[inline]
-            pub fn div_with(self, rhs: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let a = self.0 as i128;
-                let b = rhs.0 as i128;
-                let m = (10i128).pow(SCALE);
-                let n = a * m;
-                // `rhs.0` is `i64`-sized storage; its magnitude fits
-                // `u64`. Splitting sign from magnitude lets the
-                // schoolbook divide take its single-instruction `divq`
-                // fast path instead of the `__divti3` soft-call.
-                let b_neg = b < 0;
-                let b_mag: u64 = if b_neg {
-                    // Two's-complement: for i64::MIN this is 2^63, fits u64.
-                    (rhs.0 as i64).unsigned_abs()
-                } else {
-                    rhs.0 as u64
-                };
-                let q =
-                    $crate::macros::arithmetic::i128_divrem_by_u64_with_mode(n, b_mag, mode);
-                let result = if b_neg { -q } else { q };
-                Self(result as $Storage)
-            }
-        }
-
-        impl<const SCALE: u32> ::core::ops::DivAssign for $Type<SCALE> {
-            #[inline]
-            fn div_assign(&mut self, rhs: Self) {
-                *self = *self / rhs;
-            }
-        }
-    };
-
-    // Add / Sub / Neg / Rem and their assign forms — identical for
-    // native and wide storage (the `core::ops` impls on the wide integers
+    // Add / Sub / Neg / Rem and their assign forms — identical across the
+    // `Int<N>` storage widths (the `core::ops` impls on the wide integers
     // match the primitive integer surface).
+    //
+    // Each operator routes through the corresponding policy trait method
+    // (`AddPolicy::add_impl`, etc.) defined in `src/policy/`. The policy's
+    // `const { select }` block folds per monomorphisation so the dispatch is
+    // zero-cost in release. See `docs/ARCHITECTURE.md` → "Policy file
+    // structure".
     (@common $Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> ::core::ops::Add for $Type<SCALE> {
             type Output = Self;
             /// Add two values of the same scale.
+            ///
+            /// Panics on overflow in BOTH debug and release (a fixed-width
+            /// decimal never silently wraps a wrong number; use
+            /// [`Self::wrapping_add`] / [`Self::checked_add`] /
+            /// [`Self::saturating_add`] for the other policies).
+            /// Routes through the `AddPolicy` per-type policy trait.
             #[inline]
             fn add(self, rhs: Self) -> Self {
-                Self(self.0 + rhs.0)
+                use $crate::policy::add::AddPolicy as _;
+                self.add_impl(rhs)
             }
         }
 
         impl<const SCALE: u32> ::core::ops::AddAssign for $Type<SCALE> {
             #[inline]
             fn add_assign(&mut self, rhs: Self) {
-                self.0 = self.0 + rhs.0;
+                *self = *self + rhs;
             }
         }
 
         impl<const SCALE: u32> ::core::ops::Sub for $Type<SCALE> {
             type Output = Self;
+            /// Subtract two values of the same scale.
+            ///
+            /// Panics on overflow in BOTH debug and release (use
+            /// [`Self::wrapping_sub`] / [`Self::checked_sub`] /
+            /// [`Self::saturating_sub`] for the other policies).
+            /// Routes through the `SubPolicy` per-type policy trait.
             #[inline]
             fn sub(self, rhs: Self) -> Self {
-                Self(self.0 - rhs.0)
+                use $crate::policy::sub::SubPolicy as _;
+                self.sub_impl(rhs)
             }
         }
 
         impl<const SCALE: u32> ::core::ops::SubAssign for $Type<SCALE> {
             #[inline]
             fn sub_assign(&mut self, rhs: Self) {
-                self.0 = self.0 - rhs.0;
+                *self = *self - rhs;
             }
         }
 
         impl<const SCALE: u32> ::core::ops::Neg for $Type<SCALE> {
             type Output = Self;
+            /// Negate a value. Panics on overflow in BOTH debug and release
+            /// (`-MIN` is unrepresentable in two's-complement; use
+            /// [`Self::wrapping_neg`] / [`Self::checked_neg`] /
+            /// [`Self::saturating_neg`] for the other policies).
+            /// Routes through the `NegPolicy` per-type policy trait.
             #[inline]
             fn neg(self) -> Self {
-                Self(-self.0)
+                use $crate::policy::neg::NegPolicy as _;
+                self.neg_impl()
             }
         }
 
@@ -628,16 +342,23 @@ macro_rules! decl_decimal_arithmetic {
             /// Remainder of two values at the same scale. Because both
             /// operands share the scale factor, the storage-level
             /// remainder is the answer with no rescaling.
+            ///
+            /// Panics on the `MIN % -ONE` overflow boundary in BOTH debug
+            /// and release; division by zero always panics (use
+            /// [`Self::wrapping_rem`] / [`Self::checked_rem`] for the other
+            /// policies).
+            /// Routes through the `RemPolicy` per-type policy trait.
             #[inline]
             fn rem(self, rhs: Self) -> Self {
-                Self(self.0 % rhs.0)
+                use $crate::policy::rem::RemPolicy as _;
+                self.rem_impl(rhs)
             }
         }
 
         impl<const SCALE: u32> ::core::ops::RemAssign for $Type<SCALE> {
             #[inline]
             fn rem_assign(&mut self, rhs: Self) {
-                self.0 = self.0 % rhs.0;
+                *self = *self % rhs;
             }
         }
     };

@@ -1,45 +1,96 @@
-name: "🔬 golden (comprehensive)"
+name: "🌕 golden comprehensive"
 
-# The FULL mpmath-oracle golden sweep: `ulp_strict_golden`'s opt-in
-# `golden_autodiscover` test over EVERY `tests/golden/*.txt` table (~1.6k
-# across all tiers) — not just the curated `decl_band!` subset that the
-# per-push `ci` → `golden (gate)` job runs. It is multi-hour at the wide
-# tiers, so it lives in its OWN concurrency queue (queue-of-one), kept off
-# the `ci` and `bench-branch-compare` queues: a deep golden pass must never
-# delay a pre-merge gate or a perf compare, and must not be starved by them.
+# The full six-mode golden surface — every row, every cell, all six
+# rounding modes — on every push, in its OWN workflow so it never shares
+# a run's runner allocation with the ci.yml gates. This is the crate's
+# CORRECTNESS GATE: it took over from the deleted 0.5 ULP precision gate,
+# so a red here means the build rounds wrong — fix it (roll back / bisect)
+# before release, never ship over it.
 #
-# Trigger: workflow_dispatch only — run on demand against ANY ref (e.g.
-# release/0.5.0 to deep-verify a precision-sensitive change, or main before a
-# release). Manual-only by design: every multi-hour comprehensive run is then
-# deliberate, never auto-kicked by a push. The optional `filter` input maps to
-# GOLDEN_FILTER to narrow the sweep to file stems containing the substring
-# (e.g. `d924` for a ~1-minute single-tier scan, `mul_d`, etc.).
+# SHARDED BY WIDTH (owner 2026-06-12): the gate exe is built once per
+# WIDTH TIER (`--features <tier>`; `narrow` = the base D18/D38 build),
+# because the single full-width binary is not buildable on a hosted
+# runner — one rustc carrying every tier's monomorphisations peaks past
+# the runner's 16 GB (proven by the in-step sampler on the lib-cmp
+# build, run 27393313247: 15.9 GB used / 80 MB avail at -j 1 → SIGTERM
+# exit 143). Each shard exe contains ONLY its tier's cells (the per-tier
+# dispatch gating), so the width shard partitions the surface for free;
+# WITHIN a shard the rows still stripe (GOLDEN_STRIPE=k/n) so the heavy
+# wide tiers stay inside the job timeout. The splice stitches
+# shard × stripe mini reports back together. Coverage is UNCHANGED —
+# full rows, all six modes.
 
 on:
+  push:
+    branches:
+      - main
+      - "release/*"
   workflow_dispatch:
-    inputs:
-      filter:
-        description: "GOLDEN_FILTER substring (golden file-stem match; empty = ALL tables)"
-        required: false
-        default: ""
 
 permissions:
   contents: read
 
 concurrency:
-  # Own queue, independent of `ci` and `bench-branch-compare`. Queue-of-one:
-  # let the in-progress sweep finish (don't waste a multi-hour run), and let a
-  # newer push supersede only the QUEUED run.
+  # Serial queue per ref, like ci.yml/bbc: an in-progress sweep finishes,
+  # a newer push supersedes only the QUEUED run.
   group: golden-comprehensive-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  comprehensive:
-    name: golden (comprehensive)
+  plan:
+    name: plan
     runs-on: ubuntu-latest
-    # The auto-discovered sweep is multi-hour at the wide tiers; allow the
-    # GitHub-hosted job maximum.
-    timeout-minutes: 360
+    timeout-minutes: 5
+    outputs:
+      cells: ${{ steps.gen.outputs.cells }}
+    steps:
+      - name: Generate the shard × stripe matrix
+        id: gen
+        run: |
+          echo "cells=$(python3 - <<'EOF'
+          import json
+          # (shard, the GOLDEN_WIDTHS its stripes run). Every shard exe also
+          # carries the always-compiled D18/D38 cells, so each stripe MUST
+          # width-filter or every shard re-runs the narrow cells (the
+          # duplicate-bad fan-out of the first sharded run).
+          shards = [("narrow", "18,38"), ("d57", "57"), ("d76", "76"),
+                    ("d115", "115"), ("d153", "153"), ("d230", "230"),
+                    ("d307", "307"), ("d462", "462"), ("d616", "616"),
+                    ("d924", "924"), ("d1232", "1232")]
+          # Stripe count PER WIDTH TIER (owner 2026-06-13): the wide tiers
+          # dominate the per-stripe wall time, so they fan out into more,
+          # thinner stripes to stay inside the job timeout; every other
+          # shard takes the default of 4. Each matrix entry carries its own
+          # `total`, so the stripe job gets GOLDEN_STRIPE=k/n with THAT
+          # shard's own n (k = 0..n-1 — the harness's disjoint row partition,
+          # line % n == k, self-consistent for any n).
+          STRIPES = {"d1232": 10, "d924": 8, "d616": 6}
+          print(json.dumps([{"shard": s, "widths": w, "stripe": k,
+                             "total": STRIPES.get(s, 4)}
+                            for (s, w) in shards
+                            for k in range(STRIPES.get(s, 4))]))
+          EOF
+          )" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: build (${{ matrix.shard }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { shard: narrow, feat: "" }
+          - { shard: d57,    feat: "d57" }
+          - { shard: d76,    feat: "d76" }
+          - { shard: d115,   feat: "d115" }
+          - { shard: d153,   feat: "d153" }
+          - { shard: d230,   feat: "d230" }
+          - { shard: d307,   feat: "d307" }
+          - { shard: d462,   feat: "d462" }
+          - { shard: d616,   feat: "d616" }
+          - { shard: d924,   feat: "d924" }
+          - { shard: d1232,  feat: "d1232" }
 
     steps:
       - name: Checkout
@@ -54,21 +105,212 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: cargo-golden-comprehensive-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'macros/Cargo.toml') }}
+          key: cargo-ci-golden-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'macros/Cargo.toml') }}
           restore-keys: |
-            cargo-golden-comprehensive-${{ runner.os }}-
+            cargo-ci-golden-${{ runner.os }}-
 
-      - name: Install system libs (fontconfig for the plotters dev-dep)
-        # `cargo test` compiles ALL dev-dependencies regardless of `--test`
-        # scoping, and plotters (a dev-dep) pulls yeslogic-fontconfig-sys.
-        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
-
-      - name: Comprehensive auto-discovered golden sweep (release, golden feature)
-        # `--ignored` runs the `#[ignore]`d `golden_autodiscover` over every
-        # `tests/golden/*.txt`. `--nocapture` surfaces its per-table progress
-        # so a long run is not opaque. GOLDEN_FILTER (empty on push) narrows it.
+      - name: Compile the shard gate exe (release, no run)
         env:
-          GOLDEN_FILTER: ${{ github.event.inputs.filter }}
+          # Modest insurance on the now-slim per-tier build: two parallel
+          # rustc units, no release debuginfo (the workspace keeps
+          # `debug = true` for local samply; it serves nothing here).
+          CARGO_BUILD_JOBS: "2"
+          CARGO_PROFILE_RELEASE_DEBUG: "false"
         run: |
-          cargo test --release --features wide,x-wide,xx-wide,macros,golden \
-            --test ulp_strict_golden -- --ignored --nocapture golden_autodiscover
+          set -euo pipefail
+          ( while true; do m=$(free -m | awk '/^Mem:/{print $7}'); echo "[res $(date +%H:%M:%S)] mem avail ${m} MB"; sleep 30; done ) &
+          SAMPLER=$!
+          FEAT="${{ matrix.feat }}"
+          cargo test -p decimal-scale-test --release ${FEAT:+--features "$FEAT"} --test golden --no-run
+          kill "$SAMPLER" || true
+
+      - name: Stage the gate exe
+        run: |
+          set -euo pipefail
+          exe=$(ls -t target/release/deps/golden-* | grep -v '\.d$' | head -1)
+          mkdir -p staged
+          cp "$exe" staged/golden
+          chmod +x staged/golden
+          echo "staged: $exe"
+
+      - name: Upload the gate exe
+        uses: actions/upload-artifact@v7
+        with:
+          name: golden-exe-${{ matrix.shard }}
+          path: staged/
+          if-no-files-found: error
+          retention-days: 3
+
+  stripes:
+    name: ${{ matrix.shard }} stripe ${{ matrix.stripe }}/${{ matrix.total }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    needs: [plan, build]
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.cells) }}
+
+    steps:
+      - name: Checkout (golden data)
+        uses: actions/checkout@v6
+
+      - name: Download the shard gate exe
+        uses: actions/download-artifact@v8
+        with:
+          name: golden-exe-${{ matrix.shard }}
+
+      - name: Run stripe (all six modes, the shard's full rows)
+        env:
+          GOLDEN_STRIPE: "${{ matrix.stripe }}/${{ matrix.total }}"
+          GOLDEN_WIDTHS: "${{ matrix.widths }}"
+          GOLDEN_REPORT_DIR: stripe-report
+          GOLDEN_DIR: ${{ github.workspace }}/decimal-scaled-golden/golden
+        run: |
+          set -euo pipefail
+          chmod +x golden
+          ./golden golden_all_modes --ignored --nocapture
+
+      - name: Mini report → log + step summary
+        if: always()
+        run: |
+          if [ -f stripe-report/summary.txt ]; then
+            echo "=== ${{ matrix.shard }} stripe ${{ matrix.stripe }} mini report ==="
+            cat stripe-report/summary.txt
+            cat stripe-report/summary.txt >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::no stripe-report/summary.txt was produced (the gate exited before reporting)"
+          fi
+
+      - name: Upload stripe mini report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: golden-comprehensive-${{ matrix.shard }}-s${{ matrix.stripe }}
+          path: stripe-report/
+          if-no-files-found: warn
+          retention-days: 7
+
+  splice:
+    name: splice + self-commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [plan, stripes]
+    permissions:
+      # Self-commit the combined full-surface results back to the run's branch
+      # (the same self-render aggregate pattern; a GITHUB_TOKEN push does not
+      # re-trigger workflows, so there is no refresh loop).
+      contents: write
+
+    steps:
+      - name: Checkout (for the self-commit)
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Download all stripe reports
+        uses: actions/download-artifact@v8
+        with:
+          pattern: golden-comprehensive-*
+          path: stripes/
+
+      - name: Splice in shard × stripe order
+        env:
+          CELLS: ${{ needs.plan.outputs.cells }}
+        run: |
+          set -euo pipefail
+          mkdir -p combined
+          : > combined/summaries.txt
+          head_done=0
+          for cell in $(python3 -c "import json,os;print(' '.join(f\"{c['shard']}-s{c['stripe']}\" for c in json.loads(os.environ['CELLS'])))"); do
+            dir="stripes/golden-comprehensive-${cell}"
+            test -f "$dir/summary.txt" || { echo "MISSING ${cell} report" >&2; exit 1; }
+            cat "$dir/summary.txt" >> combined/summaries.txt
+            if [ "$head_done" -eq 0 ]; then
+              cat "$dir/results.tsv" > combined/results.tsv; head_done=1
+            else
+              tail -n +2 "$dir/results.tsv" >> combined/results.tsv
+            fi
+          done
+          {
+            echo "## golden comprehensive — combined (all six modes, full surface, width-sharded)"
+            echo '```'
+            cat combined/summaries.txt
+            echo '```'
+            echo "rows: $(($(wc -l < combined/results.tsv) - 1))"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Aggregate + commit the golden summary to results/golden/
+        run: |
+          set -euo pipefail
+          mkdir -p results/golden
+          # The raw per-input surface is ~56M rows (~4.7 GB) — far past GitHub's
+          # 100 MB file limit. Collapse the per-INPUT dimension into three honest
+          # outcome buckets per (function, width, scale, mode): ~15K rows, which
+          # drive every docs table (surface, per-mode, per-function) and the
+          # pass/fail counts the Precision page shows under each cell. The full
+          # per-input data stays the uploaded artifact below, not git.
+          python3 - <<'PY'
+          import collections
+          # Each row is one INPUT. Bucket its outcome into pass / fail / n-a:
+          #   PASS = a correctly-rounded result.
+          #   FAIL = the real correctness failures the (green) golden gate asserts
+          #          against (severity >= WrongMode): a mis-rounding, a wrong-mode
+          #          result, a library error, a timeout, a panic, a harness error.
+          #   n-a  = everything else — "skipped" (the tier can't represent the
+          #          cell / the subject doesn't expose it) and "non-real" /
+          #          "absent" / "value" (an input outside the function's domain,
+          #          e.g. acos of |x|>1 -> non-real). NEITHER pass nor fail.
+          # Keeping n-a as its own bucket (not folded into "bad") is the fix: the
+          # prior aggregate counted everything-but-"pass" as bad, so domain/skip
+          # inputs read as thousands of failures while the gate stayed green.
+          PASS = {"pass", "pass-oracle-limited"}
+          FAIL = {"mis-rounded", "wrong-mode", "error", "timeout", "panic",
+                  "harness-error"}
+          agg = collections.defaultdict(lambda: [0, 0, 0])  # (fn,w,s,mode)->[pass,fail,na]
+          with open("combined/results.tsv", encoding="utf-8") as f:
+              next(f, None)  # header
+              for line in f:
+                  c = line.rstrip("\n").split("\t")
+                  if len(c) < 6:
+                      continue
+                  a = agg[(c[1], c[2], c[3], c[4])]
+                  if c[5] in PASS:
+                      a[0] += 1
+                  elif c[5] in FAIL:
+                      a[1] += 1
+                  else:
+                      a[2] += 1
+          with open("results/golden/summary.tsv", "w", encoding="utf-8", newline="\n") as o:
+              o.write("function\twidth\tscale\tmode\tpassed\tfailed\tna\n")
+              for (fn, w, s, m), (p, fl, na) in sorted(agg.items()):
+                  o.write(f"{fn}\t{w}\t{s}\t{m}\t{p}\t{fl}\t{na}\n")
+          print(f"summary rows: {len(agg)}")
+          PY
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Re-render the docs that read this summary (the Precision surface renders
+          # straight from results/golden/) so the committed pages never lag the
+          # data — this is the self-heal: a refreshed summary AND its rendered page
+          # land in the SAME commit, keeping the docs-drift gate green. stdlib-only,
+          # no extra deps.
+          python3 scripts/render_docs.py
+          git add results/golden/summary.tsv
+          git add -u README.md docs/
+          if git diff --cached --quiet; then
+            echo "golden summary + docs unchanged — nothing to commit"
+            exit 0
+          fi
+          git commit -m "results(golden): refresh correctness summary + render Precision page"
+          # Incorporate any concurrent results/ self-commit (disjoint files) so
+          # the push isn't rejected non-fast-forward.
+          git pull --rebase origin "${{ github.ref_name }}" || true
+          git push origin "HEAD:${{ github.ref_name }}"
+
+      - name: Upload combined report
+        uses: actions/upload-artifact@v7
+        with:
+          name: golden-comprehensive-combined
+          path: combined/
+          if-no-files-found: error
+          retention-days: 14

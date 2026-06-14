@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! The [`Decimal`] trait — width-generic marker that requires the
 //! full surface (arithmetic + conversion + transcendentals + constants).
 //!
@@ -10,7 +13,7 @@
 //!   `ONE`, `MAX`, `MIN`, `multiplier()`) and reductions (`sum`,
 //!   `product`).
 //! - [`DecimalConvert`] — `from_bits` / `to_bits` / `scale`, the
-//!   integer bridges (`from_i32`, `to_int`, `to_int_with`), and the
+//!   to-integer bridges (`to_int`, `to_int_with`), and the
 //!   `std`-gated f64 / f32 bridge (`from_f64`, `from_f64_with`,
 //!   `to_f64`, `to_f32`).
 //! - [`DecimalTranscendental`] — the four-variant matrix on every
@@ -21,7 +24,7 @@
 //!
 //! Implemented automatically by a blanket impl, so any type that
 //! impls all four halves is `Decimal` for free. Every shipped width
-//! (`D9`, `D18`, `D38`, `D57`, `D76`, `D115`, `D153`, `D230`, `D307`,
+//! (`D18`, `D38`, `D57`, `D76`, `D115`, `D153`, `D230`, `D307`,
 //! `D462`, `D616`, `D924`, `D1232`) already satisfies the bound via
 //! the per-tier macros (`decl_decimal_basics!` for arithmetic +
 //! convert, `decl_decimal_consts!` for constants,
@@ -58,8 +61,9 @@
 //!   `const`-generic target `SCALE` parameter; const-generic trait
 //!   methods aren't stable. Use the inherent method on the concrete
 //!   type.
-//! - **`from_int`** takes a different source integer per width;
-//!   [`DecimalConvert::from_i32`] is the width-generic constructor.
+//! - **Integer construction** is the per-width `TryFrom<iN>` surface
+//!   (fallible — `ConvertError::Overflow` on scaling overflow); there
+//!   is no width-generic integer constructor on the trait.
 //! - **Joint kernels** (`sin_cos`, `sinh_cosh`) exist only on the
 //!   wide tiers; reach for them on the concrete type.
 
@@ -76,7 +80,7 @@ pub trait Decimal:
     DecimalArithmetic
     + DecimalConvert
     + crate::types::traits::transcendental::DecimalTranscendental
-    + crate::types::consts::DecimalConstants
+    + crate::types::traits::consts::DecimalConstants
 {
 }
 
@@ -84,6 +88,6 @@ impl<T> Decimal for T where
     T: DecimalArithmetic
         + DecimalConvert
         + crate::types::traits::transcendental::DecimalTranscendental
-        + crate::types::consts::DecimalConstants
+        + crate::types::traits::consts::DecimalConstants
 {
 }

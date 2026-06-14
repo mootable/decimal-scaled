@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Lossy (f64-bridge) trig methods for D38.
 //!
 //! Companion to `types/trig.rs`. The plain methods here are the
@@ -5,9 +8,8 @@
 //! fast set). When strict is on, the dispatcher in the
 //! _strict file shadows these.
 
-use crate::types::widths::D38;
 
-impl<const SCALE: u32> D38<SCALE> {
+impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     // ── Forward trig (radians input) ──────────────────────────────────
 
     /// Sine of `self`, where `self` is in radians.
@@ -407,35 +409,95 @@ impl<const SCALE: u32> D38<SCALE> {
 }
 
 #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
-impl<const SCALE: u32> D38<SCALE> {
+impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     /// Plain dispatcher: forwards to [`Self::sin_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn sin(self) -> Self { self.sin_fast() }
+    #[inline]
+    #[must_use]
+    pub fn sin(self) -> Self {
+        self.sin_fast()
+    }
     /// Plain dispatcher: forwards to [`Self::cos_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn cos(self) -> Self { self.cos_fast() }
+    #[inline]
+    #[must_use]
+    pub fn cos(self) -> Self {
+        self.cos_fast()
+    }
     /// Plain dispatcher: forwards to [`Self::tan_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn tan(self) -> Self { self.tan_fast() }
+    #[inline]
+    #[must_use]
+    pub fn tan(self) -> Self {
+        self.tan_fast()
+    }
     /// Plain dispatcher: forwards to [`Self::asin_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn asin(self) -> Self { self.asin_fast() }
+    #[inline]
+    #[must_use]
+    pub fn asin(self) -> Self {
+        self.asin_fast()
+    }
     /// Plain dispatcher: forwards to [`Self::acos_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn acos(self) -> Self { self.acos_fast() }
+    #[inline]
+    #[must_use]
+    pub fn acos(self) -> Self {
+        self.acos_fast()
+    }
     /// Plain dispatcher: forwards to [`Self::atan_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn atan(self) -> Self { self.atan_fast() }
+    #[inline]
+    #[must_use]
+    pub fn atan(self) -> Self {
+        self.atan_fast()
+    }
     /// Plain dispatcher: forwards to [`Self::atan2_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn atan2(self, other: Self) -> Self { self.atan2_fast(other) }
+    #[inline]
+    #[must_use]
+    pub fn atan2(self, other: Self) -> Self {
+        self.atan2_fast(other)
+    }
     /// Plain dispatcher: forwards to [`Self::sinh_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn sinh(self) -> Self { self.sinh_fast() }
+    #[inline]
+    #[must_use]
+    pub fn sinh(self) -> Self {
+        self.sinh_fast()
+    }
     /// Plain dispatcher: forwards to [`Self::cosh_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn cosh(self) -> Self { self.cosh_fast() }
+    #[inline]
+    #[must_use]
+    pub fn cosh(self) -> Self {
+        self.cosh_fast()
+    }
     /// Plain dispatcher: forwards to [`Self::tanh_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn tanh(self) -> Self { self.tanh_fast() }
+    #[inline]
+    #[must_use]
+    pub fn tanh(self) -> Self {
+        self.tanh_fast()
+    }
     /// Plain dispatcher: forwards to [`Self::asinh_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn asinh(self) -> Self { self.asinh_fast() }
+    #[inline]
+    #[must_use]
+    pub fn asinh(self) -> Self {
+        self.asinh_fast()
+    }
     /// Plain dispatcher: forwards to [`Self::acosh_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn acosh(self) -> Self { self.acosh_fast() }
+    #[inline]
+    #[must_use]
+    pub fn acosh(self) -> Self {
+        self.acosh_fast()
+    }
     /// Plain dispatcher: forwards to [`Self::atanh_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn atanh(self) -> Self { self.atanh_fast() }
+    #[inline]
+    #[must_use]
+    pub fn atanh(self) -> Self {
+        self.atanh_fast()
+    }
     /// Plain dispatcher: forwards to [`Self::to_degrees_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn to_degrees(self) -> Self { self.to_degrees_fast() }
+    #[inline]
+    #[must_use]
+    pub fn to_degrees(self) -> Self {
+        self.to_degrees_fast()
+    }
     /// Plain dispatcher: forwards to [`Self::to_radians_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn to_radians(self) -> Self { self.to_radians_fast() }
+    #[inline]
+    #[must_use]
+    pub fn to_radians(self) -> Self {
+        self.to_radians_fast()
+    }
 }

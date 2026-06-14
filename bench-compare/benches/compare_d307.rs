@@ -1,0 +1,14 @@
+//! Per-width branch-vs-prod compare bench for D307, fanned out over SCALE.
+//! Run: cargo bench --bench compare_d307           (all scales for this width)
+//!      cargo bench --bench compare_d307 -- s30    (just scale 30)
+//!
+//! Branch (`decimal_scaled::D307<S>`) vs prod (`prod::D307<S>`) across the
+//! shared public function surface, at each scale in this tier's scale set.
+//! See `compare_common.rs` for the macros + coverage notes.
+//!
+//! Scale set = {0, S/4, S/2, 3S/4, S-1} with S=307: [0, 76, 153, 230, 306].
+
+#[macro_use]
+mod compare_common;
+
+width_bench!("D307", D307, D307, [0, 76, 153, 230, 306]);

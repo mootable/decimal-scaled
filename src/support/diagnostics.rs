@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Diagnostic helpers for narrowing-overflow panics.
 //!
 //! Every strict transcendental kernel computes at a wider working
@@ -15,13 +18,13 @@
 //! The substring `"{method}: result out of range"` is held stable
 //! across crate versions so existing
 //! `#[should_panic(expected = "...")]` tests continue to match; the
-//! trailing `— SCALE={scale}` is the new diagnostic surface added
-//! to tell the caller which compile-time `SCALE` instantiation
+//! trailing `— SCALE={scale}` is the diagnostic surface that tells
+//! the caller which compile-time `SCALE` instantiation
 //! tripped the bound (the panic site otherwise can't identify which
 //! `Dxx<S>` it came from when the same code path serves many
 //! monomorphisations).
 //!
-//! For the deeper-diagnostic sites in `algos/*/borrow_d57.rs` we
+//! For the deeper-diagnostic sites in the `borrow_d57` module of `policy/trig.rs` we
 //! also include the offending wide-tier value inline — those
 //! wrappers have it in scope cheaply. The macro-emitted call sites
 //! in `macros/strict_transcendentals.rs` route through this helper

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Runtime-polymorphic façade over every concrete decimal width.
 //!
 //! `decimal-scaled` is built around the typed, monomorphised
@@ -16,8 +19,8 @@
 //!
 //! ```ignore
 //! use decimal_scaled::{D38, DynDecimal};
-//! let lhs: Box<dyn DynDecimal> = Box::new(D38::<2>::from_i32(150));
-//! let rhs: Box<dyn DynDecimal> = Box::new(D38::<5>::from_i32(2));
+//! let lhs: Box<dyn DynDecimal> = Box::new(D38::<2>::try_from(150_i32).unwrap());
+//! let rhs: Box<dyn DynDecimal> = Box::new(D38::<5>::try_from(2_i32).unwrap());
 //! let sum = lhs.add(&*rhs).expect("same width: D38");
 //! // sum is a D38 at the wider scale (5).
 //! ```
@@ -55,7 +58,7 @@
 //! # Scope
 //!
 //! The `dyn` feature ships impls for the narrow-tier widths only —
-//! [`D9`], [`D18`], [`D38`]. The wide and extra-wide tiers
+//! [`D18`], [`D38`]. The wide and extra-wide tiers
 //! (D57/D76/D115/D153/D230/D307/D462/D616/D924/D1232) are deliberately
 //! excluded: their per-scale monomorphisation footprint
 //! (`MAX_SCALE + 1` instantiations per op per width, up to 1233 for
@@ -65,13 +68,10 @@
 //! [`RawStorage`] enums still carry variants for the wider tiers so
 //! that the API is forward-compatible if those impls are added later.
 //!
-//! [`D9`]: crate::D9
 //! [`D18`]: crate::D18
 //! [`D38`]: crate::D38
 
 #![cfg(feature = "dyn")]
-
-extern crate alloc;
 
 use alloc::boxed::Box;
 use alloc::string::String;
@@ -94,8 +94,6 @@ use crate::support::rounding::RoundingMode;
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 #[non_exhaustive]
 pub enum DecimalWidth {
-    /// 32-bit storage; corresponds to [`crate::D9`].
-    D9,
     /// 64-bit storage; corresponds to [`crate::D18`].
     D18,
     /// 128-bit storage; corresponds to [`crate::D38`].
@@ -115,8 +113,8 @@ pub enum DecimalWidth {
     /// 768-bit storage; corresponds to [`crate::D230`]. Gated by `d230` / `wide`.
     #[cfg(any(feature = "d230", feature = "wide"))]
     D230,
-    /// 1024-bit storage; corresponds to [`crate::D307`]. Gated by `d307` / `wide` / `x-wide`.
-    #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+    /// 1024-bit storage; corresponds to [`crate::D307`]. Gated by `d307` / `wide`.
+    #[cfg(any(feature = "d307", feature = "wide"))]
     D307,
     /// 1536-bit storage; corresponds to [`crate::D462`]. Gated by `d462` / `x-wide`.
     #[cfg(any(feature = "d462", feature = "x-wide"))]
@@ -141,42 +139,40 @@ pub enum DecimalWidth {
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub enum RawStorage {
-    /// 32-bit signed integer — D9.
-    I32(i32),
     /// 64-bit signed integer — D18.
     I64(i64),
     /// 128-bit signed integer — D38.
     I128(i128),
     /// 192-bit signed integer — D57. Gated by `d57` / `wide`.
     #[cfg(any(feature = "d57", feature = "wide"))]
-    Int192(crate::wide_int::Int192),
+    Int192(crate::int::types::Int<3>),
     /// 256-bit signed integer — D76. Gated by `d76` / `wide`.
     #[cfg(any(feature = "d76", feature = "wide"))]
-    Int256(crate::wide_int::Int256),
+    Int256(crate::int::types::Int<4>),
     /// 384-bit signed integer — D115. Gated by `d115` / `wide`.
     #[cfg(any(feature = "d115", feature = "wide"))]
-    Int384(crate::wide_int::Int384),
+    Int384(crate::int::types::Int<6>),
     /// 512-bit signed integer — D153. Gated by `d153` / `wide`.
     #[cfg(any(feature = "d153", feature = "wide"))]
-    Int512(crate::wide_int::Int512),
+    Int512(crate::int::types::Int<8>),
     /// 768-bit signed integer — D230. Gated by `d230` / `wide`.
     #[cfg(any(feature = "d230", feature = "wide"))]
-    Int768(crate::wide_int::Int768),
-    /// 1024-bit signed integer — D307. Gated by `d307` / `wide` / `x-wide`.
-    #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-    Int1024(crate::wide_int::Int1024),
+    Int768(crate::int::types::Int<12>),
+    /// 1024-bit signed integer — D307. Gated by `d307` / `wide`.
+    #[cfg(any(feature = "d307", feature = "wide"))]
+    Int1024(crate::int::types::Int<16>),
     /// 1536-bit signed integer — D462. Gated by `d462` / `x-wide`.
     #[cfg(any(feature = "d462", feature = "x-wide"))]
-    Int1536(crate::wide_int::Int1536),
+    Int1536(crate::int::types::Int<24>),
     /// 2048-bit signed integer — D616. Gated by `d616` / `x-wide`.
     #[cfg(any(feature = "d616", feature = "x-wide"))]
-    Int2048(crate::wide_int::Int2048),
+    Int2048(crate::int::types::Int<32>),
     /// 3072-bit signed integer — D924. Gated by `d924` / `xx-wide`.
     #[cfg(any(feature = "d924", feature = "xx-wide"))]
-    Int3072(crate::wide_int::Int3072),
+    Int3072(crate::int::types::Int<48>),
     /// 4096-bit signed integer — D1232. Gated by `d1232` / `xx-wide`.
     #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-    Int4096(crate::wide_int::Int4096),
+    Int4096(crate::int::types::Int<64>),
 }
 
 /// Object-safe, width-erased view of a decimal value.
@@ -264,11 +260,8 @@ pub trait DynDecimal: 'static {
     fn rescale_to(&self, target_scale: u32) -> Option<Box<dyn DynDecimal>>;
 
     /// Rescale with an explicit rounding mode. See [`Self::rescale_to`].
-    fn rescale_to_with(
-        &self,
-        target_scale: u32,
-        mode: RoundingMode,
-    ) -> Option<Box<dyn DynDecimal>>;
+    fn rescale_to_with(&self, target_scale: u32, mode: RoundingMode)
+    -> Option<Box<dyn DynDecimal>>;
 
     // ── Comparison ──────────────────────────────────────────────────
 
@@ -302,17 +295,12 @@ pub trait DynDecimal: 'static {
 // through to `None` (or `false` for `eq_dyn`).
 
 crate::macros::dyn_bridge::decl_decimal_dyn_impl!(
-    D9, i32, D9, I32, 9,
-    scales = [0 1 2 3 4 5 6 7 8 9]
-);
-
-crate::macros::dyn_bridge::decl_decimal_dyn_impl!(
-    D18, i64, D18, I64, 18,
+    D18, crate::int::types::Int<1>, D18, I64, i64, 18,
     scales = [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18]
 );
 
 crate::macros::dyn_bridge::decl_decimal_dyn_impl!(
-    D38, i128, D38, I128, 38,
+    D38, crate::int::types::Int<2>, D38, I128, i128, 38,
     scales = [
         0 1 2 3 4 5 6 7 8 9
         10 11 12 13 14 15 16 17 18 19

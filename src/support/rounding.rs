@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Rounding-mode selector for scale-narrowing operations.
 //!
 //! Passed to every `*_with(mode)` sibling on every decimal width —
@@ -172,9 +175,7 @@ pub(crate) fn should_bump(
 pub(crate) const fn is_nearest_mode(mode: RoundingMode) -> bool {
     matches!(
         mode,
-        RoundingMode::HalfToEven
-            | RoundingMode::HalfAwayFromZero
-            | RoundingMode::HalfTowardZero
+        RoundingMode::HalfToEven | RoundingMode::HalfAwayFromZero | RoundingMode::HalfTowardZero
     )
 }
 
@@ -203,17 +204,9 @@ pub(crate) const fn is_nearest_mode(mode: RoundingMode) -> bool {
 /// caller guarantees `0 < |raw| <= threshold`, the band where the cubic
 /// stays under one ULP.
 #[inline]
-pub(crate) fn tiny_odd_compressing_directed<T>(
-    raw: T,
-    zero: T,
-    one: T,
-    mode: RoundingMode,
-) -> T
+pub(crate) fn tiny_odd_compressing_directed<T>(raw: T, zero: T, one: T, mode: RoundingMode) -> T
 where
-    T: Copy
-        + PartialOrd
-        + ::core::ops::Add<Output = T>
-        + ::core::ops::Sub<Output = T>,
+    T: Copy + PartialOrd + ::core::ops::Add<Output = T> + ::core::ops::Sub<Output = T>,
 {
     if is_nearest_mode(mode) {
         return raw;
@@ -264,17 +257,9 @@ where
 /// - `Floor` (toward −∞): `raw` if positive, `raw − 1` if negative;
 /// - `Ceiling` (toward +∞): `raw + 1` if positive, `raw` if negative.
 #[inline]
-pub(crate) fn tiny_odd_expanding_directed<T>(
-    raw: T,
-    zero: T,
-    one: T,
-    mode: RoundingMode,
-) -> T
+pub(crate) fn tiny_odd_expanding_directed<T>(raw: T, zero: T, one: T, mode: RoundingMode) -> T
 where
-    T: Copy
-        + PartialOrd
-        + ::core::ops::Add<Output = T>
-        + ::core::ops::Sub<Output = T>,
+    T: Copy + PartialOrd + ::core::ops::Add<Output = T> + ::core::ops::Sub<Output = T>,
 {
     if is_nearest_mode(mode) {
         return raw;
@@ -329,9 +314,131 @@ pub(crate) fn apply_rounding(raw: i128, divisor: i128, mode: RoundingMode) -> i1
     let result_positive = (raw < 0) == (divisor < 0);
 
     if should_bump(mode, cmp_r, q_is_odd, result_positive) {
-        if result_positive { quotient + 1 } else { quotient - 1 }
+        if result_positive {
+            quotient + 1
+        } else {
+            quotient - 1
+        }
     } else {
         quotient
+    }
+}
+
+/// `2^52` — the threshold at or above which every finite `f64` is
+/// already an exact integer (the mantissa can no longer represent a
+/// fractional bit). Used by the libm-free `f64` rounding helpers to
+/// short-circuit large magnitudes, which also keeps the `as i128`
+/// truncation inside `i128` range (`2^52 < i128::MAX`).
+const F64_INTEGER_THRESHOLD: f64 = 9_007_199_254_740_992.0_f64;
+
+/// Truncate an `f64` toward zero, libm-free.
+///
+/// Equivalent to [`f64::trunc`] but built from arithmetic and `as`
+/// casts only, so it is available in `no_std` without `libm`. For
+/// magnitudes at or above `2^52` (already integral) and for non-finite
+/// inputs the value is returned unchanged; otherwise the integral part
+/// is recovered via an `i128` round-trip, which is exact in that range.
+/// The negative-zero sign is preserved to match [`f64::trunc`] bit-for-bit.
+#[inline]
+pub(crate) fn trunc_f64(x: f64) -> f64 {
+    if x.is_nan() {
+        return x;
+    }
+    let magnitude = if x < 0.0 { -x } else { x };
+    if magnitude >= F64_INTEGER_THRESHOLD {
+        // NaN is already returned above, so `>=` is the exact complement of
+        // `< THRESHOLD` here: already-integral / too-large magnitudes pass
+        // through unchanged.
+        return x;
+    }
+    let truncated = x as i128 as f64;
+    if truncated == 0.0 && x.is_sign_negative() {
+        -0.0
+    } else {
+        truncated
+    }
+}
+
+/// Round an `f64` toward negative infinity, libm-free. Equivalent to
+/// [`f64::floor`]: drop to the truncated value, then step down by one
+/// when truncation rounded a negative value up toward zero.
+#[inline]
+pub(crate) fn floor_f64(x: f64) -> f64 {
+    let truncated = trunc_f64(x);
+    if truncated > x {
+        truncated - 1.0
+    } else {
+        truncated
+    }
+}
+
+/// Round an `f64` toward positive infinity, libm-free. Equivalent to
+/// [`f64::ceil`]: the mirror of [`floor_f64`].
+#[inline]
+pub(crate) fn ceil_f64(x: f64) -> f64 {
+    let truncated = trunc_f64(x);
+    if truncated < x {
+        truncated + 1.0
+    } else {
+        truncated
+    }
+}
+
+/// Round an `f64` to the nearest integer, ties away from zero, libm-free.
+/// Equivalent to [`f64::round`]: a fractional part with magnitude `>= 0.5`
+/// steps the truncated value one away from zero.
+#[inline]
+pub(crate) fn round_half_away_f64(x: f64) -> f64 {
+    let truncated = trunc_f64(x);
+    let fraction = x - truncated;
+    if fraction >= 0.5 {
+        truncated + 1.0
+    } else if fraction <= -0.5 {
+        truncated - 1.0
+    } else {
+        truncated
+    }
+}
+
+/// Round an `f64` to the nearest integer, ties to even, libm-free.
+/// Equivalent to [`f64::round_ties_even`]: a fractional part strictly
+/// past `0.5` in magnitude steps one away from zero; an exact half steps
+/// only when the truncated value is odd, landing on the even neighbour.
+#[inline]
+pub(crate) fn round_half_even_f64(x: f64) -> f64 {
+    let truncated = trunc_f64(x);
+    let fraction = x - truncated;
+    if fraction > 0.5 {
+        truncated + 1.0
+    } else if fraction < -0.5 {
+        truncated - 1.0
+    } else if fraction == 0.5 {
+        if (truncated as i128) & 1 == 0 {
+            truncated
+        } else {
+            truncated + 1.0
+        }
+    } else if fraction == -0.5 {
+        if (truncated as i128) & 1 == 0 {
+            truncated
+        } else {
+            truncated - 1.0
+        }
+    } else {
+        truncated
+    }
+}
+
+/// Round an `f64` to the nearest integer, ties toward zero, libm-free.
+/// Reproduces the previous `std` formulation
+/// (`(x - 0.5).ceil()` for `x >= 0`, `(x + 0.5).floor()` otherwise)
+/// using the libm-free [`ceil_f64`] / [`floor_f64`].
+#[inline]
+pub(crate) fn round_half_toward_zero_f64(x: f64) -> f64 {
+    if x >= 0.0 {
+        ceil_f64(x - 0.5)
+    } else {
+        floor_f64(x + 0.5)
     }
 }
 
@@ -341,10 +448,8 @@ pub(crate) fn apply_rounding(raw: i128, divisor: i128, mode: RoundingMode) -> i1
 /// default IEEE-754 rounding to short-circuit themselves under a
 /// non-default rounding feature build.
 #[cfg(test)]
-pub(crate) const DEFAULT_IS_HALF_TO_EVEN: bool = matches!(
-    DEFAULT_ROUNDING_MODE,
-    RoundingMode::HalfToEven
-);
+pub(crate) const DEFAULT_IS_HALF_TO_EVEN: bool =
+    matches!(DEFAULT_ROUNDING_MODE, RoundingMode::HalfToEven);
 
 #[cfg(test)]
 mod tests {
@@ -375,14 +480,14 @@ mod tests {
     #[test]
     fn half_to_even_ties() {
         let m = RoundingMode::HalfToEven;
-        assert_eq!(apply_rounding(5, 10, m), 0);     // 0.5 -> 0 (even)
-        assert_eq!(apply_rounding(15, 10, m), 2);    // 1.5 -> 2
-        assert_eq!(apply_rounding(25, 10, m), 2);    // 2.5 -> 2 (even)
-        assert_eq!(apply_rounding(35, 10, m), 4);    // 3.5 -> 4
-        assert_eq!(apply_rounding(-5, 10, m), 0);    // -0.5 -> 0
-        assert_eq!(apply_rounding(-15, 10, m), -2);  // -1.5 -> -2
-        assert_eq!(apply_rounding(-25, 10, m), -2);  // -2.5 -> -2
-        assert_eq!(apply_rounding(-35, 10, m), -4);  // -3.5 -> -4
+        assert_eq!(apply_rounding(5, 10, m), 0); // 0.5 -> 0 (even)
+        assert_eq!(apply_rounding(15, 10, m), 2); // 1.5 -> 2
+        assert_eq!(apply_rounding(25, 10, m), 2); // 2.5 -> 2 (even)
+        assert_eq!(apply_rounding(35, 10, m), 4); // 3.5 -> 4
+        assert_eq!(apply_rounding(-5, 10, m), 0); // -0.5 -> 0
+        assert_eq!(apply_rounding(-15, 10, m), -2); // -1.5 -> -2
+        assert_eq!(apply_rounding(-25, 10, m), -2); // -2.5 -> -2
+        assert_eq!(apply_rounding(-35, 10, m), -4); // -3.5 -> -4
     }
 
     /// Half-away-from-zero: ties go away from zero.
@@ -460,4 +565,3 @@ mod tests {
         }
     }
 }
-

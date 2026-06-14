@@ -1,16 +1,15 @@
-//! Mathematical constants (`pi`, `e`, `ln(2)`, …).
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+//! Mathematical constants (`pi`, `e`, and more).
 //!
-//! The [`DecimalConstants`] trait carries the public surface; per-width
-//! impls live in [`d38`] (narrow tier — D9 / D18 / D38) and [`wide`]
-//! (wide tier — D57 and above).
+//! The [`DecimalConstants`] trait carries the public surface; a single
+//! generic impl in [`decimal_constants`] serves every width (narrow and wide),
+//! sourced from the unified per-scale table in [`crate::consts`].
 
-pub(crate) mod d38;
-pub(crate) mod wide;
+pub(crate) mod decimal_constants;
 
-pub use d38::DecimalConstants;
-
-// Re-export every `pub(crate)` helper from `d38` (the narrow-tier
-// constant tables) so the macros emitted by `macros/consts.rs` can
-// reach them through `$crate::types::consts::<name>` from the
-// per-width impl invocations.
-pub(crate) use d38::*;
+// DecimalConstants is defined in types/traits/consts.rs; the impl lives in
+// decimal_constants.rs. Re-export here to preserve the crate::types::consts
+// path for in-crate consumers that still import from this module.
+pub use crate::types::traits::DecimalConstants;

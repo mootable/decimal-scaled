@@ -29,7 +29,6 @@ The number in each `D<N>` type name is **the maximum number of all-nines base-10
 
 | Type       | Storage                | `MAX_SCALE` | Required feature       |
 |------------|------------------------|------------:|------------------------|
-| `D9<S>`    | `i32`                  |    8        | always available       |
 | `D18<S>`   | `i64`                  |   17        | always available       |
 | `D38<S>`   | `i128`                 |   37        | always available       |
 | `D57<S>`   | in-tree `Int192`       |   56        | `d57`  / `wide`        |
@@ -94,7 +93,7 @@ let e = D38s12::from_int(42);
 let f = D38s12::from_f64(1.5);
 ```
 
-Each width has its matching macro (`d9!`, `d18!`, `d38!`, `d57!`, `d76!`, `d115!`, `d153!`, `d230!`, `d307!`, `d462!`, `d616!`, `d924!`, `d1232!`) plus per-scale wrappers (`d38s12!`, `d18s2!`, …). Long-tail scales remain reachable via `dN!(value, scale N)`.
+Each width has its matching macro (`d18!`, `d38!`, `d57!`, `d76!`, `d115!`, `d153!`, `d230!`, `d307!`, `d462!`, `d616!`, `d924!`, `d1232!`) plus per-scale wrappers (`d38s12!`, `d18s2!`, …). Long-tail scales remain reachable via `dN!(value, scale N)`.
 
 ## Arithmetic
 
@@ -224,7 +223,7 @@ The string form is bit-faithful and round-trips exactly. The deserializer reject
 | `alloc` | ✓ | String formatting / parsing |
 | `serde` | ✓ | `Serialize` / `Deserialize` on every width |
 | `strict` | ✓ | Plain `*` dispatches to `*_strict`; `no_std`-compatible |
-| `macros` | ✗ | `d9!` … `d1232!` proc-macros + per-scale wrappers |
+| `macros` | ✗ | `d18!` … `d1232!` proc-macros + per-scale wrappers |
 | `fast` | ✗ | Plain `*` dispatches to `*_fast` (overridden by `strict` when both are set) |
 | `dyn` | ✗ | Object-safe `DynDecimal` trait + `DecimalWidth` enum (heap boxing per op) |
 | `wide` | ✗ | Enables D57 / D76 / D115 / D153 / D230 / D307 (individual `d57` … `d307` flags also exist) |

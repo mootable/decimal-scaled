@@ -1,208 +1,119 @@
-# Comparisons with other numeric types
+# Comparisons
 
-Every numeric type makes a choice about which numbers it can represent
-exactly. There is no universal answer — the right choice depends on
-where the numbers come from.
+<div class="bench-header" markdown>
+<div markdown>
 
-## The binary fraction problem
+How `decimal-scaled` compares on **speed** against other fixed-precision Rust decimal
+crates, timed on the same golden set. Each peer works at a fixed precision, so
+`decimal-scaled` is timed at four matching precisions — **17, 28, 37 and 152 fractional
+digits** (see [Effective precision per library](#effective-precision-per-library) below)
+— and each peer is read against the `decimal-scaled` line doing a similar amount of
+work. Each function has a chart: `decimal-scaled` as one line per comparison precision
+across its width tiers (with a shaded min–max band), and each peer as a single **marker
+at its significant-digit capacity** (with a min–max whisker). Generated from CI
+(`lib-perf`); refreshed on each release PR. The per-function tables and graphs are split
+across **[Arithmetic](comparisons/arithmetic.md)**,
+**[Roots and Exponents](comparisons/roots-and-exponents.md)**, and
+**[Trigonometry](comparisons/trigonometry.md)**.
 
-Standard floating-point types (`f32`, `f64`, `f128`) store values as:
+</div>
 
-```
-value = mantissa × 2^exponent
-```
+<!-- BEGIN GENERATED:comparisons:units -->
+| Unit | In nanoseconds |
+| :-- | --: |
+| ns | 10⁰ ns |
+| µs | 10³ ns |
+| ms | 10⁶ ns |
+<!-- END GENERATED:comparisons:units -->
 
-The fractional part of any stored number must be expressible as a sum
-of negative powers of two: ½, ¼, ⅛, 1/16, …
+</div>
 
-The number `1.1` cannot be expressed this way. In binary it is:
+## Effective precision per library
 
-```
-1.0001100110011001100110011001100110011001100110011...  (repeating forever)
-```
+`decimal-scaled` supports any scale up to each tier's maximum; this comparison times it
+at **four fixed precisions**, one per peer-precision level, so each peer is matched
+against `decimal-scaled` doing a comparable amount of work. Each line is drawn across
+every width that can hold that scale.
 
-A 64-bit float truncates this at 52 mantissa bits. The value actually
-stored is:
+| Comparison scale | Matches |
+| :-- | :-- |
+| `@17` | the narrow D18 ceiling — 18 significant digits |
+| `@28` | `rust_decimal` — 28 significant digits |
+| `@37` | the D38 ceiling = `decimal-rs` / `g_math` — 38 significant digits |
+| `@152` | the D153 ceiling ≈ `fastnum` — ~154 significant digits |
 
-```
-1.100000000000000088817841970012523233890533447265625
-```
+**The libraries don't all measure precision the same way.** `decimal-scaled` and
+`g_math` are *fixed-point* — precision is a fixed number of *fractional* digits. The
+others cap *total significant figures*, so their fractional-digit count depends on the
+size of the integer part.
 
-This is not a bug — it is an unavoidable consequence of the
-representation. The same applies to `0.1`, `0.2`, `0.3`, and most
-everyday decimal fractions. This is why `0.1 + 0.2 == 0.3` is `false`
-in every binary floating-point system.
+| Library | Precision model | Working precision |
+| :-- | :-- | :-- |
+| `decimal-scaled` | Fixed-point — fixed fractional digits (the scale) | the four comparison scales: 17 / 28 / 37 / 152 |
+| `g_math` | Fixed-point — Q128.128 | ~38 fractional digits |
+| `rust_decimal` | Significant-figure, input-driven scale | up to 28 significant digits |
+| `decimal-rs` | Significant-figure, input-driven scale | up to 38 significant digits |
+| `fastnum` (D512) | Significant-figure, fixed coefficient | up to ~154 significant digits |
 
-## The binary fixed-point alternative
+`bigdecimal` and `dashu-float` are **not timed here**: their working width is driven by
+the input values rather than a fixed capacity, so they have no single marker position on
+a width axis. Recovering their per-call operating width is deferred to a later release.
 
-The `fixed` crate (`I64F64`, `I32F32`, etc.) uses binary fixed-point: a
-fixed number of bits for the integer part and a fixed number of bits
-for the fractional part. A value is stored as:
+**Integer in, fractional out.** How much work a call does is set by how many output
+digits the library produces, which depends on the operation:
 
-```
-value = raw_integer × 2^(-FRAC_BITS)
-```
+- **Arithmetic** (`add`, `sub`, `mul`, `rem`) terminates — an integer in gives an
+  integer out and no library adds fractional digits, so the work is set by the size of
+  the operands. For `decimal-scaled` that work is set by the *tier width*, not the
+  scale, so its four scale-lines nearly overlap on the arithmetic pages.
+- **Transcendentals and division** don't terminate — even an integer input gives an
+  irrational or repeating result, so each library produces fractional digits up to its
+  *own* working precision (the table above), and `decimal-scaled`'s cost rises with the
+  comparison scale. That is why the scale-lines fan apart on those pages, and why each
+  peer is read against the `decimal-scaled` line nearest its precision.
 
-This eliminates the rounding from exponent adjustments, but the
-representable fractions are still powers of two. `I64F64` cannot
-represent `0.1` exactly either. It excels at signal processing, physics
-simulations, and anywhere numbers arrive as binary data or are
-generated by mathematical operations.
+**So how to read the timings.** At a matching precision `decimal-scaled` does
+like-for-like *work* against each peer. What it does **not** equalise is *storage*: a
+`decimal-scaled` value keeps its full tier width — D1232 is a 1232-digit fixed type —
+even when only a few fractional digits are in play, so the wide tiers cost more per call
+than a small-coefficient library doing the same maths. A peer producing fewer digits
+than the matching line is doing **less work**, not the same work faster.
 
-## Base-10 fixed-point: filling the gap
+## Input distribution
 
-`decimal-scaled` uses base-10 fixed-point:
+The table below characterises the golden inputs each comparison runs over — per
+function, how many input values it exercises and how their fractional- and
+significant-digit counts are spread, plus the share that are exact integers (scale 0).
 
-```
-value = raw_integer × 10^(-SCALE)
-```
-
-With `SCALE = 12`, the number `1.1` is stored as the integer
-`1_100_000_000_000`. It is exact. Every number a human can write with
-up to `SCALE` decimal digits is represented exactly. The tradeoff is
-that numbers like `1/3` or `π` still cannot be represented exactly —
-no finite representation can hold every number. The question is always
-*which* numbers you need to be exact.
-
-## Choosing the right number space
-
-All numeric types have a finite number space. The choice is which
-region of the real line to cover densely and which values to round.
-
-| System | Decimal places | Exact for | Rounds | Best suited for |
-|---|---|---|---|---|
-| `f64` | dynamic (binary exponent, not decimal) | powers-of-2 fractions | decimal fractions like 0.1 | scientific computation, computer-generated values |
-| `f128` | dynamic (binary exponent, not decimal) | powers-of-2 fractions (more precision) | decimal fractions | high-precision scientific work |
-| `fixed::I64F64` | fixed (64 binary fractional bits, not decimal) | binary fixed fractions | decimal fractions | digital signal processing, physics, binary data |
-| `rust_decimal` | variable per value (0–28, stored alongside each number) | decimal fractions up to 28 digits | repeating decimals | finance, variable scale |
-| `bigdecimal` | variable per value (unbounded, heap-allocated) | any terminating decimal | repeating decimals | arbitrary-precision decimal work |
-| `D38<S>` (this crate) | **fixed to `S` at compile time** | decimal fractions up to `S` digits | repeating decimals | finance, computer-aided design, human-entered values |
-
-**Use `decimal-scaled` when:**
-
-- Values are entered by humans as decimal strings (prices, measurements, quantities)
-- You need deterministic, platform-identical results across every machine
-- The scale is known at compile time and you want zero-cost const-generic specialisation
-- You need `no_std` compatibility
-- You want a single canonical representation per value (no normalisation step)
-
-**Use `f64` or `f128` when:**
-
-- Values come from sensors, physics engines, or mathematical operations
-- The number space is continuous and decimal fractions are not special
-- You need the dynamic range of [IEEE 754](https://en.wikipedia.org/wiki/IEEE_754) binary floating-point (from ~10⁻³⁰⁸ to ~10³⁰⁸)
-
-**Use `fixed` when:**
-
-- Values are in a known integer-and-fraction format from binary protocols
-- You are doing digital signal processing or embedded arithmetic where binary fractions are natural
-- You need the best throughput on platforms without hardware decimal support
-
-**Use `rust_decimal` when:**
-
-- Scale varies between values (e.g. mixing 0.1 and 0.001 in the same collection)
-- You need up to 28 significant decimal digits
-- You are happy to carry a per-value scale byte and pay normalisation cost on equality/hash
-
-**Use `bigdecimal` when:**
-
-- Precision requirements are unbounded or unknown at compile time
-- Throughput is not a concern
-
-## Numeric comparison table
-
-| Type                           | Storage | Base | `0.1` exact | `1.1` exact | Range | Accuracy (error bound) | `no_std` |
-|--------------------------------|---|---|---|---|---|---|---|
-| `f32`                          | 32-bit IEEE 754 | 2 | No | No | ~±3.4 × 10³⁸ | basic ops: ≤ 0.5 [ULP](https://en.wikipedia.org/wiki/Unit_in_the_last_place) (IEEE 754); transcendentals: libm-defined, not guaranteed | Yes |
-| `f64`                          | 64-bit IEEE 754 | 2 | No | No | ~±1.8 × 10³⁰⁸ | basic ops: ≤ 0.5 ULP (IEEE 754); transcendentals: libm-defined, not guaranteed | Yes |
-| `f128`                         | 128-bit IEEE 754 | 2 | No | No | ~±1.2 × 10⁴⁹³² | basic ops: ≤ 0.5 ULP (IEEE 754); transcendentals: libm-defined, not guaranteed | Partial |
-| `fixed::I64F64`                | 128-bit binary fixed | 2 | No | No | ~±9.2 × 10¹⁸ | add/sub: exact; mul/div: ≤ 1 ULP; no transcendentals | Yes |
-| `fixed::I32F32`                | 64-bit binary fixed | 2 | No | No | ~±2.1 × 10⁹ | add/sub: exact; mul/div: ≤ 1 ULP; no transcendentals | Yes |
-| `rust_decimal`                 | 96-bit + per-value scale (0..=28) | 10 | Yes | Yes | ±7.9 × 10²⁸ | add/sub: exact at common scale; mul/div: ≤ 1 ULP; transcendentals: software, **not** correctly rounded | Yes |
-| `bigdecimal`                   | heap-allocated arbitrary precision | 10 | Yes | Yes | Unbounded | exact at the configured precision; transcendentals: limited | No |
-| `D38<S>` (this)                | 128-bit integer, `S ∈ 0..=37` at compile time | 10 | Yes | Yes | ±i128::MAX / 10ˢ | add/sub: **exact**; mul/div: ≤ 1 ULP; **strict transcendentals: ≤ 0.5 ULP (correctly rounded)** | Yes |
-| `D76<S>` / `D153<S>` / `D307<S>` (this, `wide`) | 256 / 512 / 1024-bit integer, `S` up to 75 / 152 / 306 | 10 | Yes | Yes | wider, S-dependent | same accuracy as `D38<S>` | Yes |
-
-The accuracy column gives the error bound on computed results, in
-[ULPs](https://en.wikipedia.org/wiki/Unit_in_the_last_place) (units in
-the last place). A 0.5 ULP bound — "correctly rounded" — is the
-IEEE 754 round-to-nearest contract and the strongest accuracy
-guarantee a finite numeric type can give. The floats meet it for basic
-arithmetic but not for transcendentals; `decimal-scaled`'s strict
-transcendentals meet it for transcendentals as well, which is the
-capability the alternatives do not offer. The position of the ULP —
-the absolute size of `1 ULP` — is the type's *scale*: for `f64` it's a
-relative ~2⁻⁵² of the value's magnitude, for `D38<S>` it's exactly
-`10⁻ˢ` at every value, fixed at compile time.
-
-## Hash and equality contracts
-
-A well-behaved numeric type must satisfy: if `a == b` then
-`hash(a) == hash(b)`. The way different types handle this for values
-like `1.1` and `1.10` varies significantly.
-
-| Type | `1.10 == 1.1`? | `hash(1.10) == hash(1.1)`? | `Hash` implemented? | How |
-|---|---|---|---|---|
-| `f32` / `f64` | Yes (same bit pattern) | N/A | No - Not-a-Number breaks the contract | - |
-| `f128` | Yes (same bit pattern) | N/A | No | - |
-| `fixed::I64F64` | Yes (same binary approximation) | Yes | Yes | structural (one representation) |
-| `rust_decimal` | Yes | Yes | Yes | normalises trailing zeros at comparison and hash time |
-| `bigdecimal` | Yes | Yes | Yes | normalises at comparison and hash time |
-| `D38<S>` (this) | Yes | Yes | Yes | structural - scale is fixed, one bit pattern per value |
-
-`f32`, `f64`, and `f128` do not implement `Hash` in the Rust standard
-library because Not-a-Number values are not equal to themselves
-(`NaN != NaN`) while a structural hash would make all such values
-collide — the contract cannot be satisfied without special-casing.
-
-For `rust_decimal` and `bigdecimal`, the normalisation is correct but
-carries a runtime cost on every comparison and hash call, and it means
-the stored representation is not canonical — you cannot memcmp two
-values.
-
-`D38<S>` derives `Hash`, `Eq`, and `Ord` directly from `i128`. Because
-the scale is fixed at compile time there is exactly one `i128` value
-per logical number. `1.10` and `1.1` parsed via `FromStr` both produce
-`D38s12(1_100_000_000_000)` — the same bit pattern — so equality and
-hashing are a single integer comparison with no runtime normalisation.
-
-## Differences from `fixed`
-
-The `fixed` crate's `I64F64` has 64 bits of integer and 64 bits of
-binary fraction. Its least significant bit is 2⁻⁶⁴ ≈ 5.4 × 10⁻²⁰, and
-its maximum value is 2⁶³ − 1 ≈ 9.2 × 10¹⁸.
-
-`D38<20>` has a least significant decimal digit of 10⁻²⁰ and a maximum
-value of i128::MAX / 10²⁰ ≈ 1.7 × 10¹⁸ model units. The two types offer
-comparable precision and range in this configuration, but with
-opposite trade-offs: `I64F64` represents its fractional part in binary
-(exact for powers of two, rounded for decimal fractions), while
-`D38<20>` represents it in decimal (exact for decimal fractions,
-rounded for fractions like 1/3).
-
-For human-scale decimal values `D38` gives decimal-exact results with
-no rounding on input or output. For values derived from binary
-arithmetic or mathematical operations, `I64F64` avoids the
-binary-to-decimal rounding boundary entirely.
-
-## Transcendental accuracy
-
-A *correctly rounded* result is the exact mathematical value rounded
-to the nearest representable number — i.e. the error is at most half a
-[ULP](https://en.wikipedia.org/wiki/Unit_in_the_last_place). It is the
-strongest accuracy guarantee a finite type can give, and the
-capability the alternatives below do not offer:
-
-| Type | Transcendentals | Correctly rounded to 0.5 ULP | Platform-deterministic |
-|---|---|---|---|
-| `f32` / `f64` (platform libm) | yes | no — `libm` is not guaranteed correctly rounded | no |
-| `fixed` (`I64F64`, …) | none | — | — |
-| `bigdecimal` | none | — | — |
-| `rust_decimal` (`MathematicalOps`) | yes | no — accurate, but not to the last place | yes |
-| `decimal-scaled` — fast (`f64` bridge, opt-in) | yes | no — inherits `f64` | no |
-| `decimal-scaled` — **strict** (default, `*_strict`) | yes | **yes — within 0.5 ULP** | **yes** |
-
-For series functions the strict form costs ~700× the fast bridge;
-`sqrt_strict` is the exception — algebraic, so it ties the fast form.
-Full head-to-head measurements against `bnum`, `ruint`, `rust_decimal`,
-and `fixed` are in [`benchmarks.md`](benchmarks.md).
+<!-- BEGIN GENERATED:comparisons:inputs -->
+| Function | Inputs | Fractional digits (min/mean/max) | Significant digits (min/mean/max) | % integer |
+| :-- | --: | :-- | :-- | --: |
+| `add` | 160 | 0 / 6.8 / 28 | 0 / 22.8 / 28 | 61% |
+| `div` | 132 | 0 / 2.8 / 26 | 1 / 12.9 / 28 | 86% |
+| `mul` | 272 | 0 / 31.1 / 642 | 1 / 12.9 / 28 | 64% |
+| `rem` | 130 | 0 / 2.9 / 26 | 1 / 13.4 / 28 | 85% |
+| `sub` | 160 | 0 / 6.8 / 28 | 0 / 22.8 / 28 | 61% |
+| `cbrt` | 5,680 | 0 / 14.1 / 1231 | 0 / 22.5 / 28 | 42% |
+| `exp` | 4,636 | 0 / 23.2 / 1231 | 0 / 21.3 / 28 | 9% |
+| `exp2` | 4,725 | 0 / 22.5 / 1231 | 0 / 20.7 / 28 | 12% |
+| `hypot` | 260 | 0 / 3.9 / 27 | 0 / 16.4 / 28 | 79% |
+| `ln` | 5,051 | 0 / 17.7 / 924 | 1 / 21.6 / 119 | 17% |
+| `log` | 3,292 | 0 / 15.6 / 31 | 1 / 18.1 / 28 | 20% |
+| `log10` | 5,264 | 0 / 17.7 / 924 | 1 / 22.2 / 1232 | 17% |
+| `log2` | 5,034 | 0 / 17.2 / 924 | 1 / 21.2 / 28 | 19% |
+| `powf` | 8,046 | 0 / 19.1 / 31 | 0 / 20.3 / 28 | 14% |
+| `sqrt` | 5,599 | 0 / 12.4 / 1231 | 0 / 22.7 / 28 | 44% |
+| `acos` | 4,015 | 0 / 23.3 / 118 | 0 / 23.0 / 28 | 0% |
+| `acosh` | 4,302 | 0 / 15.7 / 118 | 1 / 20.5 / 119 | 20% |
+| `asin` | 4,356 | 0 / 23.6 / 118 | 0 / 23.2 / 28 | 0% |
+| `asinh` | 5,152 | 0 / 17.7 / 1231 | 0 / 24.1 / 28 | 33% |
+| `atan` | 5,026 | 0 / 14.4 / 118 | 0 / 24.3 / 28 | 33% |
+| `atan2` | 9,874 | 0 / 18.5 / 924 | 0 / 19.0 / 28 | 24% |
+| `atanh` | 4,149 | 0 / 23.6 / 168 | 0 / 23.1 / 28 | 0% |
+| `cos` | 4,377 | 0 / 22.3 / 118 | 0 / 23.1 / 28 | 2% |
+| `cosh` | 5,123 | 0 / 24.1 / 1231 | 0 / 21.8 / 28 | 8% |
+| `sin` | 4,381 | 0 / 22.3 / 118 | 0 / 23.1 / 28 | 2% |
+| `sinh` | 4,841 | 0 / 24.3 / 1231 | 0 / 21.5 / 28 | 9% |
+| `tan` | 4,418 | 0 / 22.6 / 118 | 0 / 23.0 / 28 | 2% |
+| `tanh` | 4,517 | 0 / 26.2 / 1231 | 0 / 22.8 / 28 | 1% |
+<!-- END GENERATED:comparisons:inputs -->

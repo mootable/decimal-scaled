@@ -46,7 +46,7 @@ pub enum RoundingMode {
 ```rust
 use decimal_scaled::{D38s4, D38s2, RoundingMode};
 
-let v = D38s4::from_bits(12_345);   // 1.2345
+let v: D38s4 = "1.2345".parse().unwrap();   // 1.2345
 
 // Default mode (HalfToEven unless a `rounding-*` feature changes it):
 let a: D38s2 = v.rescale::<2>();
@@ -73,13 +73,13 @@ The same pairing applies to `to_int` / `to_int_with`,
 ```rust
 use decimal_scaled::{D38s3, RoundingMode};
 
-let v = D38s3::from_bits(1_235);            // 1.235
+let v: D38s3 = "1.235".parse().unwrap();    // 1.235
 
 // Scale down to 2 digits - the trailing `5` must be rounded.
 let down  = v.rescale::<2>();                // HalfToEven -> 1.24
 let trunc = v.rescale_with::<2>(RoundingMode::Trunc);   // -> 1.23
-assert_eq!(down.to_bits(),  124);
-assert_eq!(trunc.to_bits(), 123);
+assert_eq!(down.to_bits(),  124i128);
+assert_eq!(trunc.to_bits(), 123i128);
 
 // Scale up is always lossless.
 let up = v.rescale::<6>();
@@ -103,11 +103,11 @@ time* - so every plain (non-`_with`) lossy method uses a different mode
 
 ```toml
 [dependencies]
-decimal-scaled = { version = "0.4", features = ["rounding-half-away-from-zero"] }
+decimal-scaled = { version = "0.5", features = ["rounding-half-away-from-zero"] }
 ```
 
 The features are mutually exclusive in intent. If more than one is
-enabled, a fixed priority order in `src/rounding.rs` picks one
+enabled, a fixed priority order in `src/support/rounding.rs` picks one
 deterministically - but you should enable at most one.
 
 The `_with` methods are unaffected by these features: they always honour

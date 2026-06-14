@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! The [`DecimalConvert`] trait — round-trip + integer conversion +
 //! float bridge shared by every decimal width.
 //!
@@ -12,8 +15,8 @@
 //!
 //! See [`crate::types::traits::decimal`] for the full scope rationale.
 
-use crate::types::traits::arithmetic::DecimalArithmetic;
 use crate::support::rounding::RoundingMode;
+use crate::types::traits::arithmetic::DecimalArithmetic;
 
 /// Round-trip + conversion surface shared by every decimal width.
 ///
@@ -32,9 +35,12 @@ pub trait DecimalConvert: DecimalArithmetic {
     fn scale(self) -> u32;
 
     // ── Integer conversion ───────────────────────────────────────────
-
-    /// Construct from an `i32`, scaling by `10^SCALE`.
-    fn from_i32(value: i32) -> Self;
+    //
+    // Construction from a primitive integer is the fallible
+    // `TryFrom<iN>` surface on each concrete width (overflow on scaling
+    // returns `ConvertError::Overflow`); there is no width-generic
+    // integer constructor on this trait. Only the to-integer direction
+    // lives here.
 
     /// Convert to `i64` using the crate-default rounding mode.
     fn to_int(self) -> i64;

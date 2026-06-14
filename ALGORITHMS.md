@@ -2,10 +2,9 @@
 
 Catalogue of the published algorithms the crate evaluates, with
 academic citations and the source files where each is implemented.
-This is engineering credit - it complements `LICENSES/THIRD-PARTY.md`
-(which covers verbatim/adapted code from upstream repositories) by
-giving the *idea* attributions. For the lines-of-code attributions
-see `LICENSES/THIRD-PARTY.md`.
+This is engineering credit for the *ideas* the crate's own code is
+built from. The crate incorporates no third-party source code; see
+[LICENSE-THIRD-PARTY](https://github.com/mootable/decimal-scaled/blob/main/LICENSE-THIRD-PARTY).
 
 ## Integer arithmetic
 
@@ -28,11 +27,26 @@ Earlier foundational reference for the magic-multiplier idea:
 > Integers using Multiplication."** *Proc. PLDI '94*. ACM, 61–72.
 > DOI: [10.1145/178243.178249](https://doi.org/10.1145/178243.178249).
 
-Implementation: `src/mg_divide.rs` (`mul2`, `div_exp_fast_2word`,
-`div_exp_fast_2word_with_rem`, `MG_EXP_MAGICS`). The algorithm shape
-was adapted from the
+Implementation: `src/algos/support/mg_divide.rs` (`divmod_pow10_2word`,
+`MG_EXP_MAGICS`, `mg_reciprocal`). The
+magic table is re-derived from the paper's reciprocal formula by a
+`const fn` generator (`mg_reciprocal`) that performs the
+`floor(2^256 / (10^k << s))` long division at compile time, and the
+divide body follows the paper's normalise / estimate / single-add-back
+algorithm.
+
+**Prior art and clean-room declaration.** Applying Möller–Granlund to
+the constant divisor `10^SCALE` for fixed-point rescaling is prior art:
+it appears in
 [`primitive_fixed_point_decimal`](https://github.com/WuBingzheng/primitive_fixed_point_decimal)
-crate - see `LICENSES/THIRD-PARTY.md` for the verbatim attribution.
+by Wu Bingzheng (MIT-licensed), which we acknowledge as the inspiration
+for this approach. This crate's implementation is nonetheless an
+independent clean-room rewrite derived directly from the Möller–Granlund
+2011 paper — its code expression, structure, naming, comments, and the
+generated magic table are the crate's own and were not copied or adapted
+from that crate's source. The computed magics are mathematically
+determined facts; their bit-identity to any correct implementation is a
+property of the algorithm, not of shared code.
 
 Further reading:
 
@@ -41,25 +55,26 @@ Further reading:
 - Niels Möller's homepage: <https://www.lysator.liu.se/~nisse/>
 - Torbjörn Granlund's homepage (GMP project): <https://gmplib.org/~tege/>
 
-### Limb storage shape — `[u64; 2·N]`
+### Limb storage shape — `[u64; N]`
 
-The wide-integer types (the eight power-of-two widths `Int256`,
-`Int512`, `Int1024`, `Int2048`, `Int4096`, `Int8192`, `Int12288`,
-`Int16384` plus the half-width siblings `Int192`, `Int384`, `Int768`,
-`Int1536`, `Int3072`, `Int6144`) are stored as little-endian
-`[u64; L]` arrays where `L` is the bit-width divided by 64. The choice exposes native `u64 × u64 →
-u128` and `u128 / u64` hardware instructions directly (Zen 4 / Intel
-Golden Cove issue one widening 64×64 mul per cycle in steady state)
-where the historical `[u128; N]` layout had to soft-emulate every
-mul as four `u64 × u64` sub-products plus a nested carry chain. The
-public `from_limbs_le([u128; N])` / `limbs_le() -> [u128; N]` API
-preserves its u128-shaped signatures via a 4-line const-fn boundary
-conversion, so the wire format and downstream pattern-matching stay
-bit-stable.
+The wide integer is a single const-generic type, `Int<N>` (and its
+unsigned sibling `Uint<N>`), stored as a little-endian `[u64; N]`
+array of `N` u64 limbs — one type for every width, not a family of
+per-tier `IntNNN` types. A power-of-two width is just `N = bits / 64`
+(e.g. `Int<4>` is 256-bit, `Int<8>` is 512-bit), and the half-width
+tiers fall out at the in-between `N`. The `[u64; N]` choice exposes
+native `u64 × u64 → u128` and `u128 / u64` hardware instructions
+directly (Zen 4 / Intel Golden Cove issue one widening 64×64 mul per
+cycle in steady state) where a `[u128; N]` layout would have to
+soft-emulate every mul as four `u64 × u64` sub-products plus a nested
+carry chain. The public `from_limbs_le(limbs: [u64; N]) -> Self` /
+`limbs_le(self) -> [u64; N]` API takes and returns the `[u64; N]`
+limbs directly — each body is a one-line move (`Self { limbs }` /
+`self.limbs`), with no shape conversion.
 
-Implementation: every `limbs_*_u64` routine in
-`src/wide_int/mod.rs`; the `$U` / `$S` storage in
-`src/wide_int/macros/mod.rs`.
+Implementation: the `[u64; N]` storage and `from_limbs_le` / `limbs_le`
+accessors in `src/int/types/mod.rs`; the primitive limb operations
+(add, shift, compare) in `src/int/algos/support/limbs.rs`.
 
 ### Base-2⁶⁴ schoolbook multiplication
 
@@ -69,9 +84,9 @@ Karatsuba was implemented (and tested) but lost to schoolbook at
 every tier this crate emits because the per-cycle widening mul
 throughput beats Karatsuba's `3·(n/2)² + add/sub` overhead until
 `n > ~64` limbs (beyond our widest tier). The Karatsuba code is
-retained in `src/wide_int/mod.rs` (u128-base) as a reference / future
+retained in `src/int/algos/mul/mul_karatsuba.rs` as a reference / future
 SIMD baseline.
-Implementation: `src/wide_int/mod.rs::limbs_mul_u64`.
+Implementation: `src/int/algos/mul/mul_schoolbook.rs::mul_schoolbook`.
 
 Further reading:
 
@@ -92,9 +107,9 @@ estimations the per-limb work drops by ~30×.
 > Invariant Integers."** *IEEE Transactions on Computers* **60(2)**,
 > 165–175.
 
-Implementation: `src/wide_int/mod.rs::MG2by1U64`.
+Implementation: `src/int/algos/div/div_mg.rs::Mg2By1` (renamed from `MG2by1U64`).
 
-A 3-by-2 sibling (`MG3by2U64`, also implemented per MG Algorithm 5
+A 3-by-2 sibling (`Mg3By2`, also implemented per MG Algorithm 5
 with the paper's Algorithm 6 reciprocal refinement that accounts
 for `d0`) is kept available for arbitrary-divisor use cases. It was
 *not* faster than 2-by-1 + refinement loop on decimal divisors
@@ -112,8 +127,8 @@ once against the second-from-top divisor limb, multiply-subtract,
 and add-back on the rare miss. Complexity `O(m·n)` limb-ops vs the
 shift-subtract fallback's `O((m+n)·n·64)`.
 
-Implementation: `src/wide_int/mod.rs::limbs_divmod_knuth_u64`,
-fronted by `limbs_divmod_dispatch_u64`.
+Implementation: `src/int/algos/div/div_knuth.rs::div_knuth`,
+dispatched by `src/int/policy/div_rem.rs`.
 
 ### Base-2⁶⁴ schoolbook long division (u64-divisor fast path)
 
@@ -123,9 +138,9 @@ For divisors that fit a single u64 word, the crate uses one hardware
 division, now riding the native hardware instruction directly
 (previously this path had to split each u128 limb into 64-bit halves
 and do two divides per limb).
-Implementation: `src/wide_int/mod.rs::limbs_divmod_u64` (fast path B);
-`src/mg_divide.rs::div_long_256_by_128` (256-bit specialisation for
-D38 transcendentals, still u128-typed by design).
+Implementation: `src/int/algos/div/div_rem.rs::div_rem` (fast path B,
+single-limb hardware divide); `src/algos/support/mg_divide.rs::div_long_256_by_128`
+(256-bit specialisation for D38 transcendentals, still u128-typed by design).
 
 Further reading:
 
@@ -136,11 +151,11 @@ Further reading:
 
 Last-resort divide for arbitrary multi-limb divisors *in const
 context*. Runtime callers route through the
-[`limbs_divmod_dispatch_u64`](#knuth-algorithm-d-multi-limb-divide)
+[`div_knuth` dispatch](#knuth-algorithm-d-multi-limb-divide)
 dispatcher to Knuth instead; this path stays as the `const fn`
 backstop for `wrapping_div` / `wrapping_rem` and as the setup path
 for the MG reciprocal computation.
-Implementation: `src/wide_int/mod.rs::limbs_divmod_u64` general path.
+Implementation: `src/int/algos/div/div_rem.rs::div_rem` (general / shift-subtract path).
 
 Further reading:
 
@@ -156,7 +171,7 @@ overestimate so the sequence decreases monotonically. Converges
 quadratically.
 
 At wide tiers the per-iteration divide routes through
-[`limbs_divmod_dispatch_u64`](#knuth-algorithm-d-multi-limb-divide),
+[`div_knuth` dispatch](#knuth-algorithm-d-multi-limb-divide),
 i.e. Knuth Algorithm D with the MG 2-by-1 q̂ reciprocal. Earlier
 versions used the const-context `limbs_divmod_u64` shift-subtract
 path here, which made wide-tier sqrt 24–92× slower than necessary;
@@ -164,8 +179,8 @@ swapping to the runtime dispatcher closes that gap completely. D38
 keeps its hand-tuned `isqrt_256` because the 256-bit specialisation
 out-paces the generic path at single-limb scales.
 
-Implementation: `src/mg_divide.rs::isqrt_256`,
-`src/wide_int/mod.rs::limbs_isqrt_u64`.
+Implementation: `src/algos/support/mg_divide.rs::isqrt_256` (D38 2-limb fast path),
+`src/int/algos/isqrt/isqrt_newton.rs::isqrt_newton` (wide-tier Newton kernel).
 
 Further reading:
 
@@ -176,9 +191,10 @@ Further reading:
 ### Newton iteration for integer cube root (`icbrt`)
 
 `x_{k+1} = (2·x_k + N / x_k²) / 3`. Same monotone-decreasing setup
-as `isqrt`. Implementation: `src/mg_divide.rs::icbrt_384`,
-`src/macros/wide_roots.rs` (decl_wide_roots! emits a 384/512-bit
-variant per wide tier).
+as `isqrt`. Implementation: `src/algos/support/mg_divide.rs::icbrt_384` (D38 3-limb fast path),
+`src/int/algos/icbrt/icbrt_newton.rs::icbrt_newton` (wide-tier Newton kernel),
+`src/macros/wide_roots.rs` (`decl_wide_roots!` emits correctly-rounded
+wrappers per wide tier).
 
 Further reading:
 
@@ -194,8 +210,8 @@ midpoint, which is an integer for sqrt (the midpoint test is
 `8N ≥ (2q + 1)³`). For integer `N` the midpoint is never an integer
 in either case, so the rounding decision is mode-independent -
 every `RoundingMode` agrees with the half-to-nearest choice.
-Implementation: `src/mg_divide.rs::sqrt_raw_correctly_rounded` /
-`cbrt_raw_correctly_rounded`; the wide-tier counterparts in
+Implementation: `src/algos/support/mg_divide.rs::sqrt_raw_correctly_rounded` /
+`cbrt_raw_correctly_rounded` (D38 path); the wide-tier counterparts in
 `src/macros/wide_roots.rs`.
 
 Further reading:
@@ -234,13 +250,13 @@ across builds.
 > *ACM Transactions on Mathematical Software* **16(4)**, 378–400.
 > DOI: [10.1145/98267.98294](https://doi.org/10.1145/98267.98294).
 
-Implementation: `src/algos/exp/lookup_d*_tang.rs`,
-`src/algos/ln/lookup_d*_tang.rs`,
-`src/algos/trig/lookup_d*_sincos*.rs`,
-`src/algos/trig/lookup_d*_hyper.rs`,
-`src/algos/trig/lookup_d*_atan.rs`. Dispatched per `(width, scale)`
-by each tier's `mod.rs`. Outside the listed bands the artanh /
-Taylor path below handles the call.
+Implementation: `src/algos/exp/exp_tang.rs::exp_tang` (all tiers),
+`src/algos/ln/ln_tang.rs::ln_tang` (all tiers),
+`src/algos/trig/sincos_tang.rs` and `sincos_tang_3limb_s18_22.rs` (sin/cos),
+`src/algos/trig/hyper_exp_identity.rs` (hyperbolic),
+`src/algos/trig/atan_tang_3limb_s44_56.rs` and `inverse_tang_3limb_s18_22.rs` (atan/asin/acos).
+Dispatched per `(width, scale)` by `src/policy/` matchers. Outside the listed
+bands the artanh / Taylor path below handles the call.
 
 ### `ln` via multi-level sqrt argument reduction + Mercator's artanh
 
@@ -259,7 +275,7 @@ storage-scale identity `ln(x) = k·ln 2 + ln(m)` stays unchanged.
 > and the complexity of elementary function evaluation."** In
 > *Analytic Computational Complexity*, Academic Press.
 
-Implementation: `src/macros/wide_transcendental.rs::ln_fixed`. The
+Implementation: `src/macros/wide_transcendental.rs::ln_fixed` (wide tiers). The
 fastnum crate uses the same sqrt-halving recursion as its `ln_`
 inner — we cross-validated against it.
 
@@ -283,7 +299,7 @@ after the influential 1980 implementation:
 > Cody, W. J. and Waite, W. (1980). **"Software Manual for the
 > Elementary Functions."** Prentice-Hall.
 
-Implementation: `src/log_exp_strict.rs::ln_fixed` (D38),
+Implementation: `src/algos/ln/ln_series_2limb.rs::ln_fixed` (D38 narrow path),
 `src/macros/wide_transcendental.rs::ln_fixed` (every wide tier — D57 / D76 / D115 / D153 / D230 / D307 / D462 / D616 / D924 / D1232).
 
 Further reading:
@@ -317,8 +333,8 @@ u64 storage migration).
 > elementary functions."** *Journal of the ACM* **23(2)**, 242–251.
 > DOI: [10.1145/321941.321944](https://doi.org/10.1145/321941.321944).
 
-Implementation: `src/macros/wide_transcendental.rs::exp_fixed`;
-narrow tier in `src/log_exp_strict.rs`.
+Implementation: `src/macros/wide_transcendental.rs::exp_fixed` (wide tiers);
+narrow tier in `src/algos/exp/exp_series_2limb.rs::exp_fixed`.
 
 Further: `dashu-float::exp::Context::exp_internal` is the modern
 reference implementation we cross-checked against.
@@ -343,8 +359,8 @@ Implementation: `src/macros/wide_transcendental.rs::mul_cached`,
 Range-reduce `x = k · ln 2 + s` with `|s| ≤ ln 2 / 2`, then
 `exp(x) = 2^k · exp(s)`. The Taylor series for `exp(s)` converges
 absolutely on the reduced interval. The same Cody–Waite shape.
-Implementation: `src/log_exp_strict.rs::exp_fixed`,
-`src/macros/wide_transcendental.rs::exp_fixed`.
+Implementation: `src/algos/exp/exp_series_2limb.rs::exp_fixed` (D38 narrow path),
+`src/macros/wide_transcendental.rs::exp_fixed` (wide tiers).
 
 Further reading:
 
@@ -392,8 +408,8 @@ and `sin_cos_strict`.
 Earlier implementation reduced to `[0, π/2]` and ran sin Taylor
 directly without the cos branch; `cos(x) = sin(x + π/2)` was a
 full second sin evaluation. Replaced by the variants above.
-Implementation: `src/trig_strict.rs::sin_fixed`,
-`src/macros/wide_transcendental.rs::sin_fixed` / `sin_taylor`.
+Implementation: `src/algos/trig/trig_series_2limb.rs::sin_fixed` (D38 narrow path),
+`src/macros/wide_transcendental.rs::sin_fixed` / `sin_taylor` (wide tiers).
 
 Further reading:
 
@@ -408,7 +424,7 @@ Taylor series for `atan` converges in `~p_bits / (2l)` terms.
 
 The halving count is chosen per working scale `w`:
 
-- `w < 60` → 5 halvings (D38 / D9 / D18 strict path)
+- `w < 60` → 5 halvings (D38 / D18 strict path)
 - `60 ≤ w < 110` → 6 halvings (D57 / D76 / light D115)
 - `w ≥ 110` → 7 halvings (D115 / D153 / D230 / D307 / D462 / D616 /
   D924 / D1232)
@@ -418,8 +434,8 @@ sqrt + one wide div; each saved Taylor term saves ~one wide mul.
 The trade-off depends on `p_bits` and sits in the 5–7 range for
 our tiers.
 
-Implementation: `src/trig_strict.rs::atan_fixed`,
-`src/macros/wide_transcendental.rs::atan_fixed`.
+Implementation: `src/algos/trig/trig_series_2limb.rs::atan_fixed` (D38 narrow path),
+`src/macros/wide_transcendental.rs::atan_fixed` (wide tiers).
 
 ### `atan2` with max-branch quotient selection
 
@@ -433,8 +449,8 @@ implementation max-branches: it feeds `atan_fixed` whichever of
 quotient. Eliminates the asymptotic-edge precision loss; modest
 speed win at any `|y/x|` significantly different from 1.
 
-Implementation: `src/trig_strict.rs::atan2_strict` (D38),
-`src/macros/wide_transcendental.rs::atan2_strict` (wide tier).
+Implementation: `src/algos/trig/trig_series_2limb.rs::atan2_kernel` (D38 narrow path),
+`src/macros/wide_transcendental.rs::atan2_strict` (wide tiers).
 
 ### `asin` / `acos` two-range kernel
 
@@ -457,8 +473,8 @@ representable input:
 
 `acos` shares the same kernel via `acos(x) = π/2 − asin(x)`.
 
-Implementation: `src/trig_strict.rs::asin_strict` /
-`acos_strict` (D38) and the wide-tier variants in
+Implementation: `src/algos/trig/trig_series_2limb.rs` / `src/algos/trig/inverse_tang_3limb_s18_22.rs`
+(`asin_strict`, `acos_strict` for D38 / D57) and the wide-tier variants in
 `src/macros/wide_transcendental.rs` (`asin_strict`,
 `asin_strict_with`, `acos_strict`, `acos_strict_with`).
 
@@ -498,7 +514,8 @@ Composed from `exp`/`ln`:
 - `atanh(x) = ln((1 + x) / (1 − x)) / 2`
 
 All textbook identities - no specific paper attribution.
-Implementation: `src/trig_strict.rs`, `src/macros/wide_transcendental.rs`.
+Implementation: `src/algos/trig/trig_series_2limb.rs` (D38 narrow path),
+`src/algos/trig/hyper_exp_identity.rs` / `src/macros/wide_transcendental.rs` (wide tiers).
 
 Further reading:
 
@@ -511,8 +528,8 @@ Further reading:
 ### Half-to-even (banker's rounding) and the IEEE-754 family
 
 The crate's default rounding rule. Implementation in
-`src/rounding.rs::should_bump`, dispatched per
-[`RoundingMode`](src/rounding.rs) via a strategy hook.
+`src/support/rounding.rs::should_bump`, dispatched per
+[`RoundingMode`](https://github.com/mootable/decimal-scaled/blob/main/src/support/rounding.rs) via a strategy hook.
 
 > IEEE Std 754-2019. **"IEEE Standard for Floating-Point Arithmetic."**
 > IEEE Standards Association.
@@ -524,10 +541,10 @@ Further reading:
 
 ## Constants
 
-The mathematical constants in `src/consts.rs` (`pi`, `tau`,
-`half_pi`, `quarter_pi`, `e`, `golden`) are stored as 37-digit raw
-`i128` values at `SCALE_REF = 37` (the i128 maximum for the
-largest of the six). Sources:
+The mathematical constants in `src/types/consts/d38.rs` / `src/types/consts/wide.rs` (`pi`, `tau`,
+`half_pi`, `quarter_pi`, `e`, `golden`) are stored as raw `Int<4>`
+(256-bit) integer literals at `SCALE_REF = 75` for D18/D38/D76, with
+wider reference constants in `wide.rs` for D153/D307 and beyond. Sources:
 
 - `pi`, `tau`, `half_pi`, `quarter_pi`: ISO 80000-2.
 - `e`: OEIS A001113.
@@ -536,9 +553,9 @@ largest of the six). Sources:
 ## Cross-over algorithms
 
 - **Karatsuba multiplication.** Implemented in
-  `wide_int::limbs_mul_karatsuba_u64` and dispatched to by
-  `wide_int::limbs_mul_fast_u64` when both operands are equal-length
-  and at least `KARATSUBA_THRESHOLD_U64 = 256` u64 limbs. Every
+  `src/int/algos/mul/mul_karatsuba.rs::mul_karatsuba` and dispatched to by
+  `src/int/policy/mul.rs` when both operands are equal-length
+  and at least `KARATSUBA_THRESHOLD = 256` u64 limbs. Every
   shipped tier (widest work-int Int12288 = 192 u64 limbs, normal
   arithmetic at ≤ 96 limbs) sits below the threshold, so the
   canonical path is u64 schoolbook in practice. An M2 micro-bench
@@ -568,8 +585,8 @@ largest of the six). Sources:
   win asymptotically as working scale grows. Currently exposed as
   the alternate path; the canonical `ln_strict` / `exp_strict` stays
   on the artanh / Taylor implementations until a bench at the
-  relevant working scale shows AGM winning by the
-  `OVERRIDE_POLICY.md` margin. *Caveat:* the present
+  relevant working scale shows AGM winning by a benchmarked
+  margin. *Caveat:* the present
   implementation runs the AGM iteration at the same working scale
   `w` as the artanh path; at storage scales beyond ~30 the early-
   phase `sqrt(a·b)` step's truncation error amplifies and the
@@ -584,16 +601,17 @@ largest of the six). Sources:
   [Gauss–Legendre algorithm](https://en.wikipedia.org/wiki/Gauss%E2%80%93Legendre_algorithm)
   (the same AGM iteration applied to π),
   [MathWorld - Arithmetic-Geometric Mean](https://mathworld.wolfram.com/Arithmetic-GeometricMean.html).
-- **Burnikel–Ziegler recursive division.** `limbs_divmod_bz` in
-  `src/wide_int/mod.rs` is the recursive wrapper; its base case is
-  the in-crate Knuth Algorithm D port (`limbs_divmod_knuth`,
-  TAOCP §4.3.1 adapted to base 2^128). Both functions sit
-  alongside the canonical const-fn binary `limbs_divmod` - the
-  canonical path is unchanged, and `_knuth` / `_bz` are exposed for
-  bench-driven promotion. Knuth's `O(m·n)` multi-limb shape beats
-  the binary path's `O((m+n)·n·128)` for any multi-limb divisor;
+- **Burnikel–Ziegler recursive division.** `div_burnikel_ziegler_with_knuth` in
+  `src/int/algos/div/div_burnikel_ziegler_with_knuth.rs` is the recursive
+  wrapper; its base case is the in-crate Knuth Algorithm D port
+  (`div_knuth`, `src/int/algos/div/div_knuth.rs`,
+  TAOCP §4.3.1 adapted to base 2⁶⁴). Both functions sit
+  alongside the canonical const-fn `div_rem` - the
+  canonical path is unchanged, and `div_knuth` / `div_burnikel_ziegler_with_knuth`
+  are exposed for bench-driven promotion. Knuth's `O(m·n)` multi-limb shape beats
+  the shift-subtract path's `O((m+n)·n·64)` for any multi-limb divisor;
   BZ's recursion adds value only past the threshold (currently
-  `BZ_THRESHOLD = 8` limbs) and the full §3 two-by-one /
+  `BZ_THRESHOLD = 16` u64 limbs) and the full §3 two-by-one /
   three-by-two recursion is recorded as the next layer to add once
   a bench shows it winning at this crate's widths. (Burnikel, C.
   and Ziegler, J. (1998). "Fast recursive division." MPI-I-98-1-022;
@@ -621,7 +639,7 @@ Single-pass accumulator-per-output-column schoolbook variant: each
 output limb collects its sub-products into a wide accumulator stream,
 folding the carry chain into the loop body instead of a separate
 sweep. Evaluated as a candidate replacement for the canonical
-limb-by-limb schoolbook inside `limbs_mul_u64`. **Not adopted:** at
+limb-by-limb schoolbook inside `mul_schoolbook`. **Not adopted:** at
 every length this crate emits (≤ 96 u64 limbs in the widest work
 integer) the LLVM-unrolled schoolbook already saturates both
 `mulhi` / `mullo` ports on Zen 4 / Golden Cove, so the Comba
@@ -691,7 +709,7 @@ MG's per-call cost is already a single 128-bit multiply plus a
 constant fix-up (no iteration), so the Newton path needs to break
 even against ~3 wide multiplies and ends up slower until storage
 width exceeds the largest current tier. The MG path also yields
-chain-MG (`limbs_divmod_dispatch_u64` plus `MG2by1U64`) which already
+chain-MG (`div_mg` + `Mg2By1`) which already
 covers the multi-limb divisor case at hardware speed.
 
 ### Round-to-odd directed rounding

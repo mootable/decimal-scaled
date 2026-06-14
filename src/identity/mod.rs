@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Equality, ordering, and hashing — the equivalence-class contract for
 //! the decimal types.
 //!

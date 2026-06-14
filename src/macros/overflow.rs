@@ -1,5 +1,8 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Macro-generated overflow-aware arithmetic variants for the decimal
-//! widths that use a *uniform* mul/div pattern (D9, D18, and the wide
+//! widths that use a *uniform* mul/div pattern (D18, and the wide
 //! tier D76 / D153 / D307).
 //!
 //! Emits the four standard families (`checked_*`, `wrapping_*`,
@@ -19,19 +22,16 @@
 //! `wrapping_*` / `saturating_*` / `overflowing_*` intrinsics, which
 //! the wide integers expose with the same names and `const`-ness as the
 //! primitive integers — so those families live in a shared `@common`
-//! arm. Mul / div widen to `$Wider` for the intermediate; only the
-//! widening *spelling* differs (native `as`-casts vs the `WideInt` cast),
-//! so they are written inline per front-end arm.
+//! arm. Mul / div widen to `$Wider` for the intermediate via the
+//! `BigInt` cast, so they are written inline per front-end arm.
 //!
 //! D38 is the exception: its overflow mul/div go through the
 //! hand-rolled `mg_divide` path and are not generated here.
 
 /// Emits overflow variants for a decimal type.
 ///
-/// - `decl_decimal_overflow_variants!(D9, i32, i64)` — *native*
-/// storage; `$Wider` is a primitive integer.
-/// - `decl_decimal_overflow_variants!(wide D76, I256, I512)` — *wide*
-/// storage; `$Wider` is the next size up.
+/// - `decl_decimal_overflow_variants!(wide D76, Int<4>, Int<8>)` — the
+/// storage is an `Int<N>` and `$Wider` is the next size up.
 macro_rules! decl_decimal_overflow_variants {
     // Wide storage.
     (wide $Type:ident, $Storage:ty, $Wider:ty) => {
@@ -109,21 +109,21 @@ macro_rules! decl_decimal_overflow_variants {
             // ----- div ----------------------------------------------
 
             /// Checked division. Returns `None` if `rhs` is zero or
-            /// the result would overflow [`Self`]. Rounded toward
-            /// zero. The numerator is pre-multiplied by `10^SCALE`
-            /// in `$Wider` so the intermediate carries the scale-up
-            /// step without losing precision.
+            /// the result would overflow [`Self`]. Rounds to nearest
+            /// using the crate-default [`RoundingMode`](crate::RoundingMode),
+            /// identical to the `/` operator. The numerator is pre-multiplied by
+            /// `10^SCALE` in `$Wider` so the intermediate carries the
+            /// scale-up step exactly before rounding.
             #[inline]
             #[must_use]
             pub fn checked_div(self, rhs: Self) -> Option<Self> {
                 if rhs == Self::ZERO {
                     return None;
                 }
-                let a: $Wider = self.0.resize::<$Wider>();
                 let b: $Wider = rhs.0.resize::<$Wider>();
-                let m: $Wider = $Type::<SCALE>::multiplier().resize::<$Wider>();
-                let scaled_numer = a.checked_mul(m)?;
-                let result = scaled_numer / b;
+                let n: $Wider = self.0.widen_mul::<$Wider>($Type::<SCALE>::multiplier());
+                let result = $crate::macros::arithmetic::round_with_mode_wide!(
+                    n, b, $Wider, $crate::support::rounding::DEFAULT_ROUNDING_MODE);
                 let storage_max: $Wider = <$Storage>::MAX.resize::<$Wider>();
                 let storage_min: $Wider = <$Storage>::MIN.resize::<$Wider>();
                 if result > storage_max || result < storage_min {
@@ -133,10 +133,11 @@ macro_rules! decl_decimal_overflow_variants {
                 }
             }
 
-            /// Wrapping division. Computes `self / rhs` with the
-            /// scale-up step done modulo `$Wider`'s range and the
-            /// final narrowing wrapping. **Panics** on divide-by-zero
-            /// (matches `i128::wrapping_div` semantics).
+            /// Wrapping division. Computes `self / rhs` rounded to
+            /// nearest using the crate-default [`RoundingMode`](crate::RoundingMode)
+            /// (like the `/` operator), with the scale-up step done modulo
+            /// `$Wider`'s range and the final narrowing wrapping.
+            /// **Panics** on divide-by-zero (matches `i128::wrapping_div`).
             #[inline]
             #[must_use]
             pub fn wrapping_div(self, rhs: Self) -> Self {
@@ -144,7 +145,8 @@ macro_rules! decl_decimal_overflow_variants {
                 let b: $Wider = rhs.0.resize::<$Wider>();
                 let m: $Wider = $Type::<SCALE>::multiplier().resize::<$Wider>();
                 let scaled_numer = a.wrapping_mul(m);
-                let result = scaled_numer / b;
+                let result = $crate::macros::arithmetic::round_with_mode_wide!(
+                    scaled_numer, b, $Wider, $crate::support::rounding::DEFAULT_ROUNDING_MODE);
                 Self(result.resize::<$Storage>())
             }
 
@@ -154,6 +156,9 @@ macro_rules! decl_decimal_overflow_variants {
             #[inline]
             #[must_use]
             pub fn saturating_div(self, rhs: Self) -> Self {
+                if rhs == Self::ZERO {
+                    panic!("attempt to divide by zero");
+                }
                 match self.checked_div(rhs) {
                     Some(v) => v,
                     None => {
@@ -178,140 +183,6 @@ macro_rules! decl_decimal_overflow_variants {
         }
     };
 
-    // Native (primitive integer) storage.
-    ($Type:ident, $Storage:ty, $Wider:ty) => {
-        $crate::macros::overflow::decl_decimal_overflow_variants!(@common $Type, $Storage);
-
-        impl<const SCALE: u32> $Type<SCALE> {
-            // ----- mul (uses widening) ------------------------------
-
-            /// Checked multiplication. Computes `self * rhs` rounded
-            /// toward zero, returning `None` if the result doesn't fit
-            /// in `Self`. The intermediate product widens to `$Wider`
-            /// so widening overflow is detected before the narrowing
-            /// step.
-            #[inline]
-            #[must_use]
-            pub fn checked_mul(self, rhs: Self) -> Option<Self> {
-                let a = self.0 as $Wider;
-                let b = rhs.0 as $Wider;
-                let m = (10 as $Wider).pow(SCALE);
-                let prod = a.checked_mul(b)?;
-                let scaled = prod / m;
-                if scaled > <$Storage>::MAX as $Wider || scaled < <$Storage>::MIN as $Wider {
-                    None
-                } else {
-                    Some(Self(scaled as $Storage))
-                }
-            }
-
-            /// Wrapping multiplication. Computes `self * rhs` modulo
-            /// the storage type's `MAX − MIN` range.
-            #[inline]
-            #[must_use]
-            pub fn wrapping_mul(self, rhs: Self) -> Self {
-                let a = self.0 as $Wider;
-                let b = rhs.0 as $Wider;
-                let m = (10 as $Wider).pow(SCALE);
-                let prod = a.wrapping_mul(b);
-                let scaled = prod / m;
-                Self(scaled as $Storage)
-            }
-
-            /// Saturating multiplication. Clamps to [`Self::MIN`] /
-            /// [`Self::MAX`] on overflow, matching the sign of the
-            /// exact mathematical product.
-            #[inline]
-            #[must_use]
-            pub fn saturating_mul(self, rhs: Self) -> Self {
-                match self.checked_mul(rhs) {
-                    Some(v) => v,
-                    None => {
-                        // Sign of (a * b) is sign(a) XOR sign(b).
-                        let neg_result = (self.0 < 0) ^ (rhs.0 < 0);
-                        if neg_result { Self::MIN } else { Self::MAX }
-                    }
-                }
-            }
-
-            /// Overflowing multiplication. Returns the wrapped result
-            /// together with a boolean — `true` if the exact product
-            /// would be out of `Self`'s range.
-            #[inline]
-            #[must_use]
-            pub fn overflowing_mul(self, rhs: Self) -> (Self, bool) {
-                match self.checked_mul(rhs) {
-                    Some(v) => (v, false),
-                    None => (self.wrapping_mul(rhs), true),
-                }
-            }
-
-            // ----- div ----------------------------------------------
-
-            /// Checked division. Returns `None` if `rhs` is zero or
-            /// the quotient would overflow `Self`. Rounded toward
-            /// zero. The numerator is pre-multiplied by `10^SCALE`
-            /// in `$Wider`.
-            #[inline]
-            #[must_use]
-            pub fn checked_div(self, rhs: Self) -> Option<Self> {
-                if rhs.0 == 0 {
-                    return None;
-                }
-                let a = self.0 as $Wider;
-                let b = rhs.0 as $Wider;
-                let m = (10 as $Wider).pow(SCALE);
-                let scaled_numer = a.checked_mul(m)?;
-                let result = scaled_numer / b;
-                if result > <$Storage>::MAX as $Wider || result < <$Storage>::MIN as $Wider {
-                    None
-                } else {
-                    Some(Self(result as $Storage))
-                }
-            }
-
-            /// Wrapping division. **Panics** on divide-by-zero
-            /// (matches `i128::wrapping_div` semantics).
-            #[inline]
-            #[must_use]
-            pub fn wrapping_div(self, rhs: Self) -> Self {
-                let a = self.0 as $Wider;
-                let b = rhs.0 as $Wider;
-                let m = (10 as $Wider).pow(SCALE);
-                let scaled_numer = a.wrapping_mul(m);
-                let result = scaled_numer / b;
-                Self(result as $Storage)
-            }
-
-            /// Saturating division. Clamps to [`Self::MIN`] /
-            /// [`Self::MAX`] on overflow. Divide-by-zero saturates to
-            /// the appropriate-sign bound.
-            #[inline]
-            #[must_use]
-            pub fn saturating_div(self, rhs: Self) -> Self {
-                match self.checked_div(rhs) {
-                    Some(v) => v,
-                    None => {
-                        // Sign of (a / b) is sign(a) XOR sign(b).
-                        let neg_result = (self.0 < 0) ^ (rhs.0 < 0);
-                        if neg_result { Self::MIN } else { Self::MAX }
-                    }
-                }
-            }
-
-            /// Overflowing division. Returns the wrapped result with
-            /// a boolean — `true` if the exact quotient was out of
-            /// range *or* `rhs` was zero.
-            #[inline]
-            #[must_use]
-            pub fn overflowing_div(self, rhs: Self) -> (Self, bool) {
-                match self.checked_div(rhs) {
-                    Some(v) => (v, false),
-                    None => (self.wrapping_div(rhs), true),
-                }
-            }
-        }
-    };
 
     // Shared: add / sub / neg / rem and their overflow families.
     // the wide integers expose these intrinsics with the same names and

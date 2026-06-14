@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Macro-generated `num_traits` impls for narrow decimal widths.
 //!
 //! Covers the foundational traits a generic numeric helper most often
@@ -152,9 +155,10 @@ macro_rules! decl_decimal_num_traits_basics {
                     None
                 };
                 if let Some(f) = float_signal
-                    && f.is_nan() {
-                        return Self::ZERO;
-                    }
+                    && f.is_nan()
+                {
+                    return Self::ZERO;
+                }
                 if let Some(d) = <Self as ::num_traits::NumCast>::from(value) {
                     return d;
                 }
@@ -196,14 +200,10 @@ pub(crate) use decl_decimal_num_traits_basics;
 /// Emits `num_traits::FromPrimitive`, `ToPrimitive`, and `NumCast` for
 /// a decimal type.
 ///
-/// - `decl_decimal_num_traits_conversions!(D38, i128)` — native
-/// storage. `from_i64` / `from_u64` scale via an `as`-cast and
-/// `checked_mul`; the `to_*` integer methods divide the raw storage
-/// by `10^SCALE` and narrow with `TryFrom`.
-/// - `decl_decimal_num_traits_conversions!(wide D76, I256)` — wide
-/// storage. `from_i64` / `from_u64` widen via the `WideInt` cast; the
-/// `to_*` methods divide the wide storage and narrow with the
-/// wide-to-primitive `TryFrom` impls.
+/// - `decl_decimal_num_traits_conversions!(wide D76, Int<4>)` — the
+/// storage is an `Int<N>`. `from_i64` / `from_u64` widen via the
+/// `BigInt` cast; the `to_*` methods divide the storage and narrow
+/// with the integer-to-primitive `TryFrom` impls.
 ///
 /// `from_i128` / `from_u128` / `from_f32` / `from_f64` delegate to the
 /// width's `TryFrom` impls in both arms, and `NumCast` is fully
@@ -219,8 +219,10 @@ macro_rules! decl_decimal_num_traits_conversions {
             }
             #[inline]
             fn from_u64(n: u64) -> ::core::option::Option<Self> {
-                let widened: $Storage = <$Storage>::from_u128(n as u128);
-                widened.checked_mul(Self::multiplier()).map(Self)
+                // `u64` can exceed a narrow wide-storage's positive range
+                // (e.g. `Int<1>` / D18), so route through the range-checking
+                // `TryFrom<u128>` rather than an unchecked widen.
+                <Self as ::core::convert::TryFrom<u128>>::try_from(n as u128).ok()
             }
             #[inline]
             fn from_i128(n: i128) -> ::core::option::Option<Self> {
@@ -249,6 +251,12 @@ macro_rules! decl_decimal_num_traits_conversions {
             }
             #[inline]
             fn to_u64(&self) -> ::core::option::Option<u64> {
+                // A negative value has no `u64` representation. Guard the sign
+                // before the truncating divide, which would otherwise map a
+                // small negative (e.g. -1 LSB) to integer-part `0`.
+                if self.0.is_negative() {
+                    return ::core::option::Option::None;
+                }
                 (self.0 / Self::multiplier())
                     .to_u128_checked()
                     .and_then(|v| u64::try_from(v).ok())
@@ -259,6 +267,12 @@ macro_rules! decl_decimal_num_traits_conversions {
             }
             #[inline]
             fn to_u128(&self) -> ::core::option::Option<u128> {
+                // Negative values have no `u128` representation; guard the
+                // sign before the truncating divide (which maps small
+                // negatives to integer-part `0`).
+                if self.0.is_negative() {
+                    return ::core::option::Option::None;
+                }
                 (self.0 / Self::multiplier()).to_u128_checked()
             }
             #[inline]
@@ -274,73 +288,6 @@ macro_rules! decl_decimal_num_traits_conversions {
         $crate::macros::num_traits::decl_decimal_num_traits_conversions!(@numcast $Type);
     };
 
-    // Native (primitive integer) storage.
-    ($Type:ident, $Storage:ty) => {
-        impl<const SCALE: u32> ::num_traits::FromPrimitive for $Type<SCALE> {
-            #[inline]
-            fn from_i64(n: i64) -> ::core::option::Option<Self> {
-                (n as $Storage).checked_mul(Self::multiplier()).map(Self)
-            }
-            #[inline]
-            fn from_u64(n: u64) -> ::core::option::Option<Self> {
-                // u64 may exceed the storage's positive range; widen
-                // through i128, then narrow via the type's
-                // range-checking `TryFrom<i128>`.
-                <Self as ::core::convert::TryFrom<i128>>::try_from(n as i128).ok()
-            }
-            #[inline]
-            fn from_i128(n: i128) -> ::core::option::Option<Self> {
-                <Self as ::core::convert::TryFrom<i128>>::try_from(n).ok()
-            }
-            #[inline]
-            fn from_u128(n: u128) -> ::core::option::Option<Self> {
-                <Self as ::core::convert::TryFrom<u128>>::try_from(n).ok()
-            }
-            #[inline]
-            fn from_f32(n: f32) -> ::core::option::Option<Self> {
-                <Self as ::core::convert::TryFrom<f32>>::try_from(n).ok()
-            }
-            #[inline]
-            fn from_f64(n: f64) -> ::core::option::Option<Self> {
-                <Self as ::core::convert::TryFrom<f64>>::try_from(n).ok()
-            }
-        }
-
-        impl<const SCALE: u32> ::num_traits::ToPrimitive for $Type<SCALE> {
-            #[inline]
-            fn to_i64(&self) -> ::core::option::Option<i64> {
-                i64::try_from(self.0 / Self::multiplier()).ok()
-            }
-            #[inline]
-            fn to_u64(&self) -> ::core::option::Option<u64> {
-                if self.0 < 0 {
-                    return ::core::option::Option::None;
-                }
-                u64::try_from(self.0 / Self::multiplier()).ok()
-            }
-            #[inline]
-            fn to_i128(&self) -> ::core::option::Option<i128> {
-                i128::try_from(self.0 / Self::multiplier()).ok()
-            }
-            #[inline]
-            fn to_u128(&self) -> ::core::option::Option<u128> {
-                if self.0 < 0 {
-                    return ::core::option::Option::None;
-                }
-                u128::try_from(self.0 / Self::multiplier()).ok()
-            }
-            #[inline]
-            fn to_f32(&self) -> ::core::option::Option<f32> {
-                ::core::option::Option::Some((*self).to_f32())
-            }
-            #[inline]
-            fn to_f64(&self) -> ::core::option::Option<f64> {
-                ::core::option::Option::Some((*self).to_f64())
-            }
-        }
-
-        $crate::macros::num_traits::decl_decimal_num_traits_conversions!(@numcast $Type);
-    };
 
     // Shared `NumCast` — fully storage-agnostic (dispatches through the
     // `ToPrimitive` / `FromPrimitive` trait methods only).

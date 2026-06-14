@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Algorithm library for numerical kernels.
 //!
 //! Self-contained algorithm implementations grouped by mathematical
@@ -24,44 +27,40 @@
 //!
 //! # Layout
 //!
-//! `algos::<family>::<variant>` — `algos::sqrt::generic_wide`,
-//! `algos::sqrt::lookup_d57_s20`, `algos::ln::taylor`, etc. The
+//! `algos::<family>::<variant>` — `algos::sqrt::sqrt_newton`,
+//! `algos::sqrt::sqrt_mg_divide`, `algos::ln::taylor`, etc. The
 //! `<variant>` name describes the algorithm, not the type that uses
 //! it; one variant may serve many cells.
 
-// `sqrt` / `cbrt` are unconditional — the narrow tier (D9/D18/D38)
-// kernels in `<family>::mg_divide_d38` and `<family>::widen_to_d38`
-// are always built; each wide-tier kernel inside
-// `<family>::generic_wide` is independently feature-gated.
+// `sqrt` / `cbrt` are unconditional — the narrow tier (D18/D38)
+// kernels in `<family>::<family>_mg_divide` are always built; each
+// wide-tier kernel inside `<family>::generic_wide` is independently
+// feature-gated.
+// Decimal arithmetic algorithm families — each operation, even the
+// trivial `Int<N>`-layer ones, is a named `<fn>_<method>` kernel under
+// `algos::<fn>/`, called *down* from the per-function policy matcher.
+pub(crate) mod add;
 pub(crate) mod cbrt;
+pub(crate) mod div;
 pub(crate) mod exp;
+pub(crate) mod hypot;
 pub(crate) mod ln;
+pub(crate) mod log;
+pub(crate) mod mul;
+pub(crate) mod neg;
 pub(crate) mod pow;
+pub(crate) mod rem;
 pub(crate) mod sqrt;
+pub(crate) mod sub;
 pub(crate) mod trig;
 
-// Shared kernels consumed by multiple families. `mg_divide` is the
-// Moller-Granlund magic-number divide used by every multiplicative
-// path; `fixed_d38` is the 256-bit sign-magnitude `Fixed` type used
-// by the strict-transcendental fallback paths.
-pub(crate) mod mg_divide;
-pub(crate) mod fixed_d38;
+// Cross-cutting support kernels consumed by multiple families and the
+// arithmetic layer: the Moller-Granlund magic-number divide
+// (`support::mg_divide`), the 256-bit sign-magnitude `Fixed` work
+// integer (`support::fixed`), and the Newton-Raphson reciprocal
+// divide (`support::newton_reciprocal`).
+pub(crate) mod support;
 
-// Newton-Raphson reciprocal divide for `n / 10^SCALE` at the wide
-// tiers. Head-to-head benched against
-// [`mg_divide::div_wide_pow10_chain_with`] in `benches/newton_vs_mg.rs`;
-// wired into the `mul` and transcendental-rounding call sites by
-// [`dispatch_wide_pow10_with`] at the cells where the bench matrix
-// shows Newton wins. Other cells fall through to MG inside the
-// dispatcher.
-//
-// Gated on every wide tier — D307's `$Wider = Int2048` is in the
-// matrix's 2048-bit slot, so D307's `mul` slow path also routes
-// through the dispatcher.
-#[cfg(any(
-    feature = "d76", feature = "d115", feature = "d153", feature = "d230",
-    feature = "d307", feature = "d462", feature = "d616",
-    feature = "d924", feature = "d1232",
-    feature = "wide", feature = "x-wide", feature = "xx-wide"
-))]
-pub mod newton_reciprocal;
+// Unit tests for the schoolbook baselines (add/sub/neg/rem/mul/div).
+#[cfg(test)]
+mod schoolbook_tests;

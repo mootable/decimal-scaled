@@ -1,0 +1,235 @@
+# SPDX-FileCopyrightText: 2026 John Moxley
+# SPDX-License-Identifier: MIT OR Apache-2.0
+name: "🕰 history gates (advisory)"
+
+# The version-history correctness gates (task 10.13): the live crate beside
+# the pinned historical releases (ds-044, ds-033) over the same golden set.
+# `history_previous` carries the RATCHET assertion (no cell that passed in
+# 0.4.4 may fail live); `history_all` is the cross-version shootout report
+# with per-function timing medians (reported, never asserted).
+#
+# Own workflow, ADVISORY, like golden-comprehensive: the pinned historical
+# crates are heavy per-tier-era compiles the quick ci.yml gate must never
+# pay, and a red ratchet means roll back / bisect, not block the merge loop.
+#
+# WIDTH-SHARDED build+run (the ci.yml golden-quick / tests-consolidated
+# pattern): one matrix job per width tier builds exactly that tier's release
+# gate exe AND runs it in the SAME job (no artifact handoff), then
+# `GOLDEN_WIDTHS`-filters the run to its own tier's widths. Sharding the LIVE
+# (per-tier `cfg`-gated) cell fan-out down to a single tier per job keeps each
+# job's rustc within the runner's memory — the same structural fix golden-quick
+# made for the golden gate (a single all-tier build does not fit).
+#
+# NOTE — heavier than a golden-quick shard: unlike the golden gate, each
+# history shard also pulls the pinned historical crates (ds-044 always;
+# ds-033 on the shards whose widths 0.3.3 adapts) AND the v044/v033 adapter
+# cell fan-out, which is NOT tier-`cfg`-gated (it instantiates its whole
+# ladder whenever its `history-*` feature is on — only the LIVE fan-out
+# narrows per tier). Peak is ~1.5 GB per shard, well inside the runner's
+# 16 GB; the resource sampler in the run step is kept as cheap evidence
+# should a future change spike memory again.
+
+on:
+  # Pushes to `main` only (NOT release/*) + on-demand. This gate SELF-COMMITS its
+  # refreshed per-version timing medians; on a release branch with an open PR, the bot
+  # self-commit churns the PR head onto a commit the REQUIRED gates never run on, so
+  # the PR can't go green. The release branch refreshes via workflow_dispatch; `main`
+  # re-renders post-merge.
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Serial queue per ref, like ci.yml/bbc: a queued run waits its turn for the
+  # in-progress run to finish (deferred, never cancelled).
+  group: history-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  history:
+    name: history (${{ matrix.shard }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      # Drop the workspace's `[profile.release] debug = true` (local samply
+      # symbolization) — pure build-time/memory weight this gate never needs.
+      CARGO_PROFILE_RELEASE_DEBUG: "false"
+    strategy:
+      # One slow/failed tier must not mask the others — each shard IS the gate
+      # for its own widths (a missing/red shard is its own red job).
+      fail-fast: false
+      matrix:
+        # `feat`: this shard's live tier + the historical features. `history-044`
+        # rides every shard (the ratchet needs the 0.4.4 subject at every
+        # width). `history-033` rides only the shards whose widths 0.3.3 adapts
+        # (18/38/76/153/230/307) — elsewhere the `history_all` 0.3.3 column is
+        # simply absent (its `#[cfg(feature = "history-033")]` block compiles
+        # out), which the gate handles gracefully. `widths`: the GOLDEN_WIDTHS
+        # this shard sweeps; the union is the full surface (narrow carries the
+        # always-compiled D18/D38 cells, so it needs no tier feature).
+        # `par`: thread count for `HISTORY_PARALLEL`; present (= "8") on wide shards
+        # (d115+) where a full sequential sweep exceeds CI budget; absent on narrow/d57/d76
+        # which stay sequential for contention-free timing medians. When `par` is absent
+        # the matrix substitution expands to an empty string → SequentialRunner.
+        include:
+          - { shard: narrow, feat: "history-044,history-033",      widths: "18,38"  }
+          - { shard: d57,    feat: "d57,history-044",              widths: "57"     }
+          - { shard: d76,    feat: "d76,history-044,history-033",  widths: "76"     }
+          - { shard: d115,   feat: "d115,history-044",             widths: "115",   par: "8" }
+          - { shard: d153,   feat: "d153,history-044,history-033", widths: "153",   par: "8" }
+          - { shard: d230,   feat: "d230,history-044,history-033", widths: "230",   par: "8" }
+          - { shard: d307,   feat: "d307,history-044,history-033", widths: "307",   par: "8" }
+          - { shard: d462,   feat: "d462,history-044",             widths: "462",   par: "8" }
+          - { shard: d616,   feat: "d616,history-044",             widths: "616",   par: "8" }
+          - { shard: d924,   feat: "d924,history-044",             widths: "924",   par: "8" }
+          - { shard: d1232,  feat: "d1232,history-044",            widths: "1232",  par: "8" }
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-history-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'decimal-scale-test/Cargo.toml') }}
+          restore-keys: |
+            cargo-history-${{ runner.os }}-
+
+      - name: Build + run the history shard (ratchet + shootout, this tier's widths)
+        # Build + run in ONE invocation (golden-quick's no-artifact-handoff
+        # shape): compile this tier's history exe, then run both gates over only
+        # this tier's widths. The two gates serialise THEMSELVES via the in-test
+        # `HOOK_GUARD` mutex (each holds it for its whole run while it swaps the
+        # process-global panic hook), so their ride-along timing medians can't
+        # overlap regardless of the test-runner thread count — no `--test-threads`
+        # cap needed. `--ignored` runs the two `#[ignore]`d gates; `--nocapture`
+        # streams the per-cell progress.
+        # The awk pipe timestamps every line (slow-vs-stuck is decidable from the
+        # live log) and `tee` stages the log for upload. The resource sampler
+        # prints memory + disk beside the compile so a returning memory spike
+        # leaves an evidence curve rather than a bare OOM kill.
+        env:
+          GOLDEN_WIDTHS: "${{ matrix.widths }}"
+          GOLDEN_DIR: ${{ github.workspace }}/decimal-scaled-golden/golden
+          HISTORY_PARALLEL: "${{ matrix.par }}"
+          # history_all writes the full cross-version surface here (one TSV per
+          # shard); the aggregate job splices + self-commits it to results/history/.
+          # ABSOLUTE path: `cargo test` runs the test binary with CWD = the package
+          # dir (decimal-scale-test/), so a relative dir would land there while the
+          # upload step looks at the workspace root — the mismatch that left the
+          # earlier run with no history-tsv artifacts and an empty aggregate.
+          HISTORY_REPORT_DIR: ${{ github.workspace }}/history-report
+        run: |
+          set -euo pipefail
+          ( while true; do m=$(free -m | awk '/^Mem:/{print $7}'); s=$(free -m | awk '/^Swap:/{print $4}'); d=$(df -BM --output=avail . | tail -1 | tr -dc 0-9); echo "[res $(date +%H:%M:%S)] mem avail ${m} MB | swap free ${s} MB | disk avail ${d} MB"; sleep 15; done ) &
+          SAMPLER=$!
+          trap 'kill "$SAMPLER" 2>/dev/null || true' EXIT
+          cargo test -p decimal-scale-test --release --features "${{ matrix.feat }}" --test history \
+            -- --ignored --nocapture 2>&1 \
+            | awk '{ print strftime("[%H:%M:%S]"), $0; fflush() }' \
+            | tee "history-${{ matrix.shard }}.log"
+
+      - name: Upload the shard log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: history-${{ matrix.shard }}
+          path: history-${{ matrix.shard }}.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload the shard cross-version TSV
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: history-tsv-${{ matrix.shard }}
+          path: history-report/*.tsv
+          if-no-files-found: warn
+          retention-days: 7
+
+  aggregate:
+    name: aggregate + self-commit
+    needs: history
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # Self-commit the spliced cross-version correctness data back to the run's
+      # branch (a GITHUB_TOKEN push does not re-trigger workflows — no loop).
+      contents: write
+    steps:
+      - name: Checkout (for the self-commit)
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Download all shard TSVs
+        uses: actions/download-artifact@v8
+        with:
+          pattern: history-tsv-*
+          path: shards/
+
+      - name: Aggregate per-version medians + self-commit + render History page
+        run: |
+          set -euo pipefail
+          python3 - <<'EOF'
+          import collections, glob, os, statistics
+          # Shard rows are PER-LINE: version function width scale mode line grade nanos.
+          # The History page needs per-(function, width, version) MEDIAN nanoseconds;
+          # the full per-line surface would blow GitHub's 100 MB file limit, so collapse
+          # the line dimension to one median here (history is single-scale/single-mode
+          # per width, so the median is over that cell's golden rows).
+          vals = collections.defaultdict(list)  # (function, width, version) -> [nanos]
+          for p in sorted(glob.glob("shards/**/*.tsv", recursive=True)):
+              with open(p, encoding="utf-8") as f:
+                  next(f, None)  # header
+                  for line in f:
+                      c = line.rstrip("\n").split("\t")
+                      if len(c) >= 8 and c[7]:
+                          try:
+                              vals[(c[1], c[2], c[0])].append(int(c[7]))
+                          except ValueError:
+                              pass
+          if not vals:
+              print("no history rows — nothing to write")
+              raise SystemExit(0)
+          os.makedirs("results/history", exist_ok=True)
+          with open("results/history/history.tsv", "w", encoding="utf-8", newline="\n") as o:
+              # `nanos` is the median per cell; `min`/`max` bound that cell's samples so
+              # the History chart can draw a min–max band around each release's line.
+              o.write("function\twidth\tversion\tnanos\tmin\tmax\n")
+              for (fn, w, ver) in sorted(vals):
+                  s = vals[(fn, w, ver)]
+                  o.write(f"{fn}\t{w}\t{ver}\t{statistics.median(s):.0f}\t{min(s):.0f}\t{max(s):.0f}\n")
+          print(f"history.tsv rows: {len(vals)}")
+          EOF
+          if [ ! -f results/history/history.tsv ]; then
+            echo "no history.tsv produced — skipping commit"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Re-render the History page from the fresh medians in the SAME commit
+          # (self-heal: the committed page never lags the data; docs-drift stays green).
+          python3 scripts/render_docs.py
+          git add results/history/history.tsv
+          git add -u README.md docs/
+          if git diff --cached --quiet; then
+            echo "history medians + docs unchanged — nothing to commit"
+            exit 0
+          fi
+          git commit -m "results(history): refresh per-version medians + render History page"
+          # Incorporate any concurrent results/ self-commit (disjoint files) so
+          # the push isn't rejected non-fast-forward.
+          git pull --rebase origin "${{ github.ref_name }}" || true
+          git push origin "HEAD:${{ github.ref_name }}"

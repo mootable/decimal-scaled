@@ -44,7 +44,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -61,7 +61,7 @@ jobs:
         # `--all-features` is avoided: `experimental-floats` needs
         # the nightly toolchain. `wide` + `x-wide` + `xx-wide` +
         # `macros` is the widest stable-buildable set and documents
-        # every shipped tier (D9 through D1232).
+        # every shipped tier (D18 through D1232).
         run: cargo doc --no-deps --features wide,x-wide,xx-wide,macros --workspace
         env:
           # Fail the build on any rustdoc warning so broken intra-doc
@@ -69,18 +69,20 @@ jobs:
           RUSTDOCFLAGS: "-D warnings"
 
       - name: Stage root-level narrative files into docs/
-        # MkDocs only reads under `docs/`. Copy ROADMAP, CHANGELOG,
-        # ALGORITHMS, and CONTRIBUTORS in so they become first-class pages
-        # (referenced from nav in mkdocs.yml). README is NOT
-        # staged — docs/README.md already exists as the guides
-        # index; the root README is reached via the GitHub link
-        # in the header.
+        # MkDocs only reads under `docs/`. Copy the root pages the nav
+        # references (ROADMAP, CHANGELOG, ALGORITHMS, CONTRIBUTORS,
+        # SECURITY) in so they become first-class pages. README is NOT
+        # staged — docs/index.md is the landing page; the root README
+        # is reached via the GitHub link in the header. Keep this list
+        # in sync with `$nav` in scripts/preview_docs.ps1 (the only
+        # other copy) and the Project section of mkdocs.yml.
         run: |
           set -euo pipefail
           [ -f ROADMAP.md ]    && cp ROADMAP.md    docs/ROADMAP.md
           [ -f CHANGELOG.md ]  && cp CHANGELOG.md  docs/CHANGELOG.md
           [ -f ALGORITHMS.md ] && cp ALGORITHMS.md docs/ALGORITHMS.md
           [ -f CONTRIBUTORS.md ] && cp CONTRIBUTORS.md docs/CONTRIBUTORS.md
+          [ -f SECURITY.md ]   && cp SECURITY.md   docs/SECURITY.md
 
       - name: Build MkDocs site
         run: mkdocs build --strict --site-dir _site

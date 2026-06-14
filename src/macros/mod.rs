@@ -1,7 +1,10 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Internal `decl_*!` macros that emit per-width surface for the
 //! decimal type family.
 //!
-//! Every macro takes the target `$Type` (e.g. `D9`, `D18`, `D38`)
+//! Every macro takes the target `$Type` (e.g. `D18`, `D38`)
 //! and the relevant storage / widening types as parameters, then
 //! emits the corresponding impl block. Each width's `types/widths.rs`
 //! entry then becomes a series of one-line macro invocations.
@@ -13,17 +16,18 @@
 
 pub(crate) mod arithmetic;
 pub(crate) mod basics;
+pub(crate) mod bitwise;
+pub(crate) mod conversions;
 pub(crate) mod cross_scale_ops;
 pub(crate) mod cross_width_cmp;
-pub(crate) mod bitwise;
-pub(crate) mod consts;
-pub(crate) mod conversions;
 pub(crate) mod display;
 #[cfg(feature = "dyn")]
 pub(crate) mod dyn_bridge;
 pub(crate) mod equalities;
+pub(crate) mod fast_transcendentals;
 pub(crate) mod float_bridge;
 pub(crate) mod from_str;
+pub(crate) mod full;
 pub(crate) mod helpers;
 pub(crate) mod int_methods;
 pub(crate) mod num_traits;
@@ -34,10 +38,8 @@ pub(crate) mod rounding_methods;
 pub(crate) mod sign;
 pub(crate) mod storage_formatters;
 pub(crate) mod strict_transcendentals;
-pub(crate) mod fast_transcendentals;
 pub(crate) mod transcendental_trait;
-pub(crate) mod full;
-#[cfg(any(feature = "d76", feature = "d153", feature = "d307", feature = "wide"))]
+#[cfg(feature = "_wide-support")]
 pub(crate) mod wide_roots;
-#[cfg(any(feature = "d76", feature = "d153", feature = "d307", feature = "wide"))]
+#[cfg(feature = "_wide-support")]
 pub(crate) mod wide_transcendental;

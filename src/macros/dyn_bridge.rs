@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Per-width emission of the [`crate::types::traits::dyn_decimal::DynDecimal`] impl.
 //!
 //! Invoked once per supported width with the full enumeration of legal
@@ -7,17 +10,19 @@
 //! and ordering.
 //!
 //! The macro is intentionally only invoked for the narrow-tier widths
-//! (`D9`, `D18`, `D38`) — see the module docs for
+//! (`D18`, `D38`) — see the module docs for
 //! [`crate::types::traits::dyn_decimal`] for the scope rationale.
 
 /// Emits `impl<const SCALE: u32> DynDecimal for $Type<SCALE>` plus
 /// internal dispatch helpers.
 ///
 /// Args:
-/// - `$Type`           — concrete decimal type (`D9` / `D18` / `D38`).
-/// - `$Storage`        — underlying primitive integer (`i32` / `i64` / `i128`).
+/// - `$Type`           — concrete decimal type (`D18` / `D38`).
+/// - `$Storage`        — underlying integer storage (`Int<1>` / `Int<2>`).
 /// - `$width_variant`  — matching variant of [`crate::types::traits::dyn_decimal::DecimalWidth`].
 /// - `$raw_variant`    — matching variant of [`crate::types::traits::dyn_decimal::RawStorage`].
+/// - `$raw_prim`       — primitive the `$raw_variant` carries (`i64` / `i128`); the
+///   storage value is exact in it (D18 fits `i64`, D38 fits `i128`).
 /// - `$max_scale`      — `MAX_SCALE` constant for the width.
 /// - `$($scale)+`      — every legal `SCALE` literal, `0..=$max_scale`.
 ///
@@ -30,6 +35,7 @@ macro_rules! decl_decimal_dyn_impl {
         $Storage:ty,
         $width_variant:ident,
         $raw_variant:ident,
+        $raw_prim:ty,
         $max_scale:literal,
         scales = [$($scale:literal)+]
     ) => {
@@ -43,7 +49,7 @@ macro_rules! decl_decimal_dyn_impl {
             fn max_scale(&self) -> u32 { $max_scale }
 
             fn raw_storage(&self) -> $crate::types::traits::dyn_decimal::RawStorage {
-                $crate::types::traits::dyn_decimal::RawStorage::$raw_variant(self.0)
+                $crate::types::traits::dyn_decimal::RawStorage::$raw_variant(self.0.as_i128() as $raw_prim)
             }
 
             fn as_any(&self) -> &dyn ::core::any::Any { self }
@@ -233,7 +239,7 @@ macro_rules! decl_decimal_dyn_impl {
                 // never reach the typed panic path.
                 if target_scale > SCALE && target_scale <= $max_scale {
                     let shift = target_scale - SCALE;
-                    let multiplier = (10 as $Storage).pow(shift);
+                    let multiplier = <$Storage>::from_i128(10).pow(shift);
                     self.0.checked_mul(multiplier)?;
                 }
                 match target_scale {

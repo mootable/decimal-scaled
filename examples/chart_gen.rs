@@ -24,7 +24,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Subcommand routing — the default (no args) runs the
     // library-comparison + per-width-summary pipeline; `history`
     // renders the cross-version trend charts from
-    // bench-history-results/.
+    // tmp/bench-history-results/.
     let mode = std::env::args().nth(1).unwrap_or_default();
     if mode == "history" {
         return render_history();
@@ -112,17 +112,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// Centre scale to feature per power-of-two storage width. Matches
 /// the docs/benchmarks.md §5 subsections.
 const CENTRE_SCALES: &[(&str, u32)] = &[
-    ("128bit",  19),
-    ("256bit",  35),
-    ("512bit",  75),
-    ("1024bit", 150),
-    ("2048bit", 308),
-    ("4096bit", 616),
+    ("128bit", 19),   // D38  S/2
+    ("256bit", 38),   // D76  S/2
+    ("512bit", 76),   // D153 S/2
+    ("1024bit", 153), // D307 S/2
+    ("2048bit", 308), // D616 S/2
+    ("4096bit", 616), // D1232 S/2
 ];
 
 const OP_ORDER: &[&str] = &[
-    "add", "sub", "neg", "mul", "div", "rem", "sqrt",
-    "ln", "exp", "sin", "cos", "tan", "atan", "sinh", "cosh", "tanh",
+    "add", "sub", "neg", "mul", "div", "rem", "sqrt", "ln", "exp", "sin", "cos", "tan", "atan",
+    "sinh", "cosh", "tanh",
 ];
 
 /// Render one chart per CENTRE_SCALES entry — a grouped bar chart with
@@ -138,7 +138,7 @@ fn render_per_width_summaries(
         let Some(&(_, centre)) = CENTRE_SCALES.iter().find(|(w, _)| *w == width) else {
             continue;
         };
-        if !OP_ORDER.iter().any(|o| *o == op.as_str()) {
+        if !OP_ORDER.contains(&op.as_str()) {
             continue;
         }
         for (lib, points) in by_lib {
@@ -149,7 +149,11 @@ fn render_per_width_summaries(
             let chosen = points
                 .iter()
                 .find(|(s, _)| *s == centre)
-                .or_else(|| points.iter().min_by_key(|(s, _)| (*s as i64 - centre as i64).abs()))
+                .or_else(|| {
+                    points
+                        .iter()
+                        .min_by_key(|(s, _)| (*s as i64 - centre as i64).abs())
+                })
                 .copied();
             if let Some((_, ns)) = chosen {
                 summary
@@ -163,7 +167,9 @@ fn render_per_width_summaries(
     }
 
     for (width, _centre) in CENTRE_SCALES {
-        let Some(per_op) = summary.get(width) else { continue; };
+        let Some(per_op) = summary.get(width) else {
+            continue;
+        };
         let path = format!("{out_dir}/summary_{width}.png");
         render_per_width_summary(&path, width, per_op)?;
     }
@@ -176,15 +182,15 @@ fn render_per_width_summary(
     per_op: &BTreeMap<&str, BTreeMap<String, f64>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Drop ops that have no data at this width.
-    let ops: Vec<&&str> = OP_ORDER.iter().filter(|o| per_op.contains_key(**o)).collect();
+    let ops: Vec<&&str> = OP_ORDER
+        .iter()
+        .filter(|o| per_op.contains_key(**o))
+        .collect();
     if ops.is_empty() {
         return Ok(());
     }
     // Union of libraries appearing anywhere in this width.
-    let mut libs: Vec<String> = per_op
-        .values()
-        .flat_map(|m| m.keys().cloned())
-        .collect();
+    let mut libs: Vec<String> = per_op.values().flat_map(|m| m.keys().cloned()).collect();
     libs.sort();
     libs.dedup();
     // Put decimal-scaled last so it draws on top.
@@ -256,19 +262,18 @@ fn render_per_width_summary(
         .disable_x_mesh()
         .draw()?;
 
-
     let palette: &[(RGBColor, &str)] = &[
-        (RGBColor(31, 119, 180),  "rust_decimal"),
-        (RGBColor(255, 127, 14),  "fastnum"),
-        (RGBColor(44, 160, 44),   "bigdecimal"),
+        (RGBColor(31, 119, 180), "rust_decimal"),
+        (RGBColor(255, 127, 14), "fastnum"),
+        (RGBColor(44, 160, 44), "bigdecimal"),
         (RGBColor(148, 103, 189), "dashu-float"),
-        (RGBColor(140, 86, 75),   "decimal-rs"),
+        (RGBColor(140, 86, 75), "decimal-rs"),
         (RGBColor(227, 119, 194), "g_math"),
         (RGBColor(127, 127, 127), "fixed_i64f64"),
         (RGBColor(127, 127, 127), "fixed_i16f16"),
         (RGBColor(127, 127, 127), "fixed_i32f32"),
         (RGBColor(127, 127, 127), "fixed_i128f128"),
-        (RED,                     "decimal-scaled"),
+        (RED, "decimal-scaled"),
     ];
     let color_for = |lib: &str| -> RGBColor {
         palette
@@ -290,10 +295,7 @@ fn render_per_width_summary(
                     // packed [-group_half, +group_half] around centre.
                     let left = centre - group_half + li as f64 * bar_width;
                     let right = left + bar_width;
-                    Rectangle::new(
-                        [(left, y_floor), (right, ns)],
-                        color.filled(),
-                    )
+                    Rectangle::new([(left, y_floor), (right, ns)], color.filled())
                 })
             })
             .collect();
@@ -316,7 +318,7 @@ fn render_per_width_summary(
     for i in 1..n_ops {
         let x = i as f64 - 0.5;
         chart.draw_series(LineSeries::new(
-            [(x, y_floor), (x, y_ceil)].into_iter(),
+            [(x, y_floor), (x, y_ceil)],
             separator_style,
         ))?;
     }
@@ -333,20 +335,27 @@ fn render_per_width_summary(
 }
 
 // ------------------------------------------------------------------
-// History mode — read bench-history-results/ and render per-width
-// cross-version trend lines.
+// History mode — read tmp/bench-history-results/ and render per-width
+// cross-version trend lines at the fixed reference scale.
 //
-// Layout on disk (rooted at bench-history-results/):
+// Layout on disk (rooted at tmp/bench-history-results/):
 //
-//   bench-history-<tag>/<group>/<width>/new/estimates.json
+//   bench-history-<tag>/<op>_<width>_s<scale>/t/new/estimates.json
 //
 // where:
-//   <tag>   ∈ { v0.2.5, v0.3.2, v0.3.3, v0.4.0, v0.4.2, HEAD }
-//   <group> ∈ { arith_add, arith_mul, arith_div,
-//               sqrt_strict, ln_strict, sin_strict }
+//   <tag>   ∈ { v0.2.5, v0.3.2, v0.3.3, v0.4.0, v0.4.2, v0.4.3, v0.4.4, HEAD }
+//   <op>    ∈ { add, mul, div, sqrt, ln, sin }
 //   <width> ∈ { D38, D76, D307 }
+//   <scale> ∈ the harness scale set; the PNG trend uses the reference scale.
 //
-// HEAD is the current released source (v0.4.4).
+// The harness fans out over (width × scale); the cross-version PNG trend
+// plots ONE scale (the fixed reference, `HISTORY_CHART_SCALE`) so the line
+// chart stays one-line-per-function. The full (version × scale) surface is
+// rendered as a table by `summarise_history.py` in the aggregate job.
+//
+// HEAD is the current dev source (main; 0.5.0 in development). A version
+// that lacks a function leaves a gap in that function's line (no point
+// plotted) rather than a fabricated value.
 // ------------------------------------------------------------------
 
 const HISTORY_VERSIONS: &[(&str, &str)] = &[
@@ -356,19 +365,27 @@ const HISTORY_VERSIONS: &[(&str, &str)] = &[
     ("v0.4.0", "v0.4.0"),
     ("v0.4.2", "v0.4.2"),
     ("v0.4.3", "v0.4.3"),
-    ("HEAD",   "v0.4.4"),
+    ("v0.4.4", "v0.4.4"),
+    ("HEAD", "main"),
 ];
 
+// op directory stem -> chart line label (now identical; kept as a pair so
+// the renderer's label vs path distinction stays explicit).
 const HISTORY_GROUPS: &[(&str, &str)] = &[
-    ("arith_add",   "add"),
-    ("arith_mul",   "mul"),
-    ("arith_div",   "div"),
-    ("sqrt_strict", "sqrt"),
-    ("ln_strict",   "ln"),
-    ("sin_strict",  "sin"),
+    ("add", "add"),
+    ("mul", "mul"),
+    ("div", "div"),
+    ("sqrt", "sqrt"),
+    ("ln", "ln"),
+    ("sin", "sin"),
 ];
 
 const HISTORY_WIDTHS: &[&str] = &["D38", "D76", "D307"];
+
+// The fixed reference scale plotted in the cross-version line charts. The
+// harness samples the five-point set {0, S/4, S/2, 3S/4, S-1} per tier; the
+// trend uses S/2 (= 19 for D38) as the single continuity reference point.
+const HISTORY_CHART_SCALE: usize = 19;
 
 fn render_history() -> Result<(), Box<dyn std::error::Error>> {
     use std::path::Path;
@@ -377,10 +394,10 @@ fn render_history() -> Result<(), Box<dyn std::error::Error>> {
     let mut data: BTreeMap<(String, String), Vec<(String, f64)>> = BTreeMap::new();
 
     for (tag, vlabel) in HISTORY_VERSIONS {
-        for (group, fn_label) in HISTORY_GROUPS {
+        for (op, fn_label) in HISTORY_GROUPS {
             for width in HISTORY_WIDTHS {
                 let p = format!(
-                    "bench-history-results/bench-history-{tag}/{group}/{width}/new/estimates.json",
+                    "tmp/bench-history-results/bench-history-{tag}/{op}_{width}_s{HISTORY_CHART_SCALE}/t/new/estimates.json",
                 );
                 if !Path::new(&p).exists() {
                     eprintln!("history: missing {p}");
@@ -405,7 +422,10 @@ fn render_history() -> Result<(), Box<dyn std::error::Error>> {
         let path = format!("{out_dir}/{}.png", width.to_lowercase());
         render_history_chart(&path, width, &data)?;
     }
-    println!("wrote {} history charts to {out_dir}/", HISTORY_WIDTHS.len());
+    println!(
+        "wrote {} history charts to {out_dir}/",
+        HISTORY_WIDTHS.len()
+    );
     Ok(())
 }
 
@@ -453,8 +473,10 @@ fn render_history_chart(
         .right_y_label_area_size(20)
         .build_cartesian_2d(x_min..x_max, (y_floor..y_ceil).log_scale())?;
 
-    let version_labels: Vec<String> =
-        HISTORY_VERSIONS.iter().map(|(_, v)| (*v).to_string()).collect();
+    let version_labels: Vec<String> = HISTORY_VERSIONS
+        .iter()
+        .map(|(_, v)| (*v).to_string())
+        .collect();
 
     chart
         .configure_mesh()
@@ -477,13 +499,13 @@ fn render_history_chart(
     // three width charts so a reader can scan vertically.
     let color_for = |fn_label: &str| -> RGBColor {
         match fn_label {
-            "add"  => RGBColor(31, 119, 180),
-            "mul"  => RGBColor(255, 127, 14),
-            "div"  => RGBColor(44, 160, 44),
+            "add" => RGBColor(31, 119, 180),
+            "mul" => RGBColor(255, 127, 14),
+            "div" => RGBColor(44, 160, 44),
             "sqrt" => RGBColor(148, 103, 189),
-            "ln"   => RGBColor(214, 39, 40),
-            "sin"  => RGBColor(140, 86, 75),
-            _      => RGBColor(127, 127, 127),
+            "ln" => RGBColor(214, 39, 40),
+            "sin" => RGBColor(140, 86, 75),
+            _ => RGBColor(127, 127, 127),
         }
     };
 
@@ -506,7 +528,7 @@ fn render_history_chart(
         let label = (*fn_label).to_string();
         let xy_for_points = xy.clone();
         chart
-            .draw_series(LineSeries::new(xy.into_iter(), color.stroke_width(3)))?
+            .draw_series(LineSeries::new(xy, color.stroke_width(3)))?
             .label(label)
             .legend(move |(x, y)| {
                 PathElement::new(vec![(x, y), (x + 20, y)], color.stroke_width(3))
@@ -581,10 +603,7 @@ fn render_chart(
         .x_label_area_size(45)
         .y_label_area_size(70)
         .right_y_label_area_size(20)
-        .build_cartesian_2d(
-            x_min.max(0.0)..x_max + 1.0,
-            (y_floor..y_ceil).log_scale(),
-        )?;
+        .build_cartesian_2d(x_min.max(0.0)..x_max + 1.0, (y_floor..y_ceil).log_scale())?;
 
     chart
         .configure_mesh()
@@ -607,7 +626,10 @@ fn render_chart(
     };
 
     // Draw all non-decimal-scaled lines first
-    for (lib, points) in sorted.iter().filter(|(l, _)| l.as_str() != "decimal-scaled") {
+    for (lib, points) in sorted
+        .iter()
+        .filter(|(l, _)| l.as_str() != "decimal-scaled")
+    {
         let color = color_for(lib);
         let label = lib.clone();
         if points.len() >= 2 {
@@ -646,11 +668,7 @@ fn render_chart(
                 .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], RED.stroke_width(3)));
         } else if let Some(&(s, n)) = points.first() {
             chart
-                .draw_series(std::iter::once(Circle::new(
-                    (s as f64, n),
-                    6,
-                    RED.filled(),
-                )))?
+                .draw_series(std::iter::once(Circle::new((s as f64, n), 6, RED.filled())))?
                 .label("decimal-scaled")
                 .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], RED.stroke_width(3)));
         }

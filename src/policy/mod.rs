@@ -1,40 +1,95 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Per-family policy traits — which algorithm each `Dxx<S>` calls.
 //!
-//! The typed method shell on each `Dxx<S>` (e.g. `D57::<SCALE>::sqrt_strict`)
-//! delegates to a policy trait method (`SqrtPolicy::sqrt_impl`). The
-//! policy trait is implemented once per width, generic over `SCALE`,
-//! with a `const SCALE`-branch picking the right kernel from
-//! [`crate::algos`] for each cell:
+//! The typed method shell on each `Dxx<S>` (e.g. `D57::<SCALE>::exp_strict`)
+//! delegates to the policy `dispatch` fn (`exp::dispatch`). Every family
+//! follows the canonical `(N, SCALE)` matcher (`sqrt` is the exemplar): a
+//! per-function `Algorithm` enum + a `const fn select<N, SCALE>()` + an
+//! exhaustive `match algo`, dispatched via an inline
+//! `const { select::<N, SCALE>() }` block. See [`sqrt`] and
+//! `docs/ARCHITECTURE.md` → "Policy file structure".
 //!
-//! ```ignore
-//! impl<const SCALE: u32> SqrtPolicy for D57<SCALE> {
-//!     fn sqrt_impl(self, mode: RoundingMode) -> Self {
-//!         if SCALE == 20 {
-//!             // bespoke kernel for D57<20>
-//!             D57(algos::sqrt::lookup_d57_s20::sqrt_with(self.0, SCALE, mode))
-//!         } else {
-//!             // default
-//!             D57(algos::sqrt::generic_wide::sqrt_with::<_, Int384>(self.0, SCALE, mode))
-//!         }
-//!     }
-//! }
-//! ```
+//! The keys (`N` and `SCALE`) are `const` at every monomorphisation, so
+//! `select` const-folds to its single live arm — every concrete `Dxx<S>`
+//! compiles to a direct call to one kernel. Zero runtime dispatch cost.
 //!
-//! Because `SCALE` is `const`, the `if` is dead-code-eliminated per
-//! monomorphisation — every concrete `D57<S>` compiles to a direct call
-//! to one kernel only. Zero runtime dispatch cost.
-//!
-//! Stable Rust does not allow trait-impl specialisation on
-//! const-generic types, so per-(width, scale) overrides live as
-//! `if SCALE == X` arms inside the per-width policy impl rather than
-//! as separate `impl SqrtPolicy for D57<20>` blocks. The override
-//! list is grep-able in one place per family.
+//! Stable Rust does not allow trait-impl specialisation on const-generic
+//! types, so a width's per-`(N, SCALE)` realisations live as arms inside
+//! the canonical `match algo` (with a const-folding inner `match SCALE`
+//! where one algorithm has several per-band kernels at a width) rather
+//! than as separate `impl SqrtPolicy for D57<20>` blocks. The few inverse
+//! / hyperbolic trig methods whose fall-through is an inherent
+//! `*_strict_with` shell (not a raw-storage kernel) realise their single
+//! algorithm through that shell.
 
-// Unconditional — D9/D18/D38 impls live here too. Wide-tier impls
+// Unconditional — D18/D38 impls live here too. Wide-tier impls
 // inside each family are individually feature-gated.
+pub(crate) mod add;
 pub(crate) mod cbrt;
+pub(crate) mod dcmp;
+pub(crate) mod deq;
+pub(crate) mod div;
 pub(crate) mod exp;
+pub(crate) mod hypot;
 pub(crate) mod ln;
+pub(crate) mod log;
+pub(crate) mod mul;
+pub(crate) mod neg;
 pub(crate) mod pow;
+pub(crate) mod rem;
 pub(crate) mod sqrt;
+pub(crate) mod sub;
+pub(crate) mod to_degrees;
+pub(crate) mod to_radians;
 pub(crate) mod trig;
+// Shared policy-layer support: the SCALE-derived work-rung selector
+// (`ln` Tang + forward trig). Private to the policy layer.
+#[cfg(feature = "_wide-support")]
+pub(crate) mod work_rung;
+
+// ── Narrow-tier checked narrow ──────────────────────────────────────
+//
+// The exp/ln/log/pow policies route the narrow tier (N == 1, i.e. D18,
+// and the identity N == 2, i.e. D38) by computing the result at Int<2>
+// (D38 width) and narrowing back to storage. For N == 1 that narrow is
+// LOSSY and must PANIC when the D38 result exceeds the i64 storage range
+// (e.g. exp(5) at D18<17>), restoring the documented strict-overflow
+// contract. (For N == 2 it is identity; for the wide arms N >= 3 the
+// result is already computed at Int<N> and routed through their own
+// resize.)
+//
+// `Int<2>::narrow::<N>()` cannot be used here: these arms are generic
+// over N and instantiate for wide N too (dead at runtime), and the
+// inherent `narrow::<M>` requires `M <= N` at compile time. Instead we
+// resize to the storage width and verify the value survives a round-trip
+// back to Int<2>; any discrepancy means the value did not fit and we
+// panic via the shared diagnostics helper (stable substring
+// `"{method}: result out of range"`).
+#[inline]
+pub(crate) fn narrow_checked<const N: usize>(
+    wide: crate::int::types::Int<2>,
+    method: &str,
+    scale: u32,
+) -> crate::int::types::Int<N> {
+    narrow_fit::<N>(wide).unwrap_or_else(|| {
+        crate::support::diagnostics::overflow_panic_with_scale(method, scale)
+    })
+}
+
+/// `Option` primitive under [`narrow_checked`]: `None` when the `Int<2>`
+/// value does not survive the round-trip to `Int<N>` (i.e. it does not
+/// fit the narrower storage). The `checked_*` dispatch paths propagate
+/// the `None`; the default paths panic via [`narrow_checked`].
+#[inline]
+pub(crate) fn narrow_fit<const N: usize>(
+    wide: crate::int::types::Int<2>,
+) -> Option<crate::int::types::Int<N>> {
+    use crate::int::types::traits::BigInt;
+    let out = wide.resize_to::<crate::int::types::Int<N>>();
+    if out.resize_to::<crate::int::types::Int<2>>() != wide {
+        return None;
+    }
+    Some(out)
+}

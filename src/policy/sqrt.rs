@@ -1,185 +1,249 @@
-//! Square-root policy — per-width cascade of (scale-range → width →
-//! global) kernel choices.
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+//! Square-root policy — the per-`(N, SCALE)` algorithm matcher.
 //!
-//! Each `Dxx<SCALE>::sqrt_strict_with(mode)` delegates to
-//! [`SqrtPolicy::sqrt_impl`], which is implemented once per width
-//! (generic over `SCALE`) in this file. The body of each impl follows
-//! the same shape — a small `if matches!(SCALE, range)` cascade for
-//! scale-range overrides, then the width's chosen default kernel:
+//! `D<Int<N>, SCALE>::sqrt_strict_with(mode)` delegates directly to the
+//! one shared [`dispatch`] generic function. `dispatch` follows the
+//! canonical policy shape (see `docs/ARCHITECTURE.md` → "Policy file
+//! structure"):
 //!
-//! ```ignore
-//! impl<const SCALE: u32> SqrtPolicy for D57<SCALE> {
-//!     fn sqrt_impl(self, mode: RoundingMode) -> Self {
-//!         // Scale-range overrides — listed top-down, first match wins.
-//!         if matches!(SCALE, 20..=20) {
-//!             return Self(algos::sqrt::lookup_d57_s20::sqrt(self.0, mode));
-//!         }
-//!         // Width default — what every non-overridden scale gets.
-//!         Self(algos::sqrt::generic_wide::sqrt_d57(self.0, SCALE, mode))
-//!     }
-//! }
-//! ```
+//! 1. an [`Algorithm`] enum — the real square-root algorithms, no
+//!    `Default` variant;
+//! 2. a [`Select`] verdict — a settled algorithm or "the value decides"
+//!    (sqrt has no value split, so `ByValue` is never returned);
+//! 3. a `const fn` [`select`] keyed on `(N, SCALE)`, total over the key;
+//! 4. dispatch via an inline `const { select::<N, SCALE>() }` block,
+//!    then an **exhaustive** `match algo` — no `_`, no panic.
 //!
-//! Three-level cascade in plain code:
+//! Because `select` is `const` and keyed only on the const generics, the
+//! `const { … }` block folds per monomorphisation and every unchosen arm
+//! is dead-arm-eliminated in release: each concrete `D<Int<N>, SCALE>`
+//! compiles to a direct call to one kernel, no runtime branch.
 //!
-//! 1. **Global default** — for sqrt, "the generic wide isqrt over the
-//!    matching work integer" (`algos::sqrt::generic_wide::sqrt_<tier>`).
-//!    No single function name carries it because the kernel signature
-//!    varies per storage tier; instead, every per-width policy's
-//!    fall-through arm calls the matching tier-instantiation.
-//! 2. **Width override** — a per-width impl's fall-through arm picks
-//!    a different kernel. Captured here today:
-//!    - `D9` / `D18` → [`algos::sqrt::widen_to_d38`] (delegate via D38).
-//!    - `D38` → [`algos::sqrt::mg_divide_d38`] (hand-tuned 256-bit
-//!      isqrt over `i128` storage).
-//! 3. **Scale-range override** — a leading `if matches!(SCALE, range)`
-//!    arm picks a bespoke kernel for one or more scales. `matches!`
-//!    accepts range patterns (`20..=20`, `18..=22`, `(5 | 10)`), so
-//!    one arm can cover many cells.
+//! # Work width
 //!
-//! All three levels const-fold per monomorphisation — every concrete
-//! `Dxx<S>` compiles to a direct call to one kernel only. Zero
-//! runtime dispatch cost.
-//!
-//! [`algos::sqrt::widen_to_d38`]: crate::algos::sqrt::widen_to_d38
-//! [`algos::sqrt::mg_divide_d38`]: crate::algos::sqrt::mg_divide_d38
+//! The `Newton` kernel forms the radicand `raw · 10^SCALE`, which spans up
+//! to `2N` limbs. Rather than thread a work *type* `Int<2N>` (unnameable
+//! from `N` on stable), `sqrt_newton` does that arithmetic directly in
+//! limbs and calls the int layer's width-agnostic slice `isqrt`. So the
+//! dispatch carries no work-width parameter and the policy stays a pure
+//! `(N, SCALE)` matcher.
 
 use crate::algos::sqrt;
-use crate::types::widths::{D9, D18, D38};
+use crate::int::types::traits::BigInt;
+use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
+use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
-/// Per-width policy: which kernel a `Dxx<SCALE>` uses for
-/// `sqrt_strict_with`. See module docs for the cascade structure.
-pub(crate) trait SqrtPolicy: Sized {
-    /// Square root under the supplied rounding mode. Negative inputs
-    /// saturate to zero (the policy implementor handles saturation).
-    fn sqrt_impl(self, mode: RoundingMode) -> Self;
+// ── 1. the real square-root algorithms — NAMED, no `Default` ──────────
+
+/// The square-root algorithms this policy chooses between. Variants are
+/// the CamelCase of each kernel's name minus the `sqrt_` function prefix
+/// (`sqrt_newton` → `Newton`, …) — strict 1:1 with the kernel fns.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Algorithm {
+    /// [`sqrt::sqrt_newton::sqrt_newton`] — Newton `isqrt` over a work
+    /// width `W` covering `raw · 10^SCALE`. The generic default.
+    Newton,
+    /// [`sqrt::sqrt_mg_divide::sqrt_mg_divide`] — hand-tuned 256-bit
+    /// isqrt for the `Int<2>` storage (D38, and D18 widened to it).
+    MgDivide,
+    /// [`sqrt::sqrt_newton_with_table_seed::sqrt_newton_with_table_seed`]
+    /// — `f64`-seeded narrow-work bespoke for the `(D57, 20)` cell, kept as
+    /// an explicit benchmarkable reference seam. Superseded by
+    /// [`Self::Native`] (which seeds Newton in a tight `Int<W>` instead of
+    /// re-entering the int `isqrt` policy's build-max slice) and not
+    /// selected by `select`.
+    #[allow(dead_code)]
+    NewtonWithTableSeed,
+    /// [`sqrt::sqrt_native::sqrt_native`] — `f64`-seeded Newton run directly
+    /// in a tight, concrete `Int<W>` with `W = 2N` (chosen per tier in the
+    /// dispatch arm to cover `mag · 10^SCALE` at any valid scale), rather
+    /// than through the width-agnostic int `isqrt` slice, whose linear
+    /// `scale`-length ×10 radicand-build loop and build-max scratch buffer
+    /// dominate at high scale. Routed by `N` for the mid-wide tiers D57/D76
+    /// (N = 3/4) at every scale, and for the wider tiers D115..D1232
+    /// (N = 6..64) at high scale only (`SCALE >= 4·N` — the empirical
+    /// crossover where the tight `Int<2N>` overtakes the slice). Microbench
+    /// (`root_kernel_ab`): 1.1–1.97× faster at the mid-scale cells; at the
+    /// max-scale (S-1) bench-branch-compare cells 1.8–5.8× faster than the
+    /// generic slice [`Self::Newton`]. Bit-identical to [`Self::Newton`]
+    /// across all six modes.
+    ///
+    /// NOT feature-gated: variant and arms always present so routing is
+    /// feature-INDEPENDENT (a single-wide-tier build routes that tier exactly
+    /// as a full build does). Reached only at the `N` its tier instantiates,
+    /// so dead-arm-eliminated without that tier; `#[allow(dead_code)]` covers
+    /// the narrow-only build where it is never constructed.
+    #[allow(dead_code)]
+    Native,
+    /// Schoolbook reference tag -- delegates to
+    /// [`sqrt::sqrt_newton::sqrt_newton`], which uses the same
+    /// slice-`isqrt`-based pipeline as `sqrt_newton`. Exists as an explicit
+    /// benchmarkable seam; never selected by `select` in production.
+    #[allow(dead_code)]
+    Schoolbook,
 }
 
-// ── Narrow tier — width override: widen → D38 ───────────────────────
+// ── 2. the const verdict ──────────────────────────────────────────────
 
-impl<const SCALE: u32> SqrtPolicy for D9<SCALE> {
-    #[inline]
-    fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        if self.0 <= 0 {
-            return Self(0);
+/// A settled algorithm, or "the value decides". `ByValue` is part of the
+/// canonical shape for uniformity across functions; sqrt never returns it
+/// (the choice is fully determined by `(N, SCALE)`).
+#[derive(Clone, Copy)]
+enum Select<const N: usize> {
+    ByAlgorithm(Algorithm),
+    #[allow(dead_code)]
+    ByValue(fn(&Int<N>) -> Algorithm),
+}
+
+// ── 3. the matcher: const, keyed on `(N, SCALE)`, total over the key ──
+
+/// Pick the square-root algorithm for storage limb count `N` and decimal
+/// `SCALE`. Total over the key; the `_` arm is the generic `Newton`
+/// default (a real algorithm — there is no synthetic default variant).
+const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
+    match (N, SCALE) {
+        // D18 (`Int<1>`) — widened to `Int<2>` storage in the dispatch
+        // and run through the hand-tuned 256-bit isqrt there.
+        (1, _) => Select::ByAlgorithm(Algorithm::MgDivide),
+        // D38 (`Int<2>`) — hand-tuned 256-bit isqrt.
+        (2, _) => Select::ByAlgorithm(Algorithm::MgDivide),
+        // D57 / D76 (N = 3 / 4) — bespoke f64-seeded Newton in a tight,
+        // concrete `Int<W>` with `W = 2N` (covering `mag · 10^SCALE` at any
+        // valid scale: the storage magnitude is ≤ 64N bits and `10^SCALE`
+        // adds ≤ 64N more for SCALE ≤ the tier's digit capacity). Routed by
+        // `N` (all scales) because the build-max slice scratch the generic
+        // `Newton` kernel zeroes per Newton iteration dominates these
+        // radicands even at the full-range `W = 2N`. Microbench
+        // (`root_kernel_ab`, at the routed `W = 2N`): native beats the
+        // generic slice 1.22× (D57<20>) and 1.13× (D76<20>). Bit-identical
+        // to `Newton` across all six modes (kernel test gate).
+        //
+        // The wider mid tiers (D115/D153, N = 6/8) are NOT routed by `N`:
+        // at the full-range `W = 2N` (12/16 limbs) the per-iteration Knuth
+        // divide outweighs the slice's scratch churn at the benchmarked scales, so a
+        // blanket `W = 2N` would regress them (rule 6 — size each width
+        // exactly). They keep only their high-scale `Native` cells below,
+        // where the radicand is genuinely wide.
+        //
+        // Feature-INDEPENDENT routing: these arms key only on `(N, SCALE)`,
+        // never on which tiers are compiled. Reached only at the `N` their
+        // tier instantiates, so an always-present arm is dead without that
+        // tier and correct with it — the SAME verdict either way (a feature
+        // gate here was the tier-splitting routing defect).
+        (3, _) // D57, W=6
+        | (4, _) // D76, W=8
+        => Select::ByAlgorithm(Algorithm::Native),
+        // High-scale Native for the wider tiers (D115..D1232, N = 6..64),
+        // each at the full-range work width `W = 2N` (covers `mag · 10^SCALE`
+        // at any valid scale). The crossover is scale-dependent: at low/mid
+        // scale the radicand is small and the tight `Int<2N>` Native pays
+        // full-`W` Knuth divides while the slice works on the actual
+        // significant length, so the slice wins; at high scale the slice's
+        // *linear* `scale`-length ×10 radicand-build loop plus its build-max
+        // `isqrt` scratch dominate, and the tight `Int<2N>` Native (radicand
+        // built via a const-folded `pow`, root in an exactly-sized integer)
+        // wins decisively. The TRUE crossover is **per-tier** and NOT the
+        // uniform `SCALE >= 4·N` shape: a second-pass adaptive bisection
+        // (`root_kernel_ab.rs`, cores 18-19) found the slice
+        // win-band reached further into the threshold-routed region for
+        // D230/D616/D924 than the `4N` shape assumed — at routed cells
+        // just above `4N`, slice was beating Native 1.06–1.27×. The
+        // per-tier thresholds below sit at the bisected true crossover
+        // (Class I "continuous win-region" gate); each cell routed to
+        // Native is bit-identical to Newton across all six modes and a
+        // measured win.
+        (6, s) if s >= 24 => Select::ByAlgorithm(Algorithm::Native), // D115, W=12
+        (8, s) if s >= 32 => Select::ByAlgorithm(Algorithm::Native), // D153, W=16
+        // Per-tier crossovers tightened by adaptive-bisection in
+        // `root_kernel_ab.rs` (cores 18-19): the conservative
+        // `s >= 4N` heuristic placed several thresholds INSIDE the slice
+        // win-band (the slice's build-max scratch cost is smaller than the
+        // tight `Int<2N>` Knuth divide here), so native lost 1.06–1.27× at
+        // routed cells just above the gate. The refined thresholds below
+        // sit at the true bisected crossover per tier; the architecture-
+        // review Class I check (continuous win-region) requires this.
+        (12, s) if s >= 70 => Select::ByAlgorithm(Algorithm::Native), // D230, W=24
+        (16, s) if s >= 64 => Select::ByAlgorithm(Algorithm::Native), // D307, W=32
+        (24, s) if s >= 96 => Select::ByAlgorithm(Algorithm::Native), // D462, W=48
+        (32, s) if s >= 160 => Select::ByAlgorithm(Algorithm::Native), // D616, W=64
+        (48, s) if s >= 260 => Select::ByAlgorithm(Algorithm::Native), // D924, W=96
+        (64, s) if s >= 256 => Select::ByAlgorithm(Algorithm::Native), // D1232, W=128
+        // Everything else (wider tiers at low/mid scales) — generic Newton
+        // over the int layer's width-agnostic slice `isqrt`.
+        _ => Select::ByAlgorithm(Algorithm::Newton),
+    }
+}
+
+// ── 4. the shared dispatch: resolve the verdict, then dispatch ────────
+
+/// Shared square-root dispatch for storage `Int<N>`, decimal `SCALE`,
+/// and Newton work width `W`. Negative / zero inputs saturate to
+/// `Int::<N>::ZERO`.
+///
+/// `W` is the next-up work width for the `Newton` arm (`Int<2N>`),
+/// supplied by the caller because `Int<2N>` is not computable from `N`
+/// on stable. The `MgDivide` / `NewtonWithTableSeed` arms run at their
+/// own fixed widths (`Int<2>` / `Int<4>`); the `resize_to` bridges are
+/// no-ops at the `N` those arms are selected for and dead-arm-eliminated
+/// at every other `N`.
+#[inline]
+#[must_use]
+pub(crate) fn dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Int<N>
+where
+    Limbs<N>: ComputeLimbs,
+{
+    if raw <= Int::<N>::ZERO {
+        return Int::<N>::ZERO;
+    }
+    let algo = match const { select::<N, SCALE>() } {
+        Select::ByAlgorithm(a) => a,
+        Select::ByValue(f) => f(&raw),
+    };
+    match algo {
+        Algorithm::Newton => sqrt::sqrt_newton::sqrt_newton::<N>(raw, SCALE, mode),
+        // D18 / D38: run on `Int<2>` storage, resize back to `Int<N>`.
+        // (`resize_to` is identity at N==2 and a lossless widen at N==1.)
+        Algorithm::MgDivide => {
+            sqrt::sqrt_mg_divide::sqrt_mg_divide(raw.resize_to::<Int<2>>(), SCALE, mode)
+                .resize_to::<Int<N>>()
         }
-        // Width override: widen to D38, sqrt there, narrow back.
-        sqrt::widen_to_d38::sqrt_d9(self, mode)
-    }
-}
-
-impl<const SCALE: u32> SqrtPolicy for D18<SCALE> {
-    #[inline]
-    fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        if self.0 <= 0 {
-            return Self(0);
+        // (D57, 20): the bespoke kernel works on `Int<3>` storage.
+        Algorithm::NewtonWithTableSeed => {
+            sqrt::sqrt_newton_with_table_seed::sqrt_newton_with_table_seed(
+                raw.resize_to::<Int<3>>(),
+                mode,
+            )
+            .resize_to::<Int<N>>()
         }
-        // Width override: widen to D38, sqrt there, narrow back.
-        sqrt::widen_to_d38::sqrt_d18(self, mode)
-    }
-}
-
-// ── D38 — width override: hand-tuned mg_divide path ────────────────
-
-impl<const SCALE: u32> SqrtPolicy for D38<SCALE> {
-    #[inline]
-    fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        if self.0 <= 0 {
-            return Self(0);
-        }
-        // Width override: 256-bit isqrt tailored to i128 storage.
-        Self(sqrt::mg_divide_d38::sqrt(self.0, SCALE, mode))
-    }
-}
-
-// ── Wide tiers — width default: generic_wide; D57 has a scale slot ─
-
-#[cfg(any(feature = "d57", feature = "wide"))]
-impl<const SCALE: u32> SqrtPolicy for crate::types::widths::D57<SCALE> {
-    #[inline]
-    fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        // Scale-range overrides — first match wins.
-        if matches!(SCALE, 20..=20) {
-            // SCALE_OVERRIDE(D57, 20): bespoke kernel slot, currently
-            // a pass-through to `generic_wide` (no behavioural change).
-            // Replace `lookup_d57_s20::sqrt` body with a tuned
-            // implementation when ready.
-            return Self(sqrt::lookup_d57_s20::sqrt(self.0, mode));
-        }
-        // Width default (global default for the wide-tier family).
-        Self(sqrt::generic_wide::sqrt_d57(self.0, SCALE, mode))
-    }
-}
-
-#[cfg(any(feature = "d76", feature = "wide"))]
-impl<const SCALE: u32> SqrtPolicy for crate::types::widths::D76<SCALE> {
-    #[inline]
-    fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        Self(sqrt::generic_wide::sqrt_d76(self.0, SCALE, mode))
-    }
-}
-
-#[cfg(any(feature = "d115", feature = "wide"))]
-impl<const SCALE: u32> SqrtPolicy for crate::types::widths::D115<SCALE> {
-    #[inline]
-    fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        Self(sqrt::generic_wide::sqrt_d115(self.0, SCALE, mode))
-    }
-}
-
-#[cfg(any(feature = "d153", feature = "wide"))]
-impl<const SCALE: u32> SqrtPolicy for crate::types::widths::D153<SCALE> {
-    #[inline]
-    fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        Self(sqrt::generic_wide::sqrt_d153(self.0, SCALE, mode))
-    }
-}
-
-#[cfg(any(feature = "d230", feature = "wide"))]
-impl<const SCALE: u32> SqrtPolicy for crate::types::widths::D230<SCALE> {
-    #[inline]
-    fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        Self(sqrt::generic_wide::sqrt_d230(self.0, SCALE, mode))
-    }
-}
-
-#[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-impl<const SCALE: u32> SqrtPolicy for crate::types::widths::D307<SCALE> {
-    #[inline]
-    fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        Self(sqrt::generic_wide::sqrt_d307(self.0, SCALE, mode))
-    }
-}
-
-#[cfg(any(feature = "d462", feature = "x-wide"))]
-impl<const SCALE: u32> SqrtPolicy for crate::types::widths::D462<SCALE> {
-    #[inline]
-    fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        Self(sqrt::generic_wide::sqrt_d462(self.0, SCALE, mode))
-    }
-}
-
-#[cfg(any(feature = "d616", feature = "x-wide"))]
-impl<const SCALE: u32> SqrtPolicy for crate::types::widths::D616<SCALE> {
-    #[inline]
-    fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        Self(sqrt::generic_wide::sqrt_d616(self.0, SCALE, mode))
-    }
-}
-
-#[cfg(any(feature = "d924", feature = "xx-wide"))]
-impl<const SCALE: u32> SqrtPolicy for crate::types::widths::D924<SCALE> {
-    #[inline]
-    fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        Self(sqrt::generic_wide::sqrt_d924(self.0, SCALE, mode))
-    }
-}
-
-#[cfg(any(feature = "d1232", feature = "xx-wide"))]
-impl<const SCALE: u32> SqrtPolicy for crate::types::widths::D1232<SCALE> {
-    #[inline]
-    fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        Self(sqrt::generic_wide::sqrt_d1232(self.0, SCALE, mode))
+        // Native tight-`Int<W>` arm: pick the literal work width `W` for
+        // this `(N, SCALE)` cell, then run Newton directly in `Int<W>`.
+        // The `(N, SCALE)` match is const-foldable (both const generics),
+        // so each monomorphisation keeps exactly one arm and the rest are
+        // dead-arm-eliminated in release. The `_ => Newton` fallback never
+        // fires for a cell `select` routed to `Native`.
+        Algorithm::Native => match N {
+            // All wide tiers run at the full-range work width `W = 2N`, which
+            // covers `mag · 10^SCALE` for every valid SCALE of the tier (the
+            // magnitude is ≤ 64N bits and `10^SCALE` adds ≤ 64N more at the
+            // tier's max scale). `10^SCALE` folds at compile time via the
+            // `const { … }` block. The `(N, SCALE)` cells routed here by
+            // `select` all satisfy the per-N high-scale gate; the `_ => Newton`
+            // fallback is dead for any cell `select` routes to `Native`.
+            3 => sqrt::sqrt_native::sqrt_native::<N, 6>(raw, const { Int::<6>::TEN.pow(SCALE) }, mode),
+            4 => sqrt::sqrt_native::sqrt_native::<N, 8>(raw, const { Int::<8>::TEN.pow(SCALE) }, mode),
+            6 => sqrt::sqrt_native::sqrt_native::<N, 12>(raw, const { Int::<12>::TEN.pow(SCALE) }, mode),
+            8 => sqrt::sqrt_native::sqrt_native::<N, 16>(raw, const { Int::<16>::TEN.pow(SCALE) }, mode),
+            12 => sqrt::sqrt_native::sqrt_native::<N, 24>(raw, const { Int::<24>::TEN.pow(SCALE) }, mode),
+            16 => sqrt::sqrt_native::sqrt_native::<N, 32>(raw, const { Int::<32>::TEN.pow(SCALE) }, mode),
+            24 => sqrt::sqrt_native::sqrt_native::<N, 48>(raw, const { Int::<48>::TEN.pow(SCALE) }, mode),
+            32 => sqrt::sqrt_native::sqrt_native::<N, 64>(raw, const { Int::<64>::TEN.pow(SCALE) }, mode),
+            48 => sqrt::sqrt_native::sqrt_native::<N, 96>(raw, const { Int::<96>::TEN.pow(SCALE) }, mode),
+            64 => sqrt::sqrt_native::sqrt_native::<N, 128>(raw, const { Int::<128>::TEN.pow(SCALE) }, mode),
+            _ => sqrt::sqrt_newton::sqrt_newton::<N>(raw, SCALE, mode),
+        },
+        Algorithm::Schoolbook => sqrt::sqrt_newton::sqrt_newton::<N>(raw, SCALE, mode),
     }
 }

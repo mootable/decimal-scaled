@@ -14,7 +14,7 @@ only.
 
 ```toml
 [dependencies]
-decimal-scaled = { version = "0.4", features = ["macros"] }
+decimal-scaled = { version = "0.5", features = ["macros"] }
 ```
 
 ```rust
@@ -28,19 +28,18 @@ let cost = d38!(19.99, scale 2);   // D38<2>::from_bits(1999)
 
 | macro | target | storage | `MAX_SCALE` | feature gate |
 |---|---|---|---|---|
-| `d9!`    | `D9<SCALE>`    | `i32`     |   8  | always              |
-| `d18!`   | `D18<SCALE>`   | `i64`     |  17  | always              |
-| `d38!`   | `D38<SCALE>`   | `i128`    |  37  | always              |
-| `d57!`   | `D57<SCALE>`   | `Int192`  |  56  | `d57` / `wide`      |
-| `d76!`   | `D76<SCALE>`   | `Int256`  |  75  | `d76` / `wide`      |
-| `d115!`  | `D115<SCALE>`  | `Int384`  | 114  | `d115` / `wide`     |
-| `d153!`  | `D153<SCALE>`  | `Int512`  | 152  | `d153` / `wide`     |
-| `d230!`  | `D230<SCALE>`  | `Int768`  | 229  | `d230` / `wide`     |
-| `d307!`  | `D307<SCALE>`  | `Int1024` | 306  | `d307` / `wide`     |
-| `d462!`  | `D462<SCALE>`  | `Int1536` | 461  | `d462` / `x-wide`   |
-| `d616!`  | `D616<SCALE>`  | `Int2048` | 615  | `d616` / `x-wide`   |
-| `d924!`  | `D924<SCALE>`  | `Int3072` | 923  | `d924` / `xx-wide`  |
-| `d1232!` | `D1232<SCALE>` | `Int4096` | 1231 | `d1232` / `xx-wide` |
+| `d18!`   | `D18<SCALE>`   | `Int<1>`  |  17  | always              |
+| `d38!`   | `D38<SCALE>`   | `Int<2>`  |  37  | always              |
+| `d57!`   | `D57<SCALE>`   | `Int<3>`  |  56  | `d57` / `wide`      |
+| `d76!`   | `D76<SCALE>`   | `Int<4>`  |  75  | `d76` / `wide`      |
+| `d115!`  | `D115<SCALE>`  | `Int<6>`  | 114  | `d115` / `wide`     |
+| `d153!`  | `D153<SCALE>`  | `Int<8>`  | 152  | `d153` / `wide`     |
+| `d230!`  | `D230<SCALE>`  | `Int<12>` | 229  | `d230` / `wide`     |
+| `d307!`  | `D307<SCALE>`  | `Int<16>` | 306  | `d307` / `wide`     |
+| `d462!`  | `D462<SCALE>`  | `Int<24>` | 461  | `d462` / `x-wide`   |
+| `d616!`  | `D616<SCALE>`  | `Int<32>` | 615  | `d616` / `x-wide`   |
+| `d924!`  | `D924<SCALE>`  | `Int<48>` | 923  | `d924` / `xx-wide`  |
+| `d1232!` | `D1232<SCALE>` | `Int<64>` | 1231 | `d1232` / `xx-wide` |
 
 Each entry point accepts the same argument grammar.
 
@@ -177,7 +176,7 @@ use a wider entry point.
 ## Examples
 
 ```rust
-use decimal_scaled::{d9, d18, d38, D9s2, D18s12, D38s2, D38s12, D38};
+use decimal_scaled::{d18, d38, D18s12, D38s2, D38s12, D38};
 
 // Auto-scale inference.
 let a = d38!(1.23);                  // D38<2>
@@ -203,7 +202,7 @@ let with_scale = d38!(basis, scale 4);  // basis × 10^4 at runtime
 
 // Per-scale wrappers (curated subset; pre-bake `scale N`).
 let pi  = d38s12!(3.141_592_653_590); // == d38!(…, scale 12)
-let cents_alias = d9s2!(0.50);        // == d9!(0.50, scale 2)
+let cents_alias = d18s2!(0.50);       // == d18!(0.50, scale 2)
 ```
 
 Wide-tier (requires `wide` / `x-wide`):
@@ -227,16 +226,15 @@ width - the long tail remains reachable via the explicit
 
 | width | wrappers |
 |---|---|
-| D9 | `d9s0!`, `d9s2!`, `d9s4!`, `d9s6!` |
 | D18 | `d18s0!`, `d18s2!`, `d18s4!`, `d18s6!`, `d18s9!`, `d18s12!` |
 | D38 | `d38s0!`, `d38s2!`, `d38s4!`, `d38s6!`, `d38s8!`, `d38s9!`, `d38s12!`, `d38s15!`, `d38s18!`, `d38s24!`, `d38s35!`, `d38s37!` |
 | D76 | `d76s0!`, `d76s2!`, `d76s6!`, `d76s12!`, `d76s18!`, `d76s35!`, `d76s50!`, `d76s75!` |
 | D153 | `d153s0!`, `d153s35!`, `d153s75!`, `d153s150!`, `d153s152!` |
 | D307 | `d307s0!`, `d307s35!`, `d307s150!`, `d307s300!`, `d307s306!` |
 
-Per-scale wrappers at the old `MAX_SCALE == name` cap (`d9s9!`,
-`d18s18!`, `d38s38!`, `d76s76!`, `d153s153!`, `d307s307!`) were
-removed in 0.4.0 along with the matching scale aliases.
+There are no per-scale wrappers at the `MAX_SCALE == name` boundary
+(`d18s18!`, `d38s38!`, `d76s76!`, `d153s153!`, `d307s307!`): the scale cap
+is `MAX_SCALE == name - 1`.
 
 Each wrapper forwards every other qualifier unchanged:
 
@@ -254,7 +252,7 @@ d38s2!(1.234_567, rounded)
 | Scale exceeds width max | `scale 38 exceeds max for D38 (max = 37)` |
 | Scale required for expression | `scale must be specified for an expression value: d38!(expr, scale N)` |
 | Lossy literal without `rounded` | `literal 1.234567 has 6 fractional digits, target scale 2 would lose precision; pass rounded to opt into half-to-even rounding` |
-| Bits overflow storage | `scaled value 1234567890000000000000000 overflows D9's storage (i32)` |
+| Bits overflow storage | `scaled value 1234567890000000000000000 overflows D18's storage (Int::<1>)` |
 | Bare leading/trailing dot | `decimal literals require a digit on each side of the dot (write 0.5 not .5)` |
 | Inferred scale exceeds max | `1e-50 implies scale 50, which exceeds D38::MAX_SCALE (37); use an explicit scale or a wider entry point` |
 | Type suffix on literal | `type suffixes (e.g. _i64, _f32) are not accepted in decimal-scaled literals` |
@@ -268,52 +266,58 @@ d38s2!(1.234_567, rounded)
 ## Generated code
 
 For literal input, the macro evaluates the bit pattern at
-proc-macro time:
+proc-macro time, then materialises it as a `const` of the type's
+const-generic `Int<N>` storage via `Int::<N>::from_str_radix` (a
+`const fn`). Every width takes this path — `D18` is backed by
+`Int<1>`, `D38` by `Int<2>`, and the wide tiers by `Int<4>` …
+`Int<64>`:
 
-- **Narrow tiers** (D9 / D18 / D38) emit a typed integer literal
-  directly:
-  ```rust
-  d38!(1.23)            // → ::decimal_scaled::D38::<2>::from_bits(123_i128)
-  d18!(1.5, scale 6)    // → ::decimal_scaled::D18::<6>::from_bits(1_500_000_i64)
-  d9!(0x7F)             // → ::decimal_scaled::D9::<0>::from_bits(127_i32)
-  ```
-- **Wide tiers** (D76 / D153 / D307) materialise the bits via the
-  storage type's `from_str_radix` (a `const fn`):
-  ```rust
-  d76!(1.23)
-  // → ::decimal_scaled::D76::<2>::from_bits({
-  //       const BITS: ::decimal_scaled::Int256 =
-  //           match Int256::from_str_radix("123", 10) {
-  //               Ok(v) => v,
-  //               Err(_) => panic!("d76! bits parse failed"),
-  //           };
-  //       BITS
-  //   })
-  ```
+```rust
+d38!(1.23)
+// → ::decimal_scaled::D38::<2>::from_bits({
+//       const BITS: ::decimal_scaled::Int::<2> =
+//           match <::decimal_scaled::Int::<2>>::from_str_radix("123", 10) {
+//               Ok(v) => v,
+//               Err(_) => panic!("d38! bits parse failed"),
+//           };
+//       BITS
+//   })
+d76!(1.23)
+// → ::decimal_scaled::D76::<2>::from_bits({
+//       const BITS: ::decimal_scaled::Int::<4> =
+//           match <::decimal_scaled::Int::<4>>::from_str_radix("123", 10) {
+//               Ok(v) => v,
+//               Err(_) => panic!("d76! bits parse failed"),
+//           };
+//       BITS
+//   })
+```
 
-For inline expressions the macro emits a small runtime
-`checked_mul`:
+For inline expressions the macro bridges the integer-valued
+expression to the storage type and emits a runtime `checked_mul`:
 
 ```rust
 d38!(my_i128, scale 4)
 // → ::decimal_scaled::D38::<4>::from_bits({
-//      let _v: i128 = (my_i128);
-//      _v.checked_mul(10_000_i128).expect("d38! overflow …")
+//      let _v: ::decimal_scaled::Int::<2> =
+//          <Int::<2> as ::core::convert::TryFrom<i128>>::try_from((my_i128) as i128).unwrap();
+//      let mult: ::decimal_scaled::Int::<2> =
+//          <Int::<2>>::from_str_radix("10", 10).expect("dNN! mult literal").pow(4);
+//      _v.checked_mul(mult).expect("d38! overflow …")
 //   })
 ```
 
 The runtime cost is a single multiply plus an overflow check;
-the check fires on `i128::MIN * 10^k`-style edges and panics with
-a clear message.
+the check fires on storage-range edges and panics with a clear
+message.
 
 ---
 
 ## Const-context usage
 
-Because the macro emits `D::<SCALE>::from_bits(integer_literal)`
-or `from_bits({ const BITS: ... ; BITS })` and `from_bits` is
-`const fn`, the literal form is usable in `const` items at every
-width:
+Because the macro emits `D::<SCALE>::from_bits({ const BITS: ... ; BITS })`
+and `from_bits` is `const fn`, the literal form is usable in
+`const` items at every width:
 
 ```rust
 use decimal_scaled::{d38, D38};
@@ -332,9 +336,10 @@ the literal form when you need a const.
 
 ---
 
-## Test corpus
+## Test coverage
 
-`tests/macros.rs` (in the parent crate) exercises every entry
+`decimal-scale-test/tests/api/proc_macro.rs` exercises every entry
 point, every literal shape, every error path, the radix-prefix
 forms, the inline-expression form, and the curated per-scale
-wrappers. Run under `cargo test --features "wide x-wide macros"`.
+wrappers. Run under
+`cargo test -p decimal-scale-test --features macros --test api proc_macro`.

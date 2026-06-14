@@ -1,0 +1,334 @@
+name: "✅ ci (pre-merge gates)"
+
+# Pre-merge enforcement for the release checks that were previously
+# trusted-but-manual. Runs on every pull request so a broken build,
+# broken docs, or a clippy regression is caught BEFORE merge — not
+# discovered post-merge or at release time.
+#
+# Golden correctness is not gated here — the comprehensive sweep
+# (golden-comprehensive.yml) covers it advisory-style and is fast enough,
+# so the pre-merge gate stays lean.
+#
+# Gates (must pass): tests, no_std, docs, msrv. Advisory (never fails the
+# build): clippy.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "release/*"
+
+permissions:
+  contents: read
+
+concurrency:
+  # Validate only the LATEST tip: the gates are now width-sharded and fast
+  # (a ~20-min wall of small parallel jobs) and every push is locally gated
+  # before it lands, so a newer push DELIBERATELY cancels the in-progress and
+  # queued runs rather than waiting them out — a superseded tip's verdict is
+  # stale the moment a newer tip exists, so re-validating it is wasted runner
+  # time. (TRIAL, 2026-06-12; revert to `cancel-in-progress: false` if it
+  # proves wrong.) bench-branch-compare stays serial/deferred — its per-tip
+  # benchmark artifacts are each real data and must not be cancelled.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # GATE: the full test suite. Builds every target (lib, tests,
+  # examples, benches) under the widest stable feature set, then the
+  # default-feature suite. Builds-all is the point — it is what would
+  # have caught the 0.4.4 example-gating breakage that per-file
+  # `--test` scoping misses.
+  tests:
+    name: tests (gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # The full-feature dev-profile compile of decimal-scale-test (the
+      # rung kernels × 13 ladder widths plus the narrow Int<24> Ziv
+      # machinery, all with debuginfo) can OOM the hosted runner at the
+      # default parallelism. Two parallel rustc units keep the peak inside
+      # the runner.
+      CARGO_BUILD_JOBS: "2"
+      # line-tables-only: full dev debuginfo is most of a test compile's
+      # memory/size; line tables keep file:line backtraces usable while
+      # shedding the bulk (a single rustc can otherwise peak past the
+      # 16 GB runner).
+      CARGO_PROFILE_DEV_DEBUG: "line-tables-only"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-ci-tests-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'macros/Cargo.toml') }}
+          restore-keys: |
+            cargo-ci-tests-${{ runner.os }}-
+
+      - name: Install system libs (fontconfig for the plotters dev-dep)
+        # The full `cargo test` builds every target including the
+        # chart_gen example, which pulls plotters → yeslogic-fontconfig-sys.
+        run: sudo rm -f /etc/apt/sources.list.d/*microsoft* /etc/apt/sources.list.d/*azure* 2>/dev/null || true; sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
+
+      - name: Add swap for the compile's memory peak
+        # A single rustc on a full-width monomorphised target can peak past
+        # the runner's 16 GB; disk-backed swap absorbs the short spike.
+        run: |
+          set -euo pipefail
+          SWAP=/mnt/swapfile2
+          sudo fallocate -l 12G "$SWAP" 2>/dev/null || { SWAP=/swapfile2; sudo fallocate -l 8G "$SWAP"; }
+          sudo chmod 600 "$SWAP"
+          sudo mkswap "$SWAP"
+          sudo swapon "$SWAP"
+          free -h
+
+      - name: Full test suite (wide tiers + macros)
+        # The full `cargo test` — no `--test` scoping — so every
+        # example and bench target is compiled as part of the run.
+        # The golden surface runs in its own golden-comprehensive.yml
+        # workflow (the crate's correctness gate), not part of this job.
+        run: cargo test --features wide,x-wide,xx-wide,macros
+
+      - name: Default-feature test suite (narrow tiers)
+        # The wide-tier test files are feature-gated — file-top
+        # `#![cfg(feature = ...)]` module gates plus Cargo.toml
+        # `required-features` on the targets that name every tier — so
+        # a plain default `cargo test` compiles and runs the narrow-tier
+        # subset. This verifies the default-feature consumer surface
+        # BEHAVES, not merely builds.
+        run: cargo test
+
+      # NOTE: the full-feature consolidated leg (`cargo test -p
+      # decimal-scale-test --features wide,x-wide,xx-wide,macros,dyn`) runs
+      # width-sharded in the `tests-consolidated` matrix job below — one test
+      # binary monomorphising all 13 widths exceeds the runner's memory. This
+      # job keeps the default-feature consolidated leg.
+      - name: Consolidated test suite (decimal-scale-test, default features)
+        # Default-feature (narrow-tier) run of the migrated suite — the
+        # feature passthrough exists exactly so this leg keeps covering
+        # the narrow build (several historical regressions were
+        # narrow-build-only).
+        run: cargo test -p decimal-scale-test
+
+  # GATE: the migrated integration suite (decimal-scale-test), WIDTH-SHARDED.
+  # Each shard builds exactly ONE width tier — a supported config since policy
+  # routing became feature-independent — so no single rustc carries the whole
+  # ladder (a single all-width test binary exceeds the runner's memory).
+  # Mirrors the per-tier `--features <tier>` shard pattern in
+  # golden-comprehensive.yml; the union of all shards covers the full surface.
+  # fail-fast off so a slow/failed tier doesn't mask others.
+  tests-consolidated:
+    name: tests consolidated (${{ matrix.shard }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # The heavy monomorphisation lives in the decimal-scaled-cells rlib the
+      # shard links, so a single-tier build is light and runs at the runner's
+      # default parallelism (no -j cap needed). line-tables-only debuginfo
+      # stays as cheap weight-shedding insurance.
+      CARGO_PROFILE_DEV_DEBUG: "line-tables-only"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { shard: narrow, feat: "macros,dyn" }
+          - { shard: d57,    feat: "d57,macros,dyn" }
+          - { shard: d76,    feat: "d76,macros,dyn" }
+          - { shard: d115,   feat: "d115,macros,dyn" }
+          - { shard: d153,   feat: "d153,macros,dyn" }
+          - { shard: d230,   feat: "d230,macros,dyn" }
+          - { shard: d307,   feat: "d307,macros,dyn" }
+          - { shard: d462,   feat: "d462,macros,dyn" }
+          - { shard: d616,   feat: "d616,macros,dyn" }
+          - { shard: d924,   feat: "d924,macros,dyn" }
+          - { shard: d1232,  feat: "d1232,macros,dyn" }
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-ci-tests-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'macros/Cargo.toml') }}
+          restore-keys: |
+            cargo-ci-tests-${{ runner.os }}-
+
+      - name: Add swap for the compile's memory peak
+        # Copied from the `tests` job: disk-backed swap absorbs a short
+        # compile-memory spike as cheap insurance on top of the single-tier
+        # build.
+        run: |
+          set -euo pipefail
+          SWAP=/mnt/swapfile2
+          sudo fallocate -l 12G "$SWAP" 2>/dev/null || { SWAP=/swapfile2; sudo fallocate -l 8G "$SWAP"; }
+          sudo chmod 600 "$SWAP"
+          sudo mkswap "$SWAP"
+          sudo swapon "$SWAP"
+          free -h
+
+      - name: Consolidated test suite (${{ matrix.shard }} tier)
+        # `-p decimal-scale-test` scopes to the gate crate, so the root
+        # crate's plotters/fontconfig bench dev-deps never compile (no system
+        # libs needed). One width tier + macros,dyn per shard.
+        run: cargo test -p decimal-scale-test --features ${{ matrix.feat }}
+
+  # GATE: the no_std + alloc build. The crate is `#![no_std]` under
+  # non-default features, but no workflow exercised that build, so a
+  # missing-import regression (bare `Vec` / `vec!` / std-only f64
+  # intrinsics in the integer + algo layers) compiled cleanly under
+  # `std` and only broke `no_std` consumers. This job is the real gate:
+  # a plain library `cargo check` with `default-features` off and the
+  # wide tiers on. No fontconfig — no examples or benches are built.
+  no_std:
+    name: no_std (gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-ci-nostd-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'macros/Cargo.toml') }}
+          restore-keys: |
+            cargo-ci-nostd-${{ runner.os }}-
+
+      - name: no_std + alloc lib check (wide tiers + macros)
+        # `--no-default-features` drops `std`, leaving the `#![no_std]`
+        # path with the `alloc` base. Lib-only `cargo check` (no
+        # examples/benches), so no system libs are required.
+        run: cargo check --no-default-features --features alloc,wide,x-wide,xx-wide,macros
+
+  # GATE: rustdoc with warnings-as-errors. Catches broken intra-doc
+  # links before merge; docs.yml only runs this post-merge on `main`.
+  docs:
+    name: docs (gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-ci-docs-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'macros/Cargo.toml') }}
+          restore-keys: |
+            cargo-ci-docs-${{ runner.os }}-
+
+      - name: Build rustdoc (-D warnings)
+        # `--no-deps` documents only this crate, so plotters (a
+        # dev-dependency) is not compiled and no fontconfig system
+        # lib is required. RUSTDOCFLAGS=-D warnings fails on any
+        # broken intra-doc link.
+        run: cargo doc --no-deps --features wide,x-wide,xx-wide,macros
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+
+  # GATE: the MSRV. Until this job nothing built with a pinned-old
+  # toolchain — the other jobs all run `dtolnay/rust-toolchain@stable`,
+  # so a newer-stdlib call or language feature passed CI green and only
+  # broke consumers holding the documented MSRV. That had already
+  # happened: the manifests declared `rust-version = "1.85"`, but the
+  # lib needs let-chains (stable since 1.88) and `_`-inferred const
+  # generic arguments as in `dispatch::<_, SCALE>` (stable since 1.89).
+  # 1.89 is the measured floor (1.88 fails, 1.89 builds both feature
+  # sets), so this job pins 1.89 and the manifests' `rust-version`
+  # must match it. `cargo check` (not `cargo test`) keeps the job
+  # cheap: type-checking the lib is what catches MSRV drift; behaviour
+  # is covered by the stable-toolchain gates above.
+  msrv:
+    name: msrv (gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain (MSRV 1.89)
+        uses: dtolnay/rust-toolchain@1.89
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-ci-msrv-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'macros/Cargo.toml') }}
+          restore-keys: |
+            cargo-ci-msrv-${{ runner.os }}-
+
+      - name: MSRV lib check (wide tiers + macros)
+        # Lib-only `cargo check` (no examples/benches), so no system
+        # libs are required and the job stays minutes-cheap.
+        run: cargo check --features wide,x-wide,xx-wide,macros
+
+      - name: MSRV lib check (default features)
+        run: cargo check
+
+  # INFORMATIONAL: clippy on the lib. The lib currently emits ~214
+  # pre-existing macro-generated warnings, so a `-D warnings` clippy
+  # gate would red-fail every PR. Run it without `-D warnings` and
+  # never fail the build (continue-on-error).
+  #
+  # TODO(0.5.0): drive clippy warnings to zero, then promote to a gate
+  # (add `-- -D warnings` and drop continue-on-error).
+  clippy:
+    name: clippy (informational)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-ci-clippy-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'macros/Cargo.toml') }}
+          restore-keys: |
+            cargo-ci-clippy-${{ runner.os }}-
+
+      - name: Clippy (lib, informational — no -D warnings)
+        run: cargo clippy --lib --features wide,x-wide,xx-wide,macros
