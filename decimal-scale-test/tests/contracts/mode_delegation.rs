@@ -14,7 +14,7 @@ mod from_arithmetic_mode_aware {
     fn mul_with_modes() {
         // 1.5 * 2.0 = 3.0 (exact at any mode)
         let a = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_500_000_000_000_i128).unwrap());
-        let b = D38s12::from(2);
+        let b = D38s12::try_from(2).unwrap();
         for m in [
             RoundingMode::HalfToEven,
             RoundingMode::HalfAwayFromZero,
@@ -30,8 +30,8 @@ mod from_arithmetic_mode_aware {
 
     #[test]
     fn div_with_modes() {
-        let a = D38s12::from(1);
-        let b = D38s12::from(3);
+        let a = D38s12::try_from(1).unwrap();
+        let b = D38s12::try_from(3).unwrap();
         // 1/3 = 0.333â€¦ â€” different modes yield slightly different LSBs.
         let r_even = a.div_with(b, RoundingMode::HalfToEven);
         let r_away = a.div_with(b, RoundingMode::HalfAwayFromZero);
@@ -55,9 +55,9 @@ mod from_arithmetic_mode_aware {
     #[test]
     fn mul_assign_div_assign() {
         let mut v = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_500_000_000_000_i128).unwrap()); // 1.5
-        v *= D38s12::from(2);
+        v *= D38s12::try_from(2).unwrap();
         assert_eq!(v.to_bits(), 3_000_000_000_000);
-        v /= D38s12::from(3);
+        v /= D38s12::try_from(3).unwrap();
         assert_eq!(v.to_bits(), 1_000_000_000_000);
     }
     // â”€â”€â”€ D18 mul / div via the u128/u64 fast path â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -73,7 +73,7 @@ mod from_arithmetic_mode_aware {
         use decimal_scaled::D18;
         // 1.5 * 2.0 = 3.0 (exact under every mode).
         let a = D18::<18>::from_bits(decimal_scaled::Int::<1>::from(1_500_000_000_000_000_000_i64));
-        let b = D18::<18>::from(2);
+        let b = D18::<18>::try_from(2).unwrap();
         let expected = 3_000_000_000_000_000_000_i64;
         for m in [
             RoundingMode::HalfToEven,
@@ -93,8 +93,8 @@ mod from_arithmetic_mode_aware {
         use decimal_scaled::D18;
         // 1.0 / 3.0 at scale 18 â€” never exact. Check all six modes agree on
         // the truncated quotient and disagree by at most 1 LSB.
-        let a = D18::<18>::from(1);
-        let b = D18::<18>::from(3);
+        let a = D18::<18>::try_from(1).unwrap();
+        let b = D18::<18>::try_from(3).unwrap();
         let bits = [
             a.div_with(b, RoundingMode::HalfToEven).to_bits(),
             a.div_with(b, RoundingMode::HalfAwayFromZero).to_bits(),
@@ -117,7 +117,7 @@ mod from_arithmetic_mode_aware {
     fn d18_mul_negative_signs_at_s18() {
         use decimal_scaled::D18;
         let a = D18::<18>::from_bits(decimal_scaled::Int::<1>::from(1_500_000_000_000_000_000_i64));
-        let b_pos = D18::<18>::from(2);
+        let b_pos = D18::<18>::try_from(2).unwrap();
         let b_neg = -b_pos;
         // (+1.5) * (-2.0) = -3.0
         let r1 = a.mul_with(b_neg, RoundingMode::HalfToEven);
@@ -133,8 +133,8 @@ mod from_arithmetic_mode_aware {
     #[test]
     fn d18_div_negative_signs_at_s18() {
         use decimal_scaled::D18;
-        let one = D18::<18>::from(1);
-        let three_pos = D18::<18>::from(3);
+        let one = D18::<18>::try_from(1).unwrap();
+        let three_pos = D18::<18>::try_from(3).unwrap();
         let three_neg = -three_pos;
         // (+1)/(-3) â€” both modes should equal sign-flipped (+1)/(+3) result
         // under HalfToEven.
@@ -180,8 +180,8 @@ mod from_arithmetic_mode_aware {
     fn d18_mul_scale_0_short_circuit() {
         use decimal_scaled::D18;
         // SCALE = 0: the `if SCALE == 0` arm bypasses the divrem helper.
-        let a = D18::<0>::from(12_345);
-        let b = D18::<0>::from(67_890);
+        let a = D18::<0>::try_from(12_345).unwrap();
+        let b = D18::<0>::try_from(67_890).unwrap();
         let r = a.mul_with(b, RoundingMode::HalfToEven);
         assert_eq!(r.to_bits(), 12_345_i64 * 67_890);
     }
@@ -190,8 +190,8 @@ mod from_arithmetic_mode_aware {
     fn d18_div_with_at_s10_fast_path() {
         use decimal_scaled::D18;
         // SCALE = 10 â€” divisor 10^10 still > 2^32; the new path applies.
-        let a = D18::<10>::from(7);
-        let b = D18::<10>::from(2);
+        let a = D18::<10>::try_from(7).unwrap();
+        let b = D18::<10>::try_from(2).unwrap();
         let r = a.div_with(b, RoundingMode::HalfToEven);
         // 7/2 = 3.5 â†¦ storage 3.5 * 10^10 = 35_000_000_000.
         assert_eq!(r.to_bits(), 35_000_000_000);

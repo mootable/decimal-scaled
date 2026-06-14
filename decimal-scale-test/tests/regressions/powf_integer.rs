@@ -25,7 +25,7 @@ mod from_powf_integer_fastpath_parity {
     /// must hit the fast path.
     fn d38_check<const S: u32>(base_raw: i128, n: i32) {
         let base = D38::<S>::from_bits(decimal_scaled::Int::<2>::try_from(base_raw).unwrap());
-        let exp_d = D38::<S>::from(n);
+        let exp_d = D38::<S>::try_from(n).unwrap();
         let from_powf = base.powf_strict(exp_d);
         let from_powi = base.powi(n);
         assert_eq!(
@@ -37,7 +37,7 @@ mod from_powf_integer_fastpath_parity {
 
     fn d18_check<const S: u32>(base_raw: i64, n: i32) {
         let base = D18::<S>::from_bits(decimal_scaled::Int::<1>::from(base_raw));
-        let exp_d = D18::<S>::from(n);
+        let exp_d = D18::<S>::try_from(n).unwrap();
         let from_powf = base.powf_strict(exp_d);
         let from_powi = base.powi(n);
         assert_eq!(
@@ -82,7 +82,7 @@ mod from_powf_integer_fastpath_parity {
     fn d38_powf_zero_exp_returns_one() {
         let base =
             D38::<12>::from_bits(decimal_scaled::Int::<2>::try_from(2_000_000_000_000_i128).unwrap());
-        let zero_exp = D38::<12>::from(0);
+        let zero_exp = D38::<12>::try_from(0).unwrap();
         assert_eq!(
             base.powf_strict(zero_exp).to_bits(),
             D38::<12>::ONE.to_bits()
@@ -96,7 +96,7 @@ mod from_powf_integer_fastpath_parity {
         let base =
             D38::<12>::from_bits(decimal_scaled::Int::<2>::try_from(2_000_000_000_000_i128).unwrap()); // 2.0
         for n in [-1_i32, -2, -3, -5, -10] {
-            let exp_d = D38::<12>::from(n);
+            let exp_d = D38::<12>::try_from(n).unwrap();
             assert_eq!(
                 base.powf_strict(exp_d).to_bits(),
                 base.powi(n).to_bits(),
@@ -110,9 +110,9 @@ mod from_powf_integer_fastpath_parity {
     fn d57_powf_integer_fastpath_parity() {
         use decimal_scaled::D57;
         // 2.0 at SCALE = 20 (a primary target scale for D57).
-        let two = D57::<20>::from(2);
+        let two = D57::<20>::try_from(2).unwrap();
         for n in -5_i32..=10 {
-            let exp_d = D57::<20>::from(n);
+            let exp_d = D57::<20>::try_from(n).unwrap();
             let from_powf = two.powf_strict(exp_d);
             let from_powi = two.powi(n);
             assert_eq!(
@@ -128,9 +128,9 @@ mod from_powf_integer_fastpath_parity {
     fn d76_powf_integer_fastpath_parity() {
         use decimal_scaled::D76;
         // 2.0 at SCALE = 35.
-        let two = D76::<35>::from(2);
+        let two = D76::<35>::try_from(2).unwrap();
         for n in -3_i32..=8 {
-            let exp_d = D76::<35>::from(n);
+            let exp_d = D76::<35>::try_from(n).unwrap();
             let from_powf = two.powf_strict(exp_d);
             let from_powi = two.powi(n);
             assert_eq!(
@@ -146,9 +146,9 @@ mod from_powf_integer_fastpath_parity {
     fn d307_powf_integer_fastpath_parity() {
         use decimal_scaled::D307;
         // 2.0 at SCALE = 150 (matches the bench's xx-wide cell).
-        let two = D307::<150>::from(2);
+        let two = D307::<150>::try_from(2).unwrap();
         for n in -3_i32..=8 {
-            let exp_d = D307::<150>::from(n);
+            let exp_d = D307::<150>::try_from(n).unwrap();
             let from_powf = two.powf_strict(exp_d);
             let from_powi = two.powi(n);
             assert_eq!(
@@ -219,8 +219,8 @@ mod from_powf_wide_integer_exact {
                 // headroom at MAX_SCALE − 1).
                 let p10: Int<$N> = Int::<$N>::from(10i64).pow($S);
                 for &(b, e, div) in CASES {
-                    let base = $Ty::<$S>::from(b);
-                    let exp = $Ty::<$S>::from(e);
+                    let base = $Ty::<$S>::try_from(b).unwrap();
+                    let exp = $Ty::<$S>::try_from(e).unwrap();
                     // Exact reciprocal raw = 10^S / base^|k| (terminating ⇒ exact).
                     let want: Int<$N> = p10 / Int::<$N>::from(div);
                     for &mode in &MODES {

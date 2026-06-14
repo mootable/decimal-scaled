@@ -522,17 +522,17 @@ mod from_src_widths {
         use Int;
         type D = decimal_scaled::D<Int<4>, 6>;
         // From<primitive int>
-        let from_i32: D = 5i32.into();
+        let from_i32: D = D::try_from(5i32).unwrap();
         assert_eq!(
             from_i32.to_bits(),
             Int::<4>::from_str_radix("5000000", 10).unwrap()
         );
-        let from_u64: D = 7u64.into();
+        let from_u64: D = D::try_from(7u64).unwrap();
         assert_eq!(
             from_u64.to_bits(),
             Int::<4>::from_str_radix("7000000", 10).unwrap()
         );
-        let from_neg: D = (-3i16).into();
+        let from_neg: D = D::try_from(-3i16).unwrap();
         assert_eq!(
             from_neg.to_bits(),
             Int::<4>::from_str_radix("-3000000", 10).unwrap()
@@ -557,8 +557,8 @@ mod from_src_widths {
         );
         assert!(D::try_from(f64::NAN).is_err());
         // from_int / from_i32
-        assert_eq!(D::try_from(9i128).unwrap(), D::from(9i32));
-        assert_eq!(D::from(-4i32), D::from(-4i32));
+        assert_eq!(D::try_from(9i128).unwrap(), D::try_from(9i32).unwrap());
+        assert_eq!(D::try_from(-4i32).unwrap(), D::try_from(-4i32).unwrap());
         // to_int: 2.5 with HalfToEven -> 2
         use decimal_scaled::RoundingMode;
         let two_and_half = D::from_bits(Int::<4>::from_str_radix("2500000", 10).unwrap());
@@ -691,7 +691,7 @@ mod from_src_unified {
     #[test]
     fn cross_width_equal_values() {
         let narrow: decimal_scaled::D<Int<1>, 2> = decimal_scaled::D::<Int<1>, 2>::try_from(5_i64).unwrap();
-        let wide: decimal_scaled::D<Int<2>, 2> = decimal_scaled::D::<Int<2>, 2>::from(5_i64);
+        let wide: decimal_scaled::D<Int<2>, 2> = decimal_scaled::D::<Int<2>, 2>::try_from(5_i64).unwrap();
         assert!(narrow == wide);
         assert!(wide == narrow);
     }
@@ -700,7 +700,7 @@ mod from_src_unified {
     #[test]
     fn cross_width_ordering() {
         let narrow: decimal_scaled::D<Int<1>, 2> = decimal_scaled::D::<Int<1>, 2>::try_from(5_i64).unwrap();
-        let wide_bigger: decimal_scaled::D<Int<2>, 2> = decimal_scaled::D::<Int<2>, 2>::from(6_i64);
+        let wide_bigger: decimal_scaled::D<Int<2>, 2> = decimal_scaled::D::<Int<2>, 2>::try_from(6_i64).unwrap();
         assert!(narrow < wide_bigger);
         assert!(wide_bigger > narrow);
         assert_ne!(narrow, wide_bigger);
@@ -713,7 +713,7 @@ mod from_src_unified {
         // D38<2> scales by 10^2, so from_int(10^16) stores 10^18 in the
         // i128 backend â€” beyond the i64-backed D18 storage range, so the
         // value only fits the wider tier. The comparison must not wrap.
-        let huge: decimal_scaled::D<Int<2>, 2> = decimal_scaled::D::<Int<2>, 2>::from(10_000_000_000_000_000_i64);
+        let huge: decimal_scaled::D<Int<2>, 2> = decimal_scaled::D::<Int<2>, 2>::try_from(10_000_000_000_000_000_i64).unwrap();
         let small: decimal_scaled::D<Int<1>, 2> = decimal_scaled::D::<Int<1>, 2>::try_from(1_i64).unwrap();
         assert!(small < huge);
         assert!(huge > small);
@@ -723,13 +723,13 @@ mod from_src_unified {
     #[test]
     fn cross_width_negatives() {
         let narrow_neg: decimal_scaled::D<Int<1>, 2> = decimal_scaled::D::<Int<1>, 2>::try_from(-3_i64).unwrap();
-        let wide_neg: decimal_scaled::D<Int<2>, 2> = decimal_scaled::D::<Int<2>, 2>::from(-3_i64);
-        let wide_more_neg: decimal_scaled::D<Int<2>, 2> = decimal_scaled::D::<Int<2>, 2>::from(-4_i64);
+        let wide_neg: decimal_scaled::D<Int<2>, 2> = decimal_scaled::D::<Int<2>, 2>::try_from(-3_i64).unwrap();
+        let wide_more_neg: decimal_scaled::D<Int<2>, 2> = decimal_scaled::D::<Int<2>, 2>::try_from(-4_i64).unwrap();
         assert_eq!(narrow_neg, wide_neg);
         assert!(wide_more_neg < narrow_neg);
         assert!(narrow_neg > wide_more_neg);
         // Sign boundary: negative narrow < non-negative wide.
-        let wide_pos: decimal_scaled::D<Int<2>, 2> = decimal_scaled::D::<Int<2>, 2>::from(1_i64);
+        let wide_pos: decimal_scaled::D<Int<2>, 2> = decimal_scaled::D::<Int<2>, 2>::try_from(1_i64).unwrap();
         assert!(narrow_neg < wide_pos);
     }
 
@@ -737,19 +737,19 @@ mod from_src_unified {
     #[test]
     fn same_type_sort() {
         let mut v = [
-            decimal_scaled::D::<Int<2>, 2>::from(3_i64),
-            decimal_scaled::D::<Int<2>, 2>::from(-1_i64),
-            decimal_scaled::D::<Int<2>, 2>::from(2_i64),
-            decimal_scaled::D::<Int<2>, 2>::from(0_i64),
+            decimal_scaled::D::<Int<2>, 2>::try_from(3_i64).unwrap(),
+            decimal_scaled::D::<Int<2>, 2>::try_from(-1_i64).unwrap(),
+            decimal_scaled::D::<Int<2>, 2>::try_from(2_i64).unwrap(),
+            decimal_scaled::D::<Int<2>, 2>::try_from(0_i64).unwrap(),
         ];
         v.sort();
         assert_eq!(
             v,
             [
-                decimal_scaled::D::<Int<2>, 2>::from(-1_i64),
-                decimal_scaled::D::<Int<2>, 2>::from(0_i64),
-                decimal_scaled::D::<Int<2>, 2>::from(2_i64),
-                decimal_scaled::D::<Int<2>, 2>::from(3_i64),
+                decimal_scaled::D::<Int<2>, 2>::try_from(-1_i64).unwrap(),
+                decimal_scaled::D::<Int<2>, 2>::try_from(0_i64).unwrap(),
+                decimal_scaled::D::<Int<2>, 2>::try_from(2_i64).unwrap(),
+                decimal_scaled::D::<Int<2>, 2>::try_from(3_i64).unwrap(),
             ]
         );
     }

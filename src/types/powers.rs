@@ -117,8 +117,8 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     ///
     /// ```ignore
     /// use decimal_scaled::D38s12;
-    /// let two = D38s12::from(2);
-    /// assert_eq!(two.pow(10), D38s12::from(1024));
+    /// let two = D38s12::try_from(2).unwrap();
+    /// assert_eq!(two.pow(10), D38s12::try_from(1024).unwrap());
     /// // exp = 0 returns ONE regardless of base.
     /// assert_eq!(D38s12::ZERO.pow(0), D38s12::ONE);
     /// ```
@@ -160,10 +160,10 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     ///
     /// ```ignore
     /// use decimal_scaled::D38s12;
-    /// let two = D38s12::from(2);
+    /// let two = D38s12::try_from(2).unwrap();
     /// assert_eq!(two.powi(-1), D38s12::ONE / two);
     /// assert_eq!(two.powi(0), D38s12::ONE);
-    /// assert_eq!(two.powi(3), D38s12::from(8));
+    /// assert_eq!(two.powi(3), D38s12::try_from(8).unwrap());
     /// ```
     #[inline]
     #[must_use]
@@ -193,8 +193,8 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     ///
     /// ```ignore
     /// use decimal_scaled::D38s12;
-    /// let two = D38s12::from(2);
-    /// let three = D38s12::from(3);
+    /// let two = D38s12::try_from(2).unwrap();
+    /// let three = D38s12::try_from(3).unwrap();
     /// // 2^3 = 8, within f64 precision.
     /// assert!((two.powf(three).to_f64() - 8.0).abs() < 1e-9);
     /// ```

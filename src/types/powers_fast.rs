@@ -27,8 +27,8 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     ///
     /// ```ignore
     /// use decimal_scaled::D38s12;
-    /// let two = D38s12::from(2);
-    /// let three = D38s12::from(3);
+    /// let two = D38s12::try_from(2).unwrap();
+    /// let three = D38s12::try_from(3).unwrap();
     /// // 2^3 = 8, within f64 precision.
     /// assert!((two.powf(three).to_f64() - 8.0).abs() < 1e-9);
     /// ```
@@ -85,7 +85,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     ///
     /// ```ignore
     /// use decimal_scaled::D38s12;
-    /// let neg_eight = D38s12::from(-8);
+    /// let neg_eight = D38s12::try_from(-8).unwrap();
     /// let result = neg_eight.cbrt();
     /// assert!((result.to_f64() - (-2.0_f64)).abs() < 1e-9);
     /// ```
@@ -127,8 +127,8 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     ///
     /// ```ignore
     /// use decimal_scaled::D38s12;
-    /// let three = D38s12::from(3);
-    /// let four = D38s12::from(4);
+    /// let three = D38s12::try_from(3).unwrap();
+    /// let four = D38s12::try_from(4).unwrap();
     /// // Pythagorean triple: hypot(3, 4) ~= 5.
     /// assert!((three.hypot(four).to_f64() - 5.0).abs() < 1e-9);
     /// ```

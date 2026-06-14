@@ -47,8 +47,8 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     /// ```ignore
     /// use decimal_scaled::D38s12;
     /// // log_2(8) is approximately 3 within f64 precision.
-    /// let eight = D38s12::from(8);
-    /// let two = D38s12::from(2);
+    /// let eight = D38s12::try_from(8).unwrap();
+    /// let two = D38s12::try_from(2).unwrap();
     /// let result = eight.log(two);
     /// ```
     #[cfg(feature = "std")]

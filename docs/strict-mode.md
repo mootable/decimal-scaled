@@ -22,7 +22,7 @@ resolves to.
 ```rust
 use decimal_scaled::D38s12;
 
-let x: D38s12 = 2i64.into();
+let x = D38s12::try_from(2i64).unwrap();
 
 // Always available - the integer-only path, explicitly:
 let r1 = x.sqrt_strict();
@@ -80,10 +80,10 @@ transcendental in the table above also ships a non-panicking
 ```rust
 use decimal_scaled::D38s12;
 
-let neg: D38s12 = (-2i64).into();
+let neg = D38s12::try_from(-2i64).unwrap();
 assert_eq!(neg.checked_ln_strict(), None);                // domain error -> None
 
-let two: D38s12 = 2i64.into();
+let two = D38s12::try_from(2i64).unwrap();
 assert_eq!(two.checked_sqrt_strict(), Some(two.sqrt_strict())); // in range
 ```
 

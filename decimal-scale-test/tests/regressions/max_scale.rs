@@ -88,11 +88,11 @@ mod from_d57_max_scale_cbrt_panic {
         // 1 < MAX < 8, the cube root must land strictly inside (1, 2)
         // (cbrt(MAX) ≈ 1.4641).
         assert!(
-            r > D57::<57>::from(1),
+            r > D57::<57>::try_from(1).unwrap(),
             "cbrt(MAX ≈ 3.14) ≈ 1.464 must exceed 1, got {r:?}"
         );
         assert!(
-            r < D57::<57>::from(2),
+            r < D57::<57>::try_from(2).unwrap(),
             "cbrt(MAX ≈ 3.14) ≈ 1.464 must be below 2, got {r:?}"
         );
     }

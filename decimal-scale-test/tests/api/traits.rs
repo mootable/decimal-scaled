@@ -26,12 +26,12 @@ mod from_decimal_trait_default_methods {
     #[test]
     fn decimal_trait_sum_default_impl() {
         let vals = [
-            D38s12::from(1),
-            D38s12::from(2),
-            D38s12::from(3),
+            D38s12::try_from(1).unwrap(),
+            D38s12::try_from(2).unwrap(),
+            D38s12::try_from(3).unwrap(),
         ];
         let s: D38s12 = <D38s12 as DecimalArithmetic>::sum(vals.iter().copied());
-        assert_eq!(s, D38s12::from(6));
+        assert_eq!(s, D38s12::try_from(6).unwrap());
         // Empty iter → ZERO
         let s: D38s12 = <D38s12 as DecimalArithmetic>::sum(core::iter::empty());
         assert_eq!(s, D38s12::ZERO);
@@ -49,8 +49,11 @@ mod from_decimal_trait_generic_surface {
     /// A width-generic helper that touches each major surface area: ops,
     /// sign, overflow variants, integer methods, pow, and float bridge.
     /// Returning a tuple lets the caller assert per-width.
-    fn surface_check<D: Decimal>(seed_i32: i32) -> (D, D, D, D) {
-        let v = D::from_i32(seed_i32);
+    fn surface_check<D: Decimal + TryFrom<i32>>(seed_i32: i32) -> (D, D, D, D)
+    where
+        <D as TryFrom<i32>>::Error: core::fmt::Debug,
+    {
+        let v = D::try_from(seed_i32).unwrap();
         // Operators via supertrait bounds.
         let doubled = v + v;
         // Intentional self-subtraction: the surface check verifies `a - a == 0`.
@@ -101,19 +104,22 @@ mod from_decimal_trait_generic_surface {
         use decimal_scaled::D76;
 
         let (v, _, squared, _) = surface_check::<D76<6>>(5);
-        let expected_v: D76<6> = D38::<6>::from(5).into();
-        let expected_squared: D76<6> = D38::<6>::from(25).into();
+        let expected_v: D76<6> = D38::<6>::try_from(5).unwrap().into();
+        let expected_squared: D76<6> = D38::<6>::try_from(25).unwrap().into();
         assert_eq!(v, expected_v);
         assert_eq!(squared, expected_squared);
     }
 
     /// Width-generic `sum` and `product` over an iterator.
-    fn fold_sum_product<D: Decimal>() -> (D, D) {
+    fn fold_sum_product<D: Decimal + TryFrom<i32>>() -> (D, D)
+    where
+        <D as TryFrom<i32>>::Error: core::fmt::Debug,
+    {
         let vs: [D; 4] = [
-            D::from_i32(1),
-            D::from_i32(2),
-            D::from_i32(3),
-            D::from_i32(4),
+            D::try_from(1).unwrap(),
+            D::try_from(2).unwrap(),
+            D::try_from(3).unwrap(),
+            D::try_from(4).unwrap(),
         ];
         (D::sum(vs.iter().copied()), D::product(vs.iter().copied()))
     }
@@ -122,8 +128,8 @@ mod from_decimal_trait_generic_surface {
     fn sum_product_d38() {
 
         let (s, p) = fold_sum_product::<D38<2>>();
-        assert_eq!(s, D38::<2>::from(10));
-        assert_eq!(p, D38::<2>::from(24));
+        assert_eq!(s, D38::<2>::try_from(10).unwrap());
+        assert_eq!(p, D38::<2>::try_from(24).unwrap());
     }
 
     /// `to_int_with` exercised via trait dispatch under each rounding mode.
@@ -178,7 +184,7 @@ mod from_macros_surface {
 
     #[test]
     fn decimal_trait_methods() {
-        let v = D38::<2>::from(7);
+        let v = D38::<2>::try_from(7).unwrap();
         // scale() takes self
         assert_eq!(v.scale(), 2);
         // multiplier returns Storage type
@@ -187,8 +193,8 @@ mod from_macros_surface {
         assert!(!v.is_zero());
         assert!(D38::<2>::ZERO.is_zero());
         // signum
-        assert_eq!(v.signum(), D38::<2>::from(1));
+        assert_eq!(v.signum(), D38::<2>::try_from(1).unwrap());
         assert_eq!(D38::<2>::ZERO.signum(), D38::<2>::ZERO);
-        assert_eq!(D38::<2>::from(-5).signum(), D38::<2>::from(-1));
+        assert_eq!(D38::<2>::try_from(-5).unwrap().signum(), D38::<2>::try_from(-1).unwrap());
     }
 }

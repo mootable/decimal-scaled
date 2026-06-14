@@ -49,17 +49,17 @@ mod from_macros_pow {
 
     #[test]
     fn pow_small_exponents_d18() {
-        let two = D18::<0>::from(2);
+        let two = D18::<0>::try_from(2).unwrap();
         assert_eq!(two.pow(20).to_bits(), 1 << 20);
-        let ten = D18::<0>::from(10);
+        let ten = D18::<0>::try_from(10).unwrap();
         assert_eq!(ten.pow(9).to_bits(), 1_000_000_000);
     }
 
     #[test]
     fn pow_small_exponents_d38() {
-        let two = D38::<0>::from(2);
+        let two = D38::<0>::try_from(2).unwrap();
         assert_eq!(two.pow(30).to_bits(), 1i128 << 30);
-        let ten = D38::<0>::from(10);
+        let ten = D38::<0>::try_from(10).unwrap();
         assert_eq!(ten.pow(18).to_bits(), 1_000_000_000_000_000_000i128);
     }
 
@@ -72,7 +72,7 @@ mod from_macros_pow {
     #[test]
     fn powi_negative_exponent_d38_scale12() {
         use decimal_scaled::D38s12;
-        let two = D38s12::from(2);
+        let two = D38s12::try_from(2).unwrap();
         // 2^-3 = 0.125 â†’ raw 125_000_000_000
         assert_eq!(two.powi(-3).to_bits(), 125_000_000_000);
         // 2^3 == 8 (positive exp path)
@@ -86,14 +86,14 @@ mod from_macros_pow {
         use decimal_scaled::{D18};
 
         // D18<4>: 2^3 = 8 â†’ 80_000
-        let two = D18::<4>::from(2);
+        let two = D18::<4>::try_from(2).unwrap();
         assert_eq!(two.powi(3).to_bits(), 80_000);
         assert_eq!(two.powi(0).to_bits(), 10_000);
         // 2^-3 = 0.125 â†’ 1_250
         assert_eq!(two.powi(-3).to_bits(), 1_250);
 
         // D18
-        let two18 = D18::<8>::from(2);
+        let two18 = D18::<8>::try_from(2).unwrap();
         assert_eq!(two18.powi(3).to_bits(), 800_000_000);
         assert_eq!(two18.powi(0).to_bits(), 100_000_000);
         assert_eq!(two18.powi(-3).to_bits(), 12_500_000);
@@ -117,20 +117,20 @@ mod from_macros_pow {
 
     #[test]
     fn checked_pow_normal_succeeds_d18() {
-        let two = D18::<0>::from(2);
-        assert_eq!(two.checked_pow(10), Some(D18::<0>::from(1024)));
+        let two = D18::<0>::try_from(2).unwrap();
+        assert_eq!(two.checked_pow(10), Some(D18::<0>::try_from(1024).unwrap()));
         assert_eq!(two.checked_pow(0), Some(D18::<0>::ONE));
     }
 
     #[test]
     fn checked_pow_overflow_returns_none_d18() {
-        let ten = D18::<0>::from(10);
+        let ten = D18::<0>::try_from(10).unwrap();
         assert!(ten.checked_pow(40).is_none(), "10^40 overflows D18<0>");
     }
 
     #[test]
     fn checked_pow_overflow_returns_none_d38() {
-        let ten = D38::<0>::from(10);
+        let ten = D38::<0>::try_from(10).unwrap();
         assert!(ten.checked_pow(80).is_none(), "10^80 overflows D38<0>");
     }
 
@@ -138,7 +138,7 @@ mod from_macros_pow {
 
     #[test]
     fn wrapping_pow_matches_arithmetic_d18() {
-        let two = D18::<0>::from(2);
+        let two = D18::<0>::try_from(2).unwrap();
         // 2^10 == 1024, well within range.
         assert_eq!(two.wrapping_pow(10).to_bits(), 1024);
         // 2^63 wraps in i64: (2 as i64).wrapping_pow(63) == i64::MIN.
@@ -149,7 +149,7 @@ mod from_macros_pow {
 
     #[test]
     fn wrapping_pow_exp_zero_returns_one() {
-        let v = D38::<0>::from(123);
+        let v = D38::<0>::try_from(123).unwrap();
         assert_eq!(v.wrapping_pow(0), D38::<0>::ONE);
     }
 
@@ -157,17 +157,17 @@ mod from_macros_pow {
 
     #[test]
     fn saturating_pow_positive_overflow_saturates_to_max() {
-        let ten = D18::<0>::from(10);
+        let ten = D18::<0>::try_from(10).unwrap();
         assert_eq!(ten.saturating_pow(40), D18::<0>::MAX);
-        let ten = D38::<0>::from(10);
+        let ten = D38::<0>::try_from(10).unwrap();
         assert_eq!(ten.saturating_pow(80), D38::<0>::MAX);
     }
 
     #[test]
     fn saturating_pow_negative_odd_saturates_to_min() {
-        let neg_ten = D18::<0>::from(-10);
+        let neg_ten = D18::<0>::try_from(-10).unwrap();
         assert_eq!(neg_ten.saturating_pow(41), D18::<0>::MIN);
-        let neg_ten = D38::<0>::from(-10);
+        let neg_ten = D38::<0>::try_from(-10).unwrap();
         assert_eq!(neg_ten.saturating_pow(81), D38::<0>::MIN);
     }
 
@@ -175,13 +175,13 @@ mod from_macros_pow {
     fn saturating_pow_negative_even_saturates_to_max() {
         // negative base raised to an even power is positive, so the
         // saturation direction is MAX, not MIN.
-        let neg_ten = D18::<0>::from(-10);
+        let neg_ten = D18::<0>::try_from(-10).unwrap();
         assert_eq!(neg_ten.saturating_pow(20), D18::<0>::MAX);
     }
 
     #[test]
     fn saturating_pow_exp_zero_returns_one() {
-        let v = D38::<0>::from(123);
+        let v = D38::<0>::try_from(123).unwrap();
         assert_eq!(v.saturating_pow(0), D38::<0>::ONE);
     }
 
@@ -189,7 +189,7 @@ mod from_macros_pow {
 
     #[test]
     fn overflowing_pow_no_overflow_returns_false() {
-        let two = D18::<0>::from(2);
+        let two = D18::<0>::try_from(2).unwrap();
         let (v, ov) = two.overflowing_pow(10);
         assert_eq!(v.to_bits(), 1024);
         assert!(!ov);
@@ -197,12 +197,12 @@ mod from_macros_pow {
 
     #[test]
     fn overflowing_pow_detects_overflow_d18_d38() {
-        let ten18 = D18::<0>::from(10);
+        let ten18 = D18::<0>::try_from(10).unwrap();
         let (v18, ov18) = ten18.overflowing_pow(40);
         assert!(ov18);
         assert_eq!(v18, ten18.wrapping_pow(40));
 
-        let ten38 = D38::<0>::from(10);
+        let ten38 = D38::<0>::try_from(10).unwrap();
         let (v38, ov38) = ten38.overflowing_pow(80);
         assert!(ov38);
         assert_eq!(v38, ten38.wrapping_pow(80));
@@ -210,7 +210,7 @@ mod from_macros_pow {
 
     #[test]
     fn overflowing_pow_exp_zero_returns_one_no_overflow() {
-        let v = D38::<0>::from(123);
+        let v = D38::<0>::try_from(123).unwrap();
         assert_eq!(v.overflowing_pow(0), (D38::<0>::ONE, false));
     }
 
@@ -221,9 +221,9 @@ mod from_macros_pow {
     fn pow_d76() {
         use decimal_scaled::D76;
 
-        let two: D76<0> = D38::<0>::from(2).into();
+        let two: D76<0> = D38::<0>::try_from(2).unwrap().into();
         let r = two.pow(10);
-        let expected: D76<0> = D38::<0>::from(1024).into();
+        let expected: D76<0> = D38::<0>::try_from(1024).unwrap().into();
         assert_eq!(r, expected);
 
         // exp=0 â†’ ONE
@@ -237,9 +237,9 @@ mod from_macros_pow {
     fn pow_d76_negative_base_odd_even() {
         use decimal_scaled::D76;
 
-        let neg_two: D76<0> = D38::<0>::from(-2).into();
-        let expected_pos: D76<0> = D38::<0>::from(16).into();
-        let expected_neg: D76<0> = D38::<0>::from(-8).into();
+        let neg_two: D76<0> = D38::<0>::try_from(-2).unwrap().into();
+        let expected_pos: D76<0> = D38::<0>::try_from(16).unwrap().into();
+        let expected_neg: D76<0> = D38::<0>::try_from(-8).unwrap().into();
         assert_eq!(neg_two.pow(4), expected_pos);
         assert_eq!(neg_two.pow(3), expected_neg);
     }
@@ -249,7 +249,7 @@ mod from_macros_pow {
     fn checked_pow_overflow_d76() {
         use decimal_scaled::D76;
 
-        let ten: D76<0> = D38::<0>::from(10).into();
+        let ten: D76<0> = D38::<0>::try_from(10).unwrap().into();
         // D76<0> max â‰ˆ 10^76. 10^80 overflows.
         assert!(ten.checked_pow(80).is_none());
         // 10^20 fits comfortably.
@@ -261,11 +261,11 @@ mod from_macros_pow {
     fn saturating_overflowing_pow_d76() {
         use decimal_scaled::D76;
 
-        let ten: D76<0> = D38::<0>::from(10).into();
+        let ten: D76<0> = D38::<0>::try_from(10).unwrap().into();
         assert_eq!(ten.saturating_pow(80), D76::<0>::MAX);
         let (_, ov) = ten.overflowing_pow(80);
         assert!(ov);
-        let neg_ten: D76<0> = D38::<0>::from(-10).into();
+        let neg_ten: D76<0> = D38::<0>::try_from(-10).unwrap().into();
         assert_eq!(neg_ten.saturating_pow(81), D76::<0>::MIN);
     }
 
@@ -274,13 +274,13 @@ mod from_macros_pow {
     fn pow_d153_d307() {
         use decimal_scaled::{D153, D307};
 
-        let two_a: D153<0> = D38::<0>::from(2).into();
+        let two_a: D153<0> = D38::<0>::try_from(2).unwrap().into();
         assert_eq!(two_a.pow(0), D153::<0>::ONE);
-        let two_b: D307<0> = D307::<0>::from(2);
+        let two_b: D307<0> = D307::<0>::try_from(2).unwrap();
         assert_eq!(two_b.pow(0), D307::<0>::ONE);
         // small exponent
         let r_a = two_a.pow(8);
-        let expected_a: D153<0> = D38::<0>::from(256).into();
+        let expected_a: D153<0> = D38::<0>::try_from(256).unwrap().into();
         assert_eq!(r_a, expected_a);
     }
 }
@@ -312,7 +312,7 @@ mod from_src_powers {
     /// `pow(2)` equals `self * self` for an integer value.
     #[test]
     fn pow_two_matches_mul() {
-        let v = D38s12::from(13);
+        let v = D38s12::try_from(13).unwrap();
         assert_eq!(v.pow(2), v * v);
     }
 
@@ -327,8 +327,8 @@ mod from_src_powers {
     /// `2^10 == 1024`.
     #[test]
     fn pow_two_to_the_ten() {
-        let two = D38s12::from(2);
-        assert_eq!(two.pow(10), D38s12::from(1024));
+        let two = D38s12::try_from(2).unwrap();
+        assert_eq!(two.pow(10), D38s12::try_from(1024).unwrap());
     }
 
     /// `pow(0, n)` for `n > 0` is `ZERO`.
@@ -361,14 +361,14 @@ mod from_src_powers {
     /// `powi(-1)` returns `ONE / self`.
     #[test]
     fn powi_minus_one_is_reciprocal() {
-        let v = D38s12::from(7);
+        let v = D38s12::try_from(7).unwrap();
         assert_eq!(v.powi(-1), D38s12::ONE / v);
     }
 
     /// `powi` agrees with `pow` for non-negative exponents.
     #[test]
     fn powi_positive_matches_pow() {
-        let v = D38s12::from(3);
+        let v = D38s12::try_from(3).unwrap();
         for e in 0_i32..6 {
             assert_eq!(v.powi(e), v.pow(e as u32));
         }
@@ -380,7 +380,7 @@ mod from_src_powers {
     #[cfg(feature = "std")]
     #[test]
     fn powf_half_matches_sqrt() {
-        let v = D38s12::from(4);
+        let v = D38s12::try_from(4).unwrap();
         let half = D38s12::from_bits(Int::<2>::try_from(500_000_000_000_i128).unwrap()); // 0.5 at SCALE=12
         let powf_result = v.powf(half);
         let sqrt_result = v.sqrt();
@@ -397,8 +397,8 @@ mod from_src_powers {
     #[cfg(all(feature = "fast", not(feature = "strict")))]
     #[test]
     fn powf_two_matches_pow_two_within_lsb() {
-        let v = D38s12::from(7);
-        let two = D38s12::from(2);
+        let v = D38s12::try_from(7).unwrap();
+        let two = D38s12::try_from(2).unwrap();
         assert!(within_lsb(v.powf(two), v.pow(2), TWO_LSB));
     }
 
@@ -408,14 +408,14 @@ mod from_src_powers {
     #[cfg(any(not(feature = "fast"), feature = "strict"))]
     #[test]
     fn powf_two_matches_pow_two_within_lsb() {
-        let v = D38s12::from(7);
-        let two = D38s12::from(2);
+        let v = D38s12::try_from(7).unwrap();
+        let two = D38s12::try_from(2).unwrap();
         assert!(within_lsb(v.powf(two), v.pow(2), 1));
         // A few more integer-exponent cross-checks against exact `pow`.
         for base in [2_i64, 3, 5, 11] {
-            let b = D38s12::from(base);
+            let b = D38s12::try_from(base).unwrap();
             assert!(
-                within_lsb(b.powf(D38s12::from(3)), b.pow(3), 1),
+                within_lsb(b.powf(D38s12::try_from(3).unwrap()), b.pow(3), 1),
                 "powf({base}, 3)"
             );
         }
@@ -441,8 +441,8 @@ mod from_src_powers {
     #[cfg(feature = "std")]
     #[test]
     fn sqrt_four_is_two() {
-        let four = D38s12::from(4);
-        let two = D38s12::from(2);
+        let four = D38s12::try_from(4).unwrap();
+        let two = D38s12::try_from(2).unwrap();
         assert_eq!(four.sqrt(), two);
     }
 
@@ -479,7 +479,7 @@ mod from_src_powers {
     #[cfg(feature = "std")]
     #[test]
     fn sqrt_negative_saturates_to_zero() {
-        let v = -D38s12::from(4);
+        let v = -D38s12::try_from(4).unwrap();
         assert_eq!(v.sqrt(), D38s12::ZERO);
     }
 
@@ -503,8 +503,8 @@ mod from_src_powers {
     #[cfg(feature = "std")]
     #[test]
     fn cbrt_eight_is_two() {
-        let eight = D38s12::from(8);
-        let two = D38s12::from(2);
+        let eight = D38s12::try_from(8).unwrap();
+        let two = D38s12::try_from(2).unwrap();
         assert!(within_lsb(eight.cbrt(), two, TWO_LSB));
     }
 
@@ -512,8 +512,8 @@ mod from_src_powers {
     #[cfg(feature = "std")]
     #[test]
     fn cbrt_minus_eight_is_minus_two() {
-        let neg_eight = D38s12::from(-8);
-        let neg_two = D38s12::from(-2);
+        let neg_eight = D38s12::try_from(-8).unwrap();
+        let neg_two = D38s12::try_from(-2).unwrap();
         assert!(
             within_lsb(neg_eight.cbrt(), neg_two, TWO_LSB),
             "cbrt(-8) = {}, expected ~ {}",
@@ -549,24 +549,24 @@ mod from_src_powers {
     /// `mul_add(2, 3, 4) == 10`.
     #[test]
     fn mul_add_two_three_four_is_ten() {
-        let two = D38s12::from(2);
-        let three = D38s12::from(3);
-        let four = D38s12::from(4);
-        assert_eq!(two.mul_add(three, four), D38s12::from(10));
+        let two = D38s12::try_from(2).unwrap();
+        let three = D38s12::try_from(3).unwrap();
+        let four = D38s12::try_from(4).unwrap();
+        assert_eq!(two.mul_add(three, four), D38s12::try_from(10).unwrap());
     }
 
     /// `mul_add(self, ONE, ZERO) == self`.
     #[test]
     fn mul_add_identity_collapses() {
-        let v = D38s12::from(7);
+        let v = D38s12::try_from(7).unwrap();
         assert_eq!(v.mul_add(D38s12::ONE, D38s12::ZERO), v);
     }
 
     /// `mul_add(self, ZERO, b) == b`.
     #[test]
     fn mul_add_zero_factor_yields_addend() {
-        let v = D38s12::from(7);
-        let b = D38s12::from(13);
+        let v = D38s12::try_from(7).unwrap();
+        let b = D38s12::try_from(13).unwrap();
         assert_eq!(v.mul_add(D38s12::ZERO, b), b);
     }
 
@@ -604,11 +604,11 @@ mod from_src_powers {
     /// `(-a).mul_add(b, c)` propagates the sign through the multiply step.
     #[test]
     fn mul_add_sign_propagates_through_factor() {
-        let a = D38s12::from(3);
-        let b = D38s12::from(5);
-        let c = D38s12::from(7);
+        let a = D38s12::try_from(3).unwrap();
+        let b = D38s12::try_from(5).unwrap();
+        let c = D38s12::try_from(7).unwrap();
         // (-3) * 5 + 7 = -15 + 7 = -8
-        assert_eq!((-a).mul_add(b, c), D38s12::from(-8));
+        assert_eq!((-a).mul_add(b, c), D38s12::try_from(-8).unwrap());
     }
 
     // hypot â€” requires std feature
@@ -622,9 +622,9 @@ mod from_src_powers {
     #[cfg(feature = "std")]
     #[test]
     fn hypot_three_four_is_five() {
-        let three = D38s12::from(3);
-        let four = D38s12::from(4);
-        let five = D38s12::from(5);
+        let three = D38s12::try_from(3).unwrap();
+        let four = D38s12::try_from(4).unwrap();
+        let five = D38s12::try_from(5).unwrap();
         let result = three.hypot(four);
         assert!(
             within_lsb(result, five, HYPOT_TOLERANCE_LSB),
@@ -646,7 +646,7 @@ mod from_src_powers {
     #[cfg(feature = "std")]
     #[test]
     fn hypot_zero_x_is_abs_x() {
-        let x = D38s12::from(7);
+        let x = D38s12::try_from(7).unwrap();
         let result = D38s12::ZERO.hypot(x);
         assert!(
             within_lsb(result, x.abs(), HYPOT_TOLERANCE_LSB),
@@ -660,7 +660,7 @@ mod from_src_powers {
     #[cfg(feature = "std")]
     #[test]
     fn hypot_x_zero_is_abs_x() {
-        let x = D38s12::from(-9);
+        let x = D38s12::try_from(-9).unwrap();
         let result = x.hypot(D38s12::ZERO);
         assert!(
             within_lsb(result, x.abs(), HYPOT_TOLERANCE_LSB),
@@ -674,8 +674,8 @@ mod from_src_powers {
     #[cfg(feature = "std")]
     #[test]
     fn hypot_sign_invariant() {
-        let three = D38s12::from(3);
-        let four = D38s12::from(4);
+        let three = D38s12::try_from(3).unwrap();
+        let four = D38s12::try_from(4).unwrap();
         let pos = three.hypot(four);
         let neg_a = (-three).hypot(four);
         let neg_b = three.hypot(-four);
@@ -705,8 +705,8 @@ mod from_src_powers {
     #[cfg(feature = "std")]
     #[test]
     fn hypot_matches_naive_sqrt_of_sum_of_squares() {
-        let a = D38s12::from(12);
-        let b = D38s12::from(13);
+        let a = D38s12::try_from(12).unwrap();
+        let b = D38s12::try_from(13).unwrap();
         let h = a.hypot(b);
         let naive = (a * a + b * b).sqrt();
         assert!(

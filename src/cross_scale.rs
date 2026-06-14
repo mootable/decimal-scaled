@@ -47,8 +47,8 @@ pub const fn max_const(a: u32, b: u32) -> u32 {
 /// ```ignore
 /// # // (Doctest is `ignore`d because the feature requires nightly.)
 /// use decimal_scaled::{D38, cross};
-/// let a: D38<6> = D38::<6>::from(7);
-/// let b: D38<12> = D38::<12>::from(11);
+/// let a: D38<6> = D38::<6>::try_from(7).unwrap();
+/// let b: D38<12> = D38::<12>::try_from(11).unwrap();
 /// let c = cross::mul(a, b); // D38<12>, value = 77
 /// ```
 #[inline]

@@ -224,7 +224,7 @@ mod from_src_trig {
     fn atan2_third_quadrant_diagonal() {
         let neg_one = -D38s12::ONE;
         let result = neg_one.atan2(neg_one);
-        let three = D38s12::from(3);
+        let three = D38s12::try_from(3).unwrap();
         let expected = -(D38s12::quarter_pi() * three);
         assert!(
             within_lsb(result, expected, TWO_LSB),
@@ -239,7 +239,7 @@ mod from_src_trig {
         let one = D38s12::ONE;
         let neg_one = -D38s12::ONE;
         let result = one.atan2(neg_one);
-        let three = D38s12::from(3);
+        let three = D38s12::try_from(3).unwrap();
         let expected = D38s12::quarter_pi() * three;
         assert!(
             within_lsb(result, expected, TWO_LSB),
@@ -344,7 +344,7 @@ mod from_src_trig {
     fn to_degrees_pi_is_180() {
         let pi = D38s12::pi();
         let result = pi.to_degrees();
-        let expected = D38s12::from(180);
+        let expected = D38s12::try_from(180).unwrap();
         assert!(
             within_lsb(result, expected, ANGLE_TOLERANCE_LSB),
             "to_degrees(pi) bits {}, expected 180 bits {} (delta {})",
@@ -356,7 +356,7 @@ mod from_src_trig {
 
     #[test]
     fn to_radians_180_is_pi() {
-        let one_eighty = D38s12::from(180);
+        let one_eighty = D38s12::try_from(180).unwrap();
         let result = one_eighty.to_radians();
         let expected = D38s12::pi();
         assert!(
@@ -407,7 +407,7 @@ mod from_src_trig {
     #[test]
     fn to_degrees_half_pi_is_90() {
         let result = D38s12::half_pi().to_degrees();
-        let expected = D38s12::from(90);
+        let expected = D38s12::try_from(90).unwrap();
         assert!(
             within_lsb(result, expected, ANGLE_TOLERANCE_LSB),
             "to_degrees(half_pi) bits {}, expected 90 bits {} (delta {})",
@@ -420,7 +420,7 @@ mod from_src_trig {
     #[test]
     fn to_degrees_quarter_pi_is_45() {
         let result = D38s12::quarter_pi().to_degrees();
-        let expected = D38s12::from(45);
+        let expected = D38s12::try_from(45).unwrap();
         assert!(
             within_lsb(result, expected, ANGLE_TOLERANCE_LSB),
             "to_degrees(quarter_pi) bits {}, expected 45 bits {} (delta {})",

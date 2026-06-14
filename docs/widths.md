@@ -157,7 +157,7 @@ narrower or wider tier.
 ```rust
 # #[cfg(feature = "wide")] {
 use decimal_scaled::{D38, D57, D115};
-let a: D38<6> = D38::<6>::from(7i64);
+let a: D38<6> = D38::<6>::try_from(7i64).unwrap();
 let b: D57<6> = a.widen();          // one rung up
 let c: D115<6> = b.widen().widen(); // two more rungs: D57 → D76 → D115
 let _: D38<6> = c.try_into().unwrap();   // skip-jump back via TryFrom

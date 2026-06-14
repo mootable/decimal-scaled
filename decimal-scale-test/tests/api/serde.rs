@@ -164,7 +164,7 @@ mod from_serde_surface {
     fn d76_serde_json_round_trip() {
         use decimal_scaled::D76;
 
-        let v: D76<6> = D38::<6>::from(42).into();
+        let v: D76<6> = D38::<6>::try_from(42).unwrap().into();
         let s = serde_json::to_string(&v).unwrap();
         let back: D76<6> = serde_json::from_str(&s).unwrap();
         assert_eq!(back, v);
@@ -184,12 +184,12 @@ mod from_serde_surface {
     fn d153_d307_serde_json_round_trip() {
         use decimal_scaled::{D76, D153, D307};
 
-        let v: D153<6> = D38::<6>::from(42).into();
+        let v: D153<6> = D38::<6>::try_from(42).unwrap().into();
         let s = serde_json::to_string(&v).unwrap();
         let back: D153<6> = serde_json::from_str(&s).unwrap();
         assert_eq!(back, v);
 
-        let lift: D76<6> = D38::<6>::from(42).into();
+        let lift: D76<6> = D38::<6>::try_from(42).unwrap().into();
         let v: D307<6> = lift.into();
         let s = serde_json::to_string(&v).unwrap();
         let back: D307<6> = serde_json::from_str(&s).unwrap();

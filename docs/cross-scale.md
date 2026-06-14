@@ -28,13 +28,13 @@ operands may be any width less-than-or-equal to it and any SCALE.
 ```rust
 use decimal_scaled::{D18s4, D18s6, D38, D38s12};
 
-let a = D18s4::from(5i64);          // D18<4>
-let b = D18s6::from(7i64);          // D18<6>
+let a = D18s4::try_from(5i64).unwrap();          // D18<4>
+let b = D18s6::try_from(7i64).unwrap();          // D18<6>
 
 // Target = D38<12>. Operands widen to Int<2>, rescale to SCALE=12,
 // then multiply at the same width / scale.
 let product: D38s12 = D38s12::mul_of(a, b);
-assert_eq!(product, D38s12::from(35i64));
+assert_eq!(product, D38s12::try_from(35i64).unwrap());
 ```
 
 The same shape is available for every op:
@@ -42,8 +42,8 @@ The same shape is available for every op:
 ```rust
 use decimal_scaled::{D38, D38s6, D38s12};
 
-let x: D38s6 = D38::<6>::from(20i64);
-let y: D38s12 = D38::<12>::from(3i64);
+let x: D38s6 = D38::<6>::try_from(20i64).unwrap();
+let y: D38s12 = D38::<12>::try_from(3i64).unwrap();
 
 let sum:  D38<10> = D38::<10>::add_of(x, y);   // 23
 let diff: D38<10> = D38::<10>::sub_of(x, y);   // 17
@@ -61,7 +61,7 @@ Each constructor has a `_with(mode)` sibling that takes an explicit
 use decimal_scaled::{D38, Int, RoundingMode};
 
 let a: D38<1> = D38::<1>::from_bits(Int::<2>::from(15i64));  // 1.5
-let b: D38<0> = D38::<0>::from(1i64);                        // 1
+let b: D38<0> = D38::<0>::try_from(1i64).unwrap();                        // 1
 
 let trunc = D38::<0>::mul_of_with(a, b, RoundingMode::Trunc);
 assert_eq!(trunc.to_bits(), 1i128);
@@ -78,16 +78,16 @@ operands and rescale the winner into the destination type:
 ```rust
 use decimal_scaled::{D18s4, D18s6, D18s9, D38s12};
 
-let a = D18s6::from(3i64);
-let b = D18s9::from(2i64);
+let a = D18s6::try_from(3i64).unwrap();
+let b = D18s9::try_from(2i64).unwrap();
 let m: D38s12 = D38s12::max_of(a, b);
-assert_eq!(m, D38s12::from(3i64));
+assert_eq!(m, D38s12::try_from(3i64).unwrap());
 
-let v  = D38s12::from(15i64);
-let lo = D18s4::from(0i64);
-let hi = D18s9::from(10i64);
+let v  = D38s12::try_from(15i64).unwrap();
+let lo = D18s4::try_from(0i64).unwrap();
+let hi = D18s9::try_from(10i64).unwrap();
 let c: D38s12 = D38s12::clamp_of(v, lo, hi);
-assert_eq!(c, D38s12::from(10i64));
+assert_eq!(c, D38s12::try_from(10i64).unwrap());
 ```
 
 ### Comparators
@@ -100,8 +100,8 @@ the higher SCALE (lossless) before the storage `Ord` is invoked:
 ```rust
 use decimal_scaled::{D18s6, D38s12};
 
-let a = D38s12::from(5i64);
-let b = D18s6::from(5i64);
+let a = D38s12::try_from(5i64).unwrap();
+let b = D18s6::try_from(5i64).unwrap();
 
 assert!(a.eq_of(b));
 assert_eq!(a.cmp_of(b), std::cmp::Ordering::Equal);
@@ -115,8 +115,8 @@ For the common case of comparing across widths at the **same**
 ```rust
 use decimal_scaled::{D18, D38};
 
-let small: D18<12> = D18::<12>::from(5i64);
-let big:   D38<12> = D38::<12>::from(5i64);
+let small: D18<12> = D18::<12>::try_from(5i64).unwrap();
+let big:   D38<12> = D38::<12>::try_from(5i64).unwrap();
 assert!(small == big);   // works without .widen()
 assert!(big >= small);
 ```
@@ -141,8 +141,8 @@ decimal-scaled = { version = "0.5", features = ["cross-scale-ops"] }
 #![feature(generic_const_exprs)]
 use decimal_scaled::{D38, cross};
 
-let a: D38<6>  = D38::<6>::from(7i64);
-let b: D38<12> = D38::<12>::from(11i64);
+let a: D38<6>  = D38::<6>::try_from(7i64).unwrap();
+let b: D38<12> = D38::<12>::try_from(11i64).unwrap();
 let c = cross::mul(a, b);     // type: D38<12>, value: 77
 ```
 

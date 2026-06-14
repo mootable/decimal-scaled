@@ -129,8 +129,8 @@ The `dyn` feature adds a deliberately small, object-safe trait
 use decimal_scaled::{D38, DynDecimal, DecimalWidth};
 
 let values: Vec<Box<dyn DynDecimal>> = vec![
-    Box::new(D38::<2>::from(150i32)),   // 150.00
-    Box::new(D38::<5>::from(2i32)),     // 2.00000
+    Box::new(D38::<2>::try_from(150i32).unwrap()),   // 150.00
+    Box::new(D38::<5>::try_from(2i32).unwrap()),     // 2.00000
 ];
 let sum = values[0].add(&*values[1]).unwrap();
 assert_eq!(sum.width(), DecimalWidth::D38);

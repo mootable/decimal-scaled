@@ -77,7 +77,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
-    /// let two = D38::<12>::from(2i64);
+    /// let two = D38::<12>::try_from(2i64).unwrap();
     /// assert_eq!(
     ///     two.checked_ln_strict_with(RoundingMode::HalfToEven),
     ///     Some(two.ln_strict_with(RoundingMode::HalfToEven)),
@@ -97,8 +97,8 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::D38;
-    /// assert!(D38::<12>::from(10i64).checked_ln_strict().is_some());
-    /// assert_eq!(D38::<12>::from(-1i64).checked_ln_strict(), None);
+    /// assert!(D38::<12>::try_from(10i64).unwrap().checked_ln_strict().is_some());
+    /// assert_eq!(D38::<12>::try_from(-1i64).unwrap().checked_ln_strict(), None);
     /// ```
     #[inline]
     #[must_use]
@@ -120,8 +120,8 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
-    /// let eight = D38::<10>::from(8i64);
-    /// let two = D38::<10>::from(2i64);
+    /// let eight = D38::<10>::try_from(8i64).unwrap();
+    /// let two = D38::<10>::try_from(2i64).unwrap();
     /// assert!(eight.checked_log_strict_with(two, RoundingMode::HalfToEven).is_some());
     /// assert_eq!(eight.checked_log_strict_with(D38::<10>::ONE, RoundingMode::HalfToEven), None);
     /// ```
@@ -141,8 +141,8 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::D38;
-    /// let x = D38::<10>::from(100i64);
-    /// assert!(x.checked_log_strict(D38::<10>::from(10i64)).is_some());
+    /// let x = D38::<10>::try_from(100i64).unwrap();
+    /// assert!(x.checked_log_strict(D38::<10>::try_from(10i64).unwrap()).is_some());
     /// assert_eq!(x.checked_log_strict(D38::<10>::ZERO), None);
     /// ```
     #[inline]
@@ -162,7 +162,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
-    /// let eight = D38::<10>::from(8i64);
+    /// let eight = D38::<10>::try_from(8i64).unwrap();
     /// assert_eq!(
     ///     eight.checked_log2_strict_with(RoundingMode::HalfToEven),
     ///     Some(eight.log2_strict_with(RoundingMode::HalfToEven)),
@@ -182,8 +182,8 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::D38;
-    /// assert!(D38::<10>::from(4i64).checked_log2_strict().is_some());
-    /// assert_eq!(D38::<10>::from(-4i64).checked_log2_strict(), None);
+    /// assert!(D38::<10>::try_from(4i64).unwrap().checked_log2_strict().is_some());
+    /// assert_eq!(D38::<10>::try_from(-4i64).unwrap().checked_log2_strict(), None);
     /// ```
     #[inline]
     #[must_use]
@@ -202,7 +202,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
-    /// let hundred = D38::<10>::from(100i64);
+    /// let hundred = D38::<10>::try_from(100i64).unwrap();
     /// assert!(hundred.checked_log10_strict_with(RoundingMode::HalfToEven).is_some());
     /// assert_eq!(D38::<10>::ZERO.checked_log10_strict_with(RoundingMode::HalfToEven), None);
     /// ```
@@ -219,7 +219,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::D38;
-    /// assert!(D38::<10>::from(1000i64).checked_log10_strict().is_some());
+    /// assert!(D38::<10>::try_from(1000i64).unwrap().checked_log10_strict().is_some());
     /// assert_eq!(D38::<10>::ZERO.checked_log10_strict(), None);
     /// ```
     #[inline]
@@ -248,7 +248,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///     Some(one.exp_strict_with(RoundingMode::HalfToEven)),
     /// );
     /// // e^120 has 53 integer digits — far outside D38's 38.
-    /// assert_eq!(D38::<12>::from(120i64).checked_exp_strict_with(RoundingMode::HalfToEven), None);
+    /// assert_eq!(D38::<12>::try_from(120i64).unwrap().checked_exp_strict_with(RoundingMode::HalfToEven), None);
     /// ```
     #[inline]
     #[must_use]
@@ -261,7 +261,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// ```
     /// use decimal_scaled::D38;
     /// assert!(D38::<12>::ONE.checked_exp_strict().is_some());
-    /// assert_eq!(D38::<12>::from(120i64).checked_exp_strict(), None);
+    /// assert_eq!(D38::<12>::try_from(120i64).unwrap().checked_exp_strict(), None);
     /// ```
     #[inline]
     #[must_use]
@@ -279,13 +279,13 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
-    /// let ten = D38::<12>::from(10i64);
+    /// let ten = D38::<12>::try_from(10i64).unwrap();
     /// assert_eq!(
     ///     ten.checked_exp2_strict_with(RoundingMode::HalfToEven),
     ///     Some(ten.exp2_strict_with(RoundingMode::HalfToEven)),
     /// );
     /// // 2^95 has 29 integer digits — outside D38<12>'s 26.
-    /// assert_eq!(D38::<12>::from(95i64).checked_exp2_strict_with(RoundingMode::HalfToEven), None);
+    /// assert_eq!(D38::<12>::try_from(95i64).unwrap().checked_exp2_strict_with(RoundingMode::HalfToEven), None);
     /// ```
     #[inline]
     #[must_use]
@@ -297,8 +297,8 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::D38;
-    /// assert!(D38::<12>::from(10i64).checked_exp2_strict().is_some());
-    /// assert_eq!(D38::<12>::from(95i64).checked_exp2_strict(), None);
+    /// assert!(D38::<12>::try_from(10i64).unwrap().checked_exp2_strict().is_some());
+    /// assert_eq!(D38::<12>::try_from(95i64).unwrap().checked_exp2_strict(), None);
     /// ```
     #[inline]
     #[must_use]
@@ -321,8 +321,8 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
-    /// let three = D38::<10>::from(3i64);
-    /// let two = D38::<10>::from(2i64);
+    /// let three = D38::<10>::try_from(3i64).unwrap();
+    /// let two = D38::<10>::try_from(2i64).unwrap();
     /// assert_eq!(
     ///     three.checked_powf_strict_with(two, RoundingMode::HalfToEven),
     ///     Some(three.powf_strict_with(two, RoundingMode::HalfToEven)),
@@ -334,8 +334,8 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///     Some(D38::<10>::ZERO),
     /// );
     /// // 10^30 has 31 integer digits — out of D38<10>'s 28.
-    /// let ten = D38::<10>::from(10i64);
-    /// let thirty = D38::<10>::from(30i64);
+    /// let ten = D38::<10>::try_from(10i64).unwrap();
+    /// let thirty = D38::<10>::try_from(30i64).unwrap();
     /// assert_eq!(ten.checked_powf_strict_with(thirty, RoundingMode::HalfToEven), None);
     /// ```
     #[inline]
@@ -348,8 +348,8 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::D38;
-    /// let x = D38::<10>::from(2i64);
-    /// assert!(x.checked_powf_strict(D38::<10>::from(8i64)).is_some());
+    /// let x = D38::<10>::try_from(2i64).unwrap();
+    /// assert!(x.checked_powf_strict(D38::<10>::try_from(8i64).unwrap()).is_some());
     /// ```
     #[inline]
     #[must_use]
@@ -367,7 +367,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
-    /// let nine = D38::<10>::from(9i64);
+    /// let nine = D38::<10>::try_from(9i64).unwrap();
     /// assert_eq!(
     ///     nine.checked_sqrt_strict_with(RoundingMode::HalfToEven),
     ///     Some(nine.sqrt_strict_with(RoundingMode::HalfToEven)),
@@ -386,7 +386,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::D38;
-    /// assert!(D38::<10>::from(2i64).checked_sqrt_strict().is_some());
+    /// assert!(D38::<10>::try_from(2i64).unwrap().checked_sqrt_strict().is_some());
     /// ```
     #[inline]
     #[must_use]
@@ -403,7 +403,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
-    /// let x = D38::<10>::from(-27i64);
+    /// let x = D38::<10>::try_from(-27i64).unwrap();
     /// assert_eq!(
     ///     x.checked_cbrt_strict_with(RoundingMode::HalfToEven),
     ///     Some(x.cbrt_strict_with(RoundingMode::HalfToEven)),
@@ -422,7 +422,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::D38;
-    /// assert!(D38::<10>::from(8i64).checked_cbrt_strict().is_some());
+    /// assert!(D38::<10>::try_from(8i64).unwrap().checked_cbrt_strict().is_some());
     /// ```
     #[inline]
     #[must_use]
@@ -442,8 +442,8 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
-    /// let three = D38::<10>::from(3i64);
-    /// let four = D38::<10>::from(4i64);
+    /// let three = D38::<10>::try_from(3i64).unwrap();
+    /// let four = D38::<10>::try_from(4i64).unwrap();
     /// assert_eq!(
     ///     three.checked_hypot_strict_with(four, RoundingMode::HalfToEven),
     ///     Some(three.hypot_strict_with(four, RoundingMode::HalfToEven)),
@@ -463,7 +463,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::D38;
-    /// let a = D38::<10>::from(5i64);
+    /// let a = D38::<10>::try_from(5i64).unwrap();
     /// assert!(a.checked_hypot_strict(a).is_some());
     /// ```
     #[inline]
@@ -585,12 +585,12 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
-    /// let half = D38::<12>::ONE / D38::<12>::from(2i64);
+    /// let half = D38::<12>::ONE / D38::<12>::try_from(2i64).unwrap();
     /// assert_eq!(
     ///     half.checked_asin_strict_with(RoundingMode::HalfToEven),
     ///     Some(half.asin_strict_with(RoundingMode::HalfToEven)),
     /// );
-    /// assert_eq!(D38::<12>::from(2i64).checked_asin_strict_with(RoundingMode::HalfToEven), None);
+    /// assert_eq!(D38::<12>::try_from(2i64).unwrap().checked_asin_strict_with(RoundingMode::HalfToEven), None);
     /// ```
     #[inline]
     #[must_use]
@@ -607,7 +607,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// ```
     /// use decimal_scaled::D38;
     /// assert!(D38::<12>::ONE.checked_asin_strict().is_some());
-    /// assert_eq!(D38::<12>::from(-2i64).checked_asin_strict(), None);
+    /// assert_eq!(D38::<12>::try_from(-2i64).unwrap().checked_asin_strict(), None);
     /// ```
     #[inline]
     #[must_use]
@@ -623,12 +623,12 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
-    /// let half = D38::<12>::ONE / D38::<12>::from(2i64);
+    /// let half = D38::<12>::ONE / D38::<12>::try_from(2i64).unwrap();
     /// assert_eq!(
     ///     half.checked_acos_strict_with(RoundingMode::HalfToEven),
     ///     Some(half.acos_strict_with(RoundingMode::HalfToEven)),
     /// );
-    /// assert_eq!(D38::<12>::from(2i64).checked_acos_strict_with(RoundingMode::HalfToEven), None);
+    /// assert_eq!(D38::<12>::try_from(2i64).unwrap().checked_acos_strict_with(RoundingMode::HalfToEven), None);
     /// ```
     #[inline]
     #[must_use]
@@ -645,7 +645,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// ```
     /// use decimal_scaled::D38;
     /// assert!(D38::<12>::ONE.checked_acos_strict().is_some());
-    /// assert_eq!(D38::<12>::from(2i64).checked_acos_strict(), None);
+    /// assert_eq!(D38::<12>::try_from(2i64).unwrap().checked_acos_strict(), None);
     /// ```
     #[inline]
     #[must_use]
@@ -658,7 +658,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
-    /// let x = D38::<12>::from(5i64);
+    /// let x = D38::<12>::try_from(5i64).unwrap();
     /// assert_eq!(
     ///     x.checked_atan_strict_with(RoundingMode::HalfToEven),
     ///     Some(x.atan_strict_with(RoundingMode::HalfToEven)),
@@ -674,7 +674,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::D38;
-    /// assert!(D38::<12>::from(3i64).checked_atan_strict().is_some());
+    /// assert!(D38::<12>::try_from(3i64).unwrap().checked_atan_strict().is_some());
     /// ```
     #[inline]
     #[must_use]
@@ -689,7 +689,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
     /// let y = D38::<12>::ONE;
-    /// let x = D38::<12>::from(2i64);
+    /// let x = D38::<12>::try_from(2i64).unwrap();
     /// assert_eq!(
     ///     y.checked_atan2_strict_with(x, RoundingMode::HalfToEven),
     ///     Some(y.atan2_strict_with(x, RoundingMode::HalfToEven)),
@@ -734,7 +734,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///     Some(one.sinh_strict_with(RoundingMode::HalfToEven)),
     /// );
     /// // sinh(40) ~ 1.2e17 exceeds D18<6>'s range but fits the D38 work width.
-    /// assert_eq!(D18::<6>::from(40).checked_sinh_strict_with(RoundingMode::HalfToEven), None);
+    /// assert_eq!(D18::<6>::try_from(40).unwrap().checked_sinh_strict_with(RoundingMode::HalfToEven), None);
     /// ```
     #[inline]
     #[must_use]
@@ -748,7 +748,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// ```
     /// use decimal_scaled::{D18, D38};
     /// assert!(D38::<12>::ONE.checked_sinh_strict().is_some());
-    /// assert_eq!(D18::<6>::from(40).checked_sinh_strict(), None);
+    /// assert_eq!(D18::<6>::try_from(40).unwrap().checked_sinh_strict(), None);
     /// ```
     #[inline]
     #[must_use]
@@ -773,7 +773,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///     Some(one.cosh_strict_with(RoundingMode::HalfToEven)),
     /// );
     /// // cosh(40) ~ 1.2e17 exceeds D18<6>'s range but fits the D38 work width.
-    /// assert_eq!(D18::<6>::from(40).checked_cosh_strict_with(RoundingMode::HalfToEven), None);
+    /// assert_eq!(D18::<6>::try_from(40).unwrap().checked_cosh_strict_with(RoundingMode::HalfToEven), None);
     /// ```
     #[inline]
     #[must_use]
@@ -787,7 +787,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// ```
     /// use decimal_scaled::{D18, D38};
     /// assert!(D38::<12>::ONE.checked_cosh_strict().is_some());
-    /// assert_eq!(D18::<6>::from(40).checked_cosh_strict(), None);
+    /// assert_eq!(D18::<6>::try_from(40).unwrap().checked_cosh_strict(), None);
     /// ```
     #[inline]
     #[must_use]
@@ -830,7 +830,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
-    /// let x = D38::<12>::from(3i64);
+    /// let x = D38::<12>::try_from(3i64).unwrap();
     /// assert_eq!(
     ///     x.checked_asinh_strict_with(RoundingMode::HalfToEven),
     ///     Some(x.asinh_strict_with(RoundingMode::HalfToEven)),
@@ -846,7 +846,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::D38;
-    /// assert!(D38::<12>::from(2i64).checked_asinh_strict().is_some());
+    /// assert!(D38::<12>::try_from(2i64).unwrap().checked_asinh_strict().is_some());
     /// ```
     #[inline]
     #[must_use]
@@ -862,7 +862,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
-    /// let two = D38::<12>::from(2i64);
+    /// let two = D38::<12>::try_from(2i64).unwrap();
     /// assert_eq!(
     ///     two.checked_acosh_strict_with(RoundingMode::HalfToEven),
     ///     Some(two.acosh_strict_with(RoundingMode::HalfToEven)),
@@ -882,7 +882,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::D38;
-    /// assert!(D38::<12>::from(3i64).checked_acosh_strict().is_some());
+    /// assert!(D38::<12>::try_from(3i64).unwrap().checked_acosh_strict().is_some());
     /// assert_eq!(D38::<12>::ZERO.checked_acosh_strict(), None);
     /// ```
     #[inline]
@@ -903,7 +903,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
-    /// let half = D38::<12>::ONE / D38::<12>::from(2i64);
+    /// let half = D38::<12>::ONE / D38::<12>::try_from(2i64).unwrap();
     /// assert_eq!(
     ///     half.checked_atanh_strict_with(RoundingMode::HalfToEven),
     ///     Some(half.atanh_strict_with(RoundingMode::HalfToEven)),
@@ -925,7 +925,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::D38;
-    /// let half = D38::<12>::ONE / D38::<12>::from(2i64);
+    /// let half = D38::<12>::ONE / D38::<12>::try_from(2i64).unwrap();
     /// assert!(half.checked_atanh_strict().is_some());
     /// assert_eq!(D38::<12>::ONE.checked_atanh_strict(), None);
     /// ```
@@ -983,7 +983,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
-    /// let x = D38::<12>::from(180i64);
+    /// let x = D38::<12>::try_from(180i64).unwrap();
     /// assert_eq!(
     ///     x.checked_to_radians_strict_with(RoundingMode::HalfToEven),
     ///     Some(x.to_radians_strict_with(RoundingMode::HalfToEven)),
@@ -1000,7 +1000,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::D38;
-    /// assert!(D38::<12>::from(90i64).checked_to_radians_strict().is_some());
+    /// assert!(D38::<12>::try_from(90i64).unwrap().checked_to_radians_strict().is_some());
     /// ```
     #[inline]
     #[must_use]

@@ -102,7 +102,7 @@ mod from_edge_cases {
 
     #[test]
     fn checked_mul_overflow_at_max() {
-        let two = D38s12::from(2);
+        let two = D38s12::try_from(2).unwrap();
         assert_eq!(D38s12::MAX.checked_mul(two), None);
         // Saturating picks the sign-correct extreme.
         assert_eq!(D38s12::MAX.saturating_mul(two), D38s12::MAX);
@@ -571,7 +571,7 @@ mod from_wide_strict_transcendentals {
     #[test]
     #[should_panic(expected = "log: argument must be positive")]
     fn d76_log_zero_panics() {
-        let _ = D76::<6>::ZERO.log_strict(D76::<6>::from(2));
+        let _ = D76::<6>::ZERO.log_strict(D76::<6>::try_from(2).unwrap());
     }
 
     #[test]
@@ -591,13 +591,13 @@ mod from_wide_strict_transcendentals {
     #[test]
     #[should_panic(expected = "asin: argument out of domain")]
     fn d76_asin_out_of_domain_panics() {
-        let _ = lift(D38::<6>::from(2)).asin_strict();
+        let _ = lift(D38::<6>::try_from(2).unwrap()).asin_strict();
     }
 
     #[test]
     #[should_panic(expected = "acos: argument out of domain")]
     fn d76_acos_out_of_domain_panics() {
-        let _ = lift(D38::<6>::from(2)).acos_strict();
+        let _ = lift(D38::<6>::try_from(2).unwrap()).acos_strict();
     }
 
     #[test]
@@ -627,13 +627,13 @@ mod from_wide_strict_transcendentals {
     #[test]
     #[should_panic(expected = "asin: argument out of domain")]
     fn d76_asin_with_oob_panics() {
-        let _ = lift(D38::<6>::from(2)).asin_strict_with(RoundingMode::HalfToEven);
+        let _ = lift(D38::<6>::try_from(2).unwrap()).asin_strict_with(RoundingMode::HalfToEven);
     }
 
     #[test]
     #[should_panic(expected = "log: argument must be positive")]
     fn d76_log_strict_with_zero_panics() {
-        let _ = D76::<6>::ZERO.log_strict_with(lift(D38::<6>::from(2)), RoundingMode::HalfToEven);
+        let _ = D76::<6>::ZERO.log_strict_with(lift(D38::<6>::try_from(2).unwrap()), RoundingMode::HalfToEven);
     }
 
     #[test]
@@ -671,7 +671,7 @@ mod from_wide_strict_transcendentals {
     #[test]
     #[should_panic(expected = "acos: argument out of domain")]
     fn d76_acos_strict_with_oob_panics() {
-        let _ = lift(D38::<6>::from(2)).acos_strict_with(RoundingMode::HalfToEven);
+        let _ = lift(D38::<6>::try_from(2).unwrap()).acos_strict_with(RoundingMode::HalfToEven);
     }
 
     #[test]
@@ -694,9 +694,9 @@ mod from_wide_strict_transcendentals {
 
     #[test]
     fn d76_powf_negative_base_is_zero() {
-        let two = lift(D38::<6>::from(2));
+        let two = lift(D38::<6>::try_from(2).unwrap());
         assert_eq!(
-            lift(D38::<6>::from(-2)).powf_strict(two),
+            lift(D38::<6>::try_from(-2).unwrap()).powf_strict(two),
             D76::<6>::ZERO
         );
     }

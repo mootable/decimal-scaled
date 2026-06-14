@@ -108,9 +108,9 @@ macro_rules! ln_band_edge_no_panic {
     ($name:ident, $D:ident, $scale:literal) => {
         #[test]
         fn $name() {
-            let x = decimal_scaled::$D::<$scale>::from(3) / decimal_scaled::$D::<$scale>::from(2);
+            let x = decimal_scaled::$D::<$scale>::try_from(3).unwrap() / decimal_scaled::$D::<$scale>::try_from(2).unwrap();
             let y = x.ln_strict();
-            assert!(y < decimal_scaled::$D::<$scale>::from(1));
+            assert!(y < decimal_scaled::$D::<$scale>::try_from(1).unwrap());
             assert!(y > decimal_scaled::$D::<$scale>::ZERO);
         }
     };

@@ -35,7 +35,7 @@ mod from_arithmetic_mode_aware {
     fn div_with_overflow_panics() {
         use decimal_scaled::D38;
         let a = D38::<0>::MIN;
-        let _ = a.div_with(D38::<0>::from(-1), RoundingMode::HalfToEven);
+        let _ = a.div_with(D38::<0>::try_from(-1).unwrap(), RoundingMode::HalfToEven);
     }
 
     #[test]
@@ -54,7 +54,7 @@ mod from_arithmetic_mode_aware {
         // D38<0>::MIN / -1 overflows the i128 quotient.
         use decimal_scaled::D38;
         let a = D38::<0>::MIN;
-        let _ = a / D38::<0>::from(-1);
+        let _ = a / D38::<0>::try_from(-1).unwrap();
     }
 }
 
@@ -68,7 +68,7 @@ mod from_macros_surface {
     #[test]
     fn overflow_variants_add_d18() {
         let a = D18::<2>::MAX;
-        let b = D18::<2>::from(1);
+        let b = D18::<2>::try_from(1).unwrap();
         assert!(a.checked_add(b).is_none());
         assert_eq!(a.saturating_add(b), D18::<2>::MAX);
         let (_, ov) = a.overflowing_add(b);
@@ -80,7 +80,7 @@ mod from_macros_surface {
     #[test]
     fn overflow_variants_sub_d18() {
         let a = D18::<2>::MIN;
-        let b = D18::<2>::from(1);
+        let b = D18::<2>::try_from(1).unwrap();
         assert!(a.checked_sub(b).is_none());
         assert_eq!(a.saturating_sub(b), D18::<2>::MIN);
         let (_, ov) = a.overflowing_sub(b);
@@ -97,13 +97,13 @@ mod from_macros_surface {
         assert!(ov);
         let _ = D18::<2>::MIN.wrapping_neg();
         // Non-MIN case
-        assert_eq!(D18::<2>::from(5).checked_neg().unwrap(), D18::<2>::from(-5));
+        assert_eq!(D18::<2>::try_from(5).unwrap().checked_neg().unwrap(), D18::<2>::try_from(-5).unwrap());
     }
 
     #[test]
     fn overflow_variants_mul_d18() {
         let a = D18::<2>::MAX;
-        let b = D18::<2>::from(2);
+        let b = D18::<2>::try_from(2).unwrap();
         assert!(a.checked_mul(b).is_none());
         assert_eq!(a.saturating_mul(b), D18::<2>::MAX);
         let (_, ov) = a.overflowing_mul(b);
@@ -112,20 +112,20 @@ mod from_macros_surface {
 
         // Negative * positive saturating goes to MIN
         let neg_max = D18::<2>::MIN;
-        let big = D18::<2>::from(3);
+        let big = D18::<2>::try_from(3).unwrap();
         assert_eq!(neg_max.saturating_mul(big), D18::<2>::MIN);
     }
 
     #[test]
     fn overflow_variants_div_rem_d18() {
-        let a = D18::<2>::from(7);
-        let b = D18::<2>::from(2);
+        let a = D18::<2>::try_from(7).unwrap();
+        let b = D18::<2>::try_from(2).unwrap();
         let q = a.checked_div(b).unwrap();
         // 7.00 / 2.00 = 3.50 â†’ 350 at S=2.
         assert_eq!(q.to_bits(), 350);
         // div by zero â€” checked_div returns None (matches i32::checked_div);
         // saturating_div by zero panics (covered by saturating_div_by_zero_panics).
-        assert!(D18::<2>::from(7).checked_div(D18::<2>::ZERO).is_none());
+        assert!(D18::<2>::try_from(7).unwrap().checked_div(D18::<2>::ZERO).is_none());
         // overflowing_div(0) / wrapping_div(0) / wrapping_rem(0) on most
         // integer storage types panic (matches i32::overflowing_div), so we
         // don't exercise those paths here â€” they're well-known and the
@@ -133,7 +133,7 @@ mod from_macros_surface {
         // rem
         let r = a.checked_rem(b).unwrap();
         let _ = r;
-        assert!(D18::<2>::from(7).checked_rem(D18::<2>::ZERO).is_none());
+        assert!(D18::<2>::try_from(7).unwrap().checked_rem(D18::<2>::ZERO).is_none());
     }
 
     #[cfg(feature = "wide")]
@@ -142,14 +142,14 @@ mod from_macros_surface {
         use decimal_scaled::D76;
 
         let a = D76::<2>::MAX;
-        let b: D76<2> = D38::<2>::from(2).into();
+        let b: D76<2> = D38::<2>::try_from(2).unwrap().into();
         assert!(a.checked_mul(b).is_none());
         assert_eq!(a.saturating_mul(b), D76::<2>::MAX);
         let _ = a.wrapping_mul(b);
         let (_, ov) = a.overflowing_mul(b);
         assert!(ov);
         // Add overflow
-        let one: D76<2> = D38::<2>::from(1).into();
+        let one: D76<2> = D38::<2>::try_from(1).unwrap().into();
         assert!(D76::<2>::MAX.checked_add(one).is_none());
         // Sub overflow
         assert!(D76::<2>::MIN.checked_sub(one).is_none());
@@ -171,7 +171,7 @@ mod from_macros_surface {
         // The library deliberately mirrors i128 semantics, so we test the
         // checked_mul path which is always defined.
         let a = D38::<2>::MAX;
-        let b = D38::<2>::from(2);
+        let b = D38::<2>::try_from(2).unwrap();
         assert!(a.checked_mul(b).is_none());
         let (_v, ov) = a.overflowing_mul(b);
         assert!(ov);
@@ -214,16 +214,16 @@ mod from_macros_bitwise_and_overflow {
     #[test]
     fn wrapping_div_rem_non_zero() {
         // narrow widths
-        let a = D18::<2>::from(7);
-        let b = D18::<2>::from(2);
+        let a = D18::<2>::try_from(7).unwrap();
+        let b = D18::<2>::try_from(2).unwrap();
         let q = a.wrapping_div(b);
         // 7.00 / 2.00 = 3.50 â†’ 350 at S=2
         assert_eq!(q.to_bits(), 350);
         let r = a.wrapping_rem(b);
         let _ = r;
 
-        let a = D18::<2>::from(7);
-        let b = D18::<2>::from(2);
+        let a = D18::<2>::try_from(7).unwrap();
+        let b = D18::<2>::try_from(2).unwrap();
         let _ = a.wrapping_div(b);
         let _ = a.wrapping_rem(b);
 
@@ -232,8 +232,8 @@ mod from_macros_bitwise_and_overflow {
         {
             use decimal_scaled::D76;
 
-            let a: D76<2> = D38::<2>::from(7).into();
-            let b: D76<2> = D38::<2>::from(2).into();
+            let a: D76<2> = D38::<2>::try_from(7).unwrap().into();
+            let b: D76<2> = D38::<2>::try_from(2).unwrap().into();
             let q = a.wrapping_div(b);
             let expected: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(350_i128).unwrap()).into();
             assert_eq!(q, expected);
@@ -248,8 +248,8 @@ mod from_macros_bitwise_and_overflow {
     fn wide_overflow_variants_success_cases() {
         use decimal_scaled::D76;
 
-        let a: D76<2> = D38::<2>::from(7).into();
-        let b: D76<2> = D38::<2>::from(2).into();
+        let a: D76<2> = D38::<2>::try_from(7).unwrap().into();
+        let b: D76<2> = D38::<2>::try_from(2).unwrap().into();
         // saturating_mul success path
         let _ = a.saturating_mul(b);
         // saturating_div success path
@@ -296,12 +296,12 @@ mod from_macros_bitwise_and_overflow {
 
     #[test]
     fn overflowing_rem_non_zero_no_overflow() {
-        let a = D18::<2>::from(7);
-        let b = D18::<2>::from(2);
+        let a = D18::<2>::try_from(7).unwrap();
+        let b = D18::<2>::try_from(2).unwrap();
         let (_, ov) = a.overflowing_rem(b);
         assert!(!ov);
-        let a = D18::<2>::from(7);
-        let b = D18::<2>::from(2);
+        let a = D18::<2>::try_from(7).unwrap();
+        let b = D18::<2>::try_from(2).unwrap();
         let (_, ov) = a.overflowing_rem(b);
         assert!(!ov);
 
@@ -309,8 +309,8 @@ mod from_macros_bitwise_and_overflow {
         {
             use decimal_scaled::D76;
 
-            let a: D76<2> = D38::<2>::from(7).into();
-            let b: D76<2> = D38::<2>::from(2).into();
+            let a: D76<2> = D38::<2>::try_from(7).unwrap().into();
+            let b: D76<2> = D38::<2>::try_from(2).unwrap().into();
             let (_, ov) = a.overflowing_rem(b);
             assert!(!ov);
         }
@@ -945,8 +945,8 @@ mod from_hypot_edge_cases {
         // hypot(0, x) = |x| exactly, and hypot(0, -x) = |x|.
         for &x in &[3i64, 7, 42, 100] {
             for mode in ALL_MODES {
-                let d38 = D38::<6>::from(x);
-                let d38n = D38::<6>::from(-x);
+                let d38 = D38::<6>::try_from(x).unwrap();
+                let d38n = D38::<6>::try_from(-x).unwrap();
                 assert_eq!(
                     D38::<6>::ZERO.hypot_strict_with(d38, mode),
                     d38,
@@ -957,7 +957,7 @@ mod from_hypot_edge_cases {
                     d38,
                     "D38 hypot(0,-{x}) mode {mode:?} (= |{x}|)",
                 );
-                let d307 = D307::<30>::from(x);
+                let d307 = D307::<30>::try_from(x).unwrap();
                 assert_eq!(
                     D307::<30>::ZERO.hypot_strict_with(d307, mode),
                     d307,
@@ -1031,20 +1031,20 @@ mod from_transcendental_overflow_uniform {
     #[test]
     #[should_panic(expected = "result out of range")]
     fn narrow_d18_exp_far_overflow_panics() {
-        let _ = D18::<0>::from(349).exp_strict();
+        let _ = D18::<0>::try_from(349).unwrap().exp_strict();
     }
 
     #[test]
     #[should_panic(expected = "result out of range")]
     fn narrow_d18_exp2_far_overflow_panics() {
         // 2^400 ≈ 2.6e120, far beyond i64. Pre-fix returned 0.
-        let _ = D18::<0>::from(400).exp2_strict();
+        let _ = D18::<0>::try_from(400).unwrap().exp2_strict();
     }
 
     #[test]
     #[should_panic(expected = "result out of range")]
     fn narrow_d18_cosh_far_overflow_panics() {
-        let _ = D18::<0>::from(500).cosh_strict();
+        let _ = D18::<0>::try_from(500).unwrap().cosh_strict();
     }
 
     // ── Mid tier (D38, i128 storage) ───────────────────────────────────────
@@ -1054,7 +1054,7 @@ mod from_transcendental_overflow_uniform {
     #[test]
     #[should_panic(expected = "result out of range")]
     fn mid_d38_exp_far_overflow_panics() {
-        let _ = D38::<0>::from(349).exp_strict();
+        let _ = D38::<0>::try_from(349).unwrap().exp_strict();
     }
 
     // ── Wide tier (feature-gated) ──────────────────────────────────────────
@@ -1073,13 +1073,13 @@ mod from_transcendental_overflow_uniform {
         fn wide_d57_exp_far_overflow_panics() {
             // e^1000 ≈ 10^434, far beyond D57 storage AND its Wexp work integer.
             // Pre-fix this RETURNED 0 (the Wexp squaring wrapped).
-            let _ = D57::<0>::from(1000).exp_strict();
+            let _ = D57::<0>::try_from(1000).unwrap().exp_strict();
         }
 
         #[test]
         #[should_panic(expected = "result out of range")]
         fn wide_d57_cosh_overflow_panics() {
-            let _ = D57::<0>::from(140).cosh_strict();
+            let _ = D57::<0>::try_from(140).unwrap().cosh_strict();
         }
     }
 
@@ -1092,7 +1092,7 @@ mod from_transcendental_overflow_uniform {
         fn widest_d1232_cosh_far_overflow_panics() {
             // cosh(5000) ≈ e^5000/2 ≈ 10^2171, far beyond D1232 storage. Pre-fix
             // this RETURNED a wrapped multi-limb value.
-            let _ = D1232::<0>::from(5000).cosh_strict();
+            let _ = D1232::<0>::try_from(5000).unwrap().cosh_strict();
         }
     }
 
@@ -1118,7 +1118,7 @@ mod from_transcendental_overflow_uniform {
         #[test]
         #[should_panic(expected = "result out of range")]
         fn d76_cosh_storage_overflow_panics() {
-            let _ = D76::<0>::from(180).cosh_strict();
+            let _ = D76::<0>::try_from(180).unwrap().cosh_strict();
         }
     }
 
@@ -1130,13 +1130,13 @@ mod from_transcendental_overflow_uniform {
     #[test]
     fn narrow_d18_exp_in_range_returns_value() {
         // e^43 ≈ 4.7e18 < i64::MAX ≈ 9.2e18.
-        let _ = D18::<0>::from(43).exp_strict();
+        let _ = D18::<0>::try_from(43).unwrap().exp_strict();
     }
 
     #[test]
     fn mid_d38_exp_in_range_returns_value() {
         // e^88 ≈ 1.65e38 < i128::MAX ≈ 1.70e38 — the last in-range integer arg.
-        let _ = D38::<0>::from(88).exp_strict();
+        let _ = D38::<0>::try_from(88).unwrap().exp_strict();
     }
 
     // ── exp2 deep-overflow band (fractional arguments) ─────────────────────
@@ -1328,7 +1328,7 @@ mod from_transcendental_overflow_uniform {
         let b: D38<10> = "1.5".parse().unwrap();
         let e: D38<10> = "150.5".parse().unwrap();
         let r = b.powf_strict(e);
-        assert!(r > D38::<10>::from(0));
+        assert!(r > D38::<10>::try_from(0).unwrap());
     }
 
     #[test]

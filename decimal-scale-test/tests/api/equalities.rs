@@ -14,9 +14,9 @@ mod from_equalities {
 
     #[test]
     fn eq_signed_exact_match() {
-        assert!(D38s12::from(5) == 5_i32);
-        assert!(5_i32 == D38s12::from(5));
-        assert!(D38s12::from(-7) == -7_i64);
+        assert!(D38s12::try_from(5).unwrap() == 5_i32);
+        assert!(5_i32 == D38s12::try_from(5).unwrap());
+        assert!(D38s12::try_from(-7).unwrap() == -7_i64);
         assert!(D38s12::ZERO == 0_i8);
     }
 
@@ -51,14 +51,14 @@ mod from_equalities {
 
     #[test]
     fn eq_unsigned_exact_match() {
-        assert!(D38s12::from(5) == 5_u32);
-        assert!(5_u64 == D38s12::from(5));
+        assert!(D38s12::try_from(5).unwrap() == 5_u32);
+        assert!(5_u64 == D38s12::try_from(5).unwrap());
         assert!(D38s12::ZERO == 0_u8);
     }
 
     #[test]
     fn eq_unsigned_negative_is_false() {
-        let neg = D38s12::from(-1);
+        let neg = D38s12::try_from(-1).unwrap();
         assert!(!(neg == 0_u32));
         assert!(!(neg == 1_u32));
     }
@@ -175,7 +175,7 @@ mod from_macros_surface {
 
     #[test]
     fn eq_d38_all_signed_ints() {
-        let v = D38::<2>::from(42);
+        let v = D38::<2>::try_from(42).unwrap();
         assert_eq!(v, 42i8);
         assert_eq!(42i8, v);
         assert_eq!(v, 42i16);
@@ -199,14 +199,14 @@ mod from_macros_surface {
         assert_ne!(v, 41i32);
 
         // Negative.
-        let neg = D38::<2>::from(-7);
+        let neg = D38::<2>::try_from(-7).unwrap();
         assert_eq!(neg, -7i32);
         assert_ne!(neg, 7i32);
     }
 
     #[test]
     fn eq_d38_all_unsigned_ints_and_sign_rejection() {
-        let v = D38::<2>::from(42);
+        let v = D38::<2>::try_from(42).unwrap();
         assert_eq!(v, 42u8);
         assert_eq!(42u8, v);
         assert_eq!(v, 42u16);
@@ -221,7 +221,7 @@ mod from_macros_surface {
         assert_eq!(42u128, v);
 
         // Negative decimal is never equal to any unsigned primitive.
-        let neg = D38::<2>::from(-1);
+        let neg = D38::<2>::try_from(-1).unwrap();
         assert_ne!(neg, 0u32);
         assert_ne!(neg, 0u128);
         assert_ne!(neg, 5u32);
@@ -234,12 +234,12 @@ mod from_macros_surface {
 
     #[test]
     fn eq_narrow_signed_unsigned_int() {
-        let v18 = D18::<2>::from(100);
+        let v18 = D18::<2>::try_from(100).unwrap();
         assert_eq!(v18, 100i16);
         assert_eq!(v18, 100u16);
         assert_eq!(v18, 100i64);
         assert_eq!(v18, 100u64);
-        let neg18 = D18::<2>::from(-1);
+        let neg18 = D18::<2>::try_from(-1).unwrap();
         assert_ne!(neg18, 0u64);
         assert_ne!(neg18, 0u128);
     }
@@ -249,7 +249,7 @@ mod from_macros_surface {
     fn eq_wide_int() {
         use decimal_scaled::D76;
 
-        let v: D76<2> = D38::<2>::from(42).into();
+        let v: D76<2> = D38::<2>::try_from(42).unwrap().into();
         assert_eq!(v, 42i32);
         assert_eq!(42i32, v);
         assert_eq!(v, 42u32);
@@ -260,7 +260,7 @@ mod from_macros_surface {
         assert_ne!(frac, 42i32);
         assert_ne!(frac, 42u32);
         // Negative vs unsigned
-        let neg: D76<2> = D38::<2>::from(-1).into();
+        let neg: D76<2> = D38::<2>::try_from(-1).unwrap().into();
         assert_ne!(neg, 0u32);
         assert_ne!(neg, 0u128);
     }
@@ -280,7 +280,7 @@ mod from_macros_bitwise_and_overflow {
     fn eq_wide_float() {
         use decimal_scaled::D76;
 
-        let v: D76<2> = D38::<2>::from(42).into();
+        let v: D76<2> = D38::<2>::try_from(42).unwrap().into();
         assert_eq!(v, 42.0_f64);
         assert_eq!(42.0_f64, v);
         assert_eq!(v, 42.0_f32);
@@ -303,7 +303,7 @@ mod from_equalities_wide_branches {
 
     #[test]
     fn reciprocal_signed_int_eq() {
-        let v: D76<2> = D38::<2>::from(42).into();
+        let v: D76<2> = D38::<2>::try_from(42).unwrap().into();
         assert!(42_i32 == v);
         assert!(42_i64 == v);
         assert!(42_i128 == v);
@@ -315,14 +315,14 @@ mod from_equalities_wide_branches {
 
     #[test]
     fn reciprocal_unsigned_int_eq() {
-        let v: D76<2> = D38::<2>::from(42).into();
+        let v: D76<2> = D38::<2>::try_from(42).unwrap().into();
         assert!(42_u8 == v);
         assert!(42_u16 == v);
         assert!(42_u32 == v);
         assert!(42_u64 == v);
         assert!(42_u128 == v);
         // Negative D76 vs unsigned â€” false from primitive side.
-        let neg: D76<2> = D38::<2>::from(-1).into();
+        let neg: D76<2> = D38::<2>::try_from(-1).unwrap().into();
         assert!(!(0_u32 == neg));
     }
 

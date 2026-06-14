@@ -19,15 +19,15 @@ mod from_macros_int_and_conversions {
 
     #[test]
     fn div_euclid_rem_euclid_signs() {
-        let a = D38::<2>::from(7);
-        let b = D38::<2>::from(2);
+        let a = D38::<2>::try_from(7).unwrap();
+        let b = D38::<2>::try_from(2).unwrap();
         let q = a.div_euclid(b);
         let r = a.rem_euclid(b);
         // 7 / 2 = 3 (positive); remainder 1
         assert_eq!(q.to_bits(), 300);
         assert_eq!(r.to_bits(), 100);
         // Negative dividend → Euclidean keeps remainder non-negative.
-        let neg_seven = D38::<2>::from(-7);
+        let neg_seven = D38::<2>::try_from(-7).unwrap();
         let q = neg_seven.div_euclid(b);
         let r = neg_seven.rem_euclid(b);
         // -7.div_euclid(2) = -4; rem = 1
@@ -37,10 +37,10 @@ mod from_macros_int_and_conversions {
 
     #[test]
     fn div_floor_div_ceil_signs() {
-        let pos = D38::<2>::from(7);
-        let neg = D38::<2>::from(-7);
-        let two = D38::<2>::from(2);
-        let neg_two = D38::<2>::from(-2);
+        let pos = D38::<2>::try_from(7).unwrap();
+        let neg = D38::<2>::try_from(-7).unwrap();
+        let two = D38::<2>::try_from(2).unwrap();
+        let neg_two = D38::<2>::try_from(-2).unwrap();
 
         // 7.div_floor(2) = 3
         assert_eq!(pos.div_floor(two).to_bits(), 300);
@@ -58,31 +58,31 @@ mod from_macros_int_and_conversions {
         assert_eq!(neg.div_ceil(neg_two).to_bits(), 400);
 
         // Exact division (no remainder) takes the early `q` branch.
-        let eight = D38::<2>::from(8);
-        let four = D38::<2>::from(4);
+        let eight = D38::<2>::try_from(8).unwrap();
+        let four = D38::<2>::try_from(4).unwrap();
         assert_eq!(eight.div_floor(four).to_bits(), 200);
         assert_eq!(eight.div_ceil(four).to_bits(), 200);
     }
 
     #[test]
     fn abs_diff_midpoint_mul_add() {
-        let a = D38::<2>::from(7);
-        let b = D38::<2>::from(3);
+        let a = D38::<2>::try_from(7).unwrap();
+        let b = D38::<2>::try_from(3).unwrap();
         assert_eq!(a.abs_diff(b).to_bits(), 400);
         assert_eq!(b.abs_diff(a).to_bits(), 400);
         // Midpoint of 7 and 3 = 5
         let m = a.midpoint(b);
         assert_eq!(m.to_bits(), 500);
         // mul_add: 2*3 + 5 = 11
-        let r = D38::<2>::from(2).mul_add(D38::<2>::from(3), D38::<2>::from(5));
+        let r = D38::<2>::try_from(2).unwrap().mul_add(D38::<2>::try_from(3).unwrap(), D38::<2>::try_from(5).unwrap());
         assert_eq!(r.to_bits(), 1100);
 
         // Narrow variant
         assert_eq!(
-            D18::<2>::from(7).abs_diff(D18::<2>::from(3)).to_bits(),
+            D18::<2>::try_from(7).unwrap().abs_diff(D18::<2>::try_from(3).unwrap()).to_bits(),
             400
         );
-        let _ = D18::<2>::from(2).mul_add(D18::<2>::from(3), D18::<2>::from(5));
+        let _ = D18::<2>::try_from(2).unwrap().mul_add(D18::<2>::try_from(3).unwrap(), D18::<2>::try_from(5).unwrap());
     }
 
     #[test]
@@ -107,15 +107,15 @@ mod from_macros_int_and_conversions {
     fn int_methods_wide() {
         use decimal_scaled::D76;
 
-        let pos: D76<2> = D38::<2>::from(7).into();
-        let neg: D76<2> = D38::<2>::from(-7).into();
-        let two: D76<2> = D38::<2>::from(2).into();
-        let neg_two: D76<2> = D38::<2>::from(-2).into();
+        let pos: D76<2> = D38::<2>::try_from(7).unwrap().into();
+        let neg: D76<2> = D38::<2>::try_from(-7).unwrap().into();
+        let two: D76<2> = D38::<2>::try_from(2).unwrap().into();
+        let neg_two: D76<2> = D38::<2>::try_from(-2).unwrap().into();
 
-        let three: D76<2> = D38::<2>::from(3).into();
-        let neg_four: D76<2> = D38::<2>::from(-4).into();
-        let neg_three: D76<2> = D38::<2>::from(-3).into();
-        let four: D76<2> = D38::<2>::from(4).into();
+        let three: D76<2> = D38::<2>::try_from(3).unwrap().into();
+        let neg_four: D76<2> = D38::<2>::try_from(-4).unwrap().into();
+        let neg_three: D76<2> = D38::<2>::try_from(-3).unwrap().into();
+        let four: D76<2> = D38::<2>::try_from(4).unwrap().into();
         assert_eq!(pos.div_floor(two), three);
         assert_eq!(neg.div_floor(two), neg_four);
         assert_eq!(pos.div_floor(neg_two), neg_four);
@@ -125,9 +125,9 @@ mod from_macros_int_and_conversions {
         assert_eq!(neg.div_ceil(two), neg_three);
 
         // Exact branch
-        let eight: D76<2> = D38::<2>::from(8).into();
-        let four_actual: D76<2> = D38::<2>::from(4).into();
-        let two_actual: D76<2> = D38::<2>::from(2).into();
+        let eight: D76<2> = D38::<2>::try_from(8).unwrap().into();
+        let four_actual: D76<2> = D38::<2>::try_from(4).unwrap().into();
+        let two_actual: D76<2> = D38::<2>::try_from(2).unwrap().into();
         assert_eq!(eight.div_floor(four_actual), two_actual);
         assert_eq!(eight.div_ceil(four_actual), two_actual);
 
@@ -314,8 +314,8 @@ mod from_macros_int_and_conversions {
         );
 
         // to_int default delegator
-        let _ = D18::<2>::from(5).to_int();
-        let _ = D38::<2>::from(5).to_int();
+        let _ = D18::<2>::try_from(5).unwrap().to_int();
+        let _ = D38::<2>::try_from(5).unwrap().to_int();
     }
 
     #[cfg(feature = "wide")]
@@ -359,9 +359,9 @@ mod from_macros_int_and_conversions {
         // Exact remainder
         assert_eq!(lift_bits(300).to_int_with(RoundingMode::HalfToEven), 3);
         // from_int / from_i32 (wide arm)
-        let five_wide: D76<2> = D38::<2>::from(5).into();
-        assert_eq!(D76::<2>::from(5), five_wide);
-        assert_eq!(D76::<2>::from(5), five_wide);
+        let five_wide: D76<2> = D38::<2>::try_from(5).unwrap().into();
+        assert_eq!(D76::<2>::try_from(5).unwrap(), five_wide);
+        assert_eq!(D76::<2>::try_from(5).unwrap(), five_wide);
         // to_int default delegator
         let _ = D76::<2>::ONE.to_int();
     }
@@ -460,7 +460,7 @@ mod from_macros_int_and_conversions {
 
         // i128 → D76 (wide arm)
         let v: D76<2> = 100i128.try_into().unwrap();
-        let expected: D76<2> = D38::<2>::from(100).into();
+        let expected: D76<2> = D38::<2>::try_from(100).unwrap().into();
         assert_eq!(v, expected);
         // u128 → D76 (wide arm — values above i128::MAX should still succeed
         // because wide storage can hold them).

@@ -20,7 +20,7 @@ mod from_conversions {
     #[test]
     fn widen_narrow_one_tier_hop_narrow_arm() {
         use decimal_scaled::{D18s6, D38s6};
-        let a = D18s6::from(123);
+        let a = D18s6::try_from(123).unwrap();
         let b: D38s6 = a.widen(); // D18 â†’ D38
         assert_eq!(b.to_bits(), i128::from(a.to_bits()));
         let c: D18s6 = b.narrow().unwrap(); // D38 â†’ D18
@@ -34,7 +34,7 @@ mod from_conversions {
         // After the 0.3 widen-chain rework, D38.widen() steps to D57
         // (the immediate next tier in the ladder) instead of jumping
         // straight to D76. The .narrow() symmetric is D57 -> D38.
-        let a = D38s12::from(1_000_000);
+        let a = D38s12::try_from(1_000_000).unwrap();
         let b: D57<12> = a.widen();
         let back = b.narrow().unwrap();
         assert_eq!(back, a);
@@ -44,57 +44,57 @@ mod from_conversions {
 
     #[test]
     fn from_int_zero_is_zero() {
-        assert_eq!(D38s12::from(0), D38s12::ZERO);
+        assert_eq!(D38s12::try_from(0).unwrap(), D38s12::ZERO);
     }
 
     #[test]
     fn from_i32_zero_is_zero() {
-        assert_eq!(D38s12::from(0), D38s12::ZERO);
+        assert_eq!(D38s12::try_from(0).unwrap(), D38s12::ZERO);
     }
 
     #[test]
     fn from_int_one_is_one() {
-        assert_eq!(D38s12::from(1), D38s12::ONE);
+        assert_eq!(D38s12::try_from(1).unwrap(), D38s12::ONE);
     }
 
     #[test]
     fn from_i32_one_is_one() {
-        assert_eq!(D38s12::from(1), D38s12::ONE);
+        assert_eq!(D38s12::try_from(1).unwrap(), D38s12::ONE);
     }
 
     #[test]
     fn from_int_negative() {
-        assert_eq!(D38s12::from(-1), -D38s12::ONE);
-        assert_eq!(D38s12::from(-42).to_bits(), -42_000_000_000_000_i128);
+        assert_eq!(D38s12::try_from(-1).unwrap(), -D38s12::ONE);
+        assert_eq!(D38s12::try_from(-42).unwrap().to_bits(), -42_000_000_000_000_i128);
     }
 
     // Lossless From<iN> / From<uN> -- bit-exact scaling
 
     #[test]
     fn from_i8_scales_correctly() {
-        assert_eq!(D38s12::from(0_i8).to_bits(), 0);
-        assert_eq!(D38s12::from(1_i8).to_bits(), 1_000_000_000_000);
-        assert_eq!(D38s12::from(-1_i8).to_bits(), -1_000_000_000_000);
-        assert_eq!(D38s12::from(i8::MAX).to_bits(), 127_000_000_000_000);
-        assert_eq!(D38s12::from(i8::MIN).to_bits(), -128_000_000_000_000);
+        assert_eq!(D38s12::try_from(0_i8).unwrap().to_bits(), 0);
+        assert_eq!(D38s12::try_from(1_i8).unwrap().to_bits(), 1_000_000_000_000);
+        assert_eq!(D38s12::try_from(-1_i8).unwrap().to_bits(), -1_000_000_000_000);
+        assert_eq!(D38s12::try_from(i8::MAX).unwrap().to_bits(), 127_000_000_000_000);
+        assert_eq!(D38s12::try_from(i8::MIN).unwrap().to_bits(), -128_000_000_000_000);
     }
 
     #[test]
     fn from_i64_scales_correctly() {
-        assert_eq!(D38s12::from(0_i64).to_bits(), 0);
+        assert_eq!(D38s12::try_from(0_i64).unwrap().to_bits(), 0);
         assert_eq!(
-            D38s12::from(i64::MAX).to_bits(),
+            D38s12::try_from(i64::MAX).unwrap().to_bits(),
             (i64::MAX as i128) * 1_000_000_000_000
         );
         assert_eq!(
-            D38s12::from(i64::MIN).to_bits(),
+            D38s12::try_from(i64::MIN).unwrap().to_bits(),
             (i64::MIN as i128) * 1_000_000_000_000
         );
     }
 
     #[test]
     fn from_u64_at_boundary_is_lossless() {
-        let v = D38s12::from(u64::MAX);
+        let v = D38s12::try_from(u64::MAX).unwrap();
         assert_eq!(v.to_bits(), (u64::MAX as i128) * 1_000_000_000_000);
     }
 
@@ -208,7 +208,7 @@ mod from_conversions {
     #[test]
     fn from_int_works_at_scale_6() {
         type D6 = D38<6>;
-        let v: D6 = D6::from(1_000_i64);
+        let v: D6 = D6::try_from(1_000_i64).unwrap();
         assert_eq!(v.to_bits(), 1_000_000_000); // 10^9
         assert_eq!(v.to_int(), 1_000);
     }
@@ -216,7 +216,7 @@ mod from_conversions {
     #[test]
     fn from_int_works_at_scale_0() {
         type D0 = D38<0>;
-        let v: D0 = D0::from(42_i64);
+        let v: D0 = D0::try_from(42_i64).unwrap();
         assert_eq!(v.to_bits(), 42);
         assert_eq!(v.to_int(), 42);
     }
@@ -308,7 +308,7 @@ mod from_identity_invariants {
 
     #[test]
     fn widen_then_narrow_is_identity_positive() {
-        let x: D18s9 = D18s9::from(7);
+        let x: D18s9 = D18s9::try_from(7).unwrap();
         // Widen the storage Int<1> -> Int<2>, then narrow back.
         let wide: D<Int<2>, 9> = x.widen_n::<2>();
         let back: D<Int<1>, 9> = wide.narrow_n::<1>().expect("value fits Int<1>");
@@ -317,7 +317,7 @@ mod from_identity_invariants {
 
     #[test]
     fn widen_then_narrow_is_identity_negative() {
-        let x: D18s9 = D18s9::from(-12);
+        let x: D18s9 = D18s9::try_from(-12).unwrap();
         let wide: D<Int<2>, 9> = x.widen_n::<2>();
         let back: D<Int<1>, 9> = wide.narrow_n::<1>().expect("value fits Int<1>");
         assert_eq!(back, x);
@@ -336,7 +336,7 @@ mod from_identity_invariants {
         // A value that only fits the wider tier must NOT narrow back.
         // from_int(10^17) at scale 2 stores 10^19 > i64::MAX, so it cannot
         // round-trip into the Int<1>-backed tier.
-        let huge: D38<2> = D38::<2>::from(100_000_000_000_000_000_i64);
+        let huge: D38<2> = D38::<2>::try_from(100_000_000_000_000_000_i64).unwrap();
         assert!(huge.narrow_n::<1>().is_none());
     }
 
@@ -344,8 +344,8 @@ mod from_identity_invariants {
 
     #[test]
     fn cross_width_same_scale_value_equal() {
-        let narrow: D18s9 = D18s9::from(5);
-        let wide: D<Int<2>, 9> = D::<Int<2>, 9>::from(5);
+        let narrow: D18s9 = D18s9::try_from(5).unwrap();
+        let wide: D<Int<2>, 9> = D::<Int<2>, 9>::try_from(5).unwrap();
         assert_eq!(narrow, wide);
         assert_eq!(wide, narrow);
     }
@@ -353,8 +353,8 @@ mod from_identity_invariants {
     #[test]
     fn cross_scale_value_equal() {
         // 5 at scale 9 and 5 at scale 12 are the same logical value.
-        let a: D18s9 = D18s9::from(5);
-        let b: D38s12 = D38s12::from(5);
+        let a: D18s9 = D18s9::try_from(5).unwrap();
+        let b: D38s12 = D38s12::try_from(5).unwrap();
         assert_eq!(a, b);
         assert_eq!(b, a);
     }
@@ -363,7 +363,7 @@ mod from_identity_invariants {
     fn cross_scale_unequal_when_fraction_differs() {
         // 5.000000001 (scale 9) vs 5.000000000000 (scale 12): not equal.
         let frac: D18s9 = D18s9::from_bits(Int::<1>::from(5_000_000_001_i64));
-        let whole: D38s12 = D38s12::from(5);
+        let whole: D38s12 = D38s12::try_from(5).unwrap();
         assert_ne!(frac, whole);
         assert!(frac > whole);
         assert!(whole < frac);
@@ -371,8 +371,8 @@ mod from_identity_invariants {
 
     #[test]
     fn d_eq_primitive_int_exact() {
-        assert!(D38s12::from(42) == 42_i32);
-        assert!(42_i64 == D38s12::from(42));
+        assert!(D38s12::try_from(42).unwrap() == 42_i32);
+        assert!(42_i64 == D38s12::try_from(42).unwrap());
         // A fractional decimal is never equal to an integer.
         let half: D38s12 = D38s12::from_bits(Int::<2>::from(5_500_000_000_000_i64));
         assert!(!(half == 5_i32));
@@ -384,7 +384,7 @@ mod from_identity_invariants {
     #[test]
     fn from_int_to_int_round_trip() {
         for n in [-9_i64, -1, 0, 1, 7, 1234, 9_999_999] {
-            let d: D38s12 = D38s12::from(n);
+            let d: D38s12 = D38s12::try_from(n).unwrap();
             assert_eq!(d.to_int(), n);
         }
     }
@@ -603,36 +603,36 @@ mod from_macros_surface {
 
     #[test]
     fn from_int_narrow_signed() {
-        assert_eq!(D18::<2>::from(100).to_bits(), 10_000);
-        assert_eq!(D38::<2>::from(42).to_bits(), 4_200);
+        assert_eq!(D18::<2>::try_from(100).unwrap().to_bits(), 10_000);
+        assert_eq!(D38::<2>::try_from(42).unwrap().to_bits(), 4_200);
         // negative
-        assert_eq!(D38::<2>::from(-5).to_bits(), -500);
+        assert_eq!(D38::<2>::try_from(-5).unwrap().to_bits(), -500);
     }
 
     #[test]
     fn from_primitive_paths_d38() {
         // D38 has impls for every primitive int type via decl_from_primitive.
-        let _ = D38::<2>::from(7_i8);
-        let _ = D38::<2>::from(7_i16);
-        let _ = D38::<2>::from(7_i32);
-        let _ = D38::<2>::from(7_i64);
-        let _ = D38::<2>::from(7_u8);
-        let _ = D38::<2>::from(7_u16);
-        let _ = D38::<2>::from(7_u32);
-        let _ = D38::<2>::from(7_u64);
-        // i64 via from_int (D38's IntSrc is i64; i128 conversion is via TryFrom).
-        assert_eq!(D38::<2>::from(0i64).to_bits(), 0);
+        let _ = D38::<2>::try_from(7_i8).unwrap();
+        let _ = D38::<2>::try_from(7_i16).unwrap();
+        let _ = D38::<2>::try_from(7_i32).unwrap();
+        let _ = D38::<2>::try_from(7_i64).unwrap();
+        let _ = D38::<2>::try_from(7_u8).unwrap();
+        let _ = D38::<2>::try_from(7_u16).unwrap();
+        let _ = D38::<2>::try_from(7_u32).unwrap();
+        let _ = D38::<2>::try_from(7_u64).unwrap();
+        // i64 via TryFrom (D38's i128 conversion is via TryFrom).
+        assert_eq!(D38::<2>::try_from(0i64).unwrap().to_bits(), 0);
         let _: D38<2> = i128::from(0i32).try_into().unwrap_or(D38::<2>::ZERO);
     }
 
     #[test]
     fn from_primitive_paths_d18() {
-        let _ = D18::<2>::from(7_i8);
-        let _ = D18::<2>::from(7_i16);
-        let _ = D18::<2>::from(7_i32);
-        let _ = D18::<2>::from(7_u8);
-        let _ = D18::<2>::from(7_u16);
-        let _ = D18::<2>::from(7_u32);
+        let _ = D18::<2>::try_from(7_i8).unwrap();
+        let _ = D18::<2>::try_from(7_i16).unwrap();
+        let _ = D18::<2>::try_from(7_i32).unwrap();
+        let _ = D18::<2>::try_from(7_u8).unwrap();
+        let _ = D18::<2>::try_from(7_u16).unwrap();
+        let _ = D18::<2>::try_from(7_u32).unwrap();
     }
     // â”€â”€â”€ macros/float_bridge.rs: from_f32 / to_f32 / from_f64 / to_f64 â”€â”€â”€â”€â”€
 
@@ -659,8 +659,8 @@ mod from_macros_surface {
         assert_eq!(D18::<2>::from_f64(f64::NAN), D18::<2>::ZERO);
 
         // to_f32 / to_f64
-        assert_eq!(D18::<2>::from(1).to_f32(), 1.0_f32);
-        assert_eq!(D18::<2>::from(1).to_f64(), 1.0);
+        assert_eq!(D18::<2>::try_from(1).unwrap().to_f32(), 1.0_f32);
+        assert_eq!(D18::<2>::try_from(1).unwrap().to_f64(), 1.0);
 
         // from_f64_with: rounding-mode-aware variant
         use decimal_scaled::RoundingMode;
@@ -673,7 +673,7 @@ mod from_macros_surface {
 
     #[test]
     fn try_from_d38_to_d18_in_range() {
-        let v = D38::<2>::from(5);
+        let v = D38::<2>::try_from(5).unwrap();
         let r: D18<2> = v.try_into().unwrap();
         assert_eq!(r.to_bits(), 500);
     }
@@ -757,7 +757,7 @@ mod from_widen_narrow_default {
 
     #[test]
     fn d38_widen_to_d57() {
-        let a = D38::<12>::from(7);
+        let a = D38::<12>::try_from(7).unwrap();
         let w: D57<12> = a.widen();
         let expected: D57<12> = a.into();
         assert_eq!(w, expected);
@@ -767,7 +767,7 @@ mod from_widen_narrow_default {
     fn d76_narrow_to_d57_in_range() {
         // D38 -> D57 -> D76 widens losslessly, then D76.narrow() back to
         // D57 should recover the value.
-        let small: D57<12> = D38::<12>::from(7).into();
+        let small: D57<12> = D38::<12>::try_from(7).unwrap().into();
         let w: D76<12> = small.widen();
         let n: D57<12> = w.narrow().unwrap();
         assert_eq!(n.to_bits().to_string(), small.to_bits().to_string());
@@ -783,7 +783,7 @@ mod from_widen_narrow_default {
 
     #[test]
     fn d76_widen_to_d115() {
-        let a: D76<6> = D38::<6>::from(7).into();
+        let a: D76<6> = D38::<6>::try_from(7).unwrap().into();
         let b: D115<6> = a.widen();
         let n: D76<6> = b.narrow().unwrap();
         assert_eq!(n, a);
@@ -804,7 +804,7 @@ mod from_widen_narrow_default {
     #[test]
     fn d153_widen_to_d230_then_d307() {
         use decimal_scaled::{D153, D230, D307};
-        let a: D153<6> = D76::<6>::from(7).widen().widen(); // D76 -> D115 -> D153
+        let a: D153<6> = D76::<6>::try_from(7).unwrap().widen().widen(); // D76 -> D115 -> D153
         let b: D230<6> = a.widen();
         let n: D153<6> = b.narrow().unwrap();
         assert_eq!(n, a);
@@ -827,7 +827,7 @@ mod from_widen_narrow_default {
     #[test]
     fn widen_n_d18_to_d38_lossless() {
         // D18 (Int<1>) â†’ D38 (Int<2>), same scale, exact.
-        let a = D18::<9>::from(7);
+        let a = D18::<9>::try_from(7).unwrap();
         let w: D38<9> = a.widen_n::<2>();
         // Same logical value: widening sign-extends, scale unchanged.
         assert_eq!(i128::from(w.to_bits()), i128::from(a.to_bits()));
@@ -845,7 +845,7 @@ mod from_widen_narrow_default {
     #[test]
     fn narrow_n_d38_to_d18_in_range_and_out() {
         // In range: D38 value that fits Int<1> narrows back exactly.
-        let a = D38::<2>::from(7);
+        let a = D38::<2>::try_from(7).unwrap();
         let n: Option<D18<2>> = a.narrow_n::<1>();
         assert!(n.is_some());
         assert_eq!(n.unwrap().to_bits(), 700);
@@ -881,7 +881,7 @@ mod from_widen_narrow_default {
         // Cross-tier TryFrom skips multiple rungs in one hop; this isn't
         // the `.narrow()` chain (which steps once) â€” it's the From /
         // TryFrom matrix that's been comprehensive since 0.2.5.
-        let w: D76<2> = D38::<2>::from(7).into();
+        let w: D76<2> = D38::<2>::try_from(7).unwrap().into();
         let n18: D18<2> = w.try_into().unwrap();
         assert_eq!(n18.to_bits(), 700);
 

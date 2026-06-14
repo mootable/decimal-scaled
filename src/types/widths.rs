@@ -499,7 +499,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::D38s9;
-    /// let a = D38s9::from(1_000_000);
+    /// let a = D38s9::try_from(1_000_000).unwrap();
     /// let b = a.narrow().unwrap();
     /// assert_eq!(i128::from(b.to_bits()), i128::from(a.to_bits()));
     /// ```
@@ -584,7 +584,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<1>, SCALE> {
     ///
     /// ```
     /// use decimal_scaled::D18s9;
-    /// let a = D18s9::from(7);
+    /// let a = D18s9::try_from(7).unwrap();
     /// let b = a.widen();              // D38<9>
     /// assert_eq!(i128::from(b.to_bits()), i128::from(a.to_bits()));
     /// ```
@@ -712,7 +712,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     /// ```
     /// # #[cfg(feature = "wide")] {
     /// use decimal_scaled::D38s12;
-    /// let a = D38s12::from(1_000_000);
+    /// let a = D38s12::try_from(1_000_000).unwrap();
     /// let _wider = a.widen();  // D57<12>
     /// # }
     /// ```

@@ -697,7 +697,7 @@ mod from_num_traits {
     #[test]
     fn numcast_from_i32() {
         let v: D38s12 = <D38s12 as NumCast>::from(42_i32).expect("in-range");
-        assert_eq!(v, <D38s12 as From<i32>>::from(42_i32));
+        assert_eq!(v, <D38s12 as TryFrom<i32>>::try_from(42_i32).unwrap());
     }
 
     /// `NumCast::from` preserves the fractional part of an `f64` input
@@ -1085,7 +1085,7 @@ mod from_src_num_traits {
     #[test]
     fn from_num_i32_round_trip() {
         let d = D38s12::from_num(42_i32);
-        assert_eq!(d, D38s12::from(42_i32));
+        assert_eq!(d, D38s12::try_from(42_i32).unwrap());
         assert_eq!(d.to_num::<i32>(), 42_i32);
     }
 
@@ -1093,7 +1093,7 @@ mod from_src_num_traits {
     #[test]
     fn from_num_i64_matches_from() {
         let d = D38s12::from_num(1_000_i64);
-        assert_eq!(d, D38s12::from(1_000_i64));
+        assert_eq!(d, D38s12::try_from(1_000_i64).unwrap());
     }
 
     /// `from_num(f64)` for an in-range value matches `from_f64`.
@@ -1165,13 +1165,13 @@ mod from_src_num_traits {
         assert_eq!((-D38s12::ONE).to_num::<f32>(), -1.0_f32);
     }
 
-    /// `D38::from(42_i32).to_num::<i32>() == 42`.
+    /// `D38::try_from(42_i32).unwrap().to_num::<i32>() == 42`.
     #[test]
     fn to_num_i32_in_range() {
-        let d = D38s12::from(42_i32);
+        let d = D38s12::try_from(42_i32).unwrap();
         assert_eq!(d.to_num::<i32>(), 42_i32);
 
-        let neg = D38s12::from(-42_i32);
+        let neg = D38s12::try_from(-42_i32).unwrap();
         assert_eq!(neg.to_num::<i32>(), -42_i32);
     }
 
@@ -1192,7 +1192,7 @@ mod from_src_num_traits {
     fn to_num_i64_saturates() {
         assert_eq!(D38s12::MAX.to_num::<i64>(), i64::MAX);
         assert_eq!(D38s12::MIN.to_num::<i64>(), i64::MIN);
-        assert_eq!(D38s12::from(42_i64).to_num::<i64>(), 42_i64);
+        assert_eq!(D38s12::try_from(42_i64).unwrap().to_num::<i64>(), 42_i64);
     }
 
     /// `to_num::<u32>()` returns 0 for negative values (saturates to
@@ -1221,7 +1221,7 @@ mod from_src_num_traits {
     fn from_num_to_num_at_scale_6() {
         type D6 = decimal_scaled::D<Int<2>, 6>;
         let d = D6::from_num(7_i32);
-        assert_eq!(d, D6::from(7_i32));
+        assert_eq!(d, D6::try_from(7_i32).unwrap());
         assert_eq!(d.to_num::<i32>(), 7_i32);
     }
 
@@ -1257,6 +1257,6 @@ mod from_src_num_traits {
     #[test]
     fn from_num_u64_max_succeeds_without_saturation() {
         let d = D38s12::from_num(u64::MAX);
-        assert_eq!(d, D38s12::from(u64::MAX));
+        assert_eq!(d, D38s12::try_from(u64::MAX).unwrap());
     }
 }
