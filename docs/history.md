@@ -45,6 +45,140 @@ shown per cell; the legend maps each to its size in nanoseconds.
 </div>
 
 <!-- BEGIN GENERATED:history:body -->
+## Arithmetic
+
+### `add`
+
+<div class="grid perf-grid" markdown>
+
+| Width | 0.3.3 | 0.4.4 | 0.5.0 |
+| :-- | --: | --: | --: |
+| D18 | 210 ns (0.79×) | 215 ns (0.81×) | 266 ns |
+| D38 | 241 ns (0.72×) | 256 ns (0.76×) | 335 ns |
+| D57 | · | 2.15 µs (2.7×) | 791 ns |
+| D76 | 872 ns (0.84×) | 2.73 µs (2.6×) | 1.04 µs |
+| D115 | · | 6.08 µs (2.1×) | 2.94 µs |
+| D153 | 1.99 µs (0.79×) | 5.54 µs (2.2×) | 2.51 µs |
+| D230 | 4.14 µs (0.43×) | 16.1 µs (1.7×) | 9.52 µs |
+| D307 | 5.04 µs (0.36×) | 21.4 µs (1.5×) | 14.2 µs |
+| D462 | · | 40 µs (1.4×) | 29.2 µs |
+| D616 | · | 63.7 µs (1.4×) | 44.9 µs |
+| D924 | · | 125 µs (1.3×) | 92.6 µs |
+| D1232 | · | 201 µs (1.3×) | 158 µs |
+
+<figure>
+<svg viewBox="0 0 460 262" width="100%" style="height:auto;color:var(--md-default-fg-color--light)" xmlns="http://www.w3.org/2000/svg"><line x1="52" y1="232.0" x2="450" y2="232.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="235.0" text-anchor="end" font-size="9" fill="currentColor">100 ns</text><line x1="52" y1="181.5" x2="450" y2="181.5" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="184.5" text-anchor="end" font-size="9" fill="currentColor">1 µs</text><line x1="52" y1="131.0" x2="450" y2="131.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="134.0" text-anchor="end" font-size="9" fill="currentColor">10 µs</text><line x1="52" y1="80.5" x2="450" y2="80.5" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="83.5" text-anchor="end" font-size="9" fill="currentColor">100 µs</text><line x1="52" y1="30.0" x2="450" y2="30.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="33.0" text-anchor="end" font-size="9" fill="currentColor">1 ms</text><text x="52.0" y="244" text-anchor="middle" font-size="8" fill="currentColor">18</text><text x="88.2" y="244" text-anchor="middle" font-size="8" fill="currentColor">38</text><text x="124.4" y="244" text-anchor="middle" font-size="8" fill="currentColor">57</text><text x="160.5" y="244" text-anchor="middle" font-size="8" fill="currentColor">76</text><text x="196.7" y="244" text-anchor="middle" font-size="8" fill="currentColor">115</text><text x="232.9" y="244" text-anchor="middle" font-size="8" fill="currentColor">153</text><text x="269.1" y="244" text-anchor="middle" font-size="8" fill="currentColor">230</text><text x="305.3" y="244" text-anchor="middle" font-size="8" fill="currentColor">307</text><text x="341.5" y="244" text-anchor="middle" font-size="8" fill="currentColor">462</text><text x="377.6" y="244" text-anchor="middle" font-size="8" fill="currentColor">616</text><text x="413.8" y="244" text-anchor="middle" font-size="8" fill="currentColor">924</text><text x="450.0" y="244" text-anchor="middle" font-size="8" fill="currentColor">1232</text><line x1="52" y1="20" x2="66" y2="20" stroke="var(--dusk-purple,#7A6A8E)" stroke-width="2"/><text x="69" y="23" font-size="9" fill="currentColor">0.3.3</text><line x1="111" y1="20" x2="125" y2="20" stroke="var(--md-accent-fg-color)" stroke-width="2"/><text x="128" y="23" font-size="9" fill="currentColor">0.4.4</text><line x1="170" y1="20" x2="184" y2="20" stroke="var(--md-primary-fg-color)" stroke-width="2"/><text x="187" y="23" font-size="9" fill="currentColor">0.5.0</text><polyline points="52.0,215.7 88.2,212.7 160.5,184.5 232.9,166.4 269.1,150.4 305.3,146.0" fill="none" stroke="var(--dusk-purple,#7A6A8E)" stroke-width="1.3"/><polyline points="52.0,215.2 88.2,211.4 124.4,164.7 160.5,159.4 196.7,141.9 232.9,144.0 269.1,120.6 305.3,114.3 341.5,100.6 377.6,90.4 413.8,75.6 450.0,65.2" fill="none" stroke="var(--md-accent-fg-color)" stroke-width="1.3"/><polyline points="52.0,210.5 88.2,205.5 124.4,186.6 160.5,180.6 196.7,157.8 232.9,161.3 269.1,132.1 305.3,123.3 341.5,107.5 377.6,98.0 413.8,82.2 450.0,70.5" fill="none" stroke="var(--md-primary-fg-color)" stroke-width="2.0"/><line x1="52" y1="30" x2="52" y2="232" stroke="currentColor" stroke-opacity="0.4"/><line x1="52" y1="232" x2="450" y2="232" stroke="currentColor" stroke-opacity="0.4"/></svg>
+<figcaption>Median time vs width (log scale), one line per release; the multiplier is the slowdown relative to the latest.</figcaption>
+</figure>
+
+</div>
+
+### `div`
+
+<div class="grid perf-grid" markdown>
+
+| Width | 0.3.3 | 0.4.4 | 0.5.0 |
+| :-- | --: | --: | --: |
+| D18 | 230 ns (0.92×) | 200 ns (0.8×) | 251 ns |
+| D38 | 265 ns (0.68×) | 256 ns (0.65×) | 391 ns |
+| D57 | · | 2.6 µs (3.3×) | 796 ns |
+| D76 | · | 3.15 µs (3.1×) | 1.01 µs |
+| D115 | · | 6.83 µs (2.5×) | 2.71 µs |
+| D153 | · | 6.13 µs (2.8×) | 2.19 µs |
+| D230 | · | 19 µs (2.3×) | 8.28 µs |
+| D307 | 15.5 µs (1.2×) | 22.1 µs (1.8×) | 12.5 µs |
+| D462 | · | 43.5 µs (1.7×) | 26.2 µs |
+| D616 | · | 72.6 µs (1.8×) | 41.1 µs |
+| D924 | · | 137 µs (1.4×) | 95.7 µs |
+| D1232 | · | 220 µs (1.4×) | 163 µs |
+
+<figure>
+<svg viewBox="0 0 460 262" width="100%" style="height:auto;color:var(--md-default-fg-color--light)" xmlns="http://www.w3.org/2000/svg"><line x1="52" y1="232.0" x2="450" y2="232.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="235.0" text-anchor="end" font-size="9" fill="currentColor">100 ns</text><line x1="52" y1="181.5" x2="450" y2="181.5" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="184.5" text-anchor="end" font-size="9" fill="currentColor">1 µs</text><line x1="52" y1="131.0" x2="450" y2="131.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="134.0" text-anchor="end" font-size="9" fill="currentColor">10 µs</text><line x1="52" y1="80.5" x2="450" y2="80.5" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="83.5" text-anchor="end" font-size="9" fill="currentColor">100 µs</text><line x1="52" y1="30.0" x2="450" y2="30.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="33.0" text-anchor="end" font-size="9" fill="currentColor">1 ms</text><text x="52.0" y="244" text-anchor="middle" font-size="8" fill="currentColor">18</text><text x="88.2" y="244" text-anchor="middle" font-size="8" fill="currentColor">38</text><text x="124.4" y="244" text-anchor="middle" font-size="8" fill="currentColor">57</text><text x="160.5" y="244" text-anchor="middle" font-size="8" fill="currentColor">76</text><text x="196.7" y="244" text-anchor="middle" font-size="8" fill="currentColor">115</text><text x="232.9" y="244" text-anchor="middle" font-size="8" fill="currentColor">153</text><text x="269.1" y="244" text-anchor="middle" font-size="8" fill="currentColor">230</text><text x="305.3" y="244" text-anchor="middle" font-size="8" fill="currentColor">307</text><text x="341.5" y="244" text-anchor="middle" font-size="8" fill="currentColor">462</text><text x="377.6" y="244" text-anchor="middle" font-size="8" fill="currentColor">616</text><text x="413.8" y="244" text-anchor="middle" font-size="8" fill="currentColor">924</text><text x="450.0" y="244" text-anchor="middle" font-size="8" fill="currentColor">1232</text><line x1="52" y1="20" x2="66" y2="20" stroke="var(--dusk-purple,#7A6A8E)" stroke-width="2"/><text x="69" y="23" font-size="9" fill="currentColor">0.3.3</text><line x1="111" y1="20" x2="125" y2="20" stroke="var(--md-accent-fg-color)" stroke-width="2"/><text x="128" y="23" font-size="9" fill="currentColor">0.4.4</text><line x1="170" y1="20" x2="184" y2="20" stroke="var(--md-primary-fg-color)" stroke-width="2"/><text x="187" y="23" font-size="9" fill="currentColor">0.5.0</text><polyline points="52.0,213.7 88.2,210.6 305.3,121.4" fill="none" stroke="var(--dusk-purple,#7A6A8E)" stroke-width="1.3"/><polyline points="52.0,216.8 88.2,211.4 124.4,160.6 160.5,156.3 196.7,139.4 232.9,141.7 269.1,117.0 305.3,113.6 341.5,98.8 377.6,87.5 413.8,73.5 450.0,63.2" fill="none" stroke="var(--md-accent-fg-color)" stroke-width="1.3"/><polyline points="52.0,211.8 88.2,202.1 124.4,186.5 160.5,181.3 196.7,159.6 232.9,164.3 269.1,135.1 305.3,126.1 341.5,109.8 377.6,100.0 413.8,81.5 450.0,69.8" fill="none" stroke="var(--md-primary-fg-color)" stroke-width="2.0"/><line x1="52" y1="30" x2="52" y2="232" stroke="currentColor" stroke-opacity="0.4"/><line x1="52" y1="232" x2="450" y2="232" stroke="currentColor" stroke-opacity="0.4"/></svg>
+<figcaption>Median time vs width (log scale), one line per release; the multiplier is the slowdown relative to the latest.</figcaption>
+</figure>
+
+</div>
+
+### `mul`
+
+<div class="grid perf-grid" markdown>
+
+| Width | 0.3.3 | 0.4.4 | 0.5.0 |
+| :-- | --: | --: | --: |
+| D18 | 240 ns (0.82×) | 221 ns (0.76×) | 291 ns |
+| D38 | 270 ns (0.67×) | 271 ns (0.68×) | 401 ns |
+| D57 | · | 2.06 µs (2.9×) | 716 ns |
+| D76 | · | 2.55 µs (2.7×) | 941 ns |
+| D115 | · | 5.44 µs (2.1×) | 2.63 µs |
+| D153 | · | 5.12 µs (2.4×) | 2.16 µs |
+| D230 | · | 15.3 µs (1.8×) | 8.47 µs |
+| D307 | · | 19.8 µs (1.6×) | 12.6 µs |
+| D462 | · | 38.3 µs (1.4×) | 26.7 µs |
+| D616 | · | 62.3 µs (1.5×) | 40.9 µs |
+| D924 | · | 128 µs (1.4×) | 89.7 µs |
+| D1232 | · | 211 µs (1.3×) | 157 µs |
+
+<figure>
+<svg viewBox="0 0 460 262" width="100%" style="height:auto;color:var(--md-default-fg-color--light)" xmlns="http://www.w3.org/2000/svg"><line x1="52" y1="232.0" x2="450" y2="232.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="235.0" text-anchor="end" font-size="9" fill="currentColor">100 ns</text><line x1="52" y1="181.5" x2="450" y2="181.5" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="184.5" text-anchor="end" font-size="9" fill="currentColor">1 µs</text><line x1="52" y1="131.0" x2="450" y2="131.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="134.0" text-anchor="end" font-size="9" fill="currentColor">10 µs</text><line x1="52" y1="80.5" x2="450" y2="80.5" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="83.5" text-anchor="end" font-size="9" fill="currentColor">100 µs</text><line x1="52" y1="30.0" x2="450" y2="30.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="33.0" text-anchor="end" font-size="9" fill="currentColor">1 ms</text><text x="52.0" y="244" text-anchor="middle" font-size="8" fill="currentColor">18</text><text x="88.2" y="244" text-anchor="middle" font-size="8" fill="currentColor">38</text><text x="124.4" y="244" text-anchor="middle" font-size="8" fill="currentColor">57</text><text x="160.5" y="244" text-anchor="middle" font-size="8" fill="currentColor">76</text><text x="196.7" y="244" text-anchor="middle" font-size="8" fill="currentColor">115</text><text x="232.9" y="244" text-anchor="middle" font-size="8" fill="currentColor">153</text><text x="269.1" y="244" text-anchor="middle" font-size="8" fill="currentColor">230</text><text x="305.3" y="244" text-anchor="middle" font-size="8" fill="currentColor">307</text><text x="341.5" y="244" text-anchor="middle" font-size="8" fill="currentColor">462</text><text x="377.6" y="244" text-anchor="middle" font-size="8" fill="currentColor">616</text><text x="413.8" y="244" text-anchor="middle" font-size="8" fill="currentColor">924</text><text x="450.0" y="244" text-anchor="middle" font-size="8" fill="currentColor">1232</text><line x1="52" y1="20" x2="66" y2="20" stroke="var(--dusk-purple,#7A6A8E)" stroke-width="2"/><text x="69" y="23" font-size="9" fill="currentColor">0.3.3</text><line x1="111" y1="20" x2="125" y2="20" stroke="var(--md-accent-fg-color)" stroke-width="2"/><text x="128" y="23" font-size="9" fill="currentColor">0.4.4</text><line x1="170" y1="20" x2="184" y2="20" stroke="var(--md-primary-fg-color)" stroke-width="2"/><text x="187" y="23" font-size="9" fill="currentColor">0.5.0</text><polyline points="52.0,212.8 88.2,210.2" fill="none" stroke="var(--dusk-purple,#7A6A8E)" stroke-width="1.3"/><polyline points="52.0,214.6 88.2,210.1 124.4,165.6 160.5,161.0 196.7,144.4 232.9,145.7 269.1,121.6 305.3,116.1 341.5,101.6 377.6,90.9 413.8,75.1 450.0,64.2" fill="none" stroke="var(--md-accent-fg-color)" stroke-width="1.3"/><polyline points="52.0,208.6 88.2,201.5 124.4,188.8 160.5,182.8 196.7,160.3 232.9,164.6 269.1,134.7 305.3,125.9 341.5,109.5 377.6,100.1 413.8,82.9 450.0,70.6" fill="none" stroke="var(--md-primary-fg-color)" stroke-width="2.0"/><line x1="52" y1="30" x2="52" y2="232" stroke="currentColor" stroke-opacity="0.4"/><line x1="52" y1="232" x2="450" y2="232" stroke="currentColor" stroke-opacity="0.4"/></svg>
+<figcaption>Median time vs width (log scale), one line per release; the multiplier is the slowdown relative to the latest.</figcaption>
+</figure>
+
+</div>
+
+### `rem`
+
+<div class="grid perf-grid" markdown>
+
+| Width | 0.3.3 | 0.4.4 | 0.5.0 |
+| :-- | --: | --: | --: |
+| D18 | 205 ns (0.76×) | 201 ns (0.74×) | 270 ns |
+| D38 | 241 ns (0.73×) | 230 ns (0.7×) | 330 ns |
+| D57 | · | 2.05 µs (2.9×) | 701 ns |
+| D76 | · | 2.58 µs (2.6×) | 976 ns |
+| D115 | · | 5.44 µs (2.2×) | 2.52 µs |
+| D153 | · | 4.68 µs (2.3×) | 2.07 µs |
+| D230 | · | 14 µs (1.8×) | 7.92 µs |
+| D307 | · | 18.4 µs (1.5×) | 11.9 µs |
+| D462 | · | 35.3 µs (1.5×) | 24.2 µs |
+| D616 | · | 56.7 µs (1.4×) | 40 µs |
+| D924 | · | 115 µs (1.3×) | 89.4 µs |
+| D1232 | · | 191 µs (1.2×) | 159 µs |
+
+<figure>
+<svg viewBox="0 0 460 262" width="100%" style="height:auto;color:var(--md-default-fg-color--light)" xmlns="http://www.w3.org/2000/svg"><line x1="52" y1="232.0" x2="450" y2="232.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="235.0" text-anchor="end" font-size="9" fill="currentColor">100 ns</text><line x1="52" y1="181.5" x2="450" y2="181.5" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="184.5" text-anchor="end" font-size="9" fill="currentColor">1 µs</text><line x1="52" y1="131.0" x2="450" y2="131.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="134.0" text-anchor="end" font-size="9" fill="currentColor">10 µs</text><line x1="52" y1="80.5" x2="450" y2="80.5" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="83.5" text-anchor="end" font-size="9" fill="currentColor">100 µs</text><line x1="52" y1="30.0" x2="450" y2="30.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="33.0" text-anchor="end" font-size="9" fill="currentColor">1 ms</text><text x="52.0" y="244" text-anchor="middle" font-size="8" fill="currentColor">18</text><text x="88.2" y="244" text-anchor="middle" font-size="8" fill="currentColor">38</text><text x="124.4" y="244" text-anchor="middle" font-size="8" fill="currentColor">57</text><text x="160.5" y="244" text-anchor="middle" font-size="8" fill="currentColor">76</text><text x="196.7" y="244" text-anchor="middle" font-size="8" fill="currentColor">115</text><text x="232.9" y="244" text-anchor="middle" font-size="8" fill="currentColor">153</text><text x="269.1" y="244" text-anchor="middle" font-size="8" fill="currentColor">230</text><text x="305.3" y="244" text-anchor="middle" font-size="8" fill="currentColor">307</text><text x="341.5" y="244" text-anchor="middle" font-size="8" fill="currentColor">462</text><text x="377.6" y="244" text-anchor="middle" font-size="8" fill="currentColor">616</text><text x="413.8" y="244" text-anchor="middle" font-size="8" fill="currentColor">924</text><text x="450.0" y="244" text-anchor="middle" font-size="8" fill="currentColor">1232</text><line x1="52" y1="20" x2="66" y2="20" stroke="var(--dusk-purple,#7A6A8E)" stroke-width="2"/><text x="69" y="23" font-size="9" fill="currentColor">0.3.3</text><line x1="111" y1="20" x2="125" y2="20" stroke="var(--md-accent-fg-color)" stroke-width="2"/><text x="128" y="23" font-size="9" fill="currentColor">0.4.4</text><line x1="170" y1="20" x2="184" y2="20" stroke="var(--md-primary-fg-color)" stroke-width="2"/><text x="187" y="23" font-size="9" fill="currentColor">0.5.0</text><polyline points="52.0,216.3 88.2,212.7" fill="none" stroke="var(--dusk-purple,#7A6A8E)" stroke-width="1.3"/><polyline points="52.0,216.7 88.2,213.7 124.4,165.7 160.5,160.7 196.7,144.4 232.9,147.7 269.1,123.7 305.3,117.6 341.5,103.3 377.6,92.9 413.8,77.5 450.0,66.3" fill="none" stroke="var(--md-accent-fg-color)" stroke-width="1.3"/><polyline points="52.0,210.2 88.2,205.8 124.4,189.3 160.5,182.0 196.7,161.2 232.9,165.5 269.1,136.1 305.3,127.1 341.5,111.6 377.6,100.6 413.8,83.0 450.0,70.3" fill="none" stroke="var(--md-primary-fg-color)" stroke-width="2.0"/><line x1="52" y1="30" x2="52" y2="232" stroke="currentColor" stroke-opacity="0.4"/><line x1="52" y1="232" x2="450" y2="232" stroke="currentColor" stroke-opacity="0.4"/></svg>
+<figcaption>Median time vs width (log scale), one line per release; the multiplier is the slowdown relative to the latest.</figcaption>
+</figure>
+
+</div>
+
+### `sub`
+
+<div class="grid perf-grid" markdown>
+
+| Width | 0.3.3 | 0.4.4 | 0.5.0 |
+| :-- | --: | --: | --: |
+| D18 | 196 ns (0.77×) | 206 ns (0.81×) | 255 ns |
+| D38 | 235 ns (0.73×) | 231 ns (0.72×) | 320 ns |
+| D57 | · | 2.23 µs (2.9×) | 771 ns |
+| D76 | 1.04 µs (1×) | 2.72 µs (2.7×) | 1 µs |
+| D115 | · | 6.11 µs (2.1×) | 2.94 µs |
+| D153 | 921 ns (0.37×) | 5.67 µs (2.3×) | 2.5 µs |
+| D230 | 3.03 µs (0.31×) | 16.1 µs (1.7×) | 9.64 µs |
+| D307 | 3.8 µs (0.26×) | 21.1 µs (1.5×) | 14.4 µs |
+| D462 | · | 40.4 µs (1.4×) | 28.9 µs |
+| D616 | · | 61.5 µs (1.4×) | 43 µs |
+| D924 | · | 124 µs (1.3×) | 95.3 µs |
+| D1232 | · | 211 µs (1.3×) | 163 µs |
+
+<figure>
+<svg viewBox="0 0 460 262" width="100%" style="height:auto;color:var(--md-default-fg-color--light)" xmlns="http://www.w3.org/2000/svg"><line x1="52" y1="232.0" x2="450" y2="232.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="235.0" text-anchor="end" font-size="9" fill="currentColor">100 ns</text><line x1="52" y1="181.5" x2="450" y2="181.5" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="184.5" text-anchor="end" font-size="9" fill="currentColor">1 µs</text><line x1="52" y1="131.0" x2="450" y2="131.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="134.0" text-anchor="end" font-size="9" fill="currentColor">10 µs</text><line x1="52" y1="80.5" x2="450" y2="80.5" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="83.5" text-anchor="end" font-size="9" fill="currentColor">100 µs</text><line x1="52" y1="30.0" x2="450" y2="30.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="33.0" text-anchor="end" font-size="9" fill="currentColor">1 ms</text><text x="52.0" y="244" text-anchor="middle" font-size="8" fill="currentColor">18</text><text x="88.2" y="244" text-anchor="middle" font-size="8" fill="currentColor">38</text><text x="124.4" y="244" text-anchor="middle" font-size="8" fill="currentColor">57</text><text x="160.5" y="244" text-anchor="middle" font-size="8" fill="currentColor">76</text><text x="196.7" y="244" text-anchor="middle" font-size="8" fill="currentColor">115</text><text x="232.9" y="244" text-anchor="middle" font-size="8" fill="currentColor">153</text><text x="269.1" y="244" text-anchor="middle" font-size="8" fill="currentColor">230</text><text x="305.3" y="244" text-anchor="middle" font-size="8" fill="currentColor">307</text><text x="341.5" y="244" text-anchor="middle" font-size="8" fill="currentColor">462</text><text x="377.6" y="244" text-anchor="middle" font-size="8" fill="currentColor">616</text><text x="413.8" y="244" text-anchor="middle" font-size="8" fill="currentColor">924</text><text x="450.0" y="244" text-anchor="middle" font-size="8" fill="currentColor">1232</text><line x1="52" y1="20" x2="66" y2="20" stroke="var(--dusk-purple,#7A6A8E)" stroke-width="2"/><text x="69" y="23" font-size="9" fill="currentColor">0.3.3</text><line x1="111" y1="20" x2="125" y2="20" stroke="var(--md-accent-fg-color)" stroke-width="2"/><text x="128" y="23" font-size="9" fill="currentColor">0.4.4</text><line x1="170" y1="20" x2="184" y2="20" stroke="var(--md-primary-fg-color)" stroke-width="2"/><text x="187" y="23" font-size="9" fill="currentColor">0.5.0</text><polyline points="52.0,217.2 88.2,213.3 160.5,180.7 232.9,183.3 269.1,157.2 305.3,152.2" fill="none" stroke="var(--dusk-purple,#7A6A8E)" stroke-width="1.3"/><polyline points="52.0,216.1 88.2,213.6 124.4,163.9 160.5,159.5 196.7,141.8 232.9,143.4 269.1,120.6 305.3,114.6 341.5,100.4 377.6,91.2 413.8,75.8 450.0,64.2" fill="none" stroke="var(--md-accent-fg-color)" stroke-width="1.3"/><polyline points="52.0,211.5 88.2,206.5 124.4,187.2 160.5,181.5 196.7,157.8 232.9,161.4 269.1,131.8 305.3,123.1 341.5,107.7 377.6,99.0 413.8,81.6 450.0,69.8" fill="none" stroke="var(--md-primary-fg-color)" stroke-width="2.0"/><line x1="52" y1="30" x2="52" y2="232" stroke="currentColor" stroke-opacity="0.4"/><line x1="52" y1="232" x2="450" y2="232" stroke="currentColor" stroke-opacity="0.4"/></svg>
+<figcaption>Median time vs width (log scale), one line per release; the multiplier is the slowdown relative to the latest.</figcaption>
+</figure>
+
+</div>
+
+## Transcendentals
+
 ### `acos`
 
 <div class="grid perf-grid" markdown>
@@ -92,32 +226,6 @@ shown per cell; the legend maps each to its size in nanoseconds.
 
 <figure>
 <svg viewBox="0 0 460 262" width="100%" style="height:auto;color:var(--md-default-fg-color--light)" xmlns="http://www.w3.org/2000/svg"><line x1="52" y1="232.0" x2="450" y2="232.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="235.0" text-anchor="end" font-size="9" fill="currentColor">10 µs</text><line x1="52" y1="181.5" x2="450" y2="181.5" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="184.5" text-anchor="end" font-size="9" fill="currentColor">100 µs</text><line x1="52" y1="131.0" x2="450" y2="131.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="134.0" text-anchor="end" font-size="9" fill="currentColor">1 ms</text><line x1="52" y1="80.5" x2="450" y2="80.5" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="83.5" text-anchor="end" font-size="9" fill="currentColor">10 ms</text><line x1="52" y1="30.0" x2="450" y2="30.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="33.0" text-anchor="end" font-size="9" fill="currentColor">100 ms</text><text x="52.0" y="244" text-anchor="middle" font-size="8" fill="currentColor">18</text><text x="88.2" y="244" text-anchor="middle" font-size="8" fill="currentColor">38</text><text x="124.4" y="244" text-anchor="middle" font-size="8" fill="currentColor">57</text><text x="160.5" y="244" text-anchor="middle" font-size="8" fill="currentColor">76</text><text x="196.7" y="244" text-anchor="middle" font-size="8" fill="currentColor">115</text><text x="232.9" y="244" text-anchor="middle" font-size="8" fill="currentColor">153</text><text x="269.1" y="244" text-anchor="middle" font-size="8" fill="currentColor">230</text><text x="305.3" y="244" text-anchor="middle" font-size="8" fill="currentColor">307</text><text x="341.5" y="244" text-anchor="middle" font-size="8" fill="currentColor">462</text><text x="377.6" y="244" text-anchor="middle" font-size="8" fill="currentColor">616</text><text x="413.8" y="244" text-anchor="middle" font-size="8" fill="currentColor">924</text><text x="450.0" y="244" text-anchor="middle" font-size="8" fill="currentColor">1232</text><line x1="52" y1="20" x2="66" y2="20" stroke="var(--dusk-purple,#7A6A8E)" stroke-width="2"/><text x="69" y="23" font-size="9" fill="currentColor">0.3.3</text><line x1="111" y1="20" x2="125" y2="20" stroke="var(--md-accent-fg-color)" stroke-width="2"/><text x="128" y="23" font-size="9" fill="currentColor">0.4.4</text><line x1="170" y1="20" x2="184" y2="20" stroke="var(--md-primary-fg-color)" stroke-width="2"/><text x="187" y="23" font-size="9" fill="currentColor">0.5.0</text><polyline points="88.2,181.1 160.5,203.1" fill="none" stroke="var(--dusk-purple,#7A6A8E)" stroke-width="1.3"/><polyline points="52.0,209.0 88.2,208.7 124.4,188.9 160.5,187.1 196.7,156.4 232.9,168.1 269.1,137.9 305.3,133.5 341.5,120.4 377.6,92.1 413.8,74.7 450.0,56.2" fill="none" stroke="var(--md-accent-fg-color)" stroke-width="1.3"/><polyline points="52.0,208.9 88.2,208.3 124.4,208.5 160.5,206.2 196.7,178.9 232.9,182.4 269.1,153.4 305.3,152.1 341.5,132.6 377.6,116.4 413.8,83.1 450.0,69.4" fill="none" stroke="var(--md-primary-fg-color)" stroke-width="2.0"/><line x1="52" y1="30" x2="52" y2="232" stroke="currentColor" stroke-opacity="0.4"/><line x1="52" y1="232" x2="450" y2="232" stroke="currentColor" stroke-opacity="0.4"/></svg>
-<figcaption>Median time vs width (log scale), one line per release; the multiplier is the slowdown relative to the latest.</figcaption>
-</figure>
-
-</div>
-
-### `add`
-
-<div class="grid perf-grid" markdown>
-
-| Width | 0.3.3 | 0.4.4 | 0.5.0 |
-| :-- | --: | --: | --: |
-| D18 | 210 ns (0.79×) | 215 ns (0.81×) | 266 ns |
-| D38 | 241 ns (0.72×) | 256 ns (0.76×) | 335 ns |
-| D57 | · | 2.15 µs (2.7×) | 791 ns |
-| D76 | 872 ns (0.84×) | 2.73 µs (2.6×) | 1.04 µs |
-| D115 | · | 6.08 µs (2.1×) | 2.94 µs |
-| D153 | 1.99 µs (0.79×) | 5.54 µs (2.2×) | 2.51 µs |
-| D230 | 4.14 µs (0.43×) | 16.1 µs (1.7×) | 9.52 µs |
-| D307 | 5.04 µs (0.36×) | 21.4 µs (1.5×) | 14.2 µs |
-| D462 | · | 40 µs (1.4×) | 29.2 µs |
-| D616 | · | 63.7 µs (1.4×) | 44.9 µs |
-| D924 | · | 125 µs (1.3×) | 92.6 µs |
-| D1232 | · | 201 µs (1.3×) | 158 µs |
-
-<figure>
-<svg viewBox="0 0 460 262" width="100%" style="height:auto;color:var(--md-default-fg-color--light)" xmlns="http://www.w3.org/2000/svg"><line x1="52" y1="232.0" x2="450" y2="232.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="235.0" text-anchor="end" font-size="9" fill="currentColor">100 ns</text><line x1="52" y1="181.5" x2="450" y2="181.5" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="184.5" text-anchor="end" font-size="9" fill="currentColor">1 µs</text><line x1="52" y1="131.0" x2="450" y2="131.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="134.0" text-anchor="end" font-size="9" fill="currentColor">10 µs</text><line x1="52" y1="80.5" x2="450" y2="80.5" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="83.5" text-anchor="end" font-size="9" fill="currentColor">100 µs</text><line x1="52" y1="30.0" x2="450" y2="30.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="33.0" text-anchor="end" font-size="9" fill="currentColor">1 ms</text><text x="52.0" y="244" text-anchor="middle" font-size="8" fill="currentColor">18</text><text x="88.2" y="244" text-anchor="middle" font-size="8" fill="currentColor">38</text><text x="124.4" y="244" text-anchor="middle" font-size="8" fill="currentColor">57</text><text x="160.5" y="244" text-anchor="middle" font-size="8" fill="currentColor">76</text><text x="196.7" y="244" text-anchor="middle" font-size="8" fill="currentColor">115</text><text x="232.9" y="244" text-anchor="middle" font-size="8" fill="currentColor">153</text><text x="269.1" y="244" text-anchor="middle" font-size="8" fill="currentColor">230</text><text x="305.3" y="244" text-anchor="middle" font-size="8" fill="currentColor">307</text><text x="341.5" y="244" text-anchor="middle" font-size="8" fill="currentColor">462</text><text x="377.6" y="244" text-anchor="middle" font-size="8" fill="currentColor">616</text><text x="413.8" y="244" text-anchor="middle" font-size="8" fill="currentColor">924</text><text x="450.0" y="244" text-anchor="middle" font-size="8" fill="currentColor">1232</text><line x1="52" y1="20" x2="66" y2="20" stroke="var(--dusk-purple,#7A6A8E)" stroke-width="2"/><text x="69" y="23" font-size="9" fill="currentColor">0.3.3</text><line x1="111" y1="20" x2="125" y2="20" stroke="var(--md-accent-fg-color)" stroke-width="2"/><text x="128" y="23" font-size="9" fill="currentColor">0.4.4</text><line x1="170" y1="20" x2="184" y2="20" stroke="var(--md-primary-fg-color)" stroke-width="2"/><text x="187" y="23" font-size="9" fill="currentColor">0.5.0</text><polyline points="52.0,215.7 88.2,212.7 160.5,184.5 232.9,166.4 269.1,150.4 305.3,146.0" fill="none" stroke="var(--dusk-purple,#7A6A8E)" stroke-width="1.3"/><polyline points="52.0,215.2 88.2,211.4 124.4,164.7 160.5,159.4 196.7,141.9 232.9,144.0 269.1,120.6 305.3,114.3 341.5,100.6 377.6,90.4 413.8,75.6 450.0,65.2" fill="none" stroke="var(--md-accent-fg-color)" stroke-width="1.3"/><polyline points="52.0,210.5 88.2,205.5 124.4,186.6 160.5,180.6 196.7,157.8 232.9,161.3 269.1,132.1 305.3,123.3 341.5,107.5 377.6,98.0 413.8,82.2 450.0,70.5" fill="none" stroke="var(--md-primary-fg-color)" stroke-width="2.0"/><line x1="52" y1="30" x2="52" y2="232" stroke="currentColor" stroke-opacity="0.4"/><line x1="52" y1="232" x2="450" y2="232" stroke="currentColor" stroke-opacity="0.4"/></svg>
 <figcaption>Median time vs width (log scale), one line per release; the multiplier is the slowdown relative to the latest.</figcaption>
 </figure>
 
@@ -331,32 +439,6 @@ shown per cell; the legend maps each to its size in nanoseconds.
 
 </div>
 
-### `div`
-
-<div class="grid perf-grid" markdown>
-
-| Width | 0.3.3 | 0.4.4 | 0.5.0 |
-| :-- | --: | --: | --: |
-| D18 | 230 ns (0.92×) | 200 ns (0.8×) | 251 ns |
-| D38 | 265 ns (0.68×) | 256 ns (0.65×) | 391 ns |
-| D57 | · | 2.6 µs (3.3×) | 796 ns |
-| D76 | · | 3.15 µs (3.1×) | 1.01 µs |
-| D115 | · | 6.83 µs (2.5×) | 2.71 µs |
-| D153 | · | 6.13 µs (2.8×) | 2.19 µs |
-| D230 | · | 19 µs (2.3×) | 8.28 µs |
-| D307 | 15.5 µs (1.2×) | 22.1 µs (1.8×) | 12.5 µs |
-| D462 | · | 43.5 µs (1.7×) | 26.2 µs |
-| D616 | · | 72.6 µs (1.8×) | 41.1 µs |
-| D924 | · | 137 µs (1.4×) | 95.7 µs |
-| D1232 | · | 220 µs (1.4×) | 163 µs |
-
-<figure>
-<svg viewBox="0 0 460 262" width="100%" style="height:auto;color:var(--md-default-fg-color--light)" xmlns="http://www.w3.org/2000/svg"><line x1="52" y1="232.0" x2="450" y2="232.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="235.0" text-anchor="end" font-size="9" fill="currentColor">100 ns</text><line x1="52" y1="181.5" x2="450" y2="181.5" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="184.5" text-anchor="end" font-size="9" fill="currentColor">1 µs</text><line x1="52" y1="131.0" x2="450" y2="131.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="134.0" text-anchor="end" font-size="9" fill="currentColor">10 µs</text><line x1="52" y1="80.5" x2="450" y2="80.5" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="83.5" text-anchor="end" font-size="9" fill="currentColor">100 µs</text><line x1="52" y1="30.0" x2="450" y2="30.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="33.0" text-anchor="end" font-size="9" fill="currentColor">1 ms</text><text x="52.0" y="244" text-anchor="middle" font-size="8" fill="currentColor">18</text><text x="88.2" y="244" text-anchor="middle" font-size="8" fill="currentColor">38</text><text x="124.4" y="244" text-anchor="middle" font-size="8" fill="currentColor">57</text><text x="160.5" y="244" text-anchor="middle" font-size="8" fill="currentColor">76</text><text x="196.7" y="244" text-anchor="middle" font-size="8" fill="currentColor">115</text><text x="232.9" y="244" text-anchor="middle" font-size="8" fill="currentColor">153</text><text x="269.1" y="244" text-anchor="middle" font-size="8" fill="currentColor">230</text><text x="305.3" y="244" text-anchor="middle" font-size="8" fill="currentColor">307</text><text x="341.5" y="244" text-anchor="middle" font-size="8" fill="currentColor">462</text><text x="377.6" y="244" text-anchor="middle" font-size="8" fill="currentColor">616</text><text x="413.8" y="244" text-anchor="middle" font-size="8" fill="currentColor">924</text><text x="450.0" y="244" text-anchor="middle" font-size="8" fill="currentColor">1232</text><line x1="52" y1="20" x2="66" y2="20" stroke="var(--dusk-purple,#7A6A8E)" stroke-width="2"/><text x="69" y="23" font-size="9" fill="currentColor">0.3.3</text><line x1="111" y1="20" x2="125" y2="20" stroke="var(--md-accent-fg-color)" stroke-width="2"/><text x="128" y="23" font-size="9" fill="currentColor">0.4.4</text><line x1="170" y1="20" x2="184" y2="20" stroke="var(--md-primary-fg-color)" stroke-width="2"/><text x="187" y="23" font-size="9" fill="currentColor">0.5.0</text><polyline points="52.0,213.7 88.2,210.6 305.3,121.4" fill="none" stroke="var(--dusk-purple,#7A6A8E)" stroke-width="1.3"/><polyline points="52.0,216.8 88.2,211.4 124.4,160.6 160.5,156.3 196.7,139.4 232.9,141.7 269.1,117.0 305.3,113.6 341.5,98.8 377.6,87.5 413.8,73.5 450.0,63.2" fill="none" stroke="var(--md-accent-fg-color)" stroke-width="1.3"/><polyline points="52.0,211.8 88.2,202.1 124.4,186.5 160.5,181.3 196.7,159.6 232.9,164.3 269.1,135.1 305.3,126.1 341.5,109.8 377.6,100.0 413.8,81.5 450.0,69.8" fill="none" stroke="var(--md-primary-fg-color)" stroke-width="2.0"/><line x1="52" y1="30" x2="52" y2="232" stroke="currentColor" stroke-opacity="0.4"/><line x1="52" y1="232" x2="450" y2="232" stroke="currentColor" stroke-opacity="0.4"/></svg>
-<figcaption>Median time vs width (log scale), one line per release; the multiplier is the slowdown relative to the latest.</figcaption>
-</figure>
-
-</div>
-
 ### `exp`
 
 <div class="grid perf-grid" markdown>
@@ -539,32 +621,6 @@ shown per cell; the legend maps each to its size in nanoseconds.
 
 </div>
 
-### `mul`
-
-<div class="grid perf-grid" markdown>
-
-| Width | 0.3.3 | 0.4.4 | 0.5.0 |
-| :-- | --: | --: | --: |
-| D18 | 240 ns (0.82×) | 221 ns (0.76×) | 291 ns |
-| D38 | 270 ns (0.67×) | 271 ns (0.68×) | 401 ns |
-| D57 | · | 2.06 µs (2.9×) | 716 ns |
-| D76 | · | 2.55 µs (2.7×) | 941 ns |
-| D115 | · | 5.44 µs (2.1×) | 2.63 µs |
-| D153 | · | 5.12 µs (2.4×) | 2.16 µs |
-| D230 | · | 15.3 µs (1.8×) | 8.47 µs |
-| D307 | · | 19.8 µs (1.6×) | 12.6 µs |
-| D462 | · | 38.3 µs (1.4×) | 26.7 µs |
-| D616 | · | 62.3 µs (1.5×) | 40.9 µs |
-| D924 | · | 128 µs (1.4×) | 89.7 µs |
-| D1232 | · | 211 µs (1.3×) | 157 µs |
-
-<figure>
-<svg viewBox="0 0 460 262" width="100%" style="height:auto;color:var(--md-default-fg-color--light)" xmlns="http://www.w3.org/2000/svg"><line x1="52" y1="232.0" x2="450" y2="232.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="235.0" text-anchor="end" font-size="9" fill="currentColor">100 ns</text><line x1="52" y1="181.5" x2="450" y2="181.5" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="184.5" text-anchor="end" font-size="9" fill="currentColor">1 µs</text><line x1="52" y1="131.0" x2="450" y2="131.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="134.0" text-anchor="end" font-size="9" fill="currentColor">10 µs</text><line x1="52" y1="80.5" x2="450" y2="80.5" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="83.5" text-anchor="end" font-size="9" fill="currentColor">100 µs</text><line x1="52" y1="30.0" x2="450" y2="30.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="33.0" text-anchor="end" font-size="9" fill="currentColor">1 ms</text><text x="52.0" y="244" text-anchor="middle" font-size="8" fill="currentColor">18</text><text x="88.2" y="244" text-anchor="middle" font-size="8" fill="currentColor">38</text><text x="124.4" y="244" text-anchor="middle" font-size="8" fill="currentColor">57</text><text x="160.5" y="244" text-anchor="middle" font-size="8" fill="currentColor">76</text><text x="196.7" y="244" text-anchor="middle" font-size="8" fill="currentColor">115</text><text x="232.9" y="244" text-anchor="middle" font-size="8" fill="currentColor">153</text><text x="269.1" y="244" text-anchor="middle" font-size="8" fill="currentColor">230</text><text x="305.3" y="244" text-anchor="middle" font-size="8" fill="currentColor">307</text><text x="341.5" y="244" text-anchor="middle" font-size="8" fill="currentColor">462</text><text x="377.6" y="244" text-anchor="middle" font-size="8" fill="currentColor">616</text><text x="413.8" y="244" text-anchor="middle" font-size="8" fill="currentColor">924</text><text x="450.0" y="244" text-anchor="middle" font-size="8" fill="currentColor">1232</text><line x1="52" y1="20" x2="66" y2="20" stroke="var(--dusk-purple,#7A6A8E)" stroke-width="2"/><text x="69" y="23" font-size="9" fill="currentColor">0.3.3</text><line x1="111" y1="20" x2="125" y2="20" stroke="var(--md-accent-fg-color)" stroke-width="2"/><text x="128" y="23" font-size="9" fill="currentColor">0.4.4</text><line x1="170" y1="20" x2="184" y2="20" stroke="var(--md-primary-fg-color)" stroke-width="2"/><text x="187" y="23" font-size="9" fill="currentColor">0.5.0</text><polyline points="52.0,212.8 88.2,210.2" fill="none" stroke="var(--dusk-purple,#7A6A8E)" stroke-width="1.3"/><polyline points="52.0,214.6 88.2,210.1 124.4,165.6 160.5,161.0 196.7,144.4 232.9,145.7 269.1,121.6 305.3,116.1 341.5,101.6 377.6,90.9 413.8,75.1 450.0,64.2" fill="none" stroke="var(--md-accent-fg-color)" stroke-width="1.3"/><polyline points="52.0,208.6 88.2,201.5 124.4,188.8 160.5,182.8 196.7,160.3 232.9,164.6 269.1,134.7 305.3,125.9 341.5,109.5 377.6,100.1 413.8,82.9 450.0,70.6" fill="none" stroke="var(--md-primary-fg-color)" stroke-width="2.0"/><line x1="52" y1="30" x2="52" y2="232" stroke="currentColor" stroke-opacity="0.4"/><line x1="52" y1="232" x2="450" y2="232" stroke="currentColor" stroke-opacity="0.4"/></svg>
-<figcaption>Median time vs width (log scale), one line per release; the multiplier is the slowdown relative to the latest.</figcaption>
-</figure>
-
-</div>
-
 ### `powf`
 
 <div class="grid perf-grid" markdown>
@@ -586,32 +642,6 @@ shown per cell; the legend maps each to its size in nanoseconds.
 
 <figure>
 <svg viewBox="0 0 460 262" width="100%" style="height:auto;color:var(--md-default-fg-color--light)" xmlns="http://www.w3.org/2000/svg"><line x1="52" y1="232.0" x2="450" y2="232.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="235.0" text-anchor="end" font-size="9" fill="currentColor">100 ns</text><line x1="52" y1="198.3" x2="450" y2="198.3" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="201.3" text-anchor="end" font-size="9" fill="currentColor">1 µs</text><line x1="52" y1="164.7" x2="450" y2="164.7" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="167.7" text-anchor="end" font-size="9" fill="currentColor">10 µs</text><line x1="52" y1="131.0" x2="450" y2="131.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="134.0" text-anchor="end" font-size="9" fill="currentColor">100 µs</text><line x1="52" y1="97.3" x2="450" y2="97.3" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="100.3" text-anchor="end" font-size="9" fill="currentColor">1 ms</text><line x1="52" y1="63.7" x2="450" y2="63.7" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="66.7" text-anchor="end" font-size="9" fill="currentColor">10 ms</text><line x1="52" y1="30.0" x2="450" y2="30.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="33.0" text-anchor="end" font-size="9" fill="currentColor">100 ms</text><text x="52.0" y="244" text-anchor="middle" font-size="8" fill="currentColor">18</text><text x="88.2" y="244" text-anchor="middle" font-size="8" fill="currentColor">38</text><text x="124.4" y="244" text-anchor="middle" font-size="8" fill="currentColor">57</text><text x="160.5" y="244" text-anchor="middle" font-size="8" fill="currentColor">76</text><text x="196.7" y="244" text-anchor="middle" font-size="8" fill="currentColor">115</text><text x="232.9" y="244" text-anchor="middle" font-size="8" fill="currentColor">153</text><text x="269.1" y="244" text-anchor="middle" font-size="8" fill="currentColor">230</text><text x="305.3" y="244" text-anchor="middle" font-size="8" fill="currentColor">307</text><text x="341.5" y="244" text-anchor="middle" font-size="8" fill="currentColor">462</text><text x="377.6" y="244" text-anchor="middle" font-size="8" fill="currentColor">616</text><text x="413.8" y="244" text-anchor="middle" font-size="8" fill="currentColor">924</text><text x="450.0" y="244" text-anchor="middle" font-size="8" fill="currentColor">1232</text><line x1="52" y1="20" x2="66" y2="20" stroke="var(--dusk-purple,#7A6A8E)" stroke-width="2"/><text x="69" y="23" font-size="9" fill="currentColor">0.3.3</text><line x1="111" y1="20" x2="125" y2="20" stroke="var(--md-accent-fg-color)" stroke-width="2"/><text x="128" y="23" font-size="9" fill="currentColor">0.4.4</text><line x1="170" y1="20" x2="184" y2="20" stroke="var(--md-primary-fg-color)" stroke-width="2"/><text x="187" y="23" font-size="9" fill="currentColor">0.5.0</text><polyline points="88.2,119.8 160.5,137.1 232.9,133.3 269.1,115.1 305.3,112.1" fill="none" stroke="var(--dusk-purple,#7A6A8E)" stroke-width="1.3"/><polyline points="52.0,218.5 88.2,214.1 124.4,137.8 160.5,135.7 196.7,118.7 232.9,128.0 269.1,109.3 305.3,106.4 341.5,101.0 377.6,92.9 413.8,71.8 450.0,62.9" fill="none" stroke="var(--md-accent-fg-color)" stroke-width="1.3"/><polyline points="52.0,214.5 88.2,210.8 124.4,158.4 160.5,156.5 196.7,137.7 232.9,144.5 269.1,125.6 305.3,120.1 341.5,113.5 377.6,101.8 413.8,88.6 450.0,71.8" fill="none" stroke="var(--md-primary-fg-color)" stroke-width="2.0"/><line x1="52" y1="30" x2="52" y2="232" stroke="currentColor" stroke-opacity="0.4"/><line x1="52" y1="232" x2="450" y2="232" stroke="currentColor" stroke-opacity="0.4"/></svg>
-<figcaption>Median time vs width (log scale), one line per release; the multiplier is the slowdown relative to the latest.</figcaption>
-</figure>
-
-</div>
-
-### `rem`
-
-<div class="grid perf-grid" markdown>
-
-| Width | 0.3.3 | 0.4.4 | 0.5.0 |
-| :-- | --: | --: | --: |
-| D18 | 205 ns (0.76×) | 201 ns (0.74×) | 270 ns |
-| D38 | 241 ns (0.73×) | 230 ns (0.7×) | 330 ns |
-| D57 | · | 2.05 µs (2.9×) | 701 ns |
-| D76 | · | 2.58 µs (2.6×) | 976 ns |
-| D115 | · | 5.44 µs (2.2×) | 2.52 µs |
-| D153 | · | 4.68 µs (2.3×) | 2.07 µs |
-| D230 | · | 14 µs (1.8×) | 7.92 µs |
-| D307 | · | 18.4 µs (1.5×) | 11.9 µs |
-| D462 | · | 35.3 µs (1.5×) | 24.2 µs |
-| D616 | · | 56.7 µs (1.4×) | 40 µs |
-| D924 | · | 115 µs (1.3×) | 89.4 µs |
-| D1232 | · | 191 µs (1.2×) | 159 µs |
-
-<figure>
-<svg viewBox="0 0 460 262" width="100%" style="height:auto;color:var(--md-default-fg-color--light)" xmlns="http://www.w3.org/2000/svg"><line x1="52" y1="232.0" x2="450" y2="232.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="235.0" text-anchor="end" font-size="9" fill="currentColor">100 ns</text><line x1="52" y1="181.5" x2="450" y2="181.5" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="184.5" text-anchor="end" font-size="9" fill="currentColor">1 µs</text><line x1="52" y1="131.0" x2="450" y2="131.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="134.0" text-anchor="end" font-size="9" fill="currentColor">10 µs</text><line x1="52" y1="80.5" x2="450" y2="80.5" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="83.5" text-anchor="end" font-size="9" fill="currentColor">100 µs</text><line x1="52" y1="30.0" x2="450" y2="30.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="33.0" text-anchor="end" font-size="9" fill="currentColor">1 ms</text><text x="52.0" y="244" text-anchor="middle" font-size="8" fill="currentColor">18</text><text x="88.2" y="244" text-anchor="middle" font-size="8" fill="currentColor">38</text><text x="124.4" y="244" text-anchor="middle" font-size="8" fill="currentColor">57</text><text x="160.5" y="244" text-anchor="middle" font-size="8" fill="currentColor">76</text><text x="196.7" y="244" text-anchor="middle" font-size="8" fill="currentColor">115</text><text x="232.9" y="244" text-anchor="middle" font-size="8" fill="currentColor">153</text><text x="269.1" y="244" text-anchor="middle" font-size="8" fill="currentColor">230</text><text x="305.3" y="244" text-anchor="middle" font-size="8" fill="currentColor">307</text><text x="341.5" y="244" text-anchor="middle" font-size="8" fill="currentColor">462</text><text x="377.6" y="244" text-anchor="middle" font-size="8" fill="currentColor">616</text><text x="413.8" y="244" text-anchor="middle" font-size="8" fill="currentColor">924</text><text x="450.0" y="244" text-anchor="middle" font-size="8" fill="currentColor">1232</text><line x1="52" y1="20" x2="66" y2="20" stroke="var(--dusk-purple,#7A6A8E)" stroke-width="2"/><text x="69" y="23" font-size="9" fill="currentColor">0.3.3</text><line x1="111" y1="20" x2="125" y2="20" stroke="var(--md-accent-fg-color)" stroke-width="2"/><text x="128" y="23" font-size="9" fill="currentColor">0.4.4</text><line x1="170" y1="20" x2="184" y2="20" stroke="var(--md-primary-fg-color)" stroke-width="2"/><text x="187" y="23" font-size="9" fill="currentColor">0.5.0</text><polyline points="52.0,216.3 88.2,212.7" fill="none" stroke="var(--dusk-purple,#7A6A8E)" stroke-width="1.3"/><polyline points="52.0,216.7 88.2,213.7 124.4,165.7 160.5,160.7 196.7,144.4 232.9,147.7 269.1,123.7 305.3,117.6 341.5,103.3 377.6,92.9 413.8,77.5 450.0,66.3" fill="none" stroke="var(--md-accent-fg-color)" stroke-width="1.3"/><polyline points="52.0,210.2 88.2,205.8 124.4,189.3 160.5,182.0 196.7,161.2 232.9,165.5 269.1,136.1 305.3,127.1 341.5,111.6 377.6,100.6 413.8,83.0 450.0,70.3" fill="none" stroke="var(--md-primary-fg-color)" stroke-width="2.0"/><line x1="52" y1="30" x2="52" y2="232" stroke="currentColor" stroke-opacity="0.4"/><line x1="52" y1="232" x2="450" y2="232" stroke="currentColor" stroke-opacity="0.4"/></svg>
 <figcaption>Median time vs width (log scale), one line per release; the multiplier is the slowdown relative to the latest.</figcaption>
 </figure>
 
@@ -690,32 +720,6 @@ shown per cell; the legend maps each to its size in nanoseconds.
 
 <figure>
 <svg viewBox="0 0 460 262" width="100%" style="height:auto;color:var(--md-default-fg-color--light)" xmlns="http://www.w3.org/2000/svg"><line x1="52" y1="232.0" x2="450" y2="232.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="235.0" text-anchor="end" font-size="9" fill="currentColor">100 ns</text><line x1="52" y1="181.5" x2="450" y2="181.5" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="184.5" text-anchor="end" font-size="9" fill="currentColor">1 µs</text><line x1="52" y1="131.0" x2="450" y2="131.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="134.0" text-anchor="end" font-size="9" fill="currentColor">10 µs</text><line x1="52" y1="80.5" x2="450" y2="80.5" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="83.5" text-anchor="end" font-size="9" fill="currentColor">100 µs</text><line x1="52" y1="30.0" x2="450" y2="30.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="33.0" text-anchor="end" font-size="9" fill="currentColor">1 ms</text><text x="52.0" y="244" text-anchor="middle" font-size="8" fill="currentColor">18</text><text x="88.2" y="244" text-anchor="middle" font-size="8" fill="currentColor">38</text><text x="124.4" y="244" text-anchor="middle" font-size="8" fill="currentColor">57</text><text x="160.5" y="244" text-anchor="middle" font-size="8" fill="currentColor">76</text><text x="196.7" y="244" text-anchor="middle" font-size="8" fill="currentColor">115</text><text x="232.9" y="244" text-anchor="middle" font-size="8" fill="currentColor">153</text><text x="269.1" y="244" text-anchor="middle" font-size="8" fill="currentColor">230</text><text x="305.3" y="244" text-anchor="middle" font-size="8" fill="currentColor">307</text><text x="341.5" y="244" text-anchor="middle" font-size="8" fill="currentColor">462</text><text x="377.6" y="244" text-anchor="middle" font-size="8" fill="currentColor">616</text><text x="413.8" y="244" text-anchor="middle" font-size="8" fill="currentColor">924</text><text x="450.0" y="244" text-anchor="middle" font-size="8" fill="currentColor">1232</text><line x1="52" y1="20" x2="66" y2="20" stroke="var(--dusk-purple,#7A6A8E)" stroke-width="2"/><text x="69" y="23" font-size="9" fill="currentColor">0.3.3</text><line x1="111" y1="20" x2="125" y2="20" stroke="var(--md-accent-fg-color)" stroke-width="2"/><text x="128" y="23" font-size="9" fill="currentColor">0.4.4</text><line x1="170" y1="20" x2="184" y2="20" stroke="var(--md-primary-fg-color)" stroke-width="2"/><text x="187" y="23" font-size="9" fill="currentColor">0.5.0</text><polyline points="88.2,212.7 160.5,152.9 232.9,146.6 269.1,121.1 305.3,117.2" fill="none" stroke="var(--dusk-purple,#7A6A8E)" stroke-width="1.3"/><polyline points="52.0,214.7 88.2,213.7 124.4,160.3 160.5,154.4 196.7,134.3 232.9,141.9 269.1,115.9 305.3,111.1 341.5,97.8 377.6,88.6 413.8,73.5 450.0,62.1" fill="none" stroke="var(--md-accent-fg-color)" stroke-width="1.3"/><polyline points="52.0,209.3 88.2,205.7 124.4,182.6 160.5,176.1 196.7,155.0 232.9,159.2 269.1,132.3 305.3,124.5 341.5,110.6 377.6,100.4 413.8,85.6 450.0,75.1" fill="none" stroke="var(--md-primary-fg-color)" stroke-width="2.0"/><line x1="52" y1="30" x2="52" y2="232" stroke="currentColor" stroke-opacity="0.4"/><line x1="52" y1="232" x2="450" y2="232" stroke="currentColor" stroke-opacity="0.4"/></svg>
-<figcaption>Median time vs width (log scale), one line per release; the multiplier is the slowdown relative to the latest.</figcaption>
-</figure>
-
-</div>
-
-### `sub`
-
-<div class="grid perf-grid" markdown>
-
-| Width | 0.3.3 | 0.4.4 | 0.5.0 |
-| :-- | --: | --: | --: |
-| D18 | 196 ns (0.77×) | 206 ns (0.81×) | 255 ns |
-| D38 | 235 ns (0.73×) | 231 ns (0.72×) | 320 ns |
-| D57 | · | 2.23 µs (2.9×) | 771 ns |
-| D76 | 1.04 µs (1×) | 2.72 µs (2.7×) | 1 µs |
-| D115 | · | 6.11 µs (2.1×) | 2.94 µs |
-| D153 | 921 ns (0.37×) | 5.67 µs (2.3×) | 2.5 µs |
-| D230 | 3.03 µs (0.31×) | 16.1 µs (1.7×) | 9.64 µs |
-| D307 | 3.8 µs (0.26×) | 21.1 µs (1.5×) | 14.4 µs |
-| D462 | · | 40.4 µs (1.4×) | 28.9 µs |
-| D616 | · | 61.5 µs (1.4×) | 43 µs |
-| D924 | · | 124 µs (1.3×) | 95.3 µs |
-| D1232 | · | 211 µs (1.3×) | 163 µs |
-
-<figure>
-<svg viewBox="0 0 460 262" width="100%" style="height:auto;color:var(--md-default-fg-color--light)" xmlns="http://www.w3.org/2000/svg"><line x1="52" y1="232.0" x2="450" y2="232.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="235.0" text-anchor="end" font-size="9" fill="currentColor">100 ns</text><line x1="52" y1="181.5" x2="450" y2="181.5" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="184.5" text-anchor="end" font-size="9" fill="currentColor">1 µs</text><line x1="52" y1="131.0" x2="450" y2="131.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="134.0" text-anchor="end" font-size="9" fill="currentColor">10 µs</text><line x1="52" y1="80.5" x2="450" y2="80.5" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="83.5" text-anchor="end" font-size="9" fill="currentColor">100 µs</text><line x1="52" y1="30.0" x2="450" y2="30.0" stroke="currentColor" stroke-opacity="0.15"/><text x="46" y="33.0" text-anchor="end" font-size="9" fill="currentColor">1 ms</text><text x="52.0" y="244" text-anchor="middle" font-size="8" fill="currentColor">18</text><text x="88.2" y="244" text-anchor="middle" font-size="8" fill="currentColor">38</text><text x="124.4" y="244" text-anchor="middle" font-size="8" fill="currentColor">57</text><text x="160.5" y="244" text-anchor="middle" font-size="8" fill="currentColor">76</text><text x="196.7" y="244" text-anchor="middle" font-size="8" fill="currentColor">115</text><text x="232.9" y="244" text-anchor="middle" font-size="8" fill="currentColor">153</text><text x="269.1" y="244" text-anchor="middle" font-size="8" fill="currentColor">230</text><text x="305.3" y="244" text-anchor="middle" font-size="8" fill="currentColor">307</text><text x="341.5" y="244" text-anchor="middle" font-size="8" fill="currentColor">462</text><text x="377.6" y="244" text-anchor="middle" font-size="8" fill="currentColor">616</text><text x="413.8" y="244" text-anchor="middle" font-size="8" fill="currentColor">924</text><text x="450.0" y="244" text-anchor="middle" font-size="8" fill="currentColor">1232</text><line x1="52" y1="20" x2="66" y2="20" stroke="var(--dusk-purple,#7A6A8E)" stroke-width="2"/><text x="69" y="23" font-size="9" fill="currentColor">0.3.3</text><line x1="111" y1="20" x2="125" y2="20" stroke="var(--md-accent-fg-color)" stroke-width="2"/><text x="128" y="23" font-size="9" fill="currentColor">0.4.4</text><line x1="170" y1="20" x2="184" y2="20" stroke="var(--md-primary-fg-color)" stroke-width="2"/><text x="187" y="23" font-size="9" fill="currentColor">0.5.0</text><polyline points="52.0,217.2 88.2,213.3 160.5,180.7 232.9,183.3 269.1,157.2 305.3,152.2" fill="none" stroke="var(--dusk-purple,#7A6A8E)" stroke-width="1.3"/><polyline points="52.0,216.1 88.2,213.6 124.4,163.9 160.5,159.5 196.7,141.8 232.9,143.4 269.1,120.6 305.3,114.6 341.5,100.4 377.6,91.2 413.8,75.8 450.0,64.2" fill="none" stroke="var(--md-accent-fg-color)" stroke-width="1.3"/><polyline points="52.0,211.5 88.2,206.5 124.4,187.2 160.5,181.5 196.7,157.8 232.9,161.4 269.1,131.8 305.3,123.1 341.5,107.7 377.6,99.0 413.8,81.6 450.0,69.8" fill="none" stroke="var(--md-primary-fg-color)" stroke-width="2.0"/><line x1="52" y1="30" x2="52" y2="232" stroke="currentColor" stroke-opacity="0.4"/><line x1="52" y1="232" x2="450" y2="232" stroke="currentColor" stroke-opacity="0.4"/></svg>
 <figcaption>Median time vs width (log scale), one line per release; the multiplier is the slowdown relative to the latest.</figcaption>
 </figure>
 
