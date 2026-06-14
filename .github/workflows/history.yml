@@ -222,4 +222,7 @@ jobs:
             exit 0
           fi
           git commit -m "results(history): refresh per-version medians + render History page"
+          # Incorporate any concurrent results/ self-commit (disjoint files) so
+          # the push isn't rejected non-fast-forward.
+          git pull --rebase origin "${{ github.ref_name }}" || true
           git push origin "HEAD:${{ github.ref_name }}"

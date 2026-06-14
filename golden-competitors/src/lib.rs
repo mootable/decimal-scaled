@@ -863,6 +863,13 @@ impl DecimalSubject for GMath {
                 Function::Div => x / inputs[1].clone(),
                 other => return Computed::Error(format!("g_math: unsupported {}", other.name())),
             };
+            // Force realisation INSIDE the timed call. `LazyExpr` is otherwise only
+            // evaluated in the untimed grading path (`value_to_string`), so without
+            // this the perf bench would time lazy-AST construction, not g_math's
+            // actual transcendental compute — making its timing column bogus-fast.
+            // black_box keeps the evaluate from being optimised away; the Result is
+            // discarded here (correctness is judged on the returned expr in grading).
+            let _ = std::hint::black_box(evaluate(&expr));
             Computed::Value(expr)
         }
     }

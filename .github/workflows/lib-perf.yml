@@ -200,12 +200,11 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           # Re-render docs from the fresh medians in the SAME commit (self-heal: the
-          # committed page never lags the data; docs-drift stays green). NOTE: the
+          # committed page never lags the data; docs-drift stays green). The
           # Comparisons renderer (render_comparisons / _libcmp_rows in
-          # scripts/render_docs.py) must be REPOINTED to this file's schema
-          # (function/width/library/nanos — one mid cell per width, columns =
-          # libraries); until then it reads the old bit/scale/op schema and renders
-          # the page as pending (harmless — the data file is committed regardless).
+          # scripts/render_docs.py) reads this file's schema directly
+          # (function/width/library/nanos — one mid-of-band cell per width, columns
+          # = libraries).
           python3 scripts/render_docs.py
           git add results/lib_cmp/medians.tsv
           git add -u README.md docs/
@@ -214,4 +213,7 @@ jobs:
             exit 0
           fi
           git commit -m "results(lib-perf): refresh peer-crate timing medians + render Comparisons"
+          # Incorporate any concurrent results/ self-commit (disjoint files) so
+          # the push isn't rejected non-fast-forward.
+          git pull --rebase origin "${{ github.ref_name }}" || true
           git push origin "HEAD:${{ github.ref_name }}"

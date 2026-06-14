@@ -316,6 +316,11 @@ jobs:
           cp -a target/criterion aggregate/criterion
 
       - name: Commit the timing medians to results/timing/
+        # Self-commit only when the run targets its own branch HEAD: a push event
+        # (inputs.ref unset) or a dispatch with no ref override. A dispatch against
+        # an explicit tag/SHA/other-branch stays artifact-only — `HEAD:<tag-or-sha>`
+        # is never a valid push target, and rendered docs belong to a branch.
+        if: ${{ !inputs.ref }}
         run: |
           set -euo pipefail
           tsv=bench-compare/aggregate/bbc_medians.tsv
@@ -338,7 +343,11 @@ jobs:
             exit 0
           fi
           git commit -m "results(timing): refresh medians + render Performance page"
-          git push origin "HEAD:${{ inputs.ref || github.ref_name }}"
+          # Incorporate any concurrent results/ self-commit (disjoint files) so
+          # the push isn't rejected non-fast-forward. The step only runs when
+          # inputs.ref is unset, so github.ref_name is the run's own branch.
+          git pull --rebase origin "${{ github.ref_name }}" || true
+          git push origin "HEAD:${{ github.ref_name }}"
 
       - name: Upload single aggregate artifact
         if: always()
