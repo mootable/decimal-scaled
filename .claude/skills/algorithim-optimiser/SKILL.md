@@ -166,9 +166,9 @@ The dispatch `Select` seam is the "choose + swap + **microbench**" point. **Micr
 - It `black_box`-guards inputs and outputs (defeat const-fold/DCE — critical here, the dispatch is *designed* to const-fold) and prints a **ranking table** (fastest→slowest, with `(N.NNx slower)` / `(~tie)` margins) plus the `A/B verdict [group]: <winner> beats <loser> by N.NNx` line (grep-stable). Add the N-th algorithm by appending one `("label", run)` tuple to the `vec!` — nothing else changes.
 - Add a `[[bench]]` entry in `Cargo.toml`: `name`, `path = "benches/<folder>/<name>.rs"`, `harness = false`, and the `required-features` the example needs.
 
-**Discipline:** validate a perf change with a **focused <60s microbench FIRST**, before the multi-hour sweeps. Run microbenches **locally**; run the full sweeps (`library_comparison`, `full_matrix`) on **GHA** (`bench-full` / `bench-history` / `bench-branch-compare` workflows) — never burn the owner's machine on a full sweep. picosecond `change:` deltas are noise; multi-hour sweep cells run 1.5–2× slower than a cold-machine microbench.
+**Discipline:** validate a perf change with a **focused <60s microbench FIRST**, before the multi-hour sweeps. Run microbenches **locally**; run the GHA sweeps instead (`bench-branch-compare` for branch-vs-prod timing; `lib-perf` / `history` / `golden-comprehensive` self-render their pages) — never burn the owner's machine on a full sweep. picosecond `change:` deltas are noise; multi-hour sweep cells run 1.5–2× slower than a cold-machine microbench.
 
-`benches/` is organised into folders: `support/` (shared incl. `ab_microbench`), `libcmp/`, `full_matrix/`, `agm/`, `backends/`, `lookup/`, `micro/`. Keep `[[bench]] name=` stable when moving files (workflows call `--bench <name>`); only `path=` changes.
+`benches/` is organised into folders: `support/` (shared incl. `ab_microbench`), `agm/`, `backends/`, `lookup/`, `micro/`. Keep `[[bench]] name=` stable when moving files (run via `cargo bench --bench <name>`); only `path=` changes.
 
 ## 4b. Profile the winner with samply — squeeze it, then send back
 
