@@ -1,1201 +1,1201 @@
-function	width	library	nanos
-acos	18	decimal-scaled	69042
-acos	18	g_math	509530
-acos	38	decimal-scaled	128406
-acos	38	g_math	506456
-acos	57	decimal-scaled	15594
-acos	57	g_math	494922
-acos	76	decimal-scaled	16381
-acos	76	g_math	499069
-acos	115	decimal-scaled	16965
-acos	115	g_math	781833
-acos	153	decimal-scaled	28538
-acos	153	g_math	1079076
-acos	230	decimal-scaled	17462
-acos	230	g_math	403688
-acos	307	decimal-scaled	31457
-acos	307	g_math	1034584
-acos	462	decimal-scaled	35880
-acos	462	g_math	1042347
-acos	616	decimal-scaled	39644
-acos	616	g_math	1050112
-acos	924	decimal-scaled	49588
-acos	924	g_math	1058189
-acos	1232	decimal-scaled	68145
-acos	1232	g_math	631243
-acosh	18	decimal-scaled	43189
-acosh	18	g_math	267206
-acosh	38	decimal-scaled	62853
-acosh	38	g_math	267326
-acosh	57	decimal-scaled	55934
-acosh	57	g_math	261432
-acosh	76	decimal-scaled	58760
-acosh	76	g_math	263037
-acosh	115	decimal-scaled	97616
-acosh	115	g_math	414001
-acosh	153	decimal-scaled	154524
-acosh	153	g_math	543040
-acosh	230	decimal-scaled	82512
-acosh	230	g_math	210910
-acosh	307	decimal-scaled	141228
-acosh	307	g_math	540906
-acosh	462	decimal-scaled	145279
-acosh	462	g_math	536244
-acosh	616	decimal-scaled	147683
-acosh	616	g_math	545772
-acosh	924	decimal-scaled	161434
-acosh	924	g_math	536172
-acosh	1232	decimal-scaled	181667
-acosh	1232	g_math	333733
-add	18	bigdecimal	136
-add	18	dashu-float	255
-add	18	decimal-rs	50
-add	18	decimal-scaled	255
-add	18	fastnum	70
-add	18	g_math	370
-add	18	rust_decimal	60
-add	38	bigdecimal	130
-add	38	dashu-float	266
-add	38	decimal-rs	50
-add	38	decimal-scaled	521
-add	38	fastnum	70
-add	38	g_math	371
-add	38	rust_decimal	60
-add	57	bigdecimal	125
-add	57	dashu-float	240
-add	57	decimal-rs	50
-add	57	decimal-scaled	786
-add	57	fastnum	70
-add	57	g_math	350
-add	57	rust_decimal	50
-add	76	bigdecimal	121
-add	76	dashu-float	230
-add	76	decimal-rs	50
-add	76	decimal-scaled	1021
-add	76	fastnum	70
-add	76	g_math	370
-add	76	rust_decimal	51
-add	115	bigdecimal	145
-add	115	dashu-float	266
-add	115	decimal-rs	60
-add	115	decimal-scaled	1973
-add	115	fastnum	80
-add	115	g_math	421
-add	115	rust_decimal	60
-add	153	bigdecimal	190
-add	153	dashu-float	330
-add	153	decimal-rs	80
-add	153	decimal-scaled	4156
-add	153	fastnum	100
-add	153	g_math	526
-add	153	rust_decimal	70
-add	230	bigdecimal	123
-add	230	dashu-float	221
-add	230	decimal-rs	44
-add	230	decimal-scaled	5108
-add	230	fastnum	64
-add	230	g_math	300
-add	230	rust_decimal	53
-add	307	bigdecimal	180
-add	307	dashu-float	331
-add	307	decimal-rs	70
-add	307	decimal-scaled	11317
-add	307	fastnum	100
-add	307	g_math	506
-add	307	rust_decimal	70
-add	462	bigdecimal	190
-add	462	dashu-float	366
-add	462	decimal-rs	70
-add	462	decimal-scaled	21222
-add	462	fastnum	90
-add	462	g_math	516
-add	462	rust_decimal	70
-add	616	bigdecimal	190
-add	616	dashu-float	340
-add	616	decimal-rs	70
-add	616	decimal-scaled	31276
-add	616	fastnum	100
-add	616	g_math	530
-add	616	rust_decimal	70
-add	924	bigdecimal	176
-add	924	dashu-float	346
-add	924	decimal-rs	70
-add	924	decimal-scaled	59859
-add	924	fastnum	100
-add	924	g_math	531
-add	924	rust_decimal	70
-add	1232	bigdecimal	198
-add	1232	dashu-float	382
-add	1232	decimal-rs	73
-add	1232	decimal-scaled	85008
-add	1232	fastnum	102
-add	1232	g_math	520
-add	1232	rust_decimal	74
-asin	18	decimal-scaled	70425
-asin	18	g_math	510696
-asin	38	decimal-scaled	129062
-asin	38	g_math	509155
-asin	57	decimal-scaled	15449
-asin	57	g_math	491346
-asin	76	decimal-scaled	16185
-asin	76	g_math	496650
-asin	115	decimal-scaled	17191
-asin	115	g_math	780941
-asin	153	decimal-scaled	28333
-asin	153	g_math	1011529
-asin	230	decimal-scaled	17337
-asin	230	g_math	400842
-asin	307	decimal-scaled	31127
-asin	307	g_math	1027839
-asin	462	decimal-scaled	35464
-asin	462	g_math	1075882
-asin	616	decimal-scaled	39508
-asin	616	g_math	1035189
-asin	924	decimal-scaled	51386
-asin	924	g_math	1013497
-asin	1232	decimal-scaled	68886
-asin	1232	g_math	625249
-asinh	18	decimal-scaled	37045
-asinh	18	g_math	301192
-asinh	38	decimal-scaled	54080
-asinh	38	g_math	303210
-asinh	57	decimal-scaled	13705
-asinh	57	g_math	297454
-asinh	76	decimal-scaled	12673
-asinh	76	g_math	296785
-asinh	115	decimal-scaled	19870
-asinh	115	g_math	469279
-asinh	153	decimal-scaled	29795
-asinh	153	g_math	596947
-asinh	230	decimal-scaled	17659
-asinh	230	g_math	239398
-asinh	307	decimal-scaled	32904
-asinh	307	g_math	607720
-asinh	462	decimal-scaled	38834
-asinh	462	g_math	600185
-asinh	616	decimal-scaled	44125
-asinh	616	g_math	614412
-asinh	924	decimal-scaled	58006
-asinh	924	g_math	594984
-asinh	1232	decimal-scaled	71360
-asinh	1232	g_math	368906
-atan	18	decimal-scaled	6430
-atan	18	g_math	245093
-atan	38	decimal-scaled	49293
-atan	38	g_math	244503
-atan	57	decimal-scaled	13205
-atan	57	g_math	256719
-atan	76	decimal-scaled	13334
-atan	76	g_math	255828
-atan	115	decimal-scaled	13900
-atan	115	g_math	379349
-atan	153	decimal-scaled	25668
-atan	153	g_math	486825
-atan	230	decimal-scaled	15830
-atan	230	g_math	186237
-atan	307	decimal-scaled	28794
-atan	307	g_math	489848
-atan	462	decimal-scaled	27667
-atan	462	g_math	486514
-atan	616	decimal-scaled	39398
-atan	616	g_math	489013
-atan	924	decimal-scaled	53714
-atan	924	g_math	482863
-atan	1232	decimal-scaled	69642
-atan	1232	g_math	285589
-atan2	18	decimal-scaled	34706
-atan2	18	g_math	399261
-atan2	38	decimal-scaled	89207
-atan2	38	g_math	403037
-atan2	57	decimal-scaled	14156
-atan2	57	g_math	397992
-atan2	76	decimal-scaled	14888
-atan2	76	g_math	402103
-atan2	115	decimal-scaled	16069
-atan2	115	g_math	623085
-atan2	153	decimal-scaled	27031
-atan2	153	g_math	773298
-atan2	230	decimal-scaled	17478
-atan2	230	g_math	321213
-atan2	307	decimal-scaled	32910
-atan2	307	g_math	798384
-atan2	462	decimal-scaled	41042
-atan2	462	g_math	798735
-atan2	616	decimal-scaled	48973
-atan2	616	g_math	817659
-atan2	924	decimal-scaled	72948
-atan2	924	g_math	921301
-atan2	1232	decimal-scaled	98155
-atan2	1232	g_math	504042
-atanh	18	decimal-scaled	10666
-atanh	18	g_math	192846
-atanh	38	decimal-scaled	15553
-atanh	38	g_math	191454
-atanh	57	decimal-scaled	51997
-atanh	57	g_math	205964
-atanh	76	decimal-scaled	54021
-atanh	76	g_math	201017
-atanh	115	decimal-scaled	88733
-atanh	115	g_math	292399
-atanh	153	decimal-scaled	137628
-atanh	153	g_math	388888
-atanh	230	decimal-scaled	73098
-atanh	230	g_math	168234
-atanh	307	decimal-scaled	127482
-atanh	307	g_math	401174
-atanh	462	decimal-scaled	130026
-atanh	462	g_math	390358
-atanh	616	decimal-scaled	135671
-atanh	616	g_math	390978
-atanh	924	decimal-scaled	148299
-atanh	924	g_math	389596
-atanh	1232	decimal-scaled	171932
-atanh	1232	g_math	248044
-cbrt	18	bigdecimal	117509
-cbrt	18	decimal-scaled	6014
-cbrt	18	fastnum	819008
-cbrt	38	bigdecimal	117529
-cbrt	38	decimal-scaled	11297
-cbrt	38	fastnum	815760
-cbrt	57	bigdecimal	106759
-cbrt	57	decimal-scaled	1372
-cbrt	57	fastnum	745905
-cbrt	76	bigdecimal	106740
-cbrt	76	decimal-scaled	2074
-cbrt	76	fastnum	738982
-cbrt	115	bigdecimal	156565
-cbrt	115	decimal-scaled	3425
-cbrt	115	fastnum	1388583
-cbrt	153	bigdecimal	202210
-cbrt	153	decimal-scaled	6144
-cbrt	153	fastnum	1770780
-cbrt	230	bigdecimal	112964
-cbrt	230	decimal-scaled	5298
-cbrt	230	fastnum	655653
-cbrt	307	bigdecimal	202671
-cbrt	307	decimal-scaled	8653
-cbrt	307	fastnum	1711466
-cbrt	462	bigdecimal	202320
-cbrt	462	decimal-scaled	15038
-cbrt	462	fastnum	1314011
-cbrt	616	bigdecimal	202079
-cbrt	616	decimal-scaled	20230
-cbrt	616	fastnum	2142041
-cbrt	924	bigdecimal	202068
-cbrt	924	decimal-scaled	35212
-cbrt	924	fastnum	4017842
-cbrt	1232	bigdecimal	179080
-cbrt	1232	decimal-scaled	50897
-cbrt	1232	fastnum	1588380
-cos	18	decimal-scaled	6529
-cos	18	fastnum	1131928
-cos	18	g_math	213846
-cos	18	rust_decimal	3455
-cos	38	decimal-scaled	9610
-cos	38	fastnum	1080792
-cos	38	g_math	213697
-cos	38	rust_decimal	3445
-cos	57	decimal-scaled	6042
-cos	57	fastnum	999884
-cos	57	g_math	227805
-cos	57	rust_decimal	3266
-cos	76	decimal-scaled	7023
-cos	76	fastnum	988381
-cos	76	g_math	225001
-cos	76	rust_decimal	3271
-cos	115	decimal-scaled	8297
-cos	115	fastnum	1074902
-cos	115	g_math	325479
-cos	115	rust_decimal	3670
-cos	153	decimal-scaled	12900
-cos	153	fastnum	1519586
-cos	153	g_math	421196
-cos	153	rust_decimal	4672
-cos	230	decimal-scaled	8588
-cos	230	fastnum	881228
-cos	230	g_math	191660
-cos	230	rust_decimal	2815
-cos	307	decimal-scaled	15784
-cos	307	fastnum	1417978
-cos	307	g_math	435126
-cos	307	rust_decimal	4682
-cos	462	decimal-scaled	18147
-cos	462	fastnum	1437207
-cos	462	g_math	420924
-cos	462	rust_decimal	4667
-cos	616	decimal-scaled	25117
-cos	616	fastnum	2456832
-cos	616	g_math	436095
-cos	616	rust_decimal	4632
-cos	924	decimal-scaled	36173
-cos	924	fastnum	1413099
-cos	924	g_math	416966
-cos	924	rust_decimal	4612
-cos	1232	decimal-scaled	53692
-cos	1232	fastnum	1237407
-cos	1232	g_math	275369
-cos	1232	rust_decimal	4844
-cosh	18	decimal-scaled	10736
-cosh	18	g_math	316609
-cosh	38	decimal-scaled	15122
-cosh	38	g_math	315447
-cosh	57	decimal-scaled	9608
-cosh	57	g_math	297124
-cosh	76	decimal-scaled	11251
-cosh	76	g_math	299130
-cosh	115	decimal-scaled	23285
-cosh	115	g_math	479759
-cosh	153	decimal-scaled	21603
-cosh	153	g_math	614008
-cosh	230	decimal-scaled	13669
-cosh	230	g_math	235237
-cosh	307	decimal-scaled	26930
-cosh	307	g_math	622969
-cosh	462	decimal-scaled	54832
-cosh	462	g_math	615217
-cosh	616	decimal-scaled	95861
-cosh	616	g_math	627197
-cosh	924	decimal-scaled	147598
-cosh	924	g_math	611463
-cosh	1232	decimal-scaled	211174
-cosh	1232	g_math	363283
-div	18	bigdecimal	261212
-div	18	dashu-float	3200
-div	18	decimal-rs	230
-div	18	decimal-scaled	230
-div	18	fastnum	1182
-div	18	g_math	2854
-div	18	rust_decimal	100
-div	38	bigdecimal	260521
-div	38	dashu-float	3215
-div	38	decimal-rs	230
-div	38	decimal-scaled	1262
-div	38	fastnum	1187
-div	38	g_math	2814
-div	38	rust_decimal	100
-div	57	bigdecimal	243559
-div	57	dashu-float	3020
-div	57	decimal-rs	200
-div	57	decimal-scaled	776
-div	57	fastnum	1102
-div	57	g_math	2670
-div	57	rust_decimal	80
-div	76	bigdecimal	243922
-div	76	dashu-float	3051
-div	76	decimal-rs	200
-div	76	decimal-scaled	1022
-div	76	fastnum	1097
-div	76	g_math	2765
-div	76	rust_decimal	90
-div	115	bigdecimal	331882
-div	115	dashu-float	3761
-div	115	decimal-rs	231
-div	115	decimal-scaled	1773
-div	115	fastnum	1156
-div	115	g_math	3250
-div	115	rust_decimal	100
-div	153	bigdecimal	425528
-div	153	dashu-float	4922
-div	153	decimal-rs	310
-div	153	decimal-scaled	3575
-div	153	fastnum	1427
-div	153	g_math	4066
-div	153	rust_decimal	125
-div	230	bigdecimal	254101
-div	230	dashu-float	2941
-div	230	decimal-rs	177
-div	230	decimal-scaled	4263
-div	230	fastnum	985
-div	230	g_math	1986
-div	230	rust_decimal	81
-div	307	bigdecimal	428751
-div	307	dashu-float	4888
-div	307	decimal-rs	281
-div	307	decimal-scaled	10476
-div	307	fastnum	1417
-div	307	g_math	4172
-div	307	rust_decimal	110
-div	462	bigdecimal	428426
-div	462	dashu-float	4887
-div	462	decimal-rs	291
-div	462	decimal-scaled	19369
-div	462	fastnum	1417
-div	462	g_math	3991
-div	462	rust_decimal	110
-div	616	bigdecimal	429170
-div	616	dashu-float	4887
-div	616	decimal-rs	290
-div	616	decimal-scaled	30696
-div	616	fastnum	1462
-div	616	g_math	4066
-div	616	rust_decimal	120
-div	924	bigdecimal	429178
-div	924	dashu-float	4847
-div	924	decimal-rs	311
-div	924	decimal-scaled	59137
-div	924	fastnum	1422
-div	924	g_math	4091
-div	924	rust_decimal	125
-div	1232	bigdecimal	422644
-div	1232	dashu-float	4636
-div	1232	decimal-rs	262
-div	1232	decimal-scaled	95454
-div	1232	fastnum	1432
-div	1232	g_math	3442
-div	1232	rust_decimal	104
-exp	18	decimal-rs	9524
-exp	18	decimal-scaled	7131
-exp	18	fastnum	469766
-exp	18	g_math	152561
-exp	18	rust_decimal	4477
-exp	38	decimal-rs	9514
-exp	38	decimal-scaled	10075
-exp	38	fastnum	467358
-exp	38	g_math	151359
-exp	38	rust_decimal	4522
-exp	57	decimal-rs	8606
-exp	57	decimal-scaled	5606
-exp	57	fastnum	435888
-exp	57	g_math	144925
-exp	57	rust_decimal	4183
-exp	76	decimal-rs	8767
-exp	76	decimal-scaled	8155
-exp	76	fastnum	432822
-exp	76	g_math	144986
-exp	76	rust_decimal	4202
-exp	115	decimal-rs	9354
-exp	115	decimal-scaled	12639
-exp	115	fastnum	460941
-exp	115	g_math	230691
-exp	115	rust_decimal	4497
-exp	153	decimal-rs	11908
-exp	153	decimal-scaled	20521
-exp	153	fastnum	602355
-exp	153	g_math	295081
-exp	153	rust_decimal	5829
-exp	230	decimal-rs	7607
-exp	230	decimal-scaled	24910
-exp	230	fastnum	400425
-exp	230	g_math	116862
-exp	230	rust_decimal	4073
-exp	307	decimal-rs	11978
-exp	307	decimal-scaled	64167
-exp	307	fastnum	592554
-exp	307	g_math	301985
-exp	307	rust_decimal	5719
-exp	462	decimal-rs	12078
-exp	462	decimal-scaled	68053
-exp	462	fastnum	607260
-exp	462	g_math	292982
-exp	462	rust_decimal	5709
-exp	616	decimal-rs	11917
-exp	616	decimal-scaled	102396
-exp	616	fastnum	616196
-exp	616	g_math	301240
-exp	616	rust_decimal	5814
-exp	924	decimal-rs	11908
-exp	924	decimal-scaled	153326
-exp	924	fastnum	607378
-exp	924	g_math	294075
-exp	924	rust_decimal	5698
-exp	1232	decimal-rs	10685
-exp	1232	decimal-scaled	229288
-exp	1232	fastnum	574728
-exp	1232	g_math	176834
-exp	1232	rust_decimal	5856
-exp2	18	decimal-scaled	6951
-exp2	18	fastnum	1692869
-exp2	38	decimal-scaled	10345
-exp2	38	fastnum	1691669
-exp2	57	decimal-scaled	13284
-exp2	57	fastnum	1543147
-exp2	76	decimal-scaled	15238
-exp2	76	fastnum	1539918
-exp2	115	decimal-scaled	38929
-exp2	115	fastnum	1632680
-exp2	153	decimal-scaled	50386
-exp2	153	fastnum	2138261
-exp2	230	decimal-scaled	48664
-exp2	230	fastnum	1348690
-exp2	307	decimal-scaled	117067
-exp2	307	fastnum	2148550
-exp2	462	decimal-scaled	121283
-exp2	462	fastnum	2184794
-exp2	616	decimal-scaled	332581
-exp2	616	fastnum	3996999
-exp2	924	decimal-scaled	331860
-exp2	924	fastnum	2226170
-exp2	1232	decimal-scaled	1034866
-exp2	1232	fastnum	1869631
-hypot	18	decimal-scaled	261
-hypot	38	decimal-scaled	581
-hypot	57	decimal-scaled	861
-hypot	76	decimal-scaled	1378
-hypot	115	decimal-scaled	2053
-hypot	153	decimal-scaled	4377
-hypot	230	decimal-scaled	4630
-hypot	307	decimal-scaled	9845
-hypot	462	decimal-scaled	18408
-hypot	616	decimal-scaled	26549
-hypot	924	decimal-scaled	50134
-hypot	1232	decimal-scaled	75488
-ln	18	dashu-float	64978907
-ln	18	decimal-rs	5398
-ln	18	decimal-scaled	6900
-ln	18	fastnum	3546917
-ln	18	g_math	200447
-ln	18	rust_decimal	8753
-ln	38	dashu-float	64862786
-ln	38	decimal-rs	5388
-ln	38	decimal-scaled	10265
-ln	38	fastnum	3556662
-ln	38	g_math	184524
-ln	38	rust_decimal	8803
-ln	57	dashu-float	59548782
-ln	57	decimal-rs	4909
-ln	57	decimal-scaled	2745
-ln	57	fastnum	3225744
-ln	57	g_math	196516
-ln	57	rust_decimal	8245
-ln	76	dashu-float	59189541
-ln	76	decimal-rs	4989
-ln	76	decimal-scaled	3457
-ln	76	fastnum	3221503
-ln	76	g_math	195446
-ln	76	rust_decimal	8105
-ln	115	dashu-float	173039085
-ln	115	decimal-rs	5368
-ln	115	decimal-scaled	4046
-ln	115	fastnum	9334032
-ln	115	g_math	278748
-ln	115	rust_decimal	9034
-ln	153	dashu-float	225144537
-ln	153	decimal-rs	6940
-ln	153	decimal-scaled	7231
-ln	153	fastnum	10636331
-ln	153	g_math	361636
-ln	153	rust_decimal	11537
-ln	230	dashu-float	132673333
-ln	230	decimal-rs	4488
-ln	230	decimal-scaled	5244
-ln	230	fastnum	6183387
-ln	230	g_math	162944
-ln	230	rust_decimal	8000
-ln	307	dashu-float	221581744
-ln	307	decimal-rs	6840
-ln	307	decimal-scaled	11017
-ln	307	fastnum	12113415
-ln	307	g_math	375366
-ln	307	rust_decimal	12068
-ln	462	dashu-float	216293753
-ln	462	decimal-rs	6960
-ln	462	decimal-scaled	20451
-ln	462	fastnum	10450456
-ln	462	g_math	362897
-ln	462	rust_decimal	11637
-ln	616	dashu-float	220260745
-ln	616	decimal-rs	6990
-ln	616	decimal-scaled	24737
-ln	616	fastnum	10429876
-ln	616	g_math	374243
-ln	616	rust_decimal	11336
-ln	924	dashu-float	222992348
-ln	924	decimal-rs	6880
-ln	924	decimal-scaled	39408
-ln	924	fastnum	10430172
-ln	924	g_math	362996
-ln	924	rust_decimal	11707
-ln	1232	dashu-float	208616809
-ln	1232	decimal-rs	6234
-ln	1232	decimal-scaled	61297
-ln	1232	fastnum	9600340
-ln	1232	g_math	234858
-ln	1232	rust_decimal	11884
-log	18	decimal-scaled	17572
-log	38	decimal-scaled	26724
-log	57	decimal-scaled	15139
-log	76	decimal-scaled	17187
-log	115	decimal-scaled	36114
-log	153	decimal-scaled	51628
-log	230	decimal-scaled	39930
-log	307	decimal-scaled	96531
-log	462	decimal-scaled	105058
-log	616	decimal-scaled	166986
-log	924	decimal-scaled	261636
-log	1232	decimal-scaled	359972
-log10	18	decimal-scaled	11056
-log10	18	fastnum	3563862
-log10	18	rust_decimal	9584
-log10	38	decimal-scaled	18938
-log10	38	fastnum	3557660
-log10	38	rust_decimal	9554
-log10	57	decimal-scaled	8796
-log10	57	fastnum	3227618
-log10	57	rust_decimal	8997
-log10	76	decimal-scaled	9768
-log10	76	fastnum	3224118
-log10	76	rust_decimal	9016
-log10	115	decimal-scaled	20626
-log10	115	fastnum	9259732
-log10	115	rust_decimal	10085
-log10	153	decimal-scaled	29465
-log10	153	fastnum	10592294
-log10	153	rust_decimal	13009
-log10	230	decimal-scaled	22864
-log10	230	fastnum	5873900
-log10	230	rust_decimal	9764
-log10	307	decimal-scaled	54983
-log10	307	fastnum	10423527
-log10	307	rust_decimal	12969
-log10	462	decimal-scaled	59955
-log10	462	fastnum	10419035
-log10	462	rust_decimal	12990
-log10	616	decimal-scaled	96072
-log10	616	fastnum	10443772
-log10	616	rust_decimal	13130
-log10	924	decimal-scaled	153437
-log10	924	fastnum	10467448
-log10	924	rust_decimal	12559
-log10	1232	decimal-scaled	210117
-log10	1232	fastnum	9996325
-log10	1232	rust_decimal	13537
-log2	18	decimal-scaled	11402
-log2	18	fastnum	3562700
-log2	38	decimal-scaled	17436
-log2	38	fastnum	3562158
-log2	57	decimal-scaled	8822
-log2	57	fastnum	3235551
-log2	76	decimal-scaled	9923
-log2	76	fastnum	3227243
-log2	115	decimal-scaled	20811
-log2	115	fastnum	8331228
-log2	153	decimal-scaled	29209
-log2	153	fastnum	11957226
-log2	230	decimal-scaled	22964
-log2	230	fastnum	6020779
-log2	307	decimal-scaled	54662
-log2	307	fastnum	10412140
-log2	462	decimal-scaled	59971
-log2	462	fastnum	10445450
-log2	616	decimal-scaled	96713
-log2	616	fastnum	10346874
-log2	924	decimal-scaled	151363
-log2	924	fastnum	13244171
-log2	1232	decimal-scaled	208718
-log2	1232	fastnum	10035986
-mul	18	bigdecimal	110
-mul	18	dashu-float	191
-mul	18	decimal-rs	90
-mul	18	decimal-scaled	250
-mul	18	fastnum	121
-mul	18	g_math	536
-mul	18	rust_decimal	60
-mul	38	bigdecimal	111
-mul	38	dashu-float	190
-mul	38	decimal-rs	90
-mul	38	decimal-scaled	531
-mul	38	fastnum	130
-mul	38	g_math	556
-mul	38	rust_decimal	60
-mul	57	bigdecimal	110
-mul	57	dashu-float	191
-mul	57	decimal-rs	80
-mul	57	decimal-scaled	746
-mul	57	fastnum	130
-mul	57	g_math	510
-mul	57	rust_decimal	50
-mul	76	bigdecimal	101
-mul	76	dashu-float	200
-mul	76	decimal-rs	80
-mul	76	decimal-scaled	922
-mul	76	fastnum	130
-mul	76	g_math	546
-mul	76	rust_decimal	40
-mul	115	bigdecimal	131
-mul	115	dashu-float	220
-mul	115	decimal-rs	90
-mul	115	decimal-scaled	1632
-mul	115	fastnum	151
-mul	115	g_math	626
-mul	115	rust_decimal	50
-mul	153	bigdecimal	151
-mul	153	dashu-float	286
-mul	153	decimal-rs	100
-mul	153	decimal-scaled	3425
-mul	153	fastnum	200
-mul	153	g_math	861
-mul	153	rust_decimal	70
-mul	230	bigdecimal	126
-mul	230	dashu-float	176
-mul	230	decimal-rs	73
-mul	230	decimal-scaled	4080
-mul	230	fastnum	127
-mul	230	g_math	499
-mul	230	rust_decimal	44
-mul	307	bigdecimal	166
-mul	307	dashu-float	290
-mul	307	decimal-rs	110
-mul	307	decimal-scaled	9073
-mul	307	fastnum	200
-mul	307	g_math	772
-mul	307	rust_decimal	60
-mul	462	bigdecimal	161
-mul	462	dashu-float	281
-mul	462	decimal-rs	110
-mul	462	decimal-scaled	16786
-mul	462	fastnum	200
-mul	462	g_math	816
-mul	462	rust_decimal	60
-mul	616	bigdecimal	186
-mul	616	dashu-float	291
-mul	616	decimal-rs	110
-mul	616	decimal-scaled	25017
-mul	616	fastnum	200
-mul	616	g_math	796
-mul	616	rust_decimal	61
-mul	924	bigdecimal	161
-mul	924	dashu-float	280
-mul	924	decimal-rs	120
-mul	924	decimal-scaled	46233
-mul	924	fastnum	200
-mul	924	g_math	821
-mul	924	rust_decimal	70
-mul	1232	bigdecimal	200
-mul	1232	dashu-float	321
-mul	1232	decimal-rs	100
-mul	1232	decimal-scaled	72368
-mul	1232	fastnum	238
-mul	1232	g_math	826
-mul	1232	rust_decimal	64
-powf	18	decimal-rs	15078
-powf	18	decimal-scaled	481
-powf	18	fastnum	5349088
-powf	18	g_math	362608
-powf	18	rust_decimal	12729
-powf	38	decimal-rs	15123
-powf	38	decimal-scaled	19909
-powf	38	fastnum	5353694
-powf	38	g_math	360284
-powf	38	rust_decimal	12688
-powf	57	decimal-rs	13840
-powf	57	decimal-scaled	15088
-powf	57	fastnum	4860838
-powf	57	g_math	370521
-powf	57	rust_decimal	12052
-powf	76	decimal-rs	13810
-powf	76	decimal-scaled	16080
-powf	76	fastnum	4843462
-powf	76	g_math	367685
-powf	76	rust_decimal	11942
-powf	115	decimal-rs	14818
-powf	115	decimal-scaled	35473
-powf	115	fastnum	11164843
-powf	115	g_math	561102
-powf	115	rust_decimal	13100
-powf	153	decimal-rs	19054
-powf	153	decimal-scaled	51122
-powf	153	fastnum	15676441
-powf	153	g_math	712747
-powf	153	rust_decimal	17106
-powf	230	decimal-rs	12272
-powf	230	decimal-scaled	42538
-powf	230	fastnum	10211485
-powf	230	g_math	298259
-powf	230	rust_decimal	10733
-powf	307	decimal-rs	19184
-powf	307	decimal-scaled	97286
-powf	307	fastnum	18472513
-powf	307	g_math	774187
-powf	307	rust_decimal	16745
-powf	462	decimal-rs	19319
-powf	462	decimal-scaled	121443
-powf	462	fastnum	17950932
-powf	462	g_math	736601
-powf	462	rust_decimal	16975
-powf	616	decimal-rs	19258
-powf	616	decimal-scaled	226805
-powf	616	fastnum	17815305
-powf	616	g_math	749798
-powf	616	rust_decimal	17005
-powf	924	decimal-rs	19034
-powf	924	decimal-scaled	401313
-powf	924	fastnum	18454119
-powf	924	g_math	728656
-powf	924	rust_decimal	16835
-powf	1232	decimal-rs	17362
-powf	1232	decimal-scaled	677723
-powf	1232	fastnum	12955367
-powf	1232	g_math	449697
-powf	1232	rust_decimal	17635
-rem	18	bigdecimal	200
-rem	18	dashu-float	280
-rem	18	decimal-rs	60
-rem	18	decimal-scaled	220
-rem	18	fastnum	200
-rem	18	rust_decimal	100
-rem	38	bigdecimal	201
-rem	38	dashu-float	290
-rem	38	decimal-rs	70
-rem	38	decimal-scaled	501
-rem	38	fastnum	201
-rem	38	rust_decimal	90
-rem	57	bigdecimal	180
-rem	57	dashu-float	261
-rem	57	decimal-rs	55
-rem	57	decimal-scaled	681
-rem	57	fastnum	200
-rem	57	rust_decimal	90
-rem	76	bigdecimal	181
-rem	76	dashu-float	260
-rem	76	decimal-rs	60
-rem	76	decimal-scaled	926
-rem	76	fastnum	191
-rem	76	rust_decimal	80
-rem	115	bigdecimal	200
-rem	115	dashu-float	281
-rem	115	decimal-rs	70
-rem	115	decimal-scaled	1622
-rem	115	fastnum	201
-rem	115	rust_decimal	100
-rem	153	bigdecimal	261
-rem	153	dashu-float	370
-rem	153	decimal-rs	90
-rem	153	decimal-scaled	3445
-rem	153	fastnum	290
-rem	153	rust_decimal	120
-rem	230	bigdecimal	205
-rem	230	dashu-float	234
-rem	230	decimal-rs	57
-rem	230	decimal-scaled	4154
-rem	230	fastnum	189
-rem	230	rust_decimal	96
-rem	307	bigdecimal	271
-rem	307	dashu-float	351
-rem	307	decimal-rs	90
-rem	307	decimal-scaled	9495
-rem	307	fastnum	261
-rem	307	rust_decimal	130
-rem	462	bigdecimal	280
-rem	462	dashu-float	381
-rem	462	decimal-rs	90
-rem	462	decimal-scaled	18052
-rem	462	fastnum	291
-rem	462	rust_decimal	151
-rem	616	bigdecimal	260
-rem	616	dashu-float	341
-rem	616	decimal-rs	105
-rem	616	decimal-scaled	28151
-rem	616	fastnum	300
-rem	616	rust_decimal	131
-rem	924	bigdecimal	230
-rem	924	dashu-float	380
-rem	924	decimal-rs	95
-rem	924	decimal-scaled	57180
-rem	924	fastnum	281
-rem	924	rust_decimal	140
-rem	1232	bigdecimal	330
-rem	1232	dashu-float	387
-rem	1232	decimal-rs	88
-rem	1232	decimal-scaled	88515
-rem	1232	fastnum	254
-rem	1232	rust_decimal	131
-sin	18	decimal-scaled	6670
-sin	18	fastnum	449807
-sin	18	g_math	206751
-sin	18	rust_decimal	3365
-sin	38	decimal-scaled	9634
-sin	38	fastnum	443588
-sin	38	g_math	205825
-sin	38	rust_decimal	3365
-sin	57	decimal-scaled	5991
-sin	57	fastnum	411217
-sin	57	g_math	219289
-sin	57	rust_decimal	3236
-sin	76	decimal-scaled	6963
-sin	76	fastnum	406537
-sin	76	g_math	219045
-sin	76	rust_decimal	3246
-sin	115	decimal-scaled	8192
-sin	115	fastnum	451167
-sin	115	g_math	322053
-sin	115	rust_decimal	3605
-sin	153	decimal-scaled	12699
-sin	153	fastnum	562199
-sin	153	g_math	410330
-sin	153	rust_decimal	4637
-sin	230	decimal-scaled	8209
-sin	230	fastnum	380588
-sin	230	g_math	186520
-sin	230	rust_decimal	3388
-sin	307	decimal-scaled	15343
-sin	307	fastnum	561005
-sin	307	g_math	422456
-sin	307	rust_decimal	4617
-sin	462	decimal-scaled	17947
-sin	462	fastnum	563360
-sin	462	g_math	406152
-sin	462	rust_decimal	4637
-sin	616	decimal-scaled	23580
-sin	616	fastnum	606186
-sin	616	g_math	424492
-sin	616	rust_decimal	4597
-sin	924	decimal-scaled	37410
-sin	924	fastnum	573929
-sin	924	g_math	405334
-sin	924	rust_decimal	4517
-sin	1232	decimal-scaled	52790
-sin	1232	fastnum	546752
-sin	1232	g_math	267801
-sin	1232	rust_decimal	4806
-sinh	18	decimal-scaled	10756
-sinh	18	g_math	317810
-sinh	38	decimal-scaled	15142
-sinh	38	g_math	316599
-sinh	57	decimal-scaled	9724
-sinh	57	g_math	297625
-sinh	76	decimal-scaled	11176
-sinh	76	g_math	300242
-sinh	115	decimal-scaled	21682
-sinh	115	g_math	482564
-sinh	153	decimal-scaled	21437
-sinh	153	g_math	619796
-sinh	230	decimal-scaled	24935
-sinh	230	g_math	235472
-sinh	307	decimal-scaled	54206
-sinh	307	g_math	629188
-sinh	462	decimal-scaled	60496
-sinh	462	g_math	613866
-sinh	616	decimal-scaled	102372
-sinh	616	g_math	631183
-sinh	924	decimal-scaled	157733
-sinh	924	g_math	614789
-sinh	1232	decimal-scaled	219852
-sinh	1232	g_math	364762
-sqrt	18	bigdecimal	71355
-sqrt	18	decimal-rs	5208
-sqrt	18	decimal-scaled	250
-sqrt	18	fastnum	145836
-sqrt	18	g_math	138645
-sqrt	18	rust_decimal	2399
-sqrt	38	bigdecimal	71126
-sqrt	38	decimal-rs	5172
-sqrt	38	decimal-scaled	3064
-sqrt	38	fastnum	143988
-sqrt	38	g_math	138465
-sqrt	38	rust_decimal	2404
-sqrt	57	bigdecimal	65703
-sqrt	57	decimal-rs	4638
-sqrt	57	decimal-scaled	1132
-sqrt	57	fastnum	131194
-sqrt	57	g_math	126556
-sqrt	57	rust_decimal	2180
-sqrt	76	bigdecimal	65623
-sqrt	76	decimal-rs	4684
-sqrt	76	decimal-scaled	1403
-sqrt	76	fastnum	130934
-sqrt	76	g_math	128671
-sqrt	76	rust_decimal	2230
-sqrt	115	bigdecimal	89524
-sqrt	115	decimal-rs	4968
-sqrt	115	decimal-scaled	1752
-sqrt	115	fastnum	143750
-sqrt	115	g_math	209634
-sqrt	115	rust_decimal	2243
-sqrt	153	bigdecimal	115154
-sqrt	153	decimal-rs	6339
-sqrt	153	decimal-scaled	4251
-sqrt	153	fastnum	190188
-sqrt	153	g_math	269787
-sqrt	153	rust_decimal	2899
-sqrt	230	bigdecimal	69410
-sqrt	230	decimal-rs	4292
-sqrt	230	decimal-scaled	3894
-sqrt	230	fastnum	120194
-sqrt	230	g_math	98765
-sqrt	230	rust_decimal	1785
-sqrt	307	bigdecimal	115975
-sqrt	307	decimal-rs	6404
-sqrt	307	decimal-scaled	7341
-sqrt	307	fastnum	187047
-sqrt	307	g_math	270899
-sqrt	307	rust_decimal	2910
-sqrt	462	bigdecimal	116305
-sqrt	462	decimal-rs	6435
-sqrt	462	decimal-scaled	12604
-sqrt	462	fastnum	185134
-sqrt	462	g_math	270558
-sqrt	462	rust_decimal	2920
-sqrt	616	bigdecimal	116031
-sqrt	616	decimal-rs	6410
-sqrt	616	decimal-scaled	17912
-sqrt	616	fastnum	187597
-sqrt	616	g_math	276839
-sqrt	616	rust_decimal	2905
-sqrt	924	bigdecimal	115611
-sqrt	924	decimal-rs	6435
-sqrt	924	decimal-scaled	31326
-sqrt	924	fastnum	187272
-sqrt	924	g_math	269738
-sqrt	924	rust_decimal	2929
-sqrt	1232	bigdecimal	105984
-sqrt	1232	decimal-rs	5722
-sqrt	1232	decimal-scaled	46788
-sqrt	1232	fastnum	182002
-sqrt	1232	g_math	173317
-sqrt	1232	rust_decimal	3156
-sub	18	bigdecimal	121
-sub	18	dashu-float	230
-sub	18	decimal-rs	56
-sub	18	decimal-scaled	235
-sub	18	fastnum	90
-sub	18	g_math	381
-sub	18	rust_decimal	60
-sub	38	bigdecimal	130
-sub	38	dashu-float	211
-sub	38	decimal-rs	60
-sub	38	decimal-scaled	511
-sub	38	fastnum	80
-sub	38	g_math	361
-sub	38	rust_decimal	60
-sub	57	bigdecimal	110
-sub	57	dashu-float	200
-sub	57	decimal-rs	45
-sub	57	decimal-scaled	776
-sub	57	fastnum	70
-sub	57	g_math	351
-sub	57	rust_decimal	60
-sub	76	bigdecimal	120
-sub	76	dashu-float	211
-sub	76	decimal-rs	50
-sub	76	decimal-scaled	1011
-sub	76	fastnum	70
-sub	76	g_math	381
-sub	76	rust_decimal	50
-sub	115	bigdecimal	136
-sub	115	dashu-float	225
-sub	115	decimal-rs	50
-sub	115	decimal-scaled	1943
-sub	115	fastnum	90
-sub	115	g_math	436
-sub	115	rust_decimal	55
-sub	153	bigdecimal	176
-sub	153	dashu-float	290
-sub	153	decimal-rs	70
-sub	153	decimal-scaled	4236
-sub	153	fastnum	120
-sub	153	g_math	531
-sub	153	rust_decimal	70
-sub	230	bigdecimal	127
-sub	230	dashu-float	186
-sub	230	decimal-rs	48
-sub	230	decimal-scaled	5153
-sub	230	fastnum	71
-sub	230	g_math	296
-sub	230	rust_decimal	50
-sub	307	bigdecimal	176
-sub	307	dashu-float	300
-sub	307	decimal-rs	70
-sub	307	decimal-scaled	11437
-sub	307	fastnum	110
-sub	307	g_math	541
-sub	307	rust_decimal	80
-sub	462	bigdecimal	176
-sub	462	dashu-float	296
-sub	462	decimal-rs	70
-sub	462	decimal-scaled	21152
-sub	462	fastnum	110
-sub	462	g_math	530
-sub	462	rust_decimal	76
-sub	616	bigdecimal	170
-sub	616	dashu-float	290
-sub	616	decimal-rs	80
-sub	616	decimal-scaled	29804
-sub	616	fastnum	120
-sub	616	g_math	551
-sub	616	rust_decimal	75
-sub	924	bigdecimal	170
-sub	924	dashu-float	290
-sub	924	decimal-rs	60
-sub	924	decimal-scaled	59739
-sub	924	fastnum	110
-sub	924	g_math	526
-sub	924	rust_decimal	80
-sub	1232	bigdecimal	202
-sub	1232	dashu-float	317
-sub	1232	decimal-rs	71
-sub	1232	decimal-scaled	85275
-sub	1232	fastnum	107
-sub	1232	g_math	548
-sub	1232	rust_decimal	68
-tan	18	decimal-scaled	12208
-tan	18	fastnum	1478171
-tan	18	g_math	224573
-tan	18	rust_decimal	4556
-tan	38	decimal-scaled	17576
-tan	38	fastnum	1477832
-tan	38	g_math	224332
-tan	38	rust_decimal	4526
-tan	57	decimal-scaled	7864
-tan	57	fastnum	1355947
-tan	57	g_math	241711
-tan	57	rust_decimal	3836
-tan	76	decimal-scaled	8726
-tan	76	fastnum	1345136
-tan	76	g_math	242704
-tan	76	rust_decimal	3847
-tan	115	decimal-scaled	10145
-tan	115	fastnum	1884617
-tan	115	g_math	343685
-tan	115	rust_decimal	3645
-tan	153	decimal-scaled	15553
-tan	153	fastnum	2017799
-tan	153	g_math	446344
-tan	153	rust_decimal	4697
-tan	230	decimal-scaled	10212
-tan	230	fastnum	1619227
-tan	230	g_math	201260
-tan	230	rust_decimal	3322
-tan	307	decimal-scaled	18378
-tan	307	fastnum	4584482
-tan	307	g_math	466803
-tan	307	rust_decimal	4688
-tan	462	decimal-scaled	19970
-tan	462	fastnum	4487817
-tan	462	g_math	448877
-tan	462	rust_decimal	4747
-tan	616	decimal-scaled	27731
-tan	616	fastnum	4626579
-tan	616	g_math	466780
-tan	616	rust_decimal	4687
-tan	924	decimal-scaled	38887
-tan	924	fastnum	3777212
-tan	924	g_math	446940
-tan	924	rust_decimal	4707
-tan	1232	decimal-scaled	56678
-tan	1232	fastnum	2465964
-tan	1232	g_math	291423
-tan	1232	rust_decimal	4731
-tanh	18	decimal-scaled	10646
-tanh	18	g_math	188339
-tanh	38	decimal-scaled	15133
-tanh	38	g_math	188209
-tanh	57	decimal-scaled	10074
-tanh	57	g_math	179534
-tanh	76	decimal-scaled	11191
-tanh	76	g_math	178764
-tanh	115	decimal-scaled	21738
-tanh	115	g_math	284306
-tanh	153	decimal-scaled	21322
-tanh	153	g_math	370189
-tanh	230	decimal-scaled	12989
-tanh	230	g_math	141141
-tanh	307	decimal-scaled	24191
-tanh	307	g_math	372542
-tanh	462	decimal-scaled	29474
-tanh	462	g_math	365881
-tanh	616	decimal-scaled	34536
-tanh	616	g_math	371039
-tanh	924	decimal-scaled	48392
-tanh	924	g_math	367774
-tanh	1232	decimal-scaled	65260
-tanh	1232	g_math	220716
+function	width	library	nanos	min	max
+acos	18	decimal-scaled	54141	211	111108
+acos	18	g_math	497043	3176	773504
+acos	38	decimal-scaled	85640	411	221995
+acos	38	g_math	498367	3146	815386
+acos	57	decimal-scaled	15629	10449	47860
+acos	57	g_math	492434	3176	730240
+acos	76	decimal-scaled	17796	11788	54331
+acos	76	g_math	507728	3144	843090
+acos	115	decimal-scaled	13005	7557	2761171
+acos	115	g_math	404484	2218	12401887
+acos	153	decimal-scaled	28654	18358	6044544
+acos	153	g_math	1080384	5769	15543079
+acos	230	decimal-scaled	30226	19206	3052422
+acos	230	g_math	995010	5891	13966980
+acos	307	decimal-scaled	31799	20638	6055199
+acos	307	g_math	1017450	5841	15669318
+acos	462	decimal-scaled	35777	19647	6062159
+acos	462	g_math	1027227	5871	12026772
+acos	616	decimal-scaled	40431	29805	9056683
+acos	616	g_math	1099264	5769	10460928
+acos	924	decimal-scaled	51356	37085	7067151
+acos	924	g_math	1084196	5799	13240270
+acos	1232	decimal-scaled	68838	49364	6090765
+acos	1232	g_math	1096106	5859	9526888
+acosh	18	decimal-scaled	39834	441	88305
+acosh	18	g_math	274788	651	529360
+acosh	38	decimal-scaled	58945	470	74909
+acosh	38	g_math	273842	631	618688
+acosh	57	decimal-scaled	56010	3356	96752
+acosh	57	g_math	271590	662	531868
+acosh	76	decimal-scaled	63334	4106	81441
+acosh	76	g_math	281112	811	537656
+acosh	115	decimal-scaled	72356	3330	6082972
+acosh	115	g_math	225016	858	12399657
+acosh	153	decimal-scaled	154928	8703	9226140
+acosh	153	g_math	597416	941	9425994
+acosh	230	decimal-scaled	139900	11672	8149554
+acosh	230	g_math	559403	1222	12386153
+acosh	307	decimal-scaled	140502	22232	6166757
+acosh	307	g_math	572758	1172	8323514
+acosh	462	decimal-scaled	144410	17873	6173777
+acosh	462	g_math	562593	1163	12939928
+acosh	616	decimal-scaled	148714	18889	9161231
+acosh	616	g_math	596668	1111	14324781
+acosh	924	decimal-scaled	162936	31606	9164914
+acosh	924	g_math	585500	1472	8820124
+acosh	1232	decimal-scaled	177036	48512	6210184
+acosh	1232	g_math	587012	1052	9920479
+add	18	bigdecimal	130	80	311
+add	18	dashu-float	235	60	531
+add	18	decimal-rs	50	40	150
+add	18	decimal-scaled	255	220	310
+add	18	fastnum	60	50	221
+add	18	g_math	360	300	722
+add	18	rust_decimal	50	40	291
+add	38	bigdecimal	130	80	310
+add	38	dashu-float	230	61	541
+add	38	decimal-rs	60	40	151
+add	38	decimal-scaled	501	410	701
+add	38	fastnum	61	49	350
+add	38	g_math	360	311	722
+add	38	rust_decimal	51	40	411
+add	57	bigdecimal	120	70	501
+add	57	dashu-float	250	60	491
+add	57	decimal-rs	50	40	201
+add	57	decimal-scaled	786	571	1022
+add	57	fastnum	70	50	200
+add	57	g_math	360	300	741
+add	57	rust_decimal	60	40	350
+add	76	bigdecimal	136	70	380
+add	76	dashu-float	246	61	501
+add	76	decimal-rs	60	40	160
+add	76	decimal-scaled	1052	701	1443
+add	76	fastnum	70	50	460
+add	76	g_math	356	301	871
+add	76	rust_decimal	60	50	411
+add	115	bigdecimal	122	75	402
+add	115	dashu-float	242	73	1133
+add	115	decimal-rs	44	32	362
+add	115	decimal-scaled	1682	758	4548
+add	115	fastnum	63	38	780
+add	115	g_math	304	236	1275
+add	115	rust_decimal	50	32	669
+add	153	bigdecimal	170	90	541
+add	153	dashu-float	356	80	1282
+add	153	decimal-rs	70	50	241
+add	153	decimal-scaled	4306	1653	101092
+add	153	fastnum	100	70	1412
+add	153	g_math	531	440	1462
+add	153	rust_decimal	70	50	450
+add	230	bigdecimal	190	101	592
+add	230	dashu-float	406	110	1222
+add	230	decimal-rs	60	40	231
+add	230	decimal-scaled	8045	2735	47047
+add	230	fastnum	110	50	792
+add	230	g_math	531	420	1473
+add	230	rust_decimal	70	50	290
+add	307	bigdecimal	181	91	3256
+add	307	dashu-float	436	69	1162
+add	307	decimal-rs	60	40	261
+add	307	decimal-scaled	10439	5771	118061
+add	307	fastnum	100	70	642
+add	307	g_math	546	421	3827
+add	307	rust_decimal	70	49	380
+add	462	bigdecimal	180	110	441
+add	462	dashu-float	386	90	3887
+add	462	decimal-rs	60	49	261
+add	462	decimal-scaled	20178	10920	1511287
+add	462	fastnum	100	50	381
+add	462	g_math	521	410	1402
+add	462	rust_decimal	70	50	361
+add	616	bigdecimal	161	110	591
+add	616	dashu-float	336	111	1161
+add	616	decimal-rs	61	50	280
+add	616	decimal-scaled	29639	16054	3275284
+add	616	fastnum	91	70	580
+add	616	g_math	561	441	1472
+add	616	rust_decimal	80	50	391
+add	924	bigdecimal	180	90	651
+add	924	dashu-float	350	80	891
+add	924	decimal-rs	60	50	280
+add	924	decimal-scaled	57646	32938	5406319
+add	924	fastnum	90	70	481
+add	924	g_math	541	430	1272
+add	924	rust_decimal	70	50	491
+add	1232	bigdecimal	170	110	500
+add	1232	dashu-float	361	70	1182
+add	1232	decimal-rs	60	50	261
+add	1232	decimal-scaled	97556	57256	12390814
+add	1232	fastnum	91	70	590
+add	1232	g_math	526	441	1633
+add	1232	rust_decimal	71	50	2404
+asin	18	decimal-scaled	54092	261	113883
+asin	18	g_math	498326	280	679540
+asin	38	decimal-scaled	85600	551	182821
+asin	38	g_math	496745	280	973872
+asin	57	decimal-scaled	15539	1122	46797
+asin	57	g_math	490430	250	640041
+asin	76	decimal-scaled	17546	1362	52117
+asin	76	g_math	506536	280	670654
+asin	115	decimal-scaled	12920	1371	2027323
+asin	115	g_math	405081	246	15316338
+asin	153	decimal-scaled	28288	3075	8048555
+asin	153	g_math	1091642	360	10739225
+asin	230	decimal-scaled	30106	4268	3975893
+asin	230	g_math	979310	371	12985209
+asin	307	decimal-scaled	31684	5540	6056281
+asin	307	g_math	997885	341	12459398
+asin	462	decimal-scaled	35717	9297	6063661
+asin	462	g_math	1011292	350	17977868
+asin	616	decimal-scaled	39264	13350	8054272
+asin	616	g_math	1052718	400	19021237
+asin	924	decimal-scaled	50024	27491	9068200
+asin	924	g_math	1079584	360	7306829
+asin	1232	decimal-scaled	63540	43906	6088552
+asin	1232	g_math	1072005	381	13238190
+asinh	18	decimal-scaled	34795	270	51246
+asinh	18	g_math	300702	160901	569695
+asinh	38	decimal-scaled	50915	521	121347
+asinh	38	g_math	299320	161031	529681
+asinh	57	decimal-scaled	13536	772	29715
+asinh	57	g_math	298911	157826	533071
+asinh	76	decimal-scaled	14672	1002	49784
+asinh	76	g_math	304401	173116	533380
+asinh	115	decimal-scaled	14661	1020	3745440
+asinh	115	g_math	245580	125853	15371699
+asinh	153	decimal-scaled	29094	2334	7061326
+asinh	153	g_math	606675	224018	12935075
+asinh	230	decimal-scaled	30387	3626	6065830
+asinh	230	g_math	583939	309578	11809157
+asinh	307	decimal-scaled	32371	4859	6107847
+asinh	307	g_math	584814	195593	9867710
+asinh	462	decimal-scaled	36954	8867	7112643
+asinh	462	g_math	590515	230752	10585302
+asinh	616	decimal-scaled	42038	12379	9299048
+asinh	616	g_math	615155	335695	17613358
+asinh	924	decimal-scaled	56884	21411	8248712
+asinh	924	g_math	605224	335665	12943742
+asinh	1232	decimal-scaled	74843	31147	11443613
+asinh	1232	g_math	613191	228253	9861039
+atan	18	decimal-scaled	6312	311	66865
+atan	18	g_math	236172	201	970102
+atan	38	decimal-scaled	46306	510	106840
+atan	38	g_math	240950	210	616774
+atan	57	decimal-scaled	13175	9057	41758
+atan	57	g_math	235632	210	552156
+atan	76	decimal-scaled	14552	9884	30776
+atan	76	g_math	224172	210	645447
+atan	115	decimal-scaled	11789	5935	1456361
+atan	115	g_math	185168	201	9445482
+atan	153	decimal-scaled	25533	16384	9046550
+atan	153	g_math	489147	281	12037232
+atan	230	decimal-scaled	27602	15599	3069272
+atan	230	g_math	479945	280	9954499
+atan	307	decimal-scaled	29154	18334	9090643
+atan	307	g_math	494454	290	9995723
+atan	462	decimal-scaled	27386	19576	8048674
+atan	462	g_math	494345	301	10043251
+atan	616	decimal-scaled	38488	27070	9248952
+atan	616	g_math	489536	260	8442642
+atan	924	decimal-scaled	52288	36734	7170715
+atan	924	g_math	490704	250	9677089
+atan	1232	decimal-scaled	71227	50025	8272551
+atan	1232	g_math	485549	261	13246823
+atan2	18	decimal-scaled	54196	3616	72926
+atan2	18	g_math	396040	60032	595964
+atan2	38	decimal-scaled	84618	4528	144711
+atan2	38	g_math	396453	60003	719248
+atan2	57	decimal-scaled	14086	10991	44042
+atan2	57	g_math	392185	59782	626194
+atan2	76	decimal-scaled	16124	11317	51306
+atan2	76	g_math	398931	64425	1065779
+atan2	115	decimal-scaled	12304	9213	4845692
+atan2	115	g_math	326148	43986	15473423
+atan2	153	decimal-scaled	26890	18969	6045444
+atan2	153	g_math	937203	132610	15775898
+atan2	230	decimal-scaled	30747	22412	6053627
+atan2	230	g_math	880942	117038	16013335
+atan2	307	decimal-scaled	33243	20328	6060068
+atan2	307	g_math	888179	130895	10069226
+atan2	462	decimal-scaled	41087	30376	6071516
+atan2	462	g_math	890036	117450	10080767
+atan2	616	decimal-scaled	49364	31577	12071137
+atan2	616	g_math	960936	125299	16030116
+atan2	924	decimal-scaled	68812	40199	6091595
+atan2	924	g_math	943574	121059	15515960
+atan2	1232	decimal-scaled	97576	76215	6121441
+atan2	1232	g_math	946461	121783	13120545
+atanh	18	decimal-scaled	9758	271	25548
+atanh	18	g_math	203581	14758	395439
+atanh	38	decimal-scaled	14657	460	28713
+atanh	38	g_math	202610	14728	398978
+atanh	57	decimal-scaled	51767	2384	86692
+atanh	57	g_math	205616	15048	469961
+atanh	76	decimal-scaled	58517	1132	108611
+atanh	76	g_math	194348	16574	358541
+atanh	115	decimal-scaled	65202	3566	6104828
+atanh	115	g_math	172945	10276	12182226
+atanh	153	decimal-scaled	140402	2554	6167419
+atanh	153	g_math	401886	30666	12467490
+atanh	230	decimal-scaled	124171	7444	6152441
+atanh	230	g_math	406518	34554	9216241
+atanh	307	decimal-scaled	126256	8075	12153959
+atanh	307	g_math	401240	29435	16523396
+atanh	462	decimal-scaled	130314	12543	14147702
+atanh	462	g_math	396883	29665	12355114
+atanh	616	decimal-scaled	136055	14342	6164673
+atanh	616	g_math	406722	32679	12746376
+atanh	924	decimal-scaled	148940	30194	7155837
+atanh	924	g_math	392910	32698	12719731
+atanh	1232	decimal-scaled	166109	46860	6209263
+atanh	1232	g_math	393250	32379	18383618
+cbrt	18	bigdecimal	107171	81	207248
+cbrt	18	decimal-scaled	5355	5300	16732
+cbrt	18	fastnum	761961	60	48429031
+cbrt	38	bigdecimal	106790	70	140413
+cbrt	38	decimal-scaled	10078	7765	20178
+cbrt	38	fastnum	745398	60	47579713
+cbrt	57	bigdecimal	107101	70	135785
+cbrt	57	decimal-scaled	1322	1062	1843
+cbrt	57	fastnum	785359	50	48919426
+cbrt	76	bigdecimal	118140	71	166797
+cbrt	76	decimal-scaled	2263	1773	4948
+cbrt	76	fastnum	826420	70	52652832
+cbrt	115	bigdecimal	112348	67	9125482
+cbrt	115	decimal-scaled	3060	2467	17068
+cbrt	115	fastnum	930824	75	125308420
+cbrt	153	bigdecimal	201874	110	12215731
+cbrt	153	decimal-scaled	6129	4867	2021278
+cbrt	153	fastnum	3947942	100	185670068
+cbrt	230	bigdecimal	185290	111	14202809
+cbrt	230	decimal-scaled	7755	5440	4652925
+cbrt	230	fastnum	2942777	81	187169314
+cbrt	307	bigdecimal	185311	130	16599106
+cbrt	307	decimal-scaled	9177	5861	3096107
+cbrt	307	fastnum	2831388	80	173709308
+cbrt	462	bigdecimal	185908	100	15203205
+cbrt	462	decimal-scaled	14608	6572	6071055
+cbrt	462	fastnum	3646761	70	161965768
+cbrt	616	bigdecimal	202344	90	12294037
+cbrt	616	decimal-scaled	20000	14172	10220978
+cbrt	616	fastnum	3955506	70	198544236
+cbrt	924	bigdecimal	201388	80	12226173
+cbrt	924	decimal-scaled	34882	22213	8155701
+cbrt	924	fastnum	2518862	80	204324258
+cbrt	1232	bigdecimal	201382	100	15219987
+cbrt	1232	decimal-scaled	54021	36535	11318163
+cbrt	1232	fastnum	3981128	80	183986929
+cos	18	decimal-scaled	6072	4809	28774
+cos	18	fastnum	985435	109004	15562715
+cos	18	g_math	219261	3657	623337
+cos	18	rust_decimal	3231	381	15509
+cos	38	decimal-scaled	8867	5841	29234
+cos	38	fastnum	984439	108933	15634107
+cos	38	g_math	220533	3656	284552
+cos	38	rust_decimal	3262	390	30126
+cos	57	decimal-scaled	6011	2314	19366
+cos	57	fastnum	983124	108945	15563210
+cos	57	g_math	221375	3667	283071
+cos	57	rust_decimal	3241	370	4629
+cos	76	decimal-scaled	7310	2724	27110
+cos	76	fastnum	1079321	119778	17155394
+cos	76	g_math	208639	3886	365832
+cos	76	rust_decimal	3425	380	11648
+cos	115	decimal-scaled	6386	2381	1676838
+cos	115	fastnum	1007227	105293	44886282
+cos	115	g_math	188870	3677	15237495
+cos	115	rust_decimal	3267	340	523213
+cos	153	decimal-scaled	12910	4908	4259693
+cos	153	fastnum	1455023	149626	63106914
+cos	153	g_math	423398	6219	9507768
+cos	153	rust_decimal	4617	501	210097
+cos	230	decimal-scaled	14427	6763	4039542
+cos	230	fastnum	1317286	135954	52064236
+cos	230	g_math	426375	5881	8402957
+cos	230	rust_decimal	4393	471	26890
+cos	307	decimal-scaled	15659	7444	5036124
+cos	307	fastnum	1302405	135393	58086255
+cos	307	g_math	430225	6242	9460723
+cos	307	rust_decimal	4424	491	21270
+cos	462	decimal-scaled	17833	8485	51136
+cos	462	fastnum	1305382	147166	60705372
+cos	462	g_math	425577	5901	15457591
+cos	462	rust_decimal	4453	471	39904
+cos	616	decimal-scaled	24146	15073	144177
+cos	616	fastnum	1548653	149455	56504474
+cos	616	g_math	440032	6319	11409886
+cos	616	rust_decimal	4697	480	21842
+cos	924	decimal-scaled	36565	21812	6051369
+cos	924	fastnum	1439536	148679	65683819
+cos	924	g_math	426840	6230	6737709
+cos	924	rust_decimal	4647	490	2055655
+cos	1232	decimal-scaled	52940	37676	6070134
+cos	1232	fastnum	1523238	148883	65116349
+cos	1232	g_math	426701	6419	8444241
+cos	1232	rust_decimal	4657	551	41532
+cosh	18	decimal-scaled	9818	9288	31759
+cosh	18	g_math	298362	371	487381
+cosh	38	decimal-scaled	13966	11852	48470
+cosh	38	g_math	298203	360	462696
+cosh	57	decimal-scaled	9498	6111	38112
+cosh	57	g_math	296561	360	733256
+cosh	76	decimal-scaled	11868	6840	90274
+cosh	76	g_math	316454	351	421125
+cosh	115	decimal-scaled	18179	10319	1980449
+cosh	115	g_math	234122	272	12321164
+cosh	153	decimal-scaled	21577	12790	6258406
+cosh	153	g_math	619439	440	12661442
+cosh	230	decimal-scaled	23408	12894	6155708
+cosh	230	g_math	593577	431	14613836
+cosh	307	decimal-scaled	42069	11762	7644489
+cosh	307	g_math	588176	431	15603522
+cosh	462	decimal-scaled	56370	18935	11106524
+cosh	462	g_math	589002	420	15585832
+cosh	616	decimal-scaled	95670	16325	34402372
+cosh	616	g_math	628476	421	12804373
+cosh	924	decimal-scaled	148454	33970	53071393
+cosh	924	g_math	619700	421	15636798
+cosh	1232	decimal-scaled	205659	45849	92331532
+cosh	1232	g_math	619486	410	12797209
+div	18	bigdecimal	243651	51516	299872
+div	18	dashu-float	2936	130	3236
+div	18	decimal-rs	200	140	240
+div	18	decimal-scaled	221	211	311
+div	18	fastnum	1092	160	1533
+div	18	g_math	2670	802	3747
+div	18	rust_decimal	70	50	150
+div	38	bigdecimal	242975	51176	290063
+div	38	dashu-float	2956	130	3426
+div	38	decimal-rs	200	161	270
+div	38	decimal-scaled	1222	1052	1382
+div	38	fastnum	1077	170	1523
+div	38	g_math	2675	761	15890
+div	38	rust_decimal	76	60	180
+div	57	bigdecimal	243327	62197	265518
+div	57	dashu-float	3000	130	3727
+div	57	decimal-rs	200	161	230
+div	57	decimal-scaled	772	541	1042
+div	57	fastnum	1092	150	1513
+div	57	g_math	2655	781	3777
+div	57	rust_decimal	76	60	171
+div	76	bigdecimal	260892	64155	281137
+div	76	dashu-float	3185	140	12999
+div	76	decimal-rs	230	181	301
+div	76	decimal-scaled	1012	751	1372
+div	76	fastnum	1187	180	1773
+div	76	g_math	2814	821	3785
+div	76	rust_decimal	90	60	180
+div	115	bigdecimal	253582	54748	5257710
+div	115	dashu-float	2898	103	5126
+div	115	decimal-rs	191	132	457
+div	115	decimal-scaled	1485	625	2852
+div	115	fastnum	996	147	2028
+div	115	g_math	2054	689	2913
+div	115	rust_decimal	86	50	572
+div	153	bigdecimal	425286	91929	4478333
+div	153	dashu-float	4892	160	6249
+div	153	decimal-rs	271	180	711
+div	153	decimal-scaled	3856	2454	9785
+div	153	fastnum	1437	230	2574
+div	153	g_math	3576	781	11006
+div	153	rust_decimal	120	70	441
+div	230	bigdecimal	401814	103893	1635599
+div	230	dashu-float	4634	151	5671
+div	230	decimal-rs	261	190	631
+div	230	decimal-scaled	6532	2955	26911
+div	230	fastnum	1378	180	2505
+div	230	g_math	4122	1222	26139
+div	230	rust_decimal	110	70	301
+div	307	bigdecimal	401831	85410	6432563
+div	307	dashu-float	4779	140	5370
+div	307	decimal-rs	271	141	661
+div	307	decimal-scaled	9187	5610	56225
+div	307	fastnum	1422	190	2294
+div	307	g_math	4103	1072	7194
+div	307	rust_decimal	120	71	381
+div	462	bigdecimal	402964	85861	8420475
+div	462	dashu-float	4714	150	8276
+div	462	decimal-rs	271	200	761
+div	462	decimal-scaled	18184	11191	1591216
+div	462	fastnum	1363	190	2335
+div	462	g_math	3958	1052	6973
+div	462	rust_decimal	110	71	341
+div	616	bigdecimal	431424	91397	5008291
+div	616	dashu-float	4812	150	5368
+div	616	decimal-rs	290	200	601
+div	616	decimal-scaled	31082	17927	2628641
+div	616	fastnum	1452	200	4317
+div	616	g_math	4156	1061	9715
+div	616	rust_decimal	120	80	470
+div	924	bigdecimal	425298	89272	4441368
+div	924	dashu-float	4877	160	5388
+div	924	decimal-rs	291	200	681
+div	924	decimal-scaled	57285	33980	874662
+div	924	fastnum	1407	210	2414
+div	924	g_math	4276	1222	8733
+div	924	rust_decimal	110	70	290
+div	1232	bigdecimal	424994	90136	1923058
+div	1232	dashu-float	4842	150	5408
+div	1232	decimal-rs	271	200	771
+div	1232	decimal-scaled	87512	41282	5611335
+div	1232	fastnum	1437	201	2454
+div	1232	g_math	4121	1132	10917
+div	1232	rust_decimal	115	80	420
+exp	18	decimal-rs	8365	40	20458
+exp	18	decimal-scaled	6612	230	7504
+exp	18	fastnum	427751	70	676166
+exp	18	g_math	144230	201	223278
+exp	18	rust_decimal	4163	50	15058
+exp	38	decimal-rs	8385	40	20037
+exp	38	decimal-scaled	9307	401	39083
+exp	38	fastnum	427379	70	675443
+exp	38	g_math	144520	200	222336
+exp	38	rust_decimal	4118	50	15839
+exp	57	decimal-rs	8235	40	21871
+exp	57	decimal-scaled	5531	581	32311
+exp	57	fastnum	434545	80	847861
+exp	57	g_math	143819	200	240973
+exp	57	rust_decimal	4173	40	14027
+exp	76	decimal-rs	9174	40	19730
+exp	76	decimal-scaled	8823	721	40390
+exp	76	fastnum	460943	110	733457
+exp	76	g_math	151235	200	263441
+exp	76	rust_decimal	4472	90	28612
+exp	115	decimal-rs	7404	35	2760245
+exp	115	decimal-scaled	10129	972	5036889
+exp	115	fastnum	396859	60	9517862
+exp	115	g_math	114467	155	14126877
+exp	115	rust_decimal	4012	45	833440
+exp	153	decimal-rs	11518	50	3234578
+exp	153	decimal-scaled	20791	2163	6062510
+exp	153	fastnum	598432	130	9795022
+exp	153	g_math	295846	260	11305304
+exp	153	rust_decimal	5624	50	2356448
+exp	230	decimal-rs	10651	50	3840901
+exp	230	decimal-scaled	41878	3827	6142282
+exp	230	fastnum	567708	110	9613896
+exp	230	g_math	285763	250	15288223
+exp	230	rust_decimal	5264	50	2024066
+exp	307	decimal-rs	10690	50	2032029
+exp	307	decimal-scaled	63078	4829	6201181
+exp	307	fastnum	574985	111	9634269
+exp	307	g_math	283520	251	9341049
+exp	307	rust_decimal	5340	60	2383315
+exp	462	decimal-rs	10620	60	4786085
+exp	462	decimal-scaled	68217	9228	11050529
+exp	462	fastnum	573453	120	9587557
+exp	462	g_math	283190	250	12294243
+exp	462	rust_decimal	5290	60	2157214
+exp	616	decimal-rs	11597	50	2379277
+exp	616	decimal-scaled	105049	16425	8569067
+exp	616	fastnum	595916	90	11599389
+exp	616	g_math	301563	240	9322628
+exp	616	rust_decimal	5563	40	2013050
+exp	924	decimal-rs	11557	50	2758613
+exp	924	decimal-scaled	156181	30926	9128941
+exp	924	fastnum	604793	110	9680742
+exp	924	g_math	296598	240	9419238
+exp	924	rust_decimal	5688	50	217971
+exp	1232	decimal-rs	10676	40	4053979
+exp	1232	decimal-scaled	242764	45698	17476621
+exp	1232	fastnum	607031	70	9726366
+exp	1232	g_math	295333	250	15325696
+exp	1232	rust_decimal	5614	60	21963
+exp2	18	decimal-scaled	6352	201	13705
+exp2	18	fastnum	1539702	471	1948237
+exp2	38	decimal-scaled	9378	331	40816
+exp2	38	fastnum	1541872	431	1891324
+exp2	57	decimal-scaled	13215	1152	39644
+exp2	57	fastnum	1539426	461	1931661
+exp2	76	decimal-scaled	16204	1362	61922
+exp2	76	fastnum	1694105	441	2003374
+exp2	115	decimal-scaled	28537	2115	3107938
+exp2	115	fastnum	1574375	808	10519514
+exp2	153	decimal-scaled	53030	4526	6097113
+exp2	153	fastnum	2279847	921	13997756
+exp2	230	decimal-scaled	74689	5771	6736941
+exp2	230	fastnum	2046625	672	13933043
+exp2	307	decimal-scaled	107742	8596	7627888
+exp2	307	fastnum	2026127	702	10921424
+exp2	462	decimal-scaled	113437	12003	7834524
+exp2	462	fastnum	2028886	761	12600678
+exp2	616	decimal-scaled	300503	18949	19469330
+exp2	616	fastnum	2239445	731	11269230
+exp2	924	decimal-scaled	340994	27520	11053988
+exp2	924	fastnum	2245426	801	16018598
+exp2	1232	decimal-scaled	1200592	53831	32529672
+exp2	1232	fastnum	2235968	731	12261564
+hypot	18	decimal-scaled	285	230	481
+hypot	38	decimal-scaled	561	431	711
+hypot	57	decimal-scaled	862	521	1693
+hypot	76	decimal-scaled	1437	802	2263
+hypot	115	decimal-scaled	1727	787	17085
+hypot	153	decimal-scaled	4417	2333	139670
+hypot	230	decimal-scaled	7374	3948	51636
+hypot	307	decimal-scaled	9588	5210	129702
+hypot	462	decimal-scaled	18144	10319	2039435
+hypot	616	decimal-scaled	26966	16856	4449519
+hypot	924	decimal-scaled	49864	22203	9860481
+hypot	1232	decimal-scaled	82854	53410	12115000
+ln	18	dashu-float	59805634	38828606	439570649
+ln	18	decimal-rs	4849	541	16961
+ln	18	decimal-scaled	6512	4047	19456
+ln	18	fastnum	3250600	621	61175545
+ln	18	g_math	196628	420	414886
+ln	18	rust_decimal	8275	410	22934
+ln	38	dashu-float	59741307	38684234	436098113
+ln	38	decimal-rs	4859	541	16171
+ln	38	decimal-scaled	9718	431	45445
+ln	38	fastnum	3250320	551	61196044
+ln	38	g_math	196578	401	435475
+ln	38	rust_decimal	8305	421	22572
+ln	57	dashu-float	59780961	38994649	425770492
+ln	57	decimal-rs	4809	531	47329
+ln	57	decimal-scaled	2715	1774	24726
+ln	57	fastnum	3245490	592	61089050
+ln	57	g_math	197520	410	370355
+ln	57	rust_decimal	8295	431	22192
+ln	76	dashu-float	65143580	42253747	457757055
+ln	76	decimal-rs	5368	631	17296
+ln	76	decimal-scaled	3766	1993	24226
+ln	76	fastnum	3571486	561	67451988
+ln	76	g_math	184634	451	357901
+ln	76	rust_decimal	8833	501	21843
+ln	115	dashu-float	133393231	43778519	1132140008
+ln	115	decimal-rs	4401	624	16977
+ln	115	decimal-scaled	3210	1910	1886856
+ln	115	fastnum	8441812	509	116084599
+ln	115	g_math	166862	461	12306709
+ln	115	rust_decimal	8618	330	2168729
+ln	153	dashu-float	230143447	72480833	1898896644
+ln	153	decimal-rs	6760	771	2035685
+ln	153	decimal-scaled	7251	3886	3024890
+ln	153	fastnum	11577310	781	179208327
+ln	153	g_math	370579	561	12626301
+ln	153	rust_decimal	11708	561	1614314
+ln	230	dashu-float	211607660	68131990	1914260364
+ln	230	decimal-rs	6302	712	35116
+ln	230	decimal-scaled	8897	5220	6031035
+ln	230	fastnum	10081763	741	216094660
+ln	230	g_math	376622	491	9666913
+ln	230	rust_decimal	10961	541	3830411
+ln	307	dashu-float	211664414	65602700	1809124188
+ln	307	decimal-rs	6281	721	3203075
+ln	307	decimal-scaled	10891	6192	7311446
+ln	307	fastnum	10100050	832	247169576
+ln	307	g_math	376654	501	8550021
+ln	307	rust_decimal	10991	571	5390686
+ln	462	dashu-float	220144693	69904890	1889108568
+ln	462	decimal-rs	6272	712	54462
+ln	462	decimal-scaled	20449	14527	6068210
+ln	462	fastnum	10227524	782	226082121
+ln	462	g_math	377296	501	12666299
+ln	462	rust_decimal	10971	551	3038282
+ln	616	dashu-float	226416177	72036098	1993783786
+ln	616	decimal-rs	6791	781	3176175
+ln	616	decimal-scaled	23776	16845	3127895
+ln	616	fastnum	10629548	832	241801037
+ln	616	g_math	381213	571	14159112
+ln	616	rust_decimal	11658	581	2734011
+ln	924	dashu-float	227937867	72289866	2035500007
+ln	924	decimal-rs	6820	781	37605
+ln	924	decimal-scaled	38688	24637	6053212
+ln	924	fastnum	11434972	821	236656265
+ln	924	g_math	367513	500	15323435
+ln	924	rust_decimal	11687	581	6034771
+ln	1232	dashu-float	226223327	71699471	1869640858
+ln	1232	decimal-rs	6831	821	27681
+ln	1232	decimal-scaled	62745	45989	6196484
+ln	1232	fastnum	10446029	791	211858022
+ln	1232	g_math	367341	521	20459526
+ln	1232	rust_decimal	11728	531	2031391
+log	18	decimal-scaled	16396	1092	64821
+log	38	decimal-scaled	24866	1202	98504
+log	57	decimal-scaled	15118	1794	35878
+log	76	decimal-scaled	18873	2103	42233
+log	115	decimal-scaled	27145	3286	3041693
+log	153	decimal-scaled	51628	6189	6072095
+log	230	decimal-scaled	63429	8576	6097338
+log	307	decimal-scaled	99696	13305	6125260
+log	462	decimal-scaled	107190	20137	12125470
+log	616	decimal-scaled	168424	32879	12194603
+log	924	decimal-scaled	263509	53599	11444721
+log	1232	decimal-scaled	354673	93891	13371828
+log10	18	decimal-scaled	10504	8095	48611
+log10	18	fastnum	3245966	380	61279238
+log10	18	rust_decimal	9017	110	22512
+log10	38	decimal-scaled	15439	9939	53240
+log10	38	fastnum	3245165	251	61455940
+log10	38	rust_decimal	9007	120	22753
+log10	57	decimal-scaled	8687	4719	21229
+log10	57	fastnum	3243386	340	61124475
+log10	57	rust_decimal	9006	111	22422
+log10	76	decimal-scaled	10666	5328	23594
+log10	76	fastnum	3574309	471	69874346
+log10	76	rust_decimal	9515	110	22473
+log10	115	decimal-scaled	15552	8426	3027309
+log10	115	fastnum	6151126	429	130907399
+log10	115	rust_decimal	9499	98	24259
+log10	153	decimal-scaled	29184	14541	6041398
+log10	153	fastnum	10433501	621	210789474
+log10	153	rust_decimal	12819	150	979326
+log10	230	decimal-scaled	36357	19657	6060660
+log10	230	fastnum	10042904	531	210933862
+log10	230	rust_decimal	12072	150	5791858
+log10	307	decimal-scaled	56736	30777	6140067
+log10	307	fastnum	10061086	541	210960130
+log10	307	rust_decimal	12203	140	53069
+log10	462	decimal-scaled	61245	33974	6105380
+log10	462	fastnum	10035762	380	179327067
+log10	462	rust_decimal	12172	150	3966076
+log10	616	decimal-scaled	95684	53300	7120804
+log10	616	fastnum	10449403	641	215153774
+log10	616	rust_decimal	12830	130	3042934
+log10	924	decimal-scaled	150332	91866	9178303
+log10	924	fastnum	10451455	591	211346245
+log10	924	rust_decimal	12839	140	6036243
+log10	1232	decimal-scaled	199515	117356	6604967
+log10	1232	fastnum	10440701	590	202924514
+log10	1232	rust_decimal	12800	130	6043266
+log2	18	decimal-scaled	10544	4639	27211
+log2	18	fastnum	3247144	220	62197883
+log2	38	decimal-scaled	15629	6742	57217
+log2	38	fastnum	3245325	231	62252338
+log2	57	decimal-scaled	8756	2505	23674
+log2	57	fastnum	3240076	200	61120309
+log2	76	decimal-scaled	10836	2634	24597
+log2	76	fastnum	3576978	230	67653388
+log2	115	decimal-scaled	15737	4513	4750387
+log2	115	fastnum	7833774	249	131281706
+log2	153	decimal-scaled	29485	7712	6048449
+log2	153	fastnum	10453776	311	215834337
+log2	230	decimal-scaled	36638	9738	3071837
+log2	230	fastnum	10045358	341	190355688
+log2	307	decimal-scaled	57056	17403	9095651
+log2	307	fastnum	10050542	360	217292997
+log2	462	decimal-scaled	61766	20959	6096092
+log2	462	fastnum	10022442	341	184418858
+log2	616	decimal-scaled	96666	32979	6135269
+log2	616	fastnum	10486004	351	210249713
+log2	924	decimal-scaled	150883	55492	10177291
+log2	924	fastnum	10438337	310	194235673
+log2	1232	decimal-scaled	204887	74382	7299300
+log2	1232	fastnum	10417720	300	239096970
+mul	18	bigdecimal	100	60	391
+mul	18	dashu-float	190	140	461
+mul	18	decimal-rs	80	40	150
+mul	18	decimal-scaled	271	230	440
+mul	18	fastnum	130	110	250
+mul	18	g_math	521	341	14517
+mul	18	rust_decimal	40	30	151
+mul	38	bigdecimal	100	60	421
+mul	38	dashu-float	190	130	491
+mul	38	decimal-rs	81	50	170
+mul	38	decimal-scaled	541	451	671
+mul	38	fastnum	130	110	230
+mul	38	g_math	511	321	14708
+mul	38	rust_decimal	40	30	150
+mul	57	bigdecimal	120	60	381
+mul	57	dashu-float	191	130	472
+mul	57	decimal-rs	80	40	140
+mul	57	decimal-scaled	731	591	1012
+mul	57	fastnum	130	120	250
+mul	57	g_math	516	321	14588
+mul	57	rust_decimal	40	40	150
+mul	76	bigdecimal	110	70	481
+mul	76	dashu-float	190	130	561
+mul	76	decimal-rs	90	50	180
+mul	76	decimal-scaled	942	701	1362
+mul	76	fastnum	140	110	271
+mul	76	g_math	546	340	14321
+mul	76	rust_decimal	50	40	260
+mul	115	bigdecimal	124	53	843
+mul	115	dashu-float	186	126	563
+mul	115	decimal-rs	72	42	223
+mul	115	decimal-scaled	1399	976	3131
+mul	115	fastnum	126	87	302
+mul	115	g_math	538	262	11757
+mul	115	rust_decimal	43	26	340
+mul	153	bigdecimal	156	90	16455
+mul	153	dashu-float	271	191	802
+mul	153	decimal-rs	110	60	330
+mul	153	decimal-scaled	3430	1572	10356
+mul	153	fastnum	200	150	481
+mul	153	g_math	841	431	25068
+mul	153	rust_decimal	60	40	240
+mul	230	bigdecimal	170	60	511
+mul	230	dashu-float	310	170	642
+mul	230	decimal-rs	100	50	380
+mul	230	decimal-scaled	6352	4077	26509
+mul	230	fastnum	210	140	571
+mul	230	g_math	832	471	23905
+mul	230	rust_decimal	60	40	250
+mul	307	bigdecimal	171	70	651
+mul	307	dashu-float	321	160	912
+mul	307	decimal-rs	106	50	380
+mul	307	decimal-scaled	8756	5791	59781
+mul	307	fastnum	200	171	572
+mul	307	g_math	812	481	22301
+mul	307	rust_decimal	60	40	271
+mul	462	bigdecimal	161	100	501
+mul	462	dashu-float	311	170	681
+mul	462	decimal-rs	100	50	381
+mul	462	decimal-scaled	16666	11121	137137
+mul	462	fastnum	206	130	591
+mul	462	g_math	801	480	25057
+mul	462	rust_decimal	60	40	231
+mul	616	bigdecimal	160	80	651
+mul	616	dashu-float	280	171	671
+mul	616	decimal-rs	110	50	801
+mul	616	decimal-scaled	24988	18387	344428
+mul	616	fastnum	200	120	531
+mul	616	g_math	816	440	26570
+mul	616	rust_decimal	70	40	190
+mul	924	bigdecimal	166	70	651
+mul	924	dashu-float	280	171	751
+mul	924	decimal-rs	110	51	320
+mul	924	decimal-scaled	49458	27761	1160844
+mul	924	fastnum	200	150	451
+mul	924	g_math	821	471	26870
+mul	924	rust_decimal	60	40	411
+mul	1232	bigdecimal	160	100	540
+mul	1232	dashu-float	286	151	531
+mul	1232	decimal-rs	110	50	310
+mul	1232	decimal-scaled	78212	55894	1081283
+mul	1232	fastnum	196	170	501
+mul	1232	g_math	791	461	25889
+mul	1232	rust_decimal	60	40	230
+powf	18	decimal-rs	13304	40	26610
+powf	18	decimal-scaled	351	230	24957
+powf	18	fastnum	4792934	201	64267804
+powf	18	g_math	364901	360	551070
+powf	18	rust_decimal	11752	40	25948
+powf	38	decimal-rs	13305	30	25538
+powf	38	decimal-scaled	18425	411	85520
+powf	38	fastnum	4803994	220	62853779
+powf	38	g_math	372247	370	1143042
+powf	38	rust_decimal	11702	40	26981
+powf	57	decimal-rs	13180	40	33202
+powf	57	decimal-scaled	14828	601	41488
+powf	57	fastnum	4786463	161	65821597
+powf	57	g_math	365736	360	588975
+powf	57	rust_decimal	11742	40	54803
+powf	76	decimal-rs	14522	40	25889
+powf	76	decimal-scaled	17386	771	32969
+powf	76	fastnum	5283796	210	69918447
+powf	76	g_math	358802	380	556285
+powf	76	rust_decimal	12439	40	31566
+powf	115	decimal-rs	11936	35	3603844
+powf	115	decimal-scaled	28592	992	6045955
+powf	115	fastnum	9796014	160	134631569
+powf	115	g_math	301492	299	15336181
+powf	115	rust_decimal	11994	31	5973354
+powf	153	decimal-rs	18428	50	8041096
+powf	153	decimal-scaled	52424	2184	6128470
+powf	153	fastnum	12669409	330	198220291
+powf	153	g_math	742410	500	13078721
+powf	153	rust_decimal	16425	50	1044465
+powf	230	decimal-rs	17037	50	5637994
+powf	230	decimal-scaled	70141	4388	6151519
+powf	230	fastnum	12033876	200	223387433
+powf	230	g_math	723018	501	7712719
+powf	230	rust_decimal	15579	40	3844778
+powf	307	decimal-rs	17052	50	8037733
+powf	307	decimal-scaled	103233	6111	6158923
+powf	307	fastnum	12035560	260	196727210
+powf	307	g_math	714165	501	9938110
+powf	307	rust_decimal	15640	40	6043667
+powf	462	decimal-rs	17007	50	54762
+powf	462	decimal-scaled	116889	11591	6171613
+powf	462	fastnum	12037767	200	219752681
+powf	462	g_math	711842	500	8727224
+powf	462	rust_decimal	15639	40	2204333
+powf	616	decimal-rs	18403	50	8040170
+powf	616	decimal-scaled	222626	17807	13193950
+powf	616	fastnum	12698210	271	199616364
+powf	616	g_math	759994	481	10054877
+powf	616	rust_decimal	16665	50	8036074
+powf	924	decimal-rs	18417	50	8038549
+powf	924	decimal-scaled	382955	34822	8386655
+powf	924	fastnum	12704102	280	179980817
+powf	924	g_math	735376	491	13049478
+powf	924	rust_decimal	16694	50	6158503
+powf	1232	decimal-rs	18548	40	4544044
+powf	1232	decimal-scaled	570426	56024	9591391
+powf	1232	fastnum	12649168	300	215666358
+powf	1232	g_math	746551	491	7027514
+powf	1232	rust_decimal	16585	50	8030981
+rem	18	bigdecimal	200	100	551
+rem	18	dashu-float	251	130	591
+rem	18	decimal-rs	50	40	111
+rem	18	decimal-scaled	250	210	291
+rem	18	fastnum	200	120	371
+rem	18	rust_decimal	80	60	340
+rem	38	bigdecimal	190	100	481
+rem	38	dashu-float	250	140	571
+rem	38	decimal-rs	51	40	110
+rem	38	decimal-scaled	506	430	651
+rem	38	fastnum	191	130	360
+rem	38	rust_decimal	80	50	221
+rem	57	bigdecimal	180	90	531
+rem	57	dashu-float	261	150	551
+rem	57	decimal-rs	60	40	100
+rem	57	decimal-scaled	711	471	871
+rem	57	fastnum	191	130	321
+rem	57	rust_decimal	81	40	290
+rem	76	bigdecimal	210	100	641
+rem	76	dashu-float	291	130	631
+rem	76	decimal-rs	70	50	130
+rem	76	decimal-scaled	936	701	1192
+rem	76	fastnum	190	110	611
+rem	76	rust_decimal	100	60	291
+rem	115	bigdecimal	187	82	1057
+rem	115	dashu-float	228	85	547
+rem	115	decimal-rs	63	43	243
+rem	115	decimal-scaled	1410	780	2532
+rem	115	fastnum	197	101	726
+rem	115	rust_decimal	101	54	333
+rem	153	bigdecimal	260	110	821
+rem	153	dashu-float	350	171	921
+rem	153	decimal-rs	80	50	370
+rem	153	decimal-scaled	3445	1652	128514
+rem	153	fastnum	271	130	982
+rem	153	rust_decimal	120	50	391
+rem	230	bigdecimal	261	110	4368
+rem	230	dashu-float	371	141	971
+rem	230	decimal-rs	80	40	341
+rem	230	decimal-scaled	6507	2936	32340
+rem	230	fastnum	321	130	1042
+rem	230	rust_decimal	130	50	440
+rem	307	bigdecimal	241	110	962
+rem	307	dashu-float	391	121	992
+rem	307	decimal-rs	96	40	361
+rem	307	decimal-scaled	8937	4328	52098
+rem	307	fastnum	260	130	982
+rem	307	rust_decimal	120	40	401
+rem	462	bigdecimal	251	110	752
+rem	462	dashu-float	371	151	932
+rem	462	decimal-rs	90	40	410
+rem	462	decimal-scaled	18228	10820	143198
+rem	462	fastnum	320	130	971
+rem	462	rust_decimal	120	70	371
+rem	616	bigdecimal	260	130	931
+rem	616	dashu-float	360	140	871
+rem	616	decimal-rs	90	50	330
+rem	616	decimal-scaled	30926	17196	314092
+rem	616	fastnum	250	130	1002
+rem	616	rust_decimal	120	70	391
+rem	924	bigdecimal	241	130	842
+rem	924	dashu-float	361	150	912
+rem	924	decimal-rs	100	50	341
+rem	924	decimal-scaled	57114	33409	5222663
+rem	924	fastnum	280	130	842
+rem	924	rust_decimal	130	50	421
+rem	1232	bigdecimal	260	120	791
+rem	1232	dashu-float	341	160	832
+rem	1232	decimal-rs	80	50	321
+rem	1232	decimal-scaled	91822	57957	2075456
+rem	1232	fastnum	261	130	841
+rem	1232	rust_decimal	131	70	481
+sin	18	decimal-scaled	6142	201	25668
+sin	18	fastnum	393937	4339	15642111
+sin	18	g_math	218634	3697	294281
+sin	18	rust_decimal	3146	240	14898
+sin	38	decimal-scaled	8836	6642	37891
+sin	38	fastnum	394617	4188	15682858
+sin	38	g_math	218288	3687	435946
+sin	38	rust_decimal	3165	220	15359
+sin	57	decimal-scaled	5932	2134	19326
+sin	57	fastnum	392095	4328	15618030
+sin	57	g_math	219777	3687	290525
+sin	57	rust_decimal	3156	240	14928
+sin	76	decimal-scaled	7241	2514	24796
+sin	76	fastnum	429207	4567	17183836
+sin	76	g_math	205545	3825	275648
+sin	76	rust_decimal	3295	280	12629
+sin	115	decimal-scaled	6347	2424	1949932
+sin	115	fastnum	432542	5151	44902767
+sin	115	g_math	186126	3683	12234026
+sin	115	rust_decimal	3248	220	11853
+sin	153	decimal-scaled	12819	4657	5028311
+sin	153	fastnum	598423	5948	68970936
+sin	153	g_math	412848	6319	19507918
+sin	153	rust_decimal	4567	331	2021819
+sin	230	decimal-scaled	14226	7083	5941628
+sin	230	fastnum	552830	5771	69980999
+sin	230	g_math	418851	5931	9522202
+sin	230	rust_decimal	4288	290	2026699
+sin	307	decimal-scaled	15529	8205	6045280
+sin	307	fastnum	581426	5821	52160579
+sin	307	g_math	424062	6222	12525071
+sin	307	rust_decimal	4338	341	2225791
+sin	462	decimal-scaled	17773	10880	8040198
+sin	462	fastnum	541263	5921	40185659
+sin	462	g_math	423868	5851	8455844
+sin	462	rust_decimal	4338	290	25158
+sin	616	decimal-scaled	24332	15824	6038713
+sin	616	fastnum	601827	5679	66804614
+sin	616	g_math	433507	6340	11512319
+sin	616	rust_decimal	4577	310	797767
+sin	924	decimal-scaled	38592	25037	6058480
+sin	924	fastnum	607186	5769	42086628
+sin	924	g_math	416575	6269	9534759
+sin	924	rust_decimal	4557	280	25958
+sin	1232	decimal-scaled	51067	32469	6072127
+sin	1232	fastnum	612520	5659	57193040
+sin	1232	g_math	413892	6360	12525991
+sin	1232	rust_decimal	4617	321	1813103
+sinh	18	decimal-scaled	9838	341	23344
+sinh	18	g_math	298838	371	471672
+sinh	38	decimal-scaled	13986	531	42459
+sinh	38	g_math	299415	370	420146
+sinh	57	decimal-scaled	9298	691	47078
+sinh	57	g_math	297268	360	434997
+sinh	76	decimal-scaled	11898	691	44966
+sinh	76	g_math	317570	360	418410
+sinh	115	decimal-scaled	18210	986	6026080
+sinh	115	g_math	235654	282	9364705
+sinh	153	decimal-scaled	21923	2093	8151780
+sinh	153	g_math	621682	440	12649835
+sinh	230	decimal-scaled	38592	3877	7018897
+sinh	230	g_math	594414	421	12630328
+sinh	307	decimal-scaled	53610	4328	7536307
+sinh	307	g_math	588602	431	15591951
+sinh	462	decimal-scaled	58735	8546	8658104
+sinh	462	g_math	589734	430	10716120
+sinh	616	decimal-scaled	101233	12049	34993953
+sinh	616	g_math	631210	431	12720057
+sinh	924	decimal-scaled	155300	21962	47431053
+sinh	924	g_math	621192	431	8660548
+sinh	1232	decimal-scaled	214092	38268	127911805
+sinh	1232	g_math	623982	420	7627165
+sqrt	18	bigdecimal	65864	200	123662
+sqrt	18	decimal-rs	4608	501	26169
+sqrt	18	decimal-scaled	250	210	450
+sqrt	18	fastnum	131546	3727	19577774
+sqrt	18	g_math	129412	1443	643284
+sqrt	18	rust_decimal	2175	110	12834
+sqrt	38	bigdecimal	65824	191	93655
+sqrt	38	decimal-rs	4618	401	31179
+sqrt	38	decimal-scaled	2785	601	15058
+sqrt	38	fastnum	132328	791	18657875
+sqrt	38	g_math	128931	1072	224460
+sqrt	38	rust_decimal	2174	110	10810
+sqrt	57	bigdecimal	65864	100	105638
+sqrt	57	decimal-rs	4588	371	33002
+sqrt	57	decimal-scaled	1112	681	2284
+sqrt	57	fastnum	130986	3637	18948978
+sqrt	57	g_math	126598	1012	225784
+sqrt	57	rust_decimal	2174	110	16902
+sqrt	76	bigdecimal	71576	231	102412
+sqrt	76	decimal-rs	5138	400	48882
+sqrt	76	decimal-scaled	1402	882	1963
+sqrt	76	fastnum	145846	4046	20048126
+sqrt	76	g_math	140108	3846	263180
+sqrt	76	rust_decimal	2383	110	18337
+sqrt	115	bigdecimal	68692	205	9082545
+sqrt	115	decimal-rs	4184	561	2560858
+sqrt	115	decimal-scaled	1775	721	1351100
+sqrt	115	fastnum	120428	7999	48899198
+sqrt	115	g_math	99537	2133	12143657
+sqrt	115	rust_decimal	1881	130	13797
+sqrt	153	bigdecimal	115514	271	10134182
+sqrt	153	decimal-rs	6259	571	2040778
+sqrt	153	decimal-scaled	4197	1832	576149
+sqrt	153	fastnum	189946	3856	76082214
+sqrt	153	g_math	274114	1652	9426976
+sqrt	153	rust_decimal	2854	150	46921
+sqrt	230	bigdecimal	106188	160	12128151
+sqrt	230	decimal-rs	5761	431	40806
+sqrt	230	decimal-scaled	5921	2053	3030420
+sqrt	230	fastnum	177802	11731	71698311
+sqrt	230	g_math	251909	1233	12392645
+sqrt	230	rust_decimal	2765	130	23974
+sqrt	307	bigdecimal	105968	260	9125005
+sqrt	307	decimal-rs	5731	350	3211102
+sqrt	307	decimal-scaled	7294	4800	5334240
+sqrt	307	fastnum	180127	6662	71066592
+sqrt	307	g_math	256379	1784	9397875
+sqrt	307	rust_decimal	2775	160	37901
+sqrt	462	bigdecimal	106849	260	12128223
+sqrt	462	decimal-rs	5756	481	786572
+sqrt	462	decimal-scaled	12303	8335	6029087
+sqrt	462	fastnum	178910	4829	73554957
+sqrt	462	g_math	257481	1222	15182517
+sqrt	462	rust_decimal	2746	120	26620
+sqrt	616	bigdecimal	115304	230	11133451
+sqrt	616	decimal-rs	6244	511	2023363
+sqrt	616	decimal-scaled	18022	10666	8479943
+sqrt	616	fastnum	189314	6569	80159079
+sqrt	616	g_math	279481	1733	12416611
+sqrt	616	rust_decimal	2874	141	13831
+sqrt	924	bigdecimal	115241	390	12148738
+sqrt	924	decimal-rs	6274	400	2026973
+sqrt	924	decimal-scaled	30981	21211	6124097
+sqrt	924	fastnum	189730	8883	79097367
+sqrt	924	g_math	277710	1663	12288886
+sqrt	924	rust_decimal	2914	150	27550
+sqrt	1232	bigdecimal	114993	140	13132262
+sqrt	1232	decimal-rs	6270	520	3510662
+sqrt	1232	decimal-scaled	49925	32799	8308876
+sqrt	1232	fastnum	187886	4647	79597944
+sqrt	1232	g_math	279830	1382	13292402
+sqrt	1232	rust_decimal	2834	140	20020
+sub	18	bigdecimal	120	90	300
+sub	18	dashu-float	200	80	401
+sub	18	decimal-rs	50	40	110
+sub	18	decimal-scaled	250	221	291
+sub	18	fastnum	80	51	181
+sub	18	g_math	351	321	722
+sub	18	rust_decimal	50	40	231
+sub	38	bigdecimal	110	60	321
+sub	38	dashu-float	200	80	411
+sub	38	decimal-rs	50	40	130
+sub	38	decimal-scaled	510	401	701
+sub	38	fastnum	80	50	171
+sub	38	g_math	356	310	691
+sub	38	rust_decimal	50	40	210
+sub	57	bigdecimal	116	70	351
+sub	57	dashu-float	200	70	410
+sub	57	decimal-rs	50	40	140
+sub	57	decimal-scaled	781	501	1032
+sub	57	fastnum	70	50	160
+sub	57	g_math	351	330	741
+sub	57	rust_decimal	50	40	210
+sub	76	bigdecimal	130	70	330
+sub	76	dashu-float	210	60	451
+sub	76	decimal-rs	60	40	150
+sub	76	decimal-scaled	1052	651	1703
+sub	76	fastnum	80	50	190
+sub	76	g_math	370	321	741
+sub	76	rust_decimal	60	50	300
+sub	115	bigdecimal	122	79	765
+sub	115	dashu-float	175	92	424
+sub	115	decimal-rs	49	32	196
+sub	115	decimal-scaled	1654	650	4289
+sub	115	fastnum	69	38	295
+sub	115	g_math	344	238	1101
+sub	115	rust_decimal	55	33	288
+sub	153	bigdecimal	160	100	451
+sub	153	dashu-float	290	90	681
+sub	153	decimal-rs	60	50	241
+sub	153	decimal-scaled	4286	1873	18718
+sub	153	fastnum	110	70	360
+sub	153	g_math	521	441	1442
+sub	153	rust_decimal	70	50	421
+sub	230	bigdecimal	186	100	21810
+sub	230	dashu-float	321	90	771
+sub	230	decimal-rs	66	50	290
+sub	230	decimal-scaled	8146	2685	47588
+sub	230	fastnum	120	50	571
+sub	230	g_math	562	461	1793
+sub	230	rust_decimal	80	50	661
+sub	307	bigdecimal	186	101	582
+sub	307	dashu-float	346	80	951
+sub	307	decimal-rs	60	41	321
+sub	307	decimal-scaled	10610	5511	103273
+sub	307	fastnum	120	60	461
+sub	307	g_math	566	471	1433
+sub	307	rust_decimal	70	49	300
+sub	462	bigdecimal	171	90	381
+sub	462	dashu-float	316	70	841
+sub	462	decimal-rs	60	40	301
+sub	462	decimal-scaled	20018	10479	307365
+sub	462	fastnum	110	60	300
+sub	462	g_math	561	450	1503
+sub	462	rust_decimal	70	40	281
+sub	616	bigdecimal	170	80	550
+sub	616	dashu-float	291	90	661
+sub	616	decimal-rs	70	50	240
+sub	616	decimal-scaled	31458	17987	5829238
+sub	616	fastnum	110	61	401
+sub	616	g_math	511	341	1643
+sub	616	rust_decimal	70	50	351
+sub	924	bigdecimal	161	100	651
+sub	924	dashu-float	296	90	641
+sub	924	decimal-rs	60	50	251
+sub	924	decimal-scaled	60219	33950	4028559
+sub	924	fastnum	110	50	421
+sub	924	g_math	526	440	3295
+sub	924	rust_decimal	70	50	351
+sub	1232	bigdecimal	161	90	481
+sub	1232	dashu-float	286	90	811
+sub	1232	decimal-rs	60	50	261
+sub	1232	decimal-scaled	95714	55603	9124501
+sub	1232	fastnum	111	70	511
+sub	1232	g_math	541	440	1472
+sub	1232	rust_decimal	70	50	300
+tan	18	decimal-scaled	11211	211	20338
+tan	18	fastnum	1351620	740687	31169103
+tan	18	g_math	238792	6933	534077
+tan	18	rust_decimal	3817	391	14347
+tan	38	decimal-scaled	16160	561	27431
+tan	38	fastnum	1353830	729254	31241094
+tan	38	g_math	237925	6903	337251
+tan	38	rust_decimal	3808	370	16281
+tan	57	decimal-scaled	7754	3676	34735
+tan	57	fastnum	1352734	739467	31162403
+tan	57	g_math	238337	6922	338315
+tan	57	rust_decimal	3817	351	26640
+tan	76	decimal-scaled	9144	4256	43134
+tan	76	fastnum	1486546	807248	34324727
+tan	76	g_math	224097	7120	301156
+tan	76	rust_decimal	4537	400	14120
+tan	115	decimal-scaled	7805	3903	568871
+tan	115	fastnum	1748866	756351	90548473
+tan	115	g_math	202296	5721	6254741
+tan	115	rust_decimal	3506	369	1294432
+tan	153	decimal-scaled	15629	7651	3030059
+tan	153	fastnum	4507497	1008251	85057943
+tan	153	g_math	452833	12699	12573962
+tan	153	rust_decimal	4687	571	2218235
+tan	230	decimal-scaled	17328	9217	6042075
+tan	230	fastnum	4331145	926387	95034046
+tan	230	g_math	458324	12152	14553664
+tan	230	rust_decimal	4348	611	25348
+tan	307	decimal-scaled	18590	10109	6039099
+tan	307	fastnum	4368686	930200	96085050
+tan	307	g_math	456152	12513	15461800
+tan	307	rust_decimal	4369	561	48540
+tan	462	decimal-scaled	19977	12493	6046449
+tan	462	fastnum	4344141	917416	109904081
+tan	462	g_math	455502	12143	9552243
+tan	462	rust_decimal	4368	561	433524
+tan	616	decimal-scaled	27161	18097	6057772
+tan	616	fastnum	4595027	998394	113641933
+tan	616	g_math	472781	13139	12569159
+tan	616	rust_decimal	4657	511	20891
+tan	924	decimal-scaled	40199	25087	6060713
+tan	924	fastnum	4616339	1005184	123502370
+tan	924	g_math	447576	12749	12572224
+tan	924	rust_decimal	4677	561	1039760
+tan	1232	decimal-scaled	54432	35153	6160269
+tan	1232	fastnum	4599268	998931	106022219
+tan	1232	g_math	457307	12879	12552561
+tan	1232	rust_decimal	4647	511	2284090
+tanh	18	decimal-scaled	9819	281	20739
+tanh	18	g_math	178764	15579	290673
+tanh	38	decimal-scaled	13976	531	27041
+tanh	38	g_math	178524	15680	257151
+tanh	57	decimal-scaled	9919	591	32862
+tanh	57	g_math	178696	16010	254448
+tanh	76	decimal-scaled	11873	651	53510
+tanh	76	g_math	188500	17666	323259
+tanh	115	decimal-scaled	17324	947	5030021
+tanh	115	g_math	141682	12221	12148837
+tanh	153	decimal-scaled	21012	2174	6040026
+tanh	153	g_math	373133	33340	6473531
+tanh	230	decimal-scaled	21860	3637	6073735
+tanh	230	g_math	353289	30848	9403572
+tanh	307	decimal-scaled	24016	4619	6131292
+tanh	307	g_math	354257	30837	10377997
+tanh	462	decimal-scaled	28694	8476	7053874
+tanh	462	g_math	354553	30537	9400258
+tanh	616	decimal-scaled	33971	11898	6226937
+tanh	616	g_math	375014	33921	11304607
+tanh	924	decimal-scaled	48511	23755	8067964
+tanh	924	g_math	371769	34070	9428141
+tanh	1232	decimal-scaled	66420	39188	7201683
+tanh	1232	g_math	371308	32289	9405085
