@@ -94,8 +94,8 @@ jobs:
       - name: Full test suite (wide tiers + macros)
         # The full `cargo test` — no `--test` scoping — so every
         # example and bench target is compiled as part of the run.
-        # The golden surface is the striped release gate below, not
-        # part of this job.
+        # The golden surface runs in its own golden-comprehensive.yml
+        # workflow (the crate's correctness gate), not part of this job.
         run: cargo test --features wide,x-wide,xx-wide,macros
 
       - name: Default-feature test suite (narrow tiers)

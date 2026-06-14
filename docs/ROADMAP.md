@@ -1,8 +1,8 @@
 # Roadmap
 
 Known performance gaps and planned improvements. Tracked by tier
-of the §5 Library-comparison benchmark in
-[`docs/benchmarks.md`](https://mootable.github.io/decimal-scaled/benchmarks/). Cells where
+of the library-comparison benchmark in
+[`docs/comparisons.md`](https://mootable.github.io/decimal-scaled/comparisons/). Cells where
 `decimal-scaled` already wins are out of scope - these are the
 loss columns and how we plan to close them.
 

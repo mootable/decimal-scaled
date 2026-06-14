@@ -1,11 +1,11 @@
-name: "🌕 golden comprehensive (advisory)"
+name: "🌕 golden comprehensive"
 
 # The full six-mode golden surface — every row, every cell, all six
-# rounding modes — on every push, in its OWN workflow so the ci.yml
-# quick gate's verdict never waits on it and the two never share a
-# run's runner allocation. ADVISORY by design: this is not a required
-# check; a red here means roll the push back or bisect, never block
-# the quick-gate merge loop (owner 2026-06-11).
+# rounding modes — on every push, in its OWN workflow so it never shares
+# a run's runner allocation with the ci.yml gates. This is the crate's
+# CORRECTNESS GATE: it took over from the deleted 0.5 ULP precision gate,
+# so a red here means the build rounds wrong — fix it (roll back / bisect)
+# before release, never ship over it.
 #
 # SHARDED BY WIDTH (owner 2026-06-12): the gate exe is built once per
 # WIDTH TIER (`--features <tier>`; `narrow` = the base D18/D38 build),

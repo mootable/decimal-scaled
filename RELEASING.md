@@ -52,18 +52,30 @@ the rest are **manual** and must be verified by hand before merge.
 
 - **ci (pre-merge gates)** — `ci.yml`, on every PR **and** push to
   `main` / `release/*`: `tests (gate)` (the full `cargo test` for the
-  root crate and `decimal-scale-test`, widest and default feature
-  sets), the `golden-quick` stripe fleet (the full-surface golden run
-  in release — every band-edge `(width, scale)` cell, every row,
-  default mode, blocking; the `golden-comprehensive` fleet covers
-  **all six rounding modes** per push as a non-required check;
-  0 bad / 0 panic), plus `no_std`, `docs`
-  (rustdoc `-D warnings`), and `msrv`. The precision guarantee is
-  *enforced here, not assumed* — a kernel that rounds wrong turns the
-  PR red.
+  root crate and `decimal-scale-test`, widest and default feature sets)
+  plus the width-sharded `tests consolidated (<tier>)` matrix (one shard
+  per tier, narrow…d1232 — a single full-width test binary will not
+  build on a hosted runner), then `no_std`, `docs` (rustdoc
+  `-D warnings`), and `msrv`. (`clippy` runs here too but is
+  informational — see Manual.)
+- **golden comprehensive** — `golden-comprehensive.yml`; the crate's
+  **correctness gate** (it replaced the deleted 0.5 ULP precision gate).
+  The full six-mode golden surface — every band-edge `(width, scale)`
+  cell, every row, all six rounding modes — width-sharded × row-striped,
+  0 bad / 0 panic. The precision guarantee is *enforced here, not
+  assumed*: a kernel that rounds wrong turns this red.
 - **docs-drift** — `docs-drift.yml`; `render_docs.py --check` on every
   PR, failing on any stale GENERATED doc region.
 - **cargo-audit** — RustSec advisory check.
+
+> **Branch protection must list the LIVE checks.** Required status checks
+> on `main` live in repo settings, not these files; a required check that
+> is renamed or retired will hang the PR forever on a context that never
+> reports. The required set should be exactly: the `tests consolidated
+> (<tier>)` shards, `tests (gate)`, `docs`, `no_std`, `msrv`, `golden
+> comprehensive`, `docs-drift`, and `RustSec advisory check` — and must
+> NOT list any retired job (the old `precision` and `Run benchmarks`
+> contexts in particular).
 
 > **Performance is advisory, never a gate.** Perf is tracked
 > out-of-band by the `bench-branch-compare` workflow (run on demand,
@@ -123,9 +135,9 @@ git checkout -b release/<MAJOR.MINOR.PATCH>   # e.g. release/0.4.4
   manual checklist above).
 - The golden gate green: `golden_default` and `golden_all_modes`
   (`decimal-scale-test`) at **0 bad / 0 panic** over every band-edge
-  `(width, scale)` cell, all six rounding modes — plus the root crate's
-  `ulp_strict_golden` mpmath suite (the `golden` feature) all pass,
-  delta == 0.
+  `(width, scale)` cell, all six rounding modes — run on CI by
+  `golden-comprehensive.yml` (the correctness gate that replaced the
+  retired 0.5 ULP precision suite).
 - **Regenerate the single-sourced docs and commit on the release branch
   as part of the PR.** Run `python scripts/render_docs.py`; it fills
   every `<!-- … GENERATED:<key> … -->` region — the install snippet
@@ -135,94 +147,52 @@ git checkout -b release/<MAJOR.MINOR.PATCH>   # e.g. release/0.4.4
   runs `render_docs.py --check` on the PR and fails on any drift, so a
   stale doc region will block the merge.
 
-## 3. Refresh benchmarks — mandatory, every release
+## 3. Refresh benchmarks + data-driven pages — mandatory, every release
 
-Stale benchmark numbers misrepresent the release. Every release ships
-figures and tables regenerated from a **fresh GitHub-Actions sweep**
-(never a local full sweep — local machines cannot produce stable
-numbers).
+Stale numbers misrepresent the release. Every data-driven page is
+regenerated from a **fresh GitHub-Actions run** (never a local sweep —
+local machines cannot produce stable numbers). The pipeline is now
+**self-rendering**: pushing the release branch triggers each data
+workflow, and each one re-runs its bench/gate, self-commits its results
+TSV under `results/`, runs `scripts/render_docs.py`, and commits the
+refreshed page back to the branch in ONE `github-actions[bot]` commit
+(no manual download / ingest / chart step). A `GITHUB_TOKEN` self-commit
+does not re-trigger workflows, so there is no loop.
 
-```sh
-# Trigger the release sweep on the release branch (fans out to
-# bench-full full_matrix + bench-full lib_cmp + bench-history):
-gh workflow run bench-all.yml --ref release/<version>
+Pushing to `release/*` triggers these, each in its own serial queue
+(`cancel-in-progress: false` — a queued run waits its turn; it is never
+cancelled):
 
-# Then just wait. Poll with `gh run list`. The wide tiers are slow
-# (~40 min); the lib_cmp run finishes sooner.
-```
+| Workflow | Re-runs | Self-renders |
+|----------|---------|--------------|
+| `golden-comprehensive.yml` | the six-mode golden surface | `golden.md`, `precision.md` (`results/golden/`) |
+| `lib-perf.yml` | peer-crate timing over the golden set | `comparisons.md` + category pages (`results/lib_cmp/`) |
+| `history.yml` | per-version timing across releases | `history.md` (`results/history/`) |
+| `bench-branch-compare.yml` | branch-vs-latest-tag timing (advisory perf signal) | `performance.md` (`results/timing/`) |
 
-The sweep is self-refreshing. Once every per-width cell of a
-`bench-full` run finishes, that workflow's `regenerate` job collects
-the run's own Criterion artifacts and commits the refreshed docs
-straight back to the swept release branch — no manual download, ingest,
-or chart step:
-
-- The **full_matrix** run regenerates `docs/benchmarks.md` §1–§3 via
-  `full_matrix_ingest.py --fill` (reads `docs/benchmarks.md.draft`,
-  pulls each cell's median from `*/new/estimates.json`, picks the
-  per-row natural unit, bolds the row winner). A missing leaf renders
-  as `—` and is listed in the job log — values are never fabricated.
-- The **lib_cmp** run regenerates the §5 figures under
-  `docs/figures/library_comparison/` via `lib_cmp_ingest.py` +
-  `cargo run --release --example chart_gen`.
-
-Each run pushes its own `docs(benchmarks): regenerate from <family>
-sweep` commit (author `github-actions[bot]`, no attribution trailer)
-to the release branch. Pull the branch after both runs land. The §4
-prose and §5 precision tables are still maintained by hand as below.
-
-If a run's regenerate job is skipped or you need a manual rebuild, the
-push-button refresher runs the whole download → ingest → render →
-drift-check chain in one command:
+So "refresh benchmarks" is: **push the release branch, wait for these
+workflows to land their self-commits, then `git pull`.** Poll with
+`gh run list --branch release/<version>`. The wide tiers are slow; the
+narrow / peer runs finish sooner. If a self-commit is missing (a run
+failed mid-way), re-run just that workflow — never hand-edit the page:
 
 ```sh
-# Discover the latest successful bench/precision artifacts on the
-# branch, refresh docs/benchmarks.md + results/precision/*.tsv, render
-# the GENERATED regions, verify the docs-drift check, and list the
-# changed files for review. Never commits. `--figures` additionally
-# re-renders the §5 comparison charts (a cargo release build).
-python scripts/release_docs_refresh.py --figures
-
-# Preview the plan (with the resolved run IDs) without touching files:
-python scripts/release_docs_refresh.py --dry-run --figures
+gh workflow run <workflow>.yml --ref release/<version>
 ```
 
-Exit code 2 means "refreshed, changes left in the tree for review";
-review and commit them yourself. The same refresh runs as a CI job —
-dispatch `pre-release-docs.yml` on the release branch; it uploads the
-refreshed files as an artifact and opens a **draft PR** into the branch
-when anything changed.
+The non-data GENERATED regions (the install snippet pinned to the new
+`major.minor`, the width-tier table) are NOT refreshed by a workflow —
+run `python scripts/render_docs.py` locally and commit any change. The
+`docs-drift` gate (`render_docs.py --check`) fails the PR on any stale
+region, data-driven or not.
 
-<details>
-<summary>Manual fallback — the individual steps the script automates</summary>
-
-```sh
-gh run download <run-id> --dir bench-artifacts   # criterion-*-D*/ subdirs
-python scripts/full_matrix_ingest.py \
-    --artifacts bench-artifacts --fill            # criterion JSON -> docs/benchmarks.md §1–§3
-# precision: download `lib-cmp-precision-results` from the latest
-# successful lib-cmp-precision run and copy its *.tsv files over
-# results/precision/
-python scripts/lib_cmp_ingest.py \
-    --artifacts bench-artifacts \
-    --existing target/medians.tsv --out target/medians.tsv
-cargo run --release --example chart_gen           # §5 figures -> docs/figures/library_comparison/*.png
-python scripts/render_docs.py                      # GENERATED regions
-python scripts/render_docs.py --check              # the docs-drift gate's check
-```
-
-</details>
-
-- Update the "Bench machine … vX.Y.Z full_matrix sweep" provenance note
-  in `benchmarks.md` to the new version and date.
+- The **precision** tables (LSBε, ≤ 0.5 ULP per function and scale) are
+  *measured*, single-sourced from the committed `results/` data, and
+  rendered into the `<!-- … GENERATED:precision:* … -->` regions by
+  `render_docs.py` — never hand-edited; `golden-comprehensive.yml`
+  refreshes the underlying data.
 - Refresh any README speed charts (absolute `raw.githubusercontent.com`
   URLs so they render on crates.io).
-- The README / `benchmarks.md` **precision** tables (LSBε, ≤ 0.5 ULP per
-  function and scale) are *measured*, not from the sweep. They are
-  single-sourced from the committed `results/precision/*.tsv` files and
-  regenerated by `python scripts/render_docs.py` (see §2) — never edit
-  the `<!-- … GENERATED:precision:* … -->` regions by hand. Re-run the
-  oracle sweep only if the measured TSVs themselves are out of date.
 
 ## 4. Narrative docs
 
@@ -259,10 +229,13 @@ gh pr create --base main --head release/<version> \
   (`.github/PULL_REQUEST_TEMPLATE/release.md`) — work through every box.
 - All merges into `main` go through a **PR** (branch-protection
   practice) — never push to `main` directly.
-- The PR must pass CI: the `ci.yml` gates (tests, golden-quick + splice, no_std,
-  docs, msrv), docs-drift, and cargo-audit.
-- Review for: precision gate green, benchmarks refreshed, CHANGELOG and
-  docs updated, version bumped.
+- The PR must pass the required checks (the `ci.yml` gates: `tests`,
+  the `tests consolidated (<tier>)` shards, `no_std`, `docs`, `msrv`;
+  plus `golden comprehensive`, `docs-drift`, and `RustSec advisory
+  check`). These are the contexts branch protection must require — see
+  the note under Automatic gates.
+- Review for: golden (correctness) gate green, benchmarks refreshed,
+  CHANGELOG and docs updated, version bumped.
 - Pushing docs to the release branch during the sweep is safe — docs do
   not affect the perf run.
 
@@ -277,7 +250,24 @@ Each step needs explicit authorization.
    protection). Always insert `gh run watch` on the main docs run
    between the two pushes.
 3. Tag: `git tag vX.Y.Z && git push origin vX.Y.Z` (after the watch).
-4. `cargo publish` (dry-run first: `cargo publish --dry-run`).
+   **Also move the minor-resolving tag** `git tag -f vX.Y && git push -f
+   origin vX.Y` — `decimal-scaled-golden`'s default `UrlLoader` pins to
+   `vX.Y` and fetches the golden set from the repo at that ref, so it must
+   point at this release's commit ("0.5 → 0.5.max").
+4. Publish the crates (dry-run each first with `--dry-run`):
+   1. `cargo publish -p decimal_scaled_macros` — the proc-macro crate the
+      root depends on (`version = "X.Y.Z"`), so it must reach crates.io
+      before the root.
+   2. `cargo publish -p decimal-scaled` — the root crate.
+   3. `cargo publish -p decimal-scaled-golden` — the standalone
+      library-agnostic golden-testing harness (lockstep version, its own
+      release). Independent of the other two (nothing published depends on
+      it), so its order is free. It ships the **harness only** — the
+      ~130 MB `golden/` set is excluded via `include`; consumers fetch it
+      with the `net`-feature `UrlLoader` (default ref `vX.Y`, step 3).
+   The remaining members (`decimal-scaled-cells`, `decimal-scale-test`,
+   `golden-competitors`) are `publish = false` dev/test crates — never
+   published.
 5. Publish the GitHub release notes.
 
 ## After the release
