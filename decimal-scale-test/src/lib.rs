@@ -307,9 +307,11 @@ mod tests {
     #[test]
     fn cells_enumerates_every_band_edge() {
         // The 88 band-edge cells across the 12 widths, plus the four ln-lookup
-        // band cells (D307<290>, D616<590>, D924<900>, D1232<1200>); spot-check
+        // band cells (D307<290>, D616<590>, D924<900>, D1232<1200>) and the
+        // D230<30> cell added so the scale-30 library/version comparison has an
+        // exact-30 cell at D230 (its band otherwise jumps 0 -> 57); spot-check
         // the count and edges.
-        assert_eq!(CELLS.len(), 92);
+        assert_eq!(CELLS.len(), 93);
         assert_eq!(CELLS.first(), Some(&(18, 0)));
         assert_eq!(CELLS.last(), Some(&(1232, 1231)));
     }

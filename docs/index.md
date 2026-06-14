@@ -16,7 +16,7 @@ A fast, precise, decimal library.
 - **Multiple rounding modes** — six in total, `HalfToEven` by default.
 - **Up to 4 Kb numbers** — twelve widths, `D18` to `D1232`.
 - **`no_std` friendly** — the strict, integer-only path needs no `std`.
-- **Validated by <!-- BEGIN GENERATED:home:tested -->56,198,568<!-- END GENERATED:home:tested --> value tests** — every width × scale × rounding mode.
+- **Validated by <!-- BEGIN GENERATED:home:tested -->56,809,422<!-- END GENERATED:home:tested --> value tests** — every width × scale × rounding mode.
 
 <div class="hero-install"><span class="prompt">$ </span>cargo add decimal-scaled</div>
 

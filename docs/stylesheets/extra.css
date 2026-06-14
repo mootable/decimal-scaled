@@ -157,6 +157,18 @@
     grid-template-columns: 1fr;   /* stack on narrow screens */
   }
 }
+/* Keep the header's two columns from overflowing into each other: the
+   description wraps (min-width:0), the width table keeps its natural size,
+   and the 1.5rem grid gap holds a comfortable (>= 0.5em) column gap. */
+.md-typeset .bench-header > * { min-width: 0; }
+
+/* Per-op bench sections (table + graph): stack the graph BELOW the table at
+   full width. The side-by-side layout crowded the graph and let its labels
+   overlap the table; a single column reads cleanly. */
+.md-typeset .grid.perf-grid {
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
 
 /* ── Hero / landing page motifs ────────────────────────────── */
 .md-typeset .hero-row {

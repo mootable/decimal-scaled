@@ -99,13 +99,16 @@ impl<L: CaseLoader> CaseLoader for CapLoader<L> {
     }
 }
 
-/// Build the cell list for the history gates: one (width, middle-of-list scale) per width.
+/// Build the cell list for the history gates: one (width, scale 30) cell per width —
+/// the same scale-30 rule the library comparison uses, so version-over-version timing
+/// is compared at the precision the peers actually work at (~30 digits) rather than
+/// each tier's mid-band reach.
 ///
-/// The CELLS grid anchors band-edge points. For each width the "middle scale" is the
-/// element at index `len/2` of that width's sorted scale list — the closest available
-/// scale to `max_scale / 2`. This reduces each tier to one representative cell and keeps
-/// the ratchet affordable; the bbc is the correctness source of truth over the full surface.
-/// Respects `GOLDEN_WIDTHS` and `tier_compiled` (delegated to `filter.cells()`).
+/// Each width takes the compiled scale nearest 30; a width too narrow for 30 (only
+/// D18, MAX_SCALE 17) falls back to half its max scale. This reduces each tier to one
+/// representative cell and keeps the ratchet affordable; the bbc is the correctness
+/// source of truth over the full surface. Respects `GOLDEN_WIDTHS` and `tier_compiled`
+/// (delegated to `filter.cells()`).
 fn history_cells(filter: &decimal_scale_test::Filter) -> Vec<(u32, u32)> {
     let all = filter.cells();
     let mut by_width: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
@@ -116,9 +119,22 @@ fn history_cells(filter: &decimal_scale_test::Filter) -> Vec<(u32, u32)> {
         .into_iter()
         .map(|(w, mut scales)| {
             scales.sort_unstable();
-            (w, scales[scales.len() / 2])
+            (w, compare_scale(&scales))
         })
         .collect()
+}
+
+/// The comparison scale for one width's sorted compiled-scale list: **30** where the
+/// width can hold it, else the nearest compiled scale to 30; a width too narrow for 30
+/// targets half its max scale. Mirrors the library comparison's `compare_scale` so both
+/// benches time decimal-scaled at the same precision.
+fn compare_scale(scales: &[u32]) -> u32 {
+    let max_scale = *scales.last().expect("each width has at least one compiled cell");
+    let target = if max_scale >= 30 { 30 } else { max_scale / 2 };
+    *scales
+        .iter()
+        .min_by_key(|&&s| (s as i64 - target as i64).abs())
+        .expect("each width has at least one compiled cell")
 }
 
 /// Choose the runner based on the `HISTORY_PARALLEL` env var:

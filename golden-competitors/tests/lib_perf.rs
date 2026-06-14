@@ -14,7 +14,7 @@
 //! the one crate that can pair both sides on the same harness.
 //!
 //! Like the history gate this is a FILTERED slice of golden — one representative
-//! (middle-of-band) cell per width, capped rows per function, a single mode — so
+//! scale-30 cell per width, capped rows per function, a single mode — so
 //! the timing run is cheap; the full correctness surface is the golden gate's job.
 //! Each subject runs over the cell's golden rows with the `Timed` strategy as a
 //! free ride-along (exactly ONE timed call per golden row), aggregated to per-cell
@@ -23,7 +23,8 @@
 //! library exposes, so a missing `(function, library)` cell simply does not emit
 //! (the docs render the gap).
 //!
-//! decimal-scaled is timed at its tier's MID cell; every competitor runs over the
+//! decimal-scaled is timed at scale 30 (the nearest compiled scale to 30 per width —
+//! the peers' effective precision); every competitor runs over the
 //! same golden rows and the harness skips the inputs it cannot represent, so a
 //! fixed-precision peer drops out on the wide tiers (an honest gap), and a peer
 //! that has no equivalent for a function never emits a row for it.
@@ -165,11 +166,14 @@ impl CaseLoader for CappedLoader {
     }
 }
 
-/// One representative cell per width: `(width, middle-of-list scale)`. The middle
-/// scale is the element at index `len/2` of that width's sorted scale list — the
-/// closest available scale to `max_scale / 2`, the same reduction the history gate
-/// uses. Respects `GOLDEN_WIDTHS`/`GOLDEN_SCALES` and the compiled-tier set
-/// (delegated to `filter.cells()`).
+/// One representative cell per width, pinned to **scale 30** — the precision the
+/// peer libraries effectively compute at (~28-38 digits; see [`compare_scale`]). A
+/// like-for-like speed comparison needs comparable work per call, so decimal-scaled
+/// is timed at ~30 fractional digits rather than its full per-width reach (hundreds
+/// of digits at the wide tiers the peers never match). Each width takes the compiled
+/// scale nearest 30; a width too narrow for 30 (only D18, MAX_SCALE 17) falls back
+/// to half its max scale. Respects `GOLDEN_WIDTHS`/`GOLDEN_SCALES` and the
+/// compiled-tier set (delegated to `filter.cells()`).
 fn lib_cells(filter: &Filter) -> Vec<(u32, u32)> {
     let mut by_width: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
     for (w, s) in filter.cells() {
@@ -179,9 +183,23 @@ fn lib_cells(filter: &Filter) -> Vec<(u32, u32)> {
         .into_iter()
         .map(|(w, mut scales)| {
             scales.sort_unstable();
-            (w, scales[scales.len() / 2])
+            (w, compare_scale(&scales))
         })
         .collect()
+}
+
+/// The comparison scale for one width's sorted compiled-scale list: **30** (the
+/// peers' effective precision) where the width can hold it, else the nearest
+/// compiled scale to 30. A width too narrow for 30 (max scale < 30 — only D18)
+/// targets half its max scale instead, so it still does a representative fraction
+/// of work rather than its full reach.
+fn compare_scale(scales: &[u32]) -> u32 {
+    let max_scale = *scales.last().expect("each width has at least one compiled cell");
+    let target = if max_scale >= 30 { 30 } else { max_scale / 2 };
+    *scales
+        .iter()
+        .min_by_key(|&&s| (s as i64 - target as i64).abs())
+        .expect("each width has at least one compiled cell")
 }
 
 /// Build the runner, honouring `LIBPERF_PARALLEL`:
@@ -317,7 +335,7 @@ fn timing_medians(cells: &BTreeMap<Key, Cell>) -> BTreeMap<&'static str, u64> {
 // The gate — decimal-scaled vs every peer, one timed run.
 // ---------------------------------------------------------------------------
 
-/// decimal-scaled timed beside every competitor library over one mid cell per
+/// decimal-scaled timed beside every competitor library over one scale-30 cell per
 /// width, capped rows, single mode. Per-line timing is written to
 /// `LIBPERF_REPORT_DIR` (one TSV per shard) and a per-library median summary is
 /// printed — all REPORTED, never asserted. Heavy; dispatch/on-demand only.
@@ -343,7 +361,7 @@ fn lib_perf_all() {
     let mut per_lib: BTreeMap<&'static str, BTreeMap<Key, Cell>> = BTreeMap::new();
     for &(w, s) in &cells {
         for &mode in &modes {
-            // decimal-scaled at this tier's mid cell, then every peer over the same
+            // decimal-scaled at this tier's scale-30 cell, then every peer over the same
             // golden rows (the harness skips the inputs each peer cannot represent).
             collect(&runner, &DsSubject::with_mode(w, s, mode), funcs, "decimal-scaled", w, s, mode, &mut per_lib);
             collect(&runner, &FastNum, funcs, "fastnum", w, s, mode, &mut per_lib);

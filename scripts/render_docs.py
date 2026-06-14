@@ -2,14 +2,13 @@
 """Single-source-of-truth renderer for the repeated facts in the docs.
 
 Repeated facts — the crate version, the storage-width tier family, the
-`MAX_SCALE = N - 1` rule, and the precision (LSBε) shootout tables —
-live in exactly ONE place each:
+`MAX_SCALE = N - 1` rule, and the bench result surfaces (precision,
+performance, history, comparisons) — live in exactly ONE place each:
 
   * the crate version    -> `Cargo.toml` `[package] version`
   * the tier family      -> `docs/_data/tiers.json`
-  * the precision tables -> `results/precision/*.tsv` (rendered by
-    `scripts/render_precision_table.py`, the same source the bench
-    self-renderer uses)
+  * the bench surfaces   -> the `results/**/*.tsv` files each bench job
+    self-commits (golden, timing, history, lib_cmp)
 
 This script is the ONE entry point: a single invocation fills every
 generated region in `README.md` and the files under `docs/` from those
@@ -37,8 +36,7 @@ does not touch the working tree, so it is safe to run in CI. The
 ADDING A NEW SINGLE-SOURCED FACT
 --------------------------------
 1. Put the source datum in `docs/_data/*.json` (or read it from
-   `Cargo.toml`, like the version; or, for a precision table, point at
-   the relevant `results/precision/*.tsv`).
+   `Cargo.toml`, like the version, or a committed `results/**/*.tsv`).
 2. Add a `render_<key>()` builder below that returns the region body
    (no trailing newline, no marker lines).
 3. Register it in `REGIONS` with the file it lives in.
@@ -57,7 +55,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "docs" / "_data"
-PRECISION_DIR = ROOT / "results" / "precision"
 GOLDEN_DIR = ROOT / "decimal-scaled-golden" / "golden"
 GOLDEN_RESULTS = ROOT / "results" / "golden" / "summary.tsv"
 CELLS_SRC = ROOT / "decimal-scaled-cells" / "src" / "lib.rs"
@@ -65,12 +62,6 @@ ROUNDING_SRC = ROOT / "decimal-scaled-golden" / "src" / "support" / "rounding.rs
 TIMING_RESULTS = ROOT / "results" / "timing" / "bbc_medians.tsv"
 HISTORY_RESULTS = ROOT / "results" / "history" / "history.tsv"
 LIBCMP_RESULTS = ROOT / "results" / "lib_cmp" / "medians.tsv"
-
-# The precision-table renderer lives alongside this script. Import it as
-# a module so the doc tables come from exactly the same code path (and
-# the same TSV result files) as its standalone CLI output.
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import render_precision_table as precision  # noqa: E402
 
 BEGIN = "<!-- BEGIN GENERATED:{key} -->"
 END = "<!-- END GENERATED:{key} -->"
@@ -299,36 +290,6 @@ def render_precision_surface() -> str:
     return "\n".join(out)
 
 
-# Precision-table builders. Each returns the markdown table body for one
-# width (and, where the doc shows a subset, one method ordering), read
-# straight from the committed `results/precision/*.tsv` files via
-# `render_precision_table.render_table`. Every cell traces back to one
-# measured TSV row, so the findings prose can never drift from the data.
-
-def _precision_table(width: str, methods: str | None) -> str:
-    return precision.render_table(str(PRECISION_DIR), width, only=methods)
-
-
-def render_precision_d38_readme() -> str:
-    # README representative slice: nine methods at D38<19>.
-    return _precision_table("D38", "sqrt,cbrt,exp,ln,sin,cos,tan,atan,asinh")
-
-
-def render_precision_d38() -> str:
-    # benchmarks.md: the full 22-function surface at D38<19>.
-    return _precision_table("D38", None)
-
-
-def render_precision_d76() -> str:
-    # benchmarks.md: the eight-method wide-tier subset at D76<35>.
-    return _precision_table("D76", "sqrt,cbrt,exp,ln,sin,cos,tan,atan")
-
-
-def render_precision_d307() -> str:
-    # benchmarks.md: the eight-method deep-scale subset at D307<150>.
-    return _precision_table("D307", "sqrt,cbrt,exp,ln,sin,cos,tan,atan")
-
-
 # --- Performance page (docs/performance.md) — generated from results/timing/ --
 #
 # bench-branch-compare self-commits results/timing/bbc_medians.tsv:
@@ -347,13 +308,20 @@ _SUP = str.maketrans("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹")
 _FRACTIONS = {(1, 2): "½", (1, 3): "⅓", (2, 3): "⅔", (1, 4): "¼", (3, 4): "¾"}
 
 
+_TIMING_HEADER = ["op", "width", "scale", "prod_ns", "branch_ns", "delta_ns", "delta_pct", "ratio"]
+
+
 def _timing_rows() -> list[tuple[str, int, int, float]] | None:
     """`(op, width, scale, ns)` from results/timing/bbc_medians.tsv (`branch_ns`
-    = this build's median), or None if the file isn't committed yet."""
+    = this build's median), or None if the file isn't committed yet / carries a
+    foreign or superseded schema (the header guard mirrors `_golden_rows`)."""
     if not TIMING_RESULTS.exists():
         return None
+    lines = TIMING_RESULTS.read_text(encoding="utf-8").splitlines()
+    if not lines or lines[0].split("\t")[:8] != _TIMING_HEADER:
+        return None
     rows = []
-    for line in TIMING_RESULTS.read_text(encoding="utf-8").splitlines()[1:]:
+    for line in lines[1:]:
         c = line.split("\t")  # op width scale prod_ns branch_ns ...
         if len(c) >= 5:
             w = c[1].lstrip("D")
@@ -509,10 +477,31 @@ def render_performance_units() -> str:
     return _units_legend([r[3] for r in rows]) if rows else _PENDING_PERF
 
 
+# Functions split into two groups for the bench-page heading hierarchy: the five
+# arithmetic ops, then everything else (the transcendental / algebraic-function
+# surface). Each group becomes an `## <group>` h2 above its `### <op>` sections, so
+# the left nav (toc.integrate) folds as `Page -> Arithmetic / Transcendentals -> op`.
+_ARITHMETIC_OPS = ("add", "sub", "mul", "div", "rem")
+
+
+def _grouped_ops(ops) -> list[tuple[str | None, str]]:
+    """`(group_header_or_None, op)` for every op: the Arithmetic group first, then
+    Transcendentals, each alphabetical. The header string is non-None only on the
+    FIRST op of a group, so a caller emits each `##` heading exactly once."""
+    arith = sorted(o for o in ops if o in _ARITHMETIC_OPS)
+    trans = sorted(o for o in ops if o not in _ARITHMETIC_OPS)
+    rows: list[tuple[str | None, str]] = []
+    for group, label in ((arith, "Arithmetic"), (trans, "Transcendentals")):
+        for i, op in enumerate(group):
+            rows.append((label if i == 0 else None, op))
+    return rows
+
+
 def render_performance() -> str:
-    """One section per op: a width x scale timing table beside a log-time vs width
-    graph, each cell in its own natural unit. All from results/timing/bbc_medians.tsv.
-    The units legend + width map render into the page header (separate regions)."""
+    """One section per op, grouped under `## Arithmetic` / `## Transcendentals`: a
+    width x scale timing table beside a log-time vs width graph, each cell in its own
+    natural unit. All from results/timing/bbc_medians.tsv. The units legend + width
+    map render into the page header (separate regions)."""
     rows = _timing_rows()
     if not rows:
         return _PENDING_PERF
@@ -520,7 +509,9 @@ def render_performance() -> str:
     for r in rows:
         by_op.setdefault(r[0], []).append(r)
     out = []
-    for op in sorted(by_op):
+    for header, op in _grouped_ops(by_op):
+        if header:
+            out += [f"## {header}", ""]
         widths, P, series = _perf_series(by_op[op])
         head = "| Width | " + " | ".join(_pos_labels(P)) + " |"
         rule = "| :-- | " + " | ".join(["--:"] * P) + " |"
@@ -661,7 +652,9 @@ def render_history() -> str:
     for fn, w, v, ns in rows:
         by_op.setdefault(fn, {})[(w, v)] = ns
     out = []
-    for op in sorted(by_op):
+    for header, op in _grouped_ops(by_op):
+        if header:
+            out += [f"## {header}", ""]
         cells = by_op[op]
         widths = sorted({w for (w, _v) in cells})
         head = "| Width | " + " | ".join(versions) + " |"
@@ -795,7 +788,8 @@ def render_comparisons_units() -> str:
 def render_comparisons() -> str:
     """One section per op: a width x library table (median time + slowdown vs
     decimal-scaled; our column time-only) beside a grouped bar chart. From
-    results/lib_cmp/medians.tsv at each width's quarter-band scale."""
+    results/lib_cmp/medians.tsv with decimal-scaled timed at scale 30 (the nearest
+    compiled scale to 30 per width — the peers' effective precision)."""
     rows = _libcmp_rows()
     if not rows:
         return _PENDING_CMP
@@ -806,7 +800,9 @@ def render_comparisons() -> str:
     libs = ([_OURS] if _OURS in all_libs else []) + [l for l in all_libs if l != _OURS]
     colour = {l: _LIB_COLORS[k % len(_LIB_COLORS)] for k, l in enumerate(libs)}
     out = []
-    for op in sorted(by_op):
+    for header, op in _grouped_ops(by_op):
+        if header:
+            out += [f"## {header}", ""]
         cells = by_op[op]
         widths = sorted({w for (w, _l) in cells})
         present = [l for l in libs if any((w, l) in cells for w in widths)]
@@ -834,8 +830,9 @@ def render_comparisons() -> str:
             "",
             "<figure>",
             _comparisons_svg(widths, present, colour, cells),
-            "<figcaption>Median time per library at each width (log scale, middle-of-band "
-            "scale); a missing bar means that library has no equivalent at that width.</figcaption>",
+            "<figcaption>Median time per library at each width (log scale; decimal-scaled "
+            "at scale 30, or the nearest compiled scale per width); a missing bar means "
+            "that library has no equivalent at that width.</figcaption>",
             "</figure>",
             "",
             "</div>",
