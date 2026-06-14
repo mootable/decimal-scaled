@@ -862,7 +862,7 @@ REGIONS: dict[str, tuple[str, "callable"]] = {
     "widths:count": ("docs/widths.md", render_width_count_word),
     "install:dependency": ("README.md", render_install_dependency),
     "home:tested": ("docs/index.md", render_home_tested),
-    "precision:D38:readme": ("README.md", render_precision_d38_readme),
+    "readme:tested": ("README.md", render_home_tested),
     "golden:counts": ("docs/golden.md", render_golden_counts),
     "precision:stats": ("docs/precision.md", render_precision_stats),
     "precision:surface": ("docs/precision.md", render_precision_surface),
