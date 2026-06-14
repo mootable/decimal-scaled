@@ -326,12 +326,18 @@ jobs:
           cp "$tsv" results/timing/bbc_medians.tsv
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Re-render the docs that read these medians (the Performance page renders
+          # straight from results/timing/) so the committed page never lags the
+          # data — the refreshed TSV and its rendered page land in the SAME commit,
+          # keeping the docs-drift gate green. stdlib-only, no extra deps.
+          python3 scripts/render_docs.py
           git add results/timing/bbc_medians.tsv
+          git add -u README.md docs/
           if git diff --cached --quiet; then
-            echo "timing medians unchanged — nothing to commit"
+            echo "timing medians + docs unchanged — nothing to commit"
             exit 0
           fi
-          git commit -m "results(timing): refresh from the bench-branch-compare run"
+          git commit -m "results(timing): refresh medians + render Performance page"
           git push origin "HEAD:${{ inputs.ref || github.ref_name }}"
 
       - name: Upload single aggregate artifact

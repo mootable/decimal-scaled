@@ -319,6 +319,194 @@ def render_precision_d307() -> str:
     return _precision_table("D307", "sqrt,cbrt,exp,ln,sin,cos,tan,atan")
 
 
+# --- Performance page (docs/performance.md) — generated from results/timing/ --
+#
+# bench-branch-compare self-commits results/timing/bbc_medians.tsv:
+#   op  width  scale  prod_ns  branch_ns  delta_ns  delta_pct  ratio
+# `branch_ns` is THIS build's median for that (op, width, scale). One section per
+# op: a width x scale table (each cell in its own natural time unit — values span
+# up to ~6 decades, so a single per-table unit is unreadable) beside a
+# log-time-vs-width graph (solid lines for scale 0 and the max scale, dashed for
+# the intermediate band-edge scales, a light fill between the two solid lines).
+
+_PENDING_PERF = "_Pending the first bench-branch-compare CI run — this renders from `results/timing/bbc_medians.tsv`._"
+
+# Named time units as powers of ten nanoseconds (the page's helper legend).
+_TIME_UNITS = [("ns", 0), ("µs", 3), ("ms", 6), ("s", 9)]
+_SUP = str.maketrans("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹")
+_FRACTIONS = {(1, 2): "½", (1, 3): "⅓", (2, 3): "⅔", (1, 4): "¼", (3, 4): "¾"}
+
+
+def _timing_rows() -> list[tuple[str, int, int, float]] | None:
+    """`(op, width, scale, ns)` from results/timing/bbc_medians.tsv (`branch_ns`
+    = this build's median), or None if the file isn't committed yet."""
+    if not TIMING_RESULTS.exists():
+        return None
+    rows = []
+    for line in TIMING_RESULTS.read_text(encoding="utf-8").splitlines()[1:]:
+        c = line.split("\t")  # op width scale prod_ns branch_ns ...
+        if len(c) >= 5:
+            w = c[1].lstrip("D")
+            if w.isdigit() and c[2].lstrip("-").isdigit():
+                rows.append((c[0], int(w), int(c[2]), float(c[4])))
+    return rows
+
+
+def _unit_of(ns: float) -> tuple[str, int]:
+    """The largest named unit whose magnitude is <= `ns` (so the value reads in
+    [1, 1000))."""
+    for label, power in reversed(_TIME_UNITS):
+        if ns >= 10 ** power:
+            return label, power
+    return _TIME_UNITS[0]
+
+
+def _fmt_ns(ns: float) -> str:
+    """One timing in its own natural unit, three significant figures (e.g.
+    `1.87 ns`, `2.84 ms`). A narrow no-break space keeps value+unit together."""
+    label, power = _unit_of(ns)
+    return f"{ns / 10 ** power:.3g} {label}"
+
+
+def _ns_decade(d: int) -> str:
+    """A power-of-ten-nanoseconds y-axis tick label, e.g. `d=3` -> `1 µs`."""
+    for label, power in reversed(_TIME_UNITS):
+        if d >= power:
+            return f"{10 ** (d - power):g} {label}"
+    return f"{10 ** d:g} ns"
+
+
+def _pos_labels(p: int) -> list[str]:
+    """Band-edge column labels for `p` sampled scales: `0`, the fractions, `max`."""
+    if p <= 1:
+        return ["0"]
+    from math import gcd
+    out = []
+    for i in range(p):
+        if i == 0:
+            out.append("0")
+        elif i == p - 1:
+            out.append("max")
+        else:
+            g = gcd(i, p - 1)
+            out.append(_FRACTIONS.get((i // g, (p - 1) // g), f"{i}/{p - 1}"))
+    return out
+
+
+def _perf_series(op_rows) -> tuple[list[int], int, dict[int, list]]:
+    """`(widths, P, series)` for one op: widths sorted; `P` = the sampled-scale
+    count (data-driven — every scale present is included); `series[width]` = the
+    timings by ascending scale, padded with `None` to length `P`."""
+    by_w: dict[int, dict[int, float]] = {}
+    for _op, w, s, ns in op_rows:
+        by_w.setdefault(w, {})[s] = ns
+    widths = sorted(by_w)
+    P = max((len(v) for v in by_w.values()), default=0)
+    series = {}
+    for w in widths:
+        vals = [by_w[w][s] for s in sorted(by_w[w])]
+        series[w] = vals + [None] * (P - len(vals))
+    return widths, P, series
+
+
+def _perf_svg(widths: list[int], P: int, series: dict[int, list]) -> str:
+    """A log-time(y) vs width(x) line graph: one polyline per sampled scale —
+    solid for scale 0 and the max scale, dashed for the intermediate scales —
+    with a light fill between the two solid lines. Inline SVG so it tracks the
+    light/dark palette via CSS custom properties."""
+    import math
+    flat = [v for vs in series.values() for v in vs if v is not None]
+    if not flat or len(widths) < 2:
+        return ""
+    lo, hi = math.floor(math.log10(min(flat))), math.ceil(math.log10(max(flat)))
+    if hi <= lo:
+        hi = lo + 1
+    W, H, L, Rm, Tm, Bm = 460, 240, 52, 10, 10, 30
+    pw, ph, n = W - L - Rm, H - Tm - Bm, len(widths)
+
+    def xp(i):
+        return L + pw * i / (n - 1)
+
+    def yp(ns):
+        return Tm + ph * (hi - math.log10(ns)) / (hi - lo)
+
+    p = [
+        f'<svg viewBox="0 0 {W} {H}" width="100%" style="height:auto;'
+        f'color:var(--md-default-fg-color--light)" xmlns="http://www.w3.org/2000/svg">'
+    ]
+    for d in range(lo, hi + 1):  # y gridlines + decade labels
+        y = yp(10 ** d)
+        p.append(f'<line x1="{L}" y1="{y:.1f}" x2="{L + pw}" y2="{y:.1f}" '
+                 f'stroke="currentColor" stroke-opacity="0.15"/>')
+        p.append(f'<text x="{L - 6}" y="{y + 3:.1f}" text-anchor="end" font-size="9" '
+                 f'fill="currentColor">{_ns_decade(d)}</text>')
+    for i, w in enumerate(widths):  # x (width) labels
+        p.append(f'<text x="{xp(i):.1f}" y="{Tm + ph + 12}" text-anchor="middle" '
+                 f'font-size="8" fill="currentColor">{w}</text>')
+    pin = "var(--md-primary-fg-color)"
+    s0 = [(xp(i), series[w][0]) for i, w in enumerate(widths) if series[w][0] is not None]
+    sm = [(xp(i), series[w][P - 1]) for i, w in enumerate(widths) if series[w][P - 1] is not None]
+    if len(s0) >= 2 and len(sm) >= 2:  # light fill between the two solid lines
+        pts = " ".join(f"{x:.1f},{yp(v):.1f}" for x, v in s0)
+        pts += " " + " ".join(f"{x:.1f},{yp(v):.1f}" for x, v in reversed(sm))
+        p.append(f'<polygon points="{pts}" fill="{pin}" fill-opacity="0.10"/>')
+    for j in range(P):  # one polyline per sampled scale
+        line = [(xp(i), series[w][j]) for i, w in enumerate(widths) if series[w][j] is not None]
+        if len(line) < 2:
+            continue
+        pts = " ".join(f"{x:.1f},{yp(v):.1f}" for x, v in line)
+        solid = j == 0 or j == P - 1
+        dash = "" if solid else ' stroke-dasharray="3 3"'
+        p.append(f'<polyline points="{pts}" fill="none" stroke="{pin}" '
+                 f'stroke-width="{1.6 if solid else 1.0}"{dash}/>')
+    p.append(f'<line x1="{L}" y1="{Tm}" x2="{L}" y2="{Tm + ph}" stroke="currentColor" stroke-opacity="0.4"/>')
+    p.append(f'<line x1="{L}" y1="{Tm + ph}" x2="{L + pw}" y2="{Tm + ph}" stroke="currentColor" stroke-opacity="0.4"/>')
+    p.append("</svg>")
+    return "".join(p)
+
+
+def render_performance() -> str:
+    """One section per op: a width x scale timing table beside a log-time vs width
+    graph, each cell in its own natural unit; led by a units legend of the units
+    that actually appear. All from results/timing/bbc_medians.tsv."""
+    rows = _timing_rows()
+    if not rows:
+        return _PENDING_PERF
+    by_op: dict[str, list] = {}
+    for r in rows:
+        by_op.setdefault(r[0], []).append(r)
+    unit_by_power = {power: label for label, power in _TIME_UNITS}
+    used = sorted({_unit_of(r[3])[1] for r in rows})
+    legend = ["| Unit | In nanoseconds |", "| :-- | --: |"]
+    legend += [f"| {unit_by_power[power]} | 10{str(power).translate(_SUP)} ns |" for power in used]
+    out = ["\n".join(legend), ""]
+    for op in sorted(by_op):
+        widths, P, series = _perf_series(by_op[op])
+        head = "| Width | " + " | ".join(_pos_labels(P)) + " |"
+        rule = "| :-- | " + " | ".join(["--:"] * P) + " |"
+        trows = [head, rule]
+        for w in widths:
+            cells = [(_fmt_ns(v) if v is not None else "·") for v in series[w]]
+            trows.append(f"| D{w} | " + " | ".join(cells) + " |")
+        out += [
+            f"### `{op}`",
+            "",
+            '<div class="grid perf-grid" markdown>',
+            "",
+            "\n".join(trows),
+            "",
+            "<figure>",
+            _perf_svg(widths, P, series),
+            "<figcaption>Median time vs width (log scale). Solid: scale 0 and max; "
+            "dashed: the intermediate band-edge scales.</figcaption>",
+            "</figure>",
+            "",
+            "</div>",
+            "",
+        ]
+    return "\n".join(out).rstrip()
+
+
 # `key -> (target file relative to ROOT, builder)`.
 REGIONS: dict[str, tuple[str, "callable"]] = {
     "widths:table": ("docs/widths.md", render_widths_table),
@@ -328,6 +516,7 @@ REGIONS: dict[str, tuple[str, "callable"]] = {
     "golden:counts": ("docs/golden.md", render_golden_counts),
     "precision:stats": ("docs/precision.md", render_precision_stats),
     "precision:surface": ("docs/precision.md", render_precision_surface),
+    "performance:body": ("docs/performance.md", render_performance),
     "precision:D38": ("docs/comparisons.md", render_precision_d38),
     "precision:D76": ("docs/comparisons.md", render_precision_d76),
     "precision:D307": ("docs/comparisons.md", render_precision_d307),
