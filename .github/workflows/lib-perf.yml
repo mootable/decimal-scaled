@@ -1,0 +1,217 @@
+# SPDX-FileCopyrightText: 2026 John Moxley
+# SPDX-License-Identifier: MIT OR Apache-2.0
+name: "📊 lib-perf (peer-crate timing over golden)"
+
+# Peer-library TIMING comparison on the `decimal-scaled-golden` harness — the
+# library analog of history.yml. The `lib_perf_all` test (golden-competitors/
+# tests/lib_perf.rs) times decimal-scaled beside the peer decimal crates
+# (rust_decimal, fastnum, bigdecimal, dashu-float, decimal-rs, g_math) over the
+# SAME golden set, at one representative (middle-of-band) cell per width, capped
+# rows, single mode, with the `Timed` strategy as a ride-along (one timed call per
+# golden row). Timing is REPORTED, never asserted.
+#
+# This is the precision shootout's perf twin: lib-cmp-precision.yml scores the same
+# subjects for correctness; this one times them. Its aggregate self-commits
+# results/lib_cmp/medians.tsv (function/width/library/nanos) — the Comparisons-page
+# data source (docs/comparisons.md, rendered by scripts/render_docs.py).
+#
+# WIDTH-SHARDED build+run (the history.yml shape): one matrix job per width tier
+# builds exactly that tier's lib_perf exe AND runs it in the SAME job (no artifact
+# handoff), then GOLDEN_WIDTHS-filters the run to its own tier's widths. Sharding
+# the per-tier `cfg`-gated decimal-scaled cell fan-out down to one tier per job
+# keeps each job's rustc within the runner's memory — the single all-tier build does
+# not fit (proven for the precision shootout, same monomorphised surface).
+#
+# Triggers: push to main / release/* and manual workflow_dispatch (the dispatch
+# button only appears once this file is on the default branch main).
+
+on:
+  push:
+    branches:
+      - main
+      - "release/*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Serial queue per ref, like ci.yml/bbc/history: a queued run waits its turn for
+  # the in-progress run to finish (deferred, never cancelled).
+  group: lib-perf-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  lib-perf:
+    name: lib-perf (${{ matrix.shard }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      # Drop the workspace's `[profile.release] debug = true` (local samply
+      # symbolization) — pure build-time/memory weight this gate never needs.
+      CARGO_PROFILE_RELEASE_DEBUG: "false"
+    strategy:
+      # One slow/failed tier must not mask the others — each shard IS the bench for
+      # its own widths.
+      fail-fast: false
+      matrix:
+        # `feat`: this shard's decimal-scaled tier passthrough (golden-competitors
+        # forwards each dNN onto decimal-scale-test). The narrow shard needs none
+        # (the D18/D38 base is always compiled). `widths`: the GOLDEN_WIDTHS this
+        # shard sweeps; the union is the full surface. `par`: thread count for
+        # LIBPERF_PARALLEL — present (= "8") on the wide shards (d115+) where a
+        # sequential sweep over decimal-scaled exceeds the CI budget; absent on
+        # narrow/d57/d76 (sequential, contention-free timing). When `par` is absent
+        # the matrix substitution expands to "" → SequentialRunner.
+        include:
+          - { shard: narrow, feat: "",      widths: "18,38" }
+          - { shard: d57,    feat: "d57",   widths: "57" }
+          - { shard: d76,    feat: "d76",   widths: "76" }
+          - { shard: d115,   feat: "d115",  widths: "115",  par: "8" }
+          - { shard: d153,   feat: "d153",  widths: "153",  par: "8" }
+          - { shard: d230,   feat: "d230",  widths: "230",  par: "8" }
+          - { shard: d307,   feat: "d307",  widths: "307",  par: "8" }
+          - { shard: d462,   feat: "d462",  widths: "462",  par: "8" }
+          - { shard: d616,   feat: "d616",  widths: "616",  par: "8" }
+          - { shard: d924,   feat: "d924",  widths: "924",  par: "8" }
+          - { shard: d1232,  feat: "d1232", widths: "1232", par: "8" }
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system libs
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-lib-perf-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'golden-competitors/Cargo.toml') }}
+          restore-keys: |
+            cargo-lib-perf-${{ runner.os }}-
+
+      - name: Build + run the lib-perf shard (this tier's widths)
+        # Build + run in ONE invocation (history.yml's no-artifact-handoff shape):
+        # compile this tier's lib_perf exe, then run the gate over only this tier's
+        # widths. `--ignored` runs the `#[ignore]`d perf test; `--nocapture` streams
+        # the per-library progress. CRITICAL: LIBPERF_REPORT_DIR is ABSOLUTE
+        # (github.workspace), because `cargo test` runs the test binary with CWD =
+        # the package dir (golden-competitors/), so a RELATIVE path would land there
+        # while the upload step looks at the workspace root.
+        env:
+          GOLDEN_WIDTHS: "${{ matrix.widths }}"
+          GOLDEN_DIR: ${{ github.workspace }}/decimal-scaled-golden/golden
+          LIBPERF_PARALLEL: "${{ matrix.par }}"
+          LIBPERF_REPORT_DIR: ${{ github.workspace }}/libperf-report
+        run: |
+          set -euo pipefail
+          ( while true; do m=$(free -m | awk '/^Mem:/{print $7}'); echo "[res $(date +%H:%M:%S)] mem avail ${m} MB"; sleep 30; done ) &
+          SAMPLER=$!
+          trap 'kill "$SAMPLER" 2>/dev/null || true' EXIT
+          FEAT="${{ matrix.feat }}"
+          cargo test -p golden-competitors --release ${FEAT:+--features "$FEAT"} \
+            --test lib_perf lib_perf_all -- --ignored --nocapture 2>&1 \
+            | awk '{ print strftime("[%H:%M:%S]"), $0; fflush() }' \
+            | tee "lib-perf-${{ matrix.shard }}.log"
+
+      - name: Upload the shard log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: lib-perf-${{ matrix.shard }}
+          path: lib-perf-${{ matrix.shard }}.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload the shard per-line TSV
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: lib-perf-tsv-${{ matrix.shard }}
+          path: ${{ github.workspace }}/libperf-report/*.tsv
+          if-no-files-found: warn
+          retention-days: 7
+
+  aggregate:
+    name: aggregate + self-commit
+    needs: lib-perf
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # Self-commit the per-(library, function, width) medians back to the run's
+      # branch (a GITHUB_TOKEN push does not re-trigger workflows — no loop).
+      contents: write
+    steps:
+      - name: Checkout (for the self-commit)
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Download all shard TSVs
+        uses: actions/download-artifact@v8
+        with:
+          pattern: lib-perf-tsv-*
+          path: shards/
+
+      - name: Aggregate per-(library, function, width) medians + self-commit + render
+        run: |
+          set -euo pipefail
+          python3 - <<'EOF'
+          import collections, glob, os, statistics
+          # Shard rows are PER-LINE: library function width scale mode line grade nanos.
+          # The Comparisons page needs per-(function, width, library) MEDIAN nanoseconds
+          # (one representative cell per width, so the median is over that cell's golden
+          # rows); collapse the line + scale dimensions to one median here.
+          vals = collections.defaultdict(list)  # (function, width, library) -> [nanos]
+          for p in sorted(glob.glob("shards/**/*.tsv", recursive=True)):
+              with open(p, encoding="utf-8") as f:
+                  next(f, None)  # header
+                  for line in f:
+                      c = line.rstrip("\n").split("\t")
+                      # library=0 function=1 width=2 scale=3 mode=4 line=5 grade=6 nanos=7
+                      if len(c) >= 8 and c[7]:
+                          try:
+                              vals[(c[1], c[2], c[0])].append(int(c[7]))
+                          except ValueError:
+                              pass
+          if not vals:
+              print("no lib-perf rows — nothing to write")
+              raise SystemExit(0)
+          os.makedirs("results/lib_cmp", exist_ok=True)
+          def wkey(w):
+              return int(w) if w.isdigit() else 0
+          with open("results/lib_cmp/medians.tsv", "w", encoding="utf-8", newline="\n") as o:
+              o.write("function\twidth\tlibrary\tnanos\n")
+              for (fn, w, lib) in sorted(vals, key=lambda k: (k[0], wkey(k[1]), k[2])):
+                  o.write(f"{fn}\t{w}\t{lib}\t{statistics.median(vals[(fn, w, lib)]):.0f}\n")
+          print(f"medians.tsv rows: {len(vals)}")
+          EOF
+          if [ ! -f results/lib_cmp/medians.tsv ]; then
+            echo "no medians.tsv produced — skipping commit"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Re-render docs from the fresh medians in the SAME commit (self-heal: the
+          # committed page never lags the data; docs-drift stays green). NOTE: the
+          # Comparisons renderer (render_comparisons / _libcmp_rows in
+          # scripts/render_docs.py) must be REPOINTED to this file's schema
+          # (function/width/library/nanos — one mid cell per width, columns =
+          # libraries); until then it reads the old bit/scale/op schema and renders
+          # the page as pending (harmless — the data file is committed regardless).
+          python3 scripts/render_docs.py
+          git add results/lib_cmp/medians.tsv
+          git add -u README.md docs/
+          if git diff --cached --quiet; then
+            echo "lib-perf medians + docs unchanged — nothing to commit"
+            exit 0
+          fi
+          git commit -m "results(lib-perf): refresh peer-crate timing medians + render Comparisons"
+          git push origin "HEAD:${{ github.ref_name }}"
