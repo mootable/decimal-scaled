@@ -59,18 +59,20 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Checkout (${{ inputs.ref || github.ref_name }})
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           ref: ${{ inputs.ref || github.ref }}
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: stable
 
       - name: Install system libs
         run: sudo rm -f /etc/apt/sources.list.d/*microsoft* /etc/apt/sources.list.d/*azure* 2>/dev/null || true; sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
 
       - name: Cache cargo registry + git
-        uses: actions/cache@v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: |
             ~/.cargo/registry
@@ -115,7 +117,7 @@ jobs:
           echo "--- staged ---"; ls -1 staged/deps/
 
       - name: Upload compiled bench exes
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: bbc-compiled
           path: bench-compare/staged/
@@ -204,7 +206,7 @@ jobs:
         run: sudo rm -f /etc/apt/sources.list.d/*microsoft* /etc/apt/sources.list.d/*azure* 2>/dev/null || true; sudo apt-get update && sudo apt-get install -y libfontconfig1
 
       - name: Download compiled bench exes
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: bbc-compiled
           path: bbc-compiled
@@ -230,7 +232,7 @@ jobs:
 
       - name: Upload cell criterion subtree
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: bbc-${{ matrix.width }}-s${{ matrix.scale }}
           path: target/criterion/
@@ -254,7 +256,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout (for summarise.py)
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           ref: ${{ inputs.ref || github.ref }}
 
@@ -265,7 +267,7 @@ jobs:
           echo "PROD_VERSION=$LATEST" >> "$GITHUB_ENV"
 
       - name: Download every (width, scale) bench cell
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           # No `name` -> every artifact this run uploaded, each into a subdir
           # named after the artifact (bbc-D18-s0/, bbc-D307-s153/, ...).
@@ -351,7 +353,7 @@ jobs:
 
       - name: Upload single aggregate artifact
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: bbc-aggregate
           path: bench-compare/aggregate/
