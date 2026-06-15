@@ -234,14 +234,28 @@ def limbs_le(n):
     return out
 
 
-def emit_entries(value, lo, hi):
-    """Emit Rust `(scale, &[limbs], round_up)` tuples for scales lo..=hi."""
-    lines = []
-    for s in range(lo, hi + 1):
-        q, rb = floor_and_roundbit(value, s)
-        limbs = limbs_le(q)
-        limb_str = ", ".join(f"0x{l:016x}" for l in limbs)
-        lines.append(f"        ({s}, &[{limb_str}], {rb}),")
+def golden_limbs(value, gp):
+    """Little-endian u64 limbs of `floor(value * 10**gp)` — the SINGLE golden
+    mantissa a band downgrades from at compile time.
+
+    `gp = band_hi + 1`: one guard digit above the band's top scale, so the
+    `const fn` builder recovers the top scale's round bit (the most-significant
+    dropped digit) from this one value. Every lower scale `s` is exact:
+    `floor(value*10^s) = floor(golden / 10^(gp-s))`, and its round bit is
+    `digit_at(gp-1-s) >= 5` — provable because the constants are irrational
+    (no exact tie). This is what shrinks `table.rs` from ~39 MB of per-scale
+    literals to ~8 KB of goldens: the per-scale array is REBUILT at compile
+    time, never shipped."""
+    from mpmath import mpf, floor as mpfloor
+    return limbs_le(int(mpfloor(value * (mpf(10) ** gp))))
+
+
+def emit_limb_literal(prefix, name, limbs):
+    """Emit `const {name}: &[u64] = &[ ... ];`, 6 limbs per line."""
+    lines = [f"{prefix}const {name}: &[u64] = &["]
+    for i in range(0, len(limbs), 6):
+        lines.append("    " + ", ".join(f"0x{l:016x}" for l in limbs[i:i + 6]) + ",")
+    lines.append("];")
     return lines
 
 
@@ -259,13 +273,18 @@ def main():
     w("//! NOT edit by hand; re-run the script and commit its output. This")
     w("//! file is NOT produced at build time — `build.rs` is untouched.")
     w("//!")
-    w("//! Each constant is its own array of `(scale, limbs, round_up)`")
-    w("//! entries. `limbs` is `floor(const * 10^scale)` as the")
-    w("//! narrowest-fit little-endian `u64` slice; `round_up` is 1 iff the")
-    w("//! dropped fractional tail is >= 1/2. Every constant is irrational")
-    w("//! and positive, so the tail is never an exact tie and never zero,")
-    w("//! and the six rounding modes derive exactly from `(floor,")
-    w("//! round_up)`:")
+    w("//! Each constant ships ONE golden mantissa per band —")
+    w("//! `floor(const * 10^(band_hi+1))` — and a `const fn` ([`cb_build`])")
+    w("//! REBUILDS the per-scale table at compile time by dividing it down by")
+    w("//! 10 one scale at a time. So the source carries ~hundreds of bytes per")
+    w("//! constant, not the per-scale limbs, yet the compiled table (and the")
+    w("//! runtime static lookup) is byte-identical to a literal one. Each")
+    w("//! rebuilt entry is `floor(const * 10^scale)` as the narrowest-fit")
+    w("//! little-endian `u64` slice plus a `round_up` bit = 1 iff the dropped")
+    w("//! fractional tail is >= 1/2 (the most-significant dropped digit >= 5).")
+    w("//! Every constant is irrational and positive, so the tail is never an")
+    w("//! exact tie and never zero, and the six rounding modes derive exactly")
+    w("//! from `(floor, round_up)`:")
     w("//!")
     w("//! | mode | result |")
     w("//! |------|--------|")
@@ -281,15 +300,123 @@ def main():
     w("//! are feature-gated to match the tiers that can request them")
     w("//! (mirrors `src/types/consts/wide.rs`).")
     w("")
-    w("/// A single table entry: `(scale, floor-limbs little-endian, round-up bit)`.")
-    w("pub(crate) type Entry = (u32, &'static [u64], u8);")
+    # ── Compile-time table builder. The per-scale table is REBUILT from one
+    # golden mantissa per band by a `const fn` divide-down — source ships the
+    # golden (~hundreds of bytes), not ~39 MB of per-scale literals, while the
+    # COMPILED table (and runtime: a static lookup) stays byte-identical.
+    builder = r'''/// Scratch limb cap for the const-fn builders: the widest golden is
+/// ln2 @ scale 5121 (~266 limbs); 280 leaves margin. A const-eval local
+/// only — never in the binary.
+const MAXK: usize = 280;
+
+/// A compile-time-built per-scale constant band. `flat` holds every scale's
+/// `floor(const * 10^scale)` as narrowest-fit little-endian limbs, packed
+/// back-to-back; entry `i` (scale `lo + i`) is `flat[off[i] .. off[i]+len[i]]`
+/// with round-up bit `bit[i]`. Built by [`cb_build`] from one golden mantissa.
+pub(crate) struct ConstBand<const F: usize, const N: usize> {
+    flat: [u64; F],
+    off: [u32; N],
+    len: [u16; N],
+    bit: [u8; N],
+}
+
+/// Total narrowest-fit limb count over scales `lo..=hi`, divided down from
+/// `golden = floor(const * 10^(hi+1))`. Sizes [`ConstBand`]'s `flat` exactly.
+const fn cb_flat_len(golden: &[u64], lo: u32, hi: u32) -> usize {
+    let mut buf = [0u64; MAXK];
+    let mut blen = golden.len();
+    let mut i = 0;
+    while i < blen {
+        buf[i] = golden[i];
+        i += 1;
+    }
+    let mut total = 0usize;
+    let mut s = hi + 1;
+    while s > lo {
+        let mut rem: u64 = 0;
+        let mut j = blen;
+        while j > 0 {
+            j -= 1;
+            let c = ((rem as u128) << 64) | (buf[j] as u128);
+            buf[j] = (c / 10) as u64;
+            rem = (c % 10) as u64;
+        }
+        while blen > 1 && buf[blen - 1] == 0 {
+            blen -= 1;
+        }
+        total += blen;
+        s -= 1;
+    }
+    total
+}
+
+/// Build the band for scales `lo..=hi` by dividing `golden = floor(const *
+/// 10^(hi+1))` down by 10 once per scale. Each division's remainder is the
+/// most-significant dropped digit, so the round bit is `rem >= 5` — exact for
+/// irrational constants (no tie); `floor(const*10^s) = floor(golden/10^(hi+1-s))`
+/// is exact. Reproduces the former literal table bit-for-bit.
+const fn cb_build<const F: usize, const N: usize>(
+    golden: &[u64],
+    lo: u32,
+    hi: u32,
+) -> ConstBand<F, N> {
+    let mut b = ConstBand { flat: [0u64; F], off: [0u32; N], len: [0u16; N], bit: [0u8; N] };
+    let mut buf = [0u64; MAXK];
+    let mut blen = golden.len();
+    let mut i = 0;
+    while i < blen {
+        buf[i] = golden[i];
+        i += 1;
+    }
+    let mut s = hi + 1;
+    let mut cursor = 0usize;
+    while s > lo {
+        let mut rem: u64 = 0;
+        let mut j = blen;
+        while j > 0 {
+            j -= 1;
+            let c = ((rem as u128) << 64) | (buf[j] as u128);
+            buf[j] = (c / 10) as u64;
+            rem = (c % 10) as u64;
+        }
+        while blen > 1 && buf[blen - 1] == 0 {
+            blen -= 1;
+        }
+        let idx = (s - 1 - lo) as usize;
+        b.off[idx] = cursor as u32;
+        b.len[idx] = blen as u16;
+        b.bit[idx] = if rem >= 5 { 1 } else { 0 };
+        let mut k = 0;
+        while k < blen {
+            b.flat[cursor + k] = buf[k];
+            k += 1;
+        }
+        cursor += blen;
+        s -= 1;
+    }
+    b
+}
+
+/// The stored `(floor-limbs, round-up)` for entry `i` of a band — a `const fn`
+/// so a const-scale caller folds to the one entry (and bakes through `const_n`).
+/// `split_at` keeps it const-stable (range indexing is not yet const).
+const fn cb_get<const F: usize, const N: usize>(
+    b: &'static ConstBand<F, N>,
+    i: usize,
+) -> (&'static [u64], u8) {
+    let o = b.off[i] as usize;
+    let l = b.len[i] as usize;
+    (b.flat.split_at(o).1.split_at(l).0, b.bit[i])
+}
+'''
+    for ln in builder.splitlines():
+        w(ln)
     w("")
 
-    # The NARROW band (0..=W_NARROW) is ALWAYS present (no `cfg`): the public
-    # `DecimalConstants` trait on D18/D38 reads it in every build. The three
-    # wider bands are feature-gated, and each constant's band maxes are sized to
-    # its CLASS (ZIV / HOT / DEC — see CONST_CLASS) so only the constants that
-    # Ziv-escalate carry the full deep band.
+    # Per constant, per band: ONE golden mantissa + the compile-time-built band.
+    # The NARROW band (always present) feeds D18/D38 + the always-compiled narrow
+    # kernels; BASE/XW/XXW are feature-gated to the tiers that reach them. Each
+    # constant's band maxes follow its CLASS (ZIV / HOT / DEC — see CONST_CLASS).
     for name, getter in CONSTS:
         value = getter()
         upper = name.upper()
@@ -302,37 +429,53 @@ def main():
             ("XXW", xw_max + 1, xxw_max, XXW_CFG),
         ]
         for band, lo, hi, cfg in bands:
-            if cfg is not None:
-                w(f"#[cfg({cfg})]")
-            w(f"static {upper}_{band}: &[Entry] = &[")
-            out.extend(emit_entries(value, lo, hi))
-            w("];")
+            n = hi - lo + 1
+            g = golden_limbs(value, hi + 1)
+            cfg_attr = f"#[cfg({cfg})]" if cfg is not None else None
+            if cfg_attr:
+                w(cfg_attr)
+            for ln in emit_limb_literal("", f"{upper}_{band}_GOLDEN", g):
+                w(ln)
+            if cfg_attr:
+                w(cfg_attr)
+            w(f"const {upper}_{band}_F: usize = "
+              f"cb_flat_len({upper}_{band}_GOLDEN, {lo}, {hi});")
+            if cfg_attr:
+                w(cfg_attr)
+            w(f"static {upper}_{band}: ConstBand<{upper}_{band}_F, {n}> = "
+              f"cb_build({upper}_{band}_GOLDEN, {lo}, {hi});")
             w("")
 
     # ── Per-constant `const fn` lookups, band-gated by `#[cfg]` on the
     # statements so a disabled band's static is never referenced. ───────
     for name, _ in CONSTS:
         upper = name.upper()
-        base_max, xw_max, _ = CONST_CLASS[name]
+        base_max, xw_max, xxw_max = CONST_CLASS[name]
+        narrow_max = WORKING_NARROW if name in ("pi", "ln2", "ln10") else W_NARROW
+        # Per-band entry counts (= the static's `N`), so `entry` compares against
+        # a literal instead of `.len()` and indexes the built band via `cb_get`.
+        narrow_n = narrow_max + 1
+        base_n = base_max + 1
+        xw_n = xw_max - base_max
+        xxw_n = xxw_max - xw_max
         w("/// `floor(%s * 10^scale)` limbs (little-endian, narrowest-fit)" % name)
         w("/// plus the round-up bit, for the const working `scale`.")
         w("///")
         w("/// `const fn` so a caller keyed on the const-generic SCALE folds")
         w("/// to the single matching entry per monomorphisation — no runtime")
-        w("/// search on the hot path.")
+        w("/// search on the hot path. The band's per-scale `(limbs, round_up)`")
+        w("/// is rebuilt at compile time from one golden mantissa ([`cb_build`]).")
         w(f"pub(crate) const fn {name}_entry(scale: u32) -> (&'static [u64], u8) {{")
         w("    // NARROW band (0..=%d) is always present — the public" % W_NARROW)
         w("    // `DecimalConstants` trait on D18/D38 reads it in every build,")
         w("    // including default / no_std (no `_wide-support`).")
-        w(f"    if (scale as usize) < {upper}_NARROW.len() {{")
-        w(f"        let e = {upper}_NARROW[scale as usize];")
-        w("        return (e.1, e.2);")
+        w(f"    if (scale as usize) < {narrow_n} {{")
+        w(f"        return cb_get(&{upper}_NARROW, scale as usize);")
         w("    }")
         w(f"    #[cfg({BASE_CFG})]")
         w("    {")
-        w(f"        if (scale as usize) < {upper}_BASE.len() {{")
-        w(f"            let e = {upper}_BASE[scale as usize];")
-        w("            return (e.1, e.2);")
+        w(f"        if (scale as usize) < {base_n} {{")
+        w(f"            return cb_get(&{upper}_BASE, scale as usize);")
         w("        }")
         w("    }")
         w(f"    #[cfg({XW_CFG})]")
@@ -340,9 +483,8 @@ def main():
         w(f"        let base_lo = {base_max} + 1;")
         w("        if scale >= base_lo {")
         w("            let idx = (scale - base_lo) as usize;")
-        w(f"            if idx < {upper}_XW.len() {{")
-        w(f"                let e = {upper}_XW[idx];")
-        w("                return (e.1, e.2);")
+        w(f"            if idx < {xw_n} {{")
+        w(f"                return cb_get(&{upper}_XW, idx);")
         w("            }")
         w("        }")
         w("    }")
@@ -351,9 +493,8 @@ def main():
         w(f"        let xw_lo = {xw_max} + 1;")
         w("        if scale >= xw_lo {")
         w("            let idx = (scale - xw_lo) as usize;")
-        w(f"            if idx < {upper}_XXW.len() {{")
-        w(f"                let e = {upper}_XXW[idx];")
-        w("                return (e.1, e.2);")
+        w(f"            if idx < {xxw_n} {{")
+        w(f"                return cb_get(&{upper}_XXW, idx);")
         w("            }")
         w("        }")
         w("    }")
@@ -631,6 +772,103 @@ def main():
     # runtime `TEN.pow` beyond the generated range.
     POW10_NARROW = 512
     POW10_BASE_MAX, POW10_XW_MAX, POW10_XXW_MAX = (1280, 2560, 5120)
+    pow10_builder = r'''/// A compile-time-built `10^exp` band (exact — no round bit). `flat` packs every
+/// exponent's narrowest-fit little-endian limbs; entry `i` (exp `lo + i`) is
+/// `flat[off[i] .. off[i]+len[i]]`. Built by [`p10_build`] from `1` by ×10.
+pub(crate) struct Pow10Band<const F: usize, const N: usize> {
+    flat: [u64; F],
+    off: [u32; N],
+    len: [u16; N],
+}
+
+/// Total narrowest-fit limb count over `10^lo ..= 10^hi`, sizing the flat array.
+const fn p10_flat_len(lo: u32, hi: u32) -> usize {
+    let mut buf = [0u64; MAXK];
+    buf[0] = 1;
+    let mut blen = 1usize;
+    let mut total = 0usize;
+    if lo == 0 {
+        total += 1;
+    }
+    let mut e = 1u32;
+    while e <= hi {
+        let mut carry: u64 = 0;
+        let mut i = 0;
+        while i < blen {
+            let v = (buf[i] as u128) * 10 + carry as u128;
+            buf[i] = v as u64;
+            carry = (v >> 64) as u64;
+            i += 1;
+        }
+        if carry > 0 {
+            buf[blen] = carry;
+            blen += 1;
+        }
+        if e >= lo {
+            total += blen;
+        }
+        e += 1;
+    }
+    total
+}
+
+/// Build `10^lo ..= 10^hi` by repeated ×10 from 1. `10^exp` is exact, so there
+/// is no round bit. Reproduces the former literal POW10 table bit-for-bit.
+const fn p10_build<const F: usize, const N: usize>(lo: u32, hi: u32) -> Pow10Band<F, N> {
+    let mut b = Pow10Band { flat: [0u64; F], off: [0u32; N], len: [0u16; N] };
+    let mut buf = [0u64; MAXK];
+    buf[0] = 1;
+    let mut blen = 1usize;
+    let mut cursor = 0usize;
+    if lo == 0 {
+        b.off[0] = 0;
+        b.len[0] = 1;
+        b.flat[0] = 1;
+        cursor = 1;
+    }
+    let mut e = 1u32;
+    while e <= hi {
+        let mut carry: u64 = 0;
+        let mut i = 0;
+        while i < blen {
+            let v = (buf[i] as u128) * 10 + carry as u128;
+            buf[i] = v as u64;
+            carry = (v >> 64) as u64;
+            i += 1;
+        }
+        if carry > 0 {
+            buf[blen] = carry;
+            blen += 1;
+        }
+        if e >= lo {
+            let idx = (e - lo) as usize;
+            b.off[idx] = cursor as u32;
+            b.len[idx] = blen as u16;
+            let mut k = 0;
+            while k < blen {
+                b.flat[cursor + k] = buf[k];
+                k += 1;
+            }
+            cursor += blen;
+        }
+        e += 1;
+    }
+    b
+}
+
+/// Limbs of `10^(lo+i)` for entry `i` — a `const fn` so a const `exp` folds.
+const fn p10_get<const F: usize, const N: usize>(
+    b: &'static Pow10Band<F, N>,
+    i: usize,
+) -> &'static [u64] {
+    let o = b.off[i] as usize;
+    let l = b.len[i] as usize;
+    b.flat.split_at(o).1.split_at(l).0
+}
+'''
+    for ln in pow10_builder.splitlines():
+        w(ln)
+    w("")
     pow10_bands = [
         ("NARROW", 0, POW10_NARROW, None),
         ("BASE", 0, POW10_BASE_MAX, BASE_CFG),
@@ -638,28 +876,29 @@ def main():
         ("XXW", POW10_XW_MAX + 1, POW10_XXW_MAX, XXW_CFG),
     ]
     for band, lo, hi, cfg in pow10_bands:
-        if cfg is not None:
-            w(f"#[cfg({cfg})]")
-        w(f"static POW10_{band}: &[&[u64]] = &[")
-        for e in range(lo, hi + 1):
-            limbs = limbs_le(10 ** e)
-            limb_str = ", ".join(f"0x{l:016x}" for l in limbs)
-            w(f"    &[{limb_str}],")
-        w("];")
+        n = hi - lo + 1
+        cfg_attr = f"#[cfg({cfg})]" if cfg is not None else None
+        if cfg_attr:
+            w(cfg_attr)
+        w(f"const POW10_{band}_F: usize = p10_flat_len({lo}, {hi});")
+        if cfg_attr:
+            w(cfg_attr)
+        w(f"static POW10_{band}: Pow10Band<POW10_{band}_F, {n}> = p10_build({lo}, {hi});")
         w("")
     w("/// Limbs (little-endian) of `10^exp` if `exp` is within a generated POW10")
     w("/// band, else `None`. Bands are feature-gated; the always-present NARROW")
     w("/// band covers the default / no_std build. `const fn` so a const `exp`")
-    w("/// folds to the matching entry.")
+    w("/// folds to the matching entry. The per-exp limbs are rebuilt at compile")
+    w("/// time ([`p10_build`]), not shipped as literals.")
     w("#[inline]")
     w("const fn pow10_entry(exp: u32) -> Option<&'static [u64]> {")
-    w("    if (exp as usize) < POW10_NARROW.len() {")
-    w("        return Some(POW10_NARROW[exp as usize]);")
+    w(f"    if (exp as usize) < {POW10_NARROW + 1} {{")
+    w("        return Some(p10_get(&POW10_NARROW, exp as usize));")
     w("    }")
     w(f"    #[cfg({BASE_CFG})]")
     w("    {")
-    w("        if (exp as usize) < POW10_BASE.len() {")
-    w("            return Some(POW10_BASE[exp as usize]);")
+    w(f"        if (exp as usize) < {POW10_BASE_MAX + 1} {{")
+    w("            return Some(p10_get(&POW10_BASE, exp as usize));")
     w("        }")
     w("    }")
     w(f"    #[cfg({XW_CFG})]")
@@ -667,8 +906,8 @@ def main():
     w(f"        let base_lo = {POW10_BASE_MAX} + 1;")
     w("        if exp >= base_lo {")
     w("            let idx = (exp - base_lo) as usize;")
-    w("            if idx < POW10_XW.len() {")
-    w("                return Some(POW10_XW[idx]);")
+    w(f"            if idx < {POW10_XW_MAX - POW10_BASE_MAX} {{")
+    w("                return Some(p10_get(&POW10_XW, idx));")
     w("            }")
     w("        }")
     w("    }")
@@ -677,8 +916,8 @@ def main():
     w(f"        let xw_lo = {POW10_XW_MAX} + 1;")
     w("        if exp >= xw_lo {")
     w("            let idx = (exp - xw_lo) as usize;")
-    w("            if idx < POW10_XXW.len() {")
-    w("                return Some(POW10_XXW[idx]);")
+    w(f"            if idx < {POW10_XXW_MAX - POW10_XW_MAX} {{")
+    w("                return Some(p10_get(&POW10_XXW, idx));")
     w("            }")
     w("        }")
     w("    }")
