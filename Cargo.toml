@@ -1,4 +1,4 @@
-﻿[package]
+[package]
 name = "decimal-scaled"
 version = "0.5.0"
 edition = "2024"
@@ -213,7 +213,7 @@ bigdecimal = "0.4"
 dashu-float = "0.4"
 # dashu-int provides IBig for exact base-10 integer scaling of dashu-float
 # results in the comparison benches.
-dashu-int = { version = "0.4", default-features = false, features = ["std"] }
+dashu-int = { version = "0.5", default-features = false, features = ["std"] }
 decimal-rs = "0.1"
 scientific = "0.5"
 # Chart generation for docs/figures/library_comparison/*.png — pure
