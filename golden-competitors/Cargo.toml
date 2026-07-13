@@ -23,7 +23,7 @@ decimal-scaled-golden = { path = "../decimal-scaled-golden" }
 
 rust_decimal = { version = "1", default-features = false, features = ["maths"] }
 bigdecimal = "0.4"
-dashu-float = "0.4"
+dashu-float = "0.5"
 fastnum = { version = "0.7", default-features = false, features = ["std"] }
 decimal-rs = "0.1"
 g_math = { version = "0.4", features = ["balanced"] }
