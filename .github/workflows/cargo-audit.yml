@@ -42,3 +42,38 @@ jobs:
         uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          # RUSTSEC-2026-0192 — `ttf-parser` is unmaintained. This is an
+          # INFORMATIONAL notice, not a vulnerability: the scan reports
+          # zero vulnerabilities. The crate is a dev-only transitive
+          # (plotters -> ttf-parser, via the `ttf` feature used to render
+          # text on docs/figures/library_comparison/*.png); it is never
+          # compiled into the published crate or any consumer build.
+          #
+          # Scoped to the one advisory id on purpose — a future *actual*
+          # vulnerability in ttf-parser gets a different id and still
+          # fails this gate.
+          #
+          # Bumping ttf-parser does NOT clear this: the advisory is
+          # "unmaintained", which covers the crate at every version (the
+          # author declared it finished). Only dropping the dependency
+          # clears it, and that is plotters' call, not ours.
+          #
+          # Upstream state (checked 2026-07-24): plotters is aware
+          # (plotters-rs/plotters#740) and PR #736 replaces ttf-parser +
+          # font-kit + pathfinder with fontique + skrifa — skrifa being
+          # the maintained successor the advisory recommends. Unreleased:
+          # plotters' latest is still 0.3.7 (2024-09), so there is nothing
+          # to act on yet.
+          #
+          # WHEN THAT RELEASES, IT IS A PAIRED CHANGE. #736 also DELETES
+          # the `ttf` feature outright, and Cargo.toml requests it
+          # explicitly (plotters features = [..., "ttf"]), so the upgrade
+          # breaks the feature list with an unknown-feature error rather
+          # than falling back silently. Drop `ttf` from that feature list
+          # AND drop this ignore line together.
+          #
+          # Worth weighing at that point: fontique + skrifa pull in the
+          # linebender stack, a much larger surface than ttf-parser for a
+          # dev-only chart generator (examples/chart_gen.rs is the sole
+          # consumer). Dropping plotters may beat following it.
+          ignore: RUSTSEC-2026-0192
