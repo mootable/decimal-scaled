@@ -2,8 +2,15 @@ version: 2
 
 # Dependabot configuration for decimal-scaled.
 #
-# Two cargo ecosystems are tracked because each Cargo.toml lives in
-# its own root (the root crate and the `macros/` proc-macro crate).
+# ONE cargo entry covers the whole repo: `/` is a cargo WORKSPACE and
+# dependabot walks every member listed in its `[workspace] members`
+# (./macros, ./decimal-scaled-golden, ./decimal-scaled-cells,
+# ./decimal-scale-test, ./golden-competitors). A second entry for a
+# member directory does NOT add coverage -- it duplicates it, and
+# dependabot raises the SAME bump twice from two branches (the
+# byte-identical syn 2->3 pair #40 `cargo/syn-3` and #41
+# `cargo/macros/syn-3`, 2026-07-20). Add a member to the workspace,
+# not to this file.
 #
 # All schedules are Monday morning UTC, off-minute, to spread PR
 # creation across the week's start without colliding with the security
@@ -22,18 +29,6 @@ updates:
       - dependencies
       - dependabot
 
-  - package-ecosystem: cargo
-    directory: "/macros"
-    schedule:
-      interval: weekly
-      day: monday
-      time: "09:23"
-      timezone: Etc/UTC
-    open-pull-requests-limit: 5
-    labels:
-      - dependencies
-      - dependabot
-
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
@@ -46,6 +41,18 @@ updates:
       - dependencies
       - dependabot
       - github-actions
+    groups:
+      # codeql-action ships init / analyze / upload-sarif as three action
+      # paths out of ONE repo, and CodeQL refuses a run whose init and
+      # analyze versions differ. Ungrouped, dependabot opens one PR per
+      # path, so each PR on its own IS a version mismatch and fails
+      # "Analyze (Rust)" -- hit at 4.36.3 (#34), then again at 4.37.0 and
+      # 4.37.1 (#42/#43/#45), every time needing a hand-built lockstep
+      # commit. Grouping raises the trio as a single PR, which is the only
+      # state CodeQL accepts.
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"
     ignore:
       # dtolnay/rust-toolchain@1.89 is the MSRV pin for the `msrv (gate)` job — it
       # deliberately matches Cargo.toml `rust-version`. Raising the MSRV is a manual,
