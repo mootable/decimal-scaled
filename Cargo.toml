@@ -210,10 +210,10 @@ g_math = "0.4"
 # All bench-only; never compiled into a normal build.
 fastnum = { version = "0.7", default-features = false, features = ["std"] }
 bigdecimal = "0.4"
-dashu-float = "0.4"
+dashu-float = "0.5"
 # dashu-int provides IBig for exact base-10 integer scaling of dashu-float
 # results in the comparison benches.
-dashu-int = { version = "0.4", default-features = false, features = ["std"] }
+dashu-int = { version = "0.5", default-features = false, features = ["std"] }
 decimal-rs = "0.1"
 scientific = "0.5"
 # Chart generation for docs/figures/library_comparison/*.png — pure
