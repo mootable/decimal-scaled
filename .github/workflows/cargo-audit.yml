@@ -42,3 +42,15 @@ jobs:
         uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          # RUSTSEC-2026-0192 — `ttf-parser` is unmaintained. This is an
+          # INFORMATIONAL notice, not a vulnerability: the scan reports
+          # zero vulnerabilities. The crate is a dev-only transitive
+          # (plotters -> ttf-parser, via the `ttf` feature used to render
+          # text on docs/figures/library_comparison/*.png); it is never
+          # compiled into the published crate or any consumer build.
+          #
+          # Scoped to the one advisory id on purpose — a future *actual*
+          # vulnerability in ttf-parser gets a different id and still
+          # fails this gate. Revisit when plotters moves to `skrifa`
+          # (the maintained successor) and drop this line.
+          ignore: RUSTSEC-2026-0192
