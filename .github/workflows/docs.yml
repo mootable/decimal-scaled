@@ -86,6 +86,39 @@ jobs:
           [ -f CONTRIBUTORS.md ] && cp CONTRIBUTORS.md docs/CONTRIBUTORS.md
           [ -f SECURITY.md ]   && cp SECURITY.md   docs/SECURITY.md
 
+      - name: Overlay live benchmark data from ci-data + re-render
+        # The timing/correctness producers (bench-branch-compare, golden-
+        # comprehensive, history, lib-perf) publish their fresh TSVs to the
+        # data-only `ci-data` branch — they cannot self-commit to protected
+        # `main` (see scripts/push_ci_data.sh). Overlay those four files onto the
+        # committed release snapshot and re-render the data-driven pages so the
+        # PUBLISHED site tracks the latest measurements.
+        #
+        # Ephemeral by construction: nothing is committed. The committed
+        # docs/*.md stay the release snapshot and the `docs-drift` gate keeps
+        # checking THAT against the committed results/ — this step never runs
+        # there. Each file is copied individually, so results/precision/* (not on
+        # ci-data) is untouched. If `ci-data` is absent (before the first
+        # producer run) or a file is missing, the snapshot is used unchanged, so
+        # the build can only fall back, never break.
+        run: |
+          set -euo pipefail
+          if git fetch --depth 1 origin ci-data 2>/dev/null; then
+            for p in results/history/history.tsv \
+                     results/lib_cmp/medians.tsv \
+                     results/golden/summary.tsv \
+                     results/timing/bbc_medians.tsv; do
+              if git show "FETCH_HEAD:$p" > "$p.cidata" 2>/dev/null; then
+                mv "$p.cidata" "$p"; echo "overlaid $p from ci-data"
+              else
+                rm -f "$p.cidata"; echo "ci-data has no $p yet — keeping snapshot"
+              fi
+            done
+          else
+            echo "ci-data branch absent — rendering the committed snapshot"
+          fi
+          python3 scripts/render_docs.py
+
       - name: Build MkDocs site
         run: mkdocs build --strict --site-dir _site
 
