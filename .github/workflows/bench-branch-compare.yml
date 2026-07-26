@@ -25,14 +25,20 @@ name: "\U0001FA83 bench-branch-compare (branch vs latest tag)"
 #               table printed to the run summary, plus a single `bbc-aggregate`
 #               artifact (combined tree + medians .tsv + rendered .md).
 #
-# Triggers: (1) push to a release branch (queue-of-1 via the concurrency block);
-# (2) manual workflow_dispatch against any ref. Push runs from the branch itself,
-# so this does NOT need to live on the default branch.
+# Triggers: (1) push to `main` — publishes the fresh timing medians to the `ci-data`
+# data branch, exactly like the other producers (history / lib-perf / golden); (2)
+# manual workflow_dispatch against any ref. NOT release/* (see the `on:` note).
 
 on:
-  # On-demand only. This branch-vs-latest-tag bench SELF-COMMITS its timing medians;
-  # a push trigger on a release branch with an open PR would churn the PR head onto a
-  # bot commit the REQUIRED gates never run on. Run it against any ref via dispatch.
+  # Push to `main` runs the branch-vs-latest-tag bench and publishes its timing medians
+  # to the unprotected, data-only `ci-data` branch (via scripts/push_ci_data.sh — a
+  # GITHUB_TOKEN push there is loop-safe and never touches protected `main`), matching
+  # history / lib-perf / golden. NOT release/*: on a release branch with an open PR the
+  # else-path self-commit would churn the PR head onto a commit the REQUIRED gates never
+  # run on, so the release-branch refresh stays dispatch-only.
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       ref:
