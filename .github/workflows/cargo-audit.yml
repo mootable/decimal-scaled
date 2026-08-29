@@ -21,6 +21,13 @@ on:
 
 permissions:
   contents: read
+  # `rustsec/audit-check` FILES AN ISSUE when it finds an advisory on a
+  # push/schedule run. Without this scope the job dies on the report
+  # step with "Resource not accessible by integration" (POST /issues)
+  # *after* the scan has already succeeded — a confusing failure that
+  # masks the real finding. Read-only `contents` is still all the scan
+  # itself needs.
+  issues: write
 
 jobs:
   audit:
@@ -76,4 +83,50 @@ jobs:
           # linebender stack, a much larger surface than ttf-parser for a
           # dev-only chart generator (examples/chart_gen.rs is the sole
           # consumer). Dropping plotters may beat following it.
-          ignore: RUSTSEC-2026-0192
+          #
+          # ------------------------------------------------------------
+          #
+          # RUSTSEC-2026-0220 — `ruint` < 1.20.0 returns wrong overflow
+          # flags from its shift operations, and truncates shift amounts
+          # >= 2^32. Categorised denial-of-service: the bad `checked_shl`
+          # flag makes `to_base_be` (and string formatting) loop forever
+          # on no-alloc builds at non-limb-aligned widths.
+          #
+          # NOT REACHABLE HERE, on two independent counts:
+          #   1. `ruint` is a dev-dependency only (Cargo.toml, the
+          #      `[dev-dependencies]` block) — it is never compiled into
+          #      the published crate or into any consumer build.
+          #   2. Its sole use is benches/backends/wide_int_backends.rs,
+          #      which exercises add/sub/mul/div/rem on U256 and nothing
+          #      else. None of the affected functions (checked_shl/shr,
+          #      overflowing_*, saturating_*, wrapping_* shifts) is
+          #      called anywhere in this repo, nor is `to_base_be` or
+          #      any ruint string formatting.
+          #
+          # WHY NOT JUST BUMP IT — this is an MSRV wall, not a stale
+          # lockfile (Cargo.lock is gitignored; CI regenerates it every
+          # run). The requirement is `ruint = "1"`, which *would* admit
+          # the fix, but every patched version declares a higher MSRV
+          # than this crate does:
+          #
+          #     ruint 1.18.0 / 1.19.0 / 1.20.0   ->  rust-version 1.90
+          #     ruint 1.17.2 (newest at <= 1.89) ->  VULNERABLE
+          #     decimal-scaled                    ->  rust-version 1.89
+          #
+          # So the MSRV-aware resolver cannot select a patched ruint at
+          # all. The alternative was raising the crate's own MSRV to
+          # 1.90 — a user-facing change forced on every consumer purely
+          # to satisfy a benchmark harness. Rejected as the wrong trade.
+          #
+          # WHEN TO REMOVE (checkable, do not let this rot): the moment
+          # `rust-version` in Cargo.toml reaches 1.90 or higher, the
+          # resolver picks up patched ruint on its own — delete this id
+          # from the ignore list and update the `msrv (gate)` job in
+          # ci.yml to match. Dropping `ruint` from wide_int_backends.rs
+          # also clears it outright, at the cost of one comparison
+          # backend (`bnum` and the native path would remain).
+          #
+          # Scoped to the one advisory id on purpose, same as above — a
+          # future *different* ruint vulnerability gets a new id and
+          # still fails this gate.
+          ignore: RUSTSEC-2026-0192,RUSTSEC-2026-0220
