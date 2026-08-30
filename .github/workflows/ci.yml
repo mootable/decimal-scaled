@@ -308,13 +308,17 @@ jobs:
       - name: MSRV lib check (default features)
         run: cargo check
 
-  # INFORMATIONAL: clippy on the lib. The lib currently emits ~214
-  # pre-existing macro-generated warnings, so a `-D warnings` clippy
-  # gate would red-fail every PR. Run it without `-D warnings` and
-  # never fail the build (continue-on-error).
+  # INFORMATIONAL: clippy on the lib, deliberately NOT a blocking gate.
   #
-  # TODO(0.5.0): drive clippy warnings to zero, then promote to a gate
-  # (add `-- -D warnings` and drop continue-on-error).
+  # The old backlog is gone — measured 2026-08-30 on rustc 1.98, the lib emitted
+  # two `needless_late_init` warnings and zero after fixing them (the previous
+  # "~214 pre-existing macro-generated warnings" note was long stale).
+  #
+  # It stays advisory ON PURPOSE rather than for lack of a clean slate. `-D
+  # warnings` would tie merges to upstream clippy's release cadence: clippy adds
+  # lints every six weeks, so a new stable can red-fail unrelated PRs over code
+  # that was fine the day before. Clippy is idiom advice; correctness is gated by
+  # tests / golden / no_std / docs / msrv, none of which shift underfoot.
   clippy:
     name: clippy (informational)
     runs-on: ubuntu-latest
