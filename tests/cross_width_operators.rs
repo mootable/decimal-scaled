@@ -181,3 +181,20 @@ fn comparisons_already_span_width_and_scale() {
     assert_eq!(a, c);
     assert_ne!(a, b);
 }
+
+#[test]
+fn undeclared_result_takes_the_left_operands_type() {
+    // No type annotation on `r`: the fallback rule applies and the result is
+    // the LEFT operand's type. `b + a` is therefore b's type, `a + b` is a's
+    // width-promoted type at a's scale.
+    let a = D18::<2>::try_from(5i64).unwrap();
+    let b = D38::<6>::try_from(7i64).unwrap();
+
+    let r = b + a;
+    let _: D38<6> = r; // proves the inferred type IS b's
+    assert_eq!(r.to_string(), "12.000000");
+
+    let r = a + b;
+    let _: D38<2> = r; // promoted width, but a's scale
+    assert_eq!(r.to_string(), "12.00");
+}
