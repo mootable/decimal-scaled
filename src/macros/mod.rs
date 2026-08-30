@@ -14,6 +14,7 @@
 //! the `FromStr` parser, etc.) and the macro inside is named
 //! `decl_decimal_<surface>!` or a more specific variant.
 
+pub(crate) mod reshape;
 pub(crate) mod cross_width_ops;
 pub(crate) mod arithmetic;
 pub(crate) mod basics;

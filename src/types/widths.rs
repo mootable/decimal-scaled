@@ -2266,3 +2266,27 @@ crate::macros::cross_width_ops::decl_cross_width_pair!(D616, 32, D924, 48);
 crate::macros::cross_width_ops::decl_cross_width_pair!(D616, 32, D1232, 64);
 #[cfg(all(any(feature = "d924", feature = "xx-wide"), any(feature = "d1232", feature = "xx-wide")))]
 crate::macros::cross_width_ops::decl_cross_width_pair!(D924, 48, D1232, 64);
+
+// --- reshape: width + scale in one call, any direction ---------------
+crate::macros::reshape::decl_decimal_reshape!(D18, 1);
+crate::macros::reshape::decl_decimal_reshape!(D38, 2);
+#[cfg(any(feature = "d57", feature = "wide"))]
+crate::macros::reshape::decl_decimal_reshape!(D57, 3);
+#[cfg(any(feature = "d76", feature = "wide"))]
+crate::macros::reshape::decl_decimal_reshape!(D76, 4);
+#[cfg(any(feature = "d115", feature = "wide"))]
+crate::macros::reshape::decl_decimal_reshape!(D115, 6);
+#[cfg(any(feature = "d153", feature = "wide"))]
+crate::macros::reshape::decl_decimal_reshape!(D153, 8);
+#[cfg(any(feature = "d230", feature = "wide"))]
+crate::macros::reshape::decl_decimal_reshape!(D230, 12);
+#[cfg(any(feature = "d307", feature = "wide"))]
+crate::macros::reshape::decl_decimal_reshape!(D307, 16);
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+crate::macros::reshape::decl_decimal_reshape!(D462, 24);
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+crate::macros::reshape::decl_decimal_reshape!(D616, 32);
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+crate::macros::reshape::decl_decimal_reshape!(D924, 48);
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+crate::macros::reshape::decl_decimal_reshape!(D1232, 64);
