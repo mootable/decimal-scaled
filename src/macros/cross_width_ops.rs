@@ -1,90 +1,62 @@
-//! Cross-WIDTH operators at equal `SCALE`.
+//! Cross-WIDTH operators, at any SCALEs.
 //!
-//! `a + b` where `a` and `b` differ in storage width, `SCALE`, or both.
+//! `a + b` where the operands differ in storage width, SCALE, or both.
 //!
-//! **Result type = the WIDER storage width, at the LEFT operand's `SCALE`.**
-//! The width promotion is lossless. The scale is taken from the left operand,
-//! so when the right-hand side carries a finer scale its value is rescaled
-//! using the crate's default rounding mode -- exactly what `add_of` does, and
-//! the reason a `_with(mode)` sibling exists for explicit control.
+//! Result type = the WIDER storage width, at the LEFT operand's SCALE. The width
+//! promotion is lossless; a finer-scaled right-hand side is rescaled with the
+//! crate default rounding mode, exactly as `add_of` does.
 //!
-//! Two consequences worth knowing:
-//! - `+` can ROUND here, where same-scale `+` never did;
-//! - the result TYPE is not commutative in scale: `a + b` has the left's
-//!   `SCALE`, `b + a` has the right's. The values agree to the shared scale.
+//! Left-first is deliberate. `max(S1, S2)` was REJECTED: it makes the result type
+//! depend on the VALUES of the const params rather than operand position, which
+//! breaks the determinism Rust guarantees elsewhere. It also could not be a Cargo
+//! feature (non-additive: unification would let any crate in the graph silently
+//! change what `a + b` returns for everyone). Left-first also keeps
+//! `a += b` == `a = a + b`, which a right-first rule would break.
 //!
-//! Both are lifted by the nightly `cross-scale-ops` feature, which sets the
-//! result SCALE to `max(S1, S2)` — lossless in BOTH axes and commutative in
-//! type. That needs a computed const in `Output` position, which stable Rust
-//! rejects outright ("generic parameters may not be used in const operations",
-//! verified 2026-08-30) — so it is a genuine added capability, not a
-//! convenience, and nightly stays optional rather than required.
+//! Per-pair rather than blanket: `Add` carries an associated `Output`, and
+//! deriving it from two generic widths needs a computed const in type position,
+//! which stable rejects. At a macro invocation both widths are literals, so
+//! `Output` is concrete. Coherence is free -- same-width operators are already
+//! emitted per concrete type, so every pair here is a distinct (Self, Rhs) and
+//! the N == M diagonal is untouched. Measured: 66 pairs cost no compile time.
 //!
-//! # Why per-pair and not one blanket impl
+//! Comparisons need none of this: they return bool, have no `Output`, and are
+//! already blanket over (N, M, S1, S2).
 //!
-//! `Add` carries an associated `Output`. Making it the wider of two generic
-//! widths would need `max(N, M)` in type position — a computed const generic,
-//! i.e. the `generic_const_exprs` wall. Emitting one impl per concrete
-//! `(Self, Rhs)` pair sidesteps it entirely: both widths are literals at the
-//! invocation site, so `Output` is just a concrete type.
-//!
-//! It also keeps coherence free. The same-width operators are already emitted
-//! per concrete type (`macros::arithmetic`), so every pair here is a distinct
-//! `(Self, Rhs)` and the `N == M` diagonal is never touched.
-//!
-//! Comparisons need none of this — `PartialEq`/`PartialOrd` return `bool`, so
-//! they have no `Output` and are already blanket over `(N, M, S1, S2)`,
-//! cross-width *and* cross-scale.
-//!
-//! # Deliberate limitations (compile errors, not silent loss)
-//!
-//! - **Cross-SCALE is not offered *through operators*.** The crate fully
-//!   supports cross-scale arithmetic — via `D<W>::add_of(a, b)` on stable and
-//!   the nightly `cross::*` free functions. It is only the operator form that
-//!   cannot: `Output` would need `max(S1, S2)`, and `SCALE` ranges `0..=1232`,
-//!   so per-`(S1, S2)` impls are unbounded. The diagnostic says so explicitly
-//!   rather than implying the capability is missing.
-//! - **Narrowing compound assignment is not offered.** `wide += narrow` is
-//!   fine (the rhs widens into `Self`); `narrow += wide` cannot be, because
-//!   `AddAssign` writes back into `Self` and would have to discard digits.
-//!
-//! Cross-SCALE misuse reports the `SameScale` marker's message, which names
-//! both SCALEs and points at the explicit `_of` form.
-//!
-//! Narrowing compound assignment reports `E0308: mismatched types` (expected
-//! the narrower type). That one cannot carry a custom message: the same-type
-//! `AddAssign<Self>` impl emitted by `macros::arithmetic` shadows any gated
-//! impl we could add, so inference commits to it before a marker bound is ever
-//! evaluated. Verified 2026-08-30 -- do not re-attempt the gated-impl trick.
-//!
-//! Neither is ever a silent truncation.
-
+//! Compound assignment keeps the LEFT operand's width AND scale. Widening always
+//! fits. Narrowing computes at the wider width then converts back down, and
+//! panics with Rust's standard overflow message if it does not fit -- a value
+//! that overflows on a width change behaves like any other operator overflow,
+//! not a compile error.
 
 /// Emit every cross-width operator for ONE unordered width pair.
-///
-/// `$Narrow` must be the strictly narrower storage. Emits, for equal `SCALE`:
-/// - `Add`/`Sub`/`Mul`/`Div`/`Rem` in **both** directions, `Output` = `$Wide`;
-/// - `AddAssign`/…/`RemAssign` on `$Wide` taking `$Narrow` (widening only).
-///
-/// Every body delegates to the existing `<$Wide>::<op>_of`, so this macro adds
-/// routing only — no arithmetic lives here.
 macro_rules! decl_cross_width_pair {
-    ($Narrow:ident, $Wide:ident) => {
+    ($Narrow:ident, $NarrowLimbs:literal, $Wide:ident, $WideLimbs:literal) => {
         $crate::macros::cross_width_ops::decl_cross_width_value_op!($Narrow, $Wide, Add, add, add_of);
         $crate::macros::cross_width_ops::decl_cross_width_value_op!($Narrow, $Wide, Sub, sub, sub_of);
         $crate::macros::cross_width_ops::decl_cross_width_value_op!($Narrow, $Wide, Mul, mul, mul_of);
         $crate::macros::cross_width_ops::decl_cross_width_value_op!($Narrow, $Wide, Div, div, div_of);
         $crate::macros::cross_width_ops::decl_cross_width_value_op!($Narrow, $Wide, Rem, rem, rem_of);
 
-        $crate::macros::cross_width_ops::decl_cross_width_assign_op!($Narrow, $Wide, AddAssign, add_assign, add_of);
-        $crate::macros::cross_width_ops::decl_cross_width_assign_op!($Narrow, $Wide, SubAssign, sub_assign, sub_of);
-        $crate::macros::cross_width_ops::decl_cross_width_assign_op!($Narrow, $Wide, MulAssign, mul_assign, mul_of);
-        $crate::macros::cross_width_ops::decl_cross_width_assign_op!($Narrow, $Wide, DivAssign, div_assign, div_of);
-        $crate::macros::cross_width_ops::decl_cross_width_assign_op!($Narrow, $Wide, RemAssign, rem_assign, rem_of);
+        $crate::macros::cross_width_ops::decl_cross_width_assign_op!(
+            $Narrow, $NarrowLimbs, $Wide, AddAssign, add_assign, add_of,
+            "attempt to add with overflow");
+        $crate::macros::cross_width_ops::decl_cross_width_assign_op!(
+            $Narrow, $NarrowLimbs, $Wide, SubAssign, sub_assign, sub_of,
+            "attempt to subtract with overflow");
+        $crate::macros::cross_width_ops::decl_cross_width_assign_op!(
+            $Narrow, $NarrowLimbs, $Wide, MulAssign, mul_assign, mul_of,
+            "attempt to multiply with overflow");
+        $crate::macros::cross_width_ops::decl_cross_width_assign_op!(
+            $Narrow, $NarrowLimbs, $Wide, DivAssign, div_assign, div_of,
+            "attempt to divide with overflow");
+        $crate::macros::cross_width_ops::decl_cross_width_assign_op!(
+            $Narrow, $NarrowLimbs, $Wide, RemAssign, rem_assign, rem_of,
+            "attempt to calculate the remainder with overflow");
     };
 }
 
-/// One value operator, both directions. `Output` is always the wider type.
+/// One value operator, both directions. Output = wider type at the LEFT scale.
 macro_rules! decl_cross_width_value_op {
     ($Narrow:ident, $Wide:ident, $Trait:ident, $method:ident, $of:ident) => {
         impl<const S1: u32, const S2: u32> ::core::ops::$Trait<$crate::$Wide<S2>> for $crate::$Narrow<S1> {
@@ -105,17 +77,22 @@ macro_rules! decl_cross_width_value_op {
     };
 }
 
-/// One compound-assignment operator, widening direction ONLY.
-///
-/// `Output` is `Self`, so the left operand's width AND scale are both kept and
-/// the right-hand side rescales into them. The narrowing direction is simply
-/// not emitted: it would have to discard digits to fit.
+/// One compound-assignment operator, BOTH directions.
 macro_rules! decl_cross_width_assign_op {
-    ($Narrow:ident, $Wide:ident, $Trait:ident, $method:ident, $of:ident) => {
+    ($Narrow:ident, $NarrowLimbs:literal, $Wide:ident, $Trait:ident, $method:ident, $of:ident, $overflow:literal) => {
         impl<const S1: u32, const S2: u32> ::core::ops::$Trait<$crate::$Narrow<S2>> for $crate::$Wide<S1> {
             #[inline]
             fn $method(&mut self, rhs: $crate::$Narrow<S2>) {
                 *self = $crate::$Wide::<S1>::$of(*self, rhs);
+            }
+        }
+
+        impl<const S1: u32, const S2: u32> ::core::ops::$Trait<$crate::$Wide<S2>> for $crate::$Narrow<S1> {
+            #[inline]
+            fn $method(&mut self, rhs: $crate::$Wide<S2>) {
+                let wide = $crate::$Wide::<S1>::$of(*self, rhs);
+                let narrowed = wide.0.try_narrow::<$NarrowLimbs>().expect($overflow);
+                *self = $crate::$Narrow::<S1>::from_bits(narrowed);
             }
         }
     };
