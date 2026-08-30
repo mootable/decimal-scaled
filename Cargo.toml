@@ -214,7 +214,7 @@ dashu-float = "0.6"
 # dashu-int provides IBig for exact base-10 integer scaling of dashu-float
 # results in the comparison benches.
 dashu-int = { version = "0.6", default-features = false, features = ["std"] }
-decimal-rs = "0.1"
+decimal-rs = "0.2"
 scientific = "0.5"
 # Chart generation for docs/figures/library_comparison/*.png — pure
 # Rust, no Python dep. Driven by examples/chart_gen.rs.
