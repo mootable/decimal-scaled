@@ -827,14 +827,12 @@ fn expand_literal(form: LiteralForm) -> TokenStream {
     //                         applying half-to-even rounding only if
     //                         `rounded` was set.
     let shifted_digits: String;
-    let final_digits: &str;
-
-    if target_scale == natural_scale {
-        final_digits = &digits;
+    let final_digits: &str = if target_scale == natural_scale {
+        &digits
     } else if target_scale > natural_scale {
         let pad = target_scale - natural_scale;
         shifted_digits = pad_with_zeros(&digits, pad as usize);
-        final_digits = &shifted_digits;
+        &shifted_digits
     } else {
         let shift = natural_scale - target_scale;
         // The digits string must be at least `shift` long for a
@@ -866,8 +864,8 @@ fn expand_literal(form: LiteralForm) -> TokenStream {
             // Half-to-even on the kept|dropped boundary.
             shifted_digits = round_half_to_even(kept, dropped, sign < 0);
         }
-        final_digits = &shifted_digits;
-    }
+        &shifted_digits
+    };
 
     if width.wide {
         emit_wide(width, target_scale, sign, final_digits)
