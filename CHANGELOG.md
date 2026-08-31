@@ -141,6 +141,37 @@ at the end of this section.
   the exact input rather than a quotient. `log1p` opens with a divide that
   is provably never exact for the affected family, so it needed the
   different rule described above.
+- **`sin` and `cos` mis-rounded at tiny arguments with more than one
+  significant digit** (present since 0.5.0). The directed adjust for the
+  tiny-`x` band named the deciding term with a digit-count formula derived
+  from the argument's exponent. That formula is blind to the *significand*:
+  it is correct for a single-digit argument and wrong as soon as the
+  argument has more digits than one.
+
+  At `x = 3e-153 + 1e-252` and `SCALE = 461`, the cubic term carries
+  `450 + 4.5e-97`. The `4.5e-97` is sub-LSB imprecision — below the last
+  stored digit, so the walker cannot see it, but **207 digits shallower**
+  than the term the formula names, so the formula does not account for it
+  either. It falls in the gap between the two. Worse, its sign is the sign
+  of the significand's cube, so it **flips with the argument's last
+  significant digit**: `3e-153 - 1e-252` has the same exponent, the same
+  term index, and the opposite correct answer.
+
+  The replacement carries no closed-form claim at all. Consecutive partial
+  sums of an alternating series with strictly decreasing terms straddle the
+  true value, so the pair *brackets* the answer without anyone having to say
+  how deep the deciding digit sits — there is no depth claim left to be
+  wrong about. One generic kernel serves `sin`, `cos`, `atan` and `asinh`,
+  each supplying its own term-ratio recurrence. `tan` and `asin` are
+  deliberately excluded: their Taylor coefficients are all positive, so
+  consecutive partial sums approach from one side instead of straddling and
+  the bracket's precondition genuinely fails; they keep the existing path,
+  where all-positive coefficients make the sign unconditional.
+
+  It went unfound for a release because every adversarial input tried
+  against this band had a single-digit significand, and reproducing it needs
+  roughly 47 significant digits. The golden lead now carries the
+  multi-digit family.
 - **`FromStr` rejected exactly-representable trailing zeros.** `"1.00"` at
   `SCALE = 0` returned `ParseError::OverlongFractional`, as did `"2.0"`,
   `"-1.0"`, `"0.0"` and every literal whose digits past `SCALE` are all
