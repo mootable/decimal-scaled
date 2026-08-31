@@ -86,11 +86,36 @@ at the end of this section.
 
 ### Fixed
 
+- **`ln` returned the nearest-mode answer under `Ceiling` near `x = 1`**
+  (present since 0.5.0). At D616<590>, D616<615> and D924<693>,
+  `ln_strict_with(Ceiling)` gave the `HalfToEven` result. The near-one
+  guard tested only the *tangent* bracket — whether the result equals the
+  linear term `δ = x - 1`. For arguments where `δ²/2` happens to be an
+  exact multiple of one ULP, the value instead lands on the *parabola*
+  point `δ - δ²/2`, a different grid point, so the guard did not fire; the
+  deciding cubic then sits at depth ~3·SCALE/2, past the Ziv walker's
+  reach, and the kernel treats the value as exactly on the grid.
+
+  It is one-sided for a reason worth recording: since
+  `d/du [ln(1+u) - u + u²/2] = u²/(1+u)` is strictly positive and vanishes
+  at `u = 0`, the true value lies strictly *above* the parabola for
+  `x > 1` and strictly *below* it for `x < 1`. So a value landing on the
+  parabola leaves `Floor`, `Trunc` and the nearest modes accidentally
+  correct, and only `Ceiling` wrong.
+
+  Both brackets now live in one generic kernel, and the test is an exact
+  integer comparison evaluated at double width — `δ²` genuinely overflows
+  a single width at high scales, so a single-width check would pass the
+  cells that exposed the bug and fail wider members of the same family.
+  Not fixed by raising the walker cap.
 - **`log1p` sub-resolution directed rounding near `t = 0`.** For `t` at one
   LSB the deficit `t²/2` falls below the Ziv precision horizon, so the walker
   saw a zero residual and `Floor` returned one LSB high (reproduced at
   D1232<1231>). Resolved analytically, mirroring how the Tang `ln` path
   handles the same situation near 1 — not by raising the walker cap.
+  `log1p` carried the **same** too-narrow tangent-only guard as `ln` above,
+  so the parabola case reached it too; both are now faces over the shared
+  kernel and were fixed together.
 - **Golden validator: an unsound oracle could veto a sound vector.** A
   validator that *cannot represent* an input abstains harmlessly, but one that
   computes a wrong value drops the whole line — so it could discard a vector
