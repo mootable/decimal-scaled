@@ -43,9 +43,12 @@ pub(crate) mod add;
 pub(crate) mod cbrt;
 pub(crate) mod div;
 pub(crate) mod exp;
-/// `expm1` candidate kernels — drafted, none wired (no `policy::expm1` yet).
-/// See `algos::expm1`'s module docs for the four variants and
-/// `research/2026_08_31_expm1_algorithm_design.md` for the derivation.
+/// `expm1` kernels. `policy::expm1` routes two of the four — `expm1_series`
+/// for `|x| <= 1` (`Algorithm::Series`) and `expm1_via_exp` beyond it
+/// (`Algorithm::ViaExp`) — on a validity wall, not a tuning threshold.
+/// `expm1_halving` and `expm1_reduced` are kept as unrouted alternatives. See
+/// `algos::expm1`'s module docs for the four variants and the derivation's
+/// load-bearing results.
 pub(crate) mod expm1;
 pub(crate) mod hypot;
 pub(crate) mod ln;

@@ -29,11 +29,10 @@
 //! | [`expm1_halving`] | binary `v >> n` | `E <- E*(E + 2)` | kept — contracting for `x <= 0`, no `ln 2` |
 //! | [`expm1_reduced`] | `k*ln 2` | `((P + E) << k) - P` | kept — flat peak for large positive `x` |
 //!
-//! The design derivation — the reassembly identity and its error analysis, the
-//! no-cancellation lemma, the Ziv strategy and the per-candidate validity
-//! inequalities — is in `research/2026_08_31_expm1_algorithm_design.md`.
-//!
-//! Two results from that derivation are load-bearing for whoever wires this:
+//! Each candidate's reduction and reassembly are the table above; its validity
+//! inequality is stated in its own module docs, and the Ziv strategy in
+//! [`expm1_support`]. The three results a wirer cannot reconstruct from those
+//! alone are recorded here in full:
 //!
 //! 1. **The reassembly cannot cancel.** For `k != 0`, `|expm1(x)| >= 0.2928`, so
 //!    the final `- 1` discards at most 1.77 bits. The one real cancellation in
