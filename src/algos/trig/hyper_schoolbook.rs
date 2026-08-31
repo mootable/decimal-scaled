@@ -356,7 +356,9 @@ where
     // Maclaurin signs ALTERNATE (+,−,+,−), like sin/atan, so `alternating =
     // true`. The walker is mode-blind there (`!decided`, the deciding odd term
     // past its reach); the term's sign is analytic. The proven golden-
-    // comprehensive find: asinh(±3e-117) at D462 s461 / D616 s615 (j* = 5).
+    // comprehensive find: asinh(±3e-117) at D462 s461 (j* = 5) and D616 s615
+    // (j* = 7) — both have k = 117, but ⌊461/117⌋ + 1 = 4 rounds up to 5 while
+    // ⌊615/117⌋ + 1 = 6 rounds up to 7, so the two cells do NOT share a `j*`.
     // The exact alternating-series bracket first: where it closes it PROVES
     // which side of `r` the true value lies on, superseding the `j*`-parity
     // rule whose exactness premise fails for a multi-digit significand.
