@@ -32,6 +32,20 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         Self::from_f64(self.to_f64().ln())
     }
 
+    /// Returns `ln(1 + self)` via the f64 bridge (`f64::ln_1p`).
+    ///
+    /// # Precision
+    ///
+    /// Lossy: involves f64 at some point; result may lose precision.
+    /// Provided for parity with [`Self::log1p_strict`]; at this crate's
+    /// fixed-point scales it is equivalent to `(1 + self).ln_fast()`.
+    #[cfg(feature = "std")]
+    #[inline]
+    #[must_use]
+    pub fn log1p_fast(self) -> Self {
+        Self::from_f64(self.to_f64().ln_1p())
+    }
+
     /// Returns the logarithm of `self` in the given `base`.
     ///
     /// Implemented via a single `f64::log(self_f64, base_f64)` call, which
@@ -155,6 +169,12 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[must_use]
     pub fn ln(self) -> Self {
         self.ln_fast()
+    }
+    /// Plain dispatcher: forwards to [`Self::log1p_fast`] in this feature mode.
+    #[inline]
+    #[must_use]
+    pub fn log1p(self) -> Self {
+        self.log1p_fast()
     }
     /// Plain dispatcher: forwards to [`Self::log_fast`] in this feature mode.
     #[inline]

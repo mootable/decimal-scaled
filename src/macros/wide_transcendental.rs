@@ -2984,6 +2984,28 @@ macro_rules! decl_wide_transcendental {
                 ))
             }
 
+            /// `ln(1 + self)`. Strict: integer-only and correctly
+            /// rounded. Panics if `self <= -1`.
+            ///
+            /// Provided for API parity and standards conformance (C
+            /// `log1p`, IEEE 754-2019 `logp1`). In this crate's
+            /// fixed-point representation it is **equivalent** to
+            /// `(1 + self).ln_strict()` at the same scale — `1 + self`
+            /// is exactly representable, so the binary floating-point
+            /// cancellation that motivates a separate `log1p` does not
+            /// arise; it is not more accurate than [`Self::ln_strict`].
+            ///
+            /// Delegates to the policy-registered log1p kernel for this
+            /// `(width, SCALE)` cell — see `policy::log1p`.
+            #[inline]
+            #[must_use]
+            pub fn log1p_strict(self) -> Self {
+                Self::from_bits($crate::policy::log1p::dispatch::<_, SCALE>(
+                    self.to_bits(),
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                ))
+            }
+
             /// Natural logarithm via the Brent–Salamin AGM (1976).
             /// Strict and correctly rounded. Same contract as
             /// [`Self::ln_strict`]; the implementation path differs.
@@ -3483,6 +3505,13 @@ macro_rules! decl_wide_transcendental {
             #[must_use]
             pub fn ln_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 Self::from_bits($crate::policy::ln::dispatch::<_, SCALE>(self.to_bits(), mode))
+            }
+
+            /// Mode-aware sibling of [`Self::log1p_strict`].
+            #[inline]
+            #[must_use]
+            pub fn log1p_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                Self::from_bits($crate::policy::log1p::dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
             /// Mode-aware sibling of [`Self::ln_strict_agm`].
@@ -3995,6 +4024,35 @@ macro_rules! decl_wide_transcendental {
                 let w = SCALE + working_digits;
                 let r = $core::ln_fixed_routed::<SCALE>($core::to_work_scaled(raw, working_digits), w);
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// `ln(1 + self)` with caller-chosen guard digits.
+            #[inline]
+            #[must_use]
+            pub fn log1p_approx(self, working_digits: u32) -> Self {
+                self.log1p_approx_with(
+                    working_digits,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
+            }
+
+            /// `ln(1 + self)` with caller-chosen guard digits AND
+            /// rounding mode.
+            #[inline]
+            #[must_use]
+            pub fn log1p_approx_with(
+                self,
+                working_digits: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> Self {
+                if working_digits == $core::GUARD {
+                    return self.log1p_strict_with(mode);
+                }
+                Self::from_bits($crate::policy::log1p::dispatch_with::<_, SCALE>(
+                    self.to_bits(),
+                    working_digits,
+                    mode,
+                ))
             }
 
             /// Log to chosen base with caller-chosen guard digits.
@@ -4804,6 +4862,12 @@ macro_rules! decl_wide_transcendental {
             #[must_use]
             pub fn ln(self) -> Self {
                 self.ln_strict()
+            }
+            /// With `strict`, dispatches to [`Self::log1p_strict`].
+            #[inline]
+            #[must_use]
+            pub fn log1p(self) -> Self {
+                self.log1p_strict()
             }
             /// With `strict`, dispatches to [`Self::log_strict`].
             #[inline]

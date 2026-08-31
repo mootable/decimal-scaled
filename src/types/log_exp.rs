@@ -153,6 +153,86 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         self.ln_strict()
     }
 
+    /// Returns `ln(1 + self)`.
+    ///
+    /// # Why it exists
+    ///
+    /// For API parity and standards conformance (C `log1p`, IEEE
+    /// 754-2019 `logp1`). In this crate's fixed-point representation it
+    /// is numerically **equivalent** to `(1 + self).ln_strict()` at the
+    /// same scale — `1 + self` is exactly representable, so the binary
+    /// floating-point cancellation that motivates a separate `log1p`
+    /// does not arise here. It is not more accurate than
+    /// [`Self::ln_strict`] of `1 + self`; both are correctly rounded.
+    ///
+    /// # Algorithm
+    ///
+    /// The Goldberg/Higham reformulation
+    /// `log1p(t) = 2·artanh(t / (2 + t))`, evaluated at
+    /// `SCALE + STRICT_GUARD` working digits and rounded once at the
+    /// end, so the result is correctly rounded. See `policy::log1p`.
+    ///
+    /// # Precision
+    ///
+    /// Strict: integer-only, and **correctly rounded** — within 0.5 ULP.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self <= -1` (the domain is `t > -1`, mirroring
+    /// [`Self::ln_strict`]'s positive-argument requirement on `1 + t`),
+    /// or if the result overflows the type's representable range.
+    #[inline]
+    #[must_use]
+    pub fn log1p_strict(self) -> Self {
+        self.log1p_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// `ln(1 + self)` under the supplied rounding mode. See
+    /// [`Self::log1p_strict`].
+    #[inline]
+    #[must_use]
+    pub fn log1p_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
+        Self::from_bits(crate::policy::log1p::dispatch::<_, SCALE>(self.to_bits(), mode))
+    }
+
+    /// `ln(1 + self)` with a caller-chosen number of guard digits above
+    /// the storage scale, trading away the strict 0.5-ULP guarantee for
+    /// proportionally faster evaluation.
+    #[inline]
+    #[must_use]
+    pub fn log1p_approx(self, working_digits: u32) -> Self {
+        self.log1p_approx_with(
+            working_digits,
+            crate::support::rounding::DEFAULT_ROUNDING_MODE,
+        )
+    }
+
+    /// `ln(1 + self)` with caller-chosen guard digits AND rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn log1p_approx_with(
+        self,
+        working_digits: u32,
+        mode: crate::support::rounding::RoundingMode,
+    ) -> Self {
+        if working_digits == STRICT_GUARD {
+            return self.log1p_strict_with(mode);
+        }
+        Self::from_bits(crate::policy::log1p::dispatch_with::<_, SCALE>(
+            self.to_bits(),
+            working_digits,
+            mode,
+        ))
+    }
+
+    /// Returns `ln(1 + self)`.
+    #[cfg(all(feature = "strict", not(feature = "fast")))]
+    #[inline]
+    #[must_use]
+    pub fn log1p(self) -> Self {
+        self.log1p_strict()
+    }
+
     /// Returns the logarithm of `self` in the given `base`.
     #[inline]
     #[must_use]
