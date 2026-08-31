@@ -538,11 +538,17 @@ use crate::support::rounding::RoundingMode;
     ///   so the tail need not carry its first term's sign;
     /// * the loop stopped at [`SERIES_CAP`] rather than because a term
     ///   vanished, so the tail is NOT below the working resolution;
-    /// * any division in any included term was inexact. Then the returned sum
+    /// * any division in any INCLUDED term was inexact. Then the returned sum
     ///   is the exact partial sum plus an integer rounding error `e`, and
     ///   since `|e| >= 1` dominates the sub-unit tail the true side would be
     ///   `-sign(e)` rather than the tail's. Requiring exactness is what makes
     ///   the tag a PROOF of the side rather than an overwhelming likelihood.
+    ///
+    /// "Included" is load-bearing in that last one. The term that ENDS the
+    /// loop reached zero by being rounded away, so its division is inexact
+    /// whenever it was not already zero — but it is never added to the sum and
+    /// so cannot contribute error. Counting it would leave `exact` false on
+    /// essentially every input and the tag permanently `None`.
     fn expm1_fixed_inner<S: BigInt>(s: S, w: u32, want_tag: bool) -> (S, Option<TailSign>)
     where
         S::Scratch: ComputeLimbs,
@@ -560,26 +566,29 @@ use crate::support::rounding::RoundingMode;
             // `iter` is bounded by SERIES_CAP (20_000), so the cast to the
             // generic `lit`'s i128 argument is lossless.
             let d = lit::<S>(iter as i128);
-            term = if want_tag {
+            // `step_exact`: both of this term's divisions came out exact.
+            let (next, step_exact) = if want_tag {
                 // The same value `mul::<S>(term, s, w) / d` produces, with the
                 // exactness of both divisions recorded on the way through.
                 let prod = term.wrapping_mul_low_u128(s);
                 let scaled = round_div_pow10::<S>(prod, w);
-                if exact && scaled.wrapping_mul_low_u128(one::<S>(w)) != prod {
-                    exact = false;
-                }
+                let mul_exact = scaled.wrapping_mul_low_u128(one::<S>(w)) == prod;
                 let (q, r) = div_rem_exact::<S>(scaled, d);
-                if r != zero::<S>() {
-                    exact = false;
-                }
-                q
+                (q, mul_exact && r == zero::<S>())
             } else {
-                mul::<S>(term, s, w) / d
+                (mul::<S>(term, s, w) / d, true)
             };
+            term = next;
             if term == zero::<S>() {
                 vanished_at = ::core::option::Option::Some(iter);
                 break;
             }
+            // Only a term that is actually ADDED can carry error into `sum`.
+            // The term that VANISHES must not be counted: it reached zero by
+            // being rounded away, so its division is inexact by construction,
+            // and folding it in would make `exact` false on essentially every
+            // input and the tag permanently `None`.
+            exact = exact && step_exact;
             sum = sum + term;
             iter += 1;
             if iter > SERIES_CAP {
