@@ -106,9 +106,27 @@ pub(crate) fn checked<S>(v: Option<S>, method: &str, scale: u32) -> S {
 /// A no-op unless the result is exactly `raw`, so every cell whose deciding
 /// digit the walker actually reaches passes through untouched.
 ///
-/// This is the first of the two hand-offs that let the family run its walkers
-/// with `never_exact = false` (see the module docs): it owns the one band where
-/// the sub-resolution side is analytically known near zero.
+/// # Scope — the STRICT series path no longer uses this
+///
+/// Testing `result == raw` reaches only the ONE grid point where the value
+/// lands on its own linear term. The value lands on DEEPER partial sums just
+/// as often, whenever the argument makes `x^j/j!` terminate — `x = -3e-152`
+/// reaches the 3rd, `x = -3e-86` the 5th — and this test is blind to every one
+/// of them. No fixed number of such tests would do, because the run of
+/// exactly-representable terms is unbounded for a suitably composite
+/// coefficient.
+///
+/// [`expm1_series_g`](super::expm1_series::expm1_series_g) therefore threads
+/// the series' own tail sign into the walker instead, which is exact at every
+/// depth. What remains here is the two callers that cannot use it:
+///
+/// * the `_approx` single-shot paths, which run no Ziv walker at all, and
+///   whose contract is explicitly not correct rounding;
+/// * [`expm1_via_exp_g`](super::expm1_via_exp::expm1_via_exp_g), where it is
+///   a provable no-op — the policy routes `|x| > 1` there, and
+///   `expm1(x) - x = x²/2 + ...` exceeds half an ULP by orders of magnitude
+///   across that whole region, so `result == raw` never holds. It is left in
+///   place rather than removed so that path stays byte-for-byte unchanged.
 #[inline]
 pub(crate) fn adjust_near_zero<St: BigInt>(result: St, raw: St, mode: RoundingMode) -> St {
     if crate::support::rounding::is_nearest_mode(mode) {
