@@ -1426,6 +1426,78 @@ mod tests {
     use super::*;
     use crate::int::types::Int;
 
+    /// [`round_div_sided`]'s polarity at all four sign/bump combinations plus
+    /// the exact case. The `log1p` tail-sign channel rests entirely on this
+    /// mapping, and it is what a fixed polarity would get wrong at half its
+    /// arguments: the SAME truncation leaves the truth `Above` a positive
+    /// quotient and `Below` a negative one.
+    #[test]
+    fn round_div_sided_reports_the_side_the_rounding_left_the_truth_on() {
+        type I = Int<2>;
+        let d = |n: i128, m: i128| round_div_sided::<I>(lit::<I>(n), lit::<I>(m));
+
+        // 7/3 = 2.333… — keeps q = 2, so the truth is above what came back.
+        assert_eq!(d(7, 3), (lit::<I>(2), Some(TailSign::Above)));
+        // 8/3 = 2.667… — bumps to 3, a full unit past the truth.
+        assert_eq!(d(8, 3), (lit::<I>(3), Some(TailSign::Below)));
+        // -7/3 — the same truncation as +7/3, opposite side.
+        assert_eq!(d(-7, 3), (lit::<I>(-2), Some(TailSign::Below)));
+        // -8/3 — bumps to -3, past the truth, which is above it.
+        assert_eq!(d(-8, 3), (lit::<I>(-3), Some(TailSign::Above)));
+        // Exact: no side to report.
+        assert_eq!(d(6, 3), (lit::<I>(2), None));
+    }
+
+    /// The tail-sign channel FIRES for the family that needs it, and reports
+    /// OPPOSITE sides at the two signs.
+    ///
+    /// `t = ±10^-4` at working scale 12 is the small-scale twin of the
+    /// `±10^-(S/2)` arguments that mis-round at `D462<346>` / `D616<590>`:
+    /// the artanh series vanishes entirely at the working scale, so the seed
+    /// divide's rounding and the dropped tail are the only error terms, and
+    /// they agree. From `Q = ±p/(2 ± x)` with `p = 10^8`, `x = 10^-4`:
+    ///
+    /// ```text
+    ///  Q(+) =  (p/2)(1 − x/2 + x²/4 − …) =  49_997_500.12499375…
+    ///  Q(−) = −(p/2)(1 + x/2 + x²/4 + …) = −50_002_500.12500625…
+    /// ```
+    ///
+    /// Both fractions are well under a half, so half-to-even keeps the
+    /// truncation at BOTH signs — and truncation is toward zero, so the exact
+    /// quotient is left on the away-from-zero side: `Above` for `u > 0`,
+    /// `Below` for `u < 0`.
+    ///
+    /// A tag that were always `None` would be inert and would look exactly
+    /// like "no regressions", so this pins that it is `Some` — and pins the
+    /// side, which is the half a fixed polarity would get wrong.
+    #[test]
+    fn log1p_fixed_tagged_reports_opposite_sides_at_the_two_signs() {
+        type I = Int<2>;
+        let w: u32 = 12;
+        let t = pow10::<I>(8);
+
+        let (pos, pos_tag) = log1p_fixed_tagged::<I>(t, w);
+        assert_eq!(pos, lit::<I>(2 * 49_997_500), "log1p(+1e-4) at w=12 is 2u");
+        assert_eq!(
+            pos_tag,
+            Some(TailSign::Above),
+            "a truncated seed divide and a positive tail both put the truth ABOVE"
+        );
+
+        let (neg, neg_tag) = log1p_fixed_tagged::<I>(-t, w);
+        assert_eq!(neg, lit::<I>(-2 * 50_002_500), "log1p(-1e-4) at w=12 is 2u");
+        assert_eq!(
+            neg_tag,
+            Some(TailSign::Below),
+            "the same truncation at a negative argument puts the truth BELOW"
+        );
+
+        // The untagged wrapper is the tagged kernel with the tag dropped —
+        // the value must not move.
+        assert_eq!(log1p_fixed::<I>(t, w), pos);
+        assert_eq!(log1p_fixed::<I>(-t, w), neg);
+    }
+
     /// The `k < 0` internal-peak wrap: a
     /// deep-negative argument at a deep (cap-clamped Ziv probe) working
     /// scale — `exp(-62.175)` at `w = 184` in `Int<24>` (the narrow tiers'
