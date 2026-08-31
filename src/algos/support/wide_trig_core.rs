@@ -682,16 +682,80 @@ pub(crate) fn tiny_x_linear_directed<St: BigInt, const SCALE: u32>(
 }
 
 /// Upper bound on the deciding Taylor-term index `j*` that the deep-band
-/// directed post-adjust ([`tiny_x_deep_directed_adjust`]) handles. `j* ≤ JMAX`
-/// is equivalent to `|x| < 10^(−SCALE/JMAX)` — a CONTINUOUS tiny-argument band
-/// (Class I), not a per-cell fit: a smaller `|x|` raises the leading-digit
-/// position `k`, which lowers `j*`. The bound keeps the post-adjust off NON-tiny
-/// arguments (whose `k = 1` gives `j* ≈ SCALE`, far above `JMAX`) so a rare
-/// deep Table-Maker tie at an ordinary magnitude is never mistaken for the
-/// analytic tiny-`x` regime. `41` spans every deep sub-resolution cell the
-/// odd-series trig kernels reach (the comprehensive-gate find is `j* = 7`),
-/// with wide headroom; the `decided == false` gate (below) is the real
-/// validity wall, this only excludes the non-tiny corner.
+/// directed post-adjust ([`tiny_x_deep_directed_adjust`]) handles — the gate
+/// there is `5 ≤ j* ≤ JMAX`. `j* ≤ JMAX` is equivalent to
+/// `|x| < 10^(−SCALE/JMAX)`, a CONTINUOUS tiny-argument band (Class I) rather
+/// than a per-cell fit: a smaller `|x|` raises the leading-digit position `k`,
+/// which lowers `j*`.
+///
+/// # This bound is INERT — measured, not argued (#78)
+///
+/// It excludes NOTHING, at any tier and any scale. Enumerating every
+/// `(SCALE, k)` cell at all ten wide tiers and counting those that pass BOTH
+/// this gate and the `j*·k > reach` test gives an identical count at caps 39,
+/// 41, 43, 99 and unbounded:
+///
+/// ```text
+///   tier    reach   firing j*   cells (identical at every cap)
+///   D57      120    none              0
+///   D76      120    5..=5             1
+///   D115     248    none              0
+///   D153     248    5..=5             3
+///   D230     376    5..=5             2
+///   D307     504    5..=5             5
+///   D462     504    5..=19         5859
+///   D616     760    5..=9          4769
+///   D924    1016    5..=19        22322
+///   D1232   1400    5..=15        32668
+/// ```
+///
+/// The `j*·k > reach` test does 100% of the work and the largest `j*` that ever
+/// fires is 19 — 22 clear of this cap. It also performs the NON-TINY exclusion
+/// that this comment previously claimed for itself: the `k = 1` corner is kept
+/// out by `j*·k ≤ reach`, never by `j* > JMAX`.
+///
+/// # What actually carries it: `reach > MAX_SCALE`
+///
+/// `j*` is the smallest odd `j` with `j·k > SCALE`, so `j*·k ≈ SCALE` and
+/// clearing `reach` needs `SCALE ≳ reach`. Every tier has
+/// `reach = W::BITS/8 − 8` above its `MAX_SCALE`, which is why only genuinely
+/// deep cells fire and `j*` stays small. Margins, tightest first:
+///
+/// ```text
+///   D462  504 −  461 =  43      D153  248 −  152 =  96
+///   D76   120 −   75 =  45      D115  248 −  114 = 134
+///   D57   120 −   56 =  64      D616  760 −  615 = 145
+///   D924 1016 −  923 =  93      D230  376 −  229 = 147
+///                               D1232 1400 − 1231 = 169
+///                               D307  504 −  306 = 198
+/// ```
+///
+/// That pair is the one nothing enforces: the work integer's width is chosen for
+/// precision and cost, `MAX_SCALE` defines the tier, and they are set in
+/// different places by different concerns. This cap would only begin to bind
+/// once a margin fell below about `MAX_SCALE/JMAX` (~11 at D462) — some four
+/// times tighter than today — whereas `reach > MAX_SCALE` has no cushion beyond
+/// that same 43 and would break if D462's work integer were narrowed one step.
+///
+/// Issue #78 states the dependency as `41 < 43`. No `43` is declared anywhere in
+/// the tree; 43 is D462's margin above, so that mapping is an INFERENCE and is
+/// recorded as one.
+///
+/// PROPOSED, deferred to #87: assert `W::BITS/8 − 8 > MAX_SCALE` per tier where
+/// the tier macro already has both, so narrowing a work integer or raising a
+/// scale breaks the BUILD rather than the arithmetic. It is the same move as
+/// tying the Karatsuba width to its work integer and is better done once with
+/// it than twice apart.
+///
+/// # Why the previous wording was wrong
+///
+/// It asserted a reason — "keeps the post-adjust off NON-tiny arguments" — that
+/// measurement does not support. This is the second of the "unearned
+/// correctness" issues to resolve that way rather than the first: the property
+/// held and the stated reason was not the reason (see the truncation note in
+/// `ln_tang` for the other). A doc comment explaining WHY something is safe is
+/// exactly as likely to be wrong as any other unverified claim, and is trusted
+/// more than most. Measure before relying on one.
 const TINY_X_DEEP_JMAX: u32 = 41;
 
 /// Analytic directed post-adjust for the DEEP sub-resolution band of the odd
