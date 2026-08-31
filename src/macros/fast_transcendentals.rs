@@ -48,6 +48,17 @@ macro_rules! decl_fast_transcendentals_via_f64 {
             pub fn log1p_fast(self) -> Self {
                 Self::from_f64(self.to_f64().ln_1p())
             }
+            /// `e^self - 1` via the f64 bridge (`f64::exp_m1`).
+            /// Provided for parity with `expm1_strict`; at this crate's
+            /// fixed-point scales it is equivalent to
+            /// `self.exp_fast() - 1` wherever that is representable, and
+            /// the f64 round-trip forfeits the strict path's extended
+            /// domain.
+            #[inline]
+            #[must_use]
+            pub fn expm1_fast(self) -> Self {
+                Self::from_f64(self.to_f64().exp_m1())
+            }
             /// Logarithm in the given base via the f64 bridge.
             #[inline]
             #[must_use]
@@ -223,6 +234,12 @@ macro_rules! decl_fast_transcendentals_via_f64 {
             #[must_use]
             pub fn log1p(self) -> Self {
                 self.log1p_fast()
+            }
+            /// Plain dispatcher: forwards to [`Self::expm1_fast`] in this feature mode.
+            #[inline]
+            #[must_use]
+            pub fn expm1(self) -> Self {
+                self.expm1_fast()
             }
             /// Plain dispatcher: forwards to [`Self::log_fast`] in this feature mode.
             #[inline]

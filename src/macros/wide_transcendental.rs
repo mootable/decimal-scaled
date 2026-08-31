@@ -3006,6 +3006,36 @@ macro_rules! decl_wide_transcendental {
                 ))
             }
 
+            /// `e^self - 1`. Strict: integer-only and correctly rounded.
+            /// Total below — it tends to `-1` as `self` tends to `-∞`.
+            ///
+            /// Provided for API parity and standards conformance (C
+            /// `expm1`, IEEE 754-2019 `expm1`), and for the DOMAIN it
+            /// reaches: the `- 1` is applied at the working scale, ahead
+            /// of the storage range check, so the argument range is
+            /// `self <= ln(1 + MAX)` where [`Self::exp_strict`] stops at
+            /// `ln(MAX)` — exactly the arguments whose `e^self` lands in
+            /// `(MAX, MAX + 1]`. The extra band is `ln(1 + 1/MAX)` wide,
+            /// a few hundredths at the maximum scale and narrower below
+            /// it: small, but real (`MAX >= 1` always, since the crate
+            /// caps `MAX_SCALE = N - 1`).
+            ///
+            /// It is not MORE ACCURATE than `exp_strict(self) - 1` where
+            /// both are representable — `1` is exactly `10^SCALE` raw
+            /// units, so the subtraction is an exact grid translation and
+            /// rounding commutes with it.
+            ///
+            /// Delegates to the policy-registered expm1 kernel for this
+            /// `(width, SCALE)` cell — see `policy::expm1`.
+            #[inline]
+            #[must_use]
+            pub fn expm1_strict(self) -> Self {
+                Self::from_bits($crate::policy::expm1::dispatch::<_, SCALE>(
+                    self.to_bits(),
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                ))
+            }
+
             /// Natural logarithm via the Brent–Salamin AGM (1976).
             /// Strict and correctly rounded. Same contract as
             /// [`Self::ln_strict`]; the implementation path differs.
@@ -3512,6 +3542,13 @@ macro_rules! decl_wide_transcendental {
             #[must_use]
             pub fn log1p_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 Self::from_bits($crate::policy::log1p::dispatch::<_, SCALE>(self.to_bits(), mode))
+            }
+
+            /// Mode-aware sibling of [`Self::expm1_strict`].
+            #[inline]
+            #[must_use]
+            pub fn expm1_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                Self::from_bits($crate::policy::expm1::dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
             /// Mode-aware sibling of [`Self::ln_strict_agm`].
@@ -4049,6 +4086,35 @@ macro_rules! decl_wide_transcendental {
                     return self.log1p_strict_with(mode);
                 }
                 Self::from_bits($crate::policy::log1p::dispatch_with::<_, SCALE>(
+                    self.to_bits(),
+                    working_digits,
+                    mode,
+                ))
+            }
+
+            /// `e^self - 1` with caller-chosen guard digits.
+            #[inline]
+            #[must_use]
+            pub fn expm1_approx(self, working_digits: u32) -> Self {
+                self.expm1_approx_with(
+                    working_digits,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
+            }
+
+            /// `e^self - 1` with caller-chosen guard digits AND rounding
+            /// mode.
+            #[inline]
+            #[must_use]
+            pub fn expm1_approx_with(
+                self,
+                working_digits: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> Self {
+                if working_digits == $core::GUARD {
+                    return self.expm1_strict_with(mode);
+                }
+                Self::from_bits($crate::policy::expm1::dispatch_with::<_, SCALE>(
                     self.to_bits(),
                     working_digits,
                     mode,

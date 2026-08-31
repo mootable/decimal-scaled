@@ -421,6 +421,101 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         self.exp_strict()
     }
 
+    /// Returns `e^self - 1`.
+    ///
+    /// # Why it exists
+    ///
+    /// For API parity and standards conformance (C `expm1`, IEEE
+    /// 754-2019 `expm1`) — and, unlike its `log1p` sibling, for a
+    /// concrete capability `exp` cannot provide:
+    ///
+    /// **Domain reach.** The `- 1` happens at the WORKING scale, ahead of
+    /// the storage range check, so the representable argument range is
+    /// `self <= ln(1 + MAX)` where [`Self::exp_strict`] stops at
+    /// `ln(MAX)` — exactly the arguments whose `e^self` lands in
+    /// `(MAX, MAX + 1]`. The extra band is `ln(1 + 1/MAX)` wide: with
+    /// `MAX ≈ 17` at this width's maximum scale that is about `0.057`,
+    /// narrowing at lower scales. Small, but real — there are arguments
+    /// this answers and `exp_strict` panics on.
+    ///
+    /// It is NOT more accurate than `exp_strict(self) - 1` where both are
+    /// representable: in this crate's fixed-point representation `1` is
+    /// exactly `10^SCALE` raw units, so subtracting it is an exact grid
+    /// translation and rounding commutes with it — both are correctly
+    /// rounded and agree bit-for-bit. The binary floating-point
+    /// cancellation that motivates a separate `expm1` does not arise
+    /// here.
+    ///
+    /// # Algorithm
+    ///
+    /// For `|self| <= 1`, the leading-term-dropped Taylor series
+    /// `x + x²/2! + x³/3! + …`, which needs no range reduction and keeps
+    /// every digit of a tiny argument; outside that band, `e^x - 1`
+    /// formed at the working scale. Evaluated at `SCALE + STRICT_GUARD`
+    /// working digits with Ziv escalation, so the result is correctly
+    /// rounded. See `policy::expm1`.
+    ///
+    /// # Precision
+    ///
+    /// Strict: integer-only, and **correctly rounded** — within 0.5 ULP.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the result overflows the type's representable range.
+    /// There is no lower domain limit: `expm1` tends to `-1` as `self`
+    /// tends to `-∞`, which is representable at every scale.
+    #[inline]
+    #[must_use]
+    pub fn expm1_strict(self) -> Self {
+        self.expm1_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// `e^self - 1` under the supplied rounding mode. See
+    /// [`Self::expm1_strict`].
+    #[inline]
+    #[must_use]
+    pub fn expm1_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
+        Self::from_bits(crate::policy::expm1::dispatch::<_, SCALE>(self.to_bits(), mode))
+    }
+
+    /// `e^self - 1` with a caller-chosen number of guard digits above the
+    /// storage scale, trading away the strict 0.5-ULP guarantee for
+    /// proportionally faster evaluation.
+    #[inline]
+    #[must_use]
+    pub fn expm1_approx(self, working_digits: u32) -> Self {
+        self.expm1_approx_with(
+            working_digits,
+            crate::support::rounding::DEFAULT_ROUNDING_MODE,
+        )
+    }
+
+    /// `e^self - 1` with caller-chosen guard digits AND rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn expm1_approx_with(
+        self,
+        working_digits: u32,
+        mode: crate::support::rounding::RoundingMode,
+    ) -> Self {
+        if working_digits == STRICT_GUARD {
+            return self.expm1_strict_with(mode);
+        }
+        Self::from_bits(crate::policy::expm1::dispatch_with::<_, SCALE>(
+            self.to_bits(),
+            working_digits,
+            mode,
+        ))
+    }
+
+    /// Returns `e^self - 1`.
+    #[cfg(all(feature = "strict", not(feature = "fast")))]
+    #[inline]
+    #[must_use]
+    pub fn expm1(self) -> Self {
+        self.expm1_strict()
+    }
+
     /// Returns `2^self` (base-2 exponential).
     #[inline]
     #[must_use]
