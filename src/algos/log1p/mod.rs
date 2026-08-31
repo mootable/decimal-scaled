@@ -97,5 +97,107 @@ pub(crate) fn guard_domain<St: BigInt>(raw: St, scale: u32) {
     }
 }
 
+/// The two `log1p` tests that cannot live in `decimal-scale-test`: each needs a
+/// crate-private item with no public equivalent, so moving them would have meant
+/// widening visibility or weakening the assertion. Everything else from the old
+/// `tests.rs` is now `decimal-scale-test/tests/api/log1p.rs`.
 #[cfg(test)]
-mod tests;
+mod crate_internal_tests {
+    use super::log1p_artanh::log1p_artanh_g;
+    use super::log1p_with_ln::log1p_with_ln_g;
+    use crate::algos::support::narrow_ziv::WZiv;
+    use crate::int::types::Int;
+    use crate::int::types::traits::BigInt;
+    use crate::support::rounding::RoundingMode;
+    use crate::D;
+
+    const MODES: [RoundingMode; 6] = [
+        RoundingMode::HalfToEven,
+        RoundingMode::HalfAwayFromZero,
+        RoundingMode::HalfTowardZero,
+        RoundingMode::Trunc,
+        RoundingMode::Floor,
+        RoundingMode::Ceiling,
+    ];
+
+    /// `1.0` at scale 20.
+    const UNIT: i128 = 10_i128.pow(20);
+
+    fn d38s20(raw: i128) -> D<Int<2>, 20> {
+        D::<Int<2>, 20>(Int::<2>::from_i128(raw))
+    }
+
+    /// The two kernels must agree wherever both are valid — the region wall
+    /// moves cost, never the value. Checked on the overlap band (both are
+    /// correct for `|t| ≤ 1/2`) by driving each kernel directly at the
+    /// narrow work integer.
+    ///
+    /// STAYS CRATE-INTERNAL: `log1p_artanh_g`, `log1p_with_ln_g` and `WZiv` are
+    /// all `pub(crate)`. Driving the two kernels against each other is the whole
+    /// point, and the public surface exposes only whichever one the matcher
+    /// picks — so through it this test could not tell the two apart.
+    #[test]
+    fn both_kernels_agree_inside_the_overlap_band() {
+        const GUARD: u32 = 30;
+        const TS: [i128; 9] = [
+            0,
+            1,
+            -1,
+            UNIT / 1_000,
+            -UNIT / 1_000,
+            UNIT / 3,
+            -UNIT / 3,
+            UNIT / 2,
+            -UNIT / 2,
+        ];
+        for &t in &TS {
+            for &mode in &MODES {
+                let v = Int::<2>::from_i128(t);
+                assert_eq!(
+                    log1p_artanh_g::<Int<2>, WZiv, 20>(
+                        v,
+                        GUARD,
+                        Int::<2>::MAX,
+                        Int::<2>::MIN,
+                        mode
+                    ),
+                    log1p_with_ln_g::<Int<2>, WZiv, 20>(
+                        v,
+                        GUARD,
+                        Int::<2>::MAX,
+                        Int::<2>::MIN,
+                        mode
+                    ),
+                    "artanh != with_ln at t_raw={t} mode={mode:?}"
+                );
+            }
+        }
+    }
+
+    /// Every `*_with(mode)` has a default-mode sibling that agrees with it.
+    ///
+    /// STAYS CRATE-INTERNAL: `support::rounding::DEFAULT_ROUNDING_MODE` is not
+    /// exported. The default is feature-selected, so naming a mode literally
+    /// here would assert against a guess rather than against the constant the
+    /// no-mode entry points actually use.
+    #[test]
+    fn log1p_default_mode_siblings_agree() {
+        let t = UNIT / 2;
+        assert_eq!(
+            d38s20(t).log1p_approx(45).to_bits().as_i128(),
+            d38s20(t)
+                .log1p_approx_with(45, crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                .to_bits()
+                .as_i128(),
+            "log1p_approx != log1p_approx_with(default mode)"
+        );
+        assert_eq!(
+            d38s20(t).log1p_strict().to_bits().as_i128(),
+            d38s20(t)
+                .log1p_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                .to_bits()
+                .as_i128(),
+            "log1p_strict != log1p_strict_with(default mode)"
+        );
+    }
+}
