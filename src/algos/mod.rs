@@ -44,8 +44,8 @@ pub(crate) mod cbrt;
 pub(crate) mod div;
 pub(crate) mod exp;
 /// `expm1` candidate kernels — drafted, none wired (no `policy::expm1` yet).
-/// See `algos::expm1`'s module docs for the four variants and
-/// `research/2026_08_31_expm1_algorithm_design.md` for the derivation.
+/// See `algos::expm1`'s module docs for the four variants and the derivation's
+/// load-bearing results.
 pub(crate) mod expm1;
 pub(crate) mod hypot;
 pub(crate) mod ln;
