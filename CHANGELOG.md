@@ -116,6 +116,42 @@ at the end of this section.
   `log1p` carried the **same** too-narrow tangent-only guard as `ln` above,
   so the parabola case reached it too; both are now faces over the shared
   kernel and were fixed together.
+- **`log1p` directed rounding in the artanh band.** Separate from the
+  near-zero case above, and larger: 52 rows across five cells returned the
+  grid point under `Floor` and `Trunc` where the true value sits strictly
+  below it.
+
+  The guard that should have caught them could not. It tagged the result's
+  side only when the working value was *exact*, and exactness required `u²`
+  to be exact — but `u` is a rounded quotient whose square does not divide
+  `10^w`, so a single contributing series term was enough to defeat it. The
+  guard could therefore only ever fire when the artanh series contributed
+  **no** terms at all. Every failing argument arrived untagged for that
+  reason, not because a side had been computed wrongly.
+
+  Two stages replace it. Where each rounding's **direction** — not merely its
+  exactness — is unanimous and agrees with the neglected tail, no cancellation
+  between error contributions is possible and the side is proved. Unanimity is
+  the *precondition* of that proof rather than a convenient observation: one
+  opposing term makes the answer depend on magnitudes, which no argument over
+  signs can settle, so mixed directions fail closed. Where the directions
+  genuinely do oppose, the side is **measured** — the series is re-evaluated
+  deeper — instead of guessed or refused, at a depth derived from the width's
+  `BITS` and never from an argument or a cell.
+
+  The deeper evaluation runs only where its answer can be consulted. The
+  walker reads the tag at an exactly-zero residual and at an exact half, and
+  nowhere else — everywhere else the residual decides and the sign is
+  discarded unread — so the probe is skipped wherever it would be thrown
+  away. Verified as a pure laziness change by identical checksums over 6018
+  results, which differ against a build with no probe at all, confirming the
+  mechanism is not merely inert.
+
+  As with `ln` above, not fixed by raising the Ziv walker's cap: that cap is
+  co-designed with the generated constant tables, and lifting it lets a kernel
+  request a table entry that does not exist — a panic in narrow builds,
+  surfacing far from the change. `artanh` needs only `10^w` and touches no
+  per-scale table, which is why the deeper evaluation is available to it.
 - **`expm1` mis-rounded at the wide tiers, in the directed modes and in
   `HalfToEven`.** The series can land exactly on a storage grid point,
   because `x^j / j!` is exact whenever the argument supplies the odd primes
