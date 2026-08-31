@@ -5054,33 +5054,13 @@
 0.9999999999
 1.000000000000001
 0.999999999999999
-/* adversarial (internal lens): the QUADRATIC-ON-GRID near-one family, derived —
-   not searched. Write x = 1 +- d with d = (x-1) exactly representable at the
-   storage scale S. The wide ln walker
-   (`wide_trig_core::round_to_storage_directed_impl_g`) escalates its working
-   scale only to `reach = C::W::BITS/8 - 8`, so any Taylor term deeper than
-   `reach` is invisible to it and the directed decision is left to sub-working-
-   scale kernel noise rather than to a resolved deciding digit.
-
-   The existing guard `wide_trig_core::adjust_ln_near_one` covers only the case
-   where the kernel lands on the LINEAR term (it fires on `result == delta`).
-   So choose d such that the QUADRATIC term is itself an exact multiple of the
-   storage ULP — k^2 == 0 (mod 2*10^S), minimally k = 2*10^(S/2) for even S and
-   k = 10^((S+1)/2) for odd S. Then `d^2/2` is exactly 2 (resp. 5) ULP, the
-   kernel lands on a grid point that is NOT `delta`, the guard no-ops, and the
-   deciding term is the CUBIC `d^3/3` at depth 3S/2 (resp. 3(S-1)/2) — chosen
-   here to exceed `reach`. Correct rounding then differs from the reachable
-   value under Ceiling (x > 1) and Floor (x < 1); the nearest modes are
-   unaffected. The generalisation k = 2j*10^(S/2) makes this a continuous band,
-   with j = 1 the hardest cell (smallest cubic term).
-
-   Cells: D616<590> reach 760 vs cubic depth 885; D616<615> 760 vs 921;
-   D924<693> 1016 vs 1038. All three are driven GOLDEN_CELLS band edges and all
-   three keep the deciding digit inside gen_precision 1233, so the stored answer
-   can express it. D462 is NOT in this list: it is the one tier whose policy
-   passes `INTERNAL_EXTRA = true`, whose w+12 truncate-back-with-magnitude-bump
-   re-exposes the sub-w residual. */
-// D616<590>: x = 1 +- 2*10^-295, (x-1)^2/2 = 2 ULP exactly, cubic at depth 885.
+// near-1 quadratic-on-grid family, targeting the ROUTED wide `ln_tang`. Choosing k with
+// k^2 == 0 (mod 2*10^S) makes (x-1)^2/2 an EXACT ULP multiple, so the kernel lands on a grid
+// point that is not the linear term and `adjust_ln_near_one` (which fires on result == delta)
+// no-ops; the deciding cubic then sits at depth 3S/2, past the walker reach C::W::BITS/8-8.
+// Predicted mis-round: Ceiling for x > 1, Floor for x < 1. These cells ARE on the routed path,
+// so the gate does exercise them.
+// D616<590>: x = 1 +- 2*10^-295, (x-1)^2/2 = 2 ULP exactly, cubic at depth 885 vs reach 760.
 1.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002
 0.9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999998
 // D616<615>: x = 1 +- 10^-307, (x-1)^2/2 = 5 ULP exactly, cubic at depth 921.
@@ -5089,3 +5069,28 @@
 // D924<693>: x = 1 +- 10^-346, (x-1)^2/2 = 5 ULP exactly, cubic at depth 1038.
 1.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001
 0.9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999
+// near-1 linear family, targeting `wide_trig_core::ln_series` — x = 1 +- 10^-m with the
+// deciding (x-1)^2/2 at depth 2m just past the walker reach C::W::BITS/8-8, so the kernel keeps
+// the linear term though ln(x) < x-1 strictly. Predicted mis-round: Trunc+Floor for x > 1,
+// Floor for x < 1. KEPT DELIBERATELY THOUGH UNROUTED: `policy::ln::select` routes Tang at every
+// wide (N, SCALE), and Tang is defended here by `adjust_ln_near_one` (ln_tang.rs:409), which
+// ln_series never calls. So the routed path does NOT exercise ln_series and A GREEN GATE RUN IS
+// NOT EVIDENCE THAT ln_series IS CORRECT AT THESE CELLS. The value stands as a standing gate: if
+// ln_series is ever routed, fix this first. D57 and D115 need no row — no m <= MAX_SCALE exists.
+// D76<75>: d = 10^-61, depth 122 vs reach 120.
+1.0000000000000000000000000000000000000000000000000000000000001
+0.9999999999999999999999999999999999999999999999999999999999999
+// D153<152>: d = 10^-125, depth 250 vs reach 248.
+1.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001
+0.99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999
+// D307<306>: d = 10^-253, depth 506 vs reach 504.
+1.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001
+0.9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999
+// D462<461>: the quadratic-on-grid family again (d = 10^-230, (x-1)^2/2 = 5 ULP exactly, cubic at
+// depth 690 vs reach 504), targeting the `ln_tang_d462_p` SEAM CONFIG. D462 is the one tier whose
+// production routing passes INTERNAL_EXTRA = true, whose w+12 truncate-back-with-magnitude-bump
+// re-exposes the sub-w residual and is predicted to DEFEND; the seam passes false, so the guard and
+// cap are part of the kernel's identity here. The routed path does NOT exercise the IE=false
+// config, so a green gate run is not evidence about it. Predicted: Ceiling x > 1, Floor x < 1.
+1.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001
+0.99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999

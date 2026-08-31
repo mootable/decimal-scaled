@@ -43,6 +43,46 @@ D616<615>  1 +- 10^-307     cubic@921  vs reach 760   predicted: Ceiling (x>1) /
 D924<693>  1 +- 10^-346     cubic@1038 vs reach 1016  predicted: Ceiling (x>1) / Floor (x<1)
 All six verified against the rigorous Arb-ball oracle (grade_ln.correctly_rounded).
 
+## Kernel/config inventory for ln (what EXISTS vs what the gate COVERS)
+The golden gate asserts the PUBLIC surface only. `policy::ln::select` routes Tang at every
+wide (N, SCALE), so at every wide cell the gate exercises Tang and NOTHING ELSE. A green
+golden run is therefore NOT evidence about any kernel below.
+
+kernel / config                     reachable via            gate covers?
+ln_tang (production params)         public API               YES
+wide_trig_core::ln_series           __bench_internals        NO — unrouted for N >= 3
+  seams: ln_series_d57/d76/d115/d153/d230/d307/d462/d616/d924/d1232 (all ten exist)
+ln_tang_d57/d115/d153               __bench_internals        partly — fixed params
+ln_tang_d{76,230,307,462,616,924,1232}_p<SCALE,G,CAP>        NO for non-production (G,CAP)
+  ALL `_p` seams hardcode DIRECTED=true, INTERNAL_EXTRA=false. Production passes IE=true at
+  D462 ONLY, so `ln_tang_d462_p` is NOT production-equivalent — it is a distinct config, and
+  the flag it differs on is exactly the one predicted to defend the quadratic-on-grid family.
+ln_schoolbook (Algorithm::Schoolbook)  NEITHER                NO — `select` never returns it
+  and src/lib.rs has NO seam for it (0 hits). Unreachable both ways; recorded, not fixed.
+
+## Rows added targeting UNROUTED kernels (kept per the owner's rule)
+ln_series      D76<75>, D153<152>, D307<306>, both sides. Predicted Trunc+Floor (x>1),
+               Floor (x<1). Driven cells; deciding depth 122/250/506 all <= 1233.
+ln_tang_d462_p D462<461> both sides (IE=false config). Predicted Ceiling (x>1), Floor (x<1).
+
+## Status of each claim — BROKEN / UNBROKEN / PROVABLY SAFE (do not conflate)
+DERIVED-PREDICTED-BREAK  every row above. NONE has been executed — this agent runs no cargo.
+                         The oracle answers are verified; the kernel behaviour is NOT.
+PROVABLY SAFE            ln_series at D57 and D115 for the linear family ONLY: no m <= MAX_SCALE
+                         satisfies 2m > reach, so the family cannot be instantiated there. This
+                         is a proof about the FAMILY, not a correctness proof for the kernel.
+UNBROKEN, NOT SAFE       everything else, incl. the prior investigation's 1,260 clean rows.
+                         Reach: those were nearest-mode-dominated and did not instantiate the
+                         quadratic-on-grid family at all. "Not yet broken" is the claim; any
+                         stronger reading is unsupported.
+OPEN, NOT RESOLVED       whether the ln_series linear break actually materialises. What IS
+                         established: at those cells the walker PROVABLY cannot resolve the
+                         deciding term, so the outcome is decided by the sign of the
+                         sqrt-reduction truncation bias in exp_generic::ln_fixed at the
+                         cap-clamped working scale — i.e. correctness there is unearned, not
+                         demonstrated. The prior agent's amplification hypothesis is neither
+                         confirmed nor needed. DEFERRED as too big for this chunk.
+
 ## Deliberately NOT added, and why
 D462<346>, D462<461>   breaking + driven + capturable, but D462 is the IE=true tier — the
                        sticky bit is predicted to DEFEND. Kept as the natural control: if
@@ -52,10 +92,10 @@ D1232<1200/1231>       gen_precision 1233 — the stored .au truncates the decid
                        away, so the harness would compute the same wrong answer as the
                        kernel and the row would PASS. A false negative; needs the internals
                        seam or a deeper gen_precision, not a golden row.
-family-1 rows          Through the public surface these reach TANG, which adjust_ln_near_one
-                       defends. Adding them as "Series coverage" would be the false negative
-                       the brief warns about. Series evidence needs __bench_internals
-                       (ln_series_d76 … ln_series_d1232), which only the coordinator runs.
+                       (SUPERSEDED by the owner's rule: a break on an unrouted kernel is a
+                       keeper. The family-1 rows ARE now added; through the public surface they
+                       reach Tang and will PASS, which is expected and is precisely why each
+                       carries the "a green run is not evidence about this kernel" sentence.)
 
 ## REMAINING
 [ ] coordinator: regenerate golden/ln.au and run the gate at the three live cells under all
@@ -70,3 +110,10 @@ family-1 rows          Through the public surface these reach TANG, which adjust
     each live cell, for Class-I neighbour coverage.
 [ ] not yet examined: log/log2/log10/powf/asinh/acosh/atanh, which compose ln through
     ln_fixed_routed and may inherit the same reach limit.
+[ ] DEFERRED (too big, per "keep it light"): proving the sqrt-reduction bias mechanism that
+    decides whether the ln_series linear break materialises. Needs a run, not a derivation.
+[ ] DEFERRED: the remaining ln_series driven cells (D230<229>, D462<346/461>, D616<590/615>,
+    D924<693/900/923>, D1232<924/1200/1231>) and the non-production (G, CAP) configs of the
+    seven `_p` Tang seams. The derivation generalises unchanged — only the row count grows —
+    so this is volume, not new insight. D1232 linear (depth 1402) exceeds gen_precision 1233.
+[ ] NOT COVERABLE AT ALL: ln_schoolbook — no `select` arm and no seam. Recorded, not fixed.
