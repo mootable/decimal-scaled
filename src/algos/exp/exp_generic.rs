@@ -209,9 +209,11 @@ use crate::support::rounding::RoundingMode;
         (rounded, Some(side))
     }
 
-    /// Whether a `÷10^w` rounding left `scaled` no further from zero than the
-    /// exact quotient of `prod` — the ordering counterpart of the equality
-    /// test a caller would otherwise write as `scaled · 10^w == prod`.
+    /// Whether a `÷10^w` rounding left `quotient` no further from zero than the
+    /// exact quotient of `product` — the ordering counterpart of the equality
+    /// test a caller would otherwise write as `quotient · divisor == product`.
+    ///
+    /// `divisor` is the `10^w` the rounding divided by.
     ///
     /// # What the ordering buys over the equality
     ///
@@ -225,16 +227,16 @@ use crate::support::rounding::RoundingMode;
     ///
     /// # Fail-closed
     ///
-    /// `prod` reaches this as a truncated low product, so a term wide enough to
-    /// wrap it would make any ordering read off it meaningless. Reconstructing
-    /// the product from `scaled` must land within one divisor of `prod` — that
-    /// gap IS the discarded remainder — so a wider gap means the read is not
-    /// trustworthy and the answer is `false`, exactly as an away-from-zero
-    /// rounding is.
+    /// `product` reaches this as a truncated low product, so a term wide enough
+    /// to wrap it would make any ordering read off it meaningless.
+    /// Reconstructing the product from `quotient` must land within one divisor
+    /// of `product` — that gap IS the discarded remainder — so a wider gap means
+    /// the read is not trustworthy and the answer is `false`, exactly as an
+    /// away-from-zero rounding is.
     #[inline]
-    fn rounded_toward_zero<S: BigInt>(scaled: S, prod: S, pow10_w: S) -> bool {
-        let back = scaled.wrapping_mul_low_u128(pow10_w);
-        abs(back - prod) < pow10_w && abs(back) <= abs(prod)
+    fn rounded_toward_zero<S: BigInt>(quotient: S, product: S, divisor: S) -> bool {
+        let reconstructed = quotient.wrapping_mul_low_u128(divisor);
+        abs(reconstructed - product) < divisor && abs(reconstructed) <= abs(product)
     }
 
     /// Half-to-even quotient `n / 10^w`, via the MG (magic-multiply)
@@ -526,7 +528,7 @@ use crate::support::rounding::RoundingMode;
     /// The one series loop behind [`log1p_fixed`] and
     /// [`log1p_fixed_tagged`].
     ///
-    /// `tag_at` is `Some(guard)` to ask for the tag at the caller's sub-storage
+    /// `tag_at_guard` is `Some(guard)` to ask for the tag at the caller's sub-storage
     /// granularity, `None` for the bare value. `None` keeps the untagged path's
     /// arithmetic *exactly* what it was, for the reason [`expm1_fixed_inner`]
     /// documents: reading a rounding's direction costs a multiply-back, and the
@@ -612,7 +614,7 @@ use crate::support::rounding::RoundingMode;
     ///
     /// It fails CLOSED — the walker treats `None` as "make no adjustment":
     ///
-    /// * no tag was asked for (`tag_at` is `None`), or `u == 0` (no tail to
+    /// * no tag was asked for (`tag_at_guard` is `None`), or `u == 0` (no tail to
     ///   carry a sign);
     /// * the caller could not use one anyway — its residual already decides the
     ///   narrowing (see [`side_by_deeper_probe`]);
@@ -633,12 +635,12 @@ use crate::support::rounding::RoundingMode;
     fn log1p_fixed_inner<S: BigInt>(
         t: S,
         w: u32,
-        tag_at: Option<u32>,
+        tag_at_guard: Option<u32>,
     ) -> (S, Option<TailSign>)
     where
         S::Scratch: ComputeLimbs,
     {
-        let want_tag = tag_at.is_some();
+        let want_tag = tag_at_guard.is_some();
         let one_w = one::<S>(w);
         let two_w = one_w + one_w;
         let pow10_w = one_w;
@@ -709,7 +711,7 @@ use crate::support::rounding::RoundingMode;
         }
         // Doubling is a positive scaling, so it preserves the side.
         let value = sum + sum;
-        let tag = match tag_at {
+        let tag = match tag_at_guard {
             // No tag asked for; no tail to carry a sign; or an argument whose
             // dropped terms need not share one.
             None => None,
@@ -729,7 +731,7 @@ use crate::support::rounding::RoundingMode;
     /// widest product cannot reach the sign bit. Two limbs.
     const TAG_PROBE_SLACK_BITS: u64 = 128;
 
-    /// The side the TRUE value lies on relative to `value`, established by
+    /// The side the TRUE value lies on relative to `shallow_value`, established by
     /// RE-EVALUATING the series at a deeper working scale.
     ///
     /// [`log1p_fixed_inner`]'s sign rule settles the tag whenever the error
@@ -762,7 +764,7 @@ use crate::support::rounding::RoundingMode;
     ///
     /// # Why the answer is sound
     ///
-    /// `value` is lifted by an exact power of ten and so carries no error at
+    /// `shallow_value` is lifted by an exact power of ten and so carries no error at
     /// all; the gap is therefore the probe's own reading of `V − R`, wrong by
     /// at most the probe's error. That error damps rather than accumulates:
     /// each term is formed from the one before it and scaled by `u² ≤ 1/9` over
@@ -776,12 +778,12 @@ use crate::support::rounding::RoundingMode;
     ///
     /// # Termination
     ///
-    /// The re-entry passes `tag_at = None`, which is precisely the branch that
+    /// The re-entry passes `tag_at_guard = None`, which is precisely the branch that
     /// never calls this function, so the recursion is one level deep.
     fn side_by_deeper_probe<S: BigInt>(
-        t: S,
-        w: u32,
-        value: S,
+        argument: S,
+        working_scale: u32,
+        shallow_value: S,
         guard: u32,
     ) -> Option<TailSign>
     where
@@ -801,24 +803,24 @@ use crate::support::rounding::RoundingMode;
         // work integer — the hazard `round_to_storage_*` already avoids the same
         // way.
         let divisor = pow10::<S>(guard);
-        let (_q, rem) = div_rem_exact::<S>(abs(value), divisor);
-        if rem != zero::<S>() && rem + rem != divisor {
+        let (_quotient, remainder) = div_rem_exact::<S>(abs(shallow_value), divisor);
+        if remainder != zero::<S>() && remainder + remainder != divisor {
             return None;
         }
         // The probe's widest intermediates are products of two values under
-        // `10^deep_w` — the squared quotient, and the seed divide's numerator —
+        // `10^deep_scale` — the squared quotient, and the seed divide's numerator —
         // so twice that width plus the slack has to fit the work integer.
         // Inverting `bits(10^d) = d·log2(10) < (d·10 + 2)/3` for the largest
         // `d` that leaves room: `d ≤ 3·(BITS − slack)/20`.
         let bits = u64::from(<S as BigInt>::BITS);
         // Fail closed on the (unreachable) overflow rather than fall back to a
         // depth the width cannot hold.
-        let deep_w = u32::try_from(3 * bits.saturating_sub(TAG_PROBE_SLACK_BITS) / 20).ok()?;
+        let deep_scale = u32::try_from(3 * bits.saturating_sub(TAG_PROBE_SLACK_BITS) / 20).ok()?;
         // No room to probe any deeper than the value was already computed at.
-        let extra = deep_w.checked_sub(w).filter(|e| *e > 0)?;
-        let lift = pow10::<S>(extra);
-        let deep = log1p_fixed_inner::<S>(t * lift, deep_w, None).0;
-        let gap = deep - value * lift;
+        let extra_digits = deep_scale.checked_sub(working_scale).filter(|e| *e > 0)?;
+        let lift = pow10::<S>(extra_digits);
+        let deep_value = log1p_fixed_inner::<S>(argument * lift, deep_scale, None).0;
+        let gap = deep_value - shallow_value * lift;
         let bound = lit::<S>(4 * SERIES_CAP as i128 + 16);
         if abs(gap) > bound {
             Some(if gap > zero::<S>() {
