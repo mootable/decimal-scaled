@@ -1,0 +1,72 @@
+# internal-lens (white box) adversarial manifest — ln near x = 1
+# One line per unit of work. Chunk 1, 2026-08-31.
+
+## Facts established from source (verified in-tree, not assumed)
+routing            src/policy/ln.rs:66-85 — select routes Tang over (3,0..=56) … (64,0..=1231);
+                   `_ => Series`. wide ln_series (series_routed, lines 175-193) is UNREACHABLE
+                   through the public API for N >= 3. Reachable only via __bench_internals.
+guard              wide_trig_core::adjust_ln_near_one (wide_trig_core.rs:780) has exactly ONE
+                   call site: ln_tang.rs:409. ln_series_g never calls it.
+walker reach       round_to_storage_directed_impl_g: cap_digits = C::W::BITS/8 - (int_digits+8);
+                   int_digits == 0 for a near-one result. Nearest additionally clamps to
+                   ZIV_PRECISION_HORIZON = 1264; directed does NOT (deliberate, per the
+                   comment at wide_trig_core.rs:2155-2173).
+C::W per tier      decl_decimal_full! arg 7 ($Work), src/types/widths.rs:
+                   D57/D76 Int<16>; D115/D153 Int<32>; D230 Int<48>; D307/D462 Int<64>;
+                   D616 Int<96>; D924 Int<128>; D1232 Int<176>.
+reach per tier     D57 120, D76 120, D115 248, D153 248, D230 376, D307 504, D462 504,
+                   D616 760, D924 1016, D1232 1400.
+INTERNAL_EXTRA     src/policy/ln.rs tang_routed, 6th const: TRUE at D462 ONLY; false at the
+                   other nine wide tiers. IE=true runs tang_ln_fixed at w+12 and truncates
+                   back WITH a 1-LSB magnitude bump when digits are discarded — a sticky bit
+                   that re-exposes a sub-w residual to the directed rounder.
+oracle             GENERATOR_POLICY (oracle/generate.py:43) sets ln -> "decimal", NOT flint
+                   (DEFAULT_GENERATOR="flint" covers only unlisted functions). ln has NO
+                   VALIDATOR_EXCLUDE entry, so mpmath IS a live validator here.
+                   This env: decimal, mpmath, flint present; gmpy2, sympy absent.
+
+## Derivation 2 — crossover cells (DONE)
+family-1 linear    d = 10^-m, deciding term d^2/2 at depth 2m. Breaks when 2m > reach, m <= S.
+                   FIRST cell D76<61>. Per tier, breaks from: D76 S>=61, D153 S>=125,
+                   D230 S>=189, D307 S>=253, D462 S>=253, D616 S>=381, D924 S>=509,
+                   D1232 S>=701. D57 and D115 are PROVABLY SAFE (no valid m <= MAX_SCALE).
+                   Target: ln_series. ln_tang is DEFENDED by adjust_ln_near_one.
+family-2 quad      k^2 == 0 (mod 2*10^S) so d^2/2 is an exact ULP multiple; deciding term is
+                   the cubic at depth 3S/2 (even S) / 3(S-1)/2 (odd S). adjust_ln_near_one
+                   no-ops (result != delta). Breaks when cubic depth > reach.
+                   Per tier, breaks from: D462 S>=337, D616 S>=508, D924 S>=678, D1232 S>=934.
+                   Target: ln_tang = ROUTED PRODUCTION.
+
+## Rows added to lead/ln.pb (DONE — family 2, driven cells only)
+D616<590>  1 +- 2*10^-295   cubic@885  vs reach 760   predicted: Ceiling (x>1) / Floor (x<1)
+D616<615>  1 +- 10^-307     cubic@921  vs reach 760   predicted: Ceiling (x>1) / Floor (x<1)
+D924<693>  1 +- 10^-346     cubic@1038 vs reach 1016  predicted: Ceiling (x>1) / Floor (x<1)
+All six verified against the rigorous Arb-ball oracle (grade_ln.correctly_rounded).
+
+## Deliberately NOT added, and why
+D462<346>, D462<461>   breaking + driven + capturable, but D462 is the IE=true tier — the
+                       sticky bit is predicted to DEFEND. Kept as the natural control: if
+                       these ever fail, the sticky-bit mechanism is wrong.
+D924<900/923>,         breaking + driven, but cubic depth 1350/1383/1800/1845 EXCEEDS
+D1232<1200/1231>       gen_precision 1233 — the stored .au truncates the deciding residual
+                       away, so the harness would compute the same wrong answer as the
+                       kernel and the row would PASS. A false negative; needs the internals
+                       seam or a deeper gen_precision, not a golden row.
+family-1 rows          Through the public surface these reach TANG, which adjust_ln_near_one
+                       defends. Adding them as "Series coverage" would be the false negative
+                       the brief warns about. Series evidence needs __bench_internals
+                       (ln_series_d76 … ln_series_d1232), which only the coordinator runs.
+
+## REMAINING
+[ ] coordinator: regenerate golden/ln.au and run the gate at the three live cells under all
+    six modes — GOLDEN_WIDTHS=616,924 GOLDEN_MODES=ceiling,floor GOLDEN_FUNCS=ln.
+[ ] coordinator: run the family-1 candidates against ln_series via the bench-alt seam
+    (D76<61>/<75>, D153<125>, D307<253>, both sides, Floor+Trunc) — the ONLY way to settle
+    Target A. Predicted: Trunc+Floor break above 1, Floor breaks below 1.
+[ ] open question (partly answered, see the report): whether the family-1 Series break
+    actually materialises depends on the sign of the sqrt-reduction truncation bias in
+    exp_generic::ln_fixed at the cap-clamped working scale. NOT yet proven either way.
+[ ] not yet swept: the j-family band (k = 2j*10^(S/2), j > 1) — a continuous region around
+    each live cell, for Class-I neighbour coverage.
+[ ] not yet examined: log/log2/log10/powf/asinh/acosh/atanh, which compose ln through
+    ln_fixed_routed and may inherit the same reach limit.
