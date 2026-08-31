@@ -41,8 +41,9 @@ use decimal_scaled_golden::Function;
 /// era-INVARIANT half of that same rule, for a fact true of every pinned release
 /// rather than of one width or one version.
 ///
-/// `log1p` landed on the live surface in 0.5.1; no 0.3.x/0.4.x release has it.
-const NOT_IN_ANY_RELEASE: &[Function] = &[Function::Log1p];
+/// `log1p` and `expm1` both landed on the live surface in 0.5.1; no 0.3.x/0.4.x
+/// release has either.
+const NOT_IN_ANY_RELEASE: &[Function] = &[Function::Expm1, Function::Log1p];
 
 /// Generate one historical-version subject module: the crate-era bridge
 /// (`RoundingMode` map + inherent `mul_with`/`div_with` ops trait), the generic
@@ -125,12 +126,10 @@ macro_rules! historical_subject {
                     Function::Log10 => x.log10_strict_with(m),
                     Function::Exp2 => x.exp2_strict_with(m),
                     // Neither function exists in any pinned historical release, so
-                    // this arm is unreachable — but by two DIFFERENT routes now that
-                    // the live surface has diverged from the pinned ones. `expm1` is
-                    // on neither surface, so `FUNCS` does not declare it. `log1p` IS
-                    // live, so `FUNCS` DOES declare it; it is kept out of every era's
-                    // capability map by `NOT_IN_ANY_RELEASE`, and the runner never
-                    // executes an undeclared function. Anything added to `FUNCS` that
+                    // this arm is unreachable. Both are now LIVE, so `FUNCS` declares
+                    // both; both are kept out of every era's capability map by
+                    // `NOT_IN_ANY_RELEASE`, and the runner never executes a function
+                    // the subject does not declare. Anything added to `FUNCS` that
                     // predates no release must join that list, or it lands here.
                     Function::Expm1 | Function::Log1p => {
                         panic!("no decimal-scaled {} kernel", func.name())
