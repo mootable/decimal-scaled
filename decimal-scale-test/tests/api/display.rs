@@ -201,7 +201,7 @@ mod from_src_display {
         );
         assert_eq!(
             ParseError::OverlongFractional.to_string(),
-            "fractional part exceeds SCALE digits"
+            "fractional part exceeds SCALE significant digits"
         );
         assert_eq!(
             ParseError::ScientificNotation.to_string(),
@@ -294,6 +294,65 @@ mod from_src_display {
         // SCALE 12, fractional length 13 -> reject.
         let r: Result<D38s12, _> = "0.1234567890123".parse();
         assert_eq!(r, Err(ParseError::OverlongFractional));
+    }
+
+    // ── FromStr: the overlong check counts SIGNIFICANT digits ──
+
+    /// Fractional digits past SCALE that are all zeros carry no value, so
+    /// they are accepted and the value is exactly the integer part. `1.00`
+    /// at SCALE = 0 is exactly `1` and round-trips losing nothing.
+    #[test]
+    fn from_str_trailing_zeros_past_scale_are_accepted() {
+        type D0 = decimal_scaled::D<Int<2>, 0>;
+        assert_eq!("1.00".parse::<D0>().unwrap().to_bits(), 1);
+        assert_eq!("2.0".parse::<D0>().unwrap().to_bits(), 2);
+        assert_eq!("-1.0".parse::<D0>().unwrap().to_bits(), -1);
+        assert_eq!("0.0".parse::<D0>().unwrap().to_bits(), 0);
+        assert_eq!("0.000".parse::<D0>().unwrap().to_bits(), 0);
+        assert_eq!("-42.000".parse::<D0>().unwrap().to_bits(), -42);
+    }
+
+    /// A fractional part of only zeros has significant length ZERO — not
+    /// one — so it parses at SCALE = 0 however many zeros it carries.
+    #[test]
+    fn from_str_all_zero_fractional_has_zero_significant_length() {
+        type D0 = decimal_scaled::D<Int<2>, 0>;
+        assert_eq!("1.0".parse::<D0>().unwrap().to_bits(), 1);
+        assert_eq!("1.000".parse::<D0>().unwrap().to_bits(), 1);
+        assert_eq!("1.00000000000000000000".parse::<D0>().unwrap().to_bits(), 1);
+        assert_eq!("-7.0000".parse::<D0>().unwrap().to_bits(), -7);
+    }
+
+    /// The rule counts significant digits at every scale, not just zero:
+    /// `1.500` at SCALE = 1 keeps the significant `5` and drops the
+    /// value-free zeros, giving the same bits as `1.5`.
+    #[test]
+    fn from_str_trailing_zeros_at_nonzero_scale() {
+        type D1 = decimal_scaled::D<Int<2>, 1>;
+        assert_eq!("1.500".parse::<D1>().unwrap().to_bits(), 15);
+        assert_eq!("1.5".parse::<D1>().unwrap().to_bits(), 15);
+        assert_eq!("-1.500".parse::<D1>().unwrap().to_bits(), -15);
+        assert_eq!("0.0000".parse::<D1>().unwrap().to_bits(), 0);
+        // SCALE 12 with 15 fractional characters, only 12 significant.
+        let v: D38s12 = "1.500000000000000".parse().unwrap();
+        assert_eq!(v.to_bits(), 1_500_000_000_000);
+    }
+
+    /// A non-zero digit past SCALE is a genuine precision loss and stays
+    /// rejected — trimming only ever removes value-free trailing zeros.
+    #[test]
+    fn from_str_significant_digits_past_scale_still_err() {
+        type D0 = decimal_scaled::D<Int<2>, 0>;
+        type D1 = decimal_scaled::D<Int<2>, 1>;
+        assert_eq!("1.05".parse::<D0>(), Err(ParseError::OverlongFractional));
+        assert_eq!("1.5".parse::<D0>(), Err(ParseError::OverlongFractional));
+        assert_eq!("-1.5".parse::<D0>(), Err(ParseError::OverlongFractional));
+        assert_eq!("1.55".parse::<D1>(), Err(ParseError::OverlongFractional));
+        // Trailing zeros are stripped, but the `05` beneath them is still
+        // significant, so `1.050` at SCALE = 0 remains a real loss.
+        assert_eq!("1.050".parse::<D0>(), Err(ParseError::OverlongFractional));
+        // A zero *between* significant digits is not trailing.
+        assert_eq!("0.105".parse::<D1>(), Err(ParseError::OverlongFractional));
     }
 
     #[test]

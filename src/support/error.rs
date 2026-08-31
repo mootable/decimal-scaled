@@ -56,7 +56,10 @@ pub enum ParseError {
     SignOnly,
     /// Integer part has a redundant leading zero (e.g. `01.5`).
     LeadingZero,
-    /// Fractional part has more digits than `SCALE`.
+    /// Fractional part has more *significant* digits than `SCALE`, so the
+    /// value is not exactly representable (e.g. `1.05` at `SCALE = 0`).
+    /// Trailing zeros carry no value and are accepted: `1.00` parses at
+    /// `SCALE = 0`, being exactly `1`.
     OverlongFractional,
     /// Input uses scientific notation (`1e3`); not accepted.
     ScientificNotation,
@@ -74,7 +77,7 @@ impl core::fmt::Display for ParseError {
             Self::Empty => "empty input",
             Self::SignOnly => "sign with no digits",
             Self::LeadingZero => "redundant leading zero in integer part",
-            Self::OverlongFractional => "fractional part exceeds SCALE digits",
+            Self::OverlongFractional => "fractional part exceeds SCALE significant digits",
             Self::ScientificNotation => "scientific notation not accepted",
             Self::InvalidChar => "invalid character",
             Self::OutOfRange => "value out of representable range",
