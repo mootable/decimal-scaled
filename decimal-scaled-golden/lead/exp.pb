@@ -4684,18 +4684,16 @@
 // (to min(library scale, gen_precision - guard = 1231), which binds above scale 1231 and so not at
 // these cells), GoldenValue::parse keeps the whole digit string, round_to consumes every digit past
 // the graded scale, and truncated_at merely tests len >= 1233, which 1700 still satisfies.
-// The rest of the file stays at 1233 deliberately; only these six were regenerated.
-// WARNING - THE 1700 IS NOT REPRODUCIBLE FROM THE GENERATOR. `.pb` files carry no precision
-// directive: harvest.py reads only `//` comment text and value lines, and generate.py applies the
-// single scalar `args.precision` (default GEN_PRECISION = 1233) to every case. These six answers were
-// produced by an explicit `--precision 1700` run and spliced in. A plain `python -m oracle.generate`
-// rewrites all six back to 1233, and MEASURED against that output the evidence is PARTIALLY lost: 6 of
-// the 16 (row, cell) combinations go green (-1e-500, the 50-digit e-500 row, and -3e-280 lose both of
-// their cells, i.e. 3 of the 6 rows are fully neutered, 18 of the 48 directed failures), while 10 cells
-// survive because their borrow still ends past digit 1233. A PARTIAL revert is the dangerous case: the
-// gate still fails somewhere, so nobody notices coverage silently shrank. Until the generator can be
-// told a per-row precision, this comment is the only thing protecting these answers - do not regenerate
-// exp without restoring the six at 1700.
+// The rest of the file stays at 1233 deliberately; the `#precision=1700` directive below scopes the
+// deeper generation to exactly these six rows and `#precision=default` restores the set's default
+// immediately after them, so a plain `python -m oracle.generate` now REPRODUCES them.
+// That directive is load-bearing, not decoration. Before it existed these answers came from a manual
+// `--precision 1700` run, and a routine regeneration reverted them PARTIALLY - measured, 6 of the 16
+// (row, cell) combinations went green (-1e-500, the 50-digit e-500 row and -3e-280 lost both of their
+// cells, so 3 of the 6 rows were fully neutered, 18 of the 48 directed failures) while 10 survived
+// because their borrow still ended past digit 1233. A partial revert is the dangerous shape: the gate
+// still fails somewhere, so nobody notices coverage silently shrank by a third. `golden.rs`'s
+// `deep_probe_answers_keep_their_generation_depth` now fails if these six ever come back shallow.
 // EXPECTED once graded: the endgame fires at 16 (row, cell) combinations across D924<900,923> and
 // D1232<924,1200,1231>, and each fails the three DIRECTED modes by exactly +1 ULP (the kernel returns
 // one ULP above the correct answer: Ceiling grid+1 where grid is correct, Floor/Trunc grid where
@@ -4703,6 +4701,7 @@
 // residual sits far from the half boundary, so the walker exits before the endgame.
 // The fix is to wire exp to exp_generic::TailSign as expm1 and log1p already are; it is deliberately
 // NOT done here, so that the defect is observed before it is repaired.
+#precision=1700
 // probe: exp never_exact wrong-side, D924<923> J=2. x=-1e-430; terms 1..2 are exact ULP multiples ending at depths 430 and 861 (<= 923), term 3 is NEGATIVE at depth 1291, past the 1265 reach, so the truth is below the grid line while never_exact hardcodes above.
 -0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001
 // probe: exp never_exact wrong-side, D924<923> J=2, 30-DIGIT significand (the widest this cell admits, d <= 461-422) since every prior adversarial exp row used a single-digit significand. Terms 1..2 end at depths 455 and 911 (<= 923), term 3 is NEGATIVE at depth 1277, past the 1265 reach.
@@ -4715,3 +4714,4 @@
 -0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003
 // probe: exp never_exact wrong-side, D1232<1231> J=4, 50-DIGIT significand divisible by 3. Terms 1..4 end at depths 305/611/916/1223 (<= 1231), term 5 is NEGATIVE at depth 1279, past the 1265 reach.
 -0.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000034871209563428170695483216097524863019478256103945
+#precision=default

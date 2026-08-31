@@ -245,6 +245,12 @@ def _write_func(out_dir, func, rows, precision):
             continue
         seen.add(ln)
         uniq.append((prov, ln))
+    # The header records the RUN's default precision, not a per-row depth, so a
+    # `#precision=`-overridden row can legitimately carry MORE fraction digits than
+    # the header names. That is not a bug and needs no widening: the harness only
+    # ever tests `len(frac) >= gen_precision` (`GoldenValue::truncated_at`) to decide
+    # a residual exists below the stored digits, and consumes every digit past the
+    # graded scale, so a deeper row stays truthful under a shallower header.
     header = f"#gen_precision={precision}\n#guard={GUARD}\n"
     out_text = header + "".join(f"{prov}\n{ln}\n" for prov, ln in uniq)
     (out_dir / f"{func}.au").write_text(out_text, encoding="utf-8", newline="\r\n")
@@ -265,7 +271,14 @@ def cmd_generate(args):
         cases = harvest(func, src)
         if args.limit:
             cases = cases[: args.limit]
-        items += [(func, inp, why, args.precision) for inp, why in cases]
+        # `_gen_line` and `_validate_line` have always taken precision PER ITEM;
+        # this line was the only place that collapsed it to one scalar. A `.pb`
+        # block may now override it (`#precision=`) for rows that are only
+        # gradable when generated deeper than the set's default.
+        items += [
+            (func, inp, why, args.precision if prec is None else prec)
+            for inp, why, prec in cases
+        ]
     total = len(items)
     jobs = args.jobs if args.jobs else max(1, round((os.cpu_count() or 2) * 0.8))
     print(f"generating {total} lines, {len(funcs)} functions, {jobs} worker(s)", file=sys.stderr)
@@ -316,13 +329,21 @@ def cmd_revalidate(args):
                 continue
             fields = line.split()
             inp, stored = fields[: f.arity], fields[f.arity]
+            # Re-verify each row at ITS OWN depth. A `#precision=`-overridden row is
+            # stored deeper than `--precision`; recomputing it at the shallower
+            # default would leave `_within_bound` comparing at `n` = the row's depth
+            # against the default precision, i.e. a tolerance of `ulps * 10^(n-p)` —
+            # astronomically loose, so the row would pass VACUOUSLY, verified only to
+            # the default depth. The stored fraction length is the row's own
+            # generation precision, so use it whenever it is the deeper of the two.
+            row_precision = max(args.precision, _frac_len(stored))
             for v in validators:
                 try:
-                    vv = v.value(func, inp, args.precision)
+                    vv = v.value(func, inp, row_precision)
                 except Exception:
                     continue
                 diff_int, n = _diff_scaled(stored, vv)
-                if not _within_bound(diff_int, n, args.precision):
+                if not _within_bound(diff_int, n, row_precision):
                     print(f"[MISMATCH] {func}{inp}: stored={stored[:28]}.. "
                           f"{v.name()}={vv[:28]}.. delta~{_approx_mag(diff_int, n)}", file=sys.stderr)
                     mismatches += 1
