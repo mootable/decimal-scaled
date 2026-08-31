@@ -145,8 +145,50 @@ pub(crate) fn adjust_near_zero<St: BigInt>(result: St, raw: St, mode: RoundingMo
     }
 }
 
+/// The one `expm1` test that cannot live in `decimal-scale-test`: it reads
+/// `types::log_exp::STRICT_GUARD`, which is crate-private with no public
+/// equivalent. Everything else from the old `tests.rs` is now
+/// `decimal-scale-test/tests/api/expm1.rs`.
 #[cfg(test)]
-mod tests;
+mod crate_internal_tests {
+    use crate::int::types::Int;
+    use crate::int::types::traits::BigInt;
+    use crate::D;
+
+    /// `1.0` at scale 20.
+    const UNIT: i128 = 10_i128.pow(20);
+
+    fn d38s20(raw: i128) -> D<Int<2>, 20> {
+        D::<Int<2>, 20>(Int::<2>::from_i128(raw))
+    }
+
+    /// `_approx` at the strict guard must return the strict answer (the
+    /// documented redirect every `*_approx_with` carries), and a looser guard
+    /// must still land within a few ULP of it.
+    ///
+    /// STAYS CRATE-INTERNAL: the redirect is defined AT `STRICT_GUARD`, and that
+    /// constant is not exported. Substituting its literal value would stop the
+    /// test tracking the constant, which is the only thing it is really pinning.
+    #[test]
+    fn expm1_approx_redirects_at_strict_guard_and_stays_close_below_it() {
+        for arg in [UNIT / 2, -UNIT / 2, 2 * UNIT] {
+            let strict = d38s20(arg).expm1_strict().to_bits().as_i128();
+            assert_eq!(
+                d38s20(arg)
+                    .expm1_approx(crate::types::log_exp::STRICT_GUARD)
+                    .to_bits()
+                    .as_i128(),
+                strict,
+                "expm1_approx at the strict guard must redirect to strict, arg {arg}"
+            );
+            let loose = d38s20(arg).expm1_approx(12).to_bits().as_i128();
+            assert!(
+                (loose - strict).abs() <= 2,
+                "expm1_approx(12) drifted more than 2 ULP from strict at {arg}"
+            );
+        }
+    }
+}
 
 #[cfg(test)]
 mod candidate_agreement_tests {
