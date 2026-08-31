@@ -81,6 +81,10 @@ where
         Function::Log2 => x.log2_strict_with(m),
         Function::Log10 => x.log10_strict_with(m),
         Function::Exp2 => x.exp2_strict_with(m),
+        // No public `expm1` / `log1p` on the decimal surface yet, so `FUNCS` does
+        // not declare them and this arm is unreachable; reaching it means a golden
+        // file exists for a function the subject never claimed.
+        Function::Expm1 | Function::Log1p => panic!("no decimal-scaled {} kernel", func.name()),
         Function::Sin => x.sin_strict_with(m),
         Function::Cos => x.cos_strict_with(m),
         Function::Tan => x.tan_strict_with(m),

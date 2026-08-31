@@ -31,6 +31,7 @@ WORK_GUARD = 60
 _SUPPORTED = {
     "sqrt", "exp", "ln", "log10",                       # native, correctly-rounded
     "cbrt", "log2", "exp2", "log",                       # derived
+    "expm1", "log1p",                                    # derived
     "sinh", "cosh", "tanh", "asinh", "acosh", "atanh",   # derived
     "hypot", "powf",                                     # derived
     "add", "sub", "mul", "div", "rem",                   # native arithmetic
@@ -65,6 +66,17 @@ def _eval(func: str, xs: List[Decimal]) -> Decimal:
         return a.ln() / two.ln()
     if func == "exp2":
         return (a * two.ln()).exp()
+    if func == "expm1":
+        # exp(a) - 1. The relative cancellation for a small `a` costs no ABSOLUTE
+        # accuracy: exp(a) ~ 1 there, so its context-precision error is ~10^-prec
+        # and subtracting the exact 1 carries it through unchanged — well below the
+        # 10^-(precision+TERM_GUARD) depth `_format` reads.
+        return a.exp() - 1
+    if func == "log1p":
+        # ln(1 + a). Unlike the binary oracles, `1 + a` is EXACT here (base-10, no
+        # parse rounding), so the t -> -1 asymptote costs nothing: there is no input
+        # error for `1/(1+t)` to amplify.
+        return (1 + a).ln()
     if func == "cbrt":
         if a == 0:
             return Decimal(0)

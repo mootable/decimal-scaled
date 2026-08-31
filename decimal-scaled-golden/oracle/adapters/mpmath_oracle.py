@@ -54,6 +54,9 @@ _UNARY = {
     "exp": mpmath.exp, "ln": mpmath.ln,
     "log2": lambda x: mpmath.log(x, 2), "log10": lambda x: mpmath.log(x, 10),
     "exp2": lambda x: mpmath.power(2, x),
+    # Native, not composed: mpmath.expm1/log1p keep full relative accuracy where
+    # `exp(x) - 1` / `ln(1 + x)` would cancel to nothing for tiny arguments.
+    "expm1": mpmath.expm1, "log1p": mpmath.log1p,
     "sin": mpmath.sin, "cos": mpmath.cos, "tan": mpmath.tan,
     "atan": mpmath.atan, "asin": mpmath.asin, "acos": mpmath.acos,
     "sinh": mpmath.sinh, "cosh": mpmath.cosh, "tanh": mpmath.tanh,

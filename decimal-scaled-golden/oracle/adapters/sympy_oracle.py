@@ -36,6 +36,9 @@ class SympyOracle(Oracle):
             "exp": lambda: sympy.exp(x[0]), "ln": lambda: sympy.log(x[0]),
             "log2": lambda: sympy.log(x[0], 2), "log10": lambda: sympy.log(x[0], 10),
             "exp2": lambda: sympy.Integer(2) ** x[0],
+            # sympy has no expm1/log1p; the inputs are exact Rationals, so the
+            # composed expressions are exact and evalf resolves the cancellation.
+            "expm1": lambda: sympy.exp(x[0]) - 1, "log1p": lambda: sympy.log(1 + x[0]),
             "sin": lambda: sympy.sin(x[0]), "cos": lambda: sympy.cos(x[0]), "tan": lambda: sympy.tan(x[0]),
             "atan": lambda: sympy.atan(x[0]), "asin": lambda: sympy.asin(x[0]), "acos": lambda: sympy.acos(x[0]),
             "sinh": lambda: sympy.sinh(x[0]), "cosh": lambda: sympy.cosh(x[0]), "tanh": lambda: sympy.tanh(x[0]),

@@ -41,6 +41,7 @@ class MpfrOracle(Oracle):
             "exp": lambda: gmpy2.exp(a), "ln": lambda: gmpy2.log(a),
             "log2": lambda: gmpy2.log2(a), "log10": lambda: gmpy2.log10(a),
             "exp2": lambda: gmpy2.exp2(a),
+            "expm1": lambda: gmpy2.expm1(a), "log1p": lambda: gmpy2.log1p(a),
             "sin": lambda: gmpy2.sin(a), "cos": lambda: gmpy2.cos(a), "tan": lambda: gmpy2.tan(a),
             "atan": lambda: gmpy2.atan(a), "asin": lambda: gmpy2.asin(a), "acos": lambda: gmpy2.acos(a),
             "sinh": lambda: gmpy2.sinh(a), "cosh": lambda: gmpy2.cosh(a), "tanh": lambda: gmpy2.tanh(a),

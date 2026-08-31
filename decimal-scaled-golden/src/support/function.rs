@@ -6,7 +6,7 @@
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum Function {
     // unary
-    Sqrt, Cbrt, Exp, Ln, Log2, Log10, Exp2,
+    Sqrt, Cbrt, Exp, Ln, Log2, Log10, Exp2, Expm1, Log1p,
     Sin, Cos, Tan, Atan, Asin, Acos,
     Sinh, Cosh, Tanh, Asinh, Acosh, Atanh,
     // binary
@@ -27,6 +27,7 @@ impl Function {
         match self {
             Sqrt => "sqrt", Cbrt => "cbrt", Exp => "exp", Ln => "ln",
             Log2 => "log2", Log10 => "log10", Exp2 => "exp2",
+            Expm1 => "expm1", Log1p => "log1p",
             Sin => "sin", Cos => "cos", Tan => "tan",
             Atan => "atan", Asin => "asin", Acos => "acos",
             Sinh => "sinh", Cosh => "cosh", Tanh => "tanh",

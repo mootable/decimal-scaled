@@ -107,6 +107,11 @@ macro_rules! historical_subject {
                     Function::Log2 => x.log2_strict_with(m),
                     Function::Log10 => x.log10_strict_with(m),
                     Function::Exp2 => x.exp2_strict_with(m),
+                    // No `expm1` / `log1p` in any pinned historical release; `FUNCS`
+                    // does not declare them, so this arm is unreachable.
+                    Function::Expm1 | Function::Log1p => {
+                        panic!("no decimal-scaled {} kernel", func.name())
+                    }
                     Function::Sin => x.sin_strict_with(m),
                     Function::Cos => x.cos_strict_with(m),
                     Function::Tan => x.tan_strict_with(m),
