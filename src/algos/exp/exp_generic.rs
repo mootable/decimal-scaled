@@ -495,7 +495,7 @@ use crate::support::rounding::RoundingMode;
     where
         S::Scratch: ComputeLimbs,
     {
-        log1p_fixed_inner::<S>(t, w, false).0
+        log1p_fixed_inner::<S>(t, w, None).0
     }
 
     /// [`log1p_fixed`] plus the side of the returned value the TRUE value
@@ -505,20 +505,32 @@ use crate::support::rounding::RoundingMode;
     /// The value is bit-identical to [`log1p_fixed`]'s at every argument; the
     /// tag is the only difference, and it is `None` whenever it cannot be
     /// PROVED (see [`log1p_fixed_inner`]).
-    pub(crate) fn log1p_fixed_tagged<S: BigInt>(t: S, w: u32) -> (S, Option<TailSign>)
+    ///
+    /// `guard` is the caller's sub-storage granularity — the `10^guard` it will
+    /// divide this value by to reach the storage grid. It buys nothing in the
+    /// answer and everything in the cost: a tag is only ever CONSULTED where
+    /// the caller's own residual cannot decide, so knowing that granularity
+    /// lets the proof be skipped wherever it would be discarded. See
+    /// [`side_by_deeper_probe`].
+    pub(crate) fn log1p_fixed_tagged<S: BigInt>(
+        t: S,
+        w: u32,
+        guard: u32,
+    ) -> (S, Option<TailSign>)
     where
         S::Scratch: ComputeLimbs,
     {
-        log1p_fixed_inner::<S>(t, w, true)
+        log1p_fixed_inner::<S>(t, w, Some(guard))
     }
 
     /// The one series loop behind [`log1p_fixed`] and
     /// [`log1p_fixed_tagged`].
     ///
-    /// `want_tag` keeps the untagged path's arithmetic *exactly* what it was,
-    /// for the reason [`expm1_fixed_inner`] documents: proving the tag needs
-    /// each term's divisions checked for an exact remainder, and the `÷10^w`
-    /// check costs a multiply-back.
+    /// `tag_at` is `Some(guard)` to ask for the tag at the caller's sub-storage
+    /// granularity, `None` for the bare value. `None` keeps the untagged path's
+    /// arithmetic *exactly* what it was, for the reason [`expm1_fixed_inner`]
+    /// documents: reading a rounding's direction costs a multiply-back, and the
+    /// untagged path must not pay it.
     ///
     /// # Why this kernel's rule is NOT [`expm1_fixed_inner`]'s
     ///
@@ -600,7 +612,10 @@ use crate::support::rounding::RoundingMode;
     ///
     /// It fails CLOSED — the walker treats `None` as "make no adjustment":
     ///
-    /// * `want_tag` was not asked for, or `u == 0` (no tail to carry a sign);
+    /// * no tag was asked for (`tag_at` is `None`), or `u == 0` (no tail to
+    ///   carry a sign);
+    /// * the caller could not use one anyway — its residual already decides the
+    ///   narrowing (see [`side_by_deeper_probe`]);
     /// * `|u| >= 10^w`, where the dropped tail neither converges nor need
     ///   carry its terms' common sign;
     /// * the sides genuinely oppose — an INCLUDED term's multiply rounded AWAY
@@ -615,10 +630,15 @@ use crate::support::rounding::RoundingMode;
     ///   residual, so asserting either side outright would be a guess — but
     ///   measuring the two against each other is not, which is what the probe
     ///   does.
-    fn log1p_fixed_inner<S: BigInt>(t: S, w: u32, want_tag: bool) -> (S, Option<TailSign>)
+    fn log1p_fixed_inner<S: BigInt>(
+        t: S,
+        w: u32,
+        tag_at: Option<u32>,
+    ) -> (S, Option<TailSign>)
     where
         S::Scratch: ComputeLimbs,
     {
+        let want_tag = tag_at.is_some();
         let one_w = one::<S>(w);
         let two_w = one_w + one_w;
         let pow10_w = one_w;
@@ -689,17 +709,18 @@ use crate::support::rounding::RoundingMode;
         }
         // Doubling is a positive scaling, so it preserves the side.
         let value = sum + sum;
-        let tag = if !want_tag || u == zero::<S>() || abs(u) >= one_w {
-            None
-        } else if agree {
+        let tag = match tag_at {
+            // No tag asked for; no tail to carry a sign; or an argument whose
+            // dropped terms need not share one.
+            None => None,
+            Some(_) if u == zero::<S>() || abs(u) >= one_w => None,
             // Every error term reaching `sum` pushes the same way, so their sum
             // does too — no magnitude comparison anywhere.
-            Some(tail_side)
-        } else {
+            Some(_) if agree => Some(tail_side),
             // They genuinely oppose, so the total turns on their SIZES — an
             // opposing term can cancel the rest or flip it — and no reading of
             // signs can see that. Measure it rather than assert it.
-            side_by_deeper_probe::<S>(t, w, value)
+            Some(guard) => side_by_deeper_probe::<S>(t, w, value, guard),
         };
         (value, tag)
     }
@@ -755,12 +776,35 @@ use crate::support::rounding::RoundingMode;
     ///
     /// # Termination
     ///
-    /// The re-entry passes `want_tag = false`, which is precisely the branch
-    /// that never calls this function, so the recursion is one level deep.
-    fn side_by_deeper_probe<S: BigInt>(t: S, w: u32, value: S) -> Option<TailSign>
+    /// The re-entry passes `tag_at = None`, which is precisely the branch that
+    /// never calls this function, so the recursion is one level deep.
+    fn side_by_deeper_probe<S: BigInt>(
+        t: S,
+        w: u32,
+        value: S,
+        guard: u32,
+    ) -> Option<TailSign>
     where
         S::Scratch: ComputeLimbs,
     {
+        // Only pay for a proof the caller can actually use. A tail sign changes
+        // a narrowing in exactly two places: a DIRECTED round whose sub-storage
+        // residual is exactly zero, and a NEAREST one whose residual is exactly
+        // half. Anywhere else the residual itself decides and the sign is
+        // discarded unread, so proving it there is pure waste — and this proof
+        // is the expensive kind. Skipping it cannot change any result: it turns
+        // a tag that would have been thrown away into `None`, which is thrown
+        // away identically.
+        // `div_rem_exact`, not the `%` operator: the blanket operator's scratch
+        // is build-max sized, so in a narrow `exact-scratch` build it is cut for
+        // that build's 2-limb storage while this kernel probes in a far wider
+        // work integer — the hazard `round_to_storage_*` already avoids the same
+        // way.
+        let divisor = pow10::<S>(guard);
+        let (_q, rem) = div_rem_exact::<S>(abs(value), divisor);
+        if rem != zero::<S>() && rem + rem != divisor {
+            return None;
+        }
         // The probe's widest intermediates are products of two values under
         // `10^deep_w` — the squared quotient, and the seed divide's numerator —
         // so twice that width plus the slack has to fit the work integer.
@@ -773,7 +817,7 @@ use crate::support::rounding::RoundingMode;
         // No room to probe any deeper than the value was already computed at.
         let extra = deep_w.checked_sub(w).filter(|e| *e > 0)?;
         let lift = pow10::<S>(extra);
-        let deep = log1p_fixed_inner::<S>(t * lift, deep_w, false).0;
+        let deep = log1p_fixed_inner::<S>(t * lift, deep_w, None).0;
         let gap = deep - value * lift;
         let bound = lit::<S>(4 * SERIES_CAP as i128 + 16);
         if abs(gap) > bound {
@@ -1590,6 +1634,13 @@ mod tests {
     use super::*;
     use crate::int::types::Int;
 
+    /// Sub-storage granularity handed to [`log1p_fixed_tagged`] by the kernel
+    /// tests below. Immaterial to every one of them: it gates only the deeper
+    /// probe, and each of these arguments is settled by the sign rule before
+    /// the probe is reached. Zero states "the value IS the grid", so it cannot
+    /// mask a tag even if one of them ever did reach it.
+    const GRANULARITY: u32 = 0;
+
     /// [`round_div_sided`]'s polarity at all four sign/bump combinations plus
     /// the exact case. The `log1p` tail-sign channel rests entirely on this
     /// mapping, and it is what a fixed polarity would get wrong at half its
@@ -1640,7 +1691,7 @@ mod tests {
         let w: u32 = 12;
         let t = pow10::<I>(8);
 
-        let (pos, pos_tag) = log1p_fixed_tagged::<I>(t, w);
+        let (pos, pos_tag) = log1p_fixed_tagged::<I>(t, w, GRANULARITY);
         assert_eq!(pos, lit::<I>(2 * 49_997_500), "log1p(+1e-4) at w=12 is 2u");
         assert_eq!(
             pos_tag,
@@ -1648,7 +1699,7 @@ mod tests {
             "a truncated seed divide and a positive tail both put the truth ABOVE"
         );
 
-        let (neg, neg_tag) = log1p_fixed_tagged::<I>(-t, w);
+        let (neg, neg_tag) = log1p_fixed_tagged::<I>(-t, w, GRANULARITY);
         assert_eq!(neg, lit::<I>(-2 * 50_002_500), "log1p(-1e-4) at w=12 is 2u");
         assert_eq!(
             neg_tag,
@@ -1767,7 +1818,7 @@ mod tests {
             refused_by_the_exactness_gate(pos),
             "the positive argument must be one the exactness gate refused"
         );
-        let (pos_v, pos_tag) = log1p_fixed_tagged::<I>(pos, w);
+        let (pos_v, pos_tag) = log1p_fixed_tagged::<I>(pos, w, GRANULARITY);
         assert_eq!(pos_v, lit::<I>(299_955_008), "log1p(3e-4) at w=12");
         assert_eq!(
             pos_tag,
@@ -1780,7 +1831,7 @@ mod tests {
             refused_by_the_exactness_gate(neg),
             "the negative argument must be one the exactness gate refused"
         );
-        let (neg_v, neg_tag) = log1p_fixed_tagged::<I>(neg, w);
+        let (neg_v, neg_tag) = log1p_fixed_tagged::<I>(neg, w, GRANULARITY);
         assert_eq!(neg_v, lit::<I>(-400_080_020), "log1p(-4e-4) at w=12");
         assert_eq!(
             neg_tag,
