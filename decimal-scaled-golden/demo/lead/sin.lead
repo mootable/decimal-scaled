@@ -1,0 +1,8 @@
+// radix-divergence demo: sin(x) cells where the correctly-rounded f64 differs from
+// the decimal-correct value at f64's grade depth (15 frac digits) — the ~14% kind.
+// Used by the deep-dual-radix golden demonstration; NOT part of the real lead set.
+0.1665
+0.2379
+0.2827
+0.2946
+0.3044

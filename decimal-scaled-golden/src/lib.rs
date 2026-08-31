@@ -30,9 +30,10 @@ pub use execution::{ExecutionStrategy, RunOnce, Timed};
 #[cfg(feature = "bench")]
 pub use execution::CriterionStrategy;
 pub use function::Function;
-pub use loader::{CaseLoader, FileLoader, FilterLoader, GoldenCase, GoldenValue};
-#[cfg(feature = "net")]
-pub use loader::{UrlLoader, DEFAULT_REF};
+pub use loader::{
+    CaseLoader, FileLoader, FilterLoader, GoldenCase, GoldenValue, HexFloat, RoundedBinary,
+    select_radix_output,
+};
 pub use outcome::Outcome;
 pub use reporting::{
     ConsoleReporter, InlineReporter, ReportArtifact, ReportOutput, Reporter, RunSummary, TsvReporter,

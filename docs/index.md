@@ -9,20 +9,13 @@ hide:
 <div class="hero-tagline">Bit-exact decimal arithmetic for Rust</div>
 <h1 class="hero-wordmark"><span class="a">decimal</span><span class="b">-scaled</span></h1>
 
-A fast, precise, decimal library.
+Const-generic base-10 fixed-point decimals — twelve widths from **D18 to D1232** — with **≤ 0.5 ULP correctly-rounded** integer-only transcendentals. Deterministic across every platform. `no_std`-friendly. Caller-chosen rounding mode at every lossy operation.
 { .hero-lede }
-
-- **Decimal storage** — unlike floating point, `1.1` is exactly `1.1`.
-- **Multiple rounding modes** — six in total, `HalfToEven` by default.
-- **Up to 4 Kb numbers** — twelve widths, `D18` to `D1232`.
-- **Choose your precision at compile time** — from 0 to one less than the width. i.e. D1232 can carry a precision of 1231 digits.
-- **`no_std` friendly** — the strict, integer-only path needs no `std`.
-- **Validated by <!-- BEGIN GENERATED:home:tested -->71,469,918<!-- END GENERATED:home:tested --> value tests** — every width × scale × rounding mode.
 
 <div class="hero-install"><span class="prompt">$ </span>cargo add decimal-scaled</div>
 
 [:material-rocket-launch: Get started](getting-started.md){ .md-button .md-button--primary }
-[:material-chart-line: Benchmarks](performance.md){ .md-button }
+[:material-chart-line: Benchmarks](benchmarks.md){ .md-button }
 [:fontawesome-brands-github: GitHub](https://github.com/mootable/decimal-scaled){ .md-button }
 { .hero-actions }
 </div>
@@ -47,17 +40,17 @@ A fast, precise, decimal library.
 
     [:octicons-arrow-right-24: reference.md](reference.md)
 
-- :material-chart-line: **Bench**
+- :material-chart-line: **Benchmarks & precision**
 
-    Per-width speed tables, the precision surface, version history, and the like-for-like library comparison vs the top crates.io peers.
+    Per-width speed tables plus the like-for-like library comparison vs the top crates.io peers.
 
-    [:octicons-arrow-right-24: performance.md](performance.md)
+    [:octicons-arrow-right-24: benchmarks.md](benchmarks.md)
 
 - :material-check-decagram: **Correctness, proven**
 
-    How the golden harness asserts every answer bit-exact against a multi-oracle set, for every rounding mode, across every shipped width.
+    The four-layer validation story: golden oracle tables asserted bit-exact, for every rounding mode, across every shipped width.
 
-    [:octicons-arrow-right-24: golden.md](golden.md)
+    [:octicons-arrow-right-24: precision-testing.md](precision-testing.md)
 
 - :material-code-tags: **API reference**
 
@@ -90,4 +83,8 @@ A fast, precise, decimal library.
 | Bit-identical results across Linux / macOS / Windows / ARM / x86 | `*_strict` transcendentals - integer-only, no platform libm. |
 | Compile-time-fixed precision with zero per-value scale byte | Const-generic `D38<19>`, `D76<35>` etc. - scale is in the type. |
 | `no_std` (or `no_std + alloc`) | Builds under `no_std + alloc` with `default-features = false`; the strict, integer-only path needs no libm. |
-| ≤ 0.5 ULP correctly-rounded `ln` / `exp` / `sin` / `cos` / `tan` / `sqrt` / `atan` / `sinh` / `cosh` / `tanh` and friends — by default | At every shipped width, HalfToEven by default, bit-identical across every platform. Switch rounding mode per call via `*_with(mode)` or crate-wide via the `rounding-*` features. See [Comparisons](comparisons.md). |
+| ≤ 0.5 ULP correctly-rounded `ln` / `exp` / `sin` / `cos` / `tan` / `sqrt` / `atan` / `sinh` / `cosh` / `tanh` and friends — by default | At every shipped width, HalfToEven by default, bit-identical across every platform. Switch rounding mode per call via `*_with(mode)` or crate-wide via the `rounding-*` features. See [Benchmarks §5](benchmarks.md#5-where-each-crate-fits). |
+
+## What it isn't
+
+For runtime-variable scale, look at [`rust_decimal`](https://crates.io/crates/rust_decimal). For arbitrary precision at runtime, look at [`bigdecimal`](https://crates.io/crates/bigdecimal) or [`dashu-float`](https://crates.io/crates/dashu-float). For binary fixed-point (DSP, embedded radio), look at [`fixed`](https://crates.io/crates/fixed). decimal-scaled is for the case where you want **decimal**, **compile-time-fixed**, and **deterministic** - all three.

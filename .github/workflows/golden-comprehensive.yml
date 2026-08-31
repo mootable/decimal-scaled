@@ -1,11 +1,11 @@
-name: "🌕 golden comprehensive"
+name: "🌕 golden comprehensive (advisory)"
 
 # The full six-mode golden surface — every row, every cell, all six
-# rounding modes — on every push, in its OWN workflow so it never shares
-# a run's runner allocation with the ci.yml gates. This is the crate's
-# CORRECTNESS GATE: it took over from the deleted 0.5 ULP precision gate,
-# so a red here means the build rounds wrong — fix it (roll back / bisect)
-# before release, never ship over it.
+# rounding modes — on every push, in its OWN workflow so the ci.yml
+# quick gate's verdict never waits on it and the two never share a
+# run's runner allocation. ADVISORY by design: this is not a required
+# check; a red here means roll the push back or bisect, never block
+# the quick-gate merge loop (owner 2026-06-11).
 #
 # SHARDED BY WIDTH (owner 2026-06-12): the gate exe is built once per
 # WIDTH TIER (`--features <tier>`; `narrow` = the base D18/D38 build),
@@ -94,15 +94,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v6
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
-        with:
-          toolchain: stable
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Cache cargo registry + git
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -136,7 +134,7 @@ jobs:
           echo "staged: $exe"
 
       - name: Upload the gate exe
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@v7
         with:
           name: golden-exe-${{ matrix.shard }}
           path: staged/
@@ -155,10 +153,10 @@ jobs:
 
     steps:
       - name: Checkout (golden data)
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v6
 
       - name: Download the shard gate exe
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@v8
         with:
           name: golden-exe-${{ matrix.shard }}
 
@@ -186,7 +184,7 @@ jobs:
 
       - name: Upload stripe mini report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@v7
         with:
           name: golden-comprehensive-${{ matrix.shard }}-s${{ matrix.stripe }}
           path: stripe-report/
@@ -194,24 +192,14 @@ jobs:
           retention-days: 7
 
   splice:
-    name: splice + self-commit
+    name: splice
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [plan, stripes]
-    permissions:
-      # Self-commit the combined full-surface results back to the run's branch
-      # (the same self-render aggregate pattern; a GITHUB_TOKEN push does not
-      # re-trigger workflows, so there is no refresh loop).
-      contents: write
 
     steps:
-      - name: Checkout (for the self-commit)
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.ref_name }}
-
       - name: Download all stripe reports
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@v8
         with:
           pattern: golden-comprehensive-*
           path: stripes/
@@ -242,81 +230,8 @@ jobs:
             echo "rows: $(($(wc -l < combined/results.tsv) - 1))"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Aggregate + commit the golden summary to results/golden/
-        run: |
-          set -euo pipefail
-          mkdir -p results/golden
-          # The raw per-input surface is ~56M rows (~4.7 GB) — far past GitHub's
-          # 100 MB file limit. Collapse the per-INPUT dimension into three honest
-          # outcome buckets per (function, width, scale, mode): ~15K rows, which
-          # drive every docs table (surface, per-mode, per-function) and the
-          # pass/fail counts the Precision page shows under each cell. The full
-          # per-input data stays the uploaded artifact below, not git.
-          python3 - <<'PY'
-          import collections
-          # Each row is one INPUT. Bucket its outcome into pass / fail / n-a:
-          #   PASS = a correctly-rounded result.
-          #   FAIL = the real correctness failures the (green) golden gate asserts
-          #          against (severity >= WrongMode): a mis-rounding, a wrong-mode
-          #          result, a library error, a timeout, a panic, a harness error.
-          #   n-a  = everything else — "skipped" (the tier can't represent the
-          #          cell / the subject doesn't expose it) and "non-real" /
-          #          "absent" / "value" (an input outside the function's domain,
-          #          e.g. acos of |x|>1 -> non-real). NEITHER pass nor fail.
-          # Keeping n-a as its own bucket (not folded into "bad") is the fix: the
-          # prior aggregate counted everything-but-"pass" as bad, so domain/skip
-          # inputs read as thousands of failures while the gate stayed green.
-          PASS = {"pass", "pass-oracle-limited"}
-          FAIL = {"mis-rounded", "wrong-mode", "error", "timeout", "panic",
-                  "harness-error"}
-          agg = collections.defaultdict(lambda: [0, 0, 0])  # (fn,w,s,mode)->[pass,fail,na]
-          with open("combined/results.tsv", encoding="utf-8") as f:
-              next(f, None)  # header
-              for line in f:
-                  c = line.rstrip("\n").split("\t")
-                  if len(c) < 6:
-                      continue
-                  a = agg[(c[1], c[2], c[3], c[4])]
-                  if c[5] in PASS:
-                      a[0] += 1
-                  elif c[5] in FAIL:
-                      a[1] += 1
-                  else:
-                      a[2] += 1
-          with open("results/golden/summary.tsv", "w", encoding="utf-8", newline="\n") as o:
-              o.write("function\twidth\tscale\tmode\tpassed\tfailed\tna\n")
-              for (fn, w, s, m), (p, fl, na) in sorted(agg.items()):
-                  o.write(f"{fn}\t{w}\t{s}\t{m}\t{p}\t{fl}\t{na}\n")
-          print(f"summary rows: {len(agg)}")
-          PY
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if [ "$GITHUB_REF_NAME" = "main" ]; then
-            # `main` is protected — a self-commit is declined (GH006). Publish the
-            # raw summary to the unprotected `ci-data` data branch instead; the
-            # docs build reads it from there. Nothing is rendered or committed to
-            # `main` here (that stays the release-cadence snapshot).
-            bash scripts/push_ci_data.sh results/golden/summary.tsv
-          else
-            # release/* (unprotected): self-commit the fresh summary + re-rendered
-            # Precision page for the release PR — the RELEASING.md §3 refresh path,
-            # unchanged. stdlib-only, no extra deps.
-            python3 scripts/render_docs.py
-            git add results/golden/summary.tsv
-            git add -u README.md docs/
-            if git diff --cached --quiet; then
-              echo "golden summary + docs unchanged — nothing to commit"
-              exit 0
-            fi
-            git commit -m "results(golden): refresh correctness summary + render Precision page"
-            # Incorporate any concurrent results/ self-commit (disjoint files) so
-            # the push isn't rejected non-fast-forward.
-            git pull --rebase origin "${{ github.ref_name }}" || true
-            git push origin "HEAD:${{ github.ref_name }}"
-          fi
-
       - name: Upload combined report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@v7
         with:
           name: golden-comprehensive-combined
           path: combined/

@@ -5,7 +5,7 @@ All notable changes to `decimal-scaled` are documented here.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.0] — 2026-06-14
+## [0.5.0] — Unreleased
 
 An architecture release. Every decimal width is now backed by the
 const-generic `Int<N>` / `Uint<N>` integer layer introduced in this
@@ -77,27 +77,13 @@ land alongside.
   (and the matching `Uint*`) re-exports are gone — name the storage
   as the const-generic `Int<N>` / `Uint<N>` instead (e.g. `Int<4>`
   for the former `Int256`).
-- **BREAKING: integer → decimal construction is now `TryFrom`, not
-  `From`.** Every primitive-integer source (`i8`…`i64`, `u8`…`u64`,
-  `i128`, `u128`) builds a decimal via `TryFrom`, returning
-  `ConvertError::Overflow` when `value * 10^SCALE` exceeds the storage:
-  `let d = D38::<2>::try_from(20i64)?;`. Scaling can overflow even for
-  small inputs near a width's top scale, so the old infallible
-  `From<iN>` impls (which silently wrapped on overflow) are removed,
-  along with the `DecimalConvert::from_i32` trait method and the
-  inherent `from_int` / `from_i32` constructors.
-- **Uniform overflow & domain contract — strict ops panic by
-  default.** A strict transcendental panics on a domain error
-  (`ln` of a non-positive value, `asin` outside `[-1, 1]`, …) or an
-  out-of-range correctly-rounded result, in both debug and release,
-  independent of tier and scale — the condition is detected once and a
-  wrapper applies the policy. The new `checked_*` siblings (see Added)
-  opt into `Option` returns instead of a panic.
-- **Published crate slimmed to a source allowlist.** The package now
-  ships via a `[package] include` allowlist (`src/**` plus the
-  README / CHANGELOG / CONTRIBUTORS / LICENSE files) rather than the
-  whole repository, excluding the benchmarks, golden harness, dev
-  docs, and tooling from the published `.crate`.
+- **BREAKING: `from_int` / `from_i32` on the decimal types are now
+  `pub(crate)`.** The integer-construction surface is the idiomatic
+  `From` / `TryFrom` traits instead: `let d: D38<2> = 20i64.into();`
+  (infallible, scaled by `10^SCALE`) or `D38::<2>::try_from(20i128)?`
+  (fallible from `i128` / `u128`). The inherent `from_int` /
+  `from_i32` constructors are retained internally but are no longer
+  part of the public API.
 
 ### Fixed
 
@@ -134,16 +120,6 @@ land alongside.
   storage range.** Wide arms previously assumed ≥ 128-bit storage
   and truncated silently. `Int<1>` is the first narrow wide-storage
   tier; the guard is a no-op for wider tiers.
-- **Correctly rounded across all six rounding modes on the wide
-  tiers.** A family of directed-rounding fixes closes the last
-  sub-0.5-ULP gaps the six-mode golden surfaced: the tiny-argument
-  directed wrong-mode in the wide-tier trig / `atan2` / `asinh`
-  paths, the `exp` deep-underflow directed-rounding inversion, a
-  `powf(2, -200)`-class deep-underflow mis-round at the D57 / D76
-  mid-scales, and a large-argument panic in the wide hyperbolics.
-  Every shipped width is now `0 (0)` — correctly rounded — under all
-  six modes (`HalfToEven` / `HalfAwayFromZero` / `HalfTowardZero` /
-  `Floor` / `Ceiling` / `Trunc`).
 
 ### Added
 
@@ -256,21 +232,6 @@ land alongside.
   benchmark refresh, publish steps) is codified in `RELEASING.md`
   and a PR checklist template. Performance benchmarking is advisory
   (not a required gate).
-- **Checked transcendental siblings.** Every strict transcendental
-  (`exp` / `ln` / `log` / `log2` / `log10` / `sqrt` / `cbrt`, the
-  trig / inverse-trig / hyperbolic families, `powf`, `hypot`, …) gains
-  a non-panicking **`checked_*`** pair returning `Option<Self>`:
-  `checked_<fn>_strict(self, …)` and its `_with(mode)` sibling. `None`
-  is returned exactly where the default strict form would panic — a
-  domain error or an out-of-range correctly-rounded result; an
-  in-range `checked_*` result is bit-identical to the default form's.
-- **Crate-default rounding-mode features.** Five mutually-exclusive
-  `rounding-*` Cargo features — `rounding-half-away-from-zero`,
-  `rounding-half-toward-zero`, `rounding-trunc`, `rounding-floor`,
-  `rounding-ceiling` — select the `RoundingMode` used by the no-arg
-  `rescale` / strict / `_of` family. With none enabled the default is
-  half-to-even (banker's rounding); every `*_with(mode)` method keeps
-  an explicit-mode form regardless of the feature.
 
 ## [0.4.4] — 2026-05-21
 

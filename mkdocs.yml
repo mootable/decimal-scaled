@@ -1,7 +1,7 @@
 site_name: decimal-scaled
 site_description: Const-generic base-10 fixed-point decimals for Rust — bit-exact, 0.5 ULP, no_std-friendly.
 site_url: https://mootable.github.io/decimal-scaled/
-site_author: Jack Moxley
+site_author: John Moxley
 repo_url: https://github.com/mootable/decimal-scaled
 repo_name: mootable/decimal-scaled
 edit_uri: edit/main/docs/
@@ -35,7 +35,6 @@ validation:
 
 theme:
   name: material
-  custom_dir: overrides   # overrides/partials/tabs-item.html adds the header dropdowns
   logo: assets/mootable-cow-dusk.svg
   favicon: assets/mootable-cow-dusk.svg
   font:
@@ -77,7 +76,6 @@ theme:
 
 extra_css:
   - stylesheets/extra.css
-  - stylesheets/tabs-dropdown.css
 
 extra:
   social:
@@ -107,27 +105,13 @@ nav:
       - Serde: serde.md
       - Cross-scale operations: cross-scale.md
       - Glossary: glossary.md
-  - Bench:
-      - Harness: golden.md
-      - Performance:
-          - performance.md
-          - Arithmetic: performance/arithmetic.md
-          - Roots and Exponents: performance/roots-and-exponents.md
-          - Trigonometry: performance/trigonometry.md
-      - Precision: precision.md
-      - History:
-          - history.md
-          - Arithmetic: history/arithmetic.md
-          - Roots and Exponents: history/roots-and-exponents.md
-          - Trigonometry: history/trigonometry.md
-      - Comparisons:
-          - comparisons.md
-          - Arithmetic: comparisons/arithmetic.md
-          - Roots and Exponents: comparisons/roots-and-exponents.md
-          - Trigonometry: comparisons/trigonometry.md
-  - Architecture:
+  - Benchmarks & precision:
+      - benchmarks.md
+      - Library comparisons: comparisons.md
+  - Architecture & internals:
       - Architecture: ARCHITECTURE.md
       - Algorithms: ALGORITHMS.md
+      - Precision testing & golden validation: precision-testing.md
   - Project:
       - Roadmap: ROADMAP.md
       - Changelog: CHANGELOG.md

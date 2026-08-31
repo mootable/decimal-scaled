@@ -47,8 +47,8 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     /// ```ignore
     /// use decimal_scaled::D38s12;
     /// // log_2(8) is approximately 3 within f64 precision.
-    /// let eight = D38s12::try_from(8).unwrap();
-    /// let two = D38s12::try_from(2).unwrap();
+    /// let eight = D38s12::from(8);
+    /// let two = D38s12::from(2);
     /// let result = eight.log(two);
     /// ```
     #[cfg(feature = "std")]
@@ -259,9 +259,9 @@ mod tests {
     /// `log2(8) ~= 3` within tolerance.
     #[test]
     fn log2_of_eight_is_three() {
-        let eight = D38s12::try_from(8_i64).unwrap();
+        let eight = D38s12::from_int(8);
         let result = eight.log2();
-        let expected = D38s12::try_from(3_i64).unwrap();
+        let expected = D38s12::from_int(3);
         assert!(
             within_lsb(result, expected, LOG_EXP_TOLERANCE_LSB),
             "log2(8) bits {}, expected 3 bits {} (delta {})",
@@ -274,9 +274,9 @@ mod tests {
     /// `log10(1000) ~= 3` within tolerance.
     #[test]
     fn log10_of_thousand_is_three() {
-        let thousand = D38s12::try_from(1000_i64).unwrap();
+        let thousand = D38s12::from_int(1000);
         let result = thousand.log10();
-        let expected = D38s12::try_from(3_i64).unwrap();
+        let expected = D38s12::from_int(3);
         assert!(
             within_lsb(result, expected, LOG_EXP_TOLERANCE_LSB),
             "log10(1000) bits {}, expected 3 bits {} (delta {})",
@@ -291,9 +291,9 @@ mod tests {
     fn log10_of_power_of_ten() {
         // n = 1, 2, 4, 6 chosen to stay well within f64's range at SCALE=12.
         for n in [1_i64, 2, 4, 6] {
-            let pow_of_ten = D38s12::try_from(10_i64.pow(n as u32)).unwrap();
+            let pow_of_ten = D38s12::from_int(10_i64.pow(n as u32));
             let result = pow_of_ten.log10();
-            let expected = D38s12::try_from(n).unwrap();
+            let expected = D38s12::from_int(n);
             assert!(
                 within_lsb(result, expected, LOG_EXP_TOLERANCE_LSB),
                 "log10(10^{n}) bits {}, expected {n} bits {} (delta {})",
@@ -308,9 +308,9 @@ mod tests {
     #[test]
     fn log2_of_power_of_two() {
         for n in [1_i64, 2, 4, 8, 16] {
-            let pow_of_two = D38s12::try_from(2_i64.pow(n as u32)).unwrap();
+            let pow_of_two = D38s12::from_int(2_i64.pow(n as u32));
             let result = pow_of_two.log2();
-            let expected = D38s12::try_from(n).unwrap();
+            let expected = D38s12::from_int(n);
             assert!(
                 within_lsb(result, expected, LOG_EXP_TOLERANCE_LSB),
                 "log2(2^{n}) bits {}, expected {n} bits {} (delta {})",
@@ -417,7 +417,7 @@ mod tests {
     /// `log(self, 2) ~= log2(self)` -- consistency check for base 2.
     #[test]
     fn log_base_two_matches_log2() {
-        let two = D38s12::try_from(2_i64).unwrap();
+        let two = D38s12::from_int(2);
         for raw in [
             500_000_000_000_i128,   // 0.5
             1_234_567_890_123_i128, // ~1.234567
@@ -439,7 +439,7 @@ mod tests {
     /// `log(self, 10) ~= log10(self)` -- consistency check for base 10.
     #[test]
     fn log_base_ten_matches_log10() {
-        let ten = D38s12::try_from(10_i64).unwrap();
+        let ten = D38s12::from_int(10);
         for raw in [
             500_000_000_000_i128,   // 0.5
             1_234_567_890_123_i128, // ~1.234567
@@ -463,8 +463,8 @@ mod tests {
     #[test]
     fn exp2_matches_integer_power_of_two() {
         for n in [0_i64, 1, 2, 4, 8] {
-            let result = D38s12::try_from(n).unwrap().exp2();
-            let expected = D38s12::try_from(2_i64.pow(n as u32)).unwrap();
+            let result = D38s12::from_int(n).exp2();
+            let expected = D38s12::from_int(2_i64.pow(n as u32));
             assert!(
                 within_lsb(result, expected, LOG_EXP_TOLERANCE_LSB),
                 "exp2({n}) bits {}, expected 2^{n} bits {} (delta {})",

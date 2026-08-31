@@ -18,7 +18,9 @@ use super::overflow::Overflow;
 pub struct Capabilities {
     /// Library name (for the report).
     pub name: String,
-    /// The grid this subject rounds on — verdict-neutral, for the report only.
+    /// Report-only radix annotation, populated from the subject's `storage_radix()`.
+    /// **Superseded for verdicts** by the `storage_radix()` / `rounding_radix()` trait
+    /// methods (the single source of truth); kept so the report can name the grid.
     pub radix: Radix,
     /// Report-only metadata (width, scale, storage_bits, tier, …). The runner
     /// never consults it; reporting renders it.
@@ -42,12 +44,35 @@ pub struct FnSupport {
     pub overflow: Overflow,
 }
 
-/// The grid a subject rounds on. Verdict-neutral: the grader is always decimal; a
-/// `Binary` subject is still judged on decimal terms (the annotation only lets the
-/// report explain edge-of-resolution discrepancies).
+/// The grid a subject stores and rounds on. **Verdict-determining**: a subject's
+/// `storage_radix()` (the trait method — the single source of truth) drives which
+/// `radix:value` golden entry it is graded against, and the reach it is graded to.
+/// `tag()` / `from_tag()` map a variant to the golden grammar's base tag.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum Radix {
     #[default]
     Decimal,
     Binary,
+}
+
+impl Radix {
+    /// The base tag this radix carries in a golden output field: `"10"` for decimal,
+    /// `"2"` for binary. The value-chooser (`loader::select_radix_output`) matches a
+    /// `radix:value` entry's prefix against this. Base only — no precision, no kind.
+    pub fn tag(&self) -> &'static str {
+        match self {
+            Radix::Decimal => "10",
+            Radix::Binary => "2",
+        }
+    }
+
+    /// The radix a golden base tag denotes, or `None` for an unrecognised tag — the
+    /// inverse of `tag`, used to match a parsed `radix:` prefix to a subject's radix.
+    pub fn from_tag(tag: &str) -> Option<Radix> {
+        match tag {
+            "10" => Some(Radix::Decimal),
+            "2" => Some(Radix::Binary),
+            _ => None,
+        }
+    }
 }

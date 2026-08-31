@@ -615,7 +615,7 @@ fn is_radix_digit(c: char, radix: u32) -> bool {
 type ParsedQualifiers = (Option<(u32, Span)>, Option<(u32, Span)>, bool);
 
 /// Re-parse the qualifier segments to find `scale N` / `radix N` /
-/// `rounded`. Equivalent to `parse_qualifiers` but works on
+/// `rounded`. Equivalent to the old `parse_qualifiers` but works on
 /// token-vec segments instead of a `ParseStream`.
 fn parse_qualifier_segments(
     segments: &[Vec<TokenTree>],
@@ -827,12 +827,14 @@ fn expand_literal(form: LiteralForm) -> TokenStream {
     //                         applying half-to-even rounding only if
     //                         `rounded` was set.
     let shifted_digits: String;
-    let final_digits: &str = if target_scale == natural_scale {
-        &digits
+    let final_digits: &str;
+
+    if target_scale == natural_scale {
+        final_digits = &digits;
     } else if target_scale > natural_scale {
         let pad = target_scale - natural_scale;
         shifted_digits = pad_with_zeros(&digits, pad as usize);
-        &shifted_digits
+        final_digits = &shifted_digits;
     } else {
         let shift = natural_scale - target_scale;
         // The digits string must be at least `shift` long for a
@@ -864,8 +866,8 @@ fn expand_literal(form: LiteralForm) -> TokenStream {
             // Half-to-even on the kept|dropped boundary.
             shifted_digits = round_half_to_even(kept, dropped, sign < 0);
         }
-        &shifted_digits
-    };
+        final_digits = &shifted_digits;
+    }
 
     if width.wide {
         emit_wide(width, target_scale, sign, final_digits)

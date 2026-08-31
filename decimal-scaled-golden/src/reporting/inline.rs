@@ -121,7 +121,7 @@ impl InlineReporter for ConsoleReporter {
                                 if is_failure(o) {
                                     writeln!(
                                         out,
-                                        "  {} {} [{}.au:{}] {} inputs={:?}",
+                                        "  {} {} [{}.golden:{}] {} inputs={:?}",
                                         o.tag(),
                                         fc.function.name(),
                                         fc.function.name(),

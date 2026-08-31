@@ -1,11 +1,10 @@
 # Roadmap
 
 Known performance gaps and planned improvements. Tracked by tier
-against the library-comparison data on the
-[Comparisons](https://mootable.github.io/decimal-scaled/comparisons/)
-and [Performance](https://mootable.github.io/decimal-scaled/performance/)
-benchmark pages. Cells where `decimal-scaled` already wins are out of
-scope - these are the loss columns and how we plan to close them.
+of the §5 Library-comparison benchmark in
+[`docs/benchmarks.md`](https://mootable.github.io/decimal-scaled/benchmarks/). Cells where
+`decimal-scaled` already wins are out of scope - these are the
+loss columns and how we plan to close them.
 
 The crate's **accuracy** invariants are not on this roadmap.
 `decimal-scaled` is 0 ULP correctly-rounded on every
@@ -24,8 +23,8 @@ exactness when they need it and an opt-out when they don't.
 | **0.4.0** (shipped) | Foundation release — `src/` six-bucket layout (`types/`, `algos/`, `macros/`, `wide_int/`, `consts/`, `prelude/`); type renames D56 family → D57; FromStr wide-tier fix; OpenSSF Best Practices + Scorecard + cargo-audit CI; REUSE LICENSES/. |
 | **0.4.1** (shipped) | Cosmetic-only — dropped the `DecimalConsts` alias. No perf delta. |
 | **0.4.2** (shipped) | Tang ln ladder 13×-34× across narrow-GUARD bands (D57<18-22> through D1232<610-620>); AGM crossover empirically located at SCALE 1000 (3× past textbook 300 digits); D18 mul/div -60% / -47%; chain-MG bit-exact half-to-even for w > 38; `limbs_mul_u64_into<L, LP1>` primitive; benchmarks.md refresh. |
-| **0.4.3** (shipped) | See "0.4.3 candidates" section. Tang completion sweep (5 deeper bands: D230<115>, D307<290>, D616<590>, D924<900>, D1232<1200>); const POW10_TABLE for D38–D616; powf integer-exponent fast path (107× at D38<19> for `x.powf(2.0)`); cross-scale `_of` API + nightly `cross::*` auto-inference; precision-coverage expansion (external-oracle golden tables + proptest fuzz + CI gate); parity-test tightening to ±1 LSB. |
-| **0.4.4** (shipped 2026-05-21) | **Full correct-rounding completion** — every `*_strict` transcendental is 0 LSBε / ≤ 0.5 ULP under all six rounding modes, all thirteen widths, across the whole 22-function surface (directed-rounding Ziv escalation; correctly-rounded derived functions; log1p/gap reformulation for `acosh`/`atanh`; sign-stable + wider-work-int hyperbolics; exact-power pins). Strict-golden suite: 286 cells, 0 ignored, delta==0 vs an external oracle. |
+| **0.4.3** (shipped) | See "0.4.3 candidates" section. Tang completion sweep (5 deeper bands: D230<115>, D307<290>, D616<590>, D924<900>, D1232<1200>); const POW10_TABLE for D38–D616; powf integer-exponent fast path (107× at D38<19> for `x.powf(2.0)`); cross-scale `_of` API + nightly `cross::*` auto-inference; precision-coverage expansion (mpmath golden tables + proptest fuzz + CI gate); parity-test tightening to ±1 LSB. |
+| **0.4.4** (shipped 2026-05-21) | **Full correct-rounding completion** — every `*_strict` transcendental is 0 LSBε / ≤ 0.5 ULP under all six rounding modes, all thirteen widths, across the whole 22-function surface (directed-rounding Ziv escalation; correctly-rounded derived functions; log1p/gap reformulation for `acosh`/`atanh`; sign-stable + wider-work-int hyperbolics; exact-power pins). Strict-golden suite: 286 cells, 0 ignored, delta==0 vs an external mpmath oracle. |
 | **0.5.0** (incoming) | **Integer / decimal architecture rewrite** — a unified const-generic `Int<N>` / `Uint<N>` backend (the named `IntXXXX` aliases are *removed*; name storage as `Int<N>`) plus a reusable width-matched integer-algorithm layer with method parity to the decimals; the native (primitive-storage) decimal backend removed; a `(width, SCALE)` const-folded policy-matcher dispatch layer; the 32-bit `D9` tier removed; and the 0.4.4 precision corrections folded in. Non-allocating stack-scratch Karatsuba is wired but gated above every shipped width (schoolbook still wins). See the "0.5.0 architecture" section. |
 | **0.5+** (proposed) | RNG surface; public `expm1` / `log1p`; GDA `round-up` / `round-05up` modes; the DB / serialisation adapter crates (incl. CBOR tag-4); the ecosystem crates (`-math`, `-finance`, the lazy/reactive expression engine); ecosystem trait impls (`approx`, `Euclid`/`Inv`/`Pow`, nalgebra/ndarray); standards-conformance evidence (`dectest` rounding vectors, I-JSON round-trip). Each lands when it earns its place; none gate 1.0. |
 | **1.0.0** | The version stays pre-1.0 until either (a) the wide-tier `mul` / `div` numbers are *competitive with the best peer* at every shipped width — currently the `dashu-float` heap-arbitrary-precision baseline, which we trail by ~14× to ~100× at the wide tiers — *or* (b) the gap has a clearly-defensible structural reason (different storage shape, different precision invariant, different ULP contract) documented per row in the benchmarks. Adapter + ecosystem crates (per the sections below) ship at their own pace and do not gate the core 1.0. |
@@ -155,7 +154,7 @@ width - a precision cliff that's hard to communicate.
 | approach | status | expected win |
 |---|---|---|
 | Tang table-driven `ln` / `exp` / `sin_cos` / `atan` / hyperbolic at narrow-GUARD bands | **shipped 0.4.2 + extended 0.4.3-candidate** | 3-34× over artanh / Taylor at the gated `(width, scale)` bands; full ladder D57<18-22> → D1232<610-620>. See [`ALGORITHMS.md`](ALGORITHMS.md) Tang section. |
-| `*_approx(working_digits: u32)` family — same series as `*_strict` but with caller-controlled working-scale cutoff | **shipped 0.5.0** | linear cost reduction proportional to the requested digit cut |
+| `*_approx(working_digits: u32)` family — same series as `*_strict` but with caller-controlled working-scale cutoff | TODO | linear cost reduction proportional to the requested digit cut |
 | Document the precision cliff of `*_fast` on wide tiers more loudly | TODO | non-code; reader expectations |
 | Newton-on-AGM `ln` / `exp` paths past D153 — quadratic convergence, asymptotically wins where the artanh series stalls | partial (`bench-alt`) | Crossover empirically located at SCALE 1000 (3× past textbook 300 digits) thanks to the well-tuned chain-MG artanh path. Currently exposed as the alternate path; promotion gated on AGM precision lift (queued as 0.4.3-candidate B) since the present implementation runs intermediate AGM steps at the working scale and loses precision past ~30. |
 

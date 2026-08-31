@@ -1,0 +1,171 @@
+name: "pre-release docs refresh"
+
+# Push-button RELEASING.md section-3 refresh, as a CI job. Runs
+# scripts/release_docs_refresh.py against the dispatched ref: discovers
+# the latest successful bench-full / lib-cmp-precision artifacts on that
+# ref, refreshes the committed data files they feed (docs/benchmarks.md
+# timing tables, results/precision/*.tsv, optionally the comparison
+# figures), re-runs the single-source renderers, and verifies the
+# docs-drift check is clean.
+#
+# The refreshed files are NEVER pushed to the dispatched ref directly.
+# They are uploaded as a run artifact and, when anything changed, also
+# proposed as a DRAFT pull request from a fresh `docs-refresh/<run-id>`
+# branch back into the dispatched ref — the human reviews and merges.
+# (No existing workflow here creates PRs; this uses the same plain
+# gh-CLI + github-actions[bot] idiom as the self-commit workflows,
+# with `gh pr create` on top. PRs opened with the default GITHUB_TOKEN
+# do not trigger CI; the gates run once a human pushes to the branch
+# or after the merge into the release branch.)
+#
+# Trigger: workflow_dispatch only — this is a release-prep tool, not a
+# per-push gate. Dispatch it AFTER the bench-all sweep's runs have
+# completed on the release branch (it consumes their artifacts; it does
+# not run benches itself).
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch to refresh + pull artifacts for (defaults to the branch the run is launched from)."
+        required: false
+        type: string
+        default: ""
+      figures:
+        description: "Also re-render the library-comparison figures (lib_cmp artifacts + chart_gen; needs a Rust release build)."
+        required: false
+        type: boolean
+        default: false
+      skip_timing:
+        description: "Skip the docs/benchmarks.md timing-table refresh."
+        required: false
+        type: boolean
+        default: false
+      skip_precision:
+        description: "Skip the results/precision/*.tsv refresh."
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pre-release-docs-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: refresh docs from latest artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      # Push the proposal branch + open the draft PR. The dispatched ref
+      # itself is never pushed to.
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout the target ref
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          # Full history not needed; the proposal branch is cut from this
+          # checkout's HEAD.
+
+      - name: Guard - never target a default/protected branch
+        env:
+          REF: ${{ inputs.ref || github.ref_name }}
+        run: |
+          set -euo pipefail
+          case "$REF" in
+            main|master)
+              echo "::error::refusing to refresh docs against '$REF'; dispatch on a release branch"
+              exit 1
+              ;;
+          esac
+          echo "Will refresh docs for '$REF'."
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install Rust toolchain (figures only)
+        if: inputs.figures
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system libs (figures only - fontconfig for plotters)
+        if: inputs.figures
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
+
+      - name: Run the refresh
+        id: refresh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ inputs.ref || github.ref_name }}
+          FIGURES: ${{ inputs.figures }}
+          SKIP_TIMING: ${{ inputs.skip_timing }}
+          SKIP_PRECISION: ${{ inputs.skip_precision }}
+        run: |
+          set -euo pipefail
+          flags=()
+          [ "$FIGURES" = "true" ]        && flags+=(--figures)
+          [ "$SKIP_TIMING" = "true" ]    && flags+=(--skip-timing)
+          [ "$SKIP_PRECISION" = "true" ] && flags+=(--skip-precision)
+          rc=0
+          python scripts/release_docs_refresh.py --ref "$REF" "${flags[@]}" || rc=$?
+          # 0 = clean / nothing changed; 2 = refreshed with changes to
+          # review; anything else is a real failure.
+          case "$rc" in
+            0|2) echo "changed=$([ "$rc" = 2 ] && echo true || echo false)" >> "$GITHUB_OUTPUT" ;;
+            *)   exit "$rc" ;;
+          esac
+
+      - name: Publish the refresh summary
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -f tmp/release_docs_refresh/SUMMARY.md ]; then
+            cat tmp/release_docs_refresh/SUMMARY.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload the refreshed files
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pre-release-docs-refresh
+          path: |
+            README.md
+            docs/benchmarks.md
+            docs/widths.md
+            docs/figures/library_comparison/
+            results/precision/*.tsv
+            tmp/release_docs_refresh/SUMMARY.md
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Open a draft PR with the changes
+        if: steps.refresh.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ inputs.ref || github.ref_name }}
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          BRANCH="docs-refresh/${GITHUB_RUN_ID}"
+          git checkout -b "$BRANCH"
+          git add README.md docs results
+          if git diff --cached --quiet; then
+            echo "Nothing staged despite changed=true; skipping PR."
+            exit 0
+          fi
+          # Plain message, no attribution trailer (commit-hygiene gate).
+          git commit -m "docs: pre-release refresh from latest bench + precision artifacts"
+          git push origin "$BRANCH"
+          gh pr create --draft \
+            --base "$REF" \
+            --head "$BRANCH" \
+            --title "docs: pre-release refresh for ${REF}" \
+            --body-file tmp/release_docs_refresh/SUMMARY.md

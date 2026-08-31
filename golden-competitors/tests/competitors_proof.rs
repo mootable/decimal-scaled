@@ -10,7 +10,7 @@ use decimal_scaled_golden::{
     OverflowValidator, ParallelRunner, RoundingValidator, RunOnce,
 };
 use golden_competitors::{
-    BigDecimalSubject, DashuFloat, DecimalRsSubject, FastNum, GMath, F64, RustDecimal,
+    BigDecimalSubject, DashuFloat, DecimalRsSubject, FastNum, GMath, F32, F64, RustDecimal,
 };
 use decimal_scale_test::{golden_dir, thread_count, FUNCS, GEN_PRECISION};
 
@@ -59,6 +59,9 @@ fn competitors_validate_against_the_golden_set() {
     );
     // f64: every function (binary radix — decimal compliance is the verdict).
     let (f64_pass, ..) = run_competitor(&F64, FUNCS);
+    // f32: every function (binary radix, ~7-digit reach — expected to mis-round the
+    // decimal golden often; we only assert it gets a meaningful share right).
+    let (f32_pass, ..) = run_competitor(&F32, FUNCS);
 
     // bigdecimal: arbitrary precision; sqrt/cbrt + the five arithmetic ops (exp
     // excluded — its unbounded growth would never terminate on large golden inputs).
@@ -95,6 +98,7 @@ fn competitors_validate_against_the_golden_set() {
 
     assert!(rd_pass > 0, "rust_decimal should correctly compute some golden values");
     assert!(f64_pass > 0, "f64 should correctly compute some golden values");
+    assert!(f32_pass > 0, "f32 should correctly compute some golden values");
     assert!(bd_pass > 0, "bigdecimal should correctly compute some golden values");
     assert!(dashu_pass > 0, "dashu-float should correctly compute some golden values");
     assert!(fast_pass > 0, "fastnum should correctly compute some golden values");

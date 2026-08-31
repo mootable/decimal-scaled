@@ -12,7 +12,8 @@
 //! rounded root does not fit the signed range of `Int<N>` (true overflow);
 //! the caller maps that to its own out-of-range handling.
 //!
-//! The decimal tier dispatches DOWN to this kernel (both decimal operands
+//! This is the same arithmetic the decimal hypot used to inline; the
+//! decimal tier now dispatches DOWN to this kernel (both decimal operands
 //! carry the same `10^SCALE`, which cancels out of the root, so decimal
 //! hypot is exactly int hypot on the raw storages).
 //!

@@ -13,7 +13,7 @@
 //!   `ONE`, `MAX`, `MIN`, `multiplier()`) and reductions (`sum`,
 //!   `product`).
 //! - [`DecimalConvert`] — `from_bits` / `to_bits` / `scale`, the
-//!   to-integer bridges (`to_int`, `to_int_with`), and the
+//!   integer bridges (`from_i32`, `to_int`, `to_int_with`), and the
 //!   `std`-gated f64 / f32 bridge (`from_f64`, `from_f64_with`,
 //!   `to_f64`, `to_f32`).
 //! - [`DecimalTranscendental`] — the four-variant matrix on every
@@ -61,9 +61,8 @@
 //!   `const`-generic target `SCALE` parameter; const-generic trait
 //!   methods aren't stable. Use the inherent method on the concrete
 //!   type.
-//! - **Integer construction** is the per-width `TryFrom<iN>` surface
-//!   (fallible — `ConvertError::Overflow` on scaling overflow); there
-//!   is no width-generic integer constructor on the trait.
+//! - **`from_int`** takes a different source integer per width;
+//!   [`DecimalConvert::from_i32`] is the width-generic constructor.
 //! - **Joint kernels** (`sin_cos`, `sinh_cosh`) exist only on the
 //!   wide tiers; reach for them on the concrete type.
 

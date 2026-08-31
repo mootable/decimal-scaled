@@ -306,21 +306,22 @@ fn toom3_rec_limb<L: Limb>(
     // Step A: form t1=(w1+rm)/2-w0-wi and t2=(w1-rm)/2.
     // Both results are >= 0 since ci >= 0.
     let t1_neg;
-    let t2_neg = if !wm_neg {
+    let t2_neg;
+    if !wm_neg {
         // rm >= 0: t1_before_halve = w1+wm; t2_before_halve = w1-wm (both >= 0)
         t1[..pw].copy_from_slice(w1);
         let _ = limb_add_assign(t1, wm);
         t1_neg = false;
         t2[..pw].copy_from_slice(w1);
-        signed_sub_limb(t2, wm) // w1 >= wm since (w1-rm)/2=c1+c3 >= 0
+        t2_neg = signed_sub_limb(t2, wm); // w1 >= wm since (w1-rm)/2=c1+c3 >= 0
     } else {
         // rm < 0: t1_before_halve = w1-|wm| >= 0; t2_before_halve = w1+|wm| >= 0
         t1[..pw].copy_from_slice(w1);
         t1_neg = signed_sub_limb(t1, wm); // should be false for unsigned inputs
         t2[..pw].copy_from_slice(w1);
         let _ = limb_add_assign(t2, wm);
-        false
-    };
+        t2_neg = false;
+    }
     shr1_limb(t1); // t1 = (w1+rm)/2
     shr1_limb(t2); // t2 = (w1-rm)/2
     // t1 -= c0 + c4  =>  t1 = c2

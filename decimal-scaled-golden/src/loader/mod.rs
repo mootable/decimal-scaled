@@ -7,14 +7,14 @@
 
 mod file;
 mod filter;
+pub mod hexfloat;
 mod loader;
-#[cfg(feature = "net")]
-mod url;
+mod radix;
 pub mod value;
 
 pub use file::FileLoader;
 pub use filter::FilterLoader;
+pub use hexfloat::{HexFloat, RoundedBinary};
 pub use loader::{CaseLoader, GoldenCase};
-#[cfg(feature = "net")]
-pub use url::{UrlLoader, DEFAULT_REF};
+pub use radix::select_radix_output;
 pub use value::GoldenValue;

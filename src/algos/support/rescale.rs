@@ -153,7 +153,8 @@ pub(crate) fn dispatch_mag(
 /// **not** `W::BITS`. Without this, `select` saw the full 128-limb width and
 /// sized the baked-Newton reciprocal at 157 limbs (forming a full-width
 /// multiply-by-reciprocal + a 128-limb `quot·10^scale` product PER term) where
-/// `MgChain` scales with the real ~52-limb length. With
+/// `MgChain` scales with the real ~52-limb length — the regression `0b3df16c`
+/// introduced by widening the Newton cap 96→132 and pulling `Int<128>` in. With
 /// the trim, a short transcendental magnitude keeps the **Newton** kernel (the
 /// owner's decision) but at its REAL width, where it genuinely wins and the
 /// per-term products shrink ~2×. The baked reciprocal accessor slices the HIGH

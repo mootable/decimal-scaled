@@ -77,9 +77,8 @@ impl GoldenRunner for HistRunner {
 
 /// Wraps a `CaseLoader` and truncates each function's cases to at most `limit` rows
 /// (the first `limit` rows from the inner loader). This bounds the per-function golden
-/// row count for the history gates independently of `GOLDEN_SAMPLE`: 2000 rows/fn is
-/// enough to detect regressions (and give a representative min/max spread); the full
-/// correctness surface is the bbc's job.
+/// row count for the history gates independently of `GOLDEN_SAMPLE`: 1000 rows/fn is
+/// enough to detect regressions; the full correctness surface is the bbc's job.
 struct CapLoader<L> {
     inner: L,
     limit: usize,
@@ -100,16 +99,13 @@ impl<L: CaseLoader> CaseLoader for CapLoader<L> {
     }
 }
 
-/// Build the cell list for the history gates: one (width, scale 30) cell per width —
-/// the same scale-30 rule the library comparison uses, so version-over-version timing
-/// is compared at the precision the peers actually work at (~30 digits) rather than
-/// each tier's mid-band reach.
+/// Build the cell list for the history gates: one (width, middle-of-list scale) per width.
 ///
-/// Each width takes the compiled scale nearest 30; a width too narrow for 30 (only
-/// D18, MAX_SCALE 17) falls back to half its max scale. This reduces each tier to one
-/// representative cell and keeps the ratchet affordable; the bbc is the correctness
-/// source of truth over the full surface. Respects `GOLDEN_WIDTHS` and `tier_compiled`
-/// (delegated to `filter.cells()`).
+/// The CELLS grid anchors band-edge points. For each width the "middle scale" is the
+/// element at index `len/2` of that width's sorted scale list — the closest available
+/// scale to `max_scale / 2`. This reduces each tier to one representative cell and keeps
+/// the ratchet affordable; the bbc is the correctness source of truth over the full surface.
+/// Respects `GOLDEN_WIDTHS` and `tier_compiled` (delegated to `filter.cells()`).
 fn history_cells(filter: &decimal_scale_test::Filter) -> Vec<(u32, u32)> {
     let all = filter.cells();
     let mut by_width: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
@@ -120,22 +116,9 @@ fn history_cells(filter: &decimal_scale_test::Filter) -> Vec<(u32, u32)> {
         .into_iter()
         .map(|(w, mut scales)| {
             scales.sort_unstable();
-            (w, compare_scale(&scales))
+            (w, scales[scales.len() / 2])
         })
         .collect()
-}
-
-/// The comparison scale for one width's sorted compiled-scale list: **30** where the
-/// width can hold it, else the nearest compiled scale to 30; a width too narrow for 30
-/// targets half its max scale. Mirrors the library comparison's `compare_scale` so both
-/// benches time decimal-scaled at the same precision.
-fn compare_scale(scales: &[u32]) -> u32 {
-    let max_scale = *scales.last().expect("each width has at least one compiled cell");
-    let target = if max_scale >= 30 { 30 } else { max_scale / 2 };
-    *scales
-        .iter()
-        .min_by_key(|&&s| (s as i64 - target as i64).abs())
-        .expect("each width has at least one compiled cell")
 }
 
 /// Choose the runner based on the `HISTORY_PARALLEL` env var:
@@ -159,7 +142,7 @@ fn runner(filter: &Filter) -> HistRunner {
     // then the row_filter applies sample/stripe on those 1000.
     let make_loader = |sample, stripe| -> Box<dyn CaseLoader> {
         Box::new(FilterLoader::new(
-            CapLoader { inner: CachingLoader::golden(), limit: 2000 },
+            CapLoader { inner: CachingLoader::golden(), limit: 1000 },
             row_filter(sample, stripe),
         ))
     };
@@ -344,7 +327,7 @@ fn history_previous() {
     for (key, p) in &prev {
         let Some(l) = live.get(key) else { continue };
         let (w, s, mode, func, line) = key;
-        let label = || format!("D{w}<{s}> {mode} {func} [{func}.au:{line}]");
+        let label = || format!("D{w}<{s}> {mode} {func} [{func}.golden:{line}]");
         match (p.grade, l.grade) {
             (Grade::Pass, Grade::Fail) => regressions.push(format!("{} ({})", label(), l.detail)),
             (Grade::Pass, Grade::Skip) => coverage_losses.push(label()),
@@ -450,33 +433,6 @@ fn history_all() {
         flatten(subject, entry);
     }
 
-    // Publish the full cross-version surface as a committable TSV when CI sets
-    // HISTORY_REPORT_DIR (collect everything — every version × cell × mode; the
-    // docs render a slim view, so a later table never needs a re-run). One file
-    // per shard (named by the shard's GOLDEN_WIDTHS) so the CI aggregate splices
-    // without collision.
-    if let Some(dir) = std::env::var_os("HISTORY_REPORT_DIR") {
-        let dir = std::path::PathBuf::from(dir);
-        std::fs::create_dir_all(&dir).expect("create HISTORY_REPORT_DIR");
-        let mut out = String::from("version\tfunction\twidth\tscale\tmode\tline\tgrade\tnanos\n");
-        for (version, cells) in &versions {
-            for (key, cell) in cells {
-                let (w, s, mode, func, line) = key;
-                let grade = match cell.grade {
-                    Grade::Pass => "pass",
-                    Grade::Fail => "fail",
-                    Grade::Skip => "skip",
-                };
-                let ns = cell.timing.map(|n| n.to_string()).unwrap_or_default();
-                out.push_str(&format!(
-                    "{version}\t{func}\t{w}\t{s}\t{mode}\t{line}\t{grade}\t{ns}\n"
-                ));
-            }
-        }
-        let shard = std::env::var("GOLDEN_WIDTHS").unwrap_or_else(|_| "all".into()).replace(',', "_");
-        std::fs::write(dir.join(format!("history-{shard}.tsv")), out).expect("write history tsv");
-    }
-
     eprintln!("== history_all: cross-version correctness (per function; reported, never asserted) ==");
     for (version, cells) in &versions {
         let medians = timing_medians(cells);
@@ -505,11 +461,10 @@ fn history_all() {
 mod adapter_proofs {
     use decimal_scaled_golden::{Computed, DecimalSubject, Function};
 
-    /// `true` when the live GOLDEN grid contains `cell` — the sync guard between a
-    /// version's `CELLS` and the live correctness surface. The pins track
-    /// `GOLDEN_CELLS`, not the lib-compare-only scales (a live-build bench concern).
+    /// `true` when the live cell list contains `cell` — the sync guard between a
+    /// version's `CELLS` and the live surface.
     fn live_cell(cell: &(u32, u32)) -> bool {
-        decimal_scale_test::GOLDEN_CELLS.contains(cell)
+        decimal_scale_test::CELLS.contains(cell)
     }
 
     /// Prove an adapter computes at all: sqrt(2) at D38<19> through the erased
@@ -554,10 +509,8 @@ mod adapter_proofs {
 
         #[test]
         fn cells_match_the_live_surface_exactly() {
-            // 0.4.4 shares the live tier table, so its cell list IS the live GOLDEN
-            // grid — the correctness surface, NOT the lib-compare-only scales, which
-            // are a live-build bench concern the history pins deliberately exclude.
-            assert_eq!(v044::CELLS, decimal_scale_test::GOLDEN_CELLS);
+            // 0.4.4 shares the live tier table, so its cell list IS the live one.
+            assert_eq!(v044::CELLS, decimal_scale_test::CELLS);
             assert!(v044::CELLS.iter().all(live_cell));
         }
     }
@@ -591,12 +544,11 @@ mod adapter_proofs {
 
         #[test]
         fn cells_are_the_live_subset_at_the_shared_widths() {
-            // Every 0.3.3 cell is a live GOLDEN cell, and it covers EVERY golden cell
-            // at the six shared widths (none silently dropped). The lib-compare-only
-            // scales are excluded — the pins track the correctness grid, not the bench.
+            // Every 0.3.3 cell is a live cell, and it covers EVERY live cell at
+            // the six shared widths (none silently dropped).
             assert!(v033::CELLS.iter().all(live_cell));
             let shared = [18, 38, 76, 153, 230, 307];
-            let expected: Vec<(u32, u32)> = decimal_scale_test::GOLDEN_CELLS
+            let expected: Vec<(u32, u32)> = decimal_scale_test::CELLS
                 .iter()
                 .copied()
                 .filter(|(w, _)| shared.contains(w))

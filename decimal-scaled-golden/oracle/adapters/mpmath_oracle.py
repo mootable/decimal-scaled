@@ -81,6 +81,35 @@ def _eval(func: str, x):
     raise ValueError(f"unknown function {func}")
 
 
+def _format_hexfloat(r) -> str:
+    """Format an mpf as an EXACT hex-float `[-]0x<hex-mantissa>p<exp>`:
+    value = (-1)^sign * mantissa * 2^exp (a C99 `%a`-style integer significand — no
+    implicit bit, no int/frac split; the exponent carries the magnitude). Hex (not a
+    decimal rendering) so a binary grader rounds it with ZERO conversion loss."""
+    if r == 0:
+        return "0x0p0"
+    sign, man, exp, _bc = r._mpf_  # value = (-1)^sign * man * 2^exp, man > 0
+    sgn = "-" if sign else ""
+    return f"{sgn}0x{man:x}p{exp}"
+
+
+def binary_hexfloat(func: str, inputs: List[str], bin_precision: int) -> str:
+    """The true `func(inputs)` rounded to `bin_precision` significand BITS, as an exact
+    hex-float (see `_format_hexfloat`). Computed at a guarded higher working precision
+    then rounded to exactly `bin_precision` bits (round-to-nearest-even), so the stored
+    significand is the correctly-rounded deep BINARY truth — the single `2:` value that
+    every binary subject re-rounds to its OWN mantissa width (f64 53, f32 24, …). Uses
+    the same `_eval` as the decimal path, so the binary value is the same function of
+    the same inputs, just on the 2^-k grid instead of 10^-n."""
+    guard = 96  # absorb the transcendental evaluation error before the final round
+    mpmath.mp.prec = bin_precision + guard
+    x = [mpmath.mpf(s) for s in inputs]
+    r = _eval(func, x)
+    with mpmath.workprec(bin_precision):
+        r = +r  # round to exactly `bin_precision` significand bits, nearest-even
+    return _format_hexfloat(r)
+
+
 class MpmathOracle(Oracle):
     def name(self) -> str:
         return "mpmath"

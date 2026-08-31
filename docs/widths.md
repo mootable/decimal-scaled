@@ -112,8 +112,7 @@ fn sum_all<D: Decimal + core::ops::Add<Output = D>>(xs: &[D]) -> D {
 - **Overflow variants**: every `checked_*` / `wrapping_*` /
   `saturating_*` / `overflowing_*` of `add` / `sub` / `mul` / `div` /
   `rem` / `neg`.
-- **Integer conversion**: `to_int`, `to_int_with` (construction from an
-  integer is the fallible `TryFrom<iN>` surface).
+- **Integer conversion**: `from_i32`, `to_int`, `to_int_with`.
 - **Float bridge** (gated on `std`): `from_f64`, `from_f64_with`,
   `to_f64`, `to_f32`.
 - **Default reductions**: `is_zero`, `is_one`, `is_normal`, `sum`,
@@ -123,7 +122,7 @@ A few methods are deliberately not on the trait because their
 signature varies per width or the trait can't represent them — see
 the [trait reference](https://docs.rs/decimal-scaled/latest/decimal_scaled/trait.Decimal.html)
 for the full out-of-scope list (`rescale<TARGET>` needs a
-const-generic method param; the per-width fallible `TryFrom<iN>`
+const-generic method param; the per-width infallible `From<iN>`
 integer conversions live on the concrete types; transcendentals
 are feature-gated).
 
@@ -158,7 +157,7 @@ narrower or wider tier.
 ```rust
 # #[cfg(feature = "wide")] {
 use decimal_scaled::{D38, D57, D115};
-let a: D38<6> = D38::<6>::try_from(7i64).unwrap();
+let a: D38<6> = D38::<6>::from(7i64);
 let b: D57<6> = a.widen();          // one rung up
 let c: D115<6> = b.widen().widen(); // two more rungs: D57 → D76 → D115
 let _: D38<6> = c.try_into().unwrap();   // skip-jump back via TryFrom

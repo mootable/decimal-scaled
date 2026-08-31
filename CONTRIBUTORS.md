@@ -13,16 +13,6 @@ The crate's correctness contract is fixed:
 strict transcendentals, identical bit-patterns across platforms.
 Performance tuning never trades that away.
 
-> **`no_std` builds — a contributor gotcha.** The library is `no_std`, and
-> `cargo check --no-default-features --lib` is green. Do **not** expect
-> `cargo check --no-default-features --all-targets` to pass, though: the repo's
-> own tests, benches, and examples use `std` (the Rust test harness itself
-> requires it), so they cannot compile under `no_std`. That failure is a
-> property of the dev targets, not the shipped crate — a consumer depending on
-> `decimal-scaled` with `default-features = false` only ever compiles the
-> (green) library, never these targets. Check the no_std surface with
-> `--lib`, not `--all-targets`.
-
 ---
 
 ## 1. The algorithm library
@@ -236,12 +226,14 @@ The 0.5 ULP contract has dedicated test suites. They are part of the
 PR gate — if any of them fail your kernel does not land.
 
 - [`decimal-scale-test/tests/golden.rs`](https://github.com/mootable/decimal-scaled/blob/main/decimal-scale-test/tests/golden.rs) — the full-surface golden gate and the crate's **definitive correctness proof**. One erased subject drives the [`decimal-scaled-golden`](https://github.com/mootable/decimal-scaled/tree/main/decimal-scaled-golden) harness over **every band-edge `(width, scale)` cell** (88 cells, `D18<0>` … `D1232<1231>`) for every strict function under **every** `RoundingMode` (`HalfToEven`, `HalfAwayFromZero`, `HalfTowardZero`, `Trunc`, `Floor`, `Ceiling`), asserting the correctly-rounded value EXACTLY (`delta == 0` storage LSB, ZERO tolerance) and validating overflow panics against each cell's envelope. Passes only at **0 bad / 0 panic**. The `golden (gate)` CI job runs it per push (row-sampled); the `golden (comprehensive)` workflow runs it unsampled on demand. See the [`decimal-scale-test` README](https://github.com/mootable/decimal-scaled/blob/main/decimal-scale-test/README.md) for the `GOLDEN_*` filter variables.
-- The multi-oracle golden set (`decimal-scaled-golden/golden/<fn>.au`, generated from `decimal-scaled-golden/lead/<fn>.pb` by the oracle pipeline) is the external truth the gate asserts against - correctly-rounded for every `RoundingMode` across all twelve widths at the band-edge cells. The legacy `ulp_strict_golden` suite is retired (its inputs were folded into the leads).
+- The multi-oracle golden set (`decimal-scaled-golden/golden/<fn>.golden`, generated from `tests/lead/<fn>.lead` by the oracle pipeline) is the external truth the gate asserts against - correctly-rounded for every `RoundingMode` across all twelve widths at the band-edge cells. The legacy `ulp_strict_golden` mpmath suite is retired (its inputs were folded into the leads).
+- [`tests/wide_strict_transcendentals.rs`](https://github.com/mootable/decimal-scaled/blob/main/tests/wide_strict_transcendentals.rs) — cross-witness suite for the wide tier. Computes a value at the target's storage and scale, computes the reference at a wider storage at the same scale, rescales, and asserts bit-exact or ±1 LSB agreement. The pattern to copy when adding a new bespoke kernel.
+- [`tests/narrow_strict_transcendentals.rs`](https://github.com/mootable/decimal-scaled/blob/main/tests/narrow_strict_transcendentals.rs) — narrow tier (D18/D38) inherited-method coverage.
 - [`decimal-scale-test/tests/regressions/ln_lookup_bands.rs`](https://github.com/mootable/decimal-scaled/blob/main/decimal-scale-test/tests/regressions/ln_lookup_bands.rs) — parity / no-panic coverage for the deep-scale Tang-lookup `ln_strict` bands, one parametrised arm per `(width, band)`. Off-grid bands (no golden cell lands inside them) keep the full `exp(ln(x))` round-trip parity plus band-edge no-panic bounds; on-grid bands (the golden gate pins the mid-band cell bit-exact) keep the band edges only. New Tang lookup bands must add a matching parity arm before the kernel is allowed in.
 - [`decimal-scale-test/tests/regressions/powf_integer.rs`](https://github.com/mootable/decimal-scaled/blob/main/decimal-scale-test/tests/regressions/powf_integer.rs) — bit-exact assertion of `powf_strict(D::try_from(n).unwrap()).to_bits() == powi(n).to_bits()` for the integer-exponent fast path, plus the wide-tier exact integer-power directed-rounding pins. Any future integer-exponent specialisation has to keep this contract.
 - [`decimal-scale-test/tests/proptest_identities.rs`](https://github.com/mootable/decimal-scaled/blob/main/decimal-scale-test/tests/proptest_identities.rs) — property-based ULP fuzz at D38<19> with a D76<19> cross-tier witness. Identities (`exp(ln(x)) ≈ x`, `sin² + cos² ≈ 1`, sign symmetries, …) with deterministic seeds and 100 cases per block.
 
-See the [Harness page](https://mootable.github.io/decimal-scaled/golden/) for how the golden validation works and how to add coverage for a new tier.
+See [`docs/precision-testing.md`](https://mootable.github.io/decimal-scaled/precision-testing/) for the four-layer model and how to add coverage for a new tier.
 
 If your change adds a bespoke kernel for a new `(width, scale)` cell,
 **add cross-witness tests for that cell to

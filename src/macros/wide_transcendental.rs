@@ -176,8 +176,8 @@ macro_rules! decl_wide_transcendental {
             /// and the opt-in AGM run in `Wagm`, which is wide enough for
             /// their directed-Ziv guard ceiling (`~Wagm::BITS/8 − SCALE`),
             /// their integer-digit `k_lift`, and the `resize_to::<Wagm>` of a
-            /// large `Wexp`-computed result. Sized per tier in `widths.rs`;
-            /// `W` is narrowed beneath it.
+            /// large `Wexp`-computed result. Sized per tier in `widths.rs`
+            /// (the old single shared work width); `W` is narrowed beneath it.
             pub(crate) type Wagm = $AgmWork;
 
             /// Guard digits added below the type's own scale.
@@ -3605,8 +3605,8 @@ macro_rules! decl_wide_transcendental {
                 // sub-resolution `base^-k` rounds up to 1, not down to 0). The
                 // pin divides the INTEGER `base^|n|`, so a terminating
                 // reciprocal is exact even when the scaled `base^|n|·10^SCALE`
-                // overflows storage — the case a `checked_pow` fast path
-                // would defer to the to-nearest composition, mis-rounding Floor /
+                // overflows storage — the case the old `checked_pow` fast path
+                // deferred to the to-nearest composition, mis-rounding Floor /
                 // Trunc by 1 LSB. `None` (fractional base/exponent, or a
                 // positive power out of range) defers to the composition below,
                 // which panics uniformly on a genuinely out-of-range result.
@@ -3777,12 +3777,12 @@ macro_rules! decl_wide_transcendental {
             /// Delegates to the policy dispatch exactly as the default-
             /// mode sibling does (`policy::trig::asin_dispatch`), so BOTH
             /// public entry points share the one Ziv-escalated kernel.
-            /// An inline single-shot composition could not see
+            /// The old inline single-shot composition here could not see
             /// a deciding digit below the fixed working scale — the
             /// `asin(3e-60)` family has `x^3/6` EXACTLY 4.5 storage ULPs
             /// with the deciding `3x^5/40` tail far below `SCALE + GUARD`,
-            /// so HalfToEven would mis-round the half (guards asin.golden D462
-            /// <180>). The policy kernel's escalating walker
+            /// so HalfToEven mis-rounded the half (the asin.golden D462
+            /// <180> regression). The policy kernel's escalating walker
             /// resolves it.
             #[inline]
             #[must_use]
@@ -4952,7 +4952,7 @@ mod tests {
 
     /// Validity wall for the baked binary Tang `ln` table: on every
     /// shipped wide tier, the baked `ln_table_entry` accessor reproduces
-    /// the per-call `ln_fixed` Series recompute (to within the artanh
+    /// the OLD per-call `ln_fixed` Series recompute (to within the artanh
     /// reconstruction's working-LSB tolerance) for all 129 slots across
     /// the reachable working-scale band. If this passes, swapping the
     /// Series recompute for the baked slice does not move the `ln` result.
@@ -4983,7 +4983,7 @@ mod tests {
 
     /// Validity wall for the baked binary Tang `(sin, cos)` table: on
     /// every shipped wide tier, the baked `sincos_table_entry` accessor
-    /// reproduces the per-call `sin_cos_fixed` Series recompute (to
+    /// reproduces the OLD per-call `sin_cos_fixed` Series recompute (to
     /// within a small working-LSB tolerance) for all `M + 1` slots across
     /// the reachable working-scale band. If this passes, swapping the
     /// Series recompute for the baked slice does not move the sin/cos/tan
@@ -5015,7 +5015,7 @@ mod tests {
 
     /// Validity wall for the baked binary Tang `exp` table: on every
     /// shipped wide tier, the baked `exp_table_entry` accessor reproduces
-    /// the per-call `exp_fixed` Series recompute (to within a tight
+    /// the OLD per-call `exp_fixed` Series recompute (to within a tight
     /// working-LSB tolerance) for all `M` lattice slots across the
     /// reachable working-scale band. If this passes, swapping the Series
     /// recompute for the baked slice does not move the `exp` (or the
@@ -5307,7 +5307,7 @@ mod tests {
     fn wide_agm_moderate_scale_round_trip() {
         #[cfg(feature = "d76")]
         {
-            let x = crate::D::<crate::int::types::Int<4>, 20>::try_from(3_i128).unwrap();
+            let x = crate::D::<crate::int::types::Int<4>, 20>::from_int(3);
             let back = x.ln_strict_agm().exp_strict_agm();
             let delta = (back.to_bits().as_i128() - x.to_bits().as_i128()).abs();
             assert!(delta <= 8, "AGM exp(ln(3)) at D76<20> delta {delta}");
@@ -5315,7 +5315,7 @@ mod tests {
 
         #[cfg(feature = "d153")]
         {
-            let y = crate::D::<crate::int::types::Int<8>, 20>::try_from(2_i128).unwrap();
+            let y = crate::D::<crate::int::types::Int<8>, 20>::from_int(2);
             let back = y.exp_strict_agm().ln_strict_agm();
             let delta = (back.to_bits().as_i128() - y.to_bits().as_i128()).abs();
             assert!(delta <= 8, "AGM ln(exp(2)) at D153<20> delta {delta}");
@@ -5332,7 +5332,7 @@ mod tests {
         // result fits i128 comfortably, so compare there.
         #[cfg(feature = "d76")]
         {
-            let x = crate::D::<crate::int::types::Int<4>, 50>::try_from(3_i128).unwrap();
+            let x = crate::D::<crate::int::types::Int<4>, 50>::from_int(3);
             let back = x.ln_strict().exp_strict();
             let delta = (back.to_bits().as_i128() - x.to_bits().as_i128()).abs();
             assert!(delta <= 8, "exp(ln(3)) at D76<50> delta {delta}");
@@ -5341,7 +5341,7 @@ mod tests {
         // D307<150>: deep scale, only the wide core can serve it.
         #[cfg(feature = "d307")]
         {
-            let y = crate::D::<crate::int::types::Int<16>, 150>::try_from(2_i128).unwrap();
+            let y = crate::D::<crate::int::types::Int<16>, 150>::from_int(2);
             let back = y.exp_strict().ln_strict();
             let delta = (back.to_bits().as_i128() - y.to_bits().as_i128()).abs();
             assert!(delta <= 8, "ln(exp(2)) at D307<150> delta {delta}");

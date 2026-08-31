@@ -6,7 +6,7 @@
 use crate::function::Function;
 use crate::rounding::RoundingMode;
 
-use super::{Capabilities, Computed, Limits, Overflow};
+use super::{Capabilities, Computed, Limits, Overflow, Radix};
 
 /// A decimal implementation under test, pinned to exactly one `(width, scale)`
 /// cell, typed to its native `Value`. **Pure**: it parses, computes, and formats.
@@ -18,6 +18,37 @@ pub trait DecimalSubject {
 
     /// Identity, radix, per-function support, and report metadata.
     fn capabilities(&self) -> Capabilities;
+
+    /// How the library STORES values — the radix that DRIVES golden value selection:
+    /// the value-chooser grades the subject against the `radix:value` entry tagged for
+    /// this radix (falling back to the untagged catch-all), at this radix's reach.
+    /// `Decimal` by default; a binary-backed subject (f64, f32, a Q-format type)
+    /// overrides it to `Binary` so it is graded against the `2` value.
+    fn storage_radix(&self) -> Radix {
+        Radix::Decimal
+    }
+
+    /// The radix the library ROUNDS in. Defaults to `storage_radix()`; the override
+    /// hook for the rarer library that rounds in a different radix than it stores
+    /// (none does today). It refines the directed-rounding comparison, not value
+    /// selection — selection is driven by `storage_radix()`.
+    fn rounding_radix(&self) -> Radix {
+        self.storage_radix()
+    }
+
+    /// The subject's binary significand width, when it grades in BINARY. `None` (the
+    /// default — every decimal subject) means "graded in decimal at `limits`'
+    /// `max_precision`". `Some(b)` means the subject is a binary value graded against
+    /// the `2:` hex-float ROUNDED TO `b` significand bits, in binary (f64 → `Some(53)`,
+    /// f32 → `Some(24)`, a Q128.128 fixed-point → `Some(128)`).
+    ///
+    /// The runner picks the binary grading path when `storage_radix() == Binary` AND
+    /// `mantissa_bits()` is `Some` AND the selected `2:` value is a hex-float; a binary
+    /// subject WITHOUT a declared mantissa width still grades in decimal, and on the
+    /// untagged corpus (no `2:` value) every subject grades in decimal unchanged.
+    fn mantissa_bits(&self) -> Option<u32> {
+        None
+    }
 
     /// A short human label for this subject — used in diagnostics such as the
     /// `ParallelRunner`'s worker thread names. Defaults to the `capabilities`
