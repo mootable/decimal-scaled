@@ -43,6 +43,24 @@ use crate::support::rounding::RoundingMode;
 /// supplies them — the same contract as
 /// [`wtc::round_to_storage_directed_g`]).
 ///
+/// # Why the walker is the tail-signed one
+///
+/// Escalation cannot settle every input here. At `t = ±10^-(S/2)` the whole
+/// series vanishes at the working scale, so the kernel returns `2u` and the
+/// first digit that could decide the round sits just past `3·S/2` — beyond
+/// the walker's `W::BITS/8 − 8` reach at the top scale of the wide tiers
+/// (`D462<346>` and `D616<590>` are the cells where it bites). The residual
+/// then reads as an exact tie at every guard the walker can reach, and the
+/// mode's tie-break decides a tie that is not there: `HalfTowardZero` never
+/// bumps and fails at both signs, `HalfToEven` bumps only on an odd kept
+/// digit and so fails at whichever sign presents an even one.
+///
+/// The residual is blind, but the kernel is not: it knows the side its own
+/// dropped terms put the truth on, so it hands that back with the value and
+/// [`wtc::round_to_storage_tail_signed_g`] rounds to the nearer neighbour
+/// outright instead of breaking a tie. Where the kernel cannot prove a side
+/// it returns `None` and the walker behaves exactly as it did before.
+///
 /// # Panics
 ///
 /// Panics if `t <= -1`, or if the result leaves the storage range.
@@ -59,14 +77,14 @@ where
     S::Scratch: ComputeLimbs,
 {
     super::guard_domain::<St>(raw, SCALE);
-    let r = wtc::round_to_storage_directed_g::<St, S>(
+    let r = wtc::round_to_storage_tail_signed_g::<St, S>(
         base_guard,
         SCALE,
         mode,
         st_max,
         st_min,
         |guard| {
-            crate::algos::exp::exp_generic::log1p_fixed::<S>(
+            crate::algos::exp::exp_generic::log1p_fixed_tagged::<S>(
                 wtc::to_work_scaled_g::<St, S>(raw, guard),
                 SCALE + guard,
             )
