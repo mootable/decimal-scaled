@@ -51,6 +51,27 @@ DEFAULT_GENERATOR = "flint"
 # skipped. More validators ⇒ stronger cross-check (the owner's directive).
 VALIDATOR_ORDER = ["mpmath", "flint", "mpfr", "sympy", "decimal", "fraction"]
 
+# Per-function validator EXCLUSIONS. A validator listed here is not consulted for that
+# function — not because it is wrong in general, but because it is not viable THERE, and
+# a non-viable validator does not merely abstain: a computed disagreement past the radix
+# bound DROPS the line (see `_validate_line`), so it can veto a vector the reliable
+# oracles agree on and leave a silent hole in coverage.
+#
+# mpmath near a domain asymptote: its working precision is budgeted from the RESULT's
+# integer digits, with no term for the condition number. For log1p at 1+t = 1e-70 the
+# result is ln(1e-70) ~= -161 — three integer digits — while representing the input needs
+# 70+, and the derivative 1/(1+t) amplifies the shortfall straight through. The same
+# failure occurs for atanh at both endpoints and acosh near 1. flint and the base-10
+# decimal oracle agree exactly on these; mpmath is the lone outlier.
+#
+# mpmath is deliberately RETAINED everywhere else — it remains a useful independent
+# cross-check. See issue #66.
+VALIDATOR_EXCLUDE = {
+    "log1p": {"mpmath"},
+    "atanh": {"mpmath"},
+    "acosh": {"mpmath"},
+}
+
 # A binary-vs-base-10 (or derived) disagreement up to this many units at 10^-precision
 # is a legitimate radix-rounding artifact: annotated and accepted. Beyond it the line is
 # flagged and dropped — a genuine discrepancy to investigate, never silently kept.
@@ -120,11 +141,14 @@ def _generator_for(func, oracles, override):
 
 
 def _validators_for(func, gen_name, oracles):
-    """Every available oracle that supports `func` except its generator, in
-    VALIDATOR_ORDER (so a line comment lists them deterministically)."""
+    """Every available oracle that supports `func` except its generator and any listed
+    in VALIDATOR_EXCLUDE for it, in VALIDATOR_ORDER (so a line comment lists them
+    deterministically)."""
+    excluded = VALIDATOR_EXCLUDE.get(func, frozenset())
     return [
         oracles[nm] for nm in VALIDATOR_ORDER
-        if nm != gen_name and nm in oracles and oracles[nm].supports(func)
+        if nm != gen_name and nm not in excluded
+        and nm in oracles and oracles[nm].supports(func)
     ]
 
 

@@ -11,7 +11,7 @@ crate reads — it never links an oracle.
 
 | File | Role |
 | --- | --- |
-| `generate.py` | The CLI (`generate` / `revalidate`): harvests inputs, computes each line with the function's generator, cross-validates, writes `golden/<func>.au` with a per-line provenance comment. Holds `GENERATOR_POLICY`, `DEFAULT_GENERATOR`, `VALIDATOR_ORDER`, `ACCEPT_ULPS`. |
+| `generate.py` | The CLI (`generate` / `revalidate`): harvests inputs, computes each line with the function's generator, cross-validates, writes `golden/<func>.au` with a per-line provenance comment. Holds `GENERATOR_POLICY`, `DEFAULT_GENERATOR`, `VALIDATOR_ORDER`, `VALIDATOR_EXCLUDE`, `ACCEPT_ULPS`. |
 | `harvest.py` | Reads the `.pb` input layer (below): dedup, domain filter, and the per-input WHY carried into the provenance comment. |
 | `oracle.py` | The `Oracle` interface (name / radix / supports / value) and the registry the adapters self-register into. |
 | `exactness.py` | The terminate-vs-truncate decision: a value stays stripped (claiming exactness) only when exactness is PROVABLE — by irrationality theorem or exact rational inverse-check; everything else is re-padded to the full truncated form. |
@@ -56,6 +56,36 @@ generation precision is a legitimate radix-rounding artifact, annotated as
 `name(delta~MAGNITUDE, radix)`; anything beyond the bound drops the line and
 flags it for investigation — never silently kept. A line no oracle could
 confirm is also dropped.
+
+### Per-function exclusions (`VALIDATOR_EXCLUDE`)
+
+A validator that *cannot represent* an input abstains harmlessly. A validator
+that computes a **wrong** value does not: its disagreement passes `ACCEPT_ULPS`
+and **drops the line**, so a validator that is unsound for a particular function
+can veto a vector the reliable oracles agree on — leaving a silent hole in
+coverage exactly where the hardest inputs live. `VALIDATOR_EXCLUDE` in
+`generate.py` maps a function to the validators that must not be consulted for
+it.
+
+| function | excluded | reason |
+| :-- | :-- | :-- |
+| `log1p` | `mpmath` | near the `t = -1` pole |
+| `atanh` | `mpmath` | at both endpoints |
+| `acosh` | `mpmath` | near 1 |
+
+All three are the same defect: mpmath budgets its working precision from the
+**result's** integer-digit count, with no term for the condition number. For
+`log1p` at `1 + t = 1e-70` the result is `ln(1e-70) ≈ -161` — three integer
+digits — while representing that input needs seventy-plus, and the derivative
+`1 / (1 + t)` amplifies the shortfall straight through. FLINT and the base-10
+`decimal` oracle agree exactly on these inputs; mpmath is the lone outlier.
+
+This is a *targeted* exclusion, not a demotion. mpmath is deliberately retained
+everywhere else — an independent third opinion is worth having, and its binary
+storage is a known, bounded limitation rather than a reason to drop it. Adding
+an entry costs one line of cross-check, so justify it: prefer fixing the
+adapter, and exclude only where the validator is demonstrably unsound *and* two
+independent oracles agree without it. Tracked as issue #66.
 
 ## Usage
 
