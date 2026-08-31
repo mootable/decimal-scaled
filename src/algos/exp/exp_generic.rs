@@ -637,10 +637,21 @@ use crate::support::rounding::RoundingMode;
     /// concludes the value is exactly representable, or exactly a tie, when
     /// it is neither: `e^x - 1` is transcendental at every algebraic
     /// `x != 0` (Lindemann-Weierstrass), so it never lands on a grid line.
-    /// Escalating would resolve it, but at the top scale of each wide tier
-    /// there is no room left to escalate into — `SCALE + 8` already exceeds
-    /// the work integer's `BITS/8`, so the walker's cap collapses onto its
-    /// base guard and one shot is all it gets.
+    ///
+    /// Escalating does not rescue it, and NOT for want of depth: at the top
+    /// scale of D462 / D616 / D924 the work integer's `BITS/8` is
+    /// 512 / 768 / 1024 against a `SCALE` of 461 / 615 / 923, so `max_guard`
+    /// works out at 43 / 145 / 93 and a second probe always runs. What
+    /// defeats it is that the landing is scale-INVARIANT: the terms'
+    /// individual sub-LSB imprecisions cancel against one another, and the
+    /// exact sum they leave is a whole multiple of the guard power — both
+    /// facts turning on the argument's own factors of two, three and ten
+    /// rather than on the working scale. So the deeper probe re-derives the
+    /// same clean zero and draws the same conclusion; depth cannot see past a
+    /// coincidence that does not depend on depth. (One shape differs in
+    /// detail — a deeper probe can turn up a tiny NON-zero remainder rather
+    /// than a clean zero — but it falls below the walker's absolute noise
+    /// floor and is discarded, so the outcome is the same.)
     ///
     /// What decides the round there is the tail the kernel could not
     /// represent, and only the kernel that summed the series knows it.
@@ -698,17 +709,101 @@ use crate::support::rounding::RoundingMode;
         expm1_fixed_inner::<S>(s, w, true)
     }
 
+    /// One step of the accumulated-error recurrence: the exact rational
+    /// `eps_j` that this term contributes, as `(numerator, denominator)`.
+    ///
+    /// Writing `a_j` for the term the loop actually computed and `A_j` for
+    /// the exact Taylor term, the error `eps_j = a_j - A_j` satisfies
+    ///
+    /// ```text
+    ///   eps_j = (eps_{j-1} * s - rho_j) / (10^w * j)  -  r_j / j
+    /// ```
+    ///
+    /// where `rho_j = prod - scaled * 10^w` is the `/10^w` rounding remainder
+    /// and `r_j` the truncating `/j` remainder — both already in the loop's
+    /// hand. Substituting `eps_{j-1} = num/den` turns that into
+    /// `(Z / 10^w - den * r_j) / (den * j)` with `Z = num * s - den * rho_j`,
+    /// so the error stays a SMALL-denominator rational exactly while `10^w`
+    /// divides `Z` — which is the whole reason it can be tracked at all in a
+    /// fixed-width integer.
+    ///
+    /// Returns `None` the moment the error stops being exactly
+    /// representable: the division is not exact, an intermediate outgrows
+    /// `S`, or the denominator outgrows `i128`. Every such verdict FAILS
+    /// CLOSED — the caller stops tracking and the tag becomes `None`, which
+    /// is exactly what the previous per-term rule returned for those inputs,
+    /// so nothing loses coverage.
+    fn term_error<S: BigInt>(
+        eps: (S, i128),
+        rho: S,
+        rem_j: S,
+        j: i128,
+        s: S,
+        w: u32,
+    ) -> Option<(S, i128)>
+    where
+        S::Scratch: ComputeLimbs,
+    {
+        let (num, den) = eps;
+        let z = num
+            .checked_mul(s)?
+            .checked_sub(lit::<S>(den).checked_mul(rho)?)?;
+        let (y, z_rem) = div_rem_exact::<S>(z, one::<S>(w));
+        if z_rem != zero::<S>() {
+            return None;
+        }
+        Some((
+            y.checked_sub(lit::<S>(den).checked_mul(rem_j)?)?,
+            den.checked_mul(j)?,
+        ))
+    }
+
+    /// Sum of two exact rationals, over their product denominator.
+    ///
+    /// Deliberately NOT reduced to lowest terms: the tag is only ever
+    /// consulted for arguments small enough that the series vanishes within a
+    /// handful of terms, and the only thing ever read back out is whether the
+    /// NUMERATOR is zero — which no common factor can change. `None` on any
+    /// overflow, failing closed exactly as [`term_error`] does.
+    fn add_error<S: BigInt>(a: (S, i128), b: (S, i128)) -> Option<(S, i128)> {
+        let (a_num, a_den) = a;
+        let (b_num, b_den) = b;
+        Some((
+            a_num
+                .checked_mul(lit::<S>(b_den))?
+                .checked_add(b_num.checked_mul(lit::<S>(a_den))?)?,
+            a_den.checked_mul(b_den)?,
+        ))
+    }
+
     /// The one series loop behind [`expm1_fixed`] and
     /// [`expm1_fixed_tagged`].
     ///
     /// `want_tag` exists to keep the untagged path's arithmetic *exactly*
-    /// what it was: proving the tag needs each term's two divisions checked
-    /// for an exact remainder, and the `÷10^w` check costs a multiply-back
-    /// (`round_div_pow10` rounds and does not report exactness — on the
+    /// what it was: proving the tag needs each term's two rounding remainders,
+    /// and recovering the `÷10^w` one costs a multiply-back
+    /// (`round_div_pow10` rounds and does not report its remainder — on the
     /// `w > 38` path it routes through the shared rescale matcher, whose
     /// contract this must not disturb). That cost belongs only to the caller
     /// that needs the tag, so it is a runtime flag on ONE loop rather than a
     /// second loop or a const knob.
+    ///
+    /// # What the tag has to prove
+    ///
+    /// The tag names the side of `sum` the true value lies on, which is the
+    /// tail's side only when `sum` IS the exact partial sum — i.e. when the
+    /// accumulated rounding error is exactly zero. So that is what gets
+    /// tracked, as an exact rational, via [`term_error`] and [`add_error`].
+    ///
+    /// Per-term exactness would be the easier test, and it is SUFFICIENT, but
+    /// it is not NECESSARY and the difference is not academic: the terms'
+    /// errors can cancel. At `x = -10^-m` the `÷3!` of the third term leaves
+    /// exactly `+2/3` and the fourth term's two roundings leave exactly
+    /// `-2/3`, so the sum is exact although neither term is — and because the
+    /// value then lands ON a storage grid line, that is precisely where the
+    /// walker needs the tag most. A per-term rule is `None` there and the
+    /// directed round stands still on a value that is not actually on the
+    /// grid.
     ///
     /// # When the tag is `None`
     ///
@@ -719,16 +814,16 @@ use crate::support::rounding::RoundingMode;
     ///   so the tail need not carry its first term's sign;
     /// * the loop stopped at [`SERIES_CAP`] rather than because a term
     ///   vanished, so the tail is NOT below the working resolution;
-    /// * any division in any INCLUDED term was inexact. Then the returned sum
-    ///   is the exact partial sum plus an integer rounding error `e`, and
-    ///   since `|e| >= 1` dominates the sub-unit tail the true side would be
-    ///   `-sign(e)` rather than the tail's. Requiring exactness is what makes
-    ///   the tag a PROOF of the side rather than an overwhelming likelihood.
+    /// * the accumulated error is non-zero, or stopped being exactly
+    ///   representable (see [`term_error`]). A non-zero error is of the same
+    ///   order as the sub-unit tail, so it can outweigh it and put the true
+    ///   value on the other side; proving the error ZERO is what makes the
+    ///   tag a PROOF of the side rather than an overwhelming likelihood.
     ///
-    /// "Included" is load-bearing in that last one. The term that ENDS the
-    /// loop reached zero by being rounded away, so its division is inexact
-    /// whenever it was not already zero — but it is never added to the sum and
-    /// so cannot contribute error. Counting it would leave `exact` false on
+    /// Only the terms actually ADDED are tracked. The term that ENDS the loop
+    /// reached zero by being rounded away, so its divisions are inexact
+    /// whenever it was not already zero — but it never enters the sum and so
+    /// cannot contribute error. Counting it would leave the error non-zero on
     /// essentially every input and the tag permanently `None`.
     fn expm1_fixed_inner<S: BigInt>(s: S, w: u32, want_tag: bool) -> (S, Option<TailSign>)
     where
@@ -737,9 +832,15 @@ use crate::support::rounding::RoundingMode;
         let mut sum = s;
         let mut term = s;
         let mut iter: u128 = 2;
-        // Every division in every INCLUDED term has been exact so far, so
-        // `sum` is still the exact partial sum at the working scale.
-        let mut exact = true;
+        // The accumulated rounding error of the INCLUDED terms, as an exact
+        // rational: `err` is the running total and `eps` the previous term's
+        // own contribution (the recurrence needs it). `sum` is still the exact
+        // partial sum exactly while `err`'s numerator is zero. `err_lost` =
+        // the error stopped being exactly representable, so nothing can be
+        // proven and the tag must fail closed.
+        let mut eps: (S, i128) = (zero::<S>(), 1);
+        let mut err: (S, i128) = (zero::<S>(), 1);
+        let mut err_lost = false;
         // The index of the term that VANISHED at the working scale, i.e. the
         // first term of the neglected tail. `None` = the loop hit the cap.
         let mut vanished_at: ::core::option::Option<u128> = ::core::option::Option::None;
@@ -747,29 +848,47 @@ use crate::support::rounding::RoundingMode;
             // `iter` is bounded by SERIES_CAP (20_000), so the cast to the
             // generic `lit`'s i128 argument is lossless.
             let d = lit::<S>(iter as i128);
-            // `step_exact`: both of this term's divisions came out exact.
-            let (next, step_exact) = if want_tag {
+            // `rho` / `rem_j`: this term's two rounding remainders — the one the
+            // `÷10^w` shed and the one the truncating `÷j` shed. They are what
+            // the error recurrence consumes; the untagged path never reads
+            // them.
+            let (next, rho, rem_j) = if want_tag {
                 // The same value `mul::<S>(term, s, w) / d` produces, with the
-                // exactness of both divisions recorded on the way through.
+                // two remainders recorded on the way through.
                 let prod = term.wrapping_mul_low_u128(s);
                 let scaled = round_div_pow10::<S>(prod, w);
-                let mul_exact = scaled.wrapping_mul_low_u128(one::<S>(w)) == prod;
+                let back = scaled.wrapping_mul_low_u128(one::<S>(w));
                 let (q, r) = div_rem_exact::<S>(scaled, d);
-                (q, mul_exact && r == zero::<S>())
+                (q, prod - back, r)
             } else {
-                (mul::<S>(term, s, w) / d, true)
+                (mul::<S>(term, s, w) / d, zero::<S>(), zero::<S>())
             };
             term = next;
             if term == zero::<S>() {
                 vanished_at = ::core::option::Option::Some(iter);
                 break;
             }
-            // Only a term that is actually ADDED can carry error into `sum`.
-            // The term that VANISHES must not be counted: it reached zero by
-            // being rounded away, so its division is inexact by construction,
-            // and folding it in would make `exact` false on essentially every
-            // input and the tag permanently `None`.
-            exact = exact && step_exact;
+            // Only a term that is actually ADDED can carry error into `sum`,
+            // so the accumulator advances HERE, past the vanish break.
+            //
+            // Nothing moves while the running error is still exactly zero AND
+            // this term's own two divisions came out exact: `eps_j` is then
+            // zero and both rationals stand. That is the overwhelmingly common
+            // case, and short-circuiting it keeps the exact-input path clear of
+            // the recurrence's extra divide — the cost lands only on inputs the
+            // previous rule wrote off as `None` anyway.
+            let quiet = eps.0 == zero::<S>() && rho == zero::<S>() && rem_j == zero::<S>();
+            if want_tag && !err_lost && !quiet {
+                match term_error::<S>(eps, rho, rem_j, iter as i128, s, w)
+                    .and_then(|e| add_error::<S>(err, e).map(|t| (e, t)))
+                {
+                    ::core::option::Option::Some((e, t)) => {
+                        eps = e;
+                        err = t;
+                    }
+                    ::core::option::Option::None => err_lost = true,
+                }
+            }
             sum = sum + term;
             iter += 1;
             if iter > SERIES_CAP {
@@ -778,7 +897,11 @@ use crate::support::rounding::RoundingMode;
         }
         let tag = match vanished_at {
             ::core::option::Option::Some(n)
-                if want_tag && exact && s != zero::<S>() && abs(s) <= one::<S>(w) =>
+                if want_tag
+                    && !err_lost
+                    && err.0 == zero::<S>()
+                    && s != zero::<S>()
+                    && abs(s) <= one::<S>(w) =>
             {
                 // The tail is `s^n/n! + s^(n+1)/(n+1)! + ...`, alternating and
                 // strictly decreasing in magnitude for `|s| <= 1`, so it
