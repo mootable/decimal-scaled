@@ -38,17 +38,18 @@ extra places, so the `L` / `E` / `G` classification is unambiguous
 for the transcendental kernels (whose outputs are irrational and so
 never land exactly on a half-tie except where the input forces it).
 
-Function surface: the twenty-two strict transcendental + root
-functions — single-argument `ln exp exp2 log2 log10 sin cos tan atan
-asin acos sinh cosh tanh asinh acosh atanh sqrt cbrt` (three-column
-tables) and two-argument `log atan2 powf` (four-column tables, the
-second column carrying the base / x / exponent operand).
+Function surface: the twenty-four strict transcendental + root
+functions — single-argument `ln exp exp2 expm1 log1p log2 log10 sin cos
+tan atan asin acos sinh cosh tanh asinh acosh atanh sqrt cbrt`
+(three-column tables) and two-argument `log atan2 powf` (four-column
+tables, the second column carrying the base / x / exponent operand).
 
 Categories of cases per (tier, function) file:
 
   * `near_boundary` — small inputs around the function's natural
     boundary (ln near 1, exp near 0, trig near 0/quarter-pi/half-pi,
-    roots near perfect squares/cubes, asin/acos/atanh near ±1).
+    roots near perfect squares/cubes, asin/acos/atanh near ±1,
+    expm1/log1p near 0 and log1p near -1).
   * `half_ulp_tie` — inputs whose true output is bracketed within
     `(k - 0.4, k + 0.4)` storage LSBs around the half-tie point.
     Hardest tie-breaking edge.
@@ -56,10 +57,11 @@ Categories of cases per (tier, function) file:
     the natural input domain.
   * `edge_values` — a fixed roster of small / large magnitudes plus
     the function's edge classes: endpoint branch-points
-    (asin/acos/atanh `±(one - 10^k)`, acosh `one + 10^k`), exact
-    algebraic rosters (log2 of `2^k`, log10 of `10^k`, exp2 of `k`,
-    sqrt of `n^2`, cbrt of `n^3`), the MAX / MAX-ULP boundary pair.
-  * `overflow_edge` — the largest exp/exp2/sinh/cosh input whose
+    (asin/acos/atanh `±(one - 10^k)`, acosh `one + 10^k`, log1p
+    `-(one - 10^k)`), exact algebraic rosters (log2 of `2^k`, log10
+    of `10^k`, exp2 of `k`, sqrt of `n^2`, cbrt of `n^3`), the MAX /
+    MAX-ULP boundary pair.
+  * `overflow_edge` — the largest exp/exp2/expm1/sinh/cosh input whose
     result still fits storage (the just-fits boundary, asserted as a
     golden rather than silently dropped).
   * `large_trig` — very-large trig arguments `K·π` (full Payne-Hanek
@@ -115,6 +117,7 @@ from typing import Any, Callable
 from mpmath import (
     mp, mpf, ln, exp, sin, cos, tan, atan, sqrt, cbrt, mpc,
     asin, acos, atan2, sinh, cosh, tanh, asinh, acosh, atanh, power, log,
+    expm1, log1p,
 )
 
 
@@ -263,6 +266,10 @@ FUNCS: list[tuple[str, Callable[[mpf], mpf], str]] = [
     ("ln",    ln,                       "positive"),
     ("exp",   exp,                      "moderate_real"),
     ("exp2",  lambda x: power(2, x),    "moderate_real"),
+    # expm1/log1p are taken NATIVE from mpmath, never composed: `exp(x) - 1` and
+    # `ln(1 + x)` cancel away exactly the digits these two exist to preserve.
+    ("expm1", expm1,                    "moderate_real"),
+    ("log1p", log1p,                    "gt_minus_one"),
     ("log2",  lambda x: log(x, 2),      "positive"),
     ("log10", lambda x: log(x, 10),     "positive"),
     ("sin",   sin,                      "real"),
@@ -619,9 +626,15 @@ def sample_inputs(func_name: str, scale: int, max_raw: int, count: int,
             mag = rng.randint(1, cap)
             out.append(mag)
 
-    elif func_name in ("exp", "exp2", "sinh", "cosh"):
+    elif func_name == "log1p":
+        # Domain t > -1; cover the near-asymptote band (-1, 0) and (0, large).
+        cap = min(max_raw, one * (10 ** 8))
+        while len(out) < count:
+            out.append(rng.randint(-(one - 1), cap))
+
+    elif func_name in ("exp", "exp2", "expm1", "sinh", "cosh"):
         # These grow exponentially — clamp |x| <= the natural ceiling so
-        # the result still fits storage. exp/sinh/cosh share e^x growth;
+        # the result still fits storage. exp/expm1/sinh/cosh share e^x growth;
         # exp2 grows like 2^x (ceiling is log2 of the cap).
         if func_name == "exp2":
             max_x_int = max(1, int(0.9 * mp.log(mpf(max_raw) / mpf(one), 2)))
@@ -753,7 +766,9 @@ def find_half_ulp_ties(func_name: str, oracle: Callable[[mpf], mpf],
             raw = rng.randint(-(one - 1), one - 1)
         elif func_name in ("tanh", "asinh"):
             raw = rng.randint(-10 * one, 10 * one)
-        elif func_name in ("exp", "exp2", "sinh", "cosh"):
+        elif func_name == "log1p":
+            raw = rng.randint(-(one - 1), cap)
+        elif func_name in ("exp", "exp2", "expm1", "sinh", "cosh"):
             # Keep |x| <= ~20 so the result doesn't overflow at narrow
             # scales while the tie hunter scans.
             raw = rng.randint(-20 * one, 20 * one)
@@ -922,6 +937,29 @@ def edge_inputs(func_name: str, scale: int, max_raw: int) -> list[int]:
                 out += [k * one, -(k * one)]
         return out
 
+    if func_name == "expm1":
+        # expm1(0) = 0 — the one exact point — with ±1 LSB either side, since the
+        # near-zero band is where expm1 keeps every digit of x that exp(x)-1 loses.
+        # Then ±1 and the largest magnitude that still fits.
+        cap = max(1, int(0.5 * mp.log(mpf(max_raw) / mpf(one))))
+        return [
+            0,
+            1, -1,
+            one, -one,
+            cap * one, -(cap * one),
+            one // 2, -(one // 2),
+        ]
+
+    if func_name == "log1p":
+        # log1p(0) = 0 — the one exact point — with ±1 LSB either side (the band
+        # where log1p ~ t and ln(1+t) would cancel). The t -> -1 asymptote sweep
+        # -(one - 10^k) walks toward the pole; t = 1 gives ln 2, t = 9 gives ln 10.
+        # Filtered to the open domain t > -1, so the pole itself never emits.
+        out = [0, 1, -1, one, one // 2, -(one // 2), 9 * one, 99 * one]
+        for k in sweep_exponents(scale):
+            out.append(-(one - 10 ** k))
+        return [v for v in out if v > -one]
+
     if func_name == "log2":
         # Exact powers of two log2(2^k)=k (algebraic-exact roster), plus
         # log2(1)=0, near-1, near-0+, and the MAX edge.
@@ -1014,7 +1052,7 @@ def overflow_edge_inputs(func_name: str, oracle: Callable[[mpf], mpf],
     unit tests (`*_panic.rs`), which assert the kernel's documented
     contract beyond storage range.
     """
-    if func_name not in ("exp", "exp2", "sinh", "cosh"):
+    if func_name not in ("exp", "exp2", "expm1", "sinh", "cosh"):
         return []
     one = 10 ** scale
 
@@ -1026,6 +1064,9 @@ def overflow_edge_inputs(func_name: str, oracle: Callable[[mpf], mpf],
     ratio = mpf(max_raw) / mpf(one)
     if func_name == "exp2":
         x_thresh = mp.log(ratio, 2)
+    elif func_name == "expm1":
+        # expm1(x) = e^x - 1 reaches the cap one unit later than exp does.
+        x_thresh = mp.log(ratio + 1)
     elif func_name in ("sinh", "cosh"):
         # sinh/cosh ≈ e^x / 2, so x ≈ ln(2 * ratio).
         x_thresh = mp.log(2 * ratio)
@@ -2146,6 +2187,30 @@ def near_boundary_inputs(func_name: str, scale: int, max_raw: int,
         for _ in range(count - count // 2):
             out.append(one + rng.randint(-one // 100, one // 100))
         return out
+
+    if func_name == "expm1":
+        # Cluster hard on 0 — the near-zero band is expm1's reason to exist — and
+        # on ±1 for the ordinary regime.
+        out = []
+        for _ in range(count // 2):
+            out.append(rng.randint(-one // 100, one // 100))
+        for _ in range(count - count // 2):
+            a = rng.choice([one, -one])
+            out.append(a + rng.randint(-one // 100, one // 100))
+        return out
+
+    if func_name == "log1p":
+        # Cluster on 0 (where log1p ~ t) and just inside the t -> -1 asymptote.
+        # The final filter enforces the open domain t > -1: at SCALE 0 the shared
+        # `-one // 100` cluster bound floor-divides to -1, which IS the pole.
+        out = []
+        for _ in range(count // 2):
+            out.append(rng.randint(-one // 100, one // 100))
+        near = -(one - one // 50)
+        for _ in range(count - count // 2):
+            v = near + rng.randint(-one // 100, one // 100)
+            out.append(min(one, v))
+        return [v for v in out if v > -one]
 
     if func_name in ("log2", "log10"):
         # Cluster around x = 1 (the zero crossing) and the relevant base.

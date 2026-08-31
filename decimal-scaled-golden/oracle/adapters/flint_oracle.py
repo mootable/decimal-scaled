@@ -10,7 +10,8 @@ from typing import List
 from ..functions import FUNCTIONS
 from ..oracle import Oracle, OracleUnavailable, register
 
-_PROOF = {"sqrt", "exp", "ln", "log2", "log10", "exp2", "sin", "cos", "tan",
+_PROOF = {"sqrt", "exp", "ln", "log2", "log10", "exp2", "expm1", "log1p",
+          "sin", "cos", "tan",
           "atan", "asin", "acos", "sinh", "cosh", "tanh", "asinh", "acosh", "atanh"}
 
 
@@ -24,6 +25,13 @@ def _eval_flint(flint, func: str, x):
         "log2": lambda: a.log() / flint.arb(2).log(),
         "log10": lambda: a.log() / flint.arb(10).log(),
         "exp2": lambda: (a * flint.arb(2).log()).exp(),
+        # Arb exposes no expm1/log1p, so both are composed. The ball stays
+        # RIGOROUS through the composition — `exp(x)` has magnitude ~1 for a small
+        # x, so subtracting the exact 1 leaves the ABSOLUTE radius unchanged, and
+        # `value()` pins against the absolute scale 10^-(precision+GUARD). Relative
+        # accuracy is what cancels, and the pin does not depend on it.
+        "expm1": lambda: a.exp() - flint.arb(1),
+        "log1p": lambda: (flint.arb(1) + a).log(),
         "sin": lambda: a.sin(), "cos": lambda: a.cos(), "tan": lambda: a.tan(),
         "atan": lambda: a.atan(), "asin": lambda: a.asin(), "acos": lambda: a.acos(),
         "sinh": lambda: a.sinh(), "cosh": lambda: a.cosh(), "tanh": lambda: a.tanh(),
