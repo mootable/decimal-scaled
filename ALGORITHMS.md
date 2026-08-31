@@ -11,7 +11,7 @@ built from. The crate incorporates no third-party source code; see
 ### Möller–Granlund magic-number division by an invariant
 
 Used for the `÷ 10^SCALE` step in every `Mul` / `Div` operator and in
-`rescale`. The divisor `10^SCALE` is known at compile time, so a
+`quantize`. The divisor `10^SCALE` is known at compile time, so a
 pre-computed magic constant and a single 128-bit multiplication plus
 a one-step correction replace a generic divide instruction. The
 crate ships a 39-entry table (`MG_EXP_MAGICS`, scales 0–38) and the

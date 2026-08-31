@@ -13,7 +13,7 @@ The default is **HalfToEven** (banker's rounding, the IEEE 754 default).
 You can change the default crate-wide at compile time via a single
 `rounding-*` Cargo feature (see below), or override per-call with the
 `_with` sibling. The `_with` family is comprehensive — `mul_with` /
-`div_with` / `rem_with` for arithmetic, `rescale_with` for scale
+`div_with` / `rem_with` for arithmetic, `quantize_with` for scale
 changes, `ln_strict_with` / `exp_strict_with` / `sin_strict_with` /
 every strict transcendental for the correctly-rounded path. So if you
 need ASTM E29 banker's rounding for one codepath and bank-statement
@@ -49,19 +49,19 @@ use decimal_scaled::{D38s4, D38s2, RoundingMode};
 let v: D38s4 = "1.2345".parse().unwrap();   // 1.2345
 
 // Default mode (HalfToEven unless a `rounding-*` feature changes it):
-let a: D38s2 = v.rescale::<2>();
+let a: D38s2 = v.quantize::<2>();
 
 // Explicit mode:
-let b: D38s2 = v.rescale_with::<2>(RoundingMode::Floor);
-let c: D38s2 = v.rescale_with::<2>(RoundingMode::Ceiling);
+let b: D38s2 = v.quantize_with::<2>(RoundingMode::Floor);
+let c: D38s2 = v.quantize_with::<2>(RoundingMode::Ceiling);
 ```
 
 The same pairing applies to `to_int` / `to_int_with`,
 `from_f64` / `from_f64_with`, and any other lossy method.
 
-## `rescale` - changing the scale of a value
+## `quantize` - changing the scale of a value
 
-`rescale::<TARGET>()` converts a value to a different `SCALE` of the
+`quantize::<TARGET>()` converts a value to a different `SCALE` at the
 *same width*:
 
 - `TARGET == SCALE` - bit-identity.
@@ -76,15 +76,41 @@ use decimal_scaled::{D38s3, RoundingMode};
 let v: D38s3 = "1.235".parse().unwrap();    // 1.235
 
 // Scale down to 2 digits - the trailing `5` must be rounded.
-let down  = v.rescale::<2>();                // HalfToEven -> 1.24
-let trunc = v.rescale_with::<2>(RoundingMode::Trunc);   // -> 1.23
+let down  = v.quantize::<2>();                // HalfToEven -> 1.24
+let trunc = v.quantize_with::<2>(RoundingMode::Trunc);   // -> 1.23
 assert_eq!(down.to_bits(),  124i128);
 assert_eq!(trunc.to_bits(), 123i128);
 
 // Scale up is always lossless.
-let up = v.rescale::<6>();
+let up = v.quantize::<6>();
 assert_eq!(up.to_bits(), 1_235_000);
 ```
+
+> **Renamed in 0.5.1.** This operation was `rescale` in 0.5.0. The old
+> spellings — `rescale` / `rescale_with`, and `DynDecimal::rescale_to` /
+> `rescale_to_with` — still work as deprecated aliases and are removed
+> in 0.6.0. `quantize` is the name the decimal arithmetic specification
+> uses for setting the quantum; that specification marks `rescale` as
+> its deprecated spelling.
+
+## `requantize` - changing width and scale together
+
+`quantize` holds the storage width fixed. `requantize` moves both axes
+at once, to any width and any scale, in either direction. The target is
+inferred from the binding, so a call site never spells a limb count:
+
+```rust
+use decimal_scaled::{D18, D38, RoundingMode};
+
+let a = D18::<2>::try_from(7i64).unwrap();   // 7.00, narrow storage
+let wide: D38<6> = a.requantize();           // 7.000000, wider storage
+let back: D18<2> = wide.requantize_with(RoundingMode::Trunc);
+```
+
+The two steps are ordered by direction — widen before a scale-up, scale
+down before narrowing — so a value the target width can hold never
+overflows on the way there. Overflow panics, as with any other
+operation.
 
 ## Compile-time default selection: the `rounding-*` features
 
