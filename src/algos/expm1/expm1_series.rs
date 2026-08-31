@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-// candidate: direct leading-term-dropped Taylor, no argument reduction, not wired
+// ROUTED: `Algorithm::Series` — the direct leading-term-dropped Taylor,
+// no argument reduction. Selected for `|x| <= 1` at every cell.
 
 //! `expm1` by the bare leading-term-dropped Taylor series.
 //!
@@ -38,7 +39,7 @@
 //! N. J. Higham, *Accuracy and Stability of Numerical Algorithms* 2nd ed.
 //! (2002), 1.14.1.
 
-use super::expm1_support as sup;
+use super::expm1_generic as sup;
 use crate::algos::exp::exp_generic as eg;
 use crate::algos::support::wide_trig_core as wtc;
 use crate::int::types::compute_limbs::ComputeLimbs;

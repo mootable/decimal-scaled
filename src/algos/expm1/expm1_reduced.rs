@@ -74,7 +74,7 @@
 //!
 //! * `max(2*w_ext*log2(10), w_ext*log2(10) + |k|) + 64 < BITS` — the `exp_fixed`
 //!   wall verbatim (the squaring peak, and the `<< k` reassembly peak).
-//! * `|k| < BITS`, guaranteed by the [`super::expm1_support::Regime`] pre-gate.
+//! * `|k| < BITS`, guaranteed by the [`super::expm1_generic::Regime`] pre-gate.
 //!
 //! Unlike `expm1_halving`, the growth is applied ONCE at the end, so the
 //! doubling chain stays on `~P` and the peak does not carry `e^v`. That is what
@@ -83,7 +83,7 @@
 #![allow(dead_code)]
 
 use super::expm1_halving::expm1_doubling_core;
-use super::expm1_support as sup;
+use super::expm1_generic as sup;
 use crate::algos::exp::exp_generic as eg;
 use crate::int::types::compute_limbs::ComputeLimbs;
 use crate::int::types::traits::BigInt;
@@ -156,7 +156,7 @@ where
             // `2^k * e^s` is below the working resolution: `expm1(v)` sits
             // strictly between `-1` and `-1 + 10^-w`. Return the value one
             // working unit above `-1`, never a bare `-P` — see
-            // `expm1_support::just_above_minus_one`.
+            // `expm1_generic::just_above_minus_one`.
             return Some(sup::just_above_minus_one::<S>(w));
         }
         // One half-to-even rounded shift (<= 1/2 working unit), not a

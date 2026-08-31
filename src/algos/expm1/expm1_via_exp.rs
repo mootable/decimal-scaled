@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-// candidate: reference baseline, exp_fixed(v, w) - 10^w at working scale, not wired
+// ROUTED: `Algorithm::ViaExp` — `exp_fixed(v, w) - 10^w` formed at the
+// working scale. Selected for `|x| > 1` at every cell.
 
 //! `expm1` as `e^v - 1` evaluated at the WORKING scale.
 //!
@@ -87,7 +88,7 @@ where
     // than 0 so directed rounding keeps the sign). Subtracting `10^w` turns
     // that into `1 - 10^w` — precisely the "one working unit above -1"
     // representative the negative tail requires
-    // (`expm1_support::just_above_minus_one`), so the deep band is correct here
+    // (`expm1_generic::just_above_minus_one`), so the deep band is correct here
     // for free.
     let e = eg::try_exp_fixed::<S>(v_w, w)?;
     Some(e - eg::one::<S>(w))

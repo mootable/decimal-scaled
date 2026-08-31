@@ -130,7 +130,7 @@ fn expm1_one_ulp_sub_resolution_band() {
 /// For `x` deep negative, `expm1(x) = -1 + e^x` with `e^x` below the working
 /// resolution: the true value is strictly ABOVE `-1`, i.e. its MAGNITUDE is
 /// strictly BELOW one. The kernels return the working-scale representative
-/// `1 - 10^w` (`expm1_support::just_above_minus_one`) rather than a bare
+/// `1 - 10^w` (`expm1_generic::just_above_minus_one`) rather than a bare
 /// `-10^w` precisely so this comes out right — a bare `-10^w` leaves a zero
 /// residual, and the sub-resolution rule would bump the MAGNITUDE, handing
 /// `Floor` a value one ULP BELOW `-1` (representable, hence silently wrong).

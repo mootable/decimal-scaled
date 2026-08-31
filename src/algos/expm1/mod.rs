@@ -39,7 +39,7 @@
 //!    the final `- 1` discards at most 1.77 bits. The one real cancellation in
 //!    the pipeline is the REDUCTION `x - k*ln 2`, paid for by the guard lift.
 //! 2. **The deep-negative representative is `1 - 10^w`, never `-10^w`** — see
-//!    [`expm1_support::just_above_minus_one`]. A bare `-10^w` makes the walkers'
+//!    [`expm1_generic::just_above_minus_one`]. A bare `-10^w` makes the walkers'
 //!    `never_exact` rule bump the magnitude, so `Floor` returns `-1 - 1 ULP`:
 //!    the wrong side. (It is representable, so this is a silently WRONG
 //!    value rather than a panic - which is why only a test catches it.)
@@ -57,7 +57,7 @@
 pub(crate) mod expm1_halving;
 pub(crate) mod expm1_reduced;
 pub(crate) mod expm1_series;
-pub(crate) mod expm1_support;
+pub(crate) mod expm1_generic;
 pub(crate) mod expm1_via_exp;
 
 use crate::int::types::traits::BigInt;

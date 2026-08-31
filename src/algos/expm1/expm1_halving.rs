@@ -69,7 +69,7 @@
 
 #![allow(dead_code)]
 
-use super::expm1_support as sup;
+use super::expm1_generic as sup;
 use crate::algos::exp::exp_generic as eg;
 use crate::int::types::compute_limbs::ComputeLimbs;
 use crate::int::types::traits::BigInt;

@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-// candidate: shared `expm1` family leaves (regime classifier, guard lift,
-// reduction depth, peak-fit tests), not wired
+// Shared `expm1` family leaves (regime classifier, guard lift, reduction
+// depth, peak-fit tests). USED BY THE ROUTED PATH — `expm1_series` imports
+// it, as do the two unrouted candidates.
 
 //! Width-generic leaves shared by the `expm1` candidate kernels.
 //!
