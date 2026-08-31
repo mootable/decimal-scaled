@@ -5,6 +5,58 @@ All notable changes to `decimal-scaled` are documented here.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] — unreleased
+
+A non-breaking API release. Operators now work between decimals of
+different storage width and different `SCALE`; a new `requantize` moves
+both the width and the scale axis in one call; and the scale-only
+operation takes the name the decimal arithmetic specification uses for
+it — `quantize`. The former `rescale` spellings remain as deprecated
+aliases.
+
+### Added
+
+- **Cross-width and cross-scale operators.** `Add`, `Sub`, `Mul`, `Div`,
+  `Rem` and their compound-assignment forms are implemented between
+  every pair of decimal widths, at any pair of `SCALE`s. The result
+  takes the **wider** storage and the **left** operand's scale, so the
+  type of `a + b` is fixed and predictable; a declared output type the
+  operator cannot produce is a compile error rather than a silently
+  different scale. Narrowing compound assignment (`narrow op= wide`)
+  computes at the wider width and panics on overflow, matching the
+  crate's existing overflow contract.
+- **`requantize` / `requantize_with`** — change storage width and
+  `SCALE` in a single call, in either direction, to any width and any
+  scale. The target is inferred from the binding
+  (`let r: D38<6> = a.requantize();`), so a call site never spells a
+  limb count. The two steps are ordered by direction — widen before a
+  scale-up, scale down before narrowing — so a value the target width
+  can hold does not overflow on the way there. Overflow panics with the
+  crate's standard wording.
+
+### Changed
+
+- **`rescale` is now `quantize`.** The scale-only operation is renamed
+  to `quantize` / `quantize_with` on every decimal width, and
+  `with_scale` delegates to it. This is the name the decimal arithmetic
+  specification uses; that specification marks `rescale` as its
+  deprecated spelling. Behaviour is unchanged — the rounding logic is
+  byte-identical, only the name moved.
+- **`DynDecimal::rescale_to` is now `quantize_to`.** The
+  runtime-polymorphic facade follows the same rename, as
+  `quantize_to` / `quantize_to_with`. These are the trait's required
+  methods; the former names remain as deprecated provided methods that
+  delegate to them. Callers are unaffected — but code implementing
+  `DynDecimal` outside the crate now implements the new names.
+- The scale-up overflow panic message names `quantize` rather than
+  `rescale`.
+
+### Deprecated
+
+- **`rescale` / `rescale_with`** and **`DynDecimal::rescale_to` /
+  `rescale_to_with`** — renamed as above. They delegate unchanged and
+  are **removed in 0.6.0**.
+
 ## [0.5.0] — 2026-06-14
 
 An architecture release. Every decimal width is now backed by the
