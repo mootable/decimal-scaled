@@ -65,6 +65,44 @@ ln_series      D76<75>, D153<152>, D307<306>, both sides. Predicted Trunc+Floor 
                Floor (x<1). Driven cells; deciding depth 122/250/506 all <= 1233.
 ln_tang_d462_p D462<461> both sides (IE=false config). Predicted Ceiling (x>1), Floor (x<1).
 
+## TANG (production) exact-ULP sweep — COMPLETE (chunk 3)
+Qualifying cell = driven (GOLDEN_CELLS) AND exposed (cubic depth > reach) AND capturable
+(depth <= gen_precision 1233). All qualifying cells now carry rows:
+  D462   exposed S>=337; driven {346, 461}; depths 519/690 -> BOTH qualify, BOTH added.
+         (production D462 passes IE=true and is predicted to DEFEND; these rows target the
+         ln_tang_d462_p IE=false seam config.)
+  D616   exposed S>=508; driven {590, 615}; depths 885/921 -> BOTH qualify, BOTH added.
+  D924   exposed S>=678; driven {693, 900, 923}; only 693 capturable (900->1350, 923->1383
+         exceed 1233) -> ONE qualifies, added.
+  D1232  exposed S>=934; driven {1200, 1231}; depths 1800/1845 BOTH exceed 1233.
+         *** NO QUALIFYING CELL. *** This is a finding, not a gap: D1232 is genuinely exposed
+         to the family, but at every driven cell the deciding cubic lies beyond the golden
+         set's generation precision, so no golden row can express it. Capturing D1232 would
+         need either a driven cell at S in [934, 822]-- which is empty, since capturability
+         requires S <= 822 and exposure requires S >= 934 -- or a deeper gen_precision.
+         The two constraints are mutually exclusive at this tier: UNREACHABLE BY GOLDEN DATA.
+
+## SERIES linear family — driven-cell coverage COMPLETE (chunk 3)
+The input depends only on the TIER's reach (m = reach/2 + 1), not the scale, so one pair per
+distinct reach covers that tier. Reaches: D57/D76 120 (m=61); D115/D153 248 (m=125); D230 376
+(m=189); D307/D462 504 (m=253); D616 760 (m=381); D924 1016 (m=509); D1232 1400 (m=701).
+  added: m=61 (D76<75>), m=125 (D153<152>), m=253 (D307<306>), m=189 (D230<229>),
+         m=381 (D616<462>), m=509 (D924<693>).
+  D462 reuses m=253 -- the SAME input string as D307's; no new row needed.
+  D1232 m=701 -> depth 1402 > 1233: NOT capturable, no row (same wall as the Tang family).
+  D76<61> (the first break) is the SAME input string as the D76<75> row: the family needs only
+  m <= S, and m=61 is the sole valid m at S=61, so that string already carries the cell.
+  D76<61> is not itself in GOLDEN_CELLS, so it is graded at D76<75>.
+
+## PROVABLY SAFE — D57 and D115, linear family only (the argument)
+The linear family needs an m with BOTH (a) 2m > reach, so the deciding (x-1)^2/2 escapes the
+walker, and (b) m <= MAX_SCALE, so x = 1 +- 10^-m is representable at the cell.
+  D57:  reach 120 -> (a) needs m >= 61; MAX_SCALE = 56 -> (b) needs m <= 56. Empty.
+  D115: reach 248 -> (a) needs m >= 125; MAX_SCALE = 114 -> (b) needs m <= 114. Empty.
+Both intervals are empty, so the family CANNOT BE INSTANTIATED at these tiers -- a proof, not
+an absence of evidence. SCOPE: this proves only that THIS family cannot reach these tiers. It
+is NOT a correctness proof for ln_series at D57/D115 against any other family.
+
 ## Status of each claim — BROKEN / UNBROKEN / PROVABLY SAFE (do not conflate)
 DERIVED-PREDICTED-BREAK  every row above. NONE has been executed — this agent runs no cargo.
                          The oracle answers are verified; the kernel behaviour is NOT.
@@ -112,8 +150,12 @@ D1232<1200/1231>       gen_precision 1233 — the stored .au truncates the decid
     ln_fixed_routed and may inherit the same reach limit.
 [ ] DEFERRED (too big, per "keep it light"): proving the sqrt-reduction bias mechanism that
     decides whether the ln_series linear break materialises. Needs a run, not a derivation.
-[ ] DEFERRED: the remaining ln_series driven cells (D230<229>, D462<346/461>, D616<590/615>,
-    D924<693/900/923>, D1232<924/1200/1231>) and the non-production (G, CAP) configs of the
-    seven `_p` Tang seams. The derivation generalises unchanged — only the row count grows —
-    so this is volume, not new insight. D1232 linear (depth 1402) exceeds gen_precision 1233.
+[x] DONE (chunk 3): the remaining ln_series tier reaches and the remaining Tang driven cells.
+    Both sweeps are now COMPLETE over driven-and-capturable cells; see the two sections above.
+[ ] DEFERRED: the non-production (G, CAP) configs of the seven `_p` Tang seams. Only the
+    INTERNAL_EXTRA axis has been reasoned about (it is what separates D462 production from its
+    seam); G and CAP are untouched. Volume, and it needs a seam run to mean anything.
+[ ] DEFERRED: the j-family band (k = 2j*10^(S/2), j > 1) around each live cell — Class-I
+    neighbour coverage. j = 1 is the hardest cell, so the added rows would be strictly easier;
+    worth having for range-not-point discipline, but not load-bearing.
 [ ] NOT COVERABLE AT ALL: ln_schoolbook — no `select` arm and no seam. Recorded, not fixed.
