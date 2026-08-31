@@ -4649,3 +4649,51 @@
 // Retained because never_exact remains a hardcoded SIGN on the exp path, so a routing or guard change could
 // expose it, and a green gate here is not evidence that it cannot.
 -0.0000000000000000000000000000000000000000000000000000000000000000000000003
+// derived: the exp never_exact hardcoded tail DIRECTION on the ROUTED wide path. exp_series passes
+// never_exact=true into round_to_storage_widening_g, and the unresolved endgame's tail_bump keys the side
+// off the RESULT SIGN alone. never_exact soundly asserts exp(x) is never ON a grid line
+// (Lindemann-Weierstrass), then HARDCODES that side as ABOVE, so Ceiling bumps a grid line up while
+// Floor/Trunc keep it. That holds only while the neglected tail is POSITIVE: true for x>0 (an all-positive
+// series), false for x<0, where the Taylor tail ALTERNATES. Same unearned closed-form claim already fixed
+// in expm1 and log1p by wiring them to exp_generic::TailSign; exp itself was never wired to it.
+// CONSTRUCTION for x = -c*10^-m: every term c^j/j! * 10^-jm with j <= J is an exact multiple of the storage
+// ULP (j! contributes only 2s/3s/5s while 3|c; the first odd prime 7 enters at 7!), so the entire residual
+// below the storage LSB reads EXACTLY zero; term J+1 is placed DEEPER than the walker's probe reach, so no
+// escalation depth can see it. J is chosen EVEN, making J+1 odd and the first neglected term NEGATIVE, so
+// the true value sits strictly BELOW the grid line the hardcode assumes it is above.
+// Reach = min(W::BITS/8 - 9, ZIV_PRECISION_HORIZON + 1) = 1265 at both cells below: D924 widens
+// Int<128> -> Int<256>; D1232 does NOT widen (its Int<176> W already passes the horizon short-circuit).
+// Feasibility needs J < S/(reach - S), so this family cannot be built at D462 (J < 0.83) or D616
+// (J < 0.95) at ANY scale; only D924 and D1232 at max scale admit it. That is also why the -3e-73 row
+// above cannot fire: its deciding term sits at depth 511, inside D462's Wexp reach of 1015.
+// Each row's true value was confirmed strictly BELOW its grid line by arb ball arithmetic at 2200 digits
+// (the ball does not straddle), so the correct directed results are Ceiling -> the grid line and
+// Floor/Trunc -> one ULP below it, against the hardcode's Ceiling -> grid+1ULP and Floor/Trunc -> grid.
+// STATUS: these rows PASS today, and they pass for a STRUCTURAL reason that is itself the finding, not
+// because the kernel is right. The golden harness carries the SAME hardcoded assumption as the kernel:
+// loader/value.rs classify_residual maps "digits below the graded scale are all zero, and the stored
+// answer reached gen_precision" to Residual::Below, i.e. a POSITIVE hidden tail, and should_bump then
+// makes Ceiling bump for a positive value - bit for bit the verdict never_exact produces. Oracle and
+// defect agree, so the gate cannot see the miss.
+// The window needed to falsify the claim through this pipeline is EMPTY: the deciding term must be
+// DEEPER than the walker's reach (1265) or the walker simply resolves it, and SHALLOWER than the stored
+// answer's precision (gen_precision 1233) or the answer rounds back onto the grid line and the residual
+// model re-asserts the positive tail. 1265 > 1233, so no input satisfies both. Every row below sits in
+// that gap (deciding depths 1277 to 1501), which is why all six grade green.
+// These are therefore STANDING PROBES, not regression pins, and a green gate on them is NOT evidence
+// that the hardcoded sign is safe. They become live the moment either half of the gap closes: generate
+// exp's answers at a precision above the deciding depth (truncated_at only tests the stored length, so a
+// longer exp.au grades correctly with no harness change), or wire exp to exp_generic::TailSign as expm1
+// and log1p already are, which is the actual fix.
+// probe: exp never_exact wrong-side, D924<923> J=2. x=-1e-430; terms 1..2 are exact ULP multiples ending at depths 430 and 861 (<= 923), term 3 is NEGATIVE at depth 1291, past the 1265 reach, so the truth is below the grid line while never_exact hardcodes above.
+-0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001
+// probe: exp never_exact wrong-side, D924<923> J=2, 30-DIGIT significand (the widest this cell admits, d <= 461-422) since every prior adversarial exp row used a single-digit significand. Terms 1..2 end at depths 455 and 911 (<= 923), term 3 is NEGATIVE at depth 1277, past the 1265 reach.
+-0.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000471209563428170695483216097523
+// probe: exp never_exact wrong-side, D1232<1231> J=2. x=-1e-500; terms 1..2 end at depths 500 and 1001 (<= 1231), term 3 is NEGATIVE at depth 1501, past the 1265 reach. D1232 does NOT widen to Wexp, so 1265 is the whole reach available here.
+-0.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001
+// probe: exp never_exact wrong-side, D1232<1231> J=2, 50-DIGIT significand - the multi-digit region every earlier exp probe left unexplored. Terms 1..2 end at depths 500 and 1001 (<= 1231), term 3 is NEGATIVE at depth 1352, past the 1265 reach.
+-0.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000034871209563428170695483216097524863019478256103947
+// probe: exp never_exact wrong-side, D1232<1231> J=4. 3|c makes c^3/6 and c^4/24 terminate, so terms 1..4 are exact ULP multiples ending at depths 280/561/841/1123 (<= 1231); term 5 is NEGATIVE at depth 1400, past the 1265 reach. Deeper J than the J=2 rows, so a different term parity reaches the same wrong-side conclusion.
+-0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003
+// probe: exp never_exact wrong-side, D1232<1231> J=4, 50-DIGIT significand divisible by 3. Terms 1..4 end at depths 305/611/916/1223 (<= 1231), term 5 is NEGATIVE at depth 1279, past the 1265 reach.
+-0.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000034871209563428170695483216097524863019478256103945
