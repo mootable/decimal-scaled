@@ -1036,11 +1036,11 @@ impl AlternatingSeries {
         }
     }
 
-    /// `(a_j, b_j)` with `|c_{j+2}| = |c_j| · a_j / b_j`. Both fit a `u64`
-    /// for every `j` the band admits (`j ≤ TINY_X_DEEP_JMAX`, so
-    /// `b_j ≤ 42·43`).
-    const fn ratio(self, j: u32) -> (u64, u64) {
-        let j = j as u64;
+    /// `(a_j, b_j)` for the term at `term_index` = `j`, with
+    /// `|c_{j+2}| = |c_j| · a_j / b_j`. Both fit a `u64` for every `j` the
+    /// band admits (`j ≤ TINY_X_DEEP_JMAX`, so `b_j ≤ 42·43`).
+    const fn ratio(self, term_index: u32) -> (u64, u64) {
+        let j = term_index as u64;
         match self {
             AlternatingSeries::Sin | AlternatingSeries::Cos => (1, (j + 1) * (j + 2)),
             AlternatingSeries::Atan => (j, j + 2),
@@ -1049,44 +1049,49 @@ impl AlternatingSeries {
     }
 }
 
-/// `val[..len] *= m` through the multiply matcher's slice door, returning the
-/// new significant length. `scratch` must hold `len + 1` limbs.
+/// `value[..value_len] *= multiplier` through the multiply matcher's slice
+/// door, returning the new significant length. `scratch` must hold
+/// `value_len + 1` limbs.
 #[inline]
-fn mul_small(val: &mut [u64], len: usize, m: u64, scratch: &mut [u64]) -> usize {
-    if m == 1 {
-        return len;
+fn mul_small(value: &mut [u64], value_len: usize, multiplier: u64, scratch: &mut [u64]) -> usize {
+    if multiplier == 1 {
+        return value_len;
     }
-    for s in scratch[..len + 1].iter_mut() {
+    for s in scratch[..value_len + 1].iter_mut() {
         *s = 0;
     }
-    crate::int::policy::mul::dispatch_slice(&val[..len], &[m], &mut scratch[..len + 1]);
-    val[..len + 1].copy_from_slice(&scratch[..len + 1]);
-    sig_len(&val[..len + 1])
+    crate::int::policy::mul::dispatch_slice(
+        &value[..value_len],
+        &[multiplier],
+        &mut scratch[..value_len + 1],
+    );
+    value[..value_len + 1].copy_from_slice(&scratch[..value_len + 1]);
+    sig_len(&value[..value_len + 1])
 }
 
-/// `out = 10^exp` as limbs, returning its significant length; `None` when
-/// `out` / `scratch` cannot hold it (fail closed). `10^19` is the largest
-/// power of ten a `u64` holds, so the build costs `⌈exp/19⌉` small multiplies
-/// rather than `exp` of them.
-fn pow10_into(exp: u32, out: &mut [u64], scratch: &mut [u64]) -> Option<usize> {
-    for o in out.iter_mut() {
+/// `out_limbs = 10^exponent`, returning its significant length; `None` when
+/// `out_limbs` / `scratch` cannot hold it (fail closed). `10^19` is the
+/// largest power of ten a `u64` holds, so the build costs `⌈exponent/19⌉`
+/// small multiplies rather than `exponent` of them.
+fn pow10_into(exponent: u32, out_limbs: &mut [u64], scratch: &mut [u64]) -> Option<usize> {
+    for o in out_limbs.iter_mut() {
         *o = 0;
     }
-    if out.is_empty() {
+    if out_limbs.is_empty() {
         return None;
     }
-    out[0] = 1;
-    let mut len = 1usize;
-    let mut left = exp;
-    while left > 0 {
-        let step = if left >= 19 { 19 } else { left };
-        if len + 1 > out.len() || len + 1 > scratch.len() {
+    out_limbs[0] = 1;
+    let mut significant = 1usize;
+    let mut remaining = exponent;
+    while remaining > 0 {
+        let step = if remaining >= 19 { 19 } else { remaining };
+        if significant + 1 > out_limbs.len() || significant + 1 > scratch.len() {
             return None;
         }
-        len = mul_small(out, len, 10u64.pow(step), scratch);
-        left -= step;
+        significant = mul_small(out_limbs, significant, 10u64.pow(step), scratch);
+        remaining -= step;
     }
-    Some(len)
+    Some(significant)
 }
 
 /// Exact-scratch divide for the bracket. Returns `false` when the scratch
@@ -1095,7 +1100,7 @@ fn pow10_into(exp: u32, out: &mut [u64], scratch: &mut [u64]) -> Option<usize> {
 /// `int::policy::div_rem::dispatch` must NOT be used here. Its blanket engines
 /// carry BUILD-MAX normalisation scratch — `div_knuth_u128_limb` declares
 /// `[0u64; MAX_SINGLE_LIMBS]` = `4·MAX_WORK_N + 2` = 258 limbs against a
-/// documented requirement of `num.len() + 2`. `MAX_WORK_N` is derived from the
+/// documented requirement of `dividend.len() + 2`. `MAX_WORK_N` derives from the
 /// STORAGE-scaled work widths and never accounted for the AGM integer, so the
 /// `asinh` face — which instantiates this kernel at `Wk = C::Wagm`
 /// (`Int<192>` at D924, `Int<256>` at D1232) — presents a dividend of roughly
@@ -1116,38 +1121,51 @@ fn pow10_into(exp: u32, out: &mut [u64], scratch: &mut [u64]) -> Option<usize> {
 /// result). Correct for every shape this kernel presents today, but it MUST be
 /// re-verified if an `Algorithm` arm joining `int::policy::div_rem` ever
 /// returns a numerically different answer.
-fn bracket_div<Wk: BigInt>(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) -> bool
+fn bracket_div<Wk: BigInt>(
+    dividend: &[u64],
+    divisor: &[u64],
+    quotient: &mut [u64],
+    remainder: &mut [u64],
+) -> bool
 where
     <Wk as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
     use crate::int::policy::div_rem::{select_for_limbs, Algorithm};
     use crate::int::types::compute_limbs::ComputeLimbs;
 
-    match select_for_limbs(num, den) {
+    match select_for_limbs(dividend, divisor) {
         // Single-limb divisor: hardware remainder, no normalisation scratch
         // is involved at all, so there is nothing to size.
         Algorithm::Rem => {
-            crate::int::algos::div::div_rem::div_rem(num, den, quot, rem);
+            crate::int::algos::div::div_rem::div_rem(dividend, divisor, quotient, remainder);
             true
         }
         _ => {
-            let mut ub = <<Wk as BigInt>::Scratch as ComputeLimbs>::quad_u64();
-            let mut vb = <<Wk as BigInt>::Scratch as ComputeLimbs>::double_u64();
-            let u = ub.as_mut();
-            let v = vb.as_mut();
-            // `u` must hold `num.len() + 2`; the dividend here is at most
-            // `3·Wk::LIMBS`, so `quad_u64` (`4·LIMBS`) covers it — CHECKED, not
-            // assumed, because that is exactly what went wrong upstream.
-            if u.len() < num.len() + 2 || v.len() < den.len() {
+            let mut norm_dividend_buf = <<Wk as BigInt>::Scratch as ComputeLimbs>::quad_u64();
+            let mut norm_divisor_buf = <<Wk as BigInt>::Scratch as ComputeLimbs>::double_u64();
+            let norm_dividend = norm_dividend_buf.as_mut();
+            let norm_divisor = norm_divisor_buf.as_mut();
+            // Knuth needs `dividend.len() + 2` / `divisor.len()` zeroed limbs.
+            // The dividend here is at most `3·Wk::LIMBS`, so `quad_u64`
+            // (`4·LIMBS`) covers it — CHECKED, not assumed, because an
+            // unchecked version of exactly this is what went wrong upstream.
+            if norm_dividend.len() < dividend.len() + 2 || norm_divisor.len() < divisor.len() {
                 return false;
             }
-            for e in u.iter_mut() {
-                *e = 0;
+            for limb in norm_dividend.iter_mut() {
+                *limb = 0;
             }
-            for e in v.iter_mut() {
-                *e = 0;
+            for limb in norm_divisor.iter_mut() {
+                *limb = 0;
             }
-            crate::int::algos::div::div_knuth::div_knuth_into(num, den, quot, rem, u, v);
+            crate::int::algos::div::div_knuth::div_knuth_into(
+                dividend,
+                divisor,
+                quotient,
+                remainder,
+                norm_dividend,
+                norm_divisor,
+            );
             true
         }
     }
@@ -1565,25 +1583,25 @@ where
 ///
 /// Split out so the storage faces ([`adjust_alternating_bracket`]) and the
 /// RATIO face ([`adjust_alternating_bracket_ratio`], `atan2`) run the SAME
-/// kernel and differ only in how they obtain those two quantities: `t`, the
-/// leading term scaled by `2^F`, and `y = ⌊x²·2^F⌋`, the term-ratio
+/// kernel and differ only in how they obtain those two quantities: `term`, the
+/// leading term scaled by `2^F`, and `sq_ratio = ⌊x²·2^F⌋`, the term-ratio
 /// multiplier. Everything that decides anything — the recurrence, the
 /// brackets, the error bound, the fail-closed paths — lives here, once.
 ///
-/// `t` is consumed (rewritten in place as the recurrence advances); `nb`,
-/// `bd` and `pr` are caller-owned scratch, already free by the time the setup
-/// has produced `t` and `y`, and are reused here rather than re-allocated.
+/// `term` is consumed (rewritten in place as the recurrence advances); `mag_scratch`,
+/// `anchor` and `product` are caller-owned scratch, already free by the time the setup
+/// has produced `term` and `sq_ratio`, and are reused here rather than re-allocated.
 #[allow(clippy::too_many_arguments)]
 fn alternating_bracket_core<St: BigInt, Wk: BigInt>(
     result: St,
-    rho: St,
+    grid_magnitude: St,
     mode: RoundingMode,
     series: AlternatingSeries,
-    t: &mut [u64],
-    y: &[u64],
-    nb: &mut [u64],
-    bd: &mut [u64],
-    pr: &mut [u64],
+    term: &mut [u64],
+    sq_ratio: &[u64],
+    mag_scratch: &mut [u64],
+    anchor: &mut [u64],
+    product: &mut [u64],
 ) -> Option<St>
 where
     <Wk as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
@@ -1592,25 +1610,29 @@ where
     use crate::int::algos::support::limbs as lb;
     use crate::int::types::compute_limbs::ComputeLimbs;
 
-    let nl = <Wk as BigInt>::LIMBS;
-    let w = 2 * nl;
+    let work_limbs = <Wk as BigInt>::LIMBS;
+    let acc_limbs = 2 * work_limbs;
     let f_bits = <Wk as BigInt>::BITS;
     let zero = <St as BigInt>::ZERO;
 
-    let mut pp_b = <<Wk as BigInt>::Scratch as ComputeLimbs>::double_u64();
-    let mut pc_b = <<Wk as BigInt>::Scratch as ComputeLimbs>::double_u64();
-    let pp = pp_b.as_mut();
-    let pc = pc_b.as_mut();
-    if pp.len() < w || pc.len() < w || t.len() < w || y.len() < nl {
+    let mut prev_sum_buf = <<Wk as BigInt>::Scratch as ComputeLimbs>::double_u64();
+    let mut cur_sum_buf = <<Wk as BigInt>::Scratch as ComputeLimbs>::double_u64();
+    let prev_sum = prev_sum_buf.as_mut();
+    let cur_sum = cur_sum_buf.as_mut();
+    if prev_sum.len() < acc_limbs
+        || cur_sum.len() < acc_limbs
+        || term.len() < acc_limbs
+        || sq_ratio.len() < work_limbs
+    {
         return None;
     }
 
-    // `bd` becomes the fixed comparison anchor `ρ·2^F`.
-    eg::unpack_mag::<Wk>(rho.resize_to::<Wk>(), nb);
-    lb::shl(&nb[..nl], f_bits, &mut bd[..w]);
+    // The fixed comparison anchor `ρ·2^F`.
+    eg::unpack_mag::<Wk>(grid_magnitude.resize_to::<Wk>(), mag_scratch);
+    lb::shl(&mag_scratch[..work_limbs], f_bits, &mut anchor[..acc_limbs]);
 
-    pc[..w].copy_from_slice(&t[..w]);
-    for e in pp.iter_mut() {
+    cur_sum[..acc_limbs].copy_from_slice(&term[..acc_limbs]);
+    for e in prev_sum.iter_mut() {
         *e = 0;
     }
     let mut j = series.first_index();
@@ -1619,10 +1641,10 @@ where
 
     // ── the error bound, applied OUTWARD at both bracket ends ─────────────
     // The dominant per-step deficit is NOT the two truncations: it is the
-    // truncation in `y = ⌊x²·2^F⌋`, amplified by the term it multiplies.
-    // With `y = x²·2^F − δ`, `δ ∈ [0,1)`,
+    // truncation in `sq_ratio = ⌊x²·2^F⌋`, amplified by the term it multiplies.
+    // With `sq_ratio = x²·2^F − δ`, `δ ∈ [0,1)`,
     //
-    //     ⌊t·y / 2^F⌋  =  t·x² − t·δ/2^F   and   t/2^F = T,
+    //     ⌊term·sq_ratio / 2^F⌋  =  t·x² − t·δ/2^F   and   term/2^F = T,
     //
     // so one step loses up to `T` — the term's own ULP magnitude — plus 2 for
     // the two floors. Terms decrease (`a_j < b_j` and `x² < 1`), so the
@@ -1630,106 +1652,110 @@ where
     // most `m` of those and a partial sum at most `m` term errors. Hence
     // `m²·(T_1 + 2)` bounds the slack for every comparison, computed once.
     // `T_1` is the leading term's integer part, sitting in the top half of
-    // `t` — the fixed point makes it a slice, not a computation.
-    let mut eb_b = <<Wk as BigInt>::Scratch as ComputeLimbs>::double_u64();
-    let eb = eb_b.as_mut();
-    if eb.len() < w {
+    // `term` — the fixed point makes it a slice, not a computation.
+    let mut slack_buf = <<Wk as BigInt>::Scratch as ComputeLimbs>::double_u64();
+    let slack = slack_buf.as_mut();
+    if slack.len() < acc_limbs {
         return None;
     }
-    for e in eb.iter_mut() {
+    for e in slack.iter_mut() {
         *e = 0;
     }
-    eb[..nl].copy_from_slice(&t[nl..w]);
-    lb::add_assign(&mut eb[..w], &[2]);
+    slack[..work_limbs].copy_from_slice(&term[work_limbs..acc_limbs]);
+    lb::add_assign(&mut slack[..acc_limbs], &[2]);
     let steps = max_steps as u64;
-    let el0 = sig_len(&eb[..w]);
-    if el0 + 1 > w {
+    let slack_len_pre = sig_len(&slack[..acc_limbs]);
+    if slack_len_pre + 1 > acc_limbs {
         return None;
     }
-    let el = mul_small(eb, el0, steps * steps, pr);
+    let slack_len = mul_small(slack, slack_len_pre, steps * steps, product);
     // The whole argument rests on the slack staying BELOW one ULP (`2^F`, i.e.
-    // `nl` limbs). A tier violating that — it needs `Wk::BITS > ~3.4·SCALE` —
+    // `work_limbs` limbs). A tier violating that — it needs `Wk::BITS > ~3.4·SCALE` —
     // would make every comparison below meaningless, so it is CHECKED here
     // rather than assumed from the tier table.
-    if el > nl {
+    if slack_len > work_limbs {
         return None;
     }
 
     for _ in 0..max_steps {
-        // ── the next term: `t ← ⌊⌊t·y / 2^F⌋ · a_j / b_j⌋` ────────────────
+        // ── next term: `term ← ⌊⌊term·sq_ratio / 2^F⌋ · a_j / b_j⌋` ──────
         let (a, b) = series.ratio(j);
-        for p in pr.iter_mut() {
+        for p in product.iter_mut() {
             *p = 0;
         }
-        if 3 * nl > pr.len() {
+        if 3 * work_limbs > product.len() {
             return None;
         }
-        crate::int::policy::mul::dispatch_slice(&t[..w], &y[..nl], &mut pr[..3 * nl]);
-        lb::shr(&pr[..3 * nl], f_bits, &mut t[..w]);
-        let mut lt = sig_len(&t[..w]);
+        crate::int::policy::mul::dispatch_slice(
+            &term[..acc_limbs],
+            &sq_ratio[..work_limbs],
+            &mut product[..3 * work_limbs],
+        );
+        lb::shr(&product[..3 * work_limbs], f_bits, &mut term[..acc_limbs]);
+        let mut term_len = sig_len(&term[..acc_limbs]);
         if a != 1 {
-            if lt + 1 > w {
+            if term_len + 1 > acc_limbs {
                 return None;
             }
-            lt = mul_small(t, lt, a, pr);
+            term_len = mul_small(term, term_len, a, product);
         }
         if b != 1 {
-            for p in pr[..lt].iter_mut() {
+            for p in product[..term_len].iter_mut() {
                 *p = 0;
             }
             let mut r1 = [0u64; 1];
             // A single-limb divisor, so this takes the scratch-free `Rem` arm;
             // routed through the same helper so no divide in this kernel can
             // reach a build-max engine.
-            if !bracket_div::<Wk>(&t[..lt], &[b], &mut pr[..lt], &mut r1) {
+            if !bracket_div::<Wk>(&term[..term_len], &[b], &mut product[..term_len], &mut r1) {
                 return None;
             }
-            t[..lt].copy_from_slice(&pr[..lt]);
-            for e in t[lt..w].iter_mut() {
+            term[..term_len].copy_from_slice(&product[..term_len]);
+            for e in term[term_len..acc_limbs].iter_mut() {
                 *e = 0;
             }
         }
         j += 2;
 
-        // ── fold it in; `pp` and `pc` now straddle the true value ─────────
-        pp[..w].copy_from_slice(&pc[..w]);
+        // ── fold it in; `prev_sum`/`cur_sum` now straddle the value ─────
+        prev_sum[..acc_limbs].copy_from_slice(&cur_sum[..acc_limbs]);
         let out_of_range = if subtract {
-            lb::sub_assign(&mut pc[..w], &t[..w])
+            lb::sub_assign(&mut cur_sum[..acc_limbs], &term[..acc_limbs])
         } else {
-            lb::add_assign(&mut pc[..w], &t[..w])
+            lb::add_assign(&mut cur_sum[..acc_limbs], &term[..acc_limbs])
         };
         if out_of_range {
             return None; // borrow / carry out of range — fail closed
         }
         let (lo, hi): (&[u64], &[u64]) = if subtract {
-            (&pc[..w], &pp[..w])
+            (&cur_sum[..acc_limbs], &prev_sum[..acc_limbs])
         } else {
-            (&pp[..w], &pc[..w])
+            (&prev_sum[..acc_limbs], &cur_sum[..acc_limbs])
         };
 
         // ── the two unit-interval brackets, errors applied OUTWARD ────────
         let mut expanding: Option<bool> = None;
         // `ρ ≤ lo` and `hi ≤ ρ + 1`.
-        pr[..w].copy_from_slice(&bd[..w]);
-        lb::add_assign(&mut pr[..w], &eb[..w]);
-        if lb::cmp(lo, &pr[..w]) >= 0 {
-            pr[..w].copy_from_slice(&bd[..w]);
-            lb::add_assign(&mut pr[nl..w], &[1]);
-            lb::sub_assign(&mut pr[..w], &eb[..w]);
-            if lb::cmp(hi, &pr[..w]) <= 0 {
+        product[..acc_limbs].copy_from_slice(&anchor[..acc_limbs]);
+        lb::add_assign(&mut product[..acc_limbs], &slack[..acc_limbs]);
+        if lb::cmp(lo, &product[..acc_limbs]) >= 0 {
+            product[..acc_limbs].copy_from_slice(&anchor[..acc_limbs]);
+            lb::add_assign(&mut product[work_limbs..acc_limbs], &[1]);
+            lb::sub_assign(&mut product[..acc_limbs], &slack[..acc_limbs]);
+            if lb::cmp(hi, &product[..acc_limbs]) <= 0 {
                 expanding = Some(true);
             }
         }
         // `ρ − 1 ≤ lo` and `hi ≤ ρ`. Skipped at `ρ = 0`, where `ρ − 1` is not
         // a magnitude.
-        if expanding.is_none() && rho != zero {
-            pr[..w].copy_from_slice(&bd[..w]);
-            lb::sub_assign(&mut pr[nl..w], &[1]);
-            lb::add_assign(&mut pr[..w], &eb[..w]);
-            if lb::cmp(lo, &pr[..w]) >= 0 {
-                pr[..w].copy_from_slice(&bd[..w]);
-                lb::sub_assign(&mut pr[..w], &eb[..w]);
-                if lb::cmp(hi, &pr[..w]) <= 0 {
+        if expanding.is_none() && grid_magnitude != zero {
+            product[..acc_limbs].copy_from_slice(&anchor[..acc_limbs]);
+            lb::sub_assign(&mut product[work_limbs..acc_limbs], &[1]);
+            lb::add_assign(&mut product[..acc_limbs], &slack[..acc_limbs]);
+            if lb::cmp(lo, &product[..acc_limbs]) >= 0 {
+                product[..acc_limbs].copy_from_slice(&anchor[..acc_limbs]);
+                lb::sub_assign(&mut product[..acc_limbs], &slack[..acc_limbs]);
+                if lb::cmp(hi, &product[..acc_limbs]) <= 0 {
                     expanding = Some(false);
                 }
             }
@@ -1744,7 +1770,7 @@ where
         }
 
         subtract = !subtract;
-        if lb::is_zero(&t[..w]) {
+        if lb::is_zero(&term[..acc_limbs]) {
             break; // no further resolution available in the fixed point
         }
     }
