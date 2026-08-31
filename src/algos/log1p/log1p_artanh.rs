@@ -72,7 +72,7 @@ where
             )
         },
     );
-    super::adjust_near_zero::<St>(r, raw, mode)
+    super::adjust_near_zero::<St, S, SCALE>(r, raw, mode)
 }
 
 /// The `_approx` sibling of [`log1p_artanh_g`]: a SINGLE shot at the
@@ -101,7 +101,7 @@ where
         w,
     );
     let out = wtc::round_to_storage_with_g::<St, S>(r, w, SCALE, mode, st_max, st_min);
-    super::adjust_near_zero::<St>(out, raw, mode)
+    super::adjust_near_zero::<St, S, SCALE>(out, raw, mode)
 }
 
 /// Tier-generic entry to [`log1p_artanh_g`] — sources the work integer

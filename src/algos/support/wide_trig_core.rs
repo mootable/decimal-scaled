@@ -759,45 +759,239 @@ pub(crate) fn tiny_x_deep_directed_adjust<St: BigInt, const SCALE: u32>(
     }
 }
 
-/// Directed-rounding post-adjust for `ln` very near `x = 1`.
+/// Significant limb length of `a` (index of the highest non-zero limb plus
+/// one), clamped to at least 1 so a zero magnitude has length 1.
+#[inline]
+fn sig_len(a: &[u64]) -> usize {
+    let mut l = a.len();
+    while l > 1 && a[l - 1] == 0 {
+        l -= 1;
+    }
+    l
+}
+
+/// Exact three-way comparison of `a²` against `b · c` for three NON-NEGATIVE
+/// values, evaluated at DOUBLE `Wk` width. `None` means "not decidable in the
+/// available scratch" — see the fail-closed note below.
 ///
-/// Concavity gives `ln(x) < x − 1` STRICTLY for every `x ≠ 1`, and `ln(x)`
-/// is transcendental for algebraic `x ≠ 1`, so it never lands exactly on a
-/// storage grid line. For `x` within the input granularity of 1 the deficit
-/// `(x − 1) − ln(x) ≈ (x − 1)²/2` can sit far below any REACHABLE working
-/// scale (e.g. `x = 1 + 10⁻ˢ` leaves the deficit ~`10⁻²ˢ`), so the kernel
-/// rounds to exactly the linear term `δ = raw − 10^SCALE` and a downward
-/// mode then keeps `δ` though the true value is strictly below it. Because
-/// `ln(x) < x − 1`, a CORRECT downward result can never equal `δ`, so
-/// `result == δ` is unambiguously the sub-resolution overshoot — step down
-/// one LSB. `ln(1) = 0` is exact (`raw == one`) and excluded; nearest modes
-/// (frac ≈ 1⁻, rounds to `δ`) and `Ceiling` (`δ` IS the correct ceiling)
-/// are already right. `Floor` steps down for both signs; `Trunc` (toward
-/// zero) steps down only for `x > 1` (positive value). A no-op unless the
-/// result is exactly `δ`, so reachable cells pass untouched. Mirrors
+/// The parabola test in [`adjust_log_near_zero`] compares `δ²` against
+/// `2·D·10^SCALE`, and `δ²` legitimately overflows every SINGLE width in play:
+/// the input family that provokes the defect has `δ ≈ 10^(SCALE/2)`, so `δ²`
+/// is `≈ 10^SCALE` — already the whole storage range — and the odd-scale
+/// member puts `δ²` exactly at the storage maximum. A single-width
+/// `checked_mul` would therefore fold to "no answer" at precisely the cells
+/// that need one, so both products are formed at double width and compared as
+/// limb slices.
+///
+/// The buffers come from `Wk`'s own [`ComputeLimbs`] carrier
+/// (`double_buffered_u64`, exact per-`N`, never a build-max literal), and the
+/// multiply routes through the multiply matcher's slice door, so the
+/// schoolbook/Karatsuba choice stays the matcher's rather than being hardcoded
+/// here. Both operand pairs are STORAGE-magnitude values widened into `Wk`, so
+/// their products occupy at most `2·St::LIMBS + 1` limbs — inside the
+/// `2N + ⌈N/2⌉` buffer at every width in both the `exact-scratch` and the
+/// blanket build. That capacity is CHECKED rather than assumed: a product that
+/// would not fit yields `None`, which every caller treats as "make no
+/// adjustment", so the shortfall can never become a truncated comparison, a
+/// wrong step, or a panic.
+///
+/// [`ComputeLimbs`]: crate::int::types::compute_limbs::ComputeLimbs
+#[inline]
+fn cmp_sq_vs_prod<Wk: BigInt>(a: Wk, b: Wk, c: Wk) -> Option<core::cmp::Ordering>
+where
+    <Wk as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    use crate::algos::exp::exp_generic as eg;
+    use crate::int::policy::mul::dispatch_slice as mul_slice;
+    use crate::int::types::compute_limbs::ComputeLimbs;
+
+    let mut abuf = <<Wk as BigInt>::Scratch as ComputeLimbs>::single_u64();
+    let mut bbuf = <<Wk as BigInt>::Scratch as ComputeLimbs>::single_u64();
+    let mut cbuf = <<Wk as BigInt>::Scratch as ComputeLimbs>::single_u64();
+    eg::unpack_mag::<Wk>(a, abuf.as_mut());
+    eg::unpack_mag::<Wk>(b, bbuf.as_mut());
+    eg::unpack_mag::<Wk>(c, cbuf.as_mut());
+    let al = sig_len(abuf.as_ref());
+    let bl = sig_len(bbuf.as_ref());
+    let cl = sig_len(cbuf.as_ref());
+
+    let mut lhs = <<Wk as BigInt>::Scratch as ComputeLimbs>::double_buffered_u64();
+    let mut rhs = <<Wk as BigInt>::Scratch as ComputeLimbs>::double_buffered_u64();
+    let cap = lhs.as_ref().len();
+    if 2 * al > cap || bl + cl > cap {
+        return None; // fail closed — the caller makes no adjustment
+    }
+    mul_slice(
+        &abuf.as_ref()[..al],
+        &abuf.as_ref()[..al],
+        &mut lhs.as_mut()[..2 * al],
+    );
+    mul_slice(
+        &bbuf.as_ref()[..bl],
+        &cbuf.as_ref()[..cl],
+        &mut rhs.as_mut()[..bl + cl],
+    );
+    // Both buffers are the same length and zero above their product, so the
+    // full-slice compare is the product compare.
+    Some(
+        match crate::int::algos::support::limbs::cmp(lhs.as_ref(), rhs.as_ref()) {
+            d if d < 0 => core::cmp::Ordering::Less,
+            0 => core::cmp::Ordering::Equal,
+            _ => core::cmp::Ordering::Greater,
+        },
+    )
+}
+
+/// The shared analytic post-adjust for the logarithm family inside the
+/// sub-resolution band around its zero (`ln(1) = 0`, `log1p(0) = 0`).
+///
+/// `delta` is the LINEAR term at storage scale — `raw − 10^SCALE` for `ln`,
+/// `raw` itself for `log1p` — and `one` is `10^SCALE`. Writing `u = δ/one`,
+/// the true value at storage scale is
+///
+/// ```text
+///     V  =  δ  −  Q  +  C,          Q = δ²/(2·one) > 0
+/// ```
+///
+/// with `C` the cubic-and-beyond tail. Two elementary derivatives pin the
+/// bracket EXACTLY over the whole domain (`u > −1`, `u ≠ 0`):
+///
+/// ```text
+///     d/du [ u − ln(1+u) ]          =  u/(1+u)
+///     d/du [ ln(1+u) − u + u²/2 ]   =  u²/(1+u)  >  0
+/// ```
+///
+/// Both bracketing functions vanish at `u = 0`; the first has the sign of `u`
+/// and the second is strictly increasing, so
+///
+/// ```text
+///     δ > 0:      δ − Q   <   V   <   δ
+///     δ < 0:                  V   <   δ − Q   <   δ
+/// ```
+///
+/// # Why the defect this corrects is ONE-SIDED
+///
+/// `V` never lands on a storage grid line (`ln` of an algebraic `x ≠ 1` is
+/// transcendental), but the Ziv walker only resolves digits down to about
+/// `W::BITS/8`. When the deciding term sits deeper, the walker sees a residual
+/// of exactly zero and returns the grid point it reached AS THOUGH the value
+/// were exact. For `δ > 0` the true value is then strictly ABOVE that grid
+/// point, so every mode that rounds down or to nearest is accidentally right
+/// and only `Ceiling` is wrong; for `δ < 0` it is strictly BELOW and only
+/// `Floor` is wrong. The asymmetry is just the sign of the leading uncancelled
+/// term, which is why this adjust is sign-aware: applying either step to the
+/// other side would corrupt an answer that is already correct.
+///
+/// # The two grid points, and why the second needs the parabola
+///
+/// * **On the tangent** (`result == δ`) — the quadratic `Q` itself fell below
+///   the reachable working scale. `V < δ` settles it, so a downward-directed
+///   result steps down one ULP: `Floor` for both signs, `Trunc` only for
+///   `δ > 0` (for `δ < 0` truncation moves UP and `δ` is already correct).
+/// * **On the parabola** (`result == δ − Q`, `Q` an exact whole number of
+///   ULPs) — the `δ² ≡ 0 (mod 2·10^SCALE)` family. Its quadratic term is an
+///   exact ULP multiple, so the value steps to a DIFFERENT grid point and the
+///   tangent test above no-ops; the CUBIC then decides, at fractional depth
+///   `≈ 3·SCALE/2`, far past the walker's reach.
+///
+/// The parabola test is `result ≤ δ − Q  ⟺  Q ≤ D  ⟺  δ² ≤ 2·D·one`, where
+/// `D = δ − result` — an exact integer comparison ([`cmp_sq_vs_prod`]), never
+/// a tolerance.
+///
+/// # It cannot fire on a correct result
+///
+/// A correct `Ceiling` has `result = ⌈V⌉ ≥ V`, whereas `Q ≤ D` rearranges to
+/// `result ≤ δ − Q < V` — a contradiction. So the test is FALSE for every
+/// correctly-rounded `Ceiling`, at every input, and the mirror argument holds
+/// for `Floor` at `δ < 0`. The step is therefore reachable only from a
+/// genuinely wrong result, which is what lets it be applied without any
+/// reachability or width gate.
+///
+/// A no-op for the nearest modes, for the exact point `δ = 0`, and for every
+/// cell whose deciding digit the walker actually reaches. Mirrors
 /// [`adjust_bounded_extremum`] / [`adjust_cosh_near_min`].
+#[inline]
+pub(crate) fn adjust_log_near_zero<St: BigInt + Copy, Wk: BigInt>(
+    result: St,
+    delta: St,
+    one: St,
+    mode: RoundingMode,
+) -> St
+where
+    <Wk as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    use core::cmp::Ordering;
+
+    if crate::support::rounding::is_nearest_mode(mode) {
+        return result;
+    }
+    let zero = <St as BigInt>::ZERO;
+    if delta == zero {
+        return result; // ln(1) = 0 / log1p(0) = 0 — the one exact point
+    }
+    let unit = <St as BigInt>::ONE;
+    let up = delta > zero;
+
+    // ── the TANGENT bracket: `V < δ` for every `δ ≠ 0` ─────────────────
+    if result == delta {
+        return match mode {
+            RoundingMode::Floor => result - unit,
+            RoundingMode::Trunc if up => result - unit,
+            _ => result,
+        };
+    }
+
+    // ── the PARABOLA bracket ───────────────────────────────────────────
+    // `D = δ − result`: the gap from the linear term to the grid point the
+    // walker returned, in storage ULPs.
+    let d = delta - result;
+    let mag = if up { delta } else { -delta };
+    match mode {
+        // `V > δ − Q`: a Ceiling sitting AT or BELOW the parabola is strictly
+        // below the true value, so it must step up.
+        RoundingMode::Ceiling if up => {
+            if d <= zero {
+                return result; // `Q > 0`, so `Q ≤ D` cannot hold
+            }
+            let dw = d.resize_to::<Wk>();
+            match cmp_sq_vs_prod::<Wk>(mag.resize_to::<Wk>(), dw + dw, one.resize_to::<Wk>()) {
+                Some(Ordering::Less | Ordering::Equal) => result + unit,
+                _ => result,
+            }
+        }
+        // `V < δ − Q`: a Floor sitting AT or ABOVE the parabola is strictly
+        // above the true value, so it must step down.
+        RoundingMode::Floor if !up => {
+            if d <= zero {
+                return result - unit; // `Q > 0 ≥ D`, so `Q ≥ D` holds
+            }
+            let dw = d.resize_to::<Wk>();
+            match cmp_sq_vs_prod::<Wk>(mag.resize_to::<Wk>(), dw + dw, one.resize_to::<Wk>()) {
+                Some(Ordering::Greater | Ordering::Equal) => result - unit,
+                _ => result,
+            }
+        }
+        _ => result,
+    }
+}
+
+/// Directed-rounding post-adjust for `ln` very near `x = 1` — the `ln` face of
+/// [`adjust_log_near_zero`], which carries the full analysis. `ln`'s linear
+/// term is `δ = raw − 10^SCALE`, so the adjust reads the gap against `one`.
 #[inline]
 pub(crate) fn adjust_ln_near_one<C: WideTrigCore, const SCALE: u32>(
     result: C::Storage,
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> C::Storage
+where
+    <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
     if crate::support::rounding::is_nearest_mode(mode) {
         return result;
     }
     let one = C::storage_one(SCALE);
-    if raw == one {
-        return result; // ln(1) = 0 is exact
-    }
-    let delta = raw - one; // (x − 1) at storage scale (signed)
-    if result != delta {
-        return result; // only the sub-resolution linear-term overshoot
-    }
-    match mode {
-        RoundingMode::Floor => result - <C::Storage as BigInt>::ONE,
-        RoundingMode::Trunc if raw > one => result - <C::Storage as BigInt>::ONE,
-        _ => result,
-    }
+    adjust_log_near_zero::<C::Storage, C::W>(result, raw - one, one, mode)
 }
 
 /// `tan_strict` for a wide tier — generic over the tier `C`. Panics at

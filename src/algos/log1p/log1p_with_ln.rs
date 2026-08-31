@@ -102,7 +102,7 @@ where
     // The same analytic sub-resolution adjust the artanh kernel applies:
     // this composition runs the Series `ln` core directly, which (unlike
     // the Tang path) does not carry `adjust_ln_near_one` of its own.
-    super::adjust_near_zero::<St>(r, raw, mode)
+    super::adjust_near_zero::<St, S, SCALE>(r, raw, mode)
 }
 
 /// The `_approx` sibling of [`log1p_with_ln_g`]: a SINGLE shot at the
@@ -131,7 +131,7 @@ where
         ln2_at::<S>(w, w),
     );
     let out = wtc::round_to_storage_with_g::<St, S>(r, w, SCALE, mode, st_max, st_min);
-    super::adjust_near_zero::<St>(out, raw, mode)
+    super::adjust_near_zero::<St, S, SCALE>(out, raw, mode)
 }
 
 /// Tier-generic entry to [`log1p_with_ln_g`] — sources the work integer
