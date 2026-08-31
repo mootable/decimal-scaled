@@ -564,7 +564,24 @@ use crate::support::rounding::RoundingMode;
     ///   read at all, since truncation is toward zero by construction.
     ///
     /// When every side AGREES the sum's side follows with no magnitude
-    /// comparison at all, and that is the only case tagged.
+    /// comparison at all, and that is the only case this rule tags.
+    ///
+    /// # Unanimity is the PRECONDITION of that proof, not an observation
+    ///
+    /// The argument above holds *because* nothing can cancel: every error term
+    /// displaces the sum the same way, so their total displaces it that way
+    /// too, whatever their sizes. The moment one term opposes, sizes are the
+    /// only thing that decides — a large opposing term can cancel the rest or
+    /// flip the total outright — and NO rule over signs can see that. So a
+    /// mixed reading is not a weaker version of this proof, it is outside it.
+    ///
+    /// This is the same trap per-term exactness fell into on `expm1`: what
+    /// decides is the ACCUMULATED effect, and a rule that reasons term by term
+    /// while terms pull in both directions is asserting, not proving. Anything
+    /// short of unanimity therefore fails this rule closed — it goes to
+    /// [`side_by_deeper_probe`], which MEASURES the accumulation instead of
+    /// arguing about it, and to `None` if even that cannot resolve it. A tag
+    /// must never be produced from mixed directions by any other route.
     ///
     /// # Why the ORDER, and not exactness
     ///
@@ -586,15 +603,18 @@ use crate::support::rounding::RoundingMode;
     /// * `want_tag` was not asked for, or `u == 0` (no tail to carry a sign);
     /// * `|u| >= 10^w`, where the dropped tail neither converges nor need
     ///   carry its terms' common sign;
-    /// * an INCLUDED term's multiply rounded AWAY from zero, against the tail.
-    ///   "Included" is load-bearing exactly as in [`expm1_fixed_inner`]: the
-    ///   term that ENDS the loop is never added and so contributes no error,
-    ///   and counting it would reject arguments whose sum it never touched;
-    /// * the seed divide's side OPPOSES the tail's. Deciding then needs their
-    ///   magnitudes, which is a genuine comparison this does not attempt — a
+    /// * the sides genuinely oppose — an INCLUDED term's multiply rounded AWAY
+    ///   from zero, or the seed divide's side is not the tail's — AND
+    ///   [`side_by_deeper_probe`] could not settle it either, because the work
+    ///   integer had no room to probe in or because the gap it measured was
+    ///   inside its own error. ("Included" is load-bearing exactly as in
+    ///   [`expm1_fixed_inner`]: the term that ENDS the loop is never added and
+    ///   so contributes no error, and counting it would reject arguments whose
+    ///   sum it never touched.) Opposition alone is NOT enough to refuse: a
     ///   dropped tail is not always negligible beside a half-ULP divide
-    ///   residual, so asserting the divide's side alone would be a guess, not
-    ///   a proof.
+    ///   residual, so asserting either side outright would be a guess — but
+    ///   measuring the two against each other is not, which is what the probe
+    ///   does.
     fn log1p_fixed_inner<S: BigInt>(t: S, w: u32, want_tag: bool) -> (S, Option<TailSign>)
     where
         S::Scratch: ComputeLimbs,
@@ -667,15 +687,104 @@ use crate::support::rounding::RoundingMode;
                 break;
             }
         }
-        let tag = if want_tag && agree && u != zero::<S>() && abs(u) < one_w {
+        // Doubling is a positive scaling, so it preserves the side.
+        let value = sum + sum;
+        let tag = if !want_tag || u == zero::<S>() || abs(u) >= one_w {
+            None
+        } else if agree {
             // Every error term reaching `sum` pushes the same way, so their sum
             // does too — no magnitude comparison anywhere.
             Some(tail_side)
         } else {
-            None
+            // They genuinely oppose, so the total turns on their SIZES — an
+            // opposing term can cancel the rest or flip it — and no reading of
+            // signs can see that. Measure it rather than assert it.
+            side_by_deeper_probe::<S>(t, w, value)
         };
-        // Doubling is a positive scaling, so it preserves the side.
-        (sum + sum, tag)
+        (value, tag)
+    }
+
+    /// Bits of the work integer [`side_by_deeper_probe`] leaves unused, so its
+    /// widest product cannot reach the sign bit. Two limbs.
+    const TAG_PROBE_SLACK_BITS: u64 = 128;
+
+    /// The side the TRUE value lies on relative to `value`, established by
+    /// RE-EVALUATING the series at a deeper working scale.
+    ///
+    /// [`log1p_fixed_inner`]'s sign rule settles the tag whenever the error
+    /// terms line up. When they genuinely oppose, nothing about their signs can
+    /// decide it and only their magnitudes can — so rather than bound them term
+    /// by term, this recomputes the whole value at a deeper working scale,
+    /// where each of those errors is orders smaller, and reads the side
+    /// straight off the gap.
+    ///
+    /// # How deep, and why that is not a tuning choice
+    ///
+    /// As deep as the work integer allows, every time. The depth is a property
+    /// of the WIDTH, never of the argument: probing shallower would refuse
+    /// arguments the width could have settled, and there is no other claim on
+    /// the capacity — it is the same free headroom the walker cannot use only
+    /// because ITS depth is pinned to the constant tables. Reading the maximum
+    /// off `BITS` also keeps the depth from being fitted to any particular
+    /// argument or cell, which a literal digit count would invite.
+    ///
+    /// # Why this is not the walker's escalation
+    ///
+    /// It is the same idea the Ziv walker applies, at the one place the walker
+    /// cannot reach. The walker stops at a const-table-safe cap because
+    /// `pi`/`ln2`/`sincos` are provisioned only to about `BITS/8` digits, and
+    /// probing past that would request an entry the generated table does not
+    /// hold. This kernel reads none of them: its only constant is `10^w`, and
+    /// `consts::pow10` falls back to `TEN.pow` outside its baked range. So the
+    /// probe can compute deeper WITHOUT raising that cap or touching any
+    /// table's provisioning.
+    ///
+    /// # Why the answer is sound
+    ///
+    /// `value` is lifted by an exact power of ten and so carries no error at
+    /// all; the gap is therefore the probe's own reading of `V − R`, wrong by
+    /// at most the probe's error. That error damps rather than accumulates:
+    /// each term is formed from the one before it and scaled by `u² ≤ 1/9` over
+    /// the whole region the matcher routes here, so a term inherits at most a
+    /// ninth of its predecessor's error before adding its own rounding — under
+    /// two units, and under three once the truncating division is counted. With
+    /// the seed divide under one unit and the dropped tail under two, four
+    /// units per term bounds the lot, and the loop takes at most `SERIES_CAP`
+    /// of them. A gap CLEARING that bound has the sign of `V − R`; one that
+    /// does not is `None`, fail-closed, exactly as before.
+    ///
+    /// # Termination
+    ///
+    /// The re-entry passes `want_tag = false`, which is precisely the branch
+    /// that never calls this function, so the recursion is one level deep.
+    fn side_by_deeper_probe<S: BigInt>(t: S, w: u32, value: S) -> Option<TailSign>
+    where
+        S::Scratch: ComputeLimbs,
+    {
+        // The probe's widest intermediates are products of two values under
+        // `10^deep_w` — the squared quotient, and the seed divide's numerator —
+        // so twice that width plus the slack has to fit the work integer.
+        // Inverting `bits(10^d) = d·log2(10) < (d·10 + 2)/3` for the largest
+        // `d` that leaves room: `d ≤ 3·(BITS − slack)/20`.
+        let bits = u64::from(<S as BigInt>::BITS);
+        // Fail closed on the (unreachable) overflow rather than fall back to a
+        // depth the width cannot hold.
+        let deep_w = u32::try_from(3 * bits.saturating_sub(TAG_PROBE_SLACK_BITS) / 20).ok()?;
+        // No room to probe any deeper than the value was already computed at.
+        let extra = deep_w.checked_sub(w).filter(|e| *e > 0)?;
+        let lift = pow10::<S>(extra);
+        let deep = log1p_fixed_inner::<S>(t * lift, deep_w, false).0;
+        let gap = deep - value * lift;
+        let bound = lit::<S>(4 * SERIES_CAP as i128 + 16);
+        if abs(gap) > bound {
+            Some(if gap > zero::<S>() {
+                TailSign::Above
+            } else {
+                TailSign::Below
+            })
+        } else {
+            None
+        }
     }
 
     /// Which side of a working-scale sum the TRUE value lies on — the sign
