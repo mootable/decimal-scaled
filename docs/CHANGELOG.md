@@ -51,11 +51,58 @@ aliases.
 - The scale-up overflow panic message names `quantize` rather than
   `rescale`.
 
+- **Public `log1p`.** `log1p(t) = ln(1 + t)`, domain `t > -1`, correctly
+  rounded at every width and scale, with the full surface — `log1p_strict`,
+  `log1p_strict_with`, `log1p_approx`, `log1p_approx_with`, the `_fast`
+  pair, and `DecimalTranscendental` entries. Provided for API parity and
+  standards conformance: at fixed point it is *equivalent* to `ln(1 + t)` at
+  the same scale, **not more accurate** — `1 + t` is exactly representable,
+  so there is no cancellation to avoid, unlike binary floating point.
+- **`DynDecimal` now formats without allocating.** The trait requires
+  `core::fmt::Display`, so `{}` works directly on a `dyn DynDecimal` and the
+  caller chooses whether to allocate.
+
+### Fixed
+
+- **`log1p` sub-resolution directed rounding near `t = 0`.** For `t` at one
+  LSB the deficit `t²/2` falls below the Ziv precision horizon, so the walker
+  saw a zero residual and `Floor` returned one LSB high (reproduced at
+  D1232<1231>). Resolved analytically, mirroring how the Tang `ln` path
+  handles the same situation near 1 — not by raising the walker cap.
+- **Golden validator: an unsound oracle could veto a sound vector.** A
+  validator that *cannot represent* an input abstains harmlessly, but one that
+  computes a wrong value drops the whole line — so it could discard a vector
+  that the reliable oracles agreed on, leaving a silent hole in coverage
+  exactly at the hardest inputs. `VALIDATOR_EXCLUDE` now removes a validator's
+  vote per function where it is demonstrably unsound.
+
 ### Deprecated
 
 - **`rescale` / `rescale_with`** and **`DynDecimal::rescale_to` /
   `rescale_to_with`** — renamed as above. They delegate unchanged and
   are **removed in 0.6.0**.
+- **`DynDecimal::display`** — the trait now requires `Display`, so use `{}`
+  formatting instead. `display()` always allocates a `String`; the deprecated
+  method delegates unchanged and is **removed in 0.6.0**.
+
+### Breaking — for trait *implementors* only
+
+Callers are unaffected: every rename keeps a working deprecated alias, and
+everything else is additive. But `DynDecimal` and `DecimalTranscendental` are
+deliberately **not sealed** — they are extension points, and implementing them
+from outside the crate is the intent — so the following require an update to
+an external `impl`:
+
+- **`DynDecimal` gained a `Display` supertrait.** An external implementor must
+  also provide `Display`.
+- **`DynDecimal::quantize_to` / `quantize_to_with` are the required methods**;
+  `rescale_to` / `rescale_to_with` became deprecated *provided* methods.
+- **`DecimalTranscendental` gained four required `log1p_*` methods.**
+
+Accepted deliberately at this point in the pre-1.0 series, where Cargo treats
+all `0.5.x` as compatible. Future additions to either trait should prefer
+*provided* methods with default bodies, so an implementor is not forced to
+update every time a function is added.
 
 ## [0.5.0] — 2026-06-14
 
