@@ -103,6 +103,55 @@ Both intervals are empty, so the family CANNOT BE INSTANTIATED at these tiers --
 an absence of evidence. SCOPE: this proves only that THIS family cannot reach these tiers. It
 is NOT a correctness proof for ln_series at D57/D115 against any other family.
 
+## j-FAMILY (double-width compare) — COMPLETE (chunk 4)
+CONFIRMED by the gate at the j=1 cells: D616<590> 2 bad, D616<615> 3 bad, D924<693> 1 bad,
+all Ceiling, classified wrong-mode(HalfToEven). Live defect in released 0.5.0; issue #73.
+
+The fix compares delta^2 <= 2*D*one at DOUBLE width because delta^2 overflows a single width.
+At j=1 it does NOT overflow (D616<615>: delta^2 = 10^616 vs Int<32> max ~1.63*10^616), so the
+double-width path was exercised by nothing. These rows force it.
+Window on L = log10(k), all three must hold:
+  overflow   L > log10(2^(64N-1))/2      (else single width would have sufficed)
+  exposure   L < S - (reach - log10 3)/3 (else the walker resolves the cubic)
+  capturable L >= S - (1233 - log10 3)/3 (else the .au truncates it -> FALSE NEGATIVE)
+Qualifying driven cells and the k used (k^2/2 * 10^-S is an exact integer in every case):
+  D462<461>  window (231.0, 293.2)  k = 10^232  d = 10^-229  delta^2 = 83x max
+  D616<590>  window (308.1, 336.8)  k = 10^315  d = 10^-275  delta^2 = 6.2e13x max
+  D616<615>  window (308.1, 361.8)  k = 10^328  d = 10^-287  delta^2 = 6.2e39x max
+  D924<900>  window (489.2, 561.5)  k = 10^525  d = 10^-375  delta^2 = 3.4e125x max
+  D924<923>  window (512.2, 584.5)  k = 10^548  d = 10^-375  delta^2 = 3.4e171x max
+  (D924<900> and <923> share the same input string; one row serves both cells.)
+NO QUALIFYING CELL, stated as findings not gaps:
+  D307 and every narrower tier — overflow needs L > 154.0 but exposure caps L < 138.2 at the
+    widest driven cell (D307<306>). The windows are disjoint at EVERY scale, not just the
+    driven ones: storage is too narrow relative to reach, so a delta big enough to overflow
+    the width is always big enough for the walker to see its cubic. Structural, not a grid gap.
+  D1232 — same wall as before: capturability needs L >= 789.2 at S=1200, exposure needs
+    L < 733.5. Disjoint. D1232 remains unreachable by golden data for this family entirely.
+SIDE RESULT: larger k pulls the cubic SHALLOWER (depth 3(S - log10 k)), which is what brings
+D924<900>/<923> inside gen_precision. At j=1 they were uncapturable (depth 1350/1383). The
+j-family therefore reaches cells j=1 provably could not — it is not merely "easier rows".
+
+## Why the BELOW-1 side is clean under Floor (the asymmetry, explained)
+Answered from `tang_ln_fixed_g` Stage 1 (ln_tang.rs:174-188), v = 2^k * m with m in [1,2):
+  x = 1 + d : v >= one_w, so k = 0 and m = v. There is NO ln2 term. The artanh series on a
+              tiny argument reproduces d - d^2/2 exactly at working scale, so the value lands
+              EXACTLY on a grid multiple, rem == 0, residual_present == false, and the directed
+              bump cannot fire. -> BREAKS under Ceiling.
+  x = 1 - d : v < one_w, so the loop's `m < one_w => k -= 1` forces k = -1 and m = 2(1-d).
+              The result is -ln2 + ln(2-2d). ln2 is a ROUNDED working-scale constant, so that
+              subtraction leaves a generically NONZERO low residual, rem != 0, and Floor's
+              bump (residual_present && !result_positive) fires -> lands on the correct
+              -(k+Q)-1. Correct, but for a reason unrelated to the deficit it is masking.
+CONCLUSION: no CONSTRUCTIBLE below-1 input mis-rounds under Floor in this family. A break needs
+the -ln2 + ln(2-2d) working-scale value to land exactly on a grid multiple, i.e. controlling the
+rounding of an irrational to `guard` digits — that IS the Table-Maker's Dilemma, not something a
+derivation can target. Recorded as UNBROKEN-AND-EXPLAINED, NOT proven safe: the below-1
+correctness is UNEARNED (it rests on a residual that is nonzero only generically). LATENT HAZARD
+worth keeping: any future change that removes the ln2 subtraction near 1 — an exact-ln2 path, or
+a reduction that keeps k = 0 below 1 — would expose the below-1 bracket exactly as the above-1
+bracket was exposed. The fix's below-1 branch is correct but its FIRING path stays unexercised.
+
 ## Status of each claim — BROKEN / UNBROKEN / PROVABLY SAFE (do not conflate)
 DERIVED-PREDICTED-BREAK  every row above. NONE has been executed — this agent runs no cargo.
                          The oracle answers are verified; the kernel behaviour is NOT.
@@ -155,7 +204,8 @@ D1232<1200/1231>       gen_precision 1233 — the stored .au truncates the decid
 [ ] DEFERRED: the non-production (G, CAP) configs of the seven `_p` Tang seams. Only the
     INTERNAL_EXTRA axis has been reasoned about (it is what separates D462 production from its
     seam); G and CAP are untouched. Volume, and it needs a seam run to mean anything.
-[ ] DEFERRED: the j-family band (k = 2j*10^(S/2), j > 1) around each live cell — Class-I
-    neighbour coverage. j = 1 is the hardest cell, so the added rows would be strictly easier;
-    worth having for range-not-point discipline, but not load-bearing.
+[x] DONE (chunk 4): the j-family, which turned out to be LOAD-BEARING, not discipline — it is
+    the only thing that exercises the fix's double-width compare. My chunk-3 assessment
+    ("strictly easier rows") was wrong: it accounted for the deciding cubic but not for
+    delta^2 overflowing the storage width, which is a SECOND axis that only larger j reaches.
 [ ] NOT COVERABLE AT ALL: ln_schoolbook — no `select` arm and no seam. Recorded, not fixed.
