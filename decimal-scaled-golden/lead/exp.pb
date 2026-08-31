@@ -4638,3 +4638,7 @@
 // edge: large-negative argument at a deep band-edge scale (large |k| range reduction - the old Tang-table-overflow regime). The rewritten exp ArgRegime pre-gate + k<0 internal-peak clamp must round e^x correctly where the result still fits (exp(-50) D76<57>, exp(-100) D153<114>, exp(-200) D307<290>) and short-circuit to the smallest positive value where it underflows.
 -200
 -300
+// never_exact hardcodes the residual's SIGN as positive (exp_schoolbook.rs:127). That is sound for x>0 where
+// the series is all-positive, and BACKWARDS for x<0 where it alternates: an odd first sub-resolution index
+// gives a negative residual. D462<461>: terms j=0..6 are exact ULP multiples, j=7 sits at depth 512 > reach 504.
+-0.0000000000000000000000000000000000000000000000000000000000000000000000003

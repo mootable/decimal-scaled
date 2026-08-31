@@ -4152,3 +4152,6 @@
 // regression: NARROW-tier (D18/D38) near-tie families - the Fixed-256 single shots (and sin/cos's 75-digit-capped escalation) could not see a deciding digit below w = SCALE+30: directed tiny-x (x = 1e-38 at D38<38>, x^3-term deviation at depth ~115; x = 1e-18 at D18<18>) and the even-function exact-half family (cos/cosh(c*10^-19) at D38<38>: 1 -/+ x^2/2 lands EXACTLY on the half, x^4/24 tail at depth ~77). Fixed by the clear-of-tie terminal + Int<24> Ziv walker (fix/narrow-tier-near-tie).
 0.00000000000000000000000000000000000001
 0.000000000000000001
+// the linear pin (hyper_tiny_pin, j*=3 reach) does not cover the deep band: at D462<461> raw = 3e388 exceeds
+// the pin threshold, and j=7 (2187/7, the factor 7 again) sits at depth 509 > reach 504.
+0.0000000000000000000000000000000000000000000000000000000000000000000000003
