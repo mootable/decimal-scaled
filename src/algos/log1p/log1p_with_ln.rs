@@ -84,14 +84,25 @@ where
 {
     super::guard_domain::<St>(raw, SCALE);
     let base_w = SCALE + base_guard;
-    wtc::round_to_storage_directed_g::<St, S>(base_guard, SCALE, mode, st_max, st_min, |guard| {
-        let w = SCALE + guard;
-        crate::algos::exp::exp_generic::ln_fixed::<S>(
-            one_plus_t_at_w::<St, S>(raw, guard, w),
-            w,
-            ln2_at::<S>(w, base_w),
-        )
-    })
+    let r = wtc::round_to_storage_directed_g::<St, S>(
+        base_guard,
+        SCALE,
+        mode,
+        st_max,
+        st_min,
+        |guard| {
+            let w = SCALE + guard;
+            crate::algos::exp::exp_generic::ln_fixed::<S>(
+                one_plus_t_at_w::<St, S>(raw, guard, w),
+                w,
+                ln2_at::<S>(w, base_w),
+            )
+        },
+    );
+    // The same analytic sub-resolution adjust the artanh kernel applies:
+    // this composition runs the Series `ln` core directly, which (unlike
+    // the Tang path) does not carry `adjust_ln_near_one` of its own.
+    super::adjust_near_zero::<St>(r, raw, mode)
 }
 
 /// The `_approx` sibling of [`log1p_with_ln_g`]: a SINGLE shot at the
@@ -119,7 +130,8 @@ where
         w,
         ln2_at::<S>(w, w),
     );
-    wtc::round_to_storage_with_g::<St, S>(r, w, SCALE, mode, st_max, st_min)
+    let out = wtc::round_to_storage_with_g::<St, S>(r, w, SCALE, mode, st_max, st_min);
+    super::adjust_near_zero::<St>(out, raw, mode)
 }
 
 /// Tier-generic entry to [`log1p_with_ln_g`] — sources the work integer

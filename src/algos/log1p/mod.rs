@@ -44,6 +44,52 @@ pub(crate) mod log1p_artanh;
 pub(crate) mod log1p_with_ln;
 
 use crate::int::types::traits::BigInt;
+use crate::support::rounding::RoundingMode;
+
+/// Directed-rounding post-adjust for the sub-resolution band near
+/// `t = 0` — the direct analogue of
+/// [`wide_trig_core::adjust_ln_near_one`], read at `log1p`'s own
+/// argument so the gap `δ` IS `raw` and no subtraction is needed.
+///
+/// Concavity gives `log1p(t) < t` STRICTLY for every `t ≠ 0`, and
+/// `ln(1 + t)` is transcendental for algebraic `1 + t ≠ 1`, so the value
+/// never lands exactly on a storage grid line. For a tiny `t` the
+/// deficit `t − log1p(t) ≈ t²/2` can sit far below any REACHABLE working
+/// scale (`t = 10^−SCALE` leaves it at ~`10^−2·SCALE`, past the Ziv
+/// precision horizon at the wide tiers), so the kernel rounds to exactly
+/// the linear term `t` and a downward mode then keeps `t` though the
+/// true value is strictly below it.
+///
+/// Because `log1p(t) < t`, a CORRECT downward result can never equal
+/// `t`, so `result == raw` is unambiguously the sub-resolution
+/// overshoot — step down one LSB. `log1p(0) = 0` is exact and excluded;
+/// nearest modes (the fraction is `1⁻`, so they round to `t` anyway) and
+/// `Ceiling` (`t` IS the correct ceiling) are already right. `Floor`
+/// steps down for both signs; `Trunc` (toward zero) steps down only for
+/// `t > 0`, since for `t < 0` truncation moves UP and `t` is then the
+/// correct answer.
+///
+/// A no-op unless the result is exactly `raw`, so every cell whose
+/// deciding digit the walker actually reaches passes through untouched.
+///
+/// [`wide_trig_core::adjust_ln_near_one`]: crate::algos::support::wide_trig_core::adjust_ln_near_one
+#[inline]
+pub(crate) fn adjust_near_zero<St: BigInt>(result: St, raw: St, mode: RoundingMode) -> St {
+    if crate::support::rounding::is_nearest_mode(mode) {
+        return result;
+    }
+    if raw == <St as BigInt>::ZERO {
+        return result; // log1p(0) = 0 is exact
+    }
+    if result != raw {
+        return result; // only the sub-resolution linear-term overshoot
+    }
+    match mode {
+        RoundingMode::Floor => result - <St as BigInt>::ONE,
+        RoundingMode::Trunc if raw > <St as BigInt>::ZERO => result - <St as BigInt>::ONE,
+        _ => result,
+    }
+}
 
 /// Panics unless `t > -1`, i.e. unless the raw storage value exceeds
 /// `-10^SCALE`. The family-level precondition, shared by both kernels.

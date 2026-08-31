@@ -346,6 +346,82 @@ fn log1p_matches_external_oracle_d57_s20() {
     }
 }
 
+/// The region wall at a LARGE working scale — where the artanh series'
+/// term count (`≈2.1·w` inside the wall) and the 20 000-iteration
+/// series cap are furthest apart, and where a mis-placed wall would
+/// show as a truncated series rather than a slow one. D307<150> runs at
+/// `w ≈ 160`; the argument set straddles both region edges and reaches
+/// the domain edge `t → -1`.
+#[test]
+#[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+fn log1p_equals_ln_of_one_plus_t_d307_s150() {
+    use crate::int::types::traits::BigInt;
+    let unit = crate::consts::pow10::dispatch::<Int<16>>(150);
+    let lsb = <Int<16> as BigInt>::ONE;
+    let cases = [
+        Int::<16>::ZERO,
+        lsb,
+        -lsb,
+        unit >> 1,
+        -(unit >> 1),
+        (unit >> 1) + lsb,
+        unit,
+        unit + lsb,
+        unit + unit,
+        -(unit - lsb),
+    ];
+    for &t in &cases {
+        for &mode in &MODES {
+            let x = D::<Int<16>, 150>(t);
+            let y = D::<Int<16>, 150>(t + unit);
+            assert_eq!(
+                x.log1p_strict_with(mode).to_bits(),
+                y.ln_strict_with(mode).to_bits(),
+                "D307<150> log1p != ln(1+t) at t={t:?} mode={mode:?}"
+            );
+        }
+    }
+}
+
+/// The widest shipped tier at its top scale — D1232<1231>, `w ≈ 1241`,
+/// the largest working scale the crate reaches. Inside the region wall
+/// the artanh series needs `≈2.1·w ≈ 2 600` terms here, its worst case;
+/// this is the case the wall's series-cap headroom argument rests on,
+/// so both region edges are checked at the extreme. Kept to a small
+/// argument set because each call is a full-width evaluation.
+#[test]
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+fn log1p_equals_ln_of_one_plus_t_d1232_s1231() {
+    use crate::int::types::traits::BigInt;
+    let unit = crate::consts::pow10::dispatch::<Int<64>>(1231);
+    let lsb = <Int<64> as BigInt>::ONE;
+    // `t → -1` is bounded by the OUTPUT range, not the domain: at this
+    // scale `|log1p(t)| < ~100` is all the storage holds, so the deepest
+    // representable approach is `1 + t = 10^-20` (`log1p ≈ -46.05`).
+    // Anything closer to -1 legitimately overflows and panics, exactly as
+    // `ln` of the same argument does.
+    let deepest_neg = -(unit - crate::consts::pow10::dispatch::<Int<64>>(1211));
+    let cases = [
+        lsb,           // tiny t — artanh region, the sub-resolution case
+        -lsb,          // its negative mirror
+        unit,          // upper region edge
+        unit + lsb,    // just outside it
+        -(unit >> 1),  // lower region edge
+        deepest_neg,   // as close to the domain edge as the range allows
+    ];
+    for &t in &cases {
+        for &mode in &[RoundingMode::HalfToEven, RoundingMode::Floor] {
+            let x = D::<Int<64>, 1231>(t);
+            let y = D::<Int<64>, 1231>(t + unit);
+            assert_eq!(
+                x.log1p_strict_with(mode).to_bits(),
+                y.ln_strict_with(mode).to_bits(),
+                "D1232<1231> log1p != ln(1+t) at mode={mode:?}"
+            );
+        }
+    }
+}
+
 /// `S` is the scale every anchor above is stated at; assert `UNIT` is
 /// consistent with it so a future scale change cannot silently
 /// invalidate the baked expectations.

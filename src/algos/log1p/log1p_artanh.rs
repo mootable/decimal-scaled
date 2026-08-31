@@ -59,12 +59,20 @@ where
     S::Scratch: ComputeLimbs,
 {
     super::guard_domain::<St>(raw, SCALE);
-    wtc::round_to_storage_directed_g::<St, S>(base_guard, SCALE, mode, st_max, st_min, |guard| {
-        crate::algos::exp::exp_generic::log1p_fixed::<S>(
-            wtc::to_work_scaled_g::<St, S>(raw, guard),
-            SCALE + guard,
-        )
-    })
+    let r = wtc::round_to_storage_directed_g::<St, S>(
+        base_guard,
+        SCALE,
+        mode,
+        st_max,
+        st_min,
+        |guard| {
+            crate::algos::exp::exp_generic::log1p_fixed::<S>(
+                wtc::to_work_scaled_g::<St, S>(raw, guard),
+                SCALE + guard,
+            )
+        },
+    );
+    super::adjust_near_zero::<St>(r, raw, mode)
 }
 
 /// The `_approx` sibling of [`log1p_artanh_g`]: a SINGLE shot at the
@@ -92,7 +100,8 @@ where
         wtc::to_work_scaled_g::<St, S>(raw, working_digits),
         w,
     );
-    wtc::round_to_storage_with_g::<St, S>(r, w, SCALE, mode, st_max, st_min)
+    let out = wtc::round_to_storage_with_g::<St, S>(r, w, SCALE, mode, st_max, st_min);
+    super::adjust_near_zero::<St>(out, raw, mode)
 }
 
 /// Tier-generic entry to [`log1p_artanh_g`] — sources the work integer
