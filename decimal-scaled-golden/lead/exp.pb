@@ -4641,4 +4641,11 @@
 // never_exact hardcodes the residual's SIGN as positive (exp_schoolbook.rs:127). That is sound for x>0 where
 // the series is all-positive, and BACKWARDS for x<0 where it alternates: an odd first sub-resolution index
 // gives a negative residual. D462<461>: terms j=0..6 are exact ULP multiples, j=7 sits at depth 512 > reach 504.
+// STATUS: this row PASSES today - it does NOT reproduce a defect, and is kept as a standing probe rather than as
+// a regression pin. The derivation above assumed the BASE probe decides. It does not: max_guard is 43/145/93 at
+// D462/D616/D924, so a second probe always runs, and it resolves this argument. An input that genuinely stresses
+// the never_exact sign assumption needs its deciding term to survive BOTH probes - i.e. the deep probe's
+// remainder must be zero or below the 10^4 noise floor (cf. -3e-100 vs -1e-100 in expm1, remainders 20250 and 83).
+// Retained because never_exact remains a hardcoded SIGN on the exp path, so a routing or guard change could
+// expose it, and a green gate here is not evidence that it cannot.
 -0.0000000000000000000000000000000000000000000000000000000000000000000000003

@@ -4154,4 +4154,10 @@
 0.000000000000000001
 // the linear pin (hyper_tiny_pin, j*=3 reach) does not cover the deep band: at D462<461> raw = 3e388 exceeds
 // the pin threshold, and j=7 (2187/7, the factor 7 again) sits at depth 509 > reach 504.
+// STATUS: this row PASSES today - it does NOT reproduce a defect, and is kept as a standing probe rather
+// than a regression pin. The derivation above assumed the BASE probe decides; it does not (max_guard is
+// 43/145/93 at D462/D616/D924, so a second probe always runs and resolves this argument). A genuinely
+// stressing input needs its deciding term to survive BOTH probes - the deep probe's remainder zero or
+// under the 10^4 noise floor. Retained so a future routing or guard change cannot expose the gap
+// silently: a green gate here is not evidence the kernel is safe.
 0.0000000000000000000000000000000000000000000000000000000000000000000000003
