@@ -55,7 +55,10 @@ mod from_parse_errors {
 
     #[test]
     fn overlong_fractional_is_rejected() {
-        // SCALE=2 allows at most 2 fractional digits.
+        // SCALE=2 allows at most 2 SIGNIFICANT fractional digits: the `3` here
+        // is past the scale and non-zero, so the literal cannot round-trip.
+        // (More than two digits is fine when the excess is zeros -- `1.1200`
+        // parses; it is precision loss that is refused, not length.)
         assert!(D38::<2>::from_str("1.123").is_err());
     }
 
@@ -178,10 +181,28 @@ mod from_from_str_wide {
 
     #[test]
     fn d307_deep_scale_overlong_fractional_is_err() {
-        // SCALE = 150, fractional length 151 â†’ reject.
-        let frac = "0".repeat(151);
+        // SCALE = 150 and the 151st fractional digit is SIGNIFICANT, so the
+        // literal cannot round-trip and is rejected.
+        //
+        // What is rejected is a loss of precision, NOT a length: digits past
+        // SCALE that are all zeros carry no value and DO parse, which is what
+        // `d307_deep_scale_trailing_zeros_past_scale_are_accepted` below pins.
+        // This test previously used 151 zeros and so asserted the older
+        // length-based rule, which stopped being the contract.
+        let frac = format!("{}1", "0".repeat(150));
         let input = format!("0.{frac}");
         assert!(D307::<150>::from_str(&input).is_err());
+    }
+
+    /// The other side of the same boundary, and the coverage the old
+    /// length-based form of the test above was accidentally providing: excess
+    /// fractional digits that are all zeros are exactly representable, so they
+    /// parse and the value is unchanged.
+    #[test]
+    fn d307_deep_scale_trailing_zeros_past_scale_are_accepted() {
+        let input = format!("0.{}", "0".repeat(151));
+        let v = D307::<150>::from_str(&input).expect("all-zero excess carries no value");
+        assert_eq!(v, D307::<150>::from_str("0").expect("parse 0"));
     }
 
     #[test]
