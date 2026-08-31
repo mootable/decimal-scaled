@@ -169,6 +169,19 @@ where
             if let Some(v) = tiny_x_linear_directed::<C::Storage, SCALE>(g, mode, false) {
                 return v;
             }
+            // The exact bracket posed on the RATIO `z = y/x`, which is what
+            // the `g`-as-argument step below cannot do: substituting `g` for
+            // `z` reasons in a circle over `g − z`, the very quantity being
+            // signed. Where it closes it PROVES the side; where it is silent
+            // the `j*`-parity step runs unchanged.
+            if let Some(v) = crate::algos::support::wide_trig_core::adjust_alternating_bracket_ratio::<
+                C::Storage,
+                C::W,
+                SCALE,
+            >(g, y_raw, x_raw, mode)
+            {
+                return v;
+            }
             let stepped = tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
                 g,
                 false,
@@ -443,6 +456,19 @@ where
         if r_f == r_c {
             let g = r_f;
             if let Some(v) = tiny_x_linear_directed::<C::Storage, SCALE>(g, mode, false) {
+                return v;
+            }
+            // The exact bracket posed on the RATIO `z = y/x`, which is what
+            // the `g`-as-argument step below cannot do: substituting `g` for
+            // `z` reasons in a circle over `g − z`, the very quantity being
+            // signed. Where it closes it PROVES the side; where it is silent
+            // the `j*`-parity step runs unchanged.
+            if let Some(v) = crate::algos::support::wide_trig_core::adjust_alternating_bracket_ratio::<
+                C::Storage,
+                C::W,
+                SCALE,
+            >(g, y_raw, x_raw, mode)
+            {
                 return v;
             }
             let stepped = tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
