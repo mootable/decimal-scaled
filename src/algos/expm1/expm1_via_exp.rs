@@ -30,11 +30,19 @@
 //! | result for `x < 0` | `(0, 1)` | `(-1, 0)` |
 //! | representable upper arg | `x <= ln(MAX)` | `x <= ln(1 + MAX)` |
 //!
-//! With `MAX = (10^D - 1)/10^SCALE` on a `D`-digit tier, a MAX-SCALE type
-//! (`SCALE = D`, e.g. `D18<18>`) has `MAX < 1`, so `ln(MAX) < 0` and `exp`
-//! overflows for EVERY `x >= 0` — while `ln(1 + MAX) ~ ln 2`, so `expm1` covers
-//! the whole band `0 < x < 0.693`. Doing the `- 10^w` here, before
-//! `round_to_storage_*`, is what makes that band reachable.
+//! The gain is `ln(1 + MAX) - ln(MAX) = ln(1 + 1/MAX)` — precisely the
+//! arguments whose `e^x` lands in `(MAX, MAX + 1]`. Doing the `- 10^w` HERE,
+//! before `round_to_storage_*`, is what makes that band reachable.
+//!
+//! **Size it honestly.** The crate caps `MAX_SCALE = N - 1` for `D{N}`
+//! (rejected at compile time above that), so every legal scale keeps at least
+//! one integer digit and `MAX >= 1` ALWAYS. At each tier's maximum scale
+//! `MAX = Storage::MAX / 10^MAX_SCALE` runs from about 17 (D38 at scale 37) to
+//! about 92 (D18 at scale 17), so the extra band is only
+//! `ln(1 + 1/MAX) ~ 0.011 .. 0.057` wide in `x`, and it narrows further at
+//! lower scales. It is a genuine capability `exp` does not have — there ARE
+//! arguments this answers and `exp_strict` panics on — but it is a narrow strip
+//! at the top of the range, NOT a whole half-domain.
 //!
 //! # Where this candidate is weaker
 //!
@@ -56,11 +64,11 @@
 //!
 //! Exactly `try_exp_fixed`'s wall, plus the guard condition above.
 
-#![allow(dead_code)]
-
 use crate::algos::exp::exp_generic as eg;
+use crate::algos::support::wide_trig_core as wtc;
 use crate::int::types::compute_limbs::ComputeLimbs;
 use crate::int::types::traits::BigInt;
+use crate::support::rounding::RoundingMode;
 
 /// `expm1(v)` for a working-scale value `v_w` at scale `w`, as
 /// `exp_fixed(v_w, w) - 10^w`. `None` propagates `try_exp_fixed`'s
@@ -83,4 +91,127 @@ where
     // for free.
     let e = eg::try_exp_fixed::<S>(v_w, w)?;
     Some(e - eg::one::<S>(w))
+}
+
+/// `expm1(x)` at storage `St`, computed in the work integer `S` and correctly
+/// rounded to `SCALE` under `mode`. The storage-facing shell around
+/// [`expm1_via_exp_fixed`]; see
+/// [`expm1_series_g`](super::expm1_series::expm1_series_g) for the shared shape
+/// and for why the walker's `never_exact` polarity is `false`.
+///
+/// # Which work integer to pass
+///
+/// `policy::expm1` routes this arm the LARGE-argument regime (`|x| > 1`), which
+/// is exactly where `e^x`'s internal squaring / `2^k`-reassembly peak grows, so
+/// it passes the tier's WIDEST work integer (`C::Wexp`; `WZiv` on the narrow
+/// tiers, already the widest they have) rather than `C::W`. `exp_series` reaches
+/// the same width by lifting to `C::Wexp` when the peak outgrows the primary —
+/// running there directly gives `expm1_strict` at least the reach `exp_strict`
+/// has, so it cannot signal out-of-range on an argument `exp` accepts. Choosing
+/// the wider integer up front costs speed on the easy cells; that is a
+/// deliberate validity-first call, and the cost crossover is un-benched.
+///
+/// # Panics
+///
+/// Panics if the result leaves the storage range, or if the argument is so
+/// large that even `C::Wexp` cannot host `e^x` — the same wall `exp_strict`
+/// carries, reached through `try_exp_fixed`'s `None`.
+#[inline]
+#[must_use]
+pub(crate) fn expm1_via_exp_g<St: BigInt + Copy, S: BigInt, const SCALE: u32>(
+    raw: St,
+    base_guard: u32,
+    st_max: St,
+    st_min: St,
+    mode: RoundingMode,
+) -> St
+where
+    S::Scratch: ComputeLimbs,
+{
+    let r = wtc::round_to_storage_directed_g::<St, S>(
+        base_guard,
+        SCALE,
+        mode,
+        st_max,
+        st_min,
+        |guard| {
+            super::checked(
+                expm1_via_exp_fixed::<S>(wtc::to_work_scaled_g::<St, S>(raw, guard), SCALE + guard),
+                "expm1_strict",
+                SCALE,
+            )
+        },
+    );
+    super::adjust_near_zero::<St>(r, raw, mode)
+}
+
+/// The `_approx` sibling of [`expm1_via_exp_g`]: a SINGLE shot at the caller's
+/// `working_digits`, no Ziv escalation.
+///
+/// # Panics
+///
+/// Panics if the result leaves the storage range, or if `e^x` cannot be hosted
+/// at the caller's working scale.
+#[inline]
+#[must_use]
+pub(crate) fn expm1_via_exp_approx_g<St: BigInt + Copy, S: BigInt, const SCALE: u32>(
+    raw: St,
+    working_digits: u32,
+    st_max: St,
+    st_min: St,
+    mode: RoundingMode,
+) -> St
+where
+    S::Scratch: ComputeLimbs,
+{
+    let w = SCALE + working_digits;
+    let r = super::checked(
+        expm1_via_exp_fixed::<S>(wtc::to_work_scaled_g::<St, S>(raw, working_digits), w),
+        "expm1_approx",
+        SCALE,
+    );
+    let out = wtc::round_to_storage_with_g::<St, S>(r, w, SCALE, mode, st_max, st_min);
+    super::adjust_near_zero::<St>(out, raw, mode)
+}
+
+/// Tier-generic entry to [`expm1_via_exp_g`] at the tier's widest work integer
+/// `C::Wexp` — see [`expm1_via_exp_g`] for why that width and not `C::W`.
+#[cfg(feature = "_wide-support")]
+#[inline]
+#[must_use]
+pub(crate) fn expm1_via_exp<C: wtc::WideTrigCore, const SCALE: u32>(
+    raw: C::Storage,
+    mode: RoundingMode,
+) -> C::Storage
+where
+    <C::Wexp as BigInt>::Scratch: ComputeLimbs,
+{
+    expm1_via_exp_g::<C::Storage, C::Wexp, SCALE>(
+        raw,
+        C::GUARD,
+        C::storage_max(),
+        C::storage_min(),
+        mode,
+    )
+}
+
+/// Tier-generic entry to [`expm1_via_exp_approx_g`]. See [`expm1_via_exp`].
+#[cfg(feature = "_wide-support")]
+#[inline]
+#[must_use]
+pub(crate) fn expm1_via_exp_approx<C: wtc::WideTrigCore, const SCALE: u32>(
+    raw: C::Storage,
+    working_digits: u32,
+    mode: RoundingMode,
+) -> C::Storage
+where
+    <C::Wexp as BigInt>::Scratch: ComputeLimbs,
+{
+    expm1_via_exp_approx_g::<C::Storage, C::Wexp, SCALE>(
+        raw,
+        working_digits,
+        C::storage_max(),
+        C::storage_min(),
+        mode,
+    )
 }

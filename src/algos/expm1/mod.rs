@@ -1,10 +1,18 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! `expm1` algorithm family — CANDIDATES, none wired.
+//! `expm1` algorithm family — `expm1(x) = e^x - 1`, total over the argument.
 //!
-//! Four drafted approaches to a correctly-rounded `expm1(x) = e^x - 1`, all
-//! generic over the work integer `S: BigInt` and all sharing one signature
+//! Four generic kernels; `crate::policy::expm1` routes TWO of them
+//! ([`expm1_series`] and [`expm1_via_exp`]) on a value-dependent validity wall
+//! and supplies each width's work integer and guard. [`expm1_halving`] and
+//! [`expm1_reduced`] are correct over regions that overlap the routed pair
+//! entirely, so choosing between them is an OPTIMALITY question — they stay as
+//! kept alternatives for a later measured race, per
+//! `docs/ARCHITECTURE.md` → "Keeping the alternatives".
+//!
+//! All four are generic over the work integer `S: BigInt` and share one
+//! working-scale signature
 //!
 //! ```text
 //! fn expm1_<variant>_fixed<S: BigInt>(v_w: S, w: u32) -> Option<S>
@@ -14,12 +22,12 @@
 //! `exp_generic::try_exp_fixed` so the eventual policy wrapper applies the
 //! overflow policy once.
 //!
-//! | variant | reduction | reassembly | strongest where |
+//! | variant | reduction | reassembly | status |
 //! |---|---|---|---|
-//! | [`expm1_series`] | none | none | small `\|x\|`, best accuracy near 0 |
-//! | [`expm1_halving`] | binary `v >> n` | `E <- E*(E + 2)` | `x <= 0` (error-CONTRACTING), small `x > 0` |
-//! | [`expm1_reduced`] | `k*ln 2` | `((P + E) << k) - P` | large positive `x` (flat peak) |
-//! | [`expm1_via_exp`] | `exp_fixed`'s | exact `- 10^w` | reference baseline / widest domain |
+//! | [`expm1_series`] | none | none | **ROUTED** for `\|x\| <= 1` |
+//! | [`expm1_via_exp`] | `exp_fixed`'s | exact `- 10^w` | **ROUTED** for `\|x\| > 1` |
+//! | [`expm1_halving`] | binary `v >> n` | `E <- E*(E + 2)` | kept — contracting for `x <= 0`, no `ln 2` |
+//! | [`expm1_reduced`] | `k*ln 2` | `((P + E) << k) - P` | kept — flat peak for large positive `x` |
 //!
 //! The design derivation — the reassembly identity and its error analysis, the
 //! no-cancellation lemma, the Ziv strategy and the per-candidate validity
@@ -33,7 +41,8 @@
 //! 2. **The deep-negative representative is `1 - 10^w`, never `-10^w`** — see
 //!    [`expm1_support::just_above_minus_one`]. A bare `-10^w` makes the walkers'
 //!    `never_exact` rule bump the magnitude, so `Floor` returns `-1 - 1 ULP`:
-//!    the wrong side, and out of storage range at `SCALE = D`.
+//!    the wrong side. (It is representable, so this is a silently WRONG
+//!    value rather than a panic - which is why only a test catches it.)
 //! 3. **The strict wrapper must pass `never_exact = FALSE`** — the opposite of
 //!    `exp`. That flag asserts "when the residual reads zero, the TRUE magnitude
 //!    is LARGER"; it is sound for `exp` only because `exp > 0` everywhere, so a
@@ -50,6 +59,73 @@ pub(crate) mod expm1_reduced;
 pub(crate) mod expm1_series;
 pub(crate) mod expm1_support;
 pub(crate) mod expm1_via_exp;
+
+use crate::int::types::traits::BigInt;
+use crate::support::rounding::RoundingMode;
+
+/// Applies the family's overflow policy to a kernel's `Option` verdict —
+/// "detect once in the kernel, the wrapper applies the policy".
+///
+/// `None` means the result cannot be produced in the work integer at this
+/// working scale; a fixed-width decimal has no infinity, so the contract is a
+/// PANIC, uniform across every tier and scale and in both debug and release.
+#[inline]
+pub(crate) fn checked<S>(v: Option<S>, method: &str, scale: u32) -> S {
+    v.unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale(method, scale))
+}
+
+/// Directed-rounding post-adjust for the sub-resolution band near `x = 0` —
+/// the mirror image of [`log1p`'s `adjust_near_zero`](crate::algos::log1p::adjust_near_zero),
+/// reflected because `expm1` bends the opposite way.
+///
+/// Convexity gives `e^x > 1 + x` strictly for every `x != 0`, i.e.
+///
+/// ```text
+/// expm1(x) - x = x²/2 + x³/6 + … > 0        for every x != 0
+/// ```
+///
+/// — `expm1(x) > x` STRICTLY, for both signs (the `x²/2` term dominates and is
+/// positive either way). And `e^x - 1` is transcendental for algebraic
+/// `x != 0` (Lindemann–Weierstrass), so the value never lands exactly on a
+/// storage grid line.
+///
+/// For a tiny `x` the excess `expm1(x) - x ≈ x²/2` can sit far below any
+/// REACHABLE working scale (`x = 10^-SCALE` leaves it at ~`10^-2·SCALE`, past
+/// the Ziv precision horizon at the wide tiers), so the kernel rounds to
+/// exactly the linear term `x` and an upward mode then keeps `x` though the
+/// true value is strictly above it.
+///
+/// Because `expm1(x) > x`, a CORRECT upward result can never equal `x`, so
+/// `result == raw` is unambiguously the sub-resolution undershoot — step UP one
+/// LSB. `expm1(0) = 0` is exact and excluded; nearest modes (the fraction is
+/// `0⁺`, so they round to `x` anyway) and `Floor` (`x` IS the correct floor)
+/// are already right. `Ceiling` steps up for both signs; `Trunc` (toward zero)
+/// steps up only for `x < 0`, since for `x > 0` truncation moves DOWN and `x`
+/// is then the correct answer.
+///
+/// A no-op unless the result is exactly `raw`, so every cell whose deciding
+/// digit the walker actually reaches passes through untouched.
+///
+/// This is the first of the two hand-offs that let the family run its walkers
+/// with `never_exact = false` (see the module docs): it owns the one band where
+/// the sub-resolution side is analytically known near zero.
+#[inline]
+pub(crate) fn adjust_near_zero<St: BigInt>(result: St, raw: St, mode: RoundingMode) -> St {
+    if crate::support::rounding::is_nearest_mode(mode) {
+        return result;
+    }
+    if raw == <St as BigInt>::ZERO {
+        return result; // expm1(0) = 0 is exact
+    }
+    if result != raw {
+        return result; // only the sub-resolution linear-term undershoot
+    }
+    match mode {
+        RoundingMode::Ceiling => result + <St as BigInt>::ONE,
+        RoundingMode::Trunc if raw < <St as BigInt>::ZERO => result + <St as BigInt>::ONE,
+        _ => result,
+    }
+}
 
 #[cfg(test)]
 mod candidate_agreement_tests {
@@ -158,13 +234,19 @@ mod candidate_agreement_tests {
     /// The deep-negative tail must land ONE working unit above `-1`, never on
     /// `-10^w`: a bare `-10^w` leaves a zero residual, which the walkers'
     /// `never_exact` rule reads as "further from zero" and bumps, so `Floor`
-    /// would return `-1 - 1 ULP` (the wrong side, and out of storage range at
-    /// `SCALE = D`).
+    /// would return `-1 - 1 ULP` - the wrong side, and representable, so a
+    /// silently wrong value rather than a panic.
     #[test]
     fn deep_negative_lands_just_above_minus_one() {
         let want = eg::lit::<S>(1) - eg::one::<S>(W);
-        // x = -500: e^-500 is far below 10^-60.
-        let v = at(-500, W);
+        // x = -2000. The magnitude must clear the regime classifier's
+        // BIT-LENGTH test, which is a sufficient (hence conservative)
+        // condition: at `w = 60` it needs `bit_length(v) >= 210`, i.e.
+        // `|x| >~ 820`. A smaller argument like -500 is mathematically just as
+        // deep (`e^-500 ~ 1e-218`, far under `10^-60`) but sits one bit under
+        // that threshold, so `expm1_series_fixed` declines it as out-of-BAND
+        // instead — correct behaviour, wrong test.
+        let v = at(-2000, W);
         for (got, name) in [
             (expm1_series_fixed::<S>(v, W), "series"),
             (expm1_halving_fixed::<S>(v, W), "halving"),

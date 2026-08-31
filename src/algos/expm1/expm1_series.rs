@@ -38,12 +38,12 @@
 //! N. J. Higham, *Accuracy and Stability of Numerical Algorithms* 2nd ed.
 //! (2002), 1.14.1.
 
-#![allow(dead_code)]
-
 use super::expm1_support as sup;
 use crate::algos::exp::exp_generic as eg;
+use crate::algos::support::wide_trig_core as wtc;
 use crate::int::types::compute_limbs::ComputeLimbs;
 use crate::int::types::traits::BigInt;
+use crate::support::rounding::RoundingMode;
 
 /// `expm1(v)` for a working-scale value `v_w` at scale `w`, by the direct
 /// series.
@@ -79,4 +79,139 @@ where
         return None;
     }
     Some(eg::expm1_fixed::<S>(v_w, w))
+}
+
+/// `expm1(x)` at storage `St`, computed in the work integer `S` and correctly
+/// rounded to `SCALE` under `mode`.
+///
+/// The storage-facing shell around [`expm1_series_fixed`], mirroring
+/// [`log1p_artanh_g`](crate::algos::log1p::log1p_artanh::log1p_artanh_g): lift
+/// to the working scale, run the shared Ziv escalation, post-adjust the
+/// sub-resolution band near zero. `policy::expm1` supplies the width's work
+/// integer, base guard and storage bounds.
+///
+/// # Why the walker's `never_exact` polarity is `false` here
+///
+/// [`wtc::round_to_storage_directed_g`] is the `never_exact = false` walker.
+/// The `true` variant asserts that an exactly-zero working residual means the
+/// TRUE magnitude is larger, which holds for `exp`/`cosh` only because they are
+/// strictly positive. `expm1` changes sign, and on the negative half its
+/// positive neglected tail moves the value TOWARD zero. The two bands where the
+/// side IS known are handled outside the walker —
+/// [`super::adjust_near_zero`] near zero, and the `1 - 10^w` deep-negative
+/// representative inside the kernel — leaving only genuine
+/// Table-Maker's-Dilemma residue, where asserting a side would be a guess.
+///
+/// # Panics
+///
+/// Panics if the result leaves the storage range. Within the band
+/// `policy::expm1` routes here (`|x| <= 1`) the kernel's own `None` verdicts
+/// are unreachable: both regime walls need a large `|x|`, the band gate is the
+/// routing condition itself, and the peak wall needs
+/// `2·w·log2(10) + 64 >= S::BITS`, which the walker's own probe cap
+/// (`w <= S::BITS/8`) precludes for every work integer wider than ~378 bits —
+/// every one this crate uses is at least 1024.
+#[inline]
+#[must_use]
+pub(crate) fn expm1_series_g<St: BigInt + Copy, S: BigInt, const SCALE: u32>(
+    raw: St,
+    base_guard: u32,
+    st_max: St,
+    st_min: St,
+    mode: RoundingMode,
+) -> St
+where
+    S::Scratch: ComputeLimbs,
+{
+    let r = wtc::round_to_storage_directed_g::<St, S>(
+        base_guard,
+        SCALE,
+        mode,
+        st_max,
+        st_min,
+        |guard| {
+            super::checked(
+                expm1_series_fixed::<S>(wtc::to_work_scaled_g::<St, S>(raw, guard), SCALE + guard),
+                "expm1_strict",
+                SCALE,
+            )
+        },
+    );
+    super::adjust_near_zero::<St>(r, raw, mode)
+}
+
+/// The `_approx` sibling of [`expm1_series_g`]: a SINGLE shot at the caller's
+/// `working_digits`, no Ziv escalation — the same precision/latency trade every
+/// other `*_approx` transcendental makes.
+///
+/// # Panics
+///
+/// Panics if the result leaves the storage range, or if `working_digits` is so
+/// large that the series' `2·w`-digit product outruns the work integer (the
+/// escalation cap that makes this unreachable in [`expm1_series_g`] does not
+/// bound a caller-chosen guard).
+#[inline]
+#[must_use]
+pub(crate) fn expm1_series_approx_g<St: BigInt + Copy, S: BigInt, const SCALE: u32>(
+    raw: St,
+    working_digits: u32,
+    st_max: St,
+    st_min: St,
+    mode: RoundingMode,
+) -> St
+where
+    S::Scratch: ComputeLimbs,
+{
+    let w = SCALE + working_digits;
+    let r = super::checked(
+        expm1_series_fixed::<S>(wtc::to_work_scaled_g::<St, S>(raw, working_digits), w),
+        "expm1_approx",
+        SCALE,
+    );
+    let out = wtc::round_to_storage_with_g::<St, S>(r, w, SCALE, mode, st_max, st_min);
+    super::adjust_near_zero::<St>(out, raw, mode)
+}
+
+/// Tier-generic entry to [`expm1_series_g`] — sources the work integer `C::W`,
+/// the base guard `C::GUARD` and the storage bounds from the wide tier's
+/// `Core`, exactly as `log1p_artanh` does. Saves the policy from repeating five
+/// arguments per wide arm.
+#[cfg(feature = "_wide-support")]
+#[inline]
+#[must_use]
+pub(crate) fn expm1_series<C: wtc::WideTrigCore, const SCALE: u32>(
+    raw: C::Storage,
+    mode: RoundingMode,
+) -> C::Storage
+where
+    <C::W as BigInt>::Scratch: ComputeLimbs,
+{
+    expm1_series_g::<C::Storage, C::W, SCALE>(
+        raw,
+        C::GUARD,
+        C::storage_max(),
+        C::storage_min(),
+        mode,
+    )
+}
+
+/// Tier-generic entry to [`expm1_series_approx_g`]. See [`expm1_series`].
+#[cfg(feature = "_wide-support")]
+#[inline]
+#[must_use]
+pub(crate) fn expm1_series_approx<C: wtc::WideTrigCore, const SCALE: u32>(
+    raw: C::Storage,
+    working_digits: u32,
+    mode: RoundingMode,
+) -> C::Storage
+where
+    <C::W as BigInt>::Scratch: ComputeLimbs,
+{
+    expm1_series_approx_g::<C::Storage, C::W, SCALE>(
+        raw,
+        working_digits,
+        C::storage_max(),
+        C::storage_min(),
+        mode,
+    )
 }
