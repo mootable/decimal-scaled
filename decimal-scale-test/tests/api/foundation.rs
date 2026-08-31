@@ -592,19 +592,19 @@ mod from_src_widths {
         type D6 = decimal_scaled::D<Int<4>, 6>;
         // rescale up (lossless): scale 6 -> scale 9
         let v = D6::from_bits(Int::<4>::from_str_radix("1500000", 10).unwrap()); // 1.5
-        let up: decimal_scaled::D<Int<4>, 9> = v.rescale::<9>();
+        let up: decimal_scaled::D<Int<4>, 9> = v.quantize::<9>();
         assert_eq!(
             up.to_bits(),
             Int::<4>::from_str_radix("1500000000", 10).unwrap()
         );
         // rescale down (lossy, HalfToEven): scale 6 -> scale 2
-        let down: decimal_scaled::D<Int<4>, 2> = v.rescale::<2>();
+        let down: decimal_scaled::D<Int<4>, 2> = v.quantize::<2>();
         assert_eq!(down.to_bits(), Int::<4>::from_str_radix("150", 10).unwrap());
         // rescale down with explicit mode: 2.5 (scale 0 representation) ...
         let two_p_five = decimal_scaled::D::<Int<4>, 1>::from_bits(Int::<4>::from_str_radix("25", 10).unwrap());
-        let r0: decimal_scaled::D<Int<4>, 0> = two_p_five.rescale_with::<0>(RoundingMode::HalfToEven);
+        let r0: decimal_scaled::D<Int<4>, 0> = two_p_five.quantize_with::<0>(RoundingMode::HalfToEven);
         assert_eq!(r0.to_bits(), Int::<4>::from_str_radix("2", 10).unwrap());
-        let r0b: decimal_scaled::D<Int<4>, 0> = two_p_five.rescale_with::<0>(RoundingMode::HalfAwayFromZero);
+        let r0b: decimal_scaled::D<Int<4>, 0> = two_p_five.quantize_with::<0>(RoundingMode::HalfAwayFromZero);
         assert_eq!(r0b.to_bits(), Int::<4>::from_str_radix("3", 10).unwrap());
         // floor / ceil / round / trunc / fract on 1.5 at scale 6
         assert_eq!(v.floor(), D6::ONE);
@@ -648,7 +648,7 @@ mod from_src_widths {
         assert_eq!(format!("{}", one).len(), "1.".len() + 35);
         assert_eq!(D::try_from(5i128).unwrap().to_int(), 5);
         // rescale across the wide range
-        let up: decimal_scaled::D<Int<8>, 150> = one.rescale::<150>();
+        let up: decimal_scaled::D<Int<8>, 150> = one.quantize::<150>();
         assert_eq!(up, decimal_scaled::D::<Int<8>, 150>::ONE);
         // 152-digit ceiling multiplier fits in Int<8> (new MAX_SCALE)
         let _ = decimal_scaled::D153s152::multiplier();

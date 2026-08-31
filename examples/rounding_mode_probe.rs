@@ -16,7 +16,7 @@ type Hi = D76<25>;
 
 fn print_candidates(name: &str, hi: Hi) {
     println!("\n## {} at SCALE=19", name);
-    // Render at scale 25 then explicitly rescale to 19 under each mode.
+    // Render at scale 25 then explicitly quantize to 19 under each mode.
     for mode in [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
@@ -25,7 +25,7 @@ fn print_candidates(name: &str, hi: Hi) {
         RoundingMode::Floor,
         RoundingMode::Ceiling,
     ] {
-        let down: D76<19> = hi.rescale_with::<19>(mode);
+        let down: D76<19> = hi.quantize_with::<19>(mode);
         println!("  {:?} -> {}", mode, down);
     }
 }

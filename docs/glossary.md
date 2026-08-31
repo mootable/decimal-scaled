@@ -57,7 +57,8 @@ default is selectable at compile time via the `rounding-*` Cargo features.
 | `log2` / `log10` | log base 2 / 10 | `sin`/`cos`/`tan` | trigonometric |
 | `asin`/`acos`/`atan` | inverse trig | `atan2` | two-argument arctangent |
 | `sinh`/`cosh`/`tanh` | hyperbolic | `asinh`/`acosh`/`atanh` | inverse hyperbolic |
-| `rescale` | change `SCALE` | `widen` / `narrow` | change storage width |
+| `quantize` | change `SCALE` | `widen` / `narrow` | change storage width |
+| `requantize` | change width and `SCALE` | `with_scale` | builder alias for `quantize` |
 | `isqrt` | integer square root | `root_int` | integer n-th root |
 
 Method suffixes: **`_with(mode)`** takes an explicit `RoundingMode`;

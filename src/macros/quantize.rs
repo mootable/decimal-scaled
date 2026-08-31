@@ -1,50 +1,57 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Macro-generated `rescale` / `rescale_with` for all decimal widths.
+//! Macro-generated `quantize` / `quantize_with` for all decimal widths.
 //!
-//! The body lives in `rescale_with`, which takes an explicit
-//! `RoundingMode`. The no-arg `rescale` delegates to it with the
+//! `quantize` sets the quantum: it changes `SCALE` at a fixed storage width.
+//! [`requantize`](crate::macros::requantize) moves both axes at once.
+//!
+//! The body lives in `quantize_with`, which takes an explicit
+//! `RoundingMode`. The no-arg `quantize` delegates to it with the
 //! crate's `DEFAULT_ROUNDING_MODE`, which is `HalfToEven` unless a
 //! `rounding-*` Cargo feature selects something else.
 //!
-//! - The *native* arm emits `rescale` / `rescale_with` as `const fn`,
-//! since primitive integer arithmetic is `const`.
-//! - The *wide* arm emits them as ordinary `fn`: the wide integer's `Div` / `Rem`
-//! operators are not `const`, so the wide rescale path cannot be a
-//! `const fn`. The semantics are otherwise identical.
+//! The methods are ordinary `fn`, not `const fn`: the wide integer's
+//! `Div` / `Rem` operators are not `const`.
+//!
+//! # The `rescale` alias
+//!
+//! This operation shipped in 0.5.0 as `rescale` — the name the decimal
+//! arithmetic specification marks as deprecated in favour of `quantize`.
+//! `rescale` / `rescale_with` are kept as delegating aliases and are
+//! removed in 0.6.0.
 
-/// Emits `rescale` (no-arg, uses `DEFAULT_ROUNDING_MODE`) and
-/// `rescale_with` (explicit mode) methods for `$Type<SCALE>` with
-/// storage `$Storage`.
-macro_rules! decl_decimal_rescale {
+/// Emits `quantize` (no-arg, uses `DEFAULT_ROUNDING_MODE`) and
+/// `quantize_with` (explicit mode) methods for `$Type<SCALE>` with
+/// storage `$Storage`, plus the deprecated `rescale` aliases.
+macro_rules! decl_decimal_quantize {
     // Wide storage. Not `const` — the wide integer's `Div`/`Rem`
     // operators are not const fns.
     (wide $Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> $Type<SCALE> {
-            /// Rescales to `TARGET_SCALE` using the crate's default
+            /// Quantizes to `TARGET_SCALE` using the crate's default
             /// rounding mode (`HalfToEven`, or whatever a `rounding-*`
-            /// Cargo feature selects). Delegates to [`Self::rescale_with`].
+            /// Cargo feature selects). Delegates to [`Self::quantize_with`].
             #[inline]
             #[must_use]
-            pub fn rescale<const TARGET_SCALE: u32>(self) -> $Type<TARGET_SCALE> {
-                self.rescale_with::<TARGET_SCALE>($crate::support::rounding::DEFAULT_ROUNDING_MODE)
+            pub fn quantize<const TARGET_SCALE: u32>(self) -> $Type<TARGET_SCALE> {
+                self.quantize_with::<TARGET_SCALE>($crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
-            /// Builder-style alias for [`Self::rescale`].
+            /// Builder-style alias for [`Self::quantize`].
             ///
             /// Returns a new value at `TARGET_SCALE` using the crate's
-            /// default rounding mode. Use [`Self::rescale_with`] when
+            /// default rounding mode. Use [`Self::quantize_with`] when
             /// you need to pass an explicit [`RoundingMode`].
             ///
             /// [`RoundingMode`]: $crate::support::rounding::RoundingMode
             #[inline]
             #[must_use]
             pub fn with_scale<const TARGET_SCALE: u32>(self) -> $Type<TARGET_SCALE> {
-                self.rescale::<TARGET_SCALE>()
+                self.quantize::<TARGET_SCALE>()
             }
 
-            /// Rescales to `TARGET_SCALE` using the supplied rounding
+            /// Quantizes to `TARGET_SCALE` using the supplied rounding
             /// mode.
             ///
             /// - `TARGET_SCALE == SCALE`: bit-identity.
@@ -54,7 +61,7 @@ macro_rules! decl_decimal_rescale {
             /// `10^(SCALE - TARGET)` with the requested rounding rule.
             #[inline]
             #[must_use]
-            pub fn rescale_with<const TARGET_SCALE: u32>(
+            pub fn quantize_with<const TARGET_SCALE: u32>(
                 self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> $Type<TARGET_SCALE> {
@@ -72,7 +79,7 @@ macro_rules! decl_decimal_rescale {
                     let multiplier = ten.pow(shift);
                     let result = match self.0.checked_mul(multiplier) {
                         Some(v) => v,
-                        None => panic!(concat!(stringify!($Type), "::rescale: scale-up overflow")),
+                        None => panic!(concat!(stringify!($Type), "::quantize: scale-up overflow")),
                     };
                     return $Type::<TARGET_SCALE>::from_bits(result);
                 }
@@ -143,9 +150,38 @@ macro_rules! decl_decimal_rescale {
                 };
                 $Type::<TARGET_SCALE>::from_bits(bits)
             }
+
+            /// Deprecated alias for [`Self::quantize`].
+            ///
+            /// Delegates unchanged; removed in 0.6.0.
+            #[inline]
+            #[must_use]
+            #[deprecated(
+                since = "0.5.1",
+                note = "renamed to `quantize`; `rescale` is removed in 0.6.0"
+            )]
+            pub fn rescale<const TARGET_SCALE: u32>(self) -> $Type<TARGET_SCALE> {
+                self.quantize::<TARGET_SCALE>()
+            }
+
+            /// Deprecated alias for [`Self::quantize_with`].
+            ///
+            /// Delegates unchanged; removed in 0.6.0.
+            #[inline]
+            #[must_use]
+            #[deprecated(
+                since = "0.5.1",
+                note = "renamed to `quantize_with`; `rescale_with` is removed in 0.6.0"
+            )]
+            pub fn rescale_with<const TARGET_SCALE: u32>(
+                self,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> $Type<TARGET_SCALE> {
+                self.quantize_with::<TARGET_SCALE>(mode)
+            }
         }
     };
 
 }
 
-pub(crate) use decl_decimal_rescale;
+pub(crate) use decl_decimal_quantize;

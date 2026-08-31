@@ -113,6 +113,7 @@ experimental-floats = []
 # explicit-target form is the only cross-scale entry point.
 # Requires the nightly toolchain.
 cross-scale-ops = []
+
 # Root-kernel work-scratch sizing. Default (neither feature) sizes the
 # scratch buffers to the build-max width and applies it uniformly. With
 # `exact-scratch` (stable) each storage width gets a per-`Int<N>` impl
@@ -453,7 +454,6 @@ name = "g_math_comparison"
 path = "benches/backends/g_math_comparison.rs"
 harness = false
 required-features = ["wide"]
-
 
 # Focused microbench for wide-tier div/mul during tuning passes.
 # Runs in ~30s, used to validate per-change wins before kicking

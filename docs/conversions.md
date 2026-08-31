@@ -91,8 +91,9 @@ family, including the wide tier (e.g. `D38 → D76` widening,
 `D153 → D76` narrowing) when the relevant features are enabled.
 
 Note that cross-width conversions keep the *scale* unchanged. To change
-both width and scale, compose a cross-width conversion with a
-[`rescale`](rounding.md).
+both width and scale, use [`requantize`](rounding.md), which does both
+in one call and orders the two steps so the intermediate cannot
+overflow a width the target would have held.
 
 ## Serde wire format
 

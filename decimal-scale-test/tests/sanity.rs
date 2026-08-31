@@ -1,6 +1,6 @@
 //! Sanity-golden vectors for the EXACT (non-transcendental) decimal ops:
 //! add, sub, mul, div, neg, rem, abs, signum, round, floor, ceil, trunc,
-//! fract, rescale, div_euclid, rem_euclid, abs_diff, midpoint, pow.
+//! fract, quantize, div_euclid, rem_euclid, abs_diff, midpoint, pow.
 //!
 //! Every expected value is derived BY HAND from the documented
 //! storage-level semantics. The crate is NOT consulted for the expected
@@ -300,17 +300,17 @@ fn round_exact_vectors() {
 
 // ===== RESCALE: up appends zeros; down rounds (HalfToEven default) =====
 #[test]
-fn rescale_exact_vectors() {
-    assert_eq!(i128::from(d(150).rescale::<6>().to_bits()), 1_500_000);
-    assert_eq!(i128::from(d(-150).rescale::<6>().to_bits()), -1_500_000);
-    assert_eq!(i128::from(d(1).rescale::<6>().to_bits()), 10_000);
-    assert_eq!(i128::from(d(0).rescale::<6>().to_bits()), 0);
-    assert_eq!(i128::from(d(150).rescale::<0>().to_bits()), 2);  // 1.50 even
-    assert_eq!(i128::from(d(250).rescale::<0>().to_bits()), 2);  // 2.50 even
-    assert_eq!(i128::from(d(350).rescale::<0>().to_bits()), 4);  // 3.50 even
-    assert_eq!(i128::from(d(149).rescale::<0>().to_bits()), 1);
-    assert_eq!(i128::from(d(151).rescale::<0>().to_bits()), 2);
-    assert_eq!(i128::from(d(-250).rescale::<0>().to_bits()), -2);// -2.50 even
+fn quantize_exact_vectors() {
+    assert_eq!(i128::from(d(150).quantize::<6>().to_bits()), 1_500_000);
+    assert_eq!(i128::from(d(-150).quantize::<6>().to_bits()), -1_500_000);
+    assert_eq!(i128::from(d(1).quantize::<6>().to_bits()), 10_000);
+    assert_eq!(i128::from(d(0).quantize::<6>().to_bits()), 0);
+    assert_eq!(i128::from(d(150).quantize::<0>().to_bits()), 2);  // 1.50 even
+    assert_eq!(i128::from(d(250).quantize::<0>().to_bits()), 2);  // 2.50 even
+    assert_eq!(i128::from(d(350).quantize::<0>().to_bits()), 4);  // 3.50 even
+    assert_eq!(i128::from(d(149).quantize::<0>().to_bits()), 1);
+    assert_eq!(i128::from(d(151).quantize::<0>().to_bits()), 2);
+    assert_eq!(i128::from(d(-250).quantize::<0>().to_bits()), -2);// -2.50 even
 }
 
 // ===== DIV_EUCLID (integer quotient, remainder >= 0) =====

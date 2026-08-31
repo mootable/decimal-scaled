@@ -182,7 +182,7 @@ pub enum RawStorage {
 /// semantics and the cost model.
 ///
 /// The trait is intentionally narrower than [`crate::Decimal`]: it
-/// covers identity, sign, comparison, arithmetic, rescale, the float
+/// covers identity, sign, comparison, arithmetic, quantize, the float
 /// bridge, and `Display`. Transcendental functions and constants live
 /// only on the typed surface — use [`DynDecimal::as_any`] to downcast
 /// to a concrete `Dxx<S>` and call them there.
@@ -252,16 +252,42 @@ pub trait DynDecimal: 'static {
     /// `self % rhs`. Same contract as [`Self::div`].
     fn rem(&self, rhs: &dyn DynDecimal) -> Option<Box<dyn DynDecimal>>;
 
-    // ── Rescale ─────────────────────────────────────────────────────
+    // ── Quantize ────────────────────────────────────────────────────
 
-    /// Rescale to `target_scale` using the crate-default rounding mode.
+    /// Quantize to `target_scale` using the crate-default rounding mode.
     /// Returns `None` if `target_scale > max_scale()` or the scale-up
     /// multiplication overflows.
-    fn rescale_to(&self, target_scale: u32) -> Option<Box<dyn DynDecimal>>;
+    fn quantize_to(&self, target_scale: u32) -> Option<Box<dyn DynDecimal>>;
 
-    /// Rescale with an explicit rounding mode. See [`Self::rescale_to`].
-    fn rescale_to_with(&self, target_scale: u32, mode: RoundingMode)
+    /// Quantize with an explicit rounding mode. See [`Self::quantize_to`].
+    fn quantize_to_with(&self, target_scale: u32, mode: RoundingMode)
     -> Option<Box<dyn DynDecimal>>;
+
+    /// Deprecated alias for [`Self::quantize_to`].
+    ///
+    /// Delegates unchanged; removed in 0.6.0.
+    #[deprecated(
+        since = "0.5.1",
+        note = "renamed to `quantize_to`; `rescale_to` is removed in 0.6.0"
+    )]
+    fn rescale_to(&self, target_scale: u32) -> Option<Box<dyn DynDecimal>> {
+        self.quantize_to(target_scale)
+    }
+
+    /// Deprecated alias for [`Self::quantize_to_with`].
+    ///
+    /// Delegates unchanged; removed in 0.6.0.
+    #[deprecated(
+        since = "0.5.1",
+        note = "renamed to `quantize_to_with`; `rescale_to_with` is removed in 0.6.0"
+    )]
+    fn rescale_to_with(
+        &self,
+        target_scale: u32,
+        mode: RoundingMode,
+    ) -> Option<Box<dyn DynDecimal>> {
+        self.quantize_to_with(target_scale, mode)
+    }
 
     // ── Comparison ──────────────────────────────────────────────────
 
@@ -290,7 +316,7 @@ pub trait DynDecimal: 'static {
 // ── Per-width impl emission ───────────────────────────────────────────
 //
 // Each invocation enumerates every legal `SCALE` for the width so the
-// match arms in `add` / `sub` / `mul` / `div` / `rem` / `rescale_to_with`
+// match arms in `add` / `sub` / `mul` / `div` / `rem` / `quantize_to_with`
 // / `eq_dyn` / `cmp_dyn` cover the full range. Out-of-range scales fall
 // through to `None` (or `false` for `eq_dyn`).
 

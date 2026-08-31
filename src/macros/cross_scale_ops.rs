@@ -16,11 +16,11 @@
 //! Each constructor has a `*_with(…, mode)` sibling that takes an
 //! explicit [`crate::RoundingMode`]; the no-mode form delegates to it
 //! with the crate's `DEFAULT_ROUNDING_MODE`. Same convention as
-//! `rescale` / `rescale_with`.
+//! `quantize` / `quantize_with`.
 //!
 //! Same body for native and wide storage — only the rescale path
 //! changes (the wide arm goes through the wide-int helpers via the
-//! per-width `rescale_with` already in scope).
+//! per-width `quantize_with` already in scope).
 
 /// Emits the cross-scale-op surface on `$Type<SCALE>` with storage
 /// `$Storage`. Used for every decimal width.
@@ -68,8 +68,8 @@ macro_rules! decl_decimal_cross_scale_ops {
                     $crate::D::<$Storage, S1>(<W1 as $crate::WidthLE<$Storage>>::widen_into(a.0));
                 let b_w: $crate::D<$Storage, S2> =
                     $crate::D::<$Storage, S2>(<W2 as $crate::WidthLE<$Storage>>::widen_into(b.0));
-                let a_t: Self = a_w.rescale_with::<SCALE>(mode);
-                let b_t: Self = b_w.rescale_with::<SCALE>(mode);
+                let a_t: Self = a_w.quantize_with::<SCALE>(mode);
+                let b_t: Self = b_w.quantize_with::<SCALE>(mode);
                 a_t * b_t
             }
 
@@ -107,8 +107,8 @@ macro_rules! decl_decimal_cross_scale_ops {
                     $crate::D::<$Storage, S1>(<W1 as $crate::WidthLE<$Storage>>::widen_into(a.0));
                 let b_w: $crate::D<$Storage, S2> =
                     $crate::D::<$Storage, S2>(<W2 as $crate::WidthLE<$Storage>>::widen_into(b.0));
-                let a_t: Self = a_w.rescale_with::<SCALE>(mode);
-                let b_t: Self = b_w.rescale_with::<SCALE>(mode);
+                let a_t: Self = a_w.quantize_with::<SCALE>(mode);
+                let b_t: Self = b_w.quantize_with::<SCALE>(mode);
                 a_t + b_t
             }
 
@@ -143,8 +143,8 @@ macro_rules! decl_decimal_cross_scale_ops {
                     $crate::D::<$Storage, S1>(<W1 as $crate::WidthLE<$Storage>>::widen_into(a.0));
                 let b_w: $crate::D<$Storage, S2> =
                     $crate::D::<$Storage, S2>(<W2 as $crate::WidthLE<$Storage>>::widen_into(b.0));
-                let a_t: Self = a_w.rescale_with::<SCALE>(mode);
-                let b_t: Self = b_w.rescale_with::<SCALE>(mode);
+                let a_t: Self = a_w.quantize_with::<SCALE>(mode);
+                let b_t: Self = b_w.quantize_with::<SCALE>(mode);
                 a_t - b_t
             }
 
@@ -179,8 +179,8 @@ macro_rules! decl_decimal_cross_scale_ops {
                     $crate::D::<$Storage, S1>(<W1 as $crate::WidthLE<$Storage>>::widen_into(a.0));
                 let b_w: $crate::D<$Storage, S2> =
                     $crate::D::<$Storage, S2>(<W2 as $crate::WidthLE<$Storage>>::widen_into(b.0));
-                let a_t: Self = a_w.rescale_with::<SCALE>(mode);
-                let b_t: Self = b_w.rescale_with::<SCALE>(mode);
+                let a_t: Self = a_w.quantize_with::<SCALE>(mode);
+                let b_t: Self = b_w.quantize_with::<SCALE>(mode);
                 a_t / b_t
             }
 
@@ -215,8 +215,8 @@ macro_rules! decl_decimal_cross_scale_ops {
                     $crate::D::<$Storage, S1>(<W1 as $crate::WidthLE<$Storage>>::widen_into(a.0));
                 let b_w: $crate::D<$Storage, S2> =
                     $crate::D::<$Storage, S2>(<W2 as $crate::WidthLE<$Storage>>::widen_into(b.0));
-                let a_t: Self = a_w.rescale_with::<SCALE>(mode);
-                let b_t: Self = b_w.rescale_with::<SCALE>(mode);
+                let a_t: Self = a_w.quantize_with::<SCALE>(mode);
+                let b_t: Self = b_w.quantize_with::<SCALE>(mode);
                 a_t % b_t
             }
 
@@ -261,15 +261,15 @@ macro_rules! decl_decimal_cross_scale_ops {
                 // Compare at the larger of S1 / S2 — that scale-up is
                 // exact on both sides, so the comparison is exact.
                 if S1 >= S2 {
-                    let b_at_s1: $crate::D<$Storage, S1> = b_w.rescale_with::<S1>(mode);
+                    let b_at_s1: $crate::D<$Storage, S1> = b_w.quantize_with::<S1>(mode);
                     let winner: $crate::D<$Storage, S1> =
                         if a_w >= b_at_s1 { a_w } else { b_at_s1 };
-                    winner.rescale_with::<SCALE>(mode)
+                    winner.quantize_with::<SCALE>(mode)
                 } else {
-                    let a_at_s2: $crate::D<$Storage, S2> = a_w.rescale_with::<S2>(mode);
+                    let a_at_s2: $crate::D<$Storage, S2> = a_w.quantize_with::<S2>(mode);
                     let winner: $crate::D<$Storage, S2> =
                         if a_at_s2 >= b_w { a_at_s2 } else { b_w };
-                    winner.rescale_with::<SCALE>(mode)
+                    winner.quantize_with::<SCALE>(mode)
                 }
             }
 
@@ -306,15 +306,15 @@ macro_rules! decl_decimal_cross_scale_ops {
                 let b_w: $crate::D<$Storage, S2> =
                     $crate::D::<$Storage, S2>(<W2 as $crate::WidthLE<$Storage>>::widen_into(b.0));
                 if S1 >= S2 {
-                    let b_at_s1: $crate::D<$Storage, S1> = b_w.rescale_with::<S1>(mode);
+                    let b_at_s1: $crate::D<$Storage, S1> = b_w.quantize_with::<S1>(mode);
                     let winner: $crate::D<$Storage, S1> =
                         if a_w <= b_at_s1 { a_w } else { b_at_s1 };
-                    winner.rescale_with::<SCALE>(mode)
+                    winner.quantize_with::<SCALE>(mode)
                 } else {
-                    let a_at_s2: $crate::D<$Storage, S2> = a_w.rescale_with::<S2>(mode);
+                    let a_at_s2: $crate::D<$Storage, S2> = a_w.quantize_with::<S2>(mode);
                     let winner: $crate::D<$Storage, S2> =
                         if a_at_s2 <= b_w { a_at_s2 } else { b_w };
-                    winner.rescale_with::<SCALE>(mode)
+                    winner.quantize_with::<SCALE>(mode)
                 }
             }
 
@@ -461,10 +461,10 @@ macro_rules! decl_decimal_cross_scale_ops {
                     <W2 as $crate::WidthLE<$Storage>>::widen_into(other.0),
                 );
                 if SCALE >= S2 {
-                    let other_at: Self = other_w.rescale::<SCALE>();
+                    let other_at: Self = other_w.quantize::<SCALE>();
                     ::core::cmp::Ord::cmp(&self.0, &other_at.0)
                 } else {
-                    let self_at: $crate::D<$Storage, S2> = self.rescale::<S2>();
+                    let self_at: $crate::D<$Storage, S2> = self.quantize::<S2>();
                     ::core::cmp::Ord::cmp(&self_at.0, &other_w.0)
                 }
             }

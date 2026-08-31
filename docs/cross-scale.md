@@ -162,7 +162,7 @@ on it).
 Every cross-scale op runs as: widen both operands → rescale to the
 common precision → execute the same-width same-SCALE operator. The
 rescale step is the *only* place rounding occurs, and it follows
-exactly the same rule as the standalone `rescale_with(mode)`. The
+exactly the same rule as the standalone `quantize_with(mode)`. The
 arithmetic step inherits the same-width operator's 0.5 ULP contract.
 
 For `max_of` / `min_of` / `cmp_of` the comparison runs at the higher

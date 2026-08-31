@@ -42,7 +42,7 @@ use crate::support::rounding::{should_bump, RoundingMode};
 /// - `s_to < s_from` (scale-down): divides by `10^(s_from - s_to)` and
 ///   rounds per `mode`; always `Some` (the magnitude only shrinks).
 #[inline]
-fn rescale_bigint<T: BigInt>(value: T, s_from: u32, s_to: u32, mode: RoundingMode) -> Option<T> {
+pub(crate) fn rescale_bigint<T: BigInt>(value: T, s_from: u32, s_to: u32, mode: RoundingMode) -> Option<T> {
     if s_to == s_from {
         return Some(value);
     }

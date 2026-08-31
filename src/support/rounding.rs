@@ -4,7 +4,7 @@
 //! Rounding-mode selector for scale-narrowing operations.
 //!
 //! Passed to every `*_with(mode)` sibling on every decimal width —
-//! [`crate::D38::rescale_with`], `mul_with`, `div_with`, `to_int_with`,
+//! [`crate::D38::quantize_with`], `mul_with`, `div_with`, `to_int_with`,
 //! `from_f64_with`, every `*_strict_with` on the wide tier, etc. — to
 //! control how fractional digits are discarded when the result has
 //! lower precision than the working intermediate. The six modes cover
@@ -60,7 +60,7 @@ pub enum RoundingMode {
     Ceiling,
 }
 
-/// Compile-time default `RoundingMode` for the no-arg `rescale` and
+/// Compile-time default `RoundingMode` for the no-arg `quantize` and
 /// future default-rounding methods.
 ///
 /// Selected by Cargo feature flags (priority order: first match wins):
@@ -293,7 +293,7 @@ where
 /// Applies `mode` to integer division `raw / divisor`, returning the
 /// rounded quotient.
 ///
-/// Used by `D38::rescale_with` and by the multiplier-and-divide
+/// Used by `D38::quantize_with` and by the multiplier-and-divide
 /// fast paths in `mg_divide`. The whole mode-specific logic is
 /// delegated to [`should_bump`]; this function is just the i128
 /// arithmetic wrapper that builds its inputs and applies the bump.

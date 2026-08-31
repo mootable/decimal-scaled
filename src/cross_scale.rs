@@ -143,14 +143,14 @@ where
 ///
 /// Implemented for every concrete `(storage, source_scale,
 /// target_scale)` triple via a blanket impl that calls the per-width
-/// inherent `rescale_with`. Used only inside this module to keep the
+/// inherent `quantize_with`. Used only inside this module to keep the
 /// `generic_const_exprs` bounds clean.
 pub trait WidenScale<W, const S_FROM: u32, const S_TO: u32> {
     fn widen_scale(self) -> D<W, S_TO>;
 }
 
-// Implementations per concrete storage. Each width's `rescale_with`
-// is an inherent method (emitted by `decl_decimal_rescale!` on the
+// Implementations per concrete storage. Each width's `quantize_with`
+// is an inherent method (emitted by `decl_decimal_quantize!` on the
 // `D<Int<N>, SCALE>` alias), so we have to spell out the storage type
 // to dispatch. Every decimal tier is `Int<N>`-backed; the always-built
 // tiers are D18 (`Int<1>`) and D38 (`Int<2>`), the rest follow the
@@ -166,11 +166,11 @@ macro_rules! impl_widen_scale {
             fn widen_scale(self) -> D<$Storage, S_TO> {
                 // The math: `cross::mul` etc. always pick the
                 // MAXIMUM of (S_FROM, S_TO) so S_TO >= S_FROM by
-                // construction. The rescale-UP path is always exact;
+                // construction. The scale-UP path is always exact;
                 // rounding-mode is irrelevant. We still pass
-                // DEFAULT_ROUNDING_MODE so the rescale_with signature
+                // DEFAULT_ROUNDING_MODE so the quantize_with signature
                 // is satisfied.
-                <D<$Storage, S_FROM>>::rescale_with::<S_TO>(self, DEFAULT_ROUNDING_MODE)
+                <D<$Storage, S_FROM>>::quantize_with::<S_TO>(self, DEFAULT_ROUNDING_MODE)
             }
         }
     };
