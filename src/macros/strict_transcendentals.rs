@@ -39,6 +39,21 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                     $crate::support::rounding::DEFAULT_ROUNDING_MODE,
                 ))
             }
+            /// `log1p_strict` — `ln(1 + self)`, delegating to the
+            /// policy-registered log1p kernel for this `(width, SCALE)`
+            /// cell. **0.5 ULP correctly-rounded** at storage scale.
+            /// Provided for API parity; at this crate's fixed-point
+            /// scales it is equivalent to `(1 + self).ln_strict()`.
+            /// Panics if `self <= -1` or the result doesn't fit `Self`'s
+            /// range.
+            #[inline]
+            #[must_use]
+            pub fn log1p_strict(self) -> Self {
+                Self::from_bits($crate::policy::log1p::dispatch::<_, SCALE>(
+                    self.to_bits(),
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                ))
+            }
             /// `log2_strict` — delegates to [`crate::types::widths::D38::log2_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
             #[inline]
             #[must_use]
@@ -343,6 +358,43 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                             SCALE,
                         )
                     })
+            }
+
+            // `log1p` routes straight to its own policy at this width
+            // (matching `ln_strict` above), so all four variants keep
+            // the storage-scale domain guard `self > -1` and never take
+            // a detour through the D38 shell.
+            #[inline]
+            #[must_use]
+            pub fn log1p_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                Self::from_bits($crate::policy::log1p::dispatch::<_, SCALE>(
+                    self.to_bits(),
+                    mode,
+                ))
+            }
+            #[inline]
+            #[must_use]
+            pub fn log1p_approx(self, working_digits: u32) -> Self {
+                self.log1p_approx_with(
+                    working_digits,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
+            }
+            #[inline]
+            #[must_use]
+            pub fn log1p_approx_with(
+                self,
+                working_digits: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> Self {
+                if working_digits == $crate::types::log_exp::STRICT_GUARD {
+                    return self.log1p_strict_with(mode);
+                }
+                Self::from_bits($crate::policy::log1p::dispatch_with::<_, SCALE>(
+                    self.to_bits(),
+                    working_digits,
+                    mode,
+                ))
             }
 
             #[inline]
@@ -1352,6 +1404,13 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             #[must_use]
             pub fn ln(self) -> Self {
                 self.ln_strict()
+            }
+            /// `log1p` — feature-gated dispatcher; forwards to [`Self::log1p_strict`] when the `strict` feature is on.
+            #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
+            #[inline]
+            #[must_use]
+            pub fn log1p(self) -> Self {
+                self.log1p_strict()
             }
             /// `log2` — feature-gated dispatcher; forwards to [`Self::log2_strict`] when the `strict` feature is on.
             #[cfg(not(all(feature = "fast", not(feature = "strict"))))]

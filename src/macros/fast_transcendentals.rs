@@ -39,6 +39,15 @@ macro_rules! decl_fast_transcendentals_via_f64 {
             pub fn ln_fast(self) -> Self {
                 Self::from_f64(self.to_f64().ln())
             }
+            /// `ln(1 + self)` via the f64 bridge (`f64::ln_1p`).
+            /// Provided for parity with `log1p_strict`; at this crate's
+            /// fixed-point scales it is equivalent to
+            /// `(1 + self).ln_fast()`.
+            #[inline]
+            #[must_use]
+            pub fn log1p_fast(self) -> Self {
+                Self::from_f64(self.to_f64().ln_1p())
+            }
             /// Logarithm in the given base via the f64 bridge.
             #[inline]
             #[must_use]
@@ -208,6 +217,12 @@ macro_rules! decl_fast_transcendentals_via_f64 {
             #[must_use]
             pub fn ln(self) -> Self {
                 self.ln_fast()
+            }
+            /// Plain dispatcher: forwards to [`Self::log1p_fast`] in this feature mode.
+            #[inline]
+            #[must_use]
+            pub fn log1p(self) -> Self {
+                self.log1p_fast()
             }
             /// Plain dispatcher: forwards to [`Self::log_fast`] in this feature mode.
             #[inline]

@@ -35,6 +35,7 @@ pub(crate) mod exp;
 pub(crate) mod hypot;
 pub(crate) mod ln;
 pub(crate) mod log;
+pub(crate) mod log1p;
 pub(crate) mod mul;
 pub(crate) mod neg;
 pub(crate) mod pow;
