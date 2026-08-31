@@ -58,7 +58,7 @@
 //! variants, pow / checked / wrapping / saturating / overflowing, float bridge,
 //! Euclidean / floor / ceil division, etc.). Use it to write helpers that work
 //! across widths; reach for the concrete type for width-specific operations
-//! like `rescale::<TARGET>()` whose const-generic parameter cannot live on a
+//! like `quantize::<TARGET>()` whose const-generic parameter cannot live on a
 //! trait method.
 //!
 //! # Equality and hashing

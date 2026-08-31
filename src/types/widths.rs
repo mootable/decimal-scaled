@@ -575,7 +575,7 @@ crate::macros::conversions::decl_cross_width_narrowing!(wide D18, crate::int::ty
 //
 // `widen` always succeeds (the next-larger storage strictly covers every
 // value the smaller one can hold). It keeps the scale unchanged; combine
-// with `rescale` if you need to change scale and width together. D18 is
+// with `requantize` if you need to change scale and width together. D18 is
 // the narrowest tier, so it has no `narrow`.
 
 impl<const SCALE: u32> crate::D<crate::int::types::Int<1>, SCALE> {
@@ -2267,26 +2267,26 @@ crate::macros::cross_width_ops::decl_cross_width_pair!(D616, 32, D1232, 64);
 #[cfg(all(any(feature = "d924", feature = "xx-wide"), any(feature = "d1232", feature = "xx-wide")))]
 crate::macros::cross_width_ops::decl_cross_width_pair!(D924, 48, D1232, 64);
 
-// --- reshape: width + scale in one call, any direction ---------------
-crate::macros::reshape::decl_decimal_reshape!(D18, 1);
-crate::macros::reshape::decl_decimal_reshape!(D38, 2);
+// --- requantize: width + scale in one call, any direction ------------
+crate::macros::requantize::decl_decimal_requantize!(D18, 1);
+crate::macros::requantize::decl_decimal_requantize!(D38, 2);
 #[cfg(any(feature = "d57", feature = "wide"))]
-crate::macros::reshape::decl_decimal_reshape!(D57, 3);
+crate::macros::requantize::decl_decimal_requantize!(D57, 3);
 #[cfg(any(feature = "d76", feature = "wide"))]
-crate::macros::reshape::decl_decimal_reshape!(D76, 4);
+crate::macros::requantize::decl_decimal_requantize!(D76, 4);
 #[cfg(any(feature = "d115", feature = "wide"))]
-crate::macros::reshape::decl_decimal_reshape!(D115, 6);
+crate::macros::requantize::decl_decimal_requantize!(D115, 6);
 #[cfg(any(feature = "d153", feature = "wide"))]
-crate::macros::reshape::decl_decimal_reshape!(D153, 8);
+crate::macros::requantize::decl_decimal_requantize!(D153, 8);
 #[cfg(any(feature = "d230", feature = "wide"))]
-crate::macros::reshape::decl_decimal_reshape!(D230, 12);
+crate::macros::requantize::decl_decimal_requantize!(D230, 12);
 #[cfg(any(feature = "d307", feature = "wide"))]
-crate::macros::reshape::decl_decimal_reshape!(D307, 16);
+crate::macros::requantize::decl_decimal_requantize!(D307, 16);
 #[cfg(any(feature = "d462", feature = "x-wide"))]
-crate::macros::reshape::decl_decimal_reshape!(D462, 24);
+crate::macros::requantize::decl_decimal_requantize!(D462, 24);
 #[cfg(any(feature = "d616", feature = "x-wide"))]
-crate::macros::reshape::decl_decimal_reshape!(D616, 32);
+crate::macros::requantize::decl_decimal_requantize!(D616, 32);
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
-crate::macros::reshape::decl_decimal_reshape!(D924, 48);
+crate::macros::requantize::decl_decimal_requantize!(D924, 48);
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-crate::macros::reshape::decl_decimal_reshape!(D1232, 64);
+crate::macros::requantize::decl_decimal_requantize!(D1232, 64);

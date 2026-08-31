@@ -20,7 +20,7 @@ mod num_traits;
 mod parsing;
 mod pow;
 mod proc_macro;
-mod rescale;
+mod quantize;
 mod serde;
 mod tiers;
 mod traits;

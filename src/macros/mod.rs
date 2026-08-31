@@ -14,14 +14,13 @@
 //! the `FromStr` parser, etc.) and the macro inside is named
 //! `decl_decimal_<surface>!` or a more specific variant.
 
-pub(crate) mod reshape;
-pub(crate) mod cross_width_ops;
 pub(crate) mod arithmetic;
 pub(crate) mod basics;
 pub(crate) mod bitwise;
 pub(crate) mod conversions;
 pub(crate) mod cross_scale_ops;
 pub(crate) mod cross_width_cmp;
+pub(crate) mod cross_width_ops;
 pub(crate) mod display;
 #[cfg(feature = "dyn")]
 pub(crate) mod dyn_bridge;
@@ -35,7 +34,8 @@ pub(crate) mod int_methods;
 pub(crate) mod num_traits;
 pub(crate) mod overflow;
 pub(crate) mod pow;
-pub(crate) mod rescale;
+pub(crate) mod quantize;
+pub(crate) mod requantize;
 pub(crate) mod rounding_methods;
 pub(crate) mod sign;
 pub(crate) mod storage_formatters;

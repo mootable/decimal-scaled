@@ -127,24 +127,24 @@ mod from_edge_cases {
     // ─────────────────────────────────────────────────────────────────────
 
     #[test]
-    fn rescale_up_is_lossless_to_max_scale() {
+    fn quantize_up_is_lossless_to_max_scale() {
         // 1 at scale 0 -> scale 37 (new MAX_SCALE) is exactly 10^37
         // (which fits i128). A larger integer would overflow when scaled
         // up by 10^37.
         let v = D38s0::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap());
-        let up: D38<37> = v.rescale::<37>();
+        let up: D38<37> = v.quantize::<37>();
         assert_eq!(up.to_bits(), 10_i128.pow(37));
     }
 
     #[test]
-    fn rescale_same_scale_is_identity() {
+    fn quantize_same_scale_is_identity() {
         let v = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(123_456_789_012_i128).unwrap());
-        let same: D38s12 = v.rescale::<12>();
+        let same: D38s12 = v.quantize::<12>();
         assert_eq!(same.to_bits(), 123_456_789_012);
     }
 
     #[test]
-    fn rescale_down_every_mode_at_exact_half() {
+    fn quantize_down_every_mode_at_exact_half() {
         // 1.5 at scale 1 -> scale 0. The fractional digit is exactly the
         // half-way tie, so the modes diverge predictably.
         let half_tie = D38::<1>::from_bits(decimal_scaled::Int::<2>::try_from(15_i128).unwrap()); // 1.5
@@ -157,46 +157,46 @@ mod from_edge_cases {
             (RoundingMode::Ceiling, 2),          // toward +inf
         ];
         for (mode, expected) in modes_and_bits {
-            let r: D38<0> = half_tie.rescale_with::<0>(mode);
+            let r: D38<0> = half_tie.quantize_with::<0>(mode);
             assert_eq!(r.to_bits(), expected, "mode {mode:?}");
         }
         // 2.5 -> ties-to-even rounds down to 2 (2 is even).
         let other_tie = D38::<1>::from_bits(decimal_scaled::Int::<2>::try_from(25_i128).unwrap());
         assert_eq!(
             other_tie
-                .rescale_with::<0>(RoundingMode::HalfToEven)
+                .quantize_with::<0>(RoundingMode::HalfToEven)
                 .to_bits(),
             2
         );
     }
 
     #[test]
-    fn rescale_down_negative_tie_is_sign_symmetric() {
+    fn quantize_down_negative_tie_is_sign_symmetric() {
         let neg_tie = D38::<1>::from_bits(decimal_scaled::Int::<2>::try_from(-15_i128).unwrap()); // -1.5
         assert_eq!(
             neg_tie
-                .rescale_with::<0>(RoundingMode::HalfAwayFromZero)
+                .quantize_with::<0>(RoundingMode::HalfAwayFromZero)
                 .to_bits(),
             -2
         );
         assert_eq!(
             neg_tie
-                .rescale_with::<0>(RoundingMode::HalfTowardZero)
+                .quantize_with::<0>(RoundingMode::HalfTowardZero)
                 .to_bits(),
             -1
         );
-        assert_eq!(neg_tie.rescale_with::<0>(RoundingMode::Floor).to_bits(), -2);
+        assert_eq!(neg_tie.quantize_with::<0>(RoundingMode::Floor).to_bits(), -2);
         assert_eq!(
-            neg_tie.rescale_with::<0>(RoundingMode::Ceiling).to_bits(),
+            neg_tie.quantize_with::<0>(RoundingMode::Ceiling).to_bits(),
             -1
         );
     }
 
     #[test]
     #[should_panic]
-    fn rescale_up_overflow_panics() {
+    fn quantize_up_overflow_panics() {
         // Scaling i128::MAX up by another 10^26 cannot fit.
-        let _ = D38s12::MAX.rescale::<38>();
+        let _ = D38s12::MAX.quantize::<38>();
     }
 
     // ─────────────────────────────────────────────────────────────────────

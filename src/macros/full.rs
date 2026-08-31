@@ -149,7 +149,7 @@ macro_rules! decl_decimal_full {
         $crate::macros::conversions::decl_try_from_f32!(wide $Type, $Storage);
         $crate::macros::conversions::decl_decimal_int_conversion_methods!(wide $Type, $Storage);
         $crate::macros::float_bridge::decl_decimal_float_bridge!(wide $Type, $Storage);
-        $crate::macros::rescale::decl_decimal_rescale!(wide $Type, $Storage);
+        $crate::macros::quantize::decl_decimal_quantize!(wide $Type, $Storage);
         $crate::macros::rounding_methods::decl_decimal_rounding_methods!(wide $Type);
     };
 }

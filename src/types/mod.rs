@@ -19,7 +19,7 @@ pub(crate) mod unified;
 pub(crate) mod widths;
 
 pub(crate) mod num_traits;
-pub(crate) mod rescale;
+pub(crate) mod quantize;
 
 // Strict (integer-only) transcendental shells. Strict is the crate's
 // default; the lossy f64-bridge variants below carry the explicit
