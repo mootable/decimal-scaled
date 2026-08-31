@@ -4,7 +4,7 @@
 //! `expm1` algorithm family — `expm1(x) = e^x - 1`, total over the argument.
 //!
 //! Four generic kernels; `crate::policy::expm1` routes TWO of them
-//! ([`expm1_series`] and [`expm1_via_exp`]) on a value-dependent validity wall
+//! ([`expm1_series`] and [`expm1_with_exp`]) on a value-dependent validity wall
 //! and supplies each width's work integer and guard. [`expm1_halving`] and
 //! [`expm1_reduced`] are correct over regions that overlap the routed pair
 //! entirely, so choosing between them is an OPTIMALITY question — they stay as
@@ -25,7 +25,7 @@
 //! | variant | reduction | reassembly | status |
 //! |---|---|---|---|
 //! | [`expm1_series`] | none | none | **ROUTED** for `\|x\| <= 1` |
-//! | [`expm1_via_exp`] | `exp_fixed`'s | exact `- 10^w` | **ROUTED** for `\|x\| > 1` |
+//! | [`expm1_with_exp`] | `exp_fixed`'s | exact `- 10^w` | **ROUTED** for `\|x\| > 1` |
 //! | [`expm1_halving`] | binary `v >> n` | `E <- E*(E + 2)` | kept — contracting for `x <= 0`, no `ln 2` |
 //! | [`expm1_reduced`] | `k*ln 2` | `((P + E) << k) - P` | kept — flat peak for large positive `x` |
 //!
@@ -58,7 +58,7 @@ pub(crate) mod expm1_halving;
 pub(crate) mod expm1_reduced;
 pub(crate) mod expm1_series;
 pub(crate) mod expm1_generic;
-pub(crate) mod expm1_via_exp;
+pub(crate) mod expm1_with_exp;
 
 use crate::int::types::traits::BigInt;
 use crate::support::rounding::RoundingMode;
@@ -122,7 +122,7 @@ pub(crate) fn checked<S>(v: Option<S>, method: &str, scale: u32) -> S {
 ///
 /// * the `_approx` single-shot paths, which run no Ziv walker at all, and
 ///   whose contract is explicitly not correct rounding;
-/// * [`expm1_via_exp_g`](super::expm1_via_exp::expm1_via_exp_g), where it is
+/// * [`expm1_with_exp_g`](super::expm1_with_exp::expm1_with_exp_g), where it is
 ///   a provable no-op — the policy routes `|x| > 1` there, and
 ///   `expm1(x) - x = x²/2 + ...` exceeds half an ULP by orders of magnitude
 ///   across that whole region, so `result == raw` never holds. It is left in
@@ -162,7 +162,7 @@ mod candidate_agreement_tests {
     use super::expm1_halving::expm1_halving_fixed;
     use super::expm1_reduced::expm1_reduced_fixed;
     use super::expm1_series::expm1_series_fixed;
-    use super::expm1_via_exp::expm1_via_exp_fixed;
+    use super::expm1_with_exp::expm1_with_exp_fixed;
     use crate::algos::exp::exp_generic as eg;
     use crate::int::types::Int;
 
@@ -198,7 +198,7 @@ mod candidate_agreement_tests {
             (-5i128, W - 1, "-0.5"),
         ] {
             let v = at(units, exp10);
-            let base = expm1_via_exp_fixed::<S>(v, W).expect("via_exp in range");
+            let base = expm1_with_exp_fixed::<S>(v, W).expect("via_exp in range");
             close(
                 expm1_series_fixed::<S>(v, W).expect("series in band"),
                 base,
@@ -229,7 +229,7 @@ mod candidate_agreement_tests {
             (-12i128, W, "-12"),
         ] {
             let v = at(units, exp10);
-            let base = expm1_via_exp_fixed::<S>(v, W).expect("via_exp in range");
+            let base = expm1_with_exp_fixed::<S>(v, W).expect("via_exp in range");
             close(
                 expm1_halving_fixed::<S>(v, W).expect("halving in range"),
                 base,
@@ -249,7 +249,7 @@ mod candidate_agreement_tests {
         assert_eq!(expm1_series_fixed::<S>(S::ZERO, W), Some(S::ZERO));
         assert_eq!(expm1_halving_fixed::<S>(S::ZERO, W), Some(S::ZERO));
         assert_eq!(expm1_reduced_fixed::<S>(S::ZERO, W), Some(S::ZERO));
-        assert_eq!(expm1_via_exp_fixed::<S>(S::ZERO, W), Some(S::ZERO));
+        assert_eq!(expm1_with_exp_fixed::<S>(S::ZERO, W), Some(S::ZERO));
     }
 
     /// The deep-negative tail must land ONE working unit above `-1`, never on
@@ -272,7 +272,7 @@ mod candidate_agreement_tests {
             (expm1_series_fixed::<S>(v, W), "series"),
             (expm1_halving_fixed::<S>(v, W), "halving"),
             (expm1_reduced_fixed::<S>(v, W), "reduced"),
-            (expm1_via_exp_fixed::<S>(v, W), "via_exp"),
+            (expm1_with_exp_fixed::<S>(v, W), "via_exp"),
         ] {
             assert_eq!(got, Some(want), "{name}: deep-negative representative");
         }

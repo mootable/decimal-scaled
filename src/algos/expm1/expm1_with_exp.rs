@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-// ROUTED: `Algorithm::ViaExp` — `exp_fixed(v, w) - 10^w` formed at the
+// ROUTED: `Algorithm::WithExp` — `exp_fixed(v, w) - 10^w` formed at the
 // working scale. Selected for `|x| > 1` at every cell.
 
 //! `expm1` as `e^v - 1` evaluated at the WORKING scale.
@@ -75,7 +75,7 @@ use crate::support::rounding::RoundingMode;
 /// `exp_fixed(v_w, w) - 10^w`. `None` propagates `try_exp_fixed`'s
 /// out-of-range verdict (the "detect once, the wrapper applies the policy"
 /// contract).
-pub(crate) fn expm1_via_exp_fixed<S: BigInt>(v_w: S, w: u32) -> Option<S>
+pub(crate) fn expm1_with_exp_fixed<S: BigInt>(v_w: S, w: u32) -> Option<S>
 where
     S::Scratch: ComputeLimbs,
 {
@@ -96,7 +96,7 @@ where
 
 /// `expm1(x)` at storage `St`, computed in the work integer `S` and correctly
 /// rounded to `SCALE` under `mode`. The storage-facing shell around
-/// [`expm1_via_exp_fixed`]; see
+/// [`expm1_with_exp_fixed`]; see
 /// [`expm1_series_g`](super::expm1_series::expm1_series_g) for the shared shape
 /// and for why the walker's `never_exact` polarity is `false`.
 ///
@@ -119,7 +119,7 @@ where
 /// carries, reached through `try_exp_fixed`'s `None`.
 #[inline]
 #[must_use]
-pub(crate) fn expm1_via_exp_g<St: BigInt + Copy, S: BigInt, const SCALE: u32>(
+pub(crate) fn expm1_with_exp_g<St: BigInt + Copy, S: BigInt, const SCALE: u32>(
     raw: St,
     base_guard: u32,
     st_max: St,
@@ -137,7 +137,7 @@ where
         st_min,
         |guard| {
             super::checked(
-                expm1_via_exp_fixed::<S>(wtc::to_work_scaled_g::<St, S>(raw, guard), SCALE + guard),
+                expm1_with_exp_fixed::<S>(wtc::to_work_scaled_g::<St, S>(raw, guard), SCALE + guard),
                 "expm1_strict",
                 SCALE,
             )
@@ -146,7 +146,7 @@ where
     super::adjust_near_zero::<St>(r, raw, mode)
 }
 
-/// The `_approx` sibling of [`expm1_via_exp_g`]: a SINGLE shot at the caller's
+/// The `_approx` sibling of [`expm1_with_exp_g`]: a SINGLE shot at the caller's
 /// `working_digits`, no Ziv escalation.
 ///
 /// # Panics
@@ -155,7 +155,7 @@ where
 /// at the caller's working scale.
 #[inline]
 #[must_use]
-pub(crate) fn expm1_via_exp_approx_g<St: BigInt + Copy, S: BigInt, const SCALE: u32>(
+pub(crate) fn expm1_with_exp_approx_g<St: BigInt + Copy, S: BigInt, const SCALE: u32>(
     raw: St,
     working_digits: u32,
     st_max: St,
@@ -167,7 +167,7 @@ where
 {
     let w = SCALE + working_digits;
     let r = super::checked(
-        expm1_via_exp_fixed::<S>(wtc::to_work_scaled_g::<St, S>(raw, working_digits), w),
+        expm1_with_exp_fixed::<S>(wtc::to_work_scaled_g::<St, S>(raw, working_digits), w),
         "expm1_approx",
         SCALE,
     );
@@ -175,19 +175,19 @@ where
     super::adjust_near_zero::<St>(out, raw, mode)
 }
 
-/// Tier-generic entry to [`expm1_via_exp_g`] at the tier's widest work integer
-/// `C::Wexp` — see [`expm1_via_exp_g`] for why that width and not `C::W`.
+/// Tier-generic entry to [`expm1_with_exp_g`] at the tier's widest work integer
+/// `C::Wexp` — see [`expm1_with_exp_g`] for why that width and not `C::W`.
 #[cfg(feature = "_wide-support")]
 #[inline]
 #[must_use]
-pub(crate) fn expm1_via_exp<C: wtc::WideTrigCore, const SCALE: u32>(
+pub(crate) fn expm1_with_exp<C: wtc::WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
 ) -> C::Storage
 where
     <C::Wexp as BigInt>::Scratch: ComputeLimbs,
 {
-    expm1_via_exp_g::<C::Storage, C::Wexp, SCALE>(
+    expm1_with_exp_g::<C::Storage, C::Wexp, SCALE>(
         raw,
         C::GUARD,
         C::storage_max(),
@@ -196,11 +196,11 @@ where
     )
 }
 
-/// Tier-generic entry to [`expm1_via_exp_approx_g`]. See [`expm1_via_exp`].
+/// Tier-generic entry to [`expm1_with_exp_approx_g`]. See [`expm1_with_exp`].
 #[cfg(feature = "_wide-support")]
 #[inline]
 #[must_use]
-pub(crate) fn expm1_via_exp_approx<C: wtc::WideTrigCore, const SCALE: u32>(
+pub(crate) fn expm1_with_exp_approx<C: wtc::WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     working_digits: u32,
     mode: RoundingMode,
@@ -208,7 +208,7 @@ pub(crate) fn expm1_via_exp_approx<C: wtc::WideTrigCore, const SCALE: u32>(
 where
     <C::Wexp as BigInt>::Scratch: ComputeLimbs,
 {
-    expm1_via_exp_approx_g::<C::Storage, C::Wexp, SCALE>(
+    expm1_with_exp_approx_g::<C::Storage, C::Wexp, SCALE>(
         raw,
         working_digits,
         C::storage_max(),

@@ -8,7 +8,7 @@
 //! matcher-only shape (see `docs/ARCHITECTURE.md`), mirrored from
 //! `policy::log1p`:
 //!
-//! 1. an [`Algorithm`] enum — Series / ViaExp, no `Default`;
+//! 1. an [`Algorithm`] enum — Series / WithExp, no `Default`;
 //! 2. a [`Select`] verdict;
 //! 3. a `const fn` [`select`] keyed on `(N, SCALE)`, total over the key;
 //! 4. dispatch via `const { select::<N, SCALE>() }`, then an exhaustive
@@ -24,8 +24,8 @@
 //! the [`Select`] verdict, never on [`Algorithm`], never in a `dispatch`
 //! signature (the BigRule). Narrow (`N <= 2`) computes at [`WZiv`] and
 //! narrows to storage; each wide tier computes at its own `Core::W`
-//! (Series) or `Core::Wexp` (ViaExp — the large-argument regime, which
-//! needs the width; see [`expm1_via_exp_g`]). Both reach the SAME generic
+//! (Series) or `Core::Wexp` (WithExp — the large-argument regime, which
+//! needs the width; see [`expm1_with_exp_g`]). Both reach the SAME generic
 //! kernels — no per-tier algorithm copy.
 //!
 //! # Kept, unrouted alternatives
@@ -40,7 +40,7 @@
 //! as kept alternatives for a later `policy-mapper` race.
 
 use crate::algos::expm1::expm1_series::{expm1_series_approx_g, expm1_series_g};
-use crate::algos::expm1::expm1_via_exp::{expm1_via_exp_approx_g, expm1_via_exp_g};
+use crate::algos::expm1::expm1_with_exp::{expm1_with_exp_approx_g, expm1_with_exp_g};
 use crate::algos::support::narrow_ziv::WZiv;
 use crate::int::types::traits::BigInt;
 use crate::int::types::Int;
@@ -59,10 +59,10 @@ enum Algorithm {
     /// [`crate::algos::expm1::expm1_series`].
     Series,
     /// `e^x - 1` formed at the WORKING scale —
-    /// [`crate::algos::expm1::expm1_via_exp`]. A composition, so the
+    /// [`crate::algos::expm1::expm1_with_exp`]. A composition, so the
     /// variant names the composition rather than a single kernel fn (the
     /// documented `ExpWithLn` precedent).
-    ViaExp,
+    WithExp,
 }
 
 #[derive(Clone, Copy)]
@@ -81,7 +81,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
 }
 
 /// Routes `x ∈ [-1, +1]` to [`Algorithm::Series`] and everything else to
-/// [`Algorithm::ViaExp`].
+/// [`Algorithm::WithExp`].
 ///
 /// This is a **validity wall, not a tuning threshold.** The series
 /// `x + x²/2! + x³/3! + …` carries NO range reduction, and it fails
@@ -98,7 +98,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
 ///
 /// Both failures are unbounded in the term count as well, and the series
 /// stops at `SERIES_CAP` — returning a TRUNCATED, WRONG value rather than
-/// a slow one. `ViaExp` carries `exp`'s own `k·ln 2` range reduction and
+/// a slow one. `WithExp` carries `exp`'s own `k·ln 2` range reduction and
 /// its proven peak model, and is uniformly correct there.
 ///
 /// The region is stated as a continuous condition on the series' own
@@ -112,7 +112,7 @@ fn classify<const N: usize, const SCALE: u32>(raw: &Int<N>) -> Algorithm {
     if *raw <= one && *raw >= -one {
         Algorithm::Series
     } else {
-        Algorithm::ViaExp
+        Algorithm::WithExp
     }
 }
 
@@ -179,7 +179,7 @@ fn narrow_strict<const N: usize, const SCALE: u32>(
             Int::<2>::MIN,
             mode,
         ),
-        Algorithm::ViaExp => expm1_via_exp_g::<Int<2>, WZiv, SCALE>(
+        Algorithm::WithExp => expm1_with_exp_g::<Int<2>, WZiv, SCALE>(
             v,
             NARROW_GUARD,
             Int::<2>::MAX,
@@ -207,7 +207,7 @@ fn narrow_approx<const N: usize, const SCALE: u32>(
             Int::<2>::MIN,
             mode,
         ),
-        Algorithm::ViaExp => expm1_via_exp_approx_g::<Int<2>, WZiv, SCALE>(
+        Algorithm::WithExp => expm1_with_exp_approx_g::<Int<2>, WZiv, SCALE>(
             v,
             working_digits,
             Int::<2>::MAX,
@@ -219,7 +219,7 @@ fn narrow_approx<const N: usize, const SCALE: u32>(
 }
 
 /// Wide strict arm at the tier `C`. Each kernel sources its own width
-/// from the tier: `Series` runs at `C::W`, `ViaExp` at the wider
+/// from the tier: `Series` runs at `C::W`, `WithExp` at the wider
 /// `C::Wexp` because it owns the large-argument regime where `e^x`'s
 /// internal peak grows.
 #[cfg(feature = "_wide-support")]
@@ -237,8 +237,8 @@ where
         Algorithm::Series => {
             crate::algos::expm1::expm1_series::expm1_series::<C, SCALE>(raw, mode)
         }
-        Algorithm::ViaExp => {
-            crate::algos::expm1::expm1_via_exp::expm1_via_exp::<C, SCALE>(raw, mode)
+        Algorithm::WithExp => {
+            crate::algos::expm1::expm1_with_exp::expm1_with_exp::<C, SCALE>(raw, mode)
         }
     }
 }
@@ -262,7 +262,7 @@ where
             working_digits,
             mode,
         ),
-        Algorithm::ViaExp => crate::algos::expm1::expm1_via_exp::expm1_via_exp_approx::<C, SCALE>(
+        Algorithm::WithExp => crate::algos::expm1::expm1_with_exp::expm1_with_exp_approx::<C, SCALE>(
             raw,
             working_digits,
             mode,

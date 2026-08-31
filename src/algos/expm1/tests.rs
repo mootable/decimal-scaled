@@ -44,7 +44,7 @@ fn d38s20(raw: i128) -> D<Int<2>, 20> {
 ///
 /// The set straddles the matcher's region wall on purpose: `x = 1`, `0.5` and
 /// `-1` are inside the direct-series region `|x| <= 1` (with `±1` exactly on
-/// its edges), `x = 2` is outside it and lands on the `ViaExp` arm.
+/// its edges), `x = 2` is outside it and lands on the `WithExp` arm.
 #[test]
 fn expm1_matches_external_oracle_d38_s20() {
     const CASES: [(i128, i128); 4] = [
@@ -54,7 +54,7 @@ fn expm1_matches_external_oracle_d38_s20() {
         (UNIT / 2, 64_872_127_070_012_814_685),
         // expm1(-1) = 1/e − 1 — series region, lower edge.
         (-UNIT, -63_212_055_882_855_767_840),
-        // expm1(2) = e² − 1 — ViaExp region.
+        // expm1(2) = e² − 1 — WithExp region.
         (2 * UNIT, 638_905_609_893_065_022_723),
     ];
     for (arg, want) in CASES {
