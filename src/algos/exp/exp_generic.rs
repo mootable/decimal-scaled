@@ -39,10 +39,6 @@ use crate::support::rounding::RoundingMode;
         S::ZERO
     }
     #[inline]
-    fn abs<S: BigInt>(v: S) -> S {
-        if v < S::ZERO { -v } else { v }
-    }
-    #[inline]
     pub(crate) fn pow10<S: BigInt>(n: u32) -> S {
         crate::consts::pow10::dispatch::<S>(n)
     }
@@ -52,7 +48,7 @@ use crate::support::rounding::RoundingMode;
     }
     /// Bit length of `|v|` (0 for zero).
     pub(crate) fn bit_length<S: BigInt>(v: S) -> u32 {
-        <S as BigInt>::BITS - abs(v).leading_zeros()
+        <S as BigInt>::BITS - v.abs().leading_zeros()
     }
     /// Unpacks a non-negative `S` magnitude into a little-endian u64 limb
     /// buffer through the trait's u128 magnitude exit (`mag_into_u128`).
@@ -103,8 +99,8 @@ use crate::support::rounding::RoundingMode;
         let d_neg = d < S::ZERO;
         let mut nbuf = <S::Scratch as ComputeLimbs>::single_u64();
         let mut dbuf = <S::Scratch as ComputeLimbs>::single_u64();
-        unpack_mag(abs(n), nbuf.as_mut());
-        unpack_mag(abs(d), dbuf.as_mut());
+        unpack_mag(n.abs(), nbuf.as_mut());
+        unpack_mag(d.abs(), dbuf.as_mut());
         let mut qbuf = <S::Scratch as ComputeLimbs>::single_u64();
         let mut rbuf = <S::Scratch as ComputeLimbs>::single_u64();
         match select_for_limbs(nbuf.as_ref(), dbuf.as_ref()) {
@@ -173,8 +169,8 @@ use crate::support::rounding::RoundingMode;
         if r == S::ZERO {
             return (q, None);
         }
-        let ar = abs(r);
-        let comp = abs(d) - ar;
+        let ar = r.abs();
+        let comp = d.abs() - ar;
         let cmp_r = if ar < comp {
             ::core::cmp::Ordering::Less
         } else if ar > comp {
@@ -317,7 +313,7 @@ use crate::support::rounding::RoundingMode;
         let divisor = pow10::<S>(w);
         let (q, r) = div_rem_exact(v, divisor);
         let half = divisor >> 1;
-        let qi = if abs(r) >= half {
+        let qi = if r.abs() >= half {
             if v < S::ZERO { q - S::ONE } else { q + S::ONE }
         } else {
             q
@@ -344,7 +340,7 @@ use crate::support::rounding::RoundingMode;
     where
         S::Scratch: ComputeLimbs,
     {
-        let av = abs::<S>(v);
+        let av = v.abs();
         let n = av * pow10::<S>(w);
         if n <= zero::<S>() {
             return zero::<S>();
@@ -599,7 +595,7 @@ use crate::support::rounding::RoundingMode;
                 break;
             }
         }
-        let tag = if want_tag && exact && u != zero::<S>() && abs(u) < one_w {
+        let tag = if want_tag && exact && u != zero::<S>() && u.abs() < one_w {
             // The dropped tail's side — the common sign of every term the
             // loop did not take.
             let tail_side = if u > zero::<S>() {
@@ -901,7 +897,7 @@ use crate::support::rounding::RoundingMode;
                     && !err_lost
                     && err.0 == zero::<S>()
                     && s != zero::<S>()
-                    && abs(s) <= one::<S>(w) =>
+                    && s.abs() <= one::<S>(w) =>
             {
                 // The tail is `s^n/n! + s^(n+1)/(n+1)! + ...`, alternating and
                 // strictly decreasing in magnitude for `|s| <= 1`, so it
@@ -1055,8 +1051,8 @@ use crate::support::rounding::RoundingMode;
         if r == S::ZERO {
             return q;
         }
-        let ar = abs(r);
-        let comp = abs(d) - ar;
+        let ar = r.abs();
+        let comp = d.abs() - ar;
         let cmp_r = if ar < comp {
             ::core::cmp::Ordering::Less
         } else if ar > comp {
@@ -1084,7 +1080,7 @@ use crate::support::rounding::RoundingMode;
         let divisor = pow10::<S>(w);
         let (q, r) = v.div_rem(divisor);
         let half = divisor >> 1;
-        let qi = if abs(r) >= half {
+        let qi = if r.abs() >= half {
             if v < S::ZERO { q - S::ONE } else { q + S::ONE }
         } else {
             q
@@ -1214,7 +1210,7 @@ use crate::support::rounding::RoundingMode;
     /// never accuracy. It is derived from `w` alone; no argument or cell
     /// appears in it.
     fn direct_series_pays<S: BigInt>(working_value: S, working_scale: u32) -> bool {
-        let magnitude = abs::<S>(working_value);
+        let magnitude = working_value.abs();
         if magnitude == zero::<S>() {
             return false;
         }
@@ -1542,7 +1538,7 @@ use crate::support::rounding::RoundingMode;
     /// signed `Dst`.
     #[inline]
     pub(crate) fn resize_or_panic<Src: BigInt, Dst: BigInt>(v: Src) -> Dst {
-        if bit_length::<Src>(abs::<Src>(v)) >= <Dst as BigInt>::BITS {
+        if bit_length::<Src>(v.abs()) >= <Dst as BigInt>::BITS {
             panic!("exp_generic: result out of range");
         }
         <Src as BigInt>::resize_to::<Dst>(v)

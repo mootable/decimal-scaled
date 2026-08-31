@@ -31,16 +31,6 @@ use crate::int::types::traits::BigInt;
 /// `(N, SCALE)` cell.
 pub(crate) const DIRECT_BAND: i128 = 1;
 
-/// `|v|` (0 for zero).
-#[inline]
-pub(crate) fn abs<S: BigInt>(v: S) -> S {
-    if v < S::ZERO {
-        -v
-    } else {
-        v
-    }
-}
-
 /// Argument-magnitude regime of `expm1(v)` for a working-scale `v_w` at scale
 /// `w` in the work integer `S`, decided from the BIT LENGTH alone — before any
 /// division, exactly as `exp_generic::ArgRegime` is.
@@ -131,7 +121,7 @@ pub(crate) fn ceil_abs_int<S: BigInt>(v_w: S, w: u32) -> u128
 where
     S::Scratch: ComputeLimbs,
 {
-    let (q, r) = eg::div_rem_exact(abs::<S>(v_w), eg::pow10::<S>(w));
+    let (q, r) = eg::div_rem_exact(v_w.abs(), eg::pow10::<S>(w));
     let n = <S as BigInt>::to_i128(q).unsigned_abs();
     if r == S::ZERO {
         n
