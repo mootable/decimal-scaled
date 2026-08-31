@@ -4685,6 +4685,17 @@
 // these cells), GoldenValue::parse keeps the whole digit string, round_to consumes every digit past
 // the graded scale, and truncated_at merely tests len >= 1233, which 1700 still satisfies.
 // The rest of the file stays at 1233 deliberately; only these six were regenerated.
+// WARNING - THE 1700 IS NOT REPRODUCIBLE FROM THE GENERATOR. `.pb` files carry no precision
+// directive: harvest.py reads only `//` comment text and value lines, and generate.py applies the
+// single scalar `args.precision` (default GEN_PRECISION = 1233) to every case. These six answers were
+// produced by an explicit `--precision 1700` run and spliced in. A plain `python -m oracle.generate`
+// rewrites all six back to 1233, and MEASURED against that output the evidence is PARTIALLY lost: 6 of
+// the 16 (row, cell) combinations go green (-1e-500, the 50-digit e-500 row, and -3e-280 lose both of
+// their cells, i.e. 3 of the 6 rows are fully neutered, 18 of the 48 directed failures), while 10 cells
+// survive because their borrow still ends past digit 1233. A PARTIAL revert is the dangerous case: the
+// gate still fails somewhere, so nobody notices coverage silently shrank. Until the generator can be
+// told a per-row precision, this comment is the only thing protecting these answers - do not regenerate
+// exp without restoring the six at 1700.
 // EXPECTED once graded: the endgame fires at 16 (row, cell) combinations across D924<900,923> and
 // D1232<924,1200,1231>, and each fails the three DIRECTED modes by exactly +1 ULP (the kernel returns
 // one ULP above the correct answer: Ceiling grid+1 where grid is correct, Floor/Trunc grid where
