@@ -3029,8 +3029,8 @@ where
             // (working-scale remainder == 0) at a depth ABOVE the true
             // deviation also counts as resolved when paired with `hi == lo`.
             // `directed_narrow` already handles the zero remainder correctly
-            // (`residual_present = rem != lit(0) || never_exact` keeps the
-            // directed bump active when `never_exact` is set), so `hi` IS
+            // (`away = Some(true)` when `rem != lit(0) || never_exact` keeps
+            // the directed bump active when `never_exact` is set), so `hi` IS
             // the right directed answer; `hi == lo` confirms a second,
             // independent depth reached the same conclusion. This is sound
             // for every CURRENT ladder: the step formula (`target +
