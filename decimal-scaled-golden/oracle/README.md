@@ -67,25 +67,53 @@ coverage exactly where the hardest inputs live. `VALIDATOR_EXCLUDE` in
 `generate.py` maps a function to the validators that must not be consulted for
 it.
 
-| function | excluded | reason |
-| :-- | :-- | :-- |
-| `log1p` | `mpmath` | near the `t = -1` pole |
-| `atanh` | `mpmath` | at both endpoints |
-| `acosh` | `mpmath` | near 1 |
+**It is currently EMPTY, and that is the intended state.**
 
-All three are the same defect: mpmath budgets its working precision from the
-**result's** integer-digit count, with no term for the condition number. For
-`log1p` at `1 + t = 1e-70` the result is `ln(1e-70) ≈ -161` — three integer
-digits — while representing that input needs seventy-plus, and the derivative
-`1 / (1 + t)` amplifies the shortfall straight through. FLINT and the base-10
-`decimal` oracle agree exactly on these inputs; mpmath is the lone outlier.
+### The exclusion that was, and why it is gone (issue #66)
 
-This is a *targeted* exclusion, not a demotion. mpmath is deliberately retained
-everywhere else — an independent third opinion is worth having, and its binary
-storage is a known, bounded limitation rather than a reason to drop it. Adding
-an entry costs one line of cross-check, so justify it: prefer fixing the
-adapter, and exclude only where the validator is demonstrably unsound *and* two
-independent oracles agree without it. Tracked as issue #66.
+It briefly excluded `mpmath` from `log1p`, `atanh` and `acosh` near their domain
+edges. The stated reason was that mpmath was unsound there. **That diagnosis was
+wrong, and the lesson is worth more than the entry was.** The defect was ours:
+this repo's mpmath adapter budgeted working precision from the **result's**
+integer-digit count with no term for the condition number. For `log1p` at
+`1 + t = 1e-70` it sized against `ln(1e-70) ≈ -161` — three integer digits —
+while the derivative `1 / (1 + t)` destroyed seventy. A hard cliff at `A ≈ 72`,
+where the headroom was exactly `dps - precision = 70`.
+
+Fixed at the root: the adapter now sizes by the **worse** of the result's
+magnitude and `A = log10 |x · ∇f(x)|`, the digits the function itself destroys.
+mpmath then agrees with FLINT *exactly* at every depth tested, out to `A ≈ 1200`
+— zero delta annotations across 120/120 `atanh` and 120/120 `acosh` lines. It is
+a clean third opinion on these functions, not a tolerated one, so the entries
+were removed. `oracle/conditioning_check.py` guards the fix: 53 probes, and it
+reports 21 failures against the old budget, so it is a live check rather than a
+decorative one.
+
+The same latent defect affected `sin`/`cos`/`tan` of a large argument, where
+`A = log10|x|` is exactly the cost of range reduction. No exclusion ever named
+those — the committed trig inputs top out at four integer digits, so nothing was
+visibly broken, and a fourth exclusion would eventually have been added for a
+cause that was never mpmath's.
+
+### If you are about to add an entry
+
+**Diagnose the root cause first.** An exclusion added over an unproven "that
+library is just bad here" hides our own bug and costs a real cross-check. Prefer
+fixing the adapter; exclude only where the validator is demonstrably unsound
+*and* two independent oracles agree without it.
+
+**Declared is not effective.** An exclusion removes a validator from the declared
+list; whether the *remaining* ones can run depends on what is installed.
+`python-flint` and `mpmath` ship readily, but `gmpy2` (→ `mpfr`) and `sympy` are
+optional and frequently absent, and an uninstalled backend abstains silently. So
+on a typical machine an exclusion does not drop a function from four validators
+to three — it can drop it to **one** (`decimal`). That is what the three removed
+entries did here. It is not a correctness risk in itself (`_validate_line`
+requires at least one validator to confirm, and base-10 `decimal` against a
+binary/Arb generator is a good single vote to be left holding), but it means
+regeneration is confirmed by one oracle rather than several, with no second
+opinion on an adapter edit. **`pip install gmpy2` restores `mpfr`** — worth doing
+before regenerating anything near a domain edge.
 
 ## Usage
 

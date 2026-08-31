@@ -57,20 +57,28 @@ VALIDATOR_ORDER = ["mpmath", "flint", "mpfr", "sympy", "decimal", "fraction"]
 # bound DROPS the line (see `_validate_line`), so it can veto a vector the reliable
 # oracles agree on and leave a silent hole in coverage.
 #
-# mpmath near a domain asymptote: its working precision is budgeted from the RESULT's
-# integer digits, with no term for the condition number. For log1p at 1+t = 1e-70 the
-# result is ln(1e-70) ~= -161 — three integer digits — while representing the input needs
-# 70+, and the derivative 1/(1+t) amplifies the shortfall straight through. The same
-# failure occurs for atanh at both endpoints and acosh near 1. flint and the base-10
-# decimal oracle agree exactly on these; mpmath is the lone outlier.
+# EMPTY, deliberately — the facility is kept, nothing currently needs it.
 #
-# mpmath is deliberately RETAINED everywhere else — it remains a useful independent
-# cross-check. See issue #66.
-VALIDATOR_EXCLUDE = {
-    "log1p": {"mpmath"},
-    "atanh": {"mpmath"},
-    "acosh": {"mpmath"},
-}
+# It previously excluded mpmath from log1p, atanh and acosh near their domain edges. That
+# was diagnosed as a limitation of mpmath; it was not. The defect was OURS: this oracle's
+# mpmath adapter budgeted working precision from the RESULT's integer digits with no term
+# for the condition number, so for log1p at 1+t = 1e-70 it sized against ln(1e-70) ~= -161
+# — three integer digits — while the derivative 1/(1+t) destroyed seventy. A hard cliff at
+# A ~= 72, where the headroom was exactly dps - precision = 70.
+#
+# Fixed at the root (issue #66): the adapter now sizes by the worse of the result's
+# magnitude and A = log10|x . grad f(x)|. mpmath then agrees with flint EXACTLY at every
+# depth tested, to A ~= 1200 — zero delta annotations across 120/120 atanh and 120/120
+# acosh lines — so it is a clean third opinion here, not a tolerated one. Re-excluding it
+# would discard a working validator and, on a machine without gmpy2/sympy, drop these
+# functions back to a single effective validator.
+#
+# Keep the mechanism. If a validator is genuinely non-viable for a function, list it —
+# a non-viable validator does not merely abstain: a computed disagreement past the radix
+# bound DROPS the line (see `_validate_line`), so it can veto a vector the reliable
+# oracles agree on and leave a silent hole in coverage. But diagnose the root cause first;
+# an exclusion added over an unproven "that library is just bad here" hides our own bug.
+VALIDATOR_EXCLUDE: dict[str, set[str]] = {}
 
 # A binary-vs-base-10 (or derived) disagreement up to this many units at 10^-precision
 # is a legitimate radix-rounding artifact: annotated and accepted. Beyond it the line is
