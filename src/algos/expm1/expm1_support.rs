@@ -108,7 +108,9 @@ pub(crate) fn regime<S: BigInt>(v_w: S, w: u32) -> Regime {
 /// zero residual as "the true value lies FURTHER from zero than the computed
 /// grid line" and bumps the MAGNITUDE — which for a negative result is what
 /// `Floor` does. Returning a bare `-10^w` therefore has `Floor` deliver
-/// `-1 - 1 ULP`: the wrong side, and out of storage range at `SCALE = D`.
+/// `-1 - 1 ULP`: the wrong side. That value IS representable (the crate caps
+/// `MAX_SCALE = N - 1`, so `MAX >= 1` at every legal scale), which makes this a
+/// silently wrong result rather than a loud one.
 ///
 /// Returning `-(10^w - 1)` instead leaves a real non-zero residual
 /// (`10^guard - 1`), so the walker decides on the true residual: `Floor` gives

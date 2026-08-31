@@ -32,6 +32,7 @@ pub(crate) mod dcmp;
 pub(crate) mod deq;
 pub(crate) mod div;
 pub(crate) mod exp;
+pub(crate) mod expm1;
 pub(crate) mod hypot;
 pub(crate) mod ln;
 pub(crate) mod log;

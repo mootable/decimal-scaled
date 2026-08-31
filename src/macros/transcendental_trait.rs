@@ -61,6 +61,27 @@ macro_rules! decl_decimal_transcendental_impl {
             }
 
             #[inline]
+            fn expm1_strict(self) -> Self {
+                <$Type<SCALE>>::expm1_strict(self)
+            }
+            #[inline]
+            fn expm1_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                <$Type<SCALE>>::expm1_strict_with(self, mode)
+            }
+            #[inline]
+            fn expm1_approx(self, working_digits: u32) -> Self {
+                <$Type<SCALE>>::expm1_approx(self, working_digits)
+            }
+            #[inline]
+            fn expm1_approx_with(
+                self,
+                working_digits: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> Self {
+                <$Type<SCALE>>::expm1_approx_with(self, working_digits, mode)
+            }
+
+            #[inline]
             fn log_strict(self, base: Self) -> Self {
                 <$Type<SCALE>>::log_strict(self, base)
             }

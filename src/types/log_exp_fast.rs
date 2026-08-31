@@ -46,6 +46,23 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         Self::from_f64(self.to_f64().ln_1p())
     }
 
+    /// Returns `e^self - 1` via the f64 bridge (`f64::exp_m1`).
+    ///
+    /// # Precision
+    ///
+    /// Lossy: involves f64 at some point; result may lose precision.
+    /// Provided for parity with [`Self::expm1_strict`]; at this crate's
+    /// fixed-point scales it is equivalent to `self.exp_fast() - 1`
+    /// wherever that is representable. Note the f64 round-trip forfeits
+    /// the strict path's extended domain — `to_f64` of a near-`MAX`
+    /// argument is already out of range for the intermediate.
+    #[cfg(feature = "std")]
+    #[inline]
+    #[must_use]
+    pub fn expm1_fast(self) -> Self {
+        Self::from_f64(self.to_f64().exp_m1())
+    }
+
     /// Returns the logarithm of `self` in the given `base`.
     ///
     /// Implemented via a single `f64::log(self_f64, base_f64)` call, which
@@ -175,6 +192,12 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[must_use]
     pub fn log1p(self) -> Self {
         self.log1p_fast()
+    }
+    /// Plain dispatcher: forwards to [`Self::expm1_fast`] in this feature mode.
+    #[inline]
+    #[must_use]
+    pub fn expm1(self) -> Self {
+        self.expm1_fast()
     }
     /// Plain dispatcher: forwards to [`Self::log_fast`] in this feature mode.
     #[inline]

@@ -75,6 +75,18 @@ pub trait DecimalTranscendental: Sized {
     fn log1p_approx(self, working_digits: u32) -> Self;
     fn log1p_approx_with(self, working_digits: u32, mode: RoundingMode) -> Self;
 
+    // `expm1(x) = e^x - 1`, total over the argument (it tends to `-1` as
+    // `x -> -inf`). Like `log1p` it is not more accurate than the
+    // two-step form at fixed point, but it does reach slightly further:
+    // the `- 1` is applied at the working scale, ahead of the range
+    // check, so it is defined on `x <= ln(1 + MAX)` where `exp` stops at
+    // `ln(MAX)` — a band `ln(1 + 1/MAX)` wide, a few hundredths.
+
+    fn expm1_strict(self) -> Self;
+    fn expm1_strict_with(self, mode: RoundingMode) -> Self;
+    fn expm1_approx(self, working_digits: u32) -> Self;
+    fn expm1_approx_with(self, working_digits: u32, mode: RoundingMode) -> Self;
+
     /// Log to caller-chosen base.
     fn log_strict(self, base: Self) -> Self;
     fn log_strict_with(self, base: Self, mode: RoundingMode) -> Self;
