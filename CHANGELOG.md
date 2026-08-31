@@ -208,6 +208,25 @@ at the end of this section.
   against this band had a single-digit significand, and reproducing it needs
   roughly 47 significant digits. The golden lead now carries the
   multi-digit family.
+
+  `atan2` joins the same kernel. It could not simply reuse the storage face —
+  its call sites pass the *result* as the argument, so a test posed on the
+  computed value reasons in a circle. Posing the bracket on the exact rational
+  `y/x` removes the circularity: the `10^SCALE` cancels, so the two setup
+  quantities are integer divisions that keep numerator and denominator paired
+  and never form the ratio itself. No behaviour is expected to change there —
+  the bracket agrees with the previous parity rule wherever parity was right,
+  and can differ only where parity was wrong, which needs a tiny argument
+  whose `y/x` carries a multi-digit significand landing on a grid point. The
+  value is that the path is now proved rather than parity-dependent.
+
+  The bracket's own error bound is carried exactly rather than assumed. An
+  earlier form counted only the two truncations per step and missed that the
+  dominant loss is amplified by the term it multiplies — bounded by that
+  term's own magnitude, which on the first step is the argument itself. The
+  answers it produced were correct, but on a relation between the work width
+  and the scale that nothing checked. The bound is now computed and tested at
+  run time, and fails closed rather than trusting the width table.
 - **`FromStr` rejected exactly-representable trailing zeros.** `"1.00"` at
   `SCALE = 0` returned `ParseError::OverlongFractional`, as did `"2.0"`,
   `"-1.0"`, `"0.0"` and every literal whose digits past `SCALE` are all
