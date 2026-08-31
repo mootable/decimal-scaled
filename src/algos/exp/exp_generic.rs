@@ -442,6 +442,46 @@ use crate::support::rounding::RoundingMode;
         sum + sum
     }
 
+    /// `expm1(s) = exp(s) - 1` at working scale `w`, evaluated as the
+    /// Taylor series with the leading `1` term dropped so the
+    /// `exp(s) - 1` subtraction of two values both `~ 1` never occurs:
+    /// `expm1(s) = s + s^2/2! + s^3/3! + ...`. For tiny `s` the result
+    /// keeps every digit of `s` (`kappa = |s/expm1(s)| -> 1`).
+    ///
+    /// This kernel is the accuracy-critical small-argument case
+    /// `|s| <~ ln2/2`; the caller reduces a general argument to this band
+    /// and reassembles via the exact `2^k` shift. No range reduction is
+    /// performed here.
+    ///
+    /// The companion of [`log1p_fixed`]: both exist to remove the
+    /// catastrophic cancellation of the naive form at the source.
+    ///
+    /// Reference: J.-M. Muller, *Elementary Functions* 3rd ed. (2016),
+    /// 4.4; N. J. Higham, *Accuracy and Stability of Numerical
+    /// Algorithms* 2nd ed. (2002), 1.14.1.
+    pub(crate) fn expm1_fixed<S: BigInt>(s: S, w: u32) -> S
+    where
+        S::Scratch: ComputeLimbs,
+    {
+        let mut sum = s;
+        let mut term = s;
+        let mut iter: u128 = 2;
+        loop {
+            // `iter` is bounded by SERIES_CAP (20_000), so the cast to the
+            // generic `lit`'s i128 argument is lossless.
+            term = mul::<S>(term, s, w) / lit::<S>(iter as i128);
+            if term == zero::<S>() {
+                break;
+            }
+            sum = sum + term;
+            iter += 1;
+            if iter > SERIES_CAP {
+                break;
+            }
+        }
+        sum
+    }
+
     /// Argument-magnitude regime of `e^v` for a working-scale value `v_w`
     /// at scale `w` in the work integer `S`, decided BEFORE the
     /// `k = round(v / ln 2)` range-reduction division runs.

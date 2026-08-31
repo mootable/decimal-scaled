@@ -1167,21 +1167,11 @@ macro_rules! decl_wide_transcendental {
             /// Reference: J.-M. Muller, *Elementary Functions* 3rd ed.
             /// (2016), 4.4; Higham 1.14.1.
             pub(crate) fn expm1_fixed(s: W, w: u32) -> W {
-                let mut sum = s;
-                let mut term = s;
-                let mut iter: u128 = 2;
-                loop {
-                    term = mul(term, s, w) / lit(iter);
-                    if term == zero() {
-                        break;
-                    }
-                    sum = sum + term;
-                    iter += 1;
-                    if iter > SERIES_CAP {
-                        break;
-                    }
-                }
-                sum
+                // Forwards to the single generic source
+                // (`exp_generic::expm1_fixed`) — no per-tier copy of the
+                // leading-term-dropped Taylor series (Constitution rule 2),
+                // mirroring `log1p_fixed` above.
+                $crate::algos::exp::exp_generic::expm1_fixed::<W>(s, w)
             }
 
             /// `ln 10` at working scale `w`, rounded under the crate
