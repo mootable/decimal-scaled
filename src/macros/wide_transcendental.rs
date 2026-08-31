@@ -270,7 +270,7 @@ macro_rules! decl_wide_transcendental {
                 // `bit_length(|v_w|) - bit_length(10^SCALE)` clamped
                 // to zero — that's a rough log₂(int_part) bound;
                 // exponentiate to a u32 upper bound on int_part.
-                let av = abs(v_w_at_scale);
+                let av = v_w_at_scale.abs();
                 let bl_v = bit_length(av);
                 let bl_one_s = bit_length(pow10_table(scale));
                 if bl_v <= bl_one_s {
@@ -308,10 +308,6 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             pub(crate) fn zero() -> W {
                 lit(0)
-            }
-            #[inline]
-            fn abs(v: W) -> W {
-                if v < lit(0) { -v } else { v }
             }
             #[inline]
             pub(crate) fn pow10(n: u32) -> W {
@@ -423,7 +419,7 @@ macro_rules! decl_wide_transcendental {
 
             /// Bit length of `|v|` (0 for zero).
             pub(crate) fn bit_length(v: W) -> u32 {
-                W::BITS - abs(v).leading_zeros()
+                W::BITS - v.abs().leading_zeros()
             }
 
             /// `√v` at working scale `w`: `√(|v| · 10^w)`, truncating.
@@ -663,7 +659,7 @@ macro_rules! decl_wide_transcendental {
                 let divisor = pow10_table(w);
                 let (q, r) = v.div_rem(divisor);
                 let half = divisor >> 1;
-                let qi = if abs(r) >= half {
+                let qi = if r.abs() >= half {
                     if v < lit(0) { q - lit(1) } else { q + lit(1) }
                 } else {
                     q
@@ -1313,7 +1309,7 @@ macro_rules! decl_wide_transcendental {
                 for _ in 0..iter_cap {
                     let ln_x = ln_fixed_agm::<SCALE>(x, w);
                     let delta = s - ln_x;
-                    if abs(delta) <= lit(2) {
+                    if delta.abs() <= lit(2) {
                         x = mul(x, one_w + delta, w);
                         break;
                     }
