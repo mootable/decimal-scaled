@@ -351,8 +351,18 @@ but "no `N` to size against" is not the same as "unbounded". Their buffer has a
 reachable limit, and crossing it is what produced #86 (`asinh` panicking at
 D924/D1232).
 
-> **Exposed** ⟺ effective dividend limbs ≥ `MAX_SINGLE_LIMBS`, **and** the
-> divisor is even with ≥ 24 limbs, **and** `num_m >= 2 * den_n`.
+> **Exposed** ⟺ any non-`Rem` verdict reaches the blanket door with an
+> effective dividend exceeding `MAX_SINGLE_LIMBS - 2`.
+>
+> **The narrower shape that actually panicked (#86):** the divisor even with
+> ≥ 24 limbs **and** `num_m >= 2 * den_n` — which is when `select_for_limbs`
+> returns `Algorithm::KnuthU128Limb`. Worth keeping in view, because a reader
+> tracing that panic will look for it; but it selects an ARM, it does not bound
+> the hazard.
+
+The `- 2` is `div_knuth_into`'s own stated requirement: `u` must be at least
+`num.len() + 2` limbs, because the divide reads one limb above the live
+dividend and relies on the zero there.
 
 `MAX_SINGLE_LIMBS = 4 * MAX_WORK_N + 2`: **258** (xx-wide), **130** (x-wide),
 **66** (wide), **10** (narrow default).
@@ -360,18 +370,39 @@ D924/D1232).
 Stating it as a rule rather than a list of call sites buys three things:
 
 - **It is checkable against a new call site without re-deriving anything.** The
-  three conjuncts are exactly when `int::policy::div_rem::select_for_limbs`
-  returns `Algorithm::KnuthU128Limb` — the only arm reaching a build-max buffer
-  (`div_knuth_u128_limb`'s `[0u64; MAX_SINGLE_LIMBS]`). `div_knuth` has no such
-  array.
+  ceiling belongs to the DOOR, not to one arm: **both** Knuth arms reach a
+  build-max buffer. `div_knuth_u128_limb` has its `[0u64; MAX_SINGLE_LIMBS]`,
+  and the plain `div_knuth` blanket door allocates **two** `max_single_limbs()`
+  buffers of its own (`div_knuth.rs:26-30`) before delegating to
+  `div_knuth_into`. So the plain-Knuth arm shares the same effective-dividend
+  ceiling, guarded only by a `debug_assert!` at `div_knuth.rs:76` — compiled out
+  of release — and the release slice bounds-check behind it.
 - **It explains why the failure panics rather than corrupting.** The bound is
-  *value*-derived, not type-derived: `div_knuth_u128_limb_into` strips leading
-  zeros to `top64`, then writes `u64buf[top64] = carry` — a real bounds-checked
-  index. A slice wide by *type* but small by *value* is fine.
+  *value*-derived, not type-derived, on both arms. `div_knuth_into` strips BOTH
+  operands to their effective lengths before touching `u` or `v`
+  (`div_knuth.rs:55-71`), and `div_knuth_u128_limb_into` strips to `top64` then
+  writes `u64buf[top64] = carry` — a real bounds-checked index. An operand wide
+  by *type* but small by *value* is therefore fine, which is most of why a
+  ceiling this low is met so rarely.
 - **It shows the single-limb-divisor cases are unreachable by routing, not by
   luck.** A one-limb divisor returns `Algorithm::Rem` before Knuth is ever
   considered, so `/ lit(2)`, `/ lit(M)`, `/ lit(2j+1)` and `/ j` cannot reach
   the blanket at any width.
+
+**Measured, not guaranteed — 2026-09-01.** A sweep of this branch's paths found
+no reachable shape presenting 256 or more effective dividend limbs through the
+blanket door; the largest is about **75** limbs, from `ln_tang`'s `/ 10^w_ext`.
+That is a measurement of today's call sites, not a property of the code. A new
+caller, or a wider `Wexp`/`Wagm` pairing, moves it without anything complaining
+— which is exactly the gap **The durable fix** below is meant to close.
+
+**This section's own rule was an instance of what it warns about.** It read
+"`div_knuth` has no such array" — a confident claim about where a hazard cannot
+reach, which is the shape the section exists to catch. The conclusion held (the
+ceiling is real, and #86 was its instance) while the stated reason was wrong.
+That is worth more than the correction: a claim carries no warrant just because
+it sits next to the analysis it qualifies, and the rules here are the ones most
+likely to be trusted unread.
 
 **The `Int<512>` knife-edge.** `exp_fixed_tagged` instantiates
 `expm1_fixed_tagged` at `C::Wexp`, which is `Int<512>` at D1232. Its one
