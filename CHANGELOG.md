@@ -116,6 +116,40 @@ at the end of this section.
   `log1p` carried the **same** too-narrow tangent-only guard as `ln` above,
   so the parabola case reached it too; both are now faces over the shared
   kernel and were fixed together.
+- **`expm1` mis-rounded at the wide tiers, in the directed modes and in
+  `HalfToEven`.** The series can land exactly on a storage grid point,
+  because `x^j / j!` is exact whenever the argument supplies the odd primes
+  in `j!`. The walker then read a zero residual, took the value to be
+  exactly representable, and returned that grid point in every mode — so
+  whichever mode needed to step off it got its neighbour's answer instead.
+
+  The kernel now reports the neglected tail's side — above or below — for
+  each probe, and the strict walker rounds from that rather than inferring
+  it from the residual. The side is claimed only where it can be *proved*;
+  anywhere it cannot, the walker keeps its ordinary escalation, so an
+  unprovable case fails closed rather than guessing.
+
+  What must be proved is that the **accumulated** error is exactly zero,
+  not that each term is individually exact. Per-term exactness is
+  sufficient but not necessary, and the difference is not academic: the
+  last remaining failures were arguments where the third and fourth terms'
+  error contributions cancel exactly (`+2/3` and `-2/3`), leaving the sum
+  exact though neither division is. The error is carried as an exact
+  rational, and every case it cannot represent reports "unproved".
+
+  This rule is available to `expm1` only because its series is seeded with
+  the exact input rather than a quotient. `log1p` opens with a divide that
+  is provably never exact for the affected family, so it needed the
+  different rule described above.
+- **`FromStr` rejected exactly-representable trailing zeros.** `"1.00"` at
+  `SCALE = 0` returned `ParseError::OverlongFractional`, as did `"2.0"`,
+  `"-1.0"`, `"0.0"` and every literal whose digits past `SCALE` are all
+  zeros — although each is exact and round-trips losing nothing. The check
+  counted raw fractional characters where it should count *significant*
+  ones; excess zeros are now trimmed before the width check. This matches
+  the representability rule the golden harness already applies and the
+  `dec!` macro's existing all-zeros test. Genuine precision loss is still
+  rejected — `"1.05"` and `"1.050"` at `SCALE = 0`, `"1.55"` at `SCALE = 1`.
 - **Golden validator: an unsound oracle could veto a sound vector.** A
   validator that *cannot represent* an input abstains harmlessly, but one that
   computes a wrong value drops the whole line — so it could discard a vector
