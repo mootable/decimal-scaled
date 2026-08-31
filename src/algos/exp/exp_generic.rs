@@ -1197,6 +1197,79 @@ use crate::support::rounding::RoundingMode;
             .unwrap_or_else(|| panic!("exp_generic::exp_fixed: result out of range"))
     }
 
+    /// Whether the DIRECT `expm1` series reaches working scale `w` in no more
+    /// terms than [`try_exp_fixed`]'s Smith chain spends on its squarings
+    /// alone — i.e. the direct path is never the more expensive of the two.
+    ///
+    /// The chain runs `n = squaring_levels(w)` squarings whatever the
+    /// argument (`n` is keyed on `w`, not on `|s|`), so `n` terms is the
+    /// honest budget. The direct series' term `j` is `s^j/j!`, which vanishes
+    /// at scale `w` once `j·d >= w` for `d = -log10|s|`; dropping the `j!`
+    /// growth makes this a SUFFICIENT condition, erring toward the existing
+    /// path. With `D` the decimal digit count of the working magnitude,
+    /// `d = w - D + 1`.
+    ///
+    /// This is a cost gate, not a validity wall — both paths are correct
+    /// kernels at every argument it can see, so a mis-estimate costs speed and
+    /// never accuracy. It is derived from `w` alone; no argument or cell
+    /// appears in it.
+    fn direct_series_pays<S: BigInt>(v_w: S, w: u32) -> bool {
+        let mag = abs::<S>(v_w);
+        if mag == zero::<S>() {
+            return false;
+        }
+        // `digits <= floor(bl·log10 2) + 1`, at most one high — an over-estimate
+        // shrinks `d` and so only ever withholds the direct path.
+        let d_digits = ((bit_length::<S>(mag) as u64 * 30_103) / 100_000) as u32 + 1;
+        let d = (w + 1).saturating_sub(d_digits);
+        let n = squaring_levels(w) as u64;
+        n.saturating_mul(d as u64) >= w as u64
+    }
+
+    /// `e^v` at working scale `w`, together with the side its neglected tail
+    /// puts the TRUE value on where that is provable — the [`TailSign`] the
+    /// Ziv walkers need when a zero residual leaves them blind.
+    ///
+    /// `try_exp_fixed` cannot supply one. It range-reduces and then runs
+    /// `squaring_levels(w)` rounded divides (61 at `D1232<1231>`), each up to
+    /// half a working unit with its direction untracked, while the neglected
+    /// Taylor tail it would be reporting on is SUB-unit. The noise swamps the
+    /// signal, so any tag from that path would be an assertion, not a proof.
+    ///
+    /// Where the direct series pays for itself ([`direct_series_pays`]) this
+    /// evaluates `e^v = 1 + expm1(v)` instead. The `1` is `10^w` exactly, so
+    /// the addition is exact and the side transfers unchanged from
+    /// [`expm1_fixed_tagged`], whose own rule already fails closed (it tags
+    /// only when the accumulated error is provably zero and the series
+    /// vanished rather than hit the cap). Elsewhere the value is
+    /// `try_exp_fixed`'s, bit-identical to before, and the tag is `None`.
+    pub(crate) fn exp_fixed_tagged<S: BigInt>(v_w: S, w: u32) -> (S, Option<TailSign>)
+    where
+        S::Scratch: ComputeLimbs,
+    {
+        exp_fixed_tagged_with::<S>(v_w, w, || exp_fixed::<S>(v_w, w))
+    }
+
+    /// [`exp_fixed_tagged`] over a caller-supplied untagged kernel — the tier
+    /// cores route their own `exp_fixed` through a peak-fit gate that lifts to
+    /// a wider work integer, so the fallback must stay THEIRS rather than
+    /// being re-derived here. Only the gated direct-series branch is shared.
+    pub(crate) fn exp_fixed_tagged_with<S: BigInt>(
+        v_w: S,
+        w: u32,
+        fallback: impl FnOnce() -> S,
+    ) -> (S, Option<TailSign>)
+    where
+        S::Scratch: ComputeLimbs,
+    {
+        if direct_series_pays::<S>(v_w, w) {
+            let (m, tail) = expm1_fixed_tagged::<S>(v_w, w);
+            (one::<S>(w) + m, tail)
+        } else {
+            (fallback(), None)
+        }
+    }
+
     /// Option-returning core of [`exp_fixed`] — the `checked_` seam's
     /// primitive. `None` means the internal squaring / `2^k`-reassembly
     /// peak provably exceeds the work integer `S`'s capacity: for `k ≥ 0`
