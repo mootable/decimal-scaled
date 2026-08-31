@@ -1089,6 +1089,70 @@ fn pow10_into(exp: u32, out: &mut [u64], scratch: &mut [u64]) -> Option<usize> {
     Some(len)
 }
 
+/// Exact-scratch divide for the bracket. Returns `false` when the scratch
+/// cannot hold the shape, which every caller treats as "make no adjustment".
+///
+/// `int::policy::div_rem::dispatch` must NOT be used here. Its blanket engines
+/// carry BUILD-MAX normalisation scratch — `div_knuth_u128_limb` declares
+/// `[0u64; MAX_SINGLE_LIMBS]` = `4·MAX_WORK_N + 2` = 258 limbs against a
+/// documented requirement of `num.len() + 2`. `MAX_WORK_N` is derived from the
+/// STORAGE-scaled work widths and never accounted for the AGM integer, so the
+/// `asinh` face — which instantiates this kernel at `Wk = C::Wagm`
+/// (`Int<192>` at D924, `Int<256>` at D1232) — presents a dividend of roughly
+/// `3·Wk::LIMBS` limbs and indexes straight off the end of that buffer. That
+/// is the build-max blanket leaking onto a path that can size itself exactly,
+/// which rule 6 forbids and which here is not a style point but an
+/// out-of-bounds panic (#86).
+///
+/// So the divide routes on the matcher's OWN verdict
+/// ([`select_for_limbs`](crate::int::policy::div_rem::select_for_limbs)) and
+/// then calls the chosen engine's `_into` door with scratch sized exactly from
+/// `Wk`'s `ComputeLimbs` carrier — the same exact-scratch pattern
+/// `newton_reciprocal` and `div_widen_scale` use, and the one
+/// `div_rem::dispatch`'s own doc points concrete-`N` callers at.
+///
+/// The non-`Rem` verdicts collapse to base-2⁶⁴ Knuth, which is value-identical
+/// to the u128-limb engine (that engine exists for speed, not a different
+/// result). Correct for every shape this kernel presents today, but it MUST be
+/// re-verified if an `Algorithm` arm joining `int::policy::div_rem` ever
+/// returns a numerically different answer.
+fn bracket_div<Wk: BigInt>(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) -> bool
+where
+    <Wk as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    use crate::int::policy::div_rem::{select_for_limbs, Algorithm};
+    use crate::int::types::compute_limbs::ComputeLimbs;
+
+    match select_for_limbs(num, den) {
+        // Single-limb divisor: hardware remainder, no normalisation scratch
+        // is involved at all, so there is nothing to size.
+        Algorithm::Rem => {
+            crate::int::algos::div::div_rem::div_rem(num, den, quot, rem);
+            true
+        }
+        _ => {
+            let mut ub = <<Wk as BigInt>::Scratch as ComputeLimbs>::quad_u64();
+            let mut vb = <<Wk as BigInt>::Scratch as ComputeLimbs>::double_u64();
+            let u = ub.as_mut();
+            let v = vb.as_mut();
+            // `u` must hold `num.len() + 2`; the dividend here is at most
+            // `3·Wk::LIMBS`, so `quad_u64` (`4·LIMBS`) covers it — CHECKED, not
+            // assumed, because that is exactly what went wrong upstream.
+            if u.len() < num.len() + 2 || v.len() < den.len() {
+                return false;
+            }
+            for e in u.iter_mut() {
+                *e = 0;
+            }
+            for e in v.iter_mut() {
+                *e = 0;
+            }
+            crate::int::algos::div::div_knuth::div_knuth_into(num, den, quot, rem, u, v);
+            true
+        }
+    }
+}
+
 /// Analytic directed post-adjust that PROVES which side of the returned grid
 /// point the true value lies on, by bracketing it between two consecutive
 /// partial sums of its own alternating series.
@@ -1298,7 +1362,9 @@ where
     for e in t.iter_mut() {
         *e = 0;
     }
-    crate::int::policy::div_rem::dispatch(&pr[..dl], &bd[..lp], &mut qt[..dl], &mut t[..lp]);
+    if !bracket_div::<Wk>(&pr[..dl], &bd[..lp], &mut qt[..dl], &mut t[..lp]) {
+        return None;
+    }
     // `|x| < 1` so `y < 2^F`, i.e. at most `N` limbs. A wider quotient would
     // mean a non-tiny argument slipped the band gate — fail closed rather
     // than silently truncate.
@@ -1442,7 +1508,9 @@ where
     for e in t.iter_mut() {
         *e = 0;
     }
-    crate::int::policy::div_rem::dispatch(&pr[..dl], &bd[..lp], &mut qt[..dl], &mut t[..lp]);
+    if !bracket_div::<Wk>(&pr[..dl], &bd[..lp], &mut qt[..dl], &mut t[..lp]) {
+        return None;
+    }
     // `|z| < 1` so `y_fp < 2^F` — at most `nl` limbs. Anything wider means the
     // band gate admitted a non-tiny ratio; fail closed rather than truncate.
     if sig_len(&qt[..dl]) > nl {
@@ -1471,7 +1539,9 @@ where
     for e in bd.iter_mut() {
         *e = 0;
     }
-    crate::int::policy::div_rem::dispatch(&pr[..dl2], &xb[..lx], &mut qt[..dl2], &mut bd[..lx]);
+    if !bracket_div::<Wk>(&pr[..dl2], &xb[..lx], &mut qt[..dl2], &mut bd[..lx]) {
+        return None;
+    }
     // `T_1 = 10^SCALE·|z| < 10^SCALE`, so the scaled leading term fits `2N`.
     if sig_len(&qt[..dl2]) > w {
         return None;
@@ -1608,7 +1678,12 @@ where
                 *p = 0;
             }
             let mut r1 = [0u64; 1];
-            crate::int::policy::div_rem::dispatch(&t[..lt], &[b], &mut pr[..lt], &mut r1);
+            // A single-limb divisor, so this takes the scratch-free `Rem` arm;
+            // routed through the same helper so no divide in this kernel can
+            // reach a build-max engine.
+            if !bracket_div::<Wk>(&t[..lt], &[b], &mut pr[..lt], &mut r1) {
+                return None;
+            }
             t[..lt].copy_from_slice(&pr[..lt]);
             for e in t[lt..w].iter_mut() {
                 *e = 0;
