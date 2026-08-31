@@ -4669,22 +4669,29 @@
 // Each row's true value was confirmed strictly BELOW its grid line by arb ball arithmetic at 2200 digits
 // (the ball does not straddle), so the correct directed results are Ceiling -> the grid line and
 // Floor/Trunc -> one ULP below it, against the hardcode's Ceiling -> grid+1ULP and Floor/Trunc -> grid.
-// STATUS: these rows PASS today, and they pass for a STRUCTURAL reason that is itself the finding, not
-// because the kernel is right. The golden harness carries the SAME hardcoded assumption as the kernel:
+// THESE SIX ANSWERS ARE GENERATED DEEPER THAN THE REST OF THE FILE - 1700 digits against the file
+// header's 1233 - and that is load-bearing, not incidental. At 1233 the rows graded GREEN while the
+// kernel was wrong, because the harness's own residual model carries the SAME hardcoded assumption:
 // loader/value.rs classify_residual maps "digits below the graded scale are all zero, and the stored
 // answer reached gen_precision" to Residual::Below, i.e. a POSITIVE hidden tail, and should_bump then
 // makes Ceiling bump for a positive value - bit for bit the verdict never_exact produces. Oracle and
-// defect agree, so the gate cannot see the miss.
-// The window needed to falsify the claim through this pipeline is EMPTY: the deciding term must be
-// DEEPER than the walker's reach (1265) or the walker simply resolves it, and SHALLOWER than the stored
-// answer's precision (gen_precision 1233) or the answer rounds back onto the grid line and the residual
-// model re-asserts the positive tail. 1265 > 1233, so no input satisfies both. Every row below sits in
-// that gap (deciding depths 1277 to 1501), which is why all six grade green.
-// These are therefore STANDING PROBES, not regression pins, and a green gate on them is NOT evidence
-// that the hardcoded sign is safe. They become live the moment either half of the gap closes: generate
-// exp's answers at a precision above the deciding depth (truncated_at only tests the stored length, so a
-// longer exp.au grades correctly with no harness change), or wire exp to exp_generic::TailSign as expm1
-// and log1p already are, which is the actual fix.
+// defect agreed, so the gate could not see the miss.
+// The reason 1233 is not enough is the BORROW: the true value sits just under the grid line, so its
+// digits run 9 from the storage LSB all the way down to the deciding term (depths 1277 to 1501 here).
+// Any stored precision landing INSIDE that 9-run rounds up and carries back onto the grid line,
+// destroying the evidence; only a precision past the deciding term keeps it. Hence 1700.
+// No harness change is needed to read the longer line: grade_precision only clamps the grading SCALE
+// (to min(library scale, gen_precision - guard = 1231), which binds above scale 1231 and so not at
+// these cells), GoldenValue::parse keeps the whole digit string, round_to consumes every digit past
+// the graded scale, and truncated_at merely tests len >= 1233, which 1700 still satisfies.
+// The rest of the file stays at 1233 deliberately; only these six were regenerated.
+// EXPECTED once graded: the endgame fires at 16 (row, cell) combinations across D924<900,923> and
+// D1232<924,1200,1231>, and each fails the three DIRECTED modes by exactly +1 ULP (the kernel returns
+// one ULP above the correct answer: Ceiling grid+1 where grid is correct, Floor/Trunc grid where
+// grid-1ULP is correct) - 48 failures in all. The three nearest modes pass at every one of them: the
+// residual sits far from the half boundary, so the walker exits before the endgame.
+// The fix is to wire exp to exp_generic::TailSign as expm1 and log1p already are; it is deliberately
+// NOT done here, so that the defect is observed before it is repaired.
 // probe: exp never_exact wrong-side, D924<923> J=2. x=-1e-430; terms 1..2 are exact ULP multiples ending at depths 430 and 861 (<= 923), term 3 is NEGATIVE at depth 1291, past the 1265 reach, so the truth is below the grid line while never_exact hardcodes above.
 -0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001
 // probe: exp never_exact wrong-side, D924<923> J=2, 30-DIGIT significand (the widest this cell admits, d <= 461-422) since every prior adversarial exp row used a single-digit significand. Terms 1..2 end at depths 455 and 911 (<= 923), term 3 is NEGATIVE at depth 1277, past the 1265 reach.
