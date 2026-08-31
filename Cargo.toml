@@ -1,4 +1,4 @@
-﻿[package]
+[package]
 name = "decimal-scaled"
 version = "0.5.0"
 edition = "2024"
@@ -205,7 +205,7 @@ fixed = "1"
 # g_math: another fixed-point arithmetic crate that claims "0 ULP
 # transcendentals". Used as a benchmark baseline + accuracy comparison
 # (see benches/g_math_comparison.rs).
-g_math = "0.4"
+g_math = "0.5"
 # Library-comparison comparators for the §5 chapter in docs/benchmarks.md.
 # All bench-only; never compiled into a normal build.
 fastnum = { version = "0.7", default-features = false, features = ["std"] }
