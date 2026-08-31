@@ -87,6 +87,7 @@ where
             crate::algos::exp::exp_generic::log1p_fixed_tagged::<S>(
                 wtc::to_work_scaled_g::<St, S>(raw, guard),
                 SCALE + guard,
+                guard,
             )
         },
     );

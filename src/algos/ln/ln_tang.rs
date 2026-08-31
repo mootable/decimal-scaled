@@ -214,6 +214,43 @@ where
         let t = eg::div_cached::<S>(m_w - f_i, m_w + f_i, pow10_w);
 
         // Artanh series: 2 · (t + t³/3 + t⁵/5 + ...).
+        //
+        // ── The truncation below is LOAD-BEARING for directed rounding ──
+        //
+        // `term / lit(2j+1)` is integer division, so every term is TRUNCATED
+        // toward zero and `sum` comes out SHORT. That is not merely tolerable
+        // here, it is what makes the directed modes correct just BELOW `x = 1`,
+        // and the property is easy to destroy by making this line "better".
+        //
+        // Below 1 the reduction gives `k = -1`, so the result is
+        // `-ln2 + ln(m)`. A short `ln(m)` makes that MORE negative — larger in
+        // magnitude, away from zero. Every truncation pushes that one way; none
+        // can push back. The only terms that push toward zero are `ln2`'s
+        // rounding and the table entry's, at most half a unit each.
+        //
+        // The net is measured: at `x = 1 − d·ULP` the returned magnitude sits at
+        // least one working unit ABOVE `d·10^guard`, while the true sub-storage
+        // residual `d²·10^(guard−S)/2` is far under one unit. So the walker sees
+        // a NON-ZERO residual and its ordinary directed rule decides — `Floor`
+        // reaches `adjust_log_near_zero` already stepped, and the tangent
+        // bracket never fires for it. `ln2`'s rounding direction is NOT what
+        // carries this: it is a near coin flip across scales, and cells that
+        // read it at a down-rounding scale are correct anyway.
+        //
+        // So: correctness here rides on an ERROR being reliably one-sided and
+        // at least one unit — not on the value being accurate. Making this
+        // series MORE accurate (rounding these divisions instead of truncating,
+        // or turning `INTERNAL_EXTRA` on at more tiers) shrinks that excess
+        // toward zero. That is still correct, because a zero residual lands on
+        // the linear term and `adjust_log_near_zero`'s tangent bracket then
+        // supplies the same three answers — but it MOVES THE LOAD ONTO THAT
+        // BRACKET, so it must stay intact. Only a NEGATIVE excess is wrong, and
+        // that needs the two roundings to beat the accumulated truncation.
+        //
+        // Note `INTERNAL_EXTRA` is `true` at D462 ONLY (`policy::ln`); the other
+        // nine wide tiers run natively at `w` with no outward magnitude bump, so
+        // they depend on exactly the argument above. See
+        // `below_one_directed_modes_straddle` at the foot of this file.
         let t2 = eg::mul::<S>(t, t, w_ext);
         let mut sum = t;
         let mut term = t;
@@ -443,6 +480,91 @@ where
 
 #[cfg(test)]
 mod tests {
+    /// Just BELOW `x = 1` the directed modes must STRADDLE — the contract the
+    /// truncation note in [`tang_ln_fixed_g`] argues for, stated without an
+    /// oracle.
+    ///
+    /// `ln(x)` is transcendental at every algebraic `x != 1`
+    /// (Lindemann-Weierstrass), so it never lands on a storage grid line.
+    /// `Ceiling` is therefore always exactly one ULP above `Floor`, and `Trunc`
+    /// is whichever of the two faces zero — `Ceiling`, since `ln(x) < 0` below
+    /// 1. Needing no oracle, this cannot rot when the oracle changes.
+    ///
+    /// It fails in exactly the way the note warns about. If the kernel's
+    /// magnitude ever fell BELOW `d·10^guard`, the walker would read `q = d−1`;
+    /// `adjust_log_near_zero` rescues `Floor` there via its tangent bracket but
+    /// deliberately not `Trunc` or `Ceiling` (both arms are gated on `up`, and
+    /// `delta < 0` here), so those two would come back one ULP short — visible
+    /// here as a two-ULP span.
+    ///
+    /// Gated on the union of the tiers it checks so it cannot exist as an
+    /// assertion-free pass in a build where every cell is compiled out, and it
+    /// counts what it actually checked for the same reason.
+    #[test]
+    #[cfg(any(
+        feature = "d57",
+        feature = "d115",
+        feature = "d307",
+        feature = "d462",
+        feature = "wide",
+        feature = "x-wide"
+    ))]
+    fn below_one_directed_modes_straddle() {
+        use crate::int::types::traits::BigInt;
+        use crate::support::rounding::RoundingMode;
+
+        let mut checked = 0u32;
+
+        macro_rules! cell {
+            ($limbs:literal, $scale:literal, $depth:literal) => {{
+                type St = crate::int::types::Int<$limbs>;
+                const S: u32 = $scale;
+                let one = crate::consts::pow10::dispatch::<St>(S);
+                for d in 1i128..=$depth {
+                    let raw = one - <St as BigInt>::from_i128(d);
+                    let at = |m| crate::D::<St, S>(raw).ln_strict_with(m).to_bits();
+                    let floor = at(RoundingMode::Floor);
+                    let ceiling = at(RoundingMode::Ceiling);
+                    let trunc = at(RoundingMode::Trunc);
+                    assert_eq!(
+                        ceiling - floor,
+                        <St as BigInt>::ONE,
+                        "ln(1 - {d}ulp) at Int<{}><{}>: Ceiling and Floor must straddle \
+                         a value that cannot lie on the grid",
+                        $limbs,
+                        S
+                    );
+                    assert_eq!(
+                        trunc, ceiling,
+                        "ln(1 - {d}ulp) at Int<{}><{}>: Trunc must be the neighbour \
+                         facing zero",
+                        $limbs, S
+                    );
+                    checked += 1;
+                }
+            }};
+        }
+
+        // A spread of the Tang tiers, at each one's top scale — where the
+        // deciding term `d²·10^(guard−S)/2` is furthest below the working
+        // resolution and the walker is blindest.
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        cell!(3, 56, 3);
+        #[cfg(any(feature = "d115", feature = "wide"))]
+        cell!(6, 114, 3);
+        #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+        cell!(16, 306, 2);
+        // D462 is the one tier with `INTERNAL_EXTRA`, so it exercises the
+        // bumped narrow-back rather than the bare truncation.
+        #[cfg(any(feature = "d462", feature = "x-wide"))]
+        cell!(24, 461, 1);
+
+        assert!(
+            checked > 0,
+            "no cell compiled in — this test must never pass without asserting"
+        );
+    }
+
     /// The bbc-benched D462<231> ln(2.0) cell: the exact-power-of-two
     /// operand takes the `m == one_w` short-circuit (`ln(v) = k·ln2`) and
     /// must produce the correctly-rounded 231-digit value — pins the

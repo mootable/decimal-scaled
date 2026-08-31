@@ -116,6 +116,126 @@ at the end of this section.
   `log1p` carried the **same** too-narrow tangent-only guard as `ln` above,
   so the parabola case reached it too; both are now faces over the shared
   kernel and were fixed together.
+- **`log1p` directed rounding in the artanh band.** Separate from the
+  near-zero case above, and larger: 52 rows across five cells returned the
+  grid point under `Floor` and `Trunc` where the true value sits strictly
+  below it.
+
+  The guard that should have caught them could not. It tagged the result's
+  side only when the working value was *exact*, and exactness required `u²`
+  to be exact — but `u` is a rounded quotient whose square does not divide
+  `10^w`, so a single contributing series term was enough to defeat it. The
+  guard could therefore only ever fire when the artanh series contributed
+  **no** terms at all. Every failing argument arrived untagged for that
+  reason, not because a side had been computed wrongly.
+
+  Two stages replace it. Where each rounding's **direction** — not merely its
+  exactness — is unanimous and agrees with the neglected tail, no cancellation
+  between error contributions is possible and the side is proved. Unanimity is
+  the *precondition* of that proof rather than a convenient observation: one
+  opposing term makes the answer depend on magnitudes, which no argument over
+  signs can settle, so mixed directions fail closed. Where the directions
+  genuinely do oppose, the side is **measured** — the series is re-evaluated
+  deeper — instead of guessed or refused, at a depth derived from the width's
+  `BITS` and never from an argument or a cell.
+
+  The deeper evaluation runs only where its answer can be consulted. The
+  walker reads the tag at an exactly-zero residual and at an exact half, and
+  nowhere else — everywhere else the residual decides and the sign is
+  discarded unread — so the probe is skipped wherever it would be thrown
+  away. Verified as a pure laziness change by identical checksums over 6018
+  results, which differ against a build with no probe at all, confirming the
+  mechanism is not merely inert.
+
+  As with `ln` above, not fixed by raising the Ziv walker's cap: that cap is
+  co-designed with the generated constant tables, and lifting it lets a kernel
+  request a table entry that does not exist — a panic in narrow builds,
+  surfacing far from the change. `artanh` needs only `10^w` and touches no
+  per-scale table, which is why the deeper evaluation is available to it.
+- **`expm1` mis-rounded at the wide tiers, in the directed modes and in
+  `HalfToEven`.** The series can land exactly on a storage grid point,
+  because `x^j / j!` is exact whenever the argument supplies the odd primes
+  in `j!`. The walker then read a zero residual, took the value to be
+  exactly representable, and returned that grid point in every mode — so
+  whichever mode needed to step off it got its neighbour's answer instead.
+
+  The kernel now reports the neglected tail's side — above or below — for
+  each probe, and the strict walker rounds from that rather than inferring
+  it from the residual. The side is claimed only where it can be *proved*;
+  anywhere it cannot, the walker keeps its ordinary escalation, so an
+  unprovable case fails closed rather than guessing.
+
+  What must be proved is that the **accumulated** error is exactly zero,
+  not that each term is individually exact. Per-term exactness is
+  sufficient but not necessary, and the difference is not academic: the
+  last remaining failures were arguments where the third and fourth terms'
+  error contributions cancel exactly (`+2/3` and `-2/3`), leaving the sum
+  exact though neither division is. The error is carried as an exact
+  rational, and every case it cannot represent reports "unproved".
+
+  This rule is available to `expm1` only because its series is seeded with
+  the exact input rather than a quotient. `log1p` opens with a divide that
+  is provably never exact for the affected family, so it needed the
+  different rule described above.
+- **`sin` and `cos` mis-rounded at tiny arguments with more than one
+  significant digit** (present since 0.5.0). The directed adjust for the
+  tiny-`x` band named the deciding term with a digit-count formula derived
+  from the argument's exponent. That formula is blind to the *significand*:
+  it is correct for a single-digit argument and wrong as soon as the
+  argument has more digits than one.
+
+  At `x = 3e-153 + 1e-252` and `SCALE = 461`, the cubic term carries
+  `450 + 4.5e-97`. The `4.5e-97` is sub-LSB imprecision — below the last
+  stored digit, so the walker cannot see it, but **207 digits shallower**
+  than the term the formula names, so the formula does not account for it
+  either. It falls in the gap between the two. Worse, its sign is the sign
+  of the significand's cube, so it **flips with the argument's last
+  significant digit**: `3e-153 - 1e-252` has the same exponent, the same
+  term index, and the opposite correct answer.
+
+  The replacement carries no closed-form claim at all. Consecutive partial
+  sums of an alternating series with strictly decreasing terms straddle the
+  true value, so the pair *brackets* the answer without anyone having to say
+  how deep the deciding digit sits — there is no depth claim left to be
+  wrong about. One generic kernel serves `sin`, `cos`, `atan` and `asinh`,
+  each supplying its own term-ratio recurrence. `tan` and `asin` are
+  deliberately excluded: their Taylor coefficients are all positive, so
+  consecutive partial sums approach from one side instead of straddling and
+  the bracket's precondition genuinely fails; they keep the existing path,
+  where all-positive coefficients make the sign unconditional.
+
+  It went unfound for a release because every adversarial input tried
+  against this band had a single-digit significand, and reproducing it needs
+  roughly 47 significant digits. The golden lead now carries the
+  multi-digit family.
+
+  `atan2` joins the same kernel. It could not simply reuse the storage face —
+  its call sites pass the *result* as the argument, so a test posed on the
+  computed value reasons in a circle. Posing the bracket on the exact rational
+  `y/x` removes the circularity: the `10^SCALE` cancels, so the two setup
+  quantities are integer divisions that keep numerator and denominator paired
+  and never form the ratio itself. No behaviour is expected to change there —
+  the bracket agrees with the previous parity rule wherever parity was right,
+  and can differ only where parity was wrong, which needs a tiny argument
+  whose `y/x` carries a multi-digit significand landing on a grid point. The
+  value is that the path is now proved rather than parity-dependent.
+
+  The bracket's own error bound is carried exactly rather than assumed. An
+  earlier form counted only the two truncations per step and missed that the
+  dominant loss is amplified by the term it multiplies — bounded by that
+  term's own magnitude, which on the first step is the argument itself. The
+  answers it produced were correct, but on a relation between the work width
+  and the scale that nothing checked. The bound is now computed and tested at
+  run time, and fails closed rather than trusting the width table.
+- **`FromStr` rejected exactly-representable trailing zeros.** `"1.00"` at
+  `SCALE = 0` returned `ParseError::OverlongFractional`, as did `"2.0"`,
+  `"-1.0"`, `"0.0"` and every literal whose digits past `SCALE` are all
+  zeros — although each is exact and round-trips losing nothing. The check
+  counted raw fractional characters where it should count *significant*
+  ones; excess zeros are now trimmed before the width check. This matches
+  the representability rule the golden harness already applies and the
+  `dec!` macro's existing all-zeros test. Genuine precision loss is still
+  rejected — `"1.05"` and `"1.050"` at `SCALE = 0`, `"1.55"` at `SCALE = 1`.
 - **Golden validator: an unsound oracle could veto a sound vector.** A
   validator that *cannot represent* an input abstains harmlessly, but one that
   computes a wrong value drops the whole line — so it could discard a vector

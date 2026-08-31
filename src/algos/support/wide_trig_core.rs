@@ -541,6 +541,14 @@ where
     );
     // Deep sub-resolution band (deciding `x^{j*}`, `j* ≥ 5`): the walker is
     // mode-blind (`decided == false`); the sign is analytic (`sin` alternates).
+    // The exact alternating-series bracket first: where it closes it PROVES
+    // which side of `r` the true value lies on, superseding the `j*`-parity
+    // rule whose exactness premise fails for a multi-digit significand.
+    if let Some(v) =
+        adjust_alternating_bracket::<C::Storage, C::W, SCALE>(r, raw, mode, AlternatingSeries::Sin)
+    {
+        return v;
+    }
     let r = tiny_x_deep_directed_adjust::<C::Storage, SCALE>(r, decided, raw, mode, true, <C::W as BigInt>::BITS);
     adjust_bounded_extremum::<C, SCALE>(r, raw, mode)
 }
@@ -553,10 +561,23 @@ where
 pub(crate) fn cos_series<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> C::Storage
+where
+    <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
     let r = C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
         C::cos_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard)
     });
+    // [`adjust_bounded_extremum`] covers only a landing exactly ON `±10^SCALE`.
+    // A landing on a DIFFERENT grid point near the extremum needs the bracket
+    // to place it — the `cos(3·10⁻⁶⁴)` family, whose leading terms are exact
+    // ULP multiples and whose first non-terminating term is `x⁸/8!` (the
+    // factor `7` in `8!`) sitting below the walker's reach.
+    if let Some(v) =
+        adjust_alternating_bracket::<C::Storage, C::W, SCALE>(r, raw, mode, AlternatingSeries::Cos)
+    {
+        return v;
+    }
     adjust_bounded_extremum::<C, SCALE>(r, raw, mode)
 }
 
@@ -985,6 +1006,760 @@ where
     }
 }
 
+/// The four alternating power series the [`adjust_alternating_bracket`]
+/// post-adjust serves, carried as the ONE thing that differs between them —
+/// the term-ratio recurrence `|c_{j+2}| / |c_j| = a_j / b_j`.
+///
+/// | series | expansion | `a_j` | `b_j` |
+/// |---|---|---|---|
+/// | `Sin`   | `x − x³/3! + x⁵/5! − …` | `1`  | `(j+1)(j+2)` |
+/// | `Cos`   | `1 − x²/2! + x⁴/4! − …` | `1`  | `(j+1)(j+2)` |
+/// | `Atan`  | `x − x³/3 + x⁵/5 − …`   | `j`  | `j+2`        |
+/// | `Asinh` | `x − x³/6 + 3x⁵/40 − …` | `j²` | `(j+1)(j+2)` |
+///
+/// All four alternate in sign from the leading term and have STRICTLY
+/// DECREASING magnitudes for `0 < |x| < 1` — `a_j < b_j` in every row — which
+/// is exactly the precondition the bracket theorem needs, so one generic
+/// kernel serves all of them.
+///
+/// `tan` / `asin` are deliberately absent: their Taylor coefficients are all
+/// positive, so consecutive partial sums approach the value from ONE side
+/// instead of straddling it and the bracket does not apply. They keep the
+/// existing [`tiny_x_deep_directed_adjust`] path, where the all-positive
+/// coefficients make the sign unconditional.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AlternatingSeries {
+    Sin,
+    Cos,
+    Atan,
+    Asinh,
+}
+
+impl AlternatingSeries {
+    /// Index of the leading term — `0` for the even face (`cos`, whose
+    /// leading term is the constant `1`), `1` for the three odd faces.
+    const fn first_index(self) -> u32 {
+        match self {
+            AlternatingSeries::Cos => 0,
+            _ => 1,
+        }
+    }
+
+    /// `(a_j, b_j)` with `|c_{j+2}| = |c_j| · a_j / b_j`. Both fit a `u64`
+    /// for every `j` the band admits (`j ≤ TINY_X_DEEP_JMAX`, so
+    /// `b_j ≤ 42·43`).
+    const fn ratio(self, j: u32) -> (u64, u64) {
+        let j = j as u64;
+        match self {
+            AlternatingSeries::Sin | AlternatingSeries::Cos => (1, (j + 1) * (j + 2)),
+            AlternatingSeries::Atan => (j, j + 2),
+            AlternatingSeries::Asinh => (j * j, (j + 1) * (j + 2)),
+        }
+    }
+}
+
+/// `val[..len] *= m` through the multiply matcher's slice door, returning the
+/// new significant length. `scratch` must hold `len + 1` limbs.
+#[inline]
+fn mul_small(val: &mut [u64], len: usize, m: u64, scratch: &mut [u64]) -> usize {
+    if m == 1 {
+        return len;
+    }
+    for s in scratch[..len + 1].iter_mut() {
+        *s = 0;
+    }
+    crate::int::policy::mul::dispatch_slice(&val[..len], &[m], &mut scratch[..len + 1]);
+    val[..len + 1].copy_from_slice(&scratch[..len + 1]);
+    sig_len(&val[..len + 1])
+}
+
+/// `out = 10^exp` as limbs, returning its significant length; `None` when
+/// `out` / `scratch` cannot hold it (fail closed). `10^19` is the largest
+/// power of ten a `u64` holds, so the build costs `⌈exp/19⌉` small multiplies
+/// rather than `exp` of them.
+fn pow10_into(exp: u32, out: &mut [u64], scratch: &mut [u64]) -> Option<usize> {
+    for o in out.iter_mut() {
+        *o = 0;
+    }
+    if out.is_empty() {
+        return None;
+    }
+    out[0] = 1;
+    let mut len = 1usize;
+    let mut left = exp;
+    while left > 0 {
+        let step = if left >= 19 { 19 } else { left };
+        if len + 1 > out.len() || len + 1 > scratch.len() {
+            return None;
+        }
+        len = mul_small(out, len, 10u64.pow(step), scratch);
+        left -= step;
+    }
+    Some(len)
+}
+
+/// Exact-scratch divide for the bracket. Returns `false` when the scratch
+/// cannot hold the shape, which every caller treats as "make no adjustment".
+///
+/// `int::policy::div_rem::dispatch` must NOT be used here. Its blanket engines
+/// carry BUILD-MAX normalisation scratch — `div_knuth_u128_limb` declares
+/// `[0u64; MAX_SINGLE_LIMBS]` = `4·MAX_WORK_N + 2` = 258 limbs against a
+/// documented requirement of `num.len() + 2`. `MAX_WORK_N` is derived from the
+/// STORAGE-scaled work widths and never accounted for the AGM integer, so the
+/// `asinh` face — which instantiates this kernel at `Wk = C::Wagm`
+/// (`Int<192>` at D924, `Int<256>` at D1232) — presents a dividend of roughly
+/// `3·Wk::LIMBS` limbs and indexes straight off the end of that buffer. That
+/// is the build-max blanket leaking onto a path that can size itself exactly,
+/// which rule 6 forbids and which here is not a style point but an
+/// out-of-bounds panic (#86).
+///
+/// So the divide routes on the matcher's OWN verdict
+/// ([`select_for_limbs`](crate::int::policy::div_rem::select_for_limbs)) and
+/// then calls the chosen engine's `_into` door with scratch sized exactly from
+/// `Wk`'s `ComputeLimbs` carrier — the same exact-scratch pattern
+/// `newton_reciprocal` and `div_widen_scale` use, and the one
+/// `div_rem::dispatch`'s own doc points concrete-`N` callers at.
+///
+/// The non-`Rem` verdicts collapse to base-2⁶⁴ Knuth, which is value-identical
+/// to the u128-limb engine (that engine exists for speed, not a different
+/// result). Correct for every shape this kernel presents today, but it MUST be
+/// re-verified if an `Algorithm` arm joining `int::policy::div_rem` ever
+/// returns a numerically different answer.
+fn bracket_div<Wk: BigInt>(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) -> bool
+where
+    <Wk as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    use crate::int::policy::div_rem::{select_for_limbs, Algorithm};
+    use crate::int::types::compute_limbs::ComputeLimbs;
+
+    match select_for_limbs(num, den) {
+        // Single-limb divisor: hardware remainder, no normalisation scratch
+        // is involved at all, so there is nothing to size.
+        Algorithm::Rem => {
+            crate::int::algos::div::div_rem::div_rem(num, den, quot, rem);
+            true
+        }
+        _ => {
+            let mut ub = <<Wk as BigInt>::Scratch as ComputeLimbs>::quad_u64();
+            let mut vb = <<Wk as BigInt>::Scratch as ComputeLimbs>::double_u64();
+            let u = ub.as_mut();
+            let v = vb.as_mut();
+            // `u` must hold `num.len() + 2`; the dividend here is at most
+            // `3·Wk::LIMBS`, so `quad_u64` (`4·LIMBS`) covers it — CHECKED, not
+            // assumed, because that is exactly what went wrong upstream.
+            if u.len() < num.len() + 2 || v.len() < den.len() {
+                return false;
+            }
+            for e in u.iter_mut() {
+                *e = 0;
+            }
+            for e in v.iter_mut() {
+                *e = 0;
+            }
+            crate::int::algos::div::div_knuth::div_knuth_into(num, den, quot, rem, u, v);
+            true
+        }
+    }
+}
+
+/// Analytic directed post-adjust that PROVES which side of the returned grid
+/// point the true value lies on, by bracketing it between two consecutive
+/// partial sums of its own alternating series.
+///
+/// # The defect this corrects
+///
+/// [`tiny_x_deep_directed_adjust`] derives the deciding term index `j*` from
+/// `k = SCALE − digits + 1`, the LEADING-digit position, and then takes the
+/// directed side from `j*`'s parity. Two different questions are being
+/// conflated:
+///
+/// * whether term `j` is entirely SUB-ULP is governed by `k` — what the code
+///   computes, and correct;
+/// * whether term `j` is an EXACT ULP MULTIPLE is governed by the LAST
+///   significant digit's position, i.e. by the digit COUNT as well — what the
+///   code assumes, and correct only for a one-digit significand.
+///
+/// For a multi-digit significand an above-LSB term straddles the LSB and
+/// carries SUB-LSB IMPRECISION — imprecision from a term the code assumed
+/// contributed a whole number of ULPs, landing below the last stored digit.
+/// It can sit BEYOND the walker's reach (so the walker is blind to it) yet be
+/// far SHALLOWER than the `j*` term — in which case that imprecision, not
+/// `c_{j*}`, decides the sign and the parity rule asserts the wrong
+/// direction. Writing `raw = μ·10^t` with `μ` coprime to 10, every term is
+/// the exact rational `R_j = μ^j / (j!·10^((j−1)L − t))` with `L = SCALE − t`;
+/// at D462 s461 the input `3·10⁻¹⁵³ + 10⁻²⁵²` gives
+/// `R_3 = 450 + 4.5·10⁻⁹⁷ + …`, so the true value is BELOW the grid point
+/// while the parity rule says above. Flipping the last significant digit's
+/// sign (`3·10⁻¹⁵³ − 10⁻²⁵²`) flips the sub-LSB imprecision to `−4.5·10⁻⁹⁷`
+/// and the parity rule is accidentally right — which is why `k` and `j*`,
+/// identical for both, cannot see the difference.
+///
+/// # The theorem
+///
+/// For an alternating series with strictly decreasing terms, consecutive
+/// partial sums STRADDLE the value: `P_m < V < P_{m+1}` or the reverse, with
+/// the side given by the sign of the first omitted term. So with `ρ` the
+/// magnitude the walker returned, two brackets settle the rounding outright:
+///
+/// ```text
+///     ρ ≤ P_lower  and  P_upper ≤ ρ + 1   ⟹   ρ < V < ρ + 1
+///     ρ − 1 ≤ P_lower  and  P_upper ≤ ρ   ⟹   ρ − 1 < V < ρ
+/// ```
+///
+/// Each localises `V` to ONE OPEN UNIT INTERVAL, from which every directed
+/// mode's correct answer follows outright: the first is the EXPANDING step
+/// (`Ceiling` moves up one ULP, `Floor`/`Trunc` stay), the second the
+/// COMPRESSING step. Both are theorems about the series, carrying no width
+/// gate, no scale gate and no tolerance.
+///
+/// # It cannot fire on a correct result, and does not consult `decided`
+///
+/// Because the conclusion is a proof of `V`'s position rather than an
+/// inference from the walker's state, firing the first bracket establishes
+/// `ρ < V`, so a `Ceiling` of `ρ` was strictly below the true value and
+/// therefore wrong; the mirror argument holds for `Floor`/`Trunc` under the
+/// second. The two brackets are mutually exclusive. Nothing here reads the
+/// walker's `decided` flag — which is noisy in BOTH directions — so a
+/// false-negative sensor can no longer mis-route the decision.
+///
+/// # Why the variable order is BOUNDED
+///
+/// "Iterate until a bracket fires" is bounded, not open-ended, for two
+/// independent reasons.
+///
+/// The order that must actually be REACHED is `j0`, the first index whose
+/// term is not a whole number of ULPs — every shallower term contributes
+/// nothing below the LSB, so nothing before `j0` can decide the sign. Term
+/// `j` is an exact ULP multiple only while `(j−1)·L ≤ t = SCALE − L`, so
+/// exactness all the way to `j0 − 2` forces `(j0−3)·L ≤ SCALE − L`, giving
+///
+/// ```text
+///     j0  ≤  SCALE/L + 2
+/// ```
+///
+/// A LARGER `j0` therefore requires a SMALLER `L`, i.e. a shorter
+/// significand — the two trade off, which is why the deep orders are only
+/// ever reached by arguments cheap enough to carry there.
+///
+/// The loop is capped independently of that: the band gate admits an argument
+/// only while `SCALE/k + 1 ≤ TINY_X_DEEP_JMAX`, and that quantity IS the
+/// first entirely-sub-ULP index, so at most `(JMAX+3)/2` iterations run.
+/// Width is bounded too — every term is smaller than the leading one, so `2N`
+/// limbs hold the whole computation at every order and the accumulator never
+/// grows with the order.
+///
+/// # Arithmetic
+///
+/// Everything is an ULP count in binary fixed point scaled by `2^F` with
+/// `F = Wk::BITS`, so the per-term rescale is a whole-limb shift rather than
+/// a division. One setup divide produces `y = ⌊x²·2^F⌋`; each step is then
+/// `t ← ⌊⌊t·y / 2^F⌋ · a_j / b_j⌋`. Every operation truncates DOWNWARD, so the
+/// computed term never exceeds the true one, and the resulting bound is
+/// applied OUTWARD at both bracket ends so the comparison can only lose
+/// coverage, never decide wrongly. That bound is NOT a small constant: the
+/// dominant loss is the truncation in `y`, amplified by the term it
+/// multiplies, so a step loses up to the term's own ULP magnitude (see the
+/// derivation at the accumulator below) and the leading term dominates all of
+/// them. It stays far below one ULP only while `Wk::BITS` exceeds roughly
+/// `3.4·SCALE`, which is CHECKED at run time rather than assumed. Buffers are
+/// exact per-`N` [`ComputeLimbs`] (`single_u64` / `double_u64` / `quad_u64`,
+/// never a build-max), and every capacity is CHECKED: a short buffer, an
+/// out-of-range quotient or a partial-sum borrow all yield `None`.
+///
+/// # Where it stays silent, and why that is principled
+///
+/// `None` means "no adjustment" and the caller keeps its existing path
+/// byte-for-byte. That happens when no bracket closes to within one ULP —
+/// notably when the sub-LSB imprecision is positive but SMALLER than the next
+/// term, which is exactly the regime where that next term dominates and the
+/// parity rule the caller falls back to is already CORRECT. The fallback is
+/// therefore the right answer there, not an unfinished edge.
+///
+/// [`ComputeLimbs`]: crate::int::types::compute_limbs::ComputeLimbs
+pub(crate) fn adjust_alternating_bracket<St: BigInt, Wk: BigInt, const SCALE: u32>(
+    result: St,
+    raw: St,
+    mode: RoundingMode,
+    series: AlternatingSeries,
+) -> Option<St>
+where
+    <Wk as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    use crate::algos::exp::exp_generic as eg;
+    use crate::int::algos::support::limbs as lb;
+    use crate::int::types::compute_limbs::ComputeLimbs;
+
+    if crate::support::rounding::is_nearest_mode(mode) || SCALE == 0 {
+        return None;
+    }
+    let zero = <St as BigInt>::ZERO;
+    if raw == zero {
+        return None;
+    }
+    let n = if raw < zero { zero - raw } else { raw };
+    // The tiny-argument band — the SAME continuous band
+    // [`tiny_x_deep_directed_adjust`] uses, read from the same constant so the
+    // family keeps one band definition. `digits > SCALE` is `|x| ≥ 1`, where
+    // the strictly-decreasing-terms precondition fails.
+    let digits = dec_digits_g::<St>(n);
+    if digits == 0 || digits > SCALE {
+        return None;
+    }
+    let k = SCALE - digits + 1;
+    if k == 0 {
+        return None;
+    }
+    if SCALE / k + 1 > TINY_X_DEEP_JMAX {
+        return None;
+    }
+    let rho = if result < zero { zero - result } else { result };
+
+    // The work integer `Wk` carries the scratch (its `ComputeLimbs` bound is
+    // the one already in scope at every caller), so the fixed point is `2^F`
+    // with `F = Wk::BITS` — wider than the storage width, never narrower.
+    let nl = <Wk as BigInt>::LIMBS;
+    let w = 2 * nl;
+    let f_bits = <Wk as BigInt>::BITS;
+
+    let mut nb_b = <<Wk as BigInt>::Scratch as ComputeLimbs>::single_u64();
+    let mut y_b = <<Wk as BigInt>::Scratch as ComputeLimbs>::single_u64();
+    let mut t_b = <<Wk as BigInt>::Scratch as ComputeLimbs>::double_u64();
+    let mut bd_b = <<Wk as BigInt>::Scratch as ComputeLimbs>::double_u64();
+    let mut pr_b = <<Wk as BigInt>::Scratch as ComputeLimbs>::quad_u64();
+    let mut qt_b = <<Wk as BigInt>::Scratch as ComputeLimbs>::quad_u64();
+    let nb = nb_b.as_mut();
+    let y = y_b.as_mut();
+    let t = t_b.as_mut();
+    let bd = bd_b.as_mut();
+    let pr = pr_b.as_mut();
+    let qt = qt_b.as_mut();
+    // Capacity is CHECKED, never assumed.
+    if nb.len() < nl
+        || y.len() < nl
+        || t.len() < w
+        || bd.len() < w
+        || pr.len() < 4 * nl
+        || qt.len() < 4 * nl
+    {
+        return None;
+    }
+
+    // ── setup: `y = ⌊x²·2^F⌋`, the term-ratio multiplier ──────────────────
+    eg::unpack_mag::<Wk>(n.resize_to::<Wk>(), nb);
+    let ln = sig_len(&nb[..nl]);
+    for p in pr.iter_mut() {
+        *p = 0;
+    }
+    if nl + 2 * ln > pr.len() {
+        return None;
+    }
+    // `n²·2^F`: the shift is a whole number of limbs (`F = 64·N`), so the
+    // product is written straight into the offset window — no shift needed.
+    crate::int::policy::mul::dispatch_slice(&nb[..ln], &nb[..ln], &mut pr[nl..nl + 2 * ln]);
+    let lp = pow10_into(2 * SCALE, bd, qt)?;
+    let dl = sig_len(&pr[..nl + 2 * ln]);
+    // `dl < lp` would be a divide with a longer divisor than dividend — it
+    // cannot arise for a band argument (`|x| ≥ 10^−SCALE` gives
+    // `x²·2^F ≥ 1`), but the shape is checked rather than assumed.
+    // `t` is still unused here, so it serves as the remainder buffer.
+    if qt.len() < dl || t.len() < lp || dl < lp {
+        return None;
+    }
+    for q in qt.iter_mut() {
+        *q = 0;
+    }
+    for e in t.iter_mut() {
+        *e = 0;
+    }
+    if !bracket_div::<Wk>(&pr[..dl], &bd[..lp], &mut qt[..dl], &mut t[..lp]) {
+        return None;
+    }
+    // `|x| < 1` so `y < 2^F`, i.e. at most `N` limbs. A wider quotient would
+    // mean a non-tiny argument slipped the band gate — fail closed rather
+    // than silently truncate.
+    if sig_len(&qt[..dl]) > nl {
+        return None;
+    }
+    y[..nl].copy_from_slice(&qt[..nl]);
+
+    // ── the leading term, scaled by `2^F` ─────────────────────────────────
+    for e in t.iter_mut() {
+        *e = 0;
+    }
+    if series == AlternatingSeries::Cos {
+        // The even face's leading term is the constant `1` = `10^SCALE` ULPs.
+        // `n` is no longer needed, so its buffer carries the constant.
+        let unit = crate::consts::pow10::dispatch::<Wk>(SCALE);
+        eg::unpack_mag::<Wk>(unit, nb);
+        lb::shl(&nb[..nl], f_bits, &mut t[..w]);
+    } else {
+        lb::shl(&nb[..ln], f_bits, &mut t[..w]);
+    }
+    alternating_bracket_core::<St, Wk>(result, rho, mode, series, t, y, nb, bd, pr)
+}
+
+/// The RATIO face of [`adjust_alternating_bracket`] — `atan2`.
+///
+/// `atan2`'s series argument is `z = y/x`, which is NOT a storage value, so
+/// the storage entry cannot serve it. That is why the existing
+/// [`tiny_x_deep_directed_adjust`] call sites substitute the on-grid result
+/// `g` for `z`, and why that substitution is CIRCULAR: `g − z` is precisely
+/// the quantity whose sign is being determined. This entry takes `y_raw` and
+/// `x_raw` and never forms `z`, keeping numerator and denominator paired so
+/// both setup quantities remain exact integer divisions:
+///
+/// ```text
+///     leading term   t = ⌊10^SCALE · |y| · 2^F / x⌋
+///     term ratio     y_fp = ⌊|y|² · 2^F / x²⌋           ( = ⌊z²·2^F⌋ )
+/// ```
+///
+/// Reached only with `x_raw > 0` and `|y_raw| < x_raw` — the branch where
+/// `atan2` reduces to `atan(z)` with `0 < |z| < 1` and no `±π` offset — so the
+/// alternating, strictly-decreasing precondition holds and the face is
+/// [`AlternatingSeries::Atan`].
+///
+/// The band gate derives `k` from the two DIGIT COUNTS rather than from `g`,
+/// which keeps the whole path clear of the circularity: with `dy` digits in
+/// `|y|` and `dx` in `x`, `z` lies in `(10^(dy−dx−1), 10^(dy−dx+1))`, so
+/// `k = dx − dy` is a LOWER bound on the true leading-digit position and
+/// gating on it is conservative — it can only decline to attempt the proof,
+/// never admit an argument outside the band.
+pub(crate) fn adjust_alternating_bracket_ratio<St: BigInt, Wk: BigInt, const SCALE: u32>(
+    result: St,
+    y_raw: St,
+    x_raw: St,
+    mode: RoundingMode,
+) -> Option<St>
+where
+    <Wk as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    use crate::algos::exp::exp_generic as eg;
+    use crate::int::types::compute_limbs::ComputeLimbs;
+
+    if crate::support::rounding::is_nearest_mode(mode) || SCALE == 0 {
+        return None;
+    }
+    let zero = <St as BigInt>::ZERO;
+    if y_raw == zero || x_raw <= zero {
+        return None;
+    }
+    let ny = if y_raw < zero { zero - y_raw } else { y_raw };
+    if ny >= x_raw {
+        return None; // |z| ≥ 1 — outside the reduced branch and the band
+    }
+    let dy = dec_digits_g::<St>(ny);
+    let dx = dec_digits_g::<St>(x_raw);
+    if dy == 0 || dx <= dy {
+        return None;
+    }
+    let k = dx - dy; // conservative lower bound on the leading-digit position
+    if k == 0 || SCALE / k + 1 > TINY_X_DEEP_JMAX {
+        return None;
+    }
+    let rho = if result < zero { zero - result } else { result };
+
+    // `·2^F` is applied throughout as a whole-limb offset (`F = Wk::BITS`), so
+    // no bit shift is needed here — the products are written into the window.
+    let nl = <Wk as BigInt>::LIMBS;
+    let w = 2 * nl;
+
+    let mut nb_b = <<Wk as BigInt>::Scratch as ComputeLimbs>::single_u64();
+    let mut xb_b = <<Wk as BigInt>::Scratch as ComputeLimbs>::single_u64();
+    let mut y_b = <<Wk as BigInt>::Scratch as ComputeLimbs>::single_u64();
+    let mut t_b = <<Wk as BigInt>::Scratch as ComputeLimbs>::double_u64();
+    let mut bd_b = <<Wk as BigInt>::Scratch as ComputeLimbs>::double_u64();
+    let mut pr_b = <<Wk as BigInt>::Scratch as ComputeLimbs>::quad_u64();
+    let mut qt_b = <<Wk as BigInt>::Scratch as ComputeLimbs>::quad_u64();
+    let nb = nb_b.as_mut();
+    let xb = xb_b.as_mut();
+    let y = y_b.as_mut();
+    let t = t_b.as_mut();
+    let bd = bd_b.as_mut();
+    let pr = pr_b.as_mut();
+    let qt = qt_b.as_mut();
+    if nb.len() < nl
+        || xb.len() < nl
+        || y.len() < nl
+        || t.len() < w
+        || bd.len() < w
+        || pr.len() < 4 * nl
+        || qt.len() < 4 * nl
+    {
+        return None;
+    }
+
+    eg::unpack_mag::<Wk>(ny.resize_to::<Wk>(), nb);
+    eg::unpack_mag::<Wk>(x_raw.resize_to::<Wk>(), xb);
+    let ln = sig_len(&nb[..nl]);
+    let lx = sig_len(&xb[..nl]);
+
+    // ── the term ratio: `y_fp = ⌊|y|²·2^F / x²⌋` ──────────────────────────
+    for p in pr.iter_mut() {
+        *p = 0;
+    }
+    if nl + 2 * ln > pr.len() || 2 * lx > bd.len() {
+        return None;
+    }
+    // `·2^F` is a whole-limb offset, so the square is written straight into it.
+    crate::int::policy::mul::dispatch_slice(&nb[..ln], &nb[..ln], &mut pr[nl..nl + 2 * ln]);
+    for e in bd[..2 * lx].iter_mut() {
+        *e = 0;
+    }
+    crate::int::policy::mul::dispatch_slice(&xb[..lx], &xb[..lx], &mut bd[..2 * lx]);
+    let dl = sig_len(&pr[..nl + 2 * ln]);
+    let lp = sig_len(&bd[..2 * lx]);
+    if qt.len() < dl || t.len() < lp || dl < lp {
+        return None;
+    }
+    for q in qt.iter_mut() {
+        *q = 0;
+    }
+    for e in t.iter_mut() {
+        *e = 0;
+    }
+    if !bracket_div::<Wk>(&pr[..dl], &bd[..lp], &mut qt[..dl], &mut t[..lp]) {
+        return None;
+    }
+    // `|z| < 1` so `y_fp < 2^F` — at most `nl` limbs. Anything wider means the
+    // band gate admitted a non-tiny ratio; fail closed rather than truncate.
+    if sig_len(&qt[..dl]) > nl {
+        return None;
+    }
+    y[..nl].copy_from_slice(&qt[..nl]);
+
+    // ── the leading term: `t = ⌊10^SCALE·|y|·2^F / x⌋` ────────────────────
+    let unit = crate::consts::pow10::dispatch::<Wk>(SCALE);
+    eg::unpack_mag::<Wk>(unit, bd);
+    let lu = sig_len(&bd[..nl]);
+    for p in pr.iter_mut() {
+        *p = 0;
+    }
+    if nl + lu + ln > pr.len() {
+        return None;
+    }
+    crate::int::policy::mul::dispatch_slice(&bd[..lu], &nb[..ln], &mut pr[nl..nl + lu + ln]);
+    let dl2 = sig_len(&pr[..nl + lu + ln]);
+    if qt.len() < dl2 || bd.len() < lx || dl2 < lx {
+        return None;
+    }
+    for q in qt.iter_mut() {
+        *q = 0;
+    }
+    for e in bd.iter_mut() {
+        *e = 0;
+    }
+    if !bracket_div::<Wk>(&pr[..dl2], &xb[..lx], &mut qt[..dl2], &mut bd[..lx]) {
+        return None;
+    }
+    // `T_1 = 10^SCALE·|z| < 10^SCALE`, so the scaled leading term fits `2N`.
+    if sig_len(&qt[..dl2]) > w {
+        return None;
+    }
+    t[..w].copy_from_slice(&qt[..w]);
+
+    alternating_bracket_core::<St, Wk>(
+        result,
+        rho,
+        mode,
+        AlternatingSeries::Atan,
+        t,
+        y,
+        nb,
+        bd,
+        pr,
+    )
+}
+
+/// The shared bracket loop — everything after the two setup quantities.
+///
+/// Split out so the storage faces ([`adjust_alternating_bracket`]) and the
+/// RATIO face ([`adjust_alternating_bracket_ratio`], `atan2`) run the SAME
+/// kernel and differ only in how they obtain those two quantities: `t`, the
+/// leading term scaled by `2^F`, and `y = ⌊x²·2^F⌋`, the term-ratio
+/// multiplier. Everything that decides anything — the recurrence, the
+/// brackets, the error bound, the fail-closed paths — lives here, once.
+///
+/// `t` is consumed (rewritten in place as the recurrence advances); `nb`,
+/// `bd` and `pr` are caller-owned scratch, already free by the time the setup
+/// has produced `t` and `y`, and are reused here rather than re-allocated.
+#[allow(clippy::too_many_arguments)]
+fn alternating_bracket_core<St: BigInt, Wk: BigInt>(
+    result: St,
+    rho: St,
+    mode: RoundingMode,
+    series: AlternatingSeries,
+    t: &mut [u64],
+    y: &[u64],
+    nb: &mut [u64],
+    bd: &mut [u64],
+    pr: &mut [u64],
+) -> Option<St>
+where
+    <Wk as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    use crate::algos::exp::exp_generic as eg;
+    use crate::int::algos::support::limbs as lb;
+    use crate::int::types::compute_limbs::ComputeLimbs;
+
+    let nl = <Wk as BigInt>::LIMBS;
+    let w = 2 * nl;
+    let f_bits = <Wk as BigInt>::BITS;
+    let zero = <St as BigInt>::ZERO;
+
+    let mut pp_b = <<Wk as BigInt>::Scratch as ComputeLimbs>::double_u64();
+    let mut pc_b = <<Wk as BigInt>::Scratch as ComputeLimbs>::double_u64();
+    let pp = pp_b.as_mut();
+    let pc = pc_b.as_mut();
+    if pp.len() < w || pc.len() < w || t.len() < w || y.len() < nl {
+        return None;
+    }
+
+    // `bd` becomes the fixed comparison anchor `ρ·2^F`.
+    eg::unpack_mag::<Wk>(rho.resize_to::<Wk>(), nb);
+    lb::shl(&nb[..nl], f_bits, &mut bd[..w]);
+
+    pc[..w].copy_from_slice(&t[..w]);
+    for e in pp.iter_mut() {
+        *e = 0;
+    }
+    let mut j = series.first_index();
+    let mut subtract = true;
+    let max_steps = (TINY_X_DEEP_JMAX as usize + 3) / 2;
+
+    // ── the error bound, applied OUTWARD at both bracket ends ─────────────
+    // The dominant per-step deficit is NOT the two truncations: it is the
+    // truncation in `y = ⌊x²·2^F⌋`, amplified by the term it multiplies.
+    // With `y = x²·2^F − δ`, `δ ∈ [0,1)`,
+    //
+    //     ⌊t·y / 2^F⌋  =  t·x² − t·δ/2^F   and   t/2^F = T,
+    //
+    // so one step loses up to `T` — the term's own ULP magnitude — plus 2 for
+    // the two floors. Terms decrease (`a_j < b_j` and `x² < 1`), so the
+    // LEADING term `T_1` dominates every `T_j`; a term error accumulates at
+    // most `m` of those and a partial sum at most `m` term errors. Hence
+    // `m²·(T_1 + 2)` bounds the slack for every comparison, computed once.
+    // `T_1` is the leading term's integer part, sitting in the top half of
+    // `t` — the fixed point makes it a slice, not a computation.
+    let mut eb_b = <<Wk as BigInt>::Scratch as ComputeLimbs>::double_u64();
+    let eb = eb_b.as_mut();
+    if eb.len() < w {
+        return None;
+    }
+    for e in eb.iter_mut() {
+        *e = 0;
+    }
+    eb[..nl].copy_from_slice(&t[nl..w]);
+    lb::add_assign(&mut eb[..w], &[2]);
+    let steps = max_steps as u64;
+    let el0 = sig_len(&eb[..w]);
+    if el0 + 1 > w {
+        return None;
+    }
+    let el = mul_small(eb, el0, steps * steps, pr);
+    // The whole argument rests on the slack staying BELOW one ULP (`2^F`, i.e.
+    // `nl` limbs). A tier violating that — it needs `Wk::BITS > ~3.4·SCALE` —
+    // would make every comparison below meaningless, so it is CHECKED here
+    // rather than assumed from the tier table.
+    if el > nl {
+        return None;
+    }
+
+    for _ in 0..max_steps {
+        // ── the next term: `t ← ⌊⌊t·y / 2^F⌋ · a_j / b_j⌋` ────────────────
+        let (a, b) = series.ratio(j);
+        for p in pr.iter_mut() {
+            *p = 0;
+        }
+        if 3 * nl > pr.len() {
+            return None;
+        }
+        crate::int::policy::mul::dispatch_slice(&t[..w], &y[..nl], &mut pr[..3 * nl]);
+        lb::shr(&pr[..3 * nl], f_bits, &mut t[..w]);
+        let mut lt = sig_len(&t[..w]);
+        if a != 1 {
+            if lt + 1 > w {
+                return None;
+            }
+            lt = mul_small(t, lt, a, pr);
+        }
+        if b != 1 {
+            for p in pr[..lt].iter_mut() {
+                *p = 0;
+            }
+            let mut r1 = [0u64; 1];
+            // A single-limb divisor, so this takes the scratch-free `Rem` arm;
+            // routed through the same helper so no divide in this kernel can
+            // reach a build-max engine.
+            if !bracket_div::<Wk>(&t[..lt], &[b], &mut pr[..lt], &mut r1) {
+                return None;
+            }
+            t[..lt].copy_from_slice(&pr[..lt]);
+            for e in t[lt..w].iter_mut() {
+                *e = 0;
+            }
+        }
+        j += 2;
+
+        // ── fold it in; `pp` and `pc` now straddle the true value ─────────
+        pp[..w].copy_from_slice(&pc[..w]);
+        let out_of_range = if subtract {
+            lb::sub_assign(&mut pc[..w], &t[..w])
+        } else {
+            lb::add_assign(&mut pc[..w], &t[..w])
+        };
+        if out_of_range {
+            return None; // borrow / carry out of range — fail closed
+        }
+        let (lo, hi): (&[u64], &[u64]) = if subtract {
+            (&pc[..w], &pp[..w])
+        } else {
+            (&pp[..w], &pc[..w])
+        };
+
+        // ── the two unit-interval brackets, errors applied OUTWARD ────────
+        let mut expanding: Option<bool> = None;
+        // `ρ ≤ lo` and `hi ≤ ρ + 1`.
+        pr[..w].copy_from_slice(&bd[..w]);
+        lb::add_assign(&mut pr[..w], &eb[..w]);
+        if lb::cmp(lo, &pr[..w]) >= 0 {
+            pr[..w].copy_from_slice(&bd[..w]);
+            lb::add_assign(&mut pr[nl..w], &[1]);
+            lb::sub_assign(&mut pr[..w], &eb[..w]);
+            if lb::cmp(hi, &pr[..w]) <= 0 {
+                expanding = Some(true);
+            }
+        }
+        // `ρ − 1 ≤ lo` and `hi ≤ ρ`. Skipped at `ρ = 0`, where `ρ − 1` is not
+        // a magnitude.
+        if expanding.is_none() && rho != zero {
+            pr[..w].copy_from_slice(&bd[..w]);
+            lb::sub_assign(&mut pr[nl..w], &[1]);
+            lb::add_assign(&mut pr[..w], &eb[..w]);
+            if lb::cmp(lo, &pr[..w]) >= 0 {
+                pr[..w].copy_from_slice(&bd[..w]);
+                lb::sub_assign(&mut pr[..w], &eb[..w]);
+                if lb::cmp(hi, &pr[..w]) <= 0 {
+                    expanding = Some(false);
+                }
+            }
+        }
+        if let Some(up) = expanding {
+            let one = <St as BigInt>::ONE;
+            return Some(if up {
+                crate::support::rounding::tiny_odd_expanding_directed(result, zero, one, mode)
+            } else {
+                crate::support::rounding::tiny_odd_compressing_directed(result, zero, one, mode)
+            });
+        }
+
+        subtract = !subtract;
+        if lb::is_zero(&t[..w]) {
+            break; // no further resolution available in the fixed point
+        }
+    }
+    None
+}
+
 /// Directed-rounding post-adjust for `ln` very near `x = 1` — the `ln` face of
 /// [`adjust_log_near_zero`], which carries the full analysis. `ln`'s linear
 /// term is `δ = raw − 10^SCALE`, so the adjust reads the gap against `one`.
@@ -1114,6 +1889,12 @@ where
         C::storage_min(),
         |guard| C::atan_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard),
     );
+    // Exact bracket first — see [`sin_series`]; `atan` alternates identically.
+    if let Some(v) =
+        adjust_alternating_bracket::<C::Storage, C::W, SCALE>(r, raw, mode, AlternatingSeries::Atan)
+    {
+        return v;
+    }
     tiny_x_deep_directed_adjust::<C::Storage, SCALE>(r, decided, raw, mode, true, <C::W as BigInt>::BITS)
 }
 
@@ -1196,6 +1977,14 @@ where
         },
         |guard| C::sin_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard),
     );
+    // The exact alternating-series bracket first: where it closes it PROVES
+    // which side of `r` the true value lies on, superseding the `j*`-parity
+    // rule whose exactness premise fails for a multi-digit significand.
+    if let Some(v) =
+        adjust_alternating_bracket::<C::Storage, C::W, SCALE>(r, raw, mode, AlternatingSeries::Sin)
+    {
+        return v;
+    }
     let r = tiny_x_deep_directed_adjust::<C::Storage, SCALE>(r, decided, raw, mode, true, <C::W as BigInt>::BITS);
     adjust_bounded_extremum::<C, SCALE>(r, raw, mode)
 }
@@ -1233,6 +2022,13 @@ where
         },
         |guard| C::cos_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard),
     );
+    // See [`cos_series`] — the near-extremum grid point the bounded-extremum
+    // guard cannot reach.
+    if let Some(v) =
+        adjust_alternating_bracket::<C::Storage, C::W, SCALE>(r, raw, mode, AlternatingSeries::Cos)
+    {
+        return v;
+    }
     adjust_bounded_extremum::<C, SCALE>(r, raw, mode)
 }
 
@@ -1465,6 +2261,12 @@ where
         )
     };
     // Deep sub-resolution band (`j* ≥ 5`): `atan` alternates like `sin`.
+    // Exact bracket first — see [`sin_series`].
+    if let Some(v) =
+        adjust_alternating_bracket::<C::Storage, C::W, SCALE>(r, raw, mode, AlternatingSeries::Atan)
+    {
+        return v;
+    }
     tiny_x_deep_directed_adjust::<C::Storage, SCALE>(r, decided, raw, mode, true, <C::W as BigInt>::BITS)
 }
 
@@ -2629,8 +3431,8 @@ where
             // (working-scale remainder == 0) at a depth ABOVE the true
             // deviation also counts as resolved when paired with `hi == lo`.
             // `directed_narrow` already handles the zero remainder correctly
-            // (`residual_present = rem != lit(0) || never_exact` keeps the
-            // directed bump active when `never_exact` is set), so `hi` IS
+            // (`away = Some(true)` when `rem != lit(0) || never_exact` keeps
+            // the directed bump active when `never_exact` is set), so `hi` IS
             // the right directed answer; `hi == lo` confirms a second,
             // independent depth reached the same conclusion. This is sound
             // for every CURRENT ladder: the step formula (`target +

@@ -208,6 +208,35 @@ use crate::support::rounding::RoundingMode;
         };
         (rounded, Some(side))
     }
+
+    /// Whether a `÷10^w` rounding left `scaled` no further from zero than the
+    /// exact quotient of `prod` — the ordering counterpart of the equality
+    /// test a caller would otherwise write as `scaled · 10^w == prod`.
+    ///
+    /// # What the ordering buys over the equality
+    ///
+    /// A series term rounded TOWARD zero pulls its partial sum toward zero, so
+    /// it leaves the true value on the AWAY-from-zero side — which is the side
+    /// the dropped tail is already on whenever every term carries the argument's
+    /// sign. Such a rounding therefore cannot break an agreement argument; only
+    /// one that pushes the term AWAY from zero can. Demanding exactness rejects
+    /// both, which costs every argument whose divisions merely came out on the
+    /// harmless side. See [`log1p_fixed_inner`], whose tag rests on this.
+    ///
+    /// # Fail-closed
+    ///
+    /// `prod` reaches this as a truncated low product, so a term wide enough to
+    /// wrap it would make any ordering read off it meaningless. Reconstructing
+    /// the product from `scaled` must land within one divisor of `prod` — that
+    /// gap IS the discarded remainder — so a wider gap means the read is not
+    /// trustworthy and the answer is `false`, exactly as an away-from-zero
+    /// rounding is.
+    #[inline]
+    fn rounded_toward_zero<S: BigInt>(scaled: S, prod: S, pow10_w: S) -> bool {
+        let back = scaled.wrapping_mul_low_u128(pow10_w);
+        abs(back - prod) < pow10_w && abs(back) <= abs(prod)
+    }
+
     /// Half-to-even quotient `n / 10^w`, via the MG (magic-multiply)
     /// reciprocal — the same fast divide the per-tier
     /// `decl_wide_transcendental!` core uses, here for the width-generic
@@ -466,7 +495,7 @@ use crate::support::rounding::RoundingMode;
     where
         S::Scratch: ComputeLimbs,
     {
-        log1p_fixed_inner::<S>(t, w, false).0
+        log1p_fixed_inner::<S>(t, w, None).0
     }
 
     /// [`log1p_fixed`] plus the side of the returned value the TRUE value
@@ -476,20 +505,32 @@ use crate::support::rounding::RoundingMode;
     /// The value is bit-identical to [`log1p_fixed`]'s at every argument; the
     /// tag is the only difference, and it is `None` whenever it cannot be
     /// PROVED (see [`log1p_fixed_inner`]).
-    pub(crate) fn log1p_fixed_tagged<S: BigInt>(t: S, w: u32) -> (S, Option<TailSign>)
+    ///
+    /// `guard` is the caller's sub-storage granularity — the `10^guard` it will
+    /// divide this value by to reach the storage grid. It buys nothing in the
+    /// answer and everything in the cost: a tag is only ever CONSULTED where
+    /// the caller's own residual cannot decide, so knowing that granularity
+    /// lets the proof be skipped wherever it would be discarded. See
+    /// [`side_by_deeper_probe`].
+    pub(crate) fn log1p_fixed_tagged<S: BigInt>(
+        t: S,
+        w: u32,
+        guard: u32,
+    ) -> (S, Option<TailSign>)
     where
         S::Scratch: ComputeLimbs,
     {
-        log1p_fixed_inner::<S>(t, w, true)
+        log1p_fixed_inner::<S>(t, w, Some(guard))
     }
 
     /// The one series loop behind [`log1p_fixed`] and
     /// [`log1p_fixed_tagged`].
     ///
-    /// `want_tag` keeps the untagged path's arithmetic *exactly* what it was,
-    /// for the reason [`expm1_fixed_inner`] documents: proving the tag needs
-    /// each term's divisions checked for an exact remainder, and the `÷10^w`
-    /// check costs a multiply-back.
+    /// `tag_at` is `Some(guard)` to ask for the tag at the caller's sub-storage
+    /// granularity, `None` for the bare value. `None` keeps the untagged path's
+    /// arithmetic *exactly* what it was, for the reason [`expm1_fixed_inner`]
+    /// documents: reading a rounding's direction costs a multiply-back, and the
+    /// untagged path must not pay it.
     ///
     /// # Why this kernel's rule is NOT [`expm1_fixed_inner`]'s
     ///
@@ -509,14 +550,13 @@ use crate::support::rounding::RoundingMode;
     /// 1. Mirroring `expm1`'s rule verbatim would leave the tag `None` on
     /// iteration one, for every width, scale, guard and sign.
     ///
-    /// So the seed divide's rounding is not treated as a disqualifying error
-    /// but as an error term whose SIGN is known exactly —
-    /// [`round_div_sided`] reads it off the rounding decision — and the tag
-    /// is proved by making the two error terms agree:
+    /// So no rounding here is treated as a disqualifying error. Each is an
+    /// error term whose SIDE is known exactly, and the tag is proved by making
+    /// every one of them agree:
     ///
     /// * write the returned value as `R = 2·S_k(u)` and the true one as
     ///   `V = 2·artanh(û)`, `û` the exact quotient. Then
-    ///   `V − R = 2[artanh(û) − artanh(u/10^w)] + 2·T_k(u)`.
+    ///   `V − R = 2[artanh(û) − artanh(u/10^w)] + 2·T_k(u) + 2[S_k^exact(u) − S_k(u)]`.
     /// * `artanh` is strictly increasing, so the first bracket carries the
     ///   sign of `û − u/10^w` — precisely the side [`round_div_sided`]
     ///   reports;
@@ -525,65 +565,133 @@ use crate::support::rounding::RoundingMode;
     ///   whatever reason the loop stopped. (`expm1` needed its vanish index's
     ///   parity here because ITS series alternates; `artanh`'s does not, so
     ///   this side is unconditional and no `vanished_at` is tracked.)
+    /// * the third bracket is the rounding the INCLUDED terms carry. Every
+    ///   term is an odd power of `u` and so carries `u`'s sign, which makes
+    ///   "toward zero" and "toward the tail's side" the same statement: a term
+    ///   rounded toward zero shrinks `|S_k|` and leaves the truth away from
+    ///   zero, exactly where the tail already is. That holds for the shared
+    ///   `u²` as well, whose own rounding scales every later term the same way,
+    ///   so the errors compound in ONE direction rather than cancelling.
+    ///   [`rounded_toward_zero`] reads each one; the per-term division needs no
+    ///   read at all, since truncation is toward zero by construction.
     ///
-    /// When those two sides AGREE the sum's side follows with no magnitude
-    /// comparison at all, and that is the only case tagged.
+    /// When every side AGREES the sum's side follows with no magnitude
+    /// comparison at all, and that is the only case this rule tags.
+    ///
+    /// # Unanimity is the PRECONDITION of that proof, not an observation
+    ///
+    /// The argument above holds *because* nothing can cancel: every error term
+    /// displaces the sum the same way, so their total displaces it that way
+    /// too, whatever their sizes. The moment one term opposes, sizes are the
+    /// only thing that decides — a large opposing term can cancel the rest or
+    /// flip the total outright — and NO rule over signs can see that. So a
+    /// mixed reading is not a weaker version of this proof, it is outside it.
+    ///
+    /// This is the same trap per-term exactness fell into on `expm1`: what
+    /// decides is the ACCUMULATED effect, and a rule that reasons term by term
+    /// while terms pull in both directions is asserting, not proving. Anything
+    /// short of unanimity therefore fails this rule closed — it goes to
+    /// [`side_by_deeper_probe`], which MEASURES the accumulation instead of
+    /// arguing about it, and to `None` if even that cannot resolve it. A tag
+    /// must never be produced from mixed directions by any other route.
+    ///
+    /// # Why the ORDER, and not exactness
+    ///
+    /// Demanding that each rounding be EXACT — `expm1`'s rule — is far stronger
+    /// than the argument needs, and here it is fatal rather than merely strict.
+    /// `u` is a rounded quotient, so `u²` almost never divides `10^w` exactly;
+    /// since `u²` feeds every term, one surviving series term used to be enough
+    /// to force the tag `None` for good. The tag could then fire only where the
+    /// series contributed NOTHING, which left every directed round blind on the
+    /// arguments whose sub-LSB imprecision is decided by a term the series does
+    /// keep. Reading the ROUNDING'S DIRECTION instead admits all of those whose
+    /// error terms still line up, at no cost: the multiply-back the exactness
+    /// test already computed answers the ordering question too.
     ///
     /// # When the tag is `None`
     ///
     /// It fails CLOSED — the walker treats `None` as "make no adjustment":
     ///
-    /// * `want_tag` was not asked for, or `u == 0` (no tail to carry a sign);
+    /// * no tag was asked for (`tag_at` is `None`), or `u == 0` (no tail to
+    ///   carry a sign);
+    /// * the caller could not use one anyway — its residual already decides the
+    ///   narrowing (see [`side_by_deeper_probe`]);
     /// * `|u| >= 10^w`, where the dropped tail neither converges nor need
     ///   carry its terms' common sign;
-    /// * any division in any INCLUDED term was inexact — including `u²`,
-    ///   which feeds every one of them. "Included" is load-bearing exactly as
-    ///   in [`expm1_fixed_inner`]: the term that ENDS the loop was rounded
-    ///   away to zero, so its division is inexact whenever it was not already
-    ///   zero, but it is never added and so contributes no error. Counting it
-    ///   would leave the tag permanently `None`;
-    /// * the two error terms OPPOSE. Deciding then needs their magnitudes,
-    ///   which is a genuine comparison this does not attempt — a dropped tail
-    ///   is not always negligible beside a half-ULP divide residual, so
-    ///   asserting the divide's side alone would be a guess, not a proof.
-    fn log1p_fixed_inner<S: BigInt>(t: S, w: u32, want_tag: bool) -> (S, Option<TailSign>)
+    /// * the sides genuinely oppose — an INCLUDED term's multiply rounded AWAY
+    ///   from zero, or the seed divide's side is not the tail's — AND
+    ///   [`side_by_deeper_probe`] could not settle it either, because the work
+    ///   integer had no room to probe in or because the gap it measured was
+    ///   inside its own error. ("Included" is load-bearing exactly as in
+    ///   [`expm1_fixed_inner`]: the term that ENDS the loop is never added and
+    ///   so contributes no error, and counting it would reject arguments whose
+    ///   sum it never touched.) Opposition alone is NOT enough to refuse: a
+    ///   dropped tail is not always negligible beside a half-ULP divide
+    ///   residual, so asserting either side outright would be a guess — but
+    ///   measuring the two against each other is not, which is what the probe
+    ///   does.
+    fn log1p_fixed_inner<S: BigInt>(
+        t: S,
+        w: u32,
+        tag_at: Option<u32>,
+    ) -> (S, Option<TailSign>)
     where
         S::Scratch: ComputeLimbs,
     {
+        let want_tag = tag_at.is_some();
         let one_w = one::<S>(w);
         let two_w = one_w + one_w;
         let pow10_w = one_w;
         // The seed divide, with the side its rounding left the true quotient
         // on. `div_cached` IS this with the side dropped.
         let (u, div_side) = div_cached_sided::<S>(t, two_w + t, pow10_w);
-        // `u²` feeds every term, so its exactness gates all of them.
-        let (u2, u2_exact) = if want_tag {
+        // The side EVERY error term has to agree with: the dropped tail's,
+        // which is `u`'s sign unconditionally (artanh's series does not
+        // alternate). Read here so the loop can test each rounding against it;
+        // it only means anything once `u != zero` is established below.
+        let tail_side = if u > zero::<S>() {
+            TailSign::Above
+        } else {
+            TailSign::Below
+        };
+        // `u²` feeds every term, so which way ITS rounding went gates all of
+        // them.
+        let (u2, u2_toward_zero) = if want_tag {
             let prod = u.wrapping_mul_low_u128(u);
             let scaled = round_div_pow10::<S>(prod, w);
-            (scaled, scaled.wrapping_mul_low_u128(one_w) == prod)
+            (scaled, rounded_toward_zero::<S>(scaled, prod, one_w))
         } else {
             (mul::<S>(u, u, w), true)
         };
         let mut sum = u;
         let mut term = u;
         let mut j: u128 = 1;
-        // Every division in every INCLUDED term has been exact so far, so
-        // `sum` is still the exact artanh partial sum of `u` at scale `w`.
-        let mut exact = true;
+        // Every rounding that has actually reached `sum` moved it TOWARD zero,
+        // so the truth still lies on the away-from-zero side the dropped tail
+        // is on. The seed divide is the first such term, and the only one whose
+        // side is read rather than derived.
+        let mut agree = match div_side {
+            None => true,
+            Some(s) => s == tail_side,
+        };
         loop {
             // `j` is bounded by SERIES_CAP (20_000), so the cast to the
             // generic `lit`'s i128 argument is lossless.
             let d = lit::<S>((2 * j + 1) as i128);
-            // `step_exact`: both of this term's divisions came out exact.
-            let (contrib, step_exact) = if want_tag {
+            // `step_toward_zero`: this term's rounding did not push the partial
+            // sum away from zero, so it cannot oppose the tail.
+            let (contrib, step_toward_zero) = if want_tag {
                 // The same value `mul::<S>(term, u2, w)` produces, with the
-                // exactness of both divisions recorded on the way through.
+                // direction of its rounding recorded on the way through.
                 let prod = term.wrapping_mul_low_u128(u2);
                 let scaled = round_div_pow10::<S>(prod, w);
-                let mul_exact = scaled.wrapping_mul_low_u128(one_w) == prod;
+                let mul_toward_zero = rounded_toward_zero::<S>(scaled, prod, one_w);
                 term = scaled;
-                let (q, r) = div_rem_exact::<S>(term, d);
-                (q, mul_exact && u2_exact && r == zero::<S>())
+                // The division truncates, so it can only ever pull the term
+                // toward zero — the tail's own side. It is the one step that
+                // never needs testing, which is why its remainder is dropped.
+                let (q, _r) = div_rem_exact::<S>(term, d);
+                (q, mul_toward_zero && u2_toward_zero)
             } else {
                 term = mul::<S>(term, u2, w);
                 (term / d, true)
@@ -592,35 +700,135 @@ use crate::support::rounding::RoundingMode;
                 break;
             }
             // Only a term that is actually ADDED can carry error into `sum`.
-            exact = exact && step_exact;
+            agree = agree && step_toward_zero;
             sum = sum + contrib;
             j += 1;
             if j > SERIES_CAP {
                 break;
             }
         }
-        let tag = if want_tag && exact && u != zero::<S>() && abs(u) < one_w {
-            // The dropped tail's side — the common sign of every term the
-            // loop did not take.
-            let tail_side = if u > zero::<S>() {
+        // Doubling is a positive scaling, so it preserves the side.
+        let value = sum + sum;
+        let tag = match tag_at {
+            // No tag asked for; no tail to carry a sign; or an argument whose
+            // dropped terms need not share one.
+            None => None,
+            Some(_) if u == zero::<S>() || abs(u) >= one_w => None,
+            // Every error term reaching `sum` pushes the same way, so their sum
+            // does too — no magnitude comparison anywhere.
+            Some(_) if agree => Some(tail_side),
+            // They genuinely oppose, so the total turns on their SIZES — an
+            // opposing term can cancel the rest or flip it — and no reading of
+            // signs can see that. Measure it rather than assert it.
+            Some(guard) => side_by_deeper_probe::<S>(t, w, value, guard),
+        };
+        (value, tag)
+    }
+
+    /// Bits of the work integer [`side_by_deeper_probe`] leaves unused, so its
+    /// widest product cannot reach the sign bit. Two limbs.
+    const TAG_PROBE_SLACK_BITS: u64 = 128;
+
+    /// The side the TRUE value lies on relative to `value`, established by
+    /// RE-EVALUATING the series at a deeper working scale.
+    ///
+    /// [`log1p_fixed_inner`]'s sign rule settles the tag whenever the error
+    /// terms line up. When they genuinely oppose, nothing about their signs can
+    /// decide it and only their magnitudes can — so rather than bound them term
+    /// by term, this recomputes the whole value at a deeper working scale,
+    /// where each of those errors is orders smaller, and reads the side
+    /// straight off the gap.
+    ///
+    /// # How deep, and why that is not a tuning choice
+    ///
+    /// As deep as the work integer allows, every time. The depth is a property
+    /// of the WIDTH, never of the argument: probing shallower would refuse
+    /// arguments the width could have settled, and there is no other claim on
+    /// the capacity — it is the same free headroom the walker cannot use only
+    /// because ITS depth is pinned to the constant tables. Reading the maximum
+    /// off `BITS` also keeps the depth from being fitted to any particular
+    /// argument or cell, which a literal digit count would invite.
+    ///
+    /// # Why this is not the walker's escalation
+    ///
+    /// It is the same idea the Ziv walker applies, at the one place the walker
+    /// cannot reach. The walker stops at a const-table-safe cap because
+    /// `pi`/`ln2`/`sincos` are provisioned only to about `BITS/8` digits, and
+    /// probing past that would request an entry the generated table does not
+    /// hold. This kernel reads none of them: its only constant is `10^w`, and
+    /// `consts::pow10` falls back to `TEN.pow` outside its baked range. So the
+    /// probe can compute deeper WITHOUT raising that cap or touching any
+    /// table's provisioning.
+    ///
+    /// # Why the answer is sound
+    ///
+    /// `value` is lifted by an exact power of ten and so carries no error at
+    /// all; the gap is therefore the probe's own reading of `V − R`, wrong by
+    /// at most the probe's error. That error damps rather than accumulates:
+    /// each term is formed from the one before it and scaled by `u² ≤ 1/9` over
+    /// the whole region the matcher routes here, so a term inherits at most a
+    /// ninth of its predecessor's error before adding its own rounding — under
+    /// two units, and under three once the truncating division is counted. With
+    /// the seed divide under one unit and the dropped tail under two, four
+    /// units per term bounds the lot, and the loop takes at most `SERIES_CAP`
+    /// of them. A gap CLEARING that bound has the sign of `V − R`; one that
+    /// does not is `None`, fail-closed, exactly as before.
+    ///
+    /// # Termination
+    ///
+    /// The re-entry passes `tag_at = None`, which is precisely the branch that
+    /// never calls this function, so the recursion is one level deep.
+    fn side_by_deeper_probe<S: BigInt>(
+        t: S,
+        w: u32,
+        value: S,
+        guard: u32,
+    ) -> Option<TailSign>
+    where
+        S::Scratch: ComputeLimbs,
+    {
+        // Only pay for a proof the caller can actually use. A tail sign changes
+        // a narrowing in exactly two places: a DIRECTED round whose sub-storage
+        // residual is exactly zero, and a NEAREST one whose residual is exactly
+        // half. Anywhere else the residual itself decides and the sign is
+        // discarded unread, so proving it there is pure waste — and this proof
+        // is the expensive kind. Skipping it cannot change any result: it turns
+        // a tag that would have been thrown away into `None`, which is thrown
+        // away identically.
+        // `div_rem_exact`, not the `%` operator: the blanket operator's scratch
+        // is build-max sized, so in a narrow `exact-scratch` build it is cut for
+        // that build's 2-limb storage while this kernel probes in a far wider
+        // work integer — the hazard `round_to_storage_*` already avoids the same
+        // way.
+        let divisor = pow10::<S>(guard);
+        let (_q, rem) = div_rem_exact::<S>(abs(value), divisor);
+        if rem != zero::<S>() && rem + rem != divisor {
+            return None;
+        }
+        // The probe's widest intermediates are products of two values under
+        // `10^deep_w` — the squared quotient, and the seed divide's numerator —
+        // so twice that width plus the slack has to fit the work integer.
+        // Inverting `bits(10^d) = d·log2(10) < (d·10 + 2)/3` for the largest
+        // `d` that leaves room: `d ≤ 3·(BITS − slack)/20`.
+        let bits = u64::from(<S as BigInt>::BITS);
+        // Fail closed on the (unreachable) overflow rather than fall back to a
+        // depth the width cannot hold.
+        let deep_w = u32::try_from(3 * bits.saturating_sub(TAG_PROBE_SLACK_BITS) / 20).ok()?;
+        // No room to probe any deeper than the value was already computed at.
+        let extra = deep_w.checked_sub(w).filter(|e| *e > 0)?;
+        let lift = pow10::<S>(extra);
+        let deep = log1p_fixed_inner::<S>(t * lift, deep_w, None).0;
+        let gap = deep - value * lift;
+        let bound = lit::<S>(4 * SERIES_CAP as i128 + 16);
+        if abs(gap) > bound {
+            Some(if gap > zero::<S>() {
                 TailSign::Above
             } else {
                 TailSign::Below
-            };
-            match div_side {
-                // Exact seed divide: the dropped tail is the only error term
-                // left, so it decides alone.
-                None => Some(tail_side),
-                // Both error terms push the same way, so their sum does too.
-                Some(s) if s == tail_side => Some(s),
-                // They oppose — deciding needs magnitudes. Fail closed.
-                Some(_) => None,
-            }
+            })
         } else {
             None
-        };
-        // Doubling is a positive scaling, so it preserves the side.
-        (sum + sum, tag)
+        }
     }
 
     /// Which side of a working-scale sum the TRUE value lies on — the sign
@@ -1622,6 +1830,13 @@ mod tests {
     use super::*;
     use crate::int::types::Int;
 
+    /// Sub-storage granularity handed to [`log1p_fixed_tagged`] by the kernel
+    /// tests below. Immaterial to every one of them: it gates only the deeper
+    /// probe, and each of these arguments is settled by the sign rule before
+    /// the probe is reached. Zero states "the value IS the grid", so it cannot
+    /// mask a tag even if one of them ever did reach it.
+    const GRANULARITY: u32 = 0;
+
     /// [`round_div_sided`]'s polarity at all four sign/bump combinations plus
     /// the exact case. The `log1p` tail-sign channel rests entirely on this
     /// mapping, and it is what a fixed polarity would get wrong at half its
@@ -1672,7 +1887,7 @@ mod tests {
         let w: u32 = 12;
         let t = pow10::<I>(8);
 
-        let (pos, pos_tag) = log1p_fixed_tagged::<I>(t, w);
+        let (pos, pos_tag) = log1p_fixed_tagged::<I>(t, w, GRANULARITY);
         assert_eq!(pos, lit::<I>(2 * 49_997_500), "log1p(+1e-4) at w=12 is 2u");
         assert_eq!(
             pos_tag,
@@ -1680,7 +1895,7 @@ mod tests {
             "a truncated seed divide and a positive tail both put the truth ABOVE"
         );
 
-        let (neg, neg_tag) = log1p_fixed_tagged::<I>(-t, w);
+        let (neg, neg_tag) = log1p_fixed_tagged::<I>(-t, w, GRANULARITY);
         assert_eq!(neg, lit::<I>(-2 * 50_002_500), "log1p(-1e-4) at w=12 is 2u");
         assert_eq!(
             neg_tag,
@@ -1750,5 +1965,79 @@ mod tests {
             r > pow10::<Int<64>>(44) && r < pow10::<Int<64>>(45),
             "e^-357 at working scale 200 out of its analytic bounds"
         );
+    }
+
+    /// The tag fires on an argument whose INCLUDED term was ROUNDED — the case
+    /// an exactness gate refuses and the ordering rule admits.
+    ///
+    /// Both arguments below add a real series term AND leave `u²` inexact, so
+    /// the exactness form of the rule returned `None` for them however their
+    /// error terms lined up. That is the whole defect: `u` is a rounded
+    /// quotient, so `u²` almost never divides `10^w`, and since `u²` feeds every
+    /// term one surviving term used to kill the tag outright — leaving the
+    /// directed modes blind wherever the sub-LSB imprecision is decided by a
+    /// term the series keeps. The `u2_exact` assertion here is what makes this a
+    /// DIFFERENTIAL: it pins that the old gate would have refused, so the test
+    /// fails if the rule ever reverts to demanding exactness.
+    ///
+    /// Sides come from the series, not from this crate. At working scale 12,
+    /// `log1p(t) = t − t²/2 + t³/3 − t⁴/4 …` gives
+    ///
+    /// ```text
+    ///  t = +3·10⁻⁴:  3·10⁸ − 45 000 + 9 − 0.002…  = 299 955 008.998…
+    ///  t = −4·10⁻⁴: −4·10⁸ − 80 000 − 21.333 − …  = −400 080 021.339…
+    /// ```
+    ///
+    /// so the truth sits just ABOVE the returned `299 955 008` at the positive
+    /// argument and just BELOW the returned `−400 080 020` at the negative one —
+    /// opposite sides, which is exactly what a fixed polarity would get wrong.
+    #[test]
+    fn log1p_fixed_tagged_fires_when_an_included_term_was_rounded() {
+        type I = Int<2>;
+        let w: u32 = 12;
+        let one_w = one::<I>(w);
+
+        // `u²` inexact + at least one term added: the two conditions that
+        // together made the exactness gate refuse these arguments.
+        let refused_by_the_exactness_gate = |t: I| -> bool {
+            let (u, _side) = div_cached_sided::<I>(t, one_w + one_w + t, one_w);
+            let prod = u.wrapping_mul_low_u128(u);
+            let u2 = round_div_pow10::<I>(prod, w);
+            let u2_inexact = u2.wrapping_mul_low_u128(one_w) != prod;
+            let term = round_div_pow10::<I>(u.wrapping_mul_low_u128(u2), w);
+            let (first_contrib, _r) = div_rem_exact::<I>(term, lit::<I>(3));
+            u2_inexact && first_contrib != zero::<I>()
+        };
+
+        let pos = lit::<I>(3) * pow10::<I>(8); // t = +3·10⁻⁴
+        assert!(
+            refused_by_the_exactness_gate(pos),
+            "the positive argument must be one the exactness gate refused"
+        );
+        let (pos_v, pos_tag) = log1p_fixed_tagged::<I>(pos, w, GRANULARITY);
+        assert_eq!(pos_v, lit::<I>(299_955_008), "log1p(3e-4) at w=12");
+        assert_eq!(
+            pos_tag,
+            Some(TailSign::Above),
+            "299 955 008.998… lies ABOVE the returned 299 955 008"
+        );
+
+        let neg = lit::<I>(-4) * pow10::<I>(8); // t = −4·10⁻⁴
+        assert!(
+            refused_by_the_exactness_gate(neg),
+            "the negative argument must be one the exactness gate refused"
+        );
+        let (neg_v, neg_tag) = log1p_fixed_tagged::<I>(neg, w, GRANULARITY);
+        assert_eq!(neg_v, lit::<I>(-400_080_020), "log1p(-4e-4) at w=12");
+        assert_eq!(
+            neg_tag,
+            Some(TailSign::Below),
+            "-400 080 021.339… lies BELOW the returned -400 080 020"
+        );
+
+        // The untagged wrapper is the tagged kernel with the tag dropped — the
+        // value must not move on either argument.
+        assert_eq!(log1p_fixed::<I>(pos, w), pos_v);
+        assert_eq!(log1p_fixed::<I>(neg, w), neg_v);
     }
 }
