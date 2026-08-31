@@ -57,50 +57,89 @@ pub(crate) fn expm1_series_fixed<S: BigInt>(v_w: S, w: u32) -> Option<S>
 where
     S::Scratch: ComputeLimbs,
 {
+    expm1_series_fixed_tagged::<S>(v_w, w).0
+}
+
+/// [`expm1_series_fixed`] with the sign of the series tail alongside it —
+/// the input [`wtc::round_to_storage_tail_signed_g`] needs to settle a
+/// residual that reads as an exact zero or an exact tie.
+///
+/// The value is bit-identical to [`expm1_series_fixed`]'s; that function is
+/// this one with the tag dropped, so there is one body and one series loop.
+///
+/// The tag is `None` for both short-circuit verdicts, because neither is a
+/// series sum with a tail: `expm1(0) = 0` is the one exact point, and the
+/// deep-negative [`sup::just_above_minus_one`] representative is a
+/// construction whose side is already chosen deliberately rather than a
+/// computed remainder. `None` makes the walker behave exactly as before, so
+/// both keep the treatment they had.
+pub(crate) fn expm1_series_fixed_tagged<S: BigInt>(
+    v_w: S,
+    w: u32,
+) -> (Option<S>, Option<eg::TailSign>)
+where
+    S::Scratch: ComputeLimbs,
+{
     if v_w == S::ZERO {
         // expm1(0) = 0 exactly — the ONLY exact case (for algebraic x != 0,
         // e^x is transcendental by Lindemann-Weierstrass, so e^x - 1 never
         // lands on a storage grid line).
-        return Some(S::ZERO);
+        return (Some(S::ZERO), None);
     }
     match sup::regime::<S>(v_w, w) {
-        sup::Regime::Overflow => return None,
-        sup::Regime::MinusOne => return Some(sup::just_above_minus_one::<S>(w)),
+        sup::Regime::Overflow => return (None, None),
+        sup::Regime::MinusOne => {
+            return (Some(sup::just_above_minus_one::<S>(w)), None);
+        }
         sup::Regime::Fits => {}
     }
     // Band gate: |v| <= DIRECT_BAND. Tested on the working-scale integer so no
     // division is needed on the hot path.
     if sup::abs::<S>(v_w) > eg::lit::<S>(sup::DIRECT_BAND) * eg::one::<S>(w) {
-        return None;
+        return (None, None);
     }
     // Peak: |term| <= 10^w and |s| <= 10^w, so the `term * s` product before
     // the `/10^w` spans at most `2w` digits.
     if !sup::peak_fits::<S>(2 * sup::scale_bits(w)) {
-        return None;
+        return (None, None);
     }
-    Some(eg::expm1_fixed::<S>(v_w, w))
+    let (v, tail) = eg::expm1_fixed_tagged::<S>(v_w, w);
+    (Some(v), tail)
 }
 
 /// `expm1(x)` at storage `St`, computed in the work integer `S` and correctly
 /// rounded to `SCALE` under `mode`.
 ///
-/// The storage-facing shell around [`expm1_series_fixed`], mirroring
-/// [`log1p_artanh_g`](crate::algos::log1p::log1p_artanh::log1p_artanh_g): lift
-/// to the working scale, run the shared Ziv escalation, post-adjust the
-/// sub-resolution band near zero. `policy::expm1` supplies the width's work
-/// integer, base guard and storage bounds.
+/// The storage-facing shell around [`expm1_series_fixed_tagged`]: lift to the
+/// working scale, then run the Ziv escalation with the series' own tail sign
+/// threaded in. `policy::expm1` supplies the width's work integer, base guard
+/// and storage bounds.
 ///
-/// # Why the walker's `never_exact` polarity is `false` here
+/// # Why the tail sign is threaded rather than a fixed polarity asserted
 ///
-/// [`wtc::round_to_storage_directed_g`] is the `never_exact = false` walker.
-/// The `true` variant asserts that an exactly-zero working residual means the
-/// TRUE magnitude is larger, which holds for `exp`/`cosh` only because they are
-/// strictly positive. `expm1` changes sign, and on the negative half its
-/// positive neglected tail moves the value TOWARD zero. The two bands where the
-/// side IS known are handled outside the walker —
-/// [`super::adjust_near_zero`] near zero, and the `1 - 10^w` deep-negative
-/// representative inside the kernel — leaving only genuine
-/// Table-Maker's-Dilemma residue, where asserting a side would be a guess.
+/// The `never_exact = true` walker asserts that an exactly-zero working
+/// residual means the TRUE magnitude is larger. That holds for `exp`/`cosh`
+/// only because they are strictly positive, and it cannot be adapted here: the
+/// correct direction varies with the ARGUMENT, not the function, and both
+/// directions occur within a single `(width, scale)` cell — at `D1232<1231>`,
+/// `x = -3e-240` needs one and `x = -1e-306` the other, because the first
+/// surviving term of the tail is the 6th in one case and the 5th in the other.
+/// So the sign is computed per call by the kernel that summed the series and
+/// handed to [`wtc::round_to_storage_tail_signed_g`], which is the only place
+/// that can act on it.
+///
+/// This subsumes the old near-zero post-adjust, which tested `result == raw`
+/// and so reached only the ONE grid point where the value lands on its own
+/// linear term. Deeper partial sums land on the grid too whenever the
+/// argument's coefficients make `x^j/j!` terminate — `x = -3e-152` reaches the
+/// 3rd and `x = -3e-86` the 5th — and no fixed number of such tests covers
+/// them, because the run of exactly-representable terms is unbounded for a
+/// suitably composite coefficient. The tail sign is exact at every depth, so
+/// depth stops mattering.
+///
+/// The deep-negative `1 - 10^w` representative keeps its own treatment: it is
+/// a construction, not a series sum, so the kernel tags it `None` and the
+/// walker behaves exactly as it did before.
 ///
 /// # Panics
 ///
@@ -123,21 +162,20 @@ pub(crate) fn expm1_series_g<St: BigInt + Copy, S: BigInt, const SCALE: u32>(
 where
     S::Scratch: ComputeLimbs,
 {
-    let r = wtc::round_to_storage_directed_g::<St, S>(
+    wtc::round_to_storage_tail_signed_g::<St, S>(
         base_guard,
         SCALE,
         mode,
         st_max,
         st_min,
         |guard| {
-            super::checked(
-                expm1_series_fixed::<S>(wtc::to_work_scaled_g::<St, S>(raw, guard), SCALE + guard),
-                "expm1_strict",
-                SCALE,
-            )
+            let (v, tail) = expm1_series_fixed_tagged::<S>(
+                wtc::to_work_scaled_g::<St, S>(raw, guard),
+                SCALE + guard,
+            );
+            (super::checked(v, "expm1_strict", SCALE), tail)
         },
-    );
-    super::adjust_near_zero::<St>(r, raw, mode)
+    )
 }
 
 /// The `_approx` sibling of [`expm1_series_g`]: a SINGLE shot at the caller's

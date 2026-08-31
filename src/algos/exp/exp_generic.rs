@@ -442,6 +442,44 @@ use crate::support::rounding::RoundingMode;
         sum + sum
     }
 
+    /// Which side of a working-scale sum the TRUE value lies on — the sign
+    /// of the series terms the kernel dropped.
+    ///
+    /// # Why the Ziv walker cannot derive this for itself
+    ///
+    /// The walker decides a directed round from the sub-storage residual and
+    /// a nearest round from that residual's distance to the half-ULP
+    /// boundary. Both readings are blind in exactly one situation: when the
+    /// kernel's working value lands EXACTLY on the boundary — a storage grid
+    /// line for the directed modes, a midpoint for the nearest ones. The
+    /// residual then reads as a clean zero or a clean tie, and the walker
+    /// concludes the value is exactly representable, or exactly a tie, when
+    /// it is neither: `e^x - 1` is transcendental at every algebraic
+    /// `x != 0` (Lindemann-Weierstrass), so it never lands on a grid line.
+    /// Escalating would resolve it, but at the top scale of each wide tier
+    /// there is no room left to escalate into — `SCALE + 8` already exceeds
+    /// the work integer's `BITS/8`, so the walker's cap collapses onto its
+    /// base guard and one shot is all it gets.
+    ///
+    /// What decides the round there is the tail the kernel could not
+    /// represent, and only the kernel that summed the series knows it.
+    ///
+    /// # Why a single fixed polarity cannot stand in
+    ///
+    /// The near-min `never_exact` flag asserts one direction for a whole
+    /// function. That cannot work here: the correct direction varies with the
+    /// ARGUMENT, not the function, and both directions occur within one
+    /// `(width, scale)` cell. At `D1232<1231>`, `x = -3e-240` needs one and
+    /// `x = -1e-306` the other, because the tail's first surviving term is
+    /// the 6th in one case and the 5th in the other.
+    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+    pub(crate) enum TailSign {
+        /// The true value is strictly ABOVE the returned sum.
+        Above,
+        /// The true value is strictly BELOW the returned sum.
+        Below,
+    }
+
     /// `expm1(s) = exp(s) - 1` at working scale `w`, evaluated as the
     /// Taylor series with the leading `1` term dropped so the
     /// `exp(s) - 1` subtraction of two values both `~ 1` never occurs:
@@ -463,23 +501,117 @@ use crate::support::rounding::RoundingMode;
     where
         S::Scratch: ComputeLimbs,
     {
+        expm1_fixed_inner::<S>(s, w, false).0
+    }
+
+    /// [`expm1_fixed`] plus the sign of the terms it DROPPED — see
+    /// [`TailSign`] for what that buys and why nothing else can supply it.
+    ///
+    /// The sum is bit-identical to [`expm1_fixed`]'s at every argument; the
+    /// tag is the only difference, and it is `None` whenever it cannot be
+    /// justified (see [`expm1_fixed_inner`]).
+    pub(crate) fn expm1_fixed_tagged<S: BigInt>(s: S, w: u32) -> (S, Option<TailSign>)
+    where
+        S::Scratch: ComputeLimbs,
+    {
+        expm1_fixed_inner::<S>(s, w, true)
+    }
+
+    /// The one series loop behind [`expm1_fixed`] and
+    /// [`expm1_fixed_tagged`].
+    ///
+    /// `want_tag` exists to keep the untagged path's arithmetic *exactly*
+    /// what it was: proving the tag needs each term's two divisions checked
+    /// for an exact remainder, and the `÷10^w` check costs a multiply-back
+    /// (`round_div_pow10` rounds and does not report exactness — on the
+    /// `w > 38` path it routes through the shared rescale matcher, whose
+    /// contract this must not disturb). That cost belongs only to the caller
+    /// that needs the tag, so it is a runtime flag on ONE loop rather than a
+    /// second loop or a const knob.
+    ///
+    /// # When the tag is `None`
+    ///
+    /// It fails CLOSED — every caller treats `None` as "make no adjustment":
+    ///
+    /// * `want_tag` was not asked for, or `s == 0` (`expm1(0) = 0`, no tail);
+    /// * `|s| > 1`, where `|s^j / j!|` is not yet monotonically decreasing,
+    ///   so the tail need not carry its first term's sign;
+    /// * the loop stopped at [`SERIES_CAP`] rather than because a term
+    ///   vanished, so the tail is NOT below the working resolution;
+    /// * any division in any INCLUDED term was inexact. Then the returned sum
+    ///   is the exact partial sum plus an integer rounding error `e`, and
+    ///   since `|e| >= 1` dominates the sub-unit tail the true side would be
+    ///   `-sign(e)` rather than the tail's. Requiring exactness is what makes
+    ///   the tag a PROOF of the side rather than an overwhelming likelihood.
+    ///
+    /// "Included" is load-bearing in that last one. The term that ENDS the
+    /// loop reached zero by being rounded away, so its division is inexact
+    /// whenever it was not already zero — but it is never added to the sum and
+    /// so cannot contribute error. Counting it would leave `exact` false on
+    /// essentially every input and the tag permanently `None`.
+    fn expm1_fixed_inner<S: BigInt>(s: S, w: u32, want_tag: bool) -> (S, Option<TailSign>)
+    where
+        S::Scratch: ComputeLimbs,
+    {
         let mut sum = s;
         let mut term = s;
         let mut iter: u128 = 2;
+        // Every division in every INCLUDED term has been exact so far, so
+        // `sum` is still the exact partial sum at the working scale.
+        let mut exact = true;
+        // The index of the term that VANISHED at the working scale, i.e. the
+        // first term of the neglected tail. `None` = the loop hit the cap.
+        let mut vanished_at: ::core::option::Option<u128> = ::core::option::Option::None;
         loop {
             // `iter` is bounded by SERIES_CAP (20_000), so the cast to the
             // generic `lit`'s i128 argument is lossless.
-            term = mul::<S>(term, s, w) / lit::<S>(iter as i128);
+            let d = lit::<S>(iter as i128);
+            // `step_exact`: both of this term's divisions came out exact.
+            let (next, step_exact) = if want_tag {
+                // The same value `mul::<S>(term, s, w) / d` produces, with the
+                // exactness of both divisions recorded on the way through.
+                let prod = term.wrapping_mul_low_u128(s);
+                let scaled = round_div_pow10::<S>(prod, w);
+                let mul_exact = scaled.wrapping_mul_low_u128(one::<S>(w)) == prod;
+                let (q, r) = div_rem_exact::<S>(scaled, d);
+                (q, mul_exact && r == zero::<S>())
+            } else {
+                (mul::<S>(term, s, w) / d, true)
+            };
+            term = next;
             if term == zero::<S>() {
+                vanished_at = ::core::option::Option::Some(iter);
                 break;
             }
+            // Only a term that is actually ADDED can carry error into `sum`.
+            // The term that VANISHES must not be counted: it reached zero by
+            // being rounded away, so its division is inexact by construction,
+            // and folding it in would make `exact` false on essentially every
+            // input and the tag permanently `None`.
+            exact = exact && step_exact;
             sum = sum + term;
             iter += 1;
             if iter > SERIES_CAP {
                 break;
             }
         }
-        sum
+        let tag = match vanished_at {
+            ::core::option::Option::Some(n)
+                if want_tag && exact && s != zero::<S>() && abs(s) <= one::<S>(w) =>
+            {
+                // The tail is `s^n/n! + s^(n+1)/(n+1)! + ...`, alternating and
+                // strictly decreasing in magnitude for `|s| <= 1`, so it
+                // carries its first term's sign: positive throughout for
+                // `s > 0`, else `(-1)^n`.
+                ::core::option::Option::Some(if s > zero::<S>() || n % 2 == 0 {
+                    TailSign::Above
+                } else {
+                    TailSign::Below
+                })
+            }
+            _ => ::core::option::Option::None,
+        };
+        (sum, tag)
     }
 
     /// Argument-magnitude regime of `e^v` for a working-scale value `v_w`

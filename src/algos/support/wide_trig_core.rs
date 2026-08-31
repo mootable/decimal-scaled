@@ -42,6 +42,7 @@
 //! trait surface here is what makes that collapse a local change rather
 //! than a routing change.
 
+use crate::algos::exp::exp_generic::TailSign;
 use crate::int::types::traits::BigInt;
 use crate::support::rounding::RoundingMode;
 
@@ -1990,6 +1991,38 @@ where
     .0
 }
 
+/// [`round_to_storage_directed_g`] for a kernel that can say which side its
+/// neglected tail falls on — ALL SIX modes, not just the directed three.
+///
+/// `recompute` hands back its working-scale value together with the
+/// [`TailSign`] for that probe. Where the sign is `None` this is
+/// bit-identical to [`round_to_storage_directed_g`]; where it is present it
+/// settles the two readings a residual cannot (an exactly-zero directed
+/// residual, an exactly-half nearest one) — see
+/// [`round_to_storage_directed_tagged_impl_g`].
+///
+/// The nearest modes are deliberately NOT excluded. They fail on the same
+/// inputs for the same reason: a tail below the working resolution reads as
+/// an exact tie, and the mode's tie-break then decides a tie that is not
+/// there. One mechanism serves all six.
+#[inline]
+pub(crate) fn round_to_storage_tail_signed_g<St: BigInt + Copy, S: BigInt>(
+    base_guard: u32,
+    target: u32,
+    mode: RoundingMode,
+    st_max: St,
+    st_min: St,
+    mut recompute: impl FnMut(u32) -> (S, Option<TailSign>),
+) -> St
+where
+    S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    round_to_storage_directed_tagged_impl_g::<St, S>(
+        base_guard, target, mode, false, false, st_max, st_min, &mut recompute,
+    )
+    .0
+}
+
 /// As [`round_to_storage_directed_g`] but RETAINS the walker's `decided`
 /// verdict (`false` once it gives up at the escalation cap — mode-blind). The
 /// odd forward/inverse trig kernels read it to drive
@@ -2182,6 +2215,58 @@ fn round_to_storage_directed_impl_g<St: BigInt + Copy, S: BigInt>(
 where
     S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
+    // A kernel that cannot say which side its neglected tail falls on gets
+    // `None` at every probe, which is the untagged behaviour exactly.
+    round_to_storage_directed_tagged_impl_g::<St, S>(
+        base_guard,
+        target,
+        mode,
+        force_confirm,
+        never_exact,
+        st_max,
+        st_min,
+        &mut |guard| (recompute(guard), None),
+    )
+}
+
+/// [`round_to_storage_directed_impl_g`] with a per-probe TAIL SIGN — the
+/// walker's only source of truth for a residual it cannot resolve.
+///
+/// `recompute` returns its working-scale value together with
+/// [`TailSign`], the side the terms it dropped put the true value on (see
+/// that type for why nothing else can supply it). The sign belongs to the
+/// probe that produced it, so there is no question of matching a tag to
+/// the narrowing the walker ends up returning — each narrowing reads its
+/// own.
+///
+/// It changes the outcome in exactly the two places the residual is blind,
+/// and NOWHERE else:
+///
+/// * a DIRECTED round whose residual is exactly zero — the value is not on
+///   the grid after all, it is one sub-ULP tail away from it, so the round
+///   goes the tail's way instead of standing still;
+/// * a NEAREST round whose residual is exactly half — not a tie after all,
+///   so the neighbour on the tail's side wins outright and the mode's
+///   tie-break never runs.
+///
+/// Every other input keeps the previous path: a non-zero directed residual
+/// already dominates a sub-unit tail, and a nearest residual off the half
+/// boundary is decided without one. With `None` the function is
+/// bit-identical to [`round_to_storage_directed_impl_g`] at every argument.
+#[allow(clippy::too_many_arguments)]
+fn round_to_storage_directed_tagged_impl_g<St: BigInt + Copy, S: BigInt>(
+    base_guard: u32,
+    target: u32,
+    mode: RoundingMode,
+    force_confirm: bool,
+    never_exact: bool,
+    st_max: St,
+    st_min: St,
+    recompute: &mut dyn FnMut(u32) -> (S, Option<TailSign>),
+) -> (St, bool)
+where
+    S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
     use crate::support::rounding::{is_nearest_mode, RoundingMode};
 
     let lit = |n: i128| <S as BigInt>::from_i128(n);
@@ -2212,7 +2297,7 @@ where
         // once for the remainder) plus a divide-by-two for `half` — measured
         // at >50% of a wide `sin(0)` call (the bbc trig-s0 cluster).
         let mut nearest_narrow = |guard: u32| -> (St, S, S) {
-            let v = recompute(guard);
+            let (v, tail) = recompute(guard);
             let neg = v < lit(0);
             let mag = if neg { -v } else { v };
             let divisor = pow10(guard);
@@ -2221,13 +2306,31 @@ where
             let (q, rem) = crate::algos::exp::exp_generic::div_rem_exact(mag, divisor);
             let q_mag = if rem != lit(0) {
                 let comp = divisor - rem;
-                let bump = crate::support::rounding::should_bump(
-                    mode,
-                    rem.cmp(&comp),
-                    q.bit(0),
-                    !neg,
-                );
-                if bump { q + lit(1) } else { q }
+                let ord = rem.cmp(&comp);
+                match tail {
+                    // An exact half is a TIE only while nothing is known about
+                    // what lies below it. A tail sign says the value is off the
+                    // boundary, so the neighbour on that side is nearer
+                    // outright and the mode's tie-break must not run — it would
+                    // decide a tie that is not there (`HalfToEven` holding a
+                    // positive row down, `HalfTowardZero` a negative one).
+                    Some(t) if ord == ::core::cmp::Ordering::Equal => {
+                        if (t == TailSign::Above) == !neg {
+                            q + lit(1)
+                        } else {
+                            q
+                        }
+                    }
+                    _ => {
+                        let bump = crate::support::rounding::should_bump(
+                            mode,
+                            ord,
+                            q.bit(0),
+                            !neg,
+                        );
+                        if bump { q + lit(1) } else { q }
+                    }
+                }
             } else {
                 q
             };
@@ -2301,7 +2404,7 @@ where
 
     let mut directed_narrow = |guard: u32| -> (S, S, S) {
         let w = target + guard;
-        let v = recompute(guard);
+        let (v, tail) = recompute(guard);
         let shift = w - target;
         let neg = v < lit(0);
         let mag = if neg { -v } else { v };
@@ -2310,15 +2413,40 @@ where
         // to its 2-limb storage; the walkers probe in `Int<24>`).
         let (q, rem) = crate::algos::exp::exp_generic::div_rem_exact(mag, divisor);
         let result_positive = !neg;
-        let residual_present = rem != lit(0) || never_exact;
-        let bump = residual_present
-            && match mode {
-                RoundingMode::Trunc => false,
-                RoundingMode::Floor => !result_positive,
-                RoundingMode::Ceiling => result_positive,
-                _ => unreachable!(),
-            };
-        let q_mag = if bump { q + lit(1) } else { q };
+        // Where the true value sits relative to `q`, in MAGNITUDE. A non-zero
+        // residual already puts it above `q` and dominates any sub-unit tail;
+        // `never_exact` is the near-min assertion of the same thing. `None` =
+        // nothing distinguishes it from the grid line, the previous
+        // behaviour. Only an exactly-zero residual lets the tail speak — and
+        // only the tail can put the truth BELOW `q`, which no residual does.
+        let away = if rem != lit(0) || never_exact {
+            Some(true)
+        } else {
+            match tail {
+                // `q == 0` would make a toward-zero step a negative magnitude.
+                // The truth is then within one ULP of zero either way and the
+                // narrowing already names it.
+                Some(t) if q != lit(0) => Some((t == TailSign::Above) == result_positive),
+                _ => None,
+            }
+        };
+        let q_mag = match away {
+            None => q,
+            Some(away) => {
+                let toward_zero = if away { q } else { q - lit(1) };
+                let away_from_zero = if away { q + lit(1) } else { q };
+                match mode {
+                    RoundingMode::Trunc => toward_zero,
+                    RoundingMode::Floor => {
+                        if result_positive { toward_zero } else { away_from_zero }
+                    }
+                    RoundingMode::Ceiling => {
+                        if result_positive { away_from_zero } else { toward_zero }
+                    }
+                    _ => unreachable!(),
+                }
+            }
+        };
         let signed = if neg { -q_mag } else { q_mag };
         let dist = if rem < divisor - rem {
             rem
