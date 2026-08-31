@@ -4959,6 +4959,12 @@ macro_rules! decl_wide_transcendental {
             pub fn exp(self) -> Self {
                 self.exp_strict()
             }
+            /// With `strict`, dispatches to [`Self::expm1_strict`].
+            #[inline]
+            #[must_use]
+            pub fn expm1(self) -> Self {
+                self.expm1_strict()
+            }
             /// With `strict`, dispatches to [`Self::exp2_strict`].
             #[inline]
             #[must_use]
