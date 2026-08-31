@@ -20,7 +20,7 @@ mod from_narrow_fast_transcendentals {
     //! source of false failure. We just check the macro-emitted bodies are
     //! reachable and produce sensible results.
 
-    use decimal_scaled::{D18};
+    use decimal_scaled::D18;
 
     /// Loose tolerance for the f64-bridge: 4 LSB at S=4 is 4·10⁻⁴ ≈ 4e-4,
     /// orders of magnitude above the f64 quantisation noise.
@@ -40,30 +40,55 @@ mod from_narrow_fast_transcendentals {
     fn d18_logs_exps_fast() {
         assert_eq!(D18::<8>::ONE.ln_fast().to_bits(), 0);
         assert_eq!(D18::<8>::ZERO.exp_fast().to_bits(), 100_000_000);
-        close_d18("ln(2)", D18::<8>::try_from(2).unwrap().ln_fast(), 69_314_718);
+        close_d18(
+            "ln(2)",
+            D18::<8>::try_from(2).unwrap().ln_fast(),
+            69_314_718,
+        );
         close_d18("exp(1)", D18::<8>::ONE.exp_fast(), 271_828_183);
-        assert_eq!(D18::<8>::try_from(2).unwrap().log2_fast().to_bits(), 100_000_000);
-        assert_eq!(D18::<8>::try_from(10).unwrap().log10_fast().to_bits(), 100_000_000);
-        assert_eq!(D18::<8>::try_from(10).unwrap().exp2_fast().to_bits(), 102_400_000_000);
+        assert_eq!(
+            D18::<8>::try_from(2).unwrap().log2_fast().to_bits(),
+            100_000_000
+        );
+        assert_eq!(
+            D18::<8>::try_from(10).unwrap().log10_fast().to_bits(),
+            100_000_000
+        );
+        assert_eq!(
+            D18::<8>::try_from(10).unwrap().exp2_fast().to_bits(),
+            102_400_000_000
+        );
     }
 
     #[test]
     fn d18_roots_pow_fast() {
-        assert_eq!(D18::<8>::try_from(4).unwrap().sqrt_fast().to_bits(), 200_000_000);
-        assert_eq!(D18::<8>::try_from(27).unwrap().cbrt_fast().to_bits(), 300_000_000);
+        assert_eq!(
+            D18::<8>::try_from(4).unwrap().sqrt_fast().to_bits(),
+            200_000_000
+        );
+        assert_eq!(
+            D18::<8>::try_from(27).unwrap().cbrt_fast().to_bits(),
+            300_000_000
+        );
         close_d18(
             "2^10",
-            D18::<8>::try_from(2).unwrap().powf_fast(D18::<8>::try_from(10).unwrap()),
+            D18::<8>::try_from(2)
+                .unwrap()
+                .powf_fast(D18::<8>::try_from(10).unwrap()),
             102_400_000_000,
         );
         close_d18(
             "hypot(3,4)",
-            D18::<8>::try_from(3).unwrap().hypot_fast(D18::<8>::try_from(4).unwrap()),
+            D18::<8>::try_from(3)
+                .unwrap()
+                .hypot_fast(D18::<8>::try_from(4).unwrap()),
             500_000_000,
         );
         close_d18(
             "log_2(8)",
-            D18::<8>::try_from(8).unwrap().log_fast(D18::<8>::try_from(2).unwrap()),
+            D18::<8>::try_from(8)
+                .unwrap()
+                .log_fast(D18::<8>::try_from(2).unwrap()),
             300_000_000,
         );
     }
@@ -74,7 +99,11 @@ mod from_narrow_fast_transcendentals {
         assert_eq!(D18::<8>::ZERO.cos_fast().to_bits(), 100_000_000);
         close_d18("sin(1)", D18::<8>::ONE.sin_fast(), 84_147_098);
         close_d18("atan(1)", D18::<8>::ONE.atan_fast(), 78_539_816);
-        close_d18("atan2(1,1)", D18::<8>::ONE.atan2_fast(D18::<8>::ONE), 78_539_816);
+        close_d18(
+            "atan2(1,1)",
+            D18::<8>::ONE.atan2_fast(D18::<8>::ONE),
+            78_539_816,
+        );
         assert_eq!(D18::<8>::ZERO.tan_fast().to_bits(), 0);
         assert_eq!(D18::<8>::ZERO.asin_fast().to_bits(), 0);
         assert_eq!(D18::<8>::ONE.acos_fast().to_bits(), 0);

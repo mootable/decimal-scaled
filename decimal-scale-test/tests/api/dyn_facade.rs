@@ -18,7 +18,7 @@ mod from_dyn_decimal {
     //! - `eq_dyn` / `cmp_dyn` honour the same width + lossless rescale rule.
     //! - `display` / `to_f64` / `to_int` bridge the typed surface.
 
-    use decimal_scaled::{D18, D38, DecimalWidth, DynDecimal, RawStorage, RoundingMode};
+    use decimal_scaled::{DecimalWidth, DynDecimal, RawStorage, RoundingMode, D18, D38};
 
     // ── Identity surface ──────────────────────────────────────────────────
 
@@ -159,10 +159,12 @@ mod from_dyn_decimal {
     #[test]
     fn add_same_width_different_scale_auto_rescales_up() {
         // D38<2> value 1.50  +  D38<5> value 0.00007  →  D38<5> value 1.50007
-        let a: Box<dyn DynDecimal> =
-            Box::new(D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((150) as i128).unwrap()));
-        let b: Box<dyn DynDecimal> =
-            Box::new(D38::<5>::from_bits(decimal_scaled::Int::<2>::try_from((7) as i128).unwrap()));
+        let a: Box<dyn DynDecimal> = Box::new(D38::<2>::from_bits(
+            decimal_scaled::Int::<2>::try_from((150) as i128).unwrap(),
+        ));
+        let b: Box<dyn DynDecimal> = Box::new(D38::<5>::from_bits(
+            decimal_scaled::Int::<2>::try_from((7) as i128).unwrap(),
+        ));
         let sum = a.add(&*b).unwrap();
         assert_eq!(sum.scale_dyn(), 5);
         assert_eq!(sum.width(), DecimalWidth::D38);
@@ -176,10 +178,12 @@ mod from_dyn_decimal {
     #[test]
     fn cmp_dyn_uses_lossless_rescale() {
         // 1.50 and 1.50000 are equal logically; rescale up preserves that.
-        let a: Box<dyn DynDecimal> =
-            Box::new(D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((150) as i128).unwrap()));
-        let b: Box<dyn DynDecimal> =
-            Box::new(D38::<5>::from_bits(decimal_scaled::Int::<2>::try_from((150_000) as i128).unwrap()));
+        let a: Box<dyn DynDecimal> = Box::new(D38::<2>::from_bits(
+            decimal_scaled::Int::<2>::try_from((150) as i128).unwrap(),
+        ));
+        let b: Box<dyn DynDecimal> = Box::new(D38::<5>::from_bits(
+            decimal_scaled::Int::<2>::try_from((150_000) as i128).unwrap(),
+        ));
         assert_eq!(a.cmp_dyn(&*b), Some(core::cmp::Ordering::Equal));
         assert!(a.eq_dyn(&*b));
     }
@@ -188,10 +192,12 @@ mod from_dyn_decimal {
     fn cmp_dyn_distinguishes_unequal_finer_scale() {
         // 1.50 vs 1.50001 (D38<5>): the finer-scale value carries info the
         // narrower scale can't, and the lossless rescale-up preserves it.
-        let a: Box<dyn DynDecimal> =
-            Box::new(D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((150) as i128).unwrap()));
-        let b: Box<dyn DynDecimal> =
-            Box::new(D38::<5>::from_bits(decimal_scaled::Int::<2>::try_from((150_001) as i128).unwrap()));
+        let a: Box<dyn DynDecimal> = Box::new(D38::<2>::from_bits(
+            decimal_scaled::Int::<2>::try_from((150) as i128).unwrap(),
+        ));
+        let b: Box<dyn DynDecimal> = Box::new(D38::<5>::from_bits(
+            decimal_scaled::Int::<2>::try_from((150_001) as i128).unwrap(),
+        ));
         assert_eq!(a.cmp_dyn(&*b), Some(core::cmp::Ordering::Less));
         assert!(!a.eq_dyn(&*b));
     }
@@ -215,8 +221,9 @@ mod from_dyn_decimal {
 
     #[test]
     fn quantize_to_within_range() {
-        let v: Box<dyn DynDecimal> =
-            Box::new(D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((150) as i128).unwrap()));
+        let v: Box<dyn DynDecimal> = Box::new(D38::<2>::from_bits(
+            decimal_scaled::Int::<2>::try_from((150) as i128).unwrap(),
+        ));
         let up = v.quantize_to(5).unwrap();
         assert_eq!(up.scale_dyn(), 5);
         assert_eq!(
@@ -234,8 +241,9 @@ mod from_dyn_decimal {
     #[test]
     fn quantize_to_with_explicit_rounding_mode() {
         // 1.555 at scale 3 → scale 2 with Trunc → 1.55; with Ceiling → 1.56.
-        let v: Box<dyn DynDecimal> =
-            Box::new(D38::<3>::from_bits(decimal_scaled::Int::<2>::try_from((1555) as i128).unwrap()));
+        let v: Box<dyn DynDecimal> = Box::new(D38::<3>::from_bits(
+            decimal_scaled::Int::<2>::try_from((1555) as i128).unwrap(),
+        ));
         let truncated = v.quantize_to_with(2, RoundingMode::Trunc).unwrap();
         assert_eq!(
             *truncated.as_any().downcast_ref::<D38<2>>().unwrap(),
@@ -284,8 +292,9 @@ mod from_dyn_decimal {
 
     #[test]
     fn display_matches_typed_format() {
-        let v: Box<dyn DynDecimal> =
-            Box::new(D38::<3>::from_bits(decimal_scaled::Int::<2>::try_from((1234) as i128).unwrap()));
+        let v: Box<dyn DynDecimal> = Box::new(D38::<3>::from_bits(
+            decimal_scaled::Int::<2>::try_from((1234) as i128).unwrap(),
+        ));
         // `DynDecimal` requires `Display`, so `{}` formats a trait object
         // directly — the caller decides whether to allocate at all.
         assert_eq!(format!("{v}"), "1.234");
@@ -296,8 +305,9 @@ mod from_dyn_decimal {
     fn deprecated_display_still_matches_the_display_impl() {
         // `display()` is deprecated in 0.5.1 and removed in 0.6.0; until then it
         // must keep agreeing with the `Display` impl it now defaults to.
-        let v: Box<dyn DynDecimal> =
-            Box::new(D38::<3>::from_bits(decimal_scaled::Int::<2>::try_from((1234) as i128).unwrap()));
+        let v: Box<dyn DynDecimal> = Box::new(D38::<3>::from_bits(
+            decimal_scaled::Int::<2>::try_from((1234) as i128).unwrap(),
+        ));
         assert_eq!(v.display(), format!("{v}"));
         assert_eq!(v.display(), "1.234");
     }
@@ -305,19 +315,21 @@ mod from_dyn_decimal {
     #[cfg(feature = "std")]
     #[test]
     fn to_f64_round_trip_low_scale() {
-        let v: Box<dyn DynDecimal> =
-            Box::new(D38::<3>::from_bits(decimal_scaled::Int::<2>::try_from((1500) as i128).unwrap()));
+        let v: Box<dyn DynDecimal> = Box::new(D38::<3>::from_bits(
+            decimal_scaled::Int::<2>::try_from((1500) as i128).unwrap(),
+        ));
         let f = v.to_f64();
         assert!((f - 1.5).abs() < 1e-12);
     }
 
     #[test]
     fn to_int_truncates() {
-        let v: Box<dyn DynDecimal> =
-            Box::new(D38::<3>::from_bits(decimal_scaled::Int::<2>::try_from((7_500) as i128).unwrap())); // 7.500
-        // Crate default is HalfToEven; 7.5 → 8 (rounds to even).
-        // We don't assert the exact rounding mode (depends on Cargo features);
-        // just that the call succeeds and is in the right neighbourhood.
+        let v: Box<dyn DynDecimal> = Box::new(D38::<3>::from_bits(
+            decimal_scaled::Int::<2>::try_from((7_500) as i128).unwrap(),
+        )); // 7.500
+            // Crate default is HalfToEven; 7.5 → 8 (rounds to even).
+            // We don't assert the exact rounding mode (depends on Cargo features);
+            // just that the call succeeds and is in the right neighbourhood.
         let i = v.to_int();
         assert!(i == 7 || i == 8);
     }
@@ -327,8 +339,12 @@ mod from_dyn_decimal {
     #[test]
     fn d18_cross_scale_mul() {
         // 1.5 (D18<1>) * 2.00 (D18<2>) -> 3.00 at scale 2.
-        let a: Box<dyn DynDecimal> = Box::new(D18::<1>::from_bits(decimal_scaled::Int::<1>::from((15) as i64)));
-        let b: Box<dyn DynDecimal> = Box::new(D18::<2>::from_bits(decimal_scaled::Int::<1>::from((200) as i64)));
+        let a: Box<dyn DynDecimal> = Box::new(D18::<1>::from_bits(decimal_scaled::Int::<1>::from(
+            (15) as i64,
+        )));
+        let b: Box<dyn DynDecimal> = Box::new(D18::<2>::from_bits(decimal_scaled::Int::<1>::from(
+            (200) as i64,
+        )));
         let prod = a.mul(&*b).unwrap();
         assert_eq!(prod.scale_dyn(), 2);
         assert_eq!(

@@ -136,8 +136,7 @@ mod from_d57_max_scale_cbrt_panic {
     /// path is unaffected.
     #[test]
     fn d57_max_scale_cbrt_of_zero() {
-        let zero =
-            D57::<57>::from_bits(decimal_scaled::Int::<3>::from_str_radix("0", 10).unwrap());
+        let zero = D57::<57>::from_bits(decimal_scaled::Int::<3>::from_str_radix("0", 10).unwrap());
         let r = zero.cbrt_strict();
         assert_eq!(r, zero, "cbrt(0) at D57<57> should equal 0");
     }
@@ -204,26 +203,66 @@ mod from_wide_max_scale_cbrt_panic {
     cbrt_of_one_test!(d76_max_scale_cbrt_of_one, D76, 76, decimal_scaled::Int<4>);
 
     #[cfg(feature = "wide")]
-    cbrt_of_one_test!(d115_max_scale_cbrt_of_one, D115, 115, decimal_scaled::Int<6>);
+    cbrt_of_one_test!(
+        d115_max_scale_cbrt_of_one,
+        D115,
+        115,
+        decimal_scaled::Int<6>
+    );
 
     #[cfg(feature = "wide")]
-    cbrt_of_one_test!(d153_max_scale_cbrt_of_one, D153, 153, decimal_scaled::Int<8>);
+    cbrt_of_one_test!(
+        d153_max_scale_cbrt_of_one,
+        D153,
+        153,
+        decimal_scaled::Int<8>
+    );
 
     #[cfg(feature = "wide")]
-    cbrt_of_one_test!(d230_max_scale_cbrt_of_one, D230, 230, decimal_scaled::Int<12>);
+    cbrt_of_one_test!(
+        d230_max_scale_cbrt_of_one,
+        D230,
+        230,
+        decimal_scaled::Int<12>
+    );
 
     #[cfg(any(feature = "wide", feature = "x-wide"))]
-    cbrt_of_one_test!(d307_max_scale_cbrt_of_one, D307, 307, decimal_scaled::Int<16>);
+    cbrt_of_one_test!(
+        d307_max_scale_cbrt_of_one,
+        D307,
+        307,
+        decimal_scaled::Int<16>
+    );
 
     #[cfg(feature = "x-wide")]
-    cbrt_of_one_test!(d462_max_scale_cbrt_of_one, D462, 461, decimal_scaled::Int<24>);
+    cbrt_of_one_test!(
+        d462_max_scale_cbrt_of_one,
+        D462,
+        461,
+        decimal_scaled::Int<24>
+    );
 
     #[cfg(feature = "x-wide")]
-    cbrt_of_one_test!(d616_max_scale_cbrt_of_one, D616, 615, decimal_scaled::Int<32>);
+    cbrt_of_one_test!(
+        d616_max_scale_cbrt_of_one,
+        D616,
+        615,
+        decimal_scaled::Int<32>
+    );
 
     #[cfg(feature = "xx-wide")]
-    cbrt_of_one_test!(d924_max_scale_cbrt_of_one, D924, 923, decimal_scaled::Int<48>);
+    cbrt_of_one_test!(
+        d924_max_scale_cbrt_of_one,
+        D924,
+        923,
+        decimal_scaled::Int<48>
+    );
 
     #[cfg(feature = "xx-wide")]
-    cbrt_of_one_test!(d1232_max_scale_cbrt_of_one, D1232, 1231, decimal_scaled::Int<64>);
+    cbrt_of_one_test!(
+        d1232_max_scale_cbrt_of_one,
+        D1232,
+        1231,
+        decimal_scaled::Int<64>
+    );
 }

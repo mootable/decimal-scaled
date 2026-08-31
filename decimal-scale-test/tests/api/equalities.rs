@@ -22,27 +22,33 @@ mod from_equalities {
 
     #[test]
     fn eq_signed_fractional_is_false() {
-        let one_and_a_half = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_500_000_000_000_i128).unwrap());
+        let one_and_a_half =
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_500_000_000_000_i128).unwrap());
         assert!(!(one_and_a_half == 1_i32));
         assert!(!(one_and_a_half == 2_i32));
     }
 
     #[test]
     fn eq_signed_one_lsb_is_false() {
-        let just_above_zero = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap());
+        let just_above_zero =
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap());
         assert!(!(just_above_zero == 0_i32));
     }
 
     #[test]
     fn eq_i128_no_overflow_at_extremes() {
         let huge = i128::MAX / i128::from(D38s12::multiplier());
-        let d = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(huge * i128::from(D38s12::multiplier())).unwrap());
+        let d = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from(huge * i128::from(D38s12::multiplier())).unwrap(),
+        );
         assert!(d == huge);
     }
 
     #[test]
     fn eq_i128_negative() {
-        let d = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(-42_000_000_000_000_i128).unwrap());
+        let d = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from(-42_000_000_000_000_i128).unwrap(),
+        );
         assert!(d == -42_i128);
         assert!(-42_i128 == d);
     }
@@ -66,7 +72,10 @@ mod from_equalities {
     #[test]
     fn eq_u128_large_value() {
         let n: u128 = 1_000_000_u128;
-        let d = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((n as i128) * i128::from(D38s12::multiplier())).unwrap());
+        let d = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((n as i128) * i128::from(D38s12::multiplier()))
+                .unwrap(),
+        );
         assert!(d == n);
     }
 
@@ -84,7 +93,8 @@ mod from_equalities {
     #[test]
     fn eq_float_exact_representable() {
         // 1.5 is exactly representable in both f64 and D38s12.
-        let d = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_500_000_000_000_i128).unwrap());
+        let d =
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_500_000_000_000_i128).unwrap());
         assert!(d == 1.5_f64);
         assert!(1.5_f64 == d);
         assert!(d == 1.5_f32);
@@ -139,7 +149,8 @@ mod from_equalities {
     #[cfg(feature = "std")]
     #[test]
     fn eq_float_negative() {
-        let d = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(-2_500_000_000_000_i128).unwrap());
+        let d =
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(-2_500_000_000_000_i128).unwrap());
         assert!(d == -2.5_f64);
         assert!(-2.5_f64 == d);
     }
@@ -256,7 +267,8 @@ mod from_macros_surface {
         assert_eq!(v, 42i128);
         assert_eq!(v, 42u128);
         // Fractional
-        let frac: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(4_201_i128).unwrap()).into();
+        let frac: D76<2> =
+            D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(4_201_i128).unwrap()).into();
         assert_ne!(frac, 42i32);
         assert_ne!(frac, 42u32);
         // Negative vs unsigned
@@ -288,7 +300,8 @@ mod from_macros_bitwise_and_overflow {
         assert_ne!(v, f64::INFINITY);
         assert_ne!(v, f32::NAN);
         // Fractional
-        let frac: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(4_201_i128).unwrap()).into();
+        let frac: D76<2> =
+            D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(4_201_i128).unwrap()).into();
         assert_ne!(frac, 42.0_f64);
     }
 }
@@ -308,7 +321,8 @@ mod from_equalities_wide_branches {
         assert!(42_i64 == v);
         assert!(42_i128 == v);
         // Fractional vs primitive â€” false even from the primitive side.
-        let frac: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(4201_i128).unwrap()).into();
+        let frac: D76<2> =
+            D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(4201_i128).unwrap()).into();
         assert!(!(42_i32 == frac));
         assert!(!(42_i64 == frac));
     }
@@ -348,7 +362,8 @@ mod from_equalities_wide_branches {
 
     #[test]
     fn wide_fractional_vs_i128_is_false() {
-        let frac: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(123_i128).unwrap()).into(); // 0.... at S=2
+        let frac: D76<2> =
+            D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(123_i128).unwrap()).into(); // 0.... at S=2
         assert!(!(frac == 0_i128));
     }
 }

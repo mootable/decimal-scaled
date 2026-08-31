@@ -65,7 +65,10 @@ mod from_src_decimal_constants {
     )))]
     #[test]
     fn half_pi_is_bit_exact_at_scale_12() {
-        assert_eq!(D38s12::half_pi().to_bits().as_i128(), 1_570_796_326_795_i128);
+        assert_eq!(
+            D38s12::half_pi().to_bits().as_i128(),
+            1_570_796_326_795_i128
+        );
     }
 
     /// quarter_pi at SCALE=12: raw / 10^23.
@@ -80,7 +83,10 @@ mod from_src_decimal_constants {
     )))]
     #[test]
     fn quarter_pi_is_bit_exact_at_scale_12() {
-        assert_eq!(D38s12::quarter_pi().to_bits().as_i128(), 785_398_163_397_i128);
+        assert_eq!(
+            D38s12::quarter_pi().to_bits().as_i128(),
+            785_398_163_397_i128
+        );
     }
 
     /// e at SCALE=12: raw / 10^23.
@@ -327,7 +333,9 @@ mod from_src_decimal_constants {
     fn fitting_constants_at_scale_38_are_correctly_rounded() {
         // half_pi to 38 digits: 1.57079632679489661923132169163975144210
         let expected_half_pi: i128 = 157_079_632_679_489_661_923_132_169_163_975_144_210;
-        let got = decimal_scaled::D::<Int<2>, 38>::half_pi().to_bits().as_i128();
+        let got = decimal_scaled::D::<Int<2>, 38>::half_pi()
+            .to_bits()
+            .as_i128();
         let diff = (got - expected_half_pi).abs();
         assert!(
             diff <= 1,
@@ -336,7 +344,9 @@ mod from_src_decimal_constants {
 
         // quarter_pi to 38 digits: 0.78539816339744830961566084581987572105
         let expected_quarter_pi: i128 = 78_539_816_339_744_830_961_566_084_581_987_572_105;
-        let got = decimal_scaled::D::<Int<2>, 38>::quarter_pi().to_bits().as_i128();
+        let got = decimal_scaled::D::<Int<2>, 38>::quarter_pi()
+            .to_bits()
+            .as_i128();
         let diff = (got - expected_quarter_pi).abs();
         assert!(
             diff <= 1,
@@ -345,7 +355,9 @@ mod from_src_decimal_constants {
 
         // golden to 38 digits: 1.61803398874989484820458683436563811772
         let expected_golden: i128 = 161_803_398_874_989_484_820_458_683_436_563_811_772;
-        let got = decimal_scaled::D::<Int<2>, 38>::golden().to_bits().as_i128();
+        let got = decimal_scaled::D::<Int<2>, 38>::golden()
+            .to_bits()
+            .as_i128();
         let diff = (got - expected_golden).abs();
         assert!(
             diff <= 1,
@@ -371,7 +383,6 @@ mod from_src_decimal_constants {
     // (`rescale_from_ref` boundary tests removed: the rounding logic now
     // lives in `D38::rescale` / `src/rounding.rs::apply_rounding` and is
     // covered by the tests in those modules.)
-
 }
 
 #[cfg(feature = "wide")]
@@ -403,7 +414,11 @@ mod from_wide_constants_all_six {
             };
             within_one_lsb(D::tau(), D::pi() + D::pi(), "tau vs pi + pi");
             within_one_lsb(D::pi(), D::half_pi() + D::half_pi(), "pi vs 2 half_pi");
-            within_one_lsb(D::half_pi(), D::quarter_pi() + D::quarter_pi(), "half_pi vs 2 quarter_pi");
+            within_one_lsb(
+                D::half_pi(),
+                D::quarter_pi() + D::quarter_pi(),
+                "half_pi vs 2 quarter_pi",
+            );
             let two: D = "2".parse().unwrap();
             let three: D = "3".parse().unwrap();
             let one: D = "1".parse().unwrap();
@@ -438,7 +453,16 @@ mod from_wide_constants_all_six {
     }
 }
 
-#[cfg(all(feature = "wide", not(any(feature = "rounding-half-away-from-zero", feature = "rounding-half-toward-zero", feature = "rounding-trunc", feature = "rounding-floor", feature = "rounding-ceiling"))))]
+#[cfg(all(
+    feature = "wide",
+    not(any(
+        feature = "rounding-half-away-from-zero",
+        feature = "rounding-half-toward-zero",
+        feature = "rounding-trunc",
+        feature = "rounding-floor",
+        feature = "rounding-ceiling"
+    ))
+))]
 mod from_wide_constants_high_scale {
     //! Verifies the per-width raw constants in `consts_wide.rs` produce
     //! correct values at the wide tiers' deeper scales â€” the case that
@@ -446,7 +470,7 @@ mod from_wide_constants_high_scale {
 
     // Truth strings below are the half-to-even-rounded pi reference; gate
     // the module to the default rounding mode so every test always asserts.
-    use decimal_scaled::{D76, D153, D307, DecimalConstants};
+    use decimal_scaled::{DecimalConstants, D153, D307, D76};
 
     /// D76<76>::pi() used to panic at the i128 rescale-up. After wiring
     /// the build-time-generated 75-digit Int256 constants, it returns a

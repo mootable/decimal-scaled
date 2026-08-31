@@ -9,8 +9,8 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use decimal_scaled_golden::{CaseLoader, FileLoader, Function, GoldenCase, Limits};
 use decimal_scale_test::{golden_dir, GEN_PRECISION, GUARD};
+use decimal_scaled_golden::{CaseLoader, FileLoader, Function, GoldenCase, Limits};
 
 /// Loads each function's golden file ONCE and clones it per request — the per-subject
 /// `run` would otherwise re-read + re-parse the multi-MB files for every cell.
@@ -21,7 +21,10 @@ pub struct CachingLoader {
 
 impl CachingLoader {
     pub fn new(dir: &str) -> CachingLoader {
-        CachingLoader { inner: FileLoader::new(dir), cache: Mutex::new(HashMap::new()) }
+        CachingLoader {
+            inner: FileLoader::new(dir),
+            cache: Mutex::new(HashMap::new()),
+        }
     }
 
     /// Caching loader over the committed golden set. `GOLDEN_DIR` overrides the

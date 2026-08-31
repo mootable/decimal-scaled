@@ -82,7 +82,11 @@ mod from_new_tiers_smoke {
                     // √4 = 2 exactly.
                     let four = <$Tsmid>::try_from(4).unwrap();
                     let r = four.sqrt_strict();
-                    assert_eq!(r, <$Tsmid>::try_from(2).unwrap(), "sqrt(4) should be 2 exactly");
+                    assert_eq!(
+                        r,
+                        <$Tsmid>::try_from(2).unwrap(),
+                        "sqrt(4) should be 2 exactly"
+                    );
                 }
 
                 #[test]

@@ -6,7 +6,6 @@
 mod from_src_display {
     use decimal_scaled::{D38s12, Int, ParseError};
 
-    
     // ── Display ──
 
     /// ZERO renders as `0.000000000000` at SCALE = 12.
@@ -74,7 +73,10 @@ mod from_src_display {
         type D0 = decimal_scaled::D<Int<2>, 0>;
         assert_eq!(D0::ONE.to_string(), "1");
         assert_eq!(D0::ZERO.to_string(), "0");
-        assert_eq!(D0::from_bits(Int::<2>::try_from(-42_i128).unwrap()).to_string(), "-42");
+        assert_eq!(
+            D0::from_bits(Int::<2>::try_from(-42_i128).unwrap()).to_string(),
+            "-42"
+        );
     }
 
     // ── Debug ──
@@ -568,10 +570,9 @@ mod exp_width_uniform {
         /// represent. SCALE 0, so the decimal value equals the literal.
         #[test]
         fn d307_wide_magnitude_multidigit_mantissa() {
-            let v: decimal_scaled::D307<0> =
-                "12345678901234567890123456789012345678901234567891"
-                    .parse()
-                    .unwrap();
+            let v: decimal_scaled::D307<0> = "12345678901234567890123456789012345678901234567891"
+                .parse()
+                .unwrap();
             assert_eq!(
                 format!("{v:e}"),
                 "1.2345678901234567890123456789012345678901234567891e49"

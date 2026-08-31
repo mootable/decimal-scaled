@@ -83,7 +83,8 @@ mod from_parse_errors {
         assert!(D38::<2>::from_str("1.5").is_ok());
         assert!(D38::<2>::from_str("-1.5").is_ok());
         assert!(D38::<0>::from_str("170141183460469231731687303715884105727").is_ok()); // i128::MAX
-        assert!(D38::<0>::from_str("-170141183460469231731687303715884105728").is_ok()); // i128::MIN
+        assert!(D38::<0>::from_str("-170141183460469231731687303715884105728").is_ok());
+        // i128::MIN
     }
 }
 
@@ -101,7 +102,7 @@ mod from_from_str_wide {
     //! literals round-trip cleanly.
 
     use core::str::FromStr;
-    use decimal_scaled::{D38, D76, D307, D1232};
+    use decimal_scaled::{D1232, D307, D38, D76};
 
     #[test]
     fn d76_deep_scale_parses_one_point_five() {

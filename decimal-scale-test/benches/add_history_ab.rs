@@ -114,11 +114,46 @@ fn bench_mul_history(c: &mut Criterion) {
 }
 
 fn bench_trig_ln_history(c: &mut Criterion) {
-    bench_unary_pair!(c, "sin_D115s0_x0", sin, "0", decimal_scaled::D115<0>, ds_044::D115<0>);
-    bench_unary_pair!(c, "cos_D115s0_x0", cos, "0", decimal_scaled::D115<0>, ds_044::D115<0>);
-    bench_unary_pair!(c, "sin_D307s0_x0", sin, "0", decimal_scaled::D307<0>, ds_044::D307<0>);
-    bench_unary_pair!(c, "ln_D115s0_x2", ln, "2", decimal_scaled::D115<0>, ds_044::D115<0>);
-    bench_unary_pair!(c, "ln_D462s231_x2", ln, "2.0", decimal_scaled::D462<231>, ds_044::D462<231>);
+    bench_unary_pair!(
+        c,
+        "sin_D115s0_x0",
+        sin,
+        "0",
+        decimal_scaled::D115<0>,
+        ds_044::D115<0>
+    );
+    bench_unary_pair!(
+        c,
+        "cos_D115s0_x0",
+        cos,
+        "0",
+        decimal_scaled::D115<0>,
+        ds_044::D115<0>
+    );
+    bench_unary_pair!(
+        c,
+        "sin_D307s0_x0",
+        sin,
+        "0",
+        decimal_scaled::D307<0>,
+        ds_044::D307<0>
+    );
+    bench_unary_pair!(
+        c,
+        "ln_D115s0_x2",
+        ln,
+        "2",
+        decimal_scaled::D115<0>,
+        ds_044::D115<0>
+    );
+    bench_unary_pair!(
+        c,
+        "ln_D462s231_x2",
+        ln,
+        "2.0",
+        decimal_scaled::D462<231>,
+        ds_044::D462<231>
+    );
 }
 
 criterion_group! {

@@ -43,7 +43,7 @@ mod from_bitwise {
 
     // -- Tests ------------------------------------------------------------
 
-    use decimal_scaled::{D38, D38s12};
+    use decimal_scaled::{D38s12, D38};
 
     // --- BitAnd / BitOr / BitXor ------------------------------------
 
@@ -52,14 +52,20 @@ mod from_bitwise {
         // raw-bit boundary; from_bits not ONE
         let a = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0xF0_i128).unwrap());
         let b = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0x0F_i128).unwrap());
-        assert_eq!(a & b, D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0x00_i128).unwrap()));
+        assert_eq!(
+            a & b,
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0x00_i128).unwrap())
+        );
     }
 
     #[test]
     fn bitand_assign_in_place() {
         let mut a = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0xFF_i128).unwrap());
         a &= D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0x0F_i128).unwrap());
-        assert_eq!(a, D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0x0F_i128).unwrap()));
+        assert_eq!(
+            a,
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0x0F_i128).unwrap())
+        );
     }
 
     #[test]
@@ -74,21 +80,30 @@ mod from_bitwise {
     fn bitor_assign_in_place() {
         let mut a = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0xF0_i128).unwrap());
         a |= D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0x0F_i128).unwrap());
-        assert_eq!(a, D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0xFF_i128).unwrap()));
+        assert_eq!(
+            a,
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0xFF_i128).unwrap())
+        );
     }
 
     #[test]
     fn bitxor_toggles_bits() {
         let a = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0b1100_i128).unwrap());
         let b = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0b1010_i128).unwrap());
-        assert_eq!(a ^ b, D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0b0110_i128).unwrap()));
+        assert_eq!(
+            a ^ b,
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0b0110_i128).unwrap())
+        );
     }
 
     #[test]
     fn bitxor_assign_in_place() {
         let mut a = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0xFF_i128).unwrap());
         a ^= D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0x0F_i128).unwrap());
-        assert_eq!(a, D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0xF0_i128).unwrap()));
+        assert_eq!(
+            a,
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0xF0_i128).unwrap())
+        );
     }
 
     #[test]
@@ -102,39 +117,57 @@ mod from_bitwise {
     #[test]
     fn shl_doubles_lsb() {
         // raw-bit boundary; from_bits(decimal_scaled::Int::<2>::try_from((1) as i128).unwrap()) not ONE
-        assert_eq!(D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap()) << 1u32, D38s12::from_bits(decimal_scaled::Int::<2>::try_from(2_i128).unwrap()));
+        assert_eq!(
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap()) << 1u32,
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(2_i128).unwrap())
+        );
     }
 
     #[test]
     fn shr_halves_lsb() {
         // raw-bit boundary; from_bits not ONE
-        assert_eq!(D38s12::from_bits(decimal_scaled::Int::<2>::try_from(2_i128).unwrap()) >> 1u32, D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap()));
+        assert_eq!(
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(2_i128).unwrap()) >> 1u32,
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap())
+        );
     }
 
     #[test]
     fn shr_is_sign_extending() {
         // -1 raw is all-ones; arithmetic shr preserves all-ones.
-        assert_eq!(D38s12::from_bits(decimal_scaled::Int::<2>::try_from(-1_i128).unwrap()) >> 1u32, D38s12::from_bits(decimal_scaled::Int::<2>::try_from(-1_i128).unwrap()));
+        assert_eq!(
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(-1_i128).unwrap()) >> 1u32,
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(-1_i128).unwrap())
+        );
     }
 
     #[test]
     fn shr_negative_stays_negative() {
         // -8 raw >> 1 = -4 raw under arithmetic shift.
-        assert_eq!(D38s12::from_bits(decimal_scaled::Int::<2>::try_from(-8_i128).unwrap()) >> 1u32, D38s12::from_bits(decimal_scaled::Int::<2>::try_from(-4_i128).unwrap()));
+        assert_eq!(
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(-8_i128).unwrap()) >> 1u32,
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(-4_i128).unwrap())
+        );
     }
 
     #[test]
     fn shl_assign_in_place() {
         let mut a = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap());
         a <<= 4u32;
-        assert_eq!(a, D38s12::from_bits(decimal_scaled::Int::<2>::try_from(16_i128).unwrap()));
+        assert_eq!(
+            a,
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(16_i128).unwrap())
+        );
     }
 
     #[test]
     fn shr_assign_in_place() {
         let mut a = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(16_i128).unwrap());
         a >>= 2u32;
-        assert_eq!(a, D38s12::from_bits(decimal_scaled::Int::<2>::try_from(4_i128).unwrap()));
+        assert_eq!(
+            a,
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(4_i128).unwrap())
+        );
     }
 
     // --- Not ---------------------------------------------------------
@@ -142,12 +175,18 @@ mod from_bitwise {
     #[test]
     fn not_zero_is_neg_one() {
         // raw-bit boundary; from_bits(decimal_scaled::Int::<2>::try_from((-1) as i128).unwrap()) not -ONE
-        assert_eq!(!D38s12::ZERO, D38s12::from_bits(decimal_scaled::Int::<2>::try_from(-1_i128).unwrap()));
+        assert_eq!(
+            !D38s12::ZERO,
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(-1_i128).unwrap())
+        );
     }
 
     #[test]
     fn not_neg_one_is_zero() {
-        assert_eq!(!D38s12::from_bits(decimal_scaled::Int::<2>::try_from(-1_i128).unwrap()), D38s12::ZERO);
+        assert_eq!(
+            !D38s12::from_bits(decimal_scaled::Int::<2>::try_from(-1_i128).unwrap()),
+            D38s12::ZERO
+        );
     }
 
     #[test]
@@ -173,7 +212,10 @@ mod from_bitwise {
         // For non-negative inputs, arithmetic and logical shifts agree.
         let a = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0xFF_i128).unwrap());
         assert_eq!(a.unsigned_shr(4), a >> 4u32);
-        assert_eq!(a.unsigned_shr(4), D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0x0F_i128).unwrap()));
+        assert_eq!(
+            a.unsigned_shr(4),
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0x0F_i128).unwrap())
+        );
     }
 
     #[test]
@@ -188,7 +230,8 @@ mod from_bitwise {
     fn rotate_left_low_bits() {
         // 0b111 rotate_left 1 = 0b1110 = 14.
         assert_eq!(
-            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0b111_i128).unwrap()).rotate_left(1),
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0b111_i128).unwrap())
+                .rotate_left(1),
             D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0b1110_i128).unwrap())
         );
     }
@@ -219,7 +262,10 @@ mod from_bitwise {
     #[test]
     fn leading_zeros_lsb_is_127() {
         // raw-bit boundary; from_bits(decimal_scaled::Int::<2>::try_from((1) as i128).unwrap()) not ONE
-        assert_eq!(D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap()).leading_zeros(), 127);
+        assert_eq!(
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap()).leading_zeros(),
+            127
+        );
     }
 
     #[test]
@@ -229,12 +275,18 @@ mod from_bitwise {
 
     #[test]
     fn leading_zeros_neg_one_is_zero() {
-        assert_eq!(D38s12::from_bits(decimal_scaled::Int::<2>::try_from(-1_i128).unwrap()).leading_zeros(), 0);
+        assert_eq!(
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(-1_i128).unwrap()).leading_zeros(),
+            0
+        );
     }
 
     #[test]
     fn trailing_zeros_eight_is_three() {
-        assert_eq!(D38s12::from_bits(decimal_scaled::Int::<2>::try_from(8_i128).unwrap()).trailing_zeros(), 3);
+        assert_eq!(
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(8_i128).unwrap()).trailing_zeros(),
+            3
+        );
     }
 
     #[test]
@@ -244,7 +296,10 @@ mod from_bitwise {
 
     #[test]
     fn trailing_zeros_one_is_zero() {
-        assert_eq!(D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap()).trailing_zeros(), 0);
+        assert_eq!(
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap()).trailing_zeros(),
+            0
+        );
     }
 
     // --- count_ones / count_zeros -----------------------------------
@@ -252,13 +307,20 @@ mod from_bitwise {
     #[test]
     fn count_ones_pattern() {
         // 0b101 has two ones.
-        assert_eq!(D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0b101_i128).unwrap()).count_ones(), 2);
+        assert_eq!(
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0b101_i128).unwrap()).count_ones(),
+            2
+        );
     }
 
     #[test]
     fn count_zeros_pattern() {
         // 0b101 has 128 - 2 = 126 zeros (in i128 storage).
-        assert_eq!(D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0b101_i128).unwrap()).count_zeros(), 126);
+        assert_eq!(
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0b101_i128).unwrap())
+                .count_zeros(),
+            126
+        );
     }
 
     #[test]
@@ -269,13 +331,17 @@ mod from_bitwise {
     #[test]
     fn count_ones_neg_one_is_128() {
         // -1 raw is all-ones.
-        assert_eq!(D38s12::from_bits(decimal_scaled::Int::<2>::try_from(-1_i128).unwrap()).count_ones(), 128);
+        assert_eq!(
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(-1_i128).unwrap()).count_ones(),
+            128
+        );
     }
 
     #[test]
     fn count_zeros_complement_relation() {
         // count_ones + count_zeros == 128 for every value.
-        let a = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0xDEAD_BEEF_CAFE_i128).unwrap());
+        let a =
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(0xDEAD_BEEF_CAFE_i128).unwrap());
         assert_eq!(a.count_ones() + a.count_zeros(), 128);
     }
 
@@ -283,12 +349,18 @@ mod from_bitwise {
 
     #[test]
     fn is_power_of_two_true_for_eight() {
-        assert!(D38s12::from_bits(decimal_scaled::Int::<2>::try_from(8_i128).unwrap()).is_power_of_two());
+        assert!(
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(8_i128).unwrap())
+                .is_power_of_two()
+        );
     }
 
     #[test]
     fn is_power_of_two_false_for_seven() {
-        assert!(!D38s12::from_bits(decimal_scaled::Int::<2>::try_from(7_i128).unwrap()).is_power_of_two());
+        assert!(
+            !D38s12::from_bits(decimal_scaled::Int::<2>::try_from(7_i128).unwrap())
+                .is_power_of_two()
+        );
     }
 
     #[test]
@@ -300,7 +372,10 @@ mod from_bitwise {
     fn is_power_of_two_false_for_negative() {
         // Negative i128 has the sign bit set; reinterpreted as u128 the
         // popcount is more than one, so not a power of two.
-        assert!(!D38s12::from_bits(decimal_scaled::Int::<2>::try_from(-1_i128).unwrap()).is_power_of_two());
+        assert!(
+            !D38s12::from_bits(decimal_scaled::Int::<2>::try_from(-1_i128).unwrap())
+                .is_power_of_two()
+        );
     }
 
     #[test]
@@ -313,7 +388,8 @@ mod from_bitwise {
     #[test]
     fn next_power_of_two_seven_is_eight() {
         assert_eq!(
-            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(7_i128).unwrap()).next_power_of_two(),
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(7_i128).unwrap())
+                .next_power_of_two(),
             D38s12::from_bits(decimal_scaled::Int::<2>::try_from(8_i128).unwrap())
         );
     }
@@ -322,7 +398,8 @@ mod from_bitwise {
     fn next_power_of_two_eight_is_eight() {
         // Already a power of two -- stays put.
         assert_eq!(
-            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(8_i128).unwrap()).next_power_of_two(),
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(8_i128).unwrap())
+                .next_power_of_two(),
             D38s12::from_bits(decimal_scaled::Int::<2>::try_from(8_i128).unwrap())
         );
     }
@@ -330,7 +407,8 @@ mod from_bitwise {
     #[test]
     fn next_power_of_two_one_is_one() {
         assert_eq!(
-            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap()).next_power_of_two(),
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap())
+                .next_power_of_two(),
             D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap())
         );
     }
@@ -342,14 +420,37 @@ mod from_bitwise {
         type D6 = D38<6>;
         let a = D6::from_bits(decimal_scaled::Int::<2>::try_from(0b1100_i128).unwrap());
         let b = D6::from_bits(decimal_scaled::Int::<2>::try_from(0b1010_i128).unwrap());
-        assert_eq!(a & b, D6::from_bits(decimal_scaled::Int::<2>::try_from(0b1000_i128).unwrap()));
-        assert_eq!(a | b, D6::from_bits(decimal_scaled::Int::<2>::try_from(0b1110_i128).unwrap()));
-        assert_eq!(a ^ b, D6::from_bits(decimal_scaled::Int::<2>::try_from(0b0110_i128).unwrap()));
-        assert_eq!(D6::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap()) << 3u32, D6::from_bits(decimal_scaled::Int::<2>::try_from(8_i128).unwrap()));
-        assert_eq!(D6::from_bits(decimal_scaled::Int::<2>::try_from(8_i128).unwrap()) >> 3u32, D6::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap()));
-        assert_eq!(!D6::ZERO, D6::from_bits(decimal_scaled::Int::<2>::try_from(-1_i128).unwrap()));
-        assert_eq!(D6::from_bits(decimal_scaled::Int::<2>::try_from(8_i128).unwrap()).count_ones(), 1);
-        assert!(D6::from_bits(decimal_scaled::Int::<2>::try_from(8_i128).unwrap()).is_power_of_two());
+        assert_eq!(
+            a & b,
+            D6::from_bits(decimal_scaled::Int::<2>::try_from(0b1000_i128).unwrap())
+        );
+        assert_eq!(
+            a | b,
+            D6::from_bits(decimal_scaled::Int::<2>::try_from(0b1110_i128).unwrap())
+        );
+        assert_eq!(
+            a ^ b,
+            D6::from_bits(decimal_scaled::Int::<2>::try_from(0b0110_i128).unwrap())
+        );
+        assert_eq!(
+            D6::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap()) << 3u32,
+            D6::from_bits(decimal_scaled::Int::<2>::try_from(8_i128).unwrap())
+        );
+        assert_eq!(
+            D6::from_bits(decimal_scaled::Int::<2>::try_from(8_i128).unwrap()) >> 3u32,
+            D6::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap())
+        );
+        assert_eq!(
+            !D6::ZERO,
+            D6::from_bits(decimal_scaled::Int::<2>::try_from(-1_i128).unwrap())
+        );
+        assert_eq!(
+            D6::from_bits(decimal_scaled::Int::<2>::try_from(8_i128).unwrap()).count_ones(),
+            1
+        );
+        assert!(
+            D6::from_bits(decimal_scaled::Int::<2>::try_from(8_i128).unwrap()).is_power_of_two()
+        );
     }
 }
 
@@ -378,7 +479,12 @@ mod from_macros_bitwise_and_overflow {
         assert_eq!(r.to_bits(), 1);
         assert!(D18::<2>::from_bits(decimal_scaled::Int::<1>::from(8_i64)).is_power_of_two());
         assert!(!D18::<2>::from_bits(decimal_scaled::Int::<1>::from(7_i64)).is_power_of_two());
-        assert_eq!(D18::<2>::from_bits(decimal_scaled::Int::<1>::from(5_i64)).next_power_of_two().to_bits(), 8);
+        assert_eq!(
+            D18::<2>::from_bits(decimal_scaled::Int::<1>::from(5_i64))
+                .next_power_of_two()
+                .to_bits(),
+            8
+        );
     }
 
     #[test]
@@ -391,13 +497,26 @@ mod from_macros_bitwise_and_overflow {
         let neg = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(-1_i128).unwrap());
         let logical = neg.unsigned_shr(127);
         assert_eq!(logical.to_bits(), 1);
-        let r = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap()).rotate_left(2);
+        let r =
+            D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap()).rotate_left(2);
         assert_eq!(r.to_bits(), 4);
-        let r = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(4_i128).unwrap()).rotate_right(2);
+        let r = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(4_i128).unwrap())
+            .rotate_right(2);
         assert_eq!(r.to_bits(), 1);
-        assert!(D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(8_i128).unwrap()).is_power_of_two());
-        assert!(!D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(7_i128).unwrap()).is_power_of_two());
-        assert_eq!(D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(5_i128).unwrap()).next_power_of_two().to_bits(), 8);
+        assert!(
+            D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(8_i128).unwrap())
+                .is_power_of_two()
+        );
+        assert!(
+            !D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(7_i128).unwrap())
+                .is_power_of_two()
+        );
+        assert_eq!(
+            D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(5_i128).unwrap())
+                .next_power_of_two()
+                .to_bits(),
+            8
+        );
     }
 
     #[cfg(feature = "wide")]
@@ -405,7 +524,8 @@ mod from_macros_bitwise_and_overflow {
     fn bitwise_methods_wide() {
         use decimal_scaled::D76;
 
-        let one: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap()).into();
+        let one: D76<2> =
+            D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap()).into();
         let zero = D76::<2>::ZERO;
         assert_eq!(zero.count_ones(), 0);
         assert!(one.count_ones() >= 1);
@@ -420,8 +540,10 @@ mod from_macros_bitwise_and_overflow {
         let _ = one.next_power_of_two();
 
         // Bitwise operators on wide
-        let a: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(0b1100_i128).unwrap()).into();
-        let b: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(0b1010_i128).unwrap()).into();
+        let a: D76<2> =
+            D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(0b1100_i128).unwrap()).into();
+        let b: D76<2> =
+            D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(0b1010_i128).unwrap()).into();
         let _ = a & b;
         let _ = a | b;
         let _ = a ^ b;
@@ -469,10 +591,16 @@ mod from_macros_surface {
         c ^= b;
         assert_eq!(c.to_bits(), 0b0110);
         // Not
-        assert_eq!((!D18::<2>::from_bits(decimal_scaled::Int::<1>::from(0_i64))).to_bits(), !0i64);
+        assert_eq!(
+            (!D18::<2>::from_bits(decimal_scaled::Int::<1>::from(0_i64))).to_bits(),
+            !0i64
+        );
         // Shifts
         let s = D18::<2>::from_bits(decimal_scaled::Int::<1>::from(1_i64));
         assert_eq!((s.shl(3_u32)).to_bits(), 8);
-        assert_eq!((D18::<2>::from_bits(decimal_scaled::Int::<1>::from(16_i64)).shr(2_u32)).to_bits(), 4);
+        assert_eq!(
+            (D18::<2>::from_bits(decimal_scaled::Int::<1>::from(16_i64)).shr(2_u32)).to_bits(),
+            4
+        );
     }
 }

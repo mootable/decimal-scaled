@@ -21,7 +21,7 @@ mod from_quantize {
         feature = "rounding-ceiling",
     )))]
 
-    use decimal_scaled::{D38s2, D38s6, D38s12, RoundingMode};
+    use decimal_scaled::{D38s12, D38s2, D38s6, RoundingMode};
 
     // --- with_scale alias ----------------------------------------------
 
@@ -29,13 +29,23 @@ mod from_quantize {
     fn with_scale_matches_rescale() {
         // Native tier.
         let a = D38s2::from_bits(decimal_scaled::Int::<2>::try_from(150_i128).unwrap());
-        assert_eq!(i128::from(a.with_scale::<6>().to_bits()), i128::from(a.quantize::<6>().to_bits()));
-        assert_eq!(i128::from(a.with_scale::<2>().to_bits()), i128::from(a.to_bits()));
+        assert_eq!(
+            i128::from(a.with_scale::<6>().to_bits()),
+            i128::from(a.quantize::<6>().to_bits())
+        );
+        assert_eq!(
+            i128::from(a.with_scale::<2>().to_bits()),
+            i128::from(a.to_bits())
+        );
 
         // The builder-style name is the only difference; semantics are
         // bit-identical to rescale.
-        let b = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(12_345_678_901_234_i128).unwrap());
-        assert_eq!(i128::from(b.with_scale::<6>().to_bits()), i128::from(b.quantize::<6>().to_bits()));
+        let b =
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(12_345_678_901_234_i128).unwrap());
+        assert_eq!(
+            i128::from(b.with_scale::<6>().to_bits()),
+            i128::from(b.quantize::<6>().to_bits())
+        );
     }
 
     // --- scale-up direction --------------------------------------------
@@ -87,14 +97,22 @@ mod from_quantize {
         // 1.235000 at cents: tie -> 1.24 (4 is even)
         let micros = D38s6::from_bits(decimal_scaled::Int::<2>::try_from(1_235_000_i128).unwrap());
         assert_eq!(
-            i128::from(micros.quantize_with::<2>(RoundingMode::HalfToEven).to_bits()),
+            i128::from(
+                micros
+                    .quantize_with::<2>(RoundingMode::HalfToEven)
+                    .to_bits()
+            ),
             124
         );
 
         // 1.225000 at cents: tie -> 1.22 (2 is even)
         let micros = D38s6::from_bits(decimal_scaled::Int::<2>::try_from(1_225_000_i128).unwrap());
         assert_eq!(
-            i128::from(micros.quantize_with::<2>(RoundingMode::HalfToEven).to_bits()),
+            i128::from(
+                micros
+                    .quantize_with::<2>(RoundingMode::HalfToEven)
+                    .to_bits()
+            ),
             122
         );
     }
@@ -123,7 +141,11 @@ mod from_quantize {
         let micros = D38s6::from_bits(decimal_scaled::Int::<2>::try_from(1_235_000_i128).unwrap()); // 1.235000
 
         assert_eq!(
-            i128::from(micros.quantize_with::<2>(RoundingMode::HalfToEven).to_bits()),
+            i128::from(
+                micros
+                    .quantize_with::<2>(RoundingMode::HalfToEven)
+                    .to_bits()
+            ),
             124
         );
         assert_eq!(
@@ -142,8 +164,14 @@ mod from_quantize {
             ),
             123
         );
-        assert_eq!(i128::from(micros.quantize_with::<2>(RoundingMode::Trunc).to_bits()), 123);
-        assert_eq!(i128::from(micros.quantize_with::<2>(RoundingMode::Floor).to_bits()), 123);
+        assert_eq!(
+            i128::from(micros.quantize_with::<2>(RoundingMode::Trunc).to_bits()),
+            123
+        );
+        assert_eq!(
+            i128::from(micros.quantize_with::<2>(RoundingMode::Floor).to_bits()),
+            123
+        );
         assert_eq!(
             i128::from(micros.quantize_with::<2>(RoundingMode::Ceiling).to_bits()),
             124
@@ -155,7 +183,11 @@ mod from_quantize {
         let micros = D38s6::from_bits(decimal_scaled::Int::<2>::try_from(-1_235_000_i128).unwrap()); // -1.235000
 
         assert_eq!(
-            i128::from(micros.quantize_with::<2>(RoundingMode::HalfToEven).to_bits()),
+            i128::from(
+                micros
+                    .quantize_with::<2>(RoundingMode::HalfToEven)
+                    .to_bits()
+            ),
             -124
         );
         assert_eq!(
@@ -209,14 +241,16 @@ mod from_quantize {
 
     #[test]
     fn quantize_same_scale_is_bit_identity() {
-        let v = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(123_456_789_012_i128).unwrap());
+        let v =
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(123_456_789_012_i128).unwrap());
         let same: D38s12 = v.quantize::<12>();
         assert_eq!(i128::from(same.to_bits()), 123_456_789_012);
     }
 
     #[test]
     fn quantize_with_same_scale_is_bit_identity_for_every_mode() {
-        let v = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(123_456_789_012_i128).unwrap());
+        let v =
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(123_456_789_012_i128).unwrap());
         for m in [
             RoundingMode::HalfToEven,
             RoundingMode::HalfAwayFromZero,
@@ -225,7 +259,11 @@ mod from_quantize {
             RoundingMode::Floor,
             RoundingMode::Ceiling,
         ] {
-            assert_eq!(i128::from(v.quantize_with::<12>(m).to_bits()), 123_456_789_012, "{m:?}");
+            assert_eq!(
+                i128::from(v.quantize_with::<12>(m).to_bits()),
+                123_456_789_012,
+                "{m:?}"
+            );
         }
     }
 
@@ -238,7 +276,8 @@ mod from_quantize {
 
     #[test]
     fn quantize_value_matches_half_to_even() {
-        let src: D38s6 = D38s6::from_bits(decimal_scaled::Int::<2>::try_from(1_235_000_i128).unwrap());
+        let src: D38s6 =
+            D38s6::from_bits(decimal_scaled::Int::<2>::try_from(1_235_000_i128).unwrap());
         let dst: D38s2 = src.quantize::<2>();
         assert_eq!(i128::from(dst.to_bits()), 124);
     }
@@ -249,7 +288,7 @@ mod from_rescale_modes {
     //! decimal width × every rounding mode, plus the scale-up overflow panic
     //! path on D9 (the easiest tier to overflow at scale-up).
 
-    use decimal_scaled::{D18, D38, RoundingMode};
+    use decimal_scaled::{RoundingMode, D18, D38};
 
     const ALL_MODES: [RoundingMode; 6] = [
         RoundingMode::HalfToEven,
@@ -268,14 +307,21 @@ mod from_rescale_modes {
 
     #[test]
     fn d18_quantize_with_all_modes() {
-
         let v = D18::<4>::from_bits(decimal_scaled::Int::<1>::from(15050_i64));
         let neg = D18::<4>::from_bits(decimal_scaled::Int::<1>::from(-15050_i64));
         for (i, m) in ALL_MODES.into_iter().enumerate() {
             let r: D18<2> = v.quantize_with::<2>(m);
-            assert_eq!(r.to_bits(), decimal_scaled::Int::<1>::from(TIE_POS[i]), "{m:?} +tie");
+            assert_eq!(
+                r.to_bits(),
+                decimal_scaled::Int::<1>::from(TIE_POS[i]),
+                "{m:?} +tie"
+            );
             let r: D18<2> = neg.quantize_with::<2>(m);
-            assert_eq!(r.to_bits(), decimal_scaled::Int::<1>::from(TIE_NEG[i]), "{m:?} -tie");
+            assert_eq!(
+                r.to_bits(),
+                decimal_scaled::Int::<1>::from(TIE_NEG[i]),
+                "{m:?} -tie"
+            );
         }
         // Identity scale
         let r: D18<4> = v.quantize_with::<4>(RoundingMode::HalfToEven);
@@ -284,7 +330,6 @@ mod from_rescale_modes {
 
     #[test]
     fn d38_quantize_with_all_modes() {
-
         let v = D38::<4>::from_bits(decimal_scaled::Int::<2>::try_from(15050_i128).unwrap());
         let neg = D38::<4>::from_bits(decimal_scaled::Int::<2>::try_from(-15050_i128).unwrap());
         for (i, m) in ALL_MODES.into_iter().enumerate() {
@@ -307,14 +352,22 @@ mod from_rescale_modes {
     fn d76_quantize_with_all_modes() {
         use decimal_scaled::D76;
 
-        let v: D76<4> = D38::<4>::from_bits(decimal_scaled::Int::<2>::try_from(15050_i128).unwrap()).into();
-        let neg: D76<4> = D38::<4>::from_bits(decimal_scaled::Int::<2>::try_from(-15050_i128).unwrap()).into();
+        let v: D76<4> =
+            D38::<4>::from_bits(decimal_scaled::Int::<2>::try_from(15050_i128).unwrap()).into();
+        let neg: D76<4> =
+            D38::<4>::from_bits(decimal_scaled::Int::<2>::try_from(-15050_i128).unwrap()).into();
         for (i, m) in ALL_MODES.into_iter().enumerate() {
             let r: D76<2> = v.quantize_with::<2>(m);
-            let want: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(i128::from(TIE_POS[i])).unwrap()).into();
+            let want: D76<2> = D38::<2>::from_bits(
+                decimal_scaled::Int::<2>::try_from(i128::from(TIE_POS[i])).unwrap(),
+            )
+            .into();
             assert_eq!(r, want, "{m:?} +tie");
             let r: D76<2> = neg.quantize_with::<2>(m);
-            let want: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(i128::from(TIE_NEG[i])).unwrap()).into();
+            let want: D76<2> = D38::<2>::from_bits(
+                decimal_scaled::Int::<2>::try_from(i128::from(TIE_NEG[i])).unwrap(),
+            )
+            .into();
             assert_eq!(r, want, "{m:?} -tie");
         }
         // Identity scale

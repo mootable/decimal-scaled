@@ -19,11 +19,11 @@ mod common;
 
 use std::sync::Mutex;
 
+use decimal_scale_test::{thread_count, DsSubject, Filter, ALL_MODES, GEN_PRECISION};
 use decimal_scaled_golden::{
     ConsoleReporter, FilterLoader, GoldenRunner, InlineReporter, OverflowValidator, ParallelRunner,
     Reporter, RoundingMode, RoundingValidator, RunCollector, RunOnce, RunSummary, TsvReporter,
 };
-use decimal_scale_test::{thread_count, DsSubject, Filter, ALL_MODES, GEN_PRECISION};
 
 use common::{row_filter, CachingLoader};
 
@@ -49,7 +49,9 @@ fn run(default_modes: &[RoundingMode]) -> RunSummary {
             row_filter(filter.sample(), filter.stripe()),
         )),
         validators: vec![
-            Box::new(RoundingValidator { gen_precision: GEN_PRECISION }),
+            Box::new(RoundingValidator {
+                gen_precision: GEN_PRECISION,
+            }),
             Box::new(OverflowValidator),
         ],
     };
@@ -105,8 +107,10 @@ fn run(default_modes: &[RoundingMode]) -> RunSummary {
         let stripe = std::env::var("GOLDEN_STRIPE").unwrap_or_else(|_| "-".into());
         std::fs::write(
             dir.join("summary.txt"),
-            format!("stripe {stripe}: {summary}
-"),
+            format!(
+                "stripe {stripe}: {summary}
+"
+            ),
         )
         .expect("write golden summary");
     }
@@ -116,7 +120,10 @@ fn run(default_modes: &[RoundingMode]) -> RunSummary {
 fn check(s: RunSummary) {
     eprintln!("golden: {s}");
     assert_eq!(s.bad, 0, "mis-rounded / wrong-mode / error cells found");
-    assert_eq!(s.panic, 0, "decimal-scaled panicked on a representable cell");
+    assert_eq!(
+        s.panic, 0,
+        "decimal-scaled panicked on a representable cell"
+    );
     assert!(s.pass > 0, "no Pass across any cell");
 }
 

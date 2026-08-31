@@ -59,14 +59,14 @@ mod from_num_traits {
     // cosmetic lints are allowed at the test-file scope.
     #![allow(clippy::unnecessary_cast, clippy::unnecessary_fallible_conversions)]
 
-    use decimal_scaled::{D38, D38s12};
+    use decimal_scaled::{D38s12, D38};
     // Zero / One / Num / Bounded / Signed / Checked* are emitted for
     // D38 by `decl_decimal_num_traits_basics!`; FromPrimitive /
     // ToPrimitive / NumCast stay hand-coded in this module. The tests
     // exercise the whole surface, so the traits are imported directly.
     use ::num_traits::{
-        Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedRem, CheckedSub, FromPrimitive,
-        Num, NumCast, One, Signed, ToPrimitive, Zero,
+        Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedRem, CheckedSub,
+        FromPrimitive, Num, NumCast, One, Signed, ToPrimitive, Zero,
     };
 
     // ---------------------------------------------------------------------------
@@ -82,7 +82,9 @@ mod from_num_traits {
     fn zero_is_zero_predicate() {
         assert!(<D38s12 as Zero>::is_zero(&D38s12::ZERO));
         assert!(!<D38s12 as Zero>::is_zero(&D38s12::ONE));
-        assert!(!<D38s12 as Zero>::is_zero(&D38s12::from_bits(decimal_scaled::Int::<2>::try_from((1) as i128).unwrap())));
+        assert!(!<D38s12 as Zero>::is_zero(&D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((1) as i128).unwrap()
+        )));
     }
 
     #[test]
@@ -95,7 +97,9 @@ mod from_num_traits {
         assert!(<D38s12 as One>::is_one(&D38s12::ONE));
         assert!(!<D38s12 as One>::is_one(&D38s12::ZERO));
         // A non-canonical raw value (1 LSB) is not "one".
-        assert!(!<D38s12 as One>::is_one(&D38s12::from_bits(decimal_scaled::Int::<2>::try_from((1) as i128).unwrap())));
+        assert!(!<D38s12 as One>::is_one(&D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((1) as i128).unwrap()
+        )));
     }
 
     // ---------------------------------------------------------------------------
@@ -114,8 +118,12 @@ mod from_num_traits {
 
     #[test]
     fn signed_abs_basic() {
-        let pos = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((1_500_000_000_000) as i128).unwrap());
-        let neg = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((-1_500_000_000_000) as i128).unwrap());
+        let pos = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((1_500_000_000_000) as i128).unwrap(),
+        );
+        let neg = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((-1_500_000_000_000) as i128).unwrap(),
+        );
         assert_eq!(<D38s12 as Signed>::abs(&pos), pos);
         assert_eq!(<D38s12 as Signed>::abs(&neg), pos);
         assert_eq!(<D38s12 as Signed>::abs(&D38s12::ZERO), D38s12::ZERO);
@@ -123,8 +131,12 @@ mod from_num_traits {
 
     #[test]
     fn signed_signum_basic() {
-        let pos = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((1_500_000_000_000) as i128).unwrap());
-        let neg = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((-1_500_000_000_000) as i128).unwrap());
+        let pos = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((1_500_000_000_000) as i128).unwrap(),
+        );
+        let neg = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((-1_500_000_000_000) as i128).unwrap(),
+        );
         assert_eq!(<D38s12 as Signed>::signum(&pos), D38s12::ONE);
         assert_eq!(<D38s12 as Signed>::signum(&neg), -D38s12::ONE);
         assert_eq!(<D38s12 as Signed>::signum(&D38s12::ZERO), D38s12::ZERO);
@@ -132,8 +144,12 @@ mod from_num_traits {
 
     #[test]
     fn signed_is_positive_negative() {
-        let pos = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((1_500_000_000_000) as i128).unwrap());
-        let neg = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((-1_500_000_000_000) as i128).unwrap());
+        let pos = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((1_500_000_000_000) as i128).unwrap(),
+        );
+        let neg = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((-1_500_000_000_000) as i128).unwrap(),
+        );
         assert!(<D38s12 as Signed>::is_positive(&pos));
         assert!(!<D38s12 as Signed>::is_positive(&neg));
         assert!(!<D38s12 as Signed>::is_positive(&D38s12::ZERO));
@@ -146,11 +162,17 @@ mod from_num_traits {
     /// `abs_sub(a, b)` clamps to zero when `a <= b`.
     #[test]
     fn signed_abs_sub_clamps_to_zero() {
-        let two = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((2_000_000_000_000) as i128).unwrap());
-        let five = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((5_000_000_000_000) as i128).unwrap());
+        let two = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((2_000_000_000_000) as i128).unwrap(),
+        );
+        let five = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((5_000_000_000_000) as i128).unwrap(),
+        );
 
         // 5 - 2 = 3 (positive case)
-        let three = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((3_000_000_000_000) as i128).unwrap());
+        let three = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((3_000_000_000_000) as i128).unwrap(),
+        );
         assert_eq!(<D38s12 as Signed>::abs_sub(&five, &two), three);
 
         // 2 - 5 clamps to ZERO (a <= b)
@@ -170,11 +192,15 @@ mod from_num_traits {
         assert_eq!(<D38s12 as FromPrimitive>::from_i64(1), Some(D38s12::ONE));
         assert_eq!(
             <D38s12 as FromPrimitive>::from_i64(42),
-            Some(D38s12::from_bits(decimal_scaled::Int::<2>::try_from((42_000_000_000_000) as i128).unwrap()))
+            Some(D38s12::from_bits(
+                decimal_scaled::Int::<2>::try_from((42_000_000_000_000) as i128).unwrap()
+            ))
         );
         assert_eq!(
             <D38s12 as FromPrimitive>::from_i64(-42),
-            Some(D38s12::from_bits(decimal_scaled::Int::<2>::try_from((-42_000_000_000_000) as i128).unwrap()))
+            Some(D38s12::from_bits(
+                decimal_scaled::Int::<2>::try_from((-42_000_000_000_000) as i128).unwrap()
+            ))
         );
     }
 
@@ -183,7 +209,9 @@ mod from_num_traits {
         assert_eq!(<D38s12 as FromPrimitive>::from_u64(0), Some(D38s12::ZERO));
         assert_eq!(
             <D38s12 as FromPrimitive>::from_u64(42),
-            Some(D38s12::from_bits(decimal_scaled::Int::<2>::try_from((42_000_000_000_000) as i128).unwrap()))
+            Some(D38s12::from_bits(
+                decimal_scaled::Int::<2>::try_from((42_000_000_000_000) as i128).unwrap()
+            ))
         );
         // u64::MAX * 10^12 fits in i128, so this succeeds.
         let large = <D38s12 as FromPrimitive>::from_u64(u64::MAX);
@@ -200,7 +228,9 @@ mod from_num_traits {
         // Small values succeed.
         assert_eq!(
             <D38s12 as FromPrimitive>::from_i128(7),
-            Some(D38s12::from_bits(decimal_scaled::Int::<2>::try_from((7_000_000_000_000) as i128).unwrap()))
+            Some(D38s12::from_bits(
+                decimal_scaled::Int::<2>::try_from((7_000_000_000_000) as i128).unwrap()
+            ))
         );
     }
 
@@ -212,7 +242,9 @@ mod from_num_traits {
         // Small values succeed.
         assert_eq!(
             <D38s12 as FromPrimitive>::from_u128(99),
-            Some(D38s12::from_bits(decimal_scaled::Int::<2>::try_from((99_000_000_000_000) as i128).unwrap()))
+            Some(D38s12::from_bits(
+                decimal_scaled::Int::<2>::try_from((99_000_000_000_000) as i128).unwrap()
+            ))
         );
     }
 
@@ -249,24 +281,34 @@ mod from_num_traits {
     fn from_primitive_smaller_int_types_via_default_impl() {
         assert_eq!(
             <D38s12 as FromPrimitive>::from_i32(7),
-            Some(D38s12::from_bits(decimal_scaled::Int::<2>::try_from((7_000_000_000_000) as i128).unwrap()))
+            Some(D38s12::from_bits(
+                decimal_scaled::Int::<2>::try_from((7_000_000_000_000) as i128).unwrap()
+            ))
         );
         assert_eq!(
             <D38s12 as FromPrimitive>::from_i16(-3),
-            Some(D38s12::from_bits(decimal_scaled::Int::<2>::try_from((-3_000_000_000_000) as i128).unwrap()))
+            Some(D38s12::from_bits(
+                decimal_scaled::Int::<2>::try_from((-3_000_000_000_000) as i128).unwrap()
+            ))
         );
         assert_eq!(<D38s12 as FromPrimitive>::from_i8(0), Some(D38s12::ZERO));
         assert_eq!(
             <D38s12 as FromPrimitive>::from_u32(7),
-            Some(D38s12::from_bits(decimal_scaled::Int::<2>::try_from((7_000_000_000_000) as i128).unwrap()))
+            Some(D38s12::from_bits(
+                decimal_scaled::Int::<2>::try_from((7_000_000_000_000) as i128).unwrap()
+            ))
         );
         assert_eq!(
             <D38s12 as FromPrimitive>::from_u16(3),
-            Some(D38s12::from_bits(decimal_scaled::Int::<2>::try_from((3_000_000_000_000) as i128).unwrap()))
+            Some(D38s12::from_bits(
+                decimal_scaled::Int::<2>::try_from((3_000_000_000_000) as i128).unwrap()
+            ))
         );
         assert_eq!(
             <D38s12 as FromPrimitive>::from_u8(255),
-            Some(D38s12::from_bits(decimal_scaled::Int::<2>::try_from((255_000_000_000_000) as i128).unwrap()))
+            Some(D38s12::from_bits(
+                decimal_scaled::Int::<2>::try_from((255_000_000_000_000) as i128).unwrap()
+            ))
         );
     }
 
@@ -276,10 +318,14 @@ mod from_num_traits {
 
     #[test]
     fn to_primitive_i64_in_range() {
-        let v = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((42_000_000_000_000) as i128).unwrap());
+        let v = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((42_000_000_000_000) as i128).unwrap(),
+        );
         assert_eq!(<D38s12 as ToPrimitive>::to_i64(&v), Some(42_i64));
 
-        let neg = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((-42_000_000_000_000) as i128).unwrap());
+        let neg = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((-42_000_000_000_000) as i128).unwrap(),
+        );
         assert_eq!(<D38s12 as ToPrimitive>::to_i64(&neg), Some(-42_i64));
 
         assert_eq!(<D38s12 as ToPrimitive>::to_i64(&D38s12::ZERO), Some(0_i64));
@@ -288,11 +334,15 @@ mod from_num_traits {
     #[test]
     fn to_primitive_i64_truncates_toward_zero() {
         // 2.5 truncates to 2
-        let v = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((2_500_000_000_000) as i128).unwrap());
+        let v = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((2_500_000_000_000) as i128).unwrap(),
+        );
         assert_eq!(<D38s12 as ToPrimitive>::to_i64(&v), Some(2_i64));
 
         // -2.5 truncates to -2 (toward zero, not toward -inf)
-        let neg = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((-2_500_000_000_000) as i128).unwrap());
+        let neg = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((-2_500_000_000_000) as i128).unwrap(),
+        );
         assert_eq!(<D38s12 as ToPrimitive>::to_i64(&neg), Some(-2_i64));
     }
 
@@ -305,13 +355,17 @@ mod from_num_traits {
 
     #[test]
     fn to_primitive_u64_negative_returns_none() {
-        let neg = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((-1_000_000_000_000) as i128).unwrap());
+        let neg = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((-1_000_000_000_000) as i128).unwrap(),
+        );
         assert_eq!(<D38s12 as ToPrimitive>::to_u64(&neg), None);
     }
 
     #[test]
     fn to_primitive_u64_in_range() {
-        let v = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((42_000_000_000_000) as i128).unwrap());
+        let v = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((42_000_000_000_000) as i128).unwrap(),
+        );
         assert_eq!(<D38s12 as ToPrimitive>::to_u64(&v), Some(42_u64));
 
         assert_eq!(<D38s12 as ToPrimitive>::to_u64(&D38s12::ZERO), Some(0_u64));
@@ -328,7 +382,9 @@ mod from_num_traits {
             Some(0_i128)
         );
         assert_eq!(
-            <D38s12 as ToPrimitive>::to_i128(&D38s12::from_bits(decimal_scaled::Int::<2>::try_from((42_000_000_000_000) as i128).unwrap())),
+            <D38s12 as ToPrimitive>::to_i128(&D38s12::from_bits(
+                decimal_scaled::Int::<2>::try_from((42_000_000_000_000) as i128).unwrap()
+            )),
             Some(42_i128)
         );
     }
@@ -336,7 +392,9 @@ mod from_num_traits {
     #[test]
     fn to_primitive_u128_negative_returns_none() {
         assert_eq!(
-            <D38s12 as ToPrimitive>::to_u128(&D38s12::from_bits(decimal_scaled::Int::<2>::try_from((-1) as i128).unwrap())),
+            <D38s12 as ToPrimitive>::to_u128(&D38s12::from_bits(
+                decimal_scaled::Int::<2>::try_from((-1) as i128).unwrap()
+            )),
             None
         );
     }
@@ -348,7 +406,9 @@ mod from_num_traits {
             Some(0_u128)
         );
         assert_eq!(
-            <D38s12 as ToPrimitive>::to_u128(&D38s12::from_bits(decimal_scaled::Int::<2>::try_from((99_000_000_000_000) as i128).unwrap())),
+            <D38s12 as ToPrimitive>::to_u128(&D38s12::from_bits(
+                decimal_scaled::Int::<2>::try_from((99_000_000_000_000) as i128).unwrap()
+            )),
             Some(99_u128)
         );
     }
@@ -367,7 +427,9 @@ mod from_num_traits {
 
     #[test]
     fn to_primitive_f32_matches_to_f32_lossy() {
-        let v = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((1_500_000_000_000) as i128).unwrap());
+        let v = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((1_500_000_000_000) as i128).unwrap(),
+        );
         assert_eq!(<D38s12 as ToPrimitive>::to_f32(&v), Some(v.to_f32()));
     }
 
@@ -375,7 +437,9 @@ mod from_num_traits {
     /// via `to_i64` / `to_u64`. Verify the delegation chain works.
     #[test]
     fn to_primitive_smaller_int_types_via_default_impl() {
-        let v = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((42_000_000_000_000) as i128).unwrap());
+        let v = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((42_000_000_000_000) as i128).unwrap(),
+        );
         assert_eq!(<D38s12 as ToPrimitive>::to_i32(&v), Some(42_i32));
         assert_eq!(<D38s12 as ToPrimitive>::to_u32(&v), Some(42_u32));
         assert_eq!(<D38s12 as ToPrimitive>::to_i16(&v), Some(42_i16));
@@ -384,7 +448,9 @@ mod from_num_traits {
         assert_eq!(<D38s12 as ToPrimitive>::to_u8(&v), Some(42_u8));
 
         // Out-of-range narrowing returns None.
-        let big = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((40_000_000_000_000_000) as i128).unwrap()); // 40_000
+        let big = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((40_000_000_000_000_000) as i128).unwrap(),
+        ); // 40_000
         assert_eq!(<D38s12 as ToPrimitive>::to_i8(&big), None);
         assert_eq!(<D38s12 as ToPrimitive>::to_u8(&big), None);
     }
@@ -396,7 +462,9 @@ mod from_num_traits {
     #[test]
     fn checked_add_basic() {
         let one = D38s12::ONE;
-        let two = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((2_000_000_000_000) as i128).unwrap());
+        let two = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((2_000_000_000_000) as i128).unwrap(),
+        );
         assert_eq!(<D38s12 as CheckedAdd>::checked_add(&one, &one), Some(two));
     }
 
@@ -416,8 +484,12 @@ mod from_num_traits {
 
     #[test]
     fn checked_sub_basic() {
-        let three = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((3_000_000_000_000) as i128).unwrap());
-        let two = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((2_000_000_000_000) as i128).unwrap());
+        let three = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((3_000_000_000_000) as i128).unwrap(),
+        );
+        let two = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((2_000_000_000_000) as i128).unwrap(),
+        );
         assert_eq!(
             <D38s12 as CheckedSub>::checked_sub(&three, &two),
             Some(D38s12::ONE)
@@ -439,8 +511,12 @@ mod from_num_traits {
 
     #[test]
     fn checked_mul_basic() {
-        let half = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((500_000_000_000) as i128).unwrap()); // 0.5
-        let quarter = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((250_000_000_000) as i128).unwrap()); // 0.25
+        let half = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((500_000_000_000) as i128).unwrap(),
+        ); // 0.5
+        let quarter = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((250_000_000_000) as i128).unwrap(),
+        ); // 0.25
         assert_eq!(
             <D38s12 as CheckedMul>::checked_mul(&half, &half),
             Some(quarter)
@@ -450,7 +526,9 @@ mod from_num_traits {
     #[test]
     fn checked_mul_overflow_returns_none() {
         // MAX * 2 overflows.
-        let two = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((2_000_000_000_000) as i128).unwrap());
+        let two = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((2_000_000_000_000) as i128).unwrap(),
+        );
         assert_eq!(
             <D38s12 as CheckedMul>::checked_mul(&D38s12::MAX, &two),
             None
@@ -459,10 +537,16 @@ mod from_num_traits {
 
     #[test]
     fn checked_div_basic() {
-        let half = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((500_000_000_000) as i128).unwrap()); // 0.5
-        let quarter = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((250_000_000_000) as i128).unwrap()); // 0.25
-        let two = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((2_000_000_000_000) as i128).unwrap()); // 2.0
-        // 0.5 / 2.0 == 0.25
+        let half = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((500_000_000_000) as i128).unwrap(),
+        ); // 0.5
+        let quarter = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((250_000_000_000) as i128).unwrap(),
+        ); // 0.25
+        let two = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((2_000_000_000_000) as i128).unwrap(),
+        ); // 2.0
+           // 0.5 / 2.0 == 0.25
         assert_eq!(
             <D38s12 as CheckedDiv>::checked_div(&half, &two),
             Some(quarter)
@@ -495,9 +579,15 @@ mod from_num_traits {
 
     #[test]
     fn checked_rem_basic() {
-        let a = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((5_500_000_000_000) as i128).unwrap()); // 5.5
-        let b = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((2_000_000_000_000) as i128).unwrap()); // 2.0
-        let expected = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((1_500_000_000_000) as i128).unwrap()); // 1.5
+        let a = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((5_500_000_000_000) as i128).unwrap(),
+        ); // 5.5
+        let b = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((2_000_000_000_000) as i128).unwrap(),
+        ); // 2.0
+        let expected = D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from((1_500_000_000_000) as i128).unwrap(),
+        ); // 1.5
         assert_eq!(<D38s12 as CheckedRem>::checked_rem(&a, &b), Some(expected));
     }
 
@@ -559,8 +649,10 @@ mod from_num_traits {
     fn checked_mul_trait_matches_inherent_256_pairs() {
         let seeds = lcg_i128_seq(0x1234_5678_9ABC_DEF0, 512);
         for pair in seeds.chunks_exact(2) {
-            let a = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((pair[0]) as i128).unwrap());
-            let b = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((pair[1]) as i128).unwrap());
+            let a =
+                D38s12::from_bits(decimal_scaled::Int::<2>::try_from((pair[0]) as i128).unwrap());
+            let b =
+                D38s12::from_bits(decimal_scaled::Int::<2>::try_from((pair[1]) as i128).unwrap());
             let trait_result = <D38s12 as CheckedMul>::checked_mul(&a, &b);
             let inherent_result = a.checked_mul(b);
             assert_eq!(
@@ -576,7 +668,8 @@ mod from_num_traits {
     fn checked_div_trait_matches_inherent_256_pairs() {
         let seeds = lcg_i128_seq(0xDEAD_BEEF_CAFE_0001, 512);
         for pair in seeds.chunks_exact(2) {
-            let a = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((pair[0]) as i128).unwrap());
+            let a =
+                D38s12::from_bits(decimal_scaled::Int::<2>::try_from((pair[0]) as i128).unwrap());
             // Avoid divide-by-zero: if the LCG lands on zero, substitute ONE.
             // The by-zero case is covered by a dedicated test.
             let b_bits = if pair[1] == 0 {
@@ -584,7 +677,8 @@ mod from_num_traits {
             } else {
                 pair[1]
             };
-            let b = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((b_bits) as i128).unwrap());
+            let b =
+                D38s12::from_bits(decimal_scaled::Int::<2>::try_from((b_bits) as i128).unwrap());
             let trait_result = <D38s12 as CheckedDiv>::checked_div(&a, &b);
             let inherent_result = a.checked_div(b);
             assert_eq!(
@@ -604,11 +698,26 @@ mod from_num_traits {
             (D38s12::MIN, D38s12::ONE),
             (D38s12::MAX, D38s12::MAX),
             (D38s12::MIN, D38s12::MIN),
-            (D38s12::from_bits(decimal_scaled::Int::<2>::try_from((0) as i128).unwrap()), D38s12::from_bits(decimal_scaled::Int::<2>::try_from((0) as i128).unwrap())),
-            (D38s12::from_bits(decimal_scaled::Int::<2>::try_from((1) as i128).unwrap()), D38s12::from_bits(decimal_scaled::Int::<2>::try_from((1) as i128).unwrap())),
-            (D38s12::from_bits(decimal_scaled::Int::<2>::try_from((-1) as i128).unwrap()), D38s12::from_bits(decimal_scaled::Int::<2>::try_from((1) as i128).unwrap())),
-            (D38s12::from_bits(decimal_scaled::Int::<2>::try_from((1) as i128).unwrap()), D38s12::from_bits(decimal_scaled::Int::<2>::try_from((-1) as i128).unwrap())),
-            (D38s12::from_bits(decimal_scaled::Int::<2>::try_from((-1) as i128).unwrap()), D38s12::from_bits(decimal_scaled::Int::<2>::try_from((-1) as i128).unwrap())),
+            (
+                D38s12::from_bits(decimal_scaled::Int::<2>::try_from((0) as i128).unwrap()),
+                D38s12::from_bits(decimal_scaled::Int::<2>::try_from((0) as i128).unwrap()),
+            ),
+            (
+                D38s12::from_bits(decimal_scaled::Int::<2>::try_from((1) as i128).unwrap()),
+                D38s12::from_bits(decimal_scaled::Int::<2>::try_from((1) as i128).unwrap()),
+            ),
+            (
+                D38s12::from_bits(decimal_scaled::Int::<2>::try_from((-1) as i128).unwrap()),
+                D38s12::from_bits(decimal_scaled::Int::<2>::try_from((1) as i128).unwrap()),
+            ),
+            (
+                D38s12::from_bits(decimal_scaled::Int::<2>::try_from((1) as i128).unwrap()),
+                D38s12::from_bits(decimal_scaled::Int::<2>::try_from((-1) as i128).unwrap()),
+            ),
+            (
+                D38s12::from_bits(decimal_scaled::Int::<2>::try_from((-1) as i128).unwrap()),
+                D38s12::from_bits(decimal_scaled::Int::<2>::try_from((-1) as i128).unwrap()),
+            ),
         ];
         for &(a, b) in cases {
             let trait_result = <D38s12 as CheckedMul>::checked_mul(&a, &b);
@@ -636,10 +745,22 @@ mod from_num_traits {
             (D38s12::MAX, D38s12::ZERO),
             // true overflow case: MIN / -ONE
             (D38s12::MIN, neg_one),
-            (D38s12::from_bits(decimal_scaled::Int::<2>::try_from((1) as i128).unwrap()), D38s12::from_bits(decimal_scaled::Int::<2>::try_from((1) as i128).unwrap())),
-            (D38s12::from_bits(decimal_scaled::Int::<2>::try_from((-1) as i128).unwrap()), D38s12::from_bits(decimal_scaled::Int::<2>::try_from((1) as i128).unwrap())),
-            (D38s12::from_bits(decimal_scaled::Int::<2>::try_from((1) as i128).unwrap()), D38s12::from_bits(decimal_scaled::Int::<2>::try_from((-1) as i128).unwrap())),
-            (D38s12::from_bits(decimal_scaled::Int::<2>::try_from((-1) as i128).unwrap()), D38s12::from_bits(decimal_scaled::Int::<2>::try_from((-1) as i128).unwrap())),
+            (
+                D38s12::from_bits(decimal_scaled::Int::<2>::try_from((1) as i128).unwrap()),
+                D38s12::from_bits(decimal_scaled::Int::<2>::try_from((1) as i128).unwrap()),
+            ),
+            (
+                D38s12::from_bits(decimal_scaled::Int::<2>::try_from((-1) as i128).unwrap()),
+                D38s12::from_bits(decimal_scaled::Int::<2>::try_from((1) as i128).unwrap()),
+            ),
+            (
+                D38s12::from_bits(decimal_scaled::Int::<2>::try_from((1) as i128).unwrap()),
+                D38s12::from_bits(decimal_scaled::Int::<2>::try_from((-1) as i128).unwrap()),
+            ),
+            (
+                D38s12::from_bits(decimal_scaled::Int::<2>::try_from((-1) as i128).unwrap()),
+                D38s12::from_bits(decimal_scaled::Int::<2>::try_from((-1) as i128).unwrap()),
+            ),
         ];
         for &(a, b) in cases {
             let trait_result = <D38s12 as CheckedDiv>::checked_div(&a, &b);
@@ -742,11 +863,11 @@ mod from_macros_num_traits {
     // cannot apply it, so these cosmetic lints are allowed at the test-file scope.
     #![allow(clippy::unnecessary_cast, clippy::unnecessary_fallible_conversions)]
 
-    use decimal_scaled::{D18, D38};
     use ::num_traits::{
-        Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedRem, CheckedSub, FromPrimitive,
-        Num, NumCast, One, Signed, ToPrimitive, Zero,
+        Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedRem, CheckedSub,
+        FromPrimitive, Num, NumCast, One, Signed, ToPrimitive, Zero,
     };
+    use decimal_scaled::{D18, D38};
 
     // â”€â”€â”€ Num â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -819,7 +940,10 @@ mod from_macros_num_traits {
         assert!(<D38<2> as Signed>::is_negative(&neg));
         assert!(!<D38<2> as Signed>::is_negative(&pos));
         // abs_sub: 7-2=5; 2-7=0 (saturates)
-        assert_eq!(pos.abs_sub(&D38::<2>::try_from(2).unwrap()), D38::<2>::try_from(5).unwrap());
+        assert_eq!(
+            pos.abs_sub(&D38::<2>::try_from(2).unwrap()),
+            D38::<2>::try_from(5).unwrap()
+        );
         assert_eq!(D38::<2>::try_from(2).unwrap().abs_sub(&pos), D38::<2>::ZERO);
 
         // narrow
@@ -985,7 +1109,8 @@ mod from_macros_num_traits {
         assert!(<D76<2> as CheckedDiv>::checked_div(&one, &D76::<2>::ZERO).is_none());
         // num_traits::Num
         let v = <D76<2> as Num>::from_str_radix("1.50", 10).unwrap();
-        let exp: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((150) as i128).unwrap()).into();
+        let exp: D76<2> =
+            D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((150) as i128).unwrap()).into();
         assert_eq!(v, exp);
         assert!(<D76<2> as Num>::from_str_radix("FF", 16).is_err());
         // Signed
@@ -1001,15 +1126,16 @@ mod from_macros_num_traits {
     #[cfg(feature = "wide")]
     #[test]
     fn num_traits_wide_primitive_conversions() {
-        use decimal_scaled::D76;
         use ::num_traits::{FromPrimitive, NumCast, ToPrimitive};
+        use decimal_scaled::D76;
 
         let exp: D76<2> = D38::<2>::try_from(5).unwrap().into();
         assert_eq!(<D76<2> as FromPrimitive>::from_i64(5).unwrap(), exp);
         assert_eq!(<D76<2> as FromPrimitive>::from_u64(5).unwrap(), exp);
         assert_eq!(<D76<2> as FromPrimitive>::from_i128(5).unwrap(), exp);
         assert_eq!(<D76<2> as FromPrimitive>::from_u128(5).unwrap(), exp);
-        let exp_f: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((150) as i128).unwrap()).into();
+        let exp_f: D76<2> =
+            D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((150) as i128).unwrap()).into();
         assert_eq!(<D76<2> as FromPrimitive>::from_f32(1.5).unwrap(), exp_f);
         assert_eq!(<D76<2> as FromPrimitive>::from_f64(1.5).unwrap(), exp_f);
 
@@ -1032,7 +1158,8 @@ mod from_macros_num_traits {
         let exp5: D76<2> = D38::<2>::try_from(5).unwrap().into();
         assert_eq!(v, exp5);
         let v: D76<2> = <D76<2> as NumCast>::from(1.5_f64).unwrap();
-        let exp_15: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((150) as i128).unwrap()).into();
+        let exp_15: D76<2> =
+            D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((150) as i128).unwrap()).into();
         assert_eq!(v, exp_15);
         assert!(<D76<2> as NumCast>::from(f64::NAN).is_none());
     }
@@ -1066,8 +1193,8 @@ mod from_macros_surface {
     #[cfg(feature = "wide")]
     #[test]
     fn num_traits_wide() {
-        use decimal_scaled::D76;
         use ::num_traits::{Bounded, One, Zero};
+        use decimal_scaled::D76;
 
         assert!(<D76<2> as Zero>::zero().is_zero());
         assert!(<D76<2> as One>::one().is_one());

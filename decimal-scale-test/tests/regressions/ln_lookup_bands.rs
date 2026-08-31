@@ -56,7 +56,13 @@ macro_rules! ln_band_round_trips {
             let x = from_int(3) / from_int(2); // 1.5
             let round = x.ln_strict().exp_strict();
             agree_within_n_storage_lsb(
-                concat!("exp(ln(1.5)) ", stringify!($D), "<", stringify!($scale), ">"),
+                concat!(
+                    "exp(ln(1.5)) ",
+                    stringify!($D),
+                    "<",
+                    stringify!($scale),
+                    ">"
+                ),
                 round,
                 x,
                 $n_lsb,
@@ -95,7 +101,13 @@ macro_rules! ln_band_round_trips {
             assert_eq!(
                 z,
                 D::ZERO,
-                concat!("ln(1) ", stringify!($D), "<", stringify!($scale), ">: expected ZERO"),
+                concat!(
+                    "ln(1) ",
+                    stringify!($D),
+                    "<",
+                    stringify!($scale),
+                    ">: expected ZERO"
+                ),
             );
         }
     };
@@ -108,7 +120,8 @@ macro_rules! ln_band_edge_no_panic {
     ($name:ident, $D:ident, $scale:literal) => {
         #[test]
         fn $name() {
-            let x = decimal_scaled::$D::<$scale>::try_from(3).unwrap() / decimal_scaled::$D::<$scale>::try_from(2).unwrap();
+            let x = decimal_scaled::$D::<$scale>::try_from(3).unwrap()
+                / decimal_scaled::$D::<$scale>::try_from(2).unwrap();
             let y = x.ln_strict();
             assert!(y < decimal_scaled::$D::<$scale>::try_from(1).unwrap());
             assert!(y > decimal_scaled::$D::<$scale>::ZERO);
