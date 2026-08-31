@@ -422,6 +422,65 @@ fn log1p_equals_ln_of_one_plus_t_d1232_s1231() {
     }
 }
 
+/// The directed modes must SPLIT on the arguments whose deciding term the
+/// working scale cannot represent — an oracle-free contract.
+///
+/// `log1p(t) = ln(1 + t)` is transcendental at every algebraic `t != 0`
+/// (Lindemann-Weierstrass), so it never lands on a storage grid line. `Floor`
+/// and `Ceiling` therefore ALWAYS straddle it by exactly one ULP, and `Trunc`
+/// is whichever of the two faces zero. Needing no oracle, this catches the
+/// precise failure these arguments used to show: the kernel read its residual
+/// as an exact zero, took the value for representable, and returned the SAME
+/// answer in all six modes.
+///
+/// The arguments are the family that forces it. At `D462<461>`,
+/// `t = c·10^-m` makes the leading terms of `t - t²/2 + t³/3 - …` exact whole
+/// ULP multiples, so the round is decided by the first term that is not —
+/// tens of digits below the guard, far past what the Ziv walker can reach at
+/// this scale. Only the kernel's own tail sign can settle it, and settling it
+/// here needs the sub-LSB imprecision measured rather than read off the
+/// rounding signs, since those genuinely oppose at the positive arguments.
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+#[test]
+fn directed_modes_straddle_when_the_deciding_term_is_out_of_reach() {
+    use crate::int::types::traits::BigInt;
+    const SC: u32 = 461;
+    // `99·10^-m` and `10^-m`, at the exponents where the deciding term falls
+    // past the walker's reach.
+    const CASES: [(i128, u32); 6] = [
+        (99, 88),
+        (99, 92),
+        (99, 127),
+        (99, 147),
+        (1, 75),
+        (1, 76),
+    ];
+    for &(lead, expo) in &CASES {
+        for sign in [1i128, -1] {
+            let raw = Int::<24>::from_i128(sign * lead)
+                * crate::consts::pow10::dispatch::<Int<24>>(SC - expo);
+            let at = |m: RoundingMode| D::<Int<24>, SC>(raw).log1p_strict_with(m).to_bits();
+            let (floor, ceiling, trunc) = (
+                at(RoundingMode::Floor),
+                at(RoundingMode::Ceiling),
+                at(RoundingMode::Trunc),
+            );
+            assert_eq!(
+                ceiling - floor,
+                <Int<24> as BigInt>::ONE,
+                "log1p({sign}·{lead}e-{expo}) at D462<{SC}>: Ceiling and Floor must \
+                 straddle a value that cannot be on the grid"
+            );
+            let toward_zero = if floor < <Int<24> as BigInt>::ZERO { ceiling } else { floor };
+            assert_eq!(
+                trunc, toward_zero,
+                "log1p({sign}·{lead}e-{expo}) at D462<{SC}>: Trunc must equal the \
+                 neighbour facing zero"
+            );
+        }
+    }
+}
+
 /// `S` is the scale every anchor above is stated at; assert `UNIT` is
 /// consistent with it so a future scale change cannot silently
 /// invalidate the baked expectations.
