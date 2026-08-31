@@ -357,6 +357,21 @@ where
     // true`. The walker is mode-blind there (`!decided`, the deciding odd term
     // past its reach); the term's sign is analytic. The proven golden-
     // comprehensive find: asinh(±3e-117) at D462 s461 / D616 s615 (j* = 5).
+    // The exact alternating-series bracket first: where it closes it PROVES
+    // which side of `r` the true value lies on, superseding the `j*`-parity
+    // rule whose exactness premise fails for a multi-digit significand.
+    if let Some(v) = crate::algos::support::wide_trig_core::adjust_alternating_bracket::<
+        C::Storage,
+        C::Wagm,
+        SCALE,
+    >(
+        r,
+        raw,
+        mode,
+        crate::algos::support::wide_trig_core::AlternatingSeries::Asinh,
+    ) {
+        return v;
+    }
     tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
         r,
         decided,
@@ -787,6 +802,21 @@ where
     );
     // Deep sub-resolution band (j* ≥ 5): asinh alternates — see the tier
     // [`asinh_schoolbook`]. The widening walker falls up to `C::Wagm`.
+    // The exact alternating-series bracket first: where it closes it PROVES
+    // which side of `r` the true value lies on, superseding the `j*`-parity
+    // rule whose exactness premise fails for a multi-digit significand.
+    if let Some(v) = crate::algos::support::wide_trig_core::adjust_alternating_bracket::<
+        C::Storage,
+        C::Wagm,
+        SCALE,
+    >(
+        r,
+        raw,
+        mode,
+        crate::algos::support::wide_trig_core::AlternatingSeries::Asinh,
+    ) {
+        return v;
+    }
     tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
         r,
         decided,
