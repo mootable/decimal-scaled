@@ -34,6 +34,16 @@
 //!    [`expm1_support::just_above_minus_one`]. A bare `-10^w` makes the walkers'
 //!    `never_exact` rule bump the magnitude, so `Floor` returns `-1 - 1 ULP`:
 //!    the wrong side, and out of storage range at `SCALE = D`.
+//! 3. **The strict wrapper must pass `never_exact = FALSE`** — the opposite of
+//!    `exp`. That flag asserts "when the residual reads zero, the TRUE magnitude
+//!    is LARGER"; it is sound for `exp` only because `exp > 0` everywhere, so a
+//!    positive neglected tail always increases the magnitude. `expm1` changes
+//!    sign, and on the negative half a positive tail moves the value TOWARD
+//!    zero — the opposite of what the walker's `bump` can express. The two bands
+//!    where the side IS analytically known are handled before the walker sees
+//!    them (the near-min pin, and the `1 - 10^w` representative above), so what
+//!    remains is genuine Table-Maker's-Dilemma residue with no known side.
+//!    Derivation in the research doc, section 4.4.
 
 pub(crate) mod expm1_halving;
 pub(crate) mod expm1_reduced;
