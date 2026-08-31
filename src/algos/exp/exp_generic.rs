@@ -141,9 +141,37 @@ use crate::support::rounding::RoundingMode;
     where
         S::Scratch: ComputeLimbs,
     {
+        round_div_sided(n, d).0
+    }
+
+    /// [`round_div`] plus which side of the returned quotient the EXACT
+    /// quotient lies on — `Above` when the rounding went DOWN (the true
+    /// quotient is larger than the value handed back), `Below` when it went
+    /// UP, `None` when the division came out exact and there is no side.
+    ///
+    /// The quotient is bit-identical to [`round_div`]'s: that function is
+    /// this one with the side dropped, so there is a single rounding body.
+    /// The side costs two boolean tests and no extra division — the rounding
+    /// decision it reads has already been made.
+    ///
+    /// # The polarity is READ, never assumed
+    ///
+    /// [`div_rem_exact`] truncates toward zero and its remainder carries the
+    /// numerator's sign, so the exact quotient always sits `|r/d| < 1` on the
+    /// AWAY-from-zero side of `q`. Keeping `q` therefore leaves the truth
+    /// away from zero of the answer; bumping steps a full unit — necessarily
+    /// past it — and leaves the truth on the toward-zero side. Both
+    /// polarities occur at both signs, because this rounds HALF-TO-EVEN and
+    /// not toward zero, so a fixed direction would be wrong wherever the
+    /// residual passes the half.
+    #[inline]
+    fn round_div_sided<S: BigInt>(n: S, d: S) -> (S, Option<TailSign>)
+    where
+        S::Scratch: ComputeLimbs,
+    {
         let (q, r) = div_rem_exact(n, d);
         if r == S::ZERO {
-            return q;
+            return (q, None);
         }
         let ar = abs(r);
         let comp = abs(d) - ar;
@@ -156,12 +184,20 @@ use crate::support::rounding::RoundingMode;
         };
         let q_is_odd = q.bit(0);
         let result_positive = (n < S::ZERO) == (d < S::ZERO);
-        if crate::support::rounding::should_bump(
+        let bump = crate::support::rounding::should_bump(
             RoundingMode::HalfToEven,
             cmp_r,
             q_is_odd,
             result_positive,
-        ) {
+        );
+        // Away-from-zero for a positive result is UP, for a negative one DOWN
+        // — so the truth is above the answer exactly when those two disagree.
+        let side = if result_positive != bump {
+            TailSign::Above
+        } else {
+            TailSign::Below
+        };
+        let rounded = if bump {
             if result_positive {
                 q + S::ONE
             } else {
@@ -169,7 +205,8 @@ use crate::support::rounding::RoundingMode;
             }
         } else {
             q
-        }
+        };
+        (rounded, Some(side))
     }
     /// Half-to-even quotient `n / 10^w`, via the MG (magic-multiply)
     /// reciprocal — the same fast divide the per-tier
@@ -239,7 +276,17 @@ use crate::support::rounding::RoundingMode;
     where
         S::Scratch: ComputeLimbs,
     {
-        round_div(a.wrapping_mul_low_u128(pow10_w), b)
+        div_cached_sided(a, b, pow10_w).0
+    }
+
+    /// [`div_cached`] plus the side its rounding left the exact quotient on
+    /// — see [`round_div_sided`]. Same single rounding body, same value.
+    #[inline]
+    fn div_cached_sided<S: BigInt>(a: S, b: S, pow10_w: S) -> (S, Option<TailSign>)
+    where
+        S::Scratch: ComputeLimbs,
+    {
+        round_div_sided(a.wrapping_mul_low_u128(pow10_w), b)
     }
     /// `a · n` for a small unsigned multiplier.
     #[inline]
@@ -419,27 +466,161 @@ use crate::support::rounding::RoundingMode;
     where
         S::Scratch: ComputeLimbs,
     {
+        log1p_fixed_inner::<S>(t, w, false).0
+    }
+
+    /// [`log1p_fixed`] plus the side of the returned value the TRUE value
+    /// lies on — see [`TailSign`] for what that buys and why nothing else can
+    /// supply it.
+    ///
+    /// The value is bit-identical to [`log1p_fixed`]'s at every argument; the
+    /// tag is the only difference, and it is `None` whenever it cannot be
+    /// PROVED (see [`log1p_fixed_inner`]).
+    pub(crate) fn log1p_fixed_tagged<S: BigInt>(t: S, w: u32) -> (S, Option<TailSign>)
+    where
+        S::Scratch: ComputeLimbs,
+    {
+        log1p_fixed_inner::<S>(t, w, true)
+    }
+
+    /// The one series loop behind [`log1p_fixed`] and
+    /// [`log1p_fixed_tagged`].
+    ///
+    /// `want_tag` keeps the untagged path's arithmetic *exactly* what it was,
+    /// for the reason [`expm1_fixed_inner`] documents: proving the tag needs
+    /// each term's divisions checked for an exact remainder, and the `÷10^w`
+    /// check costs a multiply-back.
+    ///
+    /// # Why this kernel's rule is NOT [`expm1_fixed_inner`]'s
+    ///
+    /// `expm1` tags only when every included term divided exactly, because
+    /// otherwise an integer rounding error `|e| >= 1` dominates its sub-unit
+    /// tail. It can demand that because its series is seeded with the input
+    /// itself (`let mut sum = s`) — no leading divide. This kernel has one
+    /// and it is unavoidable:
+    ///
+    /// ```text
+    /// u = round_div(t·10^w, 2·10^w + t)
+    /// ```
+    ///
+    /// and that divide is **provably never exact for the tiny-`t` family**:
+    /// the quotient is `10^w / (2·10^m ± 1)`, whose divisor ends in 1 or 9 —
+    /// odd, coprime to 10 — so it cannot divide `10^w = 2^w·5^w` unless it is
+    /// 1. Mirroring `expm1`'s rule verbatim would leave the tag `None` on
+    /// iteration one, for every width, scale, guard and sign.
+    ///
+    /// So the seed divide's rounding is not treated as a disqualifying error
+    /// but as an error term whose SIGN is known exactly —
+    /// [`round_div_sided`] reads it off the rounding decision — and the tag
+    /// is proved by making the two error terms agree:
+    ///
+    /// * write the returned value as `R = 2·S_k(u)` and the true one as
+    ///   `V = 2·artanh(û)`, `û` the exact quotient. Then
+    ///   `V − R = 2[artanh(û) − artanh(u/10^w)] + 2·T_k(u)`.
+    /// * `artanh` is strictly increasing, so the first bracket carries the
+    ///   sign of `û − u/10^w` — precisely the side [`round_div_sided`]
+    ///   reports;
+    /// * `T_k`, the terms the loop dropped, is a sum of odd powers that ALL
+    ///   carry `u`'s sign, so its side is `sign(u)` — at any depth and for
+    ///   whatever reason the loop stopped. (`expm1` needed its vanish index's
+    ///   parity here because ITS series alternates; `artanh`'s does not, so
+    ///   this side is unconditional and no `vanished_at` is tracked.)
+    ///
+    /// When those two sides AGREE the sum's side follows with no magnitude
+    /// comparison at all, and that is the only case tagged.
+    ///
+    /// # When the tag is `None`
+    ///
+    /// It fails CLOSED — the walker treats `None` as "make no adjustment":
+    ///
+    /// * `want_tag` was not asked for, or `u == 0` (no tail to carry a sign);
+    /// * `|u| >= 10^w`, where the dropped tail neither converges nor need
+    ///   carry its terms' common sign;
+    /// * any division in any INCLUDED term was inexact — including `u²`,
+    ///   which feeds every one of them. "Included" is load-bearing exactly as
+    ///   in [`expm1_fixed_inner`]: the term that ENDS the loop was rounded
+    ///   away to zero, so its division is inexact whenever it was not already
+    ///   zero, but it is never added and so contributes no error. Counting it
+    ///   would leave the tag permanently `None`;
+    /// * the two error terms OPPOSE. Deciding then needs their magnitudes,
+    ///   which is a genuine comparison this does not attempt — a dropped tail
+    ///   is not always negligible beside a half-ULP divide residual, so
+    ///   asserting the divide's side alone would be a guess, not a proof.
+    fn log1p_fixed_inner<S: BigInt>(t: S, w: u32, want_tag: bool) -> (S, Option<TailSign>)
+    where
+        S::Scratch: ComputeLimbs,
+    {
         let one_w = one::<S>(w);
         let two_w = one_w + one_w;
         let pow10_w = one_w;
-        let u = div_cached::<S>(t, two_w + t, pow10_w);
-        let u2 = mul::<S>(u, u, w);
+        // The seed divide, with the side its rounding left the true quotient
+        // on. `div_cached` IS this with the side dropped.
+        let (u, div_side) = div_cached_sided::<S>(t, two_w + t, pow10_w);
+        // `u²` feeds every term, so its exactness gates all of them.
+        let (u2, u2_exact) = if want_tag {
+            let prod = u.wrapping_mul_low_u128(u);
+            let scaled = round_div_pow10::<S>(prod, w);
+            (scaled, scaled.wrapping_mul_low_u128(one_w) == prod)
+        } else {
+            (mul::<S>(u, u, w), true)
+        };
         let mut sum = u;
         let mut term = u;
         let mut j: u128 = 1;
+        // Every division in every INCLUDED term has been exact so far, so
+        // `sum` is still the exact artanh partial sum of `u` at scale `w`.
+        let mut exact = true;
         loop {
-            term = mul::<S>(term, u2, w);
-            let contrib = term / lit::<S>((2 * j + 1) as i128);
+            // `j` is bounded by SERIES_CAP (20_000), so the cast to the
+            // generic `lit`'s i128 argument is lossless.
+            let d = lit::<S>((2 * j + 1) as i128);
+            // `step_exact`: both of this term's divisions came out exact.
+            let (contrib, step_exact) = if want_tag {
+                // The same value `mul::<S>(term, u2, w)` produces, with the
+                // exactness of both divisions recorded on the way through.
+                let prod = term.wrapping_mul_low_u128(u2);
+                let scaled = round_div_pow10::<S>(prod, w);
+                let mul_exact = scaled.wrapping_mul_low_u128(one_w) == prod;
+                term = scaled;
+                let (q, r) = div_rem_exact::<S>(term, d);
+                (q, mul_exact && u2_exact && r == zero::<S>())
+            } else {
+                term = mul::<S>(term, u2, w);
+                (term / d, true)
+            };
             if contrib == zero::<S>() {
                 break;
             }
+            // Only a term that is actually ADDED can carry error into `sum`.
+            exact = exact && step_exact;
             sum = sum + contrib;
             j += 1;
             if j > SERIES_CAP {
                 break;
             }
         }
-        sum + sum
+        let tag = if want_tag && exact && u != zero::<S>() && abs(u) < one_w {
+            // The dropped tail's side — the common sign of every term the
+            // loop did not take.
+            let tail_side = if u > zero::<S>() {
+                TailSign::Above
+            } else {
+                TailSign::Below
+            };
+            match div_side {
+                // Exact seed divide: the dropped tail is the only error term
+                // left, so it decides alone.
+                None => Some(tail_side),
+                // Both error terms push the same way, so their sum does too.
+                Some(s) if s == tail_side => Some(s),
+                // They oppose — deciding needs magnitudes. Fail closed.
+                Some(_) => None,
+            }
+        } else {
+            None
+        };
+        // Doubling is a positive scaling, so it preserves the side.
+        (sum + sum, tag)
     }
 
     /// Which side of a working-scale sum the TRUE value lies on — the sign
@@ -1244,6 +1425,78 @@ use crate::support::rounding::RoundingMode;
 mod tests {
     use super::*;
     use crate::int::types::Int;
+
+    /// [`round_div_sided`]'s polarity at all four sign/bump combinations plus
+    /// the exact case. The `log1p` tail-sign channel rests entirely on this
+    /// mapping, and it is what a fixed polarity would get wrong at half its
+    /// arguments: the SAME truncation leaves the truth `Above` a positive
+    /// quotient and `Below` a negative one.
+    #[test]
+    fn round_div_sided_reports_the_side_the_rounding_left_the_truth_on() {
+        type I = Int<2>;
+        let d = |n: i128, m: i128| round_div_sided::<I>(lit::<I>(n), lit::<I>(m));
+
+        // 7/3 = 2.333… — keeps q = 2, so the truth is above what came back.
+        assert_eq!(d(7, 3), (lit::<I>(2), Some(TailSign::Above)));
+        // 8/3 = 2.667… — bumps to 3, a full unit past the truth.
+        assert_eq!(d(8, 3), (lit::<I>(3), Some(TailSign::Below)));
+        // -7/3 — the same truncation as +7/3, opposite side.
+        assert_eq!(d(-7, 3), (lit::<I>(-2), Some(TailSign::Below)));
+        // -8/3 — bumps to -3, past the truth, which is above it.
+        assert_eq!(d(-8, 3), (lit::<I>(-3), Some(TailSign::Above)));
+        // Exact: no side to report.
+        assert_eq!(d(6, 3), (lit::<I>(2), None));
+    }
+
+    /// The tail-sign channel FIRES for the family that needs it, and reports
+    /// OPPOSITE sides at the two signs.
+    ///
+    /// `t = ±10^-4` at working scale 12 is the small-scale twin of the
+    /// `±10^-(S/2)` arguments that mis-round at `D462<346>` / `D616<590>`:
+    /// the artanh series vanishes entirely at the working scale, so the seed
+    /// divide's rounding and the dropped tail are the only error terms, and
+    /// they agree. From `Q = ±p/(2 ± x)` with `p = 10^8`, `x = 10^-4`:
+    ///
+    /// ```text
+    ///  Q(+) =  (p/2)(1 − x/2 + x²/4 − …) =  49_997_500.12499375…
+    ///  Q(−) = −(p/2)(1 + x/2 + x²/4 + …) = −50_002_500.12500625…
+    /// ```
+    ///
+    /// Both fractions are well under a half, so half-to-even keeps the
+    /// truncation at BOTH signs — and truncation is toward zero, so the exact
+    /// quotient is left on the away-from-zero side: `Above` for `u > 0`,
+    /// `Below` for `u < 0`.
+    ///
+    /// A tag that were always `None` would be inert and would look exactly
+    /// like "no regressions", so this pins that it is `Some` — and pins the
+    /// side, which is the half a fixed polarity would get wrong.
+    #[test]
+    fn log1p_fixed_tagged_reports_opposite_sides_at_the_two_signs() {
+        type I = Int<2>;
+        let w: u32 = 12;
+        let t = pow10::<I>(8);
+
+        let (pos, pos_tag) = log1p_fixed_tagged::<I>(t, w);
+        assert_eq!(pos, lit::<I>(2 * 49_997_500), "log1p(+1e-4) at w=12 is 2u");
+        assert_eq!(
+            pos_tag,
+            Some(TailSign::Above),
+            "a truncated seed divide and a positive tail both put the truth ABOVE"
+        );
+
+        let (neg, neg_tag) = log1p_fixed_tagged::<I>(-t, w);
+        assert_eq!(neg, lit::<I>(-2 * 50_002_500), "log1p(-1e-4) at w=12 is 2u");
+        assert_eq!(
+            neg_tag,
+            Some(TailSign::Below),
+            "the same truncation at a negative argument puts the truth BELOW"
+        );
+
+        // The untagged wrapper is the tagged kernel with the tag dropped —
+        // the value must not move.
+        assert_eq!(log1p_fixed::<I>(t, w), pos);
+        assert_eq!(log1p_fixed::<I>(-t, w), neg);
+    }
 
     /// The `k < 0` internal-peak wrap: a
     /// deep-negative argument at a deep (cap-clamped Ziv probe) working
