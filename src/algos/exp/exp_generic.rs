@@ -39,10 +39,6 @@ use crate::support::rounding::RoundingMode;
         S::ZERO
     }
     #[inline]
-    fn abs<S: BigInt>(v: S) -> S {
-        if v < S::ZERO { -v } else { v }
-    }
-    #[inline]
     pub(crate) fn pow10<S: BigInt>(n: u32) -> S {
         crate::consts::pow10::dispatch::<S>(n)
     }
@@ -52,7 +48,7 @@ use crate::support::rounding::RoundingMode;
     }
     /// Bit length of `|v|` (0 for zero).
     pub(crate) fn bit_length<S: BigInt>(v: S) -> u32 {
-        <S as BigInt>::BITS - abs(v).leading_zeros()
+        <S as BigInt>::BITS - v.abs().leading_zeros()
     }
     /// Unpacks a non-negative `S` magnitude into a little-endian u64 limb
     /// buffer through the trait's u128 magnitude exit (`mag_into_u128`).
@@ -103,8 +99,8 @@ use crate::support::rounding::RoundingMode;
         let d_neg = d < S::ZERO;
         let mut nbuf = <S::Scratch as ComputeLimbs>::single_u64();
         let mut dbuf = <S::Scratch as ComputeLimbs>::single_u64();
-        unpack_mag(abs(n), nbuf.as_mut());
-        unpack_mag(abs(d), dbuf.as_mut());
+        unpack_mag(n.abs(), nbuf.as_mut());
+        unpack_mag(d.abs(), dbuf.as_mut());
         let mut qbuf = <S::Scratch as ComputeLimbs>::single_u64();
         let mut rbuf = <S::Scratch as ComputeLimbs>::single_u64();
         match select_for_limbs(nbuf.as_ref(), dbuf.as_ref()) {
@@ -173,8 +169,8 @@ use crate::support::rounding::RoundingMode;
         if r == S::ZERO {
             return (q, None);
         }
-        let ar = abs(r);
-        let comp = abs(d) - ar;
+        let ar = r.abs();
+        let comp = d.abs() - ar;
         let cmp_r = if ar < comp {
             ::core::cmp::Ordering::Less
         } else if ar > comp {
@@ -234,7 +230,7 @@ use crate::support::rounding::RoundingMode;
     #[inline]
     fn rounded_toward_zero<S: BigInt>(scaled: S, prod: S, pow10_w: S) -> bool {
         let back = scaled.wrapping_mul_low_u128(pow10_w);
-        abs(back - prod) < pow10_w && abs(back) <= abs(prod)
+        (back - prod).abs() < pow10_w && back.abs() <= prod.abs()
     }
 
     /// Half-to-even quotient `n / 10^w`, via the MG (magic-multiply)
@@ -346,7 +342,7 @@ use crate::support::rounding::RoundingMode;
         let divisor = pow10::<S>(w);
         let (q, r) = div_rem_exact(v, divisor);
         let half = divisor >> 1;
-        let qi = if abs(r) >= half {
+        let qi = if r.abs() >= half {
             if v < S::ZERO { q - S::ONE } else { q + S::ONE }
         } else {
             q
@@ -373,7 +369,7 @@ use crate::support::rounding::RoundingMode;
     where
         S::Scratch: ComputeLimbs,
     {
-        let av = abs::<S>(v);
+        let av = v.abs();
         let n = av * pow10::<S>(w);
         if n <= zero::<S>() {
             return zero::<S>();
@@ -713,7 +709,7 @@ use crate::support::rounding::RoundingMode;
             // No tag asked for; no tail to carry a sign; or an argument whose
             // dropped terms need not share one.
             None => None,
-            Some(_) if u == zero::<S>() || abs(u) >= one_w => None,
+            Some(_) if u == zero::<S>() || u.abs() >= one_w => None,
             // Every error term reaching `sum` pushes the same way, so their sum
             // does too — no magnitude comparison anywhere.
             Some(_) if agree => Some(tail_side),
@@ -801,7 +797,7 @@ use crate::support::rounding::RoundingMode;
         // work integer — the hazard `round_to_storage_*` already avoids the same
         // way.
         let divisor = pow10::<S>(guard);
-        let (_q, rem) = div_rem_exact::<S>(abs(value), divisor);
+        let (_q, rem) = div_rem_exact::<S>(value.abs(), divisor);
         if rem != zero::<S>() && rem + rem != divisor {
             return None;
         }
@@ -820,7 +816,7 @@ use crate::support::rounding::RoundingMode;
         let deep = log1p_fixed_inner::<S>(t * lift, deep_w, None).0;
         let gap = deep - value * lift;
         let bound = lit::<S>(4 * SERIES_CAP as i128 + 16);
-        if abs(gap) > bound {
+        if gap.abs() > bound {
             Some(if gap > zero::<S>() {
                 TailSign::Above
             } else {
@@ -1109,7 +1105,7 @@ use crate::support::rounding::RoundingMode;
                     && !err_lost
                     && err.0 == zero::<S>()
                     && s != zero::<S>()
-                    && abs(s) <= one::<S>(w) =>
+                    && s.abs() <= one::<S>(w) =>
             {
                 // The tail is `s^n/n! + s^(n+1)/(n+1)! + ...`, alternating and
                 // strictly decreasing in magnitude for `|s| <= 1`, so it
@@ -1263,8 +1259,8 @@ use crate::support::rounding::RoundingMode;
         if r == S::ZERO {
             return q;
         }
-        let ar = abs(r);
-        let comp = abs(d) - ar;
+        let ar = r.abs();
+        let comp = d.abs() - ar;
         let cmp_r = if ar < comp {
             ::core::cmp::Ordering::Less
         } else if ar > comp {
@@ -1292,7 +1288,7 @@ use crate::support::rounding::RoundingMode;
         let divisor = pow10::<S>(w);
         let (q, r) = v.div_rem(divisor);
         let half = divisor >> 1;
-        let qi = if abs(r) >= half {
+        let qi = if r.abs() >= half {
             if v < S::ZERO { q - S::ONE } else { q + S::ONE }
         } else {
             q
@@ -1403,6 +1399,84 @@ use crate::support::rounding::RoundingMode;
     {
         try_exp_fixed::<S>(v_w, w)
             .unwrap_or_else(|| panic!("exp_generic::exp_fixed: result out of range"))
+    }
+
+    /// Whether the DIRECT `expm1` series reaches working scale `w` in no more
+    /// terms than [`try_exp_fixed`]'s Smith chain spends on its squarings
+    /// alone — i.e. the direct path is never the more expensive of the two.
+    ///
+    /// The chain runs `n = squaring_levels(w)` squarings whatever the
+    /// argument (`n` is keyed on `w`, not on `|s|`), so `n` terms is the
+    /// honest budget. The direct series' term `j` is `s^j/j!`, which vanishes
+    /// at scale `w` once `j·d >= w` for `d = -log10|s|`; dropping the `j!`
+    /// growth makes this a SUFFICIENT condition, erring toward the existing
+    /// path. With `D` the decimal digit count of the working magnitude,
+    /// `d = w - D + 1`.
+    ///
+    /// This is a cost gate, not a validity wall — both paths are correct
+    /// kernels at every argument it can see, so a mis-estimate costs speed and
+    /// never accuracy. It is derived from `w` alone; no argument or cell
+    /// appears in it.
+    fn direct_series_pays<S: BigInt>(working_value: S, working_scale: u32) -> bool {
+        let magnitude = working_value.abs();
+        if magnitude == zero::<S>() {
+            return false;
+        }
+        // `digits <= floor(bl·log10 2) + 1`, at most one high — an over-estimate
+        // shrinks the exponent and so only ever withholds the direct path.
+        let digit_count = ((bit_length::<S>(magnitude) as u64 * 30_103) / 100_000) as u32 + 1;
+        let decimal_exponent = (working_scale + 1).saturating_sub(digit_count);
+        let squarings = squaring_levels(working_scale) as u64;
+        squarings.saturating_mul(decimal_exponent as u64) >= working_scale as u64
+    }
+
+    /// `e^v` at working scale `w`, together with the side its neglected tail
+    /// puts the TRUE value on where that is provable — the [`TailSign`] the
+    /// Ziv walkers need when a zero residual leaves them blind.
+    ///
+    /// `try_exp_fixed` cannot supply one. It range-reduces and then runs
+    /// `squaring_levels(w)` rounded divides (61 at `D1232<1231>`), each up to
+    /// half a working unit with its direction untracked, while the neglected
+    /// Taylor tail it would be reporting on is SUB-unit. The noise swamps the
+    /// signal, so any tag from that path would be an assertion, not a proof.
+    ///
+    /// Where the direct series pays for itself ([`direct_series_pays`]) this
+    /// evaluates `e^v = 1 + expm1(v)` instead. The `1` is `10^w` exactly, so
+    /// the addition is exact and the side transfers unchanged from
+    /// [`expm1_fixed_tagged`], whose own rule already fails closed (it tags
+    /// only when the accumulated error is provably zero and the series
+    /// vanished rather than hit the cap). Elsewhere the value is
+    /// `try_exp_fixed`'s, bit-identical to before, and the tag is `None`.
+    pub(crate) fn exp_fixed_tagged<S: BigInt>(
+        working_value: S,
+        working_scale: u32,
+    ) -> (S, Option<TailSign>)
+    where
+        S::Scratch: ComputeLimbs,
+    {
+        exp_fixed_tagged_with::<S>(working_value, working_scale, || {
+            exp_fixed::<S>(working_value, working_scale)
+        })
+    }
+
+    /// [`exp_fixed_tagged`] over a caller-supplied untagged kernel — the tier
+    /// cores route their own `exp_fixed` through a peak-fit gate that lifts to
+    /// a wider work integer, so the fallback must stay THEIRS rather than
+    /// being re-derived here. Only the gated direct-series branch is shared.
+    pub(crate) fn exp_fixed_tagged_with<S: BigInt>(
+        working_value: S,
+        working_scale: u32,
+        fallback: impl FnOnce() -> S,
+    ) -> (S, Option<TailSign>)
+    where
+        S::Scratch: ComputeLimbs,
+    {
+        if direct_series_pays::<S>(working_value, working_scale) {
+            let (expm1_value, tail) = expm1_fixed_tagged::<S>(working_value, working_scale);
+            (one::<S>(working_scale) + expm1_value, tail)
+        } else {
+            (fallback(), None)
+        }
     }
 
     /// Option-returning core of [`exp_fixed`] — the `checked_` seam's
@@ -1672,7 +1746,7 @@ use crate::support::rounding::RoundingMode;
     /// signed `Dst`.
     #[inline]
     pub(crate) fn resize_or_panic<Src: BigInt, Dst: BigInt>(v: Src) -> Dst {
-        if bit_length::<Src>(abs::<Src>(v)) >= <Dst as BigInt>::BITS {
+        if bit_length::<Src>(v.abs()) >= <Dst as BigInt>::BITS {
             panic!("exp_generic: result out of range");
         }
         <Src as BigInt>::resize_to::<Dst>(v)

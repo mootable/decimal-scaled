@@ -96,7 +96,7 @@ where
     }
     // Band gate: |v| <= DIRECT_BAND. Tested on the working-scale integer so no
     // division is needed on the hot path.
-    if sup::abs::<S>(v_w) > eg::lit::<S>(sup::DIRECT_BAND) * eg::one::<S>(w) {
+    if v_w.abs() > eg::lit::<S>(sup::DIRECT_BAND) * eg::one::<S>(w) {
         return (None, None);
     }
     // Peak: |term| <= 10^w and |s| <= 10^w, so the `term * s` product before

@@ -366,16 +366,23 @@ where
     // the tier work integer's escalation reach at mid/high scales; retry at
     // `C::Wexp` when the deciding digit is unreachable in `C::W`. Deep ties past
     // the precision horizon stay exact ties.
-    round_to_storage_widening_g::<C::Storage, C::W, C::Wexp>(
+    round_to_storage_widening_tail_signed_g::<C::Storage, C::W, C::Wexp>(
         C::GUARD,
         SCALE,
         mode,
         true,
         C::storage_max(),
         C::storage_min(),
-        |guard| C::exp_fixed::<SCALE>(C::to_work_scaled(raw, guard), SCALE + guard),
         |guard| {
-            crate::algos::exp::exp_generic::exp_fixed::<C::Wexp>(
+            let v = C::to_work_scaled(raw, guard);
+            crate::algos::exp::exp_generic::exp_fixed_tagged_with::<C::W>(
+                v,
+                SCALE + guard,
+                || C::exp_fixed::<SCALE>(v, SCALE + guard),
+            )
+        },
+        |guard| {
+            crate::algos::exp::exp_generic::exp_fixed_tagged::<C::Wexp>(
                 to_work_scaled_g::<C::Storage, C::Wexp>(raw, guard),
                 SCALE + guard,
             )
@@ -417,7 +424,7 @@ where
     if let Some(r) = exp_near_min_pin::<C, SCALE>(raw, mode) {
         return r;
     }
-    round_to_storage_widening_g::<C::Storage, Wk, C::Wexp>(
+    round_to_storage_widening_tail_signed_g::<C::Storage, Wk, C::Wexp>(
         C::GUARD,
         SCALE,
         mode,
@@ -427,17 +434,19 @@ where
         |guard| {
             let w = SCALE + guard;
             let v = to_work_scaled_g::<C::Storage, Wk>(raw, guard);
-            if eg::exp_peak_fits::<Wk>(v, w) {
-                eg::exp_fixed::<Wk>(v, w)
-            } else {
-                eg::resize_or_panic::<C::Wexp, Wk>(eg::exp_fixed::<C::Wexp>(
-                    to_work_scaled_g::<C::Storage, C::Wexp>(raw, guard),
-                    w,
-                ))
-            }
+            eg::exp_fixed_tagged_with::<Wk>(v, w, || {
+                if eg::exp_peak_fits::<Wk>(v, w) {
+                    eg::exp_fixed::<Wk>(v, w)
+                } else {
+                    eg::resize_or_panic::<C::Wexp, Wk>(eg::exp_fixed::<C::Wexp>(
+                        to_work_scaled_g::<C::Storage, C::Wexp>(raw, guard),
+                        w,
+                    ))
+                }
+            })
         },
         |guard| {
-            eg::exp_fixed::<C::Wexp>(
+            eg::exp_fixed_tagged::<C::Wexp>(
                 to_work_scaled_g::<C::Storage, C::Wexp>(raw, guard),
                 SCALE + guard,
             )
@@ -2501,7 +2510,7 @@ fn near_min_resolve_g<St: BigInt + Copy, S: BigInt>(
     never_exact: bool,
     st_max: St,
     st_min: St,
-    recompute: &mut dyn FnMut(u32) -> S,
+    recompute: &mut dyn FnMut(u32) -> (S, Option<TailSign>),
 ) -> (St, bool)
 where
     S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
@@ -2543,15 +2552,15 @@ where
     let pos_of = |dist: S, g: u32| -> u32 { target + g - dec_digits_g::<S>(dist) + 1 };
     // One working-scale probe: `(neg, q, rem, divisor)` of the recomputed
     // value at guard `g`, magnitude split at the storage grid.
-    let mut probe = |g: u32| -> (bool, S, S, S) {
-        let v = recompute(g);
+    let mut probe = |g: u32| -> (bool, S, S, S, Option<TailSign>) {
+        let (v, tail) = recompute(g);
         let neg = v < lit(0);
         let mag = if neg { -v } else { v };
         let divisor = pow10(g);
         // Exact per-width Knuth scratch (the narrow build's blanket is sized
         // to its 2-limb storage; the walkers probe in `Int<24>`).
         let (q, rem) = crate::algos::exp::exp_generic::div_rem_exact(mag, divisor);
-        (neg, q, rem, divisor)
+        (neg, q, rem, divisor, tail)
     };
 
     if is_nearest_mode(mode) {
@@ -2567,7 +2576,7 @@ where
             };
             finish(neg, q, should_bump(mode, cmp_r, q.bit(0), !neg))
         };
-        let (neg0, q0, rem0, div0) = probe(base_guard);
+        let (neg0, q0, rem0, div0, _) = probe(base_guard);
         let half0 = div0 / lit(2);
         let dist0 = if rem0 < half0 { half0 - rem0 } else { rem0 - half0 };
         if dist0 > pow10(base_guard) / lit(1000) {
@@ -2596,7 +2605,7 @@ where
                     let back = ZIV_RESOLVE_FLOOR_POW10 + 3;
                     if max_guard > base_guard + back {
                         let g_c = max_guard - back;
-                        let (neg, q, rem, div) = probe(g_c);
+                        let (neg, q, rem, div, _) = probe(g_c);
                         let half = div / lit(2);
                         let dist = if rem < half { half - rem } else { rem - half };
                         if dist > floor {
@@ -2620,7 +2629,7 @@ where
             }
             let step = (target + base_guard).max(base_guard);
             let next_guard = guard.saturating_add(step).min(max_guard);
-            let (neg, q, rem, div) = probe(next_guard);
+            let (neg, q, rem, div, _) = probe(next_guard);
             let half = div / lit(2);
             let hi_dist = if rem < half { half - rem } else { rem - half };
             if hi_dist > floor {
@@ -2653,7 +2662,7 @@ where
             };
         finish(neg, q, bump)
     };
-    let (neg0, q0, rem0, div0) = probe(base_guard);
+    let (neg0, q0, rem0, div0, tail0) = probe(base_guard);
     let dist0 = if rem0 < div0 - rem0 { rem0 } else { div0 - rem0 };
     if dist0 > pow10(base_guard) / lit(1000) {
         return (dir_round(neg0, q0, rem0), true); // clear of a grid line
@@ -2677,7 +2686,7 @@ where
                 let back = ZIV_RESOLVE_FLOOR_POW10 + 3;
                 if max_guard > base_guard + back {
                     let g_c = max_guard - back;
-                    let (neg, q, rem, div) = probe(g_c);
+                    let (neg, q, rem, div, _) = probe(g_c);
                     let dist = if rem < div - rem { rem } else { div - rem };
                     if dist > floor {
                         let p = pos_of(dist, g_c);
@@ -2697,18 +2706,54 @@ where
             // one ULP off the line; Trunc keeps it. A non-`never_exact`
             // caller keeps the bare grid line.
             let q_grid = if rem0 > div0 / lit(2) { q0 + lit(1) } else { q0 };
-            let tail_bump = never_exact
+            // Which way the sub-resolution tail moves the MAGNITUDE. `away` =
+            // further from zero; `!away` = toward it. A kernel-supplied
+            // [`TailSign`] is a proof about the SIGNED value, so it converts
+            // through the result's own sign — the same reading
+            // `round_to_storage_directed_tagged_impl_g` makes, and the same
+            // `q != 0` guard: at `q_grid == 0` a "toward zero" tail would put
+            // the magnitude in `(-1, 0)`, which no magnitude occupies, so the
+            // tag cannot apply and the blanket rule stands.
+            //
+            // `never_exact` is the untagged fallback, NOT a second opinion:
+            // it is this walker's blanket "the tail is always away from zero",
+            // which is what the tag exists to replace where it can be proved.
+            // It is kept for the untagged path because the hyperbolics reach
+            // this same endgame through `round_to_storage_widening_g` with the
+            // flag set, and dropping it there would move them.
+            let away = match tail0 {
+                Some(t) if q_grid != lit(0) => Some((t == TailSign::Above) == !neg0),
+                _ => {
+                    if never_exact {
+                        Some(true)
+                    } else {
+                        None
+                    }
+                }
+            };
+            // `finish` can only ADD to the magnitude, so a tail pointing TOWARD
+            // zero is not expressible as a bump — it is expressed by lowering
+            // the BASE one ULP and letting the ordinary directed rule bump back
+            // up. `Some(true)` reproduces the previous `never_exact` narrowing
+            // exactly (same base, same bump); `Some(false)` is the branch that
+            // was previously unreachable and wrong.
+            let (q_base, residual_present) = match away {
+                Some(true) => (q_grid, true),
+                Some(false) => (q_grid - lit(1), true),
+                None => (q_grid, false),
+            };
+            let tail_bump = residual_present
                 && match mode {
                     RoundingMode::Trunc => false,
                     RoundingMode::Floor => neg0,
                     RoundingMode::Ceiling => !neg0,
                     _ => unreachable!(),
                 };
-            return (finish(neg0, q_grid, tail_bump), false);
+            return (finish(neg0, q_base, tail_bump), false);
         }
         let step = (target + base_guard).max(base_guard);
         let next_guard = guard.saturating_add(step).min(max_guard);
-        let (neg, q, rem, div) = probe(next_guard);
+        let (neg, q, rem, div, _) = probe(next_guard);
         let hi_dist = if rem < div - rem { rem } else { div - rem };
         if hi_dist > floor {
             let p = pos_of(hi_dist, next_guard);
@@ -2742,6 +2787,43 @@ pub(crate) fn round_to_storage_widening_g<St: BigInt + Copy, S1: BigInt, S2: Big
     st_min: St,
     mut recompute1: impl FnMut(u32) -> S1,
     mut recompute2: impl FnMut(u32) -> S2,
+) -> St
+where
+    S1::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+    S2::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    round_to_storage_widening_tail_signed_g::<St, S1, S2>(
+        base_guard,
+        target,
+        mode,
+        never_exact,
+        st_max,
+        st_min,
+        |g| (recompute1(g), None),
+        |g| (recompute2(g), None),
+    )
+}
+
+/// [`round_to_storage_widening_g`] for a kernel that can PROVE which side its
+/// neglected tail falls on, reported per probe as a [`TailSign`].
+///
+/// Where the tag is `None` at every probe this is bit-identical to
+/// [`round_to_storage_widening_g`] — the untagged wrapper above is exactly
+/// that call. Where it is present, it replaces the `never_exact` blanket
+/// ("the tail always moves the magnitude away from zero") with the side the
+/// kernel actually proved, which is the one thing a zero residual cannot
+/// tell the walker. See [`near_min_resolve_g`]'s unresolved endgame.
+#[inline]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn round_to_storage_widening_tail_signed_g<St: BigInt + Copy, S1: BigInt, S2: BigInt>(
+    base_guard: u32,
+    target: u32,
+    mode: RoundingMode,
+    never_exact: bool,
+    st_max: St,
+    st_min: St,
+    mut recompute1: impl FnMut(u32) -> (S1, Option<TailSign>),
+    mut recompute2: impl FnMut(u32) -> (S2, Option<TailSign>),
 ) -> St
 where
     S1::Scratch: crate::int::types::compute_limbs::ComputeLimbs,

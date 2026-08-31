@@ -344,6 +344,129 @@ exactly: that is the cross-tier size pollution the Constitution (rule 6)
 forbids, and it is a defect to be migrated to `Limbs::<N>::single_u64()` /
 `double_buffered_u64()` / `quad_buffered_u64()` / `single_u128()`.
 
+### The build-max divide bound — when the slice engines' blanket is reachable
+
+The width-erased slice engines above are the one sanctioned build-max scratch,
+but "no `N` to size against" is not the same as "unbounded". Their buffer has a
+reachable limit, and crossing it is what produced #86 (`asinh` panicking at
+D924/D1232).
+
+> **Exposed** ⟺ effective dividend limbs ≥ `MAX_SINGLE_LIMBS`, **and** the
+> divisor is even with ≥ 24 limbs, **and** `num_m >= 2 * den_n`.
+
+`MAX_SINGLE_LIMBS = 4 * MAX_WORK_N + 2`: **258** (xx-wide), **130** (x-wide),
+**66** (wide), **10** (narrow default).
+
+Stating it as a rule rather than a list of call sites buys three things:
+
+- **It is checkable against a new call site without re-deriving anything.** The
+  three conjuncts are exactly when `int::policy::div_rem::select_for_limbs`
+  returns `Algorithm::KnuthU128Limb` — the only arm reaching a build-max buffer
+  (`div_knuth_u128_limb`'s `[0u64; MAX_SINGLE_LIMBS]`). `div_knuth` has no such
+  array.
+- **It explains why the failure panics rather than corrupting.** The bound is
+  *value*-derived, not type-derived: `div_knuth_u128_limb_into` strips leading
+  zeros to `top64`, then writes `u64buf[top64] = carry` — a real bounds-checked
+  index. A slice wide by *type* but small by *value* is fine.
+- **It shows the single-limb-divisor cases are unreachable by routing, not by
+  luck.** A one-limb divisor returns `Algorithm::Rem` before Knuth is ever
+  considered, so `/ lit(2)`, `/ lit(M)`, `/ lit(2j+1)` and `/ j` cannot reach
+  the blanket at any width.
+
+**The `Int<512>` knife-edge.** `exp_fixed_tagged` instantiates
+`expm1_fixed_tagged` at `C::Wexp`, which is `Int<512>` at D1232. Its one
+multi-limb-divisor divide is `round_div_pow10(prod, w)`, where `prod ~ 10^(2w)`
+is about 131 limbs against a 66-limb `10^w`. The u128 arm needs
+`num_m >= 2 * den_n = 132`. **It misses by one limb.** Two independent reasons
+keep it safe — that, and routing through the guarded `rescale` rather than the
+raw operator — but a one-limb margin is not a safety property; it is a
+coincidence that survives until `w` shifts the rounding of `limbs(10^(2w))` up
+by one. And 131 sits only 65 under the **`wide`** blanket's 66: safe at
+xx-wide, marginal in a narrower `MAX_WORK_N` build.
+
+**The root cause, once.** `MAX_WORK_N` is scoped to **storage**-derived widths,
+while `Wexp` and `Wagm` are chosen independently of it — D1232 pairs `Int<64>`
+storage with `Int<512>` `Wexp` and `Int<256>` `Wagm`. Any blanket engine sized
+from `MAX_WORK_N` can therefore meet an operand it cannot hold, and no gate
+catches it because every gate pairs the wide flags, so the blanket path is
+never fed an over-long operand.
+
+**#87 is the same family on the multiply side.** `mul_karatsuba`'s build-max
+scratch fits the widest work integer with exactly zero margin
+(`KARATSUBA_MAX_WIDTH = 256` against `Wagm = Int<256>`), and its overflow guard
+is a `debug_assert!` compiled out of release. What that costs is the
+*diagnostic*, not the safety: `karatsuba_rec` splits its scratch with
+`split_at_mut`, which panics when the index exceeds the slice, so an undersized
+scratch still aborts rather than corrupting. In release the failure is a bare
+slice panic instead of the assert's message naming `n`, needed and available.
+Both #86 and #87 therefore fail loudly; #87 just fails less legibly.
+
+**The durable fix** is for the blanket engines to take their scratch from
+`ComputeLimbs`, as `div_rem_exact` already does — the shape `bracket_div` uses
+(matcher verdict via `select_for_limbs`, then the engine's `_into` door with
+`ComputeLimbs` scratch, checking `num.len() + 2` and returning `None` on a
+shortfall) generalised to `dispatch` itself. That removes the hazard rather
+than documenting it, and means no future caller needs a reachability audit.
+
+*Scope: audited at `dfc4302f`. `adjust_alternating_bracket`, added since, was
+verified separately at the feature tip. Not a tip-wide sweep.*
+
+#### Proposed, NOT ruled on — how `dispatch` could take exact scratch
+
+**The tension.** `dispatch` cannot simply gain a `where Limbs<N>: ComputeLimbs`
+bound, because it has no `N`: it exists to serve width-erased `&[u64]` callers
+of runtime length. But that erasure is mostly *inherited*, not *required* — the
+overwhelming majority of traffic arrives through `div_rem_mag_fixed<const N>`,
+which has `N` in scope and throws it away at the call. Only two callers are
+genuinely `N`-less: `mul_schoolbook` and `newton_reciprocal`, both via
+`div_rem_mag_slice`.
+
+**Shape (recommended): split the door, keep the blanket hard-guarded.**
+
+- `dispatch_into(num, den, quot, rem, u64buf, v64buf, u128buf…)` — the real
+  implementation, scratch supplied by the caller.
+- `div_rem_mag_fixed<N>` sources those from `Limbs<N>` and calls it. This is
+  where #86 came from — the transcendental kernels reach the blanket through
+  `Int<N>` operators — so fixing this arm alone removes the whole observed
+  hazard class.
+- `dispatch(...)` stays for the two genuinely `N`-less callers, keeps the
+  build-max buffer, and gains the guard it lacks today: check
+  `effective_limbs(num) + 2 <= MAX_SINGLE_LIMBS` and fall back to an engine
+  needing no oversized scratch, rather than indexing past the buffer.
+
+**Why not the alternatives.** *Bound `dispatch` itself*: impossible, there is no
+type parameter to bound. *Give every caller a scratch argument*: the two
+`N`-less callers have runtime lengths no `Limbs<N>` expresses, so they would
+need a build-max buffer anyway — the change would be pure churn for them.
+*Rely on `exact-scratch-nightly`*: that branch already does the ideal thing (a
+blanket `impl<const N> ComputeLimbs for Limbs<N>` via `generic_const_exprs`),
+but nightly is never a requirement here, so it cannot be the answer on stable.
+
+**Feasibility, and the one thing to check first.** On stable, `exact-scratch`
+implements `ComputeLimbs` at an explicit width list — `1, 2, 3, 4, 6, 8, 12,
+16, 24, 32, 48, 64, 96, 128, 176, 192, 256, 512` — which covers every storage
+AND work width in use, `Int<512>` (D1232's `Wexp`) included. So
+`div_rem_mag_fixed<N>` can discharge the bound at every width the crate
+actually instantiates. **The check before committing to this: whether
+`Int<N>` is ever instantiated at an unlisted `N`.** If it is, that arm needs
+the bound made conditional or the width added to the list.
+
+**What this does NOT fix.** It closes the divide family only. The root cause —
+`MAX_WORK_N` scoped to storage while `Wexp`/`Wagm` are chosen independently —
+still reaches every other build-max consumer, `mul_karatsuba` (#87) included,
+and each needs the same treatment on its own terms. A `ComputeLimbs`-sized
+`dispatch` narrows the blast radius; it does not remove the class. Removing the
+class means no build-max constant sizing a buffer whose operand length is
+chosen by a work width — which on stable is a per-consumer migration, not one
+change.
+
+**Cheapest interim, independent of the above.** Both hazards become fail-closed
+with a length check at the door: in `dispatch`, compare
+`effective_limbs(num) + 2` against `MAX_SINGLE_LIMBS` before selecting
+`KnuthU128Limb`; in `mul_karatsuba`, promote the existing `debug_assert!` to a
+real `if` that falls back to schoolbook. The `mul_karatsuba` one is two lines,
+carries no design debt, and is worth landing separately from the redesign.
+
 ## Const generics — the BigRule: pass the level's OWN, never any other
 
 A recurring pollution: a policy or function that **invents a const generic**
