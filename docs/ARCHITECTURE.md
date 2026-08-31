@@ -344,6 +344,70 @@ exactly: that is the cross-tier size pollution the Constitution (rule 6)
 forbids, and it is a defect to be migrated to `Limbs::<N>::single_u64()` /
 `double_buffered_u64()` / `quad_buffered_u64()` / `single_u128()`.
 
+### The build-max divide bound — when the slice engines' blanket is reachable
+
+The width-erased slice engines above are the one sanctioned build-max scratch,
+but "no `N` to size against" is not the same as "unbounded". Their buffer has a
+reachable limit, and crossing it is what produced #86 (`asinh` panicking at
+D924/D1232).
+
+> **Exposed** ⟺ effective dividend limbs ≥ `MAX_SINGLE_LIMBS`, **and** the
+> divisor is even with ≥ 24 limbs, **and** `num_m >= 2 * den_n`.
+
+`MAX_SINGLE_LIMBS = 4 * MAX_WORK_N + 2`: **258** (xx-wide), **130** (x-wide),
+**66** (wide), **10** (narrow default).
+
+Stating it as a rule rather than a list of call sites buys three things:
+
+- **It is checkable against a new call site without re-deriving anything.** The
+  three conjuncts are exactly when `int::policy::div_rem::select_for_limbs`
+  returns `Algorithm::KnuthU128Limb` — the only arm reaching a build-max buffer
+  (`div_knuth_u128_limb`'s `[0u64; MAX_SINGLE_LIMBS]`). `div_knuth` has no such
+  array.
+- **It explains why the failure panics rather than corrupting.** The bound is
+  *value*-derived, not type-derived: `div_knuth_u128_limb_into` strips leading
+  zeros to `top64`, then writes `u64buf[top64] = carry` — a real bounds-checked
+  index. A slice wide by *type* but small by *value* is fine.
+- **It shows the single-limb-divisor cases are unreachable by routing, not by
+  luck.** A one-limb divisor returns `Algorithm::Rem` before Knuth is ever
+  considered, so `/ lit(2)`, `/ lit(M)`, `/ lit(2j+1)` and `/ j` cannot reach
+  the blanket at any width.
+
+**The `Int<512>` knife-edge.** `exp_fixed_tagged` instantiates
+`expm1_fixed_tagged` at `C::Wexp`, which is `Int<512>` at D1232. Its one
+multi-limb-divisor divide is `round_div_pow10(prod, w)`, where `prod ~ 10^(2w)`
+is about 131 limbs against a 66-limb `10^w`. The u128 arm needs
+`num_m >= 2 * den_n = 132`. **It misses by one limb.** Two independent reasons
+keep it safe — that, and routing through the guarded `rescale` rather than the
+raw operator — but a one-limb margin is not a safety property; it is a
+coincidence that survives until `w` shifts the rounding of `limbs(10^(2w))` up
+by one. And 131 sits only 65 under the **`wide`** blanket's 66: safe at
+xx-wide, marginal in a narrower `MAX_WORK_N` build.
+
+**The root cause, once.** `MAX_WORK_N` is scoped to **storage**-derived widths,
+while `Wexp` and `Wagm` are chosen independently of it — D1232 pairs `Int<64>`
+storage with `Int<512>` `Wexp` and `Int<256>` `Wagm`. Any blanket engine sized
+from `MAX_WORK_N` can therefore meet an operand it cannot hold, and no gate
+catches it because every gate pairs the wide flags, so the blanket path is
+never fed an over-long operand.
+
+**#87 is the same family on the multiply side, and is worse than #86 despite
+#86 being the one that broke.** `mul_karatsuba`'s build-max scratch fits the
+widest work integer with exactly zero margin (`KARATSUBA_MAX_WIDTH = 256`
+against `Wagm = Int<256>`), and its overflow guard is a `debug_assert!` that is
+compiled out of release — so it does not panic, it corrupts. The instance that
+failed loudly is the safer of the two.
+
+**The durable fix** is for the blanket engines to take their scratch from
+`ComputeLimbs`, as `div_rem_exact` already does — the shape `bracket_div` uses
+(matcher verdict via `select_for_limbs`, then the engine's `_into` door with
+`ComputeLimbs` scratch, checking `num.len() + 2` and returning `None` on a
+shortfall) generalised to `dispatch` itself. That removes the hazard rather
+than documenting it, and means no future caller needs a reachability audit.
+
+*Scope: audited at `dfc4302f`. `adjust_alternating_bracket`, added since, was
+verified separately at the feature tip. Not a tip-wide sweep.*
+
 ## Const generics — the BigRule: pass the level's OWN, never any other
 
 A recurring pollution: a policy or function that **invents a const generic**
