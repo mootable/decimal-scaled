@@ -128,6 +128,9 @@ pub(crate) fn adjust_near_zero<St: BigInt>(result: St, raw: St, mode: RoundingMo
 }
 
 #[cfg(test)]
+mod tests;
+
+#[cfg(test)]
 mod candidate_agreement_tests {
     //! Cross-candidate smoke agreement. NOT a correctness gate — the golden
     //! suite is that, once a candidate is wired and the strict wrapper exists.
