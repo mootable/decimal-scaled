@@ -1213,17 +1213,17 @@ use crate::support::rounding::RoundingMode;
     /// kernels at every argument it can see, so a mis-estimate costs speed and
     /// never accuracy. It is derived from `w` alone; no argument or cell
     /// appears in it.
-    fn direct_series_pays<S: BigInt>(v_w: S, w: u32) -> bool {
-        let mag = abs::<S>(v_w);
-        if mag == zero::<S>() {
+    fn direct_series_pays<S: BigInt>(working_value: S, working_scale: u32) -> bool {
+        let magnitude = abs::<S>(working_value);
+        if magnitude == zero::<S>() {
             return false;
         }
         // `digits <= floor(bl·log10 2) + 1`, at most one high — an over-estimate
-        // shrinks `d` and so only ever withholds the direct path.
-        let d_digits = ((bit_length::<S>(mag) as u64 * 30_103) / 100_000) as u32 + 1;
-        let d = (w + 1).saturating_sub(d_digits);
-        let n = squaring_levels(w) as u64;
-        n.saturating_mul(d as u64) >= w as u64
+        // shrinks the exponent and so only ever withholds the direct path.
+        let digit_count = ((bit_length::<S>(magnitude) as u64 * 30_103) / 100_000) as u32 + 1;
+        let decimal_exponent = (working_scale + 1).saturating_sub(digit_count);
+        let squarings = squaring_levels(working_scale) as u64;
+        squarings.saturating_mul(decimal_exponent as u64) >= working_scale as u64
     }
 
     /// `e^v` at working scale `w`, together with the side its neglected tail
@@ -1243,11 +1243,16 @@ use crate::support::rounding::RoundingMode;
     /// only when the accumulated error is provably zero and the series
     /// vanished rather than hit the cap). Elsewhere the value is
     /// `try_exp_fixed`'s, bit-identical to before, and the tag is `None`.
-    pub(crate) fn exp_fixed_tagged<S: BigInt>(v_w: S, w: u32) -> (S, Option<TailSign>)
+    pub(crate) fn exp_fixed_tagged<S: BigInt>(
+        working_value: S,
+        working_scale: u32,
+    ) -> (S, Option<TailSign>)
     where
         S::Scratch: ComputeLimbs,
     {
-        exp_fixed_tagged_with::<S>(v_w, w, || exp_fixed::<S>(v_w, w))
+        exp_fixed_tagged_with::<S>(working_value, working_scale, || {
+            exp_fixed::<S>(working_value, working_scale)
+        })
     }
 
     /// [`exp_fixed_tagged`] over a caller-supplied untagged kernel — the tier
@@ -1255,16 +1260,16 @@ use crate::support::rounding::RoundingMode;
     /// a wider work integer, so the fallback must stay THEIRS rather than
     /// being re-derived here. Only the gated direct-series branch is shared.
     pub(crate) fn exp_fixed_tagged_with<S: BigInt>(
-        v_w: S,
-        w: u32,
+        working_value: S,
+        working_scale: u32,
         fallback: impl FnOnce() -> S,
     ) -> (S, Option<TailSign>)
     where
         S::Scratch: ComputeLimbs,
     {
-        if direct_series_pays::<S>(v_w, w) {
-            let (m, tail) = expm1_fixed_tagged::<S>(v_w, w);
-            (one::<S>(w) + m, tail)
+        if direct_series_pays::<S>(working_value, working_scale) {
+            let (expm1_value, tail) = expm1_fixed_tagged::<S>(working_value, working_scale);
+            (one::<S>(working_scale) + expm1_value, tail)
         } else {
             (fallback(), None)
         }
