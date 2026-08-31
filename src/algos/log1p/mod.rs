@@ -46,49 +46,38 @@ pub(crate) mod log1p_with_ln;
 use crate::int::types::traits::BigInt;
 use crate::support::rounding::RoundingMode;
 
-/// Directed-rounding post-adjust for the sub-resolution band near
-/// `t = 0` — the direct analogue of
-/// [`wide_trig_core::adjust_ln_near_one`], read at `log1p`'s own
-/// argument so the gap `δ` IS `raw` and no subtraction is needed.
+/// Directed-rounding post-adjust for the sub-resolution band near `t = 0`
+/// — the `log1p` face of
+/// [`wide_trig_core::adjust_log_near_zero`], which carries the full
+/// analysis. `log1p`'s linear term IS its own argument, so the gap `δ`
+/// is `raw` and no subtraction is needed; `one` is supplied only because
+/// the parabola term is `Q = raw²/(2·10^SCALE)`.
 ///
-/// Concavity gives `log1p(t) < t` STRICTLY for every `t ≠ 0`, and
-/// `ln(1 + t)` is transcendental for algebraic `1 + t ≠ 1`, so the value
-/// never lands exactly on a storage grid line. For a tiny `t` the
-/// deficit `t − log1p(t) ≈ t²/2` can sit far below any REACHABLE working
-/// scale (`t = 10^−SCALE` leaves it at ~`10^−2·SCALE`, past the Ziv
-/// precision horizon at the wide tiers), so the kernel rounds to exactly
-/// the linear term `t` and a downward mode then keeps `t` though the
-/// true value is strictly below it.
+/// `log1p` shares BOTH of that adjust's grid points, not just the first.
+/// The tangent case (`result == raw`) is the original one: `log1p(t) < t`
+/// strictly, so a downward-directed result that landed on `t` is above
+/// the true value. The parabola case is the same `δ² ≡ 0 (mod 2·10^SCALE)`
+/// family `ln` hits near `x = 1` — read at `t` rather than at `x − 1`, it
+/// is the identical condition, the quadratic is an exact whole number of
+/// ULPs, the value steps to a DIFFERENT grid point, and the tangent test
+/// no-ops there. So `Ceiling` for `t > 0` was wrong in exactly the way
+/// `ln`'s was, and is corrected by the same bracket.
 ///
-/// Because `log1p(t) < t`, a CORRECT downward result can never equal
-/// `t`, so `result == raw` is unambiguously the sub-resolution
-/// overshoot — step down one LSB. `log1p(0) = 0` is exact and excluded;
-/// nearest modes (the fraction is `1⁻`, so they round to `t` anyway) and
-/// `Ceiling` (`t` IS the correct ceiling) are already right. `Floor`
-/// steps down for both signs; `Trunc` (toward zero) steps down only for
-/// `t > 0`, since for `t < 0` truncation moves UP and `t` is then the
-/// correct answer.
-///
-/// A no-op unless the result is exactly `raw`, so every cell whose
-/// deciding digit the walker actually reaches passes through untouched.
-///
-/// [`wide_trig_core::adjust_ln_near_one`]: crate::algos::support::wide_trig_core::adjust_ln_near_one
+/// [`wide_trig_core::adjust_log_near_zero`]: crate::algos::support::wide_trig_core::adjust_log_near_zero
 #[inline]
-pub(crate) fn adjust_near_zero<St: BigInt>(result: St, raw: St, mode: RoundingMode) -> St {
+pub(crate) fn adjust_near_zero<St: BigInt, S: BigInt, const SCALE: u32>(
+    result: St,
+    raw: St,
+    mode: RoundingMode,
+) -> St
+where
+    S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
     if crate::support::rounding::is_nearest_mode(mode) {
         return result;
     }
-    if raw == <St as BigInt>::ZERO {
-        return result; // log1p(0) = 0 is exact
-    }
-    if result != raw {
-        return result; // only the sub-resolution linear-term overshoot
-    }
-    match mode {
-        RoundingMode::Floor => result - <St as BigInt>::ONE,
-        RoundingMode::Trunc if raw > <St as BigInt>::ZERO => result - <St as BigInt>::ONE,
-        _ => result,
-    }
+    let one = crate::consts::pow10::dispatch::<St>(SCALE);
+    crate::algos::support::wide_trig_core::adjust_log_near_zero::<St, S>(result, raw, one, mode)
 }
 
 /// Panics unless `t > -1`, i.e. unless the raw storage value exceeds
