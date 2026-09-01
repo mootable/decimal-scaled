@@ -3,12 +3,14 @@
 
 //! Baked Newton-reciprocal table for the `/10^scale` rescale.
 //!
-//! `r(s) = floor(2^(64*k) / 10^s)`, `k = even(width + s/19 + 3)`, stored
-//! little-endian u64 at the widest working width (96 u64 limbs = Int<96>,
-//! the AGM working width). A narrower `w`-limb tier reads the HIGH
-//! `k_w + 1` limbs: `r_w(s) = r_96(s) >> 64*(96 - w)` (an exact prefix —
-//! the reciprocal of `10^s` is one number, truncated to fewer limbs at
-//! narrower widths), so all tiers SHARE one per-scale reciprocal.
+//! `r(s) = floor(2^(64*k) / 10^s)`, `k = even(width_limbs + s/19 + 3)`,
+//! stored little-endian u64 at the widest working width (132 u64 limbs
+//! = Int<132>, the split D1232 Tang working width). A narrower `w`-limb
+//! tier reads the HIGH `k_w + 1` limbs: `r_w(s) = r_132(s) >> 64*(132 -
+//! w)` (an exact prefix — the reciprocal of `10^s` is one number,
+//! truncated to fewer limbs at narrower widths), so all tiers SHARE one
+//! per-scale reciprocal. The prefix identity holds for an EVEN `w` only;
+//! see the guard in [`newton_recip_le`].
 //!
 //! EXACT BY CONSTRUCTION — no oracle is involved, and none is needed.
 //! Each value is `(1 << (64*k)) // (10**s)`: an exact big-integer floor
@@ -23,9 +25,10 @@
 //! runtime cache); size-local consumption via the width slice. GENERATED
 //! by `scripts/gen_newton_recip_table.py` — do not edit by hand.
 
-/// Widest baked working width, in u64 limbs (Int<96> = the AGM width).
+/// Widest baked working width, in u64 limbs (Int<132> = the split D1232
+/// Tang working width).
 #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
-pub(crate) const NEWTON_RECIP_MAX_W: usize = 132;
+pub(crate) const NEWTON_RECIP_MAX_WIDTH_LIMBS: usize = 132;
 /// Highest baked scale (inclusive).
 #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
 pub(crate) const NEWTON_RECIP_MAX_SCALE: u32 = 1850;
@@ -1888,10 +1891,11 @@ static NEWTON_RECIP: [&[u64]; 1851] = [
 
 /// `floor(2^(64*k) / 10^scale)` little-endian for a `width_limbs`-limb
 /// working integer (`k = even(width_limbs + scale/19 + 3)`), or `None`
-/// when the request is not served: outside the baked range
-/// (`scale > MAX_SCALE` / `width > MAX_W`), or an ODD `width_limbs`
-/// (see the guard below). The caller then falls back to the runtime
-/// reciprocal / MgChain.
+/// when the request is not served: outside the baked range (`scale >
+/// NEWTON_RECIP_MAX_SCALE` / `width_limbs >
+/// NEWTON_RECIP_MAX_WIDTH_LIMBS`), or an ODD `width_limbs` (see the
+/// guard below). The caller then falls back to the runtime reciprocal /
+/// MgChain.
 #[inline]
 pub(crate) fn newton_recip_le(scale: u32, width_limbs: usize) -> Option<&'static [u64]> {
     // ODD WIDTHS ARE NOT SERVED: the baked row is a valid prefix only at
@@ -1918,10 +1922,16 @@ pub(crate) fn newton_recip_le(scale: u32, width_limbs: usize) -> Option<&'static
     // caller falls back to the runtime reciprocal / MgChain.
     #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
     {
-        if scale <= NEWTON_RECIP_MAX_SCALE && width_limbs <= NEWTON_RECIP_MAX_W {
-            // High `k_w + 1` limbs of the width-96 reciprocal (drop the low
-            // `96 - width_limbs`): r_w = r_96 >> 64*(96 - width_limbs).
-            return Some(&NEWTON_RECIP[scale as usize][NEWTON_RECIP_MAX_W - width_limbs..]);
+        if scale <= NEWTON_RECIP_MAX_SCALE
+            && width_limbs <= NEWTON_RECIP_MAX_WIDTH_LIMBS
+        {
+            // High `k_w + 1` limbs of the baked width-132 reciprocal (drop
+            // the low `132 - width_limbs`):
+            // `r_w = r_132 >> 64*(132 - width_limbs)`.
+            return Some(
+                &NEWTON_RECIP[scale as usize]
+                    [NEWTON_RECIP_MAX_WIDTH_LIMBS - width_limbs..],
+            );
         }
     }
     let _ = (scale, width_limbs);

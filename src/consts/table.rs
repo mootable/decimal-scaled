@@ -67,8 +67,8 @@ const fn cb_flat_len(golden: &[u64], lo: u32, hi: u32) -> usize {
         i += 1;
     }
     let mut total = 0usize;
-    let mut s = hi + 1;
-    while s > lo {
+    let mut scale = hi + 1;
+    while scale > lo {
         let mut rem: u64 = 0;
         let mut j = blen;
         while j > 0 {
@@ -81,7 +81,7 @@ const fn cb_flat_len(golden: &[u64], lo: u32, hi: u32) -> usize {
             blen -= 1;
         }
         total += blen;
-        s -= 1;
+        scale -= 1;
     }
     total
 }
@@ -104,9 +104,9 @@ const fn cb_build<const F: usize, const N: usize>(
         buf[i] = golden[i];
         i += 1;
     }
-    let mut s = hi + 1;
+    let mut scale = hi + 1;
     let mut cursor = 0usize;
-    while s > lo {
+    while scale > lo {
         let mut rem: u64 = 0;
         let mut j = blen;
         while j > 0 {
@@ -118,7 +118,7 @@ const fn cb_build<const F: usize, const N: usize>(
         while blen > 1 && buf[blen - 1] == 0 {
             blen -= 1;
         }
-        let idx = (s - 1 - lo) as usize;
+        let idx = (scale - 1 - lo) as usize;
         b.off[idx] = cursor as u32;
         b.len[idx] = blen as u16;
         b.bit[idx] = if rem >= 5 { 1 } else { 0 };
@@ -128,7 +128,7 @@ const fn cb_build<const F: usize, const N: usize>(
             k += 1;
         }
         cursor += blen;
-        s -= 1;
+        scale -= 1;
     }
     b
 }
@@ -1354,14 +1354,18 @@ pub(crate) fn pi_by_scale<W: BigInt>(scale: u32, mode: RoundingMode) -> W {
     round_entry::<W>(limbs, round_up, mode)
 }
 
-/// `pi` at a RUNTIME working scale `w`, correctly rounded
+/// `pi` at a RUNTIME `working_scale`, correctly rounded
 /// under `mode`. **Rare fallback** — the Ziv-escalation path
-/// (`w != SCALE + GUARD`) where the const scale is not available.
-/// Does NOT const-fold; every avoidable call is a const-fold
-/// miss. Prefer [`pi_by_scale`] when a const SCALE is in hand.
+/// (`working_scale != SCALE + GUARD`) where the const scale is
+/// not available. Does NOT const-fold; every avoidable call is a
+/// const-fold miss. Prefer [`pi_by_scale`] when a const SCALE
+/// is in hand.
 #[inline]
-pub(crate) fn pi_by_working_scale<W: BigInt>(w: u32, mode: RoundingMode) -> W {
-    let (limbs, round_up) = pi_entry(w);
+pub(crate) fn pi_by_working_scale<W: BigInt>(
+    working_scale: u32,
+    mode: RoundingMode,
+) -> W {
+    let (limbs, round_up) = pi_entry(working_scale);
     round_entry::<W>(limbs, round_up, mode)
 }
 
@@ -1395,14 +1399,18 @@ pub(crate) fn tau_by_scale<W: BigInt>(scale: u32, mode: RoundingMode) -> W {
     round_entry::<W>(limbs, round_up, mode)
 }
 
-/// `tau` at a RUNTIME working scale `w`, correctly rounded
+/// `tau` at a RUNTIME `working_scale`, correctly rounded
 /// under `mode`. **Rare fallback** — the Ziv-escalation path
-/// (`w != SCALE + GUARD`) where the const scale is not available.
-/// Does NOT const-fold; every avoidable call is a const-fold
-/// miss. Prefer [`tau_by_scale`] when a const SCALE is in hand.
+/// (`working_scale != SCALE + GUARD`) where the const scale is
+/// not available. Does NOT const-fold; every avoidable call is a
+/// const-fold miss. Prefer [`tau_by_scale`] when a const SCALE
+/// is in hand.
 #[inline]
-pub(crate) fn tau_by_working_scale<W: BigInt>(w: u32, mode: RoundingMode) -> W {
-    let (limbs, round_up) = tau_entry(w);
+pub(crate) fn tau_by_working_scale<W: BigInt>(
+    working_scale: u32,
+    mode: RoundingMode,
+) -> W {
+    let (limbs, round_up) = tau_entry(working_scale);
     round_entry::<W>(limbs, round_up, mode)
 }
 
@@ -1436,14 +1444,18 @@ pub(crate) fn half_pi_by_scale<W: BigInt>(scale: u32, mode: RoundingMode) -> W {
     round_entry::<W>(limbs, round_up, mode)
 }
 
-/// `half_pi` at a RUNTIME working scale `w`, correctly rounded
+/// `half_pi` at a RUNTIME `working_scale`, correctly rounded
 /// under `mode`. **Rare fallback** — the Ziv-escalation path
-/// (`w != SCALE + GUARD`) where the const scale is not available.
-/// Does NOT const-fold; every avoidable call is a const-fold
-/// miss. Prefer [`half_pi_by_scale`] when a const SCALE is in hand.
+/// (`working_scale != SCALE + GUARD`) where the const scale is
+/// not available. Does NOT const-fold; every avoidable call is a
+/// const-fold miss. Prefer [`half_pi_by_scale`] when a const SCALE
+/// is in hand.
 #[inline]
-pub(crate) fn half_pi_by_working_scale<W: BigInt>(w: u32, mode: RoundingMode) -> W {
-    let (limbs, round_up) = half_pi_entry(w);
+pub(crate) fn half_pi_by_working_scale<W: BigInt>(
+    working_scale: u32,
+    mode: RoundingMode,
+) -> W {
+    let (limbs, round_up) = half_pi_entry(working_scale);
     round_entry::<W>(limbs, round_up, mode)
 }
 
@@ -1477,14 +1489,18 @@ pub(crate) fn quarter_pi_by_scale<W: BigInt>(scale: u32, mode: RoundingMode) -> 
     round_entry::<W>(limbs, round_up, mode)
 }
 
-/// `quarter_pi` at a RUNTIME working scale `w`, correctly rounded
+/// `quarter_pi` at a RUNTIME `working_scale`, correctly rounded
 /// under `mode`. **Rare fallback** — the Ziv-escalation path
-/// (`w != SCALE + GUARD`) where the const scale is not available.
-/// Does NOT const-fold; every avoidable call is a const-fold
-/// miss. Prefer [`quarter_pi_by_scale`] when a const SCALE is in hand.
+/// (`working_scale != SCALE + GUARD`) where the const scale is
+/// not available. Does NOT const-fold; every avoidable call is a
+/// const-fold miss. Prefer [`quarter_pi_by_scale`] when a const SCALE
+/// is in hand.
 #[inline]
-pub(crate) fn quarter_pi_by_working_scale<W: BigInt>(w: u32, mode: RoundingMode) -> W {
-    let (limbs, round_up) = quarter_pi_entry(w);
+pub(crate) fn quarter_pi_by_working_scale<W: BigInt>(
+    working_scale: u32,
+    mode: RoundingMode,
+) -> W {
+    let (limbs, round_up) = quarter_pi_entry(working_scale);
     round_entry::<W>(limbs, round_up, mode)
 }
 
@@ -1518,14 +1534,18 @@ pub(crate) fn e_by_scale<W: BigInt>(scale: u32, mode: RoundingMode) -> W {
     round_entry::<W>(limbs, round_up, mode)
 }
 
-/// `e` at a RUNTIME working scale `w`, correctly rounded
+/// `e` at a RUNTIME `working_scale`, correctly rounded
 /// under `mode`. **Rare fallback** — the Ziv-escalation path
-/// (`w != SCALE + GUARD`) where the const scale is not available.
-/// Does NOT const-fold; every avoidable call is a const-fold
-/// miss. Prefer [`e_by_scale`] when a const SCALE is in hand.
+/// (`working_scale != SCALE + GUARD`) where the const scale is
+/// not available. Does NOT const-fold; every avoidable call is a
+/// const-fold miss. Prefer [`e_by_scale`] when a const SCALE
+/// is in hand.
 #[inline]
-pub(crate) fn e_by_working_scale<W: BigInt>(w: u32, mode: RoundingMode) -> W {
-    let (limbs, round_up) = e_entry(w);
+pub(crate) fn e_by_working_scale<W: BigInt>(
+    working_scale: u32,
+    mode: RoundingMode,
+) -> W {
+    let (limbs, round_up) = e_entry(working_scale);
     round_entry::<W>(limbs, round_up, mode)
 }
 
@@ -1559,14 +1579,18 @@ pub(crate) fn golden_by_scale<W: BigInt>(scale: u32, mode: RoundingMode) -> W {
     round_entry::<W>(limbs, round_up, mode)
 }
 
-/// `golden` at a RUNTIME working scale `w`, correctly rounded
+/// `golden` at a RUNTIME `working_scale`, correctly rounded
 /// under `mode`. **Rare fallback** — the Ziv-escalation path
-/// (`w != SCALE + GUARD`) where the const scale is not available.
-/// Does NOT const-fold; every avoidable call is a const-fold
-/// miss. Prefer [`golden_by_scale`] when a const SCALE is in hand.
+/// (`working_scale != SCALE + GUARD`) where the const scale is
+/// not available. Does NOT const-fold; every avoidable call is a
+/// const-fold miss. Prefer [`golden_by_scale`] when a const SCALE
+/// is in hand.
 #[inline]
-pub(crate) fn golden_by_working_scale<W: BigInt>(w: u32, mode: RoundingMode) -> W {
-    let (limbs, round_up) = golden_entry(w);
+pub(crate) fn golden_by_working_scale<W: BigInt>(
+    working_scale: u32,
+    mode: RoundingMode,
+) -> W {
+    let (limbs, round_up) = golden_entry(working_scale);
     round_entry::<W>(limbs, round_up, mode)
 }
 
@@ -1600,14 +1624,18 @@ pub(crate) fn ln2_by_scale<W: BigInt>(scale: u32, mode: RoundingMode) -> W {
     round_entry::<W>(limbs, round_up, mode)
 }
 
-/// `ln2` at a RUNTIME working scale `w`, correctly rounded
+/// `ln2` at a RUNTIME `working_scale`, correctly rounded
 /// under `mode`. **Rare fallback** — the Ziv-escalation path
-/// (`w != SCALE + GUARD`) where the const scale is not available.
-/// Does NOT const-fold; every avoidable call is a const-fold
-/// miss. Prefer [`ln2_by_scale`] when a const SCALE is in hand.
+/// (`working_scale != SCALE + GUARD`) where the const scale is
+/// not available. Does NOT const-fold; every avoidable call is a
+/// const-fold miss. Prefer [`ln2_by_scale`] when a const SCALE
+/// is in hand.
 #[inline]
-pub(crate) fn ln2_by_working_scale<W: BigInt>(w: u32, mode: RoundingMode) -> W {
-    let (limbs, round_up) = ln2_entry(w);
+pub(crate) fn ln2_by_working_scale<W: BigInt>(
+    working_scale: u32,
+    mode: RoundingMode,
+) -> W {
+    let (limbs, round_up) = ln2_entry(working_scale);
     round_entry::<W>(limbs, round_up, mode)
 }
 
@@ -1627,14 +1655,18 @@ pub(crate) fn ln10_by_scale<W: BigInt>(scale: u32, mode: RoundingMode) -> W {
     round_entry::<W>(limbs, round_up, mode)
 }
 
-/// `ln10` at a RUNTIME working scale `w`, correctly rounded
+/// `ln10` at a RUNTIME `working_scale`, correctly rounded
 /// under `mode`. **Rare fallback** — the Ziv-escalation path
-/// (`w != SCALE + GUARD`) where the const scale is not available.
-/// Does NOT const-fold; every avoidable call is a const-fold
-/// miss. Prefer [`ln10_by_scale`] when a const SCALE is in hand.
+/// (`working_scale != SCALE + GUARD`) where the const scale is
+/// not available. Does NOT const-fold; every avoidable call is a
+/// const-fold miss. Prefer [`ln10_by_scale`] when a const SCALE
+/// is in hand.
 #[inline]
-pub(crate) fn ln10_by_working_scale<W: BigInt>(w: u32, mode: RoundingMode) -> W {
-    let (limbs, round_up) = ln10_entry(w);
+pub(crate) fn ln10_by_working_scale<W: BigInt>(
+    working_scale: u32,
+    mode: RoundingMode,
+) -> W {
+    let (limbs, round_up) = ln10_entry(working_scale);
     round_entry::<W>(limbs, round_up, mode)
 }
 
@@ -1654,14 +1686,18 @@ pub(crate) fn log10_2_by_scale<W: BigInt>(scale: u32, mode: RoundingMode) -> W {
     round_entry::<W>(limbs, round_up, mode)
 }
 
-/// `log10_2` at a RUNTIME working scale `w`, correctly rounded
+/// `log10_2` at a RUNTIME `working_scale`, correctly rounded
 /// under `mode`. **Rare fallback** — the Ziv-escalation path
-/// (`w != SCALE + GUARD`) where the const scale is not available.
-/// Does NOT const-fold; every avoidable call is a const-fold
-/// miss. Prefer [`log10_2_by_scale`] when a const SCALE is in hand.
+/// (`working_scale != SCALE + GUARD`) where the const scale is
+/// not available. Does NOT const-fold; every avoidable call is a
+/// const-fold miss. Prefer [`log10_2_by_scale`] when a const SCALE
+/// is in hand.
 #[inline]
-pub(crate) fn log10_2_by_working_scale<W: BigInt>(w: u32, mode: RoundingMode) -> W {
-    let (limbs, round_up) = log10_2_entry(w);
+pub(crate) fn log10_2_by_working_scale<W: BigInt>(
+    working_scale: u32,
+    mode: RoundingMode,
+) -> W {
+    let (limbs, round_up) = log10_2_entry(working_scale);
     round_entry::<W>(limbs, round_up, mode)
 }
 
@@ -1695,14 +1731,18 @@ pub(crate) fn deg_per_rad_by_scale<W: BigInt>(scale: u32, mode: RoundingMode) ->
     round_entry::<W>(limbs, round_up, mode)
 }
 
-/// `deg_per_rad` at a RUNTIME working scale `w`, correctly rounded
+/// `deg_per_rad` at a RUNTIME `working_scale`, correctly rounded
 /// under `mode`. **Rare fallback** — the Ziv-escalation path
-/// (`w != SCALE + GUARD`) where the const scale is not available.
-/// Does NOT const-fold; every avoidable call is a const-fold
-/// miss. Prefer [`deg_per_rad_by_scale`] when a const SCALE is in hand.
+/// (`working_scale != SCALE + GUARD`) where the const scale is
+/// not available. Does NOT const-fold; every avoidable call is a
+/// const-fold miss. Prefer [`deg_per_rad_by_scale`] when a const SCALE
+/// is in hand.
 #[inline]
-pub(crate) fn deg_per_rad_by_working_scale<W: BigInt>(w: u32, mode: RoundingMode) -> W {
-    let (limbs, round_up) = deg_per_rad_entry(w);
+pub(crate) fn deg_per_rad_by_working_scale<W: BigInt>(
+    working_scale: u32,
+    mode: RoundingMode,
+) -> W {
+    let (limbs, round_up) = deg_per_rad_entry(working_scale);
     round_entry::<W>(limbs, round_up, mode)
 }
 
@@ -1736,14 +1776,18 @@ pub(crate) fn rad_per_deg_by_scale<W: BigInt>(scale: u32, mode: RoundingMode) ->
     round_entry::<W>(limbs, round_up, mode)
 }
 
-/// `rad_per_deg` at a RUNTIME working scale `w`, correctly rounded
+/// `rad_per_deg` at a RUNTIME `working_scale`, correctly rounded
 /// under `mode`. **Rare fallback** — the Ziv-escalation path
-/// (`w != SCALE + GUARD`) where the const scale is not available.
-/// Does NOT const-fold; every avoidable call is a const-fold
-/// miss. Prefer [`rad_per_deg_by_scale`] when a const SCALE is in hand.
+/// (`working_scale != SCALE + GUARD`) where the const scale is
+/// not available. Does NOT const-fold; every avoidable call is a
+/// const-fold miss. Prefer [`rad_per_deg_by_scale`] when a const SCALE
+/// is in hand.
 #[inline]
-pub(crate) fn rad_per_deg_by_working_scale<W: BigInt>(w: u32, mode: RoundingMode) -> W {
-    let (limbs, round_up) = rad_per_deg_entry(w);
+pub(crate) fn rad_per_deg_by_working_scale<W: BigInt>(
+    working_scale: u32,
+    mode: RoundingMode,
+) -> W {
+    let (limbs, round_up) = rad_per_deg_entry(working_scale);
     round_entry::<W>(limbs, round_up, mode)
 }
 
@@ -2087,10 +2131,16 @@ mod tests {
     #[cfg(feature = "_wide-support")]
     #[test]
     fn by_scale_eq_by_working_scale() {
-        for s in [0u32, 1, 17, 18, 19, 30, 38, 86] {
-            for m in [HalfToEven, Trunc, Ceiling, Floor, HalfAwayFromZero, HalfTowardZero] {
-                assert_eq!(pi_by_scale::<Int<16>>(s, m), pi_by_working_scale::<Int<16>>(s, m));
-                assert_eq!(ln2_by_scale::<Int<16>>(s, m), ln2_by_working_scale::<Int<16>>(s, m));
+        for scale in [0u32, 1, 17, 18, 19, 30, 38, 86] {
+            for mode in [HalfToEven, Trunc, Ceiling, Floor, HalfAwayFromZero, HalfTowardZero] {
+                assert_eq!(
+                    pi_by_scale::<Int<16>>(scale, mode),
+                    pi_by_working_scale::<Int<16>>(scale, mode),
+                );
+                assert_eq!(
+                    ln2_by_scale::<Int<16>>(scale, mode),
+                    ln2_by_working_scale::<Int<16>>(scale, mode),
+                );
             }
         }
     }
@@ -2104,10 +2154,10 @@ mod tests {
     #[cfg(feature = "_wide-support")]
     #[test]
     fn value_is_width_independent() {
-        for s in [0u32, 5, 17, 18, 30, 38, 50] {
-            let a = pi_by_scale::<Int<16>>(s, HalfToEven);
-            let b = pi_by_scale::<Int<32>>(s, HalfToEven);
-            assert_eq!(a, b.resize_to::<Int<16>>());
+        for scale in [0u32, 5, 17, 18, 30, 38, 50] {
+            let narrow = pi_by_scale::<Int<16>>(scale, HalfToEven);
+            let wide = pi_by_scale::<Int<32>>(scale, HalfToEven);
+            assert_eq!(narrow, wide.resize_to::<Int<16>>());
         }
     }
 }

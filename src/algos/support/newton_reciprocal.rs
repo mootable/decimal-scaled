@@ -239,11 +239,13 @@ impl NewtonReciprocal {
         debug_assert!(k_u64 < MAX_R_U64, "num buffer too small");
 
         // r = floor(2^(64*k_u64) / 10^scale). FAST: read the baked reciprocal
-        // (`consts::newton_recip` — the high `k_u64+1` limbs of the width-96
+        // (`consts::newton_recip` — the high `k_u64+1` limbs of the width-132
         // per-scale reciprocal; bit-identical to the divide below, both exact
-        // integer floor division — `2^(64k)//10^s`). SLOW fallback (scale/width
-        // outside the baked range, or a non-wide build where the table is
-        // gated out → `None`): the one-shot Knuth divide.
+        // integer floor division — `2^(64k)//10^s`). That prefix identity holds
+        // at an EVEN `width_limbs` only, so `newton_recip_le` refuses an odd
+        // width. SLOW fallback (odd width, scale/width outside the baked range,
+        // or a non-wide build where the table is gated out → `None`): the
+        // one-shot Knuth divide.
         let mut r = [0u64; MAX_R_U64];
         if let Some(baked) = crate::consts::newton_recip_le(scale, width_limbs) {
             debug_assert_eq!(baked.len(), k_u64 + 1, "baked newton recip length");
@@ -871,8 +873,9 @@ mod tests {
     /// width and a scale sweep incl. the band edges.
     ///
     /// Gated to `xx-wide` (the test must not exceed production scope): this
-    /// sweep spans the FULL baked grid (`width_limbs` up to `NEWTON_RECIP_MAX_W`
-    /// = 132, `scale` up to `NEWTON_RECIP_MAX_SCALE` = 1850), so the independent
+    /// sweep spans the FULL baked grid (`width_limbs` up to
+    /// `NEWTON_RECIP_MAX_WIDTH_LIMBS` = 132, `scale` up to
+    /// `NEWTON_RECIP_MAX_SCALE` = 1850), so the independent
     /// recompute divides numerators of up to `width_limbs + pow_len + 1 ≈ 233`
     /// u64 limbs — wider than ANY value a narrower build can form. Only the
     /// xx-wide build's slice-divide scratch (`MAX_SINGLE_LIMBS = 4·MAX_WORK_N + 2`
