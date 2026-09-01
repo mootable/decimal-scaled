@@ -115,6 +115,26 @@ macro_rules! decl_decimal_full {
         $exp_tang_m:literal,
         $table_mode:ident
     ) => {
+        // Per-tier invariant, issue #78. The directed-Ziv "reach" of a tier is
+        // `W::BITS/8 - 8`, derived from its transcendental work integer, and
+        // `atan2`'s sign argument in `tiny_x_deep_directed_adjust` holds only
+        // while `TINY_X_DEEP_JMAX < reach - MAX_SCALE` at every tier. Both
+        // sides are independently tuned constants that do not mention each
+        // other: raising `TINY_X_DEEP_JMAX` (whose own doc calls 41 "wide
+        // headroom") opens it from one side, and narrowing a tier's `$Work` or
+        // widening its `$max_scale` opens it from the other.
+        //
+        // This is the only site where a tier's work integer and its MAX_SCALE
+        // are both in scope, which is why the check lives in the macro. It was
+        // measured to hold at all ten tiers, with margins from 43 (D462,
+        // 504 - 461) to 198 (D307, 504 - 306); D76 is 45 (120 - 75). Either
+        // change now breaks the build instead of silently making the `atan2`
+        // assertion reachable at a plateau boundary.
+        const _: () = assert!(
+            <$Work as $crate::int::types::traits::BigInt>::BITS / 8 - 8 > $max_scale,
+            "work integer too narrow for this tier's MAX_SCALE: the directed-Ziv \
+             reach (W::BITS/8 - 8) must exceed MAX_SCALE (issue #78)"
+        );
         $crate::macros::basics::decl_decimal_basics!(wide $Type, $Storage, $max_scale);
         $crate::macros::arithmetic::decl_decimal_arithmetic!(wide $Type, $Storage, $Wider);
         $crate::macros::display::decl_decimal_display!(wide $Type, $Unsigned);
