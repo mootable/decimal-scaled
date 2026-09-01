@@ -2808,6 +2808,17 @@ where
             // endgame and re-derive the same side from the same producer.
             // The blanket verdicts stay UNRESOLVED as before, so the
             // widening caller still retries those at the wider integer.
+            //
+            // The `q_grid` snap above assumes `rem0` is kernel noise. For a
+            // TAGGED probe that is false: the tag is only emitted with the
+            // accumulated error proven exactly zero, so `q0`/`rem0` are the
+            // exact partial sum and the snap discards a real residual. The
+            // tag then proves the tail's side of the PROBE's value while the
+            // code reads it as the side of the GRID line — which differ
+            // whenever `rem0 != 0` and `|tail| < rem0/div0`. Issue #98; the
+            // fix is to skip the snap for a tagged probe rather than to gate
+            // this arm. Recorded here because `proven` removes the wider
+            // retry, so this endgame's answer is final where it once was not.
             let (away, proven) = match tail0 {
                 Some(t) if q_grid != lit(0) => {
                     (Some((t == TailSign::Above) == !neg0), true)
