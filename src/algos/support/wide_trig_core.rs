@@ -3277,7 +3277,10 @@ where
 ///   goes the tail's way instead of standing still;
 /// * a NEAREST round whose residual is exactly half — not a tie after all,
 ///   so the neighbour on the tail's side wins outright and the mode's
-///   tie-break never runs.
+///   tie-break never runs. A tag-decided probe ends the walk there,
+///   `resolved` — the verdict is a proof, so the remaining ladder could
+///   only re-derive it (the same first-probe rule [`near_min_resolve_g`]'s
+///   nearest branch applies on the `exp` path, issue #95).
 ///
 /// Every other input keeps the previous path: a non-zero directed residual
 /// already dominates a sub-unit tail, and a nearest residual off the half
@@ -3326,7 +3329,18 @@ where
         // previous shape divided twice (once inside `round_to_storage_with`,
         // once for the remainder) plus a divide-by-two for `half` — measured
         // at >50% of a wide `sin(0)` call (the bbc trig-s0 cluster).
-        let mut nearest_narrow = |guard: u32| -> (St, S, S) {
+        // The third element reports whether the TAG decided this narrowing —
+        // a probe whose residual was exactly half with a kernel-proven tail
+        // side. That verdict is a PROOF (see `TailSign`: the value is the
+        // exact partial sum and the truth sits strictly on the tag's side of
+        // the boundary), so the caller returns it `resolved` outright instead
+        // of walking the ladder — the identical first-probe short-circuit
+        // `near_min_resolve_g`'s nearest branch applies on the `exp` path
+        // (issue #95): escalating could only re-derive the same side, and for
+        // the deep-tie families the deciding term outruns every reachable
+        // depth anyway, so the ladder previously ran to its cap only to hand
+        // back this same tag-decided base narrowing.
+        let mut nearest_narrow = |guard: u32| -> (St, S, bool) {
             let (v, tail) = recompute(guard);
             let neg = v < lit(0);
             let mag = if neg { -v } else { v };
@@ -3334,6 +3348,7 @@ where
             // Exact per-width Knuth scratch (the narrow build's blanket is sized
             // to its 2-limb storage; the walkers probe in `Int<24>`).
             let (q, rem) = crate::algos::exp::exp_generic::div_rem_exact(mag, divisor);
+            let mut tag_decided = false;
             let q_mag = if rem != lit(0) {
                 let comp = divisor - rem;
                 let ord = rem.cmp(&comp);
@@ -3345,6 +3360,7 @@ where
                     // decide a tie that is not there (`HalfToEven` holding a
                     // positive row down, `HalfTowardZero` a negative one).
                     Some(t) if ord == ::core::cmp::Ordering::Equal => {
+                        tag_decided = true;
                         if (t == TailSign::Above) == !neg {
                             q + lit(1)
                         } else {
@@ -3371,9 +3387,12 @@ where
             // boundary is an exact one-bit shift — not a divide.
             let half = divisor >> 1;
             let dist_half = if rem < half { half - rem } else { rem - half };
-            (narrowed, dist_half, divisor)
+            (narrowed, dist_half, tag_decided)
         };
-        let (lo, dist0, _divisor0) = nearest_narrow(base_guard);
+        let (lo, dist0, decided0) = nearest_narrow(base_guard);
+        if decided0 {
+            return (lo, true);
+        }
         // Ordinary input — residual clear of the half boundary by more than the
         // (generous) `divisor/1000` near-tie band — keep the single base
         // narrowing (bit-identical to the prior single-shot path). The escalate
@@ -3416,7 +3435,16 @@ where
             // cap-limited reading (e.g. a zero remainder that is only the
             // deciding term underflowing at the clamped working scale).
             let tainted = unclamped > max_guard;
-            let (hi, hi_dist, _) = nearest_narrow(next_guard);
+            let (hi, hi_dist, hi_decided) = nearest_narrow(next_guard);
+            // A tag-decided probe is a proof at WHATEVER depth it fired —
+            // clamping cannot taint it (the tag belongs to the probe that
+            // produced it, not to the canonical probe sequence), and no
+            // deeper or wider walk could re-derive anything but the same
+            // side. (Today's tagged callers never pass `force_confirm`; the
+            // proof would decide those walks identically if one ever did.)
+            if hi_decided {
+                return (hi, true);
+            }
             if force_confirm {
                 if hi == best {
                     return (best, !tainted);
@@ -3432,7 +3460,7 @@ where
         }
     }
 
-    let mut directed_narrow = |guard: u32| -> (S, S, S) {
+    let mut directed_narrow = |guard: u32| -> (S, S) {
         let w = target + guard;
         let (v, tail) = recompute(guard);
         let shift = w - target;
@@ -3483,10 +3511,10 @@ where
         } else {
             divisor - rem
         };
-        (signed, dist, divisor)
+        (signed, dist)
     };
 
-    let (mut lo, dist0, _divisor0) = directed_narrow(base_guard);
+    let (mut lo, dist0) = directed_narrow(base_guard);
 
     let band0 = band_of(base_guard);
     let near_grid = force_confirm || dist0 <= band0;
@@ -3560,7 +3588,7 @@ where
             // canonical probe sequence, so its conclusion is reported
             // UNRESOLVED for the two-width fall-up.
             let tainted = unclamped > max_guard;
-            let (hi, hi_dist, _hi_div) = directed_narrow(next_guard);
+            let (hi, hi_dist) = directed_narrow(next_guard);
             // A deciding digit is a genuine SIGNAL once its distance to the
             // grid line clears the ABSOLUTE kernel-noise floor — the same
             // rule the nearest branch applies to its half-boundary
@@ -3994,6 +4022,130 @@ mod tagged_half_walker_contract {
             assert_eq!(run(RoundingMode::Ceiling, tail), DOWN + 1);
             assert_eq!(run(RoundingMode::Floor, tail), DOWN);
             assert_eq!(run(RoundingMode::Trunc, tail), DOWN);
+        }
+    }
+
+}
+
+/// The expm1/log1p sibling walker's tagged-exact-half TERMINATION contract:
+/// the nearest branch of [`round_to_storage_directed_tagged_impl_g`] returns
+/// a tag-decided probe immediately and `resolved`, instead of walking the
+/// remaining ladder only to hand back — or let a noise-cleared deeper probe
+/// overrule — the narrowing the proof already fixed. The VALUE rule
+/// (`nearest_narrow`'s exact-half tag arm) predates this; these tests pin
+/// the termination onto this walker, the same rule the `exp` walker ships
+/// in [`near_min_resolve_g`] (issue #95).
+#[cfg(test)]
+mod tagged_half_sibling_walker_contract {
+    use super::*;
+    use crate::int::types::Int;
+    use crate::support::rounding::RoundingMode;
+    use core::cell::Cell;
+
+    type S = Int<6>;
+    type St = Int<2>;
+    const BASE_GUARD: u32 = 9;
+    /// Storage scale, `2·K` — the deep-tie shape (`x = -10^-K`).
+    const TARGET: u32 = 20;
+    const K: u32 = 10;
+
+    const NEAREST: [RoundingMode; 3] = [
+        RoundingMode::HalfToEven,
+        RoundingMode::HalfAwayFromZero,
+        RoundingMode::HalfTowardZero,
+    ];
+
+    /// A working value at guard `g` whose sub-storage residual is
+    /// `tenths`/10 of a storage ULP: `10^(TARGET+g) - 10^(g+K)` sits on the
+    /// grid, and the last summand puts the residual at the chosen depth.
+    fn probe_value(g: u32, tenths: i128) -> S {
+        crate::consts::pow10::dispatch::<S>(TARGET + g)
+            - crate::consts::pow10::dispatch::<S>(g + K)
+            + <S as BigInt>::from_i128(tenths) * crate::consts::pow10::dispatch::<S>(g - 1)
+    }
+
+    /// The truncated storage value `1 - 10^-K` at scale `TARGET` — the
+    /// correct nearest answer under a `Below` tag at an exact half.
+    const DOWN: i128 = 100_000_000_000_000_000_000 - 10_000_000_000;
+
+    /// A tag-decided exact half ends the walk at its own probe: one kernel
+    /// evaluation, not the ladder.
+    #[test]
+    fn tagged_half_probe_terminates_the_walk_at_that_probe() {
+        for mode in NEAREST {
+            let calls = Cell::new(0u32);
+            let r = round_to_storage_tail_signed_g::<St, S>(
+                BASE_GUARD,
+                TARGET,
+                mode,
+                St::MAX,
+                St::MIN,
+                |g| {
+                    calls.set(calls.get() + 1);
+                    (probe_value(g, 5), Some(TailSign::Below))
+                },
+            )
+            .as_i128();
+            assert_eq!(r, DOWN, "a Below tag at an exact half must round down under {mode:?}");
+            assert_eq!(
+                calls.get(),
+                1,
+                "a tag-decided exact half must end the walk at its own probe under {mode:?}"
+            );
+        }
+    }
+
+    /// The base probe is the exact partial sum with a proven `Below` tail; a
+    /// deeper probe hands back a residual clearing the noise floor on the
+    /// WRONG side (the shape kernel noise takes once a deeper evaluation
+    /// loses the exactness the tag certified). The tag is a proof, so the
+    /// walk must conclude from it and never consult the deeper reading.
+    #[test]
+    fn base_tag_outranks_a_deeper_floor_clearing_probe() {
+        for mode in NEAREST {
+            let r = round_to_storage_tail_signed_g::<St, S>(
+                BASE_GUARD,
+                TARGET,
+                mode,
+                St::MAX,
+                St::MIN,
+                |g| {
+                    if g == BASE_GUARD {
+                        (probe_value(g, 5), Some(TailSign::Below))
+                    } else {
+                        (probe_value(g, 6), None)
+                    }
+                },
+            )
+            .as_i128();
+            assert_eq!(
+                r, DOWN,
+                "the base probe's tag proof must outrank a deeper noisy probe under {mode:?}"
+            );
+        }
+    }
+
+    /// An UNTAGGED exact half keeps the previous path bit-identically: the
+    /// mode's own tie-break decides the base narrowing and the ladder still
+    /// runs (its cap returns that clean base). Guards the short-circuit
+    /// against firing without a tag.
+    #[test]
+    fn untagged_half_tie_keeps_the_tie_break() {
+        for (mode, expect) in [
+            (RoundingMode::HalfToEven, DOWN), // last kept digit 0 — even, stays
+            (RoundingMode::HalfAwayFromZero, DOWN + 1),
+            (RoundingMode::HalfTowardZero, DOWN),
+        ] {
+            let r = round_to_storage_tail_signed_g::<St, S>(
+                BASE_GUARD,
+                TARGET,
+                mode,
+                St::MAX,
+                St::MIN,
+                |g| (probe_value(g, 5), None),
+            )
+            .as_i128();
+            assert_eq!(r, expect, "the untagged tie-break must stand under {mode:?}");
         }
     }
 }
