@@ -12,14 +12,14 @@
 //! Two specialised arms, selected on `N` at compile time (the unused arm is
 //! dead-code-eliminated per monomorphisation):
 //!
-//! * **`N == 1` (D18):** the scaled numerator `a * 10^SCALE` fits `i128` (an
-//!   `i64` magnitude times `10^18 < 2^60`) and the divisor `b` is an `i64`
-//!   magnitude that fits `u64`. The rescale is therefore an `i128 / u64`
+//! * **`N == 1` (D18):** the scaled numerator `dividend * 10^SCALE` fits
+//!   `i128` (an `i64` magnitude times `10^18 < 2^60`) and the `divisor` is an
+//!   `i64` magnitude that fits `u64`. The rescale is therefore an `i128 / u64`
 //!   schoolbook divide -- two hardware `divq` via
 //!   [`crate::macros::arithmetic::i128_divrem_by_u64_with_mode`] -- not the
 //!   LLVM `__divti3` soft-call an `i128 / i128` (the `apply_rounding`
-//!   double-divmod) would lower to. `b`'s sign is folded into the numerator so
-//!   the directed-rounding tie-break sees the true quotient sign.
+//!   double-divmod) would lower to. The divisor's sign is folded into the
+//!   numerator so the directed-rounding tie-break sees the true quotient sign.
 //! * **`N == 2` (D38):** the divisor can be a full `i128` and the scaled
 //!   numerator can exceed `i128`, so the rescale delegates to the shared
 //!   hardware kernel
@@ -52,51 +52,53 @@ use crate::support::rounding::RoundingMode;
 
 /// Hardware-`i128` decimal divide kernel for narrow storage (`N <= 2`).
 ///
-/// Computes `(a * 10^SCALE) / b` rounded under `mode`. Panics on a zero
+/// Computes `(dividend * 10^SCALE) / divisor` rounded under `mode`. Panics on a zero
 /// divisor and on `i128` overflow of the quotient in BOTH debug and release
 /// per the decimal default-operator contract.
 #[inline]
 #[must_use]
 pub(crate) fn div_native<const N: usize, const SCALE: u32>(
-    a: Int<N>,
-    b: Int<N>,
+    dividend: Int<N>,
+    divisor: Int<N>,
     mode: RoundingMode,
 ) -> Int<N> {
-    if b == Int::<N>::ZERO {
+    if divisor == Int::<N>::ZERO {
         panic!("attempt to divide by zero");
     }
 
     if N == 1 {
-        // D18: numerator a * 10^SCALE fits i128 (i64 magnitude * 10^18 < 2^124),
-        // and the divisor b is an i64 magnitude that fits u64. The rescale
-        // divide is therefore an i128 / u64 schoolbook divide -- two hardware
-        // divq instructions via i128_divrem_by_u64_with_mode -- not the
-        // __divti3 soft-call an i128 / i128 (apply_rounding) would lower to.
-        let bi = b.as_i128();
-        // Fold b's sign into the numerator so the signed numerator passed to
-        // `i128_divrem_by_u64` carries the TRUE result sign (`sign(a) ^
-        // sign(b)`). The helper decides the directed-rounding tie-break from
+        // D18: numerator dividend * 10^SCALE fits i128 (i64 magnitude * 10^18
+        // < 2^124), and the divisor is an i64 magnitude that fits u64. The
+        // rescale divide is therefore an i128 / u64 schoolbook divide -- two
+        // hardware divq instructions via i128_divrem_by_u64_with_mode -- not
+        // the __divti3 soft-call an i128 / i128 (apply_rounding) would lower to.
+        let divisor_raw = divisor.as_i128();
+        // Fold the divisor's sign into the numerator so the signed numerator
+        // passed to `i128_divrem_by_u64` carries the TRUE result sign
+        // (`sign(dividend) ^ sign(divisor)`). The helper decides the
+        // directed-rounding tie-break from
         // the numerator sign (`result_positive = !n_neg`), so the divisor it
         // sees must be the positive magnitude AND the numerator must already
         // bear the quotient sign -- otherwise Floor / Ceiling round the wrong
         // way for a negative divisor.
-        let b_neg = bi < 0;
-        let n = a.as_i128() * crate::consts::pow10::dispatch_i128(SCALE);
-        let n = if b_neg { -n } else { n };
-        let b_mag: u64 = bi.unsigned_abs() as u64;
-        let result = crate::macros::arithmetic::i128_divrem_by_u64_with_mode(n, b_mag, mode);
+        let divisor_is_negative = divisor_raw < 0;
+        let numerator = dividend.as_i128() * crate::consts::pow10::dispatch_i128(SCALE);
+        let numerator = if divisor_is_negative { -numerator } else { numerator };
+        let divisor_mag: u64 = divisor_raw.unsigned_abs() as u64;
+        let quotient =
+            crate::macros::arithmetic::i128_divrem_by_u64_with_mode(numerator, divisor_mag, mode);
         assert!(
-            result >= i64::MIN as i128 && result <= i64::MAX as i128,
+            quotient >= i64::MIN as i128 && quotient <= i64::MAX as i128,
             "attempt to divide with overflow"
         );
-        return Int::<N>::from_i128(result);
+        return Int::<N>::from_i128(quotient);
     }
 
     // N == 2 (D38): the shared i128 / 256-bit kernel.
-    let ai = a.as_i128();
-    let bi = b.as_i128();
-    match div_pow10_div_with::<SCALE>(ai, bi, mode) {
-        Some(q) => Int::<N>::from_i128(q),
+    let dividend_raw = dividend.as_i128();
+    let divisor_raw = divisor.as_i128();
+    match div_pow10_div_with::<SCALE>(dividend_raw, divisor_raw, mode) {
+        Some(quotient) => Int::<N>::from_i128(quotient),
         None => panic!("attempt to divide with overflow"),
     }
 }

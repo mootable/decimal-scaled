@@ -4,13 +4,13 @@
 //! `mul_schoolbook` -- naive schoolbook decimal multiplication reference,
 //! generic over the storage width `N` only.
 //!
-//! Computes `a * b` for two same-`SCALE` decimals stored as `Int<N>`.
-//! The logical product is `(a / 10^SCALE) * (b / 10^SCALE)`, whose raw
-//! storage value is `a * b / 10^SCALE`.
+//! Computes `lhs * rhs` for two same-`SCALE` decimals stored as `Int<N>`.
+//! The logical product is `(lhs / 10^SCALE) * (rhs / 10^SCALE)`, whose raw
+//! storage value is `lhs * rhs / 10^SCALE`.
 //!
 //! This is the naive reference algorithm — no leading-zero fast path:
 //!
-//! 1. Form the full magnitude product `|a| * |b|` (`2N` u64 limbs) in a
+//! 1. Form the full magnitude product `|lhs| * |rhs|` (`2N` u64 limbs) in a
 //!    [`ComputeLimbs::double_buffered_u64`] buffer via the int layer's slice
 //!    [`crate::int::algos::mul::mul_schoolbook::mul_schoolbook`].
 //! 2. Build `10^SCALE` in the same limb domain and divide the product by
@@ -36,12 +36,12 @@ use crate::support::rounding::{should_bump, RoundingMode};
 
 /// Significant limb length (highest non-zero limb index + 1, min 1).
 #[inline]
-fn sig_len(a: &[u64]) -> usize {
-    let mut l = a.len();
-    while l > 1 && a[l - 1] == 0 {
-        l -= 1;
+fn sig_len(limbs: &[u64]) -> usize {
+    let mut len = limbs.len();
+    while len > 1 && limbs[len - 1] == 0 {
+        len -= 1;
     }
-    l
+    len
 }
 
 /// Naive schoolbook decimal multiplication, generic over `N`. Requires
@@ -53,80 +53,83 @@ fn sig_len(a: &[u64]) -> usize {
 /// `SCALE == 0` returns the narrowed product unscaled.
 #[inline]
 pub(crate) fn mul_schoolbook<const N: usize, const SCALE: u32>(
-    a: Int<N>,
-    b: Int<N>,
+    lhs: Int<N>,
+    rhs: Int<N>,
     mode: RoundingMode,
 ) -> Int<N>
 where
     Limbs<N>: ComputeLimbs,
 {
-    let neg = a.is_negative() != b.is_negative();
-    let a_mag = *a.unsigned_abs().as_limbs();
-    let b_mag = *b.unsigned_abs().as_limbs();
-    let al = sig_len(&a_mag);
-    let bl = sig_len(&b_mag);
+    let is_negative = lhs.is_negative() != rhs.is_negative();
+    let lhs_mag = *lhs.unsigned_abs().as_limbs();
+    let rhs_mag = *rhs.unsigned_abs().as_limbs();
+    let lhs_len = sig_len(&lhs_mag);
+    let rhs_len = sig_len(&rhs_mag);
 
     // Full magnitude product in the work scratch (2N u64 limbs).
-    let mut prod_buf = Limbs::<N>::double_buffered_u64();
-    let prod = prod_buf.as_mut();
-    let plen = (al + bl).min(prod.len());
-    for slot in prod[..plen].iter_mut() {
+    let mut product_buf = Limbs::<N>::double_buffered_u64();
+    let product = product_buf.as_mut();
+    let product_len = (lhs_len + rhs_len).min(product.len());
+    for slot in product[..product_len].iter_mut() {
         *slot = 0;
     }
-    mul_slice(&a_mag[..al], &b_mag[..bl], &mut prod[..plen]);
+    mul_slice(&lhs_mag[..lhs_len], &rhs_mag[..rhs_len], &mut product[..product_len]);
 
     if SCALE == 0 {
-        let mut out = [0u64; N];
-        out.copy_from_slice(&prod[..N]);
-        return apply_sign::<N>(out, neg, "attempt to multiply with overflow");
+        let mut product_limbs = [0u64; N];
+        product_limbs.copy_from_slice(&product[..N]);
+        return apply_sign::<N>(product_limbs, is_negative, "attempt to multiply with overflow");
     }
 
     // Build 10^SCALE in a u64 limb buffer (iterative *10).
-    let mut div_buf = Limbs::<N>::double_buffered_u64();
-    let divisor = div_buf.as_mut();
+    let mut divisor_buf = Limbs::<N>::double_buffered_u64();
+    let divisor = divisor_buf.as_mut();
     divisor[0] = 1;
-    let mut dl = 1usize;
+    let mut divisor_len = 1usize;
     for _ in 0..SCALE {
         let mut carry: u64 = 0;
-        for limb in divisor[..dl].iter_mut() {
-            let p = (*limb as u128) * 10u128 + carry as u128;
-            *limb = p as u64;
-            carry = (p >> 64) as u64;
+        for limb in divisor[..divisor_len].iter_mut() {
+            let scaled_limb = (*limb as u128) * 10u128 + carry as u128;
+            *limb = scaled_limb as u64;
+            carry = (scaled_limb >> 64) as u64;
         }
         if carry != 0 {
-            divisor[dl] = carry;
-            dl += 1;
+            divisor[divisor_len] = carry;
+            divisor_len += 1;
         }
     }
 
-    // q = prod / divisor, r = prod % divisor (magnitudes, via int layer).
-    let ptop = sig_len(&prod[..plen]);
-    let mut quot_buf = Limbs::<N>::double_buffered_u64();
-    let quot = quot_buf.as_mut();
-    let mut rem_buf = Limbs::<N>::double_buffered_u64();
-    let rem = rem_buf.as_mut();
-    for slot in quot[..ptop].iter_mut() {
+    // quotient = product / divisor, remainder = product % divisor
+    // (magnitudes, via int layer).
+    let product_sig_len = sig_len(&product[..product_len]);
+    let mut quotient_buf = Limbs::<N>::double_buffered_u64();
+    let quotient = quotient_buf.as_mut();
+    let mut remainder_buf = Limbs::<N>::double_buffered_u64();
+    let remainder = remainder_buf.as_mut();
+    for slot in quotient[..product_sig_len].iter_mut() {
         *slot = 0;
     }
-    for slot in rem[..dl].iter_mut() {
+    for slot in remainder[..divisor_len].iter_mut() {
         *slot = 0;
     }
-    div_rem_mag_slice(&prod[..ptop], &divisor[..dl], &mut quot[..ptop], &mut rem[..dl]);
+    div_rem_mag_slice(&product[..product_sig_len], &divisor[..divisor_len],
+        &mut quotient[..product_sig_len], &mut remainder[..divisor_len]);
 
     // Round: compare remainder against divisor - remainder.
-    let rl = sig_len(&rem[..dl]);
-    let rem_nonzero = !(rl == 1 && rem[0] == 0);
-    if rem_nonzero {
-        // cmp_r = rem.cmp(divisor - rem), via comparing 2*rem to divisor.
-        let cmp_r = cmp_double_vs::<N>(&rem[..dl], &divisor[..dl]);
-        let q_is_odd = (quot[0] & 1) != 0;
-        if should_bump(mode, cmp_r, q_is_odd, !neg) {
-            // quot += 1
+    let remainder_len = sig_len(&remainder[..divisor_len]);
+    let remainder_nonzero = !(remainder_len == 1 && remainder[0] == 0);
+    if remainder_nonzero {
+        // remainder_cmp = remainder.cmp(divisor - remainder), via comparing
+        // 2*remainder to divisor.
+        let remainder_cmp = cmp_double_vs::<N>(&remainder[..divisor_len], &divisor[..divisor_len]);
+        let quotient_is_odd = (quotient[0] & 1) != 0;
+        if should_bump(mode, remainder_cmp, quotient_is_odd, !is_negative) {
+            // quotient += 1
             let mut carry: u64 = 1;
-            for limb in quot.iter_mut() {
-                let (s, c) = limb.overflowing_add(carry);
-                *limb = s;
-                if !c {
+            for limb in quotient.iter_mut() {
+                let (sum, overflowed) = limb.overflowing_add(carry);
+                *limb = sum;
+                if !overflowed {
                     carry = 0;
                     break;
                 }
@@ -135,42 +138,43 @@ where
         }
     }
 
-    let mut out = [0u64; N];
-    out.copy_from_slice(&quot[..N]);
-    apply_sign::<N>(out, neg, "attempt to multiply with overflow")
+    let mut quotient_limbs = [0u64; N];
+    quotient_limbs.copy_from_slice(&quotient[..N]);
+    apply_sign::<N>(quotient_limbs, is_negative, "attempt to multiply with overflow")
 }
 
-/// Compare `2*rem` against `divisor` (both little-endian magnitudes),
-/// returning the ordering of `rem` vs `divisor - rem`.
+/// Compare `2*remainder` against `divisor` (both little-endian magnitudes),
+/// returning the ordering of `remainder` vs `divisor - remainder`.
 #[inline]
-fn cmp_double_vs<const N: usize>(rem: &[u64], divisor: &[u64]) -> core::cmp::Ordering
+fn cmp_double_vs<const N: usize>(remainder: &[u64], divisor: &[u64]) -> core::cmp::Ordering
 where
     Limbs<N>: ComputeLimbs,
 {
-    // `2·rem` spans at most `rem.len() + 1` limbs, and `rem < divisor`, whose
+    // `2·remainder` spans at most `remainder.len() + 1` limbs, and
+    // `remainder < divisor`, whose
     // length is `≤ N + 1` (the `10^SCALE` divisor); the `single_buffered_u64`
     // buffer (`N + 2`) holds it exactly per-`N`.
-    let mut two_r_buf = Limbs::<N>::single_buffered_u64();
-    let two_r = two_r_buf.as_mut();
+    let mut double_remainder_buf = Limbs::<N>::single_buffered_u64();
+    let double_remainder = double_remainder_buf.as_mut();
     let mut carry: u64 = 0;
-    for (i, &r) in rem.iter().enumerate() {
-        let v = (r as u128) << 1 | carry as u128;
-        two_r[i] = v as u64;
-        carry = (v >> 64) as u64;
+    for (i, &limb) in remainder.iter().enumerate() {
+        let doubled = (limb as u128) << 1 | carry as u128;
+        double_remainder[i] = doubled as u64;
+        carry = (doubled >> 64) as u64;
     }
-    let mut len = rem.len();
+    let mut len = remainder.len();
     if carry != 0 {
-        two_r[len] = carry;
+        double_remainder[len] = carry;
         len += 1;
     }
-    // Compare two_r[..len] vs divisor (little-endian).
-    let dl = divisor.len();
-    let maxl = len.max(dl);
-    let mut k = maxl;
-    while k > 0 {
-        k -= 1;
-        let lhs = if k < len { two_r[k] } else { 0 };
-        let rhs = if k < dl { divisor[k] } else { 0 };
+    // Compare double_remainder[..len] vs divisor (little-endian).
+    let divisor_len = divisor.len();
+    let max_len = len.max(divisor_len);
+    let mut idx = max_len;
+    while idx > 0 {
+        idx -= 1;
+        let lhs = if idx < len { double_remainder[idx] } else { 0 };
+        let rhs = if idx < divisor_len { divisor[idx] } else { 0 };
         if lhs != rhs {
             return if lhs > rhs {
                 core::cmp::Ordering::Greater
@@ -182,21 +186,21 @@ where
     core::cmp::Ordering::Equal
 }
 
-/// Rebuild a signed `Int<N>` from magnitude limbs `out` and sign `neg`,
+/// Rebuild a signed `Int<N>` from `magnitude_limbs` and sign `is_negative`,
 /// panicking on overflow in BOTH debug and release (the decimal default
 /// operator never silently wraps a wrong number).
 #[inline]
-fn apply_sign<const N: usize>(out: [u64; N], neg: bool, msg: &str) -> Int<N> {
-    let mag = Int::<N>::from_limbs(out);
+fn apply_sign<const N: usize>(magnitude_limbs: [u64; N], is_negative: bool, msg: &str) -> Int<N> {
+    let magnitude = Int::<N>::from_limbs(magnitude_limbs);
     // `from_limbs` reinterprets bits as two's complement; if the top bit is
     // set the magnitude exceeds the signed range. The sole representable case
-    // is exactly Int<N>::MIN with neg.
-    if mag.is_negative() && !(neg && mag == Int::<N>::MIN) {
+    // is exactly Int<N>::MIN with is_negative.
+    if magnitude.is_negative() && !(is_negative && magnitude == Int::<N>::MIN) {
         panic!("{msg}");
     }
-    if neg {
-        mag.wrapping_neg()
+    if is_negative {
+        magnitude.wrapping_neg()
     } else {
-        mag
+        magnitude
     }
 }

@@ -11,12 +11,12 @@ mod tests {
     use crate::int::types::Int;
     use crate::support::rounding::RoundingMode;
 
-    fn i1(v: i64) -> Int<1> {
-        Int::<1>::from_i64(v)
+    fn i1(value: i64) -> Int<1> {
+        Int::<1>::from_i64(value)
     }
 
-    fn i2(v: i128) -> Int<2> {
-        Int::<2>::from_i128(v)
+    fn i2(value: i128) -> Int<2> {
+        Int::<2>::from_i128(value)
     }
 
     // -- add_int_layer (Schoolbook = IntLayer for add) --
@@ -24,8 +24,8 @@ mod tests {
     #[test]
     fn add_schoolbook_identity_int1() {
         use crate::algos::add::add_int_layer::add_int_layer;
-        let a = i1(123456);
-        assert_eq!(add_int_layer::<1>(a, i1(0)), a);
+        let lhs = i1(123456);
+        assert_eq!(add_int_layer::<1>(lhs, i1(0)), lhs);
     }
 
     #[test]
@@ -45,8 +45,8 @@ mod tests {
     #[test]
     fn sub_schoolbook_identity_int1() {
         use crate::algos::sub::sub_int_layer::sub_int_layer;
-        let a = i1(99900);
-        assert_eq!(sub_int_layer::<1>(a, i1(0)), a);
+        let lhs = i1(99900);
+        assert_eq!(sub_int_layer::<1>(lhs, i1(0)), lhs);
     }
 
     #[test]
@@ -78,8 +78,8 @@ mod tests {
     #[test]
     fn neg_schoolbook_double_identity_int2() {
         use crate::algos::neg::neg_int_layer::neg_int_layer;
-        let v = i2(123_456_789_012);
-        assert_eq!(neg_int_layer::<2>(neg_int_layer::<2>(v)), v);
+        let value = i2(123_456_789_012);
+        assert_eq!(neg_int_layer::<2>(neg_int_layer::<2>(value)), value);
     }
 
     // -- rem_int_layer (Schoolbook = IntLayer for rem) --
@@ -105,9 +105,9 @@ mod tests {
     #[test]
     fn rem_schoolbook_int2() {
         use crate::algos::rem::rem_int_layer::rem_int_layer;
-        let a = i2(1_000_000_000_000_000_007);
-        let b = i2(1_000_000_000_000_000_000);
-        assert_eq!(rem_int_layer::<2>(a, b), i2(7));
+        let dividend = i2(1_000_000_000_000_000_007);
+        let divisor = i2(1_000_000_000_000_000_000);
+        assert_eq!(rem_int_layer::<2>(dividend, divisor), i2(7));
     }
 
     // -- mul_schoolbook --
@@ -115,15 +115,15 @@ mod tests {
     #[test]
     fn mul_schoolbook_basic_scale2() {
         use crate::algos::mul::mul_schoolbook::mul_schoolbook;
-        let r = mul_schoolbook::<1, 2>(i1(150), i1(200), RoundingMode::HalfToEven);
-        assert_eq!(r, i1(300));
+        let product = mul_schoolbook::<1, 2>(i1(150), i1(200), RoundingMode::HalfToEven);
+        assert_eq!(product, i1(300));
     }
 
     #[test]
     fn mul_schoolbook_neg_pos() {
         use crate::algos::mul::mul_schoolbook::mul_schoolbook;
-        let r = mul_schoolbook::<1, 2>(i1(-200), i1(300), RoundingMode::HalfToEven);
-        assert_eq!(r, i1(-600));
+        let product = mul_schoolbook::<1, 2>(i1(-200), i1(300), RoundingMode::HalfToEven);
+        assert_eq!(product, i1(-600));
     }
 
     #[test]
@@ -147,8 +147,8 @@ mod tests {
     #[test]
     fn mul_schoolbook_scale4_exact() {
         use crate::algos::mul::mul_schoolbook::mul_schoolbook;
-        let r = mul_schoolbook::<1, 4>(i1(12500), i1(40000), RoundingMode::HalfToEven);
-        assert_eq!(r, i1(50000));
+        let product = mul_schoolbook::<1, 4>(i1(12500), i1(40000), RoundingMode::HalfToEven);
+        assert_eq!(product, i1(50000));
     }
 
     #[test]
@@ -160,14 +160,14 @@ mod tests {
             (1_000_000, 2_000_000), (1_500_000, 3_000_000), (-1_000_000, 2_000_000),
             (1_234_567, 9_876_543), (999_999_999, 1),
         ];
-        for &(ra, rb) in cases {
-            let a = i2(ra);
-            let b = i2(rb);
+        for &(lhs_raw, rhs_raw) in cases {
+            let lhs = i2(lhs_raw);
+            let rhs = i2(rhs_raw);
             for mode in [RoundingMode::HalfToEven, RoundingMode::HalfAwayFromZero,
                 RoundingMode::Floor, RoundingMode::Ceiling, RoundingMode::Trunc, RoundingMode::HalfTowardZero] {
-                let sb = mul_schoolbook::<2, SCALE>(a, b, mode);
-                let wd = mul_widen_divide::<2, SCALE>(a, b, mode);
-                assert_eq!(sb, wd);
+                let schoolbook = mul_schoolbook::<2, SCALE>(lhs, rhs, mode);
+                let widen_divide = mul_widen_divide::<2, SCALE>(lhs, rhs, mode);
+                assert_eq!(schoolbook, widen_divide);
             }
         }
     }
@@ -177,48 +177,48 @@ mod tests {
     #[test]
     fn div_schoolbook_basic_scale2() {
         use crate::algos::div::div_schoolbook::div_schoolbook;
-        let r = div_schoolbook::<1>(i1(600), i1(200), i1(100), RoundingMode::HalfToEven);
-        assert_eq!(r, i1(300));
+        let quotient = div_schoolbook::<1>(i1(600), i1(200), i1(100), RoundingMode::HalfToEven);
+        assert_eq!(quotient, i1(300));
     }
 
     #[test]
     fn div_schoolbook_floor_truncation() {
         use crate::algos::div::div_schoolbook::div_schoolbook;
-        let r = div_schoolbook::<1>(i1(100), i1(300), i1(100), RoundingMode::Floor);
-        assert_eq!(r, i1(33));
+        let quotient = div_schoolbook::<1>(i1(100), i1(300), i1(100), RoundingMode::Floor);
+        assert_eq!(quotient, i1(33));
     }
 
     #[test]
     fn div_schoolbook_ceiling_rounding() {
         use crate::algos::div::div_schoolbook::div_schoolbook;
-        let r = div_schoolbook::<1>(i1(100), i1(300), i1(100), RoundingMode::Ceiling);
-        assert_eq!(r, i1(34));
+        let quotient = div_schoolbook::<1>(i1(100), i1(300), i1(100), RoundingMode::Ceiling);
+        assert_eq!(quotient, i1(34));
     }
 
     #[test]
     fn div_schoolbook_negative_dividend() {
         use crate::algos::div::div_schoolbook::div_schoolbook;
-        let r = div_schoolbook::<1>(i1(-600), i1(200), i1(100), RoundingMode::HalfToEven);
-        assert_eq!(r, i1(-300));
+        let quotient = div_schoolbook::<1>(i1(-600), i1(200), i1(100), RoundingMode::HalfToEven);
+        assert_eq!(quotient, i1(-300));
     }
 
     #[test]
     fn div_schoolbook_exact_half() {
         use crate::algos::div::div_schoolbook::div_schoolbook;
-        let r = div_schoolbook::<1>(i1(100), i1(200), i1(100), RoundingMode::HalfToEven);
-        assert_eq!(r, i1(50));
+        let quotient = div_schoolbook::<1>(i1(100), i1(200), i1(100), RoundingMode::HalfToEven);
+        assert_eq!(quotient, i1(50));
     }
 
     #[test]
     fn div_schoolbook_all_modes_one_third() {
         use crate::algos::div::div_schoolbook::div_schoolbook;
-        let (a, b, mult) = (i1(100), i1(300), i1(100));
-        assert_eq!(div_schoolbook::<1>(a, b, mult, RoundingMode::Floor), i1(33));
-        assert_eq!(div_schoolbook::<1>(a, b, mult, RoundingMode::Ceiling), i1(34));
-        assert_eq!(div_schoolbook::<1>(a, b, mult, RoundingMode::Trunc), i1(33));
-        assert_eq!(div_schoolbook::<1>(a, b, mult, RoundingMode::HalfTowardZero), i1(33));
-        assert_eq!(div_schoolbook::<1>(a, b, mult, RoundingMode::HalfToEven), i1(33));
-        assert_eq!(div_schoolbook::<1>(a, b, mult, RoundingMode::HalfAwayFromZero), i1(33));
+        let (dividend, divisor, multiplier) = (i1(100), i1(300), i1(100));
+        assert_eq!(div_schoolbook::<1>(dividend, divisor, multiplier, RoundingMode::Floor), i1(33));
+        assert_eq!(div_schoolbook::<1>(dividend, divisor, multiplier, RoundingMode::Ceiling), i1(34));
+        assert_eq!(div_schoolbook::<1>(dividend, divisor, multiplier, RoundingMode::Trunc), i1(33));
+        assert_eq!(div_schoolbook::<1>(dividend, divisor, multiplier, RoundingMode::HalfTowardZero), i1(33));
+        assert_eq!(div_schoolbook::<1>(dividend, divisor, multiplier, RoundingMode::HalfToEven), i1(33));
+        assert_eq!(div_schoolbook::<1>(dividend, divisor, multiplier, RoundingMode::HalfAwayFromZero), i1(33));
     }
 
     #[test]
@@ -226,19 +226,19 @@ mod tests {
         use crate::algos::div::div_schoolbook::div_schoolbook;
         use crate::algos::div::div_widen_scale::div_widen_scale;
         const SCALE: u32 = 6;
-        let mult = Int::<2>::TEN.pow(SCALE);
+        let multiplier = Int::<2>::TEN.pow(SCALE);
         let cases: &[(i128, i128)] = &[
             (2_000_000, 1_000_000), (1_000_000, 3_000_000), (7_000_000, 2_000_000),
             (-5_000_000, 2_000_000), (1_234_567, 9_876_543),
         ];
-        for &(ra, rb) in cases {
-            let a = i2(ra);
-            let b = i2(rb);
+        for &(dividend_raw, divisor_raw) in cases {
+            let dividend = i2(dividend_raw);
+            let divisor = i2(divisor_raw);
             for mode in [RoundingMode::HalfToEven, RoundingMode::HalfAwayFromZero,
                 RoundingMode::Floor, RoundingMode::Ceiling, RoundingMode::Trunc, RoundingMode::HalfTowardZero] {
-                let sb = div_schoolbook::<2>(a, b, mult, mode);
-                let wd = div_widen_scale::<2>(a, b, mult, mode);
-                assert_eq!(sb, wd);
+                let schoolbook = div_schoolbook::<2>(dividend, divisor, multiplier, mode);
+                let widen_scale = div_widen_scale::<2>(dividend, divisor, multiplier, mode);
+                assert_eq!(schoolbook, widen_scale);
             }
         }
     }
@@ -261,18 +261,19 @@ mod tests {
         use crate::algos::div::div_native::div_native;
         use crate::algos::div::div_widen_scale::div_widen_scale;
         const SCALE: u32 = 6;
-        let mult = Int::<1>::TEN.pow(SCALE);
+        let multiplier = Int::<1>::TEN.pow(SCALE);
         let cases: &[(i64, i64)] = &[
             (2_000_000, 1_000_000), (1_000_000, 3_000_000), (7_000_000, 2_000_000),
             (-5_000_000, 2_000_000), (1_234_567, 9_876_543), (-7, -13), (0, 5_000_000),
         ];
-        for &(ra, rb) in cases {
-            let a = i1(ra);
-            let b = i1(rb);
+        for &(dividend_raw, divisor_raw) in cases {
+            let dividend = i1(dividend_raw);
+            let divisor = i1(divisor_raw);
             for mode in ALL_MODES {
-                let nat = div_native::<1, SCALE>(a, b, mode);
-                let wd = div_widen_scale::<1>(a, b, mult, mode);
-                assert_eq!(nat, wd, "div N1 ({ra},{rb}) mode {mode:?}");
+                let native = div_native::<1, SCALE>(dividend, divisor, mode);
+                let widen_scale = div_widen_scale::<1>(dividend, divisor, multiplier, mode);
+                assert_eq!(native, widen_scale,
+                    "div N1 ({dividend_raw},{divisor_raw}) mode {mode:?}");
             }
         }
     }
@@ -288,21 +289,21 @@ mod tests {
             (-5_000_000, 2_000_000), (1_234_567, 9_876_543),
             (98_765_432_109_876_543, 12_345_678_901_234_567),
         ];
-        for &(ra, rb) in cases {
-            let a = i2(ra);
-            let b = i2(rb);
+        for &(dividend_raw, divisor_raw) in cases {
+            let dividend = i2(dividend_raw);
+            let divisor = i2(divisor_raw);
             for mode in ALL_MODES {
-                let mult6 = Int::<2>::TEN.pow(6);
+                let multiplier6 = Int::<2>::TEN.pow(6);
                 assert_eq!(
-                    div_native::<2, 6>(a, b, mode),
-                    div_widen_scale::<2>(a, b, mult6, mode),
-                    "div N2 s6 ({ra},{rb}) mode {mode:?}"
+                    div_native::<2, 6>(dividend, divisor, mode),
+                    div_widen_scale::<2>(dividend, divisor, multiplier6, mode),
+                    "div N2 s6 ({dividend_raw},{divisor_raw}) mode {mode:?}"
                 );
-                let mult22 = Int::<2>::TEN.pow(22);
+                let multiplier22 = Int::<2>::TEN.pow(22);
                 assert_eq!(
-                    div_native::<2, 22>(a, b, mode),
-                    div_widen_scale::<2>(a, b, mult22, mode),
-                    "div N2 s22 ({ra},{rb}) mode {mode:?}"
+                    div_native::<2, 22>(dividend, divisor, mode),
+                    div_widen_scale::<2>(dividend, divisor, multiplier22, mode),
+                    "div N2 s22 ({dividend_raw},{divisor_raw}) mode {mode:?}"
                 );
             }
         }

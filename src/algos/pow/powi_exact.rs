@@ -60,7 +60,7 @@ pub(crate) fn powi_exact_pin<St: BigInt, const SCALE: u32>(
     mode: RoundingMode,
 ) -> Option<St> {
     match powi_exact_pin_checked::<St, SCALE>(base, exp, storage_max, mode) {
-        ExactPin::Value(v) => Some(v),
+        ExactPin::Value(value) => Some(value),
         ExactPin::OutOfRange => {
             crate::support::diagnostics::overflow_panic_with_scale("powf kernel", SCALE)
         }
@@ -91,37 +91,37 @@ pub(crate) fn powi_exact_pin_checked<St: BigInt, const SCALE: u32>(
     // `10^SCALE` — the raw value `1.0`, sourced from the baked table so it is
     // exact at every tier (`St::TEN.pow` would wrap; `pow10::dispatch` does
     // not).
-    let one_s = crate::consts::pow10::dispatch::<St>(SCALE);
+    let one_at_scale = crate::consts::pow10::dispatch::<St>(SCALE);
 
     // The exponent must be an exact integer `n` (`exp` an exact multiple of
     // `10^SCALE`) with `|n|` inside the integer fast-path threshold.
-    let (n_big, e_rem) = exp.div_rem(one_s);
-    if e_rem != St::ZERO {
+    let (exponent_big, exponent_remainder) = exp.div_rem(one_at_scale);
+    if exponent_remainder != St::ZERO {
         return ExactPin::Defer;
     }
-    let thresh =
+    let threshold =
         St::from_i128(crate::algos::pow::powf_series_2limb::INT_FAST_PATH_THRESHOLD as i128);
-    if n_big > thresh || n_big < St::ZERO - thresh {
+    if exponent_big > threshold || exponent_big < St::ZERO - threshold {
         return ExactPin::Defer;
     }
-    let n = n_big.to_i128() as i32;
+    let exponent = exponent_big.to_i128() as i32;
 
     // The base must be an exact positive integer `b >= 1`.
     if base <= St::ZERO {
         return ExactPin::Defer;
     }
-    let (bv, b_rem) = base.div_rem(one_s);
-    if b_rem != St::ZERO {
+    let (base_value, base_remainder) = base.div_rem(one_at_scale);
+    if base_remainder != St::ZERO {
         return ExactPin::Defer; // fractional base — defer to the composition
     }
 
     // `b^0 = 1` and `1^n = 1` are exactly `1.0` for every mode.
-    if n == 0 || bv == St::ONE {
-        return ExactPin::Value(one_s);
+    if exponent == 0 || base_value == St::ONE {
+        return ExactPin::Value(one_at_scale);
     }
-    let k = n.unsigned_abs();
+    let abs_exponent = exponent.unsigned_abs();
 
-    if n > 0 {
+    if exponent > 0 {
         // `b^n · 10^SCALE` — an exact integer when it fits the decimal range.
         // A `checked_pow` / `checked_mul` overflow, or a value past
         // `storage_max`, is PROOF the exact `b^n` exceeds the decimal range
@@ -132,31 +132,32 @@ pub(crate) fn powi_exact_pin_checked<St: BigInt, const SCALE: u32>(
         // approximation can directed-round (Floor / Trunc) back INSIDE the
         // range at an out-by-one boundary (the `exp2(127)` hair case:
         // `2^127` at scale 0 is `i128::MAX + 1`).
-        match bv
-            .checked_pow(k)
-            .and_then(|p| p.checked_mul(one_s))
-            .filter(|v| *v <= storage_max)
+        match base_value
+            .checked_pow(abs_exponent)
+            .and_then(|power| power.checked_mul(one_at_scale))
+            .filter(|value| *value <= storage_max)
         {
-            Some(v) => ExactPin::Value(v),
+            Some(value) => ExactPin::Value(value),
             None => ExactPin::OutOfRange,
         }
     } else {
         // `b^-k = 1 / b^k`, stored as `round(10^SCALE / b^k)` — a strictly
         // positive value in `(0, 1]`.
-        match bv.checked_pow(k) {
-            Some(d) => {
-                // `d = b^k` fits storage; round `10^SCALE / d` under `mode`.
-                let (q, r) = one_s.div_rem(d);
-                if r == St::ZERO {
-                    return ExactPin::Value(q); // exact — no rounding
+        match base_value.checked_pow(abs_exponent) {
+            Some(divisor) => {
+                // `divisor = b^k` fits storage; round `10^SCALE / divisor`
+                // under `mode`.
+                let (quotient, remainder) = one_at_scale.div_rem(divisor);
+                if remainder == St::ZERO {
+                    return ExactPin::Value(quotient); // exact — no rounding
                 }
                 // Half-comparison `2r vs d`, formed as `r vs d − r` to avoid
-                // overflowing `2r` (`r < d <= MAX`). `q` is the truncated
-                // quotient; the result is positive.
-                let cmp = r.cmp(&(d - r));
-                let q_is_odd = q.bit(0);
-                let bump = should_bump(mode, cmp, q_is_odd, true);
-                ExactPin::Value(if bump { q + St::ONE } else { q })
+                // overflowing `2r` (`r < d <= MAX`). The truncated `quotient`
+                // stands; the result is positive.
+                let remainder_cmp = remainder.cmp(&(divisor - remainder));
+                let quotient_is_odd = quotient.bit(0);
+                let bump = should_bump(mode, remainder_cmp, quotient_is_odd, true);
+                ExactPin::Value(if bump { quotient + St::ONE } else { quotient })
             }
             None => {
                 // `b^k` overflowed storage ⟹ `b^k > MAX >= 2·10^SCALE`
@@ -175,31 +176,31 @@ pub(crate) fn powi_exact_pin_checked<St: BigInt, const SCALE: u32>(
 /// `|n|` inside the integer fast-path threshold — the shared exponent gate of
 /// [`powi_exact_pin`] and the fractional-base chain.
 pub(crate) fn exp_as_small_int_raw<St: BigInt, const SCALE: u32>(exp: St) -> Option<i32> {
-    let one_s = crate::consts::pow10::dispatch::<St>(SCALE);
-    let (n_big, e_rem) = exp.div_rem(one_s);
-    if e_rem != St::ZERO {
+    let one_at_scale = crate::consts::pow10::dispatch::<St>(SCALE);
+    let (exponent_big, exponent_remainder) = exp.div_rem(one_at_scale);
+    if exponent_remainder != St::ZERO {
         return None;
     }
-    let thresh =
+    let threshold =
         St::from_i128(crate::algos::pow::powf_series_2limb::INT_FAST_PATH_THRESHOLD as i128);
-    if n_big > thresh || n_big < St::ZERO - thresh {
+    if exponent_big > threshold || exponent_big < St::ZERO - threshold {
         return None;
     }
-    Some(n_big.to_i128() as i32)
+    Some(exponent_big.to_i128() as i32)
 }
 
-/// `10^d` in `St`, or `None` past the width (checked ×10 loop — this is a
-/// cold pin path; `d` is bounded by `SCALE·(k+1)` in practice).
-fn checked_pow10<St: BigInt>(d: u32) -> Option<St> {
+/// `10^exponent` in `St`, or `None` past the width (checked ×10 loop — this is
+/// a cold pin path; `exponent` is bounded by `SCALE·(k+1)` in practice).
+fn checked_pow10<St: BigInt>(exponent: u32) -> Option<St> {
     let ten = St::from_i128(10);
-    let mut v = St::ONE;
-    for _ in 0..d {
-        v = v.checked_mul(ten)?;
+    let mut value = St::ONE;
+    for _ in 0..exponent {
+        value = value.checked_mul(ten)?;
     }
-    Some(v)
+    Some(value)
 }
 
-/// `floor(10^e / d)` with remainder, by STREAMING long division — the
+/// `floor(10^exponent / divisor)` with remainder, by STREAMING long division — the
 /// power-of-ten dividend is never materialised, so the reciprocal pin works
 /// at MAX_SCALE where `10^(SCALE+f·k)` itself exceeds the width.
 enum Pow10Div<St> {
@@ -208,38 +209,40 @@ enum Pow10Div<St> {
     /// The quotient exceeds the decimal range — PROOF of overflow (the
     /// quotient only grows as digits stream in).
     OutOfRange,
-    /// `d` is too close to the width for the digit step (`r·10` overflowed) —
-    /// not a proof of anything; the caller defers.
+    /// The `divisor` is too close to the width for the digit step (`r·10`
+    /// overflowed) — not a proof of anything; the caller defers.
     Wide,
 }
 
-fn div_pow10_small<St: BigInt>(e: u32, d: St, storage_max: St) -> Pow10Div<St> {
+fn div_pow10_small<St: BigInt>(exponent: u32, divisor: St, storage_max: St) -> Pow10Div<St> {
     let ten = St::from_i128(10);
-    let (mut q, mut r) = St::ONE.div_rem(d);
-    for _ in 0..e {
-        let r10 = match r.checked_mul(ten) {
-            Some(v) => v,
+    let (mut quotient, mut remainder) = St::ONE.div_rem(divisor);
+    for _ in 0..exponent {
+        let scaled_remainder = match remainder.checked_mul(ten) {
+            Some(value) => value,
             None => return Pow10Div::Wide,
         };
-        let (digit, rr) = r10.div_rem(d); // digit <= 9: r < d ⇒ r·10 < 10·d
-        q = match q.checked_mul(ten).and_then(|v| v.checked_add(digit)) {
-            Some(v) => v,
+        // digit <= 9: r < d ⇒ r·10 < 10·d
+        let (digit, next_remainder) = scaled_remainder.div_rem(divisor);
+        quotient = match quotient.checked_mul(ten).and_then(|value| value.checked_add(digit)) {
+            Some(value) => value,
             None => return Pow10Div::OutOfRange,
         };
-        if q > storage_max {
+        if quotient > storage_max {
             return Pow10Div::OutOfRange;
         }
-        r = rr;
+        remainder = next_remainder;
     }
-    Pow10Div::Q(q, r)
+    Pow10Div::Q(quotient, remainder)
 }
 
-/// Correctly-rounded `base^n` for a TERMINATING-DECIMAL base — the
+/// Correctly-rounded `base^exponent` for a TERMINATING-DECIMAL base — the
 /// fractional-base sibling of [`powi_exact_pin`], reached when that pin
 /// declines (non-integer base). The base is REDUCED to its significant
 /// digits first: `base = m / 10^f` with the trailing zeros of the raw
 /// stripped, so `m` is small for real literals (`2.5 -> m = 25, f = 1`) and
-/// `m^k` never touches a `2·SCALE` product. Then `base^n = m^k / 10^(f·k)`
+/// `m^k` never touches a `2·SCALE` product. Then
+/// `base^exponent = m^k / 10^(f·k)`
 /// (or its reciprocal) is placed on the `SCALE` grid by EXACT integer
 /// arithmetic — a shift when it terminates, a single half-compared rounding
 /// otherwise (ties included), at every scale.
@@ -250,58 +253,59 @@ fn div_pow10_small<St: BigInt>(e: u32, d: St, storage_max: St) -> Pow10Div<St> {
 /// (the proof is in hand), mirroring [`powi_exact_pin`].
 pub(crate) fn powi_terminating_pin<St: BigInt, const SCALE: u32>(
     base: St,
-    n: i32,
+    exponent: i32,
     storage_max: St,
     mode: RoundingMode,
 ) -> Option<St> {
-    debug_assert!(n != 0);
+    debug_assert!(exponent != 0);
     if base <= St::ZERO {
         return None;
     }
-    // Reduce: base raw = m · 10^z, m not divisible by 10; f = significant
-    // fraction length of the VALUE (f <= SCALE; f == 0 means integer base,
-    // which powi_exact_pin already owns but is handled here for totality).
+    // Reduce: base raw = m · 10^trailing_zeros, m not divisible by 10; f =
+    // significant fraction length of the VALUE (f <= SCALE; f == 0 means
+    // integer base, which powi_exact_pin already owns but is handled here for
+    // totality).
     let ten = St::from_i128(10);
     let mut m = base;
-    let mut z = 0u32;
+    let mut trailing_zeros = 0u32;
     loop {
-        let (q, r) = m.div_rem(ten);
-        if r != St::ZERO || z >= SCALE {
+        let (quotient, remainder) = m.div_rem(ten);
+        if remainder != St::ZERO || trailing_zeros >= SCALE {
             break;
         }
-        m = q;
-        z += 1;
+        m = quotient;
+        trailing_zeros += 1;
     }
-    let f = SCALE - z;
-    let k = n.unsigned_abs();
+    let f = SCALE - trailing_zeros;
+    let k = exponent.unsigned_abs();
     let mk = m.checked_pow(k)?; // base's significant digits ^ k — small for real literals
     let fk = f.checked_mul(k)?;
 
     // Round the exact rational `num_pow10 / den` (or `mk · 10^shift`) onto the
     // SCALE grid; `positive` results only (base > 0).
-    let place = |q: St, r: St, d: St| -> St {
-        if r == St::ZERO {
-            return q;
+    let place = |quotient: St, remainder: St, divisor: St| -> St {
+        if remainder == St::ZERO {
+            return quotient;
         }
-        let cmp = r.cmp(&(d - r));
-        let bump = should_bump(mode, cmp, q.bit(0), true);
+        let remainder_cmp = remainder.cmp(&(divisor - remainder));
+        let bump = should_bump(mode, remainder_cmp, quotient.bit(0), true);
         if bump {
-            q + St::ONE
+            quotient + St::ONE
         } else {
-            q
+            quotient
         }
     };
 
-    let v = if n > 0 {
+    let value = if exponent > 0 {
         // base^k = mk / 10^fk; at SCALE the raw is mk · 10^(SCALE - fk) when
         // that shift is non-negative (exact), else a single rounded division.
         if fk <= SCALE {
             mk.checked_mul(checked_pow10::<St>(SCALE - fk)?)?
         } else {
             match checked_pow10::<St>(fk - SCALE) {
-                Some(d) => {
-                    let (q, r) = mk.div_rem(d);
-                    place(q, r, d)
+                Some(divisor) => {
+                    let (quotient, remainder) = mk.div_rem(divisor);
+                    place(quotient, remainder, divisor)
                 }
                 None => {
                     // The divisor exceeds the width while mk fits: the result
@@ -322,14 +326,14 @@ pub(crate) fn powi_terminating_pin<St: BigInt, const SCALE: u32>(
         // non-terminating reciprocals alike (1.5^-1 = 0.666...). When the
         // power-of-ten numerator exceeds the width (MAX_SCALE cells), the
         // division streams digit-by-digit instead.
-        let e = SCALE.checked_add(fk)?;
-        match checked_pow10::<St>(e) {
-            Some(num) => {
-                let (q, r) = num.div_rem(mk);
-                place(q, r, mk)
+        let pow10_exponent = SCALE.checked_add(fk)?;
+        match checked_pow10::<St>(pow10_exponent) {
+            Some(numerator) => {
+                let (quotient, remainder) = numerator.div_rem(mk);
+                place(quotient, remainder, mk)
             }
-            None => match div_pow10_small::<St>(e, mk, storage_max) {
-                Pow10Div::Q(q, r) => place(q, r, mk),
+            None => match div_pow10_small::<St>(pow10_exponent, mk, storage_max) {
+                Pow10Div::Q(quotient, remainder) => place(quotient, remainder, mk),
                 Pow10Div::OutOfRange => crate::support::diagnostics::overflow_panic_with_scale(
                     "powf kernel",
                     SCALE,
@@ -338,12 +342,12 @@ pub(crate) fn powi_terminating_pin<St: BigInt, const SCALE: u32>(
             },
         }
     };
-    if v > storage_max {
+    if value > storage_max {
         // Exact arithmetic put the correctly-rounded result beyond the
         // decimal range — proof of overflow; the contract panics.
         crate::support::diagnostics::overflow_panic_with_scale("powf kernel", SCALE)
     }
-    Some(v)
+    Some(value)
 }
 
 #[cfg(test)]
@@ -353,9 +357,10 @@ mod tests {
 
     #[test]
     fn terminating_pin_exact_ties_and_reciprocals() {
-        let pin = |base: i128, n: i32, mode: RoundingMode| {
-            powi_terminating_pin::<Int<2>, 2>(Int::<2>::from_i128(base), n, Int::<2>::MAX, mode)
-                .map(|v| v.as_i128())
+        let pin = |base: i128, exponent: i32, mode: RoundingMode| {
+            powi_terminating_pin::<Int<2>, 2>(
+                Int::<2>::from_i128(base), exponent, Int::<2>::MAX, mode)
+                .map(|value| value.as_i128())
         };
         for mode in MODES {
             // 2.5^2 = 6.25 at scale 2 — exact at every mode.
@@ -370,9 +375,10 @@ mod tests {
         assert_eq!(pin(150, 3, RoundingMode::Ceiling), Some(338));
         // 0.5^-2 = 4 at MAX-scale-like cells: 10^(SCALE+2) exceeds i128, so
         // the reciprocal streams its long division (the gate4 residue).
-        let pin37 = |base: i128, n: i32, mode: RoundingMode| {
-            powi_terminating_pin::<Int<2>, 37>(Int::<2>::from_i128(base), n, Int::<2>::MAX, mode)
-                .map(|v| v.as_i128())
+        let pin37 = |base: i128, exponent: i32, mode: RoundingMode| {
+            powi_terminating_pin::<Int<2>, 37>(
+                Int::<2>::from_i128(base), exponent, Int::<2>::MAX, mode)
+                .map(|value| value.as_i128())
         };
         let half_raw = 5 * 10_i128.pow(36);
         for mode in MODES {
@@ -405,7 +411,7 @@ mod tests {
             Int::<2>::MAX,
             mode,
         )
-        .map(|v| v.as_i128())
+        .map(|value| value.as_i128())
     }
 
     /// Pin on integer `base`/`exp` values, scaled to `SC` internally.
@@ -442,14 +448,14 @@ mod tests {
 
     #[test]
     fn inexact_reciprocal_rounds_each_direction() {
-        // 1/3 = 0.333…3̅ at scale 37: q = floor(10^37 / 3), remainder 1 (< half),
-        // so the directed/nearest split is the LSB.
-        let q = 10_i128.pow(37) / 3; // 333…3 (37 threes)
+        // 1/3 = 0.333…3̅ at scale 37: quotient = floor(10^37 / 3), remainder 1
+        // (< half), so the directed/nearest split is the LSB.
+        let quotient = 10_i128.pow(37) / 3; // 333…3 (37 threes)
         // remainder 10^37 mod 3 == 1, strictly below half → round down except Ceiling.
-        assert_eq!(pin::<37>(3, -1, RoundingMode::Floor), Some(q));
-        assert_eq!(pin::<37>(3, -1, RoundingMode::Trunc), Some(q));
-        assert_eq!(pin::<37>(3, -1, RoundingMode::HalfToEven), Some(q));
-        assert_eq!(pin::<37>(3, -1, RoundingMode::Ceiling), Some(q + 1));
+        assert_eq!(pin::<37>(3, -1, RoundingMode::Floor), Some(quotient));
+        assert_eq!(pin::<37>(3, -1, RoundingMode::Trunc), Some(quotient));
+        assert_eq!(pin::<37>(3, -1, RoundingMode::HalfToEven), Some(quotient));
+        assert_eq!(pin::<37>(3, -1, RoundingMode::Ceiling), Some(quotient + 1));
     }
 
     #[test]
