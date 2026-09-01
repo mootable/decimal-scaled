@@ -16,7 +16,7 @@
 //! dominates the real arithmetic, so the slice `isqrt` is slow for those cells.
 //! This kernel instead runs Newton directly in a concrete `Int<W>` (whose
 //! width `W` the policy picks per `(N, SCALE)` cell to just cover
-//! `mag · 10^SCALE`), so each `n / x` is one Knuth divide on tight
+//! `mag · 10^SCALE`), so each `radicand / x` is one Knuth divide on tight
 //! operands with no build-max zeroing.
 //!
 //! # Newton seed via the shared seed leaf (std / no_std agnostic)
@@ -43,26 +43,26 @@ use crate::support::rounding::RoundingMode;
 
 /// `⌊√n⌋` over `Int<W>`, seeded via the shared seed leaf.
 ///
-/// Returns `⌊√n⌋` for `n > 0`. The seed comes from
+/// Returns `⌊√n⌋` for a positive `radicand`. The seed comes from
 /// [`crate::algo_x_support::seed::sqrt_seed`] — the `f64::sqrt` of the top
 /// 64 significant bits scaled back under `std`, the classical pure-integer
 /// `2^⌈bits/2⌉` under `no_std` — so it is a safe over-estimate at **any**
-/// work width `W` (no `f64::MAX` ceiling, unlike a direct `n.as_f64()`),
+/// work width `W` (no `f64::MAX` ceiling, unlike a direct `as_f64()`),
 /// and the std/no_std divergence stays inside the leaf. The
 /// monotone-decrease Newton loop then settles on `⌊√n⌋`.
 #[inline]
-fn isqrt_w_seeded<const W: usize>(n: Int<W>) -> Int<W> {
+fn isqrt_w_seeded<const W: usize>(radicand: Int<W>) -> Int<W> {
     // Build the over-estimate seed in the W-limb magnitude via the leaf.
-    let bits = n.bit_length();
-    let mag = n.unsigned_abs();
+    let bits = radicand.bit_length();
+    let magnitude = radicand.unsigned_abs();
     let mut seed_limbs = [0u64; W];
-    sqrt_seed(mag.as_limbs(), bits, &mut seed_limbs);
+    sqrt_seed(magnitude.as_limbs(), bits, &mut seed_limbs);
     let x0 = Int::<W>::from_mag_limbs(&seed_limbs, false);
     let x0 = if x0 <= Int::<W>::ZERO { Int::<W>::ONE } else { x0 };
     let two = Int::<W>::from_i128(2);
     let mut x = x0;
     loop {
-        let y = (x + n / x) / two;
+        let y = (x + radicand / x) / two;
         if y >= x {
             break x;
         }
@@ -93,15 +93,15 @@ pub(crate) fn sqrt_native<const N: usize, const W: usize>(
     // `pow10_scale` is `10^SCALE` in `Int<W>`, supplied pre-computed by the
     // caller so it folds at compile time (`const { Int::<W>::TEN.pow(SCALE) }`
     // in the dispatch) instead of running the int pow at runtime per call.
-    let n: Int<W> = widened * pow10_scale;
+    let radicand: Int<W> = widened * pow10_scale;
 
-    let q = isqrt_w_seeded::<W>(n);
+    let root = isqrt_w_seeded::<W>(radicand);
 
     // ── single round step (same logic as sqrt_newton). ──────────────
-    // diff = n - q²  (q² ≤ n, so diff ≥ 0).
-    let qsq = q * q;
-    let diff = n - qsq;
-    let halfway_round_up = diff > q;
+    // diff = radicand - root²  (root² ≤ radicand, so diff ≥ 0).
+    let root_sq = root * root;
+    let diff = radicand - root_sq;
+    let halfway_round_up = diff > root;
     let diff_nonzero = diff != zero;
     let bump = match mode {
         RoundingMode::HalfToEven
@@ -110,8 +110,8 @@ pub(crate) fn sqrt_native<const N: usize, const W: usize>(
         RoundingMode::Trunc | RoundingMode::Floor => false,
         RoundingMode::Ceiling => diff_nonzero,
     };
-    let q = if bump { q + one } else { q };
-    q.resize_to::<Int<N>>()
+    let root = if bump { root + one } else { root };
+    root.resize_to::<Int<N>>()
 }
 
 #[cfg(all(test, feature = "std"))]
@@ -140,12 +140,12 @@ mod tests {
     where
         crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
     {
-        for &r in raws {
-            let raw = Int::<N>::from_i128(r);
+        for &raw_value in raws {
+            let raw = Int::<N>::from_i128(raw_value);
             for mode in ALL_MODES {
                 let got = sqrt_native::<N, W>(raw, Int::<W>::TEN.pow(scale), mode);
                 let want = sqrt_newton::<N>(raw, scale, mode);
-                assert_eq!(got, want, "N={N} W={W} scale={scale} raw={r} mode={mode:?}");
+                assert_eq!(got, want, "N={N} W={W} scale={scale} raw={raw_value} mode={mode:?}");
             }
         }
     }
@@ -216,13 +216,13 @@ mod tests {
     /// diverge / be release-mode UB).
     #[cfg(feature = "_wide-support")]
     fn near_max<const N: usize>() -> Int<N> {
-        let mut mag = [0u64; N];
-        for m in mag.iter_mut() {
-            *m = u64::MAX;
+        let mut magnitude = [0u64; N];
+        for limb in magnitude.iter_mut() {
+            *limb = u64::MAX;
         }
         // Clear the top bit so the value stays a positive magnitude.
-        mag[N - 1] = u64::MAX >> 1;
-        Int::<N>::from_mag_limbs(&mag, false)
+        magnitude[N - 1] = u64::MAX >> 1;
+        Int::<N>::from_mag_limbs(&magnitude, false)
     }
 
     // Spans D76..D307; the D307 cell's work width (Int<24>) needs x-wide+.
@@ -250,17 +250,17 @@ mod tests {
     #[test]
     fn sqrt_native_routed_2n_widths_near_max() {
         for mode in ALL_MODES {
-            for &s in &[0u32, 20, 28, 57] {
-                assert_eq!(sqrt_native::<3, 6>(near_max::<3>(), Int::<6>::TEN.pow(s), mode), sqrt_newton::<3>(near_max::<3>(), s, mode), "D57 W=6 s={s} mode {mode:?}");
+            for &scale in &[0u32, 20, 28, 57] {
+                assert_eq!(sqrt_native::<3, 6>(near_max::<3>(), Int::<6>::TEN.pow(scale), mode), sqrt_newton::<3>(near_max::<3>(), scale, mode), "D57 W=6 s={scale} mode {mode:?}");
             }
-            for &s in &[0u32, 20, 35, 76] {
-                assert_eq!(sqrt_native::<4, 8>(near_max::<4>(), Int::<8>::TEN.pow(s), mode), sqrt_newton::<4>(near_max::<4>(), s, mode), "D76 W=8 s={s} mode {mode:?}");
+            for &scale in &[0u32, 20, 35, 76] {
+                assert_eq!(sqrt_native::<4, 8>(near_max::<4>(), Int::<8>::TEN.pow(scale), mode), sqrt_newton::<4>(near_max::<4>(), scale, mode), "D76 W=8 s={scale} mode {mode:?}");
             }
-            for &s in &[0u32, 25, 57, 115] {
-                assert_eq!(sqrt_native::<6, 12>(near_max::<6>(), Int::<12>::TEN.pow(s), mode), sqrt_newton::<6>(near_max::<6>(), s, mode), "D115 W=12 s={s} mode {mode:?}");
+            for &scale in &[0u32, 25, 57, 115] {
+                assert_eq!(sqrt_native::<6, 12>(near_max::<6>(), Int::<12>::TEN.pow(scale), mode), sqrt_newton::<6>(near_max::<6>(), scale, mode), "D115 W=12 s={scale} mode {mode:?}");
             }
-            for &s in &[0u32, 25, 75, 153] {
-                assert_eq!(sqrt_native::<8, 16>(near_max::<8>(), Int::<16>::TEN.pow(s), mode), sqrt_newton::<8>(near_max::<8>(), s, mode), "D153 W=16 s={s} mode {mode:?}");
+            for &scale in &[0u32, 25, 75, 153] {
+                assert_eq!(sqrt_native::<8, 16>(near_max::<8>(), Int::<16>::TEN.pow(scale), mode), sqrt_newton::<8>(near_max::<8>(), scale, mode), "D153 W=16 s={scale} mode {mode:?}");
             }
         }
     }

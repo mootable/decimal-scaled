@@ -52,10 +52,10 @@ use crate::int::types::compute_limbs::Limb;
 /// `packed_len(N) ≤ N` for both limb types; stable Rust cannot put `N/2` in an
 /// array length, so the high `N − h` slots stay unused). `out` is fully written.
 #[inline]
-pub(crate) fn sqr_low_limb<const N: usize, L: Limb>(x: &[u64; N], out: &mut [u64; N]) {
+pub(crate) fn sqr_low_limb<const N: usize, L: Limb>(value: &[u64; N], out: &mut [u64; N]) {
     let h = L::packed_len(N);
-    let mut xp = [L::ZERO; N];
-    L::pack(x, &mut xp[..h]);
+    let mut value_packed = [L::ZERO; N];
+    L::pack(value, &mut value_packed[..h]);
 
     let mut acc = [L::ZERO; N];
 
@@ -64,17 +64,17 @@ pub(crate) fn sqr_low_limb<const N: usize, L: Limb>(x: &[u64; N], out: &mut [u64
     // high limb), truncated once the column index reaches `h`.
     let mut i = 0;
     while i < h {
-        let ai = xp[i];
-        if ai != L::ZERO {
+        let value_limb = value_packed[i];
+        if value_limb != L::ZERO {
             let mut carry = L::ZERO;
             let mut j = i + 1;
             while i + j < h {
                 let idx = i + j;
-                let (lo, hi) = ai.widening_mul(xp[j]);
-                let (s1, c1) = acc[idx].overflowing_add(lo);
-                let (s2, c2) = s1.overflowing_add(carry);
-                acc[idx] = s2;
-                carry = hi.add_carries(c1, c2);
+                let (lo, hi) = value_limb.widening_mul(value_packed[j]);
+                let (sum1, carry1) = acc[idx].overflowing_add(lo);
+                let (sum2, carry2) = sum1.overflowing_add(carry);
+                acc[idx] = sum2;
+                carry = hi.add_carries(carry1, carry2);
                 j += 1;
             }
             // The trailing `carry` would land at column `i + j ≥ h` — above the
@@ -85,15 +85,16 @@ pub(crate) fn sqr_low_limb<const N: usize, L: Limb>(x: &[u64; N], out: &mut [u64
 
     // Pass 2: acc[0..h] ·= 2 (the `2 · Σ_{i<j}` factor). `2·acc[k]` carries its
     // top bit out; the incoming carry bit is added as a `Limb::ONE` value.
-    let mut dcarry = L::ZERO;
+    let mut double_carry = L::ZERO;
     let mut k = 0;
     while k < h {
-        let (s1, c1) = acc[k].overflowing_add(acc[k]);
-        let (s2, c2) = s1.overflowing_add(dcarry);
-        acc[k] = s2;
-        // `2·acc[k] == MAX` ⇒ c1=0, and `+1` cannot wrap ⇒ c2=0; `acc[k]==MAX`
-        // ⇒ c1=1, s1=MAX−1, `+dcarry(≤1)` ⇒ c2=0. So c1,c2 are never both set.
-        dcarry = if c1 || c2 { L::ONE } else { L::ZERO };
+        let (sum1, carry1) = acc[k].overflowing_add(acc[k]);
+        let (sum2, carry2) = sum1.overflowing_add(double_carry);
+        acc[k] = sum2;
+        // `2·acc[k] == MAX` ⇒ carry1=0, and `+1` cannot wrap ⇒ carry2=0;
+        // `acc[k]==MAX` ⇒ carry1=1, sum1=MAX−1, `+double_carry(≤1)` ⇒ carry2=0.
+        // So carry1,carry2 are never both set.
+        double_carry = if carry1 || carry2 { L::ONE } else { L::ZERO };
         k += 1;
     }
 
@@ -101,23 +102,24 @@ pub(crate) fn sqr_low_limb<const N: usize, L: Limb>(x: &[u64; N], out: &mut [u64
     let mut i = 0;
     while 2 * i < h {
         let pos = 2 * i;
-        let (lo, hi) = xp[i].widening_mul(xp[i]);
-        let (s, mut prop) = acc[pos].overflowing_add(lo);
-        acc[pos] = s;
-        let mut p = pos + 1;
+        let (lo, hi) = value_packed[i].widening_mul(value_packed[i]);
+        let (sum, mut propagate) = acc[pos].overflowing_add(lo);
+        acc[pos] = sum;
+        let mut carry_pos = pos + 1;
         // Add the high limb `hi` plus the low limb's carry at `pos + 1`, then
         // ripple the carry upward — all truncated at `h`.
-        if p < h {
-            let (s1, c1) = acc[p].overflowing_add(hi);
-            let (s2, c2) = s1.overflowing_add(if prop { L::ONE } else { L::ZERO });
-            acc[p] = s2;
-            prop = c1 || c2;
-            p += 1;
-            while prop && p < h {
-                let (s3, c3) = acc[p].overflowing_add(L::ONE);
-                acc[p] = s3;
-                prop = c3;
-                p += 1;
+        if carry_pos < h {
+            let (sum1, carry1) = acc[carry_pos].overflowing_add(hi);
+            let (sum2, carry2) =
+                sum1.overflowing_add(if propagate { L::ONE } else { L::ZERO });
+            acc[carry_pos] = sum2;
+            propagate = carry1 || carry2;
+            carry_pos += 1;
+            while propagate && carry_pos < h {
+                let (sum3, carry3) = acc[carry_pos].overflowing_add(L::ONE);
+                acc[carry_pos] = sum3;
+                propagate = carry3;
+                carry_pos += 1;
             }
         }
         i += 1;
@@ -138,36 +140,36 @@ mod tests {
     /// widths the u128 arm targets, including the all-ones carry worst case.
     fn diff_at<const N: usize>(seeds: &[u64]) {
         for &seed in seeds {
-            let mut x = [0u64; N];
-            let mut s = seed;
-            for limb in x.iter_mut() {
-                s = s.wrapping_add(0x9E37_79B9_7F4A_7C15);
-                let mut z = s;
+            let mut value = [0u64; N];
+            let mut state = seed;
+            for limb in value.iter_mut() {
+                state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+                let mut z = state;
                 z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
                 z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
                 *limb = z ^ (z >> 31);
             }
-            let mut want = [0u64; N];
-            sqr_low_fixed::<N>(&x, &mut want);
-            let mut got_u64 = [0u64; N];
-            sqr_low_limb::<N, u64>(&x, &mut got_u64);
-            assert_eq!(got_u64, want, "u64 N={N} seed={seed:#x}");
-            let mut got_u128 = [0u64; N];
-            sqr_low_limb::<N, u128>(&x, &mut got_u128);
-            assert_eq!(got_u128, want, "u128 N={N} seed={seed:#x}");
+            let mut expected = [0u64; N];
+            sqr_low_fixed::<N>(&value, &mut expected);
+            let mut actual_u64 = [0u64; N];
+            sqr_low_limb::<N, u64>(&value, &mut actual_u64);
+            assert_eq!(actual_u64, expected, "u64 N={N} seed={seed:#x}");
+            let mut actual_u128 = [0u64; N];
+            sqr_low_limb::<N, u128>(&value, &mut actual_u128);
+            assert_eq!(actual_u128, expected, "u128 N={N} seed={seed:#x}");
         }
     }
 
     fn all_ones_at<const N: usize>() {
-        let x = [u64::MAX; N];
-        let mut want = [0u64; N];
-        sqr_low_fixed::<N>(&x, &mut want);
-        let mut got_u128 = [0u64; N];
-        sqr_low_limb::<N, u128>(&x, &mut got_u128);
-        assert_eq!(got_u128, want, "u128 all-ones N={N}");
-        let mut got_u64 = [0u64; N];
-        sqr_low_limb::<N, u64>(&x, &mut got_u64);
-        assert_eq!(got_u64, want, "u64 all-ones N={N}");
+        let value = [u64::MAX; N];
+        let mut expected = [0u64; N];
+        sqr_low_fixed::<N>(&value, &mut expected);
+        let mut actual_u128 = [0u64; N];
+        sqr_low_limb::<N, u128>(&value, &mut actual_u128);
+        assert_eq!(actual_u128, expected, "u128 all-ones N={N}");
+        let mut actual_u64 = [0u64; N];
+        sqr_low_limb::<N, u64>(&value, &mut actual_u64);
+        assert_eq!(actual_u64, expected, "u64 all-ones N={N}");
     }
 
     #[test]

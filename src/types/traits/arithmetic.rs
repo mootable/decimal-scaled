@@ -104,7 +104,7 @@ pub trait DecimalArithmetic:
     fn div_ceil(self, rhs: Self) -> Self;
     fn abs_diff(self, rhs: Self) -> Self;
     fn midpoint(self, rhs: Self) -> Self;
-    fn mul_add(self, a: Self, b: Self) -> Self;
+    fn mul_add(self, multiplier: Self, addend: Self) -> Self;
 
     // ── Integer-exponent powers ──────────────────────────────────────
 

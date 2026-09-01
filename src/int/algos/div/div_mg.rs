@@ -36,8 +36,8 @@ impl Mg2By1 {
     pub(crate) const fn new(d: u64) -> Self {
         debug_assert!(d >> 63 == 1, "Mg2By1::new: divisor must be normalised");
         // v = floor((B² - 1 - d·B) / d) where B = 2^64.
-        let num = ((!d as u128) << 64) | (u64::MAX as u128);
-        let v = (num / (d as u128)) as u64;
+        let numerator = ((!d as u128) << 64) | (u64::MAX as u128);
+        let v = (numerator / (d as u128)) as u64;
         Self { d, v }
     }
 
@@ -94,8 +94,8 @@ impl Mg3By2 {
             "Mg3By2::new: top divisor limb must be normalised"
         );
         // Step 1: 2-by-1 reciprocal of d1 alone.
-        let num = ((!d1 as u128) << 64) | (u64::MAX as u128);
-        let mut v = (num / (d1 as u128)) as u64;
+        let numerator = ((!d1 as u128) << 64) | (u64::MAX as u128);
+        let mut v = (numerator / (d1 as u128)) as u64;
 
         // Step 2: refine for d0. `p = d1·v + d0` (mod B). If the sum
         // overflows, v was over-estimated → decrement.
@@ -145,16 +145,16 @@ impl Mg3By2 {
         let mut r1 = n1.wrapping_sub(q.wrapping_mul(self.d1));
 
         // Step 2b: (r1, r0) = (r1, n0) - (d1, d0).
-        let r256 = (((r1 as u128) << 64) | (n0 as u128))
+        let remainder_pair = (((r1 as u128) << 64) | (n0 as u128))
             .wrapping_sub(((self.d1 as u128) << 64) | (self.d0 as u128));
-        r1 = (r256 >> 64) as u64;
-        let mut r0 = r256 as u64;
+        r1 = (remainder_pair >> 64) as u64;
+        let mut r0 = remainder_pair as u64;
 
         // Step 2c: (r1, r0) -= d0·q (mod B²).
         let t = (self.d0 as u128).wrapping_mul(q as u128);
-        let r256 = (((r1 as u128) << 64) | (r0 as u128)).wrapping_sub(t);
-        r1 = (r256 >> 64) as u64;
-        r0 = r256 as u64;
+        let remainder_pair = (((r1 as u128) << 64) | (r0 as u128)).wrapping_sub(t);
+        r1 = (remainder_pair >> 64) as u64;
+        r0 = remainder_pair as u64;
 
         // Step 3: q += 1; provisional.
         q = q.wrapping_add(1);
@@ -162,18 +162,18 @@ impl Mg3By2 {
         // Step 4a: first conditional correction.
         let mask = if r1 >= q_lo { u64::MAX } else { 0 };
         q = q.wrapping_add(mask); // adds u64::MAX = -1.
-        let add = ((mask & self.d1) as u128) << 64 | ((mask & self.d0) as u128);
-        let r256 = (((r1 as u128) << 64) | (r0 as u128)).wrapping_add(add);
-        r1 = (r256 >> 64) as u64;
-        r0 = r256 as u64;
+        let correction = ((mask & self.d1) as u128) << 64 | ((mask & self.d0) as u128);
+        let remainder_pair = (((r1 as u128) << 64) | (r0 as u128)).wrapping_add(correction);
+        r1 = (remainder_pair >> 64) as u64;
+        r0 = remainder_pair as u64;
 
         // Step 4b: final correction (rare).
         if r1 > self.d1 || (r1 == self.d1 && r0 >= self.d0) {
             q = q.wrapping_add(1);
-            let r256 = (((r1 as u128) << 64) | (r0 as u128))
+            let remainder_pair = (((r1 as u128) << 64) | (r0 as u128))
                 .wrapping_sub(((self.d1 as u128) << 64) | (self.d0 as u128));
-            r1 = (r256 >> 64) as u64;
-            r0 = r256 as u64;
+            r1 = (remainder_pair >> 64) as u64;
+            r0 = remainder_pair as u64;
         }
 
         (q, r1, r0)
@@ -226,13 +226,14 @@ pub(crate) trait DivLimb: Limb {
     /// whether it borrowed (q̂ was 1 too big ⇒ the D6 add-back fires).
     fn mul_sub_final(u_top: Self, carry: Self::Acc) -> (Self, bool);
     /// Serialise one quotient digit (the `L` value at quotient position `j`)
-    /// into the little-endian u64 output `quot` — the output is always u64
+    /// into the little-endian u64 output `quotient` — the output is always u64
     /// (the engine's external contract), so the digit is written at its u64
-    /// limb offset: `quot[j]` for `u64`, `quot[2j] | quot[2j+1] << 64` for
-    /// `u128`. Bounds-guarded (a digit beyond `quot.len()` is dropped, matching
-    /// both engines' prior `if … < quot.len()` writes), so the generic core
-    /// needs no separate `L`-typed quotient buffer.
-    fn store_quot_digit(quot: &mut [u64], j: usize, digit: Self);
+    /// limb offset: `quotient[j]` for `u64`,
+    /// `quotient[2j] | quotient[2j+1] << 64` for `u128`. Bounds-guarded (a
+    /// digit beyond `quotient.len()` is dropped, matching both engines' prior
+    /// `if … < quotient.len()` writes), so the generic core needs no separate
+    /// `L`-typed quotient buffer.
+    fn store_quot_digit(quotient: &mut [u64], j: usize, digit: Self);
 }
 
 impl DivLimb for u64 {
@@ -257,19 +258,19 @@ impl DivLimb for u64 {
         // generic loop body so the monomorphisation matches the hand-inlined
         // base-2⁶⁴ loop with no call/abstraction overhead.
         let acc = carry + (q_hat as u128) * (v_i as u128);
-        let (res, b) = u_ji.overflowing_sub(acc as u64);
-        (res, (acc >> 64) + (b as u128))
+        let (reduced_limb, borrowed) = u_ji.overflowing_sub(acc as u64);
+        (reduced_limb, (acc >> 64) + (borrowed as u128))
     }
     #[inline(always)]
     fn mul_sub_final(u_top: Self, carry: u128) -> (Self, bool) {
-        let (s, b1) = u_top.overflowing_sub(carry as u64);
+        let (reduced_limb, borrowed) = u_top.overflowing_sub(carry as u64);
         // The borrow is the subtraction borrow OR a non-zero high carry word.
-        (s, b1 || (carry >> 64) != 0)
+        (reduced_limb, borrowed || (carry >> 64) != 0)
     }
     #[inline]
-    fn store_quot_digit(quot: &mut [u64], j: usize, digit: Self) {
-        if j < quot.len() {
-            quot[j] = digit;
+    fn store_quot_digit(quotient: &mut [u64], j: usize, digit: Self) {
+        if j < quotient.len() {
+            quotient[j] = digit;
         }
     }
 }
@@ -308,22 +309,22 @@ impl DivLimb for u128 {
         // (which fits one u128 by the same bound as the u64 double-width form).
         // `inline(always)`: the O(m·n) hot step — see the u64 sibling.
         let (p_lo, p_hi) = <u128 as Limb>::widening_mul(q_hat, v_i);
-        let (sub_lo, c0) = p_lo.overflowing_add(carry);
-        let (res, b) = u_ji.overflowing_sub(sub_lo);
-        (res, p_hi + (c0 as u128) + (b as u128))
+        let (sub_lo, carried) = p_lo.overflowing_add(carry);
+        let (reduced_limb, borrowed) = u_ji.overflowing_sub(sub_lo);
+        (reduced_limb, p_hi + (carried as u128) + (borrowed as u128))
     }
     #[inline(always)]
     fn mul_sub_final(u_top: Self, carry: u128) -> (Self, bool) {
         u_top.overflowing_sub(carry)
     }
     #[inline]
-    fn store_quot_digit(quot: &mut [u64], j: usize, digit: Self) {
+    fn store_quot_digit(quotient: &mut [u64], j: usize, digit: Self) {
         // The u128 digit is two little-endian u64 limbs at offset 2j / 2j+1.
-        if 2 * j < quot.len() {
-            quot[2 * j] = digit as u64;
+        if 2 * j < quotient.len() {
+            quotient[2 * j] = digit as u64;
         }
-        if 2 * j + 1 < quot.len() {
-            quot[2 * j + 1] = (digit >> 64) as u64;
+        if 2 * j + 1 < quotient.len() {
+            quotient[2 * j + 1] = (digit >> 64) as u64;
         }
     }
 }

@@ -29,21 +29,21 @@ use crate::int::types::Int;
 ///
 /// Panics on a zero divisor, matching the `Rem` operator contract.
 #[allow(dead_code)]
-pub(crate) fn rem_schoolbook<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
+pub(crate) fn rem_schoolbook<const N: usize>(dividend: Int<N>, divisor: Int<N>) -> Int<N> {
     assert!(
-        !b.is_zero(),
+        !divisor.is_zero(),
         "attempt to calculate the remainder with a divisor of zero"
     );
-    let neg_r = a.is_negative();
-    let mut quot = [0u64; N];
-    let mut rem = [0u64; N];
+    let remainder_is_negative = dividend.is_negative();
+    let mut quotient = [0u64; N];
+    let mut remainder = [0u64; N];
     div_rem_schoolbook(
-        a.unsigned_abs().as_limbs(),
-        b.unsigned_abs().as_limbs(),
-        &mut quot,
-        &mut rem,
+        dividend.unsigned_abs().as_limbs(),
+        divisor.unsigned_abs().as_limbs(),
+        &mut quotient,
+        &mut remainder,
     );
-    Int::<N>::from_mag_limbs(&rem, neg_r)
+    Int::<N>::from_mag_limbs(&remainder, remainder_is_negative)
 }
 
 #[cfg(test)]
@@ -51,8 +51,8 @@ mod tests {
     use super::rem_schoolbook;
     use crate::int::types::Int;
 
-    /// Known-value table: (a, b, expected_remainder) — all fit in i64
-    /// so we can verify by construction.
+    /// Known-value table: (dividend, divisor, expected_remainder) — all fit in
+    /// i64 so we can verify by construction.
     #[test]
     fn rem_schoolbook_known_values_n1() {
         let cases: &[(i64, i64, i64)] = &[
@@ -67,13 +67,14 @@ mod tests {
             (i64::MAX, 2, 1),
             (i64::MIN + 1, 2, -1),
         ];
-        for &(a, b, want) in cases {
-            let got = rem_schoolbook::<1>(Int::<1>::from_i64(a), Int::<1>::from_i64(b));
+        for &(dividend, divisor, expected) in cases {
+            let actual = rem_schoolbook::<1>(Int::<1>::from_i64(dividend),
+                Int::<1>::from_i64(divisor));
             assert_eq!(
-                got.to_i64(),
-                want,
-                "rem_schoolbook({a}, {b}) = {:?}, want {want}",
-                got.to_i64()
+                actual.to_i64(),
+                expected,
+                "rem_schoolbook({dividend}, {divisor}) = {:?}, want {expected}",
+                actual.to_i64()
             );
         }
     }
@@ -102,16 +103,16 @@ mod tests {
                 12345678901234567,
             ),
         ];
-        for &(a, b) in cases {
-            let ia = Int::<2>::from_i128(a);
-            let ib = Int::<2>::from_i128(b);
-            let got = rem_schoolbook::<2>(ia, ib);
-            let want = a % b;
+        for &(dividend, divisor) in cases {
+            let dividend_int = Int::<2>::from_i128(dividend);
+            let divisor_int = Int::<2>::from_i128(divisor);
+            let actual = rem_schoolbook::<2>(dividend_int, divisor_int);
+            let expected = dividend % divisor;
             assert_eq!(
-                got.to_i128(),
-                want,
-                "rem_schoolbook({a}, {b}) = {:?}, want {want}",
-                got.to_i128()
+                actual.to_i128(),
+                expected,
+                "rem_schoolbook({dividend}, {divisor}) = {:?}, want {expected}",
+                actual.to_i128()
             );
         }
     }

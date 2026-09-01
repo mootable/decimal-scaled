@@ -46,19 +46,19 @@ use crate::int::types::compute_limbs::ComputeLimbs;
 use crate::int::types::traits::BigInt;
 use crate::support::rounding::RoundingMode;
 
-/// `expm1(v)` for a working-scale value `v_w` at scale `w`, by the direct
+/// `expm1(v)` for a `working_value` at `working_scale`, by the direct
 /// series.
 ///
-/// `None` means the value cannot be produced in `S` at this `w`: either the
-/// argument is outside the series' band (the caller must route to a reducing
-/// candidate) or the internal product would wrap the work integer. The
+/// `None` means the value cannot be produced in `S` at this `working_scale`:
+/// either the argument is outside the series' band (the caller must route to a
+/// reducing candidate) or the internal product would wrap the work integer. The
 /// `Option` is the `try_exp_fixed` contract — detect once here, let the policy
 /// wrapper apply the overflow policy.
-pub(crate) fn expm1_series_fixed<S: BigInt>(v_w: S, w: u32) -> Option<S>
+pub(crate) fn expm1_series_fixed<S: BigInt>(working_value: S, working_scale: u32) -> Option<S>
 where
     S::Scratch: ComputeLimbs,
 {
-    expm1_series_fixed_tagged::<S>(v_w, w).0
+    expm1_series_fixed_tagged::<S>(working_value, working_scale).0
 }
 
 /// [`expm1_series_fixed`] with the sign of the series tail alongside it —
@@ -75,37 +75,37 @@ where
 /// computed remainder. `None` makes the walker behave exactly as before, so
 /// both keep the treatment they had.
 pub(crate) fn expm1_series_fixed_tagged<S: BigInt>(
-    v_w: S,
-    w: u32,
+    working_value: S,
+    working_scale: u32,
 ) -> (Option<S>, Option<eg::TailSign>)
 where
     S::Scratch: ComputeLimbs,
 {
-    if v_w == S::ZERO {
+    if working_value == S::ZERO {
         // expm1(0) = 0 exactly — the ONLY exact case (for algebraic x != 0,
         // e^x is transcendental by Lindemann-Weierstrass, so e^x - 1 never
         // lands on a storage grid line).
         return (Some(S::ZERO), None);
     }
-    match sup::regime::<S>(v_w, w) {
+    match sup::regime::<S>(working_value, working_scale) {
         sup::Regime::Overflow => return (None, None),
         sup::Regime::MinusOne => {
-            return (Some(sup::just_above_minus_one::<S>(w)), None);
+            return (Some(sup::just_above_minus_one::<S>(working_scale)), None);
         }
         sup::Regime::Fits => {}
     }
     // Band gate: |v| <= DIRECT_BAND. Tested on the working-scale integer so no
     // division is needed on the hot path.
-    if v_w.abs() > eg::lit::<S>(sup::DIRECT_BAND) * eg::one::<S>(w) {
+    if working_value.abs() > eg::lit::<S>(sup::DIRECT_BAND) * eg::one::<S>(working_scale) {
         return (None, None);
     }
     // Peak: |term| <= 10^w and |s| <= 10^w, so the `term * s` product before
     // the `/10^w` spans at most `2w` digits.
-    if !sup::peak_fits::<S>(2 * sup::scale_bits(w)) {
+    if !sup::peak_fits::<S>(2 * sup::scale_bits(working_scale)) {
         return (None, None);
     }
-    let (v, tail) = eg::expm1_fixed_tagged::<S>(v_w, w);
-    (Some(v), tail)
+    let (expm1_value, tail_sign) = eg::expm1_fixed_tagged::<S>(working_value, working_scale);
+    (Some(expm1_value), tail_sign)
 }
 
 /// `expm1(x)` at storage `St`, computed in the work integer `S` and correctly
@@ -129,7 +129,7 @@ where
 /// handed to [`wtc::round_to_storage_tail_signed_g`], which is the only place
 /// that can act on it.
 ///
-/// This subsumes the old near-zero post-adjust, which tested `result == raw`
+/// This subsumes the old near-zero post-adjust, which tested `rounded == raw`
 /// and so reached only the ONE grid point where the value lands on its own
 /// linear term. Deeper partial sums land on the grid too whenever the
 /// argument's coefficients make `x^j/j!` terminate — `x = -3e-152` reaches the
@@ -155,26 +155,26 @@ where
 #[must_use]
 pub(crate) fn expm1_series_g<St: BigInt + Copy, S: BigInt, const SCALE: u32>(
     raw: St,
-    base_guard: u32,
-    st_max: St,
-    st_min: St,
+    base_guard_digits: u32,
+    storage_max: St,
+    storage_min: St,
     mode: RoundingMode,
 ) -> St
 where
     S::Scratch: ComputeLimbs,
 {
     wtc::round_to_storage_tail_signed_g::<St, S>(
-        base_guard,
+        base_guard_digits,
         SCALE,
         mode,
-        st_max,
-        st_min,
-        |guard| {
-            let (v, tail) = expm1_series_fixed_tagged::<S>(
-                wtc::to_work_scaled_g::<St, S>(raw, guard),
-                SCALE + guard,
+        storage_max,
+        storage_min,
+        |guard_digits| {
+            let (expm1_value, tail_sign) = expm1_series_fixed_tagged::<S>(
+                wtc::to_work_scaled_g::<St, S>(raw, guard_digits),
+                SCALE + guard_digits,
             );
-            (super::checked(v, "expm1_strict", SCALE), tail)
+            (super::checked(expm1_value, "expm1_strict", SCALE), tail_sign)
         },
     )
 }
@@ -194,21 +194,22 @@ where
 pub(crate) fn expm1_series_approx_g<St: BigInt + Copy, S: BigInt, const SCALE: u32>(
     raw: St,
     working_digits: u32,
-    st_max: St,
-    st_min: St,
+    storage_max: St,
+    storage_min: St,
     mode: RoundingMode,
 ) -> St
 where
     S::Scratch: ComputeLimbs,
 {
-    let w = SCALE + working_digits;
-    let r = super::checked(
-        expm1_series_fixed::<S>(wtc::to_work_scaled_g::<St, S>(raw, working_digits), w),
+    let working_scale = SCALE + working_digits;
+    let working_value = super::checked(
+        expm1_series_fixed::<S>(wtc::to_work_scaled_g::<St, S>(raw, working_digits), working_scale),
         "expm1_approx",
         SCALE,
     );
-    let out = wtc::round_to_storage_with_g::<St, S>(r, w, SCALE, mode, st_max, st_min);
-    super::adjust_near_zero::<St>(out, raw, mode)
+    let rounded = wtc::round_to_storage_with_g::<St, S>(
+        working_value, working_scale, SCALE, mode, storage_max, storage_min);
+    super::adjust_near_zero::<St>(rounded, raw, mode)
 }
 
 /// Tier-generic entry to [`expm1_series_g`] — sources the work integer `C::W`,

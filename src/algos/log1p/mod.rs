@@ -54,7 +54,7 @@ use crate::support::rounding::RoundingMode;
 /// the parabola term is `Q = raw²/(2·10^SCALE)`.
 ///
 /// `log1p` shares BOTH of that adjust's grid points, not just the first.
-/// The tangent case (`result == raw`) is the original one: `log1p(t) < t`
+/// The tangent case (`rounded == raw`) is the original one: `log1p(t) < t`
 /// strictly, so a downward-directed result that landed on `t` is above
 /// the true value. The parabola case is the same `δ² ≡ 0 (mod 2·10^SCALE)`
 /// family `ln` hits near `x = 1` — read at `t` rather than at `x − 1`, it
@@ -66,7 +66,7 @@ use crate::support::rounding::RoundingMode;
 /// [`wide_trig_core::adjust_log_near_zero`]: crate::algos::support::wide_trig_core::adjust_log_near_zero
 #[inline]
 pub(crate) fn adjust_near_zero<St: BigInt, S: BigInt, const SCALE: u32>(
-    result: St,
+    rounded: St,
     raw: St,
     mode: RoundingMode,
 ) -> St
@@ -74,10 +74,10 @@ where
     S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
     if crate::support::rounding::is_nearest_mode(mode) {
-        return result;
+        return rounded;
     }
     let one = crate::consts::pow10::dispatch::<St>(SCALE);
-    crate::algos::support::wide_trig_core::adjust_log_near_zero::<St, S>(result, raw, one, mode)
+    crate::algos::support::wide_trig_core::adjust_log_near_zero::<St, S>(rounded, raw, one, mode)
 }
 
 /// Panics unless `t > -1`, i.e. unless the raw storage value exceeds
@@ -149,25 +149,25 @@ mod crate_internal_tests {
             UNIT / 2,
             -UNIT / 2,
         ];
-        for &t in &TS {
+        for &t_raw in &TS {
             for &mode in &MODES {
-                let v = Int::<2>::from_i128(t);
+                let t_storage = Int::<2>::from_i128(t_raw);
                 assert_eq!(
                     log1p_artanh_g::<Int<2>, WZiv, 20>(
-                        v,
+                        t_storage,
                         GUARD,
                         Int::<2>::MAX,
                         Int::<2>::MIN,
                         mode
                     ),
                     log1p_with_ln_g::<Int<2>, WZiv, 20>(
-                        v,
+                        t_storage,
                         GUARD,
                         Int::<2>::MAX,
                         Int::<2>::MIN,
                         mode
                     ),
-                    "artanh != with_ln at t_raw={t} mode={mode:?}"
+                    "artanh != with_ln at t_raw={t_raw} mode={mode:?}"
                 );
             }
         }
@@ -181,18 +181,18 @@ mod crate_internal_tests {
     /// no-mode entry points actually use.
     #[test]
     fn log1p_default_mode_siblings_agree() {
-        let t = UNIT / 2;
+        let t_raw = UNIT / 2;
         assert_eq!(
-            d38s20(t).log1p_approx(45).to_bits().as_i128(),
-            d38s20(t)
+            d38s20(t_raw).log1p_approx(45).to_bits().as_i128(),
+            d38s20(t_raw)
                 .log1p_approx_with(45, crate::support::rounding::DEFAULT_ROUNDING_MODE)
                 .to_bits()
                 .as_i128(),
             "log1p_approx != log1p_approx_with(default mode)"
         );
         assert_eq!(
-            d38s20(t).log1p_strict().to_bits().as_i128(),
-            d38s20(t)
+            d38s20(t_raw).log1p_strict().to_bits().as_i128(),
+            d38s20(t_raw)
                 .log1p_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
                 .to_bits()
                 .as_i128(),

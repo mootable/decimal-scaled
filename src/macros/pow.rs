@@ -23,19 +23,19 @@ macro_rules! decl_decimal_pow {
             #[inline]
             #[must_use]
             pub fn pow(self, exp: u32) -> Self {
-                let mut acc = Self::ONE;
+                let mut accumulator = Self::ONE;
                 let mut base = self;
-                let mut e = exp;
-                while e > 0 {
-                    if e & 1 == 1 {
-                        acc *= base;
+                let mut remaining_exponent = exp;
+                while remaining_exponent > 0 {
+                    if remaining_exponent & 1 == 1 {
+                        accumulator *= base;
                     }
-                    e >>= 1;
-                    if e > 0 {
+                    remaining_exponent >>= 1;
+                    if remaining_exponent > 0 {
                         base = base * base;
                     }
                 }
-                acc
+                accumulator
             }
 
             /// Signed integer exponent. For non-negative `exp` this is
@@ -60,38 +60,38 @@ macro_rules! decl_decimal_pow {
             #[inline]
             #[must_use]
             pub fn checked_pow(self, exp: u32) -> ::core::option::Option<Self> {
-                let mut acc = Self::ONE;
+                let mut accumulator = Self::ONE;
                 let mut base = self;
-                let mut e = exp;
-                while e > 0 {
-                    if e & 1 == 1 {
-                        acc = acc.checked_mul(base)?;
+                let mut remaining_exponent = exp;
+                while remaining_exponent > 0 {
+                    if remaining_exponent & 1 == 1 {
+                        accumulator = accumulator.checked_mul(base)?;
                     }
-                    e >>= 1;
-                    if e > 0 {
+                    remaining_exponent >>= 1;
+                    if remaining_exponent > 0 {
                         base = base.checked_mul(base)?;
                     }
                 }
-                ::core::option::Option::Some(acc)
+                ::core::option::Option::Some(accumulator)
             }
 
             /// Two's-complement wrap at every multiplication step.
             #[inline]
             #[must_use]
             pub fn wrapping_pow(self, exp: u32) -> Self {
-                let mut acc = Self::ONE;
+                let mut accumulator = Self::ONE;
                 let mut base = self;
-                let mut e = exp;
-                while e > 0 {
-                    if e & 1 == 1 {
-                        acc = acc.wrapping_mul(base);
+                let mut remaining_exponent = exp;
+                while remaining_exponent > 0 {
+                    if remaining_exponent & 1 == 1 {
+                        accumulator = accumulator.wrapping_mul(base);
                     }
-                    e >>= 1;
-                    if e > 0 {
+                    remaining_exponent >>= 1;
+                    if remaining_exponent > 0 {
                         base = base.wrapping_mul(base);
                     }
                 }
-                acc
+                accumulator
             }
 
             /// Saturates to `Self::MAX` or `Self::MIN` on overflow,
@@ -104,11 +104,11 @@ macro_rules! decl_decimal_pow {
                 }
                 // The result is negative iff the base is negative and
                 // the exponent is odd.
-                let neg = self < Self::ZERO && (exp & 1) == 1;
+                let is_negative = self < Self::ZERO && (exp & 1) == 1;
                 match self.checked_pow(exp) {
-                    ::core::option::Option::Some(v) => v,
+                    ::core::option::Option::Some(value) => value,
                     ::core::option::Option::None => {
-                        if neg {
+                        if is_negative {
                             Self::MIN
                         } else {
                             Self::MAX
@@ -123,24 +123,24 @@ macro_rules! decl_decimal_pow {
             #[inline]
             #[must_use]
             pub fn overflowing_pow(self, exp: u32) -> (Self, bool) {
-                let mut acc = Self::ONE;
+                let mut accumulator = Self::ONE;
                 let mut base = self;
-                let mut e = exp;
+                let mut remaining_exponent = exp;
                 let mut overflowed = false;
-                while e > 0 {
-                    if e & 1 == 1 {
-                        let (v, ov) = acc.overflowing_mul(base);
-                        acc = v;
-                        overflowed |= ov;
+                while remaining_exponent > 0 {
+                    if remaining_exponent & 1 == 1 {
+                        let (product, step_overflowed) = accumulator.overflowing_mul(base);
+                        accumulator = product;
+                        overflowed |= step_overflowed;
                     }
-                    e >>= 1;
-                    if e > 0 {
-                        let (v, ov) = base.overflowing_mul(base);
-                        base = v;
-                        overflowed |= ov;
+                    remaining_exponent >>= 1;
+                    if remaining_exponent > 0 {
+                        let (squared, step_overflowed) = base.overflowing_mul(base);
+                        base = squared;
+                        overflowed |= step_overflowed;
                     }
                 }
-                (acc, overflowed)
+                (accumulator, overflowed)
             }
         }
     };

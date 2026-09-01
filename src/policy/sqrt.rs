@@ -155,8 +155,8 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // (Class I "continuous win-region" gate); each cell routed to
         // Native is bit-identical to Newton across all six modes and a
         // measured win.
-        (6, s) if s >= 24 => Select::ByAlgorithm(Algorithm::Native), // D115, W=12
-        (8, s) if s >= 32 => Select::ByAlgorithm(Algorithm::Native), // D153, W=16
+        (6, scale) if scale >= 24 => Select::ByAlgorithm(Algorithm::Native), // D115, W=12
+        (8, scale) if scale >= 32 => Select::ByAlgorithm(Algorithm::Native), // D153, W=16
         // Per-tier crossovers tightened by adaptive-bisection in
         // `root_kernel_ab.rs` (cores 18-19): the conservative
         // `s >= 4N` heuristic placed several thresholds INSIDE the slice
@@ -165,12 +165,12 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // routed cells just above the gate. The refined thresholds below
         // sit at the true bisected crossover per tier; the architecture-
         // review Class I check (continuous win-region) requires this.
-        (12, s) if s >= 70 => Select::ByAlgorithm(Algorithm::Native), // D230, W=24
-        (16, s) if s >= 64 => Select::ByAlgorithm(Algorithm::Native), // D307, W=32
-        (24, s) if s >= 96 => Select::ByAlgorithm(Algorithm::Native), // D462, W=48
-        (32, s) if s >= 160 => Select::ByAlgorithm(Algorithm::Native), // D616, W=64
-        (48, s) if s >= 260 => Select::ByAlgorithm(Algorithm::Native), // D924, W=96
-        (64, s) if s >= 256 => Select::ByAlgorithm(Algorithm::Native), // D1232, W=128
+        (12, scale) if scale >= 70 => Select::ByAlgorithm(Algorithm::Native), // D230, W=24
+        (16, scale) if scale >= 64 => Select::ByAlgorithm(Algorithm::Native), // D307, W=32
+        (24, scale) if scale >= 96 => Select::ByAlgorithm(Algorithm::Native), // D462, W=48
+        (32, scale) if scale >= 160 => Select::ByAlgorithm(Algorithm::Native), // D616, W=64
+        (48, scale) if scale >= 260 => Select::ByAlgorithm(Algorithm::Native), // D924, W=96
+        (64, scale) if scale >= 256 => Select::ByAlgorithm(Algorithm::Native), // D1232, W=128
         // Everything else (wider tiers at low/mid scales) — generic Newton
         // over the int layer's width-agnostic slice `isqrt`.
         _ => Select::ByAlgorithm(Algorithm::Newton),
@@ -199,8 +199,8 @@ where
         return Int::<N>::ZERO;
     }
     let algo = match const { select::<N, SCALE>() } {
-        Select::ByAlgorithm(a) => a,
-        Select::ByValue(f) => f(&raw),
+        Select::ByAlgorithm(algorithm) => algorithm,
+        Select::ByValue(choose) => choose(&raw),
     };
     match algo {
         Algorithm::Newton => sqrt::sqrt_newton::sqrt_newton::<N>(raw, SCALE, mode),

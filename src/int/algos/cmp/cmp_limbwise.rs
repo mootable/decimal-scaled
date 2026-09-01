@@ -21,24 +21,24 @@ use core::cmp::Ordering;
 /// Reuses the `cmp_fixed` kernel from [`crate::int::algos::support::limbs`] so
 /// the comparison loop is not duplicated here.
 #[inline]
-pub(crate) const fn cmp_limbwise<const N: usize>(a: Int<N>, b: Int<N>) -> Ordering {
-    let sn = a.is_negative();
-    let so = b.is_negative();
-    if sn && !so {
+pub(crate) const fn cmp_limbwise<const N: usize>(lhs: Int<N>, rhs: Int<N>) -> Ordering {
+    let lhs_is_negative = lhs.is_negative();
+    let rhs_is_negative = rhs.is_negative();
+    if lhs_is_negative && !rhs_is_negative {
         return Ordering::Less;
     }
-    if !sn && so {
+    if !lhs_is_negative && rhs_is_negative {
         return Ordering::Greater;
     }
     // Same sign: compare magnitudes. `cmp_fixed` returns -1 / 0 / 1.
-    let a_mag = a.unsigned_abs();
-    let b_mag = b.unsigned_abs();
-    let c = cmp_fixed(a_mag.as_limbs(), b_mag.as_limbs());
+    let lhs_magnitude = lhs.unsigned_abs();
+    let rhs_magnitude = rhs.unsigned_abs();
+    let comparison = cmp_fixed(lhs_magnitude.as_limbs(), rhs_magnitude.as_limbs());
     // For two negatives the larger magnitude is the smaller value.
-    let c = if sn { -c } else { c };
-    if c < 0 {
+    let comparison = if lhs_is_negative { -comparison } else { comparison };
+    if comparison < 0 {
         Ordering::Less
-    } else if c > 0 {
+    } else if comparison > 0 {
         Ordering::Greater
     } else {
         Ordering::Equal
@@ -51,24 +51,24 @@ pub(crate) const fn cmp_limbwise<const N: usize>(a: Int<N>, b: Int<N>) -> Orderi
 /// general `M != N` case.
 #[inline]
 pub(crate) const fn cmp_limbwise_cross<const N: usize, const M: usize>(
-    a: Int<N>,
-    b: Int<M>,
+    lhs: Int<N>,
+    rhs: Int<M>,
 ) -> Ordering {
-    let sn = a.is_negative();
-    let so = b.is_negative();
-    if sn && !so {
+    let lhs_is_negative = lhs.is_negative();
+    let rhs_is_negative = rhs.is_negative();
+    if lhs_is_negative && !rhs_is_negative {
         return Ordering::Less;
     }
-    if !sn && so {
+    if !lhs_is_negative && rhs_is_negative {
         return Ordering::Greater;
     }
-    let a_mag = a.unsigned_abs();
-    let b_mag = b.unsigned_abs();
-    let c = cmp_cross(a_mag.as_limbs(), b_mag.as_limbs());
-    let c = if sn { -c } else { c };
-    if c < 0 {
+    let lhs_magnitude = lhs.unsigned_abs();
+    let rhs_magnitude = rhs.unsigned_abs();
+    let comparison = cmp_cross(lhs_magnitude.as_limbs(), rhs_magnitude.as_limbs());
+    let comparison = if lhs_is_negative { -comparison } else { comparison };
+    if comparison < 0 {
         Ordering::Less
-    } else if c > 0 {
+    } else if comparison > 0 {
         Ordering::Greater
     } else {
         Ordering::Equal

@@ -49,8 +49,8 @@ const BZ_BASECASE: usize = 16;
 /// tiers: the decimal `÷10^w` rescale and the wide-transcendental slice roots
 /// (`isqrt_newton` / `icbrt_newton` / `newton_reciprocal`) present **working**
 /// numerators that exceed the widest storage width — at the supported build the
-/// effective divisor `den_n` reaches ~67 limbs (≥ `BZ_THRESHOLD`, so BZ DOES
-/// engage there) over a `~2·den_n` ≈ 134-limb dividend. Every recursive
+/// effective `divisor_len` reaches ~67 limbs (≥ `BZ_THRESHOLD`, so BZ DOES
+/// engage there) over a `~2·divisor_len` ≈ 134-limb dividend. Every recursive
 /// sub-buffer (`u`, the `2n` block dividend, the `3s` sub-dividend, the `2s+2`
 /// correction window) is bounded by that widest working dividend, which
 /// [`MAX_QUADRUPLE_LIMBS`] (`4·MAX_WORK_N + ⌈MAX_WORK_N/2⌉`, the build-max
@@ -66,39 +66,40 @@ const BZ_BASECASE: usize = 16;
 const BZ_MAX: usize = MAX_QUADRUPLE_LIMBS;
 
 /// Burnikel–Ziegler recursive fast-division entry. Strips the operand shapes,
-/// applies the engagement guard (the same `n < BZ_THRESHOLD || top < 2·n`
-/// short-circuit to Knuth the policy threshold encodes), then runs the
-/// recursion. The chosen-engine `match` in
+/// applies the engagement guard (the same
+/// `n < BZ_THRESHOLD || dividend_len < 2·n` short-circuit to Knuth the policy
+/// threshold encodes), then runs the recursion. The chosen-engine `match` in
 /// [`crate::int::policy::div_rem::dispatch`] only reaches here for a divisor of
 /// at least `BZ_THRESHOLD` effective limbs whose dividend is at least twice as
 /// wide.
 pub(crate) fn div_burnikel_ziegler_with_knuth(
-    num: &[u64],
-    den: &[u64],
-    quot: &mut [u64],
-    rem: &mut [u64],
+    dividend: &[u64],
+    divisor: &[u64],
+    quotient: &mut [u64],
+    remainder: &mut [u64],
 ) {
-    let mut n = den.len();
-    while n > 0 && den[n - 1] == 0 {
+    let mut n = divisor.len();
+    while n > 0 && divisor[n - 1] == 0 {
         n -= 1;
     }
     assert!(n > 0, "div_burnikel_ziegler_with_knuth: divide by zero");
 
-    let mut top = num.len();
-    while top > 0 && num[top - 1] == 0 {
-        top -= 1;
+    let mut dividend_len = dividend.len();
+    while dividend_len > 0 && dividend[dividend_len - 1] == 0 {
+        dividend_len -= 1;
     }
 
-    if n < crate::int::policy::div_rem::BZ_THRESHOLD || top < 2 * n {
-        div_knuth(num, den, quot, rem);
+    if n < crate::int::policy::div_rem::BZ_THRESHOLD || dividend_len < 2 * n {
+        div_knuth(dividend, divisor, quotient, remainder);
         return;
     }
 
-    bz_recursive_core(num, den, quot, rem, n, top);
+    bz_recursive_core(dividend, divisor, quotient, remainder, n, dividend_len);
 }
 
-/// The recursive core. Callers pass the stripped effective shape `(n, top)`;
-/// the public entry above applies the engagement guard first.
+/// The recursive core. Callers pass the stripped effective shape
+/// `(n, dividend_len)`; the public entry above applies the engagement guard
+/// first.
 ///
 /// Normalises the divisor to a full top limb (Knuth's shift), runs the
 /// block-recursive divide ([`div_blocks`]) so the dividend is consumed in
@@ -107,119 +108,124 @@ pub(crate) fn div_burnikel_ziegler_with_knuth(
 /// the production engagement threshold without an engagement branch in the
 /// timed path.
 pub(crate) fn bz_recursive_core(
-    num: &[u64],
-    den: &[u64],
-    quot: &mut [u64],
-    rem: &mut [u64],
+    dividend: &[u64],
+    divisor: &[u64],
+    quotient: &mut [u64],
+    remainder: &mut [u64],
     n: usize,
-    top: usize,
+    dividend_len: usize,
 ) {
-    for q in quot.iter_mut() {
-        *q = 0;
+    for slot in quotient.iter_mut() {
+        *slot = 0;
     }
-    for r in rem.iter_mut() {
-        *r = 0;
+    for slot in remainder.iter_mut() {
+        *slot = 0;
     }
 
     // Normalise so the divisor's top limb has its high bit set (Knuth's
     // shift); the recursion's `D_{3n/2n}` quotient estimate relies on a
     // normalised divisor exactly as Knuth does.
-    let shift = den[n - 1].leading_zeros();
+    let shift = divisor[n - 1].leading_zeros();
 
     let mut v = [0u64; BZ_MAX];
     let mut u = [0u64; BZ_MAX + 2];
-    debug_assert!(n <= BZ_MAX && top + 1 < BZ_MAX + 2);
+    debug_assert!(n <= BZ_MAX && dividend_len + 1 < BZ_MAX + 2);
 
     if shift == 0 {
-        v[..n].copy_from_slice(&den[..n]);
-        u[..top].copy_from_slice(&num[..top]);
+        v[..n].copy_from_slice(&divisor[..n]);
+        u[..dividend_len].copy_from_slice(&dividend[..dividend_len]);
     } else {
         let mut carry: u64 = 0;
         for i in 0..n {
-            let val = den[i];
-            v[i] = (val << shift) | carry;
-            carry = val >> (64 - shift);
+            let limb = divisor[i];
+            v[i] = (limb << shift) | carry;
+            carry = limb >> (64 - shift);
         }
         carry = 0;
-        for i in 0..top {
-            let val = num[i];
-            u[i] = (val << shift) | carry;
-            carry = val >> (64 - shift);
+        for i in 0..dividend_len {
+            let limb = dividend[i];
+            u[i] = (limb << shift) | carry;
+            carry = limb >> (64 - shift);
         }
-        u[top] = carry;
+        u[dividend_len] = carry;
     }
-    // The normalised dividend occupies `top + 1` limbs (the extra carry limb).
-    let u_len = top + 1;
+    // The normalised dividend occupies `dividend_len + 1` limbs (the extra
+    // carry limb).
+    let u_len = dividend_len + 1;
 
     // Block-recursive divide of the normalised `u` by the normalised `v[..n]`.
     let mut r_norm = [0u64; BZ_MAX];
-    div_blocks(&u[..u_len], &v[..n], n, quot, &mut r_norm[..n]);
+    div_blocks(&u[..u_len], &v[..n], n, quotient, &mut r_norm[..n]);
 
     // De-normalise the remainder (shift right by `shift`).
     if shift == 0 {
-        let copy_n = n.min(rem.len());
-        rem[..copy_n].copy_from_slice(&r_norm[..copy_n]);
+        let copy_len = n.min(remainder.len());
+        remainder[..copy_len].copy_from_slice(&r_norm[..copy_len]);
     } else {
         for i in 0..n {
-            if i < rem.len() {
+            if i < remainder.len() {
                 let lo = r_norm[i] >> shift;
                 let hi_into_lo = if i + 1 < n {
                     r_norm[i + 1] << (64 - shift)
                 } else {
                     0
                 };
-                rem[i] = lo | hi_into_lo;
+                remainder[i] = lo | hi_into_lo;
             }
         }
     }
 }
 
 /// Block-recursive driver: divide a (normalised) dividend `u` by a
-/// (normalised) `n`-limb divisor `v`, producing the full quotient in `quot`
-/// and the `n`-limb remainder in `rem`.
+/// (normalised) `n`-limb divisor `v`, producing the full quotient in
+/// `quotient` and the `n`-limb remainder in `remainder`.
 ///
 /// Burnikel–Ziegler's outer loop: walk the dividend in `n`-limb blocks from the
-/// most-significant end, maintaining a running `n`-limb remainder `r` (`< v`).
-/// Each block forms the `2n`-limb dividend `r ‖ block` and runs ONE
-/// [`div_2n_1n`] (the recursive `D_{2n/1n}`), whose `n`-limb quotient is that
-/// block's quotient digits and whose `n`-limb remainder carries into the next
-/// block. For the `2n`/`n` `div` shape there is exactly one block beyond the
-/// initial zero `r`; a wider dividend generalises to `⌈top/n⌉` blocks.
-fn div_blocks(u: &[u64], v: &[u64], n: usize, quot: &mut [u64], rem: &mut [u64]) {
+/// most-significant end, maintaining a `running_remainder` of `n` limbs
+/// (`< v`). Each block forms the `2n`-limb dividend `running_remainder ‖ block`
+/// and runs ONE [`div_2n_1n`] (the recursive `D_{2n/1n}`), whose `n`-limb
+/// quotient is that block's quotient digits and whose `n`-limb remainder
+/// carries into the next block. For the `2n`/`n` `div` shape there is exactly
+/// one block beyond the initial zero `running_remainder`; a wider dividend
+/// generalises to `⌈u_len/n⌉` blocks.
+fn div_blocks(u: &[u64], v: &[u64], n: usize, quotient: &mut [u64], remainder: &mut [u64]) {
     let u_len = u.len();
     let blocks = u_len.div_ceil(n);
 
-    let mut r = [0u64; BZ_MAX]; // running n-limb remainder (< v)
-    let mut dividend = [0u64; BZ_MAX]; // r ‖ block, 2n limbs
+    let mut running_remainder = [0u64; BZ_MAX]; // running n-limb remainder (< v)
+    let mut dividend = [0u64; BZ_MAX]; // running_remainder ‖ block, 2n limbs
     let mut q_block = [0u64; BZ_MAX]; // n-limb quotient digits
 
     let mut idx = blocks;
     while idx > 0 {
         idx -= 1;
-        let lo = idx * n;
-        let hi = ((idx + 1) * n).min(u_len);
-        let block_len = hi - lo;
+        let block_start = idx * n;
+        let block_end = ((idx + 1) * n).min(u_len);
+        let block_len = block_end - block_start;
 
-        // Build the `2n`-limb dividend = r·2^(64n) + block. The low `block_len`
-        // limbs are the block; limbs `[block_len, n)` (if any) are zero; the
-        // high `n` limbs are `r`.
-        dividend[..block_len].copy_from_slice(&u[lo..lo + block_len]);
-        for d in dividend[block_len..n].iter_mut() {
-            *d = 0;
+        // Build the `2n`-limb dividend = running_remainder·2^(64n) + block. The
+        // low `block_len` limbs are the block; limbs `[block_len, n)` (if any)
+        // are zero; the high `n` limbs are `running_remainder`.
+        dividend[..block_len]
+            .copy_from_slice(&u[block_start..block_start + block_len]);
+        for slot in dividend[block_len..n].iter_mut() {
+            *slot = 0;
         }
-        dividend[n..2 * n].copy_from_slice(&r[..n]);
+        dividend[n..2 * n].copy_from_slice(&running_remainder[..n]);
 
-        div_2n_1n(&dividend[..2 * n], v, n, &mut q_block[..n], &mut r[..n]);
+        div_2n_1n(&dividend[..2 * n], v, n, &mut q_block[..n],
+            &mut running_remainder[..n]);
 
-        let store_end = (lo + n).min(quot.len());
-        let store_len = store_end.saturating_sub(lo);
+        let store_end = (block_start + n).min(quotient.len());
+        let store_len = store_end.saturating_sub(block_start);
         if store_len > 0 {
-            quot[lo..lo + store_len].copy_from_slice(&q_block[..store_len]);
+            quotient[block_start..block_start + store_len]
+                .copy_from_slice(&q_block[..store_len]);
         }
     }
 
-    let rem_n = n.min(rem.len());
-    rem[..rem_n].copy_from_slice(&r[..rem_n]);
+    let copy_len = n.min(remainder.len());
+    remainder[..copy_len].copy_from_slice(&running_remainder[..copy_len]);
 }
 
 /// `D_{2n/1n}` — divide a `2n`-limb dividend `a` by an `n`-limb (normalised)
@@ -293,8 +299,8 @@ fn div_3n_2n(a: &[u64], b: &[u64], s: usize, q: &mut [u64], r: &mut [u64]) {
         // a < b·2^(64s) gives a1 <= b_hi, so `>=` means a1 == b_hi and
         //   r1 = a_top2 - q_hat·b_hi = a_top2 + b_hi - b_hi·2^(64s) = a2 + b_hi
         // (an s-limb value plus a possible carry limb).
-        for x in q_hat[..s].iter_mut() {
-            *x = u64::MAX;
+        for slot in q_hat[..s].iter_mut() {
+            *slot = u64::MAX;
         }
         r1[..s].copy_from_slice(&a[s..2 * s]); // a2 = a_top2's low s limbs
         if add_assign(&mut r1[..s], b_hi) {
@@ -344,21 +350,22 @@ fn div_3n_2n(a: &[u64], b: &[u64], s: usize, q: &mut [u64], r: &mut [u64]) {
 /// production engagement guard, so the Knuth-vs-BZ crossover can be timed at
 /// sub-threshold widths. Not used in production routing.
 #[cfg(feature = "bench-alt")]
-pub(crate) fn bz_chunk_core_forced(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
-    let mut n = den.len();
-    while n > 0 && den[n - 1] == 0 {
+pub(crate) fn bz_chunk_core_forced(dividend: &[u64], divisor: &[u64], quotient: &mut [u64],
+    remainder: &mut [u64]) {
+    let mut n = divisor.len();
+    while n > 0 && divisor[n - 1] == 0 {
         n -= 1;
     }
     assert!(n > 0, "bz_chunk_core_forced: divide by zero");
-    let mut top = num.len();
-    while top > 0 && num[top - 1] == 0 {
-        top -= 1;
+    let mut dividend_len = dividend.len();
+    while dividend_len > 0 && dividend[dividend_len - 1] == 0 {
+        dividend_len -= 1;
     }
-    bz_recursive_core(num, den, quot, rem, n, top);
+    bz_recursive_core(dividend, divisor, quotient, remainder, n, dividend_len);
 }
 
 // The differentials below all drive the recursion at the widest WORKING widths
-// (`den_n` up to ~69), so they require the xx-wide divide
+// (`divisor_len` up to ~69), so they require the xx-wide divide
 // scratch and are gated on it — gating the whole module keeps the narrow default
 // build free of unused-import / dead-helper warnings.
 #[cfg(all(test, feature = "xx-wide"))]
@@ -378,50 +385,53 @@ mod tests {
         }
     }
 
-    // Build a `(num, den)` pair: `den` exactly `den_n` nonzero-top limbs, `num`
-    // exactly `top` limbs (top limb forced nonzero). The recursion + Knuth both
-    // strip leading zeros, so the EFFECTIVE shape is `(top, den_n)`.
-    fn make(next: &mut impl FnMut() -> u64, top: usize, den_n: usize) -> (Vec<u64>, Vec<u64>) {
-        let mut num = vec![0u64; top];
-        let mut den = vec![0u64; den_n];
-        for x in num.iter_mut() {
-            *x = next();
+    // Build a `(dividend, divisor)` pair: `divisor` exactly `divisor_len`
+    // nonzero-top limbs, `dividend` exactly `dividend_len` limbs (top limb
+    // forced nonzero). The recursion + Knuth both strip leading zeros, so the
+    // EFFECTIVE shape is `(dividend_len, divisor_len)`.
+    fn make(next: &mut impl FnMut() -> u64, dividend_len: usize, divisor_len: usize)
+        -> (Vec<u64>, Vec<u64>) {
+        let mut dividend = vec![0u64; dividend_len];
+        let mut divisor = vec![0u64; divisor_len];
+        for slot in dividend.iter_mut() {
+            *slot = next();
         }
-        for x in den.iter_mut() {
-            *x = next();
+        for slot in divisor.iter_mut() {
+            *slot = next();
         }
-        num[top - 1] |= 0x8000_0000_0000_0000;
-        den[den_n - 1] |= 0x8000_0000_0000_0000;
-        (num, den)
+        dividend[dividend_len - 1] |= 0x8000_0000_0000_0000;
+        divisor[divisor_len - 1] |= 0x8000_0000_0000_0000;
+        (dividend, divisor)
     }
 
     // Drive the forced recursive core and assert bit-identity with the Knuth
     // reference (the exact-quotient oracle for an integer divide).
-    fn assert_recursive_matches_knuth(num: &[u64], den: &[u64], label: &str) {
-        let len = num.len();
-        let mut q_ref = vec![0u64; len + 1];
-        let mut r_ref = vec![0u64; len + 1];
-        div_knuth(num, den, &mut q_ref, &mut r_ref);
+    fn assert_recursive_matches_knuth(dividend: &[u64], divisor: &[u64], label: &str) {
+        let len = dividend.len();
+        let mut quotient_reference = vec![0u64; len + 1];
+        let mut remainder_reference = vec![0u64; len + 1];
+        div_knuth(dividend, divisor, &mut quotient_reference, &mut remainder_reference);
 
         // Strip the divisor / dividend to their effective lengths, then run the
         // recursive core directly (bypasses the engagement guard so the
         // recursion is exercised at every width, not only routed ones).
-        let mut den_n = den.len();
-        while den_n > 0 && den[den_n - 1] == 0 {
-            den_n -= 1;
+        let mut divisor_len = divisor.len();
+        while divisor_len > 0 && divisor[divisor_len - 1] == 0 {
+            divisor_len -= 1;
         }
-        let mut top = num.len();
-        while top > 0 && num[top - 1] == 0 {
-            top -= 1;
+        let mut dividend_len = dividend.len();
+        while dividend_len > 0 && dividend[dividend_len - 1] == 0 {
+            dividend_len -= 1;
         }
-        let mut q_bz = vec![0u64; len + 1];
-        let mut r_bz = vec![0u64; len + 1];
-        bz_recursive_core(num, den, &mut q_bz, &mut r_bz, den_n, top);
+        let mut quotient_bz = vec![0u64; len + 1];
+        let mut remainder_bz = vec![0u64; len + 1];
+        bz_recursive_core(dividend, divisor, &mut quotient_bz, &mut remainder_bz,
+            divisor_len, dividend_len);
 
-        assert_eq!(q_bz, q_ref, "BZ recursive quot mismatch [{label}]");
+        assert_eq!(quotient_bz, quotient_reference, "BZ recursive quot mismatch [{label}]");
         assert_eq!(
-            r_bz[..den_n],
-            r_ref[..den_n],
+            remainder_bz[..divisor_len],
+            remainder_reference[..divisor_len],
             "BZ recursive rem mismatch [{label}]"
         );
     }
@@ -431,43 +441,52 @@ mod tests {
     // transcendental golden cells (`index out of bounds: len 134 idx 134`).
     // Production presents a divide at WORKING widths exceeding storage — the
     // `÷10^w` rescale + the wide-transcendental slice roots give an effective
-    // `den_n` up to ~67 over a `~2·den_n` dividend — and BZ engages there
-    // (`den_n ≥ BZ_THRESHOLD`). These are the exact 2n/n shapes that arise
-    // in practice (134/67, 138/69, 96/48) plus neighbours, each bit-identical to
-    // Knuth. xx-wide so the build-max recursive scratch is the widest tier.
+    // `divisor_len` up to ~67 over a `~2·divisor_len` dividend — and BZ engages
+    // there (`divisor_len ≥ BZ_THRESHOLD`). These are the exact 2n/n shapes that
+    // arise in practice (134/67, 138/69, 96/48) plus neighbours, each
+    // bit-identical to Knuth. xx-wide so the build-max recursive scratch is the
+    // widest tier.
     #[test]
     fn bz_recursive_matches_knuth_working_width_2n_over_n() {
         let mut next = rng(0x5DEE_CE66_D1B5_4A32);
-        // The named regression shapes (den_n ≥ 65, dividend = 2·den_n).
-        for &(top, den_n) in &[(134usize, 67usize), (138, 69), (96, 48), (130, 65)] {
+        // The named regression shapes (divisor_len ≥ 65, dividend = 2·divisor_len).
+        for &(dividend_len, divisor_len) in
+            &[(134usize, 67usize), (138, 69), (96, 48), (130, 65)]
+        {
             for _ in 0..40 {
-                let (num, den) = make(&mut next, top, den_n);
-                assert_recursive_matches_knuth(&num, &den, &format!("2n/n {top}/{den_n}"));
+                let (dividend, divisor) = make(&mut next, dividend_len, divisor_len);
+                assert_recursive_matches_knuth(&dividend, &divisor,
+                    &format!("2n/n {dividend_len}/{divisor_len}"));
             }
         }
     }
 
     // The PRODUCTION ROUTED path: the public entry (engagement guard intact)
-    // at `den_n ≥ BZ_THRESHOLD(65)`, `num ≥ 2·den_n` — exactly where the
-    // matcher routes to BZ — must equal Knuth. Confirms the routed engine, not
-    // just the forced core.
+    // at `divisor_len ≥ BZ_THRESHOLD(65)`, `dividend ≥ 2·divisor_len` — exactly
+    // where the matcher routes to BZ — must equal Knuth. Confirms the routed
+    // engine, not just the forced core.
     #[test]
     fn bz_routed_entry_matches_knuth_at_engagement_widths() {
         let mut next = rng(0xA0761D64_78BD_642F);
-        for &(top, den_n) in &[(134usize, 67usize), (138, 69), (130, 65), (128, 64)] {
-            let (num, den) = make(&mut next, top, den_n);
-            let len = num.len();
-            let mut q_ref = vec![0u64; len + 1];
-            let mut r_ref = vec![0u64; len + 1];
-            div_knuth(&num, &den, &mut q_ref, &mut r_ref);
-            let mut q_bz = vec![0u64; len + 1];
-            let mut r_bz = vec![0u64; len + 1];
-            div_burnikel_ziegler_with_knuth(&num, &den, &mut q_bz, &mut r_bz);
-            assert_eq!(q_bz, q_ref, "routed BZ quot mismatch {top}/{den_n}");
+        for &(dividend_len, divisor_len) in
+            &[(134usize, 67usize), (138, 69), (130, 65), (128, 64)]
+        {
+            let (dividend, divisor) = make(&mut next, dividend_len, divisor_len);
+            let len = dividend.len();
+            let mut quotient_reference = vec![0u64; len + 1];
+            let mut remainder_reference = vec![0u64; len + 1];
+            div_knuth(&dividend, &divisor, &mut quotient_reference,
+                &mut remainder_reference);
+            let mut quotient_bz = vec![0u64; len + 1];
+            let mut remainder_bz = vec![0u64; len + 1];
+            div_burnikel_ziegler_with_knuth(&dividend, &divisor, &mut quotient_bz,
+                &mut remainder_bz);
+            assert_eq!(quotient_bz, quotient_reference,
+                "routed BZ quot mismatch {dividend_len}/{divisor_len}");
             assert_eq!(
-                r_bz[..den_n],
-                r_ref[..den_n],
-                "routed BZ rem mismatch {top}/{den_n}"
+                remainder_bz[..divisor_len],
+                remainder_reference[..divisor_len],
+                "routed BZ rem mismatch {dividend_len}/{divisor_len}"
             );
         }
     }
@@ -480,19 +499,22 @@ mod tests {
     #[test]
     fn bz_recursive_matches_knuth_spread() {
         let mut next = rng(0x2545_F491_4F6C_DD1D);
-        for &den_n in &[17usize, 24, 32, 33, 48, 64, 65, 67, 69] {
-            for &mul in &[2usize, 3] {
-                let top = mul * den_n;
+        for &divisor_len in &[17usize, 24, 32, 33, 48, 64, 65, 67, 69] {
+            for &multiple in &[2usize, 3] {
+                let dividend_len = multiple * divisor_len;
                 for _ in 0..30 {
-                    let (num, den) = make(&mut next, top, den_n);
-                    assert_recursive_matches_knuth(&num, &den, &format!("spread {top}/{den_n}"));
-                    // Ragged dividend (top - a few limbs) to vary the block split.
-                    if top > den_n + 1 {
-                        let (num2, den2) = make(&mut next, top - 1, den_n);
+                    let (dividend, divisor) = make(&mut next, dividend_len, divisor_len);
+                    assert_recursive_matches_knuth(&dividend, &divisor,
+                        &format!("spread {dividend_len}/{divisor_len}"));
+                    // Ragged dividend (dividend_len - a few limbs) to vary the
+                    // block split.
+                    if dividend_len > divisor_len + 1 {
+                        let (dividend2, divisor2) =
+                            make(&mut next, dividend_len - 1, divisor_len);
                         assert_recursive_matches_knuth(
-                            &num2,
-                            &den2,
-                            &format!("ragged {}/{den_n}", top - 1),
+                            &dividend2,
+                            &divisor2,
+                            &format!("ragged {}/{divisor_len}", dividend_len - 1),
                         );
                     }
                 }

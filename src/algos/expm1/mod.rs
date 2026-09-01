@@ -15,7 +15,7 @@
 //! working-scale signature
 //!
 //! ```text
-//! fn expm1_<variant>_fixed<S: BigInt>(v_w: S, w: u32) -> Option<S>
+//! fn expm1_<variant>_fixed<S: BigInt>(working_value: S, working_scale: u32) -> Option<S>
 //! ```
 //!
 //! — the working-scale `expm1`, `None` = out of range, mirroring
@@ -69,8 +69,8 @@ use crate::support::rounding::RoundingMode;
 /// working scale; a fixed-width decimal has no infinity, so the contract is a
 /// PANIC, uniform across every tier and scale and in both debug and release.
 #[inline]
-pub(crate) fn checked<S>(v: Option<S>, method: &str, scale: u32) -> S {
-    v.unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale(method, scale))
+pub(crate) fn checked<S>(value: Option<S>, method: &str, scale: u32) -> S {
+    value.unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale(method, scale))
 }
 
 /// Directed-rounding post-adjust for the sub-resolution band near `x = 0` —
@@ -95,7 +95,7 @@ pub(crate) fn checked<S>(v: Option<S>, method: &str, scale: u32) -> S {
 /// true value is strictly above it.
 ///
 /// Because `expm1(x) > x`, a CORRECT upward result can never equal `x`, so
-/// `result == raw` is unambiguously the sub-resolution undershoot — step UP one
+/// `rounded == raw` is unambiguously the sub-resolution undershoot — step UP one
 /// LSB. `expm1(0) = 0` is exact and excluded; nearest modes (the fraction is
 /// `0⁺`, so they round to `x` anyway) and `Floor` (`x` IS the correct floor)
 /// are already right. `Ceiling` steps up for both signs; `Trunc` (toward zero)
@@ -107,7 +107,7 @@ pub(crate) fn checked<S>(v: Option<S>, method: &str, scale: u32) -> S {
 ///
 /// # Scope — the STRICT series path no longer uses this
 ///
-/// Testing `result == raw` reaches only the ONE grid point where the value
+/// Testing `rounded == raw` reaches only the ONE grid point where the value
 /// lands on its own linear term. The value lands on DEEPER partial sums just
 /// as often, whenever the argument makes `x^j/j!` terminate — `x = -3e-152`
 /// reaches the 3rd, `x = -3e-86` the 5th — and this test is blind to every one
@@ -124,23 +124,23 @@ pub(crate) fn checked<S>(v: Option<S>, method: &str, scale: u32) -> S {
 /// * [`expm1_with_exp_g`](super::expm1_with_exp::expm1_with_exp_g), where it is
 ///   a provable no-op — the policy routes `|x| > 1` there, and
 ///   `expm1(x) - x = x²/2 + ...` exceeds half an ULP by orders of magnitude
-///   across that whole region, so `result == raw` never holds. It is left in
+///   across that whole region, so `rounded == raw` never holds. It is left in
 ///   place rather than removed so that path stays byte-for-byte unchanged.
 #[inline]
-pub(crate) fn adjust_near_zero<St: BigInt>(result: St, raw: St, mode: RoundingMode) -> St {
+pub(crate) fn adjust_near_zero<St: BigInt>(rounded: St, raw: St, mode: RoundingMode) -> St {
     if crate::support::rounding::is_nearest_mode(mode) {
-        return result;
+        return rounded;
     }
     if raw == <St as BigInt>::ZERO {
-        return result; // expm1(0) = 0 is exact
+        return rounded; // expm1(0) = 0 is exact
     }
-    if result != raw {
-        return result; // only the sub-resolution linear-term undershoot
+    if rounded != raw {
+        return rounded; // only the sub-resolution linear-term undershoot
     }
     match mode {
-        RoundingMode::Ceiling => result + <St as BigInt>::ONE,
-        RoundingMode::Trunc if raw < <St as BigInt>::ZERO => result + <St as BigInt>::ONE,
-        _ => result,
+        RoundingMode::Ceiling => rounded + <St as BigInt>::ONE,
+        RoundingMode::Trunc if raw < <St as BigInt>::ZERO => rounded + <St as BigInt>::ONE,
+        _ => rounded,
     }
 }
 
@@ -216,11 +216,11 @@ mod candidate_agreement_tests {
         eg::lit::<S>(units) * eg::pow10::<S>(exp10)
     }
 
-    fn close(a: S, b: S, what: &str) {
-        let d = a - b;
-        let d = if d < S::ZERO { -d } else { d };
+    fn close(lhs: S, rhs: S, what: &str) {
+        let difference = lhs - rhs;
+        let difference = if difference < S::ZERO { -difference } else { difference };
         assert!(
-            d <= eg::lit::<S>(TOL),
+            difference <= eg::lit::<S>(TOL),
             "{what}: candidates disagree by more than the smoke tolerance"
         );
     }
@@ -237,21 +237,21 @@ mod candidate_agreement_tests {
             (5i128, W - 1, "0.5"),
             (-5i128, W - 1, "-0.5"),
         ] {
-            let v = at(units, exp10);
-            let base = expm1_with_exp_fixed::<S>(v, W).expect("via_exp in range");
+            let working_value = at(units, exp10);
+            let baseline = expm1_with_exp_fixed::<S>(working_value, W).expect("via_exp in range");
             close(
-                expm1_series_fixed::<S>(v, W).expect("series in band"),
-                base,
+                expm1_series_fixed::<S>(working_value, W).expect("series in band"),
+                baseline,
                 name,
             );
             close(
-                expm1_halving_fixed::<S>(v, W).expect("halving in range"),
-                base,
+                expm1_halving_fixed::<S>(working_value, W).expect("halving in range"),
+                baseline,
                 name,
             );
             close(
-                expm1_reduced_fixed::<S>(v, W).expect("reduced in range"),
-                base,
+                expm1_reduced_fixed::<S>(working_value, W).expect("reduced in range"),
+                baseline,
                 name,
             );
         }
@@ -268,16 +268,16 @@ mod candidate_agreement_tests {
             (12i128, W, "12"),
             (-12i128, W, "-12"),
         ] {
-            let v = at(units, exp10);
-            let base = expm1_with_exp_fixed::<S>(v, W).expect("via_exp in range");
+            let working_value = at(units, exp10);
+            let baseline = expm1_with_exp_fixed::<S>(working_value, W).expect("via_exp in range");
             close(
-                expm1_halving_fixed::<S>(v, W).expect("halving in range"),
-                base,
+                expm1_halving_fixed::<S>(working_value, W).expect("halving in range"),
+                baseline,
                 name,
             );
             close(
-                expm1_reduced_fixed::<S>(v, W).expect("reduced in range"),
-                base,
+                expm1_reduced_fixed::<S>(working_value, W).expect("reduced in range"),
+                baseline,
                 name,
             );
         }
@@ -307,12 +307,12 @@ mod candidate_agreement_tests {
         // deep (`e^-500 ~ 1e-218`, far under `10^-60`) but sits one bit under
         // that threshold, so `expm1_series_fixed` declines it as out-of-BAND
         // instead — correct behaviour, wrong test.
-        let v = at(-2000, W);
+        let working_value = at(-2000, W);
         for (got, name) in [
-            (expm1_series_fixed::<S>(v, W), "series"),
-            (expm1_halving_fixed::<S>(v, W), "halving"),
-            (expm1_reduced_fixed::<S>(v, W), "reduced"),
-            (expm1_with_exp_fixed::<S>(v, W), "via_exp"),
+            (expm1_series_fixed::<S>(working_value, W), "series"),
+            (expm1_halving_fixed::<S>(working_value, W), "halving"),
+            (expm1_reduced_fixed::<S>(working_value, W), "reduced"),
+            (expm1_with_exp_fixed::<S>(working_value, W), "via_exp"),
         ] {
             assert_eq!(got, Some(want), "{name}: deep-negative representative");
         }

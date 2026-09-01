@@ -93,16 +93,16 @@ const fn select<const N: usize>() -> Select<N> {
 /// returns the default algorithm tag without invoking the fn pointer,
 /// satisfying the `const fn` constraint.
 #[inline]
-pub(crate) const fn dispatch<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
+pub(crate) const fn dispatch<const N: usize>(lhs: Int<N>, rhs: Int<N>) -> Int<N> {
     let algo = match const { select::<N>() } {
-        Select::ByAlgorithm(a) => a,
+        Select::ByAlgorithm(algorithm) => algorithm,
         // add is always ByAlgorithm; fall through to the default if
         // the arm is reached (fn pointer calls are not allowed in const fn).
         Select::ByValue(_) => Algorithm::RippleCarry,
     };
     match algo {
-        Algorithm::RippleCarry => add_ripple_carry(a, b),
-        Algorithm::Schoolbook => add_ripple_carry(a, b),
+        Algorithm::RippleCarry => add_ripple_carry(lhs, rhs),
+        Algorithm::Schoolbook => add_ripple_carry(lhs, rhs),
     }
 }
 
@@ -114,14 +114,14 @@ pub(crate) const fn dispatch<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
 /// `wrapping_add`-then-sign-check shape it replaces measured ≈2× the
 /// bare loop at 24 limbs in by-value moves between the layers.
 #[inline]
-pub(crate) const fn dispatch_checked<const N: usize>(a: Int<N>, b: Int<N>) -> Option<Int<N>> {
+pub(crate) const fn dispatch_checked<const N: usize>(lhs: Int<N>, rhs: Int<N>) -> Option<Int<N>> {
     let algo = match const { select::<N>() } {
-        Select::ByAlgorithm(a) => a,
+        Select::ByAlgorithm(algorithm) => algorithm,
         Select::ByValue(_) => Algorithm::RippleCarry,
     };
     match algo {
         Algorithm::RippleCarry | Algorithm::Schoolbook => {
-            crate::int::algos::add::add_ripple_carry::add_ripple_carry_checked(a, b)
+            crate::int::algos::add::add_ripple_carry::add_ripple_carry_checked(lhs, rhs)
         }
     }
 }

@@ -13,6 +13,6 @@ use crate::int::types::Int;
 /// modular / `None` / clamp / flag policies). No rescaling needed —
 /// same-SCALE operands share the scale factor.
 #[inline]
-pub(crate) fn add_int_layer<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
-    a.checked_add(b).expect("attempt to add with overflow")
+pub(crate) fn add_int_layer<const N: usize>(lhs: Int<N>, rhs: Int<N>) -> Int<N> {
+    lhs.checked_add(rhs).expect("attempt to add with overflow")
 }

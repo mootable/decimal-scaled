@@ -24,30 +24,30 @@ macro_rules! decl_decimal_display {
     // unsigned counterpart (e.g. `Uint<4>` for `Int<4>`).
     (wide $Type:ident, $Unsigned:ty) => {
         impl<const SCALE: u32> ::core::fmt::Display for $Type<SCALE> {
-            fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+            fn fmt(&self, formatter: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
                 let raw = self.to_bits();
                 let negative = raw.is_negative();
-                let mag: $Unsigned = raw.unsigned_abs();
+                let magnitude: $Unsigned = raw.unsigned_abs();
                 let multiplier: $Unsigned = <$Unsigned>::from_str_radix("10", 10)
                     .expect("wide decimal: invalid base-10 literal")
                     .pow(SCALE);
-                let int_part = mag / multiplier;
-                let frac_part = mag % multiplier;
+                let int_part = magnitude / multiplier;
+                let frac_part = magnitude % multiplier;
 
                 if negative {
-                    f.write_str("-")?;
+                    formatter.write_str("-")?;
                 }
                 if SCALE == 0 {
-                    return write!(f, "{int_part}");
+                    return write!(formatter, "{int_part}");
                 }
                 let width = SCALE as usize;
-                write!(f, "{int_part}.{frac_part:0>width$}", width = width)
+                write!(formatter, "{int_part}.{frac_part:0>width$}", width = width)
             }
         }
 
         impl<const SCALE: u32> ::core::fmt::Debug for $Type<SCALE> {
-            fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-                write!(f, concat!(stringify!($Type), "<{}>({})"), SCALE, self)
+            fn fmt(&self, formatter: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                write!(formatter, concat!(stringify!($Type), "<{}>({})"), SCALE, self)
             }
         }
     };

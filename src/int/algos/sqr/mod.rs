@@ -42,13 +42,13 @@ mod tests {
             Uint::<2>::from_limbs([0xDEAD_BEEF_CAFE_F00D, 0x1234_5678_9ABC_DEF0]),
             Uint::<2>::from_limbs([0xFFFF_FFFF_0000_0000, 0x0000_FFFF_FFFF_0000]),
         ];
-        for &x in cases {
-            let got = sqr_schoolbook(x);
-            let want = sqr_half_product(x);
+        for &value in cases {
+            let actual = sqr_schoolbook(value);
+            let expected = sqr_half_product(value);
             assert_eq!(
-                got, want,
+                actual, expected,
                 "sqr_schoolbook Uint<2> mismatch on {:?}",
-                x.as_limbs()
+                value.as_limbs()
             );
         }
     }
@@ -74,13 +74,13 @@ mod tests {
                 0x3C3C_3C3C_C3C3_C3C3,
             ]),
         ];
-        for &x in cases {
-            let got = sqr_schoolbook(x);
-            let want = sqr_half_product(x);
+        for &value in cases {
+            let actual = sqr_schoolbook(value);
+            let expected = sqr_half_product(value);
             assert_eq!(
-                got, want,
+                actual, expected,
                 "sqr_schoolbook Uint<4> mismatch on {:?}",
-                x.as_limbs()
+                value.as_limbs()
             );
         }
     }
@@ -102,12 +102,12 @@ mod tests {
                 (0xFFFF_FFFFu64).wrapping_mul(0xFFFF_FFFF),
             ),
         ];
-        for &(x, expected) in cases {
-            let got = sqr_schoolbook(x);
+        for &(value, expected) in cases {
+            let actual = sqr_schoolbook(value);
             assert_eq!(
-                got.as_limbs()[0], expected,
+                actual.as_limbs()[0], expected,
                 "sqr_schoolbook Uint<1> mismatch on {:?}",
-                x.as_limbs()
+                value.as_limbs()
             );
         }
     }

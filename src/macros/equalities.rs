@@ -122,8 +122,8 @@ macro_rules! decl_eq_float {
                 if !other.is_finite() {
                     return false;
                 }
-                let f = *other as f64;
-                self.to_bits().cmp_f64_exact(SCALE, f) == ::core::cmp::Ordering::Equal
+                let float_value = *other as f64;
+                self.to_bits().cmp_f64_exact(SCALE, float_value) == ::core::cmp::Ordering::Equal
             }
         }
         impl<const SCALE: u32> ::core::cmp::PartialEq<$Type<SCALE>> for $Src {

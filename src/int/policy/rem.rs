@@ -185,9 +185,9 @@ const fn select<const N: usize>() -> Select<N> {
 /// tag without invoking the fn pointer — no fn pointer call occurs in the
 /// const-select block.
 #[inline]
-pub(crate) fn dispatch<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
+pub(crate) fn dispatch<const N: usize>(dividend: Int<N>, divisor: Int<N>) -> Int<N> {
     let algo = match const { select::<N>() } {
-        Select::ByAlgorithm(a) => a,
+        Select::ByAlgorithm(algorithm) => algorithm,
         // rem is always ByAlgorithm; fall through to the default if
         // the arm is reached (fn pointer calls are not allowed in const fn,
         // but this outer fn is not const so reaching ByValue would be fine
@@ -195,10 +195,10 @@ pub(crate) fn dispatch<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
         Select::ByValue(_) => Algorithm::SmallFast,
     };
     match algo {
-        Algorithm::Native => rem_native(a, b),
-        Algorithm::SmallFast => rem_small_fast(a, b),
-        Algorithm::ViaDivRem => rem_via_div_rem(a, b),
-        Algorithm::Schoolbook => rem_schoolbook(a, b),
+        Algorithm::Native => rem_native(dividend, divisor),
+        Algorithm::SmallFast => rem_small_fast(dividend, divisor),
+        Algorithm::ViaDivRem => rem_via_div_rem(dividend, divisor),
+        Algorithm::Schoolbook => rem_schoolbook(dividend, divisor),
     }
 }
 
@@ -214,7 +214,7 @@ mod tests {
     /// the remainder carries the dividend's sign.
     #[test]
     fn dispatch_matches_truncating_reference_across_boundary() {
-        // (a, b, expected) — small enough to fit i128, hence representable
+        // (dividend, divisor, expected) — small enough to fit i128, hence representable
         // at N=2 and N=3 alike. Covers all four sign combinations and 0.
         let cases: &[(i128, i128, i128)] = &[
             (100, 7, 2),
@@ -226,14 +226,18 @@ mod tests {
             (i128::MAX, 3, i128::MAX % 3),
             (i128::MIN + 1, 3, (i128::MIN + 1) % 3),
         ];
-        for &(a, b, want) in cases {
+        for &(dividend, divisor, want) in cases {
             // N = 2 (native arm).
-            let got2 = dispatch::<2>(Int::<2>::from_i128(a), Int::<2>::from_i128(b));
-            assert_eq!(got2.to_i128(), want, "N=2 native rem({a}, {b})");
+            let got2 = dispatch::<2>(Int::<2>::from_i128(dividend), Int::<2>::from_i128(divisor));
+            assert_eq!(got2.to_i128(), want, "N=2 native rem({dividend}, {divisor})");
             // N = 3 (via-div-rem arm) — same value, wider storage.
-            let got3 = dispatch::<3>(Int::<3>::from_i128(a), Int::<3>::from_i128(b));
-            assert_eq!(got3.to_i128(), want, "N=3 via-div-rem rem({a}, {b})");
-            assert_eq!(got2.to_i128(), got3.to_i128(), "boundary disagreement ({a}, {b})");
+            let got3 = dispatch::<3>(Int::<3>::from_i128(dividend), Int::<3>::from_i128(divisor));
+            assert_eq!(got3.to_i128(), want, "N=3 via-div-rem rem({dividend}, {divisor})");
+            assert_eq!(
+                got2.to_i128(),
+                got3.to_i128(),
+                "boundary disagreement ({dividend}, {divisor})"
+            );
         }
     }
 }

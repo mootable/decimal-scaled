@@ -99,29 +99,30 @@ const fn select<const N: usize, const S1: u32, const S2: u32>() -> Select<N> {
 /// Cross-width same-scale comparison: delegates to `Int::cmp_cross`.
 #[inline]
 const fn cmp_cross_same_scale<const N: usize, const M: usize>(
-    a: Int<N>,
-    b: Int<M>,
+    lhs: Int<N>,
+    rhs: Int<M>,
 ) -> core::cmp::Ordering {
-    a.cmp_cross(b)
+    lhs.cmp_cross(rhs)
 }
 
-/// Cross-width cross-scale comparison. `a` has scale `S1`, `b` has `S2`.
-/// Logical values are `a/10^S1` and `b/10^S2`. Scales to the lower operand's
-/// denominator (dividing the higher-scale storage) so the comparison is
-/// overflow-free and uses only `Int::cmp_cross_scaled`.
+/// Cross-width cross-scale comparison. `lhs` has scale `S1`, `rhs` has `S2`.
+/// Logical values are `lhs/10^S1` and `rhs/10^S2`. Scales to the lower
+/// operand's denominator (dividing the higher-scale storage) so the comparison
+/// is overflow-free and uses only `Int::cmp_cross_scaled`.
 #[inline]
 const fn cmp_cross_scaled_diff<const N: usize, const M: usize, const S1: u32, const S2: u32>(
-    a: Int<N>,
-    b: Int<M>,
+    lhs: Int<N>,
+    rhs: Int<M>,
 ) -> core::cmp::Ordering {
-    // S1 > S2: compare a vs b·10^(S1−S2) — equivalently, scale DOWN `a`'s
-    // counterpart: `cmp_cross_scaled(a, b, S1−S2)` means `a` vs `b`
-    // scaled up by `10^d`, matching `a/10^S1` vs `b/10^S2` after ×10^S1.
+    // S1 > S2: compare lhs vs rhs·10^(S1−S2) — equivalently, scale DOWN
+    // `lhs`'s counterpart: `cmp_cross_scaled(lhs, rhs, S1−S2)` means `lhs` vs
+    // `rhs` scaled up by `10^d`, matching `lhs/10^S1` vs `rhs/10^S2` after
+    // ×10^S1.
     if S1 > S2 {
-        a.cmp_cross_scaled(b, S1 - S2)
+        lhs.cmp_cross_scaled(rhs, S1 - S2)
     } else {
-        // S2 > S1: compare b vs a·10^(S2−S1) → reverse.
-        b.cmp_cross_scaled(a, S2 - S1).reverse()
+        // S2 > S1: compare rhs vs lhs·10^(S2−S1) → reverse.
+        rhs.cmp_cross_scaled(lhs, S2 - S1).reverse()
     }
 }
 
@@ -141,15 +142,15 @@ pub(crate) const fn dcmp_dispatch<
     const S1: u32,
     const S2: u32,
 >(
-    a: Int<N>,
-    b: Int<M>,
+    lhs: Int<N>,
+    rhs: Int<M>,
 ) -> core::cmp::Ordering {
     let algo = match const { select::<N, S1, S2>() } {
-        Select::ByAlgorithm(a) => a,
+        Select::ByAlgorithm(algorithm) => algorithm,
         Select::ByValue(_) => Algorithm::SameScale,
     };
     match algo {
-        Algorithm::SameScale => cmp_cross_same_scale::<N, M>(a, b),
-        Algorithm::ScaledDiff => cmp_cross_scaled_diff::<N, M, S1, S2>(a, b),
+        Algorithm::SameScale => cmp_cross_same_scale::<N, M>(lhs, rhs),
+        Algorithm::ScaledDiff => cmp_cross_scaled_diff::<N, M, S1, S2>(lhs, rhs),
     }
 }

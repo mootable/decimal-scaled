@@ -8,8 +8,9 @@
 //! single hardware divide, no scratch, no shape classification). It runs at
 //! EVERY width `N`, gated on the operand VALUE rather than the const width:
 //!
-//! * when `|a| < |b|` the truncating remainder is the dividend itself
-//!   (`a % b == a`), returned after one top-down `N`-limb magnitude compare —
+//! * when `|dividend| < |divisor|` the truncating remainder is the dividend
+//!   itself (`dividend % divisor == dividend`), returned after one top-down
+//!   `N`-limb magnitude compare —
 //!   no divide at all. This catches the balanced-magnitude shape the
 //!   single-word probe below misses (a divisor that crosses the 128-bit line
 //!   while the dividend stays smaller);
@@ -36,18 +37,18 @@
 use crate::int::policy::div_rem::dispatch as div_rem_dispatch;
 use crate::int::types::{Int, Uint};
 
-/// `true` and the packed `u128` magnitude when every limb of `mag` above
+/// `true` and the packed `u128` magnitude when every limb of `magnitude` above
 /// index 1 is zero (i.e. the magnitude fits a single 128-bit word).
 #[inline]
-fn mag_fits_u128<const N: usize>(mag: &Uint<N>) -> (bool, u128) {
-    let l = mag.as_limbs();
-    let lo = l[0] as u128;
-    let hi = if N >= 2 { l[1] as u128 } else { 0 };
+fn mag_fits_u128<const N: usize>(magnitude: &Uint<N>) -> (bool, u128) {
+    let limbs = magnitude.as_limbs();
+    let lo = limbs[0] as u128;
+    let hi = if N >= 2 { limbs[1] as u128 } else { 0 };
     // Any limb at index >= 2 set means the magnitude exceeds u128.
     let mut fits = true;
     let mut i = 2;
     while i < N {
-        if l[i] != 0 {
+        if limbs[i] != 0 {
             fits = false;
             break;
         }
@@ -64,43 +65,45 @@ fn mag_fits_u128<const N: usize>(mag: &Uint<N>) -> (bool, u128) {
 /// `Rem` operator contract. Bit-identical to [`rem_via_div_rem`] at every
 /// `N` and every operand value.
 #[inline]
-pub(crate) fn rem_small_fast<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
+pub(crate) fn rem_small_fast<const N: usize>(dividend: Int<N>, divisor: Int<N>) -> Int<N> {
     assert!(
-        !b.is_zero(),
+        !divisor.is_zero(),
         "attempt to calculate the remainder with a divisor of zero"
     );
     // Compute both magnitudes ONCE (the sign-magnitude conversion the divmod
     // also needs) and reuse them on whichever branch is taken — neither path
     // re-walks `unsigned_abs`.
-    let a_mag = a.unsigned_abs();
-    let b_mag = b.unsigned_abs();
-    let neg_r = a.is_negative();
-    // Dividend-smaller short-circuit: when `|a| < |b|` the truncating
-    // remainder is the dividend itself (`a % b == a`), so return `a`
+    let dividend_mag = dividend.unsigned_abs();
+    let divisor_mag = divisor.unsigned_abs();
+    let remainder_is_negative = dividend.is_negative();
+    // Dividend-smaller short-circuit: when `|dividend| < |divisor|` the
+    // truncating remainder is the dividend itself
+    // (`dividend % divisor == dividend`), so return `dividend`
     // unchanged — one top-down `N`-limb magnitude compare (`Uint::cmp`), no
     // hardware divide, no `[u64; N]` quotient scratch, no `div_rem` shape
     // classifier. Correct for EVERY `N` and value, and it catches the
     // balanced-magnitude shape the single-word `u128` probe below MISSES (an
     // operand pair where the divisor crosses the 128-bit line but the
     // dividend is still smaller). Bit-identical to the divmod (which also
-    // yields `rem == a` here).
-    if a_mag < b_mag {
-        return a;
+    // yields `remainder == dividend` here).
+    if dividend_mag < divisor_mag {
+        return dividend;
     }
-    let (a_fits, a_u) = mag_fits_u128::<N>(&a_mag);
-    let (b_fits, b_u) = mag_fits_u128::<N>(&b_mag);
-    let mut rem = [0u64; N];
-    if a_fits && b_fits {
-        let r = a_u % b_u;
-        rem[0] = r as u64;
+    let (dividend_fits, dividend_u128) = mag_fits_u128::<N>(&dividend_mag);
+    let (divisor_fits, divisor_u128) = mag_fits_u128::<N>(&divisor_mag);
+    let mut remainder = [0u64; N];
+    if dividend_fits && divisor_fits {
+        let remainder_u128 = dividend_u128 % divisor_u128;
+        remainder[0] = remainder_u128 as u64;
         if N >= 2 {
-            rem[1] = (r >> 64) as u64;
+            remainder[1] = (remainder_u128 >> 64) as u64;
         }
     } else {
-        let mut quot = [0u64; N];
-        div_rem_dispatch(a_mag.as_limbs(), b_mag.as_limbs(), &mut quot, &mut rem);
+        let mut quotient = [0u64; N];
+        div_rem_dispatch(dividend_mag.as_limbs(), divisor_mag.as_limbs(), &mut quotient,
+            &mut remainder);
     }
-    Int::<N>::from_mag_limbs(&rem, neg_r)
+    Int::<N>::from_mag_limbs(&remainder, remainder_is_negative)
 }
 
 #[cfg(test)]
@@ -124,28 +127,28 @@ mod tests {
             (i128::MAX, 3),
             (i128::MIN + 1, 3),
         ];
-        for &(a, b) in small {
-            let ia = Int::<8>::from_i128(a);
-            let ib = Int::<8>::from_i128(b);
+        for &(dividend, divisor) in small {
+            let dividend_int = Int::<8>::from_i128(dividend);
+            let divisor_int = Int::<8>::from_i128(divisor);
             assert_eq!(
-                rem_small_fast::<8>(ia, ib),
-                rem_via_div_rem::<8>(ia, ib),
-                "fast path ({a} % {b})"
+                rem_small_fast::<8>(dividend_int, divisor_int),
+                rem_via_div_rem::<8>(dividend_int, divisor_int),
+                "fast path ({dividend} % {divisor})"
             );
         }
         // full-width operands: fallback path. Build magnitudes that span
         // many limbs.
-        let mut a_lim = [0u64; 8];
-        let mut b_lim = [0u64; 8];
+        let mut dividend_limbs = [0u64; 8];
+        let mut divisor_limbs = [0u64; 8];
         for i in 0..8 {
-            a_lim[i] = 0x9E37_79B9_7F4A_7C15u64.wrapping_mul(i as u64 + 1);
-            b_lim[i] = 0xD1B5_4A32_D192_ED03u64.wrapping_mul(i as u64 + 3);
+            dividend_limbs[i] = 0x9E37_79B9_7F4A_7C15u64.wrapping_mul(i as u64 + 1);
+            divisor_limbs[i] = 0xD1B5_4A32_D192_ED03u64.wrapping_mul(i as u64 + 3);
         }
-        let ia = Int::<8>::from_mag_limbs(&a_lim, false);
-        let ib = Int::<8>::from_mag_limbs(&b_lim, false);
+        let dividend_int = Int::<8>::from_mag_limbs(&dividend_limbs, false);
+        let divisor_int = Int::<8>::from_mag_limbs(&divisor_limbs, false);
         assert_eq!(
-            rem_small_fast::<8>(ia, ib),
-            rem_via_div_rem::<8>(ia, ib),
+            rem_small_fast::<8>(dividend_int, divisor_int),
+            rem_via_div_rem::<8>(dividend_int, divisor_int),
             "fallback path full-width"
         );
     }
