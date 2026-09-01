@@ -21,23 +21,44 @@ use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
 #[inline]
-fn asin_work<C: WideTrigCore, const SCALE: u32>(v: C::W, w: u32) -> C::W {
-    let one_w = C::one(w);
-    let abs_v = if v < C::zero() { C::zero() - v } else { v };
-    let half_w = one_w >> 1;
-    if abs_v == one_w {
-        let hp = C::half_pi::<SCALE>(w);
-        if v < C::zero() { C::zero() - hp } else { hp }
-    } else if abs_v <= half_w {
-        let denom = C::sqrt_fixed(one_w - C::mul(v, v, w), w);
-        C::atan_fixed::<SCALE>(C::div(v, denom, w), w)
+fn asin_work<C: WideTrigCore, const SCALE: u32>(working_value: C::W, working_scale: u32) -> C::W {
+    let one_w = C::one(working_scale);
+    let abs_working_value = if working_value < C::zero() {
+        C::zero() - working_value
     } else {
-        let inner = (one_w - abs_v) >> 1;
-        let inner_sqrt = C::sqrt_fixed(inner, w);
-        let inner_denom = C::sqrt_fixed(one_w - C::mul(inner_sqrt, inner_sqrt, w), w);
-        let inner_asin = C::atan_fixed::<SCALE>(C::div(inner_sqrt, inner_denom, w), w);
-        let result_abs = C::half_pi::<SCALE>(w) - inner_asin - inner_asin;
-        if v < C::zero() { C::zero() - result_abs } else { result_abs }
+        working_value
+    };
+    let half_w = one_w >> 1;
+    if abs_working_value == one_w {
+        let half_pi = C::half_pi::<SCALE>(working_scale);
+        if working_value < C::zero() {
+            C::zero() - half_pi
+        } else {
+            half_pi
+        }
+    } else if abs_working_value <= half_w {
+        let denom = C::sqrt_fixed(
+            one_w - C::mul(working_value, working_value, working_scale),
+            working_scale,
+        );
+        C::atan_fixed::<SCALE>(C::div(working_value, denom, working_scale), working_scale)
+    } else {
+        let inner = (one_w - abs_working_value) >> 1;
+        let inner_sqrt = C::sqrt_fixed(inner, working_scale);
+        let inner_denom = C::sqrt_fixed(
+            one_w - C::mul(inner_sqrt, inner_sqrt, working_scale),
+            working_scale,
+        );
+        let inner_asin = C::atan_fixed::<SCALE>(
+            C::div(inner_sqrt, inner_denom, working_scale),
+            working_scale,
+        );
+        let result_abs = C::half_pi::<SCALE>(working_scale) - inner_asin - inner_asin;
+        if working_value < C::zero() {
+            C::zero() - result_abs
+        } else {
+            result_abs
+        }
     }
 }
 
@@ -55,36 +76,43 @@ where
     use crate::algos::support::wide_trig_core::{
         round_to_storage_directed_decided_g, tiny_x_deep_directed_adjust, tiny_x_linear_directed,
     };
-    let w0 = SCALE + C::GUARD;
-    let one_w0 = C::one(w0);
-    let v0 = C::to_work(raw);
-    let abs_v0 = if v0 < C::zero() { C::zero() - v0 } else { v0 };
-    if abs_v0 > one_w0 {
+    let base_working_scale = SCALE + C::GUARD;
+    let one_w0 = C::one(base_working_scale);
+    let base_working_value = C::to_work(raw);
+    let abs_base_working_value = if base_working_value < C::zero() {
+        C::zero() - base_working_value
+    } else {
+        base_working_value
+    };
+    if abs_base_working_value > one_w0 {
         panic!("schoolbook asin: argument out of domain [-1, 1]");
     }
     // Analytic tiny-`x` directed decision (relocated from the policy layer) —
     // `asin(x) = x + x³/6 + …` EXPANDS (every Taylor coefficient is positive).
-    if let Some(v) = tiny_x_linear_directed::<C::Storage, SCALE>(raw, mode, true) {
-        return v;
+    if let Some(analytic_result) = tiny_x_linear_directed::<C::Storage, SCALE>(raw, mode, true) {
+        return analytic_result;
     }
     // Ziv-escalated narrowing (NOT a single shot): the composition's true
     // value can sit a sub-resolution distance from a rounding boundary
-    // while the fixed-w partial lands exactly ON it — asin(3·10⁻⁶⁰) at
-    // SCALE 180 has x³/6 = 4.5 ULP EXACT and the deciding +3x⁵/40 tail at
-    // fraction depth ~298, beyond any fixed GUARD. The walker's base
+    // while the partial at a fixed working scale lands exactly ON it —
+    // asin(3·10⁻⁶⁰) at SCALE 180 has x³/6 = 4.5 ULP EXACT and the
+    // deciding +3x⁵/40 tail at fraction depth ~298, beyond any fixed
+    // GUARD. The walker's base
     // probe is this same single evaluation (clear-of-band inputs exit
     // there, no cost added); a near-tie escalates the working scale.
-    let (r, decided) = round_to_storage_directed_decided_g::<C::Storage, C::W>(
+    let (rounded, decided) = round_to_storage_directed_decided_g::<C::Storage, C::W>(
         C::GUARD,
         SCALE,
         mode,
         C::storage_max(),
         C::storage_min(),
-        |guard| asin_work::<C, SCALE>(C::to_work_scaled(raw, guard), SCALE + guard),
+        |guard_digits| {
+            asin_work::<C, SCALE>(C::to_work_scaled(raw, guard_digits), SCALE + guard_digits)
+        },
     );
     // Deep sub-resolution band (`j* ≥ 5`): `asin` always EXPANDS.
     tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
-        r,
+        rounded,
         decided,
         raw,
         mode,
@@ -100,17 +128,22 @@ pub(crate) fn acos_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
 ) -> C::Storage {
-    let w0 = SCALE + C::GUARD;
-    let one_w0 = C::one(w0);
-    let v0 = C::to_work(raw);
-    let abs_v0 = if v0 < C::zero() { C::zero() - v0 } else { v0 };
-    if abs_v0 > one_w0 {
+    let base_working_scale = SCALE + C::GUARD;
+    let one_w0 = C::one(base_working_scale);
+    let base_working_value = C::to_work(raw);
+    let abs_base_working_value = if base_working_value < C::zero() {
+        C::zero() - base_working_value
+    } else {
+        base_working_value
+    };
+    if abs_base_working_value > one_w0 {
         panic!("schoolbook acos: argument out of domain [-1, 1]");
     }
     // Ziv-escalated narrowing — see [`asin_schoolbook`].
-    C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
-        let w = SCALE + guard;
-        C::half_pi::<SCALE>(w) - asin_work::<C, SCALE>(C::to_work_scaled(raw, guard), w)
+    C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard_digits| {
+        let working_scale = SCALE + guard_digits;
+        C::half_pi::<SCALE>(working_scale)
+            - asin_work::<C, SCALE>(C::to_work_scaled(raw, guard_digits), working_scale)
     })
 }
 
@@ -147,114 +180,121 @@ where
         // to `decided == true` via paired exact-zero probes — d307 s120 — yet
         // still needs the analytic step; a genuinely-resolved off-grid cell —
         // d924 s923 — is also `decided == true` but must NOT be stepped).
-        let probe = |m: RoundingMode| {
+        let probe = |probe_mode: RoundingMode| {
             round_to_storage_directed_decided_g::<C::Storage, C::W>(
                 C::GUARD,
                 SCALE,
-                m,
+                probe_mode,
                 C::storage_max(),
                 C::storage_min(),
-                |guard| atan2_work::<C, SCALE>(y_raw, x_raw, guard),
+                |guard_digits| atan2_work::<C, SCALE>(y_raw, x_raw, guard_digits),
             )
             .0
         };
-        let r_f = probe(RoundingMode::Floor);
-        let r_c = probe(RoundingMode::Ceiling);
-        if r_f == r_c {
-            // On grid: G = r_f. SINGLE analytic step from G — `atan z = z − z³/3
-            // + z⁵/5 − …` COMPRESSES (cubic −) and ALTERNATES, so the linear
-            // (j* = 3) and deep (j* ≥ 5, alternating) helpers place the directed
-            // neighbour exactly one ULP from G.
-            let g = r_f;
-            if let Some(v) = tiny_x_linear_directed::<C::Storage, SCALE>(g, mode, false) {
-                return v;
-            }
-            // The exact bracket posed on the RATIO `z = y/x`, which is what
-            // the `g`-as-argument step below cannot do: substituting `g` for
-            // `z` reasons in a circle over `g − z`, the very quantity being
-            // signed. Where it closes it PROVES the side; where it is silent
-            // the `j*`-parity step runs unchanged.
-            if let Some(v) = crate::algos::support::wide_trig_core::adjust_alternating_bracket_ratio::<
-                C::Storage,
-                C::W,
-                SCALE,
-            >(g, y_raw, x_raw, mode)
+        let floor_probe = probe(RoundingMode::Floor);
+        let ceiling_probe = probe(RoundingMode::Ceiling);
+        if floor_probe == ceiling_probe {
+            // On grid: G = floor_probe. SINGLE analytic step from G — `atan z =
+            // z − z³/3 + z⁵/5 − …` COMPRESSES (cubic −) and ALTERNATES, so the
+            // linear (j* = 3) and deep (j* ≥ 5, alternating) helpers place the
+            // directed neighbour exactly one ULP from G.
+            let grid_value = floor_probe;
+            if let Some(adjusted) =
+                tiny_x_linear_directed::<C::Storage, SCALE>(grid_value, mode, false)
             {
-                return v;
+                return adjusted;
+            }
+            // The exact bracket posed on the RATIO `z = y/x`, which is what the
+            // `grid_value`-as-argument step below cannot do: substituting
+            // `grid_value` for `z` reasons in a circle over `grid_value − z`,
+            // the very quantity being signed. Where it closes it PROVES the
+            // side; where it is silent the `j*`-parity step runs unchanged.
+            if let Some(adjusted) =
+                crate::algos::support::wide_trig_core::adjust_alternating_bracket_ratio::<
+                    C::Storage,
+                    C::W,
+                    SCALE,
+                >(grid_value, y_raw, x_raw, mode)
+            {
+                return adjusted;
             }
             let stepped = tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
-                g,
+                grid_value,
                 false,
-                g,
+                grid_value,
                 mode,
                 true,
                 <C::W as crate::int::types::traits::BigInt>::BITS,
             );
-            if stepped != g {
+            if stepped != grid_value {
                 return stepped;
             }
             // On grid but not in the tiny band (the helpers no-op): G is exact.
-            return g;
+            return grid_value;
         }
         // Off grid: the walker resolved the directed rounding. Return its result
         // for `mode` (Trunc is toward zero — x > 0 so the result sign is y's).
         return match mode {
-            RoundingMode::Ceiling => r_c,
-            RoundingMode::Floor => r_f,
+            RoundingMode::Ceiling => ceiling_probe,
+            RoundingMode::Floor => floor_probe,
             RoundingMode::Trunc => {
                 if y_raw >= zero {
-                    r_f
+                    floor_probe
                 } else {
-                    r_c
+                    ceiling_probe
                 }
             }
             _ => unreachable!("directed mode"),
         };
     }
     // Nearest modes, x ≤ 0, or |y| ≥ |x| (non-tiny |result|): ordinary narrowing.
-    C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
-        atan2_work::<C, SCALE>(y_raw, x_raw, guard)
+    C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard_digits| {
+        atan2_work::<C, SCALE>(y_raw, x_raw, guard_digits)
     })
 }
 
-/// One working-scale atan2 evaluation at `w = SCALE + guard` — the
+/// One working-scale atan2 evaluation at `SCALE + guard_digits` — the
 /// quadrant-resolved composition body shared by the walker probes.
 #[inline]
 fn atan2_work<C: WideTrigCore, const SCALE: u32>(
     y_raw: C::Storage,
     x_raw: C::Storage,
-    guard: u32,
+    guard_digits: u32,
 ) -> C::W {
-    let w = SCALE + guard;
-    let z = C::storage_zero();
-    if x_raw == z {
-        return if y_raw > z {
-            C::half_pi::<SCALE>(w)
-        } else if y_raw < z {
-            C::zero() - C::half_pi::<SCALE>(w)
+    let working_scale = SCALE + guard_digits;
+    let zero_storage = C::storage_zero();
+    if x_raw == zero_storage {
+        return if y_raw > zero_storage {
+            C::half_pi::<SCALE>(working_scale)
+        } else if y_raw < zero_storage {
+            C::zero() - C::half_pi::<SCALE>(working_scale)
         } else {
             C::zero()
         };
     }
-    let y = C::to_work_scaled(y_raw, guard);
-    let x = C::to_work_scaled(x_raw, guard);
+    let y = C::to_work_scaled(y_raw, guard_digits);
+    let x = C::to_work_scaled(x_raw, guard_digits);
     let zero_w = C::zero();
     let abs_y = if y < zero_w { zero_w - y } else { y };
     let abs_x = if x < zero_w { zero_w - x } else { x };
     let base = if abs_x >= abs_y {
-        C::atan_fixed::<SCALE>(C::div(y, x, w), w)
+        C::atan_fixed::<SCALE>(C::div(y, x, working_scale), working_scale)
     } else {
-        let inv = C::atan_fixed::<SCALE>(C::div(x, y, w), w);
-        let hp = C::half_pi::<SCALE>(w);
+        let atan_x_over_y = C::atan_fixed::<SCALE>(C::div(x, y, working_scale), working_scale);
+        let half_pi = C::half_pi::<SCALE>(working_scale);
         let same_sign = (y < zero_w) == (x < zero_w);
-        if same_sign { hp - inv } else { (zero_w - hp) - inv }
+        if same_sign {
+            half_pi - atan_x_over_y
+        } else {
+            (zero_w - half_pi) - atan_x_over_y
+        }
     };
-    if x_raw > z {
+    if x_raw > zero_storage {
         base
-    } else if y_raw >= z {
-        base + C::pi::<SCALE>(w)
+    } else if y_raw >= zero_storage {
+        base + C::pi::<SCALE>(working_scale)
     } else {
-        base - C::pi::<SCALE>(w)
+        base - C::pi::<SCALE>(working_scale)
     }
 }
 
@@ -272,33 +312,54 @@ fn atan2_work<C: WideTrigCore, const SCALE: u32>(
 /// (only its `π/2` half is consumed).
 #[cfg(feature = "_wide-support")]
 #[inline]
-fn asin_work_g<Wk: crate::int::types::traits::BigInt>(v: Wk, w: u32, pi_w: Wk) -> Wk
+fn asin_work_g<Wk: crate::int::types::traits::BigInt>(
+    working_value: Wk,
+    working_scale: u32,
+    pi_at_working_scale: Wk,
+) -> Wk
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
     use crate::algos::exp::exp_generic as eg;
-    let one_w = eg::one::<Wk>(w);
+    let one_w = eg::one::<Wk>(working_scale);
     let zero = eg::zero::<Wk>();
-    let abs_v = if v < zero { zero - v } else { v };
-    let half_w = one_w >> 1;
-    if abs_v == one_w {
-        let hp = pi_w >> 1;
-        if v < zero { zero - hp } else { hp }
-    } else if abs_v <= half_w {
-        let denom = eg::sqrt_fixed::<Wk>(one_w - eg::mul::<Wk>(v, v, w), w);
-        crate::algos::trig::trig_generic::atan_fixed::<Wk>(eg::div::<Wk>(v, denom, w), w, pi_w)
+    let abs_working_value = if working_value < zero {
+        zero - working_value
     } else {
-        let inner = (one_w - abs_v) >> 1;
-        let inner_sqrt = eg::sqrt_fixed::<Wk>(inner, w);
-        let inner_denom =
-            eg::sqrt_fixed::<Wk>(one_w - eg::mul::<Wk>(inner_sqrt, inner_sqrt, w), w);
-        let inner_asin = crate::algos::trig::trig_generic::atan_fixed::<Wk>(
-            eg::div::<Wk>(inner_sqrt, inner_denom, w),
-            w,
-            pi_w,
+        working_value
+    };
+    let half_w = one_w >> 1;
+    if abs_working_value == one_w {
+        let half_pi = pi_at_working_scale >> 1;
+        if working_value < zero { zero - half_pi } else { half_pi }
+    } else if abs_working_value <= half_w {
+        let denom = eg::sqrt_fixed::<Wk>(
+            one_w - eg::mul::<Wk>(working_value, working_value, working_scale),
+            working_scale,
         );
-        let result_abs = (pi_w >> 1) - inner_asin - inner_asin;
-        if v < zero { zero - result_abs } else { result_abs }
+        crate::algos::trig::trig_generic::atan_fixed::<Wk>(
+            eg::div::<Wk>(working_value, denom, working_scale),
+            working_scale,
+            pi_at_working_scale,
+        )
+    } else {
+        let inner = (one_w - abs_working_value) >> 1;
+        let inner_sqrt = eg::sqrt_fixed::<Wk>(inner, working_scale);
+        let inner_denom = eg::sqrt_fixed::<Wk>(
+            one_w - eg::mul::<Wk>(inner_sqrt, inner_sqrt, working_scale),
+            working_scale,
+        );
+        let inner_asin = crate::algos::trig::trig_generic::atan_fixed::<Wk>(
+            eg::div::<Wk>(inner_sqrt, inner_denom, working_scale),
+            working_scale,
+            pi_at_working_scale,
+        );
+        let result_abs = (pi_at_working_scale >> 1) - inner_asin - inner_asin;
+        if working_value < zero {
+            zero - result_abs
+        } else {
+            result_abs
+        }
     }
 }
 
@@ -323,41 +384,47 @@ where
         pi_at_rung, round_to_storage_directed_widening_decided_g, tiny_x_deep_directed_adjust,
         tiny_x_linear_directed, to_work_scaled_g,
     };
-    let w0 = SCALE + C::GUARD;
-    let one_w0 = eg::one::<Wk>(w0);
+    let base_working_scale = SCALE + C::GUARD;
+    let one_w0 = eg::one::<Wk>(base_working_scale);
     let zero = eg::zero::<Wk>();
-    let v0 = to_work_scaled_g::<C::Storage, Wk>(raw, C::GUARD);
-    let abs_v0 = if v0 < zero { zero - v0 } else { v0 };
-    if abs_v0 > one_w0 {
+    let base_working_value = to_work_scaled_g::<C::Storage, Wk>(raw, C::GUARD);
+    let abs_base_working_value = if base_working_value < zero {
+        zero - base_working_value
+    } else {
+        base_working_value
+    };
+    if abs_base_working_value > one_w0 {
         panic!("schoolbook asin: argument out of domain [-1, 1]");
     }
     // Analytic tiny-`x` directed decision — the SAME pre-empt the tier
     // [`asin_schoolbook`] carries (relocated from the policy layer).
-    if let Some(v) = tiny_x_linear_directed::<C::Storage, SCALE>(raw, mode, true) {
-        return v;
+    if let Some(analytic_result) = tiny_x_linear_directed::<C::Storage, SCALE>(raw, mode, true) {
+        return analytic_result;
     }
     // Ziv-escalated two-width narrowing — see the tier [`asin_schoolbook`]
     // (the asin(3e-60) partial-sum family): rung probes first, an
     // unresolved-at-rung-cap walk falls up to the tier width.
-    let (r, decided) = round_to_storage_directed_widening_decided_g::<C::Storage, Wk, C::W>(
+    let (rounded, decided) = round_to_storage_directed_widening_decided_g::<C::Storage, Wk, C::W>(
         C::GUARD,
         SCALE,
         mode,
         C::storage_max(),
         C::storage_min(),
-        |guard| {
-            let w = SCALE + guard;
+        |guard_digits| {
+            let working_scale = SCALE + guard_digits;
             asin_work_g::<Wk>(
-                to_work_scaled_g::<C::Storage, Wk>(raw, guard),
-                w,
-                pi_at_rung::<Wk>(w, w0),
+                to_work_scaled_g::<C::Storage, Wk>(raw, guard_digits),
+                working_scale,
+                pi_at_rung::<Wk>(working_scale, base_working_scale),
             )
         },
-        |guard| asin_work::<C, SCALE>(C::to_work_scaled(raw, guard), SCALE + guard),
+        |guard_digits| {
+            asin_work::<C, SCALE>(C::to_work_scaled(raw, guard_digits), SCALE + guard_digits)
+        },
     );
     // Deep sub-resolution band (`j* ≥ 5`): `asin` always EXPANDS.
     tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
-        r,
+        rounded,
         decided,
         raw,
         mode,
@@ -384,12 +451,16 @@ where
     use crate::algos::support::wide_trig_core::{
         pi_at_rung, round_to_storage_directed_widening_g, to_work_scaled_g,
     };
-    let w0 = SCALE + C::GUARD;
-    let one_w0 = eg::one::<Wk>(w0);
+    let base_working_scale = SCALE + C::GUARD;
+    let one_w0 = eg::one::<Wk>(base_working_scale);
     let zero = eg::zero::<Wk>();
-    let v0 = to_work_scaled_g::<C::Storage, Wk>(raw, C::GUARD);
-    let abs_v0 = if v0 < zero { zero - v0 } else { v0 };
-    if abs_v0 > one_w0 {
+    let base_working_value = to_work_scaled_g::<C::Storage, Wk>(raw, C::GUARD);
+    let abs_base_working_value = if base_working_value < zero {
+        zero - base_working_value
+    } else {
+        base_working_value
+    };
+    if abs_base_working_value > one_w0 {
         panic!("schoolbook acos: argument out of domain [-1, 1]");
     }
     // Ziv-escalated two-width narrowing — see [`asin_schoolbook_g`].
@@ -399,15 +470,20 @@ where
         mode,
         C::storage_max(),
         C::storage_min(),
-        |guard| {
-            let w = SCALE + guard;
-            let pi_w = pi_at_rung::<Wk>(w, w0);
-            (pi_w >> 1)
-                - asin_work_g::<Wk>(to_work_scaled_g::<C::Storage, Wk>(raw, guard), w, pi_w)
+        |guard_digits| {
+            let working_scale = SCALE + guard_digits;
+            let pi_at_working_scale = pi_at_rung::<Wk>(working_scale, base_working_scale);
+            (pi_at_working_scale >> 1)
+                - asin_work_g::<Wk>(
+                    to_work_scaled_g::<C::Storage, Wk>(raw, guard_digits),
+                    working_scale,
+                    pi_at_working_scale,
+                )
         },
-        |guard| {
-            let w = SCALE + guard;
-            C::half_pi::<SCALE>(w) - asin_work::<C, SCALE>(C::to_work_scaled(raw, guard), w)
+        |guard_digits| {
+            let working_scale = SCALE + guard_digits;
+            C::half_pi::<SCALE>(working_scale)
+                - asin_work::<C, SCALE>(C::to_work_scaled(raw, guard_digits), working_scale)
         },
     )
 }
@@ -430,68 +506,73 @@ where
     use crate::algos::support::wide_trig_core::{
         round_to_storage_directed_widening_g, tiny_x_deep_directed_adjust, tiny_x_linear_directed,
     };
-    let w0 = SCALE + C::GUARD;
+    let base_working_scale = SCALE + C::GUARD;
     let zero = C::storage_zero();
     let abs_y = if y_raw < zero { zero - y_raw } else { y_raw };
     // Two-width directed narrowing (rung-first, fall-up to the tier width C::W).
-    let walk = |m: RoundingMode| {
+    let walk = |walk_mode: RoundingMode| {
         round_to_storage_directed_widening_g::<C::Storage, Wk, C::W>(
             C::GUARD,
             SCALE,
-            m,
+            walk_mode,
             C::storage_max(),
             C::storage_min(),
-            |guard| atan2_work_g::<C, Wk, SCALE>(y_raw, x_raw, guard, w0),
-            |guard| atan2_work::<C, SCALE>(y_raw, x_raw, guard),
+            |guard_digits| {
+                atan2_work_g::<C, Wk, SCALE>(y_raw, x_raw, guard_digits, base_working_scale)
+            },
+            |guard_digits| atan2_work::<C, SCALE>(y_raw, x_raw, guard_digits),
         )
     };
     // Tiny-result directed decision — see the tier [`atan2_schoolbook`]: probe
     // Floor/Ceiling; AGREE ⟺ exactly on grid (mode-blind, deciding odd term
-    // sub-resolution → SINGLE analytic step from G = r_f); DIFFER ⟺ off-grid (a
-    // resolved non-terminating term, j* ≥ 9 → the walker already rounds it
-    // correctly). atan compresses + alternates.
+    // sub-resolution → SINGLE analytic step from G = floor_probe); DIFFER ⟺
+    // off-grid (a resolved non-terminating term, j* ≥ 9 → the walker already
+    // rounds it correctly). atan compresses + alternates.
     if !crate::support::rounding::is_nearest_mode(mode) && x_raw > zero && abs_y < x_raw {
-        let r_f = walk(RoundingMode::Floor);
-        let r_c = walk(RoundingMode::Ceiling);
-        if r_f == r_c {
-            let g = r_f;
-            if let Some(v) = tiny_x_linear_directed::<C::Storage, SCALE>(g, mode, false) {
-                return v;
-            }
-            // The exact bracket posed on the RATIO `z = y/x`, which is what
-            // the `g`-as-argument step below cannot do: substituting `g` for
-            // `z` reasons in a circle over `g − z`, the very quantity being
-            // signed. Where it closes it PROVES the side; where it is silent
-            // the `j*`-parity step runs unchanged.
-            if let Some(v) = crate::algos::support::wide_trig_core::adjust_alternating_bracket_ratio::<
-                C::Storage,
-                C::W,
-                SCALE,
-            >(g, y_raw, x_raw, mode)
+        let floor_probe = walk(RoundingMode::Floor);
+        let ceiling_probe = walk(RoundingMode::Ceiling);
+        if floor_probe == ceiling_probe {
+            let grid_value = floor_probe;
+            if let Some(adjusted) =
+                tiny_x_linear_directed::<C::Storage, SCALE>(grid_value, mode, false)
             {
-                return v;
+                return adjusted;
+            }
+            // The exact bracket posed on the RATIO `z = y/x`, which is what the
+            // `grid_value`-as-argument step below cannot do: substituting
+            // `grid_value` for `z` reasons in a circle over `grid_value − z`,
+            // the very quantity being signed. Where it closes it PROVES the
+            // side; where it is silent the `j*`-parity step runs unchanged.
+            if let Some(adjusted) =
+                crate::algos::support::wide_trig_core::adjust_alternating_bracket_ratio::<
+                    C::Storage,
+                    C::W,
+                    SCALE,
+                >(grid_value, y_raw, x_raw, mode)
+            {
+                return adjusted;
             }
             let stepped = tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
-                g,
+                grid_value,
                 false,
-                g,
+                grid_value,
                 mode,
                 true,
                 <C::W as crate::int::types::traits::BigInt>::BITS,
             );
-            if stepped != g {
+            if stepped != grid_value {
                 return stepped;
             }
-            return g;
+            return grid_value;
         }
         return match mode {
-            RoundingMode::Ceiling => r_c,
-            RoundingMode::Floor => r_f,
+            RoundingMode::Ceiling => ceiling_probe,
+            RoundingMode::Floor => floor_probe,
             RoundingMode::Trunc => {
                 if y_raw >= zero {
-                    r_f
+                    floor_probe
                 } else {
-                    r_c
+                    ceiling_probe
                 }
             }
             _ => unreachable!("directed mode"),
@@ -500,16 +581,16 @@ where
     walk(mode)
 }
 
-/// One rung-width atan2 evaluation at `w = SCALE + guard` — the
+/// One rung-width atan2 evaluation at `SCALE + guard_digits` — the
 /// quadrant-resolved composition body shared by the rung walker probes
-/// (`base_w0` keys the hot-path const-fold of `π`).
+/// (`base_working_scale` keys the hot-path const-fold of `π`).
 #[cfg(feature = "_wide-support")]
 #[inline]
 fn atan2_work_g<C: WideTrigCore, Wk: crate::int::types::traits::BigInt, const SCALE: u32>(
     y_raw: C::Storage,
     x_raw: C::Storage,
-    guard: u32,
-    base_w0: u32,
+    guard_digits: u32,
+    base_working_scale: u32,
 ) -> Wk
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
@@ -517,59 +598,73 @@ where
     use crate::algos::exp::exp_generic as eg;
     use crate::algos::support::wide_trig_core::{pi_at_rung, to_work_scaled_g};
     use crate::algos::trig::trig_generic::atan_fixed;
-    let w = SCALE + guard;
-    let z = C::storage_zero();
-    let pi_w = pi_at_rung::<Wk>(w, base_w0);
-    if x_raw == z {
-        return if y_raw > z {
-            pi_w >> 1
-        } else if y_raw < z {
-            eg::zero::<Wk>() - (pi_w >> 1)
+    let working_scale = SCALE + guard_digits;
+    let zero_storage = C::storage_zero();
+    let pi_at_working_scale = pi_at_rung::<Wk>(working_scale, base_working_scale);
+    if x_raw == zero_storage {
+        return if y_raw > zero_storage {
+            pi_at_working_scale >> 1
+        } else if y_raw < zero_storage {
+            eg::zero::<Wk>() - (pi_at_working_scale >> 1)
         } else {
             eg::zero::<Wk>()
         };
     }
-    let y = to_work_scaled_g::<C::Storage, Wk>(y_raw, guard);
-    let x = to_work_scaled_g::<C::Storage, Wk>(x_raw, guard);
+    let y = to_work_scaled_g::<C::Storage, Wk>(y_raw, guard_digits);
+    let x = to_work_scaled_g::<C::Storage, Wk>(x_raw, guard_digits);
     let zero_w = eg::zero::<Wk>();
     let abs_y = if y < zero_w { zero_w - y } else { y };
     let abs_x = if x < zero_w { zero_w - x } else { x };
     let base = if abs_x >= abs_y {
-        atan_fixed::<Wk>(eg::div::<Wk>(y, x, w), w, pi_w)
+        atan_fixed::<Wk>(
+            eg::div::<Wk>(y, x, working_scale),
+            working_scale,
+            pi_at_working_scale,
+        )
     } else {
-        let inv = atan_fixed::<Wk>(eg::div::<Wk>(x, y, w), w, pi_w);
-        let hp = pi_w >> 1;
+        let atan_x_over_y = atan_fixed::<Wk>(
+            eg::div::<Wk>(x, y, working_scale),
+            working_scale,
+            pi_at_working_scale,
+        );
+        let half_pi = pi_at_working_scale >> 1;
         let same_sign = (y < zero_w) == (x < zero_w);
-        if same_sign { hp - inv } else { (zero_w - hp) - inv }
+        if same_sign {
+            half_pi - atan_x_over_y
+        } else {
+            (zero_w - half_pi) - atan_x_over_y
+        }
     };
-    if x_raw > z {
+    if x_raw > zero_storage {
         base
-    } else if y_raw >= z {
-        base + pi_w
+    } else if y_raw >= zero_storage {
+        base + pi_at_working_scale
     } else {
-        base - pi_w
+        base - pi_at_working_scale
     }
 }
 
 #[inline]
-fn asin_work_narrow(v: Fixed, w: u32) -> Fixed {
-    let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
-    let abs_v = Fixed { negative: false, mag: v.mag };
-    if abs_v == one_w {
-        let hp = wide_half_pi(w);
-        return if v.negative { hp.neg() } else { hp };
+fn asin_work_narrow(working_value: Fixed, working_scale: u32) -> Fixed {
+    let one_w = Fixed { negative: false, mag: Fixed::pow10(working_scale) };
+    let abs_working_value = Fixed { negative: false, mag: working_value.mag };
+    if abs_working_value == one_w {
+        let half_pi = wide_half_pi(working_scale);
+        return if working_value.negative { half_pi.neg() } else { half_pi };
     }
     let half_w = one_w.halve();
-    if !abs_v.ge_mag(half_w) {
-        let denom = one_w.sub(v.mul(v, w)).sqrt(w);
-        atan_fixed(v.div(denom, w), w)
+    if !abs_working_value.ge_mag(half_w) {
+        let denom = one_w
+            .sub(working_value.mul(working_value, working_scale))
+            .sqrt(working_scale);
+        atan_fixed(working_value.div(denom, working_scale), working_scale)
     } else {
-        let inner = one_w.sub(abs_v).halve();
-        let inner_sqrt = inner.sqrt(w);
-        let inner_denom = one_w.sub(inner_sqrt.mul(inner_sqrt, w)).sqrt(w);
-        let inner_asin = atan_fixed(inner_sqrt.div(inner_denom, w), w);
-        let result_abs = wide_half_pi(w).sub(inner_asin).sub(inner_asin);
-        if v.negative { result_abs.neg() } else { result_abs }
+        let inner = one_w.sub(abs_working_value).halve();
+        let inner_sqrt = inner.sqrt(working_scale);
+        let inner_denom = one_w.sub(inner_sqrt.mul(inner_sqrt, working_scale)).sqrt(working_scale);
+        let inner_asin = atan_fixed(inner_sqrt.div(inner_denom, working_scale), working_scale);
+        let result_abs = wide_half_pi(working_scale).sub(inner_asin).sub(inner_asin);
+        if working_value.negative { result_abs.neg() } else { result_abs }
     }
 }
 
@@ -579,24 +674,28 @@ fn asin_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 
     if raw == 0 {
         return 0;
     }
-    let w = SCALE + STRICT_GUARD;
-    let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
-    let v = to_fixed(raw);
-    let abs_v = Fixed { negative: false, mag: v.mag };
+    let working_scale = SCALE + STRICT_GUARD;
+    let one_w = Fixed { negative: false, mag: Fixed::pow10(working_scale) };
+    let working_value = to_fixed(raw);
+    let abs_working_value = Fixed { negative: false, mag: working_value.mag };
     assert!(
-        !(abs_v.ge_mag(one_w) && abs_v != one_w),
+        !(abs_working_value.ge_mag(one_w) && abs_working_value != one_w),
         "asin: argument out of domain [-1, 1]"
     );
     // Near-tie protected terminal, mirroring the routed
     // `trig_series_2limb::asin_strict_raw` (the schoolbook is the
     // bit-exact reference, so it must decide ties the same way).
-    match asin_work_narrow(v, w).round_to_i128_clear_of_tie(w, SCALE, mode) {
-        Some(v) => v.unwrap_or_else(|| {
+    match asin_work_narrow(working_value, working_scale)
+        .round_to_i128_clear_of_tie(working_scale, SCALE, mode)
+    {
+        Some(narrowed) => narrowed.unwrap_or_else(|| {
             crate::support::diagnostics::overflow_panic_with_scale("asin", SCALE)
         }),
-        None => crate::algos::support::narrow_ziv::walk(STRICT_GUARD, SCALE, mode, |g| {
-            crate::algos::trig::trig_series_2limb::asin_ziv(raw, SCALE, g)
-        }),
+        None => {
+            crate::algos::support::narrow_ziv::walk(STRICT_GUARD, SCALE, mode, |guard_digits| {
+                crate::algos::trig::trig_series_2limb::asin_ziv(raw, SCALE, guard_digits)
+            })
+        }
     }
 }
 
@@ -619,42 +718,46 @@ fn acos_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 
     if raw == -one_bits && crate::support::rounding::is_nearest_mode(mode) {
         return <crate::D<Int<2>, SCALE> as DecimalConstants>::pi().0.as_i128();
     }
-    let w = SCALE + STRICT_GUARD;
-    let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
-    let v = to_fixed(raw);
-    let abs_v = Fixed { negative: false, mag: v.mag };
+    let working_scale = SCALE + STRICT_GUARD;
+    let one_w = Fixed { negative: false, mag: Fixed::pow10(working_scale) };
+    let working_value = to_fixed(raw);
+    let abs_working_value = Fixed { negative: false, mag: working_value.mag };
     assert!(
-        !(abs_v.ge_mag(one_w) && abs_v != one_w),
+        !(abs_working_value.ge_mag(one_w) && abs_working_value != one_w),
         "acos: argument out of domain [-1, 1]"
     );
     // Near-tie protected terminal — see `asin_schoolbook_raw`.
-    match wide_half_pi(w)
-        .sub(asin_work_narrow(v, w))
-        .round_to_i128_clear_of_tie(w, SCALE, mode)
+    match wide_half_pi(working_scale)
+        .sub(asin_work_narrow(working_value, working_scale))
+        .round_to_i128_clear_of_tie(working_scale, SCALE, mode)
     {
-        Some(v) => v.unwrap_or_else(|| {
+        Some(narrowed) => narrowed.unwrap_or_else(|| {
             crate::support::diagnostics::overflow_panic_with_scale("acos", SCALE)
         }),
-        None => crate::algos::support::narrow_ziv::walk(STRICT_GUARD, SCALE, mode, |g| {
-            crate::algos::trig::trig_series_2limb::acos_ziv(raw, SCALE, g)
-        }),
+        None => {
+            crate::algos::support::narrow_ziv::walk(STRICT_GUARD, SCALE, mode, |guard_digits| {
+                crate::algos::trig::trig_series_2limb::acos_ziv(raw, SCALE, guard_digits)
+            })
+        }
     }
 }
 
 #[inline]
 #[must_use]
 fn atan2_schoolbook_raw<const SCALE: u32>(y_raw: i128, x_raw: i128, mode: RoundingMode) -> i128 {
-    let w = SCALE + STRICT_GUARD;
+    let working_scale = SCALE + STRICT_GUARD;
     // Near-tie protected terminal — see `asin_schoolbook_raw`.
-    match atan2_kernel(to_fixed(y_raw), to_fixed(x_raw), y_raw, w)
-        .round_to_i128_clear_of_tie(w, SCALE, mode)
+    match atan2_kernel(to_fixed(y_raw), to_fixed(x_raw), y_raw, working_scale)
+        .round_to_i128_clear_of_tie(working_scale, SCALE, mode)
     {
-        Some(v) => v.unwrap_or_else(|| {
+        Some(narrowed) => narrowed.unwrap_or_else(|| {
             crate::support::diagnostics::overflow_panic_with_scale("atan2", SCALE)
         }),
-        None => crate::algos::support::narrow_ziv::walk(STRICT_GUARD, SCALE, mode, |g| {
-            crate::algos::trig::trig_series_2limb::atan2_ziv(y_raw, x_raw, SCALE, g)
-        }),
+        None => {
+            crate::algos::support::narrow_ziv::walk(STRICT_GUARD, SCALE, mode, |guard_digits| {
+                crate::algos::trig::trig_series_2limb::atan2_ziv(y_raw, x_raw, SCALE, guard_digits)
+            })
+        }
     }
 }
 
@@ -855,15 +958,15 @@ mod tests {
                 "tier asin Ceiling"
             );
             // Public path (policy -> rung walker -> tier fall-up).
-            let x = crate::D::<Int<24>, 180>(raw);
+            let value = crate::D::<Int<24>, 180>(raw);
             assert_eq!(
-                x.asin_strict_with(RoundingMode::HalfToEven).0,
+                value.asin_strict_with(RoundingMode::HalfToEven).0,
                 expect_nearest,
                 "public asin HalfToEven"
             );
             for mode in MODES {
                 assert_eq!(
-                    x.asin_strict_with(mode).0,
+                    value.asin_strict_with(mode).0,
                     asin_schoolbook::<Core, 180>(raw, mode),
                     "public == tier at mode {mode:?}"
                 );
@@ -897,14 +1000,14 @@ mod tests {
             crate::int::types::compute_limbs::ComputeLimbs,
     {
         use crate::int::types::traits::BigInt;
-        let p = |n: u32| crate::consts::pow10::dispatch::<C::Storage>(n);
+        let pow10 = |exponent: u32| crate::consts::pow10::dispatch::<C::Storage>(exponent);
         let one = <C::Storage as BigInt>::from_i128(1);
-        let y = <C::Storage as BigInt>::from_i128(coeff) * p(S - big_k);
-        let x = p(S); // 1.0
-        let g = atan2_schoolbook::<C, S>(y, x, RoundingMode::HalfToEven);
+        let y = <C::Storage as BigInt>::from_i128(coeff) * pow10(S - big_k);
+        let x = pow10(S); // 1.0
+        let grid_value = atan2_schoolbook::<C, S>(y, x, RoundingMode::HalfToEven);
         assert_eq!(
             atan2_schoolbook::<C, S>(y, x, RoundingMode::HalfAwayFromZero),
-            g,
+            grid_value,
             "nearest modes agree S={S} k={big_k} coeff={coeff}"
         );
         let j_min = S / big_k + 1;
@@ -914,32 +1017,43 @@ mod tests {
         // atan COMPRESSES (cubic −), then alternates. The directed neighbour per
         // (deciding-term direction, result sign) — mirrors
         // `tiny_odd_{compressing,expanding}_directed`.
-        let (floor_e, trunc_e, ceil_e) = match (expanding, positive) {
-            (true, true) => (g, g, g + one),            // expanding +: Ceil up
-            (true, false) => (g - one, g, g),           // expanding −: Floor down
-            (false, true) => (g - one, g - one, g),     // compress +: Floor/Trunc down
-            (false, false) => (g, g + one, g + one),    // compress −: Trunc/Ceil up
+        let (floor_expected, trunc_expected, ceil_expected) = match (expanding, positive) {
+            // expanding +: Ceil up
+            (true, true) => (grid_value, grid_value, grid_value + one),
+            // expanding −: Floor down
+            (true, false) => (grid_value - one, grid_value, grid_value),
+            // compress +: Floor/Trunc down
+            (false, true) => (grid_value - one, grid_value - one, grid_value),
+            // compress −: Trunc/Ceil up
+            (false, false) => (grid_value, grid_value + one, grid_value + one),
         };
         assert_eq!(
             atan2_schoolbook::<C, S>(y, x, RoundingMode::Floor),
-            floor_e,
+            floor_expected,
             "Floor S={S} k={big_k} coeff={coeff} j*={j_star} exp={expanding}"
         );
         assert_eq!(
             atan2_schoolbook::<C, S>(y, x, RoundingMode::Trunc),
-            trunc_e,
+            trunc_expected,
             "Trunc S={S} k={big_k} coeff={coeff} j*={j_star} exp={expanding}"
         );
         assert_eq!(
             atan2_schoolbook::<C, S>(y, x, RoundingMode::Ceiling),
-            ceil_e,
+            ceil_expected,
             "Ceiling S={S} k={big_k} coeff={coeff} j*={j_star} exp={expanding}"
         );
         // Single-step invariant: every directed result within ONE ULP of G.
-        for m in [RoundingMode::Floor, RoundingMode::Trunc, RoundingMode::Ceiling] {
-            let r = atan2_schoolbook::<C, S>(y, x, m);
-            let d = if r < g { g - r } else { r - g };
-            assert!(d <= one, "single-step |r-G|<=1 S={S} k={big_k} coeff={coeff} mode={m:?}");
+        for mode in [RoundingMode::Floor, RoundingMode::Trunc, RoundingMode::Ceiling] {
+            let directed = atan2_schoolbook::<C, S>(y, x, mode);
+            let delta = if directed < grid_value {
+                grid_value - directed
+            } else {
+                directed - grid_value
+            };
+            assert!(
+                delta <= one,
+                "single-step |r-G|<=1 S={S} k={big_k} coeff={coeff} mode={mode:?}"
+            );
         }
     }
 
@@ -957,19 +1071,19 @@ mod tests {
     {
         use crate::algos::support::wide_trig_core::round_to_storage_directed_decided_g;
         use crate::int::types::traits::BigInt;
-        let p = |n: u32| crate::consts::pow10::dispatch::<C::Storage>(n);
+        let pow10 = |exponent: u32| crate::consts::pow10::dispatch::<C::Storage>(exponent);
         let one = <C::Storage as BigInt>::from_i128(1);
-        let y = <C::Storage as BigInt>::from_i128(coeff) * p(S - big_k);
-        let x = p(S);
-        let g = atan2_schoolbook::<C, S>(y, x, RoundingMode::HalfToEven);
-        let walker = |m: RoundingMode| {
+        let y = <C::Storage as BigInt>::from_i128(coeff) * pow10(S - big_k);
+        let x = pow10(S);
+        let grid_value = atan2_schoolbook::<C, S>(y, x, RoundingMode::HalfToEven);
+        let walker = |walk_mode: RoundingMode| {
             round_to_storage_directed_decided_g::<C::Storage, C::W>(
                 C::GUARD,
                 S,
-                m,
+                walk_mode,
                 C::storage_max(),
                 C::storage_min(),
-                |guard| atan2_work::<C, S>(y, x, guard),
+                |guard_digits| atan2_work::<C, S>(y, x, guard_digits),
             )
             .0
         };
@@ -979,15 +1093,22 @@ mod tests {
             walker(RoundingMode::Ceiling),
             "off-grid Floor != Ceiling S={S} k={big_k} coeff={coeff}"
         );
-        for m in [RoundingMode::Floor, RoundingMode::Trunc, RoundingMode::Ceiling] {
+        for mode in [RoundingMode::Floor, RoundingMode::Trunc, RoundingMode::Ceiling] {
             assert_eq!(
-                atan2_schoolbook::<C, S>(y, x, m),
-                walker(m),
-                "off-grid kernel==walker S={S} k={big_k} coeff={coeff} mode={m:?}"
+                atan2_schoolbook::<C, S>(y, x, mode),
+                walker(mode),
+                "off-grid kernel==walker S={S} k={big_k} coeff={coeff} mode={mode:?}"
             );
-            let r = atan2_schoolbook::<C, S>(y, x, m);
-            let d = if r < g { g - r } else { r - g };
-            assert!(d <= one, "off-grid single-step S={S} k={big_k} coeff={coeff} mode={m:?}");
+            let directed = atan2_schoolbook::<C, S>(y, x, mode);
+            let delta = if directed < grid_value {
+                grid_value - directed
+            } else {
+                directed - grid_value
+            };
+            assert!(
+                delta <= one,
+                "off-grid single-step S={S} k={big_k} coeff={coeff} mode={mode:?}"
+            );
         }
     }
 
@@ -1029,14 +1150,14 @@ mod tests {
             check::<180>(3, 117); // linear
             check::<461>(3, 117); // deep
             fn check<const S: u32>(coeff: i128, big_k: u32) {
-                let p = |n: u32| Int::<24>::from_i128(10).pow(n);
-                let y = Int::<24>::from_i128(coeff) * p(S - big_k);
-                let x = p(S);
-                let yd = crate::D::<Int<24>, S>(y);
-                let xd = crate::D::<Int<24>, S>(x);
+                let pow10 = |exponent: u32| Int::<24>::from_i128(10).pow(exponent);
+                let y = Int::<24>::from_i128(coeff) * pow10(S - big_k);
+                let x = pow10(S);
+                let y_decimal = crate::D::<Int<24>, S>(y);
+                let x_decimal = crate::D::<Int<24>, S>(x);
                 for mode in MODES {
                     assert_eq!(
-                        yd.atan2_strict_with(xd, mode).0,
+                        y_decimal.atan2_strict_with(x_decimal, mode).0,
                         atan2_schoolbook::<Core, S>(y, x, mode),
                         "public==tier S={S} k={big_k} mode={mode:?}"
                     );
@@ -1051,15 +1172,21 @@ mod tests {
         fn atan2_nontiny_no_spurious_step() {
             let one_val = Int::<24>::from_i128(10).pow(461);
             let one = Int::<24>::from_i128(1);
-            let f = atan2_schoolbook::<Core, 461>(one_val, one_val, RoundingMode::Floor);
-            let n = atan2_schoolbook::<Core, 461>(one_val, one_val, RoundingMode::HalfToEven);
-            let c = atan2_schoolbook::<Core, 461>(one_val, one_val, RoundingMode::Ceiling);
-            assert!(f <= n && n <= c, "non-tiny atan2(1,1) directed ordered");
-            assert!(c - f <= one, "non-tiny atan2(1,1) Ceiling-Floor <= 1 ULP (no spurious step)");
-            let d = crate::D::<Int<24>, 461>(one_val);
+            let floored = atan2_schoolbook::<Core, 461>(one_val, one_val, RoundingMode::Floor);
+            let nearest = atan2_schoolbook::<Core, 461>(one_val, one_val, RoundingMode::HalfToEven);
+            let ceiled = atan2_schoolbook::<Core, 461>(one_val, one_val, RoundingMode::Ceiling);
+            assert!(
+                floored <= nearest && nearest <= ceiled,
+                "non-tiny atan2(1,1) directed ordered"
+            );
+            assert!(
+                ceiled - floored <= one,
+                "non-tiny atan2(1,1) Ceiling-Floor <= 1 ULP (no spurious step)"
+            );
+            let operand = crate::D::<Int<24>, 461>(one_val);
             for mode in MODES {
                 assert_eq!(
-                    d.atan2_strict_with(d, mode).0,
+                    operand.atan2_strict_with(operand, mode).0,
                     atan2_schoolbook::<Core, 461>(one_val, one_val, mode),
                     "non-tiny public==tier mode={mode:?}"
                 );
@@ -1128,14 +1255,14 @@ mod tests {
 
             // Public path == tier kernel across all six modes (rung == tier).
             use crate::int::types::Int;
-            let p = |n: u32| Int::<48>::from_i128(10).pow(n);
-            let y = Int::<48>::from_i128(3) * p(923 - 117);
-            let x = p(923);
-            let yd = crate::D::<Int<48>, 923>(y);
-            let xd = crate::D::<Int<48>, 923>(x);
+            let pow10 = |exponent: u32| Int::<48>::from_i128(10).pow(exponent);
+            let y = Int::<48>::from_i128(3) * pow10(923 - 117);
+            let x = pow10(923);
+            let y_decimal = crate::D::<Int<48>, 923>(y);
+            let x_decimal = crate::D::<Int<48>, 923>(x);
             for mode in MODES {
                 assert_eq!(
-                    yd.atan2_strict_with(xd, mode).0,
+                    y_decimal.atan2_strict_with(x_decimal, mode).0,
                     atan2_schoolbook::<Core, 923>(y, x, mode),
                     "d924 s923 public==tier mode={mode:?}"
                 );
@@ -1184,18 +1311,18 @@ mod tests {
 
         #[test]
         fn asin_acos_atan2_schoolbook_match_routed() {
-            for &u in &INPUTS9 {
-                let r = raw9(u);
+            for &units in &INPUTS9 {
+                let raw = raw9(units);
                 for &mode in &MODES {
                     assert_eq!(
-                        asin_schoolbook::<Core, S>(r, mode),
-                        D::<Int<3>, S>(r).asin_strict_with(mode).0,
-                        "D57 asin schoolbook != routed at units={u} mode={mode:?}"
+                        asin_schoolbook::<Core, S>(raw, mode),
+                        D::<Int<3>, S>(raw).asin_strict_with(mode).0,
+                        "D57 asin schoolbook != routed at units={units} mode={mode:?}"
                     );
                     assert_eq!(
-                        acos_schoolbook::<Core, S>(r, mode),
-                        D::<Int<3>, S>(r).acos_strict_with(mode).0,
-                        "D57 acos schoolbook != routed at units={u} mode={mode:?}"
+                        acos_schoolbook::<Core, S>(raw, mode),
+                        D::<Int<3>, S>(raw).acos_strict_with(mode).0,
+                        "D57 acos schoolbook != routed at units={units} mode={mode:?}"
                     );
                 }
             }
@@ -1208,12 +1335,12 @@ mod tests {
                 (500_000_000, 2_000_000_000),
             ];
             for &(y, x) in &PTS {
-                let yr = raw9(y);
-                let xr = raw9(x);
+                let y_raw = raw9(y);
+                let x_raw = raw9(x);
                 for &mode in &MODES {
                     assert_eq!(
-                        atan2_schoolbook::<Core, S>(yr, xr, mode),
-                        D::<Int<3>, S>(yr).atan2_strict_with(D::<Int<3>, S>(xr), mode).0,
+                        atan2_schoolbook::<Core, S>(y_raw, x_raw, mode),
+                        D::<Int<3>, S>(y_raw).atan2_strict_with(D::<Int<3>, S>(x_raw), mode).0,
                         "D57 atan2 schoolbook != routed at y={y} x={x} mode={mode:?}"
                     );
                 }

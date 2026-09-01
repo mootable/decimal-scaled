@@ -6,7 +6,7 @@
 //! `tan(x)` is computed as `sin(r)/cos(r)` on the range-reduced residue
 //! `r`. When the input lies close to an odd multiple of π/2 the residue
 //! folds toward ±π/2, where `cos(r) → 0` and the quotient diverges. A
-//! division at a fixed working scale `w` then amplifies the per-op
+//! division at a fixed working scale then amplifies the per-op
 //! working-scale rounding error by the quotient magnitude
 //! `1/cos(r) ≈ |tan|`. Holding the 0.5 ULP storage contract therefore
 //! requires the working scale to carry roughly `log10(|tan|)` extra
@@ -21,10 +21,10 @@
 /// Extra working-scale guard digits a near-pole `tan` evaluation needs,
 /// derived from the bit length of a base-width probe quotient.
 ///
-/// The probe `q = sin(r)/cos(r)` is held at working scale `w0`, i.e.
-/// `q ≈ |tan| · 10^{w0}`. Its bit length is
-/// `bit_length(q) ≈ log2(|tan|) + w0 · log2(10)`, so
-/// `log10(|tan|) ≈ bit_length(q) / log2(10) − w0`.
+/// The probe `q = sin(r)/cos(r)` is held at `base_working_scale`, i.e.
+/// `q ≈ |tan| · 10^base_working_scale`. Its bit length is
+/// `bit_length(q) ≈ log2(|tan|) + base_working_scale · log2(10)`, so
+/// `log10(|tan|) ≈ bit_length(q) / log2(10) − base_working_scale`.
 ///
 /// `bit_length / log2(10)` is computed in integers via the rational
 /// `1 / log2(10) ≈ 100_000 / 332_193`. Anything ≤ 0 means the result is
@@ -38,10 +38,10 @@
 /// covering extreme inputs where `|tan|` is many digits large.
 #[inline]
 #[must_use]
-pub(crate) fn tan_extra_digits(probe_bit_length: u32, w0: u32) -> u32 {
+pub(crate) fn tan_extra_digits(probe_bit_length: u32, base_working_scale: u32) -> u32 {
     // Integer `log10` of the probe magnitude: bits / log2(10).
     let log10_probe = (probe_bit_length as u64 * 100_000) / 332_193;
-    let log10_tan = log10_probe as i64 - w0 as i64;
+    let log10_tan = log10_probe as i64 - base_working_scale as i64;
     if log10_tan <= 0 {
         return 0;
     }
@@ -50,15 +50,16 @@ pub(crate) fn tan_extra_digits(probe_bit_length: u32, w0: u32) -> u32 {
     // final `round_to_storage_with` sheds at most a half-LSB. Six
     // decimal digits sits many orders below half a storage ULP.
     //
-    // The lift is bounded so the lifted working scale `w0 + extra` stays
-    // within `2·w0` digits — the work integer is sized for `2·(SCALE +
-    // GUARD)` products, so a lift past `w0` risks overflowing it. An
-    // input that close to the pole rounds to a value too large for
-    // storage anyway, and `round_to_storage_with` panics with an
+    // The lift is bounded so the lifted working scale
+    // `base_working_scale + extra` stays within `2·base_working_scale`
+    // digits — the work integer is sized for `2·(SCALE + GUARD)`
+    // products, so a lift past `base_working_scale` risks overflowing
+    // it. An input that close to the pole rounds to a value too large
+    // for storage anyway, and `round_to_storage_with` panics with an
     // out-of-range message rather than returning a silently-wrong
     // result.
     let extra = log10_tan as u64 + 6;
-    extra.min(w0 as u64) as u32
+    extra.min(base_working_scale as u64) as u32
 }
 
 #[cfg(test)]
@@ -67,18 +68,18 @@ mod tests {
 
     #[test]
     fn magnitude_one_quotient_needs_no_lift() {
-        // |tan| ≈ 1 ⇒ probe ≈ 10^{w0} ⇒ bit_length ≈ w0·log2(10).
-        let w0 = 158u32;
-        let bits = ((w0 as f64) * std::f64::consts::LOG2_10) as u32;
-        assert_eq!(tan_extra_digits(bits, w0), 0);
+        // |tan| ≈ 1 ⇒ probe ≈ 10^base ⇒ bit_length ≈ base·log2(10).
+        let base_working_scale = 158u32;
+        let bits = ((base_working_scale as f64) * std::f64::consts::LOG2_10) as u32;
+        assert_eq!(tan_extra_digits(bits, base_working_scale), 0);
     }
 
     #[test]
     fn five_digit_quotient_lifts_about_five_plus_margin() {
-        // |tan| ≈ 10^5 ⇒ probe bit length ≈ (w0 + 5)·log2(10).
-        let w0 = 158u32;
-        let bits = (((w0 + 5) as f64) * std::f64::consts::LOG2_10).ceil() as u32;
-        let extra = tan_extra_digits(bits, w0);
+        // |tan| ≈ 10^5 ⇒ probe bit length ≈ (base + 5)·log2(10).
+        let base_working_scale = 158u32;
+        let bits = (((base_working_scale + 5) as f64) * std::f64::consts::LOG2_10).ceil() as u32;
+        let extra = tan_extra_digits(bits, base_working_scale);
         // ~5 magnitude digits + 6 margin, allowing ±1 for integer rounding.
         assert!((10..=12).contains(&extra), "extra = {extra}");
     }
@@ -86,9 +87,9 @@ mod tests {
     #[test]
     fn large_quotient_scales_linearly() {
         // |tan| ≈ 10^40 ⇒ ~40 magnitude digits + margin.
-        let w0 = 90u32;
-        let bits = (((w0 + 40) as f64) * std::f64::consts::LOG2_10).ceil() as u32;
-        let extra = tan_extra_digits(bits, w0);
+        let base_working_scale = 90u32;
+        let bits = (((base_working_scale + 40) as f64) * std::f64::consts::LOG2_10).ceil() as u32;
+        let extra = tan_extra_digits(bits, base_working_scale);
         assert!((45..=47).contains(&extra), "extra = {extra}");
     }
 }

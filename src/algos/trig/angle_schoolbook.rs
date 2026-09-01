@@ -33,10 +33,14 @@ pub(crate) fn to_degrees_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
 ) -> C::Storage {
-    let w = SCALE + C::GUARD;
-    let v = C::to_work(raw);
-    let r = C::div(v * C::lit(180), C::pi::<SCALE>(w), w);
-    C::round_to_storage_with(r, w, SCALE, mode)
+    let working_scale = SCALE + C::GUARD;
+    let working_value = C::to_work(raw);
+    let degrees = C::div(
+        working_value * C::lit(180),
+        C::pi::<SCALE>(working_scale),
+        working_scale,
+    );
+    C::round_to_storage_with(degrees, working_scale, SCALE, mode)
 }
 
 /// Schoolbook to_radians for a wide tier -- x * pi / 180.
@@ -46,10 +50,11 @@ pub(crate) fn to_radians_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
 ) -> C::Storage {
-    let w = SCALE + C::GUARD;
-    let v = C::to_work(raw);
-    let r = C::mul(v, C::pi::<SCALE>(w), w) / C::lit(180);
-    C::round_to_storage_with(r, w, SCALE, mode)
+    let working_scale = SCALE + C::GUARD;
+    let working_value = C::to_work(raw);
+    let radians =
+        C::mul(working_value, C::pi::<SCALE>(working_scale), working_scale) / C::lit(180);
+    C::round_to_storage_with(radians, working_scale, SCALE, mode)
 }
 
 // -- Narrow tier -- Int<2> storage, math in the 256-bit Fixed ---------
@@ -60,11 +65,11 @@ fn to_degrees_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) ->
     if raw == 0 {
         return 0;
     }
-    let w = SCALE + STRICT_GUARD;
+    let working_scale = SCALE + STRICT_GUARD;
     to_fixed(raw)
         .mul_u128(180)
-        .div(wide_pi(w), w)
-        .round_to_i128_with(w, SCALE, mode)
+        .div(wide_pi(working_scale), working_scale)
+        .round_to_i128_with(working_scale, SCALE, mode)
         .unwrap_or_else(|| {
             crate::support::diagnostics::overflow_panic_with_scale("to_degrees", SCALE)
         })
@@ -76,11 +81,11 @@ fn to_radians_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) ->
     if raw == 0 {
         return 0;
     }
-    let w = SCALE + STRICT_GUARD;
+    let working_scale = SCALE + STRICT_GUARD;
     to_fixed(raw)
-        .mul(wide_pi(w), w)
+        .mul(wide_pi(working_scale), working_scale)
         .div_small(180)
-        .round_to_i128_with(w, SCALE, mode)
+        .round_to_i128_with(working_scale, SCALE, mode)
         .unwrap_or_else(|| {
             crate::support::diagnostics::overflow_panic_with_scale("to_radians", SCALE)
         })
@@ -183,18 +188,18 @@ mod tests {
 
         #[test]
         fn to_degrees_to_radians_schoolbook_match_routed() {
-            for &u in &INPUTS9 {
-                let r = raw9(u);
+            for &units in &INPUTS9 {
+                let raw = raw9(units);
                 for &mode in &MODES {
                     assert_eq!(
-                        to_degrees_schoolbook::<Core, S>(r, mode),
-                        D::<Int<3>, S>(r).to_degrees_strict_with(mode).0,
-                        "D57 to_degrees schoolbook != routed at units={u} mode={mode:?}"
+                        to_degrees_schoolbook::<Core, S>(raw, mode),
+                        D::<Int<3>, S>(raw).to_degrees_strict_with(mode).0,
+                        "D57 to_degrees schoolbook != routed at units={units} mode={mode:?}"
                     );
                     assert_eq!(
-                        to_radians_schoolbook::<Core, S>(r, mode),
-                        D::<Int<3>, S>(r).to_radians_strict_with(mode).0,
-                        "D57 to_radians schoolbook != routed at units={u} mode={mode:?}"
+                        to_radians_schoolbook::<Core, S>(raw, mode),
+                        D::<Int<3>, S>(raw).to_radians_strict_with(mode).0,
+                        "D57 to_radians schoolbook != routed at units={units} mode={mode:?}"
                     );
                 }
             }
