@@ -11,13 +11,7 @@ from typing import List
 import mpmath
 
 from ..functions import FUNCTIONS
-from ..oracle import Oracle, register
-
-# Extra fractional digits computed beyond `precision` to decide termination: if
-# they are all zero, the value terminated within `precision` and is stripped;
-# otherwise it is a genuine truncation. A coincidental run of this many zeros in a
-# non-terminating expansion is ~10^-GUARD — negligible.
-GUARD = 40
+from ..oracle import GUARD, Oracle, format_fetched, register
 
 # Working digits held beyond what the budget below demands, absorbing mpmath's own
 # few-ulp per-function error.
@@ -30,30 +24,16 @@ MAX_ESCALATIONS = 6
 
 
 def _format(r, precision: int) -> str:
-    sign = "-" if r < 0 else ""
+    """This oracle's formatting primitive plus the shared contract.
+
+    `mpmath.floor` truncates toward zero, so nothing is rounded before it is floored.
+    What the floor cannot repair is that `r` is a POINT float: it carries no interval,
+    so it cannot pin a truncation that sits on a boundary, and on a hard row it may
+    land a unit away. That is inherent to the representation, not a defect here — the
+    validation tolerance is where it is accounted for.
+    """
     scaled_guard = int(mpmath.floor(abs(r) * (mpmath.mpf(10) ** (precision + GUARD))))
-    if scaled_guard % (10 ** GUARD) == 0:
-        # Terminated within `precision` digits: strip trailing zeros.
-        exact = scaled_guard // (10 ** GUARD)  # value * 10^precision, exact
-        if exact == 0:
-            return "0"
-        z = 0
-        while z < precision and exact % 10 == 0:
-            exact //= 10
-            z += 1
-        frac_len = precision - z
-        if frac_len == 0:
-            return f"{sign}{exact}"
-        s = str(exact).rjust(frac_len + 1, "0")
-        return f"{sign}{s[:-frac_len]}.{s[-frac_len:]}"
-    # Non-terminating: truncate toward zero to exactly `precision` frac digits.
-    scaled = scaled_guard // (10 ** GUARD)
-    if scaled == 0:
-        sign = ""  # never render a signed zero (-0.000…0)
-    if precision == 0:
-        return f"{sign}{scaled}"
-    s = str(scaled).rjust(precision + 1, "0")
-    return f"{sign}{s[:-precision]}.{s[-precision:]}"
+    return format_fetched(r < 0, scaled_guard, precision)
 
 
 _UNARY = {

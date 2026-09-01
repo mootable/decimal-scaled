@@ -4,16 +4,7 @@ independence. Lazy-imports sympy."""
 from typing import List
 
 from ..functions import FUNCTIONS
-from ..oracle import Oracle, OracleUnavailable, register
-
-
-def _format(neg: bool, scaled: int, precision: int) -> str:
-    sign = "-" if neg and scaled != 0 else ""
-    s = str(scaled)
-    if precision == 0:
-        return f"{sign}{s}"
-    s = s.rjust(precision + 1, "0")
-    return f"{sign}{s[:-precision]}.{s[-precision:]}"
+from ..oracle import GUARD, Oracle, OracleUnavailable, format_fetched, register
 
 
 class SympyOracle(Oracle):
@@ -52,11 +43,14 @@ class SympyOracle(Oracle):
             raise NotImplementedError(f"sympy adapter does not implement {func}")
         expr = table[func]()
         mp = mpmath.mp
-        mp.dps = precision + 60
-        r = mpmath.mpf(str(sympy.N(expr, precision + 50)))
-        neg = r < 0
-        scaled = int(mpmath.floor(abs(r) * (mpmath.mpf(10) ** precision)))
-        return _format(neg, scaled, precision)
+        # Wide enough for `precision` + the shared termination GUARD, plus slack.
+        mp.dps = precision + GUARD + 60
+        r = mpmath.mpf(str(sympy.N(expr, precision + GUARD + 50)))
+        # The shared primitive: floor toward zero at `precision` + GUARD. Previously
+        # this floored at `precision` with no guard window, so this oracle had no
+        # exactness path and rendered every value as a full-length truncation.
+        scaled_guard = int(mpmath.floor(abs(r) * (mpmath.mpf(10) ** (precision + GUARD))))
+        return format_fetched(r < 0, scaled_guard, precision)
 
 
 register("sympy", SympyOracle)

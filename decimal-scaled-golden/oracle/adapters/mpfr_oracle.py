@@ -8,16 +8,7 @@ NOT bundled; install it yourself: `pip install gmpy2`.
 from typing import List
 
 from ..functions import FUNCTIONS
-from ..oracle import Oracle, OracleUnavailable, register
-
-
-def _format(neg: bool, scaled: int, precision: int) -> str:
-    sign = "-" if neg and scaled != 0 else ""
-    s = str(scaled)
-    if precision == 0:
-        return f"{sign}{s}"
-    s = s.rjust(precision + 1, "0")
-    return f"{sign}{s[:-precision]}.{s[-precision:]}"
+from ..oracle import GUARD, Oracle, OracleUnavailable, format_fetched, register
 
 
 class MpfrOracle(Oracle):
@@ -33,7 +24,9 @@ class MpfrOracle(Oracle):
         except ImportError as e:
             raise OracleUnavailable("mpfr: gmpy2 not installed") from e
         ctx = gmpy2.get_context()
-        ctx.precision = int((precision + 40) * 3.3219281) + 64
+        # Wide enough for `precision` + the shared termination GUARD, plus slack.
+        ctx.precision = int((precision + GUARD + 40) * 3.3219281) + 64
+        ctx.round = gmpy2.RoundToZero  # rule 1: never round before flooring
         x = [gmpy2.mpfr(s) for s in inputs]
         a = x[0]
         table = {
@@ -54,9 +47,11 @@ class MpfrOracle(Oracle):
         if func not in table:
             raise NotImplementedError(f"mpfr adapter does not implement {func}")
         r = table[func]()
-        neg = r < 0
-        scaled = int(gmpy2.floor(abs(r) * gmpy2.mpfr(10) ** precision))
-        return _format(neg, scaled, precision)
+        # The shared primitive: floor toward zero at `precision` + GUARD. Previously
+        # this floored at `precision` with no guard window, so this oracle had no
+        # exactness path at all and rendered every value as a full-length truncation.
+        scaled_guard = int(gmpy2.floor(abs(r) * gmpy2.mpfr(10) ** (precision + GUARD)))
+        return format_fetched(r < 0, scaled_guard, precision)
 
 
 register("mpfr", MpfrOracle)

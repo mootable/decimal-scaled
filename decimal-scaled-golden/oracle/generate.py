@@ -34,16 +34,12 @@ GEN_PRECISION = 1233
 # verifiable depth. GEN_PRECISION = max_decimal_width + GUARD.
 GUARD = 2
 
-# Per-function GENERATOR oracle. Unlisted functions fall to DEFAULT_GENERATOR.
-#   fraction — fractions.Fraction (exact base-10): the finite-result arithmetic ops.
-#   decimal  — decimal.Decimal (correctly-rounded base-10): the four it computes natively.
-#   flint    — Arb (binary, but RIGOROUS intervals + unique_fmpz pin the true value, so
-#              an exact result is artifact-free where mpmath's point-float can floor one
-#              below): the genuinely-irrational rest. mpmath becomes a validator.
-GENERATOR_POLICY = {
-    "add": "fraction", "sub": "fraction", "mul": "fraction", "div": "fraction", "rem": "fraction",
-    "sqrt": "decimal", "exp": "decimal", "ln": "decimal", "log10": "decimal",
-}
+# THE generator, for every function. There is no per-function table: a generator has to
+# be able to PROVE its own answer, and only Arb's rigorous intervals + `unique_fmpz` can
+# pin a truncation across the whole surface. `decimal` is exact base-10 but a point value
+# behind a fixed window, and `mpmath` is a point float; neither can pin, and `decimal`'s
+# inability to pin is exactly what produced four wrong `exp` rows that two oracles then
+# agreed on. Everything else validates.
 DEFAULT_GENERATOR = "flint"
 
 # Validator pool, in the order they appear in a line comment. Each is used wherever it
@@ -80,10 +76,19 @@ VALIDATOR_ORDER = ["mpmath", "flint", "mpfr", "sympy", "decimal", "fraction"]
 # an exclusion added over an unproven "that library is just bad here" hides our own bug.
 VALIDATOR_EXCLUDE: dict[str, set[str]] = {}
 
-# A binary-vs-base-10 (or derived) disagreement up to this many units at 10^-precision
-# is a legitimate radix-rounding artifact: annotated and accepted. Beyond it the line is
-# flagged and dropped — a genuine discrepancy to investigate, never silently kept.
-ACCEPT_ULPS = 2
+# How far a validator may differ from the generated value and still CONFIRM it: at most
+# this many units at 10^-precision. Derived from the fetch contract, not tuned to
+# observed noise — every oracle floors the SAME true value at the SAME depth, so the
+# only legitimate difference is an internal error straddling the truncation boundary,
+# which moves the floor by at most one. Beyond it the line is flagged, never silently
+# kept: it is a genuine disagreement and a maintainer decides what to do about it.
+#
+# One is only safe because the generator can PIN. While the generator was a point value
+# that could not, a delta of 1 was ambiguous — both the largest honest disagreement AND
+# the signature of a straddle — and `2` swallowed flint's correct dissent on four `exp`
+# rows for months. With flint generating, a non-pinning validator one unit away is
+# showing its own resolution limit, which is a confirmation.
+ACCEPT_ULPS = 1
 
 
 def _frac_len(s: str) -> int:
@@ -142,7 +147,7 @@ def _build_oracles(pool):
 def _generator_for(func, oracles, override):
     """`(name, oracle)` for `func`: the CLI override if given, else the policy, falling
     back to the default generator when the chosen one is unavailable."""
-    name = override or GENERATOR_POLICY.get(func, DEFAULT_GENERATOR)
+    name = override or DEFAULT_GENERATOR
     if name not in oracles:
         name = DEFAULT_GENERATOR
     return name, oracles[name]
@@ -178,9 +183,14 @@ def _validate_line(func, inp, g, gen, validators, precision):
         if diff_int == 0:
             annotations.append(v.name())
         elif _within_bound(diff_int, n, precision):
-            # A binary (or derived) validator differs from the base-10 generator by a
-            # radix-rounding artifact: record the radix + the approximate difference.
-            annotations.append(f"{v.name()}(delta~{_approx_mag(diff_int, n)}, {v.radix()})")
+            # The validator confirms, and differed on the way. Record WHICH oracle and
+            # BY HOW MUCH — the fact — and nothing else. No causal category: the old
+            # form appended the radix, and `flint(delta~1e-1233, binary)` sat on four
+            # wrong rows for months precisely because "binary" pre-explained the
+            # difference as benign and every reader skipped it. Whether a delta is
+            # acceptable is `_within_bound`'s job, decided here; this string's job is
+            # to keep the evidence findable by a human or a grep.
+            annotations.append(f"{v.name()}(delta~{_approx_mag(diff_int, n)})")
         else:
             print(
                 f"[FLAG] disagree {func}{inp}: {gen.name()}={g[:28]}.. "
@@ -206,7 +216,7 @@ _POOL_GEN_OVERRIDE = None
 def _pool_init(validator_names, gen_override):
     global _POOL_ORACLES, _POOL_GEN_OVERRIDE
     _POOL_ORACLES = _build_oracles(
-        set(validator_names) | set(GENERATOR_POLICY.values()) | {DEFAULT_GENERATOR}
+        set(validator_names) | {DEFAULT_GENERATOR}
     )
     _POOL_GEN_OVERRIDE = gen_override
 
@@ -313,7 +323,7 @@ def cmd_generate(args):
 
 def cmd_revalidate(args):
     pool = args.validators.split(",") if args.validators else VALIDATOR_ORDER
-    oracles = _build_oracles(set(pool) | set(GENERATOR_POLICY.values()) | {DEFAULT_GENERATOR})
+    oracles = _build_oracles(set(pool) | {DEFAULT_GENERATOR})
     out_dir = Path(args.out)
     mismatches = 0
     for func in args.functions.split(","):

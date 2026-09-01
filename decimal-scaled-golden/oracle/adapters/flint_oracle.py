@@ -8,7 +8,7 @@ runtime -- a "work that uses the Library" (LGPL section 5), NOT a derivative.
 from typing import List
 
 from ..functions import FUNCTIONS
-from ..oracle import Oracle, OracleUnavailable, register
+from ..oracle import GUARD, Oracle, OracleUnavailable, format_fetched, register
 
 _PROOF = {"sqrt", "exp", "ln", "log2", "log10", "exp2", "expm1", "log1p",
           "sin", "cos", "tan",
@@ -45,41 +45,6 @@ def _eval_flint(flint, func: str, x):
     if func not in table:
         raise NotImplementedError(f"flint adapter does not implement {func}")
     return table[func]()
-
-
-# Digits beyond `precision` used to decide termination: an all-zero guard means the
-# value terminated within `precision` and is stripped (marking it exact); otherwise it
-# is a genuine truncation. Matches the mpmath/decimal oracles' contract.
-GUARD = 40
-
-
-def _format(neg: bool, scaled_guard: int, precision: int) -> str:
-    """Signed `digits.digits` string from `scaled_guard = floor(|value| *
-    10^(precision+GUARD))` — pinned by Arb's rigorous interval, so an exact result is
-    pinned to the true integer (no point-float floor-one-below artifact). A value
-    terminating within `precision` digits is stripped to mark it exact; otherwise it is
-    truncated toward zero to exactly `precision` digits."""
-    sign = "-" if neg else ""
-    if scaled_guard % (10 ** GUARD) == 0:
-        exact = scaled_guard // (10 ** GUARD)  # value * 10^precision, exact
-        if exact == 0:
-            return "0"
-        z = 0
-        while z < precision and exact % 10 == 0:
-            exact //= 10
-            z += 1
-        frac_len = precision - z
-        if frac_len == 0:
-            return f"{sign}{exact}"
-        s = str(exact).rjust(frac_len + 1, "0")
-        return f"{sign}{s[:-frac_len]}.{s[-frac_len:]}"
-    scaled = scaled_guard // (10 ** GUARD)
-    if scaled == 0:
-        sign = ""  # never render a signed zero (-0.000…0)
-    if precision == 0:
-        return f"{sign}{scaled}"
-    s = str(scaled).rjust(precision + 1, "0")
-    return f"{sign}{s[:-precision]}.{s[-precision:]}"
 
 
 class FlintOracle(Oracle):
@@ -140,7 +105,9 @@ class FlintOracle(Oracle):
                     last = "floor straddles a boundary on a provably-inexact value"
                     z = None
             if z is not None:
-                return _format(r < 0, int(z), precision)
+                # `int(z)` IS the shared primitive: floor(|value| * 10^(precision+GUARD)),
+                # pinned by Arb's rigorous interval rather than approximated.
+                return format_fetched(r < 0, int(z), precision)
             last = last or "ball not tight enough"
         raise RuntimeError(f"flint: could not pin {func}{inputs} to {precision} digits ({last})")
 
