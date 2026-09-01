@@ -26,7 +26,9 @@ class MpfrOracle(Oracle):
         ctx = gmpy2.get_context()
         # Wide enough for `precision` + the shared termination GUARD, plus slack.
         ctx.precision = int((precision + GUARD + 40) * 3.3219281) + 64
-        ctx.round = gmpy2.RoundToZero  # rule 1: never round before flooring
+        # The computation keeps MPFR's default nearest rounding; rule 1's "rounded
+        # down" is the FETCH below, not a bias on the working arithmetic. Skewing a
+        # validator's own answer only widens its disagreement with the generator.
         x = [gmpy2.mpfr(s) for s in inputs]
         a = x[0]
         table = {

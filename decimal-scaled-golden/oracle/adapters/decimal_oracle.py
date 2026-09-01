@@ -16,7 +16,7 @@ Coverage:
 Output is the same signed `digits.digits` string contract as the other oracles: a
 value terminating within `precision` fractional digits is stripped (marking it
 exact); otherwise it is truncated toward zero to exactly `precision` digits."""
-from decimal import Decimal, localcontext, ROUND_DOWN
+from decimal import Decimal, localcontext, ROUND_HALF_EVEN
 from typing import List
 
 from ..functions import FUNCTIONS
@@ -142,10 +142,15 @@ class DecimalOracle(Oracle):
         base = precision + GUARD + WORK_GUARD
         with localcontext() as ctx:
             ctx.prec = base
-            # Toward zero, per rule 1 — nothing is rounded before it is floored.
-            # This governs the arithmetic ops and the intermediates of the derived
-            # compositions; `exp`/`ln`/`log10`/`sqrt` ignore it and stay half-even.
-            ctx.rounding = ROUND_DOWN
+            # Half-even for the COMPUTATION, deliberately. Rule 1's "rounded down"
+            # is the FETCH — the floor in `_scaled_guard` — not a bias applied to
+            # the working arithmetic. Forcing a direction here is not free: it is
+            # inert for `exp`/`ln`/`log10`/`sqrt` (they are correctly rounded
+            # half-even whatever the context says) and on everything else it just
+            # skews this oracle's own answer, which for `rem` measurably widened
+            # its disagreement with the generator. Nothing is rounded AFTER the
+            # computation, which is what the contract actually requires.
+            ctx.rounding = ROUND_HALF_EVEN
             r = _eval(func, xs)
             int_digits = r.adjusted() + 1 if r != 0 else 1
             need = precision + max(0, int_digits) + GUARD + WORK_GUARD
