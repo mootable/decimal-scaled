@@ -364,7 +364,7 @@ fn log_rational_pow_pin(
     let bump = crate::support::rounding::should_bump(
         mode,
         core::cmp::Ordering::Equal,
-        q_mag & 1 == 1,
+        (q_mag % 10) as u8,
         !neg,
     );
     let m = (q_mag + u128::from(bump)) as i128;

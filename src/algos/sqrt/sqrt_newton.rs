@@ -105,7 +105,13 @@ where
         | RoundingMode::HalfAwayFromZero
         | RoundingMode::HalfTowardZero => halfway_round_up,
         RoundingMode::Trunc | RoundingMode::Floor => false,
-        RoundingMode::Ceiling => diff_nonzero,
+        // The radicand is non-negative, so up IS away from zero.
+        RoundingMode::Ceiling | RoundingMode::AwayFromZero => diff_nonzero,
+        // The last decimal digit spans the whole `ql`-limb root.
+        RoundingMode::ZeroFiveUp => {
+            diff_nonzero
+                && matches!(crate::support::rounding::limbs_mod_10(&q[..ql]), 0 | 5)
+        }
     };
     if bump {
         // q += 1 (carry stays within ql+1 limbs).

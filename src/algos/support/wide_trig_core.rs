@@ -293,8 +293,9 @@ pub(crate) trait WideTrigCore {
 /// Near-min analytic pin for `exp`. When `|v| < 10^(-SCALE/2)` the deviation
 /// `e^v − (1 + v) = v²/2 + …` is provably below half a storage ULP, and `e^v > 1 + v`
 /// strictly (exp is convex), so the correctly-rounded result is exactly `1 + v` for
-/// every mode except `Ceiling`, which the positive deviation — however deep it
-/// sits — rounds up by one ULP.
+/// every mode except the three the positive deviation — however deep it sits —
+/// lifts by one ULP: `Ceiling` and `AwayFromZero` always (the result is
+/// positive, so up IS away), and `ZeroFiveUp` when `1 + v` ends in `0` or `5`.
 /// This short-circuits the widening: at these tiny inputs its `s >> n` range reduction
 /// loses bits (the working guard carries fewer factors of 2 than `n`), and the
 /// resulting sub-ULP deficit borrows into the result digit at the `…999000` /
@@ -327,8 +328,16 @@ fn exp_near_min_pin<C: WideTrigCore, const SCALE: u32>(
         return None;
     }
     let g = C::storage_one(SCALE) + raw; // (1 + v), exact since |v| < 1
+    let one_ulp = <C::Storage as BigInt>::from_i128(1);
     Some(match mode {
-        RoundingMode::Ceiling => g + <C::Storage as BigInt>::from_i128(1),
+        // The deviation is strictly positive and `g > 0`, so "up" and
+        // "away from zero" are the same step here.
+        RoundingMode::Ceiling | RoundingMode::AwayFromZero => g + one_ulp,
+        // Toward-zero lands on `g`, so `g`'s own last digit is the pivot.
+        RoundingMode::ZeroFiveUp => {
+            let d = g.div_rem(<C::Storage as BigInt>::TEN).1.to_i128();
+            if d == 0 || d == 5 { g + one_ulp } else { g }
+        }
         _ => g,
     })
 }
@@ -599,9 +608,12 @@ where
 /// Because the true value is strictly interior, the directed side is known a
 /// priori with no extra precision:
 /// - just below `+1` (`result == +one`): Floor / Trunc step down one LSB to
-///   `one − 1`; Ceiling keeps `one`.
+///   `one − 1`; Ceiling and AwayFromZero keep `one`.
 /// - just above `−1` (`result == −one`): Ceiling / Trunc step toward zero to
-///   `−one + 1`; Floor keeps `−one`.
+///   `−one + 1`; Floor and AwayFromZero keep `−one`.
+/// - ZeroFiveUp follows Trunc on both sides whenever `SCALE >= 1`: the
+///   toward-zero magnitude is `10^SCALE − 1`, which ends in `9`, so the
+///   `0`/`5` pivot never fires.
 ///
 /// Nearest modes are unaffected (rounding to `±1` IS correct to nearest there).
 /// A no-op unless the directed result is exactly `±10^SCALE` and `raw != 0`, so
@@ -619,14 +631,26 @@ pub(crate) fn adjust_bounded_extremum<C: WideTrigCore, const SCALE: u32>(
     }
     let one = C::storage_one(SCALE);
     let neg_one = C::storage_zero() - one;
+    // `ZeroFiveUp` pivots on the last digit of the TOWARD-ZERO result,
+    // whose magnitude is `10^SCALE − 1`. For `SCALE >= 1` that ends in
+    // `9`, so it never bumps and behaves as `Trunc`; at `SCALE == 0` it
+    // is `0`, a pivot digit, so it bumps back onto `±1` like `_` does.
+    // `AwayFromZero` always keeps the full magnitude `±1`, which is `_`.
+    let zero_five_up_truncates = SCALE >= 1;
     if result == one {
         match mode {
             RoundingMode::Floor | RoundingMode::Trunc => one - <C::Storage as BigInt>::ONE,
+            RoundingMode::ZeroFiveUp if zero_five_up_truncates => {
+                one - <C::Storage as BigInt>::ONE
+            }
             _ => result,
         }
     } else if result == neg_one {
         match mode {
             RoundingMode::Ceiling | RoundingMode::Trunc => neg_one + <C::Storage as BigInt>::ONE,
+            RoundingMode::ZeroFiveUp if zero_five_up_truncates => {
+                neg_one + <C::Storage as BigInt>::ONE
+            }
             _ => result,
         }
     } else {
@@ -685,10 +709,12 @@ pub(crate) fn tiny_x_linear_directed<St: BigInt, const SCALE: u32>(
     // `one` is ONE STORAGE ULP (the integer `1`), the step the directed
     // decision adds/drops — NOT `10^SCALE` (the value 1.0).
     let one = <St as BigInt>::ONE;
+    // `ZeroFiveUp`'s pivot digit; `absr` is already the magnitude.
+    let raw_mod_10 = absr.div_rem(<St as BigInt>::TEN).1.to_i128() as u8;
     Some(if expanding {
-        crate::support::rounding::tiny_odd_expanding_directed(raw, zero, one, mode)
+        crate::support::rounding::tiny_odd_expanding_directed(raw, zero, one, raw_mod_10, mode)
     } else {
-        crate::support::rounding::tiny_odd_compressing_directed(raw, zero, one, mode)
+        crate::support::rounding::tiny_odd_compressing_directed(raw, zero, one, raw_mod_10, mode)
     })
 }
 
@@ -849,10 +875,14 @@ pub(crate) fn tiny_x_deep_directed_adjust<St: BigInt, const SCALE: u32>(
     }
     let expanding = if alternating { j_star % 4 == 1 } else { true };
     let one = <St as BigInt>::ONE;
+    // The step is taken from the GRID VALUE `r`, not from `raw`, so the
+    // `ZeroFiveUp` pivot digit is `|r| % 10`.
+    let abs_r = if r < zero { zero - r } else { r };
+    let r_mod_10 = abs_r.div_rem(<St as BigInt>::TEN).1.to_i128() as u8;
     if expanding {
-        crate::support::rounding::tiny_odd_expanding_directed(r, zero, one, mode)
+        crate::support::rounding::tiny_odd_expanding_directed(r, zero, one, r_mod_10, mode)
     } else {
-        crate::support::rounding::tiny_odd_compressing_directed(r, zero, one, mode)
+        crate::support::rounding::tiny_odd_compressing_directed(r, zero, one, r_mod_10, mode)
     }
 }
 
@@ -1029,11 +1059,58 @@ where
     let unit = <St as BigInt>::ONE;
     let up = delta > zero;
 
+    // ── ZeroFiveUp: truncate, then lift only on a 0 / 5 pivot ──────────
+    //
+    // `round-05up` is `round-down` unless the last digit of the TRUNCATED
+    // coefficient is `0` or `5`, in which case the coefficient steps one
+    // away from zero. Both halves are available here:
+    //
+    // * The discarded part is never zero anywhere this pass does work.
+    //   `δ != 0` past the guard above, so `V = ln(1 + δ)` is the log of a
+    //   rational other than `1` — transcendental by Lindemann–Weierstrass,
+    //   hence never exactly on the storage grid. So the pivot alone
+    //   decides; there is no "exact value, leave it alone" case to detect.
+    // * The truncated value is this pass's OWN `Trunc` answer: the tangent
+    //   bracket's `Trunc if up` arm gives `result - unit`, and every other
+    //   path falls through to `result`.
+    //
+    // `V` carries `δ`'s sign, so the away-from-zero step is `+unit` when
+    // `up` and `-unit` otherwise. This cannot double-bump a walker that
+    // already resolved the mode: the walker only returns the lifted value
+    // when the truncated one ended in `0` or `5`, so the value arriving
+    // here then ends in `1` or `6` and the pivot below is false.
+    if matches!(mode, RoundingMode::ZeroFiveUp) {
+        let toward_zero = if result == delta && up {
+            result - unit
+        } else {
+            result
+        };
+        let mag = if toward_zero < zero {
+            zero - toward_zero
+        } else {
+            toward_zero
+        };
+        let pivot = matches!(mag.div_rem(<St as BigInt>::TEN).1.to_i128(), 0 | 5);
+        return if pivot {
+            if up {
+                toward_zero + unit
+            } else {
+                toward_zero - unit
+            }
+        } else {
+            toward_zero
+        };
+    }
+
     // ── the TANGENT bracket: `V < δ` for every `δ ≠ 0` ─────────────────
     if result == delta {
         return match mode {
             RoundingMode::Floor => result - unit,
             RoundingMode::Trunc if up => result - unit,
+            // `V < δ` on both sides, so a NEGATIVE result's away-from-zero
+            // step is the same one `Floor` takes; a positive result's is
+            // `Ceiling`'s, which does not move here.
+            RoundingMode::AwayFromZero if !up => result - unit,
             _ => result,
         };
     }
@@ -1046,7 +1123,9 @@ where
     match mode {
         // `V > δ − Q`: a Ceiling sitting AT or BELOW the parabola is strictly
         // below the true value, so it must step up.
-        RoundingMode::Ceiling if up => {
+        // `AwayFromZero` joins each arm on the side where away-from-zero
+        // IS that direction: up for `Ceiling`, down for `Floor`.
+        RoundingMode::Ceiling | RoundingMode::AwayFromZero if up => {
             if d <= zero {
                 return result; // `Q > 0`, so `Q ≤ D` cannot hold
             }
@@ -1058,7 +1137,7 @@ where
         }
         // `V < δ − Q`: a Floor sitting AT or ABOVE the parabola is strictly
         // above the true value, so it must step down.
-        RoundingMode::Floor if !up => {
+        RoundingMode::Floor | RoundingMode::AwayFromZero if !up => {
             if d <= zero {
                 return result - unit; // `Q > 0 ≥ D`, so `Q ≥ D` holds
             }
@@ -1837,10 +1916,26 @@ where
         }
         if let Some(up) = expanding {
             let one = <St as BigInt>::ONE;
+            // The step is taken from `result`, so that is the `ZeroFiveUp`
+            // pivot's magnitude.
+            let abs_result = if result < zero { zero - result } else { result };
+            let result_mod_10 = abs_result.div_rem(<St as BigInt>::TEN).1.to_i128() as u8;
             return Some(if up {
-                crate::support::rounding::tiny_odd_expanding_directed(result, zero, one, mode)
+                crate::support::rounding::tiny_odd_expanding_directed(
+                    result,
+                    zero,
+                    one,
+                    result_mod_10,
+                    mode,
+                )
             } else {
-                crate::support::rounding::tiny_odd_compressing_directed(result, zero, one, mode)
+                crate::support::rounding::tiny_odd_compressing_directed(
+                    result,
+                    zero,
+                    one,
+                    result_mod_10,
+                    mode,
+                )
             });
         }
 
@@ -2611,7 +2706,8 @@ where
             } else {
                 ::core::cmp::Ordering::Greater
             };
-            finish(neg, q, should_bump(mode, cmp_r, q.bit(0), !neg))
+            let q_mod_10 = q.div_rem(lit(10)).1.to_i128() as u8;
+            finish(neg, q, should_bump(mode, cmp_r, q_mod_10, !neg))
         };
         // A tagged EXACT half is not a tie. A [`TailSign`] is only ever
         // produced with the kernel's accumulated error proven exactly zero
@@ -2738,6 +2834,12 @@ where
                 RoundingMode::Trunc => false,
                 RoundingMode::Floor => !result_positive,
                 RoundingMode::Ceiling => result_positive,
+                // `q` is the toward-zero magnitude, so its last decimal
+                // digit is the `ZeroFiveUp` pivot.
+                RoundingMode::AwayFromZero => true,
+                RoundingMode::ZeroFiveUp => {
+                    matches!(q.div_rem(lit(10)).1.to_i128(), 0 | 5)
+                }
                 _ => unreachable!(),
             };
         finish(neg, q, bump)
@@ -2847,6 +2949,12 @@ where
                     RoundingMode::Trunc => false,
                     RoundingMode::Floor => neg0,
                     RoundingMode::Ceiling => !neg0,
+                    // The bump steps away from zero off `q_base`, so that
+                    // is the toward-zero value the `ZeroFiveUp` pivot reads.
+                    RoundingMode::AwayFromZero => true,
+                    RoundingMode::ZeroFiveUp => {
+                        matches!(q_base.div_rem(lit(10)).1.to_i128(), 0 | 5)
+                    }
                     _ => unreachable!(),
                 };
             return (finish(neg0, q_base, tail_bump), proven);
@@ -3001,7 +3109,12 @@ where
             return None;
         }
         rem != lit(0)
-            && should_bump(mode, rem.cmp(&(divisor - rem)), q.bit(0), !neg)
+            && should_bump(
+                mode,
+                rem.cmp(&(divisor - rem)),
+                q.div_rem(lit(10)).1.to_i128() as u8,
+                !neg,
+            )
     } else {
         // Distance to the grid line.
         let dist = if rem < divisor - rem { rem } else { divisor - rem };
@@ -3013,6 +3126,11 @@ where
                 RoundingMode::Trunc => false,
                 RoundingMode::Floor => neg,
                 RoundingMode::Ceiling => !neg,
+                // `q` is the toward-zero magnitude.
+                RoundingMode::AwayFromZero => true,
+                RoundingMode::ZeroFiveUp => {
+                    matches!(q.div_rem(lit(10)).1.to_i128(), 0 | 5)
+                }
                 _ => unreachable!(),
             }
     };
@@ -3391,7 +3509,7 @@ where
                         let bump = crate::support::rounding::should_bump(
                             mode,
                             ord,
-                            q.bit(0),
+                            q.div_rem(lit(10)).1.to_i128() as u8,
                             !neg,
                         );
                         if bump { q + lit(1) } else { q }
@@ -3520,6 +3638,14 @@ where
                     }
                     RoundingMode::Ceiling => {
                         if result_positive { away_from_zero } else { toward_zero }
+                    }
+                    RoundingMode::AwayFromZero => away_from_zero,
+                    RoundingMode::ZeroFiveUp => {
+                        if matches!(toward_zero.div_rem(lit(10)).1.to_i128(), 0 | 5) {
+                            away_from_zero
+                        } else {
+                            toward_zero
+                        }
                     }
                     _ => unreachable!(),
                 }
@@ -4217,5 +4343,120 @@ mod tagged_half_sibling_walker_contract {
             .as_i128();
             assert_eq!(r, expect, "the untagged tie-break must stand under {mode:?}");
         }
+    }
+}
+
+/// `adjust_log_near_zero` under `ZeroFiveUp` (GDA `round-05up`).
+///
+/// The pass repairs a directed result the Ziv walker could not resolve.
+/// `round-05up` truncates unless the last decimal digit of the TRUNCATED
+/// value is `0` or `5`, so the cases that separate a real implementation
+/// from a no-op `_ => result` fall-through are exactly the ones where the
+/// pivot's verdict disagrees with "leave `result` alone". Each test below
+/// names which of its rows those are.
+#[cfg(test)]
+mod log_near_zero_zero_five_up {
+    use super::adjust_log_near_zero;
+    use crate::int::types::Int;
+    use crate::support::rounding::RoundingMode;
+
+    /// `one` is read only by the parabola arms, which `ZeroFiveUp` never
+    /// reaches, so its value is immaterial to every case below.
+    const ONE: i128 = 1_000_000_000_000_000_000;
+
+    fn adj(result: i128, delta: i128, mode: RoundingMode) -> i128 {
+        adjust_log_near_zero::<Int<2>, Int<24>>(
+            Int::<2>::from_i128(result),
+            Int::<2>::from_i128(delta),
+            Int::<2>::from_i128(ONE),
+            mode,
+        )
+        .as_i128()
+    }
+
+    /// Tangent bracket (`result == delta`), positive: the truncated value
+    /// is `delta - 1`. When its last digit is not a pivot the answer must
+    /// truncate to `delta - 1`; the fall-through returned `delta`. Every
+    /// row here fails without the fix.
+    #[test]
+    fn tangent_positive_without_pivot_truncates() {
+        let m = RoundingMode::ZeroFiveUp;
+        assert_eq!(adj(100, 100, m), 99, "trunc 99 ends in 9: no lift");
+        assert_eq!(adj(108, 108, m), 107, "trunc 107 ends in 7: no lift");
+        assert_eq!(adj(1_003, 1_003, m), 1_002, "trunc 1002 ends in 2: no lift");
+    }
+
+    /// Same bracket with a pivot digit: the truncated value ends in `0` or
+    /// `5`, steps one away from zero and lands back on `delta`. These rows
+    /// agree with the old fall-through — they guard against over-lifting.
+    #[test]
+    fn tangent_positive_with_pivot_lifts() {
+        let m = RoundingMode::ZeroFiveUp;
+        assert_eq!(adj(101, 101, m), 101, "trunc 100 ends in 0: lift");
+        assert_eq!(adj(106, 106, m), 106, "trunc 105 ends in 5: lift");
+        // `delta == 1` drives the truncated value to zero, whose last
+        // digit is `0` — a pivot, so it lifts back to 1.
+        assert_eq!(adj(1, 1, m), 1, "trunc 0 ends in 0: lift");
+    }
+
+    /// Tangent bracket, negative: `V < delta < 0`, so the truncated value
+    /// (the one nearest zero) is `delta` itself and away-from-zero is
+    /// `delta - 1`. A pivot must step DOWN, which the fall-through never
+    /// did — the first two rows fail without the fix.
+    #[test]
+    fn tangent_negative_with_pivot_steps_away_from_zero() {
+        let m = RoundingMode::ZeroFiveUp;
+        assert_eq!(adj(-100, -100, m), -101, "|trunc| 100 ends in 0: lift");
+        assert_eq!(adj(-105, -105, m), -106, "|trunc| 105 ends in 5: lift");
+        assert_eq!(adj(-103, -103, m), -103, "|trunc| 103 ends in 3: no lift");
+    }
+
+    /// Parabola bracket (`result != delta`): the truncated value is
+    /// `result` itself, so a pivot digit lifts one away from zero. The
+    /// fall-through returned `result` for every digit, so the pivot rows
+    /// fail without the fix.
+    #[test]
+    fn parabola_bracket_pivots_on_the_result_digit() {
+        let m = RoundingMode::ZeroFiveUp;
+        assert_eq!(adj(150, 200, m), 151, "150 ends in 0: lift up");
+        assert_eq!(adj(145, 200, m), 146, "145 ends in 5: lift up");
+        assert_eq!(adj(147, 200, m), 147, "147 ends in 7: no lift");
+        assert_eq!(adj(-150, -200, m), -151, "|-150| ends in 0: lift down");
+        assert_eq!(adj(-147, -200, m), -147, "|-147| ends in 7: no lift");
+    }
+
+    /// The exact point stays exact: `delta == 0` is `ln(1)`, which no mode
+    /// may move.
+    #[test]
+    fn zero_delta_is_untouched() {
+        assert_eq!(adj(0, 0, RoundingMode::ZeroFiveUp), 0);
+        assert_eq!(adj(7, 0, RoundingMode::ZeroFiveUp), 7);
+    }
+
+    /// The `ZeroFiveUp` branch must not disturb the six original modes.
+    #[test]
+    fn the_original_modes_are_unchanged() {
+        assert_eq!(adj(100, 100, RoundingMode::Trunc), 99);
+        assert_eq!(adj(100, 100, RoundingMode::Floor), 99);
+        assert_eq!(adj(100, 100, RoundingMode::Ceiling), 100);
+        assert_eq!(adj(-100, -100, RoundingMode::Trunc), -100);
+        assert_eq!(adj(-100, -100, RoundingMode::Floor), -101);
+        assert_eq!(adj(-100, -100, RoundingMode::Ceiling), -100);
+        for m in [
+            RoundingMode::HalfToEven,
+            RoundingMode::HalfAwayFromZero,
+            RoundingMode::HalfTowardZero,
+        ] {
+            assert_eq!(adj(100, 100, m), 100, "{m:?} is a no-op here");
+        }
+    }
+
+    /// `AwayFromZero` takes the full step on both sides — the answer
+    /// `ZeroFiveUp` defers to whenever its pivot fires.
+    #[test]
+    fn away_from_zero_takes_the_full_step() {
+        let m = RoundingMode::AwayFromZero;
+        assert_eq!(adj(100, 100, m), 100, "positive: away is Ceiling, no move");
+        assert_eq!(adj(-100, -100, m), -101, "negative: away is Floor");
     }
 }

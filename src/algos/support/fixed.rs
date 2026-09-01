@@ -807,9 +807,11 @@ impl Fixed {
             // |r| is r (already a magnitude); comp = divisor - r.
             let comp = sub_u256(divisor, r);
             let cmp_r = cmp_u256(r, comp);
-            let q_is_odd = (q[0] & 1) == 1;
+            // `q` is a u128-limb magnitude (`U256`), so the last decimal
+            // digit needs both limbs, not just the low one.
+            let q_mod_10 = crate::support::rounding::limbs_u128_mod_10(&q);
             let result_positive = !self.negative;
-            if crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive) {
+            if crate::support::rounding::should_bump(mode, cmp_r, q_mod_10, result_positive) {
                 add_u256(q, [1, 0]).0
             } else {
                 q

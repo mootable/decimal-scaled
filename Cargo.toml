@@ -100,6 +100,8 @@ rounding-half-toward-zero = []
 rounding-trunc = []
 rounding-floor = []
 rounding-ceiling = []
+rounding-away-from-zero = []
+rounding-zero-five-up = []
 # Nightly-only: expose `from_f16` / `to_f16` /
 # `from_f128` / `to_f128` on each decimal type. f16 and
 # f128 are experimental in Rust; this feature requires the nightly

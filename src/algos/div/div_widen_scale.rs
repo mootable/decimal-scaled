@@ -39,7 +39,7 @@ use crate::int::policy::mul::dispatch_slice as mul_slice;
 use crate::int::policy::div_rem::{select_for_limbs, Algorithm};
 use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
 use crate::int::types::Int;
-use crate::support::rounding::{should_bump, RoundingMode};
+use crate::support::rounding::{limbs_mod_10, should_bump, RoundingMode};
 
 /// Significant limb length (highest non-zero limb index + 1, min 1).
 #[inline]
@@ -173,8 +173,10 @@ where
         let rem_nonzero = !(rl == 1 && rem[0] == 0);
         if rem_nonzero {
             let cmp_r = cmp_double_vs::<N>(&rem[..bl.max(1)], &b_mag[..bl]);
-            let q_is_odd = (quot[0] & 1) != 0;
-            if should_bump(mode, cmp_r, q_is_odd, !neg) {
+            // `quot` is the full quotient magnitude here (zeroed, then
+            // written by `div_knuth_into`), so the whole array folds.
+            let q_mod_10 = limbs_mod_10(&quot);
+            if should_bump(mode, cmp_r, q_mod_10, !neg) {
                 let mut carry: u64 = 1;
                 for limb in quot.iter_mut() {
                     let (s, c) = limb.overflowing_add(carry);
@@ -262,8 +264,10 @@ where
     let rem_nonzero = !(rl == 1 && rem[0] == 0);
     if rem_nonzero {
         let cmp_r = cmp_double_vs::<N>(&rem[..bl.max(1)], &b_mag[..bl]);
-        let q_is_odd = (quot[0] & 1) != 0;
-        if should_bump(mode, cmp_r, q_is_odd, !neg) {
+        // `qlen` is the quotient's significant span; the rest of the
+        // freshly-zeroed scratch would fold to 0 anyway.
+        let q_mod_10 = limbs_mod_10(&quot[..qlen]);
+        if should_bump(mode, cmp_r, q_mod_10, !neg) {
             let mut carry: u64 = 1;
             for limb in quot.iter_mut() {
                 let (s, c) = limb.overflowing_add(carry);

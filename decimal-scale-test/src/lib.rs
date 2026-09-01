@@ -51,16 +51,19 @@ pub use decimal_scaled_cells::{
 pub const GEN_PRECISION: usize = 1233;
 pub const GUARD: usize = 2;
 
-/// Every rounding mode, in report order — directed rounding (Ceiling/Floor/Trunc) is
-/// swept alongside the three nearest modes, since a fixed-width decimal rounds its
-/// last digit differently per mode and a directed-rounding regression shows only there.
-pub const ALL_MODES: [RoundingMode; 6] = [
+/// Every rounding mode, in report order — the five directed modes (Ceiling/Floor/Trunc
+/// and the two General Decimal Arithmetic additions, AwayFromZero/ZeroFiveUp) are swept
+/// alongside the three nearest modes, since a fixed-width decimal rounds its last digit
+/// differently per mode and a directed-rounding regression shows only there.
+pub const ALL_MODES: [RoundingMode; 8] = [
     RoundingMode::HalfToEven,
     RoundingMode::HalfAwayFromZero,
     RoundingMode::HalfTowardZero,
     RoundingMode::Ceiling,
     RoundingMode::Floor,
     RoundingMode::Trunc,
+    RoundingMode::AwayFromZero,
+    RoundingMode::ZeroFiveUp,
 ];
 
 /// Absolute path to the harness's committed golden set. `env!` is baked at THIS
@@ -93,6 +96,8 @@ pub fn ds_mode(m: RoundingMode) -> DsMode {
         RoundingMode::Ceiling => DsMode::Ceiling,
         RoundingMode::Floor => DsMode::Floor,
         RoundingMode::Trunc => DsMode::Trunc,
+        RoundingMode::AwayFromZero => DsMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp => DsMode::ZeroFiveUp,
     }
 }
 
@@ -114,8 +119,8 @@ impl DsSubject {
     }
 
     /// A subject tested under a specific rounding `mode` — the full set is swept by the
-    /// `golden_all_modes` gate so directed rounding (Ceiling/Floor/Trunc) is covered,
-    /// not just the default.
+    /// `golden_all_modes` gate so directed rounding (Ceiling/Floor/Trunc and the GDA
+    /// pair AwayFromZero/ZeroFiveUp) is covered, not just the default.
     pub fn with_mode(width: u32, scale: u32, mode: RoundingMode) -> DsSubject {
         DsSubject { width, scale, mode }
     }
@@ -314,6 +319,12 @@ pub fn parse_mode(s: &str) -> Option<RoundingMode> {
         "ceiling" | "ceil" | "up" => Some(Ceiling),
         "floor" | "down" => Some(Floor),
         "trunc" | "truncate" | "zero" => Some(Trunc),
+        // GDA `round-up`. Deliberately NOT aliased "round_up": this table already
+        // spells Ceiling "up", and two tokens a prefix apart selecting different
+        // modes is a silently-wrong run waiting to happen.
+        "away_from_zero" | "awayfromzero" => Some(AwayFromZero),
+        // GDA `round-05up` — the spec spelling normalises to "round_05up".
+        "zero_five_up" | "zerofiveup" | "round_05up" | "05up" => Some(ZeroFiveUp),
         _ => None,
     }
 }
@@ -408,6 +419,17 @@ mod tests {
         );
         assert_eq!(parse_mode("trunc"), Some(RoundingMode::Trunc));
         assert_eq!(parse_mode("nonsense"), None);
+        // The two GDA modes are selectable by name...
+        assert_eq!(
+            parse_mode("away-from-zero"),
+            Some(RoundingMode::AwayFromZero)
+        );
+        assert_eq!(parse_mode("round-05up"), Some(RoundingMode::ZeroFiveUp));
+        assert_eq!(parse_mode("ZeroFiveUp"), Some(RoundingMode::ZeroFiveUp));
+        // ...and adding them did not repoint this table's older aliases: "up" is
+        // still Ceiling here, NOT the GDA round-up mode.
+        assert_eq!(parse_mode("up"), Some(RoundingMode::Ceiling));
+        assert_eq!(parse_mode("away"), Some(RoundingMode::HalfAwayFromZero));
     }
 
     #[test]

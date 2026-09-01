@@ -832,8 +832,9 @@ macro_rules! decl_wide_transcendental {
             /// `q = num >> p`, residual `r = num mod 2^p`; the half-way
             /// divisor is `2^p` so the tie compares `2·r` with `2^p`. When
             /// `2^p` exceeds the working width the quotient is `0` and the
-            /// whole `num` is a sub-half positive residual (only `Ceiling`
-            /// rounds up).
+            /// whole `num` is a sub-half positive residual (only `Ceiling`,
+            /// `AwayFromZero` and `ZeroFiveUp` round up — the last two
+            /// because any discard lifts, and `0` is a `ZeroFiveUp` pivot).
             fn round_pow2_fraction(
                 scale: u32,
                 p: u32,
@@ -843,7 +844,8 @@ macro_rules! decl_wide_transcendental {
                 // When `2^p` does not fit the SIGNED working width it strictly
                 // exceeds `2·num` (since `num < 2^(BITS-1)` and `p ≥ BITS-1`),
                 // so `q = 0` and the residual `num` sits strictly below half —
-                // a sub-resolution positive value (only `Ceiling` rounds up).
+                // a sub-resolution positive value (`Ceiling`, `AwayFromZero`
+                // and `ZeroFiveUp` round it up; the rest truncate).
                 // The bound is `BITS-1`, not `BITS`: `lit(1) << (BITS-1)` sets
                 // the SIGN bit, so `denom` would be NEGATIVE and the `2·r` vs
                 // `denom` tie comparison would read `Greater` (positive > neg)
@@ -851,10 +853,11 @@ macro_rules! decl_wide_transcendental {
                 // golden `exp2(-1053)@D57<30>` / `exp2(-2097)@D115<50>` land
                 // exactly on `p = BITS-1` for their work integer.)
                 if p >= <W as $crate::int::types::traits::BigInt>::BITS - 1 {
+                    // Quotient is 0, so its last decimal digit is 0.
                     let bump = $crate::support::rounding::should_bump(
                         mode,
                         ::core::cmp::Ordering::Less,
-                        false,
+                        0,
                         true,
                     );
                     return narrow_to_storage(if bump { lit(1) } else { lit(0) });
@@ -866,9 +869,9 @@ macro_rules! decl_wide_transcendental {
                 }
                 let twice_r = r << 1;
                 let cmp_r = twice_r.cmp(&denom);
-                let q_is_odd = q.bit(0);
+                let q_mod_10 = (q % lit(10)).as_i128().unsigned_abs() as u8;
                 let bump =
-                    $crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, true);
+                    $crate::support::rounding::should_bump(mode, cmp_r, q_mod_10, true);
                 narrow_to_storage(if bump { q + lit(1) } else { q })
             }
 

@@ -154,8 +154,9 @@ pub(crate) fn powi_exact_pin_checked<St: BigInt, const SCALE: u32>(
                 // overflowing `2r` (`r < d <= MAX`). `q` is the truncated
                 // quotient; the result is positive.
                 let cmp = r.cmp(&(d - r));
-                let q_is_odd = q.bit(0);
-                let bump = should_bump(mode, cmp, q_is_odd, true);
+                // Last decimal digit of |q| (a wide `div_rem`, so O(limbs)).
+                let q_mod_10 = q.div_rem(St::TEN).1.to_i128().unsigned_abs() as u8;
+                let bump = should_bump(mode, cmp, q_mod_10, true);
                 ExactPin::Value(if bump { q + St::ONE } else { q })
             }
             None => {
@@ -163,8 +164,10 @@ pub(crate) fn powi_exact_pin_checked<St: BigInt, const SCALE: u32>(
                 // (every tier keeps at least one integer digit, so
                 // `10^SCALE <= MAX / 2`), hence `0 < 1/b^k < ½` LSB:
                 // a sub-resolution positive, strictly below the half
-                // boundary. Only `Ceiling` rounds it up to one LSB.
-                let bump = should_bump(mode, core::cmp::Ordering::Less, false, true);
+                // boundary. `Ceiling`, `AwayFromZero` and `ZeroFiveUp`
+                // round it up to one LSB (the truncated quotient is `0`,
+                // a `ZeroFiveUp` pivot digit); the rest truncate.
+                let bump = should_bump(mode, core::cmp::Ordering::Less, 0, true);
                 ExactPin::Value(if bump { St::ONE } else { St::ZERO })
             }
         }
@@ -284,7 +287,9 @@ pub(crate) fn powi_terminating_pin<St: BigInt, const SCALE: u32>(
             return q;
         }
         let cmp = r.cmp(&(d - r));
-        let bump = should_bump(mode, cmp, q.bit(0), true);
+        // Last decimal digit of |q| (a wide `div_rem`, so O(limbs)).
+        let q_mod_10 = q.div_rem(St::TEN).1.to_i128().unsigned_abs() as u8;
+        let bump = should_bump(mode, cmp, q_mod_10, true);
         if bump {
             q + St::ONE
         } else {
@@ -306,8 +311,9 @@ pub(crate) fn powi_terminating_pin<St: BigInt, const SCALE: u32>(
                 None => {
                     // The divisor exceeds the width while mk fits: the result
                     // is at least one order below ½ LSB — a sub-resolution
-                    // positive; only Ceiling rounds it up.
-                    let bump = should_bump(mode, core::cmp::Ordering::Less, false, true);
+                    // positive; Ceiling, AwayFromZero and ZeroFiveUp round
+                    // it up (the truncated quotient is `0`).
+                    let bump = should_bump(mode, core::cmp::Ordering::Less, 0, true);
                     if bump {
                         St::ONE
                     } else {

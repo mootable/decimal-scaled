@@ -108,7 +108,11 @@ pub(crate) fn sqrt_native<const N: usize, const W: usize>(
         | RoundingMode::HalfAwayFromZero
         | RoundingMode::HalfTowardZero => halfway_round_up,
         RoundingMode::Trunc | RoundingMode::Floor => false,
-        RoundingMode::Ceiling => diff_nonzero,
+        // The radicand is non-negative, so up IS away from zero.
+        RoundingMode::Ceiling | RoundingMode::AwayFromZero => diff_nonzero,
+        RoundingMode::ZeroFiveUp => {
+            diff_nonzero && matches!((q % Int::<W>::TEN).as_i128(), 0 | 5)
+        }
     };
     let q = if bump { q + one } else { q };
     q.resize_to::<Int<N>>()

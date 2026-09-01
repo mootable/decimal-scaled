@@ -1282,9 +1282,11 @@ pub(crate) fn limbs_to_w<W: BigInt>(limbs: &[u64]) -> W {
 ///
 /// The constants are irrational + positive, so the dropped tail is
 /// never an exact tie and never zero. Hence: Trunc / Floor keep the
-/// floor; Ceiling always bumps (`+1`); the three half-modes all
-/// reduce to round-to-nearest = `floor + round_up`. This reproduces
-/// a correct rounding of the mpmath value under every mode.
+/// floor; Ceiling and AwayFromZero always bump (`+1`); ZeroFiveUp
+/// bumps only when the floor's last decimal digit is `0` or `5`; the
+/// three half-modes all reduce to round-to-nearest = `floor +
+/// round_up`. This reproduces a correct rounding of the mpmath value
+/// under every mode.
 #[inline]
 fn round_entry<W: BigInt>(limbs: &[u64], round_up: u8, mode: RoundingMode) -> W {
     let floor = limbs_to_w::<W>(limbs);
@@ -1294,6 +1296,14 @@ fn round_entry<W: BigInt>(limbs: &[u64], round_up: u8, mode: RoundingMode) -> W 
         RoundingMode::HalfToEven
         | RoundingMode::HalfAwayFromZero
         | RoundingMode::HalfTowardZero => round_up != 0,
+        // The tail is never zero, and the value is positive, so
+        // away-from-zero always lifts — as Ceiling does.
+        RoundingMode::AwayFromZero => true,
+        // `limbs` IS the floor value (zero-extended, never truncated),
+        // so its last decimal digit is the pivot.
+        RoundingMode::ZeroFiveUp => {
+            matches!(crate::support::rounding::limbs_mod_10(limbs), 0 | 5)
+        }
     };
     if bump { floor.wrapping_add(W::ONE) } else { floor }
 }
@@ -1787,6 +1797,14 @@ pub(crate) const fn pi_const_n<const N: usize>(
         RoundingMode::HalfToEven
         | RoundingMode::HalfAwayFromZero
         | RoundingMode::HalfTowardZero => round_up != 0,
+        // The tail is never zero, and the value is positive, so
+        // away-from-zero always lifts — as Ceiling does.
+        RoundingMode::AwayFromZero => true,
+        // `limbs` IS the floor value (zero-extended, never truncated),
+        // so its last decimal digit is the pivot.
+        RoundingMode::ZeroFiveUp => {
+            matches!(crate::support::rounding::limbs_mod_10(limbs), 0 | 5)
+        }
     };
     if bump {
         floor.wrapping_add(crate::int::types::Int::<N>::ONE)
@@ -1812,6 +1830,14 @@ pub(crate) const fn tau_const_n<const N: usize>(
         RoundingMode::HalfToEven
         | RoundingMode::HalfAwayFromZero
         | RoundingMode::HalfTowardZero => round_up != 0,
+        // The tail is never zero, and the value is positive, so
+        // away-from-zero always lifts — as Ceiling does.
+        RoundingMode::AwayFromZero => true,
+        // `limbs` IS the floor value (zero-extended, never truncated),
+        // so its last decimal digit is the pivot.
+        RoundingMode::ZeroFiveUp => {
+            matches!(crate::support::rounding::limbs_mod_10(limbs), 0 | 5)
+        }
     };
     if bump {
         floor.wrapping_add(crate::int::types::Int::<N>::ONE)
@@ -1837,6 +1863,14 @@ pub(crate) const fn half_pi_const_n<const N: usize>(
         RoundingMode::HalfToEven
         | RoundingMode::HalfAwayFromZero
         | RoundingMode::HalfTowardZero => round_up != 0,
+        // The tail is never zero, and the value is positive, so
+        // away-from-zero always lifts — as Ceiling does.
+        RoundingMode::AwayFromZero => true,
+        // `limbs` IS the floor value (zero-extended, never truncated),
+        // so its last decimal digit is the pivot.
+        RoundingMode::ZeroFiveUp => {
+            matches!(crate::support::rounding::limbs_mod_10(limbs), 0 | 5)
+        }
     };
     if bump {
         floor.wrapping_add(crate::int::types::Int::<N>::ONE)
@@ -1862,6 +1896,14 @@ pub(crate) const fn quarter_pi_const_n<const N: usize>(
         RoundingMode::HalfToEven
         | RoundingMode::HalfAwayFromZero
         | RoundingMode::HalfTowardZero => round_up != 0,
+        // The tail is never zero, and the value is positive, so
+        // away-from-zero always lifts — as Ceiling does.
+        RoundingMode::AwayFromZero => true,
+        // `limbs` IS the floor value (zero-extended, never truncated),
+        // so its last decimal digit is the pivot.
+        RoundingMode::ZeroFiveUp => {
+            matches!(crate::support::rounding::limbs_mod_10(limbs), 0 | 5)
+        }
     };
     if bump {
         floor.wrapping_add(crate::int::types::Int::<N>::ONE)
@@ -1887,6 +1929,14 @@ pub(crate) const fn e_const_n<const N: usize>(
         RoundingMode::HalfToEven
         | RoundingMode::HalfAwayFromZero
         | RoundingMode::HalfTowardZero => round_up != 0,
+        // The tail is never zero, and the value is positive, so
+        // away-from-zero always lifts — as Ceiling does.
+        RoundingMode::AwayFromZero => true,
+        // `limbs` IS the floor value (zero-extended, never truncated),
+        // so its last decimal digit is the pivot.
+        RoundingMode::ZeroFiveUp => {
+            matches!(crate::support::rounding::limbs_mod_10(limbs), 0 | 5)
+        }
     };
     if bump {
         floor.wrapping_add(crate::int::types::Int::<N>::ONE)
@@ -1912,6 +1962,14 @@ pub(crate) const fn golden_const_n<const N: usize>(
         RoundingMode::HalfToEven
         | RoundingMode::HalfAwayFromZero
         | RoundingMode::HalfTowardZero => round_up != 0,
+        // The tail is never zero, and the value is positive, so
+        // away-from-zero always lifts — as Ceiling does.
+        RoundingMode::AwayFromZero => true,
+        // `limbs` IS the floor value (zero-extended, never truncated),
+        // so its last decimal digit is the pivot.
+        RoundingMode::ZeroFiveUp => {
+            matches!(crate::support::rounding::limbs_mod_10(limbs), 0 | 5)
+        }
     };
     if bump {
         floor.wrapping_add(crate::int::types::Int::<N>::ONE)
@@ -1937,6 +1995,14 @@ pub(crate) const fn ln2_const_n<const N: usize>(
         RoundingMode::HalfToEven
         | RoundingMode::HalfAwayFromZero
         | RoundingMode::HalfTowardZero => round_up != 0,
+        // The tail is never zero, and the value is positive, so
+        // away-from-zero always lifts — as Ceiling does.
+        RoundingMode::AwayFromZero => true,
+        // `limbs` IS the floor value (zero-extended, never truncated),
+        // so its last decimal digit is the pivot.
+        RoundingMode::ZeroFiveUp => {
+            matches!(crate::support::rounding::limbs_mod_10(limbs), 0 | 5)
+        }
     };
     if bump {
         floor.wrapping_add(crate::int::types::Int::<N>::ONE)
@@ -1962,6 +2028,14 @@ pub(crate) const fn ln10_const_n<const N: usize>(
         RoundingMode::HalfToEven
         | RoundingMode::HalfAwayFromZero
         | RoundingMode::HalfTowardZero => round_up != 0,
+        // The tail is never zero, and the value is positive, so
+        // away-from-zero always lifts — as Ceiling does.
+        RoundingMode::AwayFromZero => true,
+        // `limbs` IS the floor value (zero-extended, never truncated),
+        // so its last decimal digit is the pivot.
+        RoundingMode::ZeroFiveUp => {
+            matches!(crate::support::rounding::limbs_mod_10(limbs), 0 | 5)
+        }
     };
     if bump {
         floor.wrapping_add(crate::int::types::Int::<N>::ONE)
@@ -1987,6 +2061,14 @@ pub(crate) const fn log10_2_const_n<const N: usize>(
         RoundingMode::HalfToEven
         | RoundingMode::HalfAwayFromZero
         | RoundingMode::HalfTowardZero => round_up != 0,
+        // The tail is never zero, and the value is positive, so
+        // away-from-zero always lifts — as Ceiling does.
+        RoundingMode::AwayFromZero => true,
+        // `limbs` IS the floor value (zero-extended, never truncated),
+        // so its last decimal digit is the pivot.
+        RoundingMode::ZeroFiveUp => {
+            matches!(crate::support::rounding::limbs_mod_10(limbs), 0 | 5)
+        }
     };
     if bump {
         floor.wrapping_add(crate::int::types::Int::<N>::ONE)
@@ -2012,6 +2094,14 @@ pub(crate) const fn deg_per_rad_const_n<const N: usize>(
         RoundingMode::HalfToEven
         | RoundingMode::HalfAwayFromZero
         | RoundingMode::HalfTowardZero => round_up != 0,
+        // The tail is never zero, and the value is positive, so
+        // away-from-zero always lifts — as Ceiling does.
+        RoundingMode::AwayFromZero => true,
+        // `limbs` IS the floor value (zero-extended, never truncated),
+        // so its last decimal digit is the pivot.
+        RoundingMode::ZeroFiveUp => {
+            matches!(crate::support::rounding::limbs_mod_10(limbs), 0 | 5)
+        }
     };
     if bump {
         floor.wrapping_add(crate::int::types::Int::<N>::ONE)
@@ -2037,6 +2127,14 @@ pub(crate) const fn rad_per_deg_const_n<const N: usize>(
         RoundingMode::HalfToEven
         | RoundingMode::HalfAwayFromZero
         | RoundingMode::HalfTowardZero => round_up != 0,
+        // The tail is never zero, and the value is positive, so
+        // away-from-zero always lifts — as Ceiling does.
+        RoundingMode::AwayFromZero => true,
+        // `limbs` IS the floor value (zero-extended, never truncated),
+        // so its last decimal digit is the pivot.
+        RoundingMode::ZeroFiveUp => {
+            matches!(crate::support::rounding::limbs_mod_10(limbs), 0 | 5)
+        }
     };
     if bump {
         floor.wrapping_add(crate::int::types::Int::<N>::ONE)

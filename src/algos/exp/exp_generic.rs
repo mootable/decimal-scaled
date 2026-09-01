@@ -178,12 +178,13 @@ use crate::support::rounding::RoundingMode;
         } else {
             ::core::cmp::Ordering::Equal
         };
-        let q_is_odd = q.bit(0);
+        // Last decimal digit of |q| (a wide `div_rem`, so O(limbs)).
+        let q_mod_10 = q.div_rem(S::TEN).1.to_i128().unsigned_abs() as u8;
         let result_positive = (n < S::ZERO) == (d < S::ZERO);
         let bump = crate::support::rounding::should_bump(
             RoundingMode::HalfToEven,
             cmp_r,
-            q_is_odd,
+            q_mod_10,
             result_positive,
         );
         // Away-from-zero for a positive result is UP, for a negative one DOWN
@@ -1270,12 +1271,13 @@ use crate::support::rounding::RoundingMode;
         } else {
             ::core::cmp::Ordering::Equal
         };
-        let q_is_odd = q.bit(0);
+        // Last decimal digit of |q| (a wide `div_rem`, so O(limbs)).
+        let q_mod_10 = q.div_rem(S::TEN).1.to_i128().unsigned_abs() as u8;
         let result_positive = (n < S::ZERO) == (d < S::ZERO);
         if crate::support::rounding::should_bump(
             RoundingMode::HalfToEven,
             cmp_r,
-            q_is_odd,
+            q_mod_10,
             result_positive,
         ) {
             if result_positive { q + S::ONE } else { q - S::ONE }

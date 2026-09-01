@@ -72,7 +72,7 @@
 /// at the same `(n, m, mode)`. Proof: both compute
 /// `n.signum() * (|n| / m_mag)` for the truncated quotient (Rust signed
 /// `/` truncates toward zero, identical to `(-|n|/m_mag) * sign(n)`
-/// when `m > 0`), and both feed the same `(cmp_r, q_is_odd,
+/// when `m > 0`), and both feed the same `(cmp_r, q_mod_10,
 /// result_positive)` triple to `should_bump`.
 #[inline(always)]
 pub(crate) fn i128_divrem_by_u64_with_mode(
@@ -122,9 +122,11 @@ pub(crate) fn i128_divrem_by_u64_with_mode(
     let abs_m = m_mag as u128;
     let comp = abs_m - abs_r;
     let cmp_r = abs_r.cmp(&comp);
-    let q_is_odd = (q_mag & 1) != 0;
+    // `q_mag` is already the unsigned magnitude, so `% 10` is the last
+    // decimal digit directly.
+    let q_mod_10 = (q_mag % 10) as u8;
     let result_positive = !n_neg;
-    let bump = crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive);
+    let bump = crate::support::rounding::should_bump(mode, cmp_r, q_mod_10, result_positive);
     let bumped_mag = if bump { q_mag + 1 } else { q_mag };
     if n_neg {
         -(bumped_mag as i128)
@@ -156,12 +158,15 @@ macro_rules! round_with_mode_wide {
             let abs_m = if m < zero { -m } else { m };
             let comp = abs_m - abs_r;
             let cmp_r = abs_r.cmp(&comp);
-            let q_is_odd = {
-                let two = <$W>::from_i128(2);
-                (q % two) != zero
+            // Last decimal digit of |q|. A wide `%` is a full divide, so
+            // this is O(limbs) — see `i128_divrem_by_u64_with_mode` for
+            // the narrow path that gets it for free.
+            let q_mod_10 = {
+                let ten = <$W>::from_i128(10);
+                (q % ten).as_i128().unsigned_abs() as u8
             };
             let result_positive = (n < zero) == (m < zero);
-            if $crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive) {
+            if $crate::support::rounding::should_bump(mode, cmp_r, q_mod_10, result_positive) {
                 if result_positive { q + one } else { q - one }
             } else {
                 q

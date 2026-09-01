@@ -66,10 +66,15 @@ fn hyper_tiny_pin<C: WideTrigCore, const SCALE: u32, const EXPANDING: bool>(
         return None;
     }
     let one = <C::Storage as crate::int::types::traits::BigInt>::from_i128(1);
+    // `ZeroFiveUp`'s pivot digit; `a` is already `|raw|`.
+    let raw_mod_10 = {
+        use crate::int::types::traits::BigInt;
+        a.div_rem(<C::Storage as BigInt>::TEN).1.to_i128() as u8
+    };
     Some(if EXPANDING {
-        crate::support::rounding::tiny_odd_expanding_directed(raw, zero, one, mode)
+        crate::support::rounding::tiny_odd_expanding_directed(raw, zero, one, raw_mod_10, mode)
     } else {
-        crate::support::rounding::tiny_odd_compressing_directed(raw, zero, one, mode)
+        crate::support::rounding::tiny_odd_compressing_directed(raw, zero, one, raw_mod_10, mode)
     })
 }
 

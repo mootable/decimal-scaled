@@ -370,15 +370,20 @@ fn narrow_round_mag(
     let divisor = crate::consts::pow10::dispatch::<WNarrow>(shift);
     let (q, rem) = mag.div_rem(divisor);
     let result_positive = !result_neg;
+    // Last decimal digit of the quotient magnitude. This is a wide `%`
+    // (O(limbs)) where the tie break previously read one bit.
+    let q_mod_10 = (q % WNarrow::from_i128(10)).as_i128().unsigned_abs() as u8;
     let bump = if rem != WNarrow::ZERO {
         if is_nearest_mode(mode) {
             let comp = divisor - rem;
             let cmp_r = rem.cmp(&comp);
-            should_bump(mode, cmp_r, q.bit(0), result_positive)
+            should_bump(mode, cmp_r, q_mod_10, result_positive)
         } else {
             match mode {
                 RoundingMode::Ceiling => result_positive,
                 RoundingMode::Floor => !result_positive,
+                RoundingMode::AwayFromZero => true,
+                RoundingMode::ZeroFiveUp => matches!(q_mod_10, 0 | 5),
                 _ => false, // Trunc
             }
         }
@@ -387,6 +392,8 @@ fn narrow_round_mag(
         match mode {
             RoundingMode::Ceiling => result_positive,
             RoundingMode::Floor => !result_positive,
+            RoundingMode::AwayFromZero => true,
+            RoundingMode::ZeroFiveUp => matches!(q_mod_10, 0 | 5),
             _ => false,
         }
     } else {
@@ -648,7 +655,9 @@ fn exp2_exact_pin(raw: i128, scale: u32, mode: RoundingMode) -> ExactPin<i128> {
 /// `q = num >> p`, remainder `r = num & (2^p − 1)`; the half-way divisor
 /// is `2^p`, so the tie compares `2·r` against `2^p`. When `p ≥ 128`
 /// the quotient is `0` and the whole of `num` is the (sub-half) residual
-/// — a tiny positive value that only `Ceiling` rounds up.
+/// — a tiny positive value that `Ceiling`, `AwayFromZero` and
+/// `ZeroFiveUp` round up (`0` is a `ZeroFiveUp` pivot digit) and the
+/// remaining modes truncate away.
 #[inline]
 fn round_pow2_fraction(num: u128, p: u32, mode: RoundingMode) -> i128 {
     if p >= 128 {
@@ -657,7 +666,7 @@ fn round_pow2_fraction(num: u128, p: u32, mode: RoundingMode) -> i128 {
         let bump = crate::support::rounding::should_bump(
             mode,
             ::core::cmp::Ordering::Less, // r strictly below half
-            false,                       // q == 0 is even
+            0,                           // q == 0, so its last digit is 0
             true,                        // result positive
         );
         return i128::from(bump);
@@ -669,8 +678,9 @@ fn round_pow2_fraction(num: u128, p: u32, mode: RoundingMode) -> i128 {
     }
     let half = 1u128 << (p - 1);
     let cmp_r = r.cmp(&half);
-    let q_is_odd = (q & 1) == 1;
-    let bump = crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, true);
+    // `q` is non-negative here (`num > 0`, arithmetic shift right).
+    let q_mod_10 = (q % 10) as u8;
+    let bump = crate::support::rounding::should_bump(mode, cmp_r, q_mod_10, true);
     q + i128::from(bump)
 }
 

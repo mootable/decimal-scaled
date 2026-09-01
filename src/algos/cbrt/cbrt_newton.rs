@@ -158,14 +158,19 @@ where
     let halfway_gt = cmp_cube > 0;
     let tie = halfway_geq && !halfway_gt;
     let residual_nonzero = cmp_cross(&eight_n[..en_len], &eight_q_cubed[..eqc_len]) > 0;
-    let q_is_odd = (q[0] & 1) == 1;
+    // Last decimal digit of the root magnitude, which spans `ql` limbs —
+    // the low limb alone cannot carry it.
+    let q_mod_10 = crate::support::rounding::limbs_mod_10(&q[..ql]);
     let bump = match mode {
-        RoundingMode::HalfToEven => halfway_gt || (tie && q_is_odd),
+        RoundingMode::HalfToEven => halfway_gt || (tie && q_mod_10 & 1 == 1),
         RoundingMode::HalfAwayFromZero => halfway_geq,
         RoundingMode::HalfTowardZero => halfway_gt,
         RoundingMode::Trunc => false,
         RoundingMode::Floor => negative && residual_nonzero,
         RoundingMode::Ceiling => !negative && residual_nonzero,
+        // `q` is the magnitude, so away-from-zero is a bump either sign.
+        RoundingMode::AwayFromZero => residual_nonzero,
+        RoundingMode::ZeroFiveUp => residual_nonzero && matches!(q_mod_10, 0 | 5),
     };
     if bump {
         let mut i = 0;

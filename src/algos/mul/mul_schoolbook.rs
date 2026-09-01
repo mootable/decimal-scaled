@@ -32,7 +32,7 @@ use crate::int::algos::div::div_fixed::div_rem_mag_slice;
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook as mul_slice;
 use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
 use crate::int::types::Int;
-use crate::support::rounding::{should_bump, RoundingMode};
+use crate::support::rounding::{limbs_mod_10, should_bump, RoundingMode};
 
 /// Significant limb length (highest non-zero limb index + 1, min 1).
 #[inline]
@@ -119,8 +119,9 @@ where
     if rem_nonzero {
         // cmp_r = rem.cmp(divisor - rem), via comparing 2*rem to divisor.
         let cmp_r = cmp_double_vs::<N>(&rem[..dl], &divisor[..dl]);
-        let q_is_odd = (quot[0] & 1) != 0;
-        if should_bump(mode, cmp_r, q_is_odd, !neg) {
+        // `ptop` is the quotient's significant span.
+        let q_mod_10 = limbs_mod_10(&quot[..ptop]);
+        if should_bump(mode, cmp_r, q_mod_10, !neg) {
             // quot += 1
             let mut carry: u64 = 1;
             for limb in quot.iter_mut() {

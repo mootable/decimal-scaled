@@ -208,6 +208,30 @@ where
                     r_c
                 }
             }
+            // The result carries y's sign (x > 0), so away-from-zero is
+            // the Ceiling probe when positive and the Floor probe when
+            // negative — the exact mirror of the Trunc arm above.
+            RoundingMode::AwayFromZero => {
+                if y_raw >= zero {
+                    r_c
+                } else {
+                    r_f
+                }
+            }
+            RoundingMode::ZeroFiveUp => {
+                use crate::int::types::traits::BigInt as _;
+                let (toward_zero, away) = if y_raw >= zero { (r_f, r_c) } else { (r_c, r_f) };
+                let mag = if toward_zero < zero {
+                    zero - toward_zero
+                } else {
+                    toward_zero
+                };
+                let digit = mag
+                    .div_rem(<C::Storage as crate::int::types::traits::BigInt>::TEN)
+                    .1
+                    .to_i128();
+                if digit == 0 || digit == 5 { away } else { toward_zero }
+            }
             _ => unreachable!("directed mode"),
         };
     }
@@ -493,6 +517,30 @@ where
                 } else {
                     r_c
                 }
+            }
+            // The result carries y's sign (x > 0), so away-from-zero is
+            // the Ceiling probe when positive and the Floor probe when
+            // negative — the exact mirror of the Trunc arm above.
+            RoundingMode::AwayFromZero => {
+                if y_raw >= zero {
+                    r_c
+                } else {
+                    r_f
+                }
+            }
+            RoundingMode::ZeroFiveUp => {
+                use crate::int::types::traits::BigInt as _;
+                let (toward_zero, away) = if y_raw >= zero { (r_f, r_c) } else { (r_c, r_f) };
+                let mag = if toward_zero < zero {
+                    zero - toward_zero
+                } else {
+                    toward_zero
+                };
+                let digit = mag
+                    .div_rem(<C::Storage as crate::int::types::traits::BigInt>::TEN)
+                    .1
+                    .to_i128();
+                if digit == 0 || digit == 5 { away } else { toward_zero }
             }
             _ => unreachable!("directed mode"),
         };

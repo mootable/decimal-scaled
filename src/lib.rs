@@ -1856,12 +1856,13 @@ pub mod __bench_internals {
         let ad = if d < zero { zero - d } else { d };
         let comp = ad - ar;
         let cmp_r = ar.cmp(&comp);
-        let q_is_odd = q.bit(0);
+        // Last decimal digit of |q| (a wide `div_rem`, so O(limbs)).
+        let q_mod_10 = q.div_rem(W::TEN).1.to_i128().unsigned_abs() as u8;
         let result_positive = (n < zero) == (d < zero);
         if crate::support::rounding::should_bump(
             crate::support::rounding::RoundingMode::HalfToEven,
             cmp_r,
-            q_is_odd,
+            q_mod_10,
             result_positive,
         ) {
             if result_positive { q + one } else { q - one }

@@ -147,6 +147,29 @@ macro_rules! decl_decimal_quantize {
                             quotient
                         }
                     }
+                    // Any non-zero remainder lifts the magnitude; the
+                    // `remainder == zero` case returned above.
+                    $crate::support::rounding::RoundingMode::AwayFromZero => {
+                        if non_negative {
+                            quotient + one
+                        } else {
+                            quotient - one
+                        }
+                    }
+                    // Pivot on the last decimal digit of |quotient| — a
+                    // wide `%`, so O(limbs).
+                    $crate::support::rounding::RoundingMode::ZeroFiveUp => {
+                        let digit = (quotient % ten).as_i128().unsigned_abs();
+                        if digit == 0 || digit == 5 {
+                            if non_negative {
+                                quotient + one
+                            } else {
+                                quotient - one
+                            }
+                        } else {
+                            quotient
+                        }
+                    }
                 };
                 $Type::<TARGET_SCALE>::from_bits(bits)
             }

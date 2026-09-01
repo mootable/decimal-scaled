@@ -7,7 +7,7 @@
 //! ```text
 //! # default gate (half-to-even, every cell):
 //! cargo test -p decimal-scale-test --release --test golden
-//! # all six rounding modes, full surface:
+//! # all eight rounding modes, full surface:
 //! cargo test -p decimal-scale-test --release --test golden -- --ignored --nocapture
 //! # just the cells under investigation, one mode, 1-in-50 rows:
 //! GOLDEN_WIDTHS=924,1232 GOLDEN_MODES=ceiling GOLDEN_FUNCS=exp,cosh GOLDEN_SAMPLE=50 \
@@ -141,14 +141,15 @@ fn golden_default() {
     check(run(&[RoundingMode::HalfToEven]));
 }
 
-/// All six rounding modes across the full surface — heavy, so `#[ignore]`d. Directed
-/// rounding (Ceiling/Floor/Trunc) shows regressions the default mode hides.
+/// All eight rounding modes across the full surface — heavy, so `#[ignore]`d. Directed
+/// rounding (Ceiling/Floor/Trunc and the GDA pair AwayFromZero/ZeroFiveUp) shows
+/// regressions the default mode hides.
 ///
 /// SPECIALIST gate (owner ruling 2026-06-12): a deliberate opt-in cost switch, NOT a
 /// parked/orphan ignore. CI venue: golden-comprehensive.yml (runs with `-- --ignored`).
 /// The workspace zero-ignore mandate applies to every other test.
 #[test]
-#[ignore = "full six-mode surface; run via --ignored --nocapture"]
+#[ignore = "full eight-mode surface; run via --ignored --nocapture"]
 fn golden_all_modes() {
     check(run(&ALL_MODES));
 }

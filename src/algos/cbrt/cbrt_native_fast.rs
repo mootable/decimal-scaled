@@ -85,14 +85,18 @@ fn round_and_narrow<const N: usize, const W: usize>(
     let two_q = q + q;
     let eight_q_cubed = if q == zero { zero } else { two_q * two_q * two_q };
     let residual_nonzero = eight_n > eight_q_cubed;
-    let q_is_odd = (q % (one + one)) != zero;
+    // Last decimal digit of the (non-negative) root magnitude `q`.
+    let q_mod_10 = (q % Int::<W>::TEN).as_i128() as u8;
     let bump = match mode {
-        RoundingMode::HalfToEven => halfway_gt || (tie && q_is_odd),
+        RoundingMode::HalfToEven => halfway_gt || (tie && q_mod_10 & 1 == 1),
         RoundingMode::HalfAwayFromZero => halfway_geq,
         RoundingMode::HalfTowardZero => halfway_gt,
         RoundingMode::Trunc => false,
         RoundingMode::Floor => negative && residual_nonzero,
         RoundingMode::Ceiling => !negative && residual_nonzero,
+        // `q` is the magnitude, so away-from-zero is a bump either sign.
+        RoundingMode::AwayFromZero => residual_nonzero,
+        RoundingMode::ZeroFiveUp => residual_nonzero && matches!(q_mod_10, 0 | 5),
     };
     let q = if bump { q + one } else { q };
     let signed = if negative { -q } else { q };
