@@ -228,6 +228,56 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
         self.checked_log10_strict_with(DEFAULT_ROUNDING_MODE)
     }
 
+    /// Checked `log1p_strict_with`: `ln(1 + self)`, `None` instead of a
+    /// domain panic.
+    ///
+    /// Returns `None` when `self <= -1` — the domain wall the default
+    /// form panics on (`log1p: argument must be greater than -1`).
+    /// Otherwise `Some(self.log1p_strict_with(mode))`, bit-identical.
+    ///
+    /// There is no out-of-range case: `ln(1 + t)` is bounded by the
+    /// storage range wherever `1 + t` is representable, so every
+    /// in-domain argument returns `Some` at every tier. Unlike the
+    /// logarithms above, this needs no wide-tier caveat.
+    ///
+    /// ```
+    /// use decimal_scaled::{D38, RoundingMode};
+    /// let one = D38::<12>::ONE;
+    /// assert_eq!(
+    ///     one.checked_log1p_strict_with(RoundingMode::HalfToEven),
+    ///     Some(one.log1p_strict_with(RoundingMode::HalfToEven)),
+    /// );
+    /// // `t = -1` is the wall — `ln(0)` is undefined.
+    /// assert_eq!(
+    ///     D38::<12>::try_from(-1i64).unwrap().checked_log1p_strict_with(RoundingMode::HalfToEven),
+    ///     None,
+    /// );
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn checked_log1p_strict_with(self, mode: RoundingMode) -> Option<Self> {
+        if self.0 <= -Self::unit_bits() {
+            return None;
+        }
+        Some(Self(crate::policy::log1p::dispatch::<N, SCALE>(
+            self.0, mode,
+        )))
+    }
+
+    /// Default-mode sibling of [`Self::checked_log1p_strict_with`].
+    ///
+    /// ```
+    /// use decimal_scaled::D38;
+    /// assert!(D38::<12>::ONE.checked_log1p_strict().is_some());
+    /// assert_eq!(D38::<12>::try_from(-1i64).unwrap().checked_log1p_strict(), None);
+    /// assert_eq!(D38::<12>::try_from(-2i64).unwrap().checked_log1p_strict(), None);
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn checked_log1p_strict(self) -> Option<Self> {
+        self.checked_log1p_strict_with(DEFAULT_ROUNDING_MODE)
+    }
+
     // ── Exponentials ──────────────────────────────────────────────
 
     /// Checked `exp_strict_with`: `e^self`, `None` instead of a panic.
@@ -304,6 +354,52 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     #[must_use]
     pub fn checked_exp2_strict(self) -> Option<Self> {
         self.checked_exp2_strict_with(DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Checked `expm1_strict_with`: `e^self − 1`, `None` instead of a
+    /// panic.
+    ///
+    /// `expm1` is total over its argument, so there is no domain wall
+    /// and `None` is reserved for a result that does not fit the storage
+    /// range — the same condition on which the default form panics.
+    /// Otherwise `Some(self.expm1_strict_with(mode))`, bit-identical.
+    ///
+    /// Out-of-range detection: the kernel seam that reports overflow as
+    /// an `Option` has not been threaded through `expm1`, so at every
+    /// tier an out-of-range result still PANICS rather than returning
+    /// `None`, and this form is `Some` whenever the default form
+    /// returns at all. That is the same gap the wide-tier note on
+    /// [`Self::checked_exp_strict_with`] records — `exp` has the seam on
+    /// D18/D38, `expm1` does not have it yet — so this pair completes
+    /// the documented surface rather than adding a stronger guarantee.
+    ///
+    /// ```
+    /// use decimal_scaled::{D38, RoundingMode};
+    /// let one = D38::<12>::ONE;
+    /// assert_eq!(
+    ///     one.checked_expm1_strict_with(RoundingMode::HalfToEven),
+    ///     Some(one.expm1_strict_with(RoundingMode::HalfToEven)),
+    /// );
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn checked_expm1_strict_with(self, mode: RoundingMode) -> Option<Self> {
+        Some(Self(crate::policy::expm1::dispatch::<N, SCALE>(
+            self.0, mode,
+        )))
+    }
+
+    /// Default-mode sibling of [`Self::checked_expm1_strict_with`].
+    ///
+    /// ```
+    /// use decimal_scaled::D38;
+    /// assert!(D38::<12>::ONE.checked_expm1_strict().is_some());
+    /// assert!(D38::<12>::try_from(-1i64).unwrap().checked_expm1_strict().is_some());
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn checked_expm1_strict(self) -> Option<Self> {
+        self.checked_expm1_strict_with(DEFAULT_ROUNDING_MODE)
     }
 
     // ── Power ─────────────────────────────────────────────────────

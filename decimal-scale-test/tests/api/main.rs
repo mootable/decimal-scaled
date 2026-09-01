@@ -6,6 +6,7 @@
 
 mod arithmetic;
 mod bitwise;
+mod checked_transcendentals;
 mod constants;
 mod conversions;
 mod cross_scale;
