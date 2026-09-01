@@ -1,7 +1,7 @@
 # The golden harness — `decimal-scaled-golden`
 
 `decimal-scaled-golden` is a small, **library-agnostic** test harness. It holds a
-big set of known-correct answers (the *golden* values — <!-- BEGIN GENERATED:golden:counts -->102,729 answers across 30 functions<!-- END GENERATED:golden:counts -->) and the machinery to check
+big set of known-correct answers (the *golden* values — <!-- BEGIN GENERATED:golden:counts -->102,735 answers across 30 functions<!-- END GENERATED:golden:counts -->) and the machinery to check
 *any* decimal library against them. It depends on **nothing** from `decimal-scaled`,
 so you can drop it into your own crate and grade your own number type on exactly the
 same terms.

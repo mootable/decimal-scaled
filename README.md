@@ -11,7 +11,7 @@ A fast, precise, decimal library.
 - **Up to 4 Kb numbers** — twelve widths, `D18` to `D1232`.
 - **Choose your precision at compile time** — from 0 to one less than the width. i.e. D1232 can carry a precision of 1231 digits.
 - **`no_std` friendly** — the strict, integer-only path needs no `std`.
-- **Validated by <!-- BEGIN GENERATED:readme:tested -->72,115,758<!-- END GENERATED:readme:tested --> value tests** — every width × scale × rounding mode.
+- **Validated by <!-- BEGIN GENERATED:readme:tested -->72,119,970<!-- END GENERATED:readme:tested --> value tests** — every width × scale × rounding mode.
 
 ---
 
