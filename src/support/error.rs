@@ -32,10 +32,10 @@ pub enum ConvertError {
 }
 
 impl core::fmt::Display for ConvertError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::Overflow => f.write_str("decimal conversion overflow"),
-            Self::NotFinite => f.write_str("decimal conversion from non-finite float"),
+            Self::Overflow => formatter.write_str("decimal conversion overflow"),
+            Self::NotFinite => formatter.write_str("decimal conversion from non-finite float"),
         }
     }
 }
@@ -72,8 +72,8 @@ pub enum ParseError {
 }
 
 impl core::fmt::Display for ParseError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let msg = match self {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
             Self::Empty => "empty input",
             Self::SignOnly => "sign with no digits",
             Self::LeadingZero => "redundant leading zero in integer part",
@@ -83,7 +83,7 @@ impl core::fmt::Display for ParseError {
             Self::OutOfRange => "value out of representable range",
             Self::MissingDigits => "decimal point with no adjacent digits",
         };
-        f.write_str(msg)
+        formatter.write_str(message)
     }
 }
 

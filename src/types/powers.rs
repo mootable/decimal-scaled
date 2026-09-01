@@ -70,10 +70,10 @@
 //!
 //! # Square-and-multiply algorithm
 //!
-//! Starting from `acc = ONE`, the algorithm walks the bits of `exp` from
-//! low to high. On each iteration:
+//! Starting from `accumulator = ONE`, the algorithm walks the bits of
+//! `exp` from low to high. On each iteration:
 //!
-//! 1. If the current bit of `exp` is set, multiply `acc *= base`.
+//! 1. If the current bit of `exp` is set, multiply `accumulator *= base`.
 //! 2. Square `base *= base`.
 //!
 //! This costs `O(log exp)` multiplications rather than `O(exp)`. The
@@ -125,19 +125,19 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     #[must_use]
     pub fn pow(self, exp: u32) -> Self {
-        let mut acc = Self::ONE;
+        let mut accumulator = Self::ONE;
         let mut base = self;
-        let mut e = exp;
-        while e > 0 {
-            if e & 1 == 1 {
-                acc *= base;
+        let mut remaining_exponent = exp;
+        while remaining_exponent > 0 {
+            if remaining_exponent & 1 == 1 {
+                accumulator *= base;
             }
-            e >>= 1;
-            if e > 0 {
+            remaining_exponent >>= 1;
+            if remaining_exponent > 0 {
                 base *= base;
             }
         }
-        acc
+        accumulator
     }
 
     /// Raises `self` to the signed integer power `exp`.
@@ -428,19 +428,19 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     #[must_use]
     pub fn checked_pow(self, exp: u32) -> Option<Self> {
-        let mut acc = Self::ONE;
+        let mut accumulator = Self::ONE;
         let mut base = self;
-        let mut e = exp;
-        while e > 0 {
-            if e & 1 == 1 {
-                acc = acc.checked_mul(base)?;
+        let mut remaining_exponent = exp;
+        while remaining_exponent > 0 {
+            if remaining_exponent & 1 == 1 {
+                accumulator = accumulator.checked_mul(base)?;
             }
-            e >>= 1;
-            if e > 0 {
+            remaining_exponent >>= 1;
+            if remaining_exponent > 0 {
                 base = base.checked_mul(base)?;
             }
         }
-        Some(acc)
+        Some(accumulator)
     }
 
     /// Returns `self^exp`, wrapping two's-complement on overflow at
@@ -468,19 +468,19 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     #[must_use]
     pub fn wrapping_pow(self, exp: u32) -> Self {
-        let mut acc = Self::ONE;
+        let mut accumulator = Self::ONE;
         let mut base = self;
-        let mut e = exp;
-        while e > 0 {
-            if e & 1 == 1 {
-                acc = acc.wrapping_mul(base);
+        let mut remaining_exponent = exp;
+        while remaining_exponent > 0 {
+            if remaining_exponent & 1 == 1 {
+                accumulator = accumulator.wrapping_mul(base);
             }
-            e >>= 1;
-            if e > 0 {
+            remaining_exponent >>= 1;
+            if remaining_exponent > 0 {
                 base = base.wrapping_mul(base);
             }
         }
-        acc
+        accumulator
     }
 
     /// Returns `self^exp`, clamping to `D38::MAX` or `D38::MIN` on
@@ -511,15 +511,15 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         if exp == 0 {
             return Self::ONE;
         }
-        let mut acc = Self::ONE;
+        let mut accumulator = Self::ONE;
         let mut base = self;
-        let mut e = exp;
+        let mut remaining_exponent = exp;
         // The final result is negative iff the base is negative and exp is odd.
         let result_negative_if_overflow = self.is_negative() && (exp & 1) == 1;
-        while e > 0 {
-            if e & 1 == 1 {
-                match acc.checked_mul(base) {
-                    Some(q) => acc = q,
+        while remaining_exponent > 0 {
+            if remaining_exponent & 1 == 1 {
+                match accumulator.checked_mul(base) {
+                    Some(product) => accumulator = product,
                     None => {
                         return if result_negative_if_overflow {
                             Self::MIN
@@ -529,10 +529,10 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
                     }
                 }
             }
-            e >>= 1;
-            if e > 0 {
+            remaining_exponent >>= 1;
+            if remaining_exponent > 0 {
                 match base.checked_mul(base) {
-                    Some(q) => base = q,
+                    Some(squared) => base = squared,
                     None => {
                         // base*base is non-negative (squared); clamp by the
                         // sign of the would-be final result.
@@ -545,7 +545,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
                 }
             }
         }
-        acc
+        accumulator
     }
 
     /// Returns `(self^exp, overflowed)`.
@@ -571,24 +571,24 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     #[must_use]
     pub fn overflowing_pow(self, exp: u32) -> (Self, bool) {
-        let mut acc = Self::ONE;
+        let mut accumulator = Self::ONE;
         let mut base = self;
-        let mut e = exp;
+        let mut remaining_exponent = exp;
         let mut overflowed = false;
-        while e > 0 {
-            if e & 1 == 1 {
-                let (q, o) = acc.overflowing_mul(base);
-                acc = q;
-                overflowed |= o;
+        while remaining_exponent > 0 {
+            if remaining_exponent & 1 == 1 {
+                let (product, step_overflowed) = accumulator.overflowing_mul(base);
+                accumulator = product;
+                overflowed |= step_overflowed;
             }
-            e >>= 1;
-            if e > 0 {
-                let (q, o) = base.overflowing_mul(base);
-                base = q;
-                overflowed |= o;
+            remaining_exponent >>= 1;
+            if remaining_exponent > 0 {
+                let (squared, step_overflowed) = base.overflowing_mul(base);
+                base = squared;
+                overflowed |= step_overflowed;
             }
         }
-        (acc, overflowed)
+        (accumulator, overflowed)
     }
 }
 
@@ -606,12 +606,12 @@ mod tests {
         // So a correctly-rounded q satisfies q^2 - q < N ≤ q^2 + q  (q>0),
         // or N == 0 when q == 0.
         fn check<const S: u32>(raw: i128) {
-            let x = crate::D::<crate::int::types::Int<2>, S>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
-            let q = x.sqrt_strict().to_bits().as_i128();
+            let value = crate::D::<crate::int::types::Int<2>, S>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
+            let q = value.sqrt_strict().to_bits().as_i128();
             assert!(q >= 0, "sqrt result must be non-negative");
             // N = raw · 10^S as 256-bit; q is small enough that q^2 fits 256-bit.
-            let mult = 10u128.pow(S);
-            let (n_hi, n_lo) = crate::algos::support::mg_divide::mul_u128_to_u256(raw as u128, mult);
+            let multiplier = 10u128.pow(S);
+            let (n_hi, n_lo) = crate::algos::support::mg_divide::mul_u128_to_u256(raw as u128, multiplier);
             let (qsq_hi, qsq_lo) = crate::algos::support::mg_divide::mul_u128_to_u256(q as u128, q as u128);
             // lower: N > q^2 - q ⇔   N + q > q^2   (q ≥ 0)
             // upper: N ≤ q^2 + q
@@ -671,8 +671,8 @@ mod tests {
         // hold the 384-bit cubes (i256 is already a dev-dependency).
         use i256::U256;
         fn check<const S: u32>(raw: i128) {
-            let x = crate::D::<crate::int::types::Int<2>, S>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
-            let q = x.cbrt_strict().to_bits().as_i128();
+            let value = crate::D::<crate::int::types::Int<2>, S>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
+            let q = value.cbrt_strict().to_bits().as_i128();
             // Sign must match the input.
             assert_eq!(q.signum(), raw.signum(), "cbrt sign mismatch");
             let qa = q.unsigned_abs();
@@ -682,8 +682,8 @@ mod tests {
             // scales exercised here to keep the check in U256 range.
             // (The 384-bit path itself is exercised across all scales by
             // the round-trip tests; this exact check covers S ≤ 25.)
-            let m = U256::from(10u8).pow(2 * S);
-            let n = U256::from(ra) * m;
+            let scale_factor = U256::from(10u8).pow(2 * S);
+            let n = U256::from(ra) * scale_factor;
             let eight_n = n << 3;
             let two_q = U256::from(qa) * U256::from(2u8);
             let upper = {

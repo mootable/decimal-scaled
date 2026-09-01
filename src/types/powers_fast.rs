@@ -136,9 +136,13 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     #[must_use]
     pub fn hypot_fast(self, other: Self) -> Self {
-        let a = self.abs();
-        let b = other.abs();
-        let (large, small) = if a >= b { (a, b) } else { (b, a) };
+        let abs_self = self.abs();
+        let abs_other = other.abs();
+        let (large, small) = if abs_self >= abs_other {
+            (abs_self, abs_other)
+        } else {
+            (abs_other, abs_self)
+        };
         if large == Self::ZERO {
             // Both inputs are zero; large is the max of two non-negatives,
             // so this branch is only reached when both are zero.

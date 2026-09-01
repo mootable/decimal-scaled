@@ -35,11 +35,11 @@ macro_rules! decl_decimal_from_str {
     (wide $Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> ::core::str::FromStr for $Type<SCALE> {
             type Err = $crate::types::widths::ParseError;
-            fn from_str(s: &str) -> ::core::result::Result<Self, Self::Err> {
-                let comps = $crate::support::display::parse_components::<SCALE>(s)?;
-                let negative = comps.negative;
-                let int_str = comps.int_str;
-                let frac_str = comps.frac_str;
+            fn from_str(input: &str) -> ::core::result::Result<Self, Self::Err> {
+                let components = $crate::support::display::parse_components::<SCALE>(input)?;
+                let negative = components.negative;
+                let int_str = components.int_str;
+                let frac_str = components.frac_str;
 
                 // Storage-width constants. `from_i128(10).pow(SCALE)`
                 // is wrapping in the inherent impl, but SCALE is
@@ -56,10 +56,10 @@ macro_rules! decl_decimal_from_str {
                 // digit so we approach `MIN` from above without ever
                 // forming the positive intermediate `MAX + 1`.
                 let mut int_value = zero;
-                for &b in int_str {
-                    let digit = <$Storage>::from_i128((b - b'0') as i128);
+                for &byte in int_str {
+                    let digit = <$Storage>::from_i128((byte - b'0') as i128);
                     let scaled = match <$Storage>::checked_mul(int_value, ten) {
-                        ::core::option::Option::Some(v) => v,
+                        ::core::option::Option::Some(value) => value,
                         ::core::option::Option::None => {
                             return ::core::result::Result::Err(
                                 $crate::types::widths::ParseError::OutOfRange,
@@ -68,7 +68,7 @@ macro_rules! decl_decimal_from_str {
                     };
                     int_value = if negative {
                         match <$Storage>::checked_sub(scaled, digit) {
-                            ::core::option::Option::Some(v) => v,
+                            ::core::option::Option::Some(value) => value,
                             ::core::option::Option::None => {
                                 return ::core::result::Result::Err(
                                     $crate::types::widths::ParseError::OutOfRange,
@@ -77,7 +77,7 @@ macro_rules! decl_decimal_from_str {
                         }
                     } else {
                         match <$Storage>::checked_add(scaled, digit) {
-                            ::core::option::Option::Some(v) => v,
+                            ::core::option::Option::Some(value) => value,
                             ::core::option::Option::None => {
                                 return ::core::result::Result::Err(
                                     $crate::types::widths::ParseError::OutOfRange,
@@ -87,7 +87,7 @@ macro_rules! decl_decimal_from_str {
                     };
                 }
                 let int_scaled = match <$Storage>::checked_mul(int_value, multiplier) {
-                    ::core::option::Option::Some(v) => v,
+                    ::core::option::Option::Some(value) => value,
                     ::core::option::Option::None => {
                         return ::core::result::Result::Err(
                             $crate::types::widths::ParseError::OutOfRange,
@@ -98,10 +98,10 @@ macro_rules! decl_decimal_from_str {
                 // Accumulate the fractional part the same way.
                 let mut frac_value = zero;
                 let frac_len = frac_str.len();
-                for &b in frac_str {
-                    let digit = <$Storage>::from_i128((b - b'0') as i128);
+                for &byte in frac_str {
+                    let digit = <$Storage>::from_i128((byte - b'0') as i128);
                     let scaled = match <$Storage>::checked_mul(frac_value, ten) {
-                        ::core::option::Option::Some(v) => v,
+                        ::core::option::Option::Some(value) => value,
                         ::core::option::Option::None => {
                             return ::core::result::Result::Err(
                                 $crate::types::widths::ParseError::OutOfRange,
@@ -110,7 +110,7 @@ macro_rules! decl_decimal_from_str {
                     };
                     frac_value = if negative {
                         match <$Storage>::checked_sub(scaled, digit) {
-                            ::core::option::Option::Some(v) => v,
+                            ::core::option::Option::Some(value) => value,
                             ::core::option::Option::None => {
                                 return ::core::result::Result::Err(
                                     $crate::types::widths::ParseError::OutOfRange,
@@ -119,7 +119,7 @@ macro_rules! decl_decimal_from_str {
                         }
                     } else {
                         match <$Storage>::checked_add(scaled, digit) {
-                            ::core::option::Option::Some(v) => v,
+                            ::core::option::Option::Some(value) => value,
                             ::core::option::Option::None => {
                                 return ::core::result::Result::Err(
                                     $crate::types::widths::ParseError::OutOfRange,
@@ -128,11 +128,11 @@ macro_rules! decl_decimal_from_str {
                         }
                     };
                 }
-                let pad = (SCALE as usize) - frac_len;
-                if pad > 0 {
-                    let pad_factor = <$Storage>::pow(ten, pad as u32);
+                let pad_digits = (SCALE as usize) - frac_len;
+                if pad_digits > 0 {
+                    let pad_factor = <$Storage>::pow(ten, pad_digits as u32);
                     frac_value = match <$Storage>::checked_mul(frac_value, pad_factor) {
-                        ::core::option::Option::Some(v) => v,
+                        ::core::option::Option::Some(value) => value,
                         ::core::option::Option::None => {
                             return ::core::result::Result::Err(
                                 $crate::types::widths::ParseError::OutOfRange,
@@ -144,7 +144,7 @@ macro_rules! decl_decimal_from_str {
                 // `int_scaled` and `frac_value` already share the
                 // value's sign, so a plain add combines them.
                 let combined = match <$Storage>::checked_add(int_scaled, frac_value) {
-                    ::core::option::Option::Some(v) => v,
+                    ::core::option::Option::Some(value) => value,
                     ::core::option::Option::None => {
                         return ::core::result::Result::Err(
                             $crate::types::widths::ParseError::OutOfRange,

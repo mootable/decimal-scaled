@@ -76,57 +76,63 @@
 /// result_positive)` triple to `should_bump`.
 #[inline(always)]
 pub(crate) fn i128_divrem_by_u64_with_mode(
-    n: i128,
+    numerator: i128,
     m_mag: u64,
     mode: crate::support::rounding::RoundingMode,
 ) -> i128 {
     debug_assert!(m_mag != 0, "i128_divrem_by_u64_with_mode: m_mag = 0");
-    let n_neg = n < 0;
-    let un = n.unsigned_abs();
-    let (q_mag, r_mag) = {
-        let hi = (un >> 64) as u64;
-        let lo = un as u64;
+    let numerator_is_negative = numerator < 0;
+    let abs_numerator = numerator.unsigned_abs();
+    let (quotient_mag, remainder_mag) = {
+        let hi = (abs_numerator >> 64) as u64;
+        let lo = abs_numerator as u64;
         if hi == 0 {
             // Single-limb dividend — one hardware `divq`.
-            let q = lo / m_mag;
-            let r = lo % m_mag;
-            (q as u128, r)
+            let quotient = lo / m_mag;
+            let remainder = lo % m_mag;
+            (quotient as u128, remainder)
         } else {
             // Two-limb schoolbook divide in base 2^64. Two hardware
             // divides.
-            let q_hi = hi / m_mag;
-            let r_hi = hi % m_mag;
-            let cur = ((r_hi as u128) << 64) | (lo as u128);
-            // The divisor fits u64, so the quotient of (cur / m_mag)
-            // also fits u64 (cur < m_mag * 2^64).
-            let q_lo_u128 = cur / (m_mag as u128);
-            let r = cur - q_lo_u128 * (m_mag as u128);
-            let q = ((q_hi as u128) << 64) | (q_lo_u128 & u128::from(u64::MAX));
-            (q, r as u64)
+            let quotient_hi = hi / m_mag;
+            let remainder_hi = hi % m_mag;
+            let partial = ((remainder_hi as u128) << 64) | (lo as u128);
+            // The divisor fits u64, so the quotient of (partial / m_mag)
+            // also fits u64 (partial < m_mag * 2^64).
+            let quotient_lo_u128 = partial / (m_mag as u128);
+            let remainder = partial - quotient_lo_u128 * (m_mag as u128);
+            let quotient =
+                ((quotient_hi as u128) << 64) | (quotient_lo_u128 & u128::from(u64::MAX));
+            (quotient, remainder as u64)
         }
     };
 
-    if r_mag == 0 {
+    if remainder_mag == 0 {
         // No remainder — exact. Restore sign.
-        return if n_neg {
-            -(q_mag as i128)
+        return if numerator_is_negative {
+            -(quotient_mag as i128)
         } else {
-            q_mag as i128
+            quotient_mag as i128
         };
     }
 
     // `should_bump` needs the same three pre-computed inputs the macro
     // builds. `m_mag` is the divisor magnitude, never zero, never
     // negative.
-    let abs_r = r_mag as u128;
-    let abs_m = m_mag as u128;
-    let comp = abs_m - abs_r;
-    let cmp_r = abs_r.cmp(&comp);
-    let q_is_odd = (q_mag & 1) != 0;
-    let result_positive = !n_neg;
-    let bump = crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive);
-    let bumped_mag = if bump { q_mag + 1 } else { q_mag };
-    if n_neg {
+    let abs_remainder = remainder_mag as u128;
+    let abs_divisor = m_mag as u128;
+    let complement = abs_divisor - abs_remainder;
+    let remainder_cmp = abs_remainder.cmp(&complement);
+    let quotient_is_odd = (quotient_mag & 1) != 0;
+    let result_positive = !numerator_is_negative;
+    let bump = crate::support::rounding::should_bump(
+        mode,
+        remainder_cmp,
+        quotient_is_odd,
+        result_positive
+    );
+    let bumped_mag = if bump { quotient_mag + 1 } else { quotient_mag };
+    if numerator_is_negative {
         -(bumped_mag as i128)
     } else {
         bumped_mag as i128
@@ -140,31 +146,31 @@ pub(crate) fn i128_divrem_by_u64_with_mode(
 // Always available: D18 / D38 (default features) route their Div /
 // checked_div / wrapping_div through this rounding step too.
 macro_rules! round_with_mode_wide {
-    ($n:expr, $m:expr, $W:ty, $mode:expr) => {{
-        let n = $n;
-        let m = $m;
+    ($numerator:expr, $divisor:expr, $W:ty, $mode:expr) => {{
+        let numerator = $numerator;
+        let divisor = $divisor;
         let mode = $mode;
         // Single divmod call instead of `n / m` + `n % m` (which
         // would do the full multi-limb divide twice).
-        let (q, r) = n.div_rem(m);
+        let (quotient, remainder) = numerator.div_rem(divisor);
         let zero = <$W>::from_i128(0);
-        if r == zero {
-            q
+        if remainder == zero {
+            quotient
         } else {
             let one = <$W>::from_i128(1);
-            let abs_r = if r < zero { -r } else { r };
-            let abs_m = if m < zero { -m } else { m };
-            let comp = abs_m - abs_r;
-            let cmp_r = abs_r.cmp(&comp);
-            let q_is_odd = {
+            let abs_remainder = if remainder < zero { -remainder } else { remainder };
+            let abs_divisor = if divisor < zero { -divisor } else { divisor };
+            let complement = abs_divisor - abs_remainder;
+            let remainder_cmp = abs_remainder.cmp(&complement);
+            let quotient_is_odd = {
                 let two = <$W>::from_i128(2);
-                (q % two) != zero
+                (quotient % two) != zero
             };
-            let result_positive = (n < zero) == (m < zero);
-            if $crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive) {
-                if result_positive { q + one } else { q - one }
+            let result_positive = (numerator < zero) == (divisor < zero);
+            if $crate::support::rounding::should_bump(mode, remainder_cmp, quotient_is_odd, result_positive) {
+                if result_positive { quotient + one } else { quotient - one }
             } else {
-                q
+                quotient
             }
         }
     }};

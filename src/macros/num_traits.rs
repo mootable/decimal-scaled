@@ -49,7 +49,7 @@ macro_rules! decl_decimal_num_traits_basics {
         impl<const SCALE: u32> ::num_traits::Num for $Type<SCALE> {
             type FromStrRadixErr = $crate::types::widths::ParseError;
             fn from_str_radix(
-                s: &str,
+                text: &str,
                 radix: u32,
             ) -> ::core::result::Result<Self, Self::FromStrRadixErr> {
                 if radix != 10 {
@@ -57,7 +57,7 @@ macro_rules! decl_decimal_num_traits_basics {
                         $crate::types::widths::ParseError::InvalidChar,
                     );
                 }
-                <Self as ::core::str::FromStr>::from_str(s)
+                <Self as ::core::str::FromStr>::from_str(text)
             }
         }
 
@@ -154,22 +154,22 @@ macro_rules! decl_decimal_num_traits_basics {
                 } else {
                     None
                 };
-                if let Some(f) = float_signal
-                    && f.is_nan()
+                if let Some(float_value) = float_signal
+                    && float_value.is_nan()
                 {
                     return Self::ZERO;
                 }
-                if let Some(d) = <Self as ::num_traits::NumCast>::from(value) {
-                    return d;
+                if let Some(converted) = <Self as ::num_traits::NumCast>::from(value) {
+                    return converted;
                 }
-                if let Some(i) = int_signal {
-                    return if i < 0 { Self::MIN } else { Self::MAX };
+                if let Some(int_value) = int_signal {
+                    return if int_value < 0 { Self::MIN } else { Self::MAX };
                 }
                 if uint_signal.is_some() {
                     return Self::MAX;
                 }
                 match float_signal {
-                    Some(f) if f.is_sign_negative() => Self::MIN,
+                    Some(float_value) if float_value.is_sign_negative() => Self::MIN,
                     Some(_) => Self::MAX,
                     None => Self::ZERO,
                 }
@@ -181,7 +181,7 @@ macro_rules! decl_decimal_num_traits_basics {
             #[must_use]
             pub fn to_num<T: ::num_traits::NumCast + ::num_traits::Bounded>(self) -> T {
                 match T::from(self) {
-                    ::core::option::Option::Some(t) => t,
+                    ::core::option::Option::Some(converted) => converted,
                     ::core::option::Option::None => {
                         if self >= Self::ZERO {
                             T::max_value()
@@ -213,32 +213,32 @@ macro_rules! decl_decimal_num_traits_conversions {
     (wide $Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> ::num_traits::FromPrimitive for $Type<SCALE> {
             #[inline]
-            fn from_i64(n: i64) -> ::core::option::Option<Self> {
-                let widened: $Storage = <$Storage>::from_i128(n as i128);
+            fn from_i64(value: i64) -> ::core::option::Option<Self> {
+                let widened: $Storage = <$Storage>::from_i128(value as i128);
                 widened.checked_mul(Self::multiplier()).map(Self)
             }
             #[inline]
-            fn from_u64(n: u64) -> ::core::option::Option<Self> {
+            fn from_u64(value: u64) -> ::core::option::Option<Self> {
                 // `u64` can exceed a narrow wide-storage's positive range
                 // (e.g. `Int<1>` / D18), so route through the range-checking
                 // `TryFrom<u128>` rather than an unchecked widen.
-                <Self as ::core::convert::TryFrom<u128>>::try_from(n as u128).ok()
+                <Self as ::core::convert::TryFrom<u128>>::try_from(value as u128).ok()
             }
             #[inline]
-            fn from_i128(n: i128) -> ::core::option::Option<Self> {
-                <Self as ::core::convert::TryFrom<i128>>::try_from(n).ok()
+            fn from_i128(value: i128) -> ::core::option::Option<Self> {
+                <Self as ::core::convert::TryFrom<i128>>::try_from(value).ok()
             }
             #[inline]
-            fn from_u128(n: u128) -> ::core::option::Option<Self> {
-                <Self as ::core::convert::TryFrom<u128>>::try_from(n).ok()
+            fn from_u128(value: u128) -> ::core::option::Option<Self> {
+                <Self as ::core::convert::TryFrom<u128>>::try_from(value).ok()
             }
             #[inline]
-            fn from_f32(n: f32) -> ::core::option::Option<Self> {
-                <Self as ::core::convert::TryFrom<f32>>::try_from(n).ok()
+            fn from_f32(value: f32) -> ::core::option::Option<Self> {
+                <Self as ::core::convert::TryFrom<f32>>::try_from(value).ok()
             }
             #[inline]
-            fn from_f64(n: f64) -> ::core::option::Option<Self> {
-                <Self as ::core::convert::TryFrom<f64>>::try_from(n).ok()
+            fn from_f64(value: f64) -> ::core::option::Option<Self> {
+                <Self as ::core::convert::TryFrom<f64>>::try_from(value).ok()
             }
         }
 
@@ -247,7 +247,7 @@ macro_rules! decl_decimal_num_traits_conversions {
             fn to_i64(&self) -> ::core::option::Option<i64> {
                 (self.0 / Self::multiplier())
                     .to_i128_checked()
-                    .and_then(|v| i64::try_from(v).ok())
+                    .and_then(|int_part| i64::try_from(int_part).ok())
             }
             #[inline]
             fn to_u64(&self) -> ::core::option::Option<u64> {
@@ -259,7 +259,7 @@ macro_rules! decl_decimal_num_traits_conversions {
                 }
                 (self.0 / Self::multiplier())
                     .to_u128_checked()
-                    .and_then(|v| u64::try_from(v).ok())
+                    .and_then(|int_part| u64::try_from(int_part).ok())
             }
             #[inline]
             fn to_i128(&self) -> ::core::option::Option<i128> {
@@ -294,19 +294,20 @@ macro_rules! decl_decimal_num_traits_conversions {
     (@numcast $Type:ident) => {
         impl<const SCALE: u32> ::num_traits::NumCast for $Type<SCALE> {
             #[inline]
-            fn from<T: ::num_traits::ToPrimitive>(n: T) -> ::core::option::Option<Self> {
+            fn from<T: ::num_traits::ToPrimitive>(value: T) -> ::core::option::Option<Self> {
                 use ::num_traits::FromPrimitive;
                 // Read f64 early to distinguish integer vs fractional inputs.
-                let f = n.to_f64();
-                // Integer fast path: if `n` round-trips through i128 and
+                let as_float = value.to_f64();
+                // Integer fast path: if the input round-trips through i128
+                // and
                 // the f64 value matches, the input is integer-shaped —
                 // take the lossless integer path (preserves precision for
                 // i64/u64 values beyond f64's 2^53 exact-integer range).
-                if let ::core::option::Option::Some(int) = n.to_i128() {
-                    let take_int_path = match f {
+                if let ::core::option::Option::Some(int) = value.to_i128() {
+                    let take_int_path = match as_float {
                         ::core::option::Option::None => true,
-                        ::core::option::Option::Some(fv) => {
-                            fv.is_finite() && ((int as f64) == fv)
+                        ::core::option::Option::Some(float_value) => {
+                            float_value.is_finite() && ((int as f64) == float_value)
                         }
                     };
                     if take_int_path {
@@ -315,8 +316,8 @@ macro_rules! decl_decimal_num_traits_conversions {
                 }
                 // Float path — preserves fractional information; `None`
                 // for NaN / infinity / out-of-range.
-                if let ::core::option::Option::Some(fv) = f {
-                    return <Self as FromPrimitive>::from_f64(fv);
+                if let ::core::option::Option::Some(float_value) = as_float {
+                    return <Self as FromPrimitive>::from_f64(float_value);
                 }
                 ::core::option::Option::None
             }
