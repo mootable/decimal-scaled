@@ -87,34 +87,66 @@ assert_eq!(r.to_bits(), 6);
 | `-0.7` | `-1` | `-1` | `-1` | `0` | `-1` | `0` | `-1` | `-1` |
 | `-5.7` | `-6` | `-6` | `-6` | `-5` | `-6` | `-5` | `-6` | `-6` |
 
-Reading it:
-
-- **`2.0` is exact.** Nothing is discarded, so no mode moves it. Every
-  mode leaves an exact value alone — rounding only ever acts on a
-  non-zero discarded part.
-- **`0.2` separates `AwayFromZero` from `HalfAwayFromZero`.**
-  `AwayFromZero` steps up on *any* discarded part; `HalfAwayFromZero`
-  only steps up from the half-way point, so it stays at `0` here. Below
-  half is the only place those two differ.
-- **`0.5` / `1.5` / `2.5` separate the three half rules.** `HalfToEven`
-  splits `1.5` and `2.5`, sending each to its even neighbour;
-  `HalfAwayFromZero` and `HalfTowardZero` take opposite sides of every
-  tie.
-- **The negatives separate `Floor` / `Ceiling` from `Trunc` /
-  `AwayFromZero`.** `Ceiling` and `AwayFromZero` agree on every positive
-  value, and `Floor` and `Trunc` likewise; each pair parts company as
-  soon as the value is negative and something is discarded. Without a
-  negative row you cannot tell either pair apart.
-- **`0.7` / `1.7` / `4.7` / `5.7` isolate `ZeroFiveUp`.** It is the only
-  mode whose answer depends on the digit being *kept* rather than the
-  digit being discarded. The discarded part is `0.7` in all four, yet
-  `1.7` and `4.7` still truncate: the kept digits `1` and `4` are not
-  pivots. `0.7` and `5.7` step away from zero because their kept digits
-  `0` and `5` are.
-
 Because this crate stores an integer coefficient, it has no signed zero:
 a negative value that rounds to zero reads back as `0`, where the
 specification would write `-0`.
+
+Every mode leaves an exact value alone — rounding only ever acts on a
+non-zero discarded part, which is why `2.0` is unmoved right across the
+table. What separates the modes is *where* they put the line after that,
+and they fall into three groups by where that line sits.
+
+### Boundary at zero — `Trunc`, `AwayFromZero`, `Floor`, `Ceiling`
+
+GDA `round-down`, `round-up`, `round-floor`, `round-ceiling`.
+
+These four ask only **was anything discarded at all**, never how much.
+`0.2` discards the smallest part in the table, and that is already enough
+for `Ceiling` and `AwayFromZero` to reach `1`.
+
+Having no magnitude threshold, they differ only in the direction they
+then move: `Trunc` toward zero, `AwayFromZero` away from zero (its exact
+mirror), `Floor` toward −∞, `Ceiling` toward +∞.
+
+Direction is invisible until the sign changes, which is what the negative
+rows are for. At `-0.7`, `Trunc` and `Ceiling` give `0` while `Floor` and
+`AwayFromZero` give `-1`. So `Ceiling` and `AwayFromZero` coincide on
+every positive value, and `Floor` and `AwayFromZero` on every negative
+one.
+
+### Boundary at exactly one half — `HalfToEven`, `HalfAwayFromZero`, `HalfTowardZero`
+
+GDA `round-half-even`, `round-half-up`, `round-half-down`.
+
+All three take the nearer neighbour, so below half they agree (`0.2` →
+`0` for all three) and above half they agree (`0.7` → `1` for all three).
+The tie is the *only* place they part, and they differ only in how they
+break it:
+
+- `HalfToEven` — to the even neighbour: `1.5` → `2`, `2.5` → `2`.
+- `HalfAwayFromZero` — away from zero: `0.5` → `1`, `2.5` → `3`.
+- `HalfTowardZero` — toward zero: `0.5` → `0`, `1.5` → `1`.
+
+That same boundary is what separates `HalfAwayFromZero` from
+`AwayFromZero`. At and above half the two agree; *below* it they part —
+at `0.2` the half rule is still at `0` while `AwayFromZero`, needing only
+a non-zero discard, has already moved to `1`.
+
+### No boundary on the discarded part — `ZeroFiveUp`
+
+GDA `round-05up`.
+
+This one does not consult the discarded part to make its decision. It
+truncates toward zero and then, if anything was discarded, steps one away
+from zero **iff the last digit of that truncated result is `0` or `5`**.
+The condition is on the digit being *kept*, so on the discarded axis
+there is no threshold at all — not one set low, none.
+
+The table shows both halves of that. `0.2` bumps to `1` on a discard of
+two tenths, while `1.7` and `4.7` truncate a discard of seven tenths: the
+kept digits `1` and `4` are not pivots, and no amount of discarded value
+makes them one. A mode with any threshold on that axis could not produce
+both results.
 
 ### Why `ZeroFiveUp` exists
 
