@@ -23,7 +23,7 @@ pub(crate) mod mul_toom3;
 mod tests {
     use super::mul_karatsuba::{
         karatsuba_scratch_needed_th, mul_karatsuba, mul_karatsuba_with_threshold,
-        KARATSUBA_SCRATCH_LIMBS,
+        KARATSUBA_MAX_WIDTH, KARATSUBA_SCRATCH_LIMBS,
     };
     use super::mul_schoolbook::{
         mul_low_fixed, mul_low_limb, mul_schoolbook, mul_schoolbook_fixed,
@@ -174,12 +174,24 @@ mod tests {
         }
     }
 
-    /// The widest equal-length multiply (256 limbs, Int<256>) routes
-    /// through the production [`mul_karatsuba`] entry — which declares the
-    /// fixed `[u64; KARATSUBA_SCRATCH_LIMBS]` stack buffer — without
-    /// tripping the scratch-overflow `debug_assert` and matches schoolbook.
-    /// Guards the scratch sizing against future threshold drops that deepen
-    /// the recursion.
+    /// A 256-limb equal-length multiply routes through the production
+    /// [`mul_karatsuba`] entry — which declares the fixed
+    /// `[u64; KARATSUBA_SCRATCH_LIMBS]` stack buffer — and matches schoolbook.
+    ///
+    /// The sizing assert is stated against [`KARATSUBA_MAX_WIDTH`] rather than
+    /// a frozen 256, because that ceiling is now DERIVED from `MAX_WORK_N`: it
+    /// is 16 in a narrow build and 512 at xx-wide. The 256-limb product is kept
+    /// at every width regardless, and is the more interesting half of the test
+    /// now — below the ceiling it drives the Karatsuba path, above it the
+    /// fail-closed schoolbook fallback, and the product must be identical
+    /// either way. That is precisely the property the fallback promises.
+    ///
+    /// On the thresholds: the entry recurses to a base case at `threshold`, so
+    /// a LOWER threshold recurses deeper and needs MORE scratch. 8 is deeper
+    /// than production's 48 (so this over-tests the buffer), while
+    /// `KARATSUBA_SCRATCH_LIMBS` is sized at the floor of 4 — deeper still, and
+    /// therefore an upper bound for both. Guards the sizing against future
+    /// threshold drops that deepen the recursion.
     #[test]
     fn nonalloc_karatsuba_max_width_fits_fixed_scratch() {
         let mut state: u64 = 0xC0FF_EE00_1357_9BDF;
@@ -191,8 +203,9 @@ mod tests {
             z ^ (z >> 31)
         };
         assert!(
-            karatsuba_scratch_needed_th(256, 8) <= KARATSUBA_SCRATCH_LIMBS,
-            "fixed scratch too small for n=256 at a threshold of 8"
+            karatsuba_scratch_needed_th(KARATSUBA_MAX_WIDTH, 8) <= KARATSUBA_SCRATCH_LIMBS,
+            "fixed scratch too small for the ceiling width {KARATSUBA_MAX_WIDTH} \
+             at a threshold of 8"
         );
 
         let n = 256;
@@ -208,8 +221,10 @@ mod tests {
         let mut got = vec![0u64; 2 * n];
         mul_schoolbook(&a, &b, &mut oracle);
         // Deep threshold (8) drives maximal recursion at n=256 — the worst
-        // case for the fixed scratch (matches the sizing assert above, and is
-        // well below the production threshold, so this over-tests the buffer).
+        // case for the fixed scratch, and well below the production threshold,
+        // so this over-tests the buffer. Where 256 exceeds the derived ceiling
+        // the entry fails closed to schoolbook instead; the product is the
+        // same, which is what the comparison below actually pins.
         mul_karatsuba(&a, &b, &mut got, 8);
         assert_eq!(got, oracle, "max-width Karatsuba mismatch via fixed scratch");
     }

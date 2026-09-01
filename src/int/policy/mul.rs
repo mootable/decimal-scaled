@@ -30,7 +30,10 @@
 //! recursion depth ([`KARATSUBA_RECURSE`]) are policy DATA here, not magic
 //! numbers in a kernel.
 
-use crate::int::algos::mul::mul_karatsuba::{mul_karatsuba, mul_karatsuba_limb};
+use crate::int::algos::mul::mul_karatsuba::{
+    mul_karatsuba, mul_karatsuba_limb, KARATSUBA_MAX_WIDTH,
+};
+use crate::int::algos::support::limbs::MAX_WORK_N;
 use crate::int::algos::mul::mul_schoolbook::{mul_full_limb, mul_schoolbook};
 use crate::int::types::compute_limbs::{ComputeLimbs, Limbs, LimbSize};
 
@@ -108,6 +111,29 @@ enum Select {
 /// in `(96, 128]` is academic — no shipped storage tier (<=64) or work width
 /// (96/128/192/256) lies strictly between 96 and 128.
 const KARATSUBA_ENGAGE: usize = 128;
+
+// The relation whose violation actually costs something, tied here because
+// this is the only place both constants are visible: the engage point is
+// policy data private to this file, and the ceiling belongs to the kernel.
+//
+// `dispatch_slice` routes to Karatsuba at or above KARATSUBA_ENGAGE, and the
+// slice entry falls back to schoolbook above KARATSUBA_MAX_WIDTH. If the
+// ceiling ever drops below the engage point, those two windows stop
+// overlapping and EVERY slice Karatsuba silently becomes schoolbook -- correct
+// output, benched 1.34-1.39x win gone, and no test failing (the kernel tests
+// assert the product, and policy tests must not pin routing).
+//
+// MAX_WORK_N is 2 only when no wide tier is enabled. There the widest slice
+// operand any caller can carve from a storage-derived ComputeLimbs buffer is a
+// handful of limbs -- far below the engage point -- so a ceiling under it is
+// correct, and the entry simply always takes schoolbook. From the `wide` band
+// up (MAX_WORK_N >= 16, so the ceiling is >= 128) the overlap MUST hold.
+const _: () = assert!(
+    MAX_WORK_N == 2 || KARATSUBA_ENGAGE <= KARATSUBA_MAX_WIDTH,
+    "Karatsuba scratch ceiling sits below the engage point: every slice \
+     multiply the matcher routes to Karatsuba would silently fall back to \
+     schoolbook"
+);
 
 /// Karatsuba **recursion** base: the limb-count below which the kernel stops
 /// splitting and runs schoolbook. **`48`** is the swept optimum (`kara_t48`
