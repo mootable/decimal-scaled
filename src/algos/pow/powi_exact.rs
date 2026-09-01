@@ -394,13 +394,15 @@ mod tests {
     // representable at its chosen scale (`base · 10^S <= MAX`), but its
     // scaled power `base^|n| · 10^S` overflows i128 — exactly the case the
     // narrow integer fast path defers on.
-    const MODES: [RoundingMode; 6] = [
+    const MODES: [RoundingMode; 8] = [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
         RoundingMode::HalfTowardZero,
         RoundingMode::Trunc,
         RoundingMode::Floor,
         RoundingMode::Ceiling,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ];
 
     /// Pin called on already-scaled raw storage at scale `SC`.

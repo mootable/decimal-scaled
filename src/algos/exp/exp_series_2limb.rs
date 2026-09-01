@@ -955,14 +955,28 @@ fn exp2_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
 mod deep_underflow_directed {
     use super::*;
 
-    const ALL_MODES: [RoundingMode; 6] = [
+    const ALL_MODES: [RoundingMode; 8] = [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
         RoundingMode::HalfTowardZero,
         RoundingMode::Ceiling,
         RoundingMode::Floor,
         RoundingMode::Trunc,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ];
+
+    /// The result is a sub-resolution POSITIVE, so every mode that moves a
+    /// discarded remainder away from zero lands on 1 storage ULP: `Ceiling`
+    /// (toward +∞), `AwayFromZero` (anything discarded), and `ZeroFiveUp`
+    /// (the retained digit is `0`, one of its two bump digits). The rest
+    /// truncate to 0.
+    fn rounds_up_to_one_ulp(mode: RoundingMode) -> bool {
+        matches!(
+            mode,
+            RoundingMode::Ceiling | RoundingMode::AwayFromZero | RoundingMode::ZeroFiveUp
+        )
+    }
 
     /// `-62.17530480440519` lifted onto the storage grid at `scale`
     /// (exact for every `scale >= 14`).
@@ -981,7 +995,7 @@ mod deep_underflow_directed {
         ];
         for (scale, run) in cells {
             for mode in ALL_MODES {
-                let want = if mode == RoundingMode::Ceiling { 1 } else { 0 };
+                let want = i128::from(rounds_up_to_one_ulp(mode));
                 assert_eq!(
                     run(mode),
                     Some(want),
@@ -1020,13 +1034,15 @@ mod fast_path_validity {
             .unwrap_or(None)
     }
 
-    const MODES: [RoundingMode; 6] = [
+    const MODES: [RoundingMode; 8] = [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
         RoundingMode::HalfTowardZero,
         RoundingMode::Ceiling,
         RoundingMode::Floor,
         RoundingMode::Trunc,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ];
 
     /// Mirror the production gate exactly: `true` ⇒ this cell stays on the
@@ -1132,10 +1148,19 @@ mod fast_path_validity {
     // 256-bit `Fixed` too few fractional guard digits, mis-rounding the
     // last ULPs. The gate routes such cells to `exp2_wide_narrow_raw`.
     // Pin the exposing cell (class "Low": every mode → floor, except Ceiling
-    // → floor+1) plus a small integer-regime sweep checking the rounding
-    // order stays consistent (floor ≤ nearest ≤ ceil, ceil − floor ≤ 1).
-    // Guards the fix in the fast default build, parallel to the atanh near-1
-    // test; the mpmath golden floor is independently confirmed by Arb.
+    // and AwayFromZero → floor+1) plus a small integer-regime sweep checking
+    // the rounding order stays consistent (floor ≤ nearest ≤ ceil,
+    // ceil − floor ≤ 1). Guards the fix in the fast default build, parallel
+    // to the atanh near-1 test; the golden floor is confirmed by flint (Arb)
+    // and mpmath.
+    //
+    // 93.013986656 has a non-integer exponent, so 2^93.013986656 is
+    // irrational and can never land exactly on the scale-9 grid: the
+    // discard is non-zero by theorem, not by measurement. The value is
+    // positive with residual 0.4301 (below half) and a floor ending in 8,
+    // so AwayFromZero (bumps on any non-zero discard) lands at floor+1,
+    // while ZeroFiveUp (bumps only on a 0/5 last digit) stays at the floor
+    // since 8 is not a pivot digit.
     #[test]
     fn exp2_integer_regime_matches_golden_floor() {
         const S9: u32 = 9;
@@ -1143,7 +1168,7 @@ mod fast_path_validity {
         let gfloor: i128 = 9_999_999_994_134_964_658_924_521_484_307_802_708;
         for &mode in &MODES {
             let got = exp2_with_raw(raw, S9, STRICT_GUARD, mode);
-            let want = if matches!(mode, RoundingMode::Ceiling) {
+            let want = if matches!(mode, RoundingMode::Ceiling | RoundingMode::AwayFromZero) {
                 gfloor + 1
             } else {
                 gfloor

@@ -17,13 +17,15 @@
 mod from_checked_transcendentals {
     use decimal_scaled::{D38, RoundingMode};
 
-    const MODES: [RoundingMode; 6] = [
+    const MODES: [RoundingMode; 8] = [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
         RoundingMode::HalfTowardZero,
         RoundingMode::Ceiling,
         RoundingMode::Floor,
         RoundingMode::Trunc,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ];
 
     /// `-1/2` at scale 12 — inside the domain, and on the negative side

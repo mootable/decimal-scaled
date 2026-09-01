@@ -3801,14 +3801,28 @@ mod directed_walker_contract {
     const BASE_GUARD: u32 = 30;
     const TARGET: u32 = 17;
 
-    const ALL_MODES: [RoundingMode; 6] = [
+    const ALL_MODES: [RoundingMode; 8] = [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
         RoundingMode::HalfTowardZero,
         RoundingMode::Ceiling,
         RoundingMode::Floor,
         RoundingMode::Trunc,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ];
+
+    /// The walked value is a never-exact sub-resolution POSITIVE, so every
+    /// mode that moves a discarded remainder away from zero lands on 1:
+    /// `Ceiling` (toward +∞), `AwayFromZero` (anything discarded), and
+    /// `ZeroFiveUp` (the retained digit is `0`, one of its two bump
+    /// digits). The rest narrow to 0.
+    fn rounds_up_to_one(mode: RoundingMode) -> bool {
+        matches!(
+            mode,
+            RoundingMode::Ceiling | RoundingMode::AwayFromZero | RoundingMode::ZeroFiveUp
+        )
+    }
 
     fn run(mode: RoundingMode, recompute: impl FnMut(u32) -> S) -> i128 {
         round_to_storage_directed_never_exact_g::<St, S>(
@@ -3841,7 +3855,7 @@ mod directed_walker_contract {
                     * crate::consts::pow10::dispatch::<S>(g - BASE_GUARD);
                 if g >= POISON_FROM { -v } else { v }
             });
-            let want = if mode == RoundingMode::Ceiling { 1 } else { 0 };
+            let want = i128::from(rounds_up_to_one(mode));
             assert_eq!(got, want, "sub-resolution positive, mode={mode:?}");
         }
     }
@@ -3849,9 +3863,9 @@ mod directed_walker_contract {
     // A residual at kernel-noise scale (5 work units, below the resolve
     // floor at EVERY depth — the Table-Maker's-Dilemma stand-in): the walk
     // runs to the cap unresolved, and the endgame must return the CLEAN
-    // BASE narrowing (never-exact: Ceiling → 1, others → 0), never the
-    // deepest probe's — which here is poisoned negative and would invert
-    // Ceiling to 0 and Floor to -1.
+    // BASE narrowing (never-exact: the away-from-zero modes → 1, others
+    // → 0), never the deepest probe's — which here is poisoned negative
+    // and would invert Ceiling to 0 and Floor to -1.
     #[test]
     fn unresolved_cap_returns_clean_base_not_deepest_probe() {
         for mode in ALL_MODES {
@@ -3859,7 +3873,7 @@ mod directed_walker_contract {
                 let v = <S as BigInt>::from_i128(5);
                 if g >= POISON_FROM { -v } else { v }
             });
-            let want = if mode == RoundingMode::Ceiling { 1 } else { 0 };
+            let want = i128::from(rounds_up_to_one(mode));
             assert_eq!(got, want, "noise-scale residual at cap, mode={mode:?}");
         }
     }
@@ -3881,6 +3895,11 @@ mod directed_walker_contract {
             (RoundingMode::Floor, 1),
             (RoundingMode::Trunc, 1),
             (RoundingMode::HalfToEven, 1),
+            // The value is 1 ULP + a positive residual: `AwayFromZero`
+            // steps off it like `Ceiling`, while `ZeroFiveUp` truncates —
+            // the retained digit is `1`, not one of its `0`/`5` pivots.
+            (RoundingMode::AwayFromZero, 2),
+            (RoundingMode::ZeroFiveUp, 1),
         ] {
             let got = round_to_storage_directed_g::<St, Rung>(
                 BASE_GUARD,

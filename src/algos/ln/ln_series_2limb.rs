@@ -788,8 +788,13 @@ mod near_tie_pins {
         let br: i128 = 182017066872921546105935121_i128 * 1_000_000_000;
         for mode in [
             RoundingMode::HalfToEven,
+            RoundingMode::HalfAwayFromZero,
+            RoundingMode::HalfTowardZero,
+            RoundingMode::Trunc,
             RoundingMode::Floor,
             RoundingMode::Ceiling,
+            RoundingMode::AwayFromZero,
+            RoundingMode::ZeroFiveUp,
         ] {
             let r = log_strict_raw(xr, br, 37, mode);
             assert!(r.is_some(), "log fractional-base s37 mode={mode:?}");
@@ -812,6 +817,8 @@ mod near_tie_pins {
             RoundingMode::Floor,
             RoundingMode::Ceiling,
             RoundingMode::Trunc,
+            RoundingMode::AwayFromZero,
+            RoundingMode::ZeroFiveUp,
         ] {
             assert_eq!(
                 log_strict_raw(x.as_i128(), b.as_i128(), 19, mode),

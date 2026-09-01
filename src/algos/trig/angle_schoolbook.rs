@@ -115,13 +115,15 @@ mod tests {
     use super::*;
     use crate::D;
 
-    const MODES: [RoundingMode; 6] = [
+    const MODES: [RoundingMode; 8] = [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
         RoundingMode::HalfTowardZero,
         RoundingMode::Trunc,
         RoundingMode::Floor,
         RoundingMode::Ceiling,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ];
 
     const S38: u32 = 12;

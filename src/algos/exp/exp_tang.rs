@@ -373,13 +373,15 @@ mod tests {
     use crate::types::widths::{D307, D76};
     use crate::RoundingMode;
 
-    const MODES: [RoundingMode; 6] = [
+    const MODES: [RoundingMode; 8] = [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
         RoundingMode::HalfTowardZero,
         RoundingMode::Trunc,
         RoundingMode::Floor,
         RoundingMode::Ceiling,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ];
 
     #[test]
@@ -430,6 +432,16 @@ mod powf_deep_underflow_regression {
         RoundingMode::Floor,
     ];
 
+    /// The three modes that round a sub-resolution positive UP to 1 ULP:
+    /// `Ceiling` (toward +∞), `AwayFromZero` (anything discarded), and
+    /// `ZeroFiveUp` (the retained digit is `0`, one of its two bump
+    /// digits). Together with `DOWN_MODES` these cover all eight.
+    const UP_MODES: [RoundingMode; 3] = [
+        RoundingMode::Ceiling,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
+    ];
+
     /// `"0.00…01"` — one storage ULP at `scale` (the smallest positive).
     fn one_ulp_str(scale: usize) -> String {
         let mut s = String::from("0.");
@@ -442,7 +454,7 @@ mod powf_deep_underflow_regression {
 
     #[cfg(any(feature = "d57", feature = "wide"))]
     #[test]
-    fn powf_2_neg200_d57_mid_scales_six_modes() {
+    fn powf_2_neg200_d57_mid_scales_eight_modes() {
         use crate::types::widths::D57;
         // s28 is the exact golden cell; s42 a second mid-scale, both < 61.
         macro_rules! check_d57 {
@@ -457,10 +469,12 @@ mod powf_deep_underflow_regression {
                         "D57<{}> powf(2,-200) {m:?} must round the sub-resolution positive to 0", $s
                     );
                 }
-                assert_eq!(
-                    base.powf_strict_with(exp, RoundingMode::Ceiling), one_ulp,
-                    "D57<{}> powf(2,-200) Ceiling must round the sub-resolution positive up to 1 ULP", $s
-                );
+                for m in UP_MODES {
+                    assert_eq!(
+                        base.powf_strict_with(exp, m), one_ulp,
+                        "D57<{}> powf(2,-200) {m:?} must round the sub-resolution positive up to 1 ULP", $s
+                    );
+                }
             }};
         }
         check_d57!(28);
@@ -469,7 +483,7 @@ mod powf_deep_underflow_regression {
 
     #[cfg(any(feature = "d76", feature = "wide"))]
     #[test]
-    fn powf_2_neg200_d76_mid_scales_six_modes() {
+    fn powf_2_neg200_d76_mid_scales_eight_modes() {
         use crate::types::widths::D76;
         macro_rules! check_d76 {
             ($s:literal) => {{
@@ -483,10 +497,12 @@ mod powf_deep_underflow_regression {
                         "D76<{}> powf(2,-200) {m:?} must round the sub-resolution positive to 0", $s
                     );
                 }
-                assert_eq!(
-                    base.powf_strict_with(exp, RoundingMode::Ceiling), one_ulp,
-                    "D76<{}> powf(2,-200) Ceiling must round the sub-resolution positive up to 1 ULP", $s
-                );
+                for m in UP_MODES {
+                    assert_eq!(
+                        base.powf_strict_with(exp, m), one_ulp,
+                        "D76<{}> powf(2,-200) {m:?} must round the sub-resolution positive up to 1 ULP", $s
+                    );
+                }
             }};
         }
         check_d76!(40);

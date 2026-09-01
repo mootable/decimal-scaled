@@ -107,13 +107,15 @@ mod tests {
     use crate::int::types::Int;
     use crate::support::rounding::RoundingMode;
 
-    const ALL_MODES: [RoundingMode; 6] = [
+    const ALL_MODES: [RoundingMode; 8] = [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
         RoundingMode::HalfTowardZero,
         RoundingMode::Trunc,
         RoundingMode::Floor,
         RoundingMode::Ceiling,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ];
 
     #[test]

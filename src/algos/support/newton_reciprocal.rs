@@ -1033,6 +1033,8 @@ mod tests {
             RoundingMode::Trunc,
             RoundingMode::Floor,
             RoundingMode::Ceiling,
+            RoundingMode::AwayFromZero,
+            RoundingMode::ZeroFiveUp,
         ];
 
         for mode in modes {

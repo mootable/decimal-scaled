@@ -3299,13 +3299,15 @@ mod forward_rung_tests {
         feature = "d924",
         feature = "d1232"
     ))]
-    const ALL_MODES: [crate::support::rounding::RoundingMode; 6] = [
+    const ALL_MODES: [crate::support::rounding::RoundingMode; 8] = [
         crate::support::rounding::RoundingMode::HalfToEven,
         crate::support::rounding::RoundingMode::HalfAwayFromZero,
         crate::support::rounding::RoundingMode::HalfTowardZero,
         crate::support::rounding::RoundingMode::Trunc,
         crate::support::rounding::RoundingMode::Floor,
         crate::support::rounding::RoundingMode::Ceiling,
+        crate::support::rounding::RoundingMode::AwayFromZero,
+        crate::support::rounding::RoundingMode::ZeroFiveUp,
     ];
 
     /// D307<0> rung anchors: the gate admits |x| < ~10^8 and the rung
@@ -3644,21 +3646,30 @@ mod forward_rung_tests {
         let x = crate::D::<Int<24>, 461>(raw);
         for mode in ALL_MODES {
             let nearest = crate::support::rounding::is_nearest_mode(mode);
-            // sinh / atanh: expanding odd (true value just ABOVE raw).
+            // sinh / atanh: expanding odd (true value just ABOVE raw). The
+            // toward-zero result is `raw` = 10^293, whose last digit is `0`
+            // — a `ZeroFiveUp` pivot — so it steps up with `AwayFromZero`
+            // and `Ceiling`.
             let expand = if nearest {
                 raw
             } else {
                 match mode {
-                    crate::support::rounding::RoundingMode::Ceiling => raw + one,
+                    crate::support::rounding::RoundingMode::Ceiling
+                    | crate::support::rounding::RoundingMode::AwayFromZero
+                    | crate::support::rounding::RoundingMode::ZeroFiveUp => raw + one,
                     _ => raw,
                 }
             };
-            // tanh / asinh: compressing odd (true value just BELOW raw).
+            // tanh / asinh: compressing odd (true value just BELOW raw). Here
+            // the toward-zero result is `raw - 1` = 10^293 − 1, ending in `9`
+            // — no pivot — so `ZeroFiveUp` keeps it while `AwayFromZero`
+            // steps the magnitude back up to `raw`.
             let compress = if nearest {
                 raw
             } else {
                 match mode {
-                    crate::support::rounding::RoundingMode::Ceiling => raw,
+                    crate::support::rounding::RoundingMode::Ceiling
+                    | crate::support::rounding::RoundingMode::AwayFromZero => raw,
                     _ => raw - one,
                 }
             };

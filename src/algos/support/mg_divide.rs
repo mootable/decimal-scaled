@@ -1793,7 +1793,7 @@ mod tests {
         }
     }
 
-    fn all_modes() -> [crate::support::rounding::RoundingMode; 6] {
+    fn all_modes() -> [crate::support::rounding::RoundingMode; 8] {
         use crate::support::rounding::RoundingMode::*;
         [
             HalfToEven,
@@ -1802,6 +1802,8 @@ mod tests {
             Trunc,
             Floor,
             Ceiling,
+            AwayFromZero,
+            ZeroFiveUp,
         ]
     }
 

@@ -172,19 +172,21 @@ mod tests {
     use crate::support::rounding::RoundingMode;
 
     const SCALE: u32 = 20;
-    const ALL_MODES: [RoundingMode; 6] = [
+    const ALL_MODES: [RoundingMode; 8] = [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
         RoundingMode::HalfTowardZero,
         RoundingMode::Trunc,
         RoundingMode::Floor,
         RoundingMode::Ceiling,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ];
 
     /// Generic `cbrt_native<N, W>` is bit-identical to the proven-correct
     /// generic `cbrt_newton` for each routed `(N, W, SCALE)` cell across a
     /// spread of raw storages (perfect cubes, negatives, near-zero, large)
-    /// and all six rounding modes. `cbrt_newton` is oracle-gated by
+    /// and all eight rounding modes. `cbrt_newton` is oracle-gated by
     /// `ulp_strict_golden`, so matching it certifies the bespoke arm
     /// correctly-rounded.
     fn check_cell<const N: usize, const W: usize>(scale: u32, raws: &[i128])

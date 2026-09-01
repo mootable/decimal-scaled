@@ -4,7 +4,7 @@
 //! Wide-tier ln Series-vs-Tang map (the N-way width x scale x algorithm x
 //! GUARD sweep). For each wide tier, at the 5-point scale set
 //! {0, S/4, S/2, 3S/4, S-1}, asserts each Tang candidate == Series across
-//! the operand spread x all six modes (the **validity wall** -- if any
+//! the operand spread x all eight modes (the **validity wall** -- if any
 //! disagree, single-shot Tang is not correctly-rounded there, that candidate
 //! is reported INVALID and dropped), then ranks the surviving Tang
 //! candidates against Series.
@@ -37,13 +37,15 @@ mod ab_microbench;
 use ab_microbench::{compare_all, micro_criterion};
 
 const MODE: RoundingMode = RoundingMode::HalfToEven;
-const ALL_MODES: [RoundingMode; 6] = [
+const ALL_MODES: [RoundingMode; 8] = [
     RoundingMode::HalfToEven,
     RoundingMode::HalfAwayFromZero,
     RoundingMode::HalfTowardZero,
     RoundingMode::Trunc,
     RoundingMode::Floor,
     RoundingMode::Ceiling,
+    RoundingMode::AwayFromZero,
+    RoundingMode::ZeroFiveUp,
 ];
 
 /// `acc = acc * m + add`, in place across the little-endian limb array. Pure

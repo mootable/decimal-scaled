@@ -222,13 +222,15 @@ mod tests {
     use crate::D;
     use crate::support::rounding::RoundingMode;
 
-    const MODES: [RoundingMode; 6] = [
+    const MODES: [RoundingMode; 8] = [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
         RoundingMode::HalfTowardZero,
         RoundingMode::Trunc,
         RoundingMode::Floor,
         RoundingMode::Ceiling,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ];
 
     // ── narrow tier: D38, scale 12 (1 unit = 10^12) ──────────────────
@@ -316,7 +318,11 @@ mod tests {
         ] {
             for &mode in &MODES {
                 let want = match mode {
-                    RoundingMode::Trunc | RoundingMode::Floor => FLOOR,
+                    // `ZeroFiveUp` keeps the floor with them: `FLOOR` ends in
+                    // `9`, not one of its `0`/`5` pivots. `AwayFromZero` is in
+                    // the `_` arm — the value is positive with a non-zero
+                    // discard, so it steps up like `Ceiling`.
+                    RoundingMode::Trunc | RoundingMode::Floor | RoundingMode::ZeroFiveUp => FLOOR,
                     _ => UP,
                 };
                 let got = D::<Int<2>, 28>(Int::<2>::from_i128(raw))
@@ -362,10 +368,14 @@ mod tests {
         // 1-ULP-high value the borrow-D57 routed path returns here.
         // pi/4 = ...397.4483 -> nearest rounds DOWN to ...397, and the
         // truncating/flooring modes agree (value is positive, fraction
-        // below .5). The schoolbook returns the quarter-pi constant
-        // (the exact endpoint identity), matching the routed narrow
-        // kernel; assert it equals the externally-correct ...397 for the
-        // modes where that constant is the correctly-rounded result.
+        // below .5). `ZeroFiveUp` agrees too: its toward-zero result ends
+        // in 7, not one of its two bump digits, so it truncates.
+        // `AwayFromZero` is excluded with `Ceiling` — both step a positive
+        // discard up to ...398. The schoolbook returns the quarter-pi
+        // constant (the exact endpoint identity), matching the routed
+        // narrow kernel; assert it equals the externally-correct ...397
+        // for the modes where that constant is the correctly-rounded
+        // result.
         const PI_OVER_4_S12: i128 = 785_398_163_397;
         let one_bits: i128 = 10_i128.pow(S38);
         for &mode in &[
@@ -374,6 +384,7 @@ mod tests {
             RoundingMode::HalfTowardZero,
             RoundingMode::Trunc,
             RoundingMode::Floor,
+            RoundingMode::ZeroFiveUp,
         ] {
             assert_eq!(
                 atan_schoolbook_narrow::<S38>(d38(one_bits).0, mode),
@@ -382,13 +393,16 @@ mod tests {
             );
         }
         // atan(-1) = -pi/4 = -...397.4483: nearest + ceiling/trunc round
-        // toward zero to -...397.
+        // toward zero to -...397, and `ZeroFiveUp` truncates with them
+        // (magnitude ends in 7). `AwayFromZero` is excluded with `Floor`
+        // — both step the magnitude up to -...398.
         for &mode in &[
             RoundingMode::HalfToEven,
             RoundingMode::HalfAwayFromZero,
             RoundingMode::HalfTowardZero,
             RoundingMode::Trunc,
             RoundingMode::Ceiling,
+            RoundingMode::ZeroFiveUp,
         ] {
             assert_eq!(
                 atan_schoolbook_narrow::<S38>(d38(-one_bits).0, mode),

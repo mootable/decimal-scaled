@@ -32,7 +32,7 @@
 //! - `skew`   — one operand single-limb, the other full width (fast branch
 //!   falls through: the radicand of a wide × narrow pair does not fit u128).
 //!
-//! Two registered arms (both bit-identical across all six RoundingModes —
+//! Two registered arms (both bit-identical across all eight RoundingModes —
 //! asserted before timing):
 //! - `pythagoras` -> `hypot_pythagoras` (the production kernel).
 //! - `u128_fast`  -> `hypot_u128_fast` (the candidate).
@@ -47,13 +47,15 @@ use decimal_scaled::{Int, RoundingMode};
 mod ab_microbench;
 use ab_microbench::{compare_all, micro_criterion};
 
-const ALL_MODES: [RoundingMode; 6] = [
+const ALL_MODES: [RoundingMode; 8] = [
     RoundingMode::HalfToEven,
     RoundingMode::HalfAwayFromZero,
     RoundingMode::HalfTowardZero,
     RoundingMode::Trunc,
     RoundingMode::Floor,
     RoundingMode::Ceiling,
+    RoundingMode::AwayFromZero,
+    RoundingMode::ZeroFiveUp,
 ];
 
 const MODE: RoundingMode = RoundingMode::HalfToEven;

@@ -1963,13 +1963,15 @@ mod near_tie_pins {
 mod hyper_fast_path_validity {
     use super::*;
 
-    const MODES: [RoundingMode; 6] = [
+    const MODES: [RoundingMode; 8] = [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
         RoundingMode::HalfTowardZero,
         RoundingMode::Ceiling,
         RoundingMode::Floor,
         RoundingMode::Trunc,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ];
 
     /// FAST sinh/cosh in `Fixed`, no gate — catching any overflow panic.

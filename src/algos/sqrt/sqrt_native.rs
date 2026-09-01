@@ -125,18 +125,20 @@ mod tests {
     use crate::int::types::Int;
     use crate::support::rounding::RoundingMode;
 
-    const ALL_MODES: [RoundingMode; 6] = [
+    const ALL_MODES: [RoundingMode; 8] = [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
         RoundingMode::HalfTowardZero,
         RoundingMode::Trunc,
         RoundingMode::Floor,
         RoundingMode::Ceiling,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ];
 
     /// `sqrt_native` is bit-identical to the proven-correct generic
     /// `sqrt_newton` across a spread of raw storages (incl. perfect
-    /// squares, near-zero, large boundary radicands) and all six rounding
+    /// squares, near-zero, large boundary radicands) and all eight rounding
     /// modes, for each `(N, W, SCALE)` cell the policy routes to it. The
     /// generic kernel is oracle-gated by `ulp_strict_golden`, so matching
     /// it certifies the bespoke arm correctly-rounded.
