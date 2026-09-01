@@ -763,7 +763,7 @@ pub(crate) fn sqrt_raw_with(
             RoundingMode::Trunc | RoundingMode::Floor => false,
             RoundingMode::Ceiling | RoundingMode::AwayFromZero => diff_nonzero,
             // The radicand is non-negative, so away-from-zero is up.
-            RoundingMode::ZeroFiveUp => diff_nonzero && matches!(q % 10, 0 | 5),
+            RoundingMode::ZeroFiveUp => diff_nonzero && matches!(root % 10, 0 | 5),
         };
         return if bump { root + 1 } else { root };
     }
@@ -787,7 +787,7 @@ pub(crate) fn sqrt_raw_with(
         RoundingMode::Trunc | RoundingMode::Floor => false,
         RoundingMode::Ceiling | RoundingMode::AwayFromZero => diff_nonzero,
         // The radicand is non-negative, so away-from-zero is up.
-        RoundingMode::ZeroFiveUp => diff_nonzero && matches!(q % 10, 0 | 5),
+        RoundingMode::ZeroFiveUp => diff_nonzero && matches!(root % 10, 0 | 5),
     };
     if bump { root + 1 } else { root }
 }
@@ -1798,7 +1798,7 @@ mod tests {
             | RoundingMode::HalfTowardZero => halfway_round_up,
             RoundingMode::Trunc | RoundingMode::Floor => false,
             RoundingMode::Ceiling | RoundingMode::AwayFromZero => diff_nonzero,
-            RoundingMode::ZeroFiveUp => diff_nonzero && matches!(q % 10, 0 | 5),
+            RoundingMode::ZeroFiveUp => diff_nonzero && matches!(root % 10, 0 | 5),
         };
         if bump { root + 1 } else { root }
     }

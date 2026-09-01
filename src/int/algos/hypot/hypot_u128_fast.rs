@@ -482,7 +482,7 @@ fn finish<const N: usize>(root: u128, diff_nonzero: bool, halfway_round_up: bool
         RoundingMode::Trunc | RoundingMode::Floor => false,
         // A hypotenuse is non-negative, so up IS away from zero.
         RoundingMode::Ceiling | RoundingMode::AwayFromZero => diff_nonzero,
-        RoundingMode::ZeroFiveUp => diff_nonzero && matches!(q % 10, 0 | 5),
+        RoundingMode::ZeroFiveUp => diff_nonzero && matches!(root % 10, 0 | 5),
     };
     // root < 2^128 and the bump is at most +1, so the rounded value is
     // <= 2^128. When root == u128::MAX (= 2^128-1) and bump, the sum is

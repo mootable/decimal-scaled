@@ -249,14 +249,18 @@ where
             // negative — the exact mirror of the Trunc arm above.
             RoundingMode::AwayFromZero => {
                 if y_raw >= zero {
-                    r_c
+                    ceiling_probe
                 } else {
-                    r_f
+                    floor_probe
                 }
             }
             RoundingMode::ZeroFiveUp => {
                 use crate::int::types::traits::BigInt as _;
-                let (toward_zero, away) = if y_raw >= zero { (r_f, r_c) } else { (r_c, r_f) };
+                let (toward_zero, away) = if y_raw >= zero {
+                    (floor_probe, ceiling_probe)
+                } else {
+                    (ceiling_probe, floor_probe)
+                };
                 let mag = if toward_zero < zero {
                     zero - toward_zero
                 } else {
@@ -604,14 +608,18 @@ where
             // negative — the exact mirror of the Trunc arm above.
             RoundingMode::AwayFromZero => {
                 if y_raw >= zero {
-                    r_c
+                    ceiling_probe
                 } else {
-                    r_f
+                    floor_probe
                 }
             }
             RoundingMode::ZeroFiveUp => {
                 use crate::int::types::traits::BigInt as _;
-                let (toward_zero, away) = if y_raw >= zero { (r_f, r_c) } else { (r_c, r_f) };
+                let (toward_zero, away) = if y_raw >= zero {
+                    (floor_probe, ceiling_probe)
+                } else {
+                    (ceiling_probe, floor_probe)
+                };
                 let mag = if toward_zero < zero {
                     zero - toward_zero
                 } else {

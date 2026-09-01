@@ -108,10 +108,10 @@ where
         RoundingMode::Trunc | RoundingMode::Floor => false,
         // The radicand is non-negative, so up IS away from zero.
         RoundingMode::Ceiling | RoundingMode::AwayFromZero => diff_nonzero,
-        // The last decimal digit spans the whole `ql`-limb root.
+        // The last decimal digit spans the whole `root_len`-limb root.
         RoundingMode::ZeroFiveUp => {
             diff_nonzero
-                && matches!(crate::support::rounding::limbs_mod_10(&q[..ql]), 0 | 5)
+                && matches!(crate::support::rounding::limbs_mod_10(&root[..root_len]), 0 | 5)
         }
     };
     if bump {

@@ -111,7 +111,7 @@ pub(crate) fn sqrt_native<const N: usize, const W: usize>(
         // The radicand is non-negative, so up IS away from zero.
         RoundingMode::Ceiling | RoundingMode::AwayFromZero => diff_nonzero,
         RoundingMode::ZeroFiveUp => {
-            diff_nonzero && matches!((q % Int::<W>::TEN).as_i128(), 0 | 5)
+            diff_nonzero && matches!((root % Int::<W>::TEN).as_i128(), 0 | 5)
         }
     };
     let root = if bump { root + one } else { root };

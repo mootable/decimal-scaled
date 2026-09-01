@@ -727,8 +727,8 @@ pub(crate) fn tiny_x_linear_directed<St: BigInt, const SCALE: u32>(
     // `one` is ONE STORAGE ULP (the integer `1`), the step the directed
     // decision adds/drops — NOT `10^SCALE` (the value 1.0).
     let one = <St as BigInt>::ONE;
-    // `ZeroFiveUp`'s pivot digit; `absr` is already the magnitude.
-    let raw_mod_10 = absr.div_rem(<St as BigInt>::TEN).1.to_i128() as u8;
+    // `ZeroFiveUp`'s pivot digit; `abs_raw` is already the magnitude.
+    let raw_mod_10 = abs_raw.div_rem(<St as BigInt>::TEN).1.to_i128() as u8;
     Some(if expanding {
         crate::support::rounding::tiny_odd_expanding_directed(raw, zero, one, raw_mod_10, mode)
     } else {
