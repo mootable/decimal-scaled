@@ -15,9 +15,9 @@ use crate::int::types::Int;
 /// [`add_assign_fixed`], discarding the carry-out so the result wraps
 /// modulo `2^BITS` (two's-complement wrapping semantics).
 #[inline]
-pub(crate) const fn add_ripple_carry<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
-    let mut limbs = *a.as_limbs();
-    add_assign_fixed(&mut limbs, b.as_limbs());
+pub(crate) const fn add_ripple_carry<const N: usize>(lhs: Int<N>, rhs: Int<N>) -> Int<N> {
+    let mut limbs = *lhs.as_limbs();
+    add_assign_fixed(&mut limbs, rhs.as_limbs());
     Int::<N>::from_limbs(limbs)
 }
 
@@ -32,25 +32,25 @@ pub(crate) const fn add_ripple_carry<const N: usize>(a: Int<N>, b: Int<N>) -> In
 /// layers; fusing removes them.
 #[inline]
 pub(crate) const fn add_ripple_carry_checked<const N: usize>(
-    a: Int<N>,
-    b: Int<N>,
+    lhs: Int<N>,
+    rhs: Int<N>,
 ) -> Option<Int<N>> {
-    let av = a.as_limbs();
-    let bv = b.as_limbs();
+    let lhs_limbs = lhs.as_limbs();
+    let rhs_limbs = rhs.as_limbs();
     let mut out = [0u64; N];
     let mut carry = 0u64;
     let mut i = 0;
     while i < N {
-        let (s1, c1) = av[i].overflowing_add(bv[i]);
+        let (s1, c1) = lhs_limbs[i].overflowing_add(rhs_limbs[i]);
         let (s2, c2) = s1.overflowing_add(carry);
         out[i] = s2;
         carry = (c1 as u64) + (c2 as u64);
         i += 1;
     }
-    let sa = av[N - 1] >> 63;
-    let sb = bv[N - 1] >> 63;
-    let sr = out[N - 1] >> 63;
-    if sa == sb && sr != sa {
+    let lhs_sign = lhs_limbs[N - 1] >> 63;
+    let rhs_sign = rhs_limbs[N - 1] >> 63;
+    let result_sign = out[N - 1] >> 63;
+    if lhs_sign == rhs_sign && result_sign != lhs_sign {
         None
     } else {
         Some(Int::<N>::from_limbs(out))

@@ -46,11 +46,11 @@ pub(crate) const fn pow_schoolbook<const N: usize>(base: Uint<N>, exp: u32) -> U
     // Start accumulator at `base`; multiply by `base` for each
     // remaining factor (exp - 1 total multiplications).
     let mut acc = *base.as_limbs();
-    let b = *base.as_limbs();
+    let base_limbs = *base.as_limbs();
     let mut remaining = exp - 1;
     while remaining > 0 {
         let mut prod = [0u64; N];
-        mul_low_fixed(&acc, &b, &mut prod);
+        mul_low_fixed(&acc, &base_limbs, &mut prod);
         acc = prod;
         remaining -= 1;
     }
