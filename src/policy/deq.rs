@@ -85,22 +85,22 @@ const fn select<const N: usize, const S1: u32, const S2: u32>() -> Select<N> {
 
 /// Cross-width same-scale equality: plain integer equal on raw storage.
 #[inline]
-const fn eq_same_scale<const N: usize, const M: usize>(a: Int<N>, b: Int<M>) -> bool {
+const fn eq_same_scale<const N: usize, const M: usize>(lhs: Int<N>, rhs: Int<M>) -> bool {
     // Same scale: values are equal iff storage is equal (after cross-width
     // sign-extension). Delegate to the cross-scale comparator keyed at
     // d=0 — or equivalently, call cmp_cross and test for Equal.
     use core::cmp::Ordering;
-    matches!(a.cmp_cross(b), Ordering::Equal)
+    matches!(lhs.cmp_cross(rhs), Ordering::Equal)
 }
 
 /// Cross-width cross-scale equality: test that the comparison is `Equal`.
 #[inline]
 const fn eq_scaled_diff<const N: usize, const M: usize, const S1: u32, const S2: u32>(
-    a: Int<N>,
-    b: Int<M>,
+    lhs: Int<N>,
+    rhs: Int<M>,
 ) -> bool {
     use core::cmp::Ordering;
-    matches!(dcmp_dispatch::<N, M, S1, S2>(a, b), Ordering::Equal)
+    matches!(dcmp_dispatch::<N, M, S1, S2>(lhs, rhs), Ordering::Equal)
 }
 
 // ── 4. the dispatcher: fold the verdict, then dispatch ────────────────
@@ -118,15 +118,15 @@ pub(crate) const fn deq_dispatch<
     const S1: u32,
     const S2: u32,
 >(
-    a: Int<N>,
-    b: Int<M>,
+    lhs: Int<N>,
+    rhs: Int<M>,
 ) -> bool {
     let algo = match const { select::<N, S1, S2>() } {
-        Select::ByAlgorithm(a) => a,
+        Select::ByAlgorithm(algorithm) => algorithm,
         Select::ByValue(_) => Algorithm::SameScale,
     };
     match algo {
-        Algorithm::SameScale => eq_same_scale::<N, M>(a, b),
-        Algorithm::ScaledDiff => eq_scaled_diff::<N, M, S1, S2>(a, b),
+        Algorithm::SameScale => eq_same_scale::<N, M>(lhs, rhs),
+        Algorithm::ScaledDiff => eq_scaled_diff::<N, M, S1, S2>(lhs, rhs),
     }
 }

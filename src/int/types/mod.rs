@@ -167,21 +167,21 @@ impl<const N: usize> Uint<N> {
     /// `2^BITS`.
     #[inline]
     pub fn checked_mul(self, rhs: Self) -> Option<Self> {
-        let (a, b) = (&self.limbs, &rhs.limbs);
+        let (lhs_limbs, rhs_limbs) = (&self.limbs, &rhs.limbs);
         let mut out = [0u64; N];
         let mut overflow = false;
         let mut i = 0;
         while i < N {
-            let ai = a[i];
-            if ai != 0 {
+            let lhs_limb = lhs_limbs[i];
+            if lhs_limb != 0 {
                 let mut carry: u64 = 0;
                 let mut j = 0;
                 while j < N {
-                    let prod = (ai as u128) * (b[j] as u128);
+                    let prod = (lhs_limb as u128) * (rhs_limbs[j] as u128);
                     if i + j < N {
-                        let v = prod + (out[i + j] as u128) + (carry as u128);
-                        out[i + j] = v as u64;
-                        carry = (v >> 64) as u64;
+                        let column = prod + (out[i + j] as u128) + (carry as u128);
+                        out[i + j] = column as u64;
+                        carry = (column >> 64) as u64;
                     } else if prod != 0 || carry != 0 {
                         // Any product or carry landing at/above limb `N`
                         // means the true product exceeds the width.
@@ -439,8 +439,8 @@ impl<const N: usize> Uint<N> {
             return (Self::ONE, true);
         }
         if k == 2 {
-            let r = self.isqrt();
-            return (r, r.wrapping_sqr() == self);
+            let root = self.isqrt();
+            return (root, root.wrapping_sqr() == self);
         }
 
         // Seed: 2^ceil(bit_length / k) is an upper bound on the root.
@@ -470,7 +470,7 @@ impl<const N: usize> Uint<N> {
             s = u;
         }
 
-        let exact = s.checked_pow(k).is_some_and(|p| p == self);
+        let exact = s.checked_pow(k).is_some_and(|power| power == self);
         (s, exact)
     }
 
@@ -485,27 +485,27 @@ impl<const N: usize> Uint<N> {
     }
 
     /// Builds from an unsigned 128-bit value, zero-extending the upper
-    /// limbs. **Truncating** for `Uint<1>` (the high 64 bits of `v` are
-    /// discarded); use the checked `TryFrom` conversion when `v` may
+    /// limbs. **Truncating** for `Uint<1>` (the high 64 bits of `value` are
+    /// discarded); use the checked `TryFrom` conversion when `value` may
     /// not fit.
     #[inline]
-    pub(crate) const fn from_u128(v: u128) -> Self {
+    pub(crate) const fn from_u128(value: u128) -> Self {
         let mut limbs = [0u64; N];
         if N > 0 {
-            limbs[0] = v as u64;
+            limbs[0] = value as u64;
         }
         if N > 1 {
-            limbs[1] = (v >> 64) as u64;
+            limbs[1] = (value >> 64) as u64;
         }
         Self { limbs }
     }
 
-    /// Exact value conversion from `u128`, or `None` if `v` does not fit
+    /// Exact value conversion from `u128`, or `None` if `value` does not fit
     /// `Uint<N>` (only possible for `N < 2`). For `N >= 2` every `u128` fits.
     #[inline]
-    pub(crate) const fn try_from_u128(v: u128) -> Option<Self> {
-        if N >= 2 || v <= u64::MAX as u128 {
-            Some(Self::from_u128(v))
+    pub(crate) const fn try_from_u128(value: u128) -> Option<Self> {
+        if N >= 2 || value <= u64::MAX as u128 {
+            Some(Self::from_u128(value))
         } else {
             None
         }
@@ -567,11 +567,11 @@ impl<const N: usize> Uint<N> {
     }
 
     /// Parses an unsigned decimal string. Only base 10 is supported.
-    pub const fn from_str_radix(s: &str, radix: u32) -> Result<Self, ()> {
+    pub const fn from_str_radix(text: &str, radix: u32) -> Result<Self, ()> {
         if radix != 10 {
             return Err(());
         }
-        let bytes = s.as_bytes();
+        let bytes = text.as_bytes();
         if bytes.is_empty() {
             return Err(());
         }
@@ -582,13 +582,13 @@ impl<const N: usize> Uint<N> {
             if ch < b'0' || ch > b'9' {
                 return Err(());
             }
-            let d = (ch - b'0') as u64;
-            let mut carry: u64 = d;
+            let digit = (ch - b'0') as u64;
+            let mut carry: u64 = digit;
             let mut j = 0;
             while j < N {
-                let p = (acc[j] as u128) * 10u128 + (carry as u128);
-                acc[j] = p as u64;
-                carry = (p >> 64) as u64;
+                let product = (acc[j] as u128) * 10u128 + (carry as u128);
+                acc[j] = product as u64;
+                carry = (product >> 64) as u64;
                 j += 1;
             }
             k += 1;
@@ -677,10 +677,10 @@ impl<const N: usize> Div for Uint<N> {
     type Output = Self;
     #[inline]
     fn div(self, rhs: Self) -> Self {
-        let mut q = [0u64; N];
-        let mut r = [0u64; N];
-        div_rem_dispatch(&self.limbs, &rhs.limbs, &mut q, &mut r);
-        Self { limbs: q }
+        let mut quotient = [0u64; N];
+        let mut remainder = [0u64; N];
+        div_rem_dispatch(&self.limbs, &rhs.limbs, &mut quotient, &mut remainder);
+        Self { limbs: quotient }
     }
 }
 
@@ -688,10 +688,10 @@ impl<const N: usize> Rem for Uint<N> {
     type Output = Self;
     #[inline]
     fn rem(self, rhs: Self) -> Self {
-        let mut q = [0u64; N];
-        let mut r = [0u64; N];
-        div_rem_dispatch(&self.limbs, &rhs.limbs, &mut q, &mut r);
-        Self { limbs: r }
+        let mut quotient = [0u64; N];
+        let mut remainder = [0u64; N];
+        div_rem_dispatch(&self.limbs, &rhs.limbs, &mut quotient, &mut remainder);
+        Self { limbs: remainder }
     }
 }
 
@@ -904,10 +904,10 @@ impl<const N: usize> Int<N> {
     /// `Int<N>`. Only `N == 1` (64-bit storage) can fail; `N >= 2` holds
     /// every `i128`.
     #[inline]
-    pub(crate) const fn try_from_i128(v: i128) -> Option<Self> {
-        let mag = v.unsigned_abs();
-        let built = Self::from_mag_limbs(&[mag as u64, (mag >> 64) as u64], v < 0);
-        if N >= 2 || built.as_i128() == v {
+    pub(crate) const fn try_from_i128(value: i128) -> Option<Self> {
+        let mag = value.unsigned_abs();
+        let built = Self::from_mag_limbs(&[mag as u64, (mag >> 64) as u64], value < 0);
+        if N >= 2 || built.as_i128() == value {
             Some(built)
         } else {
             None
@@ -918,14 +918,14 @@ impl<const N: usize> Int<N> {
     /// `Int<N>`. `N == 1` fails above `i64::MAX`; `N == 2` fails above
     /// `i128::MAX` (the sign bit); `N >= 3` holds every `u128`.
     #[inline]
-    pub(crate) const fn try_from_u128(v: u128) -> Option<Self> {
-        let built = Self::from_mag_limbs(&[v as u64, (v >> 64) as u64], false);
+    pub(crate) const fn try_from_u128(value: u128) -> Option<Self> {
+        let built = Self::from_mag_limbs(&[value as u64, (value >> 64) as u64], false);
         if N >= 3 {
             Some(built)
         } else if built.is_negative() {
             // Magnitude landed in the sign bit of the N-limb storage.
             None
-        } else if N >= 2 || built.as_i128() as u128 == v {
+        } else if N >= 2 || built.as_i128() as u128 == value {
             Some(built)
         } else {
             None
@@ -951,7 +951,8 @@ impl<const N: usize> Int<N> {
     #[inline]
     pub(crate) fn try_to_i32(self) -> Option<i32> {
         match self.to_i128_checked() {
-            Some(v) if v >= i32::MIN as i128 && v <= i32::MAX as i128 => Some(v as i32),
+            Some(wide) if wide >= i32::MIN as i128 && wide <= i32::MAX as i128 =>
+                Some(wide as i32),
             _ => None,
         }
     }
@@ -960,7 +961,7 @@ impl<const N: usize> Int<N> {
     #[inline]
     pub(crate) fn try_to_u32(self) -> Option<u32> {
         match self.to_u128_checked() {
-            Some(v) if v <= u32::MAX as u128 => Some(v as u32),
+            Some(wide) if wide <= u32::MAX as u128 => Some(wide as u32),
             _ => None,
         }
     }
@@ -969,7 +970,8 @@ impl<const N: usize> Int<N> {
     #[inline]
     pub(crate) fn try_to_i64(self) -> Option<i64> {
         match self.to_i128_checked() {
-            Some(v) if v >= i64::MIN as i128 && v <= i64::MAX as i128 => Some(v as i64),
+            Some(wide) if wide >= i64::MIN as i128 && wide <= i64::MAX as i128 =>
+                Some(wide as i64),
             _ => None,
         }
     }
@@ -978,7 +980,7 @@ impl<const N: usize> Int<N> {
     #[inline]
     pub(crate) fn try_to_u64(self) -> Option<u64> {
         match self.to_u128_checked() {
-            Some(v) if v <= u64::MAX as u128 => Some(v as u64),
+            Some(wide) if wide <= u64::MAX as u128 => Some(wide as u64),
             _ => None,
         }
     }
@@ -1062,17 +1064,17 @@ impl<const N: usize> Int<N> {
         if self.is_zero() || rhs.is_zero() {
             return Some(Self::ZERO);
         }
-        let neg = self.is_negative() ^ rhs.is_negative();
-        let ma = Uint::<N>::from_limbs(*self.abs().as_limbs());
-        let mb = Uint::<N>::from_limbs(*rhs.abs().as_limbs());
-        let prod = ma.checked_mul(mb)?;
+        let negative = self.is_negative() ^ rhs.is_negative();
+        let lhs_mag = Uint::<N>::from_limbs(*self.abs().as_limbs());
+        let rhs_mag = Uint::<N>::from_limbs(*rhs.abs().as_limbs());
+        let prod = lhs_mag.checked_mul(rhs_mag)?;
         let signed = Self::from_limbs(*prod.as_limbs());
-        if neg {
-            let r = signed.wrapping_neg();
+        if negative {
+            let negated = signed.wrapping_neg();
             // Negative magnitude must not exceed |MIN|; the round-trip
             // through wrapping_neg detects the single MIN-magnitude case.
-            if r.is_negative() || r.is_zero() {
-                Some(r)
+            if negated.is_negative() || negated.is_zero() {
+                Some(negated)
             } else {
                 None
             }
@@ -1218,9 +1220,9 @@ impl<const N: usize> Int<N> {
             &mut quot,
             &mut rem,
         );
-        let q = Self::from_mag_limbs(&quot, neg_q);
-        let r = Self::from_mag_limbs(&rem, neg_r);
-        (q, r)
+        let quotient = Self::from_mag_limbs(&quot, neg_q);
+        let remainder = Self::from_mag_limbs(&rem, neg_r);
+        (quotient, remainder)
     }
 
     /// Builds a signed value from a non-negative magnitude limb slice
@@ -1228,19 +1230,19 @@ impl<const N: usize> Int<N> {
     #[inline]
     pub(crate) const fn from_mag_limbs(mag: &[u64], negative: bool) -> Self {
         let mut out = [0u64; N];
-        let n = if mag.len() < N { mag.len() } else { N };
+        let copy_len = if mag.len() < N { mag.len() } else { N };
         let mut i = 0;
-        while i < n {
+        while i < copy_len {
             out[i] = mag[i];
             i += 1;
         }
-        let v = Self { limbs: out };
+        let built = Self { limbs: out };
         // Inherent `const` zero-check (avoids the non-const `BigInt`
         // trait method that name-resolution would otherwise pick here).
-        if negative && !is_zero_fixed(&v.limbs) {
-            v.wrapping_neg()
+        if negative && !is_zero_fixed(&built.limbs) {
+            built.wrapping_neg()
         } else {
-            v
+            built
         }
     }
 
@@ -1255,10 +1257,10 @@ impl<const N: usize> Int<N> {
     }
 
     /// Builds from a signed 128-bit value. **Truncating** for `Int<1>`
-    /// (the high 64 bits of `v` are discarded); use the checked `TryFrom`
-    /// conversion when `v` may not fit.
+    /// (the high 64 bits of `value` are discarded); use the checked `TryFrom`
+    /// conversion when `value` may not fit.
     #[inline]
-    pub(crate) const fn from_i128(v: i128) -> Self {
+    pub(crate) const fn from_i128(value: i128) -> Self {
         // Narrow non-limb fast path (const-folds): for N<=2 write the
         // two's-complement limbs directly (truncating for N==1), skipping the
         // magnitude split + `wrapping_neg` re-sign. Bit-identical to the
@@ -1266,20 +1268,20 @@ impl<const N: usize> Int<N> {
         // truncation).
         if N <= 2 {
             let mut limbs = [0u64; N];
-            limbs[0] = v as u64;
+            limbs[0] = value as u64;
             if N == 2 {
-                limbs[1] = (v >> 64) as u64;
+                limbs[1] = (value >> 64) as u64;
             }
             return Self { limbs };
         }
-        let mag = v.unsigned_abs();
-        Self::from_mag_limbs(&[mag as u64, (mag >> 64) as u64], v < 0)
+        let mag = value.unsigned_abs();
+        Self::from_mag_limbs(&[mag as u64, (mag >> 64) as u64], value < 0)
     }
 
     /// Builds from an unsigned 128-bit value.
     #[inline]
-    pub(crate) const fn from_u128(v: u128) -> Self {
-        Self::from_mag_limbs(&[v as u64, (v >> 64) as u64], false)
+    pub(crate) const fn from_u128(value: u128) -> Self {
+        Self::from_mag_limbs(&[value as u64, (value >> 64) as u64], false)
     }
 
     /// Builds directly from the little-endian u64 limb array. Alias of
@@ -1296,33 +1298,33 @@ impl<const N: usize> Int<N> {
         self.limbs
     }
 
-    /// `self · (n as Self)` with the sign of `self`, panicking on
+    /// `self · (multiplier as Self)` with the sign of `self`, panicking on
     /// overflow (the default-form contract). Computes the n-by-1-word
     /// product (the same limb recurrence as `mul_schoolbook_into`) and
     /// rejects a non-zero top carry.
     #[inline]
-    pub fn mul_u64(self, n: u64) -> Self {
+    pub fn mul_u64(self, multiplier: u64) -> Self {
         let mag = *self.unsigned_abs().as_limbs();
         let mut prod = [0u64; N];
         let mut carry: u64 = 0;
         let mut i = 0;
         while i < N {
-            let p = (mag[i] as u128) * (n as u128) + (carry as u128);
-            prod[i] = p as u64;
-            carry = (p >> 64) as u64;
+            let product = (mag[i] as u128) * (multiplier as u128) + (carry as u128);
+            prod[i] = product as u64;
+            carry = (product >> 64) as u64;
             i += 1;
         }
         if carry != 0 {
             panic!("Int: mul overflow");
         }
         let negative = self.is_negative();
-        let r = Self::from_mag_limbs(&prod, negative);
+        let scaled = Self::from_mag_limbs(&prod, negative);
         // `from_mag_limbs` only mishandles the `mag == 2^(BITS-1)` edge:
         // legal as MIN for `negative`, overflow otherwise.
-        if !r.is_zero() && r.is_negative() != negative {
+        if !scaled.is_zero() && scaled.is_negative() != negative {
             panic!("Int: mul overflow");
         }
-        r
+        scaled
     }
 
     /// Exact `i128` value, or `None` if it does not fit.
@@ -1391,14 +1393,14 @@ impl<const N: usize> Int<N> {
         self.to_f64() as f32
     }
 
-    /// Exact conversion from an `f64`, or `None` when `v` is NaN, ±inf,
+    /// Exact conversion from an `f64`, or `None` when `value` is NaN, ±inf,
     /// has a fractional part, or lies outside the `Int<N>` range.
     ///
     /// `const`: classification and decomposition go through the const
     /// `f64::to_bits` plus integer/bit ops only — never the non-const
     /// `is_finite` / `fract` / float-`as` paths.
-    pub(crate) const fn try_from_f64(v: f64) -> Option<Self> {
-        let bits = v.to_bits();
+    pub(crate) const fn try_from_f64(value: f64) -> Option<Self> {
+        let bits = value.to_bits();
         let negative = (bits >> 63) & 1 == 1;
         let exp = ((bits >> 52) & 0x7ff) as i32;
         let mant = bits & 0x000f_ffff_ffff_ffff;
@@ -1407,7 +1409,7 @@ impl<const N: usize> Int<N> {
             return None;
         }
         if exp == 0 {
-            // ±0 is exact zero; a subnormal is a non-zero |v| < 1, i.e.
+            // ±0 is exact zero; a subnormal is a non-zero |value| < 1, i.e.
             // never an integer.
             return if mant == 0 { Some(Self::ZERO) } else { None };
         }
@@ -1421,8 +1423,8 @@ impl<const N: usize> Int<N> {
     /// `f32::to_bits` (8-bit exponent, 23-bit mantissa, bias 127, 24-bit
     /// significand) with integer/bit ops only — `const` for the same
     /// reason as [`Self::try_from_f64`].
-    pub(crate) const fn try_from_f32(v: f32) -> Option<Self> {
-        let bits = v.to_bits();
+    pub(crate) const fn try_from_f32(value: f32) -> Option<Self> {
+        let bits = value.to_bits();
         let negative = (bits >> 31) & 1 == 1;
         let exp = ((bits >> 23) & 0xff) as i32;
         let mant = (bits & 0x007f_ffff) as u64;
@@ -1445,25 +1447,25 @@ impl<const N: usize> Int<N> {
     /// ops — so both float entry points are `const`.
     const fn from_significand_shift(significand: u64, shift: i32, negative: bool) -> Option<Self> {
         if shift < 0 {
-            let s = (-shift) as u32;
-            if s >= 64 {
-                // Whole value is fractional (|v| < 1, non-zero) — not an
+            let right_shift = (-shift) as u32;
+            if right_shift >= 64 {
+                // Whole value is fractional (|value| < 1, non-zero) — not an
                 // integer.
                 return None;
             }
-            if significand & ((1u64 << s) - 1) != 0 {
+            if significand & ((1u64 << right_shift) - 1) != 0 {
                 // Fractional bits set — not an integer.
                 return None;
             }
-            let mag = significand >> s; // integral, fits a single limb
+            let mag = significand >> right_shift; // integral, fits a single limb
             let built = Self::from_mag_limbs(&[mag], negative);
             Self::accept_signed(built, negative)
         } else {
             // Place `significand` left-shifted by `shift` into an N-limb
             // magnitude, rejecting any bit that lands beyond limb N-1.
-            let s = shift as u32;
-            let limb_off = (s / 64) as usize;
-            let bit_off = s % 64;
+            let left_shift = shift as u32;
+            let limb_off = (left_shift / 64) as usize;
+            let bit_off = left_shift % 64;
             let mut mag = [0u64; N];
             // Low chunk into limb `limb_off`; carry into the next limb.
             let lo = significand << bit_off;
@@ -1510,22 +1512,22 @@ impl<const N: usize> Int<N> {
 
     /// Builds from an `f64`, truncating toward zero. Saturates to
     /// `MIN` / `MAX` on out-of-range; non-finite maps to `ZERO`.
-    pub fn from_f64(v: f64) -> Self {
-        if !v.is_finite() {
+    pub fn from_f64(value: f64) -> Self {
+        if !value.is_finite() {
             return Self::ZERO;
         }
-        let negative = v < 0.0;
-        let mut m = if negative { -v } else { v };
+        let negative = value < 0.0;
+        let mut magnitude = if negative { -value } else { value };
         let radix: f64 = 18_446_744_073_709_551_616.0; // 2^64
         let mut limbs = [0u64; N];
         let mut i = 0;
-        while m >= 1.0 && i < N {
-            let rem = m % radix;
+        while magnitude >= 1.0 && i < N {
+            let rem = magnitude % radix;
             limbs[i] = rem as u64;
-            m = (m - rem) / radix;
+            magnitude = (magnitude - rem) / radix;
             i += 1;
         }
-        if m >= 1.0 {
+        if magnitude >= 1.0 {
             return if negative {
                 Self::min_value()
             } else {
@@ -1535,14 +1537,14 @@ impl<const N: usize> Int<N> {
         Self::from_mag_limbs(&limbs, negative)
     }
 
-    /// Parses a signed decimal magnitude from `s`. Accepts an optional
+    /// Parses a signed decimal magnitude from `text`. Accepts an optional
     /// leading `-`, then ASCII digits. Only `radix == 10` is supported;
     /// any other value returns `Err(())`.
-    pub const fn from_str_radix(s: &str, radix: u32) -> Result<Self, ()> {
+    pub const fn from_str_radix(text: &str, radix: u32) -> Result<Self, ()> {
         if radix != 10 {
             return Err(());
         }
-        let bytes = s.as_bytes();
+        let bytes = text.as_bytes();
         let (negative, start): (bool, usize) = if !bytes.is_empty() && bytes[0] == b'-' {
             (true, 1)
         } else {
@@ -1551,7 +1553,7 @@ impl<const N: usize> Int<N> {
         if start >= bytes.len() {
             return Err(());
         }
-        // acc = acc * 10 + d per digit, truncating into N limbs — the
+        // acc = acc * 10 + digit per digit, truncating into N limbs — the
         // same Horner recurrence the macro runs through `mul_schoolbook`
         // + `add_assign`, but the low-N-limb multiply-by-10 is
         // folded into one n-by-1-word pass (no `2*N` staging buffer).
@@ -1562,13 +1564,13 @@ impl<const N: usize> Int<N> {
             if ch < b'0' || ch > b'9' {
                 return Err(());
             }
-            let d = (ch - b'0') as u64;
-            let mut carry: u64 = d;
+            let digit = (ch - b'0') as u64;
+            let mut carry: u64 = digit;
             let mut j = 0;
             while j < N {
-                let p = (acc[j] as u128) * 10u128 + (carry as u128);
-                acc[j] = p as u64;
-                carry = (p >> 64) as u64;
+                let product = (acc[j] as u128) * 10u128 + (carry as u128);
+                acc[j] = product as u64;
+                carry = (product >> 64) as u64;
                 j += 1;
             }
             k += 1;
@@ -1764,57 +1766,57 @@ impl<const N: usize> Int<N> {
     /// remainder.
     #[inline]
     pub const fn div_euclid(self, rhs: Self) -> Self {
-        let q = self.wrapping_div(rhs);
-        let r = self.wrapping_rem(rhs);
-        if r.is_negative() {
+        let quotient = self.wrapping_div(rhs);
+        let remainder = self.wrapping_rem(rhs);
+        if remainder.is_negative() {
             if rhs.is_negative() {
-                q.wrapping_add(Self::ONE)
+                quotient.wrapping_add(Self::ONE)
             } else {
-                q.wrapping_sub(Self::ONE)
+                quotient.wrapping_sub(Self::ONE)
             }
         } else {
-            q
+            quotient
         }
     }
 
     /// Euclidean remainder — always non-negative.
     #[inline]
     pub const fn rem_euclid(self, rhs: Self) -> Self {
-        let r = self.wrapping_rem(rhs);
-        if r.is_negative() {
-            r.wrapping_add(rhs.abs())
+        let remainder = self.wrapping_rem(rhs);
+        if remainder.is_negative() {
+            remainder.wrapping_add(rhs.abs())
         } else {
-            r
+            remainder
         }
     }
 
     /// Wrapping addition paired with the two's-complement overflow flag.
     #[inline]
     pub const fn overflowing_add(self, rhs: Self) -> (Self, bool) {
-        let r = self.wrapping_add(rhs);
-        let sa = self.is_negative();
-        let sb = rhs.is_negative();
-        let sr = r.is_negative();
-        (r, sa == sb && sr != sa)
+        let sum = self.wrapping_add(rhs);
+        let lhs_negative = self.is_negative();
+        let rhs_negative = rhs.is_negative();
+        let sum_negative = sum.is_negative();
+        (sum, lhs_negative == rhs_negative && sum_negative != lhs_negative)
     }
 
     /// Wrapping subtraction paired with the two's-complement overflow
     /// flag.
     #[inline]
     pub const fn overflowing_sub(self, rhs: Self) -> (Self, bool) {
-        let r = self.wrapping_sub(rhs);
-        let sa = self.is_negative();
-        let sb = rhs.is_negative();
-        let sr = r.is_negative();
-        (r, sa != sb && sr != sa)
+        let difference = self.wrapping_sub(rhs);
+        let lhs_negative = self.is_negative();
+        let rhs_negative = rhs.is_negative();
+        let difference_negative = difference.is_negative();
+        (difference, lhs_negative != rhs_negative && difference_negative != lhs_negative)
     }
 
     /// Wrapping negation paired with the overflow flag (`true` only at
     /// `MIN`).
     #[inline]
     pub const fn overflowing_neg(self) -> (Self, bool) {
-        let ov = cmp_fixed(&self.limbs, &Self::MIN.limbs) == 0;
-        (self.wrapping_neg(), ov)
+        let overflow = cmp_fixed(&self.limbs, &Self::MIN.limbs) == 0;
+        (self.wrapping_neg(), overflow)
     }
 
     /// Wrapping remainder paired with an overflow flag. The flag is `true`
@@ -1833,7 +1835,7 @@ impl<const N: usize> Int<N> {
     #[inline]
     pub const fn saturating_add(self, rhs: Self) -> Self {
         match self.checked_add(rhs) {
-            Some(v) => v,
+            Some(exact) => exact,
             None => {
                 if self.is_negative() {
                     Self::MIN
@@ -1848,7 +1850,7 @@ impl<const N: usize> Int<N> {
     #[inline]
     pub const fn saturating_sub(self, rhs: Self) -> Self {
         match self.checked_sub(rhs) {
-            Some(v) => v,
+            Some(exact) => exact,
             None => {
                 if self.is_negative() {
                     Self::MIN
@@ -1863,27 +1865,27 @@ impl<const N: usize> Int<N> {
     #[inline]
     pub const fn saturating_neg(self) -> Self {
         match self.checked_neg() {
-            Some(v) => v,
+            Some(exact) => exact,
             None => Self::MAX,
         }
     }
 
-    /// Rotates the bits left by `n` (modulo `BITS`).
+    /// Rotates the bits left by `rotation` (modulo `BITS`).
     #[inline]
-    pub fn rotate_left(self, n: u32) -> Self {
+    pub fn rotate_left(self, rotation: u32) -> Self {
         let bits = Self::BITS;
-        let n = n % bits;
-        if n == 0 {
+        let rotation = rotation % bits;
+        if rotation == 0 {
             return self;
         }
-        let u = self.cast_unsigned();
-        Self::from_limbs(((u.shl(n)) | (u.shr(bits - n))).limbs)
+        let unsigned = self.cast_unsigned();
+        Self::from_limbs(((unsigned.shl(rotation)) | (unsigned.shr(bits - rotation))).limbs)
     }
 
-    /// Rotates the bits right by `n` (modulo `BITS`).
+    /// Rotates the bits right by `rotation` (modulo `BITS`).
     #[inline]
-    pub fn rotate_right(self, n: u32) -> Self {
-        self.rotate_left(Self::BITS - (n % Self::BITS))
+    pub fn rotate_right(self, rotation: u32) -> Self {
+        self.rotate_left(Self::BITS - (rotation % Self::BITS))
     }
 
     /// Truncating cast to `u128` (low 128 magnitude bits, sign ignored).
@@ -1947,15 +1949,15 @@ impl<const N: usize> Int<N> {
             panic!("attempt to divide by zero");
         }
         let negative = self.is_negative() ^ rhs.is_negative();
-        let mut q = [0u64; N];
-        let mut r = [0u64; N];
+        let mut quotient = [0u64; N];
+        let mut remainder = [0u64; N];
         div_rem(
             self.unsigned_abs().as_limbs(),
             rhs.unsigned_abs().as_limbs(),
-            &mut q,
-            &mut r,
+            &mut quotient,
+            &mut remainder,
         );
-        Self::from_mag_limbs(&q, negative)
+        Self::from_mag_limbs(&quotient, negative)
     }
 
     /// Truncating remainder; result carries the sign of `self`. Panics
@@ -1965,15 +1967,15 @@ impl<const N: usize> Int<N> {
         if is_zero_fixed(&rhs.limbs) {
             panic!("attempt to calculate the remainder with a divisor of zero");
         }
-        let mut q = [0u64; N];
-        let mut r = [0u64; N];
+        let mut quotient = [0u64; N];
+        let mut remainder = [0u64; N];
         div_rem(
             self.unsigned_abs().as_limbs(),
             rhs.unsigned_abs().as_limbs(),
-            &mut q,
-            &mut r,
+            &mut quotient,
+            &mut remainder,
         );
-        Self::from_mag_limbs(&r, self.is_negative())
+        Self::from_mag_limbs(&remainder, self.is_negative())
     }
 
     /// Full `self · rhs` product widened into a `W: BigInt`, in one
@@ -1989,8 +1991,8 @@ impl<const N: usize> Int<N> {
     {
         use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
         let negative = self.is_negative() ^ rhs.is_negative();
-        let a = *self.unsigned_abs().as_limbs();
-        let b = *rhs.unsigned_abs().as_limbs();
+        let lhs_mag = *self.unsigned_abs().as_limbs();
+        let rhs_mag = *rhs.unsigned_abs().as_limbs();
         // Full product spans 2·N u64 limbs — sized exactly by the source's
         // `ComputeLimbs::double_buffered_u64()` (no build-max blanket). Route through
         // the equal-length multiply dispatcher: both operands are `[u64; N]`,
@@ -2000,7 +2002,7 @@ impl<const N: usize> Int<N> {
         // non-allocating Karatsuba kernel at or above it.
         let mut prod_buf = <Limbs<N> as ComputeLimbs>::double_buffered_u64();
         let prod = prod_buf.as_mut();
-        mul_fast::<N>(&a, &b, &mut prod[..2 * N]);
+        mul_fast::<N>(&lhs_mag, &rhs_mag, &mut prod[..2 * N]);
         // Pack the `2·N`-u64 product into `N` u128 limbs for the kept
         // `BigInt::from_mag_sign_u128` bridge. The result `W` holds the
         // product, so its scratch carrier's `single_u128()` buffer (`≥ N`)
@@ -2027,23 +2029,23 @@ impl<const N: usize> Int<N> {
     /// magnitude is the smaller value, so the magnitude order is flipped.
     #[inline]
     pub(crate) const fn cmp_cross<const M: usize>(self, other: Int<M>) -> Ordering {
-        let sn = self.is_negative();
-        let so = other.is_negative();
-        if sn && !so {
+        let self_negative = self.is_negative();
+        let other_negative = other.is_negative();
+        if self_negative && !other_negative {
             return Ordering::Less;
         }
-        if !sn && so {
+        if !self_negative && other_negative {
             return Ordering::Greater;
         }
         // Same sign: compare magnitudes length-aware.
-        let a = self.unsigned_abs();
-        let b = other.unsigned_abs();
-        let c = cmp_cross(a.as_limbs(), b.as_limbs());
+        let self_mag = self.unsigned_abs();
+        let other_mag = other.unsigned_abs();
+        let mag_cmp = cmp_cross(self_mag.as_limbs(), other_mag.as_limbs());
         // For two negatives the larger magnitude is the smaller value.
-        let c = if sn { -c } else { c };
-        if c < 0 {
+        let mag_cmp = if self_negative { -mag_cmp } else { mag_cmp };
+        if mag_cmp < 0 {
             Ordering::Less
-        } else if c > 0 {
+        } else if mag_cmp > 0 {
             Ordering::Greater
         } else {
             Ordering::Equal
@@ -2084,22 +2086,22 @@ impl<const N: usize> Int<N> {
         other: Int<M>,
         scale_diff: u32,
     ) -> Ordering {
-        let sn = self.is_negative();
-        let so = other.is_negative();
-        if sn && !so {
+        let self_negative = self.is_negative();
+        let other_negative = other.is_negative();
+        if self_negative && !other_negative {
             return Ordering::Less;
         }
-        if !sn && so {
+        if !self_negative && other_negative {
             return Ordering::Greater;
         }
 
         // Same sign (or one/both zero): compare magnitudes. `mag_cmp` is
         // the i32 sign of `|self|` − `|other| · 10^scale_diff`.
-        let a = self.unsigned_abs();
-        let b = other.unsigned_abs();
+        let self_mag = self.unsigned_abs();
+        let other_mag = other.unsigned_abs();
 
         let mag_cmp = if scale_diff == 0 {
-            cmp_cross(a.as_limbs(), b.as_limbs())
+            cmp_cross(self_mag.as_limbs(), other_mag.as_limbs())
         } else {
             // Build the divisor 10^scale_diff in a fixed staging buffer.
             // `max_n_limbs(4)` (= 288 at xx-wide) is the wide-tier staging
@@ -2107,8 +2109,8 @@ impl<const N: usize> Int<N> {
             // the widest tier's buffer; it covers every shipped width/scale.
             let mut pow = [0u64; max_n_limbs(4)];
             pow[0] = 1;
-            let mut e = 0;
-            while e < scale_diff {
+            let mut step = 0;
+            while step < scale_diff {
                 // pow *= 10, propagating carry across limbs.
                 let mut carry: u128 = 0;
                 let mut i = 0;
@@ -2118,30 +2120,30 @@ impl<const N: usize> Int<N> {
                     carry = prod >> 64;
                     i += 1;
                 }
-                e += 1;
+                step += 1;
             }
 
-            // |self| = q · 10^scale_diff + r.
-            let mut q = [0u64; max_n_limbs(4)];
-            let mut r = [0u64; max_n_limbs(4)];
-            div_rem(a.as_limbs(), &pow, &mut q, &mut r);
+            // |self| = quotient · 10^scale_diff + remainder.
+            let mut quotient = [0u64; max_n_limbs(4)];
+            let mut remainder = [0u64; max_n_limbs(4)];
+            div_rem(self_mag.as_limbs(), &pow, &mut quotient, &mut remainder);
 
             // Compare quotient against |other|; tie-break on remainder.
-            let c = cmp_cross(&q, b.as_limbs());
-            if c != 0 {
-                c
+            let quotient_cmp = cmp_cross(&quotient, other_mag.as_limbs());
+            if quotient_cmp != 0 {
+                quotient_cmp
             } else {
                 // Quotients equal: a nonzero remainder makes |self| larger.
-                let mut rk = 0;
-                let mut nz = false;
-                while rk < r.len() {
-                    if r[rk] != 0 {
-                        nz = true;
+                let mut limb_index = 0;
+                let mut remainder_nonzero = false;
+                while limb_index < remainder.len() {
+                    if remainder[limb_index] != 0 {
+                        remainder_nonzero = true;
                         break;
                     }
-                    rk += 1;
+                    limb_index += 1;
                 }
-                if nz {
+                if remainder_nonzero {
                     1
                 } else {
                     0
@@ -2150,10 +2152,10 @@ impl<const N: usize> Int<N> {
         };
 
         // For two negatives, the larger magnitude is the smaller value.
-        let c = if sn { -mag_cmp } else { mag_cmp };
-        if c < 0 {
+        let signed_cmp = if self_negative { -mag_cmp } else { mag_cmp };
+        if signed_cmp < 0 {
             Ordering::Less
-        } else if c > 0 {
+        } else if signed_cmp > 0 {
             Ordering::Greater
         } else {
             Ordering::Equal
@@ -2188,41 +2190,41 @@ impl<const N: usize> Int<N> {
     /// the magnitude order is flipped). `m == 0` is the float zero.
     pub(crate) const fn cmp_f64_exact(self, scale: u32, value: f64) -> Ordering {
         let bits = value.to_bits();
-        let fsign = (bits >> 63) != 0;
+        let float_negative = (bits >> 63) != 0;
         let exp_field = ((bits >> 52) & 0x7ff) as i32;
         let frac = bits & 0x000f_ffff_ffff_ffff;
-        // Mantissa `m` and unbiased power-of-two exponent `e`.
-        let (m, e): (u64, i32) = if exp_field == 0 {
+        // Mantissa and unbiased power-of-two exponent.
+        let (mantissa, exponent): (u64, i32) = if exp_field == 0 {
             // Subnormal (or zero): no implicit leading bit.
             (frac, -1074)
         } else {
             (frac | 0x0010_0000_0000_0000, exp_field - 1075)
         };
 
-        let sn = self.is_negative();
-        let fzero = m == 0;
+        let self_negative = self.is_negative();
+        let float_is_zero = mantissa == 0;
         // Resolve signs. The float's zero has no sign for ordering.
-        if fzero {
+        if float_is_zero {
             // value == 0: compare against self's sign / zeroness.
             let self_limbs = self.as_limbs();
-            let mut nz = false;
+            let mut self_nonzero = false;
             let mut k = 0;
             while k < self_limbs.len() {
                 if self_limbs[k] != 0 {
-                    nz = true;
+                    self_nonzero = true;
                     break;
                 }
                 k += 1;
             }
-            if !nz {
+            if !self_nonzero {
                 return Ordering::Equal;
             }
-            return if sn { Ordering::Less } else { Ordering::Greater };
+            return if self_negative { Ordering::Less } else { Ordering::Greater };
         }
-        if sn && !fsign {
+        if self_negative && !float_negative {
             return Ordering::Less;
         }
-        if !sn && fsign {
+        if !self_negative && float_negative {
             return Ordering::Greater;
         }
 
@@ -2231,14 +2233,14 @@ impl<const N: usize> Int<N> {
         // buffers (288 u64 limbs covers every shipped width / scale /
         // f64 exponent: D307 magnitude ≤ 16 limbs, 10^scale ≤ 16 limbs,
         // 2^1074 ≤ 17 limbs — products stay well under 288).
-        let a = self.unsigned_abs();
-        let a_limbs = a.as_limbs();
+        let self_mag = self.unsigned_abs();
+        let self_mag_limbs = self_mag.as_limbs();
 
         // 10^scale in a buffer.
         let mut pow10 = [0u64; 288];
         pow10[0] = 1;
-        let mut pe = 0;
-        while pe < scale {
+        let mut step = 0;
+        while step < scale {
             let mut carry: u128 = 0;
             let mut i = 0;
             while i < pow10.len() {
@@ -2247,38 +2249,38 @@ impl<const N: usize> Int<N> {
                 carry = prod >> 64;
                 i += 1;
             }
-            pe += 1;
+            step += 1;
         }
 
-        let m_limbs = [m];
+        let mantissa_limbs = [mantissa];
 
         let mut lhs = [0u64; 288];
         let mut rhs = [0u64; 288];
 
-        if e >= 0 {
-            // lhs = |self|; rhs = m · 2^e · 10^scale.
+        if exponent >= 0 {
+            // lhs = |self|; rhs = mantissa · 2^exponent · 10^scale.
             let mut i = 0;
-            while i < a_limbs.len() {
-                lhs[i] = a_limbs[i];
+            while i < self_mag_limbs.len() {
+                lhs[i] = self_mag_limbs[i];
                 i += 1;
             }
-            // tmp = m · 10^scale
-            let mut tmp = [0u64; 288];
-            mul_schoolbook(&m_limbs, &pow10, &mut tmp);
-            // rhs = tmp << e
-            shl(&tmp, e as u32, &mut rhs);
+            // scaled_mantissa = mantissa · 10^scale
+            let mut scaled_mantissa = [0u64; 288];
+            mul_schoolbook(&mantissa_limbs, &pow10, &mut scaled_mantissa);
+            // rhs = scaled_mantissa << exponent
+            shl(&scaled_mantissa, exponent as u32, &mut rhs);
         } else {
-            // lhs = |self| · 2^(−e); rhs = m · 10^scale.
-            shl(a_limbs, (-e) as u32, &mut lhs);
-            mul_schoolbook(&m_limbs, &pow10, &mut rhs);
+            // lhs = |self| · 2^(−exponent); rhs = mantissa · 10^scale.
+            shl(self_mag_limbs, (-exponent) as u32, &mut lhs);
+            mul_schoolbook(&mantissa_limbs, &pow10, &mut rhs);
         }
 
         let mag_cmp = cmp_cross(&lhs, &rhs);
         // For two negatives the larger magnitude is the smaller value.
-        let c = if sn { -mag_cmp } else { mag_cmp };
-        if c < 0 {
+        let signed_cmp = if self_negative { -mag_cmp } else { mag_cmp };
+        if signed_cmp < 0 {
             Ordering::Less
-        } else if c > 0 {
+        } else if signed_cmp > 0 {
             Ordering::Greater
         } else {
             Ordering::Equal
@@ -2315,8 +2317,8 @@ impl<const N: usize, const M: usize> PartialOrd<Int<M>> for Int<N> {
 // (the trait form of `as_i128`). Enables `i128::from(int2)` / `.into()`.
 impl From<Int<2>> for i128 {
     #[inline]
-    fn from(v: Int<2>) -> i128 {
-        v.as_i128()
+    fn from(value: Int<2>) -> i128 {
+        value.as_i128()
     }
 }
 
@@ -2351,15 +2353,15 @@ impl PartialOrd<Int<2>> for i128 {
 // literals without an explicit conversion. Deliberately `Int<1>`-only.
 impl From<Int<1>> for i64 {
     #[inline]
-    fn from(v: Int<1>) -> i64 {
-        v.as_i128() as i64
+    fn from(value: Int<1>) -> i64 {
+        value.as_i128() as i64
     }
 }
 // `Int<1>` is 64-bit, so widening to `i128` is exact.
 impl From<Int<1>> for i128 {
     #[inline]
-    fn from(v: Int<1>) -> i128 {
-        v.as_i128()
+    fn from(value: Int<1>) -> i128 {
+        value.as_i128()
     }
 }
 impl PartialEq<i64> for Int<1> {
@@ -2543,14 +2545,14 @@ impl<const N: usize> core::fmt::Display for Uint<N>
 where
     crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
 {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         // Exact per-`N` decimal output buffer (`20N + 2` bytes), drawn from
         // the `Limbs<N>` scratch carrier; the formatter writes the base-10
         // digits from its tail.
         let mut buf =
             <crate::int::types::compute_limbs::Limbs<N> as crate::int::types::compute_limbs::ComputeLimbs>::digit_formatting_limbs_u8();
-        let s = fmt_into::<N>(&self.limbs, 10, true, buf.as_mut());
-        f.pad_integral(true, "", s)
+        let rendered = fmt_into::<N>(&self.limbs, 10, true, buf.as_mut());
+        formatter.pad_integral(true, "", rendered)
     }
 }
 
@@ -2558,7 +2560,7 @@ impl<const N: usize> core::fmt::Display for Int<N>
 where
     crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
 {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mag = *self.unsigned_abs().as_limbs();
         // Exact per-`N` decimal output buffer (`20N + 2` bytes): an `Int<N>`
         // is `64N` bits, so its base-10 form is `⌈64·N·log10(2)⌉ ≈ 19.27·N`
@@ -2566,16 +2568,16 @@ where
         // scratch carrier; the formatter writes the digits from its tail.
         let mut buf =
             <crate::int::types::compute_limbs::Limbs<N> as crate::int::types::compute_limbs::ComputeLimbs>::digit_formatting_limbs_u8();
-        let s = fmt_into::<N>(&mag, 10, true, buf.as_mut());
-        f.pad_integral(!self.is_negative() || self.is_zero(), "", s)
+        let rendered = fmt_into::<N>(&mag, 10, true, buf.as_mut());
+        formatter.pad_integral(!self.is_negative() || self.is_zero(), "", rendered)
     }
 }
 
 impl<const N: usize> core::str::FromStr for Int<N> {
     type Err = ();
     #[inline]
-    fn from_str(s: &str) -> Result<Self, ()> {
-        Self::from_str_radix(s, 10)
+    fn from_str(text: &str) -> Result<Self, ()> {
+        Self::from_str_radix(text, 10)
     }
 }
 
@@ -2592,11 +2594,11 @@ impl<const N: usize> core::fmt::LowerHex for Int<N>
 where
     crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
 {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut buf =
             <crate::int::types::compute_limbs::Limbs<N> as crate::int::types::compute_limbs::ComputeLimbs>::digit_formatting_limbs_u8();
-        let s = fmt_into::<N>(&self.limbs, 16, true, buf.as_mut());
-        f.pad_integral(true, "0x", s)
+        let rendered = fmt_into::<N>(&self.limbs, 16, true, buf.as_mut());
+        formatter.pad_integral(true, "0x", rendered)
     }
 }
 
@@ -2604,11 +2606,11 @@ impl<const N: usize> core::fmt::UpperHex for Int<N>
 where
     crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
 {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut buf =
             <crate::int::types::compute_limbs::Limbs<N> as crate::int::types::compute_limbs::ComputeLimbs>::digit_formatting_limbs_u8();
-        let s = fmt_into::<N>(&self.limbs, 16, false, buf.as_mut());
-        f.pad_integral(true, "0x", s)
+        let rendered = fmt_into::<N>(&self.limbs, 16, false, buf.as_mut());
+        formatter.pad_integral(true, "0x", rendered)
     }
 }
 
@@ -2616,11 +2618,11 @@ impl<const N: usize> core::fmt::Octal for Int<N>
 where
     crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
 {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut buf =
             <crate::int::types::compute_limbs::Limbs<N> as crate::int::types::compute_limbs::ComputeLimbs>::bit_formatting_limbs_u8();
-        let s = fmt_into::<N>(&self.limbs, 8, true, buf.as_mut());
-        f.pad_integral(true, "0o", s)
+        let rendered = fmt_into::<N>(&self.limbs, 8, true, buf.as_mut());
+        formatter.pad_integral(true, "0o", rendered)
     }
 }
 
@@ -2628,11 +2630,11 @@ impl<const N: usize> core::fmt::Binary for Int<N>
 where
     crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
 {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut buf =
             <crate::int::types::compute_limbs::Limbs<N> as crate::int::types::compute_limbs::ComputeLimbs>::bit_formatting_limbs_u8();
-        let s = fmt_into::<N>(&self.limbs, 2, true, buf.as_mut());
-        f.pad_integral(true, "0b", s)
+        let rendered = fmt_into::<N>(&self.limbs, 2, true, buf.as_mut());
+        formatter.pad_integral(true, "0b", rendered)
     }
 }
 
@@ -2775,7 +2777,7 @@ macro_rules! int_from_signed {
     ($($prim:ty => $base:ident),+) => {$(
         impl<const N: usize> From<$prim> for Int<N> {
             #[inline]
-            fn from(v: $prim) -> Self { Self::$base(v) }
+            fn from(value: $prim) -> Self { Self::$base(value) }
         }
     )+};
 }
@@ -2785,7 +2787,7 @@ macro_rules! int_from_unsigned {
     ($($prim:ty => $base:ident),+) => {$(
         impl<const N: usize> From<$prim> for Int<N> {
             #[inline]
-            fn from(v: $prim) -> Self { Self::$base(v) }
+            fn from(value: $prim) -> Self { Self::$base(value) }
         }
     )+};
 }
@@ -2795,7 +2797,7 @@ macro_rules! uint_from_unsigned {
     ($($prim:ty),+) => {$(
         impl<const N: usize> From<$prim> for Uint<N> {
             #[inline]
-            fn from(v: $prim) -> Self { Self::from_u64(v as u64) }
+            fn from(value: $prim) -> Self { Self::from_u64(value as u64) }
         }
     )+};
 }
@@ -2806,24 +2808,24 @@ uint_from_unsigned!(u8, u16, u32, u64);
 impl<const N: usize> TryFrom<u64> for Int<N> {
     type Error = crate::support::error::ConvertError;
     #[inline]
-    fn try_from(v: u64) -> Result<Self, Self::Error> {
-        Self::try_from_u64(v).ok_or(crate::support::error::ConvertError::Overflow)
+    fn try_from(value: u64) -> Result<Self, Self::Error> {
+        Self::try_from_u64(value).ok_or(crate::support::error::ConvertError::Overflow)
     }
 }
 
 impl<const N: usize> TryFrom<i128> for Int<N> {
     type Error = crate::support::error::ConvertError;
     #[inline]
-    fn try_from(v: i128) -> Result<Self, Self::Error> {
-        Self::try_from_i128(v).ok_or(crate::support::error::ConvertError::Overflow)
+    fn try_from(value: i128) -> Result<Self, Self::Error> {
+        Self::try_from_i128(value).ok_or(crate::support::error::ConvertError::Overflow)
     }
 }
 
 impl<const N: usize> TryFrom<u128> for Int<N> {
     type Error = crate::support::error::ConvertError;
     #[inline]
-    fn try_from(v: u128) -> Result<Self, Self::Error> {
-        Self::try_from_u128(v).ok_or(crate::support::error::ConvertError::Overflow)
+    fn try_from(value: u128) -> Result<Self, Self::Error> {
+        Self::try_from_u128(value).ok_or(crate::support::error::ConvertError::Overflow)
     }
 }
 
@@ -2838,40 +2840,40 @@ impl<const N: usize> TryFrom<u128> for Int<N> {
 impl<const N: usize> TryFrom<Int<N>> for i32 {
     type Error = crate::support::error::ConvertError;
     #[inline]
-    fn try_from(v: Int<N>) -> Result<Self, Self::Error> {
-        v.try_to_i32().ok_or(crate::support::error::ConvertError::Overflow)
+    fn try_from(value: Int<N>) -> Result<Self, Self::Error> {
+        value.try_to_i32().ok_or(crate::support::error::ConvertError::Overflow)
     }
 }
 
 impl<const N: usize> TryFrom<Int<N>> for u32 {
     type Error = crate::support::error::ConvertError;
     #[inline]
-    fn try_from(v: Int<N>) -> Result<Self, Self::Error> {
-        v.try_to_u32().ok_or(crate::support::error::ConvertError::Overflow)
+    fn try_from(value: Int<N>) -> Result<Self, Self::Error> {
+        value.try_to_u32().ok_or(crate::support::error::ConvertError::Overflow)
     }
 }
 
 impl<const N: usize> TryFrom<Int<N>> for u64 {
     type Error = crate::support::error::ConvertError;
     #[inline]
-    fn try_from(v: Int<N>) -> Result<Self, Self::Error> {
-        v.try_to_u64().ok_or(crate::support::error::ConvertError::Overflow)
+    fn try_from(value: Int<N>) -> Result<Self, Self::Error> {
+        value.try_to_u64().ok_or(crate::support::error::ConvertError::Overflow)
     }
 }
 
 impl<const N: usize> TryFrom<Int<N>> for u128 {
     type Error = crate::support::error::ConvertError;
     #[inline]
-    fn try_from(v: Int<N>) -> Result<Self, Self::Error> {
-        v.try_to_u128().ok_or(crate::support::error::ConvertError::Overflow)
+    fn try_from(value: Int<N>) -> Result<Self, Self::Error> {
+        value.try_to_u128().ok_or(crate::support::error::ConvertError::Overflow)
     }
 }
 
 impl<const N: usize> TryFrom<u128> for Uint<N> {
     type Error = crate::support::error::ConvertError;
     #[inline]
-    fn try_from(v: u128) -> Result<Self, Self::Error> {
-        Self::try_from_u128(v).ok_or(crate::support::error::ConvertError::Overflow)
+    fn try_from(value: u128) -> Result<Self, Self::Error> {
+        Self::try_from_u128(value).ok_or(crate::support::error::ConvertError::Overflow)
     }
 }
 
@@ -2883,16 +2885,16 @@ impl<const N: usize> TryFrom<u128> for Uint<N> {
 impl<const N: usize> TryFrom<f64> for Int<N> {
     type Error = crate::support::error::ConvertError;
     #[inline]
-    fn try_from(v: f64) -> Result<Self, Self::Error> {
-        Self::try_from_f64(v).ok_or(crate::support::error::ConvertError::Overflow)
+    fn try_from(value: f64) -> Result<Self, Self::Error> {
+        Self::try_from_f64(value).ok_or(crate::support::error::ConvertError::Overflow)
     }
 }
 
 impl<const N: usize> TryFrom<f32> for Int<N> {
     type Error = crate::support::error::ConvertError;
     #[inline]
-    fn try_from(v: f32) -> Result<Self, Self::Error> {
-        Self::try_from_f32(v).ok_or(crate::support::error::ConvertError::Overflow)
+    fn try_from(value: f32) -> Result<Self, Self::Error> {
+        Self::try_from_f32(value).ok_or(crate::support::error::ConvertError::Overflow)
     }
 }
 
@@ -3093,15 +3095,15 @@ mod tests {
     /// the full `2N`-limb schoolbook product, across widths and edges.
     #[test]
     fn limbs_mul_low_matches_full_product_low_half() {
-        fn check<const N: usize, const D: usize>(a: [u64; N], b: [u64; N]) {
+        fn check<const N: usize, const D: usize>(lhs: [u64; N], rhs: [u64; N]) {
             debug_assert!(D == 2 * N);
             let mut full = [0u64; D];
-            mul_schoolbook_fixed::<N, D>(&a, &b, &mut full);
+            mul_schoolbook_fixed::<N, D>(&lhs, &rhs, &mut full);
             let mut low = [0u64; N];
-            mul_low_fixed::<N>(&a, &b, &mut low);
+            mul_low_fixed::<N>(&lhs, &rhs, &mut low);
             let mut expected = [0u64; N];
             expected.copy_from_slice(&full[..N]);
-            assert_eq!(low, expected, "low-half mismatch for {a:?} * {b:?}");
+            assert_eq!(low, expected, "low-half mismatch for {lhs:?} * {rhs:?}");
         }
 
         // Width 4 (256-bit): zero, one, MAX, cross-limb spans.
@@ -3122,12 +3124,12 @@ mod tests {
     /// general truncated product `x · x` at every width and edge case.
     #[test]
     fn dedicated_sqr_matches_general_mul() {
-        fn check<const N: usize>(x: [u64; N]) {
-            let a = Uint::<N>::from_limbs(x);
+        fn check<const N: usize>(limbs: [u64; N]) {
+            let value = Uint::<N>::from_limbs(limbs);
             assert_eq!(
-                a.wrapping_sqr(),
-                a.wrapping_mul(a),
-                "sqr != mul(self,self) for {x:?}"
+                value.wrapping_sqr(),
+                value.wrapping_mul(value),
+                "sqr != mul(self,self) for {limbs:?}"
             );
         }
 
@@ -3185,15 +3187,15 @@ mod tests {
             if m == 0 {
                 return (0, true);
             }
-            let mut r: u128 = 0;
-            // Smallest r with (r+1)^k > m, capped to avoid overflow.
+            let mut root: u128 = 0;
+            // Smallest root with (root+1)^k > m, capped to avoid overflow.
             while {
-                let next = r + 1;
-                next.checked_pow(k).is_some_and(|p| p <= m)
+                let next = root + 1;
+                next.checked_pow(k).is_some_and(|power| power <= m)
             } {
-                r += 1;
+                root += 1;
             }
-            (r, r.pow(k) == m)
+            (root, root.pow(k) == m)
         }
 
         fn check<const N: usize>(m: u128, k: u32) {
@@ -3204,20 +3206,20 @@ mod tests {
             if N > 1 {
                 limbs[1] = hi;
             }
-            let n = Uint::<N>::from_limbs(limbs);
-            let (root, exact) = n.root_int(k);
-            let (eroot, eexact) = brute(m, k);
+            let value = Uint::<N>::from_limbs(limbs);
+            let (root, exact) = value.root_int(k);
+            let (expected_root, expected_exact) = brute(m, k);
             let root_lo = root.as_limbs()[0] as u128
                 | ((if N > 1 { root.as_limbs()[1] as u128 } else { 0 }) << 64);
-            assert_eq!(root_lo, eroot, "root mismatch for m={m}, k={k}");
-            assert_eq!(exact, eexact, "exact flag mismatch for m={m}, k={k}");
+            assert_eq!(root_lo, expected_root, "root mismatch for m={m}, k={k}");
+            assert_eq!(exact, expected_exact, "exact flag mismatch for m={m}, k={k}");
 
             // The defining bracket, computed in-width.
-            let rk = root.pow(k);
-            assert!(rk <= n, "root^k > m for m={m}, k={k}");
+            let root_pow = root.pow(k);
+            assert!(root_pow <= value, "root^k > m for m={m}, k={k}");
             let next = root.wrapping_add(Uint::<N>::ONE);
             // (root+1)^k overflowing the width still satisfies > m.
-            if let Some(p) = next.checked_pow(k) { assert!(p > n, "(root+1)^k <= m for m={m}, k={k}") }
+            if let Some(next_pow) = next.checked_pow(k) { assert!(next_pow > value, "(root+1)^k <= m for m={m}, k={k}") }
         }
 
         let samples: [u128; 14] = [
@@ -3857,9 +3859,9 @@ mod tests {
     #[test]
     fn uint_sqr_policy_matches_wrapping_sqr() {
         fn check<const N: usize>(limbs: [u64; N]) {
-            let x = Uint::<N>::from_limbs(limbs);
-            assert_eq!(x.sqr(), x.wrapping_sqr(), "sqr mismatch at {limbs:?}");
-            assert_eq!(x.sqr(), x.wrapping_mul(x), "sqr != x*x at {limbs:?}");
+            let value = Uint::<N>::from_limbs(limbs);
+            assert_eq!(value.sqr(), value.wrapping_sqr(), "sqr mismatch at {limbs:?}");
+            assert_eq!(value.sqr(), value.wrapping_mul(value), "sqr != x*x at {limbs:?}");
         }
         // Width 1
         check::<1>([0]);
@@ -3882,11 +3884,11 @@ mod tests {
     #[test]
     fn uint_cube_policy_matches_wrapping_cube() {
         fn check<const N: usize>(limbs: [u64; N]) {
-            let x = Uint::<N>::from_limbs(limbs);
-            assert_eq!(x.cube(), x.wrapping_cube(), "cube mismatch at {limbs:?}");
+            let value = Uint::<N>::from_limbs(limbs);
+            assert_eq!(value.cube(), value.wrapping_cube(), "cube mismatch at {limbs:?}");
             assert_eq!(
-                x.cube(),
-                x.wrapping_mul(x).wrapping_mul(x),
+                value.cube(),
+                value.wrapping_mul(value).wrapping_mul(value),
                 "cube != x*x*x at {limbs:?}"
             );
         }
@@ -3905,14 +3907,14 @@ mod tests {
     /// `Int<N>::sqr` and `Int<N>::cube` must match their wrapping siblings.
     #[test]
     fn int_sqr_cube_match_wrapping() {
-        fn check<const N: usize>(v: i128) {
-            let x = Int::<N>::from_i128(v);
-            assert_eq!(x.sqr(), x.wrapping_sqr(), "int sqr mismatch v={v}");
-            assert_eq!(x.cube(), x.wrapping_cube(), "int cube mismatch v={v}");
+        fn check<const N: usize>(value: i128) {
+            let int = Int::<N>::from_i128(value);
+            assert_eq!(int.sqr(), int.wrapping_sqr(), "int sqr mismatch v={value}");
+            assert_eq!(int.cube(), int.wrapping_cube(), "int cube mismatch v={value}");
         }
-        for v in [0i128, 1, -1, 12, -12, 100, -100, 1_000_000, -1_000_000] {
-            check::<4>(v);
-            check::<8>(v);
+        for value in [0i128, 1, -1, 12, -12, 100, -100, 1_000_000, -1_000_000] {
+            check::<4>(value);
+            check::<8>(value);
         }
     }
 
@@ -3921,46 +3923,46 @@ mod tests {
     #[test]
     fn uint_icbrt_floor_correctness() {
         // Brute-force floor cube-root of a u64, used as oracle for small inputs.
-        fn brute_cbrt(n: u64) -> u64 {
-            if n == 0 {
+        fn brute_cbrt(value: u64) -> u64 {
+            if value == 0 {
                 return 0;
             }
-            let mut r: u64 = 0;
-            while (r + 1).checked_mul((r + 1) * (r + 1) + r + 1)
-                .is_some_and(|p| p <= n)
-                || (r + 1).checked_pow(3).is_some_and(|p| p <= n)
+            let mut root: u64 = 0;
+            while (root + 1).checked_mul((root + 1) * (root + 1) + root + 1)
+                .is_some_and(|power| power <= value)
+                || (root + 1).checked_pow(3).is_some_and(|power| power <= value)
             {
-                r += 1;
+                root += 1;
             }
-            r
+            root
         }
 
-        fn check<const N: usize>(n: u64) {
-            let x = Uint::<N>::from_u64(n);
-            let root = x.icbrt();
+        fn check<const N: usize>(value: u64) {
+            let uint = Uint::<N>::from_u64(value);
+            let root = uint.icbrt();
             let root_u64 = root.as_limbs()[0];
-            let expected = brute_cbrt(n);
-            assert_eq!(root_u64, expected, "icbrt({n}) = {root_u64}, expected {expected}");
+            let expected = brute_cbrt(value);
+            assert_eq!(root_u64, expected, "icbrt({value}) = {root_u64}, expected {expected}");
             // Higher limbs of root must be zero for a u64 input.
             for i in 1..N {
-                assert_eq!(root.as_limbs()[i], 0, "icbrt({n}) high limb {i} nonzero");
+                assert_eq!(root.as_limbs()[i], 0, "icbrt({value}) high limb {i} nonzero");
             }
         }
 
         // Perfect cubes.
-        for n in [0u64, 1, 8, 27, 64, 125, 216, 343, 512, 729, 1000,
-                  1_000_000_000u64, 8_000_000_000u64] {
-            check::<1>(n);
-            check::<2>(n);
-            check::<4>(n);
+        for value in [0u64, 1, 8, 27, 64, 125, 216, 343, 512, 729, 1000,
+                      1_000_000_000u64, 8_000_000_000u64] {
+            check::<1>(value);
+            check::<2>(value);
+            check::<4>(value);
         }
 
         // Non-cubes (floor must be correct).
-        for n in [2u64, 3, 4, 5, 6, 7, 9, 10, 26, 28, 63, 65, 999,
-                  1_000_000_001u64] {
-            check::<1>(n);
-            check::<2>(n);
-            check::<4>(n);
+        for value in [2u64, 3, 4, 5, 6, 7, 9, 10, 26, 28, 63, 65, 999,
+                      1_000_000_001u64] {
+            check::<1>(value);
+            check::<2>(value);
+            check::<4>(value);
         }
 
         // Boundary cases: 0 and 1.
@@ -3970,9 +3972,9 @@ mod tests {
         check::<4>(1);
 
         // Large 64-bit values.
-        for n in [u64::MAX, u64::MAX - 1, u64::MAX - 100, 1 << 60, 1 << 48] {
-            check::<2>(n);
-            check::<4>(n);
+        for value in [u64::MAX, u64::MAX - 1, u64::MAX - 100, 1 << 60, 1 << 48] {
+            check::<2>(value);
+            check::<4>(value);
         }
     }
 
@@ -3982,21 +3984,21 @@ mod tests {
     #[test]
     fn uint_icbrt_wide_floor_identity() {
         fn check_wide<const N: usize>(limbs: [u64; N]) {
-            let x = Uint::<N>::from_limbs(limbs);
-            let r = x.icbrt();
+            let value = Uint::<N>::from_limbs(limbs);
+            let root = value.icbrt();
             // Verify r³ <= x.
-            let r3 = r.wrapping_pow(3);
+            let root_cubed = root.wrapping_pow(3);
             assert!(
-                r3 <= x,
+                root_cubed <= value,
                 "icbrt violated: r³ > x for {limbs:?}"
             );
             // Verify (r+1)³ > x (i.e. r is the floor).
-            let r1 = r.wrapping_add(Uint::<N>::ONE);
-            let r1_3 = r1.wrapping_pow(3);
+            let next_root = root.wrapping_add(Uint::<N>::ONE);
+            let next_root_cubed = next_root.wrapping_pow(3);
             // (r+1)³ wraps to 0 only if r+1 itself wraps (i.e. r == MAX),
             // which for a cube root of a representable value cannot happen.
             assert!(
-                r1_3 > x || r1 == Uint::<N>::ZERO,
+                next_root_cubed > value || next_root == Uint::<N>::ZERO,
                 "icbrt not floor: (r+1)³ <= x for {limbs:?}"
             );
         }
@@ -4004,11 +4006,11 @@ mod tests {
         // Perfect cubes in 2 limbs (root fits one limb).
         // 10^18 cubed = 10^54 — too large; use modest values.
         // 1_000_000^3 = 10^18, which fits 2 limbs (u64 goes to ~1.8 * 10^19).
-        let m = 1_000_000u64;
-        let m3 = m * m * m; // 10^18, fits u64
-        check_wide::<4>([m3, 0, 0, 0]);
-        check_wide::<4>([m3 + 1, 0, 0, 0]);
-        check_wide::<4>([m3 - 1, 0, 0, 0]);
+        let base = 1_000_000u64;
+        let base_cubed = base * base * base; // 10^18, fits u64
+        check_wide::<4>([base_cubed, 0, 0, 0]);
+        check_wide::<4>([base_cubed + 1, 0, 0, 0]);
+        check_wide::<4>([base_cubed - 1, 0, 0, 0]);
 
         // A 2-limb value: combine two u64 halves.
         let hi = 1u64;
@@ -4018,7 +4020,7 @@ mod tests {
         check_wide::<4>([u64::MAX, u64::MAX, 0, 0]); // near 2^128
 
         // Width 6 (N >= 3, Newton path for sure).
-        check_wide::<6>([m3, 0, 0, 0, 0, 0]);
+        check_wide::<6>([base_cubed, 0, 0, 0, 0, 0]);
         check_wide::<6>([u64::MAX, u64::MAX, u64::MAX, 0, 0, 0]); // near 2^192
     }
 
@@ -4113,21 +4115,21 @@ mod unified_mg_feasibility {
     use crate::int::types::traits::BigInt;
     use crate::support::rounding::RoundingMode;
 
-    /// `(a · b) / 10^scale` through the unified pipeline, computed as
+    /// `(lhs · rhs) / 10^scale` through the unified pipeline, computed as
     /// `Int<N>::widen_mul::<Int<M>>` (full product into the wider type)
     /// then `div_wide_pow10::<Int<M>>`. The wider type's u128 magnitude
     /// width is read from its scratch carrier's [`ComputeLimbs`] buffer
     /// (`single_u128`) inside the divide — the `Limbs<N>` carrier IS the
     /// mechanism for the wider work intermediate, so no work-width const
     /// parameter is named. Returns the scaled wider-width quotient.
-    fn scaled<const N: usize, const M: usize>(a: Int<N>, b: Int<N>, scale: u32) -> Int<M>
+    fn scaled<const N: usize, const M: usize>(lhs: Int<N>, rhs: Int<N>, scale: u32) -> Int<M>
     where
         Limbs<N>: ComputeLimbs,
         Int<M>: BigInt,
         Limbs<M>: ComputeLimbs,
         <Int<M> as BigInt>::Scratch: ComputeLimbs,
     {
-        let prod: Int<M> = a.widen_mul::<Int<M>>(b);
+        let prod: Int<M> = lhs.widen_mul::<Int<M>>(rhs);
         div_wide_pow10::<Int<M>>(prod, scale, RoundingMode::HalfToEven)
     }
 

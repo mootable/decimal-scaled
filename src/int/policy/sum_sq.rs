@@ -116,16 +116,16 @@ const fn select<const N: usize>() -> Select<N> {
 /// `Int<N>` (true overflow). The signs of the operands drop out of squaring.
 #[inline]
 #[must_use]
-pub(crate) fn dispatch<const N: usize>(a: Int<N>, b: Int<N>) -> Option<Int<N>>
+pub(crate) fn dispatch<const N: usize>(lhs: Int<N>, rhs: Int<N>) -> Option<Int<N>>
 where
     Limbs<N>: ComputeLimbs,
 {
     let algo = match const { select::<N>() } {
-        Select::ByAlgorithm(a) => a,
-        Select::ByValue(f) => f(&a),
+        Select::ByAlgorithm(algorithm) => algorithm,
+        Select::ByValue(choose) => choose(&lhs),
     };
     match algo {
-        Algorithm::Schoolbook => sum_sq_schoolbook::<N>(a, b),
-        Algorithm::Comba => sum_sq_comba::<N>(a, b),
+        Algorithm::Schoolbook => sum_sq_schoolbook::<N>(lhs, rhs),
+        Algorithm::Comba => sum_sq_comba::<N>(lhs, rhs),
     }
 }

@@ -112,26 +112,26 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
 #[inline]
 #[must_use]
 pub(crate) fn dispatch<const N: usize, const SCALE: u32>(
-    a: Int<N>,
-    b: Int<N>,
+    lhs: Int<N>,
+    rhs: Int<N>,
     mode: RoundingMode,
 ) -> Int<N>
 where
     Limbs<N>: ComputeLimbs,
 {
     let algo = match const { select::<N, SCALE>() } {
-        Select::ByAlgorithm(a) => a,
-        Select::ByValue(f) => f(&a, &b),
+        Select::ByAlgorithm(algorithm) => algorithm,
+        Select::ByValue(choose) => choose(&lhs, &rhs),
     };
     match algo {
         Algorithm::Native => {
-            crate::algos::mul::mul_native::mul_native::<N, SCALE>(a, b, mode)
+            crate::algos::mul::mul_native::mul_native::<N, SCALE>(lhs, rhs, mode)
         }
         Algorithm::WidenDivide => {
-            crate::algos::mul::mul_widen_divide::mul_widen_divide::<N, SCALE>(a, b, mode)
+            crate::algos::mul::mul_widen_divide::mul_widen_divide::<N, SCALE>(lhs, rhs, mode)
         }
         Algorithm::Schoolbook => {
-            crate::algos::mul::mul_schoolbook::mul_schoolbook::<N, SCALE>(a, b, mode)
+            crate::algos::mul::mul_schoolbook::mul_schoolbook::<N, SCALE>(lhs, rhs, mode)
         }
     }
 }

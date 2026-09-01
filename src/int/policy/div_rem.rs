@@ -246,11 +246,11 @@ pub(crate) fn select_for_limbs(num: &[u64], den: &[u64]) -> Algorithm {
 /// slice.
 #[inline]
 fn effective_limbs(limbs: &[u64]) -> usize {
-    let mut n = limbs.len();
-    while n > 0 && limbs[n - 1] == 0 {
-        n -= 1;
+    let mut count = limbs.len();
+    while count > 0 && limbs[count - 1] == 0 {
+        count -= 1;
     }
-    n
+    count
 }
 
 // ── 4. the dispatcher: fold `select<N>`, run the selector, route ──────
@@ -271,7 +271,7 @@ fn effective_limbs(limbs: &[u64]) -> usize {
 /// family and calls the chosen engine's `*_into` variant.
 pub(crate) fn dispatch(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
     let algo = match const { select() } {
-        Select::ByAlgorithm(fixed) => fixed,
+        Select::ByAlgorithm(algorithm) => algorithm,
         Select::ByShape(selector) => selector(num, den),
     };
     match algo {

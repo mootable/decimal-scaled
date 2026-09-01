@@ -156,14 +156,14 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // 8·N` gate sits just inside the win region (every routed cell wins,
         // none below is regressed). At the benchmarked max-scale (S-1) cells this
         // recovers 1.4–2.9× over the slice (bit-identical, all six modes).
-        (6, s) if s >= 48 => Select::ByAlgorithm(Algorithm::Native), // D115, W=18
-        (8, s) if s >= 64 => Select::ByAlgorithm(Algorithm::Native), // D153, W=24
-        (12, s) if s >= 96 => Select::ByAlgorithm(Algorithm::Native), // D230, W=36
-        (16, s) if s >= 128 => Select::ByAlgorithm(Algorithm::Native), // D307, W=48
-        (24, s) if s >= 192 => Select::ByAlgorithm(Algorithm::Native), // D462, W=72
-        (32, s) if s >= 256 => Select::ByAlgorithm(Algorithm::Native), // D616, W=96
-        (48, s) if s >= 384 => Select::ByAlgorithm(Algorithm::Native), // D924, W=144
-        (64, s) if s >= 512 => Select::ByAlgorithm(Algorithm::Native), // D1232, W=192
+        (6, scale) if scale >= 48 => Select::ByAlgorithm(Algorithm::Native), // D115, W=18
+        (8, scale) if scale >= 64 => Select::ByAlgorithm(Algorithm::Native), // D153, W=24
+        (12, scale) if scale >= 96 => Select::ByAlgorithm(Algorithm::Native), // D230, W=36
+        (16, scale) if scale >= 128 => Select::ByAlgorithm(Algorithm::Native), // D307, W=48
+        (24, scale) if scale >= 192 => Select::ByAlgorithm(Algorithm::Native), // D462, W=72
+        (32, scale) if scale >= 256 => Select::ByAlgorithm(Algorithm::Native), // D616, W=96
+        (48, scale) if scale >= 384 => Select::ByAlgorithm(Algorithm::Native), // D924, W=144
+        (64, scale) if scale >= 512 => Select::ByAlgorithm(Algorithm::Native), // D1232, W=192
         // Everything else (wider tiers at low/mid scales) — generic Newton
         // over the int layer's width-agnostic slice `icbrt`.
         _ => Select::ByAlgorithm(Algorithm::Newton),
@@ -192,8 +192,8 @@ where
         return Int::<N>::ZERO;
     }
     let algo = match const { select::<N, SCALE>() } {
-        Select::ByAlgorithm(a) => a,
-        Select::ByValue(f) => f(&raw),
+        Select::ByAlgorithm(algorithm) => algorithm,
+        Select::ByValue(choose) => choose(&raw),
     };
     match algo {
         Algorithm::Newton => cbrt::cbrt_newton::cbrt_newton::<N>(raw, SCALE, mode),

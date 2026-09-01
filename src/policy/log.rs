@@ -69,8 +69,8 @@ pub(crate) fn checked_dispatch<const N: usize, const SCALE: u32>(
     mode: RoundingMode,
 ) -> Option<Int<N>> {
     let algo = match const { select::<N, SCALE>() } {
-        Select::ByAlgorithm(a) => a,
-        Select::ByValue(f) => f(&raw),
+        Select::ByAlgorithm(algorithm) => algorithm,
+        Select::ByValue(choose) => choose(&raw),
     };
     match algo {
         Algorithm::LnDivide => ln_divide_routed::<N, SCALE>(raw, braw, mode),
@@ -87,8 +87,8 @@ pub(crate) fn dispatch_with<const N: usize, const SCALE: u32>(
     mode: RoundingMode,
 ) -> Int<N> {
     let algo = match const { select::<N, SCALE>() } {
-        Select::ByAlgorithm(a) => a,
-        Select::ByValue(f) => f(&raw),
+        Select::ByAlgorithm(algorithm) => algorithm,
+        Select::ByValue(choose) => choose(&raw),
     };
     match algo {
         Algorithm::LnDivide => ln_divide_with_routed::<N, SCALE>(raw, braw, working_digits, mode),

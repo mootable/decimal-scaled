@@ -137,7 +137,7 @@ const fn resolve<const N: usize>() -> (Algorithm, LimbSize) {
 
 // ── 4. the dispatcher: resolve the algorithm, then its limb width ─────
 
-/// Truncated-low product `out = (a · b) mod 2^(64·N)` — the single site
+/// Truncated-low product `out = (lhs · rhs) mod 2^(64·N)` — the single site
 /// [`BigInt::wrapping_mul_low_u128`] flows through. Two-stage verdict: the
 /// algorithm is resolved first, then asked for its own benched limb width
 /// ([`Algorithm::limb_size`]). Both are const here, so the `const { … }`
@@ -149,11 +149,11 @@ const fn resolve<const N: usize>() -> (Algorithm, LimbSize) {
 /// [`BigInt::wrapping_mul_low_u128`]: crate::int::types::traits::BigInt::wrapping_mul_low_u128
 /// [`BigInt::wrapping_mul`]: crate::int::types::traits::BigInt::wrapping_mul
 #[inline]
-pub(crate) fn dispatch<const N: usize>(a: &[u64; N], b: &[u64; N], out: &mut [u64; N]) {
+pub(crate) fn dispatch<const N: usize>(lhs: &[u64; N], rhs: &[u64; N], out: &mut [u64; N]) {
     // Stage 1: resolve the algorithm. Stage 2: ask it for its limb width.
-    let (algo, limb) = const { resolve::<N>() };
-    match (algo, limb) {
-        (Algorithm::LowLimb, LimbSize::U64) => mul_low_limb::<N, u64>(a, b, out),
-        (Algorithm::LowLimb, LimbSize::U128) => mul_low_limb::<N, u128>(a, b, out),
+    let (algo, limb_size) = const { resolve::<N>() };
+    match (algo, limb_size) {
+        (Algorithm::LowLimb, LimbSize::U64) => mul_low_limb::<N, u64>(lhs, rhs, out),
+        (Algorithm::LowLimb, LimbSize::U128) => mul_low_limb::<N, u128>(lhs, rhs, out),
     }
 }

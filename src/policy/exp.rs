@@ -138,8 +138,8 @@ fn wide_tang_gate<const N: usize, const SCALE: u32>(raw: &Int<N>) -> Algorithm {
 #[inline]
 fn resolve<const N: usize, const SCALE: u32>(raw: &Int<N>) -> Algorithm {
     match const { select::<N, SCALE>() } {
-        Select::ByAlgorithm(a) => a,
-        Select::ByValue(f) => f(raw),
+        Select::ByAlgorithm(algorithm) => algorithm,
+        Select::ByValue(choose) => choose(raw),
     }
 }
 
@@ -338,11 +338,11 @@ fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode
         // SCALEs implicitly bounds `|x|` to the small-`|k|` regime.
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => {
-            let r = raw.resize_to::<Int<3>>();
+            let raw_d57 = raw.resize_to::<Int<3>>();
             let out = match SCALE {
-                0..=44 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 128, 8, true, true, false>(r, mode),
-                45..=56 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 512, 30, true, true, false>(r, mode),
-                _ => crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(r, mode),
+                0..=44 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 128, 8, true, true, false>(raw_d57, mode),
+                45..=56 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 512, 30, true, true, false>(raw_d57, mode),
+                _ => crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw_d57, mode),
             };
             Some(out.resize_to::<Int<N>>())
         }
@@ -470,13 +470,16 @@ mod series_rung_tests {
     #[cfg(feature = "d307")]
     fn d307_exp_rung_matches_tier_kernel() {
         type Core = crate::types::widths::wide_trig_d307::Core;
-        for v in ["0", "0.5", "1", "1.5", "9.9", "-1", "-9.9", "0.0000000001", "50", "-50"] {
-            let x: crate::D307<19> = v.parse().unwrap();
+        for input in ["0", "0.5", "1", "1.5", "9.9", "-1", "-9.9", "0.0000000001", "50", "-50"] {
+            let value: crate::D307<19> = input.parse().unwrap();
             for mode in ALL_MODES {
                 assert_eq!(
-                    super::series_at_rung::<Core, 19>(x.to_bits(), mode),
-                    crate::algos::support::wide_trig_core::exp_series::<Core, 19>(x.to_bits(), mode),
-                    "exp({v}) mode {mode:?}"
+                    super::series_at_rung::<Core, 19>(value.to_bits(), mode),
+                    crate::algos::support::wide_trig_core::exp_series::<Core, 19>(
+                        value.to_bits(),
+                        mode
+                    ),
+                    "exp({input}) mode {mode:?}"
                 );
             }
         }
