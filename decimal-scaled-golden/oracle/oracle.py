@@ -33,6 +33,19 @@ class Oracle(ABC):
     @abstractmethod
     def supports(self, func: str) -> bool: ...
 
+    def can_generate(self, func: str) -> bool:
+        """Whether this oracle may GENERATE `func`, as opposed to merely validating it.
+
+        Defaults to `supports`, because computing a function and being trusted to produce
+        the stored answer are usually the same claim. They come apart when an oracle can
+        CHECK a value it cannot reliably PIN: flint computes `rem` well enough to confirm
+        someone else's answer, but `rem` is discontinuous at exact multiples, where an
+        interval around the true quotient never resolves — so it must not be the source of
+        that answer. Overriding here keeps that judgement next to the adapter that knows
+        why, instead of in a per-function table in the pipeline.
+        """
+        return self.supports(func)
+
     @abstractmethod
     def value(self, func: str, inputs: List[str], precision: int) -> str:
         """The function value as a signed `digits.digits` string, truncated toward

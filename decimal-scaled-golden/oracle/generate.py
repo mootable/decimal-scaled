@@ -42,6 +42,26 @@ GUARD = 2
 # agreed on. Everything else validates.
 DEFAULT_GENERATOR = "flint"
 
+# The oracles ALLOWED to generate, in preference order. Membership is a capability claim,
+# not a convenience: a generator must be able to PIN its own answer.
+#
+#   flint     — Arb's rigorous intervals + `unique_fmpz` pin a truncation, and it escalates
+#               precision until the floor resolves on the true side.
+#   fraction  — exact rational arithmetic. It does not need to escalate because there is
+#               nothing to resolve: the scaled floor is integer division of exact rationals,
+#               so it pins by construction. It covers only the finite-result arithmetic ops,
+#               which is precisely where flint's adapter stops (it implements no `rem`).
+#
+# NOTHING ELSE MAY GENERATE, and the reason is concrete rather than theoretical. `mpmath`
+# is a binary point float: an exact decimal such as `1.04692317316873037` has no finite
+# binary form, so rendering it to 1233 digits produces a spurious `...36999...` tail that
+# the termination check then bakes in as a truncation. `decimal` is exact base-10 but a
+# point value behind a fixed window — its inability to pin is what produced six wrong `exp`
+# rows that two oracles then agreed on. Both are strong VALIDATORS and neither is fit to
+# generate. A fallthrough that picked by validator order rather than by this list generated
+# `rem` with mpmath and reproduced that exact tail on ten rows.
+GENERATOR_ORDER = ["flint", "fraction"]
+
 # Validator pool, in the order they appear in a line comment. Each is used wherever it
 # supports the function AND is not that function's generator; an unavailable backend is
 # skipped. More validators ⇒ stronger cross-check (the owner's directive).
@@ -145,12 +165,35 @@ def _build_oracles(pool):
 
 
 def _generator_for(func, oracles, override):
-    """`(name, oracle)` for `func`: the CLI override if given, else the policy, falling
-    back to the default generator when the chosen one is unavailable."""
-    name = override or DEFAULT_GENERATOR
-    if name not in oracles:
-        name = DEFAULT_GENERATOR
-    return name, oracles[name]
+    """`(name, oracle)` for `func`: the CLI override if given, else the first entry of
+    [`GENERATOR_ORDER`] that is available AND implements `func`.
+
+    The order is a preference among oracles that can PIN; it is not a fallthrough to
+    whatever happens to answer. Choosing by [`VALIDATOR_ORDER`] instead — which is a
+    reporting order, not a trust order — puts `mpmath` first, and generating `rem` with a
+    binary point float rewrote ten exact decimals as `...36999...`, the spurious tail
+    `fraction_oracle` documents. A non-pinning oracle must never generate.
+
+    NOT SUPPORTING a function is not the same as being UNAVAILABLE, and this used to
+    conflate them: only availability was checked, so asking flint for `rem` — which its
+    adapter does not implement — flagged every row, wrote an EMPTY `.au`, and exited 0.
+    Both cases now resolve to a capable generator or raise.
+    """
+    if override:
+        if override in oracles and oracles[override].can_generate(func):
+            return override, oracles[override]
+        raise SystemExit(
+            f"--generator {override} cannot generate {func}: "
+            f"{'does not implement it' if override in oracles else 'unavailable'}")
+    for nm in GENERATOR_ORDER:
+        if nm in oracles and oracles[nm].can_generate(func):
+            if nm != GENERATOR_ORDER[0]:
+                print(f"[info] {GENERATOR_ORDER[0]} does not implement {func}; "
+                      f"generating with '{nm}'", file=sys.stderr)
+            return nm, oracles[nm]
+    raise SystemExit(
+        f"no generator implements {func} — refusing to write an empty {func}.au. "
+        f"Generators tried: {', '.join(GENERATOR_ORDER)}.")
 
 
 def _validators_for(func, gen_name, oracles):
@@ -315,9 +358,20 @@ def cmd_generate(args):
             for func, row in pool.imap_unordered(_gen_line, items, chunksize=8):
                 collect(func, row)
 
+    empty = []
     for func in funcs:
         n = _write_func(out_dir, func, results[func], args.precision)
         print(f"{func}: wrote {n} lines")
+        if n == 0:
+            empty.append(func)
+    # A `.au` with no rows still parses and the gate still passes — it simply grades
+    # NOTHING. That has to be louder than a zero exit code, or a whole function can drop
+    # out of coverage in silence.
+    if empty:
+        raise SystemExit(
+            "wrote 0 rows for: " + ", ".join(empty) +
+            " — every input was flagged or dropped, and those .au files are now empty. "
+            "Restore them from git, fix the cause, and regenerate.")
     return 0
 
 
