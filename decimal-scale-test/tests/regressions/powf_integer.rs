@@ -268,7 +268,13 @@ mod from_powf_wide_integer_exact {
     /// Trunc/Floor keep, Ceiling bumps).
     mod fractional_base {
         use super::MODES;
-        use decimal_scaled::{RoundingMode, D1232, D57};
+        use decimal_scaled::{RoundingMode, D57};
+        // `D1232` is gated behind `d1232` / `xx-wide`, and its only use here is
+        // `d1232_fractional_exact_and_reciprocal` below. The import carries the
+        // SAME cfg as that test so neither a wide-only build (unresolved import)
+        // nor an xx-wide build (unused import) is left broken.
+        #[cfg(feature = "xx-wide")]
+        use decimal_scaled::D1232;
 
         fn sixes_with_last(scale: usize, last: char) -> String {
             let mut s = String::from("0.");
