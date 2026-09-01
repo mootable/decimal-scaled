@@ -31,7 +31,7 @@
 /// column is emitted, the accumulator is shifted down 64 bits — the carry
 /// into the next column — and `hi` folds back into the top.
 #[inline]
-pub(crate) const fn sqr_low_fixed<const N: usize>(x: &[u64; N], out: &mut [u64; N]) {
+pub(crate) const fn sqr_low_fixed<const N: usize>(value: &[u64; N], out: &mut [u64; N]) {
     let mut acc: u128 = 0;
     let mut hi: u64 = 0;
     let mut col = 0;
@@ -41,15 +41,15 @@ pub(crate) const fn sqr_low_fixed<const N: usize>(x: &[u64; N], out: &mut [u64; 
         let mut i = 0;
         while 2 * i <= col {
             let j = col - i;
-            let p = (x[i] as u128) * (x[j] as u128);
+            let prod = (value[i] as u128) * (value[j] as u128);
             // Diagonal once; off-diagonal twice (the symmetry doubling).
             let reps = if i == j { 1 } else { 2 };
-            let mut r = 0;
-            while r < reps {
-                let (s, c) = acc.overflowing_add(p);
-                acc = s;
-                hi += c as u64;
-                r += 1;
+            let mut rep = 0;
+            while rep < reps {
+                let (sum, carried) = acc.overflowing_add(prod);
+                acc = sum;
+                hi += carried as u64;
+                rep += 1;
             }
             i += 1;
         }
@@ -77,33 +77,33 @@ mod tests {
     /// propagation.
     fn diff_at<const N: usize>(seeds: &[u64]) {
         for &seed in seeds {
-            let mut x = [0u64; N];
-            let mut s = seed;
-            for limb in x.iter_mut() {
+            let mut value = [0u64; N];
+            let mut state = seed;
+            for limb in value.iter_mut() {
                 // SplitMix64 step.
-                s = s.wrapping_add(0x9E37_79B9_7F4A_7C15);
-                let mut z = s;
+                state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+                let mut z = state;
                 z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
                 z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
                 *limb = z ^ (z >> 31);
             }
-            let mut got = [0u64; N];
-            sqr_low_fixed::<N>(&x, &mut got);
-            let mut want = [0u64; N];
-            mul_low_fixed::<N>(&x, &x, &mut want);
-            assert_eq!(got, want, "N={N} seed={seed:#x} x={x:?}");
+            let mut actual = [0u64; N];
+            sqr_low_fixed::<N>(&value, &mut actual);
+            let mut expected = [0u64; N];
+            mul_low_fixed::<N>(&value, &value, &mut expected);
+            assert_eq!(actual, expected, "N={N} seed={seed:#x} x={value:?}");
         }
     }
 
     /// All-ones operand: every column saturates, the worst case for the
     /// running-accumulator carry.
     fn all_ones_at<const N: usize>() {
-        let x = [u64::MAX; N];
-        let mut got = [0u64; N];
-        sqr_low_fixed::<N>(&x, &mut got);
-        let mut want = [0u64; N];
-        mul_low_fixed::<N>(&x, &x, &mut want);
-        assert_eq!(got, want, "all-ones N={N}");
+        let value = [u64::MAX; N];
+        let mut actual = [0u64; N];
+        sqr_low_fixed::<N>(&value, &mut actual);
+        let mut expected = [0u64; N];
+        mul_low_fixed::<N>(&value, &value, &mut expected);
+        assert_eq!(actual, expected, "all-ones N={N}");
     }
 
     #[test]

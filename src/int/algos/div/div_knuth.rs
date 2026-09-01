@@ -23,79 +23,80 @@ use crate::int::types::compute_limbs::max_single_limbs;
 /// `Int<N>: ComputeLimbs` context) call `div_knuth_into` directly with their
 /// own buffer (`single_buffered_u64` for a value divide, `quad_buffered_u64` for the cbrt
 /// radicand divide), skipping the build-max zeroing.
-pub(crate) fn div_knuth(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
+pub(crate) fn div_knuth(dividend: &[u64], divisor: &[u64], quotient: &mut [u64],
+    remainder: &mut [u64]) {
     let mut u = max_single_limbs();
     let mut v = max_single_limbs();
-    div_knuth_into(num, den, quot, rem, &mut u, &mut v);
+    div_knuth_into(dividend, divisor, quotient, remainder, &mut u, &mut v);
 }
 
 /// Knuth Algorithm D at base 2^64, in caller-provided normalised `u`/`v`
 /// scratch. `u` and `v` must be **zeroed** on entry and at least
-/// `num.len() + 2` / `den.len()` u64 limbs respectively (the divide reads
-/// one limb above the live dividend, relying on the zero there).
+/// `dividend.len() + 2` / `divisor.len()` u64 limbs respectively (the divide
+/// reads one limb above the live dividend, relying on the zero there).
 ///
 /// Every limb is a u64 and the q̂ estimator uses [`Mg2By1`]. The
 /// multiply-subtract pass uses native `u64 × u64 → u128`, which keeps the
 /// carry-merge to a single layer.
 pub(crate) fn div_knuth_into(
-    num: &[u64],
-    den: &[u64],
-    quot: &mut [u64],
-    rem: &mut [u64],
+    dividend: &[u64],
+    divisor: &[u64],
+    quotient: &mut [u64],
+    remainder: &mut [u64],
     u: &mut [u64],
     v: &mut [u64],
 ) {
-    for q in quot.iter_mut() {
-        *q = 0;
+    for slot in quotient.iter_mut() {
+        *slot = 0;
     }
-    for r in rem.iter_mut() {
-        *r = 0;
+    for slot in remainder.iter_mut() {
+        *slot = 0;
     }
 
-    let mut n = den.len();
-    while n > 0 && den[n - 1] == 0 {
+    let mut n = divisor.len();
+    while n > 0 && divisor[n - 1] == 0 {
         n -= 1;
     }
     assert!(n > 0, "div_knuth: divide by zero");
 
-    let mut top = num.len();
-    while top > 0 && num[top - 1] == 0 {
-        top -= 1;
+    let mut dividend_len = dividend.len();
+    while dividend_len > 0 && dividend[dividend_len - 1] == 0 {
+        dividend_len -= 1;
     }
-    if top < n {
-        let copy_n = num.len().min(rem.len());
+    if dividend_len < n {
+        let copy_len = dividend.len().min(remainder.len());
         let mut i = 0;
-        while i < copy_n {
-            rem[i] = num[i];
+        while i < copy_len {
+            remainder[i] = dividend[i];
             i += 1;
         }
         return;
     }
 
-    let shift = den[n - 1].leading_zeros();
-    debug_assert!(top < u.len() && n <= v.len());
+    let shift = divisor[n - 1].leading_zeros();
+    debug_assert!(dividend_len < u.len() && n <= v.len());
 
     if shift == 0 {
-        u[..top].copy_from_slice(&num[..top]);
-        u[top] = 0;
-        v[..n].copy_from_slice(&den[..n]);
+        u[..dividend_len].copy_from_slice(&dividend[..dividend_len]);
+        u[dividend_len] = 0;
+        v[..n].copy_from_slice(&divisor[..n]);
     } else {
         let mut carry: u64 = 0;
-        for i in 0..top {
-            let val = num[i];
-            u[i] = (val << shift) | carry;
-            carry = val >> (64 - shift);
+        for i in 0..dividend_len {
+            let limb = dividend[i];
+            u[i] = (limb << shift) | carry;
+            carry = limb >> (64 - shift);
         }
-        u[top] = carry;
+        u[dividend_len] = carry;
         carry = 0;
         for i in 0..n {
-            let val = den[i];
-            v[i] = (val << shift) | carry;
-            carry = val >> (64 - shift);
+            let limb = divisor[i];
+            v[i] = (limb << shift) | carry;
+            carry = limb >> (64 - shift);
         }
     }
 
-    let m_plus_n = if u[top] != 0 { top + 1 } else { top };
+    let m_plus_n = if u[dividend_len] != 0 { dividend_len + 1 } else { dividend_len };
     debug_assert!(m_plus_n >= n);
     let m = m_plus_n - n;
 
@@ -103,29 +104,29 @@ pub(crate) fn div_knuth_into(
     // divisors have a much faster hardware divide path; route them out
     // here so the hot loop below can assume n >= 2.
     if n == 1 {
-        div_rem(num, den, quot, rem);
+        div_rem(dividend, divisor, quotient, remainder);
         return;
     }
 
     // Knuth D6/D4: emit the `m + 1` quotient digits and reduce `u` in place to
     // the remainder. The base-2⁶⁴ (`L = u64`) monomorphisation of the
-    // limb-generic [`knuth_d_core`]; the u64 quotient slice IS `quot` (no
+    // limb-generic [`knuth_d_core`]; the u64 quotient slice IS `quotient` (no
     // pack/unpack).
-    knuth_d_core::<u64>(u, v, n, m, quot);
+    knuth_d_core::<u64>(u, v, n, m, quotient);
 
     if shift == 0 {
-        let copy_n = n.min(rem.len());
-        rem[..copy_n].copy_from_slice(&u[..copy_n]);
+        let copy_len = n.min(remainder.len());
+        remainder[..copy_len].copy_from_slice(&u[..copy_len]);
     } else {
         for i in 0..n {
-            if i < rem.len() {
+            if i < remainder.len() {
                 let lo = u[i] >> shift;
                 let hi_into_lo = if i + 1 < n {
                     u[i + 1] << (64 - shift)
                 } else {
                     0
                 };
-                rem[i] = lo | hi_into_lo;
+                remainder[i] = lo | hi_into_lo;
             }
         }
     }
@@ -147,14 +148,15 @@ pub(crate) fn div_knuth_into(
 /// - at each step `u[j+n] <= v[n-1]` (the Knuth normalisation invariant — the
 ///   leading dividend limb never exceeds the leading divisor limb).
 ///
-/// On return `quot` (little-endian **u64** — the engine's external quotient
-/// type) holds the `m + 1` quotient digits (each `L` digit serialised at its
-/// u64 limb offset via [`DivLimb::store_quot_digit`], bounds-guarded) and
-/// `u[..n]` holds the remainder (still normalised — the caller denormalises by
-/// the same shift). The quotient is exact and UNIQUE, so the output is
+/// On return `quotient` (little-endian **u64** — the engine's external
+/// quotient type) holds the `m + 1` quotient digits (each `L` digit serialised
+/// at its u64 limb offset via [`DivLimb::store_quot_digit`], bounds-guarded)
+/// and `u[..n]` holds the remainder (still normalised — the caller denormalises
+/// by the same shift). The quotient is exact and UNIQUE, so the output is
 /// **bit-identical** for any conforming [`DivLimb`].
 #[inline]
-pub(crate) fn knuth_d_core<L: DivLimb>(u: &mut [L], v: &[L], n: usize, m: usize, quot: &mut [u64]) {
+pub(crate) fn knuth_d_core<L: DivLimb>(u: &mut [L], v: &[L], n: usize, m: usize,
+    quotient: &mut [u64]) {
     let v_top = v[n - 1]; // normalised: top bit set
     let v_below = v[n - 2];
     // The q̂ 2-by-1 reciprocal of the (constant) top divisor limb, built ONCE.
@@ -165,9 +167,9 @@ pub(crate) fn knuth_d_core<L: DivLimb>(u: &mut [L], v: &[L], n: usize, m: usize,
         j_plus_one -= 1;
         let j = j_plus_one;
 
-        let jn = j + n;
-        let u_top = u[jn];
-        let u_next = u[jn - 1];
+        let j_plus_n = j + n;
+        let u_top = u[j_plus_n];
+        let u_next = u[j_plus_n - 1];
         debug_assert!(u_top <= v_top, "knuth_d_core: dividend window top exceeds divisor top");
 
         // D3. q̂ = min(floor((u_top·B + u_next) / v_top), B − 1). The
@@ -176,27 +178,27 @@ pub(crate) fn knuth_d_core<L: DivLimb>(u: &mut [L], v: &[L], n: usize, m: usize,
         // remainder estimate r̂ = u_next + v_top already ran past `B` (a wrapped
         // r̂ ⇒ no D3 refinement is needed).
         let (mut q_hat, mut r_hat, overflow) = if u_top >= v_top {
-            let (r, of) = u_next.overflowing_add(v_top);
-            (L::MAX, r, of)
+            let (r, overflowed) = u_next.overflowing_add(v_top);
+            (L::MAX, r, overflowed)
         } else {
             let (q, r) = L::est_2by1(&recip, u_top, u_next);
             (q, r, false)
         };
 
-        // D3 refinement against v[n-2]: while q̂·v_below > r̂·B + u[jn-2],
+        // D3 refinement against v[n-2]: while q̂·v_below > r̂·B + u[j_plus_n-2],
         // decrement q̂ (and bump r̂ by v_top), until r̂ runs past B.
         if !overflow {
             loop {
                 let (p_lo, p_hi) = q_hat.widening_mul(v_below);
-                if p_hi < r_hat || (p_hi == r_hat && p_lo <= u[jn - 2]) {
+                if p_hi < r_hat || (p_hi == r_hat && p_lo <= u[j_plus_n - 2]) {
                     break;
                 }
                 q_hat = q_hat.overflowing_sub(L::ONE).0;
-                let (new_r, of) = r_hat.overflowing_add(v_top);
-                if of {
+                let (new_r_hat, overflowed) = r_hat.overflowing_add(v_top);
+                if overflowed {
                     break;
                 }
-                r_hat = new_r;
+                r_hat = new_r_hat;
             }
         }
 
@@ -211,32 +213,33 @@ pub(crate) fn knuth_d_core<L: DivLimb>(u: &mut [L], v: &[L], n: usize, m: usize,
         let mut carry = L::ACC_ZERO;
         let mut i = 0;
         while i < n {
-            let (res, c) = L::mul_sub_step(q_hat, v[i], u[j + i], carry);
-            u[j + i] = res;
-            carry = c;
+            let (new_limb, new_carry) = L::mul_sub_step(q_hat, v[i], u[j + i], carry);
+            u[j + i] = new_limb;
+            carry = new_carry;
             i += 1;
         }
-        let (s2, b1) = L::mul_sub_final(u[jn], carry);
-        u[jn] = s2;
+        let (final_limb, borrowed) = L::mul_sub_final(u[j_plus_n], carry);
+        u[j_plus_n] = final_limb;
 
         // D5/D6. If the final subtraction borrowed, q̂ was 1 too big: add the
         // divisor back once and decrement q̂.
-        if b1 {
+        if borrowed {
             q_hat = q_hat.overflowing_sub(L::ONE).0;
             let mut carry = L::ZERO;
             let mut i = 0;
             while i < n {
-                let (s1, c1) = u[j + i].overflowing_add(v[i]);
-                let (s2, c2) = s1.overflowing_add(carry);
-                u[j + i] = s2;
-                // c1, c2 are never both set (`u[j+i]+v[i] ≤ 2B−2 < 2B−1`), so
-                // `0 + c1 + c2 ∈ {0, 1}` — the schoolbook carry merge.
-                carry = L::ZERO.add_carries(c1, c2);
+                let (sum1, carry1) = u[j + i].overflowing_add(v[i]);
+                let (sum2, carry2) = sum1.overflowing_add(carry);
+                u[j + i] = sum2;
+                // carry1, carry2 are never both set (`u[j+i]+v[i] ≤ 2B−2 <
+                // 2B−1`), so `0 + carry1 + carry2 ∈ {0, 1}` — the schoolbook
+                // carry merge.
+                carry = L::ZERO.add_carries(carry1, carry2);
                 i += 1;
             }
-            u[jn] = u[jn].overflowing_add(carry).0;
+            u[j_plus_n] = u[j_plus_n].overflowing_add(carry).0;
         }
 
-        L::store_quot_digit(quot, j, q_hat);
+        L::store_quot_digit(quotient, j, q_hat);
     }
 }

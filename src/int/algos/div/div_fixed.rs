@@ -11,9 +11,10 @@ use crate::int::policy::div_rem::dispatch as div_rem_dispatch;
 
 /// Const-`N` fast-arm divmod over little-endian u64 magnitude limbs.
 ///
-/// `num`, `den`, `quot`, `rem` are all `N`-limb magnitudes (sign handling
-/// is the caller's; this is an unsigned division of the magnitudes). The
-/// quotient and remainder are written into `quot` / `rem`.
+/// `dividend`, `divisor`, `quotient`, `remainder` are all `N`-limb
+/// magnitudes (sign handling is the caller's; this is an unsigned division
+/// of the magnitudes). The quotient and remainder are written into
+/// `quotient` / `remainder`.
 ///
 /// Because `N` is a compile-time constant, the `if N == …` ladder
 /// const-folds per monomorphisation:
@@ -29,27 +30,27 @@ use crate::int::policy::div_rem::dispatch as div_rem_dispatch;
 /// caller guards this before delegating).
 #[inline]
 pub(crate) fn div_rem_mag_fixed<const N: usize>(
-    num: &[u64; N],
-    den: &[u64; N],
-    quot: &mut [u64; N],
-    rem: &mut [u64; N],
+    dividend: &[u64; N],
+    divisor: &[u64; N],
+    quotient: &mut [u64; N],
+    remainder: &mut [u64; N],
 ) {
     if N == 1 {
-        let n0 = num[0];
-        let d0 = den[0];
-        quot[0] = n0 / d0;
-        rem[0] = n0 % d0;
+        let dividend_limb = dividend[0];
+        let divisor_limb = divisor[0];
+        quotient[0] = dividend_limb / divisor_limb;
+        remainder[0] = dividend_limb % divisor_limb;
     } else if N == 2 {
-        let n = (num[0] as u128) | ((num[1] as u128) << 64);
-        let d = (den[0] as u128) | ((den[1] as u128) << 64);
-        let q = n / d;
-        let r = n % d;
-        quot[0] = q as u64;
-        quot[1] = (q >> 64) as u64;
-        rem[0] = r as u64;
-        rem[1] = (r >> 64) as u64;
+        let dividend_u128 = (dividend[0] as u128) | ((dividend[1] as u128) << 64);
+        let divisor_u128 = (divisor[0] as u128) | ((divisor[1] as u128) << 64);
+        let quotient_u128 = dividend_u128 / divisor_u128;
+        let remainder_u128 = dividend_u128 % divisor_u128;
+        quotient[0] = quotient_u128 as u64;
+        quotient[1] = (quotient_u128 >> 64) as u64;
+        remainder[0] = remainder_u128 as u64;
+        remainder[1] = (remainder_u128 >> 64) as u64;
     } else {
-        div_rem_dispatch(num, den, quot, rem);
+        div_rem_dispatch(dividend, divisor, quotient, remainder);
     }
 }
 
@@ -64,7 +65,8 @@ pub(crate) fn div_rem_mag_fixed<const N: usize>(
 /// `int::policy` layer directly. Fixed-width `Int<N>` callers take
 /// [`div_rem_mag_fixed`] instead. The divisor must be non-zero.
 #[inline]
-pub(crate) fn div_rem_mag_slice(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
-    div_rem_dispatch(num, den, quot, rem);
+pub(crate) fn div_rem_mag_slice(dividend: &[u64], divisor: &[u64], quotient: &mut [u64],
+    remainder: &mut [u64]) {
+    div_rem_dispatch(dividend, divisor, quotient, remainder);
 }
 
