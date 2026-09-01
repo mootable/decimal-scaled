@@ -2801,13 +2801,33 @@ where
             // It is kept for the untagged path because the hyperbolics reach
             // this same endgame through `round_to_storage_widening_g` with the
             // flag set, and dropping it there would move them.
-            let away = match tail0 {
-                Some(t) if q_grid != lit(0) => Some((t == TailSign::Above) == !neg0),
+            // `proven`: the TAG decided this endgame, not the blanket. The
+            // tag is a proof, and a proof needs no wider retry — the same
+            // rule the nearest branch's `tag_decides` applies (issue #95):
+            // the `S2` walk could only run its own ladder to this same
+            // endgame and re-derive the same side from the same producer.
+            // The blanket verdicts stay UNRESOLVED as before, so the
+            // widening caller still retries those at the wider integer.
+            //
+            // The `q_grid` snap above assumes `rem0` is kernel noise. For a
+            // TAGGED probe that is false: the tag is only emitted with the
+            // accumulated error proven exactly zero, so `q0`/`rem0` are the
+            // exact partial sum and the snap discards a real residual. The
+            // tag then proves the tail's side of the PROBE's value while the
+            // code reads it as the side of the GRID line — which differ
+            // whenever `rem0 != 0` and `|tail| < rem0/div0`. Issue #98; the
+            // fix is to skip the snap for a tagged probe rather than to gate
+            // this arm. Recorded here because `proven` removes the wider
+            // retry, so this endgame's answer is final where it once was not.
+            let (away, proven) = match tail0 {
+                Some(t) if q_grid != lit(0) => {
+                    (Some((t == TailSign::Above) == !neg0), true)
+                }
                 _ => {
                     if never_exact {
-                        Some(true)
+                        (Some(true), false)
                     } else {
-                        None
+                        (None, false)
                     }
                 }
             };
@@ -2829,7 +2849,7 @@ where
                     RoundingMode::Ceiling => !neg0,
                     _ => unreachable!(),
                 };
-            return (finish(neg0, q_base, tail_bump), false);
+            return (finish(neg0, q_base, tail_bump), proven);
         }
         let step = (target + base_guard).max(base_guard);
         let next_guard = guard.saturating_add(step).min(max_guard);
@@ -4025,6 +4045,56 @@ mod tagged_half_walker_contract {
         }
     }
 
+    /// A DIRECTED endgame decided by the TAG is a proof, so the widening
+    /// retry at `S2` must not run — its ladder could only walk to this
+    /// same endgame and re-derive the same side from the same producer.
+    /// (The blanket `never_exact` endgame keeps its unresolved verdict
+    /// and still retries, per `untagged_half_tie_keeps_the_never_exact_
+    /// endgame_bump` — only a tag verdict is a proof.)
+    ///
+    /// The recompute lands exactly ON the storage grid at every guard
+    /// (`1 - 10^-K` with the deciding deviation past both widths' reach —
+    /// the issue #84 directed deep-tie shape) with a proven `Below` tail:
+    /// the truth is strictly below the grid line, so Trunc/Floor step one
+    /// ULP toward zero and Ceiling holds the line.
+    #[test]
+    fn tag_decided_directed_endgame_skips_the_wider_retry() {
+        use core::cell::Cell;
+        fn grid<S: BigInt>(g: u32) -> S
+        where
+            S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+        {
+            crate::consts::pow10::dispatch::<S>(TARGET + g)
+                - crate::consts::pow10::dispatch::<S>(g + K)
+        }
+        for (mode, expect) in [
+            (RoundingMode::Trunc, DOWN - 1),
+            (RoundingMode::Floor, DOWN - 1),
+            (RoundingMode::Ceiling, DOWN),
+        ] {
+            let s2_calls = Cell::new(0u32);
+            let r = round_to_storage_widening_tail_signed_g::<St, S1, S2>(
+                BASE_GUARD,
+                TARGET,
+                mode,
+                true, // never_exact, as the exp callers pass
+                St::MAX,
+                St::MIN,
+                |g| (grid::<S1>(g), Some(TailSign::Below)),
+                |g| {
+                    s2_calls.set(s2_calls.get() + 1);
+                    (grid::<S2>(g), Some(TailSign::Below))
+                },
+            )
+            .as_i128();
+            assert_eq!(r, expect, "a Below tag on the grid line under {mode:?}");
+            assert_eq!(
+                s2_calls.get(),
+                0,
+                "a tag-proven directed endgame must not retry at the wider width under {mode:?}"
+            );
+        }
+    }
 }
 
 /// The expm1/log1p sibling walker's tagged-exact-half TERMINATION contract:
