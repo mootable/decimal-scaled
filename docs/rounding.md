@@ -23,23 +23,108 @@ system.
 
 ## `RoundingMode`
 
+The eight variants are the full General Decimal Arithmetic rounding set,
+so each one carries the spec's name alongside it:
+
 ```rust
 pub enum RoundingMode {
     /// Round to nearest, ties to even. IEEE-754 default; unbiased.
-    /// This is the crate default.
+    /// This is the crate default. GDA `round-half-even`.
     HalfToEven,
     /// Round to nearest, ties away from zero. Commercial/retail rule.
+    /// GDA `round-half-up`.
     HalfAwayFromZero,
-    /// Round to nearest, ties toward zero.
+    /// Round to nearest, ties toward zero. GDA `round-half-down`.
     HalfTowardZero,
     /// Truncate toward zero (what an `as` integer cast does).
+    /// GDA `round-down`.
     Trunc,
-    /// Round toward negative infinity.
+    /// Round toward negative infinity. GDA `round-floor`.
     Floor,
-    /// Round toward positive infinity.
+    /// Round toward positive infinity. GDA `round-ceiling`.
     Ceiling,
+    /// Round away from zero whenever anything was discarded - the exact
+    /// mirror of `Trunc`. GDA `round-up`.
+    AwayFromZero,
+    /// Round away from zero only when the last *kept* digit is `0` or
+    /// `5`; otherwise truncate. GDA `round-05up`.
+    ZeroFiveUp,
 }
 ```
+
+## Where each mode rounds
+
+Most modes agree most of the time, so a table of arbitrary values teaches
+nothing. Every row below makes at least one mode disagree with the rest,
+and every mode differs from every other mode in at least one row — so any
+two columns you compare are genuinely distinguishable here.
+
+Each value is rounded **to an integer** (target scale `0`), so the digit
+being kept is the units digit and everything after the point is
+discarded:
+
+```rust
+use decimal_scaled::{D38, RoundingMode};
+
+let v: D38<1> = "5.7".parse().unwrap();
+let r: D38<0> = v.quantize_with::<0>(RoundingMode::ZeroFiveUp);
+assert_eq!(r.to_bits(), 6);
+```
+
+| Value | HalfToEven | HalfAwayFromZero | HalfTowardZero | Trunc | Floor | Ceiling | AwayFromZero | ZeroFiveUp |
+|---|---|---|---|---|---|---|---|---|
+| `2.0` | `2` | `2` | `2` | `2` | `2` | `2` | `2` | `2` |
+| `0.2` | `0` | `0` | `0` | `0` | `0` | `1` | `1` | `1` |
+| `0.5` | `0` | `1` | `0` | `0` | `0` | `1` | `1` | `1` |
+| `1.5` | `2` | `2` | `1` | `1` | `1` | `2` | `2` | `1` |
+| `2.5` | `2` | `3` | `2` | `2` | `2` | `3` | `3` | `2` |
+| `0.7` | `1` | `1` | `1` | `0` | `0` | `1` | `1` | `1` |
+| `1.7` | `2` | `2` | `2` | `1` | `1` | `2` | `2` | `1` |
+| `4.7` | `5` | `5` | `5` | `4` | `4` | `5` | `5` | `4` |
+| `5.7` | `6` | `6` | `6` | `5` | `5` | `6` | `6` | `6` |
+| `-0.5` | `0` | `-1` | `0` | `0` | `-1` | `0` | `-1` | `-1` |
+| `-1.5` | `-2` | `-2` | `-1` | `-1` | `-2` | `-1` | `-2` | `-1` |
+| `-0.7` | `-1` | `-1` | `-1` | `0` | `-1` | `0` | `-1` | `-1` |
+| `-5.7` | `-6` | `-6` | `-6` | `-5` | `-6` | `-5` | `-6` | `-6` |
+
+Reading it:
+
+- **`2.0` is exact.** Nothing is discarded, so no mode moves it. Every
+  mode leaves an exact value alone — rounding only ever acts on a
+  non-zero discarded part.
+- **`0.2` separates `AwayFromZero` from `HalfAwayFromZero`.**
+  `AwayFromZero` steps up on *any* discarded part; `HalfAwayFromZero`
+  only steps up from the half-way point, so it stays at `0` here. Below
+  half is the only place those two differ.
+- **`0.5` / `1.5` / `2.5` separate the three half rules.** `HalfToEven`
+  splits `1.5` and `2.5`, sending each to its even neighbour;
+  `HalfAwayFromZero` and `HalfTowardZero` take opposite sides of every
+  tie.
+- **The negatives separate `Floor` / `Ceiling` from `Trunc` /
+  `AwayFromZero`.** `Ceiling` and `AwayFromZero` agree on every positive
+  value, and `Floor` and `Trunc` likewise; each pair parts company as
+  soon as the value is negative and something is discarded. Without a
+  negative row you cannot tell either pair apart.
+- **`0.7` / `1.7` / `4.7` / `5.7` isolate `ZeroFiveUp`.** It is the only
+  mode whose answer depends on the digit being *kept* rather than the
+  digit being discarded. The discarded part is `0.7` in all four, yet
+  `1.7` and `4.7` still truncate: the kept digits `1` and `4` are not
+  pivots. `0.7` and `5.7` step away from zero because their kept digits
+  `0` and `5` are.
+
+Because this crate stores an integer coefficient, it has no signed zero:
+a negative value that rounds to zero reads back as `0`, where the
+specification would write `-0`.
+
+### Why `ZeroFiveUp` exists
+
+It is the legacy accountancy rule, and the one mode that survives a
+second rounding intact. It reserves `0` and `5` as the only final digits
+that can absorb a discarded remainder, so rounding again to one fewer
+digit never meets a half-way tie that the *first* rounding manufactured —
+the "round for reround" rule. That is what it buys: it avoids the upward
+bias of `AwayFromZero` without ever truncating down onto a value that
+already looks rounded.
 
 ## The `_with` pairs
 
@@ -126,6 +211,8 @@ time* - so every plain (non-`_with`) lossy method uses a different mode
 | `rounding-trunc` | `Trunc` |
 | `rounding-floor` | `Floor` |
 | `rounding-ceiling` | `Ceiling` |
+| `rounding-away-from-zero` | `AwayFromZero` |
+| `rounding-zero-five-up` | `ZeroFiveUp` |
 
 ```toml
 [dependencies]
