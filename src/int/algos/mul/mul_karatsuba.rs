@@ -52,13 +52,23 @@ pub(crate) const KARATSUBA_SCRATCH_LIMBS: usize =
 pub(crate) fn mul_karatsuba(a: &[u64], b: &[u64], out: &mut [u64], threshold: usize) {
     debug_assert_eq!(a.len(), b.len());
     debug_assert!(out.len() >= 2 * a.len());
-    debug_assert!(
-        karatsuba_scratch_needed_th(a.len(), threshold) <= KARATSUBA_SCRATCH_LIMBS,
-        "Karatsuba scratch overflow: n={} needs {} limbs, have {}",
-        a.len(),
-        karatsuba_scratch_needed_th(a.len(), threshold),
-        KARATSUBA_SCRATCH_LIMBS,
-    );
+    // FAIL CLOSED. This entry is width-erased, so `a.len()` is a RUNTIME
+    // length that no const assertion can bound -- the scratch below is a
+    // fixed build-max frame. An operand past the ceiling takes the
+    // schoolbook path (slower, same product) instead of overrunning the
+    // scratch, which `karatsuba_rec` would otherwise turn into a
+    // `split_at_mut` panic in release as well as debug.
+    //
+    // Sizing argument: `KARATSUBA_SCRATCH_LIMBS` covers `KARATSUBA_MAX_WIDTH`
+    // at the threshold FLOOR (4), and `karatsuba_scratch_needed_th` is
+    // non-decreasing in `n` and non-increasing in `threshold` -- so it covers
+    // every `(n <= ceiling, threshold >= 4)` caller, and `a.len()` alone is a
+    // sufficient test. ONE compare against a const at the entry; the
+    // recursion is untouched.
+    if a.len() > KARATSUBA_MAX_WIDTH {
+        mul_schoolbook(a, b, out);
+        return;
+    }
     let mut scratch = [0u64; KARATSUBA_SCRATCH_LIMBS];
     karatsuba_rec(a, b, out, &mut scratch, threshold);
 }
@@ -68,11 +78,13 @@ pub(crate) fn mul_karatsuba(a: &[u64], b: &[u64], out: &mut [u64], threshold: us
 pub(crate) fn mul_karatsuba_forced(a: &[u64], b: &[u64], out: &mut [u64], threshold: usize) {
     debug_assert_eq!(a.len(), b.len());
     debug_assert!(out.len() >= 2 * a.len());
-    debug_assert!(
-        karatsuba_scratch_needed_th(a.len(), threshold) <= KARATSUBA_SCRATCH_LIMBS,
-        "Karatsuba scratch overflow in forced bench entry"
-    );
     for o in out.iter_mut() { *o = 0; }
+    // Same fail-closed ceiling as `mul_karatsuba` -- see the sizing argument
+    // there. `out` is already zeroed above, which is the schoolbook contract.
+    if a.len() > KARATSUBA_MAX_WIDTH {
+        mul_schoolbook(a, b, out);
+        return;
+    }
     let mut scratch = [0u64; KARATSUBA_SCRATCH_LIMBS];
     karatsuba_rec(a, b, out, &mut scratch, threshold);
 }
