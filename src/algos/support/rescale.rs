@@ -111,13 +111,13 @@ const fn select(scale: u32, width_bits: u32) -> Algorithm {
 }
 
 /// `mag /= 10^scale` in place, rounded under `mode` — the **slice door**.
-/// `neg` is the result sign (rounding tie-break); `width_bits` is the work
-/// width in bits (the Newton key). `scale == 0` is a no-op.
+/// `is_negative` is the result sign (rounding tie-break); `width_bits` is the
+/// work width in bits (the Newton key). `scale == 0` is a no-op.
 #[inline]
 pub(crate) fn dispatch_mag(
     mag: &mut [u128],
     scale: u32,
-    neg: bool,
+    is_negative: bool,
     mode: RoundingMode,
     width_bits: u32,
 ) {
@@ -126,13 +126,14 @@ pub(crate) fn dispatch_mag(
     }
     match select(scale, width_bits) {
         Algorithm::MgSingle => {
-            crate::algos::support::mg_divide::div_pow10_mag_u128(mag, scale, neg, mode)
+            crate::algos::support::mg_divide::div_pow10_mag_u128(mag, scale, is_negative, mode)
         }
         Algorithm::MgChain => {
-            crate::algos::support::mg_divide::div_pow10_chain_mag_u128(mag, scale, neg, mode)
+            crate::algos::support::mg_divide::div_pow10_chain_mag_u128(
+                mag, scale, is_negative, mode)
         }
         Algorithm::Newton => crate::algos::support::newton_reciprocal::newton_rescale_arm(
-            mag, scale, neg, mode, width_bits,
+            mag, scale, is_negative, mode, width_bits,
         ),
     }
 }
@@ -163,29 +164,31 @@ pub(crate) fn dispatch_mag(
 /// typed door narrows. Bit-identical: every kernel computes the exact
 /// correctly-rounded floor division regardless of the routed width.
 #[inline]
-pub(crate) fn dispatch_wide_pow10<W>(n: W, scale: u32, mode: RoundingMode) -> W
+pub(crate) fn dispatch_wide_pow10<W>(value: W, scale: u32, mode: RoundingMode) -> W
 where
     W: BigInt,
     W::Scratch: ComputeLimbs,
 {
     let mut buf = <W::Scratch as ComputeLimbs>::single_u128();
     let mag = &mut buf.as_mut()[..W::U128_LIMBS];
-    let neg = n.mag_into_u128(mag);
+    let is_negative = value.mag_into_u128(mag);
 
     // Significant u128-limb length (strip the leading-zero high limbs). The
     // numerator's high limbs above the value are zero (`mag_into_u128` wrote the
     // full magnitude), and the quotient `floor(mag / 10^scale) ≤ mag` so its
-    // significant length never exceeds `sig` — the high limbs stay zero and are
-    // read back unchanged by `from_mag_sign_u128`.
-    let mut sig = mag.len();
-    while sig > 1 && mag[sig - 1] == 0 {
-        sig -= 1;
+    // significant length never exceeds `significant_limbs` — the high limbs stay
+    // zero and are read back unchanged by `from_mag_sign_u128`.
+    let mut significant_limbs = mag.len();
+    while significant_limbs > 1 && mag[significant_limbs - 1] == 0 {
+        significant_limbs -= 1;
     }
     // u128 limbs → bits (128 b/limb), capped at the work width so we never claim
     // more than the buffer's real bit width (odd-`N` storage rounds `U128_LIMBS`
     // up, leaving the top u128 limb only half-populated).
-    let sig_bits = (sig as u32).saturating_mul(128).min(<W as BigInt>::BITS);
+    let significant_bits =
+        (significant_limbs as u32).saturating_mul(128).min(<W as BigInt>::BITS);
 
-    dispatch_mag(&mut mag[..sig], scale, neg, mode, sig_bits);
-    W::from_mag_sign_u128(mag, neg)
+    dispatch_mag(
+        &mut mag[..significant_limbs], scale, is_negative, mode, significant_bits);
+    W::from_mag_sign_u128(mag, is_negative)
 }

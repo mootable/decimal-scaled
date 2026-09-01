@@ -44,7 +44,7 @@ use crate::support::rounding::RoundingMode;
 pub(crate) const INT_FAST_PATH_THRESHOLD: i32 = 64;
 
 /// Analytic storage-overflow gate on the `exp(y·ln x)` composition's
-/// argument `arg = y·ln x` (a working-scale [`Fixed`] at scale `w`),
+/// argument `arg = y·ln x` (a [`Fixed`] at `working_scale`),
 /// run BEFORE [`exp_fixed`]. Returns `true` when the result
 /// `x^y = e^arg` provably cannot be stored: the kernel signals its
 /// out-of-range `None` (the policy dispatch wrapper applies the default
@@ -64,23 +64,24 @@ pub(crate) const INT_FAST_PATH_THRESHOLD: i32 = 64;
 /// assertion (loud but non-contractual), and an extreme one could wrap
 /// the `k` shift narrowing entirely.
 ///
-/// The threshold magnitude `(39−scale)·2_302_586 · 10^(w−6)` fits `U256`
-/// for every working scale this kernel serves (`w ≤ 68`); `w < 6` (no
-/// real caller) skips the gate and leaves the kernel assert as backstop.
+/// The threshold magnitude `(39−scale)·2_302_586 · 10^(working_scale−6)` fits
+/// `U256` for every working scale this kernel serves (`working_scale ≤ 68`);
+/// `working_scale < 6` (no real caller) skips the gate and leaves the kernel
+/// assert as backstop.
 #[inline]
-fn powf_overflow_gate(arg: Fixed, w: u32, scale: u32) -> bool {
-    if arg.negative || w < 6 {
+fn powf_overflow_gate(arg: Fixed, working_scale: u32, scale: u32) -> bool {
+    if arg.negative || working_scale < 6 {
         return false; // y·ln x < 0 ⇒ x^y < 1: never a storage overflow.
     }
-    let thr = Fixed {
+    let threshold = Fixed {
         negative: false,
-        mag: Fixed::pow10(w - 6),
+        mag: Fixed::pow10(working_scale - 6),
     }
     .mul_u128(((39 - scale) as u128) * 2_302_586);
-    arg.ge_mag(thr)
+    arg.ge_mag(threshold)
 }
 
-/// `(a · b) / 10^SCALE` rounded under `mode`, on `i128` storage. Returns
+/// `(lhs · rhs) / 10^SCALE` rounded under `mode`, on `i128` storage. Returns
 /// `None` when the rounded result does not fit `i128` — the signal
 /// [`powi_raw_checked`] uses to defer to the overflow-safe `exp(y·ln x)`
 /// composition rather than compute a partial power that has left the
@@ -94,61 +95,65 @@ fn powf_overflow_gate(arg: Fixed, w: u32, scale: u32) -> bool {
 /// shape paid the 256-bit `mul_widen_divide::<4, SCALE>` machinery
 /// unconditionally — the dominant cost of the bbc powf D18<0> cell.
 /// Value and rounding are engine-independent (the same correctly-rounded
-/// `(a·b)/10^SCALE`), so results are bit-identical.
+/// `(lhs·rhs)/10^SCALE`), so results are bit-identical.
 ///
 /// [`mul_div_pow10_with`]: crate::algos::support::mg_divide::mul_div_pow10_with
 #[inline]
-fn mul_div_scale_checked<const SCALE: u32>(a: i128, b: i128, mode: RoundingMode) -> Option<i128> {
-    crate::algos::support::mg_divide::mul_div_pow10_with::<SCALE>(a, b, mode)
+fn mul_div_scale_checked<const SCALE: u32>(
+    lhs: i128, rhs: i128, mode: RoundingMode) -> Option<i128> {
+    crate::algos::support::mg_divide::mul_div_pow10_with::<SCALE>(lhs, rhs, mode)
 }
 
 /// Integer-exponent square-and-multiply on raw `i128` storage at `SCALE`,
 /// returning `None` if any partial power `base^k` (`k ≤ |n|`) leaves the
 /// `i128` storage range. Uses `mul_widen_divide` directly (not the decimal
 /// `Mul` operator, which would re-enter the mul policy from inside an
-/// algorithm fn — the layering inversion). `one_s` is `10^SCALE`.
+/// algorithm fn — the layering inversion). `one_at_scale` is `10^SCALE`.
 ///
-/// Every intermediate (`acc`, `b`) is bounded by `base^|n|`, so a `None`
+/// Every intermediate (`accumulator`, `base_power`) is bounded by `base^|n|`,
+/// so a `None`
 /// means the full integer power `base^|n|` is itself out of range. The
 /// caller then routes to the composition, which panics on a genuinely
-/// out-of-range result (positive `n`) and computes the in-range reciprocal
-/// `base^-|n|` overflow-safely (negative `n`) — fixing the integer fast
-/// path's spurious panic on `powf(10, -2)` (`10² = 100` overflows storage
-/// while `1/100 = 0.01` is representable). When `Some`, the result is the
-/// exact integer power (or its reciprocal), bit-identical to before.
+/// out-of-range result (a positive `exponent`) and computes the in-range
+/// reciprocal `base^-|n|` overflow-safely (a negative `exponent`) — fixing the
+/// integer fast path's spurious panic on `powf(10, -2)` (`10² = 100` overflows
+/// storage while `1/100 = 0.01` is representable). When `Some`, the result is
+/// the exact integer power (or its reciprocal), bit-identical to before.
 ///
-/// For negative `n`, returns `one_s / base^|n|` via the decimal
+/// For a negative `exponent`, returns `one_at_scale / base^|n|` via the decimal
 /// `div_widen_scale` (a genuine downward cross-tier call to the int layer).
 #[inline]
-fn powi_raw_checked<const SCALE: u32>(base: i128, n: i32, mode: RoundingMode) -> Option<i128> {
-    let one_s: Int<2> = const { crate::consts::pow10::dispatch_int::<2>(SCALE) };
-    if n == 0 {
-        return Some(one_s.as_i128());
+fn powi_raw_checked<const SCALE: u32>(
+    base: i128, exponent: i32, mode: RoundingMode) -> Option<i128> {
+    let one_at_scale: Int<2> = const { crate::consts::pow10::dispatch_int::<2>(SCALE) };
+    if exponent == 0 {
+        return Some(one_at_scale.as_i128());
     }
-    let pos_n = n.unsigned_abs();
+    let abs_exponent = exponent.unsigned_abs();
     // Square-and-multiply; every partial product is range-checked so an
     // out-of-storage intermediate signals `None` instead of panicking.
-    let mut acc: i128 = one_s.as_i128();
-    let mut b: i128 = base;
-    let mut e = pos_n;
-    while e > 0 {
-        if e & 1 == 1 {
-            acc = mul_div_scale_checked::<SCALE>(acc, b, mode)?;
+    let mut accumulator: i128 = one_at_scale.as_i128();
+    let mut base_power: i128 = base;
+    let mut remaining_exponent = abs_exponent;
+    while remaining_exponent > 0 {
+        if remaining_exponent & 1 == 1 {
+            accumulator = mul_div_scale_checked::<SCALE>(accumulator, base_power, mode)?;
         }
-        e >>= 1;
-        if e > 0 {
-            b = mul_div_scale_checked::<SCALE>(b, b, mode)?;
+        remaining_exponent >>= 1;
+        if remaining_exponent > 0 {
+            base_power = mul_div_scale_checked::<SCALE>(base_power, base_power, mode)?;
         }
     }
-    if n > 0 {
-        Some(acc)
+    if exponent > 0 {
+        Some(accumulator)
     } else {
-        // Reciprocal: one_s / base^|n|. `acc = base^|n|` fits i128 here and
-        // `1/acc ≤ 1`, so the quotient certainly fits storage.
+        // Reciprocal: one_at_scale / base^|n|. `accumulator = base^|n|` fits
+        // i128 here and `1/accumulator ≤ 1`, so the quotient certainly fits
+        // storage.
         Some(
             crate::algos::div::div_widen_scale::div_widen_scale::<2>(
-                one_s,
-                Int::<2>::from_i128(acc),
+                one_at_scale,
+                Int::<2>::from_i128(accumulator),
                 const { crate::consts::pow10::dispatch_int::<2>(SCALE) },
                 mode,
             )
@@ -157,21 +162,21 @@ fn powi_raw_checked<const SCALE: u32>(base: i128, n: i32, mode: RoundingMode) ->
     }
 }
 
-/// Returns `Some(n)` if `exp_raw` (at `SCALE`) represents an exact
-/// integer value `n` that fits `i32` and `|n| <= INT_FAST_PATH_THRESHOLD`.
+/// Returns `Some(exponent)` if `exp_raw` (at `SCALE`) represents an exact
+/// integer value that fits `i32` with `|n| <= INT_FAST_PATH_THRESHOLD`.
 #[inline]
 fn exp_as_small_int<const SCALE: u32>(exp_raw: i128) -> Option<i32> {
-    let mult = const { crate::consts::pow10::dispatch_i128(SCALE) };
-    if exp_raw % mult != 0 {
+    let one_at_scale = const { crate::consts::pow10::dispatch_i128(SCALE) };
+    if exp_raw % one_at_scale != 0 {
         return None;
     }
-    let q = exp_raw / mult;
-    if !(i32::MIN as i128..=i32::MAX as i128).contains(&q) {
+    let quotient = exp_raw / one_at_scale;
+    if !(i32::MIN as i128..=i32::MAX as i128).contains(&quotient) {
         return None;
     }
-    let n = q as i32;
-    if n.unsigned_abs() <= INT_FAST_PATH_THRESHOLD as u32 {
-        Some(n)
+    let exponent = quotient as i32;
+    if exponent.unsigned_abs() <= INT_FAST_PATH_THRESHOLD as u32 {
+        Some(exponent)
     } else {
         None
     }
@@ -204,14 +209,14 @@ fn powf_with_raw<const SCALE: u32>(
     if base <= 0 {
         return Some(0);
     }
-    if let Some(n) = exp_as_small_int::<SCALE>(exp) {
-        if let Some(v) = powi_raw_checked::<SCALE>(base, n, mode) {
-            return Some(v);
+    if let Some(exponent) = exp_as_small_int::<SCALE>(exp) {
+        if let Some(value) = powi_raw_checked::<SCALE>(base, exponent, mode) {
+            return Some(value);
         }
         // `base^|n|` left the storage range. When the base is an exact
         // integer the result is still an exact rational — pin its
         // correctly-directed-rounded value (`10^SCALE / base^|n|` for a
-        // negative `n`) so a directed mode is not 1 LSB off, rather than
+        // negative `exponent`) so a directed mode is not 1 LSB off, rather than
         // defer to the to-nearest `exp(y·ln x)` composition. A fractional
         // base defers to the composition; a genuinely out-of-range positive
         // power is the pin's PROOF of overflow — signal the kernel's `None`
@@ -225,22 +230,28 @@ fn powf_with_raw<const SCALE: u32>(
             Int::<2>::MAX,
             mode,
         ) {
-            ExactPin::Value(v) => return Some(v.as_i128()),
+            ExactPin::Value(value) => return Some(value.as_i128()),
             ExactPin::OutOfRange => return None,
             ExactPin::Defer => {}
         }
     }
-    let w = SCALE + working_digits;
-    let pow = 10u128.pow(working_digits);
-    let ln_x = ln_fixed(Fixed::from_u128_mag(base as u128, false).mul_u128(pow), w);
-    let y_neg = exp < 0;
-    let y_w = Fixed::from_u128_mag(exp.unsigned_abs(), false).mul_u128(pow);
-    let y_w = if y_neg { y_w.neg() } else { y_w };
-    let arg = y_w.mul(ln_x, w);
-    if powf_overflow_gate(arg, w, SCALE) {
+    let working_scale = SCALE + working_digits;
+    let guard_pow = 10u128.pow(working_digits);
+    let ln_x = ln_fixed(
+        Fixed::from_u128_mag(base as u128, false).mul_u128(guard_pow), working_scale);
+    let exponent_is_negative = exp < 0;
+    let exponent_working_value =
+        Fixed::from_u128_mag(exp.unsigned_abs(), false).mul_u128(guard_pow);
+    let exponent_working_value = if exponent_is_negative {
+        exponent_working_value.neg()
+    } else {
+        exponent_working_value
+    };
+    let arg = exponent_working_value.mul(ln_x, working_scale);
+    if powf_overflow_gate(arg, working_scale, SCALE) {
         return None;
     }
-    exp_fixed(arg, w).round_to_i128_with(w, SCALE, mode)
+    exp_fixed(arg, working_scale).round_to_i128_with(working_scale, SCALE, mode)
 }
 
 /// Strict variant — const-folded `working_digits = STRICT_GUARD`.
@@ -258,14 +269,14 @@ fn powf_strict_raw<const SCALE: u32>(base: i128, exp: i128, mode: RoundingMode) 
     if base <= 0 {
         return Some(0);
     }
-    if let Some(n) = exp_as_small_int::<SCALE>(exp) {
-        if let Some(v) = powi_raw_checked::<SCALE>(base, n, mode) {
-            return Some(v);
+    if let Some(exponent) = exp_as_small_int::<SCALE>(exp) {
+        if let Some(value) = powi_raw_checked::<SCALE>(base, exponent, mode) {
+            return Some(value);
         }
         // `base^|n|` left the storage range. When the base is an exact
         // integer the result is still an exact rational — pin its
         // correctly-directed-rounded value (`10^SCALE / base^|n|` for a
-        // negative `n`) so a directed mode is not 1 LSB off, rather than
+        // negative `exponent`) so a directed mode is not 1 LSB off, rather than
         // defer to the to-nearest `exp(y·ln x)` composition. A fractional
         // base defers to the composition; a genuinely out-of-range positive
         // power is the pin's PROOF of overflow — signal the kernel's `None`
@@ -279,24 +290,30 @@ fn powf_strict_raw<const SCALE: u32>(base: i128, exp: i128, mode: RoundingMode) 
             Int::<2>::MAX,
             mode,
         ) {
-            ExactPin::Value(v) => return Some(v.as_i128()),
+            ExactPin::Value(value) => return Some(value.as_i128()),
             ExactPin::OutOfRange => return None,
             ExactPin::Defer => {}
         }
     }
-    let w = SCALE + STRICT_GUARD;
-    let pow = 10u128.pow(STRICT_GUARD);
-    let ln_x = ln_fixed(Fixed::from_u128_mag(base as u128, false).mul_u128(pow), w);
-    let y_neg = exp < 0;
-    let y_w = Fixed::from_u128_mag(exp.unsigned_abs(), false).mul_u128(pow);
-    let y_w = if y_neg { y_w.neg() } else { y_w };
-    let arg = y_w.mul(ln_x, w);
-    if powf_overflow_gate(arg, w, SCALE) {
+    let working_scale = SCALE + STRICT_GUARD;
+    let guard_pow = 10u128.pow(STRICT_GUARD);
+    let ln_x = ln_fixed(
+        Fixed::from_u128_mag(base as u128, false).mul_u128(guard_pow), working_scale);
+    let exponent_is_negative = exp < 0;
+    let exponent_working_value =
+        Fixed::from_u128_mag(exp.unsigned_abs(), false).mul_u128(guard_pow);
+    let exponent_working_value = if exponent_is_negative {
+        exponent_working_value.neg()
+    } else {
+        exponent_working_value
+    };
+    let arg = exponent_working_value.mul(ln_x, working_scale);
+    if powf_overflow_gate(arg, working_scale, SCALE) {
         return None;
     }
-    let v = exp_fixed(arg, w);
-    match v.round_to_i128_clear_of_tie(w, SCALE, mode) {
-        Some(r) => r,
+    let power_w = exp_fixed(arg, working_scale);
+    match power_w.round_to_i128_clear_of_tie(working_scale, SCALE, mode) {
+        Some(rounded) => rounded,
         // Near a boundary. The constructible family is the EXACT rational
         // power reached through the composition (`powf(4, 0.5) = 2`,
         // `powf(225, 0.5) = 15` — the composition's value lands a
@@ -310,39 +327,44 @@ fn powf_strict_raw<const SCALE: u32>(base: i128, exp: i128, mode: RoundingMode) 
         // candidates can verify; the walker resolves the genuinely
         // transcendental near-ties.
         None => {
-            if let Some(num2) =
-                v.double().round_to_i128_with(w, SCALE, RoundingMode::HalfToEven)
+            if let Some(half_ulp_numerator) = power_w
+                .double()
+                .round_to_i128_with(working_scale, SCALE, RoundingMode::HalfToEven)
             {
-                if let Some(pinned) = powf_rational_pin(base, exp, SCALE, num2) {
+                if let Some(pinned) = powf_rational_pin(base, exp, SCALE, half_ulp_numerator) {
                     return Some(pinned);
                 }
             }
             narrow_ziv::walk_checked(
-                v.round_to_i128_with(w, SCALE, mode),
+                power_w.round_to_i128_with(working_scale, SCALE, mode),
                 STRICT_GUARD,
                 SCALE,
                 mode,
-                |g| powf_ziv(base, exp, SCALE, g),
+                |guard_digits| powf_ziv(base, exp, SCALE, guard_digits),
             )
         }
     }
 }
 
-/// One `WZiv` `exp(y·ln x)` probe at working scale `scale + g`.
-fn powf_ziv(base: i128, exp: i128, scale: u32, g: u32) -> WZiv {
-    let w = scale + g;
-    let ln_x = eg::ln_fixed::<WZiv>(narrow_ziv::lift(base, g), w, narrow_ziv::ln2_w(w));
-    let arg = eg::mul::<WZiv>(narrow_ziv::lift(exp, g), ln_x, w);
-    eg::exp_fixed::<WZiv>(arg, w)
+/// One `WZiv` `exp(y·ln x)` probe at working scale `scale + guard_digits`.
+fn powf_ziv(base: i128, exp: i128, scale: u32, guard_digits: u32) -> WZiv {
+    let working_scale = scale + guard_digits;
+    let ln_x = eg::ln_fixed::<WZiv>(
+        narrow_ziv::lift(base, guard_digits), working_scale, narrow_ziv::ln2_w(working_scale));
+    let arg = eg::mul::<WZiv>(narrow_ziv::lift(exp, guard_digits), ln_x, working_scale);
+    eg::exp_fixed::<WZiv>(arg, working_scale)
 }
 
 /// Exact rational-power pin for the strict powf near-tie terminal — the
-/// powf sibling of `ln_series_2limb::log_rational_pow_pin`. `num2` is
+/// powf sibling of `ln_series_2limb::log_rational_pow_pin`.
+/// `half_ulp_numerator` is
 /// the boundary candidate in half-ULPs at `scale` (the working value
 /// doubled and nearest-rounded). With the exponent `y = p/q` (the input
-/// reduced — exact by construction) the claim `x^y == num2/(2·10^scale)`
+/// reduced — exact by construction) the claim
+/// `x^y == half_ulp_numerator/(2·10^scale)`
 /// is the integer identity `x^p == v^q` over the reduced fractions,
-/// verified with the bounded checked ladder. Only an EVEN `num2` (a grid
+/// verified with the bounded checked ladder. Only an EVEN
+/// `half_ulp_numerator` (a grid
 /// candidate) can verify — an exact-half powf value is impossible for
 /// on-grid `(x, y)`: `x^y = (2k+1)/(2·10^S)` forces `x = u^q` with
 /// `den(u^p) = 2^(S+1)·5^S`, whose 2-/5-adic exponents demand
@@ -350,33 +372,40 @@ fn powf_ziv(base: i128, exp: i128, scale: u32, g: u32) -> WZiv {
 /// cannot divide `10^S` — so the half-candidate arm is unreachable and
 /// simply returns `None`. A verified grid value is returned for every
 /// mode (it IS the exact result).
-fn powf_rational_pin(base: i128, exp: i128, scale: u32, num2: i128) -> Option<i128> {
+fn powf_rational_pin(
+    base: i128, exp: i128, scale: u32, half_ulp_numerator: i128) -> Option<i128> {
     use crate::algos::ln::ln_series_2limb::{gcd_u128, pow_bounded, reduce_fraction};
-    if num2 <= 0 || num2 & 1 == 1 || exp == 0 || base <= 0 {
+    if half_ulp_numerator <= 0 || half_ulp_numerator & 1 == 1 || exp == 0 || base <= 0 {
         // x > 0 ⇒ x^y > 0; half candidates can't verify (see above);
         // y == 0 is the exact-1 case the integer fast path already pins.
         return None;
     }
-    let one_s = 10u128.pow(scale);
+    let one_at_scale = 10u128.pow(scale);
     // y = p/q in lowest terms (sign split off).
-    let y_neg = exp < 0;
-    let g = gcd_u128(exp.unsigned_abs(), one_s);
-    let p = exp.unsigned_abs() / g;
-    let q = one_s / g;
+    let exponent_is_negative = exp < 0;
+    let common_divisor = gcd_u128(exp.unsigned_abs(), one_at_scale);
+    let reduced_num = exp.unsigned_abs() / common_divisor;
+    let reduced_den = one_at_scale / common_divisor;
     // x and the candidate v as reduced fractions.
-    let (xn, xd) = reduce_fraction(base as u128, one_s);
-    let (vn, vd) = reduce_fraction((num2 / 2) as u128, one_s);
-    // x^(±p/q) == v  ⇔  x^(±p) == v^q  ⇔ (positive y) xn^p == vn^q ∧
-    // xd^p == vd^q; (negative y) xd^p == vn^q ∧ xn^p == vd^q.
-    let (tn, td) = if y_neg { (xd, xn) } else { (xn, xd) };
-    let lx_n = pow_bounded(tn, p)?;
-    let lx_d = pow_bounded(td, p)?;
-    let rv_n = pow_bounded(vn, q)?;
-    let rv_d = pow_bounded(vd, q)?;
-    if lx_n != rv_n || lx_d != rv_d {
+    let (base_num, base_den) = reduce_fraction(base as u128, one_at_scale);
+    let (candidate_num, candidate_den) =
+        reduce_fraction((half_ulp_numerator / 2) as u128, one_at_scale);
+    // x^(±p/q) == v  ⇔  x^(±p) == v^q  ⇔ (positive y) base_num^p ==
+    // candidate_num^q ∧ base_den^p == candidate_den^q; (negative y)
+    // base_den^p == candidate_num^q ∧ base_num^p == candidate_den^q.
+    let (target_num, target_den) = if exponent_is_negative {
+        (base_den, base_num)
+    } else {
+        (base_num, base_den)
+    };
+    let base_pow_num = pow_bounded(target_num, reduced_num)?;
+    let base_pow_den = pow_bounded(target_den, reduced_num)?;
+    let candidate_pow_num = pow_bounded(candidate_num, reduced_den)?;
+    let candidate_pow_den = pow_bounded(candidate_den, reduced_den)?;
+    if base_pow_num != candidate_pow_num || base_pow_den != candidate_pow_den {
         return None;
     }
-    Some(num2 / 2)
+    Some(half_ulp_numerator / 2)
 }
 
 #[cfg(test)]

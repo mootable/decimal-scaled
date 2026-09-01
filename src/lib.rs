@@ -217,16 +217,16 @@ mod types;
 #[doc(hidden)]
 pub mod __bench_internals {
     #[inline(never)]
-    pub fn mul_slice(a: &[u64], b: &[u64], out: &mut [u64]) {
-        crate::int::algos::mul::mul_schoolbook::mul_schoolbook(a, b, out)
+    pub fn mul_slice(lhs: &[u64], rhs: &[u64], out: &mut [u64]) {
+        crate::int::algos::mul::mul_schoolbook::mul_schoolbook(lhs, rhs, out)
     }
     /// Truncated-low fixed-width schoolbook multiply (base-2^64),
     /// `out = (a * b) mod 2^(64*N)`. The kernel the wide-tier exp/powf
     /// Taylor work-multiply (`Int<N>::wrapping_mul`) routes through.
     /// Exposed for the `mul_low_u128_ab` pilot microbench.
     #[inline(never)]
-    pub fn mul_low_u64<const N: usize>(a: &[u64; N], b: &[u64; N], out: &mut [u64; N]) {
-        crate::int::algos::mul::mul_schoolbook::mul_low_limb::<N, u64>(a, b, out)
+    pub fn mul_low_u64<const N: usize>(lhs: &[u64; N], rhs: &[u64; N], out: &mut [u64; N]) {
+        crate::int::algos::mul::mul_schoolbook::mul_low_limb::<N, u64>(lhs, rhs, out)
     }
     /// u128-limb-packed truncated-low schoolbook multiply (even `N` only):
     /// bit-identical low `N` limbs to [`mul_low_u64`], computed in `N/2`
@@ -234,8 +234,8 @@ pub mod __bench_internals {
     /// `mul_low_limb` kernel. Exposed for the `mul_low_u128_ab` `LimbSize`
     /// microbench (u64 vs u128 of the same generic kernel).
     #[inline(never)]
-    pub fn mul_low_u128<const N: usize>(a: &[u64; N], b: &[u64; N], out: &mut [u64; N]) {
-        crate::int::algos::mul::mul_schoolbook::mul_low_limb::<N, u128>(a, b, out)
+    pub fn mul_low_u128<const N: usize>(lhs: &[u64; N], rhs: &[u64; N], out: &mut [u64; N]) {
+        crate::int::algos::mul::mul_schoolbook::mul_low_limb::<N, u128>(lhs, rhs, out)
     }
     /// Per-`N` monomorphic wrappers over the ONE generic full-product
     /// schoolbook kernel `mul_full_limb::<N, L>` (the production
@@ -251,19 +251,19 @@ pub mod __bench_internals {
         // u64-only (odd N — u128 packing requires even N)
         ($u64name:ident, $n:literal) => {
             #[inline(never)]
-            pub fn $u64name(a: &[u64; $n], b: &[u64; $n], out: &mut [u64]) {
-                crate::int::algos::mul::mul_schoolbook::mul_full_limb::<$n, u64>(a, b, out)
+            pub fn $u64name(lhs: &[u64; $n], rhs: &[u64; $n], out: &mut [u64]) {
+                crate::int::algos::mul::mul_schoolbook::mul_full_limb::<$n, u64>(lhs, rhs, out)
             }
         };
         // both u64 + u128 (even N)
         ($u64name:ident, $u128name:ident, $n:literal) => {
             #[inline(never)]
-            pub fn $u64name(a: &[u64; $n], b: &[u64; $n], out: &mut [u64]) {
-                crate::int::algos::mul::mul_schoolbook::mul_full_limb::<$n, u64>(a, b, out)
+            pub fn $u64name(lhs: &[u64; $n], rhs: &[u64; $n], out: &mut [u64]) {
+                crate::int::algos::mul::mul_schoolbook::mul_full_limb::<$n, u64>(lhs, rhs, out)
             }
             #[inline(never)]
-            pub fn $u128name(a: &[u64; $n], b: &[u64; $n], out: &mut [u64]) {
-                crate::int::algos::mul::mul_schoolbook::mul_full_limb::<$n, u128>(a, b, out)
+            pub fn $u128name(lhs: &[u64; $n], rhs: &[u64; $n], out: &mut [u64]) {
+                crate::int::algos::mul::mul_schoolbook::mul_full_limb::<$n, u128>(lhs, rhs, out)
             }
         };
     }
@@ -287,8 +287,8 @@ pub mod __bench_internals {
     /// (`BigInt::wrapping_sqr_low_u128`) routes through at `L = u64`. Exposed
     /// for the `sqr_low_u128_ab` pilot microbench.
     #[inline(never)]
-    pub fn sqr_low_u64<const N: usize>(x: &[u64; N], out: &mut [u64; N]) {
-        crate::int::algos::sqr::sqr_low_limb::sqr_low_limb::<N, u64>(x, out)
+    pub fn sqr_low_u64<const N: usize>(value: &[u64; N], out: &mut [u64; N]) {
+        crate::int::algos::sqr::sqr_low_limb::sqr_low_limb::<N, u64>(value, out)
     }
     /// u128-limb-packed truncated-low symmetric square (even `N` only):
     /// bit-identical low `N` limbs to [`sqr_low_u64`], computed in `N/2`
@@ -296,16 +296,16 @@ pub mod __bench_internals {
     /// `sqr_low_limb` kernel. Exposed for the `sqr_low_u128_ab` `LimbSize`
     /// microbench (u64 vs u128 of the same generic kernel).
     #[inline(never)]
-    pub fn sqr_low_u128<const N: usize>(x: &[u64; N], out: &mut [u64; N]) {
-        crate::int::algos::sqr::sqr_low_limb::sqr_low_limb::<N, u128>(x, out)
+    pub fn sqr_low_u128<const N: usize>(value: &[u64; N], out: &mut [u64; N]) {
+        crate::int::algos::sqr::sqr_low_limb::sqr_low_limb::<N, u128>(value, out)
     }
     #[inline(never)]
     pub fn mul_fixed<const L: usize, const D: usize>(
-        a: &[u64; L],
-        b: &[u64; L],
+        lhs: &[u64; L],
+        rhs: &[u64; L],
         out: &mut [u64; D],
     ) {
-        crate::int::algos::mul::mul_schoolbook::mul_schoolbook_fixed::<L, D>(a, b, out)
+        crate::int::algos::mul::mul_schoolbook::mul_schoolbook_fixed::<L, D>(lhs, rhs, out)
     }
     /// Non-allocating Karatsuba multiply forced to recurse at the given
     /// `threshold` (rather than the parked production
@@ -313,8 +313,8 @@ pub mod __bench_internals {
     /// kernel at sub-threshold widths. `threshold >= 4` (the recursion's
     /// termination floor). `out` is zeroed by the callee.
     #[inline(never)]
-    pub fn mul_karatsuba_forced(a: &[u64], b: &[u64], out: &mut [u64], threshold: usize) {
-        crate::int::algos::mul::mul_karatsuba::mul_karatsuba_forced(a, b, out, threshold)
+    pub fn mul_karatsuba_forced(lhs: &[u64], rhs: &[u64], out: &mut [u64], threshold: usize) {
+        crate::int::algos::mul::mul_karatsuba::mul_karatsuba_forced(lhs, rhs, out, threshold)
     }
     /// Per-N monomorphic wrappers over the Limb-generic Karatsuba kernel
     /// mul_karatsuba_limb::<N, L>. The u64 arm runs the same recursion as
@@ -324,18 +324,18 @@ pub mod __bench_internals {
     macro_rules! mul_kara_limb_wrappers {
         ($u64name:ident, $n:literal) => {
             #[inline(never)]
-            pub fn $u64name(a: &[u64; $n], b: &[u64; $n], out: &mut [u64]) {
-                crate::int::algos::mul::mul_karatsuba::mul_karatsuba_limb::<$n, u64>(a, b, out, $n)
+            pub fn $u64name(lhs: &[u64; $n], rhs: &[u64; $n], out: &mut [u64]) {
+                crate::int::algos::mul::mul_karatsuba::mul_karatsuba_limb::<$n, u64>(lhs, rhs, out, $n)
             }
         };
         ($u64name:ident, $u128name:ident, $n:literal) => {
             #[inline(never)]
-            pub fn $u64name(a: &[u64; $n], b: &[u64; $n], out: &mut [u64]) {
-                crate::int::algos::mul::mul_karatsuba::mul_karatsuba_limb::<$n, u64>(a, b, out, $n)
+            pub fn $u64name(lhs: &[u64; $n], rhs: &[u64; $n], out: &mut [u64]) {
+                crate::int::algos::mul::mul_karatsuba::mul_karatsuba_limb::<$n, u64>(lhs, rhs, out, $n)
             }
             #[inline(never)]
-            pub fn $u128name(a: &[u64; $n], b: &[u64; $n], out: &mut [u64]) {
-                crate::int::algos::mul::mul_karatsuba::mul_karatsuba_limb::<$n, u128>(a, b, out, $n)
+            pub fn $u128name(lhs: &[u64; $n], rhs: &[u64; $n], out: &mut [u64]) {
+                crate::int::algos::mul::mul_karatsuba::mul_karatsuba_limb::<$n, u128>(lhs, rhs, out, $n)
             }
         };
     }
@@ -358,8 +358,8 @@ pub mod __bench_internals {
     macro_rules! mul_kara_u128_thresh {
         ($name:ident, $n:literal) => {
             #[inline(never)]
-            pub fn $name(a: &[u64; $n], b: &[u64; $n], out: &mut [u64], threshold: usize) {
-                crate::int::algos::mul::mul_karatsuba::mul_karatsuba_limb::<$n, u128>(a, b, out, threshold)
+            pub fn $name(lhs: &[u64; $n], rhs: &[u64; $n], out: &mut [u64], threshold: usize) {
+                crate::int::algos::mul::mul_karatsuba::mul_karatsuba_limb::<$n, u128>(lhs, rhs, out, threshold)
             }
         };
     }
@@ -370,8 +370,8 @@ pub mod __bench_internals {
     /// Toom-Cook 3-way multiply exposed for the mul_toom3_ab microbench.
     /// out must be zeroed by the caller; out.len() >= 2 * a.len().
     #[inline(never)]
-    pub fn mul_toom3_slice(a: &[u64], b: &[u64], out: &mut [u64]) {
-        crate::int::algos::mul::mul_toom3::mul_toom3(a, b, out)
+    pub fn mul_toom3_slice(lhs: &[u64], rhs: &[u64], out: &mut [u64]) {
+        crate::int::algos::mul::mul_toom3::mul_toom3(lhs, rhs, out)
     }
     /// Per-N monomorphic wrappers over the Limb-generic Toom-3 kernel
     /// mul_toom3_limb::<N, L>. The u64 arm runs the value-slice recursion; the
@@ -381,12 +381,12 @@ pub mod __bench_internals {
     macro_rules! mul_toom3_limb_wrappers {
         ($u64name:ident, $u128name:ident, $n:literal) => {
             #[inline(never)]
-            pub fn $u64name(a: &[u64; $n], b: &[u64; $n], out: &mut [u64]) {
-                crate::int::algos::mul::mul_toom3::mul_toom3_limb::<$n, u64>(a, b, out)
+            pub fn $u64name(lhs: &[u64; $n], rhs: &[u64; $n], out: &mut [u64]) {
+                crate::int::algos::mul::mul_toom3::mul_toom3_limb::<$n, u64>(lhs, rhs, out)
             }
             #[inline(never)]
-            pub fn $u128name(a: &[u64; $n], b: &[u64; $n], out: &mut [u64]) {
-                crate::int::algos::mul::mul_toom3::mul_toom3_limb::<$n, u128>(a, b, out)
+            pub fn $u128name(lhs: &[u64; $n], rhs: &[u64; $n], out: &mut [u64]) {
+                crate::int::algos::mul::mul_toom3::mul_toom3_limb::<$n, u128>(lhs, rhs, out)
             }
         };
     }
@@ -403,12 +403,12 @@ pub mod __bench_internals {
     /// path). Both take little-endian u64 magnitude limb
     /// slices; `quot` / `rem` are written by the engine.
     #[inline(never)]
-    pub fn div_knuth_slice(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
-        crate::int::algos::div::div_knuth::div_knuth(num, den, quot, rem)
+    pub fn div_knuth_slice(numerator: &[u64], divisor: &[u64], quotient: &mut [u64], remainder: &mut [u64]) {
+        crate::int::algos::div::div_knuth::div_knuth(numerator, divisor, quotient, remainder)
     }
     #[inline(never)]
-    pub fn div_dispatch_slice(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
-        crate::int::policy::div_rem::dispatch(num, den, quot, rem)
+    pub fn div_dispatch_slice(numerator: &[u64], divisor: &[u64], quotient: &mut [u64], remainder: &mut [u64]) {
+        crate::int::policy::div_rem::dispatch(numerator, divisor, quotient, remainder)
     }
     /// Base-2¹²⁸ (u128-limb) Knuth candidate for `div_kernel_ab` — the
     /// divide side of the `LimbSize` axis, PARKED (not wired into any
@@ -416,16 +416,16 @@ pub mod __bench_internals {
     /// the aligned u128 carry-chain beats base-2⁶⁴ despite the 4-mult q̂·v
     /// product.
     #[inline(never)]
-    pub fn div_knuth_u128_limb_slice(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
-        crate::int::algos::div::div_knuth_u128_limb::div_knuth_u128_limb(num, den, quot, rem)
+    pub fn div_knuth_u128_limb_slice(numerator: &[u64], divisor: &[u64], quotient: &mut [u64], remainder: &mut [u64]) {
+        crate::int::algos::div::div_knuth_u128_limb::div_knuth_u128_limb(numerator, divisor, quotient, remainder)
     }
     /// Burnikel-Ziegler chunking engine FORCED on (production engagement
     /// guard bypassed) so the Knuth-vs-BZ crossover can be timed at
     /// sub-threshold widths in `div_kernel_ab`.
     #[inline(never)]
-    pub fn div_bz_forced_slice(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
+    pub fn div_bz_forced_slice(numerator: &[u64], divisor: &[u64], quotient: &mut [u64], remainder: &mut [u64]) {
         crate::int::algos::div::div_burnikel_ziegler_with_knuth::bz_chunk_core_forced(
-            num, den, quot, rem,
+            numerator, divisor, quotient, remainder,
         )
     }
     /// `div_rem` single-/double-limb hardware fast-path candidate for
@@ -433,16 +433,16 @@ pub mod __bench_internals {
     /// engines; A/B measures the small-divisor regime where the const
     /// `u128 / u64` path is the production routing.
     #[inline(never)]
-    pub fn div_rem_fast_slice(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
-        crate::int::algos::div::div_rem::div_rem(num, den, quot, rem)
+    pub fn div_rem_fast_slice(numerator: &[u64], divisor: &[u64], quotient: &mut [u64], remainder: &mut [u64]) {
+        crate::int::algos::div::div_rem::div_rem(numerator, divisor, quotient, remainder)
     }
     /// `div_rem_schoolbook` binary shift-subtract reference baseline for
     /// `div_kernel_ab` — the `Algorithm::Schoolbook` arm. Bit-identical to the
     /// other engines; A/B confirms it is the slowest (the never-routed
     /// baseline) at every shape.
     #[inline(never)]
-    pub fn div_schoolbook_slice(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
-        crate::int::algos::div::div_rem_schoolbook::div_rem_schoolbook(num, den, quot, rem)
+    pub fn div_schoolbook_slice(numerator: &[u64], divisor: &[u64], quotient: &mut [u64], remainder: &mut [u64]) {
+        crate::int::algos::div::div_rem_schoolbook::div_rem_schoolbook(numerator, divisor, quotient, remainder)
     }
     /// Integer hypot kernel candidates for the `hypot_ab` microbench:
     /// the production Pythagoras path (radicand `a²+b²` + Newton slice
@@ -451,26 +451,26 @@ pub mod __bench_internals {
     #[inline(never)]
     #[allow(private_bounds)]
     pub fn hypot_pythagoras<const N: usize>(
-        a: crate::int::types::Int<N>,
-        b: crate::int::types::Int<N>,
+        lhs: crate::int::types::Int<N>,
+        rhs: crate::int::types::Int<N>,
         mode: crate::RoundingMode,
     ) -> Option<crate::int::types::Int<N>>
     where
         crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
     {
-        crate::int::algos::hypot::hypot_pythagoras::hypot_pythagoras::<N>(a, b, mode)
+        crate::int::algos::hypot::hypot_pythagoras::hypot_pythagoras::<N>(lhs, rhs, mode)
     }
     #[inline(never)]
     #[allow(private_bounds)]
     pub fn hypot_u128_fast<const N: usize>(
-        a: crate::int::types::Int<N>,
-        b: crate::int::types::Int<N>,
+        lhs: crate::int::types::Int<N>,
+        rhs: crate::int::types::Int<N>,
         mode: crate::RoundingMode,
     ) -> Option<crate::int::types::Int<N>>
     where
         crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
     {
-        crate::int::algos::hypot::hypot_u128_fast::hypot_u128_fast::<N>(a, b, mode)
+        crate::int::algos::hypot::hypot_u128_fast::hypot_u128_fast::<N>(lhs, rhs, mode)
     }
 
     /// Remainder algorithm candidates exposed for the `rem_kernel_ab`
@@ -478,43 +478,43 @@ pub mod __bench_internals {
     /// `select` arm per width).
     #[inline(never)]
     pub fn rem_native<const N: usize>(
-        a: crate::int::types::Int<N>,
-        b: crate::int::types::Int<N>,
+        lhs: crate::int::types::Int<N>,
+        rhs: crate::int::types::Int<N>,
     ) -> crate::int::types::Int<N> {
-        crate::int::algos::rem::rem_native::rem_native::<N>(a, b)
+        crate::int::algos::rem::rem_native::rem_native::<N>(lhs, rhs)
     }
     #[inline(never)]
     pub fn rem_via_div_rem<const N: usize>(
-        a: crate::int::types::Int<N>,
-        b: crate::int::types::Int<N>,
+        lhs: crate::int::types::Int<N>,
+        rhs: crate::int::types::Int<N>,
     ) -> crate::int::types::Int<N> {
-        crate::int::algos::rem::rem_via_div_rem::rem_via_div_rem::<N>(a, b)
+        crate::int::algos::rem::rem_via_div_rem::rem_via_div_rem::<N>(lhs, rhs)
     }
     #[inline(never)]
     pub fn rem_schoolbook<const N: usize>(
-        a: crate::int::types::Int<N>,
-        b: crate::int::types::Int<N>,
+        lhs: crate::int::types::Int<N>,
+        rhs: crate::int::types::Int<N>,
     ) -> crate::int::types::Int<N> {
-        crate::int::algos::rem::rem_schoolbook::rem_schoolbook::<N>(a, b)
+        crate::int::algos::rem::rem_schoolbook::rem_schoolbook::<N>(lhs, rhs)
     }
     /// Width-agnostic small-magnitude hardware-`%` fast path candidate (the
     /// value-gated single-word fast path; falls
     /// back to `via_div_rem` for genuinely-wide operands).
     #[inline(never)]
     pub fn rem_small_fast<const N: usize>(
-        a: crate::int::types::Int<N>,
-        b: crate::int::types::Int<N>,
+        lhs: crate::int::types::Int<N>,
+        rhs: crate::int::types::Int<N>,
     ) -> crate::int::types::Int<N> {
-        crate::int::algos::rem::rem_small_fast::rem_small_fast::<N>(a, b)
+        crate::int::algos::rem::rem_small_fast::rem_small_fast::<N>(lhs, rhs)
     }
     /// Direct two's-complement `i128 %` remainder candidate for `N <= 2`
     /// (skips the sign-magnitude round trip `rem_native` pays).
     #[inline(never)]
     pub fn rem_native_direct<const N: usize>(
-        a: crate::int::types::Int<N>,
-        b: crate::int::types::Int<N>,
+        lhs: crate::int::types::Int<N>,
+        rhs: crate::int::types::Int<N>,
     ) -> crate::int::types::Int<N> {
-        crate::int::algos::rem::rem_native_direct::rem_native_direct::<N>(a, b)
+        crate::int::algos::rem::rem_native_direct::rem_native_direct::<N>(lhs, rhs)
     }
 
     /// Integer `sqr` kernel candidates exposed for the `int_unary_kernel_ab`
@@ -522,15 +522,15 @@ pub mod __bench_internals {
     /// routes to `HalfProduct` at every width vs the `Schoolbook` reference).
     #[inline(never)]
     pub fn sqr_half_product<const N: usize>(
-        x: crate::int::types::Uint<N>,
+        value: crate::int::types::Uint<N>,
     ) -> crate::int::types::Uint<N> {
-        crate::int::algos::sqr::sqr_half_product::sqr_half_product::<N>(x)
+        crate::int::algos::sqr::sqr_half_product::sqr_half_product::<N>(value)
     }
     #[inline(never)]
     pub fn sqr_schoolbook<const N: usize>(
-        x: crate::int::types::Uint<N>,
+        value: crate::int::types::Uint<N>,
     ) -> crate::int::types::Uint<N> {
-        crate::int::algos::sqr::sqr_schoolbook::sqr_schoolbook::<N>(x)
+        crate::int::algos::sqr::sqr_schoolbook::sqr_schoolbook::<N>(value)
     }
 
     /// Integer `pow` kernel candidates exposed for the `int_unary_kernel_ab`
@@ -555,12 +555,12 @@ pub mod __bench_internals {
     /// `Schoolbook` reference) over little-endian magnitude limb slices,
     /// exposed for the `int_unary_kernel_ab` microbench.
     #[inline(never)]
-    pub fn isqrt_newton_slice(n: &[u64], out: &mut [u64]) {
-        crate::int::algos::isqrt::isqrt_newton::isqrt_newton(n, out)
+    pub fn isqrt_newton_slice(magnitude: &[u64], out: &mut [u64]) {
+        crate::int::algos::isqrt::isqrt_newton::isqrt_newton(magnitude, out)
     }
     #[inline(never)]
-    pub fn isqrt_schoolbook_slice(n: &[u64], out: &mut [u64]) {
-        crate::int::algos::isqrt::isqrt_schoolbook::isqrt_schoolbook(n, out)
+    pub fn isqrt_schoolbook_slice(magnitude: &[u64], out: &mut [u64]) {
+        crate::int::algos::isqrt::isqrt_schoolbook::isqrt_schoolbook(magnitude, out)
     }
     /// Native hardware integer square root candidate (`u64::isqrt` for
     /// `N == 1`, `u128::isqrt` for `N == 2`) exposed for the dedicated
@@ -571,20 +571,20 @@ pub mod __bench_internals {
     ///
     /// [m]: crate::int::algos::isqrt::isqrt_mag_fixed::isqrt_mag_fixed
     #[inline(never)]
-    pub fn isqrt_native_fixed<const N: usize>(n: &[u64; N], out: &mut [u64; N]) {
-        crate::int::algos::isqrt::isqrt_mag_fixed::isqrt_mag_fixed::<N>(n, out)
+    pub fn isqrt_native_fixed<const N: usize>(magnitude: &[u64; N], out: &mut [u64; N]) {
+        crate::int::algos::isqrt::isqrt_mag_fixed::isqrt_mag_fixed::<N>(magnitude, out)
     }
 
     /// Integer `icbrt` kernel candidates (Newton f64-seeded vs the bitwise
     /// `Schoolbook` reference) over little-endian magnitude limb slices,
     /// exposed for the `int_unary_kernel_ab` microbench.
     #[inline(never)]
-    pub fn icbrt_newton_slice(n: &[u64], out: &mut [u64]) {
-        crate::int::algos::icbrt::icbrt_newton::icbrt_newton(n, out)
+    pub fn icbrt_newton_slice(magnitude: &[u64], out: &mut [u64]) {
+        crate::int::algos::icbrt::icbrt_newton::icbrt_newton(magnitude, out)
     }
     #[inline(never)]
-    pub fn icbrt_schoolbook_slice(n: &[u64], out: &mut [u64]) {
-        crate::int::algos::icbrt::icbrt_schoolbook::icbrt_schoolbook(n, out)
+    pub fn icbrt_schoolbook_slice(magnitude: &[u64], out: &mut [u64]) {
+        crate::int::algos::icbrt::icbrt_schoolbook::icbrt_schoolbook(magnitude, out)
     }
 
     /// Karatsuba Square Root candidate (`isqrt_karatsuba`) over little-endian
@@ -593,8 +593,8 @@ pub mod __bench_internals {
     /// `O(log n)` half-width divides beat Newton's full-width-divide-per-iter
     /// at each width.
     #[inline(never)]
-    pub fn isqrt_karatsuba_slice(n: &[u64], out: &mut [u64]) {
-        crate::int::algos::isqrt::isqrt_karatsuba::isqrt_karatsuba(n, out)
+    pub fn isqrt_karatsuba_slice(magnitude: &[u64], out: &mut [u64]) {
+        crate::int::algos::isqrt::isqrt_karatsuba::isqrt_karatsuba(magnitude, out)
     }
 
     /// Division-free reciprocal-Newton cube-root candidate
@@ -603,8 +603,8 @@ pub mod __bench_internals {
     /// [`icbrt_newton_slice`]; A/B measures whether the multiply-only
     /// reciprocal iteration beats the shipped divide-per-iteration Newton.
     #[inline(never)]
-    pub fn icbrt_newton_recip_slice(n: &[u64], out: &mut [u64]) {
-        crate::int::algos::icbrt::icbrt_newton_recip::icbrt_newton_recip(n, out)
+    pub fn icbrt_newton_recip_slice(magnitude: &[u64], out: &mut [u64]) {
+        crate::int::algos::icbrt::icbrt_newton_recip::icbrt_newton_recip(magnitude, out)
     }
 
     /// Integer `cube` candidates exposed for the `int_cube_eq_ab`
@@ -613,15 +613,15 @@ pub mod __bench_internals {
     /// over `N`, both `const fn`, bit-identical low `N` limbs.
     #[inline(never)]
     pub fn cube_schoolbook<const N: usize>(
-        x: crate::int::types::Uint<N>,
+        value: crate::int::types::Uint<N>,
     ) -> crate::int::types::Uint<N> {
-        crate::int::algos::cube::cube_schoolbook::cube_schoolbook::<N>(x)
+        crate::int::algos::cube::cube_schoolbook::cube_schoolbook::<N>(value)
     }
     #[inline(never)]
     pub fn cube_fused_comba<const N: usize>(
-        x: crate::int::types::Uint<N>,
+        value: crate::int::types::Uint<N>,
     ) -> crate::int::types::Uint<N> {
-        crate::int::algos::cube::cube_fused_comba::cube_fused_comba::<N>(x)
+        crate::int::algos::cube::cube_fused_comba::cube_fused_comba::<N>(value)
     }
 
     /// Integer `eq` candidates exposed for the `int_cube_eq_ab`
@@ -630,17 +630,17 @@ pub mod __bench_internals {
     /// generic over `N`, both `const fn`, bit-identical.
     #[inline(never)]
     pub fn eq_limbwise<const N: usize>(
-        a: crate::int::types::Int<N>,
-        b: crate::int::types::Int<N>,
+        lhs: crate::int::types::Int<N>,
+        rhs: crate::int::types::Int<N>,
     ) -> bool {
-        crate::int::algos::eq::eq_limbwise::eq_limbwise::<N>(a, b)
+        crate::int::algos::eq::eq_limbwise::eq_limbwise::<N>(lhs, rhs)
     }
     #[inline(never)]
     pub fn eq_xor_fold<const N: usize>(
-        a: crate::int::types::Int<N>,
-        b: crate::int::types::Int<N>,
+        lhs: crate::int::types::Int<N>,
+        rhs: crate::int::types::Int<N>,
     ) -> bool {
-        crate::int::algos::eq::eq_xor_fold::eq_xor_fold::<N>(a, b)
+        crate::int::algos::eq::eq_xor_fold::eq_xor_fold::<N>(lhs, rhs)
     }
 
     /// Per-`N` monomorphic wrappers over the two generic `sum_sq` kernels,
@@ -655,17 +655,17 @@ pub mod __bench_internals {
         ($sb:ident, $cb:ident, $n:literal) => {
             #[inline(never)]
             pub fn $sb(
-                a: crate::int::types::Int<$n>,
-                b: crate::int::types::Int<$n>,
+                lhs: crate::int::types::Int<$n>,
+                rhs: crate::int::types::Int<$n>,
             ) -> Option<crate::int::types::Int<$n>> {
-                crate::int::algos::sum_sq::sum_sq_schoolbook::sum_sq_schoolbook::<$n>(a, b)
+                crate::int::algos::sum_sq::sum_sq_schoolbook::sum_sq_schoolbook::<$n>(lhs, rhs)
             }
             #[inline(never)]
             pub fn $cb(
-                a: crate::int::types::Int<$n>,
-                b: crate::int::types::Int<$n>,
+                lhs: crate::int::types::Int<$n>,
+                rhs: crate::int::types::Int<$n>,
             ) -> Option<crate::int::types::Int<$n>> {
-                crate::int::algos::sum_sq::sum_sq_comba::sum_sq_comba::<$n>(a, b)
+                crate::int::algos::sum_sq::sum_sq_comba::sum_sq_comba::<$n>(lhs, rhs)
             }
         };
     }
@@ -687,55 +687,55 @@ pub mod __bench_internals {
     /// the generic `mul_widen_divide` arm at every band).
     #[inline(never)]
     pub fn dec_div_native<const N: usize, const SCALE: u32>(
-        a: crate::int::types::Int<N>,
-        b: crate::int::types::Int<N>,
+        lhs: crate::int::types::Int<N>,
+        rhs: crate::int::types::Int<N>,
         mode: crate::RoundingMode,
     ) -> crate::int::types::Int<N> {
-        crate::algos::div::div_native::div_native::<N, SCALE>(a, b, mode)
+        crate::algos::div::div_native::div_native::<N, SCALE>(lhs, rhs, mode)
     }
     #[inline(never)]
     pub fn dec_div_widen_scale_n1(
-        a: crate::int::types::Int<1>,
-        b: crate::int::types::Int<1>,
-        mult: crate::int::types::Int<1>,
+        lhs: crate::int::types::Int<1>,
+        rhs: crate::int::types::Int<1>,
+        multiplier: crate::int::types::Int<1>,
         mode: crate::RoundingMode,
     ) -> crate::int::types::Int<1> {
-        crate::algos::div::div_widen_scale::div_widen_scale::<1>(a, b, mult, mode)
+        crate::algos::div::div_widen_scale::div_widen_scale::<1>(lhs, rhs, multiplier, mode)
     }
     #[inline(never)]
     pub fn dec_div_widen_scale_n2(
-        a: crate::int::types::Int<2>,
-        b: crate::int::types::Int<2>,
-        mult: crate::int::types::Int<2>,
+        lhs: crate::int::types::Int<2>,
+        rhs: crate::int::types::Int<2>,
+        multiplier: crate::int::types::Int<2>,
         mode: crate::RoundingMode,
     ) -> crate::int::types::Int<2> {
-        crate::algos::div::div_widen_scale::div_widen_scale::<2>(a, b, mult, mode)
+        crate::algos::div::div_widen_scale::div_widen_scale::<2>(lhs, rhs, multiplier, mode)
     }
     /// Decimal multiply kernels exposed for the `mul_div_native_ab`
     /// microbench (the narrow native-vs-widen mul A/B at the dispatch seam).
     #[inline(never)]
     pub fn dec_mul_native<const N: usize, const SCALE: u32>(
-        a: crate::int::types::Int<N>,
-        b: crate::int::types::Int<N>,
+        lhs: crate::int::types::Int<N>,
+        rhs: crate::int::types::Int<N>,
         mode: crate::RoundingMode,
     ) -> crate::int::types::Int<N> {
-        crate::algos::mul::mul_native::mul_native::<N, SCALE>(a, b, mode)
+        crate::algos::mul::mul_native::mul_native::<N, SCALE>(lhs, rhs, mode)
     }
     #[inline(never)]
     pub fn dec_mul_widen_divide_n1<const SCALE: u32>(
-        a: crate::int::types::Int<1>,
-        b: crate::int::types::Int<1>,
+        lhs: crate::int::types::Int<1>,
+        rhs: crate::int::types::Int<1>,
         mode: crate::RoundingMode,
     ) -> crate::int::types::Int<1> {
-        crate::algos::mul::mul_widen_divide::mul_widen_divide::<1, SCALE>(a, b, mode)
+        crate::algos::mul::mul_widen_divide::mul_widen_divide::<1, SCALE>(lhs, rhs, mode)
     }
     #[inline(never)]
     pub fn dec_mul_widen_divide_n2<const SCALE: u32>(
-        a: crate::int::types::Int<2>,
-        b: crate::int::types::Int<2>,
+        lhs: crate::int::types::Int<2>,
+        rhs: crate::int::types::Int<2>,
         mode: crate::RoundingMode,
     ) -> crate::int::types::Int<2> {
-        crate::algos::mul::mul_widen_divide::mul_widen_divide::<2, SCALE>(a, b, mode)
+        crate::algos::mul::mul_widen_divide::mul_widen_divide::<2, SCALE>(lhs, rhs, mode)
     }
     /// Generic-`N` decimal widen-then-divide multiply, exposed so the
     /// wide-tier `÷10^w` rescale (the D76/D115/D153 high-scale `mul`
@@ -744,27 +744,27 @@ pub mod __bench_internals {
     #[inline(never)]
     #[allow(private_bounds)]
     pub fn dec_mul_widen_divide<const N: usize, const SCALE: u32>(
-        a: crate::int::types::Int<N>,
-        b: crate::int::types::Int<N>,
+        lhs: crate::int::types::Int<N>,
+        rhs: crate::int::types::Int<N>,
         mode: crate::RoundingMode,
     ) -> crate::int::types::Int<N>
     where
         crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
     {
-        crate::algos::mul::mul_widen_divide::mul_widen_divide::<N, SCALE>(a, b, mode)
+        crate::algos::mul::mul_widen_divide::mul_widen_divide::<N, SCALE>(lhs, rhs, mode)
     }
     /// Decimal remainder kernels exposed for the `rem_kernel_ab` microbench
     /// (the narrow native-vs-int-layer decimal rem A/B at the dispatch seam).
     #[inline(never)]
     #[allow(private_bounds)]
     pub fn dec_rem_int_layer<const N: usize>(
-        a: crate::int::types::Int<N>,
-        b: crate::int::types::Int<N>,
+        lhs: crate::int::types::Int<N>,
+        rhs: crate::int::types::Int<N>,
     ) -> crate::int::types::Int<N>
     where
         crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
     {
-        crate::algos::rem::rem_int_layer::rem_int_layer::<N>(a, b)
+        crate::algos::rem::rem_int_layer::rem_int_layer::<N>(lhs, rhs)
     }
     /// The pre-fast-path `rem_int_layer`: always the exact-scratch Knuth
     /// divmod (no single-word `u128 % u128` short-circuit). Exposed so
@@ -773,13 +773,13 @@ pub mod __bench_internals {
     #[inline(never)]
     #[allow(private_bounds)]
     pub fn dec_rem_int_layer_divmod<const N: usize>(
-        a: crate::int::types::Int<N>,
-        b: crate::int::types::Int<N>,
+        lhs: crate::int::types::Int<N>,
+        rhs: crate::int::types::Int<N>,
     ) -> crate::int::types::Int<N>
     where
         crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
     {
-        crate::algos::rem::rem_int_layer::rem_int_layer_divmod::<N>(a, b)
+        crate::algos::rem::rem_int_layer::rem_int_layer_divmod::<N>(lhs, rhs)
     }
     /// The `Int::wrapping_rem` wide decimal-remainder path (the const
     /// single-algorithm `div_rem`, whose multi-limb fallback is an
@@ -788,17 +788,17 @@ pub mod __bench_internals {
     /// on the live-bench `k * 10^SCALE` shape.
     #[inline(never)]
     pub fn int_wrapping_rem_slice<const N: usize>(
-        a: crate::int::types::Int<N>,
-        b: crate::int::types::Int<N>,
+        lhs: crate::int::types::Int<N>,
+        rhs: crate::int::types::Int<N>,
     ) -> crate::int::types::Int<N> {
-        a.wrapping_rem(b)
+        lhs.wrapping_rem(rhs)
     }
     #[inline(never)]
     pub fn dec_rem_native<const N: usize>(
-        a: crate::int::types::Int<N>,
-        b: crate::int::types::Int<N>,
+        lhs: crate::int::types::Int<N>,
+        rhs: crate::int::types::Int<N>,
     ) -> crate::int::types::Int<N> {
-        crate::algos::rem::rem_native::rem_native::<N>(a, b)
+        crate::algos::rem::rem_native::rem_native::<N>(lhs, rhs)
     }
     /// Root kernels exposed for the `root_kernel_ab` microbench (the
     /// dispatch-seam A/B for the D57<20> cbrt candidates).
@@ -1815,17 +1815,17 @@ pub mod __bench_internals {
     /// false). Lets the bench construct wide operands without exposing the
     /// internal constructors.
     #[inline(never)]
-    pub fn int_from_mag_limbs<const N: usize>(mag: &[u64; N]) -> crate::int::types::Int<N> {
-        crate::int::types::Int::<N>::from_mag_limbs(mag, false)
+    pub fn int_from_mag_limbs<const N: usize>(magnitude: &[u64; N]) -> crate::int::types::Int<N> {
+        crate::int::types::Int::<N>::from_mag_limbs(magnitude, false)
     }
 
     #[inline(never)]
     pub fn mul_u64_into<const L: usize, const LP1: usize>(
-        a: &[u64; L],
-        n: u64,
+        value: &[u64; L],
+        multiplier: u64,
         out: &mut [u64; LP1],
     ) {
-        crate::int::algos::mul::mul_schoolbook::mul_schoolbook_into::<L, LP1>(a, n, out)
+        crate::int::algos::mul::mul_schoolbook::mul_schoolbook_into::<L, LP1>(value, multiplier, out)
     }
 
     // ── wide-transcendental `÷10^w` round-divide A/B seam ────────────────
@@ -1839,60 +1839,66 @@ pub mod __bench_internals {
     // Exposed generic over the work-integer `W` so ONE pair covers every
     // wide work width the `div_recover_ab` sweep walks.
 
-    /// SLOW path: half-to-even `round(n / 10^w)` via the generic Knuth
+    /// SLOW path: half-to-even `round(numerator / 10^exponent)` via the
+    /// generic Knuth
     /// `div_rem` reference (mirrors the macro-local `round_div` with a
-    /// `10^w` divisor).
+    /// `10^exponent` divisor).
     #[inline(never)]
     #[allow(private_bounds)]
-    pub fn round_div_pow10_slow<W: crate::int::types::traits::BigInt>(n: W, w: u32) -> W {
-        let d: W = W::TEN.pow(w);
+    pub fn round_div_pow10_slow<W: crate::int::types::traits::BigInt>(
+        numerator: W,
+        exponent: u32
+    ) -> W {
+        let divisor: W = W::TEN.pow(exponent);
         let zero = W::ZERO;
         let one = W::ONE;
-        let (q, r) = n.div_rem(d);
-        if r == zero {
-            return q;
+        let (quotient, remainder) = numerator.div_rem(divisor);
+        if remainder == zero {
+            return quotient;
         }
-        let ar = if r < zero { zero - r } else { r };
-        let ad = if d < zero { zero - d } else { d };
-        let comp = ad - ar;
-        let cmp_r = ar.cmp(&comp);
-        let q_is_odd = q.bit(0);
-        let result_positive = (n < zero) == (d < zero);
+        let abs_remainder = if remainder < zero { zero - remainder } else { remainder };
+        let abs_divisor = if divisor < zero { zero - divisor } else { divisor };
+        let complement = abs_divisor - abs_remainder;
+        let remainder_cmp = abs_remainder.cmp(&complement);
+        let quotient_is_odd = quotient.bit(0);
+        let result_positive = (numerator < zero) == (divisor < zero);
         if crate::support::rounding::should_bump(
             crate::support::rounding::RoundingMode::HalfToEven,
-            cmp_r,
-            q_is_odd,
+            remainder_cmp,
+            quotient_is_odd,
             result_positive,
         ) {
-            if result_positive { q + one } else { q - one }
+            if result_positive { quotient + one } else { quotient - one }
         } else {
-            q
+            quotient
         }
     }
 
-    /// FAST path: half-to-even `round(n / 10^w)` via the production
+    /// FAST path: half-to-even `round(numerator / 10^exponent)` via the
+    /// production
     /// power-of-10 divide kernel (the macro-local `round_div_pow10`):
-    /// single-chunk MG for `w <= 38`, MG / Newton chain dispatch above.
+    /// single-chunk MG for `exponent <= 38`, MG / Newton chain dispatch
+    /// above.
     #[inline(never)]
     #[allow(private_bounds)]
-    pub fn round_div_pow10_fast<W>(n: W, w: u32) -> W
+    pub fn round_div_pow10_fast<W>(numerator: W, exponent: u32) -> W
     where
         W: crate::int::types::traits::BigInt,
         W::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     {
-        if w == 0 {
-            return n;
+        if exponent == 0 {
+            return numerator;
         }
-        if w <= 38 {
+        if exponent <= 38 {
             return crate::algos::support::mg_divide::div_wide_pow10::<W>(
-                n,
-                w,
+                numerator,
+                exponent,
                 crate::support::rounding::RoundingMode::HalfToEven,
             );
         }
         crate::algos::support::rescale::dispatch_wide_pow10::<W>(
-            n,
-            w,
+            numerator,
+            exponent,
             crate::support::rounding::RoundingMode::HalfToEven,
         )
     }
@@ -1930,35 +1936,39 @@ pub mod __bench_internals {
                     #[inline(never)]
                     pub fn build_numerator(top_limb_idx: usize) -> Storage {
                         use crate::int::types::traits::BigInt;
-                        let mut mag = [0u128; 256];
-                        mag[top_limb_idx] = 1u128 << 32;
-                        mag[1] = 0xdeadbeef_cafef00d_u128;
-                        Storage(W::from_mag_sign_u128(&mag, false))
+                        let mut magnitude = [0u128; 256];
+                        magnitude[top_limb_idx] = 1u128 << 32;
+                        magnitude[1] = 0xdeadbeef_cafef00d_u128;
+                        Storage(W::from_mag_sign_u128(&magnitude, false))
                     }
 
                     #[inline(never)]
-                    pub fn mg_chain(n: Storage, scale: u32) -> Storage {
+                    pub fn mg_chain(numerator: Storage, scale: u32) -> Storage {
                         Storage(crate::algos::support::mg_divide::div_wide_pow10_chain::<W>(
-                            n.0,
+                            numerator.0,
                             scale,
                             RoundingMode::HalfToEven,
                         ))
                     }
 
                     #[inline(never)]
-                    pub fn mg_single(n: Storage, scale: u32) -> Storage {
+                    pub fn mg_single(numerator: Storage, scale: u32) -> Storage {
                         Storage(crate::algos::support::mg_divide::div_wide_pow10::<W>(
-                            n.0,
+                            numerator.0,
                             scale,
                             RoundingMode::HalfToEven,
                         ))
                     }
 
                     #[inline(never)]
-                    pub fn newton(n: Storage, scale: u32, table: &NewtonReciprocal) -> Storage {
+                    pub fn newton(
+                        numerator: Storage,
+                        scale: u32,
+                        table: &NewtonReciprocal
+                    ) -> Storage {
                         Storage(
                             crate::algos::support::newton_reciprocal::div_wide_pow10_newton_with::<W>(
-                                n.0,
+                                numerator.0,
                                 scale,
                                 RoundingMode::HalfToEven,
                                 &table.0,
@@ -1974,7 +1984,11 @@ pub mod __bench_internals {
                     /// scale) cell -- verified by the `newton_u64_eq_u128_*` unit
                     /// tests in `newton_reciprocal.rs`.
                     #[inline(never)]
-                    pub fn newton_u128(n: Storage, scale: u32, table: &NewtonReciprocal) -> Storage {
+                    pub fn newton_u128(
+                        numerator: Storage,
+                        scale: u32,
+                        table: &NewtonReciprocal
+                    ) -> Storage {
                         use crate::int::types::traits::BigInt;
                         // Match production slicing: the Newton kernel operates
                         // on EXACTLY `W::U128_LIMBS` u128 limbs (the storage
@@ -1982,15 +1996,15 @@ pub mod __bench_internals {
                         // would inflate the schoolbook product cost on smaller
                         // widths — production never does that.
                         let mut mag_u128 = [0u128; 256];
-                        let mag = &mut mag_u128[..W::U128_LIMBS];
-                        let neg = n.0.mag_into_u128(mag);
+                        let magnitude = &mut mag_u128[..W::U128_LIMBS];
+                        let is_negative = numerator.0.mag_into_u128(magnitude);
                         crate::algos::support::newton_reciprocal::newton_pow10_mag_u128_packed(
-                            mag,
-                            neg,
+                            magnitude,
+                            is_negative,
                             RoundingMode::HalfToEven,
                             &table.0,
                         );
-                        Storage(W::from_mag_sign_u128(mag, neg))
+                        Storage(W::from_mag_sign_u128(magnitude, is_negative))
                     }
                 }
             };
@@ -2039,15 +2053,17 @@ pub mod __bench_internals {
     ///   on the common path.
     #[inline(never)]
     pub fn neg_fused_split<const N: usize>(
-        a: crate::int::types::Int<N>,
+        value: crate::int::types::Int<N>,
     ) -> crate::int::types::Int<N> {
-        crate::int::algos::neg::neg_twos_complement::neg_twos_complement::<N>(a)
+        crate::int::algos::neg::neg_twos_complement::neg_twos_complement::<N>(value)
     }
     /// Previous routed shape, retained as the `neg_kernel_ab` reference
     /// baseline. Bit-identical to `neg_fused_split`.
     #[inline(never)]
-    pub fn neg_two_pass<const N: usize>(a: crate::int::types::Int<N>) -> crate::int::types::Int<N> {
-        let limbs_in = a.as_limbs();
+    pub fn neg_two_pass<const N: usize>(
+        value: crate::int::types::Int<N>
+    ) -> crate::int::types::Int<N> {
+        let limbs_in = value.as_limbs();
         let mut out = [0u64; N];
         let mut i = 0;
         while i < N {
@@ -2078,10 +2094,10 @@ pub mod __bench_internals {
     /// `neg_kernel_ab` candidate; bit-identical to `neg_fused_split`.
     #[inline(never)]
     pub fn neg_fused_open<const N: usize>(
-        a: crate::int::types::Int<N>,
+        value: crate::int::types::Int<N>,
     ) -> crate::int::types::Int<N> {
         let mut out = [0u64; N];
-        let limbs = a.as_limbs();
+        let limbs = value.as_limbs();
         let mut carry: u64 = 1;
         let mut i = 0;
         while i < N {

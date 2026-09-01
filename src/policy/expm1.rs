@@ -119,8 +119,8 @@ fn classify<const N: usize, const SCALE: u32>(raw: &Int<N>) -> Algorithm {
 #[inline]
 fn resolve<const N: usize, const SCALE: u32>(raw: &Int<N>) -> Algorithm {
     match const { select::<N, SCALE>() } {
-        Select::ByAlgorithm(a) => a,
-        Select::ByValue(f) => f(raw),
+        Select::ByAlgorithm(algorithm) => algorithm,
+        Select::ByValue(choose) => choose(raw),
     }
 }
 
@@ -170,17 +170,17 @@ fn narrow_strict<const N: usize, const SCALE: u32>(
     algo: Algorithm,
     mode: RoundingMode,
 ) -> Int<N> {
-    let v = raw.resize_to::<Int<2>>();
+    let raw_narrow = raw.resize_to::<Int<2>>();
     let out = match algo {
         Algorithm::Series => expm1_series_g::<Int<2>, WZiv, SCALE>(
-            v,
+            raw_narrow,
             NARROW_GUARD,
             Int::<2>::MAX,
             Int::<2>::MIN,
             mode,
         ),
         Algorithm::WithExp => expm1_with_exp_g::<Int<2>, WZiv, SCALE>(
-            v,
+            raw_narrow,
             NARROW_GUARD,
             Int::<2>::MAX,
             Int::<2>::MIN,
@@ -198,17 +198,17 @@ fn narrow_approx<const N: usize, const SCALE: u32>(
     algo: Algorithm,
     mode: RoundingMode,
 ) -> Int<N> {
-    let v = raw.resize_to::<Int<2>>();
+    let raw_narrow = raw.resize_to::<Int<2>>();
     let out = match algo {
         Algorithm::Series => expm1_series_approx_g::<Int<2>, WZiv, SCALE>(
-            v,
+            raw_narrow,
             working_digits,
             Int::<2>::MAX,
             Int::<2>::MIN,
             mode,
         ),
         Algorithm::WithExp => expm1_with_exp_approx_g::<Int<2>, WZiv, SCALE>(
-            v,
+            raw_narrow,
             working_digits,
             Int::<2>::MAX,
             Int::<2>::MIN,

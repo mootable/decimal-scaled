@@ -28,11 +28,11 @@ use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
 use crate::int::types::Int;
 
 /// Full-width product-scanning (comba) square: `out = x²` over the
-/// little-endian limb slice `x[..l]`, writing the full `2l` result limbs.
-/// `out.len() >= 2*l` and `out` must be zeroed by the caller for the high
-/// limbs it does not reach (this routine overwrites `out[..2*l]`).
+/// little-endian limb slice `x[..len]`, writing the full `2·len` result limbs.
+/// `out.len() >= 2*len` and `out` must be zeroed by the caller for the high
+/// limbs it does not reach (this routine overwrites `out[..2*len]`).
 ///
-/// For each output column `col` in `0..2*l-1`, sum every partial product
+/// For each output column `col` in `0..2*len-1`, sum every partial product
 /// `x_i·x_j` with `i + j == col` and `i ≤ j`: the off-diagonal `i < j` terms
 /// contribute twice (symmetry), the diagonal `i == j` once. A running
 /// 128-bit-plus-overflow accumulator threads the inter-column carry, so there
@@ -40,55 +40,58 @@ use crate::int::types::Int;
 /// [`sqr_low_fixed`](crate::int::algos::sqr::sqr_low_fixed::sqr_low_fixed),
 /// only carried out to the full width.
 #[inline]
-fn sqr_full(x: &[u64], l: usize, out: &mut [u64]) {
+fn sqr_full(x: &[u64], len: usize, out: &mut [u64]) {
     let mut acc: u128 = 0;
-    let mut hi: u64 = 0;
-    let ncol = 2 * l; // columns 0 ..= 2l-2 are emitted; the final carry lands in 2l-1.
+    let mut acc_hi: u64 = 0;
+    // columns 0 ..= 2·len-2 are emitted; the final carry lands in 2·len-1.
+    let col_count = 2 * len;
     let mut col = 0;
-    while col < ncol {
-        // Pairs (i, j) with i ≤ j, i + j == col, and both in 0..l.
-        // i ranges from max(0, col-(l-1)) to floor(col/2).
-        let lo_i = if col >= l { col - (l - 1) } else { 0 };
-        let mut i = lo_i;
+    while col < col_count {
+        // Pairs (i, j) with i ≤ j, i + j == col, and both in 0..len.
+        // i ranges from max(0, col-(len-1)) to floor(col/2).
+        let min_i = if col >= len { col - (len - 1) } else { 0 };
+        let mut i = min_i;
         while 2 * i <= col {
             let j = col - i;
-            // j ≤ l-1 holds because i ≥ col-(l-1) ⇒ j = col-i ≤ l-1.
+            // j ≤ len-1 holds because i ≥ col-(len-1) ⇒ j = col-i ≤ len-1.
             let p = (x[i] as u128) * (x[j] as u128);
             let reps = if i == j { 1 } else { 2 };
             let mut r = 0;
             while r < reps {
                 let (s, c) = acc.overflowing_add(p);
                 acc = s;
-                hi += c as u64;
+                acc_hi += c as u64;
                 r += 1;
             }
             i += 1;
         }
         out[col] = acc as u64;
-        acc = (acc >> 64) + ((hi as u128) << 64);
-        hi = 0;
+        acc = (acc >> 64) + ((acc_hi as u128) << 64);
+        acc_hi = 0;
         col += 1;
     }
 }
 
-/// Form `a² + b²` (on the magnitude slices `ma` / `mb`) into `out` via the
-/// comba square, returning its significant limb length. Drop-in for
+/// Form `a² + b²` (on the magnitude slices `a_magnitude` / `b_magnitude`)
+/// into `out` via the comba square, returning its significant limb length.
+/// Drop-in for
 /// [`crate::int::algos::sum_sq::sum_sq_schoolbook::sum_sq_radicand`]: same
 /// contract, same result, the squares formed by [`sqr_full`].
 #[inline]
-pub(crate) fn sum_sq_radicand_comba<const N: usize>(ma: &[u64], mb: &[u64], out: &mut [u64]) -> usize
+pub(crate) fn sum_sq_radicand_comba<const N: usize>(a_magnitude: &[u64],
+    b_magnitude: &[u64], out: &mut [u64]) -> usize
 where
     Limbs<N>: ComputeLimbs,
 {
-    let la = sig_len(ma);
-    let lb = sig_len(mb);
+    let a_len = sig_len(a_magnitude);
+    let b_len = sig_len(b_magnitude);
     // a² into `out` (zeroed by the caller); b² into its own scratch.
-    sqr_full(ma, la, &mut out[..2 * la]);
-    let mut bsq_buf = Limbs::<N>::double_buffered_u64();
-    let bsq = bsq_buf.as_mut();
-    sqr_full(mb, lb, &mut bsq[..2 * lb]);
-    let span = (2 * la).max(2 * lb) + 1;
-    add_assign(&mut out[..span], &bsq[..2 * lb]);
+    sqr_full(a_magnitude, a_len, &mut out[..2 * a_len]);
+    let mut b_squared_buf = Limbs::<N>::double_buffered_u64();
+    let b_squared = b_squared_buf.as_mut();
+    sqr_full(b_magnitude, b_len, &mut b_squared[..2 * b_len]);
+    let span = (2 * a_len).max(2 * b_len) + 1;
+    add_assign(&mut out[..span], &b_squared[..2 * b_len]);
     sig_len(&out[..span])
 }
 
@@ -100,16 +103,17 @@ pub(crate) fn sum_sq_comba<const N: usize>(a: Int<N>, b: Int<N>) -> Option<Int<N
 where
     Limbs<N>: ComputeLimbs,
 {
-    let ma = a.unsigned_abs();
-    let mb = b.unsigned_abs();
-    let mut n_buf = Limbs::<N>::double_buffered_u64();
-    let n = n_buf.as_mut();
-    let nl = sum_sq_radicand_comba::<N>(ma.as_limbs(), mb.as_limbs(), n);
-    if nl > N || (nl == N && (n[N - 1] >> 63) != 0) {
+    let a_magnitude = a.unsigned_abs();
+    let b_magnitude = b.unsigned_abs();
+    let mut radicand_buf = Limbs::<N>::double_buffered_u64();
+    let radicand = radicand_buf.as_mut();
+    let radicand_len =
+        sum_sq_radicand_comba::<N>(a_magnitude.as_limbs(), b_magnitude.as_limbs(), radicand);
+    if radicand_len > N || (radicand_len == N && (radicand[N - 1] >> 63) != 0) {
         return None;
     }
     let mut out = [0u64; N];
-    out.copy_from_slice(&n[..N]);
+    out.copy_from_slice(&radicand[..N]);
     Some(Int::<N>::from_limbs(out))
 }
 
@@ -120,18 +124,18 @@ mod tests {
     use crate::int::types::Int;
 
     /// SplitMix64 step — deterministic spread for the differential check.
-    fn mix(s: &mut u64) -> u64 {
-        *s = s.wrapping_add(0x9E37_79B9_7F4A_7C15);
-        let mut z = *s;
+    fn mix(state: &mut u64) -> u64 {
+        *state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = *state;
         z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
         z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
         z ^ (z >> 31)
     }
 
-    fn rand_int<const N: usize>(s: &mut u64) -> Int<N> {
+    fn rand_int<const N: usize>(state: &mut u64) -> Int<N> {
         let mut limbs = [0u64; N];
         for limb in limbs.iter_mut() {
-            *limb = mix(s);
+            *limb = mix(state);
         }
         // Clear the top bit so the magnitude stays comfortably positive; the
         // value is then interpreted signed by Int, which is fine — the
@@ -146,20 +150,20 @@ mod tests {
     where
         crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
     {
-        let mut s = 0x0123_4567_89AB_CDEF_u64 ^ (N as u64);
+        let mut state = 0x0123_4567_89AB_CDEF_u64 ^ (N as u64);
         for _ in 0..400 {
             // Shrink one operand sometimes to exercise unequal lengths.
-            let mut a = rand_int::<N>(&mut s);
-            let mut b = rand_int::<N>(&mut s);
-            if mix(&mut s) & 1 == 0 {
+            let mut a = rand_int::<N>(&mut state);
+            let mut b = rand_int::<N>(&mut state);
+            if mix(&mut state) & 1 == 0 {
                 a = Int::<N>::from_limbs({
-                    let mut l = *a.as_limbs();
-                    l[1..N].fill(0);
-                    l[0] &= 0xFFFF_FFFF; // ~32-bit operand
-                    l
+                    let mut limbs = *a.as_limbs();
+                    limbs[1..N].fill(0);
+                    limbs[0] &= 0xFFFF_FFFF; // ~32-bit operand
+                    limbs
                 });
             }
-            if mix(&mut s) & 1 == 0 {
+            if mix(&mut state) & 1 == 0 {
                 b = Int::<N>::ZERO;
             }
             assert_eq!(

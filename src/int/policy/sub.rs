@@ -96,16 +96,16 @@ const fn select<const N: usize>() -> Select<N> {
 /// returns the default algorithm tag without invoking the fn pointer,
 /// satisfying the `const fn` constraint.
 #[inline]
-pub(crate) const fn dispatch<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
+pub(crate) const fn dispatch<const N: usize>(lhs: Int<N>, rhs: Int<N>) -> Int<N> {
     let algo = match const { select::<N>() } {
-        Select::ByAlgorithm(a) => a,
+        Select::ByAlgorithm(algorithm) => algorithm,
         // sub is always ByAlgorithm; fall through to the default if
         // the arm is reached (fn pointer calls are not allowed in const fn).
         Select::ByValue(_) => Algorithm::RippleBorrow,
     };
     match algo {
-        Algorithm::RippleBorrow => sub_ripple_borrow(a, b),
-        Algorithm::Schoolbook => sub_ripple_borrow(a, b),
+        Algorithm::RippleBorrow => sub_ripple_borrow(lhs, rhs),
+        Algorithm::Schoolbook => sub_ripple_borrow(lhs, rhs),
     }
 }
 
@@ -116,14 +116,14 @@ pub(crate) const fn dispatch<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
 /// panic-on-overflow contract) enters here — the fused-add rationale, see
 /// `int::policy::add::dispatch_checked`.
 #[inline]
-pub(crate) const fn dispatch_checked<const N: usize>(a: Int<N>, b: Int<N>) -> Option<Int<N>> {
+pub(crate) const fn dispatch_checked<const N: usize>(lhs: Int<N>, rhs: Int<N>) -> Option<Int<N>> {
     let algo = match const { select::<N>() } {
-        Select::ByAlgorithm(a) => a,
+        Select::ByAlgorithm(algorithm) => algorithm,
         Select::ByValue(_) => Algorithm::RippleBorrow,
     };
     match algo {
         Algorithm::RippleBorrow | Algorithm::Schoolbook => {
-            crate::int::algos::sub::sub_ripple_borrow::sub_ripple_borrow_checked(a, b)
+            crate::int::algos::sub::sub_ripple_borrow::sub_ripple_borrow_checked(lhs, rhs)
         }
     }
 }

@@ -98,15 +98,15 @@ const fn select<const N: usize>() -> Select<N> {
 /// returns the default algorithm tag without invoking the fn pointer,
 /// satisfying the `const fn` constraint.
 #[inline]
-pub(crate) const fn dispatch<const N: usize>(a: Int<N>) -> Int<N> {
+pub(crate) const fn dispatch<const N: usize>(value: Int<N>) -> Int<N> {
     let algo = match const { select::<N>() } {
-        Select::ByAlgorithm(a) => a,
+        Select::ByAlgorithm(algorithm) => algorithm,
         // neg is always ByAlgorithm; fall through to the default if
         // the arm is reached (fn pointer calls are not allowed in const fn).
         Select::ByValue(_) => Algorithm::TwosComplement,
     };
     match algo {
-        Algorithm::TwosComplement => neg_twos_complement(a),
-        Algorithm::Schoolbook => neg_twos_complement(a),
+        Algorithm::TwosComplement => neg_twos_complement(value),
+        Algorithm::Schoolbook => neg_twos_complement(value),
     }
 }

@@ -87,28 +87,28 @@ use crate::int::types::compute_limbs::MAX_QUADRUPLE_LIMBS;
 
 /// Scratch capacity for the reciprocal-Newton cube root. The widest
 /// intermediate is `prod = Y·bracket ≈ 2^{4F−bits/3}` (≈`4F` bits); with
-/// `F ≈ 2·bits/3`, that is `≈8·bits/3` bits ≈ `4·n.len()` limbs of headroom
-/// over the operand. `2·MAX_QUADRUPLE_LIMBS + 8` u64 limbs covers it for
-/// every shipped operand width. Local to this candidate; it sizes no other
-/// tier. The wider footprint is the division-free trade's cost,
+/// `F ≈ 2·bits/3`, that is `≈8·bits/3` bits ≈ `4·radicand.len()` limbs of
+/// headroom over the operand. `2·MAX_QUADRUPLE_LIMBS + 8` u64 limbs covers
+/// it for every shipped operand width. Local to this candidate; it sizes no
+/// other tier. The wider footprint is the division-free trade's cost,
 /// weighed at bench time.
 const SCRATCH_LIMBS: usize = 2 * MAX_QUADRUPLE_LIMBS + 8;
 /// Guard fractional bits carried by the reciprocal `Y` beyond the root
 /// precision; ample for the end-correction to finish in O(1) steps.
 const GUARD_BITS: u32 = 32;
 
-/// `out = floor(cbrt(n))`, computed division-free via a reciprocal-root
-/// Newton iteration plus an exact integer end-correction.
+/// `out = floor(cbrt(radicand))`, computed division-free via a
+/// reciprocal-root Newton iteration plus an exact integer end-correction.
 ///
 /// Bit-identical to
 /// [`crate::int::algos::icbrt::icbrt_newton::icbrt_newton`]; see the module
 /// docs for the algorithm and references.
 #[allow(dead_code)]
-pub(crate) fn icbrt_newton_recip(n: &[u64], out: &mut [u64]) {
-    for o in out.iter_mut() {
-        *o = 0;
+pub(crate) fn icbrt_newton_recip(radicand: &[u64], out: &mut [u64]) {
+    for limb in out.iter_mut() {
+        *limb = 0;
     }
-    let bits = bit_len(n);
+    let bits = bit_len(radicand);
     if bits == 0 {
         return;
     }
@@ -117,32 +117,36 @@ pub(crate) fn icbrt_newton_recip(n: &[u64], out: &mut [u64]) {
         return;
     }
 
-    let nsig = sig_len(n);
-    let work = nsig + 1;
+    let radicand_len = sig_len(radicand);
+    let work_len = radicand_len + 1;
 
     // ── fixed-point scale + intermediate widths (see module docs) ─────────
     let f: u32 = (2 * bits).div_ceil(3) + GUARD_BITS;
-    let fz = f as usize;
-    let yl = fz / 64 + 2; // Y < 2^F
-    let f3l = (3 * fz) / 64 + 3; // ~3F-bit values: 2^{3F+2}, n·Y³, bracket
-    let prodl = (4 * fz) / 64 + 4; // ~4F-bit: prod = Y·bracket (the peak)
-    debug_assert!(prodl <= SCRATCH_LIMBS, "icbrt_recip 4F scratch overflow");
-    debug_assert!(nsig + f3l <= SCRATCH_LIMBS, "icbrt_recip n·Y³ scratch overflow");
+    let f_usize = f as usize;
+    let y_len = f_usize / 64 + 2; // Y < 2^F
+    // ~3F-bit values: 2^{3F+2}, n·Y³, bracket
+    let f3_len = (3 * f_usize) / 64 + 3;
+    // ~4F-bit: prod = Y·bracket (the peak)
+    let peak_prod_len = (4 * f_usize) / 64 + 4;
+    debug_assert!(peak_prod_len <= SCRATCH_LIMBS, "icbrt_recip 4F scratch overflow");
+    debug_assert!(radicand_len + f3_len <= SCRATCH_LIMBS,
+        "icbrt_recip n·Y³ scratch overflow");
 
     // ── seed s0 ≥ ⌊∛n⌋ (shared cube-root seed) ────────────────────────────
     let mut s0 = [0u64; SCRATCH_LIMBS];
-    cbrt_seed(n, bits, &mut s0[..work]);
+    cbrt_seed(radicand, bits, &mut s0[..work_len]);
 
     // ── Y0 = 2^F / s0  (the ONE divide, run ONCE) ─────────────────────────
     let mut two_f = [0u64; SCRATCH_LIMBS];
-    two_f[fz / 64] = 1u64 << (f % 64);
-    let fdl = (fz / 64 + 2).max(work); // dividend length
+    two_f[f_usize / 64] = 1u64 << (f % 64);
+    let dividend_len = (f_usize / 64 + 2).max(work_len);
     let mut y = [0u64; SCRATCH_LIMBS];
     {
-        let mut rem = [0u64; SCRATCH_LIMBS];
-        div_rem_dispatch(&two_f[..fdl], &s0[..work], &mut y[..fdl], &mut rem[..fdl]);
+        let mut remainder = [0u64; SCRATCH_LIMBS];
+        div_rem_dispatch(&two_f[..dividend_len], &s0[..work_len],
+            &mut y[..dividend_len], &mut remainder[..dividend_len]);
     }
-    if is_zero(&y[..yl]) {
+    if is_zero(&y[..y_len]) {
         y[0] = 1; // never let the reciprocal collapse to zero
     }
 
@@ -155,131 +159,132 @@ pub(crate) fn icbrt_newton_recip(n: &[u64], out: &mut [u64]) {
     let mut bracket = [0u64; SCRATCH_LIMBS];
     let mut prod = [0u64; SCRATCH_LIMBS];
     let mut tmp = [0u64; SCRATCH_LIMBS];
-    let mut newy = [0u64; SCRATCH_LIMBS];
+    let mut new_y = [0u64; SCRATCH_LIMBS];
     let mut rem3 = [0u64; SCRATCH_LIMBS];
     let mut iter = 0;
     while iter < iters {
-        let ysig = sig_len(&y[..(yl + 2).min(SCRATCH_LIMBS)]);
+        let y_sig_len = sig_len(&y[..(y_len + 2).min(SCRATCH_LIMBS)]);
 
         // y2 = Y²  (full product width).
-        let y2len = 2 * ysig;
-        for v in y2[..y2len].iter_mut() {
-            *v = 0;
+        let y2_len = 2 * y_sig_len;
+        for limb in y2[..y2_len].iter_mut() {
+            *limb = 0;
         }
-        mul_schoolbook(&y[..ysig], &y[..ysig], &mut y2[..y2len]);
-        let y2sig = sig_len(&y2[..y2len]);
+        mul_schoolbook(&y[..y_sig_len], &y[..y_sig_len], &mut y2[..y2_len]);
+        let y2_sig_len = sig_len(&y2[..y2_len]);
 
         // y3 = y2·Y.
-        let y3len = y2sig + ysig;
-        for v in y3[..y3len].iter_mut() {
-            *v = 0;
+        let y3_len = y2_sig_len + y_sig_len;
+        for limb in y3[..y3_len].iter_mut() {
+            *limb = 0;
         }
-        mul_schoolbook(&y2[..y2sig], &y[..ysig], &mut y3[..y3len]);
-        let y3sig = sig_len(&y3[..y3len]);
+        mul_schoolbook(&y2[..y2_sig_len], &y[..y_sig_len], &mut y3[..y3_len]);
+        let y3_sig_len = sig_len(&y3[..y3_len]);
 
         // ny3 = n·Y³ ≈ 2^{3F}.
-        let ny3len = nsig + y3sig;
-        for v in ny3[..ny3len].iter_mut() {
-            *v = 0;
+        let ny3_len = radicand_len + y3_sig_len;
+        for limb in ny3[..ny3_len].iter_mut() {
+            *limb = 0;
         }
-        mul_schoolbook(&n[..nsig], &y3[..y3sig], &mut ny3[..ny3len]);
-        let ny3sig = sig_len(&ny3[..ny3len]);
+        mul_schoolbook(&radicand[..radicand_len], &y3[..y3_sig_len], &mut ny3[..ny3_len]);
+        let ny3_sig_len = sig_len(&ny3[..ny3_len]);
 
         // bracket = 4·2^{3F} − n·Y³  (4·2^{3F} = 2^{3F+2}).
-        for v in bracket[..f3l].iter_mut() {
-            *v = 0;
+        for limb in bracket[..f3_len].iter_mut() {
+            *limb = 0;
         }
         {
-            let pos = 3 * fz + 2;
+            let pos = 3 * f_usize + 2;
             bracket[pos / 64] = 1u64 << (pos % 64);
         }
-        if cmp(&bracket[..f3l], &ny3[..ny3sig]) < 0 {
+        if cmp(&bracket[..f3_len], &ny3[..ny3_sig_len]) < 0 {
             // over-shot: clamp the bracket to 0 (Y shrinks toward the fixed
             // point); keeps the unsigned subtraction well-defined.
-            for v in bracket[..f3l].iter_mut() {
-                *v = 0;
+            for limb in bracket[..f3_len].iter_mut() {
+                *limb = 0;
             }
         } else {
-            sub_assign(&mut bracket[..f3l], &ny3[..ny3sig]);
+            sub_assign(&mut bracket[..f3_len], &ny3[..ny3_sig_len]);
         }
-        let brsig = sig_len(&bracket[..f3l]);
+        let bracket_sig_len = sig_len(&bracket[..f3_len]);
 
         // prod = Y·bracket  (the 4F-bit peak — full product width).
-        let prodlen = ysig + brsig;
-        for v in prod[..prodlen].iter_mut() {
-            *v = 0;
+        let prod_len = y_sig_len + bracket_sig_len;
+        for limb in prod[..prod_len].iter_mut() {
+            *limb = 0;
         }
-        mul_schoolbook(&y[..ysig], &bracket[..brsig], &mut prod[..prodlen]);
+        mul_schoolbook(&y[..y_sig_len], &bracket[..bracket_sig_len], &mut prod[..prod_len]);
 
-        // newy = prod / (3·2^{3F}) = (prod >> 3F) / 3.
-        for v in tmp[..prodlen].iter_mut() {
-            *v = 0;
+        // new_y = prod / (3·2^{3F}) = (prod >> 3F) / 3.
+        for limb in tmp[..prod_len].iter_mut() {
+            *limb = 0;
         }
-        shr(&prod[..prodlen], 3 * f, &mut tmp[..prodlen]);
-        let tmpsig = sig_len(&tmp[..prodlen]).max(1);
-        for v in newy[..tmpsig].iter_mut() {
-            *v = 0;
+        shr(&prod[..prod_len], 3 * f, &mut tmp[..prod_len]);
+        let tmp_sig_len = sig_len(&tmp[..prod_len]).max(1);
+        for limb in new_y[..tmp_sig_len].iter_mut() {
+            *limb = 0;
         }
         rem3[0] = 0;
-        div_rem_dispatch(&tmp[..tmpsig], &three, &mut newy[..tmpsig], &mut rem3[..1]);
+        div_rem_dispatch(&tmp[..tmp_sig_len], &three, &mut new_y[..tmp_sig_len],
+            &mut rem3[..1]);
 
         // Fixed-point reached → stop early (the end-correction does the rest).
-        let cmp_len = tmpsig.max(yl);
-        if cmp(&newy[..cmp_len.min(SCRATCH_LIMBS)], &y[..cmp_len.min(SCRATCH_LIMBS)]) == 0 {
+        let cmp_len = tmp_sig_len.max(y_len);
+        if cmp(&new_y[..cmp_len.min(SCRATCH_LIMBS)], &y[..cmp_len.min(SCRATCH_LIMBS)]) == 0 {
             iter = iters;
         } else {
             iter += 1;
         }
-        let copy_len = tmpsig.min(SCRATCH_LIMBS);
-        for v in y[..(yl + 2).min(SCRATCH_LIMBS)].iter_mut() {
-            *v = 0;
+        let copy_len = tmp_sig_len.min(SCRATCH_LIMBS);
+        for limb in y[..(y_len + 2).min(SCRATCH_LIMBS)].iter_mut() {
+            *limb = 0;
         }
-        y[..copy_len].copy_from_slice(&newy[..copy_len]);
+        y[..copy_len].copy_from_slice(&new_y[..copy_len]);
     }
 
     // ── recover s ≈ (n · Y²) >> 2F ────────────────────────────────────────
-    let ysig = sig_len(&y[..(yl + 2).min(SCRATCH_LIMBS)]);
-    let y2len = 2 * ysig;
-    for v in y2[..y2len].iter_mut() {
-        *v = 0;
+    let y_sig_len = sig_len(&y[..(y_len + 2).min(SCRATCH_LIMBS)]);
+    let y2_len = 2 * y_sig_len;
+    for limb in y2[..y2_len].iter_mut() {
+        *limb = 0;
     }
-    mul_schoolbook(&y[..ysig], &y[..ysig], &mut y2[..y2len]);
-    let y2sig = sig_len(&y2[..y2len]);
-    let nylen = nsig + y2sig;
-    for v in prod[..nylen].iter_mut() {
-        *v = 0;
+    mul_schoolbook(&y[..y_sig_len], &y[..y_sig_len], &mut y2[..y2_len]);
+    let y2_sig_len = sig_len(&y2[..y2_len]);
+    let n_y2_len = radicand_len + y2_sig_len;
+    for limb in prod[..n_y2_len].iter_mut() {
+        *limb = 0;
     }
-    mul_schoolbook(&n[..nsig], &y2[..y2sig], &mut prod[..nylen]);
+    mul_schoolbook(&radicand[..radicand_len], &y2[..y2_sig_len], &mut prod[..n_y2_len]);
     let mut s = [0u64; SCRATCH_LIMBS];
-    shr(&prod[..nylen], 2 * f, &mut s[..work]);
+    shr(&prod[..n_y2_len], 2 * f, &mut s[..work_len]);
 
     // If the reciprocal collapsed (s == 0) fall back to the seed over-estimate.
-    if is_zero(&s[..work]) {
-        s[..work].copy_from_slice(&s0[..work]);
+    if is_zero(&s[..work_len]) {
+        s[..work_len].copy_from_slice(&s0[..work_len]);
     }
 
     // ── exact integer end-correction (multiplies only) ────────────────────
     let one = [1u64];
     let mut sq = [0u64; SCRATCH_LIMBS];
     let mut cube = [0u64; SCRATCH_LIMBS];
-    let mut sp1 = [0u64; SCRATCH_LIMBS];
+    let mut s_plus_one = [0u64; SCRATCH_LIMBS];
 
     // Walk DOWN while s³ > n.
     loop {
-        let slen = sig_len(&s[..work]);
-        let sqlen = (2 * slen).min(SCRATCH_LIMBS);
-        for v in sq[..sqlen].iter_mut() {
-            *v = 0;
+        let s_len = sig_len(&s[..work_len]);
+        let sq_len = (2 * s_len).min(SCRATCH_LIMBS);
+        for limb in sq[..sq_len].iter_mut() {
+            *limb = 0;
         }
-        mul_schoolbook(&s[..slen], &s[..slen], &mut sq[..sqlen]);
-        let sqsig = sig_len(&sq[..sqlen]);
-        let cublen = (sqsig + slen).min(SCRATCH_LIMBS);
-        for v in cube[..cublen].iter_mut() {
-            *v = 0;
+        mul_schoolbook(&s[..s_len], &s[..s_len], &mut sq[..sq_len]);
+        let sq_sig_len = sig_len(&sq[..sq_len]);
+        let cube_len = (sq_sig_len + s_len).min(SCRATCH_LIMBS);
+        for limb in cube[..cube_len].iter_mut() {
+            *limb = 0;
         }
-        mul_schoolbook(&sq[..sqsig], &s[..slen], &mut cube[..cublen]);
-        if cmp(&cube[..cublen], n) > 0 {
-            sub_assign(&mut s[..work], &one);
+        mul_schoolbook(&sq[..sq_sig_len], &s[..s_len], &mut cube[..cube_len]);
+        if cmp(&cube[..cube_len], radicand) > 0 {
+            sub_assign(&mut s[..work_len], &one);
         } else {
             break;
         }
@@ -287,40 +292,40 @@ pub(crate) fn icbrt_newton_recip(n: &[u64], out: &mut [u64]) {
 
     // Walk UP while (s+1)³ ≤ n.
     loop {
-        sp1[..work].copy_from_slice(&s[..work]);
-        add_assign(&mut sp1[..work], &one);
-        let slen = sig_len(&sp1[..work]);
-        let sqlen = (2 * slen).min(SCRATCH_LIMBS);
-        for v in sq[..sqlen].iter_mut() {
-            *v = 0;
+        s_plus_one[..work_len].copy_from_slice(&s[..work_len]);
+        add_assign(&mut s_plus_one[..work_len], &one);
+        let s_len = sig_len(&s_plus_one[..work_len]);
+        let sq_len = (2 * s_len).min(SCRATCH_LIMBS);
+        for limb in sq[..sq_len].iter_mut() {
+            *limb = 0;
         }
-        mul_schoolbook(&sp1[..slen], &sp1[..slen], &mut sq[..sqlen]);
-        let sqsig = sig_len(&sq[..sqlen]);
-        let cublen = (sqsig + slen).min(SCRATCH_LIMBS);
-        for v in cube[..cublen].iter_mut() {
-            *v = 0;
+        mul_schoolbook(&s_plus_one[..s_len], &s_plus_one[..s_len], &mut sq[..sq_len]);
+        let sq_sig_len = sig_len(&sq[..sq_len]);
+        let cube_len = (sq_sig_len + s_len).min(SCRATCH_LIMBS);
+        for limb in cube[..cube_len].iter_mut() {
+            *limb = 0;
         }
-        mul_schoolbook(&sq[..sqsig], &sp1[..slen], &mut cube[..cublen]);
-        if cmp(&cube[..cublen], n) <= 0 {
-            s[..work].copy_from_slice(&sp1[..work]);
+        mul_schoolbook(&sq[..sq_sig_len], &s_plus_one[..s_len], &mut cube[..cube_len]);
+        if cmp(&cube[..cube_len], radicand) <= 0 {
+            s[..work_len].copy_from_slice(&s_plus_one[..work_len]);
         } else {
             break;
         }
     }
 
-    let copy_len = out.len().min(work);
+    let copy_len = out.len().min(work_len);
     out[..copy_len].copy_from_slice(&s[..copy_len]);
 }
 
-/// Significant limb count of `a` (highest non-zero index + 1), minimum 1.
+/// Significant limb count of `limbs` (highest non-zero index + 1), minimum 1.
 #[inline]
-fn sig_len(a: &[u64]) -> usize {
-    let mut i = a.len();
-    while i > 0 {
-        if a[i - 1] != 0 {
-            return i;
+fn sig_len(limbs: &[u64]) -> usize {
+    let mut len = limbs.len();
+    while len > 0 {
+        if limbs[len - 1] != 0 {
+            return len;
         }
-        i -= 1;
+        len -= 1;
     }
     1
 }
@@ -330,29 +335,29 @@ mod tests {
     use super::icbrt_newton_recip;
     use crate::int::algos::icbrt::icbrt_newton::icbrt_newton;
 
-    fn recip(n: &[u64], limbs: usize) -> Vec<u64> {
+    fn recip(radicand: &[u64], limbs: usize) -> Vec<u64> {
         let mut out = vec![0u64; limbs];
-        icbrt_newton_recip(n, &mut out);
+        icbrt_newton_recip(radicand, &mut out);
         out
     }
-    fn newton(n: &[u64], limbs: usize) -> Vec<u64> {
+    fn newton(radicand: &[u64], limbs: usize) -> Vec<u64> {
         let mut out = vec![0u64; limbs];
-        icbrt_newton(n, &mut out);
+        icbrt_newton(radicand, &mut out);
         out
     }
-    fn recip_u64(n: u64) -> u64 {
-        recip(&[n], 1)[0]
+    fn recip_u64(radicand: u64) -> u64 {
+        recip(&[radicand], 1)[0]
     }
-    fn newton_u64(n: u64) -> u64 {
-        newton(&[n], 1)[0]
+    fn newton_u64(radicand: u64) -> u64 {
+        newton(&[radicand], 1)[0]
     }
-    fn recip_u128(n: u128) -> u128 {
-        let v = recip(&[n as u64, (n >> 64) as u64], 2);
-        (v[0] as u128) | ((v[1] as u128) << 64)
+    fn recip_u128(radicand: u128) -> u128 {
+        let root = recip(&[radicand as u64, (radicand >> 64) as u64], 2);
+        (root[0] as u128) | ((root[1] as u128) << 64)
     }
-    fn newton_u128(n: u128) -> u128 {
-        let v = newton(&[n as u64, (n >> 64) as u64], 2);
-        (v[0] as u128) | ((v[1] as u128) << 64)
+    fn newton_u128(radicand: u128) -> u128 {
+        let root = newton(&[radicand as u64, (radicand >> 64) as u64], 2);
+        (root[0] as u128) | ((root[1] as u128) << 64)
     }
 
     #[test]
@@ -453,12 +458,12 @@ mod tests {
         for &limbs in &[3usize, 4, 6, 8, 16] {
             for _ in 0..40 {
                 let mut n = vec![0u64; limbs];
-                let top = 1 + (next() as usize % limbs);
-                for l in n.iter_mut().take(top) {
-                    *l = next();
+                let fill_len = 1 + (next() as usize % limbs);
+                for limb in n.iter_mut().take(fill_len) {
+                    *limb = next();
                 }
-                if n[top - 1] == 0 {
-                    n[top - 1] = 1;
+                if n[fill_len - 1] == 0 {
+                    n[fill_len - 1] = 1;
                 }
                 assert_eq!(
                     recip(&n, limbs),
@@ -467,18 +472,18 @@ mod tests {
                 );
             }
             for _ in 0..10 {
-                let mut b = vec![0u64; limbs];
-                let bt = 1 + (next() as usize % limbs.div_ceil(3).max(1));
-                for l in b.iter_mut().take(bt) {
-                    *l = next();
+                let mut base = vec![0u64; limbs];
+                let base_fill_len = 1 + (next() as usize % limbs.div_ceil(3).max(1));
+                for limb in base.iter_mut().take(base_fill_len) {
+                    *limb = next();
                 }
-                if b[bt - 1] == 0 {
-                    b[bt - 1] = 1;
+                if base[base_fill_len - 1] == 0 {
+                    base[base_fill_len - 1] = 1;
                 }
                 let mut sq = vec![0u64; limbs * 3];
-                crate::int::algos::mul::mul_schoolbook::mul_schoolbook(&b, &b, &mut sq);
+                crate::int::algos::mul::mul_schoolbook::mul_schoolbook(&base, &base, &mut sq);
                 let mut cube = vec![0u64; limbs * 3];
-                crate::int::algos::mul::mul_schoolbook::mul_schoolbook(&sq, &b, &mut cube);
+                crate::int::algos::mul::mul_schoolbook::mul_schoolbook(&sq, &base, &mut cube);
                 let mut n = vec![0u64; limbs];
                 n.copy_from_slice(&cube[..limbs]);
                 assert_eq!(

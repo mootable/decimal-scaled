@@ -38,11 +38,11 @@
 /// integers have no `From<u8>`, so the const-fn `from_str_radix` is the
 /// portable way to materialise a literal.
 macro_rules! wide_lit {
-    ($T:ty, $s:literal) => {
-        match <$T>::from_str_radix($s, 10) {
-            ::core::result::Result::Ok(v) => v,
+    ($T:ty, $digits:literal) => {
+        match <$T>::from_str_radix($digits, 10) {
+            ::core::result::Result::Ok(value) => value,
             ::core::result::Result::Err(_) => {
-                panic!(concat!("wide_roots: invalid base-10 literal ", $s))
+                panic!(concat!("wide_roots: invalid base-10 literal ", $digits))
             }
         }
     };

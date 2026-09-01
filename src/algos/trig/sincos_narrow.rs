@@ -54,18 +54,18 @@ fn sin_cos_strict<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
     // multiple) the working-scale approximation can land on the wrong
     // side. Route through the shared Ziv escalation; nearest modes narrow
     // once.
-    let r = C::round_to_storage_directed(GUARD, SCALE, mode, &mut |guard| {
-        let v_w = C::to_work_scaled(raw, guard);
+    let rounded = C::round_to_storage_directed(GUARD, SCALE, mode, &mut |guard_digits| {
+        let working_value = C::to_work_scaled(raw, guard_digits);
         match which {
-            Which::Sin => C::sin_fixed::<SCALE>(v_w, SCALE + guard),
-            Which::Cos => C::cos_fixed::<SCALE>(v_w, SCALE + guard),
+            Which::Sin => C::sin_fixed::<SCALE>(working_value, SCALE + guard_digits),
+            Which::Cos => C::cos_fixed::<SCALE>(working_value, SCALE + guard_digits),
         }
     });
     // Near an extremum the deviation from ±1 can sit below any reachable
     // working scale, so the kernel rounds to exactly ±10^SCALE and a directed
     // mode lands on the wrong side; sin/cos are strictly interior for raw != 0,
     // so the side is known a priori. See `wide_trig_core::adjust_bounded_extremum`.
-    crate::algos::support::wide_trig_core::adjust_bounded_extremum::<C, SCALE>(r, raw, mode)
+    crate::algos::support::wide_trig_core::adjust_bounded_extremum::<C, SCALE>(rounded, raw, mode)
 }
 
 /// Narrow `sin_strict` for a wide tier — generic over `C`, `SCALE`, the
@@ -98,7 +98,7 @@ pub(crate) fn cos_narrow_with_taylor<C: WideTrigCore, const SCALE: u32, const GU
 /// amplification near an odd multiple of π/2 still lands at ≤ 0.5 ULP at
 /// storage (Muller, *Elementary Functions* 3rd ed., §11.1). When clear,
 /// the band's guard already covers the worst case, so the kernel divides
-/// once at `w = SCALE + GUARD`.
+/// once at the base working scale `SCALE + GUARD`.
 #[inline]
 #[must_use]
 pub(crate) fn tan_narrow_with_taylor<
@@ -117,58 +117,62 @@ where
     if raw == C::storage_zero() {
         return C::storage_zero();
     }
-    let w0 = SCALE + GUARD;
-    let v0 = C::to_work_scaled(raw, GUARD);
-    let (sin0, cos0) = C::sin_cos_fixed::<SCALE>(v0, w0);
-    if cos0 == C::zero() {
+    let base_working_scale = SCALE + GUARD;
+    let base_working_value = C::to_work_scaled(raw, GUARD);
+    let (sin_base, cos_base) = C::sin_cos_fixed::<SCALE>(base_working_value, base_working_scale);
+    if cos_base == C::zero() {
         panic!("wide-tier tan: cosine is zero (argument is an odd multiple of pi/2)");
     }
     // Near-tie escapes — see `wide_trig_core::tan_series`: clear-of-band
-    // residuals keep the single-shot cost; the band escalates through
-    // the ratio walker (a deciding digit can sit below the fixed w).
-    let tie_walker = |base_guard: u32| -> C::Storage {
-        C::round_to_storage_directed(base_guard, SCALE, mode, &mut |guard| {
-            let w = SCALE + guard;
-            let (s, c) = C::sin_cos_fixed::<SCALE>(C::to_work_scaled(raw, guard), w);
-            if c == C::zero() {
+    // residuals keep the single-shot cost; the band escalates through the
+    // ratio walker (a deciding digit can sit below the fixed working scale).
+    let tie_walker = |base_guard_digits: u32| -> C::Storage {
+        C::round_to_storage_directed(base_guard_digits, SCALE, mode, &mut |guard_digits| {
+            let working_scale = SCALE + guard_digits;
+            let (sin_value, cos_value) =
+                C::sin_cos_fixed::<SCALE>(C::to_work_scaled(raw, guard_digits), working_scale);
+            if cos_value == C::zero() {
                 panic!("wide-tier tan: cosine is zero (argument is an odd multiple of pi/2)");
             }
-            C::div(s, c, w)
+            C::div(sin_value, cos_value, working_scale)
         })
     };
     if !NEAR_POLE {
-        let r = C::div(sin0, cos0, w0);
-        if let Some(st) = crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<
-            C::Storage,
-            C::W,
-        >(r, w0, SCALE, mode, C::storage_max(), C::storage_min())
+        let tan_value = C::div(sin_base, cos_base, base_working_scale);
+        if let Some(rounded) =
+            crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<
+                C::Storage,
+                C::W,
+            >(tan_value, base_working_scale, SCALE, mode, C::storage_max(), C::storage_min())
         {
-            return st;
+            return rounded;
         }
         return tie_walker(GUARD);
     }
-    let probe = C::div(sin0, cos0, w0);
-    let extra = super::near_pole_tan::tan_extra_digits(C::bit_length(probe), w0);
+    let probe = C::div(sin_base, cos_base, base_working_scale);
+    let extra = super::near_pole_tan::tan_extra_digits(C::bit_length(probe), base_working_scale);
     if extra == 0 {
-        if let Some(st) = crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<
-            C::Storage,
-            C::W,
-        >(probe, w0, SCALE, mode, C::storage_max(), C::storage_min())
+        if let Some(rounded) =
+            crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<
+                C::Storage,
+                C::W,
+            >(probe, base_working_scale, SCALE, mode, C::storage_max(), C::storage_min())
         {
-            return st;
+            return rounded;
         }
         return tie_walker(GUARD);
     }
-    let w = w0 + extra;
-    let v_w = C::to_work_scaled(raw, GUARD + extra);
-    let (sin_w, cos_w) = C::sin_cos_fixed::<SCALE>(v_w, w);
-    let r = C::div(sin_w, cos_w, w);
-    if let Some(st) = crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<
-        C::Storage,
-        C::W,
-    >(r, w, SCALE, mode, C::storage_max(), C::storage_min())
+    let lifted_working_scale = base_working_scale + extra;
+    let working_value = C::to_work_scaled(raw, GUARD + extra);
+    let (sin_w, cos_w) = C::sin_cos_fixed::<SCALE>(working_value, lifted_working_scale);
+    let tan_value = C::div(sin_w, cos_w, lifted_working_scale);
+    if let Some(rounded) =
+        crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<
+            C::Storage,
+            C::W,
+        >(tan_value, lifted_working_scale, SCALE, mode, C::storage_max(), C::storage_min())
     {
-        return st;
+        return rounded;
     }
     tie_walker(GUARD + extra)
 }

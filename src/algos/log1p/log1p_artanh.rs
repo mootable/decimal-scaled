@@ -34,11 +34,11 @@ use crate::support::rounding::RoundingMode;
 ///
 /// Every width routes here through `policy::log1p`, which supplies the
 /// width's work integer `S`, its base guard, and its storage bounds.
-/// `recompute(guard)` is re-entered by the Ziv walker at successively
-/// deeper guards until the deciding digit resolves, so the result is
-/// within 0.5 ULP for every mode.
+/// `recompute(guard_digits)` is re-entered by the Ziv walker at
+/// successively deeper guards until the deciding digit resolves, so the
+/// result is within 0.5 ULP for every mode.
 ///
-/// `st_max` / `st_min` are the tier's storage bounds (`MAX`/`MIN` are
+/// `storage_max` / `storage_min` are the tier's storage bounds (`MAX`/`MIN` are
 /// inherent consts on `Int<N>`, not on [`BigInt`], so the caller
 /// supplies them — the same contract as
 /// [`wtc::round_to_storage_directed_g`]).
@@ -68,30 +68,30 @@ use crate::support::rounding::RoundingMode;
 #[must_use]
 pub(crate) fn log1p_artanh_g<St: BigInt + Copy, S: BigInt, const SCALE: u32>(
     raw: St,
-    base_guard: u32,
-    st_max: St,
-    st_min: St,
+    base_guard_digits: u32,
+    storage_max: St,
+    storage_min: St,
     mode: RoundingMode,
 ) -> St
 where
     S::Scratch: ComputeLimbs,
 {
     super::guard_domain::<St>(raw, SCALE);
-    let r = wtc::round_to_storage_tail_signed_g::<St, S>(
-        base_guard,
+    let rounded = wtc::round_to_storage_tail_signed_g::<St, S>(
+        base_guard_digits,
         SCALE,
         mode,
-        st_max,
-        st_min,
-        |guard| {
+        storage_max,
+        storage_min,
+        |guard_digits| {
             crate::algos::exp::exp_generic::log1p_fixed_tagged::<S>(
-                wtc::to_work_scaled_g::<St, S>(raw, guard),
-                SCALE + guard,
-                guard,
+                wtc::to_work_scaled_g::<St, S>(raw, guard_digits),
+                SCALE + guard_digits,
+                guard_digits,
             )
         },
     );
-    super::adjust_near_zero::<St, S, SCALE>(r, raw, mode)
+    super::adjust_near_zero::<St, S, SCALE>(rounded, raw, mode)
 }
 
 /// The `_approx` sibling of [`log1p_artanh_g`]: a SINGLE shot at the
@@ -106,21 +106,22 @@ where
 pub(crate) fn log1p_artanh_approx_g<St: BigInt + Copy, S: BigInt, const SCALE: u32>(
     raw: St,
     working_digits: u32,
-    st_max: St,
-    st_min: St,
+    storage_max: St,
+    storage_min: St,
     mode: RoundingMode,
 ) -> St
 where
     S::Scratch: ComputeLimbs,
 {
     super::guard_domain::<St>(raw, SCALE);
-    let w = SCALE + working_digits;
-    let r = crate::algos::exp::exp_generic::log1p_fixed::<S>(
+    let working_scale = SCALE + working_digits;
+    let working_value = crate::algos::exp::exp_generic::log1p_fixed::<S>(
         wtc::to_work_scaled_g::<St, S>(raw, working_digits),
-        w,
+        working_scale,
     );
-    let out = wtc::round_to_storage_with_g::<St, S>(r, w, SCALE, mode, st_max, st_min);
-    super::adjust_near_zero::<St, S, SCALE>(out, raw, mode)
+    let rounded = wtc::round_to_storage_with_g::<St, S>(
+        working_value, working_scale, SCALE, mode, storage_max, storage_min);
+    super::adjust_near_zero::<St, S, SCALE>(rounded, raw, mode)
 }
 
 /// Tier-generic entry to [`log1p_artanh_g`] — sources the work integer

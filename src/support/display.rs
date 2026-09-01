@@ -127,8 +127,8 @@ where
     /// let sub = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_500_000_000_i128).unwrap());
     /// assert_eq!(format!("{sub:e}"), "1.5e-3");
     /// ```
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        format_exp::<N>(self.0, SCALE, false, f)
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        format_exp::<N>(self.0, SCALE, false, formatter)
     }
 }
 
@@ -152,8 +152,8 @@ where
     /// let v = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_500_000_000_000_i128).unwrap());
     /// assert_eq!(format!("{v:E}"), "1.5E0");
     /// ```
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        format_exp::<N>(self.0, SCALE, true, f)
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        format_exp::<N>(self.0, SCALE, true, formatter)
     }
 }
 
@@ -173,31 +173,31 @@ where
 fn format_exp<const N: usize>(
     value: Int<N>,
     scale: u32,
-    upper: bool,
-    f: &mut fmt::Formatter<'_>,
+    uppercase: bool,
+    formatter: &mut fmt::Formatter<'_>,
 ) -> fmt::Result
 where
     Limbs<N>: ComputeLimbs,
 {
-    let exp_char = if upper { 'E' } else { 'e' };
+    let exp_char = if uppercase { 'E' } else { 'e' };
     if value.is_zero() {
-        return write!(f, "0{exp_char}0");
+        return write!(formatter, "0{exp_char}0");
     }
     let negative = value.is_negative();
 
     // Decimal digits of the magnitude, MSB-first with no leading zeros,
     // written into the per-`N` formatting buffer (the identical extraction
     // path the integer `Display` impls take — pure stack, no heap).
-    let mag = *value.unsigned_abs().as_limbs();
+    let magnitude = *value.unsigned_abs().as_limbs();
     let mut buf = Limbs::<N>::digit_formatting_limbs_u8();
-    let digits = fmt_into::<N>(&mag, 10, true, buf.as_mut()).as_bytes();
-    let len = digits.len();
+    let digits = fmt_into::<N>(&magnitude, 10, true, buf.as_mut()).as_bytes();
+    let digit_count = digits.len();
 
     // The decimal exponent for the leading digit is `(len - 1) - scale`.
-    let exp: i32 = (len as i32 - 1) - scale as i32;
+    let exp: i32 = (digit_count as i32 - 1) - scale as i32;
 
     // Strip trailing zeros from the mantissa digit string.
-    let mut frac_end = len;
+    let mut frac_end = digit_count;
     while frac_end > 1 && digits[frac_end - 1] == b'0' {
         frac_end -= 1;
     }
@@ -205,15 +205,15 @@ where
     let mantissa_frac = &digits[1..frac_end];
 
     if negative {
-        f.write_str("-")?;
+        formatter.write_str("-")?;
     }
     if mantissa_frac.is_empty() {
         // Single-digit mantissa: emit without a decimal point.
-        write!(f, "{mantissa_int}{exp_char}{exp}")
+        write!(formatter, "{mantissa_int}{exp_char}{exp}")
     } else {
         // mantissa_frac contains only ASCII digit bytes; from_utf8 cannot fail.
         let frac_str = core::str::from_utf8(mantissa_frac).map_err(|_| fmt::Error)?;
-        write!(f, "{mantissa_int}.{frac_str}{exp_char}{exp}")
+        write!(formatter, "{mantissa_int}.{frac_str}{exp_char}{exp}")
     }
 }
 
@@ -249,13 +249,13 @@ pub(crate) struct ParseComponents<'a> {
 ///
 /// Strict: integer-only string slicing; no arithmetic.
 pub(crate) fn parse_components<const SCALE: u32>(
-    s: &str,
+    input: &str,
 ) -> Result<ParseComponents<'_>, ParseError> {
-    if s.is_empty() {
+    if input.is_empty() {
         return Err(ParseError::Empty);
     }
 
-    let bytes = s.as_bytes();
+    let bytes = input.as_bytes();
     let mut idx = 0usize;
 
     // Consume an optional leading sign byte.
@@ -279,10 +279,10 @@ pub(crate) fn parse_components<const SCALE: u32>(
     // notation and invalid characters immediately.
     let mut dot_pos: Option<usize> = None;
     {
-        let mut i = idx;
-        while i < bytes.len() {
-            let c = bytes[i];
-            match c {
+        let mut scan_pos = idx;
+        while scan_pos < bytes.len() {
+            let byte = bytes[scan_pos];
+            match byte {
                 b'0'..=b'9' => {}
                 b'.' => {
                     if dot_pos.is_some() {
@@ -290,19 +290,19 @@ pub(crate) fn parse_components<const SCALE: u32>(
                         // missing-digit case.
                         return Err(ParseError::InvalidChar);
                     }
-                    dot_pos = Some(i);
+                    dot_pos = Some(scan_pos);
                 }
                 b'e' | b'E' => {
                     return Err(ParseError::ScientificNotation);
                 }
                 _ => return Err(ParseError::InvalidChar),
             }
-            i += 1;
+            scan_pos += 1;
         }
     }
 
     let (int_str, mut frac_str) = match dot_pos {
-        Some(p) => (&bytes[idx..p], &bytes[p + 1..]),
+        Some(dot_index) => (&bytes[idx..dot_index], &bytes[dot_index + 1..]),
         None => (&bytes[idx..], &[][..]),
     };
 

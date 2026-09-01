@@ -44,13 +44,13 @@ fn cbrt_mg_divide_raw(raw: i128, scale: u32, mode: RoundingMode) -> i128 {
     if raw == 0 {
         return 0;
     }
-    let negative = raw < 0;
-    let q =
-        crate::algos::support::mg_divide::cbrt_raw_with_signed(raw.unsigned_abs(), scale, negative, mode);
-    let result = q as i128;
-    if negative {
-        -result
+    let is_negative = raw < 0;
+    let root = crate::algos::support::mg_divide::cbrt_raw_with_signed(
+        raw.unsigned_abs(), scale, is_negative, mode);
+    let root_magnitude = root as i128;
+    if is_negative {
+        -root_magnitude
     } else {
-        result
+        root_magnitude
     }
 }

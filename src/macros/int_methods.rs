@@ -26,16 +26,16 @@ macro_rules! decl_decimal_int_methods {
             #[inline]
             #[must_use]
             pub fn div_floor(self, rhs: Self) -> Self {
-                let q = self.0 / rhs.0;
-                let r = self.0 % rhs.0;
+                let quotient = self.0 / rhs.0;
+                let remainder = self.0 % rhs.0;
                 let zero = <$Storage>::from_str_radix("0", 10)
                     .expect("wide decimal: invalid base-10 literal");
                 let one = <$Storage>::from_str_radix("1", 10)
                     .expect("wide decimal: invalid base-10 literal");
-                let raw = if r != zero && (r ^ rhs.0).is_negative() {
-                    q - one
+                let raw = if remainder != zero && (remainder ^ rhs.0).is_negative() {
+                    quotient - one
                 } else {
-                    q
+                    quotient
                 };
                 Self(raw * Self::multiplier())
             }
@@ -45,16 +45,16 @@ macro_rules! decl_decimal_int_methods {
             #[inline]
             #[must_use]
             pub fn div_ceil(self, rhs: Self) -> Self {
-                let q = self.0 / rhs.0;
-                let r = self.0 % rhs.0;
+                let quotient = self.0 / rhs.0;
+                let remainder = self.0 % rhs.0;
                 let zero = <$Storage>::from_str_radix("0", 10)
                     .expect("wide decimal: invalid base-10 literal");
                 let one = <$Storage>::from_str_radix("1", 10)
                     .expect("wide decimal: invalid base-10 literal");
-                let raw = if r != zero && !(r ^ rhs.0).is_negative() {
-                    q + one
+                let raw = if remainder != zero && !(remainder ^ rhs.0).is_negative() {
+                    quotient + one
                 } else {
-                    q
+                    quotient
                 };
                 Self(raw * Self::multiplier())
             }
@@ -140,14 +140,15 @@ macro_rules! decl_decimal_int_methods {
                 true
             }
 
-            /// `self * a + b`. Mirrors the `f64::mul_add` call shape so
+            /// `self * multiplier + addend`. Mirrors the `f64::mul_add`
+            /// call shape so
             /// f64-generic numeric code can monomorphise to a decimal
             /// type; there is no hardware FMA — the multiply uses the
             /// type's `Mul` and the add uses its `Add`.
             #[inline]
             #[must_use]
-            pub fn mul_add(self, a: Self, b: Self) -> Self {
-                self * a + b
+            pub fn mul_add(self, multiplier: Self, addend: Self) -> Self {
+                self * multiplier + addend
             }
         }
     };

@@ -14,23 +14,23 @@
 macro_rules! decl_decimal_storage_formatters {
     ($Type:ident) => {
         impl<const SCALE: u32> ::core::fmt::LowerHex for $Type<SCALE> {
-            fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-                ::core::fmt::LowerHex::fmt(&self.0, f)
+            fn fmt(&self, formatter: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                ::core::fmt::LowerHex::fmt(&self.0, formatter)
             }
         }
         impl<const SCALE: u32> ::core::fmt::UpperHex for $Type<SCALE> {
-            fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-                ::core::fmt::UpperHex::fmt(&self.0, f)
+            fn fmt(&self, formatter: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                ::core::fmt::UpperHex::fmt(&self.0, formatter)
             }
         }
         impl<const SCALE: u32> ::core::fmt::Octal for $Type<SCALE> {
-            fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-                ::core::fmt::Octal::fmt(&self.0, f)
+            fn fmt(&self, formatter: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                ::core::fmt::Octal::fmt(&self.0, formatter)
             }
         }
         impl<const SCALE: u32> ::core::fmt::Binary for $Type<SCALE> {
-            fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-                ::core::fmt::Binary::fmt(&self.0, f)
+            fn fmt(&self, formatter: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                ::core::fmt::Binary::fmt(&self.0, formatter)
             }
         }
     };

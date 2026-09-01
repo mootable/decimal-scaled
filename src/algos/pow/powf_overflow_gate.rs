@@ -12,9 +12,9 @@
 //! The wide `powf` shell sizes its working lift from the result's
 //! integer-digit count (`k_lift = digits(e^{y·ln x})`). For a
 //! deep-overflow cell that count is in the hundreds, pushing the
-//! working scale `w = SCALE + GUARD + k_lift` past the work integer's
+//! `working_scale = SCALE + GUARD + k_lift` past the work integer's
 //! safe working-scale ceiling (`~W::BITS/8` decimal digits — the bound
-//! the Tang table reconstruction `slot_hi · 10^w` is sized for). Past
+//! the Tang table reconstruction `slot_hi · 10^working_scale` is sized for). Past
 //! that ceiling the `ln` kernel's table product silently WRAPS,
 //! returning a near-zero garbage `ln x`; the exp argument collapses,
 //! every downstream overflow gate sees a tiny in-range argument, and
@@ -33,8 +33,8 @@ use crate::int::types::traits::BigInt;
 /// the lifted composition.
 ///
 /// `arg_w` is the composition argument `y·ln x` as a working-scale
-/// value (`arg · 10^w`) in the work integer `S` — computed at the
-/// CANONICAL working scale `w = SCALE + GUARD`, which every tier's work
+/// value (`arg · 10^working_scale`) in the work integer `S` — computed at the
+/// CANONICAL `working_scale = SCALE + GUARD`, which every tier's work
 /// integer carries in-contract (the gate must run before any
 /// result-sized lift).
 ///
@@ -54,25 +54,27 @@ use crate::int::types::traits::BigInt;
 ///   scale stays inside the work integer's ceiling and the existing
 ///   storage-narrowing fit check raises the same contractual panic.
 ///
-/// `arg < 0` (`x^y < 1`) never overflows; `w < 6` (no real caller —
-/// every shell forms `w ≥ GUARD = 30`) skips the gate for totality.
+/// `arg < 0` (`x^y < 1`) never overflows; `working_scale < 6` (no real caller
+/// — every shell forms `working_scale ≥ GUARD = 30`) skips the gate for
+/// totality.
 #[inline]
 pub(crate) fn powf_overflow_gate_g<S: BigInt>(
     arg_w: S,
-    w: u32,
+    working_scale: u32,
     storage_bits: u32,
     scale: u32,
 ) -> bool {
-    if arg_w <= S::ZERO || w < 6 {
+    if arg_w <= S::ZERO || working_scale < 6 {
         return false;
     }
     // D = ⌊BITS·log10(2)⌋ + 1 (over-approximated), +1 margin digit.
-    let d = (storage_bits as u64) * 30_103 / 100_000 + 2;
-    // Every tier's max SCALE is below its digit count, so `d - scale`
-    // is positive; saturate for totality.
-    let digits_left = d.saturating_sub(scale as u64).max(1);
-    // thr = (D+1−scale)·2.302586 · 10^w = (digits_left·2_302_586) · 10^(w−6).
-    let thr = eg::lit::<S>((digits_left as u128 * 2_302_586) as i128)
-        * eg::pow10::<S>(w - 6);
-    arg_w >= thr
+    let storage_digits = (storage_bits as u64) * 30_103 / 100_000 + 2;
+    // Every tier's max SCALE is below its digit count, so `storage_digits -
+    // scale` is positive; saturate for totality.
+    let digits_left = storage_digits.saturating_sub(scale as u64).max(1);
+    // threshold = (D+1−scale)·2.302586 · 10^working_scale
+    //           = (digits_left·2_302_586) · 10^(working_scale−6).
+    let threshold = eg::lit::<S>((digits_left as u128 * 2_302_586) as i128)
+        * eg::pow10::<S>(working_scale - 6);
+    arg_w >= threshold
 }

@@ -48,11 +48,11 @@ macro_rules! decl_decimal_overflow_variants {
             #[inline]
             #[must_use]
             pub fn checked_mul(self, rhs: Self) -> Option<Self> {
-                let a: $Wider = self.0.resize::<$Wider>();
-                let b: $Wider = rhs.0.resize::<$Wider>();
-                let m: $Wider = $Type::<SCALE>::multiplier().resize::<$Wider>();
-                let prod = a.checked_mul(b)?;
-                let scaled = prod / m;
+                let lhs_wide: $Wider = self.0.resize::<$Wider>();
+                let rhs_wide: $Wider = rhs.0.resize::<$Wider>();
+                let multiplier: $Wider = $Type::<SCALE>::multiplier().resize::<$Wider>();
+                let product = lhs_wide.checked_mul(rhs_wide)?;
+                let scaled = product / multiplier;
                 let storage_max: $Wider = <$Storage>::MAX.resize::<$Wider>();
                 let storage_min: $Wider = <$Storage>::MIN.resize::<$Wider>();
                 if scaled > storage_max || scaled < storage_min {
@@ -69,11 +69,11 @@ macro_rules! decl_decimal_overflow_variants {
             #[inline]
             #[must_use]
             pub fn wrapping_mul(self, rhs: Self) -> Self {
-                let a: $Wider = self.0.resize::<$Wider>();
-                let b: $Wider = rhs.0.resize::<$Wider>();
-                let m: $Wider = $Type::<SCALE>::multiplier().resize::<$Wider>();
-                let prod = a.wrapping_mul(b);
-                let scaled = prod / m;
+                let lhs_wide: $Wider = self.0.resize::<$Wider>();
+                let rhs_wide: $Wider = rhs.0.resize::<$Wider>();
+                let multiplier: $Wider = $Type::<SCALE>::multiplier().resize::<$Wider>();
+                let product = lhs_wide.wrapping_mul(rhs_wide);
+                let scaled = product / multiplier;
                 Self(scaled.resize::<$Storage>())
             }
 
@@ -85,11 +85,11 @@ macro_rules! decl_decimal_overflow_variants {
             #[must_use]
             pub fn saturating_mul(self, rhs: Self) -> Self {
                 match self.checked_mul(rhs) {
-                    Some(v) => v,
+                    Some(product) => product,
                     None => {
-                        let neg_result =
+                        let is_negative_result =
                             self.0.is_negative() ^ rhs.0.is_negative();
-                        if neg_result { Self::MIN } else { Self::MAX }
+                        if is_negative_result { Self::MIN } else { Self::MAX }
                     }
                 }
             }
@@ -101,7 +101,7 @@ macro_rules! decl_decimal_overflow_variants {
             #[must_use]
             pub fn overflowing_mul(self, rhs: Self) -> (Self, bool) {
                 match self.checked_mul(rhs) {
-                    Some(v) => (v, false),
+                    Some(product) => (product, false),
                     None => (self.wrapping_mul(rhs), true),
                 }
             }
@@ -120,16 +120,18 @@ macro_rules! decl_decimal_overflow_variants {
                 if rhs == Self::ZERO {
                     return None;
                 }
-                let b: $Wider = rhs.0.resize::<$Wider>();
-                let n: $Wider = self.0.widen_mul::<$Wider>($Type::<SCALE>::multiplier());
-                let result = $crate::macros::arithmetic::round_with_mode_wide!(
-                    n, b, $Wider, $crate::support::rounding::DEFAULT_ROUNDING_MODE);
+                let divisor_wide: $Wider = rhs.0.resize::<$Wider>();
+                let scaled_numerator: $Wider =
+                    self.0.widen_mul::<$Wider>($Type::<SCALE>::multiplier());
+                let quotient = $crate::macros::arithmetic::round_with_mode_wide!(
+                    scaled_numerator, divisor_wide, $Wider,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE);
                 let storage_max: $Wider = <$Storage>::MAX.resize::<$Wider>();
                 let storage_min: $Wider = <$Storage>::MIN.resize::<$Wider>();
-                if result > storage_max || result < storage_min {
+                if quotient > storage_max || quotient < storage_min {
                     None
                 } else {
-                    Some(Self(result.resize::<$Storage>()))
+                    Some(Self(quotient.resize::<$Storage>()))
                 }
             }
 
@@ -141,13 +143,14 @@ macro_rules! decl_decimal_overflow_variants {
             #[inline]
             #[must_use]
             pub fn wrapping_div(self, rhs: Self) -> Self {
-                let a: $Wider = self.0.resize::<$Wider>();
-                let b: $Wider = rhs.0.resize::<$Wider>();
-                let m: $Wider = $Type::<SCALE>::multiplier().resize::<$Wider>();
-                let scaled_numer = a.wrapping_mul(m);
-                let result = $crate::macros::arithmetic::round_with_mode_wide!(
-                    scaled_numer, b, $Wider, $crate::support::rounding::DEFAULT_ROUNDING_MODE);
-                Self(result.resize::<$Storage>())
+                let lhs_wide: $Wider = self.0.resize::<$Wider>();
+                let divisor_wide: $Wider = rhs.0.resize::<$Wider>();
+                let multiplier: $Wider = $Type::<SCALE>::multiplier().resize::<$Wider>();
+                let scaled_numerator = lhs_wide.wrapping_mul(multiplier);
+                let quotient = $crate::macros::arithmetic::round_with_mode_wide!(
+                    scaled_numerator, divisor_wide, $Wider,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE);
+                Self(quotient.resize::<$Storage>())
             }
 
             /// Saturating division. Computes `self / rhs`, clamping to
@@ -160,11 +163,11 @@ macro_rules! decl_decimal_overflow_variants {
                     panic!("attempt to divide by zero");
                 }
                 match self.checked_div(rhs) {
-                    Some(v) => v,
+                    Some(quotient) => quotient,
                     None => {
-                        let neg_result =
+                        let is_negative_result =
                             self.0.is_negative() ^ rhs.0.is_negative();
-                        if neg_result { Self::MIN } else { Self::MAX }
+                        if is_negative_result { Self::MIN } else { Self::MAX }
                     }
                 }
             }
@@ -176,7 +179,7 @@ macro_rules! decl_decimal_overflow_variants {
             #[must_use]
             pub fn overflowing_div(self, rhs: Self) -> (Self, bool) {
                 match self.checked_div(rhs) {
-                    Some(v) => (v, false),
+                    Some(quotient) => (quotient, false),
                     None => (self.wrapping_div(rhs), true),
                 }
             }
@@ -197,7 +200,7 @@ macro_rules! decl_decimal_overflow_variants {
             #[must_use]
             pub const fn checked_add(self, rhs: Self) -> Option<Self> {
                 match self.0.checked_add(rhs.0) {
-                    Some(v) => Some(Self(v)),
+                    Some(sum) => Some(Self(sum)),
                     None => None,
                 }
             }
@@ -223,8 +226,8 @@ macro_rules! decl_decimal_overflow_variants {
             #[inline]
             #[must_use]
             pub const fn overflowing_add(self, rhs: Self) -> (Self, bool) {
-                let (v, of) = self.0.overflowing_add(rhs.0);
-                (Self(v), of)
+                let (sum, overflowed) = self.0.overflowing_add(rhs.0);
+                (Self(sum), overflowed)
             }
 
             // ----- sub ----------------------------------------------
@@ -235,7 +238,7 @@ macro_rules! decl_decimal_overflow_variants {
             #[must_use]
             pub const fn checked_sub(self, rhs: Self) -> Option<Self> {
                 match self.0.checked_sub(rhs.0) {
-                    Some(v) => Some(Self(v)),
+                    Some(difference) => Some(Self(difference)),
                     None => None,
                 }
             }
@@ -260,8 +263,8 @@ macro_rules! decl_decimal_overflow_variants {
             #[inline]
             #[must_use]
             pub const fn overflowing_sub(self, rhs: Self) -> (Self, bool) {
-                let (v, of) = self.0.overflowing_sub(rhs.0);
-                (Self(v), of)
+                let (difference, overflowed) = self.0.overflowing_sub(rhs.0);
+                (Self(difference), overflowed)
             }
 
             // ----- neg ----------------------------------------------
@@ -273,7 +276,7 @@ macro_rules! decl_decimal_overflow_variants {
             #[must_use]
             pub const fn checked_neg(self) -> Option<Self> {
                 match self.0.checked_neg() {
-                    Some(v) => Some(Self(v)),
+                    Some(negated) => Some(Self(negated)),
                     None => None,
                 }
             }
@@ -300,8 +303,8 @@ macro_rules! decl_decimal_overflow_variants {
             #[inline]
             #[must_use]
             pub const fn overflowing_neg(self) -> (Self, bool) {
-                let (v, of) = self.0.overflowing_neg();
-                (Self(v), of)
+                let (negated, overflowed) = self.0.overflowing_neg();
+                (Self(negated), overflowed)
             }
 
             // ----- rem ----------------------------------------------
@@ -313,7 +316,7 @@ macro_rules! decl_decimal_overflow_variants {
             #[must_use]
             pub const fn checked_rem(self, rhs: Self) -> Option<Self> {
                 match self.0.checked_rem(rhs.0) {
-                    Some(v) => Some(Self(v)),
+                    Some(remainder) => Some(Self(remainder)),
                     None => None,
                 }
             }
@@ -332,8 +335,8 @@ macro_rules! decl_decimal_overflow_variants {
             #[inline]
             #[must_use]
             pub const fn overflowing_rem(self, rhs: Self) -> (Self, bool) {
-                let (v, of) = self.0.overflowing_rem(rhs.0);
-                (Self(v), of)
+                let (remainder, overflowed) = self.0.overflowing_rem(rhs.0);
+                (Self(remainder), overflowed)
             }
         }
     };

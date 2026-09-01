@@ -128,7 +128,7 @@ pub(crate) const fn extract_top_u64(n: &[u64], bits: u32) -> (u64, u32) {
             // `bit_off != 0` here, so `64 - bit_off` is in `1..=63`; the
             // `checked_shl` keeps the kernel's original defensive form.
             match n[limb_idx + 1].checked_shl(64 - bit_off) {
-                Some(v) => v,
+                Some(shifted) => shifted,
                 None => 0,
             }
         } else {
@@ -156,7 +156,7 @@ pub(crate) const fn extract_top_u64(n: &[u64], bits: u32) -> (u64, u32) {
 /// Computational Perspective" §9.2.1.
 #[inline]
 pub(crate) fn sqrt_seed(n: &[u64], bits: u32, out: &mut [u64]) {
-    let work = out.len();
+    let work_len = out.len();
 
     // Under `std`, the f64 bootstrap needs the top-64-bit window to carry
     // enough magnitude to be worth it; for tiny `n` (`bits < 8`) it falls
@@ -190,18 +190,18 @@ pub(crate) fn sqrt_seed(n: &[u64], bits: u32, out: &mut [u64]) {
         let seed_int: u128 = truncated
             .saturating_add(if frac_nonzero { 1 } else { 0 })
             .saturating_add(1);
-        place_seed(seed_int, half_shift - frac_bits, out, work);
+        place_seed(seed_int, half_shift - frac_bits, out, work_len);
         return;
     }
 
     // Pure-integer 1-bit seed `2^ceil(bits/2)` — the no_std path always,
     // and the `std` tiny-`n` fallback. `n`-derived top bits unused here.
     let _ = n;
-    let e = bits.div_ceil(2);
-    let idx = (e / 64) as usize;
-    if idx < work {
-        out[idx] |= 1u64 << (e % 64);
-    } else if work > 0 {
+    let seed_exponent = bits.div_ceil(2);
+    let idx = (seed_exponent / 64) as usize;
+    if idx < work_len {
+        out[idx] |= 1u64 << (seed_exponent % 64);
+    } else if work_len > 0 {
         out[0] |= 1;
     }
 }
@@ -272,18 +272,19 @@ pub(crate) fn sqrt_seed_u128(n: u128, bits: u32) -> u128 {
 /// Hasselgren seed strategy — Crandall & Pomerance 2005 §9.2.1.
 #[inline]
 pub(crate) fn cbrt_seed(n: &[u64], bits: u32, out: &mut [u64]) {
-    let work = out.len();
+    let work_len = out.len();
 
     #[cfg(feature = "std")]
     if bits >= 9 {
         let (top_u64, shift) = extract_top_u64(n, bits);
-        let rem3 = shift % 3;
+        let shift_residue = shift % 3;
         // Exact fractional residue: cbrt(top · 2^shift) =
         // cbrt(top) · 2^(shift/3); the integral `shift/3` is absorbed into
         // `half_shift` below, the fractional residue stays here as an
-        // exact f64 multiplier (vs the earlier coarse `1u64 << rem3` ≡
+        // exact f64 multiplier (vs the earlier coarse
+        // `1u64 << shift_residue` ≡
         // `×2` / `×4`).
-        let factor = match rem3 {
+        let factor = match shift_residue {
             1 => 1.259_921_049_894_873_2_f64, // 2^(1/3)
             2 => 1.587_401_051_968_199_5_f64, // 2^(2/3)
             _ => 1.0_f64,
@@ -299,18 +300,18 @@ pub(crate) fn cbrt_seed(n: &[u64], bits: u32, out: &mut [u64]) {
         let seed_int: u128 = truncated
             .saturating_add(if frac_nonzero { 1 } else { 0 })
             .saturating_add(1);
-        place_seed(seed_int, half_shift, out, work);
+        place_seed(seed_int, half_shift, out, work_len);
         return;
     }
 
     // Pure-integer 1-bit seed `2^ceil(bits/3)` — the no_std path always,
     // and the `std` tiny-`n` fallback.
     let _ = n;
-    let e = bits.div_ceil(3);
-    let idx = (e / 64) as usize;
-    if idx < work {
-        out[idx] |= 1u64 << (e % 64);
-    } else if work > 0 {
+    let seed_exponent = bits.div_ceil(3);
+    let idx = (seed_exponent / 64) as usize;
+    if idx < work_len {
+        out[idx] |= 1u64 << (seed_exponent % 64);
+    } else if work_len > 0 {
         out[0] |= 1;
     }
 }
@@ -342,30 +343,30 @@ pub(crate) fn cbrt_seed_f64_full(value: f64) -> f64 {
 /// both `std` seed bodies.
 #[cfg(feature = "std")]
 #[inline]
-fn place_seed(seed_int: u128, half_shift: u32, out: &mut [u64], work: usize) {
+fn place_seed(seed_int: u128, half_shift: u32, out: &mut [u64], work_len: usize) {
     let seed_limb_idx = (half_shift / 64) as usize;
     let seed_bit_off = half_shift % 64;
     let shifted: u128 = seed_int << seed_bit_off;
     let seed_lo = shifted as u64;
     let seed_hi = (shifted >> 64) as u64;
-    if seed_limb_idx < work {
+    if seed_limb_idx < work_len {
         out[seed_limb_idx] |= seed_lo;
     }
-    if seed_limb_idx + 1 < work {
+    if seed_limb_idx + 1 < work_len {
         out[seed_limb_idx + 1] |= seed_hi;
     }
     // If the placement landed entirely outside the work slice, force a
     // minimal non-zero seed so the Newton loop's `x >= 1` invariant holds.
     let mut all_zero = true;
     let mut i = 0;
-    while i < work {
+    while i < work_len {
         if out[i] != 0 {
             all_zero = false;
             break;
         }
         i += 1;
     }
-    if all_zero && work > 0 {
+    if all_zero && work_len > 0 {
         out[0] = 1;
     }
 }

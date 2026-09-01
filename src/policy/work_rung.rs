@@ -63,16 +63,16 @@ pub(in crate::policy) const AVAIL_RUNGS: [usize; 13] =
 
 /// Smallest ladder width (limbs) in `[lo, hi]` whose digit budget
 /// (`limbs · 8`, = `BITS/8` — the shared Ziv escalation's own capacity
-/// rule) strictly clears `need` decimal digits. If no ladder member in
-/// range clears it (the tier's max-scale extreme), `hi` is the answer —
-/// reproducing the tier's full `$Work`, so those cells stay
+/// rule) strictly clears `needed_digits` decimal digits. If no ladder
+/// member in range clears it (the tier's max-scale extreme), `hi` is the
+/// answer — reproducing the tier's full `$Work`, so those cells stay
 /// bit-identical to the pre-rung routing.
-pub(in crate::policy) const fn smallest_rung(need: u32, lo: usize, hi: usize) -> usize {
+pub(in crate::policy) const fn smallest_rung(needed_digits: u32, lo: usize, hi: usize) -> usize {
     let mut i = 0;
     while i < AVAIL_RUNGS.len() {
-        let w = AVAIL_RUNGS[i];
-        if w >= lo && w <= hi && (w as u32) * 8 > need {
-            return w;
+        let limbs = AVAIL_RUNGS[i];
+        if limbs >= lo && limbs <= hi && (limbs as u32) * 8 > needed_digits {
+            return limbs;
         }
         i += 1;
     }
@@ -188,8 +188,8 @@ pub(in crate::policy) const fn near_special_rung<C: WideTrigCore, const SCALE: u
 pub(in crate::policy) fn in_budget<St: BigInt, const SCALE: u32, const BUDGET: u32>(
     raw: &St,
 ) -> bool {
-    let bl = crate::algos::exp::exp_generic::bit_length::<St>(*raw) as u64;
-    bl * 100_000 <= ((SCALE + BUDGET) as u64) * 332_192
+    let raw_bit_length = crate::algos::exp::exp_generic::bit_length::<St>(*raw) as u64;
+    raw_bit_length * 100_000 <= ((SCALE + BUDGET) as u64) * 332_192
 }
 
 /// The const-folded work-rung match: one macro emits the 13-arm ladder

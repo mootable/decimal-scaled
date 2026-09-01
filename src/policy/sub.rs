@@ -87,14 +87,14 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
 /// Not `const fn`: matches the existing non-`const` `Sub` operator on
 /// `D<Int<N>, SCALE>`.
 #[inline]
-pub(crate) fn dispatch<const N: usize, const SCALE: u32>(a: Int<N>, b: Int<N>) -> Int<N> {
+pub(crate) fn dispatch<const N: usize, const SCALE: u32>(lhs: Int<N>, rhs: Int<N>) -> Int<N> {
     let algo = match const { select::<N, SCALE>() } {
-        Select::ByAlgorithm(a) => a,
+        Select::ByAlgorithm(algorithm) => algorithm,
         Select::ByValue(_) => Algorithm::IntLayer,
     };
     match algo {
         Algorithm::IntLayer | Algorithm::Schoolbook => {
-            crate::algos::sub::sub_int_layer::sub_int_layer(a, b)
+            crate::algos::sub::sub_int_layer::sub_int_layer(lhs, rhs)
         }
     }
 }

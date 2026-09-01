@@ -589,11 +589,11 @@ mod strict_tests {
     #[test]
     fn ln_strict_is_correctly_rounded_vs_f64() {
         fn check(raw: i128) {
-            let x = crate::D::<crate::int::types::Int<2>, 9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
-            let strict = x.ln_strict().to_bits().as_i128();
+            let value = crate::D::<crate::int::types::Int<2>, 9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
+            let strict = value.ln_strict().to_bits().as_i128();
             let reference = {
-                let v = raw as f64 / 1e9;
-                (v.ln() * 1e9).round() as i128
+                let as_float = raw as f64 / 1e9;
+                (as_float.ln() * 1e9).round() as i128
             };
             assert!(
                 (strict - reference).abs() <= 1,
@@ -621,8 +621,8 @@ mod strict_tests {
     #[test]
     fn strict_log_exp_family_matches_f64() {
         fn check_exp(raw: i128) {
-            let x = crate::D::<crate::int::types::Int<2>, 9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
-            let strict = x.exp_strict().to_bits().as_i128();
+            let value = crate::D::<crate::int::types::Int<2>, 9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
+            let strict = value.exp_strict().to_bits().as_i128();
             let reference = ((raw as f64 / 1e9).exp() * 1e9).round() as i128;
             assert!(
                 (strict - reference).abs() <= 1,
@@ -630,8 +630,8 @@ mod strict_tests {
             );
         }
         fn check_log2(raw: i128) {
-            let x = crate::D::<crate::int::types::Int<2>, 9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
-            let strict = x.log2_strict().to_bits().as_i128();
+            let value = crate::D::<crate::int::types::Int<2>, 9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
+            let strict = value.log2_strict().to_bits().as_i128();
             let reference = ((raw as f64 / 1e9).log2() * 1e9).round() as i128;
             assert!(
                 (strict - reference).abs() <= 1,
@@ -639,8 +639,8 @@ mod strict_tests {
             );
         }
         fn check_log10(raw: i128) {
-            let x = crate::D::<crate::int::types::Int<2>, 9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
-            let strict = x.log10_strict().to_bits().as_i128();
+            let value = crate::D::<crate::int::types::Int<2>, 9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
+            let strict = value.log10_strict().to_bits().as_i128();
             let reference = ((raw as f64 / 1e9).log10() * 1e9).round() as i128;
             assert!(
                 (strict - reference).abs() <= 1,
@@ -679,8 +679,8 @@ mod strict_tests {
     #[test]
     fn strict_exp2_at_integers() {
         for k in 0_i128..=12 {
-            let x = crate::D::<crate::int::types::Int<2>, 12>::from_bits(crate::int::types::Int::<2>::from_i128(k * 10i128.pow(12)));
-            let got = x.exp2_strict().to_bits().as_i128();
+            let value = crate::D::<crate::int::types::Int<2>, 12>::from_bits(crate::int::types::Int::<2>::from_i128(k * 10i128.pow(12)));
+            let got = value.exp2_strict().to_bits().as_i128();
             let expected = (1i128 << k) * 10i128.pow(12);
             assert_eq!(got, expected, "2^{k}");
         }
@@ -691,12 +691,12 @@ mod strict_tests {
     fn ln_strict_of_powers_of_two() {
         let ln2_s18: i128 = 693_147_180_559_945_309;
         for k in 1_i128..=20 {
-            let x = crate::D::<crate::int::types::Int<2>, 18>::from_bits(crate::int::types::Int::<2>::from_i128((1i128 << k) * 10i128.pow(18)));
-            let got = x.ln_strict().to_bits().as_i128();
+            let value = crate::D::<crate::int::types::Int<2>, 18>::from_bits(crate::int::types::Int::<2>::from_i128((1i128 << k) * 10i128.pow(18)));
+            let got = value.ln_strict().to_bits().as_i128();
             let expected = k * ln2_s18;
-            let tol = k / 2 + 2;
+            let tolerance = k / 2 + 2;
             assert!(
-                (got - expected).abs() <= tol,
+                (got - expected).abs() <= tolerance,
                 "ln(2^{k}) = {got}, expected ≈ {expected}"
             );
         }
@@ -741,16 +741,16 @@ mod strict_tests {
     /// ln of a value > 1 is positive.
     #[test]
     fn ln_above_one_is_positive() {
-        let v = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(1_500_000_000_000));
-        let result = v.ln();
+        let value = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(1_500_000_000_000));
+        let result = value.ln();
         assert!(result.to_bits().as_i128() > 0);
     }
 
     /// ln of a value in (0, 1) is negative.
     #[test]
     fn ln_below_one_is_negative() {
-        let v = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(500_000_000_000));
-        let result = v.ln();
+        let value = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(500_000_000_000));
+        let result = value.ln();
         assert!(result.to_bits().as_i128() < 0);
         assert!(
             within(result, -693_147_180_560, STRICT_TOLERANCE_LSB),
@@ -768,8 +768,8 @@ mod strict_tests {
     #[test]
     #[should_panic(expected = "argument must be positive")]
     fn ln_of_negative_panics() {
-        let neg = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(-1_000_000_000_000));
-        let _ = neg.ln();
+        let negative_value = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(-1_000_000_000_000));
+        let _ = negative_value.ln();
     }
 
     // log2 / log10 / log derive from ln; tolerance grows because the
@@ -852,9 +852,9 @@ mod strict_tests {
     #[test]
     #[should_panic(expected = "base must not equal 1")]
     fn log_base_one_panics() {
-        let x = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(5_000_000_000_000));
+        let value = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(5_000_000_000_000));
         let one = D38s12::ONE;
-        let _ = x.log(one);
+        let _ = value.log(one);
     }
 
     // exp / exp2 tolerance accounts for Taylor truncation, 2^k bit-shift

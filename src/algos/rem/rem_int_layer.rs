@@ -18,10 +18,11 @@ use crate::int::types::Int;
 /// same-SCALE operands share the scale factor.
 ///
 /// A value-gated small-operand fast path runs FIRST: when both operand
-/// Two value-gated fast paths run FIRST. (1) When `|a| < |b|` the truncating
-/// remainder is the dividend itself (`a % b == a`), returned after one
+/// Two value-gated fast paths run FIRST. (1) When `|dividend| < |divisor|`
+/// the truncating remainder is the dividend itself
+/// (`dividend % divisor == dividend`), returned after one
 /// top-down magnitude compare — no divide, no scratch. This is the dominant
-/// decimal-`rem` benchmarked shape (`x % b` with `|x| < |b|`, e.g. `2.0 % 3.5`) and it
+/// decimal-`rem` benchmarked shape (`x % y` with `|x| < |y|`, e.g. `2.0 % 3.5`) and it
 /// catches the cases the u128 probe misses (a scaled divisor crossing the
 /// 128-bit line while the dividend stays smaller — D76 s38 onward).
 /// (2) When both operand magnitudes fit a single 128-bit word it takes a
@@ -55,7 +56,7 @@ use crate::int::types::Int;
 ///
 /// [`div_knuth_into`]: crate::int::algos::div::div_knuth::div_knuth_into
 #[inline]
-pub(crate) fn rem_int_layer<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N>
+pub(crate) fn rem_int_layer<const N: usize>(dividend: Int<N>, divisor: Int<N>) -> Int<N>
 where
     Limbs<N>: ComputeLimbs,
 {
@@ -63,33 +64,34 @@ where
     // BOTH debug and release (the default operator never silently wraps to
     // `0`): detect it with cheap comparisons (no divide) and panic before
     // the divide wraps it.
-    if a == Int::<N>::MIN && b == -Int::<N>::ONE {
+    if dividend == Int::<N>::MIN && divisor == -Int::<N>::ONE {
         panic!("attempt to calculate the remainder with overflow");
     }
     assert!(
-        !b.is_zero(),
+        !divisor.is_zero(),
         "attempt to calculate the remainder with a divisor of zero"
     );
 
     // Truncating-toward-zero: the remainder carries the dividend's sign.
-    let neg_r = a.is_negative();
-    let a_abs = a.unsigned_abs();
-    let b_abs = b.unsigned_abs();
+    let remainder_is_negative = dividend.is_negative();
+    let dividend_abs = dividend.unsigned_abs();
+    let divisor_abs = divisor.unsigned_abs();
 
-    // Dividend-smaller short-circuit: when `|a| < |b|` the truncating
-    // remainder is the dividend itself (`a % b == a`), so return `a`
+    // Dividend-smaller short-circuit: when `|dividend| < |divisor|` the
+    // truncating remainder is the dividend itself
+    // (`dividend % divisor == dividend`), so return `dividend`
     // unchanged — no divide, no scratch, no shape classifier. This is one
     // top-down `N`-limb magnitude compare (`Uint::cmp`), correct for EVERY
     // `N` and operand value, and it catches the dominant decimal-`rem` shape
-    // the u128 fast path below MISSES: a balanced-magnitude `x % b` where the
+    // the u128 fast path below MISSES: a balanced-magnitude `x % y` where the
     // SCALED divisor crosses the 128-bit line (e.g. the benchmarked `2.0 % 3.5` cell
     // at D76 s38: `2·10^38` fits a u128 but `3.5·10^38` is 129 bits, so the
     // u128 probe fails and the operands fall into a full multi-limb Knuth
     // divmod whose `top < n` early-out the compare reaches first, for free).
-    // Bit-identical to the divmod (which also yields `rem == a` here), so it
+    // Bit-identical to the divmod (which also yields the dividend here), so it
     // only changes which path runs, never the result.
-    if a_abs < b_abs {
-        return a;
+    if dividend_abs < divisor_abs {
+        return dividend;
     }
 
     // Small-operand fast path (single-word, applied generically across
@@ -103,8 +105,8 @@ where
     // (the magnitude check guarantees the `u128` load is lossless), so valid
     // at every `N >= 3`. The MIN%-1 hazard cannot reach here (magnitudes are
     // unsigned, the divisor magnitude is `>= 1`).
-    let al = a_abs.as_limbs();
-    let bl = b_abs.as_limbs();
+    let dividend_limbs = dividend_abs.as_limbs();
+    let divisor_limbs = divisor_abs.as_limbs();
     // Probe whether both magnitudes fit one 128-bit word (every limb above
     // index 1 zero). Break on the FIRST set high limb so a full-width operand
     // pays only a couple of comparisons before falling through to the divmod
@@ -112,44 +114,44 @@ where
     let mut fits = true;
     let mut i = 2;
     while i < N {
-        if al[i] != 0 || bl[i] != 0 {
+        if dividend_limbs[i] != 0 || divisor_limbs[i] != 0 {
             fits = false;
             break;
         }
         i += 1;
     }
     if fits {
-        let a_hi = if N >= 2 { al[1] as u128 } else { 0 };
-        let b_hi = if N >= 2 { bl[1] as u128 } else { 0 };
-        let a_u = (al[0] as u128) | (a_hi << 64);
-        let b_u = (bl[0] as u128) | (b_hi << 64);
-        let r = a_u % b_u;
-        let mut rem = [0u64; N];
-        rem[0] = r as u64;
+        let dividend_hi = if N >= 2 { dividend_limbs[1] as u128 } else { 0 };
+        let divisor_hi = if N >= 2 { divisor_limbs[1] as u128 } else { 0 };
+        let dividend_u128 = (dividend_limbs[0] as u128) | (dividend_hi << 64);
+        let divisor_u128 = (divisor_limbs[0] as u128) | (divisor_hi << 64);
+        let remainder_u128 = dividend_u128 % divisor_u128;
+        let mut remainder_limbs = [0u64; N];
+        remainder_limbs[0] = remainder_u128 as u64;
         if N >= 2 {
-            rem[1] = (r >> 64) as u64;
+            remainder_limbs[1] = (remainder_u128 >> 64) as u64;
         }
-        return Int::<N>::from_mag_limbs(&rem, neg_r);
+        return Int::<N>::from_mag_limbs(&remainder_limbs, remainder_is_negative);
     }
 
-    divmod_mags::<N>(&a_abs, &b_abs, neg_r)
+    divmod_mags::<N>(&dividend_abs, &divisor_abs, remainder_is_negative)
 }
 
 /// The exact-scratch Knuth divmod remainder core. Operates on precomputed
-/// unsigned magnitudes (`a_abs`, `b_abs`) and the dividend sign (`neg_r`),
-/// so both [`rem_int_layer`] (fast-path miss) and
+/// unsigned magnitudes (`dividend_abs`, `divisor_abs`) and the dividend sign
+/// (`remainder_is_negative`), so both [`rem_int_layer`] (fast-path miss) and
 /// [`rem_int_layer_divmod`] (fast-path-free, for the microbench) share it.
 #[inline]
 fn divmod_mags<const N: usize>(
-    a_abs: &crate::int::types::Uint<N>,
-    b_abs: &crate::int::types::Uint<N>,
-    neg_r: bool,
+    dividend_abs: &crate::int::types::Uint<N>,
+    divisor_abs: &crate::int::types::Uint<N>,
+    remainder_is_negative: bool,
 ) -> Int<N>
 where
     Limbs<N>: ComputeLimbs,
 {
-    let mut quot = [0u64; N];
-    let mut rem = [0u64; N];
+    let mut quotient = [0u64; N];
+    let mut remainder = [0u64; N];
     // Exact per-`N` Knuth scratch: `single_buffered_u64` is `[u64; N + 2]`, covering
     // the normalised dividend `u` (`num.len() + 2`) and divisor `v`.
     let mut u = Limbs::<N>::single_buffered_u64();
@@ -159,7 +161,7 @@ where
     // `Int<N>`, so the wide `num ≥ 2·den` u128 shape IS reachable at wide
     // `N` — honor that verdict rather than collapse
     // it onto Knuth.
-    match select_for_limbs(a_abs.as_limbs(), b_abs.as_limbs()) {
+    match select_for_limbs(dividend_abs.as_limbs(), divisor_abs.as_limbs()) {
         Algorithm::KnuthU128Limb => {
             // Operands are ≤ `N` limbs (one family step below
             // `div_widen_scale`'s `2N` dividend): the engine's minima are
@@ -169,10 +171,10 @@ where
             let mut u128_u = Limbs::<N>::double_u128();
             let mut u128_v = Limbs::<N>::single_u128();
             div_knuth_u128_limb_into(
-                a_abs.as_limbs(),
-                b_abs.as_limbs(),
-                &mut quot,
-                &mut rem,
+                dividend_abs.as_limbs(),
+                divisor_abs.as_limbs(),
+                &mut quotient,
+                &mut remainder,
                 u.as_mut(),
                 v.as_mut(),
                 u128_u.as_mut(),
@@ -183,15 +185,15 @@ where
         | Algorithm::Knuth
         | Algorithm::BurnikelZieglerWithKnuth
         | Algorithm::Schoolbook => div_knuth_into(
-            a_abs.as_limbs(),
-            b_abs.as_limbs(),
-            &mut quot,
-            &mut rem,
+            dividend_abs.as_limbs(),
+            divisor_abs.as_limbs(),
+            &mut quotient,
+            &mut remainder,
             u.as_mut(),
             v.as_mut(),
         ),
     }
-    Int::<N>::from_mag_limbs(&rem, neg_r)
+    Int::<N>::from_mag_limbs(&remainder, remainder_is_negative)
 }
 
 /// The fast-path-FREE remainder: identical validation to [`rem_int_layer`]
@@ -200,21 +202,21 @@ where
 /// exposed only so the microbench can A/B the fast path's contribution
 /// against the divmod-only path it guards.
 #[inline]
-pub(crate) fn rem_int_layer_divmod<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N>
+pub(crate) fn rem_int_layer_divmod<const N: usize>(dividend: Int<N>, divisor: Int<N>) -> Int<N>
 where
     Limbs<N>: ComputeLimbs,
 {
-    if a == Int::<N>::MIN && b == -Int::<N>::ONE {
+    if dividend == Int::<N>::MIN && divisor == -Int::<N>::ONE {
         panic!("attempt to calculate the remainder with overflow");
     }
     assert!(
-        !b.is_zero(),
+        !divisor.is_zero(),
         "attempt to calculate the remainder with a divisor of zero"
     );
-    let neg_r = a.is_negative();
-    let a_abs = a.unsigned_abs();
-    let b_abs = b.unsigned_abs();
-    divmod_mags::<N>(&a_abs, &b_abs, neg_r)
+    let remainder_is_negative = dividend.is_negative();
+    let dividend_abs = dividend.unsigned_abs();
+    let divisor_abs = divisor.unsigned_abs();
+    divmod_mags::<N>(&dividend_abs, &divisor_abs, remainder_is_negative)
 }
 
 #[cfg(test)]
@@ -242,36 +244,36 @@ mod tests {
             (i128::MAX, 3),
             (i128::MIN + 1, 7),
         ];
-        for &(a, b) in small {
-            let ia = Int::<3>::from_i128(a);
-            let ib = Int::<3>::from_i128(b);
+        for &(dividend, divisor) in small {
+            let dividend_int = Int::<3>::from_i128(dividend);
+            let divisor_int = Int::<3>::from_i128(divisor);
             assert_eq!(
-                rem_int_layer::<3>(ia, ib),
-                rem_int_layer_divmod::<3>(ia, ib),
-                "fast path ({a} % {b}) at N=3"
+                rem_int_layer::<3>(dividend_int, divisor_int),
+                rem_int_layer_divmod::<3>(dividend_int, divisor_int),
+                "fast path ({dividend} % {divisor}) at N=3"
             );
             // also a wide storage width
-            let ja = Int::<16>::from_i128(a);
-            let jb = Int::<16>::from_i128(b);
+            let dividend_wide = Int::<16>::from_i128(dividend);
+            let divisor_wide = Int::<16>::from_i128(divisor);
             assert_eq!(
-                rem_int_layer::<16>(ja, jb),
-                rem_int_layer_divmod::<16>(ja, jb),
-                "fast path ({a} % {b}) at N=16"
+                rem_int_layer::<16>(dividend_wide, divisor_wide),
+                rem_int_layer_divmod::<16>(dividend_wide, divisor_wide),
+                "fast path ({dividend} % {divisor}) at N=16"
             );
         }
 
         // Full-width operands (span all limbs) — the fall-through branch.
-        let mut a_lim = [0u64; 8];
-        let mut b_lim = [0u64; 8];
+        let mut dividend_limbs = [0u64; 8];
+        let mut divisor_limbs = [0u64; 8];
         for i in 0..8 {
-            a_lim[i] = 0x9E37_79B9_7F4A_7C15u64.wrapping_mul(i as u64 + 1);
-            b_lim[i] = 0xD1B5_4A32_D192_ED03u64.wrapping_mul(i as u64 + 3);
+            dividend_limbs[i] = 0x9E37_79B9_7F4A_7C15u64.wrapping_mul(i as u64 + 1);
+            divisor_limbs[i] = 0xD1B5_4A32_D192_ED03u64.wrapping_mul(i as u64 + 3);
         }
-        let ia = Int::<8>::from_mag_limbs(&a_lim, false);
-        let ib = Int::<8>::from_mag_limbs(&b_lim, true); // negative divisor
+        let dividend_int = Int::<8>::from_mag_limbs(&dividend_limbs, false);
+        let divisor_int = Int::<8>::from_mag_limbs(&divisor_limbs, true); // negative divisor
         assert_eq!(
-            rem_int_layer::<8>(ia, ib),
-            rem_int_layer_divmod::<8>(ia, ib),
+            rem_int_layer::<8>(dividend_int, divisor_int),
+            rem_int_layer_divmod::<8>(dividend_int, divisor_int),
             "full-width fall-through"
         );
     }
@@ -306,49 +308,52 @@ mod tests {
         let shapes: &[(usize, usize)] = &[(64, 24), (64, 32), (48, 24), (56, 28), (50, 24)];
         for (case, &(num_n, den_n)) in shapes.iter().enumerate() {
             for round in 0..8 {
-                let mut a_lim = [0u64; N];
-                let mut b_lim = [0u64; N];
-                for x in a_lim[..num_n].iter_mut() {
-                    *x = next();
+                let mut dividend_limbs = [0u64; N];
+                let mut divisor_limbs = [0u64; N];
+                for limb in dividend_limbs[..num_n].iter_mut() {
+                    *limb = next();
                 }
-                for x in b_lim[..den_n].iter_mut() {
-                    *x = next();
+                for limb in divisor_limbs[..den_n].iter_mut() {
+                    *limb = next();
                 }
                 // Keep the dividend magnitude in signed-positive range when
                 // it spans all N limbs, and pin both top limbs nonzero so
                 // the significant lengths are exactly (num_n, den_n).
                 if num_n == N {
-                    a_lim[N - 1] &= !(1u64 << 63);
+                    dividend_limbs[N - 1] &= !(1u64 << 63);
                 }
-                a_lim[num_n - 1] |= 1;
-                b_lim[den_n - 1] |= 1;
+                dividend_limbs[num_n - 1] |= 1;
+                divisor_limbs[den_n - 1] |= 1;
 
                 // The pair must provably route to the u128 engine — this is
                 // what makes the test exercise the new arm, not Knuth.
                 assert!(
-                    select_for_limbs(&a_lim, &b_lim) == Algorithm::KnuthU128Limb,
+                    select_for_limbs(&dividend_limbs, &divisor_limbs)
+                        == Algorithm::KnuthU128Limb,
                     "case {case}: ({num_n},{den_n}) sig limbs must route to KnuthU128Limb"
                 );
 
                 // Reference remainder: the base-2^64 Knuth engine on the
                 // same magnitudes (zeroed u/v, >= num.len()+2 / den.len()).
-                let mut quot = [0u64; N];
-                let mut rem = [0u64; N];
+                let mut quotient = [0u64; N];
+                let mut remainder = [0u64; N];
                 let mut u = [0u64; N + 2];
                 let mut v = [0u64; N + 2];
-                div_knuth_into(&a_lim, &b_lim, &mut quot, &mut rem, &mut u, &mut v);
+                div_knuth_into(
+                    &dividend_limbs, &divisor_limbs,
+                    &mut quotient, &mut remainder, &mut u, &mut v);
 
                 // All four sign combinations; the remainder carries the
                 // dividend's sign.
-                let a_neg = round & 1 == 1;
-                let b_neg = round & 2 == 2;
-                let ia = Int::<N>::from_mag_limbs(&a_lim, a_neg);
-                let ib = Int::<N>::from_mag_limbs(&b_lim, b_neg);
-                let expected = Int::<N>::from_mag_limbs(&rem, a_neg);
+                let dividend_is_negative = round & 1 == 1;
+                let divisor_is_negative = round & 2 == 2;
+                let dividend_int = Int::<N>::from_mag_limbs(&dividend_limbs, dividend_is_negative);
+                let divisor_int = Int::<N>::from_mag_limbs(&divisor_limbs, divisor_is_negative);
+                let expected = Int::<N>::from_mag_limbs(&remainder, dividend_is_negative);
                 assert_eq!(
-                    rem_int_layer::<N>(ia, ib),
+                    rem_int_layer::<N>(dividend_int, divisor_int),
                     expected,
-                    "case {case} round {round}: ({num_n},{den_n}) a_neg={a_neg} b_neg={b_neg}"
+                    "case {case} round {round}: ({num_n},{den_n}) a_neg={dividend_is_negative} b_neg={divisor_is_negative}"
                 );
             }
         }

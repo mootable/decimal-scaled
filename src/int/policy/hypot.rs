@@ -124,16 +124,20 @@ const fn select<const N: usize>() -> Select<N> {
 /// sign drops out).
 #[inline]
 #[must_use]
-pub(crate) fn dispatch<const N: usize>(a: Int<N>, b: Int<N>, mode: RoundingMode) -> Option<Int<N>>
+pub(crate) fn dispatch<const N: usize>(
+    lhs: Int<N>,
+    rhs: Int<N>,
+    mode: RoundingMode
+) -> Option<Int<N>>
 where
     Limbs<N>: ComputeLimbs,
 {
     let algo = match const { select::<N>() } {
-        Select::ByAlgorithm(a) => a,
-        Select::ByValue(f) => f(&a),
+        Select::ByAlgorithm(algorithm) => algorithm,
+        Select::ByValue(choose) => choose(&lhs),
     };
     match algo {
-        Algorithm::Pythagoras => hypot_pythagoras::<N>(a, b, mode),
-        Algorithm::U128Fast => hypot_u128_fast::<N>(a, b, mode),
+        Algorithm::Pythagoras => hypot_pythagoras::<N>(lhs, rhs, mode),
+        Algorithm::U128Fast => hypot_u128_fast::<N>(lhs, rhs, mode),
     }
 }

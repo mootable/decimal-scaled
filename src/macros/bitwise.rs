@@ -22,27 +22,27 @@ macro_rules! decl_decimal_bitwise {
         $crate::macros::bitwise::decl_decimal_bitwise!(@common $Type, $Storage);
 
         impl<const SCALE: u32> $Type<SCALE> {
-            /// Logical (zero-fill) right shift of the raw storage by `n`
-            /// bits. Unlike the arithmetic `Shr` operator, the vacated
-            /// high bits are always zero regardless of sign.
+            /// Logical (zero-fill) right shift of the raw storage by
+            /// `shift` bits. Unlike the arithmetic `Shr` operator, the
+            /// vacated high bits are always zero regardless of sign.
             #[inline]
             #[must_use]
-            pub fn unsigned_shr(self, n: u32) -> Self {
-                Self((self.0.cast_unsigned() >> n).cast_signed())
+            pub fn unsigned_shr(self, shift: u32) -> Self {
+                Self((self.0.cast_unsigned() >> shift).cast_signed())
             }
 
-            /// Rotate the raw storage left by `n` bits.
+            /// Rotate the raw storage left by `shift` bits.
             #[inline]
             #[must_use]
-            pub fn rotate_left(self, n: u32) -> Self {
-                Self(self.0.rotate_left(n))
+            pub fn rotate_left(self, shift: u32) -> Self {
+                Self(self.0.rotate_left(shift))
             }
 
-            /// Rotate the raw storage right by `n` bits.
+            /// Rotate the raw storage right by `shift` bits.
             #[inline]
             #[must_use]
-            pub fn rotate_right(self, n: u32) -> Self {
-                Self(self.0.rotate_right(n))
+            pub fn rotate_right(self, shift: u32) -> Self {
+                Self(self.0.rotate_right(shift))
             }
 
             /// Number of leading zero bits in the raw storage.
@@ -138,33 +138,33 @@ macro_rules! decl_decimal_bitwise {
         }
         impl<const SCALE: u32> ::core::ops::Shl<u32> for $Type<SCALE> {
             type Output = Self;
-            /// Left-shift the raw storage by `n` bits. Debug-panics when
-            /// `n` exceeds the storage width; wraps in release.
+            /// Left-shift the raw storage by `shift` bits. Debug-panics
+            /// when `shift` exceeds the storage width; wraps in release.
             #[inline]
-            fn shl(self, n: u32) -> Self {
-                Self(self.0 << n)
+            fn shl(self, shift: u32) -> Self {
+                Self(self.0 << shift)
             }
         }
         impl<const SCALE: u32> ::core::ops::ShlAssign<u32> for $Type<SCALE> {
             #[inline]
-            fn shl_assign(&mut self, n: u32) {
-                self.0 = self.0 << n;
+            fn shl_assign(&mut self, shift: u32) {
+                self.0 = self.0 << shift;
             }
         }
         impl<const SCALE: u32> ::core::ops::Shr<u32> for $Type<SCALE> {
             type Output = Self;
             /// Arithmetic (sign-extending) right-shift of the raw
-            /// storage by `n` bits. Use [`Self::unsigned_shr`] for the
-            /// logical (zero-fill) shift.
+            /// storage by `shift` bits. Use [`Self::unsigned_shr`] for
+            /// the logical (zero-fill) shift.
             #[inline]
-            fn shr(self, n: u32) -> Self {
-                Self(self.0 >> n)
+            fn shr(self, shift: u32) -> Self {
+                Self(self.0 >> shift)
             }
         }
         impl<const SCALE: u32> ::core::ops::ShrAssign<u32> for $Type<SCALE> {
             #[inline]
-            fn shr_assign(&mut self, n: u32) {
-                self.0 = self.0 >> n;
+            fn shr_assign(&mut self, shift: u32) {
+                self.0 = self.0 >> shift;
             }
         }
         impl<const SCALE: u32> ::core::ops::Not for $Type<SCALE> {

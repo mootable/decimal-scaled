@@ -13,7 +13,7 @@
 //! Two specialised arms, selected on `N` at compile time (the unused arm is
 //! dead-code-eliminated per monomorphisation):
 //!
-//! * **`N == 1` (D18):** the product `a * b` always fits `i128` (two `i64`
+//! * **`N == 1` (D18):** the product `lhs * rhs` always fits `i128` (two `i64`
 //!   magnitudes), and `10^SCALE` (`SCALE <= 18`) always fits `u64`. The
 //!   rescale divide is therefore an `i128 / u64` schoolbook divide -- two
 //!   hardware `divq` instructions via
@@ -45,24 +45,24 @@ use crate::support::rounding::RoundingMode;
 
 /// Hardware-`i128` decimal multiply kernel for narrow storage (`N <= 2`).
 ///
-/// Computes `a * b / 10^SCALE` rounded under `mode`. Panics on storage
+/// Computes `lhs * rhs / 10^SCALE` rounded under `mode`. Panics on storage
 /// overflow in BOTH debug and release per the decimal default-operator
 /// contract.
 #[inline]
 #[must_use]
 pub(crate) fn mul_native<const N: usize, const SCALE: u32>(
-    a: Int<N>,
-    b: Int<N>,
+    lhs: Int<N>,
+    rhs: Int<N>,
     mode: RoundingMode,
 ) -> Int<N> {
     if N == 1 {
         // D18: product fits i128, 10^SCALE fits u64 (SCALE <= 18).
-        let n = a.as_i128() * b.as_i128();
+        let product = lhs.as_i128() * rhs.as_i128();
         let scaled: i128 = if SCALE == 0 {
-            n
+            product
         } else {
-            let m_mag: u64 = 10u64.pow(SCALE);
-            crate::macros::arithmetic::i128_divrem_by_u64_with_mode(n, m_mag, mode)
+            let pow10_scale: u64 = 10u64.pow(SCALE);
+            crate::macros::arithmetic::i128_divrem_by_u64_with_mode(product, pow10_scale, mode)
         };
         assert!(
             scaled >= i64::MIN as i128 && scaled <= i64::MAX as i128,
@@ -72,10 +72,10 @@ pub(crate) fn mul_native<const N: usize, const SCALE: u32>(
     }
 
     // N == 2 (D38): the shared i128 / 256-bit kernel.
-    let ai = a.as_i128();
-    let bi = b.as_i128();
-    match mul_div_pow10_with::<SCALE>(ai, bi, mode) {
-        Some(q) => Int::<N>::from_i128(q),
+    let lhs_raw = lhs.as_i128();
+    let rhs_raw = rhs.as_i128();
+    match mul_div_pow10_with::<SCALE>(lhs_raw, rhs_raw, mode) {
+        Some(product) => Int::<N>::from_i128(product),
         None => panic!("attempt to multiply with overflow"),
     }
 }
@@ -91,7 +91,7 @@ mod tests {
     #[test]
     fn mul_native_n1_matches_naive() {
         const S: u32 = 6;
-        let m = 10i128.pow(S);
+        let pow10_scale = 10i128.pow(S);
         let cases: &[(i64, i64)] = &[
             (0, 0),
             (1_000_000, 2_000_000),
@@ -102,18 +102,18 @@ mod tests {
             (999_999, 999_999),
             (i32::MAX as i64, 1_000_000),
         ];
-        for &(a, b) in cases {
-            let want = ((a as i128) * (b as i128)) / m;
-            let got = mul_native::<1, S>(Int::<1>::from_i64(a), Int::<1>::from_i64(b), MODE);
-            assert_eq!(got.to_i128(), want, "mul_native n1 ({a}, {b})");
+        for &(lhs, rhs) in cases {
+            let want = ((lhs as i128) * (rhs as i128)) / pow10_scale;
+            let got = mul_native::<1, S>(Int::<1>::from_i64(lhs), Int::<1>::from_i64(rhs), MODE);
+            assert_eq!(got.to_i128(), want, "mul_native n1 ({lhs}, {rhs})");
         }
     }
 
     #[test]
     fn mul_native_n2_matches_naive() {
         const S: u32 = 12;
-        let m = 10i128.pow(S);
-        // Operands chosen so a * b is an exact multiple of 10^12 (no tie /
+        let pow10_scale = 10i128.pow(S);
+        // Operands chosen so lhs * rhs is an exact multiple of 10^12 (no tie /
         // rounding ambiguity), letting the truncating reference stand.
         let cases: &[(i128, i128)] = &[
             (0, 0),
@@ -121,11 +121,12 @@ mod tests {
             (-1_000_000_000_000_i128, 2_000_000_000_000_i128),
             (5_000_000_000_000_i128, 4_000_000_000_000_i128),
         ];
-        for &(a, b) in cases {
-            assert_eq!((a * b) % m, 0, "test operands must be exact for ({a}, {b})");
-            let want = (a * b) / m;
-            let got = mul_native::<2, S>(Int::<2>::from_i128(a), Int::<2>::from_i128(b), MODE);
-            assert_eq!(got.to_i128(), want, "mul_native n2 ({a}, {b})");
+        for &(lhs, rhs) in cases {
+            assert_eq!((lhs * rhs) % pow10_scale, 0,
+                "test operands must be exact for ({lhs}, {rhs})");
+            let want = (lhs * rhs) / pow10_scale;
+            let got = mul_native::<2, S>(Int::<2>::from_i128(lhs), Int::<2>::from_i128(rhs), MODE);
+            assert_eq!(got.to_i128(), want, "mul_native n2 ({lhs}, {rhs})");
         }
     }
 }

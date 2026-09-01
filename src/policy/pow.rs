@@ -53,8 +53,8 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(
     mode: RoundingMode,
 ) -> Int<N> {
     let algo = match const { select::<N, SCALE>() } {
-        Select::ByAlgorithm(a) => a,
-        Select::ByValue(f) => f(&base),
+        Select::ByAlgorithm(algorithm) => algorithm,
+        Select::ByValue(choose) => choose(&base),
     };
     match algo {
         Algorithm::ExpWithLn => exp_with_ln_routed::<N, SCALE>(base, exponent, mode),

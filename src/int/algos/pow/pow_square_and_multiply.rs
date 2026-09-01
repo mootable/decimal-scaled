@@ -42,18 +42,18 @@ pub(crate) const fn pow_square_and_multiply<const N: usize>(base: Uint<N>, mut e
     if N > 0 {
         acc[0] = 1;
     }
-    let mut b = *base.as_limbs();
+    let mut running_base = *base.as_limbs();
     while exp > 0 {
         if exp & 1 == 1 {
             let mut prod = [0u64; N];
-            mul_low_fixed(&acc, &b, &mut prod);
+            mul_low_fixed(&acc, &running_base, &mut prod);
             acc = prod;
         }
         exp >>= 1;
         if exp > 0 {
             let mut sq = [0u64; N];
-            sqr_low_fixed(&b, &mut sq);
-            b = sq;
+            sqr_low_fixed(&running_base, &mut sq);
+            running_base = sq;
         }
     }
     Uint::<N>::from_limbs(acc)
