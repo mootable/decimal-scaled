@@ -364,8 +364,10 @@ where
     // Two-width near-min widening: near `x ≈ 0` the half-ULP tie of
     // `exp(±10^-k)` is decided by the `x³/6` term at digit ≈ `1.5·SCALE`, beyond
     // the tier work integer's escalation reach at mid/high scales; retry at
-    // `C::Wexp` when the deciding digit is unreachable in `C::W`. Deep ties past
-    // the precision horizon stay exact ties.
+    // `C::Wexp` when the deciding digit is unreachable in `C::W`. A deep tie
+    // past the precision horizon is decided by the kernel's [`TailSign`]
+    // where the direct series can prove one (a tagged exact half is not a
+    // tie — issue #95), and stays an exact tie only when it cannot.
     round_to_storage_widening_tail_signed_g::<C::Storage, C::W, C::Wexp>(
         C::GUARD,
         SCALE,
@@ -2519,6 +2521,15 @@ fn dec_digits_g<S: BigInt>(v: S) -> u32 {
 /// Ceiling (positive result) / Floor (negative) nudge one ULP off the grid
 /// line and an unresolved half-ULP boundary rounds as ABOVE half for the
 /// nearest modes. A widening caller may still retry at a wider integer.
+///
+/// A kernel-supplied [`TailSign`] takes precedence over all of that where it
+/// can speak: a NEAREST probe whose residual is exactly half is decided by
+/// the tag outright (see `tag_decides` in the body — the truth is strictly
+/// off the boundary, so the tie-break must not run), returned `resolved`;
+/// and the DIRECTED unresolved endgame reads the base probe's tag before
+/// falling back to the `never_exact` blanket. The blanket remains the
+/// untagged fallback — the Smith-chain `exp` path and the hyperbolics reach
+/// here with `None` at every probe.
 /// `recompute` is a `&mut dyn FnMut` trait object, NOT an `impl FnMut`
 /// generic: the walker body is large and every distinct closure type would
 /// mint a full copy of it per call site (the dominant IR-volume entry at
@@ -2602,7 +2613,44 @@ where
             };
             finish(neg, q, should_bump(mode, cmp_r, q.bit(0), !neg))
         };
-        let (neg0, q0, rem0, div0, _) = probe(base_guard);
+        // A tagged EXACT half is not a tie. A [`TailSign`] is only ever
+        // produced with the kernel's accumulated error proven exactly zero
+        // (see `expm1_fixed_inner` — the sole producer feeding this walker,
+        // via `exp_fixed_tagged`'s direct-series branch), so the probe's
+        // value is the exact partial sum and the true value sits strictly on
+        // the tag's side of it — strictly off the half boundary. The
+        // neighbour on that side is nearer outright, whatever the nearest
+        // mode, and the tie-break must not run: this is the identical rule
+        // `round_to_storage_directed_tagged_impl_g`'s `nearest_narrow`
+        // already applies on the expm1/log1p path (issue #95 — all three
+        // nearest modes rounding `exp(-1e-462)` up at `D1232<924>` where the
+        // truth is strictly below half). The verdict is a PROOF, so it is
+        // returned `resolved`: escalating could only re-derive the same
+        // side, and for the `exp(±10^-k)` family at `2k = SCALE` the
+        // deciding term (digit `3k`) outruns every reachable depth anyway.
+        // `rem == div - rem` (never `rem + rem == div`, which could wrap) is
+        // the exact-half test; `rem == 0` can never satisfy it, so the
+        // degenerate guard-0 divisor needs no separate guard.
+        //
+        // NEAREST-ONLY BY PLACEMENT: this closure is reachable only from the
+        // `is_nearest_mode` branch it is defined in, and must never be called
+        // from the directed path — it carries no `mode` and would override a
+        // directed round the residual has already decided. The `never_exact`
+        // blanket it bypasses stays the UNTAGGED fallback; where that
+        // blanket's own direction is and is not proven is recorded in
+        // issue #96.
+        let tag_decides = |neg: bool, q: S, rem: S, div: S, tail: Option<TailSign>| -> Option<St> {
+            match tail {
+                Some(t) if rem == div - rem => {
+                    Some(finish(neg, q, (t == TailSign::Above) == !neg))
+                }
+                _ => None,
+            }
+        };
+        let (neg0, q0, rem0, div0, tail0) = probe(base_guard);
+        if let Some(r) = tag_decides(neg0, q0, rem0, div0, tail0) {
+            return (r, true);
+        }
         let half0 = div0 / lit(2);
         let dist0 = if rem0 < half0 { half0 - rem0 } else { rem0 - half0 };
         if dist0 > pow10(base_guard) / lit(1000) {
@@ -2631,7 +2679,10 @@ where
                     let back = ZIV_RESOLVE_FLOOR_POW10 + 3;
                     if max_guard > base_guard + back {
                         let g_c = max_guard - back;
-                        let (neg, q, rem, div, _) = probe(g_c);
+                        let (neg, q, rem, div, tail) = probe(g_c);
+                        if let Some(r) = tag_decides(neg, q, rem, div, tail) {
+                            return (r, true);
+                        }
                         let half = div / lit(2);
                         let dist = if rem < half { half - rem } else { rem - half };
                         if dist > floor {
@@ -2655,7 +2706,10 @@ where
             }
             let step = (target + base_guard).max(base_guard);
             let next_guard = guard.saturating_add(step).min(max_guard);
-            let (neg, q, rem, div, _) = probe(next_guard);
+            let (neg, q, rem, div, tail) = probe(next_guard);
+            if let Some(r) = tag_decides(neg, q, rem, div, tail) {
+                return (r, true);
+            }
             let half = div / lit(2);
             let hi_dist = if rem < half { half - rem } else { rem - half };
             if hi_dist > floor {
@@ -2837,8 +2891,10 @@ where
 /// [`round_to_storage_widening_g`] — the untagged wrapper above is exactly
 /// that call. Where it is present, it replaces the `never_exact` blanket
 /// ("the tail always moves the magnitude away from zero") with the side the
-/// kernel actually proved, which is the one thing a zero residual cannot
-/// tell the walker. See [`near_min_resolve_g`]'s unresolved endgame.
+/// kernel actually proved, at both readings a residual cannot make: the
+/// directed endgame's exactly-zero grid line, and a nearest probe's
+/// exactly-half boundary (decided outright, `resolved`, so no widening
+/// retry runs on a proof). See [`near_min_resolve_g`].
 #[inline]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn round_to_storage_widening_tail_signed_g<St: BigInt + Copy, S1: BigInt, S2: BigInt>(
@@ -3827,5 +3883,117 @@ mod tiny_x_deep_directed_pins {
     fn tan_asin_expanding_d616_s615_deep() {
         pin_deep!(615, 120, tan_strict_with, true, "tan s615");
         pin_deep!(615, 120, asin_strict_with, true, "asin s615");
+    }
+}
+
+/// The near-min walker's tagged-exact-half contract (issue #95): a probe
+/// whose sub-storage residual is EXACTLY half and whose kernel proved the
+/// tail side is decided by the tag — for every nearest mode — instead of
+/// being bumped away from zero by the unresolved endgame's `never_exact`
+/// blanket.
+///
+/// The synthetic recompute mimics `exp(-10^-k)` at `SCALE = 2k` (the
+/// `exp(-1e-462)` at `D1232<924>` shape, scaled to unit widths): at every
+/// guard `g` the working value is the exact partial sum
+/// `10^(TARGET+g) - 10^(g+K) + 5·10^(g-1)`, whose residual below the
+/// storage grid is exactly half an ULP, and the deciding term (digit `3K`,
+/// which the true series subtracts) lies past both work widths' probe
+/// reach — so before the tag rule the walker ran its whole ladder at BOTH
+/// widths and then bumped up. The correct nearest answer is DOWN for a
+/// `Below` tag and UP for an `Above` one, in all three nearest modes.
+#[cfg(test)]
+mod tagged_half_walker_contract {
+    use super::*;
+    use crate::int::types::Int;
+    use crate::support::rounding::RoundingMode;
+
+    type S1 = Int<4>;
+    type S2 = Int<6>;
+    type St = Int<2>;
+    const BASE_GUARD: u32 = 9;
+    /// Storage scale, `2·K` — the issue #95 shape (`x = -10^-K`).
+    const TARGET: u32 = 20;
+    const K: u32 = 10;
+
+    const NEAREST: [RoundingMode; 3] = [
+        RoundingMode::HalfToEven,
+        RoundingMode::HalfAwayFromZero,
+        RoundingMode::HalfTowardZero,
+    ];
+
+    /// The exact partial sum of `exp(-10^-K)` at working scale
+    /// `TARGET + g`: `1 - 10^-K + (1/2)·10^-2K`, ending exactly on the
+    /// half-ULP boundary of the storage grid.
+    fn half_tie<S: BigInt>(g: u32) -> S {
+        crate::consts::pow10::dispatch::<S>(TARGET + g)
+            - crate::consts::pow10::dispatch::<S>(g + K)
+            + <S as BigInt>::from_i128(5) * crate::consts::pow10::dispatch::<S>(g - 1)
+    }
+
+    fn run(mode: RoundingMode, tail: Option<TailSign>) -> i128 {
+        round_to_storage_widening_tail_signed_g::<St, S1, S2>(
+            BASE_GUARD,
+            TARGET,
+            mode,
+            true, // never_exact, as the exp callers pass
+            St::MAX,
+            St::MIN,
+            |g| (half_tie::<S1>(g), tail),
+            |g| (half_tie::<S2>(g), tail),
+        )
+        .as_i128()
+    }
+
+    /// The truncated storage value `1 - 10^-K` at scale `TARGET` — the
+    /// correct nearest answer when the truth is strictly below half.
+    const DOWN: i128 = 100_000_000_000_000_000_000 - 10_000_000_000;
+
+    #[test]
+    fn tagged_below_half_tie_rounds_down_in_every_nearest_mode() {
+        for mode in NEAREST {
+            assert_eq!(
+                run(mode, Some(TailSign::Below)),
+                DOWN,
+                "a Below tag at an exact half must round down under {mode:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn tagged_above_half_tie_rounds_up_in_every_nearest_mode() {
+        for mode in NEAREST {
+            assert_eq!(
+                run(mode, Some(TailSign::Above)),
+                DOWN + 1,
+                "an Above tag at an exact half must round up under {mode:?}"
+            );
+        }
+    }
+
+    /// The untagged path keeps the `never_exact` endgame exactly as it was:
+    /// an unresolved half boundary bumps away from zero in every nearest
+    /// mode. This is the Smith-chain / hyperbolic fallback the tag rule
+    /// must not disturb.
+    #[test]
+    fn untagged_half_tie_keeps_the_never_exact_endgame_bump() {
+        for mode in NEAREST {
+            assert_eq!(
+                run(mode, None),
+                DOWN + 1,
+                "the untagged never_exact blanket must still bump under {mode:?}"
+            );
+        }
+    }
+
+    /// The directed modes never consult the tag on this input — the
+    /// residual (half an ULP from the grid) already decides them — so the
+    /// tag must not move any of them.
+    #[test]
+    fn directed_modes_are_untouched_by_the_tag() {
+        for tail in [None, Some(TailSign::Below), Some(TailSign::Above)] {
+            assert_eq!(run(RoundingMode::Ceiling, tail), DOWN + 1);
+            assert_eq!(run(RoundingMode::Floor, tail), DOWN);
+            assert_eq!(run(RoundingMode::Trunc, tail), DOWN);
+        }
     }
 }
