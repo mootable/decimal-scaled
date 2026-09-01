@@ -63,17 +63,24 @@ at the end of this section.
   `x <= ln(1 + MAX)` against `exp`'s `x <= ln(MAX)` — a band `ln(1 + 1/MAX)`
   wide, a few hundredths of an argument unit.
 
-<!-- PLACEHOLDER — checked_ siblings are in progress, not yet landed.
-     Do not release with this comment present; replace it with the entry
-     once the work merges. The shape it should take:
+- **`checked_expm1_strict` and `checked_log1p_strict`** — the
+  `Option`-returning siblings, so the two new functions match the surface
+  every other strict transcendental carries.
 
-- **`checked_expm1_strict` and `checked_log1p_strict`** — the `Option`
-  returning siblings, so the two new functions match the surface every
-  other strict transcendental carries. `log1p`'s is the one that matters:
-  its domain genuinely ends at `t > -1` and the strict form panics there,
-  so until now a caller who could not guarantee the domain in advance had
-  no non-panicking route to the function at all.
--->
+  **`log1p`'s is the one that matters.** Its domain genuinely ends at
+  `t > -1` and the strict form panics below that, so until now a caller who
+  could not guarantee the domain in advance had no non-panicking route to the
+  function at all. The checked form returns `None` exactly at that wall and a
+  bit-identical `Some` everywhere else — and it is a *complete* guarantee, not
+  a partial one, because no out-of-range case exists: `ln(1 + t)` is bounded by
+  the storage range wherever `1 + t` is representable.
+
+  **`expm1`'s completes the surface without adding a guarantee.** It is total
+  over its argument, so there is no domain wall to check, and its overflow seam
+  is not threaded — an out-of-range `expm1` still panics, and the checked form
+  returns `Some` whenever the default returns at all. That is the same gap the
+  existing wide-tier notes record for `ln`, `log` and `exp`; threading it is
+  separate work.
 
 
 ### Changed
