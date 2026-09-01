@@ -42,49 +42,49 @@ use crate::support::rounding::RoundingMode;
 /// (`exp_series_2limb::WNarrow`) already runs in on every build.
 pub(crate) type WZiv = Int<24>;
 
-/// Lifts a raw `i128` storage value to the working scale: `raw · 10^guard`
-/// as a signed [`WZiv`]. Total for every `i128` (the magnitude goes
-/// through `from_u128`, so `i128::MIN` does not wrap).
+/// Lifts a raw `i128` storage value to the working scale:
+/// `raw · 10^guard_digits` as a signed [`WZiv`]. Total for every `i128`
+/// (the magnitude goes through `from_u128`, so `i128::MIN` does not wrap).
 #[inline]
-pub(crate) fn lift(raw: i128, guard: u32) -> WZiv {
-    let mag = WZiv::from_u128(raw.unsigned_abs())
-        * crate::consts::pow10::dispatch::<WZiv>(guard);
-    if raw < 0 { -mag } else { mag }
+pub(crate) fn lift(raw: i128, guard_digits: u32) -> WZiv {
+    let magnitude = WZiv::from_u128(raw.unsigned_abs())
+        * crate::consts::pow10::dispatch::<WZiv>(guard_digits);
+    if raw < 0 { -magnitude } else { magnitude }
 }
 
 /// `π · 10^w`, correctly rounded, at a runtime working scale.
 #[inline]
-pub(crate) fn pi_w(w: u32) -> WZiv {
-    crate::consts::pi_by_working_scale::<WZiv>(w, RoundingMode::HalfToEven)
+pub(crate) fn pi_w(working_scale: u32) -> WZiv {
+    crate::consts::pi_by_working_scale::<WZiv>(working_scale, RoundingMode::HalfToEven)
 }
 
 /// `ln 2 · 10^w`, correctly rounded, at a runtime working scale.
 #[inline]
-pub(crate) fn ln2_w(w: u32) -> WZiv {
-    crate::consts::ln2_by_working_scale::<WZiv>(w, RoundingMode::HalfToEven)
+pub(crate) fn ln2_w(working_scale: u32) -> WZiv {
+    crate::consts::ln2_by_working_scale::<WZiv>(working_scale, RoundingMode::HalfToEven)
 }
 
 /// `ln 10 · 10^w`, correctly rounded, at a runtime working scale.
 #[inline]
-pub(crate) fn ln10_w(w: u32) -> WZiv {
-    crate::consts::ln10_by_working_scale::<WZiv>(w, RoundingMode::HalfToEven)
+pub(crate) fn ln10_w(working_scale: u32) -> WZiv {
+    crate::consts::ln10_by_working_scale::<WZiv>(working_scale, RoundingMode::HalfToEven)
 }
 
 /// The plain directed/nearest Ziv walker at the narrow storage —
-/// `recompute(guard)` returns the kernel value at working scale
-/// `scale + guard` in [`WZiv`]. Result-sign-agnostic at the cap (no
+/// `recompute(guard_digits)` returns the kernel value at working scale
+/// `scale + guard_digits` in [`WZiv`]. Result-sign-agnostic at the cap (no
 /// never-exact tail assumption): the unresolved endgame snaps to the
 /// clean base narrowing, which is the correct answer for an EXACTLY
 /// boundary-valued input (`powf(4, 0.5)`, `log_4(8)`).
 #[inline]
 pub(crate) fn walk(
-    base_guard: u32,
+    base_guard_digits: u32,
     scale: u32,
     mode: RoundingMode,
     recompute: impl FnMut(u32) -> WZiv,
 ) -> i128 {
     wtc::round_to_storage_directed_g::<Int<2>, WZiv>(
-        base_guard,
+        base_guard_digits,
         scale,
         mode,
         Int::<2>::MAX,
@@ -100,13 +100,13 @@ pub(crate) fn walk(
 /// sub-resolution tail. Mirrors the wide `exp`/`cosh` shape.
 #[inline]
 pub(crate) fn walk_never_exact(
-    base_guard: u32,
+    base_guard_digits: u32,
     scale: u32,
     mode: RoundingMode,
     recompute: impl FnMut(u32) -> WZiv,
 ) -> i128 {
     wtc::round_to_storage_directed_never_exact_g::<Int<2>, WZiv>(
-        base_guard,
+        base_guard_digits,
         scale,
         mode,
         Int::<2>::MAX,
@@ -119,39 +119,39 @@ pub(crate) fn walk_never_exact(
 /// Option-contract wrapper over [`walk`] for the kernels whose overflow
 /// contract is a returned `None` (`ln`/`log`/`powf`/`exp`): the walker's
 /// range check PANICS past storage, so a near-tie AT the storage extreme
-/// (where the walker's ±1 could leave range) keeps the single-shot
-/// verdict `base` instead — `base` is the plain rounding of the same
+/// (where the walker's ±1 could leave range) keeps the `single_shot`
+/// verdict instead — `single_shot` is the plain rounding of the same
 /// working value, and a tie that deep at the extreme is the
-/// Table-Maker's-Dilemma residue either way. `base == None` (out of
+/// Table-Maker's-Dilemma residue either way. `single_shot == None` (out of
 /// range) propagates.
 #[inline]
 pub(crate) fn walk_checked(
-    base: Option<i128>,
-    base_guard: u32,
+    single_shot: Option<i128>,
+    base_guard_digits: u32,
     scale: u32,
     mode: RoundingMode,
     recompute: impl FnMut(u32) -> WZiv,
 ) -> Option<i128> {
-    match base {
+    match single_shot {
         None => None,
-        Some(b) if b.unsigned_abs() >= (i128::MAX as u128) - 1 => Some(b),
-        Some(_) => Some(walk(base_guard, scale, mode, recompute)),
+        Some(value) if value.unsigned_abs() >= (i128::MAX as u128) - 1 => Some(value),
+        Some(_) => Some(walk(base_guard_digits, scale, mode, recompute)),
     }
 }
 
 /// [`walk_checked`] with the `never_exact` polarity (`exp` / `exp2`).
 #[inline]
 pub(crate) fn walk_checked_never_exact(
-    base: Option<i128>,
-    base_guard: u32,
+    single_shot: Option<i128>,
+    base_guard_digits: u32,
     scale: u32,
     mode: RoundingMode,
     recompute: impl FnMut(u32) -> WZiv,
 ) -> Option<i128> {
-    match base {
+    match single_shot {
         None => None,
-        Some(b) if b.unsigned_abs() >= (i128::MAX as u128) - 1 => Some(b),
-        Some(_) => Some(walk_never_exact(base_guard, scale, mode, recompute)),
+        Some(value) if value.unsigned_abs() >= (i128::MAX as u128) - 1 => Some(value),
+        Some(_) => Some(walk_never_exact(base_guard_digits, scale, mode, recompute)),
     }
 }
 
@@ -160,13 +160,13 @@ pub(crate) fn walk_checked_never_exact(
 /// wide `acosh`/`atanh` shape.
 #[inline]
 pub(crate) fn walk_near_special(
-    base_guard: u32,
+    base_guard_digits: u32,
     scale: u32,
     mode: RoundingMode,
     recompute: impl FnMut(u32) -> WZiv,
 ) -> i128 {
     wtc::round_to_storage_directed_near_special_g::<Int<2>, WZiv>(
-        base_guard,
+        base_guard_digits,
         scale,
         mode,
         Int::<2>::MAX,

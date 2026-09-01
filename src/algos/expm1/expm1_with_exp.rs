@@ -71,15 +71,15 @@ use crate::int::types::compute_limbs::ComputeLimbs;
 use crate::int::types::traits::BigInt;
 use crate::support::rounding::RoundingMode;
 
-/// `expm1(v)` for a working-scale value `v_w` at scale `w`, as
-/// `exp_fixed(v_w, w) - 10^w`. `None` propagates `try_exp_fixed`'s
-/// out-of-range verdict (the "detect once, the wrapper applies the policy"
-/// contract).
-pub(crate) fn expm1_with_exp_fixed<S: BigInt>(v_w: S, w: u32) -> Option<S>
+/// `expm1(v)` for a `working_value` at `working_scale`, as
+/// `exp_fixed(working_value, working_scale) - 10^w`. `None` propagates
+/// `try_exp_fixed`'s out-of-range verdict (the "detect once, the wrapper
+/// applies the policy" contract).
+pub(crate) fn expm1_with_exp_fixed<S: BigInt>(working_value: S, working_scale: u32) -> Option<S>
 where
     S::Scratch: ComputeLimbs,
 {
-    if v_w == S::ZERO {
+    if working_value == S::ZERO {
         // expm1(0) = 0 exactly — the only exact case.
         return Some(S::ZERO);
     }
@@ -90,8 +90,8 @@ where
     // representative the negative tail requires
     // (`expm1_generic::just_above_minus_one`), so the deep band is correct here
     // for free.
-    let e = eg::try_exp_fixed::<S>(v_w, w)?;
-    Some(e - eg::one::<S>(w))
+    let exp_value = eg::try_exp_fixed::<S>(working_value, working_scale)?;
+    Some(exp_value - eg::one::<S>(working_scale))
 }
 
 /// `expm1(x)` at storage `St`, computed in the work integer `S` and correctly
@@ -121,29 +121,31 @@ where
 #[must_use]
 pub(crate) fn expm1_with_exp_g<St: BigInt + Copy, S: BigInt, const SCALE: u32>(
     raw: St,
-    base_guard: u32,
-    st_max: St,
-    st_min: St,
+    base_guard_digits: u32,
+    storage_max: St,
+    storage_min: St,
     mode: RoundingMode,
 ) -> St
 where
     S::Scratch: ComputeLimbs,
 {
-    let r = wtc::round_to_storage_directed_g::<St, S>(
-        base_guard,
+    let rounded = wtc::round_to_storage_directed_g::<St, S>(
+        base_guard_digits,
         SCALE,
         mode,
-        st_max,
-        st_min,
-        |guard| {
+        storage_max,
+        storage_min,
+        |guard_digits| {
             super::checked(
-                expm1_with_exp_fixed::<S>(wtc::to_work_scaled_g::<St, S>(raw, guard), SCALE + guard),
+                expm1_with_exp_fixed::<S>(
+                    wtc::to_work_scaled_g::<St, S>(raw, guard_digits),
+                    SCALE + guard_digits),
                 "expm1_strict",
                 SCALE,
             )
         },
     );
-    super::adjust_near_zero::<St>(r, raw, mode)
+    super::adjust_near_zero::<St>(rounded, raw, mode)
 }
 
 /// The `_approx` sibling of [`expm1_with_exp_g`]: a SINGLE shot at the caller's
@@ -158,21 +160,23 @@ where
 pub(crate) fn expm1_with_exp_approx_g<St: BigInt + Copy, S: BigInt, const SCALE: u32>(
     raw: St,
     working_digits: u32,
-    st_max: St,
-    st_min: St,
+    storage_max: St,
+    storage_min: St,
     mode: RoundingMode,
 ) -> St
 where
     S::Scratch: ComputeLimbs,
 {
-    let w = SCALE + working_digits;
-    let r = super::checked(
-        expm1_with_exp_fixed::<S>(wtc::to_work_scaled_g::<St, S>(raw, working_digits), w),
+    let working_scale = SCALE + working_digits;
+    let working_value = super::checked(
+        expm1_with_exp_fixed::<S>(
+            wtc::to_work_scaled_g::<St, S>(raw, working_digits), working_scale),
         "expm1_approx",
         SCALE,
     );
-    let out = wtc::round_to_storage_with_g::<St, S>(r, w, SCALE, mode, st_max, st_min);
-    super::adjust_near_zero::<St>(out, raw, mode)
+    let rounded = wtc::round_to_storage_with_g::<St, S>(
+        working_value, working_scale, SCALE, mode, storage_max, storage_min);
+    super::adjust_near_zero::<St>(rounded, raw, mode)
 }
 
 /// Tier-generic entry to [`expm1_with_exp_g`] at the tier's widest work integer

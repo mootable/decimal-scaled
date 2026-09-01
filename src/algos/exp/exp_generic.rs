@@ -31,42 +31,42 @@ use crate::support::rounding::RoundingMode;
     pub(crate) const SERIES_CAP: u128 = 20_000;
 
     #[inline]
-    pub(crate) fn lit<S: BigInt>(n: i128) -> S {
-        S::from_i128(n)
+    pub(crate) fn lit<S: BigInt>(value: i128) -> S {
+        S::from_i128(value)
     }
     #[inline]
     pub(crate) fn zero<S: BigInt>() -> S {
         S::ZERO
     }
     #[inline]
-    pub(crate) fn pow10<S: BigInt>(n: u32) -> S {
-        crate::consts::pow10::dispatch::<S>(n)
+    pub(crate) fn pow10<S: BigInt>(exponent: u32) -> S {
+        crate::consts::pow10::dispatch::<S>(exponent)
     }
     #[inline]
-    pub(crate) fn one<S: BigInt>(w: u32) -> S {
-        pow10::<S>(w)
+    pub(crate) fn one<S: BigInt>(working_scale: u32) -> S {
+        pow10::<S>(working_scale)
     }
     /// Bit length of `|v|` (0 for zero).
-    pub(crate) fn bit_length<S: BigInt>(v: S) -> u32 {
-        <S as BigInt>::BITS - v.abs().leading_zeros()
+    pub(crate) fn bit_length<S: BigInt>(value: S) -> u32 {
+        <S as BigInt>::BITS - value.abs().leading_zeros()
     }
     /// Unpacks a non-negative `S` magnitude into a little-endian u64 limb
     /// buffer through the trait's u128 magnitude exit (`mag_into_u128`).
     /// `dst` must be freshly zeroed and at least `S`'s width.
-    pub(crate) fn unpack_mag<S: BigInt>(v: S, dst: &mut [u64])
+    pub(crate) fn unpack_mag<S: BigInt>(value: S, dst: &mut [u64])
     where
         S::Scratch: ComputeLimbs,
     {
-        let mut tmp = <S::Scratch as ComputeLimbs>::single_u128();
-        v.mag_into_u128(tmp.as_mut());
+        let mut limbs = <S::Scratch as ComputeLimbs>::single_u128();
+        value.mag_into_u128(limbs.as_mut());
         let mut i = 0;
-        for &x in tmp.as_ref() {
+        for &chunk in limbs.as_ref() {
             if i < dst.len() {
-                dst[i] = x as u64;
+                dst[i] = chunk as u64;
                 i += 1;
             }
             if i < dst.len() {
-                dst[i] = (x >> 64) as u64;
+                dst[i] = (chunk >> 64) as u64;
                 i += 1;
             }
         }
@@ -90,54 +90,55 @@ use crate::support::rounding::RoundingMode;
     /// ≥ 24 limbs, which no narrow probe and no in-range work value here
     /// produces) falls to the value-identical base-2⁶⁴ Knuth. Truncated
     /// semantics, identical to `Int::div_rem`.
-    pub(crate) fn div_rem_exact<S: BigInt>(n: S, d: S) -> (S, S)
+    pub(crate) fn div_rem_exact<S: BigInt>(numerator: S, divisor: S) -> (S, S)
     where
         S::Scratch: ComputeLimbs,
     {
         use crate::int::policy::div_rem::{select_for_limbs, Algorithm};
-        let n_neg = n < S::ZERO;
-        let d_neg = d < S::ZERO;
-        let mut nbuf = <S::Scratch as ComputeLimbs>::single_u64();
-        let mut dbuf = <S::Scratch as ComputeLimbs>::single_u64();
-        unpack_mag(n.abs(), nbuf.as_mut());
-        unpack_mag(d.abs(), dbuf.as_mut());
-        let mut qbuf = <S::Scratch as ComputeLimbs>::single_u64();
-        let mut rbuf = <S::Scratch as ComputeLimbs>::single_u64();
-        match select_for_limbs(nbuf.as_ref(), dbuf.as_ref()) {
+        let numerator_is_negative = numerator < S::ZERO;
+        let divisor_is_negative = divisor < S::ZERO;
+        let mut numerator_limbs = <S::Scratch as ComputeLimbs>::single_u64();
+        let mut divisor_limbs = <S::Scratch as ComputeLimbs>::single_u64();
+        unpack_mag(numerator.abs(), numerator_limbs.as_mut());
+        unpack_mag(divisor.abs(), divisor_limbs.as_mut());
+        let mut quotient_limbs = <S::Scratch as ComputeLimbs>::single_u64();
+        let mut remainder_limbs = <S::Scratch as ComputeLimbs>::single_u64();
+        match select_for_limbs(numerator_limbs.as_ref(), divisor_limbs.as_ref()) {
             // Single-limb divisor: the hardware remainder engine, no
             // normalisation scratch involved.
             Algorithm::Rem => crate::int::algos::div::div_rem::div_rem(
-                nbuf.as_ref(),
-                dbuf.as_ref(),
-                qbuf.as_mut(),
-                rbuf.as_mut(),
+                numerator_limbs.as_ref(),
+                divisor_limbs.as_ref(),
+                quotient_limbs.as_mut(),
+                remainder_limbs.as_mut(),
             ),
             // Knuth — with exact caller-sized scratch (see above).
             _ => {
-                let mut u = <S::Scratch as ComputeLimbs>::single_buffered_u64();
-                let mut v = <S::Scratch as ComputeLimbs>::single_buffered_u64();
+                let mut dividend_scratch = <S::Scratch as ComputeLimbs>::single_buffered_u64();
+                let mut divisor_scratch = <S::Scratch as ComputeLimbs>::single_buffered_u64();
                 crate::int::algos::div::div_knuth::div_knuth_into(
-                    nbuf.as_ref(),
-                    dbuf.as_ref(),
-                    qbuf.as_mut(),
-                    rbuf.as_mut(),
-                    u.as_mut(),
-                    v.as_mut(),
+                    numerator_limbs.as_ref(),
+                    divisor_limbs.as_ref(),
+                    quotient_limbs.as_mut(),
+                    remainder_limbs.as_mut(),
+                    dividend_scratch.as_mut(),
+                    divisor_scratch.as_mut(),
                 );
             }
         }
-        let q = S::from_mag_sign_u64(qbuf.as_ref(), n_neg != d_neg);
-        let r = S::from_mag_sign_u64(rbuf.as_ref(), n_neg);
-        (q, r)
+        let quotient = S::from_mag_sign_u64(
+            quotient_limbs.as_ref(), numerator_is_negative != divisor_is_negative);
+        let remainder = S::from_mag_sign_u64(remainder_limbs.as_ref(), numerator_is_negative);
+        (quotient, remainder)
     }
 
     /// Half-to-even round of `numerator / divisor` for `S`.
     #[inline]
-    pub(crate) fn round_div<S: BigInt>(n: S, d: S) -> S
+    pub(crate) fn round_div<S: BigInt>(numerator: S, divisor: S) -> S
     where
         S::Scratch: ComputeLimbs,
     {
-        round_div_sided(n, d).0
+        round_div_sided(numerator, divisor).0
     }
 
     /// [`round_div`] plus which side of the returned quotient the EXACT
@@ -153,54 +154,55 @@ use crate::support::rounding::RoundingMode;
     /// # The polarity is READ, never assumed
     ///
     /// [`div_rem_exact`] truncates toward zero and its remainder carries the
-    /// numerator's sign, so the exact quotient always sits `|r/d| < 1` on the
-    /// AWAY-from-zero side of `q`. Keeping `q` therefore leaves the truth
+    /// numerator's sign, so the exact quotient always sits
+    /// `|remainder/divisor| < 1` on the AWAY-from-zero side of `quotient`.
+    /// Keeping `quotient` therefore leaves the truth
     /// away from zero of the answer; bumping steps a full unit — necessarily
     /// past it — and leaves the truth on the toward-zero side. Both
     /// polarities occur at both signs, because this rounds HALF-TO-EVEN and
     /// not toward zero, so a fixed direction would be wrong wherever the
     /// residual passes the half.
     #[inline]
-    fn round_div_sided<S: BigInt>(n: S, d: S) -> (S, Option<TailSign>)
+    fn round_div_sided<S: BigInt>(numerator: S, divisor: S) -> (S, Option<TailSign>)
     where
         S::Scratch: ComputeLimbs,
     {
-        let (q, r) = div_rem_exact(n, d);
-        if r == S::ZERO {
-            return (q, None);
+        let (quotient, remainder) = div_rem_exact(numerator, divisor);
+        if remainder == S::ZERO {
+            return (quotient, None);
         }
-        let ar = r.abs();
-        let comp = d.abs() - ar;
-        let cmp_r = if ar < comp {
+        let abs_remainder = remainder.abs();
+        let complement = divisor.abs() - abs_remainder;
+        let remainder_cmp = if abs_remainder < complement {
             ::core::cmp::Ordering::Less
-        } else if ar > comp {
+        } else if abs_remainder > complement {
             ::core::cmp::Ordering::Greater
         } else {
             ::core::cmp::Ordering::Equal
         };
-        let q_is_odd = q.bit(0);
-        let result_positive = (n < S::ZERO) == (d < S::ZERO);
+        let quotient_is_odd = quotient.bit(0);
+        let result_is_positive = (numerator < S::ZERO) == (divisor < S::ZERO);
         let bump = crate::support::rounding::should_bump(
             RoundingMode::HalfToEven,
-            cmp_r,
-            q_is_odd,
-            result_positive,
+            remainder_cmp,
+            quotient_is_odd,
+            result_is_positive,
         );
         // Away-from-zero for a positive result is UP, for a negative one DOWN
         // — so the truth is above the answer exactly when those two disagree.
-        let side = if result_positive != bump {
+        let side = if result_is_positive != bump {
             TailSign::Above
         } else {
             TailSign::Below
         };
         let rounded = if bump {
-            if result_positive {
-                q + S::ONE
+            if result_is_positive {
+                quotient + S::ONE
             } else {
-                q - S::ONE
+                quotient - S::ONE
             }
         } else {
-            q
+            quotient
         };
         (rounded, Some(side))
     }
@@ -235,7 +237,7 @@ use crate::support::rounding::RoundingMode;
         (reconstructed - product).abs() < divisor && reconstructed.abs() <= product.abs()
     }
 
-    /// Half-to-even quotient `n / 10^w`, via the MG (magic-multiply)
+    /// Half-to-even quotient `numerator / 10^exponent`, via the MG (magic-multiply)
     /// reciprocal — the same fast divide the per-tier
     /// `decl_wide_transcendental!` core uses, here for the width-generic
     /// path the hyperbolics run through. For `1 ≤ w ≤ 38` the
@@ -246,21 +248,21 @@ use crate::support::rounding::RoundingMode;
     /// hyperbolic/exp cost. The buffer comes from `S`'s scratch carrier ([`ComputeLimbs`]), so no
     /// const-generic limb count appears here.
     #[inline]
-    pub(crate) fn round_div_pow10<S: BigInt>(n: S, w: u32) -> S
+    pub(crate) fn round_div_pow10<S: BigInt>(numerator: S, exponent: u32) -> S
     where
         S::Scratch: ComputeLimbs,
     {
-        if w == 0 {
-            return n;
+        if exponent == 0 {
+            return numerator;
         }
-        if w <= 38 {
+        if exponent <= 38 {
             return crate::algos::support::mg_divide::div_wide_pow10::<S>(
-                n,
-                w,
+                numerator,
+                exponent,
                 RoundingMode::HalfToEven,
             );
         }
-        // `w > 38` rescale: route through the rescale MATCHER (not
+        // `exponent > 38` rescale: route through the rescale MATCHER (not
         // `div_wide_pow10_chain` directly) so the wide / high-scale band gets
         // the baked-reciprocal Newton arm + the 9.24 magnitude-trim, exactly
         // as the per-tier `wide_transcendental` cores do. The matcher only
@@ -270,14 +272,14 @@ use crate::support::rounding::RoundingMode;
         // never slower. Single source for the wide rescale across exp/ln/the
         // generic Tang kernel.
         crate::algos::support::rescale::dispatch_wide_pow10::<S>(
-            n,
-            w,
+            numerator,
+            exponent,
             RoundingMode::HalfToEven,
         )
     }
-    /// `(a · b) / 10^w`, rounded half-to-even.
+    /// `(lhs · rhs) / 10^working_scale`, rounded half-to-even.
     #[inline]
-    pub(crate) fn mul<S: BigInt>(a: S, b: S, w: u32) -> S
+    pub(crate) fn mul<S: BigInt>(lhs: S, rhs: S, working_scale: u32) -> S
     where
         S::Scratch: ComputeLimbs,
     {
@@ -286,143 +288,148 @@ use crate::support::rounding::RoundingMode;
         // falls back to the base-2^64 schoolbook for odd N. This is the hot
         // Taylor-term / squaring multiply, run at `Wexp` (up to Int<256>) for
         // exp + the hyperbolics.
-        round_div_pow10(a.wrapping_mul_low_u128(b), w)
+        round_div_pow10(lhs.wrapping_mul_low_u128(rhs), working_scale)
     }
     /// Loop-friendly `mul` with a precomputed `10^w` divisor.
     #[inline]
-    fn mul_cached<S: BigInt>(a: S, b: S, pow10_w: S) -> S
+    fn mul_cached<S: BigInt>(lhs: S, rhs: S, cached_pow10: S) -> S
     where
         S::Scratch: ComputeLimbs,
     {
-        round_div(a.wrapping_mul_low_u128(b), pow10_w)
+        round_div(lhs.wrapping_mul_low_u128(rhs), cached_pow10)
     }
-    /// `(a · 10^w) / b`, rounded half-to-even (precomputed numerator
-    /// factor).
+    /// `(numerator · 10^w) / divisor`, rounded half-to-even (precomputed
+    /// numerator factor).
     #[inline]
-    pub(crate) fn div_cached<S: BigInt>(a: S, b: S, pow10_w: S) -> S
+    pub(crate) fn div_cached<S: BigInt>(numerator: S, divisor: S, cached_pow10: S) -> S
     where
         S::Scratch: ComputeLimbs,
     {
-        div_cached_sided(a, b, pow10_w).0
+        div_cached_sided(numerator, divisor, cached_pow10).0
     }
 
     /// [`div_cached`] plus the side its rounding left the exact quotient on
     /// — see [`round_div_sided`]. Same single rounding body, same value.
     #[inline]
-    fn div_cached_sided<S: BigInt>(a: S, b: S, pow10_w: S) -> (S, Option<TailSign>)
+    fn div_cached_sided<S: BigInt>(
+        numerator: S, divisor: S, cached_pow10: S) -> (S, Option<TailSign>)
     where
         S::Scratch: ComputeLimbs,
     {
-        round_div_sided(a.wrapping_mul_low_u128(pow10_w), b)
+        round_div_sided(numerator.wrapping_mul_low_u128(cached_pow10), divisor)
     }
-    /// `a · n` for a small unsigned multiplier.
+    /// `value · multiplier` for a small unsigned multiplier.
     #[inline]
-    fn mul_u<S: BigInt>(a: S, n: u128) -> S {
-        if n <= u64::MAX as u128 {
-            a.mul_u64(n as u64)
+    fn mul_u<S: BigInt>(value: S, multiplier: u128) -> S {
+        if multiplier <= u64::MAX as u128 {
+            value.mul_u64(multiplier as u64)
         } else {
-            a * S::from_i128(n as i128)
+            value * S::from_i128(multiplier as i128)
         }
     }
     /// `k · c` where `k` is a signed range-reduction count. An n-by-1-word
     /// product (`mul_u64`) — O(limbs), not the full schoolbook —
     /// since `|k|` always fits one word on the range-reduction paths.
     #[inline]
-    pub(crate) fn scale_by_k<S: BigInt>(c: S, k: i128) -> S {
+    pub(crate) fn scale_by_k<S: BigInt>(constant: S, k: i128) -> S {
         if k >= 0 {
-            mul_u(c, k as u128)
+            mul_u(constant, k as u128)
         } else {
-            -mul_u(c, k.unsigned_abs())
+            -mul_u(constant, k.unsigned_abs())
         }
     }
     /// Rounds a working-scale value to the nearest integer (ties away
     /// from zero); used for the range-reduction quotient.
-    pub(crate) fn round_to_nearest_int<S: BigInt>(v: S, w: u32) -> i128
+    pub(crate) fn round_to_nearest_int<S: BigInt>(working_value: S, working_scale: u32) -> i128
     where
         S::Scratch: ComputeLimbs,
     {
-        let divisor = pow10::<S>(w);
-        let (q, r) = div_rem_exact(v, divisor);
+        let divisor = pow10::<S>(working_scale);
+        let (quotient, remainder) = div_rem_exact(working_value, divisor);
         let half = divisor >> 1;
-        let qi = if r.abs() >= half {
-            if v < S::ZERO { q - S::ONE } else { q + S::ONE }
+        let rounded_quotient = if remainder.abs() >= half {
+            if working_value < S::ZERO { quotient - S::ONE } else { quotient + S::ONE }
         } else {
-            q
+            quotient
         };
-        crate::int::types::traits::BigInt::to_i128(qi)
+        crate::int::types::traits::BigInt::to_i128(rounded_quotient)
     }
 
-    /// `ln 2` at working scale `w`, sourced from the unified constant
+    /// `ln 2` at `working_scale`, sourced from the unified constant
     /// table (`consts::ln2_by_working_scale`) — a static lookup +
     /// zero-extend, NOT a recompute. Replaces the former `2·artanh(1/3)`
     /// series (~`w` terms), which dominated the wide-tier exp/hyperbolic
     /// cost; the table's `ln2` band is sized (gen_const_table.py
     /// `LN2_MAXES`) to the peak `w_ext` this path can request. Mode is
     /// half-to-even, matching the per-tier core's `ln2_cf`.
-    fn ln2<S: BigInt>(w: u32) -> S {
-        crate::consts::ln2_by_working_scale::<S>(w, RoundingMode::HalfToEven)
+    fn ln2<S: BigInt>(working_scale: u32) -> S {
+        crate::consts::ln2_by_working_scale::<S>(working_scale, RoundingMode::HalfToEven)
     }
 
-    /// `√v` at working scale `w`: `√(|v| · 10^w)`, truncating. Width-generic
+    /// `√v` at `working_scale`: `√(|v| · 10^w)`, truncating. Width-generic
     /// twin of the per-tier `$core::sqrt_fixed` (the multi-level argument
     /// reduction `ln_fixed` runs); bit-identical (same seed-library bootstrap
     /// + monotone-downward Newton). `|v| · 10^w` must fit `S`.
-    pub(crate) fn sqrt_fixed<S: BigInt>(v: S, w: u32) -> S
+    pub(crate) fn sqrt_fixed<S: BigInt>(value: S, working_scale: u32) -> S
     where
         S::Scratch: ComputeLimbs,
     {
-        let av = v.abs();
-        let n = av * pow10::<S>(w);
-        if n <= zero::<S>() {
+        let abs_value = value.abs();
+        let radicand = abs_value * pow10::<S>(working_scale);
+        if radicand <= zero::<S>() {
             return zero::<S>();
         }
         // Seed from the shared cross-algorithm seed leaf (std f64 bootstrap /
         // no_std 1-bit), both guaranteed over-estimates, so the AM-GM pre-step
         // + monotone-downward loop converge to the identical floor either way.
-        let seed = crate::algos::support::seed_bridge::sqrt_seed_w::<S>(n);
-        let x0 = if seed <= zero::<S>() { lit::<S>(1) } else { seed };
+        let seed = crate::algos::support::seed_bridge::sqrt_seed_w::<S>(radicand);
+        let initial_estimate = if seed <= zero::<S>() { lit::<S>(1) } else { seed };
         // `div_rem_exact` (not the `/` operator): the Newton divides run at
         // the full work width, past the narrow build's blanket divide
         // scratch — see [`div_rem_exact`].
-        let mut x = (x0 + div_rem_exact(n, x0).0) >> 1;
+        let mut estimate =
+            (initial_estimate + div_rem_exact(radicand, initial_estimate).0) >> 1;
         loop {
-            let y = (x + div_rem_exact(n, x).0) >> 1;
-            if y >= x {
-                return x;
+            let next_estimate = (estimate + div_rem_exact(radicand, estimate).0) >> 1;
+            if next_estimate >= estimate {
+                return estimate;
             }
-            x = y;
+            estimate = next_estimate;
         }
     }
 
     /// Natural logarithm of a positive working-scale value, generic over the
     /// work integer `S`. Width-generic twin of the per-tier
     /// `$core::ln_fixed`: range-reduces `v = 2^k·m` with `m ∈ [1, 2)`, applies
-    /// `sqrt_l` levels of sqrt argument reduction (Brent 1976), evaluates
-    /// `ln(m) = 2^(l+1)·artanh((m−1)/(m+1))`, returns `k·ln2 + ln(m)`. `ln2_w`
-    /// is `ln 2` at scale `w`, supplied by the caller (the primitive wrapper
-    /// passes the const-folded `ln2_cf::<SCALE>`; a composition passes its
-    /// wide-work `ln2`), so this stays free of the `SCALE` const. Bit-identical
-    /// to the per-tier core for the same `(v, w, ln2_w)`.
-    pub(crate) fn ln_fixed<S: BigInt>(v_w: S, w: u32, ln2_w: S) -> S
+    /// `sqrt_levels` levels of sqrt argument reduction (Brent 1976), evaluates
+    /// `ln(m) = 2^(l+1)·artanh((m−1)/(m+1))`, returns `k·ln2 + ln(m)`.
+    /// `ln2_at_working_scale` is `ln 2` at `working_scale`, supplied by the
+    /// caller (the primitive wrapper passes the const-folded
+    /// `ln2_cf::<SCALE>`; a composition passes its wide-work `ln2`), so this
+    /// stays free of the `SCALE` const. Bit-identical to the per-tier core for
+    /// the same `(v, w, ln2_w)`.
+    pub(crate) fn ln_fixed<S: BigInt>(
+        working_value: S, working_scale: u32, ln2_at_working_scale: S) -> S
     where
         S::Scratch: ComputeLimbs,
     {
-        let one_w = one::<S>(w);
-        let two_w = one_w + one_w;
-        let pow10_w = one_w;
-        let mut k: i32 = bit_length::<S>(v_w) as i32 - bit_length::<S>(one_w) as i32;
-        let mut m_w = loop {
-            let m = if k >= 0 {
-                v_w >> (k as u32)
+        let one_at_working_scale = one::<S>(working_scale);
+        let two_at_working_scale = one_at_working_scale + one_at_working_scale;
+        let pow10_at_working_scale = one_at_working_scale;
+        let mut k: i32 = bit_length::<S>(working_value) as i32
+            - bit_length::<S>(one_at_working_scale) as i32;
+        let mut mantissa_w = loop {
+            let candidate_mantissa = if k >= 0 {
+                working_value >> (k as u32)
             } else {
-                v_w << ((-k) as u32)
+                working_value << ((-k) as u32)
             };
-            if m >= two_w {
+            if candidate_mantissa >= two_at_working_scale {
                 k += 1;
-            } else if m < one_w {
+            } else if candidate_mantissa < one_at_working_scale {
                 k -= 1;
             } else {
-                break m;
+                break candidate_mantissa;
             }
         };
 
@@ -432,49 +439,52 @@ use crate::support::rounding::RoundingMode;
         // perfect square `10^2w`), `t = (m−1)/(m+1) = 0`, and the artanh
         // series' first term is already zero — but skips the multi-level
         // sqrt reduction those steps would burn. Mirrors the Tang kernel's
-        // `m == one_w` arm.
-        if m_w == one_w {
-            return scale_by_k::<S>(ln2_w, k as i128);
+        // `mantissa_w == one_at_working_scale` arm.
+        if mantissa_w == one_at_working_scale {
+            return scale_by_k::<S>(ln2_at_working_scale, k as i128);
         }
 
-        // Multi-level sqrt argument reduction: `l ≈ √p_bits / 4`.
-        let p_bits = w.saturating_mul(3).saturating_add(1);
-        let sqrt_l: u32 = {
-            let mut n: u32 = 0;
-            while (n + 1) * (n + 1) <= p_bits {
-                n += 1;
+        // Multi-level sqrt argument reduction: `l ≈ √level_bound / 4`.
+        let level_bound = working_scale.saturating_mul(3).saturating_add(1);
+        let sqrt_levels: u32 = {
+            let mut levels: u32 = 0;
+            while (levels + 1) * (levels + 1) <= level_bound {
+                levels += 1;
             }
-            n / 4
+            levels / 4
         };
         let mut i = 0;
-        while i < sqrt_l {
-            m_w = sqrt_fixed::<S>(m_w, w);
+        while i < sqrt_levels {
+            mantissa_w = sqrt_fixed::<S>(mantissa_w, working_scale);
             i += 1;
         }
 
-        let t = div_cached::<S>(m_w - one_w, m_w + one_w, pow10_w);
-        let t2 = mul::<S>(t, t, w);
-        let mut sum = t;
-        let mut term = t;
-        let mut j: u128 = 1;
+        let atanh_arg = div_cached::<S>(
+            mantissa_w - one_at_working_scale,
+            mantissa_w + one_at_working_scale,
+            pow10_at_working_scale);
+        let atanh_arg_sq = mul::<S>(atanh_arg, atanh_arg, working_scale);
+        let mut sum = atanh_arg;
+        let mut term = atanh_arg;
+        let mut term_index: u128 = 1;
         loop {
-            term = mul::<S>(term, t2, w);
-            let contrib = term / lit::<S>((2 * j + 1) as i128);
-            if contrib == zero::<S>() {
+            term = mul::<S>(term, atanh_arg_sq, working_scale);
+            let contribution = term / lit::<S>((2 * term_index + 1) as i128);
+            if contribution == zero::<S>() {
                 break;
             }
-            sum = sum + contrib;
-            j += 1;
-            if j > SERIES_CAP {
+            sum = sum + contribution;
+            term_index += 1;
+            if term_index > SERIES_CAP {
                 break;
             }
         }
-        // ln(m) = 2^(l+1)·artanh(t) = sum << (sqrt_l + 1).
-        let ln_m = sum << (sqrt_l + 1);
-        scale_by_k::<S>(ln2_w, k as i128) + ln_m
+        // ln(m) = 2^(l+1)·artanh(t) = sum << (sqrt_levels + 1).
+        let ln_mantissa = sum << (sqrt_levels + 1);
+        scale_by_k::<S>(ln2_at_working_scale, k as i128) + ln_mantissa
     }
 
-    /// `log1p(t) = ln(1 + t)` at working scale `w`, evaluated without
+    /// `log1p(t) = ln(1 + t)` at `working_scale`, evaluated without
     /// ever forming `1 + t` — generic over the work integer `S` (the
     /// single source; the per-tier `decl_wide_transcendental!`
     /// `log1p_fixed` forwards here).
@@ -489,11 +499,11 @@ use crate::support::rounding::RoundingMode;
     /// Reference: N. J. Higham, *Accuracy and Stability of Numerical
     /// Algorithms* 2nd ed. (2002), 1.14.1 and Problem 1.4; J.-M. Muller,
     /// *Elementary Functions* 3rd ed. (2016), 4.4.
-    pub(crate) fn log1p_fixed<S: BigInt>(t: S, w: u32) -> S
+    pub(crate) fn log1p_fixed<S: BigInt>(argument: S, working_scale: u32) -> S
     where
         S::Scratch: ComputeLimbs,
     {
-        log1p_fixed_inner::<S>(t, w, None).0
+        log1p_fixed_inner::<S>(argument, working_scale, None).0
     }
 
     /// [`log1p_fixed`] plus the side of the returned value the TRUE value
@@ -504,28 +514,28 @@ use crate::support::rounding::RoundingMode;
     /// tag is the only difference, and it is `None` whenever it cannot be
     /// PROVED (see [`log1p_fixed_inner`]).
     ///
-    /// `guard` is the caller's sub-storage granularity — the `10^guard` it will
-    /// divide this value by to reach the storage grid. It buys nothing in the
-    /// answer and everything in the cost: a tag is only ever CONSULTED where
-    /// the caller's own residual cannot decide, so knowing that granularity
-    /// lets the proof be skipped wherever it would be discarded. See
-    /// [`side_by_deeper_probe`].
+    /// `guard_digits` is the caller's sub-storage granularity — the
+    /// `10^guard_digits` it will divide this value by to reach the storage
+    /// grid. It buys nothing in the answer and everything in the cost: a tag is
+    /// only ever CONSULTED where the caller's own residual cannot decide, so
+    /// knowing that granularity lets the proof be skipped wherever it would be
+    /// discarded. See [`side_by_deeper_probe`].
     pub(crate) fn log1p_fixed_tagged<S: BigInt>(
-        t: S,
-        w: u32,
-        guard: u32,
+        argument: S,
+        working_scale: u32,
+        guard_digits: u32,
     ) -> (S, Option<TailSign>)
     where
         S::Scratch: ComputeLimbs,
     {
-        log1p_fixed_inner::<S>(t, w, Some(guard))
+        log1p_fixed_inner::<S>(argument, working_scale, Some(guard_digits))
     }
 
     /// The one series loop behind [`log1p_fixed`] and
     /// [`log1p_fixed_tagged`].
     ///
-    /// `tag_at_guard` is `Some(guard)` to ask for the tag at the caller's sub-storage
-    /// granularity, `None` for the bare value. `None` keeps the untagged path's
+    /// `tag_at_guard` is `Some(guard_digits)` to ask for the tag at the caller's
+    /// sub-storage granularity, `None` for the bare value. `None` keeps the untagged path's
     /// arithmetic *exactly* what it was, for the reason [`expm1_fixed_inner`]
     /// documents: reading a rounding's direction costs a multiply-back, and the
     /// untagged path must not pay it.
@@ -539,7 +549,7 @@ use crate::support::rounding::RoundingMode;
     /// and it is unavoidable:
     ///
     /// ```text
-    /// u = round_div(t·10^w, 2·10^w + t)
+    /// u = round_div(argument·10^w, 2·10^w + argument)
     /// ```
     ///
     /// and that divide is **provably never exact for the tiny-`t` family**:
@@ -629,20 +639,21 @@ use crate::support::rounding::RoundingMode;
     ///   measuring the two against each other is not, which is what the probe
     ///   does.
     fn log1p_fixed_inner<S: BigInt>(
-        t: S,
-        w: u32,
+        argument: S,
+        working_scale: u32,
         tag_at_guard: Option<u32>,
     ) -> (S, Option<TailSign>)
     where
         S::Scratch: ComputeLimbs,
     {
         let want_tag = tag_at_guard.is_some();
-        let one_w = one::<S>(w);
-        let two_w = one_w + one_w;
-        let pow10_w = one_w;
+        let one_at_working_scale = one::<S>(working_scale);
+        let two_at_working_scale = one_at_working_scale + one_at_working_scale;
+        let pow10_at_working_scale = one_at_working_scale;
         // The seed divide, with the side its rounding left the true quotient
         // on. `div_cached` IS this with the side dropped.
-        let (u, div_side) = div_cached_sided::<S>(t, two_w + t, pow10_w);
+        let (u, div_side) = div_cached_sided::<S>(
+            argument, two_at_working_scale + argument, pow10_at_working_scale);
         // The side EVERY error term has to agree with: the dropped tail's,
         // which is `u`'s sign unconditionally (artanh's series does not
         // alternate). Read here so the loop can test each rounding against it;
@@ -655,15 +666,15 @@ use crate::support::rounding::RoundingMode;
         // `u²` feeds every term, so which way ITS rounding went gates all of
         // them.
         let (u2, u2_toward_zero) = if want_tag {
-            let prod = u.wrapping_mul_low_u128(u);
-            let scaled = round_div_pow10::<S>(prod, w);
-            (scaled, rounded_toward_zero::<S>(scaled, prod, one_w))
+            let product = u.wrapping_mul_low_u128(u);
+            let scaled = round_div_pow10::<S>(product, working_scale);
+            (scaled, rounded_toward_zero::<S>(scaled, product, one_at_working_scale))
         } else {
-            (mul::<S>(u, u, w), true)
+            (mul::<S>(u, u, working_scale), true)
         };
         let mut sum = u;
         let mut term = u;
-        let mut j: u128 = 1;
+        let mut term_index: u128 = 1;
         // Every rounding that has actually reached `sum` moved it TOWARD zero,
         // so the truth still lies on the away-from-zero side the dropped tail
         // is on. The seed divide is the first such term, and the only one whose
@@ -673,35 +684,36 @@ use crate::support::rounding::RoundingMode;
             Some(s) => s == tail_side,
         };
         loop {
-            // `j` is bounded by SERIES_CAP (20_000), so the cast to the
-            // generic `lit`'s i128 argument is lossless.
-            let d = lit::<S>((2 * j + 1) as i128);
+            // `term_index` is bounded by SERIES_CAP (20_000), so the cast to
+            // the generic `lit`'s i128 argument is lossless.
+            let divisor = lit::<S>((2 * term_index + 1) as i128);
             // `step_toward_zero`: this term's rounding did not push the partial
             // sum away from zero, so it cannot oppose the tail.
-            let (contrib, step_toward_zero) = if want_tag {
-                // The same value `mul::<S>(term, u2, w)` produces, with the
-                // direction of its rounding recorded on the way through.
-                let prod = term.wrapping_mul_low_u128(u2);
-                let scaled = round_div_pow10::<S>(prod, w);
-                let mul_toward_zero = rounded_toward_zero::<S>(scaled, prod, one_w);
+            let (contribution, step_toward_zero) = if want_tag {
+                // The same value `mul::<S>(term, u2, working_scale)` produces,
+                // with the direction of its rounding recorded on the way through.
+                let product = term.wrapping_mul_low_u128(u2);
+                let scaled = round_div_pow10::<S>(product, working_scale);
+                let mul_toward_zero =
+                    rounded_toward_zero::<S>(scaled, product, one_at_working_scale);
                 term = scaled;
                 // The division truncates, so it can only ever pull the term
                 // toward zero — the tail's own side. It is the one step that
                 // never needs testing, which is why its remainder is dropped.
-                let (q, _r) = div_rem_exact::<S>(term, d);
-                (q, mul_toward_zero && u2_toward_zero)
+                let (quotient, _remainder) = div_rem_exact::<S>(term, divisor);
+                (quotient, mul_toward_zero && u2_toward_zero)
             } else {
-                term = mul::<S>(term, u2, w);
-                (term / d, true)
+                term = mul::<S>(term, u2, working_scale);
+                (term / divisor, true)
             };
-            if contrib == zero::<S>() {
+            if contribution == zero::<S>() {
                 break;
             }
             // Only a term that is actually ADDED can carry error into `sum`.
             agree = agree && step_toward_zero;
-            sum = sum + contrib;
-            j += 1;
-            if j > SERIES_CAP {
+            sum = sum + contribution;
+            term_index += 1;
+            if term_index > SERIES_CAP {
                 break;
             }
         }
@@ -711,14 +723,15 @@ use crate::support::rounding::RoundingMode;
             // No tag asked for; no tail to carry a sign; or an argument whose
             // dropped terms need not share one.
             None => None,
-            Some(_) if u == zero::<S>() || u.abs() >= one_w => None,
+            Some(_) if u == zero::<S>() || u.abs() >= one_at_working_scale => None,
             // Every error term reaching `sum` pushes the same way, so their sum
             // does too — no magnitude comparison anywhere.
             Some(_) if agree => Some(tail_side),
             // They genuinely oppose, so the total turns on their SIZES — an
             // opposing term can cancel the rest or flip it — and no reading of
             // signs can see that. Measure it rather than assert it.
-            Some(guard) => side_by_deeper_probe::<S>(t, w, value, guard),
+            Some(guard_digits) => side_by_deeper_probe::<S>(
+                argument, working_scale, value, guard_digits),
         };
         (value, tag)
     }
@@ -780,7 +793,7 @@ use crate::support::rounding::RoundingMode;
         argument: S,
         working_scale: u32,
         shallow_value: S,
-        guard: u32,
+        guard_digits: u32,
     ) -> Option<TailSign>
     where
         S::Scratch: ComputeLimbs,
@@ -798,7 +811,7 @@ use crate::support::rounding::RoundingMode;
         // that build's 2-limb storage while this kernel probes in a far wider
         // work integer — the hazard `round_to_storage_*` already avoids the same
         // way.
-        let divisor = pow10::<S>(guard);
+        let divisor = pow10::<S>(guard_digits);
         let (_quotient, remainder) = div_rem_exact::<S>(shallow_value.abs(), divisor);
         if remainder != zero::<S>() && remainder + remainder != divisor {
             return None;
@@ -808,12 +821,14 @@ use crate::support::rounding::RoundingMode;
         // so twice that width plus the slack has to fit the work integer.
         // Inverting `bits(10^d) = d·log2(10) < (d·10 + 2)/3` for the largest
         // `d` that leaves room: `d ≤ 3·(BITS − slack)/20`.
-        let bits = u64::from(<S as BigInt>::BITS);
+        let work_integer_bits = u64::from(<S as BigInt>::BITS);
         // Fail closed on the (unreachable) overflow rather than fall back to a
         // depth the width cannot hold.
-        let deep_scale = u32::try_from(3 * bits.saturating_sub(TAG_PROBE_SLACK_BITS) / 20).ok()?;
+        let deep_scale =
+            u32::try_from(3 * work_integer_bits.saturating_sub(TAG_PROBE_SLACK_BITS) / 20).ok()?;
         // No room to probe any deeper than the value was already computed at.
-        let extra_digits = deep_scale.checked_sub(working_scale).filter(|e| *e > 0)?;
+        let extra_digits =
+            deep_scale.checked_sub(working_scale).filter(|digits| *digits > 0)?;
         let lift = pow10::<S>(extra_digits);
         let deep_value = log1p_fixed_inner::<S>(argument * lift, deep_scale, None).0;
         let gap = deep_value - shallow_value * lift;
@@ -878,7 +893,7 @@ use crate::support::rounding::RoundingMode;
         Below,
     }
 
-    /// `expm1(s) = exp(s) - 1` at working scale `w`, evaluated as the
+    /// `expm1(s) = exp(s) - 1` at `working_scale`, evaluated as the
     /// Taylor series with the leading `1` term dropped so the
     /// `exp(s) - 1` subtraction of two values both `~ 1` never occurs:
     /// `expm1(s) = s + s^2/2! + s^3/3! + ...`. For tiny `s` the result
@@ -895,11 +910,11 @@ use crate::support::rounding::RoundingMode;
     /// Reference: J.-M. Muller, *Elementary Functions* 3rd ed. (2016),
     /// 4.4; N. J. Higham, *Accuracy and Stability of Numerical
     /// Algorithms* 2nd ed. (2002), 1.14.1.
-    pub(crate) fn expm1_fixed<S: BigInt>(s: S, w: u32) -> S
+    pub(crate) fn expm1_fixed<S: BigInt>(reduced_arg: S, working_scale: u32) -> S
     where
         S::Scratch: ComputeLimbs,
     {
-        expm1_fixed_inner::<S>(s, w, false).0
+        expm1_fixed_inner::<S>(reduced_arg, working_scale, false).0
     }
 
     /// [`expm1_fixed`] plus the sign of the terms it DROPPED — see
@@ -908,11 +923,12 @@ use crate::support::rounding::RoundingMode;
     /// The sum is bit-identical to [`expm1_fixed`]'s at every argument; the
     /// tag is the only difference, and it is `None` whenever it cannot be
     /// justified (see [`expm1_fixed_inner`]).
-    pub(crate) fn expm1_fixed_tagged<S: BigInt>(s: S, w: u32) -> (S, Option<TailSign>)
+    pub(crate) fn expm1_fixed_tagged<S: BigInt>(
+        reduced_arg: S, working_scale: u32) -> (S, Option<TailSign>)
     where
         S::Scratch: ComputeLimbs,
     {
-        expm1_fixed_inner::<S>(s, w, true)
+        expm1_fixed_inner::<S>(reduced_arg, working_scale, true)
     }
 
     /// One step of the accumulated-error recurrence: the exact rational
@@ -927,7 +943,7 @@ use crate::support::rounding::RoundingMode;
     ///
     /// where `rho_j = prod - scaled * 10^w` is the `/10^w` rounding remainder
     /// and `r_j` the truncating `/j` remainder — both already in the loop's
-    /// hand. Substituting `eps_{j-1} = num/den` turns that into
+    /// hand. Substituting `eps_{j-1} = numerator/denominator` turns that into
     /// `(Z / 10^w - den * r_j) / (den * j)` with `Z = num * s - den * rho_j`,
     /// so the error stays a SMALL-denominator rational exactly while `10^w`
     /// divides `Z` — which is the whole reason it can be tracked at all in a
@@ -943,24 +959,24 @@ use crate::support::rounding::RoundingMode;
         eps: (S, i128),
         rho: S,
         rem_j: S,
-        j: i128,
-        s: S,
-        w: u32,
+        term_index: i128,
+        reduced_arg: S,
+        working_scale: u32,
     ) -> Option<(S, i128)>
     where
         S::Scratch: ComputeLimbs,
     {
-        let (num, den) = eps;
-        let z = num
-            .checked_mul(s)?
-            .checked_sub(lit::<S>(den).checked_mul(rho)?)?;
-        let (y, z_rem) = div_rem_exact::<S>(z, one::<S>(w));
-        if z_rem != zero::<S>() {
+        let (numerator, denominator) = eps;
+        let z = numerator
+            .checked_mul(reduced_arg)?
+            .checked_sub(lit::<S>(denominator).checked_mul(rho)?)?;
+        let (scaled_z, z_remainder) = div_rem_exact::<S>(z, one::<S>(working_scale));
+        if z_remainder != zero::<S>() {
             return None;
         }
         Some((
-            y.checked_sub(lit::<S>(den).checked_mul(rem_j)?)?,
-            den.checked_mul(j)?,
+            scaled_z.checked_sub(lit::<S>(denominator).checked_mul(rem_j)?)?,
+            denominator.checked_mul(term_index)?,
         ))
     }
 
@@ -971,14 +987,14 @@ use crate::support::rounding::RoundingMode;
     /// handful of terms, and the only thing ever read back out is whether the
     /// NUMERATOR is zero — which no common factor can change. `None` on any
     /// overflow, failing closed exactly as [`term_error`] does.
-    fn add_error<S: BigInt>(a: (S, i128), b: (S, i128)) -> Option<(S, i128)> {
-        let (a_num, a_den) = a;
-        let (b_num, b_den) = b;
+    fn add_error<S: BigInt>(lhs: (S, i128), rhs: (S, i128)) -> Option<(S, i128)> {
+        let (lhs_num, lhs_den) = lhs;
+        let (rhs_num, rhs_den) = rhs;
         Some((
-            a_num
-                .checked_mul(lit::<S>(b_den))?
-                .checked_add(b_num.checked_mul(lit::<S>(a_den))?)?,
-            a_den.checked_mul(b_den)?,
+            lhs_num
+                .checked_mul(lit::<S>(rhs_den))?
+                .checked_add(rhs_num.checked_mul(lit::<S>(lhs_den))?)?,
+            lhs_den.checked_mul(rhs_den)?,
         ))
     }
 
@@ -1015,7 +1031,8 @@ use crate::support::rounding::RoundingMode;
     ///
     /// It fails CLOSED — every caller treats `None` as "make no adjustment":
     ///
-    /// * `want_tag` was not asked for, or `s == 0` (`expm1(0) = 0`, no tail);
+    /// * `want_tag` was not asked for, or `reduced_arg == 0` (`expm1(0) = 0`,
+    ///   no tail);
     /// * `|s| > 1`, where `|s^j / j!|` is not yet monotonically decreasing,
     ///   so the tail need not carry its first term's sign;
     /// * the loop stopped at [`SERIES_CAP`] rather than because a term
@@ -1031,13 +1048,14 @@ use crate::support::rounding::RoundingMode;
     /// whenever it was not already zero — but it never enters the sum and so
     /// cannot contribute error. Counting it would leave the error non-zero on
     /// essentially every input and the tag permanently `None`.
-    fn expm1_fixed_inner<S: BigInt>(s: S, w: u32, want_tag: bool) -> (S, Option<TailSign>)
+    fn expm1_fixed_inner<S: BigInt>(
+        reduced_arg: S, working_scale: u32, want_tag: bool) -> (S, Option<TailSign>)
     where
         S::Scratch: ComputeLimbs,
     {
-        let mut sum = s;
-        let mut term = s;
-        let mut iter: u128 = 2;
+        let mut sum = reduced_arg;
+        let mut term = reduced_arg;
+        let mut term_index: u128 = 2;
         // The accumulated rounding error of the INCLUDED terms, as an exact
         // rational: `err` is the running total and `eps` the previous term's
         // own contribution (the recurrence needs it). `sum` is still the exact
@@ -1051,27 +1069,29 @@ use crate::support::rounding::RoundingMode;
         // first term of the neglected tail. `None` = the loop hit the cap.
         let mut vanished_at: ::core::option::Option<u128> = ::core::option::Option::None;
         loop {
-            // `iter` is bounded by SERIES_CAP (20_000), so the cast to the
-            // generic `lit`'s i128 argument is lossless.
-            let d = lit::<S>(iter as i128);
+            // `term_index` is bounded by SERIES_CAP (20_000), so the cast to
+            // the generic `lit`'s i128 argument is lossless.
+            let divisor = lit::<S>(term_index as i128);
             // `rho` / `rem_j`: this term's two rounding remainders — the one the
             // `÷10^w` shed and the one the truncating `÷j` shed. They are what
             // the error recurrence consumes; the untagged path never reads
             // them.
-            let (next, rho, rem_j) = if want_tag {
-                // The same value `mul::<S>(term, s, w) / d` produces, with the
-                // two remainders recorded on the way through.
-                let prod = term.wrapping_mul_low_u128(s);
-                let scaled = round_div_pow10::<S>(prod, w);
-                let back = scaled.wrapping_mul_low_u128(one::<S>(w));
-                let (q, r) = div_rem_exact::<S>(scaled, d);
-                (q, prod - back, r)
+            let (next_term, rho, rem_j) = if want_tag {
+                // The same value `mul::<S>(term, reduced_arg, working_scale)
+                // / divisor` produces, with the two remainders recorded on the
+                // way through.
+                let product = term.wrapping_mul_low_u128(reduced_arg);
+                let scaled = round_div_pow10::<S>(product, working_scale);
+                let reconstructed = scaled.wrapping_mul_low_u128(one::<S>(working_scale));
+                let (quotient, remainder) = div_rem_exact::<S>(scaled, divisor);
+                (quotient, product - reconstructed, remainder)
             } else {
-                (mul::<S>(term, s, w) / d, zero::<S>(), zero::<S>())
+                (mul::<S>(term, reduced_arg, working_scale) / divisor,
+                    zero::<S>(), zero::<S>())
             };
-            term = next;
+            term = next_term;
             if term == zero::<S>() {
-                vanished_at = ::core::option::Option::Some(iter);
+                vanished_at = ::core::option::Option::Some(term_index);
                 break;
             }
             // Only a term that is actually ADDED can carry error into `sum`,
@@ -1085,47 +1105,49 @@ use crate::support::rounding::RoundingMode;
             // previous rule wrote off as `None` anyway.
             let quiet = eps.0 == zero::<S>() && rho == zero::<S>() && rem_j == zero::<S>();
             if want_tag && !err_lost && !quiet {
-                match term_error::<S>(eps, rho, rem_j, iter as i128, s, w)
-                    .and_then(|e| add_error::<S>(err, e).map(|t| (e, t)))
+                match term_error::<S>(
+                    eps, rho, rem_j, term_index as i128, reduced_arg, working_scale)
+                    .and_then(|step| add_error::<S>(err, step).map(|total| (step, total)))
                 {
-                    ::core::option::Option::Some((e, t)) => {
-                        eps = e;
-                        err = t;
+                    ::core::option::Option::Some((step, total)) => {
+                        eps = step;
+                        err = total;
                     }
                     ::core::option::Option::None => err_lost = true,
                 }
             }
             sum = sum + term;
-            iter += 1;
-            if iter > SERIES_CAP {
+            term_index += 1;
+            if term_index > SERIES_CAP {
                 break;
             }
         }
         let tag = match vanished_at {
-            ::core::option::Option::Some(n)
+            ::core::option::Option::Some(vanish_index)
                 if want_tag
                     && !err_lost
                     && err.0 == zero::<S>()
-                    && s != zero::<S>()
-                    && s.abs() <= one::<S>(w) =>
+                    && reduced_arg != zero::<S>()
+                    && reduced_arg.abs() <= one::<S>(working_scale) =>
             {
                 // The tail is `s^n/n! + s^(n+1)/(n+1)! + ...`, alternating and
                 // strictly decreasing in magnitude for `|s| <= 1`, so it
                 // carries its first term's sign: positive throughout for
                 // `s > 0`, else `(-1)^n`.
-                ::core::option::Option::Some(if s > zero::<S>() || n % 2 == 0 {
-                    TailSign::Above
-                } else {
-                    TailSign::Below
-                })
+                ::core::option::Option::Some(
+                    if reduced_arg > zero::<S>() || vanish_index % 2 == 0 {
+                        TailSign::Above
+                    } else {
+                        TailSign::Below
+                    })
             }
             _ => ::core::option::Option::None,
         };
         (sum, tag)
     }
 
-    /// Argument-magnitude regime of `e^v` for a working-scale value `v_w`
-    /// at scale `w` in the work integer `S`, decided BEFORE the
+    /// Argument-magnitude regime of `e^v` for a `working_value`
+    /// at `working_scale` in the work integer `S`, decided BEFORE the
     /// `k = round(v / ln 2)` range-reduction division runs.
     ///
     /// [`exp_fixed`] / [`exp_internal_peak_bits`] first compute `k` with a
@@ -1145,16 +1167,16 @@ use crate::support::rounding::RoundingMode;
     ///   `e^v · 10^w < 2^BITS`, i.e. `v < BITS·ln 2 − w·ln 10`. With
     ///   `R = ⌊BITS·6932/10000⌋ + 1 − ⌊w·23025/10000⌋ ≥ BITS·ln 2 − w·ln 10`
     ///   (0.6932 over-approximates ln 2, 2.3025 under-approximates ln 10),
-    ///   and `|v| ≥ 2^(bl−1)/10^w` for `bl = bit_length(v_w)`, the result
-    ///   provably overflows `S` once
-    ///   `bl ≥ ⌈w·33220/10000⌉ + bits(R) + 2`
+    ///   and `|v| ≥ 2^(bl−1)/10^w` for `bit_len = bit_length(working_value)`,
+    ///   the result provably overflows `S` once
+    ///   `bit_len ≥ ⌈w·33220/10000⌉ + bits(R) + 2`
     ///   (because `2^(bl−1) ≥ 2^⌈w·3.3220⌉ · 2^bits(R) · 2 ≥ 10^w · R`,
     ///   with 3.3220 over-approximating log2 10 and `2^bits(R) ≥ R`).
     /// * **Underflow** (`v < 0`): `e^v < 10^−(w+1)` — strictly below the
     ///   working resolution — once `|v| ≥ (w+1)·ln 10`. With
     ///   `U = ⌊(w+1)·23026/10000⌋ + 1 ≥ (w+1)·ln 10` (2.3026 over-
     ///   approximates ln 10) the same bit-length argument gives the
-    ///   threshold `bl ≥ ⌈w·33220/10000⌉ + bits(U) + 2`.
+    ///   threshold `bit_len ≥ ⌈w·33220/10000⌉ + bits(U) + 2`.
     ///
     /// A cell that does NOT fire has `|v|` within a small constant factor of
     /// the fired bound, so `|k| = |v|/ln 2` stays of order `BITS` — every
@@ -1170,29 +1192,29 @@ use crate::support::rounding::RoundingMode;
         Underflow,
     }
 
-    /// Classifies `v_w` per [`ArgRegime`]'s analytic bounds. See the enum
-    /// docs for the derivation.
-    fn arg_regime<S: BigInt>(v_w: S, w: u32) -> ArgRegime {
-        if v_w == S::ZERO {
+    /// Classifies `working_value` per [`ArgRegime`]'s analytic bounds. See the
+    /// enum docs for the derivation.
+    fn arg_regime<S: BigInt>(working_value: S, working_scale: u32) -> ArgRegime {
+        if working_value == S::ZERO {
             return ArgRegime::Fits;
         }
-        let bl = bit_length::<S>(v_w) as u64;
+        let bit_len = bit_length::<S>(working_value) as u64;
         // ⌈w · log2(10)⌉, over-approximated (33220/10000 ≥ log2 10).
-        let w_bits = ((w as u64) * 33220).div_ceil(10000);
+        let working_scale_bits = ((working_scale as u64) * 33220).div_ceil(10000);
         // bits(x) = floor(log2 x) + 1, so 2^bits(x) ≥ x.
         let bits_of = |x: u64| 64 - x.leading_zeros() as u64;
-        if v_w > S::ZERO {
+        if working_value > S::ZERO {
             let bits_ln2 = (<S as BigInt>::BITS as u64) * 6932 / 10000 + 1;
-            let w_ln10 = (w as u64) * 23025 / 10000;
+            let scale_ln10 = (working_scale as u64) * 23025 / 10000;
             // R ≥ BITS·ln2 − w·ln10; clamp at 1 (a degenerate `w` no caller
             // forms — 10^w would not even fit S — but keep the math total).
-            let r = bits_ln2.saturating_sub(w_ln10).max(1);
-            if bl >= w_bits + bits_of(r) + 2 {
+            let overflow_arg_bound = bits_ln2.saturating_sub(scale_ln10).max(1);
+            if bit_len >= working_scale_bits + bits_of(overflow_arg_bound) + 2 {
                 return ArgRegime::Overflow;
             }
         } else {
-            let u = ((w as u64) + 1) * 23026 / 10000 + 1;
-            if bl >= w_bits + bits_of(u) + 2 {
+            let underflow_arg_bound = ((working_scale as u64) + 1) * 23026 / 10000 + 1;
+            if bit_len >= working_scale_bits + bits_of(underflow_arg_bound) + 2 {
                 return ArgRegime::Underflow;
             }
         }
@@ -1200,14 +1222,15 @@ use crate::support::rounding::RoundingMode;
     }
 
     /// True worst-case bit-width the [`exp_fixed`] body reaches internally
-    /// for a working-scale value `v_w` at scale `w`, in a work integer `S`
+    /// for a `working_value` at `working_scale`, in a work integer `S`
     /// of capacity `S::BITS` bits.
     ///
-    /// Mirrors [`exp_fixed`]'s own `k` / `extra` / `w_ext` arithmetic
-    /// EXACTLY (range-reduce `v = k·ln2 + s`, lift the working scale by
-    /// `extra` digits, run the Taylor squarings at `w_ext`, then reassemble
+    /// Mirrors [`exp_fixed`]'s own `k` / `extra_digits` /
+    /// `extended_working_scale` arithmetic EXACTLY (range-reduce
+    /// `v = k·ln2 + s`, lift the working scale by
+    /// `extra_digits`, run the Taylor squarings at the extended scale, then reassemble
     /// `2^k · exp(s)`), so the fit gate models the real squaring-reassembly
-    /// PEAK — `2·w_ext` decimal digits for the symmetric `sum²` plus the
+    /// PEAK — twice the extended scale in decimal digits for the symmetric `sum²` plus the
     /// `sum << k` shift — NOT just the final result magnitude. The body's
     /// `wrapping_sqr_low_u128` / `wrapping_mul_low_u128` return the low bits,
     /// so an internal peak that exceeds `S::BITS` silently TRUNCATES (an
@@ -1218,7 +1241,7 @@ use crate::support::rounding::RoundingMode;
     /// This is the width-generic single source for the peak estimate; the
     /// per-tier `decl_wide_transcendental!` `exp_internal_peak_bits` /
     /// `exp_fits_w` / `hyper_fits_w` gates delegate to it.
-    pub(crate) fn exp_internal_peak_bits<S: BigInt>(v_w: S, w: u32) -> u64 {
+    pub(crate) fn exp_internal_peak_bits<S: BigInt>(working_value: S, working_scale: u32) -> u64 {
         // Argument-magnitude pre-gate (see [`ArgRegime`]): a deep argument
         // must not reach the `k` division below — its quotient can exceed
         // `i128` and its dividend the divide scratch. BOTH non-`Fits`
@@ -1226,8 +1249,8 @@ use crate::support::rounding::RoundingMode;
         // result. For Underflow the VALUE is tiny, but this function models
         // the peak of the UNGATED per-tier body its `exp_fits_w` callers
         // would run — and that body's range reduction provisions
-        // `extra ≈ |k|·0.30103` digits even for a deep NEGATIVE `k`,
-        // pushing `w_ext` and the `k·ln2` term past the tier work integer
+        // `extra_digits ≈ |k|·0.30103` even for a deep NEGATIVE `k`,
+        // pushing the extended scale and the `k·ln2` term past the tier work integer
         // (an `Int: mul overflow`). Reporting "does not fit" keeps such a
         // cell on the wider-lift route the deep band always took, where
         // [`exp_fixed`]'s own pre-gate / `k < -1` short-circuit returns the
@@ -1241,84 +1264,87 @@ use crate::support::rounding::RoundingMode;
         // status-quo path, whose per-tier operands the build blanket has
         // always covered. The exact-scratch path ([`try_exp_fixed`]) feeds
         // its own `k` to [`exp_peak_bits_model`] instead.
-        if !matches!(arg_regime::<S>(v_w, w), ArgRegime::Fits) {
+        if !matches!(arg_regime::<S>(working_value, working_scale), ArgRegime::Fits) {
             return u64::MAX;
         }
-        let one_w_pre = one::<S>(w);
-        let l2_pre = ln2::<S>(w);
+        let one_at_working_scale = one::<S>(working_scale);
+        let ln2_at_working_scale = ln2::<S>(working_scale);
         let k = round_to_nearest_int_blanket(
-            round_div_blanket(v_w.wrapping_mul_low_u128(one_w_pre), l2_pre),
-            w,
+            round_div_blanket(
+                working_value.wrapping_mul_low_u128(one_at_working_scale),
+                ln2_at_working_scale),
+            working_scale,
         );
-        exp_peak_bits_model::<S>(w, k)
+        exp_peak_bits_model::<S>(working_scale, k)
     }
 
     /// Blanket-scratch sibling of [`round_div`] (the `Int` operator's own
     /// `div_rem`), kept ONLY for [`exp_internal_peak_bits`]'s macro-facing
     /// unbounded signature — see there.
-    fn round_div_blanket<S: BigInt>(n: S, d: S) -> S {
-        let (q, r) = n.div_rem(d);
-        if r == S::ZERO {
-            return q;
+    fn round_div_blanket<S: BigInt>(numerator: S, divisor: S) -> S {
+        let (quotient, remainder) = numerator.div_rem(divisor);
+        if remainder == S::ZERO {
+            return quotient;
         }
-        let ar = r.abs();
-        let comp = d.abs() - ar;
-        let cmp_r = if ar < comp {
+        let abs_remainder = remainder.abs();
+        let complement = divisor.abs() - abs_remainder;
+        let remainder_cmp = if abs_remainder < complement {
             ::core::cmp::Ordering::Less
-        } else if ar > comp {
+        } else if abs_remainder > complement {
             ::core::cmp::Ordering::Greater
         } else {
             ::core::cmp::Ordering::Equal
         };
-        let q_is_odd = q.bit(0);
-        let result_positive = (n < S::ZERO) == (d < S::ZERO);
+        let quotient_is_odd = quotient.bit(0);
+        let result_is_positive = (numerator < S::ZERO) == (divisor < S::ZERO);
         if crate::support::rounding::should_bump(
             RoundingMode::HalfToEven,
-            cmp_r,
-            q_is_odd,
-            result_positive,
+            remainder_cmp,
+            quotient_is_odd,
+            result_is_positive,
         ) {
-            if result_positive { q + S::ONE } else { q - S::ONE }
+            if result_is_positive { quotient + S::ONE } else { quotient - S::ONE }
         } else {
-            q
+            quotient
         }
     }
 
     /// Blanket-scratch sibling of [`round_to_nearest_int`] — see
     /// [`round_div_blanket`].
-    fn round_to_nearest_int_blanket<S: BigInt>(v: S, w: u32) -> i128 {
-        let divisor = pow10::<S>(w);
-        let (q, r) = v.div_rem(divisor);
+    fn round_to_nearest_int_blanket<S: BigInt>(working_value: S, working_scale: u32) -> i128 {
+        let divisor = pow10::<S>(working_scale);
+        let (quotient, remainder) = working_value.div_rem(divisor);
         let half = divisor >> 1;
-        let qi = if r.abs() >= half {
-            if v < S::ZERO { q - S::ONE } else { q + S::ONE }
+        let rounded_quotient = if remainder.abs() >= half {
+            if working_value < S::ZERO { quotient - S::ONE } else { quotient + S::ONE }
         } else {
-            q
+            quotient
         };
-        crate::int::types::traits::BigInt::to_i128(qi)
+        crate::int::types::traits::BigInt::to_i128(rounded_quotient)
     }
 
     /// Number of repeated-squaring levels the [`try_exp_fixed`] Taylor core
-    /// runs at working scale `w_ext`: the largest `n ≥ 1` with
-    /// `(n+1)² ≤ p_bits` for `p_bits = 3·w_ext + 1` (so `n ≈ √(3·w_ext)`).
+    /// runs at `extended_working_scale`: the largest `n ≥ 1` with
+    /// `(n+1)² ≤ level_bound` for `level_bound = 3·ext + 1` (so
+    /// `n ≈ √(3·ext)`).
     /// Shared by the body and the `k < 0` internal-peak clamp, which must
     /// evaluate the chain depth at the CLAMPED width.
-    fn squaring_levels(w_ext: u32) -> u32 {
-        let p_bits = w_ext.saturating_mul(3).saturating_add(1);
-        let mut n: u32 = 1;
-        while (n + 1) * (n + 1) <= p_bits {
-            n += 1;
+    fn squaring_levels(extended_working_scale: u32) -> u32 {
+        let level_bound = extended_working_scale.saturating_mul(3).saturating_add(1);
+        let mut levels: u32 = 1;
+        while (levels + 1) * (levels + 1) <= level_bound {
+            levels += 1;
         }
-        n
+        levels
     }
 
     /// The pure peak model for an ALREADY-computed range-reduction `k` —
     /// the divide-free tail of [`exp_internal_peak_bits`], shared with
     /// [`try_exp_fixed`] (which holds `k` from its own exact-scratch
     /// divide and must not re-derive it through the blanket).
-    fn exp_peak_bits_model<S: BigInt>(w: u32, k: i128) -> u64 {
+    fn exp_peak_bits_model<S: BigInt>(working_scale: u32, k: i128) -> u64 {
         let abs_k_u128 = if k < 0 { -k } else { k } as u128;
-        let extra: u32 = if abs_k_u128 == 0 {
+        let extra_digits: u32 = if abs_k_u128 == 0 {
             0
         } else {
             // Saturating: `Fits` bounds `|k|` to order `BITS`, far inside
@@ -1329,23 +1355,24 @@ use crate::support::rounding::RoundingMode;
             let capped = digits.min((<S as BigInt>::BITS / 4) as u128) as u32;
             capped + 12 + (capped >> 2)
         };
-        let w_ext = (w + extra) as u64;
+        let extended_working_scale = (working_scale + extra_digits) as u64;
         // digits → bits: `log2(10) ≈ 3.3220 ≈ 3322/1000`.
         // Squaring peak: the symmetric `sum²` before the round-divide spans
-        // `2·w_ext` decimal digits.
-        let sqr_bits = 2 * w_ext * 3322 / 1000;
-        // Reassembly peak: `sum << k` lifts the `w_ext`-digit Taylor sum by
+        // twice the extended scale in decimal digits.
+        let squaring_bits = 2 * extended_working_scale * 3322 / 1000;
+        // Reassembly peak: `sum << k` lifts the extended-scale Taylor sum by
         // `|k|` bits. Saturating narrowing, same upper-bound rationale as
         // the `digits` product above.
-        let reasm_bits =
-            (w_ext * 3322 / 1000).saturating_add(u64::try_from(abs_k_u128).unwrap_or(u64::MAX));
-        let peak = if sqr_bits > reasm_bits { sqr_bits } else { reasm_bits };
+        let reassembly_bits = (extended_working_scale * 3322 / 1000)
+            .saturating_add(u64::try_from(abs_k_u128).unwrap_or(u64::MAX));
+        let peak =
+            if squaring_bits > reassembly_bits { squaring_bits } else { reassembly_bits };
         // Small safety slack on top of the modelled peak. The model can
         // under-count the TRUE internal peak by only a few bits: `sum` can
-        // reach `√2·10^w_ext` (e^(ln2/2)), so the symmetric `sum²` reaches
-        // `2·10^(2·w_ext)` — `2·w_ext` digits PLUS the leading factor `2`
-        // (≈ +2 bits the `2·w_ext·3322/1000` digit count omits) — plus the
-        // half-LSB residue of the rounded `÷10^w_ext`. ~4 bits suffices to
+        // reach `√2·10^ext` (e^(ln2/2)), so the symmetric `sum²` reaches
+        // `2·10^(2·ext)` — `2·ext` digits PLUS the leading factor `2`
+        // (≈ +2 bits the `2·ext·3322/1000` digit count omits) — plus the
+        // half-LSB residue of the rounded `÷10^ext`. ~4 bits suffices to
         // keep `peak` an UPPER bound (so the gate never lets a genuine wrap
         // through); one u64 limb (64) is a generous, clean pad.
         //
@@ -1365,17 +1392,18 @@ use crate::support::rounding::RoundingMode;
     }
 
     /// Whether [`exp_fixed`]'s internal squaring-reassembly peak for
-    /// `(v_w, w)` fits the work integer `S` without wrapping. Used by the
-    /// per-tier `exp_fits_w` / `hyper_fits_w` regime-routing gates.
+    /// `(working_value, working_scale)` fits the work integer `S` without
+    /// wrapping. Used by the per-tier `exp_fits_w` / `hyper_fits_w`
+    /// regime-routing gates.
     #[inline]
-    pub(crate) fn exp_peak_fits<S: BigInt>(v_w: S, w: u32) -> bool {
-        exp_internal_peak_bits::<S>(v_w, w) < <S as BigInt>::BITS as u64
+    pub(crate) fn exp_peak_fits<S: BigInt>(working_value: S, working_scale: u32) -> bool {
+        exp_internal_peak_bits::<S>(working_value, working_scale) < <S as BigInt>::BITS as u64
     }
 
-    /// `e^v` for a working-scale value `v`, generic over the work
+    /// `e^v` for a `working_value`, generic over the work
     /// integer `S`. Mirrors the per-tier `$core::exp_fixed` exactly
     /// (range-reduce `v = k·ln2 + s`, extend the working scale by
-    /// `extra` to absorb the `2^k` amplification, run the
+    /// `extra_digits` to absorb the `2^k` amplification, run the
     /// repeated-squaring Taylor core, reassemble `2^k · exp(s)`), but
     /// stays width-generic so the caller can run it in a wider integer
     /// for the large-result regime.
@@ -1395,11 +1423,11 @@ use crate::support::rounding::RoundingMode;
     /// runs this in the WIDEST work integer it can (`Wexp` / `WNarrow`); the
     /// panic fires only when even that cannot hold the peak — a genuinely
     /// unrepresentable result.
-    pub(crate) fn exp_fixed<S: BigInt>(v_w: S, w: u32) -> S
+    pub(crate) fn exp_fixed<S: BigInt>(working_value: S, working_scale: u32) -> S
     where
         S::Scratch: ComputeLimbs,
     {
-        try_exp_fixed::<S>(v_w, w)
+        try_exp_fixed::<S>(working_value, working_scale)
             .unwrap_or_else(|| panic!("exp_generic::exp_fixed: result out of range"))
     }
 
@@ -1475,8 +1503,8 @@ use crate::support::rounding::RoundingMode;
         S::Scratch: ComputeLimbs,
     {
         if direct_series_pays::<S>(working_value, working_scale) {
-            let (expm1_value, tail) = expm1_fixed_tagged::<S>(working_value, working_scale);
-            (one::<S>(working_scale) + expm1_value, tail)
+            let (expm1_value, tail_sign) = expm1_fixed_tagged::<S>(working_value, working_scale);
+            (one::<S>(working_scale) + expm1_value, tail_sign)
         } else {
             (fallback(), None)
         }
@@ -1495,7 +1523,7 @@ use crate::support::rounding::RoundingMode;
     /// (their policy dispatch wrapper applies the default form's
     /// contractual panic), while [`exp_fixed`] panics directly for the
     /// unseamed callers — one detection, each wrapper applies its policy.
-    pub(crate) fn try_exp_fixed<S: BigInt>(v_w: S, w: u32) -> Option<S>
+    pub(crate) fn try_exp_fixed<S: BigInt>(working_value: S, working_scale: u32) -> Option<S>
     where
         S::Scratch: ComputeLimbs,
     {
@@ -1510,26 +1538,31 @@ use crate::support::rounding::RoundingMode;
         // the smallest positive working value exactly as the in-body
         // short-circuits below do (the caller's rounding turns it into 0,
         // or 1 ULP under Ceiling).
-        match arg_regime::<S>(v_w, w) {
+        match arg_regime::<S>(working_value, working_scale) {
             ArgRegime::Overflow => return None,
             ArgRegime::Underflow => return Some(lit::<S>(1)),
             ArgRegime::Fits => {}
         }
-        let one_w_pre = one::<S>(w);
-        let l2_pre = ln2::<S>(w);
-        let pow10_w_pre = one_w_pre;
-        let k = round_to_nearest_int(div_cached(v_w, l2_pre, pow10_w_pre), w);
+        let one_at_working_scale = one::<S>(working_scale);
+        let ln2_at_working_scale = ln2::<S>(working_scale);
+        let pow10_at_working_scale = one_at_working_scale;
+        let k = round_to_nearest_int(
+            div_cached(working_value, ln2_at_working_scale, pow10_at_working_scale),
+            working_scale);
         // Deep underflow: e^v < 10^-w, so its working value is sub-resolution. For
         // a very negative k the extra-guard range reduction below provisions
-        // `extra ≈ |k|·0.3` digits, pushing `w_ext` and the `k·ln2` term past the
+        // `extra_digits ≈ |k|·0.3`, pushing the extended scale and the `k·ln2`
+        // term past the
         // work integer S's capacity (an `Int: mul overflow`). Short-circuit to the
         // smallest positive working value, preserving the positive sub-resolution
         // so the caller rounds correctly (0 under nearest, the smallest positive
         // under Ceiling). Sufficient condition: e^v < 2^(k+1) <= 10^-w, i.e.
         // -(k+1)·log10(2) >= w  (log10(2) ≈ 30103/100000).
         if k < -1 {
-            let neg = (-(k + 1)) as u128;
-            if neg.saturating_mul(30103) >= (w as u128).saturating_mul(100_000) {
+            let underflow_depth = (-(k + 1)) as u128;
+            if underflow_depth.saturating_mul(30103)
+                >= (working_scale as u128).saturating_mul(100_000)
+            {
                 return Some(lit::<S>(1));
             }
         }
@@ -1548,11 +1581,11 @@ use crate::support::rounding::RoundingMode;
         // peak — a genuinely unrepresentable result. (`k < 0` is the
         // underflow direction, handled by the short-circuits above and
         // below — never out of range.)
-        if k >= 0 && exp_peak_bits_model::<S>(w, k) >= <S as BigInt>::BITS as u64 {
+        if k >= 0 && exp_peak_bits_model::<S>(working_scale, k) >= <S as BigInt>::BITS as u64 {
             return None;
         }
         let abs_k_u128 = if k < 0 { -k } else { k } as u128;
-        let extra: u32 = if abs_k_u128 == 0 {
+        let extra_digits: u32 = if abs_k_u128 == 0 {
             0
         } else {
             // Saturating for the same upper-bound reason as the peak model;
@@ -1564,41 +1597,43 @@ use crate::support::rounding::RoundingMode;
 
         // `k < 0` internal-peak clamp. The `k >= 0` gate above does not cover
         // the negative-`k` band, yet the squaring chain's peak grows with
-        // `w_ext = w + extra` REGARDLESS of `k`'s sign: every squaring forms
+        // `extended_working_scale = working_scale + extra_digits` REGARDLESS
+        // of `k`'s sign: every squaring forms
         // the full symmetric product `sum²` (`wrapping_sqr_low_u128`) BEFORE
-        // its `÷10^w_ext`, and `sum` reaches up to `√2·10^w_ext`
+        // its `÷10^ext`, and `sum` reaches up to `√2·10^ext`
         // (`e^(ln2/2)`, `s` at the range-reduction band edge), so the peak
-        // intermediate reaches `2·10^(2·w_ext)`. For a deep-negative `k` the
-        // un-clamped `extra ≈ 1.25·|k|·log10(2) + 12` pushes that peak past
+        // intermediate reaches `2·10^(2·ext)`. For a deep-negative `k` the
+        // un-clamped `extra_digits ≈ 1.25·|k|·log10(2) + 12` pushes that peak past
         // `S`'s capacity and the low-bits square WRAPS — `S`'s sign bit sets
         // and a NEGATIVE "e^x" is handed back (the exp(-62.175)·10^184
-        // Int<24> instance: `k = -90`, `extra = 47`, `w_ext = 231`,
-        // `e^s·10^462 = 1.0219·2^1535`). Bound the peak and clamp `extra` so
+        // Int<24> instance: `k = -90`, `extra_digits = 47`, `ext = 231`,
+        // `e^s·10^462 = 1.0219·2^1535`). Bound the peak and clamp the extra so
         // it provably fits; the clamp only ENGAGES where the un-clamped path
         // is past the provable-fit line, so every cell that fits today keeps
         // its bit-identical path.
         //
         // Capacity bound (sufficient no-wrap condition): the chain's largest
-        // intermediate is `sum² < 2·10^(2·w_ext)·(1+ε)` with
-        // `ε ≤ 2^(n+1)·(T+2)·10^-w_ext ≪ 2^-30` (the chain's accumulated
+        // intermediate is `sum² < 2·10^(2·ext)·(1+ε)` with
+        // `ε ≤ 2^(n+1)·(T+2)·10^-ext ≪ 2^-30` (the chain's accumulated
         // relative error, see the precision floor below), and the signed `S`
         // holds magnitudes below `2^(BITS-1)`. So it suffices that
-        //   bits(2.0…·10^(2·w_ext)) ≤ 2·w_ext·log2(10) + 2  ≤  BITS − 2.
+        //   bits(2.0…·10^(2·ext)) ≤ 2·ext·log2(10) + 2  ≤  BITS − 2.
         // With the rational over-approximation log2(10) < 3322/1000 this is
         // implied by the integer condition
-        //   w_ext · 6644 ≤ (BITS − 4) · 1000,
-        // i.e. `w_ext ≤ W_EXT_CAP = (BITS − 4)·1000 / 6644` (floor). For
+        //   ext · 6644 ≤ (BITS − 4) · 1000,
+        // i.e. `ext ≤ W_EXT_CAP = (BITS − 4)·1000 / 6644` (floor). For
         // Int<24> (BITS = 1536): W_EXT_CAP = 230 — worst-case peak
         // `2·10^460 = 0.0166·2^1535` (fits), while the defect instance's
-        // `w_ext = 231` reaches `1.0219·2^1535` (wraps). Every other
-        // intermediate is strictly smaller: `|v_ext| ≤ (|k|+1)·ln2·10^w_ext`
-        // (bits ≈ log2|k| + w_ext·3.33 ≪ 2·w_ext·3.32), the `k·ln2` term is
-        // the same size, and each Taylor `term·s_red` product is bounded by
-        // `sum²`'s width.
+        // `ext = 231` reaches `1.0219·2^1535` (wraps). Every other
+        // intermediate is strictly smaller:
+        // `|extended_working_value| ≤ (|k|+1)·ln2·10^ext`
+        // (bits ≈ log2|k| + ext·3.33 ≪ 2·ext·3.32), the `k·ln2` term is
+        // the same size, and each Taylor `term·halved_arg` product is bounded
+        // by `sum²`'s width.
         //
         // Precision floor (the clamp must not degrade correctness): with the
-        // clamped `extra_c` the kernel's absolute error at the caller's scale
-        // `w`, in units of `10^-w`, is bounded by
+        // clamped `clamped_extra_digits` the kernel's absolute error at the
+        // caller's `working_scale`, in units of `10^-w`, is bounded by
         //   err ≤ [√2·(2^n·(T+2) + |k|/2) · 2^-|k| + 1] · 10^-extra_c + 0.5
         // where `n = squaring_levels(w + extra_c)` (each squaring doubles the
         // chain's relative error and adds a half-unit rounding), `T ≤ 1.2·n+4`
@@ -1617,78 +1652,80 @@ use crate::support::rounding::RoundingMode;
         // established instance (w = 184, |k| = 90): extra_c = 230 − 184 = 46,
         // n = squaring_levels(230) = 26, deficit = max(0, 36 − 90) = 0,
         // floor = 1 ≤ 46 — the clamp delivers with margin.
-        let extra: u32 = if k >= 0 {
-            extra
+        let extra_digits: u32 = if k >= 0 {
+            extra_digits
         } else {
             let w_ext_cap = ((<S as BigInt>::BITS as u64 - 4) * 1000 / 6644) as u32;
-            if (w as u64) + (extra as u64) <= w_ext_cap as u64 {
+            if (working_scale as u64) + (extra_digits as u64) <= w_ext_cap as u64 {
                 // Peak provably fits — the unchanged, bit-identical path.
-                extra
+                extra_digits
             } else {
-                let extra_c = w_ext_cap.saturating_sub(w);
-                let n_c = squaring_levels(w + extra_c) as u64;
+                let clamped_extra_digits = w_ext_cap.saturating_sub(working_scale);
+                let clamped_levels =
+                    squaring_levels(working_scale + clamped_extra_digits) as u64;
                 // `|k|` is far below u64 here (`Fits` bounds it to order
                 // BITS); the `min` only keeps the cast total.
                 let abs_k_u64 = abs_k_u128.min(u64::MAX as u128) as u64;
-                let deficit_bits = (n_c + 10).saturating_sub(abs_k_u64);
-                let floor_extra = (deficit_bits * 30103).div_ceil(100_000) as u32 + 1;
-                if extra_c < floor_extra {
+                let deficit_bits = (clamped_levels + 10).saturating_sub(abs_k_u64);
+                let min_extra_digits = (deficit_bits * 30103).div_ceil(100_000) as u32 + 1;
+                if clamped_extra_digits < min_extra_digits {
                     return None;
                 }
-                extra_c
+                clamped_extra_digits
             }
         };
 
-        let w_ext = w + extra;
-        let v_ext = if extra == 0 {
-            v_w
+        let extended_working_scale = working_scale + extra_digits;
+        let extended_working_value = if extra_digits == 0 {
+            working_value
         } else {
-            v_w * pow10::<S>(extra)
+            working_value * pow10::<S>(extra_digits)
         };
-        let one_w = one::<S>(w_ext);
-        let l2 = ln2::<S>(w_ext);
-        let s = v_ext - scale_by_k(l2, k);
+        let one_at_extended_scale = one::<S>(extended_working_scale);
+        let ln2_at_extended_scale = ln2::<S>(extended_working_scale);
+        let reduced_arg = extended_working_value - scale_by_k(ln2_at_extended_scale, k);
 
-        let n = squaring_levels(w_ext);
+        let levels = squaring_levels(extended_working_scale);
 
-        let s_red = s >> n;
-        let mut sum = one_w + s_red;
-        let mut term = s_red;
-        let mut iter: u128 = 2;
+        let halved_arg = reduced_arg >> levels;
+        let mut sum = one_at_extended_scale + halved_arg;
+        let mut term = halved_arg;
+        let mut term_index: u128 = 2;
         loop {
-            term = mul(term, s_red, w_ext) / lit::<S>(iter as i128);
+            term = mul(term, halved_arg, extended_working_scale)
+                / lit::<S>(term_index as i128);
             if term == S::ZERO {
                 break;
             }
             sum = sum + term;
-            iter += 1;
-            if iter > SERIES_CAP {
+            term_index += 1;
+            if term_index > SERIES_CAP {
                 break;
             }
         }
 
         let mut squared = sum;
         let mut i = 0;
-        while i < n {
+        while i < levels {
             // Dedicated low-half symmetric SQUARE through the limb-width
             // matcher (`wrapping_sqr_low_u128` → `int::policy::sqr_low`): the
             // u128-packed `sqr_low_limb` on even work widths (half the limbs),
             // bit-identical to the low-`BITS` of `x²`. The squaring sibling of
             // the Taylor `mul`'s `wrapping_mul_low_u128`; feeds the same divide.
-            squared = round_div_pow10(squared.wrapping_sqr_low_u128(), w_ext);
+            squared = round_div_pow10(squared.wrapping_sqr_low_u128(), extended_working_scale);
             i += 1;
         }
         let sum = squared;
 
-        let scaled_at_w_ext = if k >= 0 {
+        let exp_at_extended_scale = if k >= 0 {
             let shift = k as u32;
             if bit_length(sum) + shift >= <S as BigInt>::BITS {
                 return None;
             }
             sum << shift
         } else {
-            let neg_k = -k as u128;
-            if neg_k >= bit_length(sum) as u128 {
+            let right_shift_bits = -k as u128;
+            if right_shift_bits >= bit_length(sum) as u128 {
                 // Deep underflow: e^x (x < 0 here, since k < 0) is strictly
                 // positive but below the working resolution. Return the
                 // smallest positive working value (1 = 10^-w), NOT zero, so the
@@ -1699,12 +1736,12 @@ use crate::support::rounding::RoundingMode;
                 // — the hyperbolics call `exp_fixed` on |x| >= 0.
                 return Some(lit::<S>(1));
             }
-            sum >> (neg_k as u32)
+            sum >> (right_shift_bits as u32)
         };
-        let result = if extra == 0 {
-            scaled_at_w_ext
+        let exp_value = if extra_digits == 0 {
+            exp_at_extended_scale
         } else {
-            round_div_pow10(scaled_at_w_ext, extra)
+            round_div_pow10(exp_at_extended_scale, extra_digits)
         };
         // e^v > 0 for every finite v: a zero result here is genuine underflow
         // of `e^(negative)` below the working resolution, not a true zero.
@@ -1713,14 +1750,14 @@ use crate::support::rounding::RoundingMode;
         // correctly-rounded defect). Restricted to `k < 0`: for `k >= 0`,
         // `e^v >= 1`, so a 0 result would mean the working width overflowed,
         // and masking it as 1 would hide the defect rather than fix it.
-        if k < 0 && result == zero::<S>() {
+        if k < 0 && exp_value == zero::<S>() {
             Some(lit::<S>(1))
         } else {
-            Some(result)
+            Some(exp_value)
         }
     }
 
-    /// Narrows a `Wexp`-computed working value `v` back down to the tier's
+    /// Narrows a `Wexp`-computed `value` back down to the tier's
     /// own work integer `Dst`, panicking UNIFORMLY when it does not fit.
     ///
     /// The wide `exp` / hyperbolic compositions evaluate in the wider `Wexp`
@@ -1748,17 +1785,17 @@ use crate::support::rounding::RoundingMode;
     /// exact: a value needing `≥ Dst::BITS` significant bits cannot fit the
     /// signed `Dst`.
     #[inline]
-    pub(crate) fn resize_or_panic<Src: BigInt, Dst: BigInt>(v: Src) -> Dst {
-        if bit_length::<Src>(v.abs()) >= <Dst as BigInt>::BITS {
+    pub(crate) fn resize_or_panic<Src: BigInt, Dst: BigInt>(value: Src) -> Dst {
+        if bit_length::<Src>(value.abs()) >= <Dst as BigInt>::BITS {
             panic!("exp_generic: result out of range");
         }
-        <Src as BigInt>::resize_to::<Dst>(v)
+        <Src as BigInt>::resize_to::<Dst>(value)
     }
 
-    /// `(a · 10^w) / b`, rounded half-to-even (the generic sibling of
-    /// the per-tier `$core::div`).
+    /// `(numerator · 10^working_scale) / divisor`, rounded half-to-even (the
+    /// generic sibling of the per-tier `$core::div`).
     #[inline]
-    pub(crate) fn div<S: BigInt>(a: S, b: S, w: u32) -> S
+    pub(crate) fn div<S: BigInt>(numerator: S, divisor: S, working_scale: u32) -> S
     where
         S::Scratch: ComputeLimbs,
     {
@@ -1767,66 +1804,74 @@ use crate::support::rounding::RoundingMode;
         // the numerator product is the u128-packed truncated-low mul (the
         // macro `div`'s kernel) so routing through the policy costs no
         // multiply speed.
-        round_div(a.wrapping_mul_low_u128(pow10::<S>(w)), b)
+        round_div(numerator.wrapping_mul_low_u128(pow10::<S>(working_scale)), divisor)
     }
 
-    /// `sinh(|x|)` at working scale `w` for a non-negative working
-    /// value `av_w` (= `|x|·10^w`), computed entirely in `S`:
+    /// `sinh(|x|)` at `working_scale` for a non-negative
+    /// `abs_working_value` (= `|x|·10^w`), computed entirely in `S`:
     /// `(e^|x| − e^-|x|)/2`. The dominant `e^|x|` term is evaluated
     /// directly (`exp_fixed`) and the small `e^-|x|` via reciprocal, so
     /// the small term's relative error stays a small *absolute* error.
-    pub(crate) fn sinh_pos<S: BigInt>(av_w: S, w: u32) -> S
+    pub(crate) fn sinh_pos<S: BigInt>(abs_working_value: S, working_scale: u32) -> S
     where
         S::Scratch: ComputeLimbs,
     {
-        let ex = exp_fixed::<S>(av_w, w);
-        let enx = div(one::<S>(w), ex, w);
-        (ex - enx) >> 1
+        let exp_x = exp_fixed::<S>(abs_working_value, working_scale);
+        let exp_neg_x = div(one::<S>(working_scale), exp_x, working_scale);
+        (exp_x - exp_neg_x) >> 1
     }
 
-    /// `cosh(|x|) = (e^|x| + e^-|x|)/2` at working scale `w`. See
+    /// `cosh(|x|) = (e^|x| + e^-|x|)/2` at `working_scale`. See
     /// [`sinh_pos`].
-    pub(crate) fn cosh_pos<S: BigInt>(av_w: S, w: u32) -> S
+    pub(crate) fn cosh_pos<S: BigInt>(abs_working_value: S, working_scale: u32) -> S
     where
         S::Scratch: ComputeLimbs,
     {
-        let ex = exp_fixed::<S>(av_w, w);
-        let enx = div(one::<S>(w), ex, w);
-        (ex + enx) >> 1
+        let exp_x = exp_fixed::<S>(abs_working_value, working_scale);
+        let exp_neg_x = div(one::<S>(working_scale), exp_x, working_scale);
+        (exp_x + exp_neg_x) >> 1
     }
 
-    /// `tanh(|x|) = (e^|x| − e^-|x|)/(e^|x| + e^-|x|)` at working scale
-    /// `w`. See [`sinh_pos`].
-    pub(crate) fn tanh_pos<S: BigInt>(av_w: S, w: u32) -> S
+    /// `tanh(|x|) = (e^|x| − e^-|x|)/(e^|x| + e^-|x|)` at
+    /// `working_scale`. See [`sinh_pos`].
+    pub(crate) fn tanh_pos<S: BigInt>(abs_working_value: S, working_scale: u32) -> S
     where
         S::Scratch: ComputeLimbs,
     {
-        let one_w = one::<S>(w);
+        let one_at_working_scale = one::<S>(working_scale);
         // Past the all-nines saturation onset |x| ≳ ln(10)/2·w ≈ 1.1513·w,
         // tanh(|x|) rounds to 1 − 10^−w; return that directly.
-        let thr_x = (w as i128) * 1152 / 1000 + 2;
-        let saturated = one_w - lit::<S>(1);
+        let saturation_bound = (working_scale as i128) * 1152 / 1000 + 2;
+        let saturated = one_at_working_scale - lit::<S>(1);
         // `div_rem_exact` (not the `/` operator) — the narrow build's
         // blanket divide scratch is below this work width.
-        if div_rem_exact(av_w, one_w).0 > lit::<S>(thr_x) {
+        if div_rem_exact(abs_working_value, one_at_working_scale).0
+            > lit::<S>(saturation_bound)
+        {
             return saturated;
         }
-        // Below `thr_x` use the negative-exponent identity tanh(|x|) =
+        // Below `saturation_bound` use the negative-exponent identity tanh(|x|) =
         // (1 − m)/(1 + m), m = e^(−2|x|). Forming the dominant e^(+|x|) directly
         // overflows the work integer `S` once |x| ≳ (S::BITS·ln2 − w·ln10)/ln10,
         // which at high scale on a deep tier (w ≳ 0.67·S digits, e.g. D1232<924>)
-        // is BELOW `thr_x` — a panic GAP. `m` is tiny and is formed by `exp_fixed`
+        // is BELOW `saturation_bound` — a panic GAP. `exp_neg_2x` is tiny and is
+        // formed by `exp_fixed`
         // on the NEGATIVE argument −2|x| (its 2^k reassembly shifts DOWN, never
         // the overflowing up-shift), so e^(+|x|) is never formed; the identity is
         // the exact tanh. Mirrors `trig_series_2limb::tanh_with_raw` (the narrow
-        // path). `m == 0` (defensive: unreachable since `exp_fixed` on a negative argument
-        // returns >= 1 via the ArgRegime::Underflow short-circuit in
-        // `try_exp_fixed` -- retained as a belt-and-suspenders guard).
-        let m = exp_fixed::<S>(-(av_w + av_w), w);
-        if m == lit::<S>(0) {
+        // path). `exp_neg_2x == 0` (defensive: unreachable since `exp_fixed` on a
+        // negative argument returns >= 1 via the ArgRegime::Underflow
+        // short-circuit in `try_exp_fixed` -- retained as a belt-and-suspenders
+        // guard).
+        let exp_neg_2x =
+            exp_fixed::<S>(-(abs_working_value + abs_working_value), working_scale);
+        if exp_neg_2x == lit::<S>(0) {
             return saturated;
         }
-        div(one_w - m, one_w + m, w)
+        div(
+            one_at_working_scale - exp_neg_2x,
+            one_at_working_scale + exp_neg_2x,
+            working_scale)
     }
 
 #[cfg(test)]
@@ -1849,18 +1894,19 @@ mod tests {
     #[test]
     fn round_div_sided_reports_the_side_the_rounding_left_the_truth_on() {
         type I = Int<2>;
-        let d = |n: i128, m: i128| round_div_sided::<I>(lit::<I>(n), lit::<I>(m));
+        let sided = |numerator: i128, divisor: i128|
+            round_div_sided::<I>(lit::<I>(numerator), lit::<I>(divisor));
 
         // 7/3 = 2.333… — keeps q = 2, so the truth is above what came back.
-        assert_eq!(d(7, 3), (lit::<I>(2), Some(TailSign::Above)));
+        assert_eq!(sided(7, 3), (lit::<I>(2), Some(TailSign::Above)));
         // 8/3 = 2.667… — bumps to 3, a full unit past the truth.
-        assert_eq!(d(8, 3), (lit::<I>(3), Some(TailSign::Below)));
+        assert_eq!(sided(8, 3), (lit::<I>(3), Some(TailSign::Below)));
         // -7/3 — the same truncation as +7/3, opposite side.
-        assert_eq!(d(-7, 3), (lit::<I>(-2), Some(TailSign::Below)));
+        assert_eq!(sided(-7, 3), (lit::<I>(-2), Some(TailSign::Below)));
         // -8/3 — bumps to -3, past the truth, which is above it.
-        assert_eq!(d(-8, 3), (lit::<I>(-3), Some(TailSign::Above)));
+        assert_eq!(sided(-8, 3), (lit::<I>(-3), Some(TailSign::Above)));
         // Exact: no side to report.
-        assert_eq!(d(6, 3), (lit::<I>(2), None));
+        assert_eq!(sided(6, 3), (lit::<I>(2), None));
     }
 
     /// The tail-sign channel FIRES for the family that needs it, and reports
@@ -1888,10 +1934,10 @@ mod tests {
     #[test]
     fn log1p_fixed_tagged_reports_opposite_sides_at_the_two_signs() {
         type I = Int<2>;
-        let w: u32 = 12;
-        let t = pow10::<I>(8);
+        let working_scale: u32 = 12;
+        let argument = pow10::<I>(8);
 
-        let (pos, pos_tag) = log1p_fixed_tagged::<I>(t, w, GRANULARITY);
+        let (pos, pos_tag) = log1p_fixed_tagged::<I>(argument, working_scale, GRANULARITY);
         assert_eq!(pos, lit::<I>(2 * 49_997_500), "log1p(+1e-4) at w=12 is 2u");
         assert_eq!(
             pos_tag,
@@ -1899,7 +1945,7 @@ mod tests {
             "a truncated seed divide and a positive tail both put the truth ABOVE"
         );
 
-        let (neg, neg_tag) = log1p_fixed_tagged::<I>(-t, w, GRANULARITY);
+        let (neg, neg_tag) = log1p_fixed_tagged::<I>(-argument, working_scale, GRANULARITY);
         assert_eq!(neg, lit::<I>(-2 * 50_002_500), "log1p(-1e-4) at w=12 is 2u");
         assert_eq!(
             neg_tag,
@@ -1909,8 +1955,8 @@ mod tests {
 
         // The untagged wrapper is the tagged kernel with the tag dropped —
         // the value must not move.
-        assert_eq!(log1p_fixed::<I>(t, w), pos);
-        assert_eq!(log1p_fixed::<I>(-t, w), neg);
+        assert_eq!(log1p_fixed::<I>(argument, working_scale), pos);
+        assert_eq!(log1p_fixed::<I>(-argument, working_scale), neg);
     }
 
     /// The `k < 0` internal-peak wrap: a
@@ -1928,12 +1974,12 @@ mod tests {
     #[test]
     fn exp_fixed_k_negative_internal_peak_clamped_int24() {
         // v = -62.175 · 10^184 = -62175 · 10^181
-        let w: u32 = 184;
-        let v = lit::<Int<24>>(-62175) * pow10::<Int<24>>(181);
-        let r = try_exp_fixed::<Int<24>>(v, w)
+        let working_scale: u32 = 184;
+        let working_value = lit::<Int<24>>(-62175) * pow10::<Int<24>>(181);
+        let exp_value = try_exp_fixed::<Int<24>>(working_value, working_scale)
             .expect("in-range e^-62.175 at w=184 must not signal out-of-range");
         assert!(
-            r > zero::<Int<24>>(),
+            exp_value > zero::<Int<24>>(),
             "e^-62.175 must be strictly positive (a negative value is the wrap)"
         );
         // Tight oracle window: 9948110203481228920 · 10^138 < r·10^-184·10^184
@@ -1942,7 +1988,7 @@ mod tests {
         let lo = lit::<Int<24>>(9_948_110_203_481_228_920) * pow10::<Int<24>>(138);
         let hi = lit::<Int<24>>(9_948_110_203_481_228_921) * pow10::<Int<24>>(138);
         assert!(
-            r > lo && r < hi,
+            exp_value > lo && exp_value < hi,
             "e^-62.175 · 10^184 outside its 19-digit oracle window"
         );
     }
@@ -1960,13 +2006,13 @@ mod tests {
     #[cfg(any(feature = "d115", feature = "wide"))]
     #[test]
     fn exp_fixed_deep_negative_large_working_scale_int64() {
-        let w: u32 = 200;
-        let v = lit::<Int<64>>(-357) * pow10::<Int<64>>(w);
-        let r = exp_fixed::<Int<64>>(v, w);
+        let working_scale: u32 = 200;
+        let working_value = lit::<Int<64>>(-357) * pow10::<Int<64>>(working_scale);
+        let exp_value = exp_fixed::<Int<64>>(working_value, working_scale);
         // 357·log10(e) ≈ 155.057, so 10^44 < e^-357 · 10^200 < 10^45.
-        assert!(r > zero::<Int<64>>(), "e^-357 must stay strictly positive");
+        assert!(exp_value > zero::<Int<64>>(), "e^-357 must stay strictly positive");
         assert!(
-            r > pow10::<Int<64>>(44) && r < pow10::<Int<64>>(45),
+            exp_value > pow10::<Int<64>>(44) && exp_value < pow10::<Int<64>>(45),
             "e^-357 at working scale 200 out of its analytic bounds"
         );
     }
@@ -1998,19 +2044,22 @@ mod tests {
     #[test]
     fn log1p_fixed_tagged_fires_when_an_included_term_was_rounded() {
         type I = Int<2>;
-        let w: u32 = 12;
-        let one_w = one::<I>(w);
+        let working_scale: u32 = 12;
+        let one_at_working_scale = one::<I>(working_scale);
 
         // `u²` inexact + at least one term added: the two conditions that
         // together made the exactness gate refuse these arguments.
-        let refused_by_the_exactness_gate = |t: I| -> bool {
-            let (u, _side) = div_cached_sided::<I>(t, one_w + one_w + t, one_w);
-            let prod = u.wrapping_mul_low_u128(u);
-            let u2 = round_div_pow10::<I>(prod, w);
-            let u2_inexact = u2.wrapping_mul_low_u128(one_w) != prod;
-            let term = round_div_pow10::<I>(u.wrapping_mul_low_u128(u2), w);
-            let (first_contrib, _r) = div_rem_exact::<I>(term, lit::<I>(3));
-            u2_inexact && first_contrib != zero::<I>()
+        let refused_by_the_exactness_gate = |argument: I| -> bool {
+            let (u, _side) = div_cached_sided::<I>(
+                argument,
+                one_at_working_scale + one_at_working_scale + argument,
+                one_at_working_scale);
+            let product = u.wrapping_mul_low_u128(u);
+            let u2 = round_div_pow10::<I>(product, working_scale);
+            let u2_inexact = u2.wrapping_mul_low_u128(one_at_working_scale) != product;
+            let term = round_div_pow10::<I>(u.wrapping_mul_low_u128(u2), working_scale);
+            let (first_contribution, _remainder) = div_rem_exact::<I>(term, lit::<I>(3));
+            u2_inexact && first_contribution != zero::<I>()
         };
 
         let pos = lit::<I>(3) * pow10::<I>(8); // t = +3·10⁻⁴
@@ -2018,7 +2067,7 @@ mod tests {
             refused_by_the_exactness_gate(pos),
             "the positive argument must be one the exactness gate refused"
         );
-        let (pos_v, pos_tag) = log1p_fixed_tagged::<I>(pos, w, GRANULARITY);
+        let (pos_v, pos_tag) = log1p_fixed_tagged::<I>(pos, working_scale, GRANULARITY);
         assert_eq!(pos_v, lit::<I>(299_955_008), "log1p(3e-4) at w=12");
         assert_eq!(
             pos_tag,
@@ -2031,7 +2080,7 @@ mod tests {
             refused_by_the_exactness_gate(neg),
             "the negative argument must be one the exactness gate refused"
         );
-        let (neg_v, neg_tag) = log1p_fixed_tagged::<I>(neg, w, GRANULARITY);
+        let (neg_v, neg_tag) = log1p_fixed_tagged::<I>(neg, working_scale, GRANULARITY);
         assert_eq!(neg_v, lit::<I>(-400_080_020), "log1p(-4e-4) at w=12");
         assert_eq!(
             neg_tag,
@@ -2041,7 +2090,7 @@ mod tests {
 
         // The untagged wrapper is the tagged kernel with the tag dropped — the
         // value must not move on either argument.
-        assert_eq!(log1p_fixed::<I>(pos, w), pos_v);
-        assert_eq!(log1p_fixed::<I>(neg, w), neg_v);
+        assert_eq!(log1p_fixed::<I>(pos, working_scale), pos_v);
+        assert_eq!(log1p_fixed::<I>(neg, working_scale), neg_v);
     }
 }
