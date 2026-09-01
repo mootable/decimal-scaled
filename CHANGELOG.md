@@ -100,6 +100,48 @@ at the end of this section.
 - The scale-up overflow panic message names `quantize` rather than
   `rescale`.
 
+- **The golden oracle fetched values by rounding instead of truncating, and
+  six `exp` answers were wrong because of it.** This affects
+  `decimal-scaled-golden` — how every golden answer is produced — so it is
+  worth reading even if you only consume the published set.
+
+  An oracle value is defined as the true value **truncated** toward zero to
+  the generation depth plus two guard digits. The `decimal` adapter instead
+  computed at a working precision under half-even rounding and truncated only
+  afterwards. Where a value sits just under a storage grid line its digits run
+  9 from the stored depth downward, and when the working precision landed
+  inside that run the rounding carried *up past the stored depth*: `…4|99`
+  became `…5|00`. Both guard digits are destroyed at once — and the same carry
+  manufactures the run of zeros that the termination check reads as "this
+  value terminated", so a transcendental value was simultaneously recorded as
+  exact. The corrected answers are for `exp` at `-1e-306`, `-1e-461`,
+  `-1e-462`, `-1e-615`, `-1e-616` and `-3e-280`.
+
+  Three consequences, all now closed:
+
+  - **One fetch contract, shared by every oracle.** Fetch to depth + guard,
+    truncated toward zero; an exact value that terminates shorter keeps its
+    own shorter length. `decimal`, `mpmath` and `flint` had carried
+    byte-identical copies of this logic and `mpfr`/`sympy` a stripped one with
+    no guard window at all — six copies of one algorithm, which is what let a
+    generator and one of its validators fail identically and read as
+    agreement. Each adapter now supplies only a scaled floor in its own
+    numeric type; everything after that is shared.
+  - **`flint`/Arb generates.** Only rigorous intervals can *pin* a truncation;
+    a point value behind a fixed window can merely approximate one, and that
+    limitation is exactly what produced the wrong rows. The per-function
+    generator table is gone. (`rem` stays on `fraction`, which is exact — the
+    flint adapter implements no `rem`.)
+  - **A validator confirms within one unit at the last guard digit**, down
+    from two. All oracles floor the same value at the same depth, so the only
+    honest difference is an internal error straddling the truncation boundary,
+    worth at most one unit — the bound now follows from the contract rather
+    than from observed noise. `flint` had in fact dissented by exactly one
+    unit on all six rows from the day they were generated; the old tolerance
+    accepted it, and the annotation blamed it on binary-vs-decimal radix. Line
+    comments now record which validator differed and by how much, and no
+    longer offer a cause.
+
 - **`DynDecimal` now formats without allocating.** The trait requires
   `core::fmt::Display`, so `{}` works directly on a `dyn DynDecimal` and the
   caller chooses whether to allocate.
