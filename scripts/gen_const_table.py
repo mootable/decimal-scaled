@@ -6,10 +6,15 @@ This is a ONE-OFF hand-run generator (a sibling of
 committed Rust source file `src/consts/table.rs`, and that
 output is what the crate compiles. `build.rs` is untouched.
 
-Oracle. Every constant comes from `mpmath` directly at a working
-precision (`mp.dps`) comfortably above the widest enabled tier's maximum
-working scale, with margin, so `floor(const * 10**scale)` and the
-"round-up" bit are exact at the top scale. No value is derived from the
+Oracle. Every constant comes from `flint`/Arb through the shared
+`tang_flint_oracle` module — the same determination routine the Tang
+tables use. Each golden is `floor(value * 10**gp)` resolved by
+`ball.floor().unique_fmpz()`, which yields a value ONLY when the
+enclosing interval determines every retained digit. If it cannot, the
+oracle escalates the working precision and recomputes; if it still
+cannot, it raises rather than rounding past an undecided digit. So the
+digits emitted below are not merely believed correct at some working
+precision — the enclosure certifies them. No value is derived from the
 crate's own `pi` or any `decimal_scaled` method.
 
 The ten constants (all positive, all irrational):
@@ -32,7 +37,7 @@ Encoding (per constant, per scale `s`):
     (the three half-modes coincide: with no possible tie they all reduce
     to "round to nearest", which is `floor + round_up`).
 
-This reproduces, bit-for-bit, a CORRECT ROUNDING of the mpmath value
+This reproduces, bit-for-bit, a CORRECT ROUNDING of the oracle value
 under each of the six modes — the same contract the runtime
 `const_rounded` path implements. The crate-side unit test in
 `const_table.rs` re-derives the six modes from the stored (floor,
@@ -48,7 +53,10 @@ none of it.
 from __future__ import annotations
 
 import datetime
-from mpmath import mp
+
+from flint import arb
+
+from tang_flint_oracle import decimal_prec_for, determine_decimal_floor
 
 # ── Tier table: (tier name, work-int limbs, max SCALE, gating cfg) ─────
 #
@@ -174,51 +182,34 @@ XW_CFG = (
 XXW_CFG = 'any(feature = "d924", feature = "d1232", feature = "xx-wide")'
 
 # ── Oracle precision ──────────────────────────────────────────────────
-# Comfortably above W_XXW (2048) with wide margin so floor + round-bit
-# are exact at the top scale.
-mp.dps = 6000
-
+# NOT a single global setting. Each golden picks its own starting working
+# precision from the digit count it has to retain
+# (`tang_flint_oracle.decimal_prec_for`), and the determination escalates
+# from there if that proves tight. The widest golden here is ln2 at 5121
+# digits.
+#
+# Each constant is a THUNK returning the value as an `arb` at the ambient
+# working precision — not a precomputed value, because escalating the
+# precision means recomputing the value, not re-reading an enclosure that
+# was already fixed at the old precision.
 CONSTS = [
-    ("pi", lambda: +mp.pi),
-    ("tau", lambda: 2 * mp.pi),
-    ("half_pi", lambda: mp.pi / 2),
-    ("quarter_pi", lambda: mp.pi / 4),
-    ("e", lambda: +mp.e),
-    ("golden", lambda: (1 + mp.sqrt(5)) / 2),
-    ("ln2", lambda: mp.log(2)),
-    ("ln10", lambda: mp.log(10)),
+    ("pi", lambda: arb.pi()),
+    ("tau", lambda: arb.pi() * 2),
+    ("half_pi", lambda: arb.pi() / 2),
+    ("quarter_pi", lambda: arb.pi() / 4),
+    ("e", lambda: arb(1).exp()),
+    ("golden", lambda: (arb(5).sqrt() + 1) / 2),
+    ("ln2", lambda: arb.const_log2()),
+    ("ln10", lambda: arb(10).log()),
     # log10(2) = log(2)/log(10) ~ 0.30103 — the bit<->digit conversion
     # factor (a value's decimal-digit count ~ bit_len * log10(2)). Public
     # DecimalConstants value; sourced as a true oracle ratio.
-    ("log10_2", lambda: mp.log(2) / mp.log(10)),
+    ("log10_2", lambda: arb.const_log2() / arb(10).log()),
     # one radian in degrees = 180/pi, sourced as a true oracle value.
-    ("deg_per_rad", lambda: mp.degrees(1)),
+    ("deg_per_rad", lambda: arb(180) / arb.pi()),
     # one degree in radians = pi/180.
-    ("rad_per_deg", lambda: mp.radians(1)),
+    ("rad_per_deg", lambda: arb.pi() / 180),
 ]
-
-
-def floor_and_roundbit(value, scale):
-    """Return (floor(value * 10**scale), round_up_bit).
-
-    `round_up_bit` is 1 iff the dropped fractional tail
-    `value*10**scale - floor` is >= 1/2. Computed exactly via integer
-    arithmetic on the oracle's mpf at high precision: we compute
-    `floor(value * 10**scale)` and `floor(value * 10**scale * 2)`; the
-    tail is >= 1/2 iff the doubled floor is odd-relative, i.e.
-    `floor(2*v*10**s) - 2*floor(v*10**s) == 1`.
-    """
-    from mpmath import mpf, floor as mpfloor
-
-    scaled = value * (mpf(10) ** scale)
-    q = int(mpfloor(scaled))
-    # tail = scaled - q in [0, 1); round up iff tail >= 1/2.
-    # Compute floor(2*scaled) and compare to 2*q. Since the constants are
-    # irrational, tail is never exactly 0 or exactly 1/2 (no tie), so the
-    # comparison is unambiguous at mp.dps precision.
-    q2 = int(mpfloor(scaled * 2))
-    round_up = 1 if (q2 - 2 * q) >= 1 else 0
-    return q, round_up
 
 
 def limbs_le(n):
@@ -234,9 +225,14 @@ def limbs_le(n):
     return out
 
 
-def golden_limbs(value, gp):
+def golden_limbs(make_val, gp, label):
     """Little-endian u64 limbs of `floor(value * 10**gp)` — the SINGLE golden
     mantissa a band downgrades from at compile time.
+
+    Returns `(limbs, spare_bits, prec_used)`. The value is DETERMINED by the
+    shared flint/Arb oracle: it is emitted only when the enclosure pins every
+    one of the `gp` retained digits, and `spare_bits` records by what factor
+    the enclosure could have been wider and still decided it.
 
     `gp = band_hi + 1`: one guard digit above the band's top scale, so the
     `const fn` builder recovers the top scale's round bit (the most-significant
@@ -246,8 +242,8 @@ def golden_limbs(value, gp):
     (no exact tie). This is what shrinks `table.rs` from ~39 MB of per-scale
     literals to ~8 KB of goldens: the per-scale array is REBUILT at compile
     time, never shipped."""
-    from mpmath import mpf, floor as mpfloor
-    return limbs_le(int(mpfloor(value * (mpf(10) ** gp))))
+    n, spare, prec = determine_decimal_floor(make_val, gp, label)
+    return limbs_le(n), spare, prec
 
 
 def emit_limb_literal(prefix, name, limbs):
@@ -262,6 +258,10 @@ def emit_limb_literal(prefix, name, limbs):
 def main():
     out = []
     w = out.append
+    # One row per emitted golden: (label, digits, headroom bits, precision
+    # used). Reported at the end so a tightening margin or a precision
+    # escalation is visible in the run, not buried.
+    determined = []
 
     w("// SPDX-FileCopyrightText: 2026 John Moxley")
     w("// SPDX-License-Identifier: MIT OR Apache-2.0")
@@ -269,9 +269,14 @@ def main():
     w("//! Per-scale, oracle-sourced, width-deduplicated wide")
     w("//! transcendental constant table.")
     w("//!")
-    w("//! GENERATED by `scripts/gen_const_table.py` (mpmath oracle). Do")
-    w("//! NOT edit by hand; re-run the script and commit its output. This")
-    w("//! file is NOT produced at build time — `build.rs` is untouched.")
+    w("//! GENERATED by `scripts/gen_const_table.py` from a flint/Arb")
+    w("//! oracle: every golden mantissa below is `floor(const * 10^gp)`")
+    w("//! resolved by `ball.floor().unique_fmpz()`, which yields a value")
+    w("//! ONLY when the enclosing interval determines every retained")
+    w("//! digit — so these digits are certified, not assumed correct at")
+    w("//! some working precision. Do NOT edit by hand; re-run the script")
+    w("//! and commit its output. This file is NOT produced at build time")
+    w("//! — `build.rs` is untouched.")
     w("//!")
     w("//! Each constant ships ONE golden mantissa per band —")
     w("//! `floor(const * 10^(band_hi+1))` — and a `const fn` ([`cb_build`])")
@@ -418,7 +423,6 @@ const fn cb_get<const F: usize, const N: usize>(
     # kernels; BASE/XW/XXW are feature-gated to the tiers that reach them. Each
     # constant's band maxes follow its CLASS (ZIV / HOT / DEC — see CONST_CLASS).
     for name, getter in CONSTS:
-        value = getter()
         upper = name.upper()
         base_max, xw_max, xxw_max = CONST_CLASS[name]
         narrow_max = WORKING_NARROW if name in ("pi", "ln2", "ln10") else W_NARROW
@@ -430,7 +434,8 @@ const fn cb_get<const F: usize, const N: usize>(
         ]
         for band, lo, hi, cfg in bands:
             n = hi - lo + 1
-            g = golden_limbs(value, hi + 1)
+            g, spare, prec = golden_limbs(getter, hi + 1, f"{name} {band}")
+            determined.append((f"{name} {band}", hi + 1, spare, prec))
             cfg_attr = f"#[cfg({cfg})]" if cfg is not None else None
             if cfg_attr:
                 w(cfg_attr)
@@ -528,7 +533,7 @@ const fn cb_get<const F: usize, const N: usize>(
     w("/// never an exact tie and never zero. Hence: Trunc / Floor keep the")
     w("/// floor; Ceiling always bumps (`+1`); the three half-modes all")
     w("/// reduce to round-to-nearest = `floor + round_up`. This reproduces")
-    w("/// a correct rounding of the mpmath value under every mode.")
+    w("/// a correct rounding of the oracle value under every mode.")
     w("#[inline]")
     w("fn round_entry<W: BigInt>(limbs: &[u64], round_up: u8, mode: RoundingMode) -> W {")
     w("    let floor = limbs_to_w::<W>(limbs);")
@@ -944,8 +949,22 @@ const fn p10_get<const F: usize, const N: usize>(
     path = "src/consts/table.rs"
     with open(path, "w", encoding="utf-8", newline="\n") as f:
         f.write(src)
-    print(f"wrote {path} ({len(src)} bytes), mp.dps={mp.dps}, "
-          f"{datetime.date.today()}")
+    worst_spare, worst_label, worst_digits = min(
+        (spare, label, digits) for label, digits, spare, _p in determined
+    )
+    escalated = [
+        (label, prec) for label, digits, _s, prec in determined
+        if prec != decimal_prec_for(digits)
+    ]
+    print(f"wrote {path} ({len(src)} bytes), {datetime.date.today()}")
+    print(f"goldens determined : {len(determined)}"
+          "   (lower and upper bounds floor to the same integer)")
+    print(f"precision raised   : {len(escalated)}")
+    for label, prec in escalated:
+        print(f"  RAISED PRECISION {label}: determined only at {prec} bits")
+    print(f"tightest golden    : {worst_label} ({worst_digits} digits) — its "
+          f"enclosure could be 2^{worst_spare:.0f} times wider and still "
+          "determine every retained digit")
 
 
 if __name__ == "__main__":

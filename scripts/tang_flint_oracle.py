@@ -1,13 +1,26 @@
-"""Shared rigorous `flint`/Arb oracle for the baked Tang tables.
+"""Shared rigorous `flint`/Arb oracle for the baked constant tables.
 
-The four Tang generators — `gen_ln_tang_table.py`, `gen_exp_tang_table.py`,
-`gen_atan_tang_table.py`, `gen_sincos_tang_table.py` — each bake the
-correctly-rounded binary fixed-point
+Two shapes of baked constant are served, and they share ONE determination
+routine so the generators cannot drift apart in how a retained digit is
+decided.
+
+BINARY (the four Tang generators — `gen_ln_tang_table.py`,
+`gen_exp_tang_table.py`, `gen_atan_tang_table.py`,
+`gen_sincos_tang_table.py`) bake the correctly-rounded binary fixed-point
 
     slot = round(value · 2^B)
 
-of a value in `[0, 1)`. They share ONE determination routine, `determine`
-below, so they cannot drift apart in how a retained bit is decided.
+of a value in `[0, 1)`.
+
+DECIMAL (`gen_const_table.py`) bakes the golden mantissa
+
+    golden = floor(value · 10^gp)
+
+from which a `const fn` rebuilds every lower scale at compile time.
+
+Both reduce to "an integer floor that the enclosure must PIN", which is
+`_determine_floor` below; `determine` and `determine_decimal_floor` differ
+only in the ball they hand it and the starting precision.
 
 ## Why Arb rather than a binary float library
 
@@ -23,9 +36,12 @@ retries at a lower bar, or falls back to another library.
 
 The Tang tables retain `B = 7168` bits. `ORACLE_PREC_BITS` is set far beyond
 that so the enclosure of `value · 2^B` is tighter than one unit by thousands
-of bits, leaving the rounding decidable for every entry. That starting
-precision is only a HINT: the determination is what proves the bits, and it
-escalates until it can prove them or gives up loudly.
+of bits, leaving the rounding decidable for every entry. The decimal goldens
+run to 5121 digits (~17012 bits), well past that, so they size a starting
+precision from the requested digit count instead — see `decimal_prec_for`.
+Either way the starting precision is only a HINT: the determination is what
+proves the digits, and it escalates until it can prove them or gives up
+loudly.
 """
 
 from __future__ import annotations
@@ -49,6 +65,13 @@ ORACLE_PREC_BITS = 16384
 # integer boundary here, the entry is UNDETERMINED and that is reported as a
 # finding — never rounded past.
 MAX_PREC_BITS = 262144
+
+# Bits of headroom added to a decimal golden's OWN size to pick its starting
+# precision. The golden `floor(value · 10^gp)` needs `gp · log2(10)` bits
+# just to hold; this guard on top is what makes the enclosure narrower than
+# one unit in the last retained place, so the floor is decidable on the first
+# pass. A starting HINT only — `_determine_floor` escalates if it is tight.
+DECIMAL_GUARD_BITS = 4096
 
 
 class IndeterminateSlot(RuntimeError):
@@ -75,36 +98,34 @@ def scaled_ball(val: arb, b: int) -> arb:
     return val * arb(2) ** b + arb(0.5)
 
 
-def determine(make_val, b: int, label: str):
-    """Determine `floor(val · 2^B + 1/2)` and PROVE it from Arb's bounds.
+def _determine_floor(make_ball, label: str, start_prec: int):
+    """Determine `floor(ball)` and PROVE it from Arb's bounds.
 
     Returns `(n, spare_bits, prec_used)`.
 
-    `make_val` is a CALLABLE returning the value as an `arb` at the ambient
-    working precision — not a precomputed ball, because escalating the
-    precision requires recomputing the value, not merely re-examining an
-    enclosure that was already fixed at the old precision.
+    `make_ball` is a CALLABLE returning the enclosure at the ambient working
+    precision — not a precomputed ball, because escalating the precision
+    requires recomputing the value, not merely re-examining an enclosure that
+    was already fixed at the old precision.
 
     The determination criterion is the explicit one: the enclosure's LOWER
     and UPPER bounds must floor to the same integer, i.e. the interval lies
     strictly inside `[n, n+1)` and so agrees at the full retained precision.
-    `spare_bits` is `log2` of the distance from the interval to the nearest
-    integer boundary — the margin by which the entry is decided.
+    `spare_bits` is `log2` of the margin over the radius — the factor by
+    which the enclosure could widen before the entry stopped being decided.
 
     If the bounds disagree we ESCALATE the working precision (announcing it
     on stderr — never silently) and recompute. Only if the entry is still
     undetermined at `MAX_PREC_BITS` do we raise `IndeterminateSlot`.
     """
-    prec = ORACLE_PREC_BITS
+    prec = start_prec
     while True:
         ctx.prec = prec
-        ball = scaled_ball(make_val(), b)
+        ball = make_ball()
         lo_n = ball.lower().floor().unique_fmpz()
         hi_n = ball.upper().floor().unique_fmpz()
         if lo_n is not None and hi_n is not None and int(lo_n) == int(hi_n):
             n = int(lo_n)
-            if not 0 <= n < (1 << b):
-                raise IndeterminateSlot(f"{label}: slot {n} out of {b}-bit range")
             # Safety factor, in bits: how much WIDER the enclosure could be
             # before this entry stopped being decidable. Subtracting the
             # exact integer keeps the residuals small enough to inspect.
@@ -123,9 +144,9 @@ def determine(make_val, b: int, label: str):
             return n, _safety_bits(margin, rel.rad()), prec
         if prec >= MAX_PREC_BITS:
             raise IndeterminateSlot(
-                f"{label}: Arb bounds still disagree at prec={prec} bits "
-                f"(B={b}); the enclosure spans an integer boundary, so the "
-                f"retained digits are NOT determined. Bounds "
+                f"{label}: Arb bounds still disagree at prec={prec} bits; "
+                f"the enclosure spans an integer boundary, so the retained "
+                f"digits are NOT determined. Bounds "
                 f"[{ball.lower()}, {ball.upper()}]"
             )
         prec *= 2
@@ -134,6 +155,50 @@ def determine(make_val, b: int, label: str):
             f"escalating working precision to {prec} bits",
             file=sys.stderr,
         )
+
+
+def determine(make_val, b: int, label: str):
+    """Determine `floor(val · 2^B + 1/2)` — the BINARY (Tang) slot.
+
+    `make_val` is a CALLABLE returning the value as an `arb` at the ambient
+    working precision, for the reason `_determine_floor` gives. Returns
+    `(n, spare_bits, prec_used)`.
+    """
+    n, spare, prec = _determine_floor(
+        lambda: scaled_ball(make_val(), b), label, ORACLE_PREC_BITS
+    )
+    if not 0 <= n < (1 << b):
+        raise IndeterminateSlot(f"{label}: slot {n} out of {b}-bit range")
+    return n, spare, prec
+
+
+def decimal_prec_for(gp: int) -> int:
+    """Starting working precision, in bits, for a `gp`-digit golden.
+
+    `gp · log2(10)` bits hold the golden itself; `DECIMAL_GUARD_BITS` on top
+    is the headroom that decides the floor. See `DECIMAL_GUARD_BITS`.
+    """
+    return math.ceil(gp * math.log2(10)) + DECIMAL_GUARD_BITS
+
+
+def determine_decimal_floor(make_val, gp: int, label: str):
+    """Determine `floor(val · 10^gp)` — the DECIMAL golden mantissa.
+
+    `10^gp` is built as an exact Python integer and converted to an `arb`,
+    which is exact (zero radius) at any working precision, so the scaling
+    contributes no error of its own: the enclosure the floor is read from is
+    the value's own, scaled. Raising `arb(10)` to the power instead would
+    round at every squaring and widen the ball for no reason.
+
+    Returns `(n, spare_bits, prec_used)`.
+    """
+    ten_pow = arb(10 ** gp)
+    n, spare, prec = _determine_floor(
+        lambda: make_val() * ten_pow, label, decimal_prec_for(gp)
+    )
+    if n < 0:
+        raise IndeterminateSlot(f"{label}: golden {n} is negative")
+    return n, spare, prec
 
 
 def _log2(x: arb):
