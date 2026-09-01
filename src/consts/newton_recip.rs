@@ -10,6 +10,15 @@
 //! the reciprocal of `10^s` is one number, truncated to fewer limbs at
 //! narrower widths), so all tiers SHARE one per-scale reciprocal.
 //!
+//! EXACT BY CONSTRUCTION — no oracle is involved, and none is needed.
+//! Each value is `(1 << (64*k)) // (10**s)`: an exact big-integer floor
+//! division, computed with Python's arbitrary-precision integers. There
+//! is no transcendental, no floating point and no rounding anywhere in
+//! the derivation, so there are no digits to bound and nothing an
+//! interval oracle could tighten. It is also bit-identical to what
+//! `newton_reciprocal::precompute` computes at runtime via
+//! `div_rem_mag_slice`, which is the property the table exists to bake.
+//!
 //! Compile-time read-only data (architectural-review Class K — NOT a
 //! runtime cache); size-local consumption via the width slice. GENERATED
 //! by `scripts/gen_newton_recip_table.py` — do not edit by hand.

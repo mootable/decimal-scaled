@@ -76,8 +76,9 @@ const M: u32 = atan_tang_table::ATAN_TANG_M;
 ///
 /// Reads the value from the BAKED binary Tang table
 /// [`atan_tang_table::atan_table_entry_baked`]: the `M + 1` values
-/// `atan(j/M)` are precomputed ONCE by an mpmath oracle as binary
-/// fixed-point `round(atan(j/M) · 2^B)` (committed rodata), then SLICED
+/// `atan(j/M)` are precomputed ONCE by a flint/Arb oracle as binary
+/// fixed-point `round(atan(j/M) · 2^B)` — every retained bit pinned by a
+/// rigorous interval bound (committed rodata) — then SLICED
 /// to the tier's needed precision and reconstructed to working scale `w`
 /// per call — one multiply + one shift. This replaces the previous
 /// per-call `core::atan_fixed` halving-chain Series recompute, which the
