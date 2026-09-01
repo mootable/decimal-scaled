@@ -63,6 +63,19 @@ at the end of this section.
   `x <= ln(1 + MAX)` against `exp`'s `x <= ln(MAX)` — a band `ln(1 + 1/MAX)`
   wide, a few hundredths of an argument unit.
 
+<!-- PLACEHOLDER — checked_ siblings are in progress, not yet landed.
+     Do not release with this comment present; replace it with the entry
+     once the work merges. The shape it should take:
+
+- **`checked_expm1_strict` and `checked_log1p_strict`** — the `Option`
+  returning siblings, so the two new functions match the surface every
+  other strict transcendental carries. `log1p`'s is the one that matters:
+  its domain genuinely ends at `t > -1` and the strict form panics there,
+  so until now a caller who could not guarantee the domain in advance had
+  no non-panicking route to the function at all.
+-->
+
+
 ### Changed
 
 - **`rescale` is now `quantize`.** The scale-only operation is renamed
@@ -227,6 +240,50 @@ at the end of this section.
   answers it produced were correct, but on a relation between the work width
   and the scale that nothing checked. The bound is now computed and tested at
   run time, and fails closed rather than trusting the width table.
+- **`exp` mis-rounded negative arguments in the directed modes**
+  (present since 0.5.0). The wide path reached the Ziv walker's unresolved
+  endgame under a blanket assertion — that the sub-resolution tail always
+  moves the magnitude *away* from zero. That is sound for `x > 0`, where
+  every Taylor term is positive, and backwards for `x < 0`, where the series
+  alternates. 48 rows across D924<900, 923> and D1232<924, 1200, 1231>,
+  identical under `Ceiling`, `Floor` and `Trunc`.
+
+  It is the same shape as the four above — a claim about which side the
+  neglected tail falls on, asserted rather than proved — and it was the
+  hardest of them to see, because the grading harness had made the same
+  assumption independently: a zero residual at full precision was mapped to
+  a positive hidden tail, which is bit-for-bit the verdict the kernel
+  produced, so oracle and defect agreed and the gate stayed green.
+
+  The walker's endgame now reads a per-probe side, and the kernel supplies
+  one only where it can be proved. `try_exp_fixed` cannot: it runs a fixed
+  number of rounded divides keyed on the working scale — 61 at D1232<1231>,
+  paid even by `exp(-1e-430)` — each up to half a working unit with its
+  direction untracked, while the tail being reported on is sub-unit, so any
+  side from that path would be another assertion. Where the direct series
+  pays for itself, `exp` is instead evaluated as `1 + expm1(v)`: the `1` is
+  `10^w` exactly, so the addition is exact and the side transfers unchanged
+  from `expm1`'s rule, which already fails closed. Everywhere else the value
+  is bit-identical to before. The choice between them is a cost gate, not a
+  validity wall — both kernels are correct at every argument it sees, so a
+  mis-estimate costs speed and never accuracy.
+- **`asinh` panicked at D924 and D1232** — a regression this branch
+  introduced and fixed before release, not a defect in 0.5.0. The tiny-`x`
+  bracket added above divided through the width-erased slice engines, whose
+  normalisation scratch is sized from a build-max constant derived from the
+  *storage*-scaled work widths. That constant never accounted for the AGM
+  work integer, and the `asinh` face instantiates the bracket at exactly
+  that integer — `Int<192>` at D924, `Int<256>` at D1232 — so the dividend
+  ran off the end of a 258-limb buffer. 5880 panics across 33 cells, no
+  wrong values.
+
+  Every divide in the kernel now takes the divide matcher's own verdict and
+  calls the chosen engine's caller-supplied-scratch door, sized exactly from
+  the width in hand — the pattern the reciprocal and widening-divide paths
+  already use. Worth recording rather than quietly repairing, for two
+  reasons: a per-diff review had passed the offending call, and it was the
+  full-surface gate that caught it, which is the argument for running that
+  gate on every merge rather than on the ones that look risky.
 - **`FromStr` rejected exactly-representable trailing zeros.** `"1.00"` at
   `SCALE = 0` returned `ParseError::OverlongFractional`, as did `"2.0"`,
   `"-1.0"`, `"0.0"` and every literal whose digits past `SCALE` are all
@@ -256,6 +313,29 @@ at the end of this section.
   *(Oracle-only — this is the test harness that grades the crate, not shipped
   code. No golden value changed: all 4149 `atanh` and 4302 `acosh` committed
   lines revalidate identically.)*
+
+### Internal
+
+- **`abs` moved onto the `BigInt` trait**, replacing four copies of the
+  same three-line function — two free functions in separate algorithm
+  modules, and one emitted per tier by a macro, so the per-tier copies
+  scaled with the width list rather than staying at one. No behaviour
+  changes; the trait method is what every caller now reaches.
+- The `expm1` and `log1p` public-surface tests moved into the
+  `decimal-scale-test` crate, where the rest of the public-API coverage
+  lives. They had been the only `tests.rs` files under `src/algos/`, a
+  third layout no other module used. The few cases that genuinely need
+  crate-internal items stay behind as inline `#[cfg(test)]` blocks, the
+  convention the rest of the tree follows.
+
+### Performance — findings
+
+- **`exp` at D18<13> runs about 1.17× the published 0.5.0 time.**
+  Acknowledged and deferred rather than fixed in this release: the
+  correctness work above added a proved tail side to paths that previously
+  asserted one, and at the narrowest tier that cost is visible against a
+  very small baseline. Deferred deliberately — the alternative was to keep
+  a directed-rounding defect to protect a benchmark.
 
 ### Deprecated
 
