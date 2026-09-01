@@ -107,7 +107,6 @@ mod crate_internal_tests {
     use super::log1p_with_ln::log1p_with_ln_g;
     use crate::algos::support::narrow_ziv::WZiv;
     use crate::int::types::Int;
-    use crate::int::types::traits::BigInt;
     use crate::support::rounding::RoundingMode;
     use crate::D;
 

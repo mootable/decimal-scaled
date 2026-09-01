@@ -1417,8 +1417,9 @@ use crate::support::rounding::RoundingMode;
     ///
     /// This is a cost gate, not a validity wall — both paths are correct
     /// kernels at every argument it can see, so a mis-estimate costs speed and
-    /// never accuracy. It is derived from `w` alone; no argument or cell
-    /// appears in it.
+    /// never accuracy. The BUDGET it compares against is keyed on `w` alone;
+    /// the comparison itself also reads the argument's magnitude, through `D`.
+    /// No cell — no `N`, no `SCALE` — appears in either.
     fn direct_series_pays<S: BigInt>(working_value: S, working_scale: u32) -> bool {
         let magnitude = working_value.abs();
         if magnitude == zero::<S>() {

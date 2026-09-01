@@ -151,7 +151,6 @@ pub(crate) fn adjust_near_zero<St: BigInt>(result: St, raw: St, mode: RoundingMo
 #[cfg(test)]
 mod crate_internal_tests {
     use crate::int::types::Int;
-    use crate::int::types::traits::BigInt;
     use crate::D;
 
     /// `1.0` at scale 20.

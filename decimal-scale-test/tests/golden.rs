@@ -158,15 +158,23 @@ fn fraction_of(s: &str) -> &str {
     s.split_once('.').map_or("", |(_, f)| f)
 }
 
-/// The `exp` never_exact probe rows, keyed by `(input fraction digits, input's last
-/// six digits)` — a pair unique across the set.
-const DEEP_PROBES: [(usize, &str); 6] = [
-    (280, "000003"),
-    (305, "103945"),
-    (430, "000001"),
-    (455, "097523"),
-    (500, "000001"),
-    (500, "103947"),
+/// The `exp` never_exact probe rows, keyed by `(input is negative, input fraction
+/// digits, input's last six digits)`.
+///
+/// The sign is part of the key because it has to be: it sits at the FRONT of the input,
+/// so a suffix-and-length pair cannot see it, and `+1e-430` and `-1e-430` are different
+/// rows with different answers that both match `(430, "000001")`. Without the sign the
+/// lookup resolved by file order — every probe here happens to be negative and the set
+/// happens to sort the negative row first, so it found the right row by luck. A new
+/// positive probe, or a change to the ordering, would have silently pointed these
+/// assertions at the wrong answers.
+const DEEP_PROBES: [(bool, usize, &str); 6] = [
+    (true, 280, "000003"),
+    (true, 305, "103945"),
+    (true, 430, "000001"),
+    (true, 455, "097523"),
+    (true, 500, "000001"),
+    (true, 500, "103947"),
 ];
 
 /// These six `exp` rows are generated DEEPER than the rest of the set — the
@@ -194,7 +202,7 @@ fn deep_probe_answers_keep_their_generation_depth() {
     let text = std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()));
 
-    for (in_len, suffix) in DEEP_PROBES {
+    for (negative, in_len, suffix) in DEEP_PROBES {
         let row = text
             .lines()
             .filter(|l| {
@@ -202,21 +210,25 @@ fn deep_probe_answers_keep_their_generation_depth() {
                 !t.is_empty() && !t.starts_with('#') && !t.starts_with("//")
             })
             .find(|l| {
-                l.split_whitespace()
-                    .next()
-                    .map_or(false, |inp| fraction_of(inp).len() == in_len && inp.ends_with(suffix))
+                l.split_whitespace().next().map_or(false, |inp| {
+                    inp.starts_with('-') == negative
+                        && fraction_of(inp).len() == in_len
+                        && inp.ends_with(suffix)
+                })
             })
             .unwrap_or_else(|| {
+                let sign = if negative { "negative" } else { "positive" };
                 panic!(
-                    "exp.au: no never_exact probe row whose input has {in_len} fraction \
-                     digits and ends {suffix} — the row was removed or renumbered"
+                    "exp.au: no never_exact probe row whose input is {sign}, has {in_len} \
+                     fraction digits and ends {suffix} — the row was removed or renumbered"
                 )
             });
         let answer = row.split_whitespace().last().expect("row has an answer column");
         let depth = fraction_of(answer).len();
         assert!(
             depth > GEN_PRECISION,
-            "exp.au: never_exact probe row (input {in_len} digits, ending {suffix}) \
+            "exp.au: never_exact probe row (input negative={negative}, {in_len} digits, \
+             ending {suffix}) \
              carries {depth} answer digits, needs more than {GEN_PRECISION}. The \
              `#precision=1700` block in lead/exp.pb was dropped, or exp was regenerated \
              without it — the borrow holding the below-grid evidence has been rounded \
