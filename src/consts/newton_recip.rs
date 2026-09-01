@@ -1887,11 +1887,32 @@ static NEWTON_RECIP: [&[u64]; 1851] = [
 ];
 
 /// `floor(2^(64*k) / 10^scale)` little-endian for a `width_limbs`-limb
-/// working integer (`k = even(width_limbs + scale/19 + 3)`), or `None` if
-/// outside the baked range (`scale > MAX_SCALE` / `width > MAX_W`), where
-/// the caller falls back to the runtime reciprocal / MgChain.
+/// working integer (`k = even(width_limbs + scale/19 + 3)`), or `None`
+/// when the request is not served: outside the baked range
+/// (`scale > MAX_SCALE` / `width > MAX_W`), or an ODD `width_limbs`
+/// (see the guard below). The caller then falls back to the runtime
+/// reciprocal / MgChain.
 #[inline]
 pub(crate) fn newton_recip_le(scale: u32, width_limbs: usize) -> Option<&'static [u64]> {
+    // ODD WIDTHS ARE NOT SERVED: the baked row is a valid prefix only at
+    // an EVEN width. The row holds the reciprocal at the baked width with
+    // `k = even(baked_width + pow_len)` limbs, and a narrower reader takes
+    // the high-limb prefix `>> 64*(baked_width - width_limbs)`. Since `k`
+    // rounds UP to even and the baked width is itself even, that shift
+    // lands on the reader's own `k = even(width_limbs + pow_len)` only
+    // when `width_limbs` is even too. At an odd width the slice is one
+    // limb off and carries the reciprocal of a DIFFERENT power of two, so
+    // the exact-prefix identity does not hold. Return `None` and let the
+    // caller use its runtime divide, which is exact at any width — a
+    // graceful fallback, not a panic.
+    //
+    // Nothing reaches this today (the Newton band floor is 24 limbs and
+    // the crate instantiates no odd `Int<N>` that wide); it is a
+    // deliberate wall so a future odd width degrades instead of reading a
+    // wrong reciprocal prefix.
+    if !width_limbs.is_multiple_of(2) {
+        return None;
+    }
     // The table is gated behind the wide features (size-local: the narrow /
     // base build never reaches the wide rescale). Absent => `None` => the
     // caller falls back to the runtime reciprocal / MgChain.
