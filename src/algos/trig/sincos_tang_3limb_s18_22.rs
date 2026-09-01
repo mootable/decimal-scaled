@@ -32,10 +32,10 @@
 //!
 //! The shared core's `GUARD = 30` is documented (in
 //! `crate::macros::wide_transcendental`) as supporting `~200 ×
-//! 0.5 = 100 LSB-of-w` accumulated drift across the longest series
+//! 0.5 = 100 LSB-of-working_scale` accumulated drift across the longest series
 //! the wide tiers run. At SCALE 18..=22 the Taylor series on
 //! `r ∈ [0, π/4]` converges in ~20-30 rounded multiplies; the matching
-//! worst-case drift is ~30 × 0.5 = 15 LSB-of-w, many orders of
+//! worst-case drift is ~30 × 0.5 = 15 LSB-of-`working_scale`, many orders of
 //! magnitude below half a storage ULP for any `SCALE ≤ 22` at the
 //! band's guard. The probe set the value empirically: every value
 //! tried in the 8..=14 band held the wide-tier baseline within 1 LSB
@@ -64,21 +64,21 @@ pub(crate) fn tan_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> I
     if raw == Int::<3>::ZERO {
         return Int::<3>::ZERO;
     }
-    let w = SCALE + GUARD_NARROW;
-    let v_w = core::to_work_scaled(raw, GUARD_NARROW);
-    let (sin_w, cos_w) = core::sin_cos_fixed::<SCALE>(v_w, w);
+    let working_scale = SCALE + GUARD_NARROW;
+    let working_value = core::to_work_scaled(raw, GUARD_NARROW);
+    let (sin_w, cos_w) = core::sin_cos_fixed::<SCALE>(working_value, working_scale);
     if cos_w == core::zero() {
         panic!("D57::tan: cosine is zero (argument is an odd multiple of pi/2)");
     }
-    let r = core::div(sin_w, cos_w, w);
+    let tan_value = core::div(sin_w, cos_w, working_scale);
     // Near-tie escape — see `wide_trig_core::tan_series` / the asin(3e-60)
-    // family: a fixed-w single shot cannot see a deciding digit below w.
-    // Clear-of-band residuals keep the single-shot cost; the band falls to
-    // the Ziv-escalating generic kernel (rare).
+    // family: a fixed-working-scale single shot cannot see a deciding digit
+    // below the working scale. Clear-of-band residuals keep the single-shot
+    // cost; the band falls to the Ziv-escalating generic kernel (rare).
     match crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<Int<3>, _>(
-        r, w, SCALE, mode, Int::<3>::MAX, Int::<3>::MIN,
+        tan_value, working_scale, SCALE, mode, Int::<3>::MAX, Int::<3>::MIN,
     ) {
-        Some(st) => st,
+        Some(rounded) => rounded,
         None => crate::algos::support::wide_trig_core::tan_series::<
             crate::types::widths::wide_trig_d57::Core,
             SCALE,

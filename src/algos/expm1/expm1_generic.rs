@@ -32,9 +32,9 @@ use crate::int::types::traits::BigInt;
 /// `(N, SCALE)` cell.
 pub(crate) const DIRECT_BAND: i128 = 1;
 
-/// Argument-magnitude regime of `expm1(v)` for a working-scale `v_w` at scale
-/// `w` in the work integer `S`, decided from the BIT LENGTH alone — before any
-/// division, exactly as `exp_generic::ArgRegime` is.
+/// Argument-magnitude regime of `expm1(v)` for a `working_value` at
+/// `working_scale` in the work integer `S`, decided from the BIT LENGTH alone —
+/// before any division, exactly as `exp_generic::ArgRegime` is.
 ///
 /// The bounds are the `exp` classifier's, re-derived for `e^v - 1`; the two
 /// functions differ by exactly `1`, which never moves an overflow threshold.
@@ -51,39 +51,39 @@ pub(crate) enum Regime {
     MinusOne,
 }
 
-/// Classifies `v_w` per [`Regime`].
+/// Classifies `working_value` per [`Regime`].
 ///
 /// Derivation (both bounds SUFFICIENT, never fired by a representable cell),
-/// with `bl = bit_length(v_w)` and `|v| >= 2^(bl-1) / 10^w`:
+/// with `bit_len = bit_length(working_value)` and `|v| >= 2^(bit_len-1) / 10^w`:
 ///
 /// * **Overflow** (`v > 0`): the result needs `e^v * 10^w < 2^BITS`, i.e.
 ///   `v < BITS*ln2 - w*ln10`. With
 ///   `R = floor(BITS*6932/10000) + 1 - floor(w*23025/10000) >= BITS*ln2 - w*ln10`
 ///   the result provably overflows `S` once
-///   `bl >= ceil(w*33220/10000) + bits(R) + 2`.
+///   `bit_len >= ceil(w*33220/10000) + bits(R) + 2`.
 /// * **MinusOne** (`v < 0`): `e^v < 10^-(w+1)` — strictly below the working
 ///   resolution — once `|v| >= (w+1)*ln10`. With
 ///   `U = floor((w+1)*23026/10000) + 1 >= (w+1)*ln10` the same bit-length
-///   argument gives `bl >= ceil(w*33220/10000) + bits(U) + 2`.
-pub(crate) fn regime<S: BigInt>(v_w: S, w: u32) -> Regime {
-    if v_w == S::ZERO {
+///   argument gives `bit_len >= ceil(w*33220/10000) + bits(U) + 2`.
+pub(crate) fn regime<S: BigInt>(working_value: S, working_scale: u32) -> Regime {
+    if working_value == S::ZERO {
         return Regime::Fits;
     }
-    let bl = eg::bit_length::<S>(v_w) as u64;
+    let bit_len = eg::bit_length::<S>(working_value) as u64;
     // ceil(w * log2 10), over-approximated (33220/10000 >= log2 10).
-    let w_bits = ((w as u64) * 33220).div_ceil(10000);
+    let working_scale_bits = ((working_scale as u64) * 33220).div_ceil(10000);
     // bits(x) = floor(log2 x) + 1, so 2^bits(x) >= x.
     let bits_of = |x: u64| 64 - x.leading_zeros() as u64;
-    if v_w > S::ZERO {
+    if working_value > S::ZERO {
         let bits_ln2 = (<S as BigInt>::BITS as u64) * 6932 / 10000 + 1;
-        let w_ln10 = (w as u64) * 23025 / 10000;
-        let r = bits_ln2.saturating_sub(w_ln10).max(1);
-        if bl >= w_bits + bits_of(r) + 2 {
+        let scale_ln10 = (working_scale as u64) * 23025 / 10000;
+        let overflow_arg_bound = bits_ln2.saturating_sub(scale_ln10).max(1);
+        if bit_len >= working_scale_bits + bits_of(overflow_arg_bound) + 2 {
             return Regime::Overflow;
         }
     } else {
-        let u = ((w as u64) + 1) * 23026 / 10000 + 1;
-        if bl >= w_bits + bits_of(u) + 2 {
+        let minus_one_arg_bound = ((working_scale as u64) + 1) * 23026 / 10000 + 1;
+        if bit_len >= working_scale_bits + bits_of(minus_one_arg_bound) + 2 {
             return Regime::MinusOne;
         }
     }
@@ -111,23 +111,24 @@ pub(crate) fn regime<S: BigInt>(v_w: S, w: u32) -> Regime {
 /// `Some(1)` (the smallest POSITIVE working value rather than `0`, so directed
 /// rounding keeps the sign) — the same rule, reflected about `-1`.
 #[inline]
-pub(crate) fn just_above_minus_one<S: BigInt>(w: u32) -> S {
-    eg::lit::<S>(1) - eg::one::<S>(w)
+pub(crate) fn just_above_minus_one<S: BigInt>(working_scale: u32) -> S {
+    eg::lit::<S>(1) - eg::one::<S>(working_scale)
 }
 
-/// `ceil(|v|)` as a `u128`, for a working-scale `v_w` at scale `w`.
+/// `ceil(|v|)` as a `u128`, for a `working_value` at `working_scale`.
 ///
 /// Bounded by [`Regime::Fits`] to order `S::BITS * ln 2`, far inside `u128`.
-pub(crate) fn ceil_abs_int<S: BigInt>(v_w: S, w: u32) -> u128
+pub(crate) fn ceil_abs_int<S: BigInt>(working_value: S, working_scale: u32) -> u128
 where
     S::Scratch: ComputeLimbs,
 {
-    let (q, r) = eg::div_rem_exact(v_w.abs(), eg::pow10::<S>(w));
-    let n = <S as BigInt>::to_i128(q).unsigned_abs();
-    if r == S::ZERO {
-        n
+    let (quotient, remainder) =
+        eg::div_rem_exact(working_value.abs(), eg::pow10::<S>(working_scale));
+    let integer_part = <S as BigInt>::to_i128(quotient).unsigned_abs();
+    if remainder == S::ZERO {
+        integer_part
     } else {
-        n.saturating_add(1)
+        integer_part.saturating_add(1)
     }
 }
 
@@ -169,18 +170,19 @@ pub(crate) fn extra_digits<S: BigInt>(int_digits: u32) -> u32 {
     capped + 12 + (capped >> 2)
 }
 
-/// Argument-reduction depth for the halving/doubling core at working scale
-/// `w_ext`: the largest `n >= 1` with `(n+1)^2 <= 3*w_ext + 1` (so
-/// `n ~ sqrt(3*w_ext)`) — the same balance point `exp_fixed`'s
-/// `squaring_levels` strikes between reduction depth and Taylor term count.
+/// Argument-reduction depth for the halving/doubling core at
+/// `extended_working_scale`: the largest `n >= 1` with
+/// `(n+1)^2 <= 3*extended_working_scale + 1` (so `n ~ sqrt(3*ext)`) — the
+/// same balance point `exp_fixed`'s `squaring_levels` strikes between
+/// reduction depth and Taylor term count.
 #[inline]
-pub(crate) fn halving_levels(w_ext: u32) -> u32 {
-    let p_bits = w_ext.saturating_mul(3).saturating_add(1);
-    let mut n: u32 = 1;
-    while (n + 1) * (n + 1) <= p_bits {
-        n += 1;
+pub(crate) fn halving_levels(extended_working_scale: u32) -> u32 {
+    let level_bound = extended_working_scale.saturating_mul(3).saturating_add(1);
+    let mut levels: u32 = 1;
+    while (levels + 1) * (levels + 1) <= level_bound {
+        levels += 1;
     }
-    n
+    levels
 }
 
 /// Extra halvings needed to bring `|v|` into the [`DIRECT_BAND`]:
@@ -195,10 +197,10 @@ pub(crate) fn band_levels(ceil_abs: u128) -> u32 {
     }
 }
 
-/// `w * log2 10`, over-approximated (3322/1000 >= log2 10).
+/// `working_scale * log2 10`, over-approximated (3322/1000 >= log2 10).
 #[inline]
-pub(crate) fn scale_bits(w: u32) -> u64 {
-    (w as u64) * 3322 / 1000
+pub(crate) fn scale_bits(working_scale: u32) -> u64 {
+    (working_scale as u64) * 3322 / 1000
 }
 
 /// Whether a modelled internal peak of `peak` bits fits the work integer `S`

@@ -161,17 +161,18 @@ pub trait BigInt:
     /// `true` if bit `idx` of the two's-complement representation is set.
     fn bit(self, idx: u32) -> bool;
     /// Builds the value from a signed 128-bit integer.
-    fn from_i128(v: i128) -> Self;
+    fn from_i128(value: i128) -> Self;
     /// The value as a signed 128-bit integer (truncating to the low 128
     /// bits; the inverse of [`BigInt::from_i128`]).
     fn to_i128(self) -> i128;
-    /// `self * n` for an unsigned 64-bit multiplier (panics on overflow —
-    /// the default-form contract, matching `Mul`-operator semantics).
-    fn mul_u64(self, n: u64) -> Self;
+    /// `self * multiplier` for an unsigned 64-bit multiplier (panics on
+    /// overflow — the default-form contract, matching `Mul`-operator
+    /// semantics).
+    fn mul_u64(self, multiplier: u64) -> Self;
     /// Nearest-`f64` value of `self` (lossy above 53 significant bits).
     fn to_f64(self) -> f64;
     /// Truncating conversion from `f64` (saturating on out-of-range).
-    fn from_f64_val(v: f64) -> Self;
+    fn from_f64_val(value: f64) -> Self;
 
     // ── Limb round-trip bridge ───────────────────────────────────────
 
@@ -208,7 +209,7 @@ pub trait BigInt:
     where
         I: IntoIterator<Item = Self>,
     {
-        iter.into_iter().fold(Self::ZERO, |acc, x| acc + x)
+        iter.into_iter().fold(Self::ZERO, |acc, value| acc + value)
     }
 
     #[inline]
@@ -216,7 +217,7 @@ pub trait BigInt:
     where
         I: IntoIterator<Item = Self>,
     {
-        iter.into_iter().fold(Self::ONE, |acc, x| acc * x)
+        iter.into_iter().fold(Self::ONE, |acc, value| acc * value)
     }
 }
 
@@ -267,10 +268,10 @@ impl<const N: usize> BigInt for Int<N> {
         // verdict (the architecture's second axis) and const-folds it to a
         // single direct `mul_low_limb::<N, _>` call per monomorphisation.
         // Bit-identical to `wrapping_mul` (mod 2^64N) at either limb width.
-        let a = *self.as_limbs();
-        let b = *rhs.as_limbs();
+        let lhs_limbs = *self.as_limbs();
+        let rhs_limbs = *rhs.as_limbs();
         let mut out = [0u64; N];
-        crate::int::policy::mul_low::dispatch::<N>(&a, &b, &mut out);
+        crate::int::policy::mul_low::dispatch::<N>(&lhs_limbs, &rhs_limbs, &mut out);
         Int::from_limbs(out)
     }
 
@@ -280,9 +281,9 @@ impl<const N: usize> BigInt for Int<N> {
         // `int::policy::sqr_low`: same `(Algorithm, LimbSize)` second-axis
         // shape as `mul_low`, const-folded to one direct `sqr_low_limb::<N, _>`
         // call. Bit-identical to `sqr` (mod 2^64N) at either limb width.
-        let a = *self.as_limbs();
+        let value_limbs = *self.as_limbs();
         let mut out = [0u64; N];
-        crate::int::policy::sqr_low::dispatch::<N>(&a, &mut out);
+        crate::int::policy::sqr_low::dispatch::<N>(&value_limbs, &mut out);
         Int::from_limbs(out)
     }
 
@@ -378,8 +379,8 @@ impl<const N: usize> BigInt for Int<N> {
     }
 
     #[inline]
-    fn from_i128(v: i128) -> Self {
-        Int::from_i128(v)
+    fn from_i128(value: i128) -> Self {
+        Int::from_i128(value)
     }
 
     #[inline]
@@ -388,8 +389,8 @@ impl<const N: usize> BigInt for Int<N> {
     }
 
     #[inline]
-    fn mul_u64(self, n: u64) -> Self {
-        Int::mul_u64(self, n)
+    fn mul_u64(self, multiplier: u64) -> Self {
+        Int::mul_u64(self, multiplier)
     }
 
     #[inline]
@@ -398,8 +399,8 @@ impl<const N: usize> BigInt for Int<N> {
     }
 
     #[inline]
-    fn from_f64_val(v: f64) -> Self {
-        Int::from_f64(v)
+    fn from_f64_val(value: f64) -> Self {
+        Int::from_f64(value)
     }
 
     #[inline]
@@ -420,8 +421,8 @@ impl<const N: usize> BigInt for Int<N> {
         let n_full_pairs = N / 2;
         let dst_len = dst.len();
         let mut i = 0;
-        let m = n_full_pairs.min(dst_len);
-        while i < m {
+        let pairs_to_write = n_full_pairs.min(dst_len);
+        while i < pairs_to_write {
             dst[i] = (mag[2 * i] as u128) | ((mag[2 * i + 1] as u128) << 64);
             i += 1;
         }
@@ -450,18 +451,18 @@ impl<const N: usize> BigInt for Int<N> {
     fn from_mag_sign_u128(mag: &[u128], negative: bool) -> Self {
         let u128_limbs = N.div_ceil(2);
         let mut out = [0u64; N];
-        let m = u128_limbs.min(mag.len());
+        let readable_limbs = u128_limbs.min(mag.len());
         let n_full_pairs = N / 2;
-        let copy_pairs = n_full_pairs.min(m);
+        let copy_pairs = n_full_pairs.min(readable_limbs);
         let mut i = 0;
         while i < copy_pairs {
-            let v = mag[i];
-            out[2 * i] = v as u64;
-            out[2 * i + 1] = (v >> 64) as u64;
+            let pair = mag[i];
+            out[2 * i] = pair as u64;
+            out[2 * i + 1] = (pair >> 64) as u64;
             i += 1;
         }
         // Odd-N tail: only the low u64 of mag[i] survives.
-        if (N & 1) == 1 && i < m {
+        if (N & 1) == 1 && i < readable_limbs {
             out[2 * i] = mag[i] as u64;
         }
         Self::from_mag_limbs(&out, negative)

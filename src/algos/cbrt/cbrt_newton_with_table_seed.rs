@@ -55,36 +55,37 @@ pub(crate) fn cbrt_newton_with_table_seed(raw: Int<3>, mode: RoundingMode) -> In
     let zero = Int::<6>::ZERO;
     let one = Int::<6>::ONE;
     let widened: Int<6> = raw.resize_to::<Int<6>>();
-    let negative = widened < zero;
-    let mag = if negative { -widened } else { widened };
-    let n: Int<6> = mag * const { crate::consts::pow10::dispatch_int::<6>(2 * SCALE) };
+    let is_negative = widened < zero;
+    let magnitude = if is_negative { -widened } else { widened };
+    let radicand: Int<6> =
+        magnitude * const { crate::consts::pow10::dispatch_int::<6>(2 * SCALE) };
 
-    let q: Int<6> = n.icbrt();
+    let root: Int<6> = radicand.icbrt();
 
     // ── single half-step round (same logic as cbrt_newton). ──────────
-    let eight_n = n << 3u32;
-    let t = q + q + one;
-    let cube = t * t * t;
-    let halfway_geq = eight_n >= cube;
-    let halfway_gt = eight_n > cube;
+    let eight_radicand = radicand << 3u32;
+    let doubled_midpoint = root + root + one;
+    let cube = doubled_midpoint * doubled_midpoint * doubled_midpoint;
+    let halfway_geq = eight_radicand >= cube;
+    let halfway_gt = eight_radicand > cube;
     let tie = halfway_geq && !halfway_gt;
-    let two_q = q + q;
-    let eight_q_cubed = if q == zero { zero } else { two_q * two_q * two_q };
-    let residual_nonzero = eight_n > eight_q_cubed;
-    // Last decimal digit of the (non-negative) root magnitude `q`.
-    let q_mod_10 = (q % Int::<6>::TEN).as_i128() as u8;
+    let two_root = root + root;
+    let eight_root_cubed = if root == zero { zero } else { two_root * two_root * two_root };
+    let residual_nonzero = eight_radicand > eight_root_cubed;
+    // Last decimal digit of the (non-negative) root magnitude `root`.
+    let root_mod_10 = (root % Int::<6>::TEN).as_i128() as u8;
     let bump = match mode {
-        RoundingMode::HalfToEven => halfway_gt || (tie && q_mod_10 & 1 == 1),
+        RoundingMode::HalfToEven => halfway_gt || (tie && root_mod_10 & 1 == 1),
         RoundingMode::HalfAwayFromZero => halfway_geq,
         RoundingMode::HalfTowardZero => halfway_gt,
         RoundingMode::Trunc => false,
-        RoundingMode::Floor => negative && residual_nonzero,
-        RoundingMode::Ceiling => !negative && residual_nonzero,
-        // `q` is the magnitude, so away-from-zero is a bump either sign.
+        RoundingMode::Floor => is_negative && residual_nonzero,
+        RoundingMode::Ceiling => !is_negative && residual_nonzero,
+        // `root` is the magnitude, so away-from-zero is a bump either sign.
         RoundingMode::AwayFromZero => residual_nonzero,
-        RoundingMode::ZeroFiveUp => residual_nonzero && matches!(q_mod_10, 0 | 5),
+        RoundingMode::ZeroFiveUp => residual_nonzero && matches!(root_mod_10, 0 | 5),
     };
-    let q = if bump { q + one } else { q };
-    let signed = if negative { -q } else { q };
-    signed.resize_to::<Int<3>>()
+    let root = if bump { root + one } else { root };
+    let signed_root = if is_negative { -root } else { root };
+    signed_root.resize_to::<Int<3>>()
 }

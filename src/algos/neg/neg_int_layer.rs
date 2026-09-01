@@ -13,6 +13,6 @@ use crate::int::types::Int;
 /// `saturating_neg` / `overflowing_neg` variants carry the modular / `None`
 /// / clamp / flag policies). No rescaling needed — the scale is unchanged.
 #[inline]
-pub(crate) fn neg_int_layer<const N: usize>(a: Int<N>) -> Int<N> {
-    a.checked_neg().expect("attempt to negate with overflow")
+pub(crate) fn neg_int_layer<const N: usize>(value: Int<N>) -> Int<N> {
+    value.checked_neg().expect("attempt to negate with overflow")
 }

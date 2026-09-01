@@ -6,7 +6,8 @@
 //!
 //! Same-`SCALE` decimal remainder needs no rescaling: both operands carry the
 //! same `10^SCALE` factor, so the storage-level remainder IS the answer
-//! (`(a / 10^S) rem (b / 10^S) == (a rem b) / 10^S`). For narrow storage the
+//! (`(dividend / 10^S) rem (divisor / 10^S) == (dividend rem divisor) /
+//! 10^S`). For narrow storage the
 //! storage value fits a single hardware integer, so the remainder is a direct
 //! primitive `%`:
 //!
@@ -37,31 +38,31 @@ use crate::int::types::Int;
 
 /// Hardware-`%` decimal remainder for narrow storage (`N <= 2`).
 ///
-/// Computes `a % b` on the storage values. Panics on a zero divisor and on
-/// the `MIN % -ONE` overflow boundary in BOTH debug and release, matching the
-/// generic `rem_int_layer` default-operator contract.
+/// Computes `dividend % divisor` on the storage values. Panics on a zero
+/// divisor and on the `MIN % -ONE` overflow boundary in BOTH debug and
+/// release, matching the generic `rem_int_layer` default-operator contract.
 #[inline]
 #[must_use]
-pub(crate) fn rem_native<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
+pub(crate) fn rem_native<const N: usize>(dividend: Int<N>, divisor: Int<N>) -> Int<N> {
     assert!(
-        !b.is_zero(),
+        !divisor.is_zero(),
         "attempt to calculate the remainder with a divisor of zero"
     );
     if N == 1 {
-        let ai = a.to_i128() as i64;
-        let bi = b.to_i128() as i64;
-        if ai == i64::MIN && bi == -1 {
+        let dividend_raw = dividend.to_i128() as i64;
+        let divisor_raw = divisor.to_i128() as i64;
+        if dividend_raw == i64::MIN && divisor_raw == -1 {
             panic!("attempt to calculate the remainder with overflow");
         }
-        return Int::<N>::from_i128(ai.wrapping_rem(bi) as i128);
+        return Int::<N>::from_i128(dividend_raw.wrapping_rem(divisor_raw) as i128);
     }
     // N == 2 (D38): native i128 %.
-    let ai = a.to_i128();
-    let bi = b.to_i128();
-    if ai == i128::MIN && bi == -1 {
+    let dividend_raw = dividend.to_i128();
+    let divisor_raw = divisor.to_i128();
+    if dividend_raw == i128::MIN && divisor_raw == -1 {
         panic!("attempt to calculate the remainder with overflow");
     }
-    Int::<N>::from_i128(ai.wrapping_rem(bi))
+    Int::<N>::from_i128(dividend_raw.wrapping_rem(divisor_raw))
 }
 
 #[cfg(test)]
@@ -83,9 +84,13 @@ mod tests {
             (i64::MIN + 1, 2),
             (i64::MIN, 7),
         ];
-        for &(a, b) in cases {
-            let got = rem_native::<1>(Int::<1>::from_i64(a), Int::<1>::from_i64(b));
-            assert_eq!(got.to_i128() as i64, a % b, "rem_native n1 ({a}, {b})");
+        for &(dividend, divisor) in cases {
+            let got = rem_native::<1>(Int::<1>::from_i64(dividend), Int::<1>::from_i64(divisor));
+            assert_eq!(
+                got.to_i128() as i64,
+                dividend % divisor,
+                "rem_native n1 ({dividend}, {divisor})"
+            );
         }
     }
 
@@ -100,9 +105,13 @@ mod tests {
             (i128::MIN + 1, 3),
             (1_000_000_000_000_i128, 999_999_937),
         ];
-        for &(a, b) in cases {
-            let got = rem_native::<2>(Int::<2>::from_i128(a), Int::<2>::from_i128(b));
-            assert_eq!(got.to_i128(), a % b, "rem_native n2 ({a}, {b})");
+        for &(dividend, divisor) in cases {
+            let got = rem_native::<2>(Int::<2>::from_i128(dividend), Int::<2>::from_i128(divisor));
+            assert_eq!(
+                got.to_i128(),
+                dividend % divisor,
+                "rem_native n2 ({dividend}, {divisor})"
+            );
         }
     }
 }

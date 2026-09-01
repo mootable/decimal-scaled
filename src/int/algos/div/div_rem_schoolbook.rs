@@ -6,8 +6,8 @@
 //! [`div_rem_schoolbook`] is the generic naive reference algorithm for
 //! unsigned big-integer division, operating over little-endian `u64` limb
 //! slices. It uses the classical bit-by-bit shift-subtract method: the
-//! invariant is that the running remainder in `rem` is always less than the
-//! divisor after each subtraction step.
+//! invariant is that the running remainder in `remainder` is always less than
+//! the divisor after each subtraction step.
 //!
 //! The algorithm: for each bit of the dividend from most-significant to
 //! least-significant, shift the running remainder left by one, bring in the
@@ -24,33 +24,35 @@ use crate::int::algos::support::limbs::{bit_len, cmp, shl1, sub_assign};
 
 /// Binary shift-subtract long division — schoolbook reference.
 ///
-/// Computes `quot = num / den` and `rem = num % den` (unsigned, truncating)
-/// over little-endian `u64` limb slices. Both `quot` and `rem` are
-/// zeroed before use; their lengths must each be at least as long as `num`.
+/// Computes `quotient = dividend / divisor` and
+/// `remainder = dividend % divisor` (unsigned, truncating) over little-endian
+/// `u64` limb slices. Both `quotient` and `remainder` are zeroed before use;
+/// their lengths must each be at least as long as `dividend`.
 ///
-/// The divisor must be non-zero; if `den` is zero the outputs are left as
+/// The divisor must be non-zero; if `divisor` is zero the outputs are left as
 /// zero (the shift-subtract loop produces no subtractions and no quotient
 /// bits, which is consistent with this).
 #[allow(dead_code)]
-pub(crate) fn div_rem_schoolbook(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
-    for slot in quot.iter_mut() {
+pub(crate) fn div_rem_schoolbook(dividend: &[u64], divisor: &[u64], quotient: &mut [u64],
+    remainder: &mut [u64]) {
+    for slot in quotient.iter_mut() {
         *slot = 0;
     }
-    for slot in rem.iter_mut() {
+    for slot in remainder.iter_mut() {
         *slot = 0;
     }
 
-    let bits = bit_len(num);
-    let mut i = bits;
+    let dividend_bits = bit_len(dividend);
+    let mut i = dividend_bits;
     while i > 0 {
         i -= 1;
-        shl1(rem);
-        let bit = (num[(i / 64) as usize] >> (i % 64)) & 1;
-        rem[0] |= bit;
-        shl1(quot);
-        if cmp(rem, den) >= 0 {
-            sub_assign(rem, den);
-            quot[0] |= 1;
+        shl1(remainder);
+        let bit = (dividend[(i / 64) as usize] >> (i % 64)) & 1;
+        remainder[0] |= bit;
+        shl1(quotient);
+        if cmp(remainder, divisor) >= 0 {
+            sub_assign(remainder, divisor);
+            quotient[0] |= 1;
         }
     }
 }
@@ -63,23 +65,23 @@ mod tests {
     /// arithmetic (external oracle).
     #[test]
     fn schoolbook_single_limb_oracle() {
-        let vals: &[u64] = &[
+        let values: &[u64] = &[
             0, 1, 2, 3, 7, 10, 13, 100, 1_000_000,
             u64::MAX, u64::MAX - 1, 1u64 << 63,
             0xDEAD_BEEF_CAFE_F00D, 0x0102_0304_0506_0708,
         ];
-        for &num in vals {
-            for &den in vals {
-                if den == 0 {
+        for &dividend in values {
+            for &divisor in values {
+                if divisor == 0 {
                     continue;
                 }
-                let mut q = [0u64; 1];
-                let mut r = [0u64; 1];
-                div_rem_schoolbook(&[num], &[den], &mut q, &mut r);
-                assert_eq!(q[0], num / den,
-                    "schoolbook quot mismatch: {num} / {den}");
-                assert_eq!(r[0], num % den,
-                    "schoolbook rem mismatch: {num} % {den}");
+                let mut quotient = [0u64; 1];
+                let mut remainder = [0u64; 1];
+                div_rem_schoolbook(&[dividend], &[divisor], &mut quotient, &mut remainder);
+                assert_eq!(quotient[0], dividend / divisor,
+                    "schoolbook quot mismatch: {dividend} / {divisor}");
+                assert_eq!(remainder[0], dividend % divisor,
+                    "schoolbook rem mismatch: {dividend} % {divisor}");
             }
         }
     }
@@ -88,29 +90,30 @@ mod tests {
     /// oracle).
     #[test]
     fn schoolbook_double_limb_oracle() {
-        let wide: &[u128] = &[
+        let values: &[u128] = &[
             0, 1, u128::MAX, u128::MAX - 1,
             1u128 << 64, (1u128 << 64) - 1,
             0x0123_4567_89ab_cdef_fedc_ba98_7654_3210_u128,
             0xDEAD_BEEF_DEAD_BEEF_CAFE_F00D_CAFE_F00D_u128,
         ];
-        let to_limbs = |v: u128| [v as u64, (v >> 64) as u64];
-        for &num in wide {
-            for &den in wide {
-                if den == 0 {
+        let to_limbs = |value: u128| [value as u64, (value >> 64) as u64];
+        for &dividend in values {
+            for &divisor in values {
+                if divisor == 0 {
                     continue;
                 }
-                let n = to_limbs(num);
-                let d = to_limbs(den);
-                let mut q = [0u64; 2];
-                let mut r = [0u64; 2];
-                div_rem_schoolbook(&n, &d, &mut q, &mut r);
-                let want_q = to_limbs(num / den);
-                let want_r = to_limbs(num % den);
-                assert_eq!(q, want_q,
-                    "schoolbook quot mismatch: {num:#x} / {den:#x}");
-                assert_eq!(r, want_r,
-                    "schoolbook rem mismatch: {num:#x} % {den:#x}");
+                let dividend_limbs = to_limbs(dividend);
+                let divisor_limbs = to_limbs(divisor);
+                let mut quotient = [0u64; 2];
+                let mut remainder = [0u64; 2];
+                div_rem_schoolbook(&dividend_limbs, &divisor_limbs, &mut quotient,
+                    &mut remainder);
+                let expected_quotient = to_limbs(dividend / divisor);
+                let expected_remainder = to_limbs(dividend % divisor);
+                assert_eq!(quotient, expected_quotient,
+                    "schoolbook quot mismatch: {dividend:#x} / {divisor:#x}");
+                assert_eq!(remainder, expected_remainder,
+                    "schoolbook rem mismatch: {dividend:#x} % {divisor:#x}");
             }
         }
     }
@@ -131,22 +134,24 @@ mod tests {
             (&[100, 0, 0], &[200, 0, 1]),
             (&[0, 0, u64::MAX, u64::MAX], &[1, 2, u64::MAX]),
         ];
-        for (num, den) in cases {
-            if is_zero(den) {
+        for (dividend, divisor) in cases {
+            if is_zero(divisor) {
                 continue;
             }
-            let mut q_ref = [0u64; 8];
-            let mut r_ref = [0u64; 8];
-            div_rem_dispatch(num, den, &mut q_ref, &mut r_ref);
+            let mut quotient_dispatch = [0u64; 8];
+            let mut remainder_dispatch = [0u64; 8];
+            div_rem_dispatch(dividend, divisor, &mut quotient_dispatch,
+                &mut remainder_dispatch);
 
-            let mut q_sb = [0u64; 8];
-            let mut r_sb = [0u64; 8];
-            div_rem_schoolbook(num, den, &mut q_sb, &mut r_sb);
+            let mut quotient_schoolbook = [0u64; 8];
+            let mut remainder_schoolbook = [0u64; 8];
+            div_rem_schoolbook(dividend, divisor, &mut quotient_schoolbook,
+                &mut remainder_schoolbook);
 
-            assert_eq!(q_sb, q_ref,
-                "schoolbook quot differs from dispatch on {:?} / {:?}", num, den);
-            assert_eq!(r_sb, r_ref,
-                "schoolbook rem differs from dispatch on {:?} / {:?}", num, den);
+            assert_eq!(quotient_schoolbook, quotient_dispatch,
+                "schoolbook quot differs from dispatch on {:?} / {:?}", dividend, divisor);
+            assert_eq!(remainder_schoolbook, remainder_dispatch,
+                "schoolbook rem differs from dispatch on {:?} / {:?}", dividend, divisor);
         }
     }
 }

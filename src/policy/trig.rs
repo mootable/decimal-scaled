@@ -186,8 +186,8 @@ pub(crate) mod forward {
     #[inline]
     pub(crate) fn resolve<const N: usize, const SCALE: u32>(raw: &Int<N>) -> Algorithm {
         match const { select::<N, SCALE>() } {
-            Select::ByAlgorithm(a) => a,
-            Select::ByValue(f) => f(raw),
+            Select::ByAlgorithm(algorithm) => algorithm,
+            Select::ByValue(choose) => choose(raw),
         }
     }
 
@@ -195,8 +195,8 @@ pub(crate) mod forward {
     #[inline]
     pub(crate) fn resolve_tan<const N: usize, const SCALE: u32>(raw: &Int<N>) -> Algorithm {
         match const { select_tan::<N, SCALE>() } {
-            Select::ByAlgorithm(a) => a,
-            Select::ByValue(f) => f(raw),
+            Select::ByAlgorithm(algorithm) => algorithm,
+            Select::ByValue(choose) => choose(raw),
         }
     }
 }
@@ -253,8 +253,8 @@ pub(crate) mod inverse {
     #[inline]
     pub(crate) fn resolve<const N: usize, const SCALE: u32>(raw: &Int<N>) -> Algorithm {
         match const { select::<N, SCALE>() } {
-            Select::ByAlgorithm(a) => a,
-            Select::ByValue(f) => f(raw),
+            Select::ByAlgorithm(algorithm) => algorithm,
+            Select::ByValue(choose) => choose(raw),
         }
     }
 }
@@ -311,8 +311,8 @@ pub(crate) mod hyper {
     #[inline]
     pub(crate) fn resolve<const N: usize, const SCALE: u32>(raw: &Int<N>) -> Algorithm {
         match const { select::<N, SCALE>() } {
-            Select::ByAlgorithm(a) => a,
-            Select::ByValue(f) => f(raw),
+            Select::ByAlgorithm(algorithm) => algorithm,
+            Select::ByValue(choose) => choose(raw),
         }
     }
 }
@@ -566,8 +566,8 @@ pub(crate) mod inverse_rung {
 #[inline]
 fn hyper_band_in_range<const N: usize, const SCALE: u32>(raw: &crate::int::types::Int<N>) -> bool {
     let zero = crate::int::types::Int::<N>::ZERO;
-    let a = if *raw < zero { zero - *raw } else { *raw };
-    a <= crate::int::types::Int::<N>::from_i128(2)
+    let abs_raw = if *raw < zero { zero - *raw } else { *raw };
+    abs_raw <= crate::int::types::Int::<N>::from_i128(2)
         * crate::consts::pow10::dispatch::<crate::int::types::Int<N>>(SCALE)
 }
 
@@ -758,15 +758,16 @@ mod borrow_d57 {
     use crate::types::widths::wide_trig_d57;
 
     #[inline]
-    fn narrow<const SCALE: u32>(raw_wide: Int<3>, op: &'static str) -> Int<2> {
+    fn narrow<const SCALE: u32>(raw_wide: Int<3>, method: &'static str) -> Int<2> {
         let wide = crate::D::<crate::int::types::Int<3>, SCALE>::from_bits(raw_wide);
-        let r: crate::D<crate::int::types::Int<2>, SCALE> = wide.try_into().unwrap_or_else(|_| {
-            panic!(
-                "{op}: result out of range — produced {wide}, D38<{SCALE}> represents only |x| < 1.7e{}",
-                38_i32 - SCALE as i32,
-            )
-        });
-        r.0
+        let narrowed: crate::D<crate::int::types::Int<2>, SCALE> =
+            wide.try_into().unwrap_or_else(|_| {
+                panic!(
+                    "{method}: result out of range — produced {wide}, D38<{SCALE}> represents only |x| < 1.7e{}",
+                    38_i32 - SCALE as i32,
+                )
+            });
+        narrowed.0
     }
 
     #[inline]
@@ -933,56 +934,56 @@ macro_rules! impl_narrow_trig {
                 $sin_s(self, mode)
             }
             #[inline]
-            pub(crate) fn policy_sin_with(self, wd: u32, mode: RoundingMode) -> Self {
-                $sin_w(self, wd, mode)
+            pub(crate) fn policy_sin_with(self, working_digits: u32, mode: RoundingMode) -> Self {
+                $sin_w(self, working_digits, mode)
             }
             #[inline]
             pub(crate) fn policy_cos(self, mode: RoundingMode) -> Self {
                 $cos_s(self, mode)
             }
             #[inline]
-            pub(crate) fn policy_cos_with(self, wd: u32, mode: RoundingMode) -> Self {
-                $cos_w(self, wd, mode)
+            pub(crate) fn policy_cos_with(self, working_digits: u32, mode: RoundingMode) -> Self {
+                $cos_w(self, working_digits, mode)
             }
             #[inline]
             pub(crate) fn policy_tan(self, mode: RoundingMode) -> Self {
                 $tan_s(self, mode)
             }
             #[inline]
-            pub(crate) fn policy_tan_with(self, wd: u32, mode: RoundingMode) -> Self {
-                $tan_w(self, wd, mode)
+            pub(crate) fn policy_tan_with(self, working_digits: u32, mode: RoundingMode) -> Self {
+                $tan_w(self, working_digits, mode)
             }
             #[inline]
             pub(crate) fn policy_atan(self, mode: RoundingMode) -> Self {
                 $atan_s(self, mode)
             }
             #[inline]
-            pub(crate) fn policy_atan_with(self, wd: u32, mode: RoundingMode) -> Self {
-                $atan_w(self, wd, mode)
+            pub(crate) fn policy_atan_with(self, working_digits: u32, mode: RoundingMode) -> Self {
+                $atan_w(self, working_digits, mode)
             }
             #[inline]
             pub(crate) fn policy_asin(self, mode: RoundingMode) -> Self {
                 $asin_s(self, mode)
             }
             #[inline]
-            pub(crate) fn policy_asin_with(self, wd: u32, mode: RoundingMode) -> Self {
-                $asin_w(self, wd, mode)
+            pub(crate) fn policy_asin_with(self, working_digits: u32, mode: RoundingMode) -> Self {
+                $asin_w(self, working_digits, mode)
             }
             #[inline]
             pub(crate) fn policy_acos(self, mode: RoundingMode) -> Self {
                 $acos_s(self, mode)
             }
             #[inline]
-            pub(crate) fn policy_acos_with(self, wd: u32, mode: RoundingMode) -> Self {
-                $acos_w(self, wd, mode)
+            pub(crate) fn policy_acos_with(self, working_digits: u32, mode: RoundingMode) -> Self {
+                $acos_w(self, working_digits, mode)
             }
             #[inline]
             pub(crate) fn policy_atan2(self, other: Self, mode: RoundingMode) -> Self {
                 $atan2_s(self, other, mode)
             }
             #[inline]
-            pub(crate) fn policy_atan2_with(self, other: Self, wd: u32, mode: RoundingMode) -> Self {
-                $atan2_w(self, other, wd, mode)
+            pub(crate) fn policy_atan2_with(self, other: Self, working_digits: u32, mode: RoundingMode) -> Self {
+                $atan2_w(self, other, working_digits, mode)
             }
 
             // Hyperbolics and angle conversions widen → D38 → narrow.
@@ -999,9 +1000,9 @@ macro_rules! impl_narrow_trig {
                 )
             }
             #[inline]
-            pub(crate) fn policy_sinh_with(self, wd: u32, mode: RoundingMode) -> Self {
+            pub(crate) fn policy_sinh_with(self, working_digits: u32, mode: RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.sinh_approx_with(wd, mode)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide.sinh_approx_with(working_digits, mode)).unwrap_or_else(
                     |_| {
                         crate::support::diagnostics::overflow_panic_with_scale(
                             concat!(stringify!($T), "::sinh"),
@@ -1023,9 +1024,9 @@ macro_rules! impl_narrow_trig {
                 )
             }
             #[inline]
-            pub(crate) fn policy_cosh_with(self, wd: u32, mode: RoundingMode) -> Self {
+            pub(crate) fn policy_cosh_with(self, working_digits: u32, mode: RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.cosh_approx_with(wd, mode)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide.cosh_approx_with(working_digits, mode)).unwrap_or_else(
                     |_| {
                         crate::support::diagnostics::overflow_panic_with_scale(
                             concat!(stringify!($T), "::cosh"),
@@ -1047,9 +1048,9 @@ macro_rules! impl_narrow_trig {
                 )
             }
             #[inline]
-            pub(crate) fn policy_tanh_with(self, wd: u32, mode: RoundingMode) -> Self {
+            pub(crate) fn policy_tanh_with(self, working_digits: u32, mode: RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.tanh_approx_with(wd, mode)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide.tanh_approx_with(working_digits, mode)).unwrap_or_else(
                     |_| {
                         crate::support::diagnostics::overflow_panic_with_scale(
                             concat!(stringify!($T), "::tanh"),
@@ -1071,9 +1072,9 @@ macro_rules! impl_narrow_trig {
                 )
             }
             #[inline]
-            pub(crate) fn policy_asinh_with(self, wd: u32, mode: RoundingMode) -> Self {
+            pub(crate) fn policy_asinh_with(self, working_digits: u32, mode: RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.asinh_approx_with(wd, mode)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide.asinh_approx_with(working_digits, mode)).unwrap_or_else(
                     |_| {
                         crate::support::diagnostics::overflow_panic_with_scale(
                             concat!(stringify!($T), "::asinh"),
@@ -1095,9 +1096,9 @@ macro_rules! impl_narrow_trig {
                 )
             }
             #[inline]
-            pub(crate) fn policy_acosh_with(self, wd: u32, mode: RoundingMode) -> Self {
+            pub(crate) fn policy_acosh_with(self, working_digits: u32, mode: RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.acosh_approx_with(wd, mode)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide.acosh_approx_with(working_digits, mode)).unwrap_or_else(
                     |_| {
                         crate::support::diagnostics::overflow_panic_with_scale(
                             concat!(stringify!($T), "::acosh"),
@@ -1119,9 +1120,9 @@ macro_rules! impl_narrow_trig {
                 )
             }
             #[inline]
-            pub(crate) fn policy_atanh_with(self, wd: u32, mode: RoundingMode) -> Self {
+            pub(crate) fn policy_atanh_with(self, working_digits: u32, mode: RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.atanh_approx_with(wd, mode)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide.atanh_approx_with(working_digits, mode)).unwrap_or_else(
                     |_| {
                         crate::support::diagnostics::overflow_panic_with_scale(
                             concat!(stringify!($T), "::atanh"),
@@ -1135,8 +1136,8 @@ macro_rules! impl_narrow_trig {
                 Self::from_bits(crate::policy::to_degrees::dispatch::<_, SCALE>(self.to_bits(), mode))
             }
             #[inline]
-            pub(crate) fn policy_to_degrees_with(self, wd: u32, mode: RoundingMode) -> Self {
-                let _ = wd;
+            pub(crate) fn policy_to_degrees_with(self, working_digits: u32, mode: RoundingMode) -> Self {
+                let _ = working_digits;
                 Self::from_bits(crate::policy::to_degrees::dispatch::<_, SCALE>(self.to_bits(), mode))
             }
             #[inline]
@@ -1144,8 +1145,8 @@ macro_rules! impl_narrow_trig {
                 Self::from_bits(crate::policy::to_radians::dispatch::<_, SCALE>(self.to_bits(), mode))
             }
             #[inline]
-            pub(crate) fn policy_to_radians_with(self, wd: u32, mode: RoundingMode) -> Self {
-                let _ = wd;
+            pub(crate) fn policy_to_radians_with(self, working_digits: u32, mode: RoundingMode) -> Self {
+                let _ = working_digits;
                 Self::from_bits(crate::policy::to_radians::dispatch::<_, SCALE>(self.to_bits(), mode))
             }
         }
@@ -1197,8 +1198,8 @@ macro_rules! d38_hyperbolic_and_angle {
             })
         }
         #[inline]
-        pub(crate) fn policy_sinh_with(self, wd: u32, mode: RoundingMode) -> Self {
-            Self(trig::trig_series_2limb::sinh_with(self.0, SCALE, wd, mode))
+        pub(crate) fn policy_sinh_with(self, working_digits: u32, mode: RoundingMode) -> Self {
+            Self(trig::trig_series_2limb::sinh_with(self.0, SCALE, working_digits, mode))
         }
         #[inline]
         pub(crate) fn policy_cosh(self, mode: RoundingMode) -> Self {
@@ -1209,8 +1210,8 @@ macro_rules! d38_hyperbolic_and_angle {
             })
         }
         #[inline]
-        pub(crate) fn policy_cosh_with(self, wd: u32, mode: RoundingMode) -> Self {
-            Self(trig::trig_series_2limb::cosh_with(self.0, SCALE, wd, mode))
+        pub(crate) fn policy_cosh_with(self, working_digits: u32, mode: RoundingMode) -> Self {
+            Self(trig::trig_series_2limb::cosh_with(self.0, SCALE, working_digits, mode))
         }
         #[inline]
         pub(crate) fn policy_tanh(self, mode: RoundingMode) -> Self {
@@ -1221,40 +1222,40 @@ macro_rules! d38_hyperbolic_and_angle {
             })
         }
         #[inline]
-        pub(crate) fn policy_tanh_with(self, wd: u32, mode: RoundingMode) -> Self {
-            Self(trig::trig_series_2limb::tanh_with(self.0, SCALE, wd, mode))
+        pub(crate) fn policy_tanh_with(self, working_digits: u32, mode: RoundingMode) -> Self {
+            Self(trig::trig_series_2limb::tanh_with(self.0, SCALE, working_digits, mode))
         }
         #[inline]
         pub(crate) fn policy_asinh(self, mode: RoundingMode) -> Self {
             Self(trig::trig_series_2limb::asinh_strict::<SCALE>(self.0, mode))
         }
         #[inline]
-        pub(crate) fn policy_asinh_with(self, wd: u32, mode: RoundingMode) -> Self {
-            Self(trig::trig_series_2limb::asinh_with(self.0, SCALE, wd, mode))
+        pub(crate) fn policy_asinh_with(self, working_digits: u32, mode: RoundingMode) -> Self {
+            Self(trig::trig_series_2limb::asinh_with(self.0, SCALE, working_digits, mode))
         }
         #[inline]
         pub(crate) fn policy_acosh(self, mode: RoundingMode) -> Self {
             Self(trig::trig_series_2limb::acosh_strict::<SCALE>(self.0, mode))
         }
         #[inline]
-        pub(crate) fn policy_acosh_with(self, wd: u32, mode: RoundingMode) -> Self {
-            Self(trig::trig_series_2limb::acosh_with(self.0, SCALE, wd, mode))
+        pub(crate) fn policy_acosh_with(self, working_digits: u32, mode: RoundingMode) -> Self {
+            Self(trig::trig_series_2limb::acosh_with(self.0, SCALE, working_digits, mode))
         }
         #[inline]
         pub(crate) fn policy_atanh(self, mode: RoundingMode) -> Self {
             Self(trig::trig_series_2limb::atanh_strict::<SCALE>(self.0, mode))
         }
         #[inline]
-        pub(crate) fn policy_atanh_with(self, wd: u32, mode: RoundingMode) -> Self {
-            Self(trig::trig_series_2limb::atanh_with(self.0, SCALE, wd, mode))
+        pub(crate) fn policy_atanh_with(self, working_digits: u32, mode: RoundingMode) -> Self {
+            Self(trig::trig_series_2limb::atanh_with(self.0, SCALE, working_digits, mode))
         }
         #[inline]
         pub(crate) fn policy_to_degrees(self, mode: RoundingMode) -> Self {
             Self::from_bits(crate::policy::to_degrees::dispatch::<_, SCALE>(self.to_bits(), mode))
         }
         #[inline]
-        pub(crate) fn policy_to_degrees_with(self, wd: u32, mode: RoundingMode) -> Self {
-            let _ = wd;
+        pub(crate) fn policy_to_degrees_with(self, working_digits: u32, mode: RoundingMode) -> Self {
+            let _ = working_digits;
             Self::from_bits(crate::policy::to_degrees::dispatch::<_, SCALE>(self.to_bits(), mode))
         }
         #[inline]
@@ -1262,8 +1263,8 @@ macro_rules! d38_hyperbolic_and_angle {
             Self::from_bits(crate::policy::to_radians::dispatch::<_, SCALE>(self.to_bits(), mode))
         }
         #[inline]
-        pub(crate) fn policy_to_radians_with(self, wd: u32, mode: RoundingMode) -> Self {
-            let _ = wd;
+        pub(crate) fn policy_to_radians_with(self, working_digits: u32, mode: RoundingMode) -> Self {
+            let _ = working_digits;
             Self::from_bits(crate::policy::to_radians::dispatch::<_, SCALE>(self.to_bits(), mode))
         }
     };
@@ -1285,8 +1286,8 @@ macro_rules! d38_forward_fixed {
             })
         }
         #[inline]
-        pub(crate) fn policy_sin_with(self, wd: u32, mode: RoundingMode) -> Self {
-            Self(trig::trig_series_2limb::sin_with::<SCALE>(self.0, wd, mode))
+        pub(crate) fn policy_sin_with(self, working_digits: u32, mode: RoundingMode) -> Self {
+            Self(trig::trig_series_2limb::sin_with::<SCALE>(self.0, working_digits, mode))
         }
         #[inline]
         pub(crate) fn policy_cos(self, mode: RoundingMode) -> Self {
@@ -1299,8 +1300,8 @@ macro_rules! d38_forward_fixed {
             })
         }
         #[inline]
-        pub(crate) fn policy_cos_with(self, wd: u32, mode: RoundingMode) -> Self {
-            Self(trig::trig_series_2limb::cos_with::<SCALE>(self.0, wd, mode))
+        pub(crate) fn policy_cos_with(self, working_digits: u32, mode: RoundingMode) -> Self {
+            Self(trig::trig_series_2limb::cos_with::<SCALE>(self.0, working_digits, mode))
         }
         #[inline]
         pub(crate) fn policy_tan(self, mode: RoundingMode) -> Self {
@@ -1313,8 +1314,8 @@ macro_rules! d38_forward_fixed {
             })
         }
         #[inline]
-        pub(crate) fn policy_tan_with(self, wd: u32, mode: RoundingMode) -> Self {
-            Self(trig::trig_series_2limb::tan_with::<SCALE>(self.0, wd, mode))
+        pub(crate) fn policy_tan_with(self, working_digits: u32, mode: RoundingMode) -> Self {
+            Self(trig::trig_series_2limb::tan_with::<SCALE>(self.0, working_digits, mode))
         }
     };
 }
@@ -1333,7 +1334,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_atan_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_atan_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         Self(borrow_d57::atan_strict::<SCALE>(self.0, mode))
     }
     #[inline]
@@ -1345,7 +1346,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_asin_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_asin_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         Self(borrow_d57::asin_strict::<SCALE>(self.0, mode))
     }
     #[inline]
@@ -1357,7 +1358,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_acos_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_acos_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         Self(borrow_d57::acos_strict::<SCALE>(self.0, mode))
     }
     #[inline]
@@ -1371,7 +1372,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_atan2_with(self, other: Self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_atan2_with(self, other: Self, _working_digits: u32, mode: RoundingMode) -> Self {
         Self(borrow_d57::atan2_strict::<SCALE>(self.0, other.0, mode))
     }
 
@@ -1392,8 +1393,8 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_atan_with(self, wd: u32, mode: RoundingMode) -> Self {
-        Self(trig::trig_series_2limb::atan_with::<SCALE>(self.0, wd, mode))
+    pub(crate) fn policy_atan_with(self, working_digits: u32, mode: RoundingMode) -> Self {
+        Self(trig::trig_series_2limb::atan_with::<SCALE>(self.0, working_digits, mode))
     }
     #[inline]
     pub(crate) fn policy_asin(self, mode: RoundingMode) -> Self {
@@ -1404,8 +1405,8 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_asin_with(self, wd: u32, mode: RoundingMode) -> Self {
-        Self(trig::trig_series_2limb::asin_with::<SCALE>(self.0, wd, mode))
+    pub(crate) fn policy_asin_with(self, working_digits: u32, mode: RoundingMode) -> Self {
+        Self(trig::trig_series_2limb::asin_with::<SCALE>(self.0, working_digits, mode))
     }
     #[inline]
     pub(crate) fn policy_acos(self, mode: RoundingMode) -> Self {
@@ -1416,8 +1417,8 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_acos_with(self, wd: u32, mode: RoundingMode) -> Self {
-        Self(trig::trig_series_2limb::acos_with::<SCALE>(self.0, wd, mode))
+    pub(crate) fn policy_acos_with(self, working_digits: u32, mode: RoundingMode) -> Self {
+        Self(trig::trig_series_2limb::acos_with::<SCALE>(self.0, working_digits, mode))
     }
     #[inline]
     pub(crate) fn policy_atan2(self, other: Self, mode: RoundingMode) -> Self {
@@ -1430,8 +1431,8 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_atan2_with(self, other: Self, wd: u32, mode: RoundingMode) -> Self {
-        Self(trig::trig_series_2limb::atan2_with::<SCALE>(self.0, other.0, wd, mode))
+    pub(crate) fn policy_atan2_with(self, other: Self, working_digits: u32, mode: RoundingMode) -> Self {
+        Self(trig::trig_series_2limb::atan2_with::<SCALE>(self.0, other.0, working_digits, mode))
     }
 
     d38_hyperbolic_and_angle!();
@@ -1468,7 +1469,7 @@ macro_rules! wide_trig_inverse_inherent {
             }
         }
         #[inline]
-        pub(crate) fn policy_asin_with(self, _wd: u32, mode: RoundingMode) -> Self {
+        pub(crate) fn policy_asin_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
             Self(inverse_rung::asin_strict::<$Core, SCALE>(self.0, mode))
         }
         #[inline]
@@ -1480,7 +1481,7 @@ macro_rules! wide_trig_inverse_inherent {
             }
         }
         #[inline]
-        pub(crate) fn policy_acos_with(self, _wd: u32, mode: RoundingMode) -> Self {
+        pub(crate) fn policy_acos_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
             Self(inverse_rung::acos_strict::<$Core, SCALE>(self.0, mode))
         }
         #[inline]
@@ -1492,7 +1493,7 @@ macro_rules! wide_trig_inverse_inherent {
             }
         }
         #[inline]
-        pub(crate) fn policy_atan2_with(self, other: Self, _wd: u32, mode: RoundingMode) -> Self {
+        pub(crate) fn policy_atan2_with(self, other: Self, _working_digits: u32, mode: RoundingMode) -> Self {
             Self(inverse_rung::atan2_strict::<$Core, SCALE>(self.0, other.0, mode))
         }
     };
@@ -1507,7 +1508,7 @@ macro_rules! wide_trig_extra_inherent {
             Self(extra_rung::asinh_strict::<$Core, SCALE>(self.0, mode))
         }
         #[inline]
-        pub(crate) fn policy_asinh_with(self, _wd: u32, mode: RoundingMode) -> Self {
+        pub(crate) fn policy_asinh_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
             Self(extra_rung::asinh_strict::<$Core, SCALE>(self.0, mode))
         }
         #[inline]
@@ -1515,7 +1516,7 @@ macro_rules! wide_trig_extra_inherent {
             Self(extra_rung::acosh_strict::<$Core, SCALE>(self.0, mode))
         }
         #[inline]
-        pub(crate) fn policy_acosh_with(self, _wd: u32, mode: RoundingMode) -> Self {
+        pub(crate) fn policy_acosh_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
             Self(extra_rung::acosh_strict::<$Core, SCALE>(self.0, mode))
         }
         #[inline]
@@ -1523,7 +1524,7 @@ macro_rules! wide_trig_extra_inherent {
             Self(extra_rung::atanh_strict::<$Core, SCALE>(self.0, mode))
         }
         #[inline]
-        pub(crate) fn policy_atanh_with(self, _wd: u32, mode: RoundingMode) -> Self {
+        pub(crate) fn policy_atanh_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
             Self(extra_rung::atanh_strict::<$Core, SCALE>(self.0, mode))
         }
         #[inline]
@@ -1531,8 +1532,8 @@ macro_rules! wide_trig_extra_inherent {
             Self::from_bits(crate::policy::to_degrees::dispatch::<_, SCALE>(self.to_bits(), mode))
         }
         #[inline]
-        pub(crate) fn policy_to_degrees_with(self, wd: u32, mode: RoundingMode) -> Self {
-            let _ = wd;
+        pub(crate) fn policy_to_degrees_with(self, working_digits: u32, mode: RoundingMode) -> Self {
+            let _ = working_digits;
             Self::from_bits(crate::policy::to_degrees::dispatch::<_, SCALE>(self.to_bits(), mode))
         }
         #[inline]
@@ -1540,8 +1541,8 @@ macro_rules! wide_trig_extra_inherent {
             Self::from_bits(crate::policy::to_radians::dispatch::<_, SCALE>(self.to_bits(), mode))
         }
         #[inline]
-        pub(crate) fn policy_to_radians_with(self, wd: u32, mode: RoundingMode) -> Self {
-            let _ = wd;
+        pub(crate) fn policy_to_radians_with(self, working_digits: u32, mode: RoundingMode) -> Self {
+            let _ = working_digits;
             Self::from_bits(crate::policy::to_radians::dispatch::<_, SCALE>(self.to_bits(), mode))
         }
     };
@@ -1561,7 +1562,7 @@ macro_rules! wide_trig_hyper_inherent {
             }
         }
         #[inline]
-        pub(crate) fn policy_sinh_with(self, _wd: u32, mode: RoundingMode) -> Self {
+        pub(crate) fn policy_sinh_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
             Self(hyper_rung::sinh_strict::<$Core, SCALE>(self.0, mode))
         }
         #[inline]
@@ -1573,7 +1574,7 @@ macro_rules! wide_trig_hyper_inherent {
             }
         }
         #[inline]
-        pub(crate) fn policy_cosh_with(self, _wd: u32, mode: RoundingMode) -> Self {
+        pub(crate) fn policy_cosh_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
             Self(hyper_rung::cosh_strict::<$Core, SCALE>(self.0, mode))
         }
         #[inline]
@@ -1585,7 +1586,7 @@ macro_rules! wide_trig_hyper_inherent {
             }
         }
         #[inline]
-        pub(crate) fn policy_tanh_with(self, _wd: u32, mode: RoundingMode) -> Self {
+        pub(crate) fn policy_tanh_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
             Self(hyper_rung::tanh_strict::<$Core, SCALE>(self.0, mode))
         }
     };
@@ -1613,7 +1614,7 @@ macro_rules! wide_trig_forward_series {
             })
         }
         #[inline]
-        pub(crate) fn policy_sin_with(self, _wd: u32, mode: RoundingMode) -> Self {
+        pub(crate) fn policy_sin_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
             Self(forward_rung::sin_strict::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode))
         }
         #[inline]
@@ -1631,7 +1632,7 @@ macro_rules! wide_trig_forward_series {
             })
         }
         #[inline]
-        pub(crate) fn policy_cos_with(self, _wd: u32, mode: RoundingMode) -> Self {
+        pub(crate) fn policy_cos_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
             Self(forward_rung::cos_strict::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode))
         }
         #[inline]
@@ -1649,7 +1650,7 @@ macro_rules! wide_trig_forward_series {
             })
         }
         #[inline]
-        pub(crate) fn policy_tan_with(self, _wd: u32, mode: RoundingMode) -> Self {
+        pub(crate) fn policy_tan_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
             Self(forward_rung::tan_strict::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true, true>(self.0, mode))
         }
         #[inline]
@@ -1667,7 +1668,7 @@ macro_rules! wide_trig_forward_series {
             })
         }
         #[inline]
-        pub(crate) fn policy_atan_with(self, _wd: u32, mode: RoundingMode) -> Self {
+        pub(crate) fn policy_atan_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
             Self(forward_rung::atan_strict::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true>(self.0, mode))
         }
     };
@@ -1701,7 +1702,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_sin_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_sin_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_sin(mode)
     }
     #[inline]
@@ -1721,7 +1722,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_cos_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_cos_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_cos(mode)
     }
     #[inline]
@@ -1739,7 +1740,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_tan_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_tan_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_tan(mode)
     }
     #[inline]
@@ -1758,7 +1759,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_atan_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_atan_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_atan(mode)
     }
 
@@ -1776,7 +1777,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_asin_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_asin_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_asin(mode)
     }
     #[inline]
@@ -1791,7 +1792,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_acos_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_acos_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_acos(mode)
     }
     #[inline]
@@ -1808,7 +1809,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_atan2_with(self, other: Self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_atan2_with(self, other: Self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_atan2(other, mode)
     }
 
@@ -1826,7 +1827,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_sinh_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_sinh_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_sinh(mode)
     }
     #[inline]
@@ -1841,7 +1842,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_cosh_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_cosh_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_cosh(mode)
     }
     #[inline]
@@ -1856,7 +1857,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_tanh_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_tanh_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_tanh(mode)
     }
 
@@ -1891,7 +1892,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<6>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_sinh_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_sinh_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_sinh(mode)
     }
     #[inline]
@@ -1906,7 +1907,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<6>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_cosh_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_cosh_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_cosh(mode)
     }
     #[inline]
@@ -1921,7 +1922,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<6>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_tanh_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_tanh_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_tanh(mode)
     }
 
@@ -1944,7 +1945,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<8>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_sin_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_sin_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_sin(mode)
     }
     #[inline]
@@ -1959,7 +1960,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<8>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_cos_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_cos_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_cos(mode)
     }
     #[inline]
@@ -1974,7 +1975,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<8>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_tan_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_tan_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_tan(mode)
     }
     #[inline]
@@ -1989,7 +1990,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<8>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_atan_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_atan_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_atan(mode)
     }
 
@@ -2007,7 +2008,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<8>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_sinh_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_sinh_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_sinh(mode)
     }
     #[inline]
@@ -2022,7 +2023,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<8>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_cosh_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_cosh_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_cosh(mode)
     }
     #[inline]
@@ -2037,7 +2038,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<8>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_tanh_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_tanh_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_tanh(mode)
     }
 
@@ -2069,7 +2070,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_sin_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_sin_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_sin(mode)
     }
     #[inline]
@@ -2084,7 +2085,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_cos_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_cos_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_cos(mode)
     }
     #[inline]
@@ -2099,7 +2100,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_tan_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_tan_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_tan(mode)
     }
     #[inline]
@@ -2114,7 +2115,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_atan_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_atan_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_atan(mode)
     }
 
@@ -2132,7 +2133,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_sinh_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_sinh_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_sinh(mode)
     }
     #[inline]
@@ -2147,7 +2148,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_cosh_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_cosh_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_cosh(mode)
     }
     #[inline]
@@ -2162,7 +2163,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_tanh_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_tanh_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_tanh(mode)
     }
 
@@ -2185,7 +2186,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<24>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_sin_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_sin_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_sin(mode)
     }
     #[inline]
@@ -2200,7 +2201,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<24>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_cos_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_cos_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_cos(mode)
     }
     #[inline]
@@ -2215,7 +2216,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<24>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_tan_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_tan_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_tan(mode)
     }
     #[inline]
@@ -2230,7 +2231,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<24>, SCALE> {
         })
     }
     #[inline]
-    pub(crate) fn policy_atan_with(self, _wd: u32, mode: RoundingMode) -> Self {
+    pub(crate) fn policy_atan_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
         self.policy_atan(mode)
     }
 
@@ -2302,31 +2303,31 @@ pub(crate) fn sin_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: 
 
 #[inline]
 #[must_use]
-pub(crate) fn sin_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, wd: u32, mode: RoundingMode) -> Int<N> {
+pub(crate) fn sin_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, working_digits: u32, mode: RoundingMode) -> Int<N> {
     match N {
-        1 => crate::D::<crate::int::types::Int<1>, SCALE>(raw.resize_to::<crate::int::types::Int<1>>()).policy_sin_with(wd, mode).0.resize_to::<Int<N>>(),
-        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_sin_with(wd, mode).0.resize_to::<Int<N>>(),
+        1 => crate::D::<crate::int::types::Int<1>, SCALE>(raw.resize_to::<crate::int::types::Int<1>>()).policy_sin_with(working_digits, mode).0.resize_to::<Int<N>>(),
+        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_sin_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_sin_with(wd, mode).0.resize_to::<Int<N>>(),
+        3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_sin_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).policy_sin_with(wd, mode).0.resize_to::<Int<N>>(),
+        4 => crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).policy_sin_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).policy_sin_with(wd, mode).0.resize_to::<Int<N>>(),
+        6 => crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).policy_sin_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).policy_sin_with(wd, mode).0.resize_to::<Int<N>>(),
+        8 => crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).policy_sin_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).policy_sin_with(wd, mode).0.resize_to::<Int<N>>(),
+        12 => crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).policy_sin_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).policy_sin_with(wd, mode).0.resize_to::<Int<N>>(),
+        16 => crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).policy_sin_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).policy_sin_with(wd, mode).0.resize_to::<Int<N>>(),
+        24 => crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).policy_sin_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).policy_sin_with(wd, mode).0.resize_to::<Int<N>>(),
+        32 => crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).policy_sin_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_sin_with(wd, mode).0.resize_to::<Int<N>>(),
+        48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_sin_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_sin_with(wd, mode).0.resize_to::<Int<N>>(),
-        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_sin_with(wd, mode).0.resize_to::<Int<N>>(),
+        64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_sin_with(working_digits, mode).0.resize_to::<Int<N>>(),
+        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_sin_with(working_digits, mode).0.resize_to::<Int<N>>(),
     }
 }
 
@@ -2362,31 +2363,31 @@ pub(crate) fn cos_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: 
 
 #[inline]
 #[must_use]
-pub(crate) fn cos_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, wd: u32, mode: RoundingMode) -> Int<N> {
+pub(crate) fn cos_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, working_digits: u32, mode: RoundingMode) -> Int<N> {
     match N {
-        1 => crate::D::<crate::int::types::Int<1>, SCALE>(raw.resize_to::<crate::int::types::Int<1>>()).policy_cos_with(wd, mode).0.resize_to::<Int<N>>(),
-        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_cos_with(wd, mode).0.resize_to::<Int<N>>(),
+        1 => crate::D::<crate::int::types::Int<1>, SCALE>(raw.resize_to::<crate::int::types::Int<1>>()).policy_cos_with(working_digits, mode).0.resize_to::<Int<N>>(),
+        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_cos_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_cos_with(wd, mode).0.resize_to::<Int<N>>(),
+        3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_cos_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).policy_cos_with(wd, mode).0.resize_to::<Int<N>>(),
+        4 => crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).policy_cos_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).policy_cos_with(wd, mode).0.resize_to::<Int<N>>(),
+        6 => crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).policy_cos_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).policy_cos_with(wd, mode).0.resize_to::<Int<N>>(),
+        8 => crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).policy_cos_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).policy_cos_with(wd, mode).0.resize_to::<Int<N>>(),
+        12 => crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).policy_cos_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).policy_cos_with(wd, mode).0.resize_to::<Int<N>>(),
+        16 => crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).policy_cos_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).policy_cos_with(wd, mode).0.resize_to::<Int<N>>(),
+        24 => crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).policy_cos_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).policy_cos_with(wd, mode).0.resize_to::<Int<N>>(),
+        32 => crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).policy_cos_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_cos_with(wd, mode).0.resize_to::<Int<N>>(),
+        48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_cos_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_cos_with(wd, mode).0.resize_to::<Int<N>>(),
-        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_cos_with(wd, mode).0.resize_to::<Int<N>>(),
+        64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_cos_with(working_digits, mode).0.resize_to::<Int<N>>(),
+        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_cos_with(working_digits, mode).0.resize_to::<Int<N>>(),
     }
 }
 
@@ -2422,31 +2423,31 @@ pub(crate) fn tan_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: 
 
 #[inline]
 #[must_use]
-pub(crate) fn tan_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, wd: u32, mode: RoundingMode) -> Int<N> {
+pub(crate) fn tan_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, working_digits: u32, mode: RoundingMode) -> Int<N> {
     match N {
-        1 => crate::D::<crate::int::types::Int<1>, SCALE>(raw.resize_to::<crate::int::types::Int<1>>()).policy_tan_with(wd, mode).0.resize_to::<Int<N>>(),
-        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_tan_with(wd, mode).0.resize_to::<Int<N>>(),
+        1 => crate::D::<crate::int::types::Int<1>, SCALE>(raw.resize_to::<crate::int::types::Int<1>>()).policy_tan_with(working_digits, mode).0.resize_to::<Int<N>>(),
+        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_tan_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_tan_with(wd, mode).0.resize_to::<Int<N>>(),
+        3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_tan_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).policy_tan_with(wd, mode).0.resize_to::<Int<N>>(),
+        4 => crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).policy_tan_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).policy_tan_with(wd, mode).0.resize_to::<Int<N>>(),
+        6 => crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).policy_tan_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).policy_tan_with(wd, mode).0.resize_to::<Int<N>>(),
+        8 => crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).policy_tan_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).policy_tan_with(wd, mode).0.resize_to::<Int<N>>(),
+        12 => crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).policy_tan_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).policy_tan_with(wd, mode).0.resize_to::<Int<N>>(),
+        16 => crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).policy_tan_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).policy_tan_with(wd, mode).0.resize_to::<Int<N>>(),
+        24 => crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).policy_tan_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).policy_tan_with(wd, mode).0.resize_to::<Int<N>>(),
+        32 => crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).policy_tan_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_tan_with(wd, mode).0.resize_to::<Int<N>>(),
+        48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_tan_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_tan_with(wd, mode).0.resize_to::<Int<N>>(),
-        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_tan_with(wd, mode).0.resize_to::<Int<N>>(),
+        64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_tan_with(working_digits, mode).0.resize_to::<Int<N>>(),
+        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_tan_with(working_digits, mode).0.resize_to::<Int<N>>(),
     }
 }
 
@@ -2482,31 +2483,31 @@ pub(crate) fn atan_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode:
 
 #[inline]
 #[must_use]
-pub(crate) fn atan_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, wd: u32, mode: RoundingMode) -> Int<N> {
+pub(crate) fn atan_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, working_digits: u32, mode: RoundingMode) -> Int<N> {
     match N {
-        1 => crate::D::<crate::int::types::Int<1>, SCALE>(raw.resize_to::<crate::int::types::Int<1>>()).policy_atan_with(wd, mode).0.resize_to::<Int<N>>(),
-        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atan_with(wd, mode).0.resize_to::<Int<N>>(),
+        1 => crate::D::<crate::int::types::Int<1>, SCALE>(raw.resize_to::<crate::int::types::Int<1>>()).policy_atan_with(working_digits, mode).0.resize_to::<Int<N>>(),
+        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atan_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_atan_with(wd, mode).0.resize_to::<Int<N>>(),
+        3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_atan_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).policy_atan_with(wd, mode).0.resize_to::<Int<N>>(),
+        4 => crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).policy_atan_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).policy_atan_with(wd, mode).0.resize_to::<Int<N>>(),
+        6 => crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).policy_atan_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).policy_atan_with(wd, mode).0.resize_to::<Int<N>>(),
+        8 => crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).policy_atan_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).policy_atan_with(wd, mode).0.resize_to::<Int<N>>(),
+        12 => crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).policy_atan_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).policy_atan_with(wd, mode).0.resize_to::<Int<N>>(),
+        16 => crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).policy_atan_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).policy_atan_with(wd, mode).0.resize_to::<Int<N>>(),
+        24 => crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).policy_atan_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).policy_atan_with(wd, mode).0.resize_to::<Int<N>>(),
+        32 => crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).policy_atan_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_atan_with(wd, mode).0.resize_to::<Int<N>>(),
+        48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_atan_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_atan_with(wd, mode).0.resize_to::<Int<N>>(),
-        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atan_with(wd, mode).0.resize_to::<Int<N>>(),
+        64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_atan_with(working_digits, mode).0.resize_to::<Int<N>>(),
+        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atan_with(working_digits, mode).0.resize_to::<Int<N>>(),
     }
 }
 
@@ -2542,31 +2543,31 @@ pub(crate) fn asin_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode:
 
 #[inline]
 #[must_use]
-pub(crate) fn asin_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, wd: u32, mode: RoundingMode) -> Int<N> {
+pub(crate) fn asin_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, working_digits: u32, mode: RoundingMode) -> Int<N> {
     match N {
-        1 => crate::D::<crate::int::types::Int<1>, SCALE>(raw.resize_to::<crate::int::types::Int<1>>()).policy_asin_with(wd, mode).0.resize_to::<Int<N>>(),
-        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_asin_with(wd, mode).0.resize_to::<Int<N>>(),
+        1 => crate::D::<crate::int::types::Int<1>, SCALE>(raw.resize_to::<crate::int::types::Int<1>>()).policy_asin_with(working_digits, mode).0.resize_to::<Int<N>>(),
+        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_asin_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_asin_with(wd, mode).0.resize_to::<Int<N>>(),
+        3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_asin_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).policy_asin_with(wd, mode).0.resize_to::<Int<N>>(),
+        4 => crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).policy_asin_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).policy_asin_with(wd, mode).0.resize_to::<Int<N>>(),
+        6 => crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).policy_asin_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).policy_asin_with(wd, mode).0.resize_to::<Int<N>>(),
+        8 => crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).policy_asin_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).policy_asin_with(wd, mode).0.resize_to::<Int<N>>(),
+        12 => crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).policy_asin_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).policy_asin_with(wd, mode).0.resize_to::<Int<N>>(),
+        16 => crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).policy_asin_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).policy_asin_with(wd, mode).0.resize_to::<Int<N>>(),
+        24 => crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).policy_asin_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).policy_asin_with(wd, mode).0.resize_to::<Int<N>>(),
+        32 => crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).policy_asin_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_asin_with(wd, mode).0.resize_to::<Int<N>>(),
+        48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_asin_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_asin_with(wd, mode).0.resize_to::<Int<N>>(),
-        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_asin_with(wd, mode).0.resize_to::<Int<N>>(),
+        64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_asin_with(working_digits, mode).0.resize_to::<Int<N>>(),
+        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_asin_with(working_digits, mode).0.resize_to::<Int<N>>(),
     }
 }
 
@@ -2602,31 +2603,31 @@ pub(crate) fn acos_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode:
 
 #[inline]
 #[must_use]
-pub(crate) fn acos_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, wd: u32, mode: RoundingMode) -> Int<N> {
+pub(crate) fn acos_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, working_digits: u32, mode: RoundingMode) -> Int<N> {
     match N {
-        1 => crate::D::<crate::int::types::Int<1>, SCALE>(raw.resize_to::<crate::int::types::Int<1>>()).policy_acos_with(wd, mode).0.resize_to::<Int<N>>(),
-        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_acos_with(wd, mode).0.resize_to::<Int<N>>(),
+        1 => crate::D::<crate::int::types::Int<1>, SCALE>(raw.resize_to::<crate::int::types::Int<1>>()).policy_acos_with(working_digits, mode).0.resize_to::<Int<N>>(),
+        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_acos_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_acos_with(wd, mode).0.resize_to::<Int<N>>(),
+        3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_acos_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).policy_acos_with(wd, mode).0.resize_to::<Int<N>>(),
+        4 => crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).policy_acos_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).policy_acos_with(wd, mode).0.resize_to::<Int<N>>(),
+        6 => crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).policy_acos_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).policy_acos_with(wd, mode).0.resize_to::<Int<N>>(),
+        8 => crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).policy_acos_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).policy_acos_with(wd, mode).0.resize_to::<Int<N>>(),
+        12 => crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).policy_acos_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).policy_acos_with(wd, mode).0.resize_to::<Int<N>>(),
+        16 => crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).policy_acos_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).policy_acos_with(wd, mode).0.resize_to::<Int<N>>(),
+        24 => crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).policy_acos_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).policy_acos_with(wd, mode).0.resize_to::<Int<N>>(),
+        32 => crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).policy_acos_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_acos_with(wd, mode).0.resize_to::<Int<N>>(),
+        48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_acos_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_acos_with(wd, mode).0.resize_to::<Int<N>>(),
-        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_acos_with(wd, mode).0.resize_to::<Int<N>>(),
+        64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_acos_with(working_digits, mode).0.resize_to::<Int<N>>(),
+        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_acos_with(working_digits, mode).0.resize_to::<Int<N>>(),
     }
 }
 
@@ -2662,31 +2663,31 @@ pub(crate) fn sinh_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode:
 
 #[inline]
 #[must_use]
-pub(crate) fn sinh_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, wd: u32, mode: RoundingMode) -> Int<N> {
+pub(crate) fn sinh_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, working_digits: u32, mode: RoundingMode) -> Int<N> {
     match N {
-        1 => crate::D::<crate::int::types::Int<1>, SCALE>(raw.resize_to::<crate::int::types::Int<1>>()).policy_sinh_with(wd, mode).0.resize_to::<Int<N>>(),
-        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_sinh_with(wd, mode).0.resize_to::<Int<N>>(),
+        1 => crate::D::<crate::int::types::Int<1>, SCALE>(raw.resize_to::<crate::int::types::Int<1>>()).policy_sinh_with(working_digits, mode).0.resize_to::<Int<N>>(),
+        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_sinh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_sinh_with(wd, mode).0.resize_to::<Int<N>>(),
+        3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_sinh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).policy_sinh_with(wd, mode).0.resize_to::<Int<N>>(),
+        4 => crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).policy_sinh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).policy_sinh_with(wd, mode).0.resize_to::<Int<N>>(),
+        6 => crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).policy_sinh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).policy_sinh_with(wd, mode).0.resize_to::<Int<N>>(),
+        8 => crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).policy_sinh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).policy_sinh_with(wd, mode).0.resize_to::<Int<N>>(),
+        12 => crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).policy_sinh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).policy_sinh_with(wd, mode).0.resize_to::<Int<N>>(),
+        16 => crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).policy_sinh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).policy_sinh_with(wd, mode).0.resize_to::<Int<N>>(),
+        24 => crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).policy_sinh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).policy_sinh_with(wd, mode).0.resize_to::<Int<N>>(),
+        32 => crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).policy_sinh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_sinh_with(wd, mode).0.resize_to::<Int<N>>(),
+        48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_sinh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_sinh_with(wd, mode).0.resize_to::<Int<N>>(),
-        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_sinh_with(wd, mode).0.resize_to::<Int<N>>(),
+        64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_sinh_with(working_digits, mode).0.resize_to::<Int<N>>(),
+        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_sinh_with(working_digits, mode).0.resize_to::<Int<N>>(),
     }
 }
 
@@ -2722,31 +2723,31 @@ pub(crate) fn cosh_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode:
 
 #[inline]
 #[must_use]
-pub(crate) fn cosh_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, wd: u32, mode: RoundingMode) -> Int<N> {
+pub(crate) fn cosh_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, working_digits: u32, mode: RoundingMode) -> Int<N> {
     match N {
-        1 => crate::D::<crate::int::types::Int<1>, SCALE>(raw.resize_to::<crate::int::types::Int<1>>()).policy_cosh_with(wd, mode).0.resize_to::<Int<N>>(),
-        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_cosh_with(wd, mode).0.resize_to::<Int<N>>(),
+        1 => crate::D::<crate::int::types::Int<1>, SCALE>(raw.resize_to::<crate::int::types::Int<1>>()).policy_cosh_with(working_digits, mode).0.resize_to::<Int<N>>(),
+        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_cosh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_cosh_with(wd, mode).0.resize_to::<Int<N>>(),
+        3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_cosh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).policy_cosh_with(wd, mode).0.resize_to::<Int<N>>(),
+        4 => crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).policy_cosh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).policy_cosh_with(wd, mode).0.resize_to::<Int<N>>(),
+        6 => crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).policy_cosh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).policy_cosh_with(wd, mode).0.resize_to::<Int<N>>(),
+        8 => crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).policy_cosh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).policy_cosh_with(wd, mode).0.resize_to::<Int<N>>(),
+        12 => crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).policy_cosh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).policy_cosh_with(wd, mode).0.resize_to::<Int<N>>(),
+        16 => crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).policy_cosh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).policy_cosh_with(wd, mode).0.resize_to::<Int<N>>(),
+        24 => crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).policy_cosh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).policy_cosh_with(wd, mode).0.resize_to::<Int<N>>(),
+        32 => crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).policy_cosh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_cosh_with(wd, mode).0.resize_to::<Int<N>>(),
+        48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_cosh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_cosh_with(wd, mode).0.resize_to::<Int<N>>(),
-        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_cosh_with(wd, mode).0.resize_to::<Int<N>>(),
+        64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_cosh_with(working_digits, mode).0.resize_to::<Int<N>>(),
+        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_cosh_with(working_digits, mode).0.resize_to::<Int<N>>(),
     }
 }
 
@@ -2782,31 +2783,31 @@ pub(crate) fn tanh_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode:
 
 #[inline]
 #[must_use]
-pub(crate) fn tanh_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, wd: u32, mode: RoundingMode) -> Int<N> {
+pub(crate) fn tanh_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, working_digits: u32, mode: RoundingMode) -> Int<N> {
     match N {
-        1 => crate::D::<crate::int::types::Int<1>, SCALE>(raw.resize_to::<crate::int::types::Int<1>>()).policy_tanh_with(wd, mode).0.resize_to::<Int<N>>(),
-        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_tanh_with(wd, mode).0.resize_to::<Int<N>>(),
+        1 => crate::D::<crate::int::types::Int<1>, SCALE>(raw.resize_to::<crate::int::types::Int<1>>()).policy_tanh_with(working_digits, mode).0.resize_to::<Int<N>>(),
+        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_tanh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_tanh_with(wd, mode).0.resize_to::<Int<N>>(),
+        3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_tanh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).policy_tanh_with(wd, mode).0.resize_to::<Int<N>>(),
+        4 => crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).policy_tanh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).policy_tanh_with(wd, mode).0.resize_to::<Int<N>>(),
+        6 => crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).policy_tanh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).policy_tanh_with(wd, mode).0.resize_to::<Int<N>>(),
+        8 => crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).policy_tanh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).policy_tanh_with(wd, mode).0.resize_to::<Int<N>>(),
+        12 => crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).policy_tanh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).policy_tanh_with(wd, mode).0.resize_to::<Int<N>>(),
+        16 => crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).policy_tanh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).policy_tanh_with(wd, mode).0.resize_to::<Int<N>>(),
+        24 => crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).policy_tanh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).policy_tanh_with(wd, mode).0.resize_to::<Int<N>>(),
+        32 => crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).policy_tanh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_tanh_with(wd, mode).0.resize_to::<Int<N>>(),
+        48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_tanh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_tanh_with(wd, mode).0.resize_to::<Int<N>>(),
-        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_tanh_with(wd, mode).0.resize_to::<Int<N>>(),
+        64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_tanh_with(working_digits, mode).0.resize_to::<Int<N>>(),
+        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_tanh_with(working_digits, mode).0.resize_to::<Int<N>>(),
     }
 }
 
@@ -2842,31 +2843,31 @@ pub(crate) fn asinh_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode
 
 #[inline]
 #[must_use]
-pub(crate) fn asinh_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, wd: u32, mode: RoundingMode) -> Int<N> {
+pub(crate) fn asinh_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, working_digits: u32, mode: RoundingMode) -> Int<N> {
     match N {
-        1 => crate::D::<crate::int::types::Int<1>, SCALE>(raw.resize_to::<crate::int::types::Int<1>>()).policy_asinh_with(wd, mode).0.resize_to::<Int<N>>(),
-        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_asinh_with(wd, mode).0.resize_to::<Int<N>>(),
+        1 => crate::D::<crate::int::types::Int<1>, SCALE>(raw.resize_to::<crate::int::types::Int<1>>()).policy_asinh_with(working_digits, mode).0.resize_to::<Int<N>>(),
+        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_asinh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_asinh_with(wd, mode).0.resize_to::<Int<N>>(),
+        3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_asinh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).policy_asinh_with(wd, mode).0.resize_to::<Int<N>>(),
+        4 => crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).policy_asinh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).policy_asinh_with(wd, mode).0.resize_to::<Int<N>>(),
+        6 => crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).policy_asinh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).policy_asinh_with(wd, mode).0.resize_to::<Int<N>>(),
+        8 => crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).policy_asinh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).policy_asinh_with(wd, mode).0.resize_to::<Int<N>>(),
+        12 => crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).policy_asinh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).policy_asinh_with(wd, mode).0.resize_to::<Int<N>>(),
+        16 => crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).policy_asinh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).policy_asinh_with(wd, mode).0.resize_to::<Int<N>>(),
+        24 => crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).policy_asinh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).policy_asinh_with(wd, mode).0.resize_to::<Int<N>>(),
+        32 => crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).policy_asinh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_asinh_with(wd, mode).0.resize_to::<Int<N>>(),
+        48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_asinh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_asinh_with(wd, mode).0.resize_to::<Int<N>>(),
-        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_asinh_with(wd, mode).0.resize_to::<Int<N>>(),
+        64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_asinh_with(working_digits, mode).0.resize_to::<Int<N>>(),
+        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_asinh_with(working_digits, mode).0.resize_to::<Int<N>>(),
     }
 }
 
@@ -2902,31 +2903,31 @@ pub(crate) fn acosh_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode
 
 #[inline]
 #[must_use]
-pub(crate) fn acosh_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, wd: u32, mode: RoundingMode) -> Int<N> {
+pub(crate) fn acosh_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, working_digits: u32, mode: RoundingMode) -> Int<N> {
     match N {
-        1 => crate::D::<crate::int::types::Int<1>, SCALE>(raw.resize_to::<crate::int::types::Int<1>>()).policy_acosh_with(wd, mode).0.resize_to::<Int<N>>(),
-        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_acosh_with(wd, mode).0.resize_to::<Int<N>>(),
+        1 => crate::D::<crate::int::types::Int<1>, SCALE>(raw.resize_to::<crate::int::types::Int<1>>()).policy_acosh_with(working_digits, mode).0.resize_to::<Int<N>>(),
+        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_acosh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_acosh_with(wd, mode).0.resize_to::<Int<N>>(),
+        3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_acosh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).policy_acosh_with(wd, mode).0.resize_to::<Int<N>>(),
+        4 => crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).policy_acosh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).policy_acosh_with(wd, mode).0.resize_to::<Int<N>>(),
+        6 => crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).policy_acosh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).policy_acosh_with(wd, mode).0.resize_to::<Int<N>>(),
+        8 => crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).policy_acosh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).policy_acosh_with(wd, mode).0.resize_to::<Int<N>>(),
+        12 => crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).policy_acosh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).policy_acosh_with(wd, mode).0.resize_to::<Int<N>>(),
+        16 => crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).policy_acosh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).policy_acosh_with(wd, mode).0.resize_to::<Int<N>>(),
+        24 => crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).policy_acosh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).policy_acosh_with(wd, mode).0.resize_to::<Int<N>>(),
+        32 => crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).policy_acosh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_acosh_with(wd, mode).0.resize_to::<Int<N>>(),
+        48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_acosh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_acosh_with(wd, mode).0.resize_to::<Int<N>>(),
-        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_acosh_with(wd, mode).0.resize_to::<Int<N>>(),
+        64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_acosh_with(working_digits, mode).0.resize_to::<Int<N>>(),
+        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_acosh_with(working_digits, mode).0.resize_to::<Int<N>>(),
     }
 }
 
@@ -2962,31 +2963,31 @@ pub(crate) fn atanh_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode
 
 #[inline]
 #[must_use]
-pub(crate) fn atanh_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, wd: u32, mode: RoundingMode) -> Int<N> {
+pub(crate) fn atanh_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, working_digits: u32, mode: RoundingMode) -> Int<N> {
     match N {
-        1 => crate::D::<crate::int::types::Int<1>, SCALE>(raw.resize_to::<crate::int::types::Int<1>>()).policy_atanh_with(wd, mode).0.resize_to::<Int<N>>(),
-        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atanh_with(wd, mode).0.resize_to::<Int<N>>(),
+        1 => crate::D::<crate::int::types::Int<1>, SCALE>(raw.resize_to::<crate::int::types::Int<1>>()).policy_atanh_with(working_digits, mode).0.resize_to::<Int<N>>(),
+        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atanh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_atanh_with(wd, mode).0.resize_to::<Int<N>>(),
+        3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_atanh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).policy_atanh_with(wd, mode).0.resize_to::<Int<N>>(),
+        4 => crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).policy_atanh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).policy_atanh_with(wd, mode).0.resize_to::<Int<N>>(),
+        6 => crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).policy_atanh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).policy_atanh_with(wd, mode).0.resize_to::<Int<N>>(),
+        8 => crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).policy_atanh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).policy_atanh_with(wd, mode).0.resize_to::<Int<N>>(),
+        12 => crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).policy_atanh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).policy_atanh_with(wd, mode).0.resize_to::<Int<N>>(),
+        16 => crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).policy_atanh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).policy_atanh_with(wd, mode).0.resize_to::<Int<N>>(),
+        24 => crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).policy_atanh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).policy_atanh_with(wd, mode).0.resize_to::<Int<N>>(),
+        32 => crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).policy_atanh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_atanh_with(wd, mode).0.resize_to::<Int<N>>(),
+        48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_atanh_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_atanh_with(wd, mode).0.resize_to::<Int<N>>(),
-        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atanh_with(wd, mode).0.resize_to::<Int<N>>(),
+        64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_atanh_with(working_digits, mode).0.resize_to::<Int<N>>(),
+        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atanh_with(working_digits, mode).0.resize_to::<Int<N>>(),
     }
 }
 
@@ -3022,31 +3023,31 @@ pub(crate) fn to_degrees_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>,
 
 #[inline]
 #[must_use]
-pub(crate) fn to_degrees_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, wd: u32, mode: RoundingMode) -> Int<N> {
+pub(crate) fn to_degrees_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, working_digits: u32, mode: RoundingMode) -> Int<N> {
     match N {
-        1 => crate::D::<crate::int::types::Int<1>, SCALE>(raw.resize_to::<crate::int::types::Int<1>>()).policy_to_degrees_with(wd, mode).0.resize_to::<Int<N>>(),
-        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_to_degrees_with(wd, mode).0.resize_to::<Int<N>>(),
+        1 => crate::D::<crate::int::types::Int<1>, SCALE>(raw.resize_to::<crate::int::types::Int<1>>()).policy_to_degrees_with(working_digits, mode).0.resize_to::<Int<N>>(),
+        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_to_degrees_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_to_degrees_with(wd, mode).0.resize_to::<Int<N>>(),
+        3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_to_degrees_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).policy_to_degrees_with(wd, mode).0.resize_to::<Int<N>>(),
+        4 => crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).policy_to_degrees_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).policy_to_degrees_with(wd, mode).0.resize_to::<Int<N>>(),
+        6 => crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).policy_to_degrees_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).policy_to_degrees_with(wd, mode).0.resize_to::<Int<N>>(),
+        8 => crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).policy_to_degrees_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).policy_to_degrees_with(wd, mode).0.resize_to::<Int<N>>(),
+        12 => crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).policy_to_degrees_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).policy_to_degrees_with(wd, mode).0.resize_to::<Int<N>>(),
+        16 => crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).policy_to_degrees_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).policy_to_degrees_with(wd, mode).0.resize_to::<Int<N>>(),
+        24 => crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).policy_to_degrees_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).policy_to_degrees_with(wd, mode).0.resize_to::<Int<N>>(),
+        32 => crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).policy_to_degrees_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_to_degrees_with(wd, mode).0.resize_to::<Int<N>>(),
+        48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_to_degrees_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_to_degrees_with(wd, mode).0.resize_to::<Int<N>>(),
-        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_to_degrees_with(wd, mode).0.resize_to::<Int<N>>(),
+        64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_to_degrees_with(working_digits, mode).0.resize_to::<Int<N>>(),
+        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_to_degrees_with(working_digits, mode).0.resize_to::<Int<N>>(),
     }
 }
 
@@ -3082,31 +3083,31 @@ pub(crate) fn to_radians_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>,
 
 #[inline]
 #[must_use]
-pub(crate) fn to_radians_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, wd: u32, mode: RoundingMode) -> Int<N> {
+pub(crate) fn to_radians_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, working_digits: u32, mode: RoundingMode) -> Int<N> {
     match N {
-        1 => crate::D::<crate::int::types::Int<1>, SCALE>(raw.resize_to::<crate::int::types::Int<1>>()).policy_to_radians_with(wd, mode).0.resize_to::<Int<N>>(),
-        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_to_radians_with(wd, mode).0.resize_to::<Int<N>>(),
+        1 => crate::D::<crate::int::types::Int<1>, SCALE>(raw.resize_to::<crate::int::types::Int<1>>()).policy_to_radians_with(working_digits, mode).0.resize_to::<Int<N>>(),
+        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_to_radians_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_to_radians_with(wd, mode).0.resize_to::<Int<N>>(),
+        3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_to_radians_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).policy_to_radians_with(wd, mode).0.resize_to::<Int<N>>(),
+        4 => crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).policy_to_radians_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).policy_to_radians_with(wd, mode).0.resize_to::<Int<N>>(),
+        6 => crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).policy_to_radians_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).policy_to_radians_with(wd, mode).0.resize_to::<Int<N>>(),
+        8 => crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).policy_to_radians_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).policy_to_radians_with(wd, mode).0.resize_to::<Int<N>>(),
+        12 => crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).policy_to_radians_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).policy_to_radians_with(wd, mode).0.resize_to::<Int<N>>(),
+        16 => crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).policy_to_radians_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).policy_to_radians_with(wd, mode).0.resize_to::<Int<N>>(),
+        24 => crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).policy_to_radians_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).policy_to_radians_with(wd, mode).0.resize_to::<Int<N>>(),
+        32 => crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).policy_to_radians_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_to_radians_with(wd, mode).0.resize_to::<Int<N>>(),
+        48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_to_radians_with(working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_to_radians_with(wd, mode).0.resize_to::<Int<N>>(),
-        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_to_radians_with(wd, mode).0.resize_to::<Int<N>>(),
+        64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_to_radians_with(working_digits, mode).0.resize_to::<Int<N>>(),
+        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_to_radians_with(working_digits, mode).0.resize_to::<Int<N>>(),
     }
 }
 
@@ -3142,31 +3143,31 @@ pub(crate) fn atan2_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, othe
 
 #[inline]
 #[must_use]
-pub(crate) fn atan2_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, other: Int<N>, wd: u32, mode: RoundingMode) -> Int<N> {
+pub(crate) fn atan2_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, other: Int<N>, working_digits: u32, mode: RoundingMode) -> Int<N> {
     match N {
-        1 => crate::D::<crate::int::types::Int<1>, SCALE>(raw.resize_to::<crate::int::types::Int<1>>()).policy_atan2_with(crate::D::<crate::int::types::Int<1>, SCALE>(other.resize_to::<crate::int::types::Int<1>>()), wd, mode).0.resize_to::<Int<N>>(),
-        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atan2_with(crate::D::<crate::int::types::Int<2>, SCALE>(other.resize_to::<crate::int::types::Int<2>>()), wd, mode).0.resize_to::<Int<N>>(),
+        1 => crate::D::<crate::int::types::Int<1>, SCALE>(raw.resize_to::<crate::int::types::Int<1>>()).policy_atan2_with(crate::D::<crate::int::types::Int<1>, SCALE>(other.resize_to::<crate::int::types::Int<1>>()), working_digits, mode).0.resize_to::<Int<N>>(),
+        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atan2_with(crate::D::<crate::int::types::Int<2>, SCALE>(other.resize_to::<crate::int::types::Int<2>>()), working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_atan2_with(crate::D::<crate::int::types::Int<3>, SCALE>(other.resize_to::<crate::int::types::Int<3>>()), wd, mode).0.resize_to::<Int<N>>(),
+        3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_atan2_with(crate::D::<crate::int::types::Int<3>, SCALE>(other.resize_to::<crate::int::types::Int<3>>()), working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).policy_atan2_with(crate::D::<crate::int::types::Int<4>, SCALE>(other.resize_to::<crate::int::types::Int<4>>()), wd, mode).0.resize_to::<Int<N>>(),
+        4 => crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).policy_atan2_with(crate::D::<crate::int::types::Int<4>, SCALE>(other.resize_to::<crate::int::types::Int<4>>()), working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).policy_atan2_with(crate::D::<crate::int::types::Int<6>, SCALE>(other.resize_to::<crate::int::types::Int<6>>()), wd, mode).0.resize_to::<Int<N>>(),
+        6 => crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).policy_atan2_with(crate::D::<crate::int::types::Int<6>, SCALE>(other.resize_to::<crate::int::types::Int<6>>()), working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).policy_atan2_with(crate::D::<crate::int::types::Int<8>, SCALE>(other.resize_to::<crate::int::types::Int<8>>()), wd, mode).0.resize_to::<Int<N>>(),
+        8 => crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).policy_atan2_with(crate::D::<crate::int::types::Int<8>, SCALE>(other.resize_to::<crate::int::types::Int<8>>()), working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).policy_atan2_with(crate::D::<crate::int::types::Int<12>, SCALE>(other.resize_to::<crate::int::types::Int<12>>()), wd, mode).0.resize_to::<Int<N>>(),
+        12 => crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).policy_atan2_with(crate::D::<crate::int::types::Int<12>, SCALE>(other.resize_to::<crate::int::types::Int<12>>()), working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).policy_atan2_with(crate::D::<crate::int::types::Int<16>, SCALE>(other.resize_to::<crate::int::types::Int<16>>()), wd, mode).0.resize_to::<Int<N>>(),
+        16 => crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).policy_atan2_with(crate::D::<crate::int::types::Int<16>, SCALE>(other.resize_to::<crate::int::types::Int<16>>()), working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).policy_atan2_with(crate::D::<crate::int::types::Int<24>, SCALE>(other.resize_to::<crate::int::types::Int<24>>()), wd, mode).0.resize_to::<Int<N>>(),
+        24 => crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).policy_atan2_with(crate::D::<crate::int::types::Int<24>, SCALE>(other.resize_to::<crate::int::types::Int<24>>()), working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).policy_atan2_with(crate::D::<crate::int::types::Int<32>, SCALE>(other.resize_to::<crate::int::types::Int<32>>()), wd, mode).0.resize_to::<Int<N>>(),
+        32 => crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).policy_atan2_with(crate::D::<crate::int::types::Int<32>, SCALE>(other.resize_to::<crate::int::types::Int<32>>()), working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_atan2_with(crate::D::<crate::int::types::Int<48>, SCALE>(other.resize_to::<crate::int::types::Int<48>>()), wd, mode).0.resize_to::<Int<N>>(),
+        48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_atan2_with(crate::D::<crate::int::types::Int<48>, SCALE>(other.resize_to::<crate::int::types::Int<48>>()), working_digits, mode).0.resize_to::<Int<N>>(),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_atan2_with(crate::D::<crate::int::types::Int<64>, SCALE>(other.resize_to::<crate::int::types::Int<64>>()), wd, mode).0.resize_to::<Int<N>>(),
-        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atan2_with(crate::D::<crate::int::types::Int<2>, SCALE>(other.resize_to::<crate::int::types::Int<2>>()), wd, mode).0.resize_to::<Int<N>>(),
+        64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_atan2_with(crate::D::<crate::int::types::Int<64>, SCALE>(other.resize_to::<crate::int::types::Int<64>>()), working_digits, mode).0.resize_to::<Int<N>>(),
+        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atan2_with(crate::D::<crate::int::types::Int<2>, SCALE>(other.resize_to::<crate::int::types::Int<2>>()), working_digits, mode).0.resize_to::<Int<N>>(),
     }
 }
 
@@ -3320,23 +3321,23 @@ mod forward_rung_tests {
         type Core = crate::types::widths::wide_trig_d307::Core;
         const G: u32 =
             <Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD;
-        for v in ["1", "-1", "2", "3141", "-1570"] {
-            let x: crate::D307<0> = v.parse().unwrap();
+        for input in ["1", "-1", "2", "3141", "-1570"] {
+            let value: crate::D307<0> = input.parse().unwrap();
             for mode in ALL_MODES {
                 assert_eq!(
-                    super::forward_rung::sin_strict::<Core, 0, G>(x.to_bits(), mode),
-                    crate::algos::support::wide_trig_core::sin_series::<Core, 0>(x.to_bits(), mode),
-                    "sin({v}) mode {mode:?}"
+                    super::forward_rung::sin_strict::<Core, 0, G>(value.to_bits(), mode),
+                    crate::algos::support::wide_trig_core::sin_series::<Core, 0>(value.to_bits(), mode),
+                    "sin({input}) mode {mode:?}"
                 );
                 assert_eq!(
-                    super::forward_rung::tan_strict::<Core, 0, G, true, true>(x.to_bits(), mode),
-                    crate::algos::support::wide_trig_core::tan_series::<Core, 0>(x.to_bits(), mode),
-                    "tan({v}) mode {mode:?}"
+                    super::forward_rung::tan_strict::<Core, 0, G, true, true>(value.to_bits(), mode),
+                    crate::algos::support::wide_trig_core::tan_series::<Core, 0>(value.to_bits(), mode),
+                    "tan({input}) mode {mode:?}"
                 );
                 assert_eq!(
-                    super::forward_rung::atan_strict::<Core, 0, G, true>(x.to_bits(), mode),
-                    crate::algos::support::wide_trig_core::atan_series::<Core, 0>(x.to_bits(), mode),
-                    "atan({v}) mode {mode:?}"
+                    super::forward_rung::atan_strict::<Core, 0, G, true>(value.to_bits(), mode),
+                    crate::algos::support::wide_trig_core::atan_series::<Core, 0>(value.to_bits(), mode),
+                    "atan({input}) mode {mode:?}"
                 );
             }
         }
@@ -3349,13 +3350,13 @@ mod forward_rung_tests {
     #[cfg(feature = "d307")]
     fn d307_band_atan_rung_matches_tier_narrow() {
         type Core = crate::types::widths::wide_trig_d307::Core;
-        for v in ["1", "-1", "2", "3141"] {
-            let x: crate::D307<150> = v.parse().unwrap();
+        for input in ["1", "-1", "2", "3141"] {
+            let value: crate::D307<150> = input.parse().unwrap();
             for mode in ALL_MODES {
                 assert_eq!(
-                    super::forward_rung::atan_strict::<Core, 150, 10, false>(x.to_bits(), mode),
-                    crate::algos::support::wide_trig_core::atan_narrow::<Core, 150, 10>(x.to_bits(), mode),
-                    "atan({v}) band mode {mode:?}"
+                    super::forward_rung::atan_strict::<Core, 150, 10, false>(value.to_bits(), mode),
+                    crate::algos::support::wide_trig_core::atan_narrow::<Core, 150, 10>(value.to_bits(), mode),
+                    "atan({input}) band mode {mode:?}"
                 );
             }
         }
@@ -3369,16 +3370,16 @@ mod forward_rung_tests {
         type Core = crate::types::widths::wide_trig_d307::Core;
         const G: u32 =
             <Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD;
-        let x: crate::D307<0> = "1000000000".parse().unwrap();
+        let value: crate::D307<0> = "1000000000".parse().unwrap();
         for mode in ALL_MODES {
             assert_eq!(
-                super::forward_rung::sin_strict::<Core, 0, G>(x.to_bits(), mode),
-                crate::algos::support::wide_trig_core::sin_series::<Core, 0>(x.to_bits(), mode),
+                super::forward_rung::sin_strict::<Core, 0, G>(value.to_bits(), mode),
+                crate::algos::support::wide_trig_core::sin_series::<Core, 0>(value.to_bits(), mode),
                 "sin(1e9) mode {mode:?}"
             );
             assert_eq!(
-                super::forward_rung::atan_strict::<Core, 0, G, true>(x.to_bits(), mode),
-                crate::algos::support::wide_trig_core::atan_series::<Core, 0>(x.to_bits(), mode),
+                super::forward_rung::atan_strict::<Core, 0, G, true>(value.to_bits(), mode),
+                crate::algos::support::wide_trig_core::atan_series::<Core, 0>(value.to_bits(), mode),
                 "atan(1e9) mode {mode:?}"
             );
         }
@@ -3403,12 +3404,12 @@ mod forward_rung_tests {
         const G: u32 =
             <Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD;
         // The bench input set at SCALE 153: raw = {0.3, 1.0, 1.5, 3141}·10^36.
-        let p36 = crate::int::types::Int::<16>::from_i128(10i128.pow(36));
+        let ten_pow_36 = crate::int::types::Int::<16>::from_i128(10i128.pow(36));
         let raws = [
             crate::int::types::Int::<16>::from_i128(3 * 10i128.pow(35)),
-            p36,
+            ten_pow_36,
             crate::int::types::Int::<16>::from_i128(15 * 10i128.pow(35)),
-            crate::int::types::Int::<16>::from_i128(3141) * p36,
+            crate::int::types::Int::<16>::from_i128(3141) * ten_pow_36,
         ];
         for raw in raws {
             for mode in ALL_MODES {
@@ -3477,10 +3478,10 @@ mod forward_rung_tests {
         type Core = crate::types::widths::wide_trig_d1232::Core;
         const G: u32 =
             <Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD;
-        let p36 = crate::int::types::Int::<64>::from_i128(10i128.pow(36));
+        let ten_pow_36 = crate::int::types::Int::<64>::from_i128(10i128.pow(36));
         let raws = [
             crate::int::types::Int::<64>::from_i128(3 * 10i128.pow(35)),
-            p36,
+            ten_pow_36,
             crate::int::types::Int::<64>::from_i128(15 * 10i128.pow(35)),
         ];
         for raw in raws {
@@ -3525,15 +3526,22 @@ mod forward_rung_tests {
         ($Core:ty, $N:literal, $SCALE:literal, $with_big:expr) => {{
             type C = $Core;
             const G: u32 = <C as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD;
-            let p = crate::int::types::Int::<$N>::from_i128(10i128).pow(($SCALE as u32).min(36));
+            let scale_factor =
+                crate::int::types::Int::<$N>::from_i128(10i128).pow(($SCALE as u32).min(36));
             let ten = crate::int::types::Int::<$N>::from_i128(10);
-            let i = |n: i128| crate::int::types::Int::<$N>::from_i128(n);
-            // Forward trig: {0.3, 1.0, 1.5, 3141}·p (+ 1e9·p at s0).
-            let mut fwd = vec![p * i(3) / ten, p, p + (p >> 1), p * i(3141)];
+            let int = |value: i128| crate::int::types::Int::<$N>::from_i128(value);
+            // Forward trig: {0.3, 1.0, 1.5, 3141}·scale_factor
+            // (+ 1e9·scale_factor at s0).
+            let mut forward_raws = vec![
+                scale_factor * int(3) / ten,
+                scale_factor,
+                scale_factor + (scale_factor >> 1),
+                scale_factor * int(3141)
+            ];
             if $with_big {
-                fwd.push(p * i(1_000_000_000));
+                forward_raws.push(scale_factor * int(1_000_000_000));
             }
-            for raw in fwd {
+            for raw in forward_raws {
                 for mode in ALL_MODES {
                     assert_eq!(
                         super::forward_rung::sin_strict::<C, $SCALE, G>(raw, mode),
@@ -3557,8 +3565,12 @@ mod forward_rung_tests {
                     );
                 }
             }
-            // asin: the unit-domain set {0.3, 0.9, 1.0}·p.
-            for raw in [p * i(3) / ten, p * i(9) / ten, p] {
+            // asin: the unit-domain set {0.3, 0.9, 1.0}·scale_factor.
+            for raw in [
+                scale_factor * int(3) / ten,
+                scale_factor * int(9) / ten,
+                scale_factor
+            ] {
                 for mode in ALL_MODES {
                     assert_eq!(
                         super::inverse_rung::asin_strict::<C, $SCALE>(raw, mode),
@@ -3567,11 +3579,17 @@ mod forward_rung_tests {
                     );
                 }
             }
-            // sinh / exp / asinh: the EXP_ARG_BUDGET set {0.3, 1, 1.5, 9.5}·p
-            // (+ the 50·p out-of-budget probe at s0).
-            let mut small = vec![p * i(3) / ten, p, p + (p >> 1), p * i(9) + (p >> 1)];
+            // sinh / exp / asinh: the EXP_ARG_BUDGET set
+            // {0.3, 1, 1.5, 9.5}·scale_factor (+ the 50·scale_factor
+            // out-of-budget probe at s0).
+            let mut small = vec![
+                scale_factor * int(3) / ten,
+                scale_factor,
+                scale_factor + (scale_factor >> 1),
+                scale_factor * int(9) + (scale_factor >> 1)
+            ];
             if $with_big {
-                small.push(p * i(50));
+                small.push(scale_factor * int(50));
             }
             for raw in small {
                 for mode in ALL_MODES {
@@ -3643,7 +3661,7 @@ mod forward_rung_tests {
         use crate::int::types::Int;
         let raw = Int::<24>::from_i128(10).pow(293);
         let one = Int::<24>::from_i128(1);
-        let x = crate::D::<Int<24>, 461>(raw);
+        let deep_value = crate::D::<Int<24>, 461>(raw);
         for mode in ALL_MODES {
             let nearest = crate::support::rounding::is_nearest_mode(mode);
             // sinh / atanh: expanding odd (true value just ABOVE raw). The
@@ -3673,27 +3691,28 @@ mod forward_rung_tests {
                     _ => raw - one,
                 }
             };
-            assert_eq!(x.sinh_strict_with(mode).0, expand, "sinh mode {mode:?}");
+            assert_eq!(deep_value.sinh_strict_with(mode).0, expand, "sinh mode {mode:?}");
             assert_eq!(super::sinh_dispatch::<24, 461>(raw, mode), expand, "sinh dispatch {mode:?}");
-            assert_eq!(x.tanh_strict_with(mode).0, compress, "tanh mode {mode:?}");
+            assert_eq!(deep_value.tanh_strict_with(mode).0, compress, "tanh mode {mode:?}");
             assert_eq!(super::tanh_dispatch::<24, 461>(raw, mode), compress, "tanh dispatch {mode:?}");
-            assert_eq!(x.asinh_strict_with(mode).0, compress, "asinh mode {mode:?}");
+            assert_eq!(deep_value.asinh_strict_with(mode).0, compress, "asinh mode {mode:?}");
             assert_eq!(super::asinh_dispatch::<24, 461>(raw, mode), compress, "asinh dispatch {mode:?}");
-            assert_eq!(x.atanh_strict_with(mode).0, expand, "atanh mode {mode:?}");
+            assert_eq!(deep_value.atanh_strict_with(mode).0, expand, "atanh mode {mode:?}");
             assert_eq!(super::atanh_dispatch::<24, 461>(raw, mode), expand, "atanh dispatch {mode:?}");
         }
         // Default == _with(DEFAULT) for the whole family, deep + ordinary.
         let half = Int::<24>::from_i128(5) * Int::<24>::from_i128(10).pow(460);
-        for v in [raw, half] {
-            let y = crate::D::<Int<24>, 461>(v);
-            let m = crate::support::rounding::DEFAULT_ROUNDING_MODE;
-            assert_eq!(y.sinh_strict(), y.sinh_strict_with(m), "sinh default");
-            assert_eq!(y.cosh_strict(), y.cosh_strict_with(m), "cosh default");
-            assert_eq!(y.tanh_strict(), y.tanh_strict_with(m), "tanh default");
-            assert_eq!(y.asinh_strict(), y.asinh_strict_with(m), "asinh default");
-            assert_eq!(y.atanh_strict(), y.atanh_strict_with(m), "atanh default");
-            let z = crate::D::<Int<24>, 461>(v + Int::<24>::from_i128(10).pow(461)); // >= 1 for acosh
-            assert_eq!(z.acosh_strict(), z.acosh_strict_with(m), "acosh default");
+        for raw_case in [raw, half] {
+            let case_value = crate::D::<Int<24>, 461>(raw_case);
+            let default_mode = crate::support::rounding::DEFAULT_ROUNDING_MODE;
+            assert_eq!(case_value.sinh_strict(), case_value.sinh_strict_with(default_mode), "sinh default");
+            assert_eq!(case_value.cosh_strict(), case_value.cosh_strict_with(default_mode), "cosh default");
+            assert_eq!(case_value.tanh_strict(), case_value.tanh_strict_with(default_mode), "tanh default");
+            assert_eq!(case_value.asinh_strict(), case_value.asinh_strict_with(default_mode), "asinh default");
+            assert_eq!(case_value.atanh_strict(), case_value.atanh_strict_with(default_mode), "atanh default");
+            let acosh_value =
+                crate::D::<Int<24>, 461>(raw_case + Int::<24>::from_i128(10).pow(461)); // >= 1 for acosh
+            assert_eq!(acosh_value.acosh_strict(), acosh_value.acosh_strict_with(default_mode), "acosh default");
         }
     }
 
@@ -3706,18 +3725,18 @@ mod forward_rung_tests {
     #[cfg(feature = "d307")]
     fn d307_inverse_rung_matches_tier_kernels() {
         type Core = crate::types::widths::wide_trig_d307::Core;
-        for v in ["0", "0.25", "0.6", "0.9", "1", "-0.6", "-1"] {
-            let x: crate::D307<19> = v.parse().unwrap();
+        for input in ["0", "0.25", "0.6", "0.9", "1", "-0.6", "-1"] {
+            let value: crate::D307<19> = input.parse().unwrap();
             for mode in ALL_MODES {
                 assert_eq!(
-                    super::inverse_rung::asin_strict::<Core, 19>(x.to_bits(), mode),
-                    crate::algos::trig::inverse_schoolbook::asin_schoolbook::<Core, 19>(x.to_bits(), mode),
-                    "asin({v}) mode {mode:?}"
+                    super::inverse_rung::asin_strict::<Core, 19>(value.to_bits(), mode),
+                    crate::algos::trig::inverse_schoolbook::asin_schoolbook::<Core, 19>(value.to_bits(), mode),
+                    "asin({input}) mode {mode:?}"
                 );
                 assert_eq!(
-                    super::inverse_rung::acos_strict::<Core, 19>(x.to_bits(), mode),
-                    crate::algos::trig::inverse_schoolbook::acos_schoolbook::<Core, 19>(x.to_bits(), mode),
-                    "acos({v}) mode {mode:?}"
+                    super::inverse_rung::acos_strict::<Core, 19>(value.to_bits(), mode),
+                    crate::algos::trig::inverse_schoolbook::acos_schoolbook::<Core, 19>(value.to_bits(), mode),
+                    "acos({input}) mode {mode:?}"
                 );
             }
         }
@@ -3732,12 +3751,12 @@ mod forward_rung_tests {
             ("0", "1"),
             ("1000000000", "1"),
         ] {
-            let yd: crate::D307<19> = y.parse().unwrap();
-            let xd: crate::D307<19> = x.parse().unwrap();
+            let y_value: crate::D307<19> = y.parse().unwrap();
+            let x_value: crate::D307<19> = x.parse().unwrap();
             for mode in ALL_MODES {
                 assert_eq!(
-                    super::inverse_rung::atan2_strict::<Core, 19>(yd.to_bits(), xd.to_bits(), mode),
-                    crate::algos::trig::inverse_schoolbook::atan2_schoolbook::<Core, 19>(yd.to_bits(), xd.to_bits(), mode),
+                    super::inverse_rung::atan2_strict::<Core, 19>(y_value.to_bits(), x_value.to_bits(), mode),
+                    crate::algos::trig::inverse_schoolbook::atan2_schoolbook::<Core, 19>(y_value.to_bits(), x_value.to_bits(), mode),
                     "atan2({y}, {x}) mode {mode:?}"
                 );
             }
@@ -3753,23 +3772,23 @@ mod forward_rung_tests {
     #[cfg(feature = "d307")]
     fn d307_hyper_rung_matches_tier_kernels() {
         type Core = crate::types::widths::wide_trig_d307::Core;
-        for v in ["0", "0.3", "1", "1.5", "9.9", "-1", "-9.9", "50"] {
-            let x: crate::D307<19> = v.parse().unwrap();
+        for input in ["0", "0.3", "1", "1.5", "9.9", "-1", "-9.9", "50"] {
+            let value: crate::D307<19> = input.parse().unwrap();
             for mode in ALL_MODES {
                 assert_eq!(
-                    super::hyper_rung::sinh_strict::<Core, 19>(x.to_bits(), mode),
-                    crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<Core, 19>(x.to_bits(), mode),
-                    "sinh({v}) mode {mode:?}"
+                    super::hyper_rung::sinh_strict::<Core, 19>(value.to_bits(), mode),
+                    crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<Core, 19>(value.to_bits(), mode),
+                    "sinh({input}) mode {mode:?}"
                 );
                 assert_eq!(
-                    super::hyper_rung::cosh_strict::<Core, 19>(x.to_bits(), mode),
-                    crate::algos::trig::hyper_schoolbook::cosh_schoolbook::<Core, 19>(x.to_bits(), mode),
-                    "cosh({v}) mode {mode:?}"
+                    super::hyper_rung::cosh_strict::<Core, 19>(value.to_bits(), mode),
+                    crate::algos::trig::hyper_schoolbook::cosh_schoolbook::<Core, 19>(value.to_bits(), mode),
+                    "cosh({input}) mode {mode:?}"
                 );
                 assert_eq!(
-                    super::hyper_rung::tanh_strict::<Core, 19>(x.to_bits(), mode),
-                    crate::algos::trig::hyper_schoolbook::tanh_schoolbook::<Core, 19>(x.to_bits(), mode),
-                    "tanh({v}) mode {mode:?}"
+                    super::hyper_rung::tanh_strict::<Core, 19>(value.to_bits(), mode),
+                    crate::algos::trig::hyper_schoolbook::tanh_schoolbook::<Core, 19>(value.to_bits(), mode),
+                    "tanh({input}) mode {mode:?}"
                 );
             }
         }
@@ -3784,33 +3803,33 @@ mod forward_rung_tests {
     #[cfg(feature = "d307")]
     fn d307_extra_rung_matches_tier_kernels() {
         type Core = crate::types::widths::wide_trig_d307::Core;
-        for v in ["0", "0.5", "1", "2", "1000000000", "-0.5", "-2"] {
-            let x: crate::D307<19> = v.parse().unwrap();
+        for input in ["0", "0.5", "1", "2", "1000000000", "-0.5", "-2"] {
+            let value: crate::D307<19> = input.parse().unwrap();
             for mode in ALL_MODES {
                 assert_eq!(
-                    super::extra_rung::asinh_strict::<Core, 19>(x.to_bits(), mode),
-                    crate::algos::trig::hyper_schoolbook::asinh_schoolbook::<Core, 19>(x.to_bits(), mode),
-                    "asinh({v}) mode {mode:?}"
+                    super::extra_rung::asinh_strict::<Core, 19>(value.to_bits(), mode),
+                    crate::algos::trig::hyper_schoolbook::asinh_schoolbook::<Core, 19>(value.to_bits(), mode),
+                    "asinh({input}) mode {mode:?}"
                 );
             }
         }
-        for v in ["1", "1.0000000000000000001", "1.5", "2", "1000", "1000000000"] {
-            let x: crate::D307<19> = v.parse().unwrap();
+        for input in ["1", "1.0000000000000000001", "1.5", "2", "1000", "1000000000"] {
+            let value: crate::D307<19> = input.parse().unwrap();
             for mode in ALL_MODES {
                 assert_eq!(
-                    super::extra_rung::acosh_strict::<Core, 19>(x.to_bits(), mode),
-                    crate::algos::trig::hyper_schoolbook::acosh_schoolbook::<Core, 19>(x.to_bits(), mode),
-                    "acosh({v}) mode {mode:?}"
+                    super::extra_rung::acosh_strict::<Core, 19>(value.to_bits(), mode),
+                    crate::algos::trig::hyper_schoolbook::acosh_schoolbook::<Core, 19>(value.to_bits(), mode),
+                    "acosh({input}) mode {mode:?}"
                 );
             }
         }
-        for v in ["0", "0.5", "0.9999999999999999999", "-0.9999999999999999999", "-0.5"] {
-            let x: crate::D307<19> = v.parse().unwrap();
+        for input in ["0", "0.5", "0.9999999999999999999", "-0.9999999999999999999", "-0.5"] {
+            let value: crate::D307<19> = input.parse().unwrap();
             for mode in ALL_MODES {
                 assert_eq!(
-                    super::extra_rung::atanh_strict::<Core, 19>(x.to_bits(), mode),
-                    crate::algos::trig::hyper_schoolbook::atanh_schoolbook::<Core, 19>(x.to_bits(), mode),
-                    "atanh({v}) mode {mode:?}"
+                    super::extra_rung::atanh_strict::<Core, 19>(value.to_bits(), mode),
+                    crate::algos::trig::hyper_schoolbook::atanh_schoolbook::<Core, 19>(value.to_bits(), mode),
+                    "atanh({input}) mode {mode:?}"
                 );
             }
         }

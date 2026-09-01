@@ -170,7 +170,8 @@ pub const DEFAULT_ROUNDING_MODE: RoundingMode = RoundingMode::HalfToEven;
 /// The three inputs collapse the per-step numerics that every mode
 /// cares about into mode-independent booleans / orderings:
 ///
-/// - `cmp_r` — three-way comparison of `|r|` against `|m| − |r|`. This
+/// - `remainder_cmp` — three-way comparison of `|r|` against `|m| − |r|`.
+///   This
 ///   is exactly the round-up condition (`|r| > |m| − |r|` ⇔ `2·|r| > |m|`)
 ///   without the doubling-overflow risk. `Equal` flags the half-way tie,
 ///   which only occurs when the divisor is even.
@@ -195,19 +196,19 @@ pub const DEFAULT_ROUNDING_MODE: RoundingMode = RoundingMode::HalfToEven;
 #[inline(always)]
 pub(crate) fn should_bump(
     mode: RoundingMode,
-    cmp_r: ::core::cmp::Ordering,
+    remainder_cmp: ::core::cmp::Ordering,
     q_mod_10: u8,
     result_positive: bool,
 ) -> bool {
     use ::core::cmp::Ordering;
     match mode {
-        RoundingMode::HalfToEven => match cmp_r {
+        RoundingMode::HalfToEven => match remainder_cmp {
             Ordering::Less => false,
             Ordering::Greater => true,
             Ordering::Equal => q_mod_10 & 1 == 1,
         },
-        RoundingMode::HalfAwayFromZero => !matches!(cmp_r, Ordering::Less),
-        RoundingMode::HalfTowardZero => matches!(cmp_r, Ordering::Greater),
+        RoundingMode::HalfAwayFromZero => !matches!(remainder_cmp, Ordering::Less),
+        RoundingMode::HalfTowardZero => matches!(remainder_cmp, Ordering::Greater),
         RoundingMode::Trunc => false,
         RoundingMode::Floor => !result_positive,
         RoundingMode::Ceiling => result_positive,
@@ -331,15 +332,15 @@ where
     if is_nearest_mode(mode) {
         return raw;
     }
-    let positive = raw > zero;
+    let is_positive = raw > zero;
     // The toward-zero result: magnitude |raw| − 1.
-    let toward_zero = if positive { raw - one } else { raw + one };
+    let toward_zero = if is_positive { raw - one } else { raw + one };
     match mode {
         // Toward zero: drop the sub-ULP magnitude, landing on |raw| − 1.
         RoundingMode::Trunc => toward_zero,
         // Toward −∞.
         RoundingMode::Floor => {
-            if positive {
+            if is_positive {
                 raw - one
             } else {
                 raw
@@ -347,7 +348,7 @@ where
         }
         // Toward +∞.
         RoundingMode::Ceiling => {
-            if positive {
+            if is_positive {
                 raw
             } else {
                 raw + one
@@ -405,16 +406,16 @@ where
     if is_nearest_mode(mode) {
         return raw;
     }
-    let positive = raw > zero;
+    let is_positive = raw > zero;
     // One step away from zero from the toward-zero result `raw`.
-    let away = if positive { raw + one } else { raw - one };
+    let away = if is_positive { raw + one } else { raw - one };
     match mode {
         // Toward zero: the excess is sub-ULP, so the magnitude stays at
         // `|raw|` — i.e. `raw` unchanged.
         RoundingMode::Trunc => raw,
         // Toward −∞.
         RoundingMode::Floor => {
-            if positive {
+            if is_positive {
                 raw
             } else {
                 raw - one
@@ -422,7 +423,7 @@ where
         }
         // Toward +∞.
         RoundingMode::Ceiling => {
-            if positive {
+            if is_positive {
                 raw + one
             } else {
                 raw
@@ -460,16 +461,16 @@ pub(crate) fn apply_rounding(raw: i128, divisor: i128, mode: RoundingMode) -> i1
         return quotient;
     }
 
-    let abs_rem = remainder.unsigned_abs();
-    let abs_div = divisor.unsigned_abs();
-    let comp = abs_div - abs_rem;
-    let cmp_r = abs_rem.cmp(&comp);
+    let abs_remainder = remainder.unsigned_abs();
+    let abs_divisor = divisor.unsigned_abs();
+    let complement = abs_divisor - abs_remainder;
+    let remainder_cmp = abs_remainder.cmp(&complement);
     // Last decimal digit of |quotient|: `%` on a negative `i128` keeps the
     // sign, so take the magnitude of the one-digit remainder.
     let q_mod_10 = (quotient % 10).unsigned_abs() as u8;
     let result_positive = (raw < 0) == (divisor < 0);
 
-    if should_bump(mode, cmp_r, q_mod_10, result_positive) {
+    if should_bump(mode, remainder_cmp, q_mod_10, result_positive) {
         if result_positive {
             quotient + 1
         } else {
@@ -496,19 +497,19 @@ const F64_INTEGER_THRESHOLD: f64 = 9_007_199_254_740_992.0_f64;
 /// is recovered via an `i128` round-trip, which is exact in that range.
 /// The negative-zero sign is preserved to match [`f64::trunc`] bit-for-bit.
 #[inline]
-pub(crate) fn trunc_f64(x: f64) -> f64 {
-    if x.is_nan() {
-        return x;
+pub(crate) fn trunc_f64(value: f64) -> f64 {
+    if value.is_nan() {
+        return value;
     }
-    let magnitude = if x < 0.0 { -x } else { x };
+    let magnitude = if value < 0.0 { -value } else { value };
     if magnitude >= F64_INTEGER_THRESHOLD {
         // NaN is already returned above, so `>=` is the exact complement of
         // `< THRESHOLD` here: already-integral / too-large magnitudes pass
         // through unchanged.
-        return x;
+        return value;
     }
-    let truncated = x as i128 as f64;
-    if truncated == 0.0 && x.is_sign_negative() {
+    let truncated = value as i128 as f64;
+    if truncated == 0.0 && value.is_sign_negative() {
         -0.0
     } else {
         truncated
@@ -519,9 +520,9 @@ pub(crate) fn trunc_f64(x: f64) -> f64 {
 /// [`f64::floor`]: drop to the truncated value, then step down by one
 /// when truncation rounded a negative value up toward zero.
 #[inline]
-pub(crate) fn floor_f64(x: f64) -> f64 {
-    let truncated = trunc_f64(x);
-    if truncated > x {
+pub(crate) fn floor_f64(value: f64) -> f64 {
+    let truncated = trunc_f64(value);
+    if truncated > value {
         truncated - 1.0
     } else {
         truncated
@@ -531,9 +532,9 @@ pub(crate) fn floor_f64(x: f64) -> f64 {
 /// Round an `f64` toward positive infinity, libm-free. Equivalent to
 /// [`f64::ceil`]: the mirror of [`floor_f64`].
 #[inline]
-pub(crate) fn ceil_f64(x: f64) -> f64 {
-    let truncated = trunc_f64(x);
-    if truncated < x {
+pub(crate) fn ceil_f64(value: f64) -> f64 {
+    let truncated = trunc_f64(value);
+    if truncated < value {
         truncated + 1.0
     } else {
         truncated
@@ -544,9 +545,9 @@ pub(crate) fn ceil_f64(x: f64) -> f64 {
 /// Equivalent to [`f64::round`]: a fractional part with magnitude `>= 0.5`
 /// steps the truncated value one away from zero.
 #[inline]
-pub(crate) fn round_half_away_f64(x: f64) -> f64 {
-    let truncated = trunc_f64(x);
-    let fraction = x - truncated;
+pub(crate) fn round_half_away_f64(value: f64) -> f64 {
+    let truncated = trunc_f64(value);
+    let fraction = value - truncated;
     if fraction >= 0.5 {
         truncated + 1.0
     } else if fraction <= -0.5 {
@@ -561,9 +562,9 @@ pub(crate) fn round_half_away_f64(x: f64) -> f64 {
 /// past `0.5` in magnitude steps one away from zero; an exact half steps
 /// only when the truncated value is odd, landing on the even neighbour.
 #[inline]
-pub(crate) fn round_half_even_f64(x: f64) -> f64 {
-    let truncated = trunc_f64(x);
-    let fraction = x - truncated;
+pub(crate) fn round_half_even_f64(value: f64) -> f64 {
+    let truncated = trunc_f64(value);
+    let fraction = value - truncated;
     if fraction > 0.5 {
         truncated + 1.0
     } else if fraction < -0.5 {
@@ -590,11 +591,11 @@ pub(crate) fn round_half_even_f64(x: f64) -> f64 {
 /// (`(x - 0.5).ceil()` for `x >= 0`, `(x + 0.5).floor()` otherwise)
 /// using the libm-free [`ceil_f64`] / [`floor_f64`].
 #[inline]
-pub(crate) fn round_half_toward_zero_f64(x: f64) -> f64 {
-    if x >= 0.0 {
-        ceil_f64(x - 0.5)
+pub(crate) fn round_half_toward_zero_f64(value: f64) -> f64 {
+    if value >= 0.0 {
+        ceil_f64(value - 0.5)
     } else {
-        floor_f64(x + 0.5)
+        floor_f64(value + 0.5)
     }
 }
 
@@ -669,99 +670,99 @@ mod tests {
     /// Zero remainder is exact for every mode.
     #[test]
     fn zero_remainder_is_quotient_for_all_modes() {
-        for m in modes() {
-            assert_eq!(apply_rounding(20, 10, m), 2, "{m:?}");
-            assert_eq!(apply_rounding(-20, 10, m), -2, "{m:?}");
-            assert_eq!(apply_rounding(0, 10, m), 0, "{m:?}");
+        for mode in modes() {
+            assert_eq!(apply_rounding(20, 10, mode), 2, "{mode:?}");
+            assert_eq!(apply_rounding(-20, 10, mode), -2, "{mode:?}");
+            assert_eq!(apply_rounding(0, 10, mode), 0, "{mode:?}");
         }
     }
 
     /// Half-to-even: ties go to even neighbour.
     #[test]
     fn half_to_even_ties() {
-        let m = RoundingMode::HalfToEven;
-        assert_eq!(apply_rounding(5, 10, m), 0); // 0.5 -> 0 (even)
-        assert_eq!(apply_rounding(15, 10, m), 2); // 1.5 -> 2
-        assert_eq!(apply_rounding(25, 10, m), 2); // 2.5 -> 2 (even)
-        assert_eq!(apply_rounding(35, 10, m), 4); // 3.5 -> 4
-        assert_eq!(apply_rounding(-5, 10, m), 0); // -0.5 -> 0
-        assert_eq!(apply_rounding(-15, 10, m), -2); // -1.5 -> -2
-        assert_eq!(apply_rounding(-25, 10, m), -2); // -2.5 -> -2
-        assert_eq!(apply_rounding(-35, 10, m), -4); // -3.5 -> -4
+        let mode = RoundingMode::HalfToEven;
+        assert_eq!(apply_rounding(5, 10, mode), 0); // 0.5 -> 0 (even)
+        assert_eq!(apply_rounding(15, 10, mode), 2); // 1.5 -> 2
+        assert_eq!(apply_rounding(25, 10, mode), 2); // 2.5 -> 2 (even)
+        assert_eq!(apply_rounding(35, 10, mode), 4); // 3.5 -> 4
+        assert_eq!(apply_rounding(-5, 10, mode), 0); // -0.5 -> 0
+        assert_eq!(apply_rounding(-15, 10, mode), -2); // -1.5 -> -2
+        assert_eq!(apply_rounding(-25, 10, mode), -2); // -2.5 -> -2
+        assert_eq!(apply_rounding(-35, 10, mode), -4); // -3.5 -> -4
     }
 
     /// Half-away-from-zero: ties go away from zero.
     #[test]
     fn half_away_from_zero_ties() {
-        let m = RoundingMode::HalfAwayFromZero;
-        assert_eq!(apply_rounding(5, 10, m), 1);
-        assert_eq!(apply_rounding(15, 10, m), 2);
-        assert_eq!(apply_rounding(25, 10, m), 3);
-        assert_eq!(apply_rounding(-5, 10, m), -1);
-        assert_eq!(apply_rounding(-15, 10, m), -2);
-        assert_eq!(apply_rounding(-25, 10, m), -3);
+        let mode = RoundingMode::HalfAwayFromZero;
+        assert_eq!(apply_rounding(5, 10, mode), 1);
+        assert_eq!(apply_rounding(15, 10, mode), 2);
+        assert_eq!(apply_rounding(25, 10, mode), 3);
+        assert_eq!(apply_rounding(-5, 10, mode), -1);
+        assert_eq!(apply_rounding(-15, 10, mode), -2);
+        assert_eq!(apply_rounding(-25, 10, mode), -3);
     }
 
     /// Half-toward-zero: ties go toward zero.
     #[test]
     fn half_toward_zero_ties() {
-        let m = RoundingMode::HalfTowardZero;
-        assert_eq!(apply_rounding(5, 10, m), 0);
-        assert_eq!(apply_rounding(15, 10, m), 1);
-        assert_eq!(apply_rounding(25, 10, m), 2);
-        assert_eq!(apply_rounding(-5, 10, m), 0);
-        assert_eq!(apply_rounding(-15, 10, m), -1);
-        assert_eq!(apply_rounding(-25, 10, m), -2);
+        let mode = RoundingMode::HalfTowardZero;
+        assert_eq!(apply_rounding(5, 10, mode), 0);
+        assert_eq!(apply_rounding(15, 10, mode), 1);
+        assert_eq!(apply_rounding(25, 10, mode), 2);
+        assert_eq!(apply_rounding(-5, 10, mode), 0);
+        assert_eq!(apply_rounding(-15, 10, mode), -1);
+        assert_eq!(apply_rounding(-25, 10, mode), -2);
     }
 
     /// Trunc: always toward zero, regardless of magnitude.
     #[test]
     fn trunc_always_toward_zero() {
-        let m = RoundingMode::Trunc;
-        assert_eq!(apply_rounding(7, 10, m), 0);
-        assert_eq!(apply_rounding(9, 10, m), 0);
-        assert_eq!(apply_rounding(19, 10, m), 1);
-        assert_eq!(apply_rounding(-7, 10, m), 0);
-        assert_eq!(apply_rounding(-19, 10, m), -1);
+        let mode = RoundingMode::Trunc;
+        assert_eq!(apply_rounding(7, 10, mode), 0);
+        assert_eq!(apply_rounding(9, 10, mode), 0);
+        assert_eq!(apply_rounding(19, 10, mode), 1);
+        assert_eq!(apply_rounding(-7, 10, mode), 0);
+        assert_eq!(apply_rounding(-19, 10, mode), -1);
     }
 
     /// Floor: always toward negative infinity.
     #[test]
     fn floor_toward_negative_infinity() {
-        let m = RoundingMode::Floor;
-        assert_eq!(apply_rounding(1, 10, m), 0);
-        assert_eq!(apply_rounding(7, 10, m), 0);
-        assert_eq!(apply_rounding(9, 10, m), 0);
-        assert_eq!(apply_rounding(-1, 10, m), -1);
-        assert_eq!(apply_rounding(-7, 10, m), -1);
-        assert_eq!(apply_rounding(-19, 10, m), -2);
+        let mode = RoundingMode::Floor;
+        assert_eq!(apply_rounding(1, 10, mode), 0);
+        assert_eq!(apply_rounding(7, 10, mode), 0);
+        assert_eq!(apply_rounding(9, 10, mode), 0);
+        assert_eq!(apply_rounding(-1, 10, mode), -1);
+        assert_eq!(apply_rounding(-7, 10, mode), -1);
+        assert_eq!(apply_rounding(-19, 10, mode), -2);
     }
 
     /// Ceiling: always toward positive infinity.
     #[test]
     fn ceiling_toward_positive_infinity() {
-        let m = RoundingMode::Ceiling;
-        assert_eq!(apply_rounding(1, 10, m), 1);
-        assert_eq!(apply_rounding(7, 10, m), 1);
-        assert_eq!(apply_rounding(19, 10, m), 2);
-        assert_eq!(apply_rounding(-1, 10, m), 0);
-        assert_eq!(apply_rounding(-7, 10, m), 0);
-        assert_eq!(apply_rounding(-19, 10, m), -1);
+        let mode = RoundingMode::Ceiling;
+        assert_eq!(apply_rounding(1, 10, mode), 1);
+        assert_eq!(apply_rounding(7, 10, mode), 1);
+        assert_eq!(apply_rounding(19, 10, mode), 2);
+        assert_eq!(apply_rounding(-1, 10, mode), 0);
+        assert_eq!(apply_rounding(-7, 10, mode), 0);
+        assert_eq!(apply_rounding(-19, 10, mode), -1);
     }
 
     /// Non-half values go to the nearest neighbour for every "half"
     /// mode and ignore the half-tie rule.
     #[test]
     fn non_half_goes_to_nearest() {
-        for m in [
+        for mode in [
             RoundingMode::HalfToEven,
             RoundingMode::HalfAwayFromZero,
             RoundingMode::HalfTowardZero,
         ] {
-            assert_eq!(apply_rounding(4, 10, m), 0, "{m:?} 0.4");
-            assert_eq!(apply_rounding(6, 10, m), 1, "{m:?} 0.6");
-            assert_eq!(apply_rounding(-4, 10, m), 0, "{m:?} -0.4");
-            assert_eq!(apply_rounding(-6, 10, m), -1, "{m:?} -0.6");
+            assert_eq!(apply_rounding(4, 10, mode), 0, "{mode:?} 0.4");
+            assert_eq!(apply_rounding(6, 10, mode), 1, "{mode:?} 0.6");
+            assert_eq!(apply_rounding(-4, 10, mode), 0, "{mode:?} -0.4");
+            assert_eq!(apply_rounding(-6, 10, mode), -1, "{mode:?} -0.6");
         }
     }
 

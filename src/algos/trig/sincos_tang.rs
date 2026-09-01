@@ -76,29 +76,35 @@ where
         };
     }
 
-    let w = SCALE + C::GUARD;
-    let v_w = C::to_work(raw);
-    let one_w = C::one(w);
+    let working_scale = SCALE + C::GUARD;
+    let working_value = C::to_work(raw);
+    let one_w = C::one(working_scale);
     let pow10_w = one_w;
-    let pi_w = C::pi::<SCALE>(w);
-    let half_pi_w = C::half_pi::<SCALE>(w);
+    let pi_at_working_scale = C::pi::<SCALE>(working_scale);
+    let half_pi_at_working_scale = C::half_pi::<SCALE>(working_scale);
 
     // Stage 1: x = k·(π/2) + r, |r| ≤ π/4 + small rounding slack.
-    let k = C::round_to_nearest_int(C::div_cached(v_w, half_pi_w, pow10_w), w);
+    let k = C::round_to_nearest_int(
+        C::div_cached(working_value, half_pi_at_working_scale, pow10_w),
+        working_scale,
+    );
     let k_half_pi = if k >= 0 {
-        half_pi_w * C::lit(k as u128)
+        half_pi_at_working_scale * C::lit(k as u128)
     } else {
-        -(half_pi_w * C::lit((-k) as u128))
+        -(half_pi_at_working_scale * C::lit((-k) as u128))
     };
-    let r = v_w - k_half_pi;
+    let r = working_value - k_half_pi;
 
     // Stage 2: r = c_j_signed · π/(4M) + δ, |δ| ≤ π/(8M).
     let four_m = C::lit((4 * M) as u128);
-    let j_signed = C::round_to_nearest_int(C::div_cached(r * four_m, pi_w, pow10_w), w);
+    let j_signed = C::round_to_nearest_int(
+        C::div_cached(r * four_m, pi_at_working_scale, pow10_w),
+        working_scale,
+    );
     let cj_signed_w = if j_signed >= 0 {
-        (pi_w * C::lit(j_signed as u128)) / four_m
+        (pi_at_working_scale * C::lit(j_signed as u128)) / four_m
     } else {
-        -((pi_w * C::lit((-j_signed) as u128)) / four_m)
+        -((pi_at_working_scale * C::lit((-j_signed) as u128)) / four_m)
     };
     let delta = r - cj_signed_w;
 
@@ -107,29 +113,30 @@ where
     let j_abs = j_signed.unsigned_abs() as u32;
     debug_assert!(j_abs <= M, "sin_cos_strict tang: table index {j_abs} > M={M}");
     let j_idx = if j_abs > M { M as usize } else { j_abs as usize };
-    let (sin_cj_abs, cos_cj) = C::sincos_table_entry::<SCALE>(w, j_idx, M);
+    let (sin_cj_abs, cos_cj) = C::sincos_table_entry::<SCALE>(working_scale, j_idx, M);
     let sin_cj = if j_signed < 0 { -sin_cj_abs } else { sin_cj_abs };
 
     // Stage 3: small-residual Taylor for sin(δ) and cos(δ).
-    let delta2 = C::mul(delta, delta, w);
+    let delta_squared = C::mul(delta, delta, working_scale);
 
     // sin(δ) = δ − δ³/3! + δ⁵/5! − …
     let sin_delta = {
         let mut sum = delta;
         let mut term = delta;
-        let mut k_term: u128 = 1;
+        let mut term_index: u128 = 1;
         loop {
-            term = C::mul(term, delta2, w) / C::lit((2 * k_term) * (2 * k_term + 1));
+            term = C::mul(term, delta_squared, working_scale)
+                / C::lit((2 * term_index) * (2 * term_index + 1));
             if term == C::zero() {
                 break;
             }
-            if k_term % 2 == 1 {
+            if term_index % 2 == 1 {
                 sum = sum - term;
             } else {
                 sum = sum + term;
             }
-            k_term += 1;
-            if k_term > 200 {
+            term_index += 1;
+            if term_index > 200 {
                 break;
             }
         }
@@ -140,19 +147,20 @@ where
     let cos_delta = {
         let mut sum = one_w;
         let mut term = one_w;
-        let mut k_term: u128 = 1;
+        let mut term_index: u128 = 1;
         loop {
-            term = C::mul(term, delta2, w) / C::lit((2 * k_term - 1) * (2 * k_term));
+            term = C::mul(term, delta_squared, working_scale)
+                / C::lit((2 * term_index - 1) * (2 * term_index));
             if term == C::zero() {
                 break;
             }
-            if k_term % 2 == 1 {
+            if term_index % 2 == 1 {
                 sum = sum - term;
             } else {
                 sum = sum + term;
             }
-            k_term += 1;
-            if k_term > 200 {
+            term_index += 1;
+            if term_index > 200 {
                 break;
             }
         }
@@ -160,8 +168,8 @@ where
     };
 
     // Stage 4: addition formula to lift (sin δ, cos δ) onto r.
-    let sin_r = C::mul(sin_cj, cos_delta, w) + C::mul(cos_cj, sin_delta, w);
-    let cos_r = C::mul(cos_cj, cos_delta, w) - C::mul(sin_cj, sin_delta, w);
+    let sin_r = C::mul(sin_cj, cos_delta, working_scale) + C::mul(cos_cj, sin_delta, working_scale);
+    let cos_r = C::mul(cos_cj, cos_delta, working_scale) - C::mul(sin_cj, sin_delta, working_scale);
 
     // Stage 5: quadrant permutation. `k mod 4` selects the signed
     // permutation of (sin(r), cos(r)) that becomes (sin(x), cos(x)).
@@ -179,13 +187,13 @@ where
         Which::Cos => cos_x,
     };
     // Near-tie escape — see `wide_trig_core::tan_series` / the asin(3e-60)
-    // family: a fixed-w single shot cannot see a deciding digit below w.
-    // Clear-of-band residuals keep the single-shot cost; the band falls to
-    // the Ziv-escalating generic kernel (rare).
+    // family: a fixed-working-scale single shot cannot see a deciding digit
+    // below the working scale. Clear-of-band residuals keep the single-shot
+    // cost; the band falls to the Ziv-escalating generic kernel (rare).
     match crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<C::Storage, C::W>(
-        result, w, SCALE, mode, C::storage_max(), C::storage_min(),
+        result, working_scale, SCALE, mode, C::storage_max(), C::storage_min(),
     ) {
-        Some(st) => st,
+        Some(rounded) => rounded,
         None => match which {
             Which::Sin => crate::algos::support::wide_trig_core::sin_series::<C, SCALE>(raw, mode),
             Which::Cos => crate::algos::support::wide_trig_core::cos_series::<C, SCALE>(raw, mode),

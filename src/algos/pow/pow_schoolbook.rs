@@ -11,7 +11,7 @@
 //!
 //! All three stages — `ln(x)`, the multiplication `y · ln(x)`, and
 //! `exp(…)` — are performed in the 256-bit `Fixed` guard-digit
-//! intermediate at `w = SCALE + SCHOOLBOOK_GUARD` working digits,
+//! intermediate at `working_scale = SCALE + SCHOOLBOOK_GUARD` working digits,
 //! using:
 //! - [`crate::algos::ln::ln_schoolbook::ln_schoolbook_fixed`] for the
 //!   natural log;
@@ -80,26 +80,29 @@ pub(crate) fn pow_schoolbook<C: WideTrigCore, const SCALE: u32>(
     // base/exponent, or a positive power out of range) defers to the
     // composition below. The wide schoolbook kernel has no other integer
     // fast path, so this is also the wide tiers' only exact-integer handling.
-    if let Some(v) = crate::algos::pow::powi_exact::powi_exact_pin::<C::Storage, SCALE>(
+    if let Some(value) = crate::algos::pow::powi_exact::powi_exact_pin::<C::Storage, SCALE>(
         base,
         exponent,
         C::storage_max(),
         mode,
     ) {
-        return v;
+        return value;
     }
-    C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
-        let w = SCALE + guard;
-        let ln_base = C::ln_fixed::<SCALE>(C::to_work_scaled(base, guard), w);
-        let arg = C::mul(C::to_work_scaled(exponent, guard), ln_base, w);
-        C::exp_fixed::<SCALE>(arg, w)
+    C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard_digits| {
+        let working_scale = SCALE + guard_digits;
+        let ln_base =
+            C::ln_fixed::<SCALE>(C::to_work_scaled(base, guard_digits), working_scale);
+        let arg = C::mul(
+            C::to_work_scaled(exponent, guard_digits), ln_base, working_scale);
+        C::exp_fixed::<SCALE>(arg, working_scale)
     })
 }
 
 /// `x^y` via naive `exp(y · ln(x))` on the 256-bit `Fixed` intermediate.
 ///
-/// Accepts raw `Int<2>` storage for `base` and `exp` at `scale`, evaluates
-/// `exp(exp · ln(base))` at working scale `w = scale + working_digits`, and
+/// Accepts raw `Int<2>` storage for `base` and `exponent` at `scale`,
+/// evaluates `exp(exponent · ln(base))` at
+/// `working_scale = scale + working_digits`, and
 /// rounds the result back to `scale`.
 ///
 /// Returns `0` for a non-positive `base` (matching the production NaN-to-ZERO
@@ -112,38 +115,43 @@ pub(crate) fn pow_schoolbook_with(
     working_digits: u32,
     mode: RoundingMode,
 ) -> Int<2> {
-    let base_i = base.as_i128();
-    if base_i <= 0 {
+    let base_raw = base.as_i128();
+    if base_raw <= 0 {
         return Int::<2>::ZERO;
     }
-    let exp_i = exponent.as_i128();
-    let one_s: i128 = 10_i128.pow(scale);
+    let exponent_raw = exponent.as_i128();
+    let one_at_scale: i128 = 10_i128.pow(scale);
     // base^0 == 1.
-    if exp_i == 0 {
-        return Int::<2>::from_i128(one_s);
+    if exponent_raw == 0 {
+        return Int::<2>::from_i128(one_at_scale);
     }
 
-    let w = scale + working_digits;
+    let working_scale = scale + working_digits;
     let guard_pow = 10u128.pow(working_digits);
 
-    // Lift base to working scale w.
-    let base_w = Fixed::from_u128_mag(base_i as u128, false).mul_u128(guard_pow);
+    // Lift base to the working scale.
+    let base_working_value = Fixed::from_u128_mag(base_raw as u128, false).mul_u128(guard_pow);
 
-    // Compute ln(base) at working scale w.
-    let ln_base = ln_schoolbook_fixed(base_w, w);
+    // Compute ln(base) at the working scale.
+    let ln_base = ln_schoolbook_fixed(base_working_value, working_scale);
 
-    // Lift exponent to working scale w (preserving sign).
-    let negative_exp = exp_i < 0;
-    let exp_w = Fixed::from_u128_mag(exp_i.unsigned_abs(), false).mul_u128(guard_pow);
-    let exp_w = if negative_exp { exp_w.neg() } else { exp_w };
+    // Lift exponent to the working scale (preserving sign).
+    let exponent_is_negative = exponent_raw < 0;
+    let exponent_working_value =
+        Fixed::from_u128_mag(exponent_raw.unsigned_abs(), false).mul_u128(guard_pow);
+    let exponent_working_value = if exponent_is_negative {
+        exponent_working_value.neg()
+    } else {
+        exponent_working_value
+    };
 
-    // Multiply: arg = y · ln(base) at working scale w.
-    let arg = exp_w.mul(ln_base, w);
+    // Multiply: arg = y · ln(base) at the working scale.
+    let arg = exponent_working_value.mul(ln_base, working_scale);
 
     // exp(arg) and round to storage.
     Int::<2>::from_i128(
-        exp_schoolbook_fixed(arg, w)
-            .round_to_i128_with(w, scale, mode)
+        exp_schoolbook_fixed(arg, working_scale)
+            .round_to_i128_with(working_scale, scale, mode)
             .unwrap_or_else(|| {
                 crate::support::diagnostics::overflow_panic_with_scale(
                     "pow_schoolbook",
@@ -180,10 +188,10 @@ mod tests {
 
     #[track_caller]
     fn check<const S: u32>(base: i128, exp: i128, mode: RoundingMode) {
-        let rb = Int::<2>::from_i128(base);
-        let re = Int::<2>::from_i128(exp);
-        let got = pow_schoolbook_strict::<S>(rb, re, mode);
-        let expected = powf_strict::<S>(rb, re, mode).expect("reference in range");
+        let base_raw = Int::<2>::from_i128(base);
+        let exponent_raw = Int::<2>::from_i128(exp);
+        let got = pow_schoolbook_strict::<S>(base_raw, exponent_raw, mode);
+        let expected = powf_strict::<S>(base_raw, exponent_raw, mode).expect("reference in range");
         assert_eq!(got, expected,
             "pow schoolbook D38<{}> base={} exp={} mode={:?}: {:?} != {:?}",
             S, base, exp, mode, got, expected);
@@ -197,8 +205,8 @@ mod tests {
             (2*one, one/2), (2*one, 3*one/2), (3*one, one/2),
             (2*one, -(one/2)), (4*one, 3*one/4), (3*one/2, 5*one/2),
         ];
-        for (b, e) in cases {
-            for mode in MODES { check::<12>(b, e, mode); }
+        for (base, exponent) in cases {
+            for mode in MODES { check::<12>(base, exponent, mode); }
         }
     }
 
@@ -208,8 +216,8 @@ mod tests {
         let cases = [
             (2*one, one/2), (2*one, 3*one/2), (3*one, one/2),
         ];
-        for (b, e) in cases {
-            for mode in MODES { check::<19>(b, e, mode); }
+        for (base, exponent) in cases {
+            for mode in MODES { check::<19>(base, exponent, mode); }
         }
     }
     #[cfg(any(feature = "d57", feature = "wide"))]
@@ -235,14 +243,16 @@ mod tests {
 
         #[test]
         fn pow_schoolbook_matches_routed() {
-            for &(b, e) in &CASES {
-                let rb = raw9(b);
-                let re = raw9(e);
+            for &(base, exponent) in &CASES {
+                let base_raw = raw9(base);
+                let exponent_raw = raw9(exponent);
                 for mode in MODES {
                     assert_eq!(
-                        crate::algos::pow::pow_schoolbook::pow_schoolbook::<Core, S>(rb, re, mode),
-                        D::<Int<3>, S>(rb).powf_strict_with(D::<Int<3>, S>(re), mode).0,
-                        "D57 pow schoolbook != routed at base={b} exp={e} mode={mode:?}"
+                        crate::algos::pow::pow_schoolbook::pow_schoolbook::<Core, S>(
+                            base_raw, exponent_raw, mode),
+                        D::<Int<3>, S>(base_raw)
+                            .powf_strict_with(D::<Int<3>, S>(exponent_raw), mode).0,
+                        "D57 pow schoolbook != routed at base={base} exp={exponent} mode={mode:?}"
                     );
                 }
             }
@@ -265,15 +275,16 @@ mod tests {
                 (4, -3, 64),      // 0.015625
                 (5, -3, 125),     // 0.008
             ];
-            for (b, e, div) in cases {
-                let rb = Int::<3>::from_i128(b) * one3;
-                let re = Int::<3>::from_i128(e) * one3;
-                let want = Int::<3>::from_i128(one / div);
+            for (base, exponent, divisor) in cases {
+                let base_raw = Int::<3>::from_i128(base) * one3;
+                let exponent_raw = Int::<3>::from_i128(exponent) * one3;
+                let want = Int::<3>::from_i128(one / divisor);
                 for mode in MODES {
                     assert_eq!(
-                        crate::algos::pow::pow_schoolbook::pow_schoolbook::<Core, S>(rb, re, mode),
+                        crate::algos::pow::pow_schoolbook::pow_schoolbook::<Core, S>(
+                            base_raw, exponent_raw, mode),
                         want,
-                        "D57 {b}^{e} mode={mode:?}"
+                        "D57 {base}^{exponent} mode={mode:?}"
                     );
                 }
             }

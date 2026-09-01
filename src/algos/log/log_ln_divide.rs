@@ -31,13 +31,14 @@ pub(crate) fn log_ln_divide_d18<const SCALE: u32>(
     base_raw: Int<1>,
     mode: RoundingMode,
 ) -> Int<1> {
-    let wide: crate::D<Int<2>, SCALE> = crate::D::<Int<1>, SCALE>(raw).into();
-    let wbase: crate::D<Int<2>, SCALE> = crate::D::<Int<1>, SCALE>(base_raw).into();
-    let result: crate::D<Int<1>, SCALE> =
-        ::core::convert::TryInto::try_into(wide.log_strict_with(wbase, mode)).unwrap_or_else(|_| {
-            crate::support::diagnostics::overflow_panic_with_scale("D18::log", SCALE)
-        });
-    result.0
+    let wide_value: crate::D<Int<2>, SCALE> = crate::D::<Int<1>, SCALE>(raw).into();
+    let wide_base: crate::D<Int<2>, SCALE> = crate::D::<Int<1>, SCALE>(base_raw).into();
+    let log_value: crate::D<Int<1>, SCALE> =
+        ::core::convert::TryInto::try_into(wide_value.log_strict_with(wide_base, mode))
+            .unwrap_or_else(|_| {
+                crate::support::diagnostics::overflow_panic_with_scale("D18::log", SCALE)
+            });
+    log_value.0
 }
 
 /// D18 approx `log(self, base)` with caller-chosen guard digits: widen to
@@ -49,14 +50,14 @@ pub(crate) fn log_ln_divide_d18_approx<const SCALE: u32>(
     working_digits: u32,
     mode: RoundingMode,
 ) -> Int<1> {
-    let wide: crate::D<Int<2>, SCALE> = crate::D::<Int<1>, SCALE>(raw).into();
-    let wbase: crate::D<Int<2>, SCALE> = crate::D::<Int<1>, SCALE>(base_raw).into();
-    let result: crate::D<Int<1>, SCALE> =
-        ::core::convert::TryInto::try_into(wide.log_approx_with(wbase, working_digits, mode))
-            .unwrap_or_else(|_| {
-                crate::support::diagnostics::overflow_panic_with_scale("D18::log", SCALE)
-            });
-    result.0
+    let wide_value: crate::D<Int<2>, SCALE> = crate::D::<Int<1>, SCALE>(raw).into();
+    let wide_base: crate::D<Int<2>, SCALE> = crate::D::<Int<1>, SCALE>(base_raw).into();
+    let log_value: crate::D<Int<1>, SCALE> = ::core::convert::TryInto::try_into(
+        wide_value.log_approx_with(wide_base, working_digits, mode))
+        .unwrap_or_else(|_| {
+            crate::support::diagnostics::overflow_panic_with_scale("D18::log", SCALE)
+        });
+    log_value.0
 }
 
 /// D38 strict `log(self, base)` via the `ln::ln_series_2limb` 256-bit log

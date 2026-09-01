@@ -77,11 +77,11 @@ macro_rules! decl_decimal_quantize {
                 if TARGET_SCALE > SCALE {
                     let shift = TARGET_SCALE - SCALE;
                     let multiplier = ten.pow(shift);
-                    let result = match self.0.checked_mul(multiplier) {
-                        Some(v) => v,
+                    let scaled_up = match self.0.checked_mul(multiplier) {
+                        Some(scaled) => scaled,
                         None => panic!(concat!(stringify!($Type), "::quantize: scale-up overflow")),
                     };
-                    return $Type::<TARGET_SCALE>::from_bits(result);
+                    return $Type::<TARGET_SCALE>::from_bits(scaled_up);
                 }
                 let shift = SCALE - TARGET_SCALE;
                 let divisor = ten.pow(shift);
@@ -91,39 +91,39 @@ macro_rules! decl_decimal_quantize {
                 if remainder == zero {
                     return $Type::<TARGET_SCALE>::from_bits(quotient);
                 }
-                let abs_rem = remainder.unsigned_abs();
+                let abs_remainder = remainder.unsigned_abs();
                 let half = divisor.unsigned_abs() >> 1;
-                let non_negative = !raw.is_negative();
+                let is_non_negative = !raw.is_negative();
                 let bits = match mode {
                     $crate::support::rounding::RoundingMode::HalfToEven => {
-                        if abs_rem < half {
+                        if abs_remainder < half {
                             quotient
-                        } else if abs_rem > half {
-                            if non_negative {
+                        } else if abs_remainder > half {
+                            if is_non_negative {
                                 quotient + one
                             } else {
                                 quotient - one
                             }
                         } else if !quotient.bit(0) {
                             quotient
-                        } else if non_negative {
+                        } else if is_non_negative {
                             quotient + one
                         } else {
                             quotient - one
                         }
                     }
                     $crate::support::rounding::RoundingMode::HalfAwayFromZero => {
-                        if abs_rem < half {
+                        if abs_remainder < half {
                             quotient
-                        } else if non_negative {
+                        } else if is_non_negative {
                             quotient + one
                         } else {
                             quotient - one
                         }
                     }
                     $crate::support::rounding::RoundingMode::HalfTowardZero => {
-                        if abs_rem > half {
-                            if non_negative {
+                        if abs_remainder > half {
+                            if is_non_negative {
                                 quotient + one
                             } else {
                                 quotient - one
@@ -134,14 +134,14 @@ macro_rules! decl_decimal_quantize {
                     }
                     $crate::support::rounding::RoundingMode::Trunc => quotient,
                     $crate::support::rounding::RoundingMode::Floor => {
-                        if non_negative {
+                        if is_non_negative {
                             quotient
                         } else {
                             quotient - one
                         }
                     }
                     $crate::support::rounding::RoundingMode::Ceiling => {
-                        if non_negative {
+                        if is_non_negative {
                             quotient + one
                         } else {
                             quotient

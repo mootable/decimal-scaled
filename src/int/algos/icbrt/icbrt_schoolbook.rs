@@ -27,9 +27,9 @@
 //!   `p_sq_new = (p + d)² = p² + 2·p·d + d²`
 //!   computed by the same schoolbook kernel.
 //!
-//! The running term `p_cube_rem = n - p³` (the remainder) is maintained to
-//! avoid recomputing `p³` from scratch each step. On acceptance:
-//!   `p_cube_rem -= delta`.
+//! The running term `remainder = n - p³` is maintained to avoid recomputing
+//! `p³` from scratch each step. On acceptance:
+//!   `remainder -= delta`.
 //!
 //! # Properties
 //!
@@ -47,20 +47,21 @@ use crate::int::algos::support::limbs::{
 /// Scratch capacity — 288 u64 limbs, matching the Newton icbrt budget.
 use crate::int::types::compute_limbs::MAX_QUADRUPLE_LIMBS;
 
-/// `out = floor(cbrt(n))`. Bit-by-bit integer cube root.
+/// `out = floor(cbrt(radicand))`. Bit-by-bit integer cube root.
 ///
 /// Determines each bit of the result from MSB to LSB. At each step tests
-/// whether the next candidate bit can be set by checking `(p + bit)³ <= n`
-/// via an incremental delta, using schoolbook multiply kernels directly.
-/// No division, no floating-point seed, no Newton iteration.
+/// whether the next candidate bit can be set by checking
+/// `(p + bit)³ <= radicand` via an incremental delta, using schoolbook
+/// multiply kernels directly. No division, no floating-point seed, no Newton
+/// iteration.
 ///
 /// Result is identical to
 /// [`crate::int::algos::icbrt::icbrt_newton::icbrt_newton`].
-pub(crate) fn icbrt_schoolbook(n: &[u64], out: &mut [u64]) {
-    for o in out.iter_mut() {
-        *o = 0;
+pub(crate) fn icbrt_schoolbook(radicand: &[u64], out: &mut [u64]) {
+    for limb in out.iter_mut() {
+        *limb = 0;
     }
-    let bits = bit_len(n);
+    let bits = bit_len(radicand);
     if bits == 0 {
         return;
     }
@@ -69,21 +70,21 @@ pub(crate) fn icbrt_schoolbook(n: &[u64], out: &mut [u64]) {
         return;
     }
 
-    let work = n.len() + 1;
-    // sq_work: p_sq needs at most 2*(work/3)+2 limbs, but we use work+1 as
-    // an upper bound (the result has at most ceil(bits/3) bits, so p_sq has
-    // at most ceil(2*bits/3) bits, which is < work limbs).
-    let sq_work = (work * 2).min(MAX_QUADRUPLE_LIMBS);
-    debug_assert!(work <= MAX_QUADRUPLE_LIMBS, "icbrt_schoolbook scratch overflow");
+    let work_len = radicand.len() + 1;
+    // sq_len: p_sq needs at most 2*(work_len/3)+2 limbs, but we use
+    // work_len+1 as an upper bound (the result has at most ceil(bits/3) bits,
+    // so p_sq has at most ceil(2*bits/3) bits, which is < work_len limbs).
+    let sq_len = (work_len * 2).min(MAX_QUADRUPLE_LIMBS);
+    debug_assert!(work_len <= MAX_QUADRUPLE_LIMBS, "icbrt_schoolbook scratch overflow");
 
     // `p`: partial root (result bits accumulated so far).
     // `p_sq`: p², maintained incrementally.
-    // `rem`: n - p³, the running remainder.
+    // `remainder`: n - p³, the running remainder.
     let mut p = [0u64; MAX_QUADRUPLE_LIMBS];
     let mut p_sq = [0u64; MAX_QUADRUPLE_LIMBS];
-    let mut rem = [0u64; MAX_QUADRUPLE_LIMBS];
-    // Initialise rem = n.
-    rem[..n.len()].copy_from_slice(n);
+    let mut remainder = [0u64; MAX_QUADRUPLE_LIMBS];
+    // Initialise remainder = n.
+    remainder[..radicand.len()].copy_from_slice(radicand);
 
     // result_bits = ceil(bits / 3): the number of bits in floor(cbrt(n)).
     let result_bits = bits.div_ceil(3);
@@ -93,85 +94,85 @@ pub(crate) fn icbrt_schoolbook(n: &[u64], out: &mut [u64]) {
     while k >= 0 {
         // `d` = 1 << k  (a single-bit value in a limb array).
         let bit_pos = k as u32;
-        let d_limb = (bit_pos / 64) as usize;
-        let d_off = bit_pos % 64;
+        let d_limb_index = (bit_pos / 64) as usize;
+        let d_bit_offset = bit_pos % 64;
         let mut d = [0u64; MAX_QUADRUPLE_LIMBS];
-        if d_limb < MAX_QUADRUPLE_LIMBS {
-            d[d_limb] = 1u64 << d_off;
+        if d_limb_index < MAX_QUADRUPLE_LIMBS {
+            d[d_limb_index] = 1u64 << d_bit_offset;
         }
 
         // Compute delta = d * (3*p_sq + 3*p*d + d*d)
         //               = (p + d)^3 - p^3
         //
-        // Step 1: t1 = 3 * p_sq  (just shift p_sq left by 1 and add once)
+        // Step 1: three_p_sq = 3 * p_sq  (shift p_sq left by 1 and add once)
         // 3*p_sq = p_sq + p_sq + p_sq = p_sq*2 + p_sq = (p_sq << 1) + p_sq
-        let mut t1 = [0u64; MAX_QUADRUPLE_LIMBS];
+        let mut three_p_sq = [0u64; MAX_QUADRUPLE_LIMBS];
         {
             let mut shifted = [0u64; MAX_QUADRUPLE_LIMBS];
-            shl(&p_sq[..sq_work], 1, &mut shifted[..sq_work]);
-            t1[..sq_work].copy_from_slice(&shifted[..sq_work]);
-            add_assign(&mut t1[..sq_work], &p_sq[..sq_work]);
+            shl(&p_sq[..sq_len], 1, &mut shifted[..sq_len]);
+            three_p_sq[..sq_len].copy_from_slice(&shifted[..sq_len]);
+            add_assign(&mut three_p_sq[..sq_len], &p_sq[..sq_len]);
         }
-        // t1 = 3 * p_sq
 
-        // Step 2: p_d = p * d  (using mul_schoolbook, result in 2*work area)
-        let pd_work = (work + d_limb + 1).min(MAX_QUADRUPLE_LIMBS);
+        // Step 2: p_d = p * d  (using mul_schoolbook, result in 2*work_len
+        // area)
+        let p_d_len = (work_len + d_limb_index + 1).min(MAX_QUADRUPLE_LIMBS);
         let mut p_d = [0u64; MAX_QUADRUPLE_LIMBS];
-        mul_schoolbook(&p[..work], &d[..d_limb + 1], &mut p_d[..pd_work]);
+        mul_schoolbook(&p[..work_len], &d[..d_limb_index + 1], &mut p_d[..p_d_len]);
 
-        // Step 3: t2 = 3 * p_d = (p_d << 1) + p_d
-        let mut t2 = [0u64; MAX_QUADRUPLE_LIMBS];
+        // Step 3: three_p_d = 3 * p_d = (p_d << 1) + p_d
+        let mut three_p_d = [0u64; MAX_QUADRUPLE_LIMBS];
         {
             let mut shifted = [0u64; MAX_QUADRUPLE_LIMBS];
-            shl(&p_d[..pd_work], 1, &mut shifted[..pd_work]);
-            t2[..pd_work].copy_from_slice(&shifted[..pd_work]);
-            add_assign(&mut t2[..pd_work], &p_d[..pd_work]);
+            shl(&p_d[..p_d_len], 1, &mut shifted[..p_d_len]);
+            three_p_d[..p_d_len].copy_from_slice(&shifted[..p_d_len]);
+            add_assign(&mut three_p_d[..p_d_len], &p_d[..p_d_len]);
         }
-        // t2 = 3 * p * d
 
         // Step 4: d_sq = d * d = d << k (since d = 2^k, d^2 = 2^(2k))
         // d^2 has bit at position 2k.
         let d_sq_pos = (k as u32) * 2;
-        let d_sq_limb = (d_sq_pos / 64) as usize;
-        let d_sq_off = d_sq_pos % 64;
+        let d_sq_limb_index = (d_sq_pos / 64) as usize;
+        let d_sq_bit_offset = d_sq_pos % 64;
         let mut d_sq = [0u64; MAX_QUADRUPLE_LIMBS];
-        if d_sq_limb < MAX_QUADRUPLE_LIMBS {
-            d_sq[d_sq_limb] = 1u64 << d_sq_off;
+        if d_sq_limb_index < MAX_QUADRUPLE_LIMBS {
+            d_sq[d_sq_limb_index] = 1u64 << d_sq_bit_offset;
         }
-        // Handle overflow into the next limb if d_sq_off == 63 and a carry
-        // would appear — but since d = 2^k and d^2 = 2^(2k), there is
+        // Handle overflow into the next limb if d_sq_bit_offset == 63 and a
+        // carry would appear — but since d = 2^k and d^2 = 2^(2k), there is
         // exactly one bit set at position 2k, no carry needed.
 
-        // Step 5: inner = t1 + t2 + d_sq = 3p^2 + 3pd + d^2
-        let inner_work = sq_work.max(pd_work).max(d_sq_limb + 1) + 1;
-        let inner_work = inner_work.min(MAX_QUADRUPLE_LIMBS);
+        // Step 5: inner = three_p_sq + three_p_d + d_sq = 3p^2 + 3pd + d^2
+        let inner_len = sq_len.max(p_d_len).max(d_sq_limb_index + 1) + 1;
+        let inner_len = inner_len.min(MAX_QUADRUPLE_LIMBS);
         let mut inner = [0u64; MAX_QUADRUPLE_LIMBS];
-        inner[..sq_work].copy_from_slice(&t1[..sq_work]);
-        add_assign(&mut inner[..inner_work], &t2[..pd_work.min(inner_work)]);
-        add_assign(&mut inner[..inner_work], &d_sq[..(d_sq_limb + 1).min(inner_work)]);
+        inner[..sq_len].copy_from_slice(&three_p_sq[..sq_len]);
+        add_assign(&mut inner[..inner_len], &three_p_d[..p_d_len.min(inner_len)]);
+        add_assign(&mut inner[..inner_len], &d_sq[..(d_sq_limb_index + 1).min(inner_len)]);
         // inner = 3*p^2 + 3*p*d + d^2
 
         // Step 6: delta = d * inner
-        let delta_work = (d_limb + 1 + inner_work).min(MAX_QUADRUPLE_LIMBS);
+        let delta_len = (d_limb_index + 1 + inner_len).min(MAX_QUADRUPLE_LIMBS);
         let mut delta = [0u64; MAX_QUADRUPLE_LIMBS];
-        mul_schoolbook(&d[..d_limb + 1], &inner[..inner_work], &mut delta[..delta_work]);
+        mul_schoolbook(&d[..d_limb_index + 1], &inner[..inner_len],
+            &mut delta[..delta_len]);
         // delta = (p + d)^3 - p^3
 
-        // Step 7: If rem >= delta, accept the bit.
-        //   rem -= delta; p += d; p_sq = p^2 (recomputed).
-        if cmp(&rem[..work], &delta[..delta_work.min(work)]) >= 0 {
-            sub_assign(&mut rem[..work], &delta[..delta_work.min(work)]);
-            add_assign(&mut p[..work], &d[..d_limb + 1]);
+        // Step 7: If remainder >= delta, accept the bit.
+        //   remainder -= delta; p += d; p_sq = p^2 (recomputed).
+        if cmp(&remainder[..work_len], &delta[..delta_len.min(work_len)]) >= 0 {
+            sub_assign(&mut remainder[..work_len], &delta[..delta_len.min(work_len)]);
+            add_assign(&mut p[..work_len], &d[..d_limb_index + 1]);
             // Recompute p_sq = p * p
             let mut new_p_sq = [0u64; MAX_QUADRUPLE_LIMBS];
-            mul_schoolbook(&p[..work], &p[..work], &mut new_p_sq[..sq_work]);
-            p_sq[..sq_work].copy_from_slice(&new_p_sq[..sq_work]);
+            mul_schoolbook(&p[..work_len], &p[..work_len], &mut new_p_sq[..sq_len]);
+            p_sq[..sq_len].copy_from_slice(&new_p_sq[..sq_len]);
         }
 
         k -= 1;
     }
 
-    let copy_len = out.len().min(work);
+    let copy_len = out.len().min(work_len);
     out[..copy_len].copy_from_slice(&p[..copy_len]);
 }
 
@@ -182,32 +183,32 @@ mod tests {
     use crate::int::algos::icbrt::icbrt_newton::icbrt_newton;
 
     /// Helper: run icbrt_schoolbook on a u64 value using 1-limb buffers.
-    fn schoolbook_u64(n: u64) -> u64 {
-        let input = [n];
+    fn schoolbook_u64(radicand: u64) -> u64 {
+        let input = [radicand];
         let mut out = [0u64];
         icbrt_schoolbook(&input, &mut out);
         out[0]
     }
 
     /// Helper: run icbrt_schoolbook on a u128 value using 2-limb buffers.
-    fn schoolbook_u128(n: u128) -> u128 {
-        let input = [n as u64, (n >> 64) as u64];
+    fn schoolbook_u128(radicand: u128) -> u128 {
+        let input = [radicand as u64, (radicand >> 64) as u64];
         let mut out = [0u64, 0u64];
         icbrt_schoolbook(&input, &mut out);
         (out[0] as u128) | ((out[1] as u128) << 64)
     }
 
     /// Helper: run icbrt_newton on a u64 value (cross-check oracle).
-    fn newton_u64(n: u64) -> u64 {
-        let input = [n];
+    fn newton_u64(radicand: u64) -> u64 {
+        let input = [radicand];
         let mut out = [0u64];
         icbrt_newton(&input, &mut out);
         out[0]
     }
 
     /// Helper: run icbrt_newton on a u128 value (cross-check oracle).
-    fn newton_u128(n: u128) -> u128 {
-        let input = [n as u64, (n >> 64) as u64];
+    fn newton_u128(radicand: u128) -> u128 {
+        let input = [radicand as u64, (radicand >> 64) as u64];
         let mut out = [0u64, 0u64];
         icbrt_newton(&input, &mut out);
         (out[0] as u128) | ((out[1] as u128) << 64)

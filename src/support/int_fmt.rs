@@ -15,13 +15,13 @@ use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
 /// `limbs /= radix` in place, returning the remainder. `radix` must be a
 /// u64 (so the per-limb divide stays inside `u128 / u64`).
 fn div_small_radix(limbs: &mut [u64], radix: u64) -> u64 {
-    let mut rem: u64 = 0;
+    let mut remainder: u64 = 0;
     for limb in limbs.iter_mut().rev() {
-        let acc = ((rem as u128) << 64) | (*limb as u128);
-        *limb = (acc / (radix as u128)) as u64;
-        rem = (acc % (radix as u128)) as u64;
+        let accumulator = ((remainder as u128) << 64) | (*limb as u128);
+        *limb = (accumulator / (radix as u128)) as u64;
+        remainder = (accumulator % (radix as u128)) as u64;
     }
-    rem
+    remainder
 }
 
 /// `10^19` — the largest power of ten that fits in a `u64`
@@ -42,7 +42,7 @@ const POW10_19_DIGITS: usize = 19;
 pub(crate) fn fmt_into<'a, const N: usize>(
     limbs: &[u64],
     radix: u64,
-    lower: bool,
+    lowercase: bool,
     buf: &'a mut [u8],
 ) -> &'a str
 where
@@ -58,46 +58,46 @@ where
     let mut work_buf = Limbs::<N>::single_u64();
     let work = work_buf.as_mut();
     work[..limbs.len()].copy_from_slice(limbs);
-    let wl = limbs.len();
+    let limb_count = limbs.len();
     let mut pos = buf.len();
 
     if radix == 10 {
         // Peel one 19-digit base-10^19 chunk per full-width divide.
         loop {
-            let chunk = div_small_radix(&mut work[..wl], POW10_19);
-            if is_zero(&work[..wl]) {
+            let chunk = div_small_radix(&mut work[..limb_count], POW10_19);
+            if is_zero(&work[..limb_count]) {
                 // Most-significant chunk: emit without leading-zero pad.
-                let mut v = chunk;
+                let mut remaining = chunk;
                 loop {
                     pos -= 1;
-                    buf[pos] = b'0' + (v % 10) as u8;
-                    v /= 10;
-                    if v == 0 {
+                    buf[pos] = b'0' + (remaining % 10) as u8;
+                    remaining /= 10;
+                    if remaining == 0 {
                         break;
                     }
                 }
                 break;
             }
             // Interior chunk: always exactly 19 zero-padded digits.
-            let mut v = chunk;
+            let mut remaining = chunk;
             for _ in 0..POW10_19_DIGITS {
                 pos -= 1;
-                buf[pos] = b'0' + (v % 10) as u8;
-                v /= 10;
+                buf[pos] = b'0' + (remaining % 10) as u8;
+                remaining /= 10;
             }
         }
         return core::str::from_utf8(&buf[pos..]).unwrap();
     }
 
-    let digits: &[u8] = if lower {
+    let digits: &[u8] = if lowercase {
         b"0123456789abcdef"
     } else {
         b"0123456789ABCDEF"
     };
-    while !is_zero(&work[..wl]) {
-        let r = div_small_radix(&mut work[..wl], radix);
+    while !is_zero(&work[..limb_count]) {
+        let digit = div_small_radix(&mut work[..limb_count], radix);
         pos -= 1;
-        buf[pos] = digits[r as usize];
+        buf[pos] = digits[digit as usize];
     }
     core::str::from_utf8(&buf[pos..]).unwrap()
 }

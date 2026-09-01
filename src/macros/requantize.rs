@@ -57,11 +57,11 @@ macro_rules! decl_decimal_requantize {
                     // Growing: widen first so the scale-up cannot overflow a
                     // width the target could have held.
                     let widened = self.0.resize_n::<N>();
-                    let out = $crate::int::convert::rescale_bigint(
+                    let rescaled = $crate::int::convert::rescale_bigint(
                         widened, SCALE, TARGET_SCALE, mode,
                     )
                     .expect("attempt to requantize with overflow");
-                    $crate::D(out)
+                    $crate::D(rescaled)
                 } else {
                     // Shrinking: rescale at the source width, then narrow.
                     let scaled = $crate::int::convert::rescale_bigint(

@@ -15,8 +15,8 @@ use crate::int::types::Int;
 /// equal iff their `cmp_fixed` result is `0`. Reuses the comparison
 /// kernel so the limb loop is not duplicated here.
 #[inline]
-pub(crate) const fn eq_limbwise<const N: usize>(a: Int<N>, b: Int<N>) -> bool {
-    cmp_fixed(a.as_limbs(), b.as_limbs()) == 0
+pub(crate) const fn eq_limbwise<const N: usize>(lhs: Int<N>, rhs: Int<N>) -> bool {
+    cmp_fixed(lhs.as_limbs(), rhs.as_limbs()) == 0
 }
 
 #[cfg(test)]

@@ -180,36 +180,36 @@ const fn select() -> Select {
 /// zero their own accumulators); the result is bit-identical at either limb
 /// width and against the historic slice schoolbook.
 #[inline]
-pub(crate) fn dispatch<const N: usize>(a: &[u64; N], b: &[u64; N], out: &mut [u64])
+pub(crate) fn dispatch<const N: usize>(lhs: &[u64; N], rhs: &[u64; N], out: &mut [u64])
 where
     Limbs<N>: ComputeLimbs,
 {
     // Lengths are both N (equal), so the run-time classifier folds to a
     // const verdict per monomorphisation; resolve its limb width too.
-    let (algo, limb) = {
+    let (algo, limb_size) = {
         let algo = match const { select() } {
-            Select::ByAlgorithm(a) => a,
-            Select::ByShape(f) => f(N, N),
+            Select::ByAlgorithm(algorithm) => algorithm,
+            Select::ByShape(classify) => classify(N, N),
         };
         (algo, algo.limb_size::<N>())
     };
-    match (algo, limb) {
-        (Algorithm::Schoolbook, LimbSize::U64) => mul_full_limb::<N, u64>(a, b, out),
-        (Algorithm::Schoolbook, LimbSize::U128) => mul_full_limb::<N, u128>(a, b, out),
+    match (algo, limb_size) {
+        (Algorithm::Schoolbook, LimbSize::U64) => mul_full_limb::<N, u64>(lhs, rhs, out),
+        (Algorithm::Schoolbook, LimbSize::U128) => mul_full_limb::<N, u128>(lhs, rhs, out),
         // The engaged Karatsuba arm: u128-packed Limb-generic kernel (the
         // swept winner at even N >= ENGAGE), recursing to the schoolbook base
         // at KARATSUBA_RECURSE. Writes `out` in full (the unpack overwrites it).
         (Algorithm::Karatsuba, LimbSize::U128) => {
-            mul_karatsuba_limb::<N, u128>(a, b, out, KARATSUBA_RECURSE)
+            mul_karatsuba_limb::<N, u128>(lhs, rhs, out, KARATSUBA_RECURSE)
         }
         // Unreached (the matcher only engages Karatsuba at even N, which always
         // packs to u128) but kept exhaustive: the u64 slice Karatsuba, zeroing
         // its accumulator first.
         (Algorithm::Karatsuba, LimbSize::U64) => {
-            for o in out.iter_mut() {
-                *o = 0;
+            for limb in out.iter_mut() {
+                *limb = 0;
             }
-            mul_karatsuba(a, b, out, KARATSUBA_RECURSE);
+            mul_karatsuba(lhs, rhs, out, KARATSUBA_RECURSE);
         }
     }
 }
@@ -248,16 +248,16 @@ where
 /// classifier guarantees before it is reached (it only engages Karatsuba for
 /// equal even lengths `>= KARATSUBA_ENGAGE`).
 #[inline]
-pub(crate) fn dispatch_slice(a: &[u64], b: &[u64], out: &mut [u64]) {
+pub(crate) fn dispatch_slice(lhs: &[u64], rhs: &[u64], out: &mut [u64]) {
     // The SAME classifier as the const door, evaluated on the operands' runtime
     // lengths instead of folded on `N`.
     let algo = match const { select() } {
-        Select::ByAlgorithm(alg) => alg,
-        Select::ByShape(classify) => classify(a.len(), b.len()),
+        Select::ByAlgorithm(algorithm) => algorithm,
+        Select::ByShape(classify) => classify(lhs.len(), rhs.len()),
     };
     match algo {
-        Algorithm::Schoolbook => mul_schoolbook(a, b, out),
-        Algorithm::Karatsuba => mul_karatsuba(a, b, out, KARATSUBA_RECURSE),
+        Algorithm::Schoolbook => mul_schoolbook(lhs, rhs, out),
+        Algorithm::Karatsuba => mul_karatsuba(lhs, rhs, out, KARATSUBA_RECURSE),
     }
 }
 
@@ -312,54 +312,54 @@ mod tests {
         ];
 
         let edge_fill = |buf: &mut [u64], kind: usize, next: &mut dyn FnMut() -> u64| match kind {
-            0 => buf.iter_mut().for_each(|x| *x = 0),
-            1 => buf.iter_mut().for_each(|x| *x = u64::MAX),
+            0 => buf.iter_mut().for_each(|limb| *limb = 0),
+            1 => buf.iter_mut().for_each(|limb| *limb = u64::MAX),
             2 => {
-                buf.iter_mut().for_each(|x| *x = 0);
+                buf.iter_mut().for_each(|limb| *limb = 0);
                 if let Some(last) = buf.last_mut() {
                     *last = u64::MAX;
                 }
             }
             3 => {
-                buf.iter_mut().for_each(|x| *x = 0);
+                buf.iter_mut().for_each(|limb| *limb = 0);
                 buf[0] = u64::MAX;
             }
-            _ => buf.iter_mut().for_each(|x| *x = next()),
+            _ => buf.iter_mut().for_each(|limb| *limb = next()),
         };
 
-        for &(la, lb) in SHAPES {
+        for &(lhs_len, rhs_len) in SHAPES {
             let mut pairs: Vec<(Vec<u64>, Vec<u64>)> = Vec::new();
-            for ka in 0..5 {
-                for kb in 0..5 {
-                    let mut a = vec![0u64; la];
-                    let mut b = vec![0u64; lb];
-                    edge_fill(&mut a, ka, &mut next);
-                    edge_fill(&mut b, kb, &mut next);
-                    pairs.push((a, b));
+            for lhs_kind in 0..5 {
+                for rhs_kind in 0..5 {
+                    let mut lhs = vec![0u64; lhs_len];
+                    let mut rhs = vec![0u64; rhs_len];
+                    edge_fill(&mut lhs, lhs_kind, &mut next);
+                    edge_fill(&mut rhs, rhs_kind, &mut next);
+                    pairs.push((lhs, rhs));
                 }
             }
-            let randoms = if la.max(lb) <= 16 { 40 } else { 8 };
+            let randoms = if lhs_len.max(rhs_len) <= 16 { 40 } else { 8 };
             for _ in 0..randoms {
-                let mut a = vec![0u64; la];
-                let mut b = vec![0u64; lb];
-                for x in a.iter_mut() {
-                    *x = next();
+                let mut lhs = vec![0u64; lhs_len];
+                let mut rhs = vec![0u64; rhs_len];
+                for limb in lhs.iter_mut() {
+                    *limb = next();
                 }
-                for x in b.iter_mut() {
-                    *x = next();
+                for limb in rhs.iter_mut() {
+                    *limb = next();
                 }
-                pairs.push((a, b));
+                pairs.push((lhs, rhs));
             }
 
-            for (a, b) in &pairs {
-                // `out` zeroed + sized `a.len() + b.len()` — the door's contract.
-                let mut oracle = vec![0u64; la + lb];
-                mul_schoolbook(a, b, &mut oracle);
-                let mut got = vec![0u64; la + lb];
-                dispatch_slice(a, b, &mut got);
+            for (lhs, rhs) in &pairs {
+                // `out` zeroed + sized `lhs.len() + rhs.len()` — the door's contract.
+                let mut oracle = vec![0u64; lhs_len + rhs_len];
+                mul_schoolbook(lhs, rhs, &mut oracle);
+                let mut got = vec![0u64; lhs_len + rhs_len];
+                dispatch_slice(lhs, rhs, &mut got);
                 assert_eq!(
                     got, oracle,
-                    "dispatch_slice != mul_schoolbook at shape ({la}, {lb})\na={a:?}\nb={b:?}"
+                    "dispatch_slice != mul_schoolbook at shape ({lhs_len}, {rhs_len})\na={lhs:?}\nb={rhs:?}"
                 );
             }
         }

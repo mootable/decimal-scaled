@@ -8,12 +8,13 @@
 //! This module provides two `pub(crate)` entry points used by the
 //! arithmetic layer:
 //!
-//! - [`mul_div_pow10`] -- computes `(a * b) / 10^SCALE` with a 256-bit
+//! - [`mul_div_pow10`] -- computes `(lhs * rhs) / 10^SCALE` with a 256-bit
 //! intermediate product to avoid silent overflow from the naive
-//! `(a * b) / multiplier()` form.
+//! `(lhs * rhs) / multiplier()` form.
 //!
-//! - [`div_pow10_div`] -- computes `(a * 10^SCALE) / b` with a 256-bit
-//! intermediate numerator, used for the division rescale.
+//! - [`div_pow10_div`] -- computes `(dividend * 10^SCALE) / divisor`
+//! with a 256-bit intermediate numerator, used for the division
+//! rescale.
 //!
 //! Both functions return `None` when the final `i128` quotient would
 //! overflow; the caller maps `None` to a panic (debug) or wrapping
@@ -77,32 +78,33 @@ pub(crate) const POW10_U128: [u128; 39] = {
 ///
 /// For our divisors `d = 10^k` the only proper divisors of `2^256 - 1`
 /// that could perturb the floor are powers of two, which `10^k` is not,
-/// so `floor((2^256 - 1) / d_norm) == floor(2^256 / d_norm)`; the
+/// so `floor((2^256 - 1) / d) == floor(2^256 / d)` at the normalised
+/// divisor; the
 /// implementation divides `2^256` (the cleaner constant) by binary
 /// long division. The 129th bit is asserted to be exactly 1.
-const fn mg_reciprocal(d: u128) -> u128 {
-    let s = d.leading_zeros();
-    let d_norm = d << s;
+const fn mg_reciprocal(divisor: u128) -> u128 {
+    let shift = divisor.leading_zeros();
+    let divisor_normalised = divisor << shift;
 
-    // Binary long division of 2^256 by `d_norm`. The numerator has a
-    // single set bit at position 256; we sweep bit positions 256..=0,
+    // Binary long division of 2^256 by `divisor_normalised`. The numerator
+    // has a single set bit at position 256; we sweep bit positions 256..=0,
     // shifting the running remainder left one place per step and pulling
-    // in the numerator bit. The remainder stays strictly below `d_norm`
-    // (< 2^128), but the pre-comparison value `(rem << 1) | nbit` can
-    // reach the 129th bit, so the carry-out of the shift is tracked
-    // separately in `rem_carry`.
+    // in the numerator bit. The remainder stays strictly below the
+    // normalised divisor (< 2^128), but the pre-comparison value
+    // `(rem << 1) | nbit` can reach the 129th bit, so the carry-out of the
+    // shift is tracked separately in `remainder_carry`.
     let mut quot_lo: u128 = 0; // low 128 bits of the quotient
     let mut quot_hi: u128 = 0; // bits 128.. (must end as exactly 1)
-    let mut rem: u128 = 0;
+    let mut remainder: u128 = 0;
     let mut pos: i32 = 256;
     while pos >= 0 {
-        let rem_carry = rem >> 127;
-        let shifted = (rem << 1) | if pos == 256 { 1 } else { 0 };
+        let remainder_carry = remainder >> 127;
+        let shifted = (remainder << 1) | if pos == 256 { 1 } else { 0 };
         // Quotient bit is set when the 129-bit value
-        // (rem_carry:shifted) is >= d_norm.
-        let fits = rem_carry == 1 || shifted >= d_norm;
-        rem = if fits {
-            shifted.wrapping_sub(d_norm)
+        // (remainder_carry:shifted) is >= divisor_normalised.
+        let fits = remainder_carry == 1 || shifted >= divisor_normalised;
+        remainder = if fits {
+            shifted.wrapping_sub(divisor_normalised)
         } else {
             shifted
         };
@@ -131,8 +133,8 @@ const MG_EXP_MAGICS: [(u128, u32); 39] = {
     let mut table = [(0u128, 0u32); 39];
     let mut i = 1;
     while i < 39 {
-        let d = POW10_U128[i];
-        table[i] = (mg_reciprocal(d), d.leading_zeros());
+        let divisor = POW10_U128[i];
+        table[i] = (mg_reciprocal(divisor), divisor.leading_zeros());
         i += 1;
     }
     table
@@ -140,8 +142,8 @@ const MG_EXP_MAGICS: [(u128, u32); 39] = {
 
 /// Full 256-bit product of two unsigned 128-bit integers.
 ///
-/// Returns `(high, low)` with `high * 2^128 + low == a * b` exactly for
-/// every `a`, `b` in `0..=u128::MAX`. `const fn`, so products of
+/// Returns `(high, low)` with `high * 2^128 + low == lhs * rhs` exactly
+/// for every `lhs`, `rhs` in `0..=u128::MAX`. `const fn`, so products of
 /// constants (e.g. the magic-table reciprocals) fold at compile time.
 ///
 /// # Method
@@ -157,16 +159,16 @@ const MG_EXP_MAGICS: [(u128, u32); 39] = {
 ///
 /// Strict: all arithmetic is integer-only; result is bit-exact.
 #[inline]
-pub(crate) const fn mul_u128_to_u256(a: u128, b: u128) -> (u128, u128) {
+pub(crate) const fn mul_u128_to_u256(lhs: u128, rhs: u128) -> (u128, u128) {
     const LOW64: u128 = u64::MAX as u128;
-    let (a_lo, a_hi) = (a & LOW64, a >> 64);
-    let (b_lo, b_hi) = (b & LOW64, b >> 64);
+    let (lhs_lo, lhs_hi) = (lhs & LOW64, lhs >> 64);
+    let (rhs_lo, rhs_hi) = (rhs & LOW64, rhs >> 64);
 
     // Column 0 (weight 2^0) and the two column-1 (weight 2^64) partials.
-    let p00 = a_lo * b_lo;
-    let p01 = a_lo * b_hi;
-    let p10 = a_hi * b_lo;
-    let p11 = a_hi * b_hi; // column 2 (weight 2^128)
+    let p00 = lhs_lo * rhs_lo;
+    let p01 = lhs_lo * rhs_hi;
+    let p10 = lhs_hi * rhs_lo;
+    let p11 = lhs_hi * rhs_hi; // column 2 (weight 2^128)
 
     // Result low half: column 0 plus the low 64 bits of each column-1
     // partial. Accumulate the column-1 contribution to the low word and
@@ -220,13 +222,13 @@ pub(crate) fn divmod_pow10_2word(
         return None;
     }
 
-    let (recip, s) = MG_EXP_MAGICS[scale_idx];
+    let (recip, shift) = MG_EXP_MAGICS[scale_idx];
 
     // Normalise the dividend by the same shift used to derive `recip`
-    // (the divisor's leading-zero count). `s < 128` for every scale in
-    // range, so `128 - s` is a valid shift width.
-    let top = (n_high << s) | (n_low >> (128 - s));
-    let bottom = n_low << s;
+    // (the divisor's leading-zero count). `shift < 128` for every scale in
+    // range, so `128 - shift` is a valid shift width.
+    let top = (n_high << shift) | (n_low >> (128 - shift));
+    let bottom = n_low << shift;
 
     // Quotient estimate = high 128 bits of `(2^128 + recip) * n_norm`,
     // where `n_norm = top * 2^128 + bottom`. The `2^128` factor
@@ -236,31 +238,32 @@ pub(crate) fn divmod_pow10_2word(
     let (hi_from_top, lo_from_top) = mul_u128_to_u256(recip, top);
     let (carry_from_bottom, _) = mul_u128_to_u256(recip, bottom);
 
-    let (acc_low, c0) = lo_from_top.overflowing_add(carry_from_bottom);
-    let acc_high = hi_from_top + u128::from(c0);
+    let (acc_low, carry0) = lo_from_top.overflowing_add(carry_from_bottom);
+    let acc_high = hi_from_top + u128::from(carry0);
 
     // Folding the normalised low word back in completes the high-word
-    // extraction; `q` is the floor quotient, possibly one too small.
-    let (_, c1) = acc_low.overflowing_add(bottom);
-    let q = acc_high + top + u128::from(c1);
+    // extraction; `quotient` is the floor quotient, possibly one too small.
+    let (_, carry1) = acc_low.overflowing_add(bottom);
+    let quotient = acc_high + top + u128::from(carry1);
 
     // Exact remainder against the un-normalised divisor, then the single
-    // add-back: at most one increment makes `q` exact.
-    let (_, prod_low) = mul_u128_to_u256(q, exp);
-    let (rem, under) = n_low.overflowing_sub(prod_low);
-    debug_assert!(n_high == mul_u128_to_u256(q, exp).0 + u128::from(under));
+    // add-back: at most one increment makes `quotient` exact.
+    let (_, prod_low) = mul_u128_to_u256(quotient, exp);
+    let (remainder, under) = n_low.overflowing_sub(prod_low);
+    debug_assert!(n_high == mul_u128_to_u256(quotient, exp).0 + u128::from(under));
 
-    if rem < exp {
-        Some((q, rem))
+    if remainder < exp {
+        Some((quotient, remainder))
     } else {
-        Some((q + 1, rem - exp))
+        Some((quotient + 1, remainder - exp))
     }
 }
 
 /// Width-agnostic single-chunk MG divide of a u128-limb magnitude slice
 /// by `10^scale` (`1 ≤ scale ≤ 38`), in place, with `mode`-aware
 /// rounding. `mag` is the little-endian unsigned magnitude (zero-padded
-/// to its full length); `neg` is the result sign for rounding tie-breaks.
+/// to its full length); `is_negative` is the result sign for rounding
+/// tie-breaks.
 ///
 /// This is the slice core extracted from [`div_wide_pow10`]: the
 /// `BigInt` packing/unpacking is the only difference between the two, so
@@ -272,12 +275,12 @@ pub(crate) fn divmod_pow10_2word(
 pub(crate) fn div_pow10_mag_u128(
     mag: &mut [u128],
     scale: u32,
-    neg: bool,
+    is_negative: bool,
     mode: crate::support::rounding::RoundingMode,
 ) {
     debug_assert!((1..=38).contains(&scale));
     let scale_idx = scale as usize;
-    let exp = POW10_U128[scale_idx];
+    let divisor = POW10_U128[scale_idx];
 
     // Skip trailing zero limbs (buffers are zero-padded to full width).
     let mut top = mag.len();
@@ -285,31 +288,32 @@ pub(crate) fn div_pow10_mag_u128(
         top -= 1;
     }
 
-    // Base-2^128 long divide of `mag[..top]` by `exp`, top-limb first.
-    let mut rem: u128 = 0;
+    // Base-2^128 long divide of `mag[..top]` by the divisor, top-limb first.
+    let mut remainder: u128 = 0;
     let mut i = top;
     while i > 0 {
         i -= 1;
         let limb = mag[i];
-        let (q_limb, r_limb) = divmod_pow10_2word(rem, limb, exp, scale_idx)
-            .expect("MG: rem < exp invariant violated");
-        mag[i] = q_limb;
-        rem = r_limb;
+        let (quotient_limb, remainder_limb) =
+            divmod_pow10_2word(remainder, limb, divisor, scale_idx)
+                .expect("MG: rem < exp invariant violated");
+        mag[i] = quotient_limb;
+        remainder = remainder_limb;
     }
 
     // Round the magnitude per `mode`.
-    if rem != 0 {
+    if remainder != 0 {
         // `mag` now holds the quotient magnitude (zero-padded above the
         // significant limbs, which fold to 0).
         let q_mod_10 = crate::support::rounding::limbs_u128_mod_10(mag);
-        let comp = exp - rem;
-        let cmp_r = rem.cmp(&comp);
-        if crate::support::rounding::should_bump(mode, cmp_r, q_mod_10, !neg) {
+        let complement = divisor - remainder;
+        let remainder_cmp = remainder.cmp(&complement);
+        if crate::support::rounding::should_bump(mode, remainder_cmp, q_mod_10, !is_negative) {
             let mut carry: u128 = 1;
             for limb in mag.iter_mut() {
-                let (s, c) = limb.overflowing_add(carry);
-                *limb = s;
-                if !c {
+                let (sum, carried) = limb.overflowing_add(carry);
+                *limb = sum;
+                if !carried {
                     carry = 0;
                     break;
                 }
@@ -339,19 +343,20 @@ pub(crate) fn div_pow10_mag_u128(
 ///
 /// Bit-exact half-to-even (and every other `RoundingMode`) across
 /// `SCALE ∈ 39..=∞`. The chain produces a per-pass remainder sequence
-/// `r_1, …, r_k` (from each `÷10^38`) plus a final `r_last < 10^s`
+/// `r_1, …, r_k` (from each `÷10^38`) plus a final `last_remainder < 10^s`
 /// (`s = SCALE − 38·k`). The combined remainder
-/// `r_total = r_last·10^{38·k} + (lower chunks)` is compared against
-/// `10^SCALE / 2`: this reduces to `r_last` vs `10^s / 2`, with a tie
-/// broken upward iff any lower chunk is non-zero — captured by the
-/// `lower_any_nonzero` flag. (`r_last == 0` ⇒ `r_total < 10^SCALE/2`,
-/// because each lower chunk `< 10^38` and the chunks cannot sum to the
-/// half.) Identical decision to a single exact `r` vs `10^SCALE/2` test.
+/// `r_total = last_remainder·10^{38·k} + (lower chunks)` is compared
+/// against `10^SCALE / 2`: this reduces to `last_remainder` vs `10^s / 2`,
+/// with a tie broken upward iff any lower chunk is non-zero — captured by
+/// the `lower_any_nonzero` flag. (`last_remainder == 0` ⇒
+/// `r_total < 10^SCALE/2`, because each lower chunk `< 10^38` and the
+/// chunks cannot sum to the half.) Identical decision to a single exact
+/// `r` vs `10^SCALE/2` test.
 #[inline]
 pub(crate) fn div_pow10_chain_mag_u128(
     mag: &mut [u128],
     scale: u32,
-    neg: bool,
+    is_negative: bool,
     mode: crate::support::rounding::RoundingMode,
 ) {
     debug_assert!(
@@ -359,7 +364,7 @@ pub(crate) fn div_pow10_chain_mag_u128(
         "chain path is for SCALE > 38; callers handle smaller scales"
     );
 
-    let exp38 = POW10_U128[38];
+    let pow10_38 = POW10_U128[38];
 
     // Live (leading-zero-trimmed) limb cursor; passes shrink it.
     let mut top = mag.len();
@@ -373,16 +378,17 @@ pub(crate) fn div_pow10_chain_mag_u128(
     let mut lower_any_nonzero = false;
     let mut remaining = scale;
     while remaining > 38 {
-        let mut rem: u128 = 0;
+        let mut remainder: u128 = 0;
         let mut i = top;
         while i > 0 {
             i -= 1;
-            let (q, r) = divmod_pow10_2word(rem, mag[i], exp38, 38)
-                .expect("MG chain: rem < exp invariant violated");
-            mag[i] = q;
-            rem = r;
+            let (quotient, chunk_remainder) =
+                divmod_pow10_2word(remainder, mag[i], pow10_38, 38)
+                    .expect("MG chain: rem < exp invariant violated");
+            mag[i] = quotient;
+            remainder = chunk_remainder;
         }
-        if rem != 0 {
+        if remainder != 0 {
             lower_any_nonzero = true;
         }
         remaining -= 38;
@@ -392,26 +398,27 @@ pub(crate) fn div_pow10_chain_mag_u128(
     }
 
     // Final divide by 10^remaining (1..=38); its remainder is the
-    // top-chunk remainder r_last.
+    // top-chunk `last_remainder`.
     let scale_idx = remaining as usize;
-    let exp_last = POW10_U128[scale_idx];
-    let mut r_last: u128 = 0;
+    let pow10_last = POW10_U128[scale_idx];
+    let mut last_remainder: u128 = 0;
     let mut i = top;
     while i > 0 {
         i -= 1;
-        let (q, r) = divmod_pow10_2word(r_last, mag[i], exp_last, scale_idx)
-            .expect("MG chain: rem < exp invariant violated");
-        mag[i] = q;
-        r_last = r;
+        let (quotient, chunk_remainder) =
+            divmod_pow10_2word(last_remainder, mag[i], pow10_last, scale_idx)
+                .expect("MG chain: rem < exp invariant violated");
+        mag[i] = quotient;
+        last_remainder = chunk_remainder;
     }
 
-    // Combined-remainder rounding: cmp_r is r_total vs 10^SCALE / 2.
-    let combined_nonzero = r_last != 0 || lower_any_nonzero;
+    // Combined-remainder rounding: the comparison is r_total vs 10^SCALE / 2.
+    let combined_nonzero = last_remainder != 0 || lower_any_nonzero;
     if combined_nonzero {
-        let half = exp_last / 2; // exact; exp_last = 10^scale_idx is even
-        let cmp_r = if r_last > half {
+        let half = pow10_last / 2; // exact; 10^scale_idx is even
+        let remainder_cmp = if last_remainder > half {
             core::cmp::Ordering::Greater
-        } else if r_last < half {
+        } else if last_remainder < half {
             core::cmp::Ordering::Less
         } else if lower_any_nonzero {
             core::cmp::Ordering::Greater
@@ -419,12 +426,12 @@ pub(crate) fn div_pow10_chain_mag_u128(
             core::cmp::Ordering::Equal
         };
         let q_mod_10 = crate::support::rounding::limbs_u128_mod_10(mag);
-        if crate::support::rounding::should_bump(mode, cmp_r, q_mod_10, !neg) {
+        if crate::support::rounding::should_bump(mode, remainder_cmp, q_mod_10, !is_negative) {
             let mut carry: u128 = 1;
             for limb in mag.iter_mut() {
-                let (s, c) = limb.overflowing_add(carry);
-                *limb = s;
-                if !c {
+                let (sum, carried) = limb.overflowing_add(carry);
+                *limb = sum;
+                if !carried {
                     carry = 0;
                     break;
                 }
@@ -447,7 +454,7 @@ pub(crate) fn div_pow10_chain_mag_u128(
 /// [`ComputeLimbs`]: crate::int::types::compute_limbs::ComputeLimbs
 #[inline]
 pub(crate) fn div_wide_pow10<W>(
-    n: W,
+    value: W,
     scale: u32,
     mode: crate::support::rounding::RoundingMode,
 ) -> W
@@ -457,9 +464,9 @@ where
 {
     let mut buf = <W::Scratch as crate::int::types::compute_limbs::ComputeLimbs>::single_u128();
     let mag = &mut buf.as_mut()[..W::U128_LIMBS];
-    let neg = n.mag_into_u128(mag);
-    div_pow10_mag_u128(mag, scale, neg, mode);
-    W::from_mag_sign_u128(mag, neg)
+    let is_negative = value.mag_into_u128(mag);
+    div_pow10_mag_u128(mag, scale, is_negative, mode);
+    W::from_mag_sign_u128(mag, is_negative)
 }
 
 /// Width-generic extension of [`div_wide_pow10`] to scales past `38`,
@@ -481,7 +488,7 @@ where
 /// [`ComputeLimbs`]: crate::int::types::compute_limbs::ComputeLimbs
 #[inline]
 pub(crate) fn div_wide_pow10_chain<W>(
-    n: W,
+    value: W,
     scale: u32,
     mode: crate::support::rounding::RoundingMode,
 ) -> W
@@ -491,13 +498,13 @@ where
 {
     let mut buf = <W::Scratch as crate::int::types::compute_limbs::ComputeLimbs>::single_u128();
     let mag = &mut buf.as_mut()[..W::U128_LIMBS];
-    let neg = n.mag_into_u128(mag);
-    div_pow10_chain_mag_u128(mag, scale, neg, mode);
-    W::from_mag_sign_u128(mag, neg)
+    let is_negative = value.mag_into_u128(mag);
+    div_pow10_chain_mag_u128(mag, scale, is_negative, mode);
+    W::from_mag_sign_u128(mag, is_negative)
 }
 
-/// Mode-aware rounding for an *unsigned* magnitude `q` with remainder
-/// `r` against divisor `m`, given the result sign — returns the
+/// Mode-aware rounding for an *unsigned* `quotient` with `remainder`
+/// against `divisor`, given the result sign — returns the
 /// rounded magnitude. Caller applies the sign afterwards.
 ///
 /// All mode-specific behaviour is delegated to
@@ -505,44 +512,45 @@ where
 /// the inputs from the unsigned-magnitude representation.
 #[inline]
 fn round_mag_with_mode(
-    q: u128,
-    r: u128,
-    m: u128,
+    quotient: u128,
+    remainder: u128,
+    divisor: u128,
     mode: crate::support::rounding::RoundingMode,
-    result_positive: bool,
+    result_is_positive: bool,
 ) -> u128 {
-    if r == 0 {
-        return q;
+    if remainder == 0 {
+        return quotient;
     }
-    let comp = m - r;
-    let cmp_r = r.cmp(&comp);
-    // `q` is already the unsigned magnitude.
-    let q_mod_10 = (q % 10) as u8;
-    if crate::support::rounding::should_bump(mode, cmp_r, q_mod_10, result_positive) {
-        q + 1
+    let complement = divisor - remainder;
+    let remainder_cmp = remainder.cmp(&complement);
+    // `quotient` is already the unsigned magnitude.
+    let q_mod_10 = (quotient % 10) as u8;
+    if crate::support::rounding::should_bump(mode, remainder_cmp, q_mod_10, result_is_positive) {
+        quotient + 1
     } else {
-        q
+        quotient
     }
 }
 
 // Binary shift-subtract long-divide for the variable-divisor path.
 //
-// Used when dividing a 256-bit numerator by an arbitrary 128-bit `b`
-// (not a power of 10), so no magic table applies. The loop runs exactly
-// 256 iterations -- one per bit of the numerator -- and is competitive
-// in practice because the widening path is taken only for large `a`.
+// Used when dividing a 256-bit numerator by an arbitrary 128-bit
+// `divisor` (not a power of 10), so no magic table applies. The loop
+// runs exactly 256 iterations -- one per bit of the numerator -- and is
+// competitive in practice because the widening path is taken only for
+// large `dividend`.
 
 /// Divide the unsigned 256-bit value `(n_high, n_low)` by the 128-bit
-/// divisor `d` using a binary shift-subtract algorithm. Returns
+/// `divisor` using a binary shift-subtract algorithm. Returns
 /// `Some(quotient)` if the quotient fits in 128 bits, or `None` if
-/// `d == 0` or the quotient would overflow 128 bits.
+/// the divisor is `0` or the quotient would overflow 128 bits.
 ///
 /// # Precision
 ///
 /// Strict: all arithmetic is integer-only; result is bit-exact.
 #[inline]
-fn div_long_256_by_128(n_high: u128, n_low: u128, d: u128) -> Option<u128> {
-    div_long_256_by_128_with_rem(n_high, n_low, d).map(|(q, _)| q)
+fn div_long_256_by_128(n_high: u128, n_low: u128, divisor: u128) -> Option<u128> {
+    div_long_256_by_128_with_rem(n_high, n_low, divisor).map(|(quotient, _)| quotient)
 }
 
 /// Remainder-returning companion of [`div_long_256_by_128`]. Same
@@ -553,17 +561,17 @@ fn div_long_256_by_128(n_high: u128, n_low: u128, d: u128) -> Option<u128> {
 fn div_long_256_by_128_with_rem(
     mut n_high: u128,
     mut n_low: u128,
-    d: u128,
+    divisor: u128,
 ) -> Option<(u128, u128)> {
-    if d == 0 {
+    if divisor == 0 {
         return None;
     }
     // Fast path: dividend already fits 128 bits.
     if n_high == 0 {
-        return Some((n_low / d, n_low % d));
+        return Some((n_low / divisor, n_low % divisor));
     }
-    // Overflow check: quotient must fit in 128 bits, so n_high < d.
-    if n_high >= d {
+    // Overflow check: quotient must fit in 128 bits, so n_high < divisor.
+    if n_high >= divisor {
         return None;
     }
 
@@ -571,25 +579,25 @@ fn div_long_256_by_128_with_rem(
     // schoolbook base-2^64 long division — one hardware divide per
     // 64-bit limb instead of a 256-iteration bit loop. Every
     // `10^scale` for `scale <= 19` lands here.
-    if d <= u128::from(u64::MAX) {
+    if divisor <= u128::from(u64::MAX) {
         let limbs = [
             n_low as u64,
             (n_low >> 64) as u64,
             n_high as u64,
             (n_high >> 64) as u64,
         ];
-        // `n_high < d` guarantees the quotient fits in 128 bits, so the
-        // top two limbs of the result are always zero.
+        // `n_high < divisor` guarantees the quotient fits in 128 bits, so
+        // the top two limbs of the result are always zero.
         let mut out = [0u64; 4];
-        let mut rem: u128 = 0;
+        let mut remainder: u128 = 0;
         let mut i = 4;
         while i > 0 {
             i -= 1;
-            let cur = (rem << 64) | u128::from(limbs[i]);
-            out[i] = (cur / d) as u64;
-            rem = cur % d;
+            let current = (remainder << 64) | u128::from(limbs[i]);
+            out[i] = (current / divisor) as u64;
+            remainder = current % divisor;
         }
-        return Some((u128::from(out[0]) | (u128::from(out[1]) << 64), rem));
+        return Some((u128::from(out[0]) | (u128::from(out[1]) << 64), remainder));
     }
 
     // Shift-subtract over only the significant bits of the dividend.
@@ -606,21 +614,21 @@ fn div_long_256_by_128_with_rem(
         n_high = (n_high << shift) | (n_low >> (128 - shift));
         n_low <<= shift;
     }
-    let mut q: u128 = 0;
-    let mut rem: u128 = 0;
+    let mut quotient: u128 = 0;
+    let mut remainder: u128 = 0;
     let mut i = bits;
     while i > 0 {
         i -= 1;
-        rem = (rem << 1) | (n_high >> 127);
+        remainder = (remainder << 1) | (n_high >> 127);
         n_high = (n_high << 1) | (n_low >> 127);
         n_low <<= 1;
-        q <<= 1;
-        if rem >= d {
-            rem -= d;
-            q |= 1;
+        quotient <<= 1;
+        if remainder >= divisor {
+            remainder -= divisor;
+            quotient |= 1;
         }
     }
-    Some((q, rem))
+    Some((quotient, remainder))
 }
 
 /// `floor(sqrt(N))` for the unsigned 256-bit value `N = hi·2^128 + lo`.
@@ -659,18 +667,19 @@ pub(crate) fn isqrt_256(hi: u128, lo: u128) -> u128 {
     let n_limbs = [lo as u64, (lo >> 64) as u64, hi as u64, (hi >> 64) as u64];
     let mut seed_limbs = [0u64; 4];
     crate::algo_x_support::seed::sqrt_seed(&n_limbs, bits, &mut seed_limbs);
-    let mut q: u128 = (seed_limbs[0] as u128) | ((seed_limbs[1] as u128) << 64);
+    let mut estimate: u128 = (seed_limbs[0] as u128) | ((seed_limbs[1] as u128) << 64);
     loop {
-        // q ≥ sqrt(N) on every iteration, so N / q ≤ sqrt(N) < 2^127
-        // and the divide always succeeds.
-        let nq = div_long_256_by_128(hi, lo, q)
+        // estimate ≥ sqrt(N) on every iteration, so N / estimate ≤ sqrt(N)
+        // < 2^127 and the divide always succeeds.
+        let quotient = div_long_256_by_128(hi, lo, estimate)
             .expect("isqrt_256: q >= sqrt(N), so N/q fits in 128 bits");
-        // q_next = (q + nq) / 2, computed without the q+nq overflow.
-        let q_next = (q >> 1) + (nq >> 1) + (q & nq & 1);
-        if q_next >= q {
-            return q;
+        // next_estimate = (estimate + quotient) / 2, without the overflow.
+        let next_estimate =
+            (estimate >> 1) + (quotient >> 1) + (estimate & quotient & 1);
+        if next_estimate >= estimate {
+            return estimate;
         }
-        q = q_next;
+        estimate = next_estimate;
     }
 }
 
@@ -694,8 +703,8 @@ pub(crate) fn isqrt_256(hi: u128, lo: u128) -> u128 {
 ///
 /// Strict: integer-only; the result is within 0.5 ULP of the exact
 /// square root — it is the exact result correctly rounded.
-pub(crate) fn sqrt_raw_correctly_rounded(r: u128, scale: u32) -> u128 {
-    sqrt_raw_with(r, scale, crate::support::rounding::RoundingMode::HalfToEven)
+pub(crate) fn sqrt_raw_correctly_rounded(raw: u128, scale: u32) -> u128 {
+    sqrt_raw_with(raw, scale, crate::support::rounding::RoundingMode::HalfToEven)
 }
 
 /// Mode-aware variant of [`sqrt_raw_correctly_rounded`].
@@ -713,12 +722,12 @@ pub(crate) fn sqrt_raw_correctly_rounded(r: u128, scale: u32) -> u128 {
 /// - half-modes: bump to `q + 1` iff `N > q² + q` (equivalently
 ///   `diff > q`), the standard round-to-nearest-integer test.
 pub(crate) fn sqrt_raw_with(
-    r: u128,
+    raw: u128,
     scale: u32,
     mode: crate::support::rounding::RoundingMode,
 ) -> u128 {
     use crate::support::rounding::RoundingMode;
-    if r == 0 {
+    if raw == 0 {
         return 0;
     }
 
@@ -736,17 +745,17 @@ pub(crate) fn sqrt_raw_with(
     // and the table lookup `POW10_U128[scale]` const-fold and the
     // branch is statically resolved per-monomorphisation.
     let scale_idx = scale as usize;
-    let pow = POW10_U128[scale_idx];
-    // u128 overflow check: `r ≤ u128::MAX / pow` iff `r * pow ≤ u128::MAX`.
-    if r <= u128::MAX / pow {
-        let n = r * pow;
-        let q = n.isqrt();
+    let pow10_scale = POW10_U128[scale_idx];
+    // u128 overflow check: `raw ≤ u128::MAX / pow` iff `raw * pow ≤ u128::MAX`.
+    if raw <= u128::MAX / pow10_scale {
+        let radicand = raw * pow10_scale;
+        let root = radicand.isqrt();
         // Residual `N − q²` and the round-to-nearest tie test `diff > q`
         // mirror the 256-bit branch exactly: `q² ≤ N` always, so the
         // subtraction never underflows.
-        let diff = n - q * q;
+        let diff = radicand - root * root;
         let diff_nonzero = diff != 0;
-        let halfway_round_up = diff > q;
+        let halfway_round_up = diff > root;
         let bump = match mode {
             RoundingMode::HalfToEven
             | RoundingMode::HalfAwayFromZero
@@ -756,21 +765,21 @@ pub(crate) fn sqrt_raw_with(
             // The radicand is non-negative, so away-from-zero is up.
             RoundingMode::ZeroFiveUp => diff_nonzero && matches!(q % 10, 0 | 5),
         };
-        return if bump { q + 1 } else { q };
+        return if bump { root + 1 } else { root };
     }
 
-    // Widening path: `r · 10^SCALE` overflows `u128`, so the full
+    // Widening path: `raw · 10^SCALE` overflows `u128`, so the full
     // 256-bit machinery is required.
-    let (hi, lo) = mul_u128_to_u256(r, pow);
-    let q = isqrt_256(hi, lo);
-    let (q_sq_hi, q_sq_lo) = mul_u128_to_u256(q, q);
-    let (diff_hi, diff_lo) = if lo >= q_sq_lo {
-        (hi - q_sq_hi, lo - q_sq_lo)
+    let (hi, lo) = mul_u128_to_u256(raw, pow10_scale);
+    let root = isqrt_256(hi, lo);
+    let (root_sq_hi, root_sq_lo) = mul_u128_to_u256(root, root);
+    let (diff_hi, diff_lo) = if lo >= root_sq_lo {
+        (hi - root_sq_hi, lo - root_sq_lo)
     } else {
-        (hi - q_sq_hi - 1, lo.wrapping_sub(q_sq_lo))
+        (hi - root_sq_hi - 1, lo.wrapping_sub(root_sq_lo))
     };
     let diff_nonzero = diff_hi != 0 || diff_lo != 0;
-    let halfway_round_up = diff_hi != 0 || diff_lo > q;
+    let halfway_round_up = diff_hi != 0 || diff_lo > root;
     let bump = match mode {
         RoundingMode::HalfToEven
         | RoundingMode::HalfAwayFromZero
@@ -780,7 +789,7 @@ pub(crate) fn sqrt_raw_with(
         // The radicand is non-negative, so away-from-zero is up.
         RoundingMode::ZeroFiveUp => diff_nonzero && matches!(q % 10, 0 | 5),
     };
-    if bump { q + 1 } else { q }
+    if bump { root + 1 } else { root }
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -806,98 +815,102 @@ fn pow10_256(exp: u32) -> [u128; 2] {
     }
 }
 
-/// `a * m` where `m` is a 256-bit value `[lo, hi]`; result is 384-bit.
-fn mul_u128_by_256(a: u128, m: [u128; 2]) -> [u128; 3] {
-    let (p0_hi, p0_lo) = mul_u128_to_u256(a, m[0]);
-    let (p1_hi, p1_lo) = mul_u128_to_u256(a, m[1]);
+/// `value * wide` where `wide` is a 256-bit value `[lo, hi]`; result is
+/// 384-bit.
+fn mul_u128_by_256(value: u128, wide: [u128; 2]) -> [u128; 3] {
+    let (p0_hi, p0_lo) = mul_u128_to_u256(value, wide[0]);
+    let (p1_hi, p1_lo) = mul_u128_to_u256(value, wide[1]);
     let limb0 = p0_lo;
-    let (limb1, c1) = p0_hi.overflowing_add(p1_lo);
-    let limb2 = p1_hi + u128::from(c1);
+    let (limb1, carry1) = p0_hi.overflowing_add(p1_lo);
+    let limb2 = p1_hi + u128::from(carry1);
     [limb0, limb1, limb2]
 }
 
-/// `s * b` where `s` is a 256-bit value `[lo, hi]`; result is 384-bit.
-fn mul_u256_by_u128(s: [u128; 2], b: u128) -> [u128; 3] {
-    let (p0_hi, p0_lo) = mul_u128_to_u256(s[0], b);
-    let (p1_hi, p1_lo) = mul_u128_to_u256(s[1], b);
+/// `wide * multiplier` where `wide` is a 256-bit value `[lo, hi]`; result
+/// is 384-bit.
+fn mul_u256_by_u128(wide: [u128; 2], multiplier: u128) -> [u128; 3] {
+    let (p0_hi, p0_lo) = mul_u128_to_u256(wide[0], multiplier);
+    let (p1_hi, p1_lo) = mul_u128_to_u256(wide[1], multiplier);
     let limb0 = p0_lo;
-    let (limb1, c1) = p0_hi.overflowing_add(p1_lo);
-    let limb2 = p1_hi + u128::from(c1);
+    let (limb1, carry1) = p0_hi.overflowing_add(p1_lo);
+    let limb2 = p1_hi + u128::from(carry1);
     [limb0, limb1, limb2]
 }
 
 /// Left-shift a 384-bit value by 3 bits. The caller guarantees no
 /// significant bits are lost (used only on `N < 2^380`, so `8N < 2^383`).
-fn shl3_384(n: [u128; 3]) -> [u128; 3] {
+fn shl3_384(value: [u128; 3]) -> [u128; 3] {
     [
-        n[0] << 3,
-        (n[1] << 3) | (n[0] >> 125),
-        (n[2] << 3) | (n[1] >> 125),
+        value[0] << 3,
+        (value[1] << 3) | (value[0] >> 125),
+        (value[2] << 3) | (value[1] >> 125),
     ]
 }
 
-/// `a >= b` for 384-bit values.
-fn ge_384(a: [u128; 3], b: [u128; 3]) -> bool {
-    if a[2] != b[2] {
-        a[2] > b[2]
-    } else if a[1] != b[1] {
-        a[1] > b[1]
+/// `lhs >= rhs` for 384-bit values.
+fn ge_384(lhs: [u128; 3], rhs: [u128; 3]) -> bool {
+    if lhs[2] != rhs[2] {
+        lhs[2] > rhs[2]
+    } else if lhs[1] != rhs[1] {
+        lhs[1] > rhs[1]
     } else {
-        a[0] >= b[0]
+        lhs[0] >= rhs[0]
     }
 }
 
-/// `a >= b` for 256-bit values `[lo, hi]`.
-fn ge_256(a: [u128; 2], b: [u128; 2]) -> bool {
-    a[1] > b[1] || (a[1] == b[1] && a[0] >= b[0])
+/// `lhs >= rhs` for 256-bit values `[lo, hi]`.
+fn ge_256(lhs: [u128; 2], rhs: [u128; 2]) -> bool {
+    lhs[1] > rhs[1] || (lhs[1] == rhs[1] && lhs[0] >= rhs[0])
 }
 
-/// `a - b` for 256-bit values `[lo, hi]`; caller guarantees `a >= b`.
-fn sub_256(a: [u128; 2], b: [u128; 2]) -> [u128; 2] {
-    let (lo, borrow) = a[0].overflowing_sub(b[0]);
-    let hi = a[1] - b[1] - u128::from(borrow);
+/// `lhs - rhs` for 256-bit values `[lo, hi]`; caller guarantees
+/// `lhs >= rhs`.
+fn sub_256(lhs: [u128; 2], rhs: [u128; 2]) -> [u128; 2] {
+    let (lo, borrow) = lhs[0].overflowing_sub(rhs[0]);
+    let hi = lhs[1] - rhs[1] - u128::from(borrow);
     [lo, hi]
 }
 
-/// Divide the 384-bit `num` by the 256-bit `d` via binary
+/// Divide the 384-bit `numerator` by the 256-bit `divisor` via binary
 /// shift-subtract. The caller guarantees the quotient fits in `u128`.
-fn div_384_by_256(mut num: [u128; 3], d: [u128; 2]) -> u128 {
-    let mut rem: [u128; 2] = [0, 0];
-    let mut q: u128 = 0;
+fn div_384_by_256(mut numerator: [u128; 3], divisor: [u128; 2]) -> u128 {
+    let mut remainder: [u128; 2] = [0, 0];
+    let mut quotient: u128 = 0;
     let mut i = 0;
     while i < 384 {
-        // Shift the top bit of `num` into `rem`, both left by 1.
-        let num_top = num[2] >> 127;
-        num[2] = (num[2] << 1) | (num[1] >> 127);
-        num[1] = (num[1] << 1) | (num[0] >> 127);
-        num[0] <<= 1;
-        rem[1] = (rem[1] << 1) | (rem[0] >> 127);
-        rem[0] = (rem[0] << 1) | num_top;
-        q <<= 1;
-        if ge_256(rem, d) {
-            rem = sub_256(rem, d);
-            q |= 1;
+        // Shift the top bit of the numerator into the remainder, both
+        // left by 1.
+        let numerator_top = numerator[2] >> 127;
+        numerator[2] = (numerator[2] << 1) | (numerator[1] >> 127);
+        numerator[1] = (numerator[1] << 1) | (numerator[0] >> 127);
+        numerator[0] <<= 1;
+        remainder[1] = (remainder[1] << 1) | (remainder[0] >> 127);
+        remainder[0] = (remainder[0] << 1) | numerator_top;
+        quotient <<= 1;
+        if ge_256(remainder, divisor) {
+            remainder = sub_256(remainder, divisor);
+            quotient |= 1;
         }
         i += 1;
     }
-    q
+    quotient
 }
 
-/// `floor((carry · 2^128 + val) / 3)` for `carry` in `0..=2`. Used by
+/// `floor((carry · 2^128 + value) / 3)` for `carry` in `0..=2`. Used by
 /// the cube-root Newton step, where `2y + N/y²` can be a 130-bit value.
-fn floor_div3(mut carry: u128, mut val: u128) -> u128 {
+fn floor_div3(mut carry: u128, mut value: u128) -> u128 {
     // 2^128 = 3·K + 1, with K = (2^128 - 1) / 3.
     const K: u128 = u128::MAX / 3;
-    let mut q: u128 = 0;
+    let mut quotient: u128 = 0;
     loop {
         if carry == 0 {
-            return q + val / 3;
+            return quotient + value / 3;
         }
-        // carry·2^128 + val = 3·carry·K + (carry + val).
-        q += carry * K;
-        let (next_val, c) = val.overflowing_add(carry);
-        carry = u128::from(c);
-        val = next_val;
+        // carry·2^128 + value = 3·carry·K + (carry + value).
+        quotient += carry * K;
+        let (next_value, carried) = value.overflowing_add(carry);
+        carry = u128::from(carried);
+        value = next_value;
     }
 }
 
@@ -909,17 +922,17 @@ fn floor_div3(mut carry: u128, mut val: u128) -> u128 {
 /// stays within `u128`). The scaled-fixed-point caller forms
 /// `N = r · 10^(2·SCALE)` with `r < 2^127` and `2·SCALE <= 76`, so
 /// `N < 2^380`.
-fn icbrt_384(n: [u128; 3]) -> u128 {
-    if n == [0, 0, 0] {
+fn icbrt_384(radicand: [u128; 3]) -> u128 {
+    if radicand == [0, 0, 0] {
         return 0;
     }
     // Bit length of N.
-    let bits = if n[2] != 0 {
-        384 - n[2].leading_zeros()
-    } else if n[1] != 0 {
-        256 - n[1].leading_zeros()
+    let bits = if radicand[2] != 0 {
+        384 - radicand[2].leading_zeros()
+    } else if radicand[1] != 0 {
+        256 - radicand[1].leading_zeros()
     } else {
-        128 - n[0].leading_zeros()
+        128 - radicand[0].leading_zeros()
     };
     // Initial over-estimate from the shared seed library: under `std` the
     // hardware `f64::cbrt` of the top 64 bits with the exact `2^(r/3)`
@@ -932,31 +945,31 @@ fn icbrt_384(n: [u128; 3]) -> u128 {
     // packs little-endian into six u64 limbs; the seed `< 2^127`
     // (`N < 2^381`) reads back from the low two.
     let n_limbs = [
-        n[0] as u64,
-        (n[0] >> 64) as u64,
-        n[1] as u64,
-        (n[1] >> 64) as u64,
-        n[2] as u64,
-        (n[2] >> 64) as u64,
+        radicand[0] as u64,
+        (radicand[0] >> 64) as u64,
+        radicand[1] as u64,
+        (radicand[1] >> 64) as u64,
+        radicand[2] as u64,
+        (radicand[2] >> 64) as u64,
     ];
     let mut seed_limbs = [0u64; 6];
     crate::algo_x_support::seed::cbrt_seed(&n_limbs, bits, &mut seed_limbs);
-    let mut y: u128 = (seed_limbs[0] as u128) | ((seed_limbs[1] as u128) << 64);
+    let mut estimate: u128 = (seed_limbs[0] as u128) | ((seed_limbs[1] as u128) << 64);
     loop {
-        // y² as a 256-bit divisor.
-        let (yy_hi, yy_lo) = mul_u128_to_u256(y, y);
-        // nq = N / y²; y >= cbrt(N) keeps this below 2^128.
-        let nq = div_384_by_256(n, [yy_lo, yy_hi]);
-        // y_next = (2y + nq) / 3, computed via a (carry, sum) pair so
-        // the up-to-130-bit intermediate never overflows `u128`.
-        let (two_y, c0) = y.overflowing_add(y);
-        let (sum, c1) = two_y.overflowing_add(nq);
-        let carry = u128::from(c0) + u128::from(c1);
-        let y_next = floor_div3(carry, sum);
-        if y_next >= y {
-            return y;
+        // estimate² as a 256-bit divisor.
+        let (yy_hi, yy_lo) = mul_u128_to_u256(estimate, estimate);
+        // quotient = N / estimate²; estimate >= cbrt(N) keeps this below 2^128.
+        let quotient = div_384_by_256(radicand, [yy_lo, yy_hi]);
+        // next_estimate = (2y + quotient) / 3, computed via a (carry, sum)
+        // pair so the up-to-130-bit intermediate never overflows `u128`.
+        let (two_y, carry0) = estimate.overflowing_add(estimate);
+        let (sum, carry1) = two_y.overflowing_add(quotient);
+        let carry = u128::from(carry0) + u128::from(carry1);
+        let next_estimate = floor_div3(carry, sum);
+        if next_estimate >= estimate {
+            return estimate;
         }
-        y = y_next;
+        estimate = next_estimate;
     }
 }
 
@@ -981,8 +994,8 @@ fn icbrt_384(n: [u128; 3]) -> u128 {
 ///
 /// Strict: integer-only; the result is within 0.5 ULP of the exact
 /// cube root — it is the exact result correctly rounded.
-pub(crate) fn cbrt_raw_correctly_rounded(r: u128, scale: u32) -> u128 {
-    cbrt_raw_with_unsigned_mag(r, scale, crate::support::rounding::RoundingMode::HalfToEven)
+pub(crate) fn cbrt_raw_correctly_rounded(raw: u128, scale: u32) -> u128 {
+    cbrt_raw_with_unsigned_mag(raw, scale, crate::support::rounding::RoundingMode::HalfToEven)
 }
 
 /// Mode-aware variant of [`cbrt_raw_correctly_rounded`] operating on
@@ -1008,29 +1021,29 @@ pub(crate) fn cbrt_raw_correctly_rounded(r: u128, scale: u32) -> u128 {
 /// follows the conservative reading: `>=` triggers a bump for the
 /// `HalfAwayFromZero` and `HalfToEven` modes, `>` for `HalfTowardZero`.
 pub(crate) fn cbrt_raw_with_unsigned_mag(
-    r: u128,
+    raw: u128,
     scale: u32,
     mode: crate::support::rounding::RoundingMode,
 ) -> u128 {
-    cbrt_raw_with_signed(r, scale, false, mode)
+    cbrt_raw_with_signed(raw, scale, false, mode)
 }
 
-/// Sign-aware mode dispatch for the cbrt raw computation. `negative`
+/// Sign-aware mode dispatch for the cbrt raw computation. `is_negative`
 /// is the sign of the source value (cbrt preserves sign).
 pub(crate) fn cbrt_raw_with_signed(
-    r: u128,
+    raw: u128,
     scale: u32,
-    negative: bool,
+    is_negative: bool,
     mode: crate::support::rounding::RoundingMode,
 ) -> u128 {
     use crate::support::rounding::RoundingMode;
-    if r == 0 {
+    if raw == 0 {
         return 0;
     }
-    let n = mul_u128_by_256(r, pow10_256(2 * scale));
-    let q = icbrt_384(n);
-    let eight_n = shl3_384(n);
-    let two_q_plus_1 = 2 * q + 1;
+    let radicand = mul_u128_by_256(raw, pow10_256(2 * scale));
+    let root = icbrt_384(radicand);
+    let eight_n = shl3_384(radicand);
+    let two_q_plus_1 = 2 * root + 1;
     let (sq_hi, sq_lo) = mul_u128_to_u256(two_q_plus_1, two_q_plus_1);
     let cube = mul_u256_by_u128([sq_lo, sq_hi], two_q_plus_1);
     let halfway_geq = ge_384(eight_n, cube);
@@ -1041,9 +1054,9 @@ pub(crate) fn cbrt_raw_with_signed(
     // `n != q · q · q`, but that requires another 384-bit mul. Reuse
     // the eight_n vs (2q)³ comparison: 8N > 8q³ iff N > q³ iff there's
     // a residual.
-    let two_q = q + q;
+    let two_q = root + root;
     let (tq_sq_hi, tq_sq_lo) = mul_u128_to_u256(two_q, two_q);
-    let eight_q_cubed = if q == 0 {
+    let eight_q_cubed = if root == 0 {
         [0u128, 0, 0]
     } else {
         mul_u256_by_u128([tq_sq_lo, tq_sq_hi], two_q)
@@ -1051,34 +1064,34 @@ pub(crate) fn cbrt_raw_with_signed(
     let residual_nonzero = gt_384(eight_n, eight_q_cubed);
     let tie = halfway_geq && !halfway_gt;
     let bump = match mode {
-        RoundingMode::HalfToEven => halfway_gt || (tie && (q & 1 == 1)),
+        RoundingMode::HalfToEven => halfway_gt || (tie && (root & 1 == 1)),
         RoundingMode::HalfAwayFromZero => halfway_geq,
         RoundingMode::HalfTowardZero => halfway_gt,
         RoundingMode::Trunc => false,
-        RoundingMode::Floor => negative && residual_nonzero,
-        RoundingMode::Ceiling => !negative && residual_nonzero,
-        // `q` is the magnitude, so away-from-zero is a bump either sign.
+        RoundingMode::Floor => is_negative && residual_nonzero,
+        RoundingMode::Ceiling => !is_negative && residual_nonzero,
+        // `root` is the magnitude, so away-from-zero is a bump either sign.
         RoundingMode::AwayFromZero => residual_nonzero,
-        RoundingMode::ZeroFiveUp => residual_nonzero && matches!(q % 10, 0 | 5),
+        RoundingMode::ZeroFiveUp => residual_nonzero && matches!(root % 10, 0 | 5),
     };
-    if bump { q + 1 } else { q }
+    if bump { root + 1 } else { root }
 }
 
 /// 384-bit strictly-greater comparison, mirroring [`ge_384`].
-fn gt_384(a: [u128; 3], b: [u128; 3]) -> bool {
-    if a[2] != b[2] {
-        return a[2] > b[2];
+fn gt_384(lhs: [u128; 3], rhs: [u128; 3]) -> bool {
+    if lhs[2] != rhs[2] {
+        return lhs[2] > rhs[2];
     }
-    if a[1] != b[1] {
-        return a[1] > b[1];
+    if lhs[1] != rhs[1] {
+        return lhs[1] > rhs[1];
     }
-    a[0] > b[0]
+    lhs[0] > rhs[0]
 }
 
-/// Compute `(a * b) / 10^SCALE` with truncating division semantics
+/// Compute `(lhs * rhs) / 10^SCALE` with truncating division semantics
 /// matching `i128 /`. Returns `None` if the result overflows `i128`.
 ///
-/// When `a * b` fits in `i128` the multiply is done directly and the
+/// When `lhs * rhs` fits in `i128` the multiply is done directly and the
 /// result is divided by the scale multiplier. When the product would
 /// overflow `i128`, the unsigned absolute values are multiplied to a
 /// full 256-bit result via [`mul_u128_to_u256`], divided by `10^SCALE` using the
@@ -1086,7 +1099,7 @@ fn gt_384(a: [u128; 3], b: [u128; 3]) -> bool {
 /// restored.
 ///
 /// At `SCALE = 0` the multiplier is 1 and the function reduces to
-/// `a.checked_mul(b)`.
+/// `lhs.checked_mul(rhs)`.
 ///
 /// # Precision
 ///
@@ -1105,8 +1118,8 @@ fn gt_384(a: [u128; 3], b: [u128; 3]) -> bool {
 /// assert_eq!(result, Some(1_500_000_000_000_000_000_000_000_000_000_000_i128));
 /// ```
 #[inline]
-pub(crate) fn mul_div_pow10<const SCALE: u32>(a: i128, b: i128) -> Option<i128> {
-    mul_div_pow10_with::<SCALE>(a, b, crate::support::rounding::DEFAULT_ROUNDING_MODE)
+pub(crate) fn mul_div_pow10<const SCALE: u32>(lhs: i128, rhs: i128) -> Option<i128> {
+    mul_div_pow10_with::<SCALE>(lhs, rhs, crate::support::rounding::DEFAULT_ROUNDING_MODE)
 }
 
 /// Mode-aware variant of [`mul_div_pow10`]: rounds the
@@ -1115,27 +1128,27 @@ pub(crate) fn mul_div_pow10<const SCALE: u32>(a: i128, b: i128) -> Option<i128> 
 /// [`crate::support::rounding::DEFAULT_ROUNDING_MODE`].
 #[inline]
 pub(crate) fn mul_div_pow10_with<const SCALE: u32>(
-    a: i128,
-    b: i128,
+    lhs: i128,
+    rhs: i128,
     mode: crate::support::rounding::RoundingMode,
 ) -> Option<i128> {
-    // SCALE = 0: multiplier is 1, result is just a * b. No rounding
+    // SCALE = 0: multiplier is 1, result is just lhs * rhs. No rounding
     // step possible.
     if SCALE == 0 {
-        return a.checked_mul(b);
+        return lhs.checked_mul(rhs);
     }
 
     // Fast path: i128 * i128 didn't overflow. Apply `mode` at the
     // divide-by-10^SCALE step.
-    if let Some(prod) = a.checked_mul(b) {
+    if let Some(product) = lhs.checked_mul(rhs) {
         return Some(crate::support::rounding::apply_rounding(
-            prod,
+            product,
             crate::D::<crate::int::types::Int<2>, SCALE>::multiplier().as_i128(),
             mode,
         ));
     }
 
-    // Widening path: |a*b| > i128::MAX. Compute the unsigned product;
+    // Widening path: |lhs*rhs| > i128::MAX. Compute the unsigned product;
     // when it still fits a single u128 use a hardware u128 divide
     // (one DIV instruction), only falling through to the full 256-bit
     // magic-divide when the unsigned product overflows u128 too. The
@@ -1143,11 +1156,11 @@ pub(crate) fn mul_div_pow10_with<const SCALE: u32>(
     // sqrt(u128::MAX), i.e. ~1.3e19 < |op| < ~1.8e19 — the SCALE 19
     // typical-input window, sparing it the full mul_u128_to_u256 +
     // div_exp_fast_2word machinery.
-    let ua = a.unsigned_abs();
-    let ub = b.unsigned_abs();
-    let exp = crate::D::<crate::int::types::Int<2>, SCALE>::multiplier().as_i128() as u128;
+    let abs_lhs = lhs.unsigned_abs();
+    let abs_rhs = rhs.unsigned_abs();
+    let divisor = crate::D::<crate::int::types::Int<2>, SCALE>::multiplier().as_i128() as u128;
 
-    let (uprod, hi_overflow) = ua.overflowing_mul(ub);
+    let (unsigned_product, hi_overflow) = abs_lhs.overflowing_mul(abs_rhs);
     if !hi_overflow {
         // u128 product fits. For SCALE <= 19 the divisor `exp = 10^SCALE`
         // also fits a single u64, in which case the LLVM `__udivti3`
@@ -1156,83 +1169,86 @@ pub(crate) fn mul_div_pow10_with<const SCALE: u32>(
         // x86_64 instead of the soft routine. The branch is const-folded
         // per-SCALE so the runtime cost is just the branch the compiler
         // proves away.
-        let (q_floor, r) = if SCALE <= 19 {
-            let d = exp as u64;
-            let hi = (uprod >> 64) as u64;
-            let lo = uprod as u64;
+        let (floor_quotient, remainder) = if SCALE <= 19 {
+            let divisor_u64 = divisor as u64;
+            let hi = (unsigned_product >> 64) as u64;
+            let lo = unsigned_product as u64;
             if hi == 0 {
                 // Single-limb dividend: one hardware divide suffices.
-                let q = lo / d;
-                let r = lo % d;
-                (q as u128, r as u128)
+                let quotient = lo / divisor_u64;
+                let remainder = lo % divisor_u64;
+                (quotient as u128, remainder as u128)
             } else {
                 // Two-limb schoolbook divide in base 2^64.
-                let q_hi = hi / d;
-                let r_hi = hi % d;
-                let cur = ((r_hi as u128) << 64) | (lo as u128);
-                let q_lo_u128 = cur / (d as u128);
-                let r = cur - q_lo_u128 * (d as u128);
-                let q = ((q_hi as u128) << 64) | (q_lo_u128 & u128::from(u64::MAX));
-                (q, r)
+                let q_hi = hi / divisor_u64;
+                let r_hi = hi % divisor_u64;
+                let current = ((r_hi as u128) << 64) | (lo as u128);
+                let q_lo_u128 = current / (divisor_u64 as u128);
+                let remainder = current - q_lo_u128 * (divisor_u64 as u128);
+                let quotient = ((q_hi as u128) << 64) | (q_lo_u128 & u128::from(u64::MAX));
+                (quotient, remainder)
             }
         } else {
-            let q = uprod / exp;
-            (q, uprod - q * exp)
+            let quotient = unsigned_product / divisor;
+            (quotient, unsigned_product - quotient * divisor)
         };
-        let neg = (a < 0) ^ (b < 0);
-        let q = round_mag_with_mode(q_floor, r, exp, mode, !neg);
-        return if neg {
-            if q <= i128::MAX as u128 {
-                Some(-(q as i128))
-            } else if q == (i128::MAX as u128) + 1 {
+        let is_negative = (lhs < 0) ^ (rhs < 0);
+        let magnitude =
+            round_mag_with_mode(floor_quotient, remainder, divisor, mode, !is_negative);
+        return if is_negative {
+            if magnitude <= i128::MAX as u128 {
+                Some(-(magnitude as i128))
+            } else if magnitude == (i128::MAX as u128) + 1 {
                 Some(i128::MIN)
             } else {
                 None
             }
-        } else if q <= i128::MAX as u128 {
-            Some(q as i128)
+        } else if magnitude <= i128::MAX as u128 {
+            Some(magnitude as i128)
         } else {
             None
         };
     }
 
     // Truly wide path: unsigned 256-bit product, magic-divide by 10^SCALE.
-    let (mhigh, mlow) = mul_u128_to_u256(ua, ub);
-    let (q_floor, r) = divmod_pow10_2word(mhigh, mlow, exp, SCALE as usize)?;
+    let (mhigh, mlow) = mul_u128_to_u256(abs_lhs, abs_rhs);
+    let (floor_quotient, remainder) =
+        divmod_pow10_2word(mhigh, mlow, divisor, SCALE as usize)?;
     // Sign: result is negative iff exactly one operand is negative.
-    let neg = (a < 0) ^ (b < 0);
-    let q = round_mag_with_mode(q_floor, r, exp, mode, !neg);
-    if neg {
-        // -q must fit in i128. q == 2^127 is fine (that is i128::MIN).
-        if q <= i128::MAX as u128 {
-            Some(-(q as i128))
-        } else if q == (i128::MAX as u128) + 1 {
+    let is_negative = (lhs < 0) ^ (rhs < 0);
+    let magnitude =
+        round_mag_with_mode(floor_quotient, remainder, divisor, mode, !is_negative);
+    if is_negative {
+        // -magnitude must fit i128. 2^127 is fine (that is i128::MIN).
+        if magnitude <= i128::MAX as u128 {
+            Some(-(magnitude as i128))
+        } else if magnitude == (i128::MAX as u128) + 1 {
             Some(i128::MIN)
         } else {
             None
         }
     } else {
-        // Positive: q must be <= i128::MAX.
-        if q <= i128::MAX as u128 {
-            Some(q as i128)
+        // Positive: the magnitude must be <= i128::MAX.
+        if magnitude <= i128::MAX as u128 {
+            Some(magnitude as i128)
         } else {
             None
         }
     }
 }
 
-/// Compute `(a * 10^SCALE) / b` with truncating division semantics
-/// matching `i128 /`. Returns `None` if the result overflows `i128` or
-/// `b == 0`.
+/// Compute `(dividend * 10^SCALE) / divisor` with truncating division
+/// semantics matching `i128 /`. Returns `None` if the result overflows
+/// `i128` or `divisor == 0`.
 ///
-/// When `a * 10^SCALE` fits in `i128` the multiply-then-divide is done
-/// directly. When it would overflow, the unsigned absolute value of `a`
-/// is multiplied by the scale multiplier to a full 256-bit result via
-/// [`mul_u128_to_u256`], divided by `|b|` using the binary long-divide, and the
-/// correct sign is restored.
+/// When `dividend * 10^SCALE` fits in `i128` the multiply-then-divide is
+/// done directly. When it would overflow, the unsigned absolute value of
+/// `dividend` is multiplied by the scale multiplier to a full 256-bit
+/// result via [`mul_u128_to_u256`], divided by `|divisor|` using the
+/// binary long-divide, and the correct sign is restored.
 ///
 /// At `SCALE = 0` the multiplier is 1 and the function reduces to
-/// `a.checked_div(b)`.
+/// `dividend.checked_div(divisor)`.
 ///
 /// # Precision
 ///
@@ -1247,8 +1263,8 @@ pub(crate) fn mul_div_pow10_with<const SCALE: u32>(
 /// assert_eq!(result, Some(5 * 10_i128.pow(33)));
 /// ```
 #[inline]
-pub(crate) fn div_pow10_div<const SCALE: u32>(a: i128, b: i128) -> Option<i128> {
-    div_pow10_div_with::<SCALE>(a, b, crate::support::rounding::DEFAULT_ROUNDING_MODE)
+pub(crate) fn div_pow10_div<const SCALE: u32>(dividend: i128, divisor: i128) -> Option<i128> {
+    div_pow10_div_with::<SCALE>(dividend, divisor, crate::support::rounding::DEFAULT_ROUNDING_MODE)
 }
 
 /// Mode-aware variant of [`div_pow10_div`]: rounds the final divide
@@ -1256,84 +1272,87 @@ pub(crate) fn div_pow10_div<const SCALE: u32>(a: i128, b: i128) -> Option<i128> 
 /// wrapper that passes [`crate::support::rounding::DEFAULT_ROUNDING_MODE`].
 #[inline]
 pub(crate) fn div_pow10_div_with<const SCALE: u32>(
-    a: i128,
-    b: i128,
+    dividend: i128,
+    divisor: i128,
     mode: crate::support::rounding::RoundingMode,
 ) -> Option<i128> {
-    if b == 0 {
+    if divisor == 0 {
         return None;
     }
     // Probe for the `i128::MIN / -1` overflow case so the rounding path
-    // below can rely on `a / b` not panicking.
-    a.checked_div(b)?;
+    // below can rely on the division not panicking.
+    dividend.checked_div(divisor)?;
 
-    // SCALE = 0: scale-narrowing step is `a / b` itself; apply mode.
+    // SCALE = 0: scale-narrowing step is the division itself; apply mode.
     if SCALE == 0 {
-        return Some(crate::support::rounding::apply_rounding(a, b, mode));
+        return Some(crate::support::rounding::apply_rounding(dividend, divisor, mode));
     }
 
-    let mult = crate::D::<crate::int::types::Int<2>, SCALE>::multiplier().as_i128();
+    let multiplier = crate::D::<crate::int::types::Int<2>, SCALE>::multiplier().as_i128();
 
-    // Fast path 1: a * mult fits in i128. At SCALE <= 18, i64::MAX * 10^18
-    // fits with headroom; for larger SCALE the overflow check below
-    // handles the fallthrough.
-    if let Some(num) = a.checked_mul(mult) {
-        return Some(crate::support::rounding::apply_rounding(num, b, mode));
+    // Fast path 1: dividend * multiplier fits in i128. At SCALE <= 18,
+    // i64::MAX * 10^18 fits with headroom; for larger SCALE the overflow
+    // check below handles the fallthrough.
+    if let Some(numerator) = dividend.checked_mul(multiplier) {
+        return Some(crate::support::rounding::apply_rounding(numerator, divisor, mode));
     }
 
-    // Fast path 2: `|a| * mult` overflows `i128` but still fits `u128`
-    // (so the i128-signed `checked_mul` rejected it only because of the
-    // sign bit, OR `|a|` is just past `i128::MAX / mult`). Skip the
-    // 256-bit `mul_u128_to_u256 + div_long_256_by_128` path — a single hardware
-    // `u128 / u128` suffices.
+    // Fast path 2: `|dividend| * mult` overflows `i128` but still fits
+    // `u128` (so the i128-signed `checked_mul` rejected it only because
+    // of the sign bit, OR `|dividend|` is just past `i128::MAX / mult`).
+    // Skip the 256-bit `mul_u128_to_u256 + div_long_256_by_128` path —
+    // a single hardware `u128 / u128` suffices.
     //
-    // Predicate: `|a| ≤ u128::MAX / mult`. Const-folded per SCALE.
-    let ua = a.unsigned_abs();
-    let umult = mult as u128;
-    if ua <= u128::MAX / umult {
-        let num = ua * umult;
-        let ub = b.unsigned_abs();
-        let q_floor = num / ub;
-        let r = num % ub;
-        let neg = (a < 0) ^ (b < 0);
-        let q = round_mag_with_mode(q_floor, r, ub, mode, !neg);
-        return if neg {
-            if q <= i128::MAX as u128 {
-                Some(-(q as i128))
-            } else if q == (i128::MAX as u128) + 1 {
+    // Predicate: `|dividend| ≤ u128::MAX / mult`. Const-folded per SCALE.
+    let abs_dividend = dividend.unsigned_abs();
+    let abs_multiplier = multiplier as u128;
+    if abs_dividend <= u128::MAX / abs_multiplier {
+        let numerator = abs_dividend * abs_multiplier;
+        let abs_divisor = divisor.unsigned_abs();
+        let floor_quotient = numerator / abs_divisor;
+        let remainder = numerator % abs_divisor;
+        let is_negative = (dividend < 0) ^ (divisor < 0);
+        let magnitude =
+            round_mag_with_mode(floor_quotient, remainder, abs_divisor, mode, !is_negative);
+        return if is_negative {
+            if magnitude <= i128::MAX as u128 {
+                Some(-(magnitude as i128))
+            } else if magnitude == (i128::MAX as u128) + 1 {
                 Some(i128::MIN)
             } else {
                 None
             }
-        } else if q <= i128::MAX as u128 {
-            Some(q as i128)
+        } else if magnitude <= i128::MAX as u128 {
+            Some(magnitude as i128)
         } else {
             None
         };
     }
 
-    // Widening path: |a|*mult overflows u128. Compute it as a 256-bit
-    // unsigned, divide by |b| keeping the remainder, round per `mode`,
-    // restore sign.
-    let (mhigh, mlow) = mul_u128_to_u256(ua, umult);
+    // Widening path: |dividend|*mult overflows u128. Compute it as a
+    // 256-bit unsigned, divide by |divisor| keeping the remainder, round
+    // per `mode`, restore sign.
+    let (mhigh, mlow) = mul_u128_to_u256(abs_dividend, abs_multiplier);
 
-    let ub = b.unsigned_abs();
-    let (q_floor, r) = div_long_256_by_128_with_rem(mhigh, mlow, ub)?;
+    let abs_divisor = divisor.unsigned_abs();
+    let (floor_quotient, remainder) =
+        div_long_256_by_128_with_rem(mhigh, mlow, abs_divisor)?;
 
-    // Sign: result is negative iff exactly one of `a` and `b` is
-    // negative. (mult is always positive.)
-    let neg = (a < 0) ^ (b < 0);
-    let q = round_mag_with_mode(q_floor, r, ub, mode, !neg);
-    if neg {
-        if q <= i128::MAX as u128 {
-            Some(-(q as i128))
-        } else if q == (i128::MAX as u128) + 1 {
+    // Sign: result is negative iff exactly one of the operands is
+    // negative. (The multiplier is always positive.)
+    let is_negative = (dividend < 0) ^ (divisor < 0);
+    let magnitude =
+        round_mag_with_mode(floor_quotient, remainder, abs_divisor, mode, !is_negative);
+    if is_negative {
+        if magnitude <= i128::MAX as u128 {
+            Some(-(magnitude as i128))
+        } else if magnitude == (i128::MAX as u128) + 1 {
             Some(i128::MIN)
         } else {
             None
         }
-    } else if q <= i128::MAX as u128 {
-        Some(q as i128)
+    } else if magnitude <= i128::MAX as u128 {
+        Some(magnitude as i128)
     } else {
         None
     }
@@ -1348,10 +1367,10 @@ mod tests {
     #[test]
     fn mul_div_pow10_small_matches_naive() {
         const SCALE: u32 = 12;
-        let a: i128 = 1_500_000_000;
-        let b: i128 = 2_300_000_000;
-        let expected = (a * b) / 1_000_000_000_000_i128;
-        assert_eq!(mul_div_pow10::<SCALE>(a, b), Some(expected));
+        let lhs: i128 = 1_500_000_000;
+        let rhs: i128 = 2_300_000_000;
+        let expected = (lhs * rhs) / 1_000_000_000_000_i128;
+        assert_eq!(mul_div_pow10::<SCALE>(lhs, rhs), Some(expected));
     }
 
     /// Mid-range operands: still fits the i128 fast path with a wider
@@ -1359,10 +1378,10 @@ mod tests {
     #[test]
     fn mul_div_pow10_mid_matches_naive() {
         const SCALE: u32 = 12;
-        let a: i128 = 3_000_000_000_000_000;
-        let b: i128 = 4_700_000_000_000_000;
-        let expected = (a * b) / 1_000_000_000_000_i128;
-        assert_eq!(mul_div_pow10::<SCALE>(a, b), Some(expected));
+        let lhs: i128 = 3_000_000_000_000_000;
+        let rhs: i128 = 4_700_000_000_000_000;
+        let expected = (lhs * rhs) / 1_000_000_000_000_i128;
+        assert_eq!(mul_div_pow10::<SCALE>(lhs, rhs), Some(expected));
     }
 
     /// Operands near the boundary of the i128 fast path; still within
@@ -1371,10 +1390,10 @@ mod tests {
     fn mul_div_pow10_bound_matches_naive() {
         const SCALE: u32 = 12;
         // 7e18 * 4.7e18 = 3.29e37 < i128::MAX (1.7e38)
-        let a: i128 = 7_000_000_000_000_000_000;
-        let b: i128 = 4_700_000_000_000_000_000;
-        let expected = (a * b) / 1_000_000_000_000_i128;
-        assert_eq!(mul_div_pow10::<SCALE>(a, b), Some(expected));
+        let lhs: i128 = 7_000_000_000_000_000_000;
+        let rhs: i128 = 4_700_000_000_000_000_000;
+        let expected = (lhs * rhs) / 1_000_000_000_000_i128;
+        assert_eq!(mul_div_pow10::<SCALE>(lhs, rhs), Some(expected));
     }
 
     /// Wide operands: 5e22 * 3e22 = 1.5e45, past i128::MAX. The widening
@@ -1382,12 +1401,12 @@ mod tests {
     #[test]
     fn mul_div_pow10_wide_correctness() {
         const SCALE: u32 = 12;
-        let a: i128 = 50_000_000_000_000_000_000_000;
-        let b: i128 = 30_000_000_000_000_000_000_000;
-        // a * b == 1.5e45 raw; / 10^12 == 1.5e33 raw.
+        let lhs: i128 = 50_000_000_000_000_000_000_000;
+        let rhs: i128 = 30_000_000_000_000_000_000_000;
+        // lhs * rhs == 1.5e45 raw; / 10^12 == 1.5e33 raw.
         // 1.5e33 < i128::MAX (1.7e38), so the result fits.
         let expected: i128 = 1_500_000_000_000_000_000_000_000_000_000_000_i128;
-        assert_eq!(mul_div_pow10::<SCALE>(a, b), Some(expected));
+        assert_eq!(mul_div_pow10::<SCALE>(lhs, rhs), Some(expected));
     }
 
     /// When the final i128 quotient would overflow, the function returns
@@ -1395,33 +1414,33 @@ mod tests {
     #[test]
     fn mul_div_pow10_overflows_to_none() {
         const SCALE: u32 = 12;
-        // a*b = 10^52; /10^12 = 10^40. i128::MAX < 10^39, so this overflows.
-        let a: i128 = 10_i128.pow(26);
-        let b: i128 = 10_i128.pow(26);
-        assert_eq!(mul_div_pow10::<SCALE>(a, b), None);
+        // lhs*rhs = 10^52; /10^12 = 10^40. i128::MAX < 10^39, so this overflows.
+        let lhs: i128 = 10_i128.pow(26);
+        let rhs: i128 = 10_i128.pow(26);
+        assert_eq!(mul_div_pow10::<SCALE>(lhs, rhs), None);
     }
 
     /// One negative operand produces a negative result.
     #[test]
     fn mul_div_pow10_negative_one_sided() {
         const SCALE: u32 = 12;
-        let a: i128 = -50_000_000_000_000_000_000_000;
-        let b: i128 = 30_000_000_000_000_000_000_000;
+        let lhs: i128 = -50_000_000_000_000_000_000_000;
+        let rhs: i128 = 30_000_000_000_000_000_000_000;
         let expected: i128 = -1_500_000_000_000_000_000_000_000_000_000_000_i128;
-        assert_eq!(mul_div_pow10::<SCALE>(a, b), Some(expected));
+        assert_eq!(mul_div_pow10::<SCALE>(lhs, rhs), Some(expected));
     }
 
     /// Two negative operands produce a positive result.
     #[test]
     fn mul_div_pow10_negative_both() {
         const SCALE: u32 = 12;
-        let a: i128 = -50_000_000_000_000_000_000_000;
-        let b: i128 = -30_000_000_000_000_000_000_000;
+        let lhs: i128 = -50_000_000_000_000_000_000_000;
+        let rhs: i128 = -30_000_000_000_000_000_000_000;
         let expected: i128 = 1_500_000_000_000_000_000_000_000_000_000_000_i128;
-        assert_eq!(mul_div_pow10::<SCALE>(a, b), Some(expected));
+        assert_eq!(mul_div_pow10::<SCALE>(lhs, rhs), Some(expected));
     }
 
-    /// `SCALE = 0`: identity multiplier; result is just `a * b`.
+    /// `SCALE = 0`: identity multiplier; result is just `lhs * rhs`.
     #[test]
     fn mul_div_pow10_scale_zero() {
         const SCALE: u32 = 0;
@@ -1444,9 +1463,9 @@ mod tests {
     fn mul_div_pow10_scale_eighteen() {
         const SCALE: u32 = 18;
         // 10^18 * 10^18 = 10^36; / 10^18 = 10^18.
-        let a: i128 = 10_i128.pow(18);
-        let b: i128 = 10_i128.pow(18);
-        assert_eq!(mul_div_pow10::<SCALE>(a, b), Some(10_i128.pow(18)));
+        let lhs: i128 = 10_i128.pow(18);
+        let rhs: i128 = 10_i128.pow(18);
+        assert_eq!(mul_div_pow10::<SCALE>(lhs, rhs), Some(10_i128.pow(18)));
     }
 
     /// Division: small operands match the naive form.
@@ -1457,12 +1476,12 @@ mod tests {
         }
         // `expected` is the truncating result and matches under
         // HalfToEven only when the remainder is below half — true here
-        // (a*10^12 / 7 leaves a remainder well under 3.5).
+        // (dividend*10^12 / 7 leaves a remainder well under 3.5).
         const SCALE: u32 = 12;
-        let a: i128 = 1_500_000_000;
-        let b: i128 = 7;
-        let expected = (a * 1_000_000_000_000_i128) / b;
-        assert_eq!(div_pow10_div::<SCALE>(a, b), Some(expected));
+        let dividend: i128 = 1_500_000_000;
+        let divisor: i128 = 7;
+        let expected = (dividend * 1_000_000_000_000_i128) / divisor;
+        assert_eq!(div_pow10_div::<SCALE>(dividend, divisor), Some(expected));
     }
 
     /// Division by zero returns `None`.
@@ -1472,8 +1491,8 @@ mod tests {
         assert_eq!(div_pow10_div::<SCALE>(123, 0), None);
     }
 
-    /// `SCALE = 0`: scale-narrowing step is `a / b`, rounded by the
-    /// crate-default rounding mode (HalfToEven by default).
+    /// `SCALE = 0`: scale-narrowing step is `dividend / divisor`, rounded
+    /// by the crate-default rounding mode (HalfToEven by default).
     #[test]
     fn div_pow10_div_scale_zero() {
         if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN {
@@ -1515,44 +1534,45 @@ mod tests {
     #[test]
     fn div_pow10_div_wide_correctness() {
         const SCALE: u32 = 12;
-        let a: i128 = 10_i128.pow(22);
-        let b: i128 = 2;
-        // a * 10^12 = 10^34; / 2 = 5e33.
+        let dividend: i128 = 10_i128.pow(22);
+        let divisor: i128 = 2;
+        // dividend * 10^12 = 10^34; / 2 = 5e33.
         let expected: i128 = 5 * 10_i128.pow(33);
-        assert_eq!(div_pow10_div::<SCALE>(a, b), Some(expected));
+        assert_eq!(div_pow10_div::<SCALE>(dividend, divisor), Some(expected));
     }
 
-    /// Round-trip within i128 range: `(a / b) * b` recovers `a`.
+    /// Round-trip within i128 range: `(dividend / divisor) * divisor`
+    /// recovers `dividend`.
     #[test]
     fn div_pow10_div_round_trip_small() {
         const SCALE: u32 = 12;
         // 6.0 / 2.0 == 3.0 (raw: 6e12 / 2e12 -> in scaled space:
         // (6e12 * 1e12) / 2e12 == 3e12)
-        let a: i128 = 6_000_000_000_000;
-        let b: i128 = 2_000_000_000_000;
-        assert_eq!(div_pow10_div::<SCALE>(a, b), Some(3_000_000_000_000));
+        let dividend: i128 = 6_000_000_000_000;
+        let divisor: i128 = 2_000_000_000_000;
+        assert_eq!(div_pow10_div::<SCALE>(dividend, divisor), Some(3_000_000_000_000));
     }
 
     /// Negative dividend with positive divisor produces a negative result.
     #[test]
     fn div_pow10_div_negative_dividend() {
         const SCALE: u32 = 12;
-        let a: i128 = -6_000_000_000_000;
-        let b: i128 = 2_000_000_000_000;
-        assert_eq!(div_pow10_div::<SCALE>(a, b), Some(-3_000_000_000_000));
+        let dividend: i128 = -6_000_000_000_000;
+        let divisor: i128 = 2_000_000_000_000;
+        assert_eq!(div_pow10_div::<SCALE>(dividend, divisor), Some(-3_000_000_000_000));
     }
 
-    /// Round-trip property: `(a * b) / b == a` on the widening path.
+    /// Round-trip property: `(lhs * rhs) / rhs == lhs` on the widening path.
     #[test]
     fn mul_div_round_trip_wide() {
         const SCALE: u32 = 12;
-        let a: i128 = 50_000_000_000_000_000_000_000;
-        let b: i128 = 30_000_000_000_000_000_000_000;
-        // a * b / 10^12 = 1.5e33
-        let prod = mul_div_pow10::<SCALE>(a, b).expect("wide mul");
-        // Dividing back by b should recover a (up to truncation).
-        let recovered = div_pow10_div::<SCALE>(prod, b).expect("wide div");
-        assert_eq!(recovered, a);
+        let lhs: i128 = 50_000_000_000_000_000_000_000;
+        let rhs: i128 = 30_000_000_000_000_000_000_000;
+        // lhs * rhs / 10^12 = 1.5e33
+        let prod = mul_div_pow10::<SCALE>(lhs, rhs).expect("wide mul");
+        // Dividing back by rhs should recover lhs (up to truncation).
+        let recovered = div_pow10_div::<SCALE>(prod, rhs).expect("wide div");
+        assert_eq!(recovered, lhs);
     }
 
     /// `divide_pow_64limb_with` performs the 64-limb magnitude bump
@@ -1568,12 +1588,17 @@ mod tests {
         use crate::support::rounding::RoundingMode;
         // 1 / 3 = 0.333... — non-zero remainder, three modes pick
         // different last digits.
-        let a: i128 = 1_000_000_000_000; // 1.0 at S=12
-        let b: i128 = 3_000_000_000_000;
-        let trunc = div_pow10_div_with::<SCALE>(a, b, RoundingMode::Trunc).unwrap();
-        let ceil = div_pow10_div_with::<SCALE>(a, b, RoundingMode::Ceiling).unwrap();
-        let floor = div_pow10_div_with::<SCALE>(a, b, RoundingMode::Floor).unwrap();
-        let ha = div_pow10_div_with::<SCALE>(a, b, RoundingMode::HalfAwayFromZero).unwrap();
+        let dividend: i128 = 1_000_000_000_000; // 1.0 at S=12
+        let divisor: i128 = 3_000_000_000_000;
+        let trunc =
+            div_pow10_div_with::<SCALE>(dividend, divisor, RoundingMode::Trunc).unwrap();
+        let ceil =
+            div_pow10_div_with::<SCALE>(dividend, divisor, RoundingMode::Ceiling).unwrap();
+        let floor =
+            div_pow10_div_with::<SCALE>(dividend, divisor, RoundingMode::Floor).unwrap();
+        let ha = div_pow10_div_with::<SCALE>(dividend, divisor,
+            RoundingMode::HalfAwayFromZero)
+        .unwrap();
         // All within 1 LSB of each other.
         let bits = [trunc, ceil, floor, ha];
         let min = *bits.iter().min().unwrap();
@@ -1582,8 +1607,10 @@ mod tests {
         // Ceiling should bump positive, Floor truncates positive.
         assert!(ceil >= trunc);
         // Negative side: Floor pushes away from zero, Ceiling truncates.
-        let neg_floor = div_pow10_div_with::<SCALE>(-a, b, RoundingMode::Floor).unwrap();
-        let neg_trunc = div_pow10_div_with::<SCALE>(-a, b, RoundingMode::Trunc).unwrap();
+        let neg_floor =
+            div_pow10_div_with::<SCALE>(-dividend, divisor, RoundingMode::Floor).unwrap();
+        let neg_trunc =
+            div_pow10_div_with::<SCALE>(-dividend, divisor, RoundingMode::Trunc).unwrap();
         assert!(neg_floor <= neg_trunc);
     }
 
@@ -1596,16 +1623,16 @@ mod tests {
     /// `sqrt_raw_correctly_rounded(0, scale) == 0` short-circuit.
     #[test]
     fn sqrt_raw_correctly_rounded_zero_input() {
-        for s in 0..=12 {
-            assert_eq!(sqrt_raw_correctly_rounded(0, s), 0);
+        for scale in 0..=12 {
+            assert_eq!(sqrt_raw_correctly_rounded(0, scale), 0);
         }
     }
 
     /// `cbrt_raw_correctly_rounded(0, scale) == 0` short-circuit.
     #[test]
     fn cbrt_raw_correctly_rounded_zero_input() {
-        for s in 0..=12 {
-            assert_eq!(cbrt_raw_correctly_rounded(0, s), 0);
+        for scale in 0..=12 {
+            assert_eq!(cbrt_raw_correctly_rounded(0, scale), 0);
         }
     }
 
@@ -1618,34 +1645,34 @@ mod tests {
     /// the post-condition holds for every one.
     #[test]
     fn sqrt_raw_correctly_rounded_post_condition_holds() {
-        for r in [
+        for raw in [
             7u128,
             1_500_000_000_000u128,
             10u128.pow(20),
             (i128::MAX as u128) / 7,
         ] {
-            let q = sqrt_raw_correctly_rounded(r, 12);
-            let (n_hi, n_lo) = mul_u128_to_u256(r, POW10_U128[12]);
-            let q_floor = isqrt_256(n_hi, n_lo);
+            let root = sqrt_raw_correctly_rounded(raw, 12);
+            let (n_hi, n_lo) = mul_u128_to_u256(raw, POW10_U128[12]);
+            let root_floor = isqrt_256(n_hi, n_lo);
             // q must be either floor(sqrt(N)) or floor+1.
             assert!(
-                q == q_floor || q == q_floor + 1,
-                "sqrt({r}, 12): q={q}, floor={q_floor}",
+                root == root_floor || root == root_floor + 1,
+                "sqrt({raw}, 12): q={root}, floor={root_floor}",
             );
             // The round-up decision must agree with `N - q² > q`.
-            let (qq_hi, qq_lo) = mul_u128_to_u256(q_floor, q_floor);
+            let (qq_hi, qq_lo) = mul_u128_to_u256(root_floor, root_floor);
             let (diff_hi, diff_lo) = if n_lo >= qq_lo {
                 (n_hi - qq_hi, n_lo - qq_lo)
             } else {
                 (n_hi - qq_hi - 1, n_lo.wrapping_sub(qq_lo))
             };
-            let should_round_up = diff_hi != 0 || diff_lo > q_floor;
+            let should_round_up = diff_hi != 0 || diff_lo > root_floor;
             let expected = if should_round_up {
-                q_floor + 1
+                root_floor + 1
             } else {
-                q_floor
+                root_floor
             };
-            assert_eq!(q, expected, "sqrt({r}, 12): wrong round-up decision");
+            assert_eq!(root, expected, "sqrt({raw}, 12): wrong round-up decision");
         }
     }
 
@@ -1659,30 +1686,30 @@ mod tests {
     /// into the 384-bit mid limb.
     #[test]
     fn cbrt_raw_high_limb_radicand_post_condition_holds() {
-        for r in [
+        for raw in [
             8u128,
             27u128,
             1_000_000u128,
             10u128.pow(20),
             (i128::MAX as u128) / 7,
         ] {
-            let q = cbrt_raw_correctly_rounded(r, 12);
-            let n = mul_u128_by_256(r, pow10_256(24));
-            let q_floor = icbrt_384(n);
+            let root = cbrt_raw_correctly_rounded(raw, 12);
+            let radicand = mul_u128_by_256(raw, pow10_256(24));
+            let root_floor = icbrt_384(radicand);
             assert!(
-                q == q_floor || q == q_floor + 1,
-                "cbrt({r}, 12): q={q}, floor={q_floor}",
+                root == root_floor || root == root_floor + 1,
+                "cbrt({raw}, 12): q={root}, floor={root_floor}",
             );
-            let eight_n = shl3_384(n);
-            let two_q_plus_1 = 2 * q_floor + 1;
+            let eight_n = shl3_384(radicand);
+            let two_q_plus_1 = 2 * root_floor + 1;
             let (sq_hi, sq_lo) = mul_u128_to_u256(two_q_plus_1, two_q_plus_1);
             let cube = mul_u256_by_u128([sq_lo, sq_hi], two_q_plus_1);
             let expected = if ge_384(eight_n, cube) {
-                q_floor + 1
+                root_floor + 1
             } else {
-                q_floor
+                root_floor
             };
-            assert_eq!(q, expected, "cbrt({r}, 12): wrong round-up decision");
+            assert_eq!(root, expected, "cbrt({raw}, 12): wrong round-up decision");
         }
     }
 
@@ -1694,7 +1721,7 @@ mod tests {
     /// half-LSB comparison for the round-up cases.
     #[test]
     fn cbrt_raw_correctly_rounded_post_condition_holds() {
-        for (r, scale) in [
+        for (raw, scale) in [
             (8u128, 0),  // exact cube of 2
             (27u128, 0), // exact cube of 3
             (9u128, 0),  // non-perfect — nearest cube root is 2
@@ -1702,35 +1729,35 @@ mod tests {
             (65u128, 0),
             (10u128.pow(12), 6), // mid-range with scale
         ] {
-            let q = cbrt_raw_correctly_rounded(r, scale);
+            let root = cbrt_raw_correctly_rounded(raw, scale);
             // q³ ≤ N ≤ (q+1)³ OR q is the round-up of floor cbrt.
             // Express via the same integer identity the function uses:
             // round up iff 8·N ≥ (2q+1)³. We re-derive the floor and
             // compare.
             // N as 384-bit:
-            let n = mul_u128_by_256(r, pow10_256(2 * scale));
-            let q_floor = icbrt_384(n);
+            let radicand = mul_u128_by_256(raw, pow10_256(2 * scale));
+            let root_floor = icbrt_384(radicand);
             // Either q == q_floor (no round-up) or q == q_floor + 1
             // (rounded up).
             assert!(
-                q == q_floor || q == q_floor + 1,
-                "cbrt({r}, {scale}): q={q}, floor={q_floor} — expected q ∈ {{floor, floor+1}}",
+                root == root_floor || root == root_floor + 1,
+                "cbrt({raw}, {scale}): q={root}, floor={root_floor} — expected q ∈ {{floor, floor+1}}",
             );
             // And the round-up decision must agree with the
             // `8·N ≥ (2q_floor+1)³` test.
-            let eight_n = shl3_384(n);
-            let two_q_plus_1 = 2 * q_floor + 1;
+            let eight_n = shl3_384(radicand);
+            let two_q_plus_1 = 2 * root_floor + 1;
             let (sq_hi, sq_lo) = mul_u128_to_u256(two_q_plus_1, two_q_plus_1);
             let cube = mul_u256_by_u128([sq_lo, sq_hi], two_q_plus_1);
             let should_round_up = ge_384(eight_n, cube);
             let expected = if should_round_up {
-                q_floor + 1
+                root_floor + 1
             } else {
-                q_floor
+                root_floor
             };
             assert_eq!(
-                q, expected,
-                "cbrt({r}, {scale}): round-up decision mismatched",
+                root, expected,
+                "cbrt({raw}, {scale}): round-up decision mismatched",
             );
         }
     }
@@ -1747,24 +1774,24 @@ mod tests {
     /// Reference sqrt that bypasses the fast path: always uses the
     /// 256-bit `mul_u128_to_u256 + isqrt_256` machinery.
     fn sqrt_raw_reference(
-        r: u128,
+        raw: u128,
         scale: u32,
         mode: crate::support::rounding::RoundingMode,
     ) -> u128 {
         use crate::support::rounding::RoundingMode;
-        if r == 0 {
+        if raw == 0 {
             return 0;
         }
-        let (hi, lo) = mul_u128_to_u256(r, POW10_U128[scale as usize]);
-        let q = isqrt_256(hi, lo);
-        let (q_sq_hi, q_sq_lo) = mul_u128_to_u256(q, q);
-        let (diff_hi, diff_lo) = if lo >= q_sq_lo {
-            (hi - q_sq_hi, lo - q_sq_lo)
+        let (hi, lo) = mul_u128_to_u256(raw, POW10_U128[scale as usize]);
+        let root = isqrt_256(hi, lo);
+        let (root_sq_hi, root_sq_lo) = mul_u128_to_u256(root, root);
+        let (diff_hi, diff_lo) = if lo >= root_sq_lo {
+            (hi - root_sq_hi, lo - root_sq_lo)
         } else {
-            (hi - q_sq_hi - 1, lo.wrapping_sub(q_sq_lo))
+            (hi - root_sq_hi - 1, lo.wrapping_sub(root_sq_lo))
         };
         let diff_nonzero = diff_hi != 0 || diff_lo != 0;
-        let halfway_round_up = diff_hi != 0 || diff_lo > q;
+        let halfway_round_up = diff_hi != 0 || diff_lo > root;
         let bump = match mode {
             RoundingMode::HalfToEven
             | RoundingMode::HalfAwayFromZero
@@ -1773,7 +1800,7 @@ mod tests {
             RoundingMode::Ceiling | RoundingMode::AwayFromZero => diff_nonzero,
             RoundingMode::ZeroFiveUp => diff_nonzero && matches!(q % 10, 0 | 5),
         };
-        if bump { q + 1 } else { q }
+        if bump { root + 1 } else { root }
     }
 
     /// SplitMix64 — small deterministic 64-bit PRNG with good
@@ -1846,44 +1873,47 @@ mod tests {
     /// bypassing both the i128 and the u128 fast paths. Used to
     /// cross-check the u128 fast path in `div_pow10_div_with`.
     fn div_pow10_div_reference<const SCALE: u32>(
-        a: i128,
-        b: i128,
+        dividend: i128,
+        divisor: i128,
         mode: crate::support::rounding::RoundingMode,
     ) -> Option<i128> {
-        if b == 0 {
+        if divisor == 0 {
             return None;
         }
-        a.checked_div(b)?;
+        dividend.checked_div(divisor)?;
         if SCALE == 0 {
-            return Some(crate::support::rounding::apply_rounding(a, b, mode));
+            return Some(crate::support::rounding::apply_rounding(dividend, divisor, mode));
         }
-        let mult = crate::D::<crate::int::types::Int<2>, SCALE>::multiplier().as_i128();
-        let ua = a.unsigned_abs();
-        let umult = mult as u128;
-        let (mhigh, mlow) = mul_u128_to_u256(ua, umult);
-        let ub = b.unsigned_abs();
-        let (q_floor, r) = div_long_256_by_128_with_rem(mhigh, mlow, ub)?;
-        let neg = (a < 0) ^ (b < 0);
-        let q = round_mag_with_mode(q_floor, r, ub, mode, !neg);
-        if neg {
-            if q <= i128::MAX as u128 {
-                Some(-(q as i128))
-            } else if q == (i128::MAX as u128) + 1 {
+        let multiplier = crate::D::<crate::int::types::Int<2>, SCALE>::multiplier().as_i128();
+        let abs_dividend = dividend.unsigned_abs();
+        let abs_multiplier = multiplier as u128;
+        let (mhigh, mlow) = mul_u128_to_u256(abs_dividend, abs_multiplier);
+        let abs_divisor = divisor.unsigned_abs();
+        let (floor_quotient, remainder) =
+            div_long_256_by_128_with_rem(mhigh, mlow, abs_divisor)?;
+        let is_negative = (dividend < 0) ^ (divisor < 0);
+        let magnitude =
+            round_mag_with_mode(floor_quotient, remainder, abs_divisor, mode, !is_negative);
+        if is_negative {
+            if magnitude <= i128::MAX as u128 {
+                Some(-(magnitude as i128))
+            } else if magnitude == (i128::MAX as u128) + 1 {
                 Some(i128::MIN)
             } else {
                 None
             }
-        } else if q <= i128::MAX as u128 {
-            Some(q as i128)
+        } else if magnitude <= i128::MAX as u128 {
+            Some(magnitude as i128)
         } else {
             None
         }
     }
 
     /// Targeted sweep for the SCALEs where the u128 fast path can fire
-    /// (SCALE ≤ ~38; the predicate `|a| ≤ u128::MAX / 10^S` is checked
-    /// dynamically). For each scale × mode, draw `a, b` from the full
-    /// `i128` range and assert fast-dispatch matches the reference.
+    /// (SCALE ≤ ~38; the predicate `|dividend| ≤ u128::MAX / 10^S` is
+    /// checked dynamically). For each scale × mode, draw `dividend,
+    /// divisor` from the full `i128` range and assert fast-dispatch
+    /// matches the reference.
     #[test]
     fn div_pow10_div_fast_path_matches_reference() {
         const ITERS: usize = 100_000;
@@ -1894,17 +1924,18 @@ mod tests {
                 for mode in all_modes() {
                     let mut rng = SplitMix64(0xDEADBEEF_u64 + SCALE as u64);
                     for _ in 0..ITERS {
-                        // a: full i128 spread; b: nonzero, also full spread.
-                        let a = rng.next_u128() as i128;
-                        let mut b: i128 = rng.next_u128() as i128;
-                        if b == 0 {
-                            b = 1;
+                        // dividend: full i128 spread; divisor: nonzero, also full spread.
+                        let dividend = rng.next_u128() as i128;
+                        let mut divisor: i128 = rng.next_u128() as i128;
+                        if divisor == 0 {
+                            divisor = 1;
                         }
-                        let got = div_pow10_div_with::<SCALE>(a, b, mode);
-                        let expected = div_pow10_div_reference::<SCALE>(a, b, mode);
+                        let got = div_pow10_div_with::<SCALE>(dividend, divisor, mode);
+                        let expected =
+                            div_pow10_div_reference::<SCALE>(dividend, divisor, mode);
                         assert_eq!(
                             got, expected,
-                            "div mismatch: a={a}, b={b}, scale={SCALE}, mode={mode:?}",
+                            "div mismatch: a={dividend}, b={divisor}, scale={SCALE}, mode={mode:?}",
                         );
                     }
                 }
@@ -1928,32 +1959,33 @@ mod tests {
     /// is the audit gate for routing `round_div` through the MG kernel
     /// whenever the divisor is `10^w` with `w ≤ 38`.
     #[cfg(any(feature = "d76", feature = "wide"))]
-    fn round_div_reference_int256(n: crate::int::types::Int<4>, w: u32) -> crate::int::types::Int<4> {
+    fn round_div_reference_int256(
+        numerator: crate::int::types::Int<4>, scale: u32) -> crate::int::types::Int<4> {
         use crate::int::types::Int;
-        let d_u128 = POW10_U128[w as usize];
-        let d: Int<4> = Int::from_u128(d_u128);
+        let divisor_u128 = POW10_U128[scale as usize];
+        let divisor: Int<4> = Int::from_u128(divisor_u128);
         let zero: Int<4> = Int::from_u128(0u128);
         let one: Int<4> = Int::from_u128(1u128);
-        let (q, r) = n.div_rem(d);
-        if r == zero {
-            return q;
+        let (quotient, remainder) = numerator.div_rem(divisor);
+        if remainder == zero {
+            return quotient;
         }
-        let ar = if r < zero { -r } else { r };
-        let comp = d - ar;
-        let cmp_r = ar.cmp(&comp);
+        let abs_remainder = if remainder < zero { -remainder } else { remainder };
+        let complement = divisor - abs_remainder;
+        let remainder_cmp = abs_remainder.cmp(&complement);
         let ten = Int::from_u128(10u128);
-        let q_mod_10 = (q % ten).as_i128().unsigned_abs() as u8;
-        let result_positive = n >= zero;
+        let q_mod_10 = (quotient % ten).as_i128().unsigned_abs() as u8;
+        let result_is_positive = numerator >= zero;
         let bump = crate::support::rounding::should_bump(
             crate::support::rounding::RoundingMode::HalfToEven,
-            cmp_r,
+            remainder_cmp,
             q_mod_10,
-            result_positive,
+            result_is_positive,
         );
         if bump {
-            if result_positive { q + one } else { q - one }
+            if result_is_positive { quotient + one } else { quotient - one }
         } else {
-            q
+            quotient
         }
     }
 
@@ -1973,30 +2005,31 @@ mod tests {
     /// path passes.
     #[cfg(any(feature = "d76", feature = "wide"))]
     fn round_div_reference_int256_with(
-        n: crate::int::types::Int<4>,
-        w: u32,
+        numerator: crate::int::types::Int<4>,
+        scale: u32,
         mode: crate::support::rounding::RoundingMode,
     ) -> crate::int::types::Int<4> {
         use crate::int::types::Int;
-        let d_u128 = POW10_U128[w as usize];
-        let d: Int<4> = Int::from_u128(d_u128);
+        let divisor_u128 = POW10_U128[scale as usize];
+        let divisor: Int<4> = Int::from_u128(divisor_u128);
         let zero: Int<4> = Int::from_u128(0u128);
         let one: Int<4> = Int::from_u128(1u128);
-        let (q, r) = n.div_rem(d);
-        if r == zero {
-            return q;
+        let (quotient, remainder) = numerator.div_rem(divisor);
+        if remainder == zero {
+            return quotient;
         }
-        let ar = if r < zero { -r } else { r };
-        let comp = d - ar;
-        let cmp_r = ar.cmp(&comp);
+        let abs_remainder = if remainder < zero { -remainder } else { remainder };
+        let complement = divisor - abs_remainder;
+        let remainder_cmp = abs_remainder.cmp(&complement);
         let ten = Int::from_u128(10u128);
-        let q_mod_10 = (q % ten).as_i128().unsigned_abs() as u8;
-        let result_positive = n >= zero;
-        let bump = crate::support::rounding::should_bump(mode, cmp_r, q_mod_10, result_positive);
+        let q_mod_10 = (quotient % ten).as_i128().unsigned_abs() as u8;
+        let result_is_positive = numerator >= zero;
+        let bump = crate::support::rounding::should_bump(
+            mode, remainder_cmp, q_mod_10, result_is_positive);
         if bump {
-            if result_positive { q + one } else { q - one }
+            if result_is_positive { quotient + one } else { quotient - one }
         } else {
-            q
+            quotient
         }
     }
 
@@ -2005,8 +2038,8 @@ mod tests {
     fn round_div_audit_mg_matches_div_rem_int256() {
         use crate::int::types::Int;
         const ITERS: usize = 10_000;
-        for w in 1u32..=38 {
-            let mut rng = SplitMix64(0xA17D17_u64.wrapping_add(w as u64));
+        for scale in 1u32..=38 {
+            let mut rng = SplitMix64(0xA17D17_u64.wrapping_add(scale as u64));
             for _ in 0..ITERS {
                 // Build a numerator drawn from a mix of regimes:
                 //   - small (fits one u128 limb)
@@ -2024,12 +2057,12 @@ mod tests {
                     let hi: Int<4> = Int::from_u128(mag_high);
                     (hi << 128_u32) + lo
                 };
-                let n: Int<4> = if regime % 2 == 1 { -pos } else { pos };
+                let numerator: Int<4> = if regime % 2 == 1 { -pos } else { pos };
 
                 let got =
-                    crate::algos::support::mg_divide::div_wide_pow10::<Int<4>>(n, w, crate::support::rounding::RoundingMode::HalfToEven);
-                let expected = round_div_reference_int256(n, w);
-                assert_eq!(got, expected, "round_div MG audit mismatch: w={w}, n={n:?}",);
+                    crate::algos::support::mg_divide::div_wide_pow10::<Int<4>>(numerator, scale, crate::support::rounding::RoundingMode::HalfToEven);
+                let expected = round_div_reference_int256(numerator, scale);
+                assert_eq!(got, expected, "round_div MG audit mismatch: w={scale}, n={numerator:?}",);
             }
         }
     }
@@ -2045,9 +2078,9 @@ mod tests {
         use crate::int::types::Int;
         const ITERS: usize = 2_000;
         let scales: &[u32] = &[1, 5, 10, 19, 28, 38];
-        for &w in scales {
+        for &scale in scales {
             for mode in all_modes() {
-                let mut rng = SplitMix64(0xCAFE_u64.wrapping_add(w as u64 ^ mode as u64));
+                let mut rng = SplitMix64(0xCAFE_u64.wrapping_add(scale as u64 ^ mode as u64));
                 for _ in 0..ITERS {
                     let regime = rng.next() % 4;
                     let mag_high = if regime >= 2 {
@@ -2061,12 +2094,13 @@ mod tests {
                         let hi: Int<4> = Int::from_u128(mag_high);
                         (hi << 128_u32) + lo
                     };
-                    let n: Int<4> = if regime % 2 == 1 { -pos } else { pos };
-                    let got = crate::algos::support::mg_divide::div_wide_pow10::<Int<4>>(n, w, mode);
-                    let expected = round_div_reference_int256_with(n, w, mode);
+                    let numerator: Int<4> = if regime % 2 == 1 { -pos } else { pos };
+                    let got = crate::algos::support::mg_divide::div_wide_pow10::<Int<4>>(
+                        numerator, scale, mode);
+                    let expected = round_div_reference_int256_with(numerator, scale, mode);
                     assert_eq!(
                         got, expected,
-                        "round_div MG all-modes mismatch: w={w}, mode={mode:?}",
+                        "round_div MG all-modes mismatch: w={scale}, mode={mode:?}",
                     );
                 }
             }
@@ -2084,48 +2118,49 @@ mod tests {
         let zero: Int<16> = Int::from_u128(0u128);
         let one: Int<16> = Int::from_u128(1u128);
         const ITERS: usize = 5_000;
-        for w in 1u32..=38 {
-            let mut rng = SplitMix64(0xB02ED2_u64.wrapping_add(w as u64));
-            let d: Int<16> = Int::from_u128(POW10_U128[w as usize]);
+        for scale in 1u32..=38 {
+            let mut rng = SplitMix64(0xB02ED2_u64.wrapping_add(scale as u64));
+            let divisor: Int<16> = Int::from_u128(POW10_U128[scale as usize]);
             for _ in 0..ITERS {
                 // Fill up to 6 u128 limbs (768 bits) of magnitude — well
                 // past one MG kernel pass.
                 let limbs = (rng.next() % 7) as usize;
-                let mut n: Int<16> = zero;
+                let mut numerator: Int<16> = zero;
                 for k in 0..limbs {
                     let chunk: Int<16> = Int::from_u128(rng.next_u128());
-                    n = n + (chunk << ((k * 128) as u32));
+                    numerator = numerator + (chunk << ((k * 128) as u32));
                 }
                 if rng.next() & 1 == 1 {
-                    n = -n;
+                    numerator = -numerator;
                 }
 
                 let got =
-                    crate::algos::support::mg_divide::div_wide_pow10::<Int<16>>(n, w, crate::support::rounding::RoundingMode::HalfToEven);
+                    crate::algos::support::mg_divide::div_wide_pow10::<Int<16>>(numerator, scale, crate::support::rounding::RoundingMode::HalfToEven);
                 // Reference half-to-even via div_rem.
-                let (q, r) = n.div_rem(d);
-                let expected = if r == zero {
-                    q
+                let (quotient, remainder) = numerator.div_rem(divisor);
+                let expected = if remainder == zero {
+                    quotient
                 } else {
-                    let ar = if r < zero { -r } else { r };
-                    let comp = d - ar;
-                    let cmp_r = ar.cmp(&comp);
+                    let abs_remainder =
+                        if remainder < zero { -remainder } else { remainder };
+                    let complement = divisor - abs_remainder;
+                    let remainder_cmp = abs_remainder.cmp(&complement);
                     let ten = Int::from_u128(10u128);
-                    let q_mod_10 = (q % ten).as_i128().unsigned_abs() as u8;
-                    let result_positive = n >= zero;
+                    let q_mod_10 = (quotient % ten).as_i128().unsigned_abs() as u8;
+                    let result_is_positive = numerator >= zero;
                     let bump = crate::support::rounding::should_bump(
                         crate::support::rounding::RoundingMode::HalfToEven,
-                        cmp_r,
+                        remainder_cmp,
                         q_mod_10,
-                        result_positive,
+                        result_is_positive,
                     );
                     if bump {
-                        if result_positive { q + one } else { q - one }
+                        if result_is_positive { quotient + one } else { quotient - one }
                     } else {
-                        q
+                        quotient
                     }
                 };
-                assert_eq!(got, expected, "round_div MG audit (Int<16>) mismatch: w={w}",);
+                assert_eq!(got, expected, "round_div MG audit (Int<16>) mismatch: w={scale}",);
             }
         }
     }
@@ -2151,32 +2186,32 @@ mod tests {
 
     /// Build `10^w` in the target wide integer width.
     #[cfg(any(feature = "d76", feature = "wide"))]
-    fn pow10_int256(w: u32) -> crate::int::types::Int<4> {
+    fn pow10_int256(scale: u32) -> crate::int::types::Int<4> {
         use crate::int::types::Int;
-        let mut d: Int<4> = Int::from_u128(1u128);
+        let mut power: Int<4> = Int::from_u128(1u128);
         // 10^38 fits in u128, so we can build with chunks of up to 38.
-        let mut remaining = w;
+        let mut remaining = scale;
         while remaining > 0 {
             let chunk = remaining.min(38);
             let factor: Int<4> = Int::from_u128(POW10_U128[chunk as usize]);
-            d = d * factor;
+            power = power * factor;
             remaining -= chunk;
         }
-        d
+        power
     }
 
     #[cfg(any(feature = "d307", feature = "wide"))]
-    fn pow10_int1024(w: u32) -> crate::int::types::Int<16> {
+    fn pow10_int1024(scale: u32) -> crate::int::types::Int<16> {
         use crate::int::types::Int;
-        let mut d: Int<16> = Int::from_u128(1u128);
-        let mut remaining = w;
+        let mut power: Int<16> = Int::from_u128(1u128);
+        let mut remaining = scale;
         while remaining > 0 {
             let chunk = remaining.min(38);
             let factor: Int<16> = Int::from_u128(POW10_U128[chunk as usize]);
-            d = d * factor;
+            power = power * factor;
             remaining -= chunk;
         }
-        d
+        power
     }
 
     /// Int<4> reference quotient via div_rem + should_bump for any
@@ -2185,57 +2220,59 @@ mod tests {
     /// single u128 limb (so w can exceed 38).
     #[cfg(any(feature = "d76", feature = "wide"))]
     fn round_div_chain_reference_int256(
-        n: crate::int::types::Int<4>,
-        w: u32,
+        numerator: crate::int::types::Int<4>,
+        scale: u32,
         mode: crate::support::rounding::RoundingMode,
     ) -> crate::int::types::Int<4> {
         use crate::int::types::Int;
-        let d = pow10_int256(w);
+        let divisor = pow10_int256(scale);
         let zero: Int<4> = Int::from_u128(0u128);
         let one: Int<4> = Int::from_u128(1u128);
-        let (q, r) = n.div_rem(d);
-        if r == zero {
-            return q;
+        let (quotient, remainder) = numerator.div_rem(divisor);
+        if remainder == zero {
+            return quotient;
         }
-        let ar = if r < zero { -r } else { r };
-        let comp = d - ar;
-        let cmp_r = ar.cmp(&comp);
+        let abs_remainder = if remainder < zero { -remainder } else { remainder };
+        let complement = divisor - abs_remainder;
+        let remainder_cmp = abs_remainder.cmp(&complement);
         let ten = Int::from_u128(10u128);
-        let q_mod_10 = (q % ten).as_i128().unsigned_abs() as u8;
-        let result_positive = n >= zero;
-        let bump = crate::support::rounding::should_bump(mode, cmp_r, q_mod_10, result_positive);
+        let q_mod_10 = (quotient % ten).as_i128().unsigned_abs() as u8;
+        let result_is_positive = numerator >= zero;
+        let bump = crate::support::rounding::should_bump(
+            mode, remainder_cmp, q_mod_10, result_is_positive);
         if bump {
-            if result_positive { q + one } else { q - one }
+            if result_is_positive { quotient + one } else { quotient - one }
         } else {
-            q
+            quotient
         }
     }
 
     #[cfg(any(feature = "d307", feature = "wide"))]
     fn round_div_chain_reference_int1024(
-        n: crate::int::types::Int<16>,
-        w: u32,
+        numerator: crate::int::types::Int<16>,
+        scale: u32,
         mode: crate::support::rounding::RoundingMode,
     ) -> crate::int::types::Int<16> {
         use crate::int::types::Int;
-        let d = pow10_int1024(w);
+        let divisor = pow10_int1024(scale);
         let zero: Int<16> = Int::from_u128(0u128);
         let one: Int<16> = Int::from_u128(1u128);
-        let (q, r) = n.div_rem(d);
-        if r == zero {
-            return q;
+        let (quotient, remainder) = numerator.div_rem(divisor);
+        if remainder == zero {
+            return quotient;
         }
-        let ar = if r < zero { -r } else { r };
-        let comp = d - ar;
-        let cmp_r = ar.cmp(&comp);
+        let abs_remainder = if remainder < zero { -remainder } else { remainder };
+        let complement = divisor - abs_remainder;
+        let remainder_cmp = abs_remainder.cmp(&complement);
         let ten = Int::from_u128(10u128);
-        let q_mod_10 = (q % ten).as_i128().unsigned_abs() as u8;
-        let result_positive = n >= zero;
-        let bump = crate::support::rounding::should_bump(mode, cmp_r, q_mod_10, result_positive);
+        let q_mod_10 = (quotient % ten).as_i128().unsigned_abs() as u8;
+        let result_is_positive = numerator >= zero;
+        let bump = crate::support::rounding::should_bump(
+            mode, remainder_cmp, q_mod_10, result_is_positive);
         if bump {
-            if result_positive { q + one } else { q - one }
+            if result_is_positive { quotient + one } else { quotient - one }
         } else {
-            q
+            quotient
         }
     }
 
@@ -2249,14 +2286,15 @@ mod tests {
         use crate::int::types::Int;
         const ITERS_HTE: usize = 5_000;
         const ITERS_OTHER: usize = 1_000;
-        for w in 39u32..=76 {
+        for scale in 39u32..=76 {
             for mode in all_modes() {
                 let iters = if matches!(mode, crate::support::rounding::RoundingMode::HalfToEven) {
                     ITERS_HTE
                 } else {
                     ITERS_OTHER
                 };
-                let mut rng = SplitMix64(0xC4A1_u64.wrapping_add((w as u64) << 8 ^ (mode as u64)));
+                let mut rng =
+                    SplitMix64(0xC4A1_u64.wrapping_add((scale as u64) << 8 ^ (mode as u64)));
                 for _ in 0..iters {
                     let regime = rng.next() % 4;
                     let mag_high = if regime >= 2 {
@@ -2270,13 +2308,14 @@ mod tests {
                         let hi: Int<4> = Int::from_u128(mag_high);
                         (hi << 128_u32) + lo
                     };
-                    let n: Int<4> = if regime % 2 == 1 { -pos } else { pos };
+                    let numerator: Int<4> = if regime % 2 == 1 { -pos } else { pos };
 
-                    let got = crate::algos::support::mg_divide::div_wide_pow10_chain::<Int<4>>(n, w, mode);
-                    let expected = round_div_chain_reference_int256(n, w, mode);
+                    let got = crate::algos::support::mg_divide::div_wide_pow10_chain::<Int<4>>(
+                        numerator, scale, mode);
+                    let expected = round_div_chain_reference_int256(numerator, scale, mode);
                     assert_eq!(
                         got, expected,
-                        "chain MG audit (Int<4>) mismatch: w={w}, mode={mode:?}, n={n:?}",
+                        "chain MG audit (Int<4>) mismatch: w={scale}, mode={mode:?}, n={numerator:?}",
                     );
                 }
             }
@@ -2293,27 +2332,27 @@ mod tests {
         use crate::int::types::Int;
         let zero: Int<16> = Int::from_u128(0u128);
         const ITERS_HTE: usize = 3_000;
-        for w in 39u32..=100 {
-            let mut rng = SplitMix64(0x5C5C_u64.wrapping_add(w as u64));
+        for scale in 39u32..=100 {
+            let mut rng = SplitMix64(0x5C5C_u64.wrapping_add(scale as u64));
             for _ in 0..ITERS_HTE {
                 let limbs = (rng.next() % 7) as usize;
-                let mut n: Int<16> = zero;
+                let mut numerator: Int<16> = zero;
                 for k in 0..limbs {
                     let chunk: Int<16> = Int::from_u128(rng.next_u128());
-                    n = n + (chunk << ((k * 128) as u32));
+                    numerator = numerator + (chunk << ((k * 128) as u32));
                 }
                 if rng.next() & 1 == 1 {
-                    n = -n;
+                    numerator = -numerator;
                 }
 
                 let got =
-                    crate::algos::support::mg_divide::div_wide_pow10_chain::<Int<16>>(n, w, crate::support::rounding::RoundingMode::HalfToEven);
+                    crate::algos::support::mg_divide::div_wide_pow10_chain::<Int<16>>(numerator, scale, crate::support::rounding::RoundingMode::HalfToEven);
                 let expected = round_div_chain_reference_int1024(
-                    n,
-                    w,
+                    numerator,
+                    scale,
                     crate::support::rounding::RoundingMode::HalfToEven,
                 );
-                assert_eq!(got, expected, "chain MG audit (Int<16> HTE) mismatch: w={w}",);
+                assert_eq!(got, expected, "chain MG audit (Int<16> HTE) mismatch: w={scale}",);
             }
         }
     }
@@ -2330,24 +2369,26 @@ mod tests {
         let zero: Int<16> = Int::from_u128(0u128);
         const ITERS: usize = 1_000;
         let ws: &[u32] = &[39, 50, 57, 76, 77, 88, 100];
-        for &w in ws {
+        for &scale in ws {
             for mode in all_modes() {
-                let mut rng = SplitMix64(0x9E15_u64.wrapping_add((w as u64) << 4 ^ mode as u64));
+                let mut rng =
+                    SplitMix64(0x9E15_u64.wrapping_add((scale as u64) << 4 ^ mode as u64));
                 for _ in 0..ITERS {
                     let limbs = (rng.next() % 7) as usize;
-                    let mut n: Int<16> = zero;
+                    let mut numerator: Int<16> = zero;
                     for k in 0..limbs {
                         let chunk: Int<16> = Int::from_u128(rng.next_u128());
-                        n = n + (chunk << ((k * 128) as u32));
+                        numerator = numerator + (chunk << ((k * 128) as u32));
                     }
                     if rng.next() & 1 == 1 {
-                        n = -n;
+                        numerator = -numerator;
                     }
-                    let got = crate::algos::support::mg_divide::div_wide_pow10_chain::<Int<16>>(n, w, mode);
-                    let expected = round_div_chain_reference_int1024(n, w, mode);
+                    let got = crate::algos::support::mg_divide::div_wide_pow10_chain::<Int<16>>(
+                        numerator, scale, mode);
+                    let expected = round_div_chain_reference_int1024(numerator, scale, mode);
                     assert_eq!(
                         got, expected,
-                        "chain MG audit (Int<16> all modes) mismatch: w={w}, mode={mode:?}",
+                        "chain MG audit (Int<16> all modes) mismatch: w={scale}, mode={mode:?}",
                     );
                 }
             }
@@ -2366,8 +2407,8 @@ mod tests {
         use crate::int::types::Int;
         let two: Int<16> = Int::from_u128(2u128);
         let ws: &[u32] = &[39, 50, 57, 76, 77, 100];
-        for &w in ws {
-            let pow_w = pow10_int1024(w);
+        for &scale in ws {
+            let pow_w = pow10_int1024(scale);
             let half = pow_w / two;
             // Three q values: 0, 1, large.
             let qs: [Int<16>; 3] = [
@@ -2380,17 +2421,18 @@ mod tests {
                 -Int::<16>::from_u128(1u128),
                 Int::<16>::from_u128(1u128),
             ];
-            for q in qs {
+            for quotient in qs {
                 for delta in deltas {
                     for &sign_neg in &[false, true] {
-                        let pos_n = q * pow_w + half + delta;
-                        let n = if sign_neg { -pos_n } else { pos_n };
+                        let pos_n = quotient * pow_w + half + delta;
+                        let numerator = if sign_neg { -pos_n } else { pos_n };
                         for mode in all_modes() {
-                            let got = crate::algos::support::mg_divide::div_wide_pow10_chain::<Int<16>>(n, w, mode);
-                            let expected = round_div_chain_reference_int1024(n, w, mode);
+                            let got = crate::algos::support::mg_divide::div_wide_pow10_chain::<Int<16>>(numerator, scale, mode);
+                            let expected =
+                                round_div_chain_reference_int1024(numerator, scale, mode);
                             assert_eq!(
                                 got, expected,
-                                "chain MG half-tie mismatch: w={w}, mode={mode:?}, n={n:?}",
+                                "chain MG half-tie mismatch: w={scale}, mode={mode:?}, n={numerator:?}",
                             );
                         }
                     }
@@ -2402,17 +2444,17 @@ mod tests {
     /// Builds `10^w` as an `Int<256>` via chunked multiply (analogue of
     /// [`pow10_int1024`] at the widest work-integer width).
     #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-    fn pow10_int16384(w: u32) -> crate::int::types::Int<256> {
+    fn pow10_int16384(scale: u32) -> crate::int::types::Int<256> {
         use crate::int::types::Int;
-        let mut d: Int<256> = Int::from_u128(1u128);
-        let mut remaining = w;
+        let mut power: Int<256> = Int::from_u128(1u128);
+        let mut remaining = scale;
         while remaining > 0 {
             let chunk = remaining.min(38);
             let factor: Int<256> = Int::from_u128(POW10_U128[chunk as usize]);
-            d = d * factor;
+            power = power * factor;
             remaining -= chunk;
         }
-        d
+        power
     }
 
     /// Regression for the original `div_wide_pow10_chain` buffer
@@ -2444,46 +2486,48 @@ mod tests {
 
         for &bit in high_bit_positions {
             // n = (1 << bit) | low-entropy limbs.
-            let mut n: Int<256> = one << bit;
-            n = n
+            let mut base_numerator: Int<256> = one << bit;
+            base_numerator = base_numerator
                 + (Int::<256>::from_u128(0xdead_beef_cafe_f00d_u128)
                     << 64_u32);
-            n = n + Int::<256>::from_u128(0x1234_5678_9abc_def0_u128);
+            base_numerator =
+                base_numerator + Int::<256>::from_u128(0x1234_5678_9abc_def0_u128);
 
-            for &w in scales {
+            for &scale in scales {
                 for &sign_neg in &[false, true] {
-                    let nn = if sign_neg { -n } else { n };
+                    let numerator = if sign_neg { -base_numerator } else { base_numerator };
                     for mode in all_modes() {
-                        let got = crate::algos::support::mg_divide::div_wide_pow10_chain::<Int<256>>(nn, w, mode);
+                        let got = crate::algos::support::mg_divide::div_wide_pow10_chain::<Int<256>>(numerator, scale, mode);
 
                         // Schoolbook reference on the untruncated value.
-                        let d = pow10_int16384(w);
-                        let (q, r) = nn.div_rem(d);
-                        let expected = if r == zero {
-                            q
+                        let divisor = pow10_int16384(scale);
+                        let (quotient, remainder) = numerator.div_rem(divisor);
+                        let expected = if remainder == zero {
+                            quotient
                         } else {
-                            let ar = if r < zero { -r } else { r };
-                            let comp = d - ar;
-                            let cmp_r = ar.cmp(&comp);
+                            let abs_remainder =
+                                if remainder < zero { -remainder } else { remainder };
+                            let complement = divisor - abs_remainder;
+                            let remainder_cmp = abs_remainder.cmp(&complement);
                             let ten = Int::from_u128(10u128);
-                            let q_mod_10 = (q % ten).as_i128().unsigned_abs() as u8;
-                            let result_positive = nn >= zero;
+                            let q_mod_10 = (quotient % ten).as_i128().unsigned_abs() as u8;
+                            let result_is_positive = numerator >= zero;
                             if crate::support::rounding::should_bump(
                                 mode,
-                                cmp_r,
+                                remainder_cmp,
                                 q_mod_10,
-                                result_positive,
+                                result_is_positive,
                             ) {
-                                if result_positive { q + one } else { q - one }
+                                if result_is_positive { quotient + one } else { quotient - one }
                             } else {
-                                q
+                                quotient
                             }
                         };
 
                         assert_eq!(
                             got, expected,
                             "Int<256> chain divide truncated above 8192 bits: \
-                             bit={bit}, w={w}, mode={mode:?}, neg={sign_neg}",
+                             bit={bit}, w={scale}, mode={mode:?}, neg={sign_neg}",
                         );
                     }
                 }
@@ -2500,42 +2544,51 @@ mod tests {
     /// the divide kernel needs.
     #[test]
     fn mg_magics_match_paper_formula() {
-        for k in 1..=38usize {
-            let d = POW10_U128[k];
-            let (recip, s) = MG_EXP_MAGICS[k];
-            assert_eq!(s, d.leading_zeros(), "shift for 10^{k}");
+        for scale_idx in 1..=38usize {
+            let divisor = POW10_U128[scale_idx];
+            let (recip, shift) = MG_EXP_MAGICS[scale_idx];
+            assert_eq!(shift, divisor.leading_zeros(), "shift for 10^{scale_idx}");
 
-            let d_norm = d << s;
+            let divisor_normalised = divisor << shift;
             // floor(2^256 / d_norm) recomputed independently here as
             // 2^128 + floor((2^256 - d_norm*2^128) / d_norm) using the
             // identity 2^256 = (2^128) * 2^128. We verify via the
             // defining product instead: (2^128 + recip) * d_norm must be
             // the largest multiple of d_norm at or below 2^256.
-            let (q_hi, q_lo) = mul_u128_to_u256(recip, d_norm);
+            let (q_hi, q_lo) = mul_u128_to_u256(recip, divisor_normalised);
             // (2^128 + recip) * d_norm = recip*d_norm + d_norm*2^128.
             // Its high 128 bits: q_hi + d_norm; low: q_lo.
-            let prod_hi = q_hi + d_norm;
+            let prod_hi = q_hi + divisor_normalised;
             // Largest multiple of d_norm <= 2^256 means prod_hi <= 2^128
             // (i.e. high word of 2^256 is 1 at bit 128) and one more
             // d_norm would cross 2^256.
             // prod_hi as a 129-bit count: it must not exceed 2^128, and
             // adding d_norm must overflow past 2^256.
             assert!(
-                prod_hi <= 1u128 << 127 || q_hi <= d_norm,
-                "reciprocal lower bound 10^{k}"
+                prod_hi <= 1u128 << 127 || q_hi <= divisor_normalised,
+                "reciprocal lower bound 10^{scale_idx}"
             );
             // Exactness check through the kernel: dividing the boundary
             // value 2^128*10^k - 1 (the largest n with quotient < 10^k
             // would overflow) is awkward; instead spot-check the kernel
             // against hardware u128 division across a few dividends.
-            let exp = d;
-            for &n_low in &[0u128, 1, exp - 1, exp, exp + 7, u128::MAX] {
+            let pow10_divisor = divisor;
+            for &n_low in &[0u128, 1, pow10_divisor - 1, pow10_divisor,
+                            pow10_divisor + 7, u128::MAX] {
                 // n_high = 0 keeps the true quotient within u128 and lets
                 // us compare against the native u128 divide.
-                let (q, r) =
-                    divmod_pow10_2word(0, n_low, exp, k).expect("quotient fits when n_high == 0");
-                assert_eq!(q, n_low / exp, "kernel quotient 10^{k}, n_low={n_low}");
-                assert_eq!(r, n_low % exp, "kernel remainder 10^{k}, n_low={n_low}");
+                let (quotient, remainder) = divmod_pow10_2word(0, n_low, pow10_divisor, scale_idx)
+                    .expect("quotient fits when n_high == 0");
+                assert_eq!(
+                    quotient,
+                    n_low / pow10_divisor,
+                    "kernel quotient 10^{scale_idx}, n_low={n_low}"
+                );
+                assert_eq!(
+                    remainder,
+                    n_low % pow10_divisor,
+                    "kernel remainder 10^{scale_idx}, n_low={n_low}"
+                );
             }
         }
     }

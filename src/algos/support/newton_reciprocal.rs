@@ -250,9 +250,9 @@ impl NewtonReciprocal {
             r[..k_u64 + 1].copy_from_slice(baked);
         } else {
             // numerator = 2^(64 * k_u64) — a single 1 in limb position k_u64.
-            let mut num = [0u64; MAX_R_U64];
-            num[k_u64] = 1u64;
-            let mut rem = [0u64; MAX_POW_U64];
+            let mut numerator = [0u64; MAX_R_U64];
+            numerator[k_u64] = 1u64;
+            let mut remainder = [0u64; MAX_POW_U64];
             // EXACT module-sized Knuth scratch — never the build-max slice
             // blanket. The dividend spans `k_u64 + 1 ≤ MAX_R_U64` limbs
             // (asserted above), which exceeds the blanket divide's
@@ -268,14 +268,14 @@ impl NewtonReciprocal {
             // `exp_generic::div_rem_exact` precedent; the u128-limb
             // refinement falls to the value-identical base-2⁶⁴ Knuth).
             use crate::int::policy::div_rem::{select_for_limbs, Algorithm};
-            match select_for_limbs(&num[..k_u64 + 1], &pow_scale[..pow_len]) {
+            match select_for_limbs(&numerator[..k_u64 + 1], &pow_scale[..pow_len]) {
                 // Single-limb divisor: hardware remainder, no normalisation
                 // scratch involved.
                 Algorithm::Rem => crate::int::algos::div::div_rem::div_rem(
-                    &num[..k_u64 + 1],
+                    &numerator[..k_u64 + 1],
                     &pow_scale[..pow_len],
                     &mut r[..k_u64 + 1],
-                    &mut rem[..pow_len],
+                    &mut remainder[..pow_len],
                 ),
                 _ => {
                     // Verdict collapse: any non-Rem algorithm (including the
@@ -285,15 +285,15 @@ impl NewtonReciprocal {
                     // but MUST be re-verified whenever an Algorithm arm joins
                     // `int::policy::div_rem`; a new engine winning for these
                     // shapes would need an explicit arm, not a silent Knuth fall.
-                    let mut u = [0u64; MAX_R_U64 + 2];
-                    let mut v = [0u64; MAX_POW_U64];
+                    let mut dividend_scratch = [0u64; MAX_R_U64 + 2];
+                    let mut divisor_scratch = [0u64; MAX_POW_U64];
                     crate::int::algos::div::div_knuth::div_knuth_into(
-                        &num[..k_u64 + 1],
+                        &numerator[..k_u64 + 1],
                         &pow_scale[..pow_len],
                         &mut r[..k_u64 + 1],
-                        &mut rem[..pow_len],
-                        &mut u,
-                        &mut v,
+                        &mut remainder[..pow_len],
+                        &mut dividend_scratch,
+                        &mut divisor_scratch,
                     );
                 }
             }
@@ -344,10 +344,10 @@ impl NewtonReciprocal {
 
 /// Per-call Newton-reciprocal divide.
 ///
-/// `n` is the unsigned numerator magnitude in little-endian u64 limbs.
-/// The quotient `floor(n / 10^scale)` is written into `quot` (caller-
-/// sized to the target width); the remainder is written into `rem_out`
-/// and its live limb count returned, for rounding-aware callers.
+/// `numerator` is the unsigned numerator magnitude in little-endian u64
+/// limbs. The quotient `floor(n / 10^scale)` is written into `quot`
+/// (caller-sized to the target width); the remainder is written into
+/// `rem_out` and its live limb count returned, for rounding-aware callers.
 ///
 /// # Precision
 ///
@@ -355,19 +355,19 @@ impl NewtonReciprocal {
 /// add-back step ensures correctness for the at-most-1 over/under
 /// estimate the truncated reciprocal produces.
 fn div_newton(
-    n: &[u64],
+    numerator: &[u64],
     table: &NewtonReciprocal,
     quot: &mut [u64],
     rem_out: &mut [u64],
 ) -> usize {
-    let r = &table.r[..table.r_len];
+    let reciprocal = &table.r[..table.r_len];
     let pow_scale = &table.pow_scale[..table.pow_len];
 
-    // product = n * r
-    let prod_len = n.len() + r.len();
+    // product = numerator * reciprocal
+    let prod_len = numerator.len() + reciprocal.len();
     debug_assert!(prod_len <= MAX_PROD_U64, "product buffer too small");
     let mut prod = [0u64; MAX_PROD_U64];
-    mul_slice(n, r, &mut prod[..prod_len]);
+    mul_slice(numerator, reciprocal, &mut prod[..prod_len]);
 
     // q_approx = prod >> (64 * k_u64)
     let lo = table.k_u64.min(prod_len);
@@ -379,16 +379,16 @@ fn div_newton(
         *dst = 0;
     }
 
-    // r_approx = n - q_approx * pow_scale  (mod 2^width)
+    // r_approx = numerator - q_approx * pow_scale  (mod 2^width)
     let prod2_len = quot.len() + pow_scale.len();
     debug_assert!(prod2_len <= MAX_PROD_U64, "product buffer too small");
     let mut prod2 = [0u64; MAX_PROD_U64];
     mul_slice(quot, pow_scale, &mut prod2[..prod2_len]);
 
-    // rem = n - prod2 (mod 2^width), held in n.len()+1 limbs.
-    let rem_len = n.len() + 1;
+    // rem = numerator - prod2 (mod 2^width), in numerator.len()+1 limbs.
+    let rem_len = numerator.len() + 1;
     debug_assert!(rem_len <= MAX_MAG_U64 + 1, "rem buffer too small");
-    for (dst, src) in rem_out.iter_mut().take(rem_len).zip(n.iter()) {
+    for (dst, src) in rem_out.iter_mut().take(rem_len).zip(numerator.iter()) {
         *dst = *src;
     }
     rem_out[rem_len - 1] = 0;
@@ -402,8 +402,8 @@ fn div_newton(
         if cmp(&rem_out[..rem_len], pow_scale) < 0 {
             break;
         }
-        let s = rem_len.min(pow_scale.len());
-        let _ = sub_assign(&mut rem_out[..s], &pow_scale[..s]);
+        let common_len = rem_len.min(pow_scale.len());
+        let _ = sub_assign(&mut rem_out[..common_len], &pow_scale[..common_len]);
         // quot += 1
         let mut carry: u64 = 1;
         for limb in quot.iter_mut() {
@@ -430,48 +430,48 @@ fn div_newton(
 // paying the pack cost ONCE in the amortised `precompute`.
 
 #[inline]
-const fn cmp_u128(a: &[u128], b: &[u128]) -> i32 {
-    let mut alen = a.len();
-    while alen > 0 && a[alen - 1] == 0 { alen -= 1; }
-    let mut blen = b.len();
-    while blen > 0 && b[blen - 1] == 0 { blen -= 1; }
-    if alen != blen { return if alen > blen { 1 } else { -1 }; }
-    let mut i = alen;
+const fn cmp_u128(lhs: &[u128], rhs: &[u128]) -> i32 {
+    let mut lhs_len = lhs.len();
+    while lhs_len > 0 && lhs[lhs_len - 1] == 0 { lhs_len -= 1; }
+    let mut rhs_len = rhs.len();
+    while rhs_len > 0 && rhs[rhs_len - 1] == 0 { rhs_len -= 1; }
+    if lhs_len != rhs_len { return if lhs_len > rhs_len { 1 } else { -1 }; }
+    let mut i = lhs_len;
     while i > 0 {
         i -= 1;
-        if a[i] != b[i] { return if a[i] > b[i] { 1 } else { -1 }; }
+        if lhs[i] != rhs[i] { return if lhs[i] > rhs[i] { 1 } else { -1 }; }
     }
     0
 }
 
 #[inline]
-const fn sub_assign_u128(a: &mut [u128], b: &[u128]) -> bool {
+const fn sub_assign_u128(lhs: &mut [u128], rhs: &[u128]) -> bool {
     let mut borrow: u128 = 0;
     let mut i = 0;
-    while i < a.len() {
-        let bi = if i < b.len() { b[i] } else { 0 };
-        let (s1, c1) = a[i].overflowing_sub(bi);
+    while i < lhs.len() {
+        let rhs_limb = if i < rhs.len() { rhs[i] } else { 0 };
+        let (s1, c1) = lhs[i].overflowing_sub(rhs_limb);
         let (s2, c2) = s1.overflowing_sub(borrow);
-        a[i] = s2;
+        lhs[i] = s2;
         borrow = (c1 as u128) | (c2 as u128);
         i += 1;
     }
     borrow != 0
 }
 
-/// `out = a * b` schoolbook on u128 limb slices. Inner step uses the
+/// `out = lhs * rhs` schoolbook on u128 limb slices. Inner step uses the
 /// 4xu64*u64->u128 partials decomposition (`<u128 as Limb>::widening_mul`).
 #[inline]
-fn mul_schoolbook_u128(a: &[u128], b: &[u128], out: &mut [u128]) {
+fn mul_schoolbook_u128(lhs: &[u128], rhs: &[u128], out: &mut [u128]) {
     use crate::int::types::compute_limbs::Limb;
     let mut i = 0;
-    while i < a.len() {
-        if a[i] != 0 {
+    while i < lhs.len() {
+        if lhs[i] != 0 {
             let mut carry: u128 = 0;
             let mut j = 0;
-            while j < b.len() {
-                if b[j] != 0 || carry != 0 {
-                    let (prod_lo, prod_hi) = <u128 as Limb>::widening_mul(a[i], b[j]);
+            while j < rhs.len() {
+                if rhs[j] != 0 || carry != 0 {
+                    let (prod_lo, prod_hi) = <u128 as Limb>::widening_mul(lhs[i], rhs[j]);
                     let idx = i + j;
                     let (s1, c1) = out[idx].overflowing_add(prod_lo);
                     let (s2, c2) = s1.overflowing_add(carry);
@@ -480,7 +480,7 @@ fn mul_schoolbook_u128(a: &[u128], b: &[u128], out: &mut [u128]) {
                 }
                 j += 1;
             }
-            let mut idx = i + b.len();
+            let mut idx = i + rhs.len();
             while carry != 0 && idx < out.len() {
                 let (s, c) = out[idx].overflowing_add(carry);
                 out[idx] = s;
@@ -492,29 +492,31 @@ fn mul_schoolbook_u128(a: &[u128], b: &[u128], out: &mut [u128]) {
     }
 }
 
-/// HIGH product: `out[i] = limb (base + i)` of `a * b` (the full product has
-/// `a.len()+b.len()` limbs), forming only the partials with `i + j >= base`.
+/// HIGH product: `out[i] = limb (base + i)` of `lhs * rhs` (the full product
+/// has `lhs.len()+rhs.len()` limbs), forming only the partials with
+/// `i + j >= base`.
 /// The dropped low partials (`i + j < base`) are NOT included, so their carry
 /// into limb `base` is missing — making the high limbs too-LOW by a bounded
 /// amount. The Newton quotient `q = (a·b) >> k` reads this with a small guard
 /// (`base = k - GUARD`), bounding the deficit to `< 1` ULP at the `k`-cut; the
 /// Newton correction LOOP (`while rem >= D { q += 1 }`) adds back any residual,
 /// so the result is EXACT regardless of guard — the guard only bounds the loop
-/// count (perf). `out` pre-zeroed; `out.len() >= a.len()+b.len() - base`. This
-/// halves the `mag·r` work vs the full product (only the high half is kept).
+/// count (perf). `out` pre-zeroed;
+/// `out.len() >= lhs.len()+rhs.len() - base`. This halves the `mag·r` work
+/// vs the full product (only the high half is kept).
 #[inline]
-fn mul_high_schoolbook_u128(a: &[u128], b: &[u128], out: &mut [u128], base: usize) {
+fn mul_high_schoolbook_u128(lhs: &[u128], rhs: &[u128], out: &mut [u128], base: usize) {
     use crate::int::types::compute_limbs::Limb;
     let out_len = out.len();
     let mut i = 0;
-    while i < a.len() {
-        if a[i] != 0 {
+    while i < lhs.len() {
+        if lhs[i] != 0 {
             // Smallest j with i + j >= base; skip the dropped-low partials.
             let j0 = base.saturating_sub(i);
             let mut carry: u128 = 0;
             let mut j = j0;
-            while j < b.len() {
-                let (lo, hi) = <u128 as Limb>::widening_mul(a[i], b[j]);
+            while j < rhs.len() {
+                let (lo, hi) = <u128 as Limb>::widening_mul(lhs[i], rhs[j]);
                 let idx = i + j - base; // i + j >= base for j >= j0
                 let (s1, c1) = out[idx].overflowing_add(lo);
                 let (s2, c2) = s1.overflowing_add(carry);
@@ -522,7 +524,7 @@ fn mul_high_schoolbook_u128(a: &[u128], b: &[u128], out: &mut [u128], base: usiz
                 carry = hi.wrapping_add(c1 as u128).wrapping_add(c2 as u128);
                 j += 1;
             }
-            let mut idx = i + b.len() - base;
+            let mut idx = i + rhs.len() - base;
             while carry != 0 && idx < out_len {
                 let (s, c) = out[idx].overflowing_add(carry);
                 out[idx] = s;
@@ -538,15 +540,15 @@ fn mul_high_schoolbook_u128(a: &[u128], b: &[u128], out: &mut [u128], base: usiz
 /// All multiplies run on the precomputed u128-packed `r` and `pow_scale` (NO
 /// per-call pack); operand/output stay in u128 throughout.
 fn div_newton_u128(
-    n: &[u128],
+    numerator: &[u128],
     table: &NewtonReciprocal,
     quot: &mut [u128],
     rem_out: &mut [u128],
 ) -> usize {
-    let r = &table.r_u128[..table.r_u128_len];
+    let reciprocal = &table.r_u128[..table.r_u128_len];
     let pow_scale = &table.pow_u128[..table.pow_u128_len];
 
-    let prod_len = n.len() + r.len();
+    let prod_len = numerator.len() + reciprocal.len();
     let lo = table.k_u128.min(prod_len);
     // q = (n·r) >> (128·k_u128) reads only the HIGH limbs [lo..]. Form just
     // those (plus GUARD guard limbs) with the high-product — dropping the low
@@ -557,7 +559,7 @@ fn div_newton_u128(
     let high_len = prod_len - base;
     debug_assert!(high_len <= MAX_PROD_U128, "u128 high-product buffer too small");
     let mut prod = [0u128; MAX_PROD_U128];
-    mul_high_schoolbook_u128(n, r, &mut prod[..high_len], base);
+    mul_high_schoolbook_u128(numerator, reciprocal, &mut prod[..high_len], base);
 
     // q = limbs [lo..prod_len] of n·r = prod[lo - base .. high_len].
     let q_slice = &prod[lo - base..high_len];
@@ -569,17 +571,17 @@ fn div_newton_u128(
     let mut prod2 = [0u128; MAX_PROD_U128];
     mul_schoolbook_u128(quot, pow_scale, &mut prod2[..prod2_len]);
 
-    let rem_len = n.len() + 1;
+    let rem_len = numerator.len() + 1;
     debug_assert!(rem_len <= MAX_MAG_U128 + 1, "u128 rem buffer too small");
-    for (dst, src_) in rem_out.iter_mut().take(rem_len).zip(n.iter()) { *dst = *src_; }
+    for (dst, src_) in rem_out.iter_mut().take(rem_len).zip(numerator.iter()) { *dst = *src_; }
     rem_out[rem_len - 1] = 0;
     let sub_len = prod2_len.min(rem_len);
     let _ = sub_assign_u128(&mut rem_out[..sub_len], &prod2[..sub_len]);
 
     loop {
         if cmp_u128(&rem_out[..rem_len], pow_scale) < 0 { break; }
-        let s = rem_len.min(pow_scale.len());
-        let _ = sub_assign_u128(&mut rem_out[..s], &pow_scale[..s]);
+        let common_len = rem_len.min(pow_scale.len());
+        let _ = sub_assign_u128(&mut rem_out[..common_len], &pow_scale[..common_len]);
         let mut carry: u128 = 1;
         for limb in quot.iter_mut() {
             let (s, c) = limb.overflowing_add(carry);
@@ -598,7 +600,7 @@ fn div_newton_u128(
 /// path `newton_pow10_mag_u128`.
 pub(crate) fn newton_pow10_mag_u128_packed(
     mag_u128: &mut [u128],
-    neg: bool,
+    is_negative: bool,
     mode: crate::support::rounding::RoundingMode,
     table: &NewtonReciprocal,
 ) {
@@ -627,14 +629,14 @@ pub(crate) fn newton_pow10_mag_u128_packed(
             carry_in = next_carry;
         }
 
-        let cmp_r = match cmp_u128(&rem[..rem_len], &half[..pow_len]) {
-            n if n < 0 => core::cmp::Ordering::Less,
+        let remainder_cmp = match cmp_u128(&rem[..rem_len], &half[..pow_len]) {
+            ordering if ordering < 0 => core::cmp::Ordering::Less,
             0 => core::cmp::Ordering::Equal,
             _ => core::cmp::Ordering::Greater,
         };
         // Last decimal digit of the u128-limb quotient magnitude.
         let q_mod_10 = rounding::limbs_u128_mod_10(&quot[..mag_len]);
-        if rounding::should_bump(mode, cmp_r, q_mod_10, !neg) {
+        if rounding::should_bump(mode, remainder_cmp, q_mod_10, !is_negative) {
             let mut carry: u128 = 1;
             for limb in quot[..mag_len].iter_mut() {
                 let (s, c) = limb.overflowing_add(carry);
@@ -681,7 +683,7 @@ const fn newton_u128_wins(width_bits: u32) -> bool {
 /// Direct analogue of [`crate::algos::support::mg_divide::div_wide_pow10_chain`]
 /// — same signature, same semantics, different inner algorithm.
 pub(crate) fn div_wide_pow10_newton_with<W: crate::int::types::traits::BigInt>(
-    n: W,
+    value: W,
     scale: u32,
     mode: crate::support::rounding::RoundingMode,
     table: &NewtonReciprocal,
@@ -702,9 +704,9 @@ pub(crate) fn div_wide_pow10_newton_with<W: crate::int::types::traits::BigInt>(
     let mut mag_u128 = crate::int::types::compute_limbs::max_u128_limb();
     let limbs = <W as crate::int::types::traits::BigInt>::U128_LIMBS;
     let mag = &mut mag_u128[..limbs];
-    let neg = n.mag_into_u128(mag);
-    newton_pow10_mag_u128(mag, neg, mode, table);
-    W::from_mag_sign_u128(mag, neg)
+    let is_negative = value.mag_into_u128(mag);
+    newton_pow10_mag_u128(mag, is_negative, mode, table);
+    W::from_mag_sign_u128(mag, is_negative)
 }
 
 /// Width-agnostic Newton-reciprocal divide of a u128-limb magnitude slice
@@ -718,7 +720,7 @@ pub(crate) fn div_wide_pow10_newton_with<W: crate::int::types::traits::BigInt>(
 /// the quotient back into `mag` in place.
 pub(crate) fn newton_pow10_mag_u128(
     mag_u128: &mut [u128],
-    neg: bool,
+    is_negative: bool,
     mode: crate::support::rounding::RoundingMode,
     table: &NewtonReciprocal,
 ) {
@@ -726,9 +728,9 @@ pub(crate) fn newton_pow10_mag_u128(
 
     // Transcode the u128 magnitude to the u64 limbs the kernel runs in.
     let mut mag = [0u64; MAX_MAG_U64];
-    for (i, &v) in mag_u128.iter().enumerate() {
-        mag[2 * i] = v as u64;
-        mag[2 * i + 1] = (v >> 64) as u64;
+    for (i, &limb) in mag_u128.iter().enumerate() {
+        mag[2 * i] = limb as u64;
+        mag[2 * i + 1] = (limb >> 64) as u64;
     }
     let mag_len = mag_u128.len() * 2;
 
@@ -759,14 +761,14 @@ pub(crate) fn newton_pow10_mag_u128(
             carry_in = next_carry;
         }
 
-        let cmp_r = match cmp(&rem[..rem_len], &half[..pow_len]) {
-            n if n < 0 => core::cmp::Ordering::Less,
+        let remainder_cmp = match cmp(&rem[..rem_len], &half[..pow_len]) {
+            ordering if ordering < 0 => core::cmp::Ordering::Less,
             0 => core::cmp::Ordering::Equal,
             _ => core::cmp::Ordering::Greater,
         };
         // Last decimal digit of the u64-limb quotient magnitude.
         let q_mod_10 = rounding::limbs_mod_10(&quot[..mag_len]);
-        if rounding::should_bump(mode, cmp_r, q_mod_10, !neg) {
+        if rounding::should_bump(mode, remainder_cmp, q_mod_10, !is_negative) {
             let mut carry: u64 = 1;
             for limb in quot[..mag_len].iter_mut() {
                 let (s, c) = limb.overflowing_add(carry);
@@ -796,8 +798,8 @@ pub(crate) fn newton_pow10_mag_u128(
 /// is the magnitude width in bits — the typed door
 /// ([`crate::algos::support::rescale::dispatch_wide_pow10`]) passes the
 /// SIGNIFICANT length here (task 9.24), so `precompute` sizes the reciprocal +
-/// quotient to the real magnitude, not the full work buffer; `neg` is the
-/// result sign for the rounding tie-break.
+/// quotient to the real magnitude, not the full work buffer; `is_negative`
+/// is the result sign for the rounding tie-break.
 ///
 /// This is the `Newton` arm of the rescale matcher
 /// ([`crate::algos::support::rescale`]) — **SELECTED** for the wide /
@@ -811,7 +813,7 @@ pub(crate) fn newton_pow10_mag_u128(
 pub(crate) fn newton_rescale_arm(
     mag: &mut [u128],
     scale: u32,
-    neg: bool,
+    is_negative: bool,
     mode: crate::support::rounding::RoundingMode,
     width_bits: u32,
 ) {
@@ -824,9 +826,9 @@ pub(crate) fn newton_rescale_arm(
         let width_limbs = (width_bits as usize) / 64;
         let table = NewtonReciprocal::precompute(scale, width_limbs);
         if newton_u128_wins(width_bits) {
-            newton_pow10_mag_u128_packed(mag, neg, mode, &table);
+            newton_pow10_mag_u128_packed(mag, is_negative, mode, &table);
         } else {
-            newton_pow10_mag_u128(mag, neg, mode, &table);
+            newton_pow10_mag_u128(mag, is_negative, mode, &table);
         }
     }
 
@@ -835,7 +837,8 @@ pub(crate) fn newton_rescale_arm(
         // no_std has no Newton path (the per-call Knuth precompute is too
         // costly); forward to the MG chain — the kernel the matcher selects.
         let _ = width_bits;
-        crate::algos::support::mg_divide::div_pow10_chain_mag_u128(mag, scale, neg, mode);
+        crate::algos::support::mg_divide::div_pow10_chain_mag_u128(
+            mag, scale, is_negative, mode);
     }
 }
 
@@ -900,18 +903,20 @@ mod tests {
                     }
                     assert_eq!(carry, 0, "10^{scale} overflowed pow_len");
                 }
-                let k_raw = width_limbs + pow_len;
-                let k = if k_raw % 2 == 0 { k_raw } else { k_raw + 1 };
+                let top_limb_raw = width_limbs + pow_len;
+                let top_limb =
+                    if top_limb_raw % 2 == 0 { top_limb_raw } else { top_limb_raw + 1 };
                 let mut num = [0u64; MAX_R_U64];
-                num[k] = 1;
-                let mut r = [0u64; MAX_R_U64];
+                num[top_limb] = 1;
+                let mut recip = [0u64; MAX_R_U64];
                 let mut rem = [0u64; MAX_POW_U64];
-                div_rem_mag_slice(&num[..k + 1], &pow[..pow_len], &mut r[..k + 1], &mut rem[..pow_len]);
+                div_rem_mag_slice(&num[..top_limb + 1], &pow[..pow_len],
+                    &mut recip[..top_limb + 1], &mut rem[..pow_len]);
                 let baked = crate::consts::newton_recip_le(scale, width_limbs)
                     .expect("baked reciprocal in range");
                 assert_eq!(
                     baked,
-                    &r[..k + 1],
+                    &recip[..top_limb + 1],
                     "baked != runtime divide: width_limbs={width_limbs} scale={scale}"
                 );
             }
@@ -930,10 +935,12 @@ mod tests {
         let mut limbs = [0u128; 64];
         limbs[6] = 1u128 << 32;
         limbs[0] = 42;
-        let n = <Int<16> as crate::int::types::traits::BigInt>::from_mag_sign_u128(&limbs, false);
+        let numerator = <Int<16> as crate::int::types::traits::BigInt>::from_mag_sign_u128(
+            &limbs, false);
 
-        let got = div_wide_pow10_newton_with(n, scale, RoundingMode::HalfToEven, &table);
-        let want = div_wide_pow10_chain::<Int<16>>(n, scale, RoundingMode::HalfToEven);
+        let got =
+            div_wide_pow10_newton_with(numerator, scale, RoundingMode::HalfToEven, &table);
+        let want = div_wide_pow10_chain::<Int<16>>(numerator, scale, RoundingMode::HalfToEven);
         assert_eq!(got, want, "Newton differs from MG chain at D307 s=150");
     }
 
@@ -950,10 +957,12 @@ mod tests {
         let mut limbs = [0u128; 64];
         limbs[10] = 1u128 << 24;
         limbs[2] = 0xfeedfacecafef00d_u128;
-        let n = <Int<24> as crate::int::types::traits::BigInt>::from_mag_sign_u128(&limbs, false);
+        let numerator = <Int<24> as crate::int::types::traits::BigInt>::from_mag_sign_u128(
+            &limbs, false);
 
-        let got = div_wide_pow10_newton_with(n, scale, RoundingMode::HalfToEven, &table);
-        let want = div_wide_pow10_chain::<Int<24>>(n, scale, RoundingMode::HalfToEven);
+        let got =
+            div_wide_pow10_newton_with(numerator, scale, RoundingMode::HalfToEven, &table);
+        let want = div_wide_pow10_chain::<Int<24>>(numerator, scale, RoundingMode::HalfToEven);
         assert_eq!(got, want, "Newton differs from MG chain at Int<24> s=202");
     }
 
@@ -967,10 +976,12 @@ mod tests {
         let mut limbs = [0u128; 64];
         limbs[10] = 1u128 << 8;
         limbs[1] = 0xdeadbeef_cafef00d_u128;
-        let n = <Int<24> as crate::int::types::traits::BigInt>::from_mag_sign_u128(&limbs, false);
+        let numerator = <Int<24> as crate::int::types::traits::BigInt>::from_mag_sign_u128(
+            &limbs, false);
 
-        let got = div_wide_pow10_newton_with(n, scale, RoundingMode::HalfToEven, &table);
-        let want = div_wide_pow10_chain::<Int<24>>(n, scale, RoundingMode::HalfToEven);
+        let got =
+            div_wide_pow10_newton_with(numerator, scale, RoundingMode::HalfToEven, &table);
+        let want = div_wide_pow10_chain::<Int<24>>(numerator, scale, RoundingMode::HalfToEven);
         assert_eq!(got, want, "Newton differs from MG chain at Int<24> s=259");
     }
 
@@ -985,10 +996,12 @@ mod tests {
         let mut limbs = [0u128; 64];
         limbs[14] = 1u128 << 16;
         limbs[3] = 0xdeadbeef;
-        let n = <Int<32> as crate::int::types::traits::BigInt>::from_mag_sign_u128(&limbs, false);
+        let numerator = <Int<32> as crate::int::types::traits::BigInt>::from_mag_sign_u128(
+            &limbs, false);
 
-        let got = div_wide_pow10_newton_with(n, scale, RoundingMode::HalfToEven, &table);
-        let want = div_wide_pow10_chain::<Int<32>>(n, scale, RoundingMode::HalfToEven);
+        let got =
+            div_wide_pow10_newton_with(numerator, scale, RoundingMode::HalfToEven, &table);
+        let want = div_wide_pow10_chain::<Int<32>>(numerator, scale, RoundingMode::HalfToEven);
         assert_eq!(got, want, "Newton differs from MG chain at D616 s=308");
     }
 
@@ -1003,10 +1016,12 @@ mod tests {
         let mut limbs = [0u128; 64];
         limbs[30] = 1u128 << 8;
         limbs[5] = 0xcafef00d;
-        let n = <Int<64> as crate::int::types::traits::BigInt>::from_mag_sign_u128(&limbs, false);
+        let numerator = <Int<64> as crate::int::types::traits::BigInt>::from_mag_sign_u128(
+            &limbs, false);
 
-        let got = div_wide_pow10_newton_with(n, scale, RoundingMode::HalfToEven, &table);
-        let want = div_wide_pow10_chain::<Int<64>>(n, scale, RoundingMode::HalfToEven);
+        let got =
+            div_wide_pow10_newton_with(numerator, scale, RoundingMode::HalfToEven, &table);
+        let want = div_wide_pow10_chain::<Int<64>>(numerator, scale, RoundingMode::HalfToEven);
         assert_eq!(got, want, "Newton differs from MG chain at D1232 s=615");
     }
 
@@ -1154,9 +1169,11 @@ mod tests {
         let mut limbs = [0u128; 64];
         limbs[40] = 1u128 << 24;
         limbs[3] = 0xfeedfacecafef00d_u128;
-        let n = <Int<96> as crate::int::types::traits::BigInt>::from_mag_sign_u128(&limbs, false);
-        let got = div_wide_pow10_newton_with(n, scale, RoundingMode::HalfToEven, &table);
-        let want = div_wide_pow10_chain::<Int<96>>(n, scale, RoundingMode::HalfToEven);
+        let numerator = <Int<96> as crate::int::types::traits::BigInt>::from_mag_sign_u128(
+            &limbs, false);
+        let got =
+            div_wide_pow10_newton_with(numerator, scale, RoundingMode::HalfToEven, &table);
+        let want = div_wide_pow10_chain::<Int<96>>(numerator, scale, RoundingMode::HalfToEven);
         assert_eq!(got, want, "Newton differs from MG chain at Int<96> s=200");
     }
 
@@ -1169,9 +1186,11 @@ mod tests {
         let mut limbs = [0u128; 64];
         limbs[46] = 1u128 << 8;
         limbs[1] = 0xdeadbeef_cafef00d_u128;
-        let n = <Int<96> as crate::int::types::traits::BigInt>::from_mag_sign_u128(&limbs, false);
-        let got = div_wide_pow10_newton_with(n, scale, RoundingMode::HalfToEven, &table);
-        let want = div_wide_pow10_chain::<Int<96>>(n, scale, RoundingMode::HalfToEven);
+        let numerator = <Int<96> as crate::int::types::traits::BigInt>::from_mag_sign_u128(
+            &limbs, false);
+        let got =
+            div_wide_pow10_newton_with(numerator, scale, RoundingMode::HalfToEven, &table);
+        let want = div_wide_pow10_chain::<Int<96>>(numerator, scale, RoundingMode::HalfToEven);
         assert_eq!(got, want, "Newton differs from MG chain at Int<96> s=953");
     }
 

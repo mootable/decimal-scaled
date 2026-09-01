@@ -22,14 +22,14 @@ use crate::int::algos::support::limbs::{bit_len, cmp, shl, sub_assign};
 
 use crate::int::types::compute_limbs::MAX_DOUBLE_LIMBS;
 
-/// floor(sqrt(n)) via two-bits-at-a-time bitwise algorithm.
-pub(crate) fn isqrt_schoolbook(n: &[u64], out: &mut [u64]) {
-    for o in out.iter_mut() { *o = 0; }
-    let bits = bit_len(n);
+/// floor(sqrt(radicand)) via two-bits-at-a-time bitwise algorithm.
+pub(crate) fn isqrt_schoolbook(radicand: &[u64], out: &mut [u64]) {
+    for limb in out.iter_mut() { *limb = 0; }
+    let bits = bit_len(radicand);
     if bits == 0 { return; }
     if bits <= 1 { out[0] = 1; return; }
-    let work = n.len() + 1;
-    debug_assert!(work <= MAX_DOUBLE_LIMBS, "isqrt_schoolbook scratch overflow");
+    let work_len = radicand.len() + 1;
+    debug_assert!(work_len <= MAX_DOUBLE_LIMBS, "isqrt_schoolbook scratch overflow");
     let mut p = [0u64; MAX_DOUBLE_LIMBS];
     let mut r = [0u64; MAX_DOUBLE_LIMBS];
     let mut tmp = [0u64; MAX_DOUBLE_LIMBS];
@@ -39,37 +39,37 @@ pub(crate) fn isqrt_schoolbook(n: &[u64], out: &mut [u64]) {
     let mut b = start;
     while b >= 0 {
         // Step 1: r = (r << 2) | 2-bit group at [b+1, b].
-        shl(&r[..work], 2, &mut tmp[..work]);
-        r[..work].copy_from_slice(&tmp[..work]);
+        shl(&r[..work_len], 2, &mut tmp[..work_len]);
+        r[..work_len].copy_from_slice(&tmp[..work_len]);
         let b_u32 = b as u32;
-        let li = (b_u32 / 64) as usize;
-        let bo = b_u32 % 64;
-        let group: u64 = if bo == 63 {
-            let lo = if li < n.len() { (n[li] >> 63) & 1 } else { 0 };
-            let hi = if li + 1 < n.len() { n[li + 1] & 1 } else { 0 };
+        let limb_index = (b_u32 / 64) as usize;
+        let bit_offset = b_u32 % 64;
+        let group: u64 = if bit_offset == 63 {
+            let lo = if limb_index < radicand.len() { (radicand[limb_index] >> 63) & 1 } else { 0 };
+            let hi = if limb_index + 1 < radicand.len() { radicand[limb_index + 1] & 1 } else { 0 };
             (hi << 1) | lo
-        } else if li < n.len() {
-            (n[li] >> bo) & 3
+        } else if limb_index < radicand.len() {
+            (radicand[limb_index] >> bit_offset) & 3
         } else { 0 };
         r[0] |= group;
         // Step 2: t = (p << 2) | 1 = 4p + 1.
-        shl(&p[..work], 2, &mut tmp[..work]);
+        shl(&p[..work_len], 2, &mut tmp[..work_len]);
         let mut t = [0u64; MAX_DOUBLE_LIMBS];
-        t[..work].copy_from_slice(&tmp[..work]);
+        t[..work_len].copy_from_slice(&tmp[..work_len]);
         t[0] |= 1;
         // Step 3: accept or reject next bit.
-        if cmp(&r[..work], &t[..work]) >= 0 {
-            sub_assign(&mut r[..work], &t[..work]);
-            shl(&p[..work], 1, &mut tmp[..work]);
-            p[..work].copy_from_slice(&tmp[..work]);
+        if cmp(&r[..work_len], &t[..work_len]) >= 0 {
+            sub_assign(&mut r[..work_len], &t[..work_len]);
+            shl(&p[..work_len], 1, &mut tmp[..work_len]);
+            p[..work_len].copy_from_slice(&tmp[..work_len]);
             p[0] |= 1;
         } else {
-            shl(&p[..work], 1, &mut tmp[..work]);
-            p[..work].copy_from_slice(&tmp[..work]);
+            shl(&p[..work_len], 1, &mut tmp[..work_len]);
+            p[..work_len].copy_from_slice(&tmp[..work_len]);
         }
         b -= 2;
     }
-    let copy_len = out.len().min(work);
+    let copy_len = out.len().min(work_len);
     out[..copy_len].copy_from_slice(&p[..copy_len]);
 }
 
@@ -77,19 +77,21 @@ pub(crate) fn isqrt_schoolbook(n: &[u64], out: &mut [u64]) {
 mod tests {
     use super::isqrt_schoolbook;
     use crate::int::algos::isqrt::isqrt_newton::isqrt_newton;
-    fn sb64(n: u64) -> u64 {
-        let i = [n]; let mut o = [0u64]; isqrt_schoolbook(&i, &mut o); o[0]
+    fn sb64(radicand: u64) -> u64 {
+        let input = [radicand]; let mut output = [0u64];
+        isqrt_schoolbook(&input, &mut output); output[0]
     }
-    fn sb128(n: u128) -> u128 {
-        let i = [n as u64, (n>>64) as u64]; let mut o = [0u64, 0u64];
-        isqrt_schoolbook(&i, &mut o); (o[0] as u128) | ((o[1] as u128) << 64)
+    fn sb128(radicand: u128) -> u128 {
+        let input = [radicand as u64, (radicand>>64) as u64]; let mut output = [0u64, 0u64];
+        isqrt_schoolbook(&input, &mut output); (output[0] as u128) | ((output[1] as u128) << 64)
     }
-    fn nt64(n: u64) -> u64 {
-        let i = [n]; let mut o = [0u64]; isqrt_newton(&i, &mut o); o[0]
+    fn nt64(radicand: u64) -> u64 {
+        let input = [radicand]; let mut output = [0u64];
+        isqrt_newton(&input, &mut output); output[0]
     }
-    fn nt128(n: u128) -> u128 {
-        let i = [n as u64, (n>>64) as u64]; let mut o = [0u64, 0u64];
-        isqrt_newton(&i, &mut o); (o[0] as u128) | ((o[1] as u128) << 64)
+    fn nt128(radicand: u128) -> u128 {
+        let input = [radicand as u64, (radicand>>64) as u64]; let mut output = [0u64, 0u64];
+        isqrt_newton(&input, &mut output); (output[0] as u128) | ((output[1] as u128) << 64)
     }
     /// Fixed known values -- externally verified via Python math.isqrt.
     #[test]

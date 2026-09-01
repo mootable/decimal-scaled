@@ -90,8 +90,8 @@ macro_rules! decl_cross_width_assign_op {
         impl<const S1: u32, const S2: u32> ::core::ops::$Trait<$crate::$Wide<S2>> for $crate::$Narrow<S1> {
             #[inline]
             fn $method(&mut self, rhs: $crate::$Wide<S2>) {
-                let wide = $crate::$Wide::<S1>::$of(*self, rhs);
-                let narrowed = wide.0.try_narrow::<$NarrowLimbs>().expect($overflow);
+                let wide_value = $crate::$Wide::<S1>::$of(*self, rhs);
+                let narrowed = wide_value.0.try_narrow::<$NarrowLimbs>().expect($overflow);
                 *self = $crate::$Narrow::<S1>::from_bits(narrowed);
             }
         }

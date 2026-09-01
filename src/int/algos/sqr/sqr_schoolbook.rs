@@ -24,15 +24,15 @@ use crate::int::types::Uint;
 
 /// Naive schoolbook integer square for `Uint<N>`: `x²` modulo `2^BITS`.
 ///
-/// Delegates directly to [`mul_low_fixed`] with both operands set to `x`,
-/// forming the full `N×N` outer product and retaining only the low `N`
-/// limbs. Bit-identical to [`crate::int::algos::sqr::sqr_half_product::sqr_half_product`];
+/// Delegates directly to [`mul_low_fixed`] with both operands set to
+/// `value`, forming the full `N×N` outer product and retaining only the low
+/// `N` limbs. Bit-identical to [`crate::int::algos::sqr::sqr_half_product::sqr_half_product`];
 /// slower by roughly 2× because symmetric cross terms are formed twice.
 /// `const fn`, matching the const-ness of the production algorithm.
 #[inline]
 #[allow(dead_code)]
-pub(crate) const fn sqr_schoolbook<const N: usize>(x: Uint<N>) -> Uint<N> {
+pub(crate) const fn sqr_schoolbook<const N: usize>(value: Uint<N>) -> Uint<N> {
     let mut out = [0u64; N];
-    mul_low_fixed(x.as_limbs(), x.as_limbs(), &mut out);
+    mul_low_fixed(value.as_limbs(), value.as_limbs(), &mut out);
     Uint::<N>::from_limbs(out)
 }

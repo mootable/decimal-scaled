@@ -36,13 +36,13 @@ use crate::int::types::Int;
 /// equality is a value equality — no sign special-case is needed.) `const fn`.
 #[allow(dead_code)]
 #[inline]
-pub(crate) const fn eq_xor_fold<const N: usize>(a: Int<N>, b: Int<N>) -> bool {
-    let al = a.as_limbs();
-    let bl = b.as_limbs();
+pub(crate) const fn eq_xor_fold<const N: usize>(lhs: Int<N>, rhs: Int<N>) -> bool {
+    let lhs_limbs = lhs.as_limbs();
+    let rhs_limbs = rhs.as_limbs();
     let mut diff: u64 = 0;
     let mut i = 0;
     while i < N {
-        diff |= al[i] ^ bl[i];
+        diff |= lhs_limbs[i] ^ rhs_limbs[i];
         i += 1;
     }
     diff == 0
@@ -61,32 +61,32 @@ mod tests {
     /// limb, and sign-boundary values.
     fn diff_at<const N: usize>(seeds: &[u64]) {
         for &seed in seeds {
-            let mut la = [0u64; N];
-            let mut s = seed;
-            for limb in la.iter_mut() {
-                s = s.wrapping_add(0x9E37_79B9_7F4A_7C15);
-                let mut z = s;
+            let mut a_limbs = [0u64; N];
+            let mut state = seed;
+            for limb in a_limbs.iter_mut() {
+                state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+                let mut z = state;
                 z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
                 z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
                 *limb = z ^ (z >> 31);
             }
-            let a = Int::<N>::from_limbs(la);
+            let a = Int::<N>::from_limbs(a_limbs);
 
             // equal to itself
             assert_eq!(eq_xor_fold::<N>(a, a), eq_limbwise::<N>(a, a));
             assert!(eq_xor_fold::<N>(a, a));
 
             // differ in the bottom limb
-            let mut lb = la;
-            lb[0] ^= 1;
-            let b = Int::<N>::from_limbs(lb);
+            let mut b_limbs = a_limbs;
+            b_limbs[0] ^= 1;
+            let b = Int::<N>::from_limbs(b_limbs);
             assert_eq!(eq_xor_fold::<N>(a, b), eq_limbwise::<N>(a, b));
             assert!(!eq_xor_fold::<N>(a, b));
 
             // differ in the top limb
-            let mut lc = la;
-            lc[N - 1] ^= 1 << 63;
-            let c = Int::<N>::from_limbs(lc);
+            let mut c_limbs = a_limbs;
+            c_limbs[N - 1] ^= 1 << 63;
+            let c = Int::<N>::from_limbs(c_limbs);
             assert_eq!(eq_xor_fold::<N>(a, c), eq_limbwise::<N>(a, c));
             assert!(!eq_xor_fold::<N>(a, c));
         }

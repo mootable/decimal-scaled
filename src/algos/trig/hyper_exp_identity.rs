@@ -10,11 +10,11 @@
 //! magnitude more:
 //!
 //! ```text
-//! ex  = exp(v)
-//! enx = 1 / ex              (exp(-v) identity)
-//! sinh = (ex - enx) / 2
-//! cosh = (ex + enx) / 2
-//! tanh = (ex - enx) / (ex + enx)
+//! exp_x     = exp(working_value)
+//! exp_neg_x = 1 / exp_x                     (the exp(-x) identity)
+//! sinh = (exp_x - exp_neg_x) / 2
+//! cosh = (exp_x + exp_neg_x) / 2
+//! tanh = (exp_x - exp_neg_x) / (exp_x + exp_neg_x)
 //! ```
 //!
 //! ## Layering
@@ -44,20 +44,20 @@ use crate::support::rounding::RoundingMode;
 /// is the tier's Tang table size, `IE` its `INTERNAL_EXTRA` flag.
 #[inline]
 fn ex_enx_agm<C: WideTrigCore, const M: u32, const IE: bool>(
-    v: C::Wagm,
-    w: u32,
+    working_value: C::Wagm,
+    working_scale: u32,
 ) -> (C::Wagm, C::Wagm)
 where
     <C::Wagm as BigInt>::Scratch: ComputeLimbs,
 {
-    let ex = tang_exp_fixed_g::<C::Wagm, M, IE>(v, w, |ww| {
+    let exp_x = tang_exp_fixed_g::<C::Wagm, M, IE>(working_value, working_scale, |ln2_scale| {
         crate::consts::ln2_by_working_scale::<C::Wagm>(
-            ww,
+            ln2_scale,
             crate::support::rounding::DEFAULT_ROUNDING_MODE,
         )
     });
-    let enx = eg::div::<C::Wagm>(eg::one::<C::Wagm>(w), ex, w);
-    (ex, enx)
+    let exp_neg_x = eg::div::<C::Wagm>(eg::one::<C::Wagm>(working_scale), exp_x, working_scale);
+    (exp_x, exp_neg_x)
 }
 
 /// `sinh_strict` for a wide tier — generic over the tier `C`, the band's
@@ -79,20 +79,20 @@ where
     <C::Wagm as BigInt>::Scratch: ComputeLimbs,
     <C::Wexp as BigInt>::Scratch: ComputeLimbs,
 {
-    let w = SCALE + GUARD;
-    let v = C::to_work_scaled_agm(raw, GUARD);
-    let (ex, enx) = ex_enx_agm::<C, M, IE>(v, w);
-    let r = (ex - enx) / eg::lit::<C::Wagm>(2);
+    let working_scale = SCALE + GUARD;
+    let working_value = C::to_work_scaled_agm(raw, GUARD);
+    let (exp_x, exp_neg_x) = ex_enx_agm::<C, M, IE>(working_value, working_scale);
+    let sinh_value = (exp_x - exp_neg_x) / eg::lit::<C::Wagm>(2);
     // Near-tie escape — see `wide_trig_core::tan_series` / the asin(3e-60)
-    // family: a fixed-w single shot cannot see a deciding digit below w.
-    // Clear-of-band residuals keep the single-shot cost; the band falls to
-    // the Ziv-escalating generic kernel (rare).
+    // family: a fixed-working-scale single shot cannot see a deciding digit
+    // below the working scale. Clear-of-band residuals keep the single-shot
+    // cost; the band falls to the Ziv-escalating generic kernel (rare).
     match crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<
         C::Storage,
         C::Wagm,
-    >(r, w, SCALE, mode, C::storage_max(), C::storage_min())
+    >(sinh_value, working_scale, SCALE, mode, C::storage_max(), C::storage_min())
     {
-        Some(st) => st,
+        Some(rounded) => rounded,
         None => crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<C, SCALE>(raw, mode),
     }
 }
@@ -130,11 +130,11 @@ where
         mode,
         C::storage_max(),
         C::storage_min(),
-        |guard| {
-            let w = SCALE + guard;
-            let v = C::to_work_scaled_agm(raw, guard);
-            let (ex, enx) = ex_enx_agm::<C, M, IE>(v, w);
-            (ex + enx) / eg::lit::<C::Wagm>(2)
+        |guard_digits| {
+            let working_scale = SCALE + guard_digits;
+            let working_value = C::to_work_scaled_agm(raw, guard_digits);
+            let (exp_x, exp_neg_x) = ex_enx_agm::<C, M, IE>(working_value, working_scale);
+            (exp_x + exp_neg_x) / eg::lit::<C::Wagm>(2)
         },
     )
 }
@@ -166,10 +166,10 @@ where
 {
     let zero = C::storage_zero();
     if raw != zero {
-        let thresh_exp = SCALE - SCALE.div_ceil(3);
-        let thresh = <C::Storage as BigInt>::TEN.pow(thresh_exp);
+        let threshold_exponent = SCALE - SCALE.div_ceil(3);
+        let threshold = <C::Storage as BigInt>::TEN.pow(threshold_exponent);
         let abs_raw = if raw < zero { -raw } else { raw };
-        if abs_raw <= thresh {
+        if abs_raw <= threshold {
             // `ZeroFiveUp`'s pivot digit; `abs_raw` is already `|raw|`.
             let raw_mod_10 = abs_raw.div_rem(<C::Storage as BigInt>::TEN).1.to_i128() as u8;
             return crate::support::rounding::tiny_odd_compressing_directed(
@@ -184,20 +184,20 @@ where
     // General path: outside the tiny band the kernel error is far below
     // half a storage ULP, so a single narrowing is correctly rounded for
     // every mode.
-    let w = SCALE + GUARD;
-    let v = C::to_work_scaled_agm(raw, GUARD);
-    let (ex, enx) = ex_enx_agm::<C, M, IE>(v, w);
-    let r = eg::div::<C::Wagm>(ex - enx, ex + enx, w);
+    let working_scale = SCALE + GUARD;
+    let working_value = C::to_work_scaled_agm(raw, GUARD);
+    let (exp_x, exp_neg_x) = ex_enx_agm::<C, M, IE>(working_value, working_scale);
+    let tanh_value = eg::div::<C::Wagm>(exp_x - exp_neg_x, exp_x + exp_neg_x, working_scale);
     // Near-tie escape — see `wide_trig_core::tan_series` / the asin(3e-60)
-    // family: a fixed-w single shot cannot see a deciding digit below w.
-    // Clear-of-band residuals keep the single-shot cost; the band falls to
-    // the Ziv-escalating generic kernel (rare).
+    // family: a fixed-working-scale single shot cannot see a deciding digit
+    // below the working scale. Clear-of-band residuals keep the single-shot
+    // cost; the band falls to the Ziv-escalating generic kernel (rare).
     match crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<
         C::Storage,
         C::Wagm,
-    >(r, w, SCALE, mode, C::storage_max(), C::storage_min())
+    >(tanh_value, working_scale, SCALE, mode, C::storage_max(), C::storage_min())
     {
-        Some(st) => st,
+        Some(rounded) => rounded,
         None => crate::algos::trig::hyper_schoolbook::tanh_schoolbook::<C, SCALE>(raw, mode),
     }
 }

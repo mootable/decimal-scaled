@@ -65,50 +65,50 @@ use crate::support::rounding::RoundingMode;
 
 /// The single half-step round + sign reattachment, factored out so both
 /// candidates share `cbrt_native`'s exact logic verbatim. Given the floor
-/// cube root `q = ⌊∛n⌋` (in `Int<W>`), the radicand `n`, the input sign and
+/// cube `root` (`⌊∛n⌋` in `Int<W>`), the `radicand`, the input sign and
 /// the rounding mode, returns the rounded, signed, narrowed `Int<N>`.
 #[inline]
 fn round_and_narrow<const N: usize, const W: usize>(
-    q: Int<W>,
-    n: Int<W>,
-    negative: bool,
+    root: Int<W>,
+    radicand: Int<W>,
+    is_negative: bool,
     mode: RoundingMode,
 ) -> Int<N> {
     let zero = Int::<W>::ZERO;
     let one = Int::<W>::ONE;
-    let eight_n = n << 3u32;
-    let t = q + q + one;
-    let cube = t * t * t;
-    let halfway_geq = eight_n >= cube;
-    let halfway_gt = eight_n > cube;
+    let eight_radicand = radicand << 3u32;
+    let doubled_midpoint = root + root + one;
+    let cube = doubled_midpoint * doubled_midpoint * doubled_midpoint;
+    let halfway_geq = eight_radicand >= cube;
+    let halfway_gt = eight_radicand > cube;
     let tie = halfway_geq && !halfway_gt;
-    let two_q = q + q;
-    let eight_q_cubed = if q == zero { zero } else { two_q * two_q * two_q };
-    let residual_nonzero = eight_n > eight_q_cubed;
-    // Last decimal digit of the (non-negative) root magnitude `q`.
-    let q_mod_10 = (q % Int::<W>::TEN).as_i128() as u8;
+    let two_root = root + root;
+    let eight_root_cubed = if root == zero { zero } else { two_root * two_root * two_root };
+    let residual_nonzero = eight_radicand > eight_root_cubed;
+    // Last decimal digit of the (non-negative) root magnitude `root`.
+    let root_mod_10 = (root % Int::<W>::TEN).as_i128() as u8;
     let bump = match mode {
-        RoundingMode::HalfToEven => halfway_gt || (tie && q_mod_10 & 1 == 1),
+        RoundingMode::HalfToEven => halfway_gt || (tie && root_mod_10 & 1 == 1),
         RoundingMode::HalfAwayFromZero => halfway_geq,
         RoundingMode::HalfTowardZero => halfway_gt,
         RoundingMode::Trunc => false,
-        RoundingMode::Floor => negative && residual_nonzero,
-        RoundingMode::Ceiling => !negative && residual_nonzero,
-        // `q` is the magnitude, so away-from-zero is a bump either sign.
+        RoundingMode::Floor => is_negative && residual_nonzero,
+        RoundingMode::Ceiling => !is_negative && residual_nonzero,
+        // `root` is the magnitude, so away-from-zero is a bump either sign.
         RoundingMode::AwayFromZero => residual_nonzero,
-        RoundingMode::ZeroFiveUp => residual_nonzero && matches!(q_mod_10, 0 | 5),
+        RoundingMode::ZeroFiveUp => residual_nonzero && matches!(root_mod_10, 0 | 5),
     };
-    let q = if bump { q + one } else { q };
-    let signed = if negative { -q } else { q };
-    signed.resize_to::<Int<N>>()
+    let root = if bump { root + one } else { root };
+    let signed_root = if is_negative { -root } else { root };
+    signed_root.resize_to::<Int<N>>()
 }
 
 // ── candidate A: full-radicand f64::cbrt seed ────────
 
 /// `⌊∛n⌋` over `Int<W>`, seeded from the **full** radicand via
-/// `n.as_f64().cbrt()`. Caller MUST
-/// guarantee `n` is within the `f64` range (`bit_length ≲ 1023`); the
-/// `cbrt_native_fast_a` entry guards this and falls back otherwise.
+/// `as_f64().cbrt()`. Caller MUST
+/// guarantee the `radicand` is within the `f64` range (`bit_length ≲ 1023`);
+/// the `cbrt_native_fast_a` entry guards this and falls back otherwise.
 ///
 /// `as_f64` keeps 53 mantissa bits and `f64::cbrt` is correctly rounded, so
 /// `seed` sits within ~2⁻⁵² *relative* of `∛n` — it may under- OR
@@ -118,18 +118,18 @@ fn round_and_narrow<const N: usize, const W: usize>(
 /// kernel's fixed point.
 #[cfg(feature = "std")]
 #[inline]
-fn icbrt_w_f64_full<const W: usize>(n: Int<W>) -> Int<W> {
-    let seed_f64 = crate::algo_x_support::seed::cbrt_seed_f64_full(n.as_f64());
+fn icbrt_w_f64_full<const W: usize>(radicand: Int<W>) -> Int<W> {
+    let seed_f64 = crate::algo_x_support::seed::cbrt_seed_f64_full(radicand.as_f64());
     let seed = Int::<W>::from_f64(seed_f64);
     let x0 = if seed <= Int::<W>::ZERO { Int::<W>::ONE } else { seed };
     let three = Int::<W>::from_i128(3);
     // Unconditional first Newton step: lifts any positive seed to ≥ ⌈∛n⌉.
-    let mut x = (x0 + x0 + n / (x0 * x0)) / three;
+    let mut x = (x0 + x0 + radicand / (x0 * x0)) / three;
     if x <= Int::<W>::ZERO {
         x = Int::<W>::ONE;
     }
     loop {
-        let y = (x + x + n / (x * x)) / three;
+        let y = (x + x + radicand / (x * x)) / three;
         if y >= x {
             break x;
         }
@@ -142,17 +142,17 @@ fn icbrt_w_f64_full<const W: usize>(n: Int<W>) -> Int<W> {
 /// [`crate::algo_x_support::seed::cbrt_seed`]). Used by candidate A when the
 /// radicand would overflow `f64`, and is the whole no_std body.
 #[inline]
-fn icbrt_w_shipped_seed<const W: usize>(n: Int<W>) -> Int<W> {
-    let bits = n.bit_length();
-    let mag = n.unsigned_abs();
+fn icbrt_w_shipped_seed<const W: usize>(radicand: Int<W>) -> Int<W> {
+    let bits = radicand.bit_length();
+    let magnitude = radicand.unsigned_abs();
     let mut seed_limbs = [0u64; W];
-    crate::algo_x_support::seed::cbrt_seed(mag.as_limbs(), bits, &mut seed_limbs);
+    crate::algo_x_support::seed::cbrt_seed(magnitude.as_limbs(), bits, &mut seed_limbs);
     let x0 = Int::<W>::from_mag_limbs(&seed_limbs, false);
     let x0 = if x0 <= Int::<W>::ZERO { Int::<W>::ONE } else { x0 };
     let three = Int::<W>::from_i128(3);
     let mut x = x0;
     loop {
-        let y = (x + x + n / (x * x)) / three;
+        let y = (x + x + radicand / (x * x)) / three;
         if y >= x {
             break x;
         }
@@ -176,24 +176,24 @@ pub(crate) fn cbrt_native_fast_a<const N: usize, const W: usize>(
     }
     let zero = Int::<W>::ZERO;
     let widened: Int<W> = raw.resize_to::<Int<W>>();
-    let negative = widened < zero;
-    let mag = if negative { -widened } else { widened };
-    let n: Int<W> = mag * pow10_2scale;
+    let is_negative = widened < zero;
+    let magnitude = if is_negative { -widened } else { widened };
+    let radicand: Int<W> = magnitude * pow10_2scale;
 
     // `f64::cbrt` seed only when the radicand is inside the f64 range
     // (`as_f64` would otherwise saturate to ±inf → a degenerate seed). The
     // D57<20> radicand (≤ 10^97 ≈ 322 bits) always passes; the wider cells
     // pass for all but their largest magnitudes, which fall back cleanly.
     #[cfg(feature = "std")]
-    let q = if n.bit_length() <= 1020 {
-        icbrt_w_f64_full::<W>(n)
+    let root = if radicand.bit_length() <= 1020 {
+        icbrt_w_f64_full::<W>(radicand)
     } else {
-        icbrt_w_shipped_seed::<W>(n)
+        icbrt_w_shipped_seed::<W>(radicand)
     };
     #[cfg(not(feature = "std"))]
-    let q = icbrt_w_shipped_seed::<W>(n);
+    let root = icbrt_w_shipped_seed::<W>(radicand);
 
-    round_and_narrow::<N, W>(q, n, negative, mode)
+    round_and_narrow::<N, W>(root, radicand, is_negative, mode)
 }
 
 // ── candidate B: width-safe top-bits seed with exact 2^(r/3) residue ────
@@ -212,22 +212,22 @@ pub(crate) fn cbrt_native_fast_a<const N: usize, const W: usize>(
 /// `⌊∛n⌋`. The unconditional pre-step (one redundant Newton step from a
 /// guaranteed over-estimate) is retained to keep candidate B's loop shape.
 #[inline]
-fn icbrt_w_tight_topbits<const W: usize>(n: Int<W>) -> Int<W> {
-    let bits = n.bit_length();
-    let mag = n.unsigned_abs();
+fn icbrt_w_tight_topbits<const W: usize>(radicand: Int<W>) -> Int<W> {
+    let bits = radicand.bit_length();
+    let magnitude = radicand.unsigned_abs();
     let mut seed_limbs = [0u64; W];
-    crate::algo_x_support::seed::cbrt_seed(mag.as_limbs(), bits, &mut seed_limbs);
+    crate::algo_x_support::seed::cbrt_seed(magnitude.as_limbs(), bits, &mut seed_limbs);
     let x0 = Int::<W>::from_mag_limbs(&seed_limbs, false);
     let x0 = if x0 <= Int::<W>::ZERO { Int::<W>::ONE } else { x0 };
     let three = Int::<W>::from_i128(3);
     // Unconditional pre-step: AM-GM lifts any positive seed to ≥ ⌈∛n⌉, so a
     // mild under-shoot from the tighter seed is corrected before the loop.
-    let mut x = (x0 + x0 + n / (x0 * x0)) / three;
+    let mut x = (x0 + x0 + radicand / (x0 * x0)) / three;
     if x <= Int::<W>::ZERO {
         x = Int::<W>::ONE;
     }
     loop {
-        let y = (x + x + n / (x * x)) / three;
+        let y = (x + x + radicand / (x * x)) / three;
         if y >= x {
             break x;
         }
@@ -250,21 +250,21 @@ pub(crate) fn cbrt_native_fast_b<const N: usize, const W: usize>(
     }
     let zero = Int::<W>::ZERO;
     let widened: Int<W> = raw.resize_to::<Int<W>>();
-    let negative = widened < zero;
-    let mag = if negative { -widened } else { widened };
-    let n: Int<W> = mag * pow10_2scale;
+    let is_negative = widened < zero;
+    let magnitude = if is_negative { -widened } else { widened };
+    let radicand: Int<W> = magnitude * pow10_2scale;
 
     // The seed library is std/no_std-agnostic (it cfg-swaps internally), so
     // a single call covers both builds — no per-build kernel split.
-    let q = icbrt_w_tight_topbits::<W>(n);
+    let root = icbrt_w_tight_topbits::<W>(radicand);
 
-    round_and_narrow::<N, W>(q, n, negative, mode)
+    round_and_narrow::<N, W>(root, radicand, is_negative, mode)
 }
 
 // ── bit-identity test (NOT run here — run by the full suite) ───────
 
 // Same gating rationale as `cbrt_native`'s test module: these candidates run
-// Newton in a wide work `Int<W>`, whose `n / (x·x)` build-max Knuth-divide
+// Newton in a wide work `Int<W>`, whose `radicand / (x·x)` build-max Knuth-divide
 // scratch (`4·MAX_WORK_N + 2` u64) only covers `W` once a wide tier raises
 // MAX_WORK_N to 16. Each test/case is gated to exactly the `dNN` tier whose
 // storage width it instantiates; the module guard is the precise union of
@@ -303,27 +303,27 @@ mod tests {
     /// every routed cell, sign, and rounding mode. Matching it certifies the
     /// candidate seeds change only the divide count, never the result.
     fn check_cell<const N: usize, const W: usize>(scale: u32, raws: &[i128]) {
-        let pow = Int::<W>::TEN.pow(2 * scale);
-        for &r in raws {
-            let raw = Int::<N>::from_i128(r);
+        let pow10_2scale = Int::<W>::TEN.pow(2 * scale);
+        for &raw_value in raws {
+            let raw = Int::<N>::from_i128(raw_value);
             for mode in ALL_MODES {
-                let want = cbrt_native::<N, W>(raw, pow, mode);
-                let got_a = cbrt_native_fast_a::<N, W>(raw, pow, mode);
-                let got_b = cbrt_native_fast_b::<N, W>(raw, pow, mode);
-                assert_eq!(got_a, want, "A: N={N} W={W} scale={scale} raw={r} mode={mode:?}");
-                assert_eq!(got_b, want, "B: N={N} W={W} scale={scale} raw={r} mode={mode:?}");
+                let want = cbrt_native::<N, W>(raw, pow10_2scale, mode);
+                let got_a = cbrt_native_fast_a::<N, W>(raw, pow10_2scale, mode);
+                let got_b = cbrt_native_fast_b::<N, W>(raw, pow10_2scale, mode);
+                assert_eq!(got_a, want, "A: N={N} W={W} scale={scale} raw={raw_value} mode={mode:?}");
+                assert_eq!(got_b, want, "B: N={N} W={W} scale={scale} raw={raw_value} mode={mode:?}");
             }
         }
     }
 
     /// Near-storage-max radicand at each native cell (widest `mag·10^(2·SCALE)`).
-    fn near_max<const N: usize>(neg: bool) -> Int<N> {
-        let mut mag = [0u64; N];
-        for m in mag.iter_mut() {
-            *m = u64::MAX;
+    fn near_max<const N: usize>(is_negative: bool) -> Int<N> {
+        let mut magnitude = [0u64; N];
+        for limb in magnitude.iter_mut() {
+            *limb = u64::MAX;
         }
-        mag[N - 1] = u64::MAX >> 1;
-        Int::<N>::from_mag_limbs(&mag, neg)
+        magnitude[N - 1] = u64::MAX >> 1;
+        Int::<N>::from_mag_limbs(&magnitude, is_negative)
     }
 
     // D57 storage (N=3), work `Int<6>`.
@@ -400,15 +400,15 @@ mod tests {
     ))]
     #[test]
     fn fast_a_routed_3n_widths_near_max() {
-        for &neg in &[false, true] {
+        for &is_negative in &[false, true] {
             for mode in ALL_MODES {
                 macro_rules! chk {
                     ($n:literal, $w:literal, $($s:literal),+) => {{
                         $(
-                            let pow = Int::<$w>::TEN.pow(2 * $s);
-                            let raw = near_max::<$n>(neg);
-                            let want = cbrt_native::<$n, $w>(raw, pow, mode);
-                            assert_eq!(cbrt_native_fast_a::<$n, $w>(raw, pow, mode), want, "A 3N N={} W={} s={} neg={neg} mode={mode:?}", $n, $w, $s);
+                            let pow10_2scale = Int::<$w>::TEN.pow(2 * $s);
+                            let raw = near_max::<$n>(is_negative);
+                            let want = cbrt_native::<$n, $w>(raw, pow10_2scale, mode);
+                            assert_eq!(cbrt_native_fast_a::<$n, $w>(raw, pow10_2scale, mode), want, "A 3N N={} W={} s={} neg={is_negative} mode={mode:?}", $n, $w, $s);
                         )+
                     }};
                 }
@@ -426,15 +426,15 @@ mod tests {
 
     #[test]
     fn fast_candidates_match_native_near_max_all_cells() {
-        for &neg in &[false, true] {
+        for &is_negative in &[false, true] {
             for mode in ALL_MODES {
                 macro_rules! chk {
                     ($n:literal, $w:literal, $s:literal) => {{
-                        let pow = Int::<$w>::TEN.pow(2 * $s);
-                        let raw = near_max::<$n>(neg);
-                        let want = cbrt_native::<$n, $w>(raw, pow, mode);
-                        assert_eq!(cbrt_native_fast_a::<$n, $w>(raw, pow, mode), want, "A near_max N={} neg={neg} mode={mode:?}", $n);
-                        assert_eq!(cbrt_native_fast_b::<$n, $w>(raw, pow, mode), want, "B near_max N={} neg={neg} mode={mode:?}", $n);
+                        let pow10_2scale = Int::<$w>::TEN.pow(2 * $s);
+                        let raw = near_max::<$n>(is_negative);
+                        let want = cbrt_native::<$n, $w>(raw, pow10_2scale, mode);
+                        assert_eq!(cbrt_native_fast_a::<$n, $w>(raw, pow10_2scale, mode), want, "A near_max N={} neg={is_negative} mode={mode:?}", $n);
+                        assert_eq!(cbrt_native_fast_b::<$n, $w>(raw, pow10_2scale, mode), want, "B near_max N={} neg={is_negative} mode={mode:?}", $n);
                     }};
                 }
                 #[cfg(feature = "d57")]

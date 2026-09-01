@@ -6,8 +6,8 @@
 //! limbs.
 //!
 //! For a `D<Int<N>, SCALE>` value with raw storage `r`, the cube-root raw
-//! storage is `round(cbrt(r) · 10^SCALE)`; working with
-//! `n = |r| · 10^(2·SCALE)` keeps the radicand exact, takes the floor cube
+//! storage is `round(cbrt(r) · 10^SCALE)`; working with the radicand
+//! `|r| · 10^(2·SCALE)` keeps it exact, takes the floor cube
 //! root via the int layer's width-agnostic slice kernel
 //! ([`crate::int::algos::icbrt::icbrt_newton::icbrt_newton`]), and a single
 //! half-step lands the result on the type's last place (within 0.5 ULP under
@@ -31,59 +31,59 @@ use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
-/// Significant limb length of `a` (index of the highest non-zero limb + 1),
-/// clamped to at least 1.
+/// Significant limb length of `limbs` (index of the highest non-zero limb
+/// + 1), clamped to at least 1.
 #[inline]
-fn sig_len(a: &[u64]) -> usize {
-    let mut l = a.len();
-    while l > 1 && a[l - 1] == 0 {
-        l -= 1;
-    }
-    l
-}
-
-/// `dst[..len] = src[..src_len] * 10^pow`, returning the new significant
-/// length. `dst` must be wide enough for the result.
-#[inline]
-fn mul_pow10_into<const N: usize>(src: &[u64], pow: u32, dst: &mut [u64]) -> usize
-where
-    Limbs<N>: ComputeLimbs,
-{
-    let s = sig_len(src);
-    dst[..s].copy_from_slice(&src[..s]);
-    let mut len = s;
-    let mut tmp_buf = Limbs::<N>::quad_buffered_u64();
-    let tmp = tmp_buf.as_mut();
-    for _ in 0..pow {
-        let out = len + 1;
-        for t in tmp[..out].iter_mut() {
-            *t = 0;
-        }
-        mul_slice(&dst[..len], &[10u64], &mut tmp[..out]);
-        dst[..out].copy_from_slice(&tmp[..out]);
-        len = sig_len(&dst[..out]);
+fn sig_len(limbs: &[u64]) -> usize {
+    let mut len = limbs.len();
+    while len > 1 && limbs[len - 1] == 0 {
+        len -= 1;
     }
     len
 }
 
-/// `out[..2*la] = a[..la]³` (cube via two schoolbook multiplies), returning
-/// the cube's significant length.
+/// `dst[..len] = src[..src_len] * 10^exponent`, returning the new significant
+/// length. `dst` must be wide enough for the result.
 #[inline]
-fn cube_into<const N: usize>(a: &[u64], la: usize, out: &mut [u64]) -> usize
+fn mul_pow10_into<const N: usize>(src: &[u64], exponent: u32, dst: &mut [u64]) -> usize
 where
     Limbs<N>: ComputeLimbs,
 {
-    let mut sq_buf = Limbs::<N>::quad_buffered_u64();
-    let sq = sq_buf.as_mut();
-    let sq_cap = sq.len();
-    let sq_len = (2 * la).min(sq_cap);
-    mul_slice(&a[..la], &a[..la], &mut sq[..sq_len]);
-    let sq_sig = sig_len(&sq[..sq_len]);
-    let out_len = (sq_sig + la).min(sq_cap);
-    for o in out[..out_len].iter_mut() {
-        *o = 0;
+    let src_len = sig_len(src);
+    dst[..src_len].copy_from_slice(&src[..src_len]);
+    let mut len = src_len;
+    let mut product_buf = Limbs::<N>::quad_buffered_u64();
+    let product = product_buf.as_mut();
+    for _ in 0..exponent {
+        let product_len = len + 1;
+        for limb in product[..product_len].iter_mut() {
+            *limb = 0;
+        }
+        mul_slice(&dst[..len], &[10u64], &mut product[..product_len]);
+        dst[..product_len].copy_from_slice(&product[..product_len]);
+        len = sig_len(&dst[..product_len]);
     }
-    mul_slice(&sq[..sq_sig], &a[..la], &mut out[..out_len]);
+    len
+}
+
+/// `out[..2*base_len] = base[..base_len]³` (cube via two schoolbook
+/// multiplies), returning the cube's significant length.
+#[inline]
+fn cube_into<const N: usize>(base: &[u64], base_len: usize, out: &mut [u64]) -> usize
+where
+    Limbs<N>: ComputeLimbs,
+{
+    let mut square_buf = Limbs::<N>::quad_buffered_u64();
+    let square = square_buf.as_mut();
+    let square_cap = square.len();
+    let square_len = (2 * base_len).min(square_cap);
+    mul_slice(&base[..base_len], &base[..base_len], &mut square[..square_len]);
+    let square_sig_len = sig_len(&square[..square_len]);
+    let out_len = (square_sig_len + base_len).min(square_cap);
+    for limb in out[..out_len].iter_mut() {
+        *limb = 0;
+    }
+    mul_slice(&square[..square_sig_len], &base[..base_len], &mut out[..out_len]);
     sig_len(&out[..out_len])
 }
 
@@ -98,86 +98,89 @@ where
     if raw == Int::<N>::ZERO {
         return Int::<N>::ZERO;
     }
-    let negative = raw.is_negative();
+    let is_negative = raw.is_negative();
 
-    // ── radicand n = |raw| · 10^(2·scale) ───────────────────────────────
-    let mut n_buf = Limbs::<N>::quad_buffered_u64();
-    let n = n_buf.as_mut();
-    let nl = mul_pow10_into::<N>(raw.unsigned_abs().as_limbs(), 2 * scale, n);
+    // ── radicand = |raw| · 10^(2·scale) ─────────────────────────────────
+    let mut radicand_buf = Limbs::<N>::quad_buffered_u64();
+    let radicand = radicand_buf.as_mut();
+    let radicand_len =
+        mul_pow10_into::<N>(raw.unsigned_abs().as_limbs(), 2 * scale, radicand);
 
-    // ── q = floor(cbrt(n)) via the int slice kernel ─────────────────────
-    let mut q_buf = Limbs::<N>::quad_buffered_u64();
-    let q = q_buf.as_mut();
-    icbrt_newton(&n[..nl], &mut q[..nl]);
-    let ql = sig_len(&q[..nl]);
+    // ── root = floor(cbrt(radicand)) via the int slice kernel ───────────
+    let mut root_buf = Limbs::<N>::quad_buffered_u64();
+    let root = root_buf.as_mut();
+    icbrt_newton(&radicand[..radicand_len], &mut root[..radicand_len]);
+    let root_len = sig_len(&root[..radicand_len]);
 
     // ── single half-step round (all six modes), via cube comparisons ────
-    // eight_n = 8n
-    let mut eight_n_buf = Limbs::<N>::quad_buffered_u64();
-    let eight_n = eight_n_buf.as_mut();
-    shl(&n[..nl], 3, &mut eight_n[..nl + 1]);
-    let en_len = sig_len(&eight_n[..nl + 1]);
+    // eight_radicand = 8·radicand
+    let mut eight_radicand_buf = Limbs::<N>::quad_buffered_u64();
+    let eight_radicand = eight_radicand_buf.as_mut();
+    shl(&radicand[..radicand_len], 3, &mut eight_radicand[..radicand_len + 1]);
+    let eight_radicand_len = sig_len(&eight_radicand[..radicand_len + 1]);
 
-    // t = 2q + 1; cube = t³
-    let mut t_buf = Limbs::<N>::quad_buffered_u64();
-    let t = t_buf.as_mut();
-    shl(&q[..ql], 1, &mut t[..ql + 1]);
+    // doubled_midpoint = 2·root + 1; cube = doubled_midpoint³
+    let mut doubled_midpoint_buf = Limbs::<N>::quad_buffered_u64();
+    let doubled_midpoint = doubled_midpoint_buf.as_mut();
+    shl(&root[..root_len], 1, &mut doubled_midpoint[..root_len + 1]);
     // +1
     {
         let mut i = 0;
         loop {
-            let (v, c) = t[i].overflowing_add(1);
-            t[i] = v;
-            if !c {
+            let (sum, carry) = doubled_midpoint[i].overflowing_add(1);
+            doubled_midpoint[i] = sum;
+            if !carry {
                 break;
             }
             i += 1;
         }
     }
-    let tl = sig_len(&t[..ql + 1]);
+    let doubled_midpoint_len = sig_len(&doubled_midpoint[..root_len + 1]);
     let mut cube_buf = Limbs::<N>::quad_buffered_u64();
     let cube = cube_buf.as_mut();
-    let cube_len = cube_into::<N>(t, tl, cube);
+    let cube_len = cube_into::<N>(doubled_midpoint, doubled_midpoint_len, cube);
 
-    // eight_q_cubed = (2q)³  (0 when q == 0)
-    let mut two_q_buf = Limbs::<N>::quad_buffered_u64();
-    let two_q = two_q_buf.as_mut();
-    shl(&q[..ql], 1, &mut two_q[..ql + 1]);
-    let tql = sig_len(&two_q[..ql + 1]);
-    let mut eight_q_cubed_buf = Limbs::<N>::quad_buffered_u64();
-    let eight_q_cubed = eight_q_cubed_buf.as_mut();
-    let eqc_len = if ql == 1 && q[0] == 0 {
-        eight_q_cubed[0] = 0;
+    // eight_root_cubed = (2·root)³  (0 when root == 0)
+    let mut two_root_buf = Limbs::<N>::quad_buffered_u64();
+    let two_root = two_root_buf.as_mut();
+    shl(&root[..root_len], 1, &mut two_root[..root_len + 1]);
+    let two_root_len = sig_len(&two_root[..root_len + 1]);
+    let mut eight_root_cubed_buf = Limbs::<N>::quad_buffered_u64();
+    let eight_root_cubed = eight_root_cubed_buf.as_mut();
+    let eight_root_cubed_len = if root_len == 1 && root[0] == 0 {
+        eight_root_cubed[0] = 0;
         1
     } else {
-        cube_into::<N>(two_q, tql, eight_q_cubed)
+        cube_into::<N>(two_root, two_root_len, eight_root_cubed)
     };
 
-    let cmp_cube = cmp_cross(&eight_n[..en_len], &cube[..cube_len]);
+    let cmp_cube = cmp_cross(&eight_radicand[..eight_radicand_len], &cube[..cube_len]);
     let halfway_geq = cmp_cube >= 0;
     let halfway_gt = cmp_cube > 0;
     let tie = halfway_geq && !halfway_gt;
-    let residual_nonzero = cmp_cross(&eight_n[..en_len], &eight_q_cubed[..eqc_len]) > 0;
-    // Last decimal digit of the root magnitude, which spans `ql` limbs —
+    let residual_nonzero = cmp_cross(
+        &eight_radicand[..eight_radicand_len],
+        &eight_root_cubed[..eight_root_cubed_len]) > 0;
+    // Last decimal digit of the root magnitude, which spans `root_len` limbs —
     // the low limb alone cannot carry it.
-    let q_mod_10 = crate::support::rounding::limbs_mod_10(&q[..ql]);
+    let root_mod_10 = crate::support::rounding::limbs_mod_10(&root[..root_len]);
     let bump = match mode {
-        RoundingMode::HalfToEven => halfway_gt || (tie && q_mod_10 & 1 == 1),
+        RoundingMode::HalfToEven => halfway_gt || (tie && root_mod_10 & 1 == 1),
         RoundingMode::HalfAwayFromZero => halfway_geq,
         RoundingMode::HalfTowardZero => halfway_gt,
         RoundingMode::Trunc => false,
-        RoundingMode::Floor => negative && residual_nonzero,
-        RoundingMode::Ceiling => !negative && residual_nonzero,
-        // `q` is the magnitude, so away-from-zero is a bump either sign.
+        RoundingMode::Floor => is_negative && residual_nonzero,
+        RoundingMode::Ceiling => !is_negative && residual_nonzero,
+        // `root` is the magnitude, so away-from-zero is a bump either sign.
         RoundingMode::AwayFromZero => residual_nonzero,
-        RoundingMode::ZeroFiveUp => residual_nonzero && matches!(q_mod_10, 0 | 5),
+        RoundingMode::ZeroFiveUp => residual_nonzero && matches!(root_mod_10, 0 | 5),
     };
     if bump {
         let mut i = 0;
         loop {
-            let (v, c) = q[i].overflowing_add(1);
-            q[i] = v;
-            if !c {
+            let (sum, carry) = root[i].overflowing_add(1);
+            root[i] = sum;
+            if !carry {
                 break;
             }
             i += 1;
@@ -185,12 +188,12 @@ where
     }
 
     // ── narrow + apply sign ─────────────────────────────────────────────
-    let mut out = [0u64; N];
-    out.copy_from_slice(&q[..N]);
-    let v = Int::<N>::from_limbs(out);
-    if negative {
-        -v
+    let mut root_limbs = [0u64; N];
+    root_limbs.copy_from_slice(&root[..N]);
+    let root_magnitude = Int::<N>::from_limbs(root_limbs);
+    if is_negative {
+        -root_magnitude
     } else {
-        v
+        root_magnitude
     }
 }

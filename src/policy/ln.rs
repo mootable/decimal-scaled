@@ -90,8 +90,8 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
 #[inline]
 fn resolve<const N: usize, const SCALE: u32>(raw: &Int<N>) -> Algorithm {
     match const { select::<N, SCALE>() } {
-        Select::ByAlgorithm(a) => a,
-        Select::ByValue(f) => f(raw),
+        Select::ByAlgorithm(algorithm) => algorithm,
+        Select::ByValue(choose) => choose(raw),
     }
 }
 

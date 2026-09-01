@@ -34,15 +34,15 @@ use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
-/// Significant limb length of `a` (index of the highest non-zero limb + 1),
-/// clamped to at least 1 so zero has length 1.
+/// Significant limb length of `limbs` (index of the highest non-zero limb
+/// + 1), clamped to at least 1 so zero has length 1.
 #[inline]
-fn sig_len(a: &[u64]) -> usize {
-    let mut l = a.len();
-    while l > 1 && a[l - 1] == 0 {
-        l -= 1;
+fn sig_len(limbs: &[u64]) -> usize {
+    let mut len = limbs.len();
+    while len > 1 && limbs[len - 1] == 0 {
+        len -= 1;
     }
-    l
+    len
 }
 
 /// Newton integer square-root kernel, computed in limbs.
@@ -60,46 +60,47 @@ where
         return Int::<N>::ZERO;
     }
 
-    // ── radicand n = |raw| · 10^scale, in limb scratch ──────────────────
-    let mut n_buf = Limbs::<N>::double_buffered_u64();
-    let n = n_buf.as_mut();
-    n[..N].copy_from_slice(raw.unsigned_abs().as_limbs());
-    let mut nl = sig_len(&n[..N]);
+    // ── radicand = |raw| · 10^scale, in limb scratch ────────────────────
+    let mut radicand_buf = Limbs::<N>::double_buffered_u64();
+    let radicand = radicand_buf.as_mut();
+    radicand[..N].copy_from_slice(raw.unsigned_abs().as_limbs());
+    let mut radicand_len = sig_len(&radicand[..N]);
     {
-        let mut tmp_buf = Limbs::<N>::double_buffered_u64();
-        let tmp = tmp_buf.as_mut();
+        let mut product_buf = Limbs::<N>::double_buffered_u64();
+        let product = product_buf.as_mut();
         for _ in 0..scale {
-            let out = nl + 1;
-            for t in tmp[..out].iter_mut() {
-                *t = 0;
+            let product_len = radicand_len + 1;
+            for limb in product[..product_len].iter_mut() {
+                *limb = 0;
             }
-            mul_slice(&n[..nl], &[10u64], &mut tmp[..out]);
-            n[..out].copy_from_slice(&tmp[..out]);
-            nl = sig_len(&n[..out]);
+            mul_slice(&radicand[..radicand_len], &[10u64], &mut product[..product_len]);
+            radicand[..product_len].copy_from_slice(&product[..product_len]);
+            radicand_len = sig_len(&radicand[..product_len]);
         }
     }
 
-    // ── q = floor(sqrt(n)) via the int slice kernel ─────────────────────
-    let mut q_buf = Limbs::<N>::double_buffered_u64();
-    let q = q_buf.as_mut();
-    isqrt_newton(&n[..nl], &mut q[..nl]);
-    let ql = sig_len(&q[..nl]);
+    // ── root = floor(sqrt(radicand)) via the int slice kernel ───────────
+    let mut root_buf = Limbs::<N>::double_buffered_u64();
+    let root = root_buf.as_mut();
+    isqrt_newton(&radicand[..radicand_len], &mut root[..radicand_len]);
+    let root_len = sig_len(&root[..radicand_len]);
 
-    // ── diff = n - q²  (q² ≤ n, so diff fits in nl limbs) ───────────────
-    let mut qsq_buf = Limbs::<N>::double_buffered_u64();
-    let qsq = qsq_buf.as_mut();
-    let qsq_cap = qsq.len();
-    mul_slice(&q[..ql], &q[..ql], &mut qsq[..(2 * ql).min(qsq_cap)]);
+    // ── diff = radicand - root²  (root² ≤ radicand, so diff fits in
+    //    radicand_len limbs) ──────────────────────────────────────────────
+    let mut root_sq_buf = Limbs::<N>::double_buffered_u64();
+    let root_sq = root_sq_buf.as_mut();
+    let root_sq_cap = root_sq.len();
+    mul_slice(&root[..root_len], &root[..root_len], &mut root_sq[..(2 * root_len).min(root_sq_cap)]);
     let mut diff_buf = Limbs::<N>::double_buffered_u64();
     let diff = diff_buf.as_mut();
-    diff[..nl].copy_from_slice(&n[..nl]);
-    sub_assign(&mut diff[..nl], &qsq[..nl]);
+    diff[..radicand_len].copy_from_slice(&radicand[..radicand_len]);
+    sub_assign(&mut diff[..radicand_len], &root_sq[..radicand_len]);
 
     // ── single round step (matches the BigInt-generic kernel exactly) ───
     // halfway_round_up: remainder past the lower root exceeds the root
-    // (diff > q); diff_nonzero: any remainder at all.
-    let halfway_round_up = cmp_cross(&diff[..nl], &q[..ql]) > 0;
-    let diff_nonzero = !is_zero(&diff[..nl]);
+    // (diff > root); diff_nonzero: any remainder at all.
+    let halfway_round_up = cmp_cross(&diff[..radicand_len], &root[..root_len]) > 0;
+    let diff_nonzero = !is_zero(&diff[..radicand_len]);
     let bump = match mode {
         RoundingMode::HalfToEven
         | RoundingMode::HalfAwayFromZero
@@ -114,12 +115,12 @@ where
         }
     };
     if bump {
-        // q += 1 (carry stays within ql+1 limbs).
+        // root += 1 (carry stays within root_len+1 limbs).
         let mut i = 0;
         loop {
-            let (v, c) = q[i].overflowing_add(1);
-            q[i] = v;
-            if !c {
+            let (sum, carry) = root[i].overflowing_add(1);
+            root[i] = sum;
+            if !carry {
                 break;
             }
             i += 1;
@@ -127,7 +128,7 @@ where
     }
 
     // ── narrow the root to Int<N> (positive; fits by construction) ──────
-    let mut out = [0u64; N];
-    out.copy_from_slice(&q[..N]);
-    Int::<N>::from_limbs(out)
+    let mut root_limbs = [0u64; N];
+    root_limbs.copy_from_slice(&root[..N]);
+    Int::<N>::from_limbs(root_limbs)
 }

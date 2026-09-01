@@ -3,8 +3,8 @@
 
 //! Decimal division algorithm family.
 //!
-//! One algorithm: [`div_widen_scale`] — widens `a * 10^SCALE` to the
-//! next-up work width `W` then divides by `b`, rounding under `mode`, with
+//! One algorithm: [`div_widen_scale`] — widens `dividend * 10^SCALE` to the
+//! next-up work width `W` then divides by `divisor`, rounding under `mode`, with
 //! a value-gated fast path that skips the widen step when the scaled
 //! numerator provably fits the storage width. The per-`(N, SCALE)` choice
 //! lives in [`crate::policy::div`], which delegates *down* to this kernel.

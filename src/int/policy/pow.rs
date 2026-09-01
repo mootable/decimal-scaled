@@ -124,7 +124,7 @@ const fn select<const N: usize>() -> Select<N> {
 #[inline]
 pub(crate) const fn dispatch<const N: usize>(base: Uint<N>, exp: u32) -> Uint<N> {
     let algo = match const { select::<N>() } {
-        Select::ByAlgorithm(a) => a,
+        Select::ByAlgorithm(algorithm) => algorithm,
         // pow is always ByAlgorithm; fall through to the default if the
         // arm is reached (fn pointer calls are not allowed in const fn).
         Select::ByValue(_) => Algorithm::SquareAndMultiply,

@@ -21,8 +21,8 @@ macro_rules! decl_decimal_helpers {
             #[inline]
             #[must_use]
             pub fn copysign(self, sign: Self) -> Self {
-                let mag = self.0.abs();
-                if sign.0.is_negative() { Self(-mag) } else { Self(mag) }
+                let magnitude = self.0.abs();
+                if sign.0.is_negative() { Self(-magnitude) } else { Self(magnitude) }
             }
         }
     };
@@ -37,8 +37,8 @@ macro_rules! decl_decimal_helpers {
             #[inline]
             #[must_use]
             pub fn copysign(self, sign: Self) -> Self {
-                let mag = self.0.abs();
-                if sign.0 < 0 { Self(-mag) } else { Self(mag) }
+                let magnitude = self.0.abs();
+                if sign.0 < 0 { Self(-magnitude) } else { Self(magnitude) }
             }
         }
     };

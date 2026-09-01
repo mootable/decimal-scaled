@@ -28,12 +28,12 @@ pub(crate) fn to_degrees_mul_pi_ratio<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
 ) -> C::Storage {
-    let w = SCALE + C::GUARD;
-    let v = C::to_work(raw);
+    let working_scale = SCALE + C::GUARD;
+    let working_value = C::to_work(raw);
     // `x * 180/π`: multiply by the exact oracle `deg_per_rad` factor
     // instead of dividing by `π` (the divide was the main cost).
-    let r = C::mul(v, C::deg_per_rad::<SCALE>(w), w);
-    C::round_to_storage_with(r, w, SCALE, mode)
+    let degrees = C::mul(working_value, C::deg_per_rad::<SCALE>(working_scale), working_scale);
+    C::round_to_storage_with(degrees, working_scale, SCALE, mode)
 }
 
 /// `MulPiRatio` to_radians for a wide tier -- `x * pi / 180` in the
@@ -44,11 +44,11 @@ pub(crate) fn to_radians_mul_pi_ratio<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
 ) -> C::Storage {
-    let w = SCALE + C::GUARD;
-    let v = C::to_work(raw);
+    let working_scale = SCALE + C::GUARD;
+    let working_value = C::to_work(raw);
     // `x * π/180`: multiply by the exact oracle `rad_per_deg` factor.
-    let r = C::mul(v, C::rad_per_deg::<SCALE>(w), w);
-    C::round_to_storage_with(r, w, SCALE, mode)
+    let radians = C::mul(working_value, C::rad_per_deg::<SCALE>(working_scale), working_scale);
+    C::round_to_storage_with(radians, working_scale, SCALE, mode)
 }
 
 // ── Unit tests: the MulPiRatio kernel is bit-exact against the routed
@@ -89,18 +89,18 @@ mod tests {
 
         #[test]
         fn to_degrees_to_radians_mul_pi_ratio_match_routed() {
-            for &u in &INPUTS9 {
-                let r = raw9(u);
+            for &units in &INPUTS9 {
+                let raw = raw9(units);
                 for &mode in &MODES {
                     assert_eq!(
-                        to_degrees_mul_pi_ratio::<Core, S>(r, mode),
-                        D::<Int<3>, S>(r).to_degrees_strict_with(mode).0,
-                        "D57 to_degrees MulPiRatio != routed at units={u} mode={mode:?}"
+                        to_degrees_mul_pi_ratio::<Core, S>(raw, mode),
+                        D::<Int<3>, S>(raw).to_degrees_strict_with(mode).0,
+                        "D57 to_degrees MulPiRatio != routed at units={units} mode={mode:?}"
                     );
                     assert_eq!(
-                        to_radians_mul_pi_ratio::<Core, S>(r, mode),
-                        D::<Int<3>, S>(r).to_radians_strict_with(mode).0,
-                        "D57 to_radians MulPiRatio != routed at units={u} mode={mode:?}"
+                        to_radians_mul_pi_ratio::<Core, S>(raw, mode),
+                        D::<Int<3>, S>(raw).to_radians_strict_with(mode).0,
+                        "D57 to_radians MulPiRatio != routed at units={units} mode={mode:?}"
                     );
                 }
             }

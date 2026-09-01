@@ -33,28 +33,30 @@ use crate::int::types::compute_limbs::ComputeLimbs;
 use crate::int::types::traits::BigInt;
 use crate::support::rounding::RoundingMode;
 
-/// `1 + t` at working scale `w = SCALE + guard`, exactly, in the work
-/// integer `S`.
+/// `1 + t` at `working_scale = SCALE + guard_digits`, exactly, in the
+/// work integer `S`.
 #[inline]
-fn one_plus_t_at_w<St: BigInt, S: BigInt>(raw: St, guard: u32, w: u32) -> S
+fn one_plus_t_at_w<St: BigInt, S: BigInt>(raw: St, guard_digits: u32, working_scale: u32) -> S
 where
     S::Scratch: ComputeLimbs,
 {
-    crate::algos::exp::exp_generic::one::<S>(w) + wtc::to_work_scaled_g::<St, S>(raw, guard)
+    crate::algos::exp::exp_generic::one::<S>(working_scale)
+        + wtc::to_work_scaled_g::<St, S>(raw, guard_digits)
 }
 
-/// `ln 2` at working scale `w`. Reads the const-scale table on the base
-/// guard (the hot path, where `w` is the monomorphisation's own
-/// `SCALE + base_guard`) and only falls to the runtime working-scale
-/// lookup on a Ziv escalation — the same split
+/// `ln 2` at `working_scale`. Reads the const-scale table on the base
+/// guard (the hot path, where `working_scale` is the monomorphisation's
+/// own `SCALE + base_guard_digits`) and only falls to the runtime
+/// working-scale lookup on a Ziv escalation — the same split
 /// [`wtc::ln_series_g`] makes.
 #[inline]
-fn ln2_at<S: BigInt>(w: u32, base_w: u32) -> S {
-    if w == base_w {
-        crate::consts::ln2_by_scale::<S>(w, crate::support::rounding::DEFAULT_ROUNDING_MODE)
+fn ln2_at<S: BigInt>(working_scale: u32, base_working_scale: u32) -> S {
+    if working_scale == base_working_scale {
+        crate::consts::ln2_by_scale::<S>(
+            working_scale, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     } else {
         crate::consts::ln2_by_working_scale::<S>(
-            w,
+            working_scale,
             crate::support::rounding::DEFAULT_ROUNDING_MODE,
         )
     }
@@ -74,35 +76,35 @@ fn ln2_at<S: BigInt>(w: u32, base_w: u32) -> S {
 #[must_use]
 pub(crate) fn log1p_with_ln_g<St: BigInt + Copy, S: BigInt, const SCALE: u32>(
     raw: St,
-    base_guard: u32,
-    st_max: St,
-    st_min: St,
+    base_guard_digits: u32,
+    storage_max: St,
+    storage_min: St,
     mode: RoundingMode,
 ) -> St
 where
     S::Scratch: ComputeLimbs,
 {
     super::guard_domain::<St>(raw, SCALE);
-    let base_w = SCALE + base_guard;
-    let r = wtc::round_to_storage_directed_g::<St, S>(
-        base_guard,
+    let base_working_scale = SCALE + base_guard_digits;
+    let rounded = wtc::round_to_storage_directed_g::<St, S>(
+        base_guard_digits,
         SCALE,
         mode,
-        st_max,
-        st_min,
-        |guard| {
-            let w = SCALE + guard;
+        storage_max,
+        storage_min,
+        |guard_digits| {
+            let working_scale = SCALE + guard_digits;
             crate::algos::exp::exp_generic::ln_fixed::<S>(
-                one_plus_t_at_w::<St, S>(raw, guard, w),
-                w,
-                ln2_at::<S>(w, base_w),
+                one_plus_t_at_w::<St, S>(raw, guard_digits, working_scale),
+                working_scale,
+                ln2_at::<S>(working_scale, base_working_scale),
             )
         },
     );
     // The same analytic sub-resolution adjust the artanh kernel applies:
     // this composition runs the Series `ln` core directly, which (unlike
     // the Tang path) does not carry `adjust_ln_near_one` of its own.
-    super::adjust_near_zero::<St, S, SCALE>(r, raw, mode)
+    super::adjust_near_zero::<St, S, SCALE>(rounded, raw, mode)
 }
 
 /// The `_approx` sibling of [`log1p_with_ln_g`]: a SINGLE shot at the
@@ -116,22 +118,23 @@ where
 pub(crate) fn log1p_with_ln_approx_g<St: BigInt + Copy, S: BigInt, const SCALE: u32>(
     raw: St,
     working_digits: u32,
-    st_max: St,
-    st_min: St,
+    storage_max: St,
+    storage_min: St,
     mode: RoundingMode,
 ) -> St
 where
     S::Scratch: ComputeLimbs,
 {
     super::guard_domain::<St>(raw, SCALE);
-    let w = SCALE + working_digits;
-    let r = crate::algos::exp::exp_generic::ln_fixed::<S>(
-        one_plus_t_at_w::<St, S>(raw, working_digits, w),
-        w,
-        ln2_at::<S>(w, w),
+    let working_scale = SCALE + working_digits;
+    let working_value = crate::algos::exp::exp_generic::ln_fixed::<S>(
+        one_plus_t_at_w::<St, S>(raw, working_digits, working_scale),
+        working_scale,
+        ln2_at::<S>(working_scale, working_scale),
     );
-    let out = wtc::round_to_storage_with_g::<St, S>(r, w, SCALE, mode, st_max, st_min);
-    super::adjust_near_zero::<St, S, SCALE>(out, raw, mode)
+    let rounded = wtc::round_to_storage_with_g::<St, S>(
+        working_value, working_scale, SCALE, mode, storage_max, storage_min);
+    super::adjust_near_zero::<St, S, SCALE>(rounded, raw, mode)
 }
 
 /// Tier-generic entry to [`log1p_with_ln_g`] — sources the work integer

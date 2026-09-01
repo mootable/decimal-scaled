@@ -26,19 +26,19 @@ use crate::int::types::Int;
 ///
 /// Panics on a zero divisor, matching the `Rem` operator contract.
 #[inline]
-pub(crate) fn rem_via_div_rem<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
+pub(crate) fn rem_via_div_rem<const N: usize>(dividend: Int<N>, divisor: Int<N>) -> Int<N> {
     assert!(
-        !b.is_zero(),
+        !divisor.is_zero(),
         "attempt to calculate the remainder with a divisor of zero"
     );
-    let neg_r = a.is_negative();
-    let mut quot = [0u64; N];
-    let mut rem = [0u64; N];
+    let remainder_is_negative = dividend.is_negative();
+    let mut quotient = [0u64; N];
+    let mut remainder = [0u64; N];
     div_rem_dispatch(
-        a.unsigned_abs().as_limbs(),
-        b.unsigned_abs().as_limbs(),
-        &mut quot,
-        &mut rem,
+        dividend.unsigned_abs().as_limbs(),
+        divisor.unsigned_abs().as_limbs(),
+        &mut quotient,
+        &mut remainder,
     );
-    Int::<N>::from_mag_limbs(&rem, neg_r)
+    Int::<N>::from_mag_limbs(&remainder, remainder_is_negative)
 }

@@ -28,39 +28,40 @@ use crate::int::algos::support::limbs::add_assign;
 use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
 use crate::int::types::Int;
 
-/// Significant limb length of `a` (index of the highest non-zero limb plus
-/// one), never below 1. Shared by the sum-of-squares and hypot kernels.
+/// Significant limb length of `limbs` (index of the highest non-zero limb
+/// plus one), never below 1. Shared by the sum-of-squares and hypot kernels.
 #[inline]
-pub(crate) fn sig_len(a: &[u64]) -> usize {
-    let mut l = a.len();
-    while l > 1 && a[l - 1] == 0 {
-        l -= 1;
+pub(crate) fn sig_len(limbs: &[u64]) -> usize {
+    let mut len = limbs.len();
+    while len > 1 && limbs[len - 1] == 0 {
+        len -= 1;
     }
-    l
+    len
 }
 
-/// Form `a^2 + b^2` (on the magnitude slices `ma` / `mb`) into `out`,
-/// returning its significant limb length. `N` is the storage limb count of
-/// the originating `Int<N>` operands, so each magnitude is `<= N` limbs and
-/// the radicand fits the `Buf2` scratch the caller supplies (`out` must be a
-/// freshly zeroed `Limbs::<N>::double_buffered_u64()`, i.e. `>= 2N + 1` limbs). This is the
-/// single radicand former shared by [`sum_sq_schoolbook`] and the hypot
-/// kernel.
+/// Form `a^2 + b^2` (on the magnitude slices `a_magnitude` / `b_magnitude`)
+/// into `out`, returning its significant limb length. `N` is the storage limb
+/// count of the originating `Int<N>` operands, so each magnitude is `<= N`
+/// limbs and the radicand fits the `Buf2` scratch the caller supplies (`out`
+/// must be a freshly zeroed `Limbs::<N>::double_buffered_u64()`, i.e.
+/// `>= 2N + 1` limbs). This is the single radicand former shared by
+/// [`sum_sq_schoolbook`] and the hypot kernel.
 #[inline]
-pub(crate) fn sum_sq_radicand<const N: usize>(ma: &[u64], mb: &[u64], out: &mut [u64]) -> usize
+pub(crate) fn sum_sq_radicand<const N: usize>(a_magnitude: &[u64], b_magnitude: &[u64],
+    out: &mut [u64]) -> usize
 where
     Limbs<N>: ComputeLimbs,
 {
-    let la = sig_len(ma);
-    let lb = sig_len(mb);
+    let a_len = sig_len(a_magnitude);
+    let b_len = sig_len(b_magnitude);
     // a^2 into `out` (zeroed by the caller); b^2 into its own scratch.
-    mul_schoolbook(&ma[..la], &ma[..la], &mut out[..2 * la]);
-    let mut bsq_buf = Limbs::<N>::double_buffered_u64();
-    let bsq = bsq_buf.as_mut();
-    mul_schoolbook(&mb[..lb], &mb[..lb], &mut bsq[..2 * lb]);
+    mul_schoolbook(&a_magnitude[..a_len], &a_magnitude[..a_len], &mut out[..2 * a_len]);
+    let mut b_squared_buf = Limbs::<N>::double_buffered_u64();
+    let b_squared = b_squared_buf.as_mut();
+    mul_schoolbook(&b_magnitude[..b_len], &b_magnitude[..b_len], &mut b_squared[..2 * b_len]);
     // accumulate into `out`; the +1 limb covers the addition carry.
-    let span = (2 * la).max(2 * lb) + 1;
-    add_assign(&mut out[..span], &bsq[..2 * lb]);
+    let span = (2 * a_len).max(2 * b_len) + 1;
+    add_assign(&mut out[..span], &b_squared[..2 * b_len]);
     sig_len(&out[..span])
 }
 
@@ -74,17 +75,18 @@ pub(crate) fn sum_sq_schoolbook<const N: usize>(a: Int<N>, b: Int<N>) -> Option<
 where
     Limbs<N>: ComputeLimbs,
 {
-    let ma = a.unsigned_abs();
-    let mb = b.unsigned_abs();
-    let mut n_buf = Limbs::<N>::double_buffered_u64();
-    let n = n_buf.as_mut();
-    let nl = sum_sq_radicand::<N>(ma.as_limbs(), mb.as_limbs(), n);
+    let a_magnitude = a.unsigned_abs();
+    let b_magnitude = b.unsigned_abs();
+    let mut radicand_buf = Limbs::<N>::double_buffered_u64();
+    let radicand = radicand_buf.as_mut();
+    let radicand_len =
+        sum_sq_radicand::<N>(a_magnitude.as_limbs(), b_magnitude.as_limbs(), radicand);
     // fit check: positive magnitude must be < 2^(64N-1) (signed range).
-    if nl > N || (nl == N && (n[N - 1] >> 63) != 0) {
+    if radicand_len > N || (radicand_len == N && (radicand[N - 1] >> 63) != 0) {
         return None;
     }
     let mut out = [0u64; N];
-    out.copy_from_slice(&n[..N]);
+    out.copy_from_slice(&radicand[..N]);
     Some(Int::<N>::from_limbs(out))
 }
 
