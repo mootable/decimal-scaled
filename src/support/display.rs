@@ -56,6 +56,9 @@
 //! Parses canonical decimal literals. Accepted forms:
 //! - Integer-only: `42` parses as `42 * 10^SCALE`.
 //! - Decimal with up to `SCALE` fractional digits: `1.5`, `1.500`.
+//! - Excess fractional digits that are all zeros, since they carry no
+//! value: `1.00` and `1.000` parse at any scale — including `SCALE = 0`,
+//! where both are exactly `1`.
 //! - Optional sign prefix: `-` or `+`.
 //! - Bare zero: `0` or `0.0`.
 //!
@@ -63,7 +66,9 @@
 //! - Empty string: [`ParseError::Empty`].
 //! - Sign with no digits: [`ParseError::SignOnly`].
 //! - Redundant leading zeros (`01`, `00`): [`ParseError::LeadingZero`].
-//! - More than `SCALE` fractional digits: [`ParseError::OverlongFractional`].
+//! - More than `SCALE` *significant* fractional digits — i.e. digits past
+//! `SCALE` that are not all zeros, such as `1.05` at `SCALE = 0`:
+//! [`ParseError::OverlongFractional`].
 //! - Scientific notation (`1e3`): [`ParseError::ScientificNotation`].
 //! - Missing digits on either side of the point (`.5`, `5.`):
 //! [`ParseError::MissingDigits`].
@@ -231,9 +236,14 @@ pub(crate) struct ParseComponents<'a> {
 /// String-parsing front-end shared by every width.
 ///
 /// Validates and splits the input into sign / integer-digits / fractional-
-/// digits. The `SCALE` parameter is needed only to reject overlong fractional
-/// parts — no arithmetic happens here, so wide-tier callers can drive their
-/// own storage-typed accumulator without overflow risk.
+/// digits. The `SCALE` parameter is needed only to bound the fractional part:
+/// value-free trailing zeros past `SCALE` are trimmed off, and a fractional
+/// part still longer than `SCALE` after that is rejected as overlong. No
+/// arithmetic happens here, so wide-tier callers can drive their own
+/// storage-typed accumulator without overflow risk.
+///
+/// The returned `frac_str` is therefore never longer than `SCALE`, which the
+/// accumulators rely on when they zero-pad it back out to `SCALE` digits.
 ///
 /// # Precision
 ///
@@ -291,7 +301,7 @@ pub(crate) fn parse_components<const SCALE: u32>(
         }
     }
 
-    let (int_str, frac_str) = match dot_pos {
+    let (int_str, mut frac_str) = match dot_pos {
         Some(p) => (&bytes[idx..p], &bytes[p + 1..]),
         None => (&bytes[idx..], &[][..]),
     };
@@ -310,7 +320,15 @@ pub(crate) fn parse_components<const SCALE: u32>(
         return Err(ParseError::LeadingZero);
     }
 
-    // More than SCALE fractional digits would lose precision on round-trip.
+    // Fractional digits past SCALE are acceptable when every one of them is
+    // a zero: a trailing zero carries no value, so `1.00` at SCALE = 0 is
+    // exactly `1` and round-trips losing nothing. Trim that excess — the
+    // accumulator pads back to SCALE, so the parsed value is unchanged, and
+    // it relies on `frac_str` never exceeding SCALE. Whatever remains past
+    // SCALE is a significant digit, i.e. a genuine loss of precision.
+    while frac_str.len() > SCALE as usize && frac_str.last() == Some(&b'0') {
+        frac_str = &frac_str[..frac_str.len() - 1];
+    }
     if frac_str.len() > SCALE as usize {
         return Err(ParseError::OverlongFractional);
     }

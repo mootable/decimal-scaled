@@ -83,7 +83,7 @@ mod from_macros_pow {
 
     #[test]
     fn powi_d9_d18_positive_negative_exp() {
-        use decimal_scaled::{D18};
+        use decimal_scaled::D18;
 
         // D18<4>: 2^3 = 8 â†’ 80_000
         let two = D18::<4>::try_from(2).unwrap();
@@ -717,5 +717,4 @@ mod from_src_powers {
             (h.to_bits().as_i128() - naive.to_bits().as_i128()).abs(),
         );
     }
-
 }

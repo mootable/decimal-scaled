@@ -13,7 +13,8 @@ mod from_arithmetic_mode_aware {
     #[test]
     fn mul_with_modes() {
         // 1.5 * 2.0 = 3.0 (exact at any mode)
-        let a = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_500_000_000_000_i128).unwrap());
+        let a =
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_500_000_000_000_i128).unwrap());
         let b = D38s12::try_from(2).unwrap();
         for m in [
             RoundingMode::HalfToEven,
@@ -54,7 +55,8 @@ mod from_arithmetic_mode_aware {
 
     #[test]
     fn mul_assign_div_assign() {
-        let mut v = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_500_000_000_000_i128).unwrap()); // 1.5
+        let mut v =
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_500_000_000_000_i128).unwrap()); // 1.5
         v *= D38s12::try_from(2).unwrap();
         assert_eq!(v.to_bits(), 3_000_000_000_000);
         v /= D38s12::try_from(3).unwrap();
@@ -72,7 +74,9 @@ mod from_arithmetic_mode_aware {
     fn d18_mul_with_modes_exact_at_s18() {
         use decimal_scaled::D18;
         // 1.5 * 2.0 = 3.0 (exact under every mode).
-        let a = D18::<18>::from_bits(decimal_scaled::Int::<1>::from(1_500_000_000_000_000_000_i64));
+        let a = D18::<18>::from_bits(decimal_scaled::Int::<1>::from(
+            1_500_000_000_000_000_000_i64,
+        ));
         let b = D18::<18>::try_from(2).unwrap();
         let expected = 3_000_000_000_000_000_000_i64;
         for m in [
@@ -116,7 +120,9 @@ mod from_arithmetic_mode_aware {
     #[test]
     fn d18_mul_negative_signs_at_s18() {
         use decimal_scaled::D18;
-        let a = D18::<18>::from_bits(decimal_scaled::Int::<1>::from(1_500_000_000_000_000_000_i64));
+        let a = D18::<18>::from_bits(decimal_scaled::Int::<1>::from(
+            1_500_000_000_000_000_000_i64,
+        ));
         let b_pos = D18::<18>::try_from(2).unwrap();
         let b_neg = -b_pos;
         // (+1.5) * (-2.0) = -3.0
@@ -198,7 +204,11 @@ mod from_arithmetic_mode_aware {
     }
 }
 
-#[cfg(all(feature = "strict", not(feature = "fast"), any(feature = "d76", feature = "wide")))]
+#[cfg(all(
+    feature = "strict",
+    not(feature = "fast"),
+    any(feature = "d76", feature = "wide")
+))]
 mod from_rounding_mode_matrix {
     //! Mode-aware and precision-aware transcendental matrix.
     //!
@@ -215,7 +225,7 @@ mod from_rounding_mode_matrix {
     //! - Non-half rounding modes (`Floor` / `Ceiling`) produce results
     //!   that bracket the half-mode result for inexact inputs.
 
-    use decimal_scaled::{D38, D76, RoundingMode};
+    use decimal_scaled::{RoundingMode, D38, D76};
     use std::str::FromStr;
 
     const STRICT_GUARD: u32 = 30;

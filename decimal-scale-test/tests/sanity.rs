@@ -30,7 +30,7 @@
     feature = "rounding-ceiling",
 )))]
 
-use decimal_scaled::{D38s2, D307s2, Int, RoundingMode};
+use decimal_scaled::{D307s2, D38s2, Int, RoundingMode};
 
 const ALL_MODES: [RoundingMode; 6] = [
     RoundingMode::HalfToEven,
@@ -54,31 +54,31 @@ fn dw(raw: i128) -> D307s2 {
 // ===== ADD: raw_a + raw_b =====
 #[test]
 fn add_exact_vectors() {
-    assert_eq!(r(d(125) + d(250)), 375);   // [middle] 1.25 + 2.50
-    assert_eq!(r(d(420) + d(0)), 420);     // [zero id]
-    assert_eq!(r(d(-100) + d(100)), 0);    // [cancel]
-    assert_eq!(r(d(-150) + d(-250)), -400);// [both neg]
-    assert_eq!(r(d(7) + d(93)), 100);      // [commute]
+    assert_eq!(r(d(125) + d(250)), 375); // [middle] 1.25 + 2.50
+    assert_eq!(r(d(420) + d(0)), 420); // [zero id]
+    assert_eq!(r(d(-100) + d(100)), 0); // [cancel]
+    assert_eq!(r(d(-150) + d(-250)), -400); // [both neg]
+    assert_eq!(r(d(7) + d(93)), 100); // [commute]
     assert_eq!(r(d(93) + d(7)), 100);
-    assert_eq!(r(d(99) + d(1)), 100);      // [carry]
-    assert_eq!(r(d(50) + d(-125)), -75);   // [cross 0]
+    assert_eq!(r(d(99) + d(1)), 100); // [carry]
+    assert_eq!(r(d(50) + d(-125)), -75); // [cross 0]
     assert_eq!(r(d(100_000_000) + d(100)), 100_000_100); // [large]
-    assert_eq!(r(d(0) + d(-333)), -333);   // [id right]
-    assert_eq!(r(d(1) + d(1)), 2);         // [smallest unit]
+    assert_eq!(r(d(0) + d(-333)), -333); // [id right]
+    assert_eq!(r(d(1) + d(1)), 2); // [smallest unit]
 }
 
 // ===== SUB: raw_a - raw_b =====
 #[test]
 fn sub_exact_vectors() {
-    assert_eq!(r(d(500) - d(125)), 375);   // [middle] 5.00 - 1.25
-    assert_eq!(r(d(250) - d(250)), 0);     // [self]
-    assert_eq!(r(d(314) - d(0)), 314);     // [x - 0]
-    assert_eq!(r(d(0) - d(314)), -314);    // [0 - x]
+    assert_eq!(r(d(500) - d(125)), 375); // [middle] 5.00 - 1.25
+    assert_eq!(r(d(250) - d(250)), 0); // [self]
+    assert_eq!(r(d(314) - d(0)), 314); // [x - 0]
+    assert_eq!(r(d(0) - d(314)), -314); // [0 - x]
     assert_eq!(r(d(-100) - d(200)), -300); // [neg - pos]
-    assert_eq!(r(d(100) - d(-200)), 300);  // [pos - neg]
-    assert_eq!(r(d(100) - d(1)), 99);      // [borrow]
-    assert_eq!(r(d(25) - d(100)), -75);    // [cross 0]
-    assert_eq!(r(d(-500) - d(-200)), -300);// [both neg]
+    assert_eq!(r(d(100) - d(-200)), 300); // [pos - neg]
+    assert_eq!(r(d(100) - d(1)), 99); // [borrow]
+    assert_eq!(r(d(25) - d(100)), -75); // [cross 0]
+    assert_eq!(r(d(-500) - d(-200)), -300); // [both neg]
     assert_eq!(r(d(100_000_000) - d(99)), 99_999_901); // [large]
 }
 
@@ -110,31 +110,31 @@ fn neg_min_panics() {
 // ===== MUL: round(raw_a * raw_b / 100) =====
 #[test]
 fn mul_exact_vectors() {
-    assert_eq!(r(d(150) * d(200)), 300);   // [middle] 1.50*2.00=3.00
-    assert_eq!(r(d(314) * d(100)), 314);   // [by one]
-    assert_eq!(r(d(999) * d(0)), 0);       // [by zero]
+    assert_eq!(r(d(150) * d(200)), 300); // [middle] 1.50*2.00=3.00
+    assert_eq!(r(d(314) * d(100)), 314); // [by one]
+    assert_eq!(r(d(999) * d(0)), 0); // [by zero]
     assert_eq!(r(d(-200) * d(300)), -600); // [neg*pos]
     assert_eq!(r(d(-200) * d(-300)), 600); // [neg*neg]
-    assert_eq!(r(d(50) * d(50)), 25);      // [fraction] 0.50*0.50=0.25
-    assert_eq!(r(d(10) * d(10)), 1);       // [exact] 0.10*0.10=0.01
-    assert_eq!(r(d(5) * d(5)), 0);         // 0.0025: 0.25 LSB HalfToEven->0
-    assert_eq!(r(d(15) * d(10)), 2);       // 0.015: 1.5 LSB HalfToEven->2
+    assert_eq!(r(d(50) * d(50)), 25); // [fraction] 0.50*0.50=0.25
+    assert_eq!(r(d(10) * d(10)), 1); // [exact] 0.10*0.10=0.01
+    assert_eq!(r(d(5) * d(5)), 0); // 0.0025: 0.25 LSB HalfToEven->0
+    assert_eq!(r(d(15) * d(10)), 2); // 0.015: 1.5 LSB HalfToEven->2
     assert_eq!(r(d(100_000) * d(100_000)), 100_000_000); // [large]
 }
 
 // ===== DIV: round(raw_a * 100 / raw_b) =====
 #[test]
 fn div_exact_vectors() {
-    assert_eq!(r(d(600) / d(200)), 300);   // [middle] 6/2=3
-    assert_eq!(r(d(314) / d(100)), 314);   // [by one]
-    assert_eq!(r(d(100) / d(400)), 25);    // [exact] 1/4=0.25
+    assert_eq!(r(d(600) / d(200)), 300); // [middle] 6/2=3
+    assert_eq!(r(d(314) / d(100)), 314); // [by one]
+    assert_eq!(r(d(100) / d(400)), 25); // [exact] 1/4=0.25
     assert_eq!(r(d(-600) / d(200)), -300); // [neg/pos]
     assert_eq!(r(d(-600) / d(-200)), 300); // [neg/neg]
-    assert_eq!(r(d(100) / d(800)), 12);    // 0.125: 12.5 even=12
-    assert_eq!(r(d(300) / d(800)), 38);    // 0.375: 37.5 even=38
-    assert_eq!(r(d(100) / d(300)), 33);    // 1/3: 33.33 -> 33
-    assert_eq!(r(d(200) / d(300)), 67);    // 2/3: 66.66 -> 67
-    assert_eq!(r(d(500) / d(500)), 100);   // [identity]
+    assert_eq!(r(d(100) / d(800)), 12); // 0.125: 12.5 even=12
+    assert_eq!(r(d(300) / d(800)), 38); // 0.375: 37.5 even=38
+    assert_eq!(r(d(100) / d(300)), 33); // 1/3: 33.33 -> 33
+    assert_eq!(r(d(200) / d(300)), 67); // 2/3: 66.66 -> 67
+    assert_eq!(r(d(500) / d(500)), 100); // [identity]
 }
 
 #[test]
@@ -164,16 +164,16 @@ fn div_one_third_all_modes() {
 // ===== REM: raw_a % raw_b (truncated, sign of dividend) =====
 #[test]
 fn rem_exact_vectors() {
-    assert_eq!(r(d(700) % d(200)), 100);   // [middle] 7%2=1
-    assert_eq!(r(d(600) % d(200)), 0);     // [exact]
+    assert_eq!(r(d(700) % d(200)), 100); // [middle] 7%2=1
+    assert_eq!(r(d(600) % d(200)), 0); // [exact]
     assert_eq!(r(d(-700) % d(200)), -100); // [neg dividend]
-    assert_eq!(r(d(700) % d(-200)), 100);  // [neg divisor]
-    assert_eq!(r(d(-700) % d(-200)), -100);// [both neg]
-    assert_eq!(r(d(100) % d(300)), 100);   // [|a|<|b|]
-    assert_eq!(r(d(7) % d(3)), 1);         // [fractional] 0.07%0.03
-    assert_eq!(r(d(500) % d(500)), 0);     // [a==b]
+    assert_eq!(r(d(700) % d(-200)), 100); // [neg divisor]
+    assert_eq!(r(d(-700) % d(-200)), -100); // [both neg]
+    assert_eq!(r(d(100) % d(300)), 100); // [|a|<|b|]
+    assert_eq!(r(d(7) % d(3)), 1); // [fractional] 0.07%0.03
+    assert_eq!(r(d(500) % d(500)), 0); // [a==b]
     assert_eq!(r(d(100_000_001) % d(100)), 1); // [large]
-    assert_eq!(r(d(0) % d(300)), 0);       // [zero dividend]
+    assert_eq!(r(d(0) % d(300)), 0); // [zero dividend]
 }
 
 #[test]
@@ -228,13 +228,13 @@ fn signum_exact_vectors() {
 fn floor_exact_vectors() {
     assert_eq!(r(d(150).floor()), 100);
     assert_eq!(r(d(199).floor()), 100);
-    assert_eq!(r(d(100).floor()), 100);   // exact
+    assert_eq!(r(d(100).floor()), 100); // exact
     assert_eq!(r(d(0).floor()), 0);
     assert_eq!(r(d(-150).floor()), -200); // -1.50 -> -2.00
     assert_eq!(r(d(-101).floor()), -200);
     assert_eq!(r(d(-100).floor()), -100); // exact
-    assert_eq!(r(d(1).floor()), 0);       // 0.01 -> 0
-    assert_eq!(r(d(-1).floor()), -100);   // -0.01 -> -1.00
+    assert_eq!(r(d(1).floor()), 0); // 0.01 -> 0
+    assert_eq!(r(d(-1).floor()), -100); // -0.01 -> -1.00
     assert_eq!(r(d(250).floor()), 200);
 }
 
@@ -243,13 +243,13 @@ fn floor_exact_vectors() {
 fn ceil_exact_vectors() {
     assert_eq!(r(d(150).ceil()), 200);
     assert_eq!(r(d(101).ceil()), 200);
-    assert_eq!(r(d(100).ceil()), 100);    // exact
+    assert_eq!(r(d(100).ceil()), 100); // exact
     assert_eq!(r(d(0).ceil()), 0);
-    assert_eq!(r(d(-150).ceil()), -100);  // -1.50 -> -1.00
+    assert_eq!(r(d(-150).ceil()), -100); // -1.50 -> -1.00
     assert_eq!(r(d(-199).ceil()), -100);
-    assert_eq!(r(d(-100).ceil()), -100);  // exact
-    assert_eq!(r(d(1).ceil()), 100);      // 0.01 -> 1.00
-    assert_eq!(r(d(-1).ceil()), 0);       // -0.01 -> 0
+    assert_eq!(r(d(-100).ceil()), -100); // exact
+    assert_eq!(r(d(1).ceil()), 100); // 0.01 -> 1.00
+    assert_eq!(r(d(-1).ceil()), 0); // -0.01 -> 0
     assert_eq!(r(d(250).ceil()), 300);
 }
 
@@ -287,14 +287,14 @@ fn fract_exact_vectors() {
 #[test]
 fn round_exact_vectors() {
     assert_eq!(r(d(149).round()), 100);
-    assert_eq!(r(d(150).round()), 200);   // half away
+    assert_eq!(r(d(150).round()), 200); // half away
     assert_eq!(r(d(151).round()), 200);
-    assert_eq!(r(d(100).round()), 100);   // exact
+    assert_eq!(r(d(100).round()), 100); // exact
     assert_eq!(r(d(0).round()), 0);
     assert_eq!(r(d(-149).round()), -100);
     assert_eq!(r(d(-150).round()), -200); // half away
     assert_eq!(r(d(-151).round()), -200);
-    assert_eq!(r(d(50).round()), 100);    // 0.50 -> 1.00
+    assert_eq!(r(d(50).round()), 100); // 0.50 -> 1.00
     assert_eq!(r(d(-50).round()), -100);
 }
 
@@ -305,12 +305,12 @@ fn quantize_exact_vectors() {
     assert_eq!(i128::from(d(-150).quantize::<6>().to_bits()), -1_500_000);
     assert_eq!(i128::from(d(1).quantize::<6>().to_bits()), 10_000);
     assert_eq!(i128::from(d(0).quantize::<6>().to_bits()), 0);
-    assert_eq!(i128::from(d(150).quantize::<0>().to_bits()), 2);  // 1.50 even
-    assert_eq!(i128::from(d(250).quantize::<0>().to_bits()), 2);  // 2.50 even
-    assert_eq!(i128::from(d(350).quantize::<0>().to_bits()), 4);  // 3.50 even
+    assert_eq!(i128::from(d(150).quantize::<0>().to_bits()), 2); // 1.50 even
+    assert_eq!(i128::from(d(250).quantize::<0>().to_bits()), 2); // 2.50 even
+    assert_eq!(i128::from(d(350).quantize::<0>().to_bits()), 4); // 3.50 even
     assert_eq!(i128::from(d(149).quantize::<0>().to_bits()), 1);
     assert_eq!(i128::from(d(151).quantize::<0>().to_bits()), 2);
-    assert_eq!(i128::from(d(-250).quantize::<0>().to_bits()), -2);// -2.50 even
+    assert_eq!(i128::from(d(-250).quantize::<0>().to_bits()), -2); // -2.50 even
 }
 
 // ===== DIV_EUCLID (integer quotient, remainder >= 0) =====
@@ -376,17 +376,17 @@ fn midpoint_exact_vectors() {
 // ===== POW (integer exponent) =====
 #[test]
 fn pow_exact_vectors() {
-    assert_eq!(r(d(200).pow(0)), 100);   // x^0 = 1.00
+    assert_eq!(r(d(200).pow(0)), 100); // x^0 = 1.00
     assert_eq!(r(d(200).pow(1)), 200);
-    assert_eq!(r(d(200).pow(2)), 400);   // 2^2
-    assert_eq!(r(d(200).pow(3)), 800);   // 2^3
-    assert_eq!(r(d(300).pow(2)), 900);   // 3^2
-    assert_eq!(r(d(-200).pow(2)), 400);  // (-2)^2
+    assert_eq!(r(d(200).pow(2)), 400); // 2^2
+    assert_eq!(r(d(200).pow(3)), 800); // 2^3
+    assert_eq!(r(d(300).pow(2)), 900); // 3^2
+    assert_eq!(r(d(-200).pow(2)), 400); // (-2)^2
     assert_eq!(r(d(-200).pow(3)), -800); // (-2)^3
-    assert_eq!(r(d(100).pow(5)), 100);   // 1^5
-    assert_eq!(r(d(150).pow(2)), 225);   // 1.5^2 = 2.25
+    assert_eq!(r(d(100).pow(5)), 100); // 1^5
+    assert_eq!(r(d(150).pow(2)), 225); // 1.5^2 = 2.25
     assert_eq!(r(d(0).pow(3)), 0);
-    assert_eq!(r(d(50).pow(2)), 25);     // 0.5^2 = 0.25
+    assert_eq!(r(d(50).pow(2)), 25); // 0.5^2 = 0.25
 }
 
 // ===== WIDE-TIER spot-check (D307 / Int<16>) =====

@@ -66,7 +66,10 @@ pub const ALL_MODES: [RoundingMode; 6] = [
 /// Absolute path to the harness's committed golden set. `env!` is baked at THIS
 /// crate's compile time, so the path stays correct no matter which crate calls it.
 pub fn golden_dir() -> &'static str {
-    concat!(env!("CARGO_MANIFEST_DIR"), "/../decimal-scaled-golden/golden")
+    concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../decimal-scaled-golden/golden"
+    )
 }
 
 /// Worker-thread cap, honouring `GOLDEN_THREADS` (default = available cores).
@@ -74,7 +77,11 @@ pub fn thread_count() -> usize {
     std::env::var("GOLDEN_THREADS")
         .ok()
         .and_then(|s| s.parse().ok())
-        .unwrap_or_else(|| std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1))
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(1)
+        })
 }
 
 /// Map the harness rounding mode onto decimal-scaled's.
@@ -118,7 +125,10 @@ impl DecimalSubject for DsSubject {
     type Value = String;
 
     fn name(&self) -> String {
-        format!("decimal-scaled D{}<{}> {:?}", self.width, self.scale, self.mode)
+        format!(
+            "decimal-scaled D{}<{}> {:?}",
+            self.width, self.scale, self.mode
+        )
     }
 
     fn capabilities(&self) -> Capabilities {
@@ -128,13 +138,24 @@ impl DecimalSubject for DsSubject {
         // `wrapping_`/`checked_`/`saturating_` variants are not the path tested here.
         let mut functions = BTreeMap::new();
         for &f in FUNCS {
-            functions.insert(f, FnSupport { mode: self.mode, overflow: Overflow::Panic });
+            functions.insert(
+                f,
+                FnSupport {
+                    mode: self.mode,
+                    overflow: Overflow::Panic,
+                },
+            );
         }
         let mut config = BTreeMap::new();
         config.insert("width".into(), self.width.to_string());
         config.insert("scale".into(), self.scale.to_string());
         config.insert("mode".into(), format!("{:?}", self.mode));
-        Capabilities { name: "decimal-scaled".into(), radix: Radix::Decimal, config, functions }
+        Capabilities {
+            name: "decimal-scaled".into(),
+            radix: Radix::Decimal,
+            config,
+            functions,
+        }
     }
 
     fn string_to_value(&self, s: &str) -> String {
@@ -277,7 +298,12 @@ fn parse_stripe(s: &str) -> Option<(usize, usize)> {
 /// Parse a rounding-mode name (case-/separator-insensitive, with the common aliases).
 pub fn parse_mode(s: &str) -> Option<RoundingMode> {
     use RoundingMode::*;
-    match s.trim().to_ascii_lowercase().replace(['-', ' '], "_").as_str() {
+    match s
+        .trim()
+        .to_ascii_lowercase()
+        .replace(['-', ' '], "_")
+        .as_str()
+    {
         "half_to_even" | "halftoeven" | "even" | "bankers" | "nearest" => Some(HalfToEven),
         "half_away_from_zero" | "halfawayfromzero" | "half_away" | "away" | "half_up" => {
             Some(HalfAwayFromZero)
@@ -346,12 +372,20 @@ mod tests {
         // cells crate's compile-once shim): a 19-dp value on the right prefix
         // (not pinned digit-for-digit, to stay robust).
         let out = decimal_scaled_cells::dispatch_compute(
-            38, 19, Function::Sqrt, &["2".to_string()], DsMode::HalfToEven,
+            38,
+            19,
+            Function::Sqrt,
+            &["2".to_string()],
+            DsMode::HalfToEven,
         );
         match out {
             Computed::Value(v) => {
                 assert!(v.starts_with("1.41421356237309"), "got {v}");
-                assert_eq!(v.split_once('.').unwrap().1.len(), 19, "19 fractional digits");
+                assert_eq!(
+                    v.split_once('.').unwrap().1.len(),
+                    19,
+                    "19 fractional digits"
+                );
             }
             other => panic!("expected Value, got {other:?}"),
         }
@@ -368,7 +402,10 @@ mod tests {
     #[test]
     fn mode_aliases_parse() {
         assert_eq!(parse_mode("Ceiling"), Some(RoundingMode::Ceiling));
-        assert_eq!(parse_mode("half-away"), Some(RoundingMode::HalfAwayFromZero));
+        assert_eq!(
+            parse_mode("half-away"),
+            Some(RoundingMode::HalfAwayFromZero)
+        );
         assert_eq!(parse_mode("trunc"), Some(RoundingMode::Trunc));
         assert_eq!(parse_mode("nonsense"), None);
     }

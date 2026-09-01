@@ -14,7 +14,7 @@ mod from_cross_scale_stable {
     //! - Comparator pairwise consistency (cmp_of vs eq_of/lt_of/etc.).
 
     use decimal_scaled::{
-        D18, D18s4, D18s6, D18s9, D38, D38s6, D38s9, D38s12, D38s18, RoundingMode,
+        D18s4, D18s6, D18s9, D38s12, D38s18, D38s6, D38s9, RoundingMode, D18, D38,
     };
 
     // ── Same-width, cross-scale: D38 arithmetic. ─────────────────────────
@@ -23,7 +23,7 @@ mod from_cross_scale_stable {
     fn d38_mul_of_same_width_cross_scale() {
         let a = D38s6::try_from(2).unwrap(); // 2.000000 (SCALE = 6)
         let b = D38s12::try_from(3).unwrap(); // 3.000000000000 (SCALE = 12)
-        // mul_of at target SCALE = 9: 2 × 3 = 6.000000000
+                                              // mul_of at target SCALE = 9: 2 × 3 = 6.000000000
         let c: D38s9 = D38s9::mul_of(a, b);
         assert_eq!(c, D38s9::try_from(6).unwrap());
     }
@@ -170,7 +170,9 @@ mod from_cross_scale_stable {
     #[test]
     fn cmp_of_distinguishes_small_difference() {
         // 1.000000000001 vs 1.000000
-        let a = D38::<12>::from_bits(decimal_scaled::Int::<2>::try_from(1_000_000_000_001_i128).unwrap());
+        let a = D38::<12>::from_bits(
+            decimal_scaled::Int::<2>::try_from(1_000_000_000_001_i128).unwrap(),
+        );
         let b = D38::<6>::try_from(1).unwrap();
         assert!(a.gt_of(b));
         assert!(b.lt_of(a));
@@ -274,7 +276,7 @@ mod from_cross_scale_stable {
 
     #[cfg(feature = "wide")]
     mod wide {
-        use decimal_scaled::{D38, D38s12, D38s18, D76, D153, D307};
+        use decimal_scaled::{D38s12, D38s18, D153, D307, D38, D76};
 
         #[test]
         fn d76_mul_of_accepts_narrow_inputs() {

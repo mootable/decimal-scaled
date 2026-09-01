@@ -13,11 +13,11 @@ mod from_serde_surface {
 
     use core::marker::PhantomData;
     use decimal_scaled::serde_helpers::decimal_serde::DecimalVisitor;
+    use decimal_scaled::D38s12;
     #[cfg(any(feature = "wide", feature = "x-wide"))]
     use decimal_scaled::D38;
-    use decimal_scaled::D38s12;
-    use serde::de::Visitor;
     use serde::de::value::Error as DeError;
+    use serde::de::Visitor;
 
     // ─── D38 visitor: every native integer width ───────────────────────────
 
@@ -118,7 +118,8 @@ mod from_serde_surface {
             .unwrap();
         assert_eq!(i128::from(v.to_bits()), 123);
         // Wrong length
-        let r: Result<D38s12, _> = DecimalVisitor::<12>(PhantomData).visit_bytes::<DeError>(&[0u8; 15]);
+        let r: Result<D38s12, _> =
+            DecimalVisitor::<12>(PhantomData).visit_bytes::<DeError>(&[0u8; 15]);
         assert!(r.is_err());
     }
 
@@ -182,7 +183,7 @@ mod from_serde_surface {
     #[cfg(feature = "x-wide")]
     #[test]
     fn d153_d307_serde_json_round_trip() {
-        use decimal_scaled::{D76, D153, D307};
+        use decimal_scaled::{D153, D307, D76};
 
         let v: D153<6> = D38::<6>::try_from(42).unwrap().into();
         let s = serde_json::to_string(&v).unwrap();
@@ -227,7 +228,10 @@ mod from_serde_surface {
         let back_bin: T = postcard::from_bytes(&bin1).unwrap();
         assert_eq!(back_bin, value, "postcard round-trip changed the value");
         let bin2 = postcard::to_allocvec(&back_bin).unwrap();
-        assert_eq!(bin1, bin2, "postcard wire form is not stable on re-serialise");
+        assert_eq!(
+            bin1, bin2,
+            "postcard wire form is not stable on re-serialise"
+        );
     }
 
     /// Generates a round-trip test for one decimal width `$ty` whose storage

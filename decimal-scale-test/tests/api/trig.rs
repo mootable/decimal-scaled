@@ -76,7 +76,12 @@ mod from_src_trig {
             check!("sinh", raw, x.sinh_strict().to_bits().as_i128(), f64::sinh);
             check!("cosh", raw, x.cosh_strict().to_bits().as_i128(), f64::cosh);
             check!("tanh", raw, x.tanh_strict().to_bits().as_i128(), f64::tanh);
-            check!("asinh", raw, x.asinh_strict().to_bits().as_i128(), f64::asinh);
+            check!(
+                "asinh",
+                raw,
+                x.asinh_strict().to_bits().as_i128(),
+                f64::asinh
+            );
         }
         for &raw in &[
             -1_000_000_000_i128,
@@ -93,7 +98,12 @@ mod from_src_trig {
         }
         for &raw in &[-900_000_000_i128, -300_000_000, 1, 300_000_000, 900_000_000] {
             let x = decimal_scaled::D::<Int<2>, 9>::from_bits(Int::<2>::try_from(raw).unwrap());
-            check!("atanh", raw, x.atanh_strict().to_bits().as_i128(), f64::atanh);
+            check!(
+                "atanh",
+                raw,
+                x.atanh_strict().to_bits().as_i128(),
+                f64::atanh
+            );
         }
         for &raw in &[
             1_000_000_000_i128,
@@ -102,7 +112,12 @@ mod from_src_trig {
             50_000_000_000,
         ] {
             let x = decimal_scaled::D::<Int<2>, 9>::from_bits(Int::<2>::try_from(raw).unwrap());
-            check!("acosh", raw, x.acosh_strict().to_bits().as_i128(), f64::acosh);
+            check!(
+                "acosh",
+                raw,
+                x.acosh_strict().to_bits().as_i128(),
+                f64::acosh
+            );
         }
         for &raw in &[
             -1_000_000_000_i128,
@@ -472,5 +487,4 @@ mod from_src_trig {
             );
         }
     }
-
 }

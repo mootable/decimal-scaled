@@ -307,6 +307,66 @@ Further reading:
 - Wikipedia - [Inverse hyperbolic functions § Series expansions](https://en.wikipedia.org/wiki/Inverse_hyperbolic_functions#Series_expansions) (the `artanh` series the crate evaluates)
 - Wolfram MathWorld - [Mercator Series](https://mathworld.wolfram.com/MercatorSeries.html), [Inverse Hyperbolic Tangent](https://mathworld.wolfram.com/InverseHyperbolicTangent.html)
 
+### `log1p` via `artanh` on `u = t / (2 + t)`
+
+`log1p(t) = ln(1 + t)`, evaluated without ever forming `ln`. The
+substitution `u = t / (2 + t)` makes `(1 + u) / (1 − u) = 1 + t`
+exactly, so
+
+```text
+log1p(t) = 2·artanh(u) = 2·(u + u³/3 + u⁵/5 + …)
+```
+
+— the same Mercator / `artanh` family as the `ln` entries above, but
+evaluated directly on `t` with no range reduction. The convergence ratio
+is `u²`.
+
+The matcher routes `t ∈ [−1/2, +1]` here, which is exactly the preimage
+of `|u| ≤ 1/3`: a ratio of at most `1/9`, so at most `≈2.1·w` terms at
+working scale `w`. That is a **validity wall, not a tuning threshold** —
+outside it `|u| → 1` as `t → −1` or `t → ∞`, the term count grows without
+bound, and the series would hit its iteration cap and return a truncated
+*wrong* value rather than a slow one.
+
+**What is different at fixed point.** In binary floating point `log1p`
+exists to avoid the cancellation in `1 + t` for small `|t|`: `1 + t` is
+not representable and the leading digits of `t` are destroyed before the
+logarithm is taken. Here `1 + t` **is** exactly representable at the
+storage scale, so there is no cancellation to avoid. This kernel is
+therefore **parity** with `ln(1 + t)` at the same scale, not an accuracy
+improvement — it is offered because the function is expected on a
+transcendental surface, and because inside the band it skips `ln`'s
+range reduction, not because it rounds better.
+
+> Mercator, N. (1668). *Logarithmotechnia*. (Cited via Borwein &
+> Borwein, "Pi and the AGM", 1987, Wiley.)
+
+The cancellation argument that motivates `log1p` in binary formats — and
+which, as above, does **not** apply at fixed point:
+
+> Goldberg, D. (1991). **"What Every Computer Scientist Should Know
+> About Floating-Point Arithmetic."** *ACM Computing Surveys* 23(1),
+> 5–48.
+
+Implementation: `src/algos/log1p/log1p_artanh.rs`; the region is
+`src/policy/log1p.rs::classify`.
+
+### `log1p` by composition with `ln` (general argument)
+
+Outside the `artanh` region the kernel forms `1 + t` at working scale and
+calls `ln`, inheriting that function's multi-level sqrt argument
+reduction and so being uniformly correct over the whole domain `t > −1`.
+
+This is the matcher's default arm rather than a fallback: the split is
+stated on the series' own convergence, so each kernel runs exactly where
+it is valid. And because `1 + t` is exact at fixed point, the
+composition loses nothing to cancellation — which is why a *composed*
+`log1p` is a correct implementation here, and would not be in a binary
+format.
+
+Implementation: `src/algos/log1p/log1p_with_ln.rs`; the region is
+`src/policy/log1p.rs::classify`.
+
 ### `exp` via two-stage argument reduction + Taylor
 
 Wide-tier exp uses Brent's two-stage argument reduction (dashu's
@@ -366,6 +426,100 @@ Further reading:
 - Wikipedia - [Exponential function § Computation](https://en.wikipedia.org/wiki/Exponential_function#Computation) (the Taylor series and the `2^k · exp(s)` reduction)
 - Wikipedia - [Taylor series § Exponential function](https://en.wikipedia.org/wiki/Taylor_series#Exponential_function)
 - Wolfram MathWorld - [Exponential Function](https://mathworld.wolfram.com/ExponentialFunction.html), [Maclaurin Series](https://mathworld.wolfram.com/MaclaurinSeries.html)
+
+### `expm1` via Taylor at working scale
+
+`expm1(x) = e^x − 1` summed directly as `x + x²/2! + x³/3! + …`, seeded
+with the **exact input** (`sum = x`), so the leading term carries no
+rounding of its own and the `− 1` is never formed as a subtraction at
+all.
+
+The matcher routes `|x| ≤ 1` here, and this too is a **validity wall,
+not a tuning threshold**: the series carries no range reduction and
+fails outside the band in two different ways depending on the sign.
+
+- `x < 0` — the series alternates, so its cancellation loss is
+  `max term / |sum|`. At `x = −1` that is `1 / 0.63212`, about **0.66
+  bits** — under one bit, so the whole band is safe. Past it the loss
+  grows like `e^|x|` and eats the guard.
+- `x > 0` — the terms peak at `m ≈ x` with value `≈ e^x / √(2πx)`, so the
+  intermediate reaches the *size of the result* and the work integer
+  would have to host `e^x` on top of the series' own `2·w`-digit
+  product. Inside `x ≤ 1` the peak term is bounded by `1`, so no such
+  lift is needed.
+
+Both failures are unbounded in the term count as well, so outside the
+band the series stops at its cap and returns a truncated *wrong* value
+rather than a slow one.
+
+> Cody, W. J. and Waite, W. (1980). **"Software Manual for the
+> Elementary Functions."** Prentice-Hall.
+
+Implementation: `src/algos/expm1/expm1_series.rs`; the region is
+`src/policy/expm1.rs::classify`.
+
+### `expm1` by composition with `exp` (general argument)
+
+Outside the series band the kernel evaluates `exp` and subtracts one **at
+working scale**, inheriting `exp`'s `k·ln 2` range reduction and its peak
+model, and so is uniformly correct there.
+
+**Why the public `expm1` cannot simply be `exp(x) − 1`.** For the three
+nearest modes and for `Floor` / `Ceiling`, rounding commutes with the
+subtraction and the composed form at *storage* scale would be correct.
+**`Trunc` does not commute.** Truncation rounds toward zero, so for
+`x < 0` the subtraction crosses zero: `e^x` lies in `(0, 1)` and has its
+magnitude rounded DOWN, while `expm1(x) < 0` must have its magnitude
+rounded UP to be rounding toward zero. The two disagree by one ULP.
+
+That is a correctness reason which survives fixed point, and it is why
+the trait methods are *required* rather than provided with a default body
+composed from `exp`. The composition is correct only when performed at
+working scale, before the storage rounding — which is exactly what this
+kernel does.
+
+Implementation: `src/algos/expm1/expm1_via_exp.rs`; the region is
+`src/policy/expm1.rs::classify`.
+
+### `expm1` via binary halving + the `E·(E + 2)` doubling recurrence (kept, unrouted)
+
+Reduce by an exact binary right shift, `u = v / 2^n`; evaluate the
+leading-term-dropped Taylor series on the tiny `u`; then climb back `n`
+times with
+
+```text
+expm1(2u) = e^{2u} − 1 = (e^u − 1)(e^u + 1) = E·(E + 2)
+```
+
+No `ln 2` constant, no range-reduction division, and the recurrence is
+cancellation-free — for `x ≤ 0` it is contracting, which is the regime
+where the alternating series is least comfortable.
+
+**Not routed.** Kept as a documented alternative per the crate's
+"algorithms are never deleted" rule: it is a distinct reduction that
+could win at a width or scale the current matcher does not favour, and
+it is reached only by its own tests.
+
+Implementation: `src/algos/expm1/expm1_halving.rs` (unrouted).
+
+### `expm1` via `k·ln 2` reduction + `2^k` reassembly (kept, unrouted)
+
+The classic reduction `v = k·ln 2 + s` with `k = round(v / ln 2)` and
+`|s| ≤ ln2/2`, so `e^v = 2^k·e^s` and, with `E = expm1(s)` and
+`P = 10^w`,
+
+```text
+expm1(v) = 2^k·(1 + E) − 1     i.e.     ((P + E) << k) − P
+```
+
+The reassembly stays in the integer domain — a shift and a subtract —
+rather than re-multiplying, and the term peak is flat for large positive
+`x`, the regime where the direct series is worst.
+
+**Not routed**, and kept on the same basis as the halving candidate
+above.
+
+Implementation: `src/algos/expm1/expm1_reduced.rs` (unrouted).
 
 ### `sin` via [0, π/4] reduction with sin / cos branching
 
@@ -537,6 +691,66 @@ Further reading:
 
 - Wikipedia - [Rounding § Round half to even](https://en.wikipedia.org/wiki/Rounding#Round_half_to_even) (the tie-breaking rule the crate uses by default)
 - Wikipedia - [IEEE 754 § Roundings to nearest](https://en.wikipedia.org/wiki/IEEE_754#Roundings_to_nearest)
+
+### Directed rounding by alternating-series bracket
+
+A directed mode needs to know which side of the returned grid point the
+true value lies on. When the deciding Taylor term sits below the
+widening walker's reach, the walker sees a zero residual and returns the
+grid point mode-blind — correct for the nearest modes, wrong for
+whichever directed mode had to step off it.
+
+Rather than *name* the deciding term and infer the side from its sign,
+this bracket **proves** the side. For a series whose terms alternate in
+sign and decrease strictly in magnitude, consecutive partial sums lie on
+opposite sides of the limit, so any two adjacent ones straddle it. With
+`ρ` the magnitude the walker returned, two exact integer comparisons
+
+```text
+ρ ≤ P_lower  and  P_upper ≤ ρ + 1     ⟹     ρ < V < ρ + 1
+ρ − 1 ≤ P_lower  and  P_upper ≤ ρ     ⟹     ρ − 1 < V < ρ
+```
+
+localise the true value `V` to a single open unit interval, from which
+every directed mode's answer follows outright. Both are theorems about
+the series: no width gate, no scale gate, no tolerance, and no reading of
+the walker's own "decided" flag. The test is therefore false for every
+correctly-rounded result and can fire only on a wrong one; where neither
+bracket closes it reports nothing and the caller's existing path stands.
+
+**The precondition is what selects the functions.** Strictly decreasing
+terms *alternating in sign* is exactly what makes consecutive partial
+sums straddle rather than approach from one side. `sin`, `cos`, `atan`
+and `asinh` satisfy it. `tan` and `asin` do **not** — their Taylor
+coefficients are all positive, so their partial sums climb toward the
+value from below and never bracket it; they are excluded on that ground
+rather than by a gate. `atan2` needs the bracket posed on the exact
+rational `y/x` rather than on a storage value, since its series argument
+is a quotient.
+
+The estimation theorem is Leibniz's, and the alternating-series criterion
+carries his name:
+
+> Knopp, K. (1990). **"Theory and Application of Infinite Series."**
+> Dover Publications (translation of *Theorie und Anwendung der
+> unendlichen Reihen*). The Leibniz criterion for alternating series and
+> its remainder estimate.
+
+The escalation the bracket rescues — recompute at increasing precision,
+test, and repeat until the rounding is decided — is Ziv's strategy:
+
+> Ziv, A. (1991). **"Fast evaluation of elementary mathematical
+> functions with correctly rounded last bit."** *ACM Transactions on
+> Mathematical Software* 17(3), 410–423.
+
+Implementation: `src/algos/support/wide_trig_core.rs::adjust_alternating_bracket`
+(storage arguments) and `::adjust_alternating_bracket_ratio` (`atan2`,
+posed on `y/x`); the shared loop is `::alternating_bracket_core`.
+
+Further reading:
+
+- Wikipedia - [Alternating series test](https://en.wikipedia.org/wiki/Alternating_series_test) (the criterion and the remainder bound the bracket uses)
+- Wikipedia - [Alternating series § Approximating sums](https://en.wikipedia.org/wiki/Alternating_series#Approximating_sums)
 
 ## Constants
 

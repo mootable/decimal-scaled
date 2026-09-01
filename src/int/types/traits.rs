@@ -84,6 +84,18 @@ pub trait BigInt:
     fn is_zero(self) -> bool;
     fn is_one(self) -> bool;
 
+    // ── Sign ─────────────────────────────────────────────────────────
+
+    /// Absolute value — the sign drop, WRAPPING at the width's minimum
+    /// (`MIN.abs() == MIN`), exactly as [`Int::abs`] defines it.
+    ///
+    /// Exposed on the trait because a kernel generic over `S: BigInt`
+    /// cannot reach the inherent method, and every one that needed it had
+    /// written its own `fn abs<S: BigInt>(v: S) -> S` instead.
+    ///
+    /// [`Int::abs`]: crate::int::types::Int::abs
+    fn abs(self) -> Self;
+
     // ── Wrapping arithmetic ──────────────────────────────────────────
 
     fn wrapping_add(self, rhs: Self) -> Self;
@@ -228,6 +240,11 @@ impl<const N: usize> BigInt for Int<N> {
     #[inline]
     fn is_one(self) -> bool {
         Int::is_one(&self)
+    }
+
+    #[inline]
+    fn abs(self) -> Self {
+        Int::abs(self)
     }
 
     #[inline]

@@ -27,6 +27,24 @@
 //!   0.5.0 contract panics everywhere in every build — that difference is
 //!   exactly what the report shows.)
 
+use decimal_scaled_golden::Function;
+
+/// Functions the LIVE surface declares — and so [`crate::FUNCS`] lists — that NO
+/// pinned historical release implements.
+///
+/// [`crate::FUNCS`] is the live function list, shared with the live subject, so a
+/// function added to the current surface becomes visible to every history subject
+/// the moment it lands. A release that predates the function has no kernel for it,
+/// and declaring it would send the gate straight into the unreachable panic arm of
+/// this module's `compute`. Filtering it out here keeps each era's capability map
+/// honest, exactly as the per-version `supports` predicate does — this list is the
+/// era-INVARIANT half of that same rule, for a fact true of every pinned release
+/// rather than of one width or one version.
+///
+/// `log1p` and `expm1` both landed on the live surface in 0.5.1; no 0.3.x/0.4.x
+/// release has either.
+const NOT_IN_ANY_RELEASE: &[Function] = &[Function::Expm1, Function::Log1p];
+
 /// Generate one historical-version subject module: the crate-era bridge
 /// (`RoundingMode` map + inherent `mul_with`/`div_with` ops trait), the generic
 /// compute/limits leaves, the `(width, scale)` dispatch over that version's cell
@@ -107,6 +125,15 @@ macro_rules! historical_subject {
                     Function::Log2 => x.log2_strict_with(m),
                     Function::Log10 => x.log10_strict_with(m),
                     Function::Exp2 => x.exp2_strict_with(m),
+                    // Neither function exists in any pinned historical release, so
+                    // this arm is unreachable. Both are now LIVE, so `FUNCS` declares
+                    // both; both are kept out of every era's capability map by
+                    // `NOT_IN_ANY_RELEASE`, and the runner never executes a function
+                    // the subject does not declare. Anything added to `FUNCS` that
+                    // predates no release must join that list, or it lands here.
+                    Function::Expm1 | Function::Log1p => {
+                        panic!("no decimal-scaled {} kernel", func.name())
+                    }
                     Function::Sin => x.sin_strict_with(m),
                     Function::Cos => x.cos_strict_with(m),
                     Function::Tan => x.tan_strict_with(m),
@@ -272,7 +299,7 @@ macro_rules! historical_subject {
                     let supports: fn(u32, Function) -> bool = $supports;
                     let mut functions = BTreeMap::new();
                     for &f in FUNCS {
-                        if !supports(self.width, f) {
+                        if super::NOT_IN_ANY_RELEASE.contains(&f) || !supports(self.width, f) {
                             continue;
                         }
                         functions.insert(f, FnSupport { mode: self.mode, overflow: self.overflow(f) });

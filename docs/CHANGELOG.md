@@ -7,12 +7,17 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [0.5.1] — unreleased
 
-A non-breaking API release. Operators now work between decimals of
-different storage width and different `SCALE`; a new `requantize` moves
-both the width and the scale axis in one call; and the scale-only
-operation takes the name the decimal arithmetic specification uses for
-it — `quantize`. The former `rescale` spellings remain as deprecated
-aliases.
+An API release, non-breaking for callers. Operators now work between
+decimals of different storage width and different `SCALE`; a new
+`requantize` moves both the width and the scale axis in one call; and the
+scale-only operation takes the name the decimal arithmetic specification
+uses for it — `quantize`. The former `rescale` spellings remain as
+deprecated aliases. Two functions join the transcendental surface,
+`log1p` and `expm1`, both correctly rounded at every width and scale.
+
+Code that *implements* `DynDecimal` or `DecimalTranscendental` outside the
+crate does need an update — see **Breaking — for trait implementors only**
+at the end of this section.
 
 ### Added
 
@@ -33,6 +38,30 @@ aliases.
   scale-up, scale down before narrowing — so a value the target width
   can hold does not overflow on the way there. Overflow panics with the
   crate's standard wording.
+- **Public `log1p`.** `log1p(t) = ln(1 + t)`, domain `t > -1`, correctly
+  rounded at every width and scale, with the full surface — `log1p_strict`,
+  `log1p_strict_with`, `log1p_approx`, `log1p_approx_with`, the `_fast`
+  pair, and `DecimalTranscendental` entries. Provided for API parity and
+  standards conformance: at fixed point it is *equivalent* to `ln(1 + t)` at
+  the same scale, **not more accurate** — `1 + t` is exactly representable,
+  so there is no cancellation to avoid, unlike binary floating point.
+- **Public `expm1`.** `expm1(x) = e^x - 1`, total over the argument,
+  correctly rounded at every width and scale, with the same full surface —
+  `expm1_strict`, `expm1_strict_with`, `expm1_approx`, `expm1_approx_with`,
+  the `_fast` pair, and `DecimalTranscendental` entries.
+
+  Unlike `log1p`, this one is not merely parity. **`Trunc` does not commute
+  with the `- 1`**, so on the negative half `exp(x) - 1` is a genuinely wrong
+  answer rather than a slower one: `Trunc` rounds toward zero, and for
+  `x < 0` the subtraction crosses zero — `e^x` lies in `(0, 1)` and has its
+  magnitude rounded *down*, while `expm1(x) < 0` is rounded *up* — leaving
+  the two-step form one ULP out. `Floor`, `Ceiling` and the nearest modes
+  commute, since they are translations by a grid point; `Trunc` does not.
+
+  It also reaches slightly further than `exp`: the `- 1` is applied at the
+  working scale, ahead of the range check, so the domain is
+  `x <= ln(1 + MAX)` against `exp`'s `x <= ln(MAX)` — a band `ln(1 + 1/MAX)`
+  wide, a few hundredths of an argument unit.
 
 ### Changed
 
@@ -51,11 +80,95 @@ aliases.
 - The scale-up overflow panic message names `quantize` rather than
   `rescale`.
 
+- **`DynDecimal` now formats without allocating.** The trait requires
+  `core::fmt::Display`, so `{}` works directly on a `dyn DynDecimal` and the
+  caller chooses whether to allocate.
+
+### Fixed
+
+- **`ln` returned the nearest-mode answer under `Ceiling` near `x = 1`**
+  (present since 0.5.0). At D616<590>, D616<615> and D924<693>,
+  `ln_strict_with(Ceiling)` gave the `HalfToEven` result. The near-one
+  guard tested only the *tangent* bracket — whether the result equals the
+  linear term `δ = x - 1`. For arguments where `δ²/2` happens to be an
+  exact multiple of one ULP, the value instead lands on the *parabola*
+  point `δ - δ²/2`, a different grid point, so the guard did not fire; the
+  deciding cubic then sits at depth ~3·SCALE/2, past the Ziv walker's
+  reach, and the kernel treats the value as exactly on the grid.
+
+  It is one-sided for a reason worth recording: since
+  `d/du [ln(1+u) - u + u²/2] = u²/(1+u)` is strictly positive and vanishes
+  at `u = 0`, the true value lies strictly *above* the parabola for
+  `x > 1` and strictly *below* it for `x < 1`. So a value landing on the
+  parabola leaves `Floor`, `Trunc` and the nearest modes accidentally
+  correct, and only `Ceiling` wrong.
+
+  Both brackets now live in one generic kernel, and the test is an exact
+  integer comparison evaluated at double width — `δ²` genuinely overflows
+  a single width at high scales, so a single-width check would pass the
+  cells that exposed the bug and fail wider members of the same family.
+  Not fixed by raising the walker cap.
+- **`log1p` sub-resolution directed rounding near `t = 0`.** For `t` at one
+  LSB the deficit `t²/2` falls below the Ziv precision horizon, so the walker
+  saw a zero residual and `Floor` returned one LSB high (reproduced at
+  D1232<1231>). Resolved analytically, mirroring how the Tang `ln` path
+  handles the same situation near 1 — not by raising the walker cap.
+  `log1p` carried the **same** too-narrow tangent-only guard as `ln` above,
+  so the parabola case reached it too; both are now faces over the shared
+  kernel and were fixed together.
+- **Golden validator: an unsound oracle could veto a sound vector.** A
+  validator that *cannot represent* an input abstains harmlessly, but one that
+  computes a wrong value drops the whole line — so it could discard a vector
+  that the reliable oracles agreed on, leaving a silent hole in coverage
+  exactly at the hardest inputs. It was the `mpmath` validator doing this near
+  `log1p`'s `t = -1` pole, `atanh`'s endpoints and `acosh` at 1 — but the
+  cause was *ours*, not the library's: this repo's mpmath adapter budgeted
+  working precision from the **result's** magnitude with no term for the
+  condition number, so at `1 + t = 1e-70` it sized against
+  `ln(1e-70) ~= -161` — three integer digits — while the derivative
+  `1 / (1 + t)` destroyed seventy. The adapter now sizes by the worse of the
+  result's magnitude and `A = log10 |x . grad f(x)|`, the digits the function
+  itself destroys; the same latent defect affected `sin`/`cos`/`tan` of a
+  large argument, where `A = log10|x|` is exactly the range-reduction cost.
+  A per-function `VALIDATOR_EXCLUDE` facility remains for a genuinely
+  non-viable validator, but it is now empty.
+
+  *(Oracle-only — this is the test harness that grades the crate, not shipped
+  code. No golden value changed: all 4149 `atanh` and 4302 `acosh` committed
+  lines revalidate identically.)*
+
 ### Deprecated
 
 - **`rescale` / `rescale_with`** and **`DynDecimal::rescale_to` /
   `rescale_to_with`** — renamed as above. They delegate unchanged and
   are **removed in 0.6.0**.
+- **`DynDecimal::display`** — the trait now requires `Display`, so use `{}`
+  formatting instead. `display()` always allocates a `String`; the deprecated
+  method delegates unchanged and is **removed in 0.6.0**.
+
+### Breaking — for trait *implementors* only
+
+Callers are unaffected: every rename keeps a working deprecated alias, and
+everything else is additive. But `DynDecimal` and `DecimalTranscendental` are
+deliberately **not sealed** — they are extension points, and implementing them
+from outside the crate is the intent — so the following require an update to
+an external `impl`:
+
+- **`DynDecimal` gained a `Display` supertrait.** An external implementor must
+  also provide `Display`.
+- **`DynDecimal::quantize_to` / `quantize_to_with` are the required methods**;
+  `rescale_to` / `rescale_to_with` became deprecated *provided* methods.
+- **`DecimalTranscendental` gained four required `log1p_*` methods**, and
+  four required `expm1_*` methods. Neither could sensibly be a *provided*
+  method: a default body would have to compose the result from `ln`/`exp`,
+  and for `expm1` that composition is demonstrably wrong under `Trunc` on
+  the negative half (see Added). A default that is incorrect for one
+  rounding mode is worse than a required method.
+
+Accepted deliberately at this point in the pre-1.0 series, where Cargo treats
+all `0.5.x` as compatible. Future additions to either trait should prefer
+*provided* methods with default bodies, so an implementor is not forced to
+update every time a function is added.
 
 ## [0.5.0] — 2026-06-14
 

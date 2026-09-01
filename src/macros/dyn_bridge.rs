@@ -308,9 +308,9 @@ macro_rules! decl_decimal_dyn_impl {
                 }
             }
 
-            fn display(&self) -> ::alloc::string::String {
-                ::alloc::format!("{}", self)
-            }
+            // `display()` is no longer emitted per width: `DynDecimal` requires
+            // `Display`, so the trait's deprecated default body covers it and
+            // the caller can format without allocating at all.
 
             #[cfg(feature = "std")]
             fn to_f64(&self) -> f64 {

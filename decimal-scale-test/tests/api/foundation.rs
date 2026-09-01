@@ -163,14 +163,23 @@ mod from_src_widths {
             D38s12::from_bits(Int::<2>::try_from(42_000_000_000_000_i128).unwrap()),
             D38s12::from_bits(Int::<2>::try_from(42_000_000_000_000_i128).unwrap())
         );
-        assert_ne!(D38s12::from_bits(Int::<2>::try_from(42_i128).unwrap()), D38s12::from_bits(Int::<2>::try_from(43_i128).unwrap()));
+        assert_ne!(
+            D38s12::from_bits(Int::<2>::try_from(42_i128).unwrap()),
+            D38s12::from_bits(Int::<2>::try_from(43_i128).unwrap())
+        );
     }
 
     /// Ord is derived from i128: smaller bits compare less.
     #[test]
     fn ord_by_underlying_bits() {
-        assert!(D38s12::from_bits(Int::<2>::try_from(1_i128).unwrap()) < D38s12::from_bits(Int::<2>::try_from(2_i128).unwrap()));
-        assert!(D38s12::from_bits(Int::<2>::try_from(-1_i128).unwrap()) < D38s12::from_bits(Int::<2>::try_from(0_i128).unwrap()));
+        assert!(
+            D38s12::from_bits(Int::<2>::try_from(1_i128).unwrap())
+                < D38s12::from_bits(Int::<2>::try_from(2_i128).unwrap())
+        );
+        assert!(
+            D38s12::from_bits(Int::<2>::try_from(-1_i128).unwrap())
+                < D38s12::from_bits(Int::<2>::try_from(0_i128).unwrap())
+        );
     }
 
     /// `multiplier()` returns 10^SCALE. At SCALE = 12 that is 10^12.
@@ -193,8 +202,14 @@ mod from_src_widths {
     fn scale_method_matches_type_parameter() {
         assert_eq!(D38s12::ZERO.scale(), 12);
         assert_eq!(D38s12::ONE.scale(), 12);
-        assert_eq!(D38s12::from_bits(Int::<2>::try_from(i128::MAX).unwrap()).scale(), 12);
-        assert_eq!(D38s12::from_bits(Int::<2>::try_from(-7_i128).unwrap()).scale(), 12);
+        assert_eq!(
+            D38s12::from_bits(Int::<2>::try_from(i128::MAX).unwrap()).scale(),
+            12
+        );
+        assert_eq!(
+            D38s12::from_bits(Int::<2>::try_from(-7_i128).unwrap()).scale(),
+            12
+        );
     }
 
     /// Both forms agree at non-default scales.
@@ -275,9 +290,11 @@ mod from_src_widths {
 
     #[test]
     fn d18_display() {
-        let v: decimal_scaled::D18s9 = decimal_scaled::D18s9::from_bits(Int::<1>::from(1_500_000_000_i64)); // 1.500000000
+        let v: decimal_scaled::D18s9 =
+            decimal_scaled::D18s9::from_bits(Int::<1>::from(1_500_000_000_i64)); // 1.500000000
         assert_eq!(format!("{}", v), "1.500000000");
-        let neg: decimal_scaled::D18s9 = decimal_scaled::D18s9::from_bits(Int::<1>::from(-1_500_000_000_i64));
+        let neg: decimal_scaled::D18s9 =
+            decimal_scaled::D18s9::from_bits(Int::<1>::from(-1_500_000_000_i64));
         assert_eq!(format!("{}", neg), "-1.500000000");
     }
 
@@ -290,14 +307,16 @@ mod from_src_widths {
 
     #[test]
     fn cross_width_narrowing_d38_to_d18_in_range() {
-        let wide: decimal_scaled::D38s9 = decimal_scaled::D38s9::from_bits(Int::<2>::try_from(1_500_000_000_i128).unwrap());
+        let wide: decimal_scaled::D38s9 =
+            decimal_scaled::D38s9::from_bits(Int::<2>::try_from(1_500_000_000_i128).unwrap());
         let narrow: decimal_scaled::D18s9 = wide.try_into().unwrap();
         assert_eq!(narrow.to_bits(), 1_500_000_000);
     }
 
     #[test]
     fn cross_width_narrowing_d38_to_d18_out_of_range() {
-        let wide: decimal_scaled::D38s9 = decimal_scaled::D38s9::from_bits(Int::<2>::try_from(i128::MAX).unwrap());
+        let wide: decimal_scaled::D38s9 =
+            decimal_scaled::D38s9::from_bits(Int::<2>::try_from(i128::MAX).unwrap());
         let narrow: Result<decimal_scaled::D18s9, _> = wide.try_into();
         assert!(narrow.is_err());
     }
@@ -371,15 +390,13 @@ mod from_src_widths {
         type D = decimal_scaled::D<Int<4>, 12>;
         let one = D::ONE;
         let two = D::from_bits(D::multiplier() + D::multiplier());
-        let three =
-            D::from_bits(D::multiplier() * Int::<4>::from_str_radix("3", 10).unwrap());
+        let three = D::from_bits(D::multiplier() * Int::<4>::from_str_radix("3", 10).unwrap());
         // add / sub / neg
         assert_eq!((one + two), three);
         assert_eq!((three - one), two);
         assert_eq!((-one).to_bits(), -D::multiplier());
         // mul: 2 * 3 == 6
-        let six =
-            D::from_bits(D::multiplier() * Int::<4>::from_str_radix("6", 10).unwrap());
+        let six = D::from_bits(D::multiplier() * Int::<4>::from_str_radix("6", 10).unwrap());
         assert_eq!((two * three), six);
         // div: 6 / 2 == 3
         assert_eq!((six / two), three);
@@ -398,8 +415,7 @@ mod from_src_widths {
         v %= two;
         assert_eq!(v, D::ZERO);
         // fractional: 1.5 * 1.5 == 2.25 at scale 12
-        let half =
-            D::from_bits(D::multiplier() / Int::<4>::from_str_radix("2", 10).unwrap());
+        let half = D::from_bits(D::multiplier() / Int::<4>::from_str_radix("2", 10).unwrap());
         let one_and_half = one + half;
         let product = one_and_half * one_and_half;
         let expected = D::from_bits(
@@ -417,8 +433,7 @@ mod from_src_widths {
         assert_eq!(format!("{}", one), "1.000000000000");
         assert_eq!(format!("{}", -one), "-1.000000000000");
         assert_eq!(format!("{}", D::ZERO), "0.000000000000");
-        let half =
-            D::from_bits(D::multiplier() / Int::<4>::from_str_radix("2", 10).unwrap());
+        let half = D::from_bits(D::multiplier() / Int::<4>::from_str_radix("2", 10).unwrap());
         assert_eq!(format!("{}", half), "0.500000000000");
         assert_eq!(format!("{:?}", one), "D76<12>(1.000000000000)");
         // scale 0 prints no fractional part
@@ -452,8 +467,7 @@ mod from_src_widths {
         assert_eq!(D::ONE.copysign(neg), neg);
         assert_eq!(neg.copysign(D::ONE), D::ONE);
         // recip: 1/2 at scale 6
-        let half =
-            D::from_bits(D::multiplier() / Int::<4>::from_str_radix("2", 10).unwrap());
+        let half = D::from_bits(D::multiplier() / Int::<4>::from_str_radix("2", 10).unwrap());
         assert_eq!(two.recip(), half);
     }
 
@@ -492,8 +506,8 @@ mod from_src_widths {
     #[cfg(feature = "wide")]
     #[test]
     fn d76_consts_and_from_str() {
-        use decimal_scaled::DecimalConstants;
         use core::str::FromStr;
+        use decimal_scaled::DecimalConstants;
         // pi at scale 12 matches the D38 reference.
         assert_eq!(
             decimal_scaled::D::<Int<4>, 12>::pi().to_bits(),
@@ -505,10 +519,7 @@ mod from_src_widths {
         );
         // FromStr within i128 range
         let v = decimal_scaled::D::<Int<4>, 2>::from_str("1.50").unwrap();
-        assert_eq!(
-            v.to_bits(),
-            Int::<4>::from_str_radix("150", 10).unwrap()
-        );
+        assert_eq!(v.to_bits(), Int::<4>::from_str_radix("150", 10).unwrap());
         let neg = decimal_scaled::D::<Int<4>, 2>::from_str("-20.50").unwrap();
         assert_eq!(
             neg.to_bits(),
@@ -570,9 +581,13 @@ mod from_src_widths {
         assert_eq!(neg_two_and_half.to_int_with(RoundingMode::Floor), -3);
         assert_eq!(neg_two_and_half.to_int_with(RoundingMode::Trunc), -2);
         // cross-width widening D38 -> D76 (lossless)
-        let d38: decimal_scaled::D38s6 = decimal_scaled::D38s6::from_bits(Int::<2>::try_from(-150_i128).unwrap());
+        let d38: decimal_scaled::D38s6 =
+            decimal_scaled::D38s6::from_bits(Int::<2>::try_from(-150_i128).unwrap());
         let widened: decimal_scaled::D<Int<4>, 6> = d38.into();
-        assert_eq!(widened.to_bits(), Int::<4>::from_str_radix("-150", 10).unwrap());
+        assert_eq!(
+            widened.to_bits(),
+            Int::<4>::from_str_radix("-150", 10).unwrap()
+        );
         // cross-width narrowing D76 -> D38 in range
         let in_range: decimal_scaled::D<Int<4>, 6> =
             decimal_scaled::D::<Int<4>, 6>::from_bits(Int::<4>::from_str_radix("999", 10).unwrap());
@@ -601,10 +616,13 @@ mod from_src_widths {
         let down: decimal_scaled::D<Int<4>, 2> = v.quantize::<2>();
         assert_eq!(down.to_bits(), Int::<4>::from_str_radix("150", 10).unwrap());
         // rescale down with explicit mode: 2.5 (scale 0 representation) ...
-        let two_p_five = decimal_scaled::D::<Int<4>, 1>::from_bits(Int::<4>::from_str_radix("25", 10).unwrap());
-        let r0: decimal_scaled::D<Int<4>, 0> = two_p_five.quantize_with::<0>(RoundingMode::HalfToEven);
+        let two_p_five =
+            decimal_scaled::D::<Int<4>, 1>::from_bits(Int::<4>::from_str_radix("25", 10).unwrap());
+        let r0: decimal_scaled::D<Int<4>, 0> =
+            two_p_five.quantize_with::<0>(RoundingMode::HalfToEven);
         assert_eq!(r0.to_bits(), Int::<4>::from_str_radix("2", 10).unwrap());
-        let r0b: decimal_scaled::D<Int<4>, 0> = two_p_five.quantize_with::<0>(RoundingMode::HalfAwayFromZero);
+        let r0b: decimal_scaled::D<Int<4>, 0> =
+            two_p_five.quantize_with::<0>(RoundingMode::HalfAwayFromZero);
         assert_eq!(r0b.to_bits(), Int::<4>::from_str_radix("3", 10).unwrap());
         // floor / ceil / round / trunc / fract on 1.5 at scale 6
         assert_eq!(v.floor(), D6::ONE);
@@ -639,7 +657,10 @@ mod from_src_widths {
         use Int;
         type D = decimal_scaled::D<Int<8>, 35>;
         assert_eq!(<D as DecimalArithmetic>::MAX_SCALE, 152);
-        assert_eq!(D::ZERO.to_bits(), Int::<8>::from_str_radix("0", 10).unwrap());
+        assert_eq!(
+            D::ZERO.to_bits(),
+            Int::<8>::from_str_radix("0", 10).unwrap()
+        );
         let one = D::ONE;
         let two = one + one;
         let three = two + one;
@@ -666,7 +687,10 @@ mod from_src_widths {
         let three = two + one;
         assert_eq!(two * three, D::try_from(6i128).unwrap());
         assert_eq!((three * two) / two, three);
-        assert_eq!(D::ZERO.to_bits(), Int::<16>::from_str_radix("0", 10).unwrap());
+        assert_eq!(
+            D::ZERO.to_bits(),
+            Int::<16>::from_str_radix("0", 10).unwrap()
+        );
         assert_eq!(format!("{}", one).len(), "1.".len() + 35);
         // cross-width: D76 -> D307 widening, D307 -> D76 narrowing
         #[cfg(feature = "wide")]
@@ -680,7 +704,6 @@ mod from_src_widths {
         // 306-digit ceiling multiplier fits in Int<16> (new MAX_SCALE)
         let _ = decimal_scaled::D307s306::multiplier();
     }
-
 }
 
 mod from_src_unified {
@@ -690,8 +713,10 @@ mod from_src_unified {
     /// same SCALE.
     #[test]
     fn cross_width_equal_values() {
-        let narrow: decimal_scaled::D<Int<1>, 2> = decimal_scaled::D::<Int<1>, 2>::try_from(5_i64).unwrap();
-        let wide: decimal_scaled::D<Int<2>, 2> = decimal_scaled::D::<Int<2>, 2>::try_from(5_i64).unwrap();
+        let narrow: decimal_scaled::D<Int<1>, 2> =
+            decimal_scaled::D::<Int<1>, 2>::try_from(5_i64).unwrap();
+        let wide: decimal_scaled::D<Int<2>, 2> =
+            decimal_scaled::D::<Int<2>, 2>::try_from(5_i64).unwrap();
         assert!(narrow == wide);
         assert!(wide == narrow);
     }
@@ -699,8 +724,10 @@ mod from_src_unified {
     /// Ordering holds across widths at the same SCALE, both directions.
     #[test]
     fn cross_width_ordering() {
-        let narrow: decimal_scaled::D<Int<1>, 2> = decimal_scaled::D::<Int<1>, 2>::try_from(5_i64).unwrap();
-        let wide_bigger: decimal_scaled::D<Int<2>, 2> = decimal_scaled::D::<Int<2>, 2>::try_from(6_i64).unwrap();
+        let narrow: decimal_scaled::D<Int<1>, 2> =
+            decimal_scaled::D::<Int<1>, 2>::try_from(5_i64).unwrap();
+        let wide_bigger: decimal_scaled::D<Int<2>, 2> =
+            decimal_scaled::D::<Int<2>, 2>::try_from(6_i64).unwrap();
         assert!(narrow < wide_bigger);
         assert!(wide_bigger > narrow);
         assert_ne!(narrow, wide_bigger);
@@ -713,8 +740,10 @@ mod from_src_unified {
         // D38<2> scales by 10^2, so from_int(10^16) stores 10^18 in the
         // i128 backend â€” beyond the i64-backed D18 storage range, so the
         // value only fits the wider tier. The comparison must not wrap.
-        let huge: decimal_scaled::D<Int<2>, 2> = decimal_scaled::D::<Int<2>, 2>::try_from(10_000_000_000_000_000_i64).unwrap();
-        let small: decimal_scaled::D<Int<1>, 2> = decimal_scaled::D::<Int<1>, 2>::try_from(1_i64).unwrap();
+        let huge: decimal_scaled::D<Int<2>, 2> =
+            decimal_scaled::D::<Int<2>, 2>::try_from(10_000_000_000_000_000_i64).unwrap();
+        let small: decimal_scaled::D<Int<1>, 2> =
+            decimal_scaled::D::<Int<1>, 2>::try_from(1_i64).unwrap();
         assert!(small < huge);
         assert!(huge > small);
     }
@@ -722,14 +751,18 @@ mod from_src_unified {
     /// Negative values compare correctly across widths.
     #[test]
     fn cross_width_negatives() {
-        let narrow_neg: decimal_scaled::D<Int<1>, 2> = decimal_scaled::D::<Int<1>, 2>::try_from(-3_i64).unwrap();
-        let wide_neg: decimal_scaled::D<Int<2>, 2> = decimal_scaled::D::<Int<2>, 2>::try_from(-3_i64).unwrap();
-        let wide_more_neg: decimal_scaled::D<Int<2>, 2> = decimal_scaled::D::<Int<2>, 2>::try_from(-4_i64).unwrap();
+        let narrow_neg: decimal_scaled::D<Int<1>, 2> =
+            decimal_scaled::D::<Int<1>, 2>::try_from(-3_i64).unwrap();
+        let wide_neg: decimal_scaled::D<Int<2>, 2> =
+            decimal_scaled::D::<Int<2>, 2>::try_from(-3_i64).unwrap();
+        let wide_more_neg: decimal_scaled::D<Int<2>, 2> =
+            decimal_scaled::D::<Int<2>, 2>::try_from(-4_i64).unwrap();
         assert_eq!(narrow_neg, wide_neg);
         assert!(wide_more_neg < narrow_neg);
         assert!(narrow_neg > wide_more_neg);
         // Sign boundary: negative narrow < non-negative wide.
-        let wide_pos: decimal_scaled::D<Int<2>, 2> = decimal_scaled::D::<Int<2>, 2>::try_from(1_i64).unwrap();
+        let wide_pos: decimal_scaled::D<Int<2>, 2> =
+            decimal_scaled::D::<Int<2>, 2>::try_from(1_i64).unwrap();
         assert!(narrow_neg < wide_pos);
     }
 
@@ -756,7 +789,6 @@ mod from_src_unified {
 
     // â”€â”€ Cross-scale comparison (story 1.3.3). â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-    
     /// `D38<S>` raw constructor: `raw` is the stored integer (logical
     /// value `raw / 10^S`).
     fn d38_raw<const S: u32>(raw: i128) -> decimal_scaled::D<Int<2>, S> {

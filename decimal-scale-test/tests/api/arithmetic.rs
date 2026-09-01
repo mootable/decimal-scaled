@@ -221,7 +221,8 @@ mod from_src_arithmetic {
     fn one_point_one_plus_two_point_two_equals_three_point_three() {
         let one_point_one = D38s12::from_bits(Int::<2>::try_from(1_100_000_000_000_i128).unwrap()); // 1.1
         let two_point_two = D38s12::from_bits(Int::<2>::try_from(2_200_000_000_000_i128).unwrap()); // 2.2
-        let three_point_three = D38s12::from_bits(Int::<2>::try_from(3_300_000_000_000_i128).unwrap()); // 3.3
+        let three_point_three =
+            D38s12::from_bits(Int::<2>::try_from(3_300_000_000_000_i128).unwrap()); // 3.3
         assert_eq!(one_point_one + two_point_two, three_point_three);
     }
 
@@ -234,7 +235,10 @@ mod from_src_arithmetic {
         let a = D38s12::from_bits(Int::<2>::try_from(1_500_000_000_000_i128).unwrap());
         let b = D38s12::from_bits(Int::<2>::try_from(2_500_000_000_000_i128).unwrap());
         let product = a * b;
-        assert_eq!(product, D38s12::from_bits(Int::<2>::try_from(3_750_000_000_000_i128).unwrap()));
+        assert_eq!(
+            product,
+            D38s12::from_bits(Int::<2>::try_from(3_750_000_000_000_i128).unwrap())
+        );
         assert_eq!(product / b, a);
 
         // Negative-operand round-trip.
@@ -335,7 +339,9 @@ mod from_src_arithmetic {
     fn mul_wide_operands_match_widened_form() {
         let a = D38s12::from_bits(Int::<2>::try_from(50_000_000_000_000_000_000_000_i128).unwrap());
         let b = D38s12::from_bits(Int::<2>::try_from(30_000_000_000_000_000_000_000_i128).unwrap());
-        let expected = D38s12::from_bits(Int::<2>::try_from(1_500_000_000_000_000_000_000_000_000_000_000_i128).unwrap());
+        let expected = D38s12::from_bits(
+            Int::<2>::try_from(1_500_000_000_000_000_000_000_000_000_000_000_i128).unwrap(),
+        );
         assert_eq!(a * b, expected);
         // Symmetric.
         assert_eq!(b * a, expected);
@@ -407,7 +413,10 @@ mod from_src_arithmetic {
         let b = D0::from_bits(Int::<2>::try_from(4_i128).unwrap());
         // 15 / 4 = 3.75 -> 4 under HalfToEven (no tie at .75).
         assert_eq!(a / b, D0::from_bits(Int::<2>::try_from(4_i128).unwrap()));
-        assert_eq!((-a) / b, D0::from_bits(Int::<2>::try_from(-4_i128).unwrap()));
+        assert_eq!(
+            (-a) / b,
+            D0::from_bits(Int::<2>::try_from(-4_i128).unwrap())
+        );
         // Exact divide is unchanged.
         let c = D0::from_bits(Int::<2>::try_from(16_i128).unwrap());
         assert_eq!(c / b, D0::from_bits(Int::<2>::try_from(4_i128).unwrap()));
@@ -420,7 +429,10 @@ mod from_src_arithmetic {
         let a = D0::from_bits(Int::<2>::try_from(7_i128).unwrap());
         let b = D0::from_bits(Int::<2>::try_from(11_i128).unwrap());
         assert_eq!(a * b, D0::from_bits(Int::<2>::try_from(77_i128).unwrap()));
-        assert_eq!((-a) * b, D0::from_bits(Int::<2>::try_from(-77_i128).unwrap()));
+        assert_eq!(
+            (-a) * b,
+            D0::from_bits(Int::<2>::try_from(-77_i128).unwrap())
+        );
     }
 
     /// Default policy: division by zero panics.
@@ -520,7 +532,8 @@ mod from_src_arithmetic {
 
         // Smaller fractional part: -0.5 -> -1.0
         let small_neg = D38s12::from_bits(Int::<2>::try_from(-500_000_000_000_i128).unwrap());
-        let small_expected = D38s12::from_bits(Int::<2>::try_from(-1_000_000_000_000_i128).unwrap());
+        let small_expected =
+            D38s12::from_bits(Int::<2>::try_from(-1_000_000_000_000_i128).unwrap());
         assert_eq!(small_neg.floor(), small_expected);
     }
 
@@ -584,28 +597,40 @@ mod from_src_arithmetic {
     fn round_half_away_from_zero() {
         // Positive halves
         let two_point_five = D38s12::from_bits(Int::<2>::try_from(2_500_000_000_000_i128).unwrap());
-        assert_eq!(two_point_five.round(), D38s12::from_bits(Int::<2>::try_from(3_000_000_000_000_i128).unwrap()));
+        assert_eq!(
+            two_point_five.round(),
+            D38s12::from_bits(Int::<2>::try_from(3_000_000_000_000_i128).unwrap())
+        );
 
         let two_point_four = D38s12::from_bits(Int::<2>::try_from(2_400_000_000_000_i128).unwrap());
-        assert_eq!(two_point_four.round(), D38s12::from_bits(Int::<2>::try_from(2_000_000_000_000_i128).unwrap()));
+        assert_eq!(
+            two_point_four.round(),
+            D38s12::from_bits(Int::<2>::try_from(2_000_000_000_000_i128).unwrap())
+        );
 
         let two_point_six = D38s12::from_bits(Int::<2>::try_from(2_600_000_000_000_i128).unwrap());
-        assert_eq!(two_point_six.round(), D38s12::from_bits(Int::<2>::try_from(3_000_000_000_000_i128).unwrap()));
+        assert_eq!(
+            two_point_six.round(),
+            D38s12::from_bits(Int::<2>::try_from(3_000_000_000_000_i128).unwrap())
+        );
 
         // Negative halves -- away from zero == toward neg infinity
-        let neg_two_point_five = D38s12::from_bits(Int::<2>::try_from(-2_500_000_000_000_i128).unwrap());
+        let neg_two_point_five =
+            D38s12::from_bits(Int::<2>::try_from(-2_500_000_000_000_i128).unwrap());
         assert_eq!(
             neg_two_point_five.round(),
             D38s12::from_bits(Int::<2>::try_from(-3_000_000_000_000_i128).unwrap())
         );
 
-        let neg_two_point_four = D38s12::from_bits(Int::<2>::try_from(-2_400_000_000_000_i128).unwrap());
+        let neg_two_point_four =
+            D38s12::from_bits(Int::<2>::try_from(-2_400_000_000_000_i128).unwrap());
         assert_eq!(
             neg_two_point_four.round(),
             D38s12::from_bits(Int::<2>::try_from(-2_000_000_000_000_i128).unwrap())
         );
 
-        let neg_two_point_six = D38s12::from_bits(Int::<2>::try_from(-2_600_000_000_000_i128).unwrap());
+        let neg_two_point_six =
+            D38s12::from_bits(Int::<2>::try_from(-2_600_000_000_000_i128).unwrap());
         assert_eq!(
             neg_two_point_six.round(),
             D38s12::from_bits(Int::<2>::try_from(-3_000_000_000_000_i128).unwrap())
@@ -623,12 +648,18 @@ mod from_src_arithmetic {
     fn trunc_drops_fractional() {
         // Positive
         let x = D38s12::from_bits(Int::<2>::try_from(2_500_000_000_000_i128).unwrap());
-        assert_eq!(x.trunc(), D38s12::from_bits(Int::<2>::try_from(2_000_000_000_000_i128).unwrap()));
+        assert_eq!(
+            x.trunc(),
+            D38s12::from_bits(Int::<2>::try_from(2_000_000_000_000_i128).unwrap())
+        );
 
         // Negative -- key sign distinction: trunc(-2.5) == -2.0
         // (floor(-2.5) would be -3.0)
         let neg = D38s12::from_bits(Int::<2>::try_from(-2_500_000_000_000_i128).unwrap());
-        assert_eq!(neg.trunc(), D38s12::from_bits(Int::<2>::try_from(-2_000_000_000_000_i128).unwrap()));
+        assert_eq!(
+            neg.trunc(),
+            D38s12::from_bits(Int::<2>::try_from(-2_000_000_000_000_i128).unwrap())
+        );
 
         // Zero
         assert_eq!(D38s12::ZERO.trunc(), D38s12::ZERO);
@@ -643,11 +674,17 @@ mod from_src_arithmetic {
     #[test]
     fn fract_keeps_only_fractional() {
         let x = D38s12::from_bits(Int::<2>::try_from(2_500_000_000_000_i128).unwrap());
-        assert_eq!(x.fract(), D38s12::from_bits(Int::<2>::try_from(500_000_000_000_i128).unwrap()));
+        assert_eq!(
+            x.fract(),
+            D38s12::from_bits(Int::<2>::try_from(500_000_000_000_i128).unwrap())
+        );
 
         // Negative: fract preserves dividend sign
         let neg = D38s12::from_bits(Int::<2>::try_from(-2_500_000_000_000_i128).unwrap());
-        assert_eq!(neg.fract(), D38s12::from_bits(Int::<2>::try_from(-500_000_000_000_i128).unwrap()));
+        assert_eq!(
+            neg.fract(),
+            D38s12::from_bits(Int::<2>::try_from(-500_000_000_000_i128).unwrap())
+        );
 
         // Integer values have zero fract
         let two = D38s12::from_bits(Int::<2>::try_from(2_000_000_000_000_i128).unwrap());
@@ -772,10 +809,16 @@ mod from_src_arithmetic {
         let b = D38s12::from_bits(Int::<2>::try_from(2_000_000_000_000_i128).unwrap()); // 2.0
 
         let q = a.div_euclid(b);
-        assert_eq!(q, D38s12::from_bits(Int::<2>::try_from(2_000_000_000_000_i128).unwrap())); // 2
+        assert_eq!(
+            q,
+            D38s12::from_bits(Int::<2>::try_from(2_000_000_000_000_i128).unwrap())
+        ); // 2
 
         let r = a.rem_euclid(b);
-        assert_eq!(r, D38s12::from_bits(Int::<2>::try_from(1_000_000_000_000_i128).unwrap())); // 1
+        assert_eq!(
+            r,
+            D38s12::from_bits(Int::<2>::try_from(1_000_000_000_000_i128).unwrap())
+        ); // 1
 
         // Identity: q*b + r == a
         assert_eq!(q * b + r, a);
@@ -790,10 +833,16 @@ mod from_src_arithmetic {
 
         let q = a.div_euclid(b);
         // -5 = -3*2 + 1, so quotient = -3, rem = 1
-        assert_eq!(q, D38s12::from_bits(Int::<2>::try_from(-3_000_000_000_000_i128).unwrap()));
+        assert_eq!(
+            q,
+            D38s12::from_bits(Int::<2>::try_from(-3_000_000_000_000_i128).unwrap())
+        );
 
         let r = a.rem_euclid(b);
-        assert_eq!(r, D38s12::from_bits(Int::<2>::try_from(1_000_000_000_000_i128).unwrap()));
+        assert_eq!(
+            r,
+            D38s12::from_bits(Int::<2>::try_from(1_000_000_000_000_i128).unwrap())
+        );
 
         // Identity: q*b + r == a
         assert_eq!(q * b + r, a);
@@ -807,10 +856,16 @@ mod from_src_arithmetic {
         let b = D38s12::from_bits(Int::<2>::try_from(-2_000_000_000_000_i128).unwrap()); // -2.0
 
         let q = a.div_euclid(b);
-        assert_eq!(q, D38s12::from_bits(Int::<2>::try_from(-2_000_000_000_000_i128).unwrap())); // -2
+        assert_eq!(
+            q,
+            D38s12::from_bits(Int::<2>::try_from(-2_000_000_000_000_i128).unwrap())
+        ); // -2
 
         let r = a.rem_euclid(b);
-        assert_eq!(r, D38s12::from_bits(Int::<2>::try_from(1_000_000_000_000_i128).unwrap())); // 1 (non-negative!)
+        assert_eq!(
+            r,
+            D38s12::from_bits(Int::<2>::try_from(1_000_000_000_000_i128).unwrap())
+        ); // 1 (non-negative!)
 
         // Identity: q*b + r == a
         assert_eq!(q * b + r, a);
@@ -854,19 +909,31 @@ mod from_src_arithmetic {
         // 5.0 / 2.0 -> floor(2.5) = 2.0
         let a = D38s12::from_bits(Int::<2>::try_from(5_000_000_000_000_i128).unwrap());
         let b = D38s12::from_bits(Int::<2>::try_from(2_000_000_000_000_i128).unwrap());
-        assert_eq!(a.div_floor(b), D38s12::from_bits(Int::<2>::try_from(2_000_000_000_000_i128).unwrap()));
+        assert_eq!(
+            a.div_floor(b),
+            D38s12::from_bits(Int::<2>::try_from(2_000_000_000_000_i128).unwrap())
+        );
 
         // -5.0 / 2.0 -> floor(-2.5) = -3.0
         let neg_a = D38s12::from_bits(Int::<2>::try_from(-5_000_000_000_000_i128).unwrap());
-        assert_eq!(neg_a.div_floor(b), D38s12::from_bits(Int::<2>::try_from(-3_000_000_000_000_i128).unwrap()));
+        assert_eq!(
+            neg_a.div_floor(b),
+            D38s12::from_bits(Int::<2>::try_from(-3_000_000_000_000_i128).unwrap())
+        );
 
         // -5.0 / -2.0 -> floor(2.5) = 2.0 (sign distinction from div_euclid)
         let neg_b = D38s12::from_bits(Int::<2>::try_from(-2_000_000_000_000_i128).unwrap());
-        assert_eq!(neg_a.div_floor(neg_b), D38s12::from_bits(Int::<2>::try_from(2_000_000_000_000_i128).unwrap()));
+        assert_eq!(
+            neg_a.div_floor(neg_b),
+            D38s12::from_bits(Int::<2>::try_from(2_000_000_000_000_i128).unwrap())
+        );
 
         // 5.0 / -2.0 -> floor(-2.5) = -3.0
         // (div_euclid here would be -2 because rem must be >= 0.)
-        assert_eq!(a.div_floor(neg_b), D38s12::from_bits(Int::<2>::try_from(-3_000_000_000_000_i128).unwrap()));
+        assert_eq!(
+            a.div_floor(neg_b),
+            D38s12::from_bits(Int::<2>::try_from(-3_000_000_000_000_i128).unwrap())
+        );
     }
 
     /// `div_ceil` rounds toward positive infinity.
@@ -875,15 +942,24 @@ mod from_src_arithmetic {
         // 5.0 / 2.0 -> ceil(2.5) = 3.0
         let a = D38s12::from_bits(Int::<2>::try_from(5_000_000_000_000_i128).unwrap());
         let b = D38s12::from_bits(Int::<2>::try_from(2_000_000_000_000_i128).unwrap());
-        assert_eq!(a.div_ceil(b), D38s12::from_bits(Int::<2>::try_from(3_000_000_000_000_i128).unwrap()));
+        assert_eq!(
+            a.div_ceil(b),
+            D38s12::from_bits(Int::<2>::try_from(3_000_000_000_000_i128).unwrap())
+        );
 
         // -5.0 / 2.0 -> ceil(-2.5) = -2.0
         let neg_a = D38s12::from_bits(Int::<2>::try_from(-5_000_000_000_000_i128).unwrap());
-        assert_eq!(neg_a.div_ceil(b), D38s12::from_bits(Int::<2>::try_from(-2_000_000_000_000_i128).unwrap()));
+        assert_eq!(
+            neg_a.div_ceil(b),
+            D38s12::from_bits(Int::<2>::try_from(-2_000_000_000_000_i128).unwrap())
+        );
 
         // 4.0 / 2.0 -> exact -> 2.0
         let four = D38s12::from_bits(Int::<2>::try_from(4_000_000_000_000_i128).unwrap());
-        assert_eq!(four.div_ceil(b), D38s12::from_bits(Int::<2>::try_from(2_000_000_000_000_i128).unwrap()));
+        assert_eq!(
+            four.div_ceil(b),
+            D38s12::from_bits(Int::<2>::try_from(2_000_000_000_000_i128).unwrap())
+        );
     }
 
     // ── abs_diff ──
@@ -929,12 +1005,18 @@ mod from_src_arithmetic {
     fn midpoint_basic() {
         let a = D38s12::from_bits(Int::<2>::try_from(1_000_000_000_000_i128).unwrap()); // 1.0
         let b = D38s12::from_bits(Int::<2>::try_from(3_000_000_000_000_i128).unwrap()); // 3.0
-        assert_eq!(a.midpoint(b), D38s12::from_bits(Int::<2>::try_from(2_000_000_000_000_i128).unwrap())); // 2.0
+        assert_eq!(
+            a.midpoint(b),
+            D38s12::from_bits(Int::<2>::try_from(2_000_000_000_000_i128).unwrap())
+        ); // 2.0
 
         // Negative
         let neg_a = -a;
         let neg_b = -b;
-        assert_eq!(neg_a.midpoint(neg_b), D38s12::from_bits(Int::<2>::try_from(-2_000_000_000_000_i128).unwrap()));
+        assert_eq!(
+            neg_a.midpoint(neg_b),
+            D38s12::from_bits(Int::<2>::try_from(-2_000_000_000_000_i128).unwrap())
+        );
 
         // Mixed sign: midpoint(-1, 1) == 0
         assert_eq!(neg_a.midpoint(a), D38s12::ZERO);
@@ -1016,5 +1098,4 @@ mod from_src_arithmetic {
         assert!(!D38s12::from_bits(Int::<2>::try_from(-1_i128).unwrap()).is_positive());
         assert!(D38s12::from_bits(Int::<2>::try_from(-1_i128).unwrap()).is_negative());
     }
-
 }

@@ -43,7 +43,7 @@ mod from_decimal_trait_generic_surface {
     //! surface: a single generic function works on every width without
     //! reaching for inherent methods.
 
-    use decimal_scaled::{D18, D38, Decimal, RoundingMode};
+    use decimal_scaled::{Decimal, RoundingMode, D18, D38};
     use decimal_scaled::{DecimalArithmetic, DecimalConvert};
 
     /// A width-generic helper that touches each major surface area: ops,
@@ -82,7 +82,6 @@ mod from_decimal_trait_generic_surface {
 
     #[test]
     fn surface_check_d18() {
-
         let (v, doubled, squared, _) = surface_check::<D18<4>>(5);
         assert_eq!(v.to_bits(), 50_000);
         assert_eq!(doubled.to_bits(), 100_000);
@@ -91,7 +90,6 @@ mod from_decimal_trait_generic_surface {
 
     #[test]
     fn surface_check_d38() {
-
         let (v, doubled, squared, _) = surface_check::<D38<6>>(5);
         assert_eq!(v.to_bits(), 5_000_000);
         assert_eq!(doubled.to_bits(), 10_000_000);
@@ -126,7 +124,6 @@ mod from_decimal_trait_generic_surface {
 
     #[test]
     fn sum_product_d38() {
-
         let (s, p) = fold_sum_product::<D38<2>>();
         assert_eq!(s, D38::<2>::try_from(10).unwrap());
         assert_eq!(p, D38::<2>::try_from(24).unwrap());
@@ -195,6 +192,9 @@ mod from_macros_surface {
         // signum
         assert_eq!(v.signum(), D38::<2>::try_from(1).unwrap());
         assert_eq!(D38::<2>::ZERO.signum(), D38::<2>::ZERO);
-        assert_eq!(D38::<2>::try_from(-5).unwrap().signum(), D38::<2>::try_from(-1).unwrap());
+        assert_eq!(
+            D38::<2>::try_from(-5).unwrap().signum(),
+            D38::<2>::try_from(-1).unwrap()
+        );
     }
 }

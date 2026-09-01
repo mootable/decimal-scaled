@@ -4521,3 +4521,13 @@
 // regression: hyper default-vs-_with asymmetry (tanh dispatch Trunc D462<461>, x=1e-168) - the odd-cubic deciding digit beyond every escalation cap, resolvable only by the analytic small-argument band now carried by the canonical kernels on both public entries
 0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001
 -0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001
+// hyper_schoolbook.rs:270-275 justifies having NO deep adjust by asserting the exp-ratio composition exposes
+// the deciding residual at a reachable depth. tanh = x - x^3/3 + 2x^5/15 - 17x^7/315 has the sin/atan shape;
+// at D462<461> j=3 and j=5 are exact and j=7 (315 = 3^2.5.7) sits at depth 509 > reach 504.
+// STATUS: this row PASSES today - it does NOT reproduce a defect, and is kept as a standing probe rather
+// than a regression pin. The derivation above assumed the BASE probe decides; it does not (max_guard is
+// 43/145/93 at D462/D616/D924, so a second probe always runs and resolves this argument). A genuinely
+// stressing input needs its deciding term to survive BOTH probes - the deep probe's remainder zero or
+// under the 10^4 noise floor. Retained so a future routing or guard change cannot expose the gap
+// silently: a green gate here is not evidence the kernel is safe.
+0.0000000000000000000000000000000000000000000000000000000000000000000000003

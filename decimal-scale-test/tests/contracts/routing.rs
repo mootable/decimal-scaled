@@ -28,13 +28,19 @@ mod from_routing_surface {
         let _ = x.exp2_fast();
         let _ = x.sqrt_fast();
         let _ = x.cbrt_fast();
-        let _ = x.powf_fast(D38s12::from_bits(decimal_scaled::Int::<2>::try_from(500_000_000_000_i128).unwrap()));
+        let _ = x.powf_fast(D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from(500_000_000_000_i128).unwrap(),
+        ));
         let _ = x.hypot_fast(D38s12::try_from(3).unwrap());
         let _ = x.sin_fast();
         let _ = x.cos_fast();
         let _ = x.tan_fast();
-        let _ = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(500_000_000_000_i128).unwrap()).asin_fast();
-        let _ = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(500_000_000_000_i128).unwrap()).acos_fast();
+        let _ =
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(500_000_000_000_i128).unwrap())
+                .asin_fast();
+        let _ =
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(500_000_000_000_i128).unwrap())
+                .acos_fast();
         let _ = x.atan_fast();
         let _ = x.atan2_fast(D38s12::ONE);
         let _ = x.sinh_fast();
@@ -42,7 +48,9 @@ mod from_routing_surface {
         let _ = x.tanh_fast();
         let _ = x.asinh_fast();
         let _ = x.acosh_fast();
-        let _ = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(500_000_000_000_i128).unwrap()).atanh_fast();
+        let _ =
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(500_000_000_000_i128).unwrap())
+                .atanh_fast();
         let _ = x.to_degrees_fast();
         let _ = x.to_radians_fast();
     }
@@ -58,12 +66,18 @@ mod from_routing_surface {
         let _ = x.exp2_strict();
         let _ = x.sqrt_strict();
         let _ = x.cbrt_strict();
-        let _ = x.powf_strict(D38s12::from_bits(decimal_scaled::Int::<2>::try_from(500_000_000_000_i128).unwrap()));
+        let _ = x.powf_strict(D38s12::from_bits(
+            decimal_scaled::Int::<2>::try_from(500_000_000_000_i128).unwrap(),
+        ));
         let _ = x.sin_strict();
         let _ = x.cos_strict();
         let _ = x.tan_strict();
-        let _ = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(500_000_000_000_i128).unwrap()).asin_strict();
-        let _ = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(500_000_000_000_i128).unwrap()).acos_strict();
+        let _ =
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(500_000_000_000_i128).unwrap())
+                .asin_strict();
+        let _ =
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(500_000_000_000_i128).unwrap())
+                .acos_strict();
         let _ = x.atan_strict();
         let _ = x.atan2_strict(D38s12::ONE);
         let _ = x.sinh_strict();
@@ -71,7 +85,9 @@ mod from_routing_surface {
         let _ = x.tanh_strict();
         let _ = x.asinh_strict();
         let _ = x.acosh_strict();
-        let _ = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(500_000_000_000_i128).unwrap()).atanh_strict();
+        let _ =
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(500_000_000_000_i128).unwrap())
+                .atanh_strict();
         let _ = x.to_degrees_strict();
         let _ = x.to_radians_strict();
     }
@@ -105,7 +121,7 @@ mod from_routing_surface {
 
     #[test]
     fn narrow_strict_surface_callable() {
-        use decimal_scaled::{D18};
+        use decimal_scaled::D18;
 
         let x18 = D18::<8>::try_from(2).unwrap();
         let _ = x18.ln_strict();
@@ -117,7 +133,7 @@ mod from_routing_surface {
     #[cfg(feature = "std")]
     #[test]
     fn narrow_fast_surface_callable() {
-        use decimal_scaled::{D18};
+        use decimal_scaled::D18;
 
         let x18 = D18::<8>::try_from(2).unwrap();
         let _ = x18.ln_fast();
@@ -138,7 +154,6 @@ mod from_wide_roots_dispatcher_and_hypot {
     #[cfg(feature = "strict")]
     #[test]
     fn d76_sqrt_cbrt_plain_dispatcher() {
-
         let four: D76<6> = D38::<6>::try_from(4).unwrap().into();
         let twenty_seven: D76<6> = D38::<6>::try_from(27).unwrap().into();
         assert_eq!(four.sqrt(), four.sqrt_strict());
@@ -147,13 +162,11 @@ mod from_wide_roots_dispatcher_and_hypot {
 
     #[test]
     fn d76_hypot_strict_zero_zero() {
-
         assert_eq!(D76::<6>::ZERO.hypot_strict(D76::<6>::ZERO), D76::<6>::ZERO);
     }
 
     #[test]
     fn d76_hypot_strict_zero_x() {
-
         let five: D76<6> = D38::<6>::try_from(5).unwrap().into();
         let r = D76::<6>::ZERO.hypot_strict(five);
         // hypot(0, x) = |x| exactly (isqrt(x²) = |x|, no rounding bump).
@@ -162,7 +175,6 @@ mod from_wide_roots_dispatcher_and_hypot {
 
     #[test]
     fn d76_hypot_strict_3_4_is_5() {
-
         let three: D76<6> = D38::<6>::try_from(3).unwrap().into();
         let four: D76<6> = D38::<6>::try_from(4).unwrap().into();
         let five: D76<6> = D38::<6>::try_from(5).unwrap().into();
@@ -224,7 +236,10 @@ mod from_narrow_strict_transcendentals {
         assert_eq!(D18::<8>::ONE.sinh(), D18::<8>::ONE.sinh_strict());
         assert_eq!(D18::<8>::ONE.cosh(), D18::<8>::ONE.cosh_strict());
         assert_eq!(D18::<8>::ONE.tanh(), D18::<8>::ONE.tanh_strict());
-        assert_eq!(D18::<8>::try_from(4).unwrap().sqrt(), D18::<8>::try_from(4).unwrap().sqrt_strict());
+        assert_eq!(
+            D18::<8>::try_from(4).unwrap().sqrt(),
+            D18::<8>::try_from(4).unwrap().sqrt_strict()
+        );
         assert_eq!(
             D18::<8>::try_from(27).unwrap().cbrt(),
             D18::<8>::try_from(27).unwrap().cbrt_strict()
@@ -242,15 +257,29 @@ mod from_narrow_strict_transcendentals {
         assert_eq!(D18::<8>::ONE.log2(), D18::<8>::ONE.log2_strict());
         assert_eq!(D18::<8>::ONE.log10(), D18::<8>::ONE.log10_strict());
         assert_eq!(D18::<8>::ONE.exp2(), D18::<8>::ONE.exp2_strict());
-        assert_eq!(D18::<8>::ZERO.to_degrees(), D18::<8>::ZERO.to_degrees_strict());
-        assert_eq!(D18::<8>::ZERO.to_radians(), D18::<8>::ZERO.to_radians_strict());
         assert_eq!(
-            D18::<8>::try_from(8).unwrap().log(D18::<8>::try_from(2).unwrap()),
-            D18::<8>::try_from(8).unwrap().log_strict(D18::<8>::try_from(2).unwrap()),
+            D18::<8>::ZERO.to_degrees(),
+            D18::<8>::ZERO.to_degrees_strict()
         );
         assert_eq!(
-            D18::<8>::try_from(2).unwrap().powf(D18::<8>::try_from(10).unwrap()),
-            D18::<8>::try_from(2).unwrap().powf_strict(D18::<8>::try_from(10).unwrap()),
+            D18::<8>::ZERO.to_radians(),
+            D18::<8>::ZERO.to_radians_strict()
+        );
+        assert_eq!(
+            D18::<8>::try_from(8)
+                .unwrap()
+                .log(D18::<8>::try_from(2).unwrap()),
+            D18::<8>::try_from(8)
+                .unwrap()
+                .log_strict(D18::<8>::try_from(2).unwrap()),
+        );
+        assert_eq!(
+            D18::<8>::try_from(2)
+                .unwrap()
+                .powf(D18::<8>::try_from(10).unwrap()),
+            D18::<8>::try_from(2)
+                .unwrap()
+                .powf_strict(D18::<8>::try_from(10).unwrap()),
         );
     }
 }
@@ -271,7 +300,7 @@ mod from_wide_strict_transcendentals {
     //! contracts for the wide (D76) tier, moved from
     //! `tests/wide_strict_transcendentals.rs`.
 
-    use decimal_scaled::{D38, D76, RoundingMode};
+    use decimal_scaled::{RoundingMode, D38, D76};
 
     const WIDE_TOL_LSB: i128 = 1;
 
@@ -336,13 +365,14 @@ mod from_wide_strict_transcendentals {
     // we call each with multiple `RoundingMode` variants and check the
     // HalfToEven branch reproduces the plain `*_strict` result.
 
-
     #[test]
     fn d76_strict_with_modes() {
         let two = lift(D38::<6>::try_from(2).unwrap());
         let ten = lift(D38::<6>::try_from(10).unwrap());
         let one = lift(D38::<6>::ONE);
-        let half = lift(D38::<6>::from_bits(decimal_scaled::Int::<2>::try_from(500_000_i128).unwrap()));
+        let half = lift(D38::<6>::from_bits(
+            decimal_scaled::Int::<2>::try_from(500_000_i128).unwrap(),
+        ));
 
         // HalfToEven matches the plain *_strict form bit-exactly.
         assert_eq!(
@@ -501,7 +531,9 @@ mod from_wide_strict_transcendentals {
         let two = lift(D38::<6>::try_from(2).unwrap());
         let ten = lift(D38::<6>::try_from(10).unwrap());
         let four = lift(D38::<6>::try_from(4).unwrap());
-        let half = lift(D38::<6>::from_bits(decimal_scaled::Int::<2>::try_from(500_000_i128).unwrap()));
+        let half = lift(D38::<6>::from_bits(
+            decimal_scaled::Int::<2>::try_from(500_000_i128).unwrap(),
+        ));
         let twenty_seven = lift(D38::<6>::try_from(27).unwrap());
 
         assert_eq!(two.ln(), two.ln_strict());

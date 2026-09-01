@@ -270,7 +270,7 @@ macro_rules! decl_wide_transcendental {
                 // `bit_length(|v_w|) - bit_length(10^SCALE)` clamped
                 // to zero — that's a rough log₂(int_part) bound;
                 // exponentiate to a u32 upper bound on int_part.
-                let av = abs(v_w_at_scale);
+                let av = v_w_at_scale.abs();
                 let bl_v = bit_length(av);
                 let bl_one_s = bit_length(pow10_table(scale));
                 if bl_v <= bl_one_s {
@@ -308,10 +308,6 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             pub(crate) fn zero() -> W {
                 lit(0)
-            }
-            #[inline]
-            fn abs(v: W) -> W {
-                if v < lit(0) { -v } else { v }
             }
             #[inline]
             pub(crate) fn pow10(n: u32) -> W {
@@ -423,7 +419,7 @@ macro_rules! decl_wide_transcendental {
 
             /// Bit length of `|v|` (0 for zero).
             pub(crate) fn bit_length(v: W) -> u32 {
-                W::BITS - abs(v).leading_zeros()
+                W::BITS - v.abs().leading_zeros()
             }
 
             /// `√v` at working scale `w`: `√(|v| · 10^w)`, truncating.
@@ -663,7 +659,7 @@ macro_rules! decl_wide_transcendental {
                 let divisor = pow10_table(w);
                 let (q, r) = v.div_rem(divisor);
                 let half = divisor >> 1;
-                let qi = if abs(r) >= half {
+                let qi = if r.abs() >= half {
                     if v < lit(0) { q - lit(1) } else { q + lit(1) }
                 } else {
                     q
@@ -1167,21 +1163,11 @@ macro_rules! decl_wide_transcendental {
             /// Reference: J.-M. Muller, *Elementary Functions* 3rd ed.
             /// (2016), 4.4; Higham 1.14.1.
             pub(crate) fn expm1_fixed(s: W, w: u32) -> W {
-                let mut sum = s;
-                let mut term = s;
-                let mut iter: u128 = 2;
-                loop {
-                    term = mul(term, s, w) / lit(iter);
-                    if term == zero() {
-                        break;
-                    }
-                    sum = sum + term;
-                    iter += 1;
-                    if iter > SERIES_CAP {
-                        break;
-                    }
-                }
-                sum
+                // Forwards to the single generic source
+                // (`exp_generic::expm1_fixed`) — no per-tier copy of the
+                // leading-term-dropped Taylor series (Constitution rule 2),
+                // mirroring `log1p_fixed` above.
+                $crate::algos::exp::exp_generic::expm1_fixed::<W>(s, w)
             }
 
             /// `ln 10` at working scale `w`, rounded under the crate
@@ -1323,7 +1309,7 @@ macro_rules! decl_wide_transcendental {
                 for _ in 0..iter_cap {
                     let ln_x = ln_fixed_agm::<SCALE>(x, w);
                     let delta = s - ln_x;
-                    if abs(delta) <= lit(2) {
+                    if delta.abs() <= lit(2) {
                         x = mul(x, one_w + delta, w);
                         break;
                     }
@@ -2994,6 +2980,58 @@ macro_rules! decl_wide_transcendental {
                 ))
             }
 
+            /// `ln(1 + self)`. Strict: integer-only and correctly
+            /// rounded. Panics if `self <= -1`.
+            ///
+            /// Provided for API parity and standards conformance (C
+            /// `log1p`, IEEE 754-2019 `logp1`). In this crate's
+            /// fixed-point representation it is **equivalent** to
+            /// `(1 + self).ln_strict()` at the same scale — `1 + self`
+            /// is exactly representable, so the binary floating-point
+            /// cancellation that motivates a separate `log1p` does not
+            /// arise; it is not more accurate than [`Self::ln_strict`].
+            ///
+            /// Delegates to the policy-registered log1p kernel for this
+            /// `(width, SCALE)` cell — see `policy::log1p`.
+            #[inline]
+            #[must_use]
+            pub fn log1p_strict(self) -> Self {
+                Self::from_bits($crate::policy::log1p::dispatch::<_, SCALE>(
+                    self.to_bits(),
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                ))
+            }
+
+            /// `e^self - 1`. Strict: integer-only and correctly rounded.
+            /// Total below — it tends to `-1` as `self` tends to `-∞`.
+            ///
+            /// Provided for API parity and standards conformance (C
+            /// `expm1`, IEEE 754-2019 `expm1`), and for the DOMAIN it
+            /// reaches: the `- 1` is applied at the working scale, ahead
+            /// of the storage range check, so the argument range is
+            /// `self <= ln(1 + MAX)` where [`Self::exp_strict`] stops at
+            /// `ln(MAX)` — exactly the arguments whose `e^self` lands in
+            /// `(MAX, MAX + 1]`. The extra band is `ln(1 + 1/MAX)` wide,
+            /// a few hundredths at the maximum scale and narrower below
+            /// it: small, but real (`MAX >= 1` always, since the crate
+            /// caps `MAX_SCALE = N - 1`).
+            ///
+            /// It is not MORE ACCURATE than `exp_strict(self) - 1` where
+            /// both are representable — `1` is exactly `10^SCALE` raw
+            /// units, so the subtraction is an exact grid translation and
+            /// rounding commutes with it.
+            ///
+            /// Delegates to the policy-registered expm1 kernel for this
+            /// `(width, SCALE)` cell — see `policy::expm1`.
+            #[inline]
+            #[must_use]
+            pub fn expm1_strict(self) -> Self {
+                Self::from_bits($crate::policy::expm1::dispatch::<_, SCALE>(
+                    self.to_bits(),
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                ))
+            }
+
             /// Natural logarithm via the Brent–Salamin AGM (1976).
             /// Strict and correctly rounded. Same contract as
             /// [`Self::ln_strict`]; the implementation path differs.
@@ -3493,6 +3531,20 @@ macro_rules! decl_wide_transcendental {
             #[must_use]
             pub fn ln_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 Self::from_bits($crate::policy::ln::dispatch::<_, SCALE>(self.to_bits(), mode))
+            }
+
+            /// Mode-aware sibling of [`Self::log1p_strict`].
+            #[inline]
+            #[must_use]
+            pub fn log1p_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                Self::from_bits($crate::policy::log1p::dispatch::<_, SCALE>(self.to_bits(), mode))
+            }
+
+            /// Mode-aware sibling of [`Self::expm1_strict`].
+            #[inline]
+            #[must_use]
+            pub fn expm1_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                Self::from_bits($crate::policy::expm1::dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
             /// Mode-aware sibling of [`Self::ln_strict_agm`].
@@ -4005,6 +4057,64 @@ macro_rules! decl_wide_transcendental {
                 let w = SCALE + working_digits;
                 let r = $core::ln_fixed_routed::<SCALE>($core::to_work_scaled(raw, working_digits), w);
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// `ln(1 + self)` with caller-chosen guard digits.
+            #[inline]
+            #[must_use]
+            pub fn log1p_approx(self, working_digits: u32) -> Self {
+                self.log1p_approx_with(
+                    working_digits,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
+            }
+
+            /// `ln(1 + self)` with caller-chosen guard digits AND
+            /// rounding mode.
+            #[inline]
+            #[must_use]
+            pub fn log1p_approx_with(
+                self,
+                working_digits: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> Self {
+                if working_digits == $core::GUARD {
+                    return self.log1p_strict_with(mode);
+                }
+                Self::from_bits($crate::policy::log1p::dispatch_with::<_, SCALE>(
+                    self.to_bits(),
+                    working_digits,
+                    mode,
+                ))
+            }
+
+            /// `e^self - 1` with caller-chosen guard digits.
+            #[inline]
+            #[must_use]
+            pub fn expm1_approx(self, working_digits: u32) -> Self {
+                self.expm1_approx_with(
+                    working_digits,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
+            }
+
+            /// `e^self - 1` with caller-chosen guard digits AND rounding
+            /// mode.
+            #[inline]
+            #[must_use]
+            pub fn expm1_approx_with(
+                self,
+                working_digits: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> Self {
+                if working_digits == $core::GUARD {
+                    return self.expm1_strict_with(mode);
+                }
+                Self::from_bits($crate::policy::expm1::dispatch_with::<_, SCALE>(
+                    self.to_bits(),
+                    working_digits,
+                    mode,
+                ))
             }
 
             /// Log to chosen base with caller-chosen guard digits.
@@ -4815,6 +4925,12 @@ macro_rules! decl_wide_transcendental {
             pub fn ln(self) -> Self {
                 self.ln_strict()
             }
+            /// With `strict`, dispatches to [`Self::log1p_strict`].
+            #[inline]
+            #[must_use]
+            pub fn log1p(self) -> Self {
+                self.log1p_strict()
+            }
             /// With `strict`, dispatches to [`Self::log_strict`].
             #[inline]
             #[must_use]
@@ -4838,6 +4954,12 @@ macro_rules! decl_wide_transcendental {
             #[must_use]
             pub fn exp(self) -> Self {
                 self.exp_strict()
+            }
+            /// With `strict`, dispatches to [`Self::expm1_strict`].
+            #[inline]
+            #[must_use]
+            pub fn expm1(self) -> Self {
+                self.expm1_strict()
             }
             /// With `strict`, dispatches to [`Self::exp2_strict`].
             #[inline]

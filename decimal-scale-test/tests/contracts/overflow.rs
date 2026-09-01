@@ -97,7 +97,10 @@ mod from_macros_surface {
         assert!(ov);
         let _ = D18::<2>::MIN.wrapping_neg();
         // Non-MIN case
-        assert_eq!(D18::<2>::try_from(5).unwrap().checked_neg().unwrap(), D18::<2>::try_from(-5).unwrap());
+        assert_eq!(
+            D18::<2>::try_from(5).unwrap().checked_neg().unwrap(),
+            D18::<2>::try_from(-5).unwrap()
+        );
     }
 
     #[test]
@@ -125,7 +128,10 @@ mod from_macros_surface {
         assert_eq!(q.to_bits(), 350);
         // div by zero â€” checked_div returns None (matches i32::checked_div);
         // saturating_div by zero panics (covered by saturating_div_by_zero_panics).
-        assert!(D18::<2>::try_from(7).unwrap().checked_div(D18::<2>::ZERO).is_none());
+        assert!(D18::<2>::try_from(7)
+            .unwrap()
+            .checked_div(D18::<2>::ZERO)
+            .is_none());
         // overflowing_div(0) / wrapping_div(0) / wrapping_rem(0) on most
         // integer storage types panic (matches i32::overflowing_div), so we
         // don't exercise those paths here â€” they're well-known and the
@@ -133,7 +139,10 @@ mod from_macros_surface {
         // rem
         let r = a.checked_rem(b).unwrap();
         let _ = r;
-        assert!(D18::<2>::try_from(7).unwrap().checked_rem(D18::<2>::ZERO).is_none());
+        assert!(D18::<2>::try_from(7)
+            .unwrap()
+            .checked_rem(D18::<2>::ZERO)
+            .is_none());
     }
 
     #[cfg(feature = "wide")]
@@ -235,7 +244,8 @@ mod from_macros_bitwise_and_overflow {
             let a: D76<2> = D38::<2>::try_from(7).unwrap().into();
             let b: D76<2> = D38::<2>::try_from(2).unwrap().into();
             let q = a.wrapping_div(b);
-            let expected: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(350_i128).unwrap()).into();
+            let expected: D76<2> =
+                D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(350_i128).unwrap()).into();
             assert_eq!(q, expected);
             let _ = a.wrapping_rem(b);
         }
@@ -277,7 +287,8 @@ mod from_macros_bitwise_and_overflow {
         let a = D::MAX;
         // 1.0 at S=74 is 10^74 â€” make rhs = 1 LSB so q = a * 10^74 / 1 â†’ way past storage.
         // Build a 1-LSB tiny value by lifting D38<74> from_bits(1).
-        let tiny: D = D38::<74>::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap()).into();
+        let tiny: D =
+            D38::<74>::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap()).into();
         let r = a.checked_div(tiny);
         assert!(r.is_none(), "tiny divisor on huge dividend should overflow");
     }
@@ -348,14 +359,20 @@ mod from_src_overflow_variants {
         // MAX + ONE overflows (MAX is i128::MAX raw; ONE is 10^SCALE raw).
         assert_eq!(D38s12::MAX.checked_add(D38s12::ONE), None);
         // Boundary: MAX + 1 LSB also overflows.
-        assert_eq!(D38s12::MAX.checked_add(D38s12::from_bits(Int::<2>::try_from(1_i128).unwrap())), None);
+        assert_eq!(
+            D38s12::MAX.checked_add(D38s12::from_bits(Int::<2>::try_from(1_i128).unwrap())),
+            None
+        );
     }
 
     #[test]
     fn checked_add_negative_overflow_returns_none() {
         assert_eq!(D38s12::MIN.checked_add(neg_one()), None);
         // Boundary: MIN + (-1 LSB) also overflows.
-        assert_eq!(D38s12::MIN.checked_add(D38s12::from_bits(Int::<2>::try_from(-1_i128).unwrap())), None);
+        assert_eq!(
+            D38s12::MIN.checked_add(D38s12::from_bits(Int::<2>::try_from(-1_i128).unwrap())),
+            None
+        );
     }
 
     #[test]
@@ -366,13 +383,19 @@ mod from_src_overflow_variants {
     #[test]
     fn wrapping_add_overflow_wraps_to_min() {
         // MAX + 1 LSB wraps to MIN under two's-complement.
-        assert_eq!(D38s12::MAX.wrapping_add(D38s12::from_bits(Int::<2>::try_from(1_i128).unwrap())), D38s12::MIN);
+        assert_eq!(
+            D38s12::MAX.wrapping_add(D38s12::from_bits(Int::<2>::try_from(1_i128).unwrap())),
+            D38s12::MIN
+        );
     }
 
     #[test]
     fn wrapping_add_negative_overflow_wraps_to_max() {
         // MIN + (-1 LSB) wraps to MAX.
-        assert_eq!(D38s12::MIN.wrapping_add(D38s12::from_bits(Int::<2>::try_from(-1_i128).unwrap())), D38s12::MAX);
+        assert_eq!(
+            D38s12::MIN.wrapping_add(D38s12::from_bits(Int::<2>::try_from(-1_i128).unwrap())),
+            D38s12::MAX
+        );
     }
 
     #[test]
@@ -439,7 +462,10 @@ mod from_src_overflow_variants {
     #[test]
     fn wrapping_sub_underflow_wraps_to_max() {
         // MIN - 1 LSB wraps exactly to MAX.
-        assert_eq!(D38s12::MIN.wrapping_sub(D38s12::from_bits(Int::<2>::try_from(1_i128).unwrap())), D38s12::MAX);
+        assert_eq!(
+            D38s12::MIN.wrapping_sub(D38s12::from_bits(Int::<2>::try_from(1_i128).unwrap())),
+            D38s12::MAX
+        );
     }
 
     #[test]
@@ -971,7 +997,10 @@ mod from_hypot_edge_cases {
     fn hypot_near_max_does_not_overflow_when_in_range() {
         // a near MAX, b = 0 -> hypot = a exactly, must not panic or overflow.
         let a = D38::<0>::MAX;
-        assert_eq!(a.hypot_strict_with(D38::<0>::ZERO, RoundingMode::HalfToEven), a);
+        assert_eq!(
+            a.hypot_strict_with(D38::<0>::ZERO, RoundingMode::HalfToEven),
+            a
+        );
     }
 
     #[test]
@@ -983,7 +1012,16 @@ mod from_hypot_edge_cases {
     }
 }
 
-#[cfg(all(not(feature = "fast"), not(any(feature = "rounding-half-away-from-zero", feature = "rounding-half-toward-zero", feature = "rounding-trunc", feature = "rounding-floor", feature = "rounding-ceiling"))))]
+#[cfg(all(
+    not(feature = "fast"),
+    not(any(
+        feature = "rounding-half-away-from-zero",
+        feature = "rounding-half-toward-zero",
+        feature = "rounding-trunc",
+        feature = "rounding-floor",
+        feature = "rounding-ceiling"
+    ))
+))]
 mod from_transcendental_overflow_uniform {
     //! Tier-invariant strict-transcendental overflow contract.
     //!
@@ -1239,10 +1277,7 @@ mod from_transcendental_overflow_uniform {
         // 2^-80.5 ≈ 5.9e-25 ≈ 0.59 ULP at scale 24 — rounds to 1 ULP under
         // nearest. Pre-fix: index-out-of-bounds inside div_knuth.
         let v: D38<24> = "-80.5".parse().unwrap();
-        assert_eq!(
-            format!("{}", v.exp2_strict()),
-            "0.000000000000000000000001"
-        );
+        assert_eq!(format!("{}", v.exp2_strict()), "0.000000000000000000000001");
     }
 
     #[test]

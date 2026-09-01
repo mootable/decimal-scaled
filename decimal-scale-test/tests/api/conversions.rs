@@ -13,7 +13,7 @@ mod from_conversions {
     //! Bodies live in src/macros/conversions.rs and float_bridge.rs;
     //! these tests exercise the resulting public API for D38 specifically.
 
-    use decimal_scaled::{ConvertError, D38, D38s12};
+    use decimal_scaled::{ConvertError, D38s12, D38};
 
     // --- widen / narrow ergonomic methods -------------------------------
 
@@ -65,7 +65,10 @@ mod from_conversions {
     #[test]
     fn from_int_negative() {
         assert_eq!(D38s12::try_from(-1).unwrap(), -D38s12::ONE);
-        assert_eq!(D38s12::try_from(-42).unwrap().to_bits(), -42_000_000_000_000_i128);
+        assert_eq!(
+            D38s12::try_from(-42).unwrap().to_bits(),
+            -42_000_000_000_000_i128
+        );
     }
 
     // Lossless From<iN> / From<uN> -- bit-exact scaling
@@ -74,9 +77,18 @@ mod from_conversions {
     fn from_i8_scales_correctly() {
         assert_eq!(D38s12::try_from(0_i8).unwrap().to_bits(), 0);
         assert_eq!(D38s12::try_from(1_i8).unwrap().to_bits(), 1_000_000_000_000);
-        assert_eq!(D38s12::try_from(-1_i8).unwrap().to_bits(), -1_000_000_000_000);
-        assert_eq!(D38s12::try_from(i8::MAX).unwrap().to_bits(), 127_000_000_000_000);
-        assert_eq!(D38s12::try_from(i8::MIN).unwrap().to_bits(), -128_000_000_000_000);
+        assert_eq!(
+            D38s12::try_from(-1_i8).unwrap().to_bits(),
+            -1_000_000_000_000
+        );
+        assert_eq!(
+            D38s12::try_from(i8::MAX).unwrap().to_bits(),
+            127_000_000_000_000
+        );
+        assert_eq!(
+            D38s12::try_from(i8::MIN).unwrap().to_bits(),
+            -128_000_000_000_000
+        );
     }
 
     #[test]
@@ -103,9 +115,17 @@ mod from_conversions {
     #[test]
     fn to_int_lossy_default_rounds_half_to_even() {
         // 2.5 with HalfToEven default -> 2 (even neighbour).
-        assert_eq!(D38s12::from_bits(decimal_scaled::Int::<2>::try_from(2_500_000_000_000_i128).unwrap()).to_int(), 2);
+        assert_eq!(
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(2_500_000_000_000_i128).unwrap())
+                .to_int(),
+            2
+        );
         // 3.5 with HalfToEven -> 4 (even).
-        assert_eq!(D38s12::from_bits(decimal_scaled::Int::<2>::try_from(3_500_000_000_000_i128).unwrap()).to_int(), 4);
+        assert_eq!(
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(3_500_000_000_000_i128).unwrap())
+                .to_int(),
+            4
+        );
     }
 
     #[test]
@@ -302,7 +322,7 @@ mod from_identity_invariants {
     //! - 1.4  overflow contract: debug-panic on the operator path, `None`
     //!   on the `checked_*` path.
 
-    use decimal_scaled::{D18s9, D38, D38s12, Int, D};
+    use decimal_scaled::{D18s9, D38s12, Int, D, D38};
 
     // â”€â”€â”€ 1.2 â€” width round-trip: narrow_n(widen_n(x)) == x â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -440,7 +460,7 @@ mod from_convert_cross_width_scale {
         feature = "rounding-ceiling",
     )))]
 
-    use decimal_scaled::{ConvertError, D18, D38, Int, RoundingMode};
+    use decimal_scaled::{ConvertError, Int, RoundingMode, D18, D38};
 
     /// Raw `D38<S>` constructor: `raw` is the stored integer (logical value
     /// `raw / 10^S`).
@@ -493,7 +513,8 @@ mod from_convert_cross_width_scale {
         let src: D18<1> = d18_raw::<1>(25); // 2.5
         let even: D38<0> = D38::<0>::convert_from_with(src, RoundingMode::HalfToEven).unwrap();
         assert_eq!(i128::from(even.to_bits()), 2);
-        let away: D38<0> = D38::<0>::convert_from_with(src, RoundingMode::HalfAwayFromZero).unwrap();
+        let away: D38<0> =
+            D38::<0>::convert_from_with(src, RoundingMode::HalfAwayFromZero).unwrap();
         assert_eq!(i128::from(away.to_bits()), 3);
         let ceil: D38<0> = D38::<0>::convert_from_with(src, RoundingMode::Ceiling).unwrap();
         assert_eq!(i128::from(ceil.to_bits()), 3);
@@ -753,7 +774,7 @@ mod from_widen_narrow_default {
     //! â†’ D462) rather than skipping straight to the next power-of-two
     //! width. Plus the per-tier `Default` impl coverage.
 
-    use decimal_scaled::{D18, D38, D57, D76, D115};
+    use decimal_scaled::{D115, D18, D38, D57, D76};
 
     #[test]
     fn d38_widen_to_d57() {
