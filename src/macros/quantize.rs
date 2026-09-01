@@ -150,7 +150,7 @@ macro_rules! decl_decimal_quantize {
                     // Any non-zero remainder lifts the magnitude; the
                     // `remainder == zero` case returned above.
                     $crate::support::rounding::RoundingMode::AwayFromZero => {
-                        if non_negative {
+                        if is_non_negative {
                             quotient + one
                         } else {
                             quotient - one
@@ -161,7 +161,7 @@ macro_rules! decl_decimal_quantize {
                     $crate::support::rounding::RoundingMode::ZeroFiveUp => {
                         let digit = (quotient % ten).as_i128().unsigned_abs();
                         if digit == 0 || digit == 5 {
-                            if non_negative {
+                            if is_non_negative {
                                 quotient + one
                             } else {
                                 quotient - one
