@@ -17,11 +17,12 @@ digits emitted below are not merely believed correct at some working
 precision — the enclosure certifies them. No value is derived from the
 crate's own `pi` or any `decimal_scaled` method.
 
-The ten constants (all positive, all irrational):
+The eleven constants (all positive, all irrational):
     pi, tau (= 2*pi), half_pi (= pi/2), quarter_pi (= pi/4),
     e, golden (= (1+sqrt 5)/2), ln2 (= log 2), ln10 (= log 10),
-    deg_per_rad (one radian in degrees, mpmath `degrees(1)` = 180/pi),
-    rad_per_deg (one degree in radians, mpmath `radians(1)` = pi/180).
+    log10_2 (= log 2 / log 10),
+    deg_per_rad (one radian in degrees, = 180/pi),
+    rad_per_deg (one degree in radians, = pi/180).
 
 Encoding (per constant, per scale `s`):
     `floor(const * 10**s)` stored as the NARROWEST-fit little-endian
