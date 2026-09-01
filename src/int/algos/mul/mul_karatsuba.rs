@@ -20,26 +20,58 @@
 //! copy (rule 2 of the architecture constitution). The choice of which
 //! limb width wins per (N, SCALE) cell is the policy matcher's job.
 
-use crate::int::algos::support::limbs::{add_assign, sub_assign};
+use crate::int::algos::support::limbs::{add_assign, sub_assign, MAX_WORK_N};
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 use crate::int::types::compute_limbs::{ComputeLimbs, Limb, Limbs};
 
 // ---- Slice-entry scratch (width-erased build-max) ---------------------------
 
-/// The widest equal-length product the crate forms: Int<256> -- the widest
-/// transcendental work integer (4*MAX_WORK_N at the xx-wide tier). The
-/// int-layer multiply matcher (int::policy::mul) engages Karatsuba only at
-/// even N >= 128, and no work width exceeds 256 (a wider operand would route
-/// through the concrete-N kernel's exact ComputeLimbs scratch, not this slice
-/// path), so the WIDTH-ERASED slice entries below cover up to this width.
-const KARATSUBA_MAX_WIDTH: usize = 256;
+/// Ceiling on the operand length the WIDTH-ERASED slice entries
+/// (`mul_karatsuba` / `mul_karatsuba_forced`) will run Karatsuba for; past it
+/// they fall back to schoolbook.
+///
+/// DERIVED from `MAX_WORK_N`, not frozen. The widest work integer any tier
+/// declares is its `Wexp`, which is `8 x storage` at the top of every feature
+/// band (`wide` 16 -> `Int<128>` at D307; `x-wide` 32 -> `Int<256>` at D616;
+/// `xx-wide` 64 -> `Int<512>` at D1232). Deriving it means adding a tier
+/// resizes this automatically instead of leaving two constants to be kept in
+/// step by hand -- and it stops a narrow build carrying a frame sized for a
+/// width it can never present.
+///
+/// It bounds ONLY the slice door. The const-`N` door
+/// (`int::policy::mul::dispatch` -> `mul_karatsuba_limb`) sources EXACT per-`N`
+/// scratch from `ComputeLimbs`, so no `Int<N>` operand of any width -- D1232's
+/// `Wexp = Int<512>` included -- can reach this constant. That asymmetry is
+/// what makes the hazard tractable: only a runtime-length caller is exposed,
+/// and only the entry check in `mul_karatsuba` can bound a runtime length.
+///
+/// (The previous doc here claimed a wider operand "would route through the
+/// concrete-N kernel's exact ComputeLimbs scratch, not this slice path". That
+/// is true of the const door and CANNOT be true of the slice door, which has
+/// no `N` to route by. What protects the slice door is a property of its call
+/// sites, not of routing.)
+///
+/// Every slice caller (`sqrt_newton`, `cbrt_newton`, `newton_reciprocal`,
+/// `div_widen_scale`, `wide_trig_core`) carves operands from storage-derived
+/// `ComputeLimbs` buffers and shrinks them with `sig_len`, so the longest
+/// equal-length pair any can present today is about **96** limbs (`cbrt` at
+/// D1232) -- below the matcher's engage point, leaving the slice Karatsuba arm
+/// unreached in production.
+///
+/// That 96 is a MEASUREMENT OF TODAY'S CALL SITES, NOT A PROPERTY of the code.
+/// A new slice caller, or a work width fed here as a value rather than as a
+/// widened storage magnitude, moves it without anything complaining -- which
+/// is why the entry fails closed rather than trusting the number.
+pub(crate) const KARATSUBA_MAX_WIDTH: usize = 8 * MAX_WORK_N;
 
 /// Build-max stack scratch (in u64 limbs) for the WIDTH-ERASED slice Karatsuba
 /// entries mul_karatsuba / mul_karatsuba_forced. Those take &[u64] of RUNTIME
 /// length, so they cannot size per-N and use this sanctioned build-max blanket
 /// (like the width-erased slice-divide engines). It is sized to the deepest
-/// recursion (the threshold floor 4) at the widest width via the kernel's own
-/// recursion arithmetic -- derived, not a frozen guess. The concrete-N kernel
+/// recursion (the threshold floor 4) at [`KARATSUBA_MAX_WIDTH`] via the
+/// kernel's own recursion arithmetic -- derived, not a frozen guess, and now
+/// feature-scoped through that ceiling rather than pinned to the widest
+/// tier the crate can be built with. The concrete-N kernel
 /// mul_karatsuba_limb sources its EXACT per-N scratch from ComputeLimbs instead
 /// (no build-max on the hot wide-multiply path -- Constitution rule 6).
 pub(crate) const KARATSUBA_SCRATCH_LIMBS: usize =
