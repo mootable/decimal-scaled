@@ -79,7 +79,15 @@ jobs:
           # the per-stripe cost is not what holds the run up. 86 stripe jobs
           # in total (24 at the default + 6 + 8 + 12 + 16 + 20).
           STRIPES = {"d1232": 20, "d924": 16, "d616": 12, "d462": 8, "d307": 6}
+          # `stripe` is the harness's partition selector and MUST stay
+          # 0-based: the row filter is `line % total == stripe`, so a
+          # 1-based value would never match on the last stripe — that job
+          # would grade nothing and one row-class would go unrun, with the
+          # whole workflow still green. `label` exists ONLY for the job
+          # name, where 1..n reads correctly to a human. Do not "tidy" the
+          # two into one field.
           print(json.dumps([{"shard": s, "widths": w, "stripe": k,
+                             "label": k + 1,
                              "total": STRIPES.get(s, 4)}
                             for (s, w) in shards
                             for k in range(STRIPES.get(s, 4))]))
@@ -158,7 +166,10 @@ jobs:
           retention-days: 3
 
   stripes:
-    name: ${{ matrix.shard }} stripe ${{ matrix.stripe }}/${{ matrix.total }}
+    # `matrix.label` (1..n), NOT `matrix.stripe` (0..n-1). The 0-based value
+    # is the partition selector and stays on GOLDEN_STRIPE below; this is
+    # only what a human reads.
+    name: ${{ matrix.shard }} stripe ${{ matrix.label }}/${{ matrix.total }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     needs: [plan, build]
@@ -191,7 +202,7 @@ jobs:
         if: always()
         run: |
           if [ -f stripe-report/summary.txt ]; then
-            echo "=== ${{ matrix.shard }} stripe ${{ matrix.stripe }} mini report ==="
+            echo "=== ${{ matrix.shard }} stripe ${{ matrix.label }}/${{ matrix.total }} mini report ==="
             cat stripe-report/summary.txt
             cat stripe-report/summary.txt >> "$GITHUB_STEP_SUMMARY"
           else
