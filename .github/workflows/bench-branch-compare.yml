@@ -14,20 +14,50 @@ name: "\U0001FA83 bench-branch-compare (branch vs latest tag)"
 # name-filter (`-- s<scale>`). This surfaces SCALE-dependent regressions the
 # old single-scale (all wide tiers @ scale-30) bench hid.
 #
-# Job graph — compile ONCE, then fan out, then join:
-#   build     : pin prod, `cargo bench --no-run` for ALL width targets once,
+# Job graph — plan, compile ONCE, then fan out, then join:
+#   plan       : resolve the `features` + `widths` dispatch inputs into a build
+#                plan (bench-compare/bbc_plan.py) and REJECT an inconsistent
+#                pair in seconds rather than as a compile error 20 minutes in.
+#                Emits the tier feature list, the `--bench` target list, the
+#                (width, scale) matrix, and whether this run may publish.
+#   build     : pin prod, `cargo bench --no-run` for the PLANNED width targets,
 #               upload the compiled criterion exes + Cargo.lock as `bbc-compiled`.
-#   bench      : matrix of explicit (width, scale) cells; download `bbc-compiled`,
+#   bench      : matrix of (width, scale) cells from `plan`; download `bbc-compiled`,
 #               invoke the prebuilt exe directly with a `-- s<scale>` name-filter
 #               (NO recompile), upload that cell's criterion subtree.
 #   aggregate  : needs ALL bench cells; merge every cell into one criterion tree,
 #               run summarise.py -> a worst-first (op x width x scale) regression
 #               table printed to the run summary, plus a single `bbc-aggregate`
-#               artifact (combined tree + medians .tsv + rendered .md).
+#               artifact (combined tree + medians .tsv + rendered .md + the run
+#               config). Publishes the medians ONLY for the full default sweep.
 #
 # Triggers: (1) push to `main` — publishes the fresh timing medians to the `ci-data`
 # data branch, exactly like the other producers (history / lib-perf / golden); (2)
 # manual workflow_dispatch against any ref. NOT release/* (see the `on:` note).
+#
+# PARAMETERISED RUNS — the tier feature set is a dispatch input, and it is applied
+# to BOTH dep lines (branch and prod) from one resolved value, because a
+# comparison whose two sides carry different features is not a comparison. The
+# build job asserts the two feature arrays are byte-identical before compiling.
+#
+# The point of the `features` input is the rule that enabling a feature may cost
+# COMPILE time but must NOT cost RUNTIME. `MAX_WORK_N`
+# (src/int/algos/support/limbs.rs) is `#[cfg]`-selected by these very features —
+# 2 narrow, 16 at `wide`, 32 at `x-wide`, 64 at `xx-wide` — and the build-max
+# scratch sizing derives from it, so an unused tier's mere presence can change a
+# used tier's speed. This workflow could never see that while it hardcoded every
+# feature.
+#
+# Read the result ACROSS runs, not within one: bbc compares branch vs prod at the
+# SAME features, so both sides move together and the ratio stays ~1.00 whatever
+# the feature set. Dispatch the SAME ref twice with different `features`, then
+# compare the `prod_ns` column of the two `bbc_medians.tsv` artifacts cell by
+# cell — identical code, one variable. (`prod_ns` is the right column: it is the
+# published baseline, unaffected by whatever the branch is changing.)
+#
+# The concurrency group is deliberately per-ref, so two dispatches on one ref
+# serialise instead of competing for runners — an A/B whose halves ran under
+# different machine load would not be an A/B.
 
 on:
   # Push to `main` runs the branch-vs-latest-tag bench and publishes its timing medians
@@ -46,6 +76,16 @@ on:
         required: false
         type: string
         default: ""
+      features:
+        description: "TIER features for BOTH sides, csv (wide / x-wide / xx-wide / d57..d1232). `none` = narrow-only. std+strict are always applied. Default = every tier, i.e. today's behaviour."
+        required: false
+        type: string
+        default: "wide,x-wide,xx-wide"
+      widths:
+        description: "Widths to bench, csv (e.g. D57 or D18,D38,D57). `all` = every width the feature set can build. A width the features cannot build is rejected before anything compiles."
+        required: false
+        type: string
+        default: "all"
 
 concurrency:
   group: bench-branch-compare-${{ github.ref }}
@@ -56,11 +96,60 @@ permissions:
 
 jobs:
   # ------------------------------------------------------------------
-  # build: pin prod and compile EVERY width's bench exe ONCE. The compiled
+  # plan: turn the two dispatch inputs into a build plan, and fail FAST on an
+  # inconsistent one. A `wide`-only build has no `D924` type, so asking for that
+  # cell is a compile error — but only after the ~20 min compile. This job costs
+  # seconds and says exactly which feature the width needs.
+  #
+  # No toolchain, no cargo: bbc_plan.py is stdlib-only. It parses the benchable
+  # widths + their scale sets out of `benches/compare_d*.rs` (the `width_bench!`
+  # invocations) and the feature ladder out of the crate's own `[features]`
+  # table, so neither the matrix nor the tier map is a hand-maintained copy that
+  # can drift from the thing it describes.
+  plan:
+    name: "\U0001FA83 plan (resolve features + widths)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      features_toml: ${{ steps.plan.outputs.features_toml }}
+      features_csv: ${{ steps.plan.outputs.features_csv }}
+      widths_csv: ${{ steps.plan.outputs.widths_csv }}
+      bench_args: ${{ steps.plan.outputs.bench_args }}
+      cell_count: ${{ steps.plan.outputs.cell_count }}
+      is_default: ${{ steps.plan.outputs.is_default }}
+    steps:
+      - name: Checkout (${{ inputs.ref || github.ref_name }})
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Resolve the run plan
+        id: plan
+        working-directory: bench-compare
+        env:
+          # Through `env`, never string-interpolated into the script: these are
+          # caller-supplied. bbc_plan.py accepts only names present in the
+          # crate's own feature table / bench targets, so nothing downstream
+          # ever sees an arbitrary string.
+          BBC_FEATURES: ${{ inputs.features }}
+          BBC_WIDTHS: ${{ inputs.widths }}
+          PYTHONIOENCODING: utf-8
+        run: |
+          set -euo pipefail
+          python3 bbc_plan.py \
+            --features "${BBC_FEATURES:-}" \
+            --widths "${BBC_WIDTHS:-all}" \
+            --summary plan_summary.md
+          cat plan_summary.md >> "$GITHUB_STEP_SUMMARY"
+
+  # ------------------------------------------------------------------
+  # build: pin prod and compile the PLANNED widths' bench exes ONCE. The compiled
   # criterion executables + the resolved Cargo.lock are uploaded so the bench
   # cells run them directly with a scale name-filter — no per-cell recompile.
   build:
-    name: "\U0001FA83 build (compile all widths once)"
+    name: "\U0001FA83 build (${{ needs.plan.outputs.widths_csv }} @ ${{ needs.plan.outputs.features_csv }})"
+    needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -87,22 +176,62 @@ jobs:
           restore-keys: |
             cargo-branch-compare-${{ runner.os }}-
 
-      - name: Pin prod to the latest published release
+      - name: Pin prod, and set the SAME features on both sides
         working-directory: bench-compare
+        env:
+          # One resolved value, written to BOTH dep lines. A bbc run whose two
+          # sides carry different features is not a comparison — and it would
+          # fail in the flattering direction, since the side with fewer tiers
+          # gets smaller build-max scratch and looks like a large free win.
+          FEATURES_TOML: ${{ needs.plan.outputs.features_toml }}
         run: |
           set -euo pipefail
           LATEST=$(curl -s -H 'User-Agent: decimal-scaled-bench (github.com/mootable/decimal-scaled)' https://crates.io/api/v1/crates/decimal-scaled | python3 -c "import sys,json; d=json.load(sys.stdin); c=d['crate']; print(c.get('max_stable_version') or c['newest_version'])")
           echo "latest published tag = $LATEST"
           echo "PROD_VERSION=$LATEST" >> "$GITHUB_ENV"
-          sed -i -E "s|^prod = .*|prod = { package = \"decimal-scaled\", version = \"=$LATEST\", default-features = false, features = [\"std\", \"strict\", \"wide\", \"x-wide\", \"xx-wide\"] }|" Cargo.toml
+          # `|` delimiter: the replacements contain `"` but never `|`, `&` or a
+          # backslash (bbc_plan.py emits only names from the crate's own feature
+          # table, so the value is a closed set of `[a-z0-9-]` words).
+          sed -i -E "s|^decimal-scaled = .*|decimal-scaled = { path = \"..\", default-features = false, features = [${FEATURES_TOML}] }|" Cargo.toml
+          sed -i -E "s|^prod = .*|prod = { package = \"decimal-scaled\", version = \"=$LATEST\", default-features = false, features = [${FEATURES_TOML}] }|" Cargo.toml
 
-      - name: Compile every width bench exe (no run)
+      - name: Assert branch and prod carry identical features
         working-directory: bench-compare
         run: |
           set -euo pipefail
-          echo "--- dep lines ---"; grep -E '^(decimal-scaled|prod)' Cargo.toml
-          # One compile of the whole bench target set; the cells just run the exes.
-          cargo bench --no-run
+          echo "--- dep lines ---"; grep -E '^(decimal-scaled|prod) = ' Cargo.toml
+          extract() { grep -E "^$1 = " Cargo.toml | sed -E 's/.*features = \[([^]]*)\].*/\1/'; }
+          BRANCH_FEATS=$(extract 'decimal-scaled')
+          PROD_FEATS=$(extract 'prod')
+          if [ -z "$BRANCH_FEATS" ] || [ -z "$PROD_FEATS" ]; then
+            echo "::error::could not read a features array off both dep lines — the manifest shape changed and the rewrite above silently did nothing."
+            exit 1
+          fi
+          if [ "$BRANCH_FEATS" != "$PROD_FEATS" ]; then
+            echo "::error::branch and prod feature sets DIFFER — every number this run produced would be meaningless."
+            echo "  branch: [$BRANCH_FEATS]"
+            echo "  prod:   [$PROD_FEATS]"
+            exit 1
+          fi
+          echo "both sides: [$BRANCH_FEATS]"
+
+      - name: Compile the planned width bench exes (no run)
+        working-directory: bench-compare
+        env:
+          # `--bench compare_dNNN ...` for the planned widths only. Compiling
+          # just these is what makes a single-width dispatch fast, and it is
+          # also what lets a reduced feature set compile at all: the bench
+          # targets declare no `required-features`, so a whole-target-set build
+          # would try to compile `compare_d924.rs` against a crate that has no
+          # `D924`.
+          BENCH_ARGS: ${{ needs.plan.outputs.bench_args }}
+        run: |
+          set -euo pipefail
+          echo "compiling: $BENCH_ARGS"
+          # Unquoted on purpose — the planner emits a validated flag list that
+          # must word-split into separate arguments.
+          # shellcheck disable=SC2086
+          cargo bench --no-run $BENCH_ARGS
           echo "--- compiled compare exes ---"
           ls -1 target/release/deps/compare_d*-* | grep -v '\.d$' || true
 
@@ -136,76 +265,21 @@ jobs:
   # criterion name-filter. No toolchain, no recompile.
   bench:
     name: "\U0001FA83 ${{ matrix.width }} s${{ matrix.scale }}"
-    needs: build
+    needs: [plan, build]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
-      # Explicit (width, scale) pairs — scales differ per width, so the matrix
-      # must be an `include:` list, not a cross-product. Per #1:
-      # scales = {0, S/4, S/2, 3S/4, S-1}, S = the tier's max SCALE (no 30).
-      matrix:
-        include:
-          - { width: D18,   scale: 0 }
-          - { width: D18,   scale: 4 }
-          - { width: D18,   scale: 9 }
-          - { width: D18,   scale: 13 }
-          - { width: D18,   scale: 17 }
-          - { width: D38,   scale: 0 }
-          - { width: D38,   scale: 9 }
-          - { width: D38,   scale: 19 }
-          - { width: D38,   scale: 28 }
-          - { width: D38,   scale: 37 }
-          - { width: D57,   scale: 0 }
-          - { width: D57,   scale: 14 }
-          - { width: D57,   scale: 28 }
-          - { width: D57,   scale: 42 }
-          - { width: D57,   scale: 56 }
-          - { width: D76,   scale: 0 }
-          - { width: D76,   scale: 19 }
-          - { width: D76,   scale: 38 }
-          - { width: D76,   scale: 57 }
-          - { width: D76,   scale: 75 }
-          - { width: D115,  scale: 0 }
-          - { width: D115,  scale: 28 }
-          - { width: D115,  scale: 57 }
-          - { width: D115,  scale: 86 }
-          - { width: D115,  scale: 114 }
-          - { width: D153,  scale: 0 }
-          - { width: D153,  scale: 38 }
-          - { width: D153,  scale: 76 }
-          - { width: D153,  scale: 114 }
-          - { width: D153,  scale: 152 }
-          - { width: D230,  scale: 0 }
-          - { width: D230,  scale: 57 }
-          - { width: D230,  scale: 115 }
-          - { width: D230,  scale: 172 }
-          - { width: D230,  scale: 229 }
-          - { width: D307,  scale: 0 }
-          - { width: D307,  scale: 76 }
-          - { width: D307,  scale: 153 }
-          - { width: D307,  scale: 230 }
-          - { width: D307,  scale: 306 }
-          - { width: D462,  scale: 0 }
-          - { width: D462,  scale: 115 }
-          - { width: D462,  scale: 231 }
-          - { width: D462,  scale: 346 }
-          - { width: D462,  scale: 461 }
-          - { width: D616,  scale: 0 }
-          - { width: D616,  scale: 154 }
-          - { width: D616,  scale: 308 }
-          - { width: D616,  scale: 462 }
-          - { width: D616,  scale: 615 }
-          - { width: D924,  scale: 0 }
-          - { width: D924,  scale: 231 }
-          - { width: D924,  scale: 462 }
-          - { width: D924,  scale: 693 }
-          - { width: D924,  scale: 923 }
-          - { width: D1232, scale: 0 }
-          - { width: D1232, scale: 308 }
-          - { width: D1232, scale: 616 }
-          - { width: D1232, scale: 924 }
-          - { width: D1232, scale: 1231 }
+      # The (width, scale) cells come from `plan`, which reads them off the
+      # `width_bench!` invocation in each `benches/compare_d*.rs` and keeps only
+      # the selected widths. Scales differ per width, so it stays an `include:`
+      # list rather than a cross-product; per #1 the set is
+      # {0, S/4, S/2, 3S/4, S-1}, S = the tier's max SCALE.
+      #
+      # This replaced a hand-written 60-line copy of the same table, which was a
+      # standing drift risk: a changed scale set in a bench file did not update
+      # the matrix, and the cell simply benched nothing.
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
 
     steps:
       - name: Install system libs (criterion runtime)
@@ -251,8 +325,11 @@ jobs:
   # and bundles ONE downloadable artifact (tree + medians .tsv + table .md).
   aggregate:
     name: "\U0001FA83 aggregate (worst-first regression table)"
-    needs: bench
-    if: always()
+    needs: [plan, bench]
+    # Still aggregate when some bench cells failed (partial data beats none),
+    # but not when PLANNING failed — there is nothing to collate, and the
+    # `is_default` output the publish gate reads would be an empty string.
+    if: ${{ always() && needs.plan.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -310,25 +387,69 @@ jobs:
         env:
           BENCH_REF: ${{ inputs.ref || github.ref_name }}
           PYTHONIOENCODING: utf-8
+          RUN_FEATURES: ${{ needs.plan.outputs.features_csv }}
+          RUN_WIDTHS: ${{ needs.plan.outputs.widths_csv }}
+          RUN_CELLS: ${{ needs.plan.outputs.cell_count }}
+          RUN_IS_DEFAULT: ${{ needs.plan.outputs.is_default }}
+          RUN_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           mkdir -p aggregate
           # Print to stdout (raw log) AND capture the table for the step summary.
           python3 summarise.py --tsv aggregate/bbc_medians.tsv --md aggregate/bbc_table.md | tee aggregate/bbc_table.txt
-          # Append the rendered markdown to the GitHub Actions run summary UI.
+          # What this run WAS, travelling with the numbers. A feature-varied A/B
+          # compares the `prod_ns` column of two artifacts, and the feature set
+          # is the whole independent variable — it must not be something the
+          # reader has to reconstruct from the run's dispatch inputs later.
+          cat > aggregate/bbc_run_config.env <<EOF
+          BBC_REF=${BENCH_REF}
+          BBC_SHA=${RUN_SHA}
+          BBC_PROD_VERSION=${PROD_VERSION}
+          BBC_FEATURES=${RUN_FEATURES}
+          BBC_WIDTHS=${RUN_WIDTHS}
+          BBC_CELLS=${RUN_CELLS}
+          BBC_IS_DEFAULT_SWEEP=${RUN_IS_DEFAULT}
+          EOF
+          echo "--- run config ---"; cat aggregate/bbc_run_config.env
+          # Append the rendered markdown to the GitHub Actions run summary UI,
+          # under a banner when the numbers are NOT the tracked full surface.
           {
             echo ""
+            if [ "$RUN_IS_DEFAULT" != "true" ]; then
+              echo "> **Parameterised run — not the tracked surface.** Features"
+              echo "> \`${RUN_FEATURES}\`, widths \`${RUN_WIDTHS}\` (${RUN_CELLS} cells)."
+              echo "> Medians are in the \`bbc-aggregate\` artifact only; nothing was published."
+              echo ""
+            fi
             cat aggregate/bbc_table.md
           } >> "$GITHUB_STEP_SUMMARY"
           # Bundle the combined criterion tree into the aggregate dir too.
           cp -a target/criterion aggregate/criterion
 
       - name: Commit the timing medians to results/timing/
-        # Self-commit only when the run targets its own branch HEAD: a push event
-        # (inputs.ref unset) or a dispatch with no ref override. A dispatch against
-        # an explicit tag/SHA/other-branch stays artifact-only — `HEAD:<tag-or-sha>`
-        # is never a valid push target, and rendered docs belong to a branch.
-        if: ${{ !inputs.ref }}
+        # TWO conditions, and both are load-bearing:
+        #
+        # 1. The run targets its own branch HEAD — a push event (inputs.ref
+        #    unset) or a dispatch with no ref override. A dispatch against an
+        #    explicit tag/SHA/other-branch stays artifact-only: `HEAD:<tag-or-sha>`
+        #    is never a valid push target, and rendered docs belong to a branch.
+        #
+        # 2. The run is the FULL DEFAULT SWEEP. `results/timing/bbc_medians.tsv`
+        #    is not a scratch file: scripts/render_docs.py renders the published
+        #    Performance page from it, and docs.yml reads it off `ci-data`. A
+        #    narrowed or reduced-feature run produces the same filename holding
+        #    a different measurement — fewer cells, or the same cells built
+        #    against a different `MAX_WORK_N`. Committing that would silently
+        #    replace the tracked surface with a subset, or restate every number
+        #    under a build no consumer of the docs is running. So a
+        #    parameterised run is artifact-only, and `plan` decides by comparing
+        #    the resolved feature CLOSURE (not the typed string) against the
+        #    default — `xx-wide` alone builds identically to the default and
+        #    still publishes.
+        #
+        # The `main` push path carries no inputs, so it resolves to the default
+        # and publishes exactly as before.
+        if: ${{ !inputs.ref && needs.plan.outputs.is_default == 'true' }}
         run: |
           set -euo pipefail
           tsv=bench-compare/aggregate/bbc_medians.tsv
