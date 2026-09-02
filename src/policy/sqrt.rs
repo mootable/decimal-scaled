@@ -105,11 +105,59 @@ enum Select<const N: usize> {
 /// default (a real algorithm — there is no synthetic default variant).
 const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
     match (N, SCALE) {
-        // D18 (`Int<1>`) — widened to `Int<2>` storage in the dispatch
-        // and run through the hand-tuned 256-bit isqrt there.
+        // ── D18 (N = 1): the bypass EARNS its place here ───────────────
+        // `MgDivide` bypasses the int layer (hand-written 256-bit `u128`
+        // arithmetic in `algos::support::mg_divide`), so it only belongs
+        // here if it beats the int-layer paths by a margin worth a separate
+        // kernel. At this width it does, and the reason is structural: the
+        // radicand `raw · 10^SCALE` is at most `i64::MAX · 10^17 ≈ 9.22e35`,
+        // which is below `u128::MAX ≈ 3.40e38` by a factor of ~369 — so
+        // `sqrt_raw_with`'s hardware-`u128::isqrt` fast path fires for EVERY
+        // legal `D18<SCALE>` value and the bit-serial fallback is
+        // unreachable. Measured (`root_kernel_ab`, `sqrt_d18_s00..s17`,
+        // pinned, two runs): MgDivide beats the better int-layer path
+        // (`Native`) by 2.31x/2.30x at s0, 2.21x/2.18x at s4, 2.01x/1.94x at
+        // s9, 1.39x/1.40x at s13, 1.46x/1.43x at s17 — reproducible to
+        // within 0.07x. The fast-path condition is a tautology at this
+        // width, so no value test is needed.
         (1, _) => Select::ByAlgorithm(Algorithm::MgDivide),
-        // D38 (`Int<2>`) — hand-tuned 256-bit isqrt.
-        (2, _) => Select::ByAlgorithm(Algorithm::MgDivide),
+        // ── D38 (N = 2): the bypass earns its place only on the values it
+        // can actually serve ──────────────────────────────────────────────
+        // At this width the same radicand can be either side of `u128`:
+        // `raw · 10^SCALE` fits only while `raw <= u128::MAX / 10^SCALE`.
+        // Inside that region MgDivide takes the same hardware `u128::isqrt`
+        // path as D18 and wins big; outside it, `sqrt_raw_with` falls back
+        // to a 256-bit Newton whose every divide is a bit-serial shift-subtract
+        // (the divisor is the root estimate, ~2^127, far above the
+        // `u64::MAX` word-divisor fast path), and it loses catastrophically.
+        //
+        // Measured per input (`root_kernel_ab`, `sqrt_d38_s19n`, pinned):
+        // inside the region MgDivide is 62-75ns vs `Native` 260-365ns
+        // (4.1-4.9x); outside it MgDivide is 8963ns vs `Native` 439ns
+        // (20x the wrong way). Aggregated at SCALE 0 — where the condition
+        // holds for every value — MgDivide beats the best int-layer path
+        // 3.74x/3.84x across two runs.
+        //
+        // A `(N, SCALE)` arm cannot express this: the split is on the VALUE,
+        // not the cell. So this is the one genuine `ByValue` case — the
+        // bypass is routed exactly where it earns its place and the int
+        // layer takes every other value.
+        (2, _) => Select::ByValue(|raw: &Int<N>| {
+            // Magnitude as u128 (exact at N == 2, the only width that
+            // reaches this matcher).
+            let magnitude = raw.unsigned_abs();
+            let limbs = magnitude.as_limbs();
+            let mut mag: u128 = limbs[0] as u128;
+            if limbs.len() > 1 {
+                mag |= (limbs[1] as u128) << 64;
+            }
+            // `checked_pow` keeps this total: a SCALE whose `10^SCALE`
+            // overflows u128 can never satisfy the condition anyway.
+            match 10u128.checked_pow(SCALE) {
+                Some(pow10) if mag <= u128::MAX / pow10 => Algorithm::MgDivide,
+                _ => Algorithm::Native,
+            }
+        }),
         // D57 / D76 (N = 3 / 4) — bespoke f64-seeded Newton in a tight,
         // concrete `Int<W>` with `W = 2N` (covering `mag · 10^SCALE` at any
         // valid scale: the storage magnitude is ≤ 64N bits and `10^SCALE`
@@ -232,6 +280,15 @@ where
             // `const { … }` block. The `(N, SCALE)` cells routed here by
             // `select` all satisfy the per-N high-scale gate; the `_ => Newton`
             // fallback is dead for any cell `select` routes to `Native`.
+            // Narrow tiers at the same full-range `W = 2N`: `mag · 10^SCALE`
+            // needs `(64N-1) + ceil(SCALE·log2 10) <= 128N - 1` bits, i.e.
+            // `SCALE <= 19.266·N`. With `MAX_SCALE = tier - 1` that is 17 <=
+            // 19.27 at N=1 (7 bits spare) and 37 <= 38.53 at N=2 (5 spare) —
+            // at least as much headroom as the already-routed N=3/4 cells.
+            // Only N=2 is reachable (N=1 routes to `MgDivide` unconditionally);
+            // the N=1 arm is present so the width table stays total.
+            1 => sqrt::sqrt_native::sqrt_native::<N, 2>(raw, const { Int::<2>::TEN.pow(SCALE) }, mode),
+            2 => sqrt::sqrt_native::sqrt_native::<N, 4>(raw, const { Int::<4>::TEN.pow(SCALE) }, mode),
             3 => sqrt::sqrt_native::sqrt_native::<N, 6>(raw, const { Int::<6>::TEN.pow(SCALE) }, mode),
             4 => sqrt::sqrt_native::sqrt_native::<N, 8>(raw, const { Int::<8>::TEN.pow(SCALE) }, mode),
             6 => sqrt::sqrt_native::sqrt_native::<N, 12>(raw, const { Int::<12>::TEN.pow(SCALE) }, mode),
