@@ -41,6 +41,11 @@ pub(crate) mod div_knuth;
 pub(crate) mod div_knuth_u128_limb;
 pub(crate) mod div_mg;
 pub(crate) mod div_rem;
+// the divide's EXACT-SCRATCH door: the matcher's verdict routed into the
+// chosen engine's `_into` variant with the caller's normalisation buffers, so
+// a caller that divides in a loop stops paying the build-max memset per
+// iteration. Not an engine — a routing leaf over the engines above.
+pub(crate) mod div_rem_into;
 pub(crate) mod div_rem_schoolbook;
 
 #[cfg(test)]

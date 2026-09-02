@@ -10,27 +10,98 @@
 //! operand and writes `floor(sqrt(radicand))`; no algorithm choice.
 
 use crate::algo_x_support::seed::sqrt_seed;
+use crate::int::algos::div::div_rem_into::div_rem_into;
 use crate::int::algos::support::limbs::{add_assign, bit_len, cmp, shr};
-use crate::int::policy::div_rem::dispatch as div_rem_dispatch;
 
-/// Scratch capacity for the Newton isqrt kernel — 288 u64 limbs
-/// (18432 bits), covering the widest work integer in the crate
-/// (Int<256> used by D1232 cbrt, 256 u64 limbs) with isqrt scratch slack.
+/// Scratch capacity for the width-agnostic [`isqrt_newton`] door — the
+/// build-max `2·MAX_WORK_N + ⌈MAX_WORK_N/2⌉`, the only sizing available to a
+/// caller with no `N`. Callers that DO hold a concrete `N` must use
+/// [`isqrt_newton_into`] instead: this constant is selected by the build's
+/// WIDTH FEATURES (40 limbs at `wide`, 160 at `xx-wide`), so a kernel sized
+/// from it makes every narrow call pay for the widest enabled tier — the
+/// feature-coupling the exact-scratch mechanism exists to remove.
 use crate::int::algos::support::limbs::max_n_limbs;
+use crate::int::types::compute_limbs::MAX_SINGLE_LIMBS;
 
 const SCRATCH_LIMBS: usize = max_n_limbs(2);
 
-/// `out = floor(sqrt(radicand))`. Newton iteration on top of the runtime
-/// divide dispatcher.
+/// Build-max Knuth normalisation scratch for [`isqrt_newton`] — the same
+/// `MAX_SINGLE_LIMBS` budget [`div_knuth`](crate::int::algos::div::div_knuth)
+/// allocates at its own blanket door, hoisted here so it is zeroed ONCE per
+/// root instead of once per Newton iteration.
+const DIV_SCRATCH_LIMBS: usize = MAX_SINGLE_LIMBS;
+
+/// Build-max base-2¹²⁸ packed scratch — `⌈MAX_SINGLE_LIMBS/2⌉ + 2`, matching
+/// `div_knuth_u128_limb`'s own blanket sizing (the one-above window limb plus
+/// an even-rounding limb).
+const DIV_SCRATCH_LIMBS_128: usize = MAX_SINGLE_LIMBS / 2 + 2;
+
+/// `out = floor(sqrt(radicand))` — the **build-max** door, for callers with no
+/// `N` to size scratch from (the `Uint<N>` fast-arm dispatch, `hypot`, the
+/// bench seam). Allocates the four Newton working buffers plus the divide's
+/// normalisation scratch at the build-max width and delegates to
+/// [`isqrt_newton_into`].
 ///
-/// Uses [`div_rem_dispatch`] (not the *const* `div_rem`) per iteration: the
-/// const path routes multi-limb divisors through the O(bits²)
-/// shift-subtract path, which at Int<64> (n=64 u64 limbs) dominates wall
-/// time — Newton converges in ~log₂(b) ≈ 12 iterations, each one a
-/// `~65k`-limb-op divmod. The dispatcher gets
-/// Knuth-base-2⁶⁴ per iteration (~`~32²` = 1024 limb-ops), worth ~40× on
-/// D307 sqrt.
+/// A caller holding a concrete `N` (`Limbs<N>: ComputeLimbs` — the decimal
+/// `sqrt` kernel) calls [`isqrt_newton_into`] with its own exactly-sized
+/// buffers instead, skipping the build-max zeroing entirely.
 pub(crate) fn isqrt_newton(radicand: &[u64], out: &mut [u64]) {
+    debug_assert!(radicand.len() + 1 <= SCRATCH_LIMBS, "isqrt scratch overflow");
+    let mut x = [0u64; SCRATCH_LIMBS];
+    let mut q = [0u64; SCRATCH_LIMBS];
+    let mut y = [0u64; SCRATCH_LIMBS];
+    let mut u = [0u64; DIV_SCRATCH_LIMBS];
+    let mut v = [0u64; DIV_SCRATCH_LIMBS];
+    let mut u128_u = [0u128; DIV_SCRATCH_LIMBS_128];
+    let mut u128_v = [0u128; DIV_SCRATCH_LIMBS_128];
+    isqrt_newton_into(
+        radicand, out, &mut x, &mut q, &mut y, &mut u, &mut v, &mut u128_u, &mut u128_v,
+    );
+}
+
+/// `out = floor(sqrt(radicand))` in **caller-provided scratch** — the real
+/// implementation, and the exact-scratch sibling of [`isqrt_newton`].
+///
+/// Newton's downward-monotone recurrence `x ← (x + radicand/x) / 2` from a
+/// guaranteed over-estimate seed, one divide per iteration. The divide is the
+/// hot term, so it goes through the divide matcher's verdict
+/// ([`select_for_limbs`]) into the chosen engine's `_into` door with the
+/// caller's buffers — rather than the build-max
+/// [`dispatch`](crate::int::policy::div_rem::dispatch), whose `div_knuth`
+/// wrapper allocates and zeroes two `MAX_SINGLE_LIMBS` arrays **per
+/// iteration** (2 × 258 limbs at `xx-wide`, 2 × 66 at `wide` — for the same
+/// work). Every verdict is honored with its own engine: the `radicand / x`
+/// shape has `den_n ≈ num_m / 2`, so the wide even-divisor `num_m ≥ 2·den_n`
+/// u128-limb arm is genuinely reachable from D462 up and must not be
+/// collapsed onto base-2⁶⁴ Knuth.
+///
+/// Required scratch lengths, with `L = radicand.len()` and `W = L + 1`:
+///
+/// | buffer | minimum | role |
+/// |---|---|---|
+/// | `x`, `q`, `y` | `W` | estimate, quotient, next estimate |
+/// | `u` | `L + 2` | Knuth normalised dividend (reads one limb above the live dividend) |
+/// | `v` | `W` | Knuth normalised divisor |
+/// | `u128_u` | `⌈(L + 2) / 2⌉ + 1` | base-2¹²⁸ packed dividend |
+/// | `u128_v` | `⌈W / 2⌉` | base-2¹²⁸ packed divisor |
+///
+/// The buffers may be **dirty** on entry and are reusable across calls: `x` is
+/// zeroed here before the seed ORs into it, `shr` re-zeros `y`, and both
+/// divide engines re-zero their own outputs and normalisation scratch. Only
+/// the live `[..W]` prefixes are touched, so the cost tracks the operand, not
+/// the build.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn isqrt_newton_into(
+    radicand: &[u64],
+    out: &mut [u64],
+    x: &mut [u64],
+    q: &mut [u64],
+    y: &mut [u64],
+    u: &mut [u64],
+    v: &mut [u64],
+    u128_u: &mut [u128],
+    u128_v: &mut [u128],
+) {
     for limb in out.iter_mut() {
         *limb = 0;
     }
@@ -43,8 +114,6 @@ pub(crate) fn isqrt_newton(radicand: &[u64], out: &mut [u64]) {
         return;
     }
     let work_len = radicand.len() + 1;
-    debug_assert!(work_len <= SCRATCH_LIMBS, "isqrt scratch overflow");
-    let mut x = [0u64; SCRATCH_LIMBS];
 
     // Initial guess — delegated to the cross-algorithm seed leaf
     // (`algo_x_support::seed`). Under `std` it bootstraps from the hardware
@@ -54,19 +123,21 @@ pub(crate) fn isqrt_newton(radicand: &[u64], out: &mut [u64]) {
     // safe over-estimates, so this monotone-downward loop converges to the
     // same floor root either way. The leaf calls nothing in-crate (primitives
     // + std-gated inherent f64) — `num_traits::Float`/libm is never reached.
+    //
+    // The seed ORs into its destination, so the live prefix is zeroed first
+    // (the caller's buffer may carry a previous call's limbs).
+    for limb in x[..work_len].iter_mut() {
+        *limb = 0;
+    }
     sqrt_seed(radicand, bits, &mut x[..work_len]);
 
-    // Newton working buffers hoisted OUT of the loop. The divide engine
-    // re-zeros `q`/`r` each pass and `shr` re-zeros `y`, so only the live
-    // `[..work_len]` slice is touched per iteration — no per-iteration
-    // build-max memset (the previous in-loop `[0u64; SCRATCH_LIMBS]` allocs
-    // were the wide-tier tax). `x = y` is likewise a `[..work_len]` copy, not
-    // a full array.
-    let mut q = [0u64; SCRATCH_LIMBS];
-    let mut r = [0u64; SCRATCH_LIMBS];
-    let mut y = [0u64; SCRATCH_LIMBS];
+    // Newton loop. `y` doubles as the divide's remainder sink — the remainder
+    // is never read here, and `shr` fully re-zeros `y` from `q` immediately
+    // after, so one buffer covers both roles. Per pass only the live
+    // `[..work_len]` slices are touched; `x = y` is likewise a prefix copy.
     loop {
-        div_rem_dispatch(radicand, &x[..work_len], &mut q[..work_len], &mut r[..work_len]);
+        div_rem_into(radicand, &x[..work_len], &mut q[..work_len], &mut y[..work_len],
+            u, v, u128_u, u128_v);
         add_assign(&mut q[..work_len], &x[..work_len]);
         shr(&q[..work_len], 1, &mut y[..work_len]);
         if cmp(&y[..work_len], &x[..work_len]) >= 0 {
