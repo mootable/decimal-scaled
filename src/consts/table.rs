@@ -2199,10 +2199,28 @@ mod tests {
     use crate::int::types::Int;
     use crate::support::rounding::RoundingMode::*;
 
-    /// The six modes derive correctly from the stored (floor,
-    /// round_up) pair: Trunc=Floor=floor, Ceiling=floor+1, and the
-    /// three half-modes coincide at floor+round_up (no ties for
-    /// irrationals). Spot-checked against `pi` at a few scales.
+    /// All eight modes derive correctly from the stored (floor,
+    /// round_up) pair: Trunc = Floor = floor; Ceiling and AwayFromZero
+    /// bump (the dropped tail is never zero for an irrational);
+    /// ZeroFiveUp bumps only when the floor's last digit is 0 or 5; the
+    /// three half-modes coincide at floor + round_up (no ties for
+    /// irrationals). Checked against `pi` at two scales.
+    ///
+    /// THIS is the test that pins VALUES, so it is the one that catches
+    /// a wrong arm in [`round_entry`]. Its sibling
+    /// [`by_scale_eq_by_working_scale`] proves only that the two
+    /// accessors AGREE, and both route through that same `round_entry`,
+    /// so it holds by construction and would still pass if every arm
+    /// were identically wrong. A new `RoundingMode` variant needs an
+    /// expected value HERE; adding it to the sibling's list is not
+    /// coverage of the mode.
+    ///
+    /// The expected values below were derived with Python's `decimal`
+    /// (ROUND_DOWN / ROUND_FLOOR / ROUND_CEILING / ROUND_HALF_EVEN /
+    /// ROUND_HALF_UP / ROUND_HALF_DOWN / ROUND_UP / ROUND_05UP) — an
+    /// independent implementation of the same General Decimal
+    /// Arithmetic rounding rules — applied to a flint/Arb-determined
+    /// `pi`, rather than reasoned out from the arms they check.
     #[test]
     fn modes_derive_from_floor_and_roundbit() {
         // pi = 3.14159265358979323846...; at scale 4 -> 31415.9..,
@@ -2215,11 +2233,25 @@ mod tests {
         assert_eq!(pi_by_scale::<Int<3>>(4, HalfToEven), up);
         assert_eq!(pi_by_scale::<Int<3>>(4, HalfAwayFromZero), up);
         assert_eq!(pi_by_scale::<Int<3>>(4, HalfTowardZero), up);
+        // AwayFromZero and ZeroFiveUp coincide here: `decimal`
+        // ROUND_UP and ROUND_05UP both give 31416. The tail is
+        // non-zero so away-from-zero lifts, and the floor's last
+        // digit (5) IS a ZeroFiveUp pivot.
+        let away4: Int<3> = limbs_to_w(&[31416]);
+        assert_eq!(pi_by_scale::<Int<3>>(4, AwayFromZero), away4);
+        assert_eq!(pi_by_scale::<Int<3>>(4, ZeroFiveUp), away4);
         // scale 5 -> 314159.26.., floor 314159, tail .26 < .5 ->
         // round_up = 0; all three half-modes keep the floor.
         let f5: Int<3> = limbs_to_w(&[314159]);
         assert_eq!(pi_by_scale::<Int<3>>(5, HalfToEven), f5);
         assert_eq!(pi_by_scale::<Int<3>>(5, Ceiling), f5.wrapping_add(Int::<3>::ONE));
+        // At scale 5 the two new modes PART COMPANY, which is what
+        // makes this pair worth pinning: `decimal` ROUND_UP gives
+        // 314160, ROUND_05UP gives 314159, because the floor's last
+        // digit (9) is not a pivot so ZeroFiveUp keeps the floor.
+        let away5: Int<3> = limbs_to_w(&[314160]);
+        assert_eq!(pi_by_scale::<Int<3>>(5, AwayFromZero), away5);
+        assert_eq!(pi_by_scale::<Int<3>>(5, ZeroFiveUp), f5);
     }
 
     /// `by_scale` and `by_working_scale` return identical values for the same
