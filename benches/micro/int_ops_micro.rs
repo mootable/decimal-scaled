@@ -77,6 +77,43 @@ macro_rules! bench_width {
     }};
 }
 
+// Narrow-width operand pair. Small enough that `NA * NB` stays inside
+// `Int<1>` (i64), so the SAME value can be benched at every width from
+// `Int<1>` up — isolating the pure per-width overhead of the integer
+// primitives with no decimal layer above them. `*` is a checked mul that
+// panics on overflow, which is what constrains the magnitude here.
+const NA: i128 = 0x0000_0000_ABCD_EF12; // ~2.88e9
+const NB: i128 = 0x0000_0000_1357_9BDF; // ~3.24e8  (NA*NB ~9.3e17 < i64::MAX)
+
+/// Times the width-sensitive op set for one width on the shared narrow
+/// operands. Same value at every `N`, so the only variable is the limb
+/// count — the direct test of "is a narrower `Int<N>` slower?".
+macro_rules! bench_narrow_width {
+    ($c:expr, $w:literal, $Int:ty) => {{
+        let a = <$Int>::try_from(NA).unwrap();
+        let b = <$Int>::try_from(NB).unwrap();
+        let mut g = $c.benchmark_group(concat!("int_narrow/", $w));
+        g.bench_function("add", |bn| bn.iter(|| black_box(a) + black_box(b)));
+        g.bench_function("sub", |bn| bn.iter(|| black_box(a) - black_box(b)));
+        g.bench_function("mul", |bn| bn.iter(|| black_box(a) * black_box(b)));
+        g.bench_function("div", |bn| bn.iter(|| black_box(a) / black_box(b)));
+        g.bench_function("rem", |bn| bn.iter(|| black_box(a) % black_box(b)));
+        g.finish();
+    }};
+}
+
+/// The decisive width sweep: identical operands, `N` = 1,2,3,4,6,8.
+/// If the narrow widths are slower than the wider ones here, the cause
+/// is int-tier; if the numbers are monotonic in `N`, it is not.
+fn bench_narrow_int_ops(c: &mut Criterion) {
+    bench_narrow_width!(c, "N01", Int<1>);
+    bench_narrow_width!(c, "N02", Int<2>);
+    bench_narrow_width!(c, "N03", Int<3>);
+    bench_narrow_width!(c, "N04", Int<4>);
+    bench_narrow_width!(c, "N06", Int<6>);
+    bench_narrow_width!(c, "N08", Int<8>);
+}
+
 fn bench_int_ops(c: &mut Criterion) {
     bench_width!(c, "Int256", Int<4>);
     bench_width!(c, "Int512", Int<8>);
@@ -156,14 +193,14 @@ fn micro() -> Criterion {
 criterion_group! {
     name = benches;
     config = micro();
-    targets = bench_int_ops, bench_mul_crossover
+    targets = bench_narrow_int_ops, bench_int_ops, bench_mul_crossover
 }
 
 #[cfg(not(feature = "bench-alt"))]
 criterion_group! {
     name = benches;
     config = micro();
-    targets = bench_int_ops
+    targets = bench_narrow_int_ops, bench_int_ops
 }
 
 /// Custom entry point: pin the current thread to a single fixed core

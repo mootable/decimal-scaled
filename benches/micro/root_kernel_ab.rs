@@ -14,8 +14,8 @@ use decimal_scaled::Int;
 use decimal_scaled::RoundingMode;
 use decimal_scaled::__bench_internals::{
     cbrt_native_d57s20, cbrt_native_fast_a_w, cbrt_native_fast_b_w, cbrt_native_fast_3limb_s20,
-    cbrt_native_w, cbrt_newton_slice, cbrt_newton_slice_n, cbrt_table_seed_d57s20,
-    int_from_mag_limbs, sqrt_mg, sqrt_native_w, sqrt_newton_slice, sqrt_newton_slice_n,
+    cbrt_mg_n, cbrt_native_w, cbrt_newton_slice, cbrt_newton_slice_n, cbrt_table_seed_d57s20,
+    int_from_mag_limbs, sqrt_mg, sqrt_mg_n, sqrt_native_w, sqrt_newton_slice, sqrt_newton_slice_n,
 };
 
 #[path = "../support/ab_microbench.rs"]
@@ -128,6 +128,119 @@ fn bench_cbrt(c: &mut Criterion) {
     );
 }
 
+
+// ── NARROW-tier roots (N == 2): the arms `select` never raced ─────────
+// `policy::{sqrt,cbrt}::select` routes `(1, _)` and `(2, _)` to
+// `Algorithm::MgDivide` unconditionally. The pre-existing `sqrt_d38_s19`
+// group above races MgDivide only against the generic `slice` — the
+// tight-`Int<W>` f64-seeded `Native` arm the wide tiers use was never
+// entered as a candidate here. These groups add it, at the policy's own
+// full-range work width (sqrt `W = 2N = 4`, cbrt `W = 3N = 6`), on the
+// bench-branch-compare cells where the inversion is worst (D38<28>) and
+// on a cell below the `10^scale > u64::MAX` boundary (D38<19>) to check
+// whether MgDivide should be KEPT there.
+// The two INT-LAYER candidates are `native` (Newton run in a tight concrete
+// `Int<W>`, whose `radicand / x` dispatches through `int::policy::div_rem`)
+// and `slice` (the width-agnostic int `isqrt`/`icbrt`). `mg_divide` is the
+// only candidate that BYPASSES the int layer — it reimplements division
+// bit-serially over `u128` pairs in `algos::support::mg_divide`. So the
+// question each group answers is not "which is fastest" but "does the bypass
+// beat the better int-layer path by a margin that earns a separate kernel".
+#[derive(Clone)]
+struct NarrowOne<const N: usize> {
+    label: &'static str,
+    raw: Int<N>,
+}
+
+/// bbc-shaped operands (value 2.0 / 1.5 at the cell's scale) plus a
+/// near-full-magnitude raw — the value class where MgDivide's `u128` fast
+/// path can no longer fire. `big` is per-`N` because `Int<1>` tops out at
+/// `i64::MAX`.
+fn narrow_inputs<const N: usize>(scale: u32, big: u128) -> Vec<NarrowOne<N>> {
+    let p = 10u128.pow(scale);
+    vec![
+        NarrowOne { label: "v2.0", raw: fromu::<N>(2 * p) },
+        NarrowOne { label: "v1.5", raw: fromu::<N>(3 * p / 2) },
+        NarrowOne { label: "v_big", raw: fromu::<N>(big) },
+    ]
+}
+
+const BIG_N1: u128 = 9_000_000_000_000_000_000; // just under i64::MAX
+const BIG_N2: u128 = 170_000_000_000_000_000_000_000_000_000_000_000_000; // ~i128::MAX
+
+macro_rules! narrow_root_bench {
+    ($fnname:ident, $mg:ident, $nat:ident, $slc:ident,
+     $n:literal, $w:literal, $s:literal, $big:expr, $group:literal) => {
+        fn $fnname(c: &mut Criterion) {
+            let mg = |o: NarrowOne<$n>| $mg::<$n, $s>(o.raw, MODE);
+            let nat = |o: NarrowOne<$n>| $nat::<$n, $w, $s>(o.raw, MODE);
+            let slc = |o: NarrowOne<$n>| $slc::<$n, $s>(o.raw, MODE);
+            // Validity wall: every candidate must be bit-identical to the
+            // slice reference across all eight modes before it is timed.
+            for o in narrow_inputs::<$n>($s, $big) {
+                for m in ALL_MODES {
+                    let r_ref = $slc::<$n, $s>(o.raw, m);
+                    assert_eq!($mg::<$n, $s>(o.raw, m), r_ref,
+                        concat!($group, " mg vs slice {} mode {:?}"), o.label, m);
+                    assert_eq!($nat::<$n, $w, $s>(o.raw, m), r_ref,
+                        concat!($group, " native vs slice {} mode {:?}"), o.label, m);
+                }
+            }
+            compare_all(
+                c,
+                $group,
+                |o: &NarrowOne<$n>| o.label.to_string(),
+                narrow_inputs::<$n>($s, $big),
+                vec![
+                    ("mg_divide", Box::new(mg) as Box<dyn Fn(NarrowOne<$n>) -> Int<$n>>),
+                    ("native", Box::new(nat)),
+                    ("slice", Box::new(slc)),
+                ],
+            );
+        }
+    };
+}
+
+// ── N == 1 (D18): the cells routed on mechanism-equivalence, now measured ──
+// D18's bbc scale grid is {0, 4, 9, 13, 17}. sqrt W = 2N = 2, cbrt W = 3N = 3.
+narrow_root_bench!(bench_cbrt_d18_s0, cbrt_mg_n, cbrt_native_fast_a_w, cbrt_newton_slice_n, 1, 3, 0, BIG_N1, "cbrt_d18_s00");
+narrow_root_bench!(bench_cbrt_d18_s4, cbrt_mg_n, cbrt_native_fast_a_w, cbrt_newton_slice_n, 1, 3, 4, BIG_N1, "cbrt_d18_s04");
+narrow_root_bench!(bench_cbrt_d18_s9, cbrt_mg_n, cbrt_native_fast_a_w, cbrt_newton_slice_n, 1, 3, 9, BIG_N1, "cbrt_d18_s09");
+narrow_root_bench!(bench_cbrt_d18_s13, cbrt_mg_n, cbrt_native_fast_a_w, cbrt_newton_slice_n, 1, 3, 13, BIG_N1, "cbrt_d18_s13");
+narrow_root_bench!(bench_cbrt_d18_s17, cbrt_mg_n, cbrt_native_fast_a_w, cbrt_newton_slice_n, 1, 3, 17, BIG_N1, "cbrt_d18_s17");
+// Crossover bisection for the cbrt slice→native boundary, at BOTH narrow
+// widths: bracketed above by s4 (native 1.45-1.93x) and below by s0/s2
+// (tie or slice). These pin the exact first scale native wins.
+narrow_root_bench!(bench_cbrt_d18_s1, cbrt_mg_n, cbrt_native_fast_a_w, cbrt_newton_slice_n, 1, 3, 1, BIG_N1, "cbrt_d18_s01");
+narrow_root_bench!(bench_cbrt_d18_s2, cbrt_mg_n, cbrt_native_fast_a_w, cbrt_newton_slice_n, 1, 3, 2, BIG_N1, "cbrt_d18_s02");
+narrow_root_bench!(bench_cbrt_d18_s3, cbrt_mg_n, cbrt_native_fast_a_w, cbrt_newton_slice_n, 1, 3, 3, BIG_N1, "cbrt_d18_s03");
+narrow_root_bench!(bench_cbrt_d38_s3, cbrt_mg_n, cbrt_native_fast_a_w, cbrt_newton_slice_n, 2, 6, 3, BIG_N2, "cbrt_d38_s03");
+narrow_root_bench!(bench_sqrt_d18_s0, sqrt_mg_n, sqrt_native_w, sqrt_newton_slice_n, 1, 2, 0, BIG_N1, "sqrt_d18_s00");
+narrow_root_bench!(bench_sqrt_d18_s4, sqrt_mg_n, sqrt_native_w, sqrt_newton_slice_n, 1, 2, 4, BIG_N1, "sqrt_d18_s04");
+narrow_root_bench!(bench_sqrt_d18_s9, sqrt_mg_n, sqrt_native_w, sqrt_newton_slice_n, 1, 2, 9, BIG_N1, "sqrt_d18_s09");
+narrow_root_bench!(bench_sqrt_d18_s13, sqrt_mg_n, sqrt_native_w, sqrt_newton_slice_n, 1, 2, 13, BIG_N1, "sqrt_d18_s13");
+narrow_root_bench!(bench_sqrt_d18_s17, sqrt_mg_n, sqrt_native_w, sqrt_newton_slice_n, 1, 2, 17, BIG_N1, "sqrt_d18_s17");
+
+// Bisection cells: the slice→native crossover sits in (0, 9] for cbrt and
+// the mg_divide→native crossover in (0, 9] for sqrt. These localize both so
+// the policy arm can be placed at the TRUE crossover covering a continuous
+// win-region, not snapped to a sampled bbc point.
+narrow_root_bench!(bench_cbrt_d38_s2, cbrt_mg_n, cbrt_native_fast_a_w, cbrt_newton_slice_n, 2, 6, 2, BIG_N2, "cbrt_d38_s02");
+narrow_root_bench!(bench_cbrt_d38_s4, cbrt_mg_n, cbrt_native_fast_a_w, cbrt_newton_slice_n, 2, 6, 4, BIG_N2, "cbrt_d38_s04");
+narrow_root_bench!(bench_cbrt_d38_s6, cbrt_mg_n, cbrt_native_fast_a_w, cbrt_newton_slice_n, 2, 6, 6, BIG_N2, "cbrt_d38_s06");
+narrow_root_bench!(bench_sqrt_d38_s2, sqrt_mg_n, sqrt_native_w, sqrt_newton_slice_n, 2, 4, 2, BIG_N2, "sqrt_d38_s02");
+narrow_root_bench!(bench_sqrt_d38_s4, sqrt_mg_n, sqrt_native_w, sqrt_newton_slice_n, 2, 4, 4, BIG_N2, "sqrt_d38_s04");
+narrow_root_bench!(bench_sqrt_d38_s6, sqrt_mg_n, sqrt_native_w, sqrt_newton_slice_n, 2, 4, 6, BIG_N2, "sqrt_d38_s06");
+narrow_root_bench!(bench_cbrt_d38_s9, cbrt_mg_n, cbrt_native_fast_a_w, cbrt_newton_slice_n, 2, 6, 9, BIG_N2, "cbrt_d38_s09");
+narrow_root_bench!(bench_cbrt_d38_s14, cbrt_mg_n, cbrt_native_fast_a_w, cbrt_newton_slice_n, 2, 6, 14, BIG_N2, "cbrt_d38_s14");
+narrow_root_bench!(bench_cbrt_d38_s19, cbrt_mg_n, cbrt_native_fast_a_w, cbrt_newton_slice_n, 2, 6, 19, BIG_N2, "cbrt_d38_s19");
+narrow_root_bench!(bench_sqrt_d38_s0, sqrt_mg_n, sqrt_native_w, sqrt_newton_slice_n, 2, 4, 0, BIG_N2, "sqrt_d38_s00");
+narrow_root_bench!(bench_sqrt_d38_s9, sqrt_mg_n, sqrt_native_w, sqrt_newton_slice_n, 2, 4, 9, BIG_N2, "sqrt_d38_s09");
+narrow_root_bench!(bench_cbrt_d38_s28, cbrt_mg_n, cbrt_native_fast_a_w, cbrt_newton_slice_n, 2, 6, 28, BIG_N2, "cbrt_d38_s28");
+narrow_root_bench!(bench_cbrt_d38_s0, cbrt_mg_n, cbrt_native_fast_a_w, cbrt_newton_slice_n, 2, 6, 0, BIG_N2, "cbrt_d38_s0");
+narrow_root_bench!(bench_cbrt_d38_s37, cbrt_mg_n, cbrt_native_fast_a_w, cbrt_newton_slice_n, 2, 6, 37, BIG_N2, "cbrt_d38_s37");
+narrow_root_bench!(bench_sqrt_d38_s28, sqrt_mg_n, sqrt_native_w, sqrt_newton_slice_n, 2, 4, 28, BIG_N2, "sqrt_d38_s28");
+narrow_root_bench!(bench_sqrt_d38_s19n, sqrt_mg_n, sqrt_native_w, sqrt_newton_slice_n, 2, 4, 19, BIG_N2, "sqrt_d38_s19n");
 
 // ── wide-tier roots: native tight-Int<W> f64 Newton vs generic slice ──
 // Benched at each tier's mid-scale (the lib_cmp root cell). One concrete
@@ -518,7 +631,43 @@ fn bench_wide_max(c: &mut Criterion) {
 }
 
 
+/// The narrow-tier cells `select` routes to `MgDivide` without ever having
+/// raced the `Native` arm against it.
+fn bench_narrow(c: &mut Criterion) {
+    bench_cbrt_d18_s0(c);
+    bench_cbrt_d18_s1(c);
+    bench_cbrt_d18_s2(c);
+    bench_cbrt_d18_s3(c);
+    bench_cbrt_d38_s3(c);
+    bench_cbrt_d18_s4(c);
+    bench_cbrt_d18_s9(c);
+    bench_cbrt_d18_s13(c);
+    bench_cbrt_d18_s17(c);
+    bench_sqrt_d18_s0(c);
+    bench_sqrt_d18_s4(c);
+    bench_sqrt_d18_s9(c);
+    bench_sqrt_d18_s13(c);
+    bench_sqrt_d18_s17(c);
+    bench_cbrt_d38_s0(c);
+    bench_cbrt_d38_s2(c);
+    bench_cbrt_d38_s4(c);
+    bench_cbrt_d38_s6(c);
+    bench_sqrt_d38_s2(c);
+    bench_sqrt_d38_s4(c);
+    bench_sqrt_d38_s6(c);
+    bench_cbrt_d38_s9(c);
+    bench_cbrt_d38_s14(c);
+    bench_cbrt_d38_s19(c);
+    bench_cbrt_d38_s28(c);
+    bench_cbrt_d38_s37(c);
+    bench_sqrt_d38_s0(c);
+    bench_sqrt_d38_s9(c);
+    bench_sqrt_d38_s19n(c);
+    bench_sqrt_d38_s28(c);
+}
+
 fn benches(c: &mut Criterion) {
+    bench_narrow(c);
     bench_sqrt(c);
     bench_cbrt(c);
     bench_wide(c);

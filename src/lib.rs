@@ -821,6 +821,41 @@ pub mod __bench_internals {
     ) -> crate::int::types::Int<2> {
         crate::algos::sqrt::sqrt_newton::sqrt_newton::<2>(raw, SCALE, mode)
     }
+    /// `cbrt_mg_n` — the cube-root kernel `policy::cbrt` currently routes
+    /// `N == 1 | 2` to (`Algorithm::MgDivide`), reached exactly as the policy
+    /// reaches it: through the `Int<2>` `resize_to` bridge (identity at
+    /// `N == 2`, a lossless widen at `N == 1`). Taking `Int<N>` in and out
+    /// lets the narrow tiers be raced against the `Native` / slice candidates
+    /// in one `compare_all`, and charges this arm the same bridge cost the
+    /// live decimal op pays.
+    #[inline(never)]
+    pub fn cbrt_mg_n<const N: usize, const SCALE: u32>(
+        raw: crate::int::types::Int<N>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<N> {
+        use crate::int::types::traits::BigInt;
+        crate::algos::cbrt::cbrt_mg_divide::cbrt_mg_divide(
+            raw.resize_to::<crate::int::types::Int<2>>(),
+            SCALE,
+            mode,
+        )
+        .resize_to::<crate::int::types::Int<N>>()
+    }
+    /// `sqrt_mg_n` — the [`cbrt_mg_n`] sibling for the square root, over the
+    /// same `Int<2>` `resize_to` bridge `policy::sqrt` uses.
+    #[inline(never)]
+    pub fn sqrt_mg_n<const N: usize, const SCALE: u32>(
+        raw: crate::int::types::Int<N>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<N> {
+        use crate::int::types::traits::BigInt;
+        crate::algos::sqrt::sqrt_mg_divide::sqrt_mg_divide(
+            raw.resize_to::<crate::int::types::Int<2>>(),
+            SCALE,
+            mode,
+        )
+        .resize_to::<crate::int::types::Int<N>>()
+    }
     #[cfg(any(feature = "d57", feature = "wide"))]
     #[inline(never)]
     pub fn cbrt_native_d57s20(
