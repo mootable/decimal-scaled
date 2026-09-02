@@ -532,13 +532,69 @@ fn round_mag_with_mode(
     }
 }
 
-// Binary shift-subtract long-divide for the variable-divisor path.
+// ─────────────────────────────────────────────────────────────────────
+// Variable-divisor divides — routed through the int layer.
 //
-// Used when dividing a 256-bit numerator by an arbitrary 128-bit
-// `divisor` (not a power of 10), so no magic table applies. The loop
-// runs exactly 256 iterations -- one per bit of the numerator -- and is
-// competitive in practice because the widening path is taken only for
-// large `dividend`.
+// The narrow-tier kernels below divide by divisors that can exceed
+// `u64::MAX` (a squared Newton estimate, an arbitrary decimal divisor).
+// Those divides go through the int layer's divisor-shape matcher rather
+// than a bespoke shift-subtract bit loop: the int engines (the hardware
+// single-limb path, Knuth Algorithm D with the Möller-Granlund 2-by-1
+// q̂ reciprocal) are word-serial — O(m·n) limb operations — where a bit
+// loop pays one full-width shift+compare+subtract per BIT of the
+// dividend for the same operands.
+// ─────────────────────────────────────────────────────────────────────
+
+/// Divide via the int layer's divisor-shape matcher
+/// ([`crate::int::policy::div_rem::select_for_limbs`]), with scratch
+/// sized exactly for this support module's fixed widths.
+///
+/// `num` / `den` are little-endian u64 magnitudes; `quot` / `rem` are
+/// fully written by the chosen engine (both engines zero them first).
+///
+/// The matcher's verdict is honoured, not bypassed: `Rem` routes to the
+/// hardware single-limb engine, every other verdict routes to base-2⁶⁴
+/// Knuth through its `_into` door with caller scratch — the same
+/// verdict-then-`_into` shape as `wide_trig_core::bracket_div` /
+/// `rem_int_layer`. At this module's shapes (dividend ≤ 8 limbs,
+/// divisor ≤ 4) the matcher can only return `Rem` or `Knuth` today (the
+/// u128-limb engine needs a ≥ 24-limb divisor; BZ and Schoolbook are
+/// unrouted), and every registered engine computes the same unique
+/// floor quotient/remainder, so collapsing the non-`Rem` verdicts onto
+/// Knuth's door is value-identical. Re-verify this arm if an engine
+/// with different numerics ever joins `int::policy::div_rem`.
+///
+/// Scratch is a fixed `[u64; 10]` / `[u64; 4]` pair: `div_knuth_into`
+/// needs `num.len() + 2` / `den.len()` zeroed limbs, and this module's
+/// widest dividend is the fixed 512-bit `U512` shape (8 limbs — the
+/// widths here are architectural constants like `[u128; 2]` itself,
+/// not a generic `N`), so 10/4 is the exact per-width sizing, not a
+/// build-max blanket.
+pub(crate) fn div_rem_via_int_layer(
+    num: &[u64],
+    den: &[u64],
+    quot: &mut [u64],
+    rem: &mut [u64],
+) {
+    use crate::int::policy::div_rem::{select_for_limbs, Algorithm};
+    debug_assert!(
+        num.len() <= 8 && den.len() <= 4,
+        "div_rem_via_int_layer: fixed 512/256-bit ceiling exceeded"
+    );
+    match select_for_limbs(num, den) {
+        // Single-limb divisor: the hardware Möller-Granlund single-limb
+        // engine; no normalisation scratch is involved at all.
+        Algorithm::Rem => {
+            crate::int::algos::div::div_rem::div_rem(num, den, quot, rem);
+        }
+        // Multi-limb divisor: Knuth Algorithm D with exact scratch.
+        _ => {
+            let mut u = [0u64; 10];
+            let mut v = [0u64; 4];
+            crate::int::algos::div::div_knuth::div_knuth_into(num, den, quot, rem, &mut u, &mut v);
+        }
+    }
+}
 
 /// Divide the unsigned 256-bit value `(n_high, n_low)` by the 128-bit
 /// `divisor` using a binary shift-subtract algorithm. Returns
@@ -559,8 +615,8 @@ fn div_long_256_by_128(n_high: u128, n_low: u128, divisor: u128) -> Option<u128>
 /// 0.5-ULP rounding path in [`div_pow10_div_with`].
 #[inline]
 fn div_long_256_by_128_with_rem(
-    mut n_high: u128,
-    mut n_low: u128,
+    n_high: u128,
+    n_low: u128,
     divisor: u128,
 ) -> Option<(u128, u128)> {
     if divisor == 0 {
@@ -600,35 +656,28 @@ fn div_long_256_by_128_with_rem(
         return Some((u128::from(out[0]) | (u128::from(out[1]) << 64), remainder));
     }
 
-    // Shift-subtract over only the significant bits of the dividend.
-    let bits = if n_high != 0 {
-        256 - n_high.leading_zeros()
-    } else {
-        128 - n_low.leading_zeros()
-    };
-    let shift = 256 - bits;
-    if shift >= 128 {
-        n_high = n_low << (shift - 128);
-        n_low = 0;
-    } else if shift > 0 {
-        n_high = (n_high << shift) | (n_low >> (128 - shift));
-        n_low <<= shift;
-    }
-    let mut quotient: u128 = 0;
-    let mut remainder: u128 = 0;
-    let mut i = bits;
-    while i > 0 {
-        i -= 1;
-        remainder = (remainder << 1) | (n_high >> 127);
-        n_high = (n_high << 1) | (n_low >> 127);
-        n_low <<= 1;
-        quotient <<= 1;
-        if remainder >= divisor {
-            remainder -= divisor;
-            quotient |= 1;
-        }
-    }
-    Some((quotient, remainder))
+    // Wide divisor (`u64::MAX < divisor < 2^128`): route through the
+    // int layer's divisor-shape matcher — Knuth Algorithm D at these
+    // limb counts — replacing the former shift-subtract bit loop
+    // (word-serial O(m·n) limb steps instead of one full-width
+    // shift+compare+subtract per dividend bit).
+    let num = [
+        n_low as u64,
+        (n_low >> 64) as u64,
+        n_high as u64,
+        (n_high >> 64) as u64,
+    ];
+    let den = [divisor as u64, (divisor >> 64) as u64];
+    let mut quot = [0u64; 4];
+    let mut rem = [0u64; 2];
+    div_rem_via_int_layer(&num, &den, &mut quot, &mut rem);
+    // `n_high < divisor` (checked above) guarantees the quotient fits
+    // 128 bits, so the high two quotient limbs are zero.
+    debug_assert!(quot[2] == 0 && quot[3] == 0);
+    Some((
+        u128::from(quot[0]) | (u128::from(quot[1]) << 64),
+        u128::from(rem[0]) | (u128::from(rem[1]) << 64),
+    ))
 }
 
 /// `floor(sqrt(N))` for the unsigned 256-bit value `N = hi·2^128 + lo`.
@@ -858,42 +907,42 @@ fn ge_384(lhs: [u128; 3], rhs: [u128; 3]) -> bool {
     }
 }
 
-/// `lhs >= rhs` for 256-bit values `[lo, hi]`.
-fn ge_256(lhs: [u128; 2], rhs: [u128; 2]) -> bool {
-    lhs[1] > rhs[1] || (lhs[1] == rhs[1] && lhs[0] >= rhs[0])
-}
-
-/// `lhs - rhs` for 256-bit values `[lo, hi]`; caller guarantees
-/// `lhs >= rhs`.
-fn sub_256(lhs: [u128; 2], rhs: [u128; 2]) -> [u128; 2] {
-    let (lo, borrow) = lhs[0].overflowing_sub(rhs[0]);
-    let hi = lhs[1] - rhs[1] - u128::from(borrow);
-    [lo, hi]
-}
-
-/// Divide the 384-bit `numerator` by the 256-bit `divisor` via binary
-/// shift-subtract. The caller guarantees the quotient fits in `u128`.
-fn div_384_by_256(mut numerator: [u128; 3], divisor: [u128; 2]) -> u128 {
-    let mut remainder: [u128; 2] = [0, 0];
-    let mut quotient: u128 = 0;
-    let mut i = 0;
-    while i < 384 {
-        // Shift the top bit of the numerator into the remainder, both
-        // left by 1.
-        let numerator_top = numerator[2] >> 127;
-        numerator[2] = (numerator[2] << 1) | (numerator[1] >> 127);
-        numerator[1] = (numerator[1] << 1) | (numerator[0] >> 127);
-        numerator[0] <<= 1;
-        remainder[1] = (remainder[1] << 1) | (remainder[0] >> 127);
-        remainder[0] = (remainder[0] << 1) | numerator_top;
-        quotient <<= 1;
-        if ge_256(remainder, divisor) {
-            remainder = sub_256(remainder, divisor);
-            quotient |= 1;
-        }
-        i += 1;
-    }
-    quotient
+/// Divide the 384-bit `numerator` by the 256-bit `divisor`. The caller
+/// guarantees the quotient fits in `u128`.
+///
+/// Routed through the int layer's divisor-shape matcher
+/// ([`div_rem_via_int_layer`]): a single-limb divisor takes the
+/// hardware Möller-Granlund single-limb engine, a multi-limb one takes
+/// Knuth Algorithm D — word-serial in both cases, replacing the former
+/// unconditional 384-iteration shift-subtract bit loop (which had no
+/// fast path at all, making the cube-root Newton loop bit-serial even
+/// at SCALE 0).
+fn div_384_by_256(numerator: [u128; 3], divisor: [u128; 2]) -> u128 {
+    let num = [
+        numerator[0] as u64,
+        (numerator[0] >> 64) as u64,
+        numerator[1] as u64,
+        (numerator[1] >> 64) as u64,
+        numerator[2] as u64,
+        (numerator[2] >> 64) as u64,
+    ];
+    let den = [
+        divisor[0] as u64,
+        (divisor[0] >> 64) as u64,
+        divisor[1] as u64,
+        (divisor[1] >> 64) as u64,
+    ];
+    let mut quot = [0u64; 6];
+    let mut rem = [0u64; 4];
+    div_rem_via_int_layer(&num, &den, &mut quot, &mut rem);
+    // The caller's invariant (`estimate >= cbrt(N)`, so `N / estimate²
+    // < 2^128`) keeps the high quotient limbs zero — the same contract
+    // the former bit loop's single-`u128` accumulator relied on.
+    debug_assert!(
+        quot[2] == 0 && quot[3] == 0 && quot[4] == 0 && quot[5] == 0,
+        "div_384_by_256: quotient exceeds u128 — caller invariant violated"
+    );
+    u128::from(quot[0]) | (u128::from(quot[1]) << 64)
 }
 
 /// `floor((carry · 2^128 + value) / 3)` for `carry` in `0..=2`. Used by
@@ -1361,6 +1410,288 @@ pub(crate) fn div_pow10_div_with<const SCALE: u32>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ── Bit-identity: int-layer-routed divides vs the former bit loops ──
+    //
+    // The wide-divisor divides in this file were rewired from bespoke
+    // shift-subtract bit loops to the int layer's engines
+    // (`div_rem_via_int_layer`). The references below are verbatim
+    // copies of the deleted loops; the sweeps prove the rewire is
+    // bit-identical on quotient AND remainder. Every rounding decision
+    // upstream (all 8 modes) consumes only `(quotient, remainder,
+    // divisor)`, so quotient+remainder identity at the leaf covers all
+    // 8 modes by construction.
+
+    /// SplitMix64 — deterministic pattern stream for the sweeps.
+    fn mix(state: &mut u64) -> u64 {
+        *state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = *state;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^ (z >> 31)
+    }
+
+    fn mix_u128(state: &mut u64) -> u128 {
+        (u128::from(mix(state)) << 64) | u128::from(mix(state))
+    }
+
+    /// `lhs >= rhs` for 256-bit `[lo, hi]` — reference-loop helper
+    /// (verbatim copy of the deleted production helper).
+    fn ref_ge_256(lhs: [u128; 2], rhs: [u128; 2]) -> bool {
+        lhs[1] > rhs[1] || (lhs[1] == rhs[1] && lhs[0] >= rhs[0])
+    }
+
+    /// `lhs - rhs` for 256-bit `[lo, hi]`, `lhs >= rhs` — reference-loop
+    /// helper (verbatim copy of the deleted production helper).
+    fn ref_sub_256(lhs: [u128; 2], rhs: [u128; 2]) -> [u128; 2] {
+        let (lo, borrow) = lhs[0].overflowing_sub(rhs[0]);
+        let hi = lhs[1] - rhs[1] - u128::from(borrow);
+        [lo, hi]
+    }
+
+    /// Verbatim copy of the deleted `div_384_by_256` shift-subtract loop.
+    fn div_384_by_256_reference(mut numerator: [u128; 3], divisor: [u128; 2]) -> u128 {
+        let mut remainder: [u128; 2] = [0, 0];
+        let mut quotient: u128 = 0;
+        let mut i = 0;
+        while i < 384 {
+            let numerator_top = numerator[2] >> 127;
+            numerator[2] = (numerator[2] << 1) | (numerator[1] >> 127);
+            numerator[1] = (numerator[1] << 1) | (numerator[0] >> 127);
+            numerator[0] <<= 1;
+            remainder[1] = (remainder[1] << 1) | (remainder[0] >> 127);
+            remainder[0] = (remainder[0] << 1) | numerator_top;
+            quotient <<= 1;
+            if ref_ge_256(remainder, divisor) {
+                remainder = ref_sub_256(remainder, divisor);
+                quotient |= 1;
+            }
+            i += 1;
+        }
+        quotient
+    }
+
+    /// Verbatim copy of the deleted `div_long_256_by_128_with_rem`
+    /// shift-subtract tail (fast paths included, so the whole input
+    /// domain is compared).
+    fn div_long_256_by_128_with_rem_reference(
+        mut n_high: u128,
+        mut n_low: u128,
+        divisor: u128,
+    ) -> Option<(u128, u128)> {
+        if divisor == 0 {
+            return None;
+        }
+        if n_high == 0 {
+            return Some((n_low / divisor, n_low % divisor));
+        }
+        if n_high >= divisor {
+            return None;
+        }
+        if divisor <= u128::from(u64::MAX) {
+            let limbs = [
+                n_low as u64,
+                (n_low >> 64) as u64,
+                n_high as u64,
+                (n_high >> 64) as u64,
+            ];
+            let mut out = [0u64; 4];
+            let mut remainder: u128 = 0;
+            let mut i = 4;
+            while i > 0 {
+                i -= 1;
+                let current = (remainder << 64) | u128::from(limbs[i]);
+                out[i] = (current / divisor) as u64;
+                remainder = current % divisor;
+            }
+            return Some((u128::from(out[0]) | (u128::from(out[1]) << 64), remainder));
+        }
+        let bits = if n_high != 0 {
+            256 - n_high.leading_zeros()
+        } else {
+            128 - n_low.leading_zeros()
+        };
+        let shift = 256 - bits;
+        if shift >= 128 {
+            n_high = n_low << (shift - 128);
+            n_low = 0;
+        } else if shift > 0 {
+            n_high = (n_high << shift) | (n_low >> (128 - shift));
+            n_low <<= shift;
+        }
+        let mut quotient: u128 = 0;
+        let mut remainder: u128 = 0;
+        let mut i = bits;
+        while i > 0 {
+            i -= 1;
+            remainder = (remainder << 1) | (n_high >> 127);
+            n_high = (n_high << 1) | (n_low >> 127);
+            n_low <<= 1;
+            quotient <<= 1;
+            if remainder >= divisor {
+                remainder -= divisor;
+                quotient |= 1;
+            }
+        }
+        Some((quotient, remainder))
+    }
+
+    /// `div_384_by_256` (int-layer route) is bit-identical to the
+    /// deleted shift-subtract loop across divisor limb classes (1-4
+    /// u64 limbs — the `Rem` and Knuth matcher arms) and reconstructs
+    /// the built-in quotient exactly.
+    #[test]
+    fn div_384_by_256_matches_bit_loop_reference() {
+        let mut state = 0x0384_0256_u64;
+        // Structured edges first: divisor magnitude classes x quotient
+        // edges, numerator = divisor * quotient + remainder.
+        let divisor_edges: [[u128; 2]; 8] = [
+            [1, 0],
+            [u128::from(u64::MAX), 0],
+            [u128::from(u64::MAX) + 1, 0],
+            [u128::MAX, 0],
+            [0, 1],
+            [u128::MAX, 1],
+            [0, 1u128 << 125],
+            [u128::MAX, u128::MAX >> 3],
+        ];
+        let quotient_edges: [u128; 4] = [0, 1, u128::from(u64::MAX) + 1, u128::MAX];
+        let mut cases: Vec<([u128; 2], u128)> = Vec::new();
+        for d in divisor_edges {
+            for q in quotient_edges {
+                cases.push((d, q));
+            }
+        }
+        // Pattern sweep: random divisors of 1..=4 effective u64 limbs.
+        for _ in 0..400 {
+            let limb_count = 1 + (mix(&mut state) % 4);
+            let mut d = [0u128; 2];
+            d[0] = u128::from(mix(&mut state));
+            if limb_count >= 2 {
+                d[0] |= u128::from(mix(&mut state)) << 64;
+            }
+            if limb_count >= 3 {
+                d[1] = u128::from(mix(&mut state));
+            }
+            if limb_count == 4 {
+                d[1] |= u128::from(mix(&mut state)) << 64;
+            }
+            if d == [0, 0] {
+                d[0] = 1;
+            }
+            cases.push((d, mix_u128(&mut state)));
+        }
+        for (divisor, quotient_in) in cases {
+            // remainder < divisor: any u128 works for a >1-limb-u128
+            // divisor; reduce mod d[0] when the divisor fits one u128.
+            let remainder_in: u128 = if divisor[1] == 0 {
+                mix_u128(&mut state) % divisor[0]
+            } else {
+                mix_u128(&mut state)
+            };
+            // numerator = divisor * quotient_in + remainder_in (384-bit).
+            let mut numerator = mul_u256_by_u128(divisor, quotient_in);
+            let (sum0, carry0) = numerator[0].overflowing_add(remainder_in);
+            numerator[0] = sum0;
+            let (sum1, carry1) = numerator[1].overflowing_add(u128::from(carry0));
+            numerator[1] = sum1;
+            numerator[2] += u128::from(carry1);
+
+            let actual = div_384_by_256(numerator, divisor);
+            // Ground truth over the WHOLE domain: the numerator was
+            // built as `divisor * quotient_in + remainder_in`, so the
+            // exact floor quotient is `quotient_in` by construction.
+            assert_eq!(
+                actual, quotient_in,
+                "div_384_by_256 wrong quotient: n={numerator:?} d={divisor:?}"
+            );
+            // Reference equality only where the old loop is itself
+            // correct: its 256-bit remainder register overflows on
+            // `remainder << 1` once the divisor exceeds 2^255 (top bit
+            // of d[1] set), a domain no production caller reaches
+            // (the cbrt Newton divisor is estimate² < 2^254). The
+            // ground-truth assert above proves the int-layer route is
+            // additionally correct there.
+            if divisor[1] >> 127 == 0 {
+                assert_eq!(
+                    actual,
+                    div_384_by_256_reference(numerator, divisor),
+                    "div_384_by_256 mismatch: n={numerator:?} d={divisor:?}"
+                );
+            }
+        }
+    }
+
+    /// `div_long_256_by_128_with_rem` (int-layer route above `u64::MAX`)
+    /// is bit-identical to the deleted implementation — quotient,
+    /// remainder, and the `None` contract — across the whole divisor
+    /// range including both fast paths.
+    #[test]
+    fn div_long_256_by_128_matches_bit_loop_reference() {
+        let mut state = 0x0256_0128_u64;
+        // Edges: divisor 0 (None), 1-bit..128-bit divisors, n_high
+        // below/at/above divisor (the at/above cases must both be None).
+        let edge_divisors: [u128; 6] = [
+            0,
+            1,
+            u128::from(u64::MAX),
+            u128::from(u64::MAX) + 1,
+            1u128 << 127,
+            u128::MAX,
+        ];
+        for divisor in edge_divisors {
+            for _ in 0..24 {
+                let n_low = mix_u128(&mut state);
+                let n_high = if divisor == 0 {
+                    mix_u128(&mut state)
+                } else {
+                    match mix(&mut state) % 3 {
+                        0 => 0,
+                        1 => mix_u128(&mut state) % divisor,
+                        _ => divisor | mix_u128(&mut state), // >= divisor -> None
+                    }
+                };
+                // Reference equality only where the old loop is itself
+                // correct: its u128 remainder register overflows on
+                // `remainder << 1` once the divisor exceeds 2^127, a
+                // domain no production caller reaches (the callers'
+                // divisors are |i128| magnitudes <= 2^127 and isqrt
+                // Newton estimates ~< 2^127). The ground-truth sweep
+                // below proves the int-layer route correct there.
+                if divisor <= 1u128 << 127 || n_high >= divisor {
+                    assert_eq!(
+                        div_long_256_by_128_with_rem(n_high, n_low, divisor),
+                        div_long_256_by_128_with_rem_reference(n_high, n_low, divisor),
+                        "div_long_256_by_128 mismatch: hi={n_high} lo={n_low} d={divisor}"
+                    );
+                }
+            }
+        }
+        // Pattern sweep across the wide-divisor band: ground truth by
+        // reconstruction (n = d*q + r, r < d ⇒ result must be (q, r)),
+        // valid over the WHOLE band including divisors above 2^127.
+        for _ in 0..600 {
+            let divisor = u128::from(u64::MAX) + 1 + (mix_u128(&mut state) >> 1);
+            let quotient_in = mix_u128(&mut state);
+            let remainder_in = mix_u128(&mut state) % divisor;
+            let (mut n_high, n_low) = mul_u128_to_u256(divisor, quotient_in);
+            let (n_low, carry) = n_low.overflowing_add(remainder_in);
+            n_high += u128::from(carry);
+            assert_eq!(
+                div_long_256_by_128_with_rem(n_high, n_low, divisor),
+                Some((quotient_in, remainder_in)),
+                "div_long_256_by_128 wrong result: hi={n_high} lo={n_low} d={divisor}"
+            );
+            // And reference equality on the old loop's correct half.
+            if divisor <= 1u128 << 127 {
+                assert_eq!(
+                    div_long_256_by_128_with_rem(n_high, n_low, divisor),
+                    div_long_256_by_128_with_rem_reference(n_high, n_low, divisor),
+                    "div_long_256_by_128 wide mismatch: hi={n_high} lo={n_low} d={divisor}"
+                );
+            }
+        }
+    }
 
     /// Small operands route via the i128 fast path; result matches the
     /// naive form bit-exactly.
