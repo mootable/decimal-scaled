@@ -211,9 +211,10 @@ where
 /// Result in `(−π/2, π/2)`.
 ///
 /// Reciprocal fold (`atan(x) = π/2 − atan(1/x)` for `x > 1`), then
-/// argument halvings `atan(x) = 2·atan(x/(1+√(1+x²)))` (count keyed on
-/// the working scale — the per-tier break-even analysis in the original
-/// kernel), then the [`atan_taylor`] series on the reduced argument.
+/// argument halvings `atan(x) = 2·atan(x/(1+√(1+x²)))` — taken only
+/// while the argument is at or above ~0.2, capped by the working-scale
+/// count from the per-tier break-even analysis — then the
+/// [`atan_taylor`] series on the reduced argument.
 ///
 /// ## Argument-magnitude validity
 ///
@@ -240,10 +241,29 @@ where
         x = eg::div::<S>(one_w, x, working_scale);
         add_half_pi = true;
     }
-    // Argument halvings: atan(x) = 2·atan(x/(1+√(1+x²))). Count keyed on
-    // the working scale (the original per-tier kernel's break-even sweet
-    // spots — wider working scale → more halvings worth taking).
-    let halvings: u32 = if working_scale < 60 {
+    // Argument halvings: atan(x) = 2·atan(x/(1+√(1+x²))).
+    //
+    // ADAPTIVE on the argument, mirroring the narrow 2-limb kernel
+    // (`trig::trig_series_2limb::atan_fixed`): halve only while the
+    // argument is at or above ~0.2 — the band where [`atan_taylor`]
+    // below still needs the reduction — and stop as soon as it is
+    // inside. The scale-keyed count is retained UNCHANGED as the cap,
+    // so no argument takes more halvings than it did before; a small
+    // one now takes fewer.
+    //
+    // Each halving costs a wide sqrt + a wide divide + a wide multiply
+    // at the tier's work width, so running the whole chain on an
+    // argument already inside the convergence band is pure waste. The
+    // narrow kernel has always been adaptive here and the wide one was
+    // not, which made the wide path pay 5–6 unnecessary wide sqrts for
+    // any small argument at every tier and scale. This adopts the
+    // narrow kernel's existing rule rather than inventing a new one.
+    //
+    // Fewer halvings also REDUCES error: the result is reassembled with
+    // `<< halvings`, so a shorter chain scales up less accumulated
+    // error. The threshold costs one divide per call, against the 5–6
+    // sqrt/divide/multiply triples it can skip.
+    let halving_cap: u32 = if working_scale < 60 {
         5
     } else if working_scale < 110 {
         6
@@ -251,10 +271,14 @@ where
         7
     };
     let pow10_w = one_w;
-    for _ in 0..halvings {
+    // 0.2 at the working scale — the narrow kernel's threshold.
+    let halving_threshold = one_w / eg::lit::<S>(5);
+    let mut halvings: u32 = 0;
+    while x >= halving_threshold && halvings < halving_cap {
         let x_squared = eg::mul::<S>(x, x, working_scale);
         let denom = one_w + eg::sqrt_fixed::<S>(one_w + x_squared, working_scale);
         x = eg::div_cached::<S>(x, denom, pow10_w);
+        halvings += 1;
     }
     let mut result = atan_taylor::<S>(x, working_scale) << halvings;
     if add_half_pi {

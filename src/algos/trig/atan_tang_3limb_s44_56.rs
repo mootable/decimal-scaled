@@ -7,10 +7,14 @@
 //! At deep storage scales the wide-tier `atan_fixed` runs an
 //! `O(log working_scale)` halving chain (each `atan(x) = 2·atan(x/(1+√(1+x²)))`
 //! costs one wide sqrt + one wide div + one wide mul) followed by a
-//! Taylor evaluation on the post-halving residual. With `working_scale =
-//! SCALE + GUARD = 74..=87` and the per-tier halving cap at 7, the halving
-//! chain itself burns ~7 wide sqrts (each ~1.2 µs at D57<57>) before
-//! the Taylor loop runs ~30 terms — and every iteration of every
+//! Taylor evaluation on the post-halving residual. With `GUARD = 30` this
+//! band's `working_scale = SCALE + GUARD` is `74..=86`, which lands in the
+//! `working_scale < 110` arm of the halving count in
+//! [`crate::algos::trig::trig_generic::atan_fixed`] — so the chain is
+//! **6** halvings here, not the 7 an earlier draft of this header claimed
+//! (7 needs `working_scale >= 110`, i.e. `SCALE >= 80`, which D57 cannot
+//! reach: its `MAX_SCALE` is 56). Six wide sqrts before the Taylor loop
+//! runs ~30 terms — and every iteration of every
 //! kernel goes through the same `Int<16> / Int<16>` Knuth divide that
 //! dominates wide arithmetic at this width. This kernel collapses the
 //! halving chain into a single table lookup using the atan addition
@@ -28,9 +32,37 @@
 //! the generic path runs.
 //!
 //! The slot is exposed through `crate::policy::trig`
-//! only for `SCALE ∈ 44..=56`; lower scales keep using the generic
-//! [`crate::algos::support::wide_trig_core::atan_series`] which is
-//! already cheaper there (fewer halvings, faster Knuth dispatch).
+//! only for `SCALE ∈ 44..=56`.
+//!
+//! # The lower band edge (44) is ASSERTED, not measured
+//!
+//! An earlier draft of this header justified the edge by claiming lower
+//! scales "keep using the generic `atan_series` which is already cheaper
+//! there (fewer halvings, faster Knuth dispatch)". Neither half survives
+//! reading the code it refers to:
+//!
+//! - **"fewer halvings"** — the count in
+//!   [`crate::algos::trig::trig_generic::atan_fixed`] steps only at
+//!   `working_scale = 60`, i.e. `SCALE = 30`. Every scale in `30..=56`
+//!   runs the SAME 6 halvings, so the generic path at `SCALE = 43` does
+//!   exactly the work it does at `SCALE = 44` where this kernel takes
+//!   over. Below 30 it runs 5 — one fewer, not "fewer" in any sense that
+//!   scales with the gap.
+//! - **"faster Knuth dispatch"** — the D57 trig work integer is `Int<16>`
+//!   at EVERY scale of the tier (`types::widths`), so the divide width is
+//!   scale-INDEPENDENT. Only the operand magnitudes shrink.
+//!
+//! Meanwhile this kernel gets CHEAPER as SCALE falls: its table
+//! reconstruction reads a `ceil((w·3.322 + 64)/64)`-limb prefix
+//! (`support::atan_tang_table::reconstruct`) — 3 limbs at `SCALE = 0`
+//! against 6 at `SCALE = 56` — and its Taylor loop is bounded by
+//! `working_scale`. It pays NO halvings at any scale.
+//!
+//! So the band edge should be re-bisected downward rather than trusted.
+//! The precedent is in the same matcher: the D462 arm
+//! (`policy::trig::forward::select`, `(24, 0..=461)`) is the one trig band
+//! whose edge was actually bisected, and it came back as the FULL scale
+//! range.
 //!
 //! ## Correctness
 //!
