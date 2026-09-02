@@ -93,8 +93,8 @@ const fn select(scale: u32, width_bits: u32) -> Algorithm {
     {
         let width_limbs = width_bits / 64;
         // 1850 = `consts::newton_recip::NEWTON_RECIP_MAX_SCALE` and
-        // 132 = `NEWTON_RECIP_MAX_W` (literals so the cfg-gated consts are
-        // not named here): the routed band sits entirely inside the baked
+        // 132 = `NEWTON_RECIP_MAX_WIDTH_LIMBS` (literals so the cfg-gated
+        // consts are not named here): the routed band sits inside the baked
         // table, so `precompute` is ALWAYS a lookup for a selected cell.
         // `blanket_ok` is the historical build-max wall the 24..=132 band
         // was mapped under (policy-map `newton_vs_mg`) — kept verbatim; do

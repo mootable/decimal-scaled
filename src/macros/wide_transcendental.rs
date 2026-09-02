@@ -2004,8 +2004,11 @@ macro_rules! decl_wide_transcendental {
             // `const fn`.
             //
             // The `ln` table (`ln(1 + i/M)`, M = 128) is the pilot for the
-            // BAKED binary Tang store: each slot is precomputed ONCE by an
-            // mpmath oracle as a binary fixed-point `round(ln(1+i/M) · 2^B)`
+            // BAKED binary Tang store: each slot is precomputed ONCE by a
+            // flint/Arb oracle as the binary fixed-point
+            // `floor(ln(1+i/M) · 2^B + 1/2)`, resolved by `unique_fmpz` —
+            // which yields a value ONLY when the enclosing interval
+            // determines every retained bit
             // (committed rodata in `algos::support::ln_tang_table`), then
             // SLICED + reconstructed to working scale `w` per call (one
             // multiply + one shift) — far cheaper than the `ln_fixed` Series
@@ -2048,8 +2051,11 @@ macro_rules! decl_wide_transcendental {
                 /// binary Tang table. idx = 0 → (sin 0, cos 0) = (0, 1).
                 ///
                 /// BAKED binary Tang store: each `(sin, cos)` pair is
-                /// precomputed ONCE by an mpmath oracle as binary
-                /// fixed-point `round(value · 2^B)` (committed rodata in
+                /// precomputed ONCE by a flint/Arb oracle as the binary
+                /// fixed-point `floor(value · 2^B + 1/2)`, resolved by
+                /// `unique_fmpz` — which yields a value ONLY when the
+                /// enclosing interval determines every retained bit
+                /// (committed rodata in
                 /// `algos::support::sincos_tang_table`), then SLICED +
                 /// reconstructed to `working_scale` per call (one
                 /// multiply + one shift per component) — far cheaper than
