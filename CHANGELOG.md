@@ -444,12 +444,32 @@ at the end of this section.
 
 ### Performance — findings
 
-- **`exp` at D18<13> runs about 1.17× the published 0.5.0 time.**
-  Acknowledged and deferred rather than fixed in this release: the
-  correctness work above added a proved tail side to paths that previously
-  asserted one, and at the narrowest tier that cost is visible against a
-  very small baseline. Deferred deliberately — the alternative was to keep
-  a directed-rounding defect to protect a benchmark.
+- **Most of the timed surface is slower than 0.5.0, by single-digit
+  percentages in the median.** Of 1620 measured cells, 773 clear the
+  assessability floor (over 1% *and* over 10ns, below which the shared
+  runner cannot distinguish a change from jitter); of those, 611 regressed
+  and 162 improved. `ln` is the most affected op — 49 cells, median +8.5%,
+  worst +18.1% at D616<462> — followed by `to_degrees` / `to_radians`
+  around D115. The worst single cell is `div` at D57<42>, +23.4%. The
+  spread covers nearly every op and every width from D38 up, so it is not
+  one kernel.
+
+  Acknowledged rather than fixed in this release. The correctness work
+  above added a proved tail side to paths that previously asserted one,
+  and the two new rounding modes widened the single decision point every
+  kernel funnels through; the alternative was to keep a directed-rounding
+  defect to protect a benchmark. Tracked as issue #114, with the measured
+  table — the mechanism is not yet traced, and the numbers there are one
+  sampled `(operand, scale)` point per cell rather than a tier's whole
+  range, so it is a starting record and not a diagnosis.
+
+- **The wide-tier transcendentals got materially faster at scale 0.**
+  Every one of the fifteen largest improvements sits there, and they are
+  larger than the largest regressions: `tan` at D230<0> −28.5%, `cos` at
+  D462<0> −24.0%, `exp` at D462<0> −23.4%, with `sin`, `sinh`, `cosh` and
+  `exp` in the same band across D230 through D616. What produced them has
+  not been traced either, and whether it can be extended off scale 0 is
+  the same open question as the regression above.
 
 ### Deprecated
 
