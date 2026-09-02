@@ -193,6 +193,29 @@ where
 
     // Stage 2: pick i. Boundary `m = 1` short-circuits: ln(m) = 0, so
     // ln(v) = k · ln(2).
+    //
+    // ── BENCHMARK HAZARD — read before choosing an `ln` operand ──
+    //
+    // This arm is a deliberate, bit-identical early-out (see below), and the
+    // Series kernel `exp_generic::ln_fixed` has the SAME arm on the same
+    // condition. So an exact power of two — `0.5`, `1`, `2.0`, `4`, … — runs
+    // NEITHER kernel: no artanh series here, no Brent sqrt reduction there.
+    // At every width and every scale. A benchmark on such an operand compares
+    // two one-word `scale_by_k` products and says nothing about `ln`.
+    //
+    // There is a SECOND, Tang-only trap just below: `t = (m − f_i)/(m + f_i)`
+    // is EXACTLY zero whenever `m` is an exact multiple of `1/M`, so the
+    // artanh loop breaks on its first iteration while Series still pays its
+    // full reduction. With `M = 128` that catches every value whose binary
+    // mantissa terminates within 7 fraction bits — `7.0` (`m = 1.75`) and
+    // `7.5` (`m = 1.875`) among them.
+    //
+    // In terms of the stored `raw = x·10^SCALE`, `raw` ODD and `raw % 5 != 0`
+    // defeats both traps at every `SCALE >= 1`; at `SCALE == 0` the rule is
+    // `raw` odd and `raw >= 257`. `benches/micro/ln_wide_series_tang_ab.rs`
+    // states the derivation and asserts it on every operand it measures —
+    // the first version of that map used `{0.5, 2.0, 7.5}`, all three
+    // degenerate, which voided both its timings and its validity wall.
     let ln_at_extended_scale = if mantissa_w == one_at_extended_scale {
         // k·ln2 as an n-by-1-word product (`scale_by_k`, O(limbs)) — the
         // same value the previous full-width `ln2 * lit(k)` schoolbook
