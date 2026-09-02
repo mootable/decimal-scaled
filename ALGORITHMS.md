@@ -208,8 +208,10 @@ After the integer root `q = floor(N^{1/k})`, the crate decides
 midpoint, which is an integer for sqrt (the midpoint test is
 `N − q² > q`) and a multiple of `1/8` for cbrt (the test is
 `8N ≥ (2q + 1)³`). For integer `N` the midpoint is never an integer
-in either case, so the rounding decision is mode-independent -
-every `RoundingMode` agrees with the half-to-nearest choice.
+in either case, so no half-way tie exists and the three nearest modes
+cannot disagree — they all take the half-to-nearest choice. The directed
+modes are decided separately, from the sign and stickiness of the
+remainder, since they do not consult the midpoint at all.
 Implementation: `src/algos/support/mg_divide.rs::sqrt_raw_correctly_rounded` /
 `cbrt_raw_correctly_rounded` (D38 path); the wide-tier counterparts in
 `src/macros/wide_roots.rs`.

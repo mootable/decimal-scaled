@@ -628,16 +628,25 @@ role. Config assigns roles: the **generator** oracle's output becomes the stored
 golden value; each **validator** oracle independently recomputes and is compared.
 
 ```toml
-generator  = "mpmath"
-validators = ["flint", "mpfr"]   # 0..N independent cross-checks
+generator  = "flint"
+validators = ["mpmath", "mpfr"]   # 0..N independent cross-checks
 ```
 
-Available oracles (each usable as generator *or* validator):
+Available oracles:
 
-- `mpmath` — BSD; full coverage; default **generator**.
+- `flint` / Arb (`python-flint`) — LGPL; the **generator**. Only its rigorous
+  intervals can *pin* a truncation, which is what generating requires.
+- `fraction` — exact rationals; **generates** `rem` alone, which `flint`'s
+  adapter does not implement.
+- `mpmath` — BSD; full coverage; **validator**.
+- `decimal` — exact base 10, but a point value behind a fixed window;
+  **validator**.
 - `sympy` — BSD; symbolic cross-check **validator**.
-- `flint` / Arb (`python-flint`) — LGPL; strong **validator** (separate process).
 - `mpfr` (`gmpy2`) — LGPL; **validator** (separate process).
+
+A generator has to be able to prove its own answer, so the role split is not a
+preference — see §11 for why a point-value oracle cannot hold the generator
+role, and what it cost when one did.
 
 **Acceptance:** a generated value is kept only if every configured validator that
 `supports` the function agrees to the required precision; a disagreement
@@ -815,8 +824,8 @@ current state, recorded here rather than by rewriting the section.
   unprovable is re-padded to the full `gen_precision` truncated form. A
   zero-run heuristic alone is unsound (near-zero transcendentals carry
   arbitrarily deep structural zeros).
-- **§7's "mpmath = default generator" is superseded: `flint`/Arb generates,
-  everything else validates.** There is no per-function generator table —
+- **Why `flint`/Arb generates and everything else validates** (§7 states the
+  split; this is the reason for it). There is no per-function generator table —
   `GENERATOR_POLICY` was deleted. A generator has to be able to PROVE its own
   answer, and only Arb's rigorous intervals plus `unique_fmpz` can pin a
   truncation across the surface. `decimal` is exact base-10 but a point value
