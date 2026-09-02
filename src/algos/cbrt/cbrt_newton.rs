@@ -19,10 +19,23 @@
 //! (radicand `≤ 4N` limbs, the cube-comparison rounding) is done in a limb
 //! scratch buffer rather than a work *type* `Int<4N>` (unnameable from `N` on
 //! stable). Integer work dispatches *down* to the int slice kernels:
-//! `icbrt_newton` for the root and the multiply matcher's slice door
+//! `icbrt_newton_into` for the root and the multiply matcher's slice door
 //! [`crate::int::policy::mul::dispatch_slice`] for the cube comparisons (so
 //! the schoolbook-vs-Karatsuba choice is the matcher's, not hardcoded). No
 //! work-width parameter; the policy stays a pure `(N, SCALE)` matcher.
+//!
+//! # Exact scratch — every buffer sized from `N`, none from the build
+//!
+//! `N` is concrete here, so every working buffer comes from `ComputeLimbs` on
+//! the `Limbs<N>` carrier — including the ones the ROOT needs. The slice
+//! kernel has no `N` of its own, so its width-agnostic door would size six
+//! Newton buffers and (per divide) two Knuth normalisation buffers from
+//! `MAX_WORK_N`, which the build's WIDTH FEATURES select. That is the R10
+//! defect — enabling `xx-wide` for a single D1232 value made every D57 cbrt
+//! zero ~4× the buffer for identical work — so this kernel threads its own
+//! scratch through the `_into` door and the cost tracks `N` instead. The
+//! radicand `|r| · 10^(2·SCALE)` is likewise built by ONE multiply against the
+//! baked const-table entry rather than one `×10` pass per decimal digit.
 
 use crate::int::algos::icbrt::icbrt_newton::icbrt_newton_into;
 use crate::int::policy::mul::dispatch_slice as mul_slice;

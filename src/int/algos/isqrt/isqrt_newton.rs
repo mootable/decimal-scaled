@@ -3,11 +3,15 @@
 
 //! Newton integer square root over little-endian `u64` limb slices.
 //!
-//! [`isqrt_newton`] is the width-agnostic Newton integer square root used
-//! by the fixed-width fast-arm dispatch
-//! [`crate::int::algos::isqrt::isqrt_mag_fixed::isqrt_mag_fixed`] (`N >= 3`)
-//! and by the decimal `sqrt` work-width path. Pure kernel — it takes the
-//! operand and writes `floor(sqrt(radicand))`; no algorithm choice.
+//! Two doors onto one kernel. [`isqrt_newton_into`] is the implementation and
+//! takes the caller's scratch; [`isqrt_newton`] is the width-agnostic wrapper
+//! that sizes that scratch from the build-max, for callers with no `N` — the
+//! fixed-width fast-arm dispatch
+//! [`crate::int::algos::isqrt::isqrt_mag_fixed::isqrt_mag_fixed`] (`N >= 3`),
+//! `hypot`, `isqrt_karatsuba` and the bench seam. The decimal `sqrt`
+//! work-width path holds a concrete `N` and goes through the `_into` door.
+//! Pure kernel either way — it takes the operand and writes
+//! `floor(sqrt(radicand))`; no algorithm choice.
 
 use crate::algo_x_support::seed::sqrt_seed;
 use crate::int::algos::div::div_rem_into::div_rem_into;
@@ -38,9 +42,11 @@ const DIV_SCRATCH_LIMBS_128: usize = MAX_SINGLE_LIMBS / 2 + 2;
 
 /// `out = floor(sqrt(radicand))` — the **build-max** door, for callers with no
 /// `N` to size scratch from (the `Uint<N>` fast-arm dispatch, `hypot`, the
-/// bench seam). Allocates the four Newton working buffers plus the divide's
+/// bench seam). Allocates the three Newton working buffers plus the divide's
 /// normalisation scratch at the build-max width and delegates to
-/// [`isqrt_newton_into`].
+/// [`isqrt_newton_into`]. Hoisting the divide's scratch up here is a win even
+/// on this path: it is now zeroed once per root rather than once per Newton
+/// iteration, which is where `div_knuth`'s blanket door was zeroing it.
 ///
 /// A caller holding a concrete `N` (`Limbs<N>: ComputeLimbs` — the decimal
 /// `sqrt` kernel) calls [`isqrt_newton_into`] with its own exactly-sized

@@ -7,11 +7,23 @@
 //! For a `D<Int<N>, SCALE>` value with raw storage `r`, the logical value
 //! is `r / 10^SCALE`, so the square-root raw storage is
 //! `round(sqrt(r · 10^SCALE))`. The radicand `|r| · 10^SCALE` is formed in
-//! a local limb scratch buffer (it spans up to `2N` limbs), the exact integer square root is
-//! taken via the int layer's width-agnostic slice kernel
-//! ([`crate::int::algos::isqrt::isqrt_newton::isqrt_newton`]), and a single
-//! round-to-nearest step lands the result on the type's last representable
-//! place. Within 0.5 ULP under any rounding mode.
+//! a local limb scratch buffer (it spans up to `2N` limbs) by ONE multiply
+//! against the baked `10^SCALE` const-table entry, the exact integer square
+//! root is taken via the int layer's width-agnostic slice kernel
+//! ([`isqrt_newton_into`](crate::int::algos::isqrt::isqrt_newton::isqrt_newton_into)),
+//! and a single round-to-nearest step lands the result on the type's last
+//! representable place. Within 0.5 ULP under any rounding mode.
+//!
+//! # Exact scratch — every buffer sized from `N`, none from the build
+//!
+//! `N` is concrete here, so every working buffer comes from `ComputeLimbs` on
+//! the `Limbs<N>` carrier — including the ones the ROOT needs. The slice
+//! kernel has no `N` of its own, so its width-agnostic door would size four
+//! Newton buffers and (per divide) two Knuth normalisation buffers from
+//! `MAX_WORK_N`, which the build's WIDTH FEATURES select. That is the R10
+//! defect — enabling `xx-wide` for a single D1232 value made every D57 sqrt
+//! zero ~4× the buffer for identical work — so this kernel threads its own
+//! scratch through the `_into` door and the cost tracks `N` instead.
 //!
 //! # Generic over the storage width only
 //!

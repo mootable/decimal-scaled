@@ -3,10 +3,14 @@
 
 //! Newton integer cube root over little-endian `u64` limb slices.
 //!
-//! [`icbrt_newton`] is the width-agnostic Brent–Zimmermann integer Newton
-//! cube root used by the fixed-width fast-arm dispatch in
-//! [`crate::int::policy::icbrt`] (`N >= 3`). Pure kernel — it takes the
-//! operand and writes `floor(cbrt(radicand))`; no algorithm choice.
+//! Two doors onto one kernel. [`icbrt_newton_into`] is the Brent–Zimmermann
+//! implementation and takes the caller's scratch; [`icbrt_newton`] is the
+//! width-agnostic wrapper that sizes that scratch from the build-max, for
+//! callers with no `N` — the fixed-width fast-arm dispatch in
+//! [`crate::int::policy::icbrt`] (`N >= 3`) and the bench seam. The decimal
+//! `cbrt` work-width path holds a concrete `N` and goes through the `_into`
+//! door. Pure kernel either way — it takes the operand and writes
+//! `floor(cbrt(radicand))`; no algorithm choice.
 
 use crate::algo_x_support::seed::cbrt_seed;
 use crate::int::algos::div::div_rem_into::div_rem_into;
