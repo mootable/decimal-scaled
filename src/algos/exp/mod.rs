@@ -23,6 +23,12 @@
 /// whose 256-bit `Fixed` intermediate cannot host the integer-digit lift),
 /// and reused by the wide tiers' `Wexp` large-result path.
 pub(crate) mod exp_generic;
+/// candidate (NOT WIRED): rectangular-splitting (Paterson-Stockmeyer)
+/// Taylor core for the Smith chain — `O(w^(1/3))` full-width multiplies
+/// where `exp_generic`'s wired core spends `O(w^(1/2))`, and ~13 fewer
+/// guard digits burned on squaring-chain error amplification at the widest
+/// cell. Reached only by its own tests until the coordinator races it.
+pub(crate) mod exp_rectangular;
 pub(crate) mod exp_series_2limb;
 /// Schoolbook exponential -- direct Maclaurin series correctness reference.
 /// Registered as the unrouted `Algorithm::Schoolbook` arm; not connected
