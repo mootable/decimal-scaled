@@ -83,17 +83,24 @@ macro_rules! historical_subject {
             /// decimal-scale-test's `tests/history.rs` gate).
             pub const CELLS: &[(u32, u32)] = &[ $( $( ($w, $s), )+ )+ ];
 
-            /// Map the harness rounding mode onto this era's `RoundingMode` — the
-            /// six variants are identical across 0.3.x..0.5.0, but each crate
-            /// version is its own type.
-            fn hist_mode(m: RoundingMode) -> HistMode {
+            /// Map the harness rounding mode onto this era's `RoundingMode`.
+            ///
+            /// Six variants are identical across 0.3.x..0.5.0, but each crate
+            /// version is its own type. `AwayFromZero` and `ZeroFiveUp` arrived
+            /// in 0.5.1 and have NO counterpart in any pinned release, so they
+            /// map to `None` — a historical subject cannot be asked to round a
+            /// way its own code never implemented. Returning an `Option` rather
+            /// than substituting a near-neighbour keeps that honest: a silent
+            /// remap would time one mode and label it another.
+            fn hist_mode(m: RoundingMode) -> Option<HistMode> {
                 match m {
-                    RoundingMode::HalfToEven => HistMode::HalfToEven,
-                    RoundingMode::HalfAwayFromZero => HistMode::HalfAwayFromZero,
-                    RoundingMode::HalfTowardZero => HistMode::HalfTowardZero,
-                    RoundingMode::Ceiling => HistMode::Ceiling,
-                    RoundingMode::Floor => HistMode::Floor,
-                    RoundingMode::Trunc => HistMode::Trunc,
+                    RoundingMode::HalfToEven => Some(HistMode::HalfToEven),
+                    RoundingMode::HalfAwayFromZero => Some(HistMode::HalfAwayFromZero),
+                    RoundingMode::HalfTowardZero => Some(HistMode::HalfTowardZero),
+                    RoundingMode::Ceiling => Some(HistMode::Ceiling),
+                    RoundingMode::Floor => Some(HistMode::Floor),
+                    RoundingMode::Trunc => Some(HistMode::Trunc),
+                    RoundingMode::AwayFromZero | RoundingMode::ZeroFiveUp => None,
                 }
             }
 
@@ -298,11 +305,17 @@ macro_rules! historical_subject {
                 fn capabilities(&self) -> Capabilities {
                     let supports: fn(u32, Function) -> bool = $supports;
                     let mut functions = BTreeMap::new();
-                    for &f in FUNCS {
-                        if super::NOT_IN_ANY_RELEASE.contains(&f) || !supports(self.width, f) {
-                            continue;
+                    // A rounding mode this pinned release never had is declared
+                    // by declaring NOTHING: presence in the map IS the support
+                    // claim, so an empty map runs no function for this subject
+                    // rather than reporting a failure it could never have passed.
+                    if hist_mode(self.mode).is_some() {
+                        for &f in FUNCS {
+                            if super::NOT_IN_ANY_RELEASE.contains(&f) || !supports(self.width, f) {
+                                continue;
+                            }
+                            functions.insert(f, FnSupport { mode: self.mode, overflow: self.overflow(f) });
                         }
-                        functions.insert(f, FnSupport { mode: self.mode, overflow: self.overflow(f) });
                     }
                     let mut config = BTreeMap::new();
                     config.insert("width".into(), self.width.to_string());
@@ -338,7 +351,14 @@ macro_rules! historical_subject {
                     _overflow: Overflow,
                 ) -> impl Fn(&[String]) -> Computed<String> {
                     let (width, scale, m) = (self.width, self.scale, hist_mode(mode));
-                    move |inputs| dispatch_compute(width, scale, func, inputs, m)
+                    move |inputs| match m {
+                        Some(m) => dispatch_compute(width, scale, func, inputs, m),
+                        // Declared, not skipped: the reason reaches the report
+                        // rather than the cell quietly going missing.
+                        None => Computed::Error(format!(
+                            "{VERSION}: rounding mode not present in this release"
+                        )),
+                    }
                 }
             }
         }
