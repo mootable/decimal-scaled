@@ -2224,6 +2224,12 @@ mod tests {
 
     /// `by_scale` and `by_working_scale` return identical values for the same
     /// scale (they differ only in const-fold behaviour, not value).
+    ///
+    /// The mode list is EVERY `RoundingMode` variant, deliberately. Both
+    /// sides route through the same `*_entry` + `round_entry`, so the
+    /// equality holds for any mode by construction — a new variant needs
+    /// no new expected value here, only an extra list entry. Omitting one
+    /// would not fail the test; it would silently cover less.
     /// Uses an `Int<16>` work integer, which only exists in a
     /// `_wide-support` build, so the test is gated to that build (a
     /// narrow-only build has no work integer this wide to exercise).
@@ -2231,7 +2237,16 @@ mod tests {
     #[test]
     fn by_scale_eq_by_working_scale() {
         for scale in [0u32, 1, 17, 18, 19, 30, 38, 86] {
-            for mode in [HalfToEven, Trunc, Ceiling, Floor, HalfAwayFromZero, HalfTowardZero] {
+            for mode in [
+                HalfToEven,
+                Trunc,
+                Ceiling,
+                Floor,
+                HalfAwayFromZero,
+                HalfTowardZero,
+                AwayFromZero,
+                ZeroFiveUp,
+            ] {
                 assert_eq!(
                     pi_by_scale::<Int<16>>(scale, mode),
                     pi_by_working_scale::<Int<16>>(scale, mode),
