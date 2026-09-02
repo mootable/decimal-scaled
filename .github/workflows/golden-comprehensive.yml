@@ -71,7 +71,14 @@ jobs:
           # 12,019,995 per mode, x 8 = 96,159,960 — so every stripe carries a
           # third more work. The ladder scales the fan-out with tier cost
           # rather than letting the widest stripes absorb it.
-          STRIPES = {"d1232": 16, "d924": 12, "d616": 10, "d462": 8, "d307": 6}
+          # Raised again 2026-09-02 at the top three tiers (16/12/10 ->
+          # 20/16/12) after watching the first eight-mode run: those are the
+          # tiers whose stripes still set the critical path, so shortening
+          # them shortens the whole workflow. d462 and d307 keep the sizes
+          # they were just given; d230 and below stay at the default 4, where
+          # the per-stripe cost is not what holds the run up. 86 stripe jobs
+          # in total (24 at the default + 6 + 8 + 12 + 16 + 20).
+          STRIPES = {"d1232": 20, "d924": 16, "d616": 12, "d462": 8, "d307": 6}
           print(json.dumps([{"shard": s, "widths": w, "stripe": k,
                              "total": STRIPES.get(s, 4)}
                             for (s, w) in shards
