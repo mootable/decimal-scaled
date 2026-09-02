@@ -76,10 +76,11 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
 /// i.e. at most `≈2.1·w` terms at working scale `w`. With `w` bounded by
 /// the Ziv precision horizon (~1264 digits) that is ~2 600 terms,
 /// comfortably inside the kernel's 20 000-iteration series cap. Outside
-/// the region `|u| → 1` as `t → -1` or `t → ∞`, the term count grows
-/// without bound and the series hits that cap — returning a truncated,
-/// WRONG value rather than a slow one. `WithLn` carries `ln`'s own
-/// multi-level sqrt reduction and is uniformly correct there.
+/// the region `|u| → 1` as `t → -1` or `t → ∞`, and the term count grows
+/// past that cap — which is why the region is enforced HERE, by routing,
+/// rather than left to the kernel: the series is never asked for an
+/// argument it cannot resolve within the bound. `WithLn` carries `ln`'s
+/// own multi-level sqrt reduction and is uniformly correct there.
 ///
 /// The region is stated as a continuous condition on the series ratio
 /// and is correct at every width and every scale; it is not fitted to

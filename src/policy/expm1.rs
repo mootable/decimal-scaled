@@ -96,10 +96,11 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
 ///   must host `e^x` on top of the series' own `2·w`-digit product. Inside
 ///   `x ≤ 1` the peak term is bounded by `1`, so no such lift is needed.
 ///
-/// Both failures are unbounded in the term count as well, and the series
-/// stops at `SERIES_CAP` — returning a TRUNCATED, WRONG value rather than
-/// a slow one. `WithExp` carries `exp`'s own `k·ln 2` range reduction and
-/// its proven peak model, and is uniformly correct there.
+/// Both failures also drive the term count past `SERIES_CAP`, which is
+/// why the region is enforced HERE, by routing, rather than left to the
+/// kernel: the series is never asked for an argument it cannot resolve
+/// within that bound. `WithExp` carries `exp`'s own `k·ln 2` range
+/// reduction and its proven peak model, and is uniformly correct there.
 ///
 /// The region is stated as a continuous condition on the series' own
 /// convergence and is correct at every width and every scale; it is not
