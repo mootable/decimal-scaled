@@ -310,6 +310,35 @@ Further reading:
 - Wikipedia - [Inverse hyperbolic functions § Series expansions](https://en.wikipedia.org/wiki/Inverse_hyperbolic_functions#Series_expansions) (the `artanh` series the crate evaluates)
 - Wolfram MathWorld - [Mercator Series](https://mathworld.wolfram.com/MercatorSeries.html), [Inverse Hyperbolic Tangent](https://mathworld.wolfram.com/InverseHyperbolicTangent.html)
 
+### `log1p` via the `artanh` reformulation, `ln` composition outside the band
+
+`log1p(t) = 2·artanh(u)` with `u = t / (2 + t)`, which reaches the
+result without ever forming `1 + t`. It reuses the width-generic
+working-scale kernel already shipped for `acosh` / `atanh`.
+
+The series carries no range reduction, so its convergence ratio is
+`u²` and it is the small-`|t|` kernel. The routed region `t ∈
+[-1/2, +1]` is exactly the preimage of `|u| ≤ 1/3` — a ratio of at
+most `1/9`, so at most `≈2.1·w` terms at working scale `w`. With `w`
+bounded by the Ziv precision horizon (~1264 digits) that is ~2600
+terms, inside the kernel's 20 000-iteration cap. This is a **validity
+wall, not a tuning threshold**: outside the region `|u| → 1` as
+`t → -1` or `t → ∞`, and the term count grows past what that cap
+allows, so the series is not used there at all. Everything else routes
+to the composition, which forms `1 + t` at the working scale and runs
+`ln`, whose own multi-level sqrt reduction is uniformly correct there.
+
+Worth stating plainly, because it inverts the usual reason for having
+the function: **`log1p` is not more accurate than `ln(1 + t)` here.**
+In binary floating point it exists because `1 + t` destroys every
+significant digit of a tiny `t`. In this crate's fixed-point
+representation `1 + t` is exactly representable at the working scale,
+so that cancellation cannot occur; `log1p` is provided for API parity
+and standards conformance, not for precision.
+
+Implementation: `src/algos/log1p/log1p_artanh.rs`,
+`src/algos/log1p/log1p_with_ln.rs`; routing in `src/policy/log1p.rs`.
+
 ### `exp` via two-stage argument reduction + Taylor
 
 Wide-tier exp uses Brent's two-stage argument reduction (dashu's
@@ -369,6 +398,55 @@ Further reading:
 - Wikipedia - [Exponential function § Computation](https://en.wikipedia.org/wiki/Exponential_function#Computation) (the Taylor series and the `2^k · exp(s)` reduction)
 - Wikipedia - [Taylor series § Exponential function](https://en.wikipedia.org/wiki/Taylor_series#Exponential_function)
 - Wolfram MathWorld - [Exponential Function](https://mathworld.wolfram.com/ExponentialFunction.html), [Maclaurin Series](https://mathworld.wolfram.com/MaclaurinSeries.html)
+
+### `expm1` via the leading-term-dropped Taylor series, `exp` composition outside `|x| ≤ 1`
+
+`expm1(x) = x + x²/2! + x³/3! + …` evaluated directly at the working
+scale — no argument reduction, no `ln 2` constant, no division to find
+a reduction quotient, no reassembly.
+
+The routed region `|x| ≤ 1` is a **validity wall, not a tuning
+threshold**, and the series fails outside it in two different ways
+depending on sign:
+
+- `x < 0` — the series alternates, so its cancellation loss is
+  `max term / |sum|`. At `x = -1` that is `1 / |expm1(-1)| = 1/0.63212`,
+  i.e. **0.66 bits** — under one bit, so the whole band is safe. Past
+  it the loss grows like `e^|x|` and eats the guard.
+- `x > 0` — the terms peak at `m ≈ x` with value `≈ e^x/√(2πx)`, so the
+  intermediate reaches the size of the result and the work integer must
+  host `e^x` on top of the series' own `2·w`-digit product. Inside
+  `x ≤ 1` the peak term is bounded by `1`, so no such lift is needed.
+
+Both regimes also need unboundedly many terms as `|x|` grows, past what
+the loop's 20 000-term bound (`SERIES_CAP`) allows. The series is
+therefore never asked for an argument outside the region: the routing
+wall is what keeps every call inside the band where a bounded term
+count suffices, and the loop's own stop conditions fail closed, so a
+result is never returned on an unproven tail.
+
+Outside the region, `expm1` is computed as `e^x - 1` at the working
+scale, which routes through `exp` and inherits its `k·ln 2` argument
+reduction — bringing any `x` back into a band the Taylor series
+handles in a bounded number of terms.
+
+Unlike `log1p`, this one is **not** merely parity: `Trunc` does not
+commute with the `- 1`, so on the negative half `exp(x) - 1` is a
+genuinely wrong answer rather than a slower one. `Trunc` rounds toward
+zero, and for `x < 0` the subtraction crosses zero — `e^x` lies in
+`(0, 1)` and has its magnitude rounded *down*, while `expm1(x) < 0` is
+rounded *up* — leaving the two-step form one ULP out. `Floor`,
+`Ceiling` and the nearest modes commute, being translations by a grid
+point; `Trunc` does not.
+
+Two further kernels, `expm1_halving` and `expm1_reduced`, are correct
+over regions that overlap the routed pair entirely, so choosing between
+them is an optimality question rather than a validity one. They stay as
+kept alternatives for a later measured race.
+
+Implementation: `src/algos/expm1/expm1_series.rs`,
+`src/algos/expm1/expm1_with_exp.rs`, with `expm1_halving.rs` /
+`expm1_reduced.rs` kept unrouted; routing in `src/policy/expm1.rs`.
 
 ### `sin` via [0, π/4] reduction with sin / cos branching
 
