@@ -24,7 +24,7 @@
 //! ```text
 //! GOLDEN_WIDTHS=18 GOLDEN_FUNCS=exp,sqrt \
 //!   cargo test -p decimal-scale-test --release \
-//!     --features wide,x-wide,xx-wide,history-044 \
+//!     --features wide,x-wide,xx-wide,history-050,history-044 \
 //!     --test history history_previous -- --ignored --nocapture
 //! ```
 
@@ -34,7 +34,15 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
-use decimal_scale_test::history::v044;
+use decimal_scale_test::history::{v044, v050};
+/// The immediately-previous release, which `history_previous` ratchets against.
+///
+/// EVERY release repoints this at its predecessor. The live column is the
+/// working tree rather than a pinned version, so the release being replaced
+/// leaves the comparison the moment the version is bumped — leaving this behind
+/// silently widens the ratchet to two releases back, which is how 0.5.0 fell
+/// out of the picture.
+use decimal_scale_test::history::v050 as previous_release;
 use decimal_scale_test::{DsSubject, Filter, GEN_PRECISION};
 use decimal_scaled_golden::{
     CaseLoader, ConsoleReporter, DecimalSubject, ExecutionResult, FilterLoader, Function,
@@ -357,7 +365,7 @@ fn history_previous() {
     let prev_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
     let live_rc = run_version(&runner, &filter, &modes, &cells, DsSubject::with_mode);
-    let prev_rc = run_version(&runner, &filter, &modes, &cells, v044::Subject::with_mode);
+    let prev_rc = run_version(&runner, &filter, &modes, &cells, previous_release::Subject::with_mode);
     std::panic::set_hook(prev_hook);
 
     let mut live = BTreeMap::new();
@@ -387,7 +395,7 @@ fn history_previous() {
 
     eprintln!(
         "== history_previous: live vs decimal-scaled@{} ==",
-        v044::VERSION
+        previous_release::VERSION
     );
     eprintln!(
         "ratchet: {} both-pass / {} both-fail / {} fixed in live / {} regressions / {} coverage losses",
@@ -406,7 +414,7 @@ fn history_previous() {
     for c in &coverage_losses {
         eprintln!(
             "  coverage loss (passed in {}, skipped live): {c}",
-            v044::VERSION
+            previous_release::VERSION
         );
     }
     for r in &regressions {
@@ -423,7 +431,7 @@ fn history_previous() {
         "{:<8} {:>14} {:>14} {:>8}",
         "func",
         "live",
-        v044::VERSION,
+        previous_release::VERSION,
         "ratio"
     );
     for (func, &l) in &live_ns {
@@ -441,7 +449,7 @@ fn history_previous() {
         regressions.is_empty(),
         "{} cell(s) passed in {} but fail in the live crate (listed above)",
         regressions.len(),
-        v044::VERSION
+        previous_release::VERSION
     );
 }
 
@@ -470,6 +478,9 @@ fn history_all() {
     std::panic::set_hook(Box::new(|_| {}));
     // One RunCollector spans every version's subjects.
     let mut rc = run_version(&runner, &filter, &modes, &cells, DsSubject::with_mode);
+    for s in run_version(&runner, &filter, &modes, &cells, v050::Subject::with_mode).subjects {
+        rc.add(s);
+    }
     for s in run_version(&runner, &filter, &modes, &cells, v044::Subject::with_mode).subjects {
         rc.add(s);
     }
@@ -605,6 +616,44 @@ mod adapter_proofs {
         match op(&["1.5".to_string(), "2".to_string()]) {
             Computed::Value(v) => assert_eq!(v, "3.000"),
             other => panic!("expected Value, got {other:?}"),
+        }
+    }
+
+    mod v050_proof {
+        use super::{live_cell, proves_mul_at_d18_3, proves_sqrt2_at_d38_19};
+        use decimal_scale_test::history::v050;
+
+        #[test]
+        fn computes_sqrt_and_mul() {
+            proves_sqrt2_at_d38_19(&v050::Subject::new(38, 19));
+            proves_mul_at_d18_3(&v050::Subject::new(18, 3));
+        }
+
+        #[test]
+        fn cells_match_the_live_surface_exactly() {
+            // 0.5.0 shares the live tier table, so its cell list IS the live GOLDEN
+            // grid — the correctness surface, NOT the lib-compare-only scales, which
+            // are a live-build bench concern the history pins deliberately exclude.
+            assert_eq!(v050::CELLS, decimal_scale_test::GOLDEN_CELLS);
+            assert!(v050::CELLS.iter().all(live_cell));
+        }
+
+        #[test]
+        fn declines_the_rounding_modes_it_never_had() {
+            // 0.5.0's RoundingMode has six variants; the two 0.5.1 added have no
+            // counterpart. The subject must declare NOTHING for them rather than
+            // report a failure it could never have passed.
+            use decimal_scaled_golden::{DecimalSubject, RoundingMode};
+            for mode in [RoundingMode::AwayFromZero, RoundingMode::ZeroFiveUp] {
+                let caps = v050::Subject::with_mode(38, 19, mode).capabilities();
+                assert!(
+                    caps.functions.is_empty(),
+                    "0.5.0 must declare no function for {mode:?}"
+                );
+            }
+            // A mode it DOES have still declares the full surface.
+            let caps = v050::Subject::with_mode(38, 19, RoundingMode::HalfToEven).capabilities();
+            assert!(!caps.functions.is_empty(), "0.5.0 must support HalfToEven");
         }
     }
 

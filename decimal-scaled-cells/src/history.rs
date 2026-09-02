@@ -365,11 +365,61 @@ macro_rules! historical_subject {
     };
 }
 
-#[cfg(feature = "history-044")]
+#[cfg(feature = "history-050")]
 historical_subject! {
-    /// decimal-scaled 0.4.4 — the immediately-previous release. Same tier table
+    /// decimal-scaled 0.5.0 — the immediately-previous release. Same tier table
     /// and trait surface as live, so it covers every live band-edge cell and
     /// every golden function at every width.
+    ///
+    /// `expm1` and `log1p` are not declared: both landed in 0.5.1, and
+    /// `NOT_IN_ANY_RELEASE` keeps them out of every era's map. The two rounding
+    /// modes 0.5.1 added are declined by the `hist_mode` gate, since 0.5.0's
+    /// `RoundingMode` has six variants.
+    mod v050, crate ds_050, version "0.5.0",
+    supports |_width, _func| true,
+    cells {
+        // D18 — the narrow tier (always compiled)
+        D18 => 18 { 0, 3, 4, 9, 13, 17 };
+        // D38 (always compiled)
+        D38 => 38 { 0, 2, 6, 9, 10, 12, 17, 18, 19, 28, 37 };
+        // D57 — 192-bit
+        #[cfg(feature = "d57")]
+        D57 => 57 { 0, 14, 20, 28, 30, 42, 56 };
+        // D76 — 256-bit
+        #[cfg(feature = "d76")]
+        D76 => 76 { 0, 18, 19, 38, 40, 57, 75 };
+        // D115 — 384-bit
+        #[cfg(feature = "d115")]
+        D115 => 115 { 0, 28, 50, 57, 86, 114 };
+        // D153 — 512-bit
+        #[cfg(feature = "d153")]
+        D153 => 153 { 0, 38, 76, 114, 152 };
+        // D230 — 768-bit
+        #[cfg(feature = "d230")]
+        D230 => 230 { 0, 30, 57, 115, 172, 229 };
+        // D307 — 1024-bit
+        #[cfg(feature = "d307")]
+        D307 => 307 { 0, 30, 50, 70, 76, 120, 153, 230, 290, 306 };
+        // D462 — 1536-bit
+        #[cfg(feature = "d462")]
+        D462 => 462 { 0, 30, 100, 115, 180, 231, 346, 461 };
+        // D616 — 2048-bit
+        #[cfg(feature = "d616")]
+        D616 => 616 { 0, 30, 130, 154, 240, 308, 462, 590, 615 };
+        // D924 — 3072-bit
+        #[cfg(feature = "d924")]
+        D924 => 924 { 0, 30, 180, 231, 350, 462, 693, 900, 923 };
+        // D1232 — 4096-bit
+        #[cfg(feature = "d1232")]
+        D1232 => 1232 { 0, 30, 250, 308, 470, 616, 924, 1200, 1231 };
+    }
+}
+
+#[cfg(feature = "history-044")]
+historical_subject! {
+    /// decimal-scaled 0.4.4 — the last 0.4.x release. Same tier table and trait
+    /// surface as live, so it covers every live band-edge cell and every golden
+    /// function at every width.
     mod v044, crate ds_044, version "0.4.4",
     supports |_width, _func| true,
     cells {
