@@ -1,0 +1,136 @@
+name: "🧬 generator drift"
+
+# Re-runs the table generators and fails if any committed output moves.
+#
+# WHY THIS EXISTS: adding an enum variant breaks every exhaustive `match`
+# immediately and loudly, with a file and a line number — so the fix lands
+# in the file the compiler pointed at. When that file is generator OUTPUT,
+# the edit is correct, compiles, ships, and is silently reverted the next
+# time anyone regenerates. A "DO NOT EDIT" header does not stop this: the
+# header is a comment, the broken build is not. Nothing else catches it,
+# and the failure stays invisible for as long as nobody regenerates.
+#
+# Two real divergences prompted this, both found by hand and both since
+# repaired at source by #106:
+#   * `gen_ln_tang_table.py` emitted a two-parameter `ln_table_entry_baked`
+#     while the committed table had three — regenerating would have broken
+#     four call sites and reverted a caller-supplied `pow10_w` optimisation.
+#   * PR #105 wired `AwayFromZero` / `ZeroFiveUp` into `src/consts/table.rs`
+#     across twelve `match mode` blocks; `gen_const_table.py` knew nothing
+#     of them, so regenerating stripped all 24 arms and left twelve
+#     non-exhaustive matches.
+#
+# COST: all six together take ~2s — the slowest is the sincos table at
+# ~0.7s, even at Arb's 16384-bit working precision. Job setup dominates by
+# an order of magnitude, which is why this is ONE job rather than a
+# per-generator matrix: a six-way matrix would pay checkout +
+# setup-python + pip six times over to parallelise two seconds. The paths
+# filter keeps it off every PR that cannot introduce drift. If the
+# generators ever grow expensive, splitting them is a small change.
+
+on:
+  # The paths list is repeated rather than shared via a YAML anchor:
+  # GitHub Actions does not expand anchors in workflow files. Keep the
+  # two copies in step.
+  pull_request:
+    paths:
+      - "scripts/gen_*.py"
+      - "src/algos/support/atan_tang_table.rs"
+      - "src/algos/support/exp_tang_table.rs"
+      - "src/algos/support/ln_tang_table.rs"
+      - "src/algos/support/sincos_tang_table.rs"
+      - "src/consts/table.rs"
+      - "src/consts/newton_recip.rs"
+      - ".github/workflows/generator-drift.yml"
+  push:
+    branches:
+      - main
+      - "release/*"
+    paths:
+      - "scripts/gen_*.py"
+      - "src/algos/support/atan_tang_table.rs"
+      - "src/algos/support/exp_tang_table.rs"
+      - "src/algos/support/ln_tang_table.rs"
+      - "src/algos/support/sincos_tang_table.rs"
+      - "src/consts/table.rs"
+      - "src/consts/newton_recip.rs"
+      - ".github/workflows/generator-drift.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: generator-drift-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  drift:
+    name: generator drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.x"
+
+      - name: Install the oracle
+        # Since #106 the five oracle-backed generators use flint/Arb (via
+        # the shared `scripts/tang_flint_oracle.py`); none imports mpmath
+        # any more. `gen_newton_recip_table.py` is pure Python.
+        run: pip install python-flint
+
+      - name: Re-run the generators and diff their output
+        run: |
+          set -uo pipefail
+          pairs="scripts/gen_atan_tang_table.py:src/algos/support/atan_tang_table.rs
+          scripts/gen_exp_tang_table.py:src/algos/support/exp_tang_table.rs
+          scripts/gen_ln_tang_table.py:src/algos/support/ln_tang_table.rs
+          scripts/gen_sincos_tang_table.py:src/algos/support/sincos_tang_table.rs
+          scripts/gen_const_table.py:src/consts/table.rs
+          scripts/gen_newton_recip_table.py:src/consts/newton_recip.rs"
+
+          drifted=""
+          while IFS= read -r pair; do
+            gen="${pair%%:*}"
+            out="${pair##*:}"
+            echo "::group::$gen -> $out"
+            if ! python "$gen"; then
+              echo "::error file=$gen::$gen failed to run"
+              drifted="$drifted%0A  $gen (failed to run)"
+              echo "::endgroup::"
+              continue
+            fi
+            if git diff --quiet -- "$out"; then
+              echo "up to date"
+            else
+              echo "::error file=$out::$out is out of date with $gen"
+              git --no-pager diff --stat -- "$out"
+              drifted="$drifted%0A  $gen -> $out"
+            fi
+            echo "::endgroup::"
+          done <<< "$pairs"
+
+          if [ -n "$drifted" ]; then
+            echo "::error::Generated files are out of date with their generators:$drifted"
+            echo ""
+            echo "The fix belongs in the GENERATOR, never in the generated file."
+            echo "A hand-edit to the .rs compiles and ships, then disappears the"
+            echo "next time anyone regenerates — which is the failure this job"
+            echo "exists to catch."
+            echo ""
+            echo "  1. make the change in the generator named above"
+            echo "  2. re-run it:   python <generator>"
+            echo "  3. commit the generator AND its regenerated output together"
+            echo ""
+            echo "If a RoundingMode variant was added, its match arms belong in"
+            echo "the generator's emitted source — not in the .rs file the"
+            echo "compiler pointed at when the variant broke the build."
+            exit 1
+          fi
+          echo "all six generators reproduce their committed output"
