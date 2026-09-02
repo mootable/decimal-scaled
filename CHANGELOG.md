@@ -5,7 +5,7 @@ All notable changes to `decimal-scaled` are documented here.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.1] — unreleased
+## [0.5.1] — 2026-09-02
 
 An API release, non-breaking for callers. Operators now work between
 decimals of different storage width and different `SCALE`; a new
@@ -13,7 +13,9 @@ decimals of different storage width and different `SCALE`; a new
 scale-only operation takes the name the decimal arithmetic specification
 uses for it — `quantize`. The former `rescale` spellings remain as
 deprecated aliases. Two functions join the transcendental surface,
-`log1p` and `expm1`, both correctly rounded at every width and scale.
+`log1p` and `expm1`, both correctly rounded at every width and scale, and
+the two remaining rounding modes of the decimal arithmetic specification
+join `RoundingMode`, completing it against that specification at eight.
 
 Code that *implements* `DynDecimal` or `DecimalTranscendental` outside the
 crate does need an update — see **Breaking — for trait implementors only**
@@ -82,6 +84,29 @@ at the end of this section.
   existing wide-tier notes record for `ln`, `log` and `exp`; threading it is
   separate work.
 
+- **The two missing GDA rounding modes — `AwayFromZero` and `ZeroFiveUp`.**
+  The crate implemented six of the decimal arithmetic specification's eight
+  rounding modes; these are the other two, so `RoundingMode` is now complete
+  against that specification. Both are accepted everywhere a mode is —
+  every `*_with` method, the quantize surface, and the crate-wide default
+  feature flags — and both are covered by the golden gate at every
+  band-edge `(width, scale)` cell.
+
+  - **`AwayFromZero`** (GDA `round-up`) rounds away from zero whenever
+    anything was discarded, the exact mirror of `Trunc`. `0.1 -> 1`,
+    `-0.1 -> -1`, and an exact value is never moved.
+  - **`ZeroFiveUp`** (GDA `round-05up`) rounds away from zero *iff* the
+    last retained digit of the toward-zero result is `0` or `5`, and
+    truncates otherwise — so `0.7 -> 1` and `5.7 -> 6`, but `1.7 -> 1` and
+    `4.7 -> 4`. It is indifferent to *how much* was discarded, which is
+    the point: reserving `0` and `5` as the only final digits that can
+    absorb a remainder means a later round to one fewer digit never meets
+    a half-way tie that the first rounding manufactured. This is the
+    "round for reround" rule, and it is the reason the mode looks
+    arbitrary in isolation.
+
+  The golden surface consequently grew from six modes to eight — a third
+  more graded rows per cell, at 96,159,960 checks.
 
 ### Changed
 
@@ -376,6 +401,46 @@ at the end of this section.
   third layout no other module used. The few cases that genuinely need
   crate-internal items stay behind as inline `#[cfg(test)]` blocks, the
   convention the rest of the tree follows.
+- **Every baked constant is now derived from a rigorous flint/Arb oracle.**
+  The generators previously took their digits from `mpmath`, which carries
+  no error bound: it computes to a working precision and reports what it
+  has, so the last few digits of a long constant are not guaranteed. The
+  constant and Tang-table generators now use flint's Arb intervals and emit
+  a digit only where the enclosure pins it — a value that cannot be pinned
+  escalates precision rather than being reported. Regeneration also turned
+  out to be **5× faster** (9.8s → 2.0s) at a higher working precision,
+  because Arb is a C library and `mpmath` is pure Python. flint is a
+  generator-side and CI dependency only; nothing from it ships, and the
+  crate's licensing is unchanged.
+- **A generator that no longer reproduces its output now fails the build.**
+  Two committed tables had silently diverged from the generators that
+  produce them. The mechanism is worth recording because it is structural
+  rather than careless: adding an enum variant breaks every exhaustive
+  `match` immediately and loudly, with a file and a line number, so the fix
+  lands in the file the compiler pointed at — which, for a generated table,
+  is the output rather than the generator. The "do not edit by hand" header
+  is a comment; the broken build is not. CI now re-runs every generator and
+  fails on any working-tree change (about 14s, behind a paths filter), and
+  the headers name the generator as where a match arm belongs.
+- **Parameters and locals named across the tree.** A sweep over 190 files
+  replaced single-letter and abbreviated bindings with names drawn from the
+  tree's own documentation. It corrected names that were actively
+  misleading rather than merely terse — an `r256` holding a 128-bit pair, a
+  `hi` used as a length beside a `hi` used as a value, an `a2`/`b2` pair
+  meaning opposite things within one file, and a Newton iteration binding a
+  limb to `s` where the surrounding derivation defines `s` as the root.
+  Rust has no named arguments, so parameter names are file-local and no
+  call site changed; the work is entirely legibility.
+- **Golden striping sized from measurement.** The comprehensive gate's
+  fan-out is now derived from measured per-stripe durations rather than
+  from tier width, which had over-provisioned the middle tiers while
+  leaving the widest one setting the critical path alone. Same total graded
+  rows, 85 jobs rather than 86, and roughly half the wall time.
+- **Dependencies.** `decimal_scaled_macros` moves to `syn` 3 — the only
+  dependency change that reaches a published crate. The remaining bumps
+  (`dashu-int` / `dashu-float` to 0.6, `decimal-rs` to 0.2, `g_math` to
+  0.5) are confined to the benchmark and golden-comparison members, which
+  are `publish = false` and reach no consumer.
 
 ### Performance — findings
 

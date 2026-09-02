@@ -3394,7 +3394,7 @@ mod forward_rung_tests {
     /// tier's — exactly the band where an unresolved-at-rung walker must
     /// FALL UP to the tier width instead of concluding from its base
     /// narrowing (a 1-ULP directed-mode violation otherwise). Asserts
-    /// rung == tier for every family across all six modes at the
+    /// rung == tier for every family across every mode at the
     /// exposing cell D307<153> (and the s0/s306 neighbours via the
     /// existing anchors).
     #[test]
@@ -3516,7 +3516,7 @@ mod forward_rung_tests {
     /// scale grid with the bench's PER-FAMILY input sets (forward trig
     /// gets the full spread + the 1e9 out-of-budget probe; asin its unit
     /// domain; sinh/exp/asinh the EXP_ARG_BUDGET region + the x50
-    /// out-of-budget probe at s0), rung == tier across all six modes.
+    /// out-of-budget probe at s0), rung == tier across every mode.
     // Defined only when a consuming test is compiled: its invocations live in `#[test]`
     // grids gated `#[cfg(feature = "d307")]` / `#[cfg(feature = "d1232")]` below, so gate
     // the definition on `test` AND those tiers — then no build (test or not, narrow or

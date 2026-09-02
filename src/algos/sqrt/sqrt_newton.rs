@@ -11,7 +11,7 @@
 //! taken via the int layer's width-agnostic slice kernel
 //! ([`crate::int::algos::isqrt::isqrt_newton::isqrt_newton`]), and a single
 //! round-to-nearest step lands the result on the type's last representable
-//! place. Within 0.5 ULP under any of the six rounding modes.
+//! place. Within 0.5 ULP under any rounding mode.
 //!
 //! # Generic over the storage width only
 //!

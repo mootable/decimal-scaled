@@ -69,7 +69,7 @@ enum Algorithm {
     /// (`root_kernel_ab`): 1.1–1.97× faster at the mid-scale cells; at the
     /// max-scale (S-1) bench-branch-compare cells 1.8–5.8× faster than the
     /// generic slice [`Self::Newton`]. Bit-identical to [`Self::Newton`]
-    /// across all six modes.
+    /// across every mode.
     ///
     /// NOT feature-gated: variant and arms always present so routing is
     /// feature-INDEPENDENT (a single-wide-tier build routes that tier exactly
@@ -119,7 +119,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // radicands even at the full-range `W = 2N`. Microbench
         // (`root_kernel_ab`, at the routed `W = 2N`): native beats the
         // generic slice 1.22× (D57<20>) and 1.13× (D76<20>). Bit-identical
-        // to `Newton` across all six modes (kernel test gate).
+        // to `Newton` across every mode (kernel test gate).
         //
         // The wider mid tiers (D115/D153, N = 6/8) are NOT routed by `N`:
         // at the full-range `W = 2N` (12/16 limbs) the per-iteration Knuth
@@ -153,7 +153,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // just above `4N`, slice was beating Native 1.06–1.27×. The
         // per-tier thresholds below sit at the bisected true crossover
         // (Class I "continuous win-region" gate); each cell routed to
-        // Native is bit-identical to Newton across all six modes and a
+        // Native is bit-identical to Newton across every mode and a
         // measured win.
         (6, scale) if scale >= 24 => Select::ByAlgorithm(Algorithm::Native), // D115, W=12
         (8, scale) if scale >= 32 => Select::ByAlgorithm(Algorithm::Native), // D153, W=16

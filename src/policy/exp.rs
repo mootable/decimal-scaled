@@ -49,7 +49,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // D57 (Int<3>): the seam A/B (`benches/micro/exp_series_tang_ab.rs`)
         // sweeps the full SCALE range at the production Tang config and shows
         // Tang beats Series at EVERY D57 scale (validity bit-identical to
-        // Series across the operand spread × all six modes at each cell):
+        // Series across the operand spread × every mode at each cell):
         // s0 4.81×, s10 2.81×, s17 2.96×, s22 2.91×, s23 2.26×, s28 2.32×,
         // s33 2.29×, s38 19.3×, s42 1.90×, s44 2.27×, s45 1.52×, s56 44.6×.
         // A gap in the routed D57 scales would drop powf's inner exp(y·ln x)
@@ -80,7 +80,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // (`src/algos/support/exp_tang_table.rs`).
         // The N-way A/B `benches/micro/exp_wide_series_tang_ab.rs`
         // (PINNED core 22, Series vs 3 Tang configs vs Schoolbook, validity-
-        // gated bit-identical to Series × all six modes) shows SERIES (the
+        // gated bit-identical to Series × every mode) shows SERIES (the
         // generic squaring core) BEATS every Tang config at EVERY scale at
         // these tiers — Tang's
         // table-multiply + post-reduction Taylor costs MORE than Series's
@@ -348,7 +348,7 @@ fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode
         }
         // D76 (Int<4>): full-range Tang, M=512 G=30, the directed +
         // external-extra shape <true,true,false> — bit-identical to Series
-        // across the spread × all six modes at every sampled scale (s0/s19/s38/
+        // across the spread × every mode at every sampled scale (s0/s19/s38/
         // s57/s74) in the wide A/B (`exp_wide_series_tang_ab`), where Tang wins
         // 1.05-1.20× at every scale (and the value-gate sweep shows Tang wins
         // 8-10× for `|x|` 10..110 where Series's reduction blows up). The

@@ -17,7 +17,7 @@
 //!   storage and work widths `(S, W)`; the default for every wide tier
 //!   (D57 … D1232) and, via the policy's widen-to-`Int<2>` strategy, the
 //!   narrow tiers. Exact to the last representable place (within 0.5 ULP)
-//!   under any of the six [`RoundingMode`]s.
+//!   under any [`RoundingMode`].
 //! - [`cbrt_mg_divide`] — hand-tuned 384-bit cube-root path tailored to
 //!   D38's `Int<2>` storage. **Width-bespoke for `N == 2`.**
 //! - [`cbrt_newton_with_table_seed`] — `f64`-seeded narrow-work Newton

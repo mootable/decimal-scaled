@@ -7,8 +7,8 @@
 //! cell (and, where the radicand stays inside the `f64` range, the other
 //! `Native`-routed mid-scale wide cells). Each is **bit-for-bit identical** to
 //! [`crate::algos::cbrt::cbrt_native::cbrt_native`] /
-//! [`crate::algos::cbrt::cbrt_newton::cbrt_newton`] under all six
-//! [`RoundingMode`] values — only the Newton *seed* (hence the iteration
+//! [`crate::algos::cbrt::cbrt_newton::cbrt_newton`] under every
+//! [`RoundingMode`] value — only the Newton *seed* (hence the iteration
 //! count) differs. NOT wired into any policy.
 //!
 //! # Why the seed matters

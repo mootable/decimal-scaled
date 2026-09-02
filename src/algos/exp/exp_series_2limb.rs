@@ -1080,8 +1080,8 @@ mod fast_path_validity {
 
     // For EVERY D38 cell the production gate routes to the fast path,
     // assert it is bit-identical to the wide reference. A fine 0.1-step
-    // |x| grid over the whole representable range, both signs, all six
-    // modes, scale 0..=38 — so an unbenched scale cannot silently get a
+    // |x| grid over the whole representable range, both signs, every
+    // mode, scale 0..=38 — so an unbenched scale cannot silently get a
     // wrong fast result.
     #[test]
     fn fast_path_bit_identical_to_wide_d38() {

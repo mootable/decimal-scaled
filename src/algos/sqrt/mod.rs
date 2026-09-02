@@ -15,7 +15,7 @@
 //!   work widths `(S, W)`; the default for every wide tier (D57 … D1232)
 //!   and, via the policy's widen-to-`Int<2>` strategy, the narrow tiers.
 //!   The result is exact to the last representable place (within 0.5 ULP)
-//!   under any of the six [`RoundingMode`]s.
+//!   under any [`RoundingMode`].
 //! - [`sqrt_mg_divide`] — hand-tuned `mul_u128_to_u256` + 256-bit
 //!   `isqrt_256` tailored to D38's `Int<2>` storage. **Width-bespoke for
 //!   `N == 2`.**

@@ -17,7 +17,7 @@ and auto-rendered here; there is **no manual editing**. If we ever fail our
 guarantee, we want you to know.
 
 Each row is a function, each column a storage width. A `✓` means `0` bits of
-error — the exact correctly-rounded value — across every scale and all six
+error — the exact correctly-rounded value — across every scale and all eight
 rounding modes at that width, with the number of checks verified correct beneath
 it. A `✗` marks a cell with at least one failure, the count of failing checks
 beneath. Inputs outside a function's domain or a tier's range aren't checks, so

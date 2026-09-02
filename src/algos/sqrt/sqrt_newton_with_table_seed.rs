@@ -36,7 +36,7 @@
 //! the tighter seed.
 //!
 //! Result is bit-for-bit identical to [`crate::algos::sqrt::sqrt_newton`]
-//! under all six [`RoundingMode`] values; only the integer width and the
+//! under every [`RoundingMode`] value; only the integer width and the
 //! seed source change.
 //!
 //! NOT feature-gated: referenced by the feature-independent `sqrt` policy (as

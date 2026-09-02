@@ -65,7 +65,7 @@ enum Algorithm {
     /// Microbench (`root_kernel_ab`): 1.1–1.4× at the mid-scale cells; at the
     /// max-scale (S-1) bench-branch-compare cells 1.4–2.9× faster than the
     /// generic slice [`Self::Newton`]. Bit-identical to [`Self::Newton`]
-    /// across all six modes (the rounding tail is shared); the seed falls back
+    /// across every mode (the rounding tail is shared); the seed falls back
     /// to the top-bits path past the f64 range.
     ///
     /// NOT feature-gated: the variant and its `select`/`dispatch` arms are
@@ -125,7 +125,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // `W = 3N`. Microbench (`root_kernel_ab`, at the routed `W = 3N`):
         // native beats the generic slice 1.42× (D57<20>, via `fast_a`) and
         // 1.15× (D76<20>). Bit-identical to the oracle-gated `cbrt_native`
-        // across all six modes and signs (kernel test gate).
+        // across every mode and sign (kernel test gate).
         //
         // The wider mid tiers (D115/D153, N = 6/8) are NOT routed by `N`:
         // at the full-range `W = 3N` (18/24 limbs) the per-iteration Knuth
@@ -155,7 +155,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // the cbrt crossover near `SCALE ≈ 7·N`; the conservative `SCALE >=
         // 8·N` gate sits just inside the win region (every routed cell wins,
         // none below is regressed). At the benchmarked max-scale (S-1) cells this
-        // recovers 1.4–2.9× over the slice (bit-identical, all six modes).
+        // recovers 1.4–2.9× over the slice (bit-identical, every mode).
         (6, scale) if scale >= 48 => Select::ByAlgorithm(Algorithm::Native), // D115, W=18
         (8, scale) if scale >= 64 => Select::ByAlgorithm(Algorithm::Native), // D153, W=24
         (12, scale) if scale >= 96 => Select::ByAlgorithm(Algorithm::Native), // D230, W=36

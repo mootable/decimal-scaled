@@ -973,7 +973,7 @@ by two independent layers (see the [Harness](golden.md) page):
 
 1. **The full-surface golden gate** — the `decimal-scale-test` crate
    drives the library-agnostic `decimal-scaled-golden` harness over every
-   band-edge (width, scale) cell for every strict function under all six
+   band-edge (width, scale) cell for every strict function under all eight
    rounding modes, against the committed width-agnostic golden set
    (each answer agreed by independent high-precision oracles); a run
    passes only at 0 bad / 0 panic. CI runs it on every push.
@@ -990,12 +990,13 @@ rounds wrong turns CI red.
 
 The kernels compute at a wider *working scale* (`SCALE + GUARD` digits)
 and then round to the storage scale. For the three nearest modes a fixed
-guard is enough; for the directed modes (toward zero / ±∞) the rounding
-decision needs the *sign and stickiness* of the sub-LSB residual — which
-the divide already computes — and, on the rare inputs sitting within the
-kernel's error of a tie, an adaptive widening step (Ziv iteration) settles
-it. The result is correct rounding under all six modes with the common,
-nearest-mode path paying nothing extra.
+guard is enough; for the five directed modes (toward zero, ±∞, away from
+zero, and the `0`/`5` rule) the rounding decision needs the *sign and
+stickiness* of the sub-LSB residual — which the divide already computes —
+and, on the rare inputs sitting within the kernel's error of a tie, an
+adaptive widening step (Ziv iteration) settles it. The result is correct
+rounding under all eight modes with the common, nearest-mode path paying
+nothing extra.
 
 ## Overflow & domain behaviour — one contract, invariant across tier and scale
 

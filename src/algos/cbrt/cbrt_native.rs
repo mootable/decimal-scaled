@@ -31,7 +31,7 @@
 //! body stays cfg-free.
 //!
 //! Result is bit-for-bit identical to [`crate::algos::cbrt::cbrt_newton`]
-//! under all six [`RoundingMode`] values; only the work-integer width
+//! under every [`RoundingMode`] value; only the work-integer width
 //! (a tight concrete `Int<W>` vs the slice's build-max scratch) and the
 //! seed source change. See [`crate::algos::cbrt::cbrt_newton`] for the
 //! Newton + half-step rounding algorithm.
@@ -77,7 +77,7 @@ fn icbrt_w_seeded<const W: usize>(radicand: Int<W>) -> Int<W> {
 /// the policy chose to cover `mag · 10^(2·SCALE)` for this `(N, SCALE)`
 /// cell. The half-step rounding mirrors
 /// [`crate::algos::cbrt::cbrt_newton`] exactly; the result is bit-identical
-/// to the generic path under all six [`RoundingMode`] values, only the
+/// to the generic path under every [`RoundingMode`] value, only the
 /// iteration cost differs. Under `no_std` (no floats) this delegates to the
 /// generic slice kernel.
 #[inline]

@@ -11,7 +11,7 @@
 //! root via the int layer's width-agnostic slice kernel
 //! ([`crate::int::algos::icbrt::icbrt_newton::icbrt_newton`]), and a single
 //! half-step lands the result on the type's last place (within 0.5 ULP under
-//! any of the six rounding modes). The sign of a non-zero input is preserved.
+//! any rounding mode). The sign of a non-zero input is preserved.
 //!
 //! # Generic over the storage width only
 //!
@@ -112,7 +112,7 @@ where
     icbrt_newton(&radicand[..radicand_len], &mut root[..radicand_len]);
     let root_len = sig_len(&root[..radicand_len]);
 
-    // ── single half-step round (all six modes), via cube comparisons ────
+    // ── single half-step round (every mode), via cube comparisons ────
     // eight_radicand = 8·radicand
     let mut eight_radicand_buf = Limbs::<N>::quad_buffered_u64();
     let eight_radicand = eight_radicand_buf.as_mut();

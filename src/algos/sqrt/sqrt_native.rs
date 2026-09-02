@@ -31,7 +31,7 @@
 //! body stays cfg-free.
 //!
 //! Result is bit-for-bit identical to [`crate::algos::sqrt::sqrt_newton`]
-//! under all six [`RoundingMode`] values; only the work-integer width
+//! under every [`RoundingMode`] value; only the work-integer width
 //! (a tight concrete `Int<W>` vs the slice's build-max scratch) and the
 //! seed source change. See [`crate::algos::sqrt::sqrt_newton`] for the
 //! round-step rounding algorithm.
@@ -76,7 +76,7 @@ fn isqrt_w_seeded<const W: usize>(radicand: Int<W>) -> Int<W> {
 /// cell. Input `raw` must be `> 0` (the policy saturates non-positive
 /// inputs to zero before calling). The round-step mirrors
 /// [`crate::algos::sqrt::sqrt_newton`] exactly; the result is bit-identical
-/// to the generic path under all six [`RoundingMode`] values.
+/// to the generic path under every [`RoundingMode`] value.
 #[inline]
 #[must_use]
 pub(crate) fn sqrt_native<const N: usize, const W: usize>(

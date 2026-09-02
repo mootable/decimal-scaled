@@ -25,7 +25,7 @@
 //! Both return the exact `⌊∛n⌋`, so this body is cfg-free.
 //!
 //! Result is bit-for-bit identical to [`crate::algos::cbrt::cbrt_newton`]
-//! under all six [`RoundingMode`] values; only the work-integer width
+//! under every [`RoundingMode`] value; only the work-integer width
 //! (`Int<6>` vs the generic `Int<12>`) and the seed source change. See
 //! [`crate::algos::cbrt::cbrt_newton`] for the Newton + half-step
 //! rounding algorithm.
@@ -44,8 +44,8 @@ const SCALE: u32 = 20;
 /// the `f64::cbrt`-vs-classical seed std/no_std choice is encapsulated in
 /// the seed leaf the kernel calls, so this body is cfg-free. The
 /// half-step rounding mirrors [`crate::algos::cbrt::cbrt_newton`]
-/// exactly; the result is bit-identical to the generic path under all
-/// six [`RoundingMode`] values, only the iteration count differs.
+/// exactly; the result is bit-identical to the generic path under every
+/// [`RoundingMode`] value, only the iteration count differs.
 #[inline]
 #[must_use]
 pub(crate) fn cbrt_newton_with_table_seed(raw: Int<3>, mode: RoundingMode) -> Int<3> {

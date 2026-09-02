@@ -8,7 +8,7 @@
 //! of squaring) in a limb scratch buffer spanning up to `2N` limbs, takes
 //! the floor root via the width-agnostic slice kernel
 //! [`crate::int::algos::isqrt::isqrt_newton::isqrt_newton`], then applies a
-//! single round step (all six [`RoundingMode`]s). Returns [`None`] when the
+//! single round step (every [`RoundingMode`]). Returns [`None`] when the
 //! rounded root does not fit the signed range of `Int<N>` (true overflow);
 //! the caller maps that to its own out-of-range handling.
 //!

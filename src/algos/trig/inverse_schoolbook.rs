@@ -1038,8 +1038,8 @@ mod tests {
     // atan(z) = z - z^3/3 + z^5/5 - ...: the kernel recovers the NEAREST grid
     // value G and takes a SINGLE analytic step from it (compress for j*=3, then
     // alternating: expand for j*=5, compress for j*=7, ...). Validated across
-    // the LINEAR -> DEEP band transition at MANY scales (not one cell), all six
-    // modes, with a single-step invariant (|directed - G| <= 1 ULP, never 2 —
+    // the LINEAR -> DEEP band transition at MANY scales (not one cell), every
+    // mode, with a single-step invariant (|directed - G| <= 1 ULP, never 2 —
     // a double-step would return G∓2).
     //
     // Generic over the tier `C` and the const scale `S`; `coeff * 10^-big_k` is
@@ -1178,7 +1178,7 @@ mod tests {
 
         // atan2(3e-117, 1) sweeping the LINEAR band (j*=3, S where 3*117=351 > S)
         // into the DEEP band (j*=5, 351 <= S < 585), plus the atan2(1e-38, 1)
-        // family (the new d153 break). Every scale, all six modes, single-step.
+        // family (the new d153 break). Every scale, every mode, single-step.
         #[test]
         fn atan2_tiny_linear_to_deep_sweep() {
             // 3e-117: linear up to s350, deep (j*=5) from s351.
@@ -1202,7 +1202,7 @@ mod tests {
         }
 
         // Public path (policy -> rung -> tier) == tier kernel, one linear + one
-        // deep cell across all six modes (the rung==tier invariant).
+        // deep cell across every mode (the rung==tier invariant).
         #[test]
         fn atan2_public_eq_tier() {
             check::<180>(3, 117); // linear
@@ -1260,7 +1260,7 @@ mod tests {
         // atan2(3e-117, 1) is LINEAR (j*=3) across D307's whole scale range
         // (351 > every supported scale) - the exact cells the gate flagged
         // (s120, s153, s230, s290, s306). 3e-117 needs scale >= 117 to be
-        // representable. All six modes, single-step.
+        // representable. Every mode, single-step.
         #[test]
         fn atan2_3e117_linear_sweep() {
             assert_atan2_tiny_single_step::<Core, 120>(3, 117);
@@ -1311,7 +1311,7 @@ mod tests {
             assert_atan2_offgrid_uses_walker::<Core, 923>(-3, 117); // j*=9, negative
             assert_atan2_offgrid_uses_walker::<Core, 900>(3, 117); // j*=9 (819<=900<1053)
 
-            // Public path == tier kernel across all six modes (rung == tier).
+            // Public path == tier kernel across every mode (rung == tier).
             use crate::int::types::Int;
             let pow10 = |exponent: u32| Int::<48>::from_i128(10).pow(exponent);
             let y = Int::<48>::from_i128(3) * pow10(923 - 117);

@@ -3251,7 +3251,7 @@ where
 /// The nearest modes are deliberately NOT excluded. They fail on the same
 /// inputs for the same reason: a tail below the working resolution reads as
 /// an exact tie, and the mode's tie-break then decides a tie that is not
-/// there. One mechanism serves all six.
+/// there. One mechanism serves them all.
 #[inline]
 pub(crate) fn round_to_storage_tail_signed_g<St: BigInt + Copy, S: BigInt>(
     base_guard_digits: u32,
@@ -4026,7 +4026,7 @@ mod tiny_x_directed_pins {
 
     const ULP: Int<8> = <Int<8> as BigInt>::ONE;
 
-    /// Pin all six modes for one wide-tier `D153<SCALE>` function at the
+    /// Pin every mode for one wide-tier `D153<SCALE>` function at the
     /// tiny argument `±3·10^(−KNEG)` (raw `±3·10^(SCALE−KNEG)`, built
     /// directly — the parser takes no scientific notation). `expanding`
     /// selects the cubic-tail direction: EXPANDING (`|f| > |x|`,
@@ -4108,7 +4108,7 @@ mod tiny_x_deep_directed_pins {
 
     const ULP: Int<32> = <Int<32> as BigInt>::ONE;
 
-    /// Pin all six modes for one `D616<SCALE>` function at `±3·10^(−KNEG)`
+    /// Pin every mode for one `D616<SCALE>` function at `±3·10^(−KNEG)`
     /// (raw `±3·10^(SCALE−KNEG)`). `G` is the crate's own NEAREST result (the
     /// terminating partial sum, `≠ x`); the directed modes must be `G ± 1 ULP`
     /// per the deciding term's sign.
