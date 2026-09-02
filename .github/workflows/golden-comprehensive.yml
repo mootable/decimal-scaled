@@ -1,6 +1,6 @@
 name: "🌕 golden comprehensive"
 
-# The full six-mode golden surface — every row, every cell, all six
+# The full eight-mode golden surface — every row, every cell, all eight
 # rounding modes — on every push, in its OWN workflow so it never shares
 # a run's runner allocation with the ci.yml gates. This is the crate's
 # CORRECTNESS GATE: it took over from the deleted 0.5 ULP precision gate,
@@ -18,7 +18,7 @@ name: "🌕 golden comprehensive"
 # WITHIN a shard the rows still stripe (GOLDEN_STRIPE=k/n) so the heavy
 # wide tiers stay inside the job timeout. The splice stitches
 # shard × stripe mini reports back together. Coverage is UNCHANGED —
-# full rows, all six modes.
+# full rows, all eight modes.
 
 on:
   push:
@@ -59,12 +59,19 @@ jobs:
                     ("d924", "924"), ("d1232", "1232")]
           # Stripe count PER WIDTH TIER (owner 2026-06-13): the wide tiers
           # dominate the per-stripe wall time, so they fan out into more,
-          # thinner stripes to stay inside the job timeout; every other
-          # shard takes the default of 4. Each matrix entry carries its own
-          # `total`, so the stripe job gets GOLDEN_STRIPE=k/n with THAT
+          # thinner stripes to stay inside the job timeout. The ladder
+          # TAPERS with tier width — widest tier, most stripes — and d230
+          # and below take the default of 4. Each matrix entry carries its
+          # own `total`, so the stripe job gets GOLDEN_STRIPE=k/n with THAT
           # shard's own n (k = 0..n-1 — the harness's disjoint row partition,
           # line % n == k, self-consistent for any n).
-          STRIPES = {"d1232": 10, "d924": 8, "d616": 6}
+          # Re-sized 2026-09-02 for the eight-mode surface: the two GDA modes
+          # took the sweep from 72,119,970 checks to 96,159,960. That is
+          # EXACTLY a third more, not approximately — 72,119,970 / 6 =
+          # 12,019,995 per mode, x 8 = 96,159,960 — so every stripe carries a
+          # third more work. The ladder scales the fan-out with tier cost
+          # rather than letting the widest stripes absorb it.
+          STRIPES = {"d1232": 16, "d924": 12, "d616": 10, "d462": 8, "d307": 6}
           print(json.dumps([{"shard": s, "widths": w, "stripe": k,
                              "total": STRIPES.get(s, 4)}
                             for (s, w) in shards
@@ -162,7 +169,7 @@ jobs:
         with:
           name: golden-exe-${{ matrix.shard }}
 
-      - name: Run stripe (all six modes, the shard's full rows)
+      - name: Run stripe (all eight modes, the shard's full rows)
         env:
           GOLDEN_STRIPE: "${{ matrix.stripe }}/${{ matrix.total }}"
           GOLDEN_WIDTHS: "${{ matrix.widths }}"
@@ -235,7 +242,7 @@ jobs:
             fi
           done
           {
-            echo "## golden comprehensive — combined (all six modes, full surface, width-sharded)"
+            echo "## golden comprehensive — combined (all eight modes, full surface, width-sharded)"
             echo '```'
             cat combined/summaries.txt
             echo '```'

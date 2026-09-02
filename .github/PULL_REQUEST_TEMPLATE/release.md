@@ -13,7 +13,7 @@
 
 ## Automatic gates (CI — must be green)
 
-- [ ] 📐 Precision (0.5 ULP gate) — `ci.yml` `golden (gate)` at 0 bad / 0 panic, all 6 modes, every band-edge `(width, scale)` cell; `tests (gate)` green (incl. proptest ULP fuzz)
+- [ ] 📐 Precision (0.5 ULP gate) — `golden-comprehensive.yml` at 0 bad / 0 panic, all 8 modes, every band-edge `(width, scale)` cell; `ci.yml` `tests (gate)` green (incl. proptest ULP fuzz)
 - [ ] cargo-audit — clean
 
 ## Manual checks (verified before merge)
