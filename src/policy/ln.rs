@@ -52,17 +52,65 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // The table-driven Tang kernel eliminates the Series path's wide
         // argument-reduction sqrts and is bit-identical to Series (the
         // correctly-rounded oracle) across every wide tier's full valid
-        // scale range. The wide-tier `ln_wide_series_tang_ab` map (the
-        // N-way width × scale × (G, CAP) sweep, 35 cells, 3-input × 6-mode
-        // validity wall) shows Tang beats Series by 4.5×-57× at EVERY
-        // (N, SCALE) cell across {0, S/4, S/2, 3S/4, S-1} for every wide
-        // tier, with zero validity failures. So Tang owns the whole range
-        // at every tier — narrow-wide AND wide — not just point ranges
-        // snapped to benchmarked cells.
-        // SCALE = 0 is included at every tier: there is no validity wall at
-        // s0, and the map shows Tang beating the Series kernel at s0 as at
-        // every neighbouring scale.
-        // The golden gate covers the s0 band edge at these widths.
+        // scale range. Tang wins or ties EVERY cell of the wide-tier
+        // `ln_wide_series_tang_ab` map, so it owns the whole range at every
+        // tier — narrow-wide AND wide — not point ranges snapped to
+        // benchmarked cells. SCALE = 0 is included at every tier: there is no
+        // validity wall at s0 and Tang wins there as at every neighbouring
+        // scale. The golden gate covers the s0 band edge at these widths.
+        //
+        // ── THE MARGIN, MEASURED (series ÷ best Tang, 2026-09-03) ──
+        //
+        // An earlier version of this comment claimed 4.5×-57× at every cell.
+        // **That figure was an artefact and must not be re-derived from the
+        // old bench.** It came from the operand spread `{0.5, 2.0, 7.5}`,
+        // every member of which short-circuits the kernel it was timing:
+        // `0.5` and `2.0` are exact powers of two, so BOTH kernels take the
+        // `m == 1` arm (`ln_tang::tang_ln_fixed_g`, `exp_generic::ln_fixed`)
+        // and return `k·ln2` from a one-word product; and `7.5 = 2²·1.875`
+        // with `1.875 = 1 + 112/128` sits EXACTLY on Tang table index 112, so
+        // Tang's residual `t` is exactly zero and its artanh loop breaks on
+        // the first iteration while Series still pays its full reduction.
+        // The 57× was that asymmetry, not a kernel result. The same spread
+        // voided the old validity wall, which never once ran the artanh
+        // series. `benches/micro/ln_wide_series_tang_ab.rs` now states the
+        // non-degeneracy contract (`raw` odd and `raw % 5 != 0` for
+        // SCALE ≥ 1; odd and ≥ 257 at SCALE 0) and asserts it per operand.
+        //
+        // Re-raced on `1/3` and `7/3` (full-width repeating decimals, one
+        // either side of 1), the true surface is **1.02×-4.22×**:
+        //
+        //   tier    s0     S/4    S/2    3S/4   S-1
+        //   D76    2.62×  3.44×  3.17×  3.10×  2.49×
+        //   D230   2.94×  4.22×  2.44×  2.03×  2.21×
+        //   D307   2.62×  2.22×  2.16×  1.74×  1.73×
+        //   D462   2.72×  2.70×  1.92×  1.57×  1.43×
+        //   D616   3.23×  2.06×  1.56×  1.46×  1.24×
+        //   D924   2.44×  1.47×  1.53×  1.20×  1.15×
+        //   D1232  2.51×  1.87×  1.31×  1.22×  1.02×  ← a TIE
+        //
+        // The margin falls monotonically along BOTH axes — in scale within
+        // every tier, and in width along the top-scale column (2.49 → 1.02).
+        // Mechanism: Tang's artanh series is **O(w)** terms (`|t| ≤ 1/256`
+        // needs `2j+1 > w/2.408`) while Series' Brent reduction is
+        // **O(√w)** sqrt levels followed by a shorter series, so the gap
+        // closes as the working scale grows.
+        //
+        // At D1232<1231> the two are TIED (1.02×, under the within-cell
+        // replication floor), and that cell is rung-FAITHFUL — `ln_rung`
+        // returns `C::W` when no ladder member clears the budget, so the
+        // bench ran the same width `tang_at_rung` routes. The arms below are
+        // unchanged because a tie warrants no move in either direction, and
+        // Tang still wins outright everywhere else. A future re-tune that
+        // wants to move this boundary needs the D1232 s924 → s1231 segment
+        // bisected first; it is the one unbisected winner change in the grid.
+        //
+        // Caveat for anyone re-reading the raw bench numbers: the
+        // `__bench_internals` Tang exports call `ln_tang` (`Wk = C::W`),
+        // whereas `tang_routed` routes the narrowest `ln_rung`. That
+        // handicaps Tang by up to 2.75× at LOW and MID scales, so those
+        // margins are lower bounds; the top-scale cells are exact (D307<306>
+        // excepted, 1.33×).
         #[cfg(any(feature = "d57", feature = "wide"))]
         (3, 0..=56) => Select::ByAlgorithm(Algorithm::Tang),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -277,12 +325,56 @@ where
 #[inline]
 fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
     // Per-tier `(GUARD, CAP)` tuning for the Tang kernel. The select gates
-    // cover the FULL valid scale range for each tier (see [`select`]); the
-    // `ln_wide_series_tang_ab` map confirmed every (G, CAP) candidate is
-    // bit-identical to Series at every cell (zero validity failures across
-    // 35 cells × 3 inputs × 6 modes), so the choice here is purely a
-    // performance tuning. The Tang win over Series ranges from 4.5× (low
-    // scales) to 57× (max scales) per the same map.
+    // cover the FULL valid scale range for each tier (see [`select`]).
+    //
+    // ── CAP IS A VALIDITY WALL, NOT ONLY A SAFETY NET ──
+    //
+    // `CAP` bounds the artanh iteration index `j` in
+    // `ln_tang::tang_ln_fixed_g`. The loop is *meant* to exit on a zero
+    // contribution long before the cap, but if the cap bites first the series
+    // is truncated and the result is WRONG. The coverage bound is derived in
+    // full on the `M` const in `crate::algos::ln::ln_tang` (M bounds the
+    // residual `t`, which fixes the term count); the usable form is
+    //
+    //     CAP = C  covers working scales  w ≤ (2C + 1) · 2.408
+    //
+    // and the requirement is that `w` at its LARGEST — the tier's max scale
+    // plus GUARD, plus whatever the directed-Ziv escalation adds on top,
+    // itself capped at the rung's `BITS/8` — stays inside that. Per-tier
+    // check (2026-09-03), `j` = the terms actually needed at max scale:
+    //
+    //   tier    CAP   covers w ≤   max w    j needed   margin
+    //   D57     100        482        64        13     ample
+    //   D115    200        966       122        25     ample
+    //   D153    200        966       162        34     ample
+    //   D230+   400       1929       ≤1241     ≤258    ample
+    //
+    // The widest cell is D1232<1231>: `w = 1241`, needing `j ≈ 258`, against
+    // `CAP = 400`. Every shipped tier clears its bound with room.
+    //
+    // This is not hypothetical. The `ln_wide_series_tang_ab` map runs a
+    // `CAP = 200` CANDIDATE at every tier, and at D1232<1231> (`w = 1239`,
+    // past `CAP=200`'s 966) it is caught by the validity wall:
+    // `tang_g8_c200 != series (x_lo, HalfToEven)`. That candidate is not
+    // wired anywhere; the wall rejected it exactly as intended. Adding a tier
+    // or raising a max scale means re-running that arithmetic — a `CAP` that
+    // silently bites produces wrong digits, not slow ones.
+    //
+    // Note the failure only became detectable once the map moved to
+    // non-degenerate operands: under the old `{0.5, 2.0, 7.5}` spread the
+    // artanh loop never ran a single iteration, so no `CAP` could ever bite.
+    //
+    // ── PERFORMANCE ──
+    //
+    // Choice of (G, CAP) *within* the validity bound is performance tuning.
+    // The measured Tang-over-Series margin is **1.02×-4.22×**, LARGEST at low
+    // scales and shrinking to a tie at D1232<1231> — see the surface table on
+    // [`select`]. An earlier version of this comment said "4.5× (low scales)
+    // to 57× (max scales)"; that figure came from operands that
+    // short-circuited the kernel, and its direction was also inverted — the
+    // margin shrinks with scale, it does not grow. The (G, CAP) winner moves
+    // cell to cell with margins mostly ≤ 1.2×, i.e. under the replication
+    // floor, so the values below are not claimed to be optimal — only valid.
     match N {
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => Some(tang_at_rung::<crate::types::widths::wide_trig_d57::Core, SCALE, 8, 100, true, false>(raw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>()),
