@@ -113,14 +113,18 @@ pub(crate) fn cbrt_native<const N: usize, const W: usize>(
     let two_root = root + root;
     let eight_root_cubed = if root == zero { zero } else { two_root * two_root * two_root };
     let residual_nonzero = eight_radicand > eight_root_cubed;
-    let root_is_odd = (root % (one + one)) != zero;
+    // Last decimal digit of the (non-negative) root magnitude `root`.
+    let root_mod_10 = (root % Int::<W>::TEN).as_i128() as u8;
     let bump = match mode {
-        RoundingMode::HalfToEven => halfway_gt || (tie && root_is_odd),
+        RoundingMode::HalfToEven => halfway_gt || (tie && root_mod_10 & 1 == 1),
         RoundingMode::HalfAwayFromZero => halfway_geq,
         RoundingMode::HalfTowardZero => halfway_gt,
         RoundingMode::Trunc => false,
         RoundingMode::Floor => is_negative && residual_nonzero,
         RoundingMode::Ceiling => !is_negative && residual_nonzero,
+        // `root` is the magnitude, so away-from-zero is a bump either sign.
+        RoundingMode::AwayFromZero => residual_nonzero,
+        RoundingMode::ZeroFiveUp => residual_nonzero && matches!(root_mod_10, 0 | 5),
     };
     let root = if bump { root + one } else { root };
     let signed_root = if is_negative { -root } else { root };
@@ -168,19 +172,21 @@ mod tests {
     use crate::support::rounding::RoundingMode;
 
     const SCALE: u32 = 20;
-    const ALL_MODES: [RoundingMode; 6] = [
+    const ALL_MODES: [RoundingMode; 8] = [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
         RoundingMode::HalfTowardZero,
         RoundingMode::Trunc,
         RoundingMode::Floor,
         RoundingMode::Ceiling,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ];
 
     /// Generic `cbrt_native<N, W>` is bit-identical to the proven-correct
     /// generic `cbrt_newton` for each routed `(N, W, SCALE)` cell across a
     /// spread of raw storages (perfect cubes, negatives, near-zero, large)
-    /// and all six rounding modes. `cbrt_newton` is oracle-gated by
+    /// and all eight rounding modes. `cbrt_newton` is oracle-gated by
     /// `ulp_strict_golden`, so matching it certifies the bespoke arm
     /// correctly-rounded.
     fn check_cell<const N: usize, const W: usize>(scale: u32, raws: &[i128])

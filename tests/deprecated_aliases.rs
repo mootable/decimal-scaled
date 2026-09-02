@@ -26,6 +26,8 @@ fn rescale_with_matches_quantize_with_in_every_mode() {
         RoundingMode::Trunc,
         RoundingMode::Floor,
         RoundingMode::Ceiling,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ] {
         assert_eq!(a.rescale_with::<2>(mode), a.quantize_with::<2>(mode));
     }

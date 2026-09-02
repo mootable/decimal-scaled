@@ -6,7 +6,7 @@
 //! bench-branch-compare cells (sqrt/cbrt @ D57/D76/D115/D153/D230/D307).
 //!
 //! Each candidate is asserted bit-identical across the operand spread and
-//! all six rounding modes before timing (correctness gate), then the
+//! all eight rounding modes before timing (correctness gate), then the
 //! harness `black_box`-guards inputs/outputs so nothing const-folds.
 
 use criterion::Criterion;
@@ -23,13 +23,15 @@ mod ab_microbench;
 use ab_microbench::{compare_all, micro_criterion};
 
 const MODE: RoundingMode = RoundingMode::HalfToEven;
-const ALL_MODES: [RoundingMode; 6] = [
+const ALL_MODES: [RoundingMode; 8] = [
     RoundingMode::HalfToEven,
     RoundingMode::HalfAwayFromZero,
     RoundingMode::HalfTowardZero,
     RoundingMode::Trunc,
     RoundingMode::Floor,
     RoundingMode::Ceiling,
+    RoundingMode::AwayFromZero,
+    RoundingMode::ZeroFiveUp,
 ];
 
 /// Build an `Int<N>` from a non-negative magnitude (low two u64 limbs).

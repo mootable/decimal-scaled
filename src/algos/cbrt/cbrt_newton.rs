@@ -161,14 +161,19 @@ where
     let residual_nonzero = cmp_cross(
         &eight_radicand[..eight_radicand_len],
         &eight_root_cubed[..eight_root_cubed_len]) > 0;
-    let root_is_odd = (root[0] & 1) == 1;
+    // Last decimal digit of the root magnitude, which spans `root_len` limbs —
+    // the low limb alone cannot carry it.
+    let root_mod_10 = crate::support::rounding::limbs_mod_10(&root[..root_len]);
     let bump = match mode {
-        RoundingMode::HalfToEven => halfway_gt || (tie && root_is_odd),
+        RoundingMode::HalfToEven => halfway_gt || (tie && root_mod_10 & 1 == 1),
         RoundingMode::HalfAwayFromZero => halfway_geq,
         RoundingMode::HalfTowardZero => halfway_gt,
         RoundingMode::Trunc => false,
         RoundingMode::Floor => is_negative && residual_nonzero,
         RoundingMode::Ceiling => !is_negative && residual_nonzero,
+        // `root` is the magnitude, so away-from-zero is a bump either sign.
+        RoundingMode::AwayFromZero => residual_nonzero,
+        RoundingMode::ZeroFiveUp => residual_nonzero && matches!(root_mod_10, 0 | 5),
     };
     if bump {
         let mut i = 0;

@@ -827,10 +827,12 @@ impl Fixed {
             // |r| is r (already a magnitude); complement = divisor - r.
             let complement = sub_u256(divisor, remainder);
             let remainder_cmp = cmp_u256(remainder, complement);
-            let quotient_is_odd = (quotient[0] & 1) == 1;
+            // `quotient` is a u128-limb magnitude (`U256`), so the last decimal
+            // digit needs both limbs, not just the low one.
+            let q_mod_10 = crate::support::rounding::limbs_u128_mod_10(&quotient);
             let result_is_positive = !self.negative;
             if crate::support::rounding::should_bump(
-                mode, remainder_cmp, quotient_is_odd, result_is_positive)
+                mode, remainder_cmp, q_mod_10, result_is_positive)
             {
                 add_u256(quotient, [1, 0]).0
             } else {

@@ -14,7 +14,7 @@
 //! - D115 (Int<6>): GUARD=8, CAP=200.
 //! - D153 (Int<8>): GUARD=10, CAP=200.
 //!
-//! Tang and Series are asserted bit-identical across the value spread × six
+//! Tang and Series are asserted bit-identical across the value spread × eight
 //! modes before timing (the validity wall). ln's domain is x > 0, so arguments
 //! are x ∈ {0.5, 2.0, 7.5}. Correct rounding over the widened range is gated by
 //! the golden-gate ln cells (the near-grid-line directed-mode case the
@@ -36,13 +36,15 @@ mod ab_microbench;
 use ab_microbench::{compare_all, micro_criterion};
 
 const MODE: RoundingMode = RoundingMode::HalfToEven;
-const ALL_MODES: [RoundingMode; 6] = [
+const ALL_MODES: [RoundingMode; 8] = [
     RoundingMode::HalfToEven,
     RoundingMode::HalfAwayFromZero,
     RoundingMode::HalfTowardZero,
     RoundingMode::Trunc,
     RoundingMode::Floor,
     RoundingMode::Ceiling,
+    RoundingMode::AwayFromZero,
+    RoundingMode::ZeroFiveUp,
 ];
 
 /// Build `digit · 10^pow10` as a wide `Int<N>` magnitude by iterative ×10 on

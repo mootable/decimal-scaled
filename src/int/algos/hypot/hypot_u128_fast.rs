@@ -480,7 +480,9 @@ fn finish<const N: usize>(root: u128, diff_nonzero: bool, halfway_round_up: bool
         | RoundingMode::HalfAwayFromZero
         | RoundingMode::HalfTowardZero => halfway_round_up,
         RoundingMode::Trunc | RoundingMode::Floor => false,
-        RoundingMode::Ceiling => diff_nonzero,
+        // A hypotenuse is non-negative, so up IS away from zero.
+        RoundingMode::Ceiling | RoundingMode::AwayFromZero => diff_nonzero,
+        RoundingMode::ZeroFiveUp => diff_nonzero && matches!(root % 10, 0 | 5),
     };
     // root < 2^128 and the bump is at most +1, so the rounded value is
     // <= 2^128. When root == u128::MAX (= 2^128-1) and bump, the sum is
@@ -535,13 +537,15 @@ mod tests {
     use crate::int::types::Int;
     use crate::support::rounding::RoundingMode;
 
-    const ALL_MODES: [RoundingMode; 6] = [
+    const ALL_MODES: [RoundingMode; 8] = [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
         RoundingMode::HalfTowardZero,
         RoundingMode::Trunc,
         RoundingMode::Floor,
         RoundingMode::Ceiling,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ];
 
     fn mix(state: &mut u64) -> u64 {

@@ -5,7 +5,7 @@ The `decimal-scaled` subjects for the
 filterable full-surface golden gate, and the consolidated integration suite
 (`tests/api/`, `tests/contracts/`, `tests/regressions/`) migrated out of the
 root crate. The crate exists to isolate the heavy full-surface run (88
-band-edge `(width, scale)` cells × every strict function × six rounding modes)
+band-edge `(width, scale)` cells × every strict function × eight rounding modes)
 from the core library's `cargo test`; its features mirror the root crate's as
 passthroughs (default = the root's default set), and the golden gate pins its
 wide tiers (`wide`, `x-wide`, `xx-wide`) via `required-features`.
@@ -36,7 +36,7 @@ them; run them explicitly:
 # default-mode gate (half-to-even, every cell):
 cargo test -p decimal-scale-test --release --features wide,x-wide,xx-wide --test golden golden_default -- --ignored --nocapture
 
-# all six rounding modes (directed rounding shows regressions the default hides):
+# all eight rounding modes (directed rounding shows regressions the default hides):
 cargo test -p decimal-scale-test --release --features wide,x-wide,xx-wide --test golden golden_all_modes -- --ignored --nocapture
 
 # the single-cell end-to-end proof (D38<19>, not ignored):
@@ -137,7 +137,7 @@ cargo test -p decimal-scale-test --release --features wide,x-wide,xx-wide,histor
   `golden-quick-splice` job recombines the stripes in order into the combined
   surface artifact and fails if any stripe went missing.
 - **Per push (advisory)** — `golden-comprehensive` runs the same stripe fleet
-  across **all six rounding modes** (`golden_all_modes`), with its own splice.
+  across **all eight rounding modes** (`golden_all_modes`), with its own splice.
   It is not a required check: a red here means roll the push back or bisect,
   never block the quick-gate merge loop.
 - **Tuning** — the stripe modulus is the single `STRIPE_COUNT` env at the top

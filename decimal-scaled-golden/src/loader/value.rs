@@ -84,7 +84,10 @@ impl GoldenValue {
         }
         let rest: &[u8] = if frac.len() > scale { &frac[scale..] } else { &[] };
         let residual = classify_residual(rest, truncated);
-        let bump = should_bump(self.negative, residual, mode, last_kept_is_odd(&kept));
+        let bump = should_bump(
+            self.negative, residual, mode,
+            last_kept_is_odd(&kept), last_kept_is_0_or_5(&kept),
+        );
         let mag = if bump { string_increment(&kept) } else { kept };
         let mag = mag.trim_start_matches('0');
         let mag = if mag.is_empty() { "0" } else { mag };
@@ -119,18 +122,50 @@ fn last_kept_is_odd(kept: &str) -> bool {
     kept.bytes().last().map_or(false, |b| (b - b'0') % 2 == 1)
 }
 
+/// True if the last digit of the kept magnitude string is 0 or 5 (the
+/// `ZeroFiveUp` pivot — GDA `round-05up`).
+fn last_kept_is_0_or_5(kept: &str) -> bool {
+    matches!(kept.bytes().last(), Some(b'0') | Some(b'5'))
+}
+
 /// Whether to add one unit to the (toward-zero) kept magnitude.
-fn should_bump(negative: bool, residual: Residual, mode: RoundingMode, last_kept_odd: bool) -> bool {
+///
+/// Every arm names every mode — no catch-all. A `_` arm here silently gives a
+/// newly added mode some other mode's answer (`ZeroFiveUp` would have inherited
+/// the nearest modes' `Above => true`), and the grader would then score a wrong
+/// expected value rather than fail to build.
+fn should_bump(
+    negative: bool,
+    residual: Residual,
+    mode: RoundingMode,
+    last_kept_odd: bool,
+    last_kept_0_or_5: bool,
+) -> bool {
     use RoundingMode::*;
     use Residual::*;
     match residual {
+        // Nothing was discarded: the kept digits ARE the value, so no mode
+        // bumps — including the two GDA modes, both of which are conditioned on
+        // a non-zero discarded part.
         Zero => false,
-        Below => matches!((mode, negative), (Ceiling, false) | (Floor, true)),
+        // Something WAS discarded, and it is under the half point.
+        Below => match mode {
+            HalfToEven | HalfAwayFromZero | HalfTowardZero | Trunc => false,
+            Ceiling => !negative,
+            Floor => negative,
+            AwayFromZero => true,
+            ZeroFiveUp => last_kept_0_or_5,
+        },
         Above => match mode {
             Trunc => false,
             Floor => negative,
             Ceiling => !negative,
-            _ => true, // nearest modes round away from the kept value
+            // Nearest modes round away from the kept value.
+            HalfToEven | HalfAwayFromZero | HalfTowardZero => true,
+            AwayFromZero => true,
+            // NOT a nearest mode: a discarded part just under one whole unit
+            // still truncates unless the last kept digit is the pivot.
+            ZeroFiveUp => last_kept_0_or_5,
         },
         Tie => match mode {
             Trunc | HalfTowardZero => false,
@@ -138,6 +173,8 @@ fn should_bump(negative: bool, residual: Residual, mode: RoundingMode, last_kept
             HalfToEven => last_kept_odd,
             Floor => negative,
             Ceiling => !negative,
+            AwayFromZero => true,
+            ZeroFiveUp => last_kept_0_or_5,
         },
     }
 }
@@ -205,6 +242,77 @@ mod tests {
     fn ceiling_exact_no_bump() {
         let v = GoldenValue::parse("12.00").unwrap();
         assert_eq!(v.round_to(1, RoundingMode::Ceiling, false), "120");
+    }
+    #[test]
+    fn away_from_zero_bumps_on_any_discard() {
+        // Below / Above / Tie all discard something, so all three bump — and the
+        // bump grows the MAGNITUDE, so the sign rides along unchanged.
+        let m = RoundingMode::AwayFromZero;
+        assert_eq!(GoldenValue::parse("1.21").unwrap().round_to(1, m, false), "13");
+        assert_eq!(GoldenValue::parse("1.29").unwrap().round_to(1, m, false), "13");
+        assert_eq!(GoldenValue::parse("1.25").unwrap().round_to(1, m, false), "13");
+        assert_eq!(GoldenValue::parse("-1.21").unwrap().round_to(1, m, false), "-13");
+        assert_eq!(GoldenValue::parse("-1.29").unwrap().round_to(1, m, false), "-13");
+        assert_eq!(GoldenValue::parse("-1.25").unwrap().round_to(1, m, false), "-13");
+        // The bump carries.
+        assert_eq!(GoldenValue::parse("1.91").unwrap().round_to(1, m, false), "20");
+        // A residual hidden BELOW the stored digits still counts as discarded.
+        assert_eq!(GoldenValue::parse("1.2").unwrap().round_to(1, m, true), "13");
+        assert_eq!(GoldenValue::parse("-1.2").unwrap().round_to(1, m, true), "-13");
+    }
+    #[test]
+    fn away_from_zero_leaves_an_exact_value_alone() {
+        // Nothing discarded => no bump, either sign.
+        let m = RoundingMode::AwayFromZero;
+        assert_eq!(GoldenValue::parse("1.20").unwrap().round_to(1, m, false), "12");
+        assert_eq!(GoldenValue::parse("-1.20").unwrap().round_to(1, m, false), "-12");
+        assert_eq!(GoldenValue::parse("12.00").unwrap().round_to(1, m, false), "120");
+    }
+    #[test]
+    fn zero_five_up_pivots_on_the_last_kept_digit() {
+        // Last kept 0 or 5 => away from zero; any other digit => truncate.
+        let m = RoundingMode::ZeroFiveUp;
+        assert_eq!(GoldenValue::parse("1.09").unwrap().round_to(1, m, false), "11");
+        assert_eq!(GoldenValue::parse("1.59").unwrap().round_to(1, m, false), "16");
+        assert_eq!(GoldenValue::parse("1.49").unwrap().round_to(1, m, false), "14");
+        assert_eq!(GoldenValue::parse("1.69").unwrap().round_to(1, m, false), "16");
+        // Sign-symmetric: the pivot decides the magnitude, not the direction.
+        assert_eq!(GoldenValue::parse("-1.09").unwrap().round_to(1, m, false), "-11");
+        assert_eq!(GoldenValue::parse("-1.59").unwrap().round_to(1, m, false), "-16");
+        assert_eq!(GoldenValue::parse("-1.49").unwrap().round_to(1, m, false), "-14");
+        assert_eq!(GoldenValue::parse("-1.69").unwrap().round_to(1, m, false), "-16");
+        // A zero kept magnitude pivots too (last kept digit is '0').
+        assert_eq!(GoldenValue::parse("0.09").unwrap().round_to(1, m, false), "1");
+        assert_eq!(GoldenValue::parse("-0.09").unwrap().round_to(1, m, false), "-1");
+    }
+    #[test]
+    fn zero_five_up_ignores_the_size_of_the_discarded_part() {
+        // The property that separates ZeroFiveUp from every other mode: the
+        // discarded part only has to be NON-ZERO. A discard just short of a whole
+        // unit does not bump a non-pivot digit, and the tiniest discard does bump
+        // a pivot digit — the opposite ordering to every nearest/directed mode.
+        let m = RoundingMode::ZeroFiveUp;
+        assert_eq!(GoldenValue::parse("1.49").unwrap().round_to(1, m, false), "14");
+        assert_eq!(GoldenValue::parse("1.51").unwrap().round_to(1, m, false), "16");
+        // Same two inputs under the modes that DO weigh the discarded part.
+        assert_eq!(GoldenValue::parse("1.49").unwrap().round_to(1, RoundingMode::HalfToEven, false), "15");
+        assert_eq!(GoldenValue::parse("1.49").unwrap().round_to(1, RoundingMode::Ceiling, false), "15");
+        assert_eq!(GoldenValue::parse("1.51").unwrap().round_to(1, RoundingMode::HalfToEven, false), "15");
+        // Exact ties are no different: still the pivot's decision alone.
+        assert_eq!(GoldenValue::parse("1.55").unwrap().round_to(1, m, false), "16");
+        assert_eq!(GoldenValue::parse("1.65").unwrap().round_to(1, m, false), "16");
+    }
+    #[test]
+    fn zero_five_up_needs_something_discarded() {
+        // A pivot digit alone is not enough — an exact value never bumps.
+        let m = RoundingMode::ZeroFiveUp;
+        assert_eq!(GoldenValue::parse("1.00").unwrap().round_to(1, m, false), "10");
+        assert_eq!(GoldenValue::parse("1.50").unwrap().round_to(1, m, false), "15");
+        assert_eq!(GoldenValue::parse("-1.50").unwrap().round_to(1, m, false), "-15");
+        // ...but a residual below the stored digits IS a discard.
+        assert_eq!(GoldenValue::parse("1.5").unwrap().round_to(1, m, true), "16");
+        assert_eq!(GoldenValue::parse("-1.5").unwrap().round_to(1, m, true), "-16");
+        assert_eq!(GoldenValue::parse("1.4").unwrap().round_to(1, m, true), "14");
     }
     #[test]
     fn classify_residual_cases() {

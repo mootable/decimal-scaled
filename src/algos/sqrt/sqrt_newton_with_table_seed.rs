@@ -74,7 +74,11 @@ pub(crate) fn sqrt_newton_with_table_seed(raw: Int<3>, mode: RoundingMode) -> In
         | RoundingMode::HalfAwayFromZero
         | RoundingMode::HalfTowardZero => halfway_round_up,
         RoundingMode::Trunc | RoundingMode::Floor => false,
-        RoundingMode::Ceiling => diff_nonzero,
+        // The radicand is non-negative, so up IS away from zero.
+        RoundingMode::Ceiling | RoundingMode::AwayFromZero => diff_nonzero,
+        RoundingMode::ZeroFiveUp => {
+            diff_nonzero && matches!((root % Int::<4>::TEN).as_i128(), 0 | 5)
+        }
     };
     let root = if bump { root + Int::<4>::ONE } else { root };
     root.resize_to::<Int<3>>()

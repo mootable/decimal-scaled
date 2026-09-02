@@ -1860,12 +1860,13 @@ pub mod __bench_internals {
         let abs_divisor = if divisor < zero { zero - divisor } else { divisor };
         let complement = abs_divisor - abs_remainder;
         let remainder_cmp = abs_remainder.cmp(&complement);
-        let quotient_is_odd = quotient.bit(0);
+        // Last decimal digit of |quotient| (a wide `div_rem`, so O(limbs)).
+        let q_mod_10 = quotient.div_rem(W::TEN).1.to_i128().unsigned_abs() as u8;
         let result_positive = (numerator < zero) == (divisor < zero);
         if crate::support::rounding::should_bump(
             crate::support::rounding::RoundingMode::HalfToEven,
             remainder_cmp,
-            quotient_is_odd,
+            q_mod_10,
             result_positive,
         ) {
             if result_positive { quotient + one } else { quotient - one }

@@ -32,13 +32,15 @@
 
 use decimal_scaled::{D307s2, D38s2, Int, RoundingMode};
 
-const ALL_MODES: [RoundingMode; 6] = [
+const ALL_MODES: [RoundingMode; 8] = [
     RoundingMode::HalfToEven,
     RoundingMode::HalfAwayFromZero,
     RoundingMode::HalfTowardZero,
     RoundingMode::Trunc,
     RoundingMode::Floor,
     RoundingMode::Ceiling,
+    RoundingMode::AwayFromZero,
+    RoundingMode::ZeroFiveUp,
 ];
 
 fn d(raw: i128) -> D38s2 {
@@ -156,6 +158,12 @@ fn div_one_third_all_modes() {
             | RoundingMode::HalfAwayFromZero
             | RoundingMode::HalfTowardZero => 33,
             RoundingMode::Ceiling => 34,
+            // 1.00/3.00 = 0.3333… : something IS discarded, so round-up goes
+            // away from zero...
+            RoundingMode::AwayFromZero => 34,
+            // ...while round-05up truncates — the last kept digit is 3, not the
+            // 0-or-5 pivot, and the size of the discarded part is irrelevant.
+            RoundingMode::ZeroFiveUp => 33,
         };
         assert_eq!(got, expected, "div mode {m:?}");
     }

@@ -260,7 +260,7 @@ Two reference integrations live in this workspace:
 
 - **`decimal-scale-test`** — the `decimal-scaled` subjects and the filterable
   full-surface gate (one erased subject over every band-edge `(width, scale)`
-  cell, all six rounding modes).
+  cell, all eight rounding modes).
 - **`golden-competitors`** — third-party adapters (`rust_decimal`, `f64`,
   `bigdecimal`, `dashu-float`, `fastnum`, `decimal-rs`, `g_math`) graded
   side-by-side against the same golden set, each to its own declared precision

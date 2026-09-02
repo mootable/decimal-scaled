@@ -47,6 +47,8 @@ Exactly one of these may be enabled to change the crate-wide default
 | `rounding-trunc` | `Trunc` |
 | `rounding-floor` | `Floor` |
 | `rounding-ceiling` | `Ceiling` |
+| `rounding-away-from-zero` | `AwayFromZero` |
+| `rounding-zero-five-up` | `ZeroFiveUp` |
 
 ## Wide-tier features
 

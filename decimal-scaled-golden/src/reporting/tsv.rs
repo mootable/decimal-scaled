@@ -120,6 +120,8 @@ fn mode_name(m: RoundingMode) -> &'static str {
         RoundingMode::Ceiling => "Ceiling",
         RoundingMode::Floor => "Floor",
         RoundingMode::Trunc => "Trunc",
+        RoundingMode::AwayFromZero => "AwayFromZero",
+        RoundingMode::ZeroFiveUp => "ZeroFiveUp",
     }
 }
 

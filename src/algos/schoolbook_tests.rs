@@ -245,17 +245,19 @@ mod tests {
 
     // -- div_native vs the widen reference (narrow N == 2, the routed band) --
 
-    const ALL_MODES: [RoundingMode; 6] = [
+    const ALL_MODES: [RoundingMode; 8] = [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
         RoundingMode::Floor,
         RoundingMode::Ceiling,
         RoundingMode::Trunc,
         RoundingMode::HalfTowardZero,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ];
 
     /// `div_native` (hardware i128) is bit-identical to `div_widen_scale`
-    /// at `N == 1` (D18) across all six rounding modes, incl. negatives.
+    /// at `N == 1` (D18) across all eight rounding modes, incl. negatives.
     #[test]
     fn div_native_matches_widen_scale_int1_scale6() {
         use crate::algos::div::div_native::div_native;

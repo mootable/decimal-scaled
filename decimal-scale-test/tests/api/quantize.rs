@@ -258,6 +258,8 @@ mod from_quantize {
             RoundingMode::Trunc,
             RoundingMode::Floor,
             RoundingMode::Ceiling,
+            RoundingMode::AwayFromZero,
+            RoundingMode::ZeroFiveUp,
         ] {
             assert_eq!(
                 i128::from(v.quantize_with::<12>(m).to_bits()),
@@ -290,20 +292,27 @@ mod from_rescale_modes {
 
     use decimal_scaled::{RoundingMode, D18, D38};
 
-    const ALL_MODES: [RoundingMode; 6] = [
+    const ALL_MODES: [RoundingMode; 8] = [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
         RoundingMode::HalfTowardZero,
         RoundingMode::Trunc,
         RoundingMode::Floor,
         RoundingMode::Ceiling,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ];
 
     // `1.5050` rescaled 4→2 leaves a residual of exactly HALF (kept `1.50`, rest
     // `50`), so each mode's tie rule decides the last digit — the per-mode contract
-    // these raw expectations pin (kept digits 150, the bump per mode):
-    const TIE_POS: [i64; 6] = [150, 151, 150, 150, 150, 151];
-    const TIE_NEG: [i64; 6] = [-150, -151, -150, -150, -151, -150];
+    // these raw expectations pin (kept digits 150, the bump per mode).
+    //
+    // The two directed GDA modes read the residual, not the tie: `AwayFromZero`
+    // bumps on any discard, and `ZeroFiveUp` bumps because the kept digit is `0`
+    // — one of its two pivot digits. Both step the MAGNITUDE up, so both give
+    // 151 on the positive tie and -151 on the negative one.
+    const TIE_POS: [i64; 8] = [150, 151, 150, 150, 150, 151, 151, 151];
+    const TIE_NEG: [i64; 8] = [-150, -151, -150, -150, -151, -150, -151, -151];
 
     #[test]
     fn d18_quantize_with_all_modes() {

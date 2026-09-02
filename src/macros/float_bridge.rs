@@ -83,6 +83,12 @@ macro_rules! decl_decimal_float_bridge {
                     $crate::support::rounding::RoundingMode::Ceiling => {
                         $crate::support::rounding::ceil_f64(scaled)
                     }
+                    $crate::support::rounding::RoundingMode::AwayFromZero => {
+                        $crate::support::rounding::away_from_zero_f64(scaled)
+                    }
+                    $crate::support::rounding::RoundingMode::ZeroFiveUp => {
+                        $crate::support::rounding::zero_five_up_f64(scaled)
+                    }
                 };
                 Self(<$Storage>::from_f64(rounded))
             }

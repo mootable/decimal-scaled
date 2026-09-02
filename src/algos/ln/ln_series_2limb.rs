@@ -389,7 +389,7 @@ fn log_rational_pow_pin(
     let bump = crate::support::rounding::should_bump(
         mode,
         core::cmp::Ordering::Equal,
-        result_magnitude & 1 == 1,
+        (result_magnitude % 10) as u8,
         !is_negative,
     );
     let bumped_magnitude = (result_magnitude + u128::from(bump)) as i128;
@@ -823,8 +823,13 @@ mod near_tie_pins {
         let base_raw: i128 = 182017066872921546105935121_i128 * 1_000_000_000;
         for mode in [
             RoundingMode::HalfToEven,
+            RoundingMode::HalfAwayFromZero,
+            RoundingMode::HalfTowardZero,
+            RoundingMode::Trunc,
             RoundingMode::Floor,
             RoundingMode::Ceiling,
+            RoundingMode::AwayFromZero,
+            RoundingMode::ZeroFiveUp,
         ] {
             let log_result = log_strict_raw(x_raw, base_raw, 37, mode);
             assert!(log_result.is_some(), "log fractional-base s37 mode={mode:?}");
@@ -847,6 +852,8 @@ mod near_tie_pins {
             RoundingMode::Floor,
             RoundingMode::Ceiling,
             RoundingMode::Trunc,
+            RoundingMode::AwayFromZero,
+            RoundingMode::ZeroFiveUp,
         ] {
             assert_eq!(
                 log_strict_raw(x_storage.as_i128(), base_storage.as_i128(), 19, mode),

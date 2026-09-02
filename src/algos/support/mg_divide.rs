@@ -303,12 +303,12 @@ pub(crate) fn div_pow10_mag_u128(
 
     // Round the magnitude per `mode`.
     if remainder != 0 {
-        let quotient_is_odd = (mag[0] & 1) != 0;
+        // `mag` now holds the quotient magnitude (zero-padded above the
+        // significant limbs, which fold to 0).
+        let q_mod_10 = crate::support::rounding::limbs_u128_mod_10(mag);
         let complement = divisor - remainder;
         let remainder_cmp = remainder.cmp(&complement);
-        if crate::support::rounding::should_bump(
-            mode, remainder_cmp, quotient_is_odd, !is_negative)
-        {
+        if crate::support::rounding::should_bump(mode, remainder_cmp, q_mod_10, !is_negative) {
             let mut carry: u128 = 1;
             for limb in mag.iter_mut() {
                 let (sum, carried) = limb.overflowing_add(carry);
@@ -425,10 +425,8 @@ pub(crate) fn div_pow10_chain_mag_u128(
         } else {
             core::cmp::Ordering::Equal
         };
-        let quotient_is_odd = (mag[0] & 1) != 0;
-        if crate::support::rounding::should_bump(
-            mode, remainder_cmp, quotient_is_odd, !is_negative)
-        {
+        let q_mod_10 = crate::support::rounding::limbs_u128_mod_10(mag);
+        if crate::support::rounding::should_bump(mode, remainder_cmp, q_mod_10, !is_negative) {
             let mut carry: u128 = 1;
             for limb in mag.iter_mut() {
                 let (sum, carried) = limb.overflowing_add(carry);
@@ -525,10 +523,9 @@ fn round_mag_with_mode(
     }
     let complement = divisor - remainder;
     let remainder_cmp = remainder.cmp(&complement);
-    let quotient_is_odd = (quotient & 1) != 0;
-    if crate::support::rounding::should_bump(
-        mode, remainder_cmp, quotient_is_odd, result_is_positive)
-    {
+    // `quotient` is already the unsigned magnitude.
+    let q_mod_10 = (quotient % 10) as u8;
+    if crate::support::rounding::should_bump(mode, remainder_cmp, q_mod_10, result_is_positive) {
         quotient + 1
     } else {
         quotient
@@ -764,7 +761,9 @@ pub(crate) fn sqrt_raw_with(
             | RoundingMode::HalfAwayFromZero
             | RoundingMode::HalfTowardZero => halfway_round_up,
             RoundingMode::Trunc | RoundingMode::Floor => false,
-            RoundingMode::Ceiling => diff_nonzero,
+            RoundingMode::Ceiling | RoundingMode::AwayFromZero => diff_nonzero,
+            // The radicand is non-negative, so away-from-zero is up.
+            RoundingMode::ZeroFiveUp => diff_nonzero && matches!(root % 10, 0 | 5),
         };
         return if bump { root + 1 } else { root };
     }
@@ -786,7 +785,9 @@ pub(crate) fn sqrt_raw_with(
         | RoundingMode::HalfAwayFromZero
         | RoundingMode::HalfTowardZero => halfway_round_up,
         RoundingMode::Trunc | RoundingMode::Floor => false,
-        RoundingMode::Ceiling => diff_nonzero,
+        RoundingMode::Ceiling | RoundingMode::AwayFromZero => diff_nonzero,
+        // The radicand is non-negative, so away-from-zero is up.
+        RoundingMode::ZeroFiveUp => diff_nonzero && matches!(root % 10, 0 | 5),
     };
     if bump { root + 1 } else { root }
 }
@@ -1069,6 +1070,9 @@ pub(crate) fn cbrt_raw_with_signed(
         RoundingMode::Trunc => false,
         RoundingMode::Floor => is_negative && residual_nonzero,
         RoundingMode::Ceiling => !is_negative && residual_nonzero,
+        // `root` is the magnitude, so away-from-zero is a bump either sign.
+        RoundingMode::AwayFromZero => residual_nonzero,
+        RoundingMode::ZeroFiveUp => residual_nonzero && matches!(root % 10, 0 | 5),
     };
     if bump { root + 1 } else { root }
 }
@@ -1793,7 +1797,8 @@ mod tests {
             | RoundingMode::HalfAwayFromZero
             | RoundingMode::HalfTowardZero => halfway_round_up,
             RoundingMode::Trunc | RoundingMode::Floor => false,
-            RoundingMode::Ceiling => diff_nonzero,
+            RoundingMode::Ceiling | RoundingMode::AwayFromZero => diff_nonzero,
+            RoundingMode::ZeroFiveUp => diff_nonzero && matches!(root % 10, 0 | 5),
         };
         if bump { root + 1 } else { root }
     }
@@ -1815,7 +1820,7 @@ mod tests {
         }
     }
 
-    fn all_modes() -> [crate::support::rounding::RoundingMode; 6] {
+    fn all_modes() -> [crate::support::rounding::RoundingMode; 8] {
         use crate::support::rounding::RoundingMode::*;
         [
             HalfToEven,
@@ -1824,6 +1829,8 @@ mod tests {
             Trunc,
             Floor,
             Ceiling,
+            AwayFromZero,
+            ZeroFiveUp,
         ]
     }
 
@@ -1966,12 +1973,13 @@ mod tests {
         let abs_remainder = if remainder < zero { -remainder } else { remainder };
         let complement = divisor - abs_remainder;
         let remainder_cmp = abs_remainder.cmp(&complement);
-        let quotient_is_odd = quotient.bit(0);
+        let ten = Int::from_u128(10u128);
+        let q_mod_10 = (quotient % ten).as_i128().unsigned_abs() as u8;
         let result_is_positive = numerator >= zero;
         let bump = crate::support::rounding::should_bump(
             crate::support::rounding::RoundingMode::HalfToEven,
             remainder_cmp,
-            quotient_is_odd,
+            q_mod_10,
             result_is_positive,
         );
         if bump {
@@ -2013,10 +2021,11 @@ mod tests {
         let abs_remainder = if remainder < zero { -remainder } else { remainder };
         let complement = divisor - abs_remainder;
         let remainder_cmp = abs_remainder.cmp(&complement);
-        let quotient_is_odd = quotient.bit(0);
+        let ten = Int::from_u128(10u128);
+        let q_mod_10 = (quotient % ten).as_i128().unsigned_abs() as u8;
         let result_is_positive = numerator >= zero;
         let bump = crate::support::rounding::should_bump(
-            mode, remainder_cmp, quotient_is_odd, result_is_positive);
+            mode, remainder_cmp, q_mod_10, result_is_positive);
         if bump {
             if result_is_positive { quotient + one } else { quotient - one }
         } else {
@@ -2136,12 +2145,13 @@ mod tests {
                         if remainder < zero { -remainder } else { remainder };
                     let complement = divisor - abs_remainder;
                     let remainder_cmp = abs_remainder.cmp(&complement);
-                    let quotient_is_odd = quotient.bit(0);
+                    let ten = Int::from_u128(10u128);
+                    let q_mod_10 = (quotient % ten).as_i128().unsigned_abs() as u8;
                     let result_is_positive = numerator >= zero;
                     let bump = crate::support::rounding::should_bump(
                         crate::support::rounding::RoundingMode::HalfToEven,
                         remainder_cmp,
-                        quotient_is_odd,
+                        q_mod_10,
                         result_is_positive,
                     );
                     if bump {
@@ -2225,10 +2235,11 @@ mod tests {
         let abs_remainder = if remainder < zero { -remainder } else { remainder };
         let complement = divisor - abs_remainder;
         let remainder_cmp = abs_remainder.cmp(&complement);
-        let quotient_is_odd = quotient.bit(0);
+        let ten = Int::from_u128(10u128);
+        let q_mod_10 = (quotient % ten).as_i128().unsigned_abs() as u8;
         let result_is_positive = numerator >= zero;
         let bump = crate::support::rounding::should_bump(
-            mode, remainder_cmp, quotient_is_odd, result_is_positive);
+            mode, remainder_cmp, q_mod_10, result_is_positive);
         if bump {
             if result_is_positive { quotient + one } else { quotient - one }
         } else {
@@ -2253,10 +2264,11 @@ mod tests {
         let abs_remainder = if remainder < zero { -remainder } else { remainder };
         let complement = divisor - abs_remainder;
         let remainder_cmp = abs_remainder.cmp(&complement);
-        let quotient_is_odd = quotient.bit(0);
+        let ten = Int::from_u128(10u128);
+        let q_mod_10 = (quotient % ten).as_i128().unsigned_abs() as u8;
         let result_is_positive = numerator >= zero;
         let bump = crate::support::rounding::should_bump(
-            mode, remainder_cmp, quotient_is_odd, result_is_positive);
+            mode, remainder_cmp, q_mod_10, result_is_positive);
         if bump {
             if result_is_positive { quotient + one } else { quotient - one }
         } else {
@@ -2497,12 +2509,13 @@ mod tests {
                                 if remainder < zero { -remainder } else { remainder };
                             let complement = divisor - abs_remainder;
                             let remainder_cmp = abs_remainder.cmp(&complement);
-                            let quotient_is_odd = quotient.bit(0);
+                            let ten = Int::from_u128(10u128);
+                            let q_mod_10 = (quotient % ten).as_i128().unsigned_abs() as u8;
                             let result_is_positive = numerator >= zero;
                             if crate::support::rounding::should_bump(
                                 mode,
                                 remainder_cmp,
-                                quotient_is_odd,
+                                q_mod_10,
                                 result_is_positive,
                             ) {
                                 if result_is_positive { quotient + one } else { quotient - one }

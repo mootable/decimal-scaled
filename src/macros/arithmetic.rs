@@ -72,7 +72,7 @@
 /// at the same `(n, m, mode)`. Proof: both compute
 /// `n.signum() * (|n| / m_mag)` for the truncated quotient (Rust signed
 /// `/` truncates toward zero, identical to `(-|n|/m_mag) * sign(n)`
-/// when `m > 0`), and both feed the same `(cmp_r, q_is_odd,
+/// when `m > 0`), and both feed the same `(remainder_cmp, q_mod_10,
 /// result_positive)` triple to `should_bump`.
 #[inline(always)]
 pub(crate) fn i128_divrem_by_u64_with_mode(
@@ -123,12 +123,14 @@ pub(crate) fn i128_divrem_by_u64_with_mode(
     let abs_divisor = m_mag as u128;
     let complement = abs_divisor - abs_remainder;
     let remainder_cmp = abs_remainder.cmp(&complement);
-    let quotient_is_odd = (quotient_mag & 1) != 0;
+    // `quotient_mag` is already the unsigned magnitude, so `% 10` is the
+    // last decimal digit directly.
+    let q_mod_10 = (quotient_mag % 10) as u8;
     let result_positive = !numerator_is_negative;
     let bump = crate::support::rounding::should_bump(
         mode,
         remainder_cmp,
-        quotient_is_odd,
+        q_mod_10,
         result_positive
     );
     let bumped_mag = if bump { quotient_mag + 1 } else { quotient_mag };
@@ -162,12 +164,15 @@ macro_rules! round_with_mode_wide {
             let abs_divisor = if divisor < zero { -divisor } else { divisor };
             let complement = abs_divisor - abs_remainder;
             let remainder_cmp = abs_remainder.cmp(&complement);
-            let quotient_is_odd = {
-                let two = <$W>::from_i128(2);
-                (quotient % two) != zero
+            // Last decimal digit of |quotient|. A wide `%` is a full divide,
+            // so this is O(limbs) — see `i128_divrem_by_u64_with_mode` for
+            // the narrow path that gets it for free.
+            let q_mod_10 = {
+                let ten = <$W>::from_i128(10);
+                (quotient % ten).as_i128().unsigned_abs() as u8
             };
             let result_positive = (numerator < zero) == (divisor < zero);
-            if $crate::support::rounding::should_bump(mode, remainder_cmp, quotient_is_odd, result_positive) {
+            if $crate::support::rounding::should_bump(mode, remainder_cmp, q_mod_10, result_positive) {
                 if result_positive { quotient + one } else { quotient - one }
             } else {
                 quotient

@@ -21,7 +21,7 @@
 //!
 //! IMPORTANT: this is an OPTIMALITY A/B over a VALID region. Tang and Series
 //! are bit-identical inside a band (both correctly-rounded), so the harness
-//! asserts `tang == series` across the operand spread and all six modes before
+//! asserts `tang == series` across the operand spread and all eight modes before
 //! timing. The JUST-OUT-OF-BAND probe cells exercise Tang at a SCALE the policy
 //! does NOT route to it — Tang must stay numerically correct there for the A/B
 //! to be meaningful; if a probe asserts unequal, that scale is outside Tang's
@@ -44,13 +44,15 @@ mod ab_microbench;
 use ab_microbench::{compare_all, micro_criterion};
 
 const MODE: RoundingMode = RoundingMode::HalfToEven;
-const ALL_MODES: [RoundingMode; 6] = [
+const ALL_MODES: [RoundingMode; 8] = [
     RoundingMode::HalfToEven,
     RoundingMode::HalfAwayFromZero,
     RoundingMode::HalfTowardZero,
     RoundingMode::Trunc,
     RoundingMode::Floor,
     RoundingMode::Ceiling,
+    RoundingMode::AwayFromZero,
+    RoundingMode::ZeroFiveUp,
 ];
 
 /// Build an `Int<N>` from a non-negative magnitude (low two u64 limbs).
