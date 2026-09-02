@@ -993,11 +993,18 @@ required-features = ["wide", "bench-alt"]
 # root_kernel_ab: dispatch-seam A/B for the root policies -- D38 hypot /
 # sqrt (256-bit mg_divide vs the slice path) and D57<20> cbrt (f64-seeded
 # Int<6> Newton vs the int-icbrt table-seed arm vs the generic slice).
+# Its `wide_root_bench!` sweeps reach D462-D1232, whose work widths go up to
+# 192 limbs (D1232 cbrt: N=64, W=3N). The kernels size their limb scratch from
+# the build-max `max_n_limbs(mult) = mult*MAX_WORK_N + ceil(MAX_WORK_N/2)`, and
+# MAX_WORK_N is only 16 in a wide-only build -- giving a 40-limb sqrt scratch
+# where D924 needs 50, so `isqrt_newton` index-panics and every group after it
+# (D924, D1232 and the whole cbrt tail) never runs. x-wide + xx-wide are what
+# raise MAX_WORK_N to 64; they are load-bearing here, not decoration.
 [[bench]]
 name = "root_kernel_ab"
 path = "benches/micro/root_kernel_ab.rs"
 harness = false
-required-features = ["wide", "bench-alt"]
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
 # The wide-tier Tang/Series benchmark example uses the wide decimal types
 # (D307..D1232), which only exist under the wide feature umbrellas. Gate it so a
