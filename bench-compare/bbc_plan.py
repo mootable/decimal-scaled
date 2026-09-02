@@ -24,6 +24,13 @@ Two independent needs, one shared consistency problem:
 2. **Width selection is a feedback loop.** An agent working D57 should not wait
    on a 60-cell sweep. Selecting widths compiles and runs only those cells.
 
+3. **A cross-cell ratio needs its cells on one machine.** Each bench job is its
+   own runner VM, so branch-vs-prod WITHIN a cell cancels machine speed, but a
+   ratio BETWEEN cells does not: on identical code that null distribution runs
+   p50 1.11x, p90 1.60x, p99 2.2x, max 6.8x. Width and scale monotonicity are
+   read entirely across cells, so `--group` can put a whole scale grid (or a
+   whole width selection) in ONE job and make those readings valid.
+
 Both need the same guard: a width can only be benched if the feature set can
 actually BUILD it. `compare_d924.rs` names `decimal_scaled::D924`, which does
 not exist in a `wide`-only build. Catching that here — in seconds, with a
@@ -77,6 +84,33 @@ BASE_FEATURES = ("std", "strict")
 # The tier set the workflow has always built, and the one whose numbers are
 # publishable as the tracked full-surface medians.
 DEFAULT_TIERS = ("wide", "x-wide", "xx-wide")
+
+# How the selected cells are partitioned into jobs. This is a MEASUREMENT
+# choice, not a scheduling one.
+#
+# Every bench job is its own GitHub-hosted runner VM. Within one job branch and
+# prod are measured on the same VM, so the branch/prod ratio cancels machine
+# speed and that column is sound however the cells are partitioned. But a ratio
+# taken BETWEEN two cells — D18<9> vs D18<13>, D462 vs D924 — compares two
+# different VMs, and on identical code that null distribution runs p50 1.11x,
+# p90 1.60x, p99 2.2x, max 6.8x. Any cross-cell reading needs its cells in ONE
+# job:
+#
+#   cell   one job per (width, scale). The default and the full-sweep shape:
+#          maximum fan-out, wall time = the slowest single cell. Cross-cell
+#          comparison is NOT valid in this mode.
+#   width  one job per width, running that width's whole scale grid in
+#          sequence. Makes CROSS-SCALE ratios at a fixed width same-machine.
+#   all    one job for everything selected. Also makes CROSS-WIDTH ratios
+#          same-machine. Serialises every cell, so keep the width selection
+#          small.
+GROUPS = ("cell", "width", "all")
+
+# Per-cell wall-clock budget for a grouped job. A cell that fans out on its own
+# gets the historical 20 min; a grouped job gets this much per cell it carries,
+# capped below the hosted-runner ceiling.
+GROUPED_MINUTES_PER_CELL = 25
+GROUPED_TIMEOUT_CAP = 340
 
 _WIDTH_BENCH = re.compile(
     r"""width_bench!\(\s*"D(?P<width>\d+)"\s*,[^,]+,[^,]+,\s*\[(?P<scales>[^\]]*)\]""",
@@ -201,12 +235,61 @@ def enablers(features: dict[str, list[str]], gate: str) -> list[str]:
     return sorted(cands, key=lambda f: (len(closure(features, [f])), f))
 
 
+def build_include(
+    group: str, selected: list[int], scale_sets: dict[int, list[int]]
+) -> list[dict[str, object]]:
+    """Partition the selected cells into matrix entries, one entry per job.
+
+    Every entry carries the same three fields whatever the mode — `widths` and
+    `scales` as csv (`scales: all` meaning that width's whole set) plus a `name`
+    used for the job title and the artifact — so the bench step is ONE loop and
+    does not branch on the mode.
+
+    In `cell` mode the names come out as `D18-s0`, so the artifacts keep the
+    exact names they have always had.
+    """
+    if group == "cell":
+        return [
+            {"name": f"D{w}-s{s}", "widths": f"D{w}", "scales": str(s), "cells": 1}
+            for w in selected
+            for s in scale_sets[w]
+        ]
+    if group == "width":
+        return [
+            {
+                "name": f"D{w}-all",
+                "widths": f"D{w}",
+                "scales": "all",
+                "cells": len(scale_sets[w]),
+            }
+            for w in selected
+        ]
+    return [
+        {
+            "name": "all",
+            "widths": ",".join(f"D{w}" for w in selected),
+            "scales": "all",
+            "cells": sum(len(scale_sets[w]) for w in selected),
+        }
+    ]
+
+
 def resolve(
     raw_features: str,
     raw_widths: str,
     benches_dir: Path,
     manifest: Path,
+    group: str = "cell",
 ) -> dict[str, object]:
+    group = ("".join(group.split()) or "cell").lower()
+    if group not in GROUPS:
+        raise PlanError(
+            f"unknown grouping `{group}`. Use one of: {', '.join(GROUPS)} "
+            f"(`cell` = one job per cell, the default; `width` = one job per "
+            f"width so cross-SCALE ratios are same-machine; `all` = one job for "
+            f"everything selected, so cross-WIDTH ratios are too)."
+        )
+
     features = parse_features(manifest)
     scale_sets = parse_widths(benches_dir)
 
@@ -264,23 +347,41 @@ def resolve(
             raise PlanError("no widths selected")
         selected.sort()
 
-    include = [{"width": f"D{w}", "scale": s} for w in selected for s in scale_sets[w]]
+    include = build_include(group, selected, scale_sets)
     all_features = list(BASE_FEATURES) + tiers
 
-    # The published medians must describe the FULL default surface: a partial or
-    # reduced-feature sweep is a different measurement wearing the same filename.
-    # Keyed on the resolved CLOSURE, not the typed string, so `xx-wide` alone —
-    # which builds byte-identically to the default — still counts as default.
-    is_default = active == closure(features, list(DEFAULT_TIERS)) and selected == known
+    # A grouped job runs its cells in sequence, so it needs a budget per cell
+    # rather than the per-cell fan-out's flat 20 minutes.
+    max_cells = max(int(e["cells"]) for e in include)
+    timeout = (
+        20
+        if max_cells == 1
+        else min(GROUPED_TIMEOUT_CAP, GROUPED_MINUTES_PER_CELL * max_cells)
+    )
+
+    # The published medians must describe the FULL default surface, measured the
+    # way that surface has always been measured. A partial sweep, a reduced
+    # feature set, or a different cell-to-runner partition is a different
+    # measurement wearing the same filename. The feature test keys on the
+    # resolved CLOSURE, not the typed string, so `xx-wide` alone — which builds
+    # byte-identically to the default — still counts as default.
+    is_default = (
+        active == closure(features, list(DEFAULT_TIERS))
+        and selected == known
+        and group == "cell"
+    )
 
     return {
         "tiers": tiers,
+        "group": group,
         "features_csv": ",".join(all_features),
         "features_toml": ", ".join(f'"{f}"' for f in all_features),
         "widths_csv": ",".join(f"D{w}" for w in selected),
         "bench_args": " ".join(f"--bench compare_d{w}" for w in selected),
         "matrix": json.dumps({"include": include}, separators=(",", ":")),
-        "cell_count": str(len(include)),
+        "cell_count": str(sum(int(e["cells"]) for e in include)),
+        "job_count": str(len(include)),
+        "bench_timeout": str(timeout),
         "is_default": "true" if is_default else "false",
     }
 
@@ -288,8 +389,25 @@ def resolve(
 # ---------------------------------------------------------------- reporting
 
 
+GROUP_MEANING = {
+    "cell": (
+        "one job per cell. Branch-vs-prod within a cell is valid; a ratio "
+        "**between** cells is not — those cells ran on different runner VMs."
+    ),
+    "width": (
+        "one job per width, whole scale grid in sequence. Cross-SCALE ratios "
+        "at a fixed width are same-machine and therefore valid."
+    ),
+    "all": (
+        "one job for everything selected. Cross-scale AND cross-width ratios "
+        "are same-machine."
+    ),
+}
+
+
 def render_summary(plan: dict[str, object]) -> str:
     default = plan["is_default"] == "true"
+    group = str(plan["group"])
     lines = [
         "### bench-branch-compare — run plan",
         "",
@@ -298,7 +416,9 @@ def render_summary(plan: dict[str, object]) -> str:
         f"| tier features | `{', '.join(plan['tiers']) or 'none (narrow-only)'}` |",
         f"| full feature set | `{plan['features_csv']}` (both branch AND prod) |",
         f"| widths | `{plan['widths_csv']}` |",
-        f"| cells | {plan['cell_count']} |",
+        f"| grouping | `{group}` — {GROUP_MEANING[group]} |",
+        f"| cells / jobs | {plan['cell_count']} cells in {plan['job_count']} job(s) |",
+        f"| bench job timeout | {plan['bench_timeout']} min |",
         f"| publishes medians | {'yes' if default else '**no — artifact only**'} |",
         "",
     ]
@@ -328,6 +448,11 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--features", default="", help="tier features, csv; `none` = narrow-only")
     ap.add_argument("--widths", default="all", help="widths, csv (e.g. D57) or `all`")
+    ap.add_argument(
+        "--group",
+        default="cell",
+        help="cell | width | all — how cells are partitioned into runner jobs",
+    )
     ap.add_argument("--benches-dir", default=str(HERE / "benches"))
     ap.add_argument("--manifest", default=str(ROOT / "Cargo.toml"))
     ap.add_argument("--summary", help="write the markdown run-plan block here")
@@ -339,6 +464,7 @@ def main() -> int:
             args.widths,
             Path(args.benches_dir),
             Path(args.manifest),
+            args.group,
         )
     except PlanError as exc:
         # `::error::` renders as an annotation on the run; the plain copy keeps
@@ -363,7 +489,9 @@ def main() -> int:
     print(f"tier features : {', '.join(plan['tiers']) or 'none (narrow-only)'}")
     print(f"feature set   : {plan['features_csv']}")
     print(f"widths        : {plan['widths_csv']}")
-    print(f"cells         : {plan['cell_count']}")
+    print(f"grouping      : {plan['group']}")
+    print(f"cells / jobs  : {plan['cell_count']} / {plan['job_count']}")
+    print(f"bench timeout : {plan['bench_timeout']} min")
     print(f"bench args    : {plan['bench_args']}")
     print(f"is_default    : {plan['is_default']}")
     return 0

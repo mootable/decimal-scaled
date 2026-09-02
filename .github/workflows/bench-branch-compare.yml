@@ -58,6 +58,27 @@ name: "\U0001FA83 bench-branch-compare (branch vs latest tag)"
 # The concurrency group is deliberately per-ref, so two dispatches on one ref
 # serialise instead of competing for runners — an A/B whose halves ran under
 # different machine load would not be an A/B.
+#
+# CROSS-CELL READINGS AND THE `group` INPUT — every bench job is its own
+# GitHub-hosted runner VM. Branch and prod for a cell are always measured in the
+# SAME job, so the branch/prod ratio cancels machine speed: that column is sound
+# in every mode, and bbc remains a correct branch-vs-prod instrument. A ratio
+# taken BETWEEN cells is a different quantity. Under the default per-cell
+# fan-out those two numbers came off two different VMs, and the null
+# distribution on IDENTICAL code is p50 1.11x, p90 1.60x, p99 2.2x, max 6.8x —
+# so width monotonicity (D18 vs D38) and scale monotonicity (D18<9> vs D18<13>),
+# which are read entirely across cells, are not measurable that way.
+#
+# `group` chooses how cells map to jobs:
+#   cell   (default) one job per cell. Maximum fan-out, wall time = the slowest
+#          single cell. This is the full-sweep shape and the `main` push path.
+#   width  one job per width, running that width's whole scale grid in sequence
+#          — cross-SCALE ratios at a fixed width become same-machine.
+#   all    one job for everything selected — cross-WIDTH ratios too. Serialises
+#          every cell, so pair it with a small `widths` selection.
+#
+# Only `group: cell` at the default features over every width publishes; a
+# grouped run is by construction a different measurement and stays artifact-only.
 
 on:
   # Push to `main` runs the branch-vs-latest-tag bench and publishes its timing medians
@@ -86,6 +107,12 @@ on:
         required: false
         type: string
         default: "all"
+      group:
+        description: "How cells map to runner jobs. `cell` (default) = one job per cell, max fan-out, cross-cell ratios INVALID. `width` = one job per width, so cross-SCALE ratios are same-machine. `all` = one job for everything selected, so cross-WIDTH ratios are too."
+        required: false
+        type: choice
+        options: ["cell", "width", "all"]
+        default: "cell"
 
 concurrency:
   group: bench-branch-compare-${{ github.ref }}
@@ -117,6 +144,9 @@ jobs:
       widths_csv: ${{ steps.plan.outputs.widths_csv }}
       bench_args: ${{ steps.plan.outputs.bench_args }}
       cell_count: ${{ steps.plan.outputs.cell_count }}
+      job_count: ${{ steps.plan.outputs.job_count }}
+      group: ${{ steps.plan.outputs.group }}
+      bench_timeout: ${{ steps.plan.outputs.bench_timeout }}
       is_default: ${{ steps.plan.outputs.is_default }}
     steps:
       - name: Checkout (${{ inputs.ref || github.ref_name }})
@@ -134,12 +164,14 @@ jobs:
           # ever sees an arbitrary string.
           BBC_FEATURES: ${{ inputs.features }}
           BBC_WIDTHS: ${{ inputs.widths }}
+          BBC_GROUP: ${{ inputs.group }}
           PYTHONIOENCODING: utf-8
         run: |
           set -euo pipefail
           python3 bbc_plan.py \
             --features "${BBC_FEATURES:-}" \
             --widths "${BBC_WIDTHS:-all}" \
+            --group "${BBC_GROUP:-cell}" \
             --summary plan_summary.md
           cat plan_summary.md >> "$GITHUB_STEP_SUMMARY"
 
@@ -260,21 +292,38 @@ jobs:
           retention-days: 7
 
   # ------------------------------------------------------------------
-  # bench: one job per (width, scale) cell. Downloads the prebuilt exes and
-  # runs ONLY that cell by invoking the matching exe with a `-- s<scale>`
-  # criterion name-filter. No toolchain, no recompile.
+  # bench: one job per matrix entry. Downloads the prebuilt exes and runs the
+  # entry's cells by invoking the matching exe with a `_s<scale>/` criterion
+  # name-filter. No toolchain, no recompile.
+  #
+  # An entry carries `widths` + `scales` (csv, or `scales: all`), so ONE loop
+  # serves every grouping: in the default `cell` mode an entry is a single
+  # (width, scale) pair and the job is exactly what it always was; in `width`
+  # mode it is one width's whole scale grid; in `all` mode it is everything
+  # selected.
+  #
+  # WHY GROUPING IS A MEASUREMENT CONTROL, not scheduling: each job is its own
+  # runner VM. Branch and prod for a given cell are always measured in the SAME
+  # job, so the branch/prod ratio cancels machine speed and is valid in every
+  # mode. A ratio taken BETWEEN cells is a different matter — in `cell` mode
+  # those two numbers came off two different VMs, and the null distribution on
+  # identical code is p50 1.11x, p90 1.60x, p99 2.2x, max 6.8x. Width and scale
+  # monotonicity are read entirely across cells, so they need `group: width` (a
+  # scale grid on one machine) or `group: all` (widths too).
   bench:
-    name: "\U0001FA83 ${{ matrix.width }} s${{ matrix.scale }}"
+    name: "\U0001FA83 ${{ matrix.name }}"
     needs: [plan, build]
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # A grouped job runs its cells in sequence, so `plan` scales the budget by
+    # the cells the largest entry carries (the per-cell fan-out keeps its 20).
+    timeout-minutes: ${{ fromJSON(needs.plan.outputs.bench_timeout) }}
     strategy:
       fail-fast: false
-      # The (width, scale) cells come from `plan`, which reads them off the
-      # `width_bench!` invocation in each `benches/compare_d*.rs` and keeps only
-      # the selected widths. Scales differ per width, so it stays an `include:`
-      # list rather than a cross-product; per #1 the set is
-      # {0, S/4, S/2, 3S/4, S-1}, S = the tier's max SCALE.
+      # The cells come from `plan`, which reads them off the `width_bench!`
+      # invocation in each `benches/compare_d*.rs` and keeps only the selected
+      # widths. Scales differ per width, so it stays an `include:` list rather
+      # than a cross-product; per #1 the set is {0, S/4, S/2, 3S/4, S-1},
+      # S = the tier's max SCALE.
       #
       # This replaced a hand-written 60-line copy of the same table, which was a
       # standing drift risk: a changed scale set in a bench file did not update
@@ -291,30 +340,53 @@ jobs:
           name: bbc-compiled
           path: bbc-compiled
 
-      - name: Run cell ${{ matrix.width }} s${{ matrix.scale }}
+      - name: Run ${{ matrix.name }}
+        env:
+          # csv from `plan`. `SCALES=all` means this width's whole grid, which
+          # is the same thing as running the exe with no name-filter at all.
+          BBC_ENTRY_WIDTHS: ${{ matrix.widths }}
+          BBC_ENTRY_SCALES: ${{ matrix.scales }}
         run: |
           set -euo pipefail
-          WIDTH_LC=$(echo "${{ matrix.width }}" | tr '[:upper:]' '[:lower:]')
-          # Resolve the hashed exe name by globbing: compare_<width_lc>-<hash>.
-          EXE=$(ls bbc-compiled/deps/compare_${WIDTH_LC}-* | grep -v '\.d$' | head -1)
-          if [ -z "$EXE" ]; then echo "no exe for compare_${WIDTH_LC}"; exit 1; fi
-          chmod +x "$EXE"
-          # Each benched id is `<op>_D###_s<scale>/<side>`. Filtering on the
-          # `_s<scale>/` substring (with the trailing group/function separator)
-          # selects EXACTLY this scale's groups and no other: e.g. `_s30/` does
-          # NOT match `_s306/` because the `/` lands right after the scale.
-          # (Verified locally on D307, whose set contains both 30 and 306.)
-          FILTER="_s${{ matrix.scale }}/"
-          echo "running: $EXE --bench $FILTER --"
-          "$EXE" --bench "$FILTER" --
+          # Everything this job runs happens HERE, in one shell on one runner —
+          # that co-location is the whole point of the grouped modes.
+          for W in $(echo "$BBC_ENTRY_WIDTHS" | tr ',' ' '); do
+            WIDTH_LC=$(echo "$W" | tr '[:upper:]' '[:lower:]')
+            # Resolve the hashed exe name by globbing: compare_<width_lc>-<hash>.
+            # Written to a file first: `ls | head` can SIGPIPE `ls` once head has
+            # its line, and `pipefail` would then abort the job.
+            ls -1 bbc-compiled/deps/compare_${WIDTH_LC}-* > /tmp/bbc_exes.txt
+            EXE=$(grep -v '\.d$' /tmp/bbc_exes.txt | head -1)
+            if [ -z "$EXE" ]; then echo "no exe for compare_${WIDTH_LC}"; exit 1; fi
+            chmod +x "$EXE"
+            if [ "$BBC_ENTRY_SCALES" = "all" ]; then
+              # No filter: criterion runs every group in this width's target,
+              # i.e. the tier's whole scale set, back to back on this machine.
+              echo "running: $EXE --bench   (all scales for $W)"
+              "$EXE" --bench
+            else
+              for S in $(echo "$BBC_ENTRY_SCALES" | tr ',' ' '); do
+                # Each benched id is `<op>_D###_s<scale>/<side>`. Filtering on the
+                # `_s<scale>/` substring (with the trailing group/function
+                # separator) selects EXACTLY this scale's groups and no other:
+                # e.g. `_s30/` does NOT match `_s306/` because the `/` lands right
+                # after the scale. (Verified locally on D307, which has both.)
+                FILTER="_s${S}/"
+                echo "running: $EXE --bench $FILTER --"
+                "$EXE" --bench "$FILTER" --
+              done
+            fi
+          done
           echo "--- produced groups ---"
           ls -1 target/criterion 2>/dev/null || true
 
-      - name: Upload cell criterion subtree
+      - name: Upload criterion subtree
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: bbc-${{ matrix.width }}-s${{ matrix.scale }}
+          # `plan` names a `cell`-mode entry `D18-s0`, so the default run's
+          # artifacts keep the exact names they have always had.
+          name: bbc-${{ matrix.name }}
           path: target/criterion/
           if-no-files-found: warn
           retention-days: 7
@@ -363,9 +435,12 @@ jobs:
           set -euo pipefail
           mkdir -p bench-compare/target/criterion
           shopt -s nullglob
-          # Each cell artifact is the cell's `target/criterion` subtree directly.
-          for d in bbc-cells/bbc-*-s*/; do
-            # Skip the compiled-exe artifact if it matched the glob.
+          # Each bench artifact is that job's `target/criterion` subtree directly.
+          # The glob is `bbc-*` rather than `bbc-*-s*` because a grouped job is
+          # named `bbc-D57-all` / `bbc-all`, with no `-s<scale>` segment; the
+          # explicit skip below is what keeps the compiled-exe blob out.
+          for d in bbc-cells/bbc-*/; do
+            # Skip the compiled-exe artifact, which matches this glob.
             [ -d "$d" ] || continue
             case "$d" in *bbc-compiled*) continue;; esac
             echo "merging $d"
@@ -390,6 +465,8 @@ jobs:
           RUN_FEATURES: ${{ needs.plan.outputs.features_csv }}
           RUN_WIDTHS: ${{ needs.plan.outputs.widths_csv }}
           RUN_CELLS: ${{ needs.plan.outputs.cell_count }}
+          RUN_JOBS: ${{ needs.plan.outputs.job_count }}
+          RUN_GROUP: ${{ needs.plan.outputs.group }}
           RUN_IS_DEFAULT: ${{ needs.plan.outputs.is_default }}
           RUN_SHA: ${{ github.sha }}
         run: |
@@ -401,13 +478,21 @@ jobs:
           # compares the `prod_ns` column of two artifacts, and the feature set
           # is the whole independent variable — it must not be something the
           # reader has to reconstruct from the run's dispatch inputs later.
+          if [ "$RUN_GROUP" = "cell" ]; then
+            CROSS_CELL="no - every cell ran on its own runner VM"
+          else
+            CROSS_CELL="yes, within a job - ${RUN_GROUP}-grouped"
+          fi
           cat > aggregate/bbc_run_config.env <<EOF
           BBC_REF=${BENCH_REF}
           BBC_SHA=${RUN_SHA}
           BBC_PROD_VERSION=${PROD_VERSION}
           BBC_FEATURES=${RUN_FEATURES}
           BBC_WIDTHS=${RUN_WIDTHS}
+          BBC_GROUP=${RUN_GROUP}
           BBC_CELLS=${RUN_CELLS}
+          BBC_JOBS=${RUN_JOBS}
+          BBC_CROSS_CELL_COMPARABLE=${CROSS_CELL}
           BBC_IS_DEFAULT_SWEEP=${RUN_IS_DEFAULT}
           EOF
           echo "--- run config ---"; cat aggregate/bbc_run_config.env
@@ -417,10 +502,23 @@ jobs:
             echo ""
             if [ "$RUN_IS_DEFAULT" != "true" ]; then
               echo "> **Parameterised run — not the tracked surface.** Features"
-              echo "> \`${RUN_FEATURES}\`, widths \`${RUN_WIDTHS}\` (${RUN_CELLS} cells)."
+              echo "> \`${RUN_FEATURES}\`, widths \`${RUN_WIDTHS}\`, grouping \`${RUN_GROUP}\`"
+              echo "> (${RUN_CELLS} cells in ${RUN_JOBS} job(s))."
               echo "> Medians are in the \`bbc-aggregate\` artifact only; nothing was published."
               echo ""
             fi
+            if [ "$RUN_GROUP" = "cell" ]; then
+              echo "> **Cross-cell ratios in this table are NOT valid.** Each cell ran on"
+              echo "> its own runner VM, so a ratio between two cells carries the machine"
+              echo "> difference (p50 1.11x, p90 1.60x, max 6.8x on identical code). The"
+              echo "> branch-vs-prod columns are unaffected — those two are measured in the"
+              echo "> same job. For a cross-scale or cross-width reading, re-dispatch with"
+              echo "> \`group: width\` or \`group: all\`."
+            else
+              echo "> **Cross-cell ratios are same-machine within a job** (\`group:"
+              echo "> ${RUN_GROUP}\`), so scale/width monotonicity may be read off this table."
+            fi
+            echo ""
             cat aggregate/bbc_table.md
           } >> "$GITHUB_STEP_SUMMARY"
           # Bundle the combined criterion tree into the aggregate dir too.
