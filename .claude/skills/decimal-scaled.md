@@ -108,7 +108,7 @@ Curated per-scale wrappers exist for the common scales; long-tail scales remain 
 
 - `+`, `-`, `%`, unary `-` - **exact** (no rounding).
 - `*`, `/` - **correctly rounded** (half-to-even by default).
-- Operands must share the same `SCALE` (and width). Cross-scale needs `value.rescale::<TARGET>()`, or the explicit-target `mul_of` (see below).
+- Operands must share the same `SCALE` (and width). Cross-scale needs `value.quantize::<TARGET>()`, or the explicit-target `mul_of` (see below).
 - Overflow: debug-panic / release-wrap (matches Rust integer semantics). Use `checked_*` / `wrapping_*` / `saturating_*` / `overflowing_*` for explicit handling.
 
 ```rust
@@ -119,15 +119,24 @@ let prod = a * b;                         // 3.0, rounded (here, exact)
 let safe = a.checked_mul(b).unwrap();     // explicit overflow check
 ```
 
-## Rescaling between scales
+## Quantizing between scales
 
 ```rust
 use decimal_scaled::RoundingMode;
-let micros = D38s6::from_bits(1_500_000);                  // 1.500000
-let cents: D38s2 = micros.rescale::<2>();                  // 1.50, half-to-even
-let cents = micros.rescale_with::<2>(RoundingMode::Trunc); // 1.50 (no half here)
-let same = micros.with_scale::<6>();                       // alias for rescale
+let micros = D38s6::from_bits(1_500_000);                   // 1.500000
+let cents: D38s2 = micros.quantize::<2>();                  // 1.50, half-to-even
+let cents = micros.quantize_with::<2>(RoundingMode::Trunc); // 1.50 (no half here)
+let same = micros.with_scale::<6>();                        // alias for quantize
 ```
+
+To change width **and** scale at once, use `requantize`:
+
+```rust
+let wide: D38<6> = D18::<2>::try_from(7i64).unwrap().requantize();
+```
+
+`quantize` / `quantize_with` were called `rescale` / `rescale_with` in
+0.5.0; the old names are deprecated aliases, removed in 0.6.0.
 
 - Scale-up (target > source): **exact**, panics on storage overflow.
 - Scale-down (target < source): rounds per the supplied mode (default `HalfToEven`).
@@ -180,7 +189,7 @@ Every operation that rounds has a `*_with` sibling taking an explicit [`Rounding
 
 ```rust
 use decimal_scaled::RoundingMode;
-let _ = value.rescale_with::<2>(RoundingMode::HalfAwayFromZero);
+let _ = value.quantize_with::<2>(RoundingMode::HalfAwayFromZero);
 let _ = D38s12::from_f64_with(1.5, RoundingMode::Ceiling);
 let _ = value.to_int_with(RoundingMode::Trunc);
 let _ = wide.ln_strict_with(RoundingMode::Floor);  // wide-tier transcendentals
@@ -235,7 +244,7 @@ The `Decimal` trait carries the uniform surface every width implements:
 The cross-width surface is split across four traits, all re-exported at the crate root: [`DecimalArithmetic`], [`DecimalConvert`], [`DecimalTranscendental`], and [`Decimal`] (the marker supertrait combining them).
 
 **Out of scope for the trait** (use the concrete type):
-- `rescale<TARGET>` / `widen_n<M>` - need a const-generic method parameter,
+- `quantize<TARGET>` / `widen_n<M>` - need a const-generic method parameter,
 - `from_num` / `from_bits` - inherent constructors,
 - transcendentals - feature-gated and on `DecimalTranscendental`.
 
@@ -267,7 +276,7 @@ assert_eq!(back, v);   // exact round-trip
 | Storing prices in `f64`, then converting to a decimal at output | `f64` already lost decimal precision | Stay in the decimal type from input parsing through display |
 | `D38s12::from_int(1)` | `from_int` was removed | Use `from_num(1)`, `from_i32(1)` (trait), or `d38s12!(1)` |
 | `use decimal_scaled::DecimalConsts;` | renamed | `use decimal_scaled::DecimalConstants;` |
-| `D38<6>::from_num(1) + D38<12>::from_num(1)` | Cross-scale arithmetic doesn't compile | `.rescale::<…>()` to a common scale first, or use `mul_of` |
+| `D38<6>::from_num(1) + D38<12>::from_num(1)` | Cross-scale arithmetic doesn't compile | `.quantize::<…>()` to a common scale first, or use `mul_of` |
 | Calling `.ln()` then expecting identical bits on Linux and macOS | With `strict` default it IS deterministic, but a downstream crate could flip `fast` | Call `.ln_strict()` **explicitly** when determinism is required |
 | `D38<38>` | `SCALE = digits` exceeds `MAX_SCALE = digits − 1` | Use `D38<37>` (max), or a wider tier (`D57<38>`) |
 | `D38<37>::deg_per_rad()` | ≈57.3 doesn't fit the ~±17 range at scale 37; panics | Lower the scale, or use a wider tier (`D57<37>::deg_per_rad()`) |
@@ -319,7 +328,7 @@ fn checksum<D: Decimal>(xs: &[D]) -> D { D::sum(xs.iter().copied()) }
 // 4. Mode-aware rounding.
 use decimal_scaled::{D38s6, RoundingMode};
 let v = D38s6::from_bits(1_235_000);                       // 1.235000
-let cents = v.rescale_with::<2>(RoundingMode::Ceiling);    // 1.24
+let cents = v.quantize_with::<2>(RoundingMode::Ceiling);   // 1.24
 ```
 
 ## Reference

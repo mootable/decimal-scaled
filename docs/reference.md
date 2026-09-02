@@ -8,7 +8,7 @@ how correctness is proven lives on the [Harness](golden.md) page under
 | Topic | What it covers |
 |---|---|
 | [The width family](widths.md) | The storage widths from `D18` to `D1232` — when to pick which, scale aliases, the `Decimal` trait, the required Cargo features. |
-| [Rounding](rounding.md) | `RoundingMode`, the `_with` method pairs, `rescale`, and the compile-time `rounding-*` feature flags. |
+| [Rounding](rounding.md) | `RoundingMode`, the `_with` method pairs, `quantize` / `requantize`, and the compile-time `rounding-*` feature flags. |
 | [Conversions](conversions.md) | Integer / float conversions, cross-width widening and narrowing, `to_int`, the float bridge. |
 | [Serde](serde.md) | The raw-storage wire format for human-readable and binary serialisers, and the cross-system scale contract. |
 | [Cross-scale operations](cross-scale.md) | Mixing widths and `SCALE`s in one expression via `mul_of` / `add_of` / `cmp_of` / `clamp_of` and friends, plus the nightly auto-inferred form. |

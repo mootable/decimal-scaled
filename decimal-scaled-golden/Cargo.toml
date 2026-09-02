@@ -1,6 +1,6 @@
 [package]
 name = "decimal-scaled-golden"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2021"
 description = "Library-agnostic golden value set, validator, and comparison harness for decimal libraries"
 license = "MIT OR Apache-2.0"

@@ -32,7 +32,7 @@ macro_rules! decl_decimal_basics {
             @impl $Type, $Storage, $max_scale,
             multiplier = {
                 match <$Storage>::from_str_radix("10", 10) {
-                    ::core::result::Result::Ok(v) => v,
+                    ::core::result::Result::Ok(ten) => ten,
                     ::core::result::Result::Err(_) => {
                         panic!("wide decimal: invalid base-10 multiplier literal")
                     }
@@ -41,7 +41,7 @@ macro_rules! decl_decimal_basics {
             },
             zero = {
                 match <$Storage>::from_str_radix("0", 10) {
-                    ::core::result::Result::Ok(v) => v,
+                    ::core::result::Result::Ok(zero) => zero,
                     ::core::result::Result::Err(_) => {
                         panic!("wide decimal: invalid zero literal")
                     }
@@ -247,8 +247,8 @@ macro_rules! decl_decimal_basics {
                 $Type::<SCALE>::midpoint(self, rhs)
             }
             #[inline]
-            fn mul_add(self, a: Self, b: Self) -> Self {
-                $Type::<SCALE>::mul_add(self, a, b)
+            fn mul_add(self, multiplier: Self, addend: Self) -> Self {
+                $Type::<SCALE>::mul_add(self, multiplier, addend)
             }
 
             // Pow.

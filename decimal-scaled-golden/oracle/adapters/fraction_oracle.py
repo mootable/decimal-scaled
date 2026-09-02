@@ -17,7 +17,7 @@ from fractions import Fraction
 from typing import List
 
 from ..functions import FUNCTIONS
-from ..oracle import Oracle, register
+from ..oracle import GUARD, Oracle, format_fetched, register
 
 _EXACT_OPS = {"add", "sub", "mul", "div", "rem"}
 
@@ -39,38 +39,18 @@ def _eval(func: str, a: Fraction, b: Fraction) -> Fraction:
     raise ValueError(f"fraction oracle does not handle {func}")
 
 
-def _format(r: Fraction, precision: int) -> str:
-    """Signed `digits.digits` string with the same terminated-vs-truncated contract as
-    the mpmath oracle, but decided EXACTLY: a value terminates within `precision`
-    fractional digits iff its reduced denominator divides 10^precision (it is then
-    stored stripped of trailing zeros); otherwise it is truncated toward zero to
-    exactly `precision` digits."""
-    sign = "-" if r < 0 else ""
+def _scaled_guard(r: Fraction, precision: int) -> int:
+    """`floor(|r| * 10^(precision+GUARD))` — this oracle's formatting primitive, and
+    the only one of the six that is EXACT: integer division of exact rationals, with
+    no approximation to floor and nothing rounded on the way.
+
+    The shared guard rule agrees with this oracle's algebra: a rational terminates
+    within `precision` iff its reduced denominator divides `10^precision`, and then
+    every digit below `precision` — the guard digits included — is zero, so the
+    all-zero-guard branch fires exactly when it should.
+    """
     ar = -r if r < 0 else r
-    num, den = ar.numerator, ar.denominator
-    pow10 = 10 ** precision
-    if pow10 % den == 0:
-        # Terminates within `precision`: exact = ar * 10^precision (an integer).
-        exact = num * (pow10 // den)
-        if exact == 0:
-            return "0"
-        z = 0
-        while z < precision and exact % 10 == 0:
-            exact //= 10
-            z += 1
-        frac_len = precision - z
-        if frac_len == 0:
-            return f"{sign}{exact}"
-        s = str(exact).rjust(frac_len + 1, "0")
-        return f"{sign}{s[:-frac_len]}.{s[-frac_len:]}"
-    # Non-terminating (or terminating deeper than `precision`): truncate toward zero.
-    scaled = (num * pow10) // den
-    if scaled == 0:
-        sign = ""  # never render a signed zero (-0.000…0)
-    if precision == 0:
-        return f"{sign}{scaled}"
-    s = str(scaled).rjust(precision + 1, "0")
-    return f"{sign}{s[:-precision]}.{s[-precision:]}"
+    return (ar.numerator * 10 ** (precision + GUARD)) // ar.denominator
 
 
 class FractionOracle(Oracle):
@@ -87,7 +67,8 @@ class FractionOracle(Oracle):
         # Fraction parses a decimal string exactly (no binary intermediary).
         a = Fraction(inputs[0])
         b = Fraction(inputs[1])
-        return _format(_eval(func, a, b), precision)
+        r = _eval(func, a, b)
+        return format_fetched(r < 0, _scaled_guard(r, precision), precision)
 
 
 register("fraction", FractionOracle)

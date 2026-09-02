@@ -575,7 +575,7 @@ crate::macros::conversions::decl_cross_width_narrowing!(wide D18, crate::int::ty
 //
 // `widen` always succeeds (the next-larger storage strictly covers every
 // value the smaller one can hold). It keeps the scale unchanged; combine
-// with `rescale` if you need to change scale and width together. D18 is
+// with `requantize` if you need to change scale and width together. D18 is
 // the narrowest tier, so it has no `narrow`.
 
 impl<const SCALE: u32> crate::D<crate::int::types::Int<1>, SCALE> {
@@ -2124,3 +2124,169 @@ crate::macros::cross_scale_ops::decl_decimal_cross_scale_ops!(D924, crate::int::
 
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
 crate::macros::cross_scale_ops::decl_decimal_cross_scale_ops!(D1232, crate::int::types::Int<64>);
+
+// ---------------------------------------------------------------------
+// Cross-WIDTH operators at equal SCALE (see `macros::cross_width_ops`).
+//
+// One invocation per unordered width pair, narrower first. Each emits the
+// five value operators in both directions (Output = the wider type) and the
+// five compound assignments in the widening direction only.
+//
+// Each pair is gated on BOTH tiers being enabled, so a build only pays for
+// the widths it actually has.
+// ---------------------------------------------------------------------
+crate::macros::cross_width_ops::decl_cross_width_pair!(D18, 1, D38, 2);
+#[cfg(any(feature = "d57", feature = "wide"))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D18, 1, D57, 3);
+#[cfg(any(feature = "d76", feature = "wide"))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D18, 1, D76, 4);
+#[cfg(any(feature = "d115", feature = "wide"))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D18, 1, D115, 6);
+#[cfg(any(feature = "d153", feature = "wide"))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D18, 1, D153, 8);
+#[cfg(any(feature = "d230", feature = "wide"))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D18, 1, D230, 12);
+#[cfg(any(feature = "d307", feature = "wide"))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D18, 1, D307, 16);
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D18, 1, D462, 24);
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D18, 1, D616, 32);
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D18, 1, D924, 48);
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D18, 1, D1232, 64);
+#[cfg(any(feature = "d57", feature = "wide"))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D38, 2, D57, 3);
+#[cfg(any(feature = "d76", feature = "wide"))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D38, 2, D76, 4);
+#[cfg(any(feature = "d115", feature = "wide"))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D38, 2, D115, 6);
+#[cfg(any(feature = "d153", feature = "wide"))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D38, 2, D153, 8);
+#[cfg(any(feature = "d230", feature = "wide"))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D38, 2, D230, 12);
+#[cfg(any(feature = "d307", feature = "wide"))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D38, 2, D307, 16);
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D38, 2, D462, 24);
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D38, 2, D616, 32);
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D38, 2, D924, 48);
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D38, 2, D1232, 64);
+#[cfg(all(any(feature = "d57", feature = "wide"), any(feature = "d76", feature = "wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D57, 3, D76, 4);
+#[cfg(all(any(feature = "d57", feature = "wide"), any(feature = "d115", feature = "wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D57, 3, D115, 6);
+#[cfg(all(any(feature = "d57", feature = "wide"), any(feature = "d153", feature = "wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D57, 3, D153, 8);
+#[cfg(all(any(feature = "d57", feature = "wide"), any(feature = "d230", feature = "wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D57, 3, D230, 12);
+#[cfg(all(any(feature = "d57", feature = "wide"), any(feature = "d307", feature = "wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D57, 3, D307, 16);
+#[cfg(all(any(feature = "d57", feature = "wide"), any(feature = "d462", feature = "x-wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D57, 3, D462, 24);
+#[cfg(all(any(feature = "d57", feature = "wide"), any(feature = "d616", feature = "x-wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D57, 3, D616, 32);
+#[cfg(all(any(feature = "d57", feature = "wide"), any(feature = "d924", feature = "xx-wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D57, 3, D924, 48);
+#[cfg(all(any(feature = "d57", feature = "wide"), any(feature = "d1232", feature = "xx-wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D57, 3, D1232, 64);
+#[cfg(all(any(feature = "d76", feature = "wide"), any(feature = "d115", feature = "wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D76, 4, D115, 6);
+#[cfg(all(any(feature = "d76", feature = "wide"), any(feature = "d153", feature = "wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D76, 4, D153, 8);
+#[cfg(all(any(feature = "d76", feature = "wide"), any(feature = "d230", feature = "wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D76, 4, D230, 12);
+#[cfg(all(any(feature = "d76", feature = "wide"), any(feature = "d307", feature = "wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D76, 4, D307, 16);
+#[cfg(all(any(feature = "d76", feature = "wide"), any(feature = "d462", feature = "x-wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D76, 4, D462, 24);
+#[cfg(all(any(feature = "d76", feature = "wide"), any(feature = "d616", feature = "x-wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D76, 4, D616, 32);
+#[cfg(all(any(feature = "d76", feature = "wide"), any(feature = "d924", feature = "xx-wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D76, 4, D924, 48);
+#[cfg(all(any(feature = "d76", feature = "wide"), any(feature = "d1232", feature = "xx-wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D76, 4, D1232, 64);
+#[cfg(all(any(feature = "d115", feature = "wide"), any(feature = "d153", feature = "wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D115, 6, D153, 8);
+#[cfg(all(any(feature = "d115", feature = "wide"), any(feature = "d230", feature = "wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D115, 6, D230, 12);
+#[cfg(all(any(feature = "d115", feature = "wide"), any(feature = "d307", feature = "wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D115, 6, D307, 16);
+#[cfg(all(any(feature = "d115", feature = "wide"), any(feature = "d462", feature = "x-wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D115, 6, D462, 24);
+#[cfg(all(any(feature = "d115", feature = "wide"), any(feature = "d616", feature = "x-wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D115, 6, D616, 32);
+#[cfg(all(any(feature = "d115", feature = "wide"), any(feature = "d924", feature = "xx-wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D115, 6, D924, 48);
+#[cfg(all(any(feature = "d115", feature = "wide"), any(feature = "d1232", feature = "xx-wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D115, 6, D1232, 64);
+#[cfg(all(any(feature = "d153", feature = "wide"), any(feature = "d230", feature = "wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D153, 8, D230, 12);
+#[cfg(all(any(feature = "d153", feature = "wide"), any(feature = "d307", feature = "wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D153, 8, D307, 16);
+#[cfg(all(any(feature = "d153", feature = "wide"), any(feature = "d462", feature = "x-wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D153, 8, D462, 24);
+#[cfg(all(any(feature = "d153", feature = "wide"), any(feature = "d616", feature = "x-wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D153, 8, D616, 32);
+#[cfg(all(any(feature = "d153", feature = "wide"), any(feature = "d924", feature = "xx-wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D153, 8, D924, 48);
+#[cfg(all(any(feature = "d153", feature = "wide"), any(feature = "d1232", feature = "xx-wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D153, 8, D1232, 64);
+#[cfg(all(any(feature = "d230", feature = "wide"), any(feature = "d307", feature = "wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D230, 12, D307, 16);
+#[cfg(all(any(feature = "d230", feature = "wide"), any(feature = "d462", feature = "x-wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D230, 12, D462, 24);
+#[cfg(all(any(feature = "d230", feature = "wide"), any(feature = "d616", feature = "x-wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D230, 12, D616, 32);
+#[cfg(all(any(feature = "d230", feature = "wide"), any(feature = "d924", feature = "xx-wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D230, 12, D924, 48);
+#[cfg(all(any(feature = "d230", feature = "wide"), any(feature = "d1232", feature = "xx-wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D230, 12, D1232, 64);
+#[cfg(all(any(feature = "d307", feature = "wide"), any(feature = "d462", feature = "x-wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D307, 16, D462, 24);
+#[cfg(all(any(feature = "d307", feature = "wide"), any(feature = "d616", feature = "x-wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D307, 16, D616, 32);
+#[cfg(all(any(feature = "d307", feature = "wide"), any(feature = "d924", feature = "xx-wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D307, 16, D924, 48);
+#[cfg(all(any(feature = "d307", feature = "wide"), any(feature = "d1232", feature = "xx-wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D307, 16, D1232, 64);
+#[cfg(all(any(feature = "d462", feature = "x-wide"), any(feature = "d616", feature = "x-wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D462, 24, D616, 32);
+#[cfg(all(any(feature = "d462", feature = "x-wide"), any(feature = "d924", feature = "xx-wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D462, 24, D924, 48);
+#[cfg(all(any(feature = "d462", feature = "x-wide"), any(feature = "d1232", feature = "xx-wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D462, 24, D1232, 64);
+#[cfg(all(any(feature = "d616", feature = "x-wide"), any(feature = "d924", feature = "xx-wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D616, 32, D924, 48);
+#[cfg(all(any(feature = "d616", feature = "x-wide"), any(feature = "d1232", feature = "xx-wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D616, 32, D1232, 64);
+#[cfg(all(any(feature = "d924", feature = "xx-wide"), any(feature = "d1232", feature = "xx-wide")))]
+crate::macros::cross_width_ops::decl_cross_width_pair!(D924, 48, D1232, 64);
+
+// --- requantize: width + scale in one call, any direction ------------
+crate::macros::requantize::decl_decimal_requantize!(D18, 1);
+crate::macros::requantize::decl_decimal_requantize!(D38, 2);
+#[cfg(any(feature = "d57", feature = "wide"))]
+crate::macros::requantize::decl_decimal_requantize!(D57, 3);
+#[cfg(any(feature = "d76", feature = "wide"))]
+crate::macros::requantize::decl_decimal_requantize!(D76, 4);
+#[cfg(any(feature = "d115", feature = "wide"))]
+crate::macros::requantize::decl_decimal_requantize!(D115, 6);
+#[cfg(any(feature = "d153", feature = "wide"))]
+crate::macros::requantize::decl_decimal_requantize!(D153, 8);
+#[cfg(any(feature = "d230", feature = "wide"))]
+crate::macros::requantize::decl_decimal_requantize!(D230, 12);
+#[cfg(any(feature = "d307", feature = "wide"))]
+crate::macros::requantize::decl_decimal_requantize!(D307, 16);
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+crate::macros::requantize::decl_decimal_requantize!(D462, 24);
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+crate::macros::requantize::decl_decimal_requantize!(D616, 32);
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+crate::macros::requantize::decl_decimal_requantize!(D924, 48);
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+crate::macros::requantize::decl_decimal_requantize!(D1232, 64);

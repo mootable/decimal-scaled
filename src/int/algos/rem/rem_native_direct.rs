@@ -40,19 +40,19 @@ use crate::int::types::Int;
 /// does), so it is bit-identical to the shipped magnitude path.
 #[inline]
 #[allow(dead_code)]
-pub(crate) fn rem_native_direct<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
+pub(crate) fn rem_native_direct<const N: usize>(dividend: Int<N>, divisor: Int<N>) -> Int<N> {
     assert!(
-        !b.is_zero(),
+        !divisor.is_zero(),
         "attempt to calculate the remainder with a divisor of zero"
     );
-    let ai = a.to_i128();
-    let bi = b.to_i128();
+    let dividend_i128 = dividend.to_i128();
+    let divisor_i128 = divisor.to_i128();
     // i128::MIN % -1 is the sole overflow trap of signed `%`; the magnitude
     // path can't hit it because its operands are unsigned. The true
     // remainder there is 0 (MIN is exactly divisible by -1), which is what
     // wrapping_rem yields — match it without invoking the trapping `%`.
-    let r = if bi == -1 { 0 } else { ai % bi };
-    Int::<N>::from_i128(r)
+    let remainder = if divisor_i128 == -1 { 0 } else { dividend_i128 % divisor_i128 };
+    Int::<N>::from_i128(remainder)
 }
 
 #[cfg(test)]
@@ -77,13 +77,13 @@ mod tests {
             (i64::MIN, 7),
             (i64::MIN, -1),
         ];
-        for &(a, b) in cases {
-            let ia = Int::<1>::from_i64(a);
-            let ib = Int::<1>::from_i64(b);
+        for &(dividend, divisor) in cases {
+            let dividend_int = Int::<1>::from_i64(dividend);
+            let divisor_int = Int::<1>::from_i64(divisor);
             assert_eq!(
-                rem_native_direct::<1>(ia, ib),
-                rem_native::<1>(ia, ib),
-                "n1 ({a} % {b})"
+                rem_native_direct::<1>(dividend_int, divisor_int),
+                rem_native::<1>(dividend_int, divisor_int),
+                "n1 ({dividend} % {divisor})"
             );
         }
     }
@@ -100,13 +100,13 @@ mod tests {
             (i128::MIN, 7),
             (i128::MIN, -1),
         ];
-        for &(a, b) in cases {
-            let ia = Int::<2>::from_i128(a);
-            let ib = Int::<2>::from_i128(b);
+        for &(dividend, divisor) in cases {
+            let dividend_int = Int::<2>::from_i128(dividend);
+            let divisor_int = Int::<2>::from_i128(divisor);
             assert_eq!(
-                rem_native_direct::<2>(ia, ib),
-                rem_native::<2>(ia, ib),
-                "n2 ({a} % {b})"
+                rem_native_direct::<2>(dividend_int, divisor_int),
+                rem_native::<2>(dividend_int, divisor_int),
+                "n2 ({dividend} % {divisor})"
             );
         }
     }

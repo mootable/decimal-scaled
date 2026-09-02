@@ -53,13 +53,14 @@
 //! `~2^{bits/2}`-iteration loop (a hang).
 //!
 //! This implementation instead normalizes into a **power-of-two limb
-//! window** `w = next_pow2(sig_len)`: it left-shifts `n` by an **even** bit
-//! amount so its most-significant bit lands in the top two bits of limb
-//! `w−1` (recovering the root by `>> shift/2`, since `√(n·2^e) = √n·2^{e/2}`
-//! for even `e`). Then `h = w/4` is exact, the high half `a₃·B + a₂` is
-//! exactly `w/2` limbs (also a power of two) and inherits the top limb — so
-//! it stays normalized — and the recursion halves cleanly with NO
-//! re-normalization. `a₃ ≥ B/4` therefore holds at every level, `q ≤ B`, and
+//! window** `window_len = next_pow2(sig_len)`: it left-shifts `n` by an
+//! **even** bit amount so its most-significant bit lands in the top two bits
+//! of limb `window_len−1` (recovering the root by `>> shift/2`, since
+//! `√(n·2^e) = √n·2^{e/2}` for even `e`). Then `h = window_len/4` is exact,
+//! the high half `a₃·B + a₂` is exactly `window_len/2` limbs (also a power of
+//! two) and inherits the top limb — so it stays normalized — and the
+//! recursion halves cleanly with NO re-normalization. `a₃ ≥ B/4` therefore
+//! holds at every level, `q ≤ B`, and
 //! the correction is the paper's single step (a small bounded loop guards
 //! against any residual, per the defense-in-depth recursion rule).
 //!
@@ -83,8 +84,9 @@ use crate::int::policy::div_rem::dispatch as div_rem_dispatch;
 use crate::int::types::compute_limbs::MAX_DOUBLE_LIMBS;
 
 /// Scratch capacity — the double-N budget shared with the shipped Newton
-/// `isqrt` (radicand ≤ 2N). The normalized window `w = next_pow2(sig) ≤
-/// 2·sig` and every intermediate (`num`, `q²`, `s`, `r`) stays within it.
+/// `isqrt` (radicand ≤ 2N). The normalized window
+/// `window_len = next_pow2(radicand_len) ≤ 2·radicand_len` and every
+/// intermediate (`numerator`, `q²`, `s`, `r`) stays within it.
 const SCRATCH_LIMBS: usize = MAX_DOUBLE_LIMBS;
 
 /// Below this many *significant* limbs the kernel hands straight to the
@@ -93,16 +95,17 @@ const SCRATCH_LIMBS: usize = MAX_DOUBLE_LIMBS;
 /// small-width regime where it wins.
 const BASE_LIMBS: usize = 2;
 
-/// `out = floor(sqrt(n))`, computed by the Karatsuba Square Root recursion.
+/// `out = floor(sqrt(radicand))`, computed by the Karatsuba Square Root
+/// recursion.
 ///
 /// Bit-identical to
 /// [`crate::int::algos::isqrt::isqrt_newton::isqrt_newton`]; see the module
 /// docs for the algorithm and the RR-3805 reference.
-pub(crate) fn isqrt_karatsuba(n: &[u64], out: &mut [u64]) {
-    for o in out.iter_mut() {
-        *o = 0;
+pub(crate) fn isqrt_karatsuba(radicand: &[u64], out: &mut [u64]) {
+    for limb in out.iter_mut() {
+        *limb = 0;
     }
-    let bits = bit_len(n);
+    let bits = bit_len(radicand);
     if bits == 0 {
         return;
     }
@@ -111,62 +114,63 @@ pub(crate) fn isqrt_karatsuba(n: &[u64], out: &mut [u64]) {
         return;
     }
 
-    let sig = sig_len(n);
+    let radicand_len = sig_len(radicand);
 
     // ── small widths: the shipped exact Newton kernel owns them ───────────
-    if sig <= BASE_LIMBS {
-        isqrt_newton(&n[..sig], out);
+    if radicand_len <= BASE_LIMBS {
+        isqrt_newton(&radicand[..radicand_len], out);
         return;
     }
 
     // ── normalize into a power-of-two limb window ─────────────────────────
-    // `w` = next power of two ≥ sig. Left-shift n by an EVEN bit amount so
-    // its MSB lands in the top two bits of limb `w−1` (⇒ a₃ ≥ B/4 at every
-    // recursion level). Even shift `e` ⇒ √(n·2^e) = √n·2^{e/2}, so the root
-    // is recovered by `>> e/2`.
-    let w = next_pow2_limbs(sig);
-    debug_assert!(w <= SCRATCH_LIMBS, "isqrt_karatsuba window exceeds scratch");
-    let sh = (w as u32) * 64 - bits; // ≥ 0: w ≥ sig ⇒ w·64 ≥ bits
-    let sh_even = sh & !1u32;
+    // `window_len` = next power of two ≥ radicand_len. Left-shift n by an
+    // EVEN bit amount so its MSB lands in the top two bits of limb
+    // `window_len−1` (⇒ a₃ ≥ B/4 at every recursion level). Even shift `e` ⇒
+    // √(n·2^e) = √n·2^{e/2}, so the root is recovered by `>> e/2`.
+    let window_len = next_pow2_limbs(radicand_len);
+    debug_assert!(window_len <= SCRATCH_LIMBS, "isqrt_karatsuba window exceeds scratch");
+    // ≥ 0: window_len ≥ radicand_len ⇒ window_len·64 ≥ bits
+    let shift = (window_len as u32) * 64 - bits;
+    let even_shift = shift & !1u32;
 
-    let mut nn = [0u64; SCRATCH_LIMBS];
-    shl(&n[..sig], sh_even, &mut nn[..w]);
+    let mut normalized = [0u64; SCRATCH_LIMBS];
+    shl(&radicand[..radicand_len], even_shift, &mut normalized[..window_len]);
 
     // ── recurse on the normalized window ──────────────────────────────────
     let mut s = [0u64; SCRATCH_LIMBS];
     let mut r = [0u64; SCRATCH_LIMBS];
-    sqrtrem(&nn[..w], &mut s, &mut r);
+    sqrtrem(&normalized[..window_len], &mut s, &mut r);
 
-    // ── de-normalize: s_real = s >> (sh_even/2) ───────────────────────────
+    // ── de-normalize: s_real = s >> (even_shift/2) ────────────────────────
     let s_len = sig_len(&s[..SCRATCH_LIMBS]);
     let mut s_out = [0u64; SCRATCH_LIMBS];
-    shr(&s[..s_len], sh_even / 2, &mut s_out[..s_len]);
+    shr(&s[..s_len], even_shift / 2, &mut s_out[..s_len]);
 
     let copy_len = out.len().min(s_len);
     out[..copy_len].copy_from_slice(&s_out[..copy_len]);
 }
 
-/// Smallest power-of-two limb count `≥ x`, at least 4 (the four-block split
-/// needs a window divisible by 4, and the recursion bottoms out at 2).
+/// Smallest power-of-two limb count `≥ min_limbs`, at least 4 (the four-block
+/// split needs a window divisible by 4, and the recursion bottoms out at 2).
 #[inline]
-fn next_pow2_limbs(x: usize) -> usize {
-    let mut w = 4usize;
-    while w < x {
-        w <<= 1;
+fn next_pow2_limbs(min_limbs: usize) -> usize {
+    let mut window_len = 4usize;
+    while window_len < min_limbs {
+        window_len <<= 1;
     }
-    w
+    window_len
 }
 
-/// Significant limb count of `a` (index of the highest non-zero limb + 1),
+/// Significant limb count of `limbs` (index of the highest non-zero limb + 1),
 /// minimum 1.
 #[inline]
-fn sig_len(a: &[u64]) -> usize {
-    let mut i = a.len();
-    while i > 0 {
-        if a[i - 1] != 0 {
-            return i;
+fn sig_len(limbs: &[u64]) -> usize {
+    let mut len = limbs.len();
+    while len > 0 {
+        if limbs[len - 1] != 0 {
+            return len;
         }
-        i -= 1;
+        len -= 1;
     }
     1
 }
@@ -178,35 +182,36 @@ fn sig_len(a: &[u64]) -> usize {
 /// Karatsuba Square Root (RR-3805 Algorithm 1); base case = the shipped
 /// exact Newton kernel with the remainder recovered as `n − s²`.
 fn sqrtrem(n: &[u64], s: &mut [u64], r: &mut [u64]) {
-    for v in s.iter_mut() {
-        *v = 0;
+    for limb in s.iter_mut() {
+        *limb = 0;
     }
-    for v in r.iter_mut() {
-        *v = 0;
+    for limb in r.iter_mut() {
+        *limb = 0;
     }
-    let w = n.len();
+    let window_len = n.len();
 
     // ── base case: exact Newton root + remainder n − s² ───────────────────
-    if w <= BASE_LIMBS {
-        isqrt_newton(n, &mut s[..w]);
-        let s_len = sig_len(&s[..w]);
+    if window_len <= BASE_LIMBS {
+        isqrt_newton(n, &mut s[..window_len]);
+        let s_len = sig_len(&s[..window_len]);
         let mut sq = [0u64; SCRATCH_LIMBS];
         let sq_len = (2 * s_len).min(SCRATCH_LIMBS);
         mul_schoolbook(&s[..s_len], &s[..s_len], &mut sq[..sq_len]);
         // r = n − s²  (n ≥ s² by definition of the floor root).
-        r[..w].copy_from_slice(n);
-        sub_assign(&mut r[..w], &sq[..sq_len.min(w)]);
+        r[..window_len].copy_from_slice(n);
+        sub_assign(&mut r[..window_len], &sq[..sq_len.min(window_len)]);
         return;
     }
 
-    // ── four equal blocks of h = w/4 limbs: n = a3·B³+a2·B²+a1·B+a0 ────────
-    // B = 2^{64·h}. high (= a3·B + a2) is the top w/2 limbs and is itself a
-    // normalized power-of-two-length number → the recursion needs no
+    // ── four equal blocks of h = window_len/4 limbs:
+    //    n = a3·B³+a2·B²+a1·B+a0 ─────────────────────────────────────────────
+    // B = 2^{64·h}. high (= a3·B + a2) is the top window_len/2 limbs and is
+    // itself a normalized power-of-two-length number → the recursion needs no
     // re-normalization.
-    let h = w / 4;
+    let h = window_len / 4;
     let a0 = &n[0..h];
     let a1 = &n[h..2 * h];
-    let high = &n[2 * h..w]; // a3·B + a2, w/2 limbs
+    let high = &n[2 * h..window_len]; // a3·B + a2, window_len/2 limbs
 
     // ── (s', r') = SqrtRem(high) ──────────────────────────────────────────
     let mut sp = [0u64; SCRATCH_LIMBS];
@@ -217,26 +222,26 @@ fn sqrtrem(n: &[u64], s: &mut [u64], r: &mut [u64]) {
 
     // ── (q, u) = DivRem(r'·B + a1, 2·s') ──────────────────────────────────
     // numerator = r'·B + a1  (r' at limb offset h, a1 in the low h).
-    let mut num = [0u64; SCRATCH_LIMBS];
-    for (i, &v) in rp[..rp_len].iter().enumerate() {
+    let mut numerator = [0u64; SCRATCH_LIMBS];
+    for (i, &limb) in rp[..rp_len].iter().enumerate() {
         if h + i < SCRATCH_LIMBS {
-            num[h + i] = v;
+            numerator[h + i] = limb;
         }
     }
-    add_assign(&mut num, a1);
-    let num_len = sig_len(&num[..SCRATCH_LIMBS]);
+    add_assign(&mut numerator, a1);
+    let numerator_len = sig_len(&numerator[..SCRATCH_LIMBS]);
 
     // divisor = 2·s'
-    let mut den = [0u64; SCRATCH_LIMBS];
-    shl(&sp[..sp_len], 1, &mut den[..sp_len + 1]);
-    let den_len = sig_len(&den[..SCRATCH_LIMBS]);
+    let mut divisor = [0u64; SCRATCH_LIMBS];
+    shl(&sp[..sp_len], 1, &mut divisor[..sp_len + 1]);
+    let divisor_len = sig_len(&divisor[..SCRATCH_LIMBS]);
 
     let mut q = [0u64; SCRATCH_LIMBS];
     let mut u = [0u64; SCRATCH_LIMBS];
-    let qrlen = num_len.max(den_len);
+    let qrlen = numerator_len.max(divisor_len);
     div_rem_dispatch(
-        &num[..num_len],
-        &den[..den_len],
+        &numerator[..numerator_len],
+        &divisor[..divisor_len],
         &mut q[..qrlen],
         &mut u[..qrlen],
     );
@@ -244,18 +249,18 @@ fn sqrtrem(n: &[u64], s: &mut [u64], r: &mut [u64]) {
     let u_len = sig_len(&u[..qrlen]);
 
     // ── s = s'·B + q  (s' at offset h, q low; add_assign folds any carry) ──
-    for (i, &v) in sp[..sp_len].iter().enumerate() {
+    for (i, &limb) in sp[..sp_len].iter().enumerate() {
         if h + i < SCRATCH_LIMBS {
-            s[h + i] = v;
+            s[h + i] = limb;
         }
     }
     add_assign(s, &q[..q_len]);
 
     // ── r = u·B + a0 − q² ─────────────────────────────────────────────────
     let mut rr = [0u64; SCRATCH_LIMBS];
-    for (i, &v) in u[..u_len].iter().enumerate() {
+    for (i, &limb) in u[..u_len].iter().enumerate() {
         if h + i < SCRATCH_LIMBS {
-            rr[h + i] = v;
+            rr[h + i] = limb;
         }
     }
     add_assign(&mut rr, a0);
@@ -287,21 +292,22 @@ fn sqrtrem(n: &[u64], s: &mut [u64], r: &mut [u64]) {
                 &deficit[..SCRATCH_LIMBS.min(8)],
                 &s[..SCRATCH_LIMBS.min(8)],
             );
-            // tm = 2·s − 1 (uses the current s).
-            let mut tm = [0u64; SCRATCH_LIMBS];
-            shl(s, 1, &mut tm);
-            sub_assign(&mut tm, &one);
-            if cmp(&deficit[..SCRATCH_LIMBS], &tm[..SCRATCH_LIMBS]) <= 0 {
-                // r += 2s − 1 makes it ≥ 0: r = tm − deficit. Then s −= 1.
+            // correction = 2·s − 1 (uses the current s).
+            let mut correction = [0u64; SCRATCH_LIMBS];
+            shl(s, 1, &mut correction);
+            sub_assign(&mut correction, &one);
+            if cmp(&deficit[..SCRATCH_LIMBS], &correction[..SCRATCH_LIMBS]) <= 0 {
+                // r += 2s − 1 makes it ≥ 0: r = correction − deficit.
+                // Then s −= 1.
                 let mut rfinal = [0u64; SCRATCH_LIMBS];
-                rfinal.copy_from_slice(&tm);
+                rfinal.copy_from_slice(&correction);
                 sub_assign(&mut rfinal, &deficit[..SCRATCH_LIMBS]);
                 sub_assign(s, &one);
                 r[..SCRATCH_LIMBS].copy_from_slice(&rfinal[..SCRATCH_LIMBS]);
                 break;
             }
-            // r += 2s − 1 still < 0: deficit −= tm; s −= 1; repeat.
-            sub_assign(&mut deficit, &tm[..SCRATCH_LIMBS]);
+            // r += 2s − 1 still < 0: deficit −= correction; s −= 1; repeat.
+            sub_assign(&mut deficit, &correction[..SCRATCH_LIMBS]);
             sub_assign(s, &one);
         }
     }
@@ -312,29 +318,29 @@ mod tests {
     use super::isqrt_karatsuba;
     use crate::int::algos::isqrt::isqrt_newton::isqrt_newton;
 
-    fn kara(n: &[u64], limbs: usize) -> Vec<u64> {
+    fn kara(radicand: &[u64], limbs: usize) -> Vec<u64> {
         let mut out = vec![0u64; limbs];
-        isqrt_karatsuba(n, &mut out);
+        isqrt_karatsuba(radicand, &mut out);
         out
     }
-    fn newton(n: &[u64], limbs: usize) -> Vec<u64> {
+    fn newton(radicand: &[u64], limbs: usize) -> Vec<u64> {
         let mut out = vec![0u64; limbs];
-        isqrt_newton(n, &mut out);
+        isqrt_newton(radicand, &mut out);
         out
     }
-    fn kara_u64(n: u64) -> u64 {
-        kara(&[n], 1)[0]
+    fn kara_u64(radicand: u64) -> u64 {
+        kara(&[radicand], 1)[0]
     }
-    fn newton_u64(n: u64) -> u64 {
-        newton(&[n], 1)[0]
+    fn newton_u64(radicand: u64) -> u64 {
+        newton(&[radicand], 1)[0]
     }
-    fn kara_u128(n: u128) -> u128 {
-        let v = kara(&[n as u64, (n >> 64) as u64], 2);
-        (v[0] as u128) | ((v[1] as u128) << 64)
+    fn kara_u128(radicand: u128) -> u128 {
+        let root = kara(&[radicand as u64, (radicand >> 64) as u64], 2);
+        (root[0] as u128) | ((root[1] as u128) << 64)
     }
-    fn newton_u128(n: u128) -> u128 {
-        let v = newton(&[n as u64, (n >> 64) as u64], 2);
-        (v[0] as u128) | ((v[1] as u128) << 64)
+    fn newton_u128(radicand: u128) -> u128 {
+        let root = newton(&[radicand as u64, (radicand >> 64) as u64], 2);
+        (root[0] as u128) | ((root[1] as u128) << 64)
     }
 
     #[test]
@@ -435,12 +441,12 @@ mod tests {
         for &limbs in &[3usize, 4, 5, 6, 8, 16, 24] {
             for _ in 0..40 {
                 let mut n = vec![0u64; limbs];
-                let top = 1 + (next() as usize % limbs);
-                for l in n.iter_mut().take(top) {
-                    *l = next();
+                let fill_len = 1 + (next() as usize % limbs);
+                for limb in n.iter_mut().take(fill_len) {
+                    *limb = next();
                 }
-                if n[top - 1] == 0 {
-                    n[top - 1] = 1;
+                if n[fill_len - 1] == 0 {
+                    n[fill_len - 1] = 1;
                 }
                 assert_eq!(
                     kara(&n, limbs),
@@ -450,16 +456,16 @@ mod tests {
             }
             // Perfect-square ±1 edges at this width.
             for _ in 0..10 {
-                let mut b = vec![0u64; limbs];
-                let bt = 1 + (next() as usize % limbs.div_ceil(2).max(1));
-                for l in b.iter_mut().take(bt) {
-                    *l = next();
+                let mut base = vec![0u64; limbs];
+                let base_fill_len = 1 + (next() as usize % limbs.div_ceil(2).max(1));
+                for limb in base.iter_mut().take(base_fill_len) {
+                    *limb = next();
                 }
-                if b[bt - 1] == 0 {
-                    b[bt - 1] = 1;
+                if base[base_fill_len - 1] == 0 {
+                    base[base_fill_len - 1] = 1;
                 }
                 let mut sq = vec![0u64; limbs * 2 + 1];
-                crate::int::algos::mul::mul_schoolbook::mul_schoolbook(&b, &b, &mut sq);
+                crate::int::algos::mul::mul_schoolbook::mul_schoolbook(&base, &base, &mut sq);
                 let mut n = vec![0u64; limbs];
                 n.copy_from_slice(&sq[..limbs]);
                 assert_eq!(
@@ -488,12 +494,12 @@ mod tests {
         for &limbs in &[32usize, 48, 64] {
             for _ in 0..20 {
                 let mut n = vec![0u64; limbs];
-                let top = 1 + (next() as usize % limbs);
-                for l in n.iter_mut().take(top) {
-                    *l = next();
+                let fill_len = 1 + (next() as usize % limbs);
+                for limb in n.iter_mut().take(fill_len) {
+                    *limb = next();
                 }
-                if n[top - 1] == 0 {
-                    n[top - 1] = 1;
+                if n[fill_len - 1] == 0 {
+                    n[fill_len - 1] = 1;
                 }
                 assert_eq!(
                     kara(&n, limbs),
@@ -503,16 +509,16 @@ mod tests {
             }
             // Perfect-square ±1 edges at this width.
             for _ in 0..6 {
-                let mut b = vec![0u64; limbs];
-                let bt = 1 + (next() as usize % limbs.div_ceil(2).max(1));
-                for l in b.iter_mut().take(bt) {
-                    *l = next();
+                let mut base = vec![0u64; limbs];
+                let base_fill_len = 1 + (next() as usize % limbs.div_ceil(2).max(1));
+                for limb in base.iter_mut().take(base_fill_len) {
+                    *limb = next();
                 }
-                if b[bt - 1] == 0 {
-                    b[bt - 1] = 1;
+                if base[base_fill_len - 1] == 0 {
+                    base[base_fill_len - 1] = 1;
                 }
                 let mut sq = vec![0u64; limbs * 2 + 1];
-                crate::int::algos::mul::mul_schoolbook::mul_schoolbook(&b, &b, &mut sq);
+                crate::int::algos::mul::mul_schoolbook::mul_schoolbook(&base, &base, &mut sq);
                 let mut n = vec![0u64; limbs];
                 n.copy_from_slice(&sq[..limbs]);
                 assert_eq!(

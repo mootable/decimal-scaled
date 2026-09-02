@@ -28,8 +28,8 @@ use crate::int::types::Uint;
 /// dispatcher and the type methods that delegate to it can be `const fn`
 /// too.
 #[inline]
-pub(crate) const fn sqr_half_product<const N: usize>(x: Uint<N>) -> Uint<N> {
+pub(crate) const fn sqr_half_product<const N: usize>(value: Uint<N>) -> Uint<N> {
     let mut out = [0u64; N];
-    sqr_low_fixed(x.as_limbs(), &mut out);
+    sqr_low_fixed(value.as_limbs(), &mut out);
     Uint::<N>::from_limbs(out)
 }

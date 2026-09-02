@@ -27,6 +27,24 @@
 //!   0.5.0 contract panics everywhere in every build — that difference is
 //!   exactly what the report shows.)
 
+use decimal_scaled_golden::Function;
+
+/// Functions the LIVE surface declares — and so [`crate::FUNCS`] lists — that NO
+/// pinned historical release implements.
+///
+/// [`crate::FUNCS`] is the live function list, shared with the live subject, so a
+/// function added to the current surface becomes visible to every history subject
+/// the moment it lands. A release that predates the function has no kernel for it,
+/// and declaring it would send the gate straight into the unreachable panic arm of
+/// this module's `compute`. Filtering it out here keeps each era's capability map
+/// honest, exactly as the per-version `supports` predicate does — this list is the
+/// era-INVARIANT half of that same rule, for a fact true of every pinned release
+/// rather than of one width or one version.
+///
+/// `log1p` and `expm1` both landed on the live surface in 0.5.1; no 0.3.x/0.4.x
+/// release has either.
+const NOT_IN_ANY_RELEASE: &[Function] = &[Function::Expm1, Function::Log1p];
+
 /// Generate one historical-version subject module: the crate-era bridge
 /// (`RoundingMode` map + inherent `mul_with`/`div_with` ops trait), the generic
 /// compute/limits leaves, the `(width, scale)` dispatch over that version's cell
@@ -65,17 +83,24 @@ macro_rules! historical_subject {
             /// decimal-scale-test's `tests/history.rs` gate).
             pub const CELLS: &[(u32, u32)] = &[ $( $( ($w, $s), )+ )+ ];
 
-            /// Map the harness rounding mode onto this era's `RoundingMode` — the
-            /// six variants are identical across 0.3.x..0.5.0, but each crate
-            /// version is its own type.
-            fn hist_mode(m: RoundingMode) -> HistMode {
+            /// Map the harness rounding mode onto this era's `RoundingMode`.
+            ///
+            /// Six variants are identical across 0.3.x..0.5.0, but each crate
+            /// version is its own type. `AwayFromZero` and `ZeroFiveUp` arrived
+            /// in 0.5.1 and have NO counterpart in any pinned release, so they
+            /// map to `None` — a historical subject cannot be asked to round a
+            /// way its own code never implemented. Returning an `Option` rather
+            /// than substituting a near-neighbour keeps that honest: a silent
+            /// remap would time one mode and label it another.
+            fn hist_mode(m: RoundingMode) -> Option<HistMode> {
                 match m {
-                    RoundingMode::HalfToEven => HistMode::HalfToEven,
-                    RoundingMode::HalfAwayFromZero => HistMode::HalfAwayFromZero,
-                    RoundingMode::HalfTowardZero => HistMode::HalfTowardZero,
-                    RoundingMode::Ceiling => HistMode::Ceiling,
-                    RoundingMode::Floor => HistMode::Floor,
-                    RoundingMode::Trunc => HistMode::Trunc,
+                    RoundingMode::HalfToEven => Some(HistMode::HalfToEven),
+                    RoundingMode::HalfAwayFromZero => Some(HistMode::HalfAwayFromZero),
+                    RoundingMode::HalfTowardZero => Some(HistMode::HalfTowardZero),
+                    RoundingMode::Ceiling => Some(HistMode::Ceiling),
+                    RoundingMode::Floor => Some(HistMode::Floor),
+                    RoundingMode::Trunc => Some(HistMode::Trunc),
+                    RoundingMode::AwayFromZero | RoundingMode::ZeroFiveUp => None,
                 }
             }
 
@@ -107,6 +132,15 @@ macro_rules! historical_subject {
                     Function::Log2 => x.log2_strict_with(m),
                     Function::Log10 => x.log10_strict_with(m),
                     Function::Exp2 => x.exp2_strict_with(m),
+                    // Neither function exists in any pinned historical release, so
+                    // this arm is unreachable. Both are now LIVE, so `FUNCS` declares
+                    // both; both are kept out of every era's capability map by
+                    // `NOT_IN_ANY_RELEASE`, and the runner never executes a function
+                    // the subject does not declare. Anything added to `FUNCS` that
+                    // predates no release must join that list, or it lands here.
+                    Function::Expm1 | Function::Log1p => {
+                        panic!("no decimal-scaled {} kernel", func.name())
+                    }
                     Function::Sin => x.sin_strict_with(m),
                     Function::Cos => x.cos_strict_with(m),
                     Function::Tan => x.tan_strict_with(m),
@@ -271,11 +305,17 @@ macro_rules! historical_subject {
                 fn capabilities(&self) -> Capabilities {
                     let supports: fn(u32, Function) -> bool = $supports;
                     let mut functions = BTreeMap::new();
-                    for &f in FUNCS {
-                        if !supports(self.width, f) {
-                            continue;
+                    // A rounding mode this pinned release never had is declared
+                    // by declaring NOTHING: presence in the map IS the support
+                    // claim, so an empty map runs no function for this subject
+                    // rather than reporting a failure it could never have passed.
+                    if hist_mode(self.mode).is_some() {
+                        for &f in FUNCS {
+                            if super::NOT_IN_ANY_RELEASE.contains(&f) || !supports(self.width, f) {
+                                continue;
+                            }
+                            functions.insert(f, FnSupport { mode: self.mode, overflow: self.overflow(f) });
                         }
-                        functions.insert(f, FnSupport { mode: self.mode, overflow: self.overflow(f) });
                     }
                     let mut config = BTreeMap::new();
                     config.insert("width".into(), self.width.to_string());
@@ -311,18 +351,75 @@ macro_rules! historical_subject {
                     _overflow: Overflow,
                 ) -> impl Fn(&[String]) -> Computed<String> {
                     let (width, scale, m) = (self.width, self.scale, hist_mode(mode));
-                    move |inputs| dispatch_compute(width, scale, func, inputs, m)
+                    move |inputs| match m {
+                        Some(m) => dispatch_compute(width, scale, func, inputs, m),
+                        // Declared, not skipped: the reason reaches the report
+                        // rather than the cell quietly going missing.
+                        None => Computed::Error(format!(
+                            "{VERSION}: rounding mode not present in this release"
+                        )),
+                    }
                 }
             }
         }
     };
 }
 
-#[cfg(feature = "history-044")]
+#[cfg(feature = "history-050")]
 historical_subject! {
-    /// decimal-scaled 0.4.4 — the immediately-previous release. Same tier table
+    /// decimal-scaled 0.5.0 — the immediately-previous release. Same tier table
     /// and trait surface as live, so it covers every live band-edge cell and
     /// every golden function at every width.
+    ///
+    /// `expm1` and `log1p` are not declared: both landed in 0.5.1, and
+    /// `NOT_IN_ANY_RELEASE` keeps them out of every era's map. The two rounding
+    /// modes 0.5.1 added are declined by the `hist_mode` gate, since 0.5.0's
+    /// `RoundingMode` has six variants.
+    mod v050, crate ds_050, version "0.5.0",
+    supports |_width, _func| true,
+    cells {
+        // D18 — the narrow tier (always compiled)
+        D18 => 18 { 0, 3, 4, 9, 13, 17 };
+        // D38 (always compiled)
+        D38 => 38 { 0, 2, 6, 9, 10, 12, 17, 18, 19, 28, 37 };
+        // D57 — 192-bit
+        #[cfg(feature = "d57")]
+        D57 => 57 { 0, 14, 20, 28, 30, 42, 56 };
+        // D76 — 256-bit
+        #[cfg(feature = "d76")]
+        D76 => 76 { 0, 18, 19, 38, 40, 57, 75 };
+        // D115 — 384-bit
+        #[cfg(feature = "d115")]
+        D115 => 115 { 0, 28, 50, 57, 86, 114 };
+        // D153 — 512-bit
+        #[cfg(feature = "d153")]
+        D153 => 153 { 0, 38, 76, 114, 152 };
+        // D230 — 768-bit
+        #[cfg(feature = "d230")]
+        D230 => 230 { 0, 30, 57, 115, 172, 229 };
+        // D307 — 1024-bit
+        #[cfg(feature = "d307")]
+        D307 => 307 { 0, 30, 50, 70, 76, 120, 153, 230, 290, 306 };
+        // D462 — 1536-bit
+        #[cfg(feature = "d462")]
+        D462 => 462 { 0, 30, 100, 115, 180, 231, 346, 461 };
+        // D616 — 2048-bit
+        #[cfg(feature = "d616")]
+        D616 => 616 { 0, 30, 130, 154, 240, 308, 462, 590, 615 };
+        // D924 — 3072-bit
+        #[cfg(feature = "d924")]
+        D924 => 924 { 0, 30, 180, 231, 350, 462, 693, 900, 923 };
+        // D1232 — 4096-bit
+        #[cfg(feature = "d1232")]
+        D1232 => 1232 { 0, 30, 250, 308, 470, 616, 924, 1200, 1231 };
+    }
+}
+
+#[cfg(feature = "history-044")]
+historical_subject! {
+    /// decimal-scaled 0.4.4 — the last 0.4.x release. Same tier table and trait
+    /// surface as live, so it covers every live band-edge cell and every golden
+    /// function at every width.
     mod v044, crate ds_044, version "0.4.4",
     supports |_width, _func| true,
     cells {

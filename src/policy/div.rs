@@ -112,8 +112,8 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
 #[inline]
 #[must_use]
 pub(crate) fn dispatch<const N: usize, const SCALE: u32>(
-    a: Int<N>,
-    b: Int<N>,
+    dividend: Int<N>,
+    divisor: Int<N>,
     mode: RoundingMode,
 ) -> Int<N>
 where
@@ -123,20 +123,24 @@ where
     // (N, SCALE) via the `const` block — a bare `TEN.pow(SCALE)` call runs
     // the int pow square-and-multiply at RUNTIME (the exponent reaches the
     // method as a plain `u32`), so the `const {}` is load-bearing.
-    let mult: Int<N> = const { <Int<N>>::TEN.pow(SCALE) };
+    let multiplier: Int<N> = const { <Int<N>>::TEN.pow(SCALE) };
     let algo = match const { select::<N, SCALE>() } {
-        Select::ByAlgorithm(a) => a,
-        Select::ByValue(f) => f(&a, &b),
+        Select::ByAlgorithm(algorithm) => algorithm,
+        Select::ByValue(choose) => choose(&dividend, &divisor),
     };
     match algo {
         Algorithm::Native => {
-            crate::algos::div::div_native::div_native::<N, SCALE>(a, b, mode)
+            crate::algos::div::div_native::div_native::<N, SCALE>(dividend, divisor, mode)
         }
         Algorithm::WidenScale => {
-            crate::algos::div::div_widen_scale::div_widen_scale::<N>(a, b, mult, mode)
+            crate::algos::div::div_widen_scale::div_widen_scale::<N>(
+                dividend, divisor, multiplier, mode
+            )
         }
         Algorithm::Schoolbook => {
-            crate::algos::div::div_schoolbook::div_schoolbook::<N>(a, b, mult, mode)
+            crate::algos::div::div_schoolbook::div_schoolbook::<N>(
+                dividend, divisor, multiplier, mode
+            )
         }
     }
 }

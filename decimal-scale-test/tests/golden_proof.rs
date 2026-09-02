@@ -3,12 +3,11 @@
 //! (`DsSubject::new(38, 19)`, the same adapter the full surface enumerates); the
 //! full 88-cell run is the `golden` gate.
 
-
-use decimal_scaled_golden::{
-    ExecutionResult, FileLoader, Function, GoldenRunner, Outcome, OverflowValidator, ParallelRunner,
-    RoundingValidator, RunOnce,
-};
 use decimal_scale_test::{golden_dir, thread_count, DsSubject, GEN_PRECISION};
+use decimal_scaled_golden::{
+    ExecutionResult, FileLoader, Function, GoldenRunner, Outcome, OverflowValidator,
+    ParallelRunner, RoundingValidator, RunOnce,
+};
 
 #[test]
 fn golden_proof_d38_s19() {
@@ -20,7 +19,9 @@ fn golden_proof_d38_s19() {
         // silent — which it does only if `limits` correctly reports these values as
         // in range (a broken envelope would flag every cell).
         validators: vec![
-            Box::new(RoundingValidator { gen_precision: GEN_PRECISION }),
+            Box::new(RoundingValidator {
+                gen_precision: GEN_PRECISION,
+            }),
             Box::new(OverflowValidator),
         ],
     };
@@ -44,13 +45,30 @@ fn golden_proof_d38_s19() {
                     Outcome::Precision { .. } => {}
                     other => {
                         bad += 1;
-                        eprintln!("{} [{}.au:{}]: {:?} on {:?}", fc.function.name(), fc.function.name(), cell.line, other, cell.inputs);
+                        eprintln!(
+                            "{} [{}.au:{}]: {:?} on {:?}",
+                            fc.function.name(),
+                            fc.function.name(),
+                            cell.line,
+                            other,
+                            cell.inputs
+                        );
                     }
                 }
             }
         }
-        eprintln!("{}: {fpass} pass / {} cells", fc.function.name(), fc.cells.len());
+        eprintln!(
+            "{}: {fpass} pass / {} cells",
+            fc.function.name(),
+            fc.cells.len()
+        );
     }
-    assert_eq!(bad, 0, "harness found mis-rounded / wrong-mode / panic cells");
-    assert!(pass > 0, "harness produced no Pass cells across any function");
+    assert_eq!(
+        bad, 0,
+        "harness found mis-rounded / wrong-mode / panic cells"
+    );
+    assert!(
+        pass > 0,
+        "harness produced no Pass cells across any function"
+    );
 }

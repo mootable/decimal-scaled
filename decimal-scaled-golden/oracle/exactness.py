@@ -76,7 +76,11 @@ def _provably_exact(func: str, inputs: List[str], value: str) -> bool:
 
     # Pure-transcendental family: irrational for every in-domain nonzero rational
     # input (Lindemann-Weierstrass and corollaries) — exact ONLY at the known points.
-    if func in ("exp", "sin", "tan", "asin", "atan", "sinh", "tanh", "asinh", "atanh"):
+    # expm1(a) = e^a - 1 is transcendental wherever e^a is (rational a != 0), and
+    # log1p(a) = ln(1 + a) is transcendental for every rational 1 + a != 1 — so both
+    # join the family whose only exact point is the origin.
+    if func in ("exp", "expm1", "log1p", "sin", "tan", "asin", "atan",
+                "sinh", "tanh", "asinh", "atanh"):
         return a == 0  # f(0) = 0 (exp(0) = 1)
     if func in ("cos", "cosh"):
         return a == 0  # = 1

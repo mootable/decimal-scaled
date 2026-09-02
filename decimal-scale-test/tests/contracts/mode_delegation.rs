@@ -13,7 +13,8 @@ mod from_arithmetic_mode_aware {
     #[test]
     fn mul_with_modes() {
         // 1.5 * 2.0 = 3.0 (exact at any mode)
-        let a = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_500_000_000_000_i128).unwrap());
+        let a =
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_500_000_000_000_i128).unwrap());
         let b = D38s12::try_from(2).unwrap();
         for m in [
             RoundingMode::HalfToEven,
@@ -22,6 +23,8 @@ mod from_arithmetic_mode_aware {
             RoundingMode::Trunc,
             RoundingMode::Floor,
             RoundingMode::Ceiling,
+            RoundingMode::AwayFromZero,
+            RoundingMode::ZeroFiveUp,
         ] {
             let r = a.mul_with(b, m);
             assert_eq!(r.to_bits(), 3_000_000_000_000, "mode {m:?}");
@@ -38,6 +41,8 @@ mod from_arithmetic_mode_aware {
         let r_trunc = a.div_with(b, RoundingMode::Trunc);
         let r_floor = a.div_with(b, RoundingMode::Floor);
         let r_ceil = a.div_with(b, RoundingMode::Ceiling);
+        let r_up = a.div_with(b, RoundingMode::AwayFromZero);
+        let r_zfu = a.div_with(b, RoundingMode::ZeroFiveUp);
         // Same magnitude (off by â‰¤ 1 LSB).
         let bits = [
             r_even.to_bits(),
@@ -45,6 +50,8 @@ mod from_arithmetic_mode_aware {
             r_trunc.to_bits(),
             r_floor.to_bits(),
             r_ceil.to_bits(),
+            r_up.to_bits(),
+            r_zfu.to_bits(),
         ];
         let min = *bits.iter().min().unwrap();
         let max = *bits.iter().max().unwrap();
@@ -54,7 +61,8 @@ mod from_arithmetic_mode_aware {
 
     #[test]
     fn mul_assign_div_assign() {
-        let mut v = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_500_000_000_000_i128).unwrap()); // 1.5
+        let mut v =
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_500_000_000_000_i128).unwrap()); // 1.5
         v *= D38s12::try_from(2).unwrap();
         assert_eq!(v.to_bits(), 3_000_000_000_000);
         v /= D38s12::try_from(3).unwrap();
@@ -72,7 +80,9 @@ mod from_arithmetic_mode_aware {
     fn d18_mul_with_modes_exact_at_s18() {
         use decimal_scaled::D18;
         // 1.5 * 2.0 = 3.0 (exact under every mode).
-        let a = D18::<18>::from_bits(decimal_scaled::Int::<1>::from(1_500_000_000_000_000_000_i64));
+        let a = D18::<18>::from_bits(decimal_scaled::Int::<1>::from(
+            1_500_000_000_000_000_000_i64,
+        ));
         let b = D18::<18>::try_from(2).unwrap();
         let expected = 3_000_000_000_000_000_000_i64;
         for m in [
@@ -82,6 +92,8 @@ mod from_arithmetic_mode_aware {
             RoundingMode::Trunc,
             RoundingMode::Floor,
             RoundingMode::Ceiling,
+            RoundingMode::AwayFromZero,
+            RoundingMode::ZeroFiveUp,
         ] {
             let r = a.mul_with(b, m);
             assert_eq!(r.to_bits(), expected, "mode {m:?}");
@@ -91,7 +103,7 @@ mod from_arithmetic_mode_aware {
     #[test]
     fn d18_div_with_modes_one_third_at_s18() {
         use decimal_scaled::D18;
-        // 1.0 / 3.0 at scale 18 â€” never exact. Check all six modes agree on
+        // 1.0 / 3.0 at scale 18 â€” never exact. Check all eight modes agree on
         // the truncated quotient and disagree by at most 1 LSB.
         let a = D18::<18>::try_from(1).unwrap();
         let b = D18::<18>::try_from(3).unwrap();
@@ -102,6 +114,8 @@ mod from_arithmetic_mode_aware {
             a.div_with(b, RoundingMode::Trunc).to_bits(),
             a.div_with(b, RoundingMode::Floor).to_bits(),
             a.div_with(b, RoundingMode::Ceiling).to_bits(),
+            a.div_with(b, RoundingMode::AwayFromZero).to_bits(),
+            a.div_with(b, RoundingMode::ZeroFiveUp).to_bits(),
         ];
         let min = *bits.iter().min().unwrap();
         let max = *bits.iter().max().unwrap();
@@ -116,7 +130,9 @@ mod from_arithmetic_mode_aware {
     #[test]
     fn d18_mul_negative_signs_at_s18() {
         use decimal_scaled::D18;
-        let a = D18::<18>::from_bits(decimal_scaled::Int::<1>::from(1_500_000_000_000_000_000_i64));
+        let a = D18::<18>::from_bits(decimal_scaled::Int::<1>::from(
+            1_500_000_000_000_000_000_i64,
+        ));
         let b_pos = D18::<18>::try_from(2).unwrap();
         let b_neg = -b_pos;
         // (+1.5) * (-2.0) = -3.0
@@ -198,7 +214,11 @@ mod from_arithmetic_mode_aware {
     }
 }
 
-#[cfg(all(feature = "strict", not(feature = "fast"), any(feature = "d76", feature = "wide")))]
+#[cfg(all(
+    feature = "strict",
+    not(feature = "fast"),
+    any(feature = "d76", feature = "wide")
+))]
 mod from_rounding_mode_matrix {
     //! Mode-aware and precision-aware transcendental matrix.
     //!
@@ -215,7 +235,7 @@ mod from_rounding_mode_matrix {
     //! - Non-half rounding modes (`Floor` / `Ceiling`) produce results
     //!   that bracket the half-mode result for inexact inputs.
 
-    use decimal_scaled::{D38, D76, RoundingMode};
+    use decimal_scaled::{RoundingMode, D38, D76};
     use std::str::FromStr;
 
     const STRICT_GUARD: u32 = 30;
@@ -350,6 +370,8 @@ mod from_rounding_mode_matrix {
             RoundingMode::Trunc,
             RoundingMode::Floor,
             RoundingMode::Ceiling,
+            RoundingMode::AwayFromZero,
+            RoundingMode::ZeroFiveUp,
         ] {
             assert_eq!(x.sqrt_strict_with(m), two, "sqrt(4) under {m:?}");
         }
@@ -376,6 +398,8 @@ mod from_rounding_mode_matrix {
             RoundingMode::Trunc,
             RoundingMode::Floor,
             RoundingMode::Ceiling,
+            RoundingMode::AwayFromZero,
+            RoundingMode::ZeroFiveUp,
         ] {
             assert_eq!(x.cbrt_strict_with(m), two, "cbrt(8) under {m:?}");
         }

@@ -80,8 +80,9 @@ mod from_powf_integer_fastpath_parity {
     /// fast-path bounds check.
     #[test]
     fn d38_powf_zero_exp_returns_one() {
-        let base =
-            D38::<12>::from_bits(decimal_scaled::Int::<2>::try_from(2_000_000_000_000_i128).unwrap());
+        let base = D38::<12>::from_bits(
+            decimal_scaled::Int::<2>::try_from(2_000_000_000_000_i128).unwrap(),
+        );
         let zero_exp = D38::<12>::try_from(0).unwrap();
         assert_eq!(
             base.powf_strict(zero_exp).to_bits(),
@@ -93,8 +94,9 @@ mod from_powf_integer_fastpath_parity {
     /// through `ONE / pow(|n|)`. Exercises the sign branch.
     #[test]
     fn d38_powf_negative_integer_exp_parity() {
-        let base =
-            D38::<12>::from_bits(decimal_scaled::Int::<2>::try_from(2_000_000_000_000_i128).unwrap()); // 2.0
+        let base = D38::<12>::from_bits(
+            decimal_scaled::Int::<2>::try_from(2_000_000_000_000_i128).unwrap(),
+        ); // 2.0
         for n in [-1_i32, -2, -3, -5, -10] {
             let exp_d = D38::<12>::try_from(n).unwrap();
             assert_eq!(
@@ -184,13 +186,15 @@ mod from_powf_integer_fastpath_parity {
 mod from_powf_wide_integer_exact {
     use decimal_scaled::{Int, RoundingMode};
 
-    const MODES: [RoundingMode; 6] = [
+    const MODES: [RoundingMode; 8] = [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
         RoundingMode::HalfTowardZero,
         RoundingMode::Trunc,
         RoundingMode::Floor,
         RoundingMode::Ceiling,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ];
 
     /// `(base, exponent, divisor = base^|exponent|)` — exact (terminating)
@@ -226,9 +230,14 @@ mod from_powf_wide_integer_exact {
                     for &mode in &MODES {
                         let got = base.powf_strict_with(exp, mode).to_bits();
                         assert_eq!(
-                            got, want,
+                            got,
+                            want,
                             "{} S={} {}^{} mode={:?}",
-                            stringify!($Ty), $S, b, e, mode
+                            stringify!($Ty),
+                            $S,
+                            b,
+                            e,
+                            mode
                         );
                     }
                 }
@@ -258,10 +267,17 @@ mod from_powf_wide_integer_exact {
     /// negative exponent by one correctly-rounded division — including the
     /// non-terminating reciprocal `1.5^-1 = 0.666...`, whose last digit each mode
     /// must place per its rule (residual `.66... > half`: nearest modes round up,
-    /// Trunc/Floor keep, Ceiling bumps).
+    /// Trunc/Floor keep, Ceiling and AwayFromZero bump, and ZeroFiveUp keeps —
+    /// its pivot is the kept digit `6`, not the size of the discard).
     mod fractional_base {
         use super::MODES;
-        use decimal_scaled::{RoundingMode, D1232, D57};
+        use decimal_scaled::{RoundingMode, D57};
+        // `D1232` is gated behind `d1232` / `xx-wide`, and its only use here is
+        // `d1232_fractional_exact_and_reciprocal` below. The import carries the
+        // SAME cfg as that test so neither a wide-only build (unresolved import)
+        // nor an xx-wide build (unused import) is left broken.
+        #[cfg(feature = "xx-wide")]
+        use decimal_scaled::D1232;
 
         fn sixes_with_last(scale: usize, last: char) -> String {
             let mut s = String::from("0.");
@@ -277,13 +293,36 @@ mod from_powf_wide_integer_exact {
                 type D = $D;
                 let parse = |s: &str| s.parse::<D>().unwrap();
                 for m in MODES {
-                    assert_eq!(parse("2.5").powf_strict_with(parse("2"), m), parse("6.25"), "{m:?} 2.5^2");
-                    assert_eq!(parse("0.5").powf_strict_with(parse("-2"), m), parse("4"), "{m:?} 0.5^-2");
-                    assert_eq!(parse("1.5").powf_strict_with(parse("3"), m), parse("3.375"), "{m:?} 1.5^3");
-                    assert_eq!(parse("0.1").powf_strict_with(parse("5"), m), parse("0.00001"), "{m:?} 0.1^5");
+                    assert_eq!(
+                        parse("2.5").powf_strict_with(parse("2"), m),
+                        parse("6.25"),
+                        "{m:?} 2.5^2"
+                    );
+                    assert_eq!(
+                        parse("0.5").powf_strict_with(parse("-2"), m),
+                        parse("4"),
+                        "{m:?} 0.5^-2"
+                    );
+                    assert_eq!(
+                        parse("1.5").powf_strict_with(parse("3"), m),
+                        parse("3.375"),
+                        "{m:?} 1.5^3"
+                    );
+                    assert_eq!(
+                        parse("0.1").powf_strict_with(parse("5"), m),
+                        parse("0.00001"),
+                        "{m:?} 0.1^5"
+                    );
                     let last = match m {
-                        RoundingMode::Trunc | RoundingMode::Floor => '6',
-                        _ => '7', // nearest (residual above half) and Ceiling round up
+                        // `ZeroFiveUp` truncates alongside them: the last KEPT
+                        // digit is `6`, not one of its `0`/`5` pivots, so the
+                        // size of the discard is irrelevant.
+                        RoundingMode::Trunc
+                        | RoundingMode::Floor
+                        | RoundingMode::ZeroFiveUp => '6',
+                        // nearest (residual above half), Ceiling and
+                        // AwayFromZero round up.
+                        _ => '7',
                     };
                     assert_eq!(
                         parse("1.5").powf_strict_with(parse("-1"), m),

@@ -31,10 +31,11 @@ pub mod history;
 /// Every function the golden set covers (a missing file just contributes no cases).
 pub const FUNCS: &[Function] = &[
     Function::Sqrt, Function::Cbrt, Function::Exp, Function::Ln, Function::Log2, Function::Log10,
-    Function::Exp2, Function::Sin, Function::Cos, Function::Tan, Function::Atan, Function::Asin,
-    Function::Acos, Function::Sinh, Function::Cosh, Function::Tanh, Function::Asinh, Function::Acosh,
-    Function::Atanh, Function::Log, Function::Atan2, Function::Powf, Function::Hypot, Function::Add,
-    Function::Sub, Function::Mul, Function::Div, Function::Rem,
+    Function::Exp2, Function::Expm1, Function::Log1p, Function::Sin, Function::Cos, Function::Tan,
+    Function::Atan, Function::Asin, Function::Acos, Function::Sinh, Function::Cosh, Function::Tanh,
+    Function::Asinh, Function::Acosh, Function::Atanh, Function::Log, Function::Atan2,
+    Function::Powf, Function::Hypot, Function::Add, Function::Sub, Function::Mul, Function::Div,
+    Function::Rem,
 ];
 
 /// Inherent rounded mul/div aren't on a width-generic trait, so bridge them
@@ -81,6 +82,8 @@ where
         Function::Log2 => x.log2_strict_with(m),
         Function::Log10 => x.log10_strict_with(m),
         Function::Exp2 => x.exp2_strict_with(m),
+        Function::Expm1 => x.expm1_strict_with(m),
+        Function::Log1p => x.log1p_strict_with(m),
         Function::Sin => x.sin_strict_with(m),
         Function::Cos => x.cos_strict_with(m),
         Function::Tan => x.tan_strict_with(m),

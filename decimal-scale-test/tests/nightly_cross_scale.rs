@@ -9,7 +9,7 @@
 #![allow(incomplete_features)]
 
 mod from_cross_scale_nightly {
-    use decimal_scaled::{D38, cross};
+    use decimal_scaled::{cross, D38};
 
     #[test]
     fn cross_mul_same_width_picks_higher_scale() {

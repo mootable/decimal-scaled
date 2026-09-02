@@ -90,8 +90,8 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
 #[inline]
 fn resolve<const N: usize, const SCALE: u32>(raw: &Int<N>) -> Algorithm {
     match const { select::<N, SCALE>() } {
-        Select::ByAlgorithm(a) => a,
-        Select::ByValue(f) => f(raw),
+        Select::ByAlgorithm(algorithm) => algorithm,
+        Select::ByValue(choose) => choose(raw),
     }
 }
 
@@ -462,13 +462,15 @@ mod tang_rung_tests {
     //! fall up to the tier width), plus ordinary anchors.
 
     #[cfg(feature = "d307")]
-    const ALL_MODES: [crate::support::rounding::RoundingMode; 6] = [
+    const ALL_MODES: [crate::support::rounding::RoundingMode; 8] = [
         crate::support::rounding::RoundingMode::HalfToEven,
         crate::support::rounding::RoundingMode::HalfAwayFromZero,
         crate::support::rounding::RoundingMode::HalfTowardZero,
         crate::support::rounding::RoundingMode::Trunc,
         crate::support::rounding::RoundingMode::Floor,
         crate::support::rounding::RoundingMode::Ceiling,
+        crate::support::rounding::RoundingMode::AwayFromZero,
+        crate::support::rounding::RoundingMode::ZeroFiveUp,
     ];
 
     #[test]

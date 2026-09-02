@@ -2,8 +2,7 @@
 //! actually 1 ULP off, or just using a different rounding mode?
 //!
 //! For each test value, compute it to high precision via D76 strict
-//! and render at SCALE=19 under HalfToEven (our default),
-//! HalfAwayFromZero, HalfTowardZero, and truncate. Then print each
+//! and render at SCALE=19 under every rounding mode. Then print each
 //! external library's published output, so we can see which
 //! rounding-mode candidate the peer matches.
 
@@ -16,7 +15,7 @@ type Hi = D76<25>;
 
 fn print_candidates(name: &str, hi: Hi) {
     println!("\n## {} at SCALE=19", name);
-    // Render at scale 25 then explicitly rescale to 19 under each mode.
+    // Render at scale 25 then explicitly quantize to 19 under each mode.
     for mode in [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
@@ -24,8 +23,10 @@ fn print_candidates(name: &str, hi: Hi) {
         RoundingMode::Trunc,
         RoundingMode::Floor,
         RoundingMode::Ceiling,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ] {
-        let down: D76<19> = hi.rescale_with::<19>(mode);
+        let down: D76<19> = hi.quantize_with::<19>(mode);
         println!("  {:?} -> {}", mode, down);
     }
 }

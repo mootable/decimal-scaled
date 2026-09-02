@@ -20,17 +20,17 @@ from decimal import Decimal, localcontext, ROUND_HALF_EVEN
 from typing import List
 
 from ..functions import FUNCTIONS
-from ..oracle import Oracle, register
+from ..oracle import GUARD, Oracle, format_fetched, register
 
-# Digits computed beyond `precision` to decide termination (all-zero guard ⇒ exact),
-# plus the slack the derived compositions need so their accumulated rounding stays far
-# below the stored depth (a handful of ULP from ~3-5 chained ops — 60 digits is ample).
-TERM_GUARD = 40
+# Slack beyond `precision` + the shared GUARD, so a derived composition's accumulated
+# error stays far below the stored depth (a handful of ULP from ~3-5 chained ops —
+# 60 digits is ample). The termination guard itself is `oracle.GUARD`, shared.
 WORK_GUARD = 60
 
 _SUPPORTED = {
     "sqrt", "exp", "ln", "log10",                       # native, correctly-rounded
     "cbrt", "log2", "exp2", "log",                       # derived
+    "expm1", "log1p",                                    # derived
     "sinh", "cosh", "tanh", "asinh", "acosh", "atanh",   # derived
     "hypot", "powf",                                     # derived
     "add", "sub", "mul", "div", "rem",                   # native arithmetic
@@ -65,6 +65,17 @@ def _eval(func: str, xs: List[Decimal]) -> Decimal:
         return a.ln() / two.ln()
     if func == "exp2":
         return (a * two.ln()).exp()
+    if func == "expm1":
+        # exp(a) - 1. The relative cancellation for a small `a` costs no ABSOLUTE
+        # accuracy: exp(a) ~ 1 there, so its context-precision error is ~10^-prec
+        # and subtracting the exact 1 carries it through unchanged — well below the
+        # 10^-(precision+TERM_GUARD) depth `_format` reads.
+        return a.exp() - 1
+    if func == "log1p":
+        # ln(1 + a). Unlike the binary oracles, `1 + a` is EXACT here (base-10, no
+        # parse rounding), so the t -> -1 asymptote costs nothing: there is no input
+        # error for `1/(1+t)` to amplify.
+        return (1 + a).ln()
     if func == "cbrt":
         if a == 0:
             return Decimal(0)
@@ -98,31 +109,18 @@ def _eval(func: str, xs: List[Decimal]) -> Decimal:
     raise ValueError(f"decimal oracle does not handle {func}")
 
 
-def _format(r: Decimal, precision: int) -> str:
-    sign = "-" if r < 0 else ""
-    # scaled_guard = floor(|r| * 10^(precision+TERM_GUARD)), exact (×10^k shifts the
-    # exponent; int() truncates toward zero).
-    scaled_guard = int(abs(r).scaleb(precision + TERM_GUARD))
-    if scaled_guard % (10 ** TERM_GUARD) == 0:
-        exact = scaled_guard // (10 ** TERM_GUARD)  # value * 10^precision, exact
-        if exact == 0:
-            return "0"
-        z = 0
-        while z < precision and exact % 10 == 0:
-            exact //= 10
-            z += 1
-        frac_len = precision - z
-        if frac_len == 0:
-            return f"{sign}{exact}"
-        s = str(exact).rjust(frac_len + 1, "0")
-        return f"{sign}{s[:-frac_len]}.{s[-frac_len:]}"
-    scaled = scaled_guard // (10 ** TERM_GUARD)
-    if scaled == 0:
-        sign = ""  # never render a signed zero (-0.000…0)
-    if precision == 0:
-        return f"{sign}{scaled}"
-    s = str(scaled).rjust(precision + 1, "0")
-    return f"{sign}{s[:-precision]}.{s[-precision:]}"
+def _scaled_guard(r: Decimal, precision: int) -> int:
+    """`floor(|r| * 10^(precision+GUARD))` — this oracle's ONLY formatting primitive.
+
+    Exact: `scaleb` shifts the exponent and `int()` truncates toward zero, so nothing
+    is rounded here. What this cannot undo is that `Decimal.exp/ln/log10/sqrt` are
+    correctly rounded (half-even) at the CONTEXT precision whatever `ctx.rounding`
+    says — measured, not assumed — so `r` may already have carried across a run of
+    nines before it arrives. That is this oracle's resolution limit and the reason it
+    validates rather than generates: a point value behind a fixed window cannot pin a
+    truncation the way Arb's rigorous interval can.
+    """
+    return int(abs(r).scaleb(precision + GUARD))
 
 
 class DecimalOracle(Oracle):
@@ -141,17 +139,25 @@ class DecimalOracle(Oracle):
         # then size the working precision so `precision` fractional digits — plus the
         # termination guard and the composition slack — are all valid even for a
         # many-integer-digit result (exp/exp2/cosh/powf of a large argument).
-        base = precision + TERM_GUARD + WORK_GUARD
+        base = precision + GUARD + WORK_GUARD
         with localcontext() as ctx:
             ctx.prec = base
+            # Half-even for the COMPUTATION, deliberately. Rule 1's "rounded down"
+            # is the FETCH — the floor in `_scaled_guard` — not a bias applied to
+            # the working arithmetic. Forcing a direction here is not free: it is
+            # inert for `exp`/`ln`/`log10`/`sqrt` (they are correctly rounded
+            # half-even whatever the context says) and on everything else it just
+            # skews this oracle's own answer, which for `rem` measurably widened
+            # its disagreement with the generator. Nothing is rounded AFTER the
+            # computation, which is what the contract actually requires.
             ctx.rounding = ROUND_HALF_EVEN
             r = _eval(func, xs)
             int_digits = r.adjusted() + 1 if r != 0 else 1
-            need = precision + max(0, int_digits) + TERM_GUARD + WORK_GUARD
+            need = precision + max(0, int_digits) + GUARD + WORK_GUARD
             if ctx.prec < need:
                 ctx.prec = need
                 r = _eval(func, xs)
-            return _format(r, precision)
+            return format_fetched(r < 0, _scaled_guard(r, precision), precision)
 
 
 register("decimal", DecimalOracle)

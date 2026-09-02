@@ -17,7 +17,7 @@
 //!
 //! `π` is supplied by the caller as a working-scale value rather than
 //! computed here, so the caller owns the const-fold seam
-//! (`pi_by_scale` on the hot `w == SCALE + GUARD` path,
+//! (`pi_by_scale` on the hot `working_scale == SCALE + GUARD` path,
 //! `pi_by_working_scale` on the Ziv escalation path) — exactly the
 //! `ln2` parameter shape of [`exp_generic::ln_fixed`].
 //!
@@ -32,36 +32,39 @@ use crate::algos::exp::exp_generic as eg;
 use crate::int::types::compute_limbs::ComputeLimbs;
 use crate::int::types::traits::BigInt;
 
-/// Taylor series for `sin` on a reduced `r ∈ [0, π/4]`, at scale `w`.
+/// Taylor series for `sin` on a reduced argument `r ∈ [0, π/4]`, at
+/// `working_scale`.
 ///
 /// `sin(r) = r − r³/3! + r⁵/5! − …`
-fn sin_taylor<S: BigInt>(r: S, w: u32) -> S
+fn sin_taylor<S: BigInt>(reduced_arg: S, working_scale: u32) -> S
 where
     S::Scratch: ComputeLimbs,
 {
-    let r2 = eg::mul::<S>(r, r, w);
-    let mut sum = r;
-    let mut term = r;
-    let mut k: u128 = 1;
+    let reduced_arg_squared = eg::mul::<S>(reduced_arg, reduced_arg, working_scale);
+    let mut sum = reduced_arg;
+    let mut term = reduced_arg;
+    let mut term_index: u128 = 1;
     loop {
-        term = eg::mul::<S>(term, r2, w) / eg::lit::<S>(((2 * k) * (2 * k + 1)) as i128);
+        term = eg::mul::<S>(term, reduced_arg_squared, working_scale)
+            / eg::lit::<S>(((2 * term_index) * (2 * term_index + 1)) as i128);
         if term == eg::zero::<S>() {
             break;
         }
-        if k % 2 == 1 {
+        if term_index % 2 == 1 {
             sum = sum - term;
         } else {
             sum = sum + term;
         }
-        k += 1;
-        if k > eg::SERIES_CAP {
+        term_index += 1;
+        if term_index > eg::SERIES_CAP {
             break;
         }
     }
     sum
 }
 
-/// Taylor series for `cos` on a reduced `r ∈ [0, π/4]`, at scale `w`.
+/// Taylor series for `cos` on a reduced argument `r ∈ [0, π/4]`, at
+/// `working_scale`.
 ///
 /// `cos(r) = 1 − r²/2! + r⁴/4! − r⁶/6! + …`
 ///
@@ -69,35 +72,37 @@ where
 /// leading `1` dominates the small even-power corrections — used as the
 /// "upper-half" branch of [`sin_fixed`] when the reduced argument
 /// exceeds π/4.
-fn cos_taylor<S: BigInt>(r: S, w: u32) -> S
+fn cos_taylor<S: BigInt>(reduced_arg: S, working_scale: u32) -> S
 where
     S::Scratch: ComputeLimbs,
 {
-    let r2 = eg::mul::<S>(r, r, w);
-    let one_w = eg::one::<S>(w);
+    let reduced_arg_squared = eg::mul::<S>(reduced_arg, reduced_arg, working_scale);
+    let one_w = eg::one::<S>(working_scale);
     let mut sum = one_w;
     let mut term = one_w;
-    let mut k: u128 = 1;
+    let mut term_index: u128 = 1;
     loop {
-        term = eg::mul::<S>(term, r2, w) / eg::lit::<S>(((2 * k - 1) * (2 * k)) as i128);
+        term = eg::mul::<S>(term, reduced_arg_squared, working_scale)
+            / eg::lit::<S>(((2 * term_index - 1) * (2 * term_index)) as i128);
         if term == eg::zero::<S>() {
             break;
         }
-        if k % 2 == 1 {
+        if term_index % 2 == 1 {
             sum = sum - term;
         } else {
             sum = sum + term;
         }
-        k += 1;
-        if k > eg::SERIES_CAP {
+        term_index += 1;
+        if term_index > eg::SERIES_CAP {
             break;
         }
     }
     sum
 }
 
-/// Sine of a working-scale value `v_w` (`= x · 10^w`) at scale `w`,
-/// with `π` supplied at the same scale (`pi_w = π · 10^w`).
+/// Sine of a `working_value` (`= x · 10^working_scale`) at
+/// `working_scale`, with `π` supplied at the same scale
+/// (`pi_at_working_scale = π · 10^working_scale`).
 ///
 /// Reduces to `|r| ≤ π/2` via mod-τ; then folds to `r ∈ [0, π/2]` via
 /// `sin(π − x) = sin(x)`; then routes to `sin_taylor` if `r ≤ π/4` or
@@ -108,78 +113,100 @@ where
 ///
 /// ## Argument-magnitude validity (the reduction error)
 ///
-/// `τ = 2π·10^w` is correctly rounded (error ≤ 1 working unit), so the
-/// reduced residue `r = v_w − q·τ` carries an absolute error of up to
-/// `q ≈ |x|/2π` working units — the mod-τ cancellation eats one guard
+/// `τ = 2π·10^working_scale` is correctly rounded (error ≤ 1 working
+/// unit), so the reduced residue `r = working_value − tau_multiple·τ`
+/// carries an absolute error of up to `tau_multiple ≈ |x|/2π` working
+/// units — the mod-τ cancellation eats one guard
 /// digit per integer digit of `|x|`. A caller choosing the work width /
 /// guard must budget `digits(|x|)` on top of the precision it needs
 /// (the work-rung selector's `D_BUDGET` axis; see
-/// `policy::work_rung::trig_rung`). `q` must also fit `i128`
+/// `policy::work_rung::trig_rung`). `tau_multiple` must also fit `i128`
 /// ([`eg::round_to_nearest_int`] truncates past it) — a bound inherited
 /// from the per-tier cores, not introduced here.
-pub(crate) fn sin_fixed<S: BigInt>(v_w: S, w: u32, pi_w: S) -> S
+pub(crate) fn sin_fixed<S: BigInt>(
+    working_value: S,
+    working_scale: u32,
+    pi_at_working_scale: S,
+) -> S
 where
     S::Scratch: ComputeLimbs,
 {
-    let tau = pi_w + pi_w;
-    let hp = pi_w >> 1;
-    let qp = hp >> 1; // π/4
-    let q = eg::round_to_nearest_int::<S>(eg::div::<S>(v_w, tau, w), w);
-    let r = v_w - eg::scale_by_k::<S>(tau, q);
-    let neg = r < eg::zero::<S>();
-    let abs_r = if neg { -r } else { r };
-    let reduced = if abs_r >= hp { pi_w - abs_r } else { abs_r };
-    let s = if reduced > qp {
+    let tau = pi_at_working_scale + pi_at_working_scale;
+    let half_pi = pi_at_working_scale >> 1;
+    let quarter_pi = half_pi >> 1; // π/4
+    let tau_multiple = eg::round_to_nearest_int::<S>(
+        eg::div::<S>(working_value, tau, working_scale),
+        working_scale,
+    );
+    let residue = working_value - eg::scale_by_k::<S>(tau, tau_multiple);
+    let sin_neg = residue < eg::zero::<S>();
+    let abs_residue = if sin_neg { -residue } else { residue };
+    let reduced = if abs_residue >= half_pi {
+        pi_at_working_scale - abs_residue
+    } else {
+        abs_residue
+    };
+    let sin_abs = if reduced > quarter_pi {
         // sin(reduced) = cos(π/2 − reduced); the cos argument lies in
         // [0, π/4].
-        cos_taylor::<S>(hp - reduced, w)
+        cos_taylor::<S>(half_pi - reduced, working_scale)
     } else {
-        sin_taylor::<S>(reduced, w)
+        sin_taylor::<S>(reduced, working_scale)
     };
-    if neg { -s } else { s }
+    if sin_neg { -sin_abs } else { sin_abs }
 }
 
 /// Cosine of a working-scale value via the cofunction identity
 /// `cos(x) = sin(π/2 − x)` — one [`sin_fixed`] evaluation, no sqrt.
-pub(crate) fn cos_fixed<S: BigInt>(v_w: S, w: u32, pi_w: S) -> S
+pub(crate) fn cos_fixed<S: BigInt>(
+    working_value: S,
+    working_scale: u32,
+    pi_at_working_scale: S,
+) -> S
 where
     S::Scratch: ComputeLimbs,
 {
-    sin_fixed::<S>((pi_w >> 1) - v_w, w, pi_w)
+    sin_fixed::<S>(
+        (pi_at_working_scale >> 1) - working_value,
+        working_scale,
+        pi_at_working_scale,
+    )
 }
 
-/// Taylor series for `atan` on a reduced `|x| < 1`, at scale `w`.
+/// Taylor series for `atan` on a reduced argument `|x| < 1`, at
+/// `working_scale`.
 ///
 /// `atan(x) = x − x³/3 + x⁵/5 − …`
-fn atan_taylor<S: BigInt>(x: S, w: u32) -> S
+fn atan_taylor<S: BigInt>(reduced_arg: S, working_scale: u32) -> S
 where
     S::Scratch: ComputeLimbs,
 {
-    let x2 = eg::mul::<S>(x, x, w);
-    let mut sum = x;
-    let mut term = x;
-    let mut k: u128 = 1;
+    let reduced_arg_squared = eg::mul::<S>(reduced_arg, reduced_arg, working_scale);
+    let mut sum = reduced_arg;
+    let mut term = reduced_arg;
+    let mut term_index: u128 = 1;
     loop {
-        term = eg::mul::<S>(term, x2, w);
-        let contrib = term / eg::lit::<S>((2 * k + 1) as i128);
+        term = eg::mul::<S>(term, reduced_arg_squared, working_scale);
+        let contrib = term / eg::lit::<S>((2 * term_index + 1) as i128);
         if contrib == eg::zero::<S>() {
             break;
         }
-        if k % 2 == 1 {
+        if term_index % 2 == 1 {
             sum = sum - contrib;
         } else {
             sum = sum + contrib;
         }
-        k += 1;
-        if k > eg::SERIES_CAP {
+        term_index += 1;
+        if term_index > eg::SERIES_CAP {
             break;
         }
     }
     sum
 }
 
-/// Arctangent of a working-scale value `v_w` (`= x · 10^w`) at scale `w`,
-/// with `π` supplied at the same scale (`pi_w = π · 10^w`) — only the
+/// Arctangent of a `working_value` (`= x · 10^working_scale`) at
+/// `working_scale`, with `π` supplied at the same scale
+/// (`pi_at_working_scale = π · 10^working_scale`) — only the
 /// `π/2` complement of the `|x| > 1` reciprocal fold consumes it.
 /// Result in `(−π/2, π/2)`.
 ///
@@ -193,46 +220,50 @@ where
 /// Unlike [`sin_fixed`]'s mod-τ reduction, the fold loses NO precision
 /// proportional to `digits(|x|)` — the reciprocal's relative error stays
 /// one working ULP, so there is no per-integer-digit guard cost. The
-/// only `|x|` axis is REPRESENTATION: the lifted `v_w` (and the fold's
-/// `10^(2w)` divide numerator) must fit `S` — a caller choosing a narrow
-/// work width must bound `digits(|x|)` so the lift fits (the work-rung
-/// selector's gate; see `policy::work_rung`).
-pub(crate) fn atan_fixed<S: BigInt>(v_w: S, w: u32, pi_w: S) -> S
+/// only `|x|` axis is REPRESENTATION: the lifted `working_value` (and the
+/// fold's `10^(2·working_scale)` divide numerator) must fit `S` — a
+/// caller choosing a narrow work width must bound `digits(|x|)` so the
+/// lift fits (the work-rung selector's gate; see `policy::work_rung`).
+pub(crate) fn atan_fixed<S: BigInt>(
+    working_value: S,
+    working_scale: u32,
+    pi_at_working_scale: S,
+) -> S
 where
     S::Scratch: ComputeLimbs,
 {
-    let one_w = eg::one::<S>(w);
-    let sign = v_w < eg::zero::<S>();
-    let mut x = if sign { -v_w } else { v_w };
+    let one_w = eg::one::<S>(working_scale);
+    let sign_neg = working_value < eg::zero::<S>();
+    let mut x = if sign_neg { -working_value } else { working_value };
     let mut add_half_pi = false;
     if x > one_w {
-        x = eg::div::<S>(one_w, x, w);
+        x = eg::div::<S>(one_w, x, working_scale);
         add_half_pi = true;
     }
     // Argument halvings: atan(x) = 2·atan(x/(1+√(1+x²))). Count keyed on
     // the working scale (the original per-tier kernel's break-even sweet
     // spots — wider working scale → more halvings worth taking).
-    let halvings: u32 = if w < 60 {
+    let halvings: u32 = if working_scale < 60 {
         5
-    } else if w < 110 {
+    } else if working_scale < 110 {
         6
     } else {
         7
     };
     let pow10_w = one_w;
     for _ in 0..halvings {
-        let x2 = eg::mul::<S>(x, x, w);
-        let denom = one_w + eg::sqrt_fixed::<S>(one_w + x2, w);
+        let x_squared = eg::mul::<S>(x, x, working_scale);
+        let denom = one_w + eg::sqrt_fixed::<S>(one_w + x_squared, working_scale);
         x = eg::div_cached::<S>(x, denom, pow10_w);
     }
-    let mut result = atan_taylor::<S>(x, w) << halvings;
+    let mut result = atan_taylor::<S>(x, working_scale) << halvings;
     if add_half_pi {
-        result = (pi_w >> 1) - result;
+        result = (pi_at_working_scale >> 1) - result;
     }
-    if sign { -result } else { result }
+    if sign_neg { -result } else { result }
 }
 
-/// Joint sine + cosine of a working-scale value at scale `w`.
+/// Joint sine + cosine of a working-scale value at `working_scale`.
 ///
 /// One Taylor series + one wide sqrt + one wide mul, vs two independent
 /// Taylor evaluations:
@@ -245,29 +276,40 @@ where
 /// - Recover `|cos(reduced)|` from the Pythagorean identity
 ///   `√(1 − sin²)`.
 /// - Apply the cached signs.
-pub(crate) fn sin_cos_fixed<S: BigInt>(v_w: S, w: u32, pi_w: S) -> (S, S)
+pub(crate) fn sin_cos_fixed<S: BigInt>(
+    working_value: S,
+    working_scale: u32,
+    pi_at_working_scale: S,
+) -> (S, S)
 where
     S::Scratch: ComputeLimbs,
 {
-    let tau = pi_w + pi_w;
-    let hp = pi_w >> 1;
-    let qp = hp >> 1;
-    let q = eg::round_to_nearest_int::<S>(eg::div::<S>(v_w, tau, w), w);
-    let r = v_w - eg::scale_by_k::<S>(tau, q);
-    let sin_neg = r < eg::zero::<S>();
-    let abs_r = if sin_neg { -r } else { r };
-    let cos_neg = abs_r > hp; // |r| > π/2 → cos negative.
-    let reduced = if cos_neg { pi_w - abs_r } else { abs_r };
-    let s_abs = if reduced > qp {
-        cos_taylor::<S>(hp - reduced, w)
+    let tau = pi_at_working_scale + pi_at_working_scale;
+    let half_pi = pi_at_working_scale >> 1;
+    let quarter_pi = half_pi >> 1;
+    let tau_multiple = eg::round_to_nearest_int::<S>(
+        eg::div::<S>(working_value, tau, working_scale),
+        working_scale,
+    );
+    let residue = working_value - eg::scale_by_k::<S>(tau, tau_multiple);
+    let sin_neg = residue < eg::zero::<S>();
+    let abs_residue = if sin_neg { -residue } else { residue };
+    let cos_neg = abs_residue > half_pi; // |r| > π/2 → cos negative.
+    let reduced = if cos_neg {
+        pi_at_working_scale - abs_residue
     } else {
-        sin_taylor::<S>(reduced, w)
+        abs_residue
+    };
+    let sin_abs = if reduced > quarter_pi {
+        cos_taylor::<S>(half_pi - reduced, working_scale)
+    } else {
+        sin_taylor::<S>(reduced, working_scale)
     };
     // cos² + sin² = 1 ⇒ |cos| = √(1 − sin²).
-    let one_w = eg::one::<S>(w);
-    let s2 = eg::mul::<S>(s_abs, s_abs, w);
-    let cos_abs = eg::sqrt_fixed::<S>(one_w - s2, w);
-    let sin_result = if sin_neg { -s_abs } else { s_abs };
+    let one_w = eg::one::<S>(working_scale);
+    let sin_abs_squared = eg::mul::<S>(sin_abs, sin_abs, working_scale);
+    let cos_abs = eg::sqrt_fixed::<S>(one_w - sin_abs_squared, working_scale);
+    let sin_result = if sin_neg { -sin_abs } else { sin_abs };
     let cos_result = if cos_neg { -cos_abs } else { cos_abs };
     (sin_result, cos_result)
 }

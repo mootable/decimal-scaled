@@ -24,7 +24,7 @@
 //! ```text
 //! GOLDEN_WIDTHS=18 GOLDEN_FUNCS=exp,sqrt \
 //!   cargo test -p decimal-scale-test --release \
-//!     --features wide,x-wide,xx-wide,history-044 \
+//!     --features wide,x-wide,xx-wide,history-050,history-044 \
 //!     --test history history_previous -- --ignored --nocapture
 //! ```
 
@@ -34,13 +34,21 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
+use decimal_scale_test::history::{v044, v050};
+/// The immediately-previous release, which `history_previous` ratchets against.
+///
+/// EVERY release repoints this at its predecessor. The live column is the
+/// working tree rather than a pinned version, so the release being replaced
+/// leaves the comparison the moment the version is bumped — leaving this behind
+/// silently widens the ratchet to two releases back, which is how 0.5.0 fell
+/// out of the picture.
+use decimal_scale_test::history::v050 as previous_release;
+use decimal_scale_test::{DsSubject, Filter, GEN_PRECISION};
 use decimal_scaled_golden::{
     CaseLoader, ConsoleReporter, DecimalSubject, ExecutionResult, FilterLoader, Function,
     GoldenCase, GoldenRunner, InlineReporter, Limits, Outcome, OverflowValidator, ParallelRunner,
     RoundingMode, RoundingValidator, RunCollector, SequentialRunner, SubjectCollector, Timed,
 };
-use decimal_scale_test::history::v044;
-use decimal_scale_test::{DsSubject, Filter, GEN_PRECISION};
 
 use common::{row_filter, CachingLoader};
 
@@ -130,7 +138,9 @@ fn history_cells(filter: &decimal_scale_test::Filter) -> Vec<(u32, u32)> {
 /// targets half its max scale. Mirrors the library comparison's `compare_scale` so both
 /// benches time decimal-scaled at the same precision.
 fn compare_scale(scales: &[u32]) -> u32 {
-    let max_scale = *scales.last().expect("each width has at least one compiled cell");
+    let max_scale = *scales
+        .last()
+        .expect("each width has at least one compiled cell");
     let target = if max_scale >= 30 { 30 } else { max_scale / 2 };
     *scales
         .iter()
@@ -159,26 +169,37 @@ fn runner(filter: &Filter) -> HistRunner {
     // then the row_filter applies sample/stripe on those 1000.
     let make_loader = |sample, stripe| -> Box<dyn CaseLoader> {
         Box::new(FilterLoader::new(
-            CapLoader { inner: CachingLoader::golden(), limit: 2000 },
+            CapLoader {
+                inner: CachingLoader::golden(),
+                limit: 2000,
+            },
             row_filter(sample, stripe),
         ))
     };
     if threads >= 2 {
         HistRunner::Parallel(ParallelRunner {
             threads,
-            strategy: Timed { number_of_executions: TIMED_EXECUTIONS },
+            strategy: Timed {
+                number_of_executions: TIMED_EXECUTIONS,
+            },
             loader: make_loader(filter.sample(), filter.stripe()),
             validators: vec![
-                Box::new(RoundingValidator { gen_precision: GEN_PRECISION }),
+                Box::new(RoundingValidator {
+                    gen_precision: GEN_PRECISION,
+                }),
                 Box::new(OverflowValidator),
             ],
         })
     } else {
         HistRunner::Sequential(SequentialRunner {
-            strategy: Timed { number_of_executions: TIMED_EXECUTIONS },
+            strategy: Timed {
+                number_of_executions: TIMED_EXECUTIONS,
+            },
             loader: make_loader(filter.sample(), filter.stripe()),
             validators: vec![
-                Box::new(RoundingValidator { gen_precision: GEN_PRECISION }),
+                Box::new(RoundingValidator {
+                    gen_precision: GEN_PRECISION,
+                }),
                 Box::new(OverflowValidator),
             ],
         })
@@ -214,7 +235,14 @@ struct Cell {
 /// coordinates from the subject's report config plus the golden line, so the same
 /// golden case pairs exactly across versions.
 fn flatten(subject: &SubjectCollector, into: &mut BTreeMap<Key, Cell>) {
-    let cfg = |k: &str| subject.capabilities.config.get(k).cloned().unwrap_or_default();
+    let cfg = |k: &str| {
+        subject
+            .capabilities
+            .config
+            .get(k)
+            .cloned()
+            .unwrap_or_default()
+    };
     let width: u32 = cfg("width").parse().expect("subject config carries width");
     let scale: u32 = cfg("scale").parse().expect("subject config carries scale");
     let mode = cfg("mode");
@@ -243,7 +271,11 @@ fn flatten(subject: &SubjectCollector, into: &mut BTreeMap<Key, Cell>) {
             };
             into.insert(
                 (width, scale, mode.clone(), fc.function.name(), cell.line),
-                Cell { grade, timing: cell.timing, detail },
+                Cell {
+                    grade,
+                    timing: cell.timing,
+                    detail,
+                },
             );
         }
     }
@@ -252,7 +284,10 @@ fn flatten(subject: &SubjectCollector, into: &mut BTreeMap<Key, Cell>) {
 /// A failing verdict (everything except Pass, the informational Precision, and
 /// the runner-level Skipped) — mirrors the console reporter's notion.
 fn is_failure(o: &Outcome) -> bool {
-    !matches!(o, Outcome::Pass | Outcome::Precision { .. } | Outcome::Skipped)
+    !matches!(
+        o,
+        Outcome::Pass | Outcome::Precision { .. } | Outcome::Skipped
+    )
 }
 
 /// Run one version's subjects over `cells` × `modes` into a `RunCollector`.
@@ -296,7 +331,10 @@ fn timing_medians(cells: &BTreeMap<Key, Cell>) -> BTreeMap<&'static str, u64> {
             per_func.entry(func).or_default().push(ns);
         }
     }
-    per_func.into_iter().filter_map(|(f, xs)| median(xs).map(|m| (f, m))).collect()
+    per_func
+        .into_iter()
+        .filter_map(|(f, xs)| median(xs).map(|m| (f, m)))
+        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -327,7 +365,7 @@ fn history_previous() {
     let prev_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
     let live_rc = run_version(&runner, &filter, &modes, &cells, DsSubject::with_mode);
-    let prev_rc = run_version(&runner, &filter, &modes, &cells, v044::Subject::with_mode);
+    let prev_rc = run_version(&runner, &filter, &modes, &cells, previous_release::Subject::with_mode);
     std::panic::set_hook(prev_hook);
 
     let mut live = BTreeMap::new();
@@ -355,7 +393,10 @@ fn history_previous() {
         }
     }
 
-    eprintln!("== history_previous: live vs decimal-scaled@{} ==", v044::VERSION);
+    eprintln!(
+        "== history_previous: live vs decimal-scaled@{} ==",
+        previous_release::VERSION
+    );
     eprintln!(
         "ratchet: {} both-pass / {} both-fail / {} fixed in live / {} regressions / {} coverage losses",
         both_pass,
@@ -371,7 +412,10 @@ fn history_previous() {
         eprintln!("  ... and {} more fixed cells", fixed.len() - 20);
     }
     for c in &coverage_losses {
-        eprintln!("  coverage loss (passed in {}, skipped live): {c}", v044::VERSION);
+        eprintln!(
+            "  coverage loss (passed in {}, skipped live): {c}",
+            previous_release::VERSION
+        );
     }
     for r in &regressions {
         eprintln!("  REGRESSION: {r}");
@@ -380,8 +424,16 @@ fn history_previous() {
     // Timing delta (advisory): per-function medians, live vs previous.
     let live_ns = timing_medians(&live);
     let prev_ns = timing_medians(&prev);
-    eprintln!("-- timing (median ns/call across rows, ride-along advisory; reported, never asserted) --");
-    eprintln!("{:<8} {:>14} {:>14} {:>8}", "func", "live", v044::VERSION, "ratio");
+    eprintln!(
+        "-- timing (median ns/call across rows, ride-along advisory; reported, never asserted) --"
+    );
+    eprintln!(
+        "{:<8} {:>14} {:>14} {:>8}",
+        "func",
+        "live",
+        previous_release::VERSION,
+        "ratio"
+    );
     for (func, &l) in &live_ns {
         if let Some(&p) = prev_ns.get(func) {
             let ratio = l as f64 / p.max(1) as f64;
@@ -389,12 +441,15 @@ fn history_previous() {
         }
     }
 
-    assert!(both_pass + both_fail + fixed.len() > 0, "ratchet compared no cells");
+    assert!(
+        both_pass + both_fail + fixed.len() > 0,
+        "ratchet compared no cells"
+    );
     assert!(
         regressions.is_empty(),
         "{} cell(s) passed in {} but fail in the live crate (listed above)",
         regressions.len(),
-        v044::VERSION
+        previous_release::VERSION
     );
 }
 
@@ -423,14 +478,20 @@ fn history_all() {
     std::panic::set_hook(Box::new(|_| {}));
     // One RunCollector spans every version's subjects.
     let mut rc = run_version(&runner, &filter, &modes, &cells, DsSubject::with_mode);
+    for s in run_version(&runner, &filter, &modes, &cells, v050::Subject::with_mode).subjects {
+        rc.add(s);
+    }
     for s in run_version(&runner, &filter, &modes, &cells, v044::Subject::with_mode).subjects {
         rc.add(s);
     }
     #[cfg(feature = "history-033")]
     {
         use decimal_scale_test::history::v033;
-        let shared: Vec<(u32, u32)> =
-            cells.iter().copied().filter(|c| v033::CELLS.contains(c)).collect();
+        let shared: Vec<(u32, u32)> = cells
+            .iter()
+            .copied()
+            .filter(|c| v033::CELLS.contains(c))
+            .collect();
         for s in run_version(&runner, &filter, &modes, &shared, v033::Subject::with_mode).subjects {
             rc.add(s);
         }
@@ -446,7 +507,9 @@ fn history_all() {
     // Flatten per version (capabilities name distinguishes them).
     let mut versions: BTreeMap<String, BTreeMap<Key, Cell>> = BTreeMap::new();
     for subject in &runs[0].subjects {
-        let entry = versions.entry(subject.capabilities.name.clone()).or_default();
+        let entry = versions
+            .entry(subject.capabilities.name.clone())
+            .or_default();
         flatten(subject, entry);
     }
 
@@ -473,15 +536,22 @@ fn history_all() {
                 ));
             }
         }
-        let shard = std::env::var("GOLDEN_WIDTHS").unwrap_or_else(|_| "all".into()).replace(',', "_");
+        let shard = std::env::var("GOLDEN_WIDTHS")
+            .unwrap_or_else(|_| "all".into())
+            .replace(',', "_");
         std::fs::write(dir.join(format!("history-{shard}.tsv")), out).expect("write history tsv");
     }
 
-    eprintln!("== history_all: cross-version correctness (per function; reported, never asserted) ==");
+    eprintln!(
+        "== history_all: cross-version correctness (per function; reported, never asserted) =="
+    );
     for (version, cells) in &versions {
         let medians = timing_medians(cells);
         eprintln!("-- {version} --");
-        eprintln!("{:<8} {:>6} {:>6} {:>6} {:>14}", "func", "pass", "fail", "skip", "median-ns");
+        eprintln!(
+            "{:<8} {:>6} {:>6} {:>6} {:>14}",
+            "func", "pass", "fail", "skip", "median-ns"
+        );
         let mut per_func: BTreeMap<&'static str, (usize, usize, usize)> = BTreeMap::new();
         for (&(_, _, _, func, _), cell) in cells {
             let e = per_func.entry(func).or_default();
@@ -492,7 +562,10 @@ fn history_all() {
             }
         }
         for (func, (pass, fail, skip)) in &per_func {
-            let ns = medians.get(func).map(|n| n.to_string()).unwrap_or_else(|| "-".into());
+            let ns = medians
+                .get(func)
+                .map(|n| n.to_string())
+                .unwrap_or_else(|| "-".into());
             eprintln!("{func:<8} {pass:>6} {fail:>6} {skip:>6} {ns:>14}");
         }
     }
@@ -523,7 +596,11 @@ mod adapter_proofs {
         match op(&["2".to_string()]) {
             Computed::Value(v) => {
                 assert!(v.starts_with("1.41421356237309"), "got {v}");
-                assert_eq!(v.split_once('.').unwrap().1.len(), 19, "19 fractional digits");
+                assert_eq!(
+                    v.split_once('.').unwrap().1.len(),
+                    19,
+                    "19 fractional digits"
+                );
             }
             other => panic!("expected Value, got {other:?}"),
         }
@@ -539,6 +616,44 @@ mod adapter_proofs {
         match op(&["1.5".to_string(), "2".to_string()]) {
             Computed::Value(v) => assert_eq!(v, "3.000"),
             other => panic!("expected Value, got {other:?}"),
+        }
+    }
+
+    mod v050_proof {
+        use super::{live_cell, proves_mul_at_d18_3, proves_sqrt2_at_d38_19};
+        use decimal_scale_test::history::v050;
+
+        #[test]
+        fn computes_sqrt_and_mul() {
+            proves_sqrt2_at_d38_19(&v050::Subject::new(38, 19));
+            proves_mul_at_d18_3(&v050::Subject::new(18, 3));
+        }
+
+        #[test]
+        fn cells_match_the_live_surface_exactly() {
+            // 0.5.0 shares the live tier table, so its cell list IS the live GOLDEN
+            // grid — the correctness surface, NOT the lib-compare-only scales, which
+            // are a live-build bench concern the history pins deliberately exclude.
+            assert_eq!(v050::CELLS, decimal_scale_test::GOLDEN_CELLS);
+            assert!(v050::CELLS.iter().all(live_cell));
+        }
+
+        #[test]
+        fn declines_the_rounding_modes_it_never_had() {
+            // 0.5.0's RoundingMode has six variants; the two 0.5.1 added have no
+            // counterpart. The subject must declare NOTHING for them rather than
+            // report a failure it could never have passed.
+            use decimal_scaled_golden::{DecimalSubject, RoundingMode};
+            for mode in [RoundingMode::AwayFromZero, RoundingMode::ZeroFiveUp] {
+                let caps = v050::Subject::with_mode(38, 19, mode).capabilities();
+                assert!(
+                    caps.functions.is_empty(),
+                    "0.5.0 must declare no function for {mode:?}"
+                );
+            }
+            // A mode it DOES have still declares the full surface.
+            let caps = v050::Subject::with_mode(38, 19, RoundingMode::HalfToEven).capabilities();
+            assert!(!caps.functions.is_empty(), "0.5.0 must support HalfToEven");
         }
     }
 

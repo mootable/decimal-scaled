@@ -8,7 +8,7 @@
 //! of squaring) in a limb scratch buffer spanning up to `2N` limbs, takes
 //! the floor root via the width-agnostic slice kernel
 //! [`crate::int::algos::isqrt::isqrt_newton::isqrt_newton`], then applies a
-//! single round step (all six [`RoundingMode`]s). Returns [`None`] when the
+//! single round step (every [`RoundingMode`]). Returns [`None`] when the
 //! rounded root does not fit the signed range of `Int<N>` (true overflow);
 //! the caller maps that to its own out-of-range handling.
 //!
@@ -40,45 +40,54 @@ pub(crate) fn hypot_pythagoras<const N: usize>(a: Int<N>, b: Int<N>, mode: Round
 where
     Limbs<N>: ComputeLimbs,
 {
-    // -- n = a^2 + b^2 (magnitudes; sign drops out of squaring) ----------
-    // The radicand former is shared with `sum_sq`; hypot roots `n` rather
-    // than fit-checking it, so it keeps every representable hypot.
-    let ma = a.unsigned_abs();
-    let mb = b.unsigned_abs();
-    let mut n_buf = Limbs::<N>::double_buffered_u64();
-    let n = n_buf.as_mut();
-    let nl = sum_sq_radicand::<N>(ma.as_limbs(), mb.as_limbs(), n);
-    if nl == 1 && n[0] == 0 {
+    // -- radicand = a^2 + b^2 (magnitudes; sign drops out of squaring) ---
+    // The radicand former is shared with `sum_sq`; hypot roots the radicand
+    // rather than fit-checking it, so it keeps every representable hypot.
+    let a_magnitude = a.unsigned_abs();
+    let b_magnitude = b.unsigned_abs();
+    let mut radicand_buf = Limbs::<N>::double_buffered_u64();
+    let radicand = radicand_buf.as_mut();
+    let radicand_len =
+        sum_sq_radicand::<N>(a_magnitude.as_limbs(), b_magnitude.as_limbs(), radicand);
+    if radicand_len == 1 && radicand[0] == 0 {
         return Some(Int::<N>::ZERO);
     }
 
-    // -- q = floor(sqrt(n)) ----------------------------------------------
-    let mut q_buf = Limbs::<N>::double_buffered_u64();
-    let q = q_buf.as_mut();
-    isqrt_newton(&n[..nl], &mut q[..nl]);
-    let ql = sig_len(&q[..nl]);
+    // -- root = floor(sqrt(radicand)) ------------------------------------
+    let mut root_buf = Limbs::<N>::double_buffered_u64();
+    let root = root_buf.as_mut();
+    isqrt_newton(&radicand[..radicand_len], &mut root[..radicand_len]);
+    let root_len = sig_len(&root[..radicand_len]);
 
-    // -- diff = n - q^2  (reuse `n` in place as the remainder) -----------
-    let mut qsq_buf = Limbs::<N>::double_buffered_u64();
-    let qsq = qsq_buf.as_mut();
-    let qsq_cap = qsq.len();
-    mul_schoolbook(&q[..ql], &q[..ql], &mut qsq[..(2 * ql).min(qsq_cap)]);
-    sub_assign(&mut n[..nl], &qsq[..nl]);
-    let halfway_round_up = cmp_cross(&n[..nl], &q[..ql]) > 0;
-    let diff_nonzero = !is_zero(&n[..nl]);
+    // -- diff = radicand - root^2  (reuse `radicand` in place as the
+    //    remainder) -----------------------------------------------------
+    let mut root_sq_buf = Limbs::<N>::double_buffered_u64();
+    let root_sq = root_sq_buf.as_mut();
+    let root_sq_cap = root_sq.len();
+    mul_schoolbook(&root[..root_len], &root[..root_len],
+        &mut root_sq[..(2 * root_len).min(root_sq_cap)]);
+    sub_assign(&mut radicand[..radicand_len], &root_sq[..radicand_len]);
+    let halfway_round_up = cmp_cross(&radicand[..radicand_len], &root[..root_len]) > 0;
+    let diff_nonzero = !is_zero(&radicand[..radicand_len]);
     let bump = match mode {
         RoundingMode::HalfToEven
         | RoundingMode::HalfAwayFromZero
         | RoundingMode::HalfTowardZero => halfway_round_up,
         RoundingMode::Trunc | RoundingMode::Floor => false,
-        RoundingMode::Ceiling => diff_nonzero,
+        // A hypotenuse is non-negative, so up IS away from zero.
+        RoundingMode::Ceiling | RoundingMode::AwayFromZero => diff_nonzero,
+        // The last decimal digit spans the whole `root_len`-limb root.
+        RoundingMode::ZeroFiveUp => {
+            diff_nonzero
+                && matches!(crate::support::rounding::limbs_mod_10(&root[..root_len]), 0 | 5)
+        }
     };
     if bump {
         let mut i = 0;
         loop {
-            let (v, c) = q[i].overflowing_add(1);
-            q[i] = v;
-            if !c {
+            let (sum, carry) = root[i].overflowing_add(1);
+            root[i] = sum;
+            if !carry {
                 break;
             }
             i += 1;
@@ -86,12 +95,12 @@ where
     }
 
     // -- fit check: positive magnitude must be < 2^(64N-1) (signed range) -
-    let qfl = sig_len(&q[..(N + 2).min(qsq_cap)]);
-    if qfl > N || (qfl == N && (q[N - 1] >> 63) != 0) {
+    let root_fit_len = sig_len(&root[..(N + 2).min(root_sq_cap)]);
+    if root_fit_len > N || (root_fit_len == N && (root[N - 1] >> 63) != 0) {
         return None;
     }
     let mut out = [0u64; N];
-    out.copy_from_slice(&q[..N]);
+    out.copy_from_slice(&root[..N]);
     Some(Int::<N>::from_limbs(out))
 }
 
@@ -101,13 +110,15 @@ mod tests {
     use crate::int::types::Int;
     use crate::support::rounding::RoundingMode;
 
-    const ALL_MODES: [RoundingMode; 6] = [
+    const ALL_MODES: [RoundingMode; 8] = [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
         RoundingMode::HalfTowardZero,
         RoundingMode::Trunc,
         RoundingMode::Floor,
         RoundingMode::Ceiling,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ];
 
     #[test]

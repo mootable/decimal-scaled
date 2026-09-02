@@ -51,22 +51,28 @@ pub use decimal_scaled_cells::{
 pub const GEN_PRECISION: usize = 1233;
 pub const GUARD: usize = 2;
 
-/// Every rounding mode, in report order — directed rounding (Ceiling/Floor/Trunc) is
-/// swept alongside the three nearest modes, since a fixed-width decimal rounds its
-/// last digit differently per mode and a directed-rounding regression shows only there.
-pub const ALL_MODES: [RoundingMode; 6] = [
+/// Every rounding mode, in report order — the five directed modes (Ceiling/Floor/Trunc
+/// and the two General Decimal Arithmetic additions, AwayFromZero/ZeroFiveUp) are swept
+/// alongside the three nearest modes, since a fixed-width decimal rounds its last digit
+/// differently per mode and a directed-rounding regression shows only there.
+pub const ALL_MODES: [RoundingMode; 8] = [
     RoundingMode::HalfToEven,
     RoundingMode::HalfAwayFromZero,
     RoundingMode::HalfTowardZero,
     RoundingMode::Ceiling,
     RoundingMode::Floor,
     RoundingMode::Trunc,
+    RoundingMode::AwayFromZero,
+    RoundingMode::ZeroFiveUp,
 ];
 
 /// Absolute path to the harness's committed golden set. `env!` is baked at THIS
 /// crate's compile time, so the path stays correct no matter which crate calls it.
 pub fn golden_dir() -> &'static str {
-    concat!(env!("CARGO_MANIFEST_DIR"), "/../decimal-scaled-golden/golden")
+    concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../decimal-scaled-golden/golden"
+    )
 }
 
 /// Worker-thread cap, honouring `GOLDEN_THREADS` (default = available cores).
@@ -74,7 +80,11 @@ pub fn thread_count() -> usize {
     std::env::var("GOLDEN_THREADS")
         .ok()
         .and_then(|s| s.parse().ok())
-        .unwrap_or_else(|| std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1))
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(1)
+        })
 }
 
 /// Map the harness rounding mode onto decimal-scaled's.
@@ -86,6 +96,8 @@ pub fn ds_mode(m: RoundingMode) -> DsMode {
         RoundingMode::Ceiling => DsMode::Ceiling,
         RoundingMode::Floor => DsMode::Floor,
         RoundingMode::Trunc => DsMode::Trunc,
+        RoundingMode::AwayFromZero => DsMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp => DsMode::ZeroFiveUp,
     }
 }
 
@@ -107,8 +119,8 @@ impl DsSubject {
     }
 
     /// A subject tested under a specific rounding `mode` — the full set is swept by the
-    /// `golden_all_modes` gate so directed rounding (Ceiling/Floor/Trunc) is covered,
-    /// not just the default.
+    /// `golden_all_modes` gate so directed rounding (Ceiling/Floor/Trunc and the GDA
+    /// pair AwayFromZero/ZeroFiveUp) is covered, not just the default.
     pub fn with_mode(width: u32, scale: u32, mode: RoundingMode) -> DsSubject {
         DsSubject { width, scale, mode }
     }
@@ -118,7 +130,10 @@ impl DecimalSubject for DsSubject {
     type Value = String;
 
     fn name(&self) -> String {
-        format!("decimal-scaled D{}<{}> {:?}", self.width, self.scale, self.mode)
+        format!(
+            "decimal-scaled D{}<{}> {:?}",
+            self.width, self.scale, self.mode
+        )
     }
 
     fn capabilities(&self) -> Capabilities {
@@ -128,13 +143,24 @@ impl DecimalSubject for DsSubject {
         // `wrapping_`/`checked_`/`saturating_` variants are not the path tested here.
         let mut functions = BTreeMap::new();
         for &f in FUNCS {
-            functions.insert(f, FnSupport { mode: self.mode, overflow: Overflow::Panic });
+            functions.insert(
+                f,
+                FnSupport {
+                    mode: self.mode,
+                    overflow: Overflow::Panic,
+                },
+            );
         }
         let mut config = BTreeMap::new();
         config.insert("width".into(), self.width.to_string());
         config.insert("scale".into(), self.scale.to_string());
         config.insert("mode".into(), format!("{:?}", self.mode));
-        Capabilities { name: "decimal-scaled".into(), radix: Radix::Decimal, config, functions }
+        Capabilities {
+            name: "decimal-scaled".into(),
+            radix: Radix::Decimal,
+            config,
+            functions,
+        }
     }
 
     fn string_to_value(&self, s: &str) -> String {
@@ -277,7 +303,12 @@ fn parse_stripe(s: &str) -> Option<(usize, usize)> {
 /// Parse a rounding-mode name (case-/separator-insensitive, with the common aliases).
 pub fn parse_mode(s: &str) -> Option<RoundingMode> {
     use RoundingMode::*;
-    match s.trim().to_ascii_lowercase().replace(['-', ' '], "_").as_str() {
+    match s
+        .trim()
+        .to_ascii_lowercase()
+        .replace(['-', ' '], "_")
+        .as_str()
+    {
         "half_to_even" | "halftoeven" | "even" | "bankers" | "nearest" => Some(HalfToEven),
         "half_away_from_zero" | "halfawayfromzero" | "half_away" | "away" | "half_up" => {
             Some(HalfAwayFromZero)
@@ -288,6 +319,12 @@ pub fn parse_mode(s: &str) -> Option<RoundingMode> {
         "ceiling" | "ceil" | "up" => Some(Ceiling),
         "floor" | "down" => Some(Floor),
         "trunc" | "truncate" | "zero" => Some(Trunc),
+        // GDA `round-up`. Deliberately NOT aliased "round_up": this table already
+        // spells Ceiling "up", and two tokens a prefix apart selecting different
+        // modes is a silently-wrong run waiting to happen.
+        "away_from_zero" | "awayfromzero" => Some(AwayFromZero),
+        // GDA `round-05up` — the spec spelling normalises to "round_05up".
+        "zero_five_up" | "zerofiveup" | "round_05up" | "05up" => Some(ZeroFiveUp),
         _ => None,
     }
 }
@@ -346,12 +383,20 @@ mod tests {
         // cells crate's compile-once shim): a 19-dp value on the right prefix
         // (not pinned digit-for-digit, to stay robust).
         let out = decimal_scaled_cells::dispatch_compute(
-            38, 19, Function::Sqrt, &["2".to_string()], DsMode::HalfToEven,
+            38,
+            19,
+            Function::Sqrt,
+            &["2".to_string()],
+            DsMode::HalfToEven,
         );
         match out {
             Computed::Value(v) => {
                 assert!(v.starts_with("1.41421356237309"), "got {v}");
-                assert_eq!(v.split_once('.').unwrap().1.len(), 19, "19 fractional digits");
+                assert_eq!(
+                    v.split_once('.').unwrap().1.len(),
+                    19,
+                    "19 fractional digits"
+                );
             }
             other => panic!("expected Value, got {other:?}"),
         }
@@ -368,9 +413,23 @@ mod tests {
     #[test]
     fn mode_aliases_parse() {
         assert_eq!(parse_mode("Ceiling"), Some(RoundingMode::Ceiling));
-        assert_eq!(parse_mode("half-away"), Some(RoundingMode::HalfAwayFromZero));
+        assert_eq!(
+            parse_mode("half-away"),
+            Some(RoundingMode::HalfAwayFromZero)
+        );
         assert_eq!(parse_mode("trunc"), Some(RoundingMode::Trunc));
         assert_eq!(parse_mode("nonsense"), None);
+        // The two GDA modes are selectable by name...
+        assert_eq!(
+            parse_mode("away-from-zero"),
+            Some(RoundingMode::AwayFromZero)
+        );
+        assert_eq!(parse_mode("round-05up"), Some(RoundingMode::ZeroFiveUp));
+        assert_eq!(parse_mode("ZeroFiveUp"), Some(RoundingMode::ZeroFiveUp));
+        // ...and adding them did not repoint this table's older aliases: "up" is
+        // still Ceiling here, NOT the GDA round-up mode.
+        assert_eq!(parse_mode("up"), Some(RoundingMode::Ceiling));
+        assert_eq!(parse_mode("away"), Some(RoundingMode::HalfAwayFromZero));
     }
 
     #[test]

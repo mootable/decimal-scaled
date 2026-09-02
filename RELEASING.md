@@ -60,8 +60,8 @@ the rest are **manual** and must be verified by hand before merge.
   informational — see Manual.)
 - **golden comprehensive** — `golden-comprehensive.yml`; the crate's
   **correctness gate** (it replaced the deleted 0.5 ULP precision gate).
-  The full six-mode golden surface — every band-edge `(width, scale)`
-  cell, every row, all six rounding modes — width-sharded × row-striped,
+  The full eight-mode golden surface — every band-edge `(width, scale)`
+  cell, every row, all eight rounding modes — width-sharded × row-striped,
   0 bad / 0 panic. The precision guarantee is *enforced here, not
   assumed*: a kernel that rounds wrong turns this red.
 - **docs-drift** — `docs-drift.yml`; `render_docs.py --check` on every
@@ -135,7 +135,7 @@ git checkout -b release/<MAJOR.MINOR.PATCH>   # e.g. release/0.4.4
   manual checklist above).
 - The golden gate green: `golden_default` and `golden_all_modes`
   (`decimal-scale-test`) at **0 bad / 0 panic** over every band-edge
-  `(width, scale)` cell, all six rounding modes — run on CI by
+  `(width, scale)` cell, all eight rounding modes — run on CI by
   `golden-comprehensive.yml` (the correctness gate that replaced the
   retired 0.5 ULP precision suite).
 - **Regenerate the single-sourced docs and commit on the release branch
@@ -152,33 +152,48 @@ git checkout -b release/<MAJOR.MINOR.PATCH>   # e.g. release/0.4.4
 Stale numbers misrepresent the release. Every data-driven page is
 regenerated from a **fresh GitHub-Actions run** (never a local sweep —
 local machines cannot produce stable numbers). The pipeline is now
-**self-rendering**: pushing the release branch triggers each data
-workflow, and each one re-runs its bench/gate, self-commits its results
-TSV under `results/`, runs `scripts/render_docs.py`, and commits the
-refreshed page back to the branch in ONE `github-actions[bot]` commit
-(no manual download / ingest / chart step). A `GITHUB_TOKEN` self-commit
-does not re-trigger workflows, so there is no loop.
+**self-rendering**: each data workflow re-runs its bench/gate,
+self-commits its results TSV under `results/`, runs
+`scripts/render_docs.py`, and commits the refreshed page back to the
+branch in ONE `github-actions[bot]` commit (no manual download / ingest /
+chart step). A `GITHUB_TOKEN` self-commit does not re-trigger workflows,
+so there is no loop.
 
-Pushing to `release/*` triggers these, each in its own serial queue
-(`cancel-in-progress: false` — a queued run waits its turn; it is never
-cancelled):
+**On a release branch only ONE of the four starts itself.** Pushing to
+`release/*` runs `golden-comprehensive.yml`; the three timing and
+comparison workflows are `workflow_dispatch`-only there and have to be
+started by hand. That is deliberate, and each one says so in its own
+`on:` comment: they self-commit, and on a release branch with an open PR
+that self-commit would move the PR head onto a commit the REQUIRED gates
+never ran on, so the PR could never go green.
 
-| Workflow | Re-runs | Self-renders |
-|----------|---------|--------------|
-| `golden-comprehensive.yml` | the six-mode golden surface | `golden.md`, `precision.md` (`results/golden/`) |
-| `lib-perf.yml` | peer-crate timing over the golden set | `comparisons.md` + category pages (`results/lib_cmp/`) |
-| `history.yml` | per-version timing across releases | `history.md` (`results/history/`) |
-| `bench-branch-compare.yml` | branch-vs-latest-tag timing (advisory perf signal) | `performance.md` (`results/timing/`) |
+| Workflow | Re-runs | Self-renders | On `release/*` |
+|----------|---------|--------------|----------------|
+| `golden-comprehensive.yml` | the eight-mode golden surface | `golden.md`, `precision.md` (`results/golden/`) | on push |
+| `lib-perf.yml` | peer-crate timing over the golden set | `comparisons.md` + category pages (`results/lib_cmp/`) | dispatch only |
+| `history.yml` | per-version timing across releases | `history.md` (`results/history/`) | dispatch only |
+| `bench-branch-compare.yml` | branch-vs-latest-tag timing (advisory perf signal) | `performance.md` (`results/timing/`) | dispatch only |
 
-So "refresh benchmarks" is: **push the release branch, wait for these
-workflows to land their self-commits, then `git pull`.** Poll with
-`gh run list --branch release/<version>`. The wide tiers are slow; the
-narrow / peer runs finish sooner. If a self-commit is missing (a run
-failed mid-way), re-run just that workflow — never hand-edit the page:
+So "refresh benchmarks" is: push the release branch, then start the other
+three by hand —
 
 ```sh
-gh workflow run <workflow>.yml --ref release/<version>
+gh workflow run lib-perf.yml             --ref release/<version>
+gh workflow run history.yml              --ref release/<version>
+gh workflow run bench-branch-compare.yml --ref release/<version>
 ```
+
+— then wait for all four to land their self-commits and `git pull`. Poll
+with `gh run list --branch release/<version>`. Each queues serially
+(`cancel-in-progress: false` — a queued run waits its turn; it is never
+cancelled). The wide tiers are slow; the narrow / peer runs finish
+sooner. If a self-commit is missing because a run failed mid-way, re-run
+that workflow the same way — never hand-edit the page.
+
+> **This failure mode is silent.** Pushing alone raises no error and
+> refreshes no timing data: three of the four never start, and the pages
+> keep the previous release's numbers. Confirm with `gh run list` rather
+> than assuming the push was enough.
 
 The non-data GENERATED regions (the install snippet pinned to the new
 `major.minor`, the width-tier table) are NOT refreshed by a workflow —

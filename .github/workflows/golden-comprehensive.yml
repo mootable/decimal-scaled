@@ -1,6 +1,6 @@
 name: "🌕 golden comprehensive"
 
-# The full six-mode golden surface — every row, every cell, all six
+# The full eight-mode golden surface — every row, every cell, all eight
 # rounding modes — on every push, in its OWN workflow so it never shares
 # a run's runner allocation with the ci.yml gates. This is the crate's
 # CORRECTNESS GATE: it took over from the deleted 0.5 ULP precision gate,
@@ -18,7 +18,7 @@ name: "🌕 golden comprehensive"
 # WITHIN a shard the rows still stripe (GOLDEN_STRIPE=k/n) so the heavy
 # wide tiers stay inside the job timeout. The splice stitches
 # shard × stripe mini reports back together. Coverage is UNCHANGED —
-# full rows, all six modes.
+# full rows, all eight modes.
 
 on:
   push:
@@ -57,18 +57,65 @@ jobs:
                     ("d115", "115"), ("d153", "153"), ("d230", "230"),
                     ("d307", "307"), ("d462", "462"), ("d616", "616"),
                     ("d924", "924"), ("d1232", "1232")]
-          # Stripe count PER WIDTH TIER (owner 2026-06-13): the wide tiers
+          # Stripe count PER WIDTH TIER (owner 2026-06-13): the heavy tiers
           # dominate the per-stripe wall time, so they fan out into more,
-          # thinner stripes to stay inside the job timeout; every other
-          # shard takes the default of 4. Each matrix entry carries its own
-          # `total`, so the stripe job gets GOLDEN_STRIPE=k/n with THAT
+          # thinner stripes to stay inside the job timeout. The fan-out
+          # follows MEASURED per-tier cost, not tier width — see the sizing
+          # note below, where d616/d462/d307 go DOWN because width alone had
+          # over-provisioned them. Anything not named takes the default of 2.
+          # Each matrix entry carries its
+          # own `total`, so the stripe job gets GOLDEN_STRIPE=k/n with THAT
           # shard's own n (k = 0..n-1 — the harness's disjoint row partition,
           # line % n == k, self-consistent for any n).
-          STRIPES = {"d1232": 10, "d924": 8, "d616": 6}
+          # Re-sized 2026-09-02 for the eight-mode surface: the two GDA modes
+          # took the sweep from 72,119,970 checks to 96,159,960. That is
+          # EXACTLY a third more, not approximately — 72,119,970 / 6 =
+          # 12,019,995 per mode, x 8 = 96,159,960 — so every stripe carries a
+          # third more work. The ladder scales the fan-out with tier cost
+          # rather than letting the widest stripes absorb it.
+          # BALANCED 2026-09-02 from measured per-stripe durations rather than
+          # by hand. Run 33577670109 (86 stripes, all green) gave, per tier,
+          # mean stripe seconds and tier totals:
+          #
+          #   d1232 375s/7508s   d924 226s/3624s   d616 140s/1682s
+          #   d307   86s/517s    d462  70s/564s    d230  50s/203s
+          #   narrow 38s/153s    d115  31s/127s    d153  28s/115s
+          #   d57    25s/101s    d76   25s/102s
+          #
+          # Two things stood out. d1232 alone is HALF the total work and its
+          # stripes ran 15x longer than d76's, so it set the critical path
+          # single-handedly. And the low tiers were OVER-provisioned: d57/d76
+          # at 25s are essentially pure job overhead, since the smallest
+          # observed mean bounds the per-job fixed cost at ~25s.
+          #
+          # Sizing: subtract that 25s overhead to get each tier's net work,
+          # then n = ceil(net / (target - overhead)) for a target of 200s —
+          # the middle of the 2-4 minute band the owner wants a stripe to sit
+          # in. Tiers whose ENTIRE work is under 2 minutes cannot reach the
+          # band and take a floor of 2, which costs almost nothing and stops
+          # any tier being a single point of failure.
+          #
+          # Result: 85 jobs (vs 86) and a critical path of ~200s (vs 417s) —
+          # the same runner budget for half the wall time, because the fan-out
+          # now follows measured cost instead of tier width. Note d616, d462
+          # and d307 go DOWN; width alone was the wrong proxy.
+          #
+          # To re-balance after a surface change, re-run the same measurement
+          # (per-tier mean and total stripe seconds) and redo the arithmetic —
+          # do not extrapolate this table.
+          STRIPES = {"d1232": 40, "d924": 19, "d616": 8, "d462": 3, "d307": 3}
+          # `stripe` is the harness's partition selector and MUST stay
+          # 0-based: the row filter is `line % total == stripe`, so a
+          # 1-based value would never match on the last stripe — that job
+          # would grade nothing and one row-class would go unrun, with the
+          # whole workflow still green. `label` exists ONLY for the job
+          # name, where 1..n reads correctly to a human. Do not "tidy" the
+          # two into one field.
           print(json.dumps([{"shard": s, "widths": w, "stripe": k,
-                             "total": STRIPES.get(s, 4)}
+                             "label": k + 1,
+                             "total": STRIPES.get(s, 2)}
                             for (s, w) in shards
-                            for k in range(STRIPES.get(s, 4))]))
+                            for k in range(STRIPES.get(s, 2))]))
           EOF
           )" >> "$GITHUB_OUTPUT"
 
@@ -144,7 +191,10 @@ jobs:
           retention-days: 3
 
   stripes:
-    name: ${{ matrix.shard }} stripe ${{ matrix.stripe }}/${{ matrix.total }}
+    # `matrix.label` (1..n), NOT `matrix.stripe` (0..n-1). The 0-based value
+    # is the partition selector and stays on GOLDEN_STRIPE below; this is
+    # only what a human reads.
+    name: ${{ matrix.shard }} stripe ${{ matrix.label }}/${{ matrix.total }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     needs: [plan, build]
@@ -162,7 +212,7 @@ jobs:
         with:
           name: golden-exe-${{ matrix.shard }}
 
-      - name: Run stripe (all six modes, the shard's full rows)
+      - name: Run stripe (all eight modes, the shard's full rows)
         env:
           GOLDEN_STRIPE: "${{ matrix.stripe }}/${{ matrix.total }}"
           GOLDEN_WIDTHS: "${{ matrix.widths }}"
@@ -177,7 +227,7 @@ jobs:
         if: always()
         run: |
           if [ -f stripe-report/summary.txt ]; then
-            echo "=== ${{ matrix.shard }} stripe ${{ matrix.stripe }} mini report ==="
+            echo "=== ${{ matrix.shard }} stripe ${{ matrix.label }}/${{ matrix.total }} mini report ==="
             cat stripe-report/summary.txt
             cat stripe-report/summary.txt >> "$GITHUB_STEP_SUMMARY"
           else
@@ -235,7 +285,7 @@ jobs:
             fi
           done
           {
-            echo "## golden comprehensive — combined (all six modes, full surface, width-sharded)"
+            echo "## golden comprehensive — combined (all eight modes, full surface, width-sharded)"
             echo '```'
             cat combined/summaries.txt
             echo '```'

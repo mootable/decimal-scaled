@@ -10,13 +10,15 @@
 
 use decimal_scaled::{D18, D38, RoundingMode};
 
-const MODES: [RoundingMode; 6] = [
+const MODES: [RoundingMode; 8] = [
     RoundingMode::HalfToEven,
     RoundingMode::HalfAwayFromZero,
     RoundingMode::HalfTowardZero,
     RoundingMode::Trunc,
     RoundingMode::Floor,
     RoundingMode::Ceiling,
+    RoundingMode::AwayFromZero,
+    RoundingMode::ZeroFiveUp,
 ];
 
 fn d38(v: i64) -> D38<10> {

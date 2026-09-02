@@ -112,18 +112,21 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
 /// Not `const fn`: matches the existing non-`const` `Rem` operator on
 /// `D<Int<N>, SCALE>`.
 #[inline]
-pub(crate) fn dispatch<const N: usize, const SCALE: u32>(a: Int<N>, b: Int<N>) -> Int<N>
+pub(crate) fn dispatch<const N: usize, const SCALE: u32>(
+    dividend: Int<N>,
+    divisor: Int<N>
+) -> Int<N>
 where
     crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
 {
     let algo = match const { select::<N, SCALE>() } {
-        Select::ByAlgorithm(a) => a,
+        Select::ByAlgorithm(algorithm) => algorithm,
         Select::ByValue(_) => Algorithm::IntLayer,
     };
     match algo {
-        Algorithm::Native => crate::algos::rem::rem_native::rem_native(a, b),
+        Algorithm::Native => crate::algos::rem::rem_native::rem_native(dividend, divisor),
         Algorithm::IntLayer | Algorithm::Schoolbook => {
-            crate::algos::rem::rem_int_layer::rem_int_layer(a, b)
+            crate::algos::rem::rem_int_layer::rem_int_layer(dividend, divisor)
         }
     }
 }

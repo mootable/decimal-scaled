@@ -16,8 +16,8 @@
 //! is slow for those cells. This kernel instead runs Newton
 //! directly in a concrete `Int<W>` (whose width `W` the policy picks per
 //! `(N, SCALE)` cell to just cover `mag · 10^(2·SCALE)`), so each
-//! `n / x²` is one wide multiply + one Knuth divide on tight operands with
-//! no build-max zeroing.
+//! `radicand / x²` is one wide multiply + one Knuth divide on tight operands
+//! with no build-max zeroing.
 //!
 //! # Newton seed via the shared seed leaf (std / no_std agnostic)
 //!
@@ -31,7 +31,7 @@
 //! body stays cfg-free.
 //!
 //! Result is bit-for-bit identical to [`crate::algos::cbrt::cbrt_newton`]
-//! under all six [`RoundingMode`] values; only the work-integer width
+//! under every [`RoundingMode`] value; only the work-integer width
 //! (a tight concrete `Int<W>` vs the slice's build-max scratch) and the
 //! seed source change. See [`crate::algos::cbrt::cbrt_newton`] for the
 //! Newton + half-step rounding algorithm.
@@ -46,25 +46,25 @@ use crate::support::rounding::RoundingMode;
 
 /// `⌊∛n⌋` over `Int<W>`, seeded via the shared seed leaf.
 ///
-/// Returns `⌊∛n⌋` for `n > 0`. The seed comes from
+/// Returns `⌊∛n⌋` for a positive `radicand`. The seed comes from
 /// [`crate::algo_x_support::seed::cbrt_seed`] — the `f64::cbrt` of the top
 /// 64 significant bits scaled back under `std`, the classical pure-integer
 /// `2^⌈bits/3⌉` under `no_std` — so it is a safe over-estimate at **any**
-/// work width `W` (no `f64::MAX` ceiling, unlike a direct `n.as_f64()`),
+/// work width `W` (no `f64::MAX` ceiling, unlike a direct `as_f64()`),
 /// and the std/no_std divergence stays inside the leaf. The
 /// monotone-decrease Newton loop then settles on `⌊∛n⌋`.
 #[inline]
-fn icbrt_w_seeded<const W: usize>(n: Int<W>) -> Int<W> {
-    let bits = n.bit_length();
-    let mag = n.unsigned_abs();
+fn icbrt_w_seeded<const W: usize>(radicand: Int<W>) -> Int<W> {
+    let bits = radicand.bit_length();
+    let magnitude = radicand.unsigned_abs();
     let mut seed_limbs = [0u64; W];
-    cbrt_seed(mag.as_limbs(), bits, &mut seed_limbs);
+    cbrt_seed(magnitude.as_limbs(), bits, &mut seed_limbs);
     let x0 = Int::<W>::from_mag_limbs(&seed_limbs, false);
     let x0 = if x0 <= Int::<W>::ZERO { Int::<W>::ONE } else { x0 };
     let three = Int::<W>::from_i128(3);
     let mut x = x0;
     loop {
-        let y = (x + x + n / (x * x)) / three;
+        let y = (x + x + radicand / (x * x)) / three;
         if y >= x {
             break x;
         }
@@ -77,7 +77,7 @@ fn icbrt_w_seeded<const W: usize>(n: Int<W>) -> Int<W> {
 /// the policy chose to cover `mag · 10^(2·SCALE)` for this `(N, SCALE)`
 /// cell. The half-step rounding mirrors
 /// [`crate::algos::cbrt::cbrt_newton`] exactly; the result is bit-identical
-/// to the generic path under all six [`RoundingMode`] values, only the
+/// to the generic path under every [`RoundingMode`] value, only the
 /// iteration cost differs. Under `no_std` (no floats) this delegates to the
 /// generic slice kernel.
 #[inline]
@@ -93,38 +93,42 @@ pub(crate) fn cbrt_native<const N: usize, const W: usize>(
     let zero = Int::<W>::ZERO;
     let one = Int::<W>::ONE;
     let widened: Int<W> = raw.resize_to::<Int<W>>();
-    let negative = widened < zero;
-    let mag = if negative { -widened } else { widened };
+    let is_negative = widened < zero;
+    let magnitude = if is_negative { -widened } else { widened };
     // `pow10_2scale` is `10^(2·SCALE)` in `Int<W>`, supplied pre-computed by
     // the caller so it folds at compile time (`const { Int::<W>::TEN.pow(2 *
     // SCALE) }` in the dispatch) instead of running the int pow at runtime
     // per call.
-    let n: Int<W> = mag * pow10_2scale;
+    let radicand: Int<W> = magnitude * pow10_2scale;
 
-    let q = icbrt_w_seeded::<W>(n);
+    let root = icbrt_w_seeded::<W>(radicand);
 
     // ── single half-step round (same logic as cbrt_newton). ─────────
-    let eight_n = n << 3u32;
-    let t = q + q + one;
-    let cube = t * t * t;
-    let halfway_geq = eight_n >= cube;
-    let halfway_gt = eight_n > cube;
+    let eight_radicand = radicand << 3u32;
+    let doubled_midpoint = root + root + one;
+    let cube = doubled_midpoint * doubled_midpoint * doubled_midpoint;
+    let halfway_geq = eight_radicand >= cube;
+    let halfway_gt = eight_radicand > cube;
     let tie = halfway_geq && !halfway_gt;
-    let two_q = q + q;
-    let eight_q_cubed = if q == zero { zero } else { two_q * two_q * two_q };
-    let residual_nonzero = eight_n > eight_q_cubed;
-    let q_is_odd = (q % (one + one)) != zero;
+    let two_root = root + root;
+    let eight_root_cubed = if root == zero { zero } else { two_root * two_root * two_root };
+    let residual_nonzero = eight_radicand > eight_root_cubed;
+    // Last decimal digit of the (non-negative) root magnitude `root`.
+    let root_mod_10 = (root % Int::<W>::TEN).as_i128() as u8;
     let bump = match mode {
-        RoundingMode::HalfToEven => halfway_gt || (tie && q_is_odd),
+        RoundingMode::HalfToEven => halfway_gt || (tie && root_mod_10 & 1 == 1),
         RoundingMode::HalfAwayFromZero => halfway_geq,
         RoundingMode::HalfTowardZero => halfway_gt,
         RoundingMode::Trunc => false,
-        RoundingMode::Floor => negative && residual_nonzero,
-        RoundingMode::Ceiling => !negative && residual_nonzero,
+        RoundingMode::Floor => is_negative && residual_nonzero,
+        RoundingMode::Ceiling => !is_negative && residual_nonzero,
+        // `root` is the magnitude, so away-from-zero is a bump either sign.
+        RoundingMode::AwayFromZero => residual_nonzero,
+        RoundingMode::ZeroFiveUp => residual_nonzero && matches!(root_mod_10, 0 | 5),
     };
-    let q = if bump { q + one } else { q };
-    let signed = if negative { -q } else { q };
-    signed.resize_to::<Int<N>>()
+    let root = if bump { root + one } else { root };
+    let signed_root = if is_negative { -root } else { root };
+    signed_root.resize_to::<Int<N>>()
 }
 
 /// `(D57, SCALE == 20)` cube-root entry point — the original bespoke cell
@@ -138,7 +142,7 @@ pub(crate) fn cbrt_native_d57s20(raw: Int<3>, mode: RoundingMode) -> Int<3> {
 }
 
 // These tests drive Newton directly in a wide work `Int<W>`; the
-// `n / (x·x)` step's build-max Knuth-divide scratch is sized
+// `radicand / (x·x)` step's build-max Knuth-divide scratch is sized
 // `4·MAX_WORK_N + 2` u64 limbs, which only covers the work width `W` once a
 // wide tier raises `MAX_WORK_N` to 16 (a narrow/default build sizes it 2).
 // So each test/case is gated to exactly the `dNN` tier whose storage width
@@ -168,31 +172,33 @@ mod tests {
     use crate::support::rounding::RoundingMode;
 
     const SCALE: u32 = 20;
-    const ALL_MODES: [RoundingMode; 6] = [
+    const ALL_MODES: [RoundingMode; 8] = [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
         RoundingMode::HalfTowardZero,
         RoundingMode::Trunc,
         RoundingMode::Floor,
         RoundingMode::Ceiling,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ];
 
     /// Generic `cbrt_native<N, W>` is bit-identical to the proven-correct
     /// generic `cbrt_newton` for each routed `(N, W, SCALE)` cell across a
     /// spread of raw storages (perfect cubes, negatives, near-zero, large)
-    /// and all six rounding modes. `cbrt_newton` is oracle-gated by
+    /// and all eight rounding modes. `cbrt_newton` is oracle-gated by
     /// `ulp_strict_golden`, so matching it certifies the bespoke arm
     /// correctly-rounded.
     fn check_cell<const N: usize, const W: usize>(scale: u32, raws: &[i128])
     where
         crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
     {
-        for &r in raws {
-            let raw = Int::<N>::from_i128(r);
+        for &raw_value in raws {
+            let raw = Int::<N>::from_i128(raw_value);
             for mode in ALL_MODES {
                 let got = cbrt_native::<N, W>(raw, Int::<W>::TEN.pow(2 * scale), mode);
                 let want = cbrt_newton::<N>(raw, scale, mode);
-                assert_eq!(got, want, "N={N} W={W} scale={scale} raw={r} mode={mode:?}");
+                assert_eq!(got, want, "N={N} W={W} scale={scale} raw={raw_value} mode={mode:?}");
             }
         }
     }
@@ -276,13 +282,13 @@ mod tests {
     /// must still be bit-identical to the slice. Proves the literal `W`
     /// chosen in the policy is wide enough (a too-small `W` would overflow
     /// and diverge / be release-mode UB). Both signs.
-    fn near_max<const N: usize>(neg: bool) -> Int<N> {
-        let mut mag = [0u64; N];
-        for m in mag.iter_mut() {
-            *m = u64::MAX;
+    fn near_max<const N: usize>(is_negative: bool) -> Int<N> {
+        let mut magnitude = [0u64; N];
+        for limb in magnitude.iter_mut() {
+            *limb = u64::MAX;
         }
-        mag[N - 1] = u64::MAX >> 1;
-        Int::<N>::from_mag_limbs(&mag, neg)
+        magnitude[N - 1] = u64::MAX >> 1;
+        Int::<N>::from_mag_limbs(&magnitude, is_negative)
     }
 
     #[test]
@@ -291,22 +297,22 @@ mod tests {
         // storage width `N` it instantiates (W up to 32 — safe once the
         // tier sets MAX_WORK_N=16). Every covered tier appears here, so any
         // single-tier build runs exactly its own cell.
-        for &neg in &[false, true] {
+        for &is_negative in &[false, true] {
             for mode in ALL_MODES {
                 #[cfg(feature = "d57")]
-                assert_eq!(cbrt_native::<3, 6>(near_max::<3>(neg), Int::<6>::TEN.pow(2 * 20), mode), cbrt_newton::<3>(near_max::<3>(neg), 20, mode), "D57 neg={neg} mode {mode:?}");
+                assert_eq!(cbrt_native::<3, 6>(near_max::<3>(is_negative), Int::<6>::TEN.pow(2 * 20), mode), cbrt_newton::<3>(near_max::<3>(is_negative), 20, mode), "D57 neg={is_negative} mode {mode:?}");
                 #[cfg(feature = "d76")]
-                assert_eq!(cbrt_native::<4, 8>(near_max::<4>(neg), Int::<8>::TEN.pow(2 * 35), mode), cbrt_newton::<4>(near_max::<4>(neg), 35, mode), "D76 neg={neg} mode {mode:?}");
+                assert_eq!(cbrt_native::<4, 8>(near_max::<4>(is_negative), Int::<8>::TEN.pow(2 * 35), mode), cbrt_newton::<4>(near_max::<4>(is_negative), 35, mode), "D76 neg={is_negative} mode {mode:?}");
                 #[cfg(feature = "d115")]
-                assert_eq!(cbrt_native::<6, 12>(near_max::<6>(neg), Int::<12>::TEN.pow(2 * 57), mode), cbrt_newton::<6>(near_max::<6>(neg), 57, mode), "D115 neg={neg} mode {mode:?}");
+                assert_eq!(cbrt_native::<6, 12>(near_max::<6>(is_negative), Int::<12>::TEN.pow(2 * 57), mode), cbrt_newton::<6>(near_max::<6>(is_negative), 57, mode), "D115 neg={is_negative} mode {mode:?}");
                 #[cfg(feature = "d153")]
-                assert_eq!(cbrt_native::<8, 16>(near_max::<8>(neg), Int::<16>::TEN.pow(2 * 75), mode), cbrt_newton::<8>(near_max::<8>(neg), 75, mode), "D153s75 neg={neg} mode {mode:?}");
+                assert_eq!(cbrt_native::<8, 16>(near_max::<8>(is_negative), Int::<16>::TEN.pow(2 * 75), mode), cbrt_newton::<8>(near_max::<8>(is_negative), 75, mode), "D153s75 neg={is_negative} mode {mode:?}");
                 #[cfg(feature = "d153")]
-                assert_eq!(cbrt_native::<8, 16>(near_max::<8>(neg), Int::<16>::TEN.pow(2 * 76), mode), cbrt_newton::<8>(near_max::<8>(neg), 76, mode), "D153s76 neg={neg} mode {mode:?}");
+                assert_eq!(cbrt_native::<8, 16>(near_max::<8>(is_negative), Int::<16>::TEN.pow(2 * 76), mode), cbrt_newton::<8>(near_max::<8>(is_negative), 76, mode), "D153s76 neg={is_negative} mode {mode:?}");
                 #[cfg(feature = "d230")]
-                assert_eq!(cbrt_native::<12, 25>(near_max::<12>(neg), Int::<25>::TEN.pow(2 * 115), mode), cbrt_newton::<12>(near_max::<12>(neg), 115, mode), "D230 neg={neg} mode {mode:?}");
+                assert_eq!(cbrt_native::<12, 25>(near_max::<12>(is_negative), Int::<25>::TEN.pow(2 * 115), mode), cbrt_newton::<12>(near_max::<12>(is_negative), 115, mode), "D230 neg={is_negative} mode {mode:?}");
                 #[cfg(feature = "d307")]
-                assert_eq!(cbrt_native::<16, 32>(near_max::<16>(neg), Int::<32>::TEN.pow(2 * 150), mode), cbrt_newton::<16>(near_max::<16>(neg), 150, mode), "D307 neg={neg} mode {mode:?}");
+                assert_eq!(cbrt_native::<16, 32>(near_max::<16>(is_negative), Int::<32>::TEN.pow(2 * 150), mode), cbrt_newton::<16>(near_max::<16>(is_negative), 150, mode), "D307 neg={is_negative} mode {mode:?}");
             }
         }
     }

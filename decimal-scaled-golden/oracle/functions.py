@@ -28,6 +28,7 @@ def _pos(i: List[str]) -> bool: return _d(i[0]) > 0
 def _unit_closed(i: List[str]) -> bool: return Decimal(-1) <= _d(i[0]) <= Decimal(1)
 def _ge1(i: List[str]) -> bool: return _d(i[0]) >= 1
 def _unit_open(i: List[str]) -> bool: return Decimal(-1) < _d(i[0]) < Decimal(1)
+def _gt_minus_one(i: List[str]) -> bool: return _d(i[0]) > Decimal(-1)
 def _y_nonzero(i: List[str]) -> bool: return _d(i[1]) != 0
 def _log_dom(i: List[str]) -> bool: return _d(i[0]) > 0 and _d(i[1]) > 0
 def _powf_dom(i: List[str]) -> bool: return _d(i[0]) >= 0
@@ -37,6 +38,8 @@ FUNCTIONS = {f.name: f for f in [
     Func("sqrt", 1, _nonneg), Func("cbrt", 1, _all), Func("exp", 1, _all),
     Func("ln", 1, _pos), Func("log2", 1, _pos), Func("log10", 1, _pos),
     Func("exp2", 1, _all),
+    # expm1(x) = e^x - 1 (all reals); log1p(t) = ln(1 + t), domain t > -1.
+    Func("expm1", 1, _all), Func("log1p", 1, _gt_minus_one),
     Func("sin", 1, _all), Func("cos", 1, _all), Func("tan", 1, _all),
     Func("atan", 1, _all), Func("asin", 1, _unit_closed), Func("acos", 1, _unit_closed),
     Func("sinh", 1, _all), Func("cosh", 1, _all), Func("tanh", 1, _all),

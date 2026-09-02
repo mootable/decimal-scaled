@@ -36,7 +36,7 @@
 //! the tighter seed.
 //!
 //! Result is bit-for-bit identical to [`crate::algos::sqrt::sqrt_newton`]
-//! under all six [`RoundingMode`] values; only the integer width and the
+//! under every [`RoundingMode`] value; only the integer width and the
 //! seed source change.
 //!
 //! NOT feature-gated: referenced by the feature-independent `sqrt` policy (as
@@ -64,18 +64,22 @@ pub(crate) fn sqrt_newton_with_table_seed(raw: Int<3>, mode: RoundingMode) -> In
     // `const {}` forces the 10^SCALE multiplier to fold at compile time; a
     // bare `TEN.pow(SCALE)` runs the int pow square-and-multiply at runtime
     // (the exponent reaches the method as a plain `u32`) every call.
-    let n: Int<4> = raw.resize_to::<Int<4>>() * const { Int::<4>::TEN.pow(SCALE) };
-    let q: Int<4> = n.isqrt();
-    let diff: Int<4> = n - q * q;
-    let halfway_round_up = diff > q;
+    let radicand: Int<4> = raw.resize_to::<Int<4>>() * const { Int::<4>::TEN.pow(SCALE) };
+    let root: Int<4> = radicand.isqrt();
+    let diff: Int<4> = radicand - root * root;
+    let halfway_round_up = diff > root;
     let diff_nonzero = diff != Int::<4>::ZERO;
     let bump = match mode {
         RoundingMode::HalfToEven
         | RoundingMode::HalfAwayFromZero
         | RoundingMode::HalfTowardZero => halfway_round_up,
         RoundingMode::Trunc | RoundingMode::Floor => false,
-        RoundingMode::Ceiling => diff_nonzero,
+        // The radicand is non-negative, so up IS away from zero.
+        RoundingMode::Ceiling | RoundingMode::AwayFromZero => diff_nonzero,
+        RoundingMode::ZeroFiveUp => {
+            diff_nonzero && matches!((root % Int::<4>::TEN).as_i128(), 0 | 5)
+        }
     };
-    let q = if bump { q + Int::<4>::ONE } else { q };
-    q.resize_to::<Int<3>>()
+    let root = if bump { root + Int::<4>::ONE } else { root };
+    root.resize_to::<Int<3>>()
 }

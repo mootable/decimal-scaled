@@ -8,16 +8,7 @@ NOT bundled; install it yourself: `pip install gmpy2`.
 from typing import List
 
 from ..functions import FUNCTIONS
-from ..oracle import Oracle, OracleUnavailable, register
-
-
-def _format(neg: bool, scaled: int, precision: int) -> str:
-    sign = "-" if neg and scaled != 0 else ""
-    s = str(scaled)
-    if precision == 0:
-        return f"{sign}{s}"
-    s = s.rjust(precision + 1, "0")
-    return f"{sign}{s[:-precision]}.{s[-precision:]}"
+from ..oracle import GUARD, Oracle, OracleUnavailable, format_fetched, register
 
 
 class MpfrOracle(Oracle):
@@ -33,7 +24,11 @@ class MpfrOracle(Oracle):
         except ImportError as e:
             raise OracleUnavailable("mpfr: gmpy2 not installed") from e
         ctx = gmpy2.get_context()
-        ctx.precision = int((precision + 40) * 3.3219281) + 64
+        # Wide enough for `precision` + the shared termination GUARD, plus slack.
+        ctx.precision = int((precision + GUARD + 40) * 3.3219281) + 64
+        # The computation keeps MPFR's default nearest rounding; rule 1's "rounded
+        # down" is the FETCH below, not a bias on the working arithmetic. Skewing a
+        # validator's own answer only widens its disagreement with the generator.
         x = [gmpy2.mpfr(s) for s in inputs]
         a = x[0]
         table = {
@@ -41,6 +36,7 @@ class MpfrOracle(Oracle):
             "exp": lambda: gmpy2.exp(a), "ln": lambda: gmpy2.log(a),
             "log2": lambda: gmpy2.log2(a), "log10": lambda: gmpy2.log10(a),
             "exp2": lambda: gmpy2.exp2(a),
+            "expm1": lambda: gmpy2.expm1(a), "log1p": lambda: gmpy2.log1p(a),
             "sin": lambda: gmpy2.sin(a), "cos": lambda: gmpy2.cos(a), "tan": lambda: gmpy2.tan(a),
             "atan": lambda: gmpy2.atan(a), "asin": lambda: gmpy2.asin(a), "acos": lambda: gmpy2.acos(a),
             "sinh": lambda: gmpy2.sinh(a), "cosh": lambda: gmpy2.cosh(a), "tanh": lambda: gmpy2.tanh(a),
@@ -53,9 +49,11 @@ class MpfrOracle(Oracle):
         if func not in table:
             raise NotImplementedError(f"mpfr adapter does not implement {func}")
         r = table[func]()
-        neg = r < 0
-        scaled = int(gmpy2.floor(abs(r) * gmpy2.mpfr(10) ** precision))
-        return _format(neg, scaled, precision)
+        # The shared primitive: floor toward zero at `precision` + GUARD. Previously
+        # this floored at `precision` with no guard window, so this oracle had no
+        # exactness path at all and rendered every value as a full-length truncation.
+        scaled_guard = int(gmpy2.floor(abs(r) * gmpy2.mpfr(10) ** (precision + GUARD)))
+        return format_fetched(r < 0, scaled_guard, precision)
 
 
 register("mpfr", MpfrOracle)

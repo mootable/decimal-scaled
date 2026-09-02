@@ -1,0 +1,211 @@
+# internal-lens (white box) adversarial manifest — ln near x = 1
+# One line per unit of work. Chunk 1, 2026-08-31.
+
+## Facts established from source (verified in-tree, not assumed)
+routing            src/policy/ln.rs:66-85 — select routes Tang over (3,0..=56) … (64,0..=1231);
+                   `_ => Series`. wide ln_series (series_routed, lines 175-193) is UNREACHABLE
+                   through the public API for N >= 3. Reachable only via __bench_internals.
+guard              wide_trig_core::adjust_ln_near_one (wide_trig_core.rs:780) has exactly ONE
+                   call site: ln_tang.rs:409. ln_series_g never calls it.
+walker reach       round_to_storage_directed_impl_g: cap_digits = C::W::BITS/8 - (int_digits+8);
+                   int_digits == 0 for a near-one result. Nearest additionally clamps to
+                   ZIV_PRECISION_HORIZON = 1264; directed does NOT (deliberate, per the
+                   comment at wide_trig_core.rs:2155-2173).
+C::W per tier      decl_decimal_full! arg 7 ($Work), src/types/widths.rs:
+                   D57/D76 Int<16>; D115/D153 Int<32>; D230 Int<48>; D307/D462 Int<64>;
+                   D616 Int<96>; D924 Int<128>; D1232 Int<176>.
+reach per tier     D57 120, D76 120, D115 248, D153 248, D230 376, D307 504, D462 504,
+                   D616 760, D924 1016, D1232 1400.
+INTERNAL_EXTRA     src/policy/ln.rs tang_routed, 6th const: TRUE at D462 ONLY; false at the
+                   other nine wide tiers. IE=true runs tang_ln_fixed at w+12 and truncates
+                   back WITH a 1-LSB magnitude bump when digits are discarded — a sticky bit
+                   that re-exposes a sub-w residual to the directed rounder.
+oracle             GENERATOR_POLICY (oracle/generate.py:43) sets ln -> "decimal", NOT flint
+                   (DEFAULT_GENERATOR="flint" covers only unlisted functions). ln has NO
+                   VALIDATOR_EXCLUDE entry, so mpmath IS a live validator here.
+                   This env: decimal, mpmath, flint present; gmpy2, sympy absent.
+
+## Derivation 2 — crossover cells (DONE)
+family-1 linear    d = 10^-m, deciding term d^2/2 at depth 2m. Breaks when 2m > reach, m <= S.
+                   FIRST cell D76<61>. Per tier, breaks from: D76 S>=61, D153 S>=125,
+                   D230 S>=189, D307 S>=253, D462 S>=253, D616 S>=381, D924 S>=509,
+                   D1232 S>=701. D57 and D115 are PROVABLY SAFE (no valid m <= MAX_SCALE).
+                   Target: ln_series. ln_tang is DEFENDED by adjust_ln_near_one.
+family-2 quad      k^2 == 0 (mod 2*10^S) so d^2/2 is an exact ULP multiple; deciding term is
+                   the cubic at depth 3S/2 (even S) / 3(S-1)/2 (odd S). adjust_ln_near_one
+                   no-ops (result != delta). Breaks when cubic depth > reach.
+                   Per tier, breaks from: D462 S>=337, D616 S>=508, D924 S>=678, D1232 S>=934.
+                   Target: ln_tang = ROUTED PRODUCTION.
+
+## Rows added to lead/ln.pb (DONE — family 2, driven cells only)
+D616<590>  1 +- 2*10^-295   cubic@885  vs reach 760   predicted: Ceiling (x>1) / Floor (x<1)
+D616<615>  1 +- 10^-307     cubic@921  vs reach 760   predicted: Ceiling (x>1) / Floor (x<1)
+D924<693>  1 +- 10^-346     cubic@1038 vs reach 1016  predicted: Ceiling (x>1) / Floor (x<1)
+All six verified against the rigorous Arb-ball oracle (grade_ln.correctly_rounded).
+
+## Kernel/config inventory for ln (what EXISTS vs what the gate COVERS)
+The golden gate asserts the PUBLIC surface only. `policy::ln::select` routes Tang at every
+wide (N, SCALE), so at every wide cell the gate exercises Tang and NOTHING ELSE. A green
+golden run is therefore NOT evidence about any kernel below.
+
+kernel / config                     reachable via            gate covers?
+ln_tang (production params)         public API               YES
+wide_trig_core::ln_series           __bench_internals        NO — unrouted for N >= 3
+  seams: ln_series_d57/d76/d115/d153/d230/d307/d462/d616/d924/d1232 (all ten exist)
+ln_tang_d57/d115/d153               __bench_internals        partly — fixed params
+ln_tang_d{76,230,307,462,616,924,1232}_p<SCALE,G,CAP>        NO for non-production (G,CAP)
+  ALL `_p` seams hardcode DIRECTED=true, INTERNAL_EXTRA=false. Production passes IE=true at
+  D462 ONLY, so `ln_tang_d462_p` is NOT production-equivalent — it is a distinct config, and
+  the flag it differs on is exactly the one predicted to defend the quadratic-on-grid family.
+ln_schoolbook (Algorithm::Schoolbook)  NEITHER                NO — `select` never returns it
+  and src/lib.rs has NO seam for it (0 hits). Unreachable both ways; recorded, not fixed.
+
+## Rows added targeting UNROUTED kernels (kept per the owner's rule)
+ln_series      D76<75>, D153<152>, D307<306>, both sides. Predicted Trunc+Floor (x>1),
+               Floor (x<1). Driven cells; deciding depth 122/250/506 all <= 1233.
+ln_tang_d462_p D462<461> both sides (IE=false config). Predicted Ceiling (x>1), Floor (x<1).
+
+## TANG (production) exact-ULP sweep — COMPLETE (chunk 3)
+Qualifying cell = driven (GOLDEN_CELLS) AND exposed (cubic depth > reach) AND capturable
+(depth <= gen_precision 1233). All qualifying cells now carry rows:
+  D462   exposed S>=337; driven {346, 461}; depths 519/690 -> BOTH qualify, BOTH added.
+         (production D462 passes IE=true and is predicted to DEFEND; these rows target the
+         ln_tang_d462_p IE=false seam config.)
+  D616   exposed S>=508; driven {590, 615}; depths 885/921 -> BOTH qualify, BOTH added.
+  D924   exposed S>=678; driven {693, 900, 923}; only 693 capturable (900->1350, 923->1383
+         exceed 1233) -> ONE qualifies, added.
+  D1232  exposed S>=934; driven {1200, 1231}; depths 1800/1845 BOTH exceed 1233.
+         *** NO QUALIFYING CELL. *** This is a finding, not a gap: D1232 is genuinely exposed
+         to the family, but at every driven cell the deciding cubic lies beyond the golden
+         set's generation precision, so no golden row can express it. Capturing D1232 would
+         need either a driven cell at S in [934, 822]-- which is empty, since capturability
+         requires S <= 822 and exposure requires S >= 934 -- or a deeper gen_precision.
+         The two constraints are mutually exclusive at this tier: UNREACHABLE BY GOLDEN DATA.
+
+## SERIES linear family — driven-cell coverage COMPLETE (chunk 3)
+The input depends only on the TIER's reach (m = reach/2 + 1), not the scale, so one pair per
+distinct reach covers that tier. Reaches: D57/D76 120 (m=61); D115/D153 248 (m=125); D230 376
+(m=189); D307/D462 504 (m=253); D616 760 (m=381); D924 1016 (m=509); D1232 1400 (m=701).
+  added: m=61 (D76<75>), m=125 (D153<152>), m=253 (D307<306>), m=189 (D230<229>),
+         m=381 (D616<462>), m=509 (D924<693>).
+  D462 reuses m=253 -- the SAME input string as D307's; no new row needed.
+  D1232 m=701 -> depth 1402 > 1233: NOT capturable, no row (same wall as the Tang family).
+  D76<61> (the first break) is the SAME input string as the D76<75> row: the family needs only
+  m <= S, and m=61 is the sole valid m at S=61, so that string already carries the cell.
+  D76<61> is not itself in GOLDEN_CELLS, so it is graded at D76<75>.
+
+## PROVABLY SAFE — D57 and D115, linear family only (the argument)
+The linear family needs an m with BOTH (a) 2m > reach, so the deciding (x-1)^2/2 escapes the
+walker, and (b) m <= MAX_SCALE, so x = 1 +- 10^-m is representable at the cell.
+  D57:  reach 120 -> (a) needs m >= 61; MAX_SCALE = 56 -> (b) needs m <= 56. Empty.
+  D115: reach 248 -> (a) needs m >= 125; MAX_SCALE = 114 -> (b) needs m <= 114. Empty.
+Both intervals are empty, so the family CANNOT BE INSTANTIATED at these tiers -- a proof, not
+an absence of evidence. SCOPE: this proves only that THIS family cannot reach these tiers. It
+is NOT a correctness proof for ln_series at D57/D115 against any other family.
+
+## j-FAMILY (double-width compare) — COMPLETE (chunk 4)
+CONFIRMED by the gate at the j=1 cells: D616<590> 2 bad, D616<615> 3 bad, D924<693> 1 bad,
+all Ceiling, classified wrong-mode(HalfToEven). Live defect in released 0.5.0; issue #73.
+
+The fix compares delta^2 <= 2*D*one at DOUBLE width because delta^2 overflows a single width.
+At j=1 it does NOT overflow (D616<615>: delta^2 = 10^616 vs Int<32> max ~1.63*10^616), so the
+double-width path was exercised by nothing. These rows force it.
+Window on L = log10(k), all three must hold:
+  overflow   L > log10(2^(64N-1))/2      (else single width would have sufficed)
+  exposure   L < S - (reach - log10 3)/3 (else the walker resolves the cubic)
+  capturable L >= S - (1233 - log10 3)/3 (else the .au truncates it -> FALSE NEGATIVE)
+Qualifying driven cells and the k used (k^2/2 * 10^-S is an exact integer in every case):
+  D462<461>  window (231.0, 293.2)  k = 10^232  d = 10^-229  delta^2 = 83x max
+  D616<590>  window (308.1, 336.8)  k = 10^315  d = 10^-275  delta^2 = 6.2e13x max
+  D616<615>  window (308.1, 361.8)  k = 10^328  d = 10^-287  delta^2 = 6.2e39x max
+  D924<900>  window (489.2, 561.5)  k = 10^525  d = 10^-375  delta^2 = 3.4e125x max
+  D924<923>  window (512.2, 584.5)  k = 10^548  d = 10^-375  delta^2 = 3.4e171x max
+  (D924<900> and <923> share the same input string; one row serves both cells.)
+NO QUALIFYING CELL, stated as findings not gaps:
+  D307 and every narrower tier — overflow needs L > 154.0 but exposure caps L < 138.2 at the
+    widest driven cell (D307<306>). The windows are disjoint at EVERY scale, not just the
+    driven ones: storage is too narrow relative to reach, so a delta big enough to overflow
+    the width is always big enough for the walker to see its cubic. Structural, not a grid gap.
+  D1232 — same wall as before: capturability needs L >= 789.2 at S=1200, exposure needs
+    L < 733.5. Disjoint. D1232 remains unreachable by golden data for this family entirely.
+SIDE RESULT: larger k pulls the cubic SHALLOWER (depth 3(S - log10 k)), which is what brings
+D924<900>/<923> inside gen_precision. At j=1 they were uncapturable (depth 1350/1383). The
+j-family therefore reaches cells j=1 provably could not — it is not merely "easier rows".
+
+## Why the BELOW-1 side is clean under Floor (the asymmetry, explained)
+Answered from `tang_ln_fixed_g` Stage 1 (ln_tang.rs:174-188), v = 2^k * m with m in [1,2):
+  x = 1 + d : v >= one_w, so k = 0 and m = v. There is NO ln2 term. The artanh series on a
+              tiny argument reproduces d - d^2/2 exactly at working scale, so the value lands
+              EXACTLY on a grid multiple, rem == 0, residual_present == false, and the directed
+              bump cannot fire. -> BREAKS under Ceiling.
+  x = 1 - d : v < one_w, so the loop's `m < one_w => k -= 1` forces k = -1 and m = 2(1-d).
+              The result is -ln2 + ln(2-2d). ln2 is a ROUNDED working-scale constant, so that
+              subtraction leaves a generically NONZERO low residual, rem != 0, and Floor's
+              bump (residual_present && !result_positive) fires -> lands on the correct
+              -(k+Q)-1. Correct, but for a reason unrelated to the deficit it is masking.
+CONCLUSION: no CONSTRUCTIBLE below-1 input mis-rounds under Floor in this family. A break needs
+the -ln2 + ln(2-2d) working-scale value to land exactly on a grid multiple, i.e. controlling the
+rounding of an irrational to `guard` digits — that IS the Table-Maker's Dilemma, not something a
+derivation can target. Recorded as UNBROKEN-AND-EXPLAINED, NOT proven safe: the below-1
+correctness is UNEARNED (it rests on a residual that is nonzero only generically). LATENT HAZARD
+worth keeping: any future change that removes the ln2 subtraction near 1 — an exact-ln2 path, or
+a reduction that keeps k = 0 below 1 — would expose the below-1 bracket exactly as the above-1
+bracket was exposed. The fix's below-1 branch is correct but its FIRING path stays unexercised.
+
+## Status of each claim — BROKEN / UNBROKEN / PROVABLY SAFE (do not conflate)
+DERIVED-PREDICTED-BREAK  every row above. NONE has been executed — this agent runs no cargo.
+                         The oracle answers are verified; the kernel behaviour is NOT.
+PROVABLY SAFE            ln_series at D57 and D115 for the linear family ONLY: no m <= MAX_SCALE
+                         satisfies 2m > reach, so the family cannot be instantiated there. This
+                         is a proof about the FAMILY, not a correctness proof for the kernel.
+UNBROKEN, NOT SAFE       everything else, incl. the prior investigation's 1,260 clean rows.
+                         Reach: those were nearest-mode-dominated and did not instantiate the
+                         quadratic-on-grid family at all. "Not yet broken" is the claim; any
+                         stronger reading is unsupported.
+OPEN, NOT RESOLVED       whether the ln_series linear break actually materialises. What IS
+                         established: at those cells the walker PROVABLY cannot resolve the
+                         deciding term, so the outcome is decided by the sign of the
+                         sqrt-reduction truncation bias in exp_generic::ln_fixed at the
+                         cap-clamped working scale — i.e. correctness there is unearned, not
+                         demonstrated. The prior agent's amplification hypothesis is neither
+                         confirmed nor needed. DEFERRED as too big for this chunk.
+
+## Deliberately NOT added, and why
+D462<346>, D462<461>   breaking + driven + capturable, but D462 is the IE=true tier — the
+                       sticky bit is predicted to DEFEND. Kept as the natural control: if
+                       these ever fail, the sticky-bit mechanism is wrong.
+D924<900/923>,         breaking + driven, but cubic depth 1350/1383/1800/1845 EXCEEDS
+D1232<1200/1231>       gen_precision 1233 — the stored .au truncates the deciding residual
+                       away, so the harness would compute the same wrong answer as the
+                       kernel and the row would PASS. A false negative; needs the internals
+                       seam or a deeper gen_precision, not a golden row.
+                       (SUPERSEDED by the owner's rule: a break on an unrouted kernel is a
+                       keeper. The family-1 rows ARE now added; through the public surface they
+                       reach Tang and will PASS, which is expected and is precisely why each
+                       carries the "a green run is not evidence about this kernel" sentence.)
+
+## REMAINING
+[ ] coordinator: regenerate golden/ln.au and run the gate at the three live cells under all
+    six modes — GOLDEN_WIDTHS=616,924 GOLDEN_MODES=ceiling,floor GOLDEN_FUNCS=ln.
+[ ] coordinator: run the family-1 candidates against ln_series via the bench-alt seam
+    (D76<61>/<75>, D153<125>, D307<253>, both sides, Floor+Trunc) — the ONLY way to settle
+    Target A. Predicted: Trunc+Floor break above 1, Floor breaks below 1.
+[ ] open question (partly answered, see the report): whether the family-1 Series break
+    actually materialises depends on the sign of the sqrt-reduction truncation bias in
+    exp_generic::ln_fixed at the cap-clamped working scale. NOT yet proven either way.
+[ ] not yet swept: the j-family band (k = 2j*10^(S/2), j > 1) — a continuous region around
+    each live cell, for Class-I neighbour coverage.
+[ ] not yet examined: log/log2/log10/powf/asinh/acosh/atanh, which compose ln through
+    ln_fixed_routed and may inherit the same reach limit.
+[ ] DEFERRED (too big, per "keep it light"): proving the sqrt-reduction bias mechanism that
+    decides whether the ln_series linear break materialises. Needs a run, not a derivation.
+[x] DONE (chunk 3): the remaining ln_series tier reaches and the remaining Tang driven cells.
+    Both sweeps are now COMPLETE over driven-and-capturable cells; see the two sections above.
+[ ] DEFERRED: the non-production (G, CAP) configs of the seven `_p` Tang seams. Only the
+    INTERNAL_EXTRA axis has been reasoned about (it is what separates D462 production from its
+    seam); G and CAP are untouched. Volume, and it needs a seam run to mean anything.
+[x] DONE (chunk 4): the j-family, which turned out to be LOAD-BEARING, not discipline — it is
+    the only thing that exercises the fix's double-width compare. My chunk-3 assessment
+    ("strictly easier rows") was wrong: it accounted for the deciding cubic but not for
+    delta^2 overflowing the storage width, which is a SECOND axis that only larger j reaches.
+[ ] NOT COVERABLE AT ALL: ln_schoolbook — no `select` arm and no seam. Recorded, not fixed.

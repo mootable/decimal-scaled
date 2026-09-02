@@ -67,8 +67,8 @@ const M: u32 = 128;
 /// so a fixed lift suffices.
 pub(crate) const EXTERNAL_EXTRA_DIGITS: u32 = 12;
 
-/// Tang-style `ln(v)` for a working-scale value `v_w` (`= x · 10^w`),
-/// returned at the same working scale `w`. Generic over the tier `C`,
+/// Tang-style `ln(v)` for a `working_value` (`= x · 10^w`),
+/// returned at the same `working_scale`. Generic over the tier `C`,
 /// the artanh-series iteration cap `CAP` (a safety net; the loop
 /// terminates on a zero term far sooner), and the `INTERNAL_EXTRA`
 /// directed-mode boundary-precision flag.
@@ -81,7 +81,7 @@ pub(crate) const EXTERNAL_EXTRA_DIGITS: u32 = 12;
 ///
 /// ## Accuracy — the artanh truncation bias
 ///
-/// The artanh series is truncated when `contrib = term / (2j+1)`
+/// The artanh series is truncated when `contribution = term / (2j+1)`
 /// underflows to zero in the work integer. The omitted tail
 /// `T = sum_{k>=J} t^(2k+3)/(2k+3)` carries the **sign of `t`** and a
 /// magnitude bounded by ~1 working-ULP (the largest still-representable
@@ -118,8 +118,8 @@ pub(crate) fn tang_ln_fixed<
     const INTERNAL_EXTRA: bool,
     const SCALE: u32,
 >(
-    v_w: C::W,
-    w: u32,
+    working_value: C::W,
+    working_scale: u32,
 ) -> C::W
 where
     <C::W as BigInt>::Scratch: ComputeLimbs,
@@ -130,7 +130,8 @@ where
     // feature-flagged default rounding mode AND the per-scale const-fold).
     // One Tang `ln` kernel — the wide compositions call `tang_ln_fixed_g`
     // directly at their `Wagm` work width.
-    tang_ln_fixed_g::<C::W, CAP, INTERNAL_EXTRA>(v_w, w, |ww| C::ln2::<SCALE>(ww))
+    tang_ln_fixed_g::<C::W, CAP, INTERNAL_EXTRA>(
+        working_value, working_scale, |at_scale| C::ln2::<SCALE>(at_scale))
 }
 
 /// Width-generic core of [`tang_ln_fixed`] — the Tang `ln` body over any
@@ -146,137 +147,190 @@ where
 /// directly at their `Wagm` work width.
 #[inline]
 pub(crate) fn tang_ln_fixed_g<S: BigInt, const CAP: u128, const INTERNAL_EXTRA: bool>(
-    v_w: S,
-    w: u32,
+    working_value: S,
+    working_scale: u32,
     ln2: impl Fn(u32) -> S,
 ) -> S
 where
     S::Scratch: ComputeLimbs,
 {
     // Stage 0 (INTERNAL_EXTRA only): widen the internal working scale
-    // by `extra = EXTERNAL_EXTRA_DIGITS` so the artanh-series
+    // by `extra_digits = EXTERNAL_EXTRA_DIGITS` so the artanh-series
     // truncation bias (one-sided, ≈ 1 working-ULP) sits 12 decimal
     // digits below the caller's working ULP. The input is re-lifted
-    // from `w` to `w_ext` by multiplying by `10^extra`.
-    let (w_ext, v_ext, extra): (u32, S, u32) = if INTERNAL_EXTRA {
-        let extra = EXTERNAL_EXTRA_DIGITS;
-        let v_ext = v_w * eg::pow10::<S>(extra);
-        (w + extra, v_ext, extra)
-    } else {
-        (w, v_w, 0)
-    };
+    // from `working_scale` to `extended_working_scale` by multiplying
+    // by `10^extra_digits`.
+    let (extended_working_scale, extended_working_value, extra_digits): (u32, S, u32) =
+        if INTERNAL_EXTRA {
+            let extra_digits = EXTERNAL_EXTRA_DIGITS;
+            let extended_working_value = working_value * eg::pow10::<S>(extra_digits);
+            (working_scale + extra_digits, extended_working_value, extra_digits)
+        } else {
+            (working_scale, working_value, 0)
+        };
 
-    let one_w = eg::one::<S>(w_ext);
-    let pow10_w = one_w;
-    let two_w = one_w + one_w;
+    let one_at_extended_scale = eg::one::<S>(extended_working_scale);
+    let pow10_at_extended_scale = one_at_extended_scale;
+    let two_at_extended_scale = one_at_extended_scale + one_at_extended_scale;
 
     // Stage 1: v = 2^k · m, m ∈ [1, 2). k from bit-shifts.
-    let mut k: i32 = eg::bit_length::<S>(v_ext) as i32 - eg::bit_length::<S>(one_w) as i32;
-    let m_w = loop {
-        let m = if k >= 0 {
-            v_ext >> (k as u32)
+    let mut k: i32 = eg::bit_length::<S>(extended_working_value) as i32
+        - eg::bit_length::<S>(one_at_extended_scale) as i32;
+    let mantissa_w = loop {
+        let candidate_mantissa = if k >= 0 {
+            extended_working_value >> (k as u32)
         } else {
-            v_ext << ((-k) as u32)
+            extended_working_value << ((-k) as u32)
         };
-        if m >= two_w {
+        if candidate_mantissa >= two_at_extended_scale {
             k += 1;
-        } else if m < one_w {
+        } else if candidate_mantissa < one_at_extended_scale {
             k -= 1;
         } else {
-            break m;
+            break candidate_mantissa;
         }
     };
 
     // Stage 2: pick i. Boundary `m = 1` short-circuits: ln(m) = 0, so
     // ln(v) = k · ln(2).
-    let result_at_w_ext = if m_w == one_w {
+    let ln_at_extended_scale = if mantissa_w == one_at_extended_scale {
         // k·ln2 as an n-by-1-word product (`scale_by_k`, O(limbs)) — the
         // same value the previous full-width `ln2 * lit(k)` schoolbook
         // multiply produced (|k| < BITS, and k·ln2 at scale w_ext fits the
         // rung by construction, so the product never wraps), at a fraction
         // of the cost. Matches `exp_generic::ln_fixed`'s shape.
-        eg::scale_by_k::<S>(ln2(w_ext), k as i128)
+        eg::scale_by_k::<S>(ln2(extended_working_scale), k as i128)
     } else {
         // i ∈ [0, M); when m = 2 exactly (rare boundary post-rounding),
         // clamp to M-1 so the table lookup stays in range, then the
         // residual t handles the remaining tiny piece.
-        let i_raw = ((m_w - one_w) * eg::lit::<S>(M as i128)) / one_w;
-        let i_i128 = BigInt::to_i128(i_raw);
-        let i_idx = if i_i128 >= M as i128 {
+        let table_index_raw = ((mantissa_w - one_at_extended_scale)
+            * eg::lit::<S>(M as i128))
+            / one_at_extended_scale;
+        let table_index_i128 = BigInt::to_i128(table_index_raw);
+        let table_index = if table_index_i128 >= M as i128 {
             (M - 1) as usize
         } else {
-            i_i128 as usize
+            table_index_i128 as usize
         };
 
-        let f_i = one_w + (one_w * eg::lit::<S>(i_idx as i128)) / eg::lit::<S>(M as i128);
+        let table_boundary = one_at_extended_scale
+            + (one_at_extended_scale * eg::lit::<S>(table_index as i128))
+                / eg::lit::<S>(M as i128);
 
         // Stage 3: t = (m - f_i) / (m + f_i). |t| < 1/(2M + 1).
-        let t = eg::div_cached::<S>(m_w - f_i, m_w + f_i, pow10_w);
+        let atanh_arg = eg::div_cached::<S>(
+            mantissa_w - table_boundary,
+            mantissa_w + table_boundary,
+            pow10_at_extended_scale);
 
         // Artanh series: 2 · (t + t³/3 + t⁵/5 + ...).
-        let t2 = eg::mul::<S>(t, t, w_ext);
-        let mut sum = t;
-        let mut term = t;
-        let mut j: u128 = 1;
+        //
+        // ── The truncation below is LOAD-BEARING for directed rounding ──
+        //
+        // `term / lit(2j+1)` is integer division, so every term is TRUNCATED
+        // toward zero and `sum` comes out SHORT. That is not merely tolerable
+        // here, it is what makes the directed modes correct just BELOW `x = 1`,
+        // and the property is easy to destroy by making this line "better".
+        //
+        // Below 1 the reduction gives `k = -1`, so the result is
+        // `-ln2 + ln(m)`. A short `ln(m)` makes that MORE negative — larger in
+        // magnitude, away from zero. Every truncation pushes that one way; none
+        // can push back. The only terms that push toward zero are `ln2`'s
+        // rounding and the table entry's, at most half a unit each.
+        //
+        // The net is measured: at `x = 1 − d·ULP` the returned magnitude sits at
+        // least one working unit ABOVE `d·10^guard`, while the true sub-storage
+        // residual `d²·10^(guard−S)/2` is far under one unit. So the walker sees
+        // a NON-ZERO residual and its ordinary directed rule decides — `Floor`
+        // reaches `adjust_log_near_zero` already stepped, and the tangent
+        // bracket never fires for it. `ln2`'s rounding direction is NOT what
+        // carries this: it is a near coin flip across scales, and cells that
+        // read it at a down-rounding scale are correct anyway.
+        //
+        // So: correctness here rides on an ERROR being reliably one-sided and
+        // at least one unit — not on the value being accurate. Making this
+        // series MORE accurate (rounding these divisions instead of truncating,
+        // or turning `INTERNAL_EXTRA` on at more tiers) shrinks that excess
+        // toward zero. That is still correct, because a zero residual lands on
+        // the linear term and `adjust_log_near_zero`'s tangent bracket then
+        // supplies the same three answers — but it MOVES THE LOAD ONTO THAT
+        // BRACKET, so it must stay intact. Only a NEGATIVE excess is wrong, and
+        // that needs the two roundings to beat the accumulated truncation.
+        //
+        // Note `INTERNAL_EXTRA` is `true` at D462 ONLY (`policy::ln`); the other
+        // nine wide tiers run natively at `working_scale` with no outward bump, so
+        // they depend on exactly the argument above. See
+        // `below_one_directed_modes_straddle` at the foot of this file.
+        let atanh_arg_sq = eg::mul::<S>(atanh_arg, atanh_arg, extended_working_scale);
+        let mut sum = atanh_arg;
+        let mut term = atanh_arg;
+        let mut term_index: u128 = 1;
         loop {
-            term = eg::mul::<S>(term, t2, w_ext);
-            let contrib = term / eg::lit::<S>((2 * j + 1) as i128);
-            if contrib == eg::zero::<S>() {
+            term = eg::mul::<S>(term, atanh_arg_sq, extended_working_scale);
+            let contribution = term / eg::lit::<S>((2 * term_index + 1) as i128);
+            if contribution == eg::zero::<S>() {
                 break;
             }
-            sum = sum + contrib;
-            j += 1;
-            if j > CAP {
+            sum = sum + contribution;
+            term_index += 1;
+            if term_index > CAP {
                 break;
             }
         }
-        let ln_m = sum + sum + ln_table_entry_baked::<S>(w_ext, i_idx, pow10_w);
+        let ln_mantissa = sum
+            + sum
+            + ln_table_entry_baked::<S>(
+                extended_working_scale, table_index, pow10_at_extended_scale);
 
         // Final: ln(v) = k · ln(2) + ln(m). k·ln2 via the one-word
-        // `scale_by_k` product (see the `m == one_w` arm above).
-        eg::scale_by_k::<S>(ln2(w_ext), k as i128) + ln_m
+        // `scale_by_k` product (see the `mantissa_w == one_at_extended_scale`
+        // arm above).
+        eg::scale_by_k::<S>(ln2(extended_working_scale), k as i128) + ln_mantissa
     };
 
-    if !INTERNAL_EXTRA || extra == 0 {
-        result_at_w_ext
+    if !INTERNAL_EXTRA || extra_digits == 0 {
+        ln_at_extended_scale
     } else {
-        // Truncate toward zero from scale `w_ext` to scale `w`, then
-        // bump the magnitude by 1 LSB-at-`w` IF any digits were
-        // discarded (`r_mag != 0`). The bump signals to the outer
-        // directed rounder "sub-w-scale residual present, same sign as
-        // the value" — preserving the residual sign at scale `w` even
-        // when truncation alone would round the residual to exactly
-        // zero. The `+1` is at most one ULP-at-`w`, i.e. `10^-guard`
+        // Truncate toward zero from `extended_working_scale` to
+        // `working_scale`, then
+        // bump the magnitude by 1 LSB-at-`working_scale` IF any digits
+        // were discarded (`r_mag != 0`). The bump signals to the outer
+        // directed rounder "sub-working-scale residual present, same sign
+        // as the value" — preserving the residual sign at `working_scale`
+        // even when truncation alone would round the residual to exactly
+        // zero. The `+1` is at most one ULP-at-`working_scale`, i.e. `10^-guard`
         // storage ULPs (well below half a storage ULP), so nearest
         // stays correctly rounded.
         //
         // Sign-preservation argument: the discarded digits
-        // `result_at_w_ext mod p` share the sign of `result_at_w_ext`
-        // (Rust integer truncation toward zero), so the bumped
-        // magnitude `q + 1` straddles the true value on the "outside"
-        // (in magnitude), which is exactly what a directed rounder
-        // needs to decide whether to bump under each mode.
-        let p = eg::pow10::<S>(extra);
-        let (q_signed, has_residue) = if result_at_w_ext >= eg::zero::<S>() {
-            let q = result_at_w_ext / p;
-            let has = result_at_w_ext - q * p != eg::zero::<S>();
-            (q, has)
+        // `ln_at_extended_scale mod extra_pow10` share the sign of
+        // `ln_at_extended_scale` (Rust integer truncation toward zero),
+        // so the bumped magnitude `truncated + 1` straddles the true
+        // value on the "outside" (in magnitude), which is exactly what a
+        // directed rounder needs to decide whether to bump under each mode.
+        let extra_pow10 = eg::pow10::<S>(extra_digits);
+        let (truncated, has_residue) = if ln_at_extended_scale >= eg::zero::<S>() {
+            let quotient = ln_at_extended_scale / extra_pow10;
+            let has_discarded =
+                ln_at_extended_scale - quotient * extra_pow10 != eg::zero::<S>();
+            (quotient, has_discarded)
         } else {
-            let abs_v = -result_at_w_ext;
-            let q = abs_v / p;
-            let has = abs_v - q * p != eg::zero::<S>();
-            (-q, has)
+            let abs_value = -ln_at_extended_scale;
+            let quotient = abs_value / extra_pow10;
+            let has_discarded = abs_value - quotient * extra_pow10 != eg::zero::<S>();
+            (-quotient, has_discarded)
         };
         if has_residue {
-            // Bump magnitude by 1 LSB-at-`w` so the outer rounder sees
-            // a nonzero residual with the value's sign.
-            if q_signed >= eg::zero::<S>() {
-                q_signed + eg::lit::<S>(1)
+            // Bump magnitude by 1 LSB-at-`working_scale` so the outer
+            // rounder sees a nonzero residual with the value's sign.
+            if truncated >= eg::zero::<S>() {
+                truncated + eg::lit::<S>(1)
             } else {
-                q_signed - eg::lit::<S>(1)
+                truncated - eg::lit::<S>(1)
             }
         } else {
-            q_signed
+            truncated
         }
     }
 }
@@ -331,20 +385,20 @@ where
     // `ln 2` at the RUNG work integer `Wk`, const-folded at the base working
     // scale `SCALE + GUARD` (the hot path) — the rung sibling of the per-tier
     // `C::ln2::<SCALE>` (value-identical; only the const-fold seam differs).
-    let ln2 = |ww: u32| -> Wk {
-        if ww == SCALE + GUARD {
+    let ln2 = |at_scale: u32| -> Wk {
+        if at_scale == SCALE + GUARD {
             crate::consts::ln2_by_scale::<Wk>(SCALE + GUARD, DEFAULT_ROUNDING_MODE)
         } else {
-            crate::consts::ln2_by_working_scale::<Wk>(ww, DEFAULT_ROUNDING_MODE)
+            crate::consts::ln2_by_working_scale::<Wk>(at_scale, DEFAULT_ROUNDING_MODE)
         }
     };
     // The tier-width `ln 2` for the fall-up recompute (identical closure
     // shape at `C::W` - the `ln_tang` alias's own).
-    let ln2_w = |ww: u32| -> C::W {
-        if ww == SCALE + GUARD {
+    let ln2_tier_width = |at_scale: u32| -> C::W {
+        if at_scale == SCALE + GUARD {
             crate::consts::ln2_by_scale::<C::W>(SCALE + GUARD, DEFAULT_ROUNDING_MODE)
         } else {
-            crate::consts::ln2_by_working_scale::<C::W>(ww, DEFAULT_ROUNDING_MODE)
+            crate::consts::ln2_by_working_scale::<C::W>(at_scale, DEFAULT_ROUNDING_MODE)
         }
     };
     if DIRECTED {
@@ -353,7 +407,8 @@ where
         // land on the wrong side. Route through the shared Ziv escalation.
         //
         // `INTERNAL_EXTRA` buries the ~1-working-ULP artanh truncation bias
-        // below the storage ULP (it runs the body at `w + EXTERNAL_EXTRA_DIGITS`,
+        // below the storage ULP (it runs the body at
+        // `working_scale + EXTERNAL_EXTRA_DIGITS`,
         // ~5× the cost). That bias only flips a directed result NEAR x = 1,
         // where ln(x) ≈ x−1 is tiny and the deciding residual sits at the
         // precision boundary (the loss region is ε ~ 10^(−SCALE/2)); for x away
@@ -362,58 +417,62 @@ where
         // for near-1 inputs (`|x − 1| < 10^(−SCALE/4)`, comfortably covering the
         // loss region with margin) — every other input takes the fast
         // native-width path. `adjust_ln_near_one` (below) is itself value-gated
-        // (`result == δ`), so the truly-unreachable ε case is handled regardless.
-        let use_extra = INTERNAL_EXTRA && {
+        // (`rounded == δ`), so the truly-unreachable ε case is handled regardless.
+        let use_extra_digits = INTERNAL_EXTRA && {
             let one = C::storage_one(SCALE);
-            let diff = if raw >= one { raw - one } else { one - raw };
+            let distance_from_one = if raw >= one { raw - one } else { one - raw };
             // near 1 iff |x − 1| < ~10^(−SCALE/4), tested on the bit-length so
             // the threshold is a compile-time const and the check is O(limbs)
             // (no per-call `pow`): `bit_length(10^k) ≈ k·log2(10)`, and ×3 is a
             // conservative `log2(10)`. Covers the ε ~ 10^(−SCALE/2) loss region
             // with wide margin; excludes ordinary operands (e.g. x = 1.5).
-            diff.bit_length() < (SCALE - SCALE / 4) * 3
+            distance_from_one.bit_length() < (SCALE - SCALE / 4) * 3
         };
         // Two-width fall-up: an unresolved-at-rung-cap near-tie reruns the
         // walker at the tier work width `C::W` (the `ln_tang` alias's own
         // realisation, verbatim) - see
         // `wide_trig_core::round_to_storage_directed_widening_g`.
-        let r = if use_extra {
+        let rounded = if use_extra_digits {
             round_to_storage_directed_widening_g::<C::Storage, Wk, C::W>(
                 GUARD, SCALE, mode, C::storage_max(), C::storage_min(),
-                |guard| {
+                |guard_digits| {
                     tang_ln_fixed_g::<Wk, CAP, true>(
-                        to_work_scaled_g::<C::Storage, Wk>(raw, guard), SCALE + guard, ln2,
+                        to_work_scaled_g::<C::Storage, Wk>(raw, guard_digits),
+                        SCALE + guard_digits, ln2,
                     )
                 },
-                |guard| {
+                |guard_digits| {
                     tang_ln_fixed_g::<C::W, CAP, true>(
-                        to_work_scaled_g::<C::Storage, C::W>(raw, guard), SCALE + guard, ln2_w,
+                        to_work_scaled_g::<C::Storage, C::W>(raw, guard_digits),
+                        SCALE + guard_digits, ln2_tier_width,
                     )
                 },
             )
         } else {
             round_to_storage_directed_widening_g::<C::Storage, Wk, C::W>(
                 GUARD, SCALE, mode, C::storage_max(), C::storage_min(),
-                |guard| {
+                |guard_digits| {
                     tang_ln_fixed_g::<Wk, CAP, false>(
-                        to_work_scaled_g::<C::Storage, Wk>(raw, guard), SCALE + guard, ln2,
+                        to_work_scaled_g::<C::Storage, Wk>(raw, guard_digits),
+                        SCALE + guard_digits, ln2,
                     )
                 },
-                |guard| {
+                |guard_digits| {
                     tang_ln_fixed_g::<C::W, CAP, false>(
-                        to_work_scaled_g::<C::Storage, C::W>(raw, guard), SCALE + guard, ln2_w,
+                        to_work_scaled_g::<C::Storage, C::W>(raw, guard_digits),
+                        SCALE + guard_digits, ln2_tier_width,
                     )
                 },
             )
         };
-        crate::algos::support::wide_trig_core::adjust_ln_near_one::<C, SCALE>(r, raw, mode)
+        crate::algos::support::wide_trig_core::adjust_ln_near_one::<C, SCALE>(rounded, raw, mode)
     } else {
-        let w = SCALE + GUARD;
-        let r = tang_ln_fixed_g::<Wk, CAP, INTERNAL_EXTRA>(
-            to_work_scaled_g::<C::Storage, Wk>(raw, GUARD), w, ln2,
+        let working_scale = SCALE + GUARD;
+        let working_value = tang_ln_fixed_g::<Wk, CAP, INTERNAL_EXTRA>(
+            to_work_scaled_g::<C::Storage, Wk>(raw, GUARD), working_scale, ln2,
         );
         round_to_storage_with_g::<C::Storage, Wk>(
-            r, w, SCALE, mode, C::storage_max(), C::storage_min(),
+            working_value, working_scale, SCALE, mode, C::storage_max(), C::storage_min(),
         )
     }
 }
@@ -443,18 +502,105 @@ where
 
 #[cfg(test)]
 mod tests {
+    /// Just BELOW `x = 1` the directed modes must STRADDLE — the contract the
+    /// truncation note in [`tang_ln_fixed_g`] argues for, stated without an
+    /// oracle.
+    ///
+    /// `ln(x)` is transcendental at every algebraic `x != 1`
+    /// (Lindemann-Weierstrass), so it never lands on a storage grid line.
+    /// `Ceiling` is therefore always exactly one ULP above `Floor`, and `Trunc`
+    /// is whichever of the two faces zero — `Ceiling`, since `ln(x) < 0` below
+    /// 1. Needing no oracle, this cannot rot when the oracle changes.
+    ///
+    /// It fails in exactly the way the note warns about. If the kernel's
+    /// magnitude ever fell BELOW `d·10^guard`, the walker would read `q = d−1`;
+    /// `adjust_log_near_zero` rescues `Floor` there via its tangent bracket but
+    /// deliberately not `Trunc` or `Ceiling` (both arms are gated on `up`, and
+    /// `delta < 0` here), so those two would come back one ULP short — visible
+    /// here as a two-ULP span.
+    ///
+    /// Gated on the union of the tiers it checks so it cannot exist as an
+    /// assertion-free pass in a build where every cell is compiled out, and it
+    /// counts what it actually checked for the same reason.
+    #[test]
+    #[cfg(any(
+        feature = "d57",
+        feature = "d115",
+        feature = "d307",
+        feature = "d462",
+        feature = "wide",
+        feature = "x-wide"
+    ))]
+    fn below_one_directed_modes_straddle() {
+        use crate::int::types::traits::BigInt;
+        use crate::support::rounding::RoundingMode;
+
+        let mut checked = 0u32;
+
+        macro_rules! cell {
+            ($limbs:literal, $scale:literal, $depth:literal) => {{
+                type St = crate::int::types::Int<$limbs>;
+                const S: u32 = $scale;
+                let one = crate::consts::pow10::dispatch::<St>(S);
+                for ulp_offset in 1i128..=$depth {
+                    let raw = one - <St as BigInt>::from_i128(ulp_offset);
+                    let ln_with_mode =
+                        |mode| crate::D::<St, S>(raw).ln_strict_with(mode).to_bits();
+                    let floor = ln_with_mode(RoundingMode::Floor);
+                    let ceiling = ln_with_mode(RoundingMode::Ceiling);
+                    let trunc = ln_with_mode(RoundingMode::Trunc);
+                    assert_eq!(
+                        ceiling - floor,
+                        <St as BigInt>::ONE,
+                        "ln(1 - {ulp_offset}ulp) at Int<{}><{}>: Ceiling and Floor must straddle \
+                         a value that cannot lie on the grid",
+                        $limbs,
+                        S
+                    );
+                    assert_eq!(
+                        trunc, ceiling,
+                        "ln(1 - {ulp_offset}ulp) at Int<{}><{}>: Trunc must be the neighbour \
+                         facing zero",
+                        $limbs, S
+                    );
+                    checked += 1;
+                }
+            }};
+        }
+
+        // A spread of the Tang tiers, at each one's top scale — where the
+        // deciding term `d²·10^(guard−S)/2` is furthest below the working
+        // resolution and the walker is blindest.
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        cell!(3, 56, 3);
+        #[cfg(any(feature = "d115", feature = "wide"))]
+        cell!(6, 114, 3);
+        #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+        cell!(16, 306, 2);
+        // D462 is the one tier with `INTERNAL_EXTRA`, so it exercises the
+        // bumped narrow-back rather than the bare truncation.
+        #[cfg(any(feature = "d462", feature = "x-wide"))]
+        cell!(24, 461, 1);
+
+        assert!(
+            checked > 0,
+            "no cell compiled in — this test must never pass without asserting"
+        );
+    }
+
     /// The bbc-benched D462<231> ln(2.0) cell: the exact-power-of-two
-    /// operand takes the `m == one_w` short-circuit (`ln(v) = k·ln2`) and
+    /// operand takes the `mantissa_w == one_at_extended_scale`
+    /// short-circuit (`ln(v) = k·ln2`) and
     /// must produce the correctly-rounded 231-digit value — pins the
     /// `scale_by_k` k·ln2 product and the direct-injection constant fold
     /// against the prior full-multiply shapes.
     #[test]
     #[cfg(feature = "d462")]
     fn ln_d462_s231_power_of_two_short_circuit() {
-        let x: crate::D462<231> = "2.0".parse().unwrap();
-        let r = x.ln();
+        let value: crate::D462<231> = "2.0".parse().unwrap();
+        let ln_value = value.ln();
         let expect: crate::D462<231> = "0.693147180559945309417232121458176568075500134360255254120680009493393621969694715605863326996418687542001481020570685733685520235758130557032670751635075961930727570828371435190307038623891673471123350115364497955239120475172681575".parse().unwrap();
-        assert_eq!(r, expect);
+        assert_eq!(ln_value, expect);
     }
 
     /// The bbc-benched D115<0> ln(2) cell: SCALE = 0 now routes the Tang
@@ -463,8 +609,8 @@ mod tests {
     #[test]
     #[cfg(feature = "d115")]
     fn ln_d115_s0_routes_and_rounds() {
-        let x: crate::D115<0> = "2".parse().unwrap();
+        let value: crate::D115<0> = "2".parse().unwrap();
         let one: crate::D115<0> = "1".parse().unwrap();
-        assert_eq!(x.ln(), one);
+        assert_eq!(value.ln(), one);
     }
 }

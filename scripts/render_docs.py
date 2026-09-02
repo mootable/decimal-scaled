@@ -495,7 +495,8 @@ _CATEGORY_LABELS = {
 _CATEGORY_OPS = {
     "arithmetic": ("add", "sub", "mul", "div", "rem", "neg"),
     "roots-and-exponents": (
-        "sqrt", "cbrt", "exp", "exp2", "ln", "log", "log2", "log10", "powf", "hypot",
+        "sqrt", "cbrt", "exp", "exp2", "expm1", "ln", "log", "log1p", "log2", "log10",
+        "powf", "hypot",
     ),
     "trigonometry": (
         "sin", "cos", "tan", "asin", "acos", "atan", "atan2",

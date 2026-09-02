@@ -1,6 +1,6 @@
 ﻿[package]
 name = "decimal-scaled"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2024"
 rust-version = "1.89"
 license = "MIT OR Apache-2.0"
@@ -45,7 +45,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 # To opt out and use the f64 bridge instead you have to take all
 # three steps: (a) `default-features = false`, (b) explicitly add
 # `fast` + `std`, and (c) NOT re-add `strict`:
-#   decimal-scaled = { version = "0.5.0", default-features = false,
+#   decimal-scaled = { version = "0.5.1", default-features = false,
 #                      features = ["std", "serde", "fast"] }
 # That gives ~16 decimal digits of platform-libm precision rather
 # than the deterministic 0.5 ULP strict path.
@@ -100,6 +100,8 @@ rounding-half-toward-zero = []
 rounding-trunc = []
 rounding-floor = []
 rounding-ceiling = []
+rounding-away-from-zero = []
+rounding-zero-five-up = []
 # Nightly-only: expose `from_f16` / `to_f16` /
 # `from_f128` / `to_f128` on each decimal type. f16 and
 # f128 are experimental in Rust; this feature requires the nightly
@@ -113,6 +115,7 @@ experimental-floats = []
 # explicit-target form is the only cross-scale entry point.
 # Requires the nightly toolchain.
 cross-scale-ops = []
+
 # Root-kernel work-scratch sizing. Default (neither feature) sizes the
 # scratch buffers to the build-max width and applies it uniformly. With
 # `exact-scratch` (stable) each storage width gets a per-`Int<N>` impl
@@ -143,12 +146,21 @@ exact-scratch-nightly = ["exact-scratch"]
 # be heap-cached (`thread_local!` + `alloc::vec::Vec`); those runtime
 # caches were removed in favour of stateless on-stack recompute, so the
 # wide-support path no longer needs `alloc`. This marker pulls in NO
-# features — `_wide-support = []` keeps it as the heap-free backstop: a
+# heap-bearing feature — it stays the heap-free backstop: a
 # `no_std` single-tier build (`--no-default-features --features d57`) gets
 # no `alloc`, so any reintroduced `alloc::vec::Vec` on the wide path is a
 # hard compile error rather than a silent heap allocation. (`std` still
 # pulls `alloc` for the std build; that is the std backend's own affair.)
-_wide-support = []
+#
+# It DOES pull `exact-scratch`, which is itself `[]` and so costs the
+# heap-free property nothing. Without it a wide tier lands on the blanket
+# `ComputeLimbs` impl, which sizes buffers at `4·MAX_WORK_N` while the
+# widest work integer a wide tier declares is `8·MAX_WORK_N` — half what
+# the type needs. Nothing checks that relation, and the failure mode is a
+# SILENT truncation (`mag_into_u128` clamps and returns the sign, not a
+# fits flag), not a panic. Requiring it here makes the mismatch
+# unbuildable rather than documented. See issue #92.
+_wide-support = ["exact-scratch"]
 wide = ["d57", "d76", "d115", "d153", "d230", "d307"]
 d57 = ["_wide-support"]
 d76 = ["_wide-support"]
@@ -184,7 +196,7 @@ serde = { version = "1", features = ["derive"], optional = true }
 # `FromPrimitive`/`ToPrimitive`/`NumCast` bridge used by `from_num`/
 # `to_num`, none of which require libm.
 num-traits = { version = "0.2", default-features = false }
-decimal_scaled_macros = { path = "macros", version = "0.5.0", default-features = false, optional = true }
+decimal_scaled_macros = { path = "macros", version = "0.5.1", default-features = false, optional = true }
 tracing = { version = "0.1", default-features = false, features = ["std"], optional = true }
 
 [dev-dependencies]
@@ -205,7 +217,7 @@ fixed = "1"
 # g_math: another fixed-point arithmetic crate that claims "0 ULP
 # transcendentals". Used as a benchmark baseline + accuracy comparison
 # (see benches/g_math_comparison.rs).
-g_math = "0.4"
+g_math = "0.5"
 # Library-comparison comparators for the §5 chapter in docs/benchmarks.md.
 # All bench-only; never compiled into a normal build.
 fastnum = { version = "0.7", default-features = false, features = ["std"] }
@@ -453,7 +465,6 @@ name = "g_math_comparison"
 path = "benches/backends/g_math_comparison.rs"
 harness = false
 required-features = ["wide"]
-
 
 # Focused microbench for wide-tier div/mul during tuning passes.
 # Runs in ~30s, used to validate per-change wins before kicking

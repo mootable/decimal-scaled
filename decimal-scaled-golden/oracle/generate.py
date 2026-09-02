@@ -34,27 +34,81 @@ GEN_PRECISION = 1233
 # verifiable depth. GEN_PRECISION = max_decimal_width + GUARD.
 GUARD = 2
 
-# Per-function GENERATOR oracle. Unlisted functions fall to DEFAULT_GENERATOR.
-#   fraction — fractions.Fraction (exact base-10): the finite-result arithmetic ops.
-#   decimal  — decimal.Decimal (correctly-rounded base-10): the four it computes natively.
-#   flint    — Arb (binary, but RIGOROUS intervals + unique_fmpz pin the true value, so
-#              an exact result is artifact-free where mpmath's point-float can floor one
-#              below): the genuinely-irrational rest. mpmath becomes a validator.
-GENERATOR_POLICY = {
-    "add": "fraction", "sub": "fraction", "mul": "fraction", "div": "fraction", "rem": "fraction",
-    "sqrt": "decimal", "exp": "decimal", "ln": "decimal", "log10": "decimal",
-}
+# THE generator, for every function. There is no per-function table: a generator has to
+# be able to PROVE its own answer, and only Arb's rigorous intervals + `unique_fmpz` can
+# pin a truncation across the whole surface. `decimal` is exact base-10 but a point value
+# behind a fixed window, and `mpmath` is a point float; neither can pin, and `decimal`'s
+# inability to pin is exactly what produced four wrong `exp` rows that two oracles then
+# agreed on. Everything else validates.
 DEFAULT_GENERATOR = "flint"
+
+# The oracles ALLOWED to generate, in preference order. Membership is a capability claim,
+# not a convenience: a generator must be able to PIN its own answer.
+#
+#   flint     — Arb's rigorous intervals + `unique_fmpz` pin a truncation, and it escalates
+#               precision until the floor resolves on the true side.
+#   fraction  — exact rational arithmetic. It does not need to escalate because there is
+#               nothing to resolve: the scaled floor is integer division of exact rationals,
+#               so it pins by construction. It covers only the finite-result arithmetic ops,
+#               which is precisely where flint's adapter stops (it implements no `rem`).
+#
+# NOTHING ELSE MAY GENERATE, and the reason is concrete rather than theoretical. `mpmath`
+# is a binary point float: an exact decimal such as `1.04692317316873037` has no finite
+# binary form, so rendering it to 1233 digits produces a spurious `...36999...` tail that
+# the termination check then bakes in as a truncation. `decimal` is exact base-10 but a
+# point value behind a fixed window — its inability to pin is what produced six wrong `exp`
+# rows that two oracles then agreed on. Both are strong VALIDATORS and neither is fit to
+# generate. A fallthrough that picked by validator order rather than by this list generated
+# `rem` with mpmath and reproduced that exact tail on ten rows.
+GENERATOR_ORDER = ["flint", "fraction"]
 
 # Validator pool, in the order they appear in a line comment. Each is used wherever it
 # supports the function AND is not that function's generator; an unavailable backend is
 # skipped. More validators ⇒ stronger cross-check (the owner's directive).
 VALIDATOR_ORDER = ["mpmath", "flint", "mpfr", "sympy", "decimal", "fraction"]
 
-# A binary-vs-base-10 (or derived) disagreement up to this many units at 10^-precision
-# is a legitimate radix-rounding artifact: annotated and accepted. Beyond it the line is
-# flagged and dropped — a genuine discrepancy to investigate, never silently kept.
-ACCEPT_ULPS = 2
+# Per-function validator EXCLUSIONS. A validator listed here is not consulted for that
+# function — not because it is wrong in general, but because it is not viable THERE, and
+# a non-viable validator does not merely abstain: a computed disagreement past the radix
+# bound DROPS the line (see `_validate_line`), so it can veto a vector the reliable
+# oracles agree on and leave a silent hole in coverage.
+#
+# EMPTY, deliberately — the facility is kept, nothing currently needs it.
+#
+# It previously excluded mpmath from log1p, atanh and acosh near their domain edges. That
+# was diagnosed as a limitation of mpmath; it was not. The defect was OURS: this oracle's
+# mpmath adapter budgeted working precision from the RESULT's integer digits with no term
+# for the condition number, so for log1p at 1+t = 1e-70 it sized against ln(1e-70) ~= -161
+# — three integer digits — while the derivative 1/(1+t) destroyed seventy. A hard cliff at
+# A ~= 72, where the headroom was exactly dps - precision = 70.
+#
+# Fixed at the root (issue #66): the adapter now sizes by the worse of the result's
+# magnitude and A = log10|x . grad f(x)|. mpmath then agrees with flint EXACTLY at every
+# depth tested, to A ~= 1200 — zero delta annotations across 120/120 atanh and 120/120
+# acosh lines — so it is a clean third opinion here, not a tolerated one. Re-excluding it
+# would discard a working validator and, on a machine without gmpy2/sympy, drop these
+# functions back to a single effective validator.
+#
+# Keep the mechanism. If a validator is genuinely non-viable for a function, list it —
+# a non-viable validator does not merely abstain: a computed disagreement past the radix
+# bound DROPS the line (see `_validate_line`), so it can veto a vector the reliable
+# oracles agree on and leave a silent hole in coverage. But diagnose the root cause first;
+# an exclusion added over an unproven "that library is just bad here" hides our own bug.
+VALIDATOR_EXCLUDE: dict[str, set[str]] = {}
+
+# How far a validator may differ from the generated value and still CONFIRM it: at most
+# this many units at 10^-precision. Derived from the fetch contract, not tuned to
+# observed noise — every oracle floors the SAME true value at the SAME depth, so the
+# only legitimate difference is an internal error straddling the truncation boundary,
+# which moves the floor by at most one. Beyond it the line is flagged, never silently
+# kept: it is a genuine disagreement and a maintainer decides what to do about it.
+#
+# One is only safe because the generator can PIN. While the generator was a point value
+# that could not, a delta of 1 was ambiguous — both the largest honest disagreement AND
+# the signature of a straddle — and `2` swallowed flint's correct dissent on four `exp`
+# rows for months. With flint generating, a non-pinning validator one unit away is
+# showing its own resolution limit, which is a confirmation.
+ACCEPT_ULPS = 1
 
 
 def _frac_len(s: str) -> int:
@@ -111,20 +165,46 @@ def _build_oracles(pool):
 
 
 def _generator_for(func, oracles, override):
-    """`(name, oracle)` for `func`: the CLI override if given, else the policy, falling
-    back to the default generator when the chosen one is unavailable."""
-    name = override or GENERATOR_POLICY.get(func, DEFAULT_GENERATOR)
-    if name not in oracles:
-        name = DEFAULT_GENERATOR
-    return name, oracles[name]
+    """`(name, oracle)` for `func`: the CLI override if given, else the first entry of
+    [`GENERATOR_ORDER`] that is available AND implements `func`.
+
+    The order is a preference among oracles that can PIN; it is not a fallthrough to
+    whatever happens to answer. Choosing by [`VALIDATOR_ORDER`] instead — which is a
+    reporting order, not a trust order — puts `mpmath` first, and generating `rem` with a
+    binary point float rewrote ten exact decimals as `...36999...`, the spurious tail
+    `fraction_oracle` documents. A non-pinning oracle must never generate.
+
+    NOT SUPPORTING a function is not the same as being UNAVAILABLE, and this used to
+    conflate them: only availability was checked, so asking flint for `rem` — which its
+    adapter does not implement — flagged every row, wrote an EMPTY `.au`, and exited 0.
+    Both cases now resolve to a capable generator or raise.
+    """
+    if override:
+        if override in oracles and oracles[override].can_generate(func):
+            return override, oracles[override]
+        raise SystemExit(
+            f"--generator {override} cannot generate {func}: "
+            f"{'does not implement it' if override in oracles else 'unavailable'}")
+    for nm in GENERATOR_ORDER:
+        if nm in oracles and oracles[nm].can_generate(func):
+            if nm != GENERATOR_ORDER[0]:
+                print(f"[info] {GENERATOR_ORDER[0]} does not implement {func}; "
+                      f"generating with '{nm}'", file=sys.stderr)
+            return nm, oracles[nm]
+    raise SystemExit(
+        f"no generator implements {func} — refusing to write an empty {func}.au. "
+        f"Generators tried: {', '.join(GENERATOR_ORDER)}.")
 
 
 def _validators_for(func, gen_name, oracles):
-    """Every available oracle that supports `func` except its generator, in
-    VALIDATOR_ORDER (so a line comment lists them deterministically)."""
+    """Every available oracle that supports `func` except its generator and any listed
+    in VALIDATOR_EXCLUDE for it, in VALIDATOR_ORDER (so a line comment lists them
+    deterministically)."""
+    excluded = VALIDATOR_EXCLUDE.get(func, frozenset())
     return [
         oracles[nm] for nm in VALIDATOR_ORDER
-        if nm != gen_name and nm in oracles and oracles[nm].supports(func)
+        if nm != gen_name and nm not in excluded
+        and nm in oracles and oracles[nm].supports(func)
     ]
 
 
@@ -146,9 +226,14 @@ def _validate_line(func, inp, g, gen, validators, precision):
         if diff_int == 0:
             annotations.append(v.name())
         elif _within_bound(diff_int, n, precision):
-            # A binary (or derived) validator differs from the base-10 generator by a
-            # radix-rounding artifact: record the radix + the approximate difference.
-            annotations.append(f"{v.name()}(delta~{_approx_mag(diff_int, n)}, {v.radix()})")
+            # The validator confirms, and differed on the way. Record WHICH oracle and
+            # BY HOW MUCH — the fact — and nothing else. No causal category: the old
+            # form appended the radix, and `flint(delta~1e-1233, binary)` sat on four
+            # wrong rows for months precisely because "binary" pre-explained the
+            # difference as benign and every reader skipped it. Whether a delta is
+            # acceptable is `_within_bound`'s job, decided here; this string's job is
+            # to keep the evidence findable by a human or a grep.
+            annotations.append(f"{v.name()}(delta~{_approx_mag(diff_int, n)})")
         else:
             print(
                 f"[FLAG] disagree {func}{inp}: {gen.name()}={g[:28]}.. "
@@ -174,7 +259,7 @@ _POOL_GEN_OVERRIDE = None
 def _pool_init(validator_names, gen_override):
     global _POOL_ORACLES, _POOL_GEN_OVERRIDE
     _POOL_ORACLES = _build_oracles(
-        set(validator_names) | set(GENERATOR_POLICY.values()) | {DEFAULT_GENERATOR}
+        set(validator_names) | {DEFAULT_GENERATOR}
     )
     _POOL_GEN_OVERRIDE = gen_override
 
@@ -213,6 +298,12 @@ def _write_func(out_dir, func, rows, precision):
             continue
         seen.add(ln)
         uniq.append((prov, ln))
+    # The header records the RUN's default precision, not a per-row depth, so a
+    # `#precision=`-overridden row can legitimately carry MORE fraction digits than
+    # the header names. That is not a bug and needs no widening: the harness only
+    # ever tests `len(frac) >= gen_precision` (`GoldenValue::truncated_at`) to decide
+    # a residual exists below the stored digits, and consumes every digit past the
+    # graded scale, so a deeper row stays truthful under a shallower header.
     header = f"#gen_precision={precision}\n#guard={GUARD}\n"
     out_text = header + "".join(f"{prov}\n{ln}\n" for prov, ln in uniq)
     (out_dir / f"{func}.au").write_text(out_text, encoding="utf-8", newline="\r\n")
@@ -233,7 +324,14 @@ def cmd_generate(args):
         cases = harvest(func, src)
         if args.limit:
             cases = cases[: args.limit]
-        items += [(func, inp, why, args.precision) for inp, why in cases]
+        # `_gen_line` and `_validate_line` have always taken precision PER ITEM;
+        # this line was the only place that collapsed it to one scalar. A `.pb`
+        # block may now override it (`#precision=`) for rows that are only
+        # gradable when generated deeper than the set's default.
+        items += [
+            (func, inp, why, args.precision if prec is None else prec)
+            for inp, why, prec in cases
+        ]
     total = len(items)
     jobs = args.jobs if args.jobs else max(1, round((os.cpu_count() or 2) * 0.8))
     print(f"generating {total} lines, {len(funcs)} functions, {jobs} worker(s)", file=sys.stderr)
@@ -260,15 +358,26 @@ def cmd_generate(args):
             for func, row in pool.imap_unordered(_gen_line, items, chunksize=8):
                 collect(func, row)
 
+    empty = []
     for func in funcs:
         n = _write_func(out_dir, func, results[func], args.precision)
         print(f"{func}: wrote {n} lines")
+        if n == 0:
+            empty.append(func)
+    # A `.au` with no rows still parses and the gate still passes — it simply grades
+    # NOTHING. That has to be louder than a zero exit code, or a whole function can drop
+    # out of coverage in silence.
+    if empty:
+        raise SystemExit(
+            "wrote 0 rows for: " + ", ".join(empty) +
+            " — every input was flagged or dropped, and those .au files are now empty. "
+            "Restore them from git, fix the cause, and regenerate.")
     return 0
 
 
 def cmd_revalidate(args):
     pool = args.validators.split(",") if args.validators else VALIDATOR_ORDER
-    oracles = _build_oracles(set(pool) | set(GENERATOR_POLICY.values()) | {DEFAULT_GENERATOR})
+    oracles = _build_oracles(set(pool) | {DEFAULT_GENERATOR})
     out_dir = Path(args.out)
     mismatches = 0
     for func in args.functions.split(","):
@@ -284,13 +393,21 @@ def cmd_revalidate(args):
                 continue
             fields = line.split()
             inp, stored = fields[: f.arity], fields[f.arity]
+            # Re-verify each row at ITS OWN depth. A `#precision=`-overridden row is
+            # stored deeper than `--precision`; recomputing it at the shallower
+            # default would leave `_within_bound` comparing at `n` = the row's depth
+            # against the default precision, i.e. a tolerance of `ulps * 10^(n-p)` —
+            # astronomically loose, so the row would pass VACUOUSLY, verified only to
+            # the default depth. The stored fraction length is the row's own
+            # generation precision, so use it whenever it is the deeper of the two.
+            row_precision = max(args.precision, _frac_len(stored))
             for v in validators:
                 try:
-                    vv = v.value(func, inp, args.precision)
+                    vv = v.value(func, inp, row_precision)
                 except Exception:
                     continue
                 diff_int, n = _diff_scaled(stored, vv)
-                if not _within_bound(diff_int, n, args.precision):
+                if not _within_bound(diff_int, n, row_precision):
                     print(f"[MISMATCH] {func}{inp}: stored={stored[:28]}.. "
                           f"{v.name()}={vv[:28]}.. delta~{_approx_mag(diff_int, n)}", file=sys.stderr)
                     mismatches += 1

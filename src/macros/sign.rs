@@ -35,7 +35,7 @@ macro_rules! decl_decimal_sign_methods {
                 // the always-error form.
                 if self.0.is_negative() {
                     match self.0.checked_neg() {
-                        Some(v) => Self(v),
+                        Some(negated) => Self(negated),
                         None => panic!("attempt to compute the absolute value with overflow"),
                     }
                 } else {

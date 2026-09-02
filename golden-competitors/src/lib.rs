@@ -279,6 +279,8 @@ impl DecimalSubject for F64 {
                 Function::Log2 => x.log2(),
                 Function::Log10 => x.log10(),
                 Function::Exp2 => x.exp2(),
+                Function::Expm1 => x.exp_m1(),
+                Function::Log1p => x.ln_1p(),
                 Function::Sin => x.sin(),
                 Function::Cos => x.cos(),
                 Function::Tan => x.tan(),

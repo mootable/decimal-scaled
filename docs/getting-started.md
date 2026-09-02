@@ -147,7 +147,7 @@ assert_eq!(v.trunc().to_bits(), 1200i128);
 assert_eq!(v.fract().to_bits(),   50i128);
 ```
 
-To round to a *different* scale, use `rescale` - see the
+To round to a *different* scale, use `quantize` - see the
 [rounding guide](rounding.md).
 
 ## Next steps

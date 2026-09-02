@@ -4381,3 +4381,7 @@
 0.0000000000000000001
 0.0000000000000000003
 0.000000000000000001
+// adjust_bounded_extremum fires only when result == +-10^SCALE exactly, so a landing on a DIFFERENT grid point
+// near 1 is uncovered - the same too-narrow-guard shape as the ln fix. D462<461>: j=2,4,6 are exact ULP
+// multiples, j=8 is the first non-terminating term (8! introduces the factor 7) at depth 513 > reach 504.
+0.0000000000000000000000000000000000000000000000000000000000000003

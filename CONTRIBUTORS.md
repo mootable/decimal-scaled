@@ -228,7 +228,7 @@ cargo test --release --features wide,x-wide,xx-wide,macros
 # The consolidated integration suite (api / contracts / regressions):
 cargo test -p decimal-scale-test --features wide,x-wide,xx-wide,macros,serde,alloc,dyn
 
-# The full-surface golden gate, all six rounding modes:
+# The full-surface golden gate, all eight rounding modes:
 cargo test -p decimal-scale-test --release --features wide,x-wide,xx-wide --test golden golden_all_modes -- --ignored --nocapture
 ```
 
@@ -432,7 +432,7 @@ benchmarking workflows above), advisory and never a merge blocker.
 The [`ci.yml`](https://github.com/mootable/decimal-scaled/blob/main/.github/workflows/ci.yml)
 workflow enforces the precision suite listed above on every pull
 request. Its `golden (gate)` job runs the full-surface golden gate in
-release across all six rounding modes (row-sampled per push; the
+release across all eight rounding modes (row-sampled per push; the
 unsampled deep pass is the dispatch-only `golden (comprehensive)`
 workflow), and its `tests (gate)` job runs the full `cargo test` —
 the cross-witness suites, the regression reproducers, and the

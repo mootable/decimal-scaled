@@ -122,7 +122,7 @@ fn sum_all<D: Decimal + core::ops::Add<Output = D>>(xs: &[D]) -> D {
 A few methods are deliberately not on the trait because their
 signature varies per width or the trait can't represent them — see
 the [trait reference](https://docs.rs/decimal-scaled/latest/decimal_scaled/trait.Decimal.html)
-for the full out-of-scope list (`rescale<TARGET>` needs a
+for the full out-of-scope list (`quantize<TARGET>` needs a
 const-generic method param; the per-width fallible `TryFrom<iN>`
 integer conversions live on the concrete types; transcendentals
 are feature-gated).

@@ -1,0 +1,167 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+// candidate: binary halving + the E*(E+2) doubling recurrence, no ln2, not wired
+
+//! `expm1` by pure binary halving and the cancellation-free doubling
+//! recurrence.
+//!
+//! Reduce by an exact binary right shift, `u = v / 2^n`, evaluate the
+//! leading-term-dropped Taylor series on the tiny `u`, then climb back with
+//!
+//! ```text
+//! expm1(2u) = e^{2u} - 1 = (e^u - 1)(e^u + 1) = E * (E + 2)
+//! ```
+//!
+//! applied `n` times. No `ln 2` constant, no range-reduction division, and no
+//! `x - k*ln2` subtraction — so the reduction carries NO cancellation at all
+//! (the one genuine cancellation site of the classic `k*ln 2` route).
+//!
+//! # Cancellation
+//!
+//! `E in (-1, inf)` so `E + 2 in (1, inf)`: the recurrence is a product of a
+//! value and a quantity bounded away from zero, and `E + 2` is a sum of a
+//! bounded-magnitude term with `2`. Neither step can cancel.
+//!
+//! # Error propagation
+//!
+//! With `P = 10^w` and `d_j` the absolute error in working units at level `j`,
+//!
+//! ```text
+//! d_{j+1} <= d_j * (2 + 2*|E_j|) + 1/2          (E_j in value units)
+//! ```
+//!
+//! so over `n` levels the amplification is
+//!
+//! ```text
+//! prod_j (2 + 2*E_j) = 2^n * prod_j (1 + E_j) = 2^n * prod_j e^{v/2^{n-j}} ~ 2^n * e^v
+//! ```
+//!
+//! — relative amplification `2^n` (identical to `exp`'s squaring chain),
+//! absolute amplification `2^n * e^v`. The guard lift below provisions exactly
+//! those two factors: `ceil(n*log10 2)` digits for the chain and
+//! `ceil(|v|*log10 e)` digits for the growth.
+//!
+//! **For `v <= 0` the recurrence CONTRACTS.** Writing `E_j = -1 + eps_j` (so
+//! `eps_j = e^{v/2^{n-j}}`), `E_j*(E_j + 2) = -1 + eps_j^2`: `eps` squares each
+//! level and the amplification factor `2 + 2*E_j = 2*eps_j -> 0`. The whole
+//! negative half-domain therefore needs no growth lift at all, which the
+//! `v > 0` gate on `growth` below reflects.
+//!
+//! # Cost of the missing `k*ln 2`
+//!
+//! The classic reduction keeps every squaring on `sum ~ P` (because
+//! `|s| <= ln2/2`) and applies the `2^k` growth ONCE at the end. This kernel
+//! carries the growth through the recurrence, so its last product is
+//! `~ e^v * P^2` rather than `~ P^2`: it needs up to
+//! `extended_working_scale*log2(10)` MORE bits of work integer for large
+//! positive `v`. That is the trade — no `ln 2`, no
+//! divide, no reduction cancellation, in exchange for a taller peak on the
+//! positive side. `expm1_reduced` is the other side of it.
+//!
+//! # Validity
+//!
+//! * `v <= 0`: `2*extended_working_scale*log2(10) + 1 + 64 < BITS`.
+//! * `v > 0`: `2*extended_working_scale*log2(10) + ceil(|v|*log2 e) + 64 < BITS`.
+//! * The halving depth is bounded by the caller's guard: the shift injects one
+//!   working unit which the chain amplifies by `2^n`, so correct rounding needs
+//!   `2^n < 1/2 * 10^guard`. The `chain_digits` lift below covers it
+//!   internally, so the wall is on the work integer, not the guard.
+
+#![allow(dead_code)]
+
+use super::expm1_generic as sup;
+use crate::algos::exp::exp_generic as eg;
+use crate::int::types::compute_limbs::ComputeLimbs;
+use crate::int::types::traits::BigInt;
+
+/// The halving + doubling core: `expm1(s)` at `working_scale`, reducing by
+/// `doublings` binary halvings and climbing back with `doublings`
+/// applications of `E <- E*(E + 2)`.
+///
+/// Shared with [`super::expm1_reduced`] (which supplies an already
+/// `k*ln 2`-reduced `reduced_arg` and its own `doublings`), so the recurrence
+/// has ONE body.
+///
+/// `doublings` is capped at `bit_length(reduced_arg) - 1` so the shift can
+/// never take the argument to zero — a zero `halved_arg` would return 0 for a
+/// genuinely non-zero `reduced_arg`. The cap binds only for sub-resolution
+/// arguments, which the strict wrapper's near-min pin owns anyway. The shift
+/// semantics are `exp_fixed`'s `s >> n` (arithmetic for negative values); its
+/// one working unit of truncation is what the callers' guard lift provisions
+/// against the `2^n` amplification.
+pub(crate) fn expm1_doubling_core<S: BigInt>(
+    reduced_arg: S, working_scale: u32, doublings: u32) -> S
+where
+    S::Scratch: ComputeLimbs,
+{
+    let doublings = doublings.min(eg::bit_length::<S>(reduced_arg).saturating_sub(1));
+    let halved_arg = reduced_arg >> doublings;
+    let mut expm1_value = eg::expm1_fixed::<S>(halved_arg, working_scale);
+    let two_scaled = eg::one::<S>(working_scale) + eg::one::<S>(working_scale);
+    let mut i = 0;
+    while i < doublings {
+        expm1_value = eg::mul::<S>(expm1_value, expm1_value + two_scaled, working_scale);
+        i += 1;
+    }
+    expm1_value
+}
+
+/// `expm1(v)` for a `working_value` at `working_scale`, by halving +
+/// doubling. `None` = cannot be produced in `S` at this `working_scale` (the
+/// `try_exp_fixed` contract: detect once, the policy wrapper applies the
+/// overflow policy).
+pub(crate) fn expm1_halving_fixed<S: BigInt>(working_value: S, working_scale: u32) -> Option<S>
+where
+    S::Scratch: ComputeLimbs,
+{
+    if working_value == S::ZERO {
+        return Some(S::ZERO);
+    }
+    match sup::regime::<S>(working_value, working_scale) {
+        sup::Regime::Overflow => return None,
+        sup::Regime::MinusOne => return Some(sup::just_above_minus_one::<S>(working_scale)),
+        sup::Regime::Fits => {}
+    }
+
+    let ceil_abs = sup::ceil_abs_int::<S>(working_value, working_scale);
+    let is_positive = working_value > S::ZERO;
+
+    // Guard lift. Two independent factors, each converted to decimal digits:
+    //   * the chain's `2^n` amplification of the shift truncation and of every
+    //     level's half-unit rounding  -> ceil(n*log10 2) digits;
+    //   * the result's own growth `e^v` (positive arguments only — the
+    //     recurrence contracts for v <= 0) -> ceil(|v|*log10 e) digits.
+    // The level count is estimated at `working_scale` and used at
+    // `extended_working_scale`; `halving_levels` grows like sqrt(w), so the
+    // drift over the lift is under one level, covered by the flat slack.
+    let levels_estimate = sup::band_levels(ceil_abs) + sup::halving_levels(working_scale);
+    let chain_digits = ((levels_estimate as u64) * 30_103).div_ceil(100_000) as u32;
+    let growth = if is_positive { sup::result_int_digits(ceil_abs) } else { 0 };
+    let extra_digits = chain_digits + growth + 4;
+
+    let extended_working_scale = working_scale.checked_add(extra_digits)?;
+    // Peak: the last doubling forms `E_{n-1} * (E_{n-1} + 2P)` with
+    // `|E_{n-1}| ~ e^{v/2} * P`, i.e. a product of `~ e^v * P^2`.
+    let peak = 2 * sup::scale_bits(extended_working_scale)
+        + if is_positive { sup::result_bits(ceil_abs) } else { 1 };
+    if !sup::peak_fits::<S>(peak) {
+        return None;
+    }
+
+    let extended_working_value = if extra_digits == 0 {
+        working_value
+    } else {
+        working_value * eg::pow10::<S>(extra_digits)
+    };
+    let levels = sup::band_levels(ceil_abs) + sup::halving_levels(extended_working_scale);
+    let expm1_extended =
+        expm1_doubling_core::<S>(extended_working_value, extended_working_scale, levels);
+
+    let expm1_value = if extra_digits == 0 {
+        expm1_extended
+    } else {
+        eg::round_div_pow10::<S>(expm1_extended, extra_digits)
+    };
+    Some(expm1_value)
+}

@@ -42,7 +42,7 @@
     )),
 ))]
 
-use decimal_scaled::{D38, DecimalConstants};
+use decimal_scaled::{DecimalConstants, D38};
 use proptest::prelude::*;
 
 type D = D38<19>;
@@ -398,7 +398,7 @@ mod wide_witness {
 
 mod hard_inputs {
     use super::{CASES, RELATIVE_TOL_INV, ROUND_TRIP_FLOOR_LSB, SYMMETRY_LSB_TOL};
-    use decimal_scaled::{D38, DecimalConstants};
+    use decimal_scaled::{DecimalConstants, D38};
     use proptest::prelude::*;
 
     type D = D38<19>;

@@ -91,15 +91,15 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
 #[inline]
 #[must_use]
 pub(crate) fn dispatch<const N: usize, const SCALE: u32>(
-    a: Int<N>,
-    b: Int<N>,
+    lhs: Int<N>,
+    rhs: Int<N>,
     mode: RoundingMode,
 ) -> Int<N>
 where
     Limbs<N>: ComputeLimbs,
 {
     // `SCALE` is used only to label the out-of-range panic.
-    checked_dispatch::<N, SCALE>(a, b, mode).unwrap_or_else(|| {
+    checked_dispatch::<N, SCALE>(lhs, rhs, mode).unwrap_or_else(|| {
         crate::support::diagnostics::overflow_panic_with_scale("hypot", SCALE)
     })
 }
@@ -111,8 +111,8 @@ where
 #[inline]
 #[must_use]
 pub(crate) fn checked_dispatch<const N: usize, const SCALE: u32>(
-    a: Int<N>,
-    b: Int<N>,
+    lhs: Int<N>,
+    rhs: Int<N>,
     mode: RoundingMode,
 ) -> Option<Int<N>>
 where
@@ -121,12 +121,12 @@ where
     // Both operands carry the same `10^SCALE`, so it divides out of the
     // root.
     let algo = match const { select::<N, SCALE>() } {
-        Select::ByAlgorithm(a) => a,
-        Select::ByValue(f) => f(&a),
+        Select::ByAlgorithm(algorithm) => algorithm,
+        Select::ByValue(choose) => choose(&lhs),
     };
     match algo {
         Algorithm::Pythagoras | Algorithm::Schoolbook => {
-            hypot::hypot_pythagoras::hypot_pythagoras::<N>(a, b, mode)
+            hypot::hypot_pythagoras::hypot_pythagoras::<N>(lhs, rhs, mode)
         }
     }
 }

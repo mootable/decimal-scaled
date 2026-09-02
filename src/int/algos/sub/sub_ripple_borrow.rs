@@ -15,9 +15,9 @@ use crate::int::types::Int;
 /// [`sub_assign_fixed`], discarding the borrow-out so the result wraps
 /// modulo `2^BITS` (two's-complement wrapping semantics).
 #[inline]
-pub(crate) const fn sub_ripple_borrow<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
-    let mut limbs = *a.as_limbs();
-    sub_assign_fixed(&mut limbs, b.as_limbs());
+pub(crate) const fn sub_ripple_borrow<const N: usize>(lhs: Int<N>, rhs: Int<N>) -> Int<N> {
+    let mut limbs = *lhs.as_limbs();
+    sub_assign_fixed(&mut limbs, rhs.as_limbs());
     Int::<N>::from_limbs(limbs)
 }
 
@@ -30,25 +30,25 @@ pub(crate) const fn sub_ripple_borrow<const N: usize>(a: Int<N>, b: Int<N>) -> I
 /// [`add_ripple_carry_checked`](crate::int::algos::add::add_ripple_carry::add_ripple_carry_checked)).
 #[inline]
 pub(crate) const fn sub_ripple_borrow_checked<const N: usize>(
-    a: Int<N>,
-    b: Int<N>,
+    lhs: Int<N>,
+    rhs: Int<N>,
 ) -> Option<Int<N>> {
-    let av = a.as_limbs();
-    let bv = b.as_limbs();
+    let lhs_limbs = lhs.as_limbs();
+    let rhs_limbs = rhs.as_limbs();
     let mut out = [0u64; N];
     let mut borrow = 0u64;
     let mut i = 0;
     while i < N {
-        let (d1, b1) = av[i].overflowing_sub(bv[i]);
+        let (d1, b1) = lhs_limbs[i].overflowing_sub(rhs_limbs[i]);
         let (d2, b2) = d1.overflowing_sub(borrow);
         out[i] = d2;
         borrow = (b1 as u64) + (b2 as u64);
         i += 1;
     }
-    let sa = av[N - 1] >> 63;
-    let sb = bv[N - 1] >> 63;
-    let sr = out[N - 1] >> 63;
-    if sa != sb && sr != sa {
+    let lhs_sign = lhs_limbs[N - 1] >> 63;
+    let rhs_sign = rhs_limbs[N - 1] >> 63;
+    let result_sign = out[N - 1] >> 63;
+    if lhs_sign != rhs_sign && result_sign != lhs_sign {
         None
     } else {
         Some(Int::<N>::from_limbs(out))

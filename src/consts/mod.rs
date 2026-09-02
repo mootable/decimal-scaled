@@ -3,9 +3,9 @@
 
 //! Mathematical-constant data — the single source of truth.
 //!
-//! One mpmath-sourced, committed, u64-limb, per-scale constant table for
+//! One flint/Arb-sourced, committed, u64-limb, per-scale constant table for
 //! every constant (pi / tau / half_pi / quarter_pi / e / golden / ln2 / ln10 /
-//! deg_per_rad / rad_per_deg) at any scale or width. A wide tier at a narrow
+//! log10_2 / deg_per_rad / rad_per_deg) at any scale or width. A wide tier at a narrow
 //! scale zero-extends the stored limbs (high limbs = 0); the value is
 //! width-independent.
 //!

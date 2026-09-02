@@ -3,20 +3,38 @@
 
 //! Baked Newton-reciprocal table for the `/10^scale` rescale.
 //!
-//! `r(s) = floor(2^(64*k) / 10^s)`, `k = even(width + s/19 + 3)`, stored
-//! little-endian u64 at the widest working width (96 u64 limbs = Int<96>,
-//! the AGM working width). A narrower `w`-limb tier reads the HIGH
-//! `k_w + 1` limbs: `r_w(s) = r_96(s) >> 64*(96 - w)` (an exact prefix —
-//! the reciprocal of `10^s` is one number, truncated to fewer limbs at
-//! narrower widths), so all tiers SHARE one per-scale reciprocal.
+//! `r(s) = floor(2^(64*k) / 10^s)`, `k = even(width_limbs + s/19 + 3)`,
+//! stored little-endian u64 at the widest working width (132 u64 limbs
+//! = Int<132>, the split D1232 Tang working width). A narrower `w`-limb
+//! tier reads the HIGH `k_w + 1` limbs: `r_w(s) = r_132(s) >> 64*(132 -
+//! w)` (an exact prefix — the reciprocal of `10^s` is one number,
+//! truncated to fewer limbs at narrower widths), so all tiers SHARE one
+//! per-scale reciprocal. The prefix identity holds for an EVEN `w` only;
+//! see the guard in [`newton_recip_le`].
+//!
+//! EXACT BY CONSTRUCTION — no oracle is involved, and none is needed.
+//! Each value is `(1 << (64*k)) // (10**s)`: an exact big-integer floor
+//! division, computed with Python's arbitrary-precision integers. There
+//! is no transcendental, no floating point and no rounding anywhere in
+//! the derivation, so there are no digits to bound and nothing an
+//! interval oracle could tighten. It is also bit-identical to what
+//! `newton_reciprocal::precompute` computes at runtime via
+//! `div_rem_mag_slice`, which is the property the table exists to bake.
 //!
 //! Compile-time read-only data (architectural-review Class K — NOT a
 //! runtime cache); size-local consumption via the width slice. GENERATED
 //! by `scripts/gen_newton_recip_table.py` — do not edit by hand.
+//!
+//! Any change belongs in `scripts/gen_newton_recip_table.py`,
+//! never in this file — including a new `match` arm when a
+//! `RoundingMode` variant is added. Re-run the generator and
+//! commit both; a hand-edit here is silently reverted the next
+//! time anyone regenerates.
 
-/// Widest baked working width, in u64 limbs (Int<96> = the AGM width).
+/// Widest baked working width, in u64 limbs (Int<132> = the split D1232
+/// Tang working width).
 #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
-pub(crate) const NEWTON_RECIP_MAX_W: usize = 132;
+pub(crate) const NEWTON_RECIP_MAX_WIDTH_LIMBS: usize = 132;
 /// Highest baked scale (inclusive).
 #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
 pub(crate) const NEWTON_RECIP_MAX_SCALE: u32 = 1850;
@@ -1878,20 +1896,48 @@ static NEWTON_RECIP: [&[u64]; 1851] = [
 ];
 
 /// `floor(2^(64*k) / 10^scale)` little-endian for a `width_limbs`-limb
-/// working integer (`k = even(width_limbs + scale/19 + 3)`), or `None` if
-/// outside the baked range (`scale > MAX_SCALE` / `width > MAX_W`), where
-/// the caller falls back to the runtime reciprocal / MgChain.
+/// working integer (`k = even(width_limbs + scale/19 + 3)`), or `None`
+/// when the request is not served: outside the baked range (`scale >
+/// NEWTON_RECIP_MAX_SCALE` / `width_limbs >
+/// NEWTON_RECIP_MAX_WIDTH_LIMBS`), or an ODD `width_limbs` (see the
+/// guard below). The caller then falls back to the runtime reciprocal /
+/// MgChain.
 #[inline]
 pub(crate) fn newton_recip_le(scale: u32, width_limbs: usize) -> Option<&'static [u64]> {
+    // ODD WIDTHS ARE NOT SERVED: the baked row is a valid prefix only at
+    // an EVEN width. The row holds the reciprocal at the baked width with
+    // `k = even(baked_width + pow_len)` limbs, and a narrower reader takes
+    // the high-limb prefix `>> 64*(baked_width - width_limbs)`. Since `k`
+    // rounds UP to even and the baked width is itself even, that shift
+    // lands on the reader's own `k = even(width_limbs + pow_len)` only
+    // when `width_limbs` is even too. At an odd width the slice is one
+    // limb off and carries the reciprocal of a DIFFERENT power of two, so
+    // the exact-prefix identity does not hold. Return `None` and let the
+    // caller use its runtime divide, which is exact at any width — a
+    // graceful fallback, not a panic.
+    //
+    // Nothing reaches this today (the Newton band floor is 24 limbs and
+    // the crate instantiates no odd `Int<N>` that wide); it is a
+    // deliberate wall so a future odd width degrades instead of reading a
+    // wrong reciprocal prefix.
+    if !width_limbs.is_multiple_of(2) {
+        return None;
+    }
     // The table is gated behind the wide features (size-local: the narrow /
     // base build never reaches the wide rescale). Absent => `None` => the
     // caller falls back to the runtime reciprocal / MgChain.
     #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
     {
-        if scale <= NEWTON_RECIP_MAX_SCALE && width_limbs <= NEWTON_RECIP_MAX_W {
-            // High `k_w + 1` limbs of the width-96 reciprocal (drop the low
-            // `96 - width_limbs`): r_w = r_96 >> 64*(96 - width_limbs).
-            return Some(&NEWTON_RECIP[scale as usize][NEWTON_RECIP_MAX_W - width_limbs..]);
+        if scale <= NEWTON_RECIP_MAX_SCALE
+            && width_limbs <= NEWTON_RECIP_MAX_WIDTH_LIMBS
+        {
+            // High `k_w + 1` limbs of the baked width-132 reciprocal (drop
+            // the low `132 - width_limbs`):
+            // `r_w = r_132 >> 64*(132 - width_limbs)`.
+            return Some(
+                &NEWTON_RECIP[scale as usize]
+                    [NEWTON_RECIP_MAX_WIDTH_LIMBS - width_limbs..],
+            );
         }
     }
     let _ = (scale, width_limbs);

@@ -82,7 +82,11 @@ mod from_new_tiers_smoke {
                     // √4 = 2 exactly.
                     let four = <$Tsmid>::try_from(4).unwrap();
                     let r = four.sqrt_strict();
-                    assert_eq!(r, <$Tsmid>::try_from(2).unwrap(), "sqrt(4) should be 2 exactly");
+                    assert_eq!(
+                        r,
+                        <$Tsmid>::try_from(2).unwrap(),
+                        "sqrt(4) should be 2 exactly"
+                    );
                 }
 
                 #[test]
@@ -169,22 +173,6 @@ mod from_new_tiers_smoke {
                 }
 
                 #[test]
-                fn widen_narrow_round_trip() {
-                    // .widen() (where it exists) lifts to the next tier
-                    // in the comprehensive ladder; .narrow() drops to
-                    // the previous tier. Round-trip should preserve the
-                    // value because the next-up tier is strictly larger
-                    // and at_scale=Tsmid stays in range on either side.
-                    let v: $Tsmid = <$Tsmid>::try_from(42).unwrap();
-                    let n = v.narrow().expect("narrow into previous tier");
-                    assert_eq!(
-                        n.to_bits().to_string(),
-                        v.to_bits().to_string(),
-                        "narrow should bit-preserve when value fits the smaller storage"
-                    );
-                }
-
-                #[test]
                 fn transcendentals_at_half_max_scale_do_not_overflow() {
                     // Regression: the bench panicked at D57<56>/ln_strict
                     // because the work integer was too narrow to hold
@@ -202,6 +190,35 @@ mod from_new_tiers_smoke {
                     let _ = half.exp_strict();
                     let _ = one_and_a_half.sin_strict();
                     let _ = one_and_a_half.sqrt_strict();
+                }
+            }
+        };
+    }
+
+    /// `.narrow()` drops to the previous tier in the comprehensive ladder, so
+    /// it only EXISTS when that previous tier is compiled in. `widths.rs`
+    /// declares each pair under `all(any(<lower>, <umbrella>), any(<upper>,
+    /// <umbrella>))`, and this test has to carry the same condition — it is
+    /// generated per pair rather than per tier for exactly that reason.
+    ///
+    /// It used to live in `tier_smoke!`, which emits once per tier and knows
+    /// nothing about its neighbours, so `--features wide,d1232` generated a
+    /// `D1232::narrow()` call with no `D924` to narrow into (issue #93). The
+    /// fix is not to switch the test off for that combination: it is to gate it
+    /// on the same predicate as the impl, so it still runs on every feature set
+    /// where the method exists.
+    macro_rules! tier_narrow {
+        ($mod_name:ident, $Tsmid:ty) => {
+            mod $mod_name {
+                #[test]
+                fn narrow_round_trip() {
+                    let v: $Tsmid = <$Tsmid>::try_from(42).unwrap();
+                    let n = v.narrow().expect("narrow into previous tier");
+                    assert_eq!(
+                        n.to_bits().to_string(),
+                        v.to_bits().to_string(),
+                        "narrow should bit-preserve when value fits the smaller storage"
+                    );
                 }
             }
         };
@@ -269,4 +286,47 @@ mod from_new_tiers_smoke {
         decimal_scaled::D1232<10>,
         decimal_scaled::D1232s1231
     );
+
+    // One invocation per LADDER PAIR, each carrying the same `cfg` as the
+    // `decl_cross_width_narrowing!` that provides the method (`widths.rs`).
+    // Keep these in step with that file: a pair whose gate is copied wrongly
+    // either drops coverage silently or breaks a feature combination.
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    tier_narrow!(d57_narrow, decimal_scaled::D57<5>);
+
+    #[cfg(all(
+        any(feature = "d76", feature = "wide"),
+        any(feature = "d115", feature = "wide")
+    ))]
+    tier_narrow!(d115_narrow, decimal_scaled::D115<10>);
+
+    #[cfg(all(
+        any(feature = "d153", feature = "wide"),
+        any(feature = "d230", feature = "wide")
+    ))]
+    tier_narrow!(d230_narrow, decimal_scaled::D230<10>);
+
+    #[cfg(all(
+        any(feature = "d307", feature = "wide"),
+        any(feature = "d462", feature = "x-wide")
+    ))]
+    tier_narrow!(d462_narrow, decimal_scaled::D462<10>);
+
+    #[cfg(all(
+        any(feature = "d462", feature = "x-wide"),
+        any(feature = "d616", feature = "x-wide")
+    ))]
+    tier_narrow!(d616_narrow, decimal_scaled::D616<10>);
+
+    #[cfg(all(
+        any(feature = "d616", feature = "x-wide"),
+        any(feature = "d924", feature = "xx-wide")
+    ))]
+    tier_narrow!(d924_narrow, decimal_scaled::D924<10>);
+
+    #[cfg(all(
+        any(feature = "d924", feature = "xx-wide"),
+        any(feature = "d1232", feature = "xx-wide")
+    ))]
+    tier_narrow!(d1232_narrow, decimal_scaled::D1232<10>);
 }

@@ -79,7 +79,14 @@ history-044 = ["dep:ds-044", "ds-044/wide", "ds-044/x-wide", "ds-044/xx-wide", "
 # adapter (in decimal-scaled-cells) enables the umbrellas its six shared
 # widths sit under. Nothing in this package calls 0.3.3 directly any more.
 history-033 = ["decimal-scaled-cells/history-033"]
-history = ["history-044", "history-033"]
+# 0.5.0 — the immediately-previous release, and the one `history_previous`
+# ratchets against. It shares the live tier table, so it gets the full ladder.
+# Nothing here calls it directly, so it only forwards to the adapter crate.
+# EVERY release adds its predecessor and repoints the ratchet: the live column
+# is the working tree, so the release being replaced leaves the comparison the
+# moment the version is bumped.
+history-050 = ["decimal-scaled-cells/history-050"]
+history = ["history-050", "history-044", "history-033"]
 
 # Serde wire-format round-trips in tests/api/serde.rs (JSON human-readable +
 # postcard binary forms). Test-only.
@@ -110,9 +117,10 @@ dead_code = "allow"
 # full-width build sweeps all 92.
 
 # Version-history correctness gates: live vs the pinned historical releases.
-# `history_previous` (the 0.4.4 ratchet) needs only history-044; the optional
-# 0.3.3 column of `history_all` lights up when history-033 is also enabled.
-# Only `history-044` is REQUIRED (not the wide-tier umbrellas): the live cell
+# `history_previous` ratchets against the IMMEDIATELY-PREVIOUS release (0.5.0),
+# so history-050 is required; `history_all` adds the 0.4.4 column, and the
+# optional 0.3.3 column lights up when history-033 is also enabled.
+# Only these two are REQUIRED (not the wide-tier umbrellas): the live cell
 # fan-out is per-tier feature-gated, so the gate compiles and runs at ANY tier
 # set, and history.yml builds it WIDTH-SHARDED — one tier per shard, narrow
 # through d1232 (mirroring ci.yml's golden-quick) — so the monolithic
@@ -122,7 +130,7 @@ dead_code = "allow"
 # adapts (18/38/76/153/230/307).
 [[test]]
 name = "history"
-required-features = ["history-044"]
+required-features = ["history-050", "history-044"]
 
 # The hand-derived storage-semantics oracle (tests/sanity.rs) exercises the
 # x-wide tier directly.

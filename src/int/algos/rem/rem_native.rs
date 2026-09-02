@@ -23,37 +23,37 @@
 
 use crate::int::types::Int;
 
-/// Load the (<=128-bit) magnitude of `x` into a `u128`. Correct only for
+/// Load the (<=128-bit) magnitude of `value` into a `u128`. Correct only for
 /// `N <= 2`; this fn is only routed to for `N <= 2`.
 #[inline]
-fn mag_u128<const N: usize>(x: &Int<N>) -> u128 {
-    let limbs = x.unsigned_abs();
-    let l = limbs.as_limbs();
-    let lo = l[0] as u128;
-    let hi = if N >= 2 { l[1] as u128 } else { 0 };
+fn mag_u128<const N: usize>(value: &Int<N>) -> u128 {
+    let magnitude = value.unsigned_abs();
+    let limbs = magnitude.as_limbs();
+    let lo = limbs[0] as u128;
+    let hi = if N >= 2 { limbs[1] as u128 } else { 0 };
     lo | (hi << 64)
 }
 
 /// Hardware-`%` signed remainder for `Int<N>`, `N <= 2`.
 ///
-/// Loads both magnitudes into `u128`, computes `a_mag % b_mag` with the
-/// native hardware remainder, and re-applies the dividend sign
+/// Loads both magnitudes into `u128`, computes `|dividend| % |divisor|` with
+/// the native hardware remainder, and re-applies the dividend sign
 /// (truncating-toward-zero). Panics on a zero divisor, matching the `Rem`
 /// operator contract.
 #[inline]
-pub(crate) fn rem_native<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
+pub(crate) fn rem_native<const N: usize>(dividend: Int<N>, divisor: Int<N>) -> Int<N> {
     assert!(
-        !b.is_zero(),
+        !divisor.is_zero(),
         "attempt to calculate the remainder with a divisor of zero"
     );
-    let neg_r = a.is_negative();
-    let r = mag_u128(&a) % mag_u128(&b);
-    let mut rem = [0u64; N];
-    rem[0] = r as u64;
+    let remainder_is_negative = dividend.is_negative();
+    let remainder_u128 = mag_u128(&dividend) % mag_u128(&divisor);
+    let mut remainder = [0u64; N];
+    remainder[0] = remainder_u128 as u64;
     if N >= 2 {
-        rem[1] = (r >> 64) as u64;
+        remainder[1] = (remainder_u128 >> 64) as u64;
     }
-    Int::<N>::from_mag_limbs(&rem, neg_r)
+    Int::<N>::from_mag_limbs(&remainder, remainder_is_negative)
 }
 
 #[cfg(test)]
@@ -75,9 +75,10 @@ mod tests {
             (i64::MAX, 2, 1),
             (i64::MIN + 1, 2, -1),
         ];
-        for &(a, b, want) in cases {
-            let got = rem_native::<1>(Int::<1>::from_i64(a), Int::<1>::from_i64(b));
-            assert_eq!(got.to_i64(), want, "rem_native({a}, {b})");
+        for &(dividend, divisor, expected) in cases {
+            let actual = rem_native::<1>(Int::<1>::from_i64(dividend),
+                Int::<1>::from_i64(divisor));
+            assert_eq!(actual.to_i64(), expected, "rem_native({dividend}, {divisor})");
         }
     }
 
@@ -101,9 +102,11 @@ mod tests {
                 12345678901234567,
             ),
         ];
-        for &(a, b) in cases {
-            let got = rem_native::<2>(Int::<2>::from_i128(a), Int::<2>::from_i128(b));
-            assert_eq!(got.to_i128(), a % b, "rem_native({a}, {b})");
+        for &(dividend, divisor) in cases {
+            let actual = rem_native::<2>(Int::<2>::from_i128(dividend),
+                Int::<2>::from_i128(divisor));
+            assert_eq!(actual.to_i128(), dividend % divisor,
+                "rem_native({dividend}, {divisor})");
         }
     }
 }

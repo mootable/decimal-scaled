@@ -14,7 +14,7 @@
 //! therefore match the cost of) the tier path.
 //!
 //! VALIDITY before timing: rung and tier are bit-identical at every
-//! probed cell across all six rounding modes (the integer ops are
+//! probed cell across all eight rounding modes (the integer ops are
 //! width-agnostic; the assert is the wall).
 //!
 //! Run with:
@@ -38,13 +38,15 @@ mod ab_microbench;
 use ab_microbench::{compare_all, micro_criterion};
 
 const MODE: RoundingMode = RoundingMode::HalfToEven;
-const ALL_MODES: [RoundingMode; 6] = [
+const ALL_MODES: [RoundingMode; 8] = [
     RoundingMode::HalfToEven,
     RoundingMode::HalfAwayFromZero,
     RoundingMode::HalfTowardZero,
     RoundingMode::Trunc,
     RoundingMode::Floor,
     RoundingMode::Ceiling,
+    RoundingMode::AwayFromZero,
+    RoundingMode::ZeroFiveUp,
 ];
 
 fn fromu<const N: usize>(v: u128) -> Int<N> {

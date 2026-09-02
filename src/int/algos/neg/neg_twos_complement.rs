@@ -18,12 +18,12 @@ use crate::int::types::Int;
 /// Limb-0 split shape — the routed kernel after the wide-tier
 /// `neg_kernel_ab` A/B (see `benches/micro/neg_kernel_ab.rs`):
 ///
-/// 1. Compute `out[0] = !a[0] + 1`, capturing the carry `c0`.
-/// 2. If `c0 == false` (the overwhelmingly common path — `a[0] != MAX`),
-///    limbs `1..N` reduce to plain independent `!a[i]` writes: no
+/// 1. Compute `out[0] = !value[0] + 1`, capturing the carry `c0`.
+/// 2. If `c0 == false` (the overwhelmingly common path — `value[0] != MAX`),
+///    limbs `1..N` reduce to plain independent `!value[i]` writes: no
 ///    cross-limb dependency chain, so the compiler can keep them
 ///    register-resident / vectorise the NOT loop.
-/// 3. If `c0 == true` (`a[0] == MAX`), fall back to a dependent
+/// 3. If `c0 == true` (`value[0] == MAX`), fall back to a dependent
 ///    carry-prop chain through limbs `1..N`.
 ///
 /// The previous two-pass shape (NOT loop into `out[N]`, then a
@@ -36,12 +36,12 @@ use crate::int::types::Int;
 /// const-fn so it stays available in const contexts (`abs`,
 /// `wrapping_div`, `wrapping_rem`, `from_mag_limbs`).
 #[inline]
-pub(crate) const fn neg_twos_complement<const N: usize>(a: Int<N>) -> Int<N> {
+pub(crate) const fn neg_twos_complement<const N: usize>(value: Int<N>) -> Int<N> {
     let mut out = [0u64; N];
     if N == 0 {
         return Int::<N>::from_limbs(out);
     }
-    let limbs = a.as_limbs();
+    let limbs = value.as_limbs();
     let (s0, c0) = (!limbs[0]).overflowing_add(1);
     out[0] = s0;
     if c0 {

@@ -129,22 +129,23 @@ const fn resolve<const N: usize>() -> (Algorithm, LimbSize) {
 
 // ── 4. the dispatcher: resolve the algorithm, then its limb width ─────
 
-/// Truncated-low square `out = (x²) mod 2^(64·N)` — the single site
+/// Truncated-low square `out = (value²) mod 2^(64·N)` — the single site
 /// [`BigInt::wrapping_sqr_low_u128`] flows through. Two-stage verdict: the
 /// algorithm is resolved first, then asked for its own benched limb width
 /// ([`Algorithm::limb_size`]). Both are const here, so the `const { … }` block
 /// folds them and this compiles to one direct `sqr_low_limb::<N, _>` call per
 /// monomorphisation with the unchosen arm dead-arm eliminated. `out` is written
-/// in full; bit-identical to [`BigInt::wrapping_mul`]`(x, x)` mod `2^(64·N)` at
+/// in full; bit-identical to [`BigInt::wrapping_mul`]`(value, value)` mod
+/// `2^(64·N)` at
 /// either width.
 ///
 /// [`BigInt::wrapping_sqr_low_u128`]: crate::int::types::traits::BigInt::wrapping_sqr_low_u128
 /// [`BigInt::wrapping_mul`]: crate::int::types::traits::BigInt::wrapping_mul
 #[inline]
-pub(crate) fn dispatch<const N: usize>(x: &[u64; N], out: &mut [u64; N]) {
-    let (algo, limb) = const { resolve::<N>() };
-    match (algo, limb) {
-        (Algorithm::LowLimb, LimbSize::U64) => sqr_low_limb::<N, u64>(x, out),
-        (Algorithm::LowLimb, LimbSize::U128) => sqr_low_limb::<N, u128>(x, out),
+pub(crate) fn dispatch<const N: usize>(value: &[u64; N], out: &mut [u64; N]) {
+    let (algo, limb_size) = const { resolve::<N>() };
+    match (algo, limb_size) {
+        (Algorithm::LowLimb, LimbSize::U64) => sqr_low_limb::<N, u64>(value, out),
+        (Algorithm::LowLimb, LimbSize::U128) => sqr_low_limb::<N, u128>(value, out),
     }
 }

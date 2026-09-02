@@ -20,26 +20,58 @@
 //! copy (rule 2 of the architecture constitution). The choice of which
 //! limb width wins per (N, SCALE) cell is the policy matcher's job.
 
-use crate::int::algos::support::limbs::{add_assign, sub_assign};
+use crate::int::algos::support::limbs::{add_assign, sub_assign, MAX_WORK_N};
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 use crate::int::types::compute_limbs::{ComputeLimbs, Limb, Limbs};
 
 // ---- Slice-entry scratch (width-erased build-max) ---------------------------
 
-/// The widest equal-length product the crate forms: Int<256> -- the widest
-/// transcendental work integer (4*MAX_WORK_N at the xx-wide tier). The
-/// int-layer multiply matcher (int::policy::mul) engages Karatsuba only at
-/// even N >= 128, and no work width exceeds 256 (a wider operand would route
-/// through the concrete-N kernel's exact ComputeLimbs scratch, not this slice
-/// path), so the WIDTH-ERASED slice entries below cover up to this width.
-const KARATSUBA_MAX_WIDTH: usize = 256;
+/// Ceiling on the operand length the WIDTH-ERASED slice entries
+/// (`mul_karatsuba` / `mul_karatsuba_forced`) will run Karatsuba for; past it
+/// they fall back to schoolbook.
+///
+/// DERIVED from `MAX_WORK_N`, not frozen. The widest work integer any tier
+/// declares is its `Wexp`, which is `8 x storage` at the top of every feature
+/// band (`wide` 16 -> `Int<128>` at D307; `x-wide` 32 -> `Int<256>` at D616;
+/// `xx-wide` 64 -> `Int<512>` at D1232). Deriving it means adding a tier
+/// resizes this automatically instead of leaving two constants to be kept in
+/// step by hand -- and it stops a narrow build carrying a frame sized for a
+/// width it can never present.
+///
+/// It bounds ONLY the slice door. The const-`N` door
+/// (`int::policy::mul::dispatch` -> `mul_karatsuba_limb`) sources EXACT per-`N`
+/// scratch from `ComputeLimbs`, so no `Int<N>` operand of any width -- D1232's
+/// `Wexp = Int<512>` included -- can reach this constant. That asymmetry is
+/// what makes the hazard tractable: only a runtime-length caller is exposed,
+/// and only the entry check in `mul_karatsuba` can bound a runtime length.
+///
+/// (The previous doc here claimed a wider operand "would route through the
+/// concrete-N kernel's exact ComputeLimbs scratch, not this slice path". That
+/// is true of the const door and CANNOT be true of the slice door, which has
+/// no `N` to route by. What protects the slice door is a property of its call
+/// sites, not of routing.)
+///
+/// Every slice caller (`sqrt_newton`, `cbrt_newton`, `newton_reciprocal`,
+/// `div_widen_scale`, `wide_trig_core`) carves operands from storage-derived
+/// `ComputeLimbs` buffers and shrinks them with `sig_len`, so the longest
+/// equal-length pair any can present today is about **96** limbs (`cbrt` at
+/// D1232) -- below the matcher's engage point, leaving the slice Karatsuba arm
+/// unreached in production.
+///
+/// That 96 is a MEASUREMENT OF TODAY'S CALL SITES, NOT A PROPERTY of the code.
+/// A new slice caller, or a work width fed here as a value rather than as a
+/// widened storage magnitude, moves it without anything complaining -- which
+/// is why the entry fails closed rather than trusting the number.
+pub(crate) const KARATSUBA_MAX_WIDTH: usize = 8 * MAX_WORK_N;
 
 /// Build-max stack scratch (in u64 limbs) for the WIDTH-ERASED slice Karatsuba
 /// entries mul_karatsuba / mul_karatsuba_forced. Those take &[u64] of RUNTIME
 /// length, so they cannot size per-N and use this sanctioned build-max blanket
 /// (like the width-erased slice-divide engines). It is sized to the deepest
-/// recursion (the threshold floor 4) at the widest width via the kernel's own
-/// recursion arithmetic -- derived, not a frozen guess. The concrete-N kernel
+/// recursion (the threshold floor 4) at [`KARATSUBA_MAX_WIDTH`] via the
+/// kernel's own recursion arithmetic -- derived, not a frozen guess, and now
+/// feature-scoped through that ceiling rather than pinned to the widest
+/// tier the crate can be built with. The concrete-N kernel
 /// mul_karatsuba_limb sources its EXACT per-N scratch from ComputeLimbs instead
 /// (no build-max on the hot wide-multiply path -- Constitution rule 6).
 pub(crate) const KARATSUBA_SCRATCH_LIMBS: usize =
@@ -48,48 +80,61 @@ pub(crate) const KARATSUBA_SCRATCH_LIMBS: usize =
 // ---- u64 entry points (existing slice-based interface, unchanged) -----------
 
 /// Non-allocating recursive Karatsuba multiplication at u64 base.
-/// out.len() >= 2 * a.len(), out must be zeroed by the caller.
-pub(crate) fn mul_karatsuba(a: &[u64], b: &[u64], out: &mut [u64], threshold: usize) {
-    debug_assert_eq!(a.len(), b.len());
-    debug_assert!(out.len() >= 2 * a.len());
-    debug_assert!(
-        karatsuba_scratch_needed_th(a.len(), threshold) <= KARATSUBA_SCRATCH_LIMBS,
-        "Karatsuba scratch overflow: n={} needs {} limbs, have {}",
-        a.len(),
-        karatsuba_scratch_needed_th(a.len(), threshold),
-        KARATSUBA_SCRATCH_LIMBS,
-    );
+/// out.len() >= 2 * lhs.len(), out must be zeroed by the caller.
+pub(crate) fn mul_karatsuba(lhs: &[u64], rhs: &[u64], out: &mut [u64], threshold: usize) {
+    debug_assert_eq!(lhs.len(), rhs.len());
+    debug_assert!(out.len() >= 2 * lhs.len());
+    // FAIL CLOSED. This entry is width-erased, so `lhs.len()` is a RUNTIME
+    // length that no const assertion can bound -- the scratch below is a
+    // fixed build-max frame. An operand past the ceiling takes the
+    // schoolbook path (slower, same product) instead of overrunning the
+    // scratch, which `karatsuba_rec` would otherwise turn into a
+    // `split_at_mut` panic in release as well as debug.
+    //
+    // Sizing argument: `KARATSUBA_SCRATCH_LIMBS` covers `KARATSUBA_MAX_WIDTH`
+    // at the threshold FLOOR (4), and `karatsuba_scratch_needed_th` is
+    // non-decreasing in `limb_count` and non-increasing in `threshold` -- so it
+    // covers every `(limb_count <= ceiling, threshold >= 4)` caller, and
+    // `lhs.len()` alone is a sufficient test. ONE compare against a const at
+    // the entry; the recursion is untouched.
+    if lhs.len() > KARATSUBA_MAX_WIDTH {
+        mul_schoolbook(lhs, rhs, out);
+        return;
+    }
     let mut scratch = [0u64; KARATSUBA_SCRATCH_LIMBS];
-    karatsuba_rec(a, b, out, &mut scratch, threshold);
+    karatsuba_rec(lhs, rhs, out, &mut scratch, threshold);
 }
 
 /// Bench-only u64 Karatsuba at an arbitrary threshold. out zeroed here.
 #[cfg(feature = "bench-alt")]
-pub(crate) fn mul_karatsuba_forced(a: &[u64], b: &[u64], out: &mut [u64], threshold: usize) {
-    debug_assert_eq!(a.len(), b.len());
-    debug_assert!(out.len() >= 2 * a.len());
-    debug_assert!(
-        karatsuba_scratch_needed_th(a.len(), threshold) <= KARATSUBA_SCRATCH_LIMBS,
-        "Karatsuba scratch overflow in forced bench entry"
-    );
-    for o in out.iter_mut() { *o = 0; }
+pub(crate) fn mul_karatsuba_forced(lhs: &[u64], rhs: &[u64], out: &mut [u64],
+    threshold: usize) {
+    debug_assert_eq!(lhs.len(), rhs.len());
+    debug_assert!(out.len() >= 2 * lhs.len());
+    for slot in out.iter_mut() { *slot = 0; }
+    // Same fail-closed ceiling as `mul_karatsuba` -- see the sizing argument
+    // there. `out` is already zeroed above, which is the schoolbook contract.
+    if lhs.len() > KARATSUBA_MAX_WIDTH {
+        mul_schoolbook(lhs, rhs, out);
+        return;
+    }
     let mut scratch = [0u64; KARATSUBA_SCRATCH_LIMBS];
-    karatsuba_rec(a, b, out, &mut scratch, threshold);
+    karatsuba_rec(lhs, rhs, out, &mut scratch, threshold);
 }
 
 /// Test-only entry at an arbitrary threshold (allocates scratch).
 #[cfg(test)]
 pub(crate) fn mul_karatsuba_with_threshold(
-    a: &[u64],
-    b: &[u64],
+    lhs: &[u64],
+    rhs: &[u64],
     out: &mut [u64],
     threshold: usize,
 ) {
-    debug_assert_eq!(a.len(), b.len());
-    debug_assert!(out.len() >= 2 * a.len());
-    let need = karatsuba_scratch_needed_th(a.len(), threshold);
-    let mut scratch = vec![0u64; need];
-    karatsuba_rec(a, b, out, &mut scratch, threshold);
+    debug_assert_eq!(lhs.len(), rhs.len());
+    debug_assert!(out.len() >= 2 * lhs.len());
+    let scratch_needed = karatsuba_scratch_needed_th(lhs.len(), threshold);
+    let mut scratch = vec![0u64; scratch_needed];
+    karatsuba_rec(lhs, rhs, out, &mut scratch, threshold);
 }
 // ---- Limb-generic entry point (bench-alt only) ------------------------------
 
@@ -110,8 +155,8 @@ pub(crate) fn mul_karatsuba_with_threshold(
 /// `mul_karatsuba_limb::<N, u128>` — the policy-map showed it beats schoolbook-
 /// u128 by ~1.34x (N=128) .. 1.39x (N=256) at recursion threshold 48.
 pub(crate) fn mul_karatsuba_limb<const N: usize, L: Limb>(
-    a: &[u64; N],
-    b: &[u64; N],
+    lhs: &[u64; N],
+    rhs: &[u64; N],
     out: &mut [u64],
     threshold: usize,
 ) where
@@ -120,10 +165,10 @@ pub(crate) fn mul_karatsuba_limb<const N: usize, L: Limb>(
     let h = L::packed_len(N);
     debug_assert!(h > 0 && h <= N);
     // Pack operands into L-space. [L; N] is always >= packed_len(N) <= N.
-    let mut ap = [L::ZERO; N];
-    let mut bp = [L::ZERO; N];
-    L::pack(a, &mut ap[..h]);
-    L::pack(b, &mut bp[..h]);
+    let mut lhs_packed = [L::ZERO; N];
+    let mut rhs_packed = [L::ZERO; N];
+    L::pack(lhs, &mut lhs_packed[..h]);
+    L::pack(rhs, &mut rhs_packed[..h]);
 
     // Convert threshold from u64-limb to packed-limb units.
     // For u128: packed_len = N/2 so ratio=2, threshold_packed = threshold/2.
@@ -154,81 +199,84 @@ pub(crate) fn mul_karatsuba_limb<const N: usize, L: Limb>(
         scratch.len(),
     );
 
-    karatsuba_rec_limb::<L>(&ap[..h], &bp[..h], &mut *prod, scratch, threshold_packed);
+    karatsuba_rec_limb::<L>(&lhs_packed[..h], &rhs_packed[..h], &mut *prod, scratch,
+        threshold_packed);
 
     L::unpack(&prod[..2 * h], &mut out[..2 * N]);
 }
 
 // ---- Scratch sizing ---------------------------------------------------------
 
-/// Upper bound on scratch (in typed limbs) for n-limb Karatsuba at the
-/// given threshold.
-pub(crate) const fn karatsuba_scratch_needed_th(n: usize, threshold: usize) -> usize {
-    if n < threshold {
+/// Upper bound on scratch (in typed limbs) for `limb_count`-limb Karatsuba at
+/// the given threshold.
+pub(crate) const fn karatsuba_scratch_needed_th(limb_count: usize, threshold: usize) -> usize {
+    if limb_count < threshold {
         return 0;
     }
-    let h = n / 2;
-    let hi = n - h;
-    let level = 2 * h + 2 * hi + (hi + 1) + (hi + 1) + 2 * (hi + 1);
-    level + karatsuba_scratch_needed_th(hi + 1, threshold)
+    let low_len = limb_count / 2;
+    let high_len = limb_count - low_len;
+    let level =
+        2 * low_len + 2 * high_len + (high_len + 1) + (high_len + 1) + 2 * (high_len + 1);
+    level + karatsuba_scratch_needed_th(high_len + 1, threshold)
 }
 
 // ---- u64-slice recursion (unchanged) ----------------------------------------
 
-fn karatsuba_rec(a: &[u64], b: &[u64], out: &mut [u64], scratch: &mut [u64], threshold: usize) {
+fn karatsuba_rec(lhs: &[u64], rhs: &[u64], out: &mut [u64], scratch: &mut [u64],
+    threshold: usize) {
     debug_assert!(threshold >= 4, "Karatsuba threshold must be >= 4 to terminate");
-    let n = a.len();
-    if n < threshold {
-        mul_schoolbook(a, b, out);
+    let limb_count = lhs.len();
+    if limb_count < threshold {
+        mul_schoolbook(lhs, rhs, out);
         return;
     }
-    let h = n / 2;
-    let hi = n - h;
-    let (a_lo, a_hi) = a.split_at(h);
-    let (b_lo, b_hi) = b.split_at(h);
+    let low_len = limb_count / 2;
+    let high_len = limb_count - low_len;
+    let (lhs_lo, lhs_hi) = lhs.split_at(low_len);
+    let (rhs_lo, rhs_hi) = rhs.split_at(low_len);
 
-    let (z0, rest) = scratch.split_at_mut(2 * h);
-    let (z2, rest) = rest.split_at_mut(2 * hi);
-    let (sa, rest) = rest.split_at_mut(hi + 1);
-    let (sb, rest) = rest.split_at_mut(hi + 1);
-    let (z1, tail) = rest.split_at_mut(2 * (hi + 1));
+    let (z0, rest) = scratch.split_at_mut(2 * low_len);
+    let (z2, rest) = rest.split_at_mut(2 * high_len);
+    let (lhs_sum, rest) = rest.split_at_mut(high_len + 1);
+    let (rhs_sum, rest) = rest.split_at_mut(high_len + 1);
+    let (z1, tail) = rest.split_at_mut(2 * (high_len + 1));
 
-    for v in z0.iter_mut() { *v = 0; }
-    for v in z2.iter_mut() { *v = 0; }
-    for v in z1.iter_mut() { *v = 0; }
+    for slot in z0.iter_mut() { *slot = 0; }
+    for slot in z2.iter_mut() { *slot = 0; }
+    for slot in z1.iter_mut() { *slot = 0; }
 
-    karatsuba_rec(a_lo, b_lo, z0, tail, threshold);
-    karatsuba_rec_unbalanced(a_hi, b_hi, z2, tail, threshold);
+    karatsuba_rec(lhs_lo, rhs_lo, z0, tail, threshold);
+    karatsuba_rec_unbalanced(lhs_hi, rhs_hi, z2, tail, threshold);
 
-    for v in sa.iter_mut() { *v = 0; }
-    for v in sb.iter_mut() { *v = 0; }
-    sa[..h].copy_from_slice(a_lo);
-    sb[..h].copy_from_slice(b_lo);
-    let _ = add_assign(sa, a_hi);
-    let _ = add_assign(sb, b_hi);
+    for slot in lhs_sum.iter_mut() { *slot = 0; }
+    for slot in rhs_sum.iter_mut() { *slot = 0; }
+    lhs_sum[..low_len].copy_from_slice(lhs_lo);
+    rhs_sum[..low_len].copy_from_slice(rhs_lo);
+    let _ = add_assign(lhs_sum, lhs_hi);
+    let _ = add_assign(rhs_sum, rhs_hi);
 
-    karatsuba_rec_unbalanced(sa, sb, z1, tail, threshold);
+    karatsuba_rec_unbalanced(lhs_sum, rhs_sum, z1, tail, threshold);
     let _ = sub_assign(z1, z0);
     let _ = sub_assign(z1, z2);
 
     out[..z0.len()].copy_from_slice(z0);
-    let _ = add_assign(&mut out[2 * h..], z2);
-    let _ = add_assign(&mut out[h..], z1);
+    let _ = add_assign(&mut out[2 * low_len..], z2);
+    let _ = add_assign(&mut out[low_len..], z1);
 }
 
 fn karatsuba_rec_unbalanced(
-    a: &[u64],
-    b: &[u64],
+    lhs: &[u64],
+    rhs: &[u64],
     out: &mut [u64],
     scratch: &mut [u64],
     threshold: usize,
 ) {
-    debug_assert_eq!(a.len(), b.len());
-    if a.len() >= threshold {
-        karatsuba_rec(a, b, out, scratch, threshold);
+    debug_assert_eq!(lhs.len(), rhs.len());
+    if lhs.len() >= threshold {
+        karatsuba_rec(lhs, rhs, out, scratch, threshold);
     } else {
-        for v in out.iter_mut() { *v = 0; }
-        mul_schoolbook(a, b, out);
+        for slot in out.iter_mut() { *slot = 0; }
+        mul_schoolbook(lhs, rhs, out);
     }
 }
 // ---- Limb-generic recursion: ONE kernel body for both u64 and u128 ----------
@@ -243,29 +291,29 @@ fn karatsuba_rec_unbalanced(
 /// (Constitution rule 2). (A future tidy could relocate this + the two
 /// `limb_{add,sub}_assign` helpers to `mul_schoolbook.rs` beside `mul_low_limb`.)
 #[inline]
-pub(crate) fn schoolbook_rec_limb<L: Limb>(a: &[L], b: &[L], out: &mut [L]) {
-    let na = a.len();
-    let nb = b.len();
+pub(crate) fn schoolbook_rec_limb<L: Limb>(lhs: &[L], rhs: &[L], out: &mut [L]) {
+    let lhs_len = lhs.len();
+    let rhs_len = rhs.len();
     let mut i = 0;
-    while i < na {
-        let ai = a[i];
-        if ai != L::ZERO {
+    while i < lhs_len {
+        let lhs_limb = lhs[i];
+        if lhs_limb != L::ZERO {
             let mut carry = L::ZERO;
             let mut j = 0;
-            while j < nb {
-                let (lo, hi) = ai.widening_mul(b[j]);
+            while j < rhs_len {
+                let (lo, hi) = lhs_limb.widening_mul(rhs[j]);
                 let idx = i + j;
-                let (s1, c1) = out[idx].overflowing_add(lo);
-                let (s2, c2) = s1.overflowing_add(carry);
-                out[idx] = s2;
-                carry = hi.add_carries(c1, c2);
+                let (sum1, carry1) = out[idx].overflowing_add(lo);
+                let (sum2, carry2) = sum1.overflowing_add(carry);
+                out[idx] = sum2;
+                carry = hi.add_carries(carry1, carry2);
                 j += 1;
             }
-            let mut idx = i + nb;
+            let mut idx = i + rhs_len;
             while carry != L::ZERO && idx < out.len() {
-                let (s, c) = out[idx].overflowing_add(carry);
-                out[idx] = s;
-                carry = if c { L::ONE } else { L::ZERO };
+                let (sum, carried) = out[idx].overflowing_add(carry);
+                out[idx] = sum;
+                carry = if carried { L::ONE } else { L::ZERO };
                 idx += 1;
             }
         }
@@ -273,37 +321,38 @@ pub(crate) fn schoolbook_rec_limb<L: Limb>(a: &[L], b: &[L], out: &mut [L]) {
     }
 }
 
-/// Limb-generic add-assign: a += b, returns carry. a.len() >= b.len().
+/// Limb-generic add-assign: lhs += rhs, returns carry. lhs.len() >= rhs.len().
 /// Used for sum-formation and recombine in L space. `pub(crate)`: shared
 /// with the Toom-3 kernel (one L-space add, no duplicate — rule 2).
 #[inline]
-pub(crate) fn limb_add_assign<L: Limb>(a: &mut [L], b: &[L]) -> bool {
+pub(crate) fn limb_add_assign<L: Limb>(lhs: &mut [L], rhs: &[L]) -> bool {
     let mut carry = false;
     let mut i = 0;
-    while i < a.len() {
-        let bv = if i < b.len() { b[i] } else { L::ZERO };
-        let (s1, c1) = a[i].overflowing_add(bv);
-        let (s2, c2) = s1.overflowing_add(if carry { L::ONE } else { L::ZERO });
-        a[i] = s2;
-        carry = c1 | c2;
+    while i < lhs.len() {
+        let rhs_limb = if i < rhs.len() { rhs[i] } else { L::ZERO };
+        let (sum1, carry1) = lhs[i].overflowing_add(rhs_limb);
+        let (sum2, carry2) = sum1.overflowing_add(if carry { L::ONE } else { L::ZERO });
+        lhs[i] = sum2;
+        carry = carry1 | carry2;
         i += 1;
     }
     carry
 }
 
-/// Limb-generic sub-assign: a -= b, returns borrow. a.len() >= b.len().
+/// Limb-generic sub-assign: lhs -= rhs, returns borrow. lhs.len() >= rhs.len().
 /// Used for z1 formation (z1 -= z0; z1 -= z2) in L space. `pub(crate)`:
 /// shared with the Toom-3 kernel (one L-space sub, no duplicate — rule 2).
 #[inline]
-pub(crate) fn limb_sub_assign<L: Limb>(a: &mut [L], b: &[L]) -> bool {
+pub(crate) fn limb_sub_assign<L: Limb>(lhs: &mut [L], rhs: &[L]) -> bool {
     let mut borrow = false;
     let mut i = 0;
-    while i < a.len() {
-        let bv = if i < b.len() { b[i] } else { L::ZERO };
-        let (d1, b1) = a[i].overflowing_sub(bv);
-        let (d2, b2) = d1.overflowing_sub(if borrow { L::ONE } else { L::ZERO });
-        a[i] = d2;
-        borrow = b1 | b2;
+    while i < lhs.len() {
+        let rhs_limb = if i < rhs.len() { rhs[i] } else { L::ZERO };
+        let (diff1, borrow1) = lhs[i].overflowing_sub(rhs_limb);
+        let (diff2, borrow2) =
+            diff1.overflowing_sub(if borrow { L::ONE } else { L::ZERO });
+        lhs[i] = diff2;
+        borrow = borrow1 | borrow2;
         i += 1;
     }
     borrow
@@ -312,18 +361,18 @@ pub(crate) fn limb_sub_assign<L: Limb>(a: &mut [L], b: &[L]) -> bool {
 /// Limb-generic child dispatch: routes to karatsuba_rec_limb above the
 /// threshold or schoolbook_rec_limb below.
 fn karatsuba_rec_limb_unbalanced<L: Limb>(
-    a: &[L],
-    b: &[L],
+    lhs: &[L],
+    rhs: &[L],
     out: &mut [L],
     scratch: &mut [L],
     threshold: usize,
 ) {
-    debug_assert_eq!(a.len(), b.len());
-    if a.len() >= threshold {
-        karatsuba_rec_limb::<L>(a, b, out, scratch, threshold);
+    debug_assert_eq!(lhs.len(), rhs.len());
+    if lhs.len() >= threshold {
+        karatsuba_rec_limb::<L>(lhs, rhs, out, scratch, threshold);
     } else {
-        for v in out.iter_mut() { *v = L::ZERO; }
-        schoolbook_rec_limb::<L>(a, b, out);
+        for slot in out.iter_mut() { *slot = L::ZERO; }
+        schoolbook_rec_limb::<L>(lhs, rhs, out);
     }
 }
 
@@ -334,51 +383,51 @@ fn karatsuba_rec_limb_unbalanced<L: Limb>(
 /// karatsuba_rec; for L = u128 runs in n/2 u128 limbs, halving the
 /// carry-chain depth per inner step. ONE body, no per-limb-type copy.
 ///
-/// out must be pre-zeroed for the 2*n-limb window.
+/// out must be pre-zeroed for the 2*limb_count-limb window.
 fn karatsuba_rec_limb<L: Limb>(
-    a: &[L],
-    b: &[L],
+    lhs: &[L],
+    rhs: &[L],
     out: &mut [L],
     scratch: &mut [L],
     threshold: usize,
 ) {
     debug_assert!(threshold >= 4);
-    let n = a.len();
-    if n < threshold {
-        schoolbook_rec_limb::<L>(a, b, out);
+    let limb_count = lhs.len();
+    if limb_count < threshold {
+        schoolbook_rec_limb::<L>(lhs, rhs, out);
         return;
     }
-    let h = n / 2;
-    let hi = n - h;
+    let low_len = limb_count / 2;
+    let high_len = limb_count - low_len;
 
-    let (a_lo, a_hi) = a.split_at(h);
-    let (b_lo, b_hi) = b.split_at(h);
+    let (lhs_lo, lhs_hi) = lhs.split_at(low_len);
+    let (rhs_lo, rhs_hi) = rhs.split_at(low_len);
 
-    let (z0, rest) = scratch.split_at_mut(2 * h);
-    let (z2, rest) = rest.split_at_mut(2 * hi);
-    let (sa, rest) = rest.split_at_mut(hi + 1);
-    let (sb, rest) = rest.split_at_mut(hi + 1);
-    let (z1, tail) = rest.split_at_mut(2 * (hi + 1));
+    let (z0, rest) = scratch.split_at_mut(2 * low_len);
+    let (z2, rest) = rest.split_at_mut(2 * high_len);
+    let (lhs_sum, rest) = rest.split_at_mut(high_len + 1);
+    let (rhs_sum, rest) = rest.split_at_mut(high_len + 1);
+    let (z1, tail) = rest.split_at_mut(2 * (high_len + 1));
 
-    for v in z0.iter_mut() { *v = L::ZERO; }
-    for v in z2.iter_mut() { *v = L::ZERO; }
-    for v in z1.iter_mut() { *v = L::ZERO; }
+    for slot in z0.iter_mut() { *slot = L::ZERO; }
+    for slot in z2.iter_mut() { *slot = L::ZERO; }
+    for slot in z1.iter_mut() { *slot = L::ZERO; }
 
-    karatsuba_rec_limb::<L>(a_lo, b_lo, z0, tail, threshold);
-    karatsuba_rec_limb_unbalanced::<L>(a_hi, b_hi, z2, tail, threshold);
+    karatsuba_rec_limb::<L>(lhs_lo, rhs_lo, z0, tail, threshold);
+    karatsuba_rec_limb_unbalanced::<L>(lhs_hi, rhs_hi, z2, tail, threshold);
 
-    for v in sa.iter_mut() { *v = L::ZERO; }
-    for v in sb.iter_mut() { *v = L::ZERO; }
-    sa[..h].copy_from_slice(a_lo);
-    sb[..h].copy_from_slice(b_lo);
-    let _ = limb_add_assign::<L>(sa, a_hi);
-    let _ = limb_add_assign::<L>(sb, b_hi);
+    for slot in lhs_sum.iter_mut() { *slot = L::ZERO; }
+    for slot in rhs_sum.iter_mut() { *slot = L::ZERO; }
+    lhs_sum[..low_len].copy_from_slice(lhs_lo);
+    rhs_sum[..low_len].copy_from_slice(rhs_lo);
+    let _ = limb_add_assign::<L>(lhs_sum, lhs_hi);
+    let _ = limb_add_assign::<L>(rhs_sum, rhs_hi);
 
-    karatsuba_rec_limb_unbalanced::<L>(sa, sb, z1, tail, threshold);
+    karatsuba_rec_limb_unbalanced::<L>(lhs_sum, rhs_sum, z1, tail, threshold);
     let _ = limb_sub_assign::<L>(z1, z0);
     let _ = limb_sub_assign::<L>(z1, z2);
 
     out[..z0.len()].copy_from_slice(z0);
-    let _ = limb_add_assign::<L>(&mut out[2 * h..], z2);
-    let _ = limb_add_assign::<L>(&mut out[h..], z1);
+    let _ = limb_add_assign::<L>(&mut out[2 * low_len..], z2);
+    let _ = limb_add_assign::<L>(&mut out[low_len..], z1);
 }

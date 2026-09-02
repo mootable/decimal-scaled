@@ -14,7 +14,7 @@
 //!   at s115 (+1.01% Tang). Bisect at s58 (midpoint s0..s115) to confirm Tang
 //!   never WINS there, only ties.
 //!
-//! Validity wall (bit-identical to Series across the operand spread × all six
+//! Validity wall (bit-identical to Series across the operand spread × all eight
 //! modes) applies as in the main bench.
 //!
 //! Run with:
@@ -32,13 +32,15 @@ mod ab_microbench;
 use ab_microbench::{compare_all, micro_criterion};
 
 const MODE: RoundingMode = RoundingMode::HalfToEven;
-const ALL_MODES: [RoundingMode; 6] = [
+const ALL_MODES: [RoundingMode; 8] = [
     RoundingMode::HalfToEven,
     RoundingMode::HalfAwayFromZero,
     RoundingMode::HalfTowardZero,
     RoundingMode::Trunc,
     RoundingMode::Floor,
     RoundingMode::Ceiling,
+    RoundingMode::AwayFromZero,
+    RoundingMode::ZeroFiveUp,
 ];
 
 /// `acc = acc * m + add`, in place across the little-endian limb array.

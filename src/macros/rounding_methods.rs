@@ -24,11 +24,11 @@ macro_rules! decl_decimal_rounding_methods {
             #[inline]
             #[must_use]
             pub fn round(self) -> Self {
-                let m = Self::multiplier();
-                // `m` (= 10^SCALE) is positive, so `>> 1` is `m / 2`.
-                let half = m >> 1u32;
+                let multiplier = Self::multiplier();
+                // `multiplier` (= 10^SCALE) is positive, so `>> 1` halves it.
+                let half = multiplier >> 1u32;
                 let bias = if self.0.is_negative() { -half } else { half };
-                Self((self.0 + bias) / m * m)
+                Self((self.0 + bias) / multiplier * multiplier)
             }
         }
     };
@@ -42,10 +42,10 @@ macro_rules! decl_decimal_rounding_methods {
             #[inline]
             #[must_use]
             pub fn round(self) -> Self {
-                let m = Self::multiplier();
-                let half = m / 2;
+                let multiplier = Self::multiplier();
+                let half = multiplier / 2;
                 let bias = if self.0 >= 0 { half } else { -half };
-                Self((self.0 + bias) / m * m)
+                Self((self.0 + bias) / multiplier * multiplier)
             }
         }
     };
@@ -58,8 +58,8 @@ macro_rules! decl_decimal_rounding_methods {
             #[inline]
             #[must_use]
             pub fn floor(self) -> Self {
-                let m = Self::multiplier();
-                Self(self.0.div_euclid(m) * m)
+                let multiplier = Self::multiplier();
+                Self(self.0.div_euclid(multiplier) * multiplier)
             }
 
             /// Smallest integer multiple of `ONE` greater than or equal
@@ -67,24 +67,24 @@ macro_rules! decl_decimal_rounding_methods {
             #[inline]
             #[must_use]
             pub fn ceil(self) -> Self {
-                let m = Self::multiplier();
-                Self(-((-self.0).div_euclid(m)) * m)
+                let multiplier = Self::multiplier();
+                Self(-((-self.0).div_euclid(multiplier)) * multiplier)
             }
 
             /// Drop the fractional part (toward zero).
             #[inline]
             #[must_use]
             pub fn trunc(self) -> Self {
-                let m = Self::multiplier();
-                Self(self.0 / m * m)
+                let multiplier = Self::multiplier();
+                Self(self.0 / multiplier * multiplier)
             }
 
             /// Return only the fractional part: `self - self.trunc()`.
             #[inline]
             #[must_use]
             pub fn fract(self) -> Self {
-                let m = Self::multiplier();
-                Self(self.0 - (self.0 / m * m))
+                let multiplier = Self::multiplier();
+                Self(self.0 - (self.0 / multiplier * multiplier))
             }
         }
     };

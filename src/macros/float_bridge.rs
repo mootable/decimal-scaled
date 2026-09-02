@@ -54,8 +54,8 @@ macro_rules! decl_decimal_float_bridge {
                 if value.is_infinite() {
                     return if value > 0.0 { Self::MAX } else { Self::MIN };
                 }
-                let mult_f64: f64 = Self::multiplier().as_f64();
-                let scaled = value * mult_f64;
+                let multiplier_f64: f64 = Self::multiplier().as_f64();
+                let scaled = value * multiplier_f64;
                 let storage_max_f64: f64 = <$Storage>::MAX.as_f64();
                 let storage_min_f64: f64 = <$Storage>::MIN.as_f64();
                 if scaled >= storage_max_f64 {
@@ -83,6 +83,12 @@ macro_rules! decl_decimal_float_bridge {
                     $crate::support::rounding::RoundingMode::Ceiling => {
                         $crate::support::rounding::ceil_f64(scaled)
                     }
+                    $crate::support::rounding::RoundingMode::AwayFromZero => {
+                        $crate::support::rounding::away_from_zero_f64(scaled)
+                    }
+                    $crate::support::rounding::RoundingMode::ZeroFiveUp => {
+                        $crate::support::rounding::zero_five_up_f64(scaled)
+                    }
                 };
                 Self(<$Storage>::from_f64(rounded))
             }
@@ -94,8 +100,8 @@ macro_rules! decl_decimal_float_bridge {
             #[must_use]
             pub fn to_f64(self) -> f64 {
                 let raw_f64: f64 = self.0.as_f64();
-                let mult_f64: f64 = Self::multiplier().as_f64();
-                raw_f64 / mult_f64
+                let multiplier_f64: f64 = Self::multiplier().as_f64();
+                raw_f64 / multiplier_f64
             }
 
             /// Converts to `f32` via `f64`, then narrows.

@@ -5,6 +5,505 @@ All notable changes to `decimal-scaled` are documented here.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] — 2026-09-02
+
+An API release, non-breaking for callers. Operators now work between
+decimals of different storage width and different `SCALE`; a new
+`requantize` moves both the width and the scale axis in one call; and the
+scale-only operation takes the name the decimal arithmetic specification
+uses for it — `quantize`. The former `rescale` spellings remain as
+deprecated aliases. Two functions join the transcendental surface,
+`log1p` and `expm1`, both correctly rounded at every width and scale, and
+the two remaining rounding modes of the decimal arithmetic specification
+join `RoundingMode`, completing it against that specification at eight.
+
+Code that *implements* `DynDecimal` or `DecimalTranscendental` outside the
+crate does need an update — see **Breaking — for trait implementors only**
+at the end of this section.
+
+### Added
+
+- **Cross-width and cross-scale operators.** `Add`, `Sub`, `Mul`, `Div`,
+  `Rem` and their compound-assignment forms are implemented between
+  every pair of decimal widths, at any pair of `SCALE`s. The result
+  takes the **wider** storage and the **left** operand's scale, so the
+  type of `a + b` is fixed and predictable; a declared output type the
+  operator cannot produce is a compile error rather than a silently
+  different scale. Narrowing compound assignment (`narrow op= wide`)
+  computes at the wider width and panics on overflow, matching the
+  crate's existing overflow contract.
+- **`requantize` / `requantize_with`** — change storage width and
+  `SCALE` in a single call, in either direction, to any width and any
+  scale. The target is inferred from the binding
+  (`let r: D38<6> = a.requantize();`), so a call site never spells a
+  limb count. The two steps are ordered by direction — widen before a
+  scale-up, scale down before narrowing — so a value the target width
+  can hold does not overflow on the way there. Overflow panics with the
+  crate's standard wording.
+- **Public `log1p`.** `log1p(t) = ln(1 + t)`, domain `t > -1`, correctly
+  rounded at every width and scale, with the full surface — `log1p_strict`,
+  `log1p_strict_with`, `log1p_approx`, `log1p_approx_with`, the `_fast`
+  pair, and `DecimalTranscendental` entries. Provided for API parity and
+  standards conformance: at fixed point it is *equivalent* to `ln(1 + t)` at
+  the same scale, **not more accurate** — `1 + t` is exactly representable,
+  so there is no cancellation to avoid, unlike binary floating point.
+- **Public `expm1`.** `expm1(x) = e^x - 1`, total over the argument,
+  correctly rounded at every width and scale, with the same full surface —
+  `expm1_strict`, `expm1_strict_with`, `expm1_approx`, `expm1_approx_with`,
+  the `_fast` pair, and `DecimalTranscendental` entries.
+
+  Unlike `log1p`, this one is not merely parity. **`Trunc` does not commute
+  with the `- 1`**, so on the negative half `exp(x) - 1` is a genuinely wrong
+  answer rather than a slower one: `Trunc` rounds toward zero, and for
+  `x < 0` the subtraction crosses zero — `e^x` lies in `(0, 1)` and has its
+  magnitude rounded *down*, while `expm1(x) < 0` is rounded *up* — leaving
+  the two-step form one ULP out. `Floor`, `Ceiling` and the nearest modes
+  commute, since they are translations by a grid point; `Trunc` does not.
+
+  It also reaches slightly further than `exp`: the `- 1` is applied at the
+  working scale, ahead of the range check, so the domain is
+  `x <= ln(1 + MAX)` against `exp`'s `x <= ln(MAX)` — a band `ln(1 + 1/MAX)`
+  wide, a few hundredths of an argument unit.
+
+- **`checked_expm1_strict` and `checked_log1p_strict`** — the
+  `Option`-returning siblings, so the two new functions match the surface
+  every other strict transcendental carries.
+
+  **`log1p`'s is the one that matters.** Its domain genuinely ends at
+  `t > -1` and the strict form panics below that, so until now a caller who
+  could not guarantee the domain in advance had no non-panicking route to the
+  function at all. The checked form returns `None` exactly at that wall and a
+  bit-identical `Some` everywhere else — and it is a *complete* guarantee, not
+  a partial one, because no out-of-range case exists: `ln(1 + t)` is bounded by
+  the storage range wherever `1 + t` is representable.
+
+  **`expm1`'s completes the surface without adding a guarantee.** It is total
+  over its argument, so there is no domain wall to check, and its overflow seam
+  is not threaded — an out-of-range `expm1` still panics, and the checked form
+  returns `Some` whenever the default returns at all. That is the same gap the
+  existing wide-tier notes record for `ln`, `log` and `exp`; threading it is
+  separate work.
+
+- **The two missing GDA rounding modes — `AwayFromZero` and `ZeroFiveUp`.**
+  The crate implemented six of the decimal arithmetic specification's eight
+  rounding modes; these are the other two, so `RoundingMode` is now complete
+  against that specification. Both are accepted everywhere a mode is —
+  every `*_with` method, the quantize surface, and the crate-wide default
+  feature flags — and both are covered by the golden gate at every
+  band-edge `(width, scale)` cell.
+
+  - **`AwayFromZero`** (GDA `round-up`) rounds away from zero whenever
+    anything was discarded, the exact mirror of `Trunc`. `0.1 -> 1`,
+    `-0.1 -> -1`, and an exact value is never moved.
+  - **`ZeroFiveUp`** (GDA `round-05up`) rounds away from zero *iff* the
+    last retained digit of the toward-zero result is `0` or `5`, and
+    truncates otherwise — so `0.7 -> 1` and `5.7 -> 6`, but `1.7 -> 1` and
+    `4.7 -> 4`. It is indifferent to *how much* was discarded, which is
+    the point: reserving `0` and `5` as the only final digits that can
+    absorb a remainder means a later round to one fewer digit never meets
+    a half-way tie that the first rounding manufactured. This is the
+    "round for reround" rule, and it is the reason the mode looks
+    arbitrary in isolation.
+
+  The golden surface consequently grew from six modes to eight — a third
+  more graded rows per cell, at 96,159,960 checks.
+
+### Changed
+
+- **`rescale` is now `quantize`.** The scale-only operation is renamed
+  to `quantize` / `quantize_with` on every decimal width, and
+  `with_scale` delegates to it. This is the name the decimal arithmetic
+  specification uses; that specification marks `rescale` as its
+  deprecated spelling. Behaviour is unchanged — the rounding logic is
+  byte-identical, only the name moved.
+- **`DynDecimal::rescale_to` is now `quantize_to`.** The
+  runtime-polymorphic facade follows the same rename, as
+  `quantize_to` / `quantize_to_with`. These are the trait's required
+  methods; the former names remain as deprecated provided methods that
+  delegate to them. Callers are unaffected — but code implementing
+  `DynDecimal` outside the crate now implements the new names.
+- The scale-up overflow panic message names `quantize` rather than
+  `rescale`.
+
+- **The golden oracle fetched values by rounding instead of truncating, and
+  six `exp` answers were wrong because of it.** This affects
+  `decimal-scaled-golden` — how every golden answer is produced — so it is
+  worth reading even if you only consume the published set.
+
+  An oracle value is defined as the true value **truncated** toward zero to
+  the generation depth plus two guard digits. The `decimal` adapter instead
+  computed at a working precision under half-even rounding and truncated only
+  afterwards. Where a value sits just under a storage grid line its digits run
+  9 from the stored depth downward, and when the working precision landed
+  inside that run the rounding carried *up past the stored depth*: `…4|99`
+  became `…5|00`. Both guard digits are destroyed at once — and the same carry
+  manufactures the run of zeros that the termination check reads as "this
+  value terminated", so a transcendental value was simultaneously recorded as
+  exact. The corrected answers are for `exp` at `-1e-306`, `-1e-461`,
+  `-1e-462`, `-1e-615`, `-1e-616` and `-3e-280`.
+
+  Three consequences, all now closed:
+
+  - **One fetch contract, shared by every oracle.** Fetch to depth + guard,
+    truncated toward zero; an exact value that terminates shorter keeps its
+    own shorter length. `decimal`, `mpmath` and `flint` had carried
+    byte-identical copies of this logic and `mpfr`/`sympy` a stripped one with
+    no guard window at all — six copies of one algorithm, which is what let a
+    generator and one of its validators fail identically and read as
+    agreement. Each adapter now supplies only a scaled floor in its own
+    numeric type; everything after that is shared.
+  - **`flint`/Arb generates.** Only rigorous intervals can *pin* a truncation;
+    a point value behind a fixed window can merely approximate one, and that
+    limitation is exactly what produced the wrong rows. The per-function
+    generator table is gone. (`rem` stays on `fraction`, which is exact — the
+    flint adapter implements no `rem`.)
+  - **A validator confirms within one unit at the last guard digit**, down
+    from two. All oracles floor the same value at the same depth, so the only
+    honest difference is an internal error straddling the truncation boundary,
+    worth at most one unit — the bound now follows from the contract rather
+    than from observed noise. `flint` had in fact dissented by exactly one
+    unit on all six rows from the day they were generated; the old tolerance
+    accepted it, and the annotation blamed it on binary-vs-decimal radix. Line
+    comments now record which validator differed and by how much, and no
+    longer offer a cause.
+
+- **`DynDecimal` now formats without allocating.** The trait requires
+  `core::fmt::Display`, so `{}` works directly on a `dyn DynDecimal` and the
+  caller chooses whether to allocate.
+
+### Fixed
+
+- **`ln` returned the nearest-mode answer under `Ceiling` near `x = 1`**
+  (present since 0.5.0). At D616<590>, D616<615> and D924<693>,
+  `ln_strict_with(Ceiling)` gave the `HalfToEven` result. The near-one
+  guard tested only the *tangent* bracket — whether the result equals the
+  linear term `δ = x - 1`. For arguments where `δ²/2` happens to be an
+  exact multiple of one ULP, the value instead lands on the *parabola*
+  point `δ - δ²/2`, a different grid point, so the guard did not fire; the
+  deciding cubic then sits at depth ~3·SCALE/2, past the Ziv walker's
+  reach, and the kernel treats the value as exactly on the grid.
+
+  It is one-sided for a reason worth recording: since
+  `d/du [ln(1+u) - u + u²/2] = u²/(1+u)` is strictly positive and vanishes
+  at `u = 0`, the true value lies strictly *above* the parabola for
+  `x > 1` and strictly *below* it for `x < 1`. So a value landing on the
+  parabola leaves `Floor`, `Trunc` and the nearest modes accidentally
+  correct, and only `Ceiling` wrong.
+
+  Both brackets now live in one generic kernel, and the test is an exact
+  integer comparison evaluated at double width — `δ²` genuinely overflows
+  a single width at high scales, so a single-width check would pass the
+  cells that exposed the bug and fail wider members of the same family.
+  Not fixed by raising the walker cap.
+- **`log1p` sub-resolution directed rounding near `t = 0`.** For `t` at one
+  LSB the deficit `t²/2` falls below the Ziv precision horizon, so the walker
+  saw a zero residual and `Floor` returned one LSB high (reproduced at
+  D1232<1231>). Resolved analytically, mirroring how the Tang `ln` path
+  handles the same situation near 1 — not by raising the walker cap.
+  `log1p` carried the **same** too-narrow tangent-only guard as `ln` above,
+  so the parabola case reached it too; both are now faces over the shared
+  kernel and were fixed together.
+- **`log1p` directed rounding in the artanh band.** Separate from the
+  near-zero case above, and larger: 52 rows across five cells returned the
+  grid point under `Floor` and `Trunc` where the true value sits strictly
+  below it.
+
+  The guard that should have caught them could not. It tagged the result's
+  side only when the working value was *exact*, and exactness required `u²`
+  to be exact — but `u` is a rounded quotient whose square does not divide
+  `10^w`, so a single contributing series term was enough to defeat it. The
+  guard could therefore only ever fire when the artanh series contributed
+  **no** terms at all. Every failing argument arrived untagged for that
+  reason, not because a side had been computed wrongly.
+
+  Two stages replace it. Where each rounding's **direction** — not merely its
+  exactness — is unanimous and agrees with the neglected tail, no cancellation
+  between error contributions is possible and the side is proved. Unanimity is
+  the *precondition* of that proof rather than a convenient observation: one
+  opposing term makes the answer depend on magnitudes, which no argument over
+  signs can settle, so mixed directions fail closed. Where the directions
+  genuinely do oppose, the side is **measured** — the series is re-evaluated
+  deeper — instead of guessed or refused, at a depth derived from the width's
+  `BITS` and never from an argument or a cell.
+
+  The deeper evaluation runs only where its answer can be consulted. The
+  walker reads the tag at an exactly-zero residual and at an exact half, and
+  nowhere else — everywhere else the residual decides and the sign is
+  discarded unread — so the probe is skipped wherever it would be thrown
+  away. Verified as a pure laziness change by identical checksums over 6018
+  results, which differ against a build with no probe at all, confirming the
+  mechanism is not merely inert.
+
+  As with `ln` above, not fixed by raising the Ziv walker's cap: that cap is
+  co-designed with the generated constant tables, and lifting it lets a kernel
+  request a table entry that does not exist — a panic in narrow builds,
+  surfacing far from the change. `artanh` needs only `10^w` and touches no
+  per-scale table, which is why the deeper evaluation is available to it.
+- **`expm1` mis-rounded at the wide tiers, in the directed modes and in
+  `HalfToEven`.** The series can land exactly on a storage grid point,
+  because `x^j / j!` is exact whenever the argument supplies the odd primes
+  in `j!`. The walker then read a zero residual, took the value to be
+  exactly representable, and returned that grid point in every mode — so
+  whichever mode needed to step off it got its neighbour's answer instead.
+
+  The kernel now reports the neglected tail's side — above or below — for
+  each probe, and the strict walker rounds from that rather than inferring
+  it from the residual. The side is claimed only where it can be *proved*;
+  anywhere it cannot, the walker keeps its ordinary escalation, so an
+  unprovable case fails closed rather than guessing.
+
+  What must be proved is that the **accumulated** error is exactly zero,
+  not that each term is individually exact. Per-term exactness is
+  sufficient but not necessary, and the difference is not academic: the
+  last remaining failures were arguments where the third and fourth terms'
+  error contributions cancel exactly (`+2/3` and `-2/3`), leaving the sum
+  exact though neither division is. The error is carried as an exact
+  rational, and every case it cannot represent reports "unproved".
+
+  This rule is available to `expm1` only because its series is seeded with
+  the exact input rather than a quotient. `log1p` opens with a divide that
+  is provably never exact for the affected family, so it needed the
+  different rule described above.
+- **`sin` and `cos` mis-rounded at tiny arguments with more than one
+  significant digit** (present since 0.5.0). The directed adjust for the
+  tiny-`x` band named the deciding term with a digit-count formula derived
+  from the argument's exponent. That formula is blind to the *significand*:
+  it is correct for a single-digit argument and wrong as soon as the
+  argument has more digits than one.
+
+  At `x = 3e-153 + 1e-252` and `SCALE = 461`, the cubic term carries
+  `450 + 4.5e-97`. The `4.5e-97` is sub-LSB imprecision — below the last
+  stored digit, so the walker cannot see it, but **207 digits shallower**
+  than the term the formula names, so the formula does not account for it
+  either. It falls in the gap between the two. Worse, its sign is the sign
+  of the significand's cube, so it **flips with the argument's last
+  significant digit**: `3e-153 - 1e-252` has the same exponent, the same
+  term index, and the opposite correct answer.
+
+  The replacement carries no closed-form claim at all. Consecutive partial
+  sums of an alternating series with strictly decreasing terms straddle the
+  true value, so the pair *brackets* the answer without anyone having to say
+  how deep the deciding digit sits — there is no depth claim left to be
+  wrong about. One generic kernel serves `sin`, `cos`, `atan` and `asinh`,
+  each supplying its own term-ratio recurrence. `tan` and `asin` are
+  deliberately excluded: their Taylor coefficients are all positive, so
+  consecutive partial sums approach from one side instead of straddling and
+  the bracket's precondition genuinely fails; they keep the existing path,
+  where all-positive coefficients make the sign unconditional.
+
+  It went unfound for a release because every adversarial input tried
+  against this band had a single-digit significand, and reproducing it needs
+  roughly 47 significant digits. The golden lead now carries the
+  multi-digit family.
+
+  `atan2` joins the same kernel. It could not simply reuse the storage face —
+  its call sites pass the *result* as the argument, so a test posed on the
+  computed value reasons in a circle. Posing the bracket on the exact rational
+  `y/x` removes the circularity: the `10^SCALE` cancels, so the two setup
+  quantities are integer divisions that keep numerator and denominator paired
+  and never form the ratio itself. No behaviour is expected to change there —
+  the bracket agrees with the previous parity rule wherever parity was right,
+  and can differ only where parity was wrong, which needs a tiny argument
+  whose `y/x` carries a multi-digit significand landing on a grid point. The
+  value is that the path is now proved rather than parity-dependent.
+
+  The bracket's own error bound is carried exactly rather than assumed. An
+  earlier form counted only the two truncations per step and missed that the
+  dominant loss is amplified by the term it multiplies — bounded by that
+  term's own magnitude, which on the first step is the argument itself. The
+  answers it produced were correct, but on a relation between the work width
+  and the scale that nothing checked. The bound is now computed and tested at
+  run time, and fails closed rather than trusting the width table.
+- **`exp` mis-rounded negative arguments in the directed modes**
+  (present since 0.5.0). The wide path reached the Ziv walker's unresolved
+  endgame under a blanket assertion — that the sub-resolution tail always
+  moves the magnitude *away* from zero. That is sound for `x > 0`, where
+  every Taylor term is positive, and backwards for `x < 0`, where the series
+  alternates. 48 rows across D924<900, 923> and D1232<924, 1200, 1231>,
+  identical under `Ceiling`, `Floor` and `Trunc`.
+
+  It is the same shape as the four above — a claim about which side the
+  neglected tail falls on, asserted rather than proved — and it was the
+  hardest of them to see, because the grading harness had made the same
+  assumption independently: a zero residual at full precision was mapped to
+  a positive hidden tail, which is bit-for-bit the verdict the kernel
+  produced, so oracle and defect agreed and the gate stayed green.
+
+  The walker's endgame now reads a per-probe side, and the kernel supplies
+  one only where it can be proved. `try_exp_fixed` cannot: it runs a fixed
+  number of rounded divides keyed on the working scale — 61 at D1232<1231>,
+  paid even by `exp(-1e-430)` — each up to half a working unit with its
+  direction untracked, while the tail being reported on is sub-unit, so any
+  side from that path would be another assertion. Where the direct series
+  pays for itself, `exp` is instead evaluated as `1 + expm1(v)`: the `1` is
+  `10^w` exactly, so the addition is exact and the side transfers unchanged
+  from `expm1`'s rule, which already fails closed. Everywhere else the value
+  is bit-identical to before. The choice between them is a cost gate, not a
+  validity wall — both kernels are correct at every argument it sees, so a
+  mis-estimate costs speed and never accuracy.
+- **`asinh` panicked at D924 and D1232** — a regression this branch
+  introduced and fixed before release, not a defect in 0.5.0. The tiny-`x`
+  bracket added above divided through the width-erased slice engines, whose
+  normalisation scratch is sized from a build-max constant derived from the
+  *storage*-scaled work widths. That constant never accounted for the AGM
+  work integer, and the `asinh` face instantiates the bracket at exactly
+  that integer — `Int<192>` at D924, `Int<256>` at D1232 — so the dividend
+  ran off the end of a 258-limb buffer. 5880 panics across 33 cells, no
+  wrong values.
+
+  Every divide in the kernel now takes the divide matcher's own verdict and
+  calls the chosen engine's caller-supplied-scratch door, sized exactly from
+  the width in hand — the pattern the reciprocal and widening-divide paths
+  already use. Worth recording rather than quietly repairing, for two
+  reasons: a per-diff review had passed the offending call, and it was the
+  full-surface gate that caught it, which is the argument for running that
+  gate on every merge rather than on the ones that look risky.
+- **`FromStr` rejected exactly-representable trailing zeros.** `"1.00"` at
+  `SCALE = 0` returned `ParseError::OverlongFractional`, as did `"2.0"`,
+  `"-1.0"`, `"0.0"` and every literal whose digits past `SCALE` are all
+  zeros — although each is exact and round-trips losing nothing. The check
+  counted raw fractional characters where it should count *significant*
+  ones; excess zeros are now trimmed before the width check. This matches
+  the representability rule the golden harness already applies and the
+  `dec!` macro's existing all-zeros test. Genuine precision loss is still
+  rejected — `"1.05"` and `"1.050"` at `SCALE = 0`, `"1.55"` at `SCALE = 1`.
+- **Golden validator: an unsound oracle could veto a sound vector.** A
+  validator that *cannot represent* an input abstains harmlessly, but one that
+  computes a wrong value drops the whole line — so it could discard a vector
+  that the reliable oracles agreed on, leaving a silent hole in coverage
+  exactly at the hardest inputs. It was the `mpmath` validator doing this near
+  `log1p`'s `t = -1` pole, `atanh`'s endpoints and `acosh` at 1 — but the
+  cause was *ours*, not the library's: this repo's mpmath adapter budgeted
+  working precision from the **result's** magnitude with no term for the
+  condition number, so at `1 + t = 1e-70` it sized against
+  `ln(1e-70) ~= -161` — three integer digits — while the derivative
+  `1 / (1 + t)` destroyed seventy. The adapter now sizes by the worse of the
+  result's magnitude and `A = log10 |x . grad f(x)|`, the digits the function
+  itself destroys; the same latent defect affected `sin`/`cos`/`tan` of a
+  large argument, where `A = log10|x|` is exactly the range-reduction cost.
+  A per-function `VALIDATOR_EXCLUDE` facility remains for a genuinely
+  non-viable validator, but it is now empty.
+
+  *(Oracle-only — this is the test harness that grades the crate, not shipped
+  code. No golden value changed: all 4149 `atanh` and 4302 `acosh` committed
+  lines revalidate identically.)*
+
+### Internal
+
+- **`abs` moved onto the `BigInt` trait**, replacing four copies of the
+  same three-line function — two free functions in separate algorithm
+  modules, and one emitted per tier by a macro, so the per-tier copies
+  scaled with the width list rather than staying at one. No behaviour
+  changes; the trait method is what every caller now reaches.
+- The `expm1` and `log1p` public-surface tests moved into the
+  `decimal-scale-test` crate, where the rest of the public-API coverage
+  lives. They had been the only `tests.rs` files under `src/algos/`, a
+  third layout no other module used. The few cases that genuinely need
+  crate-internal items stay behind as inline `#[cfg(test)]` blocks, the
+  convention the rest of the tree follows.
+- **Every baked constant is now derived from a rigorous flint/Arb oracle.**
+  The generators previously took their digits from `mpmath`, which carries
+  no error bound: it computes to a working precision and reports what it
+  has, so the last few digits of a long constant are not guaranteed. The
+  constant and Tang-table generators now use flint's Arb intervals and emit
+  a digit only where the enclosure pins it — a value that cannot be pinned
+  escalates precision rather than being reported. Regeneration also turned
+  out to be **5× faster** (9.8s → 2.0s) at a higher working precision,
+  because Arb is a C library and `mpmath` is pure Python. flint is a
+  generator-side and CI dependency only; nothing from it ships, and the
+  crate's licensing is unchanged.
+- **A generator that no longer reproduces its output now fails the build.**
+  Two committed tables had silently diverged from the generators that
+  produce them. The mechanism is worth recording because it is structural
+  rather than careless: adding an enum variant breaks every exhaustive
+  `match` immediately and loudly, with a file and a line number, so the fix
+  lands in the file the compiler pointed at — which, for a generated table,
+  is the output rather than the generator. The "do not edit by hand" header
+  is a comment; the broken build is not. CI now re-runs every generator and
+  fails on any working-tree change (about 14s, behind a paths filter), and
+  the headers name the generator as where a match arm belongs.
+- **Parameters and locals named across the tree.** A sweep over 190 files
+  replaced single-letter and abbreviated bindings with names drawn from the
+  tree's own documentation. It corrected names that were actively
+  misleading rather than merely terse — an `r256` holding a 128-bit pair, a
+  `hi` used as a length beside a `hi` used as a value, an `a2`/`b2` pair
+  meaning opposite things within one file, and a Newton iteration binding a
+  limb to `s` where the surrounding derivation defines `s` as the root.
+  Rust has no named arguments, so parameter names are file-local and no
+  call site changed; the work is entirely legibility.
+- **Golden striping sized from measurement.** The comprehensive gate's
+  fan-out is now derived from measured per-stripe durations rather than
+  from tier width, which had over-provisioned the middle tiers while
+  leaving the widest one setting the critical path alone. Same total graded
+  rows, 85 jobs rather than 86, and roughly half the wall time.
+- **Dependencies.** `decimal_scaled_macros` moves to `syn` 3 — the only
+  dependency change that reaches a published crate. The remaining bumps
+  (`dashu-int` / `dashu-float` to 0.6, `decimal-rs` to 0.2, `g_math` to
+  0.5) are confined to the benchmark and golden-comparison members, which
+  are `publish = false` and reach no consumer.
+
+### Performance — findings
+
+- **Most of the timed surface is slower than 0.5.0, by single-digit
+  percentages in the median.** Of 1620 measured cells, 773 clear the
+  assessability floor (over 1% *and* over 10ns, below which the shared
+  runner cannot distinguish a change from jitter); of those, 611 regressed
+  and 162 improved. `ln` is the most affected op — 49 cells, median +8.5%,
+  worst +18.1% at D616<462> — followed by `to_degrees` / `to_radians`
+  around D115. The worst single cell is `div` at D57<42>, +23.4%. The
+  spread covers nearly every op and every width from D38 up, so it is not
+  one kernel.
+
+  Acknowledged rather than fixed in this release. The correctness work
+  above added a proved tail side to paths that previously asserted one,
+  and the two new rounding modes widened the single decision point every
+  kernel funnels through; the alternative was to keep a directed-rounding
+  defect to protect a benchmark. Tracked as issue #114, with the measured
+  table — the mechanism is not yet traced, and the numbers there are one
+  sampled `(operand, scale)` point per cell rather than a tier's whole
+  range, so it is a starting record and not a diagnosis.
+
+- **The wide-tier transcendentals got materially faster at scale 0.**
+  Every one of the fifteen largest improvements sits there, and they are
+  larger than the largest regressions: `tan` at D230<0> −28.5%, `cos` at
+  D462<0> −24.0%, `exp` at D462<0> −23.4%, with `sin`, `sinh`, `cosh` and
+  `exp` in the same band across D230 through D616. What produced them has
+  not been traced either, and whether it can be extended off scale 0 is
+  the same open question as the regression above.
+
+### Deprecated
+
+- **`rescale` / `rescale_with`** and **`DynDecimal::rescale_to` /
+  `rescale_to_with`** — renamed as above. They delegate unchanged and
+  are **removed in 0.6.0**.
+- **`DynDecimal::display`** — the trait now requires `Display`, so use `{}`
+  formatting instead. `display()` always allocates a `String`; the deprecated
+  method delegates unchanged and is **removed in 0.6.0**.
+
+### Breaking — for trait *implementors* only
+
+Callers are unaffected: every rename keeps a working deprecated alias, and
+everything else is additive. But `DynDecimal` and `DecimalTranscendental` are
+deliberately **not sealed** — they are extension points, and implementing them
+from outside the crate is the intent — so the following require an update to
+an external `impl`:
+
+- **`DynDecimal` gained a `Display` supertrait.** An external implementor must
+  also provide `Display`.
+- **`DynDecimal::quantize_to` / `quantize_to_with` are the required methods**;
+  `rescale_to` / `rescale_to_with` became deprecated *provided* methods.
+- **`DecimalTranscendental` gained four required `log1p_*` methods**, and
+  four required `expm1_*` methods. Neither could sensibly be a *provided*
+  method: a default body would have to compose the result from `ln`/`exp`,
+  and for `expm1` that composition is demonstrably wrong under `Trunc` on
+  the negative half (see Added). A default that is incorrect for one
+  rounding mode is worse than a required method.
+
+Accepted deliberately at this point in the pre-1.0 series, where Cargo treats
+all `0.5.x` as compatible. Future additions to either trait should prefer
+*provided* methods with default bodies, so an implementor is not forced to
+update every time a function is added.
+
 ## [0.5.0] — 2026-06-14
 
 An architecture release. Every decimal width is now backed by the

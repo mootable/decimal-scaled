@@ -56,6 +56,9 @@
 //! Parses canonical decimal literals. Accepted forms:
 //! - Integer-only: `42` parses as `42 * 10^SCALE`.
 //! - Decimal with up to `SCALE` fractional digits: `1.5`, `1.500`.
+//! - Excess fractional digits that are all zeros, since they carry no
+//! value: `1.00` and `1.000` parse at any scale — including `SCALE = 0`,
+//! where both are exactly `1`.
 //! - Optional sign prefix: `-` or `+`.
 //! - Bare zero: `0` or `0.0`.
 //!
@@ -63,7 +66,9 @@
 //! - Empty string: [`ParseError::Empty`].
 //! - Sign with no digits: [`ParseError::SignOnly`].
 //! - Redundant leading zeros (`01`, `00`): [`ParseError::LeadingZero`].
-//! - More than `SCALE` fractional digits: [`ParseError::OverlongFractional`].
+//! - More than `SCALE` *significant* fractional digits — i.e. digits past
+//! `SCALE` that are not all zeros, such as `1.05` at `SCALE = 0`:
+//! [`ParseError::OverlongFractional`].
 //! - Scientific notation (`1e3`): [`ParseError::ScientificNotation`].
 //! - Missing digits on either side of the point (`.5`, `5.`):
 //! [`ParseError::MissingDigits`].
@@ -122,8 +127,8 @@ where
     /// let sub = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_500_000_000_i128).unwrap());
     /// assert_eq!(format!("{sub:e}"), "1.5e-3");
     /// ```
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        format_exp::<N>(self.0, SCALE, false, f)
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        format_exp::<N>(self.0, SCALE, false, formatter)
     }
 }
 
@@ -147,8 +152,8 @@ where
     /// let v = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_500_000_000_000_i128).unwrap());
     /// assert_eq!(format!("{v:E}"), "1.5E0");
     /// ```
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        format_exp::<N>(self.0, SCALE, true, f)
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        format_exp::<N>(self.0, SCALE, true, formatter)
     }
 }
 
@@ -168,31 +173,31 @@ where
 fn format_exp<const N: usize>(
     value: Int<N>,
     scale: u32,
-    upper: bool,
-    f: &mut fmt::Formatter<'_>,
+    uppercase: bool,
+    formatter: &mut fmt::Formatter<'_>,
 ) -> fmt::Result
 where
     Limbs<N>: ComputeLimbs,
 {
-    let exp_char = if upper { 'E' } else { 'e' };
+    let exp_char = if uppercase { 'E' } else { 'e' };
     if value.is_zero() {
-        return write!(f, "0{exp_char}0");
+        return write!(formatter, "0{exp_char}0");
     }
     let negative = value.is_negative();
 
     // Decimal digits of the magnitude, MSB-first with no leading zeros,
     // written into the per-`N` formatting buffer (the identical extraction
     // path the integer `Display` impls take — pure stack, no heap).
-    let mag = *value.unsigned_abs().as_limbs();
+    let magnitude = *value.unsigned_abs().as_limbs();
     let mut buf = Limbs::<N>::digit_formatting_limbs_u8();
-    let digits = fmt_into::<N>(&mag, 10, true, buf.as_mut()).as_bytes();
-    let len = digits.len();
+    let digits = fmt_into::<N>(&magnitude, 10, true, buf.as_mut()).as_bytes();
+    let digit_count = digits.len();
 
     // The decimal exponent for the leading digit is `(len - 1) - scale`.
-    let exp: i32 = (len as i32 - 1) - scale as i32;
+    let exp: i32 = (digit_count as i32 - 1) - scale as i32;
 
     // Strip trailing zeros from the mantissa digit string.
-    let mut frac_end = len;
+    let mut frac_end = digit_count;
     while frac_end > 1 && digits[frac_end - 1] == b'0' {
         frac_end -= 1;
     }
@@ -200,15 +205,15 @@ where
     let mantissa_frac = &digits[1..frac_end];
 
     if negative {
-        f.write_str("-")?;
+        formatter.write_str("-")?;
     }
     if mantissa_frac.is_empty() {
         // Single-digit mantissa: emit without a decimal point.
-        write!(f, "{mantissa_int}{exp_char}{exp}")
+        write!(formatter, "{mantissa_int}{exp_char}{exp}")
     } else {
         // mantissa_frac contains only ASCII digit bytes; from_utf8 cannot fail.
         let frac_str = core::str::from_utf8(mantissa_frac).map_err(|_| fmt::Error)?;
-        write!(f, "{mantissa_int}.{frac_str}{exp_char}{exp}")
+        write!(formatter, "{mantissa_int}.{frac_str}{exp_char}{exp}")
     }
 }
 
@@ -231,21 +236,26 @@ pub(crate) struct ParseComponents<'a> {
 /// String-parsing front-end shared by every width.
 ///
 /// Validates and splits the input into sign / integer-digits / fractional-
-/// digits. The `SCALE` parameter is needed only to reject overlong fractional
-/// parts — no arithmetic happens here, so wide-tier callers can drive their
-/// own storage-typed accumulator without overflow risk.
+/// digits. The `SCALE` parameter is needed only to bound the fractional part:
+/// value-free trailing zeros past `SCALE` are trimmed off, and a fractional
+/// part still longer than `SCALE` after that is rejected as overlong. No
+/// arithmetic happens here, so wide-tier callers can drive their own
+/// storage-typed accumulator without overflow risk.
+///
+/// The returned `frac_str` is therefore never longer than `SCALE`, which the
+/// accumulators rely on when they zero-pad it back out to `SCALE` digits.
 ///
 /// # Precision
 ///
 /// Strict: integer-only string slicing; no arithmetic.
 pub(crate) fn parse_components<const SCALE: u32>(
-    s: &str,
+    input: &str,
 ) -> Result<ParseComponents<'_>, ParseError> {
-    if s.is_empty() {
+    if input.is_empty() {
         return Err(ParseError::Empty);
     }
 
-    let bytes = s.as_bytes();
+    let bytes = input.as_bytes();
     let mut idx = 0usize;
 
     // Consume an optional leading sign byte.
@@ -269,10 +279,10 @@ pub(crate) fn parse_components<const SCALE: u32>(
     // notation and invalid characters immediately.
     let mut dot_pos: Option<usize> = None;
     {
-        let mut i = idx;
-        while i < bytes.len() {
-            let c = bytes[i];
-            match c {
+        let mut scan_pos = idx;
+        while scan_pos < bytes.len() {
+            let byte = bytes[scan_pos];
+            match byte {
                 b'0'..=b'9' => {}
                 b'.' => {
                     if dot_pos.is_some() {
@@ -280,19 +290,19 @@ pub(crate) fn parse_components<const SCALE: u32>(
                         // missing-digit case.
                         return Err(ParseError::InvalidChar);
                     }
-                    dot_pos = Some(i);
+                    dot_pos = Some(scan_pos);
                 }
                 b'e' | b'E' => {
                     return Err(ParseError::ScientificNotation);
                 }
                 _ => return Err(ParseError::InvalidChar),
             }
-            i += 1;
+            scan_pos += 1;
         }
     }
 
-    let (int_str, frac_str) = match dot_pos {
-        Some(p) => (&bytes[idx..p], &bytes[p + 1..]),
+    let (int_str, mut frac_str) = match dot_pos {
+        Some(dot_index) => (&bytes[idx..dot_index], &bytes[dot_index + 1..]),
         None => (&bytes[idx..], &[][..]),
     };
 
@@ -310,7 +320,15 @@ pub(crate) fn parse_components<const SCALE: u32>(
         return Err(ParseError::LeadingZero);
     }
 
-    // More than SCALE fractional digits would lose precision on round-trip.
+    // Fractional digits past SCALE are acceptable when every one of them is
+    // a zero: a trailing zero carries no value, so `1.00` at SCALE = 0 is
+    // exactly `1` and round-trips losing nothing. Trim that excess — the
+    // accumulator pads back to SCALE, so the parsed value is unchanged, and
+    // it relies on `frac_str` never exceeding SCALE. Whatever remains past
+    // SCALE is a significant digit, i.e. a genuine loss of precision.
+    while frac_str.len() > SCALE as usize && frac_str.last() == Some(&b'0') {
+        frac_str = &frac_str[..frac_str.len() - 1];
+    }
     if frac_str.len() > SCALE as usize {
         return Err(ParseError::OverlongFractional);
     }

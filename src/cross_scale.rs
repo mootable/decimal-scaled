@@ -37,8 +37,8 @@ use crate::types::unified::D;
 /// `const fn` `max` for `u32`, usable inside a
 /// `generic_const_exprs` clause.
 #[inline]
-pub const fn max_const(a: u32, b: u32) -> u32 {
-    if a >= b { a } else { b }
+pub const fn max_const(lhs: u32, rhs: u32) -> u32 {
+    if lhs >= rhs { lhs } else { rhs }
 }
 
 /// Same-width cross-scale multiply. Returns a decimal at the wider
@@ -52,16 +52,16 @@ pub const fn max_const(a: u32, b: u32) -> u32 {
 /// let c = cross::mul(a, b); // D38<12>, value = 77
 /// ```
 #[inline]
-pub fn mul<W, const S1: u32, const S2: u32>(a: D<W, S1>, b: D<W, S2>) -> D<W, { max_const(S1, S2) }>
+pub fn mul<W, const S1: u32, const S2: u32>(lhs: D<W, S1>, rhs: D<W, S2>) -> D<W, { max_const(S1, S2) }>
 where
     W: Copy,
     D<W, S1>: WidenScale<W, S1, { max_const(S1, S2) }>,
     D<W, S2>: WidenScale<W, S2, { max_const(S1, S2) }>,
     D<W, { max_const(S1, S2) }>: core::ops::Mul<Output = D<W, { max_const(S1, S2) }>>,
 {
-    let a_t = <D<W, S1> as WidenScale<W, S1, { max_const(S1, S2) }>>::widen_scale(a);
-    let b_t = <D<W, S2> as WidenScale<W, S2, { max_const(S1, S2) }>>::widen_scale(b);
-    a_t * b_t
+    let lhs_at_target = <D<W, S1> as WidenScale<W, S1, { max_const(S1, S2) }>>::widen_scale(lhs);
+    let rhs_at_target = <D<W, S2> as WidenScale<W, S2, { max_const(S1, S2) }>>::widen_scale(rhs);
+    lhs_at_target * rhs_at_target
 }
 
 /// Like [`mul`] but with explicit rounding mode for the
@@ -70,8 +70,8 @@ where
 /// crate; rescaling to `max_const(S1, S2)` is exact for both inputs.
 #[inline]
 pub fn mul_with<W, const S1: u32, const S2: u32>(
-    a: D<W, S1>,
-    b: D<W, S2>,
+    lhs: D<W, S1>,
+    rhs: D<W, S2>,
     _mode: RoundingMode,
 ) -> D<W, { max_const(S1, S2) }>
 where
@@ -80,77 +80,77 @@ where
     D<W, S2>: WidenScale<W, S2, { max_const(S1, S2) }>,
     D<W, { max_const(S1, S2) }>: core::ops::Mul<Output = D<W, { max_const(S1, S2) }>>,
 {
-    mul(a, b)
+    mul(lhs, rhs)
 }
 
 /// Same-width cross-scale add.
 #[inline]
-pub fn add<W, const S1: u32, const S2: u32>(a: D<W, S1>, b: D<W, S2>) -> D<W, { max_const(S1, S2) }>
+pub fn add<W, const S1: u32, const S2: u32>(lhs: D<W, S1>, rhs: D<W, S2>) -> D<W, { max_const(S1, S2) }>
 where
     W: Copy,
     D<W, S1>: WidenScale<W, S1, { max_const(S1, S2) }>,
     D<W, S2>: WidenScale<W, S2, { max_const(S1, S2) }>,
     D<W, { max_const(S1, S2) }>: core::ops::Add<Output = D<W, { max_const(S1, S2) }>>,
 {
-    let a_t = <D<W, S1> as WidenScale<W, S1, { max_const(S1, S2) }>>::widen_scale(a);
-    let b_t = <D<W, S2> as WidenScale<W, S2, { max_const(S1, S2) }>>::widen_scale(b);
-    a_t + b_t
+    let lhs_at_target = <D<W, S1> as WidenScale<W, S1, { max_const(S1, S2) }>>::widen_scale(lhs);
+    let rhs_at_target = <D<W, S2> as WidenScale<W, S2, { max_const(S1, S2) }>>::widen_scale(rhs);
+    lhs_at_target + rhs_at_target
 }
 
 /// Same-width cross-scale subtract.
 #[inline]
-pub fn sub<W, const S1: u32, const S2: u32>(a: D<W, S1>, b: D<W, S2>) -> D<W, { max_const(S1, S2) }>
+pub fn sub<W, const S1: u32, const S2: u32>(lhs: D<W, S1>, rhs: D<W, S2>) -> D<W, { max_const(S1, S2) }>
 where
     W: Copy,
     D<W, S1>: WidenScale<W, S1, { max_const(S1, S2) }>,
     D<W, S2>: WidenScale<W, S2, { max_const(S1, S2) }>,
     D<W, { max_const(S1, S2) }>: core::ops::Sub<Output = D<W, { max_const(S1, S2) }>>,
 {
-    let a_t = <D<W, S1> as WidenScale<W, S1, { max_const(S1, S2) }>>::widen_scale(a);
-    let b_t = <D<W, S2> as WidenScale<W, S2, { max_const(S1, S2) }>>::widen_scale(b);
-    a_t - b_t
+    let lhs_at_target = <D<W, S1> as WidenScale<W, S1, { max_const(S1, S2) }>>::widen_scale(lhs);
+    let rhs_at_target = <D<W, S2> as WidenScale<W, S2, { max_const(S1, S2) }>>::widen_scale(rhs);
+    lhs_at_target - rhs_at_target
 }
 
 /// Same-width cross-scale divide.
 #[inline]
-pub fn div<W, const S1: u32, const S2: u32>(a: D<W, S1>, b: D<W, S2>) -> D<W, { max_const(S1, S2) }>
+pub fn div<W, const S1: u32, const S2: u32>(lhs: D<W, S1>, rhs: D<W, S2>) -> D<W, { max_const(S1, S2) }>
 where
     W: Copy,
     D<W, S1>: WidenScale<W, S1, { max_const(S1, S2) }>,
     D<W, S2>: WidenScale<W, S2, { max_const(S1, S2) }>,
     D<W, { max_const(S1, S2) }>: core::ops::Div<Output = D<W, { max_const(S1, S2) }>>,
 {
-    let a_t = <D<W, S1> as WidenScale<W, S1, { max_const(S1, S2) }>>::widen_scale(a);
-    let b_t = <D<W, S2> as WidenScale<W, S2, { max_const(S1, S2) }>>::widen_scale(b);
-    a_t / b_t
+    let lhs_at_target = <D<W, S1> as WidenScale<W, S1, { max_const(S1, S2) }>>::widen_scale(lhs);
+    let rhs_at_target = <D<W, S2> as WidenScale<W, S2, { max_const(S1, S2) }>>::widen_scale(rhs);
+    lhs_at_target / rhs_at_target
 }
 
 /// Same-width cross-scale remainder.
 #[inline]
-pub fn rem<W, const S1: u32, const S2: u32>(a: D<W, S1>, b: D<W, S2>) -> D<W, { max_const(S1, S2) }>
+pub fn rem<W, const S1: u32, const S2: u32>(lhs: D<W, S1>, rhs: D<W, S2>) -> D<W, { max_const(S1, S2) }>
 where
     W: Copy,
     D<W, S1>: WidenScale<W, S1, { max_const(S1, S2) }>,
     D<W, S2>: WidenScale<W, S2, { max_const(S1, S2) }>,
     D<W, { max_const(S1, S2) }>: core::ops::Rem<Output = D<W, { max_const(S1, S2) }>>,
 {
-    let a_t = <D<W, S1> as WidenScale<W, S1, { max_const(S1, S2) }>>::widen_scale(a);
-    let b_t = <D<W, S2> as WidenScale<W, S2, { max_const(S1, S2) }>>::widen_scale(b);
-    a_t % b_t
+    let lhs_at_target = <D<W, S1> as WidenScale<W, S1, { max_const(S1, S2) }>>::widen_scale(lhs);
+    let rhs_at_target = <D<W, S2> as WidenScale<W, S2, { max_const(S1, S2) }>>::widen_scale(rhs);
+    lhs_at_target % rhs_at_target
 }
 
 /// Trait shim: "widen the SCALE of a same-width decimal".
 ///
 /// Implemented for every concrete `(storage, source_scale,
 /// target_scale)` triple via a blanket impl that calls the per-width
-/// inherent `rescale_with`. Used only inside this module to keep the
+/// inherent `quantize_with`. Used only inside this module to keep the
 /// `generic_const_exprs` bounds clean.
 pub trait WidenScale<W, const S_FROM: u32, const S_TO: u32> {
     fn widen_scale(self) -> D<W, S_TO>;
 }
 
-// Implementations per concrete storage. Each width's `rescale_with`
-// is an inherent method (emitted by `decl_decimal_rescale!` on the
+// Implementations per concrete storage. Each width's `quantize_with`
+// is an inherent method (emitted by `decl_decimal_quantize!` on the
 // `D<Int<N>, SCALE>` alias), so we have to spell out the storage type
 // to dispatch. Every decimal tier is `Int<N>`-backed; the always-built
 // tiers are D18 (`Int<1>`) and D38 (`Int<2>`), the rest follow the
@@ -166,11 +166,11 @@ macro_rules! impl_widen_scale {
             fn widen_scale(self) -> D<$Storage, S_TO> {
                 // The math: `cross::mul` etc. always pick the
                 // MAXIMUM of (S_FROM, S_TO) so S_TO >= S_FROM by
-                // construction. The rescale-UP path is always exact;
+                // construction. The scale-UP path is always exact;
                 // rounding-mode is irrelevant. We still pass
-                // DEFAULT_ROUNDING_MODE so the rescale_with signature
+                // DEFAULT_ROUNDING_MODE so the quantize_with signature
                 // is satisfied.
-                <D<$Storage, S_FROM>>::rescale_with::<S_TO>(self, DEFAULT_ROUNDING_MODE)
+                <D<$Storage, S_FROM>>::quantize_with::<S_TO>(self, DEFAULT_ROUNDING_MODE)
             }
         }
     };

@@ -6,6 +6,7 @@
 
 mod arithmetic;
 mod bitwise;
+mod checked_transcendentals;
 mod constants;
 mod conversions;
 mod cross_scale;
@@ -13,14 +14,16 @@ mod display;
 mod dyn_facade;
 mod equalities;
 mod errors;
+mod expm1;
 mod fast_surface;
 mod foundation;
 mod int_methods;
+mod log1p;
 mod num_traits;
 mod parsing;
 mod pow;
 mod proc_macro;
-mod rescale;
+mod quantize;
 mod serde;
 mod tiers;
 mod traits;

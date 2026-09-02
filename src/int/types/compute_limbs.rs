@@ -237,20 +237,20 @@ pub(crate) enum LimbSize {
 }
 
 impl LimbSize {
-    /// The limb-width verdict for a kernel over `n` u64 limbs: `U128` when the
-    /// packing is exact (even `n` — two u64 fold into one u128, the wide-tier
-    /// win), else `U64`. A `const fn` so callers fold it in a `const { … }`
-    /// block per monomorphisation (the unchosen `match` arm is then dead-arm
-    /// eliminated, like any policy verdict).
+    /// The limb-width verdict for a kernel over `limb_count` u64 limbs:
+    /// `U128` when the packing is exact (an even count — two u64 fold into
+    /// one u128, the wide-tier win), else `U64`. A `const fn` so callers fold
+    /// it in a `const { … }` block per monomorphisation (the unchosen `match`
+    /// arm is then dead-arm eliminated, like any policy verdict).
     ///
     /// This is the limb-width axis as a verdict; the algorithm axis composes
     /// alongside it where a function also chooses *which* algorithm (a full
-    /// `Select<N>` carrying `(Algorithm, LimbSize)`). The even-`n` rule is the
-    /// correctness gate; a per-`(N, SCALE)` *perf* refinement (which even
+    /// `Select<N>` carrying `(Algorithm, LimbSize)`). The even-count rule is
+    /// the correctness gate; a per-`(N, SCALE)` *perf* refinement (which even
     /// widths actually win the u128 packing) is a microbench tuning follow-up.
     #[inline]
-    pub(crate) const fn for_packing(n: usize) -> Self {
-        if n.is_multiple_of(2) {
+    pub(crate) const fn for_packing(limb_count: usize) -> Self {
+        if limb_count.is_multiple_of(2) {
             LimbSize::U128
         } else {
             LimbSize::U64
@@ -289,14 +289,16 @@ pub(crate) trait Limb: Copy + PartialEq + Ord {
     fn overflowing_add(self, rhs: Self) -> (Self, bool);
     /// `self - rhs → (difference, borrow)`. Wraps on underflow.
     fn overflowing_sub(self, rhs: Self) -> (Self, bool);
-    /// `self + c1 + c2` — the schoolbook carry merge. The column bound
-    /// (`hi ≤ MAX − 1`, and `c1`/`c2` never both set) guarantees no overflow.
-    fn add_carries(self, c1: bool, c2: bool) -> Self;
-    /// `self << n` (`n < BITS`) — bits shifted past the top are dropped. Used
-    /// by the width-generic small-shift helpers (`×2`, `×4`, the `>>1` carry).
-    fn wrapping_shl(self, n: u32) -> Self;
-    /// `self >> n` (`n < BITS`) — logical (zero-fill) right shift.
-    fn wrapping_shr(self, n: u32) -> Self;
+    /// `self + carry1 + carry2` — the schoolbook carry merge. The column
+    /// bound (`hi ≤ MAX − 1`, and `carry1`/`carry2` never both set)
+    /// guarantees no overflow.
+    fn add_carries(self, carry1: bool, carry2: bool) -> Self;
+    /// `self << shift` (`shift < BITS`) — bits shifted past the top are
+    /// dropped. Used by the width-generic small-shift helpers (`×2`, `×4`,
+    /// the `>>1` carry).
+    fn wrapping_shl(self, shift: u32) -> Self;
+    /// `self >> shift` (`shift < BITS`) — logical (zero-fill) right shift.
+    fn wrapping_shr(self, shift: u32) -> Self;
 
     // Width-generic scratch fetch. Each forwards to the matching
     // [`ComputeLimbs`] per-element buffer for this limb type, so a
@@ -344,18 +346,18 @@ impl Limb for u64 {
     }
     #[inline]
     fn pack(src_u64: &[u64], dst: &mut [Self]) {
-        let h = dst.len();
-        dst.copy_from_slice(&src_u64[..h]);
+        let len = dst.len();
+        dst.copy_from_slice(&src_u64[..len]);
     }
     #[inline]
     fn unpack(src: &[Self], dst_u64: &mut [u64]) {
-        let h = src.len();
-        dst_u64[..h].copy_from_slice(src);
+        let len = src.len();
+        dst_u64[..len].copy_from_slice(src);
     }
     #[inline]
     fn widening_mul(self, rhs: Self) -> (Self, Self) {
-        let p = (self as u128) * (rhs as u128);
-        (p as u64, (p >> 64) as u64)
+        let product = (self as u128) * (rhs as u128);
+        (product as u64, (product >> 64) as u64)
     }
     #[inline]
     fn overflowing_add(self, rhs: Self) -> (Self, bool) {
@@ -366,16 +368,16 @@ impl Limb for u64 {
         u64::overflowing_sub(self, rhs)
     }
     #[inline]
-    fn add_carries(self, c1: bool, c2: bool) -> Self {
-        self.wrapping_add(c1 as u64).wrapping_add(c2 as u64)
+    fn add_carries(self, carry1: bool, carry2: bool) -> Self {
+        self.wrapping_add(carry1 as u64).wrapping_add(carry2 as u64)
     }
     #[inline]
-    fn wrapping_shl(self, n: u32) -> Self {
-        u64::wrapping_shl(self, n)
+    fn wrapping_shl(self, shift: u32) -> Self {
+        u64::wrapping_shl(self, shift)
     }
     #[inline]
-    fn wrapping_shr(self, n: u32) -> Self {
-        u64::wrapping_shr(self, n)
+    fn wrapping_shr(self, shift: u32) -> Self {
+        u64::wrapping_shr(self, shift)
     }
 
     type Single<I: ComputeLimbs> = I::SingleU64;
@@ -425,15 +427,15 @@ impl Limb for u128 {
     }
     #[inline]
     fn pack(src_u64: &[u64], dst: &mut [Self]) {
-        for (k, d) in dst.iter_mut().enumerate() {
-            *d = (src_u64[2 * k] as u128) | ((src_u64[2 * k + 1] as u128) << 64);
+        for (k, dst_limb) in dst.iter_mut().enumerate() {
+            *dst_limb = (src_u64[2 * k] as u128) | ((src_u64[2 * k + 1] as u128) << 64);
         }
     }
     #[inline]
     fn unpack(src: &[Self], dst_u64: &mut [u64]) {
-        for (k, &s) in src.iter().enumerate() {
-            dst_u64[2 * k] = s as u64;
-            dst_u64[2 * k + 1] = (s >> 64) as u64;
+        for (k, &src_limb) in src.iter().enumerate() {
+            dst_u64[2 * k] = src_limb as u64;
+            dst_u64[2 * k + 1] = (src_limb >> 64) as u64;
         }
     }
     #[inline]
@@ -449,8 +451,8 @@ impl Limb for u128 {
         let hl = a_hi * b_lo;
         let hh = a_hi * b_hi;
         let (mid, mid_carry) = lh.overflowing_add(hl);
-        let (low, c) = ll.overflowing_add(mid << 64);
-        let high = hh + (mid >> 64) + (c as u128) + ((mid_carry as u128) << 64);
+        let (low, low_carry) = ll.overflowing_add(mid << 64);
+        let high = hh + (mid >> 64) + (low_carry as u128) + ((mid_carry as u128) << 64);
         (low, high)
     }
     #[inline]
@@ -462,16 +464,16 @@ impl Limb for u128 {
         u128::overflowing_sub(self, rhs)
     }
     #[inline]
-    fn add_carries(self, c1: bool, c2: bool) -> Self {
-        self.wrapping_add(c1 as u128).wrapping_add(c2 as u128)
+    fn add_carries(self, carry1: bool, carry2: bool) -> Self {
+        self.wrapping_add(carry1 as u128).wrapping_add(carry2 as u128)
     }
     #[inline]
-    fn wrapping_shl(self, n: u32) -> Self {
-        u128::wrapping_shl(self, n)
+    fn wrapping_shl(self, shift: u32) -> Self {
+        u128::wrapping_shl(self, shift)
     }
     #[inline]
-    fn wrapping_shr(self, n: u32) -> Self {
-        u128::wrapping_shr(self, n)
+    fn wrapping_shr(self, shift: u32) -> Self {
+        u128::wrapping_shr(self, shift)
     }
 
     type Single<I: ComputeLimbs> = I::SingleU128;

@@ -26,7 +26,7 @@ bigdecimal = "0.4"
 dashu-float = "0.6"
 fastnum = { version = "0.7", default-features = false, features = ["std"] }
 decimal-rs = "0.2"
-g_math = { version = "0.4", features = ["balanced"] }
+g_math = { version = "0.5", features = ["balanced"] }
 
 [features]
 # Width-tier passthroughs onto the decimal-scaled subject (mirroring

@@ -86,14 +86,14 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
 /// Not `const fn`: matches the existing non-`const` `Neg` operator on
 /// `D<Int<N>, SCALE>`.
 #[inline]
-pub(crate) fn dispatch<const N: usize, const SCALE: u32>(a: Int<N>) -> Int<N> {
+pub(crate) fn dispatch<const N: usize, const SCALE: u32>(value: Int<N>) -> Int<N> {
     let algo = match const { select::<N, SCALE>() } {
-        Select::ByAlgorithm(a) => a,
+        Select::ByAlgorithm(algorithm) => algorithm,
         Select::ByValue(_) => Algorithm::IntLayer,
     };
     match algo {
         Algorithm::IntLayer | Algorithm::Schoolbook => {
-            crate::algos::neg::neg_int_layer::neg_int_layer(a)
+            crate::algos::neg::neg_int_layer::neg_int_layer(value)
         }
     }
 }

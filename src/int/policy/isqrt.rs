@@ -115,9 +115,9 @@ const fn select<const N: usize>() -> Select<N> {
 /// `N == 1` → `u64::isqrt`, `N == 2` → `u128::isqrt`. Both are single
 /// hardware instructions on modern ISAs.
 #[inline]
-pub(crate) fn isqrt_native<const N: usize>(x: Uint<N>) -> Uint<N> {
+pub(crate) fn isqrt_native<const N: usize>(radicand: Uint<N>) -> Uint<N> {
     let mut out = [0u64; N];
-    isqrt_mag_fixed::<N>(x.as_limbs(), &mut out);
+    isqrt_mag_fixed::<N>(radicand.as_limbs(), &mut out);
     Uint::<N>::from_limbs(out)
 }
 
@@ -127,9 +127,9 @@ pub(crate) fn isqrt_native<const N: usize>(x: Uint<N>) -> Uint<N> {
 /// [`crate::int::algos::isqrt::isqrt_newton::isqrt_newton`] for `N >= 3`: Newton
 /// iteration with a hardware-`f64::sqrt` seed over the u64 limbs.
 #[inline]
-pub(crate) fn isqrt_newton<const N: usize>(x: Uint<N>) -> Uint<N> {
+pub(crate) fn isqrt_newton<const N: usize>(radicand: Uint<N>) -> Uint<N> {
     let mut out = [0u64; N];
-    isqrt_mag_fixed::<N>(x.as_limbs(), &mut out);
+    isqrt_mag_fixed::<N>(radicand.as_limbs(), &mut out);
     Uint::<N>::from_limbs(out)
 }
 
@@ -142,9 +142,9 @@ pub(crate) fn isqrt_newton<const N: usize>(x: Uint<N>) -> Uint<N> {
 /// shows it wins at `N == 64` where Newton's full-width-divide-per-iteration
 /// cost finally dominates.
 #[inline]
-pub(crate) fn isqrt_karatsuba<const N: usize>(x: Uint<N>) -> Uint<N> {
+pub(crate) fn isqrt_karatsuba<const N: usize>(radicand: Uint<N>) -> Uint<N> {
     let mut out = [0u64; N];
-    isqrt_karatsuba_kernel(x.as_limbs(), &mut out);
+    isqrt_karatsuba_kernel(radicand.as_limbs(), &mut out);
     Uint::<N>::from_limbs(out)
 }
 
@@ -156,9 +156,9 @@ pub(crate) fn isqrt_karatsuba<const N: usize>(x: Uint<N>) -> Uint<N> {
 /// Serves any `N` as a generic reference baseline.
 #[allow(dead_code)]
 #[inline]
-pub(crate) fn isqrt_schoolbook_policy<const N: usize>(x: Uint<N>) -> Uint<N> {
+pub(crate) fn isqrt_schoolbook_policy<const N: usize>(radicand: Uint<N>) -> Uint<N> {
     let mut out = [0u64; N];
-    isqrt_schoolbook_kernel(x.as_limbs(), &mut out);
+    isqrt_schoolbook_kernel(radicand.as_limbs(), &mut out);
     Uint::<N>::from_limbs(out)
 }
 // ── 4. the dispatcher: fold the verdict, then dispatch ────────────────
@@ -173,15 +173,15 @@ pub(crate) fn isqrt_schoolbook_policy<const N: usize>(x: Uint<N>) -> Uint<N> {
 /// [`crate::int::algos::isqrt::isqrt_newton::isqrt_newton`] (Newton iteration, not
 /// const-evaluable).
 #[inline]
-pub(crate) fn dispatch<const N: usize>(x: Uint<N>) -> Uint<N> {
+pub(crate) fn dispatch<const N: usize>(radicand: Uint<N>) -> Uint<N> {
     let algo = match const { select::<N>() } {
-        Select::ByAlgorithm(a) => a,
-        Select::ByValue(f) => f(&x),
+        Select::ByAlgorithm(algorithm) => algorithm,
+        Select::ByValue(choose) => choose(&radicand),
     };
     match algo {
-        Algorithm::Native => isqrt_native::<N>(x),
-        Algorithm::Newton => isqrt_newton::<N>(x),
-        Algorithm::Karatsuba => isqrt_karatsuba::<N>(x),
-        Algorithm::Schoolbook => isqrt_schoolbook_policy::<N>(x),
+        Algorithm::Native => isqrt_native::<N>(radicand),
+        Algorithm::Newton => isqrt_newton::<N>(radicand),
+        Algorithm::Karatsuba => isqrt_karatsuba::<N>(radicand),
+        Algorithm::Schoolbook => isqrt_schoolbook_policy::<N>(radicand),
     }
 }

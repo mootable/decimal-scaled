@@ -101,9 +101,9 @@ const fn select<const N: usize>() -> Select<N> {
 /// terminates in a handful of iterations; there is no distinct hardware
 /// cube-root path, so this one kernel is the icbrt for all widths.
 #[inline]
-pub(crate) fn icbrt_newton<const N: usize>(x: Uint<N>) -> Uint<N> {
+pub(crate) fn icbrt_newton<const N: usize>(radicand: Uint<N>) -> Uint<N> {
     let mut out = [0u64; N];
-    icbrt_newton_kernel(x.as_limbs(), &mut out);
+    icbrt_newton_kernel(radicand.as_limbs(), &mut out);
     Uint::<N>::from_limbs(out)
 }
 
@@ -115,9 +115,9 @@ pub(crate) fn icbrt_newton<const N: usize>(x: Uint<N>) -> Uint<N> {
 /// Serves any `N` as a generic reference baseline.
 #[allow(dead_code)]
 #[inline]
-pub(crate) fn icbrt_schoolbook_policy<const N: usize>(x: Uint<N>) -> Uint<N> {
+pub(crate) fn icbrt_schoolbook_policy<const N: usize>(radicand: Uint<N>) -> Uint<N> {
     let mut out = [0u64; N];
-    icbrt_schoolbook_kernel(x.as_limbs(), &mut out);
+    icbrt_schoolbook_kernel(radicand.as_limbs(), &mut out);
     Uint::<N>::from_limbs(out)
 }
 
@@ -133,13 +133,13 @@ pub(crate) fn icbrt_schoolbook_policy<const N: usize>(x: Uint<N>) -> Uint<N> {
 /// [`crate::int::algos::icbrt::icbrt_newton::icbrt_newton`] (Newton iteration, not
 /// const-evaluable).
 #[inline]
-pub(crate) fn dispatch<const N: usize>(x: Uint<N>) -> Uint<N> {
+pub(crate) fn dispatch<const N: usize>(radicand: Uint<N>) -> Uint<N> {
     let algo = match const { select::<N>() } {
-        Select::ByAlgorithm(a) => a,
-        Select::ByValue(f) => f(&x),
+        Select::ByAlgorithm(algorithm) => algorithm,
+        Select::ByValue(choose) => choose(&radicand),
     };
     match algo {
-        Algorithm::Newton => icbrt_newton::<N>(x),
-        Algorithm::Schoolbook => icbrt_schoolbook_policy::<N>(x),
+        Algorithm::Newton => icbrt_newton::<N>(radicand),
+        Algorithm::Schoolbook => icbrt_schoolbook_policy::<N>(radicand),
     }
 }

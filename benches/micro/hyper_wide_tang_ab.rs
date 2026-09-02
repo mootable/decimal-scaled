@@ -17,7 +17,7 @@
 //!
 //! 1. Validity-walls each Tang candidate (M=512/GUARD=30, M=512/GUARD=60,
 //!    M=128/GUARD=30) against the schoolbook baseline across the operand
-//!    spread × all 6 rounding modes — a single bit mismatch DROPS the
+//!    spread × all 8 rounding modes — a single bit mismatch DROPS the
 //!    candidate as INVALID.
 //! 2. Ranks the surviving candidates against the schoolbook baseline.
 //!
@@ -61,13 +61,15 @@ mod ab_microbench;
 use ab_microbench::{compare_all, micro_criterion};
 
 const MODE: RoundingMode = RoundingMode::HalfToEven;
-const ALL_MODES: [RoundingMode; 6] = [
+const ALL_MODES: [RoundingMode; 8] = [
     RoundingMode::HalfToEven,
     RoundingMode::HalfAwayFromZero,
     RoundingMode::HalfTowardZero,
     RoundingMode::Trunc,
     RoundingMode::Floor,
     RoundingMode::Ceiling,
+    RoundingMode::AwayFromZero,
+    RoundingMode::ZeroFiveUp,
 ];
 
 fn mul_add_small<const N: usize>(acc: &mut [u64; N], m: u64, add: u64) {

@@ -7,11 +7,11 @@
 A fast, precise, decimal library.
 
 - **Decimal storage** — unlike floating point, `1.1` is exactly `1.1`.
-- **Multiple rounding modes** — six in total, `HalfToEven` by default.
+- **Multiple rounding modes** — eight in total, `HalfToEven` by default.
 - **Up to 4 Kb numbers** — twelve widths, `D18` to `D1232`.
 - **Choose your precision at compile time** — from 0 to one less than the width. i.e. D1232 can carry a precision of 1231 digits.
 - **`no_std` friendly** — the strict, integer-only path needs no `std`.
-- **Validated by <!-- BEGIN GENERATED:readme:tested -->71,469,918<!-- END GENERATED:readme:tested --> value tests** — every width × scale × rounding mode.
+- **Validated by <!-- BEGIN GENERATED:readme:tested -->96,159,960<!-- END GENERATED:readme:tested --> value tests** — every width × scale × rounding mode.
 
 ---
 
@@ -66,7 +66,7 @@ Full docs: <https://mootable.github.io/decimal-scaled/>.
 - [The width family](docs/widths.md) — `D18` through `D1232`, scale aliases, the `Decimal` trait, picking a tier.
 - [Conversions](docs/conversions.md) — integers, floats, cross-width widening / narrowing, the float bridge.
 - [Cross-scale operations](docs/cross-scale.md) — mixed-width, mixed-`SCALE` expressions via `mul_of` / `add_of` / `cmp_of` / `clamp_of`, plus the nightly auto-inferred form.
-- [Rounding](docs/rounding.md) — `RoundingMode`, the `_with` pairs, `rescale`, the compile-time `rounding-*` features.
+- [Rounding](docs/rounding.md) — `RoundingMode`, the `_with` pairs, `quantize` / `requantize`, the compile-time `rounding-*` features.
 - [Strict vs fast transcendentals](docs/strict-mode.md) — the integer-only `*_strict` path and the 0.5 ULP guarantee.
 - [The `d*!` macros](docs/macros.md) — compile-time decimal literals and scale inference.
 - [Cargo features](docs/features.md) — every feature flag and the common configurations.

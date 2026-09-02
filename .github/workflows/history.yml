@@ -63,9 +63,10 @@ jobs:
       # for its own widths (a missing/red shard is its own red job).
       fail-fast: false
       matrix:
-        # `feat`: this shard's live tier + the historical features. `history-044`
-        # rides every shard (the ratchet needs the 0.4.4 subject at every
-        # width). `history-033` rides only the shards whose widths 0.3.3 adapts
+        # `feat`: this shard's live tier + the historical features.
+        # `history-050` and `history-044` ride every shard (both share the live
+        # tier table, and the ratchet needs the immediately-previous release at
+        # every width). `history-033` rides only the shards whose widths 0.3.3 adapts
         # (18/38/76/153/230/307) — elsewhere the `history_all` 0.3.3 column is
         # simply absent (its `#[cfg(feature = "history-033")]` block compiles
         # out), which the gate handles gracefully. `widths`: the GOLDEN_WIDTHS
@@ -76,17 +77,17 @@ jobs:
         # which stay sequential for contention-free timing medians. When `par` is absent
         # the matrix substitution expands to an empty string → SequentialRunner.
         include:
-          - { shard: narrow, feat: "history-044,history-033",      widths: "18,38"  }
-          - { shard: d57,    feat: "d57,history-044",              widths: "57"     }
-          - { shard: d76,    feat: "d76,history-044,history-033",  widths: "76"     }
-          - { shard: d115,   feat: "d115,history-044",             widths: "115",   par: "8" }
-          - { shard: d153,   feat: "d153,history-044,history-033", widths: "153",   par: "8" }
-          - { shard: d230,   feat: "d230,history-044,history-033", widths: "230",   par: "8" }
-          - { shard: d307,   feat: "d307,history-044,history-033", widths: "307",   par: "8" }
-          - { shard: d462,   feat: "d462,history-044",             widths: "462",   par: "8" }
-          - { shard: d616,   feat: "d616,history-044",             widths: "616",   par: "8" }
-          - { shard: d924,   feat: "d924,history-044",             widths: "924",   par: "8" }
-          - { shard: d1232,  feat: "d1232,history-044",            widths: "1232",  par: "8" }
+          - { shard: narrow, feat: "history-050,history-044,history-033",      widths: "18,38"  }
+          - { shard: d57,    feat: "d57,history-050,history-044",              widths: "57"     }
+          - { shard: d76,    feat: "d76,history-050,history-044,history-033",  widths: "76"     }
+          - { shard: d115,   feat: "d115,history-050,history-044",             widths: "115",   par: "8" }
+          - { shard: d153,   feat: "d153,history-050,history-044,history-033", widths: "153",   par: "8" }
+          - { shard: d230,   feat: "d230,history-050,history-044,history-033", widths: "230",   par: "8" }
+          - { shard: d307,   feat: "d307,history-050,history-044,history-033", widths: "307",   par: "8" }
+          - { shard: d462,   feat: "d462,history-050,history-044",             widths: "462",   par: "8" }
+          - { shard: d616,   feat: "d616,history-050,history-044",             widths: "616",   par: "8" }
+          - { shard: d924,   feat: "d924,history-050,history-044",             widths: "924",   par: "8" }
+          - { shard: d1232,  feat: "d1232,history-050,history-044",            widths: "1232",  par: "8" }
 
     steps:
       - name: Checkout

@@ -17,8 +17,7 @@ mod from_edge_cases {
 
     use decimal_scaled::DecimalArithmetic;
     use decimal_scaled::{
-        D18s0, D18s6, D18s9, D18s17, D38, D38s0, D38s9, D38s12, D38s37,
-        RoundingMode,
+        D18s0, D18s17, D18s6, D18s9, D38s0, D38s12, D38s37, D38s9, RoundingMode, D38,
     };
 
     // ─────────────────────────────────────────────────────────────────────
@@ -35,7 +34,6 @@ mod from_edge_cases {
         assert_eq!(D38s37::ONE.to_bits(), 10_i128.pow(37));
         assert_eq!(D38s12::MAX.to_bits(), i128::MAX);
         assert_eq!(D38s12::MIN.to_bits(), i128::MIN);
-
 
         assert_eq!(D18s17::ONE.to_bits(), 10_i64.pow(17));
         assert_eq!(D18s0::MAX.to_bits(), i64::MAX);
@@ -68,7 +66,8 @@ mod from_edge_cases {
         assert_eq!(D38s12::MAX.wrapping_add(one_lsb), D38s12::MIN);
         assert_eq!(D38s12::MAX.overflowing_add(one_lsb), (D38s12::MIN, true));
         // One short of the boundary does not overflow.
-        let near_max = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(i128::MAX - 1).unwrap());
+        let near_max =
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(i128::MAX - 1).unwrap());
         assert_eq!(near_max.checked_add(one_lsb), Some(D38s12::MAX));
     }
 
@@ -90,7 +89,9 @@ mod from_edge_cases {
         // Neg of MAX is fine.
         assert_eq!(
             D38s12::MAX.checked_neg(),
-            Some(D38s12::from_bits(decimal_scaled::Int::<2>::try_from(i128::MIN + 1).unwrap()))
+            Some(D38s12::from_bits(
+                decimal_scaled::Int::<2>::try_from(i128::MIN + 1).unwrap()
+            ))
         );
     }
 
@@ -113,7 +114,8 @@ mod from_edge_cases {
     #[should_panic]
     fn add_overflow_panics() {
         // The `+` operator panics on overflow in BOTH debug and release.
-        let _ = D38s12::MAX + D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap());
+        let _ =
+            D38s12::MAX + D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap());
     }
 
     #[test]
@@ -127,24 +129,25 @@ mod from_edge_cases {
     // ─────────────────────────────────────────────────────────────────────
 
     #[test]
-    fn rescale_up_is_lossless_to_max_scale() {
+    fn quantize_up_is_lossless_to_max_scale() {
         // 1 at scale 0 -> scale 37 (new MAX_SCALE) is exactly 10^37
         // (which fits i128). A larger integer would overflow when scaled
         // up by 10^37.
         let v = D38s0::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap());
-        let up: D38<37> = v.rescale::<37>();
+        let up: D38<37> = v.quantize::<37>();
         assert_eq!(up.to_bits(), 10_i128.pow(37));
     }
 
     #[test]
-    fn rescale_same_scale_is_identity() {
-        let v = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(123_456_789_012_i128).unwrap());
-        let same: D38s12 = v.rescale::<12>();
+    fn quantize_same_scale_is_identity() {
+        let v =
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(123_456_789_012_i128).unwrap());
+        let same: D38s12 = v.quantize::<12>();
         assert_eq!(same.to_bits(), 123_456_789_012);
     }
 
     #[test]
-    fn rescale_down_every_mode_at_exact_half() {
+    fn quantize_down_every_mode_at_exact_half() {
         // 1.5 at scale 1 -> scale 0. The fractional digit is exactly the
         // half-way tie, so the modes diverge predictably.
         let half_tie = D38::<1>::from_bits(decimal_scaled::Int::<2>::try_from(15_i128).unwrap()); // 1.5
@@ -157,46 +160,49 @@ mod from_edge_cases {
             (RoundingMode::Ceiling, 2),          // toward +inf
         ];
         for (mode, expected) in modes_and_bits {
-            let r: D38<0> = half_tie.rescale_with::<0>(mode);
+            let r: D38<0> = half_tie.quantize_with::<0>(mode);
             assert_eq!(r.to_bits(), expected, "mode {mode:?}");
         }
         // 2.5 -> ties-to-even rounds down to 2 (2 is even).
         let other_tie = D38::<1>::from_bits(decimal_scaled::Int::<2>::try_from(25_i128).unwrap());
         assert_eq!(
             other_tie
-                .rescale_with::<0>(RoundingMode::HalfToEven)
+                .quantize_with::<0>(RoundingMode::HalfToEven)
                 .to_bits(),
             2
         );
     }
 
     #[test]
-    fn rescale_down_negative_tie_is_sign_symmetric() {
+    fn quantize_down_negative_tie_is_sign_symmetric() {
         let neg_tie = D38::<1>::from_bits(decimal_scaled::Int::<2>::try_from(-15_i128).unwrap()); // -1.5
         assert_eq!(
             neg_tie
-                .rescale_with::<0>(RoundingMode::HalfAwayFromZero)
+                .quantize_with::<0>(RoundingMode::HalfAwayFromZero)
                 .to_bits(),
             -2
         );
         assert_eq!(
             neg_tie
-                .rescale_with::<0>(RoundingMode::HalfTowardZero)
+                .quantize_with::<0>(RoundingMode::HalfTowardZero)
                 .to_bits(),
             -1
         );
-        assert_eq!(neg_tie.rescale_with::<0>(RoundingMode::Floor).to_bits(), -2);
         assert_eq!(
-            neg_tie.rescale_with::<0>(RoundingMode::Ceiling).to_bits(),
+            neg_tie.quantize_with::<0>(RoundingMode::Floor).to_bits(),
+            -2
+        );
+        assert_eq!(
+            neg_tie.quantize_with::<0>(RoundingMode::Ceiling).to_bits(),
             -1
         );
     }
 
     #[test]
     #[should_panic]
-    fn rescale_up_overflow_panics() {
+    fn quantize_up_overflow_panics() {
         // Scaling i128::MAX up by another 10^26 cannot fit.
-        let _ = D38s12::MAX.rescale::<38>();
+        let _ = D38s12::MAX.quantize::<38>();
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -275,14 +281,15 @@ mod from_edge_cases {
     #[test]
     fn cross_width_narrowing_at_boundary() {
         // A D38 value exactly at i64::MAX narrows; one past it does not.
-        let at_edge = D38s0::from_bits(decimal_scaled::Int::<2>::try_from(i64::MAX as i128).unwrap());
+        let at_edge =
+            D38s0::from_bits(decimal_scaled::Int::<2>::try_from(i64::MAX as i128).unwrap());
         let narrowed: Result<D18s0, _> = at_edge.try_into();
         assert!(narrowed.is_ok());
 
-        let past_edge = D38s0::from_bits(decimal_scaled::Int::<2>::try_from(i64::MAX as i128 + 1).unwrap());
+        let past_edge =
+            D38s0::from_bits(decimal_scaled::Int::<2>::try_from(i64::MAX as i128 + 1).unwrap());
         let fail: Result<D18s0, _> = past_edge.try_into();
         assert!(fail.is_err());
-
     }
 
     #[test]
@@ -347,10 +354,16 @@ mod from_edge_cases {
             i128::MAX - 1,
             i128::MIN + 1,
         ] {
-            assert_eq!(D38s12::from_bits(decimal_scaled::Int::<2>::try_from(raw).unwrap()).to_bits(), raw);
+            assert_eq!(
+                D38s12::from_bits(decimal_scaled::Int::<2>::try_from(raw).unwrap()).to_bits(),
+                raw
+            );
         }
         for raw in [0_i64, 1, -1, i64::MAX, i64::MIN, i64::MAX - 1, i64::MIN + 1] {
-            assert_eq!(D18s9::from_bits(decimal_scaled::Int::<1>::from(raw)).to_bits(), raw);
+            assert_eq!(
+                D18s9::from_bits(decimal_scaled::Int::<1>::from(raw)).to_bits(),
+                raw
+            );
         }
     }
 
@@ -392,7 +405,8 @@ mod from_edge_cases {
             }};
         }
         check!(D18s9, |x: i128| decimal_scaled::Int::<1>::from(x as i64));
-        check!(D38s12, |x: i128| decimal_scaled::Int::<2>::try_from(x).unwrap());
+        check!(D38s12, |x: i128| decimal_scaled::Int::<2>::try_from(x)
+            .unwrap());
     }
 
     #[test]
@@ -417,7 +431,10 @@ mod from_edge_cases {
             }};
         }
         check!(D18s6, decimal_scaled::Int::<1>::from(2_500_000_i64));
-        check!(D38s12, decimal_scaled::Int::<2>::try_from(2_500_000_000_000_i128).unwrap());
+        check!(
+            D38s12,
+            decimal_scaled::Int::<2>::try_from(2_500_000_000_000_i128).unwrap()
+        );
     }
 
     #[test]
@@ -439,7 +456,11 @@ mod from_edge_cases {
             assert!(!r.is_negative(), "rem_euclid({a},{b}) negative");
             // b * (q / ONE) + r == a  (compare in i128; a, b are i128 seeds)
             let q_int = i128::from(q.to_bits()) / i128::from(D38s0::multiplier());
-            assert_eq!(b * q_int + i128::from(r.to_bits()), a, "euclid identity ({a},{b})");
+            assert_eq!(
+                b * q_int + i128::from(r.to_bits()),
+                a,
+                "euclid identity ({a},{b})"
+            );
         }
     }
 
@@ -478,11 +499,17 @@ mod from_edge_cases {
         assert_eq!((a ^ b).to_bits(), 0b0110);
         assert_eq!((!D38s12::ZERO).to_bits(), -1);
         // Arithmetic `>>` is sign-extending: -8 >> 1 == -4.
-        assert_eq!((D38s12::from_bits(decimal_scaled::Int::<2>::try_from(-8_i128).unwrap()) >> 1u32).to_bits(), -4);
+        assert_eq!(
+            (D38s12::from_bits(decimal_scaled::Int::<2>::try_from(-8_i128).unwrap()) >> 1u32)
+                .to_bits(),
+            -4
+        );
         // `unsigned_shr` is logical: -8 (all-ones tail) viewed as u128 is
         // 2^128 - 8; >> 1 is 2^127 - 4, which fits i128 as i128::MAX - 3.
         assert_eq!(
-            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(-8_i128).unwrap()).unsigned_shr(1).to_bits(),
+            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(-8_i128).unwrap())
+                .unsigned_shr(1)
+                .to_bits(),
             i128::MAX - 3
         );
     }
@@ -510,7 +537,7 @@ mod from_edge_cases {
     #[cfg(feature = "wide")]
     #[test]
     fn wide_tier_boundaries() {
-        use decimal_scaled::{D76, D76s0, D153s0, D307s0};
+        use decimal_scaled::{D153s0, D307s0, D76s0, D76};
         // ONE / MAX / MIN round-trip through to_bits / from_bits.
         let one = D76s0::ONE;
         assert_eq!(D76::<0>::from_bits(one.to_bits()), one);
@@ -524,7 +551,8 @@ mod from_edge_cases {
         assert_eq!(D153s0::MAX.checked_add(D153s0::ONE), None);
         assert_eq!(D307s0::MAX.checked_add(D307s0::ONE), None);
         // Cross-tier widen/narrow round-trip.
-        let mid: D76s0 = D38s0::from_bits(decimal_scaled::Int::<2>::try_from(123_456_i128).unwrap()).into();
+        let mid: D76s0 =
+            D38s0::from_bits(decimal_scaled::Int::<2>::try_from(123_456_i128).unwrap()).into();
         let back: D38s0 = mid.try_into().unwrap();
         assert_eq!(back.to_bits(), 123_456);
     }
@@ -548,7 +576,7 @@ mod from_wide_strict_transcendentals {
     //! cannot carry these: its leads are filtered to each function's domain,
     //! so the out-of-domain panic contract is pinned here.
 
-    use decimal_scaled::{D38, D76, RoundingMode};
+    use decimal_scaled::{RoundingMode, D38, D76};
 
     fn lift(n: D38<6>) -> D76<6> {
         n.into()
@@ -633,7 +661,10 @@ mod from_wide_strict_transcendentals {
     #[test]
     #[should_panic(expected = "log: argument must be positive")]
     fn d76_log_strict_with_zero_panics() {
-        let _ = D76::<6>::ZERO.log_strict_with(lift(D38::<6>::try_from(2).unwrap()), RoundingMode::HalfToEven);
+        let _ = D76::<6>::ZERO.log_strict_with(
+            lift(D38::<6>::try_from(2).unwrap()),
+            RoundingMode::HalfToEven,
+        );
     }
 
     #[test]

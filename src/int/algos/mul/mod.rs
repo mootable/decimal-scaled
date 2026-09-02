@@ -23,7 +23,7 @@ pub(crate) mod mul_toom3;
 mod tests {
     use super::mul_karatsuba::{
         karatsuba_scratch_needed_th, mul_karatsuba, mul_karatsuba_with_threshold,
-        KARATSUBA_SCRATCH_LIMBS,
+        KARATSUBA_MAX_WIDTH, KARATSUBA_SCRATCH_LIMBS,
     };
     use super::mul_schoolbook::{
         mul_low_fixed, mul_low_limb, mul_schoolbook, mul_schoolbook_fixed,
@@ -33,9 +33,9 @@ mod tests {
     /// Pack a `[u128; N]` little-endian limb array into `[u64; 2*N]`.
     fn pack(limbs: &[u128]) -> Vec<u64> {
         let mut out = vec![0u64; 2 * limbs.len()];
-        for (i, &l) in limbs.iter().enumerate() {
-            out[2 * i] = l as u64;
-            out[2 * i + 1] = (l >> 64) as u64;
+        for (i, &limb) in limbs.iter().enumerate() {
+            out[2 * i] = limb as u64;
+            out[2 * i + 1] = (limb >> 64) as u64;
         }
         out
     }
@@ -62,19 +62,19 @@ mod tests {
     /// split/recombine algebra is exercised even at narrow widths).
     #[test]
     fn karatsuba_matches_schoolbook() {
-        for a in corpus() {
-            for b in corpus() {
-                let a64 = pack(&a);
-                let b64 = pack(&b);
-                let n = a64.len().min(b64.len());
-                let mut a_buf = vec![0u64; n];
-                let mut b_buf = vec![0u64; n];
-                a_buf.copy_from_slice(&a64[..n]);
-                b_buf.copy_from_slice(&b64[..n]);
+        for lhs in corpus() {
+            for rhs in corpus() {
+                let lhs_limbs = pack(&lhs);
+                let rhs_limbs = pack(&rhs);
+                let n = lhs_limbs.len().min(rhs_limbs.len());
+                let mut lhs_buf = vec![0u64; n];
+                let mut rhs_buf = vec![0u64; n];
+                lhs_buf.copy_from_slice(&lhs_limbs[..n]);
+                rhs_buf.copy_from_slice(&rhs_limbs[..n]);
                 let mut out_school = vec![0u64; 2 * n];
                 let mut out_kara = vec![0u64; 2 * n];
-                mul_schoolbook(&a_buf, &b_buf, &mut out_school);
-                mul_karatsuba_with_threshold(&a_buf, &b_buf, &mut out_kara, 4);
+                mul_schoolbook(&lhs_buf, &rhs_buf, &mut out_school);
+                mul_karatsuba_with_threshold(&lhs_buf, &rhs_buf, &mut out_kara, 4);
                 assert_eq!(out_kara, out_school, "Karatsuba mismatch at n={n}");
             }
         }
@@ -104,19 +104,19 @@ mod tests {
         const THRESHOLDS: &[usize] = &[4, 8, 16, 24, 256];
 
         let edge_fill = |buf: &mut [u64], kind: usize, next: &mut dyn FnMut() -> u64| match kind {
-            0 => buf.iter_mut().for_each(|x| *x = 0),
-            1 => buf.iter_mut().for_each(|x| *x = u64::MAX),
+            0 => buf.iter_mut().for_each(|slot| *slot = 0),
+            1 => buf.iter_mut().for_each(|slot| *slot = u64::MAX),
             2 => {
-                buf.iter_mut().for_each(|x| *x = 0);
+                buf.iter_mut().for_each(|slot| *slot = 0);
                 if let Some(last) = buf.last_mut() {
                     *last = u64::MAX;
                 }
             }
             3 => {
-                buf.iter_mut().for_each(|x| *x = 0);
+                buf.iter_mut().for_each(|slot| *slot = 0);
                 buf[0] = u64::MAX;
             }
-            _ => buf.iter_mut().for_each(|x| *x = next()),
+            _ => buf.iter_mut().for_each(|slot| *slot = next()),
         };
 
         for &n in WIDTHS {
@@ -130,56 +130,68 @@ mod tests {
 
             let mut pairs: Vec<(Vec<u64>, Vec<u64>)> =
                 Vec::new();
-            for ka in 0..5 {
-                for kb in 0..5 {
-                    let mut a = vec![0u64; n];
-                    let mut b = vec![0u64; n];
-                    edge_fill(&mut a, ka, &mut next);
-                    edge_fill(&mut b, kb, &mut next);
-                    pairs.push((a, b));
+            for lhs_kind in 0..5 {
+                for rhs_kind in 0..5 {
+                    let mut lhs = vec![0u64; n];
+                    let mut rhs = vec![0u64; n];
+                    edge_fill(&mut lhs, lhs_kind, &mut next);
+                    edge_fill(&mut rhs, rhs_kind, &mut next);
+                    pairs.push((lhs, rhs));
                 }
             }
             for _ in 0..random_pairs {
-                let mut a = vec![0u64; n];
-                let mut b = vec![0u64; n];
-                for x in a.iter_mut() {
-                    *x = next();
+                let mut lhs = vec![0u64; n];
+                let mut rhs = vec![0u64; n];
+                for slot in lhs.iter_mut() {
+                    *slot = next();
                 }
-                for x in b.iter_mut() {
-                    *x = next();
+                for slot in rhs.iter_mut() {
+                    *slot = next();
                 }
-                pairs.push((a, b));
+                pairs.push((lhs, rhs));
             }
 
-            for (a, b) in &pairs {
+            for (lhs, rhs) in &pairs {
                 let mut oracle = vec![0u64; 2 * n];
-                mul_schoolbook(a, b, &mut oracle);
+                mul_schoolbook(lhs, rhs, &mut oracle);
 
-                for &th in THRESHOLDS {
-                    let mut got = vec![0u64; 2 * n];
-                    mul_karatsuba_with_threshold(a, b, &mut got, th);
+                for &threshold in THRESHOLDS {
+                    let mut actual = vec![0u64; 2 * n];
+                    mul_karatsuba_with_threshold(lhs, rhs, &mut actual, threshold);
                     assert_eq!(
-                        got, oracle,
-                        "non-alloc Karatsuba mismatch at n={n}, threshold={th}\na={a:?}\nb={b:?}"
+                        actual, oracle,
+                        "non-alloc Karatsuba mismatch at n={n}, threshold={threshold}\na={lhs:?}\nb={rhs:?}"
                     );
 
-                    let mut got_swapped = vec![0u64; 2 * n];
-                    mul_karatsuba_with_threshold(b, a, &mut got_swapped, th);
+                    let mut actual_swapped = vec![0u64; 2 * n];
+                    mul_karatsuba_with_threshold(rhs, lhs, &mut actual_swapped, threshold);
                     assert_eq!(
-                        got_swapped, oracle,
-                        "non-alloc Karatsuba not commutative at n={n}, threshold={th}"
+                        actual_swapped, oracle,
+                        "non-alloc Karatsuba not commutative at n={n}, threshold={threshold}"
                     );
                 }
             }
         }
     }
 
-    /// The widest equal-length multiply (256 limbs, Int<256>) routes
-    /// through the production [`mul_karatsuba`] entry — which declares the
-    /// fixed `[u64; KARATSUBA_SCRATCH_LIMBS]` stack buffer — without
-    /// tripping the scratch-overflow `debug_assert` and matches schoolbook.
-    /// Guards the scratch sizing against future threshold drops that deepen
-    /// the recursion.
+    /// A 256-limb equal-length multiply routes through the production
+    /// [`mul_karatsuba`] entry — which declares the fixed
+    /// `[u64; KARATSUBA_SCRATCH_LIMBS]` stack buffer — and matches schoolbook.
+    ///
+    /// The sizing assert is stated against [`KARATSUBA_MAX_WIDTH`] rather than
+    /// a frozen 256, because that ceiling is now DERIVED from `MAX_WORK_N`: it
+    /// is 16 in a narrow build and 512 at xx-wide. The 256-limb product is kept
+    /// at every width regardless, and is the more interesting half of the test
+    /// now — below the ceiling it drives the Karatsuba path, above it the
+    /// fail-closed schoolbook fallback, and the product must be identical
+    /// either way. That is precisely the property the fallback promises.
+    ///
+    /// On the thresholds: the entry recurses to a base case at `threshold`, so
+    /// a LOWER threshold recurses deeper and needs MORE scratch. 8 is deeper
+    /// than production's 48 (so this over-tests the buffer), while
+    /// `KARATSUBA_SCRATCH_LIMBS` is sized at the floor of 4 — deeper still, and
+    /// therefore an upper bound for both. Guards the sizing against future
+    /// threshold drops that deepen the recursion.
     #[test]
     fn nonalloc_karatsuba_max_width_fits_fixed_scratch() {
         let mut state: u64 = 0xC0FF_EE00_1357_9BDF;
@@ -191,27 +203,30 @@ mod tests {
             z ^ (z >> 31)
         };
         assert!(
-            karatsuba_scratch_needed_th(256, 8) <= KARATSUBA_SCRATCH_LIMBS,
-            "fixed scratch too small for n=256 at a threshold of 8"
+            karatsuba_scratch_needed_th(KARATSUBA_MAX_WIDTH, 8) <= KARATSUBA_SCRATCH_LIMBS,
+            "fixed scratch too small for the ceiling width {KARATSUBA_MAX_WIDTH} \
+             at a threshold of 8"
         );
 
         let n = 256;
-        let mut a = vec![0u64; n];
-        let mut b = vec![0u64; n];
-        for x in a.iter_mut() {
-            *x = next();
+        let mut lhs = vec![0u64; n];
+        let mut rhs = vec![0u64; n];
+        for slot in lhs.iter_mut() {
+            *slot = next();
         }
-        for x in b.iter_mut() {
-            *x = next();
+        for slot in rhs.iter_mut() {
+            *slot = next();
         }
         let mut oracle = vec![0u64; 2 * n];
-        let mut got = vec![0u64; 2 * n];
-        mul_schoolbook(&a, &b, &mut oracle);
+        let mut actual = vec![0u64; 2 * n];
+        mul_schoolbook(&lhs, &rhs, &mut oracle);
         // Deep threshold (8) drives maximal recursion at n=256 — the worst
-        // case for the fixed scratch (matches the sizing assert above, and is
-        // well below the production threshold, so this over-tests the buffer).
-        mul_karatsuba(&a, &b, &mut got, 8);
-        assert_eq!(got, oracle, "max-width Karatsuba mismatch via fixed scratch");
+        // case for the fixed scratch, and well below the production threshold,
+        // so this over-tests the buffer. Where 256 exceeds the derived ceiling
+        // the entry fails closed to schoolbook instead; the product is the
+        // same, which is what the comparison below actually pins.
+        mul_karatsuba(&lhs, &rhs, &mut actual, 8);
+        assert_eq!(actual, oracle, "max-width Karatsuba mismatch via fixed scratch");
     }
 
     /// `mul_schoolbook_fixed::<L, D>` matches `mul_schoolbook` at a
@@ -221,21 +236,21 @@ mod tests {
     fn mul_schoolbook_fixed_matches_slice() {
         macro_rules! check {
             ($L:expr, $D:expr) => {{
-                for a in corpus() {
-                    for b in corpus() {
-                        let a64 = pack(&a);
-                        let b64 = pack(&b);
-                        if a64.len() < $L || b64.len() < $L {
+                for lhs in corpus() {
+                    for rhs in corpus() {
+                        let lhs_limbs = pack(&lhs);
+                        let rhs_limbs = pack(&rhs);
+                        if lhs_limbs.len() < $L || rhs_limbs.len() < $L {
                             continue;
                         }
-                        let mut a_arr = [0u64; $L];
-                        let mut b_arr = [0u64; $L];
-                        a_arr.copy_from_slice(&a64[..$L]);
-                        b_arr.copy_from_slice(&b64[..$L]);
+                        let mut lhs_arr = [0u64; $L];
+                        let mut rhs_arr = [0u64; $L];
+                        lhs_arr.copy_from_slice(&lhs_limbs[..$L]);
+                        rhs_arr.copy_from_slice(&rhs_limbs[..$L]);
                         let mut out_slice = vec![0u64; $D];
                         let mut out_fixed = [0u64; $D];
-                        mul_schoolbook(&a_arr, &b_arr, &mut out_slice);
-                        mul_schoolbook_fixed::<$L, $D>(&a_arr, &b_arr, &mut out_fixed);
+                        mul_schoolbook(&lhs_arr, &rhs_arr, &mut out_slice);
+                        mul_schoolbook_fixed::<$L, $D>(&lhs_arr, &rhs_arr, &mut out_fixed);
                         assert_eq!(
                             &out_slice[..],
                             &out_fixed[..],
@@ -258,7 +273,7 @@ mod tests {
     }
 
     /// `mul_schoolbook_into::<L, L+1>` matches `mul_schoolbook_fixed::<L, 2·L>`
-    /// when the wider operand is `[n, 0, ..., 0]`, across L covering every
+    /// when the wider operand is `[multiplier, 0, ..., 0]`, across L covering every
     /// wide tier from D38 (L=2) to D307 (L=16).
     #[test]
     fn mul_schoolbook_into_matches_fixed() {
@@ -275,19 +290,21 @@ mod tests {
         macro_rules! check_into {
             ($L:expr, $LP1:expr, $D:expr) => {{
                 for _ in 0..1000 {
-                    let mut a = [0u64; $L];
-                    for slot in a.iter_mut() {
+                    let mut multiplicand = [0u64; $L];
+                    for slot in multiplicand.iter_mut() {
                         *slot = next();
                     }
-                    let n = next();
+                    let multiplier = next();
 
                     let mut out_into = [0u64; $LP1];
-                    mul_schoolbook_into::<$L, $LP1>(&a, n, &mut out_into);
+                    mul_schoolbook_into::<$L, $LP1>(&multiplicand, multiplier,
+                        &mut out_into);
 
-                    let mut b = [0u64; $L];
-                    b[0] = n;
+                    let mut multiplier_limbs = [0u64; $L];
+                    multiplier_limbs[0] = multiplier;
                     let mut out_fixed = [0u64; $D];
-                    mul_schoolbook_fixed::<$L, $D>(&a, &b, &mut out_fixed);
+                    mul_schoolbook_fixed::<$L, $D>(&multiplicand, &multiplier_limbs,
+                        &mut out_fixed);
 
                     assert_eq!(
                         &out_into[..],
@@ -295,8 +312,8 @@ mod tests {
                         "mul_schoolbook_into::<{}, {}> low limbs mismatch (a={:?}, n={:#x})",
                         $L,
                         $LP1,
-                        a,
-                        n
+                        multiplicand,
+                        multiplier
                     );
                     for (k, &limb) in out_fixed[$LP1..].iter().enumerate() {
                         assert_eq!(
@@ -322,18 +339,18 @@ mod tests {
     fn mul_low_matches_full_product_low_half() {
         const N: usize = 4;
         const D: usize = 8;
-        for a in corpus() {
-            for b in corpus() {
-                let a64 = pack(&a);
-                let b64 = pack(&b);
-                let mut a_arr = [0u64; N];
-                let mut b_arr = [0u64; N];
-                a_arr.copy_from_slice(&a64[..N]);
-                b_arr.copy_from_slice(&b64[..N]);
+        for lhs in corpus() {
+            for rhs in corpus() {
+                let lhs_limbs = pack(&lhs);
+                let rhs_limbs = pack(&rhs);
+                let mut lhs_arr = [0u64; N];
+                let mut rhs_arr = [0u64; N];
+                lhs_arr.copy_from_slice(&lhs_limbs[..N]);
+                rhs_arr.copy_from_slice(&rhs_limbs[..N]);
                 let mut full = [0u64; D];
-                mul_schoolbook_fixed::<N, D>(&a_arr, &b_arr, &mut full);
+                mul_schoolbook_fixed::<N, D>(&lhs_arr, &rhs_arr, &mut full);
                 let mut low = [0u64; N];
-                mul_low_fixed::<N>(&a_arr, &b_arr, &mut low);
+                mul_low_fixed::<N>(&lhs_arr, &rhs_arr, &mut low);
                 assert_eq!(&full[..N], &low[..], "mul_low_fixed mismatch");
             }
         }
@@ -349,18 +366,18 @@ mod tests {
     fn mul_low_limb_u128_matches_u64() {
         // Edge corpus at N = 4 (all-ones / single-limb / mixed).
         const N4: usize = 4;
-        for a in corpus() {
-            for b in corpus() {
-                let a64 = pack(&a);
-                let b64 = pack(&b);
-                let mut a_arr = [0u64; N4];
-                let mut b_arr = [0u64; N4];
-                a_arr.copy_from_slice(&a64[..N4]);
-                b_arr.copy_from_slice(&b64[..N4]);
+        for lhs in corpus() {
+            for rhs in corpus() {
+                let lhs_limbs = pack(&lhs);
+                let rhs_limbs = pack(&rhs);
+                let mut lhs_arr = [0u64; N4];
+                let mut rhs_arr = [0u64; N4];
+                lhs_arr.copy_from_slice(&lhs_limbs[..N4]);
+                rhs_arr.copy_from_slice(&rhs_limbs[..N4]);
                 let mut lo_ref = [0u64; N4];
                 let mut lo_u128 = [0u64; N4];
-                mul_low_fixed::<N4>(&a_arr, &b_arr, &mut lo_ref);
-                mul_low_limb::<N4, u128>(&a_arr, &b_arr, &mut lo_u128);
+                mul_low_fixed::<N4>(&lhs_arr, &rhs_arr, &mut lo_ref);
+                mul_low_limb::<N4, u128>(&lhs_arr, &rhs_arr, &mut lo_u128);
                 assert_eq!(lo_ref, lo_u128, "u128 low-mul mismatch (corpus N=4)");
             }
         }
@@ -378,18 +395,18 @@ mod tests {
             ($n:literal, $rounds:literal) => {{
                 const N: usize = $n;
                 for _ in 0..$rounds {
-                    let mut a = [0u64; N];
-                    let mut b = [0u64; N];
-                    for x in a.iter_mut() {
-                        *x = next();
+                    let mut lhs = [0u64; N];
+                    let mut rhs = [0u64; N];
+                    for slot in lhs.iter_mut() {
+                        *slot = next();
                     }
-                    for x in b.iter_mut() {
-                        *x = next();
+                    for slot in rhs.iter_mut() {
+                        *slot = next();
                     }
                     let mut lo_ref = [0u64; N];
                     let mut lo_u128 = [0u64; N];
-                    mul_low_fixed::<N>(&a, &b, &mut lo_ref);
-                    mul_low_limb::<N, u128>(&a, &b, &mut lo_u128);
+                    mul_low_fixed::<N>(&lhs, &rhs, &mut lo_ref);
+                    mul_low_limb::<N, u128>(&lhs, &rhs, &mut lo_u128);
                     assert_eq!(
                         lo_ref, lo_u128,
                         "u128 low-mul mismatch at N = {}",
@@ -402,12 +419,12 @@ mod tests {
         macro_rules! check_ones {
             ($n:literal) => {{
                 const N: usize = $n;
-                let a = [u64::MAX; N];
-                let b = [u64::MAX; N];
+                let lhs = [u64::MAX; N];
+                let rhs = [u64::MAX; N];
                 let mut lo_ref = [0u64; N];
                 let mut lo_u128 = [0u64; N];
-                mul_low_fixed::<N>(&a, &b, &mut lo_ref);
-                mul_low_limb::<N, u128>(&a, &b, &mut lo_u128);
+                mul_low_fixed::<N>(&lhs, &rhs, &mut lo_ref);
+                mul_low_limb::<N, u128>(&lhs, &rhs, &mut lo_u128);
                 assert_eq!(lo_ref, lo_u128, "u128 low-mul mismatch (all-ones N={})", N);
             }};
         }

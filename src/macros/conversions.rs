@@ -286,8 +286,8 @@ macro_rules! decl_try_from_f64 {
                         $crate::support::error::ConvertError::NotFinite,
                     );
                 }
-                let mult_f64: f64 = Self::multiplier().as_f64();
-                let scaled = value * mult_f64;
+                let multiplier_f64: f64 = Self::multiplier().as_f64();
+                let scaled = value * multiplier_f64;
                 let storage_max_f64: f64 = <$Storage>::MAX.as_f64();
                 let storage_min_f64: f64 = <$Storage>::MIN.as_f64();
                 if !(storage_min_f64..storage_max_f64).contains(&scaled) {
@@ -317,6 +317,12 @@ macro_rules! decl_try_from_f64 {
                     }
                     $crate::support::rounding::RoundingMode::Ceiling => {
                         $crate::support::rounding::ceil_f64(scaled)
+                    }
+                    $crate::support::rounding::RoundingMode::AwayFromZero => {
+                        $crate::support::rounding::away_from_zero_f64(scaled)
+                    }
+                    $crate::support::rounding::RoundingMode::ZeroFiveUp => {
+                        $crate::support::rounding::zero_five_up_f64(scaled)
                     }
                 };
                 ::core::result::Result::Ok(Self(<$Storage>::from_f64(rounded)))
@@ -383,42 +389,42 @@ macro_rules! decl_decimal_int_conversion_methods {
                 let int_rounded: $Storage = if remainder == zero {
                     quotient
                 } else {
-                    let abs_rem = remainder.unsigned_abs();
+                    let abs_remainder = remainder.unsigned_abs();
                     // `divisor` is `10^SCALE` and always positive, so
                     // `unsigned_abs()` is the value itself; `>> 1` is
                     // the half-LSB threshold.
                     let half = divisor.unsigned_abs() >> 1;
-                    let non_negative = !raw.is_negative();
+                    let is_non_negative = !raw.is_negative();
                     match mode {
                         $crate::support::rounding::RoundingMode::HalfToEven => {
-                            if abs_rem < half {
+                            if abs_remainder < half {
                                 quotient
-                            } else if abs_rem > half {
-                                if non_negative {
+                            } else if abs_remainder > half {
+                                if is_non_negative {
                                     quotient + one
                                 } else {
                                     quotient - one
                                 }
                             } else if !quotient.bit(0) {
                                 quotient
-                            } else if non_negative {
+                            } else if is_non_negative {
                                 quotient + one
                             } else {
                                 quotient - one
                             }
                         }
                         $crate::support::rounding::RoundingMode::HalfAwayFromZero => {
-                            if abs_rem < half {
+                            if abs_remainder < half {
                                 quotient
-                            } else if non_negative {
+                            } else if is_non_negative {
                                 quotient + one
                             } else {
                                 quotient - one
                             }
                         }
                         $crate::support::rounding::RoundingMode::HalfTowardZero => {
-                            if abs_rem > half {
-                                if non_negative {
+                            if abs_remainder > half {
+                                if is_non_negative {
                                     quotient + one
                                 } else {
                                     quotient - one
@@ -429,15 +435,39 @@ macro_rules! decl_decimal_int_conversion_methods {
                         }
                         $crate::support::rounding::RoundingMode::Trunc => quotient,
                         $crate::support::rounding::RoundingMode::Floor => {
-                            if non_negative {
+                            if is_non_negative {
                                 quotient
                             } else {
                                 quotient - one
                             }
                         }
                         $crate::support::rounding::RoundingMode::Ceiling => {
-                            if non_negative {
+                            if is_non_negative {
                                 quotient + one
+                            } else {
+                                quotient
+                            }
+                        }
+                        // Any non-zero remainder lifts the magnitude; the
+                        // `remainder == zero` case returned above.
+                        $crate::support::rounding::RoundingMode::AwayFromZero => {
+                            if is_non_negative {
+                                quotient + one
+                            } else {
+                                quotient - one
+                            }
+                        }
+                        // Pivot on the last decimal digit of |quotient| —
+                        // a wide `%`, so O(limbs).
+                        $crate::support::rounding::RoundingMode::ZeroFiveUp => {
+                            let ten = <$Storage>::from_i128(10);
+                            let digit = (quotient % ten).as_i128().unsigned_abs();
+                            if digit == 0 || digit == 5 {
+                                if is_non_negative {
+                                    quotient + one
+                                } else {
+                                    quotient - one
+                                }
                             } else {
                                 quotient
                             }

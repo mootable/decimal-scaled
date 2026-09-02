@@ -57,7 +57,7 @@
 //!
 //! # Out of scope on `Decimal` (and all four sub-traits)
 //!
-//! - **Rescale** (`rescale<TARGET>` / `rescale_with`) takes a
+//! - **Quantize** (`quantize<TARGET>` / `quantize_with`) takes a
 //!   `const`-generic target `SCALE` parameter; const-generic trait
 //!   methods aren't stable. Use the inherent method on the concrete
 //!   type.

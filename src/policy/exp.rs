@@ -49,7 +49,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // D57 (Int<3>): the seam A/B (`benches/micro/exp_series_tang_ab.rs`)
         // sweeps the full SCALE range at the production Tang config and shows
         // Tang beats Series at EVERY D57 scale (validity bit-identical to
-        // Series across the operand spread × all six modes at each cell):
+        // Series across the operand spread × every mode at each cell):
         // s0 4.81×, s10 2.81×, s17 2.96×, s22 2.91×, s23 2.26×, s28 2.32×,
         // s33 2.29×, s38 19.3×, s42 1.90×, s44 2.27×, s45 1.52×, s56 44.6×.
         // A gap in the routed D57 scales would drop powf's inner exp(y·ln x)
@@ -80,7 +80,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // (`src/algos/support/exp_tang_table.rs`).
         // The N-way A/B `benches/micro/exp_wide_series_tang_ab.rs`
         // (PINNED core 22, Series vs 3 Tang configs vs Schoolbook, validity-
-        // gated bit-identical to Series × all six modes) shows SERIES (the
+        // gated bit-identical to Series × every mode) shows SERIES (the
         // generic squaring core) BEATS every Tang config at EVERY scale at
         // these tiers — Tang's
         // table-multiply + post-reduction Taylor costs MORE than Series's
@@ -138,8 +138,8 @@ fn wide_tang_gate<const N: usize, const SCALE: u32>(raw: &Int<N>) -> Algorithm {
 #[inline]
 fn resolve<const N: usize, const SCALE: u32>(raw: &Int<N>) -> Algorithm {
     match const { select::<N, SCALE>() } {
-        Select::ByAlgorithm(a) => a,
-        Select::ByValue(f) => f(raw),
+        Select::ByAlgorithm(algorithm) => algorithm,
+        Select::ByValue(choose) => choose(raw),
     }
 }
 
@@ -338,17 +338,17 @@ fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode
         // SCALEs implicitly bounds `|x|` to the small-`|k|` regime.
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => {
-            let r = raw.resize_to::<Int<3>>();
+            let raw_d57 = raw.resize_to::<Int<3>>();
             let out = match SCALE {
-                0..=44 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 128, 8, true, true, false>(r, mode),
-                45..=56 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 512, 30, true, true, false>(r, mode),
-                _ => crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(r, mode),
+                0..=44 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 128, 8, true, true, false>(raw_d57, mode),
+                45..=56 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 512, 30, true, true, false>(raw_d57, mode),
+                _ => crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw_d57, mode),
             };
             Some(out.resize_to::<Int<N>>())
         }
         // D76 (Int<4>): full-range Tang, M=512 G=30, the directed +
         // external-extra shape <true,true,false> — bit-identical to Series
-        // across the spread × all six modes at every sampled scale (s0/s19/s38/
+        // across the spread × every mode at every sampled scale (s0/s19/s38/
         // s57/s74) in the wide A/B (`exp_wide_series_tang_ab`), where Tang wins
         // 1.05-1.20× at every scale (and the value-gate sweep shows Tang wins
         // 8-10× for `|x|` 10..110 where Series's reduction blows up). The
@@ -457,26 +457,31 @@ mod series_rung_tests {
     //! light); the golden gate is the correctness wall.
 
     #[cfg(feature = "d307")]
-    const ALL_MODES: [crate::support::rounding::RoundingMode; 6] = [
+    const ALL_MODES: [crate::support::rounding::RoundingMode; 8] = [
         crate::support::rounding::RoundingMode::HalfToEven,
         crate::support::rounding::RoundingMode::HalfAwayFromZero,
         crate::support::rounding::RoundingMode::HalfTowardZero,
         crate::support::rounding::RoundingMode::Trunc,
         crate::support::rounding::RoundingMode::Floor,
         crate::support::rounding::RoundingMode::Ceiling,
+        crate::support::rounding::RoundingMode::AwayFromZero,
+        crate::support::rounding::RoundingMode::ZeroFiveUp,
     ];
 
     #[test]
     #[cfg(feature = "d307")]
     fn d307_exp_rung_matches_tier_kernel() {
         type Core = crate::types::widths::wide_trig_d307::Core;
-        for v in ["0", "0.5", "1", "1.5", "9.9", "-1", "-9.9", "0.0000000001", "50", "-50"] {
-            let x: crate::D307<19> = v.parse().unwrap();
+        for input in ["0", "0.5", "1", "1.5", "9.9", "-1", "-9.9", "0.0000000001", "50", "-50"] {
+            let value: crate::D307<19> = input.parse().unwrap();
             for mode in ALL_MODES {
                 assert_eq!(
-                    super::series_at_rung::<Core, 19>(x.to_bits(), mode),
-                    crate::algos::support::wide_trig_core::exp_series::<Core, 19>(x.to_bits(), mode),
-                    "exp({v}) mode {mode:?}"
+                    super::series_at_rung::<Core, 19>(value.to_bits(), mode),
+                    crate::algos::support::wide_trig_core::exp_series::<Core, 19>(
+                        value.to_bits(),
+                        mode
+                    ),
+                    "exp({input}) mode {mode:?}"
                 );
             }
         }

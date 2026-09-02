@@ -59,17 +59,22 @@ fn hyper_tiny_pin<C: WideTrigCore, const SCALE: u32, const EXPANDING: bool>(
     if raw == zero {
         return None;
     }
-    let thresh_exp = SCALE - SCALE.div_ceil(3);
-    let thresh = crate::consts::pow10::dispatch::<C::Storage>(thresh_exp);
-    let a = if raw < zero { zero - raw } else { raw };
-    if a > thresh {
+    let threshold_exponent = SCALE - SCALE.div_ceil(3);
+    let threshold = crate::consts::pow10::dispatch::<C::Storage>(threshold_exponent);
+    let abs_raw = if raw < zero { zero - raw } else { raw };
+    if abs_raw > threshold {
         return None;
     }
     let one = <C::Storage as crate::int::types::traits::BigInt>::from_i128(1);
+    // `ZeroFiveUp`'s pivot digit; `abs_raw` is already `|raw|`.
+    let raw_mod_10 = {
+        use crate::int::types::traits::BigInt;
+        abs_raw.div_rem(<C::Storage as BigInt>::TEN).1.to_i128() as u8
+    };
     Some(if EXPANDING {
-        crate::support::rounding::tiny_odd_expanding_directed(raw, zero, one, mode)
+        crate::support::rounding::tiny_odd_expanding_directed(raw, zero, one, raw_mod_10, mode)
     } else {
-        crate::support::rounding::tiny_odd_compressing_directed(raw, zero, one, mode)
+        crate::support::rounding::tiny_odd_compressing_directed(raw, zero, one, raw_mod_10, mode)
     })
 }
 
@@ -103,11 +108,11 @@ where
 {
     use crate::algos::exp::exp_generic as eg;
     let zero = C::storage_zero();
-    let neg = raw < zero;
-    let a = if neg { zero - raw } else { raw };
-    let sat_x = ((SCALE as u128 + C::GUARD as u128 + 2) * 100_000 / 86_859) as i128;
-    let over = a / crate::consts::pow10::dispatch::<C::Storage>(SCALE)
-        > <C::Storage as crate::int::types::traits::BigInt>::from_i128(sat_x);
+    let is_negative = raw < zero;
+    let abs_raw = if is_negative { zero - raw } else { raw };
+    let saturation_bound = ((SCALE as u128 + C::GUARD as u128 + 2) * 100_000 / 86_859) as i128;
+    let over = abs_raw / crate::consts::pow10::dispatch::<C::Storage>(SCALE)
+        > <C::Storage as crate::int::types::traits::BigInt>::from_i128(saturation_bound);
     if !over {
         return None;
     }
@@ -118,11 +123,15 @@ where
             mode,
             C::storage_max(),
             C::storage_min(),
-            |guard| {
-                let w = SCALE + guard;
-                let sat = eg::one::<C::Wagm>(w)
+            |guard_digits| {
+                let working_scale = SCALE + guard_digits;
+                let all_nines = eg::one::<C::Wagm>(working_scale)
                     - <C::Wagm as crate::int::types::traits::BigInt>::ONE;
-                if neg { eg::zero::<C::Wagm>() - sat } else { sat }
+                if is_negative {
+                    eg::zero::<C::Wagm>() - all_nines
+                } else {
+                    all_nines
+                }
             },
         ),
     )
@@ -153,10 +162,10 @@ where
     if raw == C::storage_zero() {
         return C::storage_zero();
     }
-    if let Some(p) = hyper_tiny_pin::<C, SCALE, true>(raw, mode) {
-        return p;
+    if let Some(pinned) = hyper_tiny_pin::<C, SCALE, true>(raw, mode) {
+        return pinned;
     }
-    let neg = raw < C::storage_zero();
+    let is_negative = raw < C::storage_zero();
     let k_lift = C::exp_result_int_digits(C::to_work_scaled(raw, 0), SCALE);
     let base_guard = C::GUARD + k_lift;
     // sinh(x) is irrational for rational x != 0 (never on a grid line):
@@ -169,23 +178,35 @@ where
         true,
         C::storage_max(),
         C::storage_min(),
-        |guard| {
-            let w = SCALE + guard;
-            let sh = hyper_probe_g::<C, C::Wagm>(
+        |guard_digits| {
+            let working_scale = SCALE + guard_digits;
+            let sinh_value = hyper_probe_g::<C, C::Wagm>(
                 raw,
-                guard,
-                w,
+                guard_digits,
+                working_scale,
                 eg::sinh_pos::<C::Wagm>,
                 eg::sinh_pos::<C::Wexp>,
             );
-            if neg { eg::zero::<C::Wagm>() - sh } else { sh }
+            if is_negative {
+                eg::zero::<C::Wagm>() - sinh_value
+            } else {
+                sinh_value
+            }
         },
-        |guard| {
-            let w = SCALE + guard;
-            let v = to_work_scaled_g::<C::Storage, C::Wexp>(raw, guard);
-            let av = if v < eg::zero::<C::Wexp>() { eg::zero::<C::Wexp>() - v } else { v };
-            let sh = eg::sinh_pos::<C::Wexp>(av, w);
-            if neg { eg::zero::<C::Wexp>() - sh } else { sh }
+        |guard_digits| {
+            let working_scale = SCALE + guard_digits;
+            let working_value = to_work_scaled_g::<C::Storage, C::Wexp>(raw, guard_digits);
+            let abs_working_value = if working_value < eg::zero::<C::Wexp>() {
+                eg::zero::<C::Wexp>() - working_value
+            } else {
+                working_value
+            };
+            let sinh_value = eg::sinh_pos::<C::Wexp>(abs_working_value, working_scale);
+            if is_negative {
+                eg::zero::<C::Wexp>() - sinh_value
+            } else {
+                sinh_value
+            }
         },
     )
 }
@@ -222,21 +243,25 @@ where
         true,
         C::storage_max(),
         C::storage_min(),
-        |guard| {
-            let w = SCALE + guard;
+        |guard_digits| {
+            let working_scale = SCALE + guard_digits;
             hyper_probe_g::<C, C::Wagm>(
                 raw,
-                guard,
-                w,
+                guard_digits,
+                working_scale,
                 eg::cosh_pos::<C::Wagm>,
                 eg::cosh_pos::<C::Wexp>,
             )
         },
-        |guard| {
-            let w = SCALE + guard;
-            let v = to_work_scaled_g::<C::Storage, C::Wexp>(raw, guard);
-            let av = if v < eg::zero::<C::Wexp>() { eg::zero::<C::Wexp>() - v } else { v };
-            eg::cosh_pos::<C::Wexp>(av, w)
+        |guard_digits| {
+            let working_scale = SCALE + guard_digits;
+            let working_value = to_work_scaled_g::<C::Storage, C::Wexp>(raw, guard_digits);
+            let abs_working_value = if working_value < eg::zero::<C::Wexp>() {
+                eg::zero::<C::Wexp>() - working_value
+            } else {
+                working_value
+            };
+            eg::cosh_pos::<C::Wexp>(abs_working_value, working_scale)
         },
     )
 }
@@ -259,13 +284,13 @@ where
 {
     use crate::algos::exp::exp_generic as eg;
     use crate::algos::support::wide_trig_core::round_to_storage_directed_g;
-    if let Some(p) = hyper_tiny_pin::<C, SCALE, false>(raw, mode) {
-        return p;
+    if let Some(pinned) = hyper_tiny_pin::<C, SCALE, false>(raw, mode) {
+        return pinned;
     }
-    if let Some(p) = tanh_saturated::<C, SCALE>(raw, mode) {
-        return p;
+    if let Some(pinned) = tanh_saturated::<C, SCALE>(raw, mode) {
+        return pinned;
     }
-    let neg = raw < C::storage_zero();
+    let is_negative = raw < C::storage_zero();
     let base_guard = C::GUARD + tanh_k_lift::<C, SCALE>(raw);
     // No deep-band analytic adjust: unlike asinh's ln composition (whose
     // partial lands exactly on the storage grid, so the walker is uniformly
@@ -279,24 +304,29 @@ where
         mode,
         C::storage_max(),
         C::storage_min(),
-        |guard| {
-            let w = SCALE + guard;
-            let th = hyper_probe_g::<C, C::Wagm>(
+        |guard_digits| {
+            let working_scale = SCALE + guard_digits;
+            let tanh_value = hyper_probe_g::<C, C::Wagm>(
                 raw,
-                guard,
-                w,
+                guard_digits,
+                working_scale,
                 // The shell's fits-branch form, exactly: the DIRECT ratio
                 // (the k-lifted base guard covers the e^|x| amplification;
                 // the m = e^(-2|x|) identity loses the deficit's deciding
                 // digits in this regime).
-                |av, w| {
-                    let ex = eg::exp_fixed::<C::Wagm>(av, w);
-                    let enx = eg::div::<C::Wagm>(eg::one::<C::Wagm>(w), ex, w);
-                    eg::div::<C::Wagm>(ex - enx, ex + enx, w)
+                |abs_working_value, probe_scale| {
+                    let exp_x = eg::exp_fixed::<C::Wagm>(abs_working_value, probe_scale);
+                    let exp_neg_x =
+                        eg::div::<C::Wagm>(eg::one::<C::Wagm>(probe_scale), exp_x, probe_scale);
+                    eg::div::<C::Wagm>(exp_x - exp_neg_x, exp_x + exp_neg_x, probe_scale)
                 },
                 eg::tanh_pos::<C::Wexp>,
             );
-            if neg { eg::zero::<C::Wagm>() - th } else { th }
+            if is_negative {
+                eg::zero::<C::Wagm>() - tanh_value
+            } else {
+                tanh_value
+            }
         },
     )
 }
@@ -325,40 +355,72 @@ where
         return C::storage_zero();
     }
     // asinh(x) = x − x³/6 + … : compressing (the j* = 3 linear band).
-    if let Some(p) = hyper_tiny_pin::<C, SCALE, false>(raw, mode) {
-        return p;
+    if let Some(pinned) = hyper_tiny_pin::<C, SCALE, false>(raw, mode) {
+        return pinned;
     }
-    let neg = raw < C::storage_zero();
-    let (r, decided) = round_to_storage_directed_decided_g::<C::Storage, C::Wagm>(
+    let is_negative = raw < C::storage_zero();
+    let (rounded, decided) = round_to_storage_directed_decided_g::<C::Storage, C::Wagm>(
         C::GUARD,
         SCALE,
         mode,
         C::storage_max(),
         C::storage_min(),
-        |guard| {
-            let w = SCALE + guard;
-            let ln2_w = ln2_at_rung::<C::Wagm>(w, SCALE + C::GUARD);
-            let one_w = eg::one::<C::Wagm>(w);
-            let v = to_work_scaled_g::<C::Storage, C::Wagm>(raw, guard);
-            let ax = if v < eg::zero::<C::Wagm>() { eg::zero::<C::Wagm>() - v } else { v };
-            let inner = if ax >= one_w {
-                let inv = eg::div::<C::Wagm>(one_w, ax, w);
-                let root = eg::sqrt_fixed::<C::Wagm>(one_w + eg::mul::<C::Wagm>(inv, inv, w), w);
-                eg::ln_fixed::<C::Wagm>(ax, w, ln2_w) + eg::ln_fixed::<C::Wagm>(one_w + root, w, ln2_w)
+        |guard_digits| {
+            let working_scale = SCALE + guard_digits;
+            let ln2_w = ln2_at_rung::<C::Wagm>(working_scale, SCALE + C::GUARD);
+            let one_w = eg::one::<C::Wagm>(working_scale);
+            let working_value = to_work_scaled_g::<C::Storage, C::Wagm>(raw, guard_digits);
+            let abs_working_value = if working_value < eg::zero::<C::Wagm>() {
+                eg::zero::<C::Wagm>() - working_value
             } else {
-                let root = eg::sqrt_fixed::<C::Wagm>(eg::mul::<C::Wagm>(ax, ax, w) + one_w, w);
-                eg::ln_fixed::<C::Wagm>(ax + root, w, ln2_w)
+                working_value
             };
-            if neg { eg::zero::<C::Wagm>() - inner } else { inner }
+            let inner = if abs_working_value >= one_w {
+                let reciprocal = eg::div::<C::Wagm>(one_w, abs_working_value, working_scale);
+                let root = eg::sqrt_fixed::<C::Wagm>(
+                    one_w + eg::mul::<C::Wagm>(reciprocal, reciprocal, working_scale),
+                    working_scale,
+                );
+                eg::ln_fixed::<C::Wagm>(abs_working_value, working_scale, ln2_w)
+                    + eg::ln_fixed::<C::Wagm>(one_w + root, working_scale, ln2_w)
+            } else {
+                let root = eg::sqrt_fixed::<C::Wagm>(
+                    eg::mul::<C::Wagm>(abs_working_value, abs_working_value, working_scale) + one_w,
+                    working_scale,
+                );
+                eg::ln_fixed::<C::Wagm>(abs_working_value + root, working_scale, ln2_w)
+            };
+            if is_negative {
+                eg::zero::<C::Wagm>() - inner
+            } else {
+                inner
+            }
         },
     );
     // Deep sub-resolution band (j* ≥ 5, below the linear pin's reach): asinh's
     // Maclaurin signs ALTERNATE (+,−,+,−), like sin/atan, so `alternating =
     // true`. The walker is mode-blind there (`!decided`, the deciding odd term
     // past its reach); the term's sign is analytic. The proven golden-
-    // comprehensive find: asinh(±3e-117) at D462 s461 / D616 s615 (j* = 5).
+    // comprehensive find: asinh(±3e-117) at D462 s461 (j* = 5) and D616 s615
+    // (j* = 7) — both have k = 117, but ⌊461/117⌋ + 1 = 4 rounds up to 5 while
+    // ⌊615/117⌋ + 1 = 6 rounds up to 7, so the two cells do NOT share a `j*`.
+    // The exact alternating-series bracket first: where it closes it PROVES
+    // which side of `r` the true value lies on, superseding the `j*`-parity
+    // rule whose exactness premise fails for a multi-digit significand.
+    if let Some(bracketed) = crate::algos::support::wide_trig_core::adjust_alternating_bracket::<
+        C::Storage,
+        C::Wagm,
+        SCALE,
+    >(
+        rounded,
+        raw,
+        mode,
+        crate::algos::support::wide_trig_core::AlternatingSeries::Asinh,
+    ) {
+        return bracketed;
+    }
     tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
-        r,
+        rounded,
         decided,
         raw,
         mode,
@@ -387,8 +449,10 @@ where
         round_to_storage_directed_near_special_g, to_work_scaled_g,
     };
     {
-        let w0 = SCALE + C::GUARD;
-        if to_work_scaled_g::<C::Storage, C::Wagm>(raw, C::GUARD) < eg::one::<C::Wagm>(w0) {
+        let base_working_scale = SCALE + C::GUARD;
+        if to_work_scaled_g::<C::Storage, C::Wagm>(raw, C::GUARD)
+            < eg::one::<C::Wagm>(base_working_scale)
+        {
             panic!("schoolbook acosh: argument must be >= 1");
         }
     }
@@ -398,19 +462,26 @@ where
         mode,
         C::storage_max(),
         C::storage_min(),
-        |guard| {
-            let w = SCALE + guard;
-            let one_w = eg::one::<C::Wagm>(w);
-            let v = to_work_scaled_g::<C::Storage, C::Wagm>(raw, guard);
+        |guard_digits| {
+            let working_scale = SCALE + guard_digits;
+            let one_w = eg::one::<C::Wagm>(working_scale);
+            let working_value = to_work_scaled_g::<C::Storage, C::Wagm>(raw, guard_digits);
             let two_w = one_w + one_w;
-            if v >= two_w {
-                let inv = eg::div::<C::Wagm>(one_w, v, w);
-                let root = eg::sqrt_fixed::<C::Wagm>(one_w - eg::mul::<C::Wagm>(inv, inv, w), w);
-                C::ln_fixed_routed_agm::<SCALE>(v, w) + C::ln_fixed_routed_agm::<SCALE>(one_w + root, w)
+            if working_value >= two_w {
+                let reciprocal = eg::div::<C::Wagm>(one_w, working_value, working_scale);
+                let root = eg::sqrt_fixed::<C::Wagm>(
+                    one_w - eg::mul::<C::Wagm>(reciprocal, reciprocal, working_scale),
+                    working_scale,
+                );
+                C::ln_fixed_routed_agm::<SCALE>(working_value, working_scale)
+                    + C::ln_fixed_routed_agm::<SCALE>(one_w + root, working_scale)
             } else {
-                let t = v - one_w;
-                let root = eg::sqrt_fixed::<C::Wagm>(eg::mul::<C::Wagm>(t, t + two_w, w), w);
-                eg::log1p_fixed::<C::Wagm>(t + root, w)
+                let x_minus_one = working_value - one_w;
+                let root = eg::sqrt_fixed::<C::Wagm>(
+                    eg::mul::<C::Wagm>(x_minus_one, x_minus_one + two_w, working_scale),
+                    working_scale,
+                );
+                eg::log1p_fixed::<C::Wagm>(x_minus_one + root, working_scale)
             }
         },
     )
@@ -435,16 +506,20 @@ where
         round_to_storage_directed_near_special_g, to_work_scaled_g,
     };
     {
-        let w0 = SCALE + C::GUARD;
-        let v0 = to_work_scaled_g::<C::Storage, C::Wagm>(raw, C::GUARD);
-        let ax0 = if v0 < eg::zero::<C::Wagm>() { eg::zero::<C::Wagm>() - v0 } else { v0 };
-        if ax0 >= eg::one::<C::Wagm>(w0) {
+        let base_working_scale = SCALE + C::GUARD;
+        let base_working_value = to_work_scaled_g::<C::Storage, C::Wagm>(raw, C::GUARD);
+        let abs_base_working_value = if base_working_value < eg::zero::<C::Wagm>() {
+            eg::zero::<C::Wagm>() - base_working_value
+        } else {
+            base_working_value
+        };
+        if abs_base_working_value >= eg::one::<C::Wagm>(base_working_scale) {
             panic!("schoolbook atanh: argument out of domain (-1, 1)");
         }
     }
     // atanh(x) = x + x³/3 + … : expanding.
-    if let Some(p) = hyper_tiny_pin::<C, SCALE, true>(raw, mode) {
-        return p;
+    if let Some(pinned) = hyper_tiny_pin::<C, SCALE, true>(raw, mode) {
+        return pinned;
     }
     round_to_storage_directed_near_special_g::<C::Storage, C::Wagm>(
         C::GUARD,
@@ -452,12 +527,12 @@ where
         mode,
         C::storage_max(),
         C::storage_min(),
-        |guard| {
-            let w = SCALE + guard;
-            let one_w = eg::one::<C::Wagm>(w);
-            let v = to_work_scaled_g::<C::Storage, C::Wagm>(raw, guard);
-            (C::ln_fixed_routed_agm::<SCALE>(one_w + v, w)
-                - C::ln_fixed_routed_agm::<SCALE>(one_w - v, w))
+        |guard_digits| {
+            let working_scale = SCALE + guard_digits;
+            let one_w = eg::one::<C::Wagm>(working_scale);
+            let working_value = to_work_scaled_g::<C::Storage, C::Wagm>(raw, guard_digits);
+            (C::ln_fixed_routed_agm::<SCALE>(one_w + working_value, working_scale)
+                - C::ln_fixed_routed_agm::<SCALE>(one_w - working_value, working_scale))
                 >> 1
         },
     )
@@ -485,8 +560,8 @@ where
 #[inline]
 fn hyper_probe_g<C: WideTrigCore, Wk: crate::int::types::traits::BigInt>(
     raw: C::Storage,
-    guard: u32,
-    w: u32,
+    guard_digits: u32,
+    working_scale: u32,
     f_rung: impl Fn(Wk, u32) -> Wk,
     f_wide: impl Fn(C::Wexp, u32) -> C::Wexp,
 ) -> Wk
@@ -497,18 +572,22 @@ where
 {
     use crate::algos::exp::exp_generic as eg;
     use crate::algos::support::wide_trig_core::to_work_scaled_g;
-    let v = to_work_scaled_g::<C::Storage, Wk>(raw, guard);
-    let av = if v < eg::zero::<Wk>() { eg::zero::<Wk>() - v } else { v };
-    if eg::exp_peak_fits::<Wk>(av, w) {
-        f_rung(av, w)
+    let working_value = to_work_scaled_g::<C::Storage, Wk>(raw, guard_digits);
+    let abs_working_value = if working_value < eg::zero::<Wk>() {
+        eg::zero::<Wk>() - working_value
     } else {
-        let v_e = to_work_scaled_g::<C::Storage, C::Wexp>(raw, guard);
-        let av_e = if v_e < eg::zero::<C::Wexp>() {
-            eg::zero::<C::Wexp>() - v_e
+        working_value
+    };
+    if eg::exp_peak_fits::<Wk>(abs_working_value, working_scale) {
+        f_rung(abs_working_value, working_scale)
+    } else {
+        let exp_working_value = to_work_scaled_g::<C::Storage, C::Wexp>(raw, guard_digits);
+        let abs_exp_working_value = if exp_working_value < eg::zero::<C::Wexp>() {
+            eg::zero::<C::Wexp>() - exp_working_value
         } else {
-            v_e
+            exp_working_value
         };
-        eg::resize_or_panic::<C::Wexp, Wk>(f_wide(av_e, w))
+        eg::resize_or_panic::<C::Wexp, Wk>(f_wide(abs_exp_working_value, working_scale))
     }
 }
 
@@ -534,10 +613,10 @@ where
     if raw == C::storage_zero() {
         return C::storage_zero();
     }
-    if let Some(p) = hyper_tiny_pin::<C, SCALE, true>(raw, mode) {
-        return p;
+    if let Some(pinned) = hyper_tiny_pin::<C, SCALE, true>(raw, mode) {
+        return pinned;
     }
-    let neg = raw < C::storage_zero();
+    let is_negative = raw < C::storage_zero();
     let k_lift = C::exp_result_int_digits(C::to_work_scaled(raw, 0), SCALE);
     let base_guard = C::GUARD + k_lift;
     // never_exact two-width widening, rung-first: a near-tie unresolved
@@ -550,23 +629,37 @@ where
         true,
         C::storage_max(),
         C::storage_min(),
-        |guard| {
-            let w = SCALE + guard;
-            let sh = hyper_probe_g::<C, Wk>(
+        |guard_digits| {
+            let working_scale = SCALE + guard_digits;
+            let sinh_value = hyper_probe_g::<C, Wk>(
                 raw,
-                guard,
-                w,
-                |av, w| eg::sinh_pos::<Wk>(av, w),
+                guard_digits,
+                working_scale,
+                |abs_working_value, probe_scale| {
+                    eg::sinh_pos::<Wk>(abs_working_value, probe_scale)
+                },
                 eg::sinh_pos::<C::Wexp>,
             );
-            if neg { eg::zero::<Wk>() - sh } else { sh }
+            if is_negative {
+                eg::zero::<Wk>() - sinh_value
+            } else {
+                sinh_value
+            }
         },
-        |guard| {
-            let w = SCALE + guard;
-            let v = to_work_scaled_g::<C::Storage, C::Wexp>(raw, guard);
-            let av = if v < eg::zero::<C::Wexp>() { eg::zero::<C::Wexp>() - v } else { v };
-            let sh = eg::sinh_pos::<C::Wexp>(av, w);
-            if neg { eg::zero::<C::Wexp>() - sh } else { sh }
+        |guard_digits| {
+            let working_scale = SCALE + guard_digits;
+            let working_value = to_work_scaled_g::<C::Storage, C::Wexp>(raw, guard_digits);
+            let abs_working_value = if working_value < eg::zero::<C::Wexp>() {
+                eg::zero::<C::Wexp>() - working_value
+            } else {
+                working_value
+            };
+            let sinh_value = eg::sinh_pos::<C::Wexp>(abs_working_value, working_scale);
+            if is_negative {
+                eg::zero::<C::Wexp>() - sinh_value
+            } else {
+                sinh_value
+            }
         },
     )
 }
@@ -601,21 +694,27 @@ where
         true,
         C::storage_max(),
         C::storage_min(),
-        |guard| {
-            let w = SCALE + guard;
+        |guard_digits| {
+            let working_scale = SCALE + guard_digits;
             hyper_probe_g::<C, Wk>(
                 raw,
-                guard,
-                w,
-                |av, w| eg::cosh_pos::<Wk>(av, w),
+                guard_digits,
+                working_scale,
+                |abs_working_value, probe_scale| {
+                    eg::cosh_pos::<Wk>(abs_working_value, probe_scale)
+                },
                 eg::cosh_pos::<C::Wexp>,
             )
         },
-        |guard| {
-            let w = SCALE + guard;
-            let v = to_work_scaled_g::<C::Storage, C::Wexp>(raw, guard);
-            let av = if v < eg::zero::<C::Wexp>() { eg::zero::<C::Wexp>() - v } else { v };
-            eg::cosh_pos::<C::Wexp>(av, w)
+        |guard_digits| {
+            let working_scale = SCALE + guard_digits;
+            let working_value = to_work_scaled_g::<C::Storage, C::Wexp>(raw, guard_digits);
+            let abs_working_value = if working_value < eg::zero::<C::Wexp>() {
+                eg::zero::<C::Wexp>() - working_value
+            } else {
+                working_value
+            };
+            eg::cosh_pos::<C::Wexp>(abs_working_value, working_scale)
         },
     )
 }
@@ -640,13 +739,13 @@ where
     // The canonical pins — identical to the tier kernel. The saturation
     // fast path is unreachable at the rung (the policy gate admits
     // |x| < 10, far below the onset) but kept for kernel-level callers.
-    if let Some(p) = hyper_tiny_pin::<C, SCALE, false>(raw, mode) {
-        return p;
+    if let Some(pinned) = hyper_tiny_pin::<C, SCALE, false>(raw, mode) {
+        return pinned;
     }
-    if let Some(p) = tanh_saturated::<C, SCALE>(raw, mode) {
-        return p;
+    if let Some(pinned) = tanh_saturated::<C, SCALE>(raw, mode) {
+        return pinned;
     }
-    let neg = raw < C::storage_zero();
+    let is_negative = raw < C::storage_zero();
     let base_guard = C::GUARD + tanh_k_lift::<C, SCALE>(raw);
     // Two-width fall-up to the tier walker width `Wagm`. No deep-band analytic
     // adjust — see the tier [`tanh_schoolbook`] (the exp-ratio composition
@@ -657,58 +756,75 @@ where
         mode,
         C::storage_max(),
         C::storage_min(),
-        |guard| {
-            let w = SCALE + guard;
-            let th = hyper_probe_g::<C, Wk>(
+        |guard_digits| {
+            let working_scale = SCALE + guard_digits;
+            let tanh_value = hyper_probe_g::<C, Wk>(
                 raw,
-                guard,
-                w,
+                guard_digits,
+                working_scale,
                 // Direct ratio — see the tier kernel.
-                |av, w| {
-                    let ex = eg::exp_fixed::<Wk>(av, w);
-                    let enx = eg::div::<Wk>(eg::one::<Wk>(w), ex, w);
-                    eg::div::<Wk>(ex - enx, ex + enx, w)
+                |abs_working_value, probe_scale| {
+                    let exp_x = eg::exp_fixed::<Wk>(abs_working_value, probe_scale);
+                    let exp_neg_x =
+                        eg::div::<Wk>(eg::one::<Wk>(probe_scale), exp_x, probe_scale);
+                    eg::div::<Wk>(exp_x - exp_neg_x, exp_x + exp_neg_x, probe_scale)
                 },
                 eg::tanh_pos::<C::Wexp>,
             );
-            if neg { eg::zero::<Wk>() - th } else { th }
+            if is_negative {
+                eg::zero::<Wk>() - tanh_value
+            } else {
+                tanh_value
+            }
         },
-        |guard| {
-            let w = SCALE + guard;
-            let th = hyper_probe_g::<C, C::Wagm>(
+        |guard_digits| {
+            let working_scale = SCALE + guard_digits;
+            let tanh_value = hyper_probe_g::<C, C::Wagm>(
                 raw,
-                guard,
-                w,
+                guard_digits,
+                working_scale,
                 // The shell's fits-branch form, exactly: the DIRECT ratio
                 // (the k-lifted base guard covers the e^|x| amplification;
                 // the m = e^(-2|x|) identity loses the deficit's deciding
                 // digits in this regime).
-                |av, w| {
-                    let ex = eg::exp_fixed::<C::Wagm>(av, w);
-                    let enx = eg::div::<C::Wagm>(eg::one::<C::Wagm>(w), ex, w);
-                    eg::div::<C::Wagm>(ex - enx, ex + enx, w)
+                |abs_working_value, probe_scale| {
+                    let exp_x = eg::exp_fixed::<C::Wagm>(abs_working_value, probe_scale);
+                    let exp_neg_x =
+                        eg::div::<C::Wagm>(eg::one::<C::Wagm>(probe_scale), exp_x, probe_scale);
+                    eg::div::<C::Wagm>(exp_x - exp_neg_x, exp_x + exp_neg_x, probe_scale)
                 },
                 eg::tanh_pos::<C::Wexp>,
             );
-            if neg { eg::zero::<C::Wagm>() - th } else { th }
+            if is_negative {
+                eg::zero::<C::Wagm>() - tanh_value
+            } else {
+                tanh_value
+            }
         },
     )
 }
 
-/// `ln 2` at working scale `w` in the rung integer `Wk`: const-table
-/// keyed on the CONST base working scale on the hot path (`w ==
-/// base_w`, const-folds per monomorphisation — the rung sibling of the
-/// per-tier `ln2_cf`), the runtime-keyed lookup on the Ziv escalation
-/// path. Value-identical either way (same table entry). Mirrors
+/// `ln 2` at `working_scale` in the rung integer `Wk`: const-table
+/// keyed on the CONST base working scale on the hot path
+/// (`working_scale == base_working_scale`, const-folds per
+/// monomorphisation — the rung sibling of the per-tier `ln2_cf`), the
+/// runtime-keyed lookup on the Ziv escalation path. Value-identical
+/// either way (same table entry). Mirrors
 /// `wide_trig_core::pi_at_rung` / `ln_series_g`'s ln2 threading.
 #[cfg(feature = "_wide-support")]
 #[inline]
-fn ln2_at_rung<Wk: crate::int::types::traits::BigInt>(w: u32, base_w: u32) -> Wk {
-    if w == base_w {
-        crate::consts::ln2_by_scale::<Wk>(base_w, crate::support::rounding::DEFAULT_ROUNDING_MODE)
+fn ln2_at_rung<Wk: crate::int::types::traits::BigInt>(
+    working_scale: u32,
+    base_working_scale: u32,
+) -> Wk {
+    if working_scale == base_working_scale {
+        crate::consts::ln2_by_scale::<Wk>(
+            base_working_scale,
+            crate::support::rounding::DEFAULT_ROUNDING_MODE,
+        )
     } else {
         crate::consts::ln2_by_working_scale::<Wk>(
-            w,
+            working_scale,
             crate::support::rounding::DEFAULT_ROUNDING_MODE,
         )
     }
@@ -739,56 +855,103 @@ where
     }
     // The canonical pins — identical to the tier kernel (compressing:
     // asinh(x) = x − x³/6 + …).
-    if let Some(p) = hyper_tiny_pin::<C, SCALE, false>(raw, mode) {
-        return p;
+    if let Some(pinned) = hyper_tiny_pin::<C, SCALE, false>(raw, mode) {
+        return pinned;
     }
-    let neg = raw < C::storage_zero();
+    let is_negative = raw < C::storage_zero();
     // Two-width fall-up to the tier walker width `Wagm` - the second
     // closure is the tier kernel's, verbatim. Retain the `decided` verdict
     // for the deep-band analytic adjust.
-    let (r, decided) = round_to_storage_directed_widening_decided_g::<C::Storage, Wk, C::Wagm>(
-        C::GUARD,
-        SCALE,
-        mode,
-        C::storage_max(),
-        C::storage_min(),
-        |guard| {
-            let w = SCALE + guard;
-            let ln2_w = ln2_at_rung::<Wk>(w, SCALE + C::GUARD);
-            let one_w = eg::one::<Wk>(w);
-            let v = to_work_scaled_g::<C::Storage, Wk>(raw, guard);
-            let ax = if v < eg::zero::<Wk>() { eg::zero::<Wk>() - v } else { v };
-            let inner = if ax >= one_w {
-                let inv = eg::div::<Wk>(one_w, ax, w);
-                let root = eg::sqrt_fixed::<Wk>(one_w + eg::mul::<Wk>(inv, inv, w), w);
-                eg::ln_fixed::<Wk>(ax, w, ln2_w) + eg::ln_fixed::<Wk>(one_w + root, w, ln2_w)
-            } else {
-                let root = eg::sqrt_fixed::<Wk>(eg::mul::<Wk>(ax, ax, w) + one_w, w);
-                eg::ln_fixed::<Wk>(ax + root, w, ln2_w)
-            };
-            if neg { eg::zero::<Wk>() - inner } else { inner }
-        },
-        |guard| {
-            let w = SCALE + guard;
-            let ln2_w = ln2_at_rung::<C::Wagm>(w, SCALE + C::GUARD);
-            let one_w = eg::one::<C::Wagm>(w);
-            let v = to_work_scaled_g::<C::Storage, C::Wagm>(raw, guard);
-            let ax = if v < eg::zero::<C::Wagm>() { eg::zero::<C::Wagm>() - v } else { v };
-            let inner = if ax >= one_w {
-                let inv = eg::div::<C::Wagm>(one_w, ax, w);
-                let root = eg::sqrt_fixed::<C::Wagm>(one_w + eg::mul::<C::Wagm>(inv, inv, w), w);
-                eg::ln_fixed::<C::Wagm>(ax, w, ln2_w) + eg::ln_fixed::<C::Wagm>(one_w + root, w, ln2_w)
-            } else {
-                let root = eg::sqrt_fixed::<C::Wagm>(eg::mul::<C::Wagm>(ax, ax, w) + one_w, w);
-                eg::ln_fixed::<C::Wagm>(ax + root, w, ln2_w)
-            };
-            if neg { eg::zero::<C::Wagm>() - inner } else { inner }
-        },
-    );
+    let (rounded, decided) =
+        round_to_storage_directed_widening_decided_g::<C::Storage, Wk, C::Wagm>(
+            C::GUARD,
+            SCALE,
+            mode,
+            C::storage_max(),
+            C::storage_min(),
+            |guard_digits| {
+                let working_scale = SCALE + guard_digits;
+                let ln2_w = ln2_at_rung::<Wk>(working_scale, SCALE + C::GUARD);
+                let one_w = eg::one::<Wk>(working_scale);
+                let working_value = to_work_scaled_g::<C::Storage, Wk>(raw, guard_digits);
+                let abs_working_value = if working_value < eg::zero::<Wk>() {
+                    eg::zero::<Wk>() - working_value
+                } else {
+                    working_value
+                };
+                let inner = if abs_working_value >= one_w {
+                    let reciprocal = eg::div::<Wk>(one_w, abs_working_value, working_scale);
+                    let root = eg::sqrt_fixed::<Wk>(
+                        one_w + eg::mul::<Wk>(reciprocal, reciprocal, working_scale),
+                        working_scale,
+                    );
+                    eg::ln_fixed::<Wk>(abs_working_value, working_scale, ln2_w)
+                        + eg::ln_fixed::<Wk>(one_w + root, working_scale, ln2_w)
+                } else {
+                    let root = eg::sqrt_fixed::<Wk>(
+                        eg::mul::<Wk>(abs_working_value, abs_working_value, working_scale) + one_w,
+                        working_scale,
+                    );
+                    eg::ln_fixed::<Wk>(abs_working_value + root, working_scale, ln2_w)
+                };
+                if is_negative {
+                    eg::zero::<Wk>() - inner
+                } else {
+                    inner
+                }
+            },
+            |guard_digits| {
+                let working_scale = SCALE + guard_digits;
+                let ln2_w = ln2_at_rung::<C::Wagm>(working_scale, SCALE + C::GUARD);
+                let one_w = eg::one::<C::Wagm>(working_scale);
+                let working_value = to_work_scaled_g::<C::Storage, C::Wagm>(raw, guard_digits);
+                let abs_working_value = if working_value < eg::zero::<C::Wagm>() {
+                    eg::zero::<C::Wagm>() - working_value
+                } else {
+                    working_value
+                };
+                let inner = if abs_working_value >= one_w {
+                    let reciprocal = eg::div::<C::Wagm>(one_w, abs_working_value, working_scale);
+                    let root = eg::sqrt_fixed::<C::Wagm>(
+                        one_w + eg::mul::<C::Wagm>(reciprocal, reciprocal, working_scale),
+                        working_scale,
+                    );
+                    eg::ln_fixed::<C::Wagm>(abs_working_value, working_scale, ln2_w)
+                        + eg::ln_fixed::<C::Wagm>(one_w + root, working_scale, ln2_w)
+                } else {
+                    let root = eg::sqrt_fixed::<C::Wagm>(
+                        eg::mul::<C::Wagm>(abs_working_value, abs_working_value, working_scale)
+                            + one_w,
+                        working_scale,
+                    );
+                    eg::ln_fixed::<C::Wagm>(abs_working_value + root, working_scale, ln2_w)
+                };
+                if is_negative {
+                    eg::zero::<C::Wagm>() - inner
+                } else {
+                    inner
+                }
+            },
+        );
     // Deep sub-resolution band (j* ≥ 5): asinh alternates — see the tier
     // [`asinh_schoolbook`]. The widening walker falls up to `C::Wagm`.
+    // The exact alternating-series bracket first: where it closes it PROVES
+    // which side of `r` the true value lies on, superseding the `j*`-parity
+    // rule whose exactness premise fails for a multi-digit significand.
+    if let Some(bracketed) = crate::algos::support::wide_trig_core::adjust_alternating_bracket::<
+        C::Storage,
+        C::Wagm,
+        SCALE,
+    >(
+        rounded,
+        raw,
+        mode,
+        crate::algos::support::wide_trig_core::AlternatingSeries::Asinh,
+    ) {
+        return bracketed;
+    }
     tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
-        r,
+        rounded,
         decided,
         raw,
         mode,
@@ -818,8 +981,8 @@ where
         round_to_storage_directed_near_special_widening_g, to_work_scaled_g,
     };
     {
-        let w0 = SCALE + C::GUARD;
-        if to_work_scaled_g::<C::Storage, Wk>(raw, C::GUARD) < eg::one::<Wk>(w0) {
+        let base_working_scale = SCALE + C::GUARD;
+        if to_work_scaled_g::<C::Storage, Wk>(raw, C::GUARD) < eg::one::<Wk>(base_working_scale) {
             panic!("schoolbook acosh: argument must be >= 1");
         }
     }
@@ -831,35 +994,49 @@ where
         mode,
         C::storage_max(),
         C::storage_min(),
-        |guard| {
-            let w = SCALE + guard;
-            let ln2_w = ln2_at_rung::<Wk>(w, SCALE + C::GUARD);
-            let one_w = eg::one::<Wk>(w);
-            let v = to_work_scaled_g::<C::Storage, Wk>(raw, guard);
+        |guard_digits| {
+            let working_scale = SCALE + guard_digits;
+            let ln2_w = ln2_at_rung::<Wk>(working_scale, SCALE + C::GUARD);
+            let one_w = eg::one::<Wk>(working_scale);
+            let working_value = to_work_scaled_g::<C::Storage, Wk>(raw, guard_digits);
             let two_w = one_w + one_w;
-            if v >= two_w {
-                let inv = eg::div::<Wk>(one_w, v, w);
-                let root = eg::sqrt_fixed::<Wk>(one_w - eg::mul::<Wk>(inv, inv, w), w);
-                eg::ln_fixed::<Wk>(v, w, ln2_w) + eg::ln_fixed::<Wk>(one_w + root, w, ln2_w)
+            if working_value >= two_w {
+                let reciprocal = eg::div::<Wk>(one_w, working_value, working_scale);
+                let root = eg::sqrt_fixed::<Wk>(
+                    one_w - eg::mul::<Wk>(reciprocal, reciprocal, working_scale),
+                    working_scale,
+                );
+                eg::ln_fixed::<Wk>(working_value, working_scale, ln2_w)
+                    + eg::ln_fixed::<Wk>(one_w + root, working_scale, ln2_w)
             } else {
-                let t = v - one_w;
-                let root = eg::sqrt_fixed::<Wk>(eg::mul::<Wk>(t, t + two_w, w), w);
-                eg::log1p_fixed::<Wk>(t + root, w)
+                let x_minus_one = working_value - one_w;
+                let root = eg::sqrt_fixed::<Wk>(
+                    eg::mul::<Wk>(x_minus_one, x_minus_one + two_w, working_scale),
+                    working_scale,
+                );
+                eg::log1p_fixed::<Wk>(x_minus_one + root, working_scale)
             }
         },
-        |guard| {
-            let w = SCALE + guard;
-            let one_w = eg::one::<C::Wagm>(w);
-            let v = to_work_scaled_g::<C::Storage, C::Wagm>(raw, guard);
+        |guard_digits| {
+            let working_scale = SCALE + guard_digits;
+            let one_w = eg::one::<C::Wagm>(working_scale);
+            let working_value = to_work_scaled_g::<C::Storage, C::Wagm>(raw, guard_digits);
             let two_w = one_w + one_w;
-            if v >= two_w {
-                let inv = eg::div::<C::Wagm>(one_w, v, w);
-                let root = eg::sqrt_fixed::<C::Wagm>(one_w - eg::mul::<C::Wagm>(inv, inv, w), w);
-                C::ln_fixed_routed_agm::<SCALE>(v, w) + C::ln_fixed_routed_agm::<SCALE>(one_w + root, w)
+            if working_value >= two_w {
+                let reciprocal = eg::div::<C::Wagm>(one_w, working_value, working_scale);
+                let root = eg::sqrt_fixed::<C::Wagm>(
+                    one_w - eg::mul::<C::Wagm>(reciprocal, reciprocal, working_scale),
+                    working_scale,
+                );
+                C::ln_fixed_routed_agm::<SCALE>(working_value, working_scale)
+                    + C::ln_fixed_routed_agm::<SCALE>(one_w + root, working_scale)
             } else {
-                let t = v - one_w;
-                let root = eg::sqrt_fixed::<C::Wagm>(eg::mul::<C::Wagm>(t, t + two_w, w), w);
-                eg::log1p_fixed::<C::Wagm>(t + root, w)
+                let x_minus_one = working_value - one_w;
+                let root = eg::sqrt_fixed::<C::Wagm>(
+                    eg::mul::<C::Wagm>(x_minus_one, x_minus_one + two_w, working_scale),
+                    working_scale,
+                );
+                eg::log1p_fixed::<C::Wagm>(x_minus_one + root, working_scale)
             }
         },
     )
@@ -887,17 +1064,21 @@ where
         round_to_storage_directed_near_special_widening_g, to_work_scaled_g,
     };
     {
-        let w0 = SCALE + C::GUARD;
-        let v0 = to_work_scaled_g::<C::Storage, Wk>(raw, C::GUARD);
-        let ax0 = if v0 < eg::zero::<Wk>() { eg::zero::<Wk>() - v0 } else { v0 };
-        if ax0 >= eg::one::<Wk>(w0) {
+        let base_working_scale = SCALE + C::GUARD;
+        let base_working_value = to_work_scaled_g::<C::Storage, Wk>(raw, C::GUARD);
+        let abs_base_working_value = if base_working_value < eg::zero::<Wk>() {
+            eg::zero::<Wk>() - base_working_value
+        } else {
+            base_working_value
+        };
+        if abs_base_working_value >= eg::one::<Wk>(base_working_scale) {
             panic!("schoolbook atanh: argument out of domain (-1, 1)");
         }
     }
     // The canonical pins — identical to the tier kernel (expanding:
     // atanh(x) = x + x³/3 + …).
-    if let Some(p) = hyper_tiny_pin::<C, SCALE, true>(raw, mode) {
-        return p;
+    if let Some(pinned) = hyper_tiny_pin::<C, SCALE, true>(raw, mode) {
+        return pinned;
     }
     // Two-width fall-up (near-special form) to the tier walker width
     // `Wagm` - see [`acosh_schoolbook_g`].
@@ -907,20 +1088,21 @@ where
         mode,
         C::storage_max(),
         C::storage_min(),
-        |guard| {
-            let w = SCALE + guard;
-            let ln2_w = ln2_at_rung::<Wk>(w, SCALE + C::GUARD);
-            let one_w = eg::one::<Wk>(w);
-            let v = to_work_scaled_g::<C::Storage, Wk>(raw, guard);
-            (eg::ln_fixed::<Wk>(one_w + v, w, ln2_w) - eg::ln_fixed::<Wk>(one_w - v, w, ln2_w))
+        |guard_digits| {
+            let working_scale = SCALE + guard_digits;
+            let ln2_w = ln2_at_rung::<Wk>(working_scale, SCALE + C::GUARD);
+            let one_w = eg::one::<Wk>(working_scale);
+            let working_value = to_work_scaled_g::<C::Storage, Wk>(raw, guard_digits);
+            (eg::ln_fixed::<Wk>(one_w + working_value, working_scale, ln2_w)
+                - eg::ln_fixed::<Wk>(one_w - working_value, working_scale, ln2_w))
                 >> 1
         },
-        |guard| {
-            let w = SCALE + guard;
-            let one_w = eg::one::<C::Wagm>(w);
-            let v = to_work_scaled_g::<C::Storage, C::Wagm>(raw, guard);
-            (C::ln_fixed_routed_agm::<SCALE>(one_w + v, w)
-                - C::ln_fixed_routed_agm::<SCALE>(one_w - v, w))
+        |guard_digits| {
+            let working_scale = SCALE + guard_digits;
+            let one_w = eg::one::<C::Wagm>(working_scale);
+            let working_value = to_work_scaled_g::<C::Storage, C::Wagm>(raw, guard_digits);
+            (C::ln_fixed_routed_agm::<SCALE>(one_w + working_value, working_scale)
+                - C::ln_fixed_routed_agm::<SCALE>(one_w - working_value, working_scale))
                 >> 1
         },
     )
@@ -929,8 +1111,8 @@ where
 // -- Narrow tier -- Int<2> storage, math in the 256-bit Fixed ---------
 
 #[inline]
-fn one_fixed(w: u32) -> Fixed {
-    Fixed { negative: false, mag: Fixed::pow10(w) }
+fn one_fixed(working_scale: u32) -> Fixed {
+    Fixed { negative: false, mag: Fixed::pow10(working_scale) }
 }
 
 #[inline]
@@ -939,16 +1121,17 @@ fn sinh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 
     if raw == 0 {
         return 0;
     }
-    let w = SCALE + STRICT_GUARD;
-    let v = to_fixed(raw);
-    let neg = raw < 0;
-    let av = Fixed { negative: false, mag: v.mag };
-    let ex = exp_fixed(av, w);
-    let one_w = one_fixed(w);
-    let enx = one_w.div(ex, w);
-    let sh = ex.sub(enx).halve();
-    let sh = if neg { sh.neg() } else { sh };
-    sh.round_to_i128_with(w, SCALE, mode)
+    let working_scale = SCALE + STRICT_GUARD;
+    let working_value = to_fixed(raw);
+    let is_negative = raw < 0;
+    let abs_working_value = Fixed { negative: false, mag: working_value.mag };
+    let exp_x = exp_fixed(abs_working_value, working_scale);
+    let one_w = one_fixed(working_scale);
+    let exp_neg_x = one_w.div(exp_x, working_scale);
+    let sinh_value = exp_x.sub(exp_neg_x).halve();
+    let sinh_value = if is_negative { sinh_value.neg() } else { sinh_value };
+    sinh_value
+        .round_to_i128_with(working_scale, SCALE, mode)
         .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("sinh", SCALE))
 }
 
@@ -958,15 +1141,16 @@ fn cosh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 
     if raw == 0 {
         return 10_i128.pow(SCALE);
     }
-    let w = SCALE + STRICT_GUARD;
-    let v = to_fixed(raw);
-    let av = Fixed { negative: false, mag: v.mag };
-    let ex = exp_fixed(av, w);
-    let one_w = one_fixed(w);
-    let enx = one_w.div(ex, w);
-    ex.add(enx)
+    let working_scale = SCALE + STRICT_GUARD;
+    let working_value = to_fixed(raw);
+    let abs_working_value = Fixed { negative: false, mag: working_value.mag };
+    let exp_x = exp_fixed(abs_working_value, working_scale);
+    let one_w = one_fixed(working_scale);
+    let exp_neg_x = one_w.div(exp_x, working_scale);
+    exp_x
+        .add(exp_neg_x)
         .halve()
-        .round_to_i128_with(w, SCALE, mode)
+        .round_to_i128_with(working_scale, SCALE, mode)
         .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("cosh", SCALE))
 }
 
@@ -976,35 +1160,38 @@ fn tanh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 
     if raw == 0 {
         return 0;
     }
-    let w = SCALE + STRICT_GUARD;
-    let one_w = one_fixed(w);
-    let neg = raw < 0;
+    let working_scale = SCALE + STRICT_GUARD;
+    let one_w = one_fixed(working_scale);
+    let is_negative = raw < 0;
     // Large |x| via the NEGATIVE-exponent identity tanh(|x|) = (1 − m)/(1 + m),
     // m = e^(−2|x|) = (e^|x| − e^−|x|)/(e^|x| + e^−|x|) — exact. Forming e^(+|x|)
-    // directly overflows the 256-bit `Fixed` once |x| ≳ (256·ln2 − w·ln10) (≈ 44
-    // at w = 58), BELOW the all-nines saturation onset |x| ≳ 1.1513·w (`thr_x`),
+    // directly overflows the 256-bit `Fixed` once |x| ≳ (256·ln2 − working_scale·ln10)
+    // (≈ 44 at working_scale = 58), BELOW the all-nines saturation onset
+    // |x| ≳ 1.1513·working_scale (`saturation_bound`),
     // leaving a panic GAP. The identity sidesteps it: m is TINY for large |x|,
     // formed by `exp_fixed` on the NEGATIVE argument −2|x| whose `2^k` reassembly
     // shifts DOWN, never the overflowing up-shift. Mirrors the routed
     // `tanh_with_raw` / wide `exp_generic::tanh_pos`, bit-for-bit.
-    let thr_x = (w as i128) * 1152 / 1000 + 2;
-    // Largest working value below 1 (value 1 − 10^−w): the all-nines saturation.
+    let saturation_bound = (working_scale as i128) * 1152 / 1000 + 2;
+    // Largest working value below 1 (value 1 − 10^−working_scale): the all-nines
+    // saturation.
     let saturated = one_w.sub(Fixed::from_u128_mag(1, false));
-    let th = if raw.abs() / 10_i128.pow(SCALE) > thr_x {
+    let tanh_value = if raw.abs() / 10_i128.pow(SCALE) > saturation_bound {
         saturated
     } else {
-        let v = to_fixed(raw);
-        let av = Fixed { negative: false, mag: v.mag };
-        let m = exp_fixed(av.double().neg(), w);
+        let working_value = to_fixed(raw);
+        let abs_working_value = Fixed { negative: false, mag: working_value.mag };
+        let m = exp_fixed(abs_working_value.double().neg(), working_scale);
         if m.is_zero() {
-            // |x| just under `thr_x`: m underflowed; tanh is all-nines too.
+            // |x| just under `saturation_bound`: m underflowed; tanh is all-nines too.
             saturated
         } else {
-            one_w.sub(m).div(one_w.add(m), w)
+            one_w.sub(m).div(one_w.add(m), working_scale)
         }
     };
-    let th = if neg { th.neg() } else { th };
-    th.round_to_i128_with(w, SCALE, mode)
+    let tanh_value = if is_negative { tanh_value.neg() } else { tanh_value };
+    tanh_value
+        .round_to_i128_with(working_scale, SCALE, mode)
         .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("tanh", SCALE))
 }
 
@@ -1014,21 +1201,27 @@ fn asinh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128
     if raw == 0 {
         return 0;
     }
-    let w = SCALE + STRICT_GUARD;
-    let one_w = one_fixed(w);
-    let v = to_fixed(raw);
-    let ax = Fixed { negative: false, mag: v.mag };
-    let inner = if ax.ge_mag(one_w) {
-        let inv = one_w.div(ax, w);
-        let root = one_w.add(inv.mul(inv, w)).sqrt(w);
-        ln_fixed(ax, w).add(ln_fixed(one_w.add(root), w))
+    let working_scale = SCALE + STRICT_GUARD;
+    let one_w = one_fixed(working_scale);
+    let working_value = to_fixed(raw);
+    let abs_working_value = Fixed { negative: false, mag: working_value.mag };
+    let inner = if abs_working_value.ge_mag(one_w) {
+        let reciprocal = one_w.div(abs_working_value, working_scale);
+        let root = one_w
+            .add(reciprocal.mul(reciprocal, working_scale))
+            .sqrt(working_scale);
+        ln_fixed(abs_working_value, working_scale)
+            .add(ln_fixed(one_w.add(root), working_scale))
     } else {
-        let root = ax.mul(ax, w).add(one_w).sqrt(w);
-        ln_fixed(ax.add(root), w)
+        let root = abs_working_value
+            .mul(abs_working_value, working_scale)
+            .add(one_w)
+            .sqrt(working_scale);
+        ln_fixed(abs_working_value.add(root), working_scale)
     };
     let signed = if raw < 0 { inner.neg() } else { inner };
     signed
-        .round_to_i128_with(w, SCALE, mode)
+        .round_to_i128_with(working_scale, SCALE, mode)
         .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("asinh", SCALE))
 }
 
@@ -1039,21 +1232,29 @@ fn acosh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128
     if raw == one_bits {
         return 0;
     }
-    let w = SCALE + STRICT_GUARD;
-    let one_w = one_fixed(w);
-    let v = to_fixed(raw);
-    assert!(!v.negative && v.ge_mag(one_w), "acosh: argument must be >= 1");
+    let working_scale = SCALE + STRICT_GUARD;
+    let one_w = one_fixed(working_scale);
+    let working_value = to_fixed(raw);
+    assert!(
+        !working_value.negative && working_value.ge_mag(one_w),
+        "acosh: argument must be >= 1"
+    );
     let two_w = one_w.double();
-    let inner = if v.ge_mag(two_w) {
-        let inv = one_w.div(v, w);
-        let root = one_w.sub(inv.mul(inv, w)).sqrt(w);
-        ln_fixed(v, w).add(ln_fixed(one_w.add(root), w))
+    let inner = if working_value.ge_mag(two_w) {
+        let reciprocal = one_w.div(working_value, working_scale);
+        let root = one_w
+            .sub(reciprocal.mul(reciprocal, working_scale))
+            .sqrt(working_scale);
+        ln_fixed(working_value, working_scale).add(ln_fixed(one_w.add(root), working_scale))
     } else {
-        let root = v.mul(v, w).sub(one_w).sqrt(w);
-        ln_fixed(v.add(root), w)
+        let root = working_value
+            .mul(working_value, working_scale)
+            .sub(one_w)
+            .sqrt(working_scale);
+        ln_fixed(working_value.add(root), working_scale)
     };
     inner
-        .round_to_i128_with(w, SCALE, mode)
+        .round_to_i128_with(working_scale, SCALE, mode)
         .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("acosh", SCALE))
 }
 
@@ -1063,24 +1264,27 @@ fn atanh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128
     if raw == 0 {
         return 0;
     }
-    let w = SCALE + STRICT_GUARD;
-    let one_w = one_fixed(w);
-    let v = to_fixed(raw);
-    let ax = Fixed { negative: false, mag: v.mag };
-    assert!(!ax.ge_mag(one_w), "atanh: argument out of domain (-1, 1)");
+    let working_scale = SCALE + STRICT_GUARD;
+    let one_w = one_fixed(working_scale);
+    let working_value = to_fixed(raw);
+    let abs_working_value = Fixed { negative: false, mag: working_value.mag };
+    assert!(
+        !abs_working_value.ge_mag(one_w),
+        "atanh: argument out of domain (-1, 1)"
+    );
     // atanh(x) = ½·ln((1+x)/(1-x)) = ½·(ln(1+x) − ln(1-x)). Computing the two
     // logs SEPARATELY (not ln of the ratio) is essential near |x| = 1: the
     // ratio (1+x)/(1-x) reaches ~10^(2·digits) there and, scaled to the
-    // working scale `w`, overflows the 256-bit `Fixed` — e.g. atanh(1−10⁻²⁸)
-    // at D38 s28 has ratio ≈ 2·10²⁸ which at w = SCALE+30 = 58 is a raw ~10⁸⁶,
-    // far past 2²⁵⁶. `1+x` and `1-x` each fit, and `ln_fixed` handles arguments
-    // below 1 (the x-near-−1 case already relies on it).
-    let ln_num = ln_fixed(one_w.add(v), w);
-    let ln_den = ln_fixed(one_w.sub(v), w);
+    // working scale, overflows the 256-bit `Fixed` — e.g. atanh(1−10⁻²⁸)
+    // at D38 s28 has ratio ≈ 2·10²⁸ which at working_scale = SCALE+30 = 58 is a
+    // raw ~10⁸⁶, far past 2²⁵⁶. `1+x` and `1-x` each fit, and `ln_fixed` handles
+    // arguments below 1 (the x-near-−1 case already relies on it).
+    let ln_num = ln_fixed(one_w.add(working_value), working_scale);
+    let ln_den = ln_fixed(one_w.sub(working_value), working_scale);
     ln_num
         .sub(ln_den)
         .halve()
-        .round_to_i128_with(w, SCALE, mode)
+        .round_to_i128_with(working_scale, SCALE, mode)
         .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("atanh", SCALE))
 }
 
@@ -1136,13 +1340,15 @@ mod tests {
     use super::*;
     use crate::D;
 
-    const MODES: [RoundingMode; 6] = [
+    const MODES: [RoundingMode; 8] = [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
         RoundingMode::HalfTowardZero,
         RoundingMode::Trunc,
         RoundingMode::Floor,
         RoundingMode::Ceiling,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ];
 
     const S38: u32 = 12;
@@ -1200,7 +1406,7 @@ mod tests {
         }
     }
 
-    // Large |x| (well past the saturation onset |x| ≳ 1.1513·w): tanh is
+    // Large |x| (well past the saturation onset |x| ≳ 1.1513·working_scale): tanh is
     // BOUNDED in (−1, 1), so these must SATURATE to ±1 (or ±(1−ulp) under the
     // directed modes), never panic by forming e^|x|. Schoolbook and routed
     // must still agree bit-for-bit. Dedicated array (not the shared
@@ -1225,8 +1431,9 @@ mod tests {
     }
 
     // Large |x| at a HIGH scale (28) — the band the `(e^|x| ± e^-|x|)` form
-    // cannot reach. At w = SCALE + 30 = 58 the dominant e^(+|x|) overflows the
-    // 256-bit `Fixed` once |x| ≳ 44, yet the saturation onset sits at |x| ≳ 1.1513·w
+    // cannot reach. At working_scale = SCALE + 30 = 58 the dominant e^(+|x|) overflows
+    // the 256-bit `Fixed` once |x| ≳ 44, yet the saturation onset sits at
+    // |x| ≳ 1.1513·working_scale
     // ≈ 67, so |x| in [44, 67] would PANIC under that form (the 18 D38<28> cells). The
     // negative-exponent form tanh = (1 − e^-2|x|)/(1 + e^-2|x|) never forms e^(+|x|),
     // so these compute (no panic) AND still agree with the routed kernel bit-for-bit.
@@ -1376,32 +1583,35 @@ mod tests {
             // |x| ≥ 257 (257·log10(e) ≈ 111.6).
             let floor_mag = Int::<6>::TEN.pow(110);
             for &x in &[257i128, 259, 263, 264, 265, 266] {
-                let pos = Int::<6>::from_i128(x);
-                let neg = Int::<6>::from_i128(-x);
+                let positive_raw = Int::<6>::from_i128(x);
+                let negative_raw = Int::<6>::from_i128(-x);
                 for &mode in &MODES {
-                    let c = D::<Int<6>, 0>(pos).cosh_strict_with(mode).0;
-                    let s = D::<Int<6>, 0>(pos).sinh_strict_with(mode).0;
-                    assert!(c > floor_mag, "cosh({x}) too small, mode {mode:?}");
-                    assert!(s > floor_mag, "sinh({x}) too small, mode {mode:?}");
-                    assert!(c >= s, "cosh({x}) < sinh({x}), mode {mode:?}");
+                    let cosh_value = D::<Int<6>, 0>(positive_raw).cosh_strict_with(mode).0;
+                    let sinh_value = D::<Int<6>, 0>(positive_raw).sinh_strict_with(mode).0;
+                    assert!(cosh_value > floor_mag, "cosh({x}) too small, mode {mode:?}");
+                    assert!(sinh_value > floor_mag, "sinh({x}) too small, mode {mode:?}");
+                    assert!(
+                        cosh_value >= sinh_value,
+                        "cosh({x}) < sinh({x}), mode {mode:?}"
+                    );
                     // Even / odd symmetry against the negative-argument rows.
                     // cosh is even: same value, same mode, same result. sinh
                     // is odd, so directed modes flip across the negation:
                     // round_Floor(-v) = -round_Ceiling(v); the nearest modes
                     // and Trunc are sign-symmetric.
                     assert_eq!(
-                        D::<Int<6>, 0>(neg).cosh_strict_with(mode).0,
-                        c,
+                        D::<Int<6>, 0>(negative_raw).cosh_strict_with(mode).0,
+                        cosh_value,
                         "cosh(-{x}) != cosh({x}), mode {mode:?}"
                     );
                     let flipped = match mode {
                         RoundingMode::Floor => RoundingMode::Ceiling,
                         RoundingMode::Ceiling => RoundingMode::Floor,
-                        m => m,
+                        other => other,
                     };
-                    let s_flipped = D::<Int<6>, 0>(pos).sinh_strict_with(flipped).0;
+                    let s_flipped = D::<Int<6>, 0>(positive_raw).sinh_strict_with(flipped).0;
                     assert_eq!(
-                        D::<Int<6>, 0>(neg).sinh_strict_with(mode).0,
+                        D::<Int<6>, 0>(negative_raw).sinh_strict_with(mode).0,
                         Int::<6>::ZERO - s_flipped,
                         "sinh(-{x}) != -sinh({x}) under the flipped mode, mode {mode:?}"
                     );
@@ -1419,11 +1629,11 @@ mod tests {
                 * Int::<6>::TEN.pow(32);
             let floor_mag = Int::<6>::TEN.pow(114);
             for &mode in &MODES {
-                let c = D::<Int<6>, 57>(raw).cosh_strict_with(mode).0;
-                assert!(c > floor_mag, "cosh(133.61..) too small, mode {mode:?}");
+                let cosh_value = D::<Int<6>, 57>(raw).cosh_strict_with(mode).0;
+                assert!(cosh_value > floor_mag, "cosh(133.61..) too small, mode {mode:?}");
                 assert_eq!(
                     D::<Int<6>, 57>(Int::<6>::ZERO - raw).cosh_strict_with(mode).0,
-                    c,
+                    cosh_value,
                     "cosh(-133.61..) != cosh(133.61..), mode {mode:?}"
                 );
             }
@@ -1432,36 +1642,47 @@ mod tests {
         #[test]
         fn exp_exp2_deep_negative_in_range_d115() {
             // 0 < e^x, 2^x < 10^-SCALE for these arguments, so every mode
-            // rounds to 0 except Ceiling, which gives exactly 1 ulp.
+            // rounds to 0 except Ceiling, AwayFromZero, and ZeroFiveUp,
+            // which give exactly 1 ulp. exp/exp2 of a non-zero algebraic
+            // argument is transcendental (Lindemann-Weierstrass), so the
+            // discard is non-zero by theorem, not by measurement.
+            // AwayFromZero bumps on any non-zero discard. ZeroFiveUp bumps
+            // only when the truncated coefficient's last digit is 0 or 5 —
+            // truncating to zero leaves a last digit of 0, which IS the
+            // pivot, so every inexact underflow-to-zero bumps under this
+            // mode too.
             let one_ulp = Int::<6>::from_i128(1);
             for &x in &[-357i128, -391, -436, -1013, -1089] {
                 for &mode in &MODES {
-                    let expect = if mode == RoundingMode::Ceiling {
+                    let expect = if matches!(
+                        mode,
+                        RoundingMode::Ceiling | RoundingMode::AwayFromZero | RoundingMode::ZeroFiveUp
+                    ) {
                         one_ulp
                     } else {
                         Int::<6>::ZERO
                     };
                     // Scale 0.
-                    let r0 = Int::<6>::from_i128(x);
+                    let raw_s0 = Int::<6>::from_i128(x);
                     assert_eq!(
-                        D::<Int<6>, 0>(r0).exp_strict_with(mode).0,
+                        D::<Int<6>, 0>(raw_s0).exp_strict_with(mode).0,
                         expect,
                         "exp({x}) at s0, mode {mode:?}"
                     );
                     assert_eq!(
-                        D::<Int<6>, 0>(r0).exp2_strict_with(mode).0,
+                        D::<Int<6>, 0>(raw_s0).exp2_strict_with(mode).0,
                         expect,
                         "exp2({x}) at s0, mode {mode:?}"
                     );
                     // Scale 50 (the deep-escalation band).
-                    let r50 = Int::<6>::from_i128(x) * Int::<6>::TEN.pow(50);
+                    let raw_s50 = Int::<6>::from_i128(x) * Int::<6>::TEN.pow(50);
                     assert_eq!(
-                        D::<Int<6>, 50>(r50).exp_strict_with(mode).0,
+                        D::<Int<6>, 50>(raw_s50).exp_strict_with(mode).0,
                         expect,
                         "exp({x}) at s50, mode {mode:?}"
                     );
                     assert_eq!(
-                        D::<Int<6>, 50>(r50).exp2_strict_with(mode).0,
+                        D::<Int<6>, 50>(raw_s50).exp2_strict_with(mode).0,
                         expect,
                         "exp2({x}) at s50, mode {mode:?}"
                     );
@@ -1491,23 +1712,23 @@ mod tests {
                 -1_000_000_000,
                 -2_500_000_000,
             ];
-            for &u in &INPUTS9 {
-                let r = raw9(u);
+            for &units in &INPUTS9 {
+                let raw = raw9(units);
                 for &mode in &MODES {
                     assert_eq!(
-                        sinh_schoolbook::<Core, S>(r, mode),
-                        D::<Int<3>, S>(r).sinh_strict_with(mode).0,
-                        "D57 sinh schoolbook != routed at units={u} mode={mode:?}"
+                        sinh_schoolbook::<Core, S>(raw, mode),
+                        D::<Int<3>, S>(raw).sinh_strict_with(mode).0,
+                        "D57 sinh schoolbook != routed at units={units} mode={mode:?}"
                     );
                     assert_eq!(
-                        cosh_schoolbook::<Core, S>(r, mode),
-                        D::<Int<3>, S>(r).cosh_strict_with(mode).0,
-                        "D57 cosh schoolbook != routed at units={u} mode={mode:?}"
+                        cosh_schoolbook::<Core, S>(raw, mode),
+                        D::<Int<3>, S>(raw).cosh_strict_with(mode).0,
+                        "D57 cosh schoolbook != routed at units={units} mode={mode:?}"
                     );
                     assert_eq!(
-                        tanh_schoolbook::<Core, S>(r, mode),
-                        D::<Int<3>, S>(r).tanh_strict_with(mode).0,
-                        "D57 tanh schoolbook != routed at units={u} mode={mode:?}"
+                        tanh_schoolbook::<Core, S>(raw, mode),
+                        D::<Int<3>, S>(raw).tanh_strict_with(mode).0,
+                        "D57 tanh schoolbook != routed at units={units} mode={mode:?}"
                     );
                 }
             }
@@ -1524,13 +1745,13 @@ mod tests {
                 -1_000_000_000,
                 -2_500_000_000,
             ];
-            for &u in &SINPUTS {
-                let r = raw9(u);
+            for &units in &SINPUTS {
+                let raw = raw9(units);
                 for &mode in &MODES {
                     assert_eq!(
-                        asinh_schoolbook::<Core, S>(r, mode),
-                        D::<Int<3>, S>(r).asinh_strict_with(mode).0,
-                        "D57 asinh schoolbook != routed at units={u} mode={mode:?}"
+                        asinh_schoolbook::<Core, S>(raw, mode),
+                        D::<Int<3>, S>(raw).asinh_strict_with(mode).0,
+                        "D57 asinh schoolbook != routed at units={units} mode={mode:?}"
                     );
                 }
             }
@@ -1541,13 +1762,13 @@ mod tests {
                 900_000_000,
                 -500_000_000,
             ];
-            for &u in &TINPUTS {
-                let r = raw9(u);
+            for &units in &TINPUTS {
+                let raw = raw9(units);
                 for &mode in &MODES {
                     assert_eq!(
-                        atanh_schoolbook::<Core, S>(r, mode),
-                        D::<Int<3>, S>(r).atanh_strict_with(mode).0,
-                        "D57 atanh schoolbook != routed at units={u} mode={mode:?}"
+                        atanh_schoolbook::<Core, S>(raw, mode),
+                        D::<Int<3>, S>(raw).atanh_strict_with(mode).0,
+                        "D57 atanh schoolbook != routed at units={units} mode={mode:?}"
                     );
                 }
             }
@@ -1557,13 +1778,13 @@ mod tests {
                 2_000_000_000,
                 3_000_000_000,
             ];
-            for &u in &AINPUTS {
-                let r = raw9(u);
+            for &units in &AINPUTS {
+                let raw = raw9(units);
                 for &mode in &MODES {
                     assert_eq!(
-                        acosh_schoolbook::<Core, S>(r, mode),
-                        D::<Int<3>, S>(r).acosh_strict_with(mode).0,
-                        "D57 acosh schoolbook != routed at units={u} mode={mode:?}"
+                        acosh_schoolbook::<Core, S>(raw, mode),
+                        D::<Int<3>, S>(raw).acosh_strict_with(mode).0,
+                        "D57 acosh schoolbook != routed at units={units} mode={mode:?}"
                     );
                 }
             }
@@ -1602,33 +1823,46 @@ mod tests {
             let zero = Int::<24>::from_i128(0);
             let one = Int::<24>::from_i128(1);
             // positive, expanding: Ceiling -> G+1, Floor/Trunc -> G.
-            let g = asinh_schoolbook::<Core, S>(raw, RoundingMode::HalfToEven);
+            let grid_value = asinh_schoolbook::<Core, S>(raw, RoundingMode::HalfToEven);
             assert_eq!(
                 asinh_schoolbook::<Core, S>(raw, RoundingMode::Ceiling),
-                g + one,
+                grid_value + one,
                 "asinh(+) Ceiling steps up"
             );
-            assert_eq!(asinh_schoolbook::<Core, S>(raw, RoundingMode::Floor), g, "asinh(+) Floor stays");
-            assert_eq!(asinh_schoolbook::<Core, S>(raw, RoundingMode::Trunc), g, "asinh(+) Trunc stays");
+            assert_eq!(
+                asinh_schoolbook::<Core, S>(raw, RoundingMode::Floor),
+                grid_value,
+                "asinh(+) Floor stays"
+            );
+            assert_eq!(
+                asinh_schoolbook::<Core, S>(raw, RoundingMode::Trunc),
+                grid_value,
+                "asinh(+) Trunc stays"
+            );
             // negative (odd): nearest = -G; expanding -> Floor -> -G-1, Ceiling/Trunc -> -G.
-            let gn = asinh_schoolbook::<Core, S>(zero - raw, RoundingMode::HalfToEven);
-            assert_eq!(gn, zero - g, "asinh(-) nearest = -G");
+            let negative_grid_value =
+                asinh_schoolbook::<Core, S>(zero - raw, RoundingMode::HalfToEven);
+            assert_eq!(negative_grid_value, zero - grid_value, "asinh(-) nearest = -G");
             assert_eq!(
                 asinh_schoolbook::<Core, S>(zero - raw, RoundingMode::Floor),
-                gn - one,
+                negative_grid_value - one,
                 "asinh(-) Floor steps down"
             );
             assert_eq!(
                 asinh_schoolbook::<Core, S>(zero - raw, RoundingMode::Ceiling),
-                gn,
+                negative_grid_value,
                 "asinh(-) Ceiling stays"
             );
-            assert_eq!(asinh_schoolbook::<Core, S>(zero - raw, RoundingMode::Trunc), gn, "asinh(-) Trunc stays");
+            assert_eq!(
+                asinh_schoolbook::<Core, S>(zero - raw, RoundingMode::Trunc),
+                negative_grid_value,
+                "asinh(-) Trunc stays"
+            );
             // public path routes to the same kernel (rung == tier).
-            let x = D::<Int<24>, S>(raw);
+            let value = D::<Int<24>, S>(raw);
             for mode in MODES {
                 assert_eq!(
-                    x.asinh_strict_with(mode).0,
+                    value.asinh_strict_with(mode).0,
                     asinh_schoolbook::<Core, S>(raw, mode),
                     "asinh public == tier {mode:?}"
                 );

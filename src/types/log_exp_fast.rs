@@ -32,6 +32,37 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         Self::from_f64(self.to_f64().ln())
     }
 
+    /// Returns `ln(1 + self)` via the f64 bridge (`f64::ln_1p`).
+    ///
+    /// # Precision
+    ///
+    /// Lossy: involves f64 at some point; result may lose precision.
+    /// Provided for parity with [`Self::log1p_strict`]; at this crate's
+    /// fixed-point scales it is equivalent to `(1 + self).ln_fast()`.
+    #[cfg(feature = "std")]
+    #[inline]
+    #[must_use]
+    pub fn log1p_fast(self) -> Self {
+        Self::from_f64(self.to_f64().ln_1p())
+    }
+
+    /// Returns `e^self - 1` via the f64 bridge (`f64::exp_m1`).
+    ///
+    /// # Precision
+    ///
+    /// Lossy: involves f64 at some point; result may lose precision.
+    /// Provided for parity with [`Self::expm1_strict`]; at this crate's
+    /// fixed-point scales it is equivalent to `self.exp_fast() - 1`
+    /// wherever that is representable. Note the f64 round-trip forfeits
+    /// the strict path's extended domain — `to_f64` of a near-`MAX`
+    /// argument is already out of range for the intermediate.
+    #[cfg(feature = "std")]
+    #[inline]
+    #[must_use]
+    pub fn expm1_fast(self) -> Self {
+        Self::from_f64(self.to_f64().exp_m1())
+    }
+
     /// Returns the logarithm of `self` in the given `base`.
     ///
     /// Implemented via a single `f64::log(self_f64, base_f64)` call, which
@@ -156,6 +187,18 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     pub fn ln(self) -> Self {
         self.ln_fast()
     }
+    /// Plain dispatcher: forwards to [`Self::log1p_fast`] in this feature mode.
+    #[inline]
+    #[must_use]
+    pub fn log1p(self) -> Self {
+        self.log1p_fast()
+    }
+    /// Plain dispatcher: forwards to [`Self::expm1_fast`] in this feature mode.
+    #[inline]
+    #[must_use]
+    pub fn expm1(self) -> Self {
+        self.expm1_fast()
+    }
     /// Plain dispatcher: forwards to [`Self::log_fast`] in this feature mode.
     #[inline]
     #[must_use]
@@ -217,9 +260,9 @@ mod tests {
     /// Each f64 step adds up to ~1 LSB; 4 LSB absorbs two quantisation steps.
     const FOUR_LSB: i128 = 4;
 
-    fn within_lsb(actual: D38s12, expected: D38s12, lsb: i128) -> bool {
+    fn within_lsb(actual: D38s12, expected: D38s12, tolerance_lsb: i128) -> bool {
         let diff = (actual.to_bits() - expected.to_bits()).abs();
-        diff <= lsb
+        diff <= tolerance_lsb
     }
 
     // Bit-exact identity tests
@@ -339,13 +382,13 @@ mod tests {
             45_678_912_345_679_i128, // ~45.678912
             78_901_234_567_890_i128, // ~78.901234
         ] {
-            let x = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
-            let recovered = x.ln().exp();
+            let value = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
+            let recovered = value.ln().exp();
             assert!(
-                within_lsb(recovered, x, ROUND_TRIP_TOLERANCE_LSB),
+                within_lsb(recovered, value, ROUND_TRIP_TOLERANCE_LSB),
                 "exp(ln(x)) != x for raw={raw}: got bits {} (delta {})",
                 recovered.to_bits(),
-                (recovered.to_bits() - x.to_bits()).abs(),
+                (recovered.to_bits() - value.to_bits()).abs(),
             );
         }
     }
@@ -355,13 +398,13 @@ mod tests {
     /// `e ~= 2.718`, so the error stays inside `LOG_EXP_TOLERANCE_LSB`.
     #[test]
     fn exp_of_ln_e_round_trip() {
-        let e = D38s12::e();
-        let recovered = e.ln().exp();
+        let euler = D38s12::e();
+        let recovered = euler.ln().exp();
         assert!(
-            within_lsb(recovered, e, LOG_EXP_TOLERANCE_LSB),
+            within_lsb(recovered, euler, LOG_EXP_TOLERANCE_LSB),
             "exp(ln(e)) != e: got bits {} (delta {})",
             recovered.to_bits(),
-            (recovered.to_bits() - e.to_bits()).abs(),
+            (recovered.to_bits() - euler.to_bits()).abs(),
         );
     }
 
@@ -379,13 +422,13 @@ mod tests {
             1_234_567_890_123_i128,  // ~1.234567
             7_890_123_456_789_i128,  // ~7.890123
         ] {
-            let x = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
-            let recovered = x.exp().ln();
+            let value = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
+            let recovered = value.exp().ln();
             assert!(
-                within_lsb(recovered, x, FOUR_LSB),
+                within_lsb(recovered, value, FOUR_LSB),
                 "ln(exp(x)) != x for raw={raw}: got bits {} (delta {})",
                 recovered.to_bits(),
-                (recovered.to_bits() - x.to_bits()).abs(),
+                (recovered.to_bits() - value.to_bits()).abs(),
             );
         }
     }
@@ -395,16 +438,16 @@ mod tests {
     /// `log(self, e) ~= ln(self)` -- base-aware form is consistent with `ln`.
     #[test]
     fn log_base_e_matches_ln() {
-        let e = D38s12::e();
+        let euler = D38s12::e();
         for raw in [
             500_000_000_000_i128,   // 0.5
             1_234_567_890_123_i128, // ~1.234567
             4_567_891_234_567_i128, // ~4.567891
             7_890_123_456_789_i128, // ~7.890123
         ] {
-            let x = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
-            let via_log = x.log(e);
-            let via_ln = x.ln();
+            let value = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
+            let via_log = value.log(euler);
+            let via_ln = value.ln();
             assert!(
                 within_lsb(via_log, via_ln, FOUR_LSB),
                 "log(x, e) != ln(x) for raw={raw}: log bits {}, ln bits {}",
@@ -424,9 +467,9 @@ mod tests {
             4_567_891_234_567_i128, // ~4.567891
             7_890_123_456_789_i128, // ~7.890123
         ] {
-            let x = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
-            let via_log = x.log(two);
-            let via_log2 = x.log2();
+            let value = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
+            let via_log = value.log(two);
+            let via_log2 = value.log2();
             assert!(
                 within_lsb(via_log, via_log2, FOUR_LSB),
                 "log(x, 2) != log2(x) for raw={raw}: log bits {}, log2 bits {}",
@@ -446,9 +489,9 @@ mod tests {
             4_567_891_234_567_i128, // ~4.567891
             7_890_123_456_789_i128, // ~7.890123
         ] {
-            let x = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
-            let via_log = x.log(ten);
-            let via_log10 = x.log10();
+            let value = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
+            let via_log = value.log(ten);
+            let via_log10 = value.log10();
             assert!(
                 within_lsb(via_log, via_log10, FOUR_LSB),
                 "log(x, 10) != log10(x) for raw={raw}: log bits {}, log10 bits {}",
