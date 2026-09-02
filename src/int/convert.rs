@@ -76,9 +76,10 @@ pub(crate) fn rescale_bigint<T: BigInt>(
     // `remainder_cmp`: |r| vs |divisor| - |r|, i.e. the round-up boundary
     // `2|r| vs |divisor|` without the doubling-overflow risk.
     let remainder_cmp = abs_remainder.cmp(&(abs_divisor - abs_remainder));
-    let quotient_is_odd = quotient.bit(0);
+    // Last decimal digit of |quotient| (a wide `div_rem`, so O(limbs)).
+    let q_mod_10 = quotient.div_rem(T::TEN).1.to_i128().unsigned_abs() as u8;
     let result_positive = (value < T::ZERO) == (divisor < T::ZERO);
-    if should_bump(mode, remainder_cmp, quotient_is_odd, result_positive) {
+    if should_bump(mode, remainder_cmp, q_mod_10, result_positive) {
         if result_positive {
             Some(quotient + T::ONE)
         } else {
@@ -102,8 +103,10 @@ fn magnitude<T: BigInt>(value: T) -> T {
 /// Rounds the value `0.x` where the truncated quotient is `0` and the
 /// remainder is the whole `value` (the divisor exceeds `T`'s range, so
 /// `|value| < |divisor|`, meaning `|value| < |divisor| - |value|`, i.e.
-/// strictly below the half boundary). Only the directed-away modes
-/// (`Ceiling` for positive, `Floor` for negative) can bump to `±1`.
+/// strictly below the half boundary). Only the modes that step away from
+/// zero on a bare discard can bump to `±1`: `Ceiling` for positive,
+/// `Floor` for negative, `AwayFromZero` for either — and `ZeroFiveUp`,
+/// whose last retained digit here is the `0` of the zero quotient.
 #[inline]
 fn round_when_quotient_zero<T: BigInt>(value: T, mode: RoundingMode) -> T {
     if value == T::ZERO {
@@ -113,8 +116,8 @@ fn round_when_quotient_zero<T: BigInt>(value: T, mode: RoundingMode) -> T {
     // `remainder_cmp == Less`: |r| is strictly below the half boundary
     // because the divisor strictly exceeds |value|.
     let remainder_cmp = core::cmp::Ordering::Less;
-    // Truncated quotient is 0 (even).
-    if should_bump(mode, remainder_cmp, false, result_positive) {
+    // Truncated quotient is 0, so its last decimal digit is 0 (and even).
+    if should_bump(mode, remainder_cmp, 0, result_positive) {
         if result_positive {
             T::ONE
         } else {

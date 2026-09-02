@@ -186,13 +186,15 @@ mod from_powf_integer_fastpath_parity {
 mod from_powf_wide_integer_exact {
     use decimal_scaled::{Int, RoundingMode};
 
-    const MODES: [RoundingMode; 6] = [
+    const MODES: [RoundingMode; 8] = [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
         RoundingMode::HalfTowardZero,
         RoundingMode::Trunc,
         RoundingMode::Floor,
         RoundingMode::Ceiling,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ];
 
     /// `(base, exponent, divisor = base^|exponent|)` — exact (terminating)
@@ -265,7 +267,8 @@ mod from_powf_wide_integer_exact {
     /// negative exponent by one correctly-rounded division — including the
     /// non-terminating reciprocal `1.5^-1 = 0.666...`, whose last digit each mode
     /// must place per its rule (residual `.66... > half`: nearest modes round up,
-    /// Trunc/Floor keep, Ceiling bumps).
+    /// Trunc/Floor keep, Ceiling and AwayFromZero bump, and ZeroFiveUp keeps —
+    /// its pivot is the kept digit `6`, not the size of the discard).
     mod fractional_base {
         use super::MODES;
         use decimal_scaled::{RoundingMode, D57};
@@ -311,8 +314,15 @@ mod from_powf_wide_integer_exact {
                         "{m:?} 0.1^5"
                     );
                     let last = match m {
-                        RoundingMode::Trunc | RoundingMode::Floor => '6',
-                        _ => '7', // nearest (residual above half) and Ceiling round up
+                        // `ZeroFiveUp` truncates alongside them: the last KEPT
+                        // digit is `6`, not one of its `0`/`5` pivots, so the
+                        // size of the discard is irrelevant.
+                        RoundingMode::Trunc
+                        | RoundingMode::Floor
+                        | RoundingMode::ZeroFiveUp => '6',
+                        // nearest (residual above half), Ceiling and
+                        // AwayFromZero round up.
+                        _ => '7',
                     };
                     assert_eq!(
                         parse("1.5").powf_strict_with(parse("-1"), m),

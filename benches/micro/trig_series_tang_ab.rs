@@ -22,7 +22,7 @@
 //! and need x-wide builds + their own export cells — left for a follow-up.
 //!
 //! OPTIMALITY A/B over a VALID region: Tang and Series are bit-identical
-//! in-band (both correctly-rounded), asserted across the spread × six modes
+//! in-band (both correctly-rounded), asserted across the spread × eight modes
 //! before timing. sin arguments x ∈ {0.3, 1.0, 1.5} rad (inside [-π/2, π/2]
 //! style residues both kernels reduce to). A just-out-of-band probe runs Tang
 //! at a SCALE the policy does NOT route to it; if it asserts unequal, that
@@ -41,13 +41,15 @@ mod ab_microbench;
 use ab_microbench::{compare_all, micro_criterion};
 
 const MODE: RoundingMode = RoundingMode::HalfToEven;
-const ALL_MODES: [RoundingMode; 6] = [
+const ALL_MODES: [RoundingMode; 8] = [
     RoundingMode::HalfToEven,
     RoundingMode::HalfAwayFromZero,
     RoundingMode::HalfTowardZero,
     RoundingMode::Trunc,
     RoundingMode::Floor,
     RoundingMode::Ceiling,
+    RoundingMode::AwayFromZero,
+    RoundingMode::ZeroFiveUp,
 ];
 
 fn fromu<const N: usize>(v: u128) -> Int<N> {

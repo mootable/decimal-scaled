@@ -74,7 +74,13 @@ where
         | RoundingMode::HalfAwayFromZero
         | RoundingMode::HalfTowardZero => halfway_round_up,
         RoundingMode::Trunc | RoundingMode::Floor => false,
-        RoundingMode::Ceiling => diff_nonzero,
+        // A hypotenuse is non-negative, so up IS away from zero.
+        RoundingMode::Ceiling | RoundingMode::AwayFromZero => diff_nonzero,
+        // The last decimal digit spans the whole `root_len`-limb root.
+        RoundingMode::ZeroFiveUp => {
+            diff_nonzero
+                && matches!(crate::support::rounding::limbs_mod_10(&root[..root_len]), 0 | 5)
+        }
     };
     if bump {
         let mut i = 0;
@@ -104,13 +110,15 @@ mod tests {
     use crate::int::types::Int;
     use crate::support::rounding::RoundingMode;
 
-    const ALL_MODES: [RoundingMode; 6] = [
+    const ALL_MODES: [RoundingMode; 8] = [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
         RoundingMode::HalfTowardZero,
         RoundingMode::Trunc,
         RoundingMode::Floor,
         RoundingMode::Ceiling,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ];
 
     #[test]

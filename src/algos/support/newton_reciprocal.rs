@@ -636,8 +636,9 @@ pub(crate) fn newton_pow10_mag_u128_packed(
             0 => core::cmp::Ordering::Equal,
             _ => core::cmp::Ordering::Greater,
         };
-        let quotient_is_odd = (quot[0] & 1) != 0;
-        if rounding::should_bump(mode, remainder_cmp, quotient_is_odd, !is_negative) {
+        // Last decimal digit of the u128-limb quotient magnitude.
+        let q_mod_10 = rounding::limbs_u128_mod_10(&quot[..mag_len]);
+        if rounding::should_bump(mode, remainder_cmp, q_mod_10, !is_negative) {
             let mut carry: u128 = 1;
             for limb in quot[..mag_len].iter_mut() {
                 let (s, c) = limb.overflowing_add(carry);
@@ -767,8 +768,9 @@ pub(crate) fn newton_pow10_mag_u128(
             0 => core::cmp::Ordering::Equal,
             _ => core::cmp::Ordering::Greater,
         };
-        let quotient_is_odd = (quot[0] & 1) != 0;
-        if rounding::should_bump(mode, remainder_cmp, quotient_is_odd, !is_negative) {
+        // Last decimal digit of the u64-limb quotient magnitude.
+        let q_mod_10 = rounding::limbs_mod_10(&quot[..mag_len]);
+        if rounding::should_bump(mode, remainder_cmp, q_mod_10, !is_negative) {
             let mut carry: u64 = 1;
             for limb in quot[..mag_len].iter_mut() {
                 let (s, c) = limb.overflowing_add(carry);
@@ -1049,6 +1051,8 @@ mod tests {
             RoundingMode::Trunc,
             RoundingMode::Floor,
             RoundingMode::Ceiling,
+            RoundingMode::AwayFromZero,
+            RoundingMode::ZeroFiveUp,
         ];
 
         for mode in modes {

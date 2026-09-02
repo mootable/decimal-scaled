@@ -7,7 +7,7 @@
 //! For each wide tier (D57..D1232), at the owner-standard 5-point scale grid
 //! `{0, S/4, S/2, 3S/4, S-1}`, it asserts each non-Series candidate (the three
 //! Tang table/guard configs AND the `Schoolbook` reference kernel) is
-//! BIT-IDENTICAL to Series across the operand spread × all six rounding modes
+//! BIT-IDENTICAL to Series across the operand spread × all eight rounding modes
 //! (the **validity wall** — a candidate that disagrees anywhere is reported
 //! INVALID and dropped), then ranks the surviving candidates against Series.
 //!
@@ -48,13 +48,15 @@ mod ab_microbench;
 use ab_microbench::{compare_all, micro_criterion};
 
 const MODE: RoundingMode = RoundingMode::HalfToEven;
-const ALL_MODES: [RoundingMode; 6] = [
+const ALL_MODES: [RoundingMode; 8] = [
     RoundingMode::HalfToEven,
     RoundingMode::HalfAwayFromZero,
     RoundingMode::HalfTowardZero,
     RoundingMode::Trunc,
     RoundingMode::Floor,
     RoundingMode::Ceiling,
+    RoundingMode::AwayFromZero,
+    RoundingMode::ZeroFiveUp,
 ];
 
 /// `acc = acc * m + add`, in place across the little-endian limb array. Pure

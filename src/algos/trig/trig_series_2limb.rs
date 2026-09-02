@@ -669,14 +669,22 @@ fn adjust_bounded_extremum_raw(result: i128, scale: u32, mode: RoundingMode) -> 
         return result;
     }
     let one = 10_i128.pow(scale);
+    // `ZeroFiveUp` pivots on the last digit of the toward-zero result,
+    // whose magnitude is `10^scale − 1`: a `9` for every `scale >= 1`, so
+    // it never bumps and tracks `Trunc`. At `scale == 0` that digit is
+    // `0`, a pivot, so it bumps straight back onto `±1` — the `_` arm.
+    // `AwayFromZero` keeps the full `±1` magnitude, also the `_` arm.
+    let zero_five_up_truncates = scale >= 1;
     if result == one {
         match mode {
             RoundingMode::Floor | RoundingMode::Trunc => one - 1,
+            RoundingMode::ZeroFiveUp if zero_five_up_truncates => one - 1,
             _ => result,
         }
     } else if result == -one {
         match mode {
             RoundingMode::Ceiling | RoundingMode::Trunc => -one + 1,
+            RoundingMode::ZeroFiveUp if zero_five_up_truncates => -one + 1,
             _ => result,
         }
     } else {
@@ -1251,7 +1259,13 @@ fn sinh_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> i128 {
         // below one ULP yet strictly positive, so the true value sits
         // just *above* the grid line `raw` (in magnitude) — the analytic
         // decision, exact at every depth.
-        return crate::support::rounding::tiny_odd_expanding_directed(raw, 0, 1, mode);
+        return crate::support::rounding::tiny_odd_expanding_directed(
+            raw,
+            0,
+            1,
+            (raw.unsigned_abs() % 10) as u8,
+            mode,
+        );
     }
     let working_scale = scale + STRICT_GUARD;
     if crate::algos::exp::exp_series_2limb::hyper_needs_wide_narrow(raw, scale, working_scale) {
@@ -1283,7 +1297,13 @@ pub(crate) fn sinh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: Ro
         // just *above* the grid line `raw` (in magnitude). Nearest modes
         // return `raw`; the directed modes need the analytic decision —
         // no finite-precision exp path can resolve the sub-ULP cubic.
-        return crate::support::rounding::tiny_odd_expanding_directed(raw, 0, 1, mode);
+        return crate::support::rounding::tiny_odd_expanding_directed(
+            raw,
+            0,
+            1,
+            (raw.unsigned_abs() % 10) as u8,
+            mode,
+        );
     }
     let working_scale = scale + working_digits;
     // Integer-regime: the result carries too many integer digits for the
@@ -1438,7 +1458,13 @@ fn tanh_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> i128 {
     if raw.abs() <= small_x_linear_threshold_scale(scale) {
         // tanh(x) = x − x³/3 + … : analytic directed decision (see
         // `tanh_with_raw`).
-        return crate::support::rounding::tiny_odd_compressing_directed(raw, 0, 1, mode);
+        return crate::support::rounding::tiny_odd_compressing_directed(
+            raw,
+            0,
+            1,
+            (raw.unsigned_abs() % 10) as u8,
+            mode,
+        );
     }
     let working_scale = scale + STRICT_GUARD;
     match tanh_eval_fixed(raw, STRICT_GUARD, working_scale) {
@@ -1519,7 +1545,13 @@ pub(crate) fn tanh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: Ro
         // just inside the grid line `raw`. Nearest modes return `raw`;
         // the directed modes need the analytic decision below — no
         // finite-precision exp path can resolve the sub-ULP cubic.
-        return crate::support::rounding::tiny_odd_compressing_directed(raw, 0, 1, mode);
+        return crate::support::rounding::tiny_odd_compressing_directed(
+            raw,
+            0,
+            1,
+            (raw.unsigned_abs() % 10) as u8,
+            mode,
+        );
     }
     let working_scale = scale + working_digits;
     // The body lives in `tanh_eval_fixed`: the NEGATIVE-exponent identity
@@ -2127,13 +2159,15 @@ mod near_tie_pins {
 mod hyper_fast_path_validity {
     use super::*;
 
-    const MODES: [RoundingMode; 6] = [
+    const MODES: [RoundingMode; 8] = [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
         RoundingMode::HalfTowardZero,
         RoundingMode::Ceiling,
         RoundingMode::Floor,
         RoundingMode::Trunc,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ];
 
     /// FAST sinh/cosh in `Fixed`, no gate — catching any overflow panic.

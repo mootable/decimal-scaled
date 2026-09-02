@@ -46,13 +46,15 @@ mod from_src_log1p {
         }
     }
 
-    const MODES: [RoundingMode; 6] = [
+    const MODES: [RoundingMode; 8] = [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
         RoundingMode::HalfTowardZero,
         RoundingMode::Trunc,
         RoundingMode::Floor,
         RoundingMode::Ceiling,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ];
 
     /// Scale the oracle anchors below are stated at.
@@ -395,7 +397,7 @@ mod from_src_log1p {
     /// and `Trunc` is whichever of the two faces zero. Needing no oracle, this
     /// catches the precise failure these arguments used to show: the kernel read
     /// its residual as an exact zero, took the value for representable, and
-    /// returned the SAME answer in all six modes.
+    /// returned the SAME answer in all eight modes.
     ///
     /// The arguments are the family that forces it. At `D462<461>`,
     /// `t = c·10^-m` makes the leading terms of `t - t²/2 + t³/3 - …` exact

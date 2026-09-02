@@ -244,6 +244,34 @@ where
                     ceiling_probe
                 }
             }
+            // The result carries y's sign (x > 0), so away-from-zero is
+            // the Ceiling probe when positive and the Floor probe when
+            // negative — the exact mirror of the Trunc arm above.
+            RoundingMode::AwayFromZero => {
+                if y_raw >= zero {
+                    ceiling_probe
+                } else {
+                    floor_probe
+                }
+            }
+            RoundingMode::ZeroFiveUp => {
+                use crate::int::types::traits::BigInt as _;
+                let (toward_zero, away) = if y_raw >= zero {
+                    (floor_probe, ceiling_probe)
+                } else {
+                    (ceiling_probe, floor_probe)
+                };
+                let mag = if toward_zero < zero {
+                    zero - toward_zero
+                } else {
+                    toward_zero
+                };
+                let digit = mag
+                    .div_rem(<C::Storage as crate::int::types::traits::BigInt>::TEN)
+                    .1
+                    .to_i128();
+                if digit == 0 || digit == 5 { away } else { toward_zero }
+            }
             _ => unreachable!("directed mode"),
         };
     }
@@ -575,6 +603,34 @@ where
                     ceiling_probe
                 }
             }
+            // The result carries y's sign (x > 0), so away-from-zero is
+            // the Ceiling probe when positive and the Floor probe when
+            // negative — the exact mirror of the Trunc arm above.
+            RoundingMode::AwayFromZero => {
+                if y_raw >= zero {
+                    ceiling_probe
+                } else {
+                    floor_probe
+                }
+            }
+            RoundingMode::ZeroFiveUp => {
+                use crate::int::types::traits::BigInt as _;
+                let (toward_zero, away) = if y_raw >= zero {
+                    (floor_probe, ceiling_probe)
+                } else {
+                    (ceiling_probe, floor_probe)
+                };
+                let mag = if toward_zero < zero {
+                    zero - toward_zero
+                } else {
+                    toward_zero
+                };
+                let digit = mag
+                    .div_rem(<C::Storage as crate::int::types::traits::BigInt>::TEN)
+                    .1
+                    .to_i128();
+                if digit == 0 || digit == 5 { away } else { toward_zero }
+            }
             _ => unreachable!("directed mode"),
         };
     }
@@ -799,13 +855,15 @@ mod tests {
     use super::*;
     use crate::D;
 
-    const MODES: [RoundingMode; 6] = [
+    const MODES: [RoundingMode; 8] = [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
         RoundingMode::HalfTowardZero,
         RoundingMode::Trunc,
         RoundingMode::Floor,
         RoundingMode::Ceiling,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ];
 
     const S38: u32 = 12;

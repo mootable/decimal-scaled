@@ -137,9 +137,40 @@ pub(crate) fn adjust_near_zero<St: BigInt>(rounded: St, raw: St, mode: RoundingM
     if rounded != raw {
         return rounded; // only the sub-resolution linear-term undershoot
     }
+    // `expm1(x) = x + x²/2 + …` sits strictly ABOVE `raw`, so the true
+    // value lies in `(raw, raw + 1)`. For `raw > 0` the toward-zero
+    // neighbour is `raw` and away-from-zero is `raw + 1`; for `raw < 0`
+    // the two swap, because `raw + 1` is the one nearer zero.
+    let positive = raw > <St as BigInt>::ZERO;
+    let abs_raw = if positive {
+        raw
+    } else {
+        <St as BigInt>::ZERO - raw
+    };
+    let raw_mod_10 = abs_raw.div_rem(<St as BigInt>::TEN).1.to_i128() as u8;
+    // Last digit of the toward-zero result: `|raw|` when positive, else
+    // `|raw| − 1` (exact via the borrow step, since `|raw| >= 1` here).
+    let toward_zero_digit = if positive {
+        raw_mod_10
+    } else {
+        (raw_mod_10 + 9) % 10
+    };
     match mode {
         RoundingMode::Ceiling => rounded + <St as BigInt>::ONE,
-        RoundingMode::Trunc if raw < <St as BigInt>::ZERO => rounded + <St as BigInt>::ONE,
+        RoundingMode::Trunc if !positive => rounded + <St as BigInt>::ONE,
+        // Away from zero is `+1` when `raw > 0`; when `raw < 0` the
+        // away-from-zero neighbour IS `raw`, so it does not move.
+        RoundingMode::AwayFromZero if positive => rounded + <St as BigInt>::ONE,
+        // Pivot digit hit: take the away-from-zero neighbour.
+        RoundingMode::ZeroFiveUp if matches!(toward_zero_digit, 0 | 5) => {
+            if positive {
+                rounded + <St as BigInt>::ONE
+            } else {
+                rounded
+            }
+        }
+        // Not a pivot digit: truncate toward zero.
+        RoundingMode::ZeroFiveUp if !positive => rounded + <St as BigInt>::ONE,
         _ => rounded,
     }
 }

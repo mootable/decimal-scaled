@@ -318,6 +318,12 @@ macro_rules! decl_try_from_f64 {
                     $crate::support::rounding::RoundingMode::Ceiling => {
                         $crate::support::rounding::ceil_f64(scaled)
                     }
+                    $crate::support::rounding::RoundingMode::AwayFromZero => {
+                        $crate::support::rounding::away_from_zero_f64(scaled)
+                    }
+                    $crate::support::rounding::RoundingMode::ZeroFiveUp => {
+                        $crate::support::rounding::zero_five_up_f64(scaled)
+                    }
                 };
                 ::core::result::Result::Ok(Self(<$Storage>::from_f64(rounded)))
             }
@@ -438,6 +444,30 @@ macro_rules! decl_decimal_int_conversion_methods {
                         $crate::support::rounding::RoundingMode::Ceiling => {
                             if is_non_negative {
                                 quotient + one
+                            } else {
+                                quotient
+                            }
+                        }
+                        // Any non-zero remainder lifts the magnitude; the
+                        // `remainder == zero` case returned above.
+                        $crate::support::rounding::RoundingMode::AwayFromZero => {
+                            if is_non_negative {
+                                quotient + one
+                            } else {
+                                quotient - one
+                            }
+                        }
+                        // Pivot on the last decimal digit of |quotient| —
+                        // a wide `%`, so O(limbs).
+                        $crate::support::rounding::RoundingMode::ZeroFiveUp => {
+                            let ten = <$Storage>::from_i128(10);
+                            let digit = (quotient % ten).as_i128().unsigned_abs();
+                            if digit == 0 || digit == 5 {
+                                if is_non_negative {
+                                    quotient + one
+                                } else {
+                                    quotient - one
+                                }
                             } else {
                                 quotient
                             }

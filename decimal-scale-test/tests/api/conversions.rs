@@ -723,6 +723,8 @@ mod from_macros_bitwise_and_overflow {
             RoundingMode::Trunc,
             RoundingMode::Floor,
             RoundingMode::Ceiling,
+            RoundingMode::AwayFromZero,
+            RoundingMode::ZeroFiveUp,
         ] {
             // exercise the dispatch branch in from_f64_with for each mode.
             let _ = D38::<2>::from_f64_with(1.005, mode);
@@ -759,6 +761,8 @@ mod from_macros_bitwise_and_overflow {
                 RoundingMode::Trunc,
                 RoundingMode::Floor,
                 RoundingMode::Ceiling,
+                RoundingMode::AwayFromZero,
+                RoundingMode::ZeroFiveUp,
             ] {
                 let _ = D76::<2>::from_f64_with(1.005, mode);
             }

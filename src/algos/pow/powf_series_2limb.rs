@@ -419,13 +419,15 @@ mod tests {
     const ONE: i128 = 10_i128.pow(S);
     const M: RoundingMode = RoundingMode::HalfToEven;
 
-    const MODES: [RoundingMode; 6] = [
+    const MODES: [RoundingMode; 8] = [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
         RoundingMode::HalfTowardZero,
         RoundingMode::Trunc,
         RoundingMode::Floor,
         RoundingMode::Ceiling,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ];
 
     fn powf(base: i128, exp: i128) -> i128 {

@@ -66,10 +66,15 @@ fn hyper_tiny_pin<C: WideTrigCore, const SCALE: u32, const EXPANDING: bool>(
         return None;
     }
     let one = <C::Storage as crate::int::types::traits::BigInt>::from_i128(1);
+    // `ZeroFiveUp`'s pivot digit; `abs_raw` is already `|raw|`.
+    let raw_mod_10 = {
+        use crate::int::types::traits::BigInt;
+        abs_raw.div_rem(<C::Storage as BigInt>::TEN).1.to_i128() as u8
+    };
     Some(if EXPANDING {
-        crate::support::rounding::tiny_odd_expanding_directed(raw, zero, one, mode)
+        crate::support::rounding::tiny_odd_expanding_directed(raw, zero, one, raw_mod_10, mode)
     } else {
-        crate::support::rounding::tiny_odd_compressing_directed(raw, zero, one, mode)
+        crate::support::rounding::tiny_odd_compressing_directed(raw, zero, one, raw_mod_10, mode)
     })
 }
 
@@ -1335,13 +1340,15 @@ mod tests {
     use super::*;
     use crate::D;
 
-    const MODES: [RoundingMode; 6] = [
+    const MODES: [RoundingMode; 8] = [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
         RoundingMode::HalfTowardZero,
         RoundingMode::Trunc,
         RoundingMode::Floor,
         RoundingMode::Ceiling,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ];
 
     const S38: u32 = 12;
@@ -1635,11 +1642,22 @@ mod tests {
         #[test]
         fn exp_exp2_deep_negative_in_range_d115() {
             // 0 < e^x, 2^x < 10^-SCALE for these arguments, so every mode
-            // rounds to 0 except Ceiling, which gives exactly 1 ulp.
+            // rounds to 0 except Ceiling, AwayFromZero, and ZeroFiveUp,
+            // which give exactly 1 ulp. exp/exp2 of a non-zero algebraic
+            // argument is transcendental (Lindemann-Weierstrass), so the
+            // discard is non-zero by theorem, not by measurement.
+            // AwayFromZero bumps on any non-zero discard. ZeroFiveUp bumps
+            // only when the truncated coefficient's last digit is 0 or 5 —
+            // truncating to zero leaves a last digit of 0, which IS the
+            // pivot, so every inexact underflow-to-zero bumps under this
+            // mode too.
             let one_ulp = Int::<6>::from_i128(1);
             for &x in &[-357i128, -391, -436, -1013, -1089] {
                 for &mode in &MODES {
-                    let expect = if mode == RoundingMode::Ceiling {
+                    let expect = if matches!(
+                        mode,
+                        RoundingMode::Ceiling | RoundingMode::AwayFromZero | RoundingMode::ZeroFiveUp
+                    ) {
                         one_ulp
                     } else {
                         Int::<6>::ZERO

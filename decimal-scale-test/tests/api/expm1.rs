@@ -42,13 +42,15 @@ mod from_src_expm1 {
         }
     }
 
-    const MODES: [RoundingMode; 6] = [
+    const MODES: [RoundingMode; 8] = [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
         RoundingMode::HalfTowardZero,
         RoundingMode::Trunc,
         RoundingMode::Floor,
         RoundingMode::Ceiling,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ];
 
     /// Scale the oracle anchors below are stated at.
@@ -196,7 +198,12 @@ mod from_src_expm1 {
     ///
     /// `Trunc` does NOT commute — see
     /// [`expm1_trunc_differs_from_exp_minus_one_for_negative_x`], which pins the
-    /// disagreement rather than papering over it.
+    /// disagreement rather than papering over it. `AwayFromZero` and
+    /// `ZeroFiveUp` are excluded for the same reason: both are defined
+    /// relative to ZERO (the first steps a discard away from it, the second
+    /// truncates toward it unless the retained digit is `0` or `5`), and for
+    /// `x < 0` the translation moves the result across zero — `expm1(x)` is
+    /// negative where `exp(x)` is a positive value below 1.
     ///
     /// (`HalfAwayFromZero` / `HalfTowardZero` are also defined relative to zero,
     /// but they differ from `HalfToEven` only ON an exact tie, and `e^x - 1` is

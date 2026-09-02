@@ -108,7 +108,11 @@ pub(crate) fn sqrt_native<const N: usize, const W: usize>(
         | RoundingMode::HalfAwayFromZero
         | RoundingMode::HalfTowardZero => halfway_round_up,
         RoundingMode::Trunc | RoundingMode::Floor => false,
-        RoundingMode::Ceiling => diff_nonzero,
+        // The radicand is non-negative, so up IS away from zero.
+        RoundingMode::Ceiling | RoundingMode::AwayFromZero => diff_nonzero,
+        RoundingMode::ZeroFiveUp => {
+            diff_nonzero && matches!((root % Int::<W>::TEN).as_i128(), 0 | 5)
+        }
     };
     let root = if bump { root + one } else { root };
     root.resize_to::<Int<N>>()
@@ -121,18 +125,20 @@ mod tests {
     use crate::int::types::Int;
     use crate::support::rounding::RoundingMode;
 
-    const ALL_MODES: [RoundingMode; 6] = [
+    const ALL_MODES: [RoundingMode; 8] = [
         RoundingMode::HalfToEven,
         RoundingMode::HalfAwayFromZero,
         RoundingMode::HalfTowardZero,
         RoundingMode::Trunc,
         RoundingMode::Floor,
         RoundingMode::Ceiling,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
     ];
 
     /// `sqrt_native` is bit-identical to the proven-correct generic
     /// `sqrt_newton` across a spread of raw storages (incl. perfect
-    /// squares, near-zero, large boundary radicands) and all six rounding
+    /// squares, near-zero, large boundary radicands) and all eight rounding
     /// modes, for each `(N, W, SCALE)` cell the policy routes to it. The
     /// generic kernel is oracle-gated by `ulp_strict_golden`, so matching
     /// it certifies the bespoke arm correctly-rounded.
