@@ -112,47 +112,6 @@ pub(crate) fn mul_u256(lhs: U256, rhs: U256) -> U512 {
     [limb0, limb1, limb2, limb3]
 }
 
-/// Bit length of a 512-bit value (`0` for zero, else `floor(log2)+1`).
-#[inline]
-fn bitlen_u512(value: U512) -> u32 {
-    if value[3] != 0 {
-        512 - value[3].leading_zeros()
-    } else if value[2] != 0 {
-        384 - value[2].leading_zeros()
-    } else if value[1] != 0 {
-        256 - value[1].leading_zeros()
-    } else {
-        128 - value[0].leading_zeros()
-    }
-}
-
-/// `value << shift` for a 512-bit value (`shift < 512`).
-#[inline]
-fn shl_u512(value: U512, shift: u32) -> U512 {
-    if shift == 0 {
-        return value;
-    }
-    let limb_offset = (shift / 128) as usize;
-    let bit_offset = shift % 128;
-    let mut out = [0u128; 4];
-    if bit_offset == 0 {
-        for i in (limb_offset..4).rev() {
-            out[i] = value[i - limb_offset];
-        }
-    } else {
-        for i in (limb_offset..4).rev() {
-            let shifted_low = value[i - limb_offset] << bit_offset;
-            let carry = if i - limb_offset == 0 {
-                0
-            } else {
-                value[i - limb_offset - 1] >> (128 - bit_offset)
-            };
-            out[i] = shifted_low | carry;
-        }
-    }
-    out
-}
-
 /// Quotient `numerator / divisor` for a 512-bit dividend and a divisor
 /// that fits in a single 64-bit word.
 ///
@@ -302,16 +261,21 @@ fn div_u512_by_pow10_small(numerator: U512, scale_idx: usize) -> U256 {
 /// fits in 256 bits, but the wider return type keeps the routine
 /// general and the high limbs are simply zero in practice.
 ///
-/// Binary shift-subtract long division. The loop is bounded by the
-/// numerator's actual bit length, not a fixed 512 — for the typical
-/// operands in this crate (products of moderate-magnitude decimals)
-/// that is a multiple-times reduction in iteration count.
+/// Divisors above `u64::MAX` route through the int layer's
+/// divisor-shape matcher
+/// ([`crate::algos::support::mg_divide::div_rem_via_int_layer`]) —
+/// Knuth Algorithm D at these limb counts — replacing the former
+/// shift-subtract bit loop (word-serial O(m·n) limb steps instead of
+/// one full-width shift+compare+subtract per dividend bit). This is
+/// the divide every `Fixed::div` by a transcendental constant (e.g.
+/// `to_degrees`' full-precision pi) and every `isqrt_u512` Newton
+/// iteration lands on.
 pub(crate) fn div_u512_by_u256(numerator: U512, divisor: U256) -> U512 {
     debug_assert!(!(divisor[0] == 0 && divisor[1] == 0), "division by zero");
     // Fast path: when both the dividend and divisor fit in a single
     // 128-bit word, the hardware divide is exact and far cheaper than
-    // any bit loop. This covers the overwhelmingly common case of
-    // moderate-magnitude decimal multiply/divide at small scales.
+    // any multi-limb engine. This covers the overwhelmingly common case
+    // of moderate-magnitude decimal multiply/divide at small scales.
     if numerator[1] == 0 && numerator[2] == 0 && numerator[3] == 0 && divisor[1] == 0 {
         return [numerator[0] / divisor[0], 0, 0, 0];
     }
@@ -320,38 +284,33 @@ pub(crate) fn div_u512_by_u256(numerator: U512, divisor: U256) -> U512 {
     if divisor[1] == 0 && divisor[0] <= u128::from(u64::MAX) {
         return div_u512_by_word(numerator, divisor[0] as u64);
     }
-    let bits = bitlen_u512(numerator);
-    if bits == 0 {
-        return [0; 4];
-    }
-    // Pre-shift so the most-significant set bit sits at position 511,
-    // then only `bits` shift-subtract steps are needed (the leading
-    // `512 - bits` iterations of the naive loop are provably no-ops).
-    let mut numerator = shl_u512(numerator, 512 - bits);
-    let mut quotient: U512 = [0; 4];
-    let mut remainder: U256 = [0, 0];
-    let mut i = bits;
-    while i > 0 {
-        i -= 1;
-        // Shift (remainder, numerator) left by 1; the top bit enters the
-        // remainder.
-        let bit = (numerator[3] >> 127) & 1;
-        numerator[3] = (numerator[3] << 1) | (numerator[2] >> 127);
-        numerator[2] = (numerator[2] << 1) | (numerator[1] >> 127);
-        numerator[1] = (numerator[1] << 1) | (numerator[0] >> 127);
-        numerator[0] <<= 1;
-        remainder[1] = (remainder[1] << 1) | (remainder[0] >> 127);
-        remainder[0] = (remainder[0] << 1) | bit;
-        quotient[3] = (quotient[3] << 1) | (quotient[2] >> 127);
-        quotient[2] = (quotient[2] << 1) | (quotient[1] >> 127);
-        quotient[1] = (quotient[1] << 1) | (quotient[0] >> 127);
-        quotient[0] <<= 1;
-        if ge_u256(remainder, divisor) {
-            remainder = sub_u256(remainder, divisor);
-            quotient[0] |= 1;
-        }
-    }
-    quotient
+    // Wide divisor (`u64::MAX < divisor < 2^256`): the int layer's
+    // word-serial engines.
+    let num = [
+        numerator[0] as u64,
+        (numerator[0] >> 64) as u64,
+        numerator[1] as u64,
+        (numerator[1] >> 64) as u64,
+        numerator[2] as u64,
+        (numerator[2] >> 64) as u64,
+        numerator[3] as u64,
+        (numerator[3] >> 64) as u64,
+    ];
+    let den = [
+        divisor[0] as u64,
+        (divisor[0] >> 64) as u64,
+        divisor[1] as u64,
+        (divisor[1] >> 64) as u64,
+    ];
+    let mut quot = [0u64; 8];
+    let mut rem = [0u64; 4];
+    crate::algos::support::mg_divide::div_rem_via_int_layer(&num, &den, &mut quot, &mut rem);
+    [
+        u128::from(quot[0]) | (u128::from(quot[1]) << 64),
+        u128::from(quot[2]) | (u128::from(quot[3]) << 64),
+        u128::from(quot[4]) | (u128::from(quot[5]) << 64),
+        u128::from(quot[6]) | (u128::from(quot[7]) << 64),
+    ]
 }
 
 /// A signed value held as a 256-bit magnitude interpreted at a fixed
@@ -665,26 +624,21 @@ impl Fixed {
                 mag: [q_lo, q_hi],
             };
         }
-        // Fallback: 256-bit / 128-bit long division for divisor > u64::MAX.
-        let mut remainder: u128 = 0;
-        let mut hi = self.mag[1];
-        let mut lo = self.mag[0];
-        let mut q_hi: u128 = 0;
-        let mut q_lo: u128 = 0;
-        let mut bit = 256;
-        while bit > 0 {
-            bit -= 1;
-            let top = (hi >> 127) & 1;
-            hi = (hi << 1) | (lo >> 127);
-            lo <<= 1;
-            remainder = (remainder << 1) | top;
-            q_hi = (q_hi << 1) | (q_lo >> 127);
-            q_lo <<= 1;
-            if remainder >= divisor {
-                remainder -= divisor;
-                q_lo |= 1;
-            }
-        }
+        // Wide divisor (`u64::MAX < divisor < 2^128`): the int layer's
+        // divisor-shape matcher — Knuth Algorithm D at these limb
+        // counts — instead of the former 256-iteration bit loop.
+        let num = [
+            self.mag[0] as u64,
+            (self.mag[0] >> 64) as u64,
+            self.mag[1] as u64,
+            (self.mag[1] >> 64) as u64,
+        ];
+        let den = [divisor as u64, (divisor >> 64) as u64];
+        let mut quot = [0u64; 4];
+        let mut rem = [0u64; 2];
+        crate::algos::support::mg_divide::div_rem_via_int_layer(&num, &den, &mut quot, &mut rem);
+        let q_lo = u128::from(quot[0]) | (u128::from(quot[1]) << 64);
+        let q_hi = u128::from(quot[2]) | (u128::from(quot[3]) << 64);
         Fixed {
             negative: self.negative && !(q_lo == 0 && q_hi == 0),
             mag: [q_lo, q_hi],
@@ -946,14 +900,39 @@ fn isqrt_u512(radicand: U512) -> U256 {
     } else {
         128 - radicand[0].leading_zeros()
     };
-    // Initial overestimate y0 = 2^ceil(bits/2) >= sqrt(n); for n < 2^452
-    // this is at most 2^226, comfortably inside U256.
-    let half_bits = bits.div_ceil(2);
-    let mut estimate: U256 = if half_bits >= 128 {
-        [0, 1u128 << (half_bits - 128)]
-    } else {
-        [1u128 << half_bits, 0]
-    };
+    // Initial over-estimate from the shared seed library (the same
+    // pattern as `mg_divide::isqrt_256` / `icbrt_384`): under `std` the
+    // hardware `f64::sqrt` of the top 64 significant bits (~53 correct
+    // bits → ~1-2 Newton iterations, each one a `div_u512_by_u256`),
+    // under `no_std` the classical `2^ceil(bits/2)` — the seed this
+    // function formerly hand-rolled on every build, costing ~bits/2
+    // halvings' worth of extra Newton divides. Both bodies are
+    // guaranteed over-estimates `>= sqrt(n)` (the load-bearing
+    // invariant: the downward-monotone loop never under-runs, and every
+    // `radicand / estimate` quotient stays within U256), converging to
+    // the identical floor either way. The radicand stays below `2^452`
+    // (fn doc), so the seed is below `2^227` and reads back from the
+    // low four u64 limbs.
+    let n_limbs = [
+        radicand[0] as u64,
+        (radicand[0] >> 64) as u64,
+        radicand[1] as u64,
+        (radicand[1] >> 64) as u64,
+        radicand[2] as u64,
+        (radicand[2] >> 64) as u64,
+        radicand[3] as u64,
+        (radicand[3] >> 64) as u64,
+    ];
+    let mut seed_limbs = [0u64; 8];
+    crate::algo_x_support::seed::sqrt_seed(&n_limbs, bits, &mut seed_limbs);
+    debug_assert!(
+        seed_limbs[4] == 0 && seed_limbs[5] == 0 && seed_limbs[6] == 0 && seed_limbs[7] == 0,
+        "isqrt_u512: seed exceeds U256 — radicand outside the < 2^452 contract"
+    );
+    let mut estimate: U256 = [
+        u128::from(seed_limbs[0]) | (u128::from(seed_limbs[1]) << 64),
+        u128::from(seed_limbs[2]) | (u128::from(seed_limbs[3]) << 64),
+    ];
     loop {
         // quotient = radicand / estimate (fits U256 because estimate >= sqrt).
         let quotient = div_u512_by_u256(radicand, estimate);
@@ -1074,6 +1053,368 @@ fn cmp_u256(lhs: U256, rhs: U256) -> core::cmp::Ordering {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ── Bit-identity: int-layer-routed divides vs the former bit loops ──
+    //
+    // `div_u512_by_u256`'s wide-divisor tail and `div_small`'s
+    // above-`u64::MAX` fallback were rewired to the int layer's engines
+    // (`mg_divide::div_rem_via_int_layer`), and `isqrt_u512`'s seed
+    // moved from a hand-rolled `2^ceil(bits/2)` to the shared seed
+    // library. The references below are verbatim copies of the replaced
+    // code; the sweeps prove bit-identity. Every rounding decision
+    // upstream (all 8 modes) consumes only the quotient/remainder pair
+    // these leaves produce, so leaf identity covers all 8 modes by
+    // construction.
+
+    /// SplitMix64 — deterministic pattern stream for the sweeps.
+    fn mix(state: &mut u64) -> u64 {
+        *state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = *state;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^ (z >> 31)
+    }
+
+    fn mix_u128(state: &mut u64) -> u128 {
+        (u128::from(mix(state)) << 64) | u128::from(mix(state))
+    }
+
+    /// Verbatim copy of the deleted `bitlen_u512` (reference-loop helper).
+    fn ref_bitlen_u512(value: U512) -> u32 {
+        if value[3] != 0 {
+            512 - value[3].leading_zeros()
+        } else if value[2] != 0 {
+            384 - value[2].leading_zeros()
+        } else if value[1] != 0 {
+            256 - value[1].leading_zeros()
+        } else {
+            128 - value[0].leading_zeros()
+        }
+    }
+
+    /// Verbatim copy of the deleted `shl_u512` (reference-loop helper).
+    fn ref_shl_u512(value: U512, shift: u32) -> U512 {
+        if shift == 0 {
+            return value;
+        }
+        let limb_offset = (shift / 128) as usize;
+        let bit_offset = shift % 128;
+        let mut out = [0u128; 4];
+        if bit_offset == 0 {
+            for i in (limb_offset..4).rev() {
+                out[i] = value[i - limb_offset];
+            }
+        } else {
+            for i in (limb_offset..4).rev() {
+                let shifted_low = value[i - limb_offset] << bit_offset;
+                let carry = if i - limb_offset == 0 {
+                    0
+                } else {
+                    value[i - limb_offset - 1] >> (128 - bit_offset)
+                };
+                out[i] = shifted_low | carry;
+            }
+        }
+        out
+    }
+
+    /// Verbatim copy of the replaced `div_u512_by_u256` (bit-loop tail,
+    /// fast paths included so the whole domain is compared).
+    fn div_u512_by_u256_reference(numerator: U512, divisor: U256) -> U512 {
+        if numerator[1] == 0 && numerator[2] == 0 && numerator[3] == 0 && divisor[1] == 0 {
+            return [numerator[0] / divisor[0], 0, 0, 0];
+        }
+        if divisor[1] == 0 && divisor[0] <= u128::from(u64::MAX) {
+            return div_u512_by_word(numerator, divisor[0] as u64);
+        }
+        let bits = ref_bitlen_u512(numerator);
+        if bits == 0 {
+            return [0; 4];
+        }
+        let mut numerator = ref_shl_u512(numerator, 512 - bits);
+        let mut quotient: U512 = [0; 4];
+        let mut remainder: U256 = [0, 0];
+        let mut i = bits;
+        while i > 0 {
+            i -= 1;
+            let bit = (numerator[3] >> 127) & 1;
+            numerator[3] = (numerator[3] << 1) | (numerator[2] >> 127);
+            numerator[2] = (numerator[2] << 1) | (numerator[1] >> 127);
+            numerator[1] = (numerator[1] << 1) | (numerator[0] >> 127);
+            numerator[0] <<= 1;
+            remainder[1] = (remainder[1] << 1) | (remainder[0] >> 127);
+            remainder[0] = (remainder[0] << 1) | bit;
+            quotient[3] = (quotient[3] << 1) | (quotient[2] >> 127);
+            quotient[2] = (quotient[2] << 1) | (quotient[1] >> 127);
+            quotient[1] = (quotient[1] << 1) | (quotient[0] >> 127);
+            quotient[0] <<= 1;
+            if ge_u256(remainder, divisor) {
+                remainder = sub_u256(remainder, divisor);
+                quotient[0] |= 1;
+            }
+        }
+        quotient
+    }
+
+    /// Verbatim copy of `div_small`'s replaced above-`u64::MAX` bit loop.
+    fn div_small_wide_reference(mag: U256, divisor: u128) -> U256 {
+        let mut remainder: u128 = 0;
+        let mut hi = mag[1];
+        let mut lo = mag[0];
+        let mut q_hi: u128 = 0;
+        let mut q_lo: u128 = 0;
+        let mut bit = 256;
+        while bit > 0 {
+            bit -= 1;
+            let top = (hi >> 127) & 1;
+            hi = (hi << 1) | (lo >> 127);
+            lo <<= 1;
+            remainder = (remainder << 1) | top;
+            q_hi = (q_hi << 1) | (q_lo >> 127);
+            q_lo <<= 1;
+            if remainder >= divisor {
+                remainder -= divisor;
+                q_lo |= 1;
+            }
+        }
+        [q_lo, q_hi]
+    }
+
+    /// Verbatim copy of the replaced `isqrt_u512` (hand-rolled 1-bit
+    /// seed + the identical Newton loop).
+    fn isqrt_u512_reference(radicand: U512) -> U256 {
+        if radicand == [0, 0, 0, 0] {
+            return [0, 0];
+        }
+        let bits = ref_bitlen_u512(radicand);
+        let half_bits = bits.div_ceil(2);
+        let mut estimate: U256 = if half_bits >= 128 {
+            [0, 1u128 << (half_bits - 128)]
+        } else {
+            [1u128 << half_bits, 0]
+        };
+        loop {
+            let quotient = div_u512_by_u256_reference(radicand, estimate);
+            let quotient = [quotient[0], quotient[1]];
+            let (sum, _carry) = add_u256(estimate, quotient);
+            let next_estimate = halve_u256(sum);
+            if ge_u256(next_estimate, estimate) {
+                return estimate;
+            }
+            estimate = next_estimate;
+        }
+    }
+
+    /// A pattern `U512` with roughly `limb_count` active u64 limbs.
+    fn pattern_u512(state: &mut u64, limb_count: u32) -> U512 {
+        let mut out = [0u128; 4];
+        for half in 0..limb_count.min(8) {
+            let limb = u128::from(mix(state));
+            out[(half / 2) as usize] |= limb << (64 * (half % 2));
+        }
+        out
+    }
+
+    /// `div_u512_by_u256` (int-layer route above `u64::MAX`) is
+    /// bit-identical to the replaced bit loop across dividend sizes
+    /// (1-8 u64 limbs) x divisor sizes (1-4 u64 limbs).
+    #[test]
+    fn div_u512_by_u256_matches_bit_loop_reference() {
+        let mut state = 0x0512_0256_u64;
+        for num_limbs in 1..=8u32 {
+            for den_limbs in 1..=4u32 {
+                for _ in 0..60 {
+                    let numerator = pattern_u512(&mut state, num_limbs);
+                    let d512 = pattern_u512(&mut state, den_limbs);
+                    let mut divisor: U256 = [d512[0], d512[1]];
+                    if divisor == [0, 0] {
+                        divisor[0] = 1;
+                    }
+                    // Reference equality only where the old loop is
+                    // itself correct: its 256-bit remainder register
+                    // overflows on `remainder << 1` once the divisor
+                    // exceeds 2^255 (top bit of divisor[1] set), a
+                    // domain no production caller reaches (`Fixed`
+                    // magnitudes and `10^w`, `w <= 76`, stay below
+                    // 2^255). The reconstruction sweep below proves the
+                    // int-layer route correct there.
+                    if divisor[1] >> 127 == 0 {
+                        assert_eq!(
+                            div_u512_by_u256(numerator, divisor),
+                            div_u512_by_u256_reference(numerator, divisor),
+                            "div_u512_by_u256 mismatch: n={numerator:?} d={divisor:?}"
+                        );
+                    }
+                }
+            }
+        }
+        // Ground truth by reconstruction over the wide band, top-bit
+        // divisors included: n = d*q + r with r < d ⇒ result must be q.
+        for wide_top in [false, true] {
+            for _ in 0..200 {
+                let quotient_in: U256 = [mix_u128(&mut state), 0];
+                let divisor: U256 = if wide_top {
+                    // divisor in (2^255, 2^256): the old loop's overflow
+                    // domain.
+                    [mix_u128(&mut state), mix_u128(&mut state) | (1 << 127)]
+                } else {
+                    [mix_u128(&mut state) | (1 << 127), mix_u128(&mut state) >> 64]
+                };
+                // r < d via r[1] < d[1] (d[1] != 0 in both variants
+                // above ... the narrow variant needs d[1] >= 1).
+                let divisor = [divisor[0], if divisor[1] == 0 { 1 } else { divisor[1] }];
+                let remainder_in: U256 =
+                    [mix_u128(&mut state), mix_u128(&mut state) % divisor[1]];
+                let mut product = mul_u256(divisor, quotient_in);
+                let (sum0, carry0) = product[0].overflowing_add(remainder_in[0]);
+                product[0] = sum0;
+                let (sum1, carry1a) = product[1].overflowing_add(remainder_in[1]);
+                let (sum1, carry1b) = sum1.overflowing_add(u128::from(carry0));
+                product[1] = sum1;
+                let (sum2, carry2) =
+                    product[2].overflowing_add(u128::from(carry1a) + u128::from(carry1b));
+                product[2] = sum2;
+                product[3] += u128::from(carry2);
+                let result = div_u512_by_u256(product, divisor);
+                assert_eq!(
+                    [result[0], result[1]],
+                    quotient_in,
+                    "div_u512_by_u256 reconstruction: d={divisor:?}"
+                );
+                assert_eq!(result[2], 0);
+                assert_eq!(result[3], 0);
+            }
+        }
+    }
+
+    /// `div_small`'s wide-divisor branch (int-layer route) is
+    /// bit-identical to the replaced 256-iteration bit loop, magnitude
+    /// and sign.
+    #[test]
+    fn div_small_wide_divisor_matches_bit_loop_reference() {
+        let mut state = 0x0d15_0256_u64;
+        // Reference equality on the old loop's correct half (divisor
+        // <= 2^127): its u128 remainder register overflows on
+        // `remainder << 1` above that, a domain no production caller
+        // reaches (the series call `div_small` with divisors below
+        // ~10^6). The reconstruction sweep below proves the int-layer
+        // route correct there.
+        let edge_divisors: [u128; 3] = [
+            u128::from(u64::MAX) + 1,
+            (1u128 << 96) + 12345,
+            1u128 << 127,
+        ];
+        for divisor in edge_divisors {
+            for _ in 0..40 {
+                let mag: U256 = [mix_u128(&mut state), mix_u128(&mut state)];
+                for negative in [false, true] {
+                    let value = Fixed { negative, mag };
+                    let expected_mag = div_small_wide_reference(mag, divisor);
+                    let actual = value.div_small(divisor);
+                    assert_eq!(
+                        actual.mag, expected_mag,
+                        "div_small mismatch: mag={mag:?} d={divisor}"
+                    );
+                    let expect_negative =
+                        negative && !(expected_mag[0] == 0 && expected_mag[1] == 0);
+                    assert_eq!(actual.negative, expect_negative);
+                }
+            }
+        }
+        // Pattern sweep across the whole wide band: reference equality
+        // below 2^127, ground truth by reconstruction (n = d*q + r,
+        // r < d ⇒ mag must be exactly q) over the whole band including
+        // the (2^127, 2^128) divisors the old loop got wrong.
+        for _ in 0..400 {
+            let divisor = u128::from(u64::MAX) + 1 + (mix_u128(&mut state) >> 1);
+            let mag: U256 = [mix_u128(&mut state), mix_u128(&mut state)];
+            let value = Fixed { negative: false, mag };
+            if divisor <= 1u128 << 127 {
+                assert_eq!(
+                    value.div_small(divisor).mag,
+                    div_small_wide_reference(mag, divisor),
+                    "div_small wide mismatch: mag={mag:?} d={divisor}"
+                );
+            }
+            let quotient_in = mix_u128(&mut state) >> 1; // < 2^127: n fits U256
+            let remainder_in = mix_u128(&mut state) % divisor;
+            let (prod_hi, prod_lo) = mul_128(divisor, quotient_in);
+            let (n_lo, carry) = prod_lo.overflowing_add(remainder_in);
+            let n_hi = prod_hi + u128::from(carry);
+            let built = Fixed { negative: false, mag: [n_lo, n_hi] };
+            assert_eq!(
+                built.div_small(divisor).mag,
+                [quotient_in, 0],
+                "div_small reconstruction: d={divisor}"
+            );
+        }
+    }
+
+    /// `isqrt_u512` with the shared-library seed lands on the identical
+    /// floor root as the replaced hand-rolled-seed version, across
+    /// magnitudes and the perfect-square neighbourhood (the seed
+    /// library's worst case).
+    #[test]
+    fn isqrt_u512_matches_hand_seed_reference() {
+        let mut state = 0x1512_0451_u64;
+        // Magnitude sweep: radicands of 1..=7 active u64 limbs (bit
+        // length <= 448 < 452, inside the documented contract).
+        for limb_count in 1..=7u32 {
+            for _ in 0..40 {
+                let radicand = pattern_u512(&mut state, limb_count);
+                assert_eq!(
+                    isqrt_u512(radicand),
+                    isqrt_u512_reference(radicand),
+                    "isqrt_u512 mismatch: n={radicand:?}"
+                );
+            }
+        }
+        // Perfect squares and their neighbours: r = x², x² - 1, x² + 1
+        // for roots x up to 2^224 (radicand < 2^448).
+        for _ in 0..120 {
+            let root: U256 = [mix_u128(&mut state), mix_u128(&mut state) >> 32];
+            let square = mul_u256(root, root);
+            for delta in [0i32, -1, 1] {
+                let mut radicand = square;
+                if delta == -1 {
+                    if radicand == [0, 0, 0, 0] {
+                        continue;
+                    }
+                    // subtract 1 with borrow
+                    let mut i = 0;
+                    loop {
+                        let (limb, borrow) = radicand[i].overflowing_sub(1);
+                        radicand[i] = limb;
+                        if !borrow {
+                            break;
+                        }
+                        i += 1;
+                    }
+                } else if delta == 1 {
+                    let mut i = 0;
+                    loop {
+                        let (limb, carry) = radicand[i].overflowing_add(1);
+                        radicand[i] = limb;
+                        if !carry {
+                            break;
+                        }
+                        i += 1;
+                    }
+                }
+                assert_eq!(
+                    isqrt_u512(radicand),
+                    isqrt_u512_reference(radicand),
+                    "isqrt_u512 square-neighbour mismatch: n={radicand:?} delta={delta}"
+                );
+            }
+        }
+        // Exactness spot-check: floor(sqrt(x²)) == x, floor(sqrt(x²-1)) == x-1.
+        let root: U256 = [0x1234_5678_9abc_def0_u128, 0];
+        let square = mul_u256(root, root);
+        assert_eq!(isqrt_u512(square), root);
+        let square_minus_1 = [square[0] - 1, square[1], square[2], square[3]];
+        assert_eq!(isqrt_u512(square_minus_1), [root[0] - 1, 0]);
+    }
 
     #[test]
     fn mul_u256_small() {

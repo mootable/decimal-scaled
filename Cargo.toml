@@ -475,6 +475,14 @@ path = "benches/micro/quick_div.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide"]
 
+# D38 cells routed through the narrow-tier divide leaves in
+# algos::support::{mg_divide, fixed} (wide-divisor paths + a control).
+# Default features suffice (D38 only); before/after via criterion baselines.
+[[bench]]
+name = "narrow_div_leaves"
+path = "benches/micro/narrow_div_leaves.rs"
+harness = false
+
 # Focused D57<20> per-op microbench — the primary production scale
 # for the wide-tier. ~30 s wall, used for tight iteration loops on
 # SCALE 20 kernel tuning before kicking the full sweeps.
