@@ -8,6 +8,12 @@
 //! NOT edit by hand; re-run the script and commit its output. This
 //! file is NOT produced at build time — `build.rs` is untouched.
 //!
+//! Any change belongs in `scripts/gen_ln_tang_table.py`, never in
+//! this file — including a new `match` arm when a `RoundingMode`
+//! variant is added. Re-run the generator and commit both; a
+//! hand-edit here is silently reverted the next time anyone
+//! regenerates.
+//!
 //! Each of the `M + 1 = 129` slots holds the natural log
 //! `L_i = ln(1 + i/128)` (`i ∈ [0, 128]`, all in `[0, ln 2] ⊂ [0,
 //! 1)`) as a correctly-rounded BINARY fixed-point value

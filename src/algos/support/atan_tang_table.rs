@@ -9,6 +9,12 @@
 //! This file is NOT produced at build time — `build.rs` is
 //! untouched.
 //!
+//! Any change belongs in `scripts/gen_atan_tang_table.py`, never
+//! in this file — including a new `match` arm when a
+//! `RoundingMode` variant is added. Re-run the generator and
+//! commit both; a hand-edit here is silently reverted the next
+//! time anyone regenerates.
+//!
 //! Each of the `M + 1 = 513` slots holds `atan(c_j)` for
 //! `c_j = j/M` (`j ∈ [0, 512]`). For `j ≥ 1`, `c_j ∈ (0, 1]`, so
 //! `atan(c_j) ∈ (0, π/4] ≈ (0, 0.7854]` — a pure fraction in

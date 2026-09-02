@@ -24,6 +24,12 @@
 //! Compile-time read-only data (architectural-review Class K — NOT a
 //! runtime cache); size-local consumption via the width slice. GENERATED
 //! by `scripts/gen_newton_recip_table.py` — do not edit by hand.
+//!
+//! Any change belongs in `scripts/gen_newton_recip_table.py`,
+//! never in this file — including a new `match` arm when a
+//! `RoundingMode` variant is added. Re-run the generator and
+//! commit both; a hand-edit here is silently reverted the next
+//! time anyone regenerates.
 
 /// Widest baked working width, in u64 limbs (Int<132> = the split D1232
 /// Tang working width).

@@ -13,6 +13,12 @@
 //! and commit its output. This file is NOT produced at build time
 //! — `build.rs` is untouched.
 //!
+//! Any change belongs in `scripts/gen_const_table.py`, never in
+//! this file — including a new `match` arm when a `RoundingMode`
+//! variant is added. Re-run the generator and commit both; a
+//! hand-edit here is silently reverted the next time anyone
+//! regenerates.
+//!
 //! Each constant ships ONE golden mantissa per band —
 //! `floor(const * 10^(band_hi+1))` — and a `const fn` ([`cb_build`])
 //! REBUILDS the per-scale table at compile time by dividing it down by
@@ -23,7 +29,7 @@
 //! little-endian `u64` slice plus a `round_up` bit = 1 iff the dropped
 //! fractional tail is >= 1/2 (the most-significant dropped digit >= 5).
 //! Every constant is irrational and positive, so the tail is never an
-//! exact tie and never zero, and the six rounding modes derive exactly
+//! exact tie and never zero, and the eight rounding modes derive exactly
 //! from `(floor, round_up)`:
 //!
 //! | mode | result |
