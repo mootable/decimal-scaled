@@ -1724,7 +1724,7 @@ pub mod __bench_internals {
         raw: crate::int::types::Int<3>,
         mode: crate::RoundingMode,
     ) -> crate::int::types::Int<3> {
-        crate::algos::trig::atan_tang_3limb_s44_56::atan_strict::<SCALE>(raw, mode)
+        crate::algos::trig::atan_tang_3limb::atan_strict::<SCALE>(raw, mode)
     }
 
     // D462 forward-trig bench seam — sin/cos/tan/atan Series-vs-narrow A/B

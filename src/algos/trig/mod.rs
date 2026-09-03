@@ -32,7 +32,7 @@ pub(crate) mod inverse_tang_3limb_s18_22;
 #[cfg(any(feature = "d57", feature = "wide"))]
 pub(crate) mod sincos_tang_3limb_s18_22;
 #[cfg(any(feature = "d57", feature = "wide"))]
-pub(crate) mod atan_tang_3limb_s44_56;
+pub(crate) mod atan_tang_3limb;
 pub(crate) mod near_pole_tan;
 #[cfg(feature = "_wide-support")]
 pub(crate) mod sincos_narrow;

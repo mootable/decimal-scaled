@@ -39,7 +39,7 @@
 
 /// Tang table size — `atan(c_j)` of `c_j = j/M`, `j ∈ [0, M]`.
 /// Matches the const `M` in the atan Tang kernel
-/// (`algos::trig::atan_tang_3limb_s44_56`).
+/// (`algos::trig::atan_tang_3limb`).
 pub(crate) const ATAN_TANG_M: u32 = 512;
 
 /// Binary fixed-point exponent: each value is `round(value ·
