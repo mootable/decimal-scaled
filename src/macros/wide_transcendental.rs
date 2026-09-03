@@ -2549,6 +2549,24 @@ macro_rules! decl_wide_transcendental {
                 ) -> Wagm {
                     ln_fixed_routed_agm::<SCALE>(working_value, working_scale)
                 }
+                #[inline]
+                fn exp_fixed_series_agm(
+                    working_value: Wagm,
+                    working_scale: u32
+                ) -> Wagm {
+                    exp_fixed_series_agm(working_value, working_scale)
+                }
+                #[inline]
+                fn exp_fixed_routed_agm<const SCALE: u32>(
+                    working_value: Wagm,
+                    working_scale: u32
+                ) -> Wagm {
+                    exp_fixed_routed_agm::<SCALE>(working_value, working_scale)
+                }
+                #[inline]
+                fn exp_result_int_digits_agm(mag_at_scale: Wagm, scale: u32) -> u32 {
+                    exp_result_int_digits::<Wagm>(mag_at_scale, scale)
+                }
                 fn round_to_storage_directed_near_special(
                     base_guard_digits: u32,
                     target: u32,
@@ -3836,17 +3854,15 @@ macro_rules! decl_wide_transcendental {
             /// `(a * b) / 10^w`, so the working-width budget is the
             /// same as any other binary op in the core — no separate
             /// overflow check needed.
+            ///
+            /// Names the `Schoolbook` kernel
+            /// (`algos::trig::angle_schoolbook::to_radians_schoolbook`)
+            /// directly — see [`Self::to_radians_strict_with`] for why
+            /// this is not routed through `policy::to_radians::dispatch`.
             #[inline]
             #[must_use]
             pub fn to_radians_strict(self) -> Self {
-                let working_scale = SCALE + $core::GUARD;
-                let working_value = $core::to_work(self.to_bits());
-                let radians = $core::mul(
-                    working_value,
-                    $core::pi_cf::<SCALE>(working_scale, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
-                    working_scale,
-                ) / $crate::macros::wide_roots::wide_lit!($Work, "180");
-                Self::from_bits($core::round_to_storage(radians, working_scale, SCALE))
+                self.to_radians_strict_with($crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             // ---- Mode-aware siblings ----
@@ -3987,6 +4003,23 @@ macro_rules! decl_wide_transcendental {
             /// Same exact integer-power pin as [`Self::powf_strict`], here
             /// rounding any non-terminating / sub-resolution reciprocal under
             /// the caller's `mode`.
+            ///
+            /// The composition — the integer-power and terminating-reciprocal
+            /// pins, the algebraic `x^0.5 ≡ √x` pin, the analytic overflow
+            /// gate, the result-sized working lift and the Ziv-escalated
+            /// `exp(y·ln x)` — now lives in
+            /// `algos::pow::powf_pinned_exp_with_ln`, registered as
+            /// `policy::pow`'s `PinnedExpWithLn` algorithm and reached through
+            /// its `pinned_exp_with_ln_routed` door — the same fn
+            /// `policy::pow::dispatch` runs for that algorithm. Called
+            /// directly rather than through `dispatch` because `select` still
+            /// returns `ExpWithLn` for every cell, so `dispatch` would run the
+            /// naive `pow_schoolbook` reference instead — repointing `select`
+            /// would change which algorithm every wide cell runs, so it stays
+            /// an open policy decision rather than part of this relocation. The
+            /// `x^0.5` pin is handed the cell's own `policy::sqrt::dispatch`,
+            /// the same engine `self.sqrt_strict_with(mode)` reached here
+            /// before.
             #[inline]
             #[must_use]
             pub fn powf_strict_with(
@@ -3994,147 +4027,10 @@ macro_rules! decl_wide_transcendental {
                 exp: Self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
-                let raw = self.to_bits();
-                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    return Self::ZERO;
-                }
-                // Exact integer-power pin — see [`Self::powf_strict`]. Uses
-                // the caller's `mode`: the reciprocal of a non-terminating
-                // power (e.g. `3^-2`) and a sub-resolution `base^-k` must round
-                // under the requested directed mode (Ceiling of a
-                // sub-resolution `base^-k` rounds up to 1, not down to 0). The
-                // pin divides the INTEGER `base^|n|`, so a terminating
-                // reciprocal is exact even when the scaled `base^|n|·10^SCALE`
-                // overflows storage — the case a `checked_pow` fast path
-                // would defer to the to-nearest composition, mis-rounding Floor /
-                // Trunc by 1 LSB. `None` (fractional base/exponent, or a
-                // positive power out of range) defers to the composition below,
-                // which panics uniformly on a genuinely out-of-range result.
-                if let ::core::option::Option::Some(pinned) =
-                    $crate::algos::pow::powi_exact::powi_exact_pin::<$Storage, SCALE>(
-                        raw,
-                        exp.to_bits(),
-                        <$Storage>::MAX,
-                        mode,
-                    )
-                {
-                    return Self::from_bits(pinned);
-                }
-                // Fractional-base integer-exponent fast path — see
-                // [`Self::powf_strict`]; here under the caller's `mode`.
-                if let ::core::option::Option::Some(integer_exponent) =
-                    $crate::algos::pow::powi_exact::exp_as_small_int_raw::<$Storage, SCALE>(
-                        exp.to_bits(),
-                    )
-                {
-                    if integer_exponent == 0 {
-                        return Self::ONE;
-                    }
-                    if let ::core::option::Option::Some(pinned) =
-                        $crate::algos::pow::powi_exact::powi_terminating_pin::<$Storage, SCALE>(
-                            raw,
-                            integer_exponent,
-                            <$Storage>::MAX,
-                            mode,
-                        )
-                    {
-                        return Self::from_bits(pinned);
-                    }
-                }
-                // x^0.5 ≡ √x. The exp(0.5·ln x) chain loses a sub-ULP at a
-                // perfect-square base (e.g. 4^0.5), rounding 1 LSB short
-                // under the directed modes; the sqrt kernel pins the exact
-                // algebraic root and is correctly rounded for every input,
-                // so route the exact-half exponent through it.
-                {
-                    let two = $crate::macros::wide_roots::wide_lit!($Storage, "2");
-                    let multiplier = Self::multiplier();
-                    if exp.to_bits() == multiplier / two {
-                        return self.sqrt_strict_with(mode);
-                    }
-                }
-                let exponent_raw = exp.to_bits();
-                // Large-result lift. `x^y = exp(y·ln x)` carries
-                // `~|y·ln x|·log10(e)` integer digits; size the working
-                // lift from a base-guard probe of the exp argument so the
-                // `exp_fixed` relative error stays sub-storage-ULP after
-                // narrowing (same budget sinh/cosh use, see those).
-                // Two-core: composition runs on the wide `Wagm` work int
-                // (the exp argument `y·ln x` can exceed a narrowed `$Work`).
-                let k_lift = {
-                    let base_working_scale = SCALE + $core::GUARD;
-                    let probe_ln_x = $core::ln_fixed_routed_agm::<SCALE>(
-                        $core::to_work_agm(raw),
-                        base_working_scale
-                    );
-                    let probe_exp_arg = $core::mul_agm(
-                        $core::to_work_agm(exponent_raw),
-                        probe_ln_x,
-                        base_working_scale
-                    );
-                    // Analytic storage-overflow gate, BEFORE the
-                    // result-sized lift below: a deep-overflow argument
-                    // (`e^arg` provably past storage) would size `k_lift`
-                    // in the hundreds and push the working scale past the
-                    // work integer's safe ceiling, where the lifted `ln`'s
-                    // table product silently WRAPS to a near-zero garbage
-                    // `ln x` that defuses every downstream overflow check
-                    // (the `1.5^1000.5` D76 deep-band defect). Panic
-                    // contractually here instead — the gate is a provable
-                    // SUFFICIENT bound, so no representable cell fires it
-                    // (see `algos::pow::powf_overflow_gate`).
-                    if $crate::algos::pow::powf_overflow_gate::powf_overflow_gate_g::<$core::Wagm>(
-                        probe_exp_arg,
-                        base_working_scale,
-                        <$Storage as $crate::int::types::traits::BigInt>::BITS,
-                        SCALE,
-                    ) {
-                        $crate::support::diagnostics::overflow_panic_with_scale(
-                            "powf_strict",
-                            SCALE,
-                        );
-                    }
-                    // `probe_exp_arg` is the exp argument at the base working
-                    // scale; narrow it
-                    // to scale `SCALE` to feed the `e^|·|` digit sizer
-                    // (squaring-safe capped).
-                    let arg_at_scale = $core::round_to_storage_with_g::<$core::Wagm>(
-                        probe_exp_arg,
-                        base_working_scale,
-                        SCALE,
-                        $crate::support::rounding::RoundingMode::Trunc,
-                    );
-                    // `e^arg` grows integer digits ONLY for a POSITIVE
-                    // argument; for a negative argument `e^arg ∈ (0, 1)` has
-                    // zero integer digits and needs NO lift. Sizing a lift
-                    // there would inflate the working scale `w = SCALE +
-                    // GUARD + k_lift` until the non-widening low-product
-                    // `mul_agm(y, ln_x, w)` overflows the `Wagm` work integer
-                    // (its `y·ln_x` exceeds `Wagm::BITS`) and WRAPS the exp
-                    // argument to garbage — the deep-underflow misround
-                    // (`powf("2","-200")` at D57/D76 mid-scales returned
-                    // `e^-0.21 ≈ 0.808` instead of the sub-resolution 0). The
-                    // sign gate mirrors `exp2_result_int_digits`'s
-                    // negative-argument early return and the Tang/Series
-                    // `extra = 0 for k ≤ 0` reassembly asymmetry.
-                    if arg_at_scale < $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                        0
-                    } else {
-                        $core::exp_result_int_digits::<$core::Wagm>($core::to_work_scaled_agm(arg_at_scale, 0), SCALE)
-                    }
-                };
-                let base_guard_digits = $core::GUARD + k_lift;
-                Self::from_bits($core::round_to_storage_directed::<$core::Wagm>(
-                    base_guard_digits,
+                Self::from_bits($crate::policy::pow::pinned_exp_with_ln_routed::<
+                    $n_limbs,
                     SCALE,
-                    mode,
-                    |guard_digits| {
-                        let working_scale = SCALE + guard_digits;
-                        let ln_x = $core::ln_fixed_routed_agm::<SCALE>($core::to_work_scaled_agm(raw, guard_digits), working_scale);
-                        let exponent_w = $core::to_work_scaled_agm(exponent_raw, guard_digits);
-                        $core::exp_fixed_routed_agm::<SCALE>($core::mul_agm(exponent_w, ln_x, working_scale), working_scale)
-                    },
-                ))
+                >(self.to_bits(), exp.to_bits(), mode))
             }
 
             /// Mode-aware sibling of [`Self::sin_strict`]. Delegates
@@ -4290,83 +4186,88 @@ macro_rules! decl_wide_transcendental {
             }
 
             /// Mode-aware sibling of [`Self::to_radians_strict`].
+            ///
+            /// Names the `Schoolbook` kernel
+            /// (`algos::trig::angle_schoolbook::to_radians_schoolbook`),
+            /// which is this shell's former inline body expression for
+            /// expression — `C::pi::<SCALE>(w)` IS
+            /// `pi_cf::<SCALE>(w, DEFAULT_ROUNDING_MODE)` and `C::lit(180)`
+            /// is the same work-integer literal, so the relocation is
+            /// value-preserving at every input, scale, tier and mode.
+            ///
+            /// Called DIRECTLY rather than through
+            /// `policy::to_radians::dispatch`, on the same grounds as
+            /// [`Self::asinh_strict`]: that policy's `select` returns
+            /// `MulPiRatio` for every cell, and `MulPiRatio` is a
+            /// DIFFERENT algorithm — it multiplies by the `rad_per_deg`
+            /// table constant instead of scaling through `π` first, giving
+            /// up about `log10(180)` digits of relative precision, which
+            /// is wrong by 11 units at `D57<0>::to_radians(10^32)` (see
+            /// `angle_mul_pi_ratio::to_radians_mul_pi_ratio`). Routing
+            /// here would therefore swap the engine and regress precision
+            /// on every wide cell, so the repoint remains an open policy
+            /// decision rather than part of this relocation.
             #[inline]
             #[must_use]
             pub fn to_radians_strict_with(
                 self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
-                let working_scale = SCALE + $core::GUARD;
-                let working_value = $core::to_work(self.to_bits());
-                let radians = $core::mul(
-                    working_value,
-                    $core::pi_cf::<SCALE>(working_scale, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
-                    working_scale,
-                ) / $crate::macros::wide_roots::wide_lit!($Work, "180");
-                Self::from_bits($core::round_to_storage_with(radians, working_scale, SCALE, mode))
+                Self::from_bits(
+                    $crate::algos::trig::angle_schoolbook::to_radians_schoolbook::<
+                        $core::Core,
+                        SCALE,
+                    >(self.to_bits(), mode)
+                )
             }
 
-            /// Mode-aware sibling of [`Self::sin_cos_strict`].
+            /// Mode-aware sibling of [`Self::sin_cos_strict`]. Delegates
+            /// to the policy-registered joint kernel for this
+            /// `(width, SCALE)` cell — see `policy::trig::sin_cos`.
+            ///
+            /// The shared-Taylor evaluation and its two independent
+            /// near-tie escapes now live in
+            /// `algos::trig::sincos_joint::sin_cos_shared_taylor`; the
+            /// escapes are supplied BY the dispatch as this cell's own
+            /// `sin_dispatch` / `cos_dispatch` verdicts, so they land on
+            /// exactly the engines `self.sin_strict_with(mode)` /
+            /// `self.cos_strict_with(mode)` reached from here before.
             #[inline]
             #[must_use]
             pub fn sin_cos_strict_with(
                 self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> (Self, Self) {
-                // One shared kernel evaluation; each component takes the
-                // near-tie escape (a deciding digit can sit below the
-                // fixed w - the asin(3e-60) family), falling to the
-                // Ziv-escalated single-function path when inside the band.
-                let working_scale = SCALE + $core::GUARD;
-                let (sin_w, cos_w) =
-                    $core::sin_cos_fixed::<SCALE>($core::to_work(self.to_bits()), working_scale);
-                let sin_bits = match $crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<$Storage, _>(
-                    sin_w, working_scale, SCALE, mode, <$Storage>::MAX, <$Storage>::MIN,
-                ) {
-                    ::core::option::Option::Some(narrowed) => narrowed,
-                    ::core::option::Option::None => self.sin_strict_with(mode).to_bits(),
-                };
-                let cos_bits = match $crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<$Storage, _>(
-                    cos_w, working_scale, SCALE, mode, <$Storage>::MAX, <$Storage>::MIN,
-                ) {
-                    ::core::option::Option::Some(narrowed) => narrowed,
-                    ::core::option::Option::None => self.cos_strict_with(mode).to_bits(),
-                };
+                let (sin_bits, cos_bits) = $crate::policy::trig::sin_cos_dispatch::<
+                    $core::Core,
+                    $n_limbs,
+                    SCALE,
+                >(self.to_bits(), mode);
                 (Self::from_bits(sin_bits), Self::from_bits(cos_bits))
             }
 
             /// Mode-aware sibling of [`Self::sinh_cosh_strict`].
+            /// Delegates to the policy-registered joint kernel for this
+            /// `(width, SCALE)` cell — see `policy::trig::sinh_cosh`.
+            ///
+            /// The shared `exp` evaluation, the `e⁻ˣ` reciprocal and both
+            /// near-tie narrowings now live in
+            /// `algos::trig::hyper_joint::sinh_cosh_exp_reciprocal`; the
+            /// escapes are supplied BY the dispatch as this cell's own
+            /// `sinh_dispatch` / `cosh_dispatch` verdicts, so they land on
+            /// exactly the engines `self.sinh_strict_with(mode)` /
+            /// `self.cosh_strict_with(mode)` reached from here before.
             #[inline]
             #[must_use]
             pub fn sinh_cosh_strict_with(
                 self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> (Self, Self) {
-                // One shared exp evaluation; each component takes the
-                // near-tie escape (sinh(x) = x + x^3/6 + ... lands exact
-                // rational partials on rounding boundaries), falling to
-                // the analytically-pinned / Ziv-escalated single-function
-                // path when inside the band.
-                let working_scale = SCALE + $core::GUARD;
-                // Two-core: composition runs on the wide `Wagm` work int.
-                let working_value = $core::to_work_agm(self.to_bits());
-                let exp_x = $core::exp_fixed_series_agm(working_value, working_scale);
-                let exp_neg_x =
-                    $core::div_agm($core::one_agm(working_scale), exp_x, working_scale);
-                let sinh_value = (exp_x - exp_neg_x) >> 1;
-                let cosh_value = (exp_x + exp_neg_x) >> 1;
-                let sinh_bits = match $crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<$Storage, $core::Wagm>(
-                    sinh_value, working_scale, SCALE, mode, <$Storage>::MAX, <$Storage>::MIN,
-                ) {
-                    ::core::option::Option::Some(narrowed) => narrowed,
-                    ::core::option::Option::None => self.sinh_strict_with(mode).to_bits(),
-                };
-                let cosh_bits = match $crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<$Storage, $core::Wagm>(
-                    cosh_value, working_scale, SCALE, mode, <$Storage>::MAX, <$Storage>::MIN,
-                ) {
-                    ::core::option::Option::Some(narrowed) => narrowed,
-                    ::core::option::Option::None => self.cosh_strict_with(mode).to_bits(),
-                };
+                let (sinh_bits, cosh_bits) = $crate::policy::trig::sinh_cosh_dispatch::<
+                    $core::Core,
+                    $n_limbs,
+                    SCALE,
+                >(self.to_bits(), mode);
                 (Self::from_bits(sinh_bits), Self::from_bits(cosh_bits))
             }
 
