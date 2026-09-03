@@ -1668,7 +1668,8 @@ pub mod __bench_internals {
     }
 
     // trig forward (sin) — the only narrow-wide tier with a real Tang wiring
-    // is D57 (band 44..=56, M=512); tiers 4/6/12/32/48/64 route the Tang select
+    // is D57 (sin/cos band 44..=56, M=512; atan runs the full 0..=56 via
+    // `select_atan`); tiers 4/6/12/32/48/64 route the Tang select
     // arm back to `sin_series` (and `select` never returns Tang there), and
     // D153/D307/D462 have their own bespoke impls. D57 is the clean `wide`-
     // buildable band edge.
@@ -1687,6 +1688,43 @@ pub mod __bench_internals {
         mode: crate::RoundingMode,
     ) -> crate::int::types::Int<3> {
         crate::algos::trig::sincos_tang::sin_tang_with_taylor::<crate::types::widths::wide_trig_d57::Core, SCALE, 512>(raw, mode)
+    }
+
+    // D57 atan band-edge bench seam — the three kernels `policy_atan` can
+    // reach at D57, exposed so `atan_d57_band_bisect` can bisect the lower
+    // edge of the `(3, 44..=56)` Tang arm against what production ACTUALLY
+    // runs at each scale (not a bare-`atan_series` straw man):
+    //
+    // - `atan_rung_d57`        — the Series arm outside 18..=22 (GUARD=30,
+    //   DIRECTED=true), i.e. the halving-chain path the band edge diverts.
+    // - `atan_rung_narrow_d57` — the Series arm INSIDE 18..=22 (GUARD=10,
+    //   DIRECTED=false). It runs at working scale `SCALE + 10`, BELOW the
+    //   Tang kernel's fixed `SCALE + 30`, so the band's win/loss there is a
+    //   genuine measurement question rather than an interpolation.
+    // - `atan_tang_d57`        — the Tang table kernel under test.
+    #[cfg(all(feature = "_wide-support", any(feature = "d57", feature = "wide")))]
+    #[inline(never)]
+    pub fn atan_rung_d57<const SCALE: u32>(
+        raw: crate::int::types::Int<3>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<3> {
+        crate::policy::trig::forward_rung::atan_strict::<crate::types::widths::wide_trig_d57::Core, SCALE, { <crate::types::widths::wide_trig_d57::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true>(raw, mode)
+    }
+    #[cfg(all(feature = "_wide-support", any(feature = "d57", feature = "wide")))]
+    #[inline(never)]
+    pub fn atan_rung_narrow_d57<const SCALE: u32>(
+        raw: crate::int::types::Int<3>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<3> {
+        crate::policy::trig::forward_rung::atan_strict::<crate::types::widths::wide_trig_d57::Core, SCALE, 10, false>(raw, mode)
+    }
+    #[cfg(all(feature = "_wide-support", any(feature = "d57", feature = "wide")))]
+    #[inline(never)]
+    pub fn atan_tang_d57<const SCALE: u32>(
+        raw: crate::int::types::Int<3>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<3> {
+        crate::algos::trig::atan_tang_3limb_s44_56::atan_strict::<SCALE>(raw, mode)
     }
 
     // D462 forward-trig bench seam — sin/cos/tan/atan Series-vs-narrow A/B

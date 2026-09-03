@@ -882,6 +882,17 @@ path = "benches/micro/trig_wide_tang_bisect.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
+# D57 atan Tang band LOWER EDGE — the (3, 44..=56) arm whose lower edge the
+# kernel's own header records as "ASSERTED, not measured". Ranks the Tang
+# table kernel against what production actually runs at each scale (Series
+# GUARD=30 outside 18..=22, GUARD=10 inside), validity-walled bit-identical
+# across all 8 rounding modes. Same shape as `trig_wide_tang_bisect`.
+[[bench]]
+name = "atan_d57_band_bisect"
+path = "benches/micro/atan_d57_band_bisect.rs"
+harness = false
+required-features = ["wide", "bench-alt"]
+
 # trig_rung_ab: forward-trig SCALE-derived work-rung A/B -- tier-width Series
 # vs the rung-routed production path (gate + const-folded rung match) at
 # D307/D1232 across the scale axis, plus an out-of-budget large-|x| probe.

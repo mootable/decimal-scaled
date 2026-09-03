@@ -130,11 +130,16 @@ pub(crate) mod forward {
     /// including the narrow-GUARD low bands realised as a `Series` kernel
     /// — runs `Series`.
     ///
-    /// Used by sin, cos, and atan (their Tang bands coincide). `tan` has
-    /// no D57 44..=56 Tang band and routes through [`select_tan`].
+    /// Used by sin and cos. `tan` routes through [`select_tan`] (no D57
+    /// Tang band) and `atan` through [`select_atan`] (a D57 band with its
+    /// own, separately measured, lower edge).
     pub(crate) const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         match (N, SCALE) {
-            // D57 (`Int<3>`) Tang band.
+            // D57 (`Int<3>`) Tang band — sin/cos only. This arm realises as
+            // `sincos_tang`, a DIFFERENT kernel from atan's
+            // `atan_tang_3limb_s44_56`, so its edge is `sincos_tang`'s own
+            // question and is left where it was measured. atan's edge moved
+            // on atan's evidence in [`select_atan`]; nothing here follows it.
             #[cfg(any(feature = "d57", feature = "wide"))]
             (3, 44..=56) => Select::ByAlgorithm(Algorithm::Tang),
             // D153 (`Int<8>`) Tang band.
@@ -166,7 +171,8 @@ pub(crate) mod forward {
 
     /// `tan`-specific matcher. Identical to [`select`] except the D57
     /// 44..=56 cell stays `Series` (tan has no Tang band there — the
-    /// policy wires only sin/cos/atan to the D57 44..=56 Tang kernel;
+    /// policy wires only sin/cos to the D57 44..=56 `sincos_tang` kernel,
+    /// and atan to its own kernel over the full range via [`select_atan`];
     /// tan at 44..=56 falls to the generic `wide_kernel`).
     pub(crate) const fn select_tan<const N: usize, const SCALE: u32>() -> Select<N> {
         match (N, SCALE) {
@@ -182,10 +188,85 @@ pub(crate) mod forward {
         }
     }
 
-    /// Resolve the sin/cos/atan verdict to a concrete `Algorithm`.
+    /// `atan`-specific matcher. Identical to [`select`] except the D57
+    /// arm, which is split out for the same reason [`select_tan`] is: at
+    /// D57 the `Tang` arm realises as a DIFFERENT kernel per function —
+    /// `atan_tang_3limb_s44_56` for atan, `sincos_tang` for sin/cos — so
+    /// the two bands are separate empirical questions and must not share
+    /// an edge. Splitting keeps atan's edge moving on atan's evidence and
+    /// leaves sin/cos routing untouched.
+    ///
+    /// The D57 lower edge here was BISECTED (`benches/micro/`
+    /// `atan_d57_band_bisect.rs`); the previous `44` was asserted rather
+    /// than measured, and the kernel's own header said so. See that arm's
+    /// comment for the measurement.
+    pub(crate) const fn select_atan<const N: usize, const SCALE: u32>() -> Select<N> {
+        match (N, SCALE) {
+            // D57 (`Int<3>`) atan Tang band — the FULL scale range, matching
+            // the D462 precedent below (the only other trig band whose edge
+            // was ever actually bisected, which also came back full-range).
+            //
+            // WHY ROUTING BELOW 44 IS VALID (re-derivable from the code, so
+            // nobody has to re-run the sweep to trust this). The baked Tang
+            // table is the kernel's only scale-dependent resource, and it is
+            // NOT bounded below:
+            //   * `support::atan_tang_table::reconstruct` asserts only an
+            //     UPPER bound — `p_full <= ATAN_TANG_LIMBS` (112 limbs) —
+            //     then takes `p = p_full.max(1)`, so a small working scale
+            //     is always representable;
+            //   * the baked value is a 7168-bit binary expansion stored
+            //     MOST-significant-limb first and read as a high-limb
+            //     PREFIX, so a LOWER scale reads a SHORTER prefix (3 limbs
+            //     at SCALE 0 against 6 at SCALE 56) — strictly cheaper, and
+            //     still carries every bit the scale needs;
+            //   * `core::one(w)` is `consts::pow10::dispatch` and
+            //     `core::half_pi::<SCALE>` is `pi_cf` — both total, and the
+            //     kernel calls half_pi at exactly `SCALE + GUARD`, so it
+            //     takes the baked const-folded path at every scale.
+            // The tier's trig work integer is `Int<16>` at EVERY scale, so
+            // divide width is scale-INDEPENDENT; and this kernel pays NO
+            // halvings at any scale, where the generic path pays 6 across
+            // all of 30..=56.
+            //
+            // MEASURED (three independent pinned runs, `-Core 22`): Tang
+            // wins at every probed scale in 0..=43 — the region this arm
+            // newly claims — 3/3, with no crossover anywhere in it (worst
+            // cell s0 at 1.68x, best above 5x). The 18..=22 cells were
+            // ranked THREE-way, because production runs a narrow-GUARD
+            // Series there (GUARD=10, working scale `SCALE + 10`) while Tang
+            // is fixed at `SCALE + 30`: Tang still wins (1.66x / 1.65x /
+            // 1.56x over `narrow_g10` at s18), so the win region is
+            // continuous THROUGH the band rather than stepping over it.
+            // Validity wall: bit-identical to the canonical Ziv-escalating
+            // `atan_series` across 12,224 comparisons (all 57 scales x up to
+            // 27 inputs x all 8 rounding modes), 0 mismatches.
+            #[cfg(any(feature = "d57", feature = "wide"))]
+            (3, 0..=56) => Select::ByAlgorithm(Algorithm::Tang),
+            #[cfg(any(feature = "d153", feature = "wide"))]
+            (8, 70..=82) => Select::ByAlgorithm(Algorithm::Tang),
+            #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+            (16, 140..=160) => Select::ByAlgorithm(Algorithm::Tang),
+            // D462 — same full-range narrow-GUARD reclaim as [`select`];
+            // see that arm's comment for the bisection evidence.
+            #[cfg(any(feature = "d462", feature = "x-wide"))]
+            (24, 0..=461) => Select::ByAlgorithm(Algorithm::Tang),
+            _ => Select::ByAlgorithm(Algorithm::Series),
+        }
+    }
+
+    /// Resolve the sin/cos verdict to a concrete `Algorithm`.
     #[inline]
     pub(crate) fn resolve<const N: usize, const SCALE: u32>(raw: &Int<N>) -> Algorithm {
         match const { select::<N, SCALE>() } {
+            Select::ByAlgorithm(algorithm) => algorithm,
+            Select::ByValue(choose) => choose(raw),
+        }
+    }
+
+    /// Resolve the atan verdict to a concrete `Algorithm`.
+    #[inline]
+    pub(crate) fn resolve_atan<const N: usize, const SCALE: u32>(raw: &Int<N>) -> Algorithm {
+        match const { select_atan::<N, SCALE>() } {
             Select::ByAlgorithm(algorithm) => algorithm,
             Select::ByValue(choose) => choose(raw),
         }
@@ -774,10 +855,33 @@ mod borrow_d57 {
     #[must_use]
     pub(crate) fn atan_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
         let widened: crate::D<crate::int::types::Int<3>, SCALE> = crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(raw).into();
-        let raw_wide = if matches!(SCALE, 18..=22) {
-            wide_trig_core::atan_narrow::<wide_trig_d57::Core, SCALE, 10>(widened.0, mode)
-        } else {
-            wide_trig_core::atan_series::<wide_trig_d57::Core, SCALE>(widened.0, mode)
+        // This path RUNS at D57's width, so D57's atan verdict is the one
+        // that applies: consult the matcher instead of re-stating a band
+        // here. The previous `matches!(SCALE, 18..=22)` was a matcher
+        // BYPASS — inert only while the D57 Tang band floor (44) sat above
+        // D38's MAX_SCALE (37), so the two ranges could not overlap. The
+        // moment atan's band drops below 38 the bypass would silently keep
+        // D38 on the generic kernel while D57 took Tang, and no gate would
+        // catch it (golden is engine-blind; a bbc would show only that D38
+        // failed to improve). Routing now single-sources through
+        // `forward::select_atan`, so the two cannot drift again.
+        let raw_wide = match super::forward::resolve_atan::<3, SCALE>(&widened.0) {
+            super::forward::Algorithm::Tang => {
+                trig::atan_tang_3limb_s44_56::atan_strict::<SCALE>(widened.0, mode)
+            }
+            // The 18..=22 narrow-GUARD reclaim is a REALISATION of `Series`
+            // (a GUARD choice inside the arm), exactly as in `policy_atan`.
+            super::forward::Algorithm::Series => {
+                if matches!(SCALE, 18..=22) {
+                    wide_trig_core::atan_narrow::<wide_trig_d57::Core, SCALE, 10>(widened.0, mode)
+                } else {
+                    wide_trig_core::atan_series::<wide_trig_d57::Core, SCALE>(widened.0, mode)
+                }
+            }
+            #[allow(dead_code)]
+            super::forward::Algorithm::Schoolbook => {
+                trig::trig_schoolbook::atan_schoolbook::<wide_trig_d57::Core, SCALE>(widened.0, mode)
+            }
         };
         narrow::<SCALE>(raw_wide, "atan_strict")
     }
@@ -1655,7 +1759,7 @@ macro_rules! wide_trig_forward_series {
         }
         #[inline]
         pub(crate) fn policy_atan(self, mode: RoundingMode) -> Self {
-            Self(match forward::resolve::<$N, SCALE>(&self.0) {
+            Self(match forward::resolve_atan::<$N, SCALE>(&self.0) {
                 forward::Algorithm::Series => {
                     forward_rung::atan_strict::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true>(self.0, mode)
                 }
@@ -1674,14 +1778,17 @@ macro_rules! wide_trig_forward_series {
     };
 }
 
-// ── D57 — forward Tang band at 44..=56 (sin/cos/atan), narrow-GUARD
-// Series band at 18..=22 (sin/cos/tan/atan); inverse + hyper divert
-// 18..=22 to their lookup kernels. ─────────────────────────────────────
+// ── D57 — forward Tang band at 44..=56 (sin/cos), atan Tang across the
+// FULL 0..=56 (its edge was bisected; see `forward::select_atan`),
+// narrow-GUARD Series band at 18..=22 (sin/cos/tan — atan's 18..=22 Series
+// sub-arm is now unreachable, kept for match exhaustiveness); inverse +
+// hyper divert 18..=22 to their lookup kernels. ────────────────────────
 #[cfg(any(feature = "d57", feature = "wide"))]
 impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
     // Forward family — `Series` runs the 18..=22 narrow-GUARD lookup or
-    // the generic `wide_kernel`; `Tang` runs the 44..=56 band kernel
-    // (sin/cos/atan only — tan has no 44..=56 Tang band).
+    // the generic `wide_kernel`; `Tang` runs `sincos_tang` on the 44..=56
+    // band for sin/cos (tan has no Tang band here), while atan's `Tang`
+    // runs `atan_tang_3limb_s44_56` across the whole 0..=56 range.
     #[inline]
     pub(crate) fn policy_sin(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<3, SCALE>(&self.0) {
@@ -1745,7 +1852,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
     }
     #[inline]
     pub(crate) fn policy_atan(self, mode: RoundingMode) -> Self {
-        Self(match forward::resolve::<3, SCALE>(&self.0) {
+        Self(match forward::resolve_atan::<3, SCALE>(&self.0) {
             forward::Algorithm::Series => match SCALE {
                 // Both bands run at the SCALE-derived work rung.
                 18..=22 => forward_rung::atan_strict::<crate::types::widths::wide_trig_d57::Core, SCALE, 10, false>(self.0, mode),
@@ -1980,7 +2087,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<8>, SCALE> {
     }
     #[inline]
     pub(crate) fn policy_atan(self, mode: RoundingMode) -> Self {
-        Self(match forward::resolve::<8, SCALE>(&self.0) {
+        Self(match forward::resolve_atan::<8, SCALE>(&self.0) {
             forward::Algorithm::Series => forward_rung::atan_strict::<crate::types::widths::wide_trig_d153::Core, SCALE, { <crate::types::widths::wide_trig_d153::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true>(self.0, mode),
             forward::Algorithm::Tang => {
                 forward_rung::atan_strict::<crate::types::widths::wide_trig_d153::Core, SCALE, 12, false>(self.0, mode)
@@ -2105,7 +2212,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
     }
     #[inline]
     pub(crate) fn policy_atan(self, mode: RoundingMode) -> Self {
-        Self(match forward::resolve::<16, SCALE>(&self.0) {
+        Self(match forward::resolve_atan::<16, SCALE>(&self.0) {
             forward::Algorithm::Series => forward_rung::atan_strict::<crate::types::widths::wide_trig_d307::Core, SCALE, { <crate::types::widths::wide_trig_d307::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true>(self.0, mode),
             forward::Algorithm::Tang => {
                 forward_rung::atan_strict::<crate::types::widths::wide_trig_d307::Core, SCALE, 10, false>(self.0, mode)
@@ -2221,7 +2328,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<24>, SCALE> {
     }
     #[inline]
     pub(crate) fn policy_atan(self, mode: RoundingMode) -> Self {
-        Self(match forward::resolve::<24, SCALE>(&self.0) {
+        Self(match forward::resolve_atan::<24, SCALE>(&self.0) {
             forward::Algorithm::Series => forward_rung::atan_strict::<crate::types::widths::wide_trig_d462::Core, SCALE, { <crate::types::widths::wide_trig_d462::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true>(self.0, mode),
             forward::Algorithm::Tang => {
                 forward_rung::atan_strict::<crate::types::widths::wide_trig_d462::Core, SCALE, 12, false>(self.0, mode)
