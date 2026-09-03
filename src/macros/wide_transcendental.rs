@@ -3784,43 +3784,30 @@ macro_rules! decl_wide_transcendental {
             }
 
             /// Inverse hyperbolic cosine, as `ln(x + √(x² − 1))`,
-            /// defined for `x ≥ 1`. Strict and correctly rounded. For
-            /// `x ≥ 2` the radicand is factored to keep `x²` in range.
+            /// defined for `x ≥ 1`. Strict and correctly rounded.
+            ///
+            /// Delegates to the policy-registered acosh kernel for this
+            /// `(width, SCALE)` cell — see `policy::trig` — so this
+            /// default entry and [`Self::acosh_strict_with`] share the
+            /// one canonical kernel.
+            ///
+            /// This shell previously carried its own inline near-1
+            /// composition, `acosh(1+t) = log1p(t + sqrt(t·(t+2)))`,
+            /// evaluated at the fixed `SCALE + GUARD` working scale.
+            /// That form rounds `t·(t+2)` to the working scale, which
+            /// drops the `t²` contribution once `t² < 10^-(SCALE+GUARD)`
+            /// while `t²` is still significant against the result's own
+            /// last place — the two conditions overlap for `SCALE > 90`,
+            /// leaving a band just above the domain wall where the
+            /// inline form lost accuracy (measured at D115<114> and
+            /// D307<150>; see the `default_entry_matches_default_mode_sibling`
+            /// parity test). The policy kernel escalates the work rung
+            /// for near-special inputs and is correctly rounded there,
+            /// so the default entry now routes through it.
             #[inline]
             #[must_use]
             pub fn acosh_strict(self) -> Self {
-                let working_scale = SCALE + $core::GUARD;
-                // Two-core: composition runs on the wide `Wagm` work int.
-                let one_at_working_scale = $core::one_agm(working_scale);
-                let working_value = $core::to_work_agm(self.to_bits());
-                if working_value < one_at_working_scale {
-                    panic!(concat!(stringify!($Type), "::acosh: argument must be >= 1"));
-                }
-                let two_at_working_scale = one_at_working_scale + one_at_working_scale;
-                let inner = if working_value >= two_at_working_scale {
-                    let reciprocal =
-                        $core::div_agm(one_at_working_scale, working_value, working_scale);
-                    let root = $core::sqrt_fixed_agm(
-                        one_at_working_scale
-                            - $core::mul_agm(reciprocal, reciprocal, working_scale),
-                        working_scale
-                    );
-                    $core::ln_fixed_routed_agm::<SCALE>(working_value, working_scale) + $core::ln_fixed_routed_agm::<SCALE>(one_at_working_scale + root, working_scale)
-                } else {
-                    // Near 1: acosh(1+t) = log1p(t + sqrt(t*(t+2))).
-                    // The gap above 1 is exact, so
-                    // `v^2 - 1 = (v-1)*(v+1) = t*(t+2)` is formed without
-                    // the catastrophic cancellation of `mul(v,v) - 1`
-                    // as `v -> 1`, and `log1p` avoids re-forming `1 + arg`
-                    // when the gap (hence `arg`) is tiny.
-                    let gap = working_value - one_at_working_scale;
-                    let root = $core::sqrt_fixed_agm(
-                        $core::mul_agm(gap, gap + two_at_working_scale, working_scale),
-                        working_scale
-                    );
-                    $core::log1p_fixed::<$core::Wagm>(gap + root, working_scale)
-                };
-                Self::from_bits($core::round_to_storage_agm(inner, working_scale, SCALE))
+                Self::from_bits($crate::policy::trig::acosh_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
             /// Inverse hyperbolic tangent, as `ln((1+x)/(1−x)) / 2`,
@@ -5940,5 +5927,347 @@ mod tests {
             let delta = (back.to_bits().as_i128() - value.to_bits().as_i128()).abs();
             assert!(delta <= 8, "ln(exp(2)) at D307<150> delta {delta}");
         }
+    }
+
+    /// DEFAULT-entry parity: `<fn>_strict()` must return exactly what
+    /// `<fn>_strict_with(DEFAULT_ROUNDING_MODE)` returns.
+    ///
+    /// On the ten wide tiers `asinh` / `acosh` / `atanh` are served by
+    /// two DIFFERENT implementations: the default entry is an inline
+    /// composition emitted by this macro, while the mode-aware sibling
+    /// delegates to `policy::trig::*_dispatch`. The golden harness
+    /// drives only the `_with` sibling, so nothing else grades the
+    /// default entry. `to_degrees` / `to_radians` are the control pair
+    /// here: both of their shells are inline and differ only in the
+    /// final rounding call, so they must never diverge.
+    ///
+    /// The inputs are DERIVED from the two paths' seams rather than
+    /// sampled at random: the inline `asinh` branches at `|x| >= 1`
+    /// (factored radicand) and returns early at exactly 0; the inline
+    /// `acosh` branches at `x >= 2` and walls its domain at `x >= 1`;
+    /// `atanh`'s domain is the open interval `(-1, 1)`. Every seam is
+    /// probed one ULP either side, at both signs, at scale 0, a mid
+    /// scale, and the tier's MAX scale.
+    #[cfg(feature = "std")]
+    #[test]
+    fn default_entry_matches_default_mode_sibling() {
+        let mut fails: std::vec::Vec<std::string::String> = std::vec::Vec::new();
+        let mut checks: u32 = 0;
+        let mut panics: u32 = 0;
+
+        // Both entries are compared by OUTCOME, so a path that panics
+        // where its sibling returns is caught as a divergence rather
+        // than aborting the sweep. The hook is muted only for the
+        // duration of the probes: an expected domain panic is data
+        // here, not noise.
+        let prior_hook = std::panic::take_hook();
+        std::panic::set_hook(std::boxed::Box::new(|_| {}));
+
+        macro_rules! outcome {
+            ($call:expr) => {
+                match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| $call)) {
+                    Ok(v) => Some(v),
+                    Err(_) => None,
+                }
+            };
+        }
+
+        macro_rules! show {
+            ($o:expr) => {
+                match &$o {
+                    Some(v) => std::format!("{v}"),
+                    None => std::string::String::from("<panic>"),
+                }
+            };
+        }
+
+        macro_rules! probe_tier {
+            ($fails:expr, $checks:expr, $panics:expr, $label:literal, $N:literal, $S:literal) => {{
+                type T = crate::D<crate::int::types::Int<$N>, $S>;
+                let m = crate::support::rounding::DEFAULT_ROUNDING_MODE;
+                let zero = <T>::ZERO;
+                let ulp = <T>::MIN_POSITIVE;
+                let one = <T>::ONE;
+                let two = one + one;
+                let three = two + one;
+
+                // asinh: defined on all reals. Seam at |x| == 1, plus
+                // the exact-zero early return; both signs.
+                let mut xs: std::vec::Vec<T> = std::vec::Vec::new();
+                xs.push(zero);
+                xs.push(ulp);
+                xs.push(one - ulp);
+                xs.push(one);
+                xs.push(one + ulp);
+                xs.push(two);
+                xs.push(three);
+                xs.push(<T>::MAX);
+                let base = xs.len();
+                for i in 0..base {
+                    let v = xs[i];
+                    if v != zero && v != <T>::MAX {
+                        xs.push(-v);
+                    }
+                }
+                for x in xs {
+                    let a = outcome!(x.asinh_strict());
+                    let b = outcome!(x.asinh_strict_with(m));
+                    $checks += 1;
+                    if a.is_none() || b.is_none() {
+                        $panics += 1;
+                    }
+                    if a.map(|v| v.to_bits()) != b.map(|v| v.to_bits()) {
+                        $fails.push(std::format!(
+                            "{}<{}> asinh({x}) default={} _with={}",
+                            $label,
+                            $S,
+                            show!(a),
+                            show!(b)
+                        ));
+                    }
+                }
+
+                // acosh: domain x >= 1. Seam at x == 2, domain wall at 1.
+                let mut xs: std::vec::Vec<T> = std::vec::Vec::new();
+                xs.push(one);
+                xs.push(one + ulp);
+                xs.push(two - ulp);
+                xs.push(two);
+                xs.push(two + ulp);
+                xs.push(three);
+                xs.push(<T>::MAX);
+                for x in xs {
+                    if x < one {
+                        continue;
+                    }
+                    let a = outcome!(x.acosh_strict());
+                    let b = outcome!(x.acosh_strict_with(m));
+                    $checks += 1;
+                    if a.is_none() || b.is_none() {
+                        $panics += 1;
+                    }
+                    if a.map(|v| v.to_bits()) != b.map(|v| v.to_bits()) {
+                        $fails.push(std::format!(
+                            "{}<{}> acosh({x}) default={} _with={}",
+                            $label,
+                            $S,
+                            show!(a),
+                            show!(b)
+                        ));
+                    }
+                }
+
+                // atanh: open domain (-1, 1); probe hard against both walls.
+                let mut xs: std::vec::Vec<T> = std::vec::Vec::new();
+                xs.push(zero);
+                xs.push(ulp);
+                xs.push(one - ulp);
+                let base = xs.len();
+                for i in 0..base {
+                    let v = xs[i];
+                    if v != zero {
+                        xs.push(-v);
+                    }
+                }
+                for x in xs {
+                    if x >= one || x <= -one {
+                        continue;
+                    }
+                    let a = outcome!(x.atanh_strict());
+                    let b = outcome!(x.atanh_strict_with(m));
+                    $checks += 1;
+                    if a.is_none() || b.is_none() {
+                        $panics += 1;
+                    }
+                    if a.map(|v| v.to_bits()) != b.map(|v| v.to_bits()) {
+                        $fails.push(std::format!(
+                            "{}<{}> atanh({x}) default={} _with={}",
+                            $label,
+                            $S,
+                            show!(a),
+                            show!(b)
+                        ));
+                    }
+                }
+
+                // Angle conversions: the control pair. Small magnitudes
+                // only, so the `|self| * 180` working-width wall is not
+                // the thing under test.
+                let mut xs: std::vec::Vec<T> = std::vec::Vec::new();
+                xs.push(zero);
+                xs.push(ulp);
+                xs.push(one);
+                xs.push(three);
+                let base = xs.len();
+                for i in 0..base {
+                    let v = xs[i];
+                    if v != zero {
+                        xs.push(-v);
+                    }
+                }
+                for x in xs {
+                    let a = outcome!(x.to_degrees_strict());
+                    let b = outcome!(x.to_degrees_strict_with(m));
+                    $checks += 1;
+                    if a.is_none() || b.is_none() {
+                        $panics += 1;
+                    }
+                    if a.map(|v| v.to_bits()) != b.map(|v| v.to_bits()) {
+                        $fails.push(std::format!(
+                            "{}<{}> to_degrees({x}) default={} _with={}",
+                            $label,
+                            $S,
+                            show!(a),
+                            show!(b)
+                        ));
+                    }
+                    let a = outcome!(x.to_radians_strict());
+                    let b = outcome!(x.to_radians_strict_with(m));
+                    $checks += 1;
+                    if a.is_none() || b.is_none() {
+                        $panics += 1;
+                    }
+                    if a.map(|v| v.to_bits()) != b.map(|v| v.to_bits()) {
+                        $fails.push(std::format!(
+                            "{}<{}> to_radians({x}) default={} _with={}",
+                            $label,
+                            $S,
+                            show!(a),
+                            show!(b)
+                        ));
+                    }
+                }
+
+                // Magnitude sweep: log-spaced values across the whole
+                // representable range, then the same spacing hugging 1
+                // from both sides. The cancellation-sensitive regions
+                // (acosh's near-1 `log1p` branch, atanh's wall, asinh's
+                // factored-radicand seam) are where two structurally
+                // different implementations would part company.
+                let mut scan: std::vec::Vec<T> = std::vec::Vec::new();
+                if let Ok(ten) = <T>::try_from(10i64) {
+                    let mut mag = ulp;
+                    for _ in 0..($S + 4) {
+                        scan.push(mag);
+                        match outcome!(mag * ten) {
+                            Some(next) if next.to_bits() != mag.to_bits() => mag = next,
+                            _ => break,
+                        }
+                    }
+                }
+                for v in scan {
+                    for x in [v, -v] {
+                        let a = outcome!(x.asinh_strict());
+                        let b = outcome!(x.asinh_strict_with(m));
+                        $checks += 1;
+                        if a.is_none() || b.is_none() {
+                            $panics += 1;
+                        }
+                        if a.map(|t| t.to_bits()) != b.map(|t| t.to_bits()) {
+                            $fails.push(std::format!(
+                                "{}<{}> asinh({x}) default={} _with={}",
+                                $label,
+                                $S,
+                                show!(a),
+                                show!(b)
+                            ));
+                        }
+                    }
+
+                    // acosh just above its domain wall: 1 + 10^-k.
+                    if let Some(x) = outcome!(one + v) {
+                        let a = outcome!(x.acosh_strict());
+                        let b = outcome!(x.acosh_strict_with(m));
+                        $checks += 1;
+                        if a.is_none() || b.is_none() {
+                            $panics += 1;
+                        }
+                        if a.map(|t| t.to_bits()) != b.map(|t| t.to_bits()) {
+                            $fails.push(std::format!(
+                                "{}<{}> acosh({x}) default={} _with={}",
+                                $label,
+                                $S,
+                                show!(a),
+                                show!(b)
+                            ));
+                        }
+                    }
+
+                    // atanh at 10^-k and hugging the +/-1 wall at
+                    // 1 - 10^-k, both signs.
+                    let mut walls: std::vec::Vec<T> = std::vec::Vec::new();
+                    walls.push(v);
+                    if let Some(w) = outcome!(one - v) {
+                        walls.push(w);
+                    }
+                    let base = walls.len();
+                    for i in 0..base {
+                        let w = walls[i];
+                        if w != zero {
+                            walls.push(-w);
+                        }
+                    }
+                    for x in walls {
+                        if x >= one || x <= -one {
+                            continue;
+                        }
+                        let a = outcome!(x.atanh_strict());
+                        let b = outcome!(x.atanh_strict_with(m));
+                        $checks += 1;
+                        if a.is_none() || b.is_none() {
+                            $panics += 1;
+                        }
+                        if a.map(|t| t.to_bits()) != b.map(|t| t.to_bits()) {
+                            $fails.push(std::format!(
+                                "{}<{}> atanh({x}) default={} _with={}",
+                                $label,
+                                $S,
+                                show!(a),
+                                show!(b)
+                            ));
+                        }
+                    }
+                }
+            }};
+        }
+
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        {
+            probe_tier!(fails, checks, panics, "D57", 3, 0);
+            probe_tier!(fails, checks, panics, "D57", 3, 20);
+            probe_tier!(fails, checks, panics, "D57", 3, 56);
+        }
+        #[cfg(any(feature = "d76", feature = "wide"))]
+        {
+            probe_tier!(fails, checks, panics, "D76", 4, 0);
+            probe_tier!(fails, checks, panics, "D76", 4, 30);
+            probe_tier!(fails, checks, panics, "D76", 4, 75);
+        }
+        #[cfg(any(feature = "d115", feature = "wide"))]
+        {
+            probe_tier!(fails, checks, panics, "D115", 6, 30);
+            probe_tier!(fails, checks, panics, "D115", 6, 114);
+        }
+        #[cfg(any(feature = "d307", feature = "x-wide"))]
+        {
+            probe_tier!(fails, checks, panics, "D307", 16, 150);
+        }
+
+        std::panic::set_hook(prior_hook);
+
+        // Read the COUNT, not the exit code: a fully cfg'd-out body
+        // would otherwise "pass" while grading nothing.
+        assert!(checks > 0, "no tier was probed - the test graded nothing");
+        std::println!(
+            "default-entry parity: {checks} probes across the wide tiers, \
+             {panics} involved a panic on at least one path, {} diverged",
+            fails.len()
+        );
+        assert!(
+            fails.is_empty(),
+            "{} of {checks} default-entry probes diverged from the default-mode sibling:\n{}",
+            fails.len(),
+            fails.join("\n")
+        );
     }
 }
