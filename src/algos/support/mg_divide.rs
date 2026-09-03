@@ -587,107 +587,6 @@ pub(crate) fn div_rem_via_int_layer(
     );
 }
 
-/// Schoolbook base-2⁶⁴ long division of the little-endian u64 magnitude
-/// `dividend` by a single non-zero u64 `divisor`. Writes the quotient
-/// limbs into `quotient` (limb `i` of the quotient into `quotient[i]`,
-/// higher limbs zeroed) and returns the u64 remainder.
-///
-/// # Why this is not spelled as a `u128` divide
-///
-/// The natural spelling of this loop is
-///
-/// ```text
-/// let current = (remainder << 64) | u128::from(dividend[i]);
-/// quotient[i] = (current / divisor_u128) as u64;
-/// remainder   = current % divisor_u128;
-/// ```
-///
-/// with the loop invariant `remainder < divisor` guaranteeing the
-/// quotient fits a single limb. That invariant is what would license a
-/// single hardware `DIV r/m64`, and LLVM cannot see it: on x86_64 every
-/// such step lowers to a `__udivti3` *software* 128÷128 call, not a
-/// hardware divide. The int layer documents this exact lowering failure
-/// at [`crate::int::algos::div::div_rem`] and solved it there with the
-/// Möller–Granlund 2-by-1 invariant-divisor reciprocal
-/// ([`crate::int::algos::div::div_mg::Mg2By1`]): one reciprocal
-/// precompute per divisor, then a 64×64→128 multiply, a shift and a
-/// small correction per dividend limb. This helper routes the support
-/// layer's copies of the same loop to that engine.
-///
-/// # When it pays
-///
-/// The reciprocal precompute (`Mg2By1::new`) is itself one `__udivti3`
-/// at runtime — the binary-long-division reciprocal is only taken in the
-/// `const` path — so the trade is `n - 1` software divides for exactly
-/// one, independent of `n`. Break-even is a 2-limb dividend; the win
-/// starts at 3 limbs. Two-limb sites are deliberately left spelled as
-/// hardware-divide-plus-`__udivti3` for that reason — routing them here
-/// would swap one software divide for another and add slice
-/// marshalling on top.
-///
-/// # Engine choice — the matcher's verdict, not a pinned engine
-///
-/// This honours [`crate::int::policy::div_rem::select_for_limbs`] rather
-/// than calling an engine directly. The verdict is `Rem` for every shape
-/// this helper can present, and the precondition is exact and worth
-/// stating rather than assuming: `select_for_limbs` computes
-/// `den_n = effective_limbs(den)` and returns [`Algorithm::Rem`] from its
-/// **first** arm on `den_n == 1`, *before it ever inspects the dividend*
-/// (`effective_limbs(num)` is only reached inside the
-/// `den_n >= U128_DIV_THRESHOLD` branch). A `u64` divisor is presented as
-/// a one-element slice, and `effective_limbs` on a one-element slice is
-/// `1` for every non-zero value — so `den_n == 1` is structural here, not
-/// a property of the dividend, its limb count, or the divisor's
-/// magnitude. The dividend arm of the match is therefore dead today and
-/// folds away, leaving the hot path a straight call.
-///
-/// The non-`Rem` arm is kept live deliberately. If an arm ever joins that
-/// policy that the matcher prefers for a single-limb divisor, this helper
-/// routes to it instead of silently pinning `Rem` and leaving the new
-/// engine dead on the crate's hottest divide path — the failure mode a
-/// hardcoded engine call would hide, since golden is engine-blind and a
-/// bench only sees what is wired.
-///
-/// # Why the `const fn` divide is sound on a runtime path
-///
-/// [`crate::int::algos::div::div_rem`] documents itself as the
-/// const-evaluable divide, and its *general* arm is a bit shift-subtract
-/// loop — the very shape this campaign is removing. That arm is
-/// **structurally unreachable** from here, not merely unlikely: it is
-/// guarded by `!fit_one(divisor)`, and `fit_one` is `fit_k(limbs, 1)`,
-/// whose loop `while i < limbs.len()` starting at `i = 1` never executes
-/// for a one-element slice — so `fit_one` is unconditionally `true` for a
-/// `u64` divisor, whatever its value. Only the two hardware/MG fast paths
-/// are reachable. The `const fn` framing explains *why* the engine uses a
-/// reciprocal (const context rules out inline `asm!`), not a restriction
-/// to const callers: the policy's own `Algorithm::Rem` arm calls this
-/// same function at run time.
-///
-/// # Exactness
-///
-/// The base-2⁶⁴ schoolbook quotient digits of a given
-/// `(dividend, divisor)` are unique, so this is bit-identical to the
-/// `u128`-division loop it replaces for every input;
-/// `single_limb_div_rem` carries that identity claim and its tests in
-/// the int layer.
-#[inline]
-pub(crate) fn div_limbs_by_word(dividend: &[u64], divisor: u64, quotient: &mut [u64]) -> u64 {
-    use crate::int::policy::div_rem::{dispatch, select_for_limbs, Algorithm};
-    debug_assert!(divisor != 0, "div_limbs_by_word: division by zero");
-    let den = [divisor];
-    let mut remainder = [0u64; 1];
-    match select_for_limbs(dividend, &den) {
-        // The one-limb-divisor verdict. Dividend-independent (see above),
-        // so this arm takes every shape this helper presents.
-        Algorithm::Rem => {
-            crate::int::algos::div::div_rem::div_rem(dividend, &den, quotient, &mut remainder);
-        }
-        // Unreachable today; kept live so a future arm is not stranded.
-        _ => dispatch(dividend, &den, quotient, &mut remainder),
-    }
-    remainder[0]
-}
-
 /// Divide the unsigned 256-bit value `(n_high, n_low)` by the 128-bit
 /// `divisor` using a binary shift-subtract algorithm. Returns
 /// `Some(quotient)` if the quotient fits in 128 bits, or `None` if
@@ -724,16 +623,9 @@ fn div_long_256_by_128_with_rem(
     }
 
     // Word-divisor fast path: a divisor that fits in 64 bits admits
-    // schoolbook base-2^64 long division instead of a 256-iteration bit
-    // loop. Every `10^scale` for `scale <= 19` lands here.
-    //
-    // Spelled as four `u128 / u128` steps this cost three `__udivti3`
-    // software calls (only the first step, whose incoming remainder is
-    // provably zero, narrowed to a hardware divide); `div_limbs_by_word`
-    // runs the same schoolbook digits on the int layer's Möller-Granlund
-    // single-limb engine, whose one reciprocal precompute is the only
-    // software divide left. Bit-identical — the base-2^64 quotient
-    // digits of a given dividend/divisor pair are unique.
+    // schoolbook base-2^64 long division — one hardware divide per
+    // 64-bit limb instead of a 256-iteration bit loop. Every
+    // `10^scale` for `scale <= 19` lands here.
     if divisor <= u128::from(u64::MAX) {
         let limbs = [
             n_low as u64,
@@ -744,14 +636,15 @@ fn div_long_256_by_128_with_rem(
         // `n_high < divisor` guarantees the quotient fits in 128 bits, so
         // the top two limbs of the result are always zero.
         let mut out = [0u64; 4];
-        let remainder = div_limbs_by_word(&limbs, divisor as u64, &mut out);
-        debug_assert!(out[2] == 0 && out[3] == 0);
-        // The true remainder is `< divisor <= u64::MAX`, so widening the
-        // engine's u64 remainder reproduces the former u128 value exactly.
-        return Some((
-            u128::from(out[0]) | (u128::from(out[1]) << 64),
-            u128::from(remainder),
-        ));
+        let mut remainder: u128 = 0;
+        let mut i = 4;
+        while i > 0 {
+            i -= 1;
+            let current = (remainder << 64) | u128::from(limbs[i]);
+            out[i] = (current / divisor) as u64;
+            remainder = current % divisor;
+        }
+        return Some((u128::from(out[0]) | (u128::from(out[1]) << 64), remainder));
     }
 
     // Wide divisor (`u64::MAX < divisor < 2^128`): route through the
@@ -1296,12 +1189,9 @@ pub(crate) fn mul_div_pow10_with<const SCALE: u32>(
     }
 
     // Widening path: |lhs*rhs| > i128::MAX. Compute the unsigned product;
-    // when it still fits a single u128 divide it directly, only falling
-    // through to the full 256-bit magic-divide when the unsigned product
-    // overflows u128 too. NB "divide it directly" is a single
-    // `u128 / u128`, which on x86_64 is the `__udivti3` software call,
-    // NOT one hardware DIV — there is no 128-bit hardware divide to lower
-    // to. It is still far cheaper than the 256-bit path it skips. The
+    // when it still fits a single u128 use a hardware u128 divide
+    // (one DIV instruction), only falling through to the full 256-bit
+    // magic-divide when the unsigned product overflows u128 too. The
     // u128 fast path covers the operand band sqrt(i128::MAX) < |op| <
     // sqrt(u128::MAX), i.e. ~1.3e19 < |op| < ~1.8e19 — the SCALE 19
     // typical-input window, sparing it the full mul_u128_to_u256 +
@@ -1313,17 +1203,10 @@ pub(crate) fn mul_div_pow10_with<const SCALE: u32>(
     let (unsigned_product, hi_overflow) = abs_lhs.overflowing_mul(abs_rhs);
     if !hi_overflow {
         // u128 product fits. For SCALE <= 19 the divisor `exp = 10^SCALE`
-        // also fits a single u64, in which case the full-width
-        // `__udivti3` soft-call (u128/u128) is replaced by a two-step
-        // schoolbook divide in base 2^64. That buys ONE hardware `divq`
-        // (the `hi / divisor_u64` step, genuinely u64/u64) plus one
-        // narrower software call — not two hardware divides: the second
-        // step's `(r_hi:lo) / divisor` still spans 128 bits and lowers to
-        // `__udivti3`, the same invariant LLVM cannot see that
-        // `div_limbs_by_word` exists to work around. At a 2-limb
-        // dividend that helper is exactly break-even (its reciprocal
-        // precompute is itself one `__udivti3`), so this site keeps the
-        // open-coded spelling deliberately. The branch is const-folded
+        // also fits a single u64, in which case the LLVM `__udivti3`
+        // soft-call (u128/u128) can be replaced by a two-step schoolbook
+        // divide in base 2^64 — two hardware `divq` instructions on
+        // x86_64 instead of the soft routine. The branch is const-folded
         // per-SCALE so the runtime cost is just the branch the compiler
         // proves away.
         let (floor_quotient, remainder) = if SCALE <= 19 {
@@ -1336,10 +1219,7 @@ pub(crate) fn mul_div_pow10_with<const SCALE: u32>(
                 let remainder = lo % divisor_u64;
                 (quotient as u128, remainder as u128)
             } else {
-                // Two-limb schoolbook divide in base 2^64: one hardware
-                // `divq` (u64/u64) then one `__udivti3` (the 128-bit
-                // window below), against the one `__udivti3` a plain
-                // `unsigned_product / divisor` would cost.
+                // Two-limb schoolbook divide in base 2^64.
                 let q_hi = hi / divisor_u64;
                 let r_hi = hi % divisor_u64;
                 let current = ((r_hi as u128) << 64) | (lo as u128);
@@ -1801,91 +1681,6 @@ mod tests {
                     "div_long_256_by_128 wide mismatch: hi={n_high} lo={n_low} d={divisor}"
                 );
             }
-        }
-    }
-
-    /// Verbatim copy of the `u128`-division word loop `div_limbs_by_word`
-    /// replaced — the shape that lowered to one `__udivti3` per limb.
-    /// Serves as the bit-identity oracle for the replacement.
-    fn div_limbs_by_word_reference(dividend: &[u64], divisor: u64, quotient: &mut [u64]) -> u64 {
-        let divisor_u128 = u128::from(divisor);
-        let mut remainder: u128 = 0;
-        let mut i = dividend.len();
-        while i > 0 {
-            i -= 1;
-            let current = (remainder << 64) | u128::from(dividend[i]);
-            quotient[i] = (current / divisor_u128) as u64;
-            remainder = current % divisor_u128;
-        }
-        remainder as u64
-    }
-
-    /// [`div_limbs_by_word`] is bit-identical to the `u128`-division loop
-    /// it replaces, at every dividend limb count the support layer uses
-    /// (4 for `div_small` / `div_long_256_by_128_with_rem`, 8 for
-    /// `div_u512_by_word`) and across the divisor shapes that drive
-    /// `single_limb_div_rem`'s normalisation: `shift == 0` (top bit set,
-    /// the branch that must not evaluate `x >> 64`), maximal shift
-    /// (divisor 1), the small series divisors, and leading-zero dividend
-    /// limbs (the live-extent skip).
-    #[test]
-    fn div_limbs_by_word_matches_u128_loop() {
-        let mut state = 0x0D19_B10C_u64;
-        let divisors: [u64; 12] = [
-            1,
-            2,
-            3,
-            7,
-            180,
-            999_983,
-            1_299_709,
-            u64::from(u32::MAX),
-            10_000_000_000_000_000_000, // 10^19 — the widest u64 power of ten
-            1u64 << 63,                 // shift == 0, minimal normalised
-            u64::MAX - 1,
-            u64::MAX, // shift == 0, maximal
-        ];
-        for divisor in divisors {
-            for limb_count in 1..=8usize {
-                for case in 0..40u32 {
-                    let mut dividend = [0u64; 8];
-                    for (i, limb) in dividend.iter_mut().enumerate().take(limb_count) {
-                        // Cycle shapes: dense, all-ones, and sparse with
-                        // high limbs zero (exercises the live-extent skip).
-                        *limb = match case % 4 {
-                            0 => mix(&mut state),
-                            1 => u64::MAX,
-                            2 => {
-                                if i + 1 == limb_count {
-                                    0
-                                } else {
-                                    mix(&mut state)
-                                }
-                            }
-                            _ => u64::from(mix(&mut state) as u32),
-                        };
-                    }
-                    let live = &dividend[..limb_count];
-                    let mut actual = [0u64; 8];
-                    let actual_rem = div_limbs_by_word(live, divisor, &mut actual);
-                    let mut expected = [0u64; 8];
-                    let expected_rem = div_limbs_by_word_reference(live, divisor, &mut expected);
-                    assert_eq!(
-                        actual[..limb_count],
-                        expected[..limb_count],
-                        "div_limbs_by_word quotient mismatch: n={live:?} d={divisor}"
-                    );
-                    assert_eq!(
-                        actual_rem, expected_rem,
-                        "div_limbs_by_word remainder mismatch: n={live:?} d={divisor}"
-                    );
-                }
-            }
-            // All-zero dividend: quotient and remainder are zero.
-            let zero = [0u64; 4];
-            let mut quotient = [0u64; 4];
-            assert_eq!(div_limbs_by_word(&zero, divisor, &mut quotient), 0);
-            assert_eq!(quotient, [0u64; 4]);
         }
     }
 

@@ -115,32 +115,29 @@ pub(crate) fn mul_u256(lhs: U256, rhs: U256) -> U512 {
 /// Quotient `numerator / divisor` for a 512-bit dividend and a divisor
 /// that fits in a single 64-bit word.
 ///
-/// Schoolbook long division in base `2^64`: one quotient limb per
-/// 64-bit dividend limb. Far cheaper than the general bit loop, and it
+/// Schoolbook long division in base `2^64`: each step divides a
+/// 128-bit `(remainder, limb)` pair by the word divisor with one
+/// hardware division. Far cheaper than the general bit loop, and it
 /// covers every `10^scale` divisor for `scale <= 19` — the common
 /// decimal multiply path.
-///
-/// The per-limb step is *not* a hardware division: spelled as
-/// `((remainder << 64) | limb) / (divisor as u128)` all eight steps but
-/// the first lower to the `__udivti3` software call on x86_64, because
-/// the `remainder < divisor` invariant that makes the quotient fit a
-/// limb is invisible to LLVM. Delegating to
-/// [`crate::algos::support::mg_divide::div_limbs_by_word`] runs the same
-/// schoolbook digits on the int layer's Möller-Granlund single-limb
-/// engine, leaving one software divide (its reciprocal precompute)
-/// instead of seven.
 fn div_u512_by_word(numerator: U512, divisor: u64) -> U512 {
+    let divisor_u128 = u128::from(divisor);
     let mut limbs = [0u64; 8];
     for i in 0..4 {
         limbs[i << 1] = numerator[i] as u64;
         limbs[(i << 1) | 1] = (numerator[i] >> 64) as u64;
     }
-    let mut quotient = [0u64; 8];
-    let _remainder = crate::algos::support::mg_divide::div_limbs_by_word(
-        &limbs, divisor, &mut quotient);
+    let mut remainder: u128 = 0;
+    let mut i = 8;
+    while i > 0 {
+        i -= 1;
+        let current = (remainder << 64) | u128::from(limbs[i]);
+        limbs[i] = (current / divisor_u128) as u64;
+        remainder = current % divisor_u128;
+    }
     let mut out = [0u128; 4];
     for i in 0..4 {
-        out[i] = u128::from(quotient[i << 1]) | (u128::from(quotient[(i << 1) | 1]) << 64);
+        out[i] = u128::from(limbs[i << 1]) | (u128::from(limbs[(i << 1) | 1]) << 64);
     }
     out
 }
@@ -276,17 +273,9 @@ fn div_u512_by_pow10_small(numerator: U512, scale_idx: usize) -> U256 {
 pub(crate) fn div_u512_by_u256(numerator: U512, divisor: U256) -> U512 {
     debug_assert!(!(divisor[0] == 0 && divisor[1] == 0), "division by zero");
     // Fast path: when both the dividend and divisor fit in a single
-    // 128-bit word, one `u128 / u128` is exact and far cheaper than any
-    // multi-limb engine. This covers the overwhelmingly common case of
-    // moderate-magnitude decimal multiply/divide at small scales.
-    //
-    // That single divide is a `__udivti3` software call, not a hardware
-    // instruction — x86_64 has no 128-bit divide — and unlike the word
-    // loop below it cannot be narrowed: both operands genuinely span
-    // 128 bits here. Routing it through the word path instead would
-    // trade this one software call for the one inside the
-    // Möller-Granlund reciprocal precompute and add eight limb steps,
-    // so the check order below is deliberate.
+    // 128-bit word, the hardware divide is exact and far cheaper than
+    // any multi-limb engine. This covers the overwhelmingly common case
+    // of moderate-magnitude decimal multiply/divide at small scales.
     if numerator[1] == 0 && numerator[2] == 0 && numerator[3] == 0 && divisor[1] == 0 {
         return [numerator[0] / divisor[0], 0, 0, 0];
     }
@@ -597,24 +586,15 @@ impl Fixed {
     pub(crate) fn div_small(self, divisor: u128) -> Fixed {
         debug_assert!(divisor != 0, "division by zero");
         // Fast path: divisor fits a single u64 — schoolbook base-2^64
-        // long division, one quotient limb per 64-bit dividend limb,
-        // instead of the 256-iteration bit loop below. Every Taylor /
-        // artanh series in this crate calls `div_small(2*k+1)` or
-        // `div_small((2*k)*(2*k+1))` with k < 400, so the divisor is
-        // < ~1.3 million ≪ u64::MAX and this fast path always fires
-        // from those sites — once per series term.
-        //
-        // Written out as four `u128 / u128` steps this was NOT four
-        // hardware divides, as it long claimed: only the first step
-        // narrows (its incoming remainder is provably zero), and the
-        // other three lower to `__udivti3` software calls, each paying
-        // the Windows x64 ABI's by-pointer `u128` marshalling — the
-        // loop-invariant divisor re-stored to the stack once per call.
-        // `div_limbs_by_word` runs the identical schoolbook digits on
-        // the int layer's Möller-Granlund single-limb engine: three
-        // software divides become the one inside its reciprocal
-        // precompute, and the u64 limbs pass as pointer+len once.
+        // long division costs four hardware u128/u64 divides (one per
+        // 64-bit limb) instead of the 256-iteration bit loop below.
+        // Every Taylor / artanh series in this crate calls
+        // `div_small(2*k+1)` or `div_small((2*k)*(2*k+1))` with
+        // k < 400, so the divisor is < ~1.3 million ≪ u64::MAX and
+        // this fast path always fires from those sites.
         if divisor <= u64::MAX as u128 {
+            let divisor_u64 = divisor as u64;
+            let divisor_u128 = divisor; // already u128, avoids reconvert in the loop
             let limbs: [u64; 4] = [
                 self.mag[0] as u64,
                 (self.mag[0] >> 64) as u64,
@@ -622,8 +602,21 @@ impl Fixed {
                 (self.mag[1] >> 64) as u64,
             ];
             let mut out = [0u64; 4];
-            let _remainder = crate::algos::support::mg_divide::div_limbs_by_word(
-                &limbs, divisor as u64, &mut out);
+            let mut remainder: u128 = 0;
+            // Top-down schoolbook divide in base 2^64. Each step:
+            //   (rem << 64 | limb) / d  →  64-bit quotient + 64-bit rem
+            let current3 = (remainder << 64) | u128::from(limbs[3]);
+            out[3] = (current3 / divisor_u128) as u64;
+            remainder = current3 - u128::from(out[3]) * divisor_u128;
+            let current2 = (remainder << 64) | u128::from(limbs[2]);
+            out[2] = (current2 / divisor_u128) as u64;
+            remainder = current2 - u128::from(out[2]) * divisor_u128;
+            let current1 = (remainder << 64) | u128::from(limbs[1]);
+            out[1] = (current1 / divisor_u128) as u64;
+            remainder = current1 - u128::from(out[1]) * divisor_u128;
+            let current0 = (remainder << 64) | u128::from(limbs[0]);
+            out[0] = (current0 / divisor_u128) as u64;
+            let _ = divisor_u64;
             let q_lo = u128::from(out[0]) | (u128::from(out[1]) << 64);
             let q_hi = u128::from(out[2]) | (u128::from(out[3]) << 64);
             return Fixed {
