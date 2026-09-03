@@ -280,9 +280,15 @@ where
 {
     let h = L::packed_len(N); // operand packed length (N for u64, N/2 for u128)
     let d = 2 * h; // full-product length in L-limbs (2N u64 / N u128)
-    // `[L; N]` covers `packed_len(N) ≤ N` for both limb types (only low `h` used).
-    let mut lhs_packed = [L::ZERO; N];
-    let mut rhs_packed = [L::ZERO; N];
+    // Operand packs: the value's OWN `single` width in limb type `L`
+    // ([`Limb::single`] → `N` u64 / `⌈N/2⌉` u128), from the same `ComputeLimbs`
+    // family the accumulator below draws on. At `L = u128` that is the `h = N/2`
+    // limbs actually live, where `[L::ZERO; N]` zeroed `N` of them — `16N` bytes
+    // per operand for `8N` live. At `L = u64` it is `N` either way.
+    let mut lhs_buf = L::single::<Limbs<N>>();
+    let mut rhs_buf = L::single::<Limbs<N>>();
+    let lhs_packed = lhs_buf.as_mut();
+    let rhs_packed = rhs_buf.as_mut();
     L::pack(lhs, &mut lhs_packed[..h]);
     L::pack(rhs, &mut rhs_packed[..h]);
     // Accumulator: the value's own 2N-u64-width buffer in limb type `L`
