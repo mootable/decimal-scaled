@@ -277,6 +277,16 @@ jobs:
           for cell in $(python3 -c "import json,os;print(' '.join(f\"{c['shard']}-s{c['stripe']}\" for c in json.loads(os.environ['CELLS'])))"); do
             dir="stripes/golden-comprehensive-${cell}"
             test -f "$dir/summary.txt" || { echo "MISSING ${cell} report" >&2; exit 1; }
+            # A present-but-EMPTY report is the failure `test -f` cannot see: the
+            # stripe reported, graded nothing, and its rows vanish into the splice
+            # with the whole run still green. Absence of failure is not evidence
+            # that the surface was graded — so every stripe must contribute at
+            # least one DATA row. results.tsv carries a header, so the floor is 2.
+            test -f "$dir/results.tsv" || { echo "MISSING ${cell} results.tsv" >&2; exit 1; }
+            if [ "$(wc -l < "$dir/results.tsv")" -lt 2 ]; then
+              echo "EMPTY ${cell} report — graded 0 rows" >&2
+              exit 1
+            fi
             cat "$dir/summary.txt" >> combined/summaries.txt
             if [ "$head_done" -eq 0 ]; then
               cat "$dir/results.tsv" > combined/results.tsv; head_done=1
@@ -284,13 +294,21 @@ jobs:
               tail -n +2 "$dir/results.tsv" >> combined/results.tsv
             fi
           done
+          rows=$(($(wc -l < combined/results.tsv) - 1))
           {
             echo "## golden comprehensive — combined (all eight modes, full surface, width-sharded)"
             echo '```'
             cat combined/summaries.txt
             echo '```'
-            echo "rows: $(($(wc -l < combined/results.tsv) - 1))"
+            echo "rows: $rows"
           } >> "$GITHUB_STEP_SUMMARY"
+          # Assert it, do not merely report it. A reported count is only read when
+          # someone goes looking; an asserted one makes `success` itself mean the
+          # surface was graded, so a green run needs no log archaeology to trust.
+          if [ "$rows" -le 0 ]; then
+            echo "combined results.tsv graded 0 rows" >&2
+            exit 1
+          fi
 
       - name: Aggregate + commit the golden summary to results/golden/
         run: |

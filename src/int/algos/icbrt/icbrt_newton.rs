@@ -15,7 +15,7 @@
 use crate::algo_x_support::seed::cbrt_seed;
 use crate::int::algos::div::div_rem_into::div_rem_into;
 use crate::int::algos::support::limbs::{add_assign, bit_len, cmp};
-use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
+use crate::int::policy::mul::dispatch_slice as mul_slice;
 
 /// Scratch capacity for the width-agnostic [`icbrt_newton`] door — the
 /// build-max `4·MAX_WORK_N + ⌈MAX_WORK_N/2⌉`, the only sizing available to a
@@ -97,6 +97,21 @@ pub(crate) fn icbrt_newton(radicand: &[u64], out: &mut [u64]) {
     icbrt_newton_into(
         radicand, out, &mut x, &mut sq, &mut q, &mut r, &mut u, &mut v, &mut [], &mut [],
     );
+}
+
+/// Significant limb count of `limbs` (index of the highest non-zero limb + 1),
+/// minimum 1. Used to hand the multiply matcher the operand's TRUE length
+/// rather than its zero-padded buffer length.
+#[inline]
+fn sig_len(limbs: &[u64]) -> usize {
+    let mut len = limbs.len();
+    while len > 0 {
+        if limbs[len - 1] != 0 {
+            return len;
+        }
+        len -= 1;
+    }
+    1
 }
 
 /// `out = floor(cbrt(radicand))` in **caller-provided scratch** — the real
@@ -190,7 +205,7 @@ pub(crate) fn icbrt_newton_into(
     // and halts when s_new ≥ s (i.e. s is the floor root).
     //
     // Per pass only the live slices are touched: `sq` is re-zeroed
-    // (mul_schoolbook accumulates); the n/s² divide re-zeros `q`/`r`; the /3
+    // (the multiply accumulates into `out`); the n/s² divide re-zeros `q`/`r`; the /3
     // divide's quotient and remainder are re-zeroed defensively (the
     // single-limb divisor path may not). `r` serves twice — first as the n/s²
     // remainder sink (never read), then, over its `[..work_len]` prefix, as
@@ -200,11 +215,24 @@ pub(crate) fn icbrt_newton_into(
     let mut rem3_buf = [0u64; 1];
     let sq_len = (work_len * 2).min(sq.len());
     loop {
-        // t = s²  (2 * work_len limbs, but only work_len+1 matter)
+        // t = s²  (2 * work_len limbs, but only work_len+1 matter). The zeroing
+        // must cover the FULL read window `sq[..sq_len]` — the divide below
+        // reads all of it, while the product written next may be shorter.
         for limb in sq[..sq_len].iter_mut() {
             *limb = 0;
         }
-        mul_schoolbook(&x[..work_len], &x[..work_len], &mut sq[..sq_len]);
+        // Through the multiply matcher, on the root's SIGNIFICANT length. `x` is
+        // a `work_len` buffer holding a CUBE ROOT — roughly `work_len/3` live
+        // limbs, the rest padding — and the matcher's classifier keys on length
+        // alone, so handing it `work_len` would report a size this operand does
+        // not have and could route a sparse pair into Karatsuba. Trimmed, the
+        // lengths stay far below the engage point (128) at every reachable
+        // width: the widest radicand this kernel takes is ~288 limbs, so
+        // `x_sig` is ~96. That is what makes this bit-identical to the pinned
+        // schoolbook call it replaces, while leaving the choice with the matcher.
+        let x_sig = sig_len(&x[..work_len]);
+        let prod_len = (2 * x_sig).min(sq_len);
+        mul_slice(&x[..x_sig], &x[..x_sig], &mut sq[..prod_len]);
 
         // q = n / s²  (the divide engine re-zeros q[..work_len] / r[..sq_len])
         div_rem_into(radicand, &sq[..sq_len], &mut q[..work_len], &mut r[..sq_len],

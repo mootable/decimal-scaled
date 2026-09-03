@@ -552,20 +552,20 @@ fn round_mag_with_mode(
 /// `num` / `den` are little-endian u64 magnitudes; `quot` / `rem` are
 /// fully written by the chosen engine (both engines zero them first).
 ///
-/// The matcher's verdict is honoured, not bypassed: `Rem` routes to the
-/// hardware single-limb engine, every other verdict routes to base-2⁶⁴
-/// Knuth through its `_into` door with caller scratch — the same
-/// verdict-then-`_into` shape as `wide_trig_core::bracket_div` /
-/// `rem_int_layer`. At this module's shapes (dividend ≤ 8 limbs,
-/// divisor ≤ 4) the matcher can only return `Rem` or `Knuth` today (the
-/// u128-limb engine needs a ≥ 24-limb divisor; BZ and Schoolbook are
-/// unrouted), and every registered engine computes the same unique
-/// floor quotient/remainder, so collapsing the non-`Rem` verdicts onto
-/// Knuth's door is value-identical. Re-verify this arm if an engine
-/// with different numerics ever joins `int::policy::div_rem`.
+/// The matcher's verdict is honoured, not bypassed — and the honouring is
+/// delegated wholesale to
+/// [`div_rem_into`](crate::int::algos::div::div_rem_into::div_rem_into),
+/// the divide's exact-scratch door, rather than re-derived here. That
+/// door's verdict match is EXHAUSTIVE (no `_`), so a new `Algorithm`
+/// variant forces a decision there instead of being silently collapsed
+/// onto Knuth behind this caller's back. `Rem` keeps its direct hardware
+/// path; the base-2¹²⁸ arm falls closed to base-2⁶⁴ Knuth on the empty
+/// `u128` slices passed below — and cannot be selected at this door's
+/// shapes regardless, since `den ≤ 4 < 24` limbs puts every divisor here
+/// below `U128_DIV_THRESHOLD`.
 ///
-/// Scratch is a fixed `[u64; 10]` / `[u64; 4]` pair: `div_knuth_into`
-/// needs `num.len() + 2` / `den.len()` zeroed limbs, and this module's
+/// Scratch is a fixed `[u64; 10]` / `[u64; 4]` pair: the door needs
+/// `num.len() + 2` / `den.len()` zeroed limbs, and this module's
 /// widest dividend is the fixed 512-bit `U512` shape (8 limbs — the
 /// widths here are architectural constants like `[u128; 2]` itself,
 /// not a generic `N`), so 10/4 is the exact per-width sizing, not a
@@ -576,24 +576,15 @@ pub(crate) fn div_rem_via_int_layer(
     quot: &mut [u64],
     rem: &mut [u64],
 ) {
-    use crate::int::policy::div_rem::{select_for_limbs, Algorithm};
     debug_assert!(
         num.len() <= 8 && den.len() <= 4,
         "div_rem_via_int_layer: fixed 512/256-bit ceiling exceeded"
     );
-    match select_for_limbs(num, den) {
-        // Single-limb divisor: the hardware Möller-Granlund single-limb
-        // engine; no normalisation scratch is involved at all.
-        Algorithm::Rem => {
-            crate::int::algos::div::div_rem::div_rem(num, den, quot, rem);
-        }
-        // Multi-limb divisor: Knuth Algorithm D with exact scratch.
-        _ => {
-            let mut u = [0u64; 10];
-            let mut v = [0u64; 4];
-            crate::int::algos::div::div_knuth::div_knuth_into(num, den, quot, rem, &mut u, &mut v);
-        }
-    }
+    let mut u = [0u64; 10];
+    let mut v = [0u64; 4];
+    crate::int::algos::div::div_rem_into::div_rem_into(
+        num, den, quot, rem, &mut u, &mut v, &mut [], &mut [],
+    );
 }
 
 /// Divide the unsigned 256-bit value `(n_high, n_low)` by the 128-bit

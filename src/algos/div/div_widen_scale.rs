@@ -36,6 +36,7 @@
 
 use crate::int::algos::div::div_knuth::div_knuth_into;
 use crate::int::algos::div::div_knuth_u128_limb::div_knuth_u128_limb_into;
+use crate::int::algos::div::div_rem::div_rem;
 use crate::int::policy::mul::dispatch_slice as mul_slice;
 use crate::int::policy::div_rem::{select_for_limbs, Algorithm};
 use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
@@ -149,14 +150,8 @@ where
     // `mul_widen_divide`'s fits-Int<N> arm (at SCALE==0,
     // `multiplier == 1`, so it engages for any operand with ≥2 leading zero
     // bits).
-    // Bit-identical: the same `round(|dividend|·10^SCALE / |divisor|)`, an N-limb Knuth
-    // divide instead of 2N. Hardcoding Knuth is the matcher's choice for this
-    // shape: the dividend fits N limbs (≤ the divisor width `n`), so the u128
-    // engine's `dividend ≥ 2n` precondition is false and `select_for_limbs`
-    // always returns Knuth here. Class-G caveat: this direct engine call is
-    // sound ONLY while the matcher's verdict for this shape IS Knuth; MUST
-    // be re-verified whenever an Algorithm arm joins `int::policy::div_rem`
-    // (a new engine winning for small-`n` dividends would void this fast path).
+    // Bit-identical: the same `round(|dividend|·10^SCALE / |divisor|)`, an N-limb
+    // divide instead of 2N.
     let dividend_leading_zeros = dividend.unsigned_abs().leading_zeros();
     let multiplier_leading_zeros = multiplier.unsigned_abs().leading_zeros();
     if dividend_leading_zeros + multiplier_leading_zeros > <Int<N>>::BITS {
@@ -164,16 +159,45 @@ where
         let numerator_len = sig_len(&numerator_mag);
         let mut quotient = [0u64; N];
         let mut remainder = [0u64; N];
-        let mut u_buf = Limbs::<N>::single_buffered_u64();
-        let mut v_buf = Limbs::<N>::single_buffered_u64();
-        div_knuth_into(
-            &numerator_mag[..numerator_len],
-            &divisor_mag[..divisor_len],
-            &mut quotient,
-            &mut remainder,
-            u_buf.as_mut(),
-            v_buf.as_mut(),
-        );
+        let fast_numerator = &numerator_mag[..numerator_len];
+        let fast_divisor = &divisor_mag[..divisor_len];
+        // Route on the matcher's verdict, EXHAUSTIVELY (no `_`) — the same
+        // shape the `2N` path below uses, so a new engine forces a decision
+        // here instead of being silently stranded behind a hardcoded call.
+        match select_for_limbs(fast_numerator, fast_divisor) {
+            // The `/ small integer` shape. `div_knuth_into` reaches the very
+            // same `div_rem` through its own `n == 1` precondition guard, but
+            // only AFTER normalising the whole dividend into `u` and zeroing
+            // both outputs a second time; going direct skips that wasted pass.
+            Algorithm::Rem => div_rem(fast_numerator, fast_divisor, &mut quotient,
+                &mut remainder),
+            // `KnuthU128Limb` is DELIBERATELY collapsed onto base-2⁶⁴ Knuth on
+            // this arm. It is genuinely reachable — the fast path constrains
+            // only the NUMERATOR to `N` limbs, so an even divisor of ≥ 24
+            // effective limbs under a ≥ 2n numerator satisfies the verdict at
+            // the wide tiers — but the two engines are bit-identical
+            // (`div_knuth_u128_limb`'s own differential), so this is a routing
+            // choice, never a value change. Honouring it needs this arm's own
+            // packed-u128 scratch and its own bench; recorded as open perf work
+            // rather than wired unmeasured. Burnikel–Ziegler cannot engage (the
+            // divisor is `N ≤ 64 < 65` limbs) and `Schoolbook` is never
+            // returned, but both are matched so neither can be added silently.
+            Algorithm::Knuth
+            | Algorithm::KnuthU128Limb
+            | Algorithm::BurnikelZieglerWithKnuth
+            | Algorithm::Schoolbook => {
+                let mut u_buf = Limbs::<N>::single_buffered_u64();
+                let mut v_buf = Limbs::<N>::single_buffered_u64();
+                div_knuth_into(
+                    fast_numerator,
+                    fast_divisor,
+                    &mut quotient,
+                    &mut remainder,
+                    u_buf.as_mut(),
+                    v_buf.as_mut(),
+                );
+            }
+        }
         let remainder_len = sig_len(&remainder[..divisor_len.max(1)]);
         let remainder_nonzero = !(remainder_len == 1 && remainder[0] == 0);
         if remainder_nonzero {
