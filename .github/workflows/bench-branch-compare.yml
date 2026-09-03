@@ -666,7 +666,15 @@ jobs:
           BENCH: ${{ inputs.micro_bench }}
         run: |
           set -euo pipefail
-          if ! grep -qE "^name = \"${BENCH}\"$" Cargo.toml; then
+          # `[[:space:]]*$`, not a bare `$`: Cargo.toml is committed with CRLF
+          # line endings, so every `name = "..."` line ends in a carriage
+          # return and a bare `$` anchor matched NOTHING — this validator
+          # rejected every bench name that exists, micro mode included, and
+          # failed in seconds looking exactly like a typo. Verified on run
+          # 33699534180. `\r?` would NOT fix it: GNU grep -E has no `\r`
+          # escape and reads it as a literal `r`. `[[:space:]]` is POSIX and
+          # covers CR.
+          if ! grep -qE "^name = \"${BENCH}\"[[:space:]]*$" Cargo.toml; then
             echo "::error::no [[bench]] named '${BENCH}' in Cargo.toml"
             echo "Benches under benches/micro/:"
             grep -B1 '^path = "benches/micro/' Cargo.toml | grep '^name = ' | sed 's/name = /  /'
