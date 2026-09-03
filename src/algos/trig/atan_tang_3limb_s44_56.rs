@@ -1,19 +1,26 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Bespoke `atan_strict` kernel slot for `D57<SCALE>` with
-//! `SCALE ∈ 44..=56`.
+//! Bespoke `atan_strict` kernel slot for `D57<SCALE>`, routed across the
+//! tier's FULL scale range (`SCALE ∈ 0..=56`).
+//!
+//! The module name's `s44_56` records where the slot was ORIGINALLY gated,
+//! not where it routes today: the lower edge was bisected down to 0 (see
+//! "The lower band edge" below). The name is kept only to avoid churning
+//! every reference in one perf change; it is stale and a rename to
+//! `atan_tang_3limb` would be accurate.
 //!
 //! At deep storage scales the wide-tier `atan_fixed` runs an
 //! `O(log working_scale)` halving chain (each `atan(x) = 2·atan(x/(1+√(1+x²)))`
 //! costs one wide sqrt + one wide div + one wide mul) followed by a
-//! Taylor evaluation on the post-halving residual. With `GUARD = 30` this
-//! band's `working_scale = SCALE + GUARD` is `74..=86`, which lands in the
-//! `working_scale < 110` arm of the halving count in
-//! [`crate::algos::trig::trig_generic::atan_fixed`] — so the chain is
-//! **6** halvings here, not the 7 an earlier draft of this header claimed
-//! (7 needs `working_scale >= 110`, i.e. `SCALE >= 80`, which D57 cannot
-//! reach: its `MAX_SCALE` is 56). Six wide sqrts before the Taylor loop
+//! Taylor evaluation on the post-halving residual. With `GUARD = 30` the
+//! routed range's `working_scale = SCALE + GUARD` is `30..=86`, all of
+//! which lands in the `working_scale < 110` arm of the halving count in
+//! [`crate::algos::trig::trig_generic::atan_fixed`] — so the chain the
+//! generic path runs is **6** halvings from `SCALE = 30` up (5 below it),
+//! not the 7 an earlier draft of this header claimed (7 needs
+//! `working_scale >= 110`, i.e. `SCALE >= 80`, which D57 cannot reach: its
+//! `MAX_SCALE` is 56). Those wide sqrts before the Taylor loop
 //! runs ~30 terms — and every iteration of every
 //! kernel goes through the same `Int<16> / Int<16>` Knuth divide that
 //! dominates wide arithmetic at this width. This kernel collapses the
@@ -28,13 +35,17 @@
 //! With `M = 512` and `x ∈ [0, 1]` (the existing reciprocal-fold for
 //! `|x| > 1` is preserved), choosing `j = round(x · M)` gives
 //! `|y| ≤ 1/(2M) = 1/1024 ≈ 9.8·10⁻⁴`. The Taylor remainder then
-//! converges in ~15 terms at `working_scale ≤ 87`, vs the 7 halvings + ~30 terms
-//! the generic path runs.
+//! converges in ~15 terms at `working_scale ≤ 87`, vs the 5–6 halvings +
+//! ~30 terms the generic path runs.
 //!
-//! The slot is exposed through `crate::policy::trig`
-//! only for `SCALE ∈ 44..=56`.
+//! The slot is exposed through `crate::policy::trig::forward::select_atan`
+//! for every `SCALE ∈ 0..=56`. It is reached through `select_atan`, NOT the
+//! shared `select`: at this tier the `Tang` arm realises as a different
+//! kernel per function (this one for atan, `sincos_tang` for sin/cos), so
+//! the two bands are separate empirical questions and do not share an edge.
 //!
-//! # The lower band edge (44) is ASSERTED, not measured
+//! # The lower band edge (44) was ASSERTED, not measured — and has now
+//! # been bisected away
 //!
 //! An earlier draft of this header justified the edge by claiming lower
 //! scales "keep using the generic `atan_series` which is already cheaper
@@ -58,11 +69,29 @@
 //! against 6 at `SCALE = 56` — and its Taylor loop is bounded by
 //! `working_scale`. It pays NO halvings at any scale.
 //!
-//! So the band edge should be re-bisected downward rather than trusted.
-//! The precedent is in the same matcher: the D462 arm
-//! (`policy::trig::forward::select`, `(24, 0..=461)`) is the one trig band
-//! whose edge was actually bisected, and it came back as the FULL scale
-//! range.
+//! So the band edge was re-bisected downward rather than trusted, and it
+//! came back at the SCALE floor: the arm is now `(3, 0..=56)`. This matches
+//! the precedent in the same matcher — the D462 arm `(24, 0..=461)`, the
+//! one trig band whose edge had ever actually been bisected, which also
+//! came back as the FULL scale range.
+//!
+//! The bisection (`benches/micro/atan_d57_band_bisect.rs`, three
+//! independent `-Core 22` pinned runs) put this kernel ahead at every
+//! probed scale in `0..=43` — the newly claimed region — 3/3, worst cell
+//! s0 at 1.68x. `18..=22` was ranked THREE-way rather than interpolated,
+//! because production runs a narrow-GUARD Series there (GUARD=10, working
+//! scale `SCALE + 10`) while this kernel is fixed at `SCALE + 30` and so
+//! carries ~20 more working digits: it still wins (1.66x / 1.65x / 1.56x
+//! over `narrow_g10` at s18), so the win region is continuous through the
+//! band rather than stepping over a hole in it.
+//!
+//! Nothing below 44 was a validity limit: `atan_tang_table::reconstruct`
+//! asserts only an UPPER bound (`p_full <= ATAN_TANG_LIMBS`) and takes
+//! `p = p_full.max(1)`, and the baked value is read as a high-limb PREFIX
+//! of a 7168-bit expansion — so a lower scale reads a SHORTER prefix and
+//! is strictly cheaper. Bit-identity to the canonical `atan_series` was
+//! walled over 12,224 comparisons (all 57 scales x up to 27 inputs x all
+//! 8 rounding modes), 0 mismatches.
 //!
 //! ## Correctness
 //!
@@ -123,7 +152,7 @@ fn table_entry(working_scale: u32, idx: usize, pow10_w: core::W) -> core::W {
     atan_tang_table::atan_table_entry_baked::<core::W>(working_scale, idx, M, pow10_w)
 }
 
-/// `atan(x)` strict kernel for `D57<SCALE>` with `SCALE ∈ 44..=56`.
+/// `atan(x)` strict kernel for `D57<SCALE>`, routed for `SCALE ∈ 0..=56`.
 ///
 /// Stages:
 /// 1. Fold sign and `|x| > 1` to `|x| ≤ 1` via `atan(1/|x|)` + π/2.
