@@ -48,12 +48,25 @@ name: "\U0001FA83 bench-branch-compare (branch vs latest tag)"
 # used tier's speed. This workflow could never see that while it hardcoded every
 # feature.
 #
-# Read the result ACROSS runs, not within one: bbc compares branch vs prod at the
-# SAME features, so both sides move together and the ratio stays ~1.00 whatever
-# the feature set. Dispatch the SAME ref twice with different `features`, then
-# compare the `prod_ns` column of the two `bbc_medians.tsv` artifacts cell by
-# cell — identical code, one variable. (`prod_ns` is the right column: it is the
-# published baseline, unaffected by whatever the branch is changing.)
+# READING IT — and the trap. bbc compares branch vs prod at the SAME features,
+# so both sides move together and the ratio stays ~1.00 whatever the feature set;
+# no single run's table can show a feature cost. The obvious next move is to
+# dispatch the same ref twice with different `features` and diff the two
+# `prod_ns` columns. THAT COMPARISON IS CROSS-MACHINE, and it has already
+# produced a spectacular false positive: two `group: width` D57 runs on one
+# commit came out a flat 1.81x apart, 135 cells of 135 in the same direction.
+# It was the runner, not the feature set — the discriminator is that build-max
+# scratch zeroing is ADDITIVE (a roughly constant ns per call), so it would
+# inflate a 2.5 ns `add` hugely and barely touch a 14 us `atan`, whereas the
+# observed gap was a constant MULTIPLIER across five orders of magnitude of cost
+# with the absolute delta scaling in proportion. That is a CPU difference.
+# (Cell-mode arms of the same pair came out at 1.03, because the per-cell
+# fan-out spreads each arm over five VMs and averages the machine factor away.)
+#
+# So: a feature-cost A/B needs BOTH feature sets in ONE job, which this workflow
+# does not yet do — the two arms are two builds, hence two jobs, hence two VMs,
+# and no grouping can fix that. Until such a mode exists, treat any cross-run
+# feature delta as unmeasured, and never read a uniform multiplier as a defect.
 #
 # The concurrency group is deliberately per-ref, so two dispatches on one ref
 # serialise instead of competing for runners — an A/B whose halves ran under

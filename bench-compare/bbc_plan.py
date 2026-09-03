@@ -15,11 +15,17 @@ Two independent needs, one shared consistency problem:
    the feature set a dispatch input turns "enabling a feature must not slow
    execution" into a measurable CI invariant.
 
-   The measurement is ACROSS two runs, not within one: bbc compares branch vs
-   prod at the SAME features, so both sides move together and the ratio stays
-   ~1.00 whatever the features are. Dispatch the SAME ref twice with different
-   `features`, then compare the `prod_ns` column of the two `bbc_medians.tsv`
-   artifacts cell-by-cell. Identical code, identical runner class, one variable.
+   Parameterising the feature set is a PREREQUISITE for measuring that, not the
+   measurement itself. bbc compares branch vs prod at the SAME features, so both
+   sides move together and no single run's ratio can show a feature cost; and
+   diffing the `prod_ns` columns of two runs is CROSS-MACHINE. That has already
+   produced a false positive worth remembering: two `group: width` D57 runs on
+   one commit came out a flat 1.81x apart, all 135 cells agreeing in direction.
+   It was the runner. Build-max scratch zeroing is ADDITIVE (a roughly constant
+   ns per call), so it would inflate a 2.5 ns `add` hugely and barely move a
+   14 us `atan`; the observed gap was a constant MULTIPLIER across five orders
+   of magnitude of cost, which is a CPU difference. A sound feature A/B needs
+   both feature sets in ONE job, which this workflow does not yet provide.
 
 2. **Width selection is a feedback loop.** An agent working D57 should not wait
    on a 60-cell sweep. Selecting widths compiles and runs only those cells.
@@ -435,11 +441,13 @@ def render_summary(plan: dict[str, object]) -> str:
             "comparable to the tracked full-surface medians and would corrupt "
             "the rendered Performance page if committed over them._",
             "",
-            "_To test that enabling a feature costs no runtime: dispatch the "
-            "SAME ref again with a different `features`, then compare the "
-            "`prod_ns` column of the two `bbc_medians.tsv` artifacts. bbc's own "
-            "branch/prod ratio cannot see it — both sides carry the same "
-            "features and move together._",
+            "_Comparing this run's `prod_ns` against another run's to price a "
+            "FEATURE is cross-machine and has already produced a flat 1.81x "
+            "false positive on identical code. Two builds mean two jobs mean "
+            "two runner VMs, and no grouping fixes that. Tell them apart by "
+            "shape: build-max scratch zeroing is additive (near-constant ns per "
+            "call), so a constant multiplier across cheap and expensive ops "
+            "alike is the CPU, not the feature set._",
         ]
     return "\n".join(lines) + "\n"
 
