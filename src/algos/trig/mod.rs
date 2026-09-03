@@ -37,6 +37,8 @@ pub(crate) mod sincos_tang_3limb_s18_22;
 pub(crate) mod atan_tang_3limb;
 pub(crate) mod near_pole_tan;
 #[cfg(feature = "_wide-support")]
+pub(crate) mod sincos_joint;
+#[cfg(feature = "_wide-support")]
 pub(crate) mod sincos_narrow;
 #[cfg(feature = "_wide-support")]
 pub(crate) mod sincos_tang;

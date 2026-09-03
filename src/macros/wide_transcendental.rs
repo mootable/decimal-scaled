@@ -4323,32 +4323,28 @@ macro_rules! decl_wide_transcendental {
                 )
             }
 
-            /// Mode-aware sibling of [`Self::sin_cos_strict`].
+            /// Mode-aware sibling of [`Self::sin_cos_strict`]. Delegates
+            /// to the policy-registered joint kernel for this
+            /// `(width, SCALE)` cell — see `policy::trig::sin_cos`.
+            ///
+            /// The shared-Taylor evaluation and its two independent
+            /// near-tie escapes now live in
+            /// `algos::trig::sincos_joint::sin_cos_shared_taylor`; the
+            /// escapes are supplied BY the dispatch as this cell's own
+            /// `sin_dispatch` / `cos_dispatch` verdicts, so they land on
+            /// exactly the engines `self.sin_strict_with(mode)` /
+            /// `self.cos_strict_with(mode)` reached from here before.
             #[inline]
             #[must_use]
             pub fn sin_cos_strict_with(
                 self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> (Self, Self) {
-                // One shared kernel evaluation; each component takes the
-                // near-tie escape (a deciding digit can sit below the
-                // fixed w - the asin(3e-60) family), falling to the
-                // Ziv-escalated single-function path when inside the band.
-                let working_scale = SCALE + $core::GUARD;
-                let (sin_w, cos_w) =
-                    $core::sin_cos_fixed::<SCALE>($core::to_work(self.to_bits()), working_scale);
-                let sin_bits = match $crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<$Storage, _>(
-                    sin_w, working_scale, SCALE, mode, <$Storage>::MAX, <$Storage>::MIN,
-                ) {
-                    ::core::option::Option::Some(narrowed) => narrowed,
-                    ::core::option::Option::None => self.sin_strict_with(mode).to_bits(),
-                };
-                let cos_bits = match $crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<$Storage, _>(
-                    cos_w, working_scale, SCALE, mode, <$Storage>::MAX, <$Storage>::MIN,
-                ) {
-                    ::core::option::Option::Some(narrowed) => narrowed,
-                    ::core::option::Option::None => self.cos_strict_with(mode).to_bits(),
-                };
+                let (sin_bits, cos_bits) = $crate::policy::trig::sin_cos_dispatch::<
+                    $core::Core,
+                    $n_limbs,
+                    SCALE,
+                >(self.to_bits(), mode);
                 (Self::from_bits(sin_bits), Self::from_bits(cos_bits))
             }
 
