@@ -60,22 +60,23 @@ enum Algorithm {
     /// [`sqrt::sqrt_native::sqrt_native`] — `f64`-seeded Newton run directly
     /// in a tight, concrete `Int<W>` with `W = 2N` (chosen per tier in the
     /// dispatch arm to cover `mag · 10^SCALE` at any valid scale), rather
-    /// than through the width-agnostic int `isqrt` slice, whose linear
-    /// `scale`-length ×10 radicand-build loop and build-max scratch buffer
-    /// dominate at high scale. Routed by `N` for the mid-wide tiers D57/D76
-    /// (N = 3/4) at every scale, and for the wider tiers D115..D1232
-    /// (N = 6..64) at high scale only (`SCALE >= 4·N` — the empirical
-    /// crossover where the tight `Int<2N>` overtakes the slice). Microbench
-    /// (`root_kernel_ab`): 1.1–1.97× faster at the mid-scale cells; at the
-    /// max-scale (S-1) bench-branch-compare cells 1.8–5.8× faster than the
-    /// generic slice [`Self::Newton`]. Bit-identical to [`Self::Newton`]
-    /// across every mode.
+    /// than through the width-agnostic int `isqrt` slice.
     ///
-    /// NOT feature-gated: variant and arms always present so routing is
-    /// feature-INDEPENDENT (a single-wide-tier build routes that tier exactly
-    /// as a full build does). Reached only at the `N` its tier instantiates,
-    /// so dead-arm-eliminated without that tier; `#[allow(dead_code)]` covers
-    /// the narrow-only build where it is never constructed.
+    /// **KEPT but UNROUTED.** This arm was routed by `N` at D57/D76 and at
+    /// high scale for D115..D1232, on the strength of two slice costs that
+    /// have since been deleted: the build-max `isqrt` scratch (now exact
+    /// per-`N` `ComputeLimbs` buffers) and the linear `scale`-length ×10
+    /// radicand-build loop (now ONE multiply against the baked `pow10_limbs`
+    /// const-table entry — `algos/sqrt/sqrt_newton.rs:89`). Re-measured over
+    /// the full surface (2026-09-03), the generic slice [`Self::Newton`] is
+    /// faster at EVERY sampled cell of every tier `N >= 3` — 50 cells,
+    /// margins 1.36x-3.22x, each clearing its own cell's measured noise
+    /// figure — so `select` routes nothing here.
+    ///
+    /// The kernel is retained, not deleted, as a benchmarkable reference
+    /// seam that stays golden-covered, so a future remap cannot ship a break
+    /// through it. The dispatch arm's per-`N` work-width table is retained
+    /// with it so the kernel stays reachable and compiled at every width.
     #[allow(dead_code)]
     Native,
     /// Schoolbook reference tag -- delegates to
@@ -105,122 +106,77 @@ enum Select<const N: usize> {
 /// default (a real algorithm — there is no synthetic default variant).
 const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
     match (N, SCALE) {
-        // ── D18 (N = 1): the bypass EARNS its place here ───────────────
-        // `MgDivide` bypasses the int layer (hand-written 256-bit `u128`
-        // arithmetic in `algos::support::mg_divide`), so it only belongs
-        // here if it beats the int-layer paths by a margin worth a separate
-        // kernel. At this width it does, and the reason is structural: the
-        // radicand `raw · 10^SCALE` is at most `i64::MAX · 10^17 ≈ 9.22e35`,
-        // which is below `u128::MAX ≈ 3.40e38` by a factor of ~369 — so
-        // `sqrt_raw_with`'s hardware-`u128::isqrt` fast path fires for EVERY
-        // legal `D18<SCALE>` value and the bit-serial fallback is
-        // unreachable. Measured (`root_kernel_ab`, `sqrt_d18_s00..s17`,
-        // pinned, two runs): MgDivide beats the better int-layer path
-        // (`Native`) by 2.31x/2.30x at s0, 2.21x/2.18x at s4, 2.01x/1.94x at
-        // s9, 1.39x/1.40x at s13, 1.46x/1.43x at s17 — reproducible to
-        // within 0.07x. The fast-path condition is a tautology at this
-        // width, so no value test is needed.
-        (1, _) => Select::ByAlgorithm(Algorithm::MgDivide),
-        // ── D38 (N = 2): the bypass earns its place only on the values it
-        // can actually serve ──────────────────────────────────────────────
-        // At this width the same radicand can be either side of `u128`:
-        // `raw · 10^SCALE` fits only while `raw <= u128::MAX / 10^SCALE`.
-        // Inside that region MgDivide takes the same hardware `u128::isqrt`
-        // path as D18 and wins big; outside it, `sqrt_raw_with` falls back
-        // to a 256-bit Newton whose every divide is a bit-serial shift-subtract
-        // (the divisor is the root estimate, ~2^127, far above the
-        // `u64::MAX` word-divisor fast path), and it loses catastrophically.
+        // ── D18 / D38 (N = 1 / 2): the int-layer bypass EARNS its place,
+        // ── at every scale AND every magnitude ─────────────────────────
+        // `MgDivide` is the one square-root candidate that bypasses the int
+        // layer (hand-written 256-bit `u128` arithmetic in
+        // `algos::support::mg_divide`), so it belongs here only if it beats
+        // the int-layer paths ACROSS the tier — never on the strength of a
+        // single cell.
         //
-        // Measured per input (`root_kernel_ab`, `sqrt_d38_s19n`, pinned):
-        // inside the region MgDivide is 62-75ns vs `Native` 260-365ns
-        // (4.1-4.9x); outside it MgDivide is 8963ns vs `Native` 439ns
-        // (20x the wrong way). Aggregated at SCALE 0 — where the condition
-        // holds for every value — MgDivide beats the best int-layer path
-        // 3.74x/3.84x across two runs.
+        // Full-surface map (2026-09-03; interleaved min-of-rounds, with a
+        // same-kernel control measuring each cell's own noise): `MgDivide`
+        // is the fastest ELIGIBLE candidate at EVERY sampled scale of both
+        // tiers — D18 s0/s4/s9/s13/s17 by 1.45x/1.49x/1.20x/1.23x/1.32x
+        // against per-cell noise of 1.055x/1.020x/1.000x/1.037x/1.014x, and
+        // D38 s0/s9/s19/s28/s37 by 1.96x/1.66x/2.03x/1.41x/1.59x against
+        // noise 1.086x/1.051x/1.009x/1.041x/1.048x. Every margin clears its
+        // own cell's noise figure and the winner is constant in scale, so
+        // each arm covers its tier whole — there is no scale-fitted constant
+        // here to go stale.
         //
-        // A `(N, SCALE)` arm cannot express this: the split is on the VALUE,
-        // not the cell. So this is the one genuine `ByValue` case — the
-        // bypass is routed exactly where it earns its place and the int
-        // layer takes every other value.
-        (2, _) => Select::ByValue(|raw: &Int<N>| {
-            // Magnitude as u128 (exact at N == 2, the only width that
-            // reaches this matcher).
-            let magnitude = raw.unsigned_abs();
-            let limbs = magnitude.as_limbs();
-            let mut mag: u128 = limbs[0] as u128;
-            if limbs.len() > 1 {
-                mag |= (limbs[1] as u128) << 64;
-            }
-            // `checked_pow` keeps this total: a SCALE whose `10^SCALE`
-            // overflows u128 can never satisfy the condition anyway.
-            match 10u128.checked_pow(SCALE) {
-                Some(pow10) if mag <= u128::MAX / pow10 => Algorithm::MgDivide,
-                _ => Algorithm::Native,
-            }
-        }),
-        // D57 / D76 (N = 3 / 4) — bespoke f64-seeded Newton in a tight,
-        // concrete `Int<W>` with `W = 2N` (covering `mag · 10^SCALE` at any
-        // valid scale: the storage magnitude is ≤ 64N bits and `10^SCALE`
-        // adds ≤ 64N more for SCALE ≤ the tier's digit capacity). Routed by
-        // `N` (all scales) because the build-max slice scratch the generic
-        // `Newton` kernel zeroes per Newton iteration dominates these
-        // radicands even at the full-range `W = 2N`. Microbench
-        // (`root_kernel_ab`, at the routed `W = 2N`): native beats the
-        // generic slice 1.22× (D57<20>) and 1.13× (D76<20>). Bit-identical
-        // to `Newton` across every mode (kernel test gate).
+        // Why no value gate at D38. The radicand `raw · 10^SCALE` fits
+        // `u128` only while `raw <= u128::MAX / 10^SCALE`, and outside that
+        // region `MgDivide` genuinely loses its hardware-`u128::isqrt` fast
+        // path — the map's magnitude ladder confirms the step is REAL (at
+        // s19: 110-128 ns inside the region, 344-531 ns outside). The step
+        // does not justify a branch. Measured across that ladder
+        // (`raw = 10^k`, k in {0,5,10,15,19,22,25,30,37}, at s0/s19/s37),
+        // `MgDivide` is still the fastest arm at 26 of 27 points —
+        // INCLUDING outside the region. The lone exception is s19 raw=1e22,
+        // where the slice leads 1.14x; the ladder carries no noise control,
+        // so that single point is not an established win region. A
+        // `ByValue` split would buy a runtime branch on every D38 call, and
+        // forfeit dead-arm elimination in every monomorphisation, to chase
+        // it.
         //
-        // The wider mid tiers (D115/D153, N = 6/8) are NOT routed by `N`:
-        // at the full-range `W = 2N` (12/16 limbs) the per-iteration Knuth
-        // divide outweighs the slice's scratch churn at the benchmarked scales, so a
-        // blanket `W = 2N` would regress them (rule 6 — size each width
-        // exactly). They keep only their high-scale `Native` cells below,
-        // where the radicand is genuinely wide.
+        // This replaces a `ByValue` arm that sent the outside-region values
+        // to `Native`. That target measured WRONG: `Native` is the SLOWEST
+        // of the three arms at every outside-region ladder point (813-961 ns
+        // at s19). The 8963 ns outside-region `MgDivide` reading the old
+        // comment cited did not reproduce at any ladder point — the worst
+        // taken anywhere in the sweep was 530.7 ns.
         //
-        // Feature-INDEPENDENT routing: these arms key only on `(N, SCALE)`,
-        // never on which tiers are compiled. Reached only at the `N` their
-        // tier instantiates, so an always-present arm is dead without that
-        // tier and correct with it — the SAME verdict either way (a feature
-        // gate here was the tier-splitting routing defect).
-        (3, _) // D57, W=6
-        | (4, _) // D76, W=8
-        => Select::ByAlgorithm(Algorithm::Native),
-        // High-scale Native for the wider tiers (D115..D1232, N = 6..64),
-        // each at the full-range work width `W = 2N` (covers `mag · 10^SCALE`
-        // at any valid scale). The crossover is scale-dependent: at low/mid
-        // scale the radicand is small and the tight `Int<2N>` Native pays
-        // full-`W` Knuth divides while the slice works on the actual
-        // significant length, so the slice wins; at high scale the slice's
-        // *linear* `scale`-length ×10 radicand-build loop plus its build-max
-        // `isqrt` scratch dominate, and the tight `Int<2N>` Native (radicand
-        // built via a const-folded `pow`, root in an exactly-sized integer)
-        // wins decisively. The TRUE crossover is **per-tier** and NOT the
-        // uniform `SCALE >= 4·N` shape: a second-pass adaptive bisection
-        // (`root_kernel_ab.rs`, cores 18-19) found the slice
-        // win-band reached further into the threshold-routed region for
-        // D230/D616/D924 than the `4N` shape assumed — at routed cells
-        // just above `4N`, slice was beating Native 1.06–1.27×. The
-        // per-tier thresholds below sit at the bisected true crossover
-        // (Class I "continuous win-region" gate); each cell routed to
-        // Native is bit-identical to Newton across every mode and a
-        // measured win.
-        (6, scale) if scale >= 24 => Select::ByAlgorithm(Algorithm::Native), // D115, W=12
-        (8, scale) if scale >= 32 => Select::ByAlgorithm(Algorithm::Native), // D153, W=16
-        // Per-tier crossovers tightened by adaptive-bisection in
-        // `root_kernel_ab.rs` (cores 18-19): the conservative
-        // `s >= 4N` heuristic placed several thresholds INSIDE the slice
-        // win-band (the slice's build-max scratch cost is smaller than the
-        // tight `Int<2N>` Knuth divide here), so native lost 1.06–1.27× at
-        // routed cells just above the gate. The refined thresholds below
-        // sit at the true bisected crossover per tier; the architecture-
-        // review Class I check (continuous win-region) requires this.
-        (12, scale) if scale >= 70 => Select::ByAlgorithm(Algorithm::Native), // D230, W=24
-        (16, scale) if scale >= 64 => Select::ByAlgorithm(Algorithm::Native), // D307, W=32
-        (24, scale) if scale >= 96 => Select::ByAlgorithm(Algorithm::Native), // D462, W=48
-        (32, scale) if scale >= 160 => Select::ByAlgorithm(Algorithm::Native), // D616, W=64
-        (48, scale) if scale >= 260 => Select::ByAlgorithm(Algorithm::Native), // D924, W=96
-        (64, scale) if scale >= 256 => Select::ByAlgorithm(Algorithm::Native), // D1232, W=128
-        // Everything else (wider tiers at low/mid scales) — generic Newton
-        // over the int layer's width-agnostic slice `isqrt`.
+        // Validity: the map's wall requires bit-identity with the generic
+        // slice across the input spread — which includes `9·10^(S-1)`, far
+        // outside the u128 region at D38 — times all eight rounding modes.
+        // `MgDivide` is eligible at N = 1 and N = 2 at every scale.
+        (1, _) | (2, _) => Select::ByAlgorithm(Algorithm::MgDivide),
+        // ── D57 … D1232 (N >= 3): the generic slice, at every scale ────
+        // The generic `Newton` kernel (the int layer's width-agnostic slice
+        // `isqrt`) is the fastest eligible candidate at EVERY sampled cell
+        // of all ten wide tiers — 50 cells, margins 1.36x-3.22x over
+        // `Native`, the next DISTINCT kernel, against per-cell noise figures
+        // of 1.002x-1.208x. The winning kernel is constant in scale at every
+        // one of those widths, so no crossover exists to gate on and the arm
+        // covers the whole region rather than a band.
+        //
+        // This replaces the blanket `(3, _) | (4, _) => Native` arms and
+        // eight per-tier high-scale gates — (6,>=24) (8,>=32) (12,>=70)
+        // (16,>=64) (24,>=96) (32,>=160) (48,>=260) (64,>=256). All eight
+        // measured MISPLACED: the map probed each at gate-1 / gate / gate+1
+        // and the slice wins on BOTH sides of every one by 1.88x-2.76x, so
+        // there was no win region for them to gate into.
+        //
+        // Those arms rested on two slice costs that no longer exist. The
+        // build-max `isqrt` scratch is gone — `sqrt_newton` threads exact
+        // per-`N` `ComputeLimbs` buffers. The "linear `scale`-length ×10
+        // radicand build" is gone — `algos/sqrt/sqrt_newton.rs:89` forms the
+        // radicand with ONE multiply against the baked `pow10_limbs`
+        // const-table entry. Accordingly the two figures the old comments
+        // cited re-measure INVERTED at those same cells: native was claimed
+        // ahead 1.22x at D57<20> and 1.13x at D76<20>; the slice leads
+        // 1.68x and 1.67x.
         _ => Select::ByAlgorithm(Algorithm::Newton),
     }
 }
