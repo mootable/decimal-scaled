@@ -1068,6 +1068,44 @@ path = "benches/micro/root_policy_map.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
+# ── scale-change family (quantize / requantize / rescale) ─────────────
+# This family had NO performance coverage: the bench-branch-compare sweep
+# measures the arithmetic + transcendental surface and never calls any of
+# it. The three targets below are that missing measurement.
+
+# `quantize` across widths x a sampled scale grid, both directions, with
+# the scale DELTA varied (a 1-place move and a full-span move do very
+# different work) and both the exact (remainder-zero early return) and
+# dense (full divide-and-round) input classes. `wide` is what brings
+# D57..D307 into existence; D18/D38 are ungated but the sweep spans all
+# six widths so a width inversion is visible across the whole set.
+[[bench]]
+name = "quantize_surface"
+path = "benches/micro/quantize_surface.rs"
+harness = false
+required-features = ["wide"]
+
+# Delegation parity (`rescale` vs `quantize`, which should be
+# indistinguishable), rounding-mode cost across all eight modes, and
+# whether `requantize` composes with or duplicates the scale move.
+[[bench]]
+name = "quantize_family_ab"
+path = "benches/micro/quantize_family_ab.rs"
+harness = false
+required-features = ["wide"]
+
+# `DynDecimal::quantize_to` — the RUNTIME-scale path, which cannot
+# const-fold and boxes its result. Separate target because it needs the
+# `dyn` facade feature; the typed row in each group is the reference the
+# facade's cost is measured against. Only `dyn` is required: the trait is
+# emitted for D18 and D38 alone (see the bench's module docs), and both
+# of those widths are ungated.
+[[bench]]
+name = "quantize_dyn_ab"
+path = "benches/micro/quantize_dyn_ab.rs"
+harness = false
+required-features = ["dyn"]
+
 # The wide-tier Tang/Series benchmark example uses the wide decimal types
 # (D307..D1232), which only exist under the wide feature umbrellas. Gate it so a
 # default / `--all-targets` build does not try to compile it without them.
