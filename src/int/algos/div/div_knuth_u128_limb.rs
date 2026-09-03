@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Knuth Algorithm D on **u128 limbs** (base 2¹²⁸) — the divide side of the
-//! [`LimbSize`] axis, parked pending the `div_kernel_ab` verdict.
+//! [`LimbSize`] axis, and a WIRED engine: see *Routing* below before
+//! changing anything here.
 //!
 //! ## Why base 2¹²⁸ (and why NOT a u64-`q̂` hybrid)
 //!
@@ -21,25 +22,43 @@
 //! a u64 lens). Base 2¹²⁸ keeps every window aligned, at the cost of a
 //! `q̂·v[i]` product that is a full 128×128→256 (4 u64-mults) instead of
 //! 64×64→128 (1): **2× the limb-multiplies for ½ the carry-chain.** Whether
-//! that nets out ahead of base-2⁶⁴ is a per-width microbench question
-//! (`benches/micro/div_kernel_ab.rs`); the campaign's earlier estimate was
-//! a wash, hence this kernel stays a parked candidate until the bench says
-//! otherwise.
+//! that nets out ahead of base-2⁶⁴ is a per-width question the policy map
+//! answered empirically (`benches/micro/div_kernel_ab.rs`): u128 wins the
+//! WIDE, EVEN-divisor, `≥ 2n`-dividend region — beating Burnikel–Ziegler
+//! 1.68–1.78× at 96/128 limbs — and loses the balanced shape by ~1.5×, so
+//! that is exactly the region the matcher routes here (and only that
+//! region).
 //!
 //! ## Shape
 //!
 //! A PURE slice engine, drop-in alongside [`div_knuth`]: same `&[u64]`
-//! operands and `&[u64]` quotient/remainder, so if it wins it wires as a
-//! `LimbSize`-gated `Algorithm` arm in [`crate::int::policy::div_rem`]
-//! (selected when the effective limb counts are EVEN and wide — packing
-//! pairs two u64 per u128, so an odd effective count has no u128 form). It
-//! normalises + packs in u64 space (reusing [`div_knuth`]'s proven
-//! normalisation: a top-u64-limb MSB also sets the top u128 limb's bit
-//! 127), runs base 2¹²⁸, then unpacks — no per-tier type, no macro
-//! duplication. Odd/single-limb shapes fall back to [`div_knuth`].
+//! operands and `&[u64]` quotient/remainder. It normalises + packs in u64
+//! space (reusing [`div_knuth`]'s proven normalisation: a top-u64-limb MSB
+//! also sets the top u128 limb's bit 127), runs base 2¹²⁸, then unpacks —
+//! no per-tier type, no macro duplication.
 //!
-//! Bit-identical to [`div_knuth`] (the `#[cfg(test)]` differential below);
-//! NOT WIRED.
+//! ## Routing — this engine IS wired
+//!
+//! [`select_for_limbs`](crate::int::policy::div_rem::select_for_limbs)
+//! returns `Algorithm::KnuthU128Limb`, and therefore reaches this kernel,
+//! for every divide whose divisor has an EVEN effective limb count of at
+//! least `U128_DIV_THRESHOLD` (**24**) with a dividend of at least `2n`
+//! effective limbs. Packing pairs two u64 per u128, so an odd effective
+//! count has no u128 form and falls to [`div_knuth`]; so do single-limb
+//! divisors (they leave via `Algorithm::Rem` before Knuth is considered).
+//!
+//! Four live doors carry an arm for that verdict: the build-max slice
+//! [`dispatch`](crate::int::policy::div_rem::dispatch), the exact-scratch
+//! [`div_rem_into`](crate::int::algos::div::div_rem_into::div_rem_into),
+//! `crate::algos::rem::rem_int_layer`, and
+//! `crate::algos::div::div_widen_scale`. **This is production code on the
+//! wide divide surface, not a parked candidate** — changing its numerics
+//! changes shipped results.
+//!
+//! Bit-identical to [`div_knuth`] (the `#[cfg(test)]` differential below),
+//! which is what lets the exact-scratch door fall closed to base-2⁶⁴ Knuth
+//! when a caller's packed buffers are short: that guard can change which
+//! engine runs, never the value.
 //!
 //! [`LimbSize`]: crate::int::types::compute_limbs::LimbSize
 
