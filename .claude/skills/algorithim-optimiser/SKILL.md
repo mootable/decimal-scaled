@@ -44,9 +44,9 @@ Even a trivial schoolbook op gets its own named file — **no exemptions**, neve
 - `<algorithmvariation>` — the algorithm, NOT the tier: `newton`, `series` (Taylor/Maclaurin in a Fixed intermediate), `tang` (Tang lookup table), `schoolbook`, `karatsuba`, `ripple_carry`, `native`, `mg_divide`, `exp_with_ln` (composition).
 - `<preconditions>` — applicability, expressed in **limbs or scale**, NEVER the `dXX` tier alias:
   - int storage width in limbs: `2limb` (Int<2> = D38), `3limb` (Int<3> = D57), `16limb` (Int<16> = D307). Tier→limb: D18=1, D38=2, D57=3, D76=4, D115=6, D153=8, D230=12, D307=16, D462=24, D616=32, D924=48, D1232=64.
-  - scale band: `s44_56`, `s18_22`.
+  - scale band: `s18_22` — and only where the band is a REAL applicability limit. Verify that from the kernel, not from an existing name: `inverse_tang_3limb_s18_22` contains no lookup table despite the `tang`, and its window is an arbitrary gate rather than a domain bound.
 - A **generic-over-N** algorithm (one algo serving all widths) gets **NO precondition suffix** — just `<fn>_<method>`: `sqrt_newton`, `add_ripple_carry`, `mul_karatsuba`.
-- Examples: `exp_series_2limb`, `atan_tang_3limb_s44_56`, `sqrt_newton`, `cbrt_newton`, `add_int_layer`, `div_widen_scale`.
+- Examples: `exp_series_2limb`, `atan_tang_3limb`, `sqrt_newton`, `cbrt_newton`, `add_int_layer`, `div_widen_scale`. Note `atan_tang_3limb`: it carries the LIMB precondition it genuinely has (`Int<3>` storage) and NO scale band, because it has no scale precondition — it is valid and routed across its tier's whole range. State the preconditions the kernel actually has, and no others: a suffix is a CLAIM, and a band suffix on a kernel that no longer has a band is a false one. A band that is measured away must be dropped from the name, not left behind.
 - Do **not** name files after the tier (`fixed_d38`, `lookup_d57_s44_56` are the OLD anti-pattern that was renamed out).
 
 ### The body
