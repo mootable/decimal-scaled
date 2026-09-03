@@ -148,7 +148,11 @@ fn compare_wide<const N: usize>(c: &mut Criterion, label: &str) {
 }
 
 /// Decimal-rem dispatch seam (`src/policy/rem.rs` -> `rem_int_layer`).
-/// Narrow widths only: native hardware `%` vs the generic int-layer path.
+/// Narrow widths only: the `rem_native` primitive `%` vs the generic
+/// int-layer path, on synthetic limb fills with no scale axis. The scale and
+/// operand-class axes the routing actually keys on live in
+/// `dec_rem_narrow_scale_sweep!` below; "native" is a hardware `idiv` only at
+/// `N == 1` -- at `N == 2` it is an `i128` soft-call.
 macro_rules! dec_rem_cell {
     ($c:expr, $n:literal, $label:literal) => {{
         for p in operand_set::<$n>() {
