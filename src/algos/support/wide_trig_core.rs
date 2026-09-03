@@ -223,6 +223,16 @@ pub(crate) trait WideTrigCore {
     fn ln_fixed_routed_agm<const SCALE: u32>(
         working_value: Self::Wagm, working_scale: u32) -> Self::Wagm;
 
+    /// Series `e^x` on the wide composition integer [`Self::Wagm`] — the
+    /// per-tier `exp_fixed_series_agm`, which runs the plain series while
+    /// the peak fits the composition width and otherwise widens into
+    /// [`Self::Wexp`]. A trait binding rather than a free generic for the
+    /// same reason as [`Self::ln_fixed_routed_agm`]: the widened arm is
+    /// expressed against the tier's own `Wexp`. Consumed by the joint
+    /// `sinh_cosh` kernel.
+    fn exp_fixed_series_agm(
+        working_value: Self::Wagm, working_scale: u32) -> Self::Wagm;
+
     /// Directed-rounding narrowing with Ziv escalation, forcing a
     /// confirm recompute even in nearest modes — the acosh / atanh
     /// near-special path (the residual can sit on a rounding boundary).

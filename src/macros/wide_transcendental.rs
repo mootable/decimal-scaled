@@ -2549,6 +2549,13 @@ macro_rules! decl_wide_transcendental {
                 ) -> Wagm {
                     ln_fixed_routed_agm::<SCALE>(working_value, working_scale)
                 }
+                #[inline]
+                fn exp_fixed_series_agm(
+                    working_value: Wagm,
+                    working_scale: u32
+                ) -> Wagm {
+                    exp_fixed_series_agm(working_value, working_scale)
+                }
                 fn round_to_storage_directed_near_special(
                     base_guard_digits: u32,
                     target: u32,
@@ -4349,37 +4356,27 @@ macro_rules! decl_wide_transcendental {
             }
 
             /// Mode-aware sibling of [`Self::sinh_cosh_strict`].
+            /// Delegates to the policy-registered joint kernel for this
+            /// `(width, SCALE)` cell — see `policy::trig::sinh_cosh`.
+            ///
+            /// The shared `exp` evaluation, the `e⁻ˣ` reciprocal and both
+            /// near-tie narrowings now live in
+            /// `algos::trig::hyper_joint::sinh_cosh_exp_reciprocal`; the
+            /// escapes are supplied BY the dispatch as this cell's own
+            /// `sinh_dispatch` / `cosh_dispatch` verdicts, so they land on
+            /// exactly the engines `self.sinh_strict_with(mode)` /
+            /// `self.cosh_strict_with(mode)` reached from here before.
             #[inline]
             #[must_use]
             pub fn sinh_cosh_strict_with(
                 self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> (Self, Self) {
-                // One shared exp evaluation; each component takes the
-                // near-tie escape (sinh(x) = x + x^3/6 + ... lands exact
-                // rational partials on rounding boundaries), falling to
-                // the analytically-pinned / Ziv-escalated single-function
-                // path when inside the band.
-                let working_scale = SCALE + $core::GUARD;
-                // Two-core: composition runs on the wide `Wagm` work int.
-                let working_value = $core::to_work_agm(self.to_bits());
-                let exp_x = $core::exp_fixed_series_agm(working_value, working_scale);
-                let exp_neg_x =
-                    $core::div_agm($core::one_agm(working_scale), exp_x, working_scale);
-                let sinh_value = (exp_x - exp_neg_x) >> 1;
-                let cosh_value = (exp_x + exp_neg_x) >> 1;
-                let sinh_bits = match $crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<$Storage, $core::Wagm>(
-                    sinh_value, working_scale, SCALE, mode, <$Storage>::MAX, <$Storage>::MIN,
-                ) {
-                    ::core::option::Option::Some(narrowed) => narrowed,
-                    ::core::option::Option::None => self.sinh_strict_with(mode).to_bits(),
-                };
-                let cosh_bits = match $crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<$Storage, $core::Wagm>(
-                    cosh_value, working_scale, SCALE, mode, <$Storage>::MAX, <$Storage>::MIN,
-                ) {
-                    ::core::option::Option::Some(narrowed) => narrowed,
-                    ::core::option::Option::None => self.cosh_strict_with(mode).to_bits(),
-                };
+                let (sinh_bits, cosh_bits) = $crate::policy::trig::sinh_cosh_dispatch::<
+                    $core::Core,
+                    $n_limbs,
+                    SCALE,
+                >(self.to_bits(), mode);
                 (Self::from_bits(sinh_bits), Self::from_bits(cosh_bits))
             }
 

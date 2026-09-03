@@ -508,6 +508,55 @@ pub(crate) mod sin_cos {
     }
 }
 
+/// Joint-pair family — `sinh_cosh`. See [`sin_cos`] for why a pair
+/// function carries its own matcher.
+pub(crate) mod sinh_cosh {
+    use crate::int::types::Int;
+
+    /// The joint-`(sinh, cosh)` algorithms.
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    pub(crate) enum Algorithm {
+        /// `sinh_cosh_exp_reciprocal` — ONE Series `exp` evaluation on
+        /// `C::Wagm` plus the `e⁻ˣ = 1/eˣ` reciprocal, giving both terms
+        /// of the identity from a single `exp` and one wide divide. Each
+        /// component is narrowed independently with its own near-tie
+        /// escape. Realised by `algos::trig::hyper_joint`.
+        ExpReciprocal,
+        /// The two single-function paths run independently — the cell's
+        /// own routed `sinh` and `cosh` verdicts. The reference baseline
+        /// the shared evaluation optimises: at the wide tiers `exp_fixed`
+        /// costs 10-20x a divide, so running it twice is worth about 40%
+        /// more than the joint form. Kept as the alternative rather than
+        /// routed.
+        #[allow(dead_code)]
+        Separate,
+    }
+
+    /// A settled algorithm, or "the value decides". `ByValue` is part of
+    /// the canonical shape; this family never returns it — sharing the
+    /// `exp` is profitable at every operand, and the value-dependent part
+    /// (whether a component's residual sits in the tie band) is decided
+    /// INSIDE the kernel per component.
+    #[derive(Clone, Copy)]
+    pub(crate) enum Select<const N: usize> {
+        ByAlgorithm(Algorithm),
+        #[allow(dead_code)]
+        ByValue(fn(&Int<N>) -> Algorithm),
+    }
+
+    /// One algorithm at every `(N, SCALE)`, on the same grounds as
+    /// [`super::sin_cos::select`]: the shared evaluation is cheaper
+    /// across the whole key and is value-preserving, because a component
+    /// whose residual lands in the tie band escapes to exactly the
+    /// single-function path `Separate` would have run.
+    #[allow(clippy::match_single_binding)]
+    pub(crate) const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
+        match (N, SCALE) {
+            _ => Select::ByAlgorithm(Algorithm::ExpReciprocal),
+        }
+    }
+}
+
 // ══════════════════════════════════════════════════════════════════════
 // Forward-family SCALE-derived work-rung routing (sin / cos / tan)
 //
@@ -2549,6 +2598,40 @@ where
         sin_cos::Algorithm::Separate => (
             sin_dispatch::<N, SCALE>(raw, mode),
             cos_dispatch::<N, SCALE>(raw, mode),
+        ),
+    }
+}
+
+/// Joint `(sinh, cosh)` dispatch — see [`sin_cos_dispatch`] for the
+/// shape and for why a pair function takes the tier core directly.
+#[cfg(feature = "_wide-support")]
+#[inline]
+#[must_use]
+pub(crate) fn sinh_cosh_dispatch<C, const N: usize, const SCALE: u32>(
+    raw: Int<N>,
+    mode: RoundingMode,
+) -> (Int<N>, Int<N>)
+where
+    C: crate::algos::support::wide_trig_core::WideTrigCore<Storage = Int<N>>,
+    <C::Wagm as crate::int::types::traits::BigInt>::Scratch:
+        crate::int::types::compute_limbs::ComputeLimbs,
+{
+    let algo = match const { sinh_cosh::select::<N, SCALE>() } {
+        sinh_cosh::Select::ByAlgorithm(algorithm) => algorithm,
+        sinh_cosh::Select::ByValue(choose) => choose(&raw),
+    };
+    match algo {
+        sinh_cosh::Algorithm::ExpReciprocal => {
+            trig::hyper_joint::sinh_cosh_exp_reciprocal::<C, SCALE>(
+                raw,
+                mode,
+                sinh_dispatch::<N, SCALE>,
+                cosh_dispatch::<N, SCALE>,
+            )
+        }
+        sinh_cosh::Algorithm::Separate => (
+            sinh_dispatch::<N, SCALE>(raw, mode),
+            cosh_dispatch::<N, SCALE>(raw, mode),
         ),
     }
 }
