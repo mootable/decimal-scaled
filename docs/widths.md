@@ -64,8 +64,8 @@ need — narrower storage is faster and smaller.
   full xx-wide compile cost.
 - **`D924` / `D1232`** — the *xx-wide tier*. Gated behind `xx-wide`
   (or `d924` / `d1232`). The widest shipped tier; transcendentals at
-  `D1232<1231>` approach a second per call, so it's research-grade
-  precision rather than a hot-path target.
+  `D1232<1231>` cost <!-- BEGIN GENERATED:widths:slowest -->at most ~5.51 ms per call (the slowest cell measured anywhere on the surface: `atanh` at `D1232<1231>`)<!-- END GENERATED:widths:slowest -->, so it's
+  research-grade precision rather than a hot-path target.
 
 ## Scale aliases
 

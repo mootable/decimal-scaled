@@ -230,27 +230,55 @@ def rounding_mode_count() -> int:
 
 
 def render_precision_stats() -> str:
-    """The Precision-page headline stats line — derived entirely from the test
-    DEFINITION (the golden files, the `cells!` surface, the `RoundingMode`
-    enum), so it is complete without a CI run. `total = inputs x (width,scale)
-    x modes`."""
+    """The Precision-page headline stats line.
+
+    The input / function / cell / mode counts come from the test DEFINITION (the
+    golden files, the `cells!` surface, the `RoundingMode` enum). The TOTAL comes
+    from the committed run, because the product of those four is not what the
+    gate does: an input carrying more significant digits than a tier can hold is
+    filtered by that subject's `limits()` and never executes at that cell.
+    Multiplying them out claimed 96,159,960 against 51,510,016 actually graded.
+    State the four inputs to the surface, then the measured result."""
     cases, funcs = golden_counts()
     cells = golden_surface_cells()
     modes = rounding_mode_count()
-    total = cases * cells * modes
+    rows = _golden_rows()
+    if not rows:
+        return _PENDING
+    total = sum(r[4] + r[5] for r in rows)
     return (
         f"We execute {cases:,} specialised inputs across all {funcs} functions, on "
-        f"{cells} widths and scales, under all {modes} rounding modes, resulting "
-        f"in {total:,} separate checks."
+        f"{cells} widths and scales, under all {modes} rounding modes. Not every "
+        f"input is representable at every width and scale — one needing more "
+        f"significant digits than a tier holds is filtered before it runs — so "
+        f"the graded total is {total:,} separate checks."
     )
 
 
 def render_home_tested() -> str:
-    """The total value-test count for the home page (inputs × (width,scale) ×
-    rounding modes) — the same product the Precision page reports, so the two
-    can never disagree."""
-    cases, _funcs = golden_counts()
-    return f"{cases * golden_surface_cells() * rounding_mode_count():,}"
+    """The number of value tests actually GRADED, summed from the committed
+    `results/golden/summary.tsv` — the run, not a multiplication.
+
+    This used to return `inputs × cells × modes`. That product was never
+    reconciled against a run and overstated the gate by ~1.86x in every release
+    measured: 96,159,960 claimed against 51,510,016 graded, and 71,469,918
+    against 38,405,970 the release before.
+
+    The gap is not a defect in the gate — it is work the harness deliberately
+    does not do. A golden input carrying more significant digits than a tier can
+    hold is filtered by that subject's `limits()` and never executes at that
+    cell, so the product counts combinations that by construction cannot be
+    tested. `sqrt` and `cbrt` lose ~40% of their grid that way, because their
+    adversarial inputs are the longest in the set.
+
+    Passed + failed is what "value tests" can honestly mean: a verdict was
+    produced. Anything else in the summary either never ran or produced no
+    rounding verdict to grade.
+    """
+    rows = _golden_rows()
+    if not rows:
+        return _PENDING
+    return f"{sum(r[4] + r[5] for r in rows):,}"
 
 
 def render_precision_surface() -> str:
@@ -382,6 +410,25 @@ def render_bench_widths() -> str:
     """The decimal-tier -> integer-width reference table for the right column of
     the Performance/History page headers (every tier, from tiers.json)."""
     return _width_int_table([t["digits"] for t in load_tiers()])
+
+
+def render_slowest_cell() -> str:
+    """The slowest measured cell on the whole surface, for the widths-page prose.
+
+    Generated rather than written down because a hand-typed performance figure
+    becomes a lie the moment the code gets faster, and nothing catches it. This
+    page previously claimed the widest transcendentals "approach a second per
+    call"; by the time anyone checked, the true figure was ~5.5 ms — wrong by
+    more than two orders of magnitude, in the direction that scares users off a
+    tier that works fine. Single-sourcing it from the same medians the
+    Performance page renders means the docs-drift gate now fails the PR instead.
+    """
+    rows = _timing_rows()
+    if not rows:
+        return _PENDING_PERF
+    ns, op, width, scale = max((ns, op, w, s) for op, w, s, ns in rows)
+    return (f"at most ~{_fmt_ns(ns)} per call (the slowest cell measured "
+            f"anywhere on the surface: `{op}` at `D{width}<{scale}>`)")
 
 
 def _pos_labels(p: int) -> list[str]:
@@ -1175,6 +1222,7 @@ def render_comparisons_inputs() -> str:
 REGIONS: dict[str, tuple[str, "callable"]] = {
     "widths:table": ("docs/widths.md", render_widths_table),
     "widths:count": ("docs/widths.md", render_width_count_word),
+    "widths:slowest": ("docs/widths.md", render_slowest_cell),
     "install:dependency": ("README.md", render_install_dependency),
     "home:tested": ("docs/index.md", render_home_tested),
     "readme:tested": ("README.md", render_home_tested),

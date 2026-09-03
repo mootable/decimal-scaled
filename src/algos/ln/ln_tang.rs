@@ -52,6 +52,58 @@ use crate::support::rounding::RoundingMode;
 /// Table size — number of `ln(1 + i/M)` entries per working scale. The
 /// `i = 0` slot is `ln(1) = 0`, the `i = M` slot is `ln(2)`. Every
 /// shipped tier uses `M = 128`.
+///
+/// # `M` sets the artanh term count — and hence the `CAP` a tier needs
+///
+/// `M` is not only a table size: it bounds the residual `t`, which fixes how
+/// many artanh terms the series in [`tang_ln_fixed_g`] must run, which is
+/// what a tier's `CAP` has to clear. The chain, and the arithmetic to redo
+/// when adding a tier or raising a max scale:
+///
+/// 1. Reduction gives `m ∈ [f_i, f_{i+1})` with `f_{i+1} − f_i = 1/M`, so
+///    `|m − f_i| < 1/M` and `m + f_i ≥ 2`. Hence
+///    **`|t| < 1/(2M) = 1/256`** at `M = 128`. (The module header quotes the
+///    tighter `1/(2M + 1) = 1/257`, from `m + f_i > 2 + 1/M`. Both hold; this
+///    bound deliberately uses the LOOSER `1/256`, because a larger `|t|` means
+///    MORE terms, which is the conservative side for a cap.)
+/// 2. Term `j` of `2·(t + t³/3 + …)` has magnitude `≈ |t|^(2j+1)`. At working
+///    scale `w` the loop exits when that underflows the work integer's unit,
+///    i.e. when `|t|^(2j+1) < 10^-w`.
+/// 3. Taking logs with the worst case `|t| = 1/256`
+///    (`log10 256 ≈ 2.408`): the loop needs
+///    **`2j + 1 > w / 2.408`**, i.e. about `w / 4.8` iterations.
+/// 4. So a cap of `C` iterations covers working scales up to
+///
+///    ```text
+///    w ≤ (2C + 1) · 2.408
+///    ```
+///
+/// `w` must be taken at its LARGEST: the tier's max scale plus `GUARD`, plus
+/// whatever the directed-Ziv escalation adds, which is itself bounded by the
+/// rung's `BITS/8`. Per-tier check (2026-09-03):
+///
+/// | tier | `CAP` | covers `w ≤` | max `w` | `j` needed | verdict |
+/// |---|---:|---:|---:|---:|---|
+/// | D57 | 100 | 482 | 64 (Ziv ≤ 120) | 13 | ample |
+/// | D115 | 200 | 966 | 122 (Ziv ≤ 184) | 25 | ample |
+/// | D153 | 200 | 966 | 162 (Ziv ≤ 248) | 34 | ample |
+/// | D76, D230…D1232 | 400 | 1929 | ≤ 1241 (Ziv ≤ 1400) | ≤ 258 | ample |
+///
+/// The widest cell is `D1232<1231>`: `w = 1241`, `j ≈ 258`, against `CAP = 400`.
+/// Every shipped tier clears its bound with room.
+///
+/// **A `CAP` that bites produces WRONG DIGITS, not slow ones** — the series is
+/// simply truncated. That is a validity wall, not a safety net, and it is
+/// live: `benches/micro/ln_wide_series_tang_ab.rs` races a `CAP = 200`
+/// candidate at every tier, and at `D1232<1231>` (`w = 1239`, past 966) the
+/// bench's validity wall catches it —
+/// `tang_g8_c200 != series (x_lo, HalfToEven)`. That candidate is wired
+/// nowhere; the wall rejected it exactly as intended.
+///
+/// Note this only became detectable once that map moved to non-degenerate
+/// operands: under the old `{0.5, 2.0, 7.5}` spread the artanh loop ran zero
+/// iterations at every cell, so no `CAP` could ever bite. Lowering `M` raises
+/// `|t|` and therefore raises the `CAP` every tier needs — re-run step 3.
 const M: u32 = 128;
 
 /// Working-scale lift folded into [`ln_tang`]'s `GUARD` when
@@ -193,6 +245,29 @@ where
 
     // Stage 2: pick i. Boundary `m = 1` short-circuits: ln(m) = 0, so
     // ln(v) = k · ln(2).
+    //
+    // ── BENCHMARK HAZARD — read before choosing an `ln` operand ──
+    //
+    // This arm is a deliberate, bit-identical early-out (see below), and the
+    // Series kernel `exp_generic::ln_fixed` has the SAME arm on the same
+    // condition. So an exact power of two — `0.5`, `1`, `2.0`, `4`, … — runs
+    // NEITHER kernel: no artanh series here, no Brent sqrt reduction there.
+    // At every width and every scale. A benchmark on such an operand compares
+    // two one-word `scale_by_k` products and says nothing about `ln`.
+    //
+    // There is a SECOND, Tang-only trap just below: `t = (m − f_i)/(m + f_i)`
+    // is EXACTLY zero whenever `m` is an exact multiple of `1/M`, so the
+    // artanh loop breaks on its first iteration while Series still pays its
+    // full reduction. With `M = 128` that catches every value whose binary
+    // mantissa terminates within 7 fraction bits — `7.0` (`m = 1.75`) and
+    // `7.5` (`m = 1.875`) among them.
+    //
+    // In terms of the stored `raw = x·10^SCALE`, `raw` ODD and `raw % 5 != 0`
+    // defeats both traps at every `SCALE >= 1`; at `SCALE == 0` the rule is
+    // `raw` odd and `raw >= 257`. `benches/micro/ln_wide_series_tang_ab.rs`
+    // states the derivation and asserts it on every operand it measures —
+    // the first version of that map used `{0.5, 2.0, 7.5}`, all three
+    // degenerate, which voided both its timings and its validity wall.
     let ln_at_extended_scale = if mantissa_w == one_at_extended_scale {
         // k·ln2 as an n-by-1-word product (`scale_by_k`, O(limbs)) — the
         // same value the previous full-width `ln2 * lit(k)` schoolbook
