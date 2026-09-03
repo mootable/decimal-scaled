@@ -24,10 +24,19 @@ lower scale must not be slower than a higher one at the same width. Every such
 inversion is a DEFECT, and the fix target is the NARROW side. The counts at the
 top of the page are the score.
 
-CAVEAT built into the page, do not remove it: bbc runs each (width, scale) cell
-on its OWN GitHub runner, so a cross-cell ratio carries a machine-to-machine
-floor (p90 1.60x, p99 2.2x on identical code). That governs whether an inversion
-is VISIBLE, never whether it is acceptable. And scale-0 cells are degenerate for
+CAVEAT built into the page, do not remove it: in the DEFAULT `group=cell` sweep
+bbc runs each (width, scale) cell on its OWN GitHub runner, so a cross-cell ratio
+carries a machine-to-machine floor -- measured over 1944 adjacent pairs of
+identical code as p50 1.21x, p90 1.75x, p99 2.40x, max 3.02x. That governs
+whether an inversion is VISIBLE, never whether it is acceptable.
+
+That floor is a property of the SHAPE, not of bbc. A `group=width` run puts a
+width's whole scale grid in ONE job on ONE machine, so its cross-SCALE ratios
+are same-machine and stable to ~2%; the default per-cell fan-out cannot support
+a cross-scale claim at all. Cross-WIDTH ratios remain cross-VM in BOTH shapes --
+only `group=all` makes those same-machine. Note that a `group=width` or
+`group=all` run does NOT publish medians, so this page only ever renders
+default-shape sweeps. And scale-0 cells are degenerate for
 trig/hyperbolic ops -- `op_str!` substitutes the integer form, so the small
 operand `0.1` becomes literally "0". Scale 0 is excluded by default; --with-zero
 puts it back.
@@ -91,7 +100,8 @@ def parse_pair(text: str) -> dict[tuple[str, int, int], tuple[float, float]]:
     This is the trustworthy comparison and the reason these two columns exist:
     both numbers are measured in the SAME job on the SAME runner, so machine
     speed cancels exactly. Comparing a cell across two runs (the charts above)
-    spans two runner VMs and carries a p90 1.60x / p99 2.2x floor; this does not.
+    spans two runner VMs and carries a p50 1.21x / p90 1.75x / p99 2.40x floor;
+    this does not.
     """
     out = {}
     for line in text.splitlines()[1:]:
@@ -108,15 +118,16 @@ def parse_pair(text: str) -> dict[tuple[str, int, int], tuple[float, float]]:
 
 # The measured cross-cell null on IDENTICAL code: two cells come off two runner
 # VMs, so a ratio between them carries this much spread before any code differs.
-# p90 1.60x, p99 2.2x, max 6.8x over 1620 cells. An inversion below p99 is not
-# dismissed -- the owner's rule is that an inversion is a defect at any magnitude
-# -- but it cannot be DISTINGUISHED from runner jitter in a single cell-mode
-# sweep, so the panel reports the count at both bands rather than one number that
-# is mostly coin-flips on 2 ns ops.
-# Measured on 1944 ADJACENT PAIRS from two runs of identical published
-# code -- the same statistic inversions() forms, so the bands match what
-# they are banding. (An earlier 1.11/1.60/2.20 came from a different
-# calibration and understated every threshold.)
+# Measured over 1944 ADJACENT PAIRS from two runs of identical published code --
+# the same statistic inversions() forms, so the bands match what they are
+# banding: p50 1.21x, p90 1.75x, p99 2.40x, max 3.02x.
+# An inversion below p99 is not dismissed -- the owner's rule is that an
+# inversion is a defect at any magnitude -- but it cannot be DISTINGUISHED from
+# runner jitter in a single cell-mode sweep, so the panel reports the count at
+# both bands rather than one number that is mostly coin-flips on 2 ns ops.
+# SUPERSEDED, do not reintroduce: an earlier calibration reported p50 1.11 /
+# p90 1.60 / p99 2.20 / max 6.8 over 1620 CELLS. It did not form the
+# adjacent-pair statistic these bands band, and it understated every threshold.
 NULL_P25, NULL_P50, NULL_P90, NULL_P99 = 1.08, 1.21, 1.75, 2.40
 
 
