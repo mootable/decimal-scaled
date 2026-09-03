@@ -37,3 +37,8 @@ pub(crate) mod powi_exact;
 /// correctness reference. Registered as the unrouted `Algorithm::Schoolbook`
 /// arm; not connected to `select`.
 pub(crate) mod pow_schoolbook;
+/// The production wide-tier `powf`: `exp(y*ln x)` with the exact
+/// integer-power pins, the algebraic `x^0.5` pin and the result-sized
+/// working lift in front of it. Registered as `Algorithm::PinnedExpWithLn`.
+#[cfg(feature = "_wide-support")]
+pub(crate) mod powf_pinned_exp_with_ln;

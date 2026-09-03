@@ -2556,6 +2556,17 @@ macro_rules! decl_wide_transcendental {
                 ) -> Wagm {
                     exp_fixed_series_agm(working_value, working_scale)
                 }
+                #[inline]
+                fn exp_fixed_routed_agm<const SCALE: u32>(
+                    working_value: Wagm,
+                    working_scale: u32
+                ) -> Wagm {
+                    exp_fixed_routed_agm::<SCALE>(working_value, working_scale)
+                }
+                #[inline]
+                fn exp_result_int_digits_agm(mag_at_scale: Wagm, scale: u32) -> u32 {
+                    exp_result_int_digits::<Wagm>(mag_at_scale, scale)
+                }
                 fn round_to_storage_directed_near_special(
                     base_guard_digits: u32,
                     target: u32,
@@ -3992,6 +4003,23 @@ macro_rules! decl_wide_transcendental {
             /// Same exact integer-power pin as [`Self::powf_strict`], here
             /// rounding any non-terminating / sub-resolution reciprocal under
             /// the caller's `mode`.
+            ///
+            /// The composition — the integer-power and terminating-reciprocal
+            /// pins, the algebraic `x^0.5 ≡ √x` pin, the analytic overflow
+            /// gate, the result-sized working lift and the Ziv-escalated
+            /// `exp(y·ln x)` — now lives in
+            /// `algos::pow::powf_pinned_exp_with_ln`, registered as
+            /// `policy::pow`'s `PinnedExpWithLn` algorithm and reached through
+            /// its `pinned_exp_with_ln_routed` door — the same fn
+            /// `policy::pow::dispatch` runs for that algorithm. Called
+            /// directly rather than through `dispatch` because `select` still
+            /// returns `ExpWithLn` for every cell, so `dispatch` would run the
+            /// naive `pow_schoolbook` reference instead — repointing `select`
+            /// would change which algorithm every wide cell runs, so it stays
+            /// an open policy decision rather than part of this relocation. The
+            /// `x^0.5` pin is handed the cell's own `policy::sqrt::dispatch`,
+            /// the same engine `self.sqrt_strict_with(mode)` reached here
+            /// before.
             #[inline]
             #[must_use]
             pub fn powf_strict_with(
@@ -3999,147 +4027,10 @@ macro_rules! decl_wide_transcendental {
                 exp: Self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
-                let raw = self.to_bits();
-                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    return Self::ZERO;
-                }
-                // Exact integer-power pin — see [`Self::powf_strict`]. Uses
-                // the caller's `mode`: the reciprocal of a non-terminating
-                // power (e.g. `3^-2`) and a sub-resolution `base^-k` must round
-                // under the requested directed mode (Ceiling of a
-                // sub-resolution `base^-k` rounds up to 1, not down to 0). The
-                // pin divides the INTEGER `base^|n|`, so a terminating
-                // reciprocal is exact even when the scaled `base^|n|·10^SCALE`
-                // overflows storage — the case a `checked_pow` fast path
-                // would defer to the to-nearest composition, mis-rounding Floor /
-                // Trunc by 1 LSB. `None` (fractional base/exponent, or a
-                // positive power out of range) defers to the composition below,
-                // which panics uniformly on a genuinely out-of-range result.
-                if let ::core::option::Option::Some(pinned) =
-                    $crate::algos::pow::powi_exact::powi_exact_pin::<$Storage, SCALE>(
-                        raw,
-                        exp.to_bits(),
-                        <$Storage>::MAX,
-                        mode,
-                    )
-                {
-                    return Self::from_bits(pinned);
-                }
-                // Fractional-base integer-exponent fast path — see
-                // [`Self::powf_strict`]; here under the caller's `mode`.
-                if let ::core::option::Option::Some(integer_exponent) =
-                    $crate::algos::pow::powi_exact::exp_as_small_int_raw::<$Storage, SCALE>(
-                        exp.to_bits(),
-                    )
-                {
-                    if integer_exponent == 0 {
-                        return Self::ONE;
-                    }
-                    if let ::core::option::Option::Some(pinned) =
-                        $crate::algos::pow::powi_exact::powi_terminating_pin::<$Storage, SCALE>(
-                            raw,
-                            integer_exponent,
-                            <$Storage>::MAX,
-                            mode,
-                        )
-                    {
-                        return Self::from_bits(pinned);
-                    }
-                }
-                // x^0.5 ≡ √x. The exp(0.5·ln x) chain loses a sub-ULP at a
-                // perfect-square base (e.g. 4^0.5), rounding 1 LSB short
-                // under the directed modes; the sqrt kernel pins the exact
-                // algebraic root and is correctly rounded for every input,
-                // so route the exact-half exponent through it.
-                {
-                    let two = $crate::macros::wide_roots::wide_lit!($Storage, "2");
-                    let multiplier = Self::multiplier();
-                    if exp.to_bits() == multiplier / two {
-                        return self.sqrt_strict_with(mode);
-                    }
-                }
-                let exponent_raw = exp.to_bits();
-                // Large-result lift. `x^y = exp(y·ln x)` carries
-                // `~|y·ln x|·log10(e)` integer digits; size the working
-                // lift from a base-guard probe of the exp argument so the
-                // `exp_fixed` relative error stays sub-storage-ULP after
-                // narrowing (same budget sinh/cosh use, see those).
-                // Two-core: composition runs on the wide `Wagm` work int
-                // (the exp argument `y·ln x` can exceed a narrowed `$Work`).
-                let k_lift = {
-                    let base_working_scale = SCALE + $core::GUARD;
-                    let probe_ln_x = $core::ln_fixed_routed_agm::<SCALE>(
-                        $core::to_work_agm(raw),
-                        base_working_scale
-                    );
-                    let probe_exp_arg = $core::mul_agm(
-                        $core::to_work_agm(exponent_raw),
-                        probe_ln_x,
-                        base_working_scale
-                    );
-                    // Analytic storage-overflow gate, BEFORE the
-                    // result-sized lift below: a deep-overflow argument
-                    // (`e^arg` provably past storage) would size `k_lift`
-                    // in the hundreds and push the working scale past the
-                    // work integer's safe ceiling, where the lifted `ln`'s
-                    // table product silently WRAPS to a near-zero garbage
-                    // `ln x` that defuses every downstream overflow check
-                    // (the `1.5^1000.5` D76 deep-band defect). Panic
-                    // contractually here instead — the gate is a provable
-                    // SUFFICIENT bound, so no representable cell fires it
-                    // (see `algos::pow::powf_overflow_gate`).
-                    if $crate::algos::pow::powf_overflow_gate::powf_overflow_gate_g::<$core::Wagm>(
-                        probe_exp_arg,
-                        base_working_scale,
-                        <$Storage as $crate::int::types::traits::BigInt>::BITS,
-                        SCALE,
-                    ) {
-                        $crate::support::diagnostics::overflow_panic_with_scale(
-                            "powf_strict",
-                            SCALE,
-                        );
-                    }
-                    // `probe_exp_arg` is the exp argument at the base working
-                    // scale; narrow it
-                    // to scale `SCALE` to feed the `e^|·|` digit sizer
-                    // (squaring-safe capped).
-                    let arg_at_scale = $core::round_to_storage_with_g::<$core::Wagm>(
-                        probe_exp_arg,
-                        base_working_scale,
-                        SCALE,
-                        $crate::support::rounding::RoundingMode::Trunc,
-                    );
-                    // `e^arg` grows integer digits ONLY for a POSITIVE
-                    // argument; for a negative argument `e^arg ∈ (0, 1)` has
-                    // zero integer digits and needs NO lift. Sizing a lift
-                    // there would inflate the working scale `w = SCALE +
-                    // GUARD + k_lift` until the non-widening low-product
-                    // `mul_agm(y, ln_x, w)` overflows the `Wagm` work integer
-                    // (its `y·ln_x` exceeds `Wagm::BITS`) and WRAPS the exp
-                    // argument to garbage — the deep-underflow misround
-                    // (`powf("2","-200")` at D57/D76 mid-scales returned
-                    // `e^-0.21 ≈ 0.808` instead of the sub-resolution 0). The
-                    // sign gate mirrors `exp2_result_int_digits`'s
-                    // negative-argument early return and the Tang/Series
-                    // `extra = 0 for k ≤ 0` reassembly asymmetry.
-                    if arg_at_scale < $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                        0
-                    } else {
-                        $core::exp_result_int_digits::<$core::Wagm>($core::to_work_scaled_agm(arg_at_scale, 0), SCALE)
-                    }
-                };
-                let base_guard_digits = $core::GUARD + k_lift;
-                Self::from_bits($core::round_to_storage_directed::<$core::Wagm>(
-                    base_guard_digits,
+                Self::from_bits($crate::policy::pow::pinned_exp_with_ln_routed::<
+                    $n_limbs,
                     SCALE,
-                    mode,
-                    |guard_digits| {
-                        let working_scale = SCALE + guard_digits;
-                        let ln_x = $core::ln_fixed_routed_agm::<SCALE>($core::to_work_scaled_agm(raw, guard_digits), working_scale);
-                        let exponent_w = $core::to_work_scaled_agm(exponent_raw, guard_digits);
-                        $core::exp_fixed_routed_agm::<SCALE>($core::mul_agm(exponent_w, ln_x, working_scale), working_scale)
-                    },
-                ))
+                >(self.to_bits(), exp.to_bits(), mode))
             }
 
             /// Mode-aware sibling of [`Self::sin_strict`]. Delegates

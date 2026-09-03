@@ -29,6 +29,23 @@ use crate::support::rounding::RoundingMode;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
     ExpWithLn,
+    /// `exp(y·ln x)` with the exact-power pins in front of it — the
+    /// integer-power and terminating-reciprocal pins, the algebraic
+    /// `x^0.5 ≡ √x` pin, and the analytically-gated result-sized working
+    /// lift. Realised by `algos::pow::powf_pinned_exp_with_ln`; this is
+    /// what the wide `powf_strict_with` surface actually runs.
+    ///
+    /// A DISTINCT algorithm from [`Algorithm::ExpWithLn`], not a tuned
+    /// spelling of it: each pin exists because the bare composition
+    /// rounds wrong somewhere (a directed-mode reciprocal, a
+    /// perfect-square base, a deep-overflow argument that wraps the
+    /// lifted `ln`). Registered but NOT routed — `select` still returns
+    /// `ExpWithLn`, so `dispatch` continues to reach `pow_schoolbook`,
+    /// and the wide shell calls [`pinned_exp_with_ln_routed`] directly.
+    /// Pointing `select` here for the wide widths is the open decision
+    /// that would put the wide production path under its own matcher.
+    #[allow(dead_code)]
+    PinnedExpWithLn,
     #[allow(dead_code)]
     Schoolbook,
 }
@@ -58,7 +75,87 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(
     };
     match algo {
         Algorithm::ExpWithLn => exp_with_ln_routed::<N, SCALE>(base, exponent, mode),
+        Algorithm::PinnedExpWithLn => pinned_exp_with_ln_routed::<N, SCALE>(base, exponent, mode),
         Algorithm::Schoolbook => schoolbook_routed::<N, SCALE>(base, exponent, mode),
+    }
+}
+
+/// The `PinnedExpWithLn` realisation per width — the wide production
+/// `powf` path, and the door the wide `powf_strict_with` shell calls.
+///
+/// It is called from BOTH [`dispatch`]'s `PinnedExpWithLn` arm (so the
+/// matcher can select this algorithm per cell the moment `select` names
+/// it) and directly from the wide shell (because `select` does NOT name
+/// it today — it still returns `ExpWithLn`, so going through [`dispatch`]
+/// would run `pow_schoolbook` and change every wide cell's value).
+///
+/// The `x^0.5` pin is handed the cell's own `sqrt::dispatch`, which is
+/// the engine the shell reached through `self.sqrt_strict_with(mode)`.
+///
+/// The narrow arms are the SAME `powf_series_2limb` kernel `ExpWithLn`
+/// uses: that kernel already carries its own integer-exponent pin
+/// (`powi_raw`), so the two algorithms differ only on the wide tiers,
+/// which is where the pins are a separate composition.
+#[inline]
+#[must_use]
+pub(crate) fn pinned_exp_with_ln_routed<const N: usize, const SCALE: u32>(
+    base: Int<N>,
+    exponent: Int<N>,
+    mode: RoundingMode,
+) -> Int<N> {
+    macro_rules! pinned {
+        ($k:literal, $core:ident) => {
+            crate::algos::pow::powf_pinned_exp_with_ln::powf_pinned_exp_with_ln::<
+                crate::types::widths::$core::Core,
+                SCALE,
+            >(
+                base.resize_to::<Int<$k>>(),
+                exponent.resize_to::<Int<$k>>(),
+                mode,
+                crate::policy::sqrt::dispatch::<$k, SCALE>,
+            )
+            .resize_to::<Int<N>>()
+        };
+    }
+    match N {
+        1 | 2 => crate::algos::pow::powf_series_2limb::powf_strict::<SCALE>(
+            base.resize_to::<Int<2>>(),
+            exponent.resize_to::<Int<2>>(),
+            mode,
+        )
+        .and_then(super::narrow_fit::<N>)
+        .unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("powf_strict", SCALE)
+        }),
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        3 => pinned!(3, wide_trig_d57),
+        #[cfg(any(feature = "d76", feature = "wide"))]
+        4 => pinned!(4, wide_trig_d76),
+        #[cfg(any(feature = "d115", feature = "wide"))]
+        6 => pinned!(6, wide_trig_d115),
+        #[cfg(any(feature = "d153", feature = "wide"))]
+        8 => pinned!(8, wide_trig_d153),
+        #[cfg(any(feature = "d230", feature = "wide"))]
+        12 => pinned!(12, wide_trig_d230),
+        #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+        16 => pinned!(16, wide_trig_d307),
+        #[cfg(any(feature = "d462", feature = "x-wide"))]
+        24 => pinned!(24, wide_trig_d462),
+        #[cfg(any(feature = "d616", feature = "x-wide"))]
+        32 => pinned!(32, wide_trig_d616),
+        #[cfg(any(feature = "d924", feature = "xx-wide"))]
+        48 => pinned!(48, wide_trig_d924),
+        #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+        64 => pinned!(64, wide_trig_d1232),
+        _ => crate::algos::pow::powf_series_2limb::powf_strict::<SCALE>(
+            base.resize_to::<Int<2>>(),
+            exponent.resize_to::<Int<2>>(),
+            mode,
+        )
+        .and_then(super::narrow_fit::<N>)
+        .unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("powf_strict", SCALE)
+        }),
     }
 }
 

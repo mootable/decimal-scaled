@@ -233,6 +233,21 @@ pub(crate) trait WideTrigCore {
     fn exp_fixed_series_agm(
         working_value: Self::Wagm, working_scale: u32) -> Self::Wagm;
 
+    /// Tang/Series-ROUTED working-scale `e^x` on the wide composition
+    /// integer [`Self::Wagm`] — the `exp` sibling of
+    /// [`Self::ln_fixed_routed_agm`], and a trait binding for the same
+    /// reason (the per-tier Tang `M` is a macro literal). Consumed by the
+    /// `powf` canonical kernel.
+    fn exp_fixed_routed_agm<const SCALE: u32>(
+        working_value: Self::Wagm, working_scale: u32) -> Self::Wagm;
+
+    /// [`Self::exp_result_int_digits`] on the wide composition integer
+    /// [`Self::Wagm`]. A separate binding rather than a reuse of the
+    /// `Self::W` form because the two work integers differ under the
+    /// two-core split, and the digit count is capped by the tier's own
+    /// [`Self::Wexp`] headroom (`exp_lift_cap`).
+    fn exp_result_int_digits_agm(mag_at_scale: Self::Wagm, scale: u32) -> u32;
+
     /// Directed-rounding narrowing with Ziv escalation, forcing a
     /// confirm recompute even in nearest modes — the acosh / atanh
     /// near-special path (the residual can sit on a rounding boundary).
