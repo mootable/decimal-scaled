@@ -3813,35 +3813,27 @@ macro_rules! decl_wide_transcendental {
             /// Inverse hyperbolic tangent, as `ln((1+x)/(1−x)) / 2`,
             /// defined for `|x| < 1`. Strict and correctly rounded.
             /// Panics if `|self| >= 1`.
+            ///
+            /// Delegates to the policy-registered atanh kernel for this
+            /// `(width, SCALE)` cell — see `policy::trig` — so this
+            /// default entry and [`Self::atanh_strict_with`] share the
+            /// one canonical kernel.
+            ///
+            /// This shell previously carried its own inline gap-form
+            /// composition, `(ln(1+x) − ln(1−x)) / 2`, at the fixed
+            /// `SCALE + GUARD` working scale. Unlike the `acosh` shell
+            /// it collapsed alongside, no divergence from the policy
+            /// kernel was measured: `1 ± x` is formed exactly at the
+            /// working scale (no product is rounded into it), and the
+            /// result grows without bound at the `±1` walls, so relative
+            /// precision improves exactly where `acosh`'s collapsed to
+            /// zero. It is routed through the matcher regardless, so the
+            /// default entry cannot pre-empt the policy's algorithm
+            /// choice and cannot drift from the graded `_with` path.
             #[inline]
             #[must_use]
             pub fn atanh_strict(self) -> Self {
-                let working_scale = SCALE + $core::GUARD;
-                // Two-core: the composition runs on the wide `Wagm` work int
-                // (its ln + the gap-form subtraction), narrowing back to
-                // storage at the end — so a narrowed primitive `$Work` does
-                // not clip the composition's precision.
-                let one_at_working_scale = $core::one_agm(working_scale);
-                let working_value = $core::to_work_agm(self.to_bits());
-                let abs_working_value = if working_value < $core::zero_agm() {
-                    -working_value
-                } else {
-                    working_value
-                };
-                if abs_working_value >= one_at_working_scale {
-                    panic!(concat!(
-                        stringify!($Type),
-                        "::atanh: argument out of domain (-1, 1)"
-                    ));
-                }
-                // Gap form: atanh(x) = (1/2)*[ln(1+x) - ln(1-x)].
-                // `one_at_working_scale - working_value` is the exact
-                // working-scale gap (`working_value` is the
-                // storage input lifted by appending guard zeros), so
-                // neither `ln_fixed` argument suffers the `(1-x)`
-                // catastrophic cancellation the ratio form does near +-1.
-                let atanh_value = ($core::ln_fixed_routed_agm::<SCALE>(one_at_working_scale + working_value, working_scale) - $core::ln_fixed_routed_agm::<SCALE>(one_at_working_scale - working_value, working_scale)) >> 1;
-                Self::from_bits($core::round_to_storage_agm(atanh_value, working_scale, SCALE))
+                Self::from_bits($crate::policy::trig::atanh_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
             /// Convert radians to degrees: `self · (180 / π)`. Strict
@@ -6057,11 +6049,23 @@ mod tests {
                     }
                 }
 
-                // atanh: open domain (-1, 1); probe hard against both walls.
+                // atanh: open domain (-1, 1); probe hard against both
+                // walls, plus mid-range fractions where neither the
+                // near-zero series nor the near-wall logarithm
+                // dominates the gap form.
                 let mut xs: std::vec::Vec<T> = std::vec::Vec::new();
                 xs.push(zero);
                 xs.push(ulp);
                 xs.push(one - ulp);
+                if let Some(half) = outcome!(one / (one + one)) {
+                    xs.push(half);
+                    if let Some(q) = outcome!(half / (one + one)) {
+                        xs.push(q);
+                        if let Some(tq) = outcome!(half + q) {
+                            xs.push(tq);
+                        }
+                    }
+                }
                 let base = xs.len();
                 for i in 0..base {
                     let v = xs[i];
@@ -6193,12 +6197,24 @@ mod tests {
                         }
                     }
 
-                    // atanh at 10^-k and hugging the +/-1 wall at
-                    // 1 - 10^-k, both signs.
+                    // atanh at m*10^-k and hugging the +/-1 wall at
+                    // 1 - m*10^-k, both signs. The odd multipliers keep
+                    // the approach off exact powers of ten, so a dense
+                    // mantissa reaches the gap-form subtraction rather
+                    // than a single significant digit.
                     let mut walls: std::vec::Vec<T> = std::vec::Vec::new();
-                    walls.push(v);
-                    if let Some(w) = outcome!(one - v) {
-                        walls.push(w);
+                    for mult in [1i64, 3, 7] {
+                        let scaled = match <T>::try_from(mult)
+                            .ok()
+                            .and_then(|f| outcome!(v * f))
+                        {
+                            Some(s) => s,
+                            None => continue,
+                        };
+                        walls.push(scaled);
+                        if let Some(w) = outcome!(one - scaled) {
+                            walls.push(w);
+                        }
                     }
                     let base = walls.len();
                     for i in 0..base {
