@@ -778,7 +778,16 @@ jobs:
           else
             {
               echo '```'
-              grep -E "A/B verdict|slower\)|~tie" "$log" | head -200
+              # `|| true`: `head -200` closes the pipe on the 201st line, so
+              # grep dies of SIGPIPE and `pipefail` turns that into a FAILED
+              # step. A bench with more than 200 verdict lines therefore
+              # reported failure while having graded everything perfectly
+              # (run 33699946210: 1584 verdicts, "grep: write error: Broken
+              # pipe", exit 2). A false red is as bad as a false green.
+              grep -E "A/B verdict|slower\)|~tie" "$log" | head -200 || true
+              if [ "$verdicts" -gt 200 ]; then
+                echo "... truncated at 200 lines; the full log is in the artifact"
+              fi
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
           fi
