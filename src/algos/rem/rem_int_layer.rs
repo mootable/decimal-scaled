@@ -5,6 +5,7 @@
 
 use crate::int::algos::div::div_knuth::div_knuth_into;
 use crate::int::algos::div::div_knuth_u128_limb::div_knuth_u128_limb_into;
+use crate::int::algos::div::div_rem::div_rem;
 use crate::int::policy::div_rem::{select_for_limbs, Algorithm};
 use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
 use crate::int::types::Int;
@@ -185,8 +186,19 @@ where
                 u128_v.as_mut(),
             );
         }
-        Algorithm::Rem
-        | Algorithm::Knuth
+        // Single-limb divisor — the wide raw `% small` shape, reachable here
+        // whenever `N >= 3` and the dividend runs past the u128 fast path.
+        // `div_knuth_into` reaches this SAME `div_rem` through its own
+        // `n == 1` precondition guard, but only after normalising the whole
+        // dividend into `u` and zeroing both outputs a second time; going
+        // direct skips that wasted pass. Value-identical.
+        Algorithm::Rem => div_rem(
+            dividend_abs.as_limbs(),
+            divisor_abs.as_limbs(),
+            &mut quotient,
+            &mut remainder,
+        ),
+        Algorithm::Knuth
         | Algorithm::BurnikelZieglerWithKnuth
         | Algorithm::Schoolbook => div_knuth_into(
             dividend_abs.as_limbs(),
