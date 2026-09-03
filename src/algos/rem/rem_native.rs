@@ -11,14 +11,49 @@
 //! storage value fits a single hardware integer, so the remainder is a direct
 //! primitive `%`:
 //!
-//! * **`N == 1` (D18):** native `i64 %` on the `i64` storage values.
-//! * **`N == 2` (D38):** native `i128 %` on the `i128` storage values.
+//! * **`N == 1` (D18):** native `i64 %` -- a genuine hardware `idiv`. ROUTED.
+//! * **`N == 2` (D38):** `i128 %` -- **not** an instruction. KEPT, UNROUTED.
 //!
-//! This is the native D18 / D38 remainder (`self.0 % rhs.0`). It
-//! bypasses the generic [`rem_int_layer`](crate::algos::rem::rem_int_layer)
+//! It bypasses the generic [`rem_int_layer`](crate::algos::rem::rem_int_layer)
 //! path, which unpacks both operands to unsigned magnitudes, runs the
 //! const-`N` `div_rem` divmod, and rebuilds a signed `Int<N>` with sign
-//! reconstruction -- overhead the single hardware `%` instruction avoids.
+//! reconstruction. At `N == 1` that overhead is worth avoiding; at `N == 2`
+//! it is not, and the reason is codegen, not arithmetic.
+//!
+//! # Why `N == 2` is kept but not routed
+//!
+//! x86-64 has NO 128-bit divide instruction: `div r/m64` is a 128÷64→64
+//! divide that traps when the quotient overflows 64 bits, so a general
+//! `i128 % i128` cannot be one instruction. LLVM lowers it to the
+//! compiler-builtins soft-call `__modti3` / `__udivmodti4`, whose cost also
+//! depends on the operand high words. The crate already routes around the
+//! division sibling of exactly this call: [`div_native`] keeps its `N == 1`
+//! arm on an `i128 / u64` schoolbook divide expressly to avoid `__divti3`.
+//!
+//! So at `N == 2` the choice is not "instruction vs generic path" -- both
+//! arms reach the same soft-call, and `rem_int_layer` additionally skips the
+//! divide whenever `|a| < |b|`. Measured at the dispatch seam over 9 scales
+//! x 3 operand classes (`benches/micro/rem_kernel_ab.rs`, group
+//! `dec_rem_narrow`), `rem_int_layer` won all 27 cells:
+//!
+//! | class | `rem_native` | `rem_int_layer` |
+//! |---|---:|---:|
+//! | `\|a\| < \|b\|` (`2·10^s % 35·10^(s-1)`) | 18.1 ns (s0-s15) / 20.1 ns (s19-s36) | 10.0 ns, flat |
+//! | `\|a\| > \|b\|`, small quotient | 18.1 ns / 20.1 ns | 17.0 ns / 18.5 ns |
+//! | `\|a\| >> \|b\|`, large quotient | 18.1-18.5 ns | 16.9-17.4 ns |
+//!
+//! (Timings include a fixed ~9 ns of `#[inline(never)]` + `black_box` harness
+//! overhead common to both arms; compare the differences, not the absolutes.
+//! The step at `s19` is the soft-call's, and lands exactly where `2·10^s`
+//! crosses `2^64` -- the operand-dependence made visible.)
+//!
+//! At `N == 1` the same sweep splits by operand class rather than favouring
+//! one arm outright: `rem_native` wins the `|a| >= |b|` classes by ~0.85 ns
+//! at every scale and loses the `|a| < |b|` class by ~2.5 ns (10.8 vs 13.3
+//! ns) to `rem_int_layer`'s dividend-smaller short-circuit. `N == 1` stays
+//! on `rem_native`; whether a value split earns its place there is open.
+//!
+//! [`div_native`]: crate::algos::div::div_native::div_native
 //!
 //! # Overflow / divide-by-zero contract
 //!
