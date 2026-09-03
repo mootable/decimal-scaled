@@ -27,7 +27,11 @@ The per-function tables and graphs are split across three category pages:
 **[Trigonometry](performance/trigonometry.md)**.
 
 <!-- BEGIN GENERATED:performance:units -->
-_Pending the first bench-branch-compare CI run — this renders from `results/timing/bbc_medians.tsv`._
+| Unit | In nanoseconds |
+| :-- | --: |
+| ns | 10⁰ ns |
+| µs | 10³ ns |
+| ms | 10⁶ ns |
 <!-- END GENERATED:performance:units -->
 
 </div>
