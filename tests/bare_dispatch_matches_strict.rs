@@ -16,7 +16,18 @@
 //! Asserting bit-equality against `*_strict` on both a hand-written width
 //! and a macro width pins them together, so any future divergence fails
 //! here rather than shipping. Run under both the default feature set and
-//! `--no-default-features --features std`.
+//! `--no-default-features --features std`, and with `-p decimal-scaled`
+//! rather than `--workspace` — under `--workspace` cargo's feature
+//! unification pulls `strict` back in through the dev-dependency graph, so
+//! the lib compiles WITH `strict` and this file passes without exercising
+//! the configuration it exists to cover.
+//!
+//! This file must name EVERY bare method, because it can only catch what it
+//! names: `log1p` and `expm1` were added to D38 after the first pass here
+//! and kept the old gate for a release, which this file did not catch
+//! precisely because it did not list them. The bare surface is 27 methods —
+//! 8 in `log_exp_fast.rs`, 15 in `trig_fast.rs`, 4 in `powers_fast.rs`.
+//! When a transcendental is added, add it here too.
 
 #![cfg(not(all(feature = "fast", not(feature = "strict"))))]
 
@@ -51,10 +62,20 @@ fn d38_bare_log_exp_matches_strict() {
     let x = d38(3);
     let base = d38(2);
     assert_eq!(x.ln(), x.ln_strict(), "D38::ln must be the strict path");
+    assert_eq!(
+        x.log1p(),
+        x.log1p_strict(),
+        "D38::log1p must be the strict path"
+    );
     assert_eq!(x.log2(), x.log2_strict());
     assert_eq!(x.log10(), x.log10_strict());
     assert_eq!(x.log(base), x.log_strict(base));
     assert_eq!(x.exp(), x.exp_strict(), "D38::exp must be the strict path");
+    assert_eq!(
+        x.expm1(),
+        x.expm1_strict(),
+        "D38::expm1 must be the strict path"
+    );
     assert_eq!(x.exp2(), x.exp2_strict());
 }
 
@@ -98,10 +119,20 @@ fn d18_bare_log_exp_matches_strict() {
     let x = d18(3);
     let base = d18(2);
     assert_eq!(x.ln(), x.ln_strict(), "D18::ln must be the strict path");
+    assert_eq!(
+        x.log1p(),
+        x.log1p_strict(),
+        "D18::log1p must be the strict path"
+    );
     assert_eq!(x.log2(), x.log2_strict());
     assert_eq!(x.log10(), x.log10_strict());
     assert_eq!(x.log(base), x.log_strict(base));
     assert_eq!(x.exp(), x.exp_strict(), "D18::exp must be the strict path");
+    assert_eq!(
+        x.expm1(),
+        x.expm1_strict(),
+        "D18::expm1 must be the strict path"
+    );
     assert_eq!(x.exp2(), x.exp2_strict());
 }
 
