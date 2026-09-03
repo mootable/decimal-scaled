@@ -77,6 +77,26 @@ def tsv_at(ref: str) -> str:
     return sh("git", "show", f"{ref}:results/timing/bbc_medians.tsv")
 
 
+def measured_at(ref: str) -> str:
+    """When the bbc run behind THIS PAGE'S NUMBERS actually landed on `ref`.
+
+    The page renders medians committed to git, not a live bench, so a ref whose
+    sweep is days old renders days-old numbers with no visible difference. That
+    matters because only the DEFAULT `group=cell` full sweep publishes medians --
+    a `group=width` or `group=all` run leaves them untouched, so dispatching one
+    of those does NOT refresh this page and the date here will not move.
+    Reported separately from the page-generation stamp: the two answer different
+    questions, and conflating them is how a stale surface gets read as current.
+    """
+    try:
+        out = sh("git", "log", "-1", "--format=%ad (%h)",
+                 "--date=format:%Y-%m-%d %H:%M", ref, "--",
+                 "results/timing/bbc_medians.tsv").strip()
+    except subprocess.CalledProcessError:
+        return "unknown"
+    return out or "unknown"
+
+
 
 
 def parse(text: str) -> dict[tuple[str, int, int], float]:
@@ -588,6 +608,8 @@ def build(base: dict, br: dict, pairs: dict, hist: list, base_ref: str,
                         f"<div class='chart'><div class='cap'>branch</div>{svg_for(br, op)}</div></div>")
 
     stamp = _dt.datetime.now().strftime("%Y-%m-%d %H:%M")
+    base_run = measured_at(base_ref)
+    br_run = measured_at(br_ref)
     zero = "excluded" if min_scale > 0 else "INCLUDED"
     meta_refresh = (f'<meta http-equiv="refresh" content="{refresh}">'
                     if refresh else "")
@@ -596,8 +618,11 @@ def build(base: dict, br: dict, pairs: dict, hist: list, base_ref: str,
 <title>Performance compare</title><style>{CSS}</style></head><body><div class="wrap">
 <h1>Performance: branch vs published</h1>
 <p class="sub">published <code>{html.escape(base_ref)}</code> &nbsp;vs&nbsp;
-branch <code>{html.escape(br_ref)}</code> &middot; generated {stamp} &middot;
+branch <code>{html.escape(br_ref)}</code> &middot;
 scale 0 {zero} &middot; branch data: {html.escape(source)}</p>
+<p class="sub"><b>bbc medians measured:</b> published {html.escape(base_run)}
+&nbsp;&middot;&nbsp; branch {html.escape(br_run)}
+&nbsp;&middot;&nbsp; <span style="opacity:.7">page generated {stamp}</span></p>
 
 <div class="score">
   <div class="box"><div class="n">{len(nw)}</div>
