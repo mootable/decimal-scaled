@@ -19,6 +19,11 @@
 //!   `Newton` arm but does not currently select it (uncached Newton is
 //!   dominated by the MG chain, 9.18.2); kept for a baked-`r` revival.
 
+// candidate, NOT wired: `Fixed::div_small` routed through the int
+// layer's divide matcher (MG single-limb engine) instead of the four
+// software `u128 ÷ u128` divides its current fast path lowers to. See
+// the file header for the mechanism and the proposed wiring.
+pub(crate) mod div_small_int_layer;
 pub(crate) mod fixed;
 pub(crate) mod mg_divide;
 // Narrow-tier (D18/D38) near-tie Ziv escalation plumbing: the WZiv work
