@@ -128,7 +128,18 @@ pub(crate) fn isqrt_karatsuba(radicand: &[u64], out: &mut [u64]) {
     // `window_len−1` (⇒ a₃ ≥ B/4 at every recursion level). Even shift `e` ⇒
     // √(n·2^e) = √n·2^{e/2}, so the root is recovered by `>> e/2`.
     let window_len = next_pow2_limbs(radicand_len);
-    debug_assert!(window_len <= SCRATCH_LIMBS, "isqrt_karatsuba window exceeds scratch");
+    // Fail CLOSED, not merely in debug. Every buffer from here down is
+    // `[u64; SCRATCH_LIMBS]` sliced to `[..window_len]`, so a window past the
+    // scratch is a bare release slice panic — the same hazard `mul_karatsuba`
+    // closed at its own ceiling (`lhs.len() > KARATSUBA_MAX_WIDTH =>
+    // mul_schoolbook`). `isqrt_newton` is this kernel's bit-identity reference,
+    // so the fallback is slower and exact, never a different root. No caller
+    // reaches this today (the widest wired isqrt is `N = 64`, window 64); it
+    // exists so a future wider instantiation degrades instead of panicking.
+    if window_len > SCRATCH_LIMBS {
+        isqrt_newton(&radicand[..radicand_len], out);
+        return;
+    }
     // ≥ 0: window_len ≥ radicand_len ⇒ window_len·64 ≥ bits
     let shift = (window_len as u32) * 64 - bits;
     let even_shift = shift & !1u32;
