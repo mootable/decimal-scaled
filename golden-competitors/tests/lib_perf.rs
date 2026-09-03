@@ -26,6 +26,18 @@
 //! only the functions its library exposes, so a missing `(function, library)` cell
 //! simply does not emit (the docs render the gap).
 //!
+//! **What the timed span holds, and why every column here is the same shape.** `Timed`
+//! calls `string_to_value` OUTSIDE the span and times only the `execute` closure, so
+//! comparability rests entirely on every subject keeping parse and format out of that
+//! closure. `DsSubject` once carried `Value = String` and parsed + formatted inside it,
+//! so these figures timed decimal-scaled's parse + op + format against each typed
+//! peer's op alone — at the wide tiers a per-call parse of a 1232-digit literal, which
+//! swamped the operation outright and made this bench's decimal-scaled column unusable
+//! as a comparison. `DsSubject` now carries a parsed handle
+//! (`decimal_scaled_cells::CellValue`) and resolves its `(width, scale)` cell before
+//! the closure, so every column — ours and each peer's — times a `match func` plus the
+//! operation, and nothing else. Any subject added here owes the same property.
+//!
 //! decimal-scaled is timed at each of the COMPARE_SCALES a width can hold — one line
 //! per peer-precision level: 17 (narrow anchor), 28 (rust_decimal), 37 (D38 ceiling =
 //! decimal-rs / g_math's 38 significant digits), 152 (D153 ceiling ≈ fastnum's 154).

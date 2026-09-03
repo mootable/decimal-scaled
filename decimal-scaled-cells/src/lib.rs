@@ -9,16 +9,40 @@
 //! heavy-monomorphisation bill, and pays it AGAIN for every additional target
 //! that re-instantiates the same cells (a lib's own unit-test harness, a second
 //! test binary). This crate is the compile-once home for that bill: the
-//! `cells!`-generated fan-out — parse → compute → format ([`dispatch_compute`])
-//! and the storage envelope ([`dispatch_limits`]), per cell — compiles here,
-//! exactly once, into a leaf rlib. The subjects above it (the erased
-//! `DsSubject` in decimal-scale-test, the historical adapters in `history`)
-//! call these concrete, non-generic entry points and stay light.
+//! `cells!`-generated fan-out compiles here, exactly once, into a leaf rlib.
+//! The subjects above it (the erased `DsSubject` in decimal-scale-test, the
+//! historical adapters in `history`) call these concrete, non-generic entry
+//! points and stay light.
 //!
-//! Pure codegen placement: no new types, no algorithm bodies, no per-tier
-//! logic — each shim is the same one-line delegate into the existing generic
-//! surface it always was (the per-cell listing in the `cells!` macro is
-//! instantiation enumeration, not algorithm duplication).
+//! The fan-out is FOUR leaves per cell, one per stage of the harness's subject
+//! contract, so each stage can be called on its own:
+//!
+//! - [`dispatch_parse`] — literal → [`CellValue`] (a PARSED handle, not text);
+//! - [`dispatch_compute_fn`] — `(width, scale)` → the cell's compute leaf,
+//!   resolved ONCE and thereafter called on pre-parsed values only;
+//! - [`dispatch_format`] — [`CellValue`] → its canonical decimal string;
+//! - [`dispatch_limits`] — the cell's storage envelope.
+//!
+//! **Why the split is four and not one.** `decimal-scaled-golden`'s `Timed`
+//! strategy hoists `string_to_value` out of the timed span and calls only the
+//! `execute` closure inside it, so a subject whose closure also parses and
+//! formats measures parse + op + format while a typed peer measures the op
+//! alone. A single `&[String] -> Computed<String>` leaf forces exactly that.
+//! [`CellValue`] keeps the subject ERASED (one subject type for all 127 cells,
+//! so the runner/collector/validator pipeline still monomorphises once) while
+//! putting parse and format where the trait says they belong.
+//!
+//! [`CellValue`] carries the parsed value as its tier's RAW STORAGE, held in
+//! that tier's scale-0 alias: `D<W><S>` and `D<W><0>` are the same storage
+//! integer behind a different const, so `to_bits`/`from_bits` move between them
+//! as a newtype unwrap/wrap — no conversion, no allocation, `Copy`, stack-only.
+//! One enum variant per WIDTH; the scale rides with the subject, exactly as the
+//! `(width, scale)` dispatch always has.
+//!
+//! Pure codegen placement: no algorithm bodies, no per-tier logic — each shim is
+//! the same one-line delegate into the existing generic surface it always was
+//! (the per-cell listing in the `cells!` macro is instantiation enumeration, not
+//! algorithm duplication).
 
 use decimal_scaled::{DecimalArithmetic, DecimalTranscendental, RoundingMode as DsMode};
 use decimal_scaled_golden::{Computed, Function, Limits};
@@ -108,25 +132,26 @@ where
     }
 }
 
-/// Parse → compute → format at one concrete decimal type `D`. The strict op panics on
-/// an out-of-range result; the harness catches that as `Computed::Panic` and judges it
-/// against the cell's range. Parse of a harness-vetted (representable) input cannot
-/// fail; a failure is a golden-data fault and panics with the offending literal.
-fn compute_typed<D>(func: Function, inputs: &[String], m: DsMode) -> Computed<String>
+/// Parse one input literal at one concrete decimal type `D`. Parse of a
+/// harness-vetted (representable) input cannot fail — the runner's input filter
+/// (`limits`) runs before any execution — so a failure here is a golden-data fault
+/// and panics with the offending literal, which the harness catches and reports.
+fn parse_typed<D>(s: &str) -> D
 where
-    D: DecimalArithmetic
-        + DecimalTranscendental
-        + DsOps
-        + core::str::FromStr
-        + core::fmt::Display
-        + Copy,
+    D: core::str::FromStr,
 {
-    let parse =
-        |s: &str| s.parse::<D>().unwrap_or_else(|_| panic!("could not parse representable input {s:?}"));
-    let x = parse(&inputs[0]);
-    let d2 = inputs.get(1).map(|s| parse(s));
-    Computed::Value(compute(func, x, d2, m).to_string())
+    s.parse::<D>()
+        .unwrap_or_else(|_| panic!("could not parse representable input {s:?}"))
 }
+
+/// The compute leaf of one `(width, scale)` cell: the op ONLY, over pre-parsed
+/// [`CellValue`]s. [`dispatch_compute_fn`] resolves the cell once, so the
+/// `(width, scale)` match is paid at setup and never inside a timed span — what
+/// remains is the same `match func` a typed peer adapter's closure runs.
+///
+/// The strict op panics on an out-of-range result; the harness catches that as
+/// `Computed::Panic` and judges it against the cell's range.
+pub type CellCompute = fn(Function, &[CellValue], DsMode) -> Computed<CellValue>;
 
 /// The exact storage envelope of one concrete decimal type, in decimal — decimal-scaled's
 /// own MIN/MAX constants and its fixed fractional depth. No bit-width math leaks into the
@@ -144,15 +169,15 @@ where
     }
 }
 
-/// Enumerate the `(width, scale)` cells and fan the two leaf operations out to the
+/// Enumerate the `(width, scale)` cells and fan the leaf operations out to the
 /// concrete decimal type for each. Two cell lists fall out of one fan-out:
 /// [`GOLDEN_CELLS`] — the band-edge correctness/history grid (the golden gate and the
 /// version-history pins walk this) — and [`CELLS`], its union with the extra
 /// lib-compare-only scales (`; compare ...` per tier). [`CELLS`] is what
-/// [`dispatch_compute`] covers and what `DsSubject` can run; the lib-compare bench
+/// [`dispatch_compute_fn`] covers and what `DsSubject` can run; the lib-compare bench
 /// FILTERS it by [`COMPARE_SCALES`], so the comparison's scale choices never enlarge
 /// the golden grid — the benches stay decoupled, sharing only this compile-once
-/// monomorphisation home. The two dispatch fns are the concrete shim entry points
+/// monomorphisation home. The four dispatch fns are the concrete shim entry points
 /// every subject routes through.
 macro_rules! cells {
     ($(
@@ -166,8 +191,8 @@ macro_rules! cells {
         pub const GOLDEN_CELLS: &[(u32, u32)] = &[ $( $( ($w, $s), )+ )+ ];
 
         /// Every COMPILED `(width, scale)` cell: the golden grid PLUS the
-        /// lib-compare-only scales (`; compare ...`). What [`dispatch_compute`] covers
-        /// and `DsSubject` can run; whether a cell is RUNNABLE in this build is
+        /// lib-compare-only scales (`; compare ...`). What [`dispatch_compute_fn`]
+        /// covers and `DsSubject` can run; whether a cell is RUNNABLE in this build is
         /// [`tier_compiled`]. Golden/history filter to [`GOLDEN_CELLS`]; the lib-compare
         /// bench filters to the [`COMPARE_SCALES`] subset, so its scale choices never
         /// enlarge the golden grid (the benches share only this compile-once home).
@@ -182,6 +207,24 @@ macro_rules! cells {
             }
         }
 
+        /// One PARSED decimal-scaled cell value, erased over the width tiers.
+        ///
+        /// The payload is the tier's raw storage integer, carried in that tier's
+        /// scale-0 alias: `D<W><S>` and `D<W><0>` are the same `#[repr(transparent)]`
+        /// storage behind a different const, so `to_bits`/`from_bits` move between
+        /// them as a newtype unwrap/wrap. `Copy`, stack-only, no allocation, and the
+        /// scale rides with the subject exactly as the `(width, scale)` dispatch
+        /// always has — so the whole harness pipeline still sees ONE `Value` type
+        /// for all of [`CELLS`], while parse and format sit outside the op.
+        #[derive(Clone, Copy, Debug)]
+        pub enum CellValue {
+            $(
+                $(#[$cfg])*
+                /// A parsed value of this width tier, as its raw storage.
+                $D(decimal_scaled::$D<0>),
+            )+
+        }
+
         /// Per-tier dispatch leaves: one `cfg`-gated child module per tier (the
         /// scale match inside needs no gating — the whole module vanishes with
         /// its feature), and a width match with one arm per tier.
@@ -192,15 +235,72 @@ macro_rules! cells {
                 pub mod $D {
                     use decimal_scaled_golden::{Computed, Function, Limits};
                     use decimal_scaled::RoundingMode as DsMode;
-                    pub fn compute(
-                        scale: u32, func: Function, inputs: &[String], m: DsMode,
-                    ) -> Computed<String> {
+                    use crate::CellValue;
+
+                    /// This tier's scale-erased carrier: the same storage integer,
+                    /// named at scale 0.
+                    type Carrier = decimal_scaled::$D<0>;
+
+                    /// Cell type → carrier. `to_bits`/`from_bits` are the documented
+                    /// newtype unwrap/wrap, so this is free at every width.
+                    #[inline]
+                    fn carry<const S: u32>(v: decimal_scaled::$D<S>) -> Carrier {
+                        <Carrier>::from_bits(v.to_bits())
+                    }
+
+                    /// Carrier → cell type at scale `S`; the inverse of [`carry`].
+                    #[inline]
+                    fn at<const S: u32>(c: Carrier) -> decimal_scaled::$D<S> {
+                        <decimal_scaled::$D<S>>::from_bits(c.to_bits())
+                    }
+
+                    /// This tier's carrier out of an erased value. A value of another
+                    /// tier cannot occur — the subject parses and computes at one
+                    /// cell — so it is a harness fault, not a subject outcome.
+                    #[inline]
+                    fn carrier(v: &CellValue) -> Carrier {
+                        match v {
+                            CellValue::$D(c) => *c,
+                            #[allow(unreachable_patterns)]
+                            _ => panic!("decimal-scaled cell value is not a width-{} value", $w),
+                        }
+                    }
+
+                    /// The compute leaf of ONE cell: unwrap the carriers, run the op,
+                    /// re-wrap. No parse, no format — this is the whole timed body.
+                    fn cell<const S: u32>(
+                        func: Function, inputs: &[CellValue], m: DsMode,
+                    ) -> Computed<CellValue> {
+                        let x = at::<S>(carrier(&inputs[0]));
+                        let d2 = inputs.get(1).map(|v| at::<S>(carrier(v)));
+                        Computed::Value(CellValue::$D(carry::<S>(crate::compute(func, x, d2, m))))
+                    }
+
+                    pub fn compute_fn(scale: u32) -> crate::CellCompute {
                         match scale {
-                            $( $s => crate::compute_typed::<decimal_scaled::$D<$s>>(func, inputs, m), )+
-                            $( $( $cs => crate::compute_typed::<decimal_scaled::$D<$cs>>(func, inputs, m), )+ )?
+                            $( $s => cell::<{ $s }> as crate::CellCompute, )+
+                            $( $( $cs => cell::<{ $cs }> as crate::CellCompute, )+ )?
                             _ => panic!("no decimal-scaled cell for (width={}, scale={scale})", $w),
                         }
                     }
+
+                    pub fn parse(scale: u32, s: &str) -> CellValue {
+                        CellValue::$D(match scale {
+                            $( $s => carry::<{ $s }>(crate::parse_typed::<decimal_scaled::$D<$s>>(s)), )+
+                            $( $( $cs => carry::<{ $cs }>(crate::parse_typed::<decimal_scaled::$D<$cs>>(s)), )+ )?
+                            _ => panic!("no decimal-scaled cell for (width={}, scale={scale})", $w),
+                        })
+                    }
+
+                    pub fn format(scale: u32, v: &CellValue) -> String {
+                        let c = carrier(v);
+                        match scale {
+                            $( $s => at::<{ $s }>(c).to_string(), )+
+                            $( $( $cs => at::<{ $cs }>(c).to_string(), )+ )?
+                            _ => panic!("no decimal-scaled cell for (width={}, scale={scale})", $w),
+                        }
+                    }
+
                     pub fn limits(scale: u32) -> Limits {
                         match scale {
                             $( $s => crate::limits_typed::<decimal_scaled::$D<$s>>($s), )+
@@ -212,21 +312,42 @@ macro_rules! cells {
             )+
         }
 
-        /// Parse → compute → format at the concrete decimal type of one band-edge
-        /// `(width, scale)` cell — the non-generic shim entry the erased subjects
-        /// call. Panics on a cell this build does not compile (the caller filters
-        /// on [`tier_compiled`]).
-        pub fn dispatch_compute(
-            width: u32, scale: u32, func: Function, inputs: &[String], m: DsMode,
-        ) -> Computed<String> {
+        /// Parse one input literal at the concrete decimal type of one band-edge
+        /// `(width, scale)` cell — the non-generic shim entry the erased subjects'
+        /// `string_to_value` calls. Panics on a cell this build does not compile
+        /// (the caller filters on [`tier_compiled`]).
+        pub fn dispatch_parse(width: u32, scale: u32, s: &str) -> CellValue {
             match width {
-                $( $(#[$cfg])* $w => tier_dispatch::$D::compute(scale, func, inputs, m), )+
+                $( $(#[$cfg])* $w => tier_dispatch::$D::parse(scale, s), )+
+                _ => panic!("no decimal-scaled cell for (width={width}, scale={scale})"),
+            }
+        }
+
+        /// Resolve one band-edge `(width, scale)` cell to its compute leaf — the op
+        /// ONLY, over pre-parsed [`CellValue`]s. Called once per subject execution
+        /// (never inside a timed span), so the cell match is not charged to the
+        /// operation. Panics on a cell this build does not compile — as
+        /// [`dispatch_limits`], which the runner calls first for every input,
+        /// already does.
+        pub fn dispatch_compute_fn(width: u32, scale: u32) -> CellCompute {
+            match width {
+                $( $(#[$cfg])* $w => tier_dispatch::$D::compute_fn(scale), )+
+                _ => panic!("no decimal-scaled cell for (width={width}, scale={scale})"),
+            }
+        }
+
+        /// Format a [`CellValue`] back to canonical decimal text at its cell — the
+        /// erased subjects' `value_to_string`, and the other half of the pair that
+        /// keeps conversion out of the op.
+        pub fn dispatch_format(width: u32, scale: u32, v: &CellValue) -> String {
+            match width {
+                $( $(#[$cfg])* $w => tier_dispatch::$D::format(scale, v), )+
                 _ => panic!("no decimal-scaled cell for (width={width}, scale={scale})"),
             }
         }
 
         /// The storage envelope of one band-edge `(width, scale)` cell — the
-        /// non-generic shim sibling of [`dispatch_compute`].
+        /// non-generic shim sibling of [`dispatch_compute_fn`].
         pub fn dispatch_limits(width: u32, scale: u32) -> Limits {
             match width {
                 $( $(#[$cfg])* $w => tier_dispatch::$D::limits(scale), )+
