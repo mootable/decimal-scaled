@@ -25,28 +25,40 @@ use crate::int::algos::support::limbs::{add_assign, bit_len, cmp, shr};
 /// from it makes every narrow call pay for the widest enabled tier — the
 /// feature-coupling the exact-scratch mechanism exists to remove.
 use crate::int::algos::support::limbs::max_n_limbs;
-use crate::int::types::compute_limbs::MAX_SINGLE_LIMBS;
 
 const SCRATCH_LIMBS: usize = max_n_limbs(2);
 
-/// Build-max Knuth normalisation scratch for [`isqrt_newton`] — the same
-/// `MAX_SINGLE_LIMBS` budget [`div_knuth`](crate::int::algos::div::div_knuth)
-/// allocates at its own blanket door, hoisted here so it is zeroed ONCE per
-/// root instead of once per Newton iteration.
-const DIV_SCRATCH_LIMBS: usize = MAX_SINGLE_LIMBS;
-
-/// Build-max base-2¹²⁸ packed scratch — `⌈MAX_SINGLE_LIMBS/2⌉ + 2`, matching
-/// `div_knuth_u128_limb`'s own blanket sizing (the one-above window limb plus
-/// an even-rounding limb).
-const DIV_SCRATCH_LIMBS_128: usize = MAX_SINGLE_LIMBS / 2 + 2;
+/// Knuth normalisation scratch for [`isqrt_newton`], sized from **this door's
+/// own contract** rather than the divide's blanket `MAX_SINGLE_LIMBS`.
+///
+/// The engine needs `dividend.len() + 2`, the dividend is the radicand, and
+/// the door already requires `radicand.len() < SCRATCH_LIMBS` — so
+/// `SCRATCH_LIMBS + 1` is exactly sufficient. `MAX_SINGLE_LIMBS` is
+/// `4·MAX_WORK_N + 2`, sized for the widest operand ANY blanket divide can
+/// meet, which is 1.6× more than this door can ever present (258 vs 161 at
+/// `xx-wide`); hoisting that out of the Newton loop made the short-radicand
+/// calls pay for width they never use, and it measured as a ~1.2× regression
+/// at D18/D38 where the divisor is single-limb and the old path allocated no
+/// Knuth scratch at all.
+const DIV_SCRATCH_LIMBS: usize = SCRATCH_LIMBS + 1;
 
 /// `out = floor(sqrt(radicand))` — the **build-max** door, for callers with no
-/// `N` to size scratch from (the `Uint<N>` fast-arm dispatch, `hypot`, the
-/// bench seam). Allocates the three Newton working buffers plus the divide's
-/// normalisation scratch at the build-max width and delegates to
-/// [`isqrt_newton_into`]. Hoisting the divide's scratch up here is a win even
-/// on this path: it is now zeroed once per root rather than once per Newton
-/// iteration, which is where `div_knuth`'s blanket door was zeroing it.
+/// `N` to size scratch from (the `Uint<N>` fast-arm dispatch, `hypot`,
+/// `isqrt_karatsuba`, the bench seam). Allocates the three Newton working
+/// buffers plus the divide's normalisation scratch at the build-max width and
+/// delegates to [`isqrt_newton_into`]. Hoisting the divide's scratch up here is
+/// a win even on this path: it is zeroed once per root rather than once per
+/// Newton iteration, which is where `div_knuth`'s blanket door was zeroing it.
+///
+/// **No base-2¹²⁸ packed scratch is allocated here, deliberately.** That engine
+/// wants `⌈MAX_SINGLE_LIMBS/2⌉ + 2` u128 limbs — 2 KB at `xx-wide` — and it is
+/// reachable only for a radicand of 48+ limbs, so hoisting it would tax every
+/// narrow call for an arm almost none of them take. Measured: doing so cost
+/// this door 1.1–1.5× across the `isqrt_ab` width sweep. Passing empty packed
+/// slices makes [`div_rem_into`]'s guard fall closed to base-2⁶⁴ Knuth, which
+/// is bit-identical, so this is a routing choice, not a value change. The
+/// exact-scratch door is where the u128 engine stays available: a caller with a
+/// concrete `N` sizes those buffers per-`N` for free.
 ///
 /// A caller holding a concrete `N` (`Limbs<N>: ComputeLimbs` — the decimal
 /// `sqrt` kernel) calls [`isqrt_newton_into`] with its own exactly-sized
@@ -64,10 +76,8 @@ pub(crate) fn isqrt_newton(radicand: &[u64], out: &mut [u64]) {
     let mut y = [0u64; SCRATCH_LIMBS];
     let mut u = [0u64; DIV_SCRATCH_LIMBS];
     let mut v = [0u64; DIV_SCRATCH_LIMBS];
-    let mut u128_u = [0u128; DIV_SCRATCH_LIMBS_128];
-    let mut u128_v = [0u128; DIV_SCRATCH_LIMBS_128];
     isqrt_newton_into(
-        radicand, out, &mut x, &mut q, &mut y, &mut u, &mut v, &mut u128_u, &mut u128_v,
+        radicand, out, &mut x, &mut q, &mut y, &mut u, &mut v, &mut [], &mut [],
     );
 }
 

@@ -25,19 +25,21 @@ use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 /// from it makes every narrow call pay for the widest enabled tier — the
 /// feature-coupling the exact-scratch mechanism exists to remove.
 use crate::int::algos::support::limbs::max_n_limbs;
-use crate::int::types::compute_limbs::MAX_SINGLE_LIMBS;
 
 const SCRATCH_LIMBS: usize = max_n_limbs(4);
 
-/// Build-max Knuth normalisation scratch for [`icbrt_newton`] — the same
-/// `MAX_SINGLE_LIMBS` budget [`div_knuth`](crate::int::algos::div::div_knuth)
-/// allocates at its own blanket door, hoisted here so it is zeroed ONCE per
-/// root instead of once per Newton iteration.
-const DIV_SCRATCH_LIMBS: usize = MAX_SINGLE_LIMBS;
-
-/// Build-max base-2¹²⁸ packed scratch — `⌈MAX_SINGLE_LIMBS/2⌉ + 2`, matching
-/// `div_knuth_u128_limb`'s own blanket sizing.
-const DIV_SCRATCH_LIMBS_128: usize = MAX_SINGLE_LIMBS / 2 + 2;
+/// Knuth normalisation scratch for [`icbrt_newton`], sized from **this door's
+/// own contract** rather than the divide's blanket `MAX_SINGLE_LIMBS`.
+///
+/// The engine needs `dividend.len() + 2`, the dividend is the radicand, and
+/// the door already requires `radicand.len() < SCRATCH_LIMBS` — so
+/// `SCRATCH_LIMBS + 1` is exactly sufficient. Here that is also strictly
+/// SAFER than the blanket: the 4N-family radicand reaches 288 limbs at
+/// `xx-wide` while `MAX_SINGLE_LIMBS` is 258, so the blanket the old path
+/// borrowed could not have held this door's widest legal operand — the
+/// build-max divide bound `docs/ARCHITECTURE.md` warns about, closed here by
+/// sizing from the contract that actually governs.
+const DIV_SCRATCH_LIMBS: usize = SCRATCH_LIMBS + 1;
 
 /// `out = floor(cbrt(radicand))`. Newton iteration for the integer cube root.
 ///
@@ -70,6 +72,14 @@ const DIV_SCRATCH_LIMBS_128: usize = MAX_SINGLE_LIMBS / 2 + 2;
 /// build-max width and delegates to [`icbrt_newton_into`]; a caller holding a
 /// concrete `N` (`Limbs<N>: ComputeLimbs` — the decimal `cbrt` kernel) calls
 /// that door directly with its own exactly-sized buffers.
+///
+/// **No base-2¹²⁸ packed scratch is allocated here, deliberately** — the same
+/// reasoning as the isqrt door, and here the arm is unreachable anyway: the
+/// cube-root divide is `radicand / s²` with `s ≈ radicand^(1/3)`, so the
+/// divisor runs about two thirds of the dividend's length and the matcher's
+/// `num_m >= 2·den_n` gate can never be met. Passing empty packed slices makes
+/// [`div_rem_into`]'s guard fall closed to base-2⁶⁴ Knuth, which is
+/// bit-identical.
 pub(crate) fn icbrt_newton(radicand: &[u64], out: &mut [u64]) {
     // The Newton work width is `radicand.len() + 1`, so the build-max buffer
     // holds it only while the radicand is strictly shorter than the budget.
@@ -84,11 +94,8 @@ pub(crate) fn icbrt_newton(radicand: &[u64], out: &mut [u64]) {
     let mut r = [0u64; SCRATCH_LIMBS];
     let mut u = [0u64; DIV_SCRATCH_LIMBS];
     let mut v = [0u64; DIV_SCRATCH_LIMBS];
-    let mut u128_u = [0u128; DIV_SCRATCH_LIMBS_128];
-    let mut u128_v = [0u128; DIV_SCRATCH_LIMBS_128];
     icbrt_newton_into(
-        radicand, out, &mut x, &mut sq, &mut q, &mut r, &mut u, &mut v, &mut u128_u,
-        &mut u128_v,
+        radicand, out, &mut x, &mut sq, &mut q, &mut r, &mut u, &mut v, &mut [], &mut [],
     );
 }
 
