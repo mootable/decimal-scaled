@@ -428,7 +428,13 @@ mod tests {
         // directions, independently of any kernel.
         let subject = DsSubject::new(38, 19);
         let v = subject.string_to_value("-12.5");
-        assert_eq!(subject.value_to_string(&v), "-12.5000000000000000000");
+        let s = subject.value_to_string(&v);
+        assert_eq!(
+            s.split_once('.').unwrap().1.len(),
+            19,
+            "formatted at the cell's own depth, got {s}"
+        );
+        assert_eq!(s.trim_end_matches('0'), "-12.5", "value unchanged, got {s}");
         // A narrow cell, to prove the per-width enum variant is selected by width
         // and not by build order.
         let narrow = DsSubject::new(18, 3);
