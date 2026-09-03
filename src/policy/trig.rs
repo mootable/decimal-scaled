@@ -137,7 +137,7 @@ pub(crate) mod forward {
         match (N, SCALE) {
             // D57 (`Int<3>`) Tang band — sin/cos only. This arm realises as
             // `sincos_tang`, a DIFFERENT kernel from atan's
-            // `atan_tang_3limb_s44_56`, so its edge is `sincos_tang`'s own
+            // `atan_tang_3limb`, so its edge is `sincos_tang`'s own
             // question and is left where it was measured. atan's edge moved
             // on atan's evidence in [`select_atan`]; nothing here follows it.
             #[cfg(any(feature = "d57", feature = "wide"))]
@@ -191,7 +191,7 @@ pub(crate) mod forward {
     /// `atan`-specific matcher. Identical to [`select`] except the D57
     /// arm, which is split out for the same reason [`select_tan`] is: at
     /// D57 the `Tang` arm realises as a DIFFERENT kernel per function —
-    /// `atan_tang_3limb_s44_56` for atan, `sincos_tang` for sin/cos — so
+    /// `atan_tang_3limb` for atan, `sincos_tang` for sin/cos — so
     /// the two bands are separate empirical questions and must not share
     /// an edge. Splitting keeps atan's edge moving on atan's evidence and
     /// leaves sin/cos routing untouched.
@@ -867,7 +867,7 @@ mod borrow_d57 {
         // `forward::select_atan`, so the two cannot drift again.
         let raw_wide = match super::forward::resolve_atan::<3, SCALE>(&widened.0) {
             super::forward::Algorithm::Tang => {
-                trig::atan_tang_3limb_s44_56::atan_strict::<SCALE>(widened.0, mode)
+                trig::atan_tang_3limb::atan_strict::<SCALE>(widened.0, mode)
             }
             // The 18..=22 narrow-GUARD reclaim is a REALISATION of `Series`
             // (a GUARD choice inside the arm), exactly as in `policy_atan`.
@@ -1788,7 +1788,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
     // Forward family — `Series` runs the 18..=22 narrow-GUARD lookup or
     // the generic `wide_kernel`; `Tang` runs `sincos_tang` on the 44..=56
     // band for sin/cos (tan has no Tang band here), while atan's `Tang`
-    // runs `atan_tang_3limb_s44_56` across the whole 0..=56 range.
+    // runs `atan_tang_3limb` across the whole 0..=56 range.
     #[inline]
     pub(crate) fn policy_sin(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<3, SCALE>(&self.0) {
@@ -1859,7 +1859,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
                 _ => forward_rung::atan_strict::<crate::types::widths::wide_trig_d57::Core, SCALE, { <crate::types::widths::wide_trig_d57::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true>(self.0, mode),
             },
             forward::Algorithm::Tang => {
-                trig::atan_tang_3limb_s44_56::atan_strict::<SCALE>(self.0, mode)
+                trig::atan_tang_3limb::atan_strict::<SCALE>(self.0, mode)
             }
             #[allow(dead_code)]
             forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::atan_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),

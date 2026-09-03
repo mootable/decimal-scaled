@@ -266,7 +266,7 @@ Bespoke slot files: `<func>_<algo>_<limbcount>limb_s<lo>_<hi>.rs`
 
 Examples:
 
-- `atan_tang_3limb_s44_56.rs` — atan via the Tang kernel on a 3-limb work integer, scale range 44..=56
+- `atan_tang_3limb.rs` — atan via the Tang kernel on a 3-limb work integer, full scale range 0..=56
 - `inverse_tang_3limb_s18_22.rs` — inverse-trig family, Tang kernel, 3 limbs, scale range 18..=22
 - `sincos_tang_3limb_s18_22.rs` — shared kernel emitting both sin and cos, scale range 18..=22
 

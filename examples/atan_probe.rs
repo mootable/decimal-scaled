@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Focused samply probe for the decimal `atan` ALGORITHM (the Tang
-//! `atan_tang_3limb_s44_56` kernel + the generic `atan_fixed` / `atan_series`
+//! `atan_tang_3limb` kernel + the generic `atan_fixed` / `atan_series`
 //! cores) across ALL widths × the 5 scale points, driven by the bbc operand
 //! (`atan(0.5)`) + the adversarial golden inputs. One `<width>_s<scale>` per
 //! run so samply attributes time cleanly to one cell. Branch-only (the

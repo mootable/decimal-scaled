@@ -4,11 +4,11 @@
 //! Bespoke `atan_strict` kernel slot for `D57<SCALE>`, routed across the
 //! tier's FULL scale range (`SCALE ∈ 0..=56`).
 //!
-//! The module name's `s44_56` records where the slot was ORIGINALLY gated,
-//! not where it routes today: the lower edge was bisected down to 0 (see
-//! "The lower band edge" below). The name is kept only to avoid churning
-//! every reference in one perf change; it is stale and a rename to
-//! `atan_tang_3limb` would be accurate.
+//! The module carries NO precondition suffix because it has no scale
+//! precondition: it is valid and routed across the tier's whole range. It
+//! was once `atan_tang_3limb_s44_56`, named for a lower edge that was
+//! asserted rather than measured; the bisection (below) dropped that edge
+//! to 0 and the suffix was removed with it.
 //!
 //! At deep storage scales the wide-tier `atan_fixed` runs an
 //! `O(log working_scale)` halving chain (each `atan(x) = 2·atan(x/(1+√(1+x²)))`

@@ -8,7 +8,7 @@ compiles. `build.rs` is untouched.
 
 ## What it stores
 
-The Tang `atan` kernel (`algos::trig::atan_tang_3limb_s44_56`) uses a
+The Tang `atan` kernel (`algos::trig::atan_tang_3limb`) uses a
 Tang-style argument-addition reduction with `M = ATAN_TANG_M = 512`:
 after picking the nearest table entry `j = round(x·M)` it needs
 `atan(c_j)` for `c_j = j/M` (`j ∈ [0, M]`) at the working scale. The
@@ -68,7 +68,7 @@ from flint import arb, fmpq
 from tang_flint_oracle import ORACLE_PREC_BITS, set_precision, slot_limbs
 
 # ── Tang table size (do NOT change here; matches the const `M` in the
-# atan Tang kernel `atan_tang_3limb_s44_56`, currently 512). ──────────────
+# atan Tang kernel `atan_tang_3limb`, currently 512). ──────────────
 M = 512
 
 # ── Binary precision of the baked entry ──────────────────────────────────
@@ -163,7 +163,7 @@ def main():
     w("")
     w("/// Tang table size — `atan(c_j)` of `c_j = j/M`, `j ∈ [0, M]`.")
     w("/// Matches the const `M` in the atan Tang kernel")
-    w("/// (`algos::trig::atan_tang_3limb_s44_56`).")
+    w("/// (`algos::trig::atan_tang_3limb`).")
     w(f"pub(crate) const ATAN_TANG_M: u32 = {M};")
     w("")
     w("/// Binary fixed-point exponent: each value is `round(value ·")

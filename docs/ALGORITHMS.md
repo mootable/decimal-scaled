@@ -256,7 +256,7 @@ Implementation: `src/algos/exp/exp_tang.rs::exp_tang` (all tiers),
 `src/algos/ln/ln_tang.rs::ln_tang` (all tiers),
 `src/algos/trig/sincos_tang.rs` and `sincos_tang_3limb_s18_22.rs` (sin/cos),
 `src/algos/trig/hyper_exp_identity.rs` (hyperbolic),
-`src/algos/trig/atan_tang_3limb_s44_56.rs` and `inverse_tang_3limb_s18_22.rs` (atan/asin/acos).
+`src/algos/trig/atan_tang_3limb.rs` and `inverse_tang_3limb_s18_22.rs` (atan/asin/acos).
 Dispatched per `(width, scale)` by `src/policy/` matchers. Outside the listed
 bands the artanh / Taylor path below handles the call.
 

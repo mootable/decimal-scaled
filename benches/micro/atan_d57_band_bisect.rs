@@ -5,10 +5,12 @@
 //! Mirrors `trig_wide_tang_bisect.rs` (the bench that bisected the D462
 //! arm — the one trig band whose edge was actually measured).
 //!
-//! `policy::trig::forward::select` wires `(3, 44..=56)`, so D57 `atan`
-//! reaches `atan_tang_3limb_s44_56` only from SCALE 44 up. The kernel's own
-//! header records that this lower edge was **asserted, not measured**, and
-//! dismantles the original justification: every scale in `30..=56` runs the
+//! This bench BISECTED that edge. `policy::trig::forward::select` used to
+//! wire `(3, 44..=56)` for atan as well as sin/cos, so D57 `atan` reached
+//! `atan_tang_3limb` only from SCALE 44 up; atan now has its own matcher
+//! (`forward::select_atan`) wired `(3, 0..=56)`. The kernel's own header
+//! had recorded that lower edge as **asserted, not measured**, and
+//! dismantled the original justification: every scale in `30..=56` runs the
 //! SAME 6 halvings on the generic path, the work integer is `Int<16>` at
 //! every scale, and the Tang kernel gets CHEAPER as SCALE falls (a 3-limb
 //! table prefix at SCALE 0 against 6 at SCALE 56) while paying no halvings
