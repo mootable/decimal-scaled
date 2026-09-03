@@ -913,6 +913,23 @@ path = "benches/micro/ln_wide_series_tang_ab.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
+# strict_fast_ab: `<op>_strict` vs `<op>_fast` -- the f64-bridge premium, in
+# one process on one machine, over all 27 op families that carry BOTH named
+# variants, at all twelve widths, across the 5-point scale grid
+# {0, S/4, S/2, 3S/4, S}. Supplies the absolute nanoseconds AND the ratio for
+# the `fast` deprecation note; a ratio alone says nothing at this scale.
+# `required-features` MUST name BOTH families: the `*_strict` and `*_fast`
+# methods are emitted unconditionally (the latter behind `std`, which `fast`
+# implies) and only the PLAIN dispatcher is feature-selected, so the two
+# coexist -- but omit `fast` and cargo SKIPS this bench and still exits 0.
+# `std` and `strict` are default features and are listed so the requirement
+# survives a `--no-default-features` invocation.
+[[bench]]
+name = "strict_fast_ab"
+path = "benches/micro/strict_fast_ab.rs"
+harness = false
+required-features = ["std", "strict", "fast", "wide", "x-wide", "xx-wide"]
+
 # rem_kernel_ab: dispatch-seam A/B for the remainder policy `select` arm.
 # div_kernel_ab: dispatch-seam A/B for the integer division ENGINE
 # (Knuth base-2⁶⁴ vs Burnikel-Ziegler chunking vs Knuth base-2¹²⁸) at the
