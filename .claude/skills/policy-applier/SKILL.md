@@ -33,6 +33,7 @@ Constraints (the wiring must stay Constitution-clean):
 - **Keep kept-alternatives** — an algorithm that the map shows losing everywhere is NOT deleted; it stays as an unrouted alternative (architectural-review **Class E**). Only drop/repoint its stale `*_routed` delegation.
 - **No matcher bypass** introduced (**Class G**), **no per-tier pollution** (**Class C**), **no build-max / derived-const** sizing (**Class A/B**).
 - `select` stays `const fn` / const-foldable — the routing must still fold to one direct call per monomorphisation.
+- **Order the arms CONST-FIRST (architectural-review Class M).** The map tells you WHICH algorithm wins per cell; how you ORDER the arms decides how much of that survives compilation. `ByValue`/`ByShape` is the only verdict that stays a runtime branch, so wire every cell the map settles from `(N, SCALE)` as a `ByAlgorithm` arm and place those ABOVE any runtime arm — `match` is first-match-wins, so a broad `ByValue` intercepts the const-decidable cells beneath it and makes each of them pay a branch forever. Where the map records a VALUE-dependent win region, narrow the `ByValue` to exactly that region rather than blanketing the width. This is a FIDELITY question as much as a perf one: a map whose per-cell winner is right but whose arms are ordered so a runtime arm shadows them has not reproduced the map.
 - Keep an existing config/flag triple (M / GUARD / shape) unless the map carries band-edge bit-identicality evidence for the changed config.
 
 ## The proof of work — the wired policy reproduces the map
