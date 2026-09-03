@@ -661,6 +661,17 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
 
+      # The surface `build` and `bench` jobs both install this (see "Install
+      # system libs" above); the micro job did not, so criterion's build pulled
+      # `yeslogic-fontconfig-sys`, whose build script ran `pkg-config`, found
+      # nothing, and panicked before a single benchmark executed. The root
+      # Cargo.toml already sets criterion `default-features = false`, yet
+      # `plotters` is still in the graph — which is exactly why the surface jobs
+      # carry this line despite the same declaration. The apt step is the fix;
+      # chasing the feature flag is the longer road to the same place.
+      - name: Install system libs
+        run: sudo rm -f /etc/apt/sources.list.d/*microsoft* /etc/apt/sources.list.d/*azure* 2>/dev/null || true; sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
