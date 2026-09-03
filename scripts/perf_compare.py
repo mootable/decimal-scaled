@@ -241,7 +241,15 @@ def history(branch: str, min_scale: int, limit: int = 12) -> list[tuple]:
                     band(si, NULL_P50), band(si, NULL_P90), band(si, NULL_P99),
                     pct(ups, 0.5), pct(ups, 0.9), pct(dns, 0.5), pct(dns, 0.9),
                     pct(ups, 0.10), pct(ups, 0.25), pct(ups, 0.75),
-                    pct(dns, 0.10), pct(dns, 0.25), pct(dns, 0.75)))
+                    pct(dns, 0.10), pct(dns, 0.25), pct(dns, 0.75),
+                    # The inversion RATIO distributions: how severe a typical
+                    # inversion is, which the band counts cannot say.
+                    *(pct([r[5] for r in wi], q)
+                      for q in (0.10, 0.25, 0.50, 0.75, 0.90)),
+                    max((r[5] for r in wi), default=1.0),
+                    *(pct([r[5] for r in si], q)
+                      for q in (0.10, 0.25, 0.50, 0.75, 0.90)),
+                    max((r[5] for r in si), default=1.0)))
     out = list(reversed(out))  # oldest first
 
     # POINT ZERO: the shipped release itself, where branch == shipped, so
@@ -260,12 +268,24 @@ def history(branch: str, min_scale: int, limit: int = 12) -> list[tuple]:
             shipped = {k: p for k, (p, _b) in parse_pair(newest).items() if p > 0}
             wi0, si0 = inversions(shipped, min_scale)
             b0 = lambda rows, f: sum(1 for r in rows if r[5] >= f)
+
+            def pct0(v, q):
+                if not v:
+                    return 1.0
+                s = sorted(v)
+                return s[min(len(s) - 1, int(q * (len(s) - 1) + 0.5))]
             out.insert(0, ("shipped", "0.5.1", 0, 0, len(wi0), len(si0),
                            1.0, 1.0, 1.0, 1.0, 1.0, 0,
                            b0(wi0, NULL_P50), b0(wi0, NULL_P90), b0(wi0, NULL_P99),
                            b0(si0, NULL_P50), b0(si0, NULL_P90), b0(si0, NULL_P99),
                            1.0, 1.0, 1.0, 1.0,
-                           1.0, 1.0, 1.0, 1.0, 1.0, 1.0))
+                           1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+                           *(pct0([r[5] for r in wi0], q)
+                             for q in (0.10, 0.25, 0.50, 0.75, 0.90)),
+                           max((r[5] for r in wi0), default=1.0),
+                           *(pct0([r[5] for r in si0], q)
+                             for q in (0.10, 0.25, 0.50, 0.75, 0.90)),
+                           max((r[5] for r in si0), default=1.0)))
         except subprocess.CalledProcessError:
             pass
     return out
@@ -311,13 +331,23 @@ def history_panel(pts: list[tuple]) -> str:
             ("  p90 regression", 21, True, x),
             ("  worst regression", 9, True, x),
             ("width inversions — all", 4, True, n),
-            ("  above 1.11x (p50 of the runner null)", 12, True, n),
-            ("  above 1.60x (p90)", 13, True, n),
-            ("  above 2.20x (p99)", 14, True, n),
+            ("  p10 severity", 28, True, x),
+            ("  p25 severity", 29, True, x),
+            ("  p50 severity", 30, True, x),
+            ("  p75 severity", 31, True, x),
+            ("  p90 severity", 32, True, x),
+            ("  worst", 33, True, x),
+            ("  count above 1.60x (p90 of the runner null)", 13, True, n),
+            ("  count above 2.20x (p99)", 14, True, n),
             ("scale inversions — all", 5, True, n),
-            ("  above 1.11x (p50 of the runner null)", 15, True, n),
-            ("  above 1.60x (p90)", 16, True, n),
-            ("  above 2.20x (p99)", 17, True, n)]
+            ("  p10 severity", 34, True, x),
+            ("  p25 severity", 35, True, x),
+            ("  p50 severity", 36, True, x),
+            ("  p75 severity", 37, True, x),
+            ("  p90 severity", 38, True, x),
+            ("  worst", 39, True, x),
+            ("  count above 1.60x (p90 of the runner null)", 16, True, n),
+            ("  count above 2.20x (p99)", 17, True, n)]
     head = ("<table><thead><tr><th>metric</th><th>trend</th><th>first</th>"
             "<th>now</th><th>change</th></tr></thead><tbody>")
     body = []
