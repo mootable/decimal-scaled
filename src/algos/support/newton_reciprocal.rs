@@ -3,9 +3,19 @@
 
 //! Newton–Raphson reciprocal divide for `n / 10^SCALE` at storage width.
 //!
-//! Research kernel — **not wired into the dispatcher**. Built behind a
-//! `pub(crate)` API so micro-benches can compare it head-to-head against
-//! [`crate::algos::support::mg_divide::div_wide_pow10_chain`].
+//! **ROUTED.** [`newton_rescale_arm`] is the `Newton` arm of the rescale
+//! matcher ([`crate::algos::support::rescale`]): `select` routes work width
+//! `24..=132` u64 limbs × `scale 200..=1850` here, reached from the decimal
+//! `mul` ([`crate::algos::mul::mul_widen_divide`]) through the slice door
+//! [`dispatch_mag`](crate::algos::support::rescale::dispatch_mag), and from
+//! the wide-transcendental rounding through the typed door
+//! [`dispatch_wide_pow10`](crate::algos::support::rescale::dispatch_wide_pow10).
+//!
+//! The one exception is [`div_wide_pow10_newton_with`] — the typed `W: BigInt`
+//! wrapper, which no production path calls. It exists so the `newton_vs_mg`
+//! micro-bench shims (`lib.rs`, `#[cfg(feature = "bench-alt")]`) and this
+//! module's own validity-wall tests can compare the kernel head-to-head
+//! against [`crate::algos::support::mg_divide::div_wide_pow10_chain`].
 //!
 //! # Algorithm
 //!
@@ -93,11 +103,34 @@ use crate::int::policy::mul::dispatch_slice as mul_slice;
 // width the matcher routes Newton-vs-MG against, so the same type
 // serves every tier without const-generic gymnastics.
 //
-// The build-max is internal to the runtime-sized `NewtonReciprocal`
-// reciprocal struct — it never leaks onto a concrete-`N` path (those
-// still size their scratch via `ComputeLimbs::single_*` etc. per
-// Constitution rule 6). Over-sizing here costs constant per-call stack,
-// not per-tier code duplication.
+// These ceilings are internal to the runtime-sized `NewtonReciprocal`
+// struct — they never leak onto a concrete-`N` path (those size their
+// scratch via `ComputeLimbs::single_*` etc. per Constitution rule 6).
+// Over-sizing here costs constant per-call stack, not per-tier code
+// duplication.
+//
+// WHY NOT `ComputeLimbs` HERE — a structural wall, not an omission.
+// A `ComputeLimbs` buffer is a pure function of the const `N` on the
+// `Limbs<N>` carrier. Every length in this struct is instead a function of
+// TWO RUNTIME values:
+//
+//   pow_len = scale/19 + 3            (runtime `scale`)
+//   k_u64   = even(width_limbs + pow_len)
+//   r_len   = k_u64 + 1               (runtime `scale` AND runtime width)
+//
+// Both are genuinely runtime on the routed path. `scale` is runtime at the
+// typed door (`dispatch_wide_pow10`, the Taylor loops' working scale), and
+// the width is runtime EVEN where the caller has a concrete `N`: both
+// `mul_widen_divide` and `dispatch_wide_pow10` pass the *trimmed significant
+// length* (task 9.24), a value-dependent count of the magnitude's non-zero
+// limbs — not `N`, not `W::BITS`. `precompute(scale: u32, width_u64_limbs:
+// usize)` therefore has no const to size against, and no associated type on
+// `Limbs<N>` can express "a function of the runtime scale". Threading a const
+// `N` in would not help: it cannot bound `r_len`, whose dominant term is the
+// scale. So this is the narrow blanket case the Constitution allows — do NOT
+// "fix" it with a per-type or macro bridge (that is the named failure mode).
+// The ceilings below are sized from the ROUTED band instead, which is what
+// actually bounds them; see each const's doc for the worst case it covers.
 //
 // The 8192 / 12288 / 16384 / 32768 widths (D462 Wexp / D1232 Work /
 // D924 Wide / D616 Wexp / D924
@@ -684,28 +717,43 @@ const fn newton_u128_wins(width_bits: u32) -> bool {
 ///
 /// Direct analogue of [`crate::algos::support::mg_divide::div_wide_pow10_chain`]
 /// — same signature, same semantics, different inner algorithm.
-pub(crate) fn div_wide_pow10_newton_with<W: crate::int::types::traits::BigInt>(
+pub(crate) fn div_wide_pow10_newton_with<W>(
     value: W,
     scale: u32,
     mode: crate::support::rounding::RoundingMode,
     table: &NewtonReciprocal,
-) -> W {
+) -> W
+where
+    W: crate::int::types::traits::BigInt,
+    W::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+{
+    use crate::int::types::compute_limbs::ComputeLimbs;
+
     // BigInt bridge is u128-limb; the arithmetic core operates on that
     // magnitude slice in place (shared with the `Int<N>`-only decimal
     // `mul` kernel, which builds its product directly in u128 scratch).
     //
-    // Build-max u128 magnitude buffer for this genuinely-`N`-less
-    // `W: BigInt` path: `max_u128_limb()` = `MAX_U128_LIMB` = `4·MAX_WORK_N`
-    // u128 limbs — the widest work value any build forms (`Int<512>` =
-    // 32768-bit = 256 u128 at xx-wide), tracking `MAX_WORK_N` so a narrower
-    // build does NOT carry the widest tier's buffer. (The exact-per-`W`
-    // `single_u128()` is wrong here: its blanket size only covers up to
-    // `Int<256>`, so it would under-size the `Int<512>` work integer under a
-    // non-`exact-scratch` build.) The kernel is sliced to `W::U128_LIMBS` so
-    // narrower widths don't pay the wide cost.
-    let mut mag_u128 = crate::int::types::compute_limbs::max_u128_limb();
+    // EXACT per-`W` u128 magnitude buffer, sized on `W`'s own scratch carrier
+    // (`W::Scratch = Limbs<N>`): `single_u128()` is `[u128; ⌈N/2⌉]`, which is
+    // `W::U128_LIMBS` (`N.div_ceil(2)`) EXACTLY — the buffer is the magnitude,
+    // with no slack to slice off. Same shape as the typed rescale door
+    // [`crate::algos::support::rescale::dispatch_wide_pow10`], which already
+    // carries this bound on a live path.
+    //
+    // This replaces a `max_u128_limb()` build-max blanket (`4·MAX_WORK_N` u128
+    // limbs — 256 at xx-wide, so an `Int<24>` divide carried the D1232 tier's
+    // 4 KB buffer: the Constitution rule 6 cross-tier leak). Its justifying
+    // comment argued `single_u128()` would under-size an `Int<512>` work
+    // integer on a non-`exact-scratch` build; that build cannot exist.
+    // `Int<512>` is the D1232 `Wexp`, and every tier feature pulls
+    // `_wide-support = ["exact-scratch"]` (as does `std`), so wherever
+    // `Int<512>` is formed the per-`N` impl is in force and sizes it exactly.
+    // This fn is narrower still: its only callers are the `bench-alt`
+    // `newton_vs_mg` shims and this module's tests, whose widest `W` is
+    // `Int<96>`, and both require `x-wide`/`xx-wide`.
+    let mut buf = <W::Scratch as ComputeLimbs>::single_u128();
     let limbs = <W as crate::int::types::traits::BigInt>::U128_LIMBS;
-    let mag = &mut mag_u128[..limbs];
+    let mag = &mut buf.as_mut()[..limbs];
     let is_negative = value.mag_into_u128(mag);
     newton_pow10_mag_u128(mag, is_negative, mode, table);
     W::from_mag_sign_u128(mag, is_negative)
