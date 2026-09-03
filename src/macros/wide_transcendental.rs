@@ -3030,12 +3030,12 @@ macro_rules! decl_wide_transcendental {
                 }
                 // Exact-power pin: `self == base^k` ⇒ result is exactly
                 // the integer `k` (see `log10_strict_with`).
+                let probe_ratio = div_agm(
+                    ln_fixed_routed_agm::<SCALE>(to_work_agm(raw), base_working_scale),
+                    probe_ln_base,
+                    base_working_scale
+                );
                 {
-                    let probe_ratio = div_agm(
-                        ln_fixed_routed_agm::<SCALE>(to_work_agm(raw), base_working_scale),
-                        probe_ln_base,
-                        base_working_scale
-                    );
                     let exponent = round_to_nearest_int_agm(probe_ratio, base_working_scale);
                     if log_is_exact_int::<Wagm>(to_work_scaled_agm(raw, 0), to_work_scaled_agm(base_raw, 0), SCALE, exponent) {
                         return exact_int_at_scale(exponent, SCALE);
@@ -3045,7 +3045,24 @@ macro_rules! decl_wide_transcendental {
                 // Ziv escalation: recompute `ln(self)/ln(base)` at the
                 // requested guard so Trunc/Floor/Ceiling decide on the
                 // true residual sign, not the base-guard approximation.
+                //
+                // The walker ALWAYS probes `base_guard_digits` first (see
+                // `round_to_storage_directed_tagged_impl_g` — both the
+                // nearest and the directed branch open with
+                // `recompute(base_guard_digits)`), and that probe is
+                // BIT-IDENTICAL to `probe_ratio` above: `guard_digits ==
+                // GUARD` makes `working_scale == base_working_scale`, and
+                // `to_work_scaled_agm(v, GUARD)` is `to_work_agm(v)` by
+                // definition (same body, same `pow10::<Wagm>(GUARD)`
+                // factor), so both logs and the divide take the same
+                // arguments — and `ln_fixed_routed_agm` is a pure function
+                // of them (the crate is stateless). Hand the walker the
+                // value it would recompute; only an ESCALATED probe
+                // (`guard_digits > GUARD`, the rare Ziv rung) does work.
                 round_to_storage_directed::<Wagm>(GUARD, SCALE, mode, |guard_digits| {
+                    if guard_digits == GUARD {
+                        return probe_ratio;
+                    }
                     let working_scale = SCALE + guard_digits;
                     let ln_base = ln_fixed_routed_agm::<SCALE>(
                         to_work_scaled_agm(base_raw, guard_digits),
@@ -3102,21 +3119,29 @@ macro_rules! decl_wide_transcendental {
                 if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     panic!(concat!(stringify!($Type), "::log2: argument must be positive"));
                 }
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let base_working_scale = SCALE + GUARD;
+                let probe_ratio = div_agm(
+                    ln_fixed_routed_agm::<SCALE>(to_work_agm(raw), base_working_scale),
+                    ln2_cf_agm::<SCALE>(base_working_scale, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                    base_working_scale,
+                );
                 {
-                    // Two-core: composition runs on the wide `Wagm` work int.
-                    let base_working_scale = SCALE + GUARD;
-                    let probe_ratio = div_agm(
-                        ln_fixed_routed_agm::<SCALE>(to_work_agm(raw), base_working_scale),
-                        ln2_cf_agm::<SCALE>(base_working_scale, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
-                        base_working_scale,
-                    );
                     let exponent = round_to_nearest_int_agm(probe_ratio, base_working_scale);
                     let base2 = one_agm(SCALE) + one_agm(SCALE);
                     if log_is_exact_int::<Wagm>(to_work_scaled_agm(raw, 0), base2, SCALE, exponent) {
                         return exact_int_at_scale(exponent, SCALE);
                     }
                 }
+                // The walker's FIRST probe is `recompute(GUARD)`, which is
+                // bit-identical to `probe_ratio` — same `ln`, same const
+                // `ln 2` entry, same divide, all at `SCALE + GUARD` (see
+                // `log_strict_with_kernel` for the full argument). Reuse it;
+                // only an escalated rung recomputes.
                 round_to_storage_directed::<Wagm>(GUARD, SCALE, mode, |guard_digits| {
+                    if guard_digits == GUARD {
+                        return probe_ratio;
+                    }
                     let working_scale = SCALE + guard_digits;
                     div_agm(
                         ln_fixed_routed_agm::<SCALE>(
@@ -3156,21 +3181,29 @@ macro_rules! decl_wide_transcendental {
                 if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     panic!(concat!(stringify!($Type), "::log10: argument must be positive"));
                 }
+                // Two-core: composition runs on the wide `Wagm` work int.
+                let base_working_scale = SCALE + GUARD;
+                let probe_ratio = div_agm(
+                    ln_fixed_routed_agm::<SCALE>(to_work_agm(raw), base_working_scale),
+                    ln10_cf_agm::<SCALE>(base_working_scale, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
+                    base_working_scale,
+                );
                 {
-                    // Two-core: composition runs on the wide `Wagm` work int.
-                    let base_working_scale = SCALE + GUARD;
-                    let probe_ratio = div_agm(
-                        ln_fixed_routed_agm::<SCALE>(to_work_agm(raw), base_working_scale),
-                        ln10_cf_agm::<SCALE>(base_working_scale, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
-                        base_working_scale,
-                    );
                     let exponent = round_to_nearest_int_agm(probe_ratio, base_working_scale);
                     let base10 = one_agm(SCALE + 1);
                     if log_is_exact_int::<Wagm>(to_work_scaled_agm(raw, 0), base10, SCALE, exponent) {
                         return exact_int_at_scale(exponent, SCALE);
                     }
                 }
+                // The walker's FIRST probe is `recompute(GUARD)`, which is
+                // bit-identical to `probe_ratio` — same `ln`, same const
+                // `ln 10` entry, same divide, all at `SCALE + GUARD` (see
+                // `log_strict_with_kernel` for the full argument). Reuse it;
+                // only an escalated rung recomputes.
                 round_to_storage_directed::<Wagm>(GUARD, SCALE, mode, |guard_digits| {
+                    if guard_digits == GUARD {
+                        return probe_ratio;
+                    }
                     let working_scale = SCALE + guard_digits;
                     div_agm(
                         ln_fixed_routed_agm::<SCALE>(
