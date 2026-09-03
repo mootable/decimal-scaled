@@ -134,8 +134,24 @@ on:
         default: ""
         type: string
 
+# Keyed on the branch AND the run's CONFIGURATION, not the branch alone.
+#
+# A concurrency group holds exactly ONE pending run. `cancel-in-progress: false`
+# protects the RUNNING one and does nothing for the queued one: when a third
+# dispatch arrives, the waiting run is silently cancelled. Keyed on the branch
+# alone, every dispatch on a branch collided with every other, and three
+# separate agents lost work to it — an A/B whose two halves differ only by the
+# `ref` input, and a feature comparison whose halves differ only by `features`,
+# each cancelled its own other half.
+#
+# Including the inputs means genuinely different measurements on one branch run
+# CONCURRENTLY, while two byte-identical dispatches still serialise. That second
+# case is the replication run, and serialising it is the point: two identical
+# measurements should not compete for runners with each other.
 concurrency:
-  group: bench-branch-compare-${{ github.ref }}
+  group: >-
+    bench-branch-compare-${{ github.ref }}-${{ inputs.ref }}-${{ inputs.features }}-${{
+    inputs.widths }}-${{ inputs.group }}-${{ inputs.micro_bench }}-${{ inputs.micro_filter }}
   cancel-in-progress: false
 
 permissions:
