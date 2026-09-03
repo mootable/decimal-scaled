@@ -49,10 +49,14 @@ use crate::int::types::Int;
 /// the `exact-scratch` wall); this concrete-`N` decimal kernel carries
 /// `Limbs<N>: ComputeLimbs`.
 ///
-/// Only reached for `N >= 3` (the decimal `rem` policy routes `N <= 2` to
-/// `rem_native`), so the narrow hardware-`%` path is untouched; every such
-/// `N` is in the `exact-scratch` width list, so the `ComputeLimbs` bound
-/// discharges at the concrete `N` and never cascades.
+/// Reached for `N >= 2` (the decimal `rem` policy routes only `N == 1` to
+/// `rem_native`, the one width whose `%` is a hardware `idiv`), so the
+/// genuinely-hardware narrow path is untouched; every such `N` is in the
+/// `exact-scratch` width list, so the `ComputeLimbs` bound discharges at the
+/// concrete `N` and never cascades. At `N == 2` the `while i < N` high-limb
+/// probe below is empty and both fast paths are always live: `|a| < |b|`
+/// returns the dividend, and otherwise the single-word arm is the whole
+/// divide.
 ///
 /// [`div_knuth_into`]: crate::int::algos::div::div_knuth::div_knuth_into
 #[inline]
