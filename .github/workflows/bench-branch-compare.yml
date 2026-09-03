@@ -661,6 +661,17 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
 
+      # The surface `build` and `bench` jobs both install this (see "Install
+      # system libs" above); the micro job did not, so criterion's build pulled
+      # `yeslogic-fontconfig-sys`, whose build script ran `pkg-config`, found
+      # nothing, and panicked before a single benchmark executed. The root
+      # Cargo.toml already sets criterion `default-features = false`, yet
+      # `plotters` is still in the graph — which is exactly why the surface jobs
+      # carry this line despite the same declaration. The apt step is the fix;
+      # chasing the feature flag is the longer road to the same place.
+      - name: Install system libs
+        run: sudo rm -f /etc/apt/sources.list.d/*microsoft* /etc/apt/sources.list.d/*azure* 2>/dev/null || true; sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
@@ -688,7 +699,19 @@ jobs:
           # terminator, so reproducing this step locally PASSES — the check lied
           # exactly where it was verified and failed where it runs. Every
           # micro-mode dispatch died here, on every bench.
-          if ! grep -qE "^name = \"${BENCH}\"\r?$" Cargo.toml; then
+          # Strip the CR from the INPUT rather than trying to match it. Two
+          # earlier attempts failed here and both are worth not repeating:
+          #   `…"$`      — Cargo.toml is committed CRLF (106 of 764 files are),
+          #                and GNU grep treats the \r as an ordinary character,
+          #                so the anchor could never match. Every micro dispatch
+          #                died at this line, on every bench.
+          #   `…"\r?$`   — INERT. Bash double quotes do not interpret \r, so
+          #                grep receives backslash-r; POSIX ERE has no \r escape,
+          #                so it reduces to the literal letter `r`. Verified:
+          #                `^abc\r?$` matches both `abc` and `abcr`.
+          # `tr` normalises the input and encodes no assumption about the regex
+          # dialect or about which grep build the runner ships.
+          if ! tr -d '\r' < Cargo.toml | grep -qE "^name = \"${BENCH}\"$"; then
             echo "::error::no [[bench]] named '${BENCH}' in Cargo.toml"
             echo "Benches under benches/micro/:"
             grep -B1 '^path = "benches/micro/' Cargo.toml | grep '^name = ' | sed 's/name = /  /'
