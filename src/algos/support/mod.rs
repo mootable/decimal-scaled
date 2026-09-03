@@ -20,6 +20,9 @@
 //!   dominated by the MG chain, 9.18.2); kept for a baked-`r` revival.
 
 pub(crate) mod fixed;
+// candidate: `Fixed::div_small` u64-divisor fast path via the int layer's
+// Möller–Granlund single-limb engine, not wired.
+pub(crate) mod fixed_div_small_mg;
 pub(crate) mod mg_divide;
 // Narrow-tier (D18/D38) near-tie Ziv escalation plumbing: the WZiv work
 // integer + thin walker bindings the narrow strict kernels escalate
