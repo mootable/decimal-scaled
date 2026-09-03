@@ -688,7 +688,19 @@ jobs:
           # terminator, so reproducing this step locally PASSES — the check lied
           # exactly where it was verified and failed where it runs. Every
           # micro-mode dispatch died here, on every bench.
-          if ! grep -qE "^name = \"${BENCH}\"\r?$" Cargo.toml; then
+          # Strip the CR from the INPUT rather than trying to match it. Two
+          # earlier attempts failed here and both are worth not repeating:
+          #   `…"$`      — Cargo.toml is committed CRLF (106 of 764 files are),
+          #                and GNU grep treats the \r as an ordinary character,
+          #                so the anchor could never match. Every micro dispatch
+          #                died at this line, on every bench.
+          #   `…"\r?$`   — INERT. Bash double quotes do not interpret \r, so
+          #                grep receives backslash-r; POSIX ERE has no \r escape,
+          #                so it reduces to the literal letter `r`. Verified:
+          #                `^abc\r?$` matches both `abc` and `abcr`.
+          # `tr` normalises the input and encodes no assumption about the regex
+          # dialect or about which grep build the runner ships.
+          if ! tr -d '\r' < Cargo.toml | grep -qE "^name = \"${BENCH}\"$"; then
             echo "::error::no [[bench]] named '${BENCH}' in Cargo.toml"
             echo "Benches under benches/micro/:"
             grep -B1 '^path = "benches/micro/' Cargo.toml | grep '^name = ' | sed 's/name = /  /'
