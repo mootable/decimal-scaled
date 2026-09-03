@@ -331,23 +331,13 @@ def history_panel(pts: list[tuple]) -> str:
             ("  p90 regression", 21, True, x),
             ("  worst regression", 9, True, x),
             ("width inversions — all", 4, True, n),
-            ("  p10 severity", 28, True, x),
-            ("  p25 severity", 29, True, x),
-            ("  p50 severity", 30, True, x),
-            ("  p75 severity", 31, True, x),
-            ("  p90 severity", 32, True, x),
-            ("  worst", 33, True, x),
-            ("  count above 1.60x (p90 of the runner null)", 13, True, n),
-            ("  count above 2.20x (p99)", 14, True, n),
+            ("  count above 1.11x — median noise on identical code", 12, True, n),
+            ("  count above 1.60x — p90 noise", 13, True, n),
+            ("  count above 2.20x — p99 noise", 14, True, n),
             ("scale inversions — all", 5, True, n),
-            ("  p10 severity", 34, True, x),
-            ("  p25 severity", 35, True, x),
-            ("  p50 severity", 36, True, x),
-            ("  p75 severity", 37, True, x),
-            ("  p90 severity", 38, True, x),
-            ("  worst", 39, True, x),
-            ("  count above 1.60x (p90 of the runner null)", 16, True, n),
-            ("  count above 2.20x (p99)", 17, True, n)]
+            ("  count above 1.11x — median noise on identical code", 15, True, n),
+            ("  count above 1.60x — p90 noise", 16, True, n),
+            ("  count above 2.20x — p99 noise", 17, True, n)]
     head = ("<table><thead><tr><th>metric</th><th>trend</th><th>first</th>"
             "<th>now</th><th>change</th></tr></thead><tbody>")
     body = []
@@ -373,7 +363,13 @@ def history_panel(pts: list[tuple]) -> str:
             f"definition; its inversion counts come from the `prod_ns` column of "
             f"the newest sweep, which is that release measured on the same "
             f"machine. Every point compares branch against shipped WITHIN one "
-            f"job, so runner speed cancels.</div>")
+            f"job, so runner speed cancels.<br>The inversion bands are "
+            f"thresholds measured by running the SAME code twice: two cells "
+            f"land on two different GitHub runners, so their ratio moves even "
+            f"when nothing changed — 1.11x half the time, 1.60x one time in "
+            f"ten, 2.20x one in a hundred. An inversion below a band is still a "
+            f"defect; it just cannot be told apart from that noise in a "
+            f"per-cell sweep.</div>")
 
 
 def svg_for(rows: dict, op: str) -> str:
