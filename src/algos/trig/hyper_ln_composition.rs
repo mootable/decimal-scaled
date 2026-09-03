@@ -173,14 +173,33 @@ where
         // The radicand is taken as sqrt(t)*sqrt(t+2), NOT as
         // sqrt(mul(t, t+2)). Forming the product FIRST rounds it to the
         // working scale, and `t*(t+2) = 2t + t^2` loses the `t^2` term
-        // outright once `t^2 < 10^-(SCALE+GUARD)` — while that term is
+        // outright once `t^2 < 10^-(SCALE+guard)` — while that term is
         // still significant against the result's own last place,
         // because `sqrt` amplifies a relative radicand error of `t/2`
         // into a relative result error of `t/4` on a result of size
         // `sqrt(2t)`. The resulting error is `0.354 * 10^(SCALE-1.5k)`
-        // ULP for `t = 10^-k`, non-zero exactly in the window
-        // `(SCALE+GUARD)/2 < k <= 2*SCALE/3`, which is non-empty only
-        // for `SCALE > 90` (measured at D115<114> and D307<150>).
+        // ULP for `t = 10^-k`, non-zero exactly on
+        //
+        //     SCALE + guard < 2k    and    3k < 2*SCALE
+        //
+        // with BOTH ends strict, and stated against the `guard` actually
+        // passed — not the tier's `GUARD`, since a caller-chosen guard
+        // smaller than it opens the band LOWER. The upper end is
+        // `3k < 2*SCALE`, NOT `k <= 2*SCALE/3`: where 3 divides SCALE
+        // the endpoint `k = 2*SCALE/3` is correct rather than defective
+        // (measured 114 -> 75 not 76, and 150 -> 99 not 100). The lower
+        // end is exact too — the error is 0 at `2k == SCALE + guard`.
+        //
+        // The band is non-empty when an integer fits strictly between
+        // those two bounds. `SCALE > 3*guard` is only the CONTINUOUS
+        // relaxation of that: integer rounding at both ends pushes the
+        // real onset later and makes it non-monotone there. Solving the
+        // integer form at the tier's own `guard = 30` puts the first
+        // non-empty SCALE at 95 — 96 is empty again, 97 upward is not —
+        // rather than the 91 the relaxation implies. That onset is
+        // DERIVED from the two bounds, not measured; the measured cells
+        // are the two anchors above.
+        //
         // Splitting the radicand keeps each factor at full
         // working-scale relative precision, so no small term is ever
         // rounded into a large one: the residual is then bounded by the
