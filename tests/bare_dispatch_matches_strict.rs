@@ -22,10 +22,19 @@
 
 use decimal_scaled::{D18, D38};
 
-// SCALE 10 on D38 and SCALE 6 on D18 both leave ample headroom for the
-// largest value produced below (`exp(3)` is about 20.09).
-type W38 = D38<10>;
-type W18 = D18<6>;
+// The scales are chosen so the f64 bridge is DISTINGUISHABLE from the
+// strict path. f64 carries roughly 16 significant decimal digits, so at a
+// low scale the bridge rounds to the same stored value as the correctly
+// rounded result and a bare-vs-strict comparison passes even when the bare
+// name is wired to the bridge — the test would then be inert. At SCALE 20
+// a D38 result near 1.0 needs 21 significant digits, well past what f64
+// can supply, so the two paths differ in the stored bits.
+//
+// Both scales still leave headroom for the largest value produced below,
+// `to_degrees(3)` at about 171.89: D38<20> tops out near 1.7e18 and
+// D18<16> near 922.3.
+type W38 = D38<20>;
+type W18 = D18<16>;
 
 fn d38(v: i64) -> W38 {
     W38::try_from(v).unwrap()
