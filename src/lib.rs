@@ -981,6 +981,197 @@ pub mod __bench_internals {
         crate::algos::cbrt::cbrt_newton::cbrt_newton::<N>(raw, SCALE, mode)
     }
 
+    // ── runtime-SCALE root seams (the `root_policy_map` policy sweep) ────
+    //
+    // The `*_w` / `*_slice_n` seams above take `SCALE` as a CONST generic, so
+    // mapping a policy across a tier's whole scale range would need one
+    // monomorphisation per `(N, W, SCALE)` cell — hundreds of instantiations
+    // of a kernel that runs up to 192 limbs wide, and a recompile for every
+    // bisection point.
+    //
+    // The kernels never needed that. `sqrt_newton` / `cbrt_newton` already
+    // take `scale: u32` at RUNTIME, and `sqrt_native` / `cbrt_native*` take
+    // the `10^k` multiplier as a VALUE (the production dispatch merely hands
+    // them a `const { … }` fold of it). So these seams thread the scale — or a
+    // caller-precomputed multiplier — through at runtime: ONE monomorphisation
+    // per `(N, W)` sweeps every scale, and a bisected scale costs no rebuild.
+    //
+    // Each seam is a thin delegation to the SAME generic kernel the policy
+    // dispatches to — no per-tier algorithm copy, no behaviour of its own.
+    // `pow10_w` exists so the caller can hoist the multiplier OUT of the timed
+    // region, matching the compile-time fold production gets; timing it inside
+    // would charge the native arm a cost the shipped code never pays.
+
+    /// `10^exponent` in `Int<W>` — the multiplier the `*_native*` kernels take
+    /// by value. Hoisted by the caller so it is never inside the timed region.
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[inline(never)]
+    pub fn pow10_w<const W: usize>(exponent: u32) -> crate::int::types::Int<W> {
+        crate::consts::pow10::dispatch_int::<W>(exponent)
+    }
+
+    /// `k · 10^exponent` in `Int<N>` — a bench-branch-compare-shaped decimal
+    /// operand (the raw storage of the value `k` at scale `exponent`), built
+    /// here because the wide tiers run far past what a `u128` literal can hold.
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[inline(never)]
+    pub fn operand_k_at_scale<const N: usize>(k: u64, exponent: u32) -> crate::int::types::Int<N> {
+        let mut k_limbs = [0u64; N];
+        k_limbs[0] = k;
+        let k_int = int_from_mag_limbs::<N>(&k_limbs);
+        crate::consts::pow10::dispatch_int::<N>(exponent).wrapping_mul(k_int)
+    }
+
+    /// Runtime-scale `sqrt` generic slice arm (`policy::sqrt::Newton`, and
+    /// `Schoolbook`, which dispatches to the same kernel).
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[inline(never)]
+    #[allow(private_bounds)]
+    pub fn sqrt_newton_rt<const N: usize>(
+        raw: crate::int::types::Int<N>,
+        scale: u32,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<N>
+    where
+        crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
+    {
+        crate::algos::sqrt::sqrt_newton::sqrt_newton::<N>(raw, scale, mode)
+    }
+
+    /// Runtime-scale `sqrt` tight-`Int<W>` arm (`policy::sqrt::Native`).
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[inline(never)]
+    pub fn sqrt_native_rt<const N: usize, const W: usize>(
+        raw: crate::int::types::Int<N>,
+        pow10_scale: crate::int::types::Int<W>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<N> {
+        crate::algos::sqrt::sqrt_native::sqrt_native::<N, W>(raw, pow10_scale, mode)
+    }
+
+    /// Runtime-scale `sqrt` int-layer-bypassing arm (`policy::sqrt::MgDivide`),
+    /// reached through the same `Int<2>` `resize_to` bridge the policy uses.
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[inline(never)]
+    pub fn sqrt_mg_rt<const N: usize>(
+        raw: crate::int::types::Int<N>,
+        scale: u32,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<N> {
+        use crate::int::types::traits::BigInt;
+        crate::algos::sqrt::sqrt_mg_divide::sqrt_mg_divide(
+            raw.resize_to::<crate::int::types::Int<2>>(),
+            scale,
+            mode,
+        )
+        .resize_to::<crate::int::types::Int<N>>()
+    }
+
+    /// `policy::sqrt::NewtonWithTableSeed` — the kept-but-unrouted reference
+    /// arm. It hard-codes `SCALE = 20` on `Int<3>` storage, so it takes no
+    /// scale: the sweep races it anyway (never pre-drop a registered arm) and
+    /// the validity wall records where it is not bit-identical.
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[inline(never)]
+    pub fn sqrt_table_seed_rt<const N: usize>(
+        raw: crate::int::types::Int<N>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<N> {
+        use crate::int::types::traits::BigInt;
+        crate::algos::sqrt::sqrt_newton_with_table_seed::sqrt_newton_with_table_seed(
+            raw.resize_to::<crate::int::types::Int<3>>(),
+            mode,
+        )
+        .resize_to::<crate::int::types::Int<N>>()
+    }
+
+    /// Runtime-scale `cbrt` generic slice arm (`policy::cbrt::Newton`, and
+    /// `Schoolbook`, which dispatches to the same kernel).
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[inline(never)]
+    #[allow(private_bounds)]
+    pub fn cbrt_newton_rt<const N: usize>(
+        raw: crate::int::types::Int<N>,
+        scale: u32,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<N>
+    where
+        crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
+    {
+        crate::algos::cbrt::cbrt_newton::cbrt_newton::<N>(raw, scale, mode)
+    }
+
+    /// Runtime-scale `cbrt` tight-`Int<W>` arm, shipped top-bits seed
+    /// (`cbrt_native`).
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[inline(never)]
+    pub fn cbrt_native_rt<const N: usize, const W: usize>(
+        raw: crate::int::types::Int<N>,
+        pow10_2scale: crate::int::types::Int<W>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<N> {
+        crate::algos::cbrt::cbrt_native::cbrt_native::<N, W>(raw, pow10_2scale, mode)
+    }
+
+    /// Runtime-scale `cbrt` tight-`Int<W>` arm, full-radicand f64 seed — the
+    /// kernel `policy::cbrt::Native` actually routes to (`cbrt_native_fast_a`).
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[inline(never)]
+    pub fn cbrt_fast_a_rt<const N: usize, const W: usize>(
+        raw: crate::int::types::Int<N>,
+        pow10_2scale: crate::int::types::Int<W>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<N> {
+        crate::algos::cbrt::cbrt_native_fast::cbrt_native_fast_a::<N, W>(raw, pow10_2scale, mode)
+    }
+
+    /// Runtime-scale `cbrt` tight-`Int<W>` arm, width-safe top-bits seed with
+    /// the tight `2^(r/3)` residue (`cbrt_native_fast_b`).
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[inline(never)]
+    pub fn cbrt_fast_b_rt<const N: usize, const W: usize>(
+        raw: crate::int::types::Int<N>,
+        pow10_2scale: crate::int::types::Int<W>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<N> {
+        crate::algos::cbrt::cbrt_native_fast::cbrt_native_fast_b::<N, W>(raw, pow10_2scale, mode)
+    }
+
+    /// Runtime-scale `cbrt` int-layer-bypassing arm (`policy::cbrt::MgDivide`),
+    /// through the same `Int<2>` `resize_to` bridge the policy uses.
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[inline(never)]
+    pub fn cbrt_mg_rt<const N: usize>(
+        raw: crate::int::types::Int<N>,
+        scale: u32,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<N> {
+        use crate::int::types::traits::BigInt;
+        crate::algos::cbrt::cbrt_mg_divide::cbrt_mg_divide(
+            raw.resize_to::<crate::int::types::Int<2>>(),
+            scale,
+            mode,
+        )
+        .resize_to::<crate::int::types::Int<N>>()
+    }
+
+    /// `policy::cbrt::NewtonWithTableSeed` — the kept-but-unrouted reference
+    /// arm, hard-coded to `(D57, 20)` on `Int<3>` storage. Raced anyway; the
+    /// validity wall records where it is not bit-identical.
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[inline(never)]
+    pub fn cbrt_table_seed_rt<const N: usize>(
+        raw: crate::int::types::Int<N>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<N> {
+        use crate::int::types::traits::BigInt;
+        crate::algos::cbrt::cbrt_newton_with_table_seed::cbrt_newton_with_table_seed(
+            raw.resize_to::<crate::int::types::Int<3>>(),
+            mode,
+        )
+        .resize_to::<crate::int::types::Int<N>>()
+    }
+
     // ── transcendental Series-vs-Tang dispatch-seam A/B exports ──────────
     //
     // The `policy::{exp,ln,trig}` Series-vs-Tang choice is made by hand-tuned
