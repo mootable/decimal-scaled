@@ -4,7 +4,7 @@
 i.e. **0 bits of error**.
 
 <!-- BEGIN GENERATED:precision:stats -->
-We execute 102,751 specialised inputs across all 30 functions, on 117 widths and scales, under all 8 rounding modes. Not every input is representable at every width and scale — one needing more significant digits than a tier holds is filtered before it runs — so the graded total is 51,510,016 separate checks.
+We execute 102,751 specialised inputs across all 30 functions, on 117 widths and scales, under all 8 rounding modes. Not every input is representable at every width and scale — one needing more significant digits than a tier holds is filtered before it runs — so the graded total is 51,514,672 separate checks.
 <!-- END GENERATED:precision:stats -->
 
 Each golden case was gathered from the codebase failing, from theory, from
@@ -28,7 +28,7 @@ they count toward neither. The full per-scale, per-mode surface lives in
 | Function | D18 | D38 | D57 | D76 | D115 | D153 | D230 | D307 | D462 | D616 | D924 | D1232 |
 | :-- | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
 | `acos` | ✓<br>19,216 | ✓<br>101,096 | ✓<br>142,336 | ✓<br>145,680 | ✓<br>158,168 | ✓<br>128,448 | ✓<br>160,384 | ✓<br>288,848 | ✓<br>224,632 | ✓<br>256,784 | ✓<br>256,784 | ✓<br>256,784 |
-| `acosh` | ✓<br>46,584 | ✓<br>139,176 | ✓<br>146,624 | ✓<br>146,696 | ✓<br>151,832 | ✓<br>117,432 | ✓<br>151,848 | ✓<br>289,512 | ✓<br>220,680 | ✓<br>255,112 | ✓<br>255,112 | ✓<br>255,112 |
+| `acosh` | ✓<br>46,584 | ✓<br>139,176 | ✓<br>146,624 | ✓<br>146,744 | ✓<br>152,016 | ✓<br>117,712 | ✓<br>152,184 | ✓<br>290,152 | ✓<br>221,352 | ✓<br>255,920 | ✓<br>255,952 | ✓<br>255,960 |
 | `add` | ✓<br>496 | ✓<br>1,728 | ✓<br>1,728 | ✓<br>1,952 | ✓<br>1,928 | ✓<br>1,688 | ✓<br>2,344 | ✓<br>4,360 | ✓<br>3,688 | ✓<br>4,192 | ✓<br>4,416 | ✓<br>4,600 |
 | `asin` | ✓<br>19,616 | ✓<br>106,256 | ✓<br>152,112 | ✓<br>157,368 | ✓<br>170,360 | ✓<br>139,336 | ✓<br>173,896 | ✓<br>313,264 | ✓<br>243,600 | ✓<br>278,496 | ✓<br>278,496 | ✓<br>278,496 |
 | `asinh` | ✓<br>16,240 | ✓<br>98,888 | ✓<br>128,584 | ✓<br>145,544 | ✓<br>151,872 | ✓<br>129,560 | ✓<br>170,568 | ✓<br>313,520 | ✓<br>258,072 | ✓<br>292,344 | ✓<br>299,104 | ✓<br>304,928 |
