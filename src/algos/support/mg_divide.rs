@@ -634,6 +634,44 @@ pub(crate) fn div_rem_via_int_layer(
 /// would swap one software divide for another and add slice
 /// marshalling on top.
 ///
+/// # Engine choice — the matcher's verdict, not a pinned engine
+///
+/// This honours [`crate::int::policy::div_rem::select_for_limbs`] rather
+/// than calling an engine directly. The verdict is `Rem` for every shape
+/// this helper can present, and the precondition is exact and worth
+/// stating rather than assuming: `select_for_limbs` computes
+/// `den_n = effective_limbs(den)` and returns [`Algorithm::Rem`] from its
+/// **first** arm on `den_n == 1`, *before it ever inspects the dividend*
+/// (`effective_limbs(num)` is only reached inside the
+/// `den_n >= U128_DIV_THRESHOLD` branch). A `u64` divisor is presented as
+/// a one-element slice, and `effective_limbs` on a one-element slice is
+/// `1` for every non-zero value — so `den_n == 1` is structural here, not
+/// a property of the dividend, its limb count, or the divisor's
+/// magnitude. The dividend arm of the match is therefore dead today and
+/// folds away, leaving the hot path a straight call.
+///
+/// The non-`Rem` arm is kept live deliberately. If an arm ever joins that
+/// policy that the matcher prefers for a single-limb divisor, this helper
+/// routes to it instead of silently pinning `Rem` and leaving the new
+/// engine dead on the crate's hottest divide path — the failure mode a
+/// hardcoded engine call would hide, since golden is engine-blind and a
+/// bench only sees what is wired.
+///
+/// # Why the `const fn` divide is sound on a runtime path
+///
+/// [`crate::int::algos::div::div_rem`] documents itself as the
+/// const-evaluable divide, and its *general* arm is a bit shift-subtract
+/// loop — the very shape this campaign is removing. That arm is
+/// **structurally unreachable** from here, not merely unlikely: it is
+/// guarded by `!fit_one(divisor)`, and `fit_one` is `fit_k(limbs, 1)`,
+/// whose loop `while i < limbs.len()` starting at `i = 1` never executes
+/// for a one-element slice — so `fit_one` is unconditionally `true` for a
+/// `u64` divisor, whatever its value. Only the two hardware/MG fast paths
+/// are reachable. The `const fn` framing explains *why* the engine uses a
+/// reciprocal (const context rules out inline `asm!`), not a restriction
+/// to const callers: the policy's own `Algorithm::Rem` arm calls this
+/// same function at run time.
+///
 /// # Exactness
 ///
 /// The base-2⁶⁴ schoolbook quotient digits of a given
@@ -643,9 +681,19 @@ pub(crate) fn div_rem_via_int_layer(
 /// the int layer.
 #[inline]
 pub(crate) fn div_limbs_by_word(dividend: &[u64], divisor: u64, quotient: &mut [u64]) -> u64 {
+    use crate::int::policy::div_rem::{dispatch, select_for_limbs, Algorithm};
     debug_assert!(divisor != 0, "div_limbs_by_word: division by zero");
+    let den = [divisor];
     let mut remainder = [0u64; 1];
-    crate::int::algos::div::div_rem::div_rem(dividend, &[divisor], quotient, &mut remainder);
+    match select_for_limbs(dividend, &den) {
+        // The one-limb-divisor verdict. Dividend-independent (see above),
+        // so this arm takes every shape this helper presents.
+        Algorithm::Rem => {
+            crate::int::algos::div::div_rem::div_rem(dividend, &den, quotient, &mut remainder);
+        }
+        // Unreachable today; kept live so a future arm is not stranded.
+        _ => dispatch(dividend, &den, quotient, &mut remainder),
+    }
     remainder[0]
 }
 
