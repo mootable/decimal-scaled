@@ -3836,17 +3836,15 @@ macro_rules! decl_wide_transcendental {
             /// `(a * b) / 10^w`, so the working-width budget is the
             /// same as any other binary op in the core — no separate
             /// overflow check needed.
+            ///
+            /// Names the `Schoolbook` kernel
+            /// (`algos::trig::angle_schoolbook::to_radians_schoolbook`)
+            /// directly — see [`Self::to_radians_strict_with`] for why
+            /// this is not routed through `policy::to_radians::dispatch`.
             #[inline]
             #[must_use]
             pub fn to_radians_strict(self) -> Self {
-                let working_scale = SCALE + $core::GUARD;
-                let working_value = $core::to_work(self.to_bits());
-                let radians = $core::mul(
-                    working_value,
-                    $core::pi_cf::<SCALE>(working_scale, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
-                    working_scale,
-                ) / $crate::macros::wide_roots::wide_lit!($Work, "180");
-                Self::from_bits($core::round_to_storage(radians, working_scale, SCALE))
+                self.to_radians_strict_with($crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             // ---- Mode-aware siblings ----
@@ -4290,20 +4288,39 @@ macro_rules! decl_wide_transcendental {
             }
 
             /// Mode-aware sibling of [`Self::to_radians_strict`].
+            ///
+            /// Names the `Schoolbook` kernel
+            /// (`algos::trig::angle_schoolbook::to_radians_schoolbook`),
+            /// which is this shell's former inline body expression for
+            /// expression — `C::pi::<SCALE>(w)` IS
+            /// `pi_cf::<SCALE>(w, DEFAULT_ROUNDING_MODE)` and `C::lit(180)`
+            /// is the same work-integer literal, so the relocation is
+            /// value-preserving at every input, scale, tier and mode.
+            ///
+            /// Called DIRECTLY rather than through
+            /// `policy::to_radians::dispatch`, on the same grounds as
+            /// [`Self::asinh_strict`]: that policy's `select` returns
+            /// `MulPiRatio` for every cell, and `MulPiRatio` is a
+            /// DIFFERENT algorithm — it multiplies by the `rad_per_deg`
+            /// table constant instead of scaling through `π` first, giving
+            /// up about `log10(180)` digits of relative precision, which
+            /// is wrong by 11 units at `D57<0>::to_radians(10^32)` (see
+            /// `angle_mul_pi_ratio::to_radians_mul_pi_ratio`). Routing
+            /// here would therefore swap the engine and regress precision
+            /// on every wide cell, so the repoint remains an open policy
+            /// decision rather than part of this relocation.
             #[inline]
             #[must_use]
             pub fn to_radians_strict_with(
                 self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
-                let working_scale = SCALE + $core::GUARD;
-                let working_value = $core::to_work(self.to_bits());
-                let radians = $core::mul(
-                    working_value,
-                    $core::pi_cf::<SCALE>(working_scale, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
-                    working_scale,
-                ) / $crate::macros::wide_roots::wide_lit!($Work, "180");
-                Self::from_bits($core::round_to_storage_with(radians, working_scale, SCALE, mode))
+                Self::from_bits(
+                    $crate::algos::trig::angle_schoolbook::to_radians_schoolbook::<
+                        $core::Core,
+                        SCALE,
+                    >(self.to_bits(), mode)
+                )
             }
 
             /// Mode-aware sibling of [`Self::sin_cos_strict`].
