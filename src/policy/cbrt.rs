@@ -116,26 +116,6 @@ enum Select<const N: usize> {
 
 // ── 3. the matcher: const, keyed on `(N, SCALE)`, total over the key ──
 
-/// First decimal `SCALE` at which the tight-`Int<3N>` [`Algorithm::Native`]
-/// arm beats the width-agnostic int-layer slice at the NARROW tiers
-/// (`N == 1 | 2`). **Policy data.**
-///
-/// Both candidates are int-layer paths (`Native` divides via `Int<W>`'s
-/// operator into `int::policy::div_rem`; `Newton` calls the int slice
-/// `icbrt` directly), so this boundary is pure optimality, not validity.
-///
-/// **Benched** (`root_kernel_ab`, groups `cbrt_d18_s*` / `cbrt_d38_s*`,
-/// pinned, two independent runs). Native's win is reproducible and grows
-/// from this scale up — N=1: s9 2.65x/2.47x, s13 2.92x/3.00x, s17
-/// 3.44x/3.23x; N=2: s9 1.58x/1.65x, s28 3.42x/3.59x, s37 3.04x/2.71x.
-/// BELOW it the two int-layer paths are inside run-to-run noise and swap
-/// places between runs (N=1 s0: slice 1.05x then native 1.12x; N=1 s4:
-/// native 1.93x then slice 1.44x; N=2 s2: slice 1.01x then native 1.12x),
-/// so that band keeps the generic `Newton` default rather than a gate
-/// fitted to data that did not replicate. Every routed cell is a measured,
-/// replicated win; no cell below it is regressed.
-const CBRT_NARROW_NATIVE_MIN_SCALE: u32 = 9;
-
 /// Pick the cube-root algorithm for storage limb count `N` and decimal
 /// `SCALE`. Total over the key; the `_` arm is the generic `Newton`
 /// default (a real algorithm — there is no synthetic default variant).
@@ -162,13 +142,52 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // it stays golden-covered and a future remap cannot ship a break
         // through it.
         //
-        // Which int-layer path: the tight `Int<3N>` `Native` from
-        // `CBRT_NARROW_NATIVE_MIN_SCALE` up, the generic slice `Newton`
-        // below it (see that const for the measurements and the noise band).
-        (1, scale) | (2, scale) if scale >= CBRT_NARROW_NATIVE_MIN_SCALE => {
-            Select::ByAlgorithm(Algorithm::Native)
-        }
-        (1, _) | (2, _) => Select::ByAlgorithm(Algorithm::Newton),
+        // Which int-layer path: the tight `Int<3N>` `Native`, at EVERY
+        // scale. This arm used to be gated at `SCALE >= 9`, with the
+        // generic slice `Newton` below it. The gate is gone, because the
+        // measurement that placed it was taken in a build that charged the
+        // losing path a quarter of its real cost.
+        //
+        // `Native` was benched (`root_kernel_ab`, `cbrt_d18_s*` /
+        // `cbrt_d38_s*`, two runs) as a clear win from SCALE 9 up — N=1: s9
+        // 2.65x/2.47x, s13 2.92x/3.00x, s17 3.44x/3.23x; N=2: s9 1.58x/1.65x,
+        // s28 3.42x/3.59x, s37 3.04x/2.71x — while BELOW 9 the two paths tied
+        // and swapped places between runs (N=1 s0: slice 1.05x then native
+        // 1.12x; N=1 s4: native 1.93x then slice 1.44x). The gate sat at 9
+        // because that low band did not replicate.
+        //
+        // But that calibration ran UNDER-FEATURED. Until `root_kernel_ab`
+        // gained `x-wide`/`xx-wide` it declared `wide` alone, so `MAX_WORK_N`
+        // was 16 and the slice path's
+        // `int::algos::icbrt::icbrt_newton::SCRATCH_LIMBS = max_n_limbs(4)`
+        // was 72 limbs. In the shipped and bench-branch-compare build
+        // `MAX_WORK_N` is 64, making it **288 limbs** — and `icbrt_newton`
+        // declares that buffer SIX times (`x`, `sq`, `q`, `r`, `y`,
+        // `rem3_buf`), so 13,824 bytes are zero-initialised on every call
+        // against 3,456 in the calibration build.
+        //
+        // That tax is fixed and radicand-INDEPENDENT: a D18 cube root of a
+        // ONE-limb radicand pays all of it. `Native`'s cost did not move
+        // (a tight `Int<3N>` — 24 bytes at N=1). A tie recorded under the
+        // smaller tax cannot survive a 4x larger one, so the low band is
+        // routed to `Native` too.
+        //
+        // Removing the gate rather than re-placing it is deliberate: the
+        // arm is now uniform over the tier, so there is no scale-fitted
+        // constant left to go stale the next time the build-max sizing
+        // moves under it.
+        //
+        // Validity is unchanged and is proven in the `Native` dispatch arm
+        // below: `W = 3N` covers `mag · 10^(2·SCALE)` for `SCALE <= 19.27·N`,
+        // i.e. 17 <= 19.27 at N=1 and 37 <= 38.53 at N=2 — both tiers'
+        // MAX_SCALE, at every scale including 0.
+        //
+        // End-to-end corroboration, `results/timing/bbc_medians.tsv`
+        // (`cbrt(2.0)`, a non-degenerate operand): D18 cbrt cost 474 ns at
+        // SCALE 0 and 438 ns at SCALE 4 — both slice — against 159 ns at
+        // SCALE 9, the first `Native` cell. Scale 0 was not the cheapest
+        // scale, and the step sat exactly on the old gate.
+        (1, _) | (2, _) => Select::ByAlgorithm(Algorithm::Native),
         // D57 / D76 (N = 3 / 4) — bespoke f64-seeded Newton in a tight,
         // concrete `Int<W>` with `W = 3N` (covering `mag · 10^(2·SCALE)`:
         // the magnitude is ≤ 64N bits and `10^(2·SCALE)` adds ≤ 128N more

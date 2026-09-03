@@ -148,7 +148,11 @@ fn compare_wide<const N: usize>(c: &mut Criterion, label: &str) {
 }
 
 /// Decimal-rem dispatch seam (`src/policy/rem.rs` -> `rem_int_layer`).
-/// Narrow widths only: native hardware `%` vs the generic int-layer path.
+/// Narrow widths only: the `rem_native` primitive `%` vs the generic
+/// int-layer path, on synthetic limb fills with no scale axis. The scale and
+/// operand-class axes the routing actually keys on live in
+/// `dec_rem_narrow_scale_sweep!` below; "native" is a hardware `idiv` only at
+/// `N == 1` -- at `N == 2` it is an `i128` soft-call.
 macro_rules! dec_rem_cell {
     ($c:expr, $n:literal, $label:literal) => {{
         for p in operand_set::<$n>() {
@@ -191,6 +195,79 @@ fn k_times_pow10<const N: usize>(k: u64, scale: u32) -> Int<N> {
         }
     }
     int_from_mag_limbs::<N>(&limbs)
+}
+
+// ── the `N == 2` codegen witness ──────────────────────────────────────
+
+/// Raw-primitive witness for what the `N == 2` `rem_native` arm actually
+/// compiles to.
+///
+/// x86-64 has NO 128-bit divide instruction: `div r/m64` is a 128÷64→64
+/// divide that `#DE`-traps when the quotient exceeds 64 bits, so a general
+/// `i128 % i128` cannot be one instruction. LLVM lowers it to a
+/// compiler-builtins soft-call (`__modti3` → `__udivmodti4`), whose cost is
+/// OPERAND-DEPENDENT — it takes a `divq`-based short path only when the
+/// operand high words allow one. `i64 %` is a single `idiv`.
+///
+/// The crate already documents the sibling lowering on the DIVISION side:
+/// `src/algos/div/div_native.rs` keeps its `N == 1` arm on an `i128 / u64`
+/// schoolbook divide precisely to avoid "the LLVM `__divti3` soft-call an
+/// `i128 / i128` would lower to". `rem_native`'s `N == 2` arm takes the
+/// remainder sibling of exactly that soft-call — while `src/policy/rem.rs`
+/// and `rem_native`'s own header describe it as "a direct primitive `%`" and
+/// "the single hardware `%` instruction".
+///
+/// This group races `i64 %` against `i128 %` on IDENTICAL values that fit
+/// `i64`, so the arithmetic is held constant and the ratio IS the soft-call
+/// tax. Both 128-bit operands are carried in the input struct (rather than
+/// widened from the `i64` fields at the call site) so LLVM cannot prove they
+/// are sign-extensions and narrow the `i128` remainder back to a 64-bit
+/// `idiv`.
+#[derive(Clone, Copy)]
+struct PrimPair {
+    label: &'static str,
+    a64: i64,
+    b64: i64,
+    a128: i128,
+    b128: i128,
+}
+
+#[inline(never)]
+fn prim_rem_i64(p: PrimPair) -> i128 {
+    (p.a64 % p.b64) as i128
+}
+
+#[inline(never)]
+fn prim_rem_i128(p: PrimPair) -> i128 {
+    p.a128 % p.b128
+}
+
+/// Magnitude ladder for the soft-call witness. Every pair fits `i64`, so both
+/// candidates compute the same remainder and the comparison is apples to
+/// apples. The ladder spans the magnitudes the D38 bbc `rem` operands sweep
+/// (`2 % 3` at scale 0 up through `2·10^17 % 3.5·10^17`), which is where the
+/// soft-call's operand-dependence shows.
+fn prim_ladder() -> Vec<PrimPair> {
+    let pairs: &[(&'static str, i64, i64)] = &[
+        ("2_rem_3", 2, 3),
+        ("2e6_rem_35e5", 2_000_000, 3_500_000),
+        ("2e12_rem_35e11", 2_000_000_000_000, 3_500_000_000_000),
+        (
+            "2e17_rem_35e16",
+            200_000_000_000_000_000,
+            350_000_000_000_000_000,
+        ),
+    ];
+    pairs
+        .iter()
+        .map(|&(label, a, b)| PrimPair {
+            label,
+            a64: a,
+            b64: b,
+            a128: a as i128,
+            b128: b as i128,
+        })
+        .collect()
 }
 
 /// Wide decimal-remainder dispatch seam (`src/policy/rem.rs` -> `rem_int_layer`
@@ -412,8 +489,122 @@ macro_rules! rem_narrow_sweep {
     }};
 }
 
+/// NARROW decimal-rem dispatch-seam sweep — the `src/policy/rem.rs`
+/// `N <= 2` routing decision, raced across the surface rather than at a
+/// point.
+///
+/// Races the two arms `select` chooses between at `N == 1` and `N == 2`
+/// (`Algorithm::Native` → `rem_native`, `Algorithm::IntLayer` →
+/// `rem_int_layer`) over a DENSE scale grid × THREE operand value-classes,
+/// because the routing keys on both axes and the surface sweep sees neither.
+///
+/// **Why the value axis is load-bearing.** The bbc `rem` cell is `x % b` =
+/// `2.0 % 3.5` (`bench-compare/benches/compare_common.rs`), so `|a| < |b|` at
+/// EVERY scale and width. That is precisely the one shape where
+/// `rem_int_layer`'s dividend-smaller short-circuit fires and returns the
+/// dividend without dividing. Routing on it alone would be a single-value-class
+/// fit, so the `gt_*` shapes carry the `|a| >= |b|` region bbc never
+/// exercises:
+///
+///   * `lt`       — `2·10^s % 35·10^(s-1)` (`|a| < |b|`): the bbc shape.
+///                  `rem_int_layer` short-circuits on one magnitude compare;
+///                  `rem_native` has no such guard and always divides.
+///   * `gt_small` — `7·10^s % 35·10^(s-1)` (`|a| > |b|`, quotient 2): the
+///                  short-circuit is OFF, both arms divide, and what is left
+///                  is each arm's setup cost.
+///   * `gt_large` — `9·10^s % 7` (`|a| >> |b|`, quotient ~1.3·10^s): the most
+///                  divide-bound shape the narrow tiers can present.
+///
+/// **Why the scale axis is load-bearing.** `rem_native`'s `N == 2` arm is an
+/// `i128 %` soft-call whose cost depends on the operand high words, and scale
+/// is what drives the operands across the 64-bit line (`2·10^s` passes `2^64`
+/// near `s = 20`). A grid snapped to the benched cells could not tell a
+/// crossover from a soft-call step, so the grid is dense enough to read the
+/// curve either side (architectural-review Class I).
+///
+/// `Native` is the reference — valid at every `N <= 2` — and every cell
+/// asserts the two arms agree bit-for-bit before it is timed: the validity
+/// wall.
+macro_rules! dec_rem_narrow_scale_sweep {
+    ($c:expr, $n:literal, $label:literal, $scales:expr) => {{
+        for &scale in $scales {
+            let lt_a = k_times_pow10::<$n>(2, scale);
+            let lt_b = if scale >= 1 {
+                k_times_pow10::<$n>(35, scale - 1)
+            } else {
+                k_times_pow10::<$n>(3, 0)
+            };
+            let gt_small_a = k_times_pow10::<$n>(7, scale);
+            let gt_small_b = lt_b;
+            let gt_large_a = k_times_pow10::<$n>(9, scale);
+            let gt_large_b = k_times_pow10::<$n>(7, 0);
+
+            for (shape, a, b) in [
+                ("lt", lt_a, lt_b),
+                ("gt_small", gt_small_a, gt_small_b),
+                ("gt_large", gt_large_a, gt_large_b),
+            ] {
+                // Validity wall: the arms must agree bit-for-bit before
+                // either is timed.
+                assert_eq!(
+                    dec_rem_native::<$n>(a, b),
+                    dec_rem_int_layer::<$n>(a, b),
+                    "dec_rem_narrow {} {} s={} arms disagree",
+                    $label,
+                    shape,
+                    scale
+                );
+                compare_all(
+                    $c,
+                    &format!(concat!("dec_rem_narrow/", $label, "_s{}_{}"), scale, shape),
+                    |p: &Pair<$n>| p.label.to_string(),
+                    vec![Pair { label: shape, a, b }],
+                    vec![
+                        (
+                            "native",
+                            (|p: Pair<$n>| dec_rem_native::<$n>(p.a, p.b))
+                                as fn(Pair<$n>) -> Int<$n>,
+                        ),
+                        ("int_layer", |p: Pair<$n>| dec_rem_int_layer::<$n>(p.a, p.b)),
+                    ],
+                );
+            }
+        }
+    }};
+}
+
 fn bench(c: &mut Criterion) {
+    // The `N == 2` codegen witness, first: `i64 %` vs `i128 %` on identical
+    // values. Runs before the policy race because it is what the policy race
+    // is explaining.
+    for p in prim_ladder() {
+        assert_eq!(
+            prim_rem_i64(p),
+            prim_rem_i128(p),
+            "prim witness {} arms disagree",
+            p.label
+        );
+    }
+    compare_all(
+        c,
+        "rem_primitive/i128_softcall_tax",
+        |p: &PrimPair| p.label.to_string(),
+        prim_ladder(),
+        vec![
+            ("i64_rem", prim_rem_i64 as fn(PrimPair) -> i128),
+            ("i128_rem", prim_rem_i128),
+        ],
+    );
+
     decimal_scaled_ab_sweep!(c =>
+        // NARROW dispatch-seam race (this is the question under test): the
+        // `policy::rem::select` `N <= 2` arm, native vs int-layer, dense
+        // scale grid x three operand value-classes. Placed FIRST so its
+        // verdicts head the run summary.
+        Int<1> => |c: &mut Criterion|
+            dec_rem_narrow_scale_sweep!(c, 1, "D18", &[0u32, 3, 6, 9, 12, 15, 17]),
+        Int<2> => |c: &mut Criterion|
+            dec_rem_narrow_scale_sweep!(c, 2, "D38", &[0u32, 5, 10, 15, 19, 24, 29, 33, 36]),
         // Narrow tiers: native / native_direct / small_fast vs via_div_rem.
         Int<1> => |c: &mut Criterion| compare_narrow::<1>(c, "Int64_D18"),
         Int<2> => |c: &mut Criterion| compare_narrow::<2>(c, "Int128_D38"),

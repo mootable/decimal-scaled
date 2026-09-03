@@ -134,8 +134,24 @@ on:
         default: ""
         type: string
 
+# Keyed on the branch AND the run's CONFIGURATION, not the branch alone.
+#
+# A concurrency group holds exactly ONE pending run. `cancel-in-progress: false`
+# protects the RUNNING one and does nothing for the queued one: when a third
+# dispatch arrives, the waiting run is silently cancelled. Keyed on the branch
+# alone, every dispatch on a branch collided with every other, and three
+# separate agents lost work to it — an A/B whose two halves differ only by the
+# `ref` input, and a feature comparison whose halves differ only by `features`,
+# each cancelled its own other half.
+#
+# Including the inputs means genuinely different measurements on one branch run
+# CONCURRENTLY, while two byte-identical dispatches still serialise. That second
+# case is the replication run, and serialising it is the point: two identical
+# measurements should not compete for runners with each other.
 concurrency:
-  group: bench-branch-compare-${{ github.ref }}
+  group: >-
+    bench-branch-compare-${{ github.ref }}-${{ inputs.ref }}-${{ inputs.features }}-${{
+    inputs.widths }}-${{ inputs.group }}-${{ inputs.micro_bench }}-${{ inputs.micro_filter }}
   cancel-in-progress: false
 
 permissions:
@@ -645,20 +661,21 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
 
+      # The surface `build` and `bench` jobs both install this (see "Install
+      # system libs" above); the micro job did not, so criterion's build pulled
+      # `yeslogic-fontconfig-sys`, whose build script ran `pkg-config`, found
+      # nothing, and panicked before a single benchmark executed. The root
+      # Cargo.toml already sets criterion `default-features = false`, yet
+      # `plotters` is still in the graph — which is exactly why the surface jobs
+      # carry this line despite the same declaration. The apt step is the fix;
+      # chasing the feature flag is the longer road to the same place.
+      - name: Install system libs
+        run: sudo rm -f /etc/apt/sources.list.d/*microsoft* /etc/apt/sources.list.d/*azure* 2>/dev/null || true; sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
           toolchain: stable
-
-      # Same install as the `build` job. A bench target links every
-      # dev-dependency, and this crate's dev-deps include `plotters` with the
-      # `ttf` feature (for examples/chart_gen.rs), which pulls font-kit ->
-      # yeslogic-fontconfig-sys and needs system fontconfig at BUILD time. The
-      # micro job omitted it, so `cargo bench` died in the build script after
-      # ~40 s with a pkg-config error that named no bench and looked nothing
-      # like a missing apt package. Verified on run 33699722823.
-      - name: Install system libs
-        run: sudo rm -f /etc/apt/sources.list.d/*microsoft* /etc/apt/sources.list.d/*azure* 2>/dev/null || true; sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
 
       - name: Cache cargo
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -676,15 +693,25 @@ jobs:
           BENCH: ${{ inputs.micro_bench }}
         run: |
           set -euo pipefail
-          # `[[:space:]]*$`, not a bare `$`: Cargo.toml is committed with CRLF
-          # line endings, so every `name = "..."` line ends in a carriage
-          # return and a bare `$` anchor matched NOTHING — this validator
-          # rejected every bench name that exists, micro mode included, and
-          # failed in seconds looking exactly like a typo. Verified on run
-          # 33699534180. `\r?` would NOT fix it: GNU grep -E has no `\r`
-          # escape and reads it as a literal `r`. `[[:space:]]` is POSIX and
-          # covers CR.
-          if ! grep -qE "^name = \"${BENCH}\"[[:space:]]*$" Cargo.toml; then
+          # Cargo.toml is committed CRLF (106 of 764 files are), and GNU grep on
+          # the Linux runner treats the \r as a literal character, so a `$`
+          # anchor can NEVER match. MSYS grep in git-bash treats CRLF as a line
+          # terminator, so reproducing this step locally PASSES — the check lied
+          # exactly where it was verified and failed where it runs. Every
+          # micro-mode dispatch died here, on every bench.
+          # Strip the CR from the INPUT rather than trying to match it. Two
+          # earlier attempts failed here and both are worth not repeating:
+          #   `…"$`      — Cargo.toml is committed CRLF (106 of 764 files are),
+          #                and GNU grep treats the \r as an ordinary character,
+          #                so the anchor could never match. Every micro dispatch
+          #                died at this line, on every bench.
+          #   `…"\r?$`   — INERT. Bash double quotes do not interpret \r, so
+          #                grep receives backslash-r; POSIX ERE has no \r escape,
+          #                so it reduces to the literal letter `r`. Verified:
+          #                `^abc\r?$` matches both `abc` and `abcr`.
+          # `tr` normalises the input and encodes no assumption about the regex
+          # dialect or about which grep build the runner ships.
+          if ! tr -d '\r' < Cargo.toml | grep -qE "^name = \"${BENCH}\"$"; then
             echo "::error::no [[bench]] named '${BENCH}' in Cargo.toml"
             echo "Benches under benches/micro/:"
             grep -B1 '^path = "benches/micro/' Cargo.toml | grep '^name = ' | sed 's/name = /  /'
@@ -739,11 +766,15 @@ jobs:
           # than let a green tick read as a result.
           if [ "$verdicts" -eq 0 ]; then
             {
-              echo "> **No verdicts were produced — this graded nothing.**"
+              echo "> **FAILED — no verdicts were produced. This graded nothing.**"
               echo "> Most often \`micro_features\` does not cover this bench's"
               echo "> \`required-features\`, so cargo skipped it and still exited 0."
-              echo "> Read the artifact log before treating this run as a result."
             } >> "$GITHUB_STEP_SUMMARY"
+            # A run that measured nothing must not report success. A green tick on
+            # an empty run is worse than a red one: it gets read as evidence, and
+            # `root_kernel_ab` sat broken for months behind exactly that.
+            echo "::error::graded 0 comparisons — a bench that runs nothing is a failure"
+            exit 1
           else
             {
               echo '```'

@@ -28,14 +28,21 @@
 //! `SCALE`: because both carry the same `10^SCALE` factor, the storage-level
 //! remainder is the answer. The split is purely on storage width `N`:
 //!
-//! * **`N <= 2`** (D18 / D38) → `rem_native`: the storage value fits a single
-//!   hardware integer, so the remainder is a direct primitive `%` (`i64 %` at
-//!   `N == 1`, `i128 %` at `N == 2`). Microbenched at the dispatch seam:
-//!   native beats `rem_int_layer` ~1.5x at D18 and ~8x at D38 by skipping the
-//!   generic unpack-to-magnitude / divmod / signed-repack.
-//! * **`N >= 3`** → `rem_int_layer`: the magnitude exceeds a single hardware
-//!   integer, so it unpacks to unsigned magnitudes and runs the const-`N`
-//!   divmod, detecting the `MIN % -ONE` overflow up front.
+//! * **`N == 1`** (D18) → `rem_native`: the storage value is one `i64`, so the
+//!   remainder is a single hardware `idiv`, and skipping the generic
+//!   unpack-to-magnitude / compare / signed-repack is worth more than that
+//!   setup costs.
+//! * **`N >= 2`** → `rem_int_layer`: unpacks to unsigned magnitudes and runs
+//!   the const-`N` divmod, detecting the `MIN % -ONE` overflow up front, with
+//!   two value-gated fast paths ahead of it (`|a| < |b|` returns the dividend;
+//!   single-128-bit-word operands take one `u128 %`).
+//!
+//! The split is at `N == 1`, not at `N <= 2`, because the hardware runs out
+//! one width earlier than the storage does. `i64 %` is an instruction;
+//! `i128 %` is not — x86-64 has no 128-bit divide, so `N == 2`'s "native"
+//! arm is really the `__modti3` / `__udivmodti4` soft-call. Once both arms
+//! are paying for a soft-call, `rem_int_layer` wins on the strength of its
+//! fast paths. See `rem_native`'s header for the measurement.
 //!
 //! Both follow the same overflow contract: a zero divisor and the
 //! `MIN % -ONE` overflow both panic in BOTH debug and release (the default
@@ -51,12 +58,16 @@ use crate::int::types::Int;
 /// prefix (`rem_int_layer` → `IntLayer`) — strict 1:1 with the kernel fn.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
-    /// [`rem_native`](crate::algos::rem::rem_native::rem_native) — hardware
-    /// primitive `%` on the narrow storage value (`i64 %` at `N == 1`,
-    /// `i128 %` at `N == 2`), the same-SCALE remainder needing no rescaling.
-    /// Valid only for `N <= 2`; routed for D18 / D38, where bypassing the
-    /// generic unpack / divmod / repack of [`Self::IntLayer`] wins decisively
-    /// (microbench: native beats int-layer ~1.5x at D18, ~8x at D38).
+    /// [`rem_native`](crate::algos::rem::rem_native::rem_native) — primitive
+    /// `%` on the narrow storage value (`i64 %` at `N == 1`, `i128 %` at
+    /// `N == 2`), the same-SCALE remainder needing no rescaling. Valid for
+    /// `N <= 2`; **routed at `N == 1` (D18) only**, where the `%` really is
+    /// one `idiv` and skipping [`Self::IntLayer`]'s unpack / compare / repack
+    /// pays for itself.
+    ///
+    /// Kept but UNROUTED at `N == 2`: there the `%` is an `i128` soft-call,
+    /// not an instruction, and it loses to [`Self::IntLayer`] at every scale
+    /// and operand class measured. `rem_native`'s header carries the numbers.
     Native,
     /// [`rem_int_layer`](crate::algos::rem::rem_int_layer::rem_int_layer) —
     /// delegates directly to `Int<N>`'s checked/wrapping
@@ -86,16 +97,25 @@ enum Select<const N: usize> {
 // ── 3. the matcher: const, keyed on `(N, SCALE)`, total over the key ──
 
 /// Pick the remainder algorithm for storage limb count `N` and decimal
-/// `SCALE`. Total over the key; `IntLayer` wins at every `(N, SCALE)`.
+/// `SCALE`. Total over the key: `Native` at `N == 1`, `IntLayer` at every
+/// `N >= 2`. The choice does not vary with `SCALE`.
 const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
     let _ = SCALE;
-    // Narrow storage (`N <= 2`): the storage value fits a single hardware
-    // integer, so the remainder is a direct primitive `%` -- far cheaper
-    // than the generic int-layer unpack-to-magnitude / divmod / repack
-    // (microbench: native beats int-layer ~1.5x at D18, ~8x at D38).
-    // `N >= 3` exceeds a single hardware integer and keeps `IntLayer`.
+    // `N == 1` (D18) is the ONLY width whose remainder is a hardware
+    // instruction: the storage is one `i64`, so `rem_native` lowers to a
+    // single `idiv`, and skipping the int-layer unpack-to-magnitude /
+    // compare / repack is worth more than that setup costs.
+    //
+    // `N >= 2` keeps `IntLayer`. At `N == 2` (D38) `rem_native` is an
+    // `i128 %`, and x86-64 has NO 128-bit divide instruction (`div r/m64`
+    // is 128÷64→64 and traps when the quotient overflows), so it lowers to
+    // the `__modti3` / `__udivmodti4` soft-call -- NOT a primitive `%`.
+    // `rem_int_layer` reaches that same soft-call at worst, and skips the
+    // divide entirely whenever `|a| < |b|`. See `rem_native`'s header for
+    // the measurement and for why the division side of the crate
+    // (`div_native`) already routes around the identical soft-call.
     match N {
-        1 | 2 => Select::ByAlgorithm(Algorithm::Native),
+        1 => Select::ByAlgorithm(Algorithm::Native),
         _ => Select::ByAlgorithm(Algorithm::IntLayer),
     }
 }

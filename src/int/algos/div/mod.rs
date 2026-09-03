@@ -26,6 +26,14 @@
 //! fast-arm wrappers the fixed-width `Int<N>` types call. The integer
 //! square root fast-arm wrapper `isqrt_mag_fixed` and the Newton kernel
 //! `isqrt_newton` live with the [`crate::int::algos::isqrt`] family.
+//!
+//! One routing leaf sits over the engines rather than beside them:
+//! [`div_rem_into`](div_rem_into::div_rem_into), the **exact-scratch door**.
+//! Each engine's own blanket entry allocates `MAX_SINGLE_LIMBS` normalisation
+//! scratch on every call — a size chosen by the build's width features — so a
+//! caller that divides in a loop pays that memset per iteration at a width it
+//! may never touch. `div_rem_into` takes the matcher's verdict and the
+//! CALLER's buffers instead, so its cost tracks the operands.
 
 pub(crate) mod div_burnikel_ziegler_with_knuth;
 pub(crate) mod div_fixed;
@@ -41,6 +49,11 @@ pub(crate) mod div_knuth;
 pub(crate) mod div_knuth_u128_limb;
 pub(crate) mod div_mg;
 pub(crate) mod div_rem;
+// the divide's EXACT-SCRATCH door: the matcher's verdict routed into the
+// chosen engine's `_into` variant with the caller's normalisation buffers, so
+// a caller that divides in a loop stops paying the build-max memset per
+// iteration. Not an engine — a routing leaf over the engines above.
+pub(crate) mod div_rem_into;
 pub(crate) mod div_rem_schoolbook;
 
 #[cfg(test)]

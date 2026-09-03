@@ -930,6 +930,21 @@ path = "benches/micro/strict_fast_ab.rs"
 harness = false
 required-features = ["std", "strict", "fast", "wide", "x-wide", "xx-wide"]
 
+# log_wide_probe_reuse_ab: does the wide strict `log` still evaluate its two
+# natural logs TWICE? The exact-power pin computes ln(x)/ln(base) at the base
+# working scale SCALE+GUARD, and the Ziv walker's FIRST probe recomputes the
+# bit-identical value at the same scale. Ranks the production `log` against
+# one base-guard core evaluation (`core`) and against the reconstructed
+# pre-fix shape (`log_dup`), in ONE process so the ratios are
+# machine-independent. Non-degenerate operands only (1/3 and 7/3): the
+# tracked surface benches log(2.0, 7.0) and BOTH ends short-circuit the ln
+# range reduction, so that cell measures two fast paths racing.
+[[bench]]
+name = "log_wide_probe_reuse_ab"
+path = "benches/micro/log_wide_probe_reuse_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
 # rem_kernel_ab: dispatch-seam A/B for the remainder policy `select` arm.
 # div_kernel_ab: dispatch-seam A/B for the integer division ENGINE
 # (Knuth base-2⁶⁴ vs Burnikel-Ziegler chunking vs Knuth base-2¹²⁸) at the
