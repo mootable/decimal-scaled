@@ -1038,6 +1038,23 @@ path = "benches/micro/root_kernel_ab.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
+# root_policy_map: the full-surface policy sweep for `policy::{sqrt,cbrt}` --
+# every registered `Algorithm` candidate raced at every (width, scale) sample
+# point, validity-walled against the generic slice across all eight rounding
+# modes. Unlike root_kernel_ab it drives the runtime-SCALE seams
+# (`__bench_internals::*_rt`), so one monomorphisation per (N, W) sweeps a
+# whole tier and a bisected scale needs no rebuild; the sweep is selected by
+# the ROOTMAP_* environment variables (see the module docs).
+# Same feature requirement as root_kernel_ab and for the same reason: the
+# sweep reaches D462-D1232, whose work widths run to 192 limbs, and x-wide +
+# xx-wide are what raise MAX_WORK_N to 64 so the int slice scratch covers
+# them. They are load-bearing here, not decoration.
+[[bench]]
+name = "root_policy_map"
+path = "benches/micro/root_policy_map.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
 # The wide-tier Tang/Series benchmark example uses the wide decimal types
 # (D307..D1232), which only exist under the wide feature umbrellas. Gate it so a
 # default / `--all-targets` build does not try to compile it without them.
