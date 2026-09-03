@@ -3,10 +3,13 @@
 
 //! Lossy (f64-bridge) powers methods for D38.
 //!
-//! Companion to `types/powers.rs`. The plain methods here are the
-//! f64-bridge variants, gated on std + (no strict feature or
-//! fast set). When strict is on, the dispatcher in the
-//! _strict file shadows these.
+//! Companion to `types/powers.rs`. The `*_fast` methods are always
+//! available on a std build. The plain-name dispatcher block below is
+//! gated on std + `fast` + no `strict`, matching the macro widths: the
+//! f64 bridge claims the plain name only when `fast` is explicitly
+//! requested and `strict` is absent. In every other configuration —
+//! including one that sets neither feature — the dispatcher in the
+//! _strict file claims it.
 
 
 impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
@@ -154,7 +157,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     }
 }
 
-#[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
+#[cfg(all(feature = "std", feature = "fast", not(feature = "strict")))]
 impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     /// Plain dispatcher: forwards to [`Self::powf_fast`] in this feature mode.
     #[inline]
