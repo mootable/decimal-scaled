@@ -4,18 +4,30 @@
 //! decimal-scaled subjects for the `decimal-scaled-golden` harness.
 //!
 //! One *erased* [`DsSubject`] carries a `(width, scale, mode)` triple and presents
-//! `Value = String`, so the harness pipeline (runner → collectors → validators →
-//! reporter) monomorphises ONCE rather than once per concrete `D<SCALE>` cell. The
-//! per-cell concrete work — parse, compute, format, and the storage envelope — is
-//! the `decimal-scaled-cells` crate's `(width, scale)` fan-out (`cells!`), which
-//! this subject reaches through its two concrete, non-generic shim entry points
-//! (`dispatch_compute` / `dispatch_limits`). That placement is deliberate: the
-//! fan-out's heavy monomorphisations compile ONCE in the cells leaf rlib instead
-//! of once per consuming target (this lib's rlib AND its unit-test harness used
-//! to pay the full bill each). The subject lives here (not in a test) so the
-//! full-surface gate, the single-cell proof, and `golden-competitors` all share
-//! it. [`Filter`] reads the `GOLDEN_*` env vars so a `cargo test` run can target
-//! just the cells / modes / functions under investigation.
+//! `Value = CellValue`, so the harness pipeline (runner → collectors → validators →
+//! reporter) monomorphises ONCE rather than once per concrete `D<SCALE>` cell — the
+//! erasure is in the SUBJECT being one type for all 127 cells, not in the value
+//! being text. The per-cell concrete work — parse, compute, format, and the storage
+//! envelope — is the `decimal-scaled-cells` crate's `(width, scale)` fan-out
+//! (`cells!`), which this subject reaches through its four concrete, non-generic
+//! shim entry points (`dispatch_parse` / `dispatch_compute_fn` / `dispatch_format` /
+//! `dispatch_limits`). That placement is deliberate: the fan-out's heavy
+//! monomorphisations compile ONCE in the cells leaf rlib instead of once per
+//! consuming target (this lib's rlib AND its unit-test harness used to pay the full
+//! bill each). The subject lives here (not in a test) so the full-surface gate, the
+//! single-cell proof, and `golden-competitors` all share it. [`Filter`] reads the
+//! `GOLDEN_*` env vars so a `cargo test` run can target just the cells / modes /
+//! functions under investigation.
+//!
+//! **`Value` is a parsed handle, and that is load-bearing for the peer-library
+//! comparison.** `decimal-scaled-golden`'s `Timed` strategy hoists
+//! `string_to_value` out of the timed span and times only the `execute` closure
+//! (`ARCHITECTURE.md` §3, §5.2). While `Value` was `String` this subject's closure
+//! ALSO parsed and formatted, so `golden-competitors`' `lib_perf` timed our
+//! parse + op + format against every typed peer's op alone — at the wide tiers a
+//! 1232-digit parse per call, which dominated the measurement outright. Carrying
+//! the parsed value ([`decimal_scaled_cells::CellValue`], the tier's raw storage in
+//! a `Copy` per-width enum) restores the contract without giving up the erasure.
 
 // The cells fan-out is per-tier feature-gated (this crate forwards each tier
 // feature to decimal-scaled-cells), so the crate compiles at ANY feature set:
@@ -43,7 +55,7 @@ use decimal_scaled_golden::{
 // the typed op bridge (`compute` + `DsOps`) — re-exported so existing
 // consumers (golden-competitors, the history gates) keep their import paths.
 pub use decimal_scaled_cells::{
-    compute, tier_compiled, DsOps, CELLS, COMPARE_SCALES, FUNCS, GOLDEN_CELLS,
+    compute, tier_compiled, CellValue, DsOps, CELLS, COMPARE_SCALES, FUNCS, GOLDEN_CELLS,
 };
 
 /// Generation precision / rounding guard of the golden set (the file `#` header
@@ -102,9 +114,10 @@ pub fn ds_mode(m: RoundingMode) -> DsMode {
 }
 
 /// One erased decimal-scaled subject: a `(width, scale)` cell tested under one rounding
-/// `mode`. `Value = String`, so the whole harness pipeline monomorphises once; the
-/// concrete decimal type is reached only via the `(width, scale)` dispatch. The triple
-/// also rides in `Capabilities::config` as report metadata.
+/// `mode`. ONE subject type covers every cell, so the whole harness pipeline
+/// monomorphises once; the concrete decimal type is reached only via the
+/// `(width, scale)` dispatch, and `Value` is the parsed handle that dispatch produces.
+/// The triple also rides in `Capabilities::config` as report metadata.
 #[derive(Clone, Copy)]
 pub struct DsSubject {
     pub width: u32,
@@ -127,7 +140,7 @@ impl DsSubject {
 }
 
 impl DecimalSubject for DsSubject {
-    type Value = String;
+    type Value = CellValue;
 
     fn name(&self) -> String {
         format!(
@@ -163,14 +176,15 @@ impl DecimalSubject for DsSubject {
         }
     }
 
-    fn string_to_value(&self, s: &str) -> String {
-        // Erased: the value carried between parse and compute is the literal itself;
-        // the concrete parse happens inside `execute` at the dispatched type.
-        s.to_string()
+    fn string_to_value(&self, s: &str) -> CellValue {
+        // The concrete parse, at this cell's decimal type — the runner has already
+        // vetted the literal against `limits`, so a parse failure is a golden-data
+        // fault and the shim panics with it (the harness catches and reports it).
+        decimal_scaled_cells::dispatch_parse(self.width, self.scale, s)
     }
 
-    fn value_to_string(&self, v: &String) -> String {
-        v.clone()
+    fn value_to_string(&self, v: &CellValue) -> String {
+        decimal_scaled_cells::dispatch_format(self.width, self.scale, v)
     }
 
     fn limits(&self, _value: &str) -> Limits {
@@ -182,12 +196,18 @@ impl DecimalSubject for DsSubject {
         func: Function,
         mode: RoundingMode,
         _overflow: Overflow,
-    ) -> impl Fn(&[String]) -> Computed<String> {
-        let (width, scale, m) = (self.width, self.scale, ds_mode(mode));
+    ) -> impl Fn(&[CellValue]) -> Computed<CellValue> {
+        let m = ds_mode(mode);
+        // Resolve the cell ONCE, here: `execute` is called outside every timed span,
+        // so the `(width, scale)` match is not charged to the operation. What the
+        // closure then runs is the op and nothing else — no parse, no format, no cell
+        // lookup — which is exactly what a typed peer adapter's closure runs.
+        //
         // The strict op panics on overflow; the harness catches that as
         // `Computed::Panic` (a test failure judged against the cell's range).
         // The per-cell concrete work is the cells crate's compile-once shim.
-        move |inputs| decimal_scaled_cells::dispatch_compute(width, scale, func, inputs, m)
+        let cell = decimal_scaled_cells::dispatch_compute_fn(self.width, self.scale);
+        move |inputs| cell(func, inputs, m)
     }
 }
 
@@ -379,27 +399,47 @@ mod tests {
 
     #[test]
     fn dispatch_round_trips_a_known_cell() {
-        // sqrt(2) at D38<19> under half-to-even, via the erased dispatch (the
-        // cells crate's compile-once shim): a 19-dp value on the right prefix
-        // (not pinned digit-for-digit, to stay robust).
-        let out = decimal_scaled_cells::dispatch_compute(
-            38,
-            19,
-            Function::Sqrt,
-            &["2".to_string()],
-            DsMode::HalfToEven,
-        );
-        match out {
+        // sqrt(2) at D38<19> under half-to-even, driven the way the harness drives
+        // it — parse, then the compute-only closure, then format — so the three
+        // stages are exercised separately, not as one string-in/string-out call.
+        // A 19-dp value on the right prefix (not pinned digit-for-digit, to stay
+        // robust).
+        let subject = DsSubject::new(38, 19);
+        let op = subject.execute(Function::Sqrt, RoundingMode::HalfToEven, Overflow::Panic);
+        match op(&[subject.string_to_value("2")]) {
             Computed::Value(v) => {
-                assert!(v.starts_with("1.41421356237309"), "got {v}");
+                let s = subject.value_to_string(&v);
+                assert!(s.starts_with("1.41421356237309"), "got {s}");
                 assert_eq!(
-                    v.split_once('.').unwrap().1.len(),
+                    s.split_once('.').unwrap().1.len(),
                     19,
                     "19 fractional digits"
                 );
             }
             other => panic!("expected Value, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn parsed_handle_round_trips_without_the_op() {
+        // The carrier is the cell's raw storage held at scale 0; wrap/unwrap must be
+        // an identity, so parse → format returns the literal at the cell's own
+        // fractional depth. Guards the `to_bits`/`from_bits` carry in both
+        // directions, independently of any kernel.
+        let subject = DsSubject::new(38, 19);
+        let v = subject.string_to_value("-12.5");
+        let s = subject.value_to_string(&v);
+        assert_eq!(
+            s.split_once('.').unwrap().1.len(),
+            19,
+            "formatted at the cell's own depth, got {s}"
+        );
+        assert_eq!(s.trim_end_matches('0'), "-12.5", "value unchanged, got {s}");
+        // A narrow cell, to prove the per-width enum variant is selected by width
+        // and not by build order.
+        let narrow = DsSubject::new(18, 3);
+        let n = narrow.string_to_value("7.125");
+        assert_eq!(narrow.value_to_string(&n), "7.125");
     }
 
     #[test]
