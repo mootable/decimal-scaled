@@ -587,17 +587,26 @@ mod adapter_proofs {
 
     /// Prove an adapter computes at all: sqrt(2) at D38<19> through the erased
     /// dispatch yields the 19-place prefix every era agrees on.
-    fn proves_sqrt2_at_d38_19<S: DecimalSubject<Value = String>>(subject: &S) {
+    ///
+    /// Driven through the subject's three stages rather than over a `String`
+    /// value: every subject now carries a PARSED handle (its era's `CellValue`),
+    /// so parse and format sit either side of the timed op instead of inside it.
+    /// Bounding on `DecimalSubject` alone keeps this proof era-agnostic.
+    fn proves_sqrt2_at_d38_19<S: DecimalSubject>(subject: &S)
+    where
+        S::Value: core::fmt::Debug,
+    {
         let op = subject.execute(
             Function::Sqrt,
             decimal_scaled_golden::RoundingMode::HalfToEven,
             decimal_scaled_golden::Overflow::Panic,
         );
-        match op(&["2".to_string()]) {
+        match op(&[subject.string_to_value("2")]) {
             Computed::Value(v) => {
-                assert!(v.starts_with("1.41421356237309"), "got {v}");
+                let s = subject.value_to_string(&v);
+                assert!(s.starts_with("1.41421356237309"), "got {s}");
                 assert_eq!(
-                    v.split_once('.').unwrap().1.len(),
+                    s.split_once('.').unwrap().1.len(),
                     19,
                     "19 fractional digits"
                 );
@@ -607,14 +616,20 @@ mod adapter_proofs {
     }
 
     /// Prove a binary function works too (the HistOps mul bridge): 1.5 * 2 = 3.
-    fn proves_mul_at_d18_3<S: DecimalSubject<Value = String>>(subject: &S) {
+    fn proves_mul_at_d18_3<S: DecimalSubject>(subject: &S)
+    where
+        S::Value: core::fmt::Debug,
+    {
         let op = subject.execute(
             Function::Mul,
             decimal_scaled_golden::RoundingMode::HalfToEven,
             decimal_scaled_golden::Overflow::Panic,
         );
-        match op(&["1.5".to_string(), "2".to_string()]) {
-            Computed::Value(v) => assert_eq!(v, "3.000"),
+        match op(&[
+            subject.string_to_value("1.5"),
+            subject.string_to_value("2"),
+        ]) {
+            Computed::Value(v) => assert_eq!(subject.value_to_string(&v), "3.000"),
             other => panic!("expected Value, got {other:?}"),
         }
     }
