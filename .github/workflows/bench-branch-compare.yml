@@ -721,11 +721,15 @@ jobs:
           # than let a green tick read as a result.
           if [ "$verdicts" -eq 0 ]; then
             {
-              echo "> **No verdicts were produced — this graded nothing.**"
+              echo "> **FAILED — no verdicts were produced. This graded nothing.**"
               echo "> Most often \`micro_features\` does not cover this bench's"
               echo "> \`required-features\`, so cargo skipped it and still exited 0."
-              echo "> Read the artifact log before treating this run as a result."
             } >> "$GITHUB_STEP_SUMMARY"
+            # A run that measured nothing must not report success. A green tick on
+            # an empty run is worse than a red one: it gets read as evidence, and
+            # `root_kernel_ab` sat broken for months behind exactly that.
+            echo "::error::graded 0 comparisons — a bench that runs nothing is a failure"
+            exit 1
           else
             {
               echo '```'

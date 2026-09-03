@@ -106,7 +106,7 @@ at the end of this section.
     arbitrary in isolation.
 
   The golden surface consequently grew from six modes to eight — a third
-  more graded rows per cell, at 96,159,960 checks.
+  more graded rows per cell, at 51,510,016 graded checks.
 
 ### Changed
 

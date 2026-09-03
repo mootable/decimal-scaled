@@ -4,7 +4,7 @@
 i.e. **0 bits of error**.
 
 <!-- BEGIN GENERATED:precision:stats -->
-We execute 102,735 specialised inputs across all 30 functions, on 117 widths and scales, under all 8 rounding modes, resulting in 96,159,960 separate checks.
+We execute 102,735 specialised inputs across all 30 functions, on 117 widths and scales, under all 8 rounding modes. Not every input is representable at every width and scale — one needing more significant digits than a tier holds is filtered before it runs — so the graded total is 51,510,016 separate checks.
 <!-- END GENERATED:precision:stats -->
 
 Each golden case was gathered from the codebase failing, from theory, from
