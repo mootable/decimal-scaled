@@ -299,19 +299,36 @@ where
     // (x = 0.2) it is `0.21·w`: ~18 at `w = 86`, which starts to pay.
     // Hence a threshold near 0.2 low down and a tighter one as `w` grows.
     //
-    // 3/20 rather than 1/10 for the middle band deliberately: the common
-    // small operand 0.1 sits exactly on 1/10, and a threshold landing on
-    // a frequently-benched value makes the arm's behaviour turn on an
-    // exact tie. 3/20 sits strictly between the two regimes the
-    // derivation above separates.
+    // THE THRESHOLD MUST NOT COST A DIVIDE. It guards the loop, so it is
+    // computed on EVERY call — including calls whose argument is above it
+    // and which therefore run the full chain exactly as before. Those
+    // calls must not pay anything for a test that changes nothing for
+    // them. An earlier form of this used `one_w / 5`, which put a wide
+    // divide on every `atan` (and, through `inverse_schoolbook`, every
+    // asin / acos / atan2). No bench on the bbc surface could see the
+    // cost: its operand `0.1` is below every threshold, so the chain
+    // always skipped and the saved divides hid the added one — the
+    // favourable case, and the only one measured.
     //
-    // Division before multiplication keeps every intermediate at or
-    // below `one_w`, so no threshold can overflow the work integer.
+    // So the thresholds are BINARY SHIFTS of `one_w`: `>> 2` is 0.25 and
+    // `>> 3` is 0.125. One shift, no divide, no multiply, and — unlike a
+    // `k * x >= one_w` cross-multiplied comparison — nothing that can
+    // overflow the work integer, so there is no per-tier headroom
+    // argument to get wrong. `one_w` is `10^w`, and `10^w >> 2` is
+    // `25·10^(w-2)` exactly for `w >= 2` (likewise `125·10^(w-3)` for
+    // `>> 3`), so the shift is not even lossy at any working scale a
+    // caller reaches.
+    //
+    // Both values are CONSERVATIVE against the derivation above, which
+    // puts the break-even argument near 0.41 at `w = 44` and 0.26 at
+    // `w = 86` (taking a halving at ~25 term-equivalents): halving less
+    // eagerly than the arithmetic permits. They also sit clear of 0.1,
+    // so no common operand lands on an exact tie.
     let pow10_w = one_w;
     let halving_threshold = if working_scale < 60 {
-        one_w / eg::lit::<S>(5) // 0.2 — the narrow kernel's threshold
+        one_w >> 2 // 0.25
     } else if working_scale < 110 {
-        one_w / eg::lit::<S>(20) * eg::lit::<S>(3) // 0.15
+        one_w >> 3 // 0.125
     } else {
         eg::zero::<S>() // always halve to the cap, exactly as before
     };
