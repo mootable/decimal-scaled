@@ -650,6 +650,16 @@ jobs:
         with:
           toolchain: stable
 
+      # Same install as the `build` job. A bench target links every
+      # dev-dependency, and this crate's dev-deps include `plotters` with the
+      # `ttf` feature (for examples/chart_gen.rs), which pulls font-kit ->
+      # yeslogic-fontconfig-sys and needs system fontconfig at BUILD time. The
+      # micro job omitted it, so `cargo bench` died in the build script after
+      # ~40 s with a pkg-config error that named no bench and looked nothing
+      # like a missing apt package. Verified on run 33699722823.
+      - name: Install system libs
+        run: sudo rm -f /etc/apt/sources.list.d/*microsoft* /etc/apt/sources.list.d/*azure* 2>/dev/null || true; sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
+
       - name: Cache cargo
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
