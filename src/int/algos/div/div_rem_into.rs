@@ -81,9 +81,11 @@ pub(crate) fn div_rem_into(
     match select_for_limbs(num, den) {
         Algorithm::Rem => div_rem(num, den, quot, rem),
         Algorithm::KnuthU128Limb => {
-            if u128_u.len() >= (num.len() + 2).div_ceil(2) + 1
-                && u128_v.len() >= den.len().div_ceil(2)
-            {
+            // The base-2¹²⁸ engine's packed-scratch minima, stated as the doc
+            // above states them.
+            let packed_dividend_min = (num.len() + 2).div_ceil(2) + 1;
+            let packed_divisor_min = den.len().div_ceil(2);
+            if u128_u.len() >= packed_dividend_min && u128_v.len() >= packed_divisor_min {
                 div_knuth_u128_limb_into(num, den, quot, rem, u, v, u128_u, u128_v);
             } else {
                 div_knuth_into(num, den, quot, rem, u, v);

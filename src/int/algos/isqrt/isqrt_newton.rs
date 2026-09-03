@@ -52,7 +52,13 @@ const DIV_SCRATCH_LIMBS_128: usize = MAX_SINGLE_LIMBS / 2 + 2;
 /// `sqrt` kernel) calls [`isqrt_newton_into`] with its own exactly-sized
 /// buffers instead, skipping the build-max zeroing entirely.
 pub(crate) fn isqrt_newton(radicand: &[u64], out: &mut [u64]) {
-    debug_assert!(radicand.len() + 1 <= SCRATCH_LIMBS, "isqrt scratch overflow");
+    // The Newton work width is `radicand.len() + 1`, so the build-max buffer
+    // holds it only while the radicand is strictly shorter than the budget.
+    debug_assert!(
+        radicand.len() < SCRATCH_LIMBS,
+        "isqrt scratch overflow: work width {} exceeds the build-max {SCRATCH_LIMBS}",
+        radicand.len() + 1
+    );
     let mut x = [0u64; SCRATCH_LIMBS];
     let mut q = [0u64; SCRATCH_LIMBS];
     let mut y = [0u64; SCRATCH_LIMBS];
