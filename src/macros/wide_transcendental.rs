@@ -5150,38 +5150,27 @@ macro_rules! decl_wide_transcendental {
                 if working_digits == $core::GUARD {
                     return self.acosh_strict_with(mode);
                 }
-                let working_scale = SCALE + working_digits;
-                // Two-core: composition runs on the wide `Wagm` work int.
-                let one_at_working_scale = $core::one_agm(working_scale);
-                let working_value = $core::to_work_scaled_agm(self.to_bits(), working_digits);
-                if working_value < one_at_working_scale {
-                    panic!(concat!(stringify!($Type), "::acosh: argument must be >= 1"));
-                }
-                let two_at_working_scale = one_at_working_scale + one_at_working_scale;
-                let inner = if working_value >= two_at_working_scale {
-                    let reciprocal =
-                        $core::div_agm(one_at_working_scale, working_value, working_scale);
-                    let root = $core::sqrt_fixed_agm(
-                        one_at_working_scale
-                            - $core::mul_agm(reciprocal, reciprocal, working_scale),
-                        working_scale
-                    );
-                    $core::ln_fixed_routed_agm::<SCALE>(working_value, working_scale) + $core::ln_fixed_routed_agm::<SCALE>(one_at_working_scale + root, working_scale)
-                } else {
-                    // Near 1: acosh(1+t) = log1p(t + sqrt(t*(t+2))).
-                    // The gap above 1 is exact, so
-                    // `v^2 - 1 = (v-1)*(v+1) = t*(t+2)` is formed without
-                    // the catastrophic cancellation of `mul(v,v) - 1`
-                    // as `v -> 1`, and `log1p` avoids re-forming `1 + arg`
-                    // when the gap (hence `arg`) is tiny.
-                    let gap = working_value - one_at_working_scale;
-                    let root = $core::sqrt_fixed_agm(
-                        $core::mul_agm(gap, gap + two_at_working_scale, working_scale),
-                        working_scale
-                    );
-                    $core::log1p_fixed::<$core::Wagm>(gap + root, working_scale)
-                };
-                Self::from_bits($core::round_to_storage_with_g::<$core::Wagm>(inner, working_scale, SCALE, mode))
+                // The SAME `LnComposition` kernel the policy routes
+                // `acosh_strict_with` to, at the caller's guard width.
+                //
+                // This shell used to carry its own copy of the
+                // composition, and that copy kept the UN-SPLIT near-1
+                // radicand `sqrt(mul(gap, gap + 2))` after the split form
+                // `sqrt(gap) * sqrt(gap + 2)` was adopted in the kernel.
+                // The un-split product is rounded to the working scale
+                // before the root, which drops the `t^2` term of
+                // `t*(t+2)` while it still matters, so `acosh(1 + 10^-k)`
+                // came back wrong by `0.354 * 10^(SCALE - 1.5k)` ULP for
+                // every `k` with `SCALE + working_digits < 2k` and
+                // `3k < 2*SCALE`. A SMALLER `working_digits` opens that
+                // band LOWER, so the copy was reachable across a wider
+                // range than the strict path it was forked from.
+                Self::from_bits(
+                    $crate::algos::trig::hyper_ln_composition::acosh_ln_composition::<
+                        $core::Core,
+                        SCALE,
+                    >(self.to_bits(), working_digits, mode)
+                )
             }
 
             /// Inverse hyperbolic tangent with caller-chosen guard digits.

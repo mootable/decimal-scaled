@@ -129,18 +129,28 @@ where
 /// the working width; near 1 it takes the `log1p` gap form.
 ///
 /// Panics if `x < 1`.
+///
+/// `guard` is the number of guard digits below `SCALE` to compute at —
+/// a plain runtime argument, as on its two siblings here. The routed
+/// `_strict` path passes the tier's `C::GUARD`; the `_approx` shell
+/// passes the caller's chosen width. Taking it matters for more than
+/// tidiness: the near-1 correction below is only sound because the
+/// radicand is split, and the size of the band it protects depends on
+/// `guard`, so a shell computing at its own guard MUST come through
+/// here rather than carry its own copy.
 #[inline]
 pub(crate) fn acosh_ln_composition<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
+    guard: u32,
     mode: RoundingMode,
 ) -> C::Storage
 where
     <C::Wagm as BigInt>::Scratch: ComputeLimbs,
 {
-    let working_scale = SCALE + C::GUARD;
+    let working_scale = SCALE + guard;
     // Two-core: composition runs on the wide `Wagm` work int.
     let one_at_working_scale = eg::pow10::<C::Wagm>(working_scale);
-    let working_value = C::to_work_scaled_agm(raw, C::GUARD);
+    let working_value = C::to_work_scaled_agm(raw, guard);
     if working_value < one_at_working_scale {
         panic!("acosh: argument must be >= 1");
     }
@@ -163,14 +173,33 @@ where
         // The radicand is taken as sqrt(t)*sqrt(t+2), NOT as
         // sqrt(mul(t, t+2)). Forming the product FIRST rounds it to the
         // working scale, and `t*(t+2) = 2t + t^2` loses the `t^2` term
-        // outright once `t^2 < 10^-(SCALE+GUARD)` — while that term is
+        // outright once `t^2 < 10^-(SCALE+guard)` — while that term is
         // still significant against the result's own last place,
         // because `sqrt` amplifies a relative radicand error of `t/2`
         // into a relative result error of `t/4` on a result of size
         // `sqrt(2t)`. The resulting error is `0.354 * 10^(SCALE-1.5k)`
-        // ULP for `t = 10^-k`, non-zero exactly in the window
-        // `(SCALE+GUARD)/2 < k <= 2*SCALE/3`, which is non-empty only
-        // for `SCALE > 90` (measured at D115<114> and D307<150>).
+        // ULP for `t = 10^-k`, non-zero exactly on
+        //
+        //     SCALE + guard < 2k    and    3k < 2*SCALE
+        //
+        // with BOTH ends strict, and stated against the `guard` actually
+        // passed — not the tier's `GUARD`, since a caller-chosen guard
+        // smaller than it opens the band LOWER. The upper end is
+        // `3k < 2*SCALE`, NOT `k <= 2*SCALE/3`: where 3 divides SCALE
+        // the endpoint `k = 2*SCALE/3` is correct rather than defective
+        // (measured 114 -> 75 not 76, and 150 -> 99 not 100). The lower
+        // end is exact too — the error is 0 at `2k == SCALE + guard`.
+        //
+        // The band is non-empty when an integer fits strictly between
+        // those two bounds. `SCALE > 3*guard` is only the CONTINUOUS
+        // relaxation of that: integer rounding at both ends pushes the
+        // real onset later and makes it non-monotone there. Solving the
+        // integer form at the tier's own `guard = 30` puts the first
+        // non-empty SCALE at 95 — 96 is empty again, 97 upward is not —
+        // rather than the 91 the relaxation implies. That onset is
+        // DERIVED from the two bounds, not measured; the measured cells
+        // are the two anchors above.
+        //
         // Splitting the radicand keeps each factor at full
         // working-scale relative precision, so no small term is ever
         // rounded into a large one: the residual is then bounded by the
@@ -260,6 +289,128 @@ mod tests {
     //! golden suite drives. Agreement across the key is what licenses
     //! `select` returning the composition everywhere.
 
+    use crate::support::rounding::RoundingMode;
+
+    const MODES: [RoundingMode; 8] = [
+        RoundingMode::HalfToEven,
+        RoundingMode::HalfAwayFromZero,
+        RoundingMode::HalfTowardZero,
+        RoundingMode::Trunc,
+        RoundingMode::Floor,
+        RoundingMode::Ceiling,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
+    ];
+
+    /// The caller-chosen-guard `acosh` surface, graded against the
+    /// Ziv-escalating schoolbook oracle at the inputs and guards that
+    /// exercise the near-1 radicand.
+    ///
+    /// `acosh_approx_with` forked its own copy of the composition and
+    /// kept the UN-SPLIT radicand `sqrt(mul(t, t + 2))` after the kernel
+    /// adopted the split `sqrt(t) * sqrt(t + 2)`. Rounding the product
+    /// to the working scale before the root drops the `t^2` term of
+    /// `t*(t + 2)` while it is still significant, so `acosh(1 + 10^-k)`
+    /// was wrong by `0.354 * 10^(SCALE - 1.5k)` ULP over the band
+    ///
+    /// ```text
+    /// SCALE + guard < 2k    and    3k < 2 * SCALE
+    /// ```
+    ///
+    /// Measured before the shell was repointed, the band and the
+    /// magnitude both hold exactly: at `D115<114>` it is
+    /// `k in 63..=75` for `guard = 10` (worst `1.118e19` ULP at
+    /// `k = 63`) and `k in 73..=75` for `guard = 31` (worst `11180` ULP
+    /// at `k = 73`); at `D307<150>`, `k in 81..=99` for `guard = 10`
+    /// (worst `1.118e28` ULP). The lower edge is exact — error is 0 at
+    /// `2k == SCALE + guard` — and the band is empty once
+    /// `guard >= SCALE/3`, which is why the tier's own `GUARD` of 30 hid
+    /// it below `SCALE = 90` while a smaller caller guard opens it much
+    /// lower.
+    ///
+    /// The sweep covers every `k`, not just that band, so it also grades
+    /// the guards either side of it.
+    #[test]
+    fn acosh_approx_with_matches_the_schoolbook_oracle_at_every_guard() {
+        let mut fails: std::vec::Vec<std::string::String> = std::vec::Vec::new();
+        let mut checks: u32 = 0;
+        // Probes landing inside the former defect band. Counted so the
+        // test cannot pass by never reaching it: the band is the whole
+        // reason this exists, and a narrowed `k` range or a raised guard
+        // would otherwise silently grade nothing that ever broke.
+        let mut in_band: u32 = 0;
+
+        macro_rules! grade {
+            ($label:literal, $N:literal, $S:literal, $Core:ty, $guard:expr) => {{
+                type T = crate::D<crate::int::types::Int<$N>, $S>;
+                let guard: u32 = $guard;
+                let one =
+                    crate::algos::exp::exp_generic::pow10::<crate::int::types::Int<$N>>($S);
+                for &m in &MODES {
+                    for k in 1..=$S {
+                        if $S + guard < 2 * k && 3 * k < 2 * $S {
+                            in_band += 1;
+                        }
+                        let raw = one
+                            + crate::algos::exp::exp_generic::pow10::<
+                                crate::int::types::Int<$N>,
+                            >($S - k);
+                        let got = <T>::from_bits(raw).acosh_approx_with(guard, m).to_bits();
+                        let want =
+                            crate::policy::trig::extra_rung::acosh_strict::<$Core, $S>(raw, m);
+                        checks += 1;
+                        if got != want {
+                            if fails.len() < 20 {
+                                let d = if got > want { got - want } else { want - got };
+                                fails.push(std::format!(
+                                    "{}<{}> guard={guard} mode={m:?} acosh(1 + 10^-{k}): \
+                                     got={got} want={want} delta={d} ULP",
+                                    $label,
+                                    $S
+                                ));
+                            }
+                        }
+                    }
+                }
+            }};
+        }
+
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        {
+            grade!("D57", 3, 56, crate::types::widths::wide_trig_d57::Core, 10);
+            grade!("D57", 3, 56, crate::types::widths::wide_trig_d57::Core, 20);
+        }
+        #[cfg(any(feature = "d115", feature = "wide"))]
+        {
+            grade!("D115", 6, 114, crate::types::widths::wide_trig_d115::Core, 10);
+            grade!("D115", 6, 114, crate::types::widths::wide_trig_d115::Core, 29);
+            grade!("D115", 6, 114, crate::types::widths::wide_trig_d115::Core, 31);
+            grade!("D115", 6, 114, crate::types::widths::wide_trig_d115::Core, 40);
+            grade!("D115", 6, 86, crate::types::widths::wide_trig_d115::Core, 10);
+        }
+        #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+        {
+            grade!("D307", 16, 150, crate::types::widths::wide_trig_d307::Core, 10);
+        }
+
+        assert!(checks > 0, "no tier was probed - the test graded nothing");
+        assert!(
+            in_band > 0,
+            "no probe landed in the `SCALE + guard < 2k, 3k < 2*SCALE` band - \
+             this test would pass without grading the defect it exists for"
+        );
+        std::println!(
+            "acosh_approx_with vs schoolbook oracle: {checks} probes, \
+             {in_band} inside the former defect band"
+        );
+        assert!(
+            fails.is_empty(),
+            "{} of {checks} probes disagree with the schoolbook oracle:\n{}",
+            fails.len(),
+            fails.join("\n")
+        );
+    }
+
     /// Cross-algorithm wall: the routed composition must equal the
     /// schoolbook reference bit-for-bit at every probed cell.
     ///
@@ -317,7 +468,11 @@ mod tests {
                     }
                     let raw = x.to_bits();
                     let a = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        super::acosh_ln_composition::<$Core, $S>(raw, m)
+                        super::acosh_ln_composition::<$Core, $S>(
+                            raw,
+                            <$Core as super::WideTrigCore>::GUARD,
+                            m,
+                        )
                     }))
                     .ok();
                     let b = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
