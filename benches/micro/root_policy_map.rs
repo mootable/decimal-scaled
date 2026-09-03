@@ -345,6 +345,26 @@ fn run_cell<const N: usize>(
         );
     }
 
+    // Per-INPUT times for every candidate. The aggregate alone cannot answer
+    // whether a policy needs a `ByValue` arm — that question is decided by how
+    // one candidate's cost moves across the value spread, so the raw per-input
+    // figures are emitted rather than just the per-input winner.
+    for (ci, cand) in cands.iter().enumerate() {
+        if status[ci].starts_with("FAIL") {
+            continue;
+        }
+        let per: Vec<String> = inputs
+            .iter()
+            .enumerate()
+            .map(|(ii, (ilabel, _))| format!("{ilabel}={:.1}", times[ci][ii]))
+            .collect();
+        println!(
+            "ROWI\t{fname}\t{N}\tD{tier}\t{scale}\t{}\t{}",
+            cand.label,
+            per.join(" ")
+        );
+    }
+
     // Rank only the ELIGIBLE candidates — speed never overrides correctness.
     let mut rank: Vec<(usize, f64)> = (0..cands.len())
         .filter(|&ci| !status[ci].starts_with("FAIL"))
@@ -449,6 +469,9 @@ fn run_cell<const N: usize>(
 /// (`1.0` / `2.0` at this scale), the tier's near-maximum magnitude, and the
 /// minimum non-zero raw — so a value-dependent winner is visible.
 fn inputs_for<const N: usize>(scale: u32) -> Vec<(&'static str, Int<N>)> {
+    if std::env::var("ROOTMAP_INPUTS").as_deref() == Ok("mag") {
+        return inputs_magnitude_ladder::<N>();
+    }
     let mut lsb = [0u64; N];
     lsb[0] = 1;
     vec![
@@ -457,6 +480,26 @@ fn inputs_for<const N: usize>(scale: u32) -> Vec<(&'static str, Int<N>)> {
         ("v_top", bi::operand_k_at_scale::<N>(9, tier_digits(N) - 1)),
         ("v_lsb", bi::int_from_mag_limbs::<N>(&lsb)),
     ]
+}
+
+/// A ladder of raw MAGNITUDES (`10^k`) spanning the tier, at a fixed scale.
+///
+/// This is the input set that decides whether a policy needs a `ByValue` arm:
+/// a value-gated kernel (the `MgDivide` bypass, whose hardware-`u128` fast
+/// path fires only while `raw · 10^SCALE` stays under `u128::MAX`) shows a
+/// step in cost as the ladder crosses its gate. The 4-value default spread
+/// samples too coarsely to see that step.
+fn inputs_magnitude_ladder<const N: usize>() -> Vec<(&'static str, Int<N>)> {
+    const LABELS: [&str; 9] =
+        ["m1e0", "m1e5", "m1e10", "m1e15", "m1e19", "m1e22", "m1e25", "m1e30", "m1e37"];
+    const EXPS: [u32; 9] = [0, 5, 10, 15, 19, 22, 25, 30, 37];
+    let cap = tier_digits(N) - 1;
+    LABELS
+        .iter()
+        .zip(EXPS)
+        .filter(|(_, e)| *e <= cap)
+        .map(|(l, e)| (*l, bi::operand_k_at_scale::<N>(1, e)))
+        .collect()
 }
 
 // ── per-width sweeps ─────────────────────────────────────────────────────
@@ -566,6 +609,49 @@ sweep_width!(sweep_n32, 32, 64, 96);
 sweep_width!(sweep_n48, 48, 96, 144);
 sweep_width!(sweep_n64, 64, 128, 192);
 
+/// Control: runtime-SCALE slice vs the production CONST-`SCALE` slice.
+///
+/// The whole map rests on the slice's numbers, and this sweep drives it with a
+/// runtime `scale: u32` where production monomorphises on a const `SCALE`. If
+/// the const form folded the `pow10_limbs` table lookup into something
+/// materially faster, every slice figure here would understate the shipped
+/// kernel and the comparison against the (const-folded, pow10-hoisted) native
+/// arms would be unfair. This measures that difference directly at a narrow
+/// and a wide cell instead of assuming it away.
+fn control_runtime_vs_const_scale(cfg: &Cfg) {
+    println!("-- control: runtime-scale vs const-SCALE slice (same kernel) --");
+
+    let inputs3 = inputs_for::<3>(20);
+    let c3: Vec<Cand<3>> = vec![
+        Cand { label: "slice_rt", run: Box::new(|r, m| bi::sqrt_newton_rt::<3>(r, 20, m)) },
+        Cand {
+            label: "slice_const",
+            run: Box::new(|r, m| bi::sqrt_newton_slice_n::<3, 20>(r, m)),
+        },
+    ];
+    run_cell::<3>("ctl_sqrt_rt_vs_const", 20, &inputs3, &c3, 0, cfg);
+
+    let inputs16 = inputs_for::<16>(306);
+    let c16: Vec<Cand<16>> = vec![
+        Cand { label: "slice_rt", run: Box::new(|r, m| bi::sqrt_newton_rt::<16>(r, 306, m)) },
+        Cand {
+            label: "slice_const",
+            run: Box::new(|r, m| bi::sqrt_newton_slice_n::<16, 306>(r, m)),
+        },
+    ];
+    run_cell::<16>("ctl_sqrt_rt_vs_const", 306, &inputs16, &c16, 0, cfg);
+
+    let inputs12 = inputs_for::<12>(229);
+    let c12: Vec<Cand<12>> = vec![
+        Cand { label: "slice_rt", run: Box::new(|r, m| bi::cbrt_newton_rt::<12>(r, 229, m)) },
+        Cand {
+            label: "slice_const",
+            run: Box::new(|r, m| bi::cbrt_newton_slice_n::<12, 229>(r, m)),
+        },
+    ];
+    run_cell::<12>("ctl_cbrt_rt_vs_const", 229, &inputs12, &c12, 0, cfg);
+}
+
 fn main() {
     let cfg = cfg();
     let timeout = Duration::from_secs(
@@ -596,6 +682,11 @@ fn main() {
     println!("ROW\tfn\tN\ttier\tscale\tcandidate\tns_per_call\teligibility\tstatus");
 
     let started = Instant::now();
+    if env_str("ROOTMAP_CONTROL").is_some() {
+        control_runtime_vs_const_scale(&cfg);
+        println!("root_policy_map: control done in {:.1}s", started.elapsed().as_secs_f64());
+        return;
+    }
     for &n in &cfg.widths {
         match n {
             1 => sweep_n1(&cfg),
