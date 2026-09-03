@@ -112,7 +112,7 @@ def parse_pair(text: str) -> dict[tuple[str, int, int], tuple[float, float]]:
 # -- but it cannot be DISTINGUISHED from runner jitter in a single cell-mode
 # sweep, so the panel reports the count at both bands rather than one number that
 # is mostly coin-flips on 2 ns ops.
-NULL_P99 = 2.2
+NULL_P50, NULL_P90, NULL_P99 = 1.11, 1.60, 2.2
 
 
 # RELATIVE ONLY: a move counts when it is more than 1% of the shipped time.
@@ -221,14 +221,25 @@ def history(branch: str, min_scale: int, limit: int = 12) -> list[tuple]:
             (ups if branch_ns < prod else dns).append(
                 prod / branch_ns if branch_ns < prod else branch_ns / prod)
         wi, si = inversions(parse(text), min_scale)
-        wi99 = sum(1 for r in wi if r[5] >= NULL_P99)
-        si99 = sum(1 for r in si if r[5] >= NULL_P99)
+        band = lambda rows, f: sum(1 for r in rows if r[5] >= f)
         mean = lambda v: sum(v) / len(v) if v else 1.0
+
+        def pct(v, q):
+            """Percentile of a ratio distribution. Median and p90 say what the
+            typical and near-worst case actually are; a mean is dragged around by
+            a single 36x outlier and describes no cell in particular."""
+            if not v:
+                return 1.0
+            s = sorted(v)
+            return s[min(len(s) - 1, int(q * (len(s) - 1) + 0.5))]
         gmean = _math.exp(sum(logs) / len(logs)) if logs else 1.0
         out.append((sha[:8], when, len(ups), len(dns), len(wi), len(si),
                     mean(ups), max(ups, default=1.0),
                     mean(dns), max(dns, default=1.0),
-                    gmean, len(ups) - len(dns), wi99, si99))
+                    gmean, len(ups) - len(dns),
+                    band(wi, NULL_P50), band(wi, NULL_P90), band(wi, NULL_P99),
+                    band(si, NULL_P50), band(si, NULL_P90), band(si, NULL_P99),
+                    pct(ups, 0.5), pct(ups, 0.9), pct(dns, 0.5), pct(dns, 0.9)))
     out = list(reversed(out))  # oldest first
 
     # POINT ZERO: the shipped release itself, where branch == shipped, so
@@ -246,10 +257,12 @@ def history(branch: str, min_scale: int, limit: int = 12) -> list[tuple]:
                         f"{lines[0].split(chr(9))[0]}:results/timing/bbc_medians.tsv")
             shipped = {k: p for k, (p, _b) in parse_pair(newest).items() if p > 0}
             wi0, si0 = inversions(shipped, min_scale)
-            wi099 = sum(1 for r in wi0 if r[5] >= NULL_P99)
-            si099 = sum(1 for r in si0 if r[5] >= NULL_P99)
+            b0 = lambda rows, f: sum(1 for r in rows if r[5] >= f)
             out.insert(0, ("shipped", "0.5.1", 0, 0, len(wi0), len(si0),
-                           1.0, 1.0, 1.0, 1.0, 1.0, 0, wi099, si099))
+                           1.0, 1.0, 1.0, 1.0, 1.0, 0,
+                           b0(wi0, NULL_P50), b0(wi0, NULL_P90), b0(wi0, NULL_P99),
+                           b0(si0, NULL_P50), b0(si0, NULL_P90), b0(si0, NULL_P99),
+                           1.0, 1.0, 1.0, 1.0))
         except subprocess.CalledProcessError:
             pass
     return out
@@ -284,14 +297,22 @@ def history_panel(pts: list[tuple]) -> str:
              lambda v: f"{v:+,}"),
             ("cells faster than shipped", 2, False, n),
             ("  mean improvement", 6, False, x),
+            ("  median (p50) improvement", 18, False, x),
+            ("  p90 improvement", 19, False, x),
             ("  biggest improvement", 7, False, x),
             ("cells slower", 3, True, n),
             ("  mean regression", 8, True, x),
+            ("  median (p50) regression", 20, True, x),
+            ("  p90 regression", 21, True, x),
             ("  worst regression", 9, True, x),
             ("width inversions — all", 4, True, n),
-            ("  above 2.2x (p99 of the runner null)", 12, True, n),
+            ("  above 1.11x (p50 of the runner null)", 12, True, n),
+            ("  above 1.60x (p90)", 13, True, n),
+            ("  above 2.20x (p99)", 14, True, n),
             ("scale inversions — all", 5, True, n),
-            ("  above 2.2x (p99 of the runner null)", 13, True, n)]
+            ("  above 1.11x (p50 of the runner null)", 15, True, n),
+            ("  above 1.60x (p90)", 16, True, n),
+            ("  above 2.20x (p99)", 17, True, n)]
     head = ("<table><thead><tr><th>metric</th><th>trend</th><th>first</th>"
             "<th>now</th><th>change</th></tr></thead><tbody>")
     body = []
