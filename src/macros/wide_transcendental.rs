@@ -3739,48 +3739,24 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn asinh_strict(self) -> Self {
-                let raw = self.to_bits();
-                if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    return Self::ZERO;
-                }
-                let working_scale = SCALE + $core::GUARD;
-                // Two-core: composition runs on the wide `Wagm` work int.
-                let one_at_working_scale = $core::one_agm(working_scale);
-                let working_value = $core::to_work_agm(raw);
-                let abs_working_value = if working_value < $core::zero_agm() {
-                    -working_value
-                } else {
-                    working_value
-                };
-                // asinh @ MAX scale (input ±1) loses sub-w precision in the
-                // sqrt step before ln; tang_ln_fixed's INTERNAL_EXTRA
-                // residue-signal can't detect that caller-side loss. Keep
-                // on Series (`ln_fixed_agm`) until ln_fixed_routed gains a
-                // PRE_RESIDUE flag (memory project_050_asinh_max_tang_residue).
-                let inner = if abs_working_value >= one_at_working_scale {
-                    let reciprocal =
-                        $core::div_agm(one_at_working_scale, abs_working_value, working_scale);
-                    let root = $core::sqrt_fixed_agm(
-                        one_at_working_scale
-                            + $core::mul_agm(reciprocal, reciprocal, working_scale),
-                        working_scale
-                    );
-                    $core::ln_fixed_series_agm(abs_working_value, working_scale)
-                        + $core::ln_fixed_series_agm(one_at_working_scale + root, working_scale)
-                } else {
-                    let root = $core::sqrt_fixed_agm(
-                        $core::mul_agm(abs_working_value, abs_working_value, working_scale)
-                            + one_at_working_scale,
-                        working_scale
-                    );
-                    $core::ln_fixed_series_agm(abs_working_value + root, working_scale)
-                };
-                let signed = if raw < $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    -inner
-                } else {
-                    inner
-                };
-                Self::from_bits($core::round_to_storage_agm(signed, working_scale, SCALE))
+                // The composition itself lives in
+                // `algos::trig::hyper_ln_composition::asinh_series_composition`;
+                // this shell only names it. It is called DIRECTLY rather
+                // than through `policy::trig::asinh_dispatch` on purpose:
+                // the policy path runs the rung-selected schoolbook, whose
+                // `ln` is the routed Tang/Series choice, while this
+                // composition is pinned to Series (asinh @ MAX scale,
+                // input ±1, loses sub-w precision in the sqrt step ahead
+                // of the ln, which tang_ln_fixed's INTERNAL_EXTRA residue
+                // signal cannot detect caller-side — see memory
+                // project_050_asinh_max_tang_residue). Routing it would
+                // swap the engine, so that remains an open decision.
+                Self::from_bits(
+                    $crate::algos::trig::hyper_ln_composition::asinh_series_composition::<
+                        $core::Core,
+                        SCALE,
+                    >(self.to_bits(), $core::GUARD, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                )
             }
 
             /// Inverse hyperbolic cosine, as `ln(x + √(x² − 1))`,
@@ -3839,22 +3815,20 @@ macro_rules! decl_wide_transcendental {
             /// Convert radians to degrees: `self · (180 / π)`. Strict
             /// and correctly rounded. Panics if `|self| · 180`
             /// overflows the working integer.
+            ///
+            /// Delegates to the policy-registered `to_degrees` kernel for
+            /// this `(width, SCALE)` cell — see `policy::to_degrees`. The
+            /// shell previously carried its own inline `deg_per_rad`
+            /// multiply; that computation is the `MulPiRatio` kernel
+            /// (`algos::trig::angle_mul_pi_ratio`) expression for
+            /// expression, so routing it through the matcher is a
+            /// relocation, not a value change — graded across the tiers,
+            /// scales, magnitudes and all eight modes by
+            /// `to_degrees_mul_pi_ratio_matches_the_inherent_shell_across_the_surface`.
             #[inline]
             #[must_use]
             pub fn to_degrees_strict(self) -> Self {
-                let working_scale = SCALE + $core::GUARD;
-                let working_value = $core::to_work(self.to_bits());
-                // `x * 180/π`: multiply by the const-folded `deg_per_rad`
-                // (180/π) constant instead of dividing by the runtime-
-                // recomputed `pi(working_scale)`. Same value, but no per-call π
-                // rescale (`const_rounded`) and no divide — mirrors
-                // `to_radians_strict`'s `pi_cf` multiply path.
-                let degrees = $core::mul(
-                    working_value,
-                    $core::deg_per_rad_cf::<SCALE>(working_scale, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
-                    working_scale,
-                );
-                Self::from_bits($core::round_to_storage(degrees, working_scale, SCALE))
+                Self::from_bits($crate::policy::to_degrees::dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
             /// Convert degrees to radians: `self · (π / 180)`. Strict
@@ -4304,24 +4278,15 @@ macro_rules! decl_wide_transcendental {
                 Self::from_bits($crate::policy::trig::atanh_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::to_degrees_strict`].
+            /// Mode-aware sibling of [`Self::to_degrees_strict`] — policy
+            /// dispatch, see `policy::to_degrees`.
             #[inline]
             #[must_use]
             pub fn to_degrees_strict_with(
                 self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
-                let working_scale = SCALE + $core::GUARD;
-                let working_value = $core::to_work(self.to_bits());
-                // See `to_degrees_strict`: const-folded `deg_per_rad`
-                // multiply, no runtime `pi(working_scale)` recompute, no
-                // divide.
-                let degrees = $core::mul(
-                    working_value,
-                    $core::deg_per_rad_cf::<SCALE>(working_scale, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
-                    working_scale,
-                );
-                Self::from_bits($core::round_to_storage_with(degrees, working_scale, SCALE, mode))
+                Self::from_bits($crate::policy::to_degrees::dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
             /// Mode-aware sibling of [`Self::to_radians_strict`].
@@ -5152,48 +5117,16 @@ macro_rules! decl_wide_transcendental {
                 if working_digits == $core::GUARD {
                     return self.asinh_strict_with(mode);
                 }
-                let raw = self.to_bits();
-                if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    return Self::ZERO;
-                }
-                let working_scale = SCALE + working_digits;
-                // Two-core: composition runs on the wide `Wagm` work int.
-                let one_at_working_scale = $core::one_agm(working_scale);
-                let working_value = $core::to_work_scaled_agm(raw, working_digits);
-                let abs_working_value = if working_value < $core::zero_agm() {
-                    -working_value
-                } else {
-                    working_value
-                };
-                // asinh @ MAX scale (input ±1) loses sub-w precision in the
-                // sqrt step before ln; tang_ln_fixed's INTERNAL_EXTRA
-                // residue-signal can't detect that caller-side loss. Keep
-                // on Series (`ln_fixed_series_agm`) until ln_fixed_routed gains
-                // a PRE_RESIDUE flag (memory project_050_asinh_max_tang_residue).
-                let inner = if abs_working_value >= one_at_working_scale {
-                    let reciprocal =
-                        $core::div_agm(one_at_working_scale, abs_working_value, working_scale);
-                    let root = $core::sqrt_fixed_agm(
-                        one_at_working_scale
-                            + $core::mul_agm(reciprocal, reciprocal, working_scale),
-                        working_scale
-                    );
-                    $core::ln_fixed_series_agm(abs_working_value, working_scale)
-                        + $core::ln_fixed_series_agm(one_at_working_scale + root, working_scale)
-                } else {
-                    let root = $core::sqrt_fixed_agm(
-                        $core::mul_agm(abs_working_value, abs_working_value, working_scale)
-                            + one_at_working_scale,
-                        working_scale
-                    );
-                    $core::ln_fixed_series_agm(abs_working_value + root, working_scale)
-                };
-                let signed = if raw < $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    -inner
-                } else {
-                    inner
-                };
-                Self::from_bits($core::round_to_storage_with_g::<$core::Wagm>(signed, working_scale, SCALE, mode))
+                // The SAME kernel `asinh_strict` names, at the caller's
+                // guard width instead of the tier's — the composition is
+                // identical, only the working scale differs, so it is one
+                // kernel with a `guard` argument rather than a second copy.
+                Self::from_bits(
+                    $crate::algos::trig::hyper_ln_composition::asinh_series_composition::<
+                        $core::Core,
+                        SCALE,
+                    >(self.to_bits(), working_digits, mode)
+                )
             }
 
             /// Inverse hyperbolic cosine with caller-chosen guard digits.
@@ -5272,29 +5205,16 @@ macro_rules! decl_wide_transcendental {
                 if working_digits == $core::GUARD {
                     return self.atanh_strict_with(mode);
                 }
-                let working_scale = SCALE + working_digits;
-                // Two-core: composition runs on the wide `Wagm` work int.
-                let one_at_working_scale = $core::one_agm(working_scale);
-                let working_value = $core::to_work_scaled_agm(self.to_bits(), working_digits);
-                let abs_working_value = if working_value < $core::zero_agm() {
-                    -working_value
-                } else {
-                    working_value
-                };
-                if abs_working_value >= one_at_working_scale {
-                    panic!(concat!(
-                        stringify!($Type),
-                        "::atanh: argument out of domain (-1, 1)"
-                    ));
-                }
-                // Gap form: atanh(x) = (1/2)*[ln(1+x) - ln(1-x)].
-                // `one_at_working_scale - working_value` is the exact
-                // working-scale gap (`working_value` is the
-                // storage input lifted by appending guard zeros), so
-                // neither `ln_fixed` argument suffers the `(1-x)`
-                // catastrophic cancellation the ratio form does near +-1.
-                let atanh_value = ($core::ln_fixed_routed_agm::<SCALE>(one_at_working_scale + working_value, working_scale) - $core::ln_fixed_routed_agm::<SCALE>(one_at_working_scale - working_value, working_scale)) >> 1;
-                Self::from_bits($core::round_to_storage_with_g::<$core::Wagm>(atanh_value, working_scale, SCALE, mode))
+                // The SAME `LnComposition` kernel the policy routes
+                // `atanh_strict_with` to, at the caller's guard width
+                // instead of the tier's — one kernel with a `guard`
+                // argument, not a second copy of the composition.
+                Self::from_bits(
+                    $crate::algos::trig::hyper_ln_composition::atanh_ln_composition::<
+                        $core::Core,
+                        SCALE,
+                    >(self.to_bits(), working_digits, mode)
+                )
             }
 
             /// Radians-to-degrees with caller-chosen guard digits.

@@ -1695,7 +1695,9 @@ macro_rules! wide_trig_extra_inherent {
             Self(match inverse_hyper::resolve::<$N, SCALE>(&self.0) {
                 inverse_hyper::Algorithm::LnComposition => {
                     crate::algos::trig::hyper_ln_composition::atanh_ln_composition::<$Core, SCALE>(
-                        self.0, mode,
+                        self.0,
+                        <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD,
+                        mode,
                     )
                 }
                 inverse_hyper::Algorithm::Schoolbook => {
