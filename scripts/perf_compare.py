@@ -239,7 +239,9 @@ def history(branch: str, min_scale: int, limit: int = 12) -> list[tuple]:
                     gmean, len(ups) - len(dns),
                     band(wi, NULL_P50), band(wi, NULL_P90), band(wi, NULL_P99),
                     band(si, NULL_P50), band(si, NULL_P90), band(si, NULL_P99),
-                    pct(ups, 0.5), pct(ups, 0.9), pct(dns, 0.5), pct(dns, 0.9)))
+                    pct(ups, 0.5), pct(ups, 0.9), pct(dns, 0.5), pct(dns, 0.9),
+                    pct(ups, 0.10), pct(ups, 0.25), pct(ups, 0.75),
+                    pct(dns, 0.10), pct(dns, 0.25), pct(dns, 0.75)))
     out = list(reversed(out))  # oldest first
 
     # POINT ZERO: the shipped release itself, where branch == shipped, so
@@ -262,7 +264,8 @@ def history(branch: str, min_scale: int, limit: int = 12) -> list[tuple]:
                            1.0, 1.0, 1.0, 1.0, 1.0, 0,
                            b0(wi0, NULL_P50), b0(wi0, NULL_P90), b0(wi0, NULL_P99),
                            b0(si0, NULL_P50), b0(si0, NULL_P90), b0(si0, NULL_P99),
-                           1.0, 1.0, 1.0, 1.0))
+                           1.0, 1.0, 1.0, 1.0,
+                           1.0, 1.0, 1.0, 1.0, 1.0, 1.0))
         except subprocess.CalledProcessError:
             pass
     return out
@@ -297,12 +300,18 @@ def history_panel(pts: list[tuple]) -> str:
              lambda v: f"{v:+,}"),
             ("cells faster than shipped", 2, False, n),
             ("  mean improvement", 6, False, x),
+            ("  p10 improvement", 22, False, x),
+            ("  p25 improvement", 23, False, x),
             ("  median (p50) improvement", 18, False, x),
+            ("  p75 improvement", 24, False, x),
             ("  p90 improvement", 19, False, x),
             ("  biggest improvement", 7, False, x),
             ("cells slower", 3, True, n),
             ("  mean regression", 8, True, x),
+            ("  p10 regression", 25, True, x),
+            ("  p25 regression", 26, True, x),
             ("  median (p50) regression", 20, True, x),
+            ("  p75 regression", 27, True, x),
             ("  p90 regression", 21, True, x),
             ("  worst regression", 9, True, x),
             ("width inversions — all", 4, True, n),
