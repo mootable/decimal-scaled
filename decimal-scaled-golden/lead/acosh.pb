@@ -4302,3 +4302,52 @@
 292606.6593951711968003822625
 // regression: work-rung escalation-cap fall-up (sin_d307_s153 Trunc, 1-ULP directed miss) - tiny arguments whose f(x) = x -/+ x^3-term (or 1 +/- d quadratic) deciding digit lies BETWEEN a narrow work-rung's Ziv cap and the tier work int's; an unresolved-at-rung walker must fall up to the tier width, never conclude from a cap-clamped probe
 1.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003
+// regression: acosh near-wall radicand (LnComposition -- the routed inverse-hyperbolic
+// kernel at every (N, SCALE), so these rows reach it through the public surface). For
+// x = 1 + t the near-1 branch takes acosh(1+t) = log1p(t + sqrt(t*(t+2))). Forming that
+// product BEFORE the root rounds it at the working scale ws = SCALE + GUARD (GUARD = 30),
+// and t*(t+2) = 2t + t^2 drops the t^2 term outright once t^2 < 10^-ws; sqrt then turns
+// that relative radicand error of t/2 into a relative error of t/4 on a result of size
+// sqrt(2t). Closed form, for t = 10^-k:
+//     error = 0.354 * 10^(SCALE - 1.5k) ULP,
+// non-zero exactly when (SCALE + GUARD)/2 < k <= 2*SCALE/3 -- equivalently, k is in-band
+// at SCALE iff 1.5k <= SCALE < 2k - 30 -- which is non-empty only for SCALE > 90 and
+// covers 38 of the 93 golden cells. Fixed by taking the radicand as sqrt(t)*sqrt(t+2),
+// each factor kept at full working-scale relative precision.
+// The rows below are DERIVED from that form rather than sampled: they pin the worst k of
+// several bands, both edges of a band, and controls just outside on each side. A row is
+// ingested only where SCALE >= k (the harness skips an input deeper than the cell's
+// scale), so each k grades at every cell that can hold it, and is in-band only at those
+// cells the form names. Each value's own single-line why follows below.
+// acosh near-wall radicand regression (LnComposition, routed at every (N,SCALE)): x = 1+10^-k with k=65 -- a CONTROL in NO golden cell's band: 2k = 130 = ws(D462<100>) exactly, so the t^2 term still lands inside the working scale ws = SCALE+30. Bounds the D462<100> band from below; correctly rounded before and after the fix. band (SCALE+30)/2 < k <= 2*SCALE/3, err = 0.354*10^(SCALE-1.5k) ULP.
+1.00000000000000000000000000000000000000000000000000000000000000001
+// acosh near-wall radicand regression (LnComposition, routed at every (N,SCALE)): x = 1+10^-k with k=66 -- the ONLY singleton band on the grid: D462<100>'s band is exactly [66..66], err 3.54 ULP. sqrt(mul(t,t+2)) rounds the product at ws and drops t^2 once t^2 < 10^-ws; sqrt turns that into t/4 relative on a result of size sqrt(2t). With k=65 and k=67 either side, this trio pins the band edge where band (SCALE+30)/2 < k <= 2*SCALE/3, err = 0.354*10^(SCALE-1.5k) ULP puts it.
+1.000000000000000000000000000000000000000000000000000000000000000001
+// acosh near-wall radicand regression (LnComposition, routed at every (N,SCALE)): x = 1+10^-k with k=67 -- a CONTROL in NO golden cell's band, one past the D462<100> band top (2*100/3 = 66.67), where SCALE-1.5k = -0.5 leaves 0.112 ULP. Bounds that band from above; correctly rounded before and after the fix.
+1.0000000000000000000000000000000000000000000000000000000000000000001
+// acosh near-wall radicand regression (LnComposition, routed at every (N,SCALE)): x = 1+10^-k with k=72 -- a CONTROL in NO golden cell's band: 2k = 144 = ws(D115<114>) exactly, so the t^2 term survives and the error is exactly 0. The lower wall of the D115<114> band [73..76].
+1.000000000000000000000000000000000000000000000000000000000000000000000001
+// acosh near-wall radicand regression (LnComposition, routed at every (N,SCALE)): x = 1+10^-k with k=73 -- the WORST k of the D115<114> and D153<114> bands (1.12e4 ULP; D115<114> is the 11180-ULP point measured on the defect) and of D230<115> and D462<115> (1.12e5 ULP): one input, four cells across four widths. band (SCALE+30)/2 < k <= 2*SCALE/3, err = 0.354*10^(SCALE-1.5k) ULP.
+1.0000000000000000000000000000000000000000000000000000000000000000000000001
+// acosh near-wall radicand regression (LnComposition, routed at every (N,SCALE)): x = 1+10^-k with k=75 -- D115<114>/D153<114> at 11.2 ULP (the 11-ULP point measured on the defect), D230<115>/D462<115> at 112 ULP. The mid-band sample between the worst k=73 and the band top k=76.
+1.000000000000000000000000000000000000000000000000000000000000000000000000001
+// acosh near-wall radicand regression (LnComposition, routed at every (N,SCALE)): x = 1+10^-k with k=76 -- two edges at once: the TOP of the D115<114>/D153<114> band, where err has decayed to 0.354 ULP (marginal, under the half-ULP boundary), and simultaneously the WORST k of the D307<120> band at 3.54e5 ULP. Also D230<115>/D462<115> at 3.54 ULP.
+1.0000000000000000000000000000000000000000000000000000000000000000000000000001
+// acosh near-wall radicand regression (LnComposition, routed at every (N,SCALE)): x = 1+10^-k with k=77 -- D307<120> at 1.12e4 ULP. It sits just ABOVE the D115<114> band top but is NOT a control: D307<120>'s band [76..80] claims it, as every k in 77..86 is claimed by D307<120> or D616<130>. That is why the upper control is k=87.
+1.00000000000000000000000000000000000000000000000000000000000000000000000000001
+// acosh near-wall radicand regression (LnComposition, routed at every (N,SCALE)): x = 1+10^-k with k=81 -- the WORST k of the D616<130> band [81..86] at 1.12e8 ULP; the D616 width's entry in this set.
+1.000000000000000000000000000000000000000000000000000000000000000000000000000000001
+// acosh near-wall radicand regression (LnComposition, routed at every (N,SCALE)): x = 1+10^-k with k=87 -- a CONTROL in NO golden cell's band, and the FIRST k above the D115<114> band top (76) that no cell claims: 77..80 fall in D307<120>'s band and 81..86 in D616<130>'s. Its window [1.5k, 2k-30) = [130.5, 144) holds no golden scale.
+1.000000000000000000000000000000000000000000000000000000000000000000000000000000000000001
+// acosh near-wall radicand regression (LnComposition, routed at every (N,SCALE)): x = 1+10^-k with k=91 -- a CONTROL in NO golden cell's band: 2k = 182 <= ws(D307<153>) = 183, so the t^2 term survives and the error is exactly 0. The lower wall of the D307<153> band [92..102].
+1.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001
+// acosh near-wall radicand regression (LnComposition, routed at every (N,SCALE)): x = 1+10^-k with k=92 -- the WORST k of the D307<153> band at 3.54e14 ULP and of the D153<152> band at 3.54e13 ULP; the largest miss among the mid-scale cells here.
+1.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001
+// acosh near-wall radicand regression (LnComposition, routed at every (N,SCALE)): x = 1+10^-k with k=99 -- D307<153> at 1.12e4 ULP, D153<152> at 1.12e3, D616<154> at 1.12e5. k=99 is the k measured on the defect at D307<150>, which is not itself a golden cell; D307<153> is its graded neighbour.
+1.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001
+// acosh near-wall radicand regression (LnComposition, routed at every (N,SCALE)): x = 1+10^-k with k=102 -- the TOP of the D307<153> band (0.354 ULP, marginal) and at the same time the WORST k of the D230<172> band at 3.54e18 ULP.
+1.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001
+// acosh near-wall radicand regression (LnComposition, routed at every (N,SCALE)): x = 1+10^-k with k=362 -- the deep-scale end: the WORST k of the D924<693> band at 3.54e149 ULP, also in-band at D616<590>, D616<615> and D1232<616>. The band widens with SCALE, so the widest tiers carry the largest ones.
+1.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001
+// acosh near-wall radicand regression (LnComposition, routed at every (N,SCALE)): x = 1+10^-k with k=631 -- the widest cells on the grid: the WORST k of the D1232<1231> band at 1.12e284 ULP, with D1232<1200> at 1.12e253. Ingested only where SCALE >= 631, i.e. the deep D924/D1232 cells.
+1.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001
