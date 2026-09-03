@@ -546,6 +546,8 @@ required-features = ["xx-wide"]
 [[bench]]
 name = "d924_lookup_baseline"
 path = "benches/lookup/d924_lookup_baseline.rs"
+harness = false
+required-features = ["xx-wide"]
 # Side-by-side D1232 ln at SCALE 600 (wide_kernel) vs SCALE 615 (Tang
 # lookup). Isolates the lookup-vs-kernel speedup from the underlying
 # Int16384 primitive cost.
