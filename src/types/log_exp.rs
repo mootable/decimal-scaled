@@ -226,7 +226,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     }
 
     /// Returns `ln(1 + self)`.
-    #[cfg(all(feature = "strict", not(feature = "fast")))]
+    #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
     #[inline]
     #[must_use]
     pub fn log1p(self) -> Self {
@@ -509,7 +509,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     }
 
     /// Returns `e^self - 1`.
-    #[cfg(all(feature = "strict", not(feature = "fast")))]
+    #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
     #[inline]
     #[must_use]
     pub fn expm1(self) -> Self {
