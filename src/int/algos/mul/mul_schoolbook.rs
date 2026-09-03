@@ -15,83 +15,30 @@
 
 use crate::int::types::compute_limbs::{ComputeLimbs, Limb, Limbs};
 
-/// One schoolbook column step: `acc + lhs_limb · rhs_limb + carry`, returning
-/// the new accumulator limb and the outgoing carry.
-///
-/// The carry merge cannot overflow: the product's high word satisfies
-/// `prod_hi ≤ 2⁶⁴ − 2` (maximal only when the low word is 1), and `carry1` /
-/// `carry2` are never both set (`carry1` needs `acc + prod_lo` to wrap to 0,
-/// after which `+ carry` cannot wrap).
-#[inline(always)]
-const fn column_step(acc: u64, lhs_limb: u64, rhs_limb: u64, carry: u64) -> (u64, u64) {
-    let prod = (lhs_limb as u128) * (rhs_limb as u128);
-    let prod_lo = prod as u64;
-    let prod_hi = (prod >> 64) as u64;
-    let (sum1, carry1) = acc.overflowing_add(prod_lo);
-    let (sum2, carry2) = sum1.overflowing_add(carry);
-    (sum2, prod_hi + (carry1 as u64) + (carry2 as u64))
-}
-
 /// `out = lhs · rhs` schoolbook. `out.len() >= lhs.len() + rhs.len()` and
 /// `out` must be zeroed by the caller.
 ///
 /// Inner step uses the native `u64 × u64 → u128` widening mul
 /// (`MUL` + `UMULH` on x86-64 / aarch64).
-///
-/// Each row writes through a *window* — the `out` limbs row `i` can reach,
-/// taken as one slice — so the row loop's bound IS its slice's own length and
-/// the `out[i + j]` write needs no per-step length re-proof. Callers honouring
-/// the `out.len() >= lhs.len() + rhs.len()` contract get the whole row inside
-/// the window and never enter the short-`out` remainder loop below it.
 pub(crate) const fn mul_schoolbook(lhs: &[u64], rhs: &[u64], out: &mut [u64]) {
     let mut i = 0;
     while i < lhs.len() {
-        let lhs_limb = lhs[i];
-        if lhs_limb != 0 {
-            // The row window `out[i .. i + row_len]` and the matching
-            // `rhs[..row_len]`, so both indexings below are bounded by a length
-            // the compiler already holds. `row_len` is `rhs.len()` whenever the
-            // length contract holds, and only shrinks if the caller passed a
-            // short `out`. Clamping — rather than slicing to a flat
-            // `rhs.len()` — is what keeps this panic-for-panic identical: a
-            // short `out` is not turned into a new panic here, it just leaves
-            // the out-of-range limbs to the remainder loop, which still indexes
-            // `out` directly and so still panics on exactly the inputs the
-            // unwindowed loop panicked on.
-            let avail = out.len().saturating_sub(i);
-            let row_len = if rhs.len() < avail { rhs.len() } else { avail };
-            let row_start = out.len() - avail;
-            let (_, from_row) = out.split_at_mut(row_start);
-            let (row, _) = from_row.split_at_mut(row_len);
-            let (rhs_row, _) = rhs.split_at(row_len);
-
+        if lhs[i] != 0 {
             let mut carry: u64 = 0;
             let mut j = 0;
-            while j < row_len {
-                let rhs_limb = rhs_row[j];
-                if rhs_limb != 0 || carry != 0 {
-                    let (limb, next_carry) = column_step(row[j], lhs_limb, rhs_limb, carry);
-                    row[j] = limb;
-                    carry = next_carry;
-                }
-                j += 1;
-            }
-            // Short-`out` remainder: unreachable under the length contract,
-            // which leaves `row_len == rhs.len()` and so `j == rhs.len()`
-            // already. Every index it forms is at or past `out.len()`, so it
-            // reproduces the unwindowed loop exactly — skip a zero `rhs` limb
-            // that carries nothing, panic on anything that must be written.
             while j < rhs.len() {
-                let rhs_limb = rhs[j];
-                if rhs_limb != 0 || carry != 0 {
+                if rhs[j] != 0 || carry != 0 {
+                    let prod = (lhs[i] as u128) * (rhs[j] as u128);
+                    let prod_lo = prod as u64;
+                    let prod_hi = (prod >> 64) as u64;
                     let idx = i + j;
-                    let (limb, next_carry) = column_step(out[idx], lhs_limb, rhs_limb, carry);
-                    out[idx] = limb;
-                    carry = next_carry;
+                    let (sum1, carry1) = out[idx].overflowing_add(prod_lo);
+                    let (sum2, carry2) = sum1.overflowing_add(carry);
+                    out[idx] = sum2;
+                    carry = prod_hi + (carry1 as u64) + (carry2 as u64);
                 }
                 j += 1;
             }
-
             let mut idx = i + rhs.len();
             while carry != 0 && idx < out.len() {
                 let (sum, carried) = out[idx].overflowing_add(carry);

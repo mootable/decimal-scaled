@@ -279,20 +279,9 @@ pub(crate) trait Limb: Copy + PartialEq + Ord {
     fn packed_len(n_u64: usize) -> usize;
     /// Pack the low `dst.len()` little-endian u64 limbs of `src_u64` into
     /// `dst` `L` limbs.
-    ///
-    /// **Length contract**: `src_u64.len() >= dst.len() · (BITS / 64)` — one
-    /// source u64 per `L` limb for `u64`, TWO for `u128`. Every caller meets it
-    /// with equality (`src_u64` is a value's `N`-u64 storage, `dst` its
-    /// `packed_len(N)` window). Both impls state the relation by bounding
-    /// `src_u64` to exactly that length ONCE, outside the packing loop, so the
-    /// per-limb reads inside it carry no length check of their own.
     fn pack(src_u64: &[u64], dst: &mut [Self]);
     /// Unpack `src` `L` limbs back into the low little-endian u64 limbs of
     /// `dst_u64`.
-    ///
-    /// **Length contract**: `dst_u64.len() >= src.len() · (BITS / 64)`, the
-    /// mirror of [`Limb::pack`]'s and stated the same way — by bounding the u64
-    /// side once rather than re-proving it per limb.
     fn unpack(src: &[Self], dst_u64: &mut [u64]);
     /// Full widening product `self · rhs → (low, high)` limbs.
     fn widening_mul(self, rhs: Self) -> (Self, Self);
@@ -438,25 +427,15 @@ impl Limb for u128 {
     }
     #[inline]
     fn pack(src_u64: &[u64], dst: &mut [Self]) {
-        // Two u64 limbs fold into each u128 limb. Bounding `src_u64` to exactly
-        // `2 · dst.len()` states that relation ONCE — a single check, outside
-        // the loop — and `chunks_exact(2)` then hands the loop pairs whose
-        // length is the literal 2, so neither `pair[0]` nor `pair[1]` needs a
-        // check of its own. The zip is exact, not truncating: a slice of
-        // `2 · len` yields exactly `len` pairs.
-        let src = &src_u64[..2 * dst.len()];
-        for (dst_limb, pair) in dst.iter_mut().zip(src.chunks_exact(2)) {
-            *dst_limb = (pair[0] as u128) | ((pair[1] as u128) << 64);
+        for (k, dst_limb) in dst.iter_mut().enumerate() {
+            *dst_limb = (src_u64[2 * k] as u128) | ((src_u64[2 * k + 1] as u128) << 64);
         }
     }
     #[inline]
     fn unpack(src: &[Self], dst_u64: &mut [u64]) {
-        // Mirror of `pack`: bound the u64 side to exactly `2 · src.len()` once,
-        // then write through `chunks_exact_mut(2)` pairs.
-        let dst = &mut dst_u64[..2 * src.len()];
-        for (&src_limb, pair) in src.iter().zip(dst.chunks_exact_mut(2)) {
-            pair[0] = src_limb as u64;
-            pair[1] = (src_limb >> 64) as u64;
+        for (k, &src_limb) in src.iter().enumerate() {
+            dst_u64[2 * k] = src_limb as u64;
+            dst_u64[2 * k + 1] = (src_limb >> 64) as u64;
         }
     }
     #[inline]

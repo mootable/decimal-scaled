@@ -74,31 +74,20 @@ pub(crate) fn div_knuth_into(
     }
 
     let shift = divisor[n - 1].leading_zeros();
-
-    // The length precondition as SLICING, not as the `debug_assert!` it used to
-    // be — an assert vanishes in release, a slice constrains release codegen.
-    // `u_norm` is the normalisation window (the live dividend plus the one
-    // shift-carry limb above it) and `v` is bounded to the `n` significant
-    // divisor limbs, so both normalisation loops below run with their length
-    // relation already proved. Neither bound can panic where the old code did
-    // not: `u[dividend_len]` and `v[n - 1]` are both written unconditionally
-    // in every branch below, so `u.len() > dividend_len` and `v.len() >= n`
-    // were already hard release requirements.
-    let v = &mut v[..n];
-    let u_norm = &mut u[..=dividend_len];
+    debug_assert!(dividend_len < u.len() && n <= v.len());
 
     if shift == 0 {
-        u_norm[..dividend_len].copy_from_slice(&dividend[..dividend_len]);
-        u_norm[dividend_len] = 0;
-        v.copy_from_slice(&divisor[..n]);
+        u[..dividend_len].copy_from_slice(&dividend[..dividend_len]);
+        u[dividend_len] = 0;
+        v[..n].copy_from_slice(&divisor[..n]);
     } else {
         let mut carry: u64 = 0;
         for i in 0..dividend_len {
             let limb = dividend[i];
-            u_norm[i] = (limb << shift) | carry;
+            u[i] = (limb << shift) | carry;
             carry = limb >> (64 - shift);
         }
-        u_norm[dividend_len] = carry;
+        u[dividend_len] = carry;
         carry = 0;
         for i in 0..n {
             let limb = divisor[i];
@@ -107,7 +96,7 @@ pub(crate) fn div_knuth_into(
         }
     }
 
-    let m_plus_n = if u_norm[dividend_len] != 0 { dividend_len + 1 } else { dividend_len };
+    let m_plus_n = if u[dividend_len] != 0 { dividend_len + 1 } else { dividend_len };
     debug_assert!(m_plus_n >= n);
     let m = m_plus_n - n;
 
@@ -123,26 +112,17 @@ pub(crate) fn div_knuth_into(
     // the remainder. The base-2⁶⁴ (`L = u64`) monomorphisation of the
     // limb-generic [`knuth_d_core`]; the u64 quotient slice IS `quotient` (no
     // pack/unpack).
-    // `u[..=m_plus_n]` is the exact Knuth D window: the `m + n` live dividend
-    // limbs plus the zero limb above them that D4 reads as the window top. It
-    // is the same shape the u128 engine already hands the core, and it cannot
-    // panic where the old code did not — the core indexed `u[m + n]`
-    // unconditionally on its first step.
-    knuth_d_core::<u64>(&mut u[..=m_plus_n], v, n, m, quotient);
-
-    // The remainder is the low `n` limbs of that same window, read back through
-    // a shared view of it — so the denormalisation loop below is bounded too.
-    let u_live = &u[..=m_plus_n];
+    knuth_d_core::<u64>(u, v, n, m, quotient);
 
     if shift == 0 {
         let copy_len = n.min(remainder.len());
-        remainder[..copy_len].copy_from_slice(&u_live[..copy_len]);
+        remainder[..copy_len].copy_from_slice(&u[..copy_len]);
     } else {
         for i in 0..n {
             if i < remainder.len() {
-                let lo = u_live[i] >> shift;
+                let lo = u[i] >> shift;
                 let hi_into_lo = if i + 1 < n {
-                    u_live[i + 1] << (64 - shift)
+                    u[i + 1] << (64 - shift)
                 } else {
                     0
                 };
@@ -177,12 +157,6 @@ pub(crate) fn div_knuth_into(
 #[inline]
 pub(crate) fn knuth_d_core<L: DivLimb>(u: &mut [L], v: &[L], n: usize, m: usize,
     quotient: &mut [u64]) {
-    // Bound `v` to its `n` significant limbs ONCE. Every read below is inside
-    // `v[..n]`, so this single check replaces the per-step length re-proof in
-    // both inner loops. It cannot panic where the old code did not: `v[n - 1]`
-    // is read unconditionally on the very next line, so `v.len() >= n` was
-    // already a hard release requirement.
-    let v = &v[..n];
     let v_top = v[n - 1]; // normalised: top bit set
     let v_below = v[n - 2];
     // The q̂ 2-by-1 reciprocal of the (constant) top divisor limb, built ONCE.
@@ -194,17 +168,8 @@ pub(crate) fn knuth_d_core<L: DivLimb>(u: &mut [L], v: &[L], n: usize, m: usize,
         let j = j_plus_one;
 
         let j_plus_n = j + n;
-        // Knuth's own D4 window `u[j..=j+n]`, taken as ONE slice per quotient
-        // digit. Its length is `n + 1` by construction, so every access below —
-        // `u_win[n]` and `u_win[n - 1]` for the q̂ estimate, `u_win[n - 2]` for
-        // the D3 refinement, `u_win[i]` for `i < n` in the D4 and D6 loops — is
-        // in range by the slice's own length, with nothing left for the
-        // compiler to re-prove per step. That turns the O(m·n) bounds checks
-        // the indexed `u[j + i]` form needed into O(m) window checks; not one
-        // computed value changes, since `u_win[k]` IS `u[j + k]`.
-        let u_win = &mut u[j..=j_plus_n];
-        let u_top = u_win[n];
-        let u_next = u_win[n - 1];
+        let u_top = u[j_plus_n];
+        let u_next = u[j_plus_n - 1];
         debug_assert!(u_top <= v_top, "knuth_d_core: dividend window top exceeds divisor top");
 
         // D3. q̂ = min(floor((u_top·B + u_next) / v_top), B − 1). The
@@ -225,7 +190,7 @@ pub(crate) fn knuth_d_core<L: DivLimb>(u: &mut [L], v: &[L], n: usize, m: usize,
         if !overflow {
             loop {
                 let (p_lo, p_hi) = q_hat.widening_mul(v_below);
-                if p_hi < r_hat || (p_hi == r_hat && p_lo <= u_win[n - 2]) {
+                if p_hi < r_hat || (p_hi == r_hat && p_lo <= u[j_plus_n - 2]) {
                     break;
                 }
                 q_hat = q_hat.overflowing_sub(L::ONE).0;
@@ -248,13 +213,13 @@ pub(crate) fn knuth_d_core<L: DivLimb>(u: &mut [L], v: &[L], n: usize, m: usize,
         let mut carry = L::ACC_ZERO;
         let mut i = 0;
         while i < n {
-            let (new_limb, new_carry) = L::mul_sub_step(q_hat, v[i], u_win[i], carry);
-            u_win[i] = new_limb;
+            let (new_limb, new_carry) = L::mul_sub_step(q_hat, v[i], u[j + i], carry);
+            u[j + i] = new_limb;
             carry = new_carry;
             i += 1;
         }
-        let (final_limb, borrowed) = L::mul_sub_final(u_win[n], carry);
-        u_win[n] = final_limb;
+        let (final_limb, borrowed) = L::mul_sub_final(u[j_plus_n], carry);
+        u[j_plus_n] = final_limb;
 
         // D5/D6. If the final subtraction borrowed, q̂ was 1 too big: add the
         // divisor back once and decrement q̂.
@@ -263,16 +228,16 @@ pub(crate) fn knuth_d_core<L: DivLimb>(u: &mut [L], v: &[L], n: usize, m: usize,
             let mut carry = L::ZERO;
             let mut i = 0;
             while i < n {
-                let (sum1, carry1) = u_win[i].overflowing_add(v[i]);
+                let (sum1, carry1) = u[j + i].overflowing_add(v[i]);
                 let (sum2, carry2) = sum1.overflowing_add(carry);
-                u_win[i] = sum2;
+                u[j + i] = sum2;
                 // carry1, carry2 are never both set (`u[j+i]+v[i] ≤ 2B−2 <
                 // 2B−1`), so `0 + carry1 + carry2 ∈ {0, 1}` — the schoolbook
                 // carry merge.
                 carry = L::ZERO.add_carries(carry1, carry2);
                 i += 1;
             }
-            u_win[n] = u_win[n].overflowing_add(carry).0;
+            u[j_plus_n] = u[j_plus_n].overflowing_add(carry).0;
         }
 
         L::store_quot_digit(quotient, j, q_hat);
