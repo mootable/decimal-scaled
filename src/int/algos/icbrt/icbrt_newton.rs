@@ -99,6 +99,21 @@ pub(crate) fn icbrt_newton(radicand: &[u64], out: &mut [u64]) {
     );
 }
 
+/// Significant limb count of `limbs` (index of the highest non-zero limb + 1),
+/// minimum 1. Used to hand the multiply matcher the operand's TRUE length
+/// rather than its zero-padded buffer length.
+#[inline]
+fn sig_len(limbs: &[u64]) -> usize {
+    let mut len = limbs.len();
+    while len > 0 {
+        if limbs[len - 1] != 0 {
+            return len;
+        }
+        len -= 1;
+    }
+    1
+}
+
 /// `out = floor(cbrt(radicand))` in **caller-provided scratch** — the real
 /// implementation, and the exact-scratch sibling of [`icbrt_newton`].
 ///
@@ -138,21 +153,6 @@ pub(crate) fn icbrt_newton(radicand: &[u64], out: &mut [u64]) {
 /// The buffers may be **dirty** on entry and are reusable across calls: `x` and
 /// `sq` are zeroed over their live prefix here, `r` is zeroed before the `/3`
 /// divide, and the divide engines re-zero their own outputs.
-/// Significant limb count of `limbs` (index of the highest non-zero limb + 1),
-/// minimum 1. Used to hand the multiply matcher the operand's TRUE length
-/// rather than its zero-padded buffer length.
-#[inline]
-fn sig_len(limbs: &[u64]) -> usize {
-    let mut len = limbs.len();
-    while len > 0 {
-        if limbs[len - 1] != 0 {
-            return len;
-        }
-        len -= 1;
-    }
-    1
-}
-
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn icbrt_newton_into(
     radicand: &[u64],
