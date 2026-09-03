@@ -61,8 +61,27 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // `tang_routed` splits 0..=44 (M=128,G=8) vs 45..=56 (M=512,G=30) per
         // the seam A/B's per-cell (M,G) ranking; the boundary at s45 is where
         // the two configs tie.
+        //
+        // `(3, 56)` is hoisted ahead of the value gate below because it is a
+        // PROVABLE TAUTOLOGY, not merely a measured win: `wide_tang_gate`'s
+        // `max_bits = (SCALE+2)*332_192/100_000` evaluates at SCALE=56 to
+        // `58*332_192/100_000 = 19_267_136/100_000 = 192` (integer division,
+        // floor), which equals `Int<3>`'s structural magnitude bit-length
+        // ceiling `64*N = 192` (`bit_len_fixed`, `src/int/algos/support/
+        // limbs.rs`). So `bit_length(*raw) <= 192` holds for every
+        // representable `Int<3>` value — the runtime test can never observe
+        // `false` at this cell — and the verdict is always Tang, decidable
+        // from `(N, SCALE)` alone. `SCALE=56` is D57's `MAX_SCALE`, so this
+        // is the COMPLETE provable-tautology region within the arm's domain
+        // (not a Class I single-cell fit). Contrast `(3, 55)`: `max_bits =
+        // 57*332_192/100_000 = 18_934_944/100_000 = 189` (floor), strictly
+        // below the 192-bit ceiling, so an operand with bit-length 190-192
+        // genuinely fails the gate and must route to Series — `0..=55` stays
+        // a runtime `ByValue` gate.
         #[cfg(any(feature = "d57", feature = "wide"))]
-        (3, 0..=56) => Select::ByValue(wide_tang_gate::<N, SCALE>),
+        (3, 56) => Select::ByAlgorithm(Algorithm::Tang),
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        (3, 0..=55) => Select::ByValue(wide_tang_gate::<N, SCALE>),
         // D76 (Int<4>): the full width × scale A/B
         // (`benches/micro/exp_wide_series_tang_ab.rs`) shows Tang beats the
         // Series squaring core at EVERY D76 scale, including the MAX scale
