@@ -42,10 +42,13 @@ pub(crate) mod div_fixed;
 // and both outputs. Sibling of int::algos::rem::rem_native_direct.
 pub(crate) mod div_native_direct;
 pub(crate) mod div_knuth;
-// candidate (not wired): Knuth Algorithm D on u128 limbs (base 2^128) — the
-// divide side of the LimbSize axis. Parked pending the div_kernel_ab verdict
-// (whether the aligned u128 carry-chain beats base-2^64 despite the 4-mult
-// q̂·v product). Bit-identical to div_knuth (its #[cfg(test)] differential).
+// WIRED: Knuth Algorithm D on u128 limbs (base 2^128) — the divide side of the
+// LimbSize axis. `int::policy::div_rem::select_for_limbs` returns it for an
+// even divisor of >= U128_DIV_THRESHOLD (24) effective limbs under a >= 2n
+// dividend, and div_rem_into / rem_int_layer / div_widen_scale all carry live
+// arms for that verdict. Bit-identical to div_knuth (its #[cfg(test)]
+// differential), so a caller may collapse it onto Knuth as a routing choice —
+// but it is NOT parked, and changing it changes shipped behaviour.
 pub(crate) mod div_knuth_u128_limb;
 pub(crate) mod div_mg;
 pub(crate) mod div_rem;
