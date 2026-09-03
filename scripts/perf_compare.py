@@ -14,8 +14,9 @@ run, no cargo, and no network beyond a fetch. Both refs must have had a bbc run.
     python scripts/perf_compare.py --watch            # refresh as sweeps land
     python scripts/perf_compare.py --no-fetch         # offline, use local refs
 
-Output: research/perf_compare.html -- open it in a browser. `research/` is
-git-ignored, so the generated page stays local while this generator is tracked.
+Output: tmp/perf_compare.html -- open it in a browser. `tmp/` is git-ignored by
+the tracked .gitignore, so the generated page stays local while this generator
+is tracked. The directory is created on demand.
 
 THE RULE THIS PAGE EXISTS TO CHECK (owner): less work must not cost more.
 A narrower width must not be slower than a wider one at the same scale, and a
@@ -658,7 +659,7 @@ def main() -> int:
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--base", default="origin/main", help="published side (default origin/main)")
     p.add_argument("--branch", default="origin/perf/monotonicity", help="feature branch")
-    p.add_argument("--out", default=str(ROOT / "research" / "perf_compare.html"))
+    p.add_argument("--out", default=str(ROOT / "tmp" / "perf_compare.html"))
     p.add_argument("--with-zero", action="store_true",
                    help="include scale 0 (degenerate operands for trig/hyperbolic)")
     p.add_argument("--limit", type=int, default=20, help="rows per summary table")
