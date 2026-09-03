@@ -666,7 +666,13 @@ jobs:
           BENCH: ${{ inputs.micro_bench }}
         run: |
           set -euo pipefail
-          if ! grep -qE "^name = \"${BENCH}\"$" Cargo.toml; then
+          # Cargo.toml is committed CRLF (106 of 764 files are), and GNU grep on
+          # the Linux runner treats the \r as a literal character, so a `$`
+          # anchor can NEVER match. MSYS grep in git-bash treats CRLF as a line
+          # terminator, so reproducing this step locally PASSES — the check lied
+          # exactly where it was verified and failed where it runs. Every
+          # micro-mode dispatch died here, on every bench.
+          if ! grep -qE "^name = \"${BENCH}\"\r?$" Cargo.toml; then
             echo "::error::no [[bench]] named '${BENCH}' in Cargo.toml"
             echo "Benches under benches/micro/:"
             grep -B1 '^path = "benches/micro/' Cargo.toml | grep '^name = ' | sed 's/name = /  /'

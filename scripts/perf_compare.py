@@ -105,6 +105,20 @@ def parse_pair(text: str) -> dict[tuple[str, int, int], tuple[float, float]]:
     return out
 
 
+# The measured cross-cell null on IDENTICAL code: two cells come off two runner
+# VMs, so a ratio between them carries this much spread before any code differs.
+# p90 1.60x, p99 2.2x, max 6.8x over 1620 cells. An inversion below p99 is not
+# dismissed -- the owner's rule is that an inversion is a defect at any magnitude
+# -- but it cannot be DISTINGUISHED from runner jitter in a single cell-mode
+# sweep, so the panel reports the count at both bands rather than one number that
+# is mostly coin-flips on 2 ns ops.
+# Measured on 1944 ADJACENT PAIRS from two runs of identical published
+# code -- the same statistic inversions() forms, so the bands match what
+# they are banding. (An earlier 1.11/1.60/2.20 came from a different
+# calibration and understated every threshold.)
+NULL_P25, NULL_P50, NULL_P90, NULL_P99 = 1.08, 1.21, 1.75, 2.40
+
+
 # RELATIVE ONLY: a move counts when it is more than 1% of the shipped time.
 #
 # The repo's 8.4 filter also requires |delta| > 10 ns, and that absolute half is
@@ -211,12 +225,34 @@ def history(branch: str, min_scale: int, limit: int = 12) -> list[tuple]:
             (ups if branch_ns < prod else dns).append(
                 prod / branch_ns if branch_ns < prod else branch_ns / prod)
         wi, si = inversions(parse(text), min_scale)
+        band = lambda rows, f: sum(1 for r in rows if r[5] >= f)
         mean = lambda v: sum(v) / len(v) if v else 1.0
+
+        def pct(v, q):
+            """Percentile of a ratio distribution. Median and p90 say what the
+            typical and near-worst case actually are; a mean is dragged around by
+            a single 36x outlier and describes no cell in particular."""
+            if not v:
+                return 1.0
+            s = sorted(v)
+            return s[min(len(s) - 1, int(q * (len(s) - 1) + 0.5))]
         gmean = _math.exp(sum(logs) / len(logs)) if logs else 1.0
-        out.append((sha[:8], when, len(ups), len(dns), len(wi), len(si),
-                    mean(ups), max(ups, default=1.0),
-                    mean(dns), max(dns, default=1.0),
-                    gmean, len(ups) - len(dns)))
+        out.append({
+            "sha": sha[:8], "when": when,
+            "gmean": gmean, "net": len(ups) - len(dns),
+            "up_n": len(ups), "up_mean": mean(ups),
+            "up_p50": pct(ups, 0.5), "up_p75": pct(ups, 0.75),
+            "up_p90": pct(ups, 0.9), "up_max": max(ups, default=1.0),
+            "dn_n": len(dns), "dn_mean": mean(dns),
+            "dn_p50": pct(dns, 0.5), "dn_p75": pct(dns, 0.75),
+            "dn_p90": pct(dns, 0.9), "dn_max": max(dns, default=1.0),
+            "wi_n": len(wi), "wi_p25": band(wi, NULL_P25),
+            "wi_p50": band(wi, NULL_P50), "wi_p90": band(wi, NULL_P90),
+            "wi_p99": band(wi, NULL_P99),
+            "si_n": len(si), "si_p25": band(si, NULL_P25),
+            "si_p50": band(si, NULL_P50), "si_p90": band(si, NULL_P90),
+            "si_p99": band(si, NULL_P99),
+        })
     out = list(reversed(out))  # oldest first
 
     # POINT ZERO: the shipped release itself, where branch == shipped, so
@@ -234,8 +270,27 @@ def history(branch: str, min_scale: int, limit: int = 12) -> list[tuple]:
                         f"{lines[0].split(chr(9))[0]}:results/timing/bbc_medians.tsv")
             shipped = {k: p for k, (p, _b) in parse_pair(newest).items() if p > 0}
             wi0, si0 = inversions(shipped, min_scale)
-            out.insert(0, ("shipped", "0.5.1", 0, 0, len(wi0), len(si0),
-                           1.0, 1.0, 1.0, 1.0, 1.0, 0))
+            b0 = lambda rows, f: sum(1 for r in rows if r[5] >= f)
+
+            def pct0(v, q):
+                if not v:
+                    return 1.0
+                s = sorted(v)
+                return s[min(len(s) - 1, int(q * (len(s) - 1) + 0.5))]
+            out.insert(0, {
+                "sha": "shipped", "when": "0.5.1",
+                "gmean": 1.0, "net": 0,
+                "up_n": 0, "up_mean": 1.0, "up_p50": 1.0, "up_p75": 1.0,
+                "up_p90": 1.0, "up_max": 1.0,
+                "dn_n": 0, "dn_mean": 1.0, "dn_p50": 1.0, "dn_p75": 1.0,
+                "dn_p90": 1.0, "dn_max": 1.0,
+                "wi_n": len(wi0), "wi_p25": b0(wi0, NULL_P25),
+                "wi_p50": b0(wi0, NULL_P50), "wi_p90": b0(wi0, NULL_P90),
+                "wi_p99": b0(wi0, NULL_P99),
+                "si_n": len(si0), "si_p25": b0(si0, NULL_P25),
+                "si_p50": b0(si0, NULL_P50), "si_p90": b0(si0, NULL_P90),
+                "si_p99": b0(si0, NULL_P99),
+            })
         except subprocess.CalledProcessError:
             pass
     return out
@@ -265,35 +320,56 @@ def history_panel(pts: list[tuple]) -> str:
                 "branch — only the full default sweep self-commits medians.</p>")
     n = lambda v: f"{v:,}"
     x = lambda v: f"{v:.2f}x"
-    cols = [("OVERALL — geometric mean, whole surface", 10, False, x),
-            ("net cells (faster − slower)", 11, False,
-             lambda v: f"{v:+,}"),
-            ("cells faster than shipped", 2, False, n),
-            ("  mean improvement", 6, False, x),
-            ("  biggest improvement", 7, False, x),
-            ("cells slower", 3, True, n),
-            ("  mean regression", 8, True, x),
-            ("  worst regression", 9, True, x),
-            ("width inversions", 4, True, n),
-            ("scale inversions", 5, True, n)]
+    cols = [("OVERALL \u2014 geometric mean, whole surface", "gmean", False, x),
+            ("net cells (faster \u2212 slower)", "net", False, lambda v: f"{v:+,}"),
+            ("cells faster than shipped", "up_n", False, n),
+            ("  mean improvement", "up_mean", False, x),
+            ("  median (p50) improvement", "up_p50", False, x),
+            ("  p75 improvement", "up_p75", False, x),
+            ("  p90 improvement", "up_p90", False, x),
+            ("  biggest improvement", "up_max", False, x),
+            ("cells slower", "dn_n", True, n),
+            ("  mean regression", "dn_mean", True, x),
+            ("  median (p50) regression", "dn_p50", True, x),
+            ("  p75 regression", "dn_p75", True, x),
+            ("  p90 regression", "dn_p90", True, x),
+            ("  worst regression", "dn_max", True, x),
+            ("width inversions \u2014 all", "wi_n", True, n),
+            ("  count above 1.08x (p25 of the runner)", "wi_p25", True, n),
+            ("  count above 1.21x (p50 of the runner)", "wi_p50", True, n),
+            ("  count above 1.75x (p90 of the runner)", "wi_p90", True, n),
+            ("  count above 2.40x (p99 of the runner)", "wi_p99", True, n),
+            ("scale inversions \u2014 all", "si_n", True, n),
+            ("  count above 1.08x (p25 of the runner)", "si_p25", True, n),
+            ("  count above 1.21x (p50 of the runner)", "si_p50", True, n),
+            ("  count above 1.75x (p90 of the runner)", "si_p90", True, n),
+            ("  count above 2.40x (p99 of the runner)", "si_p99", True, n)]
     head = ("<table><thead><tr><th>metric</th><th>trend</th><th>first</th>"
             "<th>now</th><th>change</th></tr></thead><tbody>")
     body = []
-    for label, idx, good_low, fmt_v in cols:
-        vals = [p[idx] for p in pts]
+    group = ""
+    for label, key, good_low, fmt_v in cols:
+        vals = [p[key] for p in pts]
         d = vals[-1] - vals[0]
         good = (d <= 0) == good_low
         cls = "win" if d and good else ("loss" if d else "flat")
         # Delta formatting follows the ROW's own kind, not the identity of a
         # shared helper: a count row deltas as a count, a ratio row as a ratio.
         delta = f"{d:+.2f}x" if fmt_v is x else f"{d:+,}"
-        indent = " style='padding-left:1.6rem;color:var(--dim)'" if label.startswith("  ") else ""
+        child = label.startswith("  ")
+        if not child:
+            # A stable id from the label, so the collapsed/expanded state
+            # survives the 60s auto-refresh instead of resetting every minute.
+            group = "".join(c if c.isalnum() else "_" for c in label)[:32]
+        tr = (f"<tr class='c' data-g='{group}' hidden><td class='sub'>"
+              if child else
+              f"<tr class='p' data-g='{group}'><td><span class='tw'></span>")
         body.append(
-            f"<tr><td{indent}>{label.strip()}</td><td>{spark(vals, good_low)}</td>"
+            f"{tr}{label.strip()}</td><td>{spark(vals, good_low)}</td>"
             f"<td>{fmt_v(vals[0])}</td><td><strong>{fmt_v(vals[-1])}</strong></td>"
             f"<td class='{cls}'>{delta}</td></tr>")
-    sweeps = sum(1 for p in pts if p[0] != "shipped")
-    span = f"{pts[0][1]} &rarr; {pts[-1][1]}"
+    sweeps = sum(1 for p in pts if p["sha"] != "shipped")
+    span = f'{pts[0]["when"]} &rarr; {pts[-1]["when"]}'
     return (head + "".join(body) + "</tbody></table>"
             f"<div class='cap'>Baseline plus {sweeps} committed full "
             f"{'sweep' if sweeps == 1 else 'sweeps'}, {span}. The baseline is the "
@@ -301,7 +377,13 @@ def history_panel(pts: list[tuple]) -> str:
             f"definition; its inversion counts come from the `prod_ns` column of "
             f"the newest sweep, which is that release measured on the same "
             f"machine. Every point compares branch against shipped WITHIN one "
-            f"job, so runner speed cancels.</div>")
+            f"job, so runner speed cancels.<br>The inversion bands are "
+            f"thresholds measured by running the SAME code twice: two cells "
+            f"land on two different GitHub runners, so their ratio moves even "
+            f"when nothing changed — 1.11x half the time, 1.60x one time in "
+            f"ten, 2.20x one in a hundred. An inversion below a band is still a "
+            f"defect; it just cannot be told apart from that noise in a "
+            f"per-cell sweep.</div>")
 
 
 def svg_for(rows: dict, op: str) -> str:
@@ -450,6 +532,10 @@ th{color:var(--dim);font-weight:500} td:nth-child(n+4){text-align:right;
   padding:.8rem 1rem;margin:.6rem 0 2rem}
 .hist table{font-size:.84rem;margin:0} .hist td:nth-child(2){text-align:left}
 .hist .cap{color:var(--dim);font-size:.76rem;margin-top:.5rem}
+tr[hidden]{display:none}
+.hist tr.p{cursor:pointer} .hist tr.p:hover{background:var(--line)}
+.hist .tw{display:inline-block;width:1.1em;color:var(--dim)}
+.hist td.sub{padding-left:2.2rem;color:var(--dim)}
 """
 
 
@@ -543,7 +629,28 @@ Check the operand before trusting any single cell.</div>
     <div class="scroll">{mover_table(losses, False)}</div></section>
 </div>
 {''.join(body)}
-</div></body></html>"""
+</div>
+<script>
+// Collapse the detail rows under their headline. State is kept per group in
+// localStorage because the page reloads itself every 60s -- without that you
+// would re-collapse it every minute.
+for (const p of document.querySelectorAll('tr.p')) {{
+  const g = p.dataset.g, key = 'pc_' + g;
+  const kids = [...document.querySelectorAll('tr.c[data-g="' + g + '"]')];
+  const tw = p.querySelector('.tw');
+  if (!kids.length) {{ if (tw) tw.textContent = ''; continue; }}
+  const set = o => {{
+    for (const k of kids) k.hidden = !o;
+    tw.textContent = o ? '▾' : '▸';
+    try {{ localStorage.setItem(key, o ? '1' : '0'); }} catch (e) {{}}
+  }};
+  let open = false;
+  try {{ open = localStorage.getItem(key) === '1'; }} catch (e) {{}}
+  set(open);
+  p.addEventListener('click', () => set(kids[0].hidden));
+}}
+</script>
+</body></html>"""
 
 
 def main() -> int:
