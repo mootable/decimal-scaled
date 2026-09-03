@@ -20,6 +20,110 @@ use crate::int::types::compute_limbs::ComputeLimbs;
 use crate::int::types::traits::BigInt;
 use crate::support::rounding::RoundingMode;
 
+/// Series `ln(v)` at the composition work width — the generic form of
+/// the per-tier `ln_fixed_series_agm` shell.
+///
+/// Deliberately the Series engine, NOT [`WideTrigCore::ln_fixed_routed_agm`]:
+/// `asinh` pins Series because at MAX scale (input `±1`) the `sqrt` step
+/// ahead of the `ln` loses sub-working-scale precision that the Tang
+/// path's internal residue signal cannot detect caller-side. Keeping the
+/// pin is what makes [`asinh_series_composition`] a relocation rather
+/// than an engine swap.
+///
+/// `ln 2` is read with the runtime-keyed `ln2_by_working_scale`, matching
+/// the shell this was lifted from exactly; the const-folded
+/// `ln2_by_scale` sibling would be the faster read on the common
+/// `working_scale == SCALE + GUARD` path, but switching to it is a value
+/// question to settle separately, not part of the lift.
+#[inline]
+fn ln_series<C: WideTrigCore>(working_value: C::Wagm, working_scale: u32) -> C::Wagm
+where
+    <C::Wagm as BigInt>::Scratch: ComputeLimbs,
+{
+    eg::ln_fixed::<C::Wagm>(
+        working_value,
+        working_scale,
+        crate::consts::ln2_by_working_scale::<C::Wagm>(
+            working_scale,
+            crate::support::rounding::DEFAULT_ROUNDING_MODE,
+        ),
+    )
+}
+
+/// Inverse hyperbolic sine, as `sign · ln(|x| + √(x² + 1))`, defined on
+/// all reals. For `|x| ≥ 1` the radicand is factored (via the reciprocal)
+/// to keep `x²` inside the working width.
+///
+/// **Not on the `policy::trig::inverse_hyper` matcher, unlike its two
+/// siblings below.** This is the composition the inherent `asinh_strict`
+/// shell has always run, lifted here verbatim so the computation lives in
+/// a named kernel instead of inside the type-shell macro. It is NOT
+/// interchangeable with the policy's `asinh` path
+/// (`policy::trig::extra_rung::asinh_strict`, a rung-selected schoolbook):
+/// that path's `ln` is the routed Tang/Series choice, while this one is
+/// pinned to Series by [`ln_series`]. Registering this as an `Algorithm`
+/// variant, so the matcher can choose between the two per cell, is the
+/// open follow-up — it changes which engine runs for `asinh_strict` and
+/// so is a routing decision, not a relocation.
+///
+/// `guard` is the number of guard digits below `SCALE` to compute at.
+/// It is a plain runtime argument, not a const: the `_strict` entry
+/// passes the tier's `C::GUARD` while the `_approx` entry passes the
+/// caller's chosen width, and taking it here is what lets ONE kernel
+/// serve both shells instead of each carrying its own copy.
+#[inline]
+pub(crate) fn asinh_series_composition<C: WideTrigCore, const SCALE: u32>(
+    raw: C::Storage,
+    guard: u32,
+    mode: RoundingMode,
+) -> C::Storage
+where
+    <C::Wagm as BigInt>::Scratch: ComputeLimbs,
+{
+    let storage_zero = C::storage_zero();
+    if raw == storage_zero {
+        return storage_zero;
+    }
+    let working_scale = SCALE + guard;
+    // Two-core: composition runs on the wide `Wagm` work int.
+    let zero = <C::Wagm as BigInt>::ZERO;
+    let one_at_working_scale = eg::pow10::<C::Wagm>(working_scale);
+    let working_value = C::to_work_scaled_agm(raw, guard);
+    let abs_working_value = if working_value < zero {
+        zero - working_value
+    } else {
+        working_value
+    };
+    let inner = if abs_working_value >= one_at_working_scale {
+        // |x| >= 1: ln|x| + ln(1 + sqrt(1 + 1/x^2)), so `x^2` never
+        // forms and the working width is not exceeded by the radicand.
+        let reciprocal =
+            eg::div::<C::Wagm>(one_at_working_scale, abs_working_value, working_scale);
+        let root = eg::sqrt_fixed::<C::Wagm>(
+            one_at_working_scale + eg::mul::<C::Wagm>(reciprocal, reciprocal, working_scale),
+            working_scale,
+        );
+        ln_series::<C>(abs_working_value, working_scale)
+            + ln_series::<C>(one_at_working_scale + root, working_scale)
+    } else {
+        let root = eg::sqrt_fixed::<C::Wagm>(
+            eg::mul::<C::Wagm>(abs_working_value, abs_working_value, working_scale)
+                + one_at_working_scale,
+            working_scale,
+        );
+        ln_series::<C>(abs_working_value + root, working_scale)
+    };
+    let signed = if working_value < zero { zero - inner } else { inner };
+    round_to_storage_with_g::<C::Storage, C::Wagm>(
+        signed,
+        working_scale,
+        SCALE,
+        mode,
+        C::storage_max(),
+        C::storage_min(),
+    )
+}
+
 /// Inverse hyperbolic cosine, as `ln(x + √(x² − 1))`, defined for
 /// `x ≥ 1`. For `x ≥ 2` the radicand is factored to keep `x²` inside
 /// the working width; near 1 it takes the `log1p` gap form.
@@ -93,22 +197,30 @@ where
 /// `|x| < 1`.
 ///
 /// Panics if `|x| >= 1`.
+///
+/// `guard` is the number of guard digits below `SCALE` to compute at —
+/// a plain runtime argument, as on [`asinh_series_composition`]. The
+/// routed `_strict` path passes the tier's `C::GUARD`; the `_approx`
+/// shell passes the caller's chosen width, which is what lets this one
+/// kernel serve both instead of the shell carrying a second copy of the
+/// composition.
 #[inline]
 pub(crate) fn atanh_ln_composition<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
+    guard: u32,
     mode: RoundingMode,
 ) -> C::Storage
 where
     <C::Wagm as BigInt>::Scratch: ComputeLimbs,
 {
-    let working_scale = SCALE + C::GUARD;
+    let working_scale = SCALE + guard;
     // Two-core: the composition runs on the wide `Wagm` work int (its
     // ln + the gap-form subtraction), narrowing back to storage at the
     // end — so a narrowed primitive `W` does not clip the composition's
     // precision.
     let zero = <C::Wagm as BigInt>::ZERO;
     let one_at_working_scale = eg::pow10::<C::Wagm>(working_scale);
-    let working_value = C::to_work_scaled_agm(raw, C::GUARD);
+    let working_value = C::to_work_scaled_agm(raw, guard);
     let abs_working_value = if working_value < zero {
         zero - working_value
     } else {
@@ -248,7 +360,11 @@ mod tests {
                     }
                     let raw = x.to_bits();
                     let a = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        super::atanh_ln_composition::<$Core, $S>(raw, m)
+                        super::atanh_ln_composition::<$Core, $S>(
+                            raw,
+                            <$Core as super::WideTrigCore>::GUARD,
+                            m,
+                        )
                     }))
                     .ok();
                     let b = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
