@@ -203,11 +203,13 @@ const fn select() -> Select {
 ///   `den.len()` with trailing zero limbs stripped. `den_n == 0` is a
 ///   divide-by-zero (asserted here). Always needed.
 /// * the **dividend's** effective limb count (`num.len()` with top zero
-///   limbs stripped) is computed **lazily**, only once the divisor reaches
-///   the smaller [`U128_DIV_THRESHOLD`] gate (both wide engines want a
-///   `≥ 2·n` dividend). The common cases (single-limb divisor → `Rem`; any
-///   `2..U128_DIV_THRESHOLD`-limb divisor → `Knuth`) never strip the
-///   dividend at all.
+///   limbs stripped) is computed **lazily**, only once the divisor has
+///   cleared BOTH of the cheap divisor-only gates that stand between it and
+///   the u128 engine — the [`U128_DIV_THRESHOLD`] width AND the even-limb
+///   parity (the wide engine wants a `≥ 2·n` dividend, so the dividend is
+///   read only for a divisor that could still reach it). The common cases
+///   (single-limb divisor → `Rem`; any `2..U128_DIV_THRESHOLD`-limb divisor
+///   → `Knuth`; any ODD divisor → `Knuth`) never strip the dividend at all.
 ///
 /// Routing: a single-limb divisor takes the hardware [`Algorithm::Rem`]
 /// path (covers every `10^scale`, `scale ≤ 19`); a wide (`≥ 2·n` dividend)
@@ -220,12 +222,18 @@ pub(crate) fn select_for_limbs(num: &[u64], den: &[u64]) -> Algorithm {
     if den_n == 1 {
         return Algorithm::Rem;
     }
-    // `den_n >= 2` here. The wide u128-limb engine wants a `≥ 2·n` dividend,
-    // so the dividend's effective length is computed once — and lazily: only
-    // for a divisor wide enough to reach the threshold. Every common
-    // `2..U128_DIV_THRESHOLD`-limb divisor returns Knuth without stripping the
-    // dividend at all.
-    if den_n >= U128_DIV_THRESHOLD {
+    // `den_n >= 2` here. LEAST WORK FIRST — keep these three tests in this
+    // order. Both divisor-only gates are single tests on a count already in
+    // hand (width, then parity); the dividend's effective length is a backward
+    // scan over a slice that on the decimal `/` is the `2N`-limb scaled
+    // numerator, whose high limbs the divide has not otherwise touched. An odd
+    // divisor vetoes the u128 arm outright, so parity belongs in the OUTER
+    // condition beside the threshold: the scan is then paid only by a divisor
+    // that can still reach the engine, and every odd wide divisor returns Knuth
+    // without walking the dividend. Moving the scan back above the parity test
+    // buys nothing and charges every such divisor a full walk for a verdict
+    // already settled.
+    if den_n >= U128_DIV_THRESHOLD && den_n.is_multiple_of(2) {
         let num_m = effective_limbs(num);
         // Wide (`2n`-dividend) even divisor → the u128 limb-width engine. This
         // covers the WHOLE even-divisor wide region from `U128_DIV_THRESHOLD`
@@ -234,7 +242,7 @@ pub(crate) fn select_for_limbs(num: &[u64], den: &[u64]) -> Algorithm {
         // measured u128 beating Burnikel–Ziegler there
         // 1.68–1.78× (96/128 limbs), so this region routes u128, not BZ (the
         // balanced shape stays Knuth — u128 loses it ~1.5×).
-        if den_n.is_multiple_of(2) && num_m >= 2 * den_n {
+        if num_m >= 2 * den_n {
             return Algorithm::KnuthU128Limb;
         }
     }
