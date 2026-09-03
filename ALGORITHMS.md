@@ -502,20 +502,40 @@ The identity `atan(x) = 2·atan(x / (1 + √(1 + x²)))` halves the
 argument; applying it `l` times reduces `|x|` by `~2^l`, then the
 Taylor series for `atan` converges in `~p_bits / (2l)` terms.
 
-The halving count is chosen per working scale `w`:
+The halving count is CAPPED per working scale `w`:
 
-- `w < 60` → 5 halvings (D38 / D18 strict path)
-- `60 ≤ w < 110` → 6 halvings (D57 / D76 / light D115)
+- `w < 60` → at most 5 halvings
+- `60 ≤ w < 110` → at most 6 halvings
 - `w ≥ 110` → 7 halvings (D115 / D153 / D230 / D307 / D462 / D616 /
-  D924 / D1232)
+  D924 / D1232 at their deeper scales)
 
 Break-even rationale: each halving costs ~one wide mul + one wide
 sqrt + one wide div; each saved Taylor term saves ~one wide mul.
-The trade-off depends on `p_bits` and sits in the 5–7 range for
-our tiers.
 
-Implementation: `src/algos/trig/trig_series_2limb.rs::atan_fixed` (D38 narrow path),
-`src/macros/wide_transcendental.rs::atan_fixed` (wide tiers).
+The count also depends on the ARGUMENT, not just on `w`. The Taylor
+series needs about `w / (2·log10(1/x))` terms, so a halving — which
+adds `log10 2 ≈ 0.3` to `log10(1/x)` — saves a term count
+**proportional to `w`**: roughly `0.115·w` terms for `x = 0.1`, i.e.
+~5 terms at `w = 44` but ~145 at `w = 1261`. Below a sqrt's cost at
+the narrow end, far above it at the wide end.
+
+So the cascade is adaptive below `w = 110`: it halves only while the
+argument is above a threshold (0.2 for `w < 60`, 0.15 for
+`60 ≤ w < 110`), and an argument already inside that band skips the
+cascade entirely. At `w ≥ 110` the threshold is zero and the chain
+always runs to its cap, since there the halvings clearly pay. Both
+thresholds are placed from the term-count arithmetic above and want a
+bisection before they are treated as measured crossovers.
+
+Implementation: `src/algos/trig/trig_generic.rs::atan_fixed` (the
+generic wide kernel, reached by D38 and every wider tier through
+`WideTrigCore::atan_fixed`), and
+`src/algos/trig/trig_series_2limb.rs::atan_fixed` (the 256-bit `Fixed`
+kernel, which for `atan` serves D18 — D38's `atan` widens to the D57
+core via `policy::trig::borrow_d57`, so it runs the generic kernel).
+The narrow kernel has always been adaptive here, with its own 0.2
+threshold and a cap of 8; the generic one was unconditional until the
+thresholds above were added.
 
 ### `atan2` with max-branch quotient selection
 
