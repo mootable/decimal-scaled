@@ -27,6 +27,8 @@ pub(crate) mod angle_mul_pi_ratio;
 pub(crate) mod angle_schoolbook;
 #[cfg(feature = "_wide-support")]
 pub(crate) mod hyper_exp_identity;
+#[cfg(feature = "_wide-support")]
+pub(crate) mod hyper_ln_composition;
 #[cfg(any(feature = "d57", feature = "wide"))]
 pub(crate) mod inverse_tang_3limb_s18_22;
 #[cfg(any(feature = "d57", feature = "wide"))]

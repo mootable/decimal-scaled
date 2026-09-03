@@ -399,6 +399,64 @@ pub(crate) mod hyper {
 }
 
 // ══════════════════════════════════════════════════════════════════════
+// Inverse-hyperbolic family matcher (acosh / atanh)
+// ══════════════════════════════════════════════════════════════════════
+#[cfg(feature = "_wide-support")]
+pub(crate) mod inverse_hyper {
+    use crate::int::types::Int;
+
+    /// The inverse-hyperbolic algorithms.
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    pub(crate) enum Algorithm {
+        /// `acosh_ln_composition` / `atanh_ln_composition` — the `ln` /
+        /// `log1p` compositions evaluated single-shot on `C::Wagm` at
+        /// the tier's fixed working scale (`SCALE + GUARD`). Realised by
+        /// `algos::trig::hyper_ln_composition`.
+        LnComposition,
+        /// `acosh_schoolbook` / `atanh_schoolbook` — the Ziv-escalating
+        /// reference, reached through the `extra_rung` near-special work
+        /// rung. Correct everywhere and materially slower everywhere
+        /// (measured up to 10.5x on `acosh`, 10.75x on `atanh`), so it
+        /// is the kept alternative rather than the routed default.
+        #[allow(dead_code)]
+        Schoolbook,
+    }
+
+    /// A settled algorithm, or "the value decides". `ByValue` is part of
+    /// the canonical shape; this family never returns it — the
+    /// composition's accuracy is uniform in the operand once the
+    /// radicand is factored (see `hyper_ln_composition`), so there is
+    /// nothing left for a runtime arm to decide.
+    #[derive(Clone, Copy)]
+    pub(crate) enum Select<const N: usize> {
+        ByAlgorithm(Algorithm),
+        #[allow(dead_code)]
+        ByValue(fn(&Int<N>) -> Algorithm),
+    }
+
+    /// One algorithm at every `(N, SCALE)`. The composition is correct
+    /// across the whole key — the `SCALE > 90` near-wall band that once
+    /// forced the schoolbook is fixed IN the composition, not routed
+    /// around — so the matcher settles every cell from the const key and
+    /// no cell reaches a runtime arm.
+    #[allow(clippy::match_single_binding)]
+    pub(crate) const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
+        match (N, SCALE) {
+            _ => Select::ByAlgorithm(Algorithm::LnComposition),
+        }
+    }
+
+    /// Resolve the inverse-hyperbolic verdict to a concrete `Algorithm`.
+    #[inline]
+    pub(crate) fn resolve<const N: usize, const SCALE: u32>(raw: &Int<N>) -> Algorithm {
+        match const { select::<N, SCALE>() } {
+            Select::ByAlgorithm(algorithm) => algorithm,
+            Select::ByValue(choose) => choose(raw),
+        }
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════
 // Forward-family SCALE-derived work-rung routing (sin / cos / tan)
 //
 // A TIER-FIXED work integer `C::W` regardless of scale is wasteful at low
@@ -1617,19 +1675,37 @@ macro_rules! wide_trig_extra_inherent {
         }
         #[inline]
         pub(crate) fn policy_acosh(self, mode: RoundingMode) -> Self {
-            Self(extra_rung::acosh_strict::<$Core, SCALE>(self.0, mode))
+            Self(match inverse_hyper::resolve::<$N, SCALE>(&self.0) {
+                inverse_hyper::Algorithm::LnComposition => {
+                    crate::algos::trig::hyper_ln_composition::acosh_ln_composition::<$Core, SCALE>(
+                        self.0, mode,
+                    )
+                }
+                inverse_hyper::Algorithm::Schoolbook => {
+                    extra_rung::acosh_strict::<$Core, SCALE>(self.0, mode)
+                }
+            })
         }
         #[inline]
         pub(crate) fn policy_acosh_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
-            Self(extra_rung::acosh_strict::<$Core, SCALE>(self.0, mode))
+            self.policy_acosh(mode)
         }
         #[inline]
         pub(crate) fn policy_atanh(self, mode: RoundingMode) -> Self {
-            Self(extra_rung::atanh_strict::<$Core, SCALE>(self.0, mode))
+            Self(match inverse_hyper::resolve::<$N, SCALE>(&self.0) {
+                inverse_hyper::Algorithm::LnComposition => {
+                    crate::algos::trig::hyper_ln_composition::atanh_ln_composition::<$Core, SCALE>(
+                        self.0, mode,
+                    )
+                }
+                inverse_hyper::Algorithm::Schoolbook => {
+                    extra_rung::atanh_strict::<$Core, SCALE>(self.0, mode)
+                }
+            })
         }
         #[inline]
         pub(crate) fn policy_atanh_with(self, _working_digits: u32, mode: RoundingMode) -> Self {
-            Self(extra_rung::atanh_strict::<$Core, SCALE>(self.0, mode))
+            self.policy_atanh(mode)
         }
         #[inline]
         pub(crate) fn policy_to_degrees(self, mode: RoundingMode) -> Self {

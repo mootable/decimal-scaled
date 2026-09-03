@@ -1074,3 +1074,9 @@ required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 [[example]]
 name = "wide_tang_bench"
 required-features = ["wide", "x-wide", "xx-wide"]
+
+[[bench]]
+name = "hyper_ln_composition_ab"
+path = "benches/micro/hyper_ln_composition_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide"]
