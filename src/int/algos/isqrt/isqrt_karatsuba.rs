@@ -69,17 +69,20 @@
 //! - **One half-width divide per recursion level** (`O(log n)` total) — vs
 //!   Newton's full-width divide per iteration.
 //! - **Generic over N** — width-agnostic `&[u64]` slices; no per-tier copy.
-//! - **No dispatch re-entry** — products via [`mul_schoolbook`] directly,
-//!   the half-width divide via [`div_rem_dispatch`]; the base case calls the
-//!   sibling [`isqrt_newton`] kernel directly, never a re-dispatched method.
+//! - **No SELF re-dispatch** — the squares go through the multiply matcher
+//!   ([`mul_slice`]) and the half-width divide through [`div_rem_dispatch`],
+//!   so neither choice is pinned here; but nothing re-enters the `isqrt`
+//!   policy — the base case calls the sibling [`isqrt_newton`] kernel
+//!   directly, never a re-dispatched method, so the recursion cannot cycle
+//!   back into this engine.
 //! - **Exact:** result bit-identical to
 //!   [`isqrt_newton`](crate::int::algos::isqrt::isqrt_newton::isqrt_newton)
 //!   for every input (the `#[cfg(test)]` bit-identity sweep below is its
 //!   validity wall).
 
 use crate::int::algos::isqrt::isqrt_newton::isqrt_newton;
-use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 use crate::int::algos::support::limbs::{add_assign, bit_len, cmp, shl, shr, sub_assign};
+use crate::int::policy::mul::dispatch_slice as mul_slice;
 use crate::int::policy::div_rem::dispatch as div_rem_dispatch;
 use crate::int::types::compute_limbs::MAX_DOUBLE_LIMBS;
 
@@ -207,7 +210,12 @@ fn sqrtrem(n: &[u64], s: &mut [u64], r: &mut [u64]) {
         let s_len = sig_len(&s[..window_len]);
         let mut sq = [0u64; SCRATCH_LIMBS];
         let sq_len = (2 * s_len).min(SCRATCH_LIMBS);
-        mul_schoolbook(&s[..s_len], &s[..s_len], &mut sq[..sq_len]);
+        // Through the multiply matcher, on SIGNIFICANT lengths (`s_len` is
+        // already `sig_len`) — the length classifier cannot see padding, so a
+        // padded slice would misreport this operand's true size to it. At the
+        // base case `s_len <= 2`, far below the Karatsuba engage point, so the
+        // verdict is schoolbook exactly as before; the matcher now owns that.
+        mul_slice(&s[..s_len], &s[..s_len], &mut sq[..sq_len]);
         // r = n − s²  (n ≥ s² by definition of the floor root).
         r[..window_len].copy_from_slice(n);
         sub_assign(&mut r[..window_len], &sq[..sq_len.min(window_len)]);
@@ -277,7 +285,10 @@ fn sqrtrem(n: &[u64], s: &mut [u64], r: &mut [u64]) {
     add_assign(&mut rr, a0);
     let mut qsq = [0u64; SCRATCH_LIMBS];
     let qsq_len = (2 * q_len).min(SCRATCH_LIMBS);
-    mul_schoolbook(&q[..q_len], &q[..q_len], &mut qsq[..qsq_len]);
+    // Same door, same reasoning: `q_len` is already `sig_len`, and the paper's
+    // `q <= B` invariant keeps it near `window_len/4` — ~17 limbs at the widest
+    // wired width — so the verdict stays schoolbook today.
+    mul_slice(&q[..q_len], &q[..q_len], &mut qsq[..qsq_len]);
 
     let one = [1u64];
     if cmp(&rr[..SCRATCH_LIMBS], &qsq[..qsq_len]) >= 0 {
