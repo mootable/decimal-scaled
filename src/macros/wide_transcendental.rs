@@ -2687,86 +2687,6 @@ macro_rules! decl_wide_transcendental {
             // dominant tier value here because the working-scale routed
             // surface is single-source-per-tier.
 
-            /// Tang/Series-routed working-scale `ln` of a `working_value` for
-            /// this
-            /// tier. Bit-equivalent to the previous direct `ln_fixed`
-            /// call wherever the policy routes Series; routes through
-            /// the shared `tang_ln_fixed` surface (the same one
-            /// `ln_tang` wraps at storage level) wherever the policy
-            /// routes Tang. The bypass-fix call sites
-            /// (`log_strict_with_kernel`, `log2_*_with_kernel`,
-            /// `log10_*_with_kernel`, `powf_strict`, `powf_strict_with`,
-            /// `asinh_strict`, `acosh_strict`, `atanh_strict`, and their
-            /// `_with` siblings) go through this instead of `ln_fixed`
-            /// directly, so the wide-tier log family now inherits the
-            /// matcher's Tang routing (the Class-G remediation).
-            #[cfg(feature = "_wide-support")]
-            #[inline]
-            pub(crate) fn ln_fixed_routed<const SCALE: u32>(
-                working_value: W,
-                working_scale: u32
-            ) -> W {
-                if const { $crate::policy::ln::is_tang::<$n_limbs, SCALE>() } {
-                    // INTERNAL_EXTRA = true: run at extended working scale
-                    // `working_scale + 12` and residual-preserving narrow back
-                    // to `working_scale`,
-                    // so the directed-rounding Ziv escalation in the caller
-                    // (e.g. asinh_strict_with @ MAX scale) sees a residual
-                    // sign bit-identical to Series's `ln_fixed`. Mirrors the
-                    // `true, true` flags every `policy::ln::tang_routed`
-                    // arm now uses.
-                    $crate::algos::ln::ln_tang::tang_ln_fixed::<Core, $ln_tang_cap, false, SCALE>(working_value, working_scale)
-                } else {
-                    ln_fixed::<SCALE>(working_value, working_scale)
-                }
-            }
-            #[cfg(not(feature = "_wide-support"))]
-            #[inline]
-            pub(crate) fn ln_fixed_routed<const SCALE: u32>(
-                working_value: W,
-                working_scale: u32
-            ) -> W {
-                ln_fixed::<SCALE>(working_value, working_scale)
-            }
-
-            /// Tang/Series-routed working-scale `exp` of a `working_value` for
-            /// this tier. Bit-equivalent to the previous direct
-            /// `exp_fixed` call wherever the policy routes Series;
-            /// routes through `tang_exp_fixed::<Core, M, true>` (the
-            /// `INTERNAL_EXTRA` lift handles arbitrary `|k|`) wherever
-            /// the policy routes Tang. The bypass-fix call sites
-            /// (`exp2_strict`, `exp2_strict_with_kernel`, `powf_strict`,
-            /// `powf_strict_with`, `sinh_cosh_strict`, plus the per-mode
-            /// `_with` siblings) go through this instead of `exp_fixed`
-            /// directly. The `exp_strict` dispatcher still routes through
-            /// `policy::exp::dispatch` so its `ByValue` gate (which
-            /// chooses Series for large-`|x|` to skip Tang's `2^k`
-            /// reassembly amplification at storage) remains in effect at
-            /// the strict-narrowing layer; the working-scale composition
-            /// sites just need a fast `e^{stuff}` and let
-            /// `tang_exp_fixed`'s internal `extra` lift cover the
-            /// large-`|k|` case.
-            #[cfg(feature = "_wide-support")]
-            #[inline]
-            pub(crate) fn exp_fixed_routed<const SCALE: u32>(
-                working_value: W,
-                working_scale: u32
-            ) -> W {
-                if const { $crate::policy::exp::is_tang::<$n_limbs, SCALE>() } {
-                    $crate::algos::exp::exp_tang::tang_exp_fixed::<Core, $exp_tang_m, true, SCALE>(working_value, working_scale)
-                } else {
-                    exp_fixed::<SCALE>(working_value, working_scale)
-                }
-            }
-            #[cfg(not(feature = "_wide-support"))]
-            #[inline]
-            pub(crate) fn exp_fixed_routed<const SCALE: u32>(
-                working_value: W,
-                working_scale: u32
-            ) -> W {
-                exp_fixed::<SCALE>(working_value, working_scale)
-            }
-
             // ── Wagm (composition / AGM wide-work) bridges ─────────────
             //
             // The two-core split: the PRIMITIVES (ln/exp/sin/cos/atan) run on
@@ -2820,10 +2740,6 @@ macro_rules! decl_wide_transcendental {
                     working_value,
                     working_scale
                 )
-            }
-            #[inline]
-            pub(crate) fn mul_agm(lhs: Wagm, rhs: Wagm, working_scale: u32) -> Wagm {
-                $crate::algos::exp::exp_generic::mul::<Wagm>(lhs, rhs, working_scale)
             }
             #[inline]
             pub(crate) fn sqrt_fixed_agm(value: Wagm, working_scale: u32) -> Wagm {
