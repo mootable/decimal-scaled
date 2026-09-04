@@ -8,10 +8,9 @@
 //! The narrow `Int<2>`-storage series path: it serves the narrow
 //! D18 / D38 tier, evaluating the log series in the wider `Fixed`
 //! intermediate because the narrow storage cannot host the guard
-//! digits a correctly-rounded result needs. Captures the four-variant
-//! matrix entry shape (`strict` vs `approx`, each with an
-//! explicit-rounding-mode sibling) as a single kernel parameterised by
-//! `working_digits`.
+//! digits a correctly-rounded result needs. Captures the `strict`
+//! entry shape (with its explicit-rounding-mode sibling) at the
+//! const-folded `STRICT_GUARD` working scale.
 //!
 //! Hosts the shared `Fixed` ln primitives used by every D38 strict-
 //! ln callsite plus the `policy::ln` defaults — `STRICT_GUARD`,
@@ -163,57 +162,9 @@ pub(crate) fn ln_fixed(working_value: Fixed, working_scale: u32) -> Fixed {
     k_ln2.add(ln_mantissa)
 }
 
-/// D38 natural log with explicit `working_digits` and rounding mode.
-/// Called by both `ln_strict_with` (with `working_digits = STRICT_GUARD`)
-/// and `ln_approx_with` (with the caller's value).
-///
-/// Returns the raw `i128` storage at the input's scale; `None` when the
-/// correctly-rounded result does not fit the storage (the policy wrapper
-/// panics / the `checked_` surface propagates).
-#[inline]
-#[must_use]
-pub(crate) fn ln_with(
-    raw: Int<2>,
-    scale: u32,
-    working_digits: u32,
-    mode: RoundingMode,
-) -> Option<Int<2>> {
-    ln_with_raw(raw.as_i128(), scale, working_digits, mode).map(Int::<2>::from_i128)
-}
-
-/// `i128` core of [`ln_with`].
-#[inline]
-fn ln_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> Option<i128> {
-    assert!(raw > 0, "ln kernel: argument must be positive");
-    let one_scaled: i128 = 10_i128.pow(scale);
-    if raw == one_scaled {
-        return Some(0);
-    }
-    let delta = raw - one_scaled;
-    let ln1p_band: i128 = 10_i128.pow(scale.saturating_sub(1) / 2);
-    if delta.abs() <= ln1p_band && is_nearest_mode(mode) {
-        // ln(1 + δ/10^S)·10^S = δ − δ²/(2·10^S) + … . The leading omitted term
-        // is δ²/(2·10^S); at the band edge |δ| = 10^k it equals 10^(2k−S)/2, so
-        // the linear value `δ` is the nearest-rounded result only while
-        // 2k − S < 0 STRICTLY (the term is below half an LSB and the round is
-        // not a tie). The band exponent k = ⌊(S−1)/2⌋ gives 2k − S ≤ −1, i.e.
-        // ≤ 0.05 LSB — strictly clear of the half-ULP tie for EVERY S. The old
-        // k = ⌊S/2⌋ put 2k − S = 0 for even S, so the edge term was exactly
-        // 0.5 LSB and `δ` misrounded the tie (ln(0.999) at s6/s18/s28). Directed
-        // modes need the true residual sign (the value sits sub-LSB to one side
-        // of `δ`), so they fall through to the full working-scale kernel below.
-        return Some(delta);
-    }
-    let working_scale = scale + working_digits;
-    let working_value =
-        Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(working_digits));
-    ln_fixed(working_value, working_scale).round_to_i128_with(working_scale, scale, mode)
-}
-
-/// Strict variant — fixed to `STRICT_GUARD` working digits. Equivalent
-/// to `ln_with(raw, scale, STRICT_GUARD, mode)` but keeps the working
-/// scale `w = SCALE + STRICT_GUARD` const-folded so LLVM specialises
-/// one optimal kernel per `SCALE`.
+/// Fixed to `STRICT_GUARD` working digits, keeping the working scale
+/// `w = SCALE + STRICT_GUARD` const-folded so LLVM specialises one
+/// optimal kernel per `SCALE`.
 #[inline]
 #[must_use]
 pub(crate) fn ln_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
@@ -231,12 +182,16 @@ fn ln_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128
     let delta = raw - one_scaled;
     let ln1p_band: i128 = 10_i128.pow(SCALE.saturating_sub(1) / 2);
     if delta.abs() <= ln1p_band && is_nearest_mode(mode) {
-        // See `ln_with_raw`: the band exponent ⌊(S−1)/2⌋ keeps the omitted
-        // quadratic term ≤ 0.05 LSB — strictly clear of the half-ULP tie for
-        // every S (a ⌊S/2⌋ band hits exactly 0.5 LSB at the edge for even S).
-        // The linear approximation `δ` is then the correctly nearest-rounded
-        // result inside the band; directed modes need the residual sign and
-        // fall through to the full kernel.
+        // ln(1 + δ/10^S)·10^S = δ − δ²/(2·10^S) + … . The leading omitted term
+        // is δ²/(2·10^S); at the band edge |δ| = 10^k it equals 10^(2k−S)/2, so
+        // the linear value `δ` is the nearest-rounded result only while
+        // 2k − S < 0 STRICTLY (the term is below half an LSB and the round is
+        // not a tie). The band exponent k = ⌊(S−1)/2⌋ gives 2k − S ≤ −1, i.e.
+        // ≤ 0.05 LSB — strictly clear of the half-ULP tie for EVERY S. The old
+        // k = ⌊S/2⌋ put 2k − S = 0 for even S, so the edge term was exactly
+        // 0.5 LSB and `δ` misrounded the tie (ln(0.999) at s6/s18/s28). Directed
+        // modes need the true residual sign (the value sits sub-LSB to one side
+        // of `δ`), so they fall through to the full working-scale kernel below.
         return Some(delta);
     }
     let working_scale = SCALE + STRICT_GUARD;
@@ -480,66 +435,7 @@ fn log_exact_int_pin(value_raw: i128, base_int: i128, scale: u32, exponent: i128
     if exact { exponent.checked_mul(one_scaled) } else { None }
 }
 
-/// `log_base(v) = ln(v) / ln(base)`, both carried in the `Fixed` wide.
-/// Used by `policy::log::dispatch` when the D57 borrow path is not
-/// available (no `d57` / `wide` feature).
-#[inline]
-#[must_use]
-pub(crate) fn log_with(
-    raw: Int<2>,
-    base_raw: Int<2>,
-    scale: u32,
-    working_digits: u32,
-    mode: RoundingMode,
-) -> Option<Int<2>> {
-    log_with_raw(
-        raw.as_i128(),
-        base_raw.as_i128(),
-        scale,
-        working_digits,
-        mode,
-    )
-    .map(Int::<2>::from_i128)
-}
-
-/// `i128` core of [`log_with`].
-#[inline]
-fn log_with_raw(
-    raw: i128,
-    base_raw: i128,
-    scale: u32,
-    working_digits: u32,
-    mode: RoundingMode,
-) -> Option<i128> {
-    assert!(raw > 0, "D38::log: argument must be positive");
-    assert!(base_raw > 0, "D38::log: base must be positive");
-    let working_scale = scale + working_digits;
-    let guard_pow = 10u128.pow(working_digits);
-    let working_value = Fixed::from_u128_mag(raw as u128, false).mul_u128(guard_pow);
-    let base_working_value = Fixed::from_u128_mag(base_raw as u128, false).mul_u128(guard_pow);
-    let ln_b = ln_fixed(base_working_value, working_scale);
-    assert!(
-        !ln_b.is_zero(),
-        "D38::log: base must not equal 1 (ln(1) is zero)"
-    );
-    let ratio = ln_fixed(working_value, working_scale).div(ln_b, working_scale);
-    // Exact-power pin: `value == base^k` ⇒ result is exactly `k`.
-    // Reduce the storage `base_raw` to its integer base (`base_raw /
-    // 10^scale`) here, without forming `base · 10^scale`, so the pin's
-    // integer-domain check never carries (and never overflows) the
-    // scale factor — `0` flags a non-integer base (no exact pin).
-    let exponent_candidate = ratio.round_to_nearest_int(working_scale);
-    let base_int = match 10i128.checked_pow(scale) {
-        Some(one_scaled) if base_raw % one_scaled == 0 => base_raw / one_scaled,
-        _ => 0,
-    };
-    if let Some(pinned) = log_exact_int_pin(raw, base_int, scale, exponent_candidate) {
-        return Some(pinned);
-    }
-    ratio.round_to_i128_with(working_scale, scale, mode)
-}
-
-/// Const-folded strict variant of [`log_with`] with the near-tie
+/// Const-folded strict `log(x, base)` with the near-tie
 /// protected terminal: the exact-integer pin, then the clear-of-tie
 /// single shot, then (near a boundary) the exact rational-power pin —
 /// `log_4(8) = 3/2` exactly on the scale-19 grid, `log_4(32) = 5/2`
@@ -566,7 +462,11 @@ fn log_strict_raw(raw: i128, base_raw: i128, scale: u32, mode: RoundingMode) -> 
         "D38::log: base must not equal 1 (ln(1) is zero)"
     );
     let ratio = ln_fixed(working_value, working_scale).div(ln_b, working_scale);
-    // Exact-power pin (see `log_with_raw`).
+    // Exact-power pin: `value == base^k` ⇒ result is exactly `k`.
+    // Reduce the storage `base_raw` to its integer base (`base_raw /
+    // 10^scale`) here, without forming `base · 10^scale`, so the pin's
+    // integer-domain check never carries (and never overflows) the
+    // scale factor — `0` flags a non-integer base (no exact pin).
     let exponent_candidate = ratio.round_to_nearest_int(working_scale);
     let base_int = match 10i128.checked_pow(scale) {
         Some(one_scaled) if base_raw % one_scaled == 0 => base_raw / one_scaled,
@@ -605,30 +505,6 @@ fn log_strict_raw(raw: i128, base_raw: i128, scale: u32, mode: RoundingMode) -> 
     }
 }
 
-/// `log2(v) = ln(v) / ln(2)`, `Fixed`-wide fallback for D38.
-#[inline]
-#[must_use]
-pub(crate) fn log2_with(raw: Int<2>, scale: u32, working_digits: u32, mode: RoundingMode) -> Option<Int<2>> {
-    log2_with_raw(raw.as_i128(), scale, working_digits, mode).map(Int::<2>::from_i128)
-}
-
-/// `i128` core of [`log2_with`].
-#[inline]
-fn log2_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> Option<i128> {
-    assert!(raw > 0, "D38::log2: argument must be positive");
-    let working_scale = scale + working_digits;
-    let working_value =
-        Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(working_digits));
-    let ratio =
-        ln_fixed(working_value, working_scale).div(wide_ln2(working_scale), working_scale);
-    // Exact-power pin: `value == 2^k` ⇒ result is exactly `k`.
-    let exponent_candidate = ratio.round_to_nearest_int(working_scale);
-    if let Some(pinned) = log_exact_int_pin(raw, 2, scale, exponent_candidate) {
-        return Some(pinned);
-    }
-    ratio.round_to_i128_with(working_scale, scale, mode)
-}
-
 /// `None` = result out of storage range. The strict terminal is
 /// near-tie protected; `log2` of an on-grid rational is integer (the
 /// exact pin) or IRRATIONAL (`2^(p/q)` is rational only for `q | p`), so
@@ -661,30 +537,6 @@ fn log2_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
             |guard_digits| log_ratio_ziv(raw, -2, scale, guard_digits),
         ),
     }
-}
-
-/// `log10(v) = ln(v) / ln(10)`, `Fixed`-wide fallback for D38.
-#[inline]
-#[must_use]
-pub(crate) fn log10_with(raw: Int<2>, scale: u32, working_digits: u32, mode: RoundingMode) -> Option<Int<2>> {
-    log10_with_raw(raw.as_i128(), scale, working_digits, mode).map(Int::<2>::from_i128)
-}
-
-/// `i128` core of [`log10_with`].
-#[inline]
-fn log10_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> Option<i128> {
-    assert!(raw > 0, "D38::log10: argument must be positive");
-    let working_scale = scale + working_digits;
-    let working_value =
-        Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(working_digits));
-    let ratio =
-        ln_fixed(working_value, working_scale).div(wide_ln10(working_scale), working_scale);
-    // Exact-power pin: `value == 10^k` ⇒ result is exactly `k`.
-    let exponent_candidate = ratio.round_to_nearest_int(working_scale);
-    if let Some(pinned) = log_exact_int_pin(raw, 10, scale, exponent_candidate) {
-        return Some(pinned);
-    }
-    ratio.round_to_i128_with(working_scale, scale, mode)
 }
 
 /// `None` = result out of storage range. Near-tie protected like

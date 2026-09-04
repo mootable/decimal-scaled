@@ -21,7 +21,7 @@
 //!
 //! exp2 is derived (`2^x = exp(x·ln2)` with an exact-power pin) and routes
 //! DOWN to the narrow `exp_series_2limb::exp2_*` kernels or the wide
-//! per-tier `wide_trig_<tier>::exp2_{strict,approx}_with_kernel` free fns —
+//! per-tier `wide_trig_<tier>::exp2_strict_with_kernel` free fns —
 //! never back through a sibling decimal policy.
 
 use crate::int::types::traits::BigInt;
@@ -221,33 +221,6 @@ pub(crate) fn checked_dispatch<const N: usize, const SCALE: u32>(
     }
 }
 
-#[inline]
-#[must_use]
-pub(crate) fn dispatch_with<const N: usize, const SCALE: u32>(
-    raw: Int<N>,
-    working_digits: u32,
-    mode: RoundingMode,
-) -> Int<N> {
-    // Only the narrow tier honours caller working_digits (matching the
-    // prior ExpPolicy routing, where wide exp_with_impl ignored it).
-    match N {
-        1 | 2 => crate::algos::exp::exp_series_2limb::exp_with(
-            raw.resize_to::<Int<2>>(),
-            SCALE,
-            working_digits,
-            mode,
-        )
-        .and_then(super::narrow_fit::<N>)
-        .unwrap_or_else(|| {
-            crate::support::diagnostics::overflow_panic_with_scale("exp_with", SCALE)
-        }),
-        _ => {
-            let _ = working_digits;
-            dispatch::<N, SCALE>(raw, mode)
-        }
-    }
-}
-
 // The SCALE-derived work-rung routing for the wide-tier Series arm
 // (the `policy::trig::forward_rung` shape): a Series-INTERNAL second
 // axis — NOT in the `select` verdict, NOT on [`Algorithm`] — consulted
@@ -432,35 +405,6 @@ pub(crate) fn checked_exp2_dispatch<const N: usize, const SCALE: u32>(
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => Some(crate::types::widths::wide_trig_d1232::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>()),
         _ => crate::algos::exp::exp_series_2limb::exp2_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
-    }
-}
-
-#[inline]
-#[must_use]
-pub(crate) fn exp2_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, working_digits: u32, mode: RoundingMode) -> Int<N> {
-    match N {
-        1 | 2 => crate::algos::exp::exp_series_2limb::exp2_with(raw.resize_to::<Int<2>>(), SCALE, working_digits, mode).and_then(super::narrow_fit::<N>).unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("exp2_with", SCALE)),
-        #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => crate::types::widths::wide_trig_d57::exp2_approx_with_kernel::<SCALE>(raw.resize_to::<Int<3>>(), working_digits, mode).resize_to::<Int<N>>(),
-        #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => crate::types::widths::wide_trig_d76::exp2_approx_with_kernel::<SCALE>(raw.resize_to::<Int<4>>(), working_digits, mode).resize_to::<Int<N>>(),
-        #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => crate::types::widths::wide_trig_d115::exp2_approx_with_kernel::<SCALE>(raw.resize_to::<Int<6>>(), working_digits, mode).resize_to::<Int<N>>(),
-        #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => crate::types::widths::wide_trig_d153::exp2_approx_with_kernel::<SCALE>(raw.resize_to::<Int<8>>(), working_digits, mode).resize_to::<Int<N>>(),
-        #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => crate::types::widths::wide_trig_d230::exp2_approx_with_kernel::<SCALE>(raw.resize_to::<Int<12>>(), working_digits, mode).resize_to::<Int<N>>(),
-        #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => crate::types::widths::wide_trig_d307::exp2_approx_with_kernel::<SCALE>(raw.resize_to::<Int<16>>(), working_digits, mode).resize_to::<Int<N>>(),
-        #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => crate::types::widths::wide_trig_d462::exp2_approx_with_kernel::<SCALE>(raw.resize_to::<Int<24>>(), working_digits, mode).resize_to::<Int<N>>(),
-        #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => crate::types::widths::wide_trig_d616::exp2_approx_with_kernel::<SCALE>(raw.resize_to::<Int<32>>(), working_digits, mode).resize_to::<Int<N>>(),
-        #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => crate::types::widths::wide_trig_d924::exp2_approx_with_kernel::<SCALE>(raw.resize_to::<Int<48>>(), working_digits, mode).resize_to::<Int<N>>(),
-        #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => crate::types::widths::wide_trig_d1232::exp2_approx_with_kernel::<SCALE>(raw.resize_to::<Int<64>>(), working_digits, mode).resize_to::<Int<N>>(),
-        _ => crate::algos::exp::exp_series_2limb::exp2_with(raw.resize_to::<Int<2>>(), SCALE, working_digits, mode).and_then(super::narrow_fit::<N>).unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("exp2_with", SCALE)),
     }
 }
 

@@ -185,14 +185,6 @@ mod crate_internal_tests {
     fn log1p_default_mode_siblings_agree() {
         let t_raw = UNIT / 2;
         assert_eq!(
-            d38s20(t_raw).log1p_approx(45).to_bits().as_i128(),
-            d38s20(t_raw)
-                .log1p_approx_with(45, crate::support::rounding::DEFAULT_ROUNDING_MODE)
-                .to_bits()
-                .as_i128(),
-            "log1p_approx != log1p_approx_with(default mode)"
-        );
-        assert_eq!(
             d38s20(t_raw).log1p_strict().to_bits().as_i128(),
             d38s20(t_raw)
                 .log1p_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)

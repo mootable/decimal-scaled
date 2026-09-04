@@ -1171,7 +1171,8 @@ fn tanh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 
     // leaving a panic GAP. The identity sidesteps it: m is TINY for large |x|,
     // formed by `exp_fixed` on the NEGATIVE argument −2|x| whose `2^k` reassembly
     // shifts DOWN, never the overflowing up-shift. Mirrors the routed
-    // `tanh_with_raw` / wide `exp_generic::tanh_pos`, bit-for-bit.
+    // `trig_series_2limb::tanh_eval_fixed` / wide `exp_generic::tanh_pos`,
+    // bit-for-bit.
     let saturation_bound = (working_scale as i128) * 1152 / 1000 + 2;
     // Largest working value below 1 (value 1 − 10^−working_scale): the all-nines
     // saturation.

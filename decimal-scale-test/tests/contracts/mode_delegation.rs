@@ -220,25 +220,18 @@ mod from_arithmetic_mode_aware {
     any(feature = "d76", feature = "wide")
 ))]
 mod from_rounding_mode_matrix {
-    //! Mode-aware and precision-aware transcendental matrix.
+    //! Mode-aware transcendental matrix.
     //!
-    //! Each strict / approx method now ships with a `_with(mode)` sibling
-    //! and (for the transcendentals) an `_approx(working_digits)` family
-    //! that lets callers trade guard-width for speed. These tests pin the
-    //! delegation contract on a few representative methods across the
-    //! narrow (D38) and wide (D76) tiers:
+    //! Each strict method ships with a `_with(mode)` sibling. These tests
+    //! pin the delegation contract on a few representative methods across
+    //! the narrow (D38) and wide (D76) tiers:
     //!
     //! - `*_strict()` is bit-equal to `*_strict_with(DEFAULT_ROUNDING_MODE)`.
-    //! - `*_approx(g)` is bit-equal to `*_approx_with(g, DEFAULT)`.
-    //! - `*_approx_with(STRICT_GUARD, mode)` is bit-equal to
-    //!   `*_strict_with(mode)` (the redirect-to-strict shortcut).
     //! - Non-half rounding modes (`Floor` / `Ceiling`) produce results
     //!   that bracket the half-mode result for inexact inputs.
 
     use decimal_scaled::{RoundingMode, D38, D76};
     use std::str::FromStr;
-
-    const STRICT_GUARD: u32 = 30;
 
     fn d38s19(s: &str) -> D38<19> {
         D38::<19>::from_str(s).expect("parse D38s19")
@@ -256,53 +249,6 @@ mod from_rounding_mode_matrix {
     fn d38_ln_strict_delegates_to_strict_with_default() {
         let x = d38s19("3");
         assert_eq!(x.ln_strict(), x.ln_strict_with(RoundingMode::HalfToEven));
-    }
-
-    #[test]
-    fn d38_ln_approx_delegates_to_approx_with_default() {
-        let x = d38s19("3");
-        assert_eq!(
-            x.ln_approx(10),
-            x.ln_approx_with(10, RoundingMode::HalfToEven),
-        );
-    }
-
-    #[test]
-    fn d38_ln_approx_at_strict_guard_redirects_to_strict() {
-        let x = d38s19("3");
-        assert_eq!(
-            x.ln_approx_with(STRICT_GUARD, RoundingMode::HalfToEven),
-            x.ln_strict_with(RoundingMode::HalfToEven),
-        );
-    }
-
-    #[test]
-    fn d38_sin_approx_at_strict_guard_redirects_to_strict() {
-        let x = d38s19("1");
-        assert_eq!(
-            x.sin_approx_with(STRICT_GUARD, RoundingMode::HalfToEven),
-            x.sin_strict_with(RoundingMode::HalfToEven),
-        );
-    }
-
-    #[test]
-    fn d38_atan2_approx_at_strict_guard_redirects_to_strict() {
-        let y = d38s19("1");
-        let x = d38s19("2");
-        assert_eq!(
-            y.atan2_approx_with(x, STRICT_GUARD, RoundingMode::HalfToEven),
-            y.atan2_strict_with(x, RoundingMode::HalfToEven),
-        );
-    }
-
-    #[test]
-    fn d38_powf_approx_at_strict_guard_redirects_to_strict() {
-        let x = d38s19("2");
-        let y = d38s19("0.5");
-        assert_eq!(
-            x.powf_approx_with(y, STRICT_GUARD, RoundingMode::HalfToEven),
-            x.powf_strict_with(y, RoundingMode::HalfToEven),
-        );
     }
 
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -426,24 +372,6 @@ mod from_rounding_mode_matrix {
     }
 
     #[test]
-    fn d76_ln_approx_at_strict_guard_redirects_to_strict() {
-        let x = d76s30("3");
-        assert_eq!(
-            x.ln_approx_with(STRICT_GUARD, RoundingMode::HalfToEven),
-            x.ln_strict_with(RoundingMode::HalfToEven),
-        );
-    }
-
-    #[test]
-    fn d76_sin_approx_at_strict_guard_redirects_to_strict() {
-        let x = d76s30("1");
-        assert_eq!(
-            x.sin_approx_with(STRICT_GUARD, RoundingMode::HalfToEven),
-            x.sin_strict_with(RoundingMode::HalfToEven),
-        );
-    }
-
-    #[test]
     fn d76_sqrt_floor_le_ceiling_for_irrational() {
         let x = d76s30("2");
         let floor_v = x.sqrt_strict_with(RoundingMode::Floor);
@@ -457,16 +385,6 @@ mod from_rounding_mode_matrix {
         assert_eq!(
             x.cbrt_strict(),
             x.cbrt_strict_with(RoundingMode::HalfToEven),
-        );
-    }
-
-    #[test]
-    fn d76_atan2_approx_at_strict_guard_redirects_to_strict() {
-        let y = d76s30("1");
-        let x = d76s30("2");
-        assert_eq!(
-            y.atan2_approx_with(x, STRICT_GUARD, RoundingMode::HalfToEven),
-            y.atan2_strict_with(x, RoundingMode::HalfToEven),
         );
     }
 
@@ -488,31 +406,4 @@ mod from_rounding_mode_matrix {
         );
     }
 
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    // Approx-vs-strict: lower guard widths still hit fast paths exactly
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-    #[test]
-    fn d38_ln_one_is_zero_under_all_guards() {
-        let one = d38s19("1");
-        for g in [6u32, 10, 15, STRICT_GUARD] {
-            assert_eq!(one.ln_approx(g), D38::<19>::ZERO, "ln(1) at guard {g}");
-        }
-    }
-
-    #[test]
-    fn d38_sin_zero_is_zero_under_all_guards() {
-        let zero = D38::<19>::ZERO;
-        for g in [6u32, 10, 15, STRICT_GUARD] {
-            assert_eq!(zero.sin_approx(g), D38::<19>::ZERO, "sin(0) at guard {g}");
-        }
-    }
-
-    #[test]
-    fn d76_ln_one_is_zero_under_all_guards() {
-        let one = d76s30("1");
-        for g in [6u32, 10, 15, STRICT_GUARD] {
-            assert_eq!(one.ln_approx(g), D76::<30>::ZERO, "ln(1) at guard {g}");
-        }
-    }
 }

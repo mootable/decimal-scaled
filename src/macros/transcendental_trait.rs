@@ -26,18 +26,6 @@ macro_rules! decl_decimal_transcendental_impl {
             fn ln_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 <$Type<SCALE>>::ln_strict_with(self, mode)
             }
-            #[inline]
-            fn ln_approx(self, working_digits: u32) -> Self {
-                <$Type<SCALE>>::ln_approx(self, working_digits)
-            }
-            #[inline]
-            fn ln_approx_with(
-                self,
-                working_digits: u32,
-                mode: $crate::support::rounding::RoundingMode,
-            ) -> Self {
-                <$Type<SCALE>>::ln_approx_with(self, working_digits, mode)
-            }
 
             #[inline]
             fn log1p_strict(self) -> Self {
@@ -47,18 +35,6 @@ macro_rules! decl_decimal_transcendental_impl {
             fn log1p_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 <$Type<SCALE>>::log1p_strict_with(self, mode)
             }
-            #[inline]
-            fn log1p_approx(self, working_digits: u32) -> Self {
-                <$Type<SCALE>>::log1p_approx(self, working_digits)
-            }
-            #[inline]
-            fn log1p_approx_with(
-                self,
-                working_digits: u32,
-                mode: $crate::support::rounding::RoundingMode,
-            ) -> Self {
-                <$Type<SCALE>>::log1p_approx_with(self, working_digits, mode)
-            }
 
             #[inline]
             fn expm1_strict(self) -> Self {
@@ -67,18 +43,6 @@ macro_rules! decl_decimal_transcendental_impl {
             #[inline]
             fn expm1_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 <$Type<SCALE>>::expm1_strict_with(self, mode)
-            }
-            #[inline]
-            fn expm1_approx(self, working_digits: u32) -> Self {
-                <$Type<SCALE>>::expm1_approx(self, working_digits)
-            }
-            #[inline]
-            fn expm1_approx_with(
-                self,
-                working_digits: u32,
-                mode: $crate::support::rounding::RoundingMode,
-            ) -> Self {
-                <$Type<SCALE>>::expm1_approx_with(self, working_digits, mode)
             }
 
             #[inline]
@@ -93,19 +57,6 @@ macro_rules! decl_decimal_transcendental_impl {
             ) -> Self {
                 <$Type<SCALE>>::log_strict_with(self, base, mode)
             }
-            #[inline]
-            fn log_approx(self, base: Self, working_digits: u32) -> Self {
-                <$Type<SCALE>>::log_approx(self, base, working_digits)
-            }
-            #[inline]
-            fn log_approx_with(
-                self,
-                base: Self,
-                working_digits: u32,
-                mode: $crate::support::rounding::RoundingMode,
-            ) -> Self {
-                <$Type<SCALE>>::log_approx_with(self, base, working_digits, mode)
-            }
 
             #[inline]
             fn log2_strict(self) -> Self {
@@ -115,18 +66,6 @@ macro_rules! decl_decimal_transcendental_impl {
             fn log2_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 <$Type<SCALE>>::log2_strict_with(self, mode)
             }
-            #[inline]
-            fn log2_approx(self, working_digits: u32) -> Self {
-                <$Type<SCALE>>::log2_approx(self, working_digits)
-            }
-            #[inline]
-            fn log2_approx_with(
-                self,
-                working_digits: u32,
-                mode: $crate::support::rounding::RoundingMode,
-            ) -> Self {
-                <$Type<SCALE>>::log2_approx_with(self, working_digits, mode)
-            }
 
             #[inline]
             fn log10_strict(self) -> Self {
@@ -135,18 +74,6 @@ macro_rules! decl_decimal_transcendental_impl {
             #[inline]
             fn log10_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 <$Type<SCALE>>::log10_strict_with(self, mode)
-            }
-            #[inline]
-            fn log10_approx(self, working_digits: u32) -> Self {
-                <$Type<SCALE>>::log10_approx(self, working_digits)
-            }
-            #[inline]
-            fn log10_approx_with(
-                self,
-                working_digits: u32,
-                mode: $crate::support::rounding::RoundingMode,
-            ) -> Self {
-                <$Type<SCALE>>::log10_approx_with(self, working_digits, mode)
             }
 
             // ── Exponentials ─────────────────────────────
@@ -158,18 +85,6 @@ macro_rules! decl_decimal_transcendental_impl {
             fn exp_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 <$Type<SCALE>>::exp_strict_with(self, mode)
             }
-            #[inline]
-            fn exp_approx(self, working_digits: u32) -> Self {
-                <$Type<SCALE>>::exp_approx(self, working_digits)
-            }
-            #[inline]
-            fn exp_approx_with(
-                self,
-                working_digits: u32,
-                mode: $crate::support::rounding::RoundingMode,
-            ) -> Self {
-                <$Type<SCALE>>::exp_approx_with(self, working_digits, mode)
-            }
 
             #[inline]
             fn exp2_strict(self) -> Self {
@@ -178,18 +93,6 @@ macro_rules! decl_decimal_transcendental_impl {
             #[inline]
             fn exp2_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 <$Type<SCALE>>::exp2_strict_with(self, mode)
-            }
-            #[inline]
-            fn exp2_approx(self, working_digits: u32) -> Self {
-                <$Type<SCALE>>::exp2_approx(self, working_digits)
-            }
-            #[inline]
-            fn exp2_approx_with(
-                self,
-                working_digits: u32,
-                mode: $crate::support::rounding::RoundingMode,
-            ) -> Self {
-                <$Type<SCALE>>::exp2_approx_with(self, working_digits, mode)
             }
 
             // ── Power ────────────────────────────────────
@@ -204,19 +107,6 @@ macro_rules! decl_decimal_transcendental_impl {
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 <$Type<SCALE>>::powf_strict_with(self, exp, mode)
-            }
-            #[inline]
-            fn powf_approx(self, exp: Self, working_digits: u32) -> Self {
-                <$Type<SCALE>>::powf_approx(self, exp, working_digits)
-            }
-            #[inline]
-            fn powf_approx_with(
-                self,
-                exp: Self,
-                working_digits: u32,
-                mode: $crate::support::rounding::RoundingMode,
-            ) -> Self {
-                <$Type<SCALE>>::powf_approx_with(self, exp, working_digits, mode)
             }
 
             // ── Roots ────────────────────────────────────
@@ -258,18 +148,6 @@ macro_rules! decl_decimal_transcendental_impl {
             fn sin_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 <$Type<SCALE>>::sin_strict_with(self, mode)
             }
-            #[inline]
-            fn sin_approx(self, working_digits: u32) -> Self {
-                <$Type<SCALE>>::sin_approx(self, working_digits)
-            }
-            #[inline]
-            fn sin_approx_with(
-                self,
-                working_digits: u32,
-                mode: $crate::support::rounding::RoundingMode,
-            ) -> Self {
-                <$Type<SCALE>>::sin_approx_with(self, working_digits, mode)
-            }
 
             #[inline]
             fn cos_strict(self) -> Self {
@@ -279,18 +157,6 @@ macro_rules! decl_decimal_transcendental_impl {
             fn cos_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 <$Type<SCALE>>::cos_strict_with(self, mode)
             }
-            #[inline]
-            fn cos_approx(self, working_digits: u32) -> Self {
-                <$Type<SCALE>>::cos_approx(self, working_digits)
-            }
-            #[inline]
-            fn cos_approx_with(
-                self,
-                working_digits: u32,
-                mode: $crate::support::rounding::RoundingMode,
-            ) -> Self {
-                <$Type<SCALE>>::cos_approx_with(self, working_digits, mode)
-            }
 
             #[inline]
             fn tan_strict(self) -> Self {
@@ -299,18 +165,6 @@ macro_rules! decl_decimal_transcendental_impl {
             #[inline]
             fn tan_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 <$Type<SCALE>>::tan_strict_with(self, mode)
-            }
-            #[inline]
-            fn tan_approx(self, working_digits: u32) -> Self {
-                <$Type<SCALE>>::tan_approx(self, working_digits)
-            }
-            #[inline]
-            fn tan_approx_with(
-                self,
-                working_digits: u32,
-                mode: $crate::support::rounding::RoundingMode,
-            ) -> Self {
-                <$Type<SCALE>>::tan_approx_with(self, working_digits, mode)
             }
 
             // ── Trig (inverse) ───────────────────────────
@@ -322,18 +176,6 @@ macro_rules! decl_decimal_transcendental_impl {
             fn atan_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 <$Type<SCALE>>::atan_strict_with(self, mode)
             }
-            #[inline]
-            fn atan_approx(self, working_digits: u32) -> Self {
-                <$Type<SCALE>>::atan_approx(self, working_digits)
-            }
-            #[inline]
-            fn atan_approx_with(
-                self,
-                working_digits: u32,
-                mode: $crate::support::rounding::RoundingMode,
-            ) -> Self {
-                <$Type<SCALE>>::atan_approx_with(self, working_digits, mode)
-            }
 
             #[inline]
             fn asin_strict(self) -> Self {
@@ -343,18 +185,6 @@ macro_rules! decl_decimal_transcendental_impl {
             fn asin_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 <$Type<SCALE>>::asin_strict_with(self, mode)
             }
-            #[inline]
-            fn asin_approx(self, working_digits: u32) -> Self {
-                <$Type<SCALE>>::asin_approx(self, working_digits)
-            }
-            #[inline]
-            fn asin_approx_with(
-                self,
-                working_digits: u32,
-                mode: $crate::support::rounding::RoundingMode,
-            ) -> Self {
-                <$Type<SCALE>>::asin_approx_with(self, working_digits, mode)
-            }
 
             #[inline]
             fn acos_strict(self) -> Self {
@@ -363,18 +193,6 @@ macro_rules! decl_decimal_transcendental_impl {
             #[inline]
             fn acos_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 <$Type<SCALE>>::acos_strict_with(self, mode)
-            }
-            #[inline]
-            fn acos_approx(self, working_digits: u32) -> Self {
-                <$Type<SCALE>>::acos_approx(self, working_digits)
-            }
-            #[inline]
-            fn acos_approx_with(
-                self,
-                working_digits: u32,
-                mode: $crate::support::rounding::RoundingMode,
-            ) -> Self {
-                <$Type<SCALE>>::acos_approx_with(self, working_digits, mode)
             }
 
             #[inline]
@@ -389,19 +207,6 @@ macro_rules! decl_decimal_transcendental_impl {
             ) -> Self {
                 <$Type<SCALE>>::atan2_strict_with(self, other, mode)
             }
-            #[inline]
-            fn atan2_approx(self, other: Self, working_digits: u32) -> Self {
-                <$Type<SCALE>>::atan2_approx(self, other, working_digits)
-            }
-            #[inline]
-            fn atan2_approx_with(
-                self,
-                other: Self,
-                working_digits: u32,
-                mode: $crate::support::rounding::RoundingMode,
-            ) -> Self {
-                <$Type<SCALE>>::atan2_approx_with(self, other, working_digits, mode)
-            }
 
             // ── Hyperbolic ───────────────────────────────
             #[inline]
@@ -412,18 +217,6 @@ macro_rules! decl_decimal_transcendental_impl {
             fn sinh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 <$Type<SCALE>>::sinh_strict_with(self, mode)
             }
-            #[inline]
-            fn sinh_approx(self, working_digits: u32) -> Self {
-                <$Type<SCALE>>::sinh_approx(self, working_digits)
-            }
-            #[inline]
-            fn sinh_approx_with(
-                self,
-                working_digits: u32,
-                mode: $crate::support::rounding::RoundingMode,
-            ) -> Self {
-                <$Type<SCALE>>::sinh_approx_with(self, working_digits, mode)
-            }
 
             #[inline]
             fn cosh_strict(self) -> Self {
@@ -432,18 +225,6 @@ macro_rules! decl_decimal_transcendental_impl {
             #[inline]
             fn cosh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 <$Type<SCALE>>::cosh_strict_with(self, mode)
-            }
-            #[inline]
-            fn cosh_approx(self, working_digits: u32) -> Self {
-                <$Type<SCALE>>::cosh_approx(self, working_digits)
-            }
-            #[inline]
-            fn cosh_approx_with(
-                self,
-                working_digits: u32,
-                mode: $crate::support::rounding::RoundingMode,
-            ) -> Self {
-                <$Type<SCALE>>::cosh_approx_with(self, working_digits, mode)
             }
 
             #[inline]
@@ -454,18 +235,6 @@ macro_rules! decl_decimal_transcendental_impl {
             fn tanh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 <$Type<SCALE>>::tanh_strict_with(self, mode)
             }
-            #[inline]
-            fn tanh_approx(self, working_digits: u32) -> Self {
-                <$Type<SCALE>>::tanh_approx(self, working_digits)
-            }
-            #[inline]
-            fn tanh_approx_with(
-                self,
-                working_digits: u32,
-                mode: $crate::support::rounding::RoundingMode,
-            ) -> Self {
-                <$Type<SCALE>>::tanh_approx_with(self, working_digits, mode)
-            }
 
             #[inline]
             fn asinh_strict(self) -> Self {
@@ -474,18 +243,6 @@ macro_rules! decl_decimal_transcendental_impl {
             #[inline]
             fn asinh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 <$Type<SCALE>>::asinh_strict_with(self, mode)
-            }
-            #[inline]
-            fn asinh_approx(self, working_digits: u32) -> Self {
-                <$Type<SCALE>>::asinh_approx(self, working_digits)
-            }
-            #[inline]
-            fn asinh_approx_with(
-                self,
-                working_digits: u32,
-                mode: $crate::support::rounding::RoundingMode,
-            ) -> Self {
-                <$Type<SCALE>>::asinh_approx_with(self, working_digits, mode)
             }
 
             #[inline]
@@ -496,18 +253,6 @@ macro_rules! decl_decimal_transcendental_impl {
             fn acosh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 <$Type<SCALE>>::acosh_strict_with(self, mode)
             }
-            #[inline]
-            fn acosh_approx(self, working_digits: u32) -> Self {
-                <$Type<SCALE>>::acosh_approx(self, working_digits)
-            }
-            #[inline]
-            fn acosh_approx_with(
-                self,
-                working_digits: u32,
-                mode: $crate::support::rounding::RoundingMode,
-            ) -> Self {
-                <$Type<SCALE>>::acosh_approx_with(self, working_digits, mode)
-            }
 
             #[inline]
             fn atanh_strict(self) -> Self {
@@ -516,18 +261,6 @@ macro_rules! decl_decimal_transcendental_impl {
             #[inline]
             fn atanh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 <$Type<SCALE>>::atanh_strict_with(self, mode)
-            }
-            #[inline]
-            fn atanh_approx(self, working_digits: u32) -> Self {
-                <$Type<SCALE>>::atanh_approx(self, working_digits)
-            }
-            #[inline]
-            fn atanh_approx_with(
-                self,
-                working_digits: u32,
-                mode: $crate::support::rounding::RoundingMode,
-            ) -> Self {
-                <$Type<SCALE>>::atanh_approx_with(self, working_digits, mode)
             }
 
             // ── Angle conversion ─────────────────────────
@@ -539,18 +272,6 @@ macro_rules! decl_decimal_transcendental_impl {
             fn to_degrees_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 <$Type<SCALE>>::to_degrees_strict_with(self, mode)
             }
-            #[inline]
-            fn to_degrees_approx(self, working_digits: u32) -> Self {
-                <$Type<SCALE>>::to_degrees_approx(self, working_digits)
-            }
-            #[inline]
-            fn to_degrees_approx_with(
-                self,
-                working_digits: u32,
-                mode: $crate::support::rounding::RoundingMode,
-            ) -> Self {
-                <$Type<SCALE>>::to_degrees_approx_with(self, working_digits, mode)
-            }
 
             #[inline]
             fn to_radians_strict(self) -> Self {
@@ -559,18 +280,6 @@ macro_rules! decl_decimal_transcendental_impl {
             #[inline]
             fn to_radians_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 <$Type<SCALE>>::to_radians_strict_with(self, mode)
-            }
-            #[inline]
-            fn to_radians_approx(self, working_digits: u32) -> Self {
-                <$Type<SCALE>>::to_radians_approx(self, working_digits)
-            }
-            #[inline]
-            fn to_radians_approx_with(
-                self,
-                working_digits: u32,
-                mode: $crate::support::rounding::RoundingMode,
-            ) -> Self {
-                <$Type<SCALE>>::to_radians_approx_with(self, working_digits, mode)
             }
         }
     };

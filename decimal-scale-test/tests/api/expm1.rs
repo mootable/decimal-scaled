@@ -5,11 +5,6 @@
 //! (public surface only). Constructors rewritten from the crate-private
 //! `Int::from_i128` / `D(..)` to the public `Int::try_from` + `from_bits`, and
 //! `Int::as_i128` reached through the public `From<Int<N>> for i128`.
-//!
-//! One test stayed behind: `expm1_approx_redirects_at_strict_guard_and_stays_
-//! close_below_it` reads `types::log_exp::STRICT_GUARD`, which is crate-private
-//! with no public equivalent, so it is an inline `#[cfg(test)]` block in
-//! `src/algos/expm1/mod.rs` rather than a weakened copy here.
 
 mod from_src_expm1 {
     use decimal_scaled::{Int, RoundingMode, D};

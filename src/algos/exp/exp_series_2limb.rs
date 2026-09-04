@@ -454,9 +454,11 @@ fn hyper_pos_wide_narrow(
     }
 }
 
-/// Narrow integer-regime `sinh(x)` via the wide [`WNarrow`] work integer.
-/// Routed from [`crate::algos::trig::trig_series_2limb::sinh_with_raw`]
-/// when the result exceeds the 256-bit `Fixed`'s headroom. `sinh` is odd.
+/// Narrow integer-regime `sinh(x)` via the wide [`WNarrow`] work integer,
+/// for when the result exceeds the 256-bit `Fixed`'s headroom. `sinh` is
+/// odd. A kept alternative: the strict narrow path reaches that regime
+/// through `trig_series_2limb::sinh_ziv` instead, so this is currently
+/// exercised only by `trig_series_2limb::hyper_fast_path_validity`.
 pub(crate) fn sinh_wide_narrow_raw(
     raw: i128,
     scale: u32,
@@ -473,10 +475,11 @@ pub(crate) fn sinh_wide_narrow_raw(
     })
 }
 
-/// Narrow integer-regime `cosh(x)` via the wide [`WNarrow`] work integer.
-/// Routed from [`crate::algos::trig::trig_series_2limb::cosh_with_raw`]
-/// when the result exceeds the 256-bit `Fixed`'s headroom. `cosh` is even
-/// (always non-negative).
+/// Narrow integer-regime `cosh(x)` via the wide [`WNarrow`] work integer,
+/// for when the result exceeds the 256-bit `Fixed`'s headroom. `cosh` is
+/// even (always non-negative). A kept alternative on the same footing as
+/// [`sinh_wide_narrow_raw`]: the strict narrow path reaches that regime
+/// through `trig_series_2limb::cosh_ziv` instead.
 pub(crate) fn cosh_wide_narrow_raw(
     raw: i128,
     scale: u32,
@@ -501,56 +504,8 @@ pub(crate) fn hyper_needs_wide_narrow(raw: i128, scale: u32, working_scale: u32)
     !narrow_fixed_fits(raw.unsigned_abs() as i128, scale, working_scale)
 }
 
-/// `e^x` with caller-chosen `working_digits` above the storage scale.
-///
-/// Returns `None` when the correctly-rounded result does not fit the
-/// `i128` storage — the single out-of-range detection point; the policy
-/// dispatch wrapper turns it into the default form's panic and the
-/// `checked_` surface propagates it.
-#[inline]
-#[must_use]
-pub(crate) fn exp_with(
-    raw: Int<2>,
-    scale: u32,
-    working_digits: u32,
-    mode: RoundingMode,
-) -> Option<Int<2>> {
-    exp_with_raw(raw.as_i128(), scale, working_digits, mode).map(Int::<2>::from_i128)
-}
-
-/// `i128` core of [`exp_with`].
-#[inline]
-fn exp_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> Option<i128> {
-    if raw == 0 {
-        return Some(10_i128.pow(scale)); // ONE for this scale
-    }
-    let working_scale = scale + working_digits;
-    // The wider `WNarrow` work integer is needed for the cells the fast
-    // 256-bit `Fixed` path cannot round correctly:
-    //  1. integer-regime — `e^x` carries so many integer digits the `Fixed`
-    //     keeps too few guard digits (`!narrow_fixed_fits`); and
-    //  2. ALL directed modes — the fast path's flat-`w` rounding lacks the
-    //     never-exact treatment a directed mode needs for the sub-resolution
-    //     transcendental residual (a near-1 `e^(tiny)` or a sub-resolution
-    //     `e^(negative)` must round up under Ceiling, which the fast path
-    //     cannot resolve). Directed exp is not the common/benched cell, so
-    //     keeping it on the wide path costs nothing on the hot path.
-    // Every other (NEAREST-mode, non-integer-regime) cell — the COMMON
-    // narrow exp — stays on the fast path.
-    if !narrow_fixed_fits(raw, scale, working_scale)
-        || !crate::support::rounding::is_nearest_mode(mode)
-    {
-        return exp_wide_narrow_raw(raw, scale, working_digits, mode);
-    }
-    let negative_input = raw < 0;
-    let working_value =
-        Fixed::from_u128_mag(raw.unsigned_abs(), false).mul_u128(10u128.pow(working_digits));
-    let working_value = if negative_input { working_value.neg() } else { working_value };
-    exp_fixed(working_value, working_scale).round_to_i128_with(working_scale, scale, mode)
-}
-
-/// Strict variant — const-folded `working_digits = STRICT_GUARD`.
-/// `None` = result out of storage range (see [`exp_with`]).
+/// Const-folded at `working_digits = STRICT_GUARD`.
+/// `None` = result out of storage range.
 #[inline]
 #[must_use]
 pub(crate) fn exp_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
@@ -564,11 +519,19 @@ fn exp_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i12
         return Some(10_i128.pow(SCALE));
     }
     let working_scale = SCALE + STRICT_GUARD;
-    // See [`exp_with_raw`]: the integer-regime cells and ALL directed modes
-    // route through the wider `WNarrow` work integer; every other
-    // NEAREST-mode common cell stays on the fast `Fixed` path. Both
-    // terminals are near-tie protected (clear-of-tie single shot, Ziv
-    // walker behind it).
+    // The wider `WNarrow` work integer is needed for the cells the fast
+    // 256-bit `Fixed` path cannot round correctly:
+    //  1. integer-regime — `e^x` carries so many integer digits the `Fixed`
+    //     keeps too few guard digits (`!narrow_fixed_fits`); and
+    //  2. ALL directed modes — the fast path's flat-`w` rounding lacks the
+    //     never-exact treatment a directed mode needs for the sub-resolution
+    //     transcendental residual (a near-1 `e^(tiny)` or a sub-resolution
+    //     `e^(negative)` must round up under Ceiling, which the fast path
+    //     cannot resolve). Directed exp is not the common/benched cell, so
+    //     keeping it on the wide path costs nothing on the hot path.
+    // Every other (NEAREST-mode, non-integer-regime) cell — the COMMON
+    // narrow exp — stays on the fast path. Both terminals are near-tie
+    // protected (clear-of-tie single shot, Ziv walker behind it).
     if !narrow_fixed_fits(raw, SCALE, working_scale)
         || !crate::support::rounding::is_nearest_mode(mode)
     {
@@ -699,22 +662,6 @@ fn round_pow2_fraction(numerator: u128, shift: u32, mode: RoundingMode) -> i128 
     quotient + i128::from(bump)
 }
 
-/// `2^x = exp(x · ln 2)` on the `Fixed` intermediate. Used by
-/// `policy::exp::exp2_dispatch` when the D57 borrow path is not available.
-/// Returns `None` when the correctly-rounded result does not fit the
-/// `i128` storage (the policy wrapper panics / the `checked_` surface
-/// propagates).
-#[inline]
-#[must_use]
-pub(crate) fn exp2_with(
-    raw: Int<2>,
-    scale: u32,
-    working_digits: u32,
-    mode: RoundingMode,
-) -> Option<Int<2>> {
-    exp2_with_raw(raw.as_i128(), scale, working_digits, mode).map(Int::<2>::from_i128)
-}
-
 /// `i128` core of [`exp2_with`].
 #[inline]
 fn exp2_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> Option<i128> {
@@ -733,7 +680,7 @@ fn exp2_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode)
         ExactPin::OutOfRange => return None,
         ExactPin::Defer => {}
     }
-    // Integer-regime gate (mirrors `exp_with_raw`): `2^x = e^(x·ln 2)` whose
+    // Integer-regime gate (mirrors `exp_strict_raw`): `2^x = e^(x·ln 2)` whose
     // result carries `k_lift` integer digits leaves the flat-`w` 256-bit
     // `Fixed` too few fractional guard digits to round correctly (e.g. 2^93
     // has 28 integer digits — the exp2_d38_s9 mis-round). Route those cells to
@@ -830,8 +777,7 @@ fn exp2_wide_narrow_raw(
 
 /// The [`exp2_wide_narrow_raw`] evaluation: the
 /// `(value · 10^(scale + lifted_guard_digits), lifted_guard_digits)` pair
-/// before the narrowing terminal, shared by the approx single shot and the
-/// strict near-tie protected terminal.
+/// before the strict near-tie protected narrowing terminal.
 fn exp2_wide_narrow_eval(
     raw: i128,
     scale: u32,
@@ -1031,7 +977,7 @@ mod deep_underflow_directed {
 }
 
 // ── Fast-path validity wall ────────────────────────────────────────
-// The narrow exp gate (`exp_with_raw` / `exp_strict_raw`) routes a cell
+// The narrow exp gate (`exp_strict_raw`) routes a cell
 // to the fast 256-bit `Fixed` path only where it is bit-identical to the
 // trusted wider-`WNarrow` reference (the path the 8 mpmath golden cells
 // validate). This test ASSERTS that validity wall across the full D38

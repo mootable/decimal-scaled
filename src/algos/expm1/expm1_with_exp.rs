@@ -148,37 +148,6 @@ where
     super::adjust_near_zero::<St>(rounded, raw, mode)
 }
 
-/// The `_approx` sibling of [`expm1_with_exp_g`]: a SINGLE shot at the caller's
-/// `working_digits`, no Ziv escalation.
-///
-/// # Panics
-///
-/// Panics if the result leaves the storage range, or if `e^x` cannot be hosted
-/// at the caller's working scale.
-#[inline]
-#[must_use]
-pub(crate) fn expm1_with_exp_approx_g<St: BigInt + Copy, S: BigInt, const SCALE: u32>(
-    raw: St,
-    working_digits: u32,
-    storage_max: St,
-    storage_min: St,
-    mode: RoundingMode,
-) -> St
-where
-    S::Scratch: ComputeLimbs,
-{
-    let working_scale = SCALE + working_digits;
-    let working_value = super::checked(
-        expm1_with_exp_fixed::<S>(
-            wtc::to_work_scaled_g::<St, S>(raw, working_digits), working_scale),
-        "expm1_approx",
-        SCALE,
-    );
-    let rounded = wtc::round_to_storage_with_g::<St, S>(
-        working_value, working_scale, SCALE, mode, storage_max, storage_min);
-    super::adjust_near_zero::<St>(rounded, raw, mode)
-}
-
 /// Tier-generic entry to [`expm1_with_exp_g`] at the tier's widest work integer
 /// `C::Wexp` — see [`expm1_with_exp_g`] for why that width and not `C::W`.
 #[cfg(feature = "_wide-support")]
@@ -200,23 +169,3 @@ where
     )
 }
 
-/// Tier-generic entry to [`expm1_with_exp_approx_g`]. See [`expm1_with_exp`].
-#[cfg(feature = "_wide-support")]
-#[inline]
-#[must_use]
-pub(crate) fn expm1_with_exp_approx<C: wtc::WideTrigCore, const SCALE: u32>(
-    raw: C::Storage,
-    working_digits: u32,
-    mode: RoundingMode,
-) -> C::Storage
-where
-    <C::Wexp as BigInt>::Scratch: ComputeLimbs,
-{
-    expm1_with_exp_approx_g::<C::Storage, C::Wexp, SCALE>(
-        raw,
-        working_digits,
-        C::storage_max(),
-        C::storage_min(),
-        mode,
-    )
-}

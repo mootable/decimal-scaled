@@ -25,7 +25,7 @@ its docs, and its benchmarks — in one place.
 | **limb** | One `u64` word of a wide integer. A wide value is `[u64; N]`, little-endian. |
 | **wide integers** | The hand-rolled wide-integer backend for `D57`+: a value is an array of `u64` limbs, little-endian. |
 | **`no_std`** | Builds without the standard library (embedded-friendly). The strict, integer-only path is `no_std`-compatible. |
-| **strict / fast / approx** | `*_strict` = correctly-rounded integer path (default). `*_approx` = integer-only, correctly-rounded, at a caller-chosen working precision. `*_fast` = the `f64`-bridge path (~16 digits, platform-dependent, not CR). |
+| **strict / fast** | `*_strict` = correctly-rounded integer path (default). `*_fast` = the `f64`-bridge path (~16 digits, platform-dependent, not CR). |
 
 ## Rounding modes
 

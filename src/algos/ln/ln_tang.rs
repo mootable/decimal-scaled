@@ -182,6 +182,11 @@ where
     // feature-flagged default rounding mode AND the per-scale const-fold).
     // One Tang `ln` kernel — the wide compositions call `tang_ln_fixed_g`
     // directly at their `Wagm` work width.
+    //
+    // Currently UNWIRED: its last caller was the wide `ln_fixed_routed`
+    // shim, removed with the `_approx` surface. Kept as the tier-bound
+    // binding over the live generic kernel — it holds no computation of
+    // its own, so nothing here is unroutable.
     tang_ln_fixed_g::<C::W, CAP, INTERNAL_EXTRA>(
         working_value, working_scale, |at_scale| C::ln2::<SCALE>(at_scale))
 }
