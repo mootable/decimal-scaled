@@ -830,8 +830,7 @@ fn exp2_wide_narrow_raw(
 
 /// The [`exp2_wide_narrow_raw`] evaluation: the
 /// `(value · 10^(scale + lifted_guard_digits), lifted_guard_digits)` pair
-/// before the narrowing terminal, shared by the approx single shot and the
-/// strict near-tie protected terminal.
+/// before the strict near-tie protected narrowing terminal.
 fn exp2_wide_narrow_eval(
     raw: i128,
     scale: u32,

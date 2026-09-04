@@ -117,10 +117,8 @@ pub(crate) fn checked<S>(value: Option<S>, method: &str, scale: u32) -> S {
 ///
 /// [`expm1_series_g`](super::expm1_series::expm1_series_g) therefore threads
 /// the series' own tail sign into the walker instead, which is exact at every
-/// depth. What remains here is the two callers that cannot use it:
+/// depth. What remains here is the one caller that cannot use it:
 ///
-/// * the `_approx` single-shot paths, which run no Ziv walker at all, and
-///   whose contract is explicitly not correct rounding;
 /// * [`expm1_with_exp_g`](super::expm1_with_exp::expm1_with_exp_g), where it is
 ///   a provable no-op — the policy routes `|x| > 1` there, and
 ///   `expm1(x) - x = x²/2 + ...` exceeds half an ULP by orders of magnitude

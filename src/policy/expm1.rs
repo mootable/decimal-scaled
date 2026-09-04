@@ -3,9 +3,8 @@
 
 //! `expm1` policy — the per-(N, SCALE) algorithm matcher.
 //!
-//! `D<Int<N>, SCALE>::expm1_strict_with(mode)` delegates to [`dispatch`];
-//! `expm1_approx_with` delegates to [`dispatch_with`]. Canonical
-//! matcher-only shape (see `docs/ARCHITECTURE.md`), mirrored from
+//! `D<Int<N>, SCALE>::expm1_strict_with(mode)` delegates to [`dispatch`].
+//! Canonical matcher-only shape (see `docs/ARCHITECTURE.md`), mirrored from
 //! `policy::log1p`:
 //!
 //! 1. an [`Algorithm`] enum — Series / WithExp, no `Default`;
@@ -39,8 +38,8 @@
 //! measurement, which this pass deliberately does not attempt. They stay
 //! as kept alternatives for a later `policy-mapper` race.
 
-use crate::algos::expm1::expm1_series::{expm1_series_approx_g, expm1_series_g};
-use crate::algos::expm1::expm1_with_exp::{expm1_with_exp_approx_g, expm1_with_exp_g};
+use crate::algos::expm1::expm1_series::expm1_series_g;
+use crate::algos::expm1::expm1_with_exp::expm1_with_exp_g;
 use crate::algos::support::narrow_ziv::WZiv;
 use crate::int::types::traits::BigInt;
 use crate::int::types::Int;
@@ -139,22 +138,6 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(
     routed::<N, SCALE>(raw, resolve::<N, SCALE>(&raw), mode)
 }
 
-/// `expm1` at a caller-chosen working guard — a single shot, no Ziv
-/// escalation. Same routing as [`dispatch`].
-///
-/// # Panics
-///
-/// Panics if the result overflows the storage range.
-#[inline]
-#[must_use]
-pub(crate) fn dispatch_with<const N: usize, const SCALE: u32>(
-    raw: Int<N>,
-    working_digits: u32,
-    mode: RoundingMode,
-) -> Int<N> {
-    approx_routed::<N, SCALE>(raw, working_digits, resolve::<N, SCALE>(&raw), mode)
-}
-
 // ── per-`Algorithm` delegations ─────────────────────────────────────
 //
 // Thin: each picks the chosen kernel and passes the width's work
@@ -191,34 +174,6 @@ fn narrow_strict<const N: usize, const SCALE: u32>(
     super::narrow_checked::<N>(out, "expm1_strict", SCALE)
 }
 
-/// Narrow (`N <= 2`) approx arm. See [`narrow_strict`].
-#[inline]
-fn narrow_approx<const N: usize, const SCALE: u32>(
-    raw: Int<N>,
-    working_digits: u32,
-    algo: Algorithm,
-    mode: RoundingMode,
-) -> Int<N> {
-    let raw_narrow = raw.resize_to::<Int<2>>();
-    let out = match algo {
-        Algorithm::Series => expm1_series_approx_g::<Int<2>, WZiv, SCALE>(
-            raw_narrow,
-            working_digits,
-            Int::<2>::MAX,
-            Int::<2>::MIN,
-            mode,
-        ),
-        Algorithm::WithExp => expm1_with_exp_approx_g::<Int<2>, WZiv, SCALE>(
-            raw_narrow,
-            working_digits,
-            Int::<2>::MAX,
-            Int::<2>::MIN,
-            mode,
-        ),
-    };
-    super::narrow_checked::<N>(out, "expm1_approx", SCALE)
-}
-
 /// Wide strict arm at the tier `C`. Each kernel sources its own width
 /// from the tier: `Series` runs at `C::W`, `WithExp` at the wider
 /// `C::Wexp` because it owns the large-argument regime where `e^x`'s
@@ -241,33 +196,6 @@ where
         Algorithm::WithExp => {
             crate::algos::expm1::expm1_with_exp::expm1_with_exp::<C, SCALE>(raw, mode)
         }
-    }
-}
-
-/// Wide approx arm at the tier `C`. See [`wide_strict`].
-#[cfg(feature = "_wide-support")]
-#[inline]
-fn wide_approx<C: crate::algos::support::wide_trig_core::WideTrigCore, const SCALE: u32>(
-    raw: C::Storage,
-    working_digits: u32,
-    algo: Algorithm,
-    mode: RoundingMode,
-) -> C::Storage
-where
-    <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
-    <C::Wexp as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
-{
-    match algo {
-        Algorithm::Series => crate::algos::expm1::expm1_series::expm1_series_approx::<C, SCALE>(
-            raw,
-            working_digits,
-            mode,
-        ),
-        Algorithm::WithExp => crate::algos::expm1::expm1_with_exp::expm1_with_exp_approx::<C, SCALE>(
-            raw,
-            working_digits,
-            mode,
-        ),
     }
 }
 
@@ -308,35 +236,3 @@ fn routed<const N: usize, const SCALE: u32>(
     }
 }
 
-#[inline]
-fn approx_routed<const N: usize, const SCALE: u32>(
-    raw: Int<N>,
-    working_digits: u32,
-    algo: Algorithm,
-    mode: RoundingMode,
-) -> Int<N> {
-    match N {
-        1 | 2 => narrow_approx::<N, SCALE>(raw, working_digits, algo, mode),
-        #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => wide_approx::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw.resize_to::<Int<3>>(), working_digits, algo, mode).resize_to::<Int<N>>(),
-        #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => wide_approx::<crate::types::widths::wide_trig_d76::Core, SCALE>(raw.resize_to::<Int<4>>(), working_digits, algo, mode).resize_to::<Int<N>>(),
-        #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => wide_approx::<crate::types::widths::wide_trig_d115::Core, SCALE>(raw.resize_to::<Int<6>>(), working_digits, algo, mode).resize_to::<Int<N>>(),
-        #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => wide_approx::<crate::types::widths::wide_trig_d153::Core, SCALE>(raw.resize_to::<Int<8>>(), working_digits, algo, mode).resize_to::<Int<N>>(),
-        #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => wide_approx::<crate::types::widths::wide_trig_d230::Core, SCALE>(raw.resize_to::<Int<12>>(), working_digits, algo, mode).resize_to::<Int<N>>(),
-        #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => wide_approx::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw.resize_to::<Int<16>>(), working_digits, algo, mode).resize_to::<Int<N>>(),
-        #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => wide_approx::<crate::types::widths::wide_trig_d462::Core, SCALE>(raw.resize_to::<Int<24>>(), working_digits, algo, mode).resize_to::<Int<N>>(),
-        #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => wide_approx::<crate::types::widths::wide_trig_d616::Core, SCALE>(raw.resize_to::<Int<32>>(), working_digits, algo, mode).resize_to::<Int<N>>(),
-        #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => wide_approx::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw.resize_to::<Int<48>>(), working_digits, algo, mode).resize_to::<Int<N>>(),
-        #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => wide_approx::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw.resize_to::<Int<64>>(), working_digits, algo, mode).resize_to::<Int<N>>(),
-        _ => narrow_approx::<N, SCALE>(raw, working_digits, algo, mode),
-    }
-}

@@ -107,36 +107,6 @@ where
     super::adjust_near_zero::<St, S, SCALE>(rounded, raw, mode)
 }
 
-/// The `_approx` sibling of [`log1p_with_ln_g`]: a SINGLE shot at the
-/// caller's `working_digits`, with no Ziv escalation.
-///
-/// # Panics
-///
-/// Panics if `t <= -1`, or if the result leaves the storage range.
-#[inline]
-#[must_use]
-pub(crate) fn log1p_with_ln_approx_g<St: BigInt + Copy, S: BigInt, const SCALE: u32>(
-    raw: St,
-    working_digits: u32,
-    storage_max: St,
-    storage_min: St,
-    mode: RoundingMode,
-) -> St
-where
-    S::Scratch: ComputeLimbs,
-{
-    super::guard_domain::<St>(raw, SCALE);
-    let working_scale = SCALE + working_digits;
-    let working_value = crate::algos::exp::exp_generic::ln_fixed::<S>(
-        one_plus_t_at_w::<St, S>(raw, working_digits, working_scale),
-        working_scale,
-        ln2_at::<S>(working_scale, working_scale),
-    );
-    let rounded = wtc::round_to_storage_with_g::<St, S>(
-        working_value, working_scale, SCALE, mode, storage_max, storage_min);
-    super::adjust_near_zero::<St, S, SCALE>(rounded, raw, mode)
-}
-
 /// Tier-generic entry to [`log1p_with_ln_g`] — sources the work integer
 /// `C::W`, the base guard `C::GUARD` and the storage bounds from the
 /// wide tier's `Core`, mirroring
@@ -160,24 +130,3 @@ where
     )
 }
 
-/// Tier-generic entry to [`log1p_with_ln_approx_g`]. See
-/// [`log1p_with_ln`].
-#[cfg(feature = "_wide-support")]
-#[inline]
-#[must_use]
-pub(crate) fn log1p_with_ln_approx<C: wtc::WideTrigCore, const SCALE: u32>(
-    raw: C::Storage,
-    working_digits: u32,
-    mode: RoundingMode,
-) -> C::Storage
-where
-    <C::W as BigInt>::Scratch: ComputeLimbs,
-{
-    log1p_with_ln_approx_g::<C::Storage, C::W, SCALE>(
-        raw,
-        working_digits,
-        C::storage_max(),
-        C::storage_min(),
-        mode,
-    )
-}

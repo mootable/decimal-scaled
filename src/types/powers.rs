@@ -44,11 +44,8 @@
 //! the rounding mode explicitly; the no-arg `*_strict` form
 //! delegates to it with the crate-default mode (see
 //! [`crate::RoundingMode`] for the `rounding-*` Cargo features).
-//! `powf` additionally ships `powf_approx(working_digits)` and
-//! `powf_approx_with(working_digits, mode)` — the four-variant matrix
-//! the transcendentals expose; `sqrt` / `cbrt` / `hypot` have no
-//! guard-width parameter (the exact-integer-root path is precision-
-//! independent), so only the `_strict` / `_strict_with` pair exists.
+//! `sqrt` / `cbrt` / `hypot` / `powf` all expose exactly the
+//! `_strict` / `_strict_with` pair.
 //!
 //! `pow` / `powi` (integer exponents) are exact at any feature
 //! configuration. The plain `sqrt` / `cbrt` / `powf` / `hypot`
@@ -224,32 +221,6 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         mode: crate::support::rounding::RoundingMode,
     ) -> Self {
         Self::from_bits(crate::policy::pow::dispatch::<_, SCALE>(self.to_bits(), exp.to_bits(), mode))
-    }
-
-    /// `self^exp` with caller-chosen guard digits.
-    #[inline]
-    #[must_use]
-    pub fn powf_approx(self, exp: crate::D<crate::int::types::Int<2>, SCALE>, working_digits: u32) -> Self {
-        self.powf_approx_with(
-            exp,
-            working_digits,
-            crate::support::rounding::DEFAULT_ROUNDING_MODE,
-        )
-    }
-
-    /// `self^exp` with caller-chosen guard digits AND rounding mode.
-    #[inline]
-    #[must_use]
-    pub fn powf_approx_with(
-        self,
-        exp: crate::D<crate::int::types::Int<2>, SCALE>,
-        working_digits: u32,
-        mode: crate::support::rounding::RoundingMode,
-    ) -> Self {
-        if working_digits == crate::types::log_exp::STRICT_GUARD {
-            return self.powf_strict_with(exp, mode);
-        }
-        Self::from_bits(crate::policy::pow::dispatch_with::<_, SCALE>(self.to_bits(), exp.to_bits(), working_digits, mode))
     }
 
     /// Raises `self` to the power `exp`.

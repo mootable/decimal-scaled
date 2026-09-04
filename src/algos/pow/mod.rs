@@ -14,8 +14,8 @@
 //! Variants:
 //!
 //! - [`powf_series_2limb`] -- D38's hand-tuned `powf` on the `Fixed` intermediate,
-//!   carrying the four-variant matrix entry shape (strict + approx, each
-//!   with an explicit-rounding sibling). The D38 realisation of the
+//!   carrying the strict entry shape (with its explicit-rounding
+//!   sibling). The D38 realisation of the
 //!   `powf_exp_with_ln` (`ExpWithLn`) algorithm.
 //! - [`pow_schoolbook`] -- correctness reference: naive `exp(y*ln(x))`
 //!   using the schoolbook exp and ln. Registered as the unrouted

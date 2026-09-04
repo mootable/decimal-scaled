@@ -67,10 +67,10 @@ where
 /// so is a routing decision, not a relocation.
 ///
 /// `guard` is the number of guard digits below `SCALE` to compute at.
-/// It is a plain runtime argument, not a const: the `_strict` entry
-/// passes the tier's `C::GUARD` while the `_approx` entry passes the
-/// caller's chosen width, and taking it here is what lets ONE kernel
-/// serve both shells instead of each carrying its own copy.
+/// It is a plain runtime argument rather than a const; every routed
+/// caller now passes the tier's `C::GUARD` (the caller-chosen-width
+/// shell that was the second caller is gone), so this could become a
+/// const — left as-is here to keep the kernel byte-for-byte unchanged.
 #[inline]
 pub(crate) fn asinh_series_composition<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
@@ -132,12 +132,15 @@ where
 ///
 /// `guard` is the number of guard digits below `SCALE` to compute at —
 /// a plain runtime argument, as on its two siblings here. The routed
-/// `_strict` path passes the tier's `C::GUARD`; the `_approx` shell
-/// passes the caller's chosen width. Taking it matters for more than
-/// tidiness: the near-1 correction below is only sound because the
-/// radicand is split, and the size of the band it protects depends on
-/// `guard`, so a shell computing at its own guard MUST come through
-/// here rather than carry its own copy.
+/// `_strict` path passes the tier's `C::GUARD`. Taking it matters for
+/// more than tidiness: the near-1 correction below is only sound
+/// because the radicand is split, and the size of the band it protects
+/// depends on `guard`, so any caller computing at its own guard MUST
+/// come through here rather than carry its own copy. A shell that
+/// forked this composition and kept the un-split radicand
+/// `sqrt(mul(t, t + 2))` was wrong by up to `1.1e28` ULP near `x = 1`;
+/// that shell has been removed, but the constraint stands for any
+/// future one.
 #[inline]
 pub(crate) fn acosh_ln_composition<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
@@ -229,10 +232,9 @@ where
 ///
 /// `guard` is the number of guard digits below `SCALE` to compute at —
 /// a plain runtime argument, as on [`asinh_series_composition`]. The
-/// routed `_strict` path passes the tier's `C::GUARD`; the `_approx`
-/// shell passes the caller's chosen width, which is what lets this one
-/// kernel serve both instead of the shell carrying a second copy of the
-/// composition.
+/// routed `_strict` path passes the tier's `C::GUARD`; no caller now
+/// passes anything else, and any future one must come through this
+/// kernel rather than carry a second copy of the composition.
 #[inline]
 pub(crate) fn atanh_ln_composition<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
