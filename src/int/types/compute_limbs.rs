@@ -60,7 +60,9 @@
 //! the recursive wide multiply (`mul_karatsuba_limb`). Its `~12N` recursion
 //! geometry is not a clean limb-multiple, so — per *"Adding a higher multiple
 //! is expected"* — it is its own axis, sized per-`N` straight from the
-//! kernel's recursion via [`karatsuba_scratch_needed_th`]. Unlike the family
+//! kernel's recursion via
+//! [`karatsuba_scratch_needed_th`](crate::int::algos::mul::mul_karatsuba::karatsuba_scratch_needed_th).
+//! Unlike the family
 //! above, the two element forms are NOT the same value packed: each sizes the
 //! kernel that runs in THAT limb type — the `u64` form over `N` limbs, the
 //! `u128` form over `⌈N/2⌉` limbs (genuinely half the work). Each is
@@ -75,13 +77,48 @@
 //! and binary form). Both are exact per-`N` (`64N` bits → `⌈64N·log10(2)⌉`
 //! decimal / `64N` binary digits).
 //!
-//! Three build forms, identical sizes numerically — only *who pays for the
-//! slack* differs (each impls `ComputeLimbs for Limbs<N>`):
-//! - **default** — one blanket impl, build-max for every `N`.
-//! - **`exact-scratch`** (stable) — one impl per concrete width, each a
-//!   size literal.
+//! Two build forms, both sized EXACTLY per-`N` (each impls
+//! `ComputeLimbs for Limbs<N>`):
+//! - **default** (stable) — one impl per concrete width, each a size
+//!   literal.
 //! - **`exact-scratch-nightly`** — one blanket impl sized per-`N` via
 //!   const-expr under `generic_const_exprs`.
+//!
+//! # Why there is no build-max blanket form
+//!
+//! A third form used to sit here: one `impl<const N: usize>` giving every
+//! width a single build-max buffer, selected when `exact-scratch` was off.
+//! It was **unsound in the only configuration that could select it**, and
+//! is retired.
+//!
+//! Its sizes derived from `MAX_WORK_N` — the widest decimal *storage* width
+//! the build's tier features enable — on the premise that a work width never
+//! exceeds `4·MAX_WORK_N`. That premise holds at the wide tiers by
+//! construction (D1232 stores 64 limbs and works in `Int<256>`) but is false
+//! at the narrow end: D18/D38 store 1–2 limbs and run every strict
+//! transcendental in `narrow_ziv::WZiv = Int<24>`, a width fixed by the Ziv
+//! escalation's digit budget rather than derived from storage.
+//!
+//! Because a blanket impl ignores its own `N`, that mismatch could not be
+//! detected at the call site: `Limbs::<24>::single_u128()` returned the
+//! build-max `[u128; 4]` while `Int<24>::U128_LIMBS` is 12, and the rescale
+//! that slices the magnitude out of it panicked with `range end index 12 out
+//! of range for slice of length 4`.
+//!
+//! Every other path that forms a work integer wider than build-max avoided
+//! this only by pulling `exact-scratch` in through a feature — `std` and
+//! `_wide-support` (which every `dNN` tier enables) both did. The narrow
+//! tiers need NO feature, so nothing pulled it for them, and the one build
+//! that selected the blanket (`--no-default-features`, no tier feature,
+//! where `MAX_WORK_N` is necessarily 2) had a broken narrow transcendental
+//! surface. Sizing the blanket to cover `Int<24>` instead would have forced
+//! the narrow build to carry a 24-limb work width in every buffer — the
+//! cross-tier size leak the Constitution's rule 6 forbids — so the per-width
+//! impls became unconditional instead.
+//!
+//! The `MAX_*` consts and `max_*_limbs()` constructors below survive: they
+//! serve the genuinely-`N`-less slice engines (`div_knuth`), which have no
+//! `N` to be exact about. They are no longer a `ComputeLimbs` build form.
 
 // `⌈x/2⌉` is written `(x + 1) / 2` throughout this file — the crate's const
 // limb-sizing idiom (see `max_n_limbs`, `BigInt::mag_into_u128`). The
@@ -92,7 +129,6 @@
 // expression. The plain division is the correct, portable form here.
 #![allow(clippy::manual_div_ceil)]
 
-use crate::int::algos::mul::mul_karatsuba::karatsuba_scratch_needed_th;
 use crate::int::algos::support::limbs::{max_n_limbs, MAX_WORK_N};
 
 /// The **limb carrier** — a zero-sized sizing marker, parameterised by the
@@ -151,46 +187,6 @@ pub(crate) const MAX_QUADRUPLE_LIMBS: usize = max_n_limbs(4);
 /// Build-max `single` u128 — the MG `÷10^w` magnitude, covering the widest
 /// work value (`4·MAX_WORK_N` u128).
 pub(crate) const MAX_U128_LIMB: usize = 4 * MAX_WORK_N;
-
-/// The widest `Int<N>`/`Uint<N>` storage width any build forms, in 64-bit
-/// limbs (`Int<256>` = `Int16384`, the widest `exact_compute!` storage tier).
-/// The `Display`/radix `fmt` impls range over storage widths, not work
-/// widths, so their build-max output buffers are scoped to this ceiling.
-const MAX_FMT_N: usize = 256;
-/// Build-max decimal output buffer — `20·MAX_FMT_N + 2` bytes.
-const MAX_DIGIT_FMT_U8: usize = 20 * MAX_FMT_N + 2;
-/// Build-max bit-radix output buffer — `64·MAX_FMT_N + 2` bytes (the binary
-/// form is one byte per bit, the widest of any radix).
-const MAX_BIT_FMT_U8: usize = 64 * MAX_FMT_N + 2;
-
-// The remaining family members' build-max sizes. The plain `single` u64 is
-// the value width itself (work-scoped); the plain `double`/`quad` u64 reuse
-// their buffered blanket (build-max over-allocation of the `⌈N/2⌉` slack is
-// harmless on the cold blanket path). Every u128 blanket is `⌈u64/2⌉` of its
-// own u64 blanket, so it covers each width's exact `⌈value/2⌉` packing.
-
-/// Build-max `single` u64 — the plain value width (`4·MAX_WORK_N`).
-const MAX_SINGLE_U64: usize = 4 * MAX_WORK_N;
-/// Build-max `single` u128 — `⌈(4·MAX_WORK_N)/2⌉`.
-const MAX_SINGLE_U128: usize = (MAX_SINGLE_U64 + 1) / 2;
-/// Build-max `single_buffered` u128 — `⌈(4·MAX_WORK_N + 2)/2⌉`.
-const MAX_SINGLE_BUF_U128: usize = (MAX_SINGLE_LIMBS + 1) / 2;
-/// Build-max `double`/`double_buffered` u128 — `⌈max_n_limbs(2)/2⌉`.
-const MAX_DOUBLE_U128: usize = (MAX_DOUBLE_LIMBS + 1) / 2;
-/// Build-max `quad`/`quad_buffered` u128 — `⌈max_n_limbs(4)/2⌉`.
-const MAX_QUAD_U128: usize = (MAX_QUADRUPLE_LIMBS + 1) / 2;
-/// Build-max `karatsuba` u64 — the widest recursive multiply the build forms
-/// (`N = 4·MAX_WORK_N`, the widest work integer): the `2N`-u64 product window
-/// plus the deepest-recursion scratch `karatsuba_scratch_needed_th(N, 4)` (the
-/// threshold-floor worst case). The default-blanket (no-`exact-scratch`) form's
-/// Karatsuba buffer; the per-`N` `exact-scratch` impl sizes each width exactly.
-const MAX_KARATSUBA_U64: usize =
-    2 * (4 * MAX_WORK_N) + karatsuba_scratch_needed_th(4 * MAX_WORK_N, 4);
-/// Build-max `karatsuba` u128 — the widest even work width (`N = 4·MAX_WORK_N`)
-/// packs to `h = 2·MAX_WORK_N` u128 limbs: the `2h`-u128 product window plus
-/// `karatsuba_scratch_needed_th(h, 4)`.
-const MAX_KARATSUBA_U128: usize =
-    2 * (2 * MAX_WORK_N) + karatsuba_scratch_needed_th(2 * MAX_WORK_N, 4);
 
 // The build-max blanket constructors still called from the genuinely-`N`-less
 // blanket paths (the `Int<N>` operators, `BigInt` methods, schoolbook
@@ -633,107 +629,8 @@ pub(crate) trait ComputeLimbs {
     fn bit_formatting_limbs_u8() -> Self::BitFormattingU8;
 }
 
-// ── default: one blanket impl, build-max for every N ──────────────────
-#[cfg(not(feature = "exact-scratch"))]
-mod imp {
-    use super::{
-        ComputeLimbs, Limbs, MAX_BIT_FMT_U8, MAX_DIGIT_FMT_U8, MAX_DOUBLE_LIMBS, MAX_DOUBLE_U128,
-        MAX_KARATSUBA_U128, MAX_KARATSUBA_U64, MAX_QUADRUPLE_LIMBS, MAX_QUAD_U128,
-        MAX_SINGLE_BUF_U128, MAX_SINGLE_LIMBS, MAX_SINGLE_U128, MAX_SINGLE_U64,
-    };
-
-    // The blanket build-max impl: every buffer is its `MAX_*` blanket size.
-    // The `single`/`u128` value buffers cover the wide-transcendental work
-    // widths; the `double`/`quad` radicands are storage-scoped. The plain
-    // `double`/`quad` u64 reuse the buffered blanket (the cold blanket can
-    // over-allocate the `⌈N/2⌉` slack harmlessly). The exact-scratch form
-    // sizes per width instead.
-    impl<const N: usize> ComputeLimbs for Limbs<N> {
-        type SingleU64 = [u64; MAX_SINGLE_U64];
-        type SingleU128 = [u128; MAX_SINGLE_U128];
-        type SingleBufferedU64 = [u64; MAX_SINGLE_LIMBS];
-        type SingleBufferedU128 = [u128; MAX_SINGLE_BUF_U128];
-        type DoubleU64 = [u64; MAX_DOUBLE_LIMBS];
-        type DoubleU128 = [u128; MAX_DOUBLE_U128];
-        type DoubleBufferedU64 = [u64; MAX_DOUBLE_LIMBS];
-        type DoubleBufferedU128 = [u128; MAX_DOUBLE_U128];
-        type QuadU64 = [u64; MAX_QUADRUPLE_LIMBS];
-        type QuadU128 = [u128; MAX_QUAD_U128];
-        type QuadBufferedU64 = [u64; MAX_QUADRUPLE_LIMBS];
-        type QuadBufferedU128 = [u128; MAX_QUAD_U128];
-        type KaratsubaU64 = [u64; MAX_KARATSUBA_U64];
-        type KaratsubaU128 = [u128; MAX_KARATSUBA_U128];
-        type DigitFormattingU8 = [u8; MAX_DIGIT_FMT_U8];
-        type BitFormattingU8 = [u8; MAX_BIT_FMT_U8];
-        #[inline]
-        fn single_u64() -> Self::SingleU64 {
-            [0u64; MAX_SINGLE_U64]
-        }
-        #[inline]
-        fn single_u128() -> Self::SingleU128 {
-            [0u128; MAX_SINGLE_U128]
-        }
-        #[inline]
-        fn single_buffered_u64() -> Self::SingleBufferedU64 {
-            [0u64; MAX_SINGLE_LIMBS]
-        }
-        #[inline]
-        fn single_buffered_u128() -> Self::SingleBufferedU128 {
-            [0u128; MAX_SINGLE_BUF_U128]
-        }
-        #[inline]
-        fn double_u64() -> Self::DoubleU64 {
-            [0u64; MAX_DOUBLE_LIMBS]
-        }
-        #[inline]
-        fn double_u128() -> Self::DoubleU128 {
-            [0u128; MAX_DOUBLE_U128]
-        }
-        #[inline]
-        fn double_buffered_u64() -> Self::DoubleBufferedU64 {
-            [0u64; MAX_DOUBLE_LIMBS]
-        }
-        #[inline]
-        fn double_buffered_u128() -> Self::DoubleBufferedU128 {
-            [0u128; MAX_DOUBLE_U128]
-        }
-        #[inline]
-        fn quad_u64() -> Self::QuadU64 {
-            [0u64; MAX_QUADRUPLE_LIMBS]
-        }
-        #[inline]
-        fn quad_u128() -> Self::QuadU128 {
-            [0u128; MAX_QUAD_U128]
-        }
-        #[inline]
-        fn quad_buffered_u64() -> Self::QuadBufferedU64 {
-            [0u64; MAX_QUADRUPLE_LIMBS]
-        }
-        #[inline]
-        fn quad_buffered_u128() -> Self::QuadBufferedU128 {
-            [0u128; MAX_QUAD_U128]
-        }
-        #[inline]
-        fn karatsuba_u64() -> Self::KaratsubaU64 {
-            [0u64; MAX_KARATSUBA_U64]
-        }
-        #[inline]
-        fn karatsuba_u128() -> Self::KaratsubaU128 {
-            [0u128; MAX_KARATSUBA_U128]
-        }
-        #[inline]
-        fn digit_formatting_limbs_u8() -> Self::DigitFormattingU8 {
-            [0u8; MAX_DIGIT_FMT_U8]
-        }
-        #[inline]
-        fn bit_formatting_limbs_u8() -> Self::BitFormattingU8 {
-            [0u8; MAX_BIT_FMT_U8]
-        }
-    }
-}
-
-// ── exact-scratch (stable): one impl per concrete width ───────────────
-#[cfg(all(feature = "exact-scratch", not(feature = "exact-scratch-nightly")))]
+// ── default (stable): one impl per concrete width ─────────────────────
+#[cfg(not(feature = "exact-scratch-nightly"))]
 mod imp {
     use super::{ComputeLimbs, Limbs};
     use crate::int::algos::mul::mul_karatsuba::karatsuba_scratch_needed_th;

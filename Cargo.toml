@@ -50,9 +50,10 @@ rustdoc-args = ["--cfg", "docsrs"]
 # That gives ~16 decimal digits of platform-libm precision rather
 # than the deterministic 0.5 ULP strict path.
 default = ["std", "serde", "strict", "exact-scratch"]
-# `std` requires `exact-scratch`: the std build's kernels assume the exact
-# per-N scratch sizing; a std build without it is NOT a supported
-# configuration (working-scale arithmetic can outgrow the blanket scratch).
+# The kernels assume exact per-N scratch sizing, because working-scale
+# arithmetic outgrows a build-max buffer. That is now true of every build
+# (see `exact-scratch` below), so this dependency is retained only to keep
+# the requirement documented where it is relied upon.
 std = ["alloc", "exact-scratch"]
 alloc = []
 serde = ["dep:serde"]
@@ -116,13 +117,23 @@ experimental-floats = []
 # Requires the nightly toolchain.
 cross-scale-ops = []
 
-# Root-kernel work-scratch sizing. Default (neither feature) sizes the
-# scratch buffers to the build-max width and applies it uniformly. With
-# `exact-scratch` (stable) each storage width gets a per-`Int<N>` impl
-# sized exactly `mult·N + ceil(N/2)` — smaller frames, no nightly.
-# `exact-scratch-nightly` does the same per-`N` sizing with one blanket
-# impl via `generic_const_exprs` (the const-expr stays in that impl block).
-# See `crate::int::types::compute_limbs`.
+# Root-kernel work-scratch sizing. Every build now gets per-`Int<N>` scratch
+# sized exactly `mult·N + ceil(N/2)`, so `exact-scratch` is a NO-OP kept for
+# compatibility: it selects nothing, and enabling it changes no behaviour.
+#
+# It used to select between per-width impls and a single build-max blanket.
+# That blanket was unsound in the only configuration that could reach it — it
+# sized every buffer from the widest decimal STORAGE width, while the narrow
+# (D18/D38) strict transcendentals compute in a fixed `Int<24>` work integer
+# twelve times wider than D38's storage, so their rescale indexed a 12-limb
+# magnitude out of a 4-limb buffer and panicked. Sizing the blanket to cover
+# that work width would have pushed a 24-limb requirement onto every buffer in
+# a narrow build (the cross-tier size leak rule 6 forbids), so the per-width
+# impls became unconditional instead. See `crate::int::types::compute_limbs`.
+#
+# `exact-scratch-nightly` still selects a different build form: one blanket
+# impl sized per-`N` via `generic_const_exprs` (the const-expr stays in that
+# impl block), for builds that would rather not enumerate the widths.
 exact-scratch = []
 exact-scratch-nightly = ["exact-scratch"]
 # Wide decimal tiers (D57 … D1232). Each width is independently opt-in
@@ -152,14 +163,21 @@ exact-scratch-nightly = ["exact-scratch"]
 # hard compile error rather than a silent heap allocation. (`std` still
 # pulls `alloc` for the std build; that is the std backend's own affair.)
 #
-# It DOES pull `exact-scratch`, which is itself `[]` and so costs the
-# heap-free property nothing. Without it a wide tier lands on the blanket
-# `ComputeLimbs` impl, which sizes buffers at `4·MAX_WORK_N` while the
+# It still pulls `exact-scratch`, now a no-op, kept as a record of WHY.
+# A wide tier used to be able to land on the build-max blanket
+# `ComputeLimbs` impl, which sized buffers at `4·MAX_WORK_N` while the
 # widest work integer a wide tier declares is `8·MAX_WORK_N` — half what
-# the type needs. Nothing checks that relation, and the failure mode is a
+# the type needs. Nothing checked that relation, and the failure mode was a
 # SILENT truncation (`mag_into_u128` clamps and returns the sign, not a
-# fits flag), not a panic. Requiring it here makes the mismatch
-# unbuildable rather than documented. See issue #92.
+# fits flag), not a panic. Requiring it here made the mismatch unbuildable
+# for the WIDE tiers. See issue #92.
+#
+# The narrow tiers had the same mismatch and no feature to hang the fix on:
+# D18/D38 need no tier feature at all, yet run every strict transcendental
+# in a fixed `Int<24>`. They kept the blanket, and panicked. The blanket is
+# now retired outright, which fixes both ends by construction; this
+# dependency is left in place because it costs nothing and documents the
+# constraint at the tier that first hit it.
 _wide-support = ["exact-scratch"]
 wide = ["d57", "d76", "d115", "d153", "d230", "d307"]
 d57 = ["_wide-support"]
