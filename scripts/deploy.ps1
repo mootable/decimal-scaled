@@ -175,14 +175,14 @@ function Invoke-Step {
 # --- 4. Build + test gate ---------------------------------------------
 # `--all-features` would pull in `experimental-floats`, which needs the
 # nightly toolchain; the gate uses the widest stable-buildable set
-# (every tier umbrella) instead, plus a separate strict-only build.
+# (every tier umbrella) instead, plus a no-default-features build.
 Write-Host "`n--- Build + test gate ---" -ForegroundColor Cyan
 Invoke-Step 'cargo build (all tiers)' {
     cargo build --release --features wide,x-wide,xx-wide,macros
 } 'cargo build --release --features wide,x-wide,xx-wide,macros'
-Invoke-Step 'cargo build (strict opt-out -> fast)' {
-    cargo build --release --no-default-features --features alloc,std,wide,x-wide,xx-wide,fast,macros
-} 'cargo build --release --no-default-features --features alloc,std,wide,x-wide,xx-wide,fast,macros'
+Invoke-Step 'cargo build (no default features)' {
+    cargo build --release --no-default-features --features alloc,std,wide,x-wide,xx-wide,macros
+} 'cargo build --release --no-default-features --features alloc,std,wide,x-wide,xx-wide,macros'
 Invoke-Step 'cargo test (all tiers, release)' {
     cargo test --release --features wide,x-wide,xx-wide,macros --lib
 } 'cargo test --release --features wide,x-wide,xx-wide,macros --lib'
