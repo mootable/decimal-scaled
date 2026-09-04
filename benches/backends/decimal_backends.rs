@@ -17,9 +17,8 @@
 //! compares with D76.
 //!
 //! Transcendentals (`ln`, `exp`, `sqrt`, `sin`, `cos`, `atan2`, `pow`)
-//! cover D38 and D76 in both the lossy (f64-bridge) and strict
-//! (integer-only, correctly-rounded to 0.5 ULP) forms, alongside
-//! `rust_decimal` and the crate's native fast-paths.
+//! cover D38 and D76 in the strict (integer-only, correctly-rounded to
+//! 0.5 ULP) form, alongside `rust_decimal`.
 //!
 //! Run with: `cargo bench --features wide --bench decimal_backends`.
 
@@ -112,9 +111,9 @@ fn bench_arithmetic(c: &mut Criterion) {
 }
 
 /// `ln` / `exp` / `sqrt` / `sin` / `cos` / `atan2` / `pow`, comparing
-/// the crate's D38 / D76 (fast and strict) variants against
-/// `rust_decimal`. The wide-tier strict variants quantify the
-/// correctly-rounded-to-0.5-ULP cost.
+/// the crate's strict D38 / D76 variants against `rust_decimal`. The
+/// wide-tier strict variants quantify the correctly-rounded-to-0.5-ULP
+/// cost.
 fn bench_transcendentals(c: &mut Criterion) {
     let mut g = c.benchmark_group("decimal/transc");
 
@@ -126,52 +125,19 @@ fn bench_transcendentals(c: &mut Criterion) {
     let rd = Decimal::new(2_345_678_901, 9);
 
     macro_rules! one_arg {
-        ($name:literal, $lossy:expr, $strict:expr) => {
-            g.bench_function(concat!("D128_lossy/", $name), |b| b.iter(|| $lossy));
+        ($name:literal, $strict:expr) => {
             g.bench_function(concat!("D128_strict/", $name), |b| b.iter(|| $strict));
         };
     }
 
-    one_arg!(
-        "ln",
-        black_box(ours128).ln_fast(),
-        black_box(ours128).ln_strict()
-    );
-    one_arg!(
-        "exp",
-        black_box(ours128).exp_fast(),
-        black_box(ours128).exp_strict()
-    );
-    one_arg!(
-        "sqrt",
-        black_box(ours128).sqrt_fast(),
-        black_box(ours128).sqrt_strict()
-    );
-    one_arg!(
-        "cbrt",
-        black_box(ours128).cbrt_fast(),
-        black_box(ours128).cbrt_strict()
-    );
-    one_arg!(
-        "sin",
-        black_box(ours128).sin_fast(),
-        black_box(ours128).sin_strict()
-    );
-    one_arg!(
-        "cos",
-        black_box(ours128).cos_fast(),
-        black_box(ours128).cos_strict()
-    );
-    one_arg!(
-        "tan",
-        black_box(ours128).tan_fast(),
-        black_box(ours128).tan_strict()
-    );
-    one_arg!(
-        "atan",
-        black_box(ours128).atan_fast(),
-        black_box(ours128).atan_strict()
-    );
+    one_arg!("ln", black_box(ours128).ln_strict());
+    one_arg!("exp", black_box(ours128).exp_strict());
+    one_arg!("sqrt", black_box(ours128).sqrt_strict());
+    one_arg!("cbrt", black_box(ours128).cbrt_strict());
+    one_arg!("sin", black_box(ours128).sin_strict());
+    one_arg!("cos", black_box(ours128).cos_strict());
+    one_arg!("tan", black_box(ours128).tan_strict());
+    one_arg!("atan", black_box(ours128).atan_strict());
 
     g.bench_function("rust_decimal/ln", |b| b.iter(|| black_box(rd).ln()));
     g.bench_function("rust_decimal/exp", |b| b.iter(|| black_box(rd).exp()));
@@ -180,26 +146,15 @@ fn bench_transcendentals(c: &mut Criterion) {
     g.bench_function("rust_decimal/cos", |b| b.iter(|| black_box(rd).cos()));
     g.bench_function("rust_decimal/tan", |b| b.iter(|| black_box(rd).tan()));
 
-    // Wide tier: D76 transcendentals. Strict variants are
-    // correctly-rounded; lossy paths route through f64.
-    g.bench_function("D256_lossy/ln", |b| b.iter(|| black_box(ours256).ln_fast()));
+    // Wide tier: D76 transcendentals, correctly rounded.
     g.bench_function("D256_strict/ln", |b| {
         b.iter(|| black_box(ours256).ln_strict())
-    });
-    g.bench_function("D256_lossy/exp", |b| {
-        b.iter(|| black_box(ours256).exp_fast())
     });
     g.bench_function("D256_strict/exp", |b| {
         b.iter(|| black_box(ours256).exp_strict())
     });
-    g.bench_function("D256_lossy/sqrt", |b| {
-        b.iter(|| black_box(ours256).sqrt_fast())
-    });
     g.bench_function("D256_strict/sqrt", |b| {
         b.iter(|| black_box(ours256).sqrt_strict())
-    });
-    g.bench_function("D256_lossy/sin", |b| {
-        b.iter(|| black_box(ours256).sin_fast())
     });
     g.bench_function("D256_strict/sin", |b| {
         b.iter(|| black_box(ours256).sin_strict())
@@ -207,14 +162,8 @@ fn bench_transcendentals(c: &mut Criterion) {
 
     // Two-arg ops: pow, atan2.
     let p = D38::<9>::from_bits(decimal_scaled::Int::<2>::try_from(3_000_000_000_i128).unwrap()); // 3.0
-    g.bench_function("D128_lossy/powf", |b| {
-        b.iter(|| black_box(ours128).powf_fast(black_box(p)))
-    });
     g.bench_function("D128_strict/powf", |b| {
         b.iter(|| black_box(ours128).powf_strict(black_box(p)))
-    });
-    g.bench_function("D128_lossy/atan2", |b| {
-        b.iter(|| black_box(ours128).atan2_fast(black_box(p)))
     });
     g.bench_function("D128_strict/atan2", |b| {
         b.iter(|| black_box(ours128).atan2_strict(black_box(p)))

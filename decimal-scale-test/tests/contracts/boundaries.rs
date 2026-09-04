@@ -559,7 +559,6 @@ mod from_edge_cases {
 }
 
 #[cfg(all(
-    not(feature = "fast"),
     feature = "wide",
     not(any(
         feature = "rounding-half-away-from-zero",

@@ -216,7 +216,6 @@ mod from_arithmetic_mode_aware {
 
 #[cfg(all(
     feature = "strict",
-    not(feature = "fast"),
     any(feature = "d76", feature = "wide")
 ))]
 mod from_rounding_mode_matrix {

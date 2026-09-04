@@ -130,14 +130,14 @@ macro_rules! ln_band_edge_no_panic {
 }
 
 // ── D230 s110..=120 (mid-band on-grid at D230<115>; edges kept) ────────────
-#[cfg(all(feature = "wide", not(feature = "fast")))]
+#[cfg(feature = "wide")]
 mod from_d230_s115_lookup_parity {
     ln_band_edge_no_panic!(ln_lookup_band_lower_bound_s110, D230, 110);
     ln_band_edge_no_panic!(ln_lookup_band_upper_bound_s120, D230, 120);
 }
 
 // ── D307 s285..=295 (off-grid band; cell s290) ─────────────────────────────
-#[cfg(all(feature = "x-wide", not(feature = "fast")))]
+#[cfg(feature = "x-wide")]
 mod from_d307_s290_lookup_parity {
     ln_band_round_trips!(D307, 290, 8);
     ln_band_edge_no_panic!(ln_lookup_band_lower_bound_s285, D307, 285);
@@ -145,7 +145,7 @@ mod from_d307_s290_lookup_parity {
 }
 
 // ── D616 s585..=595 (off-grid band; cell s590) ─────────────────────────────
-#[cfg(all(feature = "x-wide", not(feature = "fast")))]
+#[cfg(feature = "x-wide")]
 mod from_d616_s590_lookup_parity {
     ln_band_round_trips!(D616, 590, 8);
     ln_band_edge_no_panic!(ln_lookup_band_lower_bound_s585, D616, 585);
@@ -156,8 +156,7 @@ mod from_d616_s590_lookup_parity {
 #[cfg(all(
     feature = "xx-wide",
     feature = "x-wide",
-    feature = "wide",
-    not(feature = "fast")
+    feature = "wide"
 ))]
 mod from_d924_s460_lookup_parity {
     ln_band_edge_no_panic!(ln_lookup_band_lower_bound_s455, D924, 455);
@@ -168,8 +167,7 @@ mod from_d924_s460_lookup_parity {
 #[cfg(all(
     feature = "xx-wide",
     feature = "x-wide",
-    feature = "wide",
-    not(feature = "fast")
+    feature = "wide"
 ))]
 mod from_d924_s900_lookup_parity {
     ln_band_round_trips!(D924, 900, 8);
@@ -178,7 +176,7 @@ mod from_d924_s900_lookup_parity {
 }
 
 // ── D1232 s610..=620 (mid-band on-grid at D1232<616>; edges kept) ──────────
-#[cfg(all(feature = "xx-wide", not(feature = "fast")))]
+#[cfg(feature = "xx-wide")]
 mod from_d1232_s615_lookup_parity {
     ln_band_edge_no_panic!(ln_lookup_band_lower_bound_s610, D1232, 610);
     ln_band_edge_no_panic!(ln_lookup_band_upper_bound_s620, D1232, 620);
@@ -188,8 +186,7 @@ mod from_d1232_s615_lookup_parity {
 #[cfg(all(
     feature = "xx-wide",
     feature = "x-wide",
-    feature = "wide",
-    not(feature = "fast")
+    feature = "wide"
 ))]
 mod from_d1232_s1200_lookup_parity {
     ln_band_round_trips!(D1232, 1200, 8);

@@ -15,7 +15,6 @@ mod dyn_facade;
 mod equalities;
 mod errors;
 mod expm1;
-mod fast_surface;
 mod foundation;
 mod int_methods;
 mod log1p;

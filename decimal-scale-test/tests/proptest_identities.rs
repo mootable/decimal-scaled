@@ -32,7 +32,6 @@
 //! property pressure.
 
 #![cfg(all(
-    not(feature = "fast"),
     not(any(
         feature = "rounding-half-away-from-zero",
         feature = "rounding-half-toward-zero",
