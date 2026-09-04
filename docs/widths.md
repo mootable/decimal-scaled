@@ -65,7 +65,7 @@ need — narrower storage is faster and smaller.
 - **`D924` / `D1232`** — the *xx-wide tier*. Gated behind `xx-wide`
   (or `d924` / `d1232`). The widest shipped tier; transcendentals at
 <<<<<<< HEAD
-  `D1232<1231>` cost <!-- BEGIN GENERATED:widths:slowest -->_Pending the first bench-branch-compare CI run — this renders from `results/timing/bbc_medians.tsv`._<!-- END GENERATED:widths:slowest -->, so it's
+  `D1232<1231>` cost <!-- BEGIN GENERATED:widths:slowest -->at most ~5.79 ms per call (the slowest cell measured anywhere on the surface: `atanh` at `D1232<1231>`)<!-- END GENERATED:widths:slowest -->, so it's
 =======
   `D1232<1231>` cost <!-- BEGIN GENERATED:widths:slowest -->at most ~5.61 ms per call (the slowest cell measured anywhere on the surface: `atanh` at `D1232<1231>`)<!-- END GENERATED:widths:slowest -->, so it's
 >>>>>>> origin/perf/r10-exact-root-scratch
