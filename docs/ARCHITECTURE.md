@@ -624,11 +624,12 @@ is added per-caller-need, never pre-emptively.**
 ## Limb width — the matcher's second axis (`u64` / `u128`)
 
 A wide-tier kernel can run faster in **u128 limbs** (half the limbs and carries) than in
-u64. Which limb width wins is a per-`(N, SCALE)` property, so it is a **second matcher axis**
-alongside the algorithm: the policy `Select` verdict carries `(Algorithm, LimbSize)`, where
-`LimbSize` (`U64` / `U128`, defined in `compute_limbs.rs`) is the *const* part of the verdict
-(limb width is value-independent — never decided inside a `ByValue` closure). `dispatch`
-const-folds the verdict and runs the kernel at the chosen width.
+u64. Which limb width wins is a per-width property, so it is a **second matcher axis**
+alongside the algorithm. It is **not carried on the `Select` verdict**: `select` resolves the
+algorithm, and the chosen algorithm then yields its own limb width — the two-stage shape
+spelled out below. `LimbSize` (`U64` / `U128`, defined in `compute_limbs.rs`) is a *const*,
+value-independent verdict (limb width is never decided inside a `ByValue` closure), and
+`dispatch` const-folds it and runs the kernel at the chosen width.
 
 The width is delivered **by type, not by name**: a `Limb` trait (impl'd for `u64` and
 `u128`, carrying the scalar primitives) parameterises ONE generic kernel
@@ -645,8 +646,10 @@ unpacks. Packing pairs two u64 into one u128, so it is exact only for an **even*
 scratch comes from `ComputeLimbs` on `Limbs<N>` (which carries both the u64 and u128 buffer
 families); the `Limb` accessors route `L` to the matching family (e.g.
 `L::double::<Limbs<N>>()`), so the kernel never names a build-max
-size. Rolled out pilot-first, microbench-gated per cell: a cell routes `U128` only where the
-benchmark shows the win.
+size. Rolled out pilot-first and microbench-gated: `U128` is routed only where the benchmark
+supports it. That evidence is currently **uniform** — the full-product A/B found u128 winning
+or tying at every even width — so today every even cell routes `U128` and no cell is
+individually carved.
 
 The limb width is selected in **two stages**, and the second stage is **owned by the
 algorithm**: `select` resolves the *algorithm* first (the existing `ByAlgorithm` / `ByValue`
@@ -655,8 +658,11 @@ N>(self) -> LimbSize` method — because the u64/u128 crossover is algorithm-dep
 on the `Algorithm` enum, not in the verdict. `dispatch` resolves the algorithm, asks it for
 its limb width, and folds both in a `const { … }` block (when the algorithm is const) so the
 whole thing collapses to one direct typed call. The limb width is **per-cell policy DATA**,
-not a blanket: each algorithm's `limb_size` arm enumerates its benched winners, with
-`LimbSize::for_packing(N)` (the even-`N` validity gate) as the default. The canonical shape
+not a blanket: each algorithm's `limb_size` arm is free to enumerate its benched winners, with
+`LimbSize::for_packing(N)` (the even-`N` validity gate) as the default. **Today every arm is
+that bare default** — all three impls (`int::policy::mul`, `int::policy::mul_low`,
+`int::policy::sqr_low`) return `for_packing(N)`, so a per-cell carve is what the seam is FOR,
+not what it currently holds. The canonical shape
 (reference instance `int/policy/mul_low.rs`, the truncated-low product):
 
 ```rust

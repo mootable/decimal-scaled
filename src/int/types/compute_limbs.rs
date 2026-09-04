@@ -216,16 +216,21 @@ pub(crate) fn max_u128_limb() -> [u128; MAX_U128_LIMB] {
 // ── The `Limb` axis — `u64` / `u128` width-generic kernels ─────────────────
 //
 // A wide-tier kernel can run faster in u128 limbs (half the limbs/carries).
-// Which width wins is a per-`(N, SCALE)` const property, so it is a second
-// matcher axis (the `Select` verdict carries a `LimbSize`). The width is
-// delivered BY TYPE: a `<L: Limb>`-generic kernel is monomorphised per width
-// via a const-folded `match` on the verdict — ONE kernel, never a per-limb
-// copy. See `docs/ARCHITECTURE.md` → "Limb width — the matcher's second axis".
+// Which width wins is a per-width const property, so it is a second matcher
+// axis. It is NOT carried on the `Select` verdict: `select` resolves the
+// algorithm, and the CHOSEN ALGORITHM then yields its own limb width via a
+// `const fn limb_size<const N>(self) -> LimbSize` method (the u64/u128
+// crossover is algorithm-dependent, so it lives on the `Algorithm` enum).
+// `dispatch` folds both. The width is delivered BY TYPE: a `<L: Limb>`-generic
+// kernel is monomorphised per width via a const-folded `match` — ONE kernel,
+// never a per-limb copy. See `docs/ARCHITECTURE.md` → "Limb width — the
+// matcher's second axis".
 
-/// The limb width a `<L: Limb>` kernel runs in, chosen by the matcher per
-/// `(N, SCALE)`. A const, value-independent property (the const part of the
-/// `Select` verdict) — packing pairs two u64 into one u128, so `U128` is only
-/// valid for an even limb count (the matcher gates this).
+/// The limb width a `<L: Limb>` kernel runs in, resolved per width by the
+/// chosen algorithm's `limb_size` method — NOT carried on the `Select`
+/// verdict. A const, value-independent property — packing pairs two u64 into
+/// one u128, so `U128` is only valid for an even limb count (the policy gates
+/// this via [`LimbSize::for_packing`]).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum LimbSize {
     U64,
@@ -239,11 +244,19 @@ impl LimbSize {
     /// it in a `const { … }` block per monomorphisation (the unchosen `match`
     /// arm is then dead-arm eliminated, like any policy verdict).
     ///
-    /// This is the limb-width axis as a verdict; the algorithm axis composes
-    /// alongside it where a function also chooses *which* algorithm (a full
-    /// `Select<N>` carrying `(Algorithm, LimbSize)`). The even-count rule is
-    /// the correctness gate; a per-`(N, SCALE)` *perf* refinement (which even
-    /// widths actually win the u128 packing) is a microbench tuning follow-up.
+    /// This is the value the axis currently resolves to EVERYWHERE: all three
+    /// `Algorithm::limb_size` impls (`int::policy::mul`, `int::policy::mul_low`,
+    /// `int::policy::sqr_low`) return `for_packing(N)`, so the width is today
+    /// derived from `N`'s parity rather than carved per cell.
+    ///
+    /// The even-count rule is the CORRECTNESS gate — an odd count cannot
+    /// round-trip the packing, so `U64` is the only valid width there. At an
+    /// EVEN `N` both widths are correct and the choice is purely a perf
+    /// question, answered uniformly on the full-product A/B recorded in
+    /// `int::policy::mul` (u128 wins or ties at every even width). A per-cell
+    /// carve is INTENDED tuning, not present behaviour: each `limb_size` impl
+    /// is the seam where an even `N` that benchmarks show regressing would be
+    /// sent back to `U64`.
     #[inline]
     pub(crate) const fn for_packing(limb_count: usize) -> Self {
         if limb_count.is_multiple_of(2) {
