@@ -213,6 +213,12 @@ where
     } else if fits_budget(SCALE, k, <Wexp as BigInt>::LIMBS) {
         conditioned_at::<N, Wexp, SCALE, CAP>(raw, braw, mode, k)
     } else {
+        // Unreachable for any legal input, NOT a contract limit: the base is
+        // representable at `SCALE`, so `|b - 1| >= 10^-SCALE` and `k <= SCALE`;
+        // the largest lift any input can ask for is therefore `w = 3·SCALE + 30`,
+        // and `2w + 40` fits every tier's `Wmax` (the table above). It stays
+        // because the defect this arm fixes was a SILENT wrong digit: if a
+        // future width pairing broke the table, this turns silent into loud.
         assert!(
             fits_capacity(SCALE, k, <Wmax as BigInt>::LIMBS),
             "log: a base within 10^-{k} of 1 at scale {SCALE} exceeds the widest \
