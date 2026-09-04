@@ -81,10 +81,10 @@ Tactical perf and fast-path wins, with bench evidence in
 
 | change | measured effect |
 |--------|-----------------|
-| `limbs_mul_u64_fixed<const L, D>` wired into `widen_mul` / `wrapping_mul` / `checked_mul` | 1.22-2.73× on per-L mul; **1.25× on D307<150> `exp_strict` whole-call** (88.8 → 71.1 µs) |
+| `limbs_mul_u64_fixed<const L, D>` wired into `widen_mul` / `wrapping_mul` / `checked_mul` | 1.22-2.73× on per-L mul; **1.25× on D307<150> `exp` whole-call** (88.8 → 71.1 µs) |
 | Adaptive halvings in `atan_fixed` (halve while `|y| > ~0.2`, max 8; was fixed 3) | 3-5× on atan with small / reciprocal-reduced inputs (D38<19>: `atan(0.001)` 44 → 14 µs; `atan(1e8)` 44 → 8 µs) |
 | 17 trig fast paths: zero / ±1 / small-x linear band for `atan`, `sin`, `cos`, `tan`, `asin`, `acos`, `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh`, `to_degrees`, `to_radians` | ~1000-10000× on the fast-path inputs (`atan(0)` 68 µs → 5 ns; `atan(1e-7)` 68 µs → 5 ns); best-in-class small-x atan vs both fastnum and g_math |
-| `ln(1) = 0` + `ln(1+ε) ≈ ε` linear-band fast paths in `ln_strict` | <10 ns on fast-path inputs vs prior 1.4 µs |
+| `ln(1) = 0` + `ln(1+ε) ≈ ε` linear-band fast paths in `ln` | <10 ns on fast-path inputs vs prior 1.4 µs |
 | Per-width bench split: `benches/lib_cmp_d{N}.rs` for D18 through D1232 | minutes vs hours per-tier iteration; was a 0.3.x infrastructure TODO, now done |
 | Profiling infrastructure: `perf-trace` feature, section spans in `exp_fixed` / `atan_fixed`, samply + perfetto example drivers + parser scripts | establishes the M2-gate discipline used through the rest of this work |
 | `benches/atan_inputs.rs` — input-class atan timing (decimal-scaled vs fastnum vs g_math) | exposed two bench-validity issues (fastnum `atan(|x|>1)` = NaN, fastnum `ln(2)` = const lookup) — recorded in `docs/benchmarks.md` |

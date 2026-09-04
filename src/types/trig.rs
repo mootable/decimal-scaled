@@ -53,186 +53,96 @@
 impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     // ── Plain dispatchers (strict path) ───────────────────────────
 
-    #[inline]
-    #[must_use]
-    pub fn sin(self) -> Self {
-        self.sin_strict()
-    }
-
-    #[inline]
-    #[must_use]
-    pub fn cos(self) -> Self {
-        self.cos_strict()
-    }
-
-    #[inline]
-    #[must_use]
-    pub fn tan(self) -> Self {
-        self.tan_strict()
-    }
-
-    #[inline]
-    #[must_use]
-    pub fn asin(self) -> Self {
-        self.asin_strict()
-    }
-
-    #[inline]
-    #[must_use]
-    pub fn acos(self) -> Self {
-        self.acos_strict()
-    }
-
-    #[inline]
-    #[must_use]
-    pub fn atan(self) -> Self {
-        self.atan_strict()
-    }
-
-    #[inline]
-    #[must_use]
-    pub fn atan2(self, other: Self) -> Self {
-        self.atan2_strict(other)
-    }
-
-    #[inline]
-    #[must_use]
-    pub fn sinh(self) -> Self {
-        self.sinh_strict()
-    }
-
-    #[inline]
-    #[must_use]
-    pub fn cosh(self) -> Self {
-        self.cosh_strict()
-    }
-
-    #[inline]
-    #[must_use]
-    pub fn tanh(self) -> Self {
-        self.tanh_strict()
-    }
-
-    #[inline]
-    #[must_use]
-    pub fn asinh(self) -> Self {
-        self.asinh_strict()
-    }
-
-    #[inline]
-    #[must_use]
-    pub fn acosh(self) -> Self {
-        self.acosh_strict()
-    }
-
-    #[inline]
-    #[must_use]
-    pub fn atanh(self) -> Self {
-        self.atanh_strict()
-    }
-
-    #[inline]
-    #[must_use]
-    pub fn to_degrees(self) -> Self {
-        self.to_degrees_strict()
-    }
-
-    #[inline]
-    #[must_use]
-    pub fn to_radians(self) -> Self {
-        self.to_radians_strict()
-    }
-
     // ── Forward trig (one-line policy delegates) ──────────────────
 
     /// Sine of `self` (radians). Correctly rounded.
     #[inline]
     #[must_use]
-    pub fn sin_strict(self) -> Self {
-        self.sin_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    pub fn sin(self) -> Self {
+        self.sin_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn sin_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
+    pub fn sin_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         Self::from_bits(crate::policy::trig::sin_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     /// Cosine of `self` (radians). `cos(x) = sin(x + π/2)`.
     #[inline]
     #[must_use]
-    pub fn cos_strict(self) -> Self {
-        self.cos_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    pub fn cos(self) -> Self {
+        self.cos_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn cos_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
+    pub fn cos_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         Self::from_bits(crate::policy::trig::cos_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     /// Tangent. Panics if `cos(self)` is zero.
     #[inline]
     #[must_use]
-    pub fn tan_strict(self) -> Self {
-        self.tan_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    pub fn tan(self) -> Self {
+        self.tan_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn tan_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
+    pub fn tan_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         Self::from_bits(crate::policy::trig::tan_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     /// Arctangent.
     #[inline]
     #[must_use]
-    pub fn atan_strict(self) -> Self {
-        self.atan_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    pub fn atan(self) -> Self {
+        self.atan_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn atan_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
+    pub fn atan_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         Self::from_bits(crate::policy::trig::atan_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     /// Arcsine. Panics if `|self| > 1`.
     #[inline]
     #[must_use]
-    pub fn asin_strict(self) -> Self {
-        self.asin_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    pub fn asin(self) -> Self {
+        self.asin_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn asin_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
+    pub fn asin_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         Self::from_bits(crate::policy::trig::asin_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     /// Arccosine. Panics if `|self| > 1`.
     #[inline]
     #[must_use]
-    pub fn acos_strict(self) -> Self {
-        self.acos_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    pub fn acos(self) -> Self {
+        self.acos_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn acos_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
+    pub fn acos_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         Self::from_bits(crate::policy::trig::acos_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     /// Four-quadrant arctangent of `self` (`y`) and `other` (`x`).
     #[inline]
     #[must_use]
-    pub fn atan2_strict(self, other: Self) -> Self {
-        self.atan2_strict_with(other, crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    pub fn atan2(self, other: Self) -> Self {
+        self.atan2_with(other, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn atan2_strict_with(
+    pub fn atan2_with(
         self,
         other: Self,
         mode: crate::support::rounding::RoundingMode,
@@ -245,78 +155,78 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     /// Hyperbolic sine. Correctly rounded.
     #[inline]
     #[must_use]
-    pub fn sinh_strict(self) -> Self {
-        self.sinh_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    pub fn sinh(self) -> Self {
+        self.sinh_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn sinh_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
+    pub fn sinh_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         Self::from_bits(crate::policy::trig::sinh_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     /// Hyperbolic cosine.
     #[inline]
     #[must_use]
-    pub fn cosh_strict(self) -> Self {
-        self.cosh_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    pub fn cosh(self) -> Self {
+        self.cosh_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn cosh_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
+    pub fn cosh_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         Self::from_bits(crate::policy::trig::cosh_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     /// Hyperbolic tangent.
     #[inline]
     #[must_use]
-    pub fn tanh_strict(self) -> Self {
-        self.tanh_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    pub fn tanh(self) -> Self {
+        self.tanh_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn tanh_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
+    pub fn tanh_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         Self::from_bits(crate::policy::trig::tanh_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     /// Inverse hyperbolic sine. `asinh(x) = sign · ln(|x| + √(x²+1))`.
     #[inline]
     #[must_use]
-    pub fn asinh_strict(self) -> Self {
-        self.asinh_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    pub fn asinh(self) -> Self {
+        self.asinh_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn asinh_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
+    pub fn asinh_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         Self::from_bits(crate::policy::trig::asinh_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     /// Inverse hyperbolic cosine. Panics if `self < 1`.
     #[inline]
     #[must_use]
-    pub fn acosh_strict(self) -> Self {
-        self.acosh_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    pub fn acosh(self) -> Self {
+        self.acosh_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn acosh_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
+    pub fn acosh_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         Self::from_bits(crate::policy::trig::acosh_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     /// Inverse hyperbolic tangent. Panics if `|self| >= 1`.
     #[inline]
     #[must_use]
-    pub fn atanh_strict(self) -> Self {
-        self.atanh_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    pub fn atanh(self) -> Self {
+        self.atanh_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn atanh_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
+    pub fn atanh_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         Self::from_bits(crate::policy::trig::atanh_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
@@ -325,26 +235,26 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     /// Convert radians to degrees: `self · (180 / π)`.
     #[inline]
     #[must_use]
-    pub fn to_degrees_strict(self) -> Self {
-        self.to_degrees_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    pub fn to_degrees(self) -> Self {
+        self.to_degrees_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn to_degrees_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
+    pub fn to_degrees_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         Self::from_bits(crate::policy::trig::to_degrees_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     /// Convert degrees to radians: `self · (π / 180)`.
     #[inline]
     #[must_use]
-    pub fn to_radians_strict(self) -> Self {
-        self.to_radians_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    pub fn to_radians(self) -> Self {
+        self.to_radians_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn to_radians_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
+    pub fn to_radians_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         Self::from_bits(crate::policy::trig::to_radians_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 

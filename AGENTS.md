@@ -127,7 +127,7 @@ Every transcendental method has **one implementation**, always compiled:
 
 | Method                       | Path             | Determinism                              | Precision                  | Needs            |
 |------------------------------|------------------|------------------------------------------|----------------------------|------------------|
-| `*_strict` (`ln_strict`, …)  | integer-only     | bit-identical on every platform          | within **0.5 ULP**         | nothing extra    |
+| `*_strict` (`ln`, …)  | integer-only     | bit-identical on every platform          | within **0.5 ULP**         | nothing extra    |
 | plain `*` (`ln`, …)          | delegates to `*_strict` | same                              | same                       | same             |
 
 The f64-bridge `*_fast` surface and its `fast` feature were removed in
@@ -147,7 +147,7 @@ use decimal_scaled::RoundingMode;
 let _ = value.quantize_with::<2>(RoundingMode::HalfAwayFromZero);
 let _ = D38s2::from_f64_with(1.5, RoundingMode::Ceiling);
 let _ = value.to_int_with(RoundingMode::Trunc);
-let _ = wide.ln_strict_with(RoundingMode::Floor);  // wide-tier sibling
+let _ = wide.ln_with(RoundingMode::Floor);  // wide-tier sibling
 ```
 
 Modes: `HalfToEven` (default; IEEE-754, no bias), `HalfAwayFromZero` (commercial), `HalfTowardZero`, `Trunc` (toward zero), `Floor` (toward −∞), `Ceiling` (toward +∞).
@@ -207,7 +207,7 @@ The string form is bit-faithful and round-trips exactly. The deserializer reject
 |---|---|---|
 | Storing prices in `f64`, then converting to `D38` at output | `f64` already lost decimal precision | Stay in `D38` from input parsing through display |
 | `D38s12::from_int(1) + D38s6::from_int(1)` | Cross-scale arithmetic doesn't compile | `.quantize::<6>()` or `.quantize::<12>()` first |
-| `.ln()` on a value that *must* be bit-identical across platforms | Not a defect any more — the bare name has one definition — but `.ln_strict()` states the requirement at the call site | Prefer `.ln_strict()` where the guarantee is load-bearing |
+| `.ln()` on a value that *must* be bit-identical across platforms | Not a defect any more — the bare name has one definition — but `.ln()` states the requirement at the call site | Prefer `.ln()` where the guarantee is load-bearing |
 | `D38<S>` for π / τ / e at `S` near `MAX_SCALE` | Integer headroom collapses; the value doesn't fit storage | Widen to `D76` (or wider) at the same scale |
 | `D38s38` (or any `DNNsNN` at the max-scale ceiling) | Removed in 0.4 — illegal `SCALE` | Use `D38s37` (or the `name − 1` ceiling) |
 | `dN!` literal without enabling `macros` feature | Compile error | Enable `macros`, or fall back to `FromStr` / `from_bits` |

@@ -28,7 +28,7 @@ pub(crate) mod exp_series_2limb;
 /// Registered as the unrouted `Algorithm::Schoolbook` arm; not connected
 /// to `select`.
 pub(crate) mod exp_schoolbook;
-/// Tier-generic Tang-style table-driven `exp_strict` kernel, generic over
+/// Tier-generic Tang-style table-driven `exp` kernel, generic over
 /// `WideTrigCore`. Collapses the per-tier D57 (18..=22 / 45..=56), D115
 /// and D153 Tang exp kernels into one. The `policy::exp` Tang arms call
 /// it with the tier's `Core`, `SCALE`, table size, narrow guard and the

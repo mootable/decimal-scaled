@@ -2,12 +2,12 @@
 //! per-tier storage extremes are width-SPECIFIC, which the width-agnostic
 //! golden lead format cannot express, so these stay as pinned reproducers.
 
-/// Regression test for the `log10_strict` panic on `D38::<38>` at
+/// Regression test for the `log10` panic on `D38::<38>` at
 /// scale-saturated inputs.
 ///
 /// At SCALE=38 the storage `i128::MAX ≈ 1.7e38` only represents values
 /// in roughly `[-1.7, 1.7]`. Calling `from_f64(2.0)` therefore
-/// saturates to `Self::MAX`, and historically `log10_strict()` panicked
+/// saturates to `Self::MAX`, and historically `log10()` panicked
 /// during the ln kernel's range reduction because the working-scale
 /// intermediate `raw · 10^STRICT_GUARD = MAX · 10^30 ≈ 1.7e68` plus the
 /// Mercator artanh series intermediate overflowed the 256-bit `Fixed`.
@@ -15,13 +15,13 @@
 mod from_d38_max_scale_log_panic {
     use decimal_scaled::D38;
 
-    /// `D38::<38>::from_f64(2.0)` saturates to `MAX` then `log10_strict`
+    /// `D38::<38>::from_f64(2.0)` saturates to `MAX` then `log10`
     /// must produce a finite result without panicking. `log10(MAX) ≈ 0.23`
     /// (because `MAX ≈ 1.7`), which fits the storage comfortably.
     #[test]
     fn log10_strict_on_saturated_d38_scale38() {
         let v = D38::<38>::from_f64(2.0);
-        let r = v.log10_strict();
+        let r = v.log10();
         // log10(1.7014…) ≈ 0.23099…  -> at scale 38, bits ≈ 2.31e37
         let bits = i128::from(r.to_bits());
         assert!(bits > 0, "log10(MAX) must be positive, got {bits}");
@@ -36,7 +36,7 @@ mod from_d38_max_scale_log_panic {
     #[test]
     fn log10_strict_on_near_max_d38_scale38() {
         let v = D38::<38>::from_bits(decimal_scaled::Int::<2>::try_from(i128::MAX).unwrap());
-        let r = v.log10_strict();
+        let r = v.log10();
         // v = i128::MAX / 10^38 ∈ (1.70, 1.71), so log10(v) ∈ (log10(1.70),
         // log10(1.71)) = (0.2304, 0.2330) ⊂ (0.22, 0.24); at scale 38 the
         // raw bits land in (2.2e37, 2.4e37).
@@ -52,7 +52,7 @@ mod from_d38_max_scale_log_panic {
     }
 }
 
-/// Regression: `D57<MAX_SCALE = 57>::cbrt_strict` used to overflow the
+/// Regression: `D57<MAX_SCALE = 57>::cbrt` used to overflow the
 /// work integer inside the generic-wide cbrt kernel.
 ///
 /// At SCALE=57 the kernel needs `mag * 10^(2*SCALE) = mag * 10^114`. A
@@ -83,7 +83,7 @@ mod from_d57_max_scale_cbrt_panic {
     #[test]
     fn d57_max_scale_cbrt_does_not_panic() {
         let v = D57::<57>::from_f64(8.0);
-        let r = v.cbrt_strict();
+        let r = v.cbrt();
         // 8.0 saturates to MAX = Int192::MAX / 10^57 ≈ 3.1385; since
         // 1 < MAX < 8, the cube root must land strictly inside (1, 2)
         // (cbrt(MAX) ≈ 1.4641).
@@ -108,7 +108,7 @@ mod from_d57_max_scale_cbrt_panic {
             )
             .unwrap(),
         );
-        let r = one.cbrt_strict();
+        let r = one.cbrt();
         assert_eq!(r, one, "cbrt(1) at D57<57> should equal 1");
     }
 
@@ -128,7 +128,7 @@ mod from_d57_max_scale_cbrt_panic {
         .unwrap();
         let v = D57::<57>::from_bits(raw);
         let expected = D57::<57>::from_bits(half_raw);
-        let r = v.cbrt_strict();
+        let r = v.cbrt();
         assert_eq!(r, expected, "cbrt(0.125) at D57<57> should equal 0.5");
     }
 
@@ -137,12 +137,12 @@ mod from_d57_max_scale_cbrt_panic {
     #[test]
     fn d57_max_scale_cbrt_of_zero() {
         let zero = D57::<57>::from_bits(decimal_scaled::Int::<3>::from_str_radix("0", 10).unwrap());
-        let r = zero.cbrt_strict();
+        let r = zero.cbrt();
         assert_eq!(r, zero, "cbrt(0) at D57<57> should equal 0");
     }
 }
 
-/// Regression: every wide tier's `cbrt_strict` used to overflow the
+/// Regression: every wide tier's `cbrt` used to overflow the
 /// work integer inside the generic-wide cbrt kernel when SCALE
 /// approached `MAX_SCALE`.
 ///
@@ -184,7 +184,7 @@ mod from_wide_max_scale_cbrt_panic {
                 let ten = <$Storage>::from_str_radix("10", 10).expect("10 literal");
                 let raw = ten.pow($scale as u32);
                 let one = decimal_scaled::$tier::<$scale>::from_bits(raw);
-                let r = one.cbrt_strict();
+                let r = one.cbrt();
                 assert_eq!(
                     r, one,
                     concat!(

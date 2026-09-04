@@ -1,4 +1,4 @@
-//! Focused microbench for the `powf_strict` integer-exponent fast
+//! Focused microbench for the `powf` integer-exponent fast
 //! path landed in `perf/powf-integer-fastpath-0.4.3`.
 //!
 //! Compares two integer exponents (2.0 and 3.0 — the headline cases
@@ -40,16 +40,16 @@ fn bench(c: &mut Criterion) {
         let exp_25: D = D::try_from(5_i64).unwrap() / D::try_from(2_i64).unwrap(); // 2.5
 
         g.bench_function("D38_s19/powf_2", |bn| {
-            bn.iter(|| black_box(base).powf_strict(black_box(exp_2)))
+            bn.iter(|| black_box(base).powf(black_box(exp_2)))
         });
         g.bench_function("D38_s19/powf_3", |bn| {
-            bn.iter(|| black_box(base).powf_strict(black_box(exp_3)))
+            bn.iter(|| black_box(base).powf(black_box(exp_3)))
         });
         g.bench_function("D38_s19/powf_05", |bn| {
-            bn.iter(|| black_box(base).powf_strict(black_box(exp_05)))
+            bn.iter(|| black_box(base).powf(black_box(exp_05)))
         });
         g.bench_function("D38_s19/powf_25", |bn| {
-            bn.iter(|| black_box(base).powf_strict(black_box(exp_25)))
+            bn.iter(|| black_box(base).powf(black_box(exp_25)))
         });
     }
 
@@ -63,16 +63,16 @@ fn bench(c: &mut Criterion) {
         let exp_25: D = D::try_from(5_i64).unwrap() / D::try_from(2_i64).unwrap();
 
         g.bench_function("D76_s35/powf_2", |bn| {
-            bn.iter(|| black_box(base).powf_strict(black_box(exp_2)))
+            bn.iter(|| black_box(base).powf(black_box(exp_2)))
         });
         g.bench_function("D76_s35/powf_3", |bn| {
-            bn.iter(|| black_box(base).powf_strict(black_box(exp_3)))
+            bn.iter(|| black_box(base).powf(black_box(exp_3)))
         });
         g.bench_function("D76_s35/powf_05", |bn| {
-            bn.iter(|| black_box(base).powf_strict(black_box(exp_05)))
+            bn.iter(|| black_box(base).powf(black_box(exp_05)))
         });
         g.bench_function("D76_s35/powf_25", |bn| {
-            bn.iter(|| black_box(base).powf_strict(black_box(exp_25)))
+            bn.iter(|| black_box(base).powf(black_box(exp_25)))
         });
     }
 
@@ -86,16 +86,16 @@ fn bench(c: &mut Criterion) {
         let exp_25: D = D::try_from(5_i64).unwrap() / D::try_from(2_i64).unwrap();
 
         g.bench_function("D307_s150/powf_2", |bn| {
-            bn.iter(|| black_box(base).powf_strict(black_box(exp_2)))
+            bn.iter(|| black_box(base).powf(black_box(exp_2)))
         });
         g.bench_function("D307_s150/powf_3", |bn| {
-            bn.iter(|| black_box(base).powf_strict(black_box(exp_3)))
+            bn.iter(|| black_box(base).powf(black_box(exp_3)))
         });
         g.bench_function("D307_s150/powf_05", |bn| {
-            bn.iter(|| black_box(base).powf_strict(black_box(exp_05)))
+            bn.iter(|| black_box(base).powf(black_box(exp_05)))
         });
         g.bench_function("D307_s150/powf_25", |bn| {
-            bn.iter(|| black_box(base).powf_strict(black_box(exp_25)))
+            bn.iter(|| black_box(base).powf(black_box(exp_25)))
         });
     }
 }

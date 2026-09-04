@@ -1,10 +1,10 @@
-//! Parity / no-panic coverage for the deep-scale Tang-lookup `ln_strict`
+//! Parity / no-panic coverage for the deep-scale Tang-lookup `ln`
 //! bands, one parametrised arm per `(width, band)`.
 //!
-//! Only `ln_strict` is wired through the deep-band lookup at these widths;
+//! Only `ln` is wired through the deep-band lookup at these widths;
 //! exp / hyperbolics still route the canonical `wide_kernel`. The composed
 //! `exp(ln(x)) ≈ x` identity therefore mixes both paths and is a strong
-//! end-to-end correctness probe: lookup error feeds `exp_strict`'s reverse
+//! end-to-end correctness probe: lookup error feeds `exp`'s reverse
 //! mapping and must come back within a few storage LSBs.
 //!
 //! Band coverage policy (mirrors the golden grid):
@@ -18,7 +18,7 @@
 //!   D924 s455 / s465 (cell D924<462> is on-grid),
 //!   D1232 s610 / s620 (cell D1232<616> is on-grid).
 //!
-//! NOTE: `ln_strict_agm` is documented to drop to `~p/2` bits beyond
+//! NOTE: `ln_agm` is documented to drop to `~p/2` bits beyond
 //! `w ~ 30`, so at these working widths AGM is the *lower*-accuracy kernel —
 //! not a useful cross-witness. The identity round trip is the correct probe.
 
@@ -54,7 +54,7 @@ macro_rules! ln_band_round_trips {
         #[test]
         fn exp_ln_round_trip_half() {
             let x = from_int(3) / from_int(2); // 1.5
-            let round = x.ln_strict().exp_strict();
+            let round = x.ln().exp();
             agree_within_n_storage_lsb(
                 concat!(
                     "exp(ln(1.5)) ",
@@ -72,7 +72,7 @@ macro_rules! ln_band_round_trips {
         #[test]
         fn exp_ln_round_trip_two() {
             let x = from_int(2);
-            let round = x.ln_strict().exp_strict();
+            let round = x.ln().exp();
             agree_within_n_storage_lsb(
                 concat!("exp(ln(2)) ", stringify!($D), "<", stringify!($scale), ">"),
                 round,
@@ -84,7 +84,7 @@ macro_rules! ln_band_round_trips {
         #[test]
         fn exp_ln_round_trip_three() {
             let x = from_int(3);
-            let round = x.ln_strict().exp_strict();
+            let round = x.ln().exp();
             agree_within_n_storage_lsb(
                 concat!("exp(ln(3)) ", stringify!($D), "<", stringify!($scale), ">"),
                 round,
@@ -97,7 +97,7 @@ macro_rules! ln_band_round_trips {
         fn ln_lookup_at_one_is_zero() {
             // ln(1) = 0 must hold exactly through the Stage-1 short-circuit.
             let one = from_int(1);
-            let z = one.ln_strict();
+            let z = one.ln();
             assert_eq!(
                 z,
                 D::ZERO,
@@ -122,7 +122,7 @@ macro_rules! ln_band_edge_no_panic {
         fn $name() {
             let x = decimal_scaled::$D::<$scale>::try_from(3).unwrap()
                 / decimal_scaled::$D::<$scale>::try_from(2).unwrap();
-            let y = x.ln_strict();
+            let y = x.ln();
             assert!(y < decimal_scaled::$D::<$scale>::try_from(1).unwrap());
             assert!(y > decimal_scaled::$D::<$scale>::ZERO);
         }

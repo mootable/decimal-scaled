@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Tier-generic Tang-style table-driven `exp_strict` kernel.
+//! Tier-generic Tang-style table-driven `exp` kernel.
 //!
 //! Tang 1989, "Table-driven implementation of the exponential function
 //! in IEEE floating-point arithmetic" (ACM TOMS 16(4)):
@@ -24,7 +24,7 @@
 //! "Layering direction"): it computes only through the
 //! [`WideTrigCore`] trait surface and `BigInt` arithmetic on the work
 //! integer; it never calls a method on a decimal type. `policy::exp`
-//! calls [`exp_tang`] *down*; the type's `exp_strict` method delegates
+//! calls [`exp_tang`] *down*; the type's `exp` method delegates
 //! *down* through the policy. The trig hyperbolic kernels reuse
 //! [`tang_exp_fixed`] directly for their shared `(e^v, e^-v)` pair.
 //!
@@ -413,8 +413,8 @@ mod tests {
             let d76_value: D76<75> = arg_text.parse().unwrap();
             let d307_value: D307<75> = arg_text.parse().unwrap();
             for mode in MODES {
-                let got = d76_value.exp_strict_with(mode).to_string();
-                let want = d307_value.exp_strict_with(mode).to_string();
+                let got = d76_value.exp_with(mode).to_string();
+                let want = d307_value.exp_with(mode).to_string();
                 assert_eq!(
                     got, want,
                     "exp({arg_text}) D76<75> vs D307<75> oracle, mode {mode:?}"
@@ -487,13 +487,13 @@ mod powf_deep_underflow_regression {
                 let one_ulp: D57<$s> = one_ulp_str($s).parse().unwrap();
                 for mode in DOWN_MODES {
                     assert_eq!(
-                        base.powf_strict_with(exp, mode), zero,
+                        base.powf_with(exp, mode), zero,
                         "D57<{}> powf(2,-200) {mode:?} must round the sub-resolution positive to 0", $s
                     );
                 }
                 for m in UP_MODES {
                     assert_eq!(
-                        base.powf_strict_with(exp, m), one_ulp,
+                        base.powf_with(exp, m), one_ulp,
                         "D57<{}> powf(2,-200) {m:?} must round the sub-resolution positive up to 1 ULP", $s
                     );
                 }
@@ -515,13 +515,13 @@ mod powf_deep_underflow_regression {
                 let one_ulp: D76<$s> = one_ulp_str($s).parse().unwrap();
                 for mode in DOWN_MODES {
                     assert_eq!(
-                        base.powf_strict_with(exp, mode), zero,
+                        base.powf_with(exp, mode), zero,
                         "D76<{}> powf(2,-200) {mode:?} must round the sub-resolution positive to 0", $s
                     );
                 }
                 for m in UP_MODES {
                     assert_eq!(
-                        base.powf_strict_with(exp, m), one_ulp,
+                        base.powf_with(exp, m), one_ulp,
                         "D76<{}> powf(2,-200) {m:?} must round the sub-resolution positive up to 1 ULP", $s
                     );
                 }

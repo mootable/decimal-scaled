@@ -60,7 +60,7 @@ where
     (exp_x, exp_neg_x)
 }
 
-/// `sinh_strict` for a wide tier — generic over the tier `C`, the band's
+/// `sinh` for a wide tier — generic over the tier `C`, the band's
 /// narrow guard `GUARD`, and the Tang `exp` config `(M, IE)`. Two-core:
 /// runs on the wide `C::Wagm`.
 #[inline]
@@ -97,7 +97,7 @@ where
     }
 }
 
-/// `cosh_strict` for a wide tier — see [`sinh_exp_identity_with_tang`].
+/// `cosh` for a wide tier — see [`sinh_exp_identity_with_tang`].
 /// Two-core: runs on the wide `C::Wagm`.
 #[inline]
 #[must_use]
@@ -139,7 +139,7 @@ where
     )
 }
 
-/// `tanh_strict` for a wide tier — see [`sinh_exp_identity_with_tang`].
+/// `tanh` for a wide tier — see [`sinh_exp_identity_with_tang`].
 /// Two-core: runs on the wide `C::Wagm`.
 ///
 /// Carries the tiny-argument analytic band: for `tanh(x) = x − x³/3 + …`

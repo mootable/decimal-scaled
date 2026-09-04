@@ -55,7 +55,7 @@ fn bench(c: &mut Criterion) {
         let f = fastn(s);
 
         g.bench_function(format!("{}/decimal-scaled", label), |bn| {
-            bn.iter(|| black_box(our).atan_strict());
+            bn.iter(|| black_box(our).atan());
         });
         g.bench_function(format!("{}/fastnum", label), |bn| {
             bn.iter(|| black_box(f).atan());

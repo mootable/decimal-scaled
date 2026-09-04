@@ -43,7 +43,7 @@ assert_eq!(total, d38!(59.97, scale 12));
 
 // Transcendentals are correctly rounded to <= 0.5 ULP, integer-only,
 // and bit-identical across platforms.
-let sqrt2 = d38!(2, scale 12).sqrt_strict();
+let sqrt2 = d38!(2, scale 12).sqrt();
 ```
 
 ## Why decimal-scaled

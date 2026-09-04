@@ -75,28 +75,28 @@ macro_rules! tier_block {
         g.warm_up_time(Duration::from_millis(150));
 
         // exp: generic 1.5; near-boundary tiny x (result hugs 1).
-        bench_fn!(g, $T, "exp", "generic", "1.5", exp_strict_with);
-        bench_fn!(g, $T, "exp", "boundary", "0.0000001", exp_strict_with);
+        bench_fn!(g, $T, "exp", "generic", "1.5", exp_with);
+        bench_fn!(g, $T, "exp", "boundary", "0.0000001", exp_with);
 
         // ln: generic 2; near-boundary x just above 1 (result hugs 0).
-        bench_fn!(g, $T, "ln", "generic", "2", ln_strict_with);
-        bench_fn!(g, $T, "ln", "boundary", "1.0000001", ln_strict_with);
+        bench_fn!(g, $T, "ln", "generic", "2", ln_with);
+        bench_fn!(g, $T, "ln", "boundary", "1.0000001", ln_with);
 
         // sin: generic 0.7; near-boundary tiny x (result hugs x ~ 0).
-        bench_fn!(g, $T, "sin", "generic", "0.7", sin_strict_with);
-        bench_fn!(g, $T, "sin", "boundary", "0.0000001", sin_strict_with);
+        bench_fn!(g, $T, "sin", "generic", "0.7", sin_with);
+        bench_fn!(g, $T, "sin", "boundary", "0.0000001", sin_with);
 
         // cos: generic 0.7; near-boundary tiny x (result hugs 1).
-        bench_fn!(g, $T, "cos", "generic", "0.7", cos_strict_with);
-        bench_fn!(g, $T, "cos", "boundary", "0.0000001", cos_strict_with);
+        bench_fn!(g, $T, "cos", "generic", "0.7", cos_with);
+        bench_fn!(g, $T, "cos", "boundary", "0.0000001", cos_with);
 
         // sqrt: generic 2; near-boundary perfect square 4 (exact tie).
-        bench_fn!(g, $T, "sqrt", "generic", "2", sqrt_strict_with);
-        bench_fn!(g, $T, "sqrt", "boundary", "4", sqrt_strict_with);
+        bench_fn!(g, $T, "sqrt", "generic", "2", sqrt_with);
+        bench_fn!(g, $T, "sqrt", "boundary", "4", sqrt_with);
 
         // cbrt: generic 2; near-boundary perfect cube 8 (exact tie).
-        bench_fn!(g, $T, "cbrt", "generic", "2", cbrt_strict_with);
-        bench_fn!(g, $T, "cbrt", "boundary", "8", cbrt_strict_with);
+        bench_fn!(g, $T, "cbrt", "generic", "2", cbrt_with);
+        bench_fn!(g, $T, "cbrt", "boundary", "8", cbrt_with);
 
         g.finish();
     }};
@@ -124,9 +124,9 @@ fn bench_d1232(c: &mut Criterion) {
     g.measurement_time(Duration::from_millis(400));
     g.warm_up_time(Duration::from_millis(150));
 
-    bench_fn!(g, D1232<600>, "exp", "generic", "1.5", exp_strict_with);
-    bench_fn!(g, D1232<600>, "ln", "generic", "2", ln_strict_with);
-    bench_fn!(g, D1232<600>, "sin", "generic", "0.7", sin_strict_with);
+    bench_fn!(g, D1232<600>, "exp", "generic", "1.5", exp_with);
+    bench_fn!(g, D1232<600>, "ln", "generic", "2", ln_with);
+    bench_fn!(g, D1232<600>, "sin", "generic", "0.7", sin_with);
 
     g.finish();
 }

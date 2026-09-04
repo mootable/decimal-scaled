@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Tier-generic Tang-style table-driven `ln_strict` kernel.
+//! Tier-generic Tang-style table-driven `ln` kernel.
 //!
 //! Tang 1990, "Table-driven implementation of the logarithm function in
 //! IEEE floating-point arithmetic" (ACM TOMS 16(4) 378-400).
@@ -34,9 +34,9 @@
 //! per-tier guard-digit kernels) and `BigInt` arithmetic on the work
 //! integer. It never calls a method on a decimal type. The thirteen
 //! `policy::ln` Tang arms call *down* to [`ln_tang`]; the type's
-//! `ln_strict` method delegates *down* through the policy.
+//! `ln` method delegates *down* through the policy.
 //!
-//! This collapses the thirteen per-tier Tang `ln_strict`
+//! This collapses the thirteen per-tier Tang `ln`
 //! kernels — structurally identical bar the `core` module
 //! (`wide_trig_d*`), the storage `Int<N>`, the narrow guard
 //! (`GUARD = 8` or `10`) and the artanh-series iteration cap — into one
@@ -128,7 +128,7 @@ pub(crate) const EXTERNAL_EXTRA_DIGITS: u32 = 12;
 /// This is the working-scale Tang `ln` shared surface — the analogue of
 /// [`crate::algos::exp::exp_tang::tang_exp_fixed`]. The narrow-ln-strict
 /// kernel ([`ln_tang`]) wraps it with the Ziv-escalated storage narrowing;
-/// `powf_strict` composes it with `tang_exp_fixed` directly at working
+/// `powf` composes it with `tang_exp_fixed` directly at working
 /// scale (skipping a double round-to-storage).
 ///
 /// ## Accuracy — the artanh truncation bias
@@ -625,7 +625,7 @@ mod tests {
                 for ulp_offset in 1i128..=$depth {
                     let raw = one - <St as BigInt>::from_i128(ulp_offset);
                     let ln_with_mode =
-                        |mode| crate::D::<St, S>(raw).ln_strict_with(mode).to_bits();
+                        |mode| crate::D::<St, S>(raw).ln_with(mode).to_bits();
                     let floor = ln_with_mode(RoundingMode::Floor);
                     let ceiling = ln_with_mode(RoundingMode::Ceiling);
                     let trunc = ln_with_mode(RoundingMode::Trunc);

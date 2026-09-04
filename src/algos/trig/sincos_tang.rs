@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Tier-generic Tang-style table-driven `sin_strict` / `cos_strict`
+//! Tier-generic Tang-style table-driven `sin` / `cos`
 //! kernel (the deep-`SCALE` sincos band).
 //!
 //! Both sin and cos share one reduction; the requested component is
@@ -55,11 +55,11 @@ pub(crate) enum Which {
     Cos,
 }
 
-/// Shared Tang `sin_strict` / `cos_strict` kernel for a wide tier —
+/// Shared Tang `sin` / `cos` kernel for a wide tier —
 /// generic over `C`, the `SCALE`, and the table size `M`.
 #[inline]
 #[must_use]
-fn sin_cos_strict<C: WideTrigCore, const SCALE: u32, const M: u32>(
+fn sin_cos<C: WideTrigCore, const SCALE: u32, const M: u32>(
     raw: C::Storage,
     mode: RoundingMode,
     which: Which,
@@ -111,7 +111,7 @@ where
     // Table lookup: stored entries are for |j_signed|. Apply
     // sin(-c) = -sin(c), cos(-c) = cos(c) on the way out.
     let j_abs = j_signed.unsigned_abs() as u32;
-    debug_assert!(j_abs <= M, "sin_cos_strict tang: table index {j_abs} > M={M}");
+    debug_assert!(j_abs <= M, "sin_cos tang: table index {j_abs} > M={M}");
     let j_idx = if j_abs > M { M as usize } else { j_abs as usize };
     let (sin_cj_abs, cos_cj) = C::sincos_table_entry::<SCALE>(working_scale, j_idx, M);
     let sin_cj = if j_signed < 0 { -sin_cj_abs } else { sin_cj_abs };
@@ -201,7 +201,7 @@ where
     }
 }
 
-/// Tang `sin_strict` for a wide tier — generic over `C`, `SCALE`, `M`.
+/// Tang `sin` for a wide tier — generic over `C`, `SCALE`, `M`.
 #[inline]
 #[must_use]
 pub(crate) fn sin_tang_with_taylor<C: WideTrigCore, const SCALE: u32, const M: u32>(
@@ -212,10 +212,10 @@ where
     <C::W as crate::int::types::traits::BigInt>::Scratch:
         crate::int::types::compute_limbs::ComputeLimbs,
 {
-    sin_cos_strict::<C, SCALE, M>(raw, mode, Which::Sin)
+    sin_cos::<C, SCALE, M>(raw, mode, Which::Sin)
 }
 
-/// Tang `cos_strict` for a wide tier — generic over `C`, `SCALE`, `M`.
+/// Tang `cos` for a wide tier — generic over `C`, `SCALE`, `M`.
 #[inline]
 #[must_use]
 pub(crate) fn cos_tang_with_taylor<C: WideTrigCore, const SCALE: u32, const M: u32>(
@@ -226,5 +226,5 @@ where
     <C::W as crate::int::types::traits::BigInt>::Scratch:
         crate::int::types::compute_limbs::ComputeLimbs,
 {
-    sin_cos_strict::<C, SCALE, M>(raw, mode, Which::Cos)
+    sin_cos::<C, SCALE, M>(raw, mode, Which::Cos)
 }

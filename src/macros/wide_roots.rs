@@ -70,12 +70,12 @@ macro_rules! decl_wide_roots {
             /// 0.5 ULP).
             #[inline]
             #[must_use]
-            pub fn sqrt_strict(self) -> Self {
-                self.sqrt_strict_with($crate::support::rounding::DEFAULT_ROUNDING_MODE)
+            pub fn sqrt(self) -> Self {
+                self.sqrt_with($crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Square root under the supplied rounding mode. See the
-            /// `D38::sqrt_strict_with` doc for the per-mode contract:
+            /// `D38::sqrt_with` doc for the per-mode contract:
             /// ties are impossible for an integer radicand, so the
             /// three half-modes coincide.
             ///
@@ -84,7 +84,7 @@ macro_rules! decl_wide_roots {
             /// `(width, SCALE)` cell in `crate::policy::sqrt`.
             #[inline]
             #[must_use]
-            pub fn sqrt_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn sqrt_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 Self($crate::policy::sqrt::dispatch::<_, SCALE>(self.0, mode))
             }
 
@@ -99,8 +99,8 @@ macro_rules! decl_wide_roots {
             /// ULP).
             #[inline]
             #[must_use]
-            pub fn cbrt_strict(self) -> Self {
-                self.cbrt_strict_with($crate::support::rounding::DEFAULT_ROUNDING_MODE)
+            pub fn cbrt(self) -> Self {
+                self.cbrt_with($crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Cube root under the supplied rounding mode. Sign is
@@ -110,31 +110,13 @@ macro_rules! decl_wide_roots {
             /// Body delegates to `policy::cbrt::CbrtPolicy::cbrt_impl`.
             #[inline]
             #[must_use]
-            pub fn cbrt_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn cbrt_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 Self($crate::policy::cbrt::dispatch::<_, SCALE>(self.0, mode))
-            }
-
-            /// Square root. With `strict` enabled this is the
-            /// integer-only, correctly-rounded [`Self::sqrt_strict`].
-            #[cfg(feature = "strict")]
-            #[inline]
-            #[must_use]
-            pub fn sqrt(self) -> Self {
-                self.sqrt_strict()
-            }
-
-            /// Cube root. With `strict` enabled this is the
-            /// integer-only, correctly-rounded [`Self::cbrt_strict`].
-            #[cfg(feature = "strict")]
-            #[inline]
-            #[must_use]
-            pub fn cbrt(self) -> Self {
-                self.cbrt_strict()
             }
 
             /// `sqrt(self² + other²)` without intermediate overflow,
             /// computed integer-only via the correctly-rounded
-            /// [`Self::sqrt_strict`]. Uses the scale-trick algorithm:
+            /// [`Self::sqrt`]. Uses the scale-trick algorithm:
             ///
             /// ```text
             /// hypot(a, b) = max(|a|,|b|) · sqrt(1 + (min(|a|,|b|)/max(|a|,|b|))²)
@@ -148,8 +130,8 @@ macro_rules! decl_wide_roots {
             /// `hypot(0, 0) = 0` (bit-exact); `hypot(0, x) = |x|`.
             #[inline]
             #[must_use]
-            pub fn hypot_strict(self, other: Self) -> Self {
-                self.hypot_strict_with(other, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+            pub fn hypot(self, other: Self) -> Self {
+                self.hypot_with(other, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Hypot under the supplied rounding mode. The mode applies
@@ -161,7 +143,7 @@ macro_rules! decl_wide_roots {
             /// lives in the algorithm, not in this method.
             #[inline]
             #[must_use]
-            pub fn hypot_strict_with(
+            pub fn hypot_with(
                 self,
                 other: Self,
                 mode: $crate::support::rounding::RoundingMode,
@@ -191,22 +173,22 @@ mod tests {
     #[test]
     fn sqrt_perfect_squares_are_exact() {
         #[cfg(feature = "d76")]
-        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::try_from(4_i128).unwrap().sqrt_strict(), crate::D::<crate::int::types::Int<4>, 6>::try_from(2_i128).unwrap());
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::try_from(4_i128).unwrap().sqrt(), crate::D::<crate::int::types::Int<4>, 6>::try_from(2_i128).unwrap());
         #[cfg(feature = "d76")]
-        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::try_from(9_i128).unwrap().sqrt_strict(), crate::D::<crate::int::types::Int<4>, 6>::try_from(3_i128).unwrap());
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::try_from(9_i128).unwrap().sqrt(), crate::D::<crate::int::types::Int<4>, 6>::try_from(3_i128).unwrap());
         #[cfg(feature = "d76")]
         assert_eq!(
-            crate::D::<crate::int::types::Int<4>, 6>::try_from(144_i128).unwrap().sqrt_strict(),
+            crate::D::<crate::int::types::Int<4>, 6>::try_from(144_i128).unwrap().sqrt(),
             crate::D::<crate::int::types::Int<4>, 6>::try_from(12_i128).unwrap()
         );
         #[cfg(feature = "d153")]
         assert_eq!(
-            crate::D::<crate::int::types::Int<8>, 6>::try_from(25_i128).unwrap().sqrt_strict(),
+            crate::D::<crate::int::types::Int<8>, 6>::try_from(25_i128).unwrap().sqrt(),
             crate::D::<crate::int::types::Int<8>, 6>::try_from(5_i128).unwrap()
         );
         #[cfg(feature = "d307")]
         assert_eq!(
-            crate::D::<crate::int::types::Int<16>, 6>::try_from(81_i128).unwrap().sqrt_strict(),
+            crate::D::<crate::int::types::Int<16>, 6>::try_from(81_i128).unwrap().sqrt(),
             crate::D::<crate::int::types::Int<16>, 6>::try_from(9_i128).unwrap()
         );
     }
@@ -215,29 +197,29 @@ mod tests {
     #[test]
     fn sqrt_zero_and_negative_saturate() {
         #[cfg(feature = "d76")]
-        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.sqrt_strict(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.sqrt(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
         #[cfg(feature = "d76")]
-        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::try_from(-4_i128).unwrap().sqrt_strict(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::try_from(-4_i128).unwrap().sqrt(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
         #[cfg(feature = "d307")]
-        assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::try_from(-1_i128).unwrap().sqrt_strict(), crate::D::<crate::int::types::Int<16>, 6>::ZERO);
+        assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::try_from(-1_i128).unwrap().sqrt(), crate::D::<crate::int::types::Int<16>, 6>::ZERO);
     }
 
     #[test]
     fn cbrt_perfect_cubes_are_exact() {
         #[cfg(feature = "d76")]
-        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::try_from(8_i128).unwrap().cbrt_strict(), crate::D::<crate::int::types::Int<4>, 6>::try_from(2_i128).unwrap());
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::try_from(8_i128).unwrap().cbrt(), crate::D::<crate::int::types::Int<4>, 6>::try_from(2_i128).unwrap());
         #[cfg(feature = "d76")]
-        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::try_from(27_i128).unwrap().cbrt_strict(), crate::D::<crate::int::types::Int<4>, 6>::try_from(3_i128).unwrap());
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::try_from(27_i128).unwrap().cbrt(), crate::D::<crate::int::types::Int<4>, 6>::try_from(3_i128).unwrap());
         #[cfg(feature = "d76")]
-        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::try_from(-8_i128).unwrap().cbrt_strict(), crate::D::<crate::int::types::Int<4>, 6>::try_from(-2_i128).unwrap());
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::try_from(-8_i128).unwrap().cbrt(), crate::D::<crate::int::types::Int<4>, 6>::try_from(-2_i128).unwrap());
         #[cfg(feature = "d153")]
         assert_eq!(
-            crate::D::<crate::int::types::Int<8>, 6>::try_from(125_i128).unwrap().cbrt_strict(),
+            crate::D::<crate::int::types::Int<8>, 6>::try_from(125_i128).unwrap().cbrt(),
             crate::D::<crate::int::types::Int<8>, 6>::try_from(5_i128).unwrap()
         );
         #[cfg(feature = "d307")]
         assert_eq!(
-            crate::D::<crate::int::types::Int<16>, 6>::try_from(-64_i128).unwrap().cbrt_strict(),
+            crate::D::<crate::int::types::Int<16>, 6>::try_from(-64_i128).unwrap().cbrt(),
             crate::D::<crate::int::types::Int<16>, 6>::try_from(-4_i128).unwrap()
         );
     }
@@ -245,11 +227,11 @@ mod tests {
     #[test]
     fn cbrt_zero_is_zero() {
         #[cfg(feature = "d76")]
-        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.cbrt_strict(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.cbrt(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
         #[cfg(feature = "d153")]
-        assert_eq!(crate::D::<crate::int::types::Int<8>, 6>::ZERO.cbrt_strict(), crate::D::<crate::int::types::Int<8>, 6>::ZERO);
+        assert_eq!(crate::D::<crate::int::types::Int<8>, 6>::ZERO.cbrt(), crate::D::<crate::int::types::Int<8>, 6>::ZERO);
         #[cfg(feature = "d307")]
-        assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::ZERO.cbrt_strict(), crate::D::<crate::int::types::Int<16>, 6>::ZERO);
+        assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::ZERO.cbrt(), crate::D::<crate::int::types::Int<16>, 6>::ZERO);
     }
 
     /// The wide-tier roots are correctly rounded, so for any scale the
@@ -261,10 +243,10 @@ mod tests {
         for raw in [2i64, 3, 5, 7, 10, 123, 1_000, 999_983] {
             let narrow = crate::D::<crate::int::types::Int<2>, 6>::try_from(raw).unwrap();
             let wide: crate::D<crate::int::types::Int<4>, 6> = narrow.into();
-            let narrow_sqrt: crate::D<crate::int::types::Int<4>, 6> = narrow.sqrt_strict().into();
-            assert_eq!(wide.sqrt_strict(), narrow_sqrt, "sqrt mismatch for {raw}");
-            let narrow_cbrt: crate::D<crate::int::types::Int<4>, 6> = narrow.cbrt_strict().into();
-            assert_eq!(wide.cbrt_strict(), narrow_cbrt, "cbrt mismatch for {raw}");
+            let narrow_sqrt: crate::D<crate::int::types::Int<4>, 6> = narrow.sqrt().into();
+            assert_eq!(wide.sqrt(), narrow_sqrt, "sqrt mismatch for {raw}");
+            let narrow_cbrt: crate::D<crate::int::types::Int<4>, 6> = narrow.cbrt().into();
+            assert_eq!(wide.cbrt(), narrow_cbrt, "cbrt mismatch for {raw}");
         }
     }
 
@@ -275,18 +257,18 @@ mod tests {
     fn sqrt_cbrt_at_wide_only_scale() {
         // D76<50>: 4.0 -> 2.0, 8.0 -> 2.0.
         #[cfg(feature = "d76")]
-        assert_eq!(crate::D::<crate::int::types::Int<4>, 50>::try_from(4_i128).unwrap().sqrt_strict(), crate::D::<crate::int::types::Int<4>, 50>::try_from(2_i128).unwrap());
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 50>::try_from(4_i128).unwrap().sqrt(), crate::D::<crate::int::types::Int<4>, 50>::try_from(2_i128).unwrap());
         #[cfg(feature = "d76")]
-        assert_eq!(crate::D::<crate::int::types::Int<4>, 50>::try_from(8_i128).unwrap().cbrt_strict(), crate::D::<crate::int::types::Int<4>, 50>::try_from(2_i128).unwrap());
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 50>::try_from(8_i128).unwrap().cbrt(), crate::D::<crate::int::types::Int<4>, 50>::try_from(2_i128).unwrap());
         // D307<150>: well past any narrower tier.
         #[cfg(feature = "d307")]
         assert_eq!(
-            crate::D::<crate::int::types::Int<16>, 150>::try_from(9_i128).unwrap().sqrt_strict(),
+            crate::D::<crate::int::types::Int<16>, 150>::try_from(9_i128).unwrap().sqrt(),
             crate::D::<crate::int::types::Int<16>, 150>::try_from(3_i128).unwrap()
         );
         #[cfg(feature = "d307")]
         assert_eq!(
-            crate::D::<crate::int::types::Int<16>, 150>::try_from(27_i128).unwrap().cbrt_strict(),
+            crate::D::<crate::int::types::Int<16>, 150>::try_from(27_i128).unwrap().cbrt(),
             crate::D::<crate::int::types::Int<16>, 150>::try_from(3_i128).unwrap()
         );
     }

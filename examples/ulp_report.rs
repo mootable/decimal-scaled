@@ -67,8 +67,8 @@ fn main() {
     );
 
     // ── ln(2) ──────────────────────────────────────────────
-    let base_ln = ref19_to_bits(Ref19::try_from(2_i64).unwrap().ln_strict());
-    let ds_ln = D38::<19>::try_from(2_i64).unwrap().ln_strict().to_bits();
+    let base_ln = ref19_to_bits(Ref19::try_from(2_i64).unwrap().ln());
+    let ds_ln = D38::<19>::try_from(2_i64).unwrap().ln().to_bits();
     let fn_ln = parse_decimal_string_to_d19_bits(&format!("{}", dec128!(2).ln()));
     let rd_ln = parse_decimal_string_to_d19_bits(&format!(
         "{:.19}",
@@ -103,8 +103,8 @@ fn main() {
     );
 
     // ── exp(1) — i.e. e ─────────────────────────────────────
-    let base_exp = ref19_to_bits(Ref19::try_from(1_i64).unwrap().exp_strict());
-    let ds_exp = D38::<19>::try_from(1_i64).unwrap().exp_strict().to_bits();
+    let base_exp = ref19_to_bits(Ref19::try_from(1_i64).unwrap().exp());
+    let ds_exp = D38::<19>::try_from(1_i64).unwrap().exp().to_bits();
     let fn_exp = parse_decimal_string_to_d19_bits(&format!("{}", dec128!(1).exp()));
     let rd_exp = parse_decimal_string_to_d19_bits(&format!(
         "{:.19}",
@@ -137,8 +137,8 @@ fn main() {
     );
 
     // ── sin(1) ─────────────────────────────────────────────
-    let base_sin = ref19_to_bits(Ref19::try_from(1_i64).unwrap().sin_strict());
-    let ds_sin = D38::<19>::try_from(1_i64).unwrap().sin_strict().to_bits();
+    let base_sin = ref19_to_bits(Ref19::try_from(1_i64).unwrap().sin());
+    let ds_sin = D38::<19>::try_from(1_i64).unwrap().sin().to_bits();
     let fn_sin = parse_decimal_string_to_d19_bits(&format!("{}", dec128!(1).sin()));
     let rd_sin = parse_decimal_string_to_d19_bits(&format!(
         "{:.19}",
@@ -158,8 +158,8 @@ fn main() {
     );
 
     // ── sqrt(2) ────────────────────────────────────────────
-    let base_sqrt = ref19_to_bits(Ref19::try_from(2_i64).unwrap().sqrt_strict());
-    let ds_sqrt = D38::<19>::try_from(2_i64).unwrap().sqrt_strict().to_bits();
+    let base_sqrt = ref19_to_bits(Ref19::try_from(2_i64).unwrap().sqrt());
+    let ds_sqrt = D38::<19>::try_from(2_i64).unwrap().sqrt().to_bits();
     let fn_sqrt = parse_decimal_string_to_d19_bits(&format!("{}", dec128!(2).sqrt()));
     let rd_sqrt = parse_decimal_string_to_d19_bits(&format!(
         "{:.19}",

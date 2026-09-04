@@ -3,7 +3,7 @@
 
 //! `log1p` policy — the per-(N, SCALE) algorithm matcher.
 //!
-//! `D<Int<N>, SCALE>::log1p_strict_with(mode)` delegates to [`dispatch`].
+//! `D<Int<N>, SCALE>::log1p_with(mode)` delegates to [`dispatch`].
 //! Canonical matcher-only shape (see `docs/ARCHITECTURE.md`), mirrored from
 //! `policy::ln`:
 //!
@@ -148,7 +148,7 @@ fn narrow_strict<const N: usize, const SCALE: u32>(
             mode,
         ),
     };
-    super::narrow_checked::<N>(out, "log1p_strict", SCALE)
+    super::narrow_checked::<N>(out, "log1p", SCALE)
 }
 
 /// Wide strict arm at the tier `C` — the tier supplies the work integer

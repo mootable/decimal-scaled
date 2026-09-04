@@ -146,7 +146,7 @@ where
             <C::Storage as BigInt>::BITS,
             SCALE,
         ) {
-            crate::support::diagnostics::overflow_panic_with_scale("powf_strict", SCALE);
+            crate::support::diagnostics::overflow_panic_with_scale("powf", SCALE);
         }
         // `probe_exp_arg` is the exp argument at the base working scale;
         // narrow it to scale `SCALE` to feed the `e^|·|` digit sizer

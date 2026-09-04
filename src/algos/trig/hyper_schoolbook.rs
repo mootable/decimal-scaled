@@ -24,7 +24,7 @@ use crate::support::rounding::RoundingMode;
 // hoisted) ────────────────────────────────────────────────────────────
 //
 // These kernels are the ONE realisation behind BOTH public entries
-// (`sinh_strict` via the policy dispatch AND `sinh_strict_with`, which
+// (`sinh` via the policy dispatch AND `sinh_with`, which
 // delegates to the same dispatch — the rounding-mode-sibling
 // convention). They carry the full shell-side surface: the exact-point pins,
 // the analytic
@@ -1374,7 +1374,7 @@ mod tests {
             for &mode in &MODES {
                 assert_eq!(
                     sinh_schoolbook_narrow::<S38>(d38(raw).0, mode),
-                    d38(raw).sinh_strict_with(mode).0,
+                    d38(raw).sinh_with(mode).0,
                     "sinh schoolbook != routed at raw={raw} mode={mode:?}"
                 );
             }
@@ -1387,7 +1387,7 @@ mod tests {
             for &mode in &MODES {
                 assert_eq!(
                     cosh_schoolbook_narrow::<S38>(d38(raw).0, mode),
-                    d38(raw).cosh_strict_with(mode).0,
+                    d38(raw).cosh_with(mode).0,
                     "cosh schoolbook != routed at raw={raw} mode={mode:?}"
                 );
             }
@@ -1400,7 +1400,7 @@ mod tests {
             for &mode in &MODES {
                 assert_eq!(
                     tanh_schoolbook_narrow::<S38>(d38(raw).0, mode),
-                    d38(raw).tanh_strict_with(mode).0,
+                    d38(raw).tanh_with(mode).0,
                     "tanh schoolbook != routed at raw={raw} mode={mode:?}"
                 );
             }
@@ -1424,7 +1424,7 @@ mod tests {
             for &mode in &MODES {
                 assert_eq!(
                     tanh_schoolbook_narrow::<S38>(d38(raw).0, mode),
-                    d38(raw).tanh_strict_with(mode).0,
+                    d38(raw).tanh_with(mode).0,
                     "tanh saturation schoolbook != routed at raw={raw} mode={mode:?}"
                 );
             }
@@ -1449,7 +1449,7 @@ mod tests {
                 for &mode in &MODES {
                     assert_eq!(
                         tanh_schoolbook_narrow::<S>(Int::<2>::from_i128(raw), mode),
-                        D::<Int<2>, S>(Int::<2>::from_i128(raw)).tanh_strict_with(mode).0,
+                        D::<Int<2>, S>(Int::<2>::from_i128(raw)).tanh_with(mode).0,
                         "tanh gap-band schoolbook != routed at raw={raw} mode={mode:?}"
                     );
                 }
@@ -1474,7 +1474,7 @@ mod tests {
             for &mode in &MODES {
                 assert_eq!(
                     asinh_schoolbook_narrow::<S38>(d38(raw).0, mode),
-                    d38(raw).asinh_strict_with(mode).0,
+                    d38(raw).asinh_with(mode).0,
                     "asinh schoolbook != routed at raw={raw} mode={mode:?}"
                 );
             }
@@ -1494,7 +1494,7 @@ mod tests {
             for &mode in &MODES {
                 assert_eq!(
                     acosh_schoolbook_narrow::<S38>(d38(raw).0, mode),
-                    d38(raw).acosh_strict_with(mode).0,
+                    d38(raw).acosh_with(mode).0,
                     "acosh schoolbook != routed at raw={raw} mode={mode:?}"
                 );
             }
@@ -1516,7 +1516,7 @@ mod tests {
             for &mode in &MODES {
                 assert_eq!(
                     atanh_schoolbook_narrow::<S38>(d38(raw).0, mode),
-                    d38(raw).atanh_strict_with(mode).0,
+                    d38(raw).atanh_with(mode).0,
                     "atanh schoolbook != routed at raw={raw} mode={mode:?}"
                 );
             }
@@ -1550,7 +1550,7 @@ mod tests {
                 for &mode in &MODES {
                     assert_eq!(
                         atanh_schoolbook_narrow::<S>(Int::<2>::from_i128(raw), mode),
-                        D::<Int<2>, S>(Int::<2>::from_i128(raw)).atanh_strict_with(mode).0,
+                        D::<Int<2>, S>(Int::<2>::from_i128(raw)).atanh_with(mode).0,
                         "atanh near-1 schoolbook != routed at raw={raw} mode={mode:?}"
                     );
                 }
@@ -1587,8 +1587,8 @@ mod tests {
                 let positive_raw = Int::<6>::from_i128(x);
                 let negative_raw = Int::<6>::from_i128(-x);
                 for &mode in &MODES {
-                    let cosh_value = D::<Int<6>, 0>(positive_raw).cosh_strict_with(mode).0;
-                    let sinh_value = D::<Int<6>, 0>(positive_raw).sinh_strict_with(mode).0;
+                    let cosh_value = D::<Int<6>, 0>(positive_raw).cosh_with(mode).0;
+                    let sinh_value = D::<Int<6>, 0>(positive_raw).sinh_with(mode).0;
                     assert!(cosh_value > floor_mag, "cosh({x}) too small, mode {mode:?}");
                     assert!(sinh_value > floor_mag, "sinh({x}) too small, mode {mode:?}");
                     assert!(
@@ -1601,7 +1601,7 @@ mod tests {
                     // round_Floor(-v) = -round_Ceiling(v); the nearest modes
                     // and Trunc are sign-symmetric.
                     assert_eq!(
-                        D::<Int<6>, 0>(negative_raw).cosh_strict_with(mode).0,
+                        D::<Int<6>, 0>(negative_raw).cosh_with(mode).0,
                         cosh_value,
                         "cosh(-{x}) != cosh({x}), mode {mode:?}"
                     );
@@ -1610,9 +1610,9 @@ mod tests {
                         RoundingMode::Ceiling => RoundingMode::Floor,
                         other => other,
                     };
-                    let s_flipped = D::<Int<6>, 0>(positive_raw).sinh_strict_with(flipped).0;
+                    let s_flipped = D::<Int<6>, 0>(positive_raw).sinh_with(flipped).0;
                     assert_eq!(
-                        D::<Int<6>, 0>(negative_raw).sinh_strict_with(mode).0,
+                        D::<Int<6>, 0>(negative_raw).sinh_with(mode).0,
                         Int::<6>::ZERO - s_flipped,
                         "sinh(-{x}) != -sinh({x}) under the flipped mode, mode {mode:?}"
                     );
@@ -1630,10 +1630,10 @@ mod tests {
                 * Int::<6>::TEN.pow(32);
             let floor_mag = Int::<6>::TEN.pow(114);
             for &mode in &MODES {
-                let cosh_value = D::<Int<6>, 57>(raw).cosh_strict_with(mode).0;
+                let cosh_value = D::<Int<6>, 57>(raw).cosh_with(mode).0;
                 assert!(cosh_value > floor_mag, "cosh(133.61..) too small, mode {mode:?}");
                 assert_eq!(
-                    D::<Int<6>, 57>(Int::<6>::ZERO - raw).cosh_strict_with(mode).0,
+                    D::<Int<6>, 57>(Int::<6>::ZERO - raw).cosh_with(mode).0,
                     cosh_value,
                     "cosh(-133.61..) != cosh(133.61..), mode {mode:?}"
                 );
@@ -1666,24 +1666,24 @@ mod tests {
                     // Scale 0.
                     let raw_s0 = Int::<6>::from_i128(x);
                     assert_eq!(
-                        D::<Int<6>, 0>(raw_s0).exp_strict_with(mode).0,
+                        D::<Int<6>, 0>(raw_s0).exp_with(mode).0,
                         expect,
                         "exp({x}) at s0, mode {mode:?}"
                     );
                     assert_eq!(
-                        D::<Int<6>, 0>(raw_s0).exp2_strict_with(mode).0,
+                        D::<Int<6>, 0>(raw_s0).exp2_with(mode).0,
                         expect,
                         "exp2({x}) at s0, mode {mode:?}"
                     );
                     // Scale 50 (the deep-escalation band).
                     let raw_s50 = Int::<6>::from_i128(x) * Int::<6>::TEN.pow(50);
                     assert_eq!(
-                        D::<Int<6>, 50>(raw_s50).exp_strict_with(mode).0,
+                        D::<Int<6>, 50>(raw_s50).exp_with(mode).0,
                         expect,
                         "exp({x}) at s50, mode {mode:?}"
                     );
                     assert_eq!(
-                        D::<Int<6>, 50>(raw_s50).exp2_strict_with(mode).0,
+                        D::<Int<6>, 50>(raw_s50).exp2_with(mode).0,
                         expect,
                         "exp2({x}) at s50, mode {mode:?}"
                     );
@@ -1718,17 +1718,17 @@ mod tests {
                 for &mode in &MODES {
                     assert_eq!(
                         sinh_schoolbook::<Core, S>(raw, mode),
-                        D::<Int<3>, S>(raw).sinh_strict_with(mode).0,
+                        D::<Int<3>, S>(raw).sinh_with(mode).0,
                         "D57 sinh schoolbook != routed at units={units} mode={mode:?}"
                     );
                     assert_eq!(
                         cosh_schoolbook::<Core, S>(raw, mode),
-                        D::<Int<3>, S>(raw).cosh_strict_with(mode).0,
+                        D::<Int<3>, S>(raw).cosh_with(mode).0,
                         "D57 cosh schoolbook != routed at units={units} mode={mode:?}"
                     );
                     assert_eq!(
                         tanh_schoolbook::<Core, S>(raw, mode),
-                        D::<Int<3>, S>(raw).tanh_strict_with(mode).0,
+                        D::<Int<3>, S>(raw).tanh_with(mode).0,
                         "D57 tanh schoolbook != routed at units={units} mode={mode:?}"
                     );
                 }
@@ -1751,7 +1751,7 @@ mod tests {
                 for &mode in &MODES {
                     assert_eq!(
                         asinh_schoolbook::<Core, S>(raw, mode),
-                        D::<Int<3>, S>(raw).asinh_strict_with(mode).0,
+                        D::<Int<3>, S>(raw).asinh_with(mode).0,
                         "D57 asinh schoolbook != routed at units={units} mode={mode:?}"
                     );
                 }
@@ -1768,7 +1768,7 @@ mod tests {
                 for &mode in &MODES {
                     assert_eq!(
                         atanh_schoolbook::<Core, S>(raw, mode),
-                        D::<Int<3>, S>(raw).atanh_strict_with(mode).0,
+                        D::<Int<3>, S>(raw).atanh_with(mode).0,
                         "D57 atanh schoolbook != routed at units={units} mode={mode:?}"
                     );
                 }
@@ -1784,7 +1784,7 @@ mod tests {
                 for &mode in &MODES {
                     assert_eq!(
                         acosh_schoolbook::<Core, S>(raw, mode),
-                        D::<Int<3>, S>(raw).acosh_strict_with(mode).0,
+                        D::<Int<3>, S>(raw).acosh_with(mode).0,
                         "D57 acosh schoolbook != routed at units={units} mode={mode:?}"
                     );
                 }
@@ -1863,7 +1863,7 @@ mod tests {
             let value = D::<Int<24>, S>(raw);
             for mode in MODES {
                 assert_eq!(
-                    value.asinh_strict_with(mode).0,
+                    value.asinh_with(mode).0,
                     asinh_schoolbook::<Core, S>(raw, mode),
                     "asinh public == tier {mode:?}"
                 );

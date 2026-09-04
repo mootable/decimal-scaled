@@ -3,7 +3,7 @@
 
 //! Floating-point power policy — the per-(N, SCALE) algorithm matcher.
 //!
-//! `D<Int<N>, SCALE>::powf_strict_with(exp, mode)` delegates directly to
+//! `D<Int<N>, SCALE>::powf_with(exp, mode)` delegates directly to
 //! the one shared [`dispatch`] generic function — the canonical
 //! matcher-only policy shape (see `docs/ARCHITECTURE.md`), mirrored from
 //! `sqrt`.
@@ -22,7 +22,7 @@
 //! - `PinnedExpWithLn` — the composition with the exact-power pins, the
 //!   algebraic `x^0.5` pin and the result-sized working lift in front of
 //!   it (`pow::powf_pinned_exp_with_ln`). Routed on every wide tier: the
-//!   wide `powf_strict_with` shell calls [`dispatch`] like every other
+//!   wide `powf_with` shell calls [`dispatch`] like every other
 //!   shell, and `select` names this algorithm for `N >= 3`.
 //! - `Schoolbook` — the unrouted naive `exp(y*ln x)` reference.
 //!
@@ -40,7 +40,7 @@ enum Algorithm {
     /// integer-power and terminating-reciprocal pins, the algebraic
     /// `x^0.5 ≡ √x` pin, and the analytically-gated result-sized working
     /// lift. Realised by `algos::pow::powf_pinned_exp_with_ln`; this is
-    /// what the wide `powf_strict_with` surface actually runs.
+    /// what the wide `powf_with` surface actually runs.
     ///
     /// A DISTINCT algorithm from [`Algorithm::ExpWithLn`], not a tuned
     /// spelling of it: each pin exists because the bare composition
@@ -70,7 +70,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // kernel here; `ExpWithLn` is the name of what runs.
         1 | 2 => Select::ByAlgorithm(Algorithm::ExpWithLn),
         // Wide tiers: the pinned composition — what the wide
-        // `powf_strict_with` shell has always run. Naming it here is what
+        // `powf_with` shell has always run. Naming it here is what
         // puts that production path under the matcher.
         _ => Select::ByAlgorithm(Algorithm::PinnedExpWithLn),
     }
@@ -105,7 +105,7 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(
 /// the unchosen arms are pruned per monomorphisation.
 ///
 /// The `x^0.5` pin is handed the cell's own `sqrt::dispatch`, which is
-/// the engine the shell reached through `self.sqrt_strict_with(mode)`.
+/// the engine the shell reached through `self.sqrt_with(mode)`.
 ///
 /// The narrow arms are the SAME `powf_series_2limb` kernel `ExpWithLn`
 /// uses: that kernel already carries its own integer-exponent pin
@@ -137,14 +137,14 @@ fn pinned_exp_with_ln_routed<const N: usize, const SCALE: u32>(
         };
     }
     match N {
-        1 | 2 => crate::algos::pow::powf_series_2limb::powf_strict::<SCALE>(
+        1 | 2 => crate::algos::pow::powf_series_2limb::powf::<SCALE>(
             base.resize_to::<Int<2>>(),
             exponent.resize_to::<Int<2>>(),
             mode,
         )
         .and_then(super::narrow_fit::<N>)
         .unwrap_or_else(|| {
-            crate::support::diagnostics::overflow_panic_with_scale("powf_strict", SCALE)
+            crate::support::diagnostics::overflow_panic_with_scale("powf", SCALE)
         }),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => pinned!(3, wide_trig_d57),
@@ -166,24 +166,24 @@ fn pinned_exp_with_ln_routed<const N: usize, const SCALE: u32>(
         48 => pinned!(48, wide_trig_d924),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => pinned!(64, wide_trig_d1232),
-        _ => crate::algos::pow::powf_series_2limb::powf_strict::<SCALE>(
+        _ => crate::algos::pow::powf_series_2limb::powf::<SCALE>(
             base.resize_to::<Int<2>>(),
             exponent.resize_to::<Int<2>>(),
             mode,
         )
         .and_then(super::narrow_fit::<N>)
         .unwrap_or_else(|| {
-            crate::support::diagnostics::overflow_panic_with_scale("powf_strict", SCALE)
+            crate::support::diagnostics::overflow_panic_with_scale("powf", SCALE)
         }),
     }
 }
 
-/// The `checked` primitive for `checked_powf_strict[_with]`.
+/// The `checked` primitive for `checked_powf[_with]`.
 ///
 /// Narrow tiers (`N == 1 | 2`) run the seamed `powf_series_2limb`
 /// kernel: its out-of-range `None` (and the `Int<2> -> Int<1>` narrow
 /// fit) propagate exactly. The wide arms hop to the tier's inherent
-/// `powf_strict_with` shell — the SAME path the default wide `powf`
+/// `powf_with` shell — the SAME path the default wide `powf`
 /// surface takes (the shell delegates to [`dispatch`], and bit-identity
 /// with the default form is the contract) — so a wide out-of-range
 /// result still panics inside that shell.
@@ -195,33 +195,33 @@ pub(crate) fn checked_dispatch<const N: usize, const SCALE: u32>(
     mode: RoundingMode,
 ) -> Option<Int<N>> {
     match N {
-        1 | 2 => crate::algos::pow::powf_series_2limb::powf_strict::<SCALE>(
+        1 | 2 => crate::algos::pow::powf_series_2limb::powf::<SCALE>(
             base.resize_to::<Int<2>>(),
             exponent.resize_to::<Int<2>>(),
             mode,
         )
         .and_then(super::narrow_fit::<N>),
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => Some(crate::D::<Int<3>, SCALE>(base.resize_to::<Int<3>>()).powf_strict_with(crate::D::<Int<3>, SCALE>(exponent.resize_to::<Int<3>>()), mode).0.resize_to::<Int<N>>()),
+        3 => Some(crate::D::<Int<3>, SCALE>(base.resize_to::<Int<3>>()).powf_with(crate::D::<Int<3>, SCALE>(exponent.resize_to::<Int<3>>()), mode).0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => Some(crate::D::<Int<4>, SCALE>(base.resize_to::<Int<4>>()).powf_strict_with(crate::D::<Int<4>, SCALE>(exponent.resize_to::<Int<4>>()), mode).0.resize_to::<Int<N>>()),
+        4 => Some(crate::D::<Int<4>, SCALE>(base.resize_to::<Int<4>>()).powf_with(crate::D::<Int<4>, SCALE>(exponent.resize_to::<Int<4>>()), mode).0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => Some(crate::D::<Int<6>, SCALE>(base.resize_to::<Int<6>>()).powf_strict_with(crate::D::<Int<6>, SCALE>(exponent.resize_to::<Int<6>>()), mode).0.resize_to::<Int<N>>()),
+        6 => Some(crate::D::<Int<6>, SCALE>(base.resize_to::<Int<6>>()).powf_with(crate::D::<Int<6>, SCALE>(exponent.resize_to::<Int<6>>()), mode).0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => Some(crate::D::<Int<8>, SCALE>(base.resize_to::<Int<8>>()).powf_strict_with(crate::D::<Int<8>, SCALE>(exponent.resize_to::<Int<8>>()), mode).0.resize_to::<Int<N>>()),
+        8 => Some(crate::D::<Int<8>, SCALE>(base.resize_to::<Int<8>>()).powf_with(crate::D::<Int<8>, SCALE>(exponent.resize_to::<Int<8>>()), mode).0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => Some(crate::D::<Int<12>, SCALE>(base.resize_to::<Int<12>>()).powf_strict_with(crate::D::<Int<12>, SCALE>(exponent.resize_to::<Int<12>>()), mode).0.resize_to::<Int<N>>()),
+        12 => Some(crate::D::<Int<12>, SCALE>(base.resize_to::<Int<12>>()).powf_with(crate::D::<Int<12>, SCALE>(exponent.resize_to::<Int<12>>()), mode).0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => Some(crate::D::<Int<16>, SCALE>(base.resize_to::<Int<16>>()).powf_strict_with(crate::D::<Int<16>, SCALE>(exponent.resize_to::<Int<16>>()), mode).0.resize_to::<Int<N>>()),
+        16 => Some(crate::D::<Int<16>, SCALE>(base.resize_to::<Int<16>>()).powf_with(crate::D::<Int<16>, SCALE>(exponent.resize_to::<Int<16>>()), mode).0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => Some(crate::D::<Int<24>, SCALE>(base.resize_to::<Int<24>>()).powf_strict_with(crate::D::<Int<24>, SCALE>(exponent.resize_to::<Int<24>>()), mode).0.resize_to::<Int<N>>()),
+        24 => Some(crate::D::<Int<24>, SCALE>(base.resize_to::<Int<24>>()).powf_with(crate::D::<Int<24>, SCALE>(exponent.resize_to::<Int<24>>()), mode).0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => Some(crate::D::<Int<32>, SCALE>(base.resize_to::<Int<32>>()).powf_strict_with(crate::D::<Int<32>, SCALE>(exponent.resize_to::<Int<32>>()), mode).0.resize_to::<Int<N>>()),
+        32 => Some(crate::D::<Int<32>, SCALE>(base.resize_to::<Int<32>>()).powf_with(crate::D::<Int<32>, SCALE>(exponent.resize_to::<Int<32>>()), mode).0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => Some(crate::D::<Int<48>, SCALE>(base.resize_to::<Int<48>>()).powf_strict_with(crate::D::<Int<48>, SCALE>(exponent.resize_to::<Int<48>>()), mode).0.resize_to::<Int<N>>()),
+        48 => Some(crate::D::<Int<48>, SCALE>(base.resize_to::<Int<48>>()).powf_with(crate::D::<Int<48>, SCALE>(exponent.resize_to::<Int<48>>()), mode).0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => Some(crate::D::<Int<64>, SCALE>(base.resize_to::<Int<64>>()).powf_strict_with(crate::D::<Int<64>, SCALE>(exponent.resize_to::<Int<64>>()), mode).0.resize_to::<Int<N>>()),
-        _ => crate::algos::pow::powf_series_2limb::powf_strict::<SCALE>(
+        64 => Some(crate::D::<Int<64>, SCALE>(base.resize_to::<Int<64>>()).powf_with(crate::D::<Int<64>, SCALE>(exponent.resize_to::<Int<64>>()), mode).0.resize_to::<Int<N>>()),
+        _ => crate::algos::pow::powf_series_2limb::powf::<SCALE>(
             base.resize_to::<Int<2>>(),
             exponent.resize_to::<Int<2>>(),
             mode,
@@ -237,14 +237,14 @@ fn exp_with_ln_routed<const N: usize, const SCALE: u32>(
     mode: RoundingMode,
 ) -> Int<N> {
     match N {
-        1 | 2 => crate::algos::pow::powf_series_2limb::powf_strict::<SCALE>(
+        1 | 2 => crate::algos::pow::powf_series_2limb::powf::<SCALE>(
             base.resize_to::<Int<2>>(),
             exponent.resize_to::<Int<2>>(),
             mode,
         )
         .and_then(super::narrow_fit::<N>)
         .unwrap_or_else(|| {
-            crate::support::diagnostics::overflow_panic_with_scale("powf_strict", SCALE)
+            crate::support::diagnostics::overflow_panic_with_scale("powf", SCALE)
         }),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => crate::algos::pow::pow_schoolbook::pow_schoolbook::<
@@ -296,14 +296,14 @@ fn exp_with_ln_routed<const N: usize, const SCALE: u32>(
             crate::types::widths::wide_trig_d1232::Core, SCALE,
         >(base.resize_to::<Int<64>>(), exponent.resize_to::<Int<64>>(), mode)
         .resize_to::<Int<N>>(),
-        _ => crate::algos::pow::powf_series_2limb::powf_strict::<SCALE>(
+        _ => crate::algos::pow::powf_series_2limb::powf::<SCALE>(
             base.resize_to::<Int<2>>(),
             exponent.resize_to::<Int<2>>(),
             mode,
         )
         .and_then(super::narrow_fit::<N>)
         .unwrap_or_else(|| {
-            crate::support::diagnostics::overflow_panic_with_scale("powf_strict", SCALE)
+            crate::support::diagnostics::overflow_panic_with_scale("powf", SCALE)
         }),
     }
 }
@@ -321,7 +321,7 @@ fn schoolbook_routed<const N: usize, const SCALE: u32>(
                 exponent.resize_to::<Int<2>>(),
                 mode,
             ),
-            "powf_strict",
+            "powf",
             SCALE,
         ),
         #[cfg(any(feature = "d57", feature = "wide"))]
@@ -380,7 +380,7 @@ fn schoolbook_routed<const N: usize, const SCALE: u32>(
                 exponent.resize_to::<Int<2>>(),
                 mode,
             ),
-            "powf_strict",
+            "powf",
             SCALE,
         ),
     }

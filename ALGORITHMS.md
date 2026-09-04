@@ -471,9 +471,9 @@ Implementation: `src/macros/wide_transcendental.rs::sin_fixed`
 
 ### `sin_cos` joint kernel
 
-`sin_cos_strict(self) -> (sin, cos)`: shares the Taylor evaluation
+`sin_cos(self) -> (sin, cos)`: shares the Taylor evaluation
 between sin and cos, recovers cos via the Pythagorean identity
-`|cos| = √(1 − sin²)`. Net cost ≈ one `sin_strict` + one wide
+`|cos| = √(1 − sin²)`. Net cost ≈ one `sin` + one wide
 sqrt + one wide mul vs the historic two independent sin
 evaluations (`cos = sin(x + π/2)`). 2–3× faster when both values
 are needed.
@@ -481,7 +481,7 @@ are needed.
 > Pattern adapted from `fastnum::decimal::dec::math::sin_cos`.
 
 Implementation: `src/macros/wide_transcendental.rs::sin_cos_fixed`
-and `sin_cos_strict`.
+and `sin_cos`.
 
 ### `sin` / `cos` via plain range-reduced Taylor (legacy reference)
 
@@ -550,7 +550,7 @@ quotient. Eliminates the asymptotic-edge precision loss; modest
 speed win at any `|y/x|` significantly different from 1.
 
 Implementation: `src/algos/trig/trig_series_2limb.rs::atan2_kernel` (D38 narrow path),
-`src/macros/wide_transcendental.rs::atan2_strict` (wide tiers).
+`src/macros/wide_transcendental.rs::atan2` (wide tiers).
 
 ### `asin` / `acos` two-range kernel
 
@@ -574,9 +574,9 @@ representable input:
 `acos` shares the same kernel via `acos(x) = π/2 − asin(x)`.
 
 Implementation: `src/algos/trig/trig_series_2limb.rs` / `src/algos/trig/inverse_tang_3limb_s18_22.rs`
-(`asin_strict`, `acos_strict` for D38 / D57) and the wide-tier variants in
-`src/macros/wide_transcendental.rs` (`asin_strict`,
-`asin_strict_with`, `acos_strict`, `acos_strict_with`).
+(`asin`, `acos` for D38 / D57) and the wide-tier variants in
+`src/macros/wide_transcendental.rs` (`asin`,
+`asin_with`, `acos`, `acos_with`).
 
 Further reading:
 
@@ -676,14 +676,14 @@ wider reference constants in `wide.rs` for D153/D307 and beyond. Sources:
   [Anatoly Karatsuba bio](https://en.wikipedia.org/wiki/Anatoly_Karatsuba),
   [Yuri Ofman bio](https://en.wikipedia.org/wiki/Yuri_Ofman),
   [MathWorld - Karatsuba Algorithm](https://mathworld.wolfram.com/KaratsubaAlgorithm.html).
-- **AGM-based ln / exp (Brent–Salamin 1976).** `ln_strict_agm`
+- **AGM-based ln / exp (Brent–Salamin 1976).** `ln_agm`
   (every wide tier) uses Brent's identity
   `ln(s) ≈ π / (2 · AGM(1, 4/s))` with range reduction
-  `ln(x) = ln(x · 2^m) − m·ln 2`. `exp_strict_agm` uses Newton's
-  iteration on `ln_strict_agm`. Both converge quadratically - `O(log
+  `ln(x) = ln(x · 2^m) − m·ln 2`. `exp_agm` uses Newton's
+  iteration on `ln_agm`. Both converge quadratically - `O(log
   p)` iterations vs the artanh path's `O(p)` series terms - so they
   win asymptotically as working scale grows. Currently exposed as
-  the alternate path; the canonical `ln_strict` / `exp_strict` stays
+  the alternate path; the canonical `ln` / `exp` stays
   on the artanh / Taylor implementations until a bench at the
   relevant working scale shows AGM winning by a benchmarked
   margin. *Caveat:* the present

@@ -1,7 +1,7 @@
 //! AGM precision-lift validation harness.
 //!
 //! Emits, for each (tier, SCALE) target, a deterministic sequence of
-//! `ln_strict_agm(x)` and `exp_strict_agm(y)` results as
+//! `ln_agm(x)` and `exp_agm(y)` results as
 //! tab-separated lines:
 //!
 //! ```text
@@ -82,12 +82,12 @@ macro_rules! emit_tier {
         use core::str::FromStr;
         for s in LN_INPUTS {
             let x = <$T>::from_str(s).expect("input parse");
-            let r = x.ln_strict_agm();
+            let r = x.ln_agm();
             println!("{}\t{}\tln_agm\t{}\t{}", $tier, $scale, s, r);
         }
         for s in EXP_INPUTS {
             let x = <$T>::from_str(s).expect("input parse");
-            let r = x.exp_strict_agm();
+            let r = x.exp_agm();
             println!("{}\t{}\texp_agm\t{}\t{}", $tier, $scale, s, r);
         }
     }};

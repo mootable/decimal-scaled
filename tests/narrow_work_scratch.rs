@@ -44,7 +44,7 @@ fn d18(v: i64) -> W18 {
     W18::try_from(v).unwrap()
 }
 
-/// `expm1_strict` on both narrow widths, across the sign/regime split the
+/// `expm1` on both narrow widths, across the sign/regime split the
 /// `expm1` matcher routes on (`|x| <= 1` takes the Taylor series, `|x| > 1`
 /// takes the `e^x - 1` composition). Both regimes run in `WZiv`, so either
 /// one alone would catch the undersized buffer; naming both keeps the check
@@ -58,13 +58,13 @@ fn narrow_expm1_strict_does_not_outrun_its_work_scratch() {
     // `expm1(x) > x` for every non-zero `x`, which is enough of a shape check
     // to prove a real value came back rather than a zero.
     for x in [half, -half, two, -two] {
-        assert!(x.expm1_strict() > x, "expm1(x) must exceed x, x = {x}");
+        assert!(x.expm1() > x, "expm1(x) must exceed x, x = {x}");
     }
 
     // D18 shares the same `WZiv` work integer through the same policy.
     let half18 = d18(1) / d18(2);
     assert!(
-        half18.expm1_strict() > half18,
+        half18.expm1() > half18,
         "D18 expm1(0.5) must exceed 0.5"
     );
 }
@@ -79,9 +79,9 @@ fn narrow_strict_neighbours_share_the_work_scratch() {
 
     // log1p / expm1 are the inverse pair; exp and ln are their unreduced
     // siblings. All lift into `WZiv`.
-    assert!(half.log1p_strict() > zero, "log1p(0.5) must be positive");
-    assert!(half.exp_strict() > zero, "exp(0.5) must be positive");
-    assert!(half.ln_strict() < zero, "ln(0.5) must be negative");
-    assert!(half.sin_strict() > zero, "sin(0.5) must be positive");
-    assert!(half.sqrt_strict() > zero, "sqrt(0.5) must be positive");
+    assert!(half.log1p() > zero, "log1p(0.5) must be positive");
+    assert!(half.exp() > zero, "exp(0.5) must be positive");
+    assert!(half.ln() < zero, "ln(0.5) must be negative");
+    assert!(half.sin() > zero, "sin(0.5) must be positive");
+    assert!(half.sqrt() > zero, "sqrt(0.5) must be positive");
 }

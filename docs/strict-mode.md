@@ -26,8 +26,8 @@ use decimal_scaled::D38s12;
 let x = D38s12::try_from(2i64).unwrap();
 
 // The integer-only path, explicitly:
-let r1 = x.sqrt_strict();
-let l1 = x.ln_strict();
+let r1 = x.sqrt();
+let l1 = x.ln();
 
 // The plain method delegates to exactly the same thing:
 let r2 = x.sqrt();
@@ -43,14 +43,14 @@ widen-compute-narrow delegation):
 
 | Group | `*_strict` methods |
 |---|---|
-| Logarithms | `ln_strict`, `log_strict`, `log2_strict`, `log10_strict` |
-| Exponentials | `exp_strict`, `exp2_strict` |
-| Roots / powers | `sqrt_strict`, `cbrt_strict`, `powf_strict`, `hypot_strict` |
-| Forward trig | `sin_strict`, `cos_strict`, `tan_strict` |
-| Inverse trig | `asin_strict`, `acos_strict`, `atan_strict`, `atan2_strict` |
-| Hyperbolic | `sinh_strict`, `cosh_strict`, `tanh_strict` |
-| Inverse hyperbolic | `asinh_strict`, `acosh_strict`, `atanh_strict` |
-| Angle conversion | `to_degrees_strict`, `to_radians_strict` |
+| Logarithms | `ln`, `log`, `log2`, `log10` |
+| Exponentials | `exp`, `exp2` |
+| Roots / powers | `sqrt`, `cbrt`, `powf`, `hypot` |
+| Forward trig | `sin`, `cos`, `tan` |
+| Inverse trig | `asin`, `acos`, `atan`, `atan2` |
+| Hyperbolic | `sinh`, `cosh`, `tanh` |
+| Inverse hyperbolic | `asinh`, `acosh`, `atanh` |
+| Angle conversion | `to_degrees`, `to_radians` |
 
 ## Checked siblings — `checked_*_strict`
 
@@ -67,10 +67,10 @@ transcendental in the table above also ships a non-panicking
 use decimal_scaled::D38s12;
 
 let neg = D38s12::try_from(-2i64).unwrap();
-assert_eq!(neg.checked_ln_strict(), None);                // domain error -> None
+assert_eq!(neg.checked_ln(), None);                // domain error -> None
 
 let two = D38s12::try_from(2i64).unwrap();
-assert_eq!(two.checked_sqrt_strict(), Some(two.sqrt_strict())); // in range
+assert_eq!(two.checked_sqrt(), Some(two.sqrt())); // in range
 ```
 
 `None` covers exactly the inputs the default form would reject:
@@ -158,11 +158,11 @@ under the `wide` umbrella; `D462` / `D616` under `x-wide`; `D924` /
 surface — every method has a `*_strict` form plus a mode-aware
 `*_strict_with(mode)` sibling. The wide tiers also expose
 paired-output transcendentals that compute both members of a pair in
-one pass and return `(Self, Self)`: `sin_cos_strict` /
-`sin_cos_strict_with` (sine and cosine together) and `sinh_cosh_strict`
-/ `sinh_cosh_strict_with` (hyperbolic sine and cosine together). Two
+one pass and return `(Self, Self)`: `sin_cos` /
+`sin_cos_with` (sine and cosine together) and `sinh_cosh`
+/ `sinh_cosh_with` (hyperbolic sine and cosine together). Two
 alternate implementations are
-also exposed: `ln_strict_agm` and `exp_strict_agm` use the
+also exposed: `ln_agm` and `exp_agm` use the
 quadratically-convergent Brent–Salamin / Newton path that scales
 better than the artanh / Taylor canonical at very high working
 scales; the canonical paths remain the default until a bench at

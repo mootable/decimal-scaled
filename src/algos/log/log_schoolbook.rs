@@ -15,7 +15,7 @@
 //! The division of the two `Fixed` results is performed at the same working
 //! scale before rounding back to storage.
 //!
-//! ## Why not call `ln_strict_with` on self
+//! ## Why not call `ln_with` on self
 //!
 //! Calling a dispatched method on a value of the same decimal type
 //! re-enters the decimal policy (inversion — forbidden by the layering
@@ -162,7 +162,7 @@ pub(crate) fn log_schoolbook_strict<const SCALE: u32>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::algos::ln::ln_series_2limb::log_strict;
+    use crate::algos::ln::ln_series_2limb::log;
     use crate::support::rounding::RoundingMode;
     use crate::int::types::Int;
 
@@ -178,7 +178,7 @@ mod tests {
         let x_storage = Int::<2>::from_i128(x_raw);
         let b_storage = Int::<2>::from_i128(b_raw);
         let got = log_schoolbook_strict::<S>(x_storage, b_storage, mode);
-        let expected = log_strict::<S>(x_storage, b_storage, mode).expect("reference in range");
+        let expected = log::<S>(x_storage, b_storage, mode).expect("reference in range");
         assert_eq!(got, expected,
             "log schoolbook D38<{}> x={} b={} mode={:?}: {:?} != {:?}",
             S, x_raw, b_raw, mode, got, expected);
@@ -236,7 +236,7 @@ mod tests {
                         crate::algos::log::log_schoolbook::log_schoolbook::<Core, S>(
                             x_storage, b_storage, mode),
                         D::<Int<3>, S>(x_storage)
-                            .log_strict_with(D::<Int<3>, S>(b_storage), mode).0,
+                            .log_with(D::<Int<3>, S>(b_storage), mode).0,
                         "D57 log schoolbook != routed at x={x_units} b={base_units} mode={mode:?}"
                     );
                 }

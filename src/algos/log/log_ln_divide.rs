@@ -9,7 +9,7 @@
 //!
 //! - [`log_ln_divide_d18`] — D18 (`Int<1>`)
 //!   has no native log kernel, so it widens to the D38 (`Int<2>`) work width,
-//!   delegates to D38's `log_strict_with` surface (a
+//!   delegates to D38's `log_with` surface (a
 //!   cross-tier *down* call), then narrows the result back.
 //! - [`log_ln_divide_d38`] — D38 (`Int<2>`)
 //!   calls the `ln::ln_series_2limb` log kernel directly on raw storage.
@@ -34,7 +34,7 @@ pub(crate) fn log_ln_divide_d18<const SCALE: u32>(
     let wide_value: crate::D<Int<2>, SCALE> = crate::D::<Int<1>, SCALE>(raw).into();
     let wide_base: crate::D<Int<2>, SCALE> = crate::D::<Int<1>, SCALE>(base_raw).into();
     let log_value: crate::D<Int<1>, SCALE> =
-        ::core::convert::TryInto::try_into(wide_value.log_strict_with(wide_base, mode))
+        ::core::convert::TryInto::try_into(wide_value.log_with(wide_base, mode))
             .unwrap_or_else(|_| {
                 crate::support::diagnostics::overflow_panic_with_scale("D18::log", SCALE)
             });
@@ -49,6 +49,6 @@ pub(crate) fn log_ln_divide_d38<const SCALE: u32>(
     base_raw: Int<2>,
     mode: RoundingMode,
 ) -> Option<Int<2>> {
-    crate::algos::ln::ln_series_2limb::log_strict::<SCALE>(raw, base_raw, mode)
+    crate::algos::ln::ln_series_2limb::log::<SCALE>(raw, base_raw, mode)
 }
 

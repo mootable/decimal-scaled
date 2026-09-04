@@ -360,7 +360,7 @@ fn exp_wide_narrow_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Opti
 /// DISTINCT from the working-width (`exp_fixed` internal `2·w_ext`)
 /// overflow the wider `WNarrow` work integer fixes. The caller turns the
 /// `None` into the same overflow panic / saturation the `Fixed` path's
-/// `round_to_i128_with` did, so `exp_strict` still panics on an
+/// `round_to_i128_with` did, so `exp` still panics on an
 /// unrepresentable result rather than silently returning a wrapped value.
 #[inline]
 fn narrow_round_mag(
@@ -508,11 +508,11 @@ pub(crate) fn hyper_needs_wide_narrow(raw: i128, scale: u32, working_scale: u32)
 /// `None` = result out of storage range.
 #[inline]
 #[must_use]
-pub(crate) fn exp_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+pub(crate) fn exp<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
     exp_strict_raw::<SCALE>(raw.as_i128(), mode).map(Int::<2>::from_i128)
 }
 
-/// `i128` core of [`exp_strict`].
+/// `i128` core of [`exp`].
 #[inline]
 fn exp_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     if raw == 0 {
@@ -863,11 +863,11 @@ fn exp2_ziv(raw: i128, scale: u32, guard_digits: u32) -> WZiv {
 /// other on-grid `x`, so the never-exact walker polarity is sound).
 #[inline]
 #[must_use]
-pub(crate) fn exp2_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+pub(crate) fn exp2<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
     exp2_strict_raw(raw.as_i128(), SCALE, mode).map(Int::<2>::from_i128)
 }
 
-/// `i128` core of [`exp2_strict`].
+/// `i128` core of [`exp2`].
 fn exp2_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
     if raw == 0 {
         return Some(10_i128.pow(scale));

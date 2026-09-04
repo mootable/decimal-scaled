@@ -18,7 +18,7 @@ decimal-scaled = { version = "0.5", default-features = false, features = ["alloc
 
 Notes:
 
-- The `*_strict` named methods (`sqrt_strict`, `ln_strict`, …) are
+- The `*_strict` named methods (`sqrt`, `ln`, …) are
   **always compiled, regardless of any feature flag** — no feature
   removes them, and the plain methods (`sqrt`, `ln`, …) always resolve
   to them.

@@ -25,12 +25,12 @@
 //!   * binary / other:      powf, log, hypot
 //!
 //! `hypot` is benched across the full width set via its
-//! `hypot_strict` method (the integer-only correctly-rounded form). The
+//! `hypot` method (the integer-only correctly-rounded form). The
 //! plain `x.hypot(y)` default method is only exposed on the `D38` tier in
 //! BOTH versions under `strict` (the wider tiers expose only
-//! `hypot_strict`/`hypot_strict_with`, not the plain dispatcher), and at
+//! `hypot`/`hypot_with`, not the plain dispatcher), and at
 //! `D38` under `strict` the plain `hypot` delegates straight to
-//! `hypot_strict` (same kernel, same numbers) — so benching `hypot_strict`
+//! `hypot` (same kernel, same numbers) — so benching `hypot`
 //! at every width pairs cleanly branch-vs-prod everywhere AND covers the
 //! D38 cell with the identical kernel the plain method would route to.
 //! This closes the prior coverage hole where `hypot` was benched at `D38`
@@ -152,12 +152,12 @@ macro_rules! funcs {
         $crate::bench_one!($c, "log", $w, $scale, $side, |bn| {
             bn.iter(|| black_box(x).log(black_box(ten)))
         });
-        // `hypot` via `hypot_strict` (the integer-only correctly-rounded form,
+        // `hypot` via `hypot` (the integer-only correctly-rounded form,
         // the only `hypot` method exposed at EVERY width in both versions; at
         // D38 the plain `hypot` delegates straight to it). Benched at every
         // width × scale, closing the prior D38-only coverage hole.
         $crate::bench_one!($c, "hypot", $w, $scale, $side, |bn| {
-            bn.iter(|| black_box(c3).hypot_strict(black_box(d4)))
+            bn.iter(|| black_box(c3).hypot(black_box(d4)))
         });
     }};
 }

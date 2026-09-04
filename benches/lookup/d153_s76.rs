@@ -33,41 +33,41 @@ fn bench(c: &mut Criterion) {
     });
 
     g.bench_function("strict/sqrt", |bn| {
-        bn.iter(|| black_box(one_p_half).sqrt_strict())
+        bn.iter(|| black_box(one_p_half).sqrt())
     });
     g.bench_function("strict/cbrt", |bn| {
-        bn.iter(|| black_box(one_p_half).cbrt_strict())
+        bn.iter(|| black_box(one_p_half).cbrt())
     });
     g.bench_function("strict/ln", |bn| {
-        bn.iter(|| black_box(one_p_half).ln_strict())
+        bn.iter(|| black_box(one_p_half).ln())
     });
-    g.bench_function("strict/exp", |bn| bn.iter(|| black_box(half).exp_strict()));
+    g.bench_function("strict/exp", |bn| bn.iter(|| black_box(half).exp()));
     g.bench_function("strict/sin", |bn| {
-        bn.iter(|| black_box(one_p_half).sin_strict())
+        bn.iter(|| black_box(one_p_half).sin())
     });
     g.bench_function("strict/cos", |bn| {
-        bn.iter(|| black_box(one_p_half).cos_strict())
+        bn.iter(|| black_box(one_p_half).cos())
     });
     g.bench_function("strict/tan", |bn| {
-        bn.iter(|| black_box(one_p_half).tan_strict())
+        bn.iter(|| black_box(one_p_half).tan())
     });
     g.bench_function("strict/atan", |bn| {
-        bn.iter(|| black_box(one_p_half).atan_strict())
+        bn.iter(|| black_box(one_p_half).atan())
     });
     g.bench_function("strict/asin", |bn| {
-        bn.iter(|| black_box(half).asin_strict())
+        bn.iter(|| black_box(half).asin())
     });
     g.bench_function("strict/acos", |bn| {
-        bn.iter(|| black_box(half).acos_strict())
+        bn.iter(|| black_box(half).acos())
     });
     g.bench_function("strict/sinh", |bn| {
-        bn.iter(|| black_box(half).sinh_strict())
+        bn.iter(|| black_box(half).sinh())
     });
     g.bench_function("strict/cosh", |bn| {
-        bn.iter(|| black_box(half).cosh_strict())
+        bn.iter(|| black_box(half).cosh())
     });
     g.bench_function("strict/tanh", |bn| {
-        bn.iter(|| black_box(half).tanh_strict())
+        bn.iter(|| black_box(half).tanh())
     });
 
     g.finish();

@@ -1,4 +1,4 @@
-//! Section-by-section timing of `D307s150::exp_strict` via
+//! Section-by-section timing of `D307s150::exp` via
 //! tracing-chrome. Writes `trace/exp_perfetto.json` — load it in
 //! https://ui.perfetto.dev for a flame-chart view of the
 //! `range_reduce / taylor_series / postfix_squarings / reassemble`
@@ -34,7 +34,7 @@ fn main() {
     let mut acc = Work::try_from(0).unwrap();
     for i in 0..iters {
         let x = Work::try_from(2).unwrap() + Work::try_from(i as i128).unwrap() / Work::try_from(1_000_000).unwrap();
-        acc = acc + x.exp_strict();
+        acc = acc + x.exp();
     }
     println!("{} iters; acc = {}", iters, black_box(acc));
     println!("trace written to trace/exp_perfetto.json");

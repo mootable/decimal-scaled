@@ -35,7 +35,7 @@
 
 /// Canonical panic for "result doesn't fit the target type".
 ///
-/// The first parameter is the method label (e.g. `"D38::log_strict"`
+/// The first parameter is the method label (e.g. `"D38::log"`
 /// or `"powf kernel"`); see the module docstring for the formatted
 /// message shape.
 #[cold]

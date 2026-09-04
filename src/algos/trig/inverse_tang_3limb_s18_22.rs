@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Bespoke narrow-`GUARD` `asin_strict` / `acos_strict` /
-//! `atan2_strict` kernel slot for `D57<SCALE>` with `SCALE ∈ 18..=22`.
+//! Bespoke narrow-`GUARD` `asin` / `acos` /
+//! `atan2` kernel slot for `D57<SCALE>` with `SCALE ∈ 18..=22`.
 //!
 //! Companion to the narrow-`GUARD` atan slot (now the generic
 //! `wide_trig_core::atan_narrow`) — the inverse-trig
@@ -101,10 +101,10 @@ fn asin_fixed<const SCALE: u32>(working_value: core::W, working_scale: u32) -> c
     }
 }
 
-/// `asin_strict` for `D57<SCALE>` with `SCALE ∈ 18..=22`.
+/// `asin` for `D57<SCALE>` with `SCALE ∈ 18..=22`.
 #[inline]
 #[must_use]
-pub(crate) fn asin_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
+pub(crate) fn asin<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
     let working_scale = SCALE + GUARD_NARROW;
     let working_value = core::to_work_scaled(raw, GUARD_NARROW);
     let asin_value = asin_fixed::<SCALE>(working_value, working_scale);
@@ -123,10 +123,10 @@ pub(crate) fn asin_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> 
     }
 }
 
-/// `acos_strict` for `D57<SCALE>` with `SCALE ∈ 18..=22`.
+/// `acos` for `D57<SCALE>` with `SCALE ∈ 18..=22`.
 #[inline]
 #[must_use]
-pub(crate) fn acos_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
+pub(crate) fn acos<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
     let working_scale = SCALE + GUARD_NARROW;
     let working_value = core::to_work_scaled(raw, GUARD_NARROW);
     let asin_w = asin_fixed::<SCALE>(working_value, working_scale);
@@ -146,10 +146,10 @@ pub(crate) fn acos_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> 
     }
 }
 
-/// `atan2_strict` for `D57<SCALE>` with `SCALE ∈ 18..=22`.
+/// `atan2` for `D57<SCALE>` with `SCALE ∈ 18..=22`.
 #[inline]
 #[must_use]
-pub(crate) fn atan2_strict<const SCALE: u32>(
+pub(crate) fn atan2<const SCALE: u32>(
     y_raw: Int<3>,
     x_raw: Int<3>,
     mode: RoundingMode,

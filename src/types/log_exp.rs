@@ -21,8 +21,8 @@
 //! `_strict` runs at `SCALE + STRICT_GUARD` (const-folded so LLVM
 //! specialises one optimal kernel per `SCALE`).
 //!
-//! `ln_strict` uses range reduction plus a Mercator series;
-//! `exp_strict` uses range reduction plus a Taylor series; the
+//! `ln` uses range reduction plus a Mercator series;
+//! `exp` uses range reduction plus a Taylor series; the
 //! remaining methods compose those two. Both variants are
 //! integer-only, `no_std`-compatible, and correctly rounded under
 //! the selected mode.
@@ -38,8 +38,8 @@
 //! `policy::ln` or `policy::exp`. The
 //! correctly-rounded kernels (`ln_fixed`, `exp_fixed`,
 //! `STRICT_GUARD`, the `wide_ln2` / `wide_ln10` constants, and the
-//! per-variant `ln_strict` / `log_strict` /
-//! `log2_*` / `log10_*` / `exp_strict` / `exp2_*`
+//! per-variant `ln` / `log` /
+//! `log2_*` / `log10_*` / `exp` / `exp2_*`
 //! `Fixed`-shape functions) live in
 //! [`crate::algos::ln::ln_series_2limb`] and
 //! [`crate::algos::exp::exp_series_2limb`]. This file is a typed-shell
@@ -93,22 +93,15 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     /// value at `SCALE >= 37`).
     #[inline]
     #[must_use]
-    pub fn ln_strict(self) -> Self {
-        self.ln_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
-    }
-
-    /// Natural log under the supplied rounding mode. See [`Self::ln_strict`].
-    #[inline]
-    #[must_use]
-    pub fn ln_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
-        Self::from_bits(crate::policy::ln::dispatch::<_, SCALE>(self.to_bits(), mode))
-    }
-
-    /// Returns the natural logarithm (base e) of `self`.
-    #[inline]
-    #[must_use]
     pub fn ln(self) -> Self {
-        self.ln_strict()
+        self.ln_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Natural log under the supplied rounding mode. See [`Self::ln`].
+    #[inline]
+    #[must_use]
+    pub fn ln_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
+        Self::from_bits(crate::policy::ln::dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     /// Returns `ln(1 + self)`.
@@ -117,11 +110,11 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     ///
     /// For API parity and standards conformance (C `log1p`, IEEE
     /// 754-2019 `logp1`). In this crate's fixed-point representation it
-    /// is numerically **equivalent** to `(1 + self).ln_strict()` at the
+    /// is numerically **equivalent** to `(1 + self).ln()` at the
     /// same scale — `1 + self` is exactly representable, so the binary
     /// floating-point cancellation that motivates a separate `log1p`
     /// does not arise here. It is not more accurate than
-    /// [`Self::ln_strict`] of `1 + self`; both are correctly rounded.
+    /// [`Self::ln`] of `1 + self`; both are correctly rounded.
     ///
     /// # Algorithm
     ///
@@ -137,90 +130,62 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     /// # Panics
     ///
     /// Panics if `self <= -1` (the domain is `t > -1`, mirroring
-    /// [`Self::ln_strict`]'s positive-argument requirement on `1 + t`),
+    /// [`Self::ln`]'s positive-argument requirement on `1 + t`),
     /// or if the result overflows the type's representable range.
     #[inline]
     #[must_use]
-    pub fn log1p_strict(self) -> Self {
-        self.log1p_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    pub fn log1p(self) -> Self {
+        self.log1p_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     /// `ln(1 + self)` under the supplied rounding mode. See
-    /// [`Self::log1p_strict`].
+    /// [`Self::log1p`].
     #[inline]
     #[must_use]
-    pub fn log1p_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
+    pub fn log1p_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         Self::from_bits(crate::policy::log1p::dispatch::<_, SCALE>(self.to_bits(), mode))
-    }
-
-    /// Returns `ln(1 + self)`.
-    #[inline]
-    #[must_use]
-    pub fn log1p(self) -> Self {
-        self.log1p_strict()
-    }
-
-    /// Returns the logarithm of `self` in the given `base`.
-    #[inline]
-    #[must_use]
-    pub fn log_strict(self, base: Self) -> Self {
-        self.log_strict_with(base, crate::support::rounding::DEFAULT_ROUNDING_MODE)
-    }
-
-    /// Logarithm in `base` under the supplied rounding mode.
-    #[inline]
-    #[must_use]
-    pub fn log_strict_with(self, base: Self, mode: crate::support::rounding::RoundingMode) -> Self {
-        Self::from_bits(crate::policy::log::dispatch::<_, SCALE>(self.to_bits(), base.to_bits(), mode))
     }
 
     /// Returns the logarithm of `self` in the given `base`.
     #[inline]
     #[must_use]
     pub fn log(self, base: Self) -> Self {
-        self.log_strict(base)
+        self.log_with(base, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
-    /// Returns the base-2 logarithm of `self`.
+    /// Logarithm in `base` under the supplied rounding mode.
     #[inline]
     #[must_use]
-    pub fn log2_strict(self) -> Self {
-        self.log2_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
-    }
-
-    /// Base-2 log under the supplied rounding mode.
-    #[inline]
-    #[must_use]
-    pub fn log2_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
-        Self::from_bits(crate::policy::ln::log2_dispatch::<_, SCALE>(self.to_bits(), mode))
+    pub fn log_with(self, base: Self, mode: crate::support::rounding::RoundingMode) -> Self {
+        Self::from_bits(crate::policy::log::dispatch::<_, SCALE>(self.to_bits(), base.to_bits(), mode))
     }
 
     /// Returns the base-2 logarithm of `self`.
     #[inline]
     #[must_use]
     pub fn log2(self) -> Self {
-        self.log2_strict()
+        self.log2_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
-    /// Returns the base-10 logarithm of `self`.
+    /// Base-2 log under the supplied rounding mode.
     #[inline]
     #[must_use]
-    pub fn log10_strict(self) -> Self {
-        self.log10_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
-    }
-
-    /// Base-10 log under the supplied rounding mode.
-    #[inline]
-    #[must_use]
-    pub fn log10_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
-        Self::from_bits(crate::policy::ln::log10_dispatch::<_, SCALE>(self.to_bits(), mode))
+    pub fn log2_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
+        Self::from_bits(crate::policy::ln::log2_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     /// Returns the base-10 logarithm of `self`.
     #[inline]
     #[must_use]
     pub fn log10(self) -> Self {
-        self.log10_strict()
+        self.log10_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Base-10 log under the supplied rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn log10_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
+        Self::from_bits(crate::policy::ln::log10_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     // ── Exponentials ──────────────────────────────────────────────
@@ -228,22 +193,15 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     /// Returns `e^self` (natural exponential).
     #[inline]
     #[must_use]
-    pub fn exp_strict(self) -> Self {
-        self.exp_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    pub fn exp(self) -> Self {
+        self.exp_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     /// `e^self` under the supplied rounding mode.
     #[inline]
     #[must_use]
-    pub fn exp_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
+    pub fn exp_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         Self::from_bits(crate::policy::exp::dispatch::<_, SCALE>(self.to_bits(), mode))
-    }
-
-    /// Returns `e^self` (natural exponential).
-    #[inline]
-    #[must_use]
-    pub fn exp(self) -> Self {
-        self.exp_strict()
     }
 
     /// Returns `e^self - 1`.
@@ -256,14 +214,14 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     ///
     /// **Domain reach.** The `- 1` happens at the WORKING scale, ahead of
     /// the storage range check, so the representable argument range is
-    /// `self <= ln(1 + MAX)` where [`Self::exp_strict`] stops at
+    /// `self <= ln(1 + MAX)` where [`Self::exp`] stops at
     /// `ln(MAX)` — exactly the arguments whose `e^self` lands in
     /// `(MAX, MAX + 1]`. The extra band is `ln(1 + 1/MAX)` wide: with
     /// `MAX ≈ 17` at this width's maximum scale that is about `0.057`,
     /// narrowing at lower scales. Small, but real — there are arguments
-    /// this answers and `exp_strict` panics on.
+    /// this answers and `exp` panics on.
     ///
-    /// It is NOT more accurate than `exp_strict(self) - 1` where both are
+    /// It is NOT more accurate than `exp(self) - 1` where both are
     /// representable: in this crate's fixed-point representation `1` is
     /// exactly `10^SCALE` raw units, so subtracting it is an exact grid
     /// translation and rounding commutes with it — both are correctly
@@ -291,45 +249,32 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     /// tends to `-∞`, which is representable at every scale.
     #[inline]
     #[must_use]
-    pub fn expm1_strict(self) -> Self {
-        self.expm1_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    pub fn expm1(self) -> Self {
+        self.expm1_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     /// `e^self - 1` under the supplied rounding mode. See
-    /// [`Self::expm1_strict`].
+    /// [`Self::expm1`].
     #[inline]
     #[must_use]
-    pub fn expm1_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
+    pub fn expm1_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         Self::from_bits(crate::policy::expm1::dispatch::<_, SCALE>(self.to_bits(), mode))
-    }
-
-    /// Returns `e^self - 1`.
-    #[inline]
-    #[must_use]
-    pub fn expm1(self) -> Self {
-        self.expm1_strict()
-    }
-
-    /// Returns `2^self` (base-2 exponential).
-    #[inline]
-    #[must_use]
-    pub fn exp2_strict(self) -> Self {
-        self.exp2_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
-    }
-
-    /// `2^self` under the supplied rounding mode.
-    #[inline]
-    #[must_use]
-    pub fn exp2_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
-        Self::from_bits(crate::policy::exp::exp2_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     /// Returns `2^self` (base-2 exponential).
     #[inline]
     #[must_use]
     pub fn exp2(self) -> Self {
-        self.exp2_strict()
+        self.exp2_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
+
+    /// `2^self` under the supplied rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn exp2_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
+        Self::from_bits(crate::policy::exp::exp2_dispatch::<_, SCALE>(self.to_bits(), mode))
+    }
+
 }
 
 // Gated to exactly the configurations where the plain `ln` / `exp` /
@@ -355,7 +300,7 @@ mod strict_tests {
         assert_eq!(D38s12::ONE.ln(), D38s12::ZERO);
     }
 
-    /// `ln_strict` is correctly rounded: cross-check against the f64
+    /// `ln` is correctly rounded: cross-check against the f64
     /// bridge at a scale where `f64` (≈ 15–16 significant digits) is
     /// comfortably more precise than the type's ULP, so the
     /// correctly-rounded integer result must agree to within 1 ULP.
@@ -363,14 +308,14 @@ mod strict_tests {
     fn ln_strict_is_correctly_rounded_vs_f64() {
         fn check(raw: i128) {
             let value = crate::D::<crate::int::types::Int<2>, 9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
-            let strict = value.ln_strict().to_bits().as_i128();
+            let strict = value.ln().to_bits().as_i128();
             let reference = {
                 let as_float = raw as f64 / 1e9;
                 (as_float.ln() * 1e9).round() as i128
             };
             assert!(
                 (strict - reference).abs() <= 1,
-                "ln_strict({raw}) = {strict}, f64 reference {reference}"
+                "ln({raw}) = {strict}, f64 reference {reference}"
             );
         }
         for &raw in &[
@@ -389,35 +334,35 @@ mod strict_tests {
         }
     }
 
-    /// `exp_strict` / `log2_strict` / `log10_strict` agree with the f64
+    /// `exp` / `log2` / `log10` agree with the f64
     /// bridge to within 1 ULP at D38<9>.
     #[test]
     fn strict_log_exp_family_matches_f64() {
         fn check_exp(raw: i128) {
             let value = crate::D::<crate::int::types::Int<2>, 9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
-            let strict = value.exp_strict().to_bits().as_i128();
+            let strict = value.exp().to_bits().as_i128();
             let reference = ((raw as f64 / 1e9).exp() * 1e9).round() as i128;
             assert!(
                 (strict - reference).abs() <= 1,
-                "exp_strict({raw}) = {strict}, f64 reference {reference}"
+                "exp({raw}) = {strict}, f64 reference {reference}"
             );
         }
         fn check_log2(raw: i128) {
             let value = crate::D::<crate::int::types::Int<2>, 9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
-            let strict = value.log2_strict().to_bits().as_i128();
+            let strict = value.log2().to_bits().as_i128();
             let reference = ((raw as f64 / 1e9).log2() * 1e9).round() as i128;
             assert!(
                 (strict - reference).abs() <= 1,
-                "log2_strict({raw}) = {strict}, f64 reference {reference}"
+                "log2({raw}) = {strict}, f64 reference {reference}"
             );
         }
         fn check_log10(raw: i128) {
             let value = crate::D::<crate::int::types::Int<2>, 9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
-            let strict = value.log10_strict().to_bits().as_i128();
+            let strict = value.log10().to_bits().as_i128();
             let reference = ((raw as f64 / 1e9).log10() * 1e9).round() as i128;
             assert!(
                 (strict - reference).abs() <= 1,
-                "log10_strict({raw}) = {strict}, f64 reference {reference}"
+                "log10({raw}) = {strict}, f64 reference {reference}"
             );
         }
         for &raw in &[
@@ -448,24 +393,24 @@ mod strict_tests {
         }
     }
 
-    /// `exp2_strict` is exact at integer arguments: `2^10` is `1024`.
+    /// `exp2` is exact at integer arguments: `2^10` is `1024`.
     #[test]
     fn strict_exp2_at_integers() {
         for k in 0_i128..=12 {
             let value = crate::D::<crate::int::types::Int<2>, 12>::from_bits(crate::int::types::Int::<2>::from_i128(k * 10i128.pow(12)));
-            let got = value.exp2_strict().to_bits().as_i128();
+            let got = value.exp2().to_bits().as_i128();
             let expected = (1i128 << k) * 10i128.pow(12);
             assert_eq!(got, expected, "2^{k}");
         }
     }
 
-    /// `ln_strict` is exact at the powers of two it can represent.
+    /// `ln` is exact at the powers of two it can represent.
     #[test]
     fn ln_strict_of_powers_of_two() {
         let ln2_s18: i128 = 693_147_180_559_945_309;
         for k in 1_i128..=20 {
             let value = crate::D::<crate::int::types::Int<2>, 18>::from_bits(crate::int::types::Int::<2>::from_i128((1i128 << k) * 10i128.pow(18)));
-            let got = value.ln_strict().to_bits().as_i128();
+            let got = value.ln().to_bits().as_i128();
             let expected = k * ln2_s18;
             let tolerance = k / 2 + 2;
             assert!(

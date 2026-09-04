@@ -151,7 +151,7 @@ mod tests {
             for &mode in &MODES {
                 assert_eq!(
                     to_degrees_schoolbook_narrow::<S38>(d38(raw).0, mode),
-                    d38(raw).to_degrees_strict_with(mode).0,
+                    d38(raw).to_degrees_with(mode).0,
                     "to_degrees schoolbook != routed at raw={raw} mode={mode:?}"
                 );
             }
@@ -164,7 +164,7 @@ mod tests {
             for &mode in &MODES {
                 assert_eq!(
                     to_radians_schoolbook_narrow::<S38>(d38(raw).0, mode),
-                    d38(raw).to_radians_strict_with(mode).0,
+                    d38(raw).to_radians_with(mode).0,
                     "to_radians schoolbook != routed at raw={raw} mode={mode:?}"
                 );
             }
@@ -195,12 +195,12 @@ mod tests {
                 for &mode in &MODES {
                     assert_eq!(
                         to_degrees_schoolbook::<Core, S>(raw, mode),
-                        D::<Int<3>, S>(raw).to_degrees_strict_with(mode).0,
+                        D::<Int<3>, S>(raw).to_degrees_with(mode).0,
                         "D57 to_degrees schoolbook != routed at units={units} mode={mode:?}"
                     );
                     assert_eq!(
                         to_radians_schoolbook::<Core, S>(raw, mode),
-                        D::<Int<3>, S>(raw).to_radians_strict_with(mode).0,
+                        D::<Int<3>, S>(raw).to_radians_with(mode).0,
                         "D57 to_radians schoolbook != routed at units={units} mode={mode:?}"
                     );
                 }

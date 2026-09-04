@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Bespoke narrow-`GUARD` `tan_strict` kernel slot for `D57<SCALE>`
+//! Bespoke narrow-`GUARD` `tan` kernel slot for `D57<SCALE>`
 //! with `SCALE ∈ 18..=22`.
 //!
 //! The shared wide-tier core sizes `GUARD = 30` for the worst case
@@ -21,7 +21,7 @@
 //! reclaim here is purely from narrowing the working width passed to
 //! the canonical `sin_cos_fixed` kernel.
 //!
-//! The band's `sin_strict` / `cos_strict` route through the shared
+//! The band's `sin` / `cos` route through the shared
 //! directed-aware generic `super::sincos_narrow` (the same narrow-GUARD
 //! reclaim, plus the Ziv escalation and bounded-extremum adjust the
 //! directed modes need) — see `policy::trig`'s D57 forward arms. Only
@@ -55,12 +55,12 @@ use crate::int::types::Int;
 /// derivation and headroom.
 const GUARD_NARROW: u32 = 8;
 
-/// `tan_strict` for `D57<SCALE>` with `SCALE ∈ 18..=22` — shares one
+/// `tan` for `D57<SCALE>` with `SCALE ∈ 18..=22` — shares one
 /// `sin_cos_fixed` between numerator and denominator, narrowed to
 /// `GUARD_NARROW`. Panics if `cos(self) == 0` (odd multiples of π/2).
 #[inline]
 #[must_use]
-pub(crate) fn tan_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
+pub(crate) fn tan<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
     if raw == Int::<3>::ZERO {
         return Int::<3>::ZERO;
     }

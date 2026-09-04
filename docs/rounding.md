@@ -14,7 +14,7 @@ You can change the default crate-wide at compile time via a single
 `rounding-*` Cargo feature (see below), or override per-call with the
 `_with` sibling. The `_with` family is comprehensive — `mul_with` /
 `div_with` / `rem_with` for arithmetic, `quantize_with` for scale
-changes, `ln_strict_with` / `exp_strict_with` / `sin_strict_with` /
+changes, `ln_with` / `exp_with` / `sin_with` /
 every strict transcendental for the correctly-rounded path. So if you
 need ASTM E29 banker's rounding for one codepath and bank-statement
 away-from-zero for another, both are first-class — no global state,

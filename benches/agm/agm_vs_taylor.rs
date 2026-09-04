@@ -2,8 +2,8 @@
 //! D307<300>.
 //!
 //! Both paths are correctly-rounded to 0.5 ULP at storage scale:
-//! `ln_strict_agm` and `exp_strict_agm` run at the lifted working
-//! scale `w' = 2·SCALE + 4` via `guard_agm`, with `exp_strict_agm`
+//! `ln_agm` and `exp_agm` run at the lifted working
+//! scale `w' = 2·SCALE + 4` via `guard_agm`, with `exp_agm`
 //! taking an additional `k_lift` to cover the post-Newton `x << k`
 //! amplification. The bench measures pure throughput against the
 //! chain-MG + narrow-GUARD artanh / Tang stack.
@@ -33,9 +33,9 @@ fn bench_ln(c: &mut Criterion) {
     let x = pos();
     let mut g = c.benchmark_group("D307<300>/ln");
     g.bench_function("artanh (canonical)", |b| {
-        b.iter(|| black_box(x).ln_strict())
+        b.iter(|| black_box(x).ln())
     });
-    g.bench_function("agm", |b| b.iter(|| black_box(x).ln_strict_agm()));
+    g.bench_function("agm", |b| b.iter(|| black_box(x).ln_agm()));
     g.finish();
 }
 
@@ -43,10 +43,10 @@ fn bench_exp(c: &mut Criterion) {
     let x = small();
     let mut g = c.benchmark_group("D307<300>/exp");
     g.bench_function("taylor (canonical)", |b| {
-        b.iter(|| black_box(x).exp_strict())
+        b.iter(|| black_box(x).exp())
     });
     g.bench_function("newton-on-agm", |b| {
-        b.iter(|| black_box(x).exp_strict_agm())
+        b.iter(|| black_box(x).exp_agm())
     });
     g.finish();
 }

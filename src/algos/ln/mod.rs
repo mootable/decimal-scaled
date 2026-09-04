@@ -23,7 +23,7 @@ pub(crate) mod ln_series_2limb;
 /// to `select`.
 pub(crate) mod ln_schoolbook;
 
-/// Tier-generic Tang-style table-driven `ln_strict` kernel, generic over
+/// Tier-generic Tang-style table-driven `ln` kernel, generic over
 /// `WideTrigCore`. Collapses the thirteen per-tier Tang ln
 /// kernels (D57 .. D1232) into one. The `policy::ln` Tang arms call it
 /// with the tier's `Core`, `SCALE`, narrow guard, series cap and

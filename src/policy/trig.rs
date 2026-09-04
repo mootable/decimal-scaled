@@ -3,7 +3,7 @@
 
 //! Trigonometric policy — the per-`(N, SCALE)` algorithm matchers.
 //!
-//! `D<Int<N>, SCALE>::sin_strict_with(mode)` (and the cos / tan / atan /
+//! `D<Int<N>, SCALE>::sin_with(mode)` (and the cos / tan / atan /
 //! asin / acos / atan2 / hyperbolic / angle-conversion siblings) delegate
 //! to the per-function `dispatch` fns at the end of this file, which
 //! resolve each family's canonical
@@ -596,12 +596,12 @@ pub(crate) mod forward_rung {
     use crate::int::types::traits::BigInt;
     use crate::support::rounding::RoundingMode;
 
-    /// `sin_strict` at the work rung; out-of-budget magnitudes fall to
+    /// `sin` at the work rung; out-of-budget magnitudes fall to
     /// the tier-width narrow-GUARD kernel (at `GUARD = C::GUARD` that is
     /// value-identical to `sin_series` — same directed narrowing, same
     /// extremum adjust; the zero pin is an exact identity).
     #[inline]
-    pub(crate) fn sin_strict<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
+    pub(crate) fn sin<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
         raw: C::Storage,
         mode: RoundingMode,
     ) -> C::Storage
@@ -621,9 +621,9 @@ pub(crate) mod forward_rung {
         }
     }
 
-    /// `cos_strict` at the work rung — see [`sin_strict`].
+    /// `cos` at the work rung — see [`sin`].
     #[inline]
-    pub(crate) fn cos_strict<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
+    pub(crate) fn cos<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
         raw: C::Storage,
         mode: RoundingMode,
     ) -> C::Storage
@@ -637,12 +637,12 @@ pub(crate) mod forward_rung {
         }
     }
 
-    /// `tan_strict` at the work rung. `SUB_GUARD` selects the tier-GUARD
+    /// `tan` at the work rung. `SUB_GUARD` selects the tier-GUARD
     /// Series probe shape (`tan_series`, lift minus the guard already
     /// paid) vs the narrow-band shape (full lift); the out-of-budget
     /// fallback is the matching pre-rung kernel, bit-identical to today.
     #[inline]
-    pub(crate) fn tan_strict<
+    pub(crate) fn tan<
         C: WideTrigCore,
         const SCALE: u32,
         const GUARD: u32,
@@ -656,7 +656,7 @@ pub(crate) mod forward_rung {
         <C::W as BigInt>::Scratch: ComputeLimbs,
     {
         // The analytic tiny-`x` directed decision now lives IN the kernels
-        // (`tan_series_g` / the tier `tan_series`) — see [`sin_strict`].
+        // (`tan_series_g` / the tier `tan_series`) — see [`sin`].
         if in_budget::<C::Storage, SCALE, D_BUDGET>(&raw) {
             rung_match!(trig_rung, C, SCALE, tan_series_g, [SCALE, GUARD, NEAR_POLE, SUB_GUARD], raw, mode)
         } else if SUB_GUARD {
@@ -668,7 +668,7 @@ pub(crate) mod forward_rung {
         }
     }
 
-    /// `atan_strict` at the work rung. `DIRECTED` selects the tier-GUARD
+    /// `atan` at the work rung. `DIRECTED` selects the tier-GUARD
     /// Ziv shape (`atan_series`) vs the narrow-band single-shot shape
     /// (`atan_narrow`); the out-of-budget fallback is the matching
     /// pre-rung kernel, bit-identical to today. atan's gate guards only
@@ -678,7 +678,7 @@ pub(crate) mod forward_rung {
     /// bounds it conservatively with the same continuous `|x| < ~10^8`
     /// region, budgeted inside `work_rung::TRIG_MARGIN`.
     #[inline]
-    pub(crate) fn atan_strict<
+    pub(crate) fn atan<
         C: WideTrigCore,
         const SCALE: u32,
         const GUARD: u32,
@@ -691,7 +691,7 @@ pub(crate) mod forward_rung {
         <C::W as BigInt>::Scratch: ComputeLimbs,
     {
         // The analytic tiny-`x` directed decision now lives IN the kernels
-        // (`atan_series_g` / the tier `atan_series`) — see [`sin_strict`].
+        // (`atan_series_g` / the tier `atan_series`) — see [`sin`].
         if in_budget::<C::Storage, SCALE, D_BUDGET>(&raw) {
             rung_match!(trig_rung, C, SCALE, atan_series_g, [SCALE, GUARD, DIRECTED], raw, mode)
         } else if DIRECTED {
@@ -731,10 +731,10 @@ pub(crate) mod inverse_rung {
     };
     use crate::support::rounding::RoundingMode;
 
-    /// `asin_strict` at the work rung; out-of-budget magnitudes (all out
+    /// `asin` at the work rung; out-of-budget magnitudes (all out
     /// of domain) fall to the tier-width composition, bit-identical.
     #[inline]
-    pub(crate) fn asin_strict<C: WideTrigCore, const SCALE: u32>(
+    pub(crate) fn asin<C: WideTrigCore, const SCALE: u32>(
         raw: C::Storage,
         mode: RoundingMode,
     ) -> C::Storage
@@ -754,9 +754,9 @@ pub(crate) mod inverse_rung {
         }
     }
 
-    /// `acos_strict` at the work rung — see [`asin_strict`].
+    /// `acos` at the work rung — see [`asin`].
     #[inline]
-    pub(crate) fn acos_strict<C: WideTrigCore, const SCALE: u32>(
+    pub(crate) fn acos<C: WideTrigCore, const SCALE: u32>(
         raw: C::Storage,
         mode: RoundingMode,
     ) -> C::Storage
@@ -771,11 +771,11 @@ pub(crate) mod inverse_rung {
         }
     }
 
-    /// `atan2_strict` at the work rung; BOTH operands must be in budget
+    /// `atan2` at the work rung; BOTH operands must be in budget
     /// (each is lifted to the rung and divides the other), else the
     /// tier-width composition runs, bit-identical.
     #[inline]
-    pub(crate) fn atan2_strict<C: WideTrigCore, const SCALE: u32>(
+    pub(crate) fn atan2<C: WideTrigCore, const SCALE: u32>(
         y_raw: C::Storage,
         x_raw: C::Storage,
         mode: RoundingMode,
@@ -836,10 +836,10 @@ pub(crate) mod hyper_rung {
     use crate::int::types::traits::BigInt;
     use crate::support::rounding::RoundingMode;
 
-    /// `sinh_strict` at the work rung; out-of-budget magnitudes fall to
+    /// `sinh` at the work rung; out-of-budget magnitudes fall to
     /// the tier-width exp-identity kernel, bit-identical.
     #[inline]
-    pub(crate) fn sinh_strict<C: WideTrigCore, const SCALE: u32>(
+    pub(crate) fn sinh<C: WideTrigCore, const SCALE: u32>(
         raw: C::Storage,
         mode: RoundingMode,
     ) -> C::Storage
@@ -854,9 +854,9 @@ pub(crate) mod hyper_rung {
         }
     }
 
-    /// `cosh_strict` at the work rung — see [`sinh_strict`].
+    /// `cosh` at the work rung — see [`sinh`].
     #[inline]
-    pub(crate) fn cosh_strict<C: WideTrigCore, const SCALE: u32>(
+    pub(crate) fn cosh<C: WideTrigCore, const SCALE: u32>(
         raw: C::Storage,
         mode: RoundingMode,
     ) -> C::Storage
@@ -871,9 +871,9 @@ pub(crate) mod hyper_rung {
         }
     }
 
-    /// `tanh_strict` at the work rung — see [`sinh_strict`].
+    /// `tanh` at the work rung — see [`sinh`].
     #[inline]
-    pub(crate) fn tanh_strict<C: WideTrigCore, const SCALE: u32>(
+    pub(crate) fn tanh<C: WideTrigCore, const SCALE: u32>(
         raw: C::Storage,
         mode: RoundingMode,
     ) -> C::Storage
@@ -915,10 +915,10 @@ pub(crate) mod extra_rung {
     };
     use crate::support::rounding::RoundingMode;
 
-    /// `asinh_strict` at the work rung; out-of-budget magnitudes fall to
+    /// `asinh` at the work rung; out-of-budget magnitudes fall to
     /// the tier-width composition, bit-identical.
     #[inline]
-    pub(crate) fn asinh_strict<C: WideTrigCore, const SCALE: u32>(
+    pub(crate) fn asinh<C: WideTrigCore, const SCALE: u32>(
         raw: C::Storage,
         mode: RoundingMode,
     ) -> C::Storage
@@ -933,11 +933,11 @@ pub(crate) mod extra_rung {
         }
     }
 
-    /// `acosh_strict` at the work rung (the near-special `2·SCALE`
+    /// `acosh` at the work rung (the near-special `2·SCALE`
     /// selector); out-of-budget magnitudes fall to the tier-width
     /// composition, bit-identical.
     #[inline]
-    pub(crate) fn acosh_strict<C: WideTrigCore, const SCALE: u32>(
+    pub(crate) fn acosh<C: WideTrigCore, const SCALE: u32>(
         raw: C::Storage,
         mode: RoundingMode,
     ) -> C::Storage
@@ -952,11 +952,11 @@ pub(crate) mod extra_rung {
         }
     }
 
-    /// `atanh_strict` at the work rung (the near-special `2·SCALE`
+    /// `atanh` at the work rung (the near-special `2·SCALE`
     /// selector); out-of-budget magnitudes (all out of domain) fall to
     /// the tier-width composition, bit-identical.
     #[inline]
-    pub(crate) fn atanh_strict<C: WideTrigCore, const SCALE: u32>(
+    pub(crate) fn atanh<C: WideTrigCore, const SCALE: u32>(
         raw: C::Storage,
         mode: RoundingMode,
     ) -> C::Storage
@@ -1012,7 +1012,7 @@ mod borrow_d57 {
 
     #[inline]
     #[must_use]
-    pub(crate) fn atan_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
+    pub(crate) fn atan<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
         let widened: crate::D<crate::int::types::Int<3>, SCALE> = crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(raw).into();
         // This path RUNS at D57's width, so D57's atan verdict is the one
         // that applies: consult the matcher instead of re-stating a band
@@ -1026,7 +1026,7 @@ mod borrow_d57 {
         // `forward::select_atan`, so the two cannot drift again.
         let raw_wide = match super::forward::resolve_atan::<3, SCALE>(&widened.0) {
             super::forward::Algorithm::Tang => {
-                trig::atan_tang_3limb::atan_strict::<SCALE>(widened.0, mode)
+                trig::atan_tang_3limb::atan::<SCALE>(widened.0, mode)
             }
             // The 18..=22 narrow-GUARD reclaim is a REALISATION of `Series`
             // (a GUARD choice inside the arm), exactly as in `policy_atan`.
@@ -1042,36 +1042,36 @@ mod borrow_d57 {
                 trig::trig_schoolbook::atan_schoolbook::<wide_trig_d57::Core, SCALE>(widened.0, mode)
             }
         };
-        narrow::<SCALE>(raw_wide, "atan_strict")
+        narrow::<SCALE>(raw_wide, "atan")
     }
 
     #[inline]
     #[must_use]
-    pub(crate) fn asin_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
+    pub(crate) fn asin<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
         let widened: crate::D<crate::int::types::Int<3>, SCALE> = crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(raw).into();
         let result_raw = if matches!(SCALE, 18..=22) {
-            trig::inverse_tang_3limb_s18_22::asin_strict::<SCALE>(widened.0, mode)
+            trig::inverse_tang_3limb_s18_22::asin::<SCALE>(widened.0, mode)
         } else {
-            widened.asin_strict_with(mode).0
+            widened.asin_with(mode).0
         };
-        narrow::<SCALE>(result_raw, "asin_strict")
+        narrow::<SCALE>(result_raw, "asin")
     }
 
     #[inline]
     #[must_use]
-    pub(crate) fn acos_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
+    pub(crate) fn acos<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
         let widened: crate::D<crate::int::types::Int<3>, SCALE> = crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(raw).into();
         let result_raw = if matches!(SCALE, 18..=22) {
-            trig::inverse_tang_3limb_s18_22::acos_strict::<SCALE>(widened.0, mode)
+            trig::inverse_tang_3limb_s18_22::acos::<SCALE>(widened.0, mode)
         } else {
-            widened.acos_strict_with(mode).0
+            widened.acos_with(mode).0
         };
-        narrow::<SCALE>(result_raw, "acos_strict")
+        narrow::<SCALE>(result_raw, "acos")
     }
 
     #[inline]
     #[must_use]
-    pub(crate) fn atan2_strict<const SCALE: u32>(
+    pub(crate) fn atan2<const SCALE: u32>(
         y_raw: Int<2>,
         x_raw: Int<2>,
         mode: RoundingMode,
@@ -1079,11 +1079,11 @@ mod borrow_d57 {
         let y_wide: crate::D<crate::int::types::Int<3>, SCALE> = crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(y_raw).into();
         let x_wide: crate::D<crate::int::types::Int<3>, SCALE> = crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(x_raw).into();
         let result_raw = if matches!(SCALE, 18..=22) {
-            trig::inverse_tang_3limb_s18_22::atan2_strict::<SCALE>(y_wide.0, x_wide.0, mode)
+            trig::inverse_tang_3limb_s18_22::atan2::<SCALE>(y_wide.0, x_wide.0, mode)
         } else {
-            y_wide.atan2_strict_with(x_wide, mode).0
+            y_wide.atan2_with(x_wide, mode).0
         };
-        narrow::<SCALE>(result_raw, "atan2_strict")
+        narrow::<SCALE>(result_raw, "atan2")
     }
 }
 
@@ -1130,13 +1130,13 @@ macro_rules! narrow_widen_binary {
     };
 }
 
-narrow_widen!(sin_strict_d18, sin_strict, "sin_strict: result out of range");
-narrow_widen!(cos_strict_d18, cos_strict, "cos_strict: result out of range");
-narrow_widen!(tan_strict_d18, tan_strict, "tan_strict: result out of range");
-narrow_widen!(atan_strict_d18, atan_strict, "atan_strict: result out of range");
-narrow_widen!(asin_strict_d18, asin_strict, "asin_strict: result out of range");
-narrow_widen!(acos_strict_d18, acos_strict, "acos_strict: result out of range");
-narrow_widen_binary!(atan2_strict_d18, atan2_strict, "atan2_strict: result out of range");
+narrow_widen!(sin_strict_d18, sin, "sin: result out of range");
+narrow_widen!(cos_strict_d18, cos, "cos: result out of range");
+narrow_widen!(tan_strict_d18, tan, "tan: result out of range");
+narrow_widen!(atan_strict_d18, atan, "atan: result out of range");
+narrow_widen!(asin_strict_d18, asin, "asin: result out of range");
+narrow_widen!(acos_strict_d18, acos, "acos: result out of range");
+narrow_widen_binary!(atan2_strict_d18, atan2, "atan2: result out of range");
 
 /// Emits the narrow-tier `TrigPolicy` impl that widens to D38, calls the
 /// D38 method, then narrows back.
@@ -1183,7 +1183,7 @@ macro_rules! impl_narrow_trig {
             #[inline]
             pub(crate) fn policy_sinh(self, mode: RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.sinh_strict_with(mode)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide.sinh_with(mode)).unwrap_or_else(
                     |_| {
                         crate::support::diagnostics::overflow_panic_with_scale(
                             concat!(stringify!($T), "::sinh"),
@@ -1195,7 +1195,7 @@ macro_rules! impl_narrow_trig {
             #[inline]
             pub(crate) fn policy_cosh(self, mode: RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.cosh_strict_with(mode)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide.cosh_with(mode)).unwrap_or_else(
                     |_| {
                         crate::support::diagnostics::overflow_panic_with_scale(
                             concat!(stringify!($T), "::cosh"),
@@ -1207,7 +1207,7 @@ macro_rules! impl_narrow_trig {
             #[inline]
             pub(crate) fn policy_tanh(self, mode: RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.tanh_strict_with(mode)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide.tanh_with(mode)).unwrap_or_else(
                     |_| {
                         crate::support::diagnostics::overflow_panic_with_scale(
                             concat!(stringify!($T), "::tanh"),
@@ -1219,7 +1219,7 @@ macro_rules! impl_narrow_trig {
             #[inline]
             pub(crate) fn policy_asinh(self, mode: RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.asinh_strict_with(mode)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide.asinh_with(mode)).unwrap_or_else(
                     |_| {
                         crate::support::diagnostics::overflow_panic_with_scale(
                             concat!(stringify!($T), "::asinh"),
@@ -1231,7 +1231,7 @@ macro_rules! impl_narrow_trig {
             #[inline]
             pub(crate) fn policy_acosh(self, mode: RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.acosh_strict_with(mode)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide.acosh_with(mode)).unwrap_or_else(
                     |_| {
                         crate::support::diagnostics::overflow_panic_with_scale(
                             concat!(stringify!($T), "::acosh"),
@@ -1243,7 +1243,7 @@ macro_rules! impl_narrow_trig {
             #[inline]
             pub(crate) fn policy_atanh(self, mode: RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.atanh_strict_with(mode)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide.atanh_with(mode)).unwrap_or_else(
                     |_| {
                         crate::support::diagnostics::overflow_panic_with_scale(
                             concat!(stringify!($T), "::atanh"),
@@ -1296,7 +1296,7 @@ macro_rules! d38_hyperbolic_and_angle {
         #[inline]
         pub(crate) fn policy_sinh(self, mode: RoundingMode) -> Self {
             Self(match hyper::resolve::<2, SCALE>(&self.0) {
-                hyper::Algorithm::ExpIdentity => trig::trig_series_2limb::sinh_strict::<SCALE>(self.0, mode),
+                hyper::Algorithm::ExpIdentity => trig::trig_series_2limb::sinh::<SCALE>(self.0, mode),
                 #[allow(dead_code)]
                 hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::sinh_schoolbook_narrow::<SCALE>(self.0, mode),
             })
@@ -1304,7 +1304,7 @@ macro_rules! d38_hyperbolic_and_angle {
         #[inline]
         pub(crate) fn policy_cosh(self, mode: RoundingMode) -> Self {
             Self(match hyper::resolve::<2, SCALE>(&self.0) {
-                hyper::Algorithm::ExpIdentity => trig::trig_series_2limb::cosh_strict::<SCALE>(self.0, mode),
+                hyper::Algorithm::ExpIdentity => trig::trig_series_2limb::cosh::<SCALE>(self.0, mode),
                 #[allow(dead_code)]
                 hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::cosh_schoolbook_narrow::<SCALE>(self.0, mode),
             })
@@ -1312,22 +1312,22 @@ macro_rules! d38_hyperbolic_and_angle {
         #[inline]
         pub(crate) fn policy_tanh(self, mode: RoundingMode) -> Self {
             Self(match hyper::resolve::<2, SCALE>(&self.0) {
-                hyper::Algorithm::ExpIdentity => trig::trig_series_2limb::tanh_strict::<SCALE>(self.0, mode),
+                hyper::Algorithm::ExpIdentity => trig::trig_series_2limb::tanh::<SCALE>(self.0, mode),
                 #[allow(dead_code)]
                 hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::tanh_schoolbook_narrow::<SCALE>(self.0, mode),
             })
         }
         #[inline]
         pub(crate) fn policy_asinh(self, mode: RoundingMode) -> Self {
-            Self(trig::trig_series_2limb::asinh_strict::<SCALE>(self.0, mode))
+            Self(trig::trig_series_2limb::asinh::<SCALE>(self.0, mode))
         }
         #[inline]
         pub(crate) fn policy_acosh(self, mode: RoundingMode) -> Self {
-            Self(trig::trig_series_2limb::acosh_strict::<SCALE>(self.0, mode))
+            Self(trig::trig_series_2limb::acosh::<SCALE>(self.0, mode))
         }
         #[inline]
         pub(crate) fn policy_atanh(self, mode: RoundingMode) -> Self {
-            Self(trig::trig_series_2limb::atanh_strict::<SCALE>(self.0, mode))
+            Self(trig::trig_series_2limb::atanh::<SCALE>(self.0, mode))
         }
         #[inline]
         pub(crate) fn policy_to_degrees(self, mode: RoundingMode) -> Self {
@@ -1348,9 +1348,9 @@ macro_rules! d38_forward_fixed {
         #[inline]
         pub(crate) fn policy_sin(self, mode: RoundingMode) -> Self {
             Self(match forward::resolve::<2, SCALE>(&self.0) {
-                forward::Algorithm::Series => trig::trig_series_2limb::sin_strict::<SCALE>(self.0, mode),
+                forward::Algorithm::Series => trig::trig_series_2limb::sin::<SCALE>(self.0, mode),
                 #[cfg(feature = "_wide-support")]
-                forward::Algorithm::Tang => trig::trig_series_2limb::sin_strict::<SCALE>(self.0, mode),
+                forward::Algorithm::Tang => trig::trig_series_2limb::sin::<SCALE>(self.0, mode),
                 #[allow(dead_code)]
                 forward::Algorithm::Schoolbook => trig::trig_schoolbook::sin_schoolbook_narrow::<SCALE>(self.0, mode),
             })
@@ -1358,9 +1358,9 @@ macro_rules! d38_forward_fixed {
         #[inline]
         pub(crate) fn policy_cos(self, mode: RoundingMode) -> Self {
             Self(match forward::resolve::<2, SCALE>(&self.0) {
-                forward::Algorithm::Series => trig::trig_series_2limb::cos_strict::<SCALE>(self.0, mode),
+                forward::Algorithm::Series => trig::trig_series_2limb::cos::<SCALE>(self.0, mode),
                 #[cfg(feature = "_wide-support")]
-                forward::Algorithm::Tang => trig::trig_series_2limb::cos_strict::<SCALE>(self.0, mode),
+                forward::Algorithm::Tang => trig::trig_series_2limb::cos::<SCALE>(self.0, mode),
                 #[allow(dead_code)]
                 forward::Algorithm::Schoolbook => trig::trig_schoolbook::cos_schoolbook_narrow::<SCALE>(self.0, mode),
             })
@@ -1368,9 +1368,9 @@ macro_rules! d38_forward_fixed {
         #[inline]
         pub(crate) fn policy_tan(self, mode: RoundingMode) -> Self {
             Self(match forward::resolve_tan::<2, SCALE>(&self.0) {
-                forward::Algorithm::Series => trig::trig_series_2limb::tan_strict::<SCALE>(self.0, mode),
+                forward::Algorithm::Series => trig::trig_series_2limb::tan::<SCALE>(self.0, mode),
                 #[cfg(feature = "_wide-support")]
-                forward::Algorithm::Tang => trig::trig_series_2limb::tan_strict::<SCALE>(self.0, mode),
+                forward::Algorithm::Tang => trig::trig_series_2limb::tan::<SCALE>(self.0, mode),
                 #[allow(dead_code)]
                 forward::Algorithm::Schoolbook => trig::trig_schoolbook::tan_schoolbook_narrow::<SCALE>(self.0, mode),
             })
@@ -1386,7 +1386,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     pub(crate) fn policy_atan(self, mode: RoundingMode) -> Self {
         Self(match inverse::resolve::<2, SCALE>(&self.0) {
-            inverse::Algorithm::Atan => borrow_d57::atan_strict::<SCALE>(self.0, mode),
+            inverse::Algorithm::Atan => borrow_d57::atan::<SCALE>(self.0, mode),
             #[allow(dead_code)]
             inverse::Algorithm::Schoolbook => trig::trig_schoolbook::atan_schoolbook_narrow::<SCALE>(self.0, mode),
         })
@@ -1394,7 +1394,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     pub(crate) fn policy_asin(self, mode: RoundingMode) -> Self {
         Self(match inverse::resolve::<2, SCALE>(&self.0) {
-            inverse::Algorithm::Atan => borrow_d57::asin_strict::<SCALE>(self.0, mode),
+            inverse::Algorithm::Atan => borrow_d57::asin::<SCALE>(self.0, mode),
             #[allow(dead_code)]
             inverse::Algorithm::Schoolbook => trig::inverse_schoolbook::asin_schoolbook_narrow::<SCALE>(self.0, mode),
         })
@@ -1402,7 +1402,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     pub(crate) fn policy_acos(self, mode: RoundingMode) -> Self {
         Self(match inverse::resolve::<2, SCALE>(&self.0) {
-            inverse::Algorithm::Atan => borrow_d57::acos_strict::<SCALE>(self.0, mode),
+            inverse::Algorithm::Atan => borrow_d57::acos::<SCALE>(self.0, mode),
             #[allow(dead_code)]
             inverse::Algorithm::Schoolbook => trig::inverse_schoolbook::acos_schoolbook_narrow::<SCALE>(self.0, mode),
         })
@@ -1411,7 +1411,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     pub(crate) fn policy_atan2(self, other: Self, mode: RoundingMode) -> Self {
         Self(match inverse::resolve::<2, SCALE>(&self.0) {
             inverse::Algorithm::Atan => {
-                borrow_d57::atan2_strict::<SCALE>(self.0, other.0, mode)
+                borrow_d57::atan2::<SCALE>(self.0, other.0, mode)
             }
             #[allow(dead_code)]
             inverse::Algorithm::Schoolbook => trig::inverse_schoolbook::atan2_schoolbook_narrow::<SCALE>(self.0, other.0, mode),
@@ -1428,7 +1428,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     pub(crate) fn policy_atan(self, mode: RoundingMode) -> Self {
         Self(match inverse::resolve::<2, SCALE>(&self.0) {
-            inverse::Algorithm::Atan => trig::trig_series_2limb::atan_strict::<SCALE>(self.0, mode),
+            inverse::Algorithm::Atan => trig::trig_series_2limb::atan::<SCALE>(self.0, mode),
             #[allow(dead_code)]
             inverse::Algorithm::Schoolbook => trig::trig_schoolbook::atan_schoolbook_narrow::<SCALE>(self.0, mode),
         })
@@ -1436,7 +1436,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     pub(crate) fn policy_asin(self, mode: RoundingMode) -> Self {
         Self(match inverse::resolve::<2, SCALE>(&self.0) {
-            inverse::Algorithm::Atan => trig::trig_series_2limb::asin_strict::<SCALE>(self.0, mode),
+            inverse::Algorithm::Atan => trig::trig_series_2limb::asin::<SCALE>(self.0, mode),
             #[allow(dead_code)]
             inverse::Algorithm::Schoolbook => trig::inverse_schoolbook::asin_schoolbook_narrow::<SCALE>(self.0, mode),
         })
@@ -1444,7 +1444,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     pub(crate) fn policy_acos(self, mode: RoundingMode) -> Self {
         Self(match inverse::resolve::<2, SCALE>(&self.0) {
-            inverse::Algorithm::Atan => trig::trig_series_2limb::acos_strict::<SCALE>(self.0, mode),
+            inverse::Algorithm::Atan => trig::trig_series_2limb::acos::<SCALE>(self.0, mode),
             #[allow(dead_code)]
             inverse::Algorithm::Schoolbook => trig::inverse_schoolbook::acos_schoolbook_narrow::<SCALE>(self.0, mode),
         })
@@ -1453,7 +1453,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     pub(crate) fn policy_atan2(self, other: Self, mode: RoundingMode) -> Self {
         Self(match inverse::resolve::<2, SCALE>(&self.0) {
             inverse::Algorithm::Atan => {
-                trig::trig_series_2limb::atan2_strict::<SCALE>(self.0, other.0, mode)
+                trig::trig_series_2limb::atan2::<SCALE>(self.0, other.0, mode)
             }
             #[allow(dead_code)]
             inverse::Algorithm::Schoolbook => trig::inverse_schoolbook::atan2_schoolbook_narrow::<SCALE>(self.0, other.0, mode),
@@ -1487,7 +1487,7 @@ macro_rules! wide_trig_inverse_inherent {
         #[inline]
         pub(crate) fn policy_asin(self, mode: RoundingMode) -> Self {
             match inverse::resolve::<$N, SCALE>(&self.0) {
-                inverse::Algorithm::Atan => Self(inverse_rung::asin_strict::<$Core, SCALE>(self.0, mode)),
+                inverse::Algorithm::Atan => Self(inverse_rung::asin::<$Core, SCALE>(self.0, mode)),
                 #[allow(dead_code)]
                 inverse::Algorithm::Schoolbook => Self(crate::algos::trig::inverse_schoolbook::asin_schoolbook::<$Core, SCALE>(self.0, mode)),
             }
@@ -1495,7 +1495,7 @@ macro_rules! wide_trig_inverse_inherent {
         #[inline]
         pub(crate) fn policy_acos(self, mode: RoundingMode) -> Self {
             match inverse::resolve::<$N, SCALE>(&self.0) {
-                inverse::Algorithm::Atan => Self(inverse_rung::acos_strict::<$Core, SCALE>(self.0, mode)),
+                inverse::Algorithm::Atan => Self(inverse_rung::acos::<$Core, SCALE>(self.0, mode)),
                 #[allow(dead_code)]
                 inverse::Algorithm::Schoolbook => Self(crate::algos::trig::inverse_schoolbook::acos_schoolbook::<$Core, SCALE>(self.0, mode)),
             }
@@ -1503,7 +1503,7 @@ macro_rules! wide_trig_inverse_inherent {
         #[inline]
         pub(crate) fn policy_atan2(self, other: Self, mode: RoundingMode) -> Self {
             match inverse::resolve::<$N, SCALE>(&self.0) {
-                inverse::Algorithm::Atan => Self(inverse_rung::atan2_strict::<$Core, SCALE>(self.0, other.0, mode)),
+                inverse::Algorithm::Atan => Self(inverse_rung::atan2::<$Core, SCALE>(self.0, other.0, mode)),
                 #[allow(dead_code)]
                 inverse::Algorithm::Schoolbook => Self(crate::algos::trig::inverse_schoolbook::atan2_schoolbook::<$Core, SCALE>(self.0, other.0, mode)),
             }
@@ -1517,7 +1517,7 @@ macro_rules! wide_trig_extra_inherent {
     ($N:literal, $Core:ty) => {
         #[inline]
         pub(crate) fn policy_asinh(self, mode: RoundingMode) -> Self {
-            Self(extra_rung::asinh_strict::<$Core, SCALE>(self.0, mode))
+            Self(extra_rung::asinh::<$Core, SCALE>(self.0, mode))
         }
         #[inline]
         pub(crate) fn policy_acosh(self, mode: RoundingMode) -> Self {
@@ -1530,7 +1530,7 @@ macro_rules! wide_trig_extra_inherent {
                     )
                 }
                 inverse_hyper::Algorithm::Schoolbook => {
-                    extra_rung::acosh_strict::<$Core, SCALE>(self.0, mode)
+                    extra_rung::acosh::<$Core, SCALE>(self.0, mode)
                 }
             })
         }
@@ -1545,7 +1545,7 @@ macro_rules! wide_trig_extra_inherent {
                     )
                 }
                 inverse_hyper::Algorithm::Schoolbook => {
-                    extra_rung::atanh_strict::<$Core, SCALE>(self.0, mode)
+                    extra_rung::atanh::<$Core, SCALE>(self.0, mode)
                 }
             })
         }
@@ -1568,7 +1568,7 @@ macro_rules! wide_trig_hyper_inherent {
         #[inline]
         pub(crate) fn policy_sinh(self, mode: RoundingMode) -> Self {
             match hyper::resolve::<$N, SCALE>(&self.0) {
-                hyper::Algorithm::ExpIdentity => Self(hyper_rung::sinh_strict::<$Core, SCALE>(self.0, mode)),
+                hyper::Algorithm::ExpIdentity => Self(hyper_rung::sinh::<$Core, SCALE>(self.0, mode)),
                 #[allow(dead_code)]
                 hyper::Algorithm::Schoolbook => Self(crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<$Core, SCALE>(self.0, mode)),
             }
@@ -1576,7 +1576,7 @@ macro_rules! wide_trig_hyper_inherent {
         #[inline]
         pub(crate) fn policy_cosh(self, mode: RoundingMode) -> Self {
             match hyper::resolve::<$N, SCALE>(&self.0) {
-                hyper::Algorithm::ExpIdentity => Self(hyper_rung::cosh_strict::<$Core, SCALE>(self.0, mode)),
+                hyper::Algorithm::ExpIdentity => Self(hyper_rung::cosh::<$Core, SCALE>(self.0, mode)),
                 #[allow(dead_code)]
                 hyper::Algorithm::Schoolbook => Self(crate::algos::trig::hyper_schoolbook::cosh_schoolbook::<$Core, SCALE>(self.0, mode)),
             }
@@ -1584,7 +1584,7 @@ macro_rules! wide_trig_hyper_inherent {
         #[inline]
         pub(crate) fn policy_tanh(self, mode: RoundingMode) -> Self {
             match hyper::resolve::<$N, SCALE>(&self.0) {
-                hyper::Algorithm::ExpIdentity => Self(hyper_rung::tanh_strict::<$Core, SCALE>(self.0, mode)),
+                hyper::Algorithm::ExpIdentity => Self(hyper_rung::tanh::<$Core, SCALE>(self.0, mode)),
                 #[allow(dead_code)]
                 hyper::Algorithm::Schoolbook => Self(crate::algos::trig::hyper_schoolbook::tanh_schoolbook::<$Core, SCALE>(self.0, mode)),
             }
@@ -1603,11 +1603,11 @@ macro_rules! wide_trig_forward_series {
         pub(crate) fn policy_sin(self, mode: RoundingMode) -> Self {
             Self(match forward::resolve::<$N, SCALE>(&self.0) {
                 forward::Algorithm::Series => {
-                    forward_rung::sin_strict::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode)
+                    forward_rung::sin::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode)
                 }
                 #[cfg(feature = "_wide-support")]
                 forward::Algorithm::Tang => {
-                    forward_rung::sin_strict::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode)
+                    forward_rung::sin::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode)
                 }
                 #[allow(dead_code)]
                 forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::sin_schoolbook::<$Core, SCALE>(self.0, mode),
@@ -1617,11 +1617,11 @@ macro_rules! wide_trig_forward_series {
         pub(crate) fn policy_cos(self, mode: RoundingMode) -> Self {
             Self(match forward::resolve::<$N, SCALE>(&self.0) {
                 forward::Algorithm::Series => {
-                    forward_rung::cos_strict::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode)
+                    forward_rung::cos::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode)
                 }
                 #[cfg(feature = "_wide-support")]
                 forward::Algorithm::Tang => {
-                    forward_rung::cos_strict::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode)
+                    forward_rung::cos::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode)
                 }
                 #[allow(dead_code)]
                 forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::cos_schoolbook::<$Core, SCALE>(self.0, mode),
@@ -1631,11 +1631,11 @@ macro_rules! wide_trig_forward_series {
         pub(crate) fn policy_tan(self, mode: RoundingMode) -> Self {
             Self(match forward::resolve_tan::<$N, SCALE>(&self.0) {
                 forward::Algorithm::Series => {
-                    forward_rung::tan_strict::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true, true>(self.0, mode)
+                    forward_rung::tan::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true, true>(self.0, mode)
                 }
                 #[cfg(feature = "_wide-support")]
                 forward::Algorithm::Tang => {
-                    forward_rung::tan_strict::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true, true>(self.0, mode)
+                    forward_rung::tan::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true, true>(self.0, mode)
                 }
                 #[allow(dead_code)]
                 forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::tan_schoolbook::<$Core, SCALE>(self.0, mode),
@@ -1645,11 +1645,11 @@ macro_rules! wide_trig_forward_series {
         pub(crate) fn policy_atan(self, mode: RoundingMode) -> Self {
             Self(match forward::resolve_atan::<$N, SCALE>(&self.0) {
                 forward::Algorithm::Series => {
-                    forward_rung::atan_strict::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true>(self.0, mode)
+                    forward_rung::atan::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true>(self.0, mode)
                 }
                 #[cfg(feature = "_wide-support")]
                 forward::Algorithm::Tang => {
-                    forward_rung::atan_strict::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true>(self.0, mode)
+                    forward_rung::atan::<$Core, SCALE, { <$Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true>(self.0, mode)
                 }
                 #[allow(dead_code)]
                 forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::atan_schoolbook::<$Core, SCALE>(self.0, mode),
@@ -1678,8 +1678,8 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
                 // + the bounded-extremum adjust); the bespoke single-shot
                 // D57 slot kept only for tan. GUARD=8 per the band's probe.
                 // Both bands run at the SCALE-derived work rung.
-                18..=22 => forward_rung::sin_strict::<crate::types::widths::wide_trig_d57::Core, SCALE, 8>(self.0, mode),
-                _ => forward_rung::sin_strict::<crate::types::widths::wide_trig_d57::Core, SCALE, { <crate::types::widths::wide_trig_d57::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode),
+                18..=22 => forward_rung::sin::<crate::types::widths::wide_trig_d57::Core, SCALE, 8>(self.0, mode),
+                _ => forward_rung::sin::<crate::types::widths::wide_trig_d57::Core, SCALE, { <crate::types::widths::wide_trig_d57::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode),
             },
             forward::Algorithm::Tang => {
                 trig::sincos_tang::sin_tang_with_taylor::<crate::types::widths::wide_trig_d57::Core, SCALE, 512>(self.0, mode)
@@ -1694,8 +1694,8 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
             forward::Algorithm::Series => match SCALE {
                 // Shared directed-aware narrow-GUARD kernel — see the
                 // matching `policy_sin` arm above.
-                18..=22 => forward_rung::cos_strict::<crate::types::widths::wide_trig_d57::Core, SCALE, 8>(self.0, mode),
-                _ => forward_rung::cos_strict::<crate::types::widths::wide_trig_d57::Core, SCALE, { <crate::types::widths::wide_trig_d57::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode),
+                18..=22 => forward_rung::cos::<crate::types::widths::wide_trig_d57::Core, SCALE, 8>(self.0, mode),
+                _ => forward_rung::cos::<crate::types::widths::wide_trig_d57::Core, SCALE, { <crate::types::widths::wide_trig_d57::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode),
             },
             forward::Algorithm::Tang => {
                 trig::sincos_tang::cos_tang_with_taylor::<crate::types::widths::wide_trig_d57::Core, SCALE, 512>(self.0, mode)
@@ -1708,12 +1708,12 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
     pub(crate) fn policy_tan(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve_tan::<3, SCALE>(&self.0) {
             forward::Algorithm::Series => match SCALE {
-                18..=22 => trig::sincos_tang_3limb_s18_22::tan_strict::<SCALE>(self.0, mode),
-                _ => forward_rung::tan_strict::<crate::types::widths::wide_trig_d57::Core, SCALE, { <crate::types::widths::wide_trig_d57::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true, true>(self.0, mode),
+                18..=22 => trig::sincos_tang_3limb_s18_22::tan::<SCALE>(self.0, mode),
+                _ => forward_rung::tan::<crate::types::widths::wide_trig_d57::Core, SCALE, { <crate::types::widths::wide_trig_d57::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true, true>(self.0, mode),
             },
             // tan has no D57 Tang band; the arm is dead-arm-eliminated
             // (forwards to the generic kernel for exhaustiveness).
-            forward::Algorithm::Tang => forward_rung::tan_strict::<crate::types::widths::wide_trig_d57::Core, SCALE, { <crate::types::widths::wide_trig_d57::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true, true>(self.0, mode),
+            forward::Algorithm::Tang => forward_rung::tan::<crate::types::widths::wide_trig_d57::Core, SCALE, { <crate::types::widths::wide_trig_d57::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true, true>(self.0, mode),
             #[allow(dead_code)]
             forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::tan_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
         })
@@ -1723,11 +1723,11 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
         Self(match forward::resolve_atan::<3, SCALE>(&self.0) {
             forward::Algorithm::Series => match SCALE {
                 // Both bands run at the SCALE-derived work rung.
-                18..=22 => forward_rung::atan_strict::<crate::types::widths::wide_trig_d57::Core, SCALE, 10, false>(self.0, mode),
-                _ => forward_rung::atan_strict::<crate::types::widths::wide_trig_d57::Core, SCALE, { <crate::types::widths::wide_trig_d57::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true>(self.0, mode),
+                18..=22 => forward_rung::atan::<crate::types::widths::wide_trig_d57::Core, SCALE, 10, false>(self.0, mode),
+                _ => forward_rung::atan::<crate::types::widths::wide_trig_d57::Core, SCALE, { <crate::types::widths::wide_trig_d57::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true>(self.0, mode),
             },
             forward::Algorithm::Tang => {
-                trig::atan_tang_3limb::atan_strict::<SCALE>(self.0, mode)
+                trig::atan_tang_3limb::atan::<SCALE>(self.0, mode)
             }
             #[allow(dead_code)]
             forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::atan_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
@@ -1739,8 +1739,8 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
     pub(crate) fn policy_asin(self, mode: RoundingMode) -> Self {
         Self(match inverse::resolve::<3, SCALE>(&self.0) {
             inverse::Algorithm::Atan => match SCALE {
-                18..=22 => trig::inverse_tang_3limb_s18_22::asin_strict::<SCALE>(self.0, mode),
-                _ => return Self(inverse_rung::asin_strict::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode)),
+                18..=22 => trig::inverse_tang_3limb_s18_22::asin::<SCALE>(self.0, mode),
+                _ => return Self(inverse_rung::asin::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
             inverse::Algorithm::Schoolbook => trig::inverse_schoolbook::asin_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
@@ -1750,8 +1750,8 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
     pub(crate) fn policy_acos(self, mode: RoundingMode) -> Self {
         Self(match inverse::resolve::<3, SCALE>(&self.0) {
             inverse::Algorithm::Atan => match SCALE {
-                18..=22 => trig::inverse_tang_3limb_s18_22::acos_strict::<SCALE>(self.0, mode),
-                _ => return Self(inverse_rung::acos_strict::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode)),
+                18..=22 => trig::inverse_tang_3limb_s18_22::acos::<SCALE>(self.0, mode),
+                _ => return Self(inverse_rung::acos::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
             inverse::Algorithm::Schoolbook => trig::inverse_schoolbook::acos_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
@@ -1762,9 +1762,9 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
         Self(match inverse::resolve::<3, SCALE>(&self.0) {
             inverse::Algorithm::Atan => match SCALE {
                 18..=22 => {
-                    trig::inverse_tang_3limb_s18_22::atan2_strict::<SCALE>(self.0, other.0, mode)
+                    trig::inverse_tang_3limb_s18_22::atan2::<SCALE>(self.0, other.0, mode)
                 }
-                _ => return Self(inverse_rung::atan2_strict::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, other.0, mode)),
+                _ => return Self(inverse_rung::atan2::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, other.0, mode)),
             },
             #[allow(dead_code)]
             inverse::Algorithm::Schoolbook => trig::inverse_schoolbook::atan2_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, other.0, mode),
@@ -1777,7 +1777,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
         Self(match hyper::resolve::<3, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
                 18..=22 if hyper_band_in_range::<3, SCALE>(&self.0) => trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8, 128, false>(self.0, mode),
-                _ => return Self(hyper_rung::sinh_strict::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode)),
+                _ => return Self(hyper_rung::sinh::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
             hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::sinh_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
@@ -1788,7 +1788,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
         Self(match hyper::resolve::<3, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
                 18..=22 if hyper_band_in_range::<3, SCALE>(&self.0) => trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8, 128, false>(self.0, mode),
-                _ => return Self(hyper_rung::cosh_strict::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode)),
+                _ => return Self(hyper_rung::cosh::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
             hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::cosh_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
@@ -1799,7 +1799,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
         Self(match hyper::resolve::<3, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
                 18..=22 if hyper_band_in_range::<3, SCALE>(&self.0) => trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8, 128, false>(self.0, mode),
-                _ => return Self(hyper_rung::tanh_strict::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode)),
+                _ => return Self(hyper_rung::tanh::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
             hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::tanh_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
@@ -1867,9 +1867,9 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<8>, SCALE> {
     #[inline]
     pub(crate) fn policy_sin(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<8, SCALE>(&self.0) {
-            forward::Algorithm::Series => forward_rung::sin_strict::<crate::types::widths::wide_trig_d153::Core, SCALE, { <crate::types::widths::wide_trig_d153::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode),
+            forward::Algorithm::Series => forward_rung::sin::<crate::types::widths::wide_trig_d153::Core, SCALE, { <crate::types::widths::wide_trig_d153::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode),
             forward::Algorithm::Tang => {
-                forward_rung::sin_strict::<crate::types::widths::wide_trig_d153::Core, SCALE, 10>(self.0, mode)
+                forward_rung::sin::<crate::types::widths::wide_trig_d153::Core, SCALE, 10>(self.0, mode)
             }
             #[allow(dead_code)]
             forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::sin_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
@@ -1878,9 +1878,9 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<8>, SCALE> {
     #[inline]
     pub(crate) fn policy_cos(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<8, SCALE>(&self.0) {
-            forward::Algorithm::Series => forward_rung::cos_strict::<crate::types::widths::wide_trig_d153::Core, SCALE, { <crate::types::widths::wide_trig_d153::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode),
+            forward::Algorithm::Series => forward_rung::cos::<crate::types::widths::wide_trig_d153::Core, SCALE, { <crate::types::widths::wide_trig_d153::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode),
             forward::Algorithm::Tang => {
-                forward_rung::cos_strict::<crate::types::widths::wide_trig_d153::Core, SCALE, 10>(self.0, mode)
+                forward_rung::cos::<crate::types::widths::wide_trig_d153::Core, SCALE, 10>(self.0, mode)
             }
             #[allow(dead_code)]
             forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::cos_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
@@ -1889,9 +1889,9 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<8>, SCALE> {
     #[inline]
     pub(crate) fn policy_tan(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve_tan::<8, SCALE>(&self.0) {
-            forward::Algorithm::Series => forward_rung::tan_strict::<crate::types::widths::wide_trig_d153::Core, SCALE, { <crate::types::widths::wide_trig_d153::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true, true>(self.0, mode),
+            forward::Algorithm::Series => forward_rung::tan::<crate::types::widths::wide_trig_d153::Core, SCALE, { <crate::types::widths::wide_trig_d153::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true, true>(self.0, mode),
             forward::Algorithm::Tang => {
-                forward_rung::tan_strict::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, true, false>(self.0, mode)
+                forward_rung::tan::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, true, false>(self.0, mode)
             }
             #[allow(dead_code)]
             forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::tan_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
@@ -1900,9 +1900,9 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<8>, SCALE> {
     #[inline]
     pub(crate) fn policy_atan(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve_atan::<8, SCALE>(&self.0) {
-            forward::Algorithm::Series => forward_rung::atan_strict::<crate::types::widths::wide_trig_d153::Core, SCALE, { <crate::types::widths::wide_trig_d153::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true>(self.0, mode),
+            forward::Algorithm::Series => forward_rung::atan::<crate::types::widths::wide_trig_d153::Core, SCALE, { <crate::types::widths::wide_trig_d153::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true>(self.0, mode),
             forward::Algorithm::Tang => {
-                forward_rung::atan_strict::<crate::types::widths::wide_trig_d153::Core, SCALE, 12, false>(self.0, mode)
+                forward_rung::atan::<crate::types::widths::wide_trig_d153::Core, SCALE, 12, false>(self.0, mode)
             }
             #[allow(dead_code)]
             forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::atan_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
@@ -1915,7 +1915,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<8>, SCALE> {
         Self(match hyper::resolve::<8, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
                 70..=82 if hyper_band_in_range::<8, SCALE>(&self.0) => trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, 128, true>(self.0, mode),
-                _ => return Self(hyper_rung::sinh_strict::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode)),
+                _ => return Self(hyper_rung::sinh::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
             hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::sinh_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
@@ -1926,7 +1926,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<8>, SCALE> {
         Self(match hyper::resolve::<8, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
                 70..=82 if hyper_band_in_range::<8, SCALE>(&self.0) => trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, 128, true>(self.0, mode),
-                _ => return Self(hyper_rung::cosh_strict::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode)),
+                _ => return Self(hyper_rung::cosh::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
             hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::cosh_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
@@ -1937,7 +1937,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<8>, SCALE> {
         Self(match hyper::resolve::<8, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
                 70..=82 if hyper_band_in_range::<8, SCALE>(&self.0) => trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, 128, true>(self.0, mode),
-                _ => return Self(hyper_rung::tanh_strict::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode)),
+                _ => return Self(hyper_rung::tanh::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
             hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::tanh_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
@@ -1962,9 +1962,9 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
     #[inline]
     pub(crate) fn policy_sin(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<16, SCALE>(&self.0) {
-            forward::Algorithm::Series => forward_rung::sin_strict::<crate::types::widths::wide_trig_d307::Core, SCALE, { <crate::types::widths::wide_trig_d307::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode),
+            forward::Algorithm::Series => forward_rung::sin::<crate::types::widths::wide_trig_d307::Core, SCALE, { <crate::types::widths::wide_trig_d307::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode),
             forward::Algorithm::Tang => {
-                forward_rung::sin_strict::<crate::types::widths::wide_trig_d307::Core, SCALE, 8>(self.0, mode)
+                forward_rung::sin::<crate::types::widths::wide_trig_d307::Core, SCALE, 8>(self.0, mode)
             }
             #[allow(dead_code)]
             forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::sin_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
@@ -1973,9 +1973,9 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
     #[inline]
     pub(crate) fn policy_cos(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<16, SCALE>(&self.0) {
-            forward::Algorithm::Series => forward_rung::cos_strict::<crate::types::widths::wide_trig_d307::Core, SCALE, { <crate::types::widths::wide_trig_d307::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode),
+            forward::Algorithm::Series => forward_rung::cos::<crate::types::widths::wide_trig_d307::Core, SCALE, { <crate::types::widths::wide_trig_d307::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode),
             forward::Algorithm::Tang => {
-                forward_rung::cos_strict::<crate::types::widths::wide_trig_d307::Core, SCALE, 8>(self.0, mode)
+                forward_rung::cos::<crate::types::widths::wide_trig_d307::Core, SCALE, 8>(self.0, mode)
             }
             #[allow(dead_code)]
             forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::cos_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
@@ -1984,9 +1984,9 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
     #[inline]
     pub(crate) fn policy_tan(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve_tan::<16, SCALE>(&self.0) {
-            forward::Algorithm::Series => forward_rung::tan_strict::<crate::types::widths::wide_trig_d307::Core, SCALE, { <crate::types::widths::wide_trig_d307::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true, true>(self.0, mode),
+            forward::Algorithm::Series => forward_rung::tan::<crate::types::widths::wide_trig_d307::Core, SCALE, { <crate::types::widths::wide_trig_d307::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true, true>(self.0, mode),
             forward::Algorithm::Tang => {
-                forward_rung::tan_strict::<crate::types::widths::wide_trig_d307::Core, SCALE, 8, true, false>(self.0, mode)
+                forward_rung::tan::<crate::types::widths::wide_trig_d307::Core, SCALE, 8, true, false>(self.0, mode)
             }
             #[allow(dead_code)]
             forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::tan_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
@@ -1995,9 +1995,9 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
     #[inline]
     pub(crate) fn policy_atan(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve_atan::<16, SCALE>(&self.0) {
-            forward::Algorithm::Series => forward_rung::atan_strict::<crate::types::widths::wide_trig_d307::Core, SCALE, { <crate::types::widths::wide_trig_d307::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true>(self.0, mode),
+            forward::Algorithm::Series => forward_rung::atan::<crate::types::widths::wide_trig_d307::Core, SCALE, { <crate::types::widths::wide_trig_d307::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true>(self.0, mode),
             forward::Algorithm::Tang => {
-                forward_rung::atan_strict::<crate::types::widths::wide_trig_d307::Core, SCALE, 10, false>(self.0, mode)
+                forward_rung::atan::<crate::types::widths::wide_trig_d307::Core, SCALE, 10, false>(self.0, mode)
             }
             #[allow(dead_code)]
             forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::atan_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
@@ -2010,7 +2010,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
         Self(match hyper::resolve::<16, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
                 140..=160 if hyper_band_in_range::<16, SCALE>(&self.0) => trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, 8, 128, false>(self.0, mode),
-                _ => return Self(hyper_rung::sinh_strict::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode)),
+                _ => return Self(hyper_rung::sinh::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
             hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::sinh_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
@@ -2021,7 +2021,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
         Self(match hyper::resolve::<16, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
                 140..=160 if hyper_band_in_range::<16, SCALE>(&self.0) => trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, 8, 128, false>(self.0, mode),
-                _ => return Self(hyper_rung::cosh_strict::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode)),
+                _ => return Self(hyper_rung::cosh::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
             hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::cosh_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
@@ -2032,7 +2032,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
         Self(match hyper::resolve::<16, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
                 140..=160 if hyper_band_in_range::<16, SCALE>(&self.0) => trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, 8, 128, false>(self.0, mode),
-                _ => return Self(hyper_rung::tanh_strict::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode)),
+                _ => return Self(hyper_rung::tanh::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
             hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::tanh_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
@@ -2048,9 +2048,9 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<24>, SCALE> {
     #[inline]
     pub(crate) fn policy_sin(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<24, SCALE>(&self.0) {
-            forward::Algorithm::Series => forward_rung::sin_strict::<crate::types::widths::wide_trig_d462::Core, SCALE, { <crate::types::widths::wide_trig_d462::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode),
+            forward::Algorithm::Series => forward_rung::sin::<crate::types::widths::wide_trig_d462::Core, SCALE, { <crate::types::widths::wide_trig_d462::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode),
             forward::Algorithm::Tang => {
-                forward_rung::sin_strict::<crate::types::widths::wide_trig_d462::Core, SCALE, 10>(self.0, mode)
+                forward_rung::sin::<crate::types::widths::wide_trig_d462::Core, SCALE, 10>(self.0, mode)
             }
             #[allow(dead_code)]
             forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::sin_schoolbook::<crate::types::widths::wide_trig_d462::Core, SCALE>(self.0, mode),
@@ -2059,9 +2059,9 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<24>, SCALE> {
     #[inline]
     pub(crate) fn policy_cos(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<24, SCALE>(&self.0) {
-            forward::Algorithm::Series => forward_rung::cos_strict::<crate::types::widths::wide_trig_d462::Core, SCALE, { <crate::types::widths::wide_trig_d462::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode),
+            forward::Algorithm::Series => forward_rung::cos::<crate::types::widths::wide_trig_d462::Core, SCALE, { <crate::types::widths::wide_trig_d462::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(self.0, mode),
             forward::Algorithm::Tang => {
-                forward_rung::cos_strict::<crate::types::widths::wide_trig_d462::Core, SCALE, 10>(self.0, mode)
+                forward_rung::cos::<crate::types::widths::wide_trig_d462::Core, SCALE, 10>(self.0, mode)
             }
             #[allow(dead_code)]
             forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::cos_schoolbook::<crate::types::widths::wide_trig_d462::Core, SCALE>(self.0, mode),
@@ -2070,9 +2070,9 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<24>, SCALE> {
     #[inline]
     pub(crate) fn policy_tan(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve_tan::<24, SCALE>(&self.0) {
-            forward::Algorithm::Series => forward_rung::tan_strict::<crate::types::widths::wide_trig_d462::Core, SCALE, { <crate::types::widths::wide_trig_d462::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true, true>(self.0, mode),
+            forward::Algorithm::Series => forward_rung::tan::<crate::types::widths::wide_trig_d462::Core, SCALE, { <crate::types::widths::wide_trig_d462::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true, true>(self.0, mode),
             forward::Algorithm::Tang => {
-                forward_rung::tan_strict::<crate::types::widths::wide_trig_d462::Core, SCALE, 10, false, false>(self.0, mode)
+                forward_rung::tan::<crate::types::widths::wide_trig_d462::Core, SCALE, 10, false, false>(self.0, mode)
             }
             #[allow(dead_code)]
             forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::tan_schoolbook::<crate::types::widths::wide_trig_d462::Core, SCALE>(self.0, mode),
@@ -2081,9 +2081,9 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<24>, SCALE> {
     #[inline]
     pub(crate) fn policy_atan(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve_atan::<24, SCALE>(&self.0) {
-            forward::Algorithm::Series => forward_rung::atan_strict::<crate::types::widths::wide_trig_d462::Core, SCALE, { <crate::types::widths::wide_trig_d462::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true>(self.0, mode),
+            forward::Algorithm::Series => forward_rung::atan::<crate::types::widths::wide_trig_d462::Core, SCALE, { <crate::types::widths::wide_trig_d462::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }, true>(self.0, mode),
             forward::Algorithm::Tang => {
-                forward_rung::atan_strict::<crate::types::widths::wide_trig_d462::Core, SCALE, 12, false>(self.0, mode)
+                forward_rung::atan::<crate::types::widths::wide_trig_d462::Core, SCALE, 12, false>(self.0, mode)
             }
             #[allow(dead_code)]
             forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::atan_schoolbook::<crate::types::widths::wide_trig_d462::Core, SCALE>(self.0, mode),
@@ -2710,16 +2710,16 @@ macro_rules! checked_hop_dispatch {
     };
 }
 
-checked_hop_dispatch!(checked_sinh_dispatch, sinh_strict_with);
-checked_hop_dispatch!(checked_cosh_dispatch, cosh_strict_with);
-checked_hop_dispatch!(checked_tanh_dispatch, tanh_strict_with);
-checked_hop_dispatch!(checked_asin_dispatch, asin_strict_with);
-checked_hop_dispatch!(checked_acos_dispatch, acos_strict_with);
-checked_hop_dispatch!(checked_asinh_dispatch, asinh_strict_with);
-checked_hop_dispatch!(checked_acosh_dispatch, acosh_strict_with);
-checked_hop_dispatch!(checked_atanh_dispatch, atanh_strict_with);
-checked_hop_dispatch!(checked_to_degrees_dispatch, to_degrees_strict_with);
-checked_hop_dispatch!(checked_to_radians_dispatch, to_radians_strict_with);
+checked_hop_dispatch!(checked_sinh_dispatch, sinh_with);
+checked_hop_dispatch!(checked_cosh_dispatch, cosh_with);
+checked_hop_dispatch!(checked_tanh_dispatch, tanh_with);
+checked_hop_dispatch!(checked_asin_dispatch, asin_with);
+checked_hop_dispatch!(checked_acos_dispatch, acos_with);
+checked_hop_dispatch!(checked_asinh_dispatch, asinh_with);
+checked_hop_dispatch!(checked_acosh_dispatch, acosh_with);
+checked_hop_dispatch!(checked_atanh_dispatch, atanh_with);
+checked_hop_dispatch!(checked_to_degrees_dispatch, to_degrees_with);
+checked_hop_dispatch!(checked_to_radians_dispatch, to_radians_with);
 
 /// Binary (`y.atan2(x)`) sibling of the [`checked_hop_dispatch!`]
 /// emissions; same hop shape, second operand threaded through.
@@ -2732,31 +2732,31 @@ pub(crate) fn checked_atan2_dispatch<const N: usize, const SCALE: u32>(
 ) -> Option<Int<N>> {
     match N {
         1 => super::narrow_fit::<N>(
-            crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).atan2_strict_with(crate::D::<crate::int::types::Int<2>, SCALE>(other.resize_to::<crate::int::types::Int<2>>()), mode).0,
+            crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).atan2_with(crate::D::<crate::int::types::Int<2>, SCALE>(other.resize_to::<crate::int::types::Int<2>>()), mode).0,
         ),
-        2 => Some(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).atan2_strict_with(crate::D::<crate::int::types::Int<2>, SCALE>(other.resize_to::<crate::int::types::Int<2>>()), mode).0.resize_to::<Int<N>>()),
+        2 => Some(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).atan2_with(crate::D::<crate::int::types::Int<2>, SCALE>(other.resize_to::<crate::int::types::Int<2>>()), mode).0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => Some(crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).atan2_strict_with(crate::D::<crate::int::types::Int<3>, SCALE>(other.resize_to::<crate::int::types::Int<3>>()), mode).0.resize_to::<Int<N>>()),
+        3 => Some(crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).atan2_with(crate::D::<crate::int::types::Int<3>, SCALE>(other.resize_to::<crate::int::types::Int<3>>()), mode).0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => Some(crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).atan2_strict_with(crate::D::<crate::int::types::Int<4>, SCALE>(other.resize_to::<crate::int::types::Int<4>>()), mode).0.resize_to::<Int<N>>()),
+        4 => Some(crate::D::<crate::int::types::Int<4>, SCALE>(raw.resize_to::<crate::int::types::Int<4>>()).atan2_with(crate::D::<crate::int::types::Int<4>, SCALE>(other.resize_to::<crate::int::types::Int<4>>()), mode).0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => Some(crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).atan2_strict_with(crate::D::<crate::int::types::Int<6>, SCALE>(other.resize_to::<crate::int::types::Int<6>>()), mode).0.resize_to::<Int<N>>()),
+        6 => Some(crate::D::<crate::int::types::Int<6>, SCALE>(raw.resize_to::<crate::int::types::Int<6>>()).atan2_with(crate::D::<crate::int::types::Int<6>, SCALE>(other.resize_to::<crate::int::types::Int<6>>()), mode).0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => Some(crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).atan2_strict_with(crate::D::<crate::int::types::Int<8>, SCALE>(other.resize_to::<crate::int::types::Int<8>>()), mode).0.resize_to::<Int<N>>()),
+        8 => Some(crate::D::<crate::int::types::Int<8>, SCALE>(raw.resize_to::<crate::int::types::Int<8>>()).atan2_with(crate::D::<crate::int::types::Int<8>, SCALE>(other.resize_to::<crate::int::types::Int<8>>()), mode).0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => Some(crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).atan2_strict_with(crate::D::<crate::int::types::Int<12>, SCALE>(other.resize_to::<crate::int::types::Int<12>>()), mode).0.resize_to::<Int<N>>()),
+        12 => Some(crate::D::<crate::int::types::Int<12>, SCALE>(raw.resize_to::<crate::int::types::Int<12>>()).atan2_with(crate::D::<crate::int::types::Int<12>, SCALE>(other.resize_to::<crate::int::types::Int<12>>()), mode).0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => Some(crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).atan2_strict_with(crate::D::<crate::int::types::Int<16>, SCALE>(other.resize_to::<crate::int::types::Int<16>>()), mode).0.resize_to::<Int<N>>()),
+        16 => Some(crate::D::<crate::int::types::Int<16>, SCALE>(raw.resize_to::<crate::int::types::Int<16>>()).atan2_with(crate::D::<crate::int::types::Int<16>, SCALE>(other.resize_to::<crate::int::types::Int<16>>()), mode).0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => Some(crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).atan2_strict_with(crate::D::<crate::int::types::Int<24>, SCALE>(other.resize_to::<crate::int::types::Int<24>>()), mode).0.resize_to::<Int<N>>()),
+        24 => Some(crate::D::<crate::int::types::Int<24>, SCALE>(raw.resize_to::<crate::int::types::Int<24>>()).atan2_with(crate::D::<crate::int::types::Int<24>, SCALE>(other.resize_to::<crate::int::types::Int<24>>()), mode).0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => Some(crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).atan2_strict_with(crate::D::<crate::int::types::Int<32>, SCALE>(other.resize_to::<crate::int::types::Int<32>>()), mode).0.resize_to::<Int<N>>()),
+        32 => Some(crate::D::<crate::int::types::Int<32>, SCALE>(raw.resize_to::<crate::int::types::Int<32>>()).atan2_with(crate::D::<crate::int::types::Int<32>, SCALE>(other.resize_to::<crate::int::types::Int<32>>()), mode).0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => Some(crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).atan2_strict_with(crate::D::<crate::int::types::Int<48>, SCALE>(other.resize_to::<crate::int::types::Int<48>>()), mode).0.resize_to::<Int<N>>()),
+        48 => Some(crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).atan2_with(crate::D::<crate::int::types::Int<48>, SCALE>(other.resize_to::<crate::int::types::Int<48>>()), mode).0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => Some(crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).atan2_strict_with(crate::D::<crate::int::types::Int<64>, SCALE>(other.resize_to::<crate::int::types::Int<64>>()), mode).0.resize_to::<Int<N>>()),
+        64 => Some(crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).atan2_with(crate::D::<crate::int::types::Int<64>, SCALE>(other.resize_to::<crate::int::types::Int<64>>()), mode).0.resize_to::<Int<N>>()),
         _ => super::narrow_fit::<N>(
-            crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).atan2_strict_with(crate::D::<crate::int::types::Int<2>, SCALE>(other.resize_to::<crate::int::types::Int<2>>()), mode).0,
+            crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).atan2_with(crate::D::<crate::int::types::Int<2>, SCALE>(other.resize_to::<crate::int::types::Int<2>>()), mode).0,
         ),
     }
 }
@@ -2806,17 +2806,17 @@ mod forward_rung_tests {
             let value: crate::D307<0> = input.parse().unwrap();
             for mode in ALL_MODES {
                 assert_eq!(
-                    super::forward_rung::sin_strict::<Core, 0, G>(value.to_bits(), mode),
+                    super::forward_rung::sin::<Core, 0, G>(value.to_bits(), mode),
                     crate::algos::support::wide_trig_core::sin_series::<Core, 0>(value.to_bits(), mode),
                     "sin({input}) mode {mode:?}"
                 );
                 assert_eq!(
-                    super::forward_rung::tan_strict::<Core, 0, G, true, true>(value.to_bits(), mode),
+                    super::forward_rung::tan::<Core, 0, G, true, true>(value.to_bits(), mode),
                     crate::algos::support::wide_trig_core::tan_series::<Core, 0>(value.to_bits(), mode),
                     "tan({input}) mode {mode:?}"
                 );
                 assert_eq!(
-                    super::forward_rung::atan_strict::<Core, 0, G, true>(value.to_bits(), mode),
+                    super::forward_rung::atan::<Core, 0, G, true>(value.to_bits(), mode),
                     crate::algos::support::wide_trig_core::atan_series::<Core, 0>(value.to_bits(), mode),
                     "atan({input}) mode {mode:?}"
                 );
@@ -2835,7 +2835,7 @@ mod forward_rung_tests {
             let value: crate::D307<150> = input.parse().unwrap();
             for mode in ALL_MODES {
                 assert_eq!(
-                    super::forward_rung::atan_strict::<Core, 150, 10, false>(value.to_bits(), mode),
+                    super::forward_rung::atan::<Core, 150, 10, false>(value.to_bits(), mode),
                     crate::algos::support::wide_trig_core::atan_narrow::<Core, 150, 10>(value.to_bits(), mode),
                     "atan({input}) band mode {mode:?}"
                 );
@@ -2854,12 +2854,12 @@ mod forward_rung_tests {
         let value: crate::D307<0> = "1000000000".parse().unwrap();
         for mode in ALL_MODES {
             assert_eq!(
-                super::forward_rung::sin_strict::<Core, 0, G>(value.to_bits(), mode),
+                super::forward_rung::sin::<Core, 0, G>(value.to_bits(), mode),
                 crate::algos::support::wide_trig_core::sin_series::<Core, 0>(value.to_bits(), mode),
                 "sin(1e9) mode {mode:?}"
             );
             assert_eq!(
-                super::forward_rung::atan_strict::<Core, 0, G, true>(value.to_bits(), mode),
+                super::forward_rung::atan::<Core, 0, G, true>(value.to_bits(), mode),
                 crate::algos::support::wide_trig_core::atan_series::<Core, 0>(value.to_bits(), mode),
                 "atan(1e9) mode {mode:?}"
             );
@@ -2895,47 +2895,47 @@ mod forward_rung_tests {
         for raw in raws {
             for mode in ALL_MODES {
                 assert_eq!(
-                    super::forward_rung::sin_strict::<Core, 153, G>(raw, mode),
+                    super::forward_rung::sin::<Core, 153, G>(raw, mode),
                     crate::algos::support::wide_trig_core::sin_series::<Core, 153>(raw, mode),
                     "sin raw={raw:?} mode {mode:?}"
                 );
                 assert_eq!(
-                    super::forward_rung::cos_strict::<Core, 153, G>(raw, mode),
+                    super::forward_rung::cos::<Core, 153, G>(raw, mode),
                     crate::algos::support::wide_trig_core::cos_series::<Core, 153>(raw, mode),
                     "cos raw={raw:?} mode {mode:?}"
                 );
                 assert_eq!(
-                    super::forward_rung::tan_strict::<Core, 153, G, true, true>(raw, mode),
+                    super::forward_rung::tan::<Core, 153, G, true, true>(raw, mode),
                     crate::algos::support::wide_trig_core::tan_series::<Core, 153>(raw, mode),
                     "tan raw={raw:?} mode {mode:?}"
                 );
                 assert_eq!(
-                    super::forward_rung::atan_strict::<Core, 153, G, true>(raw, mode),
+                    super::forward_rung::atan::<Core, 153, G, true>(raw, mode),
                     crate::algos::support::wide_trig_core::atan_series::<Core, 153>(raw, mode),
                     "atan raw={raw:?} mode {mode:?}"
                 );
                 assert_eq!(
-                    super::inverse_rung::asin_strict::<Core, 153>(raw, mode),
+                    super::inverse_rung::asin::<Core, 153>(raw, mode),
                     crate::algos::trig::inverse_schoolbook::asin_schoolbook::<Core, 153>(raw, mode),
                     "asin raw={raw:?} mode {mode:?}"
                 );
                 assert_eq!(
-                    super::hyper_rung::sinh_strict::<Core, 153>(raw, mode),
+                    super::hyper_rung::sinh::<Core, 153>(raw, mode),
                     crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<Core, 153>(raw, mode),
                     "sinh raw={raw:?} mode {mode:?}"
                 );
                 assert_eq!(
-                    super::hyper_rung::tanh_strict::<Core, 153>(raw, mode),
+                    super::hyper_rung::tanh::<Core, 153>(raw, mode),
                     crate::algos::trig::hyper_schoolbook::tanh_schoolbook::<Core, 153>(raw, mode),
                     "tanh raw={raw:?} mode {mode:?}"
                 );
                 assert_eq!(
-                    super::extra_rung::asinh_strict::<Core, 153>(raw, mode),
+                    super::extra_rung::asinh::<Core, 153>(raw, mode),
                     crate::algos::trig::hyper_schoolbook::asinh_schoolbook::<Core, 153>(raw, mode),
                     "asinh raw={raw:?} mode {mode:?}"
                 );
                 assert_eq!(
-                    super::extra_rung::atanh_strict::<Core, 153>(raw, mode),
+                    super::extra_rung::atanh::<Core, 153>(raw, mode),
                     crate::algos::trig::hyper_schoolbook::atanh_schoolbook::<Core, 153>(raw, mode),
                     "atanh raw={raw:?} mode {mode:?}"
                 );
@@ -2968,22 +2968,22 @@ mod forward_rung_tests {
         for raw in raws {
             for mode in ALL_MODES {
                 assert_eq!(
-                    super::forward_rung::sin_strict::<Core, 616, G>(raw, mode),
+                    super::forward_rung::sin::<Core, 616, G>(raw, mode),
                     crate::algos::support::wide_trig_core::sin_series::<Core, 616>(raw, mode),
                     "sin raw={raw:?} mode {mode:?}"
                 );
                 assert_eq!(
-                    super::forward_rung::atan_strict::<Core, 616, G, true>(raw, mode),
+                    super::forward_rung::atan::<Core, 616, G, true>(raw, mode),
                     crate::algos::support::wide_trig_core::atan_series::<Core, 616>(raw, mode),
                     "atan raw={raw:?} mode {mode:?}"
                 );
                 assert_eq!(
-                    super::hyper_rung::sinh_strict::<Core, 616>(raw, mode),
+                    super::hyper_rung::sinh::<Core, 616>(raw, mode),
                     crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<Core, 616>(raw, mode),
                     "sinh raw={raw:?} mode {mode:?}"
                 );
                 assert_eq!(
-                    super::extra_rung::asinh_strict::<Core, 616>(raw, mode),
+                    super::extra_rung::asinh::<Core, 616>(raw, mode),
                     crate::algos::trig::hyper_schoolbook::asinh_schoolbook::<Core, 616>(raw, mode),
                     "asinh raw={raw:?} mode {mode:?}"
                 );
@@ -3025,22 +3025,22 @@ mod forward_rung_tests {
             for raw in forward_raws {
                 for mode in ALL_MODES {
                     assert_eq!(
-                        super::forward_rung::sin_strict::<C, $SCALE, G>(raw, mode),
+                        super::forward_rung::sin::<C, $SCALE, G>(raw, mode),
                         crate::algos::support::wide_trig_core::sin_series::<C, $SCALE>(raw, mode),
                         "sin s{} raw={raw:?} mode {mode:?}", $SCALE
                     );
                     assert_eq!(
-                        super::forward_rung::cos_strict::<C, $SCALE, G>(raw, mode),
+                        super::forward_rung::cos::<C, $SCALE, G>(raw, mode),
                         crate::algos::support::wide_trig_core::cos_series::<C, $SCALE>(raw, mode),
                         "cos s{} raw={raw:?} mode {mode:?}", $SCALE
                     );
                     assert_eq!(
-                        super::forward_rung::tan_strict::<C, $SCALE, G, true, true>(raw, mode),
+                        super::forward_rung::tan::<C, $SCALE, G, true, true>(raw, mode),
                         crate::algos::support::wide_trig_core::tan_series::<C, $SCALE>(raw, mode),
                         "tan s{} raw={raw:?} mode {mode:?}", $SCALE
                     );
                     assert_eq!(
-                        super::forward_rung::atan_strict::<C, $SCALE, G, true>(raw, mode),
+                        super::forward_rung::atan::<C, $SCALE, G, true>(raw, mode),
                         crate::algos::support::wide_trig_core::atan_series::<C, $SCALE>(raw, mode),
                         "atan s{} raw={raw:?} mode {mode:?}", $SCALE
                     );
@@ -3054,7 +3054,7 @@ mod forward_rung_tests {
             ] {
                 for mode in ALL_MODES {
                     assert_eq!(
-                        super::inverse_rung::asin_strict::<C, $SCALE>(raw, mode),
+                        super::inverse_rung::asin::<C, $SCALE>(raw, mode),
                         crate::algos::trig::inverse_schoolbook::asin_schoolbook::<C, $SCALE>(raw, mode),
                         "asin s{} raw={raw:?} mode {mode:?}", $SCALE
                     );
@@ -3075,7 +3075,7 @@ mod forward_rung_tests {
             for raw in small {
                 for mode in ALL_MODES {
                     assert_eq!(
-                        super::hyper_rung::sinh_strict::<C, $SCALE>(raw, mode),
+                        super::hyper_rung::sinh::<C, $SCALE>(raw, mode),
                         crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<C, $SCALE>(raw, mode),
                         "sinh s{} raw={raw:?} mode {mode:?}", $SCALE
                     );
@@ -3085,7 +3085,7 @@ mod forward_rung_tests {
                         "exp s{} raw={raw:?} mode {mode:?}", $SCALE
                     );
                     assert_eq!(
-                        super::extra_rung::asinh_strict::<C, $SCALE>(raw, mode),
+                        super::extra_rung::asinh::<C, $SCALE>(raw, mode),
                         crate::algos::trig::hyper_schoolbook::asinh_schoolbook::<C, $SCALE>(raw, mode),
                         "asinh s{} raw={raw:?} mode {mode:?}", $SCALE
                     );
@@ -3172,13 +3172,13 @@ mod forward_rung_tests {
                     _ => raw - one,
                 }
             };
-            assert_eq!(deep_value.sinh_strict_with(mode).0, expand, "sinh mode {mode:?}");
+            assert_eq!(deep_value.sinh_with(mode).0, expand, "sinh mode {mode:?}");
             assert_eq!(super::sinh_dispatch::<24, 461>(raw, mode), expand, "sinh dispatch {mode:?}");
-            assert_eq!(deep_value.tanh_strict_with(mode).0, compress, "tanh mode {mode:?}");
+            assert_eq!(deep_value.tanh_with(mode).0, compress, "tanh mode {mode:?}");
             assert_eq!(super::tanh_dispatch::<24, 461>(raw, mode), compress, "tanh dispatch {mode:?}");
-            assert_eq!(deep_value.asinh_strict_with(mode).0, compress, "asinh mode {mode:?}");
+            assert_eq!(deep_value.asinh_with(mode).0, compress, "asinh mode {mode:?}");
             assert_eq!(super::asinh_dispatch::<24, 461>(raw, mode), compress, "asinh dispatch {mode:?}");
-            assert_eq!(deep_value.atanh_strict_with(mode).0, expand, "atanh mode {mode:?}");
+            assert_eq!(deep_value.atanh_with(mode).0, expand, "atanh mode {mode:?}");
             assert_eq!(super::atanh_dispatch::<24, 461>(raw, mode), expand, "atanh dispatch {mode:?}");
         }
         // Default == _with(DEFAULT) for the whole family, deep + ordinary.
@@ -3186,14 +3186,14 @@ mod forward_rung_tests {
         for raw_case in [raw, half] {
             let case_value = crate::D::<Int<24>, 461>(raw_case);
             let default_mode = crate::support::rounding::DEFAULT_ROUNDING_MODE;
-            assert_eq!(case_value.sinh_strict(), case_value.sinh_strict_with(default_mode), "sinh default");
-            assert_eq!(case_value.cosh_strict(), case_value.cosh_strict_with(default_mode), "cosh default");
-            assert_eq!(case_value.tanh_strict(), case_value.tanh_strict_with(default_mode), "tanh default");
-            assert_eq!(case_value.asinh_strict(), case_value.asinh_strict_with(default_mode), "asinh default");
-            assert_eq!(case_value.atanh_strict(), case_value.atanh_strict_with(default_mode), "atanh default");
+            assert_eq!(case_value.sinh(), case_value.sinh_with(default_mode), "sinh default");
+            assert_eq!(case_value.cosh(), case_value.cosh_with(default_mode), "cosh default");
+            assert_eq!(case_value.tanh(), case_value.tanh_with(default_mode), "tanh default");
+            assert_eq!(case_value.asinh(), case_value.asinh_with(default_mode), "asinh default");
+            assert_eq!(case_value.atanh(), case_value.atanh_with(default_mode), "atanh default");
             let acosh_value =
                 crate::D::<Int<24>, 461>(raw_case + Int::<24>::from_i128(10).pow(461)); // >= 1 for acosh
-            assert_eq!(acosh_value.acosh_strict(), acosh_value.acosh_strict_with(default_mode), "acosh default");
+            assert_eq!(acosh_value.acosh(), acosh_value.acosh_with(default_mode), "acosh default");
         }
     }
 
@@ -3210,12 +3210,12 @@ mod forward_rung_tests {
             let value: crate::D307<19> = input.parse().unwrap();
             for mode in ALL_MODES {
                 assert_eq!(
-                    super::inverse_rung::asin_strict::<Core, 19>(value.to_bits(), mode),
+                    super::inverse_rung::asin::<Core, 19>(value.to_bits(), mode),
                     crate::algos::trig::inverse_schoolbook::asin_schoolbook::<Core, 19>(value.to_bits(), mode),
                     "asin({input}) mode {mode:?}"
                 );
                 assert_eq!(
-                    super::inverse_rung::acos_strict::<Core, 19>(value.to_bits(), mode),
+                    super::inverse_rung::acos::<Core, 19>(value.to_bits(), mode),
                     crate::algos::trig::inverse_schoolbook::acos_schoolbook::<Core, 19>(value.to_bits(), mode),
                     "acos({input}) mode {mode:?}"
                 );
@@ -3236,7 +3236,7 @@ mod forward_rung_tests {
             let x_value: crate::D307<19> = x.parse().unwrap();
             for mode in ALL_MODES {
                 assert_eq!(
-                    super::inverse_rung::atan2_strict::<Core, 19>(y_value.to_bits(), x_value.to_bits(), mode),
+                    super::inverse_rung::atan2::<Core, 19>(y_value.to_bits(), x_value.to_bits(), mode),
                     crate::algos::trig::inverse_schoolbook::atan2_schoolbook::<Core, 19>(y_value.to_bits(), x_value.to_bits(), mode),
                     "atan2({y}, {x}) mode {mode:?}"
                 );
@@ -3257,17 +3257,17 @@ mod forward_rung_tests {
             let value: crate::D307<19> = input.parse().unwrap();
             for mode in ALL_MODES {
                 assert_eq!(
-                    super::hyper_rung::sinh_strict::<Core, 19>(value.to_bits(), mode),
+                    super::hyper_rung::sinh::<Core, 19>(value.to_bits(), mode),
                     crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<Core, 19>(value.to_bits(), mode),
                     "sinh({input}) mode {mode:?}"
                 );
                 assert_eq!(
-                    super::hyper_rung::cosh_strict::<Core, 19>(value.to_bits(), mode),
+                    super::hyper_rung::cosh::<Core, 19>(value.to_bits(), mode),
                     crate::algos::trig::hyper_schoolbook::cosh_schoolbook::<Core, 19>(value.to_bits(), mode),
                     "cosh({input}) mode {mode:?}"
                 );
                 assert_eq!(
-                    super::hyper_rung::tanh_strict::<Core, 19>(value.to_bits(), mode),
+                    super::hyper_rung::tanh::<Core, 19>(value.to_bits(), mode),
                     crate::algos::trig::hyper_schoolbook::tanh_schoolbook::<Core, 19>(value.to_bits(), mode),
                     "tanh({input}) mode {mode:?}"
                 );
@@ -3288,7 +3288,7 @@ mod forward_rung_tests {
             let value: crate::D307<19> = input.parse().unwrap();
             for mode in ALL_MODES {
                 assert_eq!(
-                    super::extra_rung::asinh_strict::<Core, 19>(value.to_bits(), mode),
+                    super::extra_rung::asinh::<Core, 19>(value.to_bits(), mode),
                     crate::algos::trig::hyper_schoolbook::asinh_schoolbook::<Core, 19>(value.to_bits(), mode),
                     "asinh({input}) mode {mode:?}"
                 );
@@ -3298,7 +3298,7 @@ mod forward_rung_tests {
             let value: crate::D307<19> = input.parse().unwrap();
             for mode in ALL_MODES {
                 assert_eq!(
-                    super::extra_rung::acosh_strict::<Core, 19>(value.to_bits(), mode),
+                    super::extra_rung::acosh::<Core, 19>(value.to_bits(), mode),
                     crate::algos::trig::hyper_schoolbook::acosh_schoolbook::<Core, 19>(value.to_bits(), mode),
                     "acosh({input}) mode {mode:?}"
                 );
@@ -3308,7 +3308,7 @@ mod forward_rung_tests {
             let value: crate::D307<19> = input.parse().unwrap();
             for mode in ALL_MODES {
                 assert_eq!(
-                    super::extra_rung::atanh_strict::<Core, 19>(value.to_bits(), mode),
+                    super::extra_rung::atanh::<Core, 19>(value.to_bits(), mode),
                     crate::algos::trig::hyper_schoolbook::atanh_schoolbook::<Core, 19>(value.to_bits(), mode),
                     "atanh({input}) mode {mode:?}"
                 );

@@ -8,8 +8,8 @@
 //! not hold for our chain-MG + narrow-GUARD artanh stack.
 //!
 //! Both paths are correctly-rounded to 0.5 ULP at storage scale.
-//! `ln_strict_agm` runs at the lifted working scale
-//! `w' = 2·SCALE + 4` via `guard_agm`; `exp_strict_agm` takes an
+//! `ln_agm` runs at the lifted working scale
+//! `w' = 2·SCALE + 4` via `guard_agm`; `exp_agm` takes an
 //! additional `k_lift` to cover the post-Newton `x << k`
 //! amplification. This bench measures pure throughput against the
 //! chain-MG + narrow-GUARD artanh / Tang stack.
@@ -26,17 +26,17 @@ fn bench_at<const SCALE: u32>(c: &mut Criterion, label: &str) {
     let three: D1232<SCALE> = D1232::<SCALE>::try_from(3_i64).unwrap();
 
     // Warm both code paths (table seeds, etc.).
-    let _ = three.ln_strict();
-    let _ = three.ln_strict_agm();
+    let _ = three.ln();
+    let _ = three.ln_agm();
 
     let group_ln = format!("D1232_s{}/ln", label);
     let mut g = c.benchmark_group(group_ln);
     g.sample_size(10);
     g.measurement_time(std::time::Duration::from_secs(8));
     g.bench_function("artanh (canonical)", |b| {
-        b.iter(|| black_box(three).ln_strict())
+        b.iter(|| black_box(three).ln())
     });
-    g.bench_function("agm", |b| b.iter(|| black_box(three).ln_strict_agm()));
+    g.bench_function("agm", |b| b.iter(|| black_box(three).ln_agm()));
     g.finish();
 }
 

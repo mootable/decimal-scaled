@@ -116,7 +116,7 @@ layers compile to a single direct call per monomorphisation.
 
 ## A call through the layers
 
-`D57<20>::sqrt_strict()` traverses **both layers' dispatch + kernels**:
+`D57<20>::sqrt()` traverses **both layers' dispatch + kernels**:
 the front-end dispatches on `(width, SCALE)` to one decimal algorithm, which
 calls the integer layer — itself dispatching on width to a matched
 algorithm down to the limb primitives — and hands back a
@@ -132,7 +132,7 @@ sequenceDiagram
   participant IP as int policy
   participant IK as int algorithm
   participant L as limb primitives
-  U->>FE: sqrt_strict()
+  U->>FE: sqrt()
   FE->>DP: dispatch (width 192, SCALE 20)
   DP->>DK: const select → matched algorithm
   DK->>IP: root_int / isqrt on Int<3> (BigInt)
@@ -202,7 +202,7 @@ sit alongside them: `WidthLE` (the compile-time width-ordering relation
 used by the `widen` / `narrow` hops) and, under the `dyn` feature,
 `DynDecimal` (the object-safe erased view).
 
-The typed method shells (`D57::<20>::sqrt_strict_with(mode)`) are emitted
+The typed method shells (`D57::<20>::sqrt_with(mode)`) are emitted
 by macros in `src/macros/` and immediately hand off to the dispatch layer.
 
 ## Work-width scratch — exact `ComputeLimbs` on the `Limbs<N>` carrier, never build-max

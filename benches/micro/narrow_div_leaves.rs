@@ -35,13 +35,13 @@ fn bench(c: &mut Criterion) {
     {
         let mut g = c.benchmark_group("narrow_div/to_degrees");
         let x0 = D38::<0>::from_str("45").unwrap();
-        g.bench_function("D38_s0_45", |b| b.iter(|| black_box(x0).to_degrees_strict()));
+        g.bench_function("D38_s0_45", |b| b.iter(|| black_box(x0).to_degrees()));
         let x9 = D38::<9>::from_str("0.1").unwrap();
-        g.bench_function("D38_s9_0.1", |b| b.iter(|| black_box(x9).to_degrees_strict()));
+        g.bench_function("D38_s9_0.1", |b| b.iter(|| black_box(x9).to_degrees()));
         let x30 = D38::<30>::from_str("0.1").unwrap();
-        g.bench_function("D38_s30_0.1", |b| b.iter(|| black_box(x30).to_degrees_strict()));
+        g.bench_function("D38_s30_0.1", |b| b.iter(|| black_box(x30).to_degrees()));
         let x37 = D38::<37>::from_str("0.1").unwrap();
-        g.bench_function("D38_s37_0.1", |b| b.iter(|| black_box(x37).to_degrees_strict()));
+        g.bench_function("D38_s37_0.1", |b| b.iter(|| black_box(x37).to_degrees()));
         g.finish();
     }
     // Control: same file, same shape, but the divisor 180 takes `div_small`'s
@@ -49,30 +49,30 @@ fn bench(c: &mut Criterion) {
     {
         let mut g = c.benchmark_group("narrow_div/to_radians_control");
         let x30 = D38::<30>::from_str("0.1").unwrap();
-        g.bench_function("D38_s30_0.1", |b| b.iter(|| black_box(x30).to_radians_strict()));
+        g.bench_function("D38_s30_0.1", |b| b.iter(|| black_box(x30).to_radians()));
         g.finish();
     }
     // cbrt: `div_384_by_256` per Newton iteration (slow even at SCALE 0).
     {
         let mut g = c.benchmark_group("narrow_div/cbrt");
         let x0 = D38::<0>::from_str("987654321987654321").unwrap();
-        g.bench_function("D38_s0_9.9e17", |b| b.iter(|| black_box(x0).cbrt_strict()));
+        g.bench_function("D38_s0_9.9e17", |b| b.iter(|| black_box(x0).cbrt()));
         let x20 = D38::<20>::from_str("1234.56789").unwrap();
-        g.bench_function("D38_s20_1234.6", |b| b.iter(|| black_box(x20).cbrt_strict()));
+        g.bench_function("D38_s20_1234.6", |b| b.iter(|| black_box(x20).cbrt()));
         g.finish();
     }
     // acosh: `Fixed::sqrt` → `isqrt_u512` → `div_u512_by_u256` per iteration.
     {
         let mut g = c.benchmark_group("narrow_div/acosh");
         let x = D38::<30>::from_str("1.5").unwrap();
-        g.bench_function("D38_s30_1.5", |b| b.iter(|| black_box(x).acosh_strict()));
+        g.bench_function("D38_s30_1.5", |b| b.iter(|| black_box(x).acosh()));
         g.finish();
     }
     // atan: the halving cascade (`Fixed::div` + `Fixed::sqrt` per rung).
     {
         let mut g = c.benchmark_group("narrow_div/atan");
         let x = D38::<30>::from_str("0.7").unwrap();
-        g.bench_function("D38_s30_0.7", |b| b.iter(|| black_box(x).atan_strict()));
+        g.bench_function("D38_s30_0.7", |b| b.iter(|| black_box(x).atan()));
         g.finish();
     }
 }

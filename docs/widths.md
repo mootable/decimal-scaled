@@ -184,6 +184,6 @@ let _: D38<6> = c.try_into().unwrap();   // skip-jump back via TryFrom
   `PartialEq` against every primitive integer and float, the
   0.5-ULP-correctly-rounded strict transcendentals (with
   mode-aware `*_strict_with` siblings and AGM alternates
-  `ln_strict_agm` / `exp_strict_agm`), arithmetic, conversions,
+  `ln_agm` / `exp_agm`), arithmetic, conversions,
   formatting, rescaling, rounding, and the full overflow-variant
   family.

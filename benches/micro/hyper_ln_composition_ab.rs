@@ -43,16 +43,16 @@ macro_rules! cell {
         let mid = one / (one + one);
 
         $group.bench_with_input(BenchmarkId::new("acosh_near1", $label), &near_one, |b, x| {
-            b.iter(|| black_box(black_box(*x).acosh_strict()))
+            b.iter(|| black_box(black_box(*x).acosh()))
         });
         $group.bench_with_input(BenchmarkId::new("acosh_far", $label), &far, |b, x| {
-            b.iter(|| black_box(black_box(*x).acosh_strict()))
+            b.iter(|| black_box(black_box(*x).acosh()))
         });
         $group.bench_with_input(BenchmarkId::new("atanh_wall", $label), &near_wall, |b, x| {
-            b.iter(|| black_box(black_box(*x).atanh_strict()))
+            b.iter(|| black_box(black_box(*x).atanh()))
         });
         $group.bench_with_input(BenchmarkId::new("atanh_mid", $label), &mid, |b, x| {
-            b.iter(|| black_box(black_box(*x).atanh_strict()))
+            b.iter(|| black_box(black_box(*x).atanh()))
         });
     }};
 }

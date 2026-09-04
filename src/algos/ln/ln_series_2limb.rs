@@ -167,11 +167,11 @@ pub(crate) fn ln_fixed(working_value: Fixed, working_scale: u32) -> Fixed {
 /// optimal kernel per `SCALE`.
 #[inline]
 #[must_use]
-pub(crate) fn ln_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+pub(crate) fn ln<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
     ln_strict_raw::<SCALE>(raw.as_i128(), mode).map(Int::<2>::from_i128)
 }
 
-/// `i128` core of [`ln_strict`].
+/// `i128` core of [`ln`].
 #[inline]
 fn ln_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     assert!(raw > 0, "ln kernel: argument must be positive");
@@ -444,11 +444,11 @@ fn log_exact_int_pin(value_raw: i128, base_int: i128, scale: u32, exponent: i128
 /// range.
 #[inline]
 #[must_use]
-pub(crate) fn log_strict<const SCALE: u32>(raw: Int<2>, base_raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+pub(crate) fn log<const SCALE: u32>(raw: Int<2>, base_raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
     log_strict_raw(raw.as_i128(), base_raw.as_i128(), SCALE, mode).map(Int::<2>::from_i128)
 }
 
-/// `i128` core of [`log_strict`].
+/// `i128` core of [`log`].
 fn log_strict_raw(raw: i128, base_raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
     assert!(raw > 0, "D38::log: argument must be positive");
     assert!(base_raw > 0, "D38::log: base must be positive");
@@ -511,11 +511,11 @@ fn log_strict_raw(raw: i128, base_raw: i128, scale: u32, mode: RoundingMode) -> 
 /// no rational-power pin is needed — the walker covers the rest.
 #[inline]
 #[must_use]
-pub(crate) fn log2_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+pub(crate) fn log2<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
     log2_strict_raw(raw.as_i128(), SCALE, mode).map(Int::<2>::from_i128)
 }
 
-/// `i128` core of [`log2_strict`].
+/// `i128` core of [`log2`].
 fn log2_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
     assert!(raw > 0, "D38::log2: argument must be positive");
     let working_scale = scale + STRICT_GUARD;
@@ -540,15 +540,15 @@ fn log2_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
 }
 
 /// `None` = result out of storage range. Near-tie protected like
-/// [`log2_strict`] (`log10` of an on-grid rational is integer or
+/// [`log2`] (`log10` of an on-grid rational is integer or
 /// irrational).
 #[inline]
 #[must_use]
-pub(crate) fn log10_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+pub(crate) fn log10<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
     log10_strict_raw(raw.as_i128(), SCALE, mode).map(Int::<2>::from_i128)
 }
 
-/// `i128` core of [`log10_strict`].
+/// `i128` core of [`log10`].
 fn log10_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
     assert!(raw > 0, "D38::log10: argument must be positive");
     let working_scale = scale + STRICT_GUARD;
@@ -588,29 +588,29 @@ mod near_tie_pins {
         // partial + the strictly-negative tail (narrow_tie_derive.py).
         let raw = Int::<2>::from_i128(10_i128.pow(38) + 1);
         assert_eq!(
-            ln_strict::<38>(raw, RoundingMode::Floor).map(|value| value.as_i128()),
+            ln::<38>(raw, RoundingMode::Floor).map(|value| value.as_i128()),
             Some(0),
             "ln Floor"
         );
         assert_eq!(
-            ln_strict::<38>(raw, RoundingMode::Trunc).map(|value| value.as_i128()),
+            ln::<38>(raw, RoundingMode::Trunc).map(|value| value.as_i128()),
             Some(0),
             "ln Trunc"
         );
         assert_eq!(
-            ln_strict::<38>(raw, RoundingMode::Ceiling).map(|value| value.as_i128()),
+            ln::<38>(raw, RoundingMode::Ceiling).map(|value| value.as_i128()),
             Some(1),
             "ln Ceiling"
         );
         // below 1: ln(1 − 1e-38) = −δ − δ²/2: strictly below −δ.
         let raw_lo = Int::<2>::from_i128(10_i128.pow(38) - 1);
         assert_eq!(
-            ln_strict::<38>(raw_lo, RoundingMode::Floor).map(|value| value.as_i128()),
+            ln::<38>(raw_lo, RoundingMode::Floor).map(|value| value.as_i128()),
             Some(-2),
             "ln(1−ulp) Floor"
         );
         assert_eq!(
-            ln_strict::<38>(raw_lo, RoundingMode::Trunc).map(|value| value.as_i128()),
+            ln::<38>(raw_lo, RoundingMode::Trunc).map(|value| value.as_i128()),
             Some(-1),
             "ln(1−ulp) Trunc"
         );
@@ -651,14 +651,14 @@ mod near_tie_pins {
     fn ln_strict_dyn(scale: u32, raw: Int<2>, mode: RoundingMode) -> Option<i128> {
         // The STRICT path (const-scale): the fixed near-tie terminal.
         let strict_result = match scale {
-            31 => ln_strict::<31>(raw, mode),
-            32 => ln_strict::<32>(raw, mode),
-            33 => ln_strict::<33>(raw, mode),
-            34 => ln_strict::<34>(raw, mode),
-            35 => ln_strict::<35>(raw, mode),
-            36 => ln_strict::<36>(raw, mode),
-            37 => ln_strict::<37>(raw, mode),
-            38 => ln_strict::<38>(raw, mode),
+            31 => ln::<31>(raw, mode),
+            32 => ln::<32>(raw, mode),
+            33 => ln::<33>(raw, mode),
+            34 => ln::<34>(raw, mode),
+            35 => ln::<35>(raw, mode),
+            36 => ln::<36>(raw, mode),
+            37 => ln::<37>(raw, mode),
+            38 => ln::<38>(raw, mode),
             _ => unreachable!(),
         };
         strict_result.map(|value| value.as_i128())

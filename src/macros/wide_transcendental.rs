@@ -242,7 +242,7 @@ macro_rules! decl_wide_transcendental {
                     4
                 }
             }
-            /// Extra digit lift for `exp_strict_agm` that absorbs the
+            /// Extra digit lift for `exp_agm` that absorbs the
             /// `2^k` post-Newton range reassembly amplification.
             ///
             /// Given a raw storage value `v` at scale `SCALE`, the
@@ -958,7 +958,7 @@ macro_rules! decl_wide_transcendental {
             /// the lift is 0. Using `|x|` here (as if the result were `2^|x|`)
             /// over-lifts the working scale by hundreds of digits for a large
             /// negative argument, corrupting the lifted-scale `exp` evaluation —
-            /// the `exp2_strict_with` vs `exp2_strict` divergence.
+            /// the `exp2_with` vs `exp2` divergence.
             pub(crate) fn exp2_result_int_digits(raw: $Storage, scale: u32) -> u32 {
                 if raw < $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     return 0;
@@ -2664,8 +2664,8 @@ macro_rules! decl_wide_transcendental {
             // surfaces `ln_tang` / `exp_tang` wrap at storage level); the
             // storage-level Ziv/EXTERNAL_EXTRA widening that the storage
             // kernels add OVER `tang_*_fixed` is the caller's concern at
-            // the working-scale composition sites (`powf_strict`,
-            // `log_*_with_kernel`, `asinh_strict`, …), which size their
+            // the working-scale composition sites (`powf`,
+            // `log_*_with_kernel`, `asinh`, …), which size their
             // own working guard from the composition's `|k|`-amplifying
             // arithmetic before calling here.
             //
@@ -2925,12 +2925,12 @@ macro_rules! decl_wide_transcendental {
             // pin + directed-rounding Ziv escalation) so the impl lives in
             // the algorithm, NOT in the inherent `log_*_with` method. The
             // `log` policy (`policy::log`) calls these *down*; the inherent
-            // `log_strict_with` method delegates *down*
+            // `log_with` method delegates *down*
             // to that policy. They take and return the tier's raw `$Storage`
             // integer (the typed shell wraps with `from_bits`).
 
             /// Strict-guard `log(x, base)` under `mode`, on raw storage.
-            /// Mirrors the prior inherent `log_strict_with` body verbatim.
+            /// Mirrors the prior inherent `log_with` body verbatim.
             #[inline]
             pub(crate) fn log_strict_with_kernel<const SCALE: u32>(
                 raw: $Storage,
@@ -2956,7 +2956,7 @@ macro_rules! decl_wide_transcendental {
                     panic!(concat!(stringify!($Type), "::log: base must not equal 1"));
                 }
                 // Exact-power pin: `self == base^k` ⇒ result is exactly
-                // the integer `k` (see `log10_strict_with`).
+                // the integer `k` (see `log10_with`).
                 let probe_ratio = div_agm(
                     ln_fixed_routed_agm::<SCALE>(to_work_agm(raw), base_working_scale),
                     probe_ln_base,
@@ -3000,7 +3000,7 @@ macro_rules! decl_wide_transcendental {
             }
 
             /// Strict-guard `log2(x)` under `mode`, on raw storage.
-            /// Mirrors the inherent `log2_strict_with` body verbatim;
+            /// Mirrors the inherent `log2_with` body verbatim;
             /// the `policy::ln` dispatch routes here so `log2` never
             /// re-enters a sibling decimal policy.
             #[inline]
@@ -3091,7 +3091,7 @@ macro_rules! decl_wide_transcendental {
             }
 
             /// Strict-guard `exp2(x) = 2^x` under `mode`, on raw storage.
-            /// Mirrors the inherent `exp2_strict_with` body verbatim; the
+            /// Mirrors the inherent `exp2_with` body verbatim; the
             /// `policy::exp` dispatch routes here so `exp2` never re-enters
             /// a sibling decimal policy.
             #[inline]
@@ -3119,8 +3119,8 @@ macro_rules! decl_wide_transcendental {
                     // (out-of-range) argument, so a `Wagm` multiply would
                     // `wrapping_mul` it down to a small in-range value —
                     // silently returning a wrong, representable result for a
-                    // `2^x` that must overflow (the `exp2_strict_with` vs
-                    // `exp2_strict` divergence). `exp_lift_cap` bounds `2·w`
+                    // `2^x` that must overflow (the `exp2_with` vs
+                    // `exp2` divergence). `exp_lift_cap` bounds `2·w`
                     // inside `Wexp`, so the multiply is exact there and
                     // `exp_fixed::<Wexp>`'s peak gate (then `resize_or_panic`)
                     // panics uniformly on a genuinely out-of-range result,
@@ -3158,7 +3158,7 @@ macro_rules! decl_wide_transcendental {
             /// `(width, SCALE)` cell — see `policy::ln`.
             #[inline]
             #[must_use]
-            pub fn ln_strict(self) -> Self {
+            pub fn ln(self) -> Self {
                 Self::from_bits($crate::policy::ln::dispatch::<_, SCALE>(
                     self.to_bits(),
                     $crate::support::rounding::DEFAULT_ROUNDING_MODE,
@@ -3171,16 +3171,16 @@ macro_rules! decl_wide_transcendental {
             /// Provided for API parity and standards conformance (C
             /// `log1p`, IEEE 754-2019 `logp1`). In this crate's
             /// fixed-point representation it is **equivalent** to
-            /// `(1 + self).ln_strict()` at the same scale — `1 + self`
+            /// `(1 + self).ln()` at the same scale — `1 + self`
             /// is exactly representable, so the binary floating-point
             /// cancellation that motivates a separate `log1p` does not
-            /// arise; it is not more accurate than [`Self::ln_strict`].
+            /// arise; it is not more accurate than [`Self::ln`].
             ///
             /// Delegates to the policy-registered log1p kernel for this
             /// `(width, SCALE)` cell — see `policy::log1p`.
             #[inline]
             #[must_use]
-            pub fn log1p_strict(self) -> Self {
+            pub fn log1p(self) -> Self {
                 Self::from_bits($crate::policy::log1p::dispatch::<_, SCALE>(
                     self.to_bits(),
                     $crate::support::rounding::DEFAULT_ROUNDING_MODE,
@@ -3194,14 +3194,14 @@ macro_rules! decl_wide_transcendental {
             /// `expm1`, IEEE 754-2019 `expm1`), and for the DOMAIN it
             /// reaches: the `- 1` is applied at the working scale, ahead
             /// of the storage range check, so the argument range is
-            /// `self <= ln(1 + MAX)` where [`Self::exp_strict`] stops at
+            /// `self <= ln(1 + MAX)` where [`Self::exp`] stops at
             /// `ln(MAX)` — exactly the arguments whose `e^self` lands in
             /// `(MAX, MAX + 1]`. The extra band is `ln(1 + 1/MAX)` wide,
             /// a few hundredths at the maximum scale and narrower below
             /// it: small, but real (`MAX >= 1` always, since the crate
             /// caps `MAX_SCALE = N - 1`).
             ///
-            /// It is not MORE ACCURATE than `exp_strict(self) - 1` where
+            /// It is not MORE ACCURATE than `exp(self) - 1` where
             /// both are representable — `1` is exactly `10^SCALE` raw
             /// units, so the subtraction is an exact grid translation and
             /// rounding commutes with it.
@@ -3210,7 +3210,7 @@ macro_rules! decl_wide_transcendental {
             /// `(width, SCALE)` cell — see `policy::expm1`.
             #[inline]
             #[must_use]
-            pub fn expm1_strict(self) -> Self {
+            pub fn expm1(self) -> Self {
                 Self::from_bits($crate::policy::expm1::dispatch::<_, SCALE>(
                     self.to_bits(),
                     $crate::support::rounding::DEFAULT_ROUNDING_MODE,
@@ -3219,7 +3219,7 @@ macro_rules! decl_wide_transcendental {
 
             /// Natural logarithm via the Brent–Salamin AGM (1976).
             /// Strict and correctly rounded. Same contract as
-            /// [`Self::ln_strict`]; the implementation path differs.
+            /// [`Self::ln`]; the implementation path differs.
             /// AGM converges quadratically and scales better than the
             /// artanh-series path at very high working scales in
             /// Brent's textbook complexity analysis.
@@ -3230,7 +3230,7 @@ macro_rules! decl_wide_transcendental {
             /// loses to the chain-MG + narrow-GUARD artanh / Tang
             /// path at every shipped tier × SCALE combination:
             ///
-            /// | tier | SCALE  | ln_strict (artanh/Tang) | ln_strict_agm | factor |
+            /// | tier | SCALE  | ln (artanh/Tang) | ln_agm | factor |
             /// |------|--------|-------------------------|---------------|--------|
             /// | D307 | 300    | 230 µs                  | 720 µs        | 3.1×   |
             /// | D616 | 300    | 21 µs (Tang)            | 812 µs        | 39×    |
@@ -3249,11 +3249,11 @@ macro_rules! decl_wide_transcendental {
             /// working scale the precision lift demands. The AGM
             /// path remains available via this method (and the
             /// `bench-alt` feature) for downstream apps that need the
-            /// alternate kernel, but the canonical `ln_strict` stays
+            /// alternate kernel, but the canonical `ln` stays
             /// on the artanh / Tang path at every tier.
             #[inline]
             #[must_use]
-            pub fn ln_strict_agm(self) -> Self {
+            pub fn ln_agm(self) -> Self {
                 let raw = self.to_bits();
                 if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     panic!(concat!(
@@ -3278,13 +3278,13 @@ macro_rules! decl_wide_transcendental {
 
             /// `e^self` via Newton's iteration on `ln_fixed_agm`.
             /// Strict and correctly rounded. Same contract as
-            /// [`Self::exp_strict`]; the implementation path differs.
+            /// [`Self::exp`]; the implementation path differs.
             /// Quadratic convergence makes this asymptotically faster
-            /// than the Taylor `exp_strict` at very high working
+            /// than the Taylor `exp` at very high working
             /// scales.
             #[inline]
             #[must_use]
-            pub fn exp_strict_agm(self) -> Self {
+            pub fn exp_agm(self) -> Self {
                 let raw = self.to_bits();
                 if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     return Self::ONE;
@@ -3320,36 +3320,36 @@ macro_rules! decl_wide_transcendental {
             /// Panics if `self <= 0`, `base <= 0`, or `base == 1`.
             #[inline]
             #[must_use]
-            pub fn log_strict(self, base: Self) -> Self {
+            pub fn log(self, base: Self) -> Self {
                 // Delegate to the mode-aware sibling at the default rounding
                 // mode (the exp2 pattern): ONE kernel for both public entries —
                 // the former inline no-mode composition was a second,
                 // single-shot implementation the `_with` path did not share.
-                self.log_strict_with(base, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                self.log_with(base, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Base-2 logarithm. Strict and correctly rounded. Panics if
             /// `self <= 0`.
             #[inline]
             #[must_use]
-            pub fn log2_strict(self) -> Self {
+            pub fn log2(self) -> Self {
                 // Delegate to the mode-aware sibling at the default rounding
                 // mode (the exp2 pattern): ONE kernel for both public entries —
                 // the former inline no-mode composition was a second,
                 // single-shot implementation the `_with` path did not share.
-                self.log2_strict_with($crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                self.log2_with($crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Base-10 logarithm. Strict and correctly rounded. Panics
             /// if `self <= 0`.
             #[inline]
             #[must_use]
-            pub fn log10_strict(self) -> Self {
+            pub fn log10(self) -> Self {
                 // Delegate to the mode-aware sibling at the default rounding
                 // mode (the exp2 pattern): ONE kernel for both public entries —
                 // the former inline no-mode composition was a second,
                 // single-shot implementation the `_with` path did not share.
-                self.log10_strict_with($crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                self.log10_with($crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// `e^self`. Strict and correctly rounded. Panics if the
@@ -3359,7 +3359,7 @@ macro_rules! decl_wide_transcendental {
             /// `(width, SCALE)` cell — see `policy::exp`.
             #[inline]
             #[must_use]
-            pub fn exp_strict(self) -> Self {
+            pub fn exp(self) -> Self {
                 Self::from_bits($crate::policy::exp::dispatch::<_, SCALE>(
                     self.to_bits(),
                     $crate::support::rounding::DEFAULT_ROUNDING_MODE,
@@ -3370,14 +3370,14 @@ macro_rules! decl_wide_transcendental {
             /// rounded. Panics if the result overflows.
             #[inline]
             #[must_use]
-            pub fn exp2_strict(self) -> Self {
+            pub fn exp2(self) -> Self {
                 // Delegate to the mode-aware kernel at the default rounding mode
                 // so the no-mode path shares BOTH the exact-power pin and the
                 // Wexp-correct argument formation. The former inline `Wagm`
                 // composition lacked both: it skipped `exp2_exact_pin` (~3 ULP
                 // on exact powers like 2^97) and formed `x·ln2` in `Wagm`, which
                 // wraps an out-of-range result instead of panicking (the
-                // documented exp2_strict_with vs exp2_strict divergence).
+                // documented exp2_with vs exp2 divergence).
                 Self::from_bits($core::exp2_strict_with_kernel::<SCALE>(
                     self.to_bits(),
                     $crate::support::rounding::DEFAULT_ROUNDING_MODE,
@@ -3398,12 +3398,12 @@ macro_rules! decl_wide_transcendental {
             /// where the scaled `base^|n|·10^SCALE` would overflow storage.
             #[inline]
             #[must_use]
-            pub fn powf_strict(self, exp: Self) -> Self {
+            pub fn powf(self, exp: Self) -> Self {
                 // Delegate to the mode-aware sibling at the default rounding
                 // mode (the exp2 pattern): ONE kernel for both public entries —
                 // the former inline no-mode composition was a second,
                 // single-shot implementation the `_with` path did not share.
-                self.powf_strict_with(exp, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                self.powf_with(exp, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Sine of `self` (radians). Strict and correctly rounded.
@@ -3412,7 +3412,7 @@ macro_rules! decl_wide_transcendental {
             /// `(width, SCALE)` cell — see `policy::trig`.
             #[inline]
             #[must_use]
-            pub fn sin_strict(self) -> Self {
+            pub fn sin(self) -> Self {
                 Self::from_bits($crate::policy::trig::sin_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
@@ -3420,14 +3420,14 @@ macro_rules! decl_wide_transcendental {
             /// rounded. The policy-registered kernel evaluates a
             /// single `sin_fixed(π/2 − self)` via the cofunction
             /// identity — no sqrt, no shared Taylor with sin.
-            /// `sin_cos_strict` keeps the shared-Taylor
+            /// `sin_cos` keeps the shared-Taylor
             /// `sin_cos_fixed` path for joint evaluation.
             ///
             /// Delegates to the policy-registered cos kernel for this
             /// `(width, SCALE)` cell — see `policy::trig`.
             #[inline]
             #[must_use]
-            pub fn cos_strict(self) -> Self {
+            pub fn cos(self) -> Self {
                 Self::from_bits($crate::policy::trig::cos_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
@@ -3437,17 +3437,17 @@ macro_rules! decl_wide_transcendental {
             /// Internally shares one Taylor-series evaluation between
             /// the two results (computing only `|sin|` and recovering
             /// `|cos| = √(1 − sin²)` from the Pythagorean identity),
-            /// so the wall-clock is `~one sin_strict + one wide sqrt`
-            /// — roughly half the cost of `(self.sin_strict(),
-            /// self.cos_strict())`.
+            /// so the wall-clock is `~one sin + one wide sqrt`
+            /// — roughly half the cost of `(self.sin(),
+            /// self.cos())`.
             ///
             /// Useful for rotation matrices, polar→cartesian, complex
             /// `e^{iθ}` evaluation, and anywhere both trig values of
             /// the same argument are needed.
             #[inline]
             #[must_use]
-            pub fn sin_cos_strict(self) -> (Self, Self) {
-                self.sin_cos_strict_with($crate::support::rounding::DEFAULT_ROUNDING_MODE)
+            pub fn sin_cos(self) -> (Self, Self) {
+                self.sin_cos_with($crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Tangent of `self` (radians), as `sin / cos`. Strict and
@@ -3457,7 +3457,7 @@ macro_rules! decl_wide_transcendental {
             /// `(width, SCALE)` cell — see `policy::trig`.
             #[inline]
             #[must_use]
-            pub fn tan_strict(self) -> Self {
+            pub fn tan(self) -> Self {
                 Self::from_bits($crate::policy::trig::tan_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
@@ -3468,7 +3468,7 @@ macro_rules! decl_wide_transcendental {
             /// `(width, SCALE)` cell — see `policy::trig`.
             #[inline]
             #[must_use]
-            pub fn atan_strict(self) -> Self {
+            pub fn atan(self) -> Self {
                 Self::from_bits($crate::policy::trig::atan_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
@@ -3494,17 +3494,17 @@ macro_rules! decl_wide_transcendental {
             ///   from 1.
             #[inline]
             #[must_use]
-            pub fn asin_strict(self) -> Self {
+            pub fn asin(self) -> Self {
                 Self::from_bits($crate::policy::trig::asin_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
             /// Arccosine of `self`, in radians, in `[0, π]`, as
             /// `π/2 − asin(self)`. Strict. Panics if `|self| > 1`.
             /// Uses the same two-range asin kernel as
-            /// [`Self::asin_strict`] for the underlying asin.
+            /// [`Self::asin`] for the underlying asin.
             #[inline]
             #[must_use]
-            pub fn acos_strict(self) -> Self {
+            pub fn acos(self) -> Self {
                 Self::from_bits($crate::policy::trig::acos_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
@@ -3513,7 +3513,7 @@ macro_rules! decl_wide_transcendental {
             /// rounded.
             #[inline]
             #[must_use]
-            pub fn atan2_strict(self, other: Self) -> Self {
+            pub fn atan2(self, other: Self) -> Self {
                 Self::from_bits($crate::policy::trig::atan2_dispatch::<_, SCALE>(self.to_bits(), other.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
@@ -3524,7 +3524,7 @@ macro_rules! decl_wide_transcendental {
             /// `(width, SCALE)` cell — see `policy::trig`.
             #[inline]
             #[must_use]
-            pub fn sinh_strict(self) -> Self {
+            pub fn sinh(self) -> Self {
                 Self::from_bits($crate::policy::trig::sinh_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
@@ -3535,7 +3535,7 @@ macro_rules! decl_wide_transcendental {
             /// `(width, SCALE)` cell — see `policy::trig`.
             #[inline]
             #[must_use]
-            pub fn cosh_strict(self) -> Self {
+            pub fn cosh(self) -> Self {
                 Self::from_bits($crate::policy::trig::cosh_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
@@ -3551,7 +3551,7 @@ macro_rules! decl_wide_transcendental {
             /// `(width, SCALE)` cell — see `policy::trig`.
             #[inline]
             #[must_use]
-            pub fn tanh_strict(self) -> Self {
+            pub fn tanh(self) -> Self {
                 Self::from_bits($crate::policy::trig::tanh_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
@@ -3565,8 +3565,8 @@ macro_rules! decl_wide_transcendental {
             /// roughly 40% versus running two `exp_fixed` calls.
             #[inline]
             #[must_use]
-            pub fn sinh_cosh_strict(self) -> (Self, Self) {
-                self.sinh_cosh_strict_with($crate::support::rounding::DEFAULT_ROUNDING_MODE)
+            pub fn sinh_cosh(self) -> (Self, Self) {
+                self.sinh_cosh_with($crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Inverse hyperbolic sine, as
@@ -3575,7 +3575,7 @@ macro_rules! decl_wide_transcendental {
             /// `x²` inside the working width.
             #[inline]
             #[must_use]
-            pub fn asinh_strict(self) -> Self {
+            pub fn asinh(self) -> Self {
                 // The composition itself lives in
                 // `algos::trig::hyper_ln_composition::asinh_series_composition`;
                 // this shell only names it. It is called DIRECTLY rather
@@ -3601,7 +3601,7 @@ macro_rules! decl_wide_transcendental {
             ///
             /// Delegates to the policy-registered acosh kernel for this
             /// `(width, SCALE)` cell — see `policy::trig` — so this
-            /// default entry and [`Self::acosh_strict_with`] share the
+            /// default entry and [`Self::acosh_with`] share the
             /// one canonical kernel.
             ///
             /// This shell previously carried its own inline near-1
@@ -3619,7 +3619,7 @@ macro_rules! decl_wide_transcendental {
             /// so the default entry now routes through it.
             #[inline]
             #[must_use]
-            pub fn acosh_strict(self) -> Self {
+            pub fn acosh(self) -> Self {
                 Self::from_bits($crate::policy::trig::acosh_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
@@ -3629,7 +3629,7 @@ macro_rules! decl_wide_transcendental {
             ///
             /// Delegates to the policy-registered atanh kernel for this
             /// `(width, SCALE)` cell — see `policy::trig` — so this
-            /// default entry and [`Self::atanh_strict_with`] share the
+            /// default entry and [`Self::atanh_with`] share the
             /// one canonical kernel.
             ///
             /// This shell previously carried its own inline gap-form
@@ -3645,7 +3645,7 @@ macro_rules! decl_wide_transcendental {
             /// choice and cannot drift from the graded `_with` path.
             #[inline]
             #[must_use]
-            pub fn atanh_strict(self) -> Self {
+            pub fn atanh(self) -> Self {
                 Self::from_bits($crate::policy::trig::atanh_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
@@ -3664,7 +3664,7 @@ macro_rules! decl_wide_transcendental {
             /// `to_degrees_mul_pi_ratio_matches_the_inherent_shell_across_the_surface`.
             #[inline]
             #[must_use]
-            pub fn to_degrees_strict(self) -> Self {
+            pub fn to_degrees(self) -> Self {
                 Self::from_bits($crate::policy::to_degrees::dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
@@ -3676,12 +3676,12 @@ macro_rules! decl_wide_transcendental {
             ///
             /// Names the `Schoolbook` kernel
             /// (`algos::trig::angle_schoolbook::to_radians_schoolbook`)
-            /// directly — see [`Self::to_radians_strict_with`] for why
+            /// directly — see [`Self::to_radians_with`] for why
             /// this is not routed through `policy::to_radians::dispatch`.
             #[inline]
             #[must_use]
-            pub fn to_radians_strict(self) -> Self {
-                self.to_radians_strict_with($crate::support::rounding::DEFAULT_ROUNDING_MODE)
+            pub fn to_radians(self) -> Self {
+                self.to_radians_with($crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             // ---- Mode-aware siblings ----
@@ -3694,33 +3694,33 @@ macro_rules! decl_wide_transcendental {
             // into a helper so each method's panic / early-return
             // semantics stay attached to its canonical name.
 
-            /// Mode-aware sibling of [`Self::ln_strict`]. Delegates to
+            /// Mode-aware sibling of [`Self::ln`]. Delegates to
             /// the policy-registered ln kernel for this `(width, SCALE)`
             /// cell — see `policy::ln`.
             #[inline]
             #[must_use]
-            pub fn ln_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn ln_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 Self::from_bits($crate::policy::ln::dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::log1p_strict`].
+            /// Mode-aware sibling of [`Self::log1p`].
             #[inline]
             #[must_use]
-            pub fn log1p_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn log1p_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 Self::from_bits($crate::policy::log1p::dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::expm1_strict`].
+            /// Mode-aware sibling of [`Self::expm1`].
             #[inline]
             #[must_use]
-            pub fn expm1_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn expm1_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 Self::from_bits($crate::policy::expm1::dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::ln_strict_agm`].
+            /// Mode-aware sibling of [`Self::ln_agm`].
             #[inline]
             #[must_use]
-            pub fn ln_strict_agm_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn ln_agm_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let raw = self.to_bits();
                 if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     panic!(concat!(
@@ -3741,10 +3741,10 @@ macro_rules! decl_wide_transcendental {
                 ))
             }
 
-            /// Mode-aware sibling of [`Self::exp_strict_agm`].
+            /// Mode-aware sibling of [`Self::exp_agm`].
             #[inline]
             #[must_use]
-            pub fn exp_strict_agm_with(
+            pub fn exp_agm_with(
                 self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
@@ -3752,7 +3752,7 @@ macro_rules! decl_wide_transcendental {
                 if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     return Self::ONE;
                 }
-                // See `exp_strict_agm` for the `k_lift` rationale.
+                // See `exp_agm` for the `k_lift` rationale.
                 let raw_w = $core::to_work_scaled(raw, 0);
                 let k_lift = $core::exp_agm_k_lift_from_w(raw_w, SCALE);
                 let lift = $core::GUARD + $core::guard_agm(SCALE) + k_lift;
@@ -3769,13 +3769,13 @@ macro_rules! decl_wide_transcendental {
                 ))
             }
 
-            /// Mode-aware sibling of [`Self::log_strict`].
+            /// Mode-aware sibling of [`Self::log`].
             ///
             /// Body delegates *down* to `policy::log::dispatch`, which
             /// routes to the `LnDivide` kernel (`$core::log_strict_with_kernel`).
             #[inline]
             #[must_use]
-            pub fn log_strict_with(
+            pub fn log_with(
                 self,
                 base: Self,
                 mode: $crate::support::rounding::RoundingMode,
@@ -3787,39 +3787,39 @@ macro_rules! decl_wide_transcendental {
                 ))
             }
 
-            /// Mode-aware sibling of [`Self::log2_strict`].
+            /// Mode-aware sibling of [`Self::log2`].
             #[inline]
             #[must_use]
-            pub fn log2_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn log2_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 Self::from_bits($core::log2_strict_with_kernel::<SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::log10_strict`].
+            /// Mode-aware sibling of [`Self::log10`].
             #[inline]
             #[must_use]
-            pub fn log10_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn log10_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 Self::from_bits($core::log10_strict_with_kernel::<SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::exp_strict`]. Delegates
+            /// Mode-aware sibling of [`Self::exp`]. Delegates
             /// to the policy-registered exp kernel for this
             /// `(width, SCALE)` cell — see `policy::exp`.
             #[inline]
             #[must_use]
-            pub fn exp_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn exp_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 Self::from_bits($crate::policy::exp::dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::exp2_strict`].
+            /// Mode-aware sibling of [`Self::exp2`].
             #[inline]
             #[must_use]
-            pub fn exp2_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn exp2_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 Self::from_bits($core::exp2_strict_with_kernel::<SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::powf_strict`].
+            /// Mode-aware sibling of [`Self::powf`].
             ///
-            /// Same exact integer-power pin as [`Self::powf_strict`], here
+            /// Same exact integer-power pin as [`Self::powf`], here
             /// rounding any non-terminating / sub-resolution reciprocal under
             /// the caller's `mode`.
             ///
@@ -3831,11 +3831,11 @@ macro_rules! decl_wide_transcendental {
             /// `select` names for every wide width; this shell delegates to
             /// `policy::pow::dispatch` like every other strict shell. The
             /// `x^0.5` pin is handed the cell's own `policy::sqrt::dispatch`,
-            /// the same engine `self.sqrt_strict_with(mode)` reached here
+            /// the same engine `self.sqrt_with(mode)` reached here
             /// before.
             #[inline]
             #[must_use]
-            pub fn powf_strict_with(
+            pub fn powf_with(
                 self,
                 exp: Self,
                 mode: $crate::support::rounding::RoundingMode,
@@ -3847,50 +3847,50 @@ macro_rules! decl_wide_transcendental {
                 ))
             }
 
-            /// Mode-aware sibling of [`Self::sin_strict`]. Delegates
+            /// Mode-aware sibling of [`Self::sin`]. Delegates
             /// to the policy-registered sin kernel for this
             /// `(width, SCALE)` cell — see `policy::trig`.
             #[inline]
             #[must_use]
-            pub fn sin_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn sin_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 Self::from_bits($crate::policy::trig::sin_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::cos_strict`]. Delegates
+            /// Mode-aware sibling of [`Self::cos`]. Delegates
             /// to the policy-registered cos kernel for this
             /// `(width, SCALE)` cell — see `policy::trig`.
             ///
             /// Note: pre-policy this method ran `sin_fixed(self + π/2)`
-            /// while the no-mode `cos_strict` ran the shared
+            /// while the no-mode `cos` ran the shared
             /// `sin_cos_fixed` Pythagorean-identity path. The migration
             /// consolidates both on the latter (faster) path; the two
             /// paths agree to well within the existing 2-ULP test
             /// slack.
             #[inline]
             #[must_use]
-            pub fn cos_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn cos_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 Self::from_bits($crate::policy::trig::cos_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::tan_strict`]. Delegates
+            /// Mode-aware sibling of [`Self::tan`]. Delegates
             /// to the policy-registered tan kernel for this
             /// `(width, SCALE)` cell — see `policy::trig`.
             #[inline]
             #[must_use]
-            pub fn tan_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn tan_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 Self::from_bits($crate::policy::trig::tan_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::atan_strict`]. Delegates
+            /// Mode-aware sibling of [`Self::atan`]. Delegates
             /// to the policy-registered atan kernel for this
             /// `(width, SCALE)` cell — see `policy::trig`.
             #[inline]
             #[must_use]
-            pub fn atan_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn atan_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 Self::from_bits($crate::policy::trig::atan_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::asin_strict`].
+            /// Mode-aware sibling of [`Self::asin`].
             ///
             /// Delegates to the policy dispatch exactly as the default-
             /// mode sibling does (`policy::trig::asin_dispatch`), so BOTH
@@ -3904,23 +3904,23 @@ macro_rules! decl_wide_transcendental {
             /// resolves it.
             #[inline]
             #[must_use]
-            pub fn asin_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn asin_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 Self::from_bits($crate::policy::trig::asin_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::acos_strict`] — policy
-            /// dispatch, see [`Self::asin_strict_with`].
+            /// Mode-aware sibling of [`Self::acos`] — policy
+            /// dispatch, see [`Self::asin_with`].
             #[inline]
             #[must_use]
-            pub fn acos_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn acos_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 Self::from_bits($crate::policy::trig::acos_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::atan2_strict`] — policy
-            /// dispatch, see [`Self::asin_strict_with`].
+            /// Mode-aware sibling of [`Self::atan2`] — policy
+            /// dispatch, see [`Self::asin_with`].
             #[inline]
             #[must_use]
-            pub fn atan2_strict_with(
+            pub fn atan2_with(
                 self,
                 other: Self,
                 mode: $crate::support::rounding::RoundingMode,
@@ -3932,7 +3932,7 @@ macro_rules! decl_wide_transcendental {
                 ))
             }
 
-            /// Mode-aware sibling of [`Self::sinh_strict`].
+            /// Mode-aware sibling of [`Self::sinh`].
             ///
             /// Delegates to the policy dispatch exactly as the default-
             /// mode sibling does (`policy::trig::sinh_dispatch`), so BOTH
@@ -3942,64 +3942,64 @@ macro_rules! decl_wide_transcendental {
             /// pins, and `never_exact` two-width widening).
             #[inline]
             #[must_use]
-            pub fn sinh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn sinh_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 Self::from_bits($crate::policy::trig::sinh_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::cosh_strict`] — policy
-            /// dispatch, see [`Self::sinh_strict_with`].
+            /// Mode-aware sibling of [`Self::cosh`] — policy
+            /// dispatch, see [`Self::sinh_with`].
             #[inline]
             #[must_use]
-            pub fn cosh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn cosh_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 Self::from_bits($crate::policy::trig::cosh_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::tanh_strict`] — policy
-            /// dispatch, see [`Self::sinh_strict_with`] (the canonical
+            /// Mode-aware sibling of [`Self::tanh`] — policy
+            /// dispatch, see [`Self::sinh_with`] (the canonical
             /// kernel carries this shell's former cubic band, all-nines
             /// saturation fast path, and capped exp lift).
             #[inline]
             #[must_use]
-            pub fn tanh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn tanh_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 Self::from_bits($crate::policy::trig::tanh_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::asinh_strict`] — policy
-            /// dispatch, see [`Self::sinh_strict_with`].
+            /// Mode-aware sibling of [`Self::asinh`] — policy
+            /// dispatch, see [`Self::sinh_with`].
             #[inline]
             #[must_use]
-            pub fn asinh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn asinh_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 Self::from_bits($crate::policy::trig::asinh_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::acosh_strict`] — policy
-            /// dispatch, see [`Self::sinh_strict_with`].
+            /// Mode-aware sibling of [`Self::acosh`] — policy
+            /// dispatch, see [`Self::sinh_with`].
             #[inline]
             #[must_use]
-            pub fn acosh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn acosh_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 Self::from_bits($crate::policy::trig::acosh_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::atanh_strict`] — policy
-            /// dispatch, see [`Self::sinh_strict_with`].
+            /// Mode-aware sibling of [`Self::atanh`] — policy
+            /// dispatch, see [`Self::sinh_with`].
             #[inline]
             #[must_use]
-            pub fn atanh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn atanh_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 Self::from_bits($crate::policy::trig::atanh_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::to_degrees_strict`] — policy
+            /// Mode-aware sibling of [`Self::to_degrees`] — policy
             /// dispatch, see `policy::to_degrees`.
             #[inline]
             #[must_use]
-            pub fn to_degrees_strict_with(
+            pub fn to_degrees_with(
                 self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 Self::from_bits($crate::policy::to_degrees::dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::to_radians_strict`].
+            /// Mode-aware sibling of [`Self::to_radians`].
             ///
             /// Names the `Schoolbook` kernel
             /// (`algos::trig::angle_schoolbook::to_radians_schoolbook`),
@@ -4011,7 +4011,7 @@ macro_rules! decl_wide_transcendental {
             ///
             /// Called DIRECTLY rather than through
             /// `policy::to_radians::dispatch`, on the same grounds as
-            /// [`Self::asinh_strict`]: that policy's `select` returns
+            /// [`Self::asinh`]: that policy's `select` returns
             /// `MulPiRatio` for every cell, and `MulPiRatio` is a
             /// DIFFERENT algorithm — it multiplies by the `rad_per_deg`
             /// table constant instead of scaling through `π` first, giving
@@ -4023,7 +4023,7 @@ macro_rules! decl_wide_transcendental {
             /// decision rather than part of this relocation.
             #[inline]
             #[must_use]
-            pub fn to_radians_strict_with(
+            pub fn to_radians_with(
                 self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
@@ -4035,7 +4035,7 @@ macro_rules! decl_wide_transcendental {
                 )
             }
 
-            /// Mode-aware sibling of [`Self::sin_cos_strict`]. Delegates
+            /// Mode-aware sibling of [`Self::sin_cos`]. Delegates
             /// to the policy-registered joint kernel for this
             /// `(width, SCALE)` cell — see `policy::trig::sin_cos`.
             ///
@@ -4044,11 +4044,11 @@ macro_rules! decl_wide_transcendental {
             /// `algos::trig::sincos_joint::sin_cos_shared_taylor`; the
             /// escapes are supplied BY the dispatch as this cell's own
             /// `sin_dispatch` / `cos_dispatch` verdicts, so they land on
-            /// exactly the engines `self.sin_strict_with(mode)` /
-            /// `self.cos_strict_with(mode)` reached from here before.
+            /// exactly the engines `self.sin_with(mode)` /
+            /// `self.cos_with(mode)` reached from here before.
             #[inline]
             #[must_use]
-            pub fn sin_cos_strict_with(
+            pub fn sin_cos_with(
                 self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> (Self, Self) {
@@ -4060,7 +4060,7 @@ macro_rules! decl_wide_transcendental {
                 (Self::from_bits(sin_bits), Self::from_bits(cos_bits))
             }
 
-            /// Mode-aware sibling of [`Self::sinh_cosh_strict`].
+            /// Mode-aware sibling of [`Self::sinh_cosh`].
             /// Delegates to the policy-registered joint kernel for this
             /// `(width, SCALE)` cell — see `policy::trig::sinh_cosh`.
             ///
@@ -4069,11 +4069,11 @@ macro_rules! decl_wide_transcendental {
             /// `algos::trig::hyper_joint::sinh_cosh_exp_reciprocal`; the
             /// escapes are supplied BY the dispatch as this cell's own
             /// `sinh_dispatch` / `cosh_dispatch` verdicts, so they land on
-            /// exactly the engines `self.sinh_strict_with(mode)` /
-            /// `self.cosh_strict_with(mode)` reached from here before.
+            /// exactly the engines `self.sinh_with(mode)` /
+            /// `self.cosh_with(mode)` reached from here before.
             #[inline]
             #[must_use]
-            pub fn sinh_cosh_strict_with(
+            pub fn sinh_cosh_with(
                 self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> (Self, Self) {
@@ -4093,150 +4093,6 @@ macro_rules! decl_wide_transcendental {
         // non-strict plain form.
         #[cfg(feature = "strict")]
         impl<const SCALE: u32> $Type<SCALE> {
-            /// With `strict`, dispatches to [`Self::ln_strict`].
-            #[inline]
-            #[must_use]
-            pub fn ln(self) -> Self {
-                self.ln_strict()
-            }
-            /// With `strict`, dispatches to [`Self::log1p_strict`].
-            #[inline]
-            #[must_use]
-            pub fn log1p(self) -> Self {
-                self.log1p_strict()
-            }
-            /// With `strict`, dispatches to [`Self::log_strict`].
-            #[inline]
-            #[must_use]
-            pub fn log(self, base: Self) -> Self {
-                self.log_strict(base)
-            }
-            /// With `strict`, dispatches to [`Self::log2_strict`].
-            #[inline]
-            #[must_use]
-            pub fn log2(self) -> Self {
-                self.log2_strict()
-            }
-            /// With `strict`, dispatches to [`Self::log10_strict`].
-            #[inline]
-            #[must_use]
-            pub fn log10(self) -> Self {
-                self.log10_strict()
-            }
-            /// With `strict`, dispatches to [`Self::exp_strict`].
-            #[inline]
-            #[must_use]
-            pub fn exp(self) -> Self {
-                self.exp_strict()
-            }
-            /// With `strict`, dispatches to [`Self::expm1_strict`].
-            #[inline]
-            #[must_use]
-            pub fn expm1(self) -> Self {
-                self.expm1_strict()
-            }
-            /// With `strict`, dispatches to [`Self::exp2_strict`].
-            #[inline]
-            #[must_use]
-            pub fn exp2(self) -> Self {
-                self.exp2_strict()
-            }
-            /// With `strict`, dispatches to [`Self::powf_strict`].
-            #[inline]
-            #[must_use]
-            pub fn powf(self, exp: Self) -> Self {
-                self.powf_strict(exp)
-            }
-            /// With `strict`, dispatches to [`Self::sin_strict`].
-            #[inline]
-            #[must_use]
-            pub fn sin(self) -> Self {
-                self.sin_strict()
-            }
-            /// With `strict`, dispatches to [`Self::cos_strict`].
-            #[inline]
-            #[must_use]
-            pub fn cos(self) -> Self {
-                self.cos_strict()
-            }
-            /// With `strict`, dispatches to [`Self::tan_strict`].
-            #[inline]
-            #[must_use]
-            pub fn tan(self) -> Self {
-                self.tan_strict()
-            }
-            /// With `strict`, dispatches to [`Self::asin_strict`].
-            #[inline]
-            #[must_use]
-            pub fn asin(self) -> Self {
-                self.asin_strict()
-            }
-            /// With `strict`, dispatches to [`Self::acos_strict`].
-            #[inline]
-            #[must_use]
-            pub fn acos(self) -> Self {
-                self.acos_strict()
-            }
-            /// With `strict`, dispatches to [`Self::atan_strict`].
-            #[inline]
-            #[must_use]
-            pub fn atan(self) -> Self {
-                self.atan_strict()
-            }
-            /// With `strict`, dispatches to [`Self::atan2_strict`].
-            #[inline]
-            #[must_use]
-            pub fn atan2(self, other: Self) -> Self {
-                self.atan2_strict(other)
-            }
-            /// With `strict`, dispatches to [`Self::sinh_strict`].
-            #[inline]
-            #[must_use]
-            pub fn sinh(self) -> Self {
-                self.sinh_strict()
-            }
-            /// With `strict`, dispatches to [`Self::cosh_strict`].
-            #[inline]
-            #[must_use]
-            pub fn cosh(self) -> Self {
-                self.cosh_strict()
-            }
-            /// With `strict`, dispatches to [`Self::tanh_strict`].
-            #[inline]
-            #[must_use]
-            pub fn tanh(self) -> Self {
-                self.tanh_strict()
-            }
-            /// With `strict`, dispatches to [`Self::asinh_strict`].
-            #[inline]
-            #[must_use]
-            pub fn asinh(self) -> Self {
-                self.asinh_strict()
-            }
-            /// With `strict`, dispatches to [`Self::acosh_strict`].
-            #[inline]
-            #[must_use]
-            pub fn acosh(self) -> Self {
-                self.acosh_strict()
-            }
-            /// With `strict`, dispatches to [`Self::atanh_strict`].
-            #[inline]
-            #[must_use]
-            pub fn atanh(self) -> Self {
-                self.atanh_strict()
-            }
-            /// With `strict`, dispatches to [`Self::to_degrees_strict`].
-            #[inline]
-            #[must_use]
-            pub fn to_degrees(self) -> Self {
-                self.to_degrees_strict()
-            }
-            /// With `strict`, dispatches to [`Self::to_radians_strict`].
-            #[inline]
-            #[must_use]
-            pub fn to_radians(self) -> Self {
-                self.to_radians_strict()
-            }
         }
     };
 }
@@ -4373,20 +4229,20 @@ mod tests {
             agree(
                 "ln",
                 raw,
-                wide.ln_strict().to_bits().as_i128(),
-                narrow.ln_strict().to_bits().as_i128(),
+                wide.ln().to_bits().as_i128(),
+                narrow.ln().to_bits().as_i128(),
             );
             agree(
                 "log2",
                 raw,
-                wide.log2_strict().to_bits().as_i128(),
-                narrow.log2_strict().to_bits().as_i128(),
+                wide.log2().to_bits().as_i128(),
+                narrow.log2().to_bits().as_i128(),
             );
             agree(
                 "log10",
                 raw,
-                wide.log10_strict().to_bits().as_i128(),
-                narrow.log10_strict().to_bits().as_i128(),
+                wide.log10().to_bits().as_i128(),
+                narrow.log10().to_bits().as_i128(),
             );
         }
         for raw in all {
@@ -4397,44 +4253,44 @@ mod tests {
             agree(
                 "exp",
                 raw,
-                wide.exp_strict().to_bits().as_i128(),
-                narrow.exp_strict().to_bits().as_i128(),
+                wide.exp().to_bits().as_i128(),
+                narrow.exp().to_bits().as_i128(),
             );
             agree(
                 "sin",
                 raw,
-                wide.sin_strict().to_bits().as_i128(),
-                narrow.sin_strict().to_bits().as_i128(),
+                wide.sin().to_bits().as_i128(),
+                narrow.sin().to_bits().as_i128(),
             );
             agree(
                 "cos",
                 raw,
-                wide.cos_strict().to_bits().as_i128(),
-                narrow.cos_strict().to_bits().as_i128(),
+                wide.cos().to_bits().as_i128(),
+                narrow.cos().to_bits().as_i128(),
             );
             agree(
                 "atan",
                 raw,
-                wide.atan_strict().to_bits().as_i128(),
-                narrow.atan_strict().to_bits().as_i128(),
+                wide.atan().to_bits().as_i128(),
+                narrow.atan().to_bits().as_i128(),
             );
             agree(
                 "sinh",
                 raw,
-                wide.sinh_strict().to_bits().as_i128(),
-                narrow.sinh_strict().to_bits().as_i128(),
+                wide.sinh().to_bits().as_i128(),
+                narrow.sinh().to_bits().as_i128(),
             );
             agree(
                 "cosh",
                 raw,
-                wide.cosh_strict().to_bits().as_i128(),
-                narrow.cosh_strict().to_bits().as_i128(),
+                wide.cosh().to_bits().as_i128(),
+                narrow.cosh().to_bits().as_i128(),
             );
             agree(
                 "tanh",
                 raw,
-                wide.tanh_strict().to_bits().as_i128(),
-                narrow.tanh_strict().to_bits().as_i128(),
+                wide.tanh().to_bits().as_i128(),
+                narrow.tanh().to_bits().as_i128(),
             );
         }
         for raw in unit_range {
@@ -4445,20 +4301,20 @@ mod tests {
             agree(
                 "asin",
                 raw,
-                wide.asin_strict().to_bits().as_i128(),
-                narrow.asin_strict().to_bits().as_i128(),
+                wide.asin().to_bits().as_i128(),
+                narrow.asin().to_bits().as_i128(),
             );
             agree(
                 "acos",
                 raw,
-                wide.acos_strict().to_bits().as_i128(),
-                narrow.acos_strict().to_bits().as_i128(),
+                wide.acos().to_bits().as_i128(),
+                narrow.acos().to_bits().as_i128(),
             );
             agree(
                 "atanh",
                 raw,
-                wide.atanh_strict().to_bits().as_i128(),
-                narrow.atanh_strict().to_bits().as_i128(),
+                wide.atanh().to_bits().as_i128(),
+                narrow.atanh().to_bits().as_i128(),
             );
         }
     }
@@ -4468,32 +4324,32 @@ mod tests {
     #[test]
     fn wide_transcendental_identities() {
         #[cfg(feature = "d76")]
-        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ONE.ln_strict(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ONE.ln(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
         #[cfg(feature = "d76")]
-        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.exp_strict(), crate::D::<crate::int::types::Int<4>, 6>::ONE);
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.exp(), crate::D::<crate::int::types::Int<4>, 6>::ONE);
         #[cfg(feature = "d76")]
-        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.sin_strict(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.sin(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
         #[cfg(feature = "d76")]
-        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.sinh_strict(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.sinh(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
         #[cfg(feature = "d76")]
-        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.atan_strict(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.atan(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
 
         #[cfg(feature = "d153")]
-        assert_eq!(crate::D::<crate::int::types::Int<8>, 6>::ONE.ln_strict(), crate::D::<crate::int::types::Int<8>, 6>::ZERO);
+        assert_eq!(crate::D::<crate::int::types::Int<8>, 6>::ONE.ln(), crate::D::<crate::int::types::Int<8>, 6>::ZERO);
         #[cfg(feature = "d153")]
-        assert_eq!(crate::D::<crate::int::types::Int<8>, 6>::ZERO.exp_strict(), crate::D::<crate::int::types::Int<8>, 6>::ONE);
+        assert_eq!(crate::D::<crate::int::types::Int<8>, 6>::ZERO.exp(), crate::D::<crate::int::types::Int<8>, 6>::ONE);
         #[cfg(feature = "d153")]
-        assert_eq!(crate::D::<crate::int::types::Int<8>, 6>::ZERO.cos_strict(), crate::D::<crate::int::types::Int<8>, 6>::ONE);
+        assert_eq!(crate::D::<crate::int::types::Int<8>, 6>::ZERO.cos(), crate::D::<crate::int::types::Int<8>, 6>::ONE);
 
         #[cfg(feature = "d307")]
-        assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::ONE.ln_strict(), crate::D::<crate::int::types::Int<16>, 6>::ZERO);
+        assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::ONE.ln(), crate::D::<crate::int::types::Int<16>, 6>::ZERO);
         #[cfg(feature = "d307")]
-        assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::ZERO.exp_strict(), crate::D::<crate::int::types::Int<16>, 6>::ONE);
+        assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::ZERO.exp(), crate::D::<crate::int::types::Int<16>, 6>::ONE);
         #[cfg(feature = "d307")]
-        assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::ZERO.cosh_strict(), crate::D::<crate::int::types::Int<16>, 6>::ONE);
+        assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::ZERO.cosh(), crate::D::<crate::int::types::Int<16>, 6>::ONE);
     }
 
-    /// AGM-based `ln_strict_agm` and `exp_strict_agm` (Brent–Salamin
+    /// AGM-based `ln_agm` and `exp_agm` (Brent–Salamin
     /// 1976 / Newton-on-AGM) are correctly rounded by the same
     /// contract as the canonical artanh / Taylor paths, so they must
     /// agree to within a couple of ULP at storage scale.
@@ -4517,8 +4373,8 @@ mod tests {
             agree(
                 "ln",
                 raw,
-                wide.ln_strict_agm().to_bits().as_i128(),
-                wide.ln_strict().to_bits().as_i128(),
+                wide.ln_agm().to_bits().as_i128(),
+                wide.ln().to_bits().as_i128(),
             );
         }
         for raw in all {
@@ -4528,8 +4384,8 @@ mod tests {
             agree(
                 "exp",
                 raw,
-                wide.exp_strict_agm().to_bits().as_i128(),
-                wide.exp_strict().to_bits().as_i128(),
+                wide.exp_agm().to_bits().as_i128(),
+                wide.exp().to_bits().as_i128(),
             );
         }
     }
@@ -4539,17 +4395,17 @@ mod tests {
     #[test]
     fn wide_agm_identity_points() {
         #[cfg(feature = "d76")]
-        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ONE.ln_strict_agm(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ONE.ln_agm(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
         #[cfg(feature = "d76")]
-        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.exp_strict_agm(), crate::D::<crate::int::types::Int<4>, 6>::ONE);
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.exp_agm(), crate::D::<crate::int::types::Int<4>, 6>::ONE);
         #[cfg(feature = "d153")]
-        assert_eq!(crate::D::<crate::int::types::Int<8>, 6>::ONE.ln_strict_agm(), crate::D::<crate::int::types::Int<8>, 6>::ZERO);
+        assert_eq!(crate::D::<crate::int::types::Int<8>, 6>::ONE.ln_agm(), crate::D::<crate::int::types::Int<8>, 6>::ZERO);
         #[cfg(feature = "d153")]
-        assert_eq!(crate::D::<crate::int::types::Int<8>, 6>::ZERO.exp_strict_agm(), crate::D::<crate::int::types::Int<8>, 6>::ONE);
+        assert_eq!(crate::D::<crate::int::types::Int<8>, 6>::ZERO.exp_agm(), crate::D::<crate::int::types::Int<8>, 6>::ONE);
         #[cfg(feature = "d307")]
-        assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::ONE.ln_strict_agm(), crate::D::<crate::int::types::Int<16>, 6>::ZERO);
+        assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::ONE.ln_agm(), crate::D::<crate::int::types::Int<16>, 6>::ZERO);
         #[cfg(feature = "d307")]
-        assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::ZERO.exp_strict_agm(), crate::D::<crate::int::types::Int<16>, 6>::ONE);
+        assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::ZERO.exp_agm(), crate::D::<crate::int::types::Int<16>, 6>::ONE);
     }
 
     /// `*_strict_with(mode)` siblings honour the explicit rounding
@@ -4573,8 +4429,8 @@ mod tests {
         // 2.7182818... at SCALE=6: 2.718281 cut, fractional 0.8 →
         // HTE rounds up to 2.718282, Trunc keeps 2.718281.
         let argument = crate::D::<crate::int::types::Int<4>, 6>::ONE;
-        let half_to_even = argument.exp_strict_with(RoundingMode::HalfToEven);
-        let trunc = argument.exp_strict_with(RoundingMode::Trunc);
+        let half_to_even = argument.exp_with(RoundingMode::HalfToEven);
+        let trunc = argument.exp_with(RoundingMode::Trunc);
         assert!(
             half_to_even.to_bits().as_i128() - trunc.to_bits().as_i128() == 1
                 || half_to_even.to_bits().as_i128() - trunc.to_bits().as_i128() == 0,
@@ -4590,7 +4446,7 @@ mod tests {
             || cfg!(feature = "rounding-floor")
             || cfg!(feature = "rounding-ceiling"))
         {
-            assert_eq!(half_to_even, argument.exp_strict());
+            assert_eq!(half_to_even, argument.exp());
         }
     }
 
@@ -4604,7 +4460,7 @@ mod tests {
         #[cfg(feature = "d76")]
         {
             let value = crate::D::<crate::int::types::Int<4>, 20>::try_from(3_i128).unwrap();
-            let back = value.ln_strict_agm().exp_strict_agm();
+            let back = value.ln_agm().exp_agm();
             let delta = (back.to_bits().as_i128() - value.to_bits().as_i128()).abs();
             assert!(delta <= 8, "AGM exp(ln(3)) at D76<20> delta {delta}");
         }
@@ -4612,7 +4468,7 @@ mod tests {
         #[cfg(feature = "d153")]
         {
             let value = crate::D::<crate::int::types::Int<8>, 20>::try_from(2_i128).unwrap();
-            let back = value.exp_strict_agm().ln_strict_agm();
+            let back = value.exp_agm().ln_agm();
             let delta = (back.to_bits().as_i128() - value.to_bits().as_i128()).abs();
             assert!(delta <= 8, "AGM ln(exp(2)) at D153<20> delta {delta}");
         }
@@ -4629,7 +4485,7 @@ mod tests {
         #[cfg(feature = "d76")]
         {
             let value = crate::D::<crate::int::types::Int<4>, 50>::try_from(3_i128).unwrap();
-            let back = value.ln_strict().exp_strict();
+            let back = value.ln().exp();
             let delta = (back.to_bits().as_i128() - value.to_bits().as_i128()).abs();
             assert!(delta <= 8, "exp(ln(3)) at D76<50> delta {delta}");
         }
@@ -4638,7 +4494,7 @@ mod tests {
         #[cfg(feature = "d307")]
         {
             let value = crate::D::<crate::int::types::Int<16>, 150>::try_from(2_i128).unwrap();
-            let back = value.exp_strict().ln_strict();
+            let back = value.exp().ln();
             let delta = (back.to_bits().as_i128() - value.to_bits().as_i128()).abs();
             assert!(delta <= 8, "ln(exp(2)) at D307<150> delta {delta}");
         }
@@ -4725,8 +4581,8 @@ mod tests {
                     }
                 }
                 for x in xs {
-                    let a = outcome!(x.asinh_strict());
-                    let b = outcome!(x.asinh_strict_with(m));
+                    let a = outcome!(x.asinh());
+                    let b = outcome!(x.asinh_with(m));
                     $checks += 1;
                     if a.is_none() || b.is_none() {
                         $panics += 1;
@@ -4755,8 +4611,8 @@ mod tests {
                     if x < one {
                         continue;
                     }
-                    let a = outcome!(x.acosh_strict());
-                    let b = outcome!(x.acosh_strict_with(m));
+                    let a = outcome!(x.acosh());
+                    let b = outcome!(x.acosh_with(m));
                     $checks += 1;
                     if a.is_none() || b.is_none() {
                         $panics += 1;
@@ -4800,8 +4656,8 @@ mod tests {
                     if x >= one || x <= -one {
                         continue;
                     }
-                    let a = outcome!(x.atanh_strict());
-                    let b = outcome!(x.atanh_strict_with(m));
+                    let a = outcome!(x.atanh());
+                    let b = outcome!(x.atanh_with(m));
                     $checks += 1;
                     if a.is_none() || b.is_none() {
                         $panics += 1;
@@ -4833,8 +4689,8 @@ mod tests {
                     }
                 }
                 for x in xs {
-                    let a = outcome!(x.to_degrees_strict());
-                    let b = outcome!(x.to_degrees_strict_with(m));
+                    let a = outcome!(x.to_degrees());
+                    let b = outcome!(x.to_degrees_with(m));
                     $checks += 1;
                     if a.is_none() || b.is_none() {
                         $panics += 1;
@@ -4848,8 +4704,8 @@ mod tests {
                             show!(b)
                         ));
                     }
-                    let a = outcome!(x.to_radians_strict());
-                    let b = outcome!(x.to_radians_strict_with(m));
+                    let a = outcome!(x.to_radians());
+                    let b = outcome!(x.to_radians_with(m));
                     $checks += 1;
                     if a.is_none() || b.is_none() {
                         $panics += 1;
@@ -4884,8 +4740,8 @@ mod tests {
                 }
                 for v in scan {
                     for x in [v, -v] {
-                        let a = outcome!(x.asinh_strict());
-                        let b = outcome!(x.asinh_strict_with(m));
+                        let a = outcome!(x.asinh());
+                        let b = outcome!(x.asinh_with(m));
                         $checks += 1;
                         if a.is_none() || b.is_none() {
                             $panics += 1;
@@ -4903,8 +4759,8 @@ mod tests {
 
                     // acosh just above its domain wall: 1 + 10^-k.
                     if let Some(x) = outcome!(one + v) {
-                        let a = outcome!(x.acosh_strict());
-                        let b = outcome!(x.acosh_strict_with(m));
+                        let a = outcome!(x.acosh());
+                        let b = outcome!(x.acosh_with(m));
                         $checks += 1;
                         if a.is_none() || b.is_none() {
                             $panics += 1;
@@ -4950,8 +4806,8 @@ mod tests {
                         if x >= one || x <= -one {
                             continue;
                         }
-                        let a = outcome!(x.atanh_strict());
-                        let b = outcome!(x.atanh_strict_with(m));
+                        let a = outcome!(x.atanh());
+                        let b = outcome!(x.atanh_with(m));
                         $checks += 1;
                         if a.is_none() || b.is_none() {
                             $panics += 1;

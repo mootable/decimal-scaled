@@ -1,4 +1,4 @@
-//! Side-by-side: D924 `ln_strict` at SCALE 440 (outside the Tang
+//! Side-by-side: D924 `ln` at SCALE 440 (outside the Tang
 //! lookup band, `wide_kernel` path) vs SCALE 460 (centre of the Tang
 //! lookup band). Both scales work on the same `Int<192>` working
 //! integer so the per-op cost of the underlying primitives is matched;
@@ -24,18 +24,18 @@ fn bench_pair<const S_KERNEL: u32, const S_LOOKUP: u32>(c: &mut Criterion, label
     let one_p_half_l = D924::<S_LOOKUP>::try_from(1_i64).unwrap() + half_l;
 
     // Warm both code paths (lookup table seeds, etc.).
-    let _ = one_p_half_l.ln_strict();
-    let _ = one_p_half_k.ln_strict();
+    let _ = one_p_half_l.ln();
+    let _ = one_p_half_k.ln();
 
     let mut g = c.benchmark_group(label);
     g.sample_size(10);
     g.measurement_time(std::time::Duration::from_secs(8));
 
     g.bench_function("ln/kernel_s440", |b| {
-        b.iter(|| black_box(one_p_half_k).ln_strict())
+        b.iter(|| black_box(one_p_half_k).ln())
     });
     g.bench_function("ln/lookup_s460", |b| {
-        b.iter(|| black_box(one_p_half_l).ln_strict())
+        b.iter(|| black_box(one_p_half_l).ln())
     });
 
     g.finish();

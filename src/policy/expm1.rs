@@ -3,7 +3,7 @@
 
 //! `expm1` policy — the per-(N, SCALE) algorithm matcher.
 //!
-//! `D<Int<N>, SCALE>::expm1_strict_with(mode)` delegates to [`dispatch`].
+//! `D<Int<N>, SCALE>::expm1_with(mode)` delegates to [`dispatch`].
 //! Canonical matcher-only shape (see `docs/ARCHITECTURE.md`), mirrored from
 //! `policy::log1p`:
 //!
@@ -171,7 +171,7 @@ fn narrow_strict<const N: usize, const SCALE: u32>(
             mode,
         ),
     };
-    super::narrow_checked::<N>(out, "expm1_strict", SCALE)
+    super::narrow_checked::<N>(out, "expm1", SCALE)
 }
 
 /// Wide strict arm at the tier `C`. Each kernel sources its own width

@@ -3,7 +3,7 @@
 
 //! Joint `(sin, cos)` over ONE shared Taylor evaluation.
 //!
-//! The pair kernel behind `sin_cos_strict` / `sin_cos_strict_with`.
+//! The pair kernel behind `sin_cos` / `sin_cos_with`.
 //! `C::sin_cos_fixed` evaluates only `|sin|` and recovers
 //! `|cos| = √(1 − sin²)` from the Pythagorean identity, so the joint
 //! result costs about one `sin` plus one wide `sqrt` — roughly half of

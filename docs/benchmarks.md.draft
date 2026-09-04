@@ -72,7 +72,7 @@ For the strict transcendentals:
 Alternate transcendental paths (alongside the canonical above,
 exposed under `bench-alt`):
 
-- **`ln_strict_agm` / `exp_strict_agm`** — Brent–Salamin 1976 AGM
+- **`ln_agm` / `exp_agm`** — Brent–Salamin 1976 AGM
   for ln, Newton-on-AGM-ln for exp. Quadratic convergence,
   asymptotically wins at extreme working scales. Per
   `benches/agm_vs_taylor.rs` at D307<300> the AGM `ln` is 1.4×
@@ -195,8 +195,8 @@ algorithm cost. The crate keeps SCALE 38 as the *correct* path
 
 ## 2. Strict transcendentals (integer-only, correctly rounded)
 
-Functions: `ln_strict`, `exp_strict`, `sin_strict`,
-`sqrt_strict`. Same argument convention as the fast block (1.5
+Functions: `ln`, `exp`, `sin`,
+`sqrt`. Same argument convention as the fast block (1.5
 for ln / sin / sqrt, 0.5 for exp). Deterministic across
 platforms, `no_std`-compatible, 0.5 ULP at storage.
 
@@ -228,17 +228,17 @@ guard-digit budget at each scale.
 rather than the full series evaluation — the bold winner per row
 sometimes picks one of these:
 
-- `ln_strict` at `SCALE = 0`: the arg becomes `1` (the `½`
+- `ln` at `SCALE = 0`: the arg becomes `1` (the `½`
   division floors), and `ln(1)` returns 0 in `O(1)`.
-- `exp_strict` at `SCALE = 0`: the arg becomes `0` and `exp(0) = 1`
+- `exp` at `SCALE = 0`: the arg becomes `0` and `exp(0) = 1`
   short-circuits.
-- `sin_strict` at `SCALE = 0`: arg is `1`; small enough that the
+- `sin` at `SCALE = 0`: arg is `1`; small enough that the
   Taylor series terminates quickly.
 
 The honest *series-cost* comparison lives in the midpoint and
 maximum-scale columns. There:
 
-- `sqrt_strict` is algebraic (integer `isqrt` + one round-to-
+- `sqrt` is algebraic (integer `isqrt` + one round-to-
   nearest), so its growth is dominated by `isqrt`'s `O(b²)` limb
   work at b bits — not series evaluation. It's the only
   transcendental whose cost stays sub-microsecond past D76.
