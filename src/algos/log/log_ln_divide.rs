@@ -18,8 +18,11 @@
 //!   [`log_ln_divide_conditioned`]: ONE generic kernel over the storage
 //!   width `N` and a work integer `Wk`, whose guard is sized a priori from
 //!   the base's conditioning number [`near_one_digits`]
-//!   (`k = ceil(-log10 |b - 1|)`): `w = SCALE + 30 + 2k`. Routed iff
-//!   `k > 0`, i.e. the base lies within 0.1 of 1.
+//!   (`k = ceil(-log10 |b - 1|)`): `w = SCALE + 30 + k`, and which forms
+//!   the ratio from the EXACT offsets `b_raw − 10^SCALE` (and
+//!   `x_raw − 10^SCALE` when `x` is near 1 too) rather than from `ln b`
+//!   ([`conditioned_ratio`]). Routed iff `k > 0`, i.e. the base lies
+//!   within 0.1 of 1.
 //!
 //! # Why a base near 1 needs its own guard
 //!
@@ -48,7 +51,7 @@
 //!
 //! # Why the work width follows `k`
 //!
-//! `w = SCALE + 30 + 2k` outruns a tier's fixed composition width in its
+//! `w = SCALE + 30 + k` outruns a tier's fixed composition width in its
 //! worst band (`k` runs up to `SCALE`, the base's own representability).
 //! The policy therefore chooses the work integer from `k`
 //! ([`fits_budget`] / [`fits_capacity`]) — the matcher's width axis, keyed
@@ -102,7 +105,7 @@ pub(crate) fn log_ln_divide_d38<const SCALE: u32>(
 /// Guard digits of the `ln(x)/ln(b)` composition for an ordinary base — the
 /// value every fixed-guard shell runs at (`decl_wide_transcendental!`'s
 /// `GUARD`, `ln_series_2limb::STRICT_GUARD`). The conditioned shell adds
-/// `2k` on top ([`lifted_guard`]).
+/// `k` on top ([`lifted_guard`]).
 pub(crate) const COMPOSITION_GUARD: u32 = 30;
 
 /// The base's conditioning number: how many significant digits `ln b`
@@ -336,21 +339,41 @@ where
 }
 
 /// `log_b(x)` at working scale `SCALE + guard_digits`, without ever forming
-/// `ln b`:
+/// `ln b` — nor `ln x` when `x` is itself within 0.1 of 1:
 ///
 /// ```text
-/// ε = d / 10^SCALE,   d = b_raw − 10^SCALE          (an EXACT integer)
-/// ln b = ε · g(ε),    g(ε) = ln(1+ε)/ε = Θ(1)
-/// R = ln x / (ε · g(ε)) = ( ln x / g(ε) ) · 10^SCALE / d
+/// ε = d_b / 10^SCALE,  d_b = b_raw − 10^SCALE         (an EXACT integer)
+/// ln b = ε · g(ε),     g(ε) = ln(1+ε)/ε = Θ(1)
+/// R = ln x / (ε · g(ε)) = ( ln x / g(ε) ) · 10^SCALE / d_b
+///
+/// a = d_x / 10^SCALE,  d_x = x_raw − 10^SCALE,  |a| < 0.1:
+/// ln x = a · g(a)
+/// R = ( g(a) / g(ε) ) · d_x / d_b
 /// ```
 ///
-/// `g` is evaluated by its own series from `d` ([`g_of_epsilon`]) — never
-/// by computing `ln(1+ε)` and dividing — so no quantity of size `10^-k` is
-/// ever held at absolute resolution; the only division by a small number is
-/// by the exact integer `d`, which preserves relative precision. The
-/// probe's relative error is then `~(c + ln x)·10^-w`, so the guard need
-/// only cover the result's own magnitude (`lifted_guard`: `30 + k`), where
-/// the naive quotient ([`conditioned_ratio_quotient`]) needs `30 + 2k`.
+/// `g` is evaluated by its own series from the offset ([`g_of_epsilon`]) —
+/// never by computing `ln(1+ε)` and dividing — so no quantity of size
+/// `10^-k` is ever held at absolute resolution; the only division by a
+/// small number is by the exact integer `d_b`, which preserves relative
+/// precision. The probe's relative error is then `~(c + ln x)·10^-w`, so
+/// the guard need only cover the result's own magnitude (`lifted_guard`:
+/// `30 + k`), where the naive quotient ([`conditioned_ratio_quotient`])
+/// needs `30 + 2k`.
+///
+/// The numerator gets the same treatment when `x` is near 1 because `ln x`
+/// held at absolute resolution `10^-w` carries only `w − k_x` significant
+/// digits, and a DIRECTED rounding can need more of them than the base
+/// guard leaves. In the power-of-ten family `x = 1 + 10^-p`, `b = 1 + 10^-q`
+/// the visible terms of `R` land exactly on a grid line and the deciding
+/// term (`(a/ε)·a²/3`-sized) sits `3p − q` digits down, so `ln x` at
+/// absolute resolution needs `w > 3p` to see it — past the `Int<256>`
+/// walker cap at D924 s900, where golden 33918031518 saw the unresolved
+/// endgame hand the grid value to Ceiling / AwayFromZero / ZeroFiveUp —
+/// while `d_x · g(a)` needs `w > 2p`, inside the base probe (the
+/// `doubly_near_one_residue_is_decided_from_both_exact_offsets` test at
+/// unit size). An ordinary `x` keeps the natural-log core, bit for bit:
+/// `g`'s series is only fast inside the 0.1 band.
+///
 /// Used for the base probe and for every escalated probe of the walker, so
 /// the escalation sequence is the same formulation at every depth.
 fn conditioned_ratio<const N: usize, Wk: BigInt, const SCALE: u32>(
@@ -364,16 +387,56 @@ where
 {
     let working_scale = SCALE + guard_digits;
     let one_scaled = eg::pow10::<Wk>(SCALE);
-    let d = BigInt::resize_to::<Wk>(base_raw) - one_scaled;
-    let g = g_of_epsilon::<Wk>(d, one_scaled, working_scale);
+    let d_b = BigInt::resize_to::<Wk>(base_raw) - one_scaled;
+    let g_b = g_of_epsilon::<Wk>(d_b, one_scaled, working_scale);
+    if near_one_digits::<Int<N>>(raw, SCALE) > 0 {
+        let d_x = BigInt::resize_to::<Wk>(raw) - one_scaled;
+        let g_x = g_of_epsilon::<Wk>(d_x, one_scaled, working_scale);
+        // `g(a) / g(ε)` at scale `w`, then `· d_x / d_b` — two exact
+        // integers — rounded half-even. The product spans `w + SCALE`
+        // digits, inside the `2w + 40` the capacity wall budgets.
+        let g_ratio = eg::div::<Wk>(g_x, g_b, working_scale);
+        return eg::round_div::<Wk>(g_ratio * d_x, d_b);
+    }
     let ln_x_over_g = eg::div::<Wk>(
         ln_of::<N, Wk, SCALE>(ln_at, raw, guard_digits),
-        g,
+        g_b,
         working_scale,
     );
-    // `(ln x / g)` is at scale `w`; dividing by `ε = d / 10^SCALE` is
-    // `· 10^SCALE / d`, rounded half-even — the exact-integer divide.
-    eg::div::<Wk>(ln_x_over_g, d, SCALE)
+    // `(ln x / g)` is at scale `w`; dividing by `ε = d_b / 10^SCALE` is
+    // `· 10^SCALE / d_b`, rounded half-even — the exact-integer divide.
+    eg::div::<Wk>(ln_x_over_g, d_b, SCALE)
+}
+
+/// The base-offset-only form of [`conditioned_ratio`] — `ln x` from the
+/// natural-log core for EVERY `x`, the base alone from its exact offset —
+/// KEPT as an unrouted reference. It is what shipped in the reformulation
+/// and it is correctly rounded everywhere the deciding digit lies within
+/// the walker's reach; the live form differs from it only where `x` is
+/// within 0.1 of 1 too, and there only on the deep directed residues the
+/// module doc describes (`w > 3p` against `w > 2p`). The bit-identity test
+/// runs the live form against this and against
+/// [`conditioned_ratio_quotient`].
+#[allow(dead_code)]
+fn conditioned_ratio_offset_base<const N: usize, Wk: BigInt, const SCALE: u32>(
+    raw: Int<N>,
+    base_raw: Int<N>,
+    guard_digits: u32,
+    ln_at: &impl Fn(Wk, u32) -> Wk,
+) -> Wk
+where
+    <Wk as BigInt>::Scratch: ComputeLimbs,
+{
+    let working_scale = SCALE + guard_digits;
+    let one_scaled = eg::pow10::<Wk>(SCALE);
+    let d_b = BigInt::resize_to::<Wk>(base_raw) - one_scaled;
+    let g_b = g_of_epsilon::<Wk>(d_b, one_scaled, working_scale);
+    let ln_x_over_g = eg::div::<Wk>(
+        ln_of::<N, Wk, SCALE>(ln_at, raw, guard_digits),
+        g_b,
+        working_scale,
+    );
+    eg::div::<Wk>(ln_x_over_g, d_b, SCALE)
 }
 
 /// `g(ε) = ln(1+ε)/ε` at working scale `w`, for `ε = d / 10^SCALE` given as
@@ -1051,11 +1114,15 @@ mod tests {
         }
     }
 
-    /// The reformulation at lift `k` and the naive quotient at lift `2k` are
-    /// both correctly rounded, so through the same finish they must agree
-    /// bit for bit under every mode — the kept alternative as the reference.
+    /// The live form at lift `k`, the base-offset-only form at lift `k` and
+    /// the naive quotient at lift `2k` are all correctly rounded on these
+    /// inputs (every deciding digit is within the walker's reach), so
+    /// through the same finish they must agree bit for bit under every mode
+    /// — the two kept alternatives as the references. Where the live form
+    /// and the base-offset-only form part company is the deep doubly-near-1
+    /// residue, covered by `doubly_near_one_residue_is_decided_from_both_exact_offsets`.
     #[test]
-    fn reformulated_ratio_agrees_with_the_naive_quotient_at_double_lift() {
+    fn reformulated_ratio_agrees_with_the_kept_references() {
         type W = Int<24>;
         fn check<const SCALE: u32>(x_raw: i128, base_raw: i128) {
             let (raw, braw) = (Int::<2>::from_i128(x_raw), Int::<2>::from_i128(base_raw));
@@ -1064,11 +1131,14 @@ mod tests {
             let ln_at = series_core::<W, SCALE>();
             let (g_guard, q_guard) = (COMPOSITION_GUARD + k, COMPOSITION_GUARD + 2 * k);
             let probe_g = conditioned_ratio::<2, W, SCALE>(raw, braw, g_guard, &ln_at);
+            let probe_o = conditioned_ratio_offset_base::<2, W, SCALE>(raw, braw, g_guard, &ln_at);
             let probe_q = conditioned_ratio_quotient::<2, W, SCALE>(raw, braw, q_guard, &ln_at);
             for mode in ALL_MODES {
                 let a = conditioned_finish::<2, W, SCALE>(raw, braw, mode, g_guard, &ln_at, probe_g);
+                let o = conditioned_finish::<2, W, SCALE>(raw, braw, mode, g_guard, &ln_at, probe_o);
                 let b = conditioned_finish::<2, W, SCALE>(raw, braw, mode, q_guard, &ln_at, probe_q);
-                assert_eq!(a, b, "x={x_raw} base={base_raw} scale={SCALE} mode={mode:?}");
+                assert_eq!(a, o, "vs base-offset-only: x={x_raw} base={base_raw} scale={SCALE} mode={mode:?}");
+                assert_eq!(a, b, "vs naive quotient: x={x_raw} base={base_raw} scale={SCALE} mode={mode:?}");
             }
         }
         let one6 = 10i128.pow(6);
@@ -1082,6 +1152,61 @@ mod tests {
         check::<19>(3 * one19, one19 - 100); // below 1
         check::<19>(one19 + 10_000_000, one19 + 10_000); // x near 1 too
         check::<19>(9_999_999 * one19, one19 + 100_000_000); // k = 11, ln x ~ 16
+    }
+
+    /// Both arguments within 0.1 of 1 — the deep directed hard case of the
+    /// power-of-ten family `x = 1 + 10^-p`, `b = 1 + 10^-q`. The visible
+    /// terms of `ln x / ln b` land exactly on a grid line and the deciding
+    /// term is `(a/ε)·a²/3`-sized, `3p - q` digits down. Holding `ln x` at
+    /// absolute resolution needs `w > 3p` to see it; from both exact offsets
+    /// (`d_x · g(a) / (d_b · g(ε))`) the quotient's error is
+    /// `10^(log10(d_x/d_b) - w)`, so `w > 2p` does — inside the base probe.
+    /// Golden 33918031518 (D924 s900, `x = 1 + 10^-682`, `b = 1 + 10^-700`):
+    /// the residue `+3.3·10^-447` ULP needed `w = 2047` the old way, past
+    /// the `Int<256>` walker cap of 2022, so the unresolved endgame handed
+    /// the grid value to Ceiling / AwayFromZero / ZeroFiveUp. The same shape
+    /// at unit size: storage `Int<3>`, scale 45, work `Int<16>` (walker cap
+    /// `128 - int_digits - 8`); every threshold below is from a fixed-point
+    /// simulation of both formulations against flint.
+    #[test]
+    fn doubly_near_one_residue_is_decided_from_both_exact_offsets() {
+        type St = Int<3>;
+        type W = Int<16>;
+        const S: u32 = 45;
+        let p10 = |n: u32| eg::pow10::<St>(n);
+        let lit = |v: i128| eg::lit::<St>(v);
+        // (p, q, nearest grid line, value above it?, ZeroFiveUp's answer):
+        // 1. p 43, q 42: R ≈ 0.1, the value 10^-40 ULP BELOW 10^44 + 45
+        //    (`-aε/4 - ε²/12`): Floor / Trunc / ZeroFiveUp take the line
+        //    below. Old way resolves from w = 126 > cap 120; new from 85.
+        // 2. p 43, q 45: R ≈ 100, 10^-39 ULP ABOVE 10^47 - 4950 (`+a²/3`):
+        //    Ceiling / AwayFromZero / ZeroFiveUp bump. 130 > cap 117; new 87.
+        // 3. p 44, q 45: R ≈ 10, 10^-42 ULP above 10^46 - 45. 133 > 118; 89.
+        let cases: [(u32, u32, St, bool, St); 3] = [
+            (43, 42, p10(44) + lit(45), false, p10(44) + lit(44)),
+            (43, 45, p10(47) - lit(4950), true, p10(47) - lit(4949)),
+            (44, 45, p10(46) - lit(45), true, p10(46) - lit(44)),
+        ];
+        for (p, q, grid, above, zero_five_up) in cases {
+            let (raw, braw) = (p10(S) + p10(S - p), p10(S) + p10(S - q));
+            assert_eq!(near_one_digits::<St>(raw, S), p);
+            let k = near_one_digits::<St>(braw, S);
+            assert_eq!(k, q);
+            let guard = lifted_guard(k);
+            let ln_at = series_core::<W, S>();
+            let probe = conditioned_probe::<3, W, S>(raw, braw, guard, &ln_at);
+            let (below_line, above_line) = if above { (grid, grid + lit(1)) } else { (grid - lit(1), grid) };
+            for mode in ALL_MODES {
+                let expected = match mode {
+                    RoundingMode::Floor | RoundingMode::Trunc => below_line,
+                    RoundingMode::Ceiling | RoundingMode::AwayFromZero => above_line,
+                    RoundingMode::ZeroFiveUp => zero_five_up,
+                    _ => grid,
+                };
+                let got = conditioned_finish::<3, W, S>(raw, braw, mode, guard, &ln_at, probe);
+                assert_eq!(got, expected, "p={p} q={q} mode={mode:?}");
+            }
+        }
     }
 }
 
