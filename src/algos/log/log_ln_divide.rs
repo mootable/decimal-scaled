@@ -59,7 +59,8 @@
 
 use crate::algos::exp::exp_generic as eg;
 use crate::algos::support::wide_trig_core::{
-    round_to_storage_directed_g, round_to_storage_with_g, to_work_scaled_g,
+    round_to_storage_clear_of_tie_g, round_to_storage_directed_g, round_to_storage_with_g,
+    to_work_scaled_g,
 };
 use crate::int::types::compute_limbs::ComputeLimbs;
 use crate::int::types::traits::BigInt;
@@ -292,6 +293,37 @@ where
     ) {
         return exact_int_at_scale::<N, Wk>(exponent, SCALE, mode);
     }
+    // The ordinary case: a residual clear of the mode's deciding boundary
+    // narrows in one shot — the walker's own first probe, arm for arm
+    // (`directed_narrow` / `nearest_narrow` at the base guard), so this is
+    // bit-identical to entering the walker and returning from its first step.
+    if let Some(narrowed) = round_to_storage_clear_of_tie_g::<Int<N>, Wk>(
+        probe_ratio,
+        base_working_scale,
+        SCALE,
+        mode,
+        Int::<N>::MAX,
+        Int::<N>::MIN,
+    ) {
+        return narrowed;
+    }
+    // Near a boundary. An EXACT rational result never resolves by escalation:
+    // the probe's residual at every depth is the kernel's own noise around
+    // the grid line, so the directed walker's unresolved endgame — the base
+    // probe's directed narrowing — lands 1 ULP off under whichever directed
+    // mode faces the noise's side (golden 33893684900: `log_1.0201(1.01)`,
+    // `log_1.0201(1.030301)`, delta 1, Floor/Ceiling/Trunc only). Decide it by
+    // exact integer arithmetic first, as the narrow shell does.
+    if let Some(pinned) = log_rational_pow_pin::<N, Wk>(
+        raw,
+        base_raw,
+        SCALE,
+        probe_ratio,
+        base_working_scale,
+        mode,
+    ) {
+        return pinned;
+    }
     // Directed narrowing through the shared Ziv escalation. The walker
     // always probes `guard` first, and that probe is `probe_ratio` (pure
     // functions of the same arguments); only an escalated probe recomputes.
@@ -363,6 +395,144 @@ fn log_is_exact_int<S: BigInt>(value_raw: S, base_raw: S, scale: u32, exponent: 
         }
         running_product == one_at_scale
     }
+}
+
+/// Exact rational-power pin for a near-boundary probe — the narrow shell's
+/// `log_rational_pow_pin` (`ln_series_2limb`) made generic over the work
+/// integer.
+///
+/// The boundary CANDIDATE is `2R` rounded to the nearest integer at `scale`
+/// — the result in half-ULPs: even = a grid candidate (a directed near-grid
+/// case, `log_1.0201(1.01) = 1/2` on every grid from scale 4 up), odd = a
+/// half candidate (a nearest near-half tie, `log_4(32) = 5/2` at scale 0).
+/// It verifies `log_(b_num/b_den)(x_num/x_den) == n/(2·10^scale)` EXACTLY
+/// through the integer identity `x^q == b^p` (`p/q` the candidate in lowest
+/// terms; a negative candidate inverts the base fraction), by bounded
+/// integer powers — an over-budget candidate defers to the walker, as the
+/// narrow shell's does. On a verified candidate the result is decided by
+/// exact integer arithmetic: a grid candidate IS the result, a half candidate
+/// applies the mode's tie rule. Only a probe inside the near-tie band pays
+/// for this.
+fn log_rational_pow_pin<const N: usize, Wk: BigInt>(
+    raw: Int<N>,
+    base_raw: Int<N>,
+    scale: u32,
+    probe_ratio: Wk,
+    working_scale: u32,
+    mode: RoundingMode,
+) -> Option<Int<N>>
+where
+    <Wk as BigInt>::Scratch: ComputeLimbs,
+{
+    let lit = |n: i128| <Wk as BigInt>::from_i128(n);
+    // `2R` at `scale`, rounded half-to-even from the working scale.
+    let half_ulp_numerator =
+        eg::round_div_pow10::<Wk>(probe_ratio + probe_ratio, working_scale - scale);
+    if half_ulp_numerator == Wk::ZERO {
+        return None; // R = 0 ⇔ x == 1, pinned upstream
+    }
+    let is_negative = half_ulp_numerator < Wk::ZERO;
+    let abs_numerator = if is_negative { -half_ulp_numerator } else { half_ulp_numerator };
+    let one_scaled = eg::pow10::<Wk>(scale);
+    let (reduced_num, reduced_den) = reduce_fraction::<Wk>(abs_numerator, one_scaled + one_scaled);
+    let (x_num, x_den) = reduce_fraction::<Wk>(BigInt::resize_to::<Wk>(raw), one_scaled);
+    let (base_num, base_den) = reduce_fraction::<Wk>(BigInt::resize_to::<Wk>(base_raw), one_scaled);
+    // log_b(x) = ±p/q ⇔ x^q == b^(±p): for the negative sign the base
+    // fraction inverts.
+    let (target_num, target_den) =
+        if is_negative { (base_den, base_num) } else { (base_num, base_den) };
+    let x_pow_num = pow_bounded::<Wk>(x_num, reduced_den)?;
+    let x_pow_den = pow_bounded::<Wk>(x_den, reduced_den)?;
+    let base_pow_num = pow_bounded::<Wk>(target_num, reduced_num)?;
+    let base_pow_den = pow_bounded::<Wk>(target_den, reduced_num)?;
+    if x_pow_num != base_pow_num || x_pow_den != base_pow_den {
+        return None;
+    }
+    // Exact value ±n/(2·10^scale): fold the half-ULP form to storage.
+    let (result_magnitude, half) = abs_numerator.div_rem(lit(2));
+    let magnitude = if half == Wk::ZERO {
+        result_magnitude
+    } else {
+        // Exactly on the half between `result_magnitude` and
+        // `result_magnitude + 1` (magnitude side): the mode's tie rule, by
+        // exact integer arithmetic.
+        let bump = crate::support::rounding::should_bump(
+            mode,
+            core::cmp::Ordering::Equal,
+            result_magnitude.div_rem(lit(10)).1.to_i128() as u8,
+            !is_negative,
+        );
+        if bump { result_magnitude + Wk::ONE } else { result_magnitude }
+    };
+    let signed = if is_negative { -magnitude } else { magnitude };
+    Some(round_to_storage_with_g::<Int<N>, Wk>(
+        signed,
+        scale,
+        scale,
+        mode,
+        Int::<N>::MAX,
+        Int::<N>::MIN,
+    ))
+}
+
+/// `base^exponent` in `Wk`, `None` when the result could exceed the bit
+/// budget `Wk::BITS − 8`. The bit-length pre-check (`bits(base) · exponent`
+/// bounds the product's bits) bounds every square-and-multiply intermediate,
+/// so no step can wrap; `1^anything` is exact at any exponent and `0` never
+/// verifies (the inputs are domain-asserted positive).
+fn pow_bounded<Wk: BigInt>(base: Wk, exponent: Wk) -> Option<Wk> {
+    if base == Wk::ZERO {
+        return None;
+    }
+    if base == Wk::ONE {
+        return Some(Wk::ONE);
+    }
+    let base_bits = base.bit_length();
+    let budget = <Wk as BigInt>::BITS - 8;
+    // `exponent` can be as large as `2·10^scale` (an irreducible candidate
+    // denominator), far past `i128` at the wide tiers — compare in `Wk`.
+    if exponent > <Wk as BigInt>::from_i128((budget / base_bits) as i128) {
+        return None;
+    }
+    let mut remaining = exponent.to_i128() as u128;
+    let mut accumulator = Wk::ONE;
+    let mut base_power = base;
+    while remaining > 0 {
+        if remaining & 1 == 1 {
+            accumulator = accumulator * base_power;
+        }
+        remaining >>= 1;
+        if remaining > 0 {
+            base_power = base_power * base_power;
+        }
+    }
+    Some(accumulator)
+}
+
+/// Greatest common divisor (Euclid) of two non-negative `Wk` values, on the
+/// exact per-width divide.
+fn gcd<Wk: BigInt>(mut lhs: Wk, mut rhs: Wk) -> Wk
+where
+    <Wk as BigInt>::Scratch: ComputeLimbs,
+{
+    while rhs != Wk::ZERO {
+        let (_, remainder) = eg::div_rem_exact::<Wk>(lhs, rhs);
+        lhs = rhs;
+        rhs = remainder;
+    }
+    lhs
+}
+
+/// Reduces `numerator / denominator` (both non-negative) to lowest terms.
+fn reduce_fraction<Wk: BigInt>(numerator: Wk, denominator: Wk) -> (Wk, Wk)
+where
+    <Wk as BigInt>::Scratch: ComputeLimbs,
+{
+    let common_divisor = gcd::<Wk>(numerator, denominator);
+    (
+        eg::div_rem_exact::<Wk>(numerator, common_divisor).0,
+        eg::div_rem_exact::<Wk>(denominator, common_divisor).0,
+    )
 }
 
 /// Storage representation of the exact `integer_value` at `scale`
@@ -451,6 +621,118 @@ mod tests {
         assert_eq!(near_one_digits::<Int<2>>(Int::<2>::from_i128(one - 10_000), S), 15);
         // Scale 0: an integer base is never near 1.
         assert_eq!(near_one_digits::<Int<2>>(Int::<2>::from_i128(2), 0), 0);
+    }
+
+    /// The pin's inputs as the kernel forms them: `probe_ratio` at working
+    /// scale `w = scale + guard`, perturbed by `noise` working units so the
+    /// candidate is reached from BOTH sides of the boundary, as a kernel
+    /// residual would land it.
+    fn pin<const N: usize>(
+        x_raw: i128,
+        base_raw: i128,
+        scale: u32,
+        ratio_units_at_scale_w: i128,
+        noise: i128,
+        mode: RoundingMode,
+    ) -> Option<i128> {
+        const GUARD: u32 = 30;
+        let w = scale + GUARD;
+        let probe = <Int<24> as BigInt>::from_i128(ratio_units_at_scale_w + noise);
+        log_rational_pow_pin::<N, Int<24>>(
+            Int::<N>::from_i128(x_raw),
+            Int::<N>::from_i128(base_raw),
+            scale,
+            probe,
+            w,
+            mode,
+        )
+        .map(|v| v.as_i128())
+    }
+
+    const ALL_MODES: [RoundingMode; 8] = [
+        RoundingMode::HalfToEven,
+        RoundingMode::HalfAwayFromZero,
+        RoundingMode::HalfTowardZero,
+        RoundingMode::Trunc,
+        RoundingMode::Floor,
+        RoundingMode::Ceiling,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
+    ];
+
+    #[test]
+    fn rational_pin_decides_the_golden_grid_cases_under_every_mode() {
+        // log_1.0201(1.01) = 1/2 and log_1.0201(1.030301) = 3/2 at scale 6:
+        // on-grid rationals, so every mode must return exactly 0.500000 /
+        // 1.500000 whether the probe sits a few working units below or
+        // above the grid line — the golden 33893684900 failure was the
+        // walker returning 1 ULP off under a directed mode on exactly this.
+        const S: u32 = 6;
+        let one = 10i128.pow(S);
+        let w_units = 10i128.pow(S + 30);
+        for noise in [-7, -1, 1, 7] {
+            for mode in ALL_MODES {
+                assert_eq!(
+                    pin::<2>(1_010_000, 1_020_100, S, w_units / 2, noise, mode),
+                    Some(one / 2),
+                    "log_1.0201(1.01) noise {noise} mode {mode:?}"
+                );
+                assert_eq!(
+                    pin::<2>(1_030_301, 1_020_100, S, 3 * w_units / 2, noise, mode),
+                    Some(3 * one / 2),
+                    "log_1.0201(1.030301) noise {noise} mode {mode:?}"
+                );
+                // Below 1: log_0.99(0.9801) = 2 — an integer, but reachable
+                // here too when the integer pin is bypassed.
+                assert_eq!(
+                    pin::<2>(980_100, 990_000, S, 2 * w_units, noise, mode),
+                    Some(2 * one),
+                    "log_0.99(0.9801) noise {noise} mode {mode:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn rational_pin_half_tie_takes_the_mode_rule() {
+        // log_4(32) = 5/2 EXACTLY at scale 0: a genuine tie between 2 and 3
+        // that only exact integer arithmetic can certify.
+        let w_units = 10i128.pow(30);
+        let ratio = 5 * w_units / 2;
+        assert_eq!(pin::<2>(32, 4, 0, ratio, 3, RoundingMode::HalfToEven), Some(2));
+        assert_eq!(pin::<2>(32, 4, 0, ratio, -3, RoundingMode::HalfAwayFromZero), Some(3));
+        assert_eq!(pin::<2>(32, 4, 0, ratio, 3, RoundingMode::HalfTowardZero), Some(2));
+        assert_eq!(pin::<2>(32, 4, 0, ratio, -3, RoundingMode::Ceiling), Some(3));
+        assert_eq!(pin::<2>(32, 4, 0, ratio, 3, RoundingMode::Floor), Some(2));
+        // log_16(8) = 3/4: a half tie at scale 1 (7.5 tenths).
+        let w1 = 10i128.pow(31);
+        assert_eq!(pin::<2>(80, 160, 1, 3 * w1 / 4, 2, RoundingMode::HalfToEven), Some(8));
+        assert_eq!(pin::<2>(80, 160, 1, 3 * w1 / 4, -2, RoundingMode::HalfTowardZero), Some(7));
+    }
+
+    #[test]
+    fn rational_pin_declines_what_it_cannot_certify() {
+        const S: u32 = 6;
+        let w_units = 10i128.pow(S + 30);
+        // A candidate that is NOT an exact power: log_1.0201(1.0101) ≈ 0.505,
+        // probe placed exactly on the 0.5 grid line — must defer, never pin.
+        for mode in ALL_MODES {
+            assert_eq!(pin::<2>(1_010_100, 1_020_100, S, w_units / 2, 0, mode), None);
+        }
+        // A candidate whose verification would exceed the work integer's
+        // bit budget defers as well: `2R` rounding to `10^6 + 1` half-ULPs
+        // is the irreducible `(10^6 + 1)/(2·10^6)`, and `101^(2·10^6)` is far
+        // past Int<24>'s 1528 bits.
+        assert_eq!(
+            pin::<2>(1_010_000, 1_020_100, S, w_units / 2 + 5 * 10i128.pow(29), 0, RoundingMode::Floor),
+            None
+        );
+        // pow_bounded itself.
+        let two = <Int<24> as BigInt>::from_i128(2);
+        assert_eq!(pow_bounded::<Int<24>>(two, <Int<24> as BigInt>::from_i128(10)).map(|v| v.as_i128()), Some(1024));
+        assert_eq!(pow_bounded::<Int<24>>(<Int<24> as BigInt>::ONE, <Int<24> as BigInt>::from_i128(i128::MAX)).map(|v| v.as_i128()), Some(1));
+        assert_eq!(pow_bounded::<Int<24>>(two, <Int<24> as BigInt>::from_i128(2_000)), None);
+        assert_eq!(pow_bounded::<Int<24>>(<Int<24> as BigInt>::ZERO, two), None);
     }
 
     #[test]
