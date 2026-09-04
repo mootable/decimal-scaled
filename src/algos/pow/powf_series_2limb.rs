@@ -125,7 +125,17 @@ fn mul_div_scale_checked<const SCALE: u32>(
 #[inline]
 fn powi_raw_checked<const SCALE: u32>(
     base: i128, exponent: i32, mode: RoundingMode) -> Option<i128> {
-    let one_at_scale: Int<2> = const { crate::consts::pow10::dispatch_int::<2>(SCALE) };
+    // `10^SCALE` from the baked table. Deliberately NOT a `const { … }`
+    // block: this narrow kernel is MONOMORPHISED at every `SCALE` the
+    // `policy::pow` doors are instantiated with, because a `match N` over
+    // a const-generic `N` type-checks and codegens ALL its arms — the
+    // narrow arms included — for a wide `N` whose cell never reaches them
+    // at run time. A const block would force compile-time evaluation of
+    // `10^SCALE` in `Int<2>`, which has no value for the wide tiers'
+    // `SCALE > 38`. The `const fn` is `#[inline]`, so a narrow cell still
+    // folds it to the single baked entry; the width-generic `powi_exact`
+    // sources the same constant the same way.
+    let one_at_scale: Int<2> = crate::consts::pow10::dispatch_int::<2>(SCALE);
     if exponent == 0 {
         return Some(one_at_scale.as_i128());
     }
@@ -154,7 +164,7 @@ fn powi_raw_checked<const SCALE: u32>(
             crate::algos::div::div_widen_scale::div_widen_scale::<2>(
                 one_at_scale,
                 Int::<2>::from_i128(accumulator),
-                const { crate::consts::pow10::dispatch_int::<2>(SCALE) },
+                one_at_scale,
                 mode,
             )
             .as_i128(),
@@ -166,7 +176,10 @@ fn powi_raw_checked<const SCALE: u32>(
 /// integer value that fits `i32` with `|n| <= INT_FAST_PATH_THRESHOLD`.
 #[inline]
 fn exp_as_small_int<const SCALE: u32>(exp_raw: i128) -> Option<i32> {
-    let one_at_scale = const { crate::consts::pow10::dispatch_i128(SCALE) };
+    // Not a `const { … }` block — see [`powi_raw_checked`]: the narrow
+    // kernel is monomorphised at the wide tiers' `SCALE` too, where
+    // `10^SCALE` does not fit `i128`.
+    let one_at_scale = crate::consts::pow10::dispatch_i128(SCALE);
     if exp_raw % one_at_scale != 0 {
         return None;
     }
