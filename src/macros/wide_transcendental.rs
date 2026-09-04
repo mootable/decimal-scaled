@@ -3674,10 +3674,9 @@ macro_rules! decl_wide_transcendental {
             /// same as any other binary op in the core — no separate
             /// overflow check needed.
             ///
-            /// Names the `Schoolbook` kernel
-            /// (`algos::trig::angle_schoolbook::to_radians_schoolbook`)
-            /// directly — see [`Self::to_radians_with`] for why
-            /// this is not routed through `policy::to_radians::dispatch`.
+            /// Delegates to [`Self::to_radians_with`], and through it to
+            /// the policy-registered `to_radians` kernel for this
+            /// `(width, SCALE)` cell — see `policy::to_radians`.
             #[inline]
             #[must_use]
             pub fn to_radians(self) -> Self {
@@ -3999,40 +3998,35 @@ macro_rules! decl_wide_transcendental {
                 Self::from_bits($crate::policy::to_degrees::dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
-            /// Mode-aware sibling of [`Self::to_radians`].
+            /// Mode-aware sibling of [`Self::to_radians`] — policy
+            /// dispatch, see `policy::to_radians`.
             ///
-            /// Names the `Schoolbook` kernel
+            /// The kernel reached is the `Schoolbook` one
             /// (`algos::trig::angle_schoolbook::to_radians_schoolbook`),
             /// which is this shell's former inline body expression for
             /// expression — `C::pi::<SCALE>(w)` IS
             /// `pi_cf::<SCALE>(w, DEFAULT_ROUNDING_MODE)` and `C::lit(180)`
-            /// is the same work-integer literal, so the relocation is
-            /// value-preserving at every input, scale, tier and mode.
-            ///
-            /// Called DIRECTLY rather than through
-            /// `policy::to_radians::dispatch`, on the same grounds as
-            /// [`Self::asinh`]: that policy's `select` returns
-            /// `MulPiRatio` for every cell, and `MulPiRatio` is a
-            /// DIFFERENT algorithm — it multiplies by the `rad_per_deg`
-            /// table constant instead of scaling through `π` first, giving
-            /// up about `log10(180)` digits of relative precision, which
-            /// is wrong by 11 units at `D57<0>::to_radians(10^32)` (see
-            /// `angle_mul_pi_ratio::to_radians_mul_pi_ratio`). Routing
-            /// here would therefore swap the engine and regress precision
-            /// on every wide cell, so the repoint remains an open policy
-            /// decision rather than part of this relocation.
+            /// is the same work-integer literal — so going through the
+            /// matcher is value-preserving at every input, scale, tier and
+            /// mode. The shell previously named that kernel DIRECTLY,
+            /// because `select` then returned `MulPiRatio` for every cell
+            /// and routing would have swapped the engine: `MulPiRatio`
+            /// multiplies by the `rad_per_deg` table constant instead of
+            /// scaling through `π` first, giving up about `log10(180)`
+            /// digits of relative precision — wrong by 11 units at
+            /// `D57<0>::to_radians(10^32)` (see
+            /// `angle_mul_pi_ratio::to_radians_mul_pi_ratio`). `select`
+            /// now names `Schoolbook`, the kernel this surface has always
+            /// run, so the matcher describes production and the direct
+            /// call is no longer needed. `MulPiRatio` stays registered as
+            /// a kept alternative.
             #[inline]
             #[must_use]
             pub fn to_radians_with(
                 self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
-                Self::from_bits(
-                    $crate::algos::trig::angle_schoolbook::to_radians_schoolbook::<
-                        $core::Core,
-                        SCALE,
-                    >(self.to_bits(), mode)
-                )
+                Self::from_bits($crate::policy::to_radians::dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
             /// Mode-aware sibling of [`Self::sin_cos`]. Delegates

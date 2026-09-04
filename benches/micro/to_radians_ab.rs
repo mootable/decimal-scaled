@@ -4,19 +4,22 @@
 //! Dispatch-seam A/B for the wide-tier `to_radians` angle conversion.
 //!
 //! Models the `bench-branch-compare` to_radians regression vs 0.4.4
-//! (D57 +64%, D76 +41%, D115 +56%, D153 +43%). The `MulPiRatio` kernel
-//! (`x * pi / 180` in the guard-digit work integer) is identical to
-//! 0.4.4's algorithm, so the candidates here isolate the routing /
-//! resize overhead the rewrite added between the public method and the
-//! kernel:
+//! (D57 +64%, D76 +41%, D115 +56%, D153 +43%):
 //! - `public` -> `D::to_radians_with` (the full path through
-//!   `to_radians_dispatch` -> `to_radians::dispatch` ->
-//!   `mul_pi_ratio_routed`, with its `resize_to` round-trips).
+//!   `to_radians::dispatch` -> `schoolbook_routed`, with its `resize_to`
+//!   round-trips), which runs the `Schoolbook` kernel `mul(x, pi) / 180`
+//!   — the algorithm every `to_radians` width has always run.
 //! - `direct`  -> the `MulPiRatio` kernel called straight on the tier
-//!   core (no policy / resize indirection).
+//!   core (no policy / resize indirection): one multiply against the
+//!   `rad_per_deg` constant.
 //!
-//! Both are bit-identical (asserted before timing). The gap is the
-//! per-call dispatch overhead.
+//! The two arms are DIFFERENT algorithms, not one kernel with and
+//! without dispatch, so the gap mixes the `Schoolbook`-vs-`MulPiRatio`
+//! algorithm cost with the per-call dispatch overhead. They agree
+//! bit-for-bit on the three angles benched here (asserted before
+//! timing), but not in general: `MulPiRatio` gives up about `log10(180)`
+//! digits of relative precision at large magnitudes, which is why
+//! `policy::to_radians` keeps it registered but unselected.
 //!
 //! Run: `cargo bench --features wide --bench to_radians_ab`
 
