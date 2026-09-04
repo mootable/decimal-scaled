@@ -51,7 +51,7 @@ let sqrt2 = d38!(2, scale 12).sqrt();
 | You need… | decimal-scaled gives you… |
 |---|---|
 | Decimal arithmetic that doesn't drift (`0.1 + 0.2 == 0.3`) | Base-10 storage; exact `+ - %`, correctly-rounded `* /`. |
-| Bit-identical results across Linux / macOS / Windows / ARM / x86 | `*_strict` transcendentals — integer-only, no platform libm. |
+| Bit-identical results across Linux / macOS / Windows / ARM / x86 | Transcendentals are integer-only — no platform libm. |
 | Compile-time-fixed precision with zero per-value scale byte | Const-generic `D38<19>`, `D76<35>` etc. — scale is in the type. |
 | `no_std` (or `no_std + alloc`) | Builds under `no_std + alloc` with `default-features = false`; the strict, integer-only path needs no libm. |
 | Correctly-rounded `ln` / `exp` / `sin` / `cos` / `tan` / `sqrt` / `atan` and friends — by default | Within 0.5 [ULP](https://en.wikipedia.org/wiki/Unit_in_the_last_place), `HalfToEven` by default; switch per call via `*_with(mode)` or crate-wide via the `rounding-*` features. |
@@ -67,7 +67,7 @@ Full docs: <https://mootable.github.io/decimal-scaled/>.
 - [Conversions](docs/conversions.md) — integers, floats, cross-width widening / narrowing, the float bridge.
 - [Cross-scale operations](docs/cross-scale.md) — mixed-width, mixed-`SCALE` expressions via `mul_of` / `add_of` / `cmp_of` / `clamp_of`, plus the nightly auto-inferred form.
 - [Rounding](docs/rounding.md) — `RoundingMode`, the `_with` pairs, `quantize` / `requantize`, the compile-time `rounding-*` features.
-- [The strict transcendentals](docs/strict-mode.md) — the integer-only `*_strict` path and the 0.5 ULP guarantee.
+- [Correctly-rounded transcendentals](docs/strict-mode.md) — the integer-only path and the 0.5 ULP guarantee.
 - [The `d*!` macros](docs/macros.md) — compile-time decimal literals and scale inference.
 - [Cargo features](docs/features.md) — every feature flag and the common configurations.
 - **Bench** — per-width [Performance](docs/performance.md), the [Precision](docs/precision.md) surface, version [History](docs/history.md), the golden [Harness](docs/golden.md), and the like-for-like [Comparisons](docs/comparisons.md) against the top crates.io peers.

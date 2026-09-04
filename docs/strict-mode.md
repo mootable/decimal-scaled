@@ -1,47 +1,42 @@
-# Strict mode - integer-only, correctly-rounded transcendentals
+# Correctly-rounded transcendentals
 
 Transcendental functions (logarithms, exponentials, roots,
 trigonometry) have exactly one implementation here: an integer-only
 one. It is platform-independent, bit-identical on every target,
 `no_std`-compatible, and correctly rounded to ≤ 0.5 ULP.
 
-There used to be a second: an **f64 bridge** that converted to `f64`,
-applied the platform intrinsic and converted back. It was removed in
-0.6.0. It capped every result at f64's ~15 significant digits whatever
-the tier's scale, so past that it was not a faster route to the same
-answer but a different, worse one - and the strict path is now fast
-enough that the trade had no buyer. Its `*_fast` methods and the `fast`
-Cargo feature are both gone.
+`ln` **is** that function. There is no suffix to remember, no feature
+to set, and no configuration in which the name means something else.
 
-## The `*_strict` name
-
-**Every transcendental is exposed under a `*_strict` name, always
-compiled, regardless of which Cargo feature is active.** The plain `*`
-form delegates to it - there is no configuration in which it resolves
-to anything else.
+It took three removals to get there. An **f64 bridge** (`*_fast`)
+converted to `f64`, applied the platform intrinsic and converted back,
+capping every result at ~15 significant digits whatever the tier's
+scale. An **`*_approx(working_digits)`** family let the caller pick a
+guard width that could not carry a stable contract. Both were opt-outs
+from correctness, sold on speed; the integer path got fast enough that
+neither had a buyer. With both gone, the `_strict` suffix that
+distinguished the correct path from them had nothing left to
+distinguish it from, so in 0.6.0 the guarantee moved onto the bare
+name and the suffix — and the `strict` feature — were dropped.
 
 ```rust
 use decimal_scaled::D38s12;
 
 let x = D38s12::try_from(2i64).unwrap();
 
-// The integer-only path, explicitly:
-let r1 = x.sqrt();
-let l1 = x.ln();
+// Correctly rounded to <= 0.5 ULP, on every platform, in every build.
+let r = x.sqrt();
+let l = x.ln();
 
-// The plain method delegates to exactly the same thing:
-let r2 = x.sqrt();
-assert_eq!(r1, r2);
+// Caller-chosen rounding mode, same guarantee:
+use decimal_scaled::RoundingMode;
+let c = x.ln_with(RoundingMode::Ceiling);
 ```
 
-Why the explicit name is kept: `*_strict` means strict, full stop. It
-states the guarantee at the call site, and it cannot be silently
-repointed by a downstream crate flipping a feature.
-
-The `*_strict` surface covers, on `D38` (and on `D18` by
+The surface covers, on `D38` (and on `D18` by
 widen-compute-narrow delegation):
 
-| Group | `*_strict` methods |
+| Group | methods |
 |---|---|
 | Logarithms | `ln`, `log`, `log2`, `log10` |
 | Exponentials | `exp`, `exp2` |
@@ -52,16 +47,16 @@ widen-compute-narrow delegation):
 | Inverse hyperbolic | `asinh`, `acosh`, `atanh` |
 | Angle conversion | `to_degrees`, `to_radians` |
 
-## Checked siblings — `checked_*_strict`
+## Checked siblings — `checked_*`
 
-The default strict form **panics** on a domain error (`ln` of a
+The default form **panics** on a domain error (`ln` of a
 non-positive value, `asin` outside `[-1, 1]`, …) or when the
-correctly-rounded result does not fit the storage range. Every strict
+correctly-rounded result does not fit the storage range. Every
 transcendental in the table above also ships a non-panicking
 **`checked_`** pair returning `Option<Self>`:
 
-- `checked_<fn>_strict_with(self, …, mode) -> Option<Self>`
-- `checked_<fn>_strict(self, …) -> Option<Self>` — the default-mode sibling.
+- `checked_<fn>_with(self, …, mode) -> Option<Self>`
+- `checked_<fn>(self, …) -> Option<Self>` — the default-mode sibling.
 
 ```rust
 use decimal_scaled::D38s12;
@@ -87,41 +82,28 @@ assert_eq!(two.checked_sqrt(), Some(two.sqrt())); // in range
 Both forms run the same policy-dispatched kernel, so an in-range
 `checked_*` result is **bit-identical** to the default form's.
 
-## The `strict` feature
+## No feature selects the guarantee
 
-```toml
-decimal-scaled = { version = "0.5", features = ["strict"] }
-```
+There is one definition of each name, in every build, so no feature
+combination changes what `sqrt` / `ln` / `sin` / … do. The integer
+algorithms compile under `no_std + alloc`; `std` is needed only for the
+explicit float-conversion methods (`to_f64`, `from_f64`,
+`TryFrom<f64>`, …), which are type conversions, not transcendental
+operations.
 
-With `strict` enabled, the plain methods (`sqrt`, `ln`, `sin`, …)
-dispatch to their `*_strict` form. `strict` does not require `std`; the
-integer algorithms compile under `no_std + alloc`. The explicit
-float-conversion methods (`to_f64`, `from_f64`,
-`TryFrom<f64>`, …) remain available - they are type conversions, not
-transcendental operations.
-
-## Dispatch, in one line
-
-There is one definition of each bare name, so no feature combination
-changes what `sqrt` / `ln` / `sin` / … resolve to:
-
-| Features | `*_strict` named methods | plain `sqrt` / `ln` / … |
-|---|---|---|
-| *(any combination)* | present | dispatches to `*_strict` |
-
-This was not always true. The `fast` feature used to move the plain
-names onto the f64 bridge when `strict` was absent, which made the
-guarantee behind a bare `ln()` depend on a feature a downstream crate
-could flip — and on which width you were calling it on, since the D38
-shells and the macro-generated ones were gated independently. That
-combination shipped a real defect: under `--no-default-features
---features std`, `D38::ln` became the f64 bridge at 426 ULP while
-`D18::ln` stayed correctly rounded. Removing the bridge removes the
-combinatorics along with it.
+This was not always true, and the history is worth keeping because it
+is what the current shape is for. A `strict` feature chose the integer
+path and a `fast` feature chose the f64 bridge, so the guarantee behind
+a bare `ln()` depended on a flag any downstream crate could flip — and
+on which width you called it on, since the D38 shells and the
+macro-generated ones were gated independently. That combination shipped
+a real defect: under `--no-default-features --features std`, `D38::ln`
+became the f64 bridge at 426 ULP while `D18::ln` stayed correctly
+rounded. One name with one meaning removes the whole class.
 
 ## The 0.5 ULP accuracy guarantee
 
-Every strict method is held to the **[IEEE 754](https://en.wikipedia.org/wiki/IEEE_754)
+Every transcendental is held to the **[IEEE 754](https://en.wikipedia.org/wiki/IEEE_754)
 correctly-rounded standard**: the returned value is within **0.5
 [ULP](https://en.wikipedia.org/wiki/Unit_in_the_last_place)** (unit in
 the last place) of the mathematically exact result - i.e. it is the
@@ -148,15 +130,15 @@ How it is achieved, per function family:
 
 This holds across the whole `SCALE` range, including `SCALE = 38`,
 because the guard-digit intermediate is wider than `i128`. Every
-strict transcendental is cross-checked against the platform `f64`
+transcendental is cross-checked against the platform `f64`
 implementation at `D38<9>` (where `f64` is comfortably more precise
 than the type's ULP) - see the in-crate tests.
 
 All wide tiers (`D57` / `D76` / `D115` / `D153` / `D230` / `D307`
 under the `wide` umbrella; `D462` / `D616` under `x-wide`; `D924` /
-`D1232` under `xx-wide`) ship the full strict transcendental
-surface — every method has a `*_strict` form plus a mode-aware
-`*_strict_with(mode)` sibling. The wide tiers also expose
+`D1232` under `xx-wide`) ship the full transcendental
+surface — every method has a plain form plus a mode-aware
+`<fn>_with(mode)` sibling. The wide tiers also expose
 paired-output transcendentals that compute both members of a pair in
 one pass and return `(Self, Self)`: `sin_cos` /
 `sin_cos_with` (sine and cosine together) and `sinh_cosh`
@@ -174,5 +156,4 @@ contract is the same ≤ 0.5 ULP at storage as D38.
 | You want… | Use |
 |---|---|
 | Bit-identical results everywhere; correct rounding | default — there is no other option |
-| To state the guarantee at the call site | `*_strict`, always available |
 | `no_std + alloc` | default works (the integer path is `no_std`-compatible) |

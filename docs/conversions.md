@@ -57,7 +57,7 @@ On nightly with the `experimental-floats` feature, `f16` and `f128`
 entry points (`from_f16`, `to_f128`, …) are also available.
 
 > The float bridge is a *conversion*, not a transcendental operation -
-> it is available regardless of the `strict` feature.
+> it is available in every build.
 
 ## Cross-width conversions
 
