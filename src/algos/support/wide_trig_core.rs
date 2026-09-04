@@ -3199,7 +3199,12 @@ where
     let neg = working_value < lit(0);
     let mag = if neg { -working_value } else { working_value };
     let divisor = crate::consts::pow10::dispatch::<S>(shift);
-    let (q, rem) = mag.div_rem(divisor);
+    // Exact per-width Knuth scratch, as the walkers' own narrowings use —
+    // the narrow build's width-erased divide blanket is sized to its 2-limb
+    // storage, and this single shot now also serves a narrow caller probing
+    // in `Int<24>` (`policy::log`'s conditioned arm). Same quotient and
+    // remainder as the operator.
+    let (q, rem) = crate::algos::exp::exp_generic::div_rem_exact(mag, divisor);
     let band = if shift >= 3 {
         crate::consts::pow10::dispatch::<S>(shift - 3)
     } else {

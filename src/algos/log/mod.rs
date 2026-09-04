@@ -3,24 +3,30 @@
 
 //! Decimal arbitrary-base logarithm algorithm family.
 //!
-//! One algorithm: `LnDivide` -- `log(self, base) = ln(self) / ln(base)`.
-//! The per-`(N, SCALE)` realisation lives in
+//! One composition, `log(self, base) = ln(self) / ln(base)`, in two guards.
+//! Both realisations live in
 //! [`log_ln_divide`](crate::algos::log::log_ln_divide):
 //!
-//! - the narrow tiers (D18, D38) route through the composition kernels in
+//! - `LnDivide`, the fixed guard (`SCALE + 30`), for every ordinary base:
+//!   the narrow tiers (D18, D38) route through the composition kernels in
 //!   that module -- D18 widens to D38, runs its log, and narrows back; D38
-//!   calls the `ln::ln_series_2limb` log kernel directly;
-//! - the wide tiers route through the per-tier `log_strict_with_kernel`
-//!   free functions emitted by
-//!   `decl_wide_transcendental!` (the real Ziv-escalating computation),
-//!   which already live outside the policy in `crate::types::widths`.
+//!   calls the `ln::ln_series_2limb` log kernel directly -- and the wide
+//!   tiers through the per-tier `log_strict_with_kernel` free functions
+//!   emitted by `decl_wide_transcendental!` (the Ziv-escalating shell),
+//!   which live outside the policy in `crate::types::widths`;
+//! - `LnDivideConditioned`, the guard sized from the base's conditioning
+//!   number `k = ceil(-log10 |b - 1|)` (`SCALE + 30 + 2k`), for a base
+//!   within 0.1 of 1: one generic kernel over the storage width and a work
+//!   integer the policy picks from `k`. The error law that makes the lift
+//!   necessary is derived on that module.
 //!
-//! The per-`(N, SCALE)` choice lives in [`crate::policy::log`], which
+//! The per-`(N, SCALE, base)` choice lives in [`crate::policy::log`], which
 //! delegates *down* to these kernels.
 //!
 //! Variants:
 //!
-//! - [`log_ln_divide`] -- the production `ln(x)/ln(b)` kernel.
+//! - [`log_ln_divide`] -- the production `ln(x)/ln(b)` kernels, fixed-guard
+//!   and conditioned.
 //! - [`log_schoolbook`] -- correctness reference: naive `ln(x)/ln(b)`
 //!   using the schoolbook ln. Registered as the unrouted
 //!   `Algorithm::Schoolbook` variant.
