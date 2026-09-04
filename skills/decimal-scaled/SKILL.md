@@ -37,7 +37,7 @@ The half-width tiers (`D57`, `D115`, `D230`, `D462`, `D924`) fill the cost gap b
 | Use case | Pick |
 |---|---|
 | Currency, prices, measurements, human-entered decimals | **`decimal-scaled`** |
-| Need bit-identical results on every platform (consensus, audit, replay) | **`decimal-scaled` + `*_strict`** |
+| Need bit-identical results on every platform (consensus, audit, replay) | **`decimal-scaled`** — every transcendental is integer-only |
 | Compile-time-fixed precision, want zero per-value scale byte | **`decimal-scaled`** |
 | `no_std + alloc` | **`decimal-scaled`** (works under `strict` too) |
 | Variable scale per value (e.g. mixing 0.1 and 0.001) | `rust_decimal` |
@@ -143,15 +143,14 @@ Every transcendental method exists in **two named forms**, **both always compile
 
 | Method | Path | Determinism | Precision | Needs |
 |---|---|---|---|---|
-| `*_strict` (e.g. `ln_strict`, `sin_strict`) | integer-only, guard-digit | platform-deterministic, bit-identical everywhere | within **0.5 ULP** at storage scale | nothing extra |
-| plain `*` (e.g. `ln`, `sin`) | dispatcher -> `*_strict` | platform-deterministic, bit-identical everywhere | within **0.5 ULP** at storage scale | nothing extra |
+| `ln`, `sin`, `sqrt`, … | integer-only, guard-digit | platform-deterministic, bit-identical everywhere | within **0.5 ULP** at storage scale | nothing extra |
 
-**Plain `.ln()` resolves to `ln_strict`, unconditionally.** There is no second dispatch: the f64-bridge `*_fast` surface and the `fast` feature were removed in 0.6.0, because the strict path became fast enough that a lossy alternative no longer earned its place.
+**There is one transcendental surface and it is correctly rounded.** The bare name IS the guarantee — `.ln()` is integer-only and within 0.5 ULP. The `_strict` suffix was retired in 0.6.0 along with the f64-bridge `*_fast` surface and the `fast` feature: with no lossy alternative left to distinguish it from, a suffix marking correctness on every method was noise.
 
 **Rules of thumb:**
 - **Every path is bit-deterministic.** The integer-only kernels are platform-independent by construction, and there is no longer a feature that can redirect a plain call to a platform-libm one.
 - **There is no lossy alternative.** `*_fast` round-tripped through f64's ~15-digit mantissa regardless of the tier's scale, so beyond that it was not a faster route to the same answer but a different, worse one.
-- The `*_strict` family is also the one you want under `no_std`.
+- The transcendentals are `no_std`-compatible: integer-only, no libm, no float dependency.
 
 ## Rounding modes via `*_with(mode)`
 
@@ -162,7 +161,7 @@ use decimal_scaled::RoundingMode;
 let _ = value.quantize_with::<2>(RoundingMode::HalfAwayFromZero);
 let _ = value.from_f64_with(1.5, RoundingMode::Ceiling);
 let _ = value.to_int_with(RoundingMode::Trunc);
-let _ = wide.ln_strict_with(RoundingMode::Floor);  // wide-tier transcendentals
+let _ = wide.ln_with(RoundingMode::Floor);  // wide-tier transcendentals
 ```
 
 Modes: `HalfToEven` (default; IEEE-754, no bias), `HalfAwayFromZero` (commercial), `HalfTowardZero`, `Trunc` (toward zero), `Floor` (toward −∞), `Ceiling` (toward +∞).
