@@ -150,21 +150,27 @@ pub(crate) fn near_one_digits<S: BigInt>(base_raw: S, scale: u32) -> u32 {
 }
 
 /// Working-scale guard of the conditioned composition at conditioning
-/// `k`: `30 + 2k`. One `k` restores the relative precision `ln b` lost,
-/// the other covers the result's own magnitude `ln x · 10^k` — see the
-/// module doc. At `k = 0` it is the fixed guard exactly.
+/// `k`: `30 + k` — the result's own integer digits, and nothing for the
+/// divisor. The composition never forms `ln b` (see [`conditioned_probe`]),
+/// so the only precision a base near 1 costs is the `k` digits its result
+/// `ln x · 10^k` carries above an ordinary one — the same rule `exp` applies
+/// through `exp_result_int_digits`, and the floor no formulation can go
+/// under: a result with `SCALE + k + 1` significant digits needs that many
+/// working digits in whatever determines it. At `k = 0` it is the fixed
+/// guard exactly. (The naive quotient [`conditioned_probe_quotient`] needs
+/// `30 + 2k`; the module doc derives both.)
 pub(crate) const fn lifted_guard(near_one_digits: u32) -> u32 {
-    COMPOSITION_GUARD + 2 * near_one_digits
+    COMPOSITION_GUARD + near_one_digits
 }
 
 /// Decimal digits the conditioned composition asks of its work integer at
 /// `(scale, k)`, on the `8 · limbs` scale the rung ladder and the Ziv
 /// walker size by (`work_rung`; `cap_digits = BITS/8 - int_digits - 8` in
 /// `round_to_storage_directed_tagged_impl_g`): the working scale
-/// `scale + 30 + 2k`, the result's integer digits (`≤ k + 4` — `ln x` is
-/// below `10^4` at every width), and the walker's own `8`. A width that
-/// meets it leaves the walker its ordinary escalation headroom above the
-/// lifted base guard.
+/// `scale + 30 + k`, the result's integer digits (`≤ k + 4` — `ln x` is
+/// below `10^4` at every width), and the walker's own `8` — i.e.
+/// `scale + 2k + 42`. A width that meets it leaves the walker its ordinary
+/// escalation headroom above the lifted base guard.
 pub(crate) const fn needed_digits(scale: u32, near_one_digits: u32) -> u32 {
     scale + lifted_guard(near_one_digits) + near_one_digits + 4 + 8
 }
@@ -250,16 +256,30 @@ where
 /// storage `Int<N>` in the work integer `Wk` — [`conditioned_probe`] then
 /// [`conditioned_finish`].
 ///
-/// The shell is the wide fixed-guard `log_strict_with_kernel`, verbatim —
-/// the domain walls, the exact integer-power pin, the Ziv-escalated
-/// directed narrowing — with `guard` (from [`lifted_guard`]) where that
-/// shell has the const `GUARD`, the natural-log core `ln_at`
-/// (`working value at w, w -> ln at w`) supplied by the caller so the
-/// matcher's `ln` routing is honoured, and the exact rational-power pin the
-/// narrow shell carries. Panics on a non-positive argument or base, on
-/// `base == 1`, and — like every wide shell — when the result does not fit
-/// `Int<N>`; a caller whose contract is `None` past storage range-gates the
-/// probe first (`policy::log`'s narrow arm).
+/// The shell is the wide fixed-guard `log_strict_with_kernel` — the domain
+/// walls, the exact integer-power pin, the clear-of-tie single shot, the
+/// Ziv-escalated directed narrowing — with `guard` (from [`lifted_guard`])
+/// where that shell has the const `GUARD`, the ratio formed by
+/// [`conditioned_ratio`] instead of the naive quotient, the natural-log
+/// core `ln_at` (`working value at w, w -> ln at w`) supplied by the caller
+/// so the matcher's `ln` routing is honoured, and the exact rational-power
+/// pin the narrow shell carries.
+///
+/// The two pins are not fast paths; they are the only way the rational
+/// half of the domain can be decided. For decimal `x` and `b` the value
+/// `log_b(x)` is either rational or transcendental — a corollary of the
+/// Gelfond–Schneider theorem (an algebraic irrational `r` would make
+/// `b^r = x` transcendental) — and on an exactly rational result the Ziv
+/// escalation cannot converge in principle: the residual at every depth is
+/// the kernel's own noise around a boundary the value sits exactly on, so
+/// the walker's cap would hand back a 1-ULP directed miss. The pins settle
+/// those inputs by exact integer arithmetic; the walker keeps the
+/// transcendental remainder, where escalation is the sound method.
+///
+/// Panics on a non-positive argument or base, on `base == 1`, and — like
+/// every wide shell — when the result does not fit `Int<N>`; a caller whose
+/// contract is `None` past storage range-gates the probe first
+/// (`policy::log`'s narrow arm).
 pub(crate) fn log_ln_divide_conditioned<const N: usize, Wk: BigInt, const SCALE: u32>(
     raw: Int<N>,
     base_raw: Int<N>,
@@ -289,11 +309,11 @@ where
 }
 
 /// The base probe of the conditioned composition: the domain walls, then
-/// `ln(x)/ln(base)` at working scale `SCALE + guard` in `Wk`. Split from
-/// [`conditioned_finish`] so a caller whose storage contract is `None` past
-/// range (the narrow arm) can gate on the probe BEFORE any narrowing runs —
-/// every narrowing step in the finish range-checks against `Int<N>` and
-/// panics past it, the wide contract.
+/// [`conditioned_ratio`] at working scale `SCALE + guard` in `Wk`. Split
+/// from [`conditioned_finish`] so a caller whose storage contract is `None`
+/// past range (the narrow arm) can gate on the probe BEFORE any narrowing
+/// runs — every narrowing step in the finish range-checks against `Int<N>`
+/// and panics past it, the wide contract.
 pub(crate) fn conditioned_probe<const N: usize, Wk: BigInt, const SCALE: u32>(
     raw: Int<N>,
     base_raw: Int<N>,
@@ -312,10 +332,113 @@ where
     if base_raw == eg::pow10::<Int<N>>(SCALE) {
         panic!("log: base must not equal 1");
     }
+    conditioned_ratio::<N, Wk, SCALE>(raw, base_raw, guard, ln_at)
+}
+
+/// `log_b(x)` at working scale `SCALE + guard_digits`, without ever forming
+/// `ln b`:
+///
+/// ```text
+/// ε = d / 10^SCALE,   d = b_raw − 10^SCALE          (an EXACT integer)
+/// ln b = ε · g(ε),    g(ε) = ln(1+ε)/ε = Θ(1)
+/// R = ln x / (ε · g(ε)) = ( ln x / g(ε) ) · 10^SCALE / d
+/// ```
+///
+/// `g` is evaluated by its own series from `d` ([`g_of_epsilon`]) — never
+/// by computing `ln(1+ε)` and dividing — so no quantity of size `10^-k` is
+/// ever held at absolute resolution; the only division by a small number is
+/// by the exact integer `d`, which preserves relative precision. The
+/// probe's relative error is then `~(c + ln x)·10^-w`, so the guard need
+/// only cover the result's own magnitude (`lifted_guard`: `30 + k`), where
+/// the naive quotient ([`conditioned_ratio_quotient`]) needs `30 + 2k`.
+/// Used for the base probe and for every escalated probe of the walker, so
+/// the escalation sequence is the same formulation at every depth.
+fn conditioned_ratio<const N: usize, Wk: BigInt, const SCALE: u32>(
+    raw: Int<N>,
+    base_raw: Int<N>,
+    guard_digits: u32,
+    ln_at: &impl Fn(Wk, u32) -> Wk,
+) -> Wk
+where
+    <Wk as BigInt>::Scratch: ComputeLimbs,
+{
+    let working_scale = SCALE + guard_digits;
+    let one_scaled = eg::pow10::<Wk>(SCALE);
+    let d = BigInt::resize_to::<Wk>(base_raw) - one_scaled;
+    let g = g_of_epsilon::<Wk>(d, one_scaled, working_scale);
+    let ln_x_over_g = eg::div::<Wk>(
+        ln_of::<N, Wk, SCALE>(ln_at, raw, guard_digits),
+        g,
+        working_scale,
+    );
+    // `(ln x / g)` is at scale `w`; dividing by `ε = d / 10^SCALE` is
+    // `· 10^SCALE / d`, rounded half-even — the exact-integer divide.
+    eg::div::<Wk>(ln_x_over_g, d, SCALE)
+}
+
+/// `g(ε) = ln(1+ε)/ε` at working scale `w`, for `ε = d / 10^SCALE` given as
+/// the exact integer `d` and `10^SCALE` (`one_scaled`), `|ε| < 0.1`:
+///
+/// ```text
+/// t = ε / (2 + ε),   |t| < 0.048
+/// g(ε) = (2 / (2 + ε)) · (1 + t²/3 + t⁴/5 + …)     [ artanh(t)/t ]
+/// ```
+///
+/// Both factors are `Θ(1)` and every term is a small correction, so a
+/// fixed-scale carrier holds `g` at full relative precision (`~j` units of
+/// `10^-w` after `j` terms — under `w/2.6` terms, each gaining at least
+/// `−log10 t² ≥ 2.6` digits). `t` and `2/(2+ε)` are single rounded divides
+/// by the exact `(2 + ε)·10^SCALE`.
+fn g_of_epsilon<Wk: BigInt>(d: Wk, one_scaled: Wk, working_scale: u32) -> Wk
+where
+    <Wk as BigInt>::Scratch: ComputeLimbs,
+{
+    let two_plus_eps = one_scaled + one_scaled + d;
+    let t = eg::div::<Wk>(d, two_plus_eps, working_scale);
+    let pre = eg::div::<Wk>(one_scaled + one_scaled, two_plus_eps, working_scale);
+    let one_w = eg::one::<Wk>(working_scale);
+    let t_sq = eg::mul::<Wk>(t, t, working_scale);
+    let mut sum = one_w;
+    let mut term = one_w;
+    let mut term_index: u128 = 1;
+    loop {
+        term = eg::mul::<Wk>(term, t_sq, working_scale);
+        let contribution = term / eg::lit::<Wk>((2 * term_index + 1) as i128);
+        if contribution == Wk::ZERO {
+            break;
+        }
+        sum = sum + contribution;
+        term_index += 1;
+        // Each term gains at least 2.6 digits, so the loop ends well inside
+        // `w` iterations; the cap is a belt, never the exit.
+        if term_index > working_scale as u128 {
+            break;
+        }
+    }
+    eg::mul::<Wk>(pre, sum, working_scale)
+}
+
+/// The naive quotient `ln(x)/ln(base)` at working scale
+/// `SCALE + guard_digits` — the composition every fixed-guard shell runs,
+/// KEPT as the unrouted reference for [`conditioned_ratio`]. Correctly
+/// rounded only at guard `30 + 2k` (the module doc's law: `ln b ~ 10^-k`
+/// held at absolute resolution loses `k` digits of relative precision and
+/// the quotient multiplies that by its own `10^k`); the bit-identity test
+/// runs it at that lift against the reformulation at `30 + k`.
+#[allow(dead_code)]
+fn conditioned_ratio_quotient<const N: usize, Wk: BigInt, const SCALE: u32>(
+    raw: Int<N>,
+    base_raw: Int<N>,
+    guard_digits: u32,
+    ln_at: &impl Fn(Wk, u32) -> Wk,
+) -> Wk
+where
+    <Wk as BigInt>::Scratch: ComputeLimbs,
+{
     eg::div::<Wk>(
-        ln_of::<N, Wk, SCALE>(ln_at, raw, guard),
-        ln_of::<N, Wk, SCALE>(ln_at, base_raw, guard),
-        SCALE + guard,
+        ln_of::<N, Wk, SCALE>(ln_at, raw, guard_digits),
+        ln_of::<N, Wk, SCALE>(ln_at, base_raw, guard_digits),
+        SCALE + guard_digits,
     )
 }
 
@@ -389,11 +512,7 @@ where
             if guard_digits == guard {
                 return probe_ratio;
             }
-            eg::div::<Wk>(
-                ln_of::<N, Wk, SCALE>(ln_at, raw, guard_digits),
-                ln_of::<N, Wk, SCALE>(ln_at, base_raw, guard_digits),
-                SCALE + guard_digits,
-            )
+            conditioned_ratio::<N, Wk, SCALE>(raw, base_raw, guard_digits, ln_at)
         },
     )
 }
@@ -889,14 +1008,80 @@ mod tests {
     #[test]
     fn lift_and_budget_arithmetic() {
         assert_eq!(lifted_guard(0), COMPOSITION_GUARD);
-        assert_eq!(lifted_guard(18), 66);
-        // D57 s28, k = 28: past Wagm's (Int<16>) budget, inside Wexp's (Int<32>).
-        assert!(!fits_budget(28, 28, 16));
-        assert!(fits_budget(28, 28, 32));
-        // Capacity at the absurd corner the assert guards: D462 s461, k = 461
-        // fits Int<176> but not Int<128>.
-        assert!(!fits_capacity(461, 461, 128));
-        assert!(fits_capacity(461, 461, 176));
+        assert_eq!(lifted_guard(18), 48);
+        // D57 s28, k = 28: inside Wagm's (Int<16>) budget under the
+        // reformulated lift (126 <= 128); D76 s38, k = 38 is past it and
+        // inside Wexp's (Int<32>).
+        assert!(fits_budget(28, 28, 16));
+        assert!(!fits_budget(38, 38, 16));
+        assert!(fits_budget(38, 38, 32));
+        // Capacity at the corner the assert guards: D462 s461, k = 461 fits
+        // Wexp Int<128> (1944 <= 2432); Wagm Int<64> could not hold it.
+        assert!(fits_capacity(461, 461, 128));
+        assert!(!fits_capacity(461, 461, 64));
+    }
+
+    /// `g(ε)·ε` must track `ln(1+ε)` to a few working units at every band
+    /// position, both sides of 1 — `g` is computed by its own series from
+    /// the exact `d`, never from `ln`, so this is the one place the two
+    /// meet. The reference is the crate's own generic Series kernel run at
+    /// DOUBLE the working scale and scaled down, so its own truncation
+    /// (tens of units at `w` for an input just below 1 — two Brent sqrt
+    /// levels and a ~w/2-term artanh) is far below a unit at `w`; what
+    /// remains is `g`'s own rounding, a unit or two. A disagreement beyond
+    /// that would be a wrong series, not a wrong oracle.
+    #[test]
+    fn g_of_epsilon_times_epsilon_tracks_ln1p() {
+        type W = Int<24>;
+        const S: u32 = 6;
+        const WS: u32 = 40; // working scale
+        const WS2: u32 = 80; // the reference's working scale
+        let one_scaled = eg::pow10::<W>(S);
+        let one_w2 = eg::one::<W>(WS2);
+        for d in [100_000i128, 50_000, 10_000, 1, -1, -20_000, -99_999] {
+            let d_w = <W as BigInt>::from_i128(d);
+            let g = g_of_epsilon::<W>(d_w, one_scaled, WS);
+            let eps_w = d_w * eg::pow10::<W>(WS - S); // ε at scale w, exact
+            let lhs = eg::mul::<W>(g, eps_w, WS);
+            let eps_w2 = d_w * eg::pow10::<W>(WS2 - S);
+            let ln2 = crate::consts::ln2_by_working_scale::<W>(WS2, RoundingMode::HalfToEven);
+            let rhs = eg::round_div_pow10::<W>(eg::ln_fixed::<W>(one_w2 + eps_w2, WS2, ln2), WS2 - WS);
+            let diff = (lhs - rhs).abs().to_i128();
+            assert!(diff <= 4, "d={d}: g·ε and ln(1+ε) differ by {diff} units at w={WS}");
+        }
+    }
+
+    /// The reformulation at lift `k` and the naive quotient at lift `2k` are
+    /// both correctly rounded, so through the same finish they must agree
+    /// bit for bit under every mode — the kept alternative as the reference.
+    #[test]
+    fn reformulated_ratio_agrees_with_the_naive_quotient_at_double_lift() {
+        type W = Int<24>;
+        fn check<const SCALE: u32>(x_raw: i128, base_raw: i128) {
+            let (raw, braw) = (Int::<2>::from_i128(x_raw), Int::<2>::from_i128(base_raw));
+            let k = near_one_digits::<Int<2>>(braw, SCALE);
+            assert!(k > 0, "not a near-1 base");
+            let ln_at = series_core::<W, SCALE>();
+            let (g_guard, q_guard) = (COMPOSITION_GUARD + k, COMPOSITION_GUARD + 2 * k);
+            let probe_g = conditioned_ratio::<2, W, SCALE>(raw, braw, g_guard, &ln_at);
+            let probe_q = conditioned_ratio_quotient::<2, W, SCALE>(raw, braw, q_guard, &ln_at);
+            for mode in ALL_MODES {
+                let a = conditioned_finish::<2, W, SCALE>(raw, braw, mode, g_guard, &ln_at, probe_g);
+                let b = conditioned_finish::<2, W, SCALE>(raw, braw, mode, q_guard, &ln_at, probe_q);
+                assert_eq!(a, b, "x={x_raw} base={base_raw} scale={SCALE} mode={mode:?}");
+            }
+        }
+        let one6 = 10i128.pow(6);
+        check::<6>(2 * one6, 1_010_000);
+        check::<6>(2 * one6, 950_000);
+        check::<6>(7 * one6, 1_001_000);
+        check::<6>(2 * one6, 1_000_001);
+        check::<6>(1_010_000, 1_020_100); // exact 1/2 — the pin, both ways
+        let one19 = 10i128.pow(19);
+        check::<19>(2 * one19, one19 + 100); // k = 17
+        check::<19>(3 * one19, one19 - 100); // below 1
+        check::<19>(one19 + 10_000_000, one19 + 10_000); // x near 1 too
+        check::<19>(9_999_999 * one19, one19 + 100_000_000); // k = 11, ln x ~ 16
     }
 }
 

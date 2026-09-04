@@ -24,14 +24,15 @@
 //!   `decl_wide_transcendental!`), reached by a `match N` with `resize_to`
 //!   bridges (identity at the matched `N`). Unchanged.
 //! - `k > 0` (a base within 0.1 of 1) — `LnDivideConditioned`, the ONE
-//!   generic `log_ln_divide_conditioned` kernel at guard `30 + 2k`, in a
-//!   work integer the policy chooses from `k`
-//!   ([`ln_divide_conditioned_routed`]): the tier's composition width
-//!   `Wagm` while its digit budget carries the lift, then the next-wider
-//!   `Wexp`, then one documented widest width where even `Wexp` lacks
-//!   capacity; the narrow tiers run it in the `Int<24>` Ziv work integer
-//!   against their own storage, with the range decided on the probe
-//!   (`None` = out of storage range, their `checked_` contract —
+//!   generic `log_ln_divide_conditioned` kernel: the ratio formed as
+//!   `(ln x / g(ε)) · 10^SCALE / d` from the EXACT `d = b_raw − 10^SCALE`
+//!   (never `ln b`), at guard `30 + k` — the result's own integer digits,
+//!   the floor no formulation can go under — in a work integer the policy
+//!   chooses from `k` ([`ln_divide_conditioned_routed`]): the tier's
+//!   composition width `Wagm` while its digit budget carries the lift, else
+//!   the next-wider `Wexp`; the narrow tiers run it in the `Int<24>` Ziv
+//!   work integer against their own storage, with the range decided on the
+//!   probe (`None` = out of storage range, their `checked_` contract —
 //!   [`conditioned_narrow`]). Why a base near 1 needs the lift, and the
 //!   measured law behind it, is on the kernel's module.
 //!
@@ -117,40 +118,39 @@ pub(crate) fn checked_dispatch<const N: usize, const SCALE: u32>(
 ///
 /// ── THE WORK WIDTH, PER TIER ──
 ///
-/// The lifted working scale `SCALE + 30 + 2k` outruns the tier's composition
-/// width `Wagm` in its worst band. Two tests, both in
+/// The lifted working scale `SCALE + 30 + k` outruns the tier's composition
+/// width `Wagm` in its worst band on four tiers. Two tests, both in
 /// `algos::log::log_ln_divide`: `fits_budget` (the `8 · limbs` digit budget
 /// the Ziv walker escalates within — the width the walker needs) and
 /// `fits_capacity` (`2w + 40 <= 19 · limbs` — the width the arithmetic
 /// needs; below it the limb ops would wrap into a plausible wrong value).
 /// The ladder is `Wagm`, then `Wexp` (the tier's next-wider work integer),
-/// then one widest width, chosen by budget and ASSERTED by capacity.
-/// `needed_digits = SCALE + 30 + 3k + 12` at the worst cell whose result can
-/// still fit storage (`k = min(SCALE, D - SCALE)`), and the capacity corner
-/// `2w + 40` at `k = SCALE = max` (`w = 3·SCALE + 30`; a result that only
-/// fits when `x` is itself within `10^-(k-1)` of 1). `k <= SCALE` because the
-/// base must be representable, so this corner is the LARGEST working scale
-/// any legal input can ask for — a finite, known width per tier, which is
-/// why no arbitrary-precision fallback is needed:
+/// chosen by budget and ASSERTED by capacity. `needed_digits =
+/// SCALE + 2k + 42` at the worst cell whose result can still fit storage
+/// (`k = min(SCALE, D - SCALE)`), and the capacity corner `2w + 40` at
+/// `k = SCALE = max` (`w = 2·SCALE + 30`; a result that only fits when `x`
+/// is itself within `10^-(k-1)` of 1). `k <= SCALE` because the base must
+/// be representable, so this corner is the LARGEST working scale any legal
+/// input can ask for — a finite, known width per tier, which is why no
+/// arbitrary-precision fallback is needed:
 ///
-///   tier    Wagm      budget  worst   Wexp      budget  worst  Wmax      capacity corner
-///   D57     Int<16>    128     155    Int<32>    256     yes   Int<32>    436 <=  608
-///   D76     Int<16>    128     194    Int<32>    256     yes   Int<32>    550 <=  608
-///   D115    Int<32>    256     271    Int<64>    512     yes   Int<64>    784 <= 1216
-///   D153    Int<32>    256     347    Int<64>    512     yes   Int<64>   1012 <= 1216
-///   D230    Int<48>    384     502    Int<96>    768     yes   Int<96>   1474 <= 1824
-///   D307    Int<64>    512     655    Int<128>  1024     yes   Int<128>  1936 <= 2432
-///   D462    Int<64>    512     966    Int<128>  1024     yes   Int<176>  2866 <= 3344
-///   D616    Int<128>  1024    1274    Int<256>  2048     yes   Int<256>  3790 <= 4864
-///   D924    Int<192>  1536    1890    Int<256>  2048     yes   Int<512>  5638 <= 9728
-///   D1232   Int<256>  2048    2506    Int<512>  4096     yes   Int<512>  7486 <= 9728
+///   tier    Wagm      budget  worst  fits   Wexp      budget   corner  capacity
+///   D57     Int<16>    128     127   yes    Int<32>    256      324 <=  608
+///   D76     Int<16>    128     156   NO     Int<32>    256      400 <=  608
+///   D115    Int<32>    256     214   yes    Int<64>    512      556 <= 1216
+///   D153    Int<32>    256     271   NO     Int<64>    512      708 <= 1216
+///   D230    Int<48>    384     387   NO     Int<96>    768     1016 <= 1824
+///   D307    Int<64>    512     502   yes    Int<128>  1024     1324 <= 2432
+///   D462    Int<64>    512     735   NO     Int<128>  1024     1944 <= 2432
+///   D616    Int<128>  1024     966   yes    Int<256>  2048     2560 <= 4864
+///   D924    Int<192>  1536    1428   yes    Int<256>  2048     3792 <= 4864
+///   D1232   Int<256>  2048    1890   yes    Int<512>  4096     5024 <= 9728
 ///
-/// D462 and D924 are the two tiers whose `Wexp` cannot hold the capacity
-/// corner (`Int<128>` 2432 < 2866; `Int<256>` 4864 < 5638), so their
-/// widest width is the next `ComputeLimbs` member above it. Every corner
-/// fits its `Wmax`, so the assert never fires for a legal input; it is the
-/// wall that turns a future width pairing that broke this table into a
-/// panic instead of a wrong digit — not a contract limit.
+/// (Under the naive quotient's `30 + 2k` lift the worst band exceeded `Wexp`'s
+/// capacity at D462 and D924 and needed a third width; `conditioned_ratio`
+/// removed that.) Every corner fits `Wexp`, so the assert never fires for a
+/// legal input; it is the wall that turns a future width pairing that broke
+/// this table into a panic instead of a wrong digit — not a contract limit.
 #[inline]
 fn ln_divide_conditioned_routed<const N: usize, const SCALE: u32>(
     raw: Int<N>,
@@ -161,43 +161,36 @@ fn ln_divide_conditioned_routed<const N: usize, const SCALE: u32>(
     match N {
         1 | 2 => conditioned_narrow::<N, SCALE>(raw, braw, mode, k),
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => Some(conditioned_wide::<3, crate::types::widths::wide_trig_d57::Wagm, crate::types::widths::wide_trig_d57::Wexp, crate::types::widths::wide_trig_d57::Wexp, SCALE, 100>(raw.resize_to::<Int<3>>(), braw.resize_to::<Int<3>>(), mode, k).resize_to::<Int<N>>()),
+        3 => Some(conditioned_wide::<3, crate::types::widths::wide_trig_d57::Wagm, crate::types::widths::wide_trig_d57::Wexp, SCALE, 100>(raw.resize_to::<Int<3>>(), braw.resize_to::<Int<3>>(), mode, k).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => Some(conditioned_wide::<4, crate::types::widths::wide_trig_d76::Wagm, crate::types::widths::wide_trig_d76::Wexp, crate::types::widths::wide_trig_d76::Wexp, SCALE, 400>(raw.resize_to::<Int<4>>(), braw.resize_to::<Int<4>>(), mode, k).resize_to::<Int<N>>()),
+        4 => Some(conditioned_wide::<4, crate::types::widths::wide_trig_d76::Wagm, crate::types::widths::wide_trig_d76::Wexp, SCALE, 400>(raw.resize_to::<Int<4>>(), braw.resize_to::<Int<4>>(), mode, k).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => Some(conditioned_wide::<6, crate::types::widths::wide_trig_d115::Wagm, crate::types::widths::wide_trig_d115::Wexp, crate::types::widths::wide_trig_d115::Wexp, SCALE, 200>(raw.resize_to::<Int<6>>(), braw.resize_to::<Int<6>>(), mode, k).resize_to::<Int<N>>()),
+        6 => Some(conditioned_wide::<6, crate::types::widths::wide_trig_d115::Wagm, crate::types::widths::wide_trig_d115::Wexp, SCALE, 200>(raw.resize_to::<Int<6>>(), braw.resize_to::<Int<6>>(), mode, k).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => Some(conditioned_wide::<8, crate::types::widths::wide_trig_d153::Wagm, crate::types::widths::wide_trig_d153::Wexp, crate::types::widths::wide_trig_d153::Wexp, SCALE, 200>(raw.resize_to::<Int<8>>(), braw.resize_to::<Int<8>>(), mode, k).resize_to::<Int<N>>()),
+        8 => Some(conditioned_wide::<8, crate::types::widths::wide_trig_d153::Wagm, crate::types::widths::wide_trig_d153::Wexp, SCALE, 200>(raw.resize_to::<Int<8>>(), braw.resize_to::<Int<8>>(), mode, k).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => Some(conditioned_wide::<12, crate::types::widths::wide_trig_d230::Wagm, crate::types::widths::wide_trig_d230::Wexp, crate::types::widths::wide_trig_d230::Wexp, SCALE, 400>(raw.resize_to::<Int<12>>(), braw.resize_to::<Int<12>>(), mode, k).resize_to::<Int<N>>()),
+        12 => Some(conditioned_wide::<12, crate::types::widths::wide_trig_d230::Wagm, crate::types::widths::wide_trig_d230::Wexp, SCALE, 400>(raw.resize_to::<Int<12>>(), braw.resize_to::<Int<12>>(), mode, k).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => Some(conditioned_wide::<16, crate::types::widths::wide_trig_d307::Wagm, crate::types::widths::wide_trig_d307::Wexp, crate::types::widths::wide_trig_d307::Wexp, SCALE, 400>(raw.resize_to::<Int<16>>(), braw.resize_to::<Int<16>>(), mode, k).resize_to::<Int<N>>()),
+        16 => Some(conditioned_wide::<16, crate::types::widths::wide_trig_d307::Wagm, crate::types::widths::wide_trig_d307::Wexp, SCALE, 400>(raw.resize_to::<Int<16>>(), braw.resize_to::<Int<16>>(), mode, k).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => Some(conditioned_wide::<24, crate::types::widths::wide_trig_d462::Wagm, crate::types::widths::wide_trig_d462::Wexp, Int<176>, SCALE, 400>(raw.resize_to::<Int<24>>(), braw.resize_to::<Int<24>>(), mode, k).resize_to::<Int<N>>()),
+        24 => Some(conditioned_wide::<24, crate::types::widths::wide_trig_d462::Wagm, crate::types::widths::wide_trig_d462::Wexp, SCALE, 400>(raw.resize_to::<Int<24>>(), braw.resize_to::<Int<24>>(), mode, k).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => Some(conditioned_wide::<32, crate::types::widths::wide_trig_d616::Wagm, crate::types::widths::wide_trig_d616::Wexp, crate::types::widths::wide_trig_d616::Wexp, SCALE, 400>(raw.resize_to::<Int<32>>(), braw.resize_to::<Int<32>>(), mode, k).resize_to::<Int<N>>()),
+        32 => Some(conditioned_wide::<32, crate::types::widths::wide_trig_d616::Wagm, crate::types::widths::wide_trig_d616::Wexp, SCALE, 400>(raw.resize_to::<Int<32>>(), braw.resize_to::<Int<32>>(), mode, k).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => Some(conditioned_wide::<48, crate::types::widths::wide_trig_d924::Wagm, crate::types::widths::wide_trig_d924::Wexp, Int<512>, SCALE, 400>(raw.resize_to::<Int<48>>(), braw.resize_to::<Int<48>>(), mode, k).resize_to::<Int<N>>()),
+        48 => Some(conditioned_wide::<48, crate::types::widths::wide_trig_d924::Wagm, crate::types::widths::wide_trig_d924::Wexp, SCALE, 400>(raw.resize_to::<Int<48>>(), braw.resize_to::<Int<48>>(), mode, k).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => Some(conditioned_wide::<64, crate::types::widths::wide_trig_d1232::Wagm, crate::types::widths::wide_trig_d1232::Wexp, crate::types::widths::wide_trig_d1232::Wexp, SCALE, 400>(raw.resize_to::<Int<64>>(), braw.resize_to::<Int<64>>(), mode, k).resize_to::<Int<N>>()),
+        64 => Some(conditioned_wide::<64, crate::types::widths::wide_trig_d1232::Wagm, crate::types::widths::wide_trig_d1232::Wexp, SCALE, 400>(raw.resize_to::<Int<64>>(), braw.resize_to::<Int<64>>(), mode, k).resize_to::<Int<N>>()),
         _ => conditioned_narrow::<N, SCALE>(raw, braw, mode, k),
     }
 }
 
 /// The wide conditioned path: `Wagm` while its budget carries the lift,
-/// else `Wexp`, else `Wmax` — asserted for capacity (see
+/// else `Wexp` — asserted for capacity (see
 /// [`ln_divide_conditioned_routed`]). `CAP` is the tier's Tang artanh cap,
 /// the same value `policy::ln` threads.
 #[cfg(feature = "_wide-support")]
 #[inline]
-fn conditioned_wide<
-    const N: usize,
-    Wagm: BigInt,
-    Wexp: BigInt,
-    Wmax: BigInt,
-    const SCALE: u32,
-    const CAP: u128,
->(
+fn conditioned_wide<const N: usize, Wagm: BigInt, Wexp: BigInt, const SCALE: u32, const CAP: u128>(
     raw: Int<N>,
     braw: Int<N>,
     mode: RoundingMode,
@@ -206,26 +199,23 @@ fn conditioned_wide<
 where
     <Wagm as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     <Wexp as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
-    <Wmax as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
     use crate::algos::log::log_ln_divide::{fits_budget, fits_capacity};
     if fits_budget(SCALE, k, <Wagm as BigInt>::LIMBS) {
         conditioned_at::<N, Wagm, SCALE, CAP>(raw, braw, mode, k)
-    } else if fits_budget(SCALE, k, <Wexp as BigInt>::LIMBS) {
-        conditioned_at::<N, Wexp, SCALE, CAP>(raw, braw, mode, k)
     } else {
         // Unreachable for any legal input, NOT a contract limit: the base is
         // representable at `SCALE`, so `|b - 1| >= 10^-SCALE` and `k <= SCALE`;
-        // the largest lift any input can ask for is therefore `w = 3·SCALE + 30`,
-        // and `2w + 40` fits every tier's `Wmax` (the table above). It stays
+        // the largest lift any input can ask for is therefore `w = 2·SCALE + 30`,
+        // and `2w + 40` fits every tier's `Wexp` (the table above). It stays
         // because the defect this arm fixes was a SILENT wrong digit: if a
         // future width pairing broke the table, this turns silent into loud.
         assert!(
-            fits_capacity(SCALE, k, <Wmax as BigInt>::LIMBS),
-            "log: a base within 10^-{k} of 1 at scale {SCALE} exceeds the widest \
-             composition work integer's capacity — see policy::log"
+            fits_capacity(SCALE, k, <Wexp as BigInt>::LIMBS),
+            "log: a base within 10^-{k} of 1 at scale {SCALE} exceeds the tier's \
+             next-wider work integer's capacity — see policy::log"
         );
-        conditioned_at::<N, Wmax, SCALE, CAP>(raw, braw, mode, k)
+        conditioned_at::<N, Wexp, SCALE, CAP>(raw, braw, mode, k)
     }
 }
 
@@ -275,7 +265,7 @@ where
 /// Table-Maker's-Dilemma residue either way); everywhere else the full
 /// finish runs and cannot leave range. Series core (the narrow `ln`
 /// verdict). Capacity is never in question: the worst narrow lift (`D38`,
-/// `k = SCALE = 38`, `w = 144`) asks `328` of `Int<24>`'s `456` digits.
+/// `k = SCALE = 38`, `w = 106`) asks `252` of `Int<24>`'s `456` digits.
 #[inline]
 fn conditioned_narrow<const N: usize, const SCALE: u32>(
     raw: Int<N>,
