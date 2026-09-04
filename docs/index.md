@@ -17,7 +17,7 @@ A fast, precise, decimal library.
 - **Up to 4 Kb numbers** — twelve widths, `D18` to `D1232`.
 - **Choose your precision at compile time** — from 0 to one less than the width. i.e. D1232 can carry a precision of 1231 digits.
 - **`no_std` friendly** — the strict, integer-only path needs no `std`.
-- **Validated by <!-- BEGIN GENERATED:home:tested -->51,514,672<!-- END GENERATED:home:tested --> value tests** — every width × scale × rounding mode.
+- **Validated by <!-- BEGIN GENERATED:home:tested -->51,623,648<!-- END GENERATED:home:tested --> value tests** — every width × scale × rounding mode.
 
 <div class="hero-install"><span class="prompt">$ </span>cargo add decimal-scaled</div>
 
