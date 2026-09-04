@@ -138,10 +138,32 @@ step CONFIRMS that base; it must never mutate git:
 > `cargo test`** — that's the coordinator's gate (#3). (Docs/scripts-only changes: confirm no
 > `.rs` changed.)
 
-### 5. No push — the coordinator merges
-> Commit on your worktree branch; do NOT push; never touch main / release / tags;
-> no publishing. (`cargo publish`, tag pushes, GitHub releases need explicit per-action
-> human authorisation — never an agent's call.)
+### 5. Push YOUR OWN branch and gate it yourself — the coordinator merges
+> Commit on your worktree branch and **push that branch**. **NEVER push `main`,
+> `release/*`, or the integration branch** (`perf/monotonicity` and its successors) —
+> those are the coordinator's, and merging is the coordinator's. Never touch tags; no
+> publishing (`cargo publish`, tag pushes, GitHub releases need explicit per-action human
+> authorisation — never an agent's call).
+>
+> **Anything heavier than `cargo check` runs on CI against your pushed branch, not
+> locally**: `gh workflow run golden-comprehensive.yml --ref <your-branch>`, and
+> `bench-branch-compare.yml` for measurements. Benches NEVER run on the owner's machine.
+> Before pushing, confirm the queue is clear:
+> `gh run list --json status --jq '[.[]|select(.status=="queued")]|length'` returns 0 —
+> an in-progress run does not block a push, it just queues behind. Report the run ID and
+> the **COUNTS** the run prints, never the exit code.
+>
+> **Why this is yours and not the coordinator's** (owner's rule, and it has a cost
+> attached): routing every gate through the coordinator turns one step into five — you
+> build, you report, they push, they dispatch, they read, they relay — and the finding
+> reaches you two handovers late. On 2026-09-04 a `cargo check` false green on a
+> `const {}` assertion surfaced that way; the agent would have caught it in one step by
+> running CI on her own branch.
+>
+> **`cargo check` is NOT a gate for a `const {}` assertion.** It stops before codegen, so
+> it never evaluates a const block's monomorphisations and passes on code that cannot
+> build. Only a real build (i.e. CI) tests one. Never report a const-assert change as
+> verified on `cargo check`.
 
 ### 6. Scope isolation (when parallel agents run)
 > Stay in your file area so merges stay clean. If another agent owns `src/`, touch only
