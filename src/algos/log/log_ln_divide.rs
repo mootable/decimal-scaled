@@ -1208,5 +1208,78 @@ mod tests {
             }
         }
     }
+
+    /// Exact rationals through the FIXED shell — a base 0.1 or more from 1
+    /// (`k = 0`), so `policy::log` routes `LnDivide`, the wide tiers' macro
+    /// shell. `log_b(x)` for decimal `x` and `b` is rational or
+    /// transcendental (Gelfond–Schneider); on a terminating rational the
+    /// working residual at every depth is kernel noise around the grid
+    /// line, so the directed walker never converges and its unresolved
+    /// endgame returns the base probe's narrowing — 1 ULP off under a
+    /// directed mode wherever that noise lands on the wrong side, cell by
+    /// cell. Every cell, every mode, exact — the rational-power pin the
+    /// narrow `Fixed` shell already carries, on the wide shell too.
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[test]
+    fn wide_fixed_shell_decides_exact_rationals_under_every_mode() {
+        fn digits(m: i128) -> u32 {
+            let (mut d, mut v) = (0u32, m.unsigned_abs());
+            while v > 0 {
+                v /= 10;
+                d += 1;
+            }
+            d.max(1)
+        }
+        fn cell<const N: usize, const SCALE: u32>(
+            misses: &mut Vec<String>,
+            max_digits: u32,
+            x: (i128, u32),
+            base: (i128, u32),
+            expected: (i128, u32),
+        ) {
+            // The harness's own rule: a value needing more significant
+            // digits than the tier holds at this scale is not a cell.
+            let fits = |(m, f): (i128, u32)| SCALE >= f && digits(m) + SCALE - f < max_digits;
+            if !(fits(x) && fits(base) && fits(expected)) {
+                return;
+            }
+            // (mantissa, fraction digits) → raw at SCALE.
+            let at = |(m, f): (i128, u32)| Int::<N>::from_i128(m) * eg::pow10::<Int<N>>(SCALE - f);
+            let (raw, braw, want) = (at(x), at(base), at(expected));
+            for mode in ALL_MODES {
+                let got = crate::policy::log::checked_dispatch::<N, SCALE>(raw, braw, mode);
+                if got != Some(want) {
+                    misses.push(format!(
+                        "N={N} scale={SCALE} x={x:?} base={base:?} mode={mode:?}: got {got:?}, want {want:?}"
+                    ));
+                }
+            }
+        }
+        fn scale<const N: usize, const SCALE: u32>(misses: &mut Vec<String>, max_digits: u32) {
+            // x, base, log_base(x) — each as (mantissa, fraction digits).
+            let d = max_digits;
+            cell::<N, SCALE>(misses, d, (11, 1), (121, 2), (5, 1)); // 1/2
+            cell::<N, SCALE>(misses, d, (1331, 3), (121, 2), (15, 1)); // 3/2
+            cell::<N, SCALE>(misses, d, (1728, 3), (144, 2), (15, 1)); // 3/2
+            cell::<N, SCALE>(misses, d, (12, 1), (144, 2), (5, 1)); // 1/2
+            cell::<N, SCALE>(misses, d, (2, 0), (4, 0), (5, 1)); // 1/2
+            cell::<N, SCALE>(misses, d, (8, 0), (16, 0), (75, 2)); // 3/4
+            cell::<N, SCALE>(misses, d, (2, 0), (16, 0), (25, 2)); // 1/4
+            cell::<N, SCALE>(misses, d, (8, 0), (256, 0), (375, 3)); // 3/8
+            cell::<N, SCALE>(misses, d, (15, 1), (225, 2), (5, 1)); // 1/2
+            cell::<N, SCALE>(misses, d, (5, 1), (25, 2), (5, 1)); // 1/2, base below 1
+            cell::<N, SCALE>(misses, d, (2, 0), (25, 2), (-5, 1)); // -1/2
+            cell::<N, SCALE>(misses, d, (1, 1), (100, 0), (-5, 1)); // -1/2, x below 1
+            cell::<N, SCALE>(misses, d, (729, 3), (81, 2), (15, 1)); // 3/2, both below 1
+            cell::<N, SCALE>(misses, d, (100000, 0), (100, 0), (25, 1)); // 5/2
+        }
+        let mut misses = Vec::new();
+        scale::<3, 3>(&mut misses, 57);
+        scale::<3, 14>(&mut misses, 57);
+        scale::<3, 28>(&mut misses, 57);
+        scale::<3, 42>(&mut misses, 57);
+        scale::<3, 53>(&mut misses, 57);
+        assert!(misses.is_empty(), "{} mis-rounded cells:\n{}", misses.len(), misses.join("\n"));
+    }
 }
 
