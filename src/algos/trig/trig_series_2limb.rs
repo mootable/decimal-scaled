@@ -44,16 +44,6 @@ macro_rules! int2_trig {
             Int::<2>::from_i128($core::<SCALE>(raw.as_i128(), mode))
         }
     };
-    (with_scale $pub:ident, $core:ident) => {
-        pub(crate) fn $pub(
-            raw: Int<2>,
-            scale: u32,
-            working_digits: u32,
-            mode: RoundingMode,
-        ) -> Int<2> {
-            Int::<2>::from_i128($core(raw.as_i128(), scale, working_digits, mode))
-        }
-    };
     (atan2_strict $pub:ident, $core:ident) => {
         pub(crate) fn $pub<const SCALE: u32>(
             y_raw: Int<2>,
@@ -72,8 +62,6 @@ int2_trig!(strict atan_strict, atan_strict_raw);
 int2_trig!(strict asin_strict, asin_strict_raw);
 int2_trig!(strict acos_strict, acos_strict_raw);
 int2_trig!(atan2_strict atan2_strict, atan2_strict_raw);
-int2_trig!(with_scale to_degrees_with, to_degrees_with_raw);
-int2_trig!(with_scale to_radians_with, to_radians_with_raw);
 
 // ── Shared Fixed primitives ────────────────────────────────────────
 
@@ -1472,7 +1460,7 @@ fn atanh_eval_fixed(raw: i128, working_digits: u32, working_scale: u32) -> Fixed
 #[inline]
 #[must_use]
 pub(crate) fn to_degrees_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    to_degrees_with(raw, SCALE, STRICT_GUARD, mode)
+    Int::<2>::from_i128(to_degrees_with_raw(raw.as_i128(), SCALE, STRICT_GUARD, mode))
 }
 
 #[inline]
@@ -1499,7 +1487,7 @@ pub(crate) fn to_degrees_with_raw(
 #[inline]
 #[must_use]
 pub(crate) fn to_radians_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    to_radians_with(raw, SCALE, STRICT_GUARD, mode)
+    Int::<2>::from_i128(to_radians_with_raw(raw.as_i128(), SCALE, STRICT_GUARD, mode))
 }
 
 #[inline]

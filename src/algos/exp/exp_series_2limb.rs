@@ -662,7 +662,8 @@ fn round_pow2_fraction(numerator: u128, shift: u32, mode: RoundingMode) -> i128 
     quotient + i128::from(bump)
 }
 
-/// `i128` core of [`exp2_with`].
+/// The guard-parameterised `i128` core of the narrow `exp2`, kept for the
+/// sweep tests that drive it across guards. `None` = result out of range.
 #[inline]
 fn exp2_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> Option<i128> {
     if raw == 0 {
@@ -856,7 +857,7 @@ fn exp2_ziv(raw: i128, scale: u32, guard_digits: u32) -> WZiv {
     eg::exp_fixed::<WZiv>(exp_arg, working_scale)
 }
 
-/// `None` = result out of storage range (see [`exp2_with`]). The strict
+/// `None` = result out of storage range (see [`exp2_with_raw`]). The strict
 /// terminal is near-tie protected on both branches (the exact-power pin
 /// already removes every rational `2^x`; `2^x` is irrational for every
 /// other on-grid `x`, so the never-exact walker polarity is sound).
