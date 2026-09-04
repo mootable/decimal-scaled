@@ -21,22 +21,11 @@ pub(crate) mod widths;
 pub(crate) mod num_traits;
 pub(crate) mod quantize;
 
-// Strict (integer-only) transcendental shells. Strict is the crate's
-// default; the lossy f64-bridge variants below carry the explicit
-// `_fast` suffix to mark them as the opt-in.
+// The integer-only transcendental shells.
 pub(crate) mod log_exp;
 pub(crate) mod powers;
-#[cfg(any(not(feature = "fast"), feature = "std"))]
 pub(crate) mod trig;
 
-// `checked_*` siblings of the strict transcendental family — one
-// generic impl over `(N, SCALE)`. Gated like [`trig`]: the checked
-// shells delegate to the same strict surface (including the trig
-// family), which a `fast`-without-`std` build does not carry.
-#[cfg(any(not(feature = "fast"), feature = "std"))]
+// `checked_*` siblings of the transcendental family — one generic impl
+// over `(N, SCALE)`.
 pub(crate) mod checked_transcendentals;
-
-// Fast (f64-bridge) transcendental shells.
-pub(crate) mod log_exp_fast;
-pub(crate) mod powers_fast;
-pub(crate) mod trig_fast;

@@ -105,7 +105,6 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     }
 
     /// Returns the natural logarithm (base e) of `self`.
-    #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
     #[inline]
     #[must_use]
     pub fn ln(self) -> Self {
@@ -155,7 +154,6 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     }
 
     /// Returns `ln(1 + self)`.
-    #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
     #[inline]
     #[must_use]
     pub fn log1p(self) -> Self {
@@ -177,7 +175,6 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     }
 
     /// Returns the logarithm of `self` in the given `base`.
-    #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
     #[inline]
     #[must_use]
     pub fn log(self, base: Self) -> Self {
@@ -199,7 +196,6 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     }
 
     /// Returns the base-2 logarithm of `self`.
-    #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
     #[inline]
     #[must_use]
     pub fn log2(self) -> Self {
@@ -221,7 +217,6 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     }
 
     /// Returns the base-10 logarithm of `self`.
-    #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
     #[inline]
     #[must_use]
     pub fn log10(self) -> Self {
@@ -245,7 +240,6 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     }
 
     /// Returns `e^self` (natural exponential).
-    #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
     #[inline]
     #[must_use]
     pub fn exp(self) -> Self {
@@ -310,7 +304,6 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     }
 
     /// Returns `e^self - 1`.
-    #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
     #[inline]
     #[must_use]
     pub fn expm1(self) -> Self {
@@ -332,7 +325,6 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     }
 
     /// Returns `2^self` (base-2 exponential).
-    #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
     #[inline]
     #[must_use]
     pub fn exp2(self) -> Self {
@@ -344,7 +336,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
 // `log2` / `log10` dispatchers above resolve to the strict path, plus
 // `std` — the expected values below are f64 references, and `f64::ln`
 // and friends are std-only under the crate's float policy.
-#[cfg(all(test, feature = "std", not(all(feature = "fast", not(feature = "strict")))))]
+#[cfg(all(test, feature = "std"))]
 mod strict_tests {
     use crate::types::widths::D38s12;
 

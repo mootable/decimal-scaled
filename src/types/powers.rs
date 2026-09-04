@@ -227,7 +227,6 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     ///
     /// This is the integer-only [`Self::powf_strict`] unless the build
     /// opts into the f64 bridge by enabling `fast` without `strict`.
-    #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
     #[inline]
     #[must_use]
     pub fn powf(self, exp: crate::D<crate::int::types::Int<2>, SCALE>) -> Self {
@@ -282,7 +281,6 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     /// This is the integer-only, correctly-rounded
     /// [`Self::sqrt_strict`] unless the build opts into the f64 bridge
     /// by enabling `fast` without `strict`.
-    #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
     #[inline]
     #[must_use]
     pub fn sqrt(self) -> Self {
@@ -293,7 +291,6 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     ///
     /// This is the integer-only [`Self::cbrt_strict`] unless the build
     /// opts into the f64 bridge by enabling `fast` without `strict`.
-    #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
     #[inline]
     #[must_use]
     pub fn cbrt(self) -> Self {
@@ -367,7 +364,6 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     ///
     /// This is the integer-only [`Self::hypot_strict`] unless the build
     /// opts into the f64 bridge by enabling `fast` without `strict`.
-    #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
     #[inline]
     #[must_use]
     pub fn hypot(self, other: Self) -> Self {

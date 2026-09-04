@@ -27,7 +27,7 @@
 //! - `<method>_strict` — always present unless the `fast` feature
 //! is set. Integer-only; `no_std`-compatible.
 //! - `<method>` — a dispatcher present only under
-//! `#[cfg(all(feature = "strict", not(feature = "fast")))]`,
+//! `#[cfg(feature = "strict")]`,
 //! forwarding to `<method>_strict`. The wide tiers have no f64-bridge
 //! transcendentals of their own, so there is no non-strict
 //! `<method>` for these widths.
@@ -116,7 +116,7 @@ macro_rules! decl_wide_roots {
 
             /// Square root. With `strict` enabled this is the
             /// integer-only, correctly-rounded [`Self::sqrt_strict`].
-            #[cfg(all(feature = "strict", not(feature = "fast")))]
+            #[cfg(feature = "strict")]
             #[inline]
             #[must_use]
             pub fn sqrt(self) -> Self {
@@ -125,7 +125,7 @@ macro_rules! decl_wide_roots {
 
             /// Cube root. With `strict` enabled this is the
             /// integer-only, correctly-rounded [`Self::cbrt_strict`].
-            #[cfg(all(feature = "strict", not(feature = "fast")))]
+            #[cfg(feature = "strict")]
             #[inline]
             #[must_use]
             pub fn cbrt(self) -> Self {
@@ -184,7 +184,6 @@ pub(crate) use {decl_wide_roots, wide_lit};
 // that touch only a subset carry their own per-tier (or union) `#[cfg]`.
 #[cfg(all(
     test,
-    not(feature = "fast"),
     any(feature = "d76", feature = "d153", feature = "d307")
 ))]
 mod tests {

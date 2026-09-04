@@ -152,7 +152,6 @@ macro_rules! decl_decimal_full {
             $n_limbs, $ln_tang_cap, $exp_tang_m
         );
         $crate::macros::transcendental_trait::decl_decimal_transcendental_impl!($Type);
-        $crate::macros::fast_transcendentals::decl_fast_transcendentals_via_f64!($Type);
         $crate::macros::pow::decl_decimal_pow!($Type);
         $crate::macros::num_traits::decl_decimal_num_traits_conversions!(wide $Type, $Storage);
         $crate::macros::conversions::decl_try_from_primitive!(wide $Type, $Storage, i8);
