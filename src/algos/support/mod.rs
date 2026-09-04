@@ -51,9 +51,13 @@ pub(crate) mod wide_trig_core;
 // `unique_fmpz`, which yields a value ONLY when the enclosing interval
 // determines every retained bit — committed, NOT built at build time
 // (`build.rs` untouched).
-// Gated to `_wide-support`: only the wide tiers (D57..D1232) carry the
-// Tang `ln` path; the narrow tiers (D18/D38) never reach it.
-#[cfg(feature = "_wide-support")]
+// NOT feature-gated: every tier carries a Tang `ln` path now, the narrow
+// tiers (D18/D38) included. The MODULE is unconditional; the ARRAY inside it
+// is what varies, and it is sized by `_wide-support` — the full 112-limb
+// entry (115,584 bytes) for the wide tiers, the leading 5 limbs of the SAME
+// values (5,160 bytes) for a narrow-only build. So a no_std narrow build
+// pays ~5 KB for the table, not ~115 KB, and no new feature flag exists to
+// select between them.
 pub(crate) mod ln_tang_table;
 
 // Baked binary Tang `(sin(c_j), cos(c_j))` lookup table (`M = 512`) + the

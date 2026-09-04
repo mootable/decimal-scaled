@@ -18,10 +18,17 @@
 //! `L_i = ln(1 + i/128)` (`i ∈ [0, 128]`, all in `[0, ln 2] ⊂ [0,
 //! 1)`) as a correctly-rounded BINARY fixed-point value
 //! `round(L_i · 2^7168)` — a `B = 7168`-bit unsigned magnitude stored as a
-//! fixed-length `[u64; 112]` little-endian array, but laid out
+//! fixed-length `[u64; LN_TANG_LIMBS]` little-endian array, but laid out
 //! **most-significant limb first** within the entry. A narrower
 //! tier reads a contiguous HIGH-limb PREFIX (a free slice); the
 //! widest tier (D1232) reads the whole entry. The `i = 0` slot is
+//!
+//! That prefix property is also how ONE table serves two build
+//! configurations: `_wide-support` compiles the full 112-limb entry,
+//! a narrow-only build compiles the leading 5 limbs of the SAME
+//! values (5160 bytes against 115584). Emitted from one computation in one
+//! pass, so the two widths cannot drift, and results are
+//! bit-identical wherever both builds accept the working scale.
 //! `ln(1) = 0` (all-zero); the `i = 128` slot is `ln 2`.
 //!
 //! `B = 7168` is sized for the widest enabled tier's max working scale
@@ -36,17 +43,61 @@
 /// separate task; do NOT change this here.
 pub(crate) const LN_TANG_M: u32 = 128;
 
-/// Binary fixed-point exponent: each slot is `round(ln(1+i/M) ·
-/// 2^B)`. `B = 7168` bits = `112` u64 limbs.
-pub(crate) const LN_TANG_B: u32 = 7168;
-
-/// Number of u64 limbs per stored slot (`B / 64`).
+/// Number of u64 limbs per stored slot, and so the binary exponent
+/// `B = 64 · LN_TANG_LIMBS` each slot is scaled by.
+///
+/// Two widths, ONE table. A `_wide-support` build carries the full
+/// `112`-limb entry the widest tier (D1232) consumes; a narrow-only
+/// build carries the `5`-limb HIGH-limb PREFIX of that SAME value —
+/// 5160 bytes against 115584. Because the narrow array is a
+/// prefix rather than a second computation, and the reader always
+/// takes the top `p` limbs, both builds return BIT-IDENTICAL results
+/// for every `(w, idx)` they both accept: the feature flag changes how
+/// much of the constant is compiled in, never its value.
+#[cfg(feature = "_wide-support")]
 pub(crate) const LN_TANG_LIMBS: usize = 112;
+#[cfg(not(feature = "_wide-support"))]
+pub(crate) const LN_TANG_LIMBS: usize = 5;
+
+/// Binary fixed-point exponent: each slot is `round(ln(1+i/M) · 2^B)`,
+/// truncated to the compiled width. Derived so it cannot disagree with
+/// the array it describes.
+pub(crate) const LN_TANG_B: u32 = (LN_TANG_LIMBS as u32) * 64;
+
+/// Limbs of `L_idx` a working scale `w` needs: `w·log2(10)` value bits
+/// plus a 64-bit guard, rounded up to whole limbs. `3322/1000` is a
+/// slight OVER-estimate of `log2(10)`, so the answer never under-sizes.
+///
+/// THE single source of this formula. [`ln_table_entry_baked`] applies
+/// it at run time and [`ln_table_fits`] applies it at compile time, so
+/// the two cannot drift apart.
+#[inline]
+#[must_use]
+pub(crate) const fn ln_table_limbs_for(w: u32) -> usize {
+    let need_bits = (w as u64) * 3322 / 1000 + 64;
+    // `div_ceil` by hand: usable in `const` on every supported toolchain.
+    ((need_bits + 63) / 64) as usize
+}
+
+/// Whether the table COMPILED INTO THIS BUILD covers working scale `w`.
+///
+/// `const fn` on purpose. The runtime `assert!` in
+/// [`ln_table_entry_baked`] is the last line of defence, not the first:
+/// a caller whose working scale is const-foldable (`SCALE + GUARD`)
+/// should assert THIS in a `const { }` block, turning "this build's
+/// table is too small for this scale" into a compile error instead of
+/// a production panic on the narrow tier.
+#[inline]
+#[must_use]
+pub(crate) const fn ln_table_fits(w: u32) -> bool {
+    ln_table_limbs_for(w) <= LN_TANG_LIMBS
+}
 
 /// The `M + 1` baked slots `round(ln(1+i/M) · 2^B)`, each a
 /// `[u64; 112]` little-endian magnitude emitted MOST-SIGNIFICANT
 /// limb FIRST (so a narrow tier reads a high-limb prefix). Index by
 /// `i ∈ [0, 128]`.
+#[cfg(feature = "_wide-support")]
 pub(crate) static LN_TANG_SLOTS: [[u64; 112]; 129] = [
     // i = 0: ln(1 + 0/128)
     [
@@ -4049,6 +4100,658 @@ pub(crate) static LN_TANG_SLOTS: [[u64; 112]; 129] = [
     ],
 ];
 
+/// The narrow-build table: the leading `LN_TANG_LIMBS` limbs of each
+/// entry above, sliced from the SAME computed value rather than
+/// recomputed at a lower precision.
+#[cfg(not(feature = "_wide-support"))]
+pub(crate) static LN_TANG_SLOTS: [[u64; 5]; 129] = [
+    // i = 0: ln(1 + 0/128)
+    [
+        0x0000000000000000, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000,
+        0x0000000000000000,
+    ],
+    // i = 1: ln(1 + 1/128)
+    [
+        0x01fe02a6b106788f, 0xc37690391dc282d2, 0xb3db2c3ef9a073a8, 0x767027886b5788c3,
+        0xd122f7ff51bc9855,
+    ],
+    // i = 2: ln(1 + 2/128)
+    [
+        0x03f815161f807c79, 0xf3db4e9a6f57aadb, 0xeb03be903ddc5335, 0xd140fe0577122f83,
+        0x7a59b490758dcd0b,
+    ],
+    // i = 3: ln(1 + 3/128)
+    [
+        0x05ee46c1f56c46aa, 0x49fd531c5af00773, 0x53c40a9487466226, 0x96efb6733a835116,
+        0xd0f00eba0efcad2b,
+    ],
+    // i = 4: ln(1 + 4/128)
+    [
+        0x07e0a6c39e0cc013, 0x3e3f04f1ef229fae, 0xaefae14cddf35ad1, 0xdf6c758fe3673dcd,
+        0x8a38a3ffec979e9d,
+    ],
+    // i = 5: ln(1 + 5/128)
+    [
+        0x09cf43dcff5eafd4, 0x80ad90155c8a7235, 0x5eb87846f4c603a3, 0xd0eb0381a91dfcd4,
+        0x747318fe3fa03b71,
+    ],
+    // i = 6: ln(1 + 6/128)
+    [
+        0x0bba2c7b196e7e23, 0x1a7950f7252c163c, 0x9bf701b2a89d8cb0, 0x7d674deba3a2b779,
+        0xe9b91ebf9f71bf4e,
+    ],
+    // i = 7: ln(1 + 7/128)
+    [
+        0x0da16eb88cb8df61, 0x468a63ecfb66e94a, 0xbce26340fc53dc9e, 0x77778bea9e448511,
+        0x1abee2d17d96a5a1,
+    ],
+    // i = 8: ln(1 + 8/128)
+    [
+        0x0f85186008b15330, 0xbe64b8b775997898, 0xd3474d3375b52596, 0x71851f0a96f69849,
+        0x6172da6bde861006,
+    ],
+    // i = 9: ln(1 + 9/128)
+    [
+        0x116536eea37ae0e8, 0x625c173dd325e46d, 0xa42905a6685a6aad, 0x37e6cb88264acee4,
+        0x8b8cbcb12c6a3b15,
+    ],
+    // i = 10: ln(1 + 10/128)
+    [
+        0x1341d7961bd1d092, 0x998376104d137502, 0x1a0eca5b78467950, 0xe61038805d37b037,
+        0x2b83c4527bb59c4a,
+    ],
+    // i = 11: ln(1 + 11/128)
+    [
+        0x151b073f06183f69, 0x278e686a2f91584b, 0xc9c7e09bc3e10deb, 0x969611657aa339ed,
+        0x84d7db82e7a295c0,
+    ],
+    // i = 12: ln(1 + 12/128)
+    [
+        0x16f0d28ae56b4b9b, 0xe499b9ed19b640ce, 0x50c1ef65087fdf23, 0x812f38a034b59afd,
+        0x284ac3feba4a6521,
+    ],
+    // i = 13: ln(1 + 13/128)
+    [
+        0x18c345d6319b20f5, 0xacb42a65edab4357, 0x02603e40d7c4c4b4, 0x799d33d000e87966,
+        0x0ae26ff95115bbde,
+    ],
+    // i = 14: ln(1 + 14/128)
+    [
+        0x1a926d3a4ad56365, 0x0bd22a9c3aa4c79a, 0x9f67e22ed398d01d, 0xeab11fa42911a622,
+        0xef3f32ca7818f6b5,
+    ],
+    // i = 15: ln(1 + 15/128)
+    [
+        0x1c5e548f5bc74315, 0xd617ef8161b1769d, 0x966af8dc3772cac1, 0x163e7f6cbbc664d5,
+        0x87d91901b458f0de,
+    ],
+    // i = 16: ln(1 + 16/128)
+    [
+        0x1e27076e2af2e5e9, 0xea87ffe1fe9e155d, 0xb94ebc4017f6f957, 0xdd0897c1ff917c95,
+        0x9e05a342cfca2ad7,
+    ],
+    // i = 17: ln(1 + 17/128)
+    [
+        0x1fec9131dbeabaaa, 0x2e5199f9324e3bfe, 0x91e2ba81202ec615, 0x272625363c82c160,
+        0x8d96c694f63a8eac,
+    ],
+    // i = 18: ln(1 + 18/128)
+    [
+        0x21aefcf9a11cb2cd, 0x2ee2f481855d1c48, 0x4cb4fd8d03860ef8, 0x80c716868c17ff3a,
+        0x17139cd6d8c48b9f,
+    ],
+    // i = 19: ln(1 + 19/128)
+    [
+        0x236e55aa5ecf4052, 0x0c08d1cb35ce7e77, 0x8fd9099532ec12a6, 0xd406e0e46589e2cd,
+        0xd04f42b419b53ea7,
+    ],
+    // i = 20: ln(1 + 20/128)
+    [
+        0x252aa5f03fea4698, 0x0bb8e203edf4d109, 0xfbc9070f7e29fbad, 0x3603f226de50d341,
+        0xbdef2e4cc81786ff,
+    ],
+    // i = 21: ln(1 + 21/128)
+    [
+        0x26e3f8403d1ee877, 0x9b2d8abc627f2e81, 0xf326daa75290329f, 0x744e54fde20dbc5c,
+        0x3dce1f32ca360847,
+    ],
+    // i = 22: ln(1 + 22/128)
+    [
+        0x289a56d996fa3ccf, 0xa7b2a1f0fc3c1882, 0xcaf99174f60aa4f8, 0x0b60281e0372cfc2,
+        0x1e4be88c2aa9b674,
+    ],
+    // i = 23: ln(1 + 23/128)
+    [
+        0x2a4dcbc743686f45, 0xc803adc796334db7, 0x98c76a888aa87317, 0xb14f7cdaa66f4587,
+        0x7c45f28623162370,
+    ],
+    // i = 24: ln(1 + 24/128)
+    [
+        0x2bfe60e14f27a790, 0xe7c4140e424775fc, 0xd55c7355fdf3e631, 0xc0acfed6d928291d,
+        0xedbafdfd023311f9,
+    ],
+    // i = 25: ln(1 + 25/128)
+    [
+        0x2dac1fce33a4391a, 0xa8ecb89974378df6, 0x8c9609738dac1eee, 0x4e8db6cc968814de,
+        0xff787daeae503ade,
+    ],
+    // i = 26: ln(1 + 26/128)
+    [
+        0x2f57120421b21237, 0xc6d65ad40c100c8f, 0xfc2929b1021656ae, 0xc62cba077969d04f,
+        0x35ca286ff91588f5,
+    ],
+    // i = 27: ln(1 + 27/128)
+    [
+        0x30ff40ca41922120, 0x401202fb932ef5a5, 0x5704b6b7eb4ebea2, 0x8a6cd2cd02e9b86e,
+        0x83edc1bd4d29abb4,
+    ],
+    // i = 28: ln(1 + 28/128)
+    [
+        0x32a4b539e8ad68ec, 0x8260ea71712cec4c, 0xa0bed3cf71766947, 0x13daa19ed7f0a39d,
+        0x9ba61844978b7d19,
+    ],
+    // i = 29: ln(1 + 29/128)
+    [
+        0x3447783fc56ac632, 0x6e2360f533184fc7, 0xe36cdb1665bcc380, 0x99f2aab1c2c7880f,
+        0xa048eef8d4945cea,
+    ],
+    // i = 30: ln(1 + 30/128)
+    [
+        0x35e7929d017fe5b1, 0x9cc0326f99eb9767, 0x69b8b9a5d50ca14a, 0x7622eb26036bf0e3,
+        0xc52dbae0adc20980,
+    ],
+    // i = 31: ln(1 + 31/128)
+    [
+        0x37850ce85b19ac53, 0xf39d121c3d53c3c5, 0x87b948d9079ada33, 0xcbd352031118cc85,
+        0xe6ccfad966f4429f,
+    ],
+    // i = 32: ln(1 + 32/128)
+    [
+        0x391fef8f35344358, 0x4bb03de5ff734495, 0xc765ea7411adc1b1, 0x70f133f564bfc746,
+        0xa192a8fd7cdd3baa,
+    ],
+    // i = 33: ln(1 + 33/128)
+    [
+        0x3ab842d69f7722b7, 0x221acbf26a00e1e3, 0x673d12bf9c69752d, 0xccd07cf7f33a42b8,
+        0xd71548c2883386a2,
+    ],
+    // i = 34: ln(1 + 34/128)
+    [
+        0x3c4e0edc55e5cbd3, 0xd50fffc3fd3c2abb, 0x729d78802fedf2af, 0xba112f83ff22f92b,
+        0x3c0b46859f9455af,
+    ],
+    // i = 35: ln(1 + 35/128)
+    [
+        0x3de15b97b8b26ca4, 0x31bca86e106429f5, 0xa5098683a47c3a3c, 0xa5834a1a19f5f6a3,
+        0x4ec45e6782bad112,
+    ],
+    // i = 36: ln(1 + 36/128)
+    [
+        0x3f7230dabc7c551a, 0xaa8cd86f29a59412, 0x40584455b22c817b, 0x165f74d56916ddaa,
+        0xe9c83e0f6589e221,
+    ],
+    // i = 37: ln(1 + 37/128)
+    [
+        0x41009652d341036b, 0x89ef42d7ee95e444, 0x7660cbc0efa11c83, 0x505da98548270514,
+        0x2bcb4cfd6974da47,
+    ],
+    // i = 38: ln(1 + 38/128)
+    [
+        0x428c9389ce438d7d, 0xcfde8061c030e28d, 0xe035afbe0972de36, 0xdde3a1dc7a329bfb,
+        0x154ca7094166ef5c,
+    ],
+    // i = 39: ln(1 + 39/128)
+    [
+        0x44162fe6b92b5462, 0x7e82ad32cc73e14c, 0xe58b9bf13912b4d3, 0xe31965f62e0e2fd5,
+        0xeb3fa702515ef682,
+    ],
+    // i = 40: ln(1 + 40/128)
+    [
+        0x459d72aeae98380e, 0x731f55c41b8b823f, 0x067d04a43c19f534, 0xc3c8dc3995940f17,
+        0x499727b2dc48152f,
+    ],
+    // i = 41: ln(1 + 41/128)
+    [
+        0x47226305a667ebef, 0x1a39d500e3bbc33b, 0x882eeb5ecaf5d936, 0x4aacab7bb04fcaa5,
+        0x99468d465f4ccf5a,
+    ],
+    // i = 42: ln(1 + 42/128)
+    [
+        0x48a507ef3de59689, 0x0a14f69d750cbd2e, 0x9aad37a78762e747, 0xe27652fffbb65f90,
+        0x030583695b634bb0,
+    ],
+    // i = 43: ln(1 + 43/128)
+    [
+        0x4a25684f7a1a8d7a, 0xd24c13f040e58b5a, 0x8eab2f9615eadf89, 0x9db59698d8b9a5b3,
+        0x8bc0a13fd1fd3cd1,
+    ],
+    // i = 44: ln(1 + 44/128)
+    [
+        0x4ba38aeb8474c270, 0xb3246a14206cf37b, 0x77ad6fb226f15213, 0x4cf267553164478e,
+        0xf5fc616e20cd5936,
+    ],
+    // i = 45: ln(1 + 45/128)
+    [
+        0x4d1f766a61f55359, 0x159d3fb73043dca2, 0x14b0167661deaff0, 0x7944fcf1ccdd5195,
+        0x8bec4a7d589a72d3,
+    ],
+    // i = 46: ln(1 + 46/128)
+    [
+        0x4e993155a517a71c, 0xbcd735d034237d6f, 0x479dcfc053c8dc26, 0x69bfc8cf9d61357a,
+        0xaee32a4918383eba,
+    ],
+    // i = 47: ln(1 + 47/128)
+    [
+        0x5010c21a1a9f8ef4, 0x3049f7d319298564, 0x1827d9d91a2da0d4, 0xf2206c9599756243,
+        0xc9dd6cfc3727a0cb,
+    ],
+    // i = 48: ln(1 + 48/128)
+    [
+        0x51862f08717b09f4, 0x2decdeccf1cd1057, 0x72cd24c00b44393c, 0xb5eeb55ca973fc98,
+        0xaf120d6ebba85f7d,
+    ],
+    // i = 49: ln(1 + 49/128)
+    [
+        0x52f97e55dde2836d, 0x326527dbf6191eb9, 0x53458673d2f053f5, 0x6b6568785b6423f7,
+        0x973e059be66f28fb,
+    ],
+    // i = 50: ln(1 + 50/128)
+    [
+        0x546ab61cb7e0b427, 0x24f5833eabc623a9, 0xe9e6af97f5c12be2, 0x1f9a5c5aeb0a988a,
+        0x530626d4f28d4eb6,
+    ],
+    // i = 51: ln(1 + 51/128)
+    [
+        0x55d9dc5d1569b152, 0x6adb283660bd00f8, 0xb83433193f7be028, 0x314796aaf884f564,
+        0x8cdf71b2f128ae8a,
+    ],
+    // i = 52: ln(1 + 52/128)
+    [
+        0x5746f6fd60272942, 0x36383dc7fe1159f3, 0x80b4a6b429a4bb09, 0x4df9cbb7645143dc,
+        0x3f984c404ca76681,
+    ],
+    // i = 53: ln(1 + 53/128)
+    [
+        0x58b20bcae71e54bd, 0xbd7c8a980728b9c8, 0x9b1577495fd12d40, 0x0b2333cf512b4182,
+        0x8f0834da1cfcf075,
+    ],
+    // i = 54: ln(1 + 54/128)
+    [
+        0x5a1b207a6c52bb11, 0x0af840538e1a592d, 0xeded1c3395996523, 0xfa9ae6166df3361f,
+        0x47379cb4a4096771,
+    ],
+    // i = 55: ln(1 + 55/128)
+    [
+        0x5b823aa8ae878e30, 0x4e4c635c5f0bc0c5, 0xab9f4e6581f708d9, 0x856f669fbedf033a,
+        0xfee3c8c70c449327,
+    ],
+    // i = 56: ln(1 + 56/128)
+    [
+        0x5ce75fdaef401a73, 0x89314feb4fbde5aa, 0xdde10dcea59757bb, 0xbc92784d23446f02,
+        0x505d2dc14ac65d2a,
+    ],
+    // i = 57: ln(1 + 57/128)
+    [
+        0x5e4a957f751e89f0, 0x57691fe9ed68159f, 0xc32ef1838fd7bd5e, 0xa6f5261c43109a88,
+        0x5f81d74a44f4c2aa,
+    ],
+    // i = 58: ln(1 + 58/128)
+    [
+        0x5fabe0ee0abf0d92, 0xce979ed295043716, 0x0cbfcbf71ee8d4b3, 0xcd06766663c82c88,
+        0xa53a25716f275bc2,
+    ],
+    // i = 59: ln(1 + 59/128)
+    [
+        0x610b47687a2c5d24, 0xec519784676688f0, 0x461471f380f95ed3, 0x2773d467406a94e2,
+        0x1084e7da9a2e6f84,
+    ],
+    // i = 60: ln(1 + 60/128)
+    [
+        0x6268ce1b05096ad6, 0x9c620440f055b3ff, 0xc63281b40515a31f, 0x501f739cc6f53831,
+        0x2fbbd96820267cbf,
+    ],
+    // i = 61: ln(1 + 61/128)
+    [
+        0x63c47a1cd98b1df8, 0x5da755a61a29979c, 0xbfcbc0e45410ee8c, 0xa0d173fb95258bac,
+        0xe79ccaf5ac124007,
+    ],
+    // i = 62: ln(1 + 62/128)
+    [
+        0x651e5070845beae9, 0x337451f441baba92, 0x9cc25dca0fa1a7e3, 0x319e32cc3de7f064,
+        0x8f4da6fa7f104da3,
+    ],
+    // i = 63: ln(1 + 63/128)
+    [
+        0x667656045f822b2e, 0xa4bbb11e0c6fdd25, 0xdb8e4afa251912da, 0xec7c7be13ffdd7f5,
+        0x129be5cd5a75462f,
+    ],
+    // i = 64: ln(1 + 64/128)
+    [
+        0x67cc8fb2fe612fca, 0xda35d9bd01488606, 0x7d20ffb34547d7c2, 0xb38ad78ec59e3b60,
+        0xc2df0cb19edaebb7,
+    ],
+    // i = 65: ln(1 + 65/128)
+    [
+        0x6921024396ec28af, 0xf29adc3ad3a4b273, 0xadea18d6c6bda28d, 0x03289542fc13c079,
+        0xc15be7c756cb539a,
+    ],
+    // i = 66: ln(1 + 66/128)
+    [
+        0x6a73b26a68212635, 0x213fd4bc950d7be1, 0x1fc8ee26768c44e9, 0xf35aa69b763554ce,
+        0xc08704e2adf8a19b,
+    ],
+    // i = 67: ln(1 + 67/128)
+    [
+        0x6bc4a4c91de1ac44, 0xce11285770a030e2, 0x6824be4383242af8, 0x84cbd5943cb06ae4,
+        0x3d38c1421468b8c3,
+    ],
+    // i = 68: ln(1 + 68/128)
+    [
+        0x6d13ddef323d8a32, 0xfbb6aba63878ef20, 0x53ab4d08603cf111, 0xaa8920b12b96a198,
+        0xf528ac22e8c5ff87,
+    ],
+    // i = 69: ln(1 + 69/128)
+    [
+        0x6e61625a4c43ed66, 0x3ec53e23bc39ef20, 0x73ab462020505b04, 0xc95f40096133b646,
+        0xfc2b97f797b8243a,
+    ],
+    // i = 70: ln(1 + 70/128)
+    [
+        0x6fad36769c6defde, 0x1874deaef06b25b5, 0x2c1be100233b3294, 0x92f74d1ea905792e,
+        0x4d17b0b18b728a55,
+    ],
+    // i = 71: ln(1 + 71/128)
+    [
+        0x70f75e9f36b535ce, 0xcf052dea69b60bb5, 0x18e57d814099fe79, 0xd2bd6d07f0a1b552,
+        0x9e8a6c59682717c8,
+    ],
+    // i = 72: ln(1 + 72/128)
+    [
+        0x723fdf1e6a6886b0, 0x97607bcbfee6892b, 0x8ecbd4e8235b8362, 0xe1e267eac97f8e8d,
+        0x432551faf9ba7754,
+    ],
+    // i = 73: ln(1 + 73/128)
+    [
+        0x7386bc2e17cfaded, 0xf4af2ab426749c43, 0x19180165ede56473, 0x30f2257a6940f2da,
+        0xac982b713e4cab06,
+    ],
+    // i = 74: ln(1 + 74/128)
+    [
+        0x74cbf9f803af5587, 0x7b232fafa36fd18a, 0xb4dff5efd6e583ff, 0x1279aed9025705ed,
+        0xe48da1636915d53c,
+    ],
+    // i = 75: ln(1 + 75/128)
+    [
+        0x760f9c9628bcf941, 0x456e8bb25110ea50, 0x94cc182477ebd803, 0x50800d473363c7fc,
+        0x5a74aeb924b62912,
+    ],
+    // i = 76: ln(1 + 76/128)
+    [
+        0x7751a813071282fb, 0x989a927476e1fe9f, 0x50684ce6bafcfd59, 0x250ff6995c94d3aa,
+        0x2451e71d7d60fbbe,
+    ],
+    // i = 77: ln(1 + 77/128)
+    [
+        0x78922069f1b09872, 0xf63d16552918d8a8, 0x07be2ec9c3da432c, 0x8750a8cacdd6a4f1,
+        0x8b5ae70ce2671dcb,
+    ],
+    // i = 78: ln(1 + 78/128)
+    [
+        0x79d109875a1e1f8d, 0xf68dbcf2ed1bb404, 0xa18e2aa5ee015120, 0xa956c38f1899206a,
+        0xb2114303946cb64f,
+    ],
+    // i = 79: ln(1 + 79/128)
+    [
+        0x7b0e67491a33005d, 0x73b94fcd4e5bfb08, 0x972fca0ebd8e5113, 0x999b100f22d5eb97,
+        0xee62d1041a908802,
+    ],
+    // i = 80: ln(1 + 80/128)
+    [
+        0x7c4a3d7ebc1bb2cd, 0x720ec44c73d75cf5, 0x649117429ec747b1, 0xea5ce16b9dfd6268,
+        0xc07f81b3669c3df9,
+    ],
+    // i = 81: ln(1 + 81/128)
+    [
+        0x7d848fe9c0a2b185, 0x15b0f2db34148654, 0x4829981609381f6e, 0x769bb433829c25b6,
+        0x9ccd0b6bbddb7177,
+    ],
+    // i = 82: ln(1 + 82/128)
+    [
+        0x7ebd623de3cc7b66, 0xbecf93aa1afec6d4, 0xcde2ef184dc7b6e6, 0x34ba102efa53d65d,
+        0xeb29d0b0592550d9,
+    ],
+    // i = 83: ln(1 + 83/128)
+    [
+        0x7ff4b8215fd26156, 0x5f40d9321af246e3, 0x379d3ea68e29866b, 0x3b38ae3b1790e838,
+        0xeee7b8f973b2b50d,
+    ],
+    // i = 84: ln(1 + 84/128)
+    [
+        0x812a952d2e87f634, 0xe34aebf73ffe346e, 0x4b8b8c4c34ebb89e, 0xa25591cfd7258b51,
+        0x0ba664483605037f,
+    ],
+    // i = 85: ln(1 + 85/128)
+    [
+        0x825efced4936932f, 0xe60804593bed4da1, 0x1c88e1e218e0a7e0, 0x9e3bf732eeafe183,
+        0xb21e3f7c16f3e26d,
+    ],
+    // i = 86: ln(1 + 86/128)
+    [
+        0x8391f2e0e6fa0272, 0xbcb1c488b755b2b7, 0xa5d75211210f75ce, 0x80a11439aa7c2a28,
+        0x297156dc20e6ea98,
+    ],
+    // i = 87: ln(1 + 87/128)
+    [
+        0x84c37a7ab9a905c8, 0xfed4a7fa1fe03811, 0x3f135a26389f13c4, 0xbde39b4a96240ed5,
+        0x978f0a6b9daa94e0,
+    ],
+    // i = 88: ln(1 + 88/128)
+    [
+        0x85f39721295415b4, 0xc4bdd99effe69b64, 0x366fbbf35d3ed11a, 0x90936f50c52fb7f6,
+        0x60e4aff46ea5168f,
+    ],
+    // i = 89: ln(1 + 89/128)
+    [
+        0x87224c2e8e645fb7, 0x572ef4b4b1f1a3f7, 0x59ee145b430bd090, 0xb3c6baddf9cabf0a,
+        0x50cba9e17ba5461a,
+    ],
+    // i = 90: ln(1 + 90/128)
+    [
+        0x884f9cf16a64b7ef, 0x1f64d85bc8c5f241, 0x63e6f9907e4ae138, 0xa2072c7e945a0a58,
+        0x2e64de1d9f62ab2c,
+    ],
+    // i = 91: ln(1 + 91/128)
+    [
+        0x897b8cac9f7de298, 0x0918ce3e86a5a24e, 0xc9d5fd4048cde6bb, 0x3451ee1551b63a9a,
+        0xd9f2a988779f7757,
+    ],
+    // i = 92: ln(1 + 92/128)
+    [
+        0x8aa61e97a6af4d4c, 0x799d1cb2f14054ed, 0x3a330f341cf1faee, 0x26dfe9520e33c3df,
+        0x50a4b66c38859b27,
+    ],
+    // i = 93: ln(1 + 93/128)
+    [
+        0x8bcf55dec4cd05fe, 0x30737d03e970d58e, 0x37d86476147c6d48, 0x5be2007634f3fab2,
+        0x21f25c1f45224e00,
+    ],
+    // i = 94: ln(1 + 94/128)
+    [
+        0x8cf735a33e4b7662, 0xe5eebbc0ef3d5710, 0x78ea06c2c371d36f, 0xe98ec9b5a3ef0ea2,
+        0x80ce3afe66f272b7,
+    ],
+    // i = 95: ln(1 + 95/128)
+    [
+        0x8e1dc0fb89e125e4, 0xa7c766fde2efc77f, 0x4c2379b2ef8dce37, 0x815595258a493f54,
+        0x411af4cc02e8f0cc,
+    ],
+    // i = 96: ln(1 + 96/128)
+    [
+        0x8f42faf3820681ef, 0x62cd2f9f1e35f2e7, 0xca4f4817696ad39f, 0x9a4b1c065ba0cde2,
+        0x6e709121ab58d60f,
+    ],
+    // i = 97: ln(1 + 97/128)
+    [
+        0x9066e68c955b6c9a, 0x81e87badfd849e89, 0x481a91283b527cba, 0xbeeaffacc9110b22,
+        0xe12af53dc984a22c,
+    ],
+    // i = 98: ln(1 + 98/128)
+    [
+        0x918986bdf5fa1416, 0xf1b439165240a471, 0xbcdfcc1f5b0c6c60, 0x5a9f09308150f4a5,
+        0xf29881dc53349bf8,
+    ],
+    // i = 99: ln(1 + 99/128)
+    [
+        0x92aade74c7be59e0, 0x21d6d6881e710847, 0x50a06eb301ae8308, 0xfeca10f43894e474,
+        0x72804429ac221819,
+    ],
+    // i = 100: ln(1 + 100/128)
+    [
+        0x93caf0944d88d75b, 0xc1f9edcb438ffc03, 0x527d7309433bbdf4, 0x7437d6659ec6647e,
+        0xb09a0aaea10dfdb1,
+    ],
+    // i = 101: ln(1 + 101/128)
+    [
+        0x94e9bff615845642, 0xe6b65d2e67db5d0c, 0xfc1f55966a10aa67, 0x33a48e4f1d0d3dfd,
+        0x53a0d1b8e0814130,
+    ],
+    // i = 102: ln(1 + 102/128)
+    [
+        0x96074f6a24745dcb, 0xd4e18dd14f312a40, 0xa546f842b745196d, 0x2d83ac4288043648,
+        0xf1efd6bec7a398d4,
+    ],
+    // i = 103: ln(1 + 103/128)
+    [
+        0x9723a1b720134202, 0xa10c34910d589296, 0x794a2964475e2e71, 0x79b791963f080baf,
+        0xf8a9352197f074ad,
+    ],
+    // i = 104: ln(1 + 104/128)
+    [
+        0x983eb99a7885f0fd, 0xac850fab36cdee18, 0x0b7013338119ba91, 0x4042089c636df445,
+        0xd3bc93b7e748ff9a,
+    ],
+    // i = 105: ln(1 + 105/128)
+    [
+        0x995899c890eb8990, 0x2ab5b3d916b06715, 0xba133462ddf94bde, 0x6b3a547a56157af9,
+        0xd14142a8246215d1,
+    ],
+    // i = 106: ln(1 + 106/128)
+    [
+        0x9a7144ece70e98b7, 0x5c96c42e72757253, 0x1ddfd382b6be4109, 0xc765792d9d8edefe,
+        0x5e8524f6366668d1,
+    ],
+    // i = 107: ln(1 + 107/128)
+    [
+        0x9b88bdaa3a3dae2e, 0xe8124226efc8f895, 0x8d986c2816c364d0, 0xc110a7922bb4ff77,
+        0xd14e82659d03b869,
+    ],
+    // i = 108: ln(1 + 108/128)
+    [
+        0x9c9f069ab150cd4e, 0x221301b6f8c38f62, 0x1717c9e700413260, 0x41e7a8452170e2c2,
+        0xbc176f0ab57fe9db,
+    ],
+    // i = 109: ln(1 + 109/128)
+    [
+        0x9db4224fffe1157c, 0x76f60c2c9b341d6d, 0xe6d9b9591a54790d, 0x29adc2b4c90a2c44,
+        0x880cc7924c9cf538,
+    ],
+    // i = 110: ln(1 + 110/128)
+    [
+        0x9ec813538ab7d520, 0x2131e85693cf6b80, 0x9d96954adf1ff936, 0x0bd03b10f297662b,
+        0xcfe36b8d89dee616,
+    ],
+    // i = 111: ln(1 + 111/128)
+    [
+        0x9fdadc268b7a12da, 0x74ea82e55dde6c84, 0xecf33acb4b72b4f9, 0x71168dc1bba84ce8,
+        0xd8c6dbf64f170359,
+    ],
+    // i = 112: ln(1 + 112/128)
+    [
+        0xa0ec7f4233957323, 0x25e617a300bbca9c, 0x4486ea2756f59974, 0x247c0b842a5e02a7,
+        0x6471b5af1bb82762,
+    ],
+    // i = 113: ln(1 + 113/128)
+    [
+        0xa1fcff17ce733bd3, 0x93dcdb0770cb6c1b, 0xb774c2fe7ce6611a, 0xe23ae16a76d75442,
+        0x0a091231751d317a,
+    ],
+    // i = 114: ln(1 + 114/128)
+    [
+        0xa30c5e10e2f613e8, 0x5bd9bd99e39a20ae, 0xe59a498016887279, 0x6bdd6ab952e7f931,
+        0x5e241add7750befb,
+    ],
+    // i = 115: ln(1 + 115/128)
+    [
+        0xa41a9e8f5446fb9e, 0xaf45d980fe84b0c1, 0xefbe78337535ca72, 0x6d9c0712c4c1348b,
+        0xfeea53373e6f4167,
+    ],
+    // i = 116: ln(1 + 116/128)
+    [
+        0xa527c2ed81f5d811, 0x3dfa3d3761b6316e, 0x6f7191d8af47e744, 0x5bf1a66c84ebc206,
+        0x23bd3235db555408,
+    ],
+    // i = 117: ln(1 + 117/128)
+    [
+        0xa633cd7e6771cd8b, 0x4766e98c37ec33b6, 0x1b11377c71eab2c3, 0x1b7a54a6905668df,
+        0x96bb552065a33b31,
+    ],
+    // i = 118: ln(1 + 118/128)
+    [
+        0xa73ec08dbadd84e5, 0x84c2b22c2aee1a18, 0xbd794408f774593d, 0xc9ea4c642eb5190b,
+        0xaca74ac10464cdd9,
+    ],
+    // i = 119: ln(1 + 119/128)
+    [
+        0xa8489e600b435a5e, 0x59d2d85ab61ed2f2, 0x39ed8a989cbb2de3, 0xab09e04277258b86,
+        0xae3a7fb068cf4ff3,
+    ],
+    // i = 120: ln(1 + 120/128)
+    [
+        0xa9516932de2d5773, 0xbe4578ad97aea7be, 0xd0920f6a4c39b31e, 0xa388b63329d4eb53,
+        0xca138ee03e381ca3,
+    ],
+    // i = 121: ln(1 + 121/128)
+    [
+        0xaa59233ccca4bd48, 0xaa145a1ec1796894, 0x5d56af714ebab5f9, 0x916e796b3fd0d75b,
+        0xd82bb3bae041db14,
+    ],
+    // i = 122: ln(1 + 122/128)
+    [
+        0xab5fcead9f9cca08, 0xe310b9b1fe59cdc1, 0x5631bf5c35094514, 0x52d39be02e3f55d3,
+        0xe4b7faf87697b2fe,
+    ],
+    // i = 123: ln(1 + 123/128)
+    [
+        0xac656dae6bcc4984, 0x9792ec984585513c, 0x601ab2b5c446c7b7, 0xcefc72f56848f351,
+        0xcbf0d84890272b07,
+    ],
+    // i = 124: ln(1 + 124/128)
+    [
+        0xad6a0261acf967d9, 0x4d552f811cd40845, 0x839e04578161ccf7, 0x7753b3c85b324a78,
+        0x0c7634647b2300e7,
+    ],
+    // i = 125: ln(1 + 125/128)
+    [
+        0xae6d8ee360bb2467, 0xb71e2eb8418af602, 0x50ae328eb0db90f8, 0x72812da9ccb86b9a,
+        0xff6f3b30066ebca8,
+    ],
+    // i = 126: ln(1 + 126/128)
+    [
+        0xaf70154920b3ab86, 0xb04afe92103ef4c6, 0x29f04ae4e7a29309, 0xe668810251d2f00f,
+        0x5f3cbd97c523dc46,
+    ],
+    // i = 127: ln(1 + 127/128)
+    [
+        0xb07197a23c46c653, 0xe44ad05a76554335, 0x17ce375accaabf0a, 0x96012a8ec1549af0,
+        0xc5e4901afa3e3768,
+    ],
+    // i = 128: ln(1 + 128/128)
+    [
+        0xb17217f7d1cf79ab, 0xc9e3b39803f2f6af, 0x40f343267298b62d, 0x8a0d175b8baafa2b,
+        0xe7b876206debac98,
+    ],
+];
+
 use crate::int::types::traits::BigInt;
 
 /// `ln(1 + idx/M)` reconstructed at working scale `w` (`idx ∈ [0,
@@ -4087,8 +4790,11 @@ pub(crate) fn ln_table_entry_baked<W: BigInt>(w: u32, idx: usize, pow10_w: W) ->
     // cap) stays inside `W` even on the narrowest work integer
     // (Int<16> = 1024 bits: 0.83·1024 + 64 ≈ 914 < 1024). Round the
     // limb count up; assert it fits the stored width.
-    let need_bits = (w as u64) * 3322 / 1000 + 64;
-    let p_full = need_bits.div_ceil(64) as usize;
+    let p_full = ln_table_limbs_for(w);
+    // LAST line of defence, not the first: a const-foldable working
+    // scale should have been checked by `const { ln_table_fits(w) }` at
+    // the call site, so reaching this assert means a caller with a
+    // genuinely runtime `w` overran the width compiled into this build.
     assert!(
         p_full <= LN_TANG_LIMBS,
         "ln_tang: working scale {w} out of generated range ({LN_TANG_LIMBS} limbs)"
