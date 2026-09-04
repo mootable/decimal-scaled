@@ -2042,9 +2042,12 @@ pub mod __bench_internals {
     /// wide-tier angle-conversion path). `direct` calls the
     /// `MulPiRatio` kernel straight on the tier `Core` (no policy / resize
     /// indirection); `public` goes through the full public method path
-    /// (`D::to_radians_with` -> `to_radians_dispatch` ->
-    /// `to_radians::dispatch` -> `mul_pi_ratio_routed`). The gap between the
-    /// two is the dispatch/resize overhead.
+    /// (`D::to_radians_with` -> `to_radians::dispatch` ->
+    /// `schoolbook_routed`), which the matcher routes to the `Schoolbook`
+    /// kernel. The two arms are therefore DIFFERENT algorithms, so the gap
+    /// is `Schoolbook` plus dispatch/resize overhead measured against a
+    /// bare `MulPiRatio` — not overhead alone. `MulPiRatio` is the less
+    /// accurate of the two; see `policy::to_radians`.
     macro_rules! to_radians_bench {
         ($direct:ident, $public:ident, $n:literal, $core:ident, $feat:literal) => {
             #[cfg(any(feature = $feat, feature = "wide"))]
