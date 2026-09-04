@@ -5,6 +5,37 @@ All notable changes to `decimal-scaled` are documented here.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Removed
+
+- **The `*_approx` family.** Every `<fn>_approx(working_digits)` and
+  `<fn>_approx_with(working_digits, mode)` is gone, across the inherent
+  methods on every width and the `DecimalTranscendental` trait — `ln`,
+  `log1p`, `expm1`, `log`, `log2`, `log10`, `exp`, `exp2`, `powf`, `sin`,
+  `cos`, `tan`, `sin_cos`, `atan`, `asin`, `acos`, `atan2`, `sinh`,
+  `cosh`, `tanh`, `sinh_cosh`, `asinh`, `acosh`, `atanh`, `to_degrees`
+  and `to_radians`.
+
+  The `working_digits` guard width could not carry a contract worth
+  relying on: the same value bought a different accuracy for each
+  function, differed again per tier, and moved whenever a kernel was
+  re-routed, so no caller could predict what a given number would give
+  them or get the same answer twice across releases. Being ungraded
+  compounded it — the golden gate covers only the strict surface, which
+  is how a defect returning values wrong by `1.1e28` ULP sat in
+  `acosh_approx_with` with every gate green.
+
+  **Migration:** use the `_strict` form of the same function
+  (`x.ln_approx(20)` becomes `x.ln_strict()`), which is correctly
+  rounded to ≤ 0.5 ULP and needs no guard-width argument. Callers who
+  chose a guard *above* the strict one were paying for work that changed
+  nothing about the result; callers who chose one below were trading
+  correctness for speed with no way to say how much of either.
+
+  Nothing on the strict surface changes behaviour: every `_strict` and
+  `_strict_with` result is bit-identical to before.
+
 ## [0.5.1] — 2026-09-02
 
 An API release, non-breaking for callers. Operators now work between

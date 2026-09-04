@@ -156,7 +156,7 @@ width - a precision cliff that's hard to communicate.
 | approach | status | expected win |
 |---|---|---|
 | Tang table-driven `ln` / `exp` / `sin_cos` / `atan` / hyperbolic at narrow-GUARD bands | **shipped 0.4.2 + extended 0.4.3-candidate** | 3-34× over artanh / Taylor at the gated `(width, scale)` bands; full ladder D57<18-22> → D1232<610-620>. See [`ALGORITHMS.md`](ALGORITHMS.md) Tang section. |
-| `*_approx(working_digits: u32)` family — same series as `*_strict` but with caller-controlled working-scale cutoff | **shipped 0.5.0** | linear cost reduction proportional to the requested digit cut |
+| `*_approx(working_digits: u32)` family — same series as `*_strict` but with caller-controlled working-scale cutoff | shipped 0.5.0, **removed 0.6.0** | withdrawn: `working_digits` could not carry a stable contract — the same value bought different accuracy per function, per tier, and moved whenever a kernel was re-routed |
 | Document the precision cliff of `*_fast` on wide tiers more loudly | TODO | non-code; reader expectations |
 | Newton-on-AGM `ln` / `exp` paths past D153 — quadratic convergence, asymptotically wins where the artanh series stalls | partial (`bench-alt`) | Crossover empirically located at SCALE 1000 (3× past textbook 300 digits) thanks to the well-tuned chain-MG artanh path. Currently exposed as the alternate path; promotion gated on AGM precision lift (queued as 0.4.3-candidate B) since the present implementation runs intermediate AGM steps at the working scale and loses precision past ~30. |
 
