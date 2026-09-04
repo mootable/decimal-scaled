@@ -1646,3 +1646,6 @@
 8 4
 32 4
 8 16
+// regression: log with a base approaching 1 - catastrophic cancellation in the DIVISOR, not in either logarithm. ln(b) for b = 1 + 10^-k has VALUE ~10^-k but is computed to ABSOLUTE precision ~c*10^-w, so its relative error is ~c*10^-(w-k), and the quotient ln(x)/ln(b) inherits that amplified by ln(x)/ln(b)^2 - giving err_ulp = (ln x / ln^2 b) * c * 10^-GUARD, independent of scale (the 10^s cancels). That needs GUARD > 2k + 0.44, so STRICT_GUARD = 30 covers k <= 14 ONLY. Confirmed at k = 6 by golden 33881690870, where a guard of 10 put log(2, 1.000001) 92-231 ULP out at every mode and every narrow scale. The two rows below probe the SHIPPED guard: k = 15 straddles its boundary (predicted ~0.7c ULP, i.e. marginal), k = 18 is 6.4 digits past it (predicted ~7e5*c ULP, i.e. unambiguous). Nothing near-1 was pinned here before, which is why 30 was never tested against its own limit.
+2 1.000000000000001
+2 1.000000000000000001
