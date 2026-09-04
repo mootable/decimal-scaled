@@ -45,22 +45,33 @@ use crate::int::types::traits::BigInt;
 pub(in crate::policy) const AVAIL_RUNGS: [usize; 13] =
     [3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 176];
 
-/// Smallest ladder width (limbs) in `[lo, hi]` whose digit budget
+/// Smallest ladder width (limbs) at or above `lo` whose digit budget
 /// (`limbs · 8`, = `BITS/8` — the shared Ziv escalation's own capacity
-/// rule) strictly clears `needed_digits` decimal digits. If no ladder
-/// member in range clears it (the tier's max-scale extreme), `hi` is the
-/// answer — reproducing the tier's full `$Work`, so those cells stay
-/// bit-identical to the pre-rung routing.
+/// rule) strictly clears `needed_digits` decimal digits, capped at the
+/// tier's `$Work` width `hi`: the ascending walk stops at the first
+/// member that is at least `hi`, so a cell whose budget no narrower rung
+/// clears (the tier's max-scale extreme) computes at the tier's full
+/// `$Work` and stays bit-identical to the pre-rung routing. That cap is
+/// `hi` itself for every current tier (each `$Work` is a ladder member),
+/// and for an off-ladder `$Work` it is the next member up — a wider
+/// integer is still correct; a narrower one would not be — so the result
+/// is always a ladder member. A `$Work` above the ladder has no member
+/// wide enough: that is an error, not a rounding, and since every caller
+/// evaluates this in a `const { … }` block it fails at compile time, at
+/// the first cell that needs it.
 pub(in crate::policy) const fn smallest_rung(needed_digits: u32, lo: usize, hi: usize) -> usize {
     let mut i = 0;
     while i < AVAIL_RUNGS.len() {
         let limbs = AVAIL_RUNGS[i];
-        if limbs >= lo && limbs <= hi && (limbs as u32) * 8 > needed_digits {
+        if limbs >= lo && (limbs as u32) * 8 > needed_digits {
+            return limbs;
+        }
+        if limbs >= hi {
             return limbs;
         }
         i += 1;
     }
-    hi
+    panic!("the tier's $Work is wider than the rung ladder: no rung is wide enough")
 }
 
 /// Resolve the `ln` Tang work rung for tier `C` at `SCALE` — derives
@@ -162,10 +173,10 @@ pub(in crate::policy) fn in_budget<St: BigInt, const SCALE: u32, const BUDGET: u
 /// `$kernel` the rung-generic kernel (imported by the calling module).
 ///
 /// The arms are the [`AVAIL_RUNGS`] widths; the `_` arm is `Int<176>`.
-/// `smallest_rung` returns a ladder member or its `hi` bound, which is
-/// itself a ladder member (every tier `$Work` is one), so `_` is reached
-/// only by 176 — it is the widest rung, not a catch-all for an unknown
-/// width.
+/// `smallest_rung` only ever returns a ladder member (an off-ladder
+/// `$Work` rounds up to the next member inside its walk; one above the
+/// ladder is a compile-time error), so `_` is reached only by 176 — it
+/// is the widest rung, not a catch-all for an unknown width.
 macro_rules! rung_match {
     ($sel:ident, $C:ty, $SCALE:ident, $kernel:ident, [$($k:tt)*], $($arg:expr),+ $(,)?) => {
         match const { $sel::<$C, $SCALE>() } {
