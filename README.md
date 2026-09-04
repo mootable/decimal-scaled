@@ -67,7 +67,7 @@ Full docs: <https://mootable.github.io/decimal-scaled/>.
 - [Conversions](docs/conversions.md) — integers, floats, cross-width widening / narrowing, the float bridge.
 - [Cross-scale operations](docs/cross-scale.md) — mixed-width, mixed-`SCALE` expressions via `mul_of` / `add_of` / `cmp_of` / `clamp_of`, plus the nightly auto-inferred form.
 - [Rounding](docs/rounding.md) — `RoundingMode`, the `_with` pairs, `quantize` / `requantize`, the compile-time `rounding-*` features.
-- [Strict vs fast transcendentals](docs/strict-mode.md) — the integer-only `*_strict` path and the 0.5 ULP guarantee.
+- [The strict transcendentals](docs/strict-mode.md) — the integer-only `*_strict` path and the 0.5 ULP guarantee.
 - [The `d*!` macros](docs/macros.md) — compile-time decimal literals and scale inference.
 - [Cargo features](docs/features.md) — every feature flag and the common configurations.
 - **Bench** — per-width [Performance](docs/performance.md), the [Precision](docs/precision.md) surface, version [History](docs/history.md), the golden [Harness](docs/golden.md), and the like-for-like [Comparisons](docs/comparisons.md) against the top crates.io peers.

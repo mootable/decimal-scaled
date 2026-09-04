@@ -97,7 +97,7 @@ nav:
   - Getting started:
       - getting-started.md
       - Decimal literals (d*! macros): macros.md
-      - Strict vs fast transcendentals: strict-mode.md
+      - Strict transcendentals: strict-mode.md
       - Cargo features: features.md
   - Reference:
       - reference.md

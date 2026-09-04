@@ -25,7 +25,7 @@ its docs, and its benchmarks — in one place.
 | **limb** | One `u64` word of a wide integer. A wide value is `[u64; N]`, little-endian. |
 | **wide integers** | The hand-rolled wide-integer backend for `D57`+: a value is an array of `u64` limbs, little-endian. |
 | **`no_std`** | Builds without the standard library (embedded-friendly). The strict, integer-only path is `no_std`-compatible. |
-| **strict / fast** | `*_strict` = correctly-rounded integer path (default). `*_fast` = the `f64`-bridge path (~16 digits, platform-dependent, not CR). |
+| **strict** | `*_strict` = the correctly-rounded integer path, and the only transcendental path there is. |
 
 ## Rounding modes
 
@@ -62,7 +62,7 @@ default is selectable at compile time via the `rounding-*` Cargo features.
 | `isqrt` | integer square root | `root_int` | integer n-th root |
 
 Method suffixes: **`_with(mode)`** takes an explicit `RoundingMode`;
-**`_strict`** / **`_fast`** select the integer vs `f64`-bridge path;
+**`_strict`** names the correctly-rounded integer path;
 **`_of`** is the cross-scale operator family (`mul_of`, `add_of`, …)
 accepting mixed-width, mixed-`SCALE` operands.
 

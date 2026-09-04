@@ -16,7 +16,7 @@ how correctness is proven lives on the [Harness](golden.md) page under
 
 Related pages elsewhere on the site:
 
-- [Decimal literals — the `d*!` macros](macros.md), [strict vs fast
+- [Decimal literals — the `d*!` macros](macros.md), [the strict
   transcendentals](strict-mode.md), and [Cargo features](features.md)
   under **Getting started**.
 - [Performance](performance.md) and [library comparisons](comparisons.md)

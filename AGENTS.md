@@ -121,23 +121,22 @@ let same = micros.with_scale::<6>();                        // alias for quantiz
 - Scale-up (target > source): **exact** (appends zeros); panics on storage overflow.
 - Scale-down (target < source): rounds per the supplied mode.
 
-## Strict vs Fast transcendentals - the dual API (read carefully)
+## Strict transcendentals - one path (read carefully)
 
-Every transcendental method exists in **two named forms**, **both always compiled**:
+Every transcendental method has **one implementation**, always compiled:
 
 | Method                       | Path             | Determinism                              | Precision                  | Needs            |
 |------------------------------|------------------|------------------------------------------|----------------------------|------------------|
 | `*_strict` (`ln_strict`, …)  | integer-only     | bit-identical on every platform          | within **0.5 ULP**         | nothing extra    |
-| `*_fast` (`ln_fast`, …)      | f64 bridge       | platform-libm-dependent                  | ~16 decimal digits         | `feature = "std"`|
-| plain `*` (`ln`, …)          | dispatcher       | follows the feature set                  | follows the feature set    | follows          |
+| plain `*` (`ln`, …)          | delegates to `*_strict` | same                              | same                       | same             |
 
-Default Cargo features include `strict`, so plain `.ln()` resolves to `ln_strict`.
+The f64-bridge `*_fast` surface and its `fast` feature were removed in
+0.6.0, so no feature combination changes what a bare `.ln()` does.
 
 **Operational rules:**
 
-1. **If the user needs cross-platform bit-determinism** (consensus protocols, financial audit trails, deterministic replay) - call `*_strict` **explicitly**. Don't rely on the feature flag; a downstream crate could enable `fast` and silently flip the dispatcher.
-2. **If the user wants max throughput and tolerates platform-libm precision** - call `*_fast` explicitly, or enable the `fast` Cargo feature so plain `*` dispatches there.
-3. **For `no_std`** - use `*_strict` (it doesn't need `std`).
+1. **If the user needs cross-platform bit-determinism** (consensus protocols, financial audit trails, deterministic replay) - `*_strict` states that at the call site, and the plain form gives the same answer.
+2. **For `no_std`** - either form works; the integer path doesn't need `std`.
 
 ## Rounding modes via `*_with(mode)`
 
@@ -208,23 +207,21 @@ The string form is bit-faithful and round-trips exactly. The deserializer reject
 |---|---|---|
 | Storing prices in `f64`, then converting to `D38` at output | `f64` already lost decimal precision | Stay in `D38` from input parsing through display |
 | `D38s12::from_int(1) + D38s6::from_int(1)` | Cross-scale arithmetic doesn't compile | `.quantize::<6>()` or `.quantize::<12>()` first |
-| `.ln()` on a value that *must* be bit-identical across platforms | Default is `strict`, but a downstream crate could enable `fast` and flip the dispatcher | Call `.ln_strict()` explicitly |
+| `.ln()` on a value that *must* be bit-identical across platforms | Not a defect any more — the bare name has one definition — but `.ln_strict()` states the requirement at the call site | Prefer `.ln_strict()` where the guarantee is load-bearing |
 | `D38<S>` for π / τ / e at `S` near `MAX_SCALE` | Integer headroom collapses; the value doesn't fit storage | Widen to `D76` (or wider) at the same scale |
 | `D38s38` (or any `DNNsNN` at the max-scale ceiling) | Removed in 0.4 — illegal `SCALE` | Use `D38s37` (or the `name − 1` ceiling) |
 | `dN!` literal without enabling `macros` feature | Compile error | Enable `macros`, or fall back to `FromStr` / `from_bits` |
 | Serialising via `serde_json::to_string(&v.to_f64())` | Lossy f64 round-trip | Serialise the `D38` directly; the impl emits a decimal string |
-| Enabling `fast` and expecting 0.5 ULP from plain `.sin()` | `fast` flips the dispatcher to f64 bridge | Don't enable `fast`, or call `.sin_strict()` explicitly |
 
 ## Cargo features cheat sheet
 
 | Feature | Default | Effect |
 |---|:---:|---|
-| `std` | ✓ | f64-bridge methods (`*_fast`); also pulls in `alloc` |
+| `std` | ✓ | `from_f64` / `to_f64` conversions; also pulls in `alloc` |
 | `alloc` | ✓ | String formatting / parsing |
 | `serde` | ✓ | `Serialize` / `Deserialize` on every width |
-| `strict` | ✓ | Plain `*` dispatches to `*_strict`; `no_std`-compatible |
+| `strict` | ✓ | Signals the strict path; `no_std`-compatible. Selects nothing now the f64 bridge is gone |
 | `macros` | ✗ | `d18!` … `d1232!` proc-macros + per-scale wrappers |
-| `fast` | ✗ | Plain `*` dispatches to `*_fast` (overridden by `strict` when both are set) |
 | `dyn` | ✗ | Object-safe `DynDecimal` trait + `DecimalWidth` enum (heap boxing per op) |
 | `wide` | ✗ | Enables D57 / D76 / D115 / D153 / D230 / D307 (individual `d57` … `d307` flags also exist) |
 | `x-wide` | ✗ | Adds D462 / D616 (`d462`, `d616`) |
@@ -269,8 +266,8 @@ src/
 │                 DecimalTranscendental, Decimal umbrella, DynDecimal),
 │                 consts/ (D38 + wide-tier mathematical constants).
 │                 Typed-shell files: arithmetic, quantize, num_traits,
-│                 log_exp / log_exp_fast, trig / trig_fast, powers /
-│                 powers_fast, overflow_variants, unified, widths.
+│                 log_exp, trig, powers, overflow_variants, unified,
+│                 widths.
 ├── identity/     Equality / ordering / hashing definitions (equalities.rs).
 ├── algos/        Width-shared algorithm kernels — mg_divide, fixed_d38,
 │                 and the per-family subfolders cbrt/, exp/, ln/, pow/,
