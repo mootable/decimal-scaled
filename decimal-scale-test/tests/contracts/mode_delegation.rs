@@ -214,10 +214,7 @@ mod from_arithmetic_mode_aware {
     }
 }
 
-#[cfg(all(
-    feature = "strict",
-    any(feature = "d76", feature = "wide")
-))]
+#[cfg(any(feature = "d76", feature = "wide"))]
 mod from_rounding_mode_matrix {
     //! Mode-aware transcendental matrix.
     //!

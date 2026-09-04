@@ -4086,14 +4086,6 @@ macro_rules! decl_wide_transcendental {
             }
 
         }
-
-        // Strict-feature dispatchers: the plain method routes to
-        // `*_strict` when `strict` is on (and `fast` is not). The
-        // wide tiers have no f64-bridge transcendentals, so there is no
-        // non-strict plain form.
-        #[cfg(feature = "strict")]
-        impl<const SCALE: u32> $Type<SCALE> {
-        }
     };
 }
 

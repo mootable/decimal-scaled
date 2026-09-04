@@ -21,16 +21,9 @@
 //! result on the type's last representable place (within 0.5 ULP — the
 //! IEEE-754 round-to-nearest result).
 //!
-//! Two surfaces are emitted per method, mirroring the rest of the
-//! strict family:
-//!
-//! - `<method>_strict` — always present unless the `fast` feature
-//! is set. Integer-only; `no_std`-compatible.
-//! - `<method>` — a dispatcher present only under
-//! `#[cfg(feature = "strict")]`,
-//! forwarding to `<method>_strict`. The wide tiers have no f64-bridge
-//! transcendentals of their own, so there is no non-strict
-//! `<method>` for these widths.
+//! One surface is emitted per method: `<method>`, integer-only and
+//! `no_std`-compatible. It carries the correctly-rounded guarantee that
+//! the `_strict` suffix used to mark, and there is no second form.
 
 /// Builds a small wide-integer constant from a base-10 literal.
 ///

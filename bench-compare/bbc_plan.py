@@ -75,11 +75,16 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 
 # The features every bbc build carries regardless of the tier selection. They
-# are NOT accepted through `--features`: `strict` decides which kernel each op
-# routes to, so dropping it would silently change what is being compared rather
-# than which tiers exist, and `std` carries `alloc`/`exact-scratch`. The tier
+# are NOT accepted through `--features`: `std` carries `alloc`, and the tier
 # axis is the one this script parameterises; the harness baseline is fixed.
-BASE_FEATURES = ("std", "strict")
+#
+# `strict` used to be listed here because it decided which kernel each op
+# routed to, so dropping it would have changed what was being compared rather
+# than which tiers exist. The head crate no longer has that feature — there is
+# one kernel per op — but the PINNED BASELINE (`prod`, an older published
+# release) still does, and `bench-compare/Cargo.toml` keeps `strict` on that
+# dependency for exactly the original reason.
+BASE_FEATURES = ("std",)
 
 # The tier set the workflow has always built, and the one whose numbers are
 # publishable as the tracked full-surface medians.

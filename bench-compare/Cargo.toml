@@ -20,7 +20,7 @@ publish = false
 
 [dependencies]
 # Branch under test (head), via the local checkout.
-decimal-scaled = { path = "..", default-features = false, features = ["std", "strict", "wide", "x-wide", "xx-wide"] }
+decimal-scaled = { path = "..", default-features = false, features = ["std", "wide", "x-wide", "xx-wide"] }
 # Baseline = the latest published tag, as an external library under a distinct
 # crate name. The version below is a sane local default; bench-branch-compare.yml
 # rewrites it to the newest published version at run time.

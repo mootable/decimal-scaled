@@ -11,7 +11,6 @@
 /// during the ln kernel's range reduction because the working-scale
 /// intermediate `raw · 10^STRICT_GUARD = MAX · 10^30 ≈ 1.7e68` plus the
 /// Mercator artanh series intermediate overflowed the 256-bit `Fixed`.
-#[cfg(feature = "strict")]
 mod from_d38_max_scale_log_panic {
     use decimal_scaled::D38;
 

@@ -26,15 +26,12 @@ decimal-scaled-golden = { path = "../decimal-scaled-golden" }
 ds-044 = { package = "decimal-scaled", version = "=0.4.4", optional = true }
 
 [features]
-# Mirror the root crate's DEFAULT set (std, serde, strict, exact-scratch) so a
-# plain `cargo test -p decimal-scale-test` exercises the migrated tests in the
-# same feature world the root's default `cargo test` always ran them in. A
-# bare-["std"] default would compile decimal-scaled in a configuration the
-# root CI never builds (std without exact-scratch/strict/serde).
-default = ["std", "serde", "strict", "exact-scratch"]
+# Mirror the root crate's DEFAULT set (std, serde) so a plain
+# `cargo test -p decimal-scale-test` exercises the migrated tests in the same
+# feature world the root's default `cargo test` always ran them in.
+default = ["std", "serde"]
 std = ["alloc", "decimal-scaled/std", "decimal-scaled-cells/std"]
 alloc = ["decimal-scaled/alloc", "decimal-scaled-cells/alloc"]
-exact-scratch = ["decimal-scaled/exact-scratch", "decimal-scaled-cells/exact-scratch"]
 # The wide umbrellas mirror the root's nesting (each umbrella turns on its
 # per-tier features) so migrated `#[cfg(feature = "dNN")]` gates keep firing
 # exactly as they did when the tests lived in the root crate. Each tier also
@@ -55,7 +52,6 @@ d1232 = ["decimal-scaled/d1232", "decimal-scaled-cells/d1232"]
 macros = ["decimal-scaled/macros"]
 serde = ["decimal-scaled/serde", "decimal-scaled-cells/serde"]
 dyn = ["decimal-scaled/dyn"]
-strict = ["decimal-scaled/strict", "decimal-scaled-cells/strict"]
 cross-scale-ops = ["decimal-scaled/cross-scale-ops"]
 rounding-half-away-from-zero = ["decimal-scaled/rounding-half-away-from-zero"]
 rounding-half-toward-zero = ["decimal-scaled/rounding-half-toward-zero"]

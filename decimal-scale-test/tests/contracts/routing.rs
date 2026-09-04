@@ -84,7 +84,6 @@ mod from_wide_roots_dispatcher_and_hypot {
 
     use decimal_scaled::{D38, D76};
 
-    #[cfg(feature = "strict")]
     #[test]
     fn d76_sqrt_cbrt_plain_dispatcher() {
         let four: D76<6> = D38::<6>::try_from(4).unwrap().into();
@@ -116,7 +115,7 @@ mod from_wide_roots_dispatcher_and_hypot {
         assert_eq!(r, five, "got {r:?} expected exact {five:?}");
     }
 
-    #[cfg(all(feature = "x-wide", feature = "strict"))]
+    #[cfg(feature = "x-wide")]
     #[test]
     fn d153_d307_dispatchers_and_hypot() {
         use decimal_scaled::{D153, D307};
@@ -155,7 +154,6 @@ mod from_narrow_strict_transcendentals {
 
     use decimal_scaled::D18;
 
-    #[cfg(feature = "strict")]
     #[test]
     fn d18_dispatcher_matches_strict() {
         assert_eq!(D18::<8>::ONE.ln(), D18::<8>::ONE.ln());
@@ -453,7 +451,6 @@ mod from_wide_strict_transcendentals {
 
     // ─── Plain dispatcher (strict mode only) ───────────────────────────────
 
-    #[cfg(feature = "strict")]
     #[test]
     fn d76_plain_dispatcher_matches_strict() {
         let one = lift(D38::<6>::ONE);

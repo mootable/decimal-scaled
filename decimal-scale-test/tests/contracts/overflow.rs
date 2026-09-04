@@ -908,7 +908,7 @@ mod from_src_overflow_variants {
     }
 }
 
-#[cfg(all(feature = "wide", feature = "strict"))]
+#[cfg(feature = "wide")]
 mod from_hypot_edge_cases {
     //! Structural edge-case gate for `hypot_with` — the non-value
     //! assertions the correctly-rounded golden set cannot express.
