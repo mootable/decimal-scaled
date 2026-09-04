@@ -40,7 +40,6 @@ mod from_src_trig {
 
     /// The strict trig / hyperbolic family is correctly rounded:
     /// cross-check every method against the f64 bridge at D38<9>.
-    #[cfg(any(not(feature = "fast"), feature = "strict"))]
     #[test]
     fn strict_trig_family_matches_f64() {
         macro_rules! check {

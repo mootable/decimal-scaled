@@ -1,13 +1,11 @@
-//! Compile-surface reachability of the `*_strict` / `*_fast` named methods in
-//! every feature mode (the plain `*` form stays the feature-driven dispatcher).
+//! Compile-surface reachability of the `*_strict` named methods, and the
+//! plain `*` form's delegation to them.
 //! The wide roots dispatcher contract (`wide_roots_dispatcher_and_hypot.rs`)
 //! joins this target in the feature-gated batch.
 
 mod from_routing_surface {
-    //! Regression test for the routing defect fix: both `*_strict` and
-    //! `*_fast` named methods must be accessible regardless of which feature
-    //! mode is selected. The plain `*` form remains the feature-driven
-    //! dispatcher.
+    //! The `*_strict` named methods must be accessible in every feature
+    //! mode, and the plain `*` form delegates to them.
     //!
     //! These tests only need to *compile* — runtime behavior of each variant
     //! is covered in the precision suites. The asserts here are weak
@@ -15,45 +13,6 @@ mod from_routing_surface {
     //! might elide them).
 
     use decimal_scaled::D38s12;
-
-    #[cfg(feature = "std")]
-    #[test]
-    fn d38_fast_surface_callable_in_any_mode() {
-        let x = D38s12::try_from(2).unwrap();
-        let _ = x.ln_fast();
-        let _ = x.log2_fast();
-        let _ = x.log10_fast();
-        let _ = x.log_fast(D38s12::try_from(10).unwrap());
-        let _ = x.exp_fast();
-        let _ = x.exp2_fast();
-        let _ = x.sqrt_fast();
-        let _ = x.cbrt_fast();
-        let _ = x.powf_fast(D38s12::from_bits(
-            decimal_scaled::Int::<2>::try_from(500_000_000_000_i128).unwrap(),
-        ));
-        let _ = x.hypot_fast(D38s12::try_from(3).unwrap());
-        let _ = x.sin_fast();
-        let _ = x.cos_fast();
-        let _ = x.tan_fast();
-        let _ =
-            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(500_000_000_000_i128).unwrap())
-                .asin_fast();
-        let _ =
-            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(500_000_000_000_i128).unwrap())
-                .acos_fast();
-        let _ = x.atan_fast();
-        let _ = x.atan2_fast(D38s12::ONE);
-        let _ = x.sinh_fast();
-        let _ = x.cosh_fast();
-        let _ = x.tanh_fast();
-        let _ = x.asinh_fast();
-        let _ = x.acosh_fast();
-        let _ =
-            D38s12::from_bits(decimal_scaled::Int::<2>::try_from(500_000_000_000_i128).unwrap())
-                .atanh_fast();
-        let _ = x.to_degrees_fast();
-        let _ = x.to_radians_fast();
-    }
 
     #[test]
     fn d38_strict_surface_callable_in_any_mode() {
@@ -93,20 +52,6 @@ mod from_routing_surface {
     }
 
     #[cfg(feature = "wide")]
-    #[cfg(feature = "std")]
-    #[test]
-    fn wide_fast_surface_callable() {
-        use decimal_scaled::D76;
-        type W = D76<12>;
-        let x: W = D38s12::try_from(2).unwrap().into();
-        let _ = x.ln_fast();
-        let _ = x.exp_fast();
-        let _ = x.sqrt_fast();
-        let _ = x.sin_fast();
-        let _ = x.atan2_fast(x);
-    }
-
-    #[cfg(feature = "wide")]
     #[test]
     fn wide_strict_surface_callable() {
         use decimal_scaled::D76;
@@ -129,21 +74,9 @@ mod from_routing_surface {
         let _ = x18.sqrt_strict();
         let _ = x18.exp_strict();
     }
-
-    #[cfg(feature = "std")]
-    #[test]
-    fn narrow_fast_surface_callable() {
-        use decimal_scaled::D18;
-
-        let x18 = D18::<8>::try_from(2).unwrap();
-        let _ = x18.ln_fast();
-        let _ = x18.sin_fast();
-        let _ = x18.sqrt_fast();
-        let _ = x18.exp_fast();
-    }
 }
 
-#[cfg(all(feature = "wide", not(feature = "fast")))]
+#[cfg(feature = "wide")]
 mod from_wide_roots_dispatcher_and_hypot {
     //! Coverage for `macros/wide_roots.rs` — the plain `sqrt()` / `cbrt()`
     //! dispatchers (strict-feature mode) and `hypot_strict` on the wide
@@ -209,16 +142,13 @@ mod from_wide_roots_dispatcher_and_hypot {
     }
 }
 
-#[cfg(all(
-    not(feature = "fast"),
-    not(any(
-        feature = "rounding-half-away-from-zero",
-        feature = "rounding-half-toward-zero",
-        feature = "rounding-trunc",
-        feature = "rounding-floor",
-        feature = "rounding-ceiling",
-    )),
-))]
+#[cfg(not(any(
+    feature = "rounding-half-away-from-zero",
+    feature = "rounding-half-toward-zero",
+    feature = "rounding-trunc",
+    feature = "rounding-floor",
+    feature = "rounding-ceiling",
+)))]
 mod from_narrow_strict_transcendentals {
     //! The plain `*` dispatcher delegation contract for the narrow (D18)
     //! tier, moved from `tests/narrow_strict_transcendentals.rs`.
@@ -285,7 +215,6 @@ mod from_narrow_strict_transcendentals {
 }
 
 #[cfg(all(
-    not(feature = "fast"),
     feature = "wide",
     not(any(
         feature = "rounding-half-away-from-zero",

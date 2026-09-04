@@ -6,7 +6,7 @@
 //! `#[should_panic]` sibling proving the default form panics on the
 //! same input.
 
-#![cfg(all(feature = "strict", not(feature = "fast")))]
+#![cfg(feature = "strict")]
 
 use decimal_scaled::{D18, D38, RoundingMode};
 

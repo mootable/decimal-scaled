@@ -9,6 +9,36 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Removed
 
+- **The `*_fast` family and the `fast` Cargo feature.** Every
+  `<fn>_fast` f64-bridge method is gone — 27 names across `ln`, `log1p`,
+  `expm1`, `log`, `log2`, `log10`, `exp`, `exp2`, `sqrt`, `cbrt`, `powf`,
+  `hypot`, the trig, inverse-trig and hyperbolic families, and the angle
+  conversions — along with the feature that let them capture the plain
+  names.
+
+  `ln_fast` was `Self::from_f64(self.to_f64().ln())`. It capped every
+  result at f64's ~15 significant digits whatever the tier's scale, so
+  beyond that it was not a faster route to the same answer but a
+  different, worse one. The strict path is now fast enough that the
+  trade had no buyer.
+
+  Removing the feature collapses a class of defect rather than one
+  instance. While `fast` existed, what a bare `ln()` guaranteed depended
+  on a feature any downstream crate could flip, and the D38 shells and
+  the macro-generated ones were gated independently — under
+  `--no-default-features --features std`, `D38::ln` became the f64
+  bridge at 426 ULP while `D18::ln` stayed correctly rounded. There is
+  now one definition of each bare name in every configuration.
+
+  **Migration:** call the `_strict` form, or the bare name — they are
+  the same function. Code that wanted the f64 path can convert
+  explicitly: `D::from_f64(x.to_f64().ln())`. The float *conversions*
+  (`to_f64`, `from_f64`, `TryFrom<f64>`) are unaffected.
+
+  Not affected, despite the shared word: `hypot_u128_fast` and
+  `rem_small_fast` (integer kernels), `round_div_pow10_fast`, and the
+  `cbrt_native_fast_*` algorithms — all internal fast *integer* paths.
+
 - **The `*_approx` family.** Every `<fn>_approx(working_digits)` and
   `<fn>_approx_with(working_digits, mode)` is gone, across the inherent
   methods on every width and the `DecimalTranscendental` trait — `ln`,

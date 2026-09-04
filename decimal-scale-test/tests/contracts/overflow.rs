@@ -908,7 +908,7 @@ mod from_src_overflow_variants {
     }
 }
 
-#[cfg(all(feature = "wide", feature = "strict", not(feature = "fast")))]
+#[cfg(all(feature = "wide", feature = "strict"))]
 mod from_hypot_edge_cases {
     //! Structural edge-case gate for `hypot_strict_with` — the non-value
     //! assertions the correctly-rounded golden set cannot express.
@@ -1015,7 +1015,6 @@ mod from_hypot_edge_cases {
 }
 
 #[cfg(all(
-    not(feature = "fast"),
     not(any(
         feature = "rounding-half-away-from-zero",
         feature = "rounding-half-toward-zero",
@@ -1048,9 +1047,8 @@ mod from_transcendental_overflow_uniform {
     //! here.
 
     // The strict surface is the default build; skip under a non-default
-    // rounding mode or the f64-bridge `fast` path.
+    // rounding mode.
     #![cfg(all(
-        not(feature = "fast"),
         not(any(
             feature = "rounding-half-away-from-zero",
             feature = "rounding-half-toward-zero",

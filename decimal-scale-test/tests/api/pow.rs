@@ -393,19 +393,9 @@ mod from_src_powers {
         );
     }
 
-    /// `powf(2)` agrees with `pow(2)` within 2 LSB (f64 bridge).
-    #[cfg(all(feature = "fast", not(feature = "strict")))]
-    #[test]
-    fn powf_two_matches_pow_two_within_lsb() {
-        let v = D38s12::try_from(7).unwrap();
-        let two = D38s12::try_from(2).unwrap();
-        assert!(within_lsb(v.powf(two), v.pow(2), TWO_LSB));
-    }
-
     /// Strict `powf` is correctly rounded: `powf(7, 2)` agrees with the
     /// exact `pow(7, 2)` to within 1 ULP â€” the whole `exp(yÂ·ln(x))`
     /// chain runs in the shared wide guard-digit intermediate.
-    #[cfg(any(not(feature = "fast"), feature = "strict"))]
     #[test]
     fn powf_two_matches_pow_two_within_lsb() {
         let v = D38s12::try_from(7).unwrap();

@@ -1,56 +1,42 @@
 # Strict mode - integer-only, correctly-rounded transcendentals
 
 Transcendental functions (logarithms, exponentials, roots,
-trigonometry) come in two forms:
+trigonometry) have exactly one implementation here: an integer-only
+one. It is platform-independent, bit-identical on every target,
+`no_std`-compatible, and correctly rounded to ≤ 0.5 ULP.
 
-- the **f64 bridge** - convert to `f64`, apply the platform `f64`
-  intrinsic, convert back. Fast, depends on `std` and the platform
-  libm.
-- the **strict** form - an integer-only implementation. Platform-
-  independent, bit-identical on every target, `no_std`-compatible.
+There used to be a second: an **f64 bridge** that converted to `f64`,
+applied the platform intrinsic and converted back. It was removed in
+0.6.0. It capped every result at f64's ~15 significant digits whatever
+the tier's scale, so past that it was not a faster route to the same
+answer but a different, worse one - and the strict path is now fast
+enough that the trade had no buyer. Its `*_fast` methods and the `fast`
+Cargo feature are both gone.
 
-## The `*_strict` / `*_fast` dual API
+## The `*_strict` name
 
-**Every transcendental that has a strict implementation exposes it
-under a `*_strict` name; every transcendental that has an f64-bridge
-implementation exposes it under a `*_fast` name. Both surfaces are
-always compiled regardless of which Cargo feature is active** (subject
-only to dependency gates - `*_fast` needs `feature = "std"`). The
-`strict` / `fast` Cargo features only choose what the plain `*` form
-resolves to.
+**Every transcendental is exposed under a `*_strict` name, always
+compiled, regardless of which Cargo feature is active.** The plain `*`
+form delegates to it - there is no configuration in which it resolves
+to anything else.
 
 ```rust
 use decimal_scaled::D38s12;
 
 let x = D38s12::try_from(2i64).unwrap();
 
-// Always available - the integer-only path, explicitly:
+// The integer-only path, explicitly:
 let r1 = x.sqrt_strict();
 let l1 = x.ln_strict();
 
-// Also always available - the f64-bridge path, explicitly (needs
-// `feature = "std"`):
-let r2 = x.sqrt_fast();
-let l2 = x.ln_fast();
-
-// The plain method dispatches by feature:
-//   * with `strict` (default)         -> calls `*_strict`
-//   * with neither feature set        -> calls `*_strict`
-//   * with `fast` AND NOT `strict`    -> calls `*_fast`  (needs std)
-//   * with both `strict` AND `fast`   -> calls `*_strict` (strict wins)
-let r3 = x.sqrt();
+// The plain method delegates to exactly the same thing:
+let r2 = x.sqrt();
+assert_eq!(r1, r2);
 ```
 
-Why a dual API:
-
-- **Run both side by side** - benchmark or cross-check the strict path
-  against the f64 bridge in the same build.
-- **Mix and match** - call `ln_strict()` for the values that must be
-  deterministic and `ln_fast()` (or plain `ln()`) for the rest.
-- **Guaranteed strict regardless of feature toggles** - `*_strict`
-  means strict, full stop; it cannot be silently swapped for the f64
-  bridge by a downstream crate flipping a feature. The same applies in
-  reverse: `*_fast` always reaches the f64 bridge.
+Why the explicit name is kept: `*_strict` means strict, full stop. It
+states the guarantee at the call site, and it cannot be silently
+repointed by a downstream crate flipping a feature.
 
 The `*_strict` surface covers, on `D38` (and on `D18` by
 widen-compute-narrow delegation):
@@ -114,48 +100,24 @@ float-conversion methods (`to_f64`, `from_f64`,
 `TryFrom<f64>`, …) remain available - they are type conversions, not
 transcendental operations.
 
-## The `fast` feature
+## Dispatch, in one line
 
-```toml
-decimal-scaled = { version = "0.5", default-features = false, features = ["std", "fast"] }
-```
+There is one definition of each bare name, so no feature combination
+changes what `sqrt` / `ln` / `sin` / … resolve to:
 
-`fast` makes the plain methods (`sqrt`, `ln`, `sin`, …) dispatch
-through the f64 bridge for speed at the cost of ~16-digit
-platform-libm precision. It only affects what plain `*` resolves
-to: **both the `*_strict` integer-only methods and the `*_fast`
-f64-bridge methods are always emitted** so per-call selection
-stays available.
+| Features | `*_strict` named methods | plain `sqrt` / `ln` / … |
+|---|---|---|
+| *(any combination)* | present | dispatches to `*_strict` |
 
-**Strict-by-default — and `strict` wins when both are enabled.**
-The dispatcher rule: strict is the default plain dispatch
-*regardless* of whether the `strict` feature is explicitly enabled,
-and `fast` only takes over plain dispatch when `strict` is explicitly
-absent. Reasoning: the strict path
-is now fast enough (`ln_strict` at D38<19> is ~1.5 µs, sin at
-39 µs) that staying on the deterministic correctly-rounded path
-by default is the right call across more codepaths. The only
-way to land on `*_fast` for plain `sqrt` / `ln` / etc. is to
-build with `default-features = false` AND explicitly enable
-`fast` AND NOT re-enable `strict` — a deliberate three-step
-opt-out. Mixing `strict` with `fast` (e.g. a downstream crate
-flips `fast` on a transitive build that also has `strict`)
-keeps you on the strict path.
-
-| Features | `*_strict` named methods | `*_fast` named methods (needs `std`) | plain `sqrt` / `ln` / … |
-|---|---|---|---|
-| *(none)*                                    | present | present | **dispatches to `*_strict`** |
-| `strict` (default)                          | present | present | dispatches to `*_strict` |
-| `fast` (and not `strict`)                   | present | present | dispatches to `*_fast` (needs `std`) |
-| `strict` + `fast`                           | present | present | **dispatches to `*_strict`** |
-
-**Strict is the default dispatcher** — explicit, intentional. To
-get the f64 bridge as the plain dispatch you have to (a) build
-with `default-features = false` (which drops the `strict` feature
-along with `std`+`serde`) and (b) add the `fast` feature plus
-`std`. Mixing `strict` with `fast` keeps you on the strict path —
-the only way to land on `*_fast` for `sqrt` / `ln` / etc. is to
-explicitly opt out of strict.
+This was not always true. The `fast` feature used to move the plain
+names onto the f64 bridge when `strict` was absent, which made the
+guarantee behind a bare `ln()` depend on a feature a downstream crate
+could flip — and on which width you were calling it on, since the D38
+shells and the macro-generated ones were gated independently. That
+combination shipped a real defect: under `--no-default-features
+--features std`, `D38::ln` became the f64 bridge at 426 ULP while
+`D18::ln` stayed correctly rounded. Removing the bridge removes the
+combinatorics along with it.
 
 ## The 0.5 ULP accuracy guarantee
 
@@ -211,7 +173,6 @@ contract is the same ≤ 0.5 ULP at storage as D38.
 
 | You want… | Use |
 |---|---|
-| Bit-identical results everywhere; correct rounding | default (`strict` is on by default) |
-| Max speed at the cost of platform-libm precision | `fast` |
-| Per-call explicit choice in the same build | always available via `*_strict` / `*_fast` regardless of features |
-| `no_std + alloc` | default works (`strict` is `no_std`-compatible) |
+| Bit-identical results everywhere; correct rounding | default — there is no other option |
+| To state the guarantee at the call site | `*_strict`, always available |
+| `no_std + alloc` | default works (the integer path is `no_std`-compatible) |

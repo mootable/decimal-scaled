@@ -140,24 +140,32 @@ length this crate emits — see the row below.
 
 ---
 
-## Wide-tier transcendentals - give callers an opt-out
+## Wide-tier transcendentals - the opt-out, and why it was withdrawn
 
-`decimal-scaled` deliberately keeps every transcendental at
-**0 ULP correctly rounded**, regardless of tier. At D76+ that
-costs ~µs per call (`ln`, `exp`, `sin`); at D307 it's ~ms. For
-callers that don't need 0-ULP determinism (e.g. plotting a
-curve, doing approximate convergence checks) this is overkill.
+`decimal-scaled` keeps every transcendental at **0 ULP correctly
+rounded**, regardless of tier. At D76+ that costs ~µs per call (`ln`,
+`exp`, `sin`); at D307 it's ~ms. The question this section tracked was
+whether callers who don't need 0-ULP determinism should get a cheaper
+path.
 
-`*_fast` already exists on every width, but on the wide tiers
-it routes through `to_f64` / `f64::ln` / `from_f64` and the
-result collapses to 16 decimal digits regardless of the storage
-width - a precision cliff that's hard to communicate.
+Two were tried and both are **removed as of 0.6.0**. `*_approx` let the
+caller pick a guard width, but `working_digits` could not carry a stable
+contract. `*_fast` routed through `to_f64` / `f64::ln` / `from_f64`, so
+on the wide tiers the result collapsed to ~16 decimal digits whatever
+the storage width - a precision cliff that was hard to communicate and
+easy to reach by accident, since the `fast` feature also moved the bare
+names onto it.
+
+The reason both could go is that the strict path got fast enough: the
+optimisation work removed the need for a second-class answer. What
+remains below is the work that makes the *correct* path cheaper, which
+is the only lever left.
 
 | approach | status | expected win |
 |---|---|---|
 | Tang table-driven `ln` / `exp` / `sin_cos` / `atan` / hyperbolic at narrow-GUARD bands | **shipped 0.4.2 + extended 0.4.3-candidate** | 3-34× over artanh / Taylor at the gated `(width, scale)` bands; full ladder D57<18-22> → D1232<610-620>. See [`ALGORITHMS.md`](ALGORITHMS.md) Tang section. |
 | `*_approx(working_digits: u32)` family — same series as `*_strict` but with caller-controlled working-scale cutoff | shipped 0.5.0, **removed 0.6.0** | withdrawn: `working_digits` could not carry a stable contract — the same value bought different accuracy per function, per tier, and moved whenever a kernel was re-routed |
-| Document the precision cliff of `*_fast` on wide tiers more loudly | TODO | non-code; reader expectations |
+| `*_fast` (f64 bridge) — a plain-name opt-out to ~16 digits | shipped, **removed 0.6.0** | withdrawn: past ~15 digits it was not a faster route to the same answer but a different, worse one, and the `fast` feature let it capture the bare names |
 | Newton-on-AGM `ln` / `exp` paths past D153 — quadratic convergence, asymptotically wins where the artanh series stalls | partial (`bench-alt`) | Crossover empirically located at SCALE 1000 (3× past textbook 300 digits) thanks to the well-tuned chain-MG artanh path. Currently exposed as the alternate path; promotion gated on AGM precision lift (queued as 0.4.3-candidate B) since the present implementation runs intermediate AGM steps at the working scale and loses precision past ~30. |
 
 ---

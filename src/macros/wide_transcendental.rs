@@ -4091,7 +4091,7 @@ macro_rules! decl_wide_transcendental {
         // `*_strict` when `strict` is on (and `fast` is not). The
         // wide tiers have no f64-bridge transcendentals, so there is no
         // non-strict plain form.
-        #[cfg(all(feature = "strict", not(feature = "fast")))]
+        #[cfg(feature = "strict")]
         impl<const SCALE: u32> $Type<SCALE> {
             /// With `strict`, dispatches to [`Self::ln_strict`].
             #[inline]
@@ -4243,7 +4243,7 @@ macro_rules! decl_wide_transcendental {
 
 pub(crate) use decl_wide_transcendental;
 
-#[cfg(all(test, not(feature = "fast")))]
+#[cfg(test)]
 mod tests {
 
     /// Validity wall for the baked binary Tang `ln` table: on every

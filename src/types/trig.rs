@@ -53,105 +53,90 @@
 impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     // ── Plain dispatchers (strict path) ───────────────────────────
 
-    #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
     #[inline]
     #[must_use]
     pub fn sin(self) -> Self {
         self.sin_strict()
     }
 
-    #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
     #[inline]
     #[must_use]
     pub fn cos(self) -> Self {
         self.cos_strict()
     }
 
-    #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
     #[inline]
     #[must_use]
     pub fn tan(self) -> Self {
         self.tan_strict()
     }
 
-    #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
     #[inline]
     #[must_use]
     pub fn asin(self) -> Self {
         self.asin_strict()
     }
 
-    #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
     #[inline]
     #[must_use]
     pub fn acos(self) -> Self {
         self.acos_strict()
     }
 
-    #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
     #[inline]
     #[must_use]
     pub fn atan(self) -> Self {
         self.atan_strict()
     }
 
-    #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
     #[inline]
     #[must_use]
     pub fn atan2(self, other: Self) -> Self {
         self.atan2_strict(other)
     }
 
-    #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
     #[inline]
     #[must_use]
     pub fn sinh(self) -> Self {
         self.sinh_strict()
     }
 
-    #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
     #[inline]
     #[must_use]
     pub fn cosh(self) -> Self {
         self.cosh_strict()
     }
 
-    #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
     #[inline]
     #[must_use]
     pub fn tanh(self) -> Self {
         self.tanh_strict()
     }
 
-    #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
     #[inline]
     #[must_use]
     pub fn asinh(self) -> Self {
         self.asinh_strict()
     }
 
-    #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
     #[inline]
     #[must_use]
     pub fn acosh(self) -> Self {
         self.acosh_strict()
     }
 
-    #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
     #[inline]
     #[must_use]
     pub fn atanh(self) -> Self {
         self.atanh_strict()
     }
 
-    #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
     #[inline]
     #[must_use]
     pub fn to_degrees(self) -> Self {
         self.to_degrees_strict()
     }
 
-    #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
     #[inline]
     #[must_use]
     pub fn to_radians(self) -> Self {

@@ -2,7 +2,7 @@
 
 Head-to-head matrix sweep of `decimal-scaled` against the wider Rust
 numeric ecosystem (`bnum`, `ruint`, `rust_decimal`, `fixed`), plus
-the crate's own fast / strict transcendental variants. Every
+the crate's own strict transcendentals. Every
 decimal width is exercised at five scales — the per-tier set
 `{0, S/4, S/2, 3S/4, S-1}` (where `S` is that tier's maximum
 `SCALE`) — so the reader can see how cost scales with both storage
@@ -40,8 +40,7 @@ cargo bench --features wide --bench d_w128_mul_div_paths
 | `µs` | microsecond | 10⁻⁶ s | ×1 000 |
 | `ns` | nanosecond | 10⁻⁹ s | ×1 |
 
-`1 µs` = `1 000 ns`. A `27 µs` strict `ln` is `27 000 ns` — about
-700× a `37 ns` fast `ln`.
+`1 µs` = `1 000 ns`. A `27 µs` strict `ln` is `27 000 ns`.
 
 ---
 
@@ -97,8 +96,7 @@ Alternate divide paths:
 | `×` / `÷` | rounded per `DEFAULT_ROUNDING_MODE` (HalfToEven default), within 0.5 ULP at storage scale |
 | `*_strict` transcendentals — D38 | within **0.5 ULP** at storage; correctly rounded under HalfToEven, deterministic across platforms, `no_std`-compatible |
 | `*_strict` transcendentals — D76 / D153 / D307 | within **0.5 ULP** at storage at typical scales; at deepest scales the rounded-intermediate budget tightens — see `ALGORITHMS.md` |
-| `*` (lossy) transcendentals — D9 / D18 / D38 | f64-bridge: ~16 decimal digits, platform-libm-dependent, **not** correctly rounded |
-| `*` plain transcendental name — wide tiers (D76 / D153 / D307) | with `strict` feature, dispatches to `*_strict`; no f64-bridge wide-tier surface exists |
+| `*` plain transcendental name — every width | dispatches to `*_strict`; there is no other definition |
 
 ---
 
@@ -195,39 +193,7 @@ algorithm cost. The crate keeps SCALE 38 as the *correct* path
 
 ---
 
-## 2. Fast transcendentals (`f64`-bridge)
-
-Available on D9 / D18 / D38 only — the wide tiers ship no lossy
-form (f64 can't carry their precision; the strict path is the
-only correct one). Functions: `ln`, `exp`, `sin`, `sqrt`.
-
-Arguments: `1.5` for ln / sin / sqrt, `0.5` for exp — picked so the
-result stays in range at every type×scale combo the sweep
-exercises (`D38<38>` has max ≈ 1.7, the tightest). At `SCALE = 0`
-the arguments built by `from_int(1) / from_int(2)` floor to `0`
-and `from_int(1) + 0 = 1`, which makes a few cells hit fast
-paths — those rows are still useful but reflect the early-return
-not the full series.
-
-Accuracy: ~16 decimal digits of f64 precision. **Not** correctly
-rounded; results vary with platform libm.
-
-### D9 / D18 / D38 fast
-
-| fn | D9 s=9 | D18 s=18 | D38 s=38 | `rust_decimal` |
-|---|---|---|---|---|
-| ln | `__LOSSY_D9_LN__` | `__LOSSY_D18_LN__` | `__LOSSY_D38_LN__` | `__LOSSY_RD_LN__` |
-| exp | `__LOSSY_D9_EXP__` | `__LOSSY_D18_EXP__` | `__LOSSY_D38_EXP__` | `__LOSSY_RD_EXP__` |
-| sin | `__LOSSY_D9_SIN__` | `__LOSSY_D18_SIN__` | `__LOSSY_D38_SIN__` | `__LOSSY_RD_SIN__` |
-| sqrt | `__LOSSY_D9_SQRT__` | `__LOSSY_D18_SQRT__` | `__LOSSY_D38_SQRT__` | `__LOSSY_RD_SQRT__` |
-
-`rust_decimal`'s transcendentals are software-implemented (no f64
-bridge) — accurate but not correctly rounded to the last place,
-and substantially slower than the f64 path.
-
----
-
-## 3. Strict transcendentals (integer-only, correctly rounded)
+## 2. Strict transcendentals (integer-only, correctly rounded)
 
 Functions: `ln_strict`, `exp_strict`, `sin_strict`,
 `sqrt_strict`. Same argument convention as the fast block (1.5
@@ -284,7 +250,7 @@ maximum-scale columns. There:
 
 ---
 
-## 4. What the strict variants buy
+## 3. What the strict variants buy
 
 Versus the fast `f64` bridge:
 
@@ -301,7 +267,7 @@ exists.
 
 ---
 
-## 5. Reference: wide-integer backends
+## 4. Reference: wide-integer backends
 
 For raw signed integer arithmetic without the decimal layer see
 `benches/wide_int_backends.rs`. Summary at this revision:

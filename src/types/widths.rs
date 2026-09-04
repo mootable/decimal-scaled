@@ -557,7 +557,6 @@ crate::macros::float_bridge::decl_decimal_float_bridge!(wide D18, crate::int::ty
 crate::macros::storage_formatters::decl_decimal_storage_formatters!(D18);
 crate::macros::strict_transcendentals::decl_strict_transcendentals_via_d38!(D18);
 crate::macros::transcendental_trait::decl_decimal_transcendental_impl!(D18);
-crate::macros::fast_transcendentals::decl_fast_transcendentals_via_f64!(D18);
 crate::macros::pow::decl_decimal_pow!(D18);
 crate::macros::rounding_methods::decl_decimal_rounding_methods!(wide D18);
 crate::macros::helpers::decl_decimal_helpers!(wide D18);

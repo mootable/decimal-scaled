@@ -1,35 +1,25 @@
 //! The bare-named transcendentals must dispatch to the correctly-rounded
-//! `*_strict` sibling in every configuration except the explicit
-//! `fast`-without-`strict` opt-in documented in `Cargo.toml`.
+//! `*_strict` sibling. Since the f64-bridge `*_fast` surface was removed
+//! there is only one definition of each bare name, so this now holds
+//! unconditionally rather than in "every configuration except one".
 //!
 //! This is deliberately a CROSS-WIDTH check. D38's bare methods are
-//! hand-written per type (`src/types/{log_exp,trig,powers}.rs`, with the
-//! f64 bridge in the `*_fast.rs` siblings), while every other width's come
-//! from `src/macros/strict_transcendentals.rs`. Those two gate sets are
-//! written independently, so they can drift apart — and in 0.5.1 they did:
-//! under `--no-default-features --features std` the D38 bridge claimed the
-//! bare name whenever `strict` was merely absent, so `D38::ln` silently
-//! became the f64 bridge (426 ULP at SCALE 20) while `D18::ln` stayed
-//! correctly rounded. One build, one method name, two different guarantees
-//! depending on the width.
-//!
-//! Asserting bit-equality against `*_strict` on both a hand-written width
-//! and a macro width pins them together, so any future divergence fails
-//! here rather than shipping. Run under both the default feature set and
-//! `--no-default-features --features std`, and with `-p decimal-scaled`
-//! rather than `--workspace` — under `--workspace` cargo's feature
-//! unification pulls `strict` back in through the dev-dependency graph, so
-//! the lib compiles WITH `strict` and this file passes without exercising
-//! the configuration it exists to cover.
+//! hand-written per type (`src/types/{log_exp,trig,powers}.rs`) while every
+//! other width's come from `src/macros/strict_transcendentals.rs`. Those two
+//! sets are written independently, so they can drift apart — and while the
+//! bridge existed they did: under `--no-default-features --features std` the
+//! D38 bridge claimed the bare name whenever `strict` was merely absent, so
+//! `D38::ln` silently became the f64 bridge (426 ULP at SCALE 20) while
+//! `D18::ln` stayed correctly rounded. One build, one method name, two
+//! different guarantees depending on the width. Removing the bridge removed
+//! that whole class — there is no second definition left to win the name —
+//! but the cross-width pin is kept because the two definition sites remain.
 //!
 //! This file must name EVERY bare method, because it can only catch what it
 //! names: `log1p` and `expm1` were added to D38 after the first pass here
 //! and kept the old gate for a release, which this file did not catch
-//! precisely because it did not list them. The bare surface is 27 methods —
-//! 8 in `log_exp_fast.rs`, 15 in `trig_fast.rs`, 4 in `powers_fast.rs`.
-//! When a transcendental is added, add it here too.
-
-#![cfg(not(all(feature = "fast", not(feature = "strict"))))]
+//! precisely because it did not list them. When a transcendental is added,
+//! add it here too.
 
 use decimal_scaled::{D18, D38};
 

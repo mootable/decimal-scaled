@@ -25,7 +25,6 @@ pub(crate) mod display;
 #[cfg(feature = "dyn")]
 pub(crate) mod dyn_bridge;
 pub(crate) mod equalities;
-pub(crate) mod fast_transcendentals;
 pub(crate) mod float_bridge;
 pub(crate) mod from_str;
 pub(crate) mod full;

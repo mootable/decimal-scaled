@@ -181,18 +181,6 @@ def build_placeholder_map() -> dict[str, str]:
         m[f"ARITH_RD_{op}"] = f"arith/rust_decimal/{op.lower()}"
         m[f"ARITH_FX_{op}"] = f"arith/fixed_i64f64/{op.lower()}"
 
-    # Lossy.
-    lossy_specs = [
-        ("D9",  "D9_s9"),
-        ("D18",  "D18_s18"),
-        ("D38", "D38_s38"),
-    ]
-    for type_name, bench_tag in lossy_specs:
-        for fn in ["LN", "EXP", "SIN", "SQRT"]:
-            m[f"LOSSY_{type_name}_{fn}"] = f"fast/{bench_tag}/{fn.lower()}"
-    for fn in ["LN", "EXP", "SIN", "SQRT"]:
-        m[f"LOSSY_RD_{fn}"] = f"fast/rust_decimal/{fn.lower()}"
-
     # Strict (narrow).
     narrow_strict_specs = [
         ("D9",  "D9_s9",   "D9"),
