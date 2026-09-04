@@ -18,8 +18,7 @@
 //!
 //! Only the **strict** forms get checked siblings: the architecture's
 //! claim covers the strict transcendentals (the f64-bridge `*_fast`
-//! forms have no panic contract to opt out of — they saturate — and the
-//! `*_approx` forms trade away the strict guarantee by construction).
+//! forms have no panic contract to opt out of — they saturate).
 //!
 //! # What `None` covers, per method class
 //!

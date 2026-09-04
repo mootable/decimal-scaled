@@ -16,9 +16,8 @@
 //!   to-integer bridges (`to_int`, `to_int_with`), and the
 //!   `std`-gated f64 / f32 bridge (`from_f64`, `from_f64_with`,
 //!   `to_f64`, `to_f32`).
-//! - [`DecimalTranscendental`] — the four-variant matrix on every
-//!   transcendental + roots (`_strict` / `_strict_with(mode)` /
-//!   `_approx(g)` / `_approx_with(g, mode)`).
+//! - [`DecimalTranscendental`] — the two-variant matrix on every
+//!   transcendental + roots (`_strict` / `_strict_with(mode)`).
 //! - [`DecimalConstants`] — `pi` / `tau` / `half_pi` / `quarter_pi` /
 //!   `golden` / `e` plus their `_with(mode)` siblings.
 //!
