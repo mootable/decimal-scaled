@@ -144,14 +144,13 @@ Every transcendental method exists in **two named forms**, **both always compile
 | Method | Path | Determinism | Precision | Needs |
 |---|---|---|---|---|
 | `*_strict` (e.g. `ln_strict`, `sin_strict`) | integer-only, guard-digit | platform-deterministic, bit-identical everywhere | within **0.5 ULP** at storage scale | nothing extra |
-| `*_fast` (e.g. `ln_fast`, `sin_fast`) | f64 bridge | platform-libm-dependent | ~16 decimal digits, libm-bounded | `feature = "std"` |
-| plain `*` (e.g. `ln`, `sin`) | dispatcher → strict OR fast based on Cargo features | follows whichever | follows whichever | follows whichever |
+| plain `*` (e.g. `ln`, `sin`) | dispatcher -> `*_strict` | platform-deterministic, bit-identical everywhere | within **0.5 ULP** at storage scale | nothing extra |
 
-**Default Cargo features include `strict`**, so plain `.ln()` resolves to `ln_strict`.
+**Plain `.ln()` resolves to `ln_strict`, unconditionally.** There is no second dispatch: the f64-bridge `*_fast` surface and the `fast` feature were removed in 0.6.0, because the strict path became fast enough that a lossy alternative no longer earned its place.
 
 **Rules of thumb:**
-- **Need cross-platform bit-determinism (consensus, audit, replay) → ALWAYS call `*_strict` explicitly.** Don't rely on the feature flag - a downstream crate could flip it.
-- **Need maximum throughput and platform-libm precision is fine → call `*_fast` explicitly**, or enable the `fast` feature so plain `*` dispatches there.
+- **Every path is bit-deterministic.** The integer-only kernels are platform-independent by construction, and there is no longer a feature that can redirect a plain call to a platform-libm one.
+- **There is no lossy alternative.** `*_fast` round-tripped through f64's ~15-digit mantissa regardless of the tier's scale, so beyond that it was not a faster route to the same answer but a different, worse one.
 - The `*_strict` family is also the one you want under `no_std`.
 
 ## Rounding modes via `*_with(mode)`
@@ -233,23 +232,19 @@ The string form is bit-faithful and round-trips exactly. Floats are rejected by 
 |---|---|---|
 | Storing prices in `f64`, then converting to `D38` at output | `f64` already lost decimal precision | Stay in `D38` from input parsing through display |
 | `D38s12::from_int(1) + D38s6::from_int(1)` | Cross-scale arithmetic doesn't compile | `.quantize::<6>()` or `.quantize::<12>()` first |
-| Calling `.ln()` then expecting identical bits on Linux and macOS | With `strict` default it IS deterministic, but a downstream crate could flip `fast` | Call `.ln_strict()` **explicitly** when determinism is required |
 | `D38<37>::pi()` (or any constant that exceeds the type's value range) | The value simply doesn't fit; method panics | Widen the storage (`D76<37>::pi()` etc.) |
 | `D38s38` (or any `DNNsNN` at the max-scale ceiling) | Removed in 0.4 — illegal `SCALE` | Use `D38s37` (`name − 1`) or `D<N>::<SCALE>` directly |
 | `dN!` literal in a `no_std` build without `macros` feature | Compile error | Enable the `macros` feature or fall back to `FromStr` / `from_bits` |
 | Serialising a `D38` via `serde_json::to_string(&v.to_f64())` | Lossy round-trip through `f64` | Serialise the `D38` directly - the impl emits a decimal string |
-| Calling plain `.sin()` under `feature = "fast"` and expecting 0.5 ULP | `fast` flips the dispatcher to f64 bridge | Either: don't enable `fast`, or call `.sin_strict()` explicitly |
 
 ## Cargo features cheat sheet
 
 | Feature | Default | What it does |
 |---|---|---|
-| `std` | ✓ | Enables the f64 bridge (`*_fast` methods); also pulls in `alloc` |
+| `std` | ✓ | `f64` conversions (`from_f64` / `to_f64`) and float traits; also pulls in `alloc` |
 | `alloc` | ✓ | String formatting / parsing |
 | `serde` | ✓ | `Serialize` / `Deserialize` on every width |
-| `strict` | ✓ | Plain `*` dispatches to integer-only `*_strict`; `no_std`-compatible |
 | `macros` | ✗ | Enables `d18!` … `d1232!` proc-macros + per-scale wrappers |
-| `fast` | ✗ | Forces plain `*` to dispatch to f64-bridge `*_fast` (overridden by `strict` when both are set) |
 | `dyn` | ✗ | Object-safe `DynDecimal` trait + `DecimalWidth` enum (heap boxing per op) |
 | `wide` | ✗ | Enables D57 / D76 / D115 / D153 / D230 / D307 (individual `d57` … `d307` flags also exist) |
 | `x-wide` | ✗ | Adds D462 / D616 (`d462`, `d616`) |
@@ -296,8 +291,8 @@ src/
 │                 DecimalTranscendental, Decimal umbrella, DynDecimal),
 │                 consts/ (D38 + wide-tier mathematical constants).
 │                 Typed-shell files: arithmetic, quantize, num_traits,
-│                 log_exp / log_exp_fast, trig / trig_fast, powers /
-│                 powers_fast, overflow_variants, unified, widths.
+│                 log_exp, trig, powers,
+│ overflow_variants, unified, widths.
 ├── identity/     Equality / ordering / hashing definitions (equalities.rs).
 ├── algos/        Width-shared algorithm kernels — mg_divide, fixed_d38,
 │                 and the per-family subfolders cbrt/, exp/, ln/, pow/,

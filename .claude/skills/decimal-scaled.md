@@ -171,16 +171,15 @@ Every transcendental method exists in **two named forms**, **both always compile
 | Method | Path | Determinism | Precision | Needs |
 |---|---|---|---|---|
 | `*_strict` (e.g. `ln_strict`, `sin_strict`) | integer-only, guard-digit | platform-deterministic, bit-identical everywhere | within **0.5 ULP** at storage scale | nothing extra |
-| `*_fast` (e.g. `ln_fast`, `sin_fast`) | f64 bridge | platform-libm-dependent | ~16 decimal digits, libm-bounded | `feature = "std"` |
-| plain `*` (e.g. `ln`, `sin`) | dispatcher → strict OR fast based on Cargo features | follows whichever | follows whichever | follows whichever |
+| plain `*` (e.g. `ln`, `sin`) | dispatcher -> `*_strict` | platform-deterministic, bit-identical everywhere | within **0.5 ULP** at storage scale | nothing extra |
 
-**Default Cargo features include `strict`**, so plain `.ln()` resolves to `ln_strict`. (If both `strict` and `fast` are present, **strict wins**.)
+**Plain `.ln()` resolves to `ln_strict`, unconditionally.** There is no second dispatch: the f64-bridge `*_fast` surface and the `fast` feature were removed in 0.6.0, because the strict path became fast enough that a lossy alternative no longer earned its place.
 
 The family covers `sqrt` / `cbrt` / `exp` / `exp2` / `ln` / `log` / `log2` / `log10` / `pow` / `powf` / `powi` / `hypot`, the trig set (`sin`/`cos`/`tan`/`asin`/`acos`/`atan`/`atan2`), the hyperbolics (`sinh`/`cosh`/`tanh`/`asinh`/`acosh`/`atanh`), and `to_radians` / `to_degrees`.
 
 **Rules of thumb:**
-- **Need cross-platform bit-determinism (consensus, audit, replay) → ALWAYS call `*_strict` explicitly.** Don't rely on the feature flag - a downstream crate could flip it.
-- **Need maximum throughput and platform-libm precision is fine → call `*_fast` explicitly**, or enable the `fast` feature so plain `*` dispatches there.
+- **Every path is bit-deterministic.** The integer-only kernels are platform-independent by construction, and there is no longer a feature that can redirect a plain call to a platform-libm one.
+- **There is no lossy alternative.** `*_fast` round-tripped through f64's ~15-digit mantissa regardless of the tier's scale, so beyond that it was not a faster route to the same answer but a different, worse one.
 - The `*_strict` family is also the one you want under `no_std`.
 
 ## Rounding modes via `*_with(mode)`
@@ -277,24 +276,19 @@ assert_eq!(back, v);   // exact round-trip
 | `D38s12::from_int(1)` | `from_int` was removed | Use `from_num(1)`, `from_i32(1)` (trait), or `d38s12!(1)` |
 | `use decimal_scaled::DecimalConsts;` | renamed | `use decimal_scaled::DecimalConstants;` |
 | `D38<6>::from_num(1) + D38<12>::from_num(1)` | Cross-scale arithmetic doesn't compile | `.quantize::<…>()` to a common scale first, or use `mul_of` |
-| Calling `.ln()` then expecting identical bits on Linux and macOS | With `strict` default it IS deterministic, but a downstream crate could flip `fast` | Call `.ln_strict()` **explicitly** when determinism is required |
 | `D38<38>` | `SCALE = digits` exceeds `MAX_SCALE = digits − 1` | Use `D38<37>` (max), or a wider tier (`D57<38>`) |
 | `D38<37>::deg_per_rad()` | ≈57.3 doesn't fit the ~±17 range at scale 37; panics | Lower the scale, or use a wider tier (`D57<37>::deg_per_rad()`) |
 | `dN!` literal in a build without the `macros` feature | Compile error | Enable `macros`, or fall back to `FromStr` / `from_bits` |
 | Serialising via `serde_json::to_string(&v.to_f64())` | Lossy round-trip through `f64` | Serialise the decimal directly - the impl emits a decimal string |
-| Calling plain `.sin()` under `feature = "fast"` and expecting 0.5 ULP | `fast` flips the dispatcher to f64 bridge | Don't enable `fast`, or call `.sin_strict()` explicitly |
 
 ## Cargo features cheat sheet
 
 | Feature | Default | What it does |
 |---|---|---|
-| `std` | ✓ | Enables the f64 bridge (`*_fast` methods); also pulls in `alloc` |
+| `std` | ✓ | `f64` conversions (`from_f64` / `to_f64`) and float traits; also pulls in `alloc` |
 | `alloc` | ✓ | String formatting / parsing |
 | `serde` | ✓ | `Serialize` / `Deserialize` on every width |
-| `strict` | ✓ | Plain `*` dispatches to integer-only `*_strict`; `no_std`-compatible; wins over `fast` |
-| `exact-scratch` | ✓ | Per-`Int<N>` exactly-sized root-kernel work scratch (smaller stack frames; stable) |
 | `macros` | ✗ | Enables `d18!` … `d1232!` proc-macros + per-scale wrappers |
-| `fast` | ✗ | Forces plain `*` to dispatch to the f64-bridge `*_fast` (implies `std`; only if `strict` is off) |
 | `dyn` | ✗ | Runtime-polymorphic `DynDecimal` façade (`+ alloc`; boxing per op) |
 | `wide` | ✗ | Enables D57 / D76 / D115 / D153 / D230 / D307 |
 | `x-wide` | ✗ | Enables D462 + D616 |
