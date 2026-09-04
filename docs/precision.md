@@ -4,7 +4,7 @@
 i.e. **0 bits of error**.
 
 <!-- BEGIN GENERATED:precision:stats -->
-We execute 103,099 specialised inputs across all 30 functions, on 117 widths and scales, under all 8 rounding modes. Not every input is representable at every width and scale — one needing more significant digits than a tier holds is filtered before it runs — so the graded total is 51,514,672 separate checks.
+We execute 103,099 specialised inputs across all 30 functions, on 117 widths and scales, under all 8 rounding modes. Not every input is representable at every width and scale — one needing more significant digits than a tier holds is filtered before it runs — so the graded total is 51,623,648 separate checks.
 <!-- END GENERATED:precision:stats -->
 
 Each golden case was gathered from the codebase failing, from theory, from
@@ -44,7 +44,7 @@ they count toward neither. The full per-scale, per-mode surface lives in
 | `expm1` | ✓<br>1,984 | ✓<br>5,880 | ✓<br>6,120 | ✓<br>7,080 | ✓<br>7,520 | ✓<br>7,072 | ✓<br>9,536 | ✓<br>18,496 | ✓<br>16,176 | ✓<br>20,912 | ✓<br>22,880 | ✓<br>24,368 |
 | `hypot` | ✓<br>1,920 | ✓<br>5,176 | ✓<br>3,944 | ✓<br>4,400 | ✓<br>3,984 | ✓<br>3,456 | ✓<br>4,520 | ✓<br>8,056 | ✓<br>6,608 | ✓<br>7,448 | ✓<br>7,696 | ✓<br>7,912 |
 | `ln` | ✓<br>41,576 | ✓<br>154,776 | ✓<br>179,392 | ✓<br>172,976 | ✓<br>181,152 | ✓<br>140,992 | ✓<br>181,400 | ✓<br>342,984 | ✓<br>262,576 | ✓<br>303,448 | ✓<br>303,784 | ✓<br>304,000 |
-| `log` | ✓<br>19,448 | ✓<br>61,376 | ✓<br>59,720 | ✓<br>61,024 | ✓<br>59,040 | ✓<br>46,544 | ✓<br>59,704 | ✓<br>112,280 | ✓<br>85,992 | ✓<br>99,144 | ✓<br>99,136 | ✓<br>99,200 |
+| `log` | ✓<br>21,304 | ✓<br>66,760 | ✓<br>64,728 | ✓<br>66,744 | ✓<br>65,016 | ✓<br>51,856 | ✓<br>66,776 | ✓<br>125,448 | ✓<br>97,552 | ✓<br>113,728 | ✓<br>115,232 | ✓<br>116,440 |
 | `log10` | ✓<br>42,344 | ✓<br>159,424 | ✓<br>185,744 | ✓<br>179,592 | ✓<br>188,624 | ✓<br>147,048 | ✓<br>189,112 | ✓<br>356,576 | ✓<br>273,392 | ✓<br>315,344 | ✓<br>315,624 | ✓<br>315,880 |
 | `log1p` | ✓<br>2,232 | ✓<br>6,640 | ✓<br>6,472 | ✓<br>7,312 | ✓<br>7,752 | ✓<br>7,232 | ✓<br>9,592 | ✓<br>18,432 | ✓<br>16,120 | ✓<br>20,568 | ✓<br>21,984 | ✓<br>22,912 |
 | `log2` | ✓<br>43,216 | ✓<br>157,624 | ✓<br>179,120 | ✓<br>172,624 | ✓<br>179,832 | ✓<br>139,944 | ✓<br>180,184 | ✓<br>340,592 | ✓<br>260,760 | ✓<br>300,984 | ✓<br>301,224 | ✓<br>301,376 |
