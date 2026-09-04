@@ -4007,16 +4007,10 @@ macro_rules! decl_wide_transcendental {
             /// The composition — the integer-power and terminating-reciprocal
             /// pins, the algebraic `x^0.5 ≡ √x` pin, the analytic overflow
             /// gate, the result-sized working lift and the Ziv-escalated
-            /// `exp(y·ln x)` — now lives in
-            /// `algos::pow::powf_pinned_exp_with_ln`, registered as
-            /// `policy::pow`'s `PinnedExpWithLn` algorithm and reached through
-            /// its `pinned_exp_with_ln_routed` door — the same fn
-            /// `policy::pow::dispatch` runs for that algorithm. Called
-            /// directly rather than through `dispatch` because `select` still
-            /// returns `ExpWithLn` for every cell, so `dispatch` would run the
-            /// naive `pow_schoolbook` reference instead — repointing `select`
-            /// would change which algorithm every wide cell runs, so it stays
-            /// an open policy decision rather than part of this relocation. The
+            /// `exp(y·ln x)` — lives in `algos::pow::powf_pinned_exp_with_ln`,
+            /// registered as `policy::pow`'s `PinnedExpWithLn` algorithm, which
+            /// `select` names for every wide width; this shell delegates to
+            /// `policy::pow::dispatch` like every other strict shell. The
             /// `x^0.5` pin is handed the cell's own `policy::sqrt::dispatch`,
             /// the same engine `self.sqrt_strict_with(mode)` reached here
             /// before.
@@ -4027,10 +4021,11 @@ macro_rules! decl_wide_transcendental {
                 exp: Self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
-                Self::from_bits($crate::policy::pow::pinned_exp_with_ln_routed::<
-                    $n_limbs,
-                    SCALE,
-                >(self.to_bits(), exp.to_bits(), mode))
+                Self::from_bits($crate::policy::pow::dispatch::<$n_limbs, SCALE>(
+                    self.to_bits(),
+                    exp.to_bits(),
+                    mode,
+                ))
             }
 
             /// Mode-aware sibling of [`Self::sin_strict`]. Delegates
