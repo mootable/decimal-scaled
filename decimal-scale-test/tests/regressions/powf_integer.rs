@@ -4,13 +4,13 @@
 //! (`10^SCALE / base^|k|`) — both shapes the width-agnostic golden leads
 //! cannot target per tier.
 
-/// Parity test: `powf_strict(D::try_from(n).unwrap())` must agree with `powi(n)`
+/// Parity test: `powf(D::try_from(n).unwrap())` must agree with `powi(n)`
 /// to within storage ULP for every supported width.
 ///
 /// Integer-valued exponents (with `|n|` within the fast-path threshold)
-/// short-circuit `powf_strict` to the exact `powi` square-and-multiply
+/// short-circuit `powf` to the exact `powi` square-and-multiply
 /// path. The two surfaces must therefore produce bit-identical results
-/// on those inputs — `powi` is exact and `powf_strict` is the
+/// on those inputs — `powi` is exact and `powf` is the
 /// 0.5-ULP-correctly-rounded form, but `powi(n)` is also the exact
 /// integer-only result, so they must coincide bit-exactly.
 ///
@@ -26,24 +26,24 @@ mod from_powf_integer_fastpath_parity {
     fn d38_check<const S: u32>(base_raw: i128, n: i32) {
         let base = D38::<S>::from_bits(decimal_scaled::Int::<2>::try_from(base_raw).unwrap());
         let exp_d = D38::<S>::try_from(n).unwrap();
-        let from_powf = base.powf_strict(exp_d);
+        let from_powf = base.powf(exp_d);
         let from_powi = base.powi(n);
         assert_eq!(
             from_powf.to_bits(),
             from_powi.to_bits(),
-            "D38<{S}>: powf_strict({base_raw}, {n}) != powi({n})",
+            "D38<{S}>: powf({base_raw}, {n}) != powi({n})",
         );
     }
 
     fn d18_check<const S: u32>(base_raw: i64, n: i32) {
         let base = D18::<S>::from_bits(decimal_scaled::Int::<1>::from(base_raw));
         let exp_d = D18::<S>::try_from(n).unwrap();
-        let from_powf = base.powf_strict(exp_d);
+        let from_powf = base.powf(exp_d);
         let from_powi = base.powi(n);
         assert_eq!(
             from_powf.to_bits(),
             from_powi.to_bits(),
-            "D18<{S}>: powf_strict({base_raw}, {n}) != powi({n})",
+            "D18<{S}>: powf({base_raw}, {n}) != powi({n})",
         );
     }
 
@@ -85,7 +85,7 @@ mod from_powf_integer_fastpath_parity {
         );
         let zero_exp = D38::<12>::try_from(0).unwrap();
         assert_eq!(
-            base.powf_strict(zero_exp).to_bits(),
+            base.powf(zero_exp).to_bits(),
             D38::<12>::ONE.to_bits()
         );
     }
@@ -100,9 +100,9 @@ mod from_powf_integer_fastpath_parity {
         for n in [-1_i32, -2, -3, -5, -10] {
             let exp_d = D38::<12>::try_from(n).unwrap();
             assert_eq!(
-                base.powf_strict(exp_d).to_bits(),
+                base.powf(exp_d).to_bits(),
                 base.powi(n).to_bits(),
-                "D38<12>: powf_strict(2.0, {n}) != powi({n})",
+                "D38<12>: powf(2.0, {n}) != powi({n})",
             );
         }
     }
@@ -115,12 +115,12 @@ mod from_powf_integer_fastpath_parity {
         let two = D57::<20>::try_from(2).unwrap();
         for n in -5_i32..=10 {
             let exp_d = D57::<20>::try_from(n).unwrap();
-            let from_powf = two.powf_strict(exp_d);
+            let from_powf = two.powf(exp_d);
             let from_powi = two.powi(n);
             assert_eq!(
                 from_powf.to_bits(),
                 from_powi.to_bits(),
-                "D57<20>: powf_strict(2.0, {n}) != powi({n})",
+                "D57<20>: powf(2.0, {n}) != powi({n})",
             );
         }
     }
@@ -133,12 +133,12 @@ mod from_powf_integer_fastpath_parity {
         let two = D76::<35>::try_from(2).unwrap();
         for n in -3_i32..=8 {
             let exp_d = D76::<35>::try_from(n).unwrap();
-            let from_powf = two.powf_strict(exp_d);
+            let from_powf = two.powf(exp_d);
             let from_powi = two.powi(n);
             assert_eq!(
                 from_powf.to_bits(),
                 from_powi.to_bits(),
-                "D76<35>: powf_strict(2.0, {n}) != powi({n})",
+                "D76<35>: powf(2.0, {n}) != powi({n})",
             );
         }
     }
@@ -151,12 +151,12 @@ mod from_powf_integer_fastpath_parity {
         let two = D307::<150>::try_from(2).unwrap();
         for n in -3_i32..=8 {
             let exp_d = D307::<150>::try_from(n).unwrap();
-            let from_powf = two.powf_strict(exp_d);
+            let from_powf = two.powf(exp_d);
             let from_powi = two.powi(n);
             assert_eq!(
                 from_powf.to_bits(),
                 from_powi.to_bits(),
-                "D307<150>: powf_strict(2.0, {n}) != powi({n})",
+                "D307<150>: powf(2.0, {n}) != powi({n})",
             );
         }
     }
@@ -167,7 +167,7 @@ mod from_powf_integer_fastpath_parity {
 /// When the base and exponent are exact integers and the result terminates
 /// (`base = 2^a·5^b`), `base^-k` lands exactly on a storage grid line, so
 /// every rounding mode must return that exact value. The wide
-/// `powf_strict_with` integer fast path used to compute the reciprocal as
+/// `powf_with` integer fast path used to compute the reciprocal as
 /// `ONE.div_with(self.checked_pow(|k|), mode)`, and `checked_pow` is a
 /// *decimal* power: at a near-max scale `base^|k| · 10^SCALE` overflows
 /// storage, so it returned `None` and the shell DEFERRED to the to-nearest
@@ -228,7 +228,7 @@ mod from_powf_wide_integer_exact {
                     // Exact reciprocal raw = 10^S / base^|k| (terminating ⇒ exact).
                     let want: Int<$N> = p10 / Int::<$N>::from(div);
                     for &mode in &MODES {
-                        let got = base.powf_strict_with(exp, mode).to_bits();
+                        let got = base.powf_with(exp, mode).to_bits();
                         assert_eq!(
                             got,
                             want,
@@ -294,22 +294,22 @@ mod from_powf_wide_integer_exact {
                 let parse = |s: &str| s.parse::<D>().unwrap();
                 for m in MODES {
                     assert_eq!(
-                        parse("2.5").powf_strict_with(parse("2"), m),
+                        parse("2.5").powf_with(parse("2"), m),
                         parse("6.25"),
                         "{m:?} 2.5^2"
                     );
                     assert_eq!(
-                        parse("0.5").powf_strict_with(parse("-2"), m),
+                        parse("0.5").powf_with(parse("-2"), m),
                         parse("4"),
                         "{m:?} 0.5^-2"
                     );
                     assert_eq!(
-                        parse("1.5").powf_strict_with(parse("3"), m),
+                        parse("1.5").powf_with(parse("3"), m),
                         parse("3.375"),
                         "{m:?} 1.5^3"
                     );
                     assert_eq!(
-                        parse("0.1").powf_strict_with(parse("5"), m),
+                        parse("0.1").powf_with(parse("5"), m),
                         parse("0.00001"),
                         "{m:?} 0.1^5"
                     );
@@ -325,7 +325,7 @@ mod from_powf_wide_integer_exact {
                         _ => '7',
                     };
                     assert_eq!(
-                        parse("1.5").powf_strict_with(parse("-1"), m),
+                        parse("1.5").powf_with(parse("-1"), m),
                         parse(&sixes_with_last($S, last)),
                         "{m:?} 1.5^-1"
                     );

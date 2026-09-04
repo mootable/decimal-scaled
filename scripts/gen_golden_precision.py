@@ -172,7 +172,7 @@ def _call_with_timeout(fn: Callable[..., Any], *args: Any) -> Any:
 
 def real_cbrt(x: mpf) -> mpf:
     """Real cube root. mpmath's cbrt returns the principal complex
-    root for negative inputs; the crate's `cbrt_strict` is the real
+    root for negative inputs; the crate's `cbrt` is the real
     cube root, so we mirror that convention."""
     if x >= 0:
         return cbrt(x)
@@ -295,11 +295,11 @@ FUNCS: list[tuple[str, Callable[[mpf], mpf], str]] = [
 # pair inside the kernel's legal domain so the harness never panics.
 
 TWO_ARG_FUNCS: list[tuple[str, Callable[[mpf, mpf], mpf], str]] = [
-    # log(value, base) — the crate's `value.log_strict_with(base)`.
+    # log(value, base) — the crate's `value.log_with(base)`.
     ("log",   lambda v, b: log(v) / log(b),  "log_base"),
-    # atan2(y, x) — the crate's `y.atan2_strict_with(x)`.
+    # atan2(y, x) — the crate's `y.atan2_with(x)`.
     ("atan2", lambda y, x: atan2(y, x),      "atan2"),
-    # powf(base, exp) — the crate's `base.powf_strict_with(exp)`.
+    # powf(base, exp) — the crate's `base.powf_with(exp)`.
     ("powf",  lambda b, e: power(b, e),      "powf"),
 ]
 

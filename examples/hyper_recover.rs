@@ -3,7 +3,7 @@
 //! The wide hyperbolics (`sinh`/`cosh`/`tanh`) run their `exp` through the
 //! width-generic `exp_generic` core at `Wexp` (up to `Int<256>`). Their only
 //! arithmetic beyond `exp` is one reciprocal divide plus an add, so each
-//! should sit within a small factor of `exp_strict` at the same tier. A large
+//! should sit within a small factor of `exp` at the same tier. A large
 //! cosh/exp ratio means the `÷ 10^w` in the generic core is the bottleneck.
 //!
 //! Run with:
@@ -36,16 +36,16 @@ fn main() {
             let a = $T::<$S>::try_from(3).unwrap() / $T::<$S>::try_from(2).unwrap();
             println!("== {} ==", $name);
             let e = time(concat!($name, "::exp"), || {
-                black_box(black_box(a).exp_strict());
+                black_box(black_box(a).exp());
             });
             let c = time(concat!($name, "::cosh"), || {
-                black_box(black_box(a).cosh_strict());
+                black_box(black_box(a).cosh());
             });
             let s = time(concat!($name, "::sinh"), || {
-                black_box(black_box(a).sinh_strict());
+                black_box(black_box(a).sinh());
             });
             let t = time(concat!($name, "::tanh"), || {
-                black_box(black_box(a).tanh_strict());
+                black_box(black_box(a).tanh());
             });
             println!(
                 "  -> cosh/exp {:.2}x  sinh/exp {:.2}x  tanh/exp {:.2}x\n",

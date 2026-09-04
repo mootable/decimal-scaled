@@ -177,7 +177,7 @@ pub(crate) fn exp_schoolbook_strict<const SCALE: u32>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::algos::exp::exp_series_2limb::exp_strict;
+    use crate::algos::exp::exp_series_2limb::exp;
     use crate::support::rounding::RoundingMode;
     use crate::int::types::Int;
 
@@ -192,7 +192,7 @@ mod tests {
     fn check<const S: u32>(raw_i128: i128, mode: RoundingMode) {
         let raw = Int::<2>::from_i128(raw_i128);
         let got = exp_schoolbook_strict::<S>(raw, mode);
-        let expected = exp_strict::<S>(raw, mode).expect("reference in range");
+        let expected = exp::<S>(raw, mode).expect("reference in range");
         assert_eq!(got, expected,
             "exp schoolbook D38<{}> raw={} mode={:?}: {:?} != {:?}",
             S, raw_i128, mode, got, expected);
@@ -238,7 +238,7 @@ mod tests {
                 for mode in MODES {
                     assert_eq!(
                         crate::algos::exp::exp_schoolbook::exp_schoolbook::<Core, S>(raw, mode),
-                        D::<Int<3>, S>(raw).exp_strict_with(mode).0,
+                        D::<Int<3>, S>(raw).exp_with(mode).0,
                         "D57 exp schoolbook != routed at units={units} mode={mode:?}"
                     );
                 }

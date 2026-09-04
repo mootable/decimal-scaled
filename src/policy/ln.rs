@@ -5,7 +5,7 @@
 //! (plus the derived log2 / log10; arbitrary-base log lives in
 //! `policy::log`).
 //!
-//! `D<Int<N>, SCALE>::ln_strict_with(mode)` delegates directly to the one
+//! `D<Int<N>, SCALE>::ln_with(mode)` delegates directly to the one
 //! shared [`dispatch`] generic function — the canonical matcher-only
 //! policy shape (see `docs/ARCHITECTURE.md`), mirrored from `sqrt`:
 //!
@@ -163,7 +163,7 @@ pub(crate) const fn is_tang<const N: usize, const SCALE: u32>() -> bool {
 #[must_use]
 pub(crate) fn dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Int<N> {
     checked_dispatch::<N, SCALE>(raw, mode).unwrap_or_else(|| {
-        crate::support::diagnostics::overflow_panic_with_scale("ln_strict", SCALE)
+        crate::support::diagnostics::overflow_panic_with_scale("ln", SCALE)
     })
 }
 
@@ -190,7 +190,7 @@ pub(crate) fn checked_dispatch<const N: usize, const SCALE: u32>(
 #[inline]
 fn series_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
     match N {
-        1 | 2 => crate::algos::ln::ln_series_2limb::ln_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
+        1 | 2 => crate::algos::ln::ln_series_2limb::ln::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => Some(crate::algos::support::wide_trig_core::ln_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -211,7 +211,7 @@ fn series_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMo
         48 => Some(crate::algos::support::wide_trig_core::ln_series::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => Some(crate::algos::support::wide_trig_core::ln_series::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>()),
-        _ => crate::algos::ln::ln_series_2limb::ln_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
+        _ => crate::algos::ln::ln_series_2limb::ln::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
     }
 }
 
@@ -379,7 +379,7 @@ fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode
 #[must_use]
 pub(crate) fn log2_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Int<N> {
     checked_log2_dispatch::<N, SCALE>(raw, mode).unwrap_or_else(|| {
-        crate::support::diagnostics::overflow_panic_with_scale("log2_strict", SCALE)
+        crate::support::diagnostics::overflow_panic_with_scale("log2", SCALE)
     })
 }
 
@@ -394,7 +394,7 @@ pub(crate) fn checked_log2_dispatch<const N: usize, const SCALE: u32>(
     mode: RoundingMode,
 ) -> Option<Int<N>> {
     match N {
-        1 | 2 => crate::algos::ln::ln_series_2limb::log2_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
+        1 | 2 => crate::algos::ln::ln_series_2limb::log2::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => Some(crate::types::widths::wide_trig_d57::log2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -415,7 +415,7 @@ pub(crate) fn checked_log2_dispatch<const N: usize, const SCALE: u32>(
         48 => Some(crate::types::widths::wide_trig_d924::log2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => Some(crate::types::widths::wide_trig_d1232::log2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>()),
-        _ => crate::algos::ln::ln_series_2limb::log2_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
+        _ => crate::algos::ln::ln_series_2limb::log2::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
     }
 }
 
@@ -423,7 +423,7 @@ pub(crate) fn checked_log2_dispatch<const N: usize, const SCALE: u32>(
 #[must_use]
 pub(crate) fn log10_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Int<N> {
     checked_log10_dispatch::<N, SCALE>(raw, mode).unwrap_or_else(|| {
-        crate::support::diagnostics::overflow_panic_with_scale("log10_strict", SCALE)
+        crate::support::diagnostics::overflow_panic_with_scale("log10", SCALE)
     })
 }
 
@@ -436,7 +436,7 @@ pub(crate) fn checked_log10_dispatch<const N: usize, const SCALE: u32>(
     mode: RoundingMode,
 ) -> Option<Int<N>> {
     match N {
-        1 | 2 => crate::algos::ln::ln_series_2limb::log10_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
+        1 | 2 => crate::algos::ln::ln_series_2limb::log10::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => Some(crate::types::widths::wide_trig_d57::log10_strict_with_kernel::<SCALE>(raw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -457,7 +457,7 @@ pub(crate) fn checked_log10_dispatch<const N: usize, const SCALE: u32>(
         48 => Some(crate::types::widths::wide_trig_d924::log10_strict_with_kernel::<SCALE>(raw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => Some(crate::types::widths::wide_trig_d1232::log10_strict_with_kernel::<SCALE>(raw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>()),
-        _ => crate::algos::ln::ln_series_2limb::log10_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
+        _ => crate::algos::ln::ln_series_2limb::log10::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
     }
 }
 

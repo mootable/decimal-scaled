@@ -22,7 +22,7 @@
 //! # Layering
 //!
 //! This calls the `ln` KERNEL directly and downward. It must never be
-//! written as `(1 + t).ln_strict()` — a decimal method on its own
+//! written as `(1 + t).ln()` — a decimal method on its own
 //! operand type re-enters a sibling decimal policy, the layering
 //! inversion `docs/ARCHITECTURE.md` forbids.
 //!

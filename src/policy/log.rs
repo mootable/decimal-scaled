@@ -4,7 +4,7 @@
 //! Log-base policy — the per-(N, SCALE) algorithm matcher for the
 //! arbitrary-base decimal logarithm `log(self, base)`.
 //!
-//! `D<Int<N>, SCALE>::log_strict_with(base, mode)` delegates directly to
+//! `D<Int<N>, SCALE>::log_with(base, mode)` delegates directly to
 //! the one shared [`dispatch`] generic function — the canonical
 //! matcher-only policy shape (see `docs/ARCHITECTURE.md`), mirrored from
 //! `sqrt`.
@@ -52,7 +52,7 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(
     mode: RoundingMode,
 ) -> Int<N> {
     checked_dispatch::<N, SCALE>(raw, braw, mode).unwrap_or_else(|| {
-        crate::support::diagnostics::overflow_panic_with_scale("log_strict", SCALE)
+        crate::support::diagnostics::overflow_panic_with_scale("log", SCALE)
     })
 }
 

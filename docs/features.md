@@ -9,19 +9,17 @@ decimal-scaled = { version = "0.5", default-features = false, features = ["alloc
 
 | Feature | Default | Enables |
 |---|---|---|
-| `std` | yes | The `f64`-bridge transcendentals (trig, log/exp, sqrt, …) and `from_f64` constructors. Pulls in `alloc`. |
+| `std` | yes | The `from_f64` / `to_f64` conversions. Pulls in `alloc`. |
 | `alloc` | yes | `Display::to_string` and `FromStr` on `no_std`. Required — targets without `alloc` are not supported. |
 | `serde` | yes | `Serialize` / `Deserialize` via `serde_helpers` — raw-storage string wire format (see [Serde](serde.md)). |
-| `strict` | **yes** | Marks the build as on the strict path: plain `sqrt` / `ln` / etc. dispatch to the integer-only ≤ 0.5 ULP `*_strict` methods. `no_std`-friendly. Since the f64-bridge surface was removed this is the only dispatch there is, so the feature now only signals intent. See [strict mode](strict-mode.md). |
 | `macros` | no | The `d38!` / `d76!` / etc. compile-time literal macros. See [the macro guide](macros.md). |
 | `dyn` | no | Object-safe `DynDecimal` trait + `DecimalWidth` / `RawStorage` enums for runtime-polymorphic decimal handles. Enables `alloc` (the boxed returns are the façade's sanctioned heap path). Ships impls for D18 / D38. See [Runtime polymorphism](#runtime-polymorphism). |
 
 Notes:
 
-- The `*_strict` named methods (`sqrt_strict`, `ln_strict`, …) are
-  **always compiled, regardless of any feature flag** — no feature
-  removes them, and the plain methods (`sqrt`, `ln`, …) always resolve
-  to them.
+- The transcendentals (`sqrt`, `ln`, …) are **always compiled,
+  regardless of any feature flag** — no feature removes them, changes
+  what they resolve to, or alters their guarantee.
 - The strict methods are held to the
   [IEEE 754](https://en.wikipedia.org/wiki/IEEE_754) correctly-rounded
   standard (within 0.5
@@ -84,13 +82,13 @@ across every wider tier pair. Every adjacent pair in the ladder has
 ## Common configurations
 
 ```toml
-# Default — std, serde, and the integer-only ≤ 0.5 ULP `*_strict`
-# transcendentals dispatched by plain `sin` / `ln` / `sqrt`.
+# Default — std and serde. The integer-only ≤ 0.5 ULP transcendentals
+# are always present; no feature selects them.
 decimal-scaled = "0.5"
 
-# `no_std`, still with serde and the deterministic strict path.
+# `no_std`, still with serde and the same deterministic transcendentals.
 decimal-scaled = { version = "0.5", default-features = false,
-                   features = ["serde", "alloc", "strict"] }
+                   features = ["serde", "alloc"] }
 
 # Add the half-width and wider tiers (D57–D307).
 decimal-scaled = { version = "0.5", features = ["wide", "macros"] }
@@ -105,12 +103,6 @@ decimal-scaled = { version = "0.5", features = ["xx-wide", "macros"] }
 decimal-scaled = { version = "0.5",
                    features = ["wide", "rounding-half-away-from-zero"] }
 
-# Speed over determinism — plain transcendentals dispatch to the f64
-# bridge (~16 decimal digits of platform-libm precision). The
-# `*_strict` named methods remain available for the parts of your
-# code that need them.
-decimal-scaled = { version = "0.5", default-features = false,
-                   features = ["std", "fast"] }
 ```
 
 ## Runtime polymorphism

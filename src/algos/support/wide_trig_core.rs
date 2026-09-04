@@ -381,7 +381,7 @@ fn exp_near_min_pin<C: WideTrigCore, const SCALE: u32>(
     })
 }
 
-/// `exp_strict` for a wide tier — generic over the tier `C`.
+/// `exp` for a wide tier — generic over the tier `C`.
 ///
 /// `raw == 0` short-circuits to the type's `ONE` raw (`10^SCALE`) rather
 /// than running the Taylor series. Replaces the per-tier
@@ -440,7 +440,7 @@ where
     )
 }
 
-/// Rung-generic `exp_strict` — the Series exp kernel run at an
+/// Rung-generic `exp` — the Series exp kernel run at an
 /// arbitrary work rung `Wk` (decoupled from `C::W`; mirrors
 /// [`sin_series_g`]). Identical pins ([`exp_near_min_pin`], the zero
 /// pin) and the identical two-width near-min widening as
@@ -504,7 +504,7 @@ where
     )
 }
 
-/// `ln_strict` for a wide tier — generic over the tier `C`. Panics if
+/// `ln` for a wide tier — generic over the tier `C`. Panics if
 /// `raw <= 0`. Replaces the per-tier `ln_strict_<tier>` wrappers.
 #[inline]
 #[must_use]
@@ -564,7 +564,7 @@ where
     )
 }
 
-/// `sin_strict` for a wide tier — generic over the tier `C`. Replaces
+/// `sin` for a wide tier — generic over the tier `C`. Replaces
 /// the per-tier `sin_strict_<tier>` wrappers.
 #[inline]
 #[must_use]
@@ -607,7 +607,7 @@ where
     adjust_bounded_extremum::<C, SCALE>(rounded, raw, mode)
 }
 
-/// `cos_strict` for a wide tier — generic over the tier `C`. Standalone
+/// `cos` for a wide tier — generic over the tier `C`. Standalone
 /// `cos_fixed` path (cofunction identity, one `sin_fixed`, no sqrt).
 /// Replaces the per-tier `cos_strict_<tier>` wrappers.
 #[inline]
@@ -2041,7 +2041,7 @@ where
     adjust_log_near_zero::<C::Storage, C::W>(rounded, raw - one, one, mode)
 }
 
-/// `tan_strict` for a wide tier — generic over the tier `C`. Panics at
+/// `tan` for a wide tier — generic over the tier `C`. Panics at
 /// odd multiples of π/2 where the cosine is zero. Ports the near-pole
 /// recompute (`near_pole_tan::tan_extra_digits`, width-free). Replaces
 /// the per-tier `tan_strict_<tier>` wrappers.
@@ -2132,7 +2132,7 @@ where
         rounded, decided, raw, mode, false, <C::W as BigInt>::BITS)
 }
 
-/// `atan_strict` for a wide tier — generic over the tier `C`. Result in
+/// `atan` for a wide tier — generic over the tier `C`. Result in
 /// `(−π/2, π/2)`. Replaces the per-tier `atan_strict_<tier>` wrappers.
 #[inline]
 #[must_use]
@@ -2167,7 +2167,7 @@ where
         rounded, decided, raw, mode, true, <C::W as BigInt>::BITS)
 }
 
-/// Narrow-`GUARD` single-shot `atan_strict` for a wide tier — generic
+/// Narrow-`GUARD` single-shot `atan` for a wide tier — generic
 /// over the tier `C`, the decimal `SCALE`, and the band's narrow guard
 /// `GUARD`. Routes the canonical [`WideTrigCore::atan_fixed`] kernel
 /// through `w = SCALE + GUARD` and narrows once with
@@ -2190,7 +2190,7 @@ pub(crate) fn atan_narrow<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
     })
 }
 
-/// Rung-generic `sin_strict` — the forward-trig Series kernel run at an
+/// Rung-generic `sin` — the forward-trig Series kernel run at an
 /// arbitrary work rung `Wk` (decoupled from `C::W`), so the policy can
 /// run it at the minimal valid work width for low-scale cells (mirrors
 /// [`ln_series_g`]; the tier-width [`sin_series`] keeps the trait-bound
@@ -2261,7 +2261,7 @@ where
     adjust_bounded_extremum::<C, SCALE>(rounded, raw, mode)
 }
 
-/// Rung-generic `cos_strict` — see [`sin_series_g`]. Standalone
+/// Rung-generic `cos` — see [`sin_series_g`]. Standalone
 /// `cos_fixed` path (cofunction identity, one `sin_fixed`, no sqrt).
 #[cfg(feature = "_wide-support")]
 #[inline]
@@ -2305,7 +2305,7 @@ where
     adjust_bounded_extremum::<C, SCALE>(rounded, raw, mode)
 }
 
-/// Rung-generic `tan_strict` — see [`sin_series_g`]. One kernel covers
+/// Rung-generic `tan` — see [`sin_series_g`]. One kernel covers
 /// the two existing tan shapes, preserved bit-for-bit per call site:
 ///
 /// - `NEAR_POLE = true, SUB_GUARD = true` — the tier-`GUARD` Series
@@ -2452,7 +2452,7 @@ where
         rounded, decided, raw, mode, false, <C::W as BigInt>::BITS)
 }
 
-/// Rung-generic `atan_strict` — the inverse-tangent kernel run at an
+/// Rung-generic `atan` — the inverse-tangent kernel run at an
 /// arbitrary work rung `Wk` (decoupled from `C::W`; mirrors
 /// [`sin_series_g`]). One kernel covers the two existing tier shapes,
 /// preserved value-for-value per call site:
@@ -2470,7 +2470,7 @@ where
 /// reciprocal-fold complement. Unlike sin/cos there is NO precision loss
 /// proportional to `digits(|x|)` (no mod-τ cancellation); the `|x|` axis
 /// is purely the lift's representation capacity, gated by the policy
-/// (`forward_rung::atan_strict`).
+/// (`forward_rung::atan`).
 #[cfg(feature = "_wide-support")]
 #[inline]
 #[must_use]
@@ -4092,24 +4092,24 @@ mod tiny_x_directed_pins {
     fn tan_expanding_d153_tang_and_series_bands() {
         // 3e-60 @ s76 → Tang band (70..=82); 3e-120 @ s152 → Series band —
         // both sit in the linear band so the analytic decision applies.
-        pin!(76, 60, tan_strict_with, true, "tan s76");
-        pin!(152, 120, tan_strict_with, true, "tan s152");
+        pin!(76, 60, tan_with, true, "tan s76");
+        pin!(152, 120, tan_with, true, "tan s152");
     }
 
     #[test]
     fn sin_compressing_d153_tang_and_series_bands() {
-        pin!(76, 60, sin_strict_with, false, "sin s76");
-        pin!(152, 120, sin_strict_with, false, "sin s152");
+        pin!(76, 60, sin_with, false, "sin s76");
+        pin!(152, 120, sin_with, false, "sin s152");
     }
 
     #[test]
     fn atan_compressing_d153_series_band() {
-        pin!(152, 120, atan_strict_with, false, "atan s152");
+        pin!(152, 120, atan_with, false, "atan s152");
     }
 
     #[test]
     fn asin_expanding_d153_series_band() {
-        pin!(152, 120, asin_strict_with, true, "asin s152");
+        pin!(152, 120, asin_with, true, "asin s152");
     }
 }
 
@@ -4172,14 +4172,14 @@ mod tiny_x_deep_directed_pins {
 
     #[test]
     fn sin_atan_compressing_d616_s615_deep() {
-        pin_deep!(615, 120, sin_strict_with, false, "sin s615");
-        pin_deep!(615, 120, atan_strict_with, false, "atan s615");
+        pin_deep!(615, 120, sin_with, false, "sin s615");
+        pin_deep!(615, 120, atan_with, false, "atan s615");
     }
 
     #[test]
     fn tan_asin_expanding_d616_s615_deep() {
-        pin_deep!(615, 120, tan_strict_with, true, "tan s615");
-        pin_deep!(615, 120, asin_strict_with, true, "asin s615");
+        pin_deep!(615, 120, tan_with, true, "tan s615");
+        pin_deep!(615, 120, asin_with, true, "asin s615");
     }
 }
 

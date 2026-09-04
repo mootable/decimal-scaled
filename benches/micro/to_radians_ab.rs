@@ -9,7 +9,7 @@
 //! 0.4.4's algorithm, so the candidates here isolate the routing /
 //! resize overhead the rewrite added between the public method and the
 //! kernel:
-//! - `public` -> `D::to_radians_strict_with` (the full path through
+//! - `public` -> `D::to_radians_with` (the full path through
 //!   `to_radians_dispatch` -> `to_radians::dispatch` ->
 //!   `mul_pi_ratio_routed`, with its `resize_to` round-trips).
 //! - `direct`  -> the `MulPiRatio` kernel called straight on the tier

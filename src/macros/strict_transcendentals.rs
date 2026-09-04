@@ -22,37 +22,37 @@
 macro_rules! decl_strict_transcendentals_via_d38 {
     ($Type:ident) => {
         impl<const SCALE: u32> $Type<SCALE> {
-            /// `ln_strict` — delegates to the policy-registered ln
+            /// `ln` — delegates to the policy-registered ln
             /// kernel for this `(width, SCALE)` cell. **0.5 ULP
             /// correctly-rounded** at storage scale. Panics if the
             /// result doesn't fit `Self`'s range.
             #[inline]
             #[must_use]
-            pub fn ln_strict(self) -> Self {
+            pub fn ln(self) -> Self {
                 Self::from_bits($crate::policy::ln::dispatch::<_, SCALE>(
                     self.to_bits(),
                     $crate::support::rounding::DEFAULT_ROUNDING_MODE,
                 ))
             }
-            /// `log1p_strict` — `ln(1 + self)`, delegating to the
+            /// `log1p` — `ln(1 + self)`, delegating to the
             /// policy-registered log1p kernel for this `(width, SCALE)`
             /// cell. **0.5 ULP correctly-rounded** at storage scale.
             /// Provided for API parity; at this crate's fixed-point
-            /// scales it is equivalent to `(1 + self).ln_strict()`.
+            /// scales it is equivalent to `(1 + self).ln()`.
             /// Panics if `self <= -1` or the result doesn't fit `Self`'s
             /// range.
             #[inline]
             #[must_use]
-            pub fn log1p_strict(self) -> Self {
+            pub fn log1p(self) -> Self {
                 Self::from_bits($crate::policy::log1p::dispatch::<_, SCALE>(
                     self.to_bits(),
                     $crate::support::rounding::DEFAULT_ROUNDING_MODE,
                 ))
             }
-            /// `expm1_strict` — `e^self - 1`, delegating to the
+            /// `expm1` — `e^self - 1`, delegating to the
             /// policy-registered expm1 kernel for this `(width, SCALE)`
             /// cell. **0.5 ULP correctly-rounded** at storage scale.
-            /// Reaches slightly further than `exp_strict`: the `- 1` is
+            /// Reaches slightly further than `exp`: the `- 1` is
             /// applied at the working scale, ahead of the range check, so
             /// the domain is `self <= ln(1 + MAX)` rather than `ln(MAX)`
             /// — a band `ln(1 + 1/MAX)` wide (a few hundredths). Total
@@ -60,61 +60,61 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             /// `Self`'s range.
             #[inline]
             #[must_use]
-            pub fn expm1_strict(self) -> Self {
+            pub fn expm1(self) -> Self {
                 Self::from_bits($crate::policy::expm1::dispatch::<_, SCALE>(
                     self.to_bits(),
                     $crate::support::rounding::DEFAULT_ROUNDING_MODE,
                 ))
             }
-            /// `log2_strict` — delegates to [`crate::types::widths::D38::log2_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
+            /// `log2` — delegates to [`crate::types::widths::D38::log2`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
             #[inline]
             #[must_use]
-            pub fn log2_strict(self) -> Self {
+            pub fn log2(self) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.log2_strict()).unwrap_or_else(|_| {
+                ::core::convert::TryInto::try_into(wide.log2()).unwrap_or_else(|_| {
                     $crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($Type), "::log2_strict"),
+                        concat!(stringify!($Type), "::log2"),
                         SCALE,
                     )
                 })
             }
-            /// `log10_strict` — delegates to [`crate::types::widths::D38::log10_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
+            /// `log10` — delegates to [`crate::types::widths::D38::log10`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
             #[inline]
             #[must_use]
-            pub fn log10_strict(self) -> Self {
+            pub fn log10(self) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.log10_strict()).unwrap_or_else(|_| {
+                ::core::convert::TryInto::try_into(wide.log10()).unwrap_or_else(|_| {
                     $crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($Type), "::log10_strict"),
+                        concat!(stringify!($Type), "::log10"),
                         SCALE,
                     )
                 })
             }
-            /// `exp_strict` — delegates to the policy-registered exp
+            /// `exp` — delegates to the policy-registered exp
             /// kernel for this `(width, SCALE)` cell. **0.5 ULP
             /// correctly-rounded** at storage scale. Panics if the
             /// result doesn't fit `Self`'s range.
             #[inline]
             #[must_use]
-            pub fn exp_strict(self) -> Self {
+            pub fn exp(self) -> Self {
                 Self::from_bits($crate::policy::exp::dispatch::<_, SCALE>(
                     self.to_bits(),
                     $crate::support::rounding::DEFAULT_ROUNDING_MODE,
                 ))
             }
-            /// `exp2_strict` — delegates to [`crate::types::widths::D38::exp2_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
+            /// `exp2` — delegates to [`crate::types::widths::D38::exp2`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
             #[inline]
             #[must_use]
-            pub fn exp2_strict(self) -> Self {
+            pub fn exp2(self) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.exp2_strict()).unwrap_or_else(|_| {
+                ::core::convert::TryInto::try_into(wide.exp2()).unwrap_or_else(|_| {
                     $crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($Type), "::exp2_strict"),
+                        concat!(stringify!($Type), "::exp2"),
                         SCALE,
                     )
                 })
             }
-            /// `sqrt_strict` — delegates to the policy-registered sqrt
+            /// `sqrt` — delegates to the policy-registered sqrt
             /// kernel for this `(width, SCALE)` cell. **0.5 ULP
             /// correctly-rounded** at storage scale. Panics if the
             /// result doesn't fit `Self`'s range.
@@ -124,191 +124,191 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             /// `policy::sqrt` for the `(N, SCALE)` matcher.
             #[inline]
             #[must_use]
-            pub fn sqrt_strict(self) -> Self {
+            pub fn sqrt(self) -> Self {
                 Self($crate::policy::sqrt::dispatch::<_, SCALE>(
                     self.0,
                     $crate::support::rounding::DEFAULT_ROUNDING_MODE,
                 ))
             }
-            /// `cbrt_strict` — delegates to the policy-registered cbrt
+            /// `cbrt` — delegates to the policy-registered cbrt
             /// kernel for this `(width, SCALE)` cell. **0.5 ULP
             /// correctly-rounded** at storage scale. Panics if the
             /// result doesn't fit `Self`'s range.
             #[inline]
             #[must_use]
-            pub fn cbrt_strict(self) -> Self {
+            pub fn cbrt(self) -> Self {
                 Self($crate::policy::cbrt::dispatch::<_, SCALE>(
                     self.0,
                     $crate::support::rounding::DEFAULT_ROUNDING_MODE,
                 ))
             }
-            /// `sin_strict` — delegates to the policy-registered sin
+            /// `sin` — delegates to the policy-registered sin
             /// kernel for this `(width, SCALE)` cell.
             #[inline]
             #[must_use]
-            pub fn sin_strict(self) -> Self {
+            pub fn sin(self) -> Self {
                 Self::from_bits($crate::policy::trig::sin_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
-            /// `cos_strict` — delegates to the policy-registered cos
+            /// `cos` — delegates to the policy-registered cos
             /// kernel for this `(width, SCALE)` cell.
             #[inline]
             #[must_use]
-            pub fn cos_strict(self) -> Self {
+            pub fn cos(self) -> Self {
                 Self::from_bits($crate::policy::trig::cos_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
-            /// `tan_strict` — delegates to the policy-registered tan
+            /// `tan` — delegates to the policy-registered tan
             /// kernel for this `(width, SCALE)` cell.
             #[inline]
             #[must_use]
-            pub fn tan_strict(self) -> Self {
+            pub fn tan(self) -> Self {
                 Self::from_bits($crate::policy::trig::tan_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
-            /// `asin_strict` — delegates to the policy-registered asin
+            /// `asin` — delegates to the policy-registered asin
             /// kernel for this `(width, SCALE)` cell.
             #[inline]
             #[must_use]
-            pub fn asin_strict(self) -> Self {
+            pub fn asin(self) -> Self {
                 Self::from_bits($crate::policy::trig::asin_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
-            /// `acos_strict` — delegates to the policy-registered acos
+            /// `acos` — delegates to the policy-registered acos
             /// kernel for this `(width, SCALE)` cell.
             #[inline]
             #[must_use]
-            pub fn acos_strict(self) -> Self {
+            pub fn acos(self) -> Self {
                 Self::from_bits($crate::policy::trig::acos_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
-            /// `atan_strict` — delegates to the policy-registered atan
+            /// `atan` — delegates to the policy-registered atan
             /// kernel for this `(width, SCALE)` cell.
             #[inline]
             #[must_use]
-            pub fn atan_strict(self) -> Self {
+            pub fn atan(self) -> Self {
                 Self::from_bits($crate::policy::trig::atan_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
-            /// `sinh_strict` — delegates to [`crate::types::widths::D38::sinh_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
+            /// `sinh` — delegates to [`crate::types::widths::D38::sinh`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
             #[inline]
             #[must_use]
-            pub fn sinh_strict(self) -> Self {
+            pub fn sinh(self) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.sinh_strict()).unwrap_or_else(|_| {
+                ::core::convert::TryInto::try_into(wide.sinh()).unwrap_or_else(|_| {
                     $crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($Type), "::sinh_strict"),
+                        concat!(stringify!($Type), "::sinh"),
                         SCALE,
                     )
                 })
             }
-            /// `cosh_strict` — delegates to [`crate::types::widths::D38::cosh_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
+            /// `cosh` — delegates to [`crate::types::widths::D38::cosh`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
             #[inline]
             #[must_use]
-            pub fn cosh_strict(self) -> Self {
+            pub fn cosh(self) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.cosh_strict()).unwrap_or_else(|_| {
+                ::core::convert::TryInto::try_into(wide.cosh()).unwrap_or_else(|_| {
                     $crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($Type), "::cosh_strict"),
+                        concat!(stringify!($Type), "::cosh"),
                         SCALE,
                     )
                 })
             }
-            /// `tanh_strict` — delegates to [`crate::types::widths::D38::tanh_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
+            /// `tanh` — delegates to [`crate::types::widths::D38::tanh`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
             #[inline]
             #[must_use]
-            pub fn tanh_strict(self) -> Self {
+            pub fn tanh(self) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.tanh_strict()).unwrap_or_else(|_| {
+                ::core::convert::TryInto::try_into(wide.tanh()).unwrap_or_else(|_| {
                     $crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($Type), "::tanh_strict"),
+                        concat!(stringify!($Type), "::tanh"),
                         SCALE,
                     )
                 })
             }
-            /// `asinh_strict` — delegates to [`crate::types::widths::D38::asinh_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
+            /// `asinh` — delegates to [`crate::types::widths::D38::asinh`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
             #[inline]
             #[must_use]
-            pub fn asinh_strict(self) -> Self {
+            pub fn asinh(self) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.asinh_strict()).unwrap_or_else(|_| {
+                ::core::convert::TryInto::try_into(wide.asinh()).unwrap_or_else(|_| {
                     $crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($Type), "::asinh_strict"),
+                        concat!(stringify!($Type), "::asinh"),
                         SCALE,
                     )
                 })
             }
-            /// `acosh_strict` — delegates to [`crate::types::widths::D38::acosh_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
+            /// `acosh` — delegates to [`crate::types::widths::D38::acosh`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
             #[inline]
             #[must_use]
-            pub fn acosh_strict(self) -> Self {
+            pub fn acosh(self) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.acosh_strict()).unwrap_or_else(|_| {
+                ::core::convert::TryInto::try_into(wide.acosh()).unwrap_or_else(|_| {
                     $crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($Type), "::acosh_strict"),
+                        concat!(stringify!($Type), "::acosh"),
                         SCALE,
                     )
                 })
             }
-            /// `atanh_strict` — delegates to [`crate::types::widths::D38::atanh_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
+            /// `atanh` — delegates to [`crate::types::widths::D38::atanh`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
             #[inline]
             #[must_use]
-            pub fn atanh_strict(self) -> Self {
+            pub fn atanh(self) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.atanh_strict()).unwrap_or_else(|_| {
+                ::core::convert::TryInto::try_into(wide.atanh()).unwrap_or_else(|_| {
                     $crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($Type), "::atanh_strict"),
+                        concat!(stringify!($Type), "::atanh"),
                         SCALE,
                     )
                 })
             }
-            /// `to_degrees_strict` — delegates to [`crate::types::widths::D38::to_degrees_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
+            /// `to_degrees` — delegates to [`crate::types::widths::D38::to_degrees`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
             #[inline]
             #[must_use]
-            pub fn to_degrees_strict(self) -> Self {
+            pub fn to_degrees(self) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.to_degrees_strict()).unwrap_or_else(|_| {
+                ::core::convert::TryInto::try_into(wide.to_degrees()).unwrap_or_else(|_| {
                     $crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($Type), "::to_degrees_strict"),
+                        concat!(stringify!($Type), "::to_degrees"),
                         SCALE,
                     )
                 })
             }
-            /// `to_radians_strict` — delegates to [`crate::types::widths::D38::to_radians_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
+            /// `to_radians` — delegates to [`crate::types::widths::D38::to_radians`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
             #[inline]
             #[must_use]
-            pub fn to_radians_strict(self) -> Self {
+            pub fn to_radians(self) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.to_radians_strict()).unwrap_or_else(|_| {
+                ::core::convert::TryInto::try_into(wide.to_radians()).unwrap_or_else(|_| {
                     $crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($Type), "::to_radians_strict"),
+                        concat!(stringify!($Type), "::to_radians"),
                         SCALE,
                     )
                 })
             }
-            /// `log_strict` — delegates to [`crate::types::widths::D38::log_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
+            /// `log` — delegates to [`crate::types::widths::D38::log`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
             #[inline]
             #[must_use]
-            pub fn log_strict(self, base: Self) -> Self {
+            pub fn log(self, base: Self) -> Self {
                 let wide_self: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
                 let wide_base: $crate::D<$crate::int::types::Int<2>, SCALE> = base.into();
-                ::core::convert::TryInto::try_into(wide_self.log_strict(wide_base)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide_self.log(wide_base)).unwrap_or_else(
                     |_| {
                         $crate::support::diagnostics::overflow_panic_with_scale(
-                            concat!(stringify!($Type), "::log_strict"),
+                            concat!(stringify!($Type), "::log"),
                             SCALE,
                         )
                     },
                 )
             }
-            /// `atan2_strict` — delegates to the policy-registered atan2
+            /// `atan2` — delegates to the policy-registered atan2
             /// kernel for this `(width, SCALE)` cell.
             #[inline]
             #[must_use]
-            pub fn atan2_strict(self, other: Self) -> Self {
+            pub fn atan2(self, other: Self) -> Self {
                 Self::from_bits($crate::policy::trig::atan2_dispatch::<_, SCALE>(self.to_bits(), other.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
-            /// `powf_strict` — delegates to the policy-registered powf
+            /// `powf` — delegates to the policy-registered powf
             /// kernel for this `(width, SCALE)` cell. **0.5 ULP
             /// correctly-rounded** at storage scale. Panics if the
             /// result doesn't fit `Self`'s range.
             #[inline]
             #[must_use]
-            pub fn powf_strict(self, exp: Self) -> Self {
+            pub fn powf(self, exp: Self) -> Self {
                 Self::from_bits($crate::policy::pow::dispatch::<_, SCALE>(
                     self.to_bits(),
                     exp.to_bits(),
@@ -332,22 +332,22 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             // ─ Logarithms ────────────────────────────────────────
             #[inline]
             #[must_use]
-            pub fn ln_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn ln_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.ln_strict_with(mode)).unwrap_or_else(|_| {
+                ::core::convert::TryInto::try_into(wide.ln_with(mode)).unwrap_or_else(|_| {
                     $crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($Type), "::ln_strict_with"),
+                        concat!(stringify!($Type), "::ln_with"),
                         SCALE,
                     )
                 })
             }
             // `log1p` routes straight to its own policy at this width
-            // (matching `ln_strict` above), so all four variants keep
+            // (matching `ln` above), so all four variants keep
             // the storage-scale domain guard `self > -1` and never take
             // a detour through the D38 shell.
             #[inline]
             #[must_use]
-            pub fn log1p_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn log1p_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 Self::from_bits($crate::policy::log1p::dispatch::<_, SCALE>(
                     self.to_bits(),
                     mode,
@@ -359,7 +359,7 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             // detour through the D38 shell.
             #[inline]
             #[must_use]
-            pub fn expm1_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn expm1_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 Self::from_bits($crate::policy::expm1::dispatch::<_, SCALE>(
                     self.to_bits(),
                     mode,
@@ -367,29 +367,29 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             }
             #[inline]
             #[must_use]
-            pub fn log_strict_with(
+            pub fn log_with(
                 self,
                 base: Self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 let wide_self: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
                 let wide_base: $crate::D<$crate::int::types::Int<2>, SCALE> = base.into();
-                ::core::convert::TryInto::try_into(wide_self.log_strict_with(wide_base, mode))
+                ::core::convert::TryInto::try_into(wide_self.log_with(wide_base, mode))
                     .unwrap_or_else(|_| {
                         $crate::support::diagnostics::overflow_panic_with_scale(
-                            concat!(stringify!($Type), "::log_strict_with"),
+                            concat!(stringify!($Type), "::log_with"),
                             SCALE,
                         )
                     })
             }
             #[inline]
             #[must_use]
-            pub fn log2_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn log2_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.log2_strict_with(mode)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide.log2_with(mode)).unwrap_or_else(
                     |_| {
                         $crate::support::diagnostics::overflow_panic_with_scale(
-                            concat!(stringify!($Type), "::log2_strict_with"),
+                            concat!(stringify!($Type), "::log2_with"),
                             SCALE,
                         )
                     },
@@ -397,12 +397,12 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             }
             #[inline]
             #[must_use]
-            pub fn log10_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn log10_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.log10_strict_with(mode)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide.log10_with(mode)).unwrap_or_else(
                     |_| {
                         $crate::support::diagnostics::overflow_panic_with_scale(
-                            concat!(stringify!($Type), "::log10_strict_with"),
+                            concat!(stringify!($Type), "::log10_with"),
                             SCALE,
                         )
                     },
@@ -411,12 +411,12 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             // ─ Exponentials ──────────────────────────────────────
             #[inline]
             #[must_use]
-            pub fn exp_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn exp_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.exp_strict_with(mode)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide.exp_with(mode)).unwrap_or_else(
                     |_| {
                         $crate::support::diagnostics::overflow_panic_with_scale(
-                            concat!(stringify!($Type), "::exp_strict_with"),
+                            concat!(stringify!($Type), "::exp_with"),
                             SCALE,
                         )
                     },
@@ -424,12 +424,12 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             }
             #[inline]
             #[must_use]
-            pub fn exp2_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn exp2_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.exp2_strict_with(mode)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide.exp2_with(mode)).unwrap_or_else(
                     |_| {
                         $crate::support::diagnostics::overflow_panic_with_scale(
-                            concat!(stringify!($Type), "::exp2_strict_with"),
+                            concat!(stringify!($Type), "::exp2_with"),
                             SCALE,
                         )
                     },
@@ -438,17 +438,17 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             // ─ Power ─────────────────────────────────────────────
             #[inline]
             #[must_use]
-            pub fn powf_strict_with(
+            pub fn powf_with(
                 self,
                 exp: Self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 let wide_self: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
                 let wide_exp: $crate::D<$crate::int::types::Int<2>, SCALE> = exp.into();
-                ::core::convert::TryInto::try_into(wide_self.powf_strict_with(wide_exp, mode))
+                ::core::convert::TryInto::try_into(wide_self.powf_with(wide_exp, mode))
                     .unwrap_or_else(|_| {
                         $crate::support::diagnostics::overflow_panic_with_scale(
-                            concat!(stringify!($Type), "::powf_strict_with"),
+                            concat!(stringify!($Type), "::powf_with"),
                             SCALE,
                         )
                     })
@@ -456,12 +456,12 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             // ─ Roots ─────────────────────────────────────────────
             #[inline]
             #[must_use]
-            pub fn sqrt_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn sqrt_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.sqrt_strict_with(mode)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide.sqrt_with(mode)).unwrap_or_else(
                     |_| {
                         $crate::support::diagnostics::overflow_panic_with_scale(
-                            concat!(stringify!($Type), "::sqrt_strict_with"),
+                            concat!(stringify!($Type), "::sqrt_with"),
                             SCALE,
                         )
                     },
@@ -469,12 +469,12 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             }
             #[inline]
             #[must_use]
-            pub fn cbrt_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn cbrt_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.cbrt_strict_with(mode)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide.cbrt_with(mode)).unwrap_or_else(
                     |_| {
                         $crate::support::diagnostics::overflow_panic_with_scale(
-                            concat!(stringify!($Type), "::cbrt_strict_with"),
+                            concat!(stringify!($Type), "::cbrt_with"),
                             SCALE,
                         )
                     },
@@ -482,30 +482,30 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             }
             #[inline]
             #[must_use]
-            pub fn hypot_strict(self, other: Self) -> Self {
+            pub fn hypot(self, other: Self) -> Self {
                 let wide_self: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
                 let wide_other: $crate::D<$crate::int::types::Int<2>, SCALE> = other.into();
-                ::core::convert::TryInto::try_into(wide_self.hypot_strict(wide_other))
+                ::core::convert::TryInto::try_into(wide_self.hypot(wide_other))
                     .unwrap_or_else(|_| {
                         $crate::support::diagnostics::overflow_panic_with_scale(
-                            concat!(stringify!($Type), "::hypot_strict"),
+                            concat!(stringify!($Type), "::hypot"),
                             SCALE,
                         )
                     })
             }
             #[inline]
             #[must_use]
-            pub fn hypot_strict_with(
+            pub fn hypot_with(
                 self,
                 other: Self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 let wide_self: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
                 let wide_other: $crate::D<$crate::int::types::Int<2>, SCALE> = other.into();
-                ::core::convert::TryInto::try_into(wide_self.hypot_strict_with(wide_other, mode))
+                ::core::convert::TryInto::try_into(wide_self.hypot_with(wide_other, mode))
                     .unwrap_or_else(|_| {
                         $crate::support::diagnostics::overflow_panic_with_scale(
-                            concat!(stringify!($Type), "::hypot_strict_with"),
+                            concat!(stringify!($Type), "::hypot_with"),
                             SCALE,
                         )
                     })
@@ -514,12 +514,12 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             // ─ Trig (forward) ────────────────────────────────────
             #[inline]
             #[must_use]
-            pub fn sin_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn sin_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.sin_strict_with(mode)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide.sin_with(mode)).unwrap_or_else(
                     |_| {
                         $crate::support::diagnostics::overflow_panic_with_scale(
-                            concat!(stringify!($Type), "::sin_strict_with"),
+                            concat!(stringify!($Type), "::sin_with"),
                             SCALE,
                         )
                     },
@@ -527,12 +527,12 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             }
             #[inline]
             #[must_use]
-            pub fn cos_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn cos_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.cos_strict_with(mode)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide.cos_with(mode)).unwrap_or_else(
                     |_| {
                         $crate::support::diagnostics::overflow_panic_with_scale(
-                            concat!(stringify!($Type), "::cos_strict_with"),
+                            concat!(stringify!($Type), "::cos_with"),
                             SCALE,
                         )
                     },
@@ -540,12 +540,12 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             }
             #[inline]
             #[must_use]
-            pub fn tan_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn tan_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.tan_strict_with(mode)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide.tan_with(mode)).unwrap_or_else(
                     |_| {
                         $crate::support::diagnostics::overflow_panic_with_scale(
-                            concat!(stringify!($Type), "::tan_strict_with"),
+                            concat!(stringify!($Type), "::tan_with"),
                             SCALE,
                         )
                     },
@@ -554,12 +554,12 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             // ─ Trig (inverse) ────────────────────────────────────
             #[inline]
             #[must_use]
-            pub fn atan_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn atan_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.atan_strict_with(mode)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide.atan_with(mode)).unwrap_or_else(
                     |_| {
                         $crate::support::diagnostics::overflow_panic_with_scale(
-                            concat!(stringify!($Type), "::atan_strict_with"),
+                            concat!(stringify!($Type), "::atan_with"),
                             SCALE,
                         )
                     },
@@ -567,12 +567,12 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             }
             #[inline]
             #[must_use]
-            pub fn asin_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn asin_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.asin_strict_with(mode)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide.asin_with(mode)).unwrap_or_else(
                     |_| {
                         $crate::support::diagnostics::overflow_panic_with_scale(
-                            concat!(stringify!($Type), "::asin_strict_with"),
+                            concat!(stringify!($Type), "::asin_with"),
                             SCALE,
                         )
                     },
@@ -580,12 +580,12 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             }
             #[inline]
             #[must_use]
-            pub fn acos_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn acos_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.acos_strict_with(mode)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide.acos_with(mode)).unwrap_or_else(
                     |_| {
                         $crate::support::diagnostics::overflow_panic_with_scale(
-                            concat!(stringify!($Type), "::acos_strict_with"),
+                            concat!(stringify!($Type), "::acos_with"),
                             SCALE,
                         )
                     },
@@ -593,17 +593,17 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             }
             #[inline]
             #[must_use]
-            pub fn atan2_strict_with(
+            pub fn atan2_with(
                 self,
                 other: Self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 let wide_self: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
                 let wide_other: $crate::D<$crate::int::types::Int<2>, SCALE> = other.into();
-                ::core::convert::TryInto::try_into(wide_self.atan2_strict_with(wide_other, mode))
+                ::core::convert::TryInto::try_into(wide_self.atan2_with(wide_other, mode))
                     .unwrap_or_else(|_| {
                         $crate::support::diagnostics::overflow_panic_with_scale(
-                            concat!(stringify!($Type), "::atan2_strict_with"),
+                            concat!(stringify!($Type), "::atan2_with"),
                             SCALE,
                         )
                     })
@@ -611,12 +611,12 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             // ─ Hyperbolic ────────────────────────────────────────
             #[inline]
             #[must_use]
-            pub fn sinh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn sinh_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.sinh_strict_with(mode)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide.sinh_with(mode)).unwrap_or_else(
                     |_| {
                         $crate::support::diagnostics::overflow_panic_with_scale(
-                            concat!(stringify!($Type), "::sinh_strict_with"),
+                            concat!(stringify!($Type), "::sinh_with"),
                             SCALE,
                         )
                     },
@@ -624,12 +624,12 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             }
             #[inline]
             #[must_use]
-            pub fn cosh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn cosh_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.cosh_strict_with(mode)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide.cosh_with(mode)).unwrap_or_else(
                     |_| {
                         $crate::support::diagnostics::overflow_panic_with_scale(
-                            concat!(stringify!($Type), "::cosh_strict_with"),
+                            concat!(stringify!($Type), "::cosh_with"),
                             SCALE,
                         )
                     },
@@ -637,12 +637,12 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             }
             #[inline]
             #[must_use]
-            pub fn tanh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn tanh_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.tanh_strict_with(mode)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide.tanh_with(mode)).unwrap_or_else(
                     |_| {
                         $crate::support::diagnostics::overflow_panic_with_scale(
-                            concat!(stringify!($Type), "::tanh_strict_with"),
+                            concat!(stringify!($Type), "::tanh_with"),
                             SCALE,
                         )
                     },
@@ -650,12 +650,12 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             }
             #[inline]
             #[must_use]
-            pub fn asinh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn asinh_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.asinh_strict_with(mode)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide.asinh_with(mode)).unwrap_or_else(
                     |_| {
                         $crate::support::diagnostics::overflow_panic_with_scale(
-                            concat!(stringify!($Type), "::asinh_strict_with"),
+                            concat!(stringify!($Type), "::asinh_with"),
                             SCALE,
                         )
                     },
@@ -663,12 +663,12 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             }
             #[inline]
             #[must_use]
-            pub fn acosh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn acosh_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.acosh_strict_with(mode)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide.acosh_with(mode)).unwrap_or_else(
                     |_| {
                         $crate::support::diagnostics::overflow_panic_with_scale(
-                            concat!(stringify!($Type), "::acosh_strict_with"),
+                            concat!(stringify!($Type), "::acosh_with"),
                             SCALE,
                         )
                     },
@@ -676,12 +676,12 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             }
             #[inline]
             #[must_use]
-            pub fn atanh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn atanh_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.atanh_strict_with(mode)).unwrap_or_else(
+                ::core::convert::TryInto::try_into(wide.atanh_with(mode)).unwrap_or_else(
                     |_| {
                         $crate::support::diagnostics::overflow_panic_with_scale(
-                            concat!(stringify!($Type), "::atanh_strict_with"),
+                            concat!(stringify!($Type), "::atanh_with"),
                             SCALE,
                         )
                     },
@@ -690,189 +690,33 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             // ─ Angle conversion ──────────────────────────────────
             #[inline]
             #[must_use]
-            pub fn to_degrees_strict_with(
+            pub fn to_degrees_with(
                 self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.to_degrees_strict_with(mode))
+                ::core::convert::TryInto::try_into(wide.to_degrees_with(mode))
                     .unwrap_or_else(|_| {
                         $crate::support::diagnostics::overflow_panic_with_scale(
-                            concat!(stringify!($Type), "::to_degrees_strict_with"),
+                            concat!(stringify!($Type), "::to_degrees_with"),
                             SCALE,
                         )
                     })
             }
             #[inline]
             #[must_use]
-            pub fn to_radians_strict_with(
+            pub fn to_radians_with(
                 self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.to_radians_strict_with(mode))
+                ::core::convert::TryInto::try_into(wide.to_radians_with(mode))
                     .unwrap_or_else(|_| {
                         $crate::support::diagnostics::overflow_panic_with_scale(
-                            concat!(stringify!($Type), "::to_radians_strict_with"),
+                            concat!(stringify!($Type), "::to_radians_with"),
                             SCALE,
                         )
                     })
-            }
-            /// `ln` — feature-gated dispatcher; forwards to [`Self::ln_strict`] when the `strict` feature is on.
-            #[inline]
-            #[must_use]
-            pub fn ln(self) -> Self {
-                self.ln_strict()
-            }
-            /// `log1p` — feature-gated dispatcher; forwards to [`Self::log1p_strict`] when the `strict` feature is on.
-            #[inline]
-            #[must_use]
-            pub fn log1p(self) -> Self {
-                self.log1p_strict()
-            }
-            /// `expm1` — feature-gated dispatcher; forwards to [`Self::expm1_strict`] when the `strict` feature is on.
-            #[inline]
-            #[must_use]
-            pub fn expm1(self) -> Self {
-                self.expm1_strict()
-            }
-            /// `log2` — feature-gated dispatcher; forwards to [`Self::log2_strict`] when the `strict` feature is on.
-            #[inline]
-            #[must_use]
-            pub fn log2(self) -> Self {
-                self.log2_strict()
-            }
-            /// `log10` — feature-gated dispatcher; forwards to [`Self::log10_strict`] when the `strict` feature is on.
-            #[inline]
-            #[must_use]
-            pub fn log10(self) -> Self {
-                self.log10_strict()
-            }
-            /// `exp` — feature-gated dispatcher; forwards to [`Self::exp_strict`] when the `strict` feature is on.
-            #[inline]
-            #[must_use]
-            pub fn exp(self) -> Self {
-                self.exp_strict()
-            }
-            /// `exp2` — feature-gated dispatcher; forwards to [`Self::exp2_strict`] when the `strict` feature is on.
-            #[inline]
-            #[must_use]
-            pub fn exp2(self) -> Self {
-                self.exp2_strict()
-            }
-            /// `sqrt` — feature-gated dispatcher; forwards to [`Self::sqrt_strict`] when the `strict` feature is on.
-            #[inline]
-            #[must_use]
-            pub fn sqrt(self) -> Self {
-                self.sqrt_strict()
-            }
-            /// `cbrt` — feature-gated dispatcher; forwards to [`Self::cbrt_strict`] when the `strict` feature is on.
-            #[inline]
-            #[must_use]
-            pub fn cbrt(self) -> Self {
-                self.cbrt_strict()
-            }
-            /// `sin` — feature-gated dispatcher; forwards to [`Self::sin_strict`] when the `strict` feature is on.
-            #[inline]
-            #[must_use]
-            pub fn sin(self) -> Self {
-                self.sin_strict()
-            }
-            /// `cos` — feature-gated dispatcher; forwards to [`Self::cos_strict`] when the `strict` feature is on.
-            #[inline]
-            #[must_use]
-            pub fn cos(self) -> Self {
-                self.cos_strict()
-            }
-            /// `tan` — feature-gated dispatcher; forwards to [`Self::tan_strict`] when the `strict` feature is on.
-            #[inline]
-            #[must_use]
-            pub fn tan(self) -> Self {
-                self.tan_strict()
-            }
-            /// `asin` — feature-gated dispatcher; forwards to [`Self::asin_strict`] when the `strict` feature is on.
-            #[inline]
-            #[must_use]
-            pub fn asin(self) -> Self {
-                self.asin_strict()
-            }
-            /// `acos` — feature-gated dispatcher; forwards to [`Self::acos_strict`] when the `strict` feature is on.
-            #[inline]
-            #[must_use]
-            pub fn acos(self) -> Self {
-                self.acos_strict()
-            }
-            /// `atan` — feature-gated dispatcher; forwards to [`Self::atan_strict`] when the `strict` feature is on.
-            #[inline]
-            #[must_use]
-            pub fn atan(self) -> Self {
-                self.atan_strict()
-            }
-            /// `sinh` — feature-gated dispatcher; forwards to [`Self::sinh_strict`] when the `strict` feature is on.
-            #[inline]
-            #[must_use]
-            pub fn sinh(self) -> Self {
-                self.sinh_strict()
-            }
-            /// `cosh` — feature-gated dispatcher; forwards to [`Self::cosh_strict`] when the `strict` feature is on.
-            #[inline]
-            #[must_use]
-            pub fn cosh(self) -> Self {
-                self.cosh_strict()
-            }
-            /// `tanh` — feature-gated dispatcher; forwards to [`Self::tanh_strict`] when the `strict` feature is on.
-            #[inline]
-            #[must_use]
-            pub fn tanh(self) -> Self {
-                self.tanh_strict()
-            }
-            /// `asinh` — feature-gated dispatcher; forwards to [`Self::asinh_strict`] when the `strict` feature is on.
-            #[inline]
-            #[must_use]
-            pub fn asinh(self) -> Self {
-                self.asinh_strict()
-            }
-            /// `acosh` — feature-gated dispatcher; forwards to [`Self::acosh_strict`] when the `strict` feature is on.
-            #[inline]
-            #[must_use]
-            pub fn acosh(self) -> Self {
-                self.acosh_strict()
-            }
-            /// `atanh` — feature-gated dispatcher; forwards to [`Self::atanh_strict`] when the `strict` feature is on.
-            #[inline]
-            #[must_use]
-            pub fn atanh(self) -> Self {
-                self.atanh_strict()
-            }
-            /// `to_degrees` — feature-gated dispatcher; forwards to [`Self::to_degrees_strict`] when the `strict` feature is on.
-            #[inline]
-            #[must_use]
-            pub fn to_degrees(self) -> Self {
-                self.to_degrees_strict()
-            }
-            /// `to_radians` — feature-gated dispatcher; forwards to [`Self::to_radians_strict`] when the `strict` feature is on.
-            #[inline]
-            #[must_use]
-            pub fn to_radians(self) -> Self {
-                self.to_radians_strict()
-            }
-            /// `log` — feature-gated dispatcher; forwards to [`Self::log_strict`] when the `strict` feature is on.
-            #[inline]
-            #[must_use]
-            pub fn log(self, base: Self) -> Self {
-                self.log_strict(base)
-            }
-            /// `atan2` — feature-gated dispatcher; forwards to [`Self::atan2_strict`] when the `strict` feature is on.
-            #[inline]
-            #[must_use]
-            pub fn atan2(self, other: Self) -> Self {
-                self.atan2_strict(other)
-            }
-            /// `powf` — feature-gated dispatcher; forwards to [`Self::powf_strict`] when the `strict` feature is on.
-            #[inline]
-            #[must_use]
-            pub fn powf(self, exp: Self) -> Self {
-                self.powf_strict(exp)
             }
         }
     };

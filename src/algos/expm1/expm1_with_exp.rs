@@ -42,7 +42,7 @@
 //! about 92 (D18 at scale 17), so the extra band is only
 //! `ln(1 + 1/MAX) ~ 0.011 .. 0.057` wide in `x`, and it narrows further at
 //! lower scales. It is a genuine capability `exp` does not have — there ARE
-//! arguments this answers and `exp_strict` panics on — but it is a narrow strip
+//! arguments this answers and `exp` panics on — but it is a narrow strip
 //! at the top of the range, NOT a whole half-domain.
 //!
 //! # Where this candidate is weaker
@@ -107,7 +107,7 @@ where
 /// it passes the tier's WIDEST work integer (`C::Wexp`; `WZiv` on the narrow
 /// tiers, already the widest they have) rather than `C::W`. `exp_series` reaches
 /// the same width by lifting to `C::Wexp` when the peak outgrows the primary —
-/// running there directly gives `expm1_strict` at least the reach `exp_strict`
+/// running there directly gives `expm1` at least the reach `exp`
 /// has, so it cannot signal out-of-range on an argument `exp` accepts. Choosing
 /// the wider integer up front costs speed on the easy cells; that is a
 /// deliberate validity-first call, and the cost crossover is un-benched.
@@ -115,7 +115,7 @@ where
 /// # Panics
 ///
 /// Panics if the result leaves the storage range, or if the argument is so
-/// large that even `C::Wexp` cannot host `e^x` — the same wall `exp_strict`
+/// large that even `C::Wexp` cannot host `e^x` — the same wall `exp`
 /// carries, reached through `try_exp_fixed`'s `None`.
 #[inline]
 #[must_use]
@@ -140,7 +140,7 @@ where
                 expm1_with_exp_fixed::<S>(
                     wtc::to_work_scaled_g::<St, S>(raw, guard_digits),
                     SCALE + guard_digits),
-                "expm1_strict",
+                "expm1",
                 SCALE,
             )
         },

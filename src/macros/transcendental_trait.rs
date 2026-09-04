@@ -19,267 +19,267 @@ macro_rules! decl_decimal_transcendental_impl {
         {
             // ── Logarithms ───────────────────────────────
             #[inline]
-            fn ln_strict(self) -> Self {
-                <$Type<SCALE>>::ln_strict(self)
+            fn ln(self) -> Self {
+                <$Type<SCALE>>::ln(self)
             }
             #[inline]
-            fn ln_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <$Type<SCALE>>::ln_strict_with(self, mode)
-            }
-
-            #[inline]
-            fn log1p_strict(self) -> Self {
-                <$Type<SCALE>>::log1p_strict(self)
-            }
-            #[inline]
-            fn log1p_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <$Type<SCALE>>::log1p_strict_with(self, mode)
+            fn ln_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                <$Type<SCALE>>::ln_with(self, mode)
             }
 
             #[inline]
-            fn expm1_strict(self) -> Self {
-                <$Type<SCALE>>::expm1_strict(self)
+            fn log1p(self) -> Self {
+                <$Type<SCALE>>::log1p(self)
             }
             #[inline]
-            fn expm1_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <$Type<SCALE>>::expm1_strict_with(self, mode)
+            fn log1p_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                <$Type<SCALE>>::log1p_with(self, mode)
             }
 
             #[inline]
-            fn log_strict(self, base: Self) -> Self {
-                <$Type<SCALE>>::log_strict(self, base)
+            fn expm1(self) -> Self {
+                <$Type<SCALE>>::expm1(self)
             }
             #[inline]
-            fn log_strict_with(
+            fn expm1_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                <$Type<SCALE>>::expm1_with(self, mode)
+            }
+
+            #[inline]
+            fn log(self, base: Self) -> Self {
+                <$Type<SCALE>>::log(self, base)
+            }
+            #[inline]
+            fn log_with(
                 self,
                 base: Self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
-                <$Type<SCALE>>::log_strict_with(self, base, mode)
+                <$Type<SCALE>>::log_with(self, base, mode)
             }
 
             #[inline]
-            fn log2_strict(self) -> Self {
-                <$Type<SCALE>>::log2_strict(self)
+            fn log2(self) -> Self {
+                <$Type<SCALE>>::log2(self)
             }
             #[inline]
-            fn log2_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <$Type<SCALE>>::log2_strict_with(self, mode)
+            fn log2_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                <$Type<SCALE>>::log2_with(self, mode)
             }
 
             #[inline]
-            fn log10_strict(self) -> Self {
-                <$Type<SCALE>>::log10_strict(self)
+            fn log10(self) -> Self {
+                <$Type<SCALE>>::log10(self)
             }
             #[inline]
-            fn log10_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <$Type<SCALE>>::log10_strict_with(self, mode)
+            fn log10_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                <$Type<SCALE>>::log10_with(self, mode)
             }
 
             // ── Exponentials ─────────────────────────────
             #[inline]
-            fn exp_strict(self) -> Self {
-                <$Type<SCALE>>::exp_strict(self)
+            fn exp(self) -> Self {
+                <$Type<SCALE>>::exp(self)
             }
             #[inline]
-            fn exp_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <$Type<SCALE>>::exp_strict_with(self, mode)
+            fn exp_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                <$Type<SCALE>>::exp_with(self, mode)
             }
 
             #[inline]
-            fn exp2_strict(self) -> Self {
-                <$Type<SCALE>>::exp2_strict(self)
+            fn exp2(self) -> Self {
+                <$Type<SCALE>>::exp2(self)
             }
             #[inline]
-            fn exp2_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <$Type<SCALE>>::exp2_strict_with(self, mode)
+            fn exp2_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                <$Type<SCALE>>::exp2_with(self, mode)
             }
 
             // ── Power ────────────────────────────────────
             #[inline]
-            fn powf_strict(self, exp: Self) -> Self {
-                <$Type<SCALE>>::powf_strict(self, exp)
+            fn powf(self, exp: Self) -> Self {
+                <$Type<SCALE>>::powf(self, exp)
             }
             #[inline]
-            fn powf_strict_with(
+            fn powf_with(
                 self,
                 exp: Self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
-                <$Type<SCALE>>::powf_strict_with(self, exp, mode)
+                <$Type<SCALE>>::powf_with(self, exp, mode)
             }
 
             // ── Roots ────────────────────────────────────
             #[inline]
-            fn sqrt_strict(self) -> Self {
-                <$Type<SCALE>>::sqrt_strict(self)
+            fn sqrt(self) -> Self {
+                <$Type<SCALE>>::sqrt(self)
             }
             #[inline]
-            fn sqrt_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <$Type<SCALE>>::sqrt_strict_with(self, mode)
+            fn sqrt_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                <$Type<SCALE>>::sqrt_with(self, mode)
             }
             #[inline]
-            fn cbrt_strict(self) -> Self {
-                <$Type<SCALE>>::cbrt_strict(self)
+            fn cbrt(self) -> Self {
+                <$Type<SCALE>>::cbrt(self)
             }
             #[inline]
-            fn cbrt_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <$Type<SCALE>>::cbrt_strict_with(self, mode)
+            fn cbrt_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                <$Type<SCALE>>::cbrt_with(self, mode)
             }
             #[inline]
-            fn hypot_strict(self, other: Self) -> Self {
-                <$Type<SCALE>>::hypot_strict(self, other)
+            fn hypot(self, other: Self) -> Self {
+                <$Type<SCALE>>::hypot(self, other)
             }
             #[inline]
-            fn hypot_strict_with(
+            fn hypot_with(
                 self,
                 other: Self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
-                <$Type<SCALE>>::hypot_strict_with(self, other, mode)
+                <$Type<SCALE>>::hypot_with(self, other, mode)
             }
 
             // ── Trig (forward) ───────────────────────────
             #[inline]
-            fn sin_strict(self) -> Self {
-                <$Type<SCALE>>::sin_strict(self)
+            fn sin(self) -> Self {
+                <$Type<SCALE>>::sin(self)
             }
             #[inline]
-            fn sin_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <$Type<SCALE>>::sin_strict_with(self, mode)
-            }
-
-            #[inline]
-            fn cos_strict(self) -> Self {
-                <$Type<SCALE>>::cos_strict(self)
-            }
-            #[inline]
-            fn cos_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <$Type<SCALE>>::cos_strict_with(self, mode)
+            fn sin_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                <$Type<SCALE>>::sin_with(self, mode)
             }
 
             #[inline]
-            fn tan_strict(self) -> Self {
-                <$Type<SCALE>>::tan_strict(self)
+            fn cos(self) -> Self {
+                <$Type<SCALE>>::cos(self)
             }
             #[inline]
-            fn tan_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <$Type<SCALE>>::tan_strict_with(self, mode)
+            fn cos_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                <$Type<SCALE>>::cos_with(self, mode)
+            }
+
+            #[inline]
+            fn tan(self) -> Self {
+                <$Type<SCALE>>::tan(self)
+            }
+            #[inline]
+            fn tan_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                <$Type<SCALE>>::tan_with(self, mode)
             }
 
             // ── Trig (inverse) ───────────────────────────
             #[inline]
-            fn atan_strict(self) -> Self {
-                <$Type<SCALE>>::atan_strict(self)
+            fn atan(self) -> Self {
+                <$Type<SCALE>>::atan(self)
             }
             #[inline]
-            fn atan_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <$Type<SCALE>>::atan_strict_with(self, mode)
-            }
-
-            #[inline]
-            fn asin_strict(self) -> Self {
-                <$Type<SCALE>>::asin_strict(self)
-            }
-            #[inline]
-            fn asin_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <$Type<SCALE>>::asin_strict_with(self, mode)
+            fn atan_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                <$Type<SCALE>>::atan_with(self, mode)
             }
 
             #[inline]
-            fn acos_strict(self) -> Self {
-                <$Type<SCALE>>::acos_strict(self)
+            fn asin(self) -> Self {
+                <$Type<SCALE>>::asin(self)
             }
             #[inline]
-            fn acos_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <$Type<SCALE>>::acos_strict_with(self, mode)
+            fn asin_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                <$Type<SCALE>>::asin_with(self, mode)
             }
 
             #[inline]
-            fn atan2_strict(self, other: Self) -> Self {
-                <$Type<SCALE>>::atan2_strict(self, other)
+            fn acos(self) -> Self {
+                <$Type<SCALE>>::acos(self)
             }
             #[inline]
-            fn atan2_strict_with(
+            fn acos_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                <$Type<SCALE>>::acos_with(self, mode)
+            }
+
+            #[inline]
+            fn atan2(self, other: Self) -> Self {
+                <$Type<SCALE>>::atan2(self, other)
+            }
+            #[inline]
+            fn atan2_with(
                 self,
                 other: Self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
-                <$Type<SCALE>>::atan2_strict_with(self, other, mode)
+                <$Type<SCALE>>::atan2_with(self, other, mode)
             }
 
             // ── Hyperbolic ───────────────────────────────
             #[inline]
-            fn sinh_strict(self) -> Self {
-                <$Type<SCALE>>::sinh_strict(self)
+            fn sinh(self) -> Self {
+                <$Type<SCALE>>::sinh(self)
             }
             #[inline]
-            fn sinh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <$Type<SCALE>>::sinh_strict_with(self, mode)
-            }
-
-            #[inline]
-            fn cosh_strict(self) -> Self {
-                <$Type<SCALE>>::cosh_strict(self)
-            }
-            #[inline]
-            fn cosh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <$Type<SCALE>>::cosh_strict_with(self, mode)
+            fn sinh_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                <$Type<SCALE>>::sinh_with(self, mode)
             }
 
             #[inline]
-            fn tanh_strict(self) -> Self {
-                <$Type<SCALE>>::tanh_strict(self)
+            fn cosh(self) -> Self {
+                <$Type<SCALE>>::cosh(self)
             }
             #[inline]
-            fn tanh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <$Type<SCALE>>::tanh_strict_with(self, mode)
-            }
-
-            #[inline]
-            fn asinh_strict(self) -> Self {
-                <$Type<SCALE>>::asinh_strict(self)
-            }
-            #[inline]
-            fn asinh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <$Type<SCALE>>::asinh_strict_with(self, mode)
+            fn cosh_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                <$Type<SCALE>>::cosh_with(self, mode)
             }
 
             #[inline]
-            fn acosh_strict(self) -> Self {
-                <$Type<SCALE>>::acosh_strict(self)
+            fn tanh(self) -> Self {
+                <$Type<SCALE>>::tanh(self)
             }
             #[inline]
-            fn acosh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <$Type<SCALE>>::acosh_strict_with(self, mode)
+            fn tanh_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                <$Type<SCALE>>::tanh_with(self, mode)
             }
 
             #[inline]
-            fn atanh_strict(self) -> Self {
-                <$Type<SCALE>>::atanh_strict(self)
+            fn asinh(self) -> Self {
+                <$Type<SCALE>>::asinh(self)
             }
             #[inline]
-            fn atanh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <$Type<SCALE>>::atanh_strict_with(self, mode)
+            fn asinh_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                <$Type<SCALE>>::asinh_with(self, mode)
+            }
+
+            #[inline]
+            fn acosh(self) -> Self {
+                <$Type<SCALE>>::acosh(self)
+            }
+            #[inline]
+            fn acosh_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                <$Type<SCALE>>::acosh_with(self, mode)
+            }
+
+            #[inline]
+            fn atanh(self) -> Self {
+                <$Type<SCALE>>::atanh(self)
+            }
+            #[inline]
+            fn atanh_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                <$Type<SCALE>>::atanh_with(self, mode)
             }
 
             // ── Angle conversion ─────────────────────────
             #[inline]
-            fn to_degrees_strict(self) -> Self {
-                <$Type<SCALE>>::to_degrees_strict(self)
+            fn to_degrees(self) -> Self {
+                <$Type<SCALE>>::to_degrees(self)
             }
             #[inline]
-            fn to_degrees_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <$Type<SCALE>>::to_degrees_strict_with(self, mode)
+            fn to_degrees_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                <$Type<SCALE>>::to_degrees_with(self, mode)
             }
 
             #[inline]
-            fn to_radians_strict(self) -> Self {
-                <$Type<SCALE>>::to_radians_strict(self)
+            fn to_radians(self) -> Self {
+                <$Type<SCALE>>::to_radians(self)
             }
             #[inline]
-            fn to_radians_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <$Type<SCALE>>::to_radians_strict_with(self, mode)
+            fn to_radians_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                <$Type<SCALE>>::to_radians_with(self, mode)
             }
         }
     };

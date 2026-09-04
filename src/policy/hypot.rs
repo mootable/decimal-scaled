@@ -6,7 +6,7 @@
 //!
 //! See `docs/ARCHITECTURE.md` → "Policy file structure".
 //!
-//! `D<Int<N>, SCALE>::hypot_strict_with(other, mode)` delegates directly to
+//! `D<Int<N>, SCALE>::hypot_with(other, mode)` delegates directly to
 //! the one shared [`dispatch`] generic function. `dispatch` follows the
 //! canonical policy shape (mirroring [`crate::policy::sqrt`]):
 //!

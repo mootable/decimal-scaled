@@ -3,7 +3,7 @@
 
 //! Joint `(sinh, cosh)` over ONE shared `exp` evaluation.
 //!
-//! The pair kernel behind `sinh_cosh_strict` / `sinh_cosh_strict_with`.
+//! The pair kernel behind `sinh_cosh` / `sinh_cosh_with`.
 //! One `exp(x)` plus the `e⁻ˣ = 1/eˣ` reciprocal gives both terms of the
 //! identity, so the pair costs one `exp` and one wide divide rather than
 //! two `exp`s — worth roughly 40% at the wide tiers, where `exp_fixed` is

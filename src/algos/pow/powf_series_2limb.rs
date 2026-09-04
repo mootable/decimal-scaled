@@ -32,7 +32,7 @@ use crate::algos::ln::ln_series_2limb::{STRICT_GUARD, ln_fixed};
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
-/// Integer-exponent fast-path threshold for `powf_strict`.
+/// Integer-exponent fast-path threshold for `powf`.
 ///
 /// At `|n| <= 64`, the square-and-multiply `powi(n)` costs at most
 /// ~12 multiplications (2·log2(64)) — comfortably cheaper than the
@@ -200,11 +200,11 @@ fn exp_as_small_int<const SCALE: u32>(exp_raw: i128) -> Option<i32> {
 /// to `Some(0)`, matching the default form's documented behaviour).
 #[inline]
 #[must_use]
-pub(crate) fn powf_strict<const SCALE: u32>(base: Int<2>, exp: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+pub(crate) fn powf<const SCALE: u32>(base: Int<2>, exp: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
     powf_strict_raw::<SCALE>(base.as_i128(), exp.as_i128(), mode).map(Int::<2>::from_i128)
 }
 
-/// `i128` core of [`powf_strict`].
+/// `i128` core of [`powf`].
 #[inline]
 fn powf_strict_raw<const SCALE: u32>(base: i128, exp: i128, mode: RoundingMode) -> Option<i128> {
     if base <= 0 {

@@ -305,7 +305,6 @@ mod tests {
     /// scratch — in the exact-scratch width list regardless of decimal
     /// tiers); gated on `exact-scratch` because the build-max blanket of a
     /// narrow no-default-features build undersizes 64-limb scratch.
-    #[cfg(feature = "exact-scratch")]
     #[test]
     fn u128_verdict_shape_matches_knuth_reference() {
         use crate::int::algos::div::div_knuth::div_knuth_into;

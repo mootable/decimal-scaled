@@ -214,10 +214,7 @@ mod from_arithmetic_mode_aware {
     }
 }
 
-#[cfg(all(
-    feature = "strict",
-    any(feature = "d76", feature = "wide")
-))]
+#[cfg(any(feature = "d76", feature = "wide"))]
 mod from_rounding_mode_matrix {
     //! Mode-aware transcendental matrix.
     //!
@@ -247,7 +244,7 @@ mod from_rounding_mode_matrix {
     #[test]
     fn d38_ln_strict_delegates_to_strict_with_default() {
         let x = d38s19("3");
-        assert_eq!(x.ln_strict(), x.ln_strict_with(RoundingMode::HalfToEven));
+        assert_eq!(x.ln(), x.ln_with(RoundingMode::HalfToEven));
     }
 
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -258,9 +255,9 @@ mod from_rounding_mode_matrix {
     fn d38_ln_floor_and_ceiling_bracket_half() {
         // ln(3) is irrational; the last storage place differs by mode.
         let x = d38s19("3");
-        let floor_v = x.ln_strict_with(RoundingMode::Floor);
-        let ceil_v = x.ln_strict_with(RoundingMode::Ceiling);
-        let half_v = x.ln_strict_with(RoundingMode::HalfToEven);
+        let floor_v = x.ln_with(RoundingMode::Floor);
+        let ceil_v = x.ln_with(RoundingMode::Ceiling);
+        let half_v = x.ln_with(RoundingMode::HalfToEven);
         assert!(
             floor_v <= half_v && half_v <= ceil_v,
             "ln(3): floor {floor_v:?} <= half {half_v:?} <= ceiling {ceil_v:?}",
@@ -272,8 +269,8 @@ mod from_rounding_mode_matrix {
     #[test]
     fn d38_sin_floor_le_ceiling() {
         let x = d38s19("1");
-        let floor_v = x.sin_strict_with(RoundingMode::Floor);
-        let ceil_v = x.sin_strict_with(RoundingMode::Ceiling);
+        let floor_v = x.sin_with(RoundingMode::Floor);
+        let ceil_v = x.sin_with(RoundingMode::Ceiling);
         assert!(floor_v <= ceil_v);
     }
 
@@ -285,8 +282,8 @@ mod from_rounding_mode_matrix {
     fn d38_sqrt_strict_delegates_to_strict_with_default() {
         let x = d38s19("2");
         assert_eq!(
-            x.sqrt_strict(),
-            x.sqrt_strict_with(RoundingMode::HalfToEven),
+            x.sqrt(),
+            x.sqrt_with(RoundingMode::HalfToEven),
         );
     }
 
@@ -296,9 +293,9 @@ mod from_rounding_mode_matrix {
         // Trunc / Floor give the smaller neighbour and Ceiling gives the
         // larger.
         let x = d38s19("2");
-        let trunc_v = x.sqrt_strict_with(RoundingMode::Trunc);
-        let floor_v = x.sqrt_strict_with(RoundingMode::Floor);
-        let ceil_v = x.sqrt_strict_with(RoundingMode::Ceiling);
+        let trunc_v = x.sqrt_with(RoundingMode::Trunc);
+        let floor_v = x.sqrt_with(RoundingMode::Floor);
+        let ceil_v = x.sqrt_with(RoundingMode::Ceiling);
         assert_eq!(trunc_v, floor_v);
         assert!(floor_v < ceil_v);
     }
@@ -318,7 +315,7 @@ mod from_rounding_mode_matrix {
             RoundingMode::AwayFromZero,
             RoundingMode::ZeroFiveUp,
         ] {
-            assert_eq!(x.sqrt_strict_with(m), two, "sqrt(4) under {m:?}");
+            assert_eq!(x.sqrt_with(m), two, "sqrt(4) under {m:?}");
         }
     }
 
@@ -327,8 +324,8 @@ mod from_rounding_mode_matrix {
         // cbrt(-3) â‰ˆ -1.44â€¦ â€” negative; Floor pushes further negative
         // (greater magnitude), Ceiling pulls toward zero (smaller mag).
         let x = d38s19("-3");
-        let floor_v = x.cbrt_strict_with(RoundingMode::Floor);
-        let ceil_v = x.cbrt_strict_with(RoundingMode::Ceiling);
+        let floor_v = x.cbrt_with(RoundingMode::Floor);
+        let ceil_v = x.cbrt_with(RoundingMode::Ceiling);
         assert!(floor_v < ceil_v);
     }
 
@@ -346,7 +343,7 @@ mod from_rounding_mode_matrix {
             RoundingMode::AwayFromZero,
             RoundingMode::ZeroFiveUp,
         ] {
-            assert_eq!(x.cbrt_strict_with(m), two, "cbrt(8) under {m:?}");
+            assert_eq!(x.cbrt_with(m), two, "cbrt(8) under {m:?}");
         }
     }
 
@@ -355,8 +352,8 @@ mod from_rounding_mode_matrix {
         let a = d38s19("3");
         let b = d38s19("4");
         assert_eq!(
-            a.hypot_strict(b),
-            a.hypot_strict_with(b, RoundingMode::HalfToEven),
+            a.hypot(b),
+            a.hypot_with(b, RoundingMode::HalfToEven),
         );
     }
 
@@ -367,14 +364,14 @@ mod from_rounding_mode_matrix {
     #[test]
     fn d76_ln_strict_delegates_to_strict_with_default() {
         let x = d76s30("3");
-        assert_eq!(x.ln_strict(), x.ln_strict_with(RoundingMode::HalfToEven));
+        assert_eq!(x.ln(), x.ln_with(RoundingMode::HalfToEven));
     }
 
     #[test]
     fn d76_sqrt_floor_le_ceiling_for_irrational() {
         let x = d76s30("2");
-        let floor_v = x.sqrt_strict_with(RoundingMode::Floor);
-        let ceil_v = x.sqrt_strict_with(RoundingMode::Ceiling);
+        let floor_v = x.sqrt_with(RoundingMode::Floor);
+        let ceil_v = x.sqrt_with(RoundingMode::Ceiling);
         assert!(floor_v < ceil_v);
     }
 
@@ -382,8 +379,8 @@ mod from_rounding_mode_matrix {
     fn d76_cbrt_strict_delegates_to_strict_with_default() {
         let x = d76s30("8");
         assert_eq!(
-            x.cbrt_strict(),
-            x.cbrt_strict_with(RoundingMode::HalfToEven),
+            x.cbrt(),
+            x.cbrt_with(RoundingMode::HalfToEven),
         );
     }
 
@@ -391,8 +388,8 @@ mod from_rounding_mode_matrix {
     fn d76_sin_cos_strict_delegates_to_strict_with_default() {
         let x = d76s30("0.5");
         assert_eq!(
-            x.sin_cos_strict(),
-            x.sin_cos_strict_with(RoundingMode::HalfToEven),
+            x.sin_cos(),
+            x.sin_cos_with(RoundingMode::HalfToEven),
         );
     }
 
@@ -400,8 +397,8 @@ mod from_rounding_mode_matrix {
     fn d76_sinh_cosh_strict_delegates_to_strict_with_default() {
         let x = d76s30("0.5");
         assert_eq!(
-            x.sinh_cosh_strict(),
-            x.sinh_cosh_strict_with(RoundingMode::HalfToEven),
+            x.sinh_cosh(),
+            x.sinh_cosh_with(RoundingMode::HalfToEven),
         );
     }
 

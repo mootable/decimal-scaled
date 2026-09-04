@@ -28,11 +28,11 @@ fn bench(c: &mut Criterion) {
 
     // Warm the per-thread Tang tables so the first measured iteration
     // doesn't pay the one-shot M*ln_fixed seed cost.
-    let _ = one_p_half.ln_strict();
-    let _ = half.exp_strict();
-    let _ = half.sinh_strict();
-    let _ = half.cosh_strict();
-    let _ = half.tanh_strict();
+    let _ = one_p_half.ln();
+    let _ = half.exp();
+    let _ = half.sinh();
+    let _ = half.cosh();
+    let _ = half.tanh();
 
     g.bench_function("arith/mul", |bn| {
         bn.iter(|| black_box(two) * black_box(one))
@@ -42,52 +42,52 @@ fn bench(c: &mut Criterion) {
     });
 
     g.bench_function("strict/sqrt", |bn| {
-        bn.iter(|| black_box(one_p_half).sqrt_strict())
+        bn.iter(|| black_box(one_p_half).sqrt())
     });
     g.bench_function("strict/cbrt", |bn| {
-        bn.iter(|| black_box(one_p_half).cbrt_strict())
+        bn.iter(|| black_box(one_p_half).cbrt())
     });
     g.bench_function("strict/ln", |bn| {
-        bn.iter(|| black_box(one_p_half).ln_strict())
+        bn.iter(|| black_box(one_p_half).ln())
     });
-    g.bench_function("strict/exp", |bn| bn.iter(|| black_box(half).exp_strict()));
+    g.bench_function("strict/exp", |bn| bn.iter(|| black_box(half).exp()));
     g.bench_function("strict/sin", |bn| {
-        bn.iter(|| black_box(one_p_half).sin_strict())
+        bn.iter(|| black_box(one_p_half).sin())
     });
     g.bench_function("strict/cos", |bn| {
-        bn.iter(|| black_box(one_p_half).cos_strict())
+        bn.iter(|| black_box(one_p_half).cos())
     });
     g.bench_function("strict/tan", |bn| {
-        bn.iter(|| black_box(one_p_half).tan_strict())
+        bn.iter(|| black_box(one_p_half).tan())
     });
     g.bench_function("strict/atan", |bn| {
-        bn.iter(|| black_box(one_p_half).atan_strict())
+        bn.iter(|| black_box(one_p_half).atan())
     });
     g.bench_function("strict/asin", |bn| {
-        bn.iter(|| black_box(half).asin_strict())
+        bn.iter(|| black_box(half).asin())
     });
     g.bench_function("strict/acos", |bn| {
-        bn.iter(|| black_box(half).acos_strict())
+        bn.iter(|| black_box(half).acos())
     });
     g.bench_function("strict/sinh", |bn| {
-        bn.iter(|| black_box(half).sinh_strict())
+        bn.iter(|| black_box(half).sinh())
     });
     g.bench_function("strict/cosh", |bn| {
-        bn.iter(|| black_box(half).cosh_strict())
+        bn.iter(|| black_box(half).cosh())
     });
     g.bench_function("strict/tanh", |bn| {
-        bn.iter(|| black_box(half).tanh_strict())
+        bn.iter(|| black_box(half).tanh())
     });
 
     // AGM probes — capture the data point so AGM-crossover decisions
-    // at deeper tiers have a baseline. `ln_strict_agm` and
-    // `exp_strict_agm` are the macro-emitted alternates next to the
+    // at deeper tiers have a baseline. `ln_agm` and
+    // `exp_agm` are the macro-emitted alternates next to the
     // canonical strict paths.
     g.bench_function("strict/ln_agm", |bn| {
-        bn.iter(|| black_box(three).ln_strict_agm())
+        bn.iter(|| black_box(three).ln_agm())
     });
     g.bench_function("strict/exp_agm", |bn| {
-        bn.iter(|| black_box(half).exp_strict_agm())
+        bn.iter(|| black_box(half).exp_agm())
     });
 
     g.finish();

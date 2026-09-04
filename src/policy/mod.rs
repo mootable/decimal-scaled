@@ -3,7 +3,7 @@
 
 //! Per-family policy traits — which algorithm each `Dxx<S>` calls.
 //!
-//! The typed method shell on each `Dxx<S>` (e.g. `D57::<SCALE>::exp_strict`)
+//! The typed method shell on each `Dxx<S>` (e.g. `D57::<SCALE>::exp`)
 //! delegates to the policy `dispatch` fn (`exp::dispatch`). Every family
 //! follows the canonical `(N, SCALE)` matcher (`sqrt` is the exemplar): a
 //! per-function `Algorithm` enum + a `const fn select<N, SCALE>()` + an

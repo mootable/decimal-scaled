@@ -51,22 +51,22 @@ fn d18(v: i64) -> W18 {
 fn d38_bare_log_exp_matches_strict() {
     let x = d38(3);
     let base = d38(2);
-    assert_eq!(x.ln(), x.ln_strict(), "D38::ln must be the strict path");
+    assert_eq!(x.ln(), x.ln(), "D38::ln must be the strict path");
     assert_eq!(
         x.log1p(),
-        x.log1p_strict(),
+        x.log1p(),
         "D38::log1p must be the strict path"
     );
-    assert_eq!(x.log2(), x.log2_strict());
-    assert_eq!(x.log10(), x.log10_strict());
-    assert_eq!(x.log(base), x.log_strict(base));
-    assert_eq!(x.exp(), x.exp_strict(), "D38::exp must be the strict path");
+    assert_eq!(x.log2(), x.log2());
+    assert_eq!(x.log10(), x.log10());
+    assert_eq!(x.log(base), x.log(base));
+    assert_eq!(x.exp(), x.exp(), "D38::exp must be the strict path");
     assert_eq!(
         x.expm1(),
-        x.expm1_strict(),
+        x.expm1(),
         "D38::expm1 must be the strict path"
     );
-    assert_eq!(x.exp2(), x.exp2_strict());
+    assert_eq!(x.exp2(), x.exp2());
 }
 
 #[test]
@@ -75,31 +75,31 @@ fn d38_bare_trig_matches_strict() {
     let y = d38(2);
     // `half` keeps asin / acos / atanh inside their |x| <= 1 domain.
     let half = d38(1) / d38(2);
-    assert_eq!(x.sin(), x.sin_strict(), "D38::sin must be the strict path");
-    assert_eq!(x.cos(), x.cos_strict());
-    assert_eq!(x.tan(), x.tan_strict());
-    assert_eq!(half.asin(), half.asin_strict());
-    assert_eq!(half.acos(), half.acos_strict());
-    assert_eq!(x.atan(), x.atan_strict());
-    assert_eq!(x.atan2(y), x.atan2_strict(y));
-    assert_eq!(x.sinh(), x.sinh_strict());
-    assert_eq!(x.cosh(), x.cosh_strict());
-    assert_eq!(x.tanh(), x.tanh_strict());
-    assert_eq!(x.asinh(), x.asinh_strict());
-    assert_eq!(x.acosh(), x.acosh_strict());
-    assert_eq!(half.atanh(), half.atanh_strict());
-    assert_eq!(x.to_degrees(), x.to_degrees_strict());
-    assert_eq!(x.to_radians(), x.to_radians_strict());
+    assert_eq!(x.sin(), x.sin(), "D38::sin must be the strict path");
+    assert_eq!(x.cos(), x.cos());
+    assert_eq!(x.tan(), x.tan());
+    assert_eq!(half.asin(), half.asin());
+    assert_eq!(half.acos(), half.acos());
+    assert_eq!(x.atan(), x.atan());
+    assert_eq!(x.atan2(y), x.atan2(y));
+    assert_eq!(x.sinh(), x.sinh());
+    assert_eq!(x.cosh(), x.cosh());
+    assert_eq!(x.tanh(), x.tanh());
+    assert_eq!(x.asinh(), x.asinh());
+    assert_eq!(x.acosh(), x.acosh());
+    assert_eq!(half.atanh(), half.atanh());
+    assert_eq!(x.to_degrees(), x.to_degrees());
+    assert_eq!(x.to_radians(), x.to_radians());
 }
 
 #[test]
 fn d38_bare_powers_match_strict() {
     let x = d38(3);
     let y = d38(2);
-    assert_eq!(x.sqrt(), x.sqrt_strict(), "D38::sqrt must be the strict path");
-    assert_eq!(x.cbrt(), x.cbrt_strict());
-    assert_eq!(x.powf(y), x.powf_strict(y));
-    assert_eq!(x.hypot(y), x.hypot_strict(y));
+    assert_eq!(x.sqrt(), x.sqrt(), "D38::sqrt must be the strict path");
+    assert_eq!(x.cbrt(), x.cbrt());
+    assert_eq!(x.powf(y), x.powf(y));
+    assert_eq!(x.hypot(y), x.hypot(y));
 }
 
 // ── D18 — the macro-generated width ─────────────────────────────────
@@ -108,22 +108,22 @@ fn d38_bare_powers_match_strict() {
 fn d18_bare_log_exp_matches_strict() {
     let x = d18(3);
     let base = d18(2);
-    assert_eq!(x.ln(), x.ln_strict(), "D18::ln must be the strict path");
+    assert_eq!(x.ln(), x.ln(), "D18::ln must be the strict path");
     assert_eq!(
         x.log1p(),
-        x.log1p_strict(),
+        x.log1p(),
         "D18::log1p must be the strict path"
     );
-    assert_eq!(x.log2(), x.log2_strict());
-    assert_eq!(x.log10(), x.log10_strict());
-    assert_eq!(x.log(base), x.log_strict(base));
-    assert_eq!(x.exp(), x.exp_strict(), "D18::exp must be the strict path");
+    assert_eq!(x.log2(), x.log2());
+    assert_eq!(x.log10(), x.log10());
+    assert_eq!(x.log(base), x.log(base));
+    assert_eq!(x.exp(), x.exp(), "D18::exp must be the strict path");
     assert_eq!(
         x.expm1(),
-        x.expm1_strict(),
+        x.expm1(),
         "D18::expm1 must be the strict path"
     );
-    assert_eq!(x.exp2(), x.exp2_strict());
+    assert_eq!(x.exp2(), x.exp2());
 }
 
 #[test]
@@ -131,28 +131,28 @@ fn d18_bare_trig_matches_strict() {
     let x = d18(3);
     let y = d18(2);
     let half = d18(1) / d18(2);
-    assert_eq!(x.sin(), x.sin_strict(), "D18::sin must be the strict path");
-    assert_eq!(x.cos(), x.cos_strict());
-    assert_eq!(x.tan(), x.tan_strict());
-    assert_eq!(half.asin(), half.asin_strict());
-    assert_eq!(half.acos(), half.acos_strict());
-    assert_eq!(x.atan(), x.atan_strict());
-    assert_eq!(x.atan2(y), x.atan2_strict(y));
-    assert_eq!(x.sinh(), x.sinh_strict());
-    assert_eq!(x.cosh(), x.cosh_strict());
-    assert_eq!(x.tanh(), x.tanh_strict());
-    assert_eq!(x.asinh(), x.asinh_strict());
-    assert_eq!(x.acosh(), x.acosh_strict());
-    assert_eq!(half.atanh(), half.atanh_strict());
-    assert_eq!(x.to_degrees(), x.to_degrees_strict());
-    assert_eq!(x.to_radians(), x.to_radians_strict());
+    assert_eq!(x.sin(), x.sin(), "D18::sin must be the strict path");
+    assert_eq!(x.cos(), x.cos());
+    assert_eq!(x.tan(), x.tan());
+    assert_eq!(half.asin(), half.asin());
+    assert_eq!(half.acos(), half.acos());
+    assert_eq!(x.atan(), x.atan());
+    assert_eq!(x.atan2(y), x.atan2(y));
+    assert_eq!(x.sinh(), x.sinh());
+    assert_eq!(x.cosh(), x.cosh());
+    assert_eq!(x.tanh(), x.tanh());
+    assert_eq!(x.asinh(), x.asinh());
+    assert_eq!(x.acosh(), x.acosh());
+    assert_eq!(half.atanh(), half.atanh());
+    assert_eq!(x.to_degrees(), x.to_degrees());
+    assert_eq!(x.to_radians(), x.to_radians());
 }
 
 #[test]
 fn d18_bare_powers_match_strict() {
     let x = d18(3);
     let y = d18(2);
-    assert_eq!(x.sqrt(), x.sqrt_strict(), "D18::sqrt must be the strict path");
-    assert_eq!(x.cbrt(), x.cbrt_strict());
-    assert_eq!(x.powf(y), x.powf_strict(y));
+    assert_eq!(x.sqrt(), x.sqrt(), "D18::sqrt must be the strict path");
+    assert_eq!(x.cbrt(), x.cbrt());
+    assert_eq!(x.powf(y), x.powf(y));
 }

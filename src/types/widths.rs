@@ -462,8 +462,8 @@ crate::macros::transcendental_trait::decl_decimal_transcendental_impl!(D38);
 
 // D38 strict transcendentals: hand-tuned per-type kernels.
 //
-// The canonical public `*_strict` surface (`ln_strict`, `exp_strict`,
-// `sin_strict`, `powf_strict`, …) is emitted by the per-type files
+// The canonical public `*_strict` surface (`ln`, `exp`,
+// `sin`, `powf`, …) is emitted by the per-type files
 // `types/log_exp.rs` / `types/trig.rs` / `types/powers.rs` using
 // the hand-tuned 256-bit `algos::support::fixed::Fixed` work integer. They
 // are the **chosen winners** per the per-type-kernel policy:

@@ -44,17 +44,7 @@ macro_rules! int2_trig {
             Int::<2>::from_i128($core::<SCALE>(raw.as_i128(), mode))
         }
     };
-    (with_scale $pub:ident, $core:ident) => {
-        pub(crate) fn $pub(
-            raw: Int<2>,
-            scale: u32,
-            working_digits: u32,
-            mode: RoundingMode,
-        ) -> Int<2> {
-            Int::<2>::from_i128($core(raw.as_i128(), scale, working_digits, mode))
-        }
-    };
-    (atan2_strict $pub:ident, $core:ident) => {
+    (atan2 $pub:ident, $core:ident) => {
         pub(crate) fn $pub<const SCALE: u32>(
             y_raw: Int<2>,
             x_raw: Int<2>,
@@ -65,15 +55,13 @@ macro_rules! int2_trig {
     };
 }
 
-int2_trig!(strict sin_strict, sin_strict_raw);
-int2_trig!(strict cos_strict, cos_strict_raw);
-int2_trig!(strict tan_strict, tan_strict_raw);
-int2_trig!(strict atan_strict, atan_strict_raw);
-int2_trig!(strict asin_strict, asin_strict_raw);
-int2_trig!(strict acos_strict, acos_strict_raw);
-int2_trig!(atan2_strict atan2_strict, atan2_strict_raw);
-int2_trig!(with_scale to_degrees_with, to_degrees_with_raw);
-int2_trig!(with_scale to_radians_with, to_radians_with_raw);
+int2_trig!(strict sin, sin_strict_raw);
+int2_trig!(strict cos, cos_strict_raw);
+int2_trig!(strict tan, tan_strict_raw);
+int2_trig!(strict atan, atan_strict_raw);
+int2_trig!(strict asin, asin_strict_raw);
+int2_trig!(strict acos, acos_strict_raw);
+int2_trig!(atan2 atan2, atan2_strict_raw);
 
 // ── Shared Fixed primitives ────────────────────────────────────────
 
@@ -933,7 +921,7 @@ pub(crate) fn atan2_strict_raw<const SCALE: u32>(y_raw: i128, x_raw: i128, mode:
 
 #[inline]
 #[must_use]
-pub(crate) fn sinh_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
+pub(crate) fn sinh<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
     Int::<2>::from_i128(sinh_strict_raw(raw.as_i128(), SCALE, mode))
 }
 
@@ -975,7 +963,7 @@ fn sinh_ziv(raw: i128, scale: u32, guard_digits: u32) -> WZiv {
     if raw < 0 { -sinh_value } else { sinh_value }
 }
 
-/// Strict-path `i128` core of [`sinh_strict`]: the `Fixed` fast shot
+/// Strict-path `i128` core of [`sinh`]: the `Fixed` fast shot
 /// narrows through the clear-of-tie terminal; a near-tie (and the
 /// integer-regime cells, whose base probe is a wider-work single
 /// shot) escalates through the Ziv walker.
@@ -1016,7 +1004,7 @@ fn sinh_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> i128 {
 
 #[inline]
 #[must_use]
-pub(crate) fn cosh_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
+pub(crate) fn cosh<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
     Int::<2>::from_i128(cosh_strict_raw(raw.as_i128(), SCALE, mode))
 }
 
@@ -1052,7 +1040,7 @@ fn cosh_ziv(raw: i128, scale: u32, guard_digits: u32) -> WZiv {
     eg::cosh_pos::<WZiv>(abs_working_value, working_scale)
 }
 
-/// Strict-path `i128` core of [`cosh_strict`]. `cosh(x) > 1` is
+/// Strict-path `i128` core of [`cosh`]. `cosh(x) > 1` is
 /// transcendental for every `x ≠ 0` (the `never_exact` walker polarity:
 /// the exact-half/grid families — `cosh(1e-19)` at D38<38> lands
 /// `1 + x²/2` EXACTLY on the half with the `x⁴/24` tail at depth 77 —
@@ -1084,7 +1072,7 @@ fn cosh_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> i128 {
 
 #[inline]
 #[must_use]
-pub(crate) fn tanh_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
+pub(crate) fn tanh<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
     Int::<2>::from_i128(tanh_strict_raw(raw.as_i128(), SCALE, mode))
 }
 
@@ -1101,7 +1089,7 @@ fn tanh_ziv(raw: i128, scale: u32, guard_digits: u32) -> WZiv {
     if raw < 0 { -tanh_value } else { tanh_value }
 }
 
-/// Strict-path `i128` core of [`tanh_strict`]: the linear band and the
+/// Strict-path `i128` core of [`tanh`]: the linear band and the
 /// all-nines saturation region stay ANALYTIC (the band's sub-ULP cubic
 /// and the saturation's `1 − 10^-w` shape are proven, so no tie check
 /// is needed there); the middle region narrows through the clear-of-tie
@@ -1197,7 +1185,7 @@ fn tanh_eval_fixed(raw: i128, working_digits: u32, working_scale: u32) -> (Fixed
 
 #[inline]
 #[must_use]
-pub(crate) fn asinh_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
+pub(crate) fn asinh<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
     Int::<2>::from_i128(asinh_strict_raw(raw.as_i128(), SCALE, mode))
 }
 
@@ -1263,7 +1251,7 @@ fn asinh_ziv(raw: i128, scale: u32, guard_digits: u32) -> WZiv {
     if raw < 0 { -inner } else { inner }
 }
 
-/// Strict-path `i128` core of [`asinh_strict`] — clear-of-tie terminal
+/// Strict-path `i128` core of [`asinh`] — clear-of-tie terminal
 /// with the Ziv walker behind it.
 fn asinh_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> i128 {
     if raw == 0 {
@@ -1287,7 +1275,7 @@ fn asinh_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> i128 {
 
 #[inline]
 #[must_use]
-pub(crate) fn acosh_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
+pub(crate) fn acosh<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
     Int::<2>::from_i128(acosh_strict_raw(raw.as_i128(), SCALE, mode))
 }
 
@@ -1345,7 +1333,7 @@ fn acosh_ziv(raw: i128, scale: u32, guard_digits: u32) -> WZiv {
     }
 }
 
-/// Strict-path `i128` core of [`acosh_strict`] — clear-of-tie terminal
+/// Strict-path `i128` core of [`acosh`] — clear-of-tie terminal
 /// with the near-special walker (the wide acosh shape: a forced confirm
 /// near the `x = 1` special point) behind it.
 fn acosh_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> i128 {
@@ -1368,7 +1356,7 @@ fn acosh_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> i128 {
 
 #[inline]
 #[must_use]
-pub(crate) fn atanh_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
+pub(crate) fn atanh<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
     Int::<2>::from_i128(atanh_strict_raw(raw.as_i128(), SCALE, mode))
 }
 
@@ -1392,7 +1380,7 @@ fn atanh_ziv(raw: i128, scale: u32, guard_digits: u32) -> WZiv {
     if raw < 0 { -inner } else { inner }
 }
 
-/// Strict-path `i128` core of [`atanh_strict`] — clear-of-tie terminal
+/// Strict-path `i128` core of [`atanh`] — clear-of-tie terminal
 /// with the near-special walker (the wide atanh shape: a forced confirm
 /// near the ±1 special points) behind it. The exposing family is the
 /// tiny-x partial (`atanh(1e-38)` at D38<38>: `x³/3` deviation at depth
@@ -1471,8 +1459,8 @@ fn atanh_eval_fixed(raw: i128, working_digits: u32, working_scale: u32) -> Fixed
 
 #[inline]
 #[must_use]
-pub(crate) fn to_degrees_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    to_degrees_with(raw, SCALE, STRICT_GUARD, mode)
+pub(crate) fn to_degrees<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
+    Int::<2>::from_i128(to_degrees_with_raw(raw.as_i128(), SCALE, STRICT_GUARD, mode))
 }
 
 #[inline]
@@ -1498,8 +1486,8 @@ pub(crate) fn to_degrees_with_raw(
 
 #[inline]
 #[must_use]
-pub(crate) fn to_radians_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    to_radians_with(raw, SCALE, STRICT_GUARD, mode)
+pub(crate) fn to_radians<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
+    Int::<2>::from_i128(to_radians_with_raw(raw.as_i128(), SCALE, STRICT_GUARD, mode))
 }
 
 #[inline]
@@ -1709,16 +1697,16 @@ mod near_tie_pins {
         // every build (default: trig_series_2limb; wide: borrow-D57 for
         // the inverse family, walker-fixed by the wide campaign).
         let x38 = crate::D::<Int<2>, 38>(Int::<2>::from_i128(1));
-        assert_eq!(x38.sin_strict_with(RoundingMode::Floor).0.as_i128(), 0, "public sin Floor");
-        assert_eq!(x38.tan_strict_with(RoundingMode::Ceiling).0.as_i128(), 2, "public tan Ceiling");
-        assert_eq!(x38.asin_strict_with(RoundingMode::Ceiling).0.as_i128(), 2, "public asin Ceiling");
+        assert_eq!(x38.sin_with(RoundingMode::Floor).0.as_i128(), 0, "public sin Floor");
+        assert_eq!(x38.tan_with(RoundingMode::Ceiling).0.as_i128(), 2, "public tan Ceiling");
+        assert_eq!(x38.asin_with(RoundingMode::Ceiling).0.as_i128(), 2, "public asin Ceiling");
         assert_eq!(
-            x38.cosh_strict_with(RoundingMode::HalfToEven).0.as_i128(),
+            x38.cosh_with(RoundingMode::HalfToEven).0.as_i128(),
             10_i128.pow(38),
             "public cosh(1e-38) HalfToEven (1 + x²/2 = 1 + 5e-77 → 1)"
         );
         let x18 = crate::D::<Int<1>, 18>(Int::<1>::from_i128(1));
-        assert_eq!(x18.tan_strict_with(RoundingMode::Ceiling).0.as_i128(), 2, "public D18 tan Ceiling");
+        assert_eq!(x18.tan_with(RoundingMode::Ceiling).0.as_i128(), 2, "public D18 tan Ceiling");
     }
 }
 

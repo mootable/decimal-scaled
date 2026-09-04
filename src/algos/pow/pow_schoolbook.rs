@@ -23,7 +23,7 @@
 //!
 //! ## Why not call dispatched methods
 //!
-//! Calling `x.ln_strict_with(…)` or `x.exp_strict_with(…)` on a value
+//! Calling `x.ln_with(…)` or `x.exp_with(…)` on a value
 //! of the same decimal type re-enters the decimal policy (the layering
 //! inversion — forbidden by `docs/ARCHITECTURE.md`).  The schoolbook
 //! kernels are called directly on `Fixed` representations instead.
@@ -175,7 +175,7 @@ pub(crate) fn pow_schoolbook_strict<const SCALE: u32>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::algos::pow::powf_series_2limb::powf_strict;
+    use crate::algos::pow::powf_series_2limb::powf;
     use crate::support::rounding::RoundingMode;
     use crate::int::types::Int;
 
@@ -191,7 +191,7 @@ mod tests {
         let base_raw = Int::<2>::from_i128(base);
         let exponent_raw = Int::<2>::from_i128(exp);
         let got = pow_schoolbook_strict::<S>(base_raw, exponent_raw, mode);
-        let expected = powf_strict::<S>(base_raw, exponent_raw, mode).expect("reference in range");
+        let expected = powf::<S>(base_raw, exponent_raw, mode).expect("reference in range");
         assert_eq!(got, expected,
             "pow schoolbook D38<{}> base={} exp={} mode={:?}: {:?} != {:?}",
             S, base, exp, mode, got, expected);
@@ -251,7 +251,7 @@ mod tests {
                         crate::algos::pow::pow_schoolbook::pow_schoolbook::<Core, S>(
                             base_raw, exponent_raw, mode),
                         D::<Int<3>, S>(base_raw)
-                            .powf_strict_with(D::<Int<3>, S>(exponent_raw), mode).0,
+                            .powf_with(D::<Int<3>, S>(exponent_raw), mode).0,
                         "D57 pow schoolbook != routed at base={base} exp={exponent} mode={mode:?}"
                     );
                 }

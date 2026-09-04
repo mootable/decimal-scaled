@@ -13,8 +13,8 @@
 //! - D307<150> — deep-storage wide-tier sentinel for wide-int
 //!   regression detection.
 //!
-//! Functions exercised: add, mul, div, sqrt_strict, ln_strict,
-//! exp_strict, sin_strict, cos_strict, atan_strict.
+//! Functions exercised: add, mul, div, sqrt, ln,
+//! exp, sin, cos, atan.
 //!
 //! When adding a new bespoke kernel for a new `(width, scale)` cell,
 //! add a matching bench here so the per-PR gate covers regressions
@@ -77,40 +77,40 @@ fn bench_transcendentals(c: &mut Criterion) {
     let (a56, _) = inputs_d57();
     let (a307, _) = inputs_d307();
 
-    let mut g = c.benchmark_group("sqrt_strict");
-    g.bench_function("D38", |bn| bn.iter(|| black_box(a38).sqrt_strict()));
-    g.bench_function("D57", |bn| bn.iter(|| black_box(a56).sqrt_strict()));
-    g.bench_function("D307", |bn| bn.iter(|| black_box(a307).sqrt_strict()));
+    let mut g = c.benchmark_group("sqrt");
+    g.bench_function("D38", |bn| bn.iter(|| black_box(a38).sqrt()));
+    g.bench_function("D57", |bn| bn.iter(|| black_box(a56).sqrt()));
+    g.bench_function("D307", |bn| bn.iter(|| black_box(a307).sqrt()));
     g.finish();
 
-    let mut g = c.benchmark_group("ln_strict");
-    g.bench_function("D38", |bn| bn.iter(|| black_box(a38).ln_strict()));
-    g.bench_function("D57", |bn| bn.iter(|| black_box(a56).ln_strict()));
-    g.bench_function("D307", |bn| bn.iter(|| black_box(a307).ln_strict()));
+    let mut g = c.benchmark_group("ln");
+    g.bench_function("D38", |bn| bn.iter(|| black_box(a38).ln()));
+    g.bench_function("D57", |bn| bn.iter(|| black_box(a56).ln()));
+    g.bench_function("D307", |bn| bn.iter(|| black_box(a307).ln()));
     g.finish();
 
-    let mut g = c.benchmark_group("exp_strict");
-    g.bench_function("D38", |bn| bn.iter(|| black_box(a38).exp_strict()));
-    g.bench_function("D57", |bn| bn.iter(|| black_box(a56).exp_strict()));
-    g.bench_function("D307", |bn| bn.iter(|| black_box(a307).exp_strict()));
+    let mut g = c.benchmark_group("exp");
+    g.bench_function("D38", |bn| bn.iter(|| black_box(a38).exp()));
+    g.bench_function("D57", |bn| bn.iter(|| black_box(a56).exp()));
+    g.bench_function("D307", |bn| bn.iter(|| black_box(a307).exp()));
     g.finish();
 
-    let mut g = c.benchmark_group("sin_strict");
-    g.bench_function("D38", |bn| bn.iter(|| black_box(a38).sin_strict()));
-    g.bench_function("D57", |bn| bn.iter(|| black_box(a56).sin_strict()));
-    g.bench_function("D307", |bn| bn.iter(|| black_box(a307).sin_strict()));
+    let mut g = c.benchmark_group("sin");
+    g.bench_function("D38", |bn| bn.iter(|| black_box(a38).sin()));
+    g.bench_function("D57", |bn| bn.iter(|| black_box(a56).sin()));
+    g.bench_function("D307", |bn| bn.iter(|| black_box(a307).sin()));
     g.finish();
 
-    let mut g = c.benchmark_group("cos_strict");
-    g.bench_function("D38", |bn| bn.iter(|| black_box(a38).cos_strict()));
-    g.bench_function("D57", |bn| bn.iter(|| black_box(a56).cos_strict()));
-    g.bench_function("D307", |bn| bn.iter(|| black_box(a307).cos_strict()));
+    let mut g = c.benchmark_group("cos");
+    g.bench_function("D38", |bn| bn.iter(|| black_box(a38).cos()));
+    g.bench_function("D57", |bn| bn.iter(|| black_box(a56).cos()));
+    g.bench_function("D307", |bn| bn.iter(|| black_box(a307).cos()));
     g.finish();
 
-    let mut g = c.benchmark_group("atan_strict");
-    g.bench_function("D38", |bn| bn.iter(|| black_box(a38).atan_strict()));
-    g.bench_function("D57", |bn| bn.iter(|| black_box(a56).atan_strict()));
-    g.bench_function("D307", |bn| bn.iter(|| black_box(a307).atan_strict()));
+    let mut g = c.benchmark_group("atan");
+    g.bench_function("D38", |bn| bn.iter(|| black_box(a38).atan()));
+    g.bench_function("D57", |bn| bn.iter(|| black_box(a56).atan()));
+    g.bench_function("D307", |bn| bn.iter(|| black_box(a307).atan()));
     g.finish();
 }
 

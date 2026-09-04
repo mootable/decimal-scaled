@@ -39,7 +39,7 @@ pub(crate) fn to_degrees_mul_pi_ratio<C: WideTrigCore, const SCALE: u32>(
 /// `MulPiRatio` to_radians for a wide tier -- `x * pi / 180` in the
 /// guard-digit work integer, correctly rounded to storage.
 ///
-/// **NOT equivalent to the inherent `to_radians_strict_with` shell, and
+/// **NOT equivalent to the inherent `to_radians_with` shell, and
 /// not a drop-in for it (measured 2026-09-03).** The shell forms
 /// `mul(x, pi)` and then divides by 180; this kernel multiplies by the
 /// `rad_per_deg` table constant. Since `pi/180 < 1`, that constant's
@@ -109,12 +109,12 @@ mod tests {
                 for &mode in &MODES {
                     assert_eq!(
                         to_degrees_mul_pi_ratio::<Core, S>(raw, mode),
-                        D::<Int<3>, S>(raw).to_degrees_strict_with(mode).0,
+                        D::<Int<3>, S>(raw).to_degrees_with(mode).0,
                         "D57 to_degrees MulPiRatio != routed at units={units} mode={mode:?}"
                     );
                     assert_eq!(
                         to_radians_mul_pi_ratio::<Core, S>(raw, mode),
-                        D::<Int<3>, S>(raw).to_radians_strict_with(mode).0,
+                        D::<Int<3>, S>(raw).to_radians_with(mode).0,
                         "D57 to_radians MulPiRatio != routed at units={units} mode={mode:?}"
                     );
                 }
@@ -122,7 +122,7 @@ mod tests {
         }
     }
 
-    /// The inherent `to_radians_strict_with` shell computes exactly the
+    /// The inherent `to_radians_with` shell computes exactly the
     /// kept `Schoolbook` kernel, across tiers, scales, a decade magnitude
     /// ladder climbing the whole representable range, the notable angles,
     /// and all eight rounding modes.
@@ -228,7 +228,7 @@ mod tests {
                         }))
                         .ok();
                         let sr = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                            <T>::from_bits(raw).to_radians_strict_with(mode).to_bits()
+                            <T>::from_bits(raw).to_radians_with(mode).to_bits()
                         }))
                         .ok();
                         checks += 1;

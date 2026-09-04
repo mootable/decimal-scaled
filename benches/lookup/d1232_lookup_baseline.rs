@@ -19,17 +19,17 @@ fn bench(c: &mut Criterion) {
     let one_p_half_l = D1232::<615>::try_from(1_i64).unwrap() + half_l;
 
     // Warm the per-thread Tang ln table seed at w = 623.
-    let _ = one_p_half_l.ln_strict();
+    let _ = one_p_half_l.ln();
 
     let mut g = c.benchmark_group("D1232_s615");
     g.sample_size(10);
     g.measurement_time(std::time::Duration::from_secs(8));
 
     g.bench_function("ln_kernel_s600", |b| {
-        b.iter(|| black_box(one_p_half_k).ln_strict())
+        b.iter(|| black_box(one_p_half_k).ln())
     });
     g.bench_function("ln_lookup_s615", |b| {
-        b.iter(|| black_box(one_p_half_l).ln_strict())
+        b.iter(|| black_box(one_p_half_l).ln())
     });
 
     g.finish();

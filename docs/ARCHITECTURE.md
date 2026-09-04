@@ -116,7 +116,7 @@ layers compile to a single direct call per monomorphisation.
 
 ## A call through the layers
 
-`D57<20>::sqrt_strict()` traverses **both layers' dispatch + kernels**:
+`D57<20>::sqrt()` traverses **both layers' dispatch + kernels**:
 the front-end dispatches on `(width, SCALE)` to one decimal algorithm, which
 calls the integer layer — itself dispatching on width to a matched
 algorithm down to the limb primitives — and hands back a
@@ -132,7 +132,7 @@ sequenceDiagram
   participant IP as int policy
   participant IK as int algorithm
   participant L as limb primitives
-  U->>FE: sqrt_strict()
+  U->>FE: sqrt()
   FE->>DP: dispatch (width 192, SCALE 20)
   DP->>DK: const select → matched algorithm
   DK->>IP: root_int / isqrt on Int<3> (BigInt)
@@ -202,7 +202,7 @@ sit alongside them: `WidthLE` (the compile-time width-ordering relation
 used by the `widen` / `narrow` hops) and, under the `dyn` feature,
 `DynDecimal` (the object-safe erased view).
 
-The typed method shells (`D57::<20>::sqrt_strict_with(mode)`) are emitted
+The typed method shells (`D57::<20>::sqrt_with(mode)`) are emitted
 by macros in `src/macros/` and immediately hand off to the dispatch layer.
 
 ## Work-width scratch — exact `ComputeLimbs` on the `Limbs<N>` carrier, never build-max
@@ -245,7 +245,7 @@ carrier, so:
 
 `BigInt::Scratch` is declared **unbounded** (`type Scratch;`, no
 `: ComputeLimbs`). `BigInt` is a blanket `impl<const N>` for every `Int<N>`,
-but in the `exact-scratch` build `ComputeLimbs` is implemented only at the
+but on stable `ComputeLimbs` is implemented only at the
 listed widths; a `type Scratch: ComputeLimbs` bound would be unprovable for
 an arbitrary blanket `N`. The `ComputeLimbs` requirement is therefore
 discharged at the generic-helper **use sites** (`where W::Scratch:
@@ -305,7 +305,7 @@ the **width-erased** ones, blanket over *every* `N`:
   under `where Self::Scratch: ComputeLimbs`) — but `resize_to` is invoked on
   a *generic* receiver `Int<N>` (the `raw.resize_to::<Int<N>>()` policy
   bridges), and a generic-`N` caller cannot discharge `Limbs<N>: ComputeLimbs`
-  in the per-width `exact-scratch` build, so the bound would cascade
+  in the per-width stable build, so the bound would cascade
   unboundedly. These stay build-max.
 - the **width-erased slice-divide engines** (`div_knuth`,
   `div_burnikel_ziegler_with_knuth`, `div_knuth_u128_limb`) — they take a
@@ -469,11 +469,11 @@ genuinely `N`-less: `mul_schoolbook` and `newton_reciprocal`, both via
 type parameter to bound. *Give every caller a scratch argument*: the two
 `N`-less callers have runtime lengths no `Limbs<N>` expresses, so they would
 need a build-max buffer anyway — the change would be pure churn for them.
-*Rely on `exact-scratch-nightly`*: that branch already does the ideal thing (a
+*Rely on `exact-scratch-nightly`*: that nightly build form already does the ideal thing (a
 blanket `impl<const N> ComputeLimbs for Limbs<N>` via `generic_const_exprs`),
 but nightly is never a requirement here, so it cannot be the answer on stable.
 
-**Feasibility, and the one thing to check first.** On stable, `exact-scratch`
+**Feasibility, and the one thing to check first.** On stable the crate
 implements `ComputeLimbs` at an explicit width list — `1, 2, 3, 4, 6, 8, 12,
 16, 24, 32, 48, 64, 96, 128, 176, 192, 256, 512` — which covers every storage
 AND work width in use, `Int<512>` (D1232's `Wexp`) included. So
@@ -1036,9 +1036,9 @@ varies, the tier/scale-invariance is structural: there is no per-tier branch lef
 that can drift. The exact arithmetic ops carry the full `checked_` / `wrapping_` /
 `saturating_` / `overflowing_` family.
 
-The strict transcendentals expose the default (panic) + the `checked_` form:
-every `<fn>_strict` / `<fn>_strict_with` has a `checked_<fn>_strict` /
-`checked_<fn>_strict_with` sibling returning `Option<Self>`, emitted once as a
+The transcendentals expose the default (panic) + the `checked_` form:
+every `<fn>` / `<fn>_with` has a `checked_<fn>` /
+`checked_<fn>_with` sibling returning `Option<Self>`, emitted once as a
 single generic impl over `(N, SCALE)` (`src/types/checked_transcendentals.rs`).
 `None` covers both classes of panic: domain errors (`ln` of a non-positive
 value, `asin` outside `[-1, 1]`, …) are prechecked exactly in the shell at

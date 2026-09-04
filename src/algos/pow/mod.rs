@@ -3,7 +3,7 @@
 
 //! Floating-point power algorithm family -- narrow-tier kernels.
 //!
-//! Only D18 / D38 have policy-routed `powf_strict` today. The wide
+//! Only D18 / D38 have policy-routed `powf` today. The wide
 //! tiers still ship `powf` through their per-tier macro shells; migrating
 //! those mirrors the deferral on [`crate::algos::ln`] / [`crate::algos::exp`].
 //!
@@ -24,7 +24,7 @@
 pub(crate) mod powf_series_2limb;
 /// Width-generic analytic storage-overflow gate for the wide-tier
 /// `exp(y·ln x)` composition -- the wide sibling of the narrow kernel's
-/// internal `powf_overflow_gate`. Run by the per-tier `powf_strict_with`
+/// internal `powf_overflow_gate`. Run by the per-tier `powf_with`
 /// shells BEFORE the result-sized working lift, so a deep-overflow cell
 /// panics contractually instead of wrapping the lifted `ln`.
 pub(crate) mod powf_overflow_gate;

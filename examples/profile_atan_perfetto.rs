@@ -1,4 +1,4 @@
-//! Section-by-section timing of `D38::<19>::atan_strict` via
+//! Section-by-section timing of `D38::<19>::atan` via
 //! tracing-chrome. Writes `trace/atan_perfetto.json` for Perfetto.
 //!
 //! Build + run:
@@ -30,7 +30,7 @@ fn main() {
         // reduction branch (x > 1) and the direct-Taylor branch
         // (x < 1).
         let x = Work::try_from(2).unwrap() - Work::try_from(i as i64).unwrap() / Work::try_from(1_000).unwrap();
-        acc = acc + x.atan_strict();
+        acc = acc + x.atan();
     }
     println!("{} iters; acc = {}", iters, black_box(acc));
     println!("trace written to trace/atan_perfetto.json");

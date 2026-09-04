@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Bespoke `atan_strict` kernel slot for `D57<SCALE>`, routed across the
+//! Bespoke `atan` kernel slot for `D57<SCALE>`, routed across the
 //! tier's FULL scale range (`SCALE ∈ 0..=56`).
 //!
 //! The module carries NO precondition suffix because it has no scale
@@ -166,7 +166,7 @@ fn table_entry(working_scale: u32, idx: usize, pow10_w: core::W) -> core::W {
 ///    `atan(x)`.
 #[inline]
 #[must_use]
-pub(crate) fn atan_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
+pub(crate) fn atan<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
     // atan(0) = 0 short-circuit.
     if raw == Int::<3>::ZERO {
         return Int::<3>::ZERO;

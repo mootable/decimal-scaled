@@ -21,7 +21,7 @@ let pi = D38s12::pi();                                    // correctly rounded
 let bytes = total.to_bits();                              // raw i128 storage
 ```
 
-Decimals like `1.1` round-trip exactly. `0.1 + 0.2 == 0.3` holds. Transcendentals (under the default `strict` feature) are correctly rounded to **0.5 ULP** and **bit-identical on every platform**.
+Decimals like `1.1` round-trip exactly. `0.1 + 0.2 == 0.3` holds. Transcendentals are correctly rounded to **0.5 ULP** and **bit-identical on every platform**.
 
 ## The width family (v0.4.0)
 
@@ -51,9 +51,9 @@ Pick the **narrowest tier** that fits your value range at the scale you need. Wi
 | Workload | Recommend |
 |---|---|
 | Currency, prices, measurements, human-entered decimal values | **`decimal-scaled`** |
-| Cross-platform deterministic results (consensus, audit, replay logs) | **`decimal-scaled` with `*_strict`** |
+| Cross-platform deterministic results (consensus, audit, replay logs) | **`decimal-scaled`** |
 | Compile-time-fixed precision, want zero per-value scale byte | **`decimal-scaled`** |
-| `no_std + alloc` (works under `strict`) | **`decimal-scaled`** |
+| `no_std + alloc` | **`decimal-scaled`** |
 | Variable scale per value (mixing 0.1 and 0.001 freely) | `rust_decimal` |
 | Unbounded / runtime precision | `bigdecimal` |
 | Binary fixed-point (DSP, embedded radio) | `fixed` |
@@ -127,15 +127,14 @@ Every transcendental method has **one implementation**, always compiled:
 
 | Method                       | Path             | Determinism                              | Precision                  | Needs            |
 |------------------------------|------------------|------------------------------------------|----------------------------|------------------|
-| `*_strict` (`ln_strict`, …)  | integer-only     | bit-identical on every platform          | within **0.5 ULP**         | nothing extra    |
-| plain `*` (`ln`, …)          | delegates to `*_strict` | same                              | same                       | same             |
+| `ln`, `sin`, `sqrt`, …        | integer-only     | bit-identical on every platform          | within **0.5 ULP**         | nothing extra    |
 
 The f64-bridge `*_fast` surface and its `fast` feature were removed in
 0.6.0, so no feature combination changes what a bare `.ln()` does.
 
 **Operational rules:**
 
-1. **If the user needs cross-platform bit-determinism** (consensus protocols, financial audit trails, deterministic replay) - `*_strict` states that at the call site, and the plain form gives the same answer.
+1. **If the user needs cross-platform bit-determinism** (consensus protocols, financial audit trails, deterministic replay) - just call the method; there is no other form and no feature that changes it.
 2. **For `no_std`** - either form works; the integer path doesn't need `std`.
 
 ## Rounding modes via `*_with(mode)`
@@ -147,7 +146,7 @@ use decimal_scaled::RoundingMode;
 let _ = value.quantize_with::<2>(RoundingMode::HalfAwayFromZero);
 let _ = D38s2::from_f64_with(1.5, RoundingMode::Ceiling);
 let _ = value.to_int_with(RoundingMode::Trunc);
-let _ = wide.ln_strict_with(RoundingMode::Floor);  // wide-tier sibling
+let _ = wide.ln_with(RoundingMode::Floor);  // wide-tier sibling
 ```
 
 Modes: `HalfToEven` (default; IEEE-754, no bias), `HalfAwayFromZero` (commercial), `HalfTowardZero`, `Trunc` (toward zero), `Floor` (toward −∞), `Ceiling` (toward +∞).
@@ -207,7 +206,7 @@ The string form is bit-faithful and round-trips exactly. The deserializer reject
 |---|---|---|
 | Storing prices in `f64`, then converting to `D38` at output | `f64` already lost decimal precision | Stay in `D38` from input parsing through display |
 | `D38s12::from_int(1) + D38s6::from_int(1)` | Cross-scale arithmetic doesn't compile | `.quantize::<6>()` or `.quantize::<12>()` first |
-| `.ln()` on a value that *must* be bit-identical across platforms | Not a defect any more — the bare name has one definition — but `.ln_strict()` states the requirement at the call site | Prefer `.ln_strict()` where the guarantee is load-bearing |
+| `.ln()` on a value that *must* be bit-identical across platforms | Not a defect any more — the bare name has one definition — but `.ln()` states the requirement at the call site | Prefer `.ln()` where the guarantee is load-bearing |
 | `D38<S>` for π / τ / e at `S` near `MAX_SCALE` | Integer headroom collapses; the value doesn't fit storage | Widen to `D76` (or wider) at the same scale |
 | `D38s38` (or any `DNNsNN` at the max-scale ceiling) | Removed in 0.4 — illegal `SCALE` | Use `D38s37` (or the `name − 1` ceiling) |
 | `dN!` literal without enabling `macros` feature | Compile error | Enable `macros`, or fall back to `FromStr` / `from_bits` |
@@ -220,7 +219,6 @@ The string form is bit-faithful and round-trips exactly. The deserializer reject
 | `std` | ✓ | `from_f64` / `to_f64` conversions; also pulls in `alloc` |
 | `alloc` | ✓ | String formatting / parsing |
 | `serde` | ✓ | `Serialize` / `Deserialize` on every width |
-| `strict` | ✓ | Signals the strict path; `no_std`-compatible. Selects nothing now the f64 bridge is gone |
 | `macros` | ✗ | `d18!` … `d1232!` proc-macros + per-scale wrappers |
 | `dyn` | ✗ | Object-safe `DynDecimal` trait + `DecimalWidth` enum (heap boxing per op) |
 | `wide` | ✗ | Enables D57 / D76 / D115 / D153 / D230 / D307 (individual `d57` … `d307` flags also exist) |

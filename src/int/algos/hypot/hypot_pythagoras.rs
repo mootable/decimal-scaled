@@ -372,7 +372,6 @@ mod tests {
     /// `SCRATCH_LIMBS` is `2·MAX_WORK_N + ⌈MAX_WORK_N/2⌉`, so it cannot hold a
     /// radicand wider than the enabled tiers — the R10 coupling this change
     /// removes, visible here as the reference's own ceiling.
-    #[cfg(feature = "exact-scratch")]
     #[test]
     fn matches_pre_change_reference_all_modes() {
         // Pythagorean triples, near-zero, primes, a zero operand, a full u64

@@ -32,13 +32,13 @@
 //! The `*_strict` forms are **correctly rounded** — within 0.5 ULP of
 //! the exact result under the active [`RoundingMode`]:
 //!
-//! - `sqrt_strict` / `cbrt_strict` form the exact 256-/384-bit
+//! - `sqrt` / `cbrt` form the exact 256-/384-bit
 //! radicand and take its exact integer root, then apply the rounding
 //! mode (no ties exist for integer-sqrt so the three half-modes
 //! coincide; `Floor`/`Ceiling` divert for the directed cases);
-//! - `powf_strict` runs `exp(y·ln(x))` entirely in the `algos::support::fixed`
+//! - `powf` runs `exp(y·ln(x))` entirely in the `algos::support::fixed`
 //! guard-digit intermediate;
-//! - `hypot_strict` composes `sqrt_strict` via the scale-trick.
+//! - `hypot` composes `sqrt` via the scale-trick.
 //!
 //! Each strict method has a `*_strict_with(mode)` sibling that takes
 //! the rounding mode explicitly; the no-arg `*_strict` form
@@ -208,29 +208,19 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     /// matching the f64-bridge NaN-to-ZERO policy.
     #[inline]
     #[must_use]
-    pub fn powf_strict(self, exp: crate::D<crate::int::types::Int<2>, SCALE>) -> Self {
-        self.powf_strict_with(exp, crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    pub fn powf(self, exp: crate::D<crate::int::types::Int<2>, SCALE>) -> Self {
+        self.powf_with(exp, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     /// `self^exp` under the supplied rounding mode.
     #[inline]
     #[must_use]
-    pub fn powf_strict_with(
+    pub fn powf_with(
         self,
         exp: crate::D<crate::int::types::Int<2>, SCALE>,
         mode: crate::support::rounding::RoundingMode,
     ) -> Self {
         Self::from_bits(crate::policy::pow::dispatch::<_, SCALE>(self.to_bits(), exp.to_bits(), mode))
-    }
-
-    /// Raises `self` to the power `exp`.
-    ///
-    /// This is the integer-only [`Self::powf_strict`] unless the build
-    /// opts into the f64 bridge by enabling `fast` without `strict`.
-    #[inline]
-    #[must_use]
-    pub fn powf(self, exp: crate::D<crate::int::types::Int<2>, SCALE>) -> Self {
-        self.powf_strict(exp)
     }
 
     /// Returns the square root of `self` (strict integer-only stub).
@@ -259,8 +249,8 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     /// ```
     #[inline]
     #[must_use]
-    pub fn sqrt_strict(self) -> Self {
-        self.sqrt_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    pub fn sqrt(self) -> Self {
+        self.sqrt_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     /// Square root under the supplied rounding mode.
@@ -272,29 +262,8 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     /// which for D38 selects the `mg_divide_d38` width-override kernel.
     #[inline]
     #[must_use]
-    pub fn sqrt_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
+    pub fn sqrt_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         Self(crate::policy::sqrt::dispatch::<_, SCALE>(self.0, mode))
-    }
-
-    /// Returns the square root of `self`.
-    ///
-    /// This is the integer-only, correctly-rounded
-    /// [`Self::sqrt_strict`] unless the build opts into the f64 bridge
-    /// by enabling `fast` without `strict`.
-    #[inline]
-    #[must_use]
-    pub fn sqrt(self) -> Self {
-        self.sqrt_strict()
-    }
-
-    /// Returns the cube root of `self`.
-    ///
-    /// This is the integer-only [`Self::cbrt_strict`] unless the build
-    /// opts into the f64 bridge by enabling `fast` without `strict`.
-    #[inline]
-    #[must_use]
-    pub fn cbrt(self) -> Self {
-        self.cbrt_strict()
     }
 
     /// Cube root of `self`. Defined for all reals — the sign of the
@@ -318,8 +287,8 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     /// Strict: integer-only; correctly rounded.
     #[inline]
     #[must_use]
-    pub fn cbrt_strict(self) -> Self {
-        self.cbrt_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    pub fn cbrt(self) -> Self {
+        self.cbrt_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     /// Cube root under the supplied rounding mode. The sign of the
@@ -329,20 +298,20 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     /// Body delegates to `policy::cbrt::CbrtPolicy::cbrt_impl`.
     #[inline]
     #[must_use]
-    pub fn cbrt_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
+    pub fn cbrt_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         Self(crate::policy::cbrt::dispatch::<_, SCALE>(self.0, mode))
     }
 
     /// Returns `sqrt(self^2 + other^2)` without intermediate overflow,
     /// computed integer-only via the correctly-rounded
-    /// [`Self::sqrt_strict`]. Same scale-trick algorithm as the
+    /// [`Self::sqrt`]. Same scale-trick algorithm as the
     /// f64-bridge [`Self::hypot`]; available in `no_std`.
     ///
     /// Always available, regardless of the `strict` feature.
     #[inline]
     #[must_use]
-    pub fn hypot_strict(self, other: Self) -> Self {
-        self.hypot_strict_with(other, crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    pub fn hypot(self, other: Self) -> Self {
+        self.hypot_with(other, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     /// Hypot under the supplied rounding mode. The mode applies to the
@@ -352,22 +321,12 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     /// Body delegates to `policy::hypot::HypotPolicy::hypot_impl`.
     #[inline]
     #[must_use]
-    pub fn hypot_strict_with(
+    pub fn hypot_with(
         self,
         other: Self,
         mode: crate::support::rounding::RoundingMode,
     ) -> Self {
         Self(crate::policy::hypot::dispatch::<_, SCALE>(self.0, other.0, mode))
-    }
-
-    /// Returns `sqrt(self^2 + other^2)` without intermediate overflow.
-    ///
-    /// This is the integer-only [`Self::hypot_strict`] unless the build
-    /// opts into the f64 bridge by enabling `fast` without `strict`.
-    #[inline]
-    #[must_use]
-    pub fn hypot(self, other: Self) -> Self {
-        self.hypot_strict(other)
     }
 
     // Overflow-variant family for pow.
@@ -574,7 +533,7 @@ mod tests {
         // or N == 0 when q == 0.
         fn check<const S: u32>(raw: i128) {
             let value = crate::D::<crate::int::types::Int<2>, S>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
-            let q = value.sqrt_strict().to_bits().as_i128();
+            let q = value.sqrt().to_bits().as_i128();
             assert!(q >= 0, "sqrt result must be non-negative");
             // N = raw · 10^S as 256-bit; q is small enough that q^2 fits 256-bit.
             let multiplier = 10u128.pow(S);
@@ -639,7 +598,7 @@ mod tests {
         use i256::U256;
         fn check<const S: u32>(raw: i128) {
             let value = crate::D::<crate::int::types::Int<2>, S>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
-            let q = value.cbrt_strict().to_bits().as_i128();
+            let q = value.cbrt().to_bits().as_i128();
             // Sign must match the input.
             assert_eq!(q.signum(), raw.signum(), "cbrt sign mismatch");
             let qa = q.unsigned_abs();

@@ -7,7 +7,45 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Changed
+
+- **The `_strict` suffix is gone; the bare name carries the guarantee.**
+  `ln_strict()` is now `ln()`, `ln_strict_with(mode)` is `ln_with(mode)`,
+  `checked_ln_strict()` is `checked_ln()`. 164 public names in five
+  shapes — `<fn>_strict`, `<fn>_strict_with`, the `<fn>_strict_agm`
+  alternates, and the `bench-alt` `<fn>_strict_default` /
+  `<fn>_strict_override` pair — all lose it.
+
+  The suffix existed to distinguish the correctly-rounded integer path
+  from the f64 bridge. With the bridge and the `*_approx` family both
+  removed, there was nothing left to distinguish it from, and a suffix
+  that never varies is noise on every call site. `ln` **is** the
+  correctly-rounded function; there is one definition of it in every
+  build.
+
+  **Migration:** delete `_strict` from the method name — `x.ln_strict()`
+  becomes `x.ln()`, which is what the bare name already did. Callers who
+  were already using the bare form need no change at all.
+
+  Note for readers of the source: the suffix survives on a few internal
+  helpers (`ln_strict_raw`, `exp_schoolbook_strict`, …) where it is
+  load-bearing — it names the entry point against the base algorithm
+  beside it in the same module. Those are not public API.
+
 ### Removed
+
+- **The `strict` and `exact-scratch` Cargo features.** Both selected
+  nothing by the time they went. `strict` chose the integer path over
+  the f64 bridge, which no longer exists; `exact-scratch` chose per-width
+  `ComputeLimbs` impls over a build-max blanket that was retired outright
+  when it proved unsound, leaving one form. Neither changed behaviour in
+  any build.
+
+  `exact-scratch-nightly` is unaffected and still selects a genuinely
+  different build form (one blanket impl via `generic_const_exprs`).
+
+  **Migration:** remove both from your feature list. Nothing replaces
+  them — what `strict` used to guarantee is now unconditional.
 
 - **The `*_fast` family and the `fast` Cargo feature.** Every
   `<fn>_fast` f64-bridge method is gone — 27 names across `ln`, `log1p`,

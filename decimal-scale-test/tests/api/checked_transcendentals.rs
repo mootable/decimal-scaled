@@ -41,10 +41,10 @@ mod from_checked_transcendentals {
         // `log1p(t) = ln(1 + t)`: undefined at `t = -1` (ln 0) and below.
         for units in [-1i64, -2, -5, -1_000] {
             let t = D38::<12>::try_from(units).unwrap();
-            assert_eq!(t.checked_log1p_strict(), None, "t = {units}");
+            assert_eq!(t.checked_log1p(), None, "t = {units}");
             for mode in MODES {
                 assert_eq!(
-                    t.checked_log1p_strict_with(mode),
+                    t.checked_log1p_with(mode),
                     None,
                     "t = {units}, mode {mode:?}"
                 );
@@ -57,15 +57,15 @@ mod from_checked_transcendentals {
         let inputs = [D38::<12>::ZERO, D38::<12>::ONE, minus_half()];
         for t in inputs {
             for mode in MODES {
-                let checked = t.checked_log1p_strict_with(mode);
+                let checked = t.checked_log1p_with(mode);
                 assert_eq!(
                     checked,
-                    Some(t.log1p_strict_with(mode)),
+                    Some(t.log1p_with(mode)),
                     "t = {t:?}, mode {mode:?}"
                 );
                 assert!(checked.is_some(), "t = {t:?} is in domain, mode {mode:?}");
             }
-            assert_eq!(t.checked_log1p_strict(), Some(t.log1p_strict()));
+            assert_eq!(t.checked_log1p(), Some(t.log1p()));
         }
     }
 
@@ -73,7 +73,7 @@ mod from_checked_transcendentals {
     fn checked_log1p_is_exact_at_zero() {
         // `log1p(0) = ln(1) = 0`, the one exact point.
         assert_eq!(
-            D38::<12>::ZERO.checked_log1p_strict(),
+            D38::<12>::ZERO.checked_log1p(),
             Some(D38::<12>::ZERO)
         );
     }
@@ -91,15 +91,15 @@ mod from_checked_transcendentals {
         ];
         for x in inputs {
             for mode in MODES {
-                let checked = x.checked_expm1_strict_with(mode);
+                let checked = x.checked_expm1_with(mode);
                 assert_eq!(
                     checked,
-                    Some(x.expm1_strict_with(mode)),
+                    Some(x.expm1_with(mode)),
                     "x = {x:?}, mode {mode:?}"
                 );
                 assert!(checked.is_some(), "expm1 is total, x = {x:?}");
             }
-            assert_eq!(x.checked_expm1_strict(), Some(x.expm1_strict()));
+            assert_eq!(x.checked_expm1(), Some(x.expm1()));
         }
     }
 
@@ -107,7 +107,7 @@ mod from_checked_transcendentals {
     fn checked_expm1_is_exact_at_zero() {
         // `expm1(0) = e^0 - 1 = 0`.
         assert_eq!(
-            D38::<12>::ZERO.checked_expm1_strict(),
+            D38::<12>::ZERO.checked_expm1(),
             Some(D38::<12>::ZERO)
         );
     }
@@ -128,10 +128,10 @@ mod from_checked_transcendentals {
         fn checked_log1p_domain_wall_holds_at_d57() {
             for units in [-1i64, -2, -1_000] {
                 let t = D57::<12>::try_from(units).unwrap();
-                assert_eq!(t.checked_log1p_strict(), None, "t = {units}");
+                assert_eq!(t.checked_log1p(), None, "t = {units}");
                 for mode in MODES {
                     assert_eq!(
-                        t.checked_log1p_strict_with(mode),
+                        t.checked_log1p_with(mode),
                         None,
                         "t = {units}, mode {mode:?}"
                     );
@@ -145,13 +145,13 @@ mod from_checked_transcendentals {
             for v in inputs {
                 for mode in MODES {
                     assert_eq!(
-                        v.checked_log1p_strict_with(mode),
-                        Some(v.log1p_strict_with(mode)),
+                        v.checked_log1p_with(mode),
+                        Some(v.log1p_with(mode)),
                         "log1p v = {v:?}, mode {mode:?}"
                     );
                     assert_eq!(
-                        v.checked_expm1_strict_with(mode),
-                        Some(v.expm1_strict_with(mode)),
+                        v.checked_expm1_with(mode),
+                        Some(v.expm1_with(mode)),
                         "expm1 v = {v:?}, mode {mode:?}"
                     );
                 }

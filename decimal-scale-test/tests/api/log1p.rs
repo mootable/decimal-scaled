@@ -94,7 +94,7 @@ mod from_src_log1p {
         for &(t_raw, expected) in &CASES {
             assert_eq!(
                 d38s20(t_raw)
-                    .log1p_strict_with(RoundingMode::HalfToEven)
+                    .log1p_with(RoundingMode::HalfToEven)
                     .to_bits()
                     .as_i128(),
                 expected,
@@ -109,7 +109,7 @@ mod from_src_log1p {
     fn log1p_of_zero_is_zero_in_every_mode() {
         for &mode in &MODES {
             assert_eq!(
-                d38s20(0).log1p_strict_with(mode).to_bits().as_i128(),
+                d38s20(0).log1p_with(mode).to_bits().as_i128(),
                 0,
                 "log1p(0) mode={mode:?}"
             );
@@ -133,7 +133,7 @@ mod from_src_log1p {
         ];
         for &(mode, expected) in &EXPECTED {
             assert_eq!(
-                d38s20(1).log1p_strict_with(mode).to_bits().as_i128(),
+                d38s20(1).log1p_with(mode).to_bits().as_i128(),
                 expected,
                 "log1p(1e-20) mode={mode:?}"
             );
@@ -150,7 +150,7 @@ mod from_src_log1p {
         ];
         for &(mode, expected) in &EXPECTED_NEG {
             assert_eq!(
-                d38s20(-1).log1p_strict_with(mode).to_bits().as_i128(),
+                d38s20(-1).log1p_with(mode).to_bits().as_i128(),
                 expected,
                 "log1p(-1e-20) mode={mode:?}"
             );
@@ -186,8 +186,8 @@ mod from_src_log1p {
         for &t in &TS {
             for &mode in &MODES {
                 assert_eq!(
-                    d38s20(t).log1p_strict_with(mode).to_bits().as_i128(),
-                    d38s20(t + UNIT).ln_strict_with(mode).to_bits().as_i128(),
+                    d38s20(t).log1p_with(mode).to_bits().as_i128(),
+                    d38s20(t + UNIT).ln_with(mode).to_bits().as_i128(),
                     "log1p != ln(1+t) at t_raw={t} mode={mode:?}"
                 );
             }
@@ -199,14 +199,14 @@ mod from_src_log1p {
     #[test]
     #[should_panic(expected = "log1p: argument must be greater than -1")]
     fn log1p_at_minus_one_panics() {
-        let _ = d38s20(-UNIT).log1p_strict();
+        let _ = d38s20(-UNIT).log1p();
     }
 
     /// Domain: `t < -1` panics.
     #[test]
     #[should_panic(expected = "log1p: argument must be greater than -1")]
     fn log1p_below_minus_one_panics() {
-        let _ = d38s20(-2 * UNIT).log1p_strict();
+        let _ = d38s20(-2 * UNIT).log1p();
     }
 
     /// D18 (`Int<1>`) routes through the same policy at its own storage
@@ -228,8 +228,8 @@ mod from_src_log1p {
                 let x = D::<Int<1>, 9>::from_bits(i1(t));
                 let y = D::<Int<1>, 9>::from_bits(i1(t + UNIT9));
                 assert_eq!(
-                    x.log1p_strict_with(mode).to_bits().as_i128(),
-                    y.ln_strict_with(mode).to_bits().as_i128(),
+                    x.log1p_with(mode).to_bits().as_i128(),
+                    y.ln_with(mode).to_bits().as_i128(),
                     "D18 log1p != ln(1+t) at t_raw={t} mode={mode:?}"
                 );
             }
@@ -257,8 +257,8 @@ mod from_src_log1p {
                 let x = D::<Int<3>, 20>::from_bits(i3(t));
                 let y = D::<Int<3>, 20>::from_bits(i3(t) + unit);
                 assert_eq!(
-                    x.log1p_strict_with(mode).to_bits(),
-                    y.ln_strict_with(mode).to_bits(),
+                    x.log1p_with(mode).to_bits(),
+                    y.ln_with(mode).to_bits(),
                     "D57 log1p != ln(1+t) at t_raw={t} mode={mode:?}"
                 );
             }
@@ -280,7 +280,7 @@ mod from_src_log1p {
         for &(t_raw, expected) in &CASES {
             assert_eq!(
                 D::<Int<3>, 20>::from_bits(i3(t_raw))
-                    .log1p_strict_with(RoundingMode::HalfToEven)
+                    .log1p_with(RoundingMode::HalfToEven)
                     .to_bits(),
                 i3(expected),
                 "log1p D57<20> HalfToEven at raw={t_raw}"
@@ -317,8 +317,8 @@ mod from_src_log1p {
                 let x = D::<Int<16>, 150>::from_bits(t);
                 let y = D::<Int<16>, 150>::from_bits(t + unit);
                 assert_eq!(
-                    x.log1p_strict_with(mode).to_bits(),
-                    y.ln_strict_with(mode).to_bits(),
+                    x.log1p_with(mode).to_bits(),
+                    y.ln_with(mode).to_bits(),
                     "D307<150> log1p != ln(1+t) at t={t:?} mode={mode:?}"
                 );
             }
@@ -356,8 +356,8 @@ mod from_src_log1p {
                 let x = D::<Int<64>, 1231>::from_bits(t);
                 let y = D::<Int<64>, 1231>::from_bits(t + unit);
                 assert_eq!(
-                    x.log1p_strict_with(mode).to_bits(),
-                    y.ln_strict_with(mode).to_bits(),
+                    x.log1p_with(mode).to_bits(),
+                    y.ln_with(mode).to_bits(),
                     "D1232<1231> log1p != ln(1+t) at mode={mode:?}"
                 );
             }
@@ -403,7 +403,7 @@ mod from_src_log1p {
         for &(lead, expo) in &CASES {
             for sign in [1_i128, -1] {
                 let raw = Int::<24>::try_from(sign * lead).unwrap() * ten.pow(SC - expo);
-                let at = |m| D::<Int<24>, SC>::from_bits(raw).log1p_strict_with(m).to_bits();
+                let at = |m| D::<Int<24>, SC>::from_bits(raw).log1p_with(m).to_bits();
                 let (floor, ceiling, trunc) = (
                     at(RoundingMode::Floor),
                     at(RoundingMode::Ceiling),

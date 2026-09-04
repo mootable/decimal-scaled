@@ -130,14 +130,14 @@ fn bench_transcendentals(c: &mut Criterion) {
         };
     }
 
-    one_arg!("ln", black_box(ours128).ln_strict());
-    one_arg!("exp", black_box(ours128).exp_strict());
-    one_arg!("sqrt", black_box(ours128).sqrt_strict());
-    one_arg!("cbrt", black_box(ours128).cbrt_strict());
-    one_arg!("sin", black_box(ours128).sin_strict());
-    one_arg!("cos", black_box(ours128).cos_strict());
-    one_arg!("tan", black_box(ours128).tan_strict());
-    one_arg!("atan", black_box(ours128).atan_strict());
+    one_arg!("ln", black_box(ours128).ln());
+    one_arg!("exp", black_box(ours128).exp());
+    one_arg!("sqrt", black_box(ours128).sqrt());
+    one_arg!("cbrt", black_box(ours128).cbrt());
+    one_arg!("sin", black_box(ours128).sin());
+    one_arg!("cos", black_box(ours128).cos());
+    one_arg!("tan", black_box(ours128).tan());
+    one_arg!("atan", black_box(ours128).atan());
 
     g.bench_function("rust_decimal/ln", |b| b.iter(|| black_box(rd).ln()));
     g.bench_function("rust_decimal/exp", |b| b.iter(|| black_box(rd).exp()));
@@ -148,25 +148,25 @@ fn bench_transcendentals(c: &mut Criterion) {
 
     // Wide tier: D76 transcendentals, correctly rounded.
     g.bench_function("D256_strict/ln", |b| {
-        b.iter(|| black_box(ours256).ln_strict())
+        b.iter(|| black_box(ours256).ln())
     });
     g.bench_function("D256_strict/exp", |b| {
-        b.iter(|| black_box(ours256).exp_strict())
+        b.iter(|| black_box(ours256).exp())
     });
     g.bench_function("D256_strict/sqrt", |b| {
-        b.iter(|| black_box(ours256).sqrt_strict())
+        b.iter(|| black_box(ours256).sqrt())
     });
     g.bench_function("D256_strict/sin", |b| {
-        b.iter(|| black_box(ours256).sin_strict())
+        b.iter(|| black_box(ours256).sin())
     });
 
     // Two-arg ops: pow, atan2.
     let p = D38::<9>::from_bits(decimal_scaled::Int::<2>::try_from(3_000_000_000_i128).unwrap()); // 3.0
     g.bench_function("D128_strict/powf", |b| {
-        b.iter(|| black_box(ours128).powf_strict(black_box(p)))
+        b.iter(|| black_box(ours128).powf(black_box(p)))
     });
     g.bench_function("D128_strict/atan2", |b| {
-        b.iter(|| black_box(ours128).atan2_strict(black_box(p)))
+        b.iter(|| black_box(ours128).atan2(black_box(p)))
     });
 
     g.finish();

@@ -3,7 +3,7 @@
 
 //! Cube-root policy — the per-`(N, SCALE)` algorithm matcher.
 //!
-//! `D<Int<N>, SCALE>::cbrt_strict_with(mode)` delegates directly to the
+//! `D<Int<N>, SCALE>::cbrt_with(mode)` delegates directly to the
 //! one shared [`dispatch`] generic function. `dispatch` follows the
 //! canonical policy shape (see `docs/ARCHITECTURE.md` → "Policy file
 //! structure"), mirroring [`crate::policy::sqrt`]:

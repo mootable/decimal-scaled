@@ -82,7 +82,7 @@ mod from_src_expm1 {
             (2 * UNIT, 638_905_609_893_065_022_723),
         ];
         for (arg, want) in CASES {
-            let got = d38s20(arg).expm1_strict();
+            let got = d38s20(arg).expm1();
             assert_eq!(
                 got.to_bits().as_i128(),
                 want,
@@ -98,7 +98,7 @@ mod from_src_expm1 {
     fn expm1_zero_is_exact_in_every_mode() {
         for mode in MODES {
             assert_eq!(
-                d38s20(0).expm1_strict_with(mode).to_bits().as_i128(),
+                d38s20(0).expm1_with(mode).to_bits().as_i128(),
                 0,
                 "expm1(0) mode {mode:?}"
             );
@@ -127,7 +127,7 @@ mod from_src_expm1 {
             (RoundingMode::Ceiling, 2),
         ] {
             assert_eq!(
-                d38s20(1).expm1_strict_with(mode).to_bits().as_i128(),
+                d38s20(1).expm1_with(mode).to_bits().as_i128(),
                 want,
                 "expm1(+1 ULP) mode {mode:?}"
             );
@@ -143,7 +143,7 @@ mod from_src_expm1 {
             (RoundingMode::Ceiling, 0),
         ] {
             assert_eq!(
-                d38s20(-1).expm1_strict_with(mode).to_bits().as_i128(),
+                d38s20(-1).expm1_with(mode).to_bits().as_i128(),
                 want,
                 "expm1(-1 ULP) mode {mode:?}"
             );
@@ -173,7 +173,7 @@ mod from_src_expm1 {
         ] {
             assert_eq!(
                 d38s20(-1000 * UNIT)
-                    .expm1_strict_with(mode)
+                    .expm1_with(mode)
                     .to_bits()
                     .as_i128(),
                 want,
@@ -188,7 +188,7 @@ mod from_src_expm1 {
     /// `1` is exactly `10^SCALE` raw units, so `v ↦ v - 1` maps grid to grid.
     /// `Floor` and `Ceiling` are defined relative to `±∞` and the nearest modes
     /// relative to the two bracketing grid points, so all of them commute with
-    /// that translation and `exp_strict(x) - 1` is then bit-for-bit the
+    /// that translation and `exp(x) - 1` is then bit-for-bit the
     /// correctly-rounded `expm1(x)`.
     ///
     /// `Trunc` does NOT commute — see
@@ -224,8 +224,8 @@ mod from_src_expm1 {
             3 * UNIT,
         ] {
             for mode in COMMUTING {
-                let via_expm1 = d38s20(arg).expm1_strict_with(mode);
-                let via_exp = d38s20(arg).exp_strict_with(mode) - one;
+                let via_expm1 = d38s20(arg).expm1_with(mode);
+                let via_exp = d38s20(arg).exp_with(mode) - one;
                 assert_eq!(
                     via_expm1.to_bits().as_i128(),
                     via_exp.to_bits().as_i128(),
@@ -239,7 +239,7 @@ mod from_src_expm1 {
     /// commute with the `- 1` grid translation — and for `x < 0` the translation
     /// crosses zero: `e^x ∈ (0, 1)` is positive (Trunc rounds its magnitude
     /// DOWN) while `expm1(x) < 0` (Trunc rounds ITS magnitude down, i.e. the
-    /// value UP). The two therefore land one ULP apart, and `exp_strict(x) - 1`
+    /// value UP). The two therefore land one ULP apart, and `exp(x) - 1`
     /// is the WRONG one.
     ///
     /// This is a correctness reason for the function that survives fixed point,
@@ -248,32 +248,32 @@ mod from_src_expm1 {
     ///
     /// Verified without any hand-computed expansion: for a NEGATIVE non-grid
     /// value, "toward zero" and "toward `+∞`" are the same direction, so a
-    /// correctly rounded `Trunc` must equal `Ceiling`. `expm1_strict` satisfies
-    /// that identity; `exp_strict(x) - 1` cannot, since it truncated a positive
+    /// correctly rounded `Trunc` must equal `Ceiling`. `expm1` satisfies
+    /// that identity; `exp(x) - 1` cannot, since it truncated a positive
     /// quantity.
     #[test]
     fn expm1_trunc_differs_from_exp_minus_one_for_negative_x() {
         let one = D::<Int<2>, 20>::ONE;
         for arg in [-3 * UNIT, -2 * UNIT, -UNIT, -UNIT / 2] {
             let trunc = d38s20(arg)
-                .expm1_strict_with(RoundingMode::Trunc)
+                .expm1_with(RoundingMode::Trunc)
                 .to_bits()
                 .as_i128();
             let ceil = d38s20(arg)
-                .expm1_strict_with(RoundingMode::Ceiling)
+                .expm1_with(RoundingMode::Ceiling)
                 .to_bits()
                 .as_i128();
             assert_eq!(
                 trunc, ceil,
                 "for x < 0, Trunc and Ceiling are the same direction; arg {arg}"
             );
-            let two_step = (d38s20(arg).exp_strict_with(RoundingMode::Trunc) - one)
+            let two_step = (d38s20(arg).exp_with(RoundingMode::Trunc) - one)
                 .to_bits()
                 .as_i128();
             assert_eq!(
                 two_step,
                 trunc - 1,
-                "exp_strict(x)-1 under Trunc must sit exactly one ULP below the \
+                "exp(x)-1 under Trunc must sit exactly one ULP below the \
                  correctly-rounded expm1 for x < 0; arg {arg}"
             );
         }
@@ -281,10 +281,10 @@ mod from_src_expm1 {
         // identity is restored.
         for arg in [UNIT / 2, UNIT, 2 * UNIT] {
             let via_expm1 = d38s20(arg)
-                .expm1_strict_with(RoundingMode::Trunc)
+                .expm1_with(RoundingMode::Trunc)
                 .to_bits()
                 .as_i128();
-            let via_exp = (d38s20(arg).exp_strict_with(RoundingMode::Trunc) - one)
+            let via_exp = (d38s20(arg).exp_with(RoundingMode::Trunc) - one)
                 .to_bits()
                 .as_i128();
             assert_eq!(via_expm1, via_exp, "x > 0 Trunc must still agree; arg {arg}");
@@ -297,7 +297,7 @@ mod from_src_expm1 {
     ///
     /// At D38<37>, `MAX = Int<2>::MAX / 10^37 = 17.0141…`, so the extra band is
     /// `x ∈ (ln 17.0141, ln 18.0141] = (2.8342…, 2.8913…]`. At `x = 2.85`,
-    /// `e^x = 17.2877…` exceeds `MAX` (so `exp_strict` is out of range) while
+    /// `e^x = 17.2877…` exceeds `MAX` (so `exp` is out of range) while
     /// `expm1(x) = 16.2877…` sits comfortably inside it.
     ///
     /// The band is narrow — `ln(1 + 1/MAX) ≈ 0.057` here, and narrower at lower
@@ -306,7 +306,7 @@ mod from_src_expm1 {
     fn expm1_reaches_arguments_exp_cannot_represent() {
         // 2.85 at SCALE 37.
         let x = D::<Int<2>, 37>::from_bits(i2(285) * i2(10).pow(35));
-        let got = x.expm1_strict().to_bits();
+        let got = x.expm1().to_bits();
         // 16.2877 < expm1(2.85) < 16.2879, from e^2.85 = 17.28778…
         // At SCALE 37, `16.2877` is `162877 * 10^33` (6 significant digits + 33).
         let lo = i2(162_877) * i2(10).pow(33);
@@ -318,13 +318,13 @@ mod from_src_expm1 {
     }
 
     /// The other half of the previous test: the same argument through
-    /// `exp_strict` is out of range, which is what makes the `expm1` answer a
+    /// `exp` is out of range, which is what makes the `expm1` answer a
     /// capability rather than a convenience.
     #[test]
     #[should_panic(expected = "out of range")]
     fn exp_cannot_represent_what_expm1_reaches() {
         let x = D::<Int<2>, 37>::from_bits(i2(285) * i2(10).pow(35));
-        let _ = x.exp_strict();
+        let _ = x.exp();
     }
 
     /// Narrow-width parity: D18 routes through the same policy at its own
@@ -333,11 +333,11 @@ mod from_src_expm1 {
     fn expm1_d18_agrees_with_d38_on_shared_values() {
         for raw in [1_i128, -1, 10_i128.pow(17) / 2, -(10_i128.pow(17) / 2)] {
             let narrow = D::<Int<1>, 17>::from_bits(i1(raw))
-                .expm1_strict()
+                .expm1()
                 .to_bits()
                 .as_i128();
             let wide = D::<Int<2>, 17>::from_bits(i2(raw))
-                .expm1_strict()
+                .expm1()
                 .to_bits()
                 .as_i128();
             assert_eq!(narrow, wide, "expm1 D18 vs D38 at raw {raw}");
@@ -357,9 +357,9 @@ mod from_src_expm1 {
         for raw in [UNIT / 2, -UNIT / 2, UNIT, -UNIT, 2 * UNIT, -2 * UNIT] {
             for mode in MODES {
                 let wide = D::<Int<3>, 20>::from_bits(i3(raw))
-                    .expm1_strict_with(mode)
+                    .expm1_with(mode)
                     .to_bits();
-                let narrow = d38s20(raw).expm1_strict_with(mode).to_bits().as_i128();
+                let narrow = d38s20(raw).expm1_with(mode).to_bits().as_i128();
                 assert_eq!(
                     wide,
                     i3(narrow),

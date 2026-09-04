@@ -174,7 +174,7 @@ where
                 wtc::to_work_scaled_g::<St, S>(raw, guard_digits),
                 SCALE + guard_digits,
             );
-            (super::checked(expm1_value, "expm1_strict", SCALE), tail_sign)
+            (super::checked(expm1_value, "expm1", SCALE), tail_sign)
         },
     )
 }

@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Tier-generic narrow-`GUARD` `sin_strict` / `cos_strict` /
-//! `tan_strict` kernels (the deep-`SCALE` sincos bands that keep the
+//! Tier-generic narrow-`GUARD` `sin` / `cos` /
+//! `tan` kernels (the deep-`SCALE` sincos bands that keep the
 //! canonical Taylor core but at a narrowed working width).
 //!
 //! Tang sin/cos at a smaller `M` was confirmed to LOSE at these tiers
@@ -33,11 +33,11 @@ pub(crate) enum Which {
     Cos,
 }
 
-/// Shared narrow-`GUARD` directed `sin_strict` / `cos_strict` for a wide
+/// Shared narrow-`GUARD` directed `sin` / `cos` for a wide
 /// tier — generic over `C`, the `SCALE`, and the band's narrow guard.
 #[inline]
 #[must_use]
-fn sin_cos_strict<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
+fn sin_cos<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
     raw: C::Storage,
     mode: RoundingMode,
     which: Which,
@@ -68,7 +68,7 @@ fn sin_cos_strict<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
     crate::algos::support::wide_trig_core::adjust_bounded_extremum::<C, SCALE>(rounded, raw, mode)
 }
 
-/// Narrow `sin_strict` for a wide tier — generic over `C`, `SCALE`, the
+/// Narrow `sin` for a wide tier — generic over `C`, `SCALE`, the
 /// band's narrow guard `GUARD`.
 #[inline]
 #[must_use]
@@ -76,10 +76,10 @@ pub(crate) fn sin_narrow_with_taylor<C: WideTrigCore, const SCALE: u32, const GU
     raw: C::Storage,
     mode: RoundingMode,
 ) -> C::Storage {
-    sin_cos_strict::<C, SCALE, GUARD>(raw, mode, Which::Sin)
+    sin_cos::<C, SCALE, GUARD>(raw, mode, Which::Sin)
 }
 
-/// Narrow `cos_strict` for a wide tier — generic over `C`, `SCALE`, the
+/// Narrow `cos` for a wide tier — generic over `C`, `SCALE`, the
 /// band's narrow guard `GUARD`.
 #[inline]
 #[must_use]
@@ -87,10 +87,10 @@ pub(crate) fn cos_narrow_with_taylor<C: WideTrigCore, const SCALE: u32, const GU
     raw: C::Storage,
     mode: RoundingMode,
 ) -> C::Storage {
-    sin_cos_strict::<C, SCALE, GUARD>(raw, mode, Which::Cos)
+    sin_cos::<C, SCALE, GUARD>(raw, mode, Which::Cos)
 }
 
-/// Narrow `tan_strict` for a wide tier — generic over `C`, `SCALE`, the
+/// Narrow `tan` for a wide tier — generic over `C`, `SCALE`, the
 /// band's narrow guard `GUARD`, and `NEAR_POLE`.
 ///
 /// When `NEAR_POLE` is set, a base-width probe sizes a per-call working

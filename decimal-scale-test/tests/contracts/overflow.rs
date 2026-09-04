@@ -908,9 +908,9 @@ mod from_src_overflow_variants {
     }
 }
 
-#[cfg(all(feature = "wide", feature = "strict"))]
+#[cfg(feature = "wide")]
 mod from_hypot_edge_cases {
-    //! Structural edge-case gate for `hypot_strict_with` — the non-value
+    //! Structural edge-case gate for `hypot_with` — the non-value
     //! assertions the correctly-rounded golden set cannot express.
     //!
     //! The numeric VALUE coverage for `hypot` (Pythagorean triples, the
@@ -946,22 +946,22 @@ mod from_hypot_edge_cases {
     fn hypot_zero_zero_is_zero_bit_exact_all_tiers_all_modes() {
         for mode in ALL_MODES {
             assert_eq!(
-                D18::<6>::ZERO.hypot_strict_with(D18::<6>::ZERO, mode),
+                D18::<6>::ZERO.hypot_with(D18::<6>::ZERO, mode),
                 D18::<6>::ZERO,
                 "D18 hypot(0,0) mode {mode:?}",
             );
             assert_eq!(
-                D38::<6>::ZERO.hypot_strict_with(D38::<6>::ZERO, mode),
+                D38::<6>::ZERO.hypot_with(D38::<6>::ZERO, mode),
                 D38::<6>::ZERO,
                 "D38 hypot(0,0) mode {mode:?}",
             );
             assert_eq!(
-                D57::<6>::ZERO.hypot_strict_with(D57::<6>::ZERO, mode),
+                D57::<6>::ZERO.hypot_with(D57::<6>::ZERO, mode),
                 D57::<6>::ZERO,
                 "D57 hypot(0,0) mode {mode:?}",
             );
             assert_eq!(
-                D307::<30>::ZERO.hypot_strict_with(D307::<30>::ZERO, mode),
+                D307::<30>::ZERO.hypot_with(D307::<30>::ZERO, mode),
                 D307::<30>::ZERO,
                 "D307 hypot(0,0) mode {mode:?}",
             );
@@ -976,18 +976,18 @@ mod from_hypot_edge_cases {
                 let d38 = D38::<6>::try_from(x).unwrap();
                 let d38n = D38::<6>::try_from(-x).unwrap();
                 assert_eq!(
-                    D38::<6>::ZERO.hypot_strict_with(d38, mode),
+                    D38::<6>::ZERO.hypot_with(d38, mode),
                     d38,
                     "D38 hypot(0,{x}) mode {mode:?}",
                 );
                 assert_eq!(
-                    D38::<6>::ZERO.hypot_strict_with(d38n, mode),
+                    D38::<6>::ZERO.hypot_with(d38n, mode),
                     d38,
                     "D38 hypot(0,-{x}) mode {mode:?} (= |{x}|)",
                 );
                 let d307 = D307::<30>::try_from(x).unwrap();
                 assert_eq!(
-                    D307::<30>::ZERO.hypot_strict_with(d307, mode),
+                    D307::<30>::ZERO.hypot_with(d307, mode),
                     d307,
                     "D307 hypot(0,{x}) mode {mode:?}",
                 );
@@ -1000,7 +1000,7 @@ mod from_hypot_edge_cases {
         // a near MAX, b = 0 -> hypot = a exactly, must not panic or overflow.
         let a = D38::<0>::MAX;
         assert_eq!(
-            a.hypot_strict_with(D38::<0>::ZERO, RoundingMode::HalfToEven),
+            a.hypot_with(D38::<0>::ZERO, RoundingMode::HalfToEven),
             a
         );
     }
@@ -1010,7 +1010,7 @@ mod from_hypot_edge_cases {
     fn hypot_overflow_panics_d38() {
         // a = b = MAX magnitude: hypot ~= MAX·√2 exceeds the type range.
         let m = D38::<0>::MAX;
-        let _ = m.hypot_strict_with(m, RoundingMode::HalfToEven);
+        let _ = m.hypot_with(m, RoundingMode::HalfToEven);
     }
 }
 
@@ -1037,7 +1037,7 @@ mod from_transcendental_overflow_uniform {
     //! internal `exp` working-width arithmetic WRAP (`wrapping_sqr_low_u128`
     //! truncates to the low bits → an overflowed square collapses to 0), and
     //! the post-narrowing fit check — seeing only the small wrapped value —
-    //! never fired, so `D18<0>::from(349).exp_strict()` returned `0` instead
+    //! never fired, so `D18<0>::from(349).exp()` returned `0` instead
     //! of panicking, while neighbouring arguments and the wide tiers panicked.
     //! `exp_generic::exp_fixed` now rejects such an argument up front, so the
     //! contract is uniform. Each `#[should_panic]` below fires in debug AND
@@ -1069,20 +1069,20 @@ mod from_transcendental_overflow_uniform {
     #[test]
     #[should_panic(expected = "result out of range")]
     fn narrow_d18_exp_far_overflow_panics() {
-        let _ = D18::<0>::try_from(349).unwrap().exp_strict();
+        let _ = D18::<0>::try_from(349).unwrap().exp();
     }
 
     #[test]
     #[should_panic(expected = "result out of range")]
     fn narrow_d18_exp2_far_overflow_panics() {
         // 2^400 ≈ 2.6e120, far beyond i64. Pre-fix returned 0.
-        let _ = D18::<0>::try_from(400).unwrap().exp2_strict();
+        let _ = D18::<0>::try_from(400).unwrap().exp2();
     }
 
     #[test]
     #[should_panic(expected = "result out of range")]
     fn narrow_d18_cosh_far_overflow_panics() {
-        let _ = D18::<0>::try_from(500).unwrap().cosh_strict();
+        let _ = D18::<0>::try_from(500).unwrap().cosh();
     }
 
     // ── Mid tier (D38, i128 storage) ───────────────────────────────────────
@@ -1092,7 +1092,7 @@ mod from_transcendental_overflow_uniform {
     #[test]
     #[should_panic(expected = "result out of range")]
     fn mid_d38_exp_far_overflow_panics() {
-        let _ = D38::<0>::try_from(349).unwrap().exp_strict();
+        let _ = D38::<0>::try_from(349).unwrap().exp();
     }
 
     // ── Wide tier (feature-gated) ──────────────────────────────────────────
@@ -1111,13 +1111,13 @@ mod from_transcendental_overflow_uniform {
         fn wide_d57_exp_far_overflow_panics() {
             // e^1000 ≈ 10^434, far beyond D57 storage AND its Wexp work integer.
             // Pre-fix this RETURNED 0 (the Wexp squaring wrapped).
-            let _ = D57::<0>::try_from(1000).unwrap().exp_strict();
+            let _ = D57::<0>::try_from(1000).unwrap().exp();
         }
 
         #[test]
         #[should_panic(expected = "result out of range")]
         fn wide_d57_cosh_overflow_panics() {
-            let _ = D57::<0>::try_from(140).unwrap().cosh_strict();
+            let _ = D57::<0>::try_from(140).unwrap().cosh();
         }
     }
 
@@ -1130,7 +1130,7 @@ mod from_transcendental_overflow_uniform {
         fn widest_d1232_cosh_far_overflow_panics() {
             // cosh(5000) ≈ e^5000/2 ≈ 10^2171, far beyond D1232 storage. Pre-fix
             // this RETURNED a wrapped multi-limb value.
-            let _ = D1232::<0>::try_from(5000).unwrap().cosh_strict();
+            let _ = D1232::<0>::try_from(5000).unwrap().cosh();
         }
     }
 
@@ -1156,7 +1156,7 @@ mod from_transcendental_overflow_uniform {
         #[test]
         #[should_panic(expected = "result out of range")]
         fn d76_cosh_storage_overflow_panics() {
-            let _ = D76::<0>::try_from(180).unwrap().cosh_strict();
+            let _ = D76::<0>::try_from(180).unwrap().cosh();
         }
     }
 
@@ -1168,13 +1168,13 @@ mod from_transcendental_overflow_uniform {
     #[test]
     fn narrow_d18_exp_in_range_returns_value() {
         // e^43 ≈ 4.7e18 < i64::MAX ≈ 9.2e18.
-        let _ = D18::<0>::try_from(43).unwrap().exp_strict();
+        let _ = D18::<0>::try_from(43).unwrap().exp();
     }
 
     #[test]
     fn mid_d38_exp_in_range_returns_value() {
         // e^88 ≈ 1.65e38 < i128::MAX ≈ 1.70e38 — the last in-range integer arg.
-        let _ = D38::<0>::try_from(88).unwrap().exp_strict();
+        let _ = D38::<0>::try_from(88).unwrap().exp();
     }
 
     // ── exp2 deep-overflow band (fractional arguments) ─────────────────────
@@ -1196,7 +1196,7 @@ mod from_transcendental_overflow_uniform {
     fn narrow_d18_exp2_deep_band_low_scale_panics() {
         // Pre-fix: index-out-of-bounds inside div_knuth.
         let v: D18<5> = "150.5".parse().unwrap();
-        let _ = v.exp2_strict();
+        let _ = v.exp2();
     }
 
     #[test]
@@ -1204,7 +1204,7 @@ mod from_transcendental_overflow_uniform {
     fn narrow_d18_exp2_deep_band_far_panics() {
         // Pre-fix: `top < u.len()` assertion inside div_knuth.
         let v: D18<5> = "400.5".parse().unwrap();
-        let _ = v.exp2_strict();
+        let _ = v.exp2();
     }
 
     #[test]
@@ -1212,7 +1212,7 @@ mod from_transcendental_overflow_uniform {
     fn mid_d38_exp2_deep_band_low_scale_panics() {
         // Scale 1 is the lowest scale with a fractional (non-pin) argument.
         let v: D38<1> = "200.5".parse().unwrap();
-        let _ = v.exp2_strict();
+        let _ = v.exp2();
     }
 
     #[test]
@@ -1220,7 +1220,7 @@ mod from_transcendental_overflow_uniform {
     fn mid_d38_exp2_deep_band_mid_scale_panics() {
         // Pre-fix: index-out-of-bounds inside div_knuth.
         let v: D38<10> = "150.5".parse().unwrap();
-        let _ = v.exp2_strict();
+        let _ = v.exp2();
     }
 
     #[test]
@@ -1228,7 +1228,7 @@ mod from_transcendental_overflow_uniform {
     fn mid_d38_exp2_deep_band_far_mid_scale_panics() {
         // Pre-fix: `top < u.len()` assertion inside div_knuth.
         let v: D38<10> = "400.5".parse().unwrap();
-        let _ = v.exp2_strict();
+        let _ = v.exp2();
     }
 
     #[test]
@@ -1236,7 +1236,7 @@ mod from_transcendental_overflow_uniform {
     fn mid_d38_exp2_deep_band_high_scale_panics() {
         // 2^20.5 ≈ 1.5e6: 7 integer digits + scale 35 ≥ 40 storage digits.
         let v: D38<35> = "20.5".parse().unwrap();
-        let _ = v.exp2_strict();
+        let _ = v.exp2();
     }
 
     #[test]
@@ -1245,7 +1245,7 @@ mod from_transcendental_overflow_uniform {
         // the probe grid; the gate must not touch it.
         let v: D38<10> = "93.5".parse().unwrap();
         assert_eq!(
-            format!("{}", v.exp2_strict()),
+            format!("{}", v.exp2()),
             "14005692743696534979682984556.8645429406"
         );
     }
@@ -1255,7 +1255,7 @@ mod from_transcendental_overflow_uniform {
     fn mid_d38_exp2_first_out_of_range_cell_panics() {
         // 2^94.5 ≈ 2.8e28 · 10^10 just exceeds i128 — the clean-path edge.
         let v: D38<10> = "94.5".parse().unwrap();
-        let _ = v.exp2_strict();
+        let _ = v.exp2();
     }
 
     // ── exp2 deep-underflow band (negative fractional arguments) ───────────
@@ -1269,7 +1269,7 @@ mod from_transcendental_overflow_uniform {
     fn mid_d38_exp2_deep_underflow_computes_zero() {
         // Pre-fix: `top < u.len()` assertion inside div_knuth.
         let v: D38<10> = "-150.5".parse().unwrap();
-        assert_eq!(format!("{}", v.exp2_strict()), "0.0000000000");
+        assert_eq!(format!("{}", v.exp2()), "0.0000000000");
     }
 
     #[test]
@@ -1277,7 +1277,7 @@ mod from_transcendental_overflow_uniform {
         // 2^-80.5 ≈ 5.9e-25 ≈ 0.59 ULP at scale 24 — rounds to 1 ULP under
         // nearest. Pre-fix: index-out-of-bounds inside div_knuth.
         let v: D38<24> = "-80.5".parse().unwrap();
-        assert_eq!(format!("{}", v.exp2_strict()), "0.000000000000000000000001");
+        assert_eq!(format!("{}", v.exp2()), "0.000000000000000000000001");
     }
 
     #[test]
@@ -1286,7 +1286,7 @@ mod from_transcendental_overflow_uniform {
         // A positive sub-resolution result must round UP under Ceiling.
         let v: D38<10> = "-150.5".parse().unwrap();
         assert_eq!(
-            format!("{}", v.exp2_strict_with(RoundingMode::Ceiling)),
+            format!("{}", v.exp2_with(RoundingMode::Ceiling)),
             "0.0000000001"
         );
     }
@@ -1304,21 +1304,21 @@ mod from_transcendental_overflow_uniform {
     fn mid_d38_exp_extreme_band_panics() {
         // Pre-fix: debug `attempt to multiply with overflow` in the peak model.
         let v: D38<0> = "99999999999999999999999999999999999".parse().unwrap();
-        let _ = v.exp_strict();
+        let _ = v.exp();
     }
 
     #[test]
     #[should_panic(expected = "result out of range")]
     fn mid_d38_exp_max_arg_panics() {
         // Pre-fix: k wrapped negative through i128 and exp(MAX) returned 0.
-        let _ = D38::<0>::MAX.exp_strict();
+        let _ = D38::<0>::MAX.exp();
     }
 
     #[test]
     #[should_panic(expected = "result out of range")]
     fn mid_d38_sinh_max_arg_panics() {
         // Pre-fix: returned a small wrapped value silently.
-        let _ = D38::<0>::MAX.sinh_strict();
+        let _ = D38::<0>::MAX.sinh();
     }
 
     #[test]
@@ -1326,7 +1326,7 @@ mod from_transcendental_overflow_uniform {
         // In-range deep underflow. Pre-fix: internal `div_u512_by_pow10`
         // invariant panic in the 256-bit kernel's range reduction.
         let v: D38<0> = "-150000000000000000000000000000000000000".parse().unwrap();
-        assert_eq!(format!("{}", v.exp_strict()), "0");
+        assert_eq!(format!("{}", v.exp()), "0");
     }
 
     // ── powf deep-overflow band ─────────────────────────────────────────────
@@ -1344,7 +1344,7 @@ mod from_transcendental_overflow_uniform {
         // 1.5^300.5 ≈ 10^52.9, far past i128 at scale 10.
         let b: D38<10> = "1.5".parse().unwrap();
         let e: D38<10> = "300.5".parse().unwrap();
-        let _ = b.powf_strict(e);
+        let _ = b.powf(e);
     }
 
     #[test]
@@ -1354,7 +1354,7 @@ mod from_transcendental_overflow_uniform {
         // narrowing could wrap.
         let b: D38<10> = "2.5".parse().unwrap();
         let e: D38<10> = "10000000000.5".parse().unwrap();
-        let _ = b.powf_strict(e);
+        let _ = b.powf(e);
     }
 
     #[test]
@@ -1362,7 +1362,7 @@ mod from_transcendental_overflow_uniform {
         // 1.5^150.5 ≈ 10^26.5 fits scale 10 with room; the gate must not fire.
         let b: D38<10> = "1.5".parse().unwrap();
         let e: D38<10> = "150.5".parse().unwrap();
-        let r = b.powf_strict(e);
+        let r = b.powf(e);
         assert!(r > D38::<10>::try_from(0).unwrap());
     }
 
@@ -1370,7 +1370,7 @@ mod from_transcendental_overflow_uniform {
     fn mid_d38_powf_deep_underflow_computes_zero() {
         let b: D38<10> = "0.5".parse().unwrap();
         let e: D38<10> = "10000000000.5".parse().unwrap();
-        assert_eq!(format!("{}", b.powf_strict(e)), "0.0000000000");
+        assert_eq!(format!("{}", b.powf(e)), "0.0000000000");
     }
 
     // ── Wide-tier uniformity of the same bands ──────────────────────────────
@@ -1384,14 +1384,14 @@ mod from_transcendental_overflow_uniform {
         fn wide_d76_exp2_deep_band_panics() {
             // 2^300.5 ≈ 10^90.5 exceeds D76<10>'s 66 integer digits.
             let v: D76<10> = "300.5".parse().unwrap();
-            let _ = v.exp2_strict();
+            let _ = v.exp2();
         }
 
         #[test]
         #[should_panic(expected = "result out of range")]
         fn wide_d76_exp2_extreme_band_panics() {
             let v: D76<10> = "100000.5".parse().unwrap();
-            let _ = v.exp2_strict();
+            let _ = v.exp2();
         }
 
         #[test]
@@ -1401,7 +1401,7 @@ mod from_transcendental_overflow_uniform {
             // wider lift (the ungated per-tier body's `k·ln2` formation cannot
             // carry it), landing on the canonical 0.
             let v: D76<10> = "-1000.5".parse().unwrap();
-            assert_eq!(format!("{}", v.exp_strict()), "0.0000000000");
+            assert_eq!(format!("{}", v.exp()), "0.0000000000");
         }
 
         #[test]
@@ -1409,7 +1409,7 @@ mod from_transcendental_overflow_uniform {
         fn wide_d76_powf_deep_band_panics() {
             let b: D76<10> = "1.5".parse().unwrap();
             let e: D76<10> = "1000.5".parse().unwrap();
-            let _ = b.powf_strict(e);
+            let _ = b.powf(e);
         }
     }
 }

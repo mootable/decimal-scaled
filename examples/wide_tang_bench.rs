@@ -32,19 +32,19 @@ macro_rules! suite {
     ($ty:ident, $scale:literal) => {{
         let a = $ty::<$scale>::ONE / $ty::<$scale>::try_from(2_i64).unwrap();
         time(concat!(stringify!($ty), "<", stringify!($scale), ">::exp(0.5)"), || {
-            black_box(black_box(a).exp_strict());
+            black_box(black_box(a).exp());
         });
         let o = $ty::<$scale>::ONE;
         time(concat!(stringify!($ty), "<", stringify!($scale), ">::sin(1)"), || {
-            black_box(black_box(o).sin_strict());
+            black_box(black_box(o).sin());
         });
         // Pure-arithmetic, NON-Tang cells: x*180/pi and x*pi/180. No table
         // component, so their cost is purely the wide work-int arithmetic.
         time(concat!(stringify!($ty), "<", stringify!($scale), ">::to_degrees"), || {
-            black_box(black_box(o).to_degrees_strict());
+            black_box(black_box(o).to_degrees());
         });
         time(concat!(stringify!($ty), "<", stringify!($scale), ">::to_radians"), || {
-            black_box(black_box(o).to_radians_strict());
+            black_box(black_box(o).to_radians());
         });
     }};
 }

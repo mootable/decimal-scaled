@@ -10,9 +10,9 @@ mod from_new_tiers_smoke {
     //! - `DecimalConstants::pi()` correctness (compared against
     //!   the 100-digit canonical reference 3.14159...749 to its tier's
     //!   safe precision).
-    //! - `sqrt_strict(4) == 2` exact.
-    //! - `sin_strict(0) == 0` and `cos_strict(0) == 1` exact.
-    //! - `exp_strict(0) == 1` and `ln_strict(1) == 0` exact.
+    //! - `sqrt(4) == 2` exact.
+    //! - `sin(0) == 0` and `cos(0) == 1` exact.
+    //! - `exp(0) == 1` and `ln(1) == 0` exact.
     //! - `from_bits`/`to_bits` round-trip.
     //!
     //! These are intentionally NOT exhaustive — the algorithm correctness
@@ -81,7 +81,7 @@ mod from_new_tiers_smoke {
                 fn sqrt_perfect_square() {
                     // √4 = 2 exactly.
                     let four = <$Tsmid>::try_from(4).unwrap();
-                    let r = four.sqrt_strict();
+                    let r = four.sqrt();
                     assert_eq!(
                         r,
                         <$Tsmid>::try_from(2).unwrap(),
@@ -91,28 +91,28 @@ mod from_new_tiers_smoke {
 
                 #[test]
                 fn sin_zero_is_zero() {
-                    assert_eq!(<$Tsmid>::ZERO.sin_strict(), <$Tsmid>::ZERO);
+                    assert_eq!(<$Tsmid>::ZERO.sin(), <$Tsmid>::ZERO);
                 }
 
                 #[test]
                 fn cos_zero_is_one() {
-                    assert_eq!(<$Tsmid>::ZERO.cos_strict(), <$Tsmid>::ONE);
+                    assert_eq!(<$Tsmid>::ZERO.cos(), <$Tsmid>::ONE);
                 }
 
                 #[test]
                 fn exp_zero_is_one() {
-                    assert_eq!(<$Tsmid>::ZERO.exp_strict(), <$Tsmid>::ONE);
+                    assert_eq!(<$Tsmid>::ZERO.exp(), <$Tsmid>::ONE);
                 }
 
                 #[test]
                 fn ln_one_is_zero() {
-                    assert_eq!(<$Tsmid>::ONE.ln_strict(), <$Tsmid>::ZERO);
+                    assert_eq!(<$Tsmid>::ONE.ln(), <$Tsmid>::ZERO);
                 }
 
                 #[test]
                 fn sin_cos_strict_at_zero_exact() {
                     // sin_cos(0) = (0, 1) exact at every storage scale.
-                    let (s, c) = <$Tsmid>::ZERO.sin_cos_strict();
+                    let (s, c) = <$Tsmid>::ZERO.sin_cos();
                     assert_eq!(s, <$Tsmid>::ZERO);
                     assert_eq!(c, <$Tsmid>::ONE);
                 }
@@ -174,7 +174,7 @@ mod from_new_tiers_smoke {
 
                 #[test]
                 fn transcendentals_at_half_max_scale_do_not_overflow() {
-                    // Regression: the bench panicked at D57<56>/ln_strict
+                    // Regression: the bench panicked at D57<56>/ln
                     // because the work integer was too narrow to hold
                     // the squared intermediate at working scale
                     // SCALE+GUARD. The fix was to bump D57's work
@@ -186,10 +186,10 @@ mod from_new_tiers_smoke {
                     // at every interior scale.
                     let half = <$Tsmid>::try_from(1).unwrap() / <$Tsmid>::try_from(2).unwrap();
                     let one_and_a_half = <$Tsmid>::try_from(1).unwrap() + half;
-                    let _ = one_and_a_half.ln_strict();
-                    let _ = half.exp_strict();
-                    let _ = one_and_a_half.sin_strict();
-                    let _ = one_and_a_half.sqrt_strict();
+                    let _ = one_and_a_half.ln();
+                    let _ = half.exp();
+                    let _ = one_and_a_half.sin();
+                    let _ = one_and_a_half.sqrt();
                 }
             }
         };

@@ -55,15 +55,15 @@ where
 /// to keep `x²` inside the working width.
 ///
 /// **Not on the `policy::trig::inverse_hyper` matcher, unlike its two
-/// siblings below.** This is the composition the inherent `asinh_strict`
+/// siblings below.** This is the composition the inherent `asinh`
 /// shell has always run, lifted here verbatim so the computation lives in
 /// a named kernel instead of inside the type-shell macro. It is NOT
 /// interchangeable with the policy's `asinh` path
-/// (`policy::trig::extra_rung::asinh_strict`, a rung-selected schoolbook):
+/// (`policy::trig::extra_rung::asinh`, a rung-selected schoolbook):
 /// that path's `ln` is the routed Tang/Series choice, while this one is
 /// pinned to Series by [`ln_series`]. Registering this as an `Algorithm`
 /// variant, so the matcher can choose between the two per cell, is the
-/// open follow-up — it changes which engine runs for `asinh_strict` and
+/// open follow-up — it changes which engine runs for `asinh` and
 /// so is a routing decision, not a relocation.
 ///
 /// `guard` is the number of guard digits below `SCALE` to compute at.
@@ -356,7 +356,7 @@ mod tests {
                     }))
                     .ok();
                     let b = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        crate::policy::trig::extra_rung::acosh_strict::<$Core, $S>(raw, m)
+                        crate::policy::trig::extra_rung::acosh::<$Core, $S>(raw, m)
                     }))
                     .ok();
                     $checks += 1;
@@ -403,7 +403,7 @@ mod tests {
                     }))
                     .ok();
                     let b = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        crate::policy::trig::extra_rung::atanh_strict::<$Core, $S>(raw, m)
+                        crate::policy::trig::extra_rung::atanh::<$Core, $S>(raw, m)
                     }))
                     .ok();
                     $checks += 1;

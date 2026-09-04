@@ -34,14 +34,11 @@ ds-044 = { package = "decimal-scaled", version = "=0.4.4", optional = true }
 ds-033 = { package = "decimal-scaled", version = "=0.3.3", optional = true }
 
 [features]
-# Mirror the root crate's DEFAULT set (std, serde, strict, exact-scratch) so a
-# plain build of this crate compiles decimal-scaled in the same feature world
-# the root CI always builds.
-default = ["std", "serde", "strict", "exact-scratch"]
+# Mirror the root crate's DEFAULT set (std, serde) so a plain build of this
+# crate compiles decimal-scaled in the same feature world the root CI builds.
+default = ["std", "serde"]
 std = ["alloc", "decimal-scaled/std"]
 alloc = ["decimal-scaled/alloc"]
-exact-scratch = ["decimal-scaled/exact-scratch"]
-strict = ["decimal-scaled/strict"]
 serde = ["decimal-scaled/serde"]
 # The tier features mirror the root's nesting (each umbrella turns on its
 # per-tier features) so the per-tier `cfg`s inside the cell fan-out fire

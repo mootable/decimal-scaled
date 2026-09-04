@@ -459,7 +459,6 @@ mod tests {
     /// split on it), so every value is graded positive AND negative. Widths
     /// are gated by the build's width features because the REFERENCE is the
     /// build-max path and cannot hold a radicand wider than the enabled tiers.
-    #[cfg(feature = "exact-scratch")]
     #[test]
     fn matches_pre_change_reference_all_modes() {
         // Perfect cubes, near-zero, primes, a full u64 limb — each signed both

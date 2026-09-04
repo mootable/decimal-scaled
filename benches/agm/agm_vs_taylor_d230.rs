@@ -11,8 +11,8 @@
 //! docs for the override policy).
 //!
 //! Both paths are correctly-rounded to 0.5 ULP at storage scale.
-//! `ln_strict_agm` runs at the lifted working scale
-//! `w' = 2·SCALE + 4` via `guard_agm`; `exp_strict_agm` takes an
+//! `ln_agm` runs at the lifted working scale
+//! `w' = 2·SCALE + 4` via `guard_agm`; `exp_agm` takes an
 //! additional `k_lift` to cover the post-Newton `x << k`
 //! amplification. This bench measures pure throughput.
 //!
@@ -43,9 +43,9 @@ fn bench_ln(c: &mut Criterion) {
     let x = pos();
     let mut g = c.benchmark_group("D230_s115/ln");
     g.bench_function("artanh (canonical)", |b| {
-        b.iter(|| black_box(x).ln_strict())
+        b.iter(|| black_box(x).ln())
     });
-    g.bench_function("agm", |b| b.iter(|| black_box(x).ln_strict_agm()));
+    g.bench_function("agm", |b| b.iter(|| black_box(x).ln_agm()));
     g.finish();
 }
 
@@ -53,10 +53,10 @@ fn bench_exp(c: &mut Criterion) {
     let x = small();
     let mut g = c.benchmark_group("D230_s115/exp");
     g.bench_function("taylor (canonical)", |b| {
-        b.iter(|| black_box(x).exp_strict())
+        b.iter(|| black_box(x).exp())
     });
     g.bench_function("newton-on-agm", |b| {
-        b.iter(|| black_box(x).exp_strict_agm())
+        b.iter(|| black_box(x).exp_agm())
     });
     g.finish();
 }

@@ -892,7 +892,7 @@ mod tests {
             for &mode in &MODES {
                 assert_eq!(
                     asin_schoolbook_narrow::<S38>(d38(raw).0, mode),
-                    d38(raw).asin_strict_with(mode).0,
+                    d38(raw).asin_with(mode).0,
                     "asin schoolbook != routed at raw={raw} mode={mode:?}"
                 );
             }
@@ -916,7 +916,7 @@ mod tests {
             for &mode in &MODES {
                 assert_eq!(
                     acos_schoolbook_narrow::<S38>(d38(raw).0, mode),
-                    d38(raw).acos_strict_with(mode).0,
+                    d38(raw).acos_with(mode).0,
                     "acos schoolbook != routed at raw={raw} mode={mode:?}"
                 );
             }
@@ -942,12 +942,12 @@ mod tests {
             assert_eq!(acos_schoolbook_narrow::<S38>(d38(one_bits).0, mode), Int::<2>::from_i128(0));
             assert_eq!(
                 acos_schoolbook_narrow::<S38>(d38(0).0, mode),
-                d38(0).acos_strict_with(mode).0,
+                d38(0).acos_with(mode).0,
                 "acos(0) schoolbook != routed at mode={mode:?}"
             );
             assert_eq!(
                 acos_schoolbook_narrow::<S38>(d38(-one_bits).0, mode),
-                d38(-one_bits).acos_strict_with(mode).0,
+                d38(-one_bits).acos_with(mode).0,
                 "acos(-1) schoolbook != routed at mode={mode:?}"
             );
         }
@@ -971,7 +971,7 @@ mod tests {
             for &mode in &MODES {
                 assert_eq!(
                     atan2_schoolbook_narrow::<S38>(d38(y).0, d38(x).0, mode),
-                    d38(y).atan2_strict_with(d38(x), mode).0,
+                    d38(y).atan2_with(d38(x), mode).0,
                     "atan2 schoolbook != routed at y={y} x={x} mode={mode:?}"
                 );
             }
@@ -1018,13 +1018,13 @@ mod tests {
             // Public path (policy -> rung walker -> tier fall-up).
             let value = crate::D::<Int<24>, 180>(raw);
             assert_eq!(
-                value.asin_strict_with(RoundingMode::HalfToEven).0,
+                value.asin_with(RoundingMode::HalfToEven).0,
                 expect_nearest,
                 "public asin HalfToEven"
             );
             for mode in MODES {
                 assert_eq!(
-                    value.asin_strict_with(mode).0,
+                    value.asin_with(mode).0,
                     asin_schoolbook::<Core, 180>(raw, mode),
                     "public == tier at mode {mode:?}"
                 );
@@ -1215,7 +1215,7 @@ mod tests {
                 let x_decimal = crate::D::<Int<24>, S>(x);
                 for mode in MODES {
                     assert_eq!(
-                        y_decimal.atan2_strict_with(x_decimal, mode).0,
+                        y_decimal.atan2_with(x_decimal, mode).0,
                         atan2_schoolbook::<Core, S>(y, x, mode),
                         "public==tier S={S} k={big_k} mode={mode:?}"
                     );
@@ -1244,7 +1244,7 @@ mod tests {
             let operand = crate::D::<Int<24>, 461>(one_val);
             for mode in MODES {
                 assert_eq!(
-                    operand.atan2_strict_with(operand, mode).0,
+                    operand.atan2_with(operand, mode).0,
                     atan2_schoolbook::<Core, 461>(one_val, one_val, mode),
                     "non-tiny public==tier mode={mode:?}"
                 );
@@ -1320,7 +1320,7 @@ mod tests {
             let x_decimal = crate::D::<Int<48>, 923>(x);
             for mode in MODES {
                 assert_eq!(
-                    y_decimal.atan2_strict_with(x_decimal, mode).0,
+                    y_decimal.atan2_with(x_decimal, mode).0,
                     atan2_schoolbook::<Core, 923>(y, x, mode),
                     "d924 s923 public==tier mode={mode:?}"
                 );
@@ -1374,12 +1374,12 @@ mod tests {
                 for &mode in &MODES {
                     assert_eq!(
                         asin_schoolbook::<Core, S>(raw, mode),
-                        D::<Int<3>, S>(raw).asin_strict_with(mode).0,
+                        D::<Int<3>, S>(raw).asin_with(mode).0,
                         "D57 asin schoolbook != routed at units={units} mode={mode:?}"
                     );
                     assert_eq!(
                         acos_schoolbook::<Core, S>(raw, mode),
-                        D::<Int<3>, S>(raw).acos_strict_with(mode).0,
+                        D::<Int<3>, S>(raw).acos_with(mode).0,
                         "D57 acos schoolbook != routed at units={units} mode={mode:?}"
                     );
                 }
@@ -1398,7 +1398,7 @@ mod tests {
                 for &mode in &MODES {
                     assert_eq!(
                         atan2_schoolbook::<Core, S>(y_raw, x_raw, mode),
-                        D::<Int<3>, S>(y_raw).atan2_strict_with(D::<Int<3>, S>(x_raw), mode).0,
+                        D::<Int<3>, S>(y_raw).atan2_with(D::<Int<3>, S>(x_raw), mode).0,
                         "D57 atan2 schoolbook != routed at y={y} x={x} mode={mode:?}"
                     );
                 }

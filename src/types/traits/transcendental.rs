@@ -54,15 +54,15 @@ pub trait DecimalTranscendental: Sized {
 
     /// Natural log. See the log/exp implementation module for the
     /// algorithm.
-    fn ln_strict(self) -> Self;
-    fn ln_strict_with(self, mode: RoundingMode) -> Self;
+    fn ln(self) -> Self;
+    fn ln_with(self, mode: RoundingMode) -> Self;
 
     // `log1p(t) = ln(1 + t)`, domain `t > -1`. Present for API parity
     // and standards conformance; at fixed point it is equivalent to
     // `ln(1 + t)` at the same scale, not more accurate.
 
-    fn log1p_strict(self) -> Self;
-    fn log1p_strict_with(self, mode: RoundingMode) -> Self;
+    fn log1p(self) -> Self;
+    fn log1p_with(self, mode: RoundingMode) -> Self;
 
     // `expm1(x) = e^x - 1`, total over the argument (it tends to `-1` as
     // `x -> -inf`). Like `log1p` it is not more accurate than the
@@ -71,97 +71,97 @@ pub trait DecimalTranscendental: Sized {
     // check, so it is defined on `x <= ln(1 + MAX)` where `exp` stops at
     // `ln(MAX)` — a band `ln(1 + 1/MAX)` wide, a few hundredths.
 
-    fn expm1_strict(self) -> Self;
-    fn expm1_strict_with(self, mode: RoundingMode) -> Self;
+    fn expm1(self) -> Self;
+    fn expm1_with(self, mode: RoundingMode) -> Self;
 
     /// Log to caller-chosen base.
-    fn log_strict(self, base: Self) -> Self;
-    fn log_strict_with(self, base: Self, mode: RoundingMode) -> Self;
+    fn log(self, base: Self) -> Self;
+    fn log_with(self, base: Self, mode: RoundingMode) -> Self;
 
     /// Log base 2.
-    fn log2_strict(self) -> Self;
-    fn log2_strict_with(self, mode: RoundingMode) -> Self;
+    fn log2(self) -> Self;
+    fn log2_with(self, mode: RoundingMode) -> Self;
 
     /// Log base 10.
-    fn log10_strict(self) -> Self;
-    fn log10_strict_with(self, mode: RoundingMode) -> Self;
+    fn log10(self) -> Self;
+    fn log10_with(self, mode: RoundingMode) -> Self;
 
     // ── Exponentials ───────────────────────────────────────────
 
-    fn exp_strict(self) -> Self;
-    fn exp_strict_with(self, mode: RoundingMode) -> Self;
+    fn exp(self) -> Self;
+    fn exp_with(self, mode: RoundingMode) -> Self;
 
-    fn exp2_strict(self) -> Self;
-    fn exp2_strict_with(self, mode: RoundingMode) -> Self;
+    fn exp2(self) -> Self;
+    fn exp2_with(self, mode: RoundingMode) -> Self;
 
     // ── Power ──────────────────────────────────────────────────
 
-    fn powf_strict(self, exp: Self) -> Self;
-    fn powf_strict_with(self, exp: Self, mode: RoundingMode) -> Self;
+    fn powf(self, exp: Self) -> Self;
+    fn powf_with(self, exp: Self, mode: RoundingMode) -> Self;
 
     // ── Roots ──────────────────────────────────────────────────
 
-    fn sqrt_strict(self) -> Self;
-    fn sqrt_strict_with(self, mode: RoundingMode) -> Self;
+    fn sqrt(self) -> Self;
+    fn sqrt_with(self, mode: RoundingMode) -> Self;
 
-    fn cbrt_strict(self) -> Self;
-    fn cbrt_strict_with(self, mode: RoundingMode) -> Self;
+    fn cbrt(self) -> Self;
+    fn cbrt_with(self, mode: RoundingMode) -> Self;
 
-    fn hypot_strict(self, other: Self) -> Self;
-    fn hypot_strict_with(self, other: Self, mode: RoundingMode) -> Self;
+    fn hypot(self, other: Self) -> Self;
+    fn hypot_with(self, other: Self, mode: RoundingMode) -> Self;
 
     // ── Trig (forward) ─────────────────────────────────────────
 
-    fn sin_strict(self) -> Self;
-    fn sin_strict_with(self, mode: RoundingMode) -> Self;
+    fn sin(self) -> Self;
+    fn sin_with(self, mode: RoundingMode) -> Self;
 
-    fn cos_strict(self) -> Self;
-    fn cos_strict_with(self, mode: RoundingMode) -> Self;
+    fn cos(self) -> Self;
+    fn cos_with(self, mode: RoundingMode) -> Self;
 
-    fn tan_strict(self) -> Self;
-    fn tan_strict_with(self, mode: RoundingMode) -> Self;
+    fn tan(self) -> Self;
+    fn tan_with(self, mode: RoundingMode) -> Self;
 
     // ── Trig (inverse) ─────────────────────────────────────────
 
-    fn atan_strict(self) -> Self;
-    fn atan_strict_with(self, mode: RoundingMode) -> Self;
+    fn atan(self) -> Self;
+    fn atan_with(self, mode: RoundingMode) -> Self;
 
-    fn asin_strict(self) -> Self;
-    fn asin_strict_with(self, mode: RoundingMode) -> Self;
+    fn asin(self) -> Self;
+    fn asin_with(self, mode: RoundingMode) -> Self;
 
-    fn acos_strict(self) -> Self;
-    fn acos_strict_with(self, mode: RoundingMode) -> Self;
+    fn acos(self) -> Self;
+    fn acos_with(self, mode: RoundingMode) -> Self;
 
     /// `atan2(self, other)` — matches the f64 convention where
     /// `self` is `y` and `other` is `x`.
-    fn atan2_strict(self, other: Self) -> Self;
-    fn atan2_strict_with(self, other: Self, mode: RoundingMode) -> Self;
+    fn atan2(self, other: Self) -> Self;
+    fn atan2_with(self, other: Self, mode: RoundingMode) -> Self;
 
     // ── Hyperbolic ─────────────────────────────────────────────
 
-    fn sinh_strict(self) -> Self;
-    fn sinh_strict_with(self, mode: RoundingMode) -> Self;
+    fn sinh(self) -> Self;
+    fn sinh_with(self, mode: RoundingMode) -> Self;
 
-    fn cosh_strict(self) -> Self;
-    fn cosh_strict_with(self, mode: RoundingMode) -> Self;
+    fn cosh(self) -> Self;
+    fn cosh_with(self, mode: RoundingMode) -> Self;
 
-    fn tanh_strict(self) -> Self;
-    fn tanh_strict_with(self, mode: RoundingMode) -> Self;
+    fn tanh(self) -> Self;
+    fn tanh_with(self, mode: RoundingMode) -> Self;
 
-    fn asinh_strict(self) -> Self;
-    fn asinh_strict_with(self, mode: RoundingMode) -> Self;
+    fn asinh(self) -> Self;
+    fn asinh_with(self, mode: RoundingMode) -> Self;
 
-    fn acosh_strict(self) -> Self;
-    fn acosh_strict_with(self, mode: RoundingMode) -> Self;
+    fn acosh(self) -> Self;
+    fn acosh_with(self, mode: RoundingMode) -> Self;
 
-    fn atanh_strict(self) -> Self;
-    fn atanh_strict_with(self, mode: RoundingMode) -> Self;
+    fn atanh(self) -> Self;
+    fn atanh_with(self, mode: RoundingMode) -> Self;
 
     // ── Angle conversion ───────────────────────────────────────
 
-    fn to_degrees_strict(self) -> Self;
-    fn to_degrees_strict_with(self, mode: RoundingMode) -> Self;
+    fn to_degrees(self) -> Self;
+    fn to_degrees_with(self, mode: RoundingMode) -> Self;
 
-    fn to_radians_strict(self) -> Self;
-    fn to_radians_strict_with(self, mode: RoundingMode) -> Self;
+    fn to_radians(self) -> Self;
+    fn to_radians_with(self, mode: RoundingMode) -> Self;
 }

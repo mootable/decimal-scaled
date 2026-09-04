@@ -4,7 +4,7 @@
 //! Exponential policy — the per-(N, SCALE) algorithm matcher (plus the
 //! derived exp2).
 //!
-//! `D<Int<N>, SCALE>::exp_strict_with(mode)` delegates directly to the one
+//! `D<Int<N>, SCALE>::exp_with(mode)` delegates directly to the one
 //! shared [`dispatch`] generic function — the canonical matcher-only
 //! policy shape (see `docs/ARCHITECTURE.md`), mirrored from `sqrt`:
 //!
@@ -197,7 +197,7 @@ pub(crate) const fn is_tang<const N: usize, const SCALE: u32>() -> bool {
 #[must_use]
 pub(crate) fn dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Int<N> {
     checked_dispatch::<N, SCALE>(raw, mode).unwrap_or_else(|| {
-        crate::support::diagnostics::overflow_panic_with_scale("exp_strict", SCALE)
+        crate::support::diagnostics::overflow_panic_with_scale("exp", SCALE)
     })
 }
 
@@ -255,7 +255,7 @@ where
 #[inline]
 fn series_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
     match N {
-        1 | 2 => crate::algos::exp::exp_series_2limb::exp_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
+        1 | 2 => crate::algos::exp::exp_series_2limb::exp::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => Some(series_at_rung::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -276,7 +276,7 @@ fn series_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMo
         48 => Some(series_at_rung::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => Some(series_at_rung::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>()),
-        _ => crate::algos::exp::exp_series_2limb::exp_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
+        _ => crate::algos::exp::exp_series_2limb::exp::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
     }
 }
 
@@ -368,7 +368,7 @@ fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode
 #[must_use]
 pub(crate) fn exp2_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Int<N> {
     checked_exp2_dispatch::<N, SCALE>(raw, mode).unwrap_or_else(|| {
-        crate::support::diagnostics::overflow_panic_with_scale("exp2_strict", SCALE)
+        crate::support::diagnostics::overflow_panic_with_scale("exp2", SCALE)
     })
 }
 
@@ -383,7 +383,7 @@ pub(crate) fn checked_exp2_dispatch<const N: usize, const SCALE: u32>(
     mode: RoundingMode,
 ) -> Option<Int<N>> {
     match N {
-        1 | 2 => crate::algos::exp::exp_series_2limb::exp2_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
+        1 | 2 => crate::algos::exp::exp_series_2limb::exp2::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => Some(crate::types::widths::wide_trig_d57::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -404,7 +404,7 @@ pub(crate) fn checked_exp2_dispatch<const N: usize, const SCALE: u32>(
         48 => Some(crate::types::widths::wide_trig_d924::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => Some(crate::types::widths::wide_trig_d1232::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>()),
-        _ => crate::algos::exp::exp_series_2limb::exp2_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
+        _ => crate::algos::exp::exp_series_2limb::exp2::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
     }
 }
 

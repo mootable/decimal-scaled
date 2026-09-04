@@ -586,57 +586,57 @@ mod from_wide_strict_transcendentals {
     #[test]
     #[should_panic(expected = "ln: argument must be positive")]
     fn d76_ln_zero_panics() {
-        let _ = D76::<6>::ZERO.ln_strict();
+        let _ = D76::<6>::ZERO.ln();
     }
 
     #[test]
     #[should_panic(expected = "ln: argument must be positive")]
     fn d76_ln_negative_panics() {
-        let _ = (-D76::<6>::ONE).ln_strict();
+        let _ = (-D76::<6>::ONE).ln();
     }
 
     #[test]
     #[should_panic(expected = "log: argument must be positive")]
     fn d76_log_zero_panics() {
-        let _ = D76::<6>::ZERO.log_strict(D76::<6>::try_from(2).unwrap());
+        let _ = D76::<6>::ZERO.log(D76::<6>::try_from(2).unwrap());
     }
 
     #[test]
     #[should_panic(expected = "log: base must be positive")]
     fn d76_log_base_zero_panics() {
         let one: D76<6> = D38::<6>::ONE.into();
-        let _ = one.log_strict(D76::<6>::ZERO);
+        let _ = one.log(D76::<6>::ZERO);
     }
 
     #[test]
     #[should_panic(expected = "log: base must not equal 1")]
     fn d76_log_base_one_panics() {
         let one: D76<6> = D38::<6>::ONE.into();
-        let _ = one.log_strict(one);
+        let _ = one.log(one);
     }
 
     #[test]
     #[should_panic(expected = "asin: argument out of domain")]
     fn d76_asin_out_of_domain_panics() {
-        let _ = lift(D38::<6>::try_from(2).unwrap()).asin_strict();
+        let _ = lift(D38::<6>::try_from(2).unwrap()).asin();
     }
 
     #[test]
     #[should_panic(expected = "acos: argument out of domain")]
     fn d76_acos_out_of_domain_panics() {
-        let _ = lift(D38::<6>::try_from(2).unwrap()).acos_strict();
+        let _ = lift(D38::<6>::try_from(2).unwrap()).acos();
     }
 
     #[test]
     #[should_panic(expected = "acosh: argument must be >= 1")]
     fn d76_acosh_below_one_panics() {
-        let _ = D76::<6>::ZERO.acosh_strict();
+        let _ = D76::<6>::ZERO.acosh();
     }
 
     #[test]
     #[should_panic(expected = "atanh: argument out of domain")]
     fn d76_atanh_at_boundary_panics() {
-        let _ = lift(D38::<6>::ONE).atanh_strict();
+        let _ = lift(D38::<6>::ONE).atanh();
     }
 
     // ─── _with-mode domain panics ──────────────────────────────────────────
@@ -648,19 +648,19 @@ mod from_wide_strict_transcendentals {
     #[test]
     #[should_panic(expected = "ln: argument must be positive")]
     fn d76_ln_with_zero_panics() {
-        let _ = D76::<6>::ZERO.ln_strict_with(RoundingMode::HalfToEven);
+        let _ = D76::<6>::ZERO.ln_with(RoundingMode::HalfToEven);
     }
 
     #[test]
     #[should_panic(expected = "asin: argument out of domain")]
     fn d76_asin_with_oob_panics() {
-        let _ = lift(D38::<6>::try_from(2).unwrap()).asin_strict_with(RoundingMode::HalfToEven);
+        let _ = lift(D38::<6>::try_from(2).unwrap()).asin_with(RoundingMode::HalfToEven);
     }
 
     #[test]
     #[should_panic(expected = "log: argument must be positive")]
     fn d76_log_strict_with_zero_panics() {
-        let _ = D76::<6>::ZERO.log_strict_with(
+        let _ = D76::<6>::ZERO.log_with(
             lift(D38::<6>::try_from(2).unwrap()),
             RoundingMode::HalfToEven,
         );
@@ -670,50 +670,50 @@ mod from_wide_strict_transcendentals {
     #[should_panic(expected = "log: base must be positive")]
     fn d76_log_strict_with_base_zero_panics() {
         let one: D76<6> = D38::<6>::ONE.into();
-        let _ = one.log_strict_with(D76::<6>::ZERO, RoundingMode::HalfToEven);
+        let _ = one.log_with(D76::<6>::ZERO, RoundingMode::HalfToEven);
     }
 
     #[test]
     #[should_panic(expected = "log: base must not equal 1")]
     fn d76_log_strict_with_base_one_panics() {
         let one: D76<6> = D38::<6>::ONE.into();
-        let _ = one.log_strict_with(one, RoundingMode::HalfToEven);
+        let _ = one.log_with(one, RoundingMode::HalfToEven);
     }
 
     #[test]
     #[should_panic(expected = "log2: argument must be positive")]
     fn d76_log2_strict_with_zero_panics() {
-        let _ = D76::<6>::ZERO.log2_strict_with(RoundingMode::HalfToEven);
+        let _ = D76::<6>::ZERO.log2_with(RoundingMode::HalfToEven);
     }
 
     #[test]
     #[should_panic(expected = "log10: argument must be positive")]
     fn d76_log10_strict_with_zero_panics() {
-        let _ = D76::<6>::ZERO.log10_strict_with(RoundingMode::HalfToEven);
+        let _ = D76::<6>::ZERO.log10_with(RoundingMode::HalfToEven);
     }
 
     #[test]
     #[should_panic(expected = "ln_agm: argument must be positive")]
     fn d76_ln_agm_with_zero_panics() {
-        let _ = D76::<6>::ZERO.ln_strict_agm_with(RoundingMode::HalfToEven);
+        let _ = D76::<6>::ZERO.ln_agm_with(RoundingMode::HalfToEven);
     }
 
     #[test]
     #[should_panic(expected = "acos: argument out of domain")]
     fn d76_acos_strict_with_oob_panics() {
-        let _ = lift(D38::<6>::try_from(2).unwrap()).acos_strict_with(RoundingMode::HalfToEven);
+        let _ = lift(D38::<6>::try_from(2).unwrap()).acos_with(RoundingMode::HalfToEven);
     }
 
     #[test]
     #[should_panic(expected = "acosh: argument must be >= 1")]
     fn d76_acosh_strict_with_below_one_panics() {
-        let _ = D76::<6>::ZERO.acosh_strict_with(RoundingMode::HalfToEven);
+        let _ = D76::<6>::ZERO.acosh_with(RoundingMode::HalfToEven);
     }
 
     #[test]
     #[should_panic(expected = "atanh: argument out of domain")]
     fn d76_atanh_strict_with_boundary_panics() {
-        let _ = lift(D38::<6>::ONE).atanh_strict_with(RoundingMode::HalfToEven);
+        let _ = lift(D38::<6>::ONE).atanh_with(RoundingMode::HalfToEven);
     }
 
     // ─── Negative-base powf ────────────────────────────────────────────────
@@ -726,7 +726,7 @@ mod from_wide_strict_transcendentals {
     fn d76_powf_negative_base_is_zero() {
         let two = lift(D38::<6>::try_from(2).unwrap());
         assert_eq!(
-            lift(D38::<6>::try_from(-2).unwrap()).powf_strict(two),
+            lift(D38::<6>::try_from(-2).unwrap()).powf(two),
             D76::<6>::ZERO
         );
     }

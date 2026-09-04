@@ -1,4 +1,4 @@
-//! Focused micro-bench for `D38<33>::log10_strict` before/after the
+//! Focused micro-bench for `D38<33>::log10` before/after the
 //! borrow-D57 migration. Kept tiny so a full run completes in well
 //! under a minute (per the project's "micro-bench first" rule).
 
@@ -14,19 +14,19 @@ fn bench_d38_s33_log10(c: &mut Criterion) {
     let two: D38<33> = D38::<33>::try_from(2_i64).unwrap();
 
     g.bench_function("D38_s33_ln_strict_of_7", |bn| {
-        bn.iter(|| black_box(seven).ln_strict())
+        bn.iter(|| black_box(seven).ln())
     });
     g.bench_function("D38_s33_log10_strict_of_7", |bn| {
-        bn.iter(|| black_box(seven).log10_strict())
+        bn.iter(|| black_box(seven).log10())
     });
     g.bench_function("D38_s33_log2_strict_of_7", |bn| {
-        bn.iter(|| black_box(seven).log2_strict())
+        bn.iter(|| black_box(seven).log2())
     });
     g.bench_function("D38_s33_log_strict_of_7_base_2", |bn| {
-        bn.iter(|| black_box(seven).log_strict(black_box(two)))
+        bn.iter(|| black_box(seven).log(black_box(two)))
     });
     g.bench_function("D38_s33_exp2_strict_of_2", |bn| {
-        bn.iter(|| black_box(two).exp2_strict())
+        bn.iter(|| black_box(two).exp2())
     });
     // exp2 of a small fraction (0.3) exercises the full Taylor series,
     // not just the integer power-of-two shortcut path.
@@ -35,7 +35,7 @@ fn bench_d38_s33_log10(c: &mut Criterion) {
             .unwrap(),
     );
     g.bench_function("D38_s33_exp2_strict_of_0p3", |bn| {
-        bn.iter(|| black_box(frac).exp2_strict())
+        bn.iter(|| black_box(frac).exp2())
     });
 
     g.finish();

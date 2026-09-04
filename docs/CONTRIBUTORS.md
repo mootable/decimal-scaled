@@ -120,7 +120,7 @@ type, so the whole choice is the one `const fn select` keyed on
 
 ### The cascade
 
-When you call `D<Int<3>, 20>::sqrt_strict_with(mode)`, dispatch flows
+When you call `D<Int<3>, 20>::sqrt_with(mode)`, dispatch flows
 **down only**:
 
 ```
@@ -168,11 +168,11 @@ use crate::int::types::Int;
 
 const GUARD: u32 = 4; // narrower than the wide-default ~25
 
-pub(crate) fn sin_strict(raw: Int<3>, mode: RoundingMode) -> Int<3> {
+pub(crate) fn sin(raw: Int<3>, mode: RoundingMode) -> Int<3> {
     /* … reduction + Taylor at SCALE + GUARD … */
 }
 
-pub(crate) fn cos_strict(raw: Int<3>, mode: RoundingMode) -> Int<3> {
+pub(crate) fn cos(raw: Int<3>, mode: RoundingMode) -> Int<3> {
     /* … shares sin_cos_fixed core … */
 }
 ```
@@ -205,7 +205,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
 
 // …then in dispatch's exhaustive `match algo`:
 Algorithm::TangNarrowBand =>
-    trig::sincos_tang_3limb_s18_22::sin_strict(raw, mode),
+    trig::sincos_tang_3limb_s18_22::sin(raw, mode),
 ```
 
 Place the arm across the **continuous win-region** the bench shows, not
@@ -216,7 +216,7 @@ neighbours uncovered (`docs/ARCHITECTURE.md` → the single-cell-fit trap).
 
 Every `*_with(mode)` method gets a default-mode sibling that
 delegates to it with `HalfToEven`. The kernel-file split mirrors
-this: if you write `sin_strict_with`, also write `sin_strict` that
+this: if you write `sin_with`, also write `sin` that
 calls it with `RoundingMode::HalfToEven`.
 
 ### Step 5 — Validate correctness BEFORE celebrating
@@ -237,8 +237,8 @@ PR gate — if any of them fail your kernel does not land.
 
 - [`decimal-scale-test/tests/golden.rs`](https://github.com/mootable/decimal-scaled/blob/main/decimal-scale-test/tests/golden.rs) — the full-surface golden gate and the crate's **definitive correctness proof**. One erased subject drives the [`decimal-scaled-golden`](https://github.com/mootable/decimal-scaled/tree/main/decimal-scaled-golden) harness over **every band-edge `(width, scale)` cell** (88 cells, `D18<0>` … `D1232<1231>`) for every strict function under **every** `RoundingMode` (`HalfToEven`, `HalfAwayFromZero`, `HalfTowardZero`, `Trunc`, `Floor`, `Ceiling`), asserting the correctly-rounded value EXACTLY (`delta == 0` storage LSB, ZERO tolerance) and validating overflow panics against each cell's envelope. Passes only at **0 bad / 0 panic**. The `golden (gate)` CI job runs it per push (row-sampled); the `golden (comprehensive)` workflow runs it unsampled on demand. See the [`decimal-scale-test` README](https://github.com/mootable/decimal-scaled/blob/main/decimal-scale-test/README.md) for the `GOLDEN_*` filter variables.
 - The multi-oracle golden set (`decimal-scaled-golden/golden/<fn>.au`, generated from `decimal-scaled-golden/lead/<fn>.pb` by the oracle pipeline) is the external truth the gate asserts against - correctly-rounded for every `RoundingMode` across all twelve widths at the band-edge cells. The legacy `ulp_strict_golden` suite is retired (its inputs were folded into the leads).
-- [`decimal-scale-test/tests/regressions/ln_lookup_bands.rs`](https://github.com/mootable/decimal-scaled/blob/main/decimal-scale-test/tests/regressions/ln_lookup_bands.rs) — parity / no-panic coverage for the deep-scale Tang-lookup `ln_strict` bands, one parametrised arm per `(width, band)`. Off-grid bands (no golden cell lands inside them) keep the full `exp(ln(x))` round-trip parity plus band-edge no-panic bounds; on-grid bands (the golden gate pins the mid-band cell bit-exact) keep the band edges only. New Tang lookup bands must add a matching parity arm before the kernel is allowed in.
-- [`decimal-scale-test/tests/regressions/powf_integer.rs`](https://github.com/mootable/decimal-scaled/blob/main/decimal-scale-test/tests/regressions/powf_integer.rs) — bit-exact assertion of `powf_strict(D::try_from(n).unwrap()).to_bits() == powi(n).to_bits()` for the integer-exponent fast path, plus the wide-tier exact integer-power directed-rounding pins. Any future integer-exponent specialisation has to keep this contract.
+- [`decimal-scale-test/tests/regressions/ln_lookup_bands.rs`](https://github.com/mootable/decimal-scaled/blob/main/decimal-scale-test/tests/regressions/ln_lookup_bands.rs) — parity / no-panic coverage for the deep-scale Tang-lookup `ln` bands, one parametrised arm per `(width, band)`. Off-grid bands (no golden cell lands inside them) keep the full `exp(ln(x))` round-trip parity plus band-edge no-panic bounds; on-grid bands (the golden gate pins the mid-band cell bit-exact) keep the band edges only. New Tang lookup bands must add a matching parity arm before the kernel is allowed in.
+- [`decimal-scale-test/tests/regressions/powf_integer.rs`](https://github.com/mootable/decimal-scaled/blob/main/decimal-scale-test/tests/regressions/powf_integer.rs) — bit-exact assertion of `powf(D::try_from(n).unwrap()).to_bits() == powi(n).to_bits()` for the integer-exponent fast path, plus the wide-tier exact integer-power directed-rounding pins. Any future integer-exponent specialisation has to keep this contract.
 - [`decimal-scale-test/tests/proptest_identities.rs`](https://github.com/mootable/decimal-scaled/blob/main/decimal-scale-test/tests/proptest_identities.rs) — property-based ULP fuzz at D38<19> with a D76<19> cross-tier witness. Identities (`exp(ln(x)) ≈ x`, `sin² + cos² ≈ 1`, sign symmetries, …) with deterministic seeds and 100 cases per block.
 
 See the [Harness page](https://mootable.github.io/decimal-scaled/golden/) for how the golden validation works and how to add coverage for a new tier.
@@ -325,12 +325,12 @@ fn main() {
         for _ in 0..3 {
             let t0 = std::time::Instant::now();
             for _ in 0..10_000 {
-                let _ = std::hint::black_box(a.sin_strict());
+                let _ = std::hint::black_box(a.sin());
             }
             samples.push(t0.elapsed());
         }
         samples.sort();
-        println!("D57<{}> sin_strict median = {:?}", scale, samples[1]);
+        println!("D57<{}> sin median = {:?}", scale, samples[1]);
     }
 }
 ```

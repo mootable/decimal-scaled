@@ -179,7 +179,7 @@ pub(crate) fn ln_schoolbook_strict<const SCALE: u32>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::algos::ln::ln_series_2limb::ln_strict;
+    use crate::algos::ln::ln_series_2limb::ln;
     use crate::support::rounding::RoundingMode;
     use crate::int::types::Int;
 
@@ -194,7 +194,7 @@ mod tests {
     fn check<const S: u32>(raw_i128: i128, mode: RoundingMode) {
         let raw = Int::<2>::from_i128(raw_i128);
         let got = ln_schoolbook_strict::<S>(raw, mode);
-        let expected = ln_strict::<S>(raw, mode).expect("reference in range");
+        let expected = ln::<S>(raw, mode).expect("reference in range");
         assert_eq!(got, expected,
             "ln schoolbook D38<{}> raw={} mode={:?}: {:?} != {:?}",
             S, raw_i128, mode, got, expected);
@@ -240,7 +240,7 @@ mod tests {
                 for mode in MODES {
                     assert_eq!(
                         crate::algos::ln::ln_schoolbook::ln_schoolbook::<Core, S>(raw, mode),
-                        D::<Int<3>, S>(raw).ln_strict_with(mode).0,
+                        D::<Int<3>, S>(raw).ln_with(mode).0,
                         "D57 ln schoolbook != routed at units={units} mode={mode:?}"
                     );
                 }

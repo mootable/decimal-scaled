@@ -157,4 +157,4 @@ To round to a *different* scale, use `quantize` - see the
 - [The width family](widths.md) — choosing one of the twelve widths from D18 to D1232.
 - [The `d38!` macro](macros.md) — ergonomic compile-time literals.
 - [Rounding modes](rounding.md) — switching from HalfToEven to Floor, Ceiling, Trunc, etc., per call or crate-wide.
-- [The strict transcendentals](strict-mode.md) — the 0.5 ULP guarantee and what it costs.
+- [Correctly-rounded transcendentals](strict-mode.md) — the 0.5 ULP guarantee and what it costs.

@@ -1,7 +1,7 @@
-//! Tight-loop driver for profiling the wide-tier strict `exp_strict`
+//! Tight-loop driver for profiling the wide-tier strict `exp`
 //! path under samply / flamegraph.
 //!
-//! Each iteration calls `D307s150::try_from(2).unwrap().exp_strict()` —
+//! Each iteration calls `D307s150::try_from(2).unwrap().exp()` —
 //! roughly 90 µs of work per call at the time of writing — wrapped
 //! in `black_box` so the optimiser cannot hoist or fold the result.
 //!
@@ -36,7 +36,7 @@ fn main() {
         // path but does not hit the same memoised state — defensive
         // against any constant-folding the compiler might attempt.
         let x = Work::try_from(2_i64).unwrap() + Work::try_from(i as i128).unwrap() / Work::try_from(1_000_000_i64).unwrap();
-        acc += x.exp_strict();
+        acc += x.exp();
     }
     println!("{} iters; acc = {}", iters, black_box(acc));
 }

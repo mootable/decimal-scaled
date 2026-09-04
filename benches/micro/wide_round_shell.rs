@@ -24,12 +24,12 @@ fn bench_shell(c: &mut Criterion) {
     let z462: D462<0> = "0".parse().unwrap();
 
     let mut g = c.benchmark_group("wide_round_shell");
-    g.bench_function("sin_D115s0_x0", |bn| bn.iter(|| black_box(z0).sin_strict()));
-    g.bench_function("sin_D115s0_x1", |bn| bn.iter(|| black_box(one).sin_strict()));
-    g.bench_function("sin_D115s28_xfrac", |bn| bn.iter(|| black_box(frac).sin_strict()));
-    g.bench_function("cos_D115s0_x0", |bn| bn.iter(|| black_box(z0).cos_strict()));
-    g.bench_function("atan_D115s0_x0", |bn| bn.iter(|| black_box(z0).atan_strict()));
-    g.bench_function("sin_D462s0_x0", |bn| bn.iter(|| black_box(z462).sin_strict()));
+    g.bench_function("sin_D115s0_x0", |bn| bn.iter(|| black_box(z0).sin()));
+    g.bench_function("sin_D115s0_x1", |bn| bn.iter(|| black_box(one).sin()));
+    g.bench_function("sin_D115s28_xfrac", |bn| bn.iter(|| black_box(frac).sin()));
+    g.bench_function("cos_D115s0_x0", |bn| bn.iter(|| black_box(z0).cos()));
+    g.bench_function("atan_D115s0_x0", |bn| bn.iter(|| black_box(z0).atan()));
+    g.bench_function("sin_D462s0_x0", |bn| bn.iter(|| black_box(z462).sin()));
     g.finish();
 }
 
