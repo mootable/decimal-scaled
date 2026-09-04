@@ -10,10 +10,11 @@
 //! intermediate because the narrow storage cannot host the guard
 //! digits a correctly-rounded result needs. Captures the `strict`
 //! entry shape (with its explicit-rounding-mode sibling) at the
-//! const-folded `STRICT_GUARD` working scale.
+//! const-folded `LN_GUARD` working scale.
 //!
 //! Hosts the shared `Fixed` ln primitives used by every D38 strict-
-//! ln callsite plus the `policy::ln` defaults — `STRICT_GUARD`,
+//! ln callsite plus the `policy::ln` defaults — `LN_GUARD` (this
+//! family) and `STRICT_GUARD` (the other narrow kernels),
 //! `ln_fixed`, `wide_ln2`, `wide_ln10` — so the typed-shell file
 //! has no `crate::algos::*` or `crate::algos::support::fixed::*` references
 //! left.
@@ -32,16 +33,73 @@ use crate::algos::support::narrow_ziv::{self, WZiv};
 use crate::int::types::Int;
 use crate::support::rounding::{RoundingMode, is_nearest_mode};
 
-/// Guard digits added below the storage scale for the D38 strict log
-/// family. The 256-bit `Fixed` intermediate runs at
-/// `w = SCALE + STRICT_GUARD`; with `SCALE <= 38` that caps `w` at 68
-/// digits, comfortably inside the 75-digit window the embedded
-/// `ln 2` / `ln 10` constants cover.
+/// Guard digits added below the storage scale for the narrow (D18 / D38)
+/// transcendental kernels that read this constant — exp, expm1, trig,
+/// hyperbolic, inverse-trig, angle conversion, powf, log1p. The 256-bit
+/// `Fixed` intermediate runs at `w = SCALE + STRICT_GUARD`; with
+/// `SCALE <= 38` that caps `w` at 68 digits, comfortably inside the
+/// 75-digit window the embedded `ln 2` / `ln 10` constants cover, and
+/// `exp_series_2limb` bounds its internal peak on that same 68.
+///
+/// It is NO LONGER the guard for `ln` / `log` / `log2` / `log10` — those
+/// four run at the smaller [`LN_GUARD`]. Read that constant's docs before
+/// changing this one; they are deliberately independent, because this one
+/// is shared across sixteen files and moving it moves every narrow
+/// transcendental's working precision at once.
 pub(crate) const STRICT_GUARD: u32 = 30;
+
+/// Guard digits for the `ln` / `log` / `log2` / `log10` entry points ONLY.
+///
+/// # Why these four have their own guard
+///
+/// [`STRICT_GUARD`] is the narrow tier's SHARED guard — sixteen files read it
+/// (exp, trig, hyper, inverse, angle, pow, `to_degrees`/`to_radians`,
+/// `log1p`/`expm1`), and some base their own analysis on it: `exp_series_2limb`
+/// bounds its internal peak on `w = SCALE + STRICT_GUARD <= 68`. Moving it
+/// would change every narrow transcendental's working precision at once. These
+/// four functions therefore carry their own constant, exactly as each wide tier
+/// carries its own per-function `GUARD` (`policy::ln` passes 8 at D57, 10 at
+/// D76). `ln_fixed` itself is guard-agnostic — it takes the working scale as an
+/// argument — so no other caller is affected.
+///
+/// # Why 30 was costing so much
+///
+/// The artanh series runs until a term underflows the working scale, so its
+/// term count is proportional to `w = SCALE + GUARD`, and EVERY term pays a
+/// 512-bit product plus a rescale by `10^w`. A guard of 30 therefore bought
+/// nothing at the output and added ~30 digits of series to every call. It also
+/// pushed `w` past 38 at every scale above 8, where `div_u512_by_pow10` stops
+/// being a single MG sweep and becomes a chained two-pass divide (`fixed.rs`),
+/// roughly 1.6x the cost per term.
+///
+/// Concretely, it made a NARROWER tier compute to MORE working digits than a
+/// wider one: D38 ran at `SCALE + 30` (up to 68 digits) while D57's Tang path
+/// runs at `SCALE + 8` (up to 64). That is the inversion, in one line.
+///
+/// # Why 10 is enough
+///
+/// The series truncates at a relative error near `10^-w`, and the accumulated
+/// truncation over `j` terms is bounded by `j * 10^-w`. At the worst cell
+/// (`SCALE = 38`, `w = 48`, `j ~ 43`) that is `~4.3e-47`, against the half-ULP
+/// budget `0.5e-38` — eight orders of margin. 10 also matches the guard the
+/// wide tiers already run this same function at.
+///
+/// Correct ROUNDING does not rest on the guard being generous: a residual too
+/// close to a tie for the single shot to call is escalated through
+/// `narrow_ziv::walk_checked`, which recomputes at successively higher guards.
+/// A smaller guard widens the band that escalates — for the directed near-1
+/// family the deep band is `|delta| < sqrt(2 * 10^(SCALE - GUARD))` — so more
+/// inputs take the walker and fewer take the single shot. The result is
+/// unchanged; only which path produces it moves. `ln_deep_directed_band_sweep`
+/// derives its sweep bound from this constant for that reason, so the test
+/// tracks the guard instead of restating it.
+pub(crate) const LN_GUARD: u32 = 10;
 
 // `ln(2)` and `ln(10)` are embedded at 75 fractional digits — the same
 // reference scale `wide_pi` uses — so callers running at the maximum
-// strict working scale `W = SCALE + STRICT_GUARD = 38 + 30 = 68` always
+// strict working scale — `SCALE + LN_GUARD = 38 + 10 = 48` for the ln
+// family, `SCALE + STRICT_GUARD = 38 + 30 = 68` for the other narrow
+// kernels that borrow these constants — always
 // rescale **down** (never up, which would wrap `from_w − to_w` as `u32`
 // and silently produce a wrong constant). The 75-digit window covers
 // every supported strict scale; widening it further is wasted work
@@ -69,10 +127,13 @@ fn fixed_from_int256(raw: Int<4>) -> Fixed {
 /// `ln(2)` as a `Fixed` at working scale `w` (`w <= 75`). Sourced from
 /// the 75-digit reference and rescaled **down** to `w`.
 ///
-/// Caller-side precondition: `w <= 75`. The D38 strict log family runs
-/// at `w = SCALE + STRICT_GUARD`, capped at `38 + 30 = 68`, so every
-/// strict call site is comfortably inside the bound. A debug-assert
-/// documents the invariant for any future caller.
+/// Caller-side precondition: `w <= 75`. The D38 strict log family runs at
+/// `w = SCALE + LN_GUARD`, capped at `38 + 10 = 48`; the other narrow
+/// kernels that call this run at `SCALE + STRICT_GUARD`, capped at 68. Both
+/// are comfortably inside the bound, and lowering a guard only moves `w`
+/// DOWN, which is the safe direction here (an over-large `w` would wrap
+/// `from_w − to_w`). A debug-assert documents the invariant for any future
+/// caller.
 pub(crate) fn wide_ln2(working_scale: u32) -> Fixed {
     debug_assert!(
         working_scale <= 75,
@@ -162,8 +223,8 @@ pub(crate) fn ln_fixed(working_value: Fixed, working_scale: u32) -> Fixed {
     k_ln2.add(ln_mantissa)
 }
 
-/// Fixed to `STRICT_GUARD` working digits, keeping the working scale
-/// `w = SCALE + STRICT_GUARD` const-folded so LLVM specialises one
+/// Fixed to [`LN_GUARD`] working digits, keeping the working scale
+/// `w = SCALE + LN_GUARD` const-folded so LLVM specialises one
 /// optimal kernel per `SCALE`.
 #[inline]
 #[must_use]
@@ -194,9 +255,9 @@ fn ln_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128
         // of `δ`), so they fall through to the full working-scale kernel below.
         return Some(delta);
     }
-    let working_scale = SCALE + STRICT_GUARD;
+    let working_scale = SCALE + LN_GUARD;
     let working_value =
-        Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(STRICT_GUARD));
+        Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(LN_GUARD));
     let ln_working_value = ln_fixed(working_value, working_scale);
     match ln_working_value.round_to_i128_clear_of_tie(working_scale, SCALE, mode) {
         Some(rounded) => rounded,
@@ -207,7 +268,7 @@ fn ln_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128
         // ≤ 2·38 = 76 ≪ the `WZiv` reach).
         None => narrow_ziv::walk_checked(
             ln_working_value.round_to_i128_with(working_scale, SCALE, mode),
-            STRICT_GUARD,
+            LN_GUARD,
             SCALE,
             mode,
             |guard_digits| ln_ziv(raw, SCALE, guard_digits),
@@ -452,8 +513,8 @@ pub(crate) fn log<const SCALE: u32>(raw: Int<2>, base_raw: Int<2>, mode: Roundin
 fn log_strict_raw(raw: i128, base_raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
     assert!(raw > 0, "D38::log: argument must be positive");
     assert!(base_raw > 0, "D38::log: base must be positive");
-    let working_scale = scale + STRICT_GUARD;
-    let guard_pow = 10u128.pow(STRICT_GUARD);
+    let working_scale = scale + LN_GUARD;
+    let guard_pow = 10u128.pow(LN_GUARD);
     let working_value = Fixed::from_u128_mag(raw as u128, false).mul_u128(guard_pow);
     let base_working_value = Fixed::from_u128_mag(base_raw as u128, false).mul_u128(guard_pow);
     let ln_b = ln_fixed(base_working_value, working_scale);
@@ -496,7 +557,7 @@ fn log_strict_raw(raw: i128, base_raw: i128, scale: u32, mode: RoundingMode) -> 
             }
             narrow_ziv::walk_checked(
                 ratio.round_to_i128_with(working_scale, scale, mode),
-                STRICT_GUARD,
+                LN_GUARD,
                 scale,
                 mode,
                 |guard_digits| log_ratio_ziv(raw, base_raw, scale, guard_digits),
@@ -518,9 +579,9 @@ pub(crate) fn log2<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<
 /// `i128` core of [`log2`].
 fn log2_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
     assert!(raw > 0, "D38::log2: argument must be positive");
-    let working_scale = scale + STRICT_GUARD;
+    let working_scale = scale + LN_GUARD;
     let working_value =
-        Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(STRICT_GUARD));
+        Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(LN_GUARD));
     let ratio =
         ln_fixed(working_value, working_scale).div(wide_ln2(working_scale), working_scale);
     let exponent_candidate = ratio.round_to_nearest_int(working_scale);
@@ -531,7 +592,7 @@ fn log2_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
         Some(rounded) => rounded,
         None => narrow_ziv::walk_checked(
             ratio.round_to_i128_with(working_scale, scale, mode),
-            STRICT_GUARD,
+            LN_GUARD,
             scale,
             mode,
             |guard_digits| log_ratio_ziv(raw, -2, scale, guard_digits),
@@ -551,9 +612,9 @@ pub(crate) fn log10<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option
 /// `i128` core of [`log10`].
 fn log10_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
     assert!(raw > 0, "D38::log10: argument must be positive");
-    let working_scale = scale + STRICT_GUARD;
+    let working_scale = scale + LN_GUARD;
     let working_value =
-        Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(STRICT_GUARD));
+        Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(LN_GUARD));
     let ratio =
         ln_fixed(working_value, working_scale).div(wide_ln10(working_scale), working_scale);
     let exponent_candidate = ratio.round_to_nearest_int(working_scale);
@@ -564,7 +625,7 @@ fn log10_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
         Some(rounded) => rounded,
         None => narrow_ziv::walk_checked(
             ratio.round_to_i128_with(working_scale, scale, mode),
-            STRICT_GUARD,
+            LN_GUARD,
             scale,
             mode,
             |guard_digits| log_ratio_ziv(raw, -10, scale, guard_digits),
@@ -618,14 +679,25 @@ mod near_tie_pins {
 
     #[test]
     fn ln_directed_deep_band_sweep() {
-        // deep zone: deviation delta^2/(2*10^S) below 10^-(S+30) working
-        // resolution <=> delta^2 < 2*10^(S-30)... in working units at w:
-        // dev_working = delta^2/(2*10^S)*10^30 < 1 <=> delta^2 < 2*10^(S-30)
+        // deep zone: the deviation delta^2/(2*10^S) falls below the working
+        // resolution 10^-(S+G) <=> delta^2 < 2*10^(S-G), where G is the ln
+        // family's guard. In working units at w: dev_working =
+        // delta^2/(2*10^S)*10^G < 1 <=> delta^2 < 2*10^(S-G).
+        //
+        // DERIVED from LN_GUARD, never restated: the band is a function of the
+        // guard, so cutting the guard WIDENS it (at G = 10 and S = 38 it reaches
+        // ~1.4e14 ULPs, against ~1.4e4 at G = 30). Those inputs stop resolving
+        // on the single shot and resolve through the Ziv walker instead, which
+        // is exactly the property this sweep exists to hold. A hardcoded bound
+        // here would silently stop testing the band the kernel actually has.
+        //
+        // The scale range is fixed by `ln_strict_dyn`'s const-scale match, not
+        // by the guard; widening it means adding arms there too.
         let mut bad = 0u32;
         for scale in 31u32..=38 {
             let one: i128 = 10_i128.pow(scale);
             let max_offset =
-                ((2.0 * 10f64.powi(scale as i32 - 30)).sqrt() as i128).max(1);
+                ((2.0 * 10f64.powi(scale as i32 - LN_GUARD as i32)).sqrt() as i128).max(1);
             let mut ulp_offset: i128 = 1;
             while ulp_offset <= max_offset {
                 let raw = Int::<2>::from_i128(one + ulp_offset);

@@ -18,8 +18,9 @@
 //! | `<fn>_strict`     | crate default  | crate default               |
 //! | `<fn>_strict_with`| crate default  | caller-supplied              |
 //!
-//! `_strict` runs at `SCALE + STRICT_GUARD` (const-folded so LLVM
-//! specialises one optimal kernel per `SCALE`).
+//! `_strict` runs at `SCALE` plus a per-family guard, const-folded so LLVM
+//! specialises one optimal kernel per `SCALE`: `LN_GUARD` for
+//! `ln`/`log`/`log2`/`log10`, `STRICT_GUARD` for the rest.
 //!
 //! `ln` uses range reduction plus a Mercator series;
 //! `exp` uses range reduction plus a Taylor series; the
@@ -75,7 +76,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     /// area-hyperbolic-tangent series
     /// `ln(m) = 2·artanh(t)`, `t = (m-1)/(m+1) ∈ [0, 1/3]`,
     /// `artanh(t) = t + t³/3 + t⁵/5 + …`, evaluated in a 256-bit
-    /// fixed-point intermediate at `SCALE + STRICT_GUARD` working
+    /// fixed-point intermediate at `SCALE + LN_GUARD` working
     /// digits. The guard digits bound the total accumulated rounding
     /// error far below 0.5 ULP of the output, so the result —
     /// `k·ln(2) + ln(m)`, rounded once at the end — is correctly
