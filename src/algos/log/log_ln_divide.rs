@@ -52,3 +52,25 @@ pub(crate) fn log_ln_divide_d38<const SCALE: u32>(
     crate::algos::ln::ln_series_2limb::log::<SCALE>(raw, base_raw, mode)
 }
 
+/// D38 strict `log(self, base)` with the ratio's two logs taken by the
+/// narrow TANG core instead of the Series one. `None` = result out of
+/// storage range.
+///
+/// Same composition, same near-tie terminal, same exact-power and
+/// rational pins — the ONLY difference is which working-scale ln the
+/// shared shell calls, which is why this is an `Algorithm` variant the
+/// matcher picks rather than a branch inside the kernel.
+#[inline]
+pub(crate) fn log_ln_divide_tang_d38<const SCALE: u32>(
+    raw: Int<2>,
+    base_raw: Int<2>,
+    mode: RoundingMode,
+) -> Option<Int<2>> {
+    crate::algos::ln::ln_series_2limb::log_with_core::<SCALE>(
+        raw,
+        base_raw,
+        mode,
+        crate::algos::ln::ln_tang_2limb::ln_tang_fixed,
+    )
+}
+

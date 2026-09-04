@@ -18,6 +18,17 @@
 //!   exponent split. Registered as the unrouted `Algorithm::Schoolbook` variant.
 
 pub(crate) mod ln_series_2limb;
+
+/// Narrow-tier Tang `ln` -- the same `Fixed` intermediate as
+/// [`ln_series_2limb`], but reduced against the baked `ln_tang_table`
+/// node before the artanh series, so `|t| <= 1/257` instead of `<= 1/3`
+/// and the term count falls ~5x for the same working scale. NOT
+/// feature-gated: the table's ARRAY is sized by `_wide-support` (the
+/// narrow build compiles a 5-limb prefix), so this kernel is available
+/// in a no_std narrow-only build. Registered as `Algorithm::Tang` at
+/// `N = 1 | 2`; [`ln_series_2limb`] stays as the kept alternative.
+pub(crate) mod ln_tang_2limb;
+
 /// Schoolbook natural logarithm -- atanh series correctness reference.
 /// Registered as the unrouted `Algorithm::Schoolbook` arm; not connected
 /// to `select`.

@@ -78,6 +78,40 @@ W_MAX_DECIMAL = 2048          # D1232 working-scale cap = Int<256>::BITS / 8
 B_LIMBS = 112                 # 112 · 64 = 7168 bits
 B = B_LIMBS * 64              # = 7168; guard ≈ 7168 − 6803 = 365 bits ≈ 110 dec digits
 
+# ── Narrow-tier prefix width ─────────────────────────────────────────────
+#
+# A build without `_wide-support` has only D18/D38, and 112 limbs (115,584
+# bytes) would dwarf what those tiers can consume. They need just the
+# HIGH-limb PREFIX their working scale demands, and the emitted array is
+# MS-limb-first precisely so a prefix IS the value at a lower exponent.
+#
+# Sized by the SAME formula the reader applies at run time — kept in one
+# place below as `ln_table_limbs_for`, so this and the Rust side cannot
+# drift:
+#
+#   need_bits = w·3322/1000 + 64   ->   limbs = ceil(need_bits / 64)
+#
+# The widest `w` any NARROW caller presents is SCALE 38 + STRICT_GUARD 30
+# = 68: the hyperbolics (`acosh`/`asinh`/`atanh`) call `ln_fixed` at that
+# working scale. The ln family itself runs at SCALE + LN_GUARD = 48, which
+# needs only 4 limbs; 5 covers the hyperbolics too, so routing one of them
+# through Tang later cannot trip the width bound.
+#
+#   w = 68 -> 225 + 64 = 289 bits -> 5 limbs (320 bits, 31 bits of slack)
+#
+# Measured headroom: 5 limbs actually cover every w <= 77, nine scales past
+# the widest a narrow caller presents. w = 78 is the first that would need a
+# sixth limb.
+#
+# The narrow slot is emitted as `limbs[:NARROW_B_LIMBS]` — literally the
+# first limbs of the SAME computed value, not a second computation at a
+# lower precision. So the narrow array is a prefix of the wide one by
+# construction, and a narrow build and a wide build return bit-identical
+# results for every `(w, idx)` they both accept.
+NARROW_W_MAX_DECIMAL = 68
+NARROW_B_LIMBS = ((NARROW_W_MAX_DECIMAL * 3322 // 1000 + 64) + 63) // 64   # = 5
+NARROW_B = NARROW_B_LIMBS * 64
+
 # ── Oracle precision ──────────────────────────────────────────────────────
 # Set by the shared flint/Arb oracle (`scripts/tang_flint_oracle.py`) well
 # above the B bits retained, so every emitted digit is pinned by a rigorous
@@ -123,10 +157,18 @@ def main():
     w("//! `L_i = ln(1 + i/128)` (`i ∈ [0, 128]`, all in `[0, ln 2] ⊂ [0,")
     w("//! 1)`) as a correctly-rounded BINARY fixed-point value")
     w(f"//! `round(L_i · 2^{B})` — a `B = {B}`-bit unsigned magnitude stored as a")
-    w(f"//! fixed-length `[u64; {B_LIMBS}]` little-endian array, but laid out")
+    w(f"//! fixed-length `[u64; LN_TANG_LIMBS]` little-endian array, but laid out")
     w("//! **most-significant limb first** within the entry. A narrower")
     w("//! tier reads a contiguous HIGH-limb PREFIX (a free slice); the")
     w("//! widest tier (D1232) reads the whole entry. The `i = 0` slot is")
+    w("//!")
+    w("//! That prefix property is also how ONE table serves two build")
+    w(f"//! configurations: `_wide-support` compiles the full {B_LIMBS}-limb entry,")
+    w(f"//! a narrow-only build compiles the leading {NARROW_B_LIMBS} limbs of the SAME")
+    w("//! values ({} bytes against {}). Emitted from one computation in one".format(
+        (M + 1) * NARROW_B_LIMBS * 8, (M + 1) * B_LIMBS * 8))
+    w("//! pass, so the two widths cannot drift, and results are")
+    w("//! bit-identical wherever both builds accept the working scale.")
     w("//! `ln(1) = 0` (all-zero); the `i = 128` slot is `ln 2`.")
     w("//!")
     w(f"//! `B = {B}` is sized for the widest enabled tier's max working scale")
@@ -141,31 +183,90 @@ def main():
     w("/// separate task; do NOT change this here.")
     w(f"pub(crate) const LN_TANG_M: u32 = {M};")
     w("")
-    w("/// Binary fixed-point exponent: each slot is `round(ln(1+i/M) ·")
-    w(f"/// 2^B)`. `B = {B}` bits = `{B_LIMBS}` u64 limbs.")
-    w(f"pub(crate) const LN_TANG_B: u32 = {B};")
-    w("")
-    w("/// Number of u64 limbs per stored slot (`B / 64`).")
+    w("/// Number of u64 limbs per stored slot, and so the binary exponent")
+    w("/// `B = 64 · LN_TANG_LIMBS` each slot is scaled by.")
+    w("///")
+    w("/// Two widths, ONE table. A `_wide-support` build carries the full")
+    w(f"/// `{B_LIMBS}`-limb entry the widest tier (D1232) consumes; a narrow-only")
+    w(f"/// build carries the `{NARROW_B_LIMBS}`-limb HIGH-limb PREFIX of that SAME value —")
+    w(f"/// {(M + 1) * NARROW_B_LIMBS * 8} bytes against {(M + 1) * B_LIMBS * 8}. Because the narrow array is a")
+    w("/// prefix rather than a second computation, and the reader always")
+    w("/// takes the top `p` limbs, both builds return BIT-IDENTICAL results")
+    w("/// for every `(w, idx)` they both accept: the feature flag changes how")
+    w("/// much of the constant is compiled in, never its value.")
+    w("#[cfg(feature = \"_wide-support\")]")
     w(f"pub(crate) const LN_TANG_LIMBS: usize = {B_LIMBS};")
+    w("#[cfg(not(feature = \"_wide-support\"))]")
+    w(f"pub(crate) const LN_TANG_LIMBS: usize = {NARROW_B_LIMBS};")
+    w("")
+    w("/// Binary fixed-point exponent: each slot is `round(ln(1+i/M) · 2^B)`,")
+    w("/// truncated to the compiled width. Derived so it cannot disagree with")
+    w("/// the array it describes.")
+    w("pub(crate) const LN_TANG_B: u32 = (LN_TANG_LIMBS as u32) * 64;")
+    w("")
+    w("/// Limbs of `L_idx` a working scale `w` needs: `w·log2(10)` value bits")
+    w("/// plus a 64-bit guard, rounded up to whole limbs. `3322/1000` is a")
+    w("/// slight OVER-estimate of `log2(10)`, so the answer never under-sizes.")
+    w("///")
+    w("/// THE single source of this formula. [`ln_table_entry_baked`] applies")
+    w("/// it at run time and [`ln_table_fits`] applies it at compile time, so")
+    w("/// the two cannot drift apart.")
+    w("#[inline]")
+    w("#[must_use]")
+    w("pub(crate) const fn ln_table_limbs_for(w: u32) -> usize {")
+    w("    let need_bits = (w as u64) * 3322 / 1000 + 64;")
+    w("    // `div_ceil` by hand: usable in `const` on every supported toolchain.")
+    w("    ((need_bits + 63) / 64) as usize")
+    w("}")
+    w("")
+    w("/// Whether the table COMPILED INTO THIS BUILD covers working scale `w`.")
+    w("///")
+    w("/// `const fn` on purpose. The runtime `assert!` in")
+    w("/// [`ln_table_entry_baked`] is the last line of defence, not the first:")
+    w("/// a caller whose working scale is const-foldable (`SCALE + GUARD`)")
+    w("/// should assert THIS in a `const { }` block, turning \"this build's")
+    w("/// table is too small for this scale\" into a compile error instead of")
+    w("/// a production panic on the narrow tier.")
+    w("#[inline]")
+    w("#[must_use]")
+    w("pub(crate) const fn ln_table_fits(w: u32) -> bool {")
+    w("    ln_table_limbs_for(w) <= LN_TANG_LIMBS")
+    w("}")
     w("")
     w("/// The `M + 1` baked slots `round(ln(1+i/M) · 2^B)`, each a")
     w(f"/// `[u64; {B_LIMBS}]` little-endian magnitude emitted MOST-SIGNIFICANT")
     w("/// limb FIRST (so a narrow tier reads a high-limb prefix). Index by")
     w("/// `i ∈ [0, 128]`.")
-    w(f"pub(crate) static LN_TANG_SLOTS: [[u64; {B_LIMBS}]; {M + 1}] = [")
-    for i in range(M + 1):
-        limbs = slot_limbs_msb_first(i)
-        # one slot per line group; chunk the limbs across lines for
-        # readability (4 limbs per line).
-        w(f"    // i = {i}: ln(1 + {i}/{M})")
-        w("    [")
-        for j in range(0, B_LIMBS, 4):
-            chunk = limbs[j:j + 4]
-            chunk_str = ", ".join(f"0x{l:016x}" for l in chunk)
-            w(f"        {chunk_str},")
-        w("    ],")
-    w("];")
-    w("")
+    # Compute every slot ONCE, then emit the full array and its prefix from
+    # the same values — the property that makes the two widths incapable of
+    # disagreeing.
+    all_limbs = [slot_limbs_msb_first(i) for i in range(M + 1)]
+
+    def emit_slots(width: int) -> None:
+        w(f"pub(crate) static LN_TANG_SLOTS: [[u64; {width}]; {M + 1}] = [")
+        for i in range(M + 1):
+            # one slot per line group; chunk the limbs across lines for
+            # readability (4 limbs per line).
+            w(f"    // i = {i}: ln(1 + {i}/{M})")
+            w("    [")
+            for j in range(0, width, 4):
+                # Clamp to `width`: `all_limbs[i]` always holds the full
+                # B_LIMBS value, so the last chunk of a narrower emission
+                # must not run past the declared array length.
+                chunk = all_limbs[i][j:min(j + 4, width)]
+                chunk_str = ", ".join(f"0x{l:016x}" for l in chunk)
+                w(f"        {chunk_str},")
+            w("    ],")
+        w("];")
+        w("")
+
+    w("#[cfg(feature = \"_wide-support\")]")
+    emit_slots(B_LIMBS)
+    w("/// The narrow-build table: the leading `LN_TANG_LIMBS` limbs of each")
+    w("/// entry above, sliced from the SAME computed value rather than")
+    w("/// recomputed at a lower precision.")
+    w("#[cfg(not(feature = \"_wide-support\"))]")
+    emit_slots(NARROW_B_LIMBS)
 
     # ── Width-generic accessor ────────────────────────────────────────────
     w("use crate::int::types::traits::BigInt;")
@@ -206,8 +307,11 @@ def main():
     w("    // cap) stays inside `W` even on the narrowest work integer")
     w("    // (Int<16> = 1024 bits: 0.83·1024 + 64 ≈ 914 < 1024). Round the")
     w("    // limb count up; assert it fits the stored width.")
-    w("    let need_bits = (w as u64) * 3322 / 1000 + 64;")
-    w("    let p_full = need_bits.div_ceil(64) as usize;")
+    w("    let p_full = ln_table_limbs_for(w);")
+    w("    // LAST line of defence, not the first: a const-foldable working")
+    w("    // scale should have been checked by `const { ln_table_fits(w) }` at")
+    w("    // the call site, so reaching this assert means a caller with a")
+    w("    // genuinely runtime `w` overran the width compiled into this build.")
     w("    assert!(")
     w("        p_full <= LN_TANG_LIMBS,")
     w("        \"ln_tang: working scale {w} out of generated range ({LN_TANG_LIMBS} limbs)\"")

@@ -28,6 +28,10 @@ use crate::support::rounding::RoundingMode;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
     LnDivide,
+    /// `ln(self)/ln(base)` with both logs taken by the narrow TANG core.
+    /// Narrow tiers only — the wide tiers reach Tang inside their own
+    /// `ln_fixed_routed` surface, so `LnDivide` already gives them it.
+    LnDivideTang,
     #[allow(dead_code)]
     Schoolbook,
 }
@@ -40,8 +44,22 @@ enum Select<const N: usize> {
 }
 
 const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
-    let _ = (N, SCALE);
-    Select::ByAlgorithm(Algorithm::LnDivide)
+    let _ = SCALE;
+    match N {
+        // Narrow tiers take the ratio's two logs from the Tang core.
+        // `log(x, b)` calls the working-scale ln TWICE, and on a base that
+        // is not a power of two the whole cost is one full artanh series
+        // (bbc 33874088471: D38 `log` 8,660 ns at s28 decomposed as
+        // `ln_nd` 7,037 + `log10` 1,667 to within 1.005x — the series IS
+        // the cost). Tang takes that series' argument from `|t| <= 1/3` to
+        // `|t| <= 1/257`.
+        //
+        // Blanket over the whole scale range: the term-count argument is
+        // scale-independent, and `LnDivide` remains the kept alternative
+        // in the `_` arm.
+        1 | 2 => Select::ByAlgorithm(Algorithm::LnDivideTang),
+        _ => Select::ByAlgorithm(Algorithm::LnDivide),
+    }
 }
 
 #[inline]
@@ -74,7 +92,23 @@ pub(crate) fn checked_dispatch<const N: usize, const SCALE: u32>(
     };
     match algo {
         Algorithm::LnDivide => ln_divide_routed::<N, SCALE>(raw, braw, mode),
+        Algorithm::LnDivideTang => ln_divide_tang_routed::<N, SCALE>(raw, braw, mode),
         Algorithm::Schoolbook => schoolbook_routed::<N, SCALE>(raw, braw, mode),
+    }
+}
+
+/// The narrow Tang arm. Only `N = 1 | 2` select it; the `_` arm keeps the
+/// widths whole by falling back to [`ln_divide_routed`], so the match stays
+/// total over `N` even though `select` never sends a wide width here.
+#[inline]
+fn ln_divide_tang_routed<const N: usize, const SCALE: u32>(
+    raw: Int<N>,
+    braw: Int<N>,
+    mode: RoundingMode,
+) -> Option<Int<N>> {
+    match N {
+        1 | 2 => crate::algos::log::log_ln_divide::log_ln_divide_tang_d38::<SCALE>(raw.resize_to::<Int<2>>(), braw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
+        _ => ln_divide_routed::<N, SCALE>(raw, braw, mode),
     }
 }
 

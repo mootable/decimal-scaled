@@ -55,8 +55,12 @@ pub(crate) const STRICT_GUARD: u32 = 30;
 /// Repacks an `Int<4>` (internally `[u64; 4]`) into a
 /// `Fixed` magnitude (`[u128; 2]`) sourced at scale `75`.
 #[inline]
-fn fixed_from_int256(raw: Int<4>) -> Fixed {
+pub(crate) fn fixed_from_int256<const N: usize>(raw: Int<N>) -> Fixed {
     let words = raw.limbs_le();
+    debug_assert!(
+        words.iter().skip(4).all(|limb| *limb == 0),
+        "fixed_from_int256: value exceeds the 256-bit Fixed magnitude"
+    );
     Fixed {
         negative: false,
         mag: [
@@ -168,12 +172,43 @@ pub(crate) fn ln_fixed(working_value: Fixed, working_scale: u32) -> Fixed {
 #[inline]
 #[must_use]
 pub(crate) fn ln<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
-    ln_strict_raw::<SCALE>(raw.as_i128(), mode).map(Int::<2>::from_i128)
+    ln_strict_raw_with::<SCALE>(raw.as_i128(), mode, ln_fixed).map(Int::<2>::from_i128)
 }
 
-/// `i128` core of [`ln`].
+/// The strict `ln` shell run against an arbitrary working-scale core —
+/// the seam `ln_tang_2limb` enters through, so the Tang algorithm reuses
+/// this file's near-tie terminal instead of restating it.
 #[inline]
-fn ln_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
+pub(crate) fn ln_with_core<const SCALE: u32>(
+    raw: Int<2>,
+    mode: RoundingMode,
+    core: impl Fn(Fixed, u32) -> Fixed,
+) -> Option<Int<2>> {
+    ln_strict_raw_with::<SCALE>(raw.as_i128(), mode, core).map(Int::<2>::from_i128)
+}
+
+/// The strict `ln` shell, shared by every narrow ln ALGORITHM.
+///
+/// `core` is the working-scale log itself — [`ln_fixed`] (Series) or
+/// `ln_tang_2limb::ln_tang_fixed` (Tang). Everything around it is
+/// algorithm-INDEPENDENT and lives here once: the exact `1.0` pin, the
+/// linear `ln(1+x) ≈ x` band, the working-value lift, the clear-of-tie
+/// single shot, and the Ziv escalation. Duplicating that shell per
+/// algorithm would put the near-tie handling in two places, which is
+/// exactly the defect the kept-alternatives rule exists to prevent — so
+/// the algorithms differ ONLY in the core they pass.
+///
+/// Taken as an `impl Fn` rather than a function pointer so each caller
+/// monomorphises and the core inlines; there is no runtime indirection.
+/// The Ziv path is core-independent by construction — `ln_ziv` probes
+/// through `exp_generic::ln_fixed::<WZiv>`, not through `core` — so
+/// escalation cost is identical whichever algorithm the matcher picked.
+#[inline]
+fn ln_strict_raw_with<const SCALE: u32>(
+    raw: i128,
+    mode: RoundingMode,
+    core: impl Fn(Fixed, u32) -> Fixed,
+) -> Option<i128> {
     assert!(raw > 0, "ln kernel: argument must be positive");
     let one_scaled: i128 = 10_i128.pow(SCALE);
     if raw == one_scaled {
@@ -197,12 +232,12 @@ fn ln_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128
     let working_scale = SCALE + STRICT_GUARD;
     let working_value =
         Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(STRICT_GUARD));
-    let ln_working_value = ln_fixed(working_value, working_scale);
+    let ln_working_value = core(working_value, working_scale);
     match ln_working_value.round_to_i128_clear_of_tie(working_scale, SCALE, mode) {
         Some(rounded) => rounded,
         // Near-tie: the directed deep-near-1 family (`ln(1 ± k·10^-S)`
         // leaves the `δ²/2` deviation below the fixed working scale once
-        // `δ² < 2·10^(S−30)`) and any nearest near-half — escalate. The
+        // `δ² < 2·10^(S−STRICT_GUARD)`) and any nearest near-half — escalate. The
         // walker resolves every constructible member (deviation depth
         // ≤ 2·38 = 76 ≪ the `WZiv` reach).
         None => narrow_ziv::walk_checked(
@@ -445,23 +480,51 @@ fn log_exact_int_pin(value_raw: i128, base_int: i128, scale: u32, exponent: i128
 #[inline]
 #[must_use]
 pub(crate) fn log<const SCALE: u32>(raw: Int<2>, base_raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
-    log_strict_raw(raw.as_i128(), base_raw.as_i128(), SCALE, mode).map(Int::<2>::from_i128)
+    log_strict_raw(raw.as_i128(), base_raw.as_i128(), SCALE, mode, ln_fixed)
+        .map(Int::<2>::from_i128)
 }
 
-/// `i128` core of [`log`].
-fn log_strict_raw(raw: i128, base_raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
+/// [`log`] run against an arbitrary working-scale ln core — the seam the
+/// Tang arm of `policy::log` enters through.
+///
+/// `log(x, b) = ln(x)/ln(b)` calls the core TWICE, and on the bbc operand
+/// `log(2, 7)` the VALUE is an exact power of two (its reduction collapses
+/// to mantissa 1, so its series terminates immediately) while the BASE is
+/// not — so essentially the whole cost is one full series on the base.
+/// That is what swapping the core is worth here.
+#[inline]
+pub(crate) fn log_with_core<const SCALE: u32>(
+    raw: Int<2>,
+    base_raw: Int<2>,
+    mode: RoundingMode,
+    core: impl Fn(Fixed, u32) -> Fixed,
+) -> Option<Int<2>> {
+    log_strict_raw(raw.as_i128(), base_raw.as_i128(), SCALE, mode, core)
+        .map(Int::<2>::from_i128)
+}
+
+/// `i128` core of [`log`]. `core` is the working-scale ln — see
+/// [`ln_strict_raw_with`] for why the shell is shared rather than copied.
+#[inline]
+fn log_strict_raw(
+    raw: i128,
+    base_raw: i128,
+    scale: u32,
+    mode: RoundingMode,
+    core: impl Fn(Fixed, u32) -> Fixed,
+) -> Option<i128> {
     assert!(raw > 0, "D38::log: argument must be positive");
     assert!(base_raw > 0, "D38::log: base must be positive");
     let working_scale = scale + STRICT_GUARD;
     let guard_pow = 10u128.pow(STRICT_GUARD);
     let working_value = Fixed::from_u128_mag(raw as u128, false).mul_u128(guard_pow);
     let base_working_value = Fixed::from_u128_mag(base_raw as u128, false).mul_u128(guard_pow);
-    let ln_b = ln_fixed(base_working_value, working_scale);
+    let ln_b = core(base_working_value, working_scale);
     assert!(
         !ln_b.is_zero(),
         "D38::log: base must not equal 1 (ln(1) is zero)"
     );
-    let ratio = ln_fixed(working_value, working_scale).div(ln_b, working_scale);
+    let ratio = core(working_value, working_scale).div(ln_b, working_scale);
     // Exact-power pin: `value == base^k` ⇒ result is exactly `k`.
     // Reduce the storage `base_raw` to its integer base (`base_raw /
     // 10^scale`) here, without forming `base · 10^scale`, so the pin's
@@ -577,6 +640,20 @@ fn log10_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
 mod near_tie_pins {
     use super::*;
 
+    /// Every narrow ln core the matcher can select, so the exact-rational
+    /// and near-tie pins below are asserted against BOTH — not just the
+    /// one that happens to be routed today.
+    ///
+    /// These pins are the reason `log` returns exact values on the storage
+    /// grid (`log_4(8) = 3/2`), and they sit downstream of the core. Tang
+    /// is what `policy::log` routes at D18/D38 now, so testing only
+    /// `ln_fixed` would leave the LIVE path unpinned while the kept
+    /// alternative stayed covered — precisely backwards.
+    const NARROW_LN_CORES: [(&str, fn(Fixed, u32) -> Fixed); 2] = [
+        ("series", ln_fixed),
+        ("tang", crate::algos::ln::ln_tang_2limb::ln_tang_fixed),
+    ];
+
     #[test]
     fn ln_directed_near_one_deep_d38_s38() {
         // ln(1 + 1e-38) = δ − δ²/2 + … with δ = 1 ULP exactly: the true
@@ -683,8 +760,13 @@ mod near_tie_pins {
             RoundingMode::AwayFromZero,
             RoundingMode::ZeroFiveUp,
         ] {
-            let log_result = log_strict_raw(x_raw, base_raw, 37, mode);
-            assert!(log_result.is_some(), "log fractional-base s37 mode={mode:?}");
+            for (core_name, core) in NARROW_LN_CORES {
+                let log_result = log_strict_raw(x_raw, base_raw, 37, mode, core);
+                assert!(
+                    log_result.is_some(),
+                    "log fractional-base s37 mode={mode:?} core={core_name}"
+                );
+            }
         }
     }
 
@@ -707,11 +789,13 @@ mod near_tie_pins {
             RoundingMode::AwayFromZero,
             RoundingMode::ZeroFiveUp,
         ] {
-            assert_eq!(
-                log_strict_raw(x_storage.as_i128(), base_storage.as_i128(), 19, mode),
-                Some(15 * one19 / 10),
-                "log_4(8) mode={mode:?}"
-            );
+            for (core_name, core) in NARROW_LN_CORES {
+                assert_eq!(
+                    log_strict_raw(x_storage.as_i128(), base_storage.as_i128(), 19, mode, core),
+                    Some(15 * one19 / 10),
+                    "log_4(8) mode={mode:?} core={core_name}"
+                );
+            }
         }
     }
 
@@ -724,37 +808,45 @@ mod near_tie_pins {
         // (even), HalfAwayFromZero → 3, HalfTowardZero → 2.
         let x_storage = Int::<2>::from_i128(32);
         let base_storage = Int::<2>::from_i128(4);
-        assert_eq!(
-            log_strict_raw(x_storage.as_i128(), base_storage.as_i128(), 0, RoundingMode::HalfToEven),
-            Some(2),
-            "log_4(32) HalfToEven"
-        );
-        assert_eq!(
-            log_strict_raw(
-                x_storage.as_i128(), base_storage.as_i128(), 0, RoundingMode::HalfAwayFromZero),
-            Some(3),
-            "log_4(32) HalfAwayFromZero"
-        );
-        assert_eq!(
-            log_strict_raw(
-                x_storage.as_i128(), base_storage.as_i128(), 0, RoundingMode::HalfTowardZero),
-            Some(2),
-            "log_4(32) HalfTowardZero"
-        );
         // log_16(8) = 3/4 (8⁴ = 16³): a half-tie at SCALE 1 (7.5 tenths).
         let x8_storage = Int::<2>::from_i128(80);
         let base16_storage = Int::<2>::from_i128(160);
-        assert_eq!(
-            log_strict_raw(
-                x8_storage.as_i128(), base16_storage.as_i128(), 1, RoundingMode::HalfToEven),
-            Some(8),
-            "log_16(8) s1 HalfToEven"
-        );
-        assert_eq!(
-            log_strict_raw(
-                x8_storage.as_i128(), base16_storage.as_i128(), 1, RoundingMode::HalfTowardZero),
-            Some(7),
-            "log_16(8) s1 HalfTowardZero"
-        );
+        for (core_name, core) in NARROW_LN_CORES {
+            assert_eq!(
+                log_strict_raw(
+                    x_storage.as_i128(), base_storage.as_i128(), 0,
+                    RoundingMode::HalfToEven, core),
+                Some(2),
+                "log_4(32) HalfToEven core={core_name}"
+            );
+            assert_eq!(
+                log_strict_raw(
+                    x_storage.as_i128(), base_storage.as_i128(), 0,
+                    RoundingMode::HalfAwayFromZero, core),
+                Some(3),
+                "log_4(32) HalfAwayFromZero core={core_name}"
+            );
+            assert_eq!(
+                log_strict_raw(
+                    x_storage.as_i128(), base_storage.as_i128(), 0,
+                    RoundingMode::HalfTowardZero, core),
+                Some(2),
+                "log_4(32) HalfTowardZero core={core_name}"
+            );
+            assert_eq!(
+                log_strict_raw(
+                    x8_storage.as_i128(), base16_storage.as_i128(), 1,
+                    RoundingMode::HalfToEven, core),
+                Some(8),
+                "log_16(8) s1 HalfToEven core={core_name}"
+            );
+            assert_eq!(
+                log_strict_raw(
+                    x8_storage.as_i128(), base16_storage.as_i128(), 1,
+                    RoundingMode::HalfTowardZero, core),
+                Some(7),
+                "log_16(8) s1 HalfTowardZero core={core_name}"
+            );
+        }
     }
 }

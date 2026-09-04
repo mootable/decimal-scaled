@@ -34,7 +34,9 @@ use crate::algos::support::wide_trig_core::WideTrigCore;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
     Series,
-    #[cfg(feature = "_wide-support")]
+    /// Table-reduced artanh. No longer `_wide-support`-gated: the narrow
+    /// tiers reach it through `algos::ln::ln_tang_2limb`, whose table is
+    /// compiled at a 5-limb prefix width in a narrow-only build.
     Tang,
     #[allow(dead_code)]
     Schoolbook,
@@ -111,6 +113,24 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // handicaps Tang by up to 2.75× at LOW and MID scales, so those
         // margins are lower bounds; the top-scale cells are exact (D307<306>
         // excepted, 1.33×).
+        // ── NARROW TIERS (D18 / D38) ──────────────────────────────────
+        //
+        // Same verdict as every wide tier, for the same reason: Tang's
+        // node reduction takes the artanh argument from `|t| <= 1/3` to
+        // `|t| <= 1/257`, so the term count falls from `~1.05·w` to
+        // `~0.21·w`. On the narrow tier the series was ~100% of the cost
+        // (measured: bbc 33874088471 put D38 `ln_nd` at 7,037 ns against
+        // D57's 1,224 — a 5.75x INVERSION, a narrower tier costing more
+        // than a wider one), so this is where the reduction is worth the
+        // most.
+        //
+        // Blanket over the whole scale range, not a benched point: the
+        // term-count argument holds at every scale, and the win grows
+        // with `w`. `Series` is NOT removed — it stays the kept
+        // alternative (and the `_` arm's default), reachable by moving
+        // this verdict, and it is still what `ln_fixed` gives the
+        // hyperbolics.
+        (1 | 2, _) => Select::ByAlgorithm(Algorithm::Tang),
         #[cfg(any(feature = "d57", feature = "wide"))]
         (3, 0..=56) => Select::ByAlgorithm(Algorithm::Tang),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -181,7 +201,6 @@ pub(crate) fn checked_dispatch<const N: usize, const SCALE: u32>(
 ) -> Option<Int<N>> {
     match resolve::<N, SCALE>(&raw) {
         Algorithm::Series => series_routed::<N, SCALE>(raw, mode),
-        #[cfg(feature = "_wide-support")]
         Algorithm::Tang => tang_routed::<N, SCALE>(raw, mode),
         Algorithm::Schoolbook => schoolbook_routed::<N, SCALE>(raw, mode),
     }
@@ -296,7 +315,6 @@ where
     }
 }
 
-#[cfg(feature = "_wide-support")]
 #[inline]
 fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
     // Per-tier `(GUARD, CAP)` tuning for the Tang kernel. The select gates
@@ -351,6 +369,13 @@ fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode
     // cell to cell with margins mostly ≤ 1.2×, i.e. under the replication
     // floor, so the values below are not claimed to be optimal — only valid.
     match N {
+        // Narrow tiers: the `Fixed`-intermediate Tang core. No rung — the
+        // narrow work width is the fixed 256-bit `Fixed`, not a ladder of
+        // `Int<K>` — and no `(G, CAP)`: the guard is `STRICT_GUARD` and the
+        // artanh loop's own cap lives in the kernel. D18 widens to
+        // `Int<2>` and narrows back through `narrow_fit`, exactly as the
+        // Series arm does.
+        1 | 2 => crate::algos::ln::ln_tang_2limb::ln::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => Some(tang_at_rung::<crate::types::widths::wide_trig_d57::Core, SCALE, 8, 100, true, false>(raw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
