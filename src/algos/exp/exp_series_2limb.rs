@@ -454,9 +454,11 @@ fn hyper_pos_wide_narrow(
     }
 }
 
-/// Narrow integer-regime `sinh(x)` via the wide [`WNarrow`] work integer.
-/// Routed from [`crate::algos::trig::trig_series_2limb::sinh_with_raw`]
-/// when the result exceeds the 256-bit `Fixed`'s headroom. `sinh` is odd.
+/// Narrow integer-regime `sinh(x)` via the wide [`WNarrow`] work integer,
+/// for when the result exceeds the 256-bit `Fixed`'s headroom. `sinh` is
+/// odd. A kept alternative: the strict narrow path reaches that regime
+/// through `trig_series_2limb::sinh_ziv` instead, so this is currently
+/// exercised only by `trig_series_2limb::hyper_fast_path_validity`.
 pub(crate) fn sinh_wide_narrow_raw(
     raw: i128,
     scale: u32,
@@ -473,10 +475,11 @@ pub(crate) fn sinh_wide_narrow_raw(
     })
 }
 
-/// Narrow integer-regime `cosh(x)` via the wide [`WNarrow`] work integer.
-/// Routed from [`crate::algos::trig::trig_series_2limb::cosh_with_raw`]
-/// when the result exceeds the 256-bit `Fixed`'s headroom. `cosh` is even
-/// (always non-negative).
+/// Narrow integer-regime `cosh(x)` via the wide [`WNarrow`] work integer,
+/// for when the result exceeds the 256-bit `Fixed`'s headroom. `cosh` is
+/// even (always non-negative). A kept alternative on the same footing as
+/// [`sinh_wide_narrow_raw`]: the strict narrow path reaches that regime
+/// through `trig_series_2limb::cosh_ziv` instead.
 pub(crate) fn cosh_wide_narrow_raw(
     raw: i128,
     scale: u32,

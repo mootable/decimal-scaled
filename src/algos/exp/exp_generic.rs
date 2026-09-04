@@ -1860,8 +1860,8 @@ use crate::support::rounding::RoundingMode;
         // formed by `exp_fixed`
         // on the NEGATIVE argument −2|x| (its 2^k reassembly shifts DOWN, never
         // the overflowing up-shift), so e^(+|x|) is never formed; the identity is
-        // the exact tanh. Mirrors `trig_series_2limb::tanh_with_raw` (the narrow
-        // path). `exp_neg_2x == 0` (defensive: unreachable since `exp_fixed` on a
+        // the exact tanh. Mirrors `trig_series_2limb::tanh_eval_fixed` (the
+        // narrow path). `exp_neg_2x == 0` (defensive: unreachable since `exp_fixed` on a
         // negative argument returns >= 1 via the ArgRegime::Underflow
         // short-circuit in `try_exp_fixed` -- retained as a belt-and-suspenders
         // guard).
