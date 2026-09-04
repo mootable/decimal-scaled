@@ -7,11 +7,23 @@
 //! `D<Int<N>, SCALE>::to_degrees_with(mode)` delegates directly to
 //! the one shared [`dispatch`] generic function — the canonical
 //! matcher-only policy shape (see `docs/ARCHITECTURE.md`), mirrored from
-//! `sqrt`. Narrow tiers (N=1 widened to Int<2>, N=2) run the 256-bit
-//! `Fixed` `trig_series_2limb` kernel; wide tiers run the tier-generic
-//! `angle_mul_pi_ratio` kernel over their `WideTrigCore` core, reached by
-//! a `match N` with `resize_to` bridges (identity at the matched `N`,
-//! like the `sqrt` `MgDivide` arm). One computation everywhere.
+//! `sqrt`. The narrow and wide tiers run genuinely different algorithms
+//! here, and `select` names each where it runs: the narrow tiers (N=1
+//! widened to Int<2>, N=2) form `mul(x, 180) / π` on the 256-bit `Fixed`
+//! intermediate via `trig_series_2limb` — that is
+//! [`Algorithm::Schoolbook`], not a ratio multiply — while the wide tiers
+//! multiply by the exact `deg_per_rad` constant over their
+//! `WideTrigCore` core via `angle_mul_pi_ratio::to_degrees_mul_pi_ratio`
+//! — [`Algorithm::MulPiRatio`]. Both are reached by a `match N` with
+//! `resize_to` bridges (identity at the matched `N`, like the `sqrt`
+//! `MgDivide` arm).
+//!
+//! The sibling `policy::to_radians` names `Schoolbook` at EVERY width
+//! instead, because there the ratio constant `π/180 < 1` costs about
+//! `log10(180)` digits of relative precision. No such swap happened
+//! here: the wide `to_degrees` shell's own former inline body WAS the
+//! `deg_per_rad` multiply, expression for expression, graded by
+//! `to_degrees_mul_pi_ratio_matches_the_inherent_shell_across_the_surface`.
 
 use crate::int::types::traits::BigInt;
 use crate::int::types::Int;
@@ -19,8 +31,12 @@ use crate::support::rounding::RoundingMode;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
+    /// `x · (180/π)` as ONE multiply against the `deg_per_rad` table
+    /// constant. What the wide tiers run.
     MulPiRatio,
-    #[allow(dead_code)]
+    /// `mul(x, 180) / π` — scale by the exact integer 180 at the working
+    /// scale, then divide by `π`. What the narrow tiers run, via
+    /// `trig_series_2limb::to_degrees`.
     Schoolbook,
 }
 
@@ -32,8 +48,15 @@ enum Select<const N: usize> {
 }
 
 const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
-    let _ = (N, SCALE);
-    Select::ByAlgorithm(Algorithm::MulPiRatio)
+    let _ = SCALE;
+    match N {
+        // The `Fixed`-256 kernel, which divides by `π` rather than
+        // multiplying by `deg_per_rad`: Schoolbook is the name of what
+        // runs. There is no narrow `deg_per_rad` kernel to name.
+        1 | 2 => Select::ByAlgorithm(Algorithm::Schoolbook),
+        // Wide tiers: the ratio multiply the wide shell has always run.
+        _ => Select::ByAlgorithm(Algorithm::MulPiRatio),
+    }
 }
 
 #[inline]
@@ -82,7 +105,11 @@ fn mul_pi_ratio_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: Roun
 #[inline]
 fn schoolbook_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Int<N> {
     match N {
-        1 | 2 => crate::algos::trig::angle_schoolbook::to_degrees_schoolbook_narrow::<SCALE>(
+        // The narrow realisation is `trig_series_2limb::to_degrees`:
+        // `to_fixed_w(x, STRICT_GUARD).mul_u128(180).div(π)`, the same
+        // Schoolbook identity the wide arms evaluate and the kernel the
+        // D18/D38 surface has always run.
+        1 | 2 => crate::algos::trig::trig_series_2limb::to_degrees::<SCALE>(
             raw.resize_to::<Int<2>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => crate::algos::trig::angle_schoolbook::to_degrees_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>(),
@@ -104,6 +131,9 @@ fn schoolbook_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: Roundi
         48 => crate::algos::trig::angle_schoolbook::to_degrees_schoolbook::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => crate::algos::trig::angle_schoolbook::to_degrees_schoolbook::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>(),
+        // Widths no tier claims. Keeps the standalone narrow Schoolbook
+        // kernel routed; it evaluates the same expression as the
+        // `1 | 2` arm at the same guard width.
         _ => crate::algos::trig::angle_schoolbook::to_degrees_schoolbook_narrow::<SCALE>(
             raw.resize_to::<Int<2>>(), mode).resize_to::<Int<N>>(),
     }
