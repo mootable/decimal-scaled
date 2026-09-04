@@ -23,8 +23,19 @@ publish = false
 decimal-scaled = { path = "..", default-features = false, features = ["std", "wide", "x-wide", "xx-wide"] }
 # Baseline = the latest published tag, as an external library under a distinct
 # crate name. The version below is a sane local default; bench-branch-compare.yml
-# rewrites it to the newest published version at run time.
-prod = { package = "decimal-scaled", version = "0.4.4", default-features = false, features = ["std", "strict", "wide", "x-wide", "xx-wide"] }
+# rewrites it to the newest published version at run time. Keep it at the
+# version CI would actually resolve, so a local `cargo check --benches` exercises
+# the same pairing CI does — pinned at 0.4.4 it silently compiled a DIFFERENT
+# baseline API and missed the 0.5.1 break entirely.
+#
+# `strict` is REQUIRED here and is not a tier feature. The baseline predates the
+# API reduction: its bare `sqrt`/`ln`/`exp`/... are
+# `#[cfg(all(feature = "strict", not(feature = "fast")))]`, so without `strict`
+# the correctly-rounded surface is not slower, it is absent — 21 methods across
+# every width vanish and the harness cannot compile. It is also what makes the
+# baseline's bare names the same kernels the branch now exposes unconditionally,
+# i.e. what keeps branch÷prod a like-for-like ratio.
+prod = { package = "decimal-scaled", version = "0.5.1", default-features = false, features = ["std", "strict", "wide", "x-wide", "xx-wide"] }
 
 [dev-dependencies]
 criterion = { version = "0.8", default-features = false }

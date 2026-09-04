@@ -82,8 +82,16 @@ ROOT = HERE.parent
 # routed to, so dropping it would have changed what was being compared rather
 # than which tiers exist. The head crate no longer has that feature — there is
 # one kernel per op — but the PINNED BASELINE (`prod`, an older published
-# release) still does, and `bench-compare/Cargo.toml` keeps `strict` on that
-# dependency for exactly the original reason.
+# release) still does, and the `prod` dependency must still carry it.
+#
+# It is NOT enough that `bench-compare/Cargo.toml` keeps `strict` on that line:
+# the workflow's pin step REWRITES both dep lines wholesale, so whatever is
+# committed here is discarded at run time. Removing `strict` from this tuple
+# therefore stripped it from prod as well, and because the baseline's bare
+# names are `#[cfg(all(feature = "strict", not(feature = "fast")))]` that did
+# not slow the baseline down — it deleted 21 methods at every width and the
+# build stopped compiling. The workflow now re-adds `strict` to the prod line
+# only, guarded by a probe of that version's own feature list.
 BASE_FEATURES = ("std",)
 
 # The tier set the workflow has always built, and the one whose numbers are
