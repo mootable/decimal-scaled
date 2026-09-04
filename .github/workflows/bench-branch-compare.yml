@@ -249,26 +249,46 @@ jobs:
           restore-keys: |
             cargo-branch-compare-${{ runner.os }}-
 
-      - name: Pin prod, and set the SAME features on both sides
+      - name: Pin prod, and set the SAME TIER features on both sides
         working-directory: bench-compare
         env:
           # One resolved value, written to BOTH dep lines. A bbc run whose two
-          # sides carry different features is not a comparison — and it would
-          # fail in the flattering direction, since the side with fewer tiers
-          # gets smaller build-max scratch and looks like a large free win.
+          # sides carry different TIER features is not a comparison — and it
+          # would fail in the flattering direction, since the side with fewer
+          # tiers gets smaller build-max scratch and looks like a large free win.
+          #
+          # `strict` is the ONE deliberate asymmetry, and it is not a tier: the
+          # pinned baseline predates the API reduction, so its correctly-rounded
+          # bare names are `#[cfg(all(feature = "strict", not(feature = "fast")))]`
+          # while the head crate has no such feature and exposes them
+          # unconditionally. Adding `strict` to prod is therefore what makes the
+          # two sides the SAME kernels; omitting it does not make the baseline
+          # slower, it deletes 21 methods at every width and the build fails.
+          # Probed per-version below, so it stops being added by itself once the
+          # pinned baseline is a release that no longer declares the feature.
           FEATURES_TOML: ${{ needs.plan.outputs.features_toml }}
         run: |
           set -euo pipefail
-          LATEST=$(curl -s -H 'User-Agent: decimal-scaled-bench (github.com/mootable/decimal-scaled)' https://crates.io/api/v1/crates/decimal-scaled | python3 -c "import sys,json; d=json.load(sys.stdin); c=d['crate']; print(c.get('max_stable_version') or c['newest_version'])")
-          echo "latest published tag = $LATEST"
+          # One request resolves both the baseline version and whether THAT
+          # version still declares `strict` (crates.io returns a per-version
+          # feature map). Printed as two space-separated tokens.
+          PIN=$(curl -s -H 'User-Agent: decimal-scaled-bench (github.com/mootable/decimal-scaled)' https://crates.io/api/v1/crates/decimal-scaled | python3 -c "import sys,json; d=json.load(sys.stdin); c=d['crate']; n=c.get('max_stable_version') or c['newest_version']; f=next((v.get('features') or {} for v in d['versions'] if v['num']==n), {}); print(n, 'strict' if 'strict' in f else '-')")
+          LATEST=${PIN%% *}
+          PROD_STRICT=${PIN##* }
+          echo "latest published tag = $LATEST (declares strict: $PROD_STRICT)"
           echo "PROD_VERSION=$LATEST" >> "$GITHUB_ENV"
+          if [ "$PROD_STRICT" = "strict" ]; then
+            PROD_FEATURES_TOML="${FEATURES_TOML}, \"strict\""
+          else
+            PROD_FEATURES_TOML="${FEATURES_TOML}"
+          fi
           # `|` delimiter: the replacements contain `"` but never `|`, `&` or a
           # backslash (bbc_plan.py emits only names from the crate's own feature
           # table, so the value is a closed set of `[a-z0-9-]` words).
           sed -i -E "s|^decimal-scaled = .*|decimal-scaled = { path = \"..\", default-features = false, features = [${FEATURES_TOML}] }|" Cargo.toml
-          sed -i -E "s|^prod = .*|prod = { package = \"decimal-scaled\", version = \"=$LATEST\", default-features = false, features = [${FEATURES_TOML}] }|" Cargo.toml
+          sed -i -E "s|^prod = .*|prod = { package = \"decimal-scaled\", version = \"=$LATEST\", default-features = false, features = [${PROD_FEATURES_TOML}] }|" Cargo.toml
 
-      - name: Assert branch and prod carry identical features
+      - name: Assert branch and prod carry identical TIER features
         working-directory: bench-compare
         run: |
           set -euo pipefail
@@ -280,13 +300,22 @@ jobs:
             echo "::error::could not read a features array off both dep lines — the manifest shape changed and the rewrite above silently did nothing."
             exit 1
           fi
-          if [ "$BRANCH_FEATS" != "$PROD_FEATS" ]; then
-            echo "::error::branch and prod feature sets DIFFER — every number this run produced would be meaningless."
-            echo "  branch: [$BRANCH_FEATS]"
-            echo "  prod:   [$PROD_FEATS]"
+          # `strict` is the one sanctioned asymmetry (see the pin step): it is
+          # how the OLDER baseline spells the kernels the head crate now exposes
+          # unconditionally, so it EQUALISES the two sides rather than skewing
+          # them. Compare the tier sets with it removed; everything else must
+          # still match exactly, which is what protects the build-max scratch
+          # comparison the tier axis governs.
+          PROD_TIERS=$(printf '%s' "$PROD_FEATS" | sed -E 's/, *"strict"//')
+          if [ "$BRANCH_FEATS" != "$PROD_TIERS" ]; then
+            echo "::error::branch and prod TIER feature sets DIFFER — every number this run produced would be meaningless."
+            echo "  branch:            [$BRANCH_FEATS]"
+            echo "  prod (as written): [$PROD_FEATS]"
+            echo "  prod (tiers only): [$PROD_TIERS]"
             exit 1
           fi
-          echo "both sides: [$BRANCH_FEATS]"
+          echo "both sides (tiers): [$BRANCH_FEATS]"
+          echo "prod as written:    [$PROD_FEATS]"
 
       - name: Compile the planned width bench exes (no run)
         working-directory: bench-compare

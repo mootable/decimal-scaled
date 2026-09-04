@@ -24,21 +24,29 @@
 //!                           to_degrees, to_radians
 //!   * binary / other:      powf, log, hypot
 //!
-//! `hypot` is benched across the full width set via its
-//! `hypot` method (the integer-only correctly-rounded form). The
-//! plain `x.hypot(y)` default method is only exposed on the `D38` tier in
-//! BOTH versions under `strict` (the wider tiers expose only
-//! `hypot`/`hypot_with`, not the plain dispatcher), and at
-//! `D38` under `strict` the plain `hypot` delegates straight to
-//! `hypot` (same kernel, same numbers) — so benching `hypot`
-//! at every width pairs cleanly branch-vs-prod everywhere AND covers the
-//! D38 cell with the identical kernel the plain method would route to.
-//! This closes the prior coverage hole where `hypot` was benched at `D38`
+//! `hypot` is benched across the full width set via the integer-only
+//! correctly-rounded form — the one method whose NAME differs between the
+//! two sides, so `scale_funcs!` passes the ident per side:
+//!
+//!   * branch — `hypot`. The API reduction dropped the `_strict` suffix, so
+//!     the bare name IS the correctly-rounded form at every width.
+//!   * prod   — `hypot_strict`. The pinned baseline predates that rename and
+//!     exposes no plain `hypot` on the wide tiers at all (its `wide_roots`
+//!     emits `hypot_strict`/`hypot_strict_with` only); the plain dispatcher
+//!     exists on `D38` alone, where it delegates straight to `hypot_strict`.
+//!
+//! Both idents therefore name the SAME kernel on their own side, which is what
+//! keeps the branch÷prod ratio a like-for-like comparison. Benching it at every
+//! width closes the prior coverage hole where `hypot` was benched at `D38`
 //! alone, leaving a regression at any wider width invisible.
 //!
 //! Each function is exercised through its DEFAULT public method (e.g.
-//! `x.sqrt()`, `x.powf(y)`); under the harness's `strict` feature these
-//! resolve to the correctly-rounded strict kernels. Operands are chosen
+//! `x.sqrt()`, `x.powf(y)`). On the branch those bare names are the
+//! correctly-rounded kernels unconditionally. On prod they resolve to the same
+//! kernels because the baseline is built WITH `strict` and WITHOUT `fast` —
+//! its bare names are `#[cfg(all(feature = "strict", not(feature = "fast")))]`,
+//! so dropping `strict` from the `prod` dep would not slow the baseline down,
+//! it would delete the entire surface and fail the build. Operands are chosen
 //! to be domain-valid for every function (e.g. `asin`/`acos` in [-1,1],
 //! `ln`/`log` positive, `acosh` >= 1, `atanh` in (-1,1)) so nothing
 //! panics or returns a degenerate result.
@@ -66,6 +74,10 @@ macro_rules! op_str {
 /// given `$side` label, grouping each function into its own Criterion group
 /// `<fn>_<W>_s<scale>` (branch/prod as the two rows).
 ///
+/// `$hypot` is the side's spelling of the correctly-rounded hypotenuse
+/// (`hypot` on the branch, `hypot_strict` on the pinned baseline — see the
+/// module docs). Every other function is spelled identically on both sides.
+///
 /// Operands (all domain-valid for every function below; the scale-0 integer
 /// fallback in parens via `op_str!`). EVERY operand — and every arithmetic
 /// RESULT — is kept to a single integer digit (|v| < 10), because the highest
@@ -89,7 +101,7 @@ macro_rules! op_str {
 ///   * `base = 7.0` (→ `7`) — log base (> 0, ≠ 1); `log(2, 7)` valid.
 #[macro_export]
 macro_rules! funcs {
-    ($c:expr, $w:literal, $scale:literal, $side:literal, $ty:ty) => {{
+    ($c:expr, $w:literal, $scale:literal, $side:literal, $ty:ty, $hypot:ident) => {{
         use ::std::hint::black_box;
         let x: $ty = $crate::op_str!($scale, "2.0", "2").parse().unwrap();
         let s: $ty = $crate::op_str!($scale, "0.1", "0").parse().unwrap();
@@ -152,12 +164,14 @@ macro_rules! funcs {
         $crate::bench_one!($c, "log", $w, $scale, $side, |bn| {
             bn.iter(|| black_box(x).log(black_box(ten)))
         });
-        // `hypot` via `hypot` (the integer-only correctly-rounded form,
-        // the only `hypot` method exposed at EVERY width in both versions; at
-        // D38 the plain `hypot` delegates straight to it). Benched at every
-        // width × scale, closing the prior D38-only coverage hole.
+        // `hypot` via this side's spelling of the integer-only
+        // correctly-rounded form — the only `hypot` method exposed at EVERY
+        // width in both versions (at D38 the plain dispatcher delegates
+        // straight to it). Benched at every width × scale, closing the prior
+        // D38-only coverage hole. The group id stays "hypot" on both sides so
+        // the branch and prod rows still pair.
         $crate::bench_one!($c, "hypot", $w, $scale, $side, |bn| {
-            bn.iter(|| black_box(c3).hypot(black_box(d4)))
+            bn.iter(|| black_box(c3).$hypot(black_box(d4)))
         });
     }};
 }
@@ -197,8 +211,21 @@ macro_rules! bench_one {
 #[macro_export]
 macro_rules! scale_funcs {
     ($c:expr, $w:literal, $scale:literal, $newmod:ident, $oldmod:ident) => {{
-        $crate::funcs!($c, $w, $scale, "branch", ::decimal_scaled::$newmod<$scale>);
-        $crate::funcs!($c, $w, $scale, "prod", ::prod::$oldmod<$scale>);
+        // Only the hypotenuse ident differs: the branch dropped the `_strict`
+        // suffix, the pinned baseline still carries it. Same kernel each side.
+        //
+        // WHEN THE BASELINE ROLLS PAST THE API REDUCTION (i.e. once the newest
+        // published release is one built from this branch), the prod side must
+        // become `hypot` too — prod will no longer have `hypot_strict`, and this
+        // line is the only place that needs the edit. It is left as a plain
+        // ident rather than a `#[cfg]` on purpose: a cfg arm that no build
+        // exercises until the day it activates is a landmine, whereas this
+        // fails at compile time with `no method named hypot_strict`, on the
+        // build gate, naming its own fix. The `strict` feature on the prod dep
+        // stops being added by itself (the workflow probes the pinned version),
+        // so this ident is the one manual step of that release.
+        $crate::funcs!($c, $w, $scale, "branch", ::decimal_scaled::$newmod<$scale>, hypot);
+        $crate::funcs!($c, $w, $scale, "prod", ::prod::$oldmod<$scale>, hypot_strict);
     }};
 }
 
