@@ -30,8 +30,9 @@
 //!   `Wagm` while its digit budget carries the lift, then the next-wider
 //!   `Wexp`, then one documented widest width where even `Wexp` lacks
 //!   capacity; the narrow tiers run it in the `Int<24>` Ziv work integer
-//!   and fit the result back (`None` = out of storage range, their
-//!   `checked_` contract). Why a base near 1 needs the lift, and the
+//!   against their own storage, with the range decided on the probe
+//!   (`None` = out of storage range, their `checked_` contract —
+//!   [`conditioned_narrow`]). Why a base near 1 needs the lift, and the
 //!   measured law behind it, is on the kernel's module.
 //!
 //! `Schoolbook` is the unrouted naive `ln(x)/ln(b)` reference.
@@ -257,12 +258,24 @@ where
 
 /// The narrow conditioned path: the same kernel in the `Int<24>` narrow Ziv
 /// work integer (`narrow_ziv::WZiv`, the width every narrow near-tie probe
-/// already runs in), with `Int<24>` also standing as the range-checked
-/// width so the walker never panics, then fitted back to `Int<N>` —
-/// `None` when the result does not fit storage, the narrow tiers' `checked_`
-/// contract. Series core (the narrow `ln` verdict). Capacity is never in
-/// question: the worst narrow lift (`D38`, `k = SCALE = 38`, `w = 144`)
-/// asks `328` of `Int<24>`'s `456` digits.
+/// already runs in), targeting the tier's OWN storage `Int<N>` exactly as
+/// `narrow_ziv::walk` targets `Int<2>` — never a wider integer standing in
+/// for storage: the narrow build's width-erased `resize_to` blanket cannot
+/// take an `Int<24>` receiver (`MAX_U128_LIMB = 8` u128 limbs against the
+/// 12 an `Int<24>` needs), so every resize on this path keeps a narrow
+/// receiver or goes through exact scratch.
+///
+/// The narrow tiers' `checked_` contract is `None` past storage, and the
+/// generic narrowings panic there, so the range is decided on the probe
+/// BEFORE the finish runs — the shape `narrow_ziv::walk_checked` gives the
+/// narrow `ln`/`log`/`powf` shells: the single-shot rounding decides the
+/// fit (`None` out of range); within one ULP of the storage extreme, where
+/// the walker's ±1 could leave range and its own range check would panic,
+/// the single shot stands (a tie that deep at the extreme is the
+/// Table-Maker's-Dilemma residue either way); everywhere else the full
+/// finish runs and cannot leave range. Series core (the narrow `ln`
+/// verdict). Capacity is never in question: the worst narrow lift (`D38`,
+/// `k = SCALE = 38`, `w = 144`) asks `328` of `Int<24>`'s `456` digits.
 #[inline]
 fn conditioned_narrow<const N: usize, const SCALE: u32>(
     raw: Int<N>,
@@ -270,27 +283,18 @@ fn conditioned_narrow<const N: usize, const SCALE: u32>(
     mode: RoundingMode,
     k: u32,
 ) -> Option<Int<N>> {
-    use crate::algos::log::log_ln_divide::{log_ln_divide_conditioned, series_core};
+    use crate::algos::log::log_ln_divide::{
+        conditioned_finish, conditioned_probe, narrow_single_shot, series_core,
+    };
     use crate::algos::support::narrow_ziv::WZiv;
-    let wide = log_ln_divide_conditioned::<24, WZiv, SCALE>(
-        raw.resize_to::<WZiv>(),
-        braw.resize_to::<WZiv>(),
-        mode,
-        lifted_guard(k),
-        series_core::<WZiv, SCALE>(),
-    );
-    fit_from_ziv::<N>(wide)
-}
-
-/// Storage fit of an `Int<24>` result — `super::narrow_fit`'s round-trip
-/// check from the Ziv width instead of `Int<2>`.
-#[inline]
-fn fit_from_ziv<const N: usize>(wide: Int<24>) -> Option<Int<N>> {
-    let out = wide.resize_to::<Int<N>>();
-    if out.resize_to::<Int<24>>() != wide {
-        return None;
+    let guard = lifted_guard(k);
+    let ln_at = series_core::<WZiv, SCALE>();
+    let probe = conditioned_probe::<N, WZiv, SCALE>(raw, braw, guard, &ln_at);
+    let single_shot = narrow_single_shot::<N, WZiv>(probe, SCALE + guard, SCALE, mode)?;
+    if single_shot.abs() >= Int::<N>::MAX - Int::<N>::ONE {
+        return Some(single_shot);
     }
-    Some(out)
+    Some(conditioned_finish::<N, WZiv, SCALE>(raw, braw, mode, guard, &ln_at, probe))
 }
 
 #[inline]

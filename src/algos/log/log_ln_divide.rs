@@ -247,17 +247,19 @@ where
 }
 
 /// `log(x, base)` by `ln(x)/ln(base)` at the conditioning-lifted guard, on
-/// storage `Int<N>` in the work integer `Wk`.
+/// storage `Int<N>` in the work integer `Wk` — [`conditioned_probe`] then
+/// [`conditioned_finish`].
 ///
 /// The shell is the wide fixed-guard `log_strict_with_kernel`, verbatim —
 /// the domain walls, the exact integer-power pin, the Ziv-escalated
 /// directed narrowing — with `guard` (from [`lifted_guard`]) where that
-/// shell has the const `GUARD`, and the natural-log core `ln_at`
+/// shell has the const `GUARD`, the natural-log core `ln_at`
 /// (`working value at w, w -> ln at w`) supplied by the caller so the
-/// matcher's `ln` routing is honoured. Panics on a non-positive argument
-/// or base, on `base == 1`, and — like every wide shell — when the result
-/// does not fit `Int<N>`; a caller that needs `None` instead computes on a
-/// wider `N` and fits the result down (`policy::log`'s narrow arm).
+/// matcher's `ln` routing is honoured, and the exact rational-power pin the
+/// narrow shell carries. Panics on a non-positive argument or base, on
+/// `base == 1`, and — like every wide shell — when the result does not fit
+/// `Int<N>`; a caller whose contract is `None` past storage range-gates the
+/// probe first (`policy::log`'s narrow arm).
 pub(crate) fn log_ln_divide_conditioned<const N: usize, Wk: BigInt, const SCALE: u32>(
     raw: Int<N>,
     base_raw: Int<N>,
@@ -265,6 +267,39 @@ pub(crate) fn log_ln_divide_conditioned<const N: usize, Wk: BigInt, const SCALE:
     guard: u32,
     ln_at: impl Fn(Wk, u32) -> Wk,
 ) -> Int<N>
+where
+    <Wk as BigInt>::Scratch: ComputeLimbs,
+{
+    let probe_ratio = conditioned_probe::<N, Wk, SCALE>(raw, base_raw, guard, &ln_at);
+    conditioned_finish::<N, Wk, SCALE>(raw, base_raw, mode, guard, &ln_at, probe_ratio)
+}
+
+/// The natural log of storage `value` lifted by `guard_digits`, at working
+/// scale `SCALE + guard_digits`, through the caller's core.
+#[inline]
+fn ln_of<const N: usize, Wk: BigInt, const SCALE: u32>(
+    ln_at: &impl Fn(Wk, u32) -> Wk,
+    value: Int<N>,
+    guard_digits: u32,
+) -> Wk
+where
+    <Wk as BigInt>::Scratch: ComputeLimbs,
+{
+    ln_at(to_work_scaled_g::<Int<N>, Wk>(value, guard_digits), SCALE + guard_digits)
+}
+
+/// The base probe of the conditioned composition: the domain walls, then
+/// `ln(x)/ln(base)` at working scale `SCALE + guard` in `Wk`. Split from
+/// [`conditioned_finish`] so a caller whose storage contract is `None` past
+/// range (the narrow arm) can gate on the probe BEFORE any narrowing runs —
+/// every narrowing step in the finish range-checks against `Int<N>` and
+/// panics past it, the wide contract.
+pub(crate) fn conditioned_probe<const N: usize, Wk: BigInt, const SCALE: u32>(
+    raw: Int<N>,
+    base_raw: Int<N>,
+    guard: u32,
+    ln_at: &impl Fn(Wk, u32) -> Wk,
+) -> Wk
 where
     <Wk as BigInt>::Scratch: ComputeLimbs,
 {
@@ -277,12 +312,29 @@ where
     if base_raw == eg::pow10::<Int<N>>(SCALE) {
         panic!("log: base must not equal 1");
     }
+    eg::div::<Wk>(
+        ln_of::<N, Wk, SCALE>(ln_at, raw, guard),
+        ln_of::<N, Wk, SCALE>(ln_at, base_raw, guard),
+        SCALE + guard,
+    )
+}
+
+/// Everything after the probe: the exact integer-power pin, the clear-of-tie
+/// single shot, the exact rational-power pin, and the Ziv-escalated
+/// narrowing into `Int<N>` (which panics past storage). `probe_ratio` is
+/// [`conditioned_probe`]'s value for the same arguments.
+pub(crate) fn conditioned_finish<const N: usize, Wk: BigInt, const SCALE: u32>(
+    raw: Int<N>,
+    base_raw: Int<N>,
+    mode: RoundingMode,
+    guard: u32,
+    ln_at: &impl Fn(Wk, u32) -> Wk,
+    probe_ratio: Wk,
+) -> Int<N>
+where
+    <Wk as BigInt>::Scratch: ComputeLimbs,
+{
     let base_working_scale = SCALE + guard;
-    let ln_of = |value: Int<N>, guard_digits: u32| -> Wk {
-        ln_at(to_work_scaled_g::<Int<N>, Wk>(value, guard_digits), SCALE + guard_digits)
-    };
-    let probe_ratio =
-        eg::div::<Wk>(ln_of(raw, guard), ln_of(base_raw, guard), base_working_scale);
     // Exact-power pin: `x == base^k` ⇒ the result is exactly the integer `k`.
     let exponent = eg::round_to_nearest_int::<Wk>(probe_ratio, base_working_scale);
     if log_is_exact_int::<Wk>(
@@ -337,10 +389,54 @@ where
             if guard_digits == guard {
                 return probe_ratio;
             }
-            let working_scale = SCALE + guard_digits;
-            eg::div::<Wk>(ln_of(raw, guard_digits), ln_of(base_raw, guard_digits), working_scale)
+            eg::div::<Wk>(
+                ln_of::<N, Wk, SCALE>(ln_at, raw, guard_digits),
+                ln_of::<N, Wk, SCALE>(ln_at, base_raw, guard_digits),
+                SCALE + guard_digits,
+            )
         },
     )
+}
+
+/// Single-shot narrowing of a working value into `Int<N>` with the fit
+/// reported as `Option` — the narrow tiers' `checked_` contract, where the
+/// generic narrowings panic. Rounds `value` (at `working_scale`) to `target`
+/// under `mode` exactly as `round_to_storage_with_g` does, then fits it:
+/// `None` when it lies outside `Int<N>`. Every resize here has a NARROW
+/// receiver or goes through `Wk`'s exact scratch: the width-erased
+/// `BigInt::resize_to` blanket is sized to the build's `MAX_U128_LIMB`,
+/// which in a narrow build cannot hold an `Int<24>` receiver (golden
+/// 33893684900 / 33895788589: every conditioned narrow call panicked at
+/// `resize_to` — `range end index 12 out of range for slice of length 8`).
+pub(crate) fn narrow_single_shot<const N: usize, Wk: BigInt>(
+    value: Wk,
+    working_scale: u32,
+    target: u32,
+    mode: RoundingMode,
+) -> Option<Int<N>>
+where
+    <Wk as BigInt>::Scratch: ComputeLimbs,
+{
+    let shift = working_scale - target;
+    let rounded = if shift == 0 {
+        value
+    } else if shift <= 38 {
+        crate::algos::support::mg_divide::div_wide_pow10::<Wk>(value, shift, mode)
+    } else {
+        crate::algos::support::rescale::dispatch_wide_pow10::<Wk>(value, shift, mode)
+    };
+    // Up-resize the NARROW bounds (their own width sizes the blanket buffer).
+    let max_w = BigInt::resize_to::<Wk>(Int::<N>::MAX);
+    let min_w = BigInt::resize_to::<Wk>(Int::<N>::MIN);
+    if rounded > max_w || rounded < min_w {
+        return None;
+    }
+    // Down-resize through `Wk`'s exact scratch, never the blanket.
+    let is_negative = rounded < Wk::ZERO;
+    let mag = if is_negative { -rounded } else { rounded };
+    let mut buf = <Wk::Scratch as ComputeLimbs>::single_u64();
+    eg::unpack_mag(mag, buf.as_mut());
+    Some(Int::<N>::from_mag_sign_u64(buf.as_ref(), is_negative))
 }
 
 /// `value == base^exponent` exactly at storage scale `scale` (both raw
@@ -733,6 +829,61 @@ mod tests {
         assert_eq!(pow_bounded::<Int<24>>(<Int<24> as BigInt>::ONE, <Int<24> as BigInt>::from_i128(i128::MAX)).map(|v| v.as_i128()), Some(1));
         assert_eq!(pow_bounded::<Int<24>>(two, <Int<24> as BigInt>::from_i128(2_000)), None);
         assert_eq!(pow_bounded::<Int<24>>(<Int<24> as BigInt>::ZERO, two), None);
+    }
+
+    /// The narrow conditioned arm end to end, through the policy exactly as
+    /// the golden gate reaches it, against the narrow `Fixed` shell on the
+    /// same inputs. Both are correctly rounded, so they must agree bit for
+    /// bit — and the conditioned arm must not panic where the fixed shell
+    /// returns a value (golden 33895788589: every conditioned narrow row
+    /// panicked at every scale and mode while the wide arms were clean).
+    #[test]
+    fn narrow_conditioned_arm_agrees_with_the_fixed_shell() {
+        fn check<const SCALE: u32>(x: i128, base: i128) {
+            let one = 10i128.pow(SCALE);
+            let (raw, braw) = (Int::<2>::from_i128(x * one), Int::<2>::from_i128(base));
+            for mode in ALL_MODES {
+                let conditioned = crate::policy::log::checked_dispatch::<2, SCALE>(raw, braw, mode);
+                let fixed = log_ln_divide_d38::<SCALE>(raw, braw, mode);
+                assert_eq!(conditioned, fixed, "x={x} base_raw={base} scale={SCALE} mode={mode:?}");
+                assert!(conditioned.is_some(), "x={x} base_raw={base} scale={SCALE}: in range");
+            }
+        }
+        // bases within 0.1 of 1 (k >= 2), both sides, the rows the gate ran:
+        // 1.01, 0.95, 1.05, 1.0001, 1.000001 (as raw storage at each scale).
+        check::<2>(2, 101);
+        check::<2>(2, 95);
+        check::<2>(2, 105);
+        check::<6>(2, 1_010_000);
+        check::<6>(2, 950_000);
+        check::<6>(2, 1_050_000);
+        check::<6>(2, 1_000_100);
+        check::<6>(2, 1_000_001);
+        check::<6>(7, 1_001_000);
+        check::<19>(2, 10_000_000_000_000_000_000 + 100_000_000_000_000_000);
+        check::<19>(9_999_999, 10_000_000_000_000_000_000 + 100_000_000);
+        // Past storage: log_1.01(2) = 69.66 does not fit D38<37> (6.97e38 >
+        // i128::MAX). The narrow contract is `None`, never a panic, and the
+        // fixed shell says the same.
+        let one37 = 10i128.pow(37);
+        let (raw, braw) = (Int::<2>::from_i128(2 * one37), Int::<2>::from_i128(101 * 10i128.pow(35)));
+        for mode in ALL_MODES {
+            assert_eq!(crate::policy::log::checked_dispatch::<2, 37>(raw, braw, mode), None, "D38<37> range {mode:?}");
+            assert_eq!(log_ln_divide_d38::<37>(raw, braw, mode), None, "fixed shell agrees {mode:?}");
+        }
+        // D18: its own storage as the walker's target, against the fixed path
+        // (widen to Int<2>, the D38 shell, narrow back).
+        let one9 = 10i128.pow(9);
+        for (x, base) in [(2i128, 101 * 10i128.pow(7)), (3, 95 * 10i128.pow(7)), (7, 1_001_000_000)] {
+            let (raw1, braw1) = (Int::<1>::from_i128(x * one9), Int::<1>::from_i128(base));
+            let (raw2, braw2) = (Int::<2>::from_i128(x * one9), Int::<2>::from_i128(base));
+            for mode in ALL_MODES {
+                let conditioned = crate::policy::log::checked_dispatch::<1, 9>(raw1, braw1, mode);
+                let fixed = log_ln_divide_d38::<9>(raw2, braw2, mode).and_then(crate::policy::narrow_fit::<1>);
+                assert_eq!(conditioned, fixed, "D18<9> x={x} base_raw={base} mode={mode:?}");
+                assert!(conditioned.is_some());
+            }
+        }
     }
 
     #[test]
