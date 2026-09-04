@@ -19,10 +19,15 @@
 //! branch — i.e. prod's surface, of which the branch is a superset):
 //!   * arith:               add, sub, mul, div, rem, neg
 //!   * roots:               sqrt, cbrt
-//!   * transcendental unary: exp, ln, sin, cos, tan, asin, acos, atan,
-//!                           sinh, cosh, tanh, asinh, acosh, atanh,
+//!   * transcendental unary: exp, ln, log2, log10, sin, cos, tan, asin, acos,
+//!                           atan, sinh, cosh, tanh, asinh, acosh, atanh,
 //!                           to_degrees, to_radians
 //!   * binary / other:      powf, log, hypot
+//!
+//! `log2` / `log10` are public API on both sides and were previously unbenched
+//! anywhere in the sweep. `ln_nd` (VARIANT A below) is a second `ln` row at a
+//! non-degenerate argument; it is diagnostic, not part of the prod surface
+//! contract, and can be dropped without touching anything else.
 //!
 //! `hypot` is benched across the full width set via the integer-only
 //! correctly-rounded form — the one method whose NAME differs between the
@@ -98,7 +103,19 @@ macro_rules! op_str {
 ///   * `b  = 3.5` (→ `3`)   — second arithmetic operand; `x±b`, `x*b`(=7),
 ///                            `x/b`, `x%b` all stay |·| < 10.
 ///   * `e  = 1.5` (→ `1`)   — powf exponent; `x^e = 2^1.5 ≈ 2.83 < 10`.
-///   * `base = 7.0` (→ `7`) — log base (> 0, ≠ 1); `log(2, 7)` valid.
+///   * `base = 7.0` (→ `7`) — log base (> 0, ≠ 1); `log(2, 7)` valid. Also the
+///                            `ln_nd` argument (VARIANT A): unlike `x = 2.0` it
+///                            is not a power of two, so it does not collapse
+///                            the log range reduction to `m = 1`.
+///   * `sw = 0.1` (→ `2`)   — VARIANT B: `s` with a NON-degenerate scale-0
+///                            spelling, for the wide-domain small-argument
+///                            functions. Identical to `s` at every scale >= 1,
+///                            so no cell except s0 moves and the S-1 analysis
+///                            above is untouched — the integer spelling is
+///                            reached ONLY at SCALE 0, where every tier has
+///                            ample integer room (`to_degrees(2) ≈ 114.6` fits
+///                            at s0; it is the S-1 cell, on `0.1`, that the
+///                            single-integer-digit rule binds).
 #[macro_export]
 macro_rules! funcs {
     ($c:expr, $w:literal, $scale:literal, $side:literal, $ty:ty, $hypot:ident) => {{
@@ -108,6 +125,20 @@ macro_rules! funcs {
         let b: $ty = $crate::op_str!($scale, "3.5", "3").parse().unwrap();
         let e: $ty = $crate::op_str!($scale, "1.5", "1").parse().unwrap(); // powf exponent
         let ten: $ty = $crate::op_str!($scale, "7.0", "7").parse().unwrap(); // log base
+        // ── VARIANT B (revert = change this "2" back to "0") ─────────────
+        // `s` above spells `0` at SCALE 0, so the whole s0 column measures
+        // `f(0)` — which every small-argument function short-circuits (the s0
+        // cells run 1-4 ns against thousands at s9). `sw` is the SAME operand
+        // at every scale >= 1 ("0.1", so no non-s0 cell moves and no S-1
+        // bound changes) and a non-degenerate `2` at SCALE 0.
+        //
+        // Only the wide-domain functions can take it. `asin`/`acos` are capped
+        // at |v| <= 1, and `atanh` needs |v| < 1 STRICTLY — the sole integer in
+        // that open interval is 0 — so those three keep `s` and their s0 cell
+        // stays irreducibly degenerate at SCALE 0. That is forced by the
+        // domains, not a choice.
+        let sw: $ty = $crate::op_str!($scale, "0.1", "2").parse().unwrap();
+        // ── end VARIANT B declaration ───────────────────────────────────
         // `hypot` operands: the 3-4-5 Pythagorean triple — both legs and the
         // result (5) stay single-integer-digit (|·| < 10), surviving the S-1 cell.
         let c3: $ty = $crate::op_str!($scale, "3.0", "3").parse().unwrap();
@@ -136,25 +167,58 @@ macro_rules! funcs {
         $crate::bench_one!($c, "cbrt", $w, $scale, $side, |bn| bn.iter(|| black_box(x).cbrt()));
 
         // ── transcendental, single argument ──
-        $crate::bench_one!($c, "exp", $w, $scale, $side, |bn| bn.iter(|| black_box(s).exp()));
+        $crate::bench_one!($c, "exp", $w, $scale, $side, |bn| bn.iter(|| black_box(sw).exp()));
         $crate::bench_one!($c, "ln", $w, $scale, $side, |bn| bn.iter(|| black_box(x).ln()));
-        $crate::bench_one!($c, "sin", $w, $scale, $side, |bn| bn.iter(|| black_box(s).sin()));
-        $crate::bench_one!($c, "cos", $w, $scale, $side, |bn| bn.iter(|| black_box(s).cos()));
-        $crate::bench_one!($c, "tan", $w, $scale, $side, |bn| bn.iter(|| black_box(s).tan()));
+        // `log2` / `log10` — the CONSTANT-base logarithms, public API on both
+        // sides and previously unbenched anywhere in the sweep. They share the
+        // narrow `log` kernel MINUS the base's own `ln` series: `log(x, base)`
+        // computes `ln(base)` at run time, whereas these divide by the baked
+        // `wide_ln2` / `wide_ln10` constant. Read against the `log` row they
+        // therefore isolate that one term.
+        $crate::bench_one!($c, "log2", $w, $scale, $side, |bn| bn.iter(|| black_box(x).log2()));
+        $crate::bench_one!($c, "log10", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(x).log10())
+        });
+        // ── VARIANT A (drop this one row to revert) ──────────────────────
+        // `ln` above is measured at `x = 2.0`, which is DEGENERATE for the
+        // logarithm: range reduction gives mantissa m = 1 exactly, so the
+        // artanh argument t = (m-1)/(m+1) is 0 and the series breaks on its
+        // first iteration at every working scale. That is why the `ln` row is
+        // flat in scale while every other transcendental rises.
+        //
+        // This row re-runs `ln` at the `base` operand (7.0 → m = 1.75,
+        // t = 3/11), which exercises the series properly. It ADDS a row and
+        // changes nothing existing, so the historical `ln` baseline is intact.
+        // 7.0 is already an operand of this harness, so it needs no new S-1
+        // bound check: ln(7) ≈ 1.946 < 10.
+        $crate::bench_one!($c, "ln_nd", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(ten).ln())
+        });
+        // ── end VARIANT A ───────────────────────────────────────────────
+        $crate::bench_one!($c, "sin", $w, $scale, $side, |bn| bn.iter(|| black_box(sw).sin()));
+        $crate::bench_one!($c, "cos", $w, $scale, $side, |bn| bn.iter(|| black_box(sw).cos()));
+        $crate::bench_one!($c, "tan", $w, $scale, $side, |bn| bn.iter(|| black_box(sw).tan()));
+        // `asin` / `acos` stay on `s`: capped at |v| <= 1, so SCALE 0 admits
+        // only 0 or the domain edge +-1, and the edge is a pathological
+        // near-boundary case rather than a representative one.
         $crate::bench_one!($c, "asin", $w, $scale, $side, |bn| bn.iter(|| black_box(s).asin()));
         $crate::bench_one!($c, "acos", $w, $scale, $side, |bn| bn.iter(|| black_box(s).acos()));
-        $crate::bench_one!($c, "atan", $w, $scale, $side, |bn| bn.iter(|| black_box(s).atan()));
-        $crate::bench_one!($c, "sinh", $w, $scale, $side, |bn| bn.iter(|| black_box(s).sinh()));
-        $crate::bench_one!($c, "cosh", $w, $scale, $side, |bn| bn.iter(|| black_box(s).cosh()));
-        $crate::bench_one!($c, "tanh", $w, $scale, $side, |bn| bn.iter(|| black_box(s).tanh()));
-        $crate::bench_one!($c, "asinh", $w, $scale, $side, |bn| bn.iter(|| black_box(s).asinh()));
+        $crate::bench_one!($c, "atan", $w, $scale, $side, |bn| bn.iter(|| black_box(sw).atan()));
+        $crate::bench_one!($c, "sinh", $w, $scale, $side, |bn| bn.iter(|| black_box(sw).sinh()));
+        $crate::bench_one!($c, "cosh", $w, $scale, $side, |bn| bn.iter(|| black_box(sw).cosh()));
+        $crate::bench_one!($c, "tanh", $w, $scale, $side, |bn| bn.iter(|| black_box(sw).tanh()));
+        $crate::bench_one!($c, "asinh", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(sw).asinh())
+        });
         $crate::bench_one!($c, "acosh", $w, $scale, $side, |bn| bn.iter(|| black_box(x).acosh()));
+        // `atanh` stays on `s`: its domain is the OPEN interval (-1, 1), whose
+        // only integer is 0, so its SCALE 0 cell cannot be de-degenerated.
         $crate::bench_one!($c, "atanh", $w, $scale, $side, |bn| bn.iter(|| black_box(s).atanh()));
         $crate::bench_one!($c, "to_degrees", $w, $scale, $side, |bn| {
-            bn.iter(|| black_box(s).to_degrees())
+            bn.iter(|| black_box(sw).to_degrees())
         });
         $crate::bench_one!($c, "to_radians", $w, $scale, $side, |bn| {
-            bn.iter(|| black_box(s).to_radians())
+            bn.iter(|| black_box(sw).to_radians())
         });
 
         // ── binary / other ──
