@@ -8,11 +8,13 @@
 //! so at low scales it is heavily over-provisioned (D1232 computes a
 //! scale-0 result in `Int<176>` when ~12 limbs suffice). The work-rung
 //! pattern keys the work integer on the *working scale* instead: a
-//! `const fn` selector picks the narrowest [`Rung`] whose Ziv-escalation
-//! digit budget clears the cell's needs, and the policy's rung match
-//! (`const { …_rung::<C, SCALE>() }`) monomorphises the ONE generic
-//! kernel at exactly that `Int<K>` — const-folded, dead arms
-//! eliminated.
+//! `const fn` selector picks the narrowest ladder width (in limbs) whose
+//! Ziv-escalation digit budget clears the cell's needs, and the policy's
+//! rung match (`const { …_rung::<C, SCALE>() }`, a plain `usize`)
+//! monomorphises the ONE generic kernel at exactly that `Int<K>`. The
+//! switch is on an integer constant, so the monomorphisation collector
+//! prunes the unchosen arms before codegen — a `match` on an enum
+//! verdict switches on a discriminant read, which it cannot fold.
 //!
 //! This is the matcher's width axis (the `LimbSize`-axis spirit of
 //! `docs/ARCHITECTURE.md` → "Limb width — the matcher's second axis"):
@@ -34,30 +36,12 @@
 use crate::algos::support::wide_trig_core::WideTrigCore;
 use crate::int::types::traits::BigInt;
 
-/// A work-rung width choice — the ComputeLimbs widths the ladder can
-/// span (min wide storage `Int<3>` .. max tier `$Work` floor
-/// `Int<176>`). Consulted only inside a policy's rung-routing fn; never
-/// part of a `Select` verdict or an `Algorithm`.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(in crate::policy) enum Rung {
-    W3,
-    W4,
-    W6,
-    W8,
-    W12,
-    W16,
-    W24,
-    W32,
-    W48,
-    W64,
-    W96,
-    W128,
-    W176,
-}
-
-/// The candidate rung ladder (ascending ComputeLimbs widths). Every wide
-/// tier's storage width AND `$Work` floor is a member, so the walker can
-/// always land on an enumerated width.
+/// The candidate rung ladder (ascending ComputeLimbs widths, in limbs —
+/// min wide storage `Int<3>` .. max tier `$Work` floor `Int<176>`). Every
+/// wide tier's storage width AND `$Work` floor is a member, so the walker
+/// can always land on an enumerated width. A rung is consulted only
+/// inside a policy's rung-routing fn; never part of a `Select` verdict
+/// or an `Algorithm`.
 pub(in crate::policy) const AVAIL_RUNGS: [usize; 13] =
     [3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 176];
 
@@ -79,27 +63,6 @@ pub(in crate::policy) const fn smallest_rung(needed_digits: u32, lo: usize, hi: 
     hi
 }
 
-/// Ladder width (limbs) → [`Rung`]. Total: every tier `$Work` is a
-/// ladder member, so the `_` arm (the widest rung) is reached only by
-/// `W176` itself.
-pub(in crate::policy) const fn rung_of(limbs: usize) -> Rung {
-    match limbs {
-        3 => Rung::W3,
-        4 => Rung::W4,
-        6 => Rung::W6,
-        8 => Rung::W8,
-        12 => Rung::W12,
-        16 => Rung::W16,
-        24 => Rung::W24,
-        32 => Rung::W32,
-        48 => Rung::W48,
-        64 => Rung::W64,
-        96 => Rung::W96,
-        128 => Rung::W128,
-        _ => Rung::W176,
-    }
-}
-
 /// Resolve the `ln` Tang work rung for tier `C` at `SCALE` — derives
 /// `[storage, floor]` from `C`'s own associated types (`C::Storage`,
 /// `C::W` = the tier's `$Work`), so ONE generic selector serves every
@@ -116,13 +79,13 @@ pub(in crate::policy) const fn rung_of(limbs: usize) -> Rung {
 /// tighter margin is safe — `51` is never too aggressive, at the cost of
 /// some missed narrowing. Each tier carries only its own width (rule 6);
 /// the golden gate is the correctness wall.
-pub(in crate::policy) const fn ln_rung<C: WideTrigCore, const SCALE: u32>() -> Rung {
+pub(in crate::policy) const fn ln_rung<C: WideTrigCore, const SCALE: u32>() -> usize {
     let storage = <C::Storage as BigInt>::LIMBS;
     let floor = <C::W as BigInt>::LIMBS;
     // Per-tier margin (measured map): wide tiers tighten to 24, narrow
     // stay safe at 51.
     let margin: u32 = if storage >= 16 { 24 } else { 51 };
-    rung_of(smallest_rung(SCALE + margin, storage, floor))
+    smallest_rung(SCALE + margin, storage, floor)
 }
 
 /// Digit reserve the forward-trig rung budgets above `SCALE`:
@@ -146,9 +109,9 @@ const TRIG_MARGIN: u32 = 76;
 /// provably fits). Out-of-budget arguments never reach the rung — the
 /// gate routes them to the tier-width kernel, bit-identical to the
 /// pre-rung routing.
-pub(in crate::policy) const fn trig_rung<C: WideTrigCore, const SCALE: u32>() -> Rung {
+pub(in crate::policy) const fn trig_rung<C: WideTrigCore, const SCALE: u32>() -> usize {
     let floor = <C::W as BigInt>::LIMBS;
-    rung_of(smallest_rung(SCALE + TRIG_MARGIN, AVAIL_RUNGS[0], floor))
+    smallest_rung(SCALE + TRIG_MARGIN, AVAIL_RUNGS[0], floor)
 }
 
 /// Max decimal digits of the INTEGER part of `|x|` admitted to the trig
@@ -171,9 +134,9 @@ pub(in crate::policy) const D_BUDGET: u32 = 8;
 /// ln kernel's `2·w₂` intermediates at that probe. Deeper unstable
 /// confirms beyond the rung cap fall back exactly as the tier does
 /// past ITS cap; the golden gate is the correctness wall.
-pub(in crate::policy) const fn near_special_rung<C: WideTrigCore, const SCALE: u32>() -> Rung {
+pub(in crate::policy) const fn near_special_rung<C: WideTrigCore, const SCALE: u32>() -> usize {
     let floor = <C::W as BigInt>::LIMBS;
-    rung_of(smallest_rung(2 * SCALE + TRIG_MARGIN, AVAIL_RUNGS[0], floor))
+    smallest_rung(2 * SCALE + TRIG_MARGIN, AVAIL_RUNGS[0], floor)
 }
 
 /// `true` iff `|x| < ~10^BUDGET` — a rung's admitted magnitude region.
@@ -197,22 +160,28 @@ pub(in crate::policy) fn in_budget<St: BigInt, const SCALE: u32, const BUDGET: u
 /// `policy::ln::tang_at_rung` shape). `$sel` is the policy-internal
 /// rung selector (`trig_rung`, …) resolved in the caller's scope;
 /// `$kernel` the rung-generic kernel (imported by the calling module).
+///
+/// The arms are the [`AVAIL_RUNGS`] widths; the `_` arm is `Int<176>`.
+/// `smallest_rung` returns a ladder member or its `hi` bound, which is
+/// itself a ladder member (every tier `$Work` is one), so `_` is reached
+/// only by 176 — it is the widest rung, not a catch-all for an unknown
+/// width.
 macro_rules! rung_match {
     ($sel:ident, $C:ty, $SCALE:ident, $kernel:ident, [$($k:tt)*], $($arg:expr),+ $(,)?) => {
         match const { $sel::<$C, $SCALE>() } {
-            crate::policy::work_rung::Rung::W3 => $kernel::<$C, crate::int::types::Int<3>, $($k)*>($($arg),+),
-            crate::policy::work_rung::Rung::W4 => $kernel::<$C, crate::int::types::Int<4>, $($k)*>($($arg),+),
-            crate::policy::work_rung::Rung::W6 => $kernel::<$C, crate::int::types::Int<6>, $($k)*>($($arg),+),
-            crate::policy::work_rung::Rung::W8 => $kernel::<$C, crate::int::types::Int<8>, $($k)*>($($arg),+),
-            crate::policy::work_rung::Rung::W12 => $kernel::<$C, crate::int::types::Int<12>, $($k)*>($($arg),+),
-            crate::policy::work_rung::Rung::W16 => $kernel::<$C, crate::int::types::Int<16>, $($k)*>($($arg),+),
-            crate::policy::work_rung::Rung::W24 => $kernel::<$C, crate::int::types::Int<24>, $($k)*>($($arg),+),
-            crate::policy::work_rung::Rung::W32 => $kernel::<$C, crate::int::types::Int<32>, $($k)*>($($arg),+),
-            crate::policy::work_rung::Rung::W48 => $kernel::<$C, crate::int::types::Int<48>, $($k)*>($($arg),+),
-            crate::policy::work_rung::Rung::W64 => $kernel::<$C, crate::int::types::Int<64>, $($k)*>($($arg),+),
-            crate::policy::work_rung::Rung::W96 => $kernel::<$C, crate::int::types::Int<96>, $($k)*>($($arg),+),
-            crate::policy::work_rung::Rung::W128 => $kernel::<$C, crate::int::types::Int<128>, $($k)*>($($arg),+),
-            crate::policy::work_rung::Rung::W176 => $kernel::<$C, crate::int::types::Int<176>, $($k)*>($($arg),+),
+            3 => $kernel::<$C, crate::int::types::Int<3>, $($k)*>($($arg),+),
+            4 => $kernel::<$C, crate::int::types::Int<4>, $($k)*>($($arg),+),
+            6 => $kernel::<$C, crate::int::types::Int<6>, $($k)*>($($arg),+),
+            8 => $kernel::<$C, crate::int::types::Int<8>, $($k)*>($($arg),+),
+            12 => $kernel::<$C, crate::int::types::Int<12>, $($k)*>($($arg),+),
+            16 => $kernel::<$C, crate::int::types::Int<16>, $($k)*>($($arg),+),
+            24 => $kernel::<$C, crate::int::types::Int<24>, $($k)*>($($arg),+),
+            32 => $kernel::<$C, crate::int::types::Int<32>, $($k)*>($($arg),+),
+            48 => $kernel::<$C, crate::int::types::Int<48>, $($k)*>($($arg),+),
+            64 => $kernel::<$C, crate::int::types::Int<64>, $($k)*>($($arg),+),
+            96 => $kernel::<$C, crate::int::types::Int<96>, $($k)*>($($arg),+),
+            128 => $kernel::<$C, crate::int::types::Int<128>, $($k)*>($($arg),+),
+            _ => $kernel::<$C, crate::int::types::Int<176>, $($k)*>($($arg),+),
         }
     };
 }

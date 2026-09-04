@@ -243,22 +243,25 @@ fn schoolbook_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: Roundi
     }
 }
 
-// The SCALE-derived work-rung machinery (the `Rung` ladder + the
+// The SCALE-derived work-rung machinery (the `AVAIL_RUNGS` ladder + the
 // `ln_rung` selector) lives in the shared policy-support module
 // `super::work_rung` — one ladder + walker for `ln` and the forward
 // trig (`policy::trig`), no per-policy copies. A Tang-INTERNAL second
 // axis — NOT in the `select` verdict, NOT on [`Algorithm`]: consulted
 // only inside the Tang routing path below.
 #[cfg(feature = "_wide-support")]
-use super::work_rung::{ln_rung, Rung};
+use super::work_rung::ln_rung;
 
 /// The Tang arm (every wide tier): pick the work rung, then call the ONE generic
-/// kernel [`ln_tang_g`] at that rung. `const { ln_rung::<C, SCALE>() }` folds
-/// per monomorphisation, so a concrete `D###<S>` collapses to a single direct
-/// call at exactly one `Int<K>` — no runtime branch, no binary bloat (the
-/// unchosen arms are dead-arm-eliminated). The rung never surfaces above this fn
-/// (no-leak: `dispatch`/`select`/`Algorithm` unchanged). `(G, CAP, DIR, IE)` are
-/// the tier's existing Tang params, threaded through.
+/// kernel [`ln_tang_g`] at that rung. `const { ln_rung::<C, SCALE>() }` is a
+/// plain `usize` that folds per monomorphisation, so a concrete `D###<S>`
+/// collapses to a single direct call at exactly one `Int<K>` — no runtime
+/// branch, and the unchosen arms are pruned by the monomorphisation collector
+/// (an integer-constant switch folds there; an enum verdict would not). The
+/// `_` arm is `Int<176>`, reached only by 176 itself (see `work_rung`). The
+/// rung never surfaces above this fn (no-leak: `dispatch`/`select`/`Algorithm`
+/// unchanged). `(G, CAP, DIR, IE)` are the tier's existing Tang params,
+/// threaded through.
 #[cfg(feature = "_wide-support")]
 #[inline]
 fn tang_at_rung<
@@ -277,19 +280,19 @@ where
 {
     use crate::algos::ln::ln_tang::ln_tang_g;
     match const { ln_rung::<C, SCALE>() } {
-        Rung::W3 => ln_tang_g::<C, Int<3>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        Rung::W4 => ln_tang_g::<C, Int<4>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        Rung::W6 => ln_tang_g::<C, Int<6>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        Rung::W8 => ln_tang_g::<C, Int<8>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        Rung::W12 => ln_tang_g::<C, Int<12>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        Rung::W16 => ln_tang_g::<C, Int<16>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        Rung::W24 => ln_tang_g::<C, Int<24>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        Rung::W32 => ln_tang_g::<C, Int<32>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        Rung::W48 => ln_tang_g::<C, Int<48>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        Rung::W64 => ln_tang_g::<C, Int<64>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        Rung::W96 => ln_tang_g::<C, Int<96>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        Rung::W128 => ln_tang_g::<C, Int<128>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        Rung::W176 => ln_tang_g::<C, Int<176>, SCALE, G, CAP, DIR, IE>(raw, mode),
+        3 => ln_tang_g::<C, Int<3>, SCALE, G, CAP, DIR, IE>(raw, mode),
+        4 => ln_tang_g::<C, Int<4>, SCALE, G, CAP, DIR, IE>(raw, mode),
+        6 => ln_tang_g::<C, Int<6>, SCALE, G, CAP, DIR, IE>(raw, mode),
+        8 => ln_tang_g::<C, Int<8>, SCALE, G, CAP, DIR, IE>(raw, mode),
+        12 => ln_tang_g::<C, Int<12>, SCALE, G, CAP, DIR, IE>(raw, mode),
+        16 => ln_tang_g::<C, Int<16>, SCALE, G, CAP, DIR, IE>(raw, mode),
+        24 => ln_tang_g::<C, Int<24>, SCALE, G, CAP, DIR, IE>(raw, mode),
+        32 => ln_tang_g::<C, Int<32>, SCALE, G, CAP, DIR, IE>(raw, mode),
+        48 => ln_tang_g::<C, Int<48>, SCALE, G, CAP, DIR, IE>(raw, mode),
+        64 => ln_tang_g::<C, Int<64>, SCALE, G, CAP, DIR, IE>(raw, mode),
+        96 => ln_tang_g::<C, Int<96>, SCALE, G, CAP, DIR, IE>(raw, mode),
+        128 => ln_tang_g::<C, Int<128>, SCALE, G, CAP, DIR, IE>(raw, mode),
+        _ => ln_tang_g::<C, Int<176>, SCALE, G, CAP, DIR, IE>(raw, mode),
     }
 }
 
