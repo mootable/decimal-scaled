@@ -744,13 +744,17 @@ where
     // limbs — 256 at xx-wide, so an `Int<24>` divide carried the D1232 tier's
     // 4 KB buffer: the Constitution rule 6 cross-tier leak). Its justifying
     // comment argued `single_u128()` would under-size an `Int<512>` work
-    // integer on a non-`exact-scratch` build; that build cannot exist.
-    // `Int<512>` is the D1232 `Wexp`, and every tier feature pulls
-    // `_wide-support = ["exact-scratch"]` (as does `std`), so wherever
-    // `Int<512>` is formed the per-`N` impl is in force and sizes it exactly.
-    // This fn is narrower still: its only callers are the `bench-alt`
-    // `newton_vs_mg` shims and this module's tests, whose widest `W` is
-    // `Int<96>`, and both require `x-wide`/`xx-wide`.
+    // integer on a non-`exact-scratch` build.
+    //
+    // No such build exists any more, and now for a reason that does not
+    // depend on the feature graph: the build-max blanket has been RETIRED, so
+    // `Limbs<N>` is sized exactly per-`N` in every configuration. The earlier
+    // argument — that every path forming a wide work integer pulls
+    // `exact-scratch` through `_wide-support` or `std` — happened to hold for
+    // `Int<512>` (the D1232 `Wexp`) but was NOT true in general: the narrow
+    // D18/D38 tiers form a fixed `Int<24>` with no feature at all, kept the
+    // blanket, and panicked in the rescale for exactly the reason that
+    // argument was dismissing. Sizing is no longer a feature-graph property.
     let mut buf = <W::Scratch as ComputeLimbs>::single_u128();
     let limbs = <W as crate::int::types::traits::BigInt>::U128_LIMBS;
     let mag = &mut buf.as_mut()[..limbs];
