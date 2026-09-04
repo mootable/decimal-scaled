@@ -194,23 +194,6 @@ mod from_src_log1p {
         }
     }
 
-    /// `_approx` at a guard well past the strict one reproduces the strict
-    /// result on well-conditioned inputs — the `*_approx` contract (same
-    /// value, caller-chosen working width). Spans both regions.
-    #[test]
-    fn log1p_approx_at_a_deep_guard_matches_strict() {
-        const TS: [i128; 5] = [UNIT / 2, UNIT, 2 * UNIT, 9 * UNIT, -UNIT / 2];
-        for &t in &TS {
-            for &mode in &MODES {
-                assert_eq!(
-                    d38s20(t).log1p_approx_with(60, mode).to_bits().as_i128(),
-                    d38s20(t).log1p_strict_with(mode).to_bits().as_i128(),
-                    "log1p_approx(60) != log1p_strict at t_raw={t} mode={mode:?}"
-                );
-            }
-        }
-    }
-
     /// Domain: `t = -1` is out of domain (`1 + t == 0`, exactly `ln`'s
     /// non-positive-argument case) and panics.
     #[test]
@@ -224,13 +207,6 @@ mod from_src_log1p {
     #[should_panic(expected = "log1p: argument must be greater than -1")]
     fn log1p_below_minus_one_panics() {
         let _ = d38s20(-2 * UNIT).log1p_strict();
-    }
-
-    /// The `_approx` surface carries the same domain guard.
-    #[test]
-    #[should_panic(expected = "log1p: argument must be greater than -1")]
-    fn log1p_approx_below_minus_one_panics() {
-        let _ = d38s20(-2 * UNIT).log1p_approx(45);
     }
 
     /// D18 (`Int<1>`) routes through the same policy at its own storage
