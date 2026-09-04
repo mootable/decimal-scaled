@@ -99,6 +99,17 @@ def measured_at(ref: str) -> str:
 
 
 
+# DIAGNOSTIC ROWS ARE DELIBERATELY KEPT HERE -- do not add
+# `render_docs.is_diagnostic_op` filtering to the parsers below.
+#
+# `render_docs.py` drops those rows because it PUBLISHES: `ln_nd` names no
+# callable function, so it must never reach the site. This page publishes
+# nothing -- it writes git-ignored `tmp/perf_compare.html` and no workflow runs
+# it -- and it exists to hunt inversions. A diagnostic row is the most
+# informative thing it can show: `ln_nd` is the only row that measures the
+# narrow `ln` kernel at all, because the published `ln` row's operand (2.0)
+# collapses the range reduction to a short-circuit. Filtering here would blind
+# the tool built to see. Exclude from PUBLICATION, never from MEASUREMENT.
 def parse(text: str) -> dict[tuple[str, int, int], float]:
     """`(op, width, scale) -> branch_ns`, the column the docs page renders."""
     out = {}

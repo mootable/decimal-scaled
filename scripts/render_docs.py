@@ -344,7 +344,11 @@ _TIMING_HEADER = ["op", "width", "scale", "prod_ns", "branch_ns", "delta_ns", "d
 def _timing_rows() -> list[tuple[str, int, int, float]] | None:
     """`(op, width, scale, ns)` from results/timing/bbc_medians.tsv (`branch_ns`
     = this build's median), or None if the file isn't committed yet / carries a
-    foreign or superseded schema (the header guard mirrors `_golden_rows`)."""
+    foreign or superseded schema (the header guard mirrors `_golden_rows`).
+
+    PUBLISHABLE rows only — diagnostic rows (`is_diagnostic_op`) are dropped
+    here, at the one place the medians enter this file, so every caller is
+    covered and a future one cannot reintroduce them by accident."""
     if not TIMING_RESULTS.exists():
         return None
     lines = TIMING_RESULTS.read_text(encoding="utf-8").splitlines()
@@ -353,7 +357,7 @@ def _timing_rows() -> list[tuple[str, int, int, float]] | None:
     rows = []
     for line in lines[1:]:
         c = line.split("\t")  # op width scale prod_ns branch_ns ...
-        if len(c) >= 5:
+        if len(c) >= 5 and not is_diagnostic_op(c[0]):
             w = c[1].lstrip("D")
             if w.isdigit() and c[2].lstrip("-").isdigit():
                 rows.append((c[0], int(w), int(c[2]), float(c[4])))
@@ -554,6 +558,36 @@ _CATEGORY_OPS = {
 _OP_CATEGORY = {op: cat for cat, ops in _CATEGORY_OPS.items() for op in ops}
 _warned_ops: set[str] = set()
 
+# --- Diagnostic (measured, never published) bench rows ---------------------
+#
+# The sweep carries rows that exist to MEASURE a kernel, not to document a
+# public function. `ln_nd` is the first: it runs `ln` at a non-degenerate
+# argument, because the published `ln` row's operand (2.0) is an exact power of
+# two whose range reduction collapses to mantissa 1 — so that row times a
+# short-circuit, not the log series. Such a row must stay in the bbc artifacts
+# (it IS the measurement) and must never reach the site, because `ln_nd` names
+# no function anyone can call.
+#
+# Excluded by a NAMING CONVENTION, not a list of op names: name a diagnostic row
+# `<op>_nd` and it is measured and never published, with nothing to remember at
+# render time. A marker for a different KIND of diagnostic is added here — one
+# entry covering every row that uses it — rather than one entry per row.
+#
+# The public direction is structural too: an op the category table lists is
+# public by definition and ALWAYS publishes, so no marker added here can ever
+# silently swallow a real function. `log2`/`log10` are listed, so they publish
+# whatever else changes.
+_DIAGNOSTIC_SUFFIXES = ("_nd",)
+
+
+def is_diagnostic_op(op: str) -> bool:
+    """True for a bench row that measures a kernel but names no public function,
+    so it must not be published. An op listed in `_CATEGORY_OPS` is public by
+    definition and is never diagnostic, whatever its spelling."""
+    if op in _OP_CATEGORY:
+        return False
+    return op.endswith(_DIAGNOSTIC_SUFFIXES)
+
 
 def op_category(op: str) -> str:
     """The category an op renders under: `arithmetic`, `roots-and-exponents`, or
@@ -672,7 +706,12 @@ def _history_rows() -> list[tuple[str, int, str, float, float, float]] | None:
     if the summary is absent / not on the current schema (renders pending rather than
     garbage). `lo`/`hi` are the min/max columns when present (the band); on the older
     4-column TSV both equal the median, so the page renders with no band. The header
-    guard checks only the first four columns, so old and new TSVs both pass."""
+    guard checks only the first four columns, so old and new TSVs both pass.
+
+    Diagnostic rows are dropped here on the same rule as `_timing_rows`. The
+    History bench carries none today; applying it at both readers is what makes
+    "no published page renders a diagnostic row" a property of this file rather
+    than a fact about one data source."""
     if not HISTORY_RESULTS.exists():
         return None
     lines = HISTORY_RESULTS.read_text(encoding="utf-8").splitlines()
@@ -681,7 +720,7 @@ def _history_rows() -> list[tuple[str, int, str, float, float, float]] | None:
     rows = []
     for line in lines[1:]:
         c = line.split("\t")
-        if len(c) >= 4 and c[1].isdigit():
+        if len(c) >= 4 and c[1].isdigit() and not is_diagnostic_op(c[0]):
             med = float(c[3])
             lo = float(c[4]) if len(c) >= 6 and c[4] else med
             hi = float(c[5]) if len(c) >= 6 and c[5] else med

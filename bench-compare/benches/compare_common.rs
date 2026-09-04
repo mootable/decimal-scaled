@@ -15,8 +15,10 @@
 //! Each per-width file declares `#[macro_use] mod compare_common;` so
 //! the macros are crate-local-visible without re-exporting.
 //!
-//! Coverage (the public surface present in BOTH prod 0.4.4 and the
-//! branch — i.e. prod's surface, of which the branch is a superset):
+//! Coverage (the public surface present in BOTH prod and the branch — i.e.
+//! prod's surface, of which the branch is a superset). `prod` is whatever
+//! `bench-compare/Cargo.toml` pins, currently 0.5.1; name the version there,
+//! not here, so this list cannot drift out of date behind the pin:
 //!   * arith:               add, sub, mul, div, rem, neg
 //!   * roots:               sqrt, cbrt
 //!   * transcendental unary: exp, ln, log2, log10, sin, cos, tan, asin, acos,
@@ -191,6 +193,14 @@ macro_rules! funcs {
         // changes nothing existing, so the historical `ln` baseline is intact.
         // 7.0 is already an operand of this harness, so it needs no new S-1
         // bound check: ln(7) ≈ 1.946 < 10.
+        //
+        // NAMING IS LOAD-BEARING: the `_nd` suffix is what keeps this row OUT
+        // of the published Performance page. `scripts/render_docs.py`
+        // (`is_diagnostic_op`) drops it at both TSV readers, because `ln_nd`
+        // names no callable function. Any future row that measures a kernel
+        // rather than documenting public API must carry that suffix — or add
+        // its own marker there — otherwise it WILL be published. The row stays
+        // in the bbc artifacts either way; only publication is filtered.
         $crate::bench_one!($c, "ln_nd", $w, $scale, $side, |bn| {
             bn.iter(|| black_box(ten).ln())
         });
