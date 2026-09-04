@@ -199,18 +199,53 @@ pub(crate) fn ln_tang_fixed(working_value: Fixed, working_scale: u32) -> Fixed {
 /// future one.
 #[inline]
 #[must_use]
-pub(crate) fn ln<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+pub(crate) fn ln<const N: usize, const SCALE: u32>(
+    raw: Int<2>,
+    mode: RoundingMode,
+) -> Option<Int<2>> {
     const {
-        assert!(
-            ln_table_fits(SCALE + STRICT_GUARD),
-            "ln Tang: this build's ln_tang_table is too narrow for SCALE + STRICT_GUARD"
-        );
-        assert!(
-            work_fits(SCALE + STRICT_GUARD),
-            "ln Tang: slot_hi * 10^w overflows the Work integer at SCALE + STRICT_GUARD"
-        );
+        // GUARDED BY `N`, and the guard is load-bearing.
+        //
+        // `policy::ln::tang_routed::<N, SCALE>` is monomorphised for every
+        // `(N, SCALE)` the crate instantiates, and the monomorphisation
+        // collector walks its `match N` narrow arm even where `N` is a WIDE
+        // width — the arm is unreachable at run time, but it is still
+        // collected, so this function is instantiated at D230's SCALE 229 and
+        // D307's 306. At SCALE 306 the working scale is 336, needing 19 limbs
+        // and a 2,333-bit product: no `Work` width satisfies that, and an
+        // unguarded assertion fires for a cell this kernel never runs at.
+        //
+        // That is not hypothetical. It is what broke golden 33884588763 on the
+        // d230 and d307 shards, having passed `cargo check` — which stops
+        // before codegen and never evaluates a `const {}` block at all.
+        //
+        // `N <= 2` is exactly the set of cells `tang_routed` can dispatch here,
+        // so the bound is asserted over the domain it actually describes.
+        if N <= 2 {
+            assert_narrow_tang_fits(SCALE);
+        }
     }
     ln_with_core::<SCALE>(raw, mode, ln_tang_fixed)
+}
+
+/// The narrow Tang core's compile-time width bounds at storage `scale`.
+///
+/// Call it ONLY from inside `const { if N <= 2 { … } }`. Both bounds hold
+/// for every cell the narrow arm serves and fail loudly for cells it does
+/// not — see [`ln`] for why the `N` guard is not optional.
+///
+/// Shared by the `ln` and `log` narrow entries so the bound is stated once;
+/// two copies would be two chances to get the domain wrong, which is the
+/// mistake that produced the E0080 in the first place.
+pub(crate) const fn assert_narrow_tang_fits(scale: u32) {
+    assert!(
+        ln_table_fits(scale + STRICT_GUARD),
+        "ln Tang: this build's ln_tang_table is too narrow for SCALE + STRICT_GUARD"
+    );
+    assert!(
+        work_fits(scale + STRICT_GUARD),
+        "ln Tang: slot_hi * 10^w overflows the Work integer at SCALE + STRICT_GUARD"
+    );
 }
 
 #[cfg(test)]
@@ -242,7 +277,7 @@ mod tests {
                 Int::<2>::from_i128(raw),
                 RoundingMode::HalfToEven,
             );
-            let tang = ln::<S>(Int::<2>::from_i128(raw), RoundingMode::HalfToEven);
+            let tang = ln::<2, S>(Int::<2>::from_i128(raw), RoundingMode::HalfToEven);
             assert_eq!(tang, series, "ln raw={raw}");
         }
     }

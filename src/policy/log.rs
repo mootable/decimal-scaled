@@ -107,7 +107,7 @@ fn ln_divide_tang_routed<const N: usize, const SCALE: u32>(
     mode: RoundingMode,
 ) -> Option<Int<N>> {
     match N {
-        1 | 2 => crate::algos::log::log_ln_divide::log_ln_divide_tang_d38::<SCALE>(raw.resize_to::<Int<2>>(), braw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
+        1 | 2 => crate::algos::log::log_ln_divide::log_ln_divide_tang_d38::<N, SCALE>(raw.resize_to::<Int<2>>(), braw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
         _ => ln_divide_routed::<N, SCALE>(raw, braw, mode),
     }
 }

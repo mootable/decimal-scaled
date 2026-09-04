@@ -61,11 +61,20 @@ pub(crate) fn log_ln_divide_d38<const SCALE: u32>(
 /// shared shell calls, which is why this is an `Algorithm` variant the
 /// matcher picks rather than a branch inside the kernel.
 #[inline]
-pub(crate) fn log_ln_divide_tang_d38<const SCALE: u32>(
+pub(crate) fn log_ln_divide_tang_d38<const N: usize, const SCALE: u32>(
     raw: Int<2>,
     base_raw: Int<2>,
     mode: RoundingMode,
 ) -> Option<Int<2>> {
+    const {
+        // Same bound and the same `N` guard as `ln_tang_2limb::ln` — this
+        // entry runs the identical core at the identical working scale, and
+        // `policy::log::ln_divide_tang_routed` monomorphises its narrow arm
+        // at every wide `(N, SCALE)` exactly as `policy::ln` does.
+        if N <= 2 {
+            crate::algos::ln::ln_tang_2limb::assert_narrow_tang_fits(SCALE);
+        }
+    }
     crate::algos::ln::ln_series_2limb::log_with_core::<SCALE>(
         raw,
         base_raw,

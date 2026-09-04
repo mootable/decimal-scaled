@@ -375,7 +375,7 @@ fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode
         // artanh loop's own cap lives in the kernel. D18 widens to
         // `Int<2>` and narrows back through `narrow_fit`, exactly as the
         // Series arm does.
-        1 | 2 => crate::algos::ln::ln_tang_2limb::ln::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
+        1 | 2 => crate::algos::ln::ln_tang_2limb::ln::<N, SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => Some(tang_at_rung::<crate::types::widths::wide_trig_d57::Core, SCALE, 8, 100, true, false>(raw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
