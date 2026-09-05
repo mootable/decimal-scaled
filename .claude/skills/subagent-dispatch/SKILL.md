@@ -185,6 +185,22 @@ step CONFIRMS that base; it must never mutate git:
 > review **Class I**). Exempt: a blanket-generic fix with no gate. Report the grid/region you
 > validated, not just the target cell.
 
+### 7c. Disputes — load the `dispute-resolution` skill
+
+> Load the **`dispute-resolution`** skill and work to it. It governs every disagreement between
+> you and the coordinator, or between you and another agent, and it applies to the coordinator
+> exactly as it applies to you.
+>
+> The parts that bite most often: **neither party trusts the other** — anything I state as fact,
+> you verify before building on it, whatever my role; **facts carry their method or they are
+> assertions**, so name your source, your field (NAME THE ROWS), your operation and your own
+> doubts; and **do not re-run an expensive measurement whose preconditions have not changed** —
+> share the artifact and re-derive only the cheap transformation over it.
+>
+> Disagreeing with me is expected and correct. Aim to reach agreement by argument rather than
+> escalating, say so plainly when you are persuaded, and record the outcome — including what was
+> discarded and why — in `decisions/<iso-datetime>_<argument>.md`.
+
 ### 8. Report format
 > Report: base verification (the tip-only file was present — no reset done), what changed, what was
 > REMOVED, the green-check lines (golden + feature combos), the width×scale region validated
