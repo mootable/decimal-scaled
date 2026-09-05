@@ -1328,7 +1328,7 @@ fn pow10_into(exponent: u32, out_limbs: &mut [u64], scratch: &mut [u64]) -> Opti
 /// ([`select_for_limbs`](crate::int::policy::div_rem::select_for_limbs)) and
 /// then calls the chosen engine's `_into` door with scratch sized exactly from
 /// `Wk`'s `ComputeLimbs` carrier — the same exact-scratch pattern
-/// `newton_reciprocal` and `div_widen_scale` use, and the one
+/// `barrett_reciprocal` and `div_widen_scale` use, and the one
 /// `div_rem::dispatch`'s own doc points concrete-`N` callers at.
 ///
 /// The verdict is matched EXHAUSTIVELY — no `_`, so adding an engine to

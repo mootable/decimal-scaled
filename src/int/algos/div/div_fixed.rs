@@ -60,7 +60,7 @@ pub(crate) fn div_rem_mag_fixed<const N: usize>(
 /// time. The int-algos-layer entry for callers whose operands have a
 /// **runtime live length** that no const-`N` `Int<N>` width can express
 /// (the reciprocal-table buffers in
-/// [`crate::algos::support::newton_reciprocal`] are the one such caller):
+/// [`crate::algos::support::barrett_reciprocal`] are the one such caller):
 /// it lets them reach the dispatching divmod without importing the
 /// `int::policy` layer directly. Fixed-width `Int<N>` callers take
 /// [`div_rem_mag_fixed`] instead. The divisor must be non-zero.

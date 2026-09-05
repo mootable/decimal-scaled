@@ -8,7 +8,7 @@
 //! const-width axis**. Its operands have *independent* runtime lengths that
 //! no single level const expresses — the decimal `/` divides a `2N`-limb
 //! scaled numerator by an `N`-limb divisor, and the slice roots
-//! (`isqrt_newton` / `icbrt_newton` / `newton_reciprocal`) divide bare
+//! (`isqrt_newton` / `icbrt_newton` / `barrett_reciprocal`) divide bare
 //! `&[u64]` of runtime length with no `N` in their types at all. So unlike
 //! a unary (`select<N>`) or binary (`select<Nthis, Nother>`) policy,
 //! [`select`] here is **non-generic**: it always returns [`Select::ByShape`],

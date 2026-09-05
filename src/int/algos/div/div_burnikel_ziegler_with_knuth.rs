@@ -47,7 +47,7 @@ const BZ_BASECASE: usize = 16;
 /// concrete-`N` caller), so it takes bare runtime-length `&[u64]` — there is no
 /// `N` to size against. The divide it must handle is NOT bounded by the storage
 /// tiers: the decimal `÷10^w` rescale and the wide-transcendental slice roots
-/// (`isqrt_newton` / `icbrt_newton` / `newton_reciprocal`) present **working**
+/// (`isqrt_newton` / `icbrt_newton` / `barrett_reciprocal`) present **working**
 /// numerators that exceed the widest storage width — at the supported build the
 /// effective `divisor_len` reaches ~67 limbs (≥ `BZ_THRESHOLD`, so BZ DOES
 /// engage there) over a `~2·divisor_len` ≈ 134-limb dividend. Every recursive

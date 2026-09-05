@@ -30,7 +30,7 @@ no algorithm is permitted to break them.
    with no allocator and keeps every call's cost on the stack where it
    const-folds. A heap allocation on the compute path is a **hard defect**,
    never a tolerated one. (The earlier heap exceptions — a `decl_table_cache!`
-   `Vec` tables macro and the `newton_reciprocal` `thread_local!`+`Vec`
+   `Vec` tables macro and the `barrett_reciprocal` `thread_local!`+`Vec`
    cache — were removed; `_wide-support = []` is now a heap-free marker.
    Do not reintroduce any of them.)
 
@@ -65,7 +65,7 @@ no algorithm is permitted to break them.
    never written at run time, and shared with no synchronisation. What is
    forbidden is a value computed/populated **at run time on first use and
    kept for later calls** — that is memoization. That is what a
-   `NewtonReciprocal` precompute cache or the `pi`/`ln2`/`ln10`/`pow10`
+   `BarrettReciprocal` precompute cache or the `pi`/`ln2`/`ln10`/`pow10`
    `thread_local!` caches WOULD do; they were removed and must not return.
    The fix for such a site is either (a) lift the
    precompute to *compile time* (a `const`/`const fn` table) where the value
@@ -325,7 +325,7 @@ Paths that *look* like exceptions but are **not** — a concrete `N` or const
   scratch (`Limbs::<N>::single_u64()`) and the caller's byte-output buffer
   (`digit_formatting_limbs_u8()`, `20N + 2` bytes) are sized **exactly
   per-`N`** — no build-max here.
-- `newton_reciprocal`: its reciprocal/pow buffer lengths are functions of the
+- `barrett_reciprocal`: its reciprocal/pow buffer lengths are functions of the
   work width *and* the divide exponent, and the exponent derives from the
   const `SCALE` that the decimal policy dispatch carries (keyed on
   `(const N, const SCALE)`, the channel that should thread it). Both axes are
@@ -449,7 +449,7 @@ bound, because it has no `N`: it exists to serve width-erased `&[u64]` callers
 of runtime length. But that erasure is mostly *inherited*, not *required* — the
 overwhelming majority of traffic arrives through `div_rem_mag_fixed<const N>`,
 which has `N` in scope and throws it away at the call. Only two callers are
-genuinely `N`-less: `mul_schoolbook` and `newton_reciprocal`, both via
+genuinely `N`-less: `mul_schoolbook` and `barrett_reciprocal`, both via
 `div_rem_mag_slice`.
 
 **Shape (recommended): split the door, keep the blanket hard-guarded.**
@@ -596,7 +596,7 @@ and the policy must still pick the best algorithm for them. The rule:
 
 - the decimal `/` divides a **`2N`-limb** scaled numerator by an **`N`-limb**
   divisor — two different widths, neither the caller's single `N`;
-- the slice roots (`isqrt_newton`, `icbrt_newton`, `newton_reciprocal`,
+- the slice roots (`isqrt_newton`, `icbrt_newton`, `barrett_reciprocal`,
   `div_rem_mag_slice`) divide **bare `&[u64]` of runtime length** — no `N` in
   their types at all.
 

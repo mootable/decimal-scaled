@@ -40,7 +40,7 @@ on:
       - "src/algos/support/ln_tang_table.rs"
       - "src/algos/support/sincos_tang_table.rs"
       - "src/consts/table.rs"
-      - "src/consts/newton_recip.rs"
+      - "src/consts/barrett_recip.rs"
       - ".github/workflows/generator-drift.yml"
   push:
     branches:
@@ -53,7 +53,7 @@ on:
       - "src/algos/support/ln_tang_table.rs"
       - "src/algos/support/sincos_tang_table.rs"
       - "src/consts/table.rs"
-      - "src/consts/newton_recip.rs"
+      - "src/consts/barrett_recip.rs"
       - ".github/workflows/generator-drift.yml"
   workflow_dispatch:
 
@@ -82,7 +82,7 @@ jobs:
       - name: Install the oracle
         # Since #106 the five oracle-backed generators use flint/Arb (via
         # the shared `scripts/tang_flint_oracle.py`); none imports mpmath
-        # any more. `gen_newton_recip_table.py` is pure Python.
+        # any more. `gen_barrett_recip_table.py` is pure Python.
         run: pip install python-flint
 
       - name: Re-run the generators and diff their output
@@ -93,7 +93,7 @@ jobs:
           scripts/gen_ln_tang_table.py:src/algos/support/ln_tang_table.rs
           scripts/gen_sincos_tang_table.py:src/algos/support/sincos_tang_table.rs
           scripts/gen_const_table.py:src/consts/table.rs
-          scripts/gen_newton_recip_table.py:src/consts/newton_recip.rs"
+          scripts/gen_barrett_recip_table.py:src/consts/barrett_recip.rs"
 
           drifted=""
           while IFS= read -r pair; do

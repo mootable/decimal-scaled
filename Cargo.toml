@@ -390,11 +390,11 @@ path = "benches/micro/d_w128_mul_div_paths.rs"
 harness = false
 required-features = ["wide"]
 
-# Newton-Raphson reciprocal divide vs MG chain divide at D307/D616/D1232.
+# Barrett-reduction reciprocal divide vs MG chain divide at D307/D616/D1232.
 # Research bench — informs ALGORITHMS.md "Evaluated and not used".
 [[bench]]
-name = "newton_vs_mg"
-path = "benches/micro/newton_vs_mg.rs"
+name = "barrett_vs_mg"
+path = "benches/micro/barrett_vs_mg.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 

@@ -1,8 +1,8 @@
-//! Head-to-head micro-bench: Newton-Raphson reciprocal divide vs.
+//! Head-to-head micro-bench: Barrett-reduction reciprocal divide vs.
 //! Möller-Granlund chain divide for `n / 10^SCALE` at the wide tiers.
 //!
 //! Setup cost (per `(SCALE, width)`): MG chain has no setup beyond
-//! looking up the per-stage 38-entry magic table; Newton has a one-shot
+//! looking up the per-stage 38-entry magic table; Barrett has a one-shot
 //! reciprocal computation. The table is computed once outside the
 //! measured loop so the per-call number is apples-to-apples with MG.
 //!
@@ -12,15 +12,15 @@
 #![cfg(all(feature = "bench-alt", feature = "x-wide", feature = "xx-wide"))]
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use decimal_scaled::__bench_internals::newton_vs_mg::{
-    NewtonReciprocal, b6144, d1232, d307, d462, d616, d924,
+use decimal_scaled::__bench_internals::barrett_vs_mg::{
+    BarrettReciprocal, b6144, d1232, d307, d462, d616, d924,
 };
 use std::hint::black_box;
 
 macro_rules! bench_cell {
     ($c:ident, $tier:ident, $label:literal, $scale:expr, $width_limbs:expr, $top_limb:expr) => {{
         let n = $tier::build_numerator($top_limb);
-        let table = NewtonReciprocal::precompute($scale, $width_limbs);
+        let table = BarrettReciprocal::precompute($scale, $width_limbs);
         let mut g = $c.benchmark_group($label);
         g.sample_size(20);
         g.measurement_time(std::time::Duration::from_secs(5));
@@ -36,9 +36,9 @@ macro_rules! bench_cell {
             });
         }
 
-        g.bench_function("newton", |b| {
+        g.bench_function("barrett", |b| {
             b.iter(|| {
-                black_box($tier::newton(
+                black_box($tier::barrett(
                     black_box(n),
                     black_box($scale),
                     black_box(&table),
@@ -46,12 +46,12 @@ macro_rules! bench_cell {
             })
         });
 
-        // u128-packed Newton -- full kernel on u128 limbs against the
+        // u128-packed Barrett -- full kernel on u128 limbs against the
         // cached u128-packed `r`/`pow_scale`. Integrated-call gate per
         // the owner's mandate (the prior standalone-mul A/B was a TRAP).
-        g.bench_function("newton_u128", |b| {
+        g.bench_function("barrett_u128", |b| {
             b.iter(|| {
-                black_box($tier::newton_u128(
+                black_box($tier::barrett_u128(
                     black_box(n),
                     black_box($scale),
                     black_box(&table),
@@ -78,7 +78,7 @@ fn bench(c: &mut Criterion) {
     // headroom — table fits.)
     bench_cell!(c, d462, "B1536_s38", 38, 24, 10);
     bench_cell!(c, d462, "B1536_s115", 115, 24, 10);
-    // Bisection between s115 (MG wins) and s202 (Newton wins) to localise
+    // Bisection between s115 (MG wins) and s202 (Barrett wins) to localise
     // the crossover (continuous win-region per Constitution rule 6 + the
     // Class I no-point-snap rule).
     bench_cell!(c, d462, "B1536_s140", 140, 24, 10);
@@ -121,9 +121,9 @@ fn bench(c: &mut Criterion) {
     // rule (axis = width × scale-band), a representative 5+ sweep
     // covers the D924 transcendental w_prime range (AGM tops out at
     // `2·SCALE_max + 4 = 1850` for D924 strict_agm — see the buffer-
-    // sizing block + `newton_wins` doc in `newton_reciprocal.rs`).
+    // sizing block + `barrett_u128_wins` doc in `barrett_reciprocal.rs`).
     //
-    // 8192 / 12288 / 16384 / 32768 are NOT benched here: the Newton
+    // 8192 / 12288 / 16384 / 32768 are NOT benched here: the Barrett
     // precompute's `2^k / 10^scale` numerator at the AGM-widened
     // scales exceeds the routed `div_knuth` build-max scratch
     // (`MAX_SINGLE_LIMBS = 258`). The sibling-agent atanh-diagnosis

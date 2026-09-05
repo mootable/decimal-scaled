@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Generate `src/consts/newton_recip.rs` — the baked Newton-reciprocal table
+"""Generate `src/consts/barrett_recip.rs` — the baked Barrett-reciprocal table
 for the `÷10^scale` rescale (the §9.20 baked-reciprocal lever).
 
-For scale `s`, the Newton reciprocal is
+For scale `s`, the Barrett reciprocal is
 
     r(s) = floor( 2^(64*k) / 10^s ),   k = even(width_limbs + s//19 + 3)
 
-(exactly what `newton_reciprocal::precompute` computes via `div_rem_mag_slice`
+(exactly what `barrett_reciprocal::precompute` computes via `div_rem_mag_slice`
 — integer floor division, so this Python `//` is bit-identical).
 
 KEY (owner insight, verified): for a FIXED scale the reciprocal is the SAME
@@ -23,7 +23,7 @@ The maths above is derived in the symbols `r(s)`, `r_w(s)`, `k` and `w`;
 those symbol forms are kept deliberately. Everything else names the
 quantity it holds.
 
-Run: python scripts/gen_newton_recip_table.py   (rerun = byte-identical)
+Run: python scripts/gen_barrett_recip_table.py   (rerun = byte-identical)
 """
 import os
 
@@ -56,7 +56,7 @@ def main():
     a("// SPDX-FileCopyrightText: 2026 John Moxley")
     a("// SPDX-License-Identifier: MIT OR Apache-2.0")
     a("")
-    a("//! Baked Newton-reciprocal table for the `/10^scale` rescale.")
+    a("//! Baked Barrett-reciprocal table for the `/10^scale` rescale.")
     a("//!")
     a("//! `r(s) = floor(2^(64*k) / 10^s)`, `k = even(width_limbs + s/19 + 3)`,")
     a("//! stored little-endian u64 at the widest working width (132 u64 limbs")
@@ -65,7 +65,7 @@ def main():
     a("//! w)` (an exact prefix — the reciprocal of `10^s` is one number,")
     a("//! truncated to fewer limbs at narrower widths), so all tiers SHARE one")
     a("//! per-scale reciprocal. The prefix identity holds for an EVEN `w` only;")
-    a("//! see the guard in [`newton_recip_le`].")
+    a("//! see the guard in [`barrett_recip_le`].")
     a("//!")
     a("//! EXACT BY CONSTRUCTION — no oracle is involved, and none is needed.")
     a("//! Each value is `(1 << (64*k)) // (10**s)`: an exact big-integer floor")
@@ -73,14 +73,14 @@ def main():
     a("//! is no transcendental, no floating point and no rounding anywhere in")
     a("//! the derivation, so there are no digits to bound and nothing an")
     a("//! interval oracle could tighten. It is also bit-identical to what")
-    a("//! `newton_reciprocal::precompute` computes at runtime via")
+    a("//! `barrett_reciprocal::precompute` computes at runtime via")
     a("//! `div_rem_mag_slice`, which is the property the table exists to bake.")
     a("//!")
     a("//! Compile-time read-only data (architectural-review Class K — NOT a")
     a("//! runtime cache); size-local consumption via the width slice. GENERATED")
-    a("//! by `scripts/gen_newton_recip_table.py` — do not edit by hand.")
+    a("//! by `scripts/gen_barrett_recip_table.py` — do not edit by hand.")
     a("//!")
-    a("//! Any change belongs in `scripts/gen_newton_recip_table.py`,")
+    a("//! Any change belongs in `scripts/gen_barrett_recip_table.py`,")
     a("//! never in this file — including a new `match` arm when a")
     a("//! `RoundingMode` variant is added. Re-run the generator and")
     a("//! commit both; a hand-edit here is silently reverted the next")
@@ -89,14 +89,14 @@ def main():
     a("/// Widest baked working width, in u64 limbs (Int<132> = the split D1232")
     a("/// Tang working width).")
     a('#[cfg(any(feature = "x-wide", feature = "xx-wide"))]')
-    a(f"pub(crate) const NEWTON_RECIP_MAX_WIDTH_LIMBS: usize = {MAX_WIDTH_LIMBS};")
+    a(f"pub(crate) const BARRETT_RECIP_MAX_WIDTH_LIMBS: usize = {MAX_WIDTH_LIMBS};")
     a("/// Highest baked scale (inclusive).")
     a('#[cfg(any(feature = "x-wide", feature = "xx-wide"))]')
-    a(f"pub(crate) const NEWTON_RECIP_MAX_SCALE: u32 = {MAX_SCALE};")
+    a(f"pub(crate) const BARRETT_RECIP_MAX_SCALE: u32 = {MAX_SCALE};")
     a("")
     a('#[cfg(any(feature = "x-wide", feature = "xx-wide"))]')
     a("#[rustfmt::skip]")
-    a(f"static NEWTON_RECIP: [&[u64]; {MAX_SCALE + 1}] = [")
+    a(f"static BARRETT_RECIP: [&[u64]; {MAX_SCALE + 1}] = [")
     for scale in range(MAX_SCALE + 1):
         limbs = limbs_le(recip(scale), shift_limbs(scale) + 1)
         a("    &[" + ", ".join(f"0x{x:016x}" for x in limbs) + "],")
@@ -105,12 +105,12 @@ def main():
     a("/// `floor(2^(64*k) / 10^scale)` little-endian for a `width_limbs`-limb")
     a("/// working integer (`k = even(width_limbs + scale/19 + 3)`), or `None`")
     a("/// when the request is not served: outside the baked range (`scale >")
-    a("/// NEWTON_RECIP_MAX_SCALE` / `width_limbs >")
-    a("/// NEWTON_RECIP_MAX_WIDTH_LIMBS`), or an ODD `width_limbs` (see the")
+    a("/// BARRETT_RECIP_MAX_SCALE` / `width_limbs >")
+    a("/// BARRETT_RECIP_MAX_WIDTH_LIMBS`), or an ODD `width_limbs` (see the")
     a("/// guard below). The caller then falls back to the runtime reciprocal /")
     a("/// MgChain.")
     a("#[inline]")
-    a("pub(crate) fn newton_recip_le(scale: u32, width_limbs: usize) -> Option<&'static [u64]> {")
+    a("pub(crate) fn barrett_recip_le(scale: u32, width_limbs: usize) -> Option<&'static [u64]> {")
     a("    // ODD WIDTHS ARE NOT SERVED: the baked row is a valid prefix only at")
     a("    // an EVEN width. The row holds the reciprocal at the baked width with")
     a("    // `k = even(baked_width + pow_len)` limbs, and a narrower reader takes")
@@ -123,7 +123,7 @@ def main():
     a("    // caller use its runtime divide, which is exact at any width — a")
     a("    // graceful fallback, not a panic.")
     a("    //")
-    a("    // Nothing reaches this today (the Newton band floor is 24 limbs and")
+    a("    // Nothing reaches this today (the Barrett band floor is 24 limbs and")
     a("    // the crate instantiates no odd `Int<N>` that wide); it is a")
     a("    // deliberate wall so a future odd width degrades instead of reading a")
     a("    // wrong reciprocal prefix.")
@@ -135,15 +135,15 @@ def main():
     a("    // caller falls back to the runtime reciprocal / MgChain.")
     a('    #[cfg(any(feature = "x-wide", feature = "xx-wide"))]')
     a("    {")
-    a("        if scale <= NEWTON_RECIP_MAX_SCALE")
-    a("            && width_limbs <= NEWTON_RECIP_MAX_WIDTH_LIMBS")
+    a("        if scale <= BARRETT_RECIP_MAX_SCALE")
+    a("            && width_limbs <= BARRETT_RECIP_MAX_WIDTH_LIMBS")
     a("        {")
     a("            // High `k_w + 1` limbs of the baked width-132 reciprocal (drop")
     a("            // the low `132 - width_limbs`):")
     a("            // `r_w = r_132 >> 64*(132 - width_limbs)`.")
     a("            return Some(")
-    a("                &NEWTON_RECIP[scale as usize]")
-    a("                    [NEWTON_RECIP_MAX_WIDTH_LIMBS - width_limbs..],")
+    a("                &BARRETT_RECIP[scale as usize]")
+    a("                    [BARRETT_RECIP_MAX_WIDTH_LIMBS - width_limbs..],")
     a("            );")
     a("        }")
     a("    }")
@@ -152,7 +152,7 @@ def main():
     a("}")
     a("")
 
-    path = os.path.join("src", "consts", "newton_recip.rs")
+    path = os.path.join("src", "consts", "barrett_recip.rs")
     with open(path, "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(out))
     size = os.path.getsize(path)

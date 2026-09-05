@@ -9,15 +9,16 @@
 //!
 //! - [`rescale`] — the `÷ 10^SCALE` policy matcher: one `const fn` classifier
 //!   ([`rescale::select`]) behind a slice door and a typed door, selecting
-//!   between the MG and Newton kernels below.
+//!   between the MG and Barrett kernels below.
 //! - [`mg_divide`] — the Moller-Granlund magic-number divide used by
 //!   every multiplicative `÷ 10^SCALE` rescale path.
 //! - [`fixed`] — the 256-bit sign-magnitude `Fixed` work integer the
 //!   strict-transcendental fallback paths evaluate their series in.
-//! - [`newton_reciprocal`] — the Newton-Raphson reciprocal divide for
-//!   `n / 10^SCALE` at the wide tiers. A kept-alt: [`rescale`] holds the
-//!   `Newton` arm but does not currently select it (uncached Newton is
-//!   dominated by the MG chain, 9.18.2); kept for a baked-`r` revival.
+//! - [`barrett_reciprocal`] — the Barrett-reduction reciprocal divide for
+//!   `n / 10^SCALE` at the wide tiers. [`rescale`] holds the `Barrett` arm
+//!   and SELECTS it for the wide / high-scale band (work width `24..=132`
+//!   u64 limbs × `scale 200..=1850`, on the builds that bake the reciprocal
+//!   table); everything else routes to the MG chain.
 
 pub(crate) mod fixed;
 pub(crate) mod mg_divide;
@@ -101,10 +102,10 @@ pub(crate) mod exp_tang_table;
 #[cfg(feature = "_wide-support")]
 pub(crate) mod atan_tang_table;
 
-// Newton-Raphson reciprocal divide for `n / 10^SCALE` at the wide tiers.
+// Barrett-reduction reciprocal divide for `n / 10^SCALE` at the wide tiers.
 // Always compiled: the unified `decl_decimal_arithmetic!` mul/div path
 // used by D18/D38 (default features) references the dispatcher in a
 // const-folded `SCALE > 38` branch — dead for the narrow tiers but still
 // type-checked. The kernels are generic over `Int<N>`, so this adds
 // compile time, not a feature.
-pub(crate) mod newton_reciprocal;
+pub(crate) mod barrett_reciprocal;

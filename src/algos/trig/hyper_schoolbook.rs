@@ -1563,13 +1563,13 @@ mod tests {
     // (D115 raw max = 2^383 − 1 ≈ 1.97e115) must compute without PANIC on
     // baked-table-less
     // builds (single-tier `dNN` / `wide`-umbrella). The risk: the rescale
-    // matcher's Newton arm falling back to a per-call Knuth divide whose
+    // matcher's Barrett arm falling back to a per-call Knuth divide whose
     // dividend —
     // `even(width_limbs + w_ext/19 + 3) + 1` u64 limbs — outruns the
     // build-max divide blanket (67 > 66 limbs at `width_limbs = 42`,
     // `w_ext = 407`, `MAX_WORK_N = 16`). `rescale::select` gates the
-    // Newton arm to the table-baking `x-wide`/`xx-wide` builds,
-    // and `NewtonReciprocal::precompute` sizes its own
+    // Barrett arm to the table-baking `x-wide`/`xx-wide` builds,
+    // and `BarrettReciprocal::precompute` sizes its own
     // Knuth scratch. Inputs are the golden d115 rows
     // (sinh.golden:3296/8150, cosh.golden:3322/3350/3352/7270, exp/exp2
     // deep negatives).
