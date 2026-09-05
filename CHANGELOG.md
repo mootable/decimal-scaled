@@ -104,6 +104,23 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   Nothing on the strict surface changes behaviour: every `_strict` and
   `_strict_with` result is bit-identical to before.
 
+- **`DynDecimal::display()`**, deprecated in 0.5.1 and removed here as
+  announced. It returned a freshly allocated `String` for a value the
+  caller could already format directly: `DynDecimal` has required
+  `core::fmt::Display` since 0.5.1, so `{}` works on the trait object
+  itself.
+
+  It was the last non-`Box` heap allocation on the `dyn` facade. That
+  facade is the one place this crate touches the heap, because a trait
+  object cannot exist without `Box` — the exemption covers `Box` and
+  nothing else, and this allocation was never needed to hold it. Removing
+  it hands the decision back to the caller, who now picks the buffer and
+  decides whether to allocate at all.
+
+  **Migration:** format the value. `x.display()` becomes `x.to_string()`
+  if you want the same `String`, or `format!("{x}")`; to avoid the
+  allocation entirely, `write!(dst, "{x}")` into a buffer you own.
+
 ## [0.5.1] — 2026-09-02
 
 An API release, non-breaking for callers. Operators now work between
