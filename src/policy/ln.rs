@@ -319,16 +319,22 @@ use super::work_rung::ln_rung;
 /// from `Int<4>` (2 u128 limbs) is narrow-safe.
 #[inline]
 fn tang_narrow<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
-    use crate::algos::ln::ln_tang::{ln_linear_band_exit, ln_tang_g};
+    use crate::algos::ln::ln_tang::{ln_linear_band_exit, ln_pow2_exit, ln_tang_g};
     if let Some(linear) = ln_linear_band_exit::<Int<N>, SCALE>(raw, mode) {
         return Some(linear);
     }
-    let wide = ln_tang_g::<Int<4>, Int<12>, Int<12>, SCALE, 8, 100, true, false>(
-        raw.resize_to::<Int<4>>(),
-        Int::<4>::MAX,
-        Int::<4>::MIN,
-        mode,
-    );
+    let raw4 = raw.resize_to::<Int<4>>();
+    // The exact-power-of-two class (`m == 1`, `ln x = k·ln 2`) skips the lift
+    // and the reduction loop; everything after them is the kernel's own tail.
+    let wide = ln_pow2_exit::<Int<4>, Int<12>, SCALE, 8>(raw4, Int::<4>::MAX, Int::<4>::MIN, mode)
+        .unwrap_or_else(|| {
+            ln_tang_g::<Int<4>, Int<12>, Int<12>, SCALE, 8, 100, true, false>(
+                raw4,
+                Int::<4>::MAX,
+                Int::<4>::MIN,
+                mode,
+            )
+        });
     let out = wide.resize_to::<Int<N>>();
     if out.resize_to::<Int<4>>() != wide {
         return None;

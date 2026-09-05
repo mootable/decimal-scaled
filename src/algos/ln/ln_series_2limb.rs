@@ -194,7 +194,6 @@ pub(crate) fn ln<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<In
 /// narrow arm) does not enter it. Nearest modes only: a directed mode needs
 /// the true residual sign (the value sits sub-LSB to one side of `δ`).
 /// Derived from `S`, never from any input value.
-#[inline]
 pub(crate) const fn ln_linear_band_exponent(scale: u32) -> u32 {
     scale.saturating_sub(1) / 2
 }

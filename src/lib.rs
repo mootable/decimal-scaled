@@ -2107,9 +2107,15 @@ pub mod __bench_internals {
         if let Some(linear) = crate::algos::ln::ln_tang::ln_linear_band_exit::<crate::int::types::Int<2>, SCALE>(raw, mode) {
             return linear;
         }
-        let wide = crate::algos::ln::ln_tang::ln_tang_g::<crate::int::types::Int<4>, crate::int::types::Int<12>, crate::int::types::Int<12>, SCALE, G, CAP, true, false>(
-            BigInt::resize_to::<crate::int::types::Int<4>>(raw), crate::int::types::Int::<4>::MAX, crate::int::types::Int::<4>::MIN, mode,
-        );
+        let raw4 = BigInt::resize_to::<crate::int::types::Int<4>>(raw);
+        let wide = crate::algos::ln::ln_tang::ln_pow2_exit::<crate::int::types::Int<4>, crate::int::types::Int<12>, SCALE, G>(
+            raw4, crate::int::types::Int::<4>::MAX, crate::int::types::Int::<4>::MIN, mode,
+        )
+        .unwrap_or_else(|| {
+            crate::algos::ln::ln_tang::ln_tang_g::<crate::int::types::Int<4>, crate::int::types::Int<12>, crate::int::types::Int<12>, SCALE, G, CAP, true, false>(
+                raw4, crate::int::types::Int::<4>::MAX, crate::int::types::Int::<4>::MIN, mode,
+            )
+        });
         BigInt::resize_to::<crate::int::types::Int<2>>(wide)
     }
 

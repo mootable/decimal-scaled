@@ -460,31 +460,17 @@ where
     use crate::algos::support::wide_trig_core::{
         round_to_storage_directed_widening_g, round_to_storage_with_g, to_work_scaled_g,
     };
-    use crate::support::rounding::DEFAULT_ROUNDING_MODE;
 
     if raw <= St::ZERO {
         panic!("tier ln: argument must be positive");
     }
-    // `ln 2` at the RUNG work integer `Wk`, const-folded at the base working
-    // scale `SCALE + GUARD` (the hot path) — the rung sibling of the per-tier
-    // `C::ln2::<SCALE>` (value-identical; only the const-fold seam differs).
-    let ln2 = |at_scale: u32| -> Wk {
-        if at_scale == SCALE + GUARD {
-            crate::consts::ln2_by_scale::<Wk>(SCALE + GUARD, DEFAULT_ROUNDING_MODE)
-        } else {
-            crate::consts::ln2_by_working_scale::<Wk>(at_scale, DEFAULT_ROUNDING_MODE)
-        }
-    };
-    // The fall-up-width `ln 2` for the widening recompute (identical closure
-    // shape at `Wtier` - the tier's full work integer, or `Wk` again when the
-    // narrow path runs a single width).
-    let ln2_tier_width = |at_scale: u32| -> Wtier {
-        if at_scale == SCALE + GUARD {
-            crate::consts::ln2_by_scale::<Wtier>(SCALE + GUARD, DEFAULT_ROUNDING_MODE)
-        } else {
-            crate::consts::ln2_by_working_scale::<Wtier>(at_scale, DEFAULT_ROUNDING_MODE)
-        }
-    };
+    // `ln 2` at the RUNG work integer `Wk` and at the fall-up width `Wtier`
+    // (the tier's full work integer, or `Wk` again when the narrow path runs a
+    // single width) — one definition, [`ln2_at`], shared with the
+    // power-of-two exit so every `k · ln 2` in this module reads the same
+    // digits at the same scale.
+    let ln2 = |at_scale: u32| -> Wk { ln2_at::<Wk, SCALE, GUARD>(at_scale) };
+    let ln2_tier_width = |at_scale: u32| -> Wtier { ln2_at::<Wtier, SCALE, GUARD>(at_scale) };
     if DIRECTED {
         // Directed modes decide which side of a storage grid line the true
         // value falls; near a grid line the working-scale approximation can
@@ -559,6 +545,76 @@ where
             working_value, working_scale, SCALE, mode, storage_max, storage_min,
         )
     }
+}
+
+/// `ln 2 · 10^at_scale` in `Wk`: const-folded at the base working scale
+/// `SCALE + GUARD` (the hot path), the runtime table otherwise (the walker's
+/// escalated probes). ONE definition for the kernel's two work widths and
+/// for [`ln_pow2_exit`], so a `k · ln 2` reaches the same digits whichever
+/// path produces it — the rung sibling of the per-tier `C::ln2::<SCALE>`
+/// (value-identical; only the const-fold seam differs).
+#[inline]
+pub(crate) fn ln2_at<Wk: BigInt, const SCALE: u32, const GUARD: u32>(at_scale: u32) -> Wk
+where
+    <Wk as BigInt>::Scratch: ComputeLimbs,
+{
+    use crate::support::rounding::DEFAULT_ROUNDING_MODE;
+    if at_scale == SCALE + GUARD {
+        crate::consts::ln2_by_scale::<Wk>(SCALE + GUARD, DEFAULT_ROUNDING_MODE)
+    } else {
+        crate::consts::ln2_by_working_scale::<Wk>(at_scale, DEFAULT_ROUNDING_MODE)
+    }
+}
+
+/// The exact-power-of-two exit for the narrow Tang arm — the input CLASS on
+/// which range reduction gives `m == 1` exactly and `ln(x) = k · ln 2`:
+///
+/// ```text
+/// raw / 10^S = 2^k   ⟺   raw = 5^S · 2^a,  a ≥ 0,  k = a − S
+/// ```
+///
+/// (`k ≥ 0` are the integer powers of two, `k < 0` the dyadic fractions
+/// `10^S` can hold: `0.5` at `S ≥ 1`, `0.25` at `S ≥ 2`, …). Detected on the
+/// storage integer BEFORE any lift: `a` is the lowest set bit, and `raw >> a`
+/// must equal `5^S = 10^S >> S` exactly — a bit test, a shift and a compare;
+/// no division, no value, no scale in it. Every kernel already takes this
+/// short-circuit AFTER its lift and reduction loop ([`tang_ln_fixed_g`]'s
+/// `mantissa_w == one`, `exp_generic::ln_fixed`'s twin); on the narrow arm
+/// the `Int<12>` lift and loop were the measured 1.17–1.54× over Series on
+/// this class. The answer is then produced by the kernel's OWN tail, reused
+/// verbatim — [`ln2_at`] at the same scales, `scale_by_k`, the widening
+/// walker at the SAME `Wk` (so the same escalation ceiling), and
+/// `adjust_ln_near_one` — with only the lift and the reduction skipped, so
+/// the result is bit-identical by construction. Nearest and directed alike.
+#[inline]
+pub(crate) fn ln_pow2_exit<St: BigInt + Copy, Wk: BigInt, const SCALE: u32, const GUARD: u32>(
+    raw: St,
+    storage_max: St,
+    storage_min: St,
+    mode: RoundingMode,
+) -> Option<St>
+where
+    <Wk as BigInt>::Scratch: ComputeLimbs,
+{
+    use crate::algos::support::wide_trig_core::round_to_storage_directed_widening_g;
+    if raw <= St::ZERO {
+        return None;
+    }
+    let mut a: u32 = 0;
+    while !raw.bit(a) {
+        a += 1;
+    }
+    let five_pow = eg::pow10::<St>(SCALE) >> SCALE;
+    if (raw >> a) != five_pow {
+        return None;
+    }
+    let k = a as i128 - SCALE as i128;
+    let rounded = round_to_storage_directed_widening_g::<St, Wk, Wk>(
+        GUARD, SCALE, mode, storage_max, storage_min,
+        |guard_digits| eg::scale_by_k::<Wk>(ln2_at::<Wk, SCALE, GUARD>(SCALE + guard_digits), k),
+        |guard_digits| eg::scale_by_k::<Wk>(ln2_at::<Wk, SCALE, GUARD>(SCALE + guard_digits), k),
+    );
+    Some(crate::algos::support::wide_trig_core::adjust_ln_near_one::<St, Wk, SCALE>(rounded, raw, mode))
 }
 
 /// The linear near-1 exit for the narrow Tang arm — the input CLASS on which
@@ -771,7 +827,7 @@ mod tests {
             d.max(1)
         }
         // (mantissa, fraction digits) — the input is `m · 10^-f`.
-        const INPUTS: [(i128, u32); 24] = [
+        const INPUTS: [(i128, u32); 26] = [
             (2, 0), (3, 0), (10, 0), (7, 0), (1000, 0), (123456789, 0),
             (5, 1), (25, 2), (1, 3), (15, 1), (75, 1),
             (10078125, 7), // 1 + 1/128: slot boundary, t = 0
@@ -792,6 +848,11 @@ mod tests {
             // range at every lower scale, where both must agree on the value.
             (1, 37),
             (2, 9),
+            // The exact-power-of-two exit, both signs of k: 1024 = 2^10 and
+            // 0.125 = 2^-3 (with 2, 8, 16, 0.5, 0.25 above) — must match the
+            // kernel's own m == 1 path bit for bit under every mode.
+            (1024, 0),
+            (125, 3),
         ];
         fn cell<const N: usize, const SCALE: u32>(misses: &mut Vec<String>, max_digits: u32) {
             for (m, f) in INPUTS {
