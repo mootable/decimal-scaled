@@ -42,18 +42,30 @@
 //! exact-hypotenuse path. A row that can reach only one branch of its kernel
 //! cannot see a regression in any of the others, at any width or scale.
 //!
-//! So an op whose kernel BRANCHES on the value gets a small family: the base
-//! row `op` — left exactly as it was, so its published figure and its history
-//! stay comparable — plus one or more `op@<variant>` rows named for the path
-//! they reach. `@hard` is the expensive branch; a more specific name is used
-//! where it says more (`@near1`, `@int`). Each family is declared beside the
-//! operands it uses in [`funcs!`], with the branch it targets and the source
-//! that branches on it.
+//! So EVERY function carries a family: the base row `op` — left exactly as it
+//! was, so its published figure and its history stay comparable, and labelled
+//! `op@base` on the rendered page so it reads as one input rather than as the
+//! function itself — plus at least one `op@<variant>` row named for the path it
+//! reaches. `@hard` is the expensive branch; a more specific name is used where
+//! it says more (`@near1`, `@int`). Each family is declared beside the operands
+//! it uses in [`funcs!`], with the branch it targets and the source that
+//! branches on it.
 //!
-//! An op whose cost does NOT vary with the value gets NO family — see "Ops
-//! deliberately left as a single row" in [`funcs!`] for why each was left
-//! alone. Rows cost sweep time linearly, so a family whose members all measure
-//! the same thing is worse than the single row it replaced.
+//! **Choosing the second operand: read the policy, do not reason about the
+//! kernel.** The matcher is where a value can change what runs, so a family
+//! member should land on the far side of a real `Select::ByValue`/`ByShape`
+//! arm, and the arm it targets is the row's recorded reason. Presuming from
+//! outside which ops "have no value axis" is assuming the answer to the very
+//! question the row exists to ask — an earlier pass excluded ten ops that way
+//! and was wrong to.
+//!
+//! Where a policy genuinely returns no value arm, the `@hard` operand is
+//! instead the hardest one the envelope admits (full significance, largest
+//! legal magnitude), and the CHECK is recorded rather than the presumption —
+//! see "the harder in the obvious sense operands" in [`funcs!`], which names
+//! each policy inspected and what it actually returns. A pair that comes out
+//! flat is then a RESULT, not a wasted row: it says the op's cost does not
+//! depend on its input, which is worth a line on the chart.
 //!
 //! `hypot` is benched across the full width set via the integer-only
 //! correctly-rounded form — the one method whose NAME differs between the
@@ -304,6 +316,71 @@ macro_rules! funcs {
         // the pin has a row of its own instead of silently owning one column
         // of another. `x^3 = 8 < 10` survives S-1.
         let pint: $ty = $crate::op_str!($scale, "3.0", "3").parse().unwrap();
+        // ── THE "HARDER IN THE OBVIOUS SENSE" OPERANDS ──────────────────
+        //
+        // For the ops below, the `@hard` row is NOT aimed at a routing arm,
+        // because there is none to aim at. That was checked in the code rather
+        // than assumed, and the check is recorded here so nobody has to redo
+        // it:
+        //   * `policy::{add, sub, neg, mul, div, rem, sqrt, cbrt, to_degrees,
+        //     to_radians}` — every one of these mentions `ByValue`, but NONE
+        //     RETURNS one from `select`. The mentions are the canonical policy
+        //     shape (the enum variant, its doc line, and the defensive
+        //     `Select::ByValue(_) =>` arm in `dispatch`), and several say so
+        //     outright: `add.rs` reads "add has no value split, so `ByValue` is
+        //     never returned".
+        //   * `policy::trig`'s sub-policies, `inverse` (asin/acos) included,
+        //     likewise return `ByAlgorithm` at every arm.
+        //   * `int::policy::mul` DOES return `ByShape`, on operand limb count —
+        //     but Karatsuba engages at 128 limbs and the widest tier is 64, so
+        //     it folds to a const per width and no operand can reach it.
+        //   * `int::policy::div_rem` returns a genuinely value-keyed `ByShape`
+        //     (`effective_limbs` of the divisor: 1 limb takes a different
+        //     engine). It is the one reachable arm here — but at a fixed
+        //     (width, SCALE) cell the raw's limb count is set by SCALE, and
+        //     the S-1 rule caps every operand under 10, so a legal pair cannot
+        //     straddle it. SCALE already does, and the sweep fans out over it.
+        // So these operands are simply HARDER: full significance across the
+        // whole raw (every fraction digit the parse bound allows) and the
+        // largest magnitude the S-1 and s0 envelopes admit. If a pair comes out
+        // flat, that IS the finding — it says the op's cost does not depend on
+        // its input, which is worth a line on the chart.
+        //
+        // Every value below, and every result, was checked against the same two
+        // bounds as the rest: `|v| < 10` and `|f(v)| < 10` at S-1, and the s0
+        // result inside `D18<0>`'s 18 digits.
+        //   * `h9`  — the maximal-significance operand (sub, div, rem, neg,
+        //             sqrt, cbrt, to_radians).
+        //   * `h5a`/`h5b` — a pair whose SUM survives S-1 (`9.9997 < 10`),
+        //             which `9.9999 + 9.9999` would not, while still carrying
+        //             into every limb.
+        //   * `h3`  — `sqrt(10)` truncated, so `h3 * h3 = 9.9995 < 10` is the
+        //             largest product S-1 admits at full significance. Its s0
+        //             spelling is a different value from `h9`'s so that
+        //             `rem`'s s0 cell is not `x % x == 0`.
+        //   * `hd`  — a divisor just above 1, so the quotient stays under 10
+        //             while the division itself is non-terminating; the s0
+        //             spelling is 7 rather than 1 or 3 to keep it inexact.
+        //   * `htd` — `to_degrees` multiplies by ~57.3, so its operand is
+        //             bounded by `10/57.3 = 0.1745`.
+        let h9: $ty = $crate::op_str!($scale, "9.9999", "999999999").parse().unwrap();
+        let h5a: $ty = $crate::op_str!($scale, "4.9999", "499999999").parse().unwrap();
+        let h5b: $ty = $crate::op_str!($scale, "4.9998", "499999998").parse().unwrap();
+        let h3: $ty = $crate::op_str!($scale, "3.1622", "999999937").parse().unwrap();
+        let hd: $ty = $crate::op_str!($scale, "1.0001", "7").parse().unwrap();
+        let htd: $ty = $crate::op_str!($scale, "0.1744", "9999999999999999")
+            .parse()
+            .unwrap();
+        // `asin@hard` / `acos@hard` — a SECOND attempt at these two. The first
+        // used `n1 = 0.99` to cross `inverse_schoolbook`'s `|x| = 1/2`
+        // half-angle switch, and the full sweep (run 33938890210) measured it
+        // at 1.01x median and 0.98-1.04x at every width and scale: the branch
+        // is real but is not a cost boundary, because both arms are dominated
+        // by the shared inner `atan_fixed`. That finding stands. `nw` is nearer
+        // the domain wall instead — four nines is the most the parse bound
+        // allows at D18's smallest non-zero scale — where the conditioning,
+        // not the branch, is what should cost.
+        let nw: $ty = $crate::op_str!($scale, "0.9999", "0").parse().unwrap();
         // `powf@hard` — the full composition: an exponent that is neither an
         // integer (the pin above) nor exactly 0.5 (the algebraic `√x` pin),
         // over the non-dyadic base `nd1` so the inner `ln` is not Trap 1
@@ -311,36 +388,6 @@ macro_rules! funcs {
         // BY DEFINITION, so this row necessarily falls onto the pin there —
         // irreducible, and now explained rather than accidental.
         let phard: $ty = $crate::op_str!($scale, "1.3", "2").parse().unwrap();
-
-        // ── OPS DELIBERATELY LEFT AS A SINGLE ROW ───────────────────────
-        //
-        // A family is only worth its sweep time where the KERNEL branches on
-        // the value. These ten do not, so they keep one row each:
-        //
-        //   add, sub, neg — fixed-width limb ripple over the tier's `N`
-        //     limbs. The work is the width, not the value.
-        //   mul — `policy::mul` says it plainly: "mul has no value split, so
-        //     `ByValue` is never returned". Its two internal paths (product
-        //     fits `Int<N>` vs widening) are chosen by whether `a_raw·b_raw`
-        //     overflows `N` limbs, and with every operand held under 10 by
-        //     the S-1 rule that is decided by SCALE — which this sweep
-        //     ALREADY fans out over. The fast path is the s0 column and the
-        //     widening path is everything above it, so the split is measured;
-        //     a value family would only re-measure the same two paths.
-        //   div, rem — the divisor's LIMB COUNT drives the Knuth engine, and
-        //     at a fixed scale a small-looking divisor still fills its raw
-        //     with trailing zeros. Same reasoning as `mul`: scale decides.
-        //   sqrt, cbrt — Newton on a radicand whose bit length is set by
-        //     SCALE; there is no perfect-square/cube short-circuit (the
-        //     `diff_nonzero` test in `algos::sqrt::sqrt_newton` is the round
-        //     step, not an early exit), and the seed comes from the shared
-        //     `f64` bootstrap, so the iteration count does not move between
-        //     `2.0` and `9.9`.
-        //   to_degrees, to_radians — one multiply by a constant.
-        //
-        // If a future bbc surface shows any of these moving with the value
-        // after all, the family goes in then; the reason it is absent is
-        // recorded here so the next reader does not have to re-derive it.
 
         // ── arithmetic ──
         $crate::bench_one!($c, "add", $w, $scale, $side, |bn| {
@@ -359,10 +406,43 @@ macro_rules! funcs {
             bn.iter(|| black_box(x) % black_box(b))
         });
         $crate::bench_one!($c, "neg", $w, $scale, $side, |bn| bn.iter(|| -black_box(x)));
+        // FAMILY (arithmetic): no routing arm to target — see "the harder in
+        // the obvious sense operands" above. These carry full significance
+        // across every limb instead, so a carry/borrow propagates the whole
+        // width and the widening multiply/divide path sees its largest legal
+        // operands. A flat pair here is the answer, not a failure.
+        $crate::bench_one!($c, "add@hard", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(h5a) + black_box(h5b))
+        });
+        $crate::bench_one!($c, "sub@hard", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(h9) - black_box(h5b))
+        });
+        $crate::bench_one!($c, "mul@hard", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(h3) * black_box(h3))
+        });
+        $crate::bench_one!($c, "div@hard", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(h9) / black_box(hd))
+        });
+        $crate::bench_one!($c, "rem@hard", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(h9) % black_box(h3))
+        });
+        $crate::bench_one!($c, "neg@hard", $w, $scale, $side, |bn| {
+            bn.iter(|| -black_box(h9))
+        });
 
         // ── roots ──
         $crate::bench_one!($c, "sqrt", $w, $scale, $side, |bn| bn.iter(|| black_box(x).sqrt()));
         $crate::bench_one!($c, "cbrt", $w, $scale, $side, |bn| bn.iter(|| black_box(x).cbrt()));
+        // FAMILY (roots): no routing arm either — `policy::{sqrt, cbrt}` return
+        // `ByAlgorithm` at every arm. `h9` is the largest radicand S-1 admits
+        // at full significance, so the Newton loop runs on the longest
+        // radicand the envelope allows.
+        $crate::bench_one!($c, "sqrt@hard", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(h9).sqrt())
+        });
+        $crate::bench_one!($c, "cbrt@hard", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(h9).cbrt())
+        });
 
         // ── transcendental, single argument ──
         $crate::bench_one!($c, "exp", $w, $scale, $side, |bn| bn.iter(|| black_box(sw).exp()));
@@ -451,10 +531,10 @@ macro_rules! funcs {
         // FAMILY: `n1` crosses the `|x| = 1/2` switch into the half-angle
         // identity (three extra wide sqrts); the base rows sit below it.
         $crate::bench_one!($c, "asin@hard", $w, $scale, $side, |bn| {
-            bn.iter(|| black_box(n1).asin())
+            bn.iter(|| black_box(nw).asin())
         });
         $crate::bench_one!($c, "acos@hard", $w, $scale, $side, |bn| {
-            bn.iter(|| black_box(n1).acos())
+            bn.iter(|| black_box(nw).acos())
         });
         // FAMILY: `atb` pays BOTH the `|x| > 1` reciprocal fold and the
         // argument halvings; the base row's small argument pays neither.
@@ -505,6 +585,16 @@ macro_rules! funcs {
         });
         $crate::bench_one!($c, "to_radians", $w, $scale, $side, |bn| {
             bn.iter(|| black_box(sw).to_radians())
+        });
+        // FAMILY (angle conversion): one constant multiply each, no routing
+        // arm. `htd` is bounded by the S-1 rule through the RESULT — degrees
+        // multiplies by ~57.3, so 0.1744 is the largest operand whose product
+        // stays under 10 — while `to_radians` divides, so it takes `h9`.
+        $crate::bench_one!($c, "to_degrees@hard", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(htd).to_degrees())
+        });
+        $crate::bench_one!($c, "to_radians@hard", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(h9).to_radians())
         });
 
         // ── binary / other ──
