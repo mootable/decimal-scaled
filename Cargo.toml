@@ -901,6 +901,19 @@ path = "benches/micro/ln_wide_series_tang_ab.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
+# ln_narrow_series_tang_ab: the narrow-tier (D18 / D38) sibling — Series (the
+# kept 256-bit Fixed artanh path) vs the routed Int<12> Tang kernel across the
+# union of both tiers' golden scale sets, same operand contract and validity
+# gate, with D57 / D76 in the SAME binary at the shared scales so the
+# narrow-vs-wide same-scale ratio (the inversion) is same-machine. The sound
+# instrument where bench-branch-compare's `ln_nd` (operand 7.0 = 2^2 · (1 +
+# 96/128), Tang slot 96, t = 0) cannot be. Run through bbc micro mode.
+[[bench]]
+name = "ln_narrow_series_tang_ab"
+path = "benches/micro/ln_narrow_series_tang_ab.rs"
+harness = false
+required-features = ["wide", "bench-alt"]
+
 # rem_kernel_ab: dispatch-seam A/B for the remainder policy `select` arm.
 # div_kernel_ab: dispatch-seam A/B for the integer division ENGINE
 # (Knuth base-2⁶⁴ vs Burnikel-Ziegler chunking vs Knuth base-2¹²⁸) at the
