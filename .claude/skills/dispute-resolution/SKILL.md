@@ -24,20 +24,25 @@ having been right last time confer nothing.
 **3. Disagreement is legitimate when facts conflict.** Neither side must yield. Each owes: state
 the case plainly, substantiate so someone else can check, share the method.
 
-**4. Aim for agreement.** Escalation is not the endpoint. Argue it through until the evidence
+**4. A verdict owes a reply.** Declaring someone wrong obliges you to give them the finding and
+the method behind it, and to answer their challenge on the evidence — including when you outrank
+them. Without that you have overruled, not resolved. The cost is not just the one bad call: a
+party who cannot contest a verdict stops surfacing what they know.
+
+**5. Aim for agreement.** Escalation is not the endpoint. Argue it through until the evidence
 persuades one side. Most disputes about what code does or what a number means ARE resolvable by
 looking harder. **Being persuaded is the goal, not a concession** — say so plainly when it
 happens.
 
-**5. Hunt the hole, in either account.** Never restate your position more firmly. Look for what
+**6. Hunt the hole, in either account.** Never restate your position more firmly. Look for what
 is missing or unsound in *either* side and narrow the space of explanations — test hypotheses
 about the disagreement itself, not just its subject. **Beware the near-miss:** narrowing
 generates coincidences, and a near-miss reads like a match when you want the question closed.
 State the arithmetic, not the impression.
 
-**6. Record the outcome.** Every dispute leaves a written record, resolved or not.
+**7. Record the outcome.** Every dispute leaves a written record, resolved or not.
 
-**7. The human resolves genuine deadlocks** — or, with their agreement, a tie-breaker does.
+**8. The human resolves genuine deadlocks** — or, with their agreement, a tie-breaker does.
 When both sides have argued properly and still disagree, or the question is a judgement call:
 scope, priorities, what ships. Backstop, not route.
 
