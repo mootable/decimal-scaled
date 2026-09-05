@@ -558,6 +558,37 @@ _CATEGORY_OPS = {
 _OP_CATEGORY = {op: cat for cat, ops in _CATEGORY_OPS.items() for op in ops}
 _warned_ops: set[str] = set()
 
+# --- Operand-family rows (`op@variant`) -------------------------------------
+#
+# The bench sweep measures one input per cell, so an op whose kernel branches
+# on the value carries a small FAMILY of rows: the base `op` plus `op@<variant>`
+# (`ln@hard`, `log@near1`, `powf@int`, ...), each pinned to a different path
+# through the same public function. See `bench-compare/benches/compare_common.rs`
+# -> "Operand families".
+#
+# A variant belongs to its BASE op's category — `log@near1` is a logarithm
+# however it is spelled — so the separator is stripped before the category
+# lookup. Without this every family row would land in `trigonometry`, which is
+# where `op_category`'s fallback puts anything it does not recognise, and the
+# only signal would be a printed warning nobody reads in CI.
+#
+# `@` is the separator because it cannot occur in a Rust method name, so it can
+# never collide with a real function: `to_degrees` contains `_`, which is why
+# `_` is not used here and why `summarise.py` anchors its group regex on the
+# `_D<n>_s<n>` suffix rather than the first underscore. Criterion does not
+# rewrite `@` in a report directory name (`report::make_filename_safe` replaces
+# only `? " / \ * < > : | ^`), and the collator reads the canonical-case
+# `group_id` out of `benchmark.json` anyway.
+_FAMILY_SEP = "@"
+
+
+def base_op(op: str) -> str:
+    """The public function a bench row measures: `ln@hard` -> `ln`, `ln` -> `ln`.
+
+    Used for categorisation only — the row keeps its own full name everywhere
+    it is displayed, because the variant is the whole point of the row."""
+    return op.split(_FAMILY_SEP, 1)[0]
+
 # --- Diagnostic (measured, never published) bench rows ---------------------
 #
 # The sweep carries rows that exist to MEASURE a kernel, not to document a
@@ -583,17 +614,23 @@ _DIAGNOSTIC_SUFFIXES = ("_nd",)
 def is_diagnostic_op(op: str) -> bool:
     """True for a bench row that measures a kernel but names no public function,
     so it must not be published. An op listed in `_CATEGORY_OPS` is public by
-    definition and is never diagnostic, whatever its spelling."""
-    if op in _OP_CATEGORY:
+    definition and is never diagnostic, whatever its spelling.
+
+    An `op@variant` family row is judged on its BASE op, so a family of a
+    published function publishes and a family of a diagnostic one would not.
+    The two conventions stay independent: `_nd` marks "never publish", `@`
+    marks "same function, different input"."""
+    if base_op(op) in _OP_CATEGORY:
         return False
     return op.endswith(_DIAGNOSTIC_SUFFIXES)
 
 
 def op_category(op: str) -> str:
     """The category an op renders under: `arithmetic`, `roots-and-exponents`, or
-    `trigonometry`. An op in no listed set falls back to trigonometry (so a new
-    function still renders somewhere), logged once per name."""
-    cat = _OP_CATEGORY.get(op)
+    `trigonometry`. An `op@variant` row takes its base op's category. An op in
+    no listed set falls back to trigonometry (so a new function still renders
+    somewhere), logged once per name."""
+    cat = _OP_CATEGORY.get(base_op(op))
     if cat is None:
         if op not in _warned_ops:
             _warned_ops.add(op)

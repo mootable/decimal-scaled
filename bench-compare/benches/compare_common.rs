@@ -31,6 +31,30 @@
 //! non-degenerate argument; it is diagnostic, not part of the prod surface
 //! contract, and can be dropped without touching anything else.
 //!
+//! # Operand families — `op` and `op@<variant>`
+//!
+//! Every cell of this sweep measures exactly ONE input, so one unlucky operand
+//! makes a whole row structurally blind — and that has repeatedly hidden real
+//! defects. `ln` at `2.0` is an exact power of two, so its range reduction
+//! collapses and the row times a short-circuit at every scale. `powf`'s
+//! exponent spells `1` at SCALE 0, so that column times the integer-power pin
+//! instead of the composition. `hypot` on the 3-4-5 triple only ever takes the
+//! exact-hypotenuse path. A row that can reach only one branch of its kernel
+//! cannot see a regression in any of the others, at any width or scale.
+//!
+//! So an op whose kernel BRANCHES on the value gets a small family: the base
+//! row `op` — left exactly as it was, so its published figure and its history
+//! stay comparable — plus one or more `op@<variant>` rows named for the path
+//! they reach. `@hard` is the expensive branch; a more specific name is used
+//! where it says more (`@near1`, `@int`). Each family is declared beside the
+//! operands it uses in [`funcs!`], with the branch it targets and the source
+//! that branches on it.
+//!
+//! An op whose cost does NOT vary with the value gets NO family — see "Ops
+//! deliberately left as a single row" in [`funcs!`] for why each was left
+//! alone. Rows cost sweep time linearly, so a family whose members all measure
+//! the same thing is worse than the single row it replaced.
+//!
 //! `hypot` is benched across the full width set via the integer-only
 //! correctly-rounded form — the one method whose NAME differs between the
 //! two sides, so `scale_funcs!` passes the ident per side:
@@ -118,6 +142,13 @@ macro_rules! op_str {
 ///                            ample integer room (`to_degrees(2) ≈ 114.6` fits
 ///                            at s0; it is the S-1 cell, on `0.1`, that the
 ///                            single-integer-digit rule binds).
+///
+/// The FAMILY operands (`nd1`, `nd2`, `n1x`, `n1b`, `eh`, `ang`, `tp`, `n1`,
+/// `atb`, `big`, `ac1`, `pint`, `phard`) are declared and justified in the
+/// body below, each next to the branch it exists to reach — see "Operand
+/// families" in the module docs. They obey the same S-1 rule as the operands
+/// above: every one of them, and every result they produce, was checked to
+/// stay `|·| < 10` at the S-1 cell and inside `D18<0>`'s 18 digits at SCALE 0.
 #[macro_export]
 macro_rules! funcs {
     ($c:expr, $w:literal, $scale:literal, $side:literal, $ty:ty, $hypot:ident) => {{
@@ -146,6 +177,171 @@ macro_rules! funcs {
         let c3: $ty = $crate::op_str!($scale, "3.0", "3").parse().unwrap();
         let d4: $ty = $crate::op_str!($scale, "4.0", "4").parse().unwrap();
 
+        // ── FAMILY OPERANDS (see "Operand families" in the module docs) ──
+        //
+        // Every operand below obeys the SAME two rules as the ones above, and
+        // both were checked numerically for every operand AND every result:
+        //   * S-1: `|v| < 10` and `|f(v)| < 10`, the one integer digit the top
+        //     benched scale leaves;
+        //   * SCALE 0: a DELIBERATE integer spelling whose result still fits
+        //     the narrowest tier at s0 (`D18<0>`, 18 significant digits).
+        // Fraction digits are held to <= 2 so every spelling parses at the
+        // smallest benched non-zero scale, 4 (D18's [0, 4, 9, 13, 17]); the
+        // bound is 4, so there is room but none is spent without reason.
+        //
+        // ── the NON-DYADIC pair, `nd1` / `nd2` ──────────────────────────
+        //
+        // The log family range-reduces on the BINARY mantissa `v = 2^k · m`,
+        // `m ∈ [1, 2)`, and has TWO degeneracies — both properties of the
+        // VALUE, not of the stored raw, hence scale-invariant, hence fixable
+        // with one literal that covers every scale and width:
+        //   * Trap 1, `m == 1` — an exact power of two. Both `ln` kernels
+        //     return `k · ln2` from a one-word product and NEITHER the artanh
+        //     series nor the Brent sqrt reduction runs. `x = 2.0` — the `ln`,
+        //     `log2`, `log10`, `log` and `powf` operand above — is exactly
+        //     this, which is why the `ln` row reads flat in scale.
+        //   * Trap 2, `t == 0` — `m` an exact multiple of `1/128`, so Tang's
+        //     residual is EXACTLY zero and its artanh series breaks on the
+        //     first iteration. `ten = 7.0 = 2² · 1.75` and `1.75 = 1 + 96/128`
+        //     EXACTLY, so the `log` base — and `ln_nd`'s argument — is this
+        //     trap at every width the policy routes Tang, i.e. every wide
+        //     tier. `b = 3.5`, `e = 1.5` and `c3 = 3.0` are caught too: ANY
+        //     value whose binary mantissa terminates within 7 fraction bits
+        //     is. `ln_nd` therefore defeats Trap 1 and lands on Trap 2; it
+        //     measures the narrow (Series) tiers, where only Trap 1 exists,
+        //     and a table read at every Tang tier.
+        // Both traps require the value to be DYADIC (denominator a power of
+        // two in lowest terms). `2.3 = 23/10` and `3.7 = 37/10` keep a factor
+        // of 5, so their binary expansions never terminate and they defeat
+        // BOTH traps at EVERY scale, width and `k`. At SCALE 0 there is no
+        // `10^SCALE` to lean on and the rule becomes "odd and >= 257" (odd
+        // forces `k <= 7` on the boundary test, so `>= 257` forces `k >= 8`);
+        // 259 and 263 satisfy it, and 259 also keeps `ln(259) ≈ 5.56 < 10`.
+        // The analysis is `benches/micro/ln_wide_series_tang_ab.rs`, which
+        // states the same contract on the raw.
+        let nd1: $ty = $crate::op_str!($scale, "2.3", "259").parse().unwrap();
+        let nd2: $ty = $crate::op_str!($scale, "3.7", "263").parse().unwrap();
+        // `log@near1` — the base within 0.1 of 1 that routes the SECOND `log`
+        // algorithm. `policy::log::select` is `ByValue` on the BASE and
+        // `log_near_one_base` classifies it by `k = ceil(-log10 |b - 1|)`:
+        // `k == 0` is `LnDivide` (every base this sweep has ever benched),
+        // `k > 0` is `LnDivideConditioned` — a different kernel at guard
+        // `30 + k`. `1.05` gives `k = 2`. The RESULT is what binds the pair:
+        // `log(x, b) = ln x / ln b` with `ln b ≈ 0.0488`, so `x` must also sit
+        // near 1 to keep the quotient under the S-1 single integer digit —
+        // `ln(1.4)/ln(1.05) ≈ 6.90 < 10`. At SCALE 0 the only integer within
+        // 0.1 of 1 is 1 itself, and base 1 is not a valid logarithm base, so
+        // this row's s0 cell CANNOT reach the conditioned arm; it falls back
+        // to a non-degenerate ordinary pair (269/271, both odd and >= 257) so
+        // it still measures `LnDivide` properly rather than a short-circuit.
+        let n1x: $ty = $crate::op_str!($scale, "1.4", "269").parse().unwrap();
+        let n1b: $ty = $crate::op_str!($scale, "1.05", "271").parse().unwrap();
+        // `exp@hard` and the hyperbolics' `@hard` — a LARGE argument, where
+        // `exp`'s adaptive `r/2^n` reduction pays for real halvings and
+        // squarings instead of returning after a couple of Taylor terms.
+        // `exp` bounds the family: the S-1 cell needs `e^v < 10`, i.e.
+        // `v < ln 10 ≈ 2.3026`, so `2.2` (→ `e^2.2 ≈ 9.03`) is the largest
+        // round value that fits. At SCALE 0 the bound is `e^v < 10^18`, and
+        // `9` is chosen well inside it (`e^9 ≈ 8103`) so `tanh` does not
+        // saturate to exactly 1 and stop measuring anything.
+        let eh: $ty = $crate::op_str!($scale, "2.2", "9").parse().unwrap();
+        // `sin@hard` / `cos@hard` — an angle that actually needs the mod-τ
+        // range reduction AND lands near π/4, where the Taylor series runs
+        // its longest. `6.9 - 2π ≈ 0.6168` and `7 - 2π ≈ 0.7168`, both inside
+        // (0, π/4) so no quadrant fold, and both far from the `s = 0.1` the
+        // base rows use — whose square is 0.01, so each term drops two
+        // decades and the series ends almost immediately. Results are in
+        // [-1, 1], so the S-1 bound is never in question for these two.
+        let ang: $ty = $crate::op_str!($scale, "6.9", "7").parse().unwrap();
+        // `tan@hard` — the NEAR-POLE guard lift. `tan` is `sin(r)/cos(r)`, and
+        // `algos::trig::near_pole_tan` adds roughly `log10(|tan|)` guard
+        // digits and RECOMPUTES (a second `sin_cos_fixed` + `div` at the
+        // lifted scale) whenever the quotient exceeds magnitude 1; at
+        // `s = 0.1` the lift is skipped entirely. `tan(1.47) ≈ 9.887` is the
+        // largest such value the S-1 single integer digit admits. At SCALE 0,
+        // `11` sits 0.0044 from `7π/2`, giving `tan(11) ≈ -226` — the same
+        // branch, harder.
+        let tp: $ty = $crate::op_str!($scale, "1.47", "11").parse().unwrap();
+        // `asin@hard` / `acos@hard` / `atanh@hard` — just inside the domain
+        // wall. `inverse_schoolbook` switches at `|x| = 1/2`: below it goes
+        // straight to `atan_fixed(x/√(1-x²))`, above it takes the half-angle
+        // identity with THREE extra wide sqrts. `0.99` is above, the base
+        // rows' `0.1` below. `atanh(0.99) ≈ 2.647 < 10` bounds the choice.
+        // SCALE 0 is IRREDUCIBLE here, exactly as it is for the base rows:
+        // `asin`/`acos` are capped at `|v| <= 1` and `atanh` needs `|v| < 1`
+        // STRICTLY, so the only integer available is 0 and the s0 cell of
+        // these three rows repeats the base row's. That is forced by the
+        // domains, not chosen.
+        let n1: $ty = $crate::op_str!($scale, "0.99", "0").parse().unwrap();
+        // `atan@hard` — `atan_fixed` folds `|x| > 1` through `π/2 - atan(1/x)`
+        // and THEN halves via `atan(x) = 2·atan(x/(1+√(1+x²)))` while the
+        // argument is at or above ~0.2, each halving costing a wide sqrt +
+        // divide + multiply. `3.3` folds to `0.303` and `3` to `0.333`, both
+        // above the threshold, so this row pays fold AND halvings; the base
+        // row's `0.1` pays neither. (A large argument alone is NOT enough:
+        // `9.3` folds to `0.108`, below the threshold, and would have skipped
+        // the halvings — nearly the base row's work plus one divide.)
+        let atb: $ty = $crate::op_str!($scale, "3.3", "3").parse().unwrap();
+        // `asinh@hard` — `asinh_series_composition` splits at `|x| = 1`: below
+        // it is one sqrt and ONE `ln_series`, at or above it is a reciprocal,
+        // a sqrt and TWO `ln_series` calls. `9.3` is the two-`ln` branch.
+        let big: $ty = $crate::op_str!($scale, "9.3", "9").parse().unwrap();
+        // `acosh@near1` — `acosh_ln_composition` splits at exactly `x = 2`:
+        // `x >= 2` factors the radicand and takes TWO `ln` calls, `x < 2`
+        // takes the `log1p` GAP form `acosh(1+t) = log1p(t + √(t(t+2)))`. The
+        // base row's `x = 2.0` sits ON the boundary and so measures the
+        // two-`ln` branch; `1.01` is the only way into the gap form. At
+        // SCALE 0 the only integer below 2 in the domain is 1, where the gap
+        // is 0 and every internal series short-circuits — measuring nothing —
+        // so the s0 spelling stays `2` and repeats the base row's branch
+        // rather than timing an empty one.
+        let ac1: $ty = $crate::op_str!($scale, "1.01", "2").parse().unwrap();
+        // `powf@int` — the EXACT integer-power pin
+        // (`algos::pow::powi_exact`), which answers an integer exponent by
+        // binary exponentiation and never forms `exp(y · ln x)` at all. The
+        // base `powf` row reaches this pin ONLY at SCALE 0, where `e = 1.5`
+        // spells `1`; this row reaches it at EVERY scale, deliberately, so
+        // the pin has a row of its own instead of silently owning one column
+        // of another. `x^3 = 8 < 10` survives S-1.
+        let pint: $ty = $crate::op_str!($scale, "3.0", "3").parse().unwrap();
+        // `powf@hard` — the full composition: an exponent that is neither an
+        // integer (the pin above) nor exactly 0.5 (the algebraic `√x` pin),
+        // over the non-dyadic base `nd1` so the inner `ln` is not Trap 1
+        // either. `2.3^1.3 ≈ 2.95 < 10`. At SCALE 0 an exponent is an integer
+        // BY DEFINITION, so this row necessarily falls onto the pin there —
+        // irreducible, and now explained rather than accidental.
+        let phard: $ty = $crate::op_str!($scale, "1.3", "2").parse().unwrap();
+
+        // ── OPS DELIBERATELY LEFT AS A SINGLE ROW ───────────────────────
+        //
+        // A family is only worth its sweep time where the KERNEL branches on
+        // the value. These ten do not, so they keep one row each:
+        //
+        //   add, sub, neg — fixed-width limb ripple over the tier's `N`
+        //     limbs. The work is the width, not the value.
+        //   mul — `policy::mul` says it plainly: "mul has no value split, so
+        //     `ByValue` is never returned". Its two internal paths (product
+        //     fits `Int<N>` vs widening) are chosen by whether `a_raw·b_raw`
+        //     overflows `N` limbs, and with every operand held under 10 by
+        //     the S-1 rule that is decided by SCALE — which this sweep
+        //     ALREADY fans out over. The fast path is the s0 column and the
+        //     widening path is everything above it, so the split is measured;
+        //     a value family would only re-measure the same two paths.
+        //   div, rem — the divisor's LIMB COUNT drives the Knuth engine, and
+        //     at a fixed scale a small-looking divisor still fills its raw
+        //     with trailing zeros. Same reasoning as `mul`: scale decides.
+        //   sqrt, cbrt — Newton on a radicand whose bit length is set by
+        //     SCALE; there is no perfect-square/cube short-circuit (the
+        //     `diff_nonzero` test in `algos::sqrt::sqrt_newton` is the round
+        //     step, not an early exit), and the seed comes from the shared
+        //     `f64` bootstrap, so the iteration count does not move between
+        //     `2.0` and `9.9`.
+        //   to_degrees, to_radians — one multiply by a constant.
+        //
+        // If a future bbc surface shows any of these moving with the value
+        // after all, the family goes in then; the reason it is absent is
+        // recorded here so the next reader does not have to re-derive it.
+
         // ── arithmetic ──
         $crate::bench_one!($c, "add", $w, $scale, $side, |bn| {
             bn.iter(|| black_box(x) + black_box(b))
@@ -170,7 +366,21 @@ macro_rules! funcs {
 
         // ── transcendental, single argument ──
         $crate::bench_one!($c, "exp", $w, $scale, $side, |bn| bn.iter(|| black_box(sw).exp()));
+        // FAMILY: the deep-reduction end of `exp`. `sw` is a small argument
+        // that exits after a couple of Taylor terms; `eh` forces the adaptive
+        // `r/2^n` halvings and the squarings that reassemble them.
+        $crate::bench_one!($c, "exp@hard", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(eh).exp())
+        });
         $crate::bench_one!($c, "ln", $w, $scale, $side, |bn| bn.iter(|| black_box(x).ln()));
+        // FAMILY: the only `ln` row that runs the artanh series. `ln` above is
+        // Trap 1 (exact power of two) and `ln_nd` below is Trap 2 (an exact
+        // Tang table boundary), so between them they measure a one-word
+        // product and a table read; `nd1` is non-dyadic and defeats both at
+        // every scale and width.
+        $crate::bench_one!($c, "ln@hard", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(nd1).ln())
+        });
         // `log2` / `log10` — the CONSTANT-base logarithms, public API on both
         // sides and previously unbenched anywhere in the sweep. They share the
         // narrow `log` kernel MINUS the base's own `ln` series: `log(x, base)`
@@ -180,6 +390,16 @@ macro_rules! funcs {
         $crate::bench_one!($c, "log2", $w, $scale, $side, |bn| bn.iter(|| black_box(x).log2()));
         $crate::bench_one!($c, "log10", $w, $scale, $side, |bn| {
             bn.iter(|| black_box(x).log10())
+        });
+        // FAMILY: both constant-base logs share `ln`'s binary reduction, so
+        // both inherit Trap 1 from `x = 2.0` — `log2(2)` is not merely a fast
+        // path, it is EXACTLY 1. These two rows are the only measurement
+        // either function has of its own series.
+        $crate::bench_one!($c, "log2@hard", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(nd1).log2())
+        });
+        $crate::bench_one!($c, "log10@hard", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(nd1).log10())
         });
         // ── VARIANT A (drop this one row to revert) ──────────────────────
         // `ln` above is measured at `x = 2.0`, which is DEGENERATE for the
@@ -208,22 +428,78 @@ macro_rules! funcs {
         $crate::bench_one!($c, "sin", $w, $scale, $side, |bn| bn.iter(|| black_box(sw).sin()));
         $crate::bench_one!($c, "cos", $w, $scale, $side, |bn| bn.iter(|| black_box(sw).cos()));
         $crate::bench_one!($c, "tan", $w, $scale, $side, |bn| bn.iter(|| black_box(sw).tan()));
+        // FAMILY: `ang` needs the mod-τ reduction the base rows skip entirely,
+        // and its residue sits near π/4 where the Taylor series is longest.
+        $crate::bench_one!($c, "sin@hard", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(ang).sin())
+        });
+        $crate::bench_one!($c, "cos@hard", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(ang).cos())
+        });
+        // FAMILY: `tp` drives `|tan|` past magnitude 1, which is what arms the
+        // near-pole guard lift and its second `sin_cos_fixed` + `div` at the
+        // lifted working scale.
+        $crate::bench_one!($c, "tan@hard", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(tp).tan())
+        });
         // `asin` / `acos` stay on `s`: capped at |v| <= 1, so SCALE 0 admits
         // only 0 or the domain edge +-1, and the edge is a pathological
         // near-boundary case rather than a representative one.
         $crate::bench_one!($c, "asin", $w, $scale, $side, |bn| bn.iter(|| black_box(s).asin()));
         $crate::bench_one!($c, "acos", $w, $scale, $side, |bn| bn.iter(|| black_box(s).acos()));
         $crate::bench_one!($c, "atan", $w, $scale, $side, |bn| bn.iter(|| black_box(sw).atan()));
+        // FAMILY: `n1` crosses the `|x| = 1/2` switch into the half-angle
+        // identity (three extra wide sqrts); the base rows sit below it.
+        $crate::bench_one!($c, "asin@hard", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(n1).asin())
+        });
+        $crate::bench_one!($c, "acos@hard", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(n1).acos())
+        });
+        // FAMILY: `atb` pays BOTH the `|x| > 1` reciprocal fold and the
+        // argument halvings; the base row's small argument pays neither.
+        $crate::bench_one!($c, "atan@hard", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(atb).atan())
+        });
         $crate::bench_one!($c, "sinh", $w, $scale, $side, |bn| bn.iter(|| black_box(sw).sinh()));
         $crate::bench_one!($c, "cosh", $w, $scale, $side, |bn| bn.iter(|| black_box(sw).cosh()));
         $crate::bench_one!($c, "tanh", $w, $scale, $side, |bn| bn.iter(|| black_box(sw).tanh()));
+        // FAMILY: the three hyperbolics are built on `exp`, so they inherit
+        // its reduction depth — `eh` exercises it, the small `sw` does not.
+        $crate::bench_one!($c, "sinh@hard", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(eh).sinh())
+        });
+        $crate::bench_one!($c, "cosh@hard", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(eh).cosh())
+        });
+        $crate::bench_one!($c, "tanh@hard", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(eh).tanh())
+        });
         $crate::bench_one!($c, "asinh", $w, $scale, $side, |bn| {
             bn.iter(|| black_box(sw).asinh())
         });
+        // FAMILY: `big` is on the far side of the `|x| = 1` split, where the
+        // composition takes a reciprocal, a sqrt and TWO `ln_series` calls
+        // instead of one.
+        $crate::bench_one!($c, "asinh@hard", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(big).asinh())
+        });
         $crate::bench_one!($c, "acosh", $w, $scale, $side, |bn| bn.iter(|| black_box(x).acosh()));
+        // FAMILY: the base row's `x = 2.0` sits exactly ON the `x >= 2`
+        // boundary and takes the two-`ln` branch, so the `log1p` gap form —
+        // the branch that guards against cancellation as `x -> 1` — has never
+        // been benched. `ac1` is the only way into it.
+        $crate::bench_one!($c, "acosh@near1", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(ac1).acosh())
+        });
         // `atanh` stays on `s`: its domain is the OPEN interval (-1, 1), whose
         // only integer is 0, so its SCALE 0 cell cannot be de-degenerated.
         $crate::bench_one!($c, "atanh", $w, $scale, $side, |bn| bn.iter(|| black_box(s).atanh()));
+        // FAMILY: `n1` sits just inside the `|x| < 1` wall, where the gap
+        // `1 - |x|` is small and the composition is at its most conditioned.
+        $crate::bench_one!($c, "atanh@hard", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(n1).atanh())
+        });
         $crate::bench_one!($c, "to_degrees", $w, $scale, $side, |bn| {
             bn.iter(|| black_box(sw).to_degrees())
         });
@@ -235,8 +511,32 @@ macro_rules! funcs {
         $crate::bench_one!($c, "powf", $w, $scale, $side, |bn| {
             bn.iter(|| black_box(x).powf(black_box(e)))
         });
+        // FAMILY: `powf` has THREE paths and the single row above straddles
+        // two of them by accident — `e = 1.5` spells `1` at SCALE 0, so the
+        // s0 column times the integer pin while every other scale times the
+        // composition over a Trap-1 base. These two rows own one path each,
+        // at every scale.
+        $crate::bench_one!($c, "powf@int", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(x).powf(black_box(pint)))
+        });
+        $crate::bench_one!($c, "powf@hard", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(nd1).powf(black_box(phard)))
+        });
         $crate::bench_one!($c, "log", $w, $scale, $side, |bn| {
             bn.iter(|| black_box(x).log(black_box(ten)))
+        });
+        // FAMILY: `log`'s matcher is `ByValue` on the BASE, and every base
+        // this sweep has benched gives `k = 0` — so `LnDivideConditioned`,
+        // one of the policy's two routed algorithms, has never been measured
+        // at any width or scale. `log@near1` is the row that reaches it.
+        // `log@hard` keeps the ordinary `LnDivide` arm but on operands that
+        // are not Trap 1 / Trap 2, which the `x = 2.0`, `ten = 7.0` pair both
+        // are.
+        $crate::bench_one!($c, "log@hard", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(nd1).log(black_box(nd2)))
+        });
+        $crate::bench_one!($c, "log@near1", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(n1x).log(black_box(n1b)))
         });
         // `hypot` via this side's spelling of the integer-only
         // correctly-rounded form — the only `hypot` method exposed at EVERY
@@ -246,6 +546,15 @@ macro_rules! funcs {
         // the branch and prod rows still pair.
         $crate::bench_one!($c, "hypot", $w, $scale, $side, |bn| {
             bn.iter(|| black_box(c3).$hypot(black_box(d4)))
+        });
+        // FAMILY: decimal `hypot` is exactly integer hypot on the raws, so the
+        // 3-4-5 triple makes `a² + b²` a PERFECT SQUARE at every scale — the
+        // int `isqrt` lands exactly and the round step's `diff_nonzero` test
+        // is always false. `nd1`/`nd2` give `1898 · 10^(2S-2)` (and `136250`
+        // at s0), neither a perfect square, so this row takes the inexact
+        // path the base row can never reach.
+        $crate::bench_one!($c, "hypot@hard", $w, $scale, $side, |bn| {
+            bn.iter(|| black_box(nd1).$hypot(black_box(nd2)))
         });
     }};
 }
