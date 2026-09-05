@@ -698,26 +698,30 @@ def perf_chart_block(base: str, op_rows, uid: str = "") -> str:
     svg = _perf_svg_families(families, widths, P, series, average=len(families) > 1)
     if not svg:
         return ""
-    if len(families) == 1:  # no family axis — no legend to draw
-        return (f'<figure>{svg}<figcaption>Median time vs width (log scale). '
-                f'Solid: scale 0 and max; dashed: the intermediate band-edge '
-                f'scales.</figcaption></figure>')
+    solo = len(families) == 1
     pre = f"f-{_slug(uid + base)}"
     keys = [f'<input type="checkbox" class="fam-toggle" id="{pre}-{k}" checked>'
             for k in range(len(families))]
-    keys.append(f'<input type="checkbox" class="fam-toggle" id="{pre}-avg">')
-    labels = [f'<label class="fam-key k{k + 1}" for="{pre}-{k}">{f}</label>'
+    labels = [f'<label class="fam-key k{k + 1}" for="{pre}-{k}">{display_op(f)}</label>'
               for k, f in enumerate(families)]
-    labels.append(f'<label class="fam-key kavg" for="{pre}-avg">average</label>')
+    if not solo:
+        # An average OF ONE LINE is that line, so the entry only exists where
+        # there is something to average.
+        keys.append(f'<input type="checkbox" class="fam-toggle" id="{pre}-avg">')
+        labels.append(f'<label class="fam-key kavg" for="{pre}-avg">average</label>')
+    caption = (
+        "Median time vs width (log scale). "
+        + ("" if solo else
+           "Colour = operand family (click a legend entry to show or hide it); ")
+        + "solid = scale 0 and max, dashed = the intermediate band-edge scales."
+        + ("" if solo else " The shaded band is the base row's scale spread.")
+    )
     return (
         '<div class="perf-chart">'
         + "".join(keys)
         + "<figure>"
         + svg
-        + '<figcaption>Median time vs width (log scale). Colour = operand family '
-          '(click a legend entry to show or hide it); solid = scale 0 and max, '
-          'dashed = the intermediate band-edge scales. The shaded band is the '
-          'base row\'s scale spread.</figcaption>'
+        + f"<figcaption>{caption}</figcaption>"
         + '<div class="fam-legend">' + "".join(labels) + "</div>"
         + "</figure></div>"
     )
@@ -784,9 +788,35 @@ _FAMILY_SEP = "@"
 def base_op(op: str) -> str:
     """The public function a bench row measures: `ln@hard` -> `ln`, `ln` -> `ln`.
 
-    Used for categorisation only — the row keeps its own full name everywhere
-    it is displayed, because the variant is the whole point of the row."""
+    Used for categorisation and grouping only — the row keeps its own full name
+    everywhere it is displayed, because the variant is the whole point of it."""
     return op.split(_FAMILY_SEP, 1)[0]
+
+
+# The base row's WIRE id is the bare op name (`ln`, `log`, `add`) and stays that
+# way: `results/timing/bbc_medians.tsv` and the History surface are keyed on it,
+# and continuity of those rows is the reason the base operands were kept
+# unchanged in the first place. But bare is the wrong thing to SHOW. Beside
+# `ln@hard` and `log@near1`, a legend entry reading plain `ln` reads as "the"
+# `ln` with variants hanging off it, when it is one input among several — and
+# that is exactly the impression that made the degenerate `ln` row misleading
+# before the families existed: a reader takes the fast line as the function's
+# cost. `@base` says what it is.
+#
+# Applied uniformly, INCLUDING to ops with a single row, so `add@base` reads the
+# same as `ln@base`. If only the ops that acquired variants carried a suffix,
+# the suffix would silently mark which ops got families, which is not what it is
+# for. (A one-entry legend is redundant on its own terms; carrying the scheme
+# everywhere is worth more than dropping the box on those charts.)
+_BASE_LABEL = "base"
+
+
+def display_op(op: str) -> str:
+    """How a row is LABELLED — `ln` -> `ln@base`, `ln@hard` -> `ln@hard`.
+
+    Presentation only. Never write this to a data file or use it as a key: the
+    wire id is `op` itself."""
+    return op if _FAMILY_SEP in op else f"{op}{_FAMILY_SEP}{_BASE_LABEL}"
 
 # --- Diagnostic (measured, never published) bench rows ---------------------
 #
@@ -853,10 +883,9 @@ def _perf_op_section(op: str, op_rows) -> list[str]:
     readable directly — which is also the relief the palette's light-mode
     contrast check requires."""
     families, widths, P, series = _perf_families(op_rows)
-    # "Width" while an op has no family axis — the column then holds nothing but
-    # widths, and renaming it would churn every single-row op's page for nothing.
-    head = ("| Width | " if len(families) == 1 else "| Row | ") \
-        + " | ".join(_pos_labels(P)) + " |"
+    # Every row is labelled by its FAMILY, single-family ops included, so the
+    # table reads the same way as the legend beside it.
+    head = "| Row | " + " | ".join(_pos_labels(P)) + " |"
     rule = "| :-- | " + " | ".join(["--:"] * P) + " |"
     trows = [head, rule]
     for fam in families:
@@ -865,8 +894,7 @@ def _perf_op_section(op: str, op_rows) -> list[str]:
             if vals is None:
                 continue
             cells = [(_fmt_ns(v) if v is not None else "·") for v in vals]
-            label = f"D{w}" if len(families) == 1 else f"`{fam}` D{w}"
-            trows.append(f"| {label} | " + " | ".join(cells) + " |")
+            trows.append(f"| `{display_op(fam)}` D{w} | " + " | ".join(cells) + " |")
     return [
         f"### `{op}`",
         "",
