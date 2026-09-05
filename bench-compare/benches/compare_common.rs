@@ -27,9 +27,11 @@
 //!   * binary / other:      powf, log, hypot
 //!
 //! `log2` / `log10` are public API on both sides and were previously unbenched
-//! anywhere in the sweep. `ln_nd` (VARIANT A below) is a second `ln` row at a
-//! non-degenerate argument; it is diagnostic, not part of the prod surface
-//! contract, and can be dropped without touching anything else.
+//! anywhere in the sweep. A diagnostic `ln_nd` row once sat here for the same
+//! reason `ln@hard` exists now — the base `ln` operand short-circuits the
+//! kernel — but its own argument turned out to sit on a Tang table boundary,
+//! so it measured a table read wherever Tang routes. `ln@hard` supersedes it
+//! and is non-degenerate at every width, so the row was retired.
 //!
 //! # Operand families — `op` and `op@<variant>`
 //!
@@ -139,10 +141,10 @@ macro_rules! op_str {
 ///   * `b  = 3.5` (→ `3`)   — second arithmetic operand; `x±b`, `x*b`(=7),
 ///                            `x/b`, `x%b` all stay |·| < 10.
 ///   * `e  = 1.5` (→ `1`)   — powf exponent; `x^e = 2^1.5 ≈ 2.83 < 10`.
-///   * `base = 7.0` (→ `7`) — log base (> 0, ≠ 1); `log(2, 7)` valid. Also the
-///                            `ln_nd` argument (VARIANT A): unlike `x = 2.0` it
-///                            is not a power of two, so it does not collapse
-///                            the log range reduction to `m = 1`.
+///   * `base = 7.0` (→ `7`) — log base (> 0, ≠ 1); `log(2, 7)` valid. It is not
+///                            a power of two, so it does not collapse the log
+///                            range reduction to `m = 1` — but see Trap 2 below:
+///                            it lands on a Tang table boundary instead.
 ///   * `sw = 0.1` (→ `2`)   — VARIANT B: `s` with a NON-degenerate scale-0
 ///                            spelling, for the wide-domain small-argument
 ///                            functions. Identical to `s` at every scale >= 1,
@@ -213,13 +215,12 @@ macro_rules! funcs {
         //   * Trap 2, `t == 0` — `m` an exact multiple of `1/128`, so Tang's
         //     residual is EXACTLY zero and its artanh series breaks on the
         //     first iteration. `ten = 7.0 = 2² · 1.75` and `1.75 = 1 + 96/128`
-        //     EXACTLY, so the `log` base — and `ln_nd`'s argument — is this
-        //     trap at every width the policy routes Tang, i.e. every wide
-        //     tier. `b = 3.5`, `e = 1.5` and `c3 = 3.0` are caught too: ANY
-        //     value whose binary mantissa terminates within 7 fraction bits
-        //     is. `ln_nd` therefore defeats Trap 1 and lands on Trap 2; it
-        //     measures the narrow (Series) tiers, where only Trap 1 exists,
-        //     and a table read at every Tang tier.
+        //     EXACTLY, so the `log` base is this trap at every width the
+        //     policy routes Tang — which, since the narrow tiers were routed
+        //     to Tang too, is now every tier. `b = 3.5`, `e = 1.5` and
+        //     `c3 = 3.0` are caught the same way: ANY value whose binary
+        //     mantissa terminates within 7 fraction bits is. This is what
+        //     retired the old `ln_nd` row, whose argument was this same 7.0.
         // Both traps require the value to be DYADIC (denominator a power of
         // two in lowest terms). `2.3 = 23/10` and `3.7 = 37/10` keep a factor
         // of 5, so their binary expansions never terminate and they defeat
@@ -410,10 +411,8 @@ macro_rules! funcs {
         });
         $crate::bench_one!($c, "ln", $w, $scale, $side, |bn| bn.iter(|| black_box(x).ln()));
         // FAMILY: the only `ln` row that runs the artanh series. `ln` above is
-        // Trap 1 (exact power of two) and `ln_nd` below is Trap 2 (an exact
-        // Tang table boundary), so between them they measure a one-word
-        // product and a table read; `nd1` is non-dyadic and defeats both at
-        // every scale and width.
+        // Trap 1 (an exact power of two), so it measures a one-word product;
+        // `nd1` is non-dyadic and defeats both traps at every scale and width.
         $crate::bench_one!($c, "ln@hard", $w, $scale, $side, |bn| {
             bn.iter(|| black_box(nd1).ln())
         });
@@ -437,30 +436,6 @@ macro_rules! funcs {
         $crate::bench_one!($c, "log10@hard", $w, $scale, $side, |bn| {
             bn.iter(|| black_box(nd1).log10())
         });
-        // ── VARIANT A (drop this one row to revert) ──────────────────────
-        // `ln` above is measured at `x = 2.0`, which is DEGENERATE for the
-        // logarithm: range reduction gives mantissa m = 1 exactly, so the
-        // artanh argument t = (m-1)/(m+1) is 0 and the series breaks on its
-        // first iteration at every working scale. That is why the `ln` row is
-        // flat in scale while every other transcendental rises.
-        //
-        // This row re-runs `ln` at the `base` operand (7.0 → m = 1.75,
-        // t = 3/11), which exercises the series properly. It ADDS a row and
-        // changes nothing existing, so the historical `ln` baseline is intact.
-        // 7.0 is already an operand of this harness, so it needs no new S-1
-        // bound check: ln(7) ≈ 1.946 < 10.
-        //
-        // NAMING IS LOAD-BEARING: the `_nd` suffix is what keeps this row OUT
-        // of the published Performance page. `scripts/render_docs.py`
-        // (`is_diagnostic_op`) drops it at both TSV readers, because `ln_nd`
-        // names no callable function. Any future row that measures a kernel
-        // rather than documenting public API must carry that suffix — or add
-        // its own marker there — otherwise it WILL be published. The row stays
-        // in the bbc artifacts either way; only publication is filtered.
-        $crate::bench_one!($c, "ln_nd", $w, $scale, $side, |bn| {
-            bn.iter(|| black_box(ten).ln())
-        });
-        // ── end VARIANT A ───────────────────────────────────────────────
         $crate::bench_one!($c, "sin", $w, $scale, $side, |bn| bn.iter(|| black_box(sw).sin()));
         $crate::bench_one!($c, "cos", $w, $scale, $side, |bn| bn.iter(|| black_box(sw).cos()));
         $crate::bench_one!($c, "tan", $w, $scale, $side, |bn| bn.iter(|| black_box(sw).tan()));
