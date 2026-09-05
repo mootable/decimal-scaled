@@ -15,19 +15,34 @@
 //! 4. dispatch via an inline `const { select::<N>() }` block, then an
 //!    **exhaustive** `match algo` — no `_`, no panic.
 //!
-//! Because `select` is `const` and keyed only on the const generic `N`,
-//! the `const { … }` block folds per monomorphisation and the unchosen arm
-//! is dead-arm-eliminated in release: each concrete `Int<N>` compiles to a
-//! direct call to the limbwise equality kernel, with no runtime branch.
+//! Because `select` is `const` and keyed only on the const generic `N`, the
+//! `const { … }` block folds per monomorphisation, and the FINAL compiled
+//! code carries no runtime branch: LLVM discards every arm the constant
+//! discriminant doesn't select, so each concrete `Int<N>` still compiles to
+//! a direct call to the limbwise equality kernel. What does NOT fold away is
+//! the compile-time mono-item cost: `match algo` switches on an enum
+//! discriminant, which rustc's mono collector cannot prune the way it prunes
+//! a `match N` on the const generic itself — every arm's kernel is
+//! instantiated (MIR generated, `required_consts` evaluated) for every `N`
+//! this policy is monomorphised at, in debug AND release
+//! ([[reference_mono_collector_prunes_int_switch_not_enum]]). One extra
+//! unrouted arm is a bounded, accepted cost here (this is the ALREADY-SHIPPED
+//! shape — `Schoolbook` has paid it since before `XorFold` existed); it would
+//! need revisiting only if this policy's item count itself became a measured
+//! problem, the same way `ln::tang_at_rung` did.
 //!
-//! # Why there is only one algorithm
+//! # Why there is only one ROUTED algorithm
 //!
 //! Integer equality is width-independent: a limb-by-limb comparison over the
 //! `N`-limb two's-complement representation (the limbwise approach in
 //! [`eq_limbwise`]) is the unique correct choice at every limb count `N`.
 //! There is no crossover threshold, no value-dependent split, and no
-//! work-width widening. The `ByValue` arm of [`Select`] is present for
-//! canonical-shape uniformity; `select` never returns it.
+//! work-width widening — so `select` always returns [`Algorithm::Limbwise`]
+//! and never reaches [`Algorithm::XorFold`], the registered-but-unrouted
+//! candidate kept per `docs/ARCHITECTURE.md` → "Keeping the alternatives"
+//! until a benchmark pass decides whether it wins. The `ByValue` arm of
+//! [`Select`] is present for canonical-shape uniformity; `select` never
+//! returns it either.
 //!
 //! # Why `dispatch` is `const fn`
 //!
@@ -47,13 +62,15 @@
 //! separately microbenchable. `PartialEq` observable behaviour is unchanged.
 
 use crate::int::algos::eq::eq_limbwise::eq_limbwise;
+use crate::int::algos::eq::eq_xor_fold::eq_xor_fold;
 use crate::int::types::Int;
 
 // ── 1. the real equality algorithm — NAMED, no `Default` ─────────────
 
-/// The equality algorithms this policy chooses between. The single variant
-/// is the CamelCase of the kernel fn's name minus the `eq_` function
-/// prefix (`eq_limbwise` → `Limbwise`) — strict 1:1 with the kernel fn.
+/// The equality algorithms this policy chooses between. Variants are the
+/// CamelCase of each kernel fn's name minus the `eq_` function prefix
+/// (`eq_limbwise` → `Limbwise`, `eq_xor_fold` → `XorFold`) — strict 1:1
+/// with the kernel fns.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
     /// [`eq_limbwise`] — limb-by-limb two's-complement equality test,
@@ -67,6 +84,14 @@ enum Algorithm {
     /// this variant exists as an explicit, benchmarkable seam.
     #[allow(dead_code)]
     Schoolbook,
+    /// [`eq_xor_fold`] — a genuinely distinct kernel: an OR-fold of
+    /// per-limb XORs rather than a reuse of the comparison kernel. Bit-
+    /// identical to [`eq_limbwise`] for every input (`docs/ARCHITECTURE.md`
+    /// → "Keeping the alternatives"). Registered but **unrouted**:
+    /// `select` never returns it. Kept per `int_cube_eq_ab`'s bench seam
+    /// (`src/lib.rs`) until a measurement pass decides whether it wins.
+    #[allow(dead_code)]
+    XorFold,
 }
 
 // ── 2. the verdict ────────────────────────────────────────────────────
@@ -114,5 +139,6 @@ pub(crate) const fn dispatch<const N: usize>(lhs: Int<N>, rhs: Int<N>) -> bool {
     match algo {
         Algorithm::Limbwise => eq_limbwise(lhs, rhs),
         Algorithm::Schoolbook => eq_limbwise(lhs, rhs),
+        Algorithm::XorFold => eq_xor_fold(lhs, rhs),
     }
 }
