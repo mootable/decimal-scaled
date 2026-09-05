@@ -2807,7 +2807,12 @@ macro_rules! decl_wide_transcendental {
                 working_scale: u32
             ) -> Wagm {
                 if const { $crate::policy::ln::is_tang::<$n_limbs, SCALE>() } {
-                    $crate::algos::ln::ln_tang::tang_ln_fixed_g::<Wagm, $ln_tang_cap, false>(
+                    $crate::algos::ln::ln_tang::tang_ln_fixed_g::<
+                        Wagm,
+                        $crate::algos::support::ln_tang_slot::WideSlots,
+                        $ln_tang_cap,
+                        false,
+                    >(
                         working_value,
                         working_scale,
                         |inner_working_scale| {

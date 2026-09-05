@@ -34,7 +34,11 @@ use crate::algos::support::wide_trig_core::WideTrigCore;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
     Series,
-    #[cfg(feature = "_wide-support")]
+    /// The table-driven Tang kernel. No longer `_wide-support`-gated: the
+    /// kernel was lifted free of `WideTrigCore`, so the narrow tiers
+    /// (D18/D38) can be routed to it too. While it WAS gated, narrow Tang
+    /// was structurally unselectable — a computation the matcher could not
+    /// reach (`architectural-review` Class N).
     Tang,
     #[allow(dead_code)]
     Schoolbook,
@@ -49,6 +53,45 @@ enum Select<const N: usize> {
 
 const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
     match (N, SCALE) {
+        // ── NARROW (D18 / D38) — closing a width INVERSION ──────────────
+        //
+        // These tiers ran `ln_series_2limb` (artanh at `|t| <= 1/3`, so
+        // ~1.05·w terms, on the 256-bit `Fixed` type at `STRICT_GUARD = 30`)
+        // while every WIDER tier ran Tang (`|t| < 1/256`, ~0.21·w terms, at
+        // guard 8-10). Narrower storage was therefore doing MORE work than
+        // wider storage: `ln_nd` (a non-degenerate argument — see the
+        // benchmark-hazard note in `ln_tang::tang_ln_fixed_g`) measured D38 at
+        // 2431-8205 ns against D57's 566-1697 and D76's 603-1750, a 4.0-5.8x
+        // inversion. An inversion is a defect on the NARROW side by
+        // definition: less storage must never cost more time.
+        //
+        // Tang was not merely unrouted here, it was UNROUTABLE: `Algorithm::
+        // Tang`, `algos::ln::ln_tang` and the table were all
+        // `_wide-support`-gated, and the kernel was bound `C: WideTrigCore`,
+        // which no narrow tier implements. Lifting the kernel free of `C`
+        // (storage as a plain `BigInt`, storage bounds as values, the table as
+        // a type parameter) is what makes this arm expressible at all.
+        //
+        // ── THE RANGE IS THE TIER'S WHOLE RANGE, NOT A CARVE-OUT ─────────
+        //
+        // `0..=37` is FULL coverage, not a fitted band: the crate caps
+        // `MAX_SCALE = N - 1` for `D{N}` (`lib.rs` — `SCALE = MAX_SCALE + 1`
+        // is rejected at COMPILE time), so D38's legal scales are `0..=37` and
+        // D18's are `0..=17`. Both tiers are covered end to end, exactly as
+        // every wide arm below covers its own tier number minus one
+        // (D57 -> 56, D76 -> 75, D1232 -> 1231). There is no top cell falling
+        // through to Series, and `0..=38` would be a dead bound — `D38<38>`
+        // does not compile.
+        //
+        // Validity across that whole range is a capacity argument, not a
+        // measurement: the narrow work rung is `Int<12>`, whose Ziv-escalation
+        // budget is `BITS/8 = 96` decimal digits, against a worst-cell need of
+        // `SCALE + MARGIN = 37 + 51 = 88` under the same narrow-storage margin
+        // `work_rung::ln_rung` already applies below 16 limbs. The Tang table
+        // read needs 6 of its 8 stored limbs at `w = 96`. Both clear with
+        // room, and identically at every scale in between — the bound moves
+        // monotonically in `SCALE`, so there is no interior cell to bisect.
+        (1 | 2, 0..=37) => Select::ByAlgorithm(Algorithm::Tang),
         // The table-driven Tang kernel eliminates the Series path's wide
         // argument-reduction sqrts and is bit-identical to Series (the
         // correctly-rounded oracle) across every wide tier's full valid
@@ -181,7 +224,6 @@ pub(crate) fn checked_dispatch<const N: usize, const SCALE: u32>(
 ) -> Option<Int<N>> {
     match resolve::<N, SCALE>(&raw) {
         Algorithm::Series => series_routed::<N, SCALE>(raw, mode),
-        #[cfg(feature = "_wide-support")]
         Algorithm::Tang => tang_routed::<N, SCALE>(raw, mode),
         Algorithm::Schoolbook => schoolbook_routed::<N, SCALE>(raw, mode),
     }
@@ -279,24 +321,100 @@ where
     <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
     use crate::algos::ln::ln_tang::ln_tang_g;
+    use crate::algos::support::ln_tang_slot::WideSlots;
+    // The lifted kernel is `C`-free: storage type `C::Storage`, rung work
+    // width `Int<K>`, fall-up width the tier's full `C::W`, the full-precision
+    // `WideSlots` table, storage bounds threaded as values. `C` here only
+    // sources those — the same routing, bit-identical to the pre-lift path.
+    let (smax, smin) = (C::storage_max(), C::storage_min());
     match const { ln_rung::<C, SCALE>() } {
-        3 => ln_tang_g::<C, Int<3>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        4 => ln_tang_g::<C, Int<4>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        6 => ln_tang_g::<C, Int<6>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        8 => ln_tang_g::<C, Int<8>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        12 => ln_tang_g::<C, Int<12>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        16 => ln_tang_g::<C, Int<16>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        24 => ln_tang_g::<C, Int<24>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        32 => ln_tang_g::<C, Int<32>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        48 => ln_tang_g::<C, Int<48>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        64 => ln_tang_g::<C, Int<64>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        96 => ln_tang_g::<C, Int<96>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        128 => ln_tang_g::<C, Int<128>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        _ => ln_tang_g::<C, Int<176>, SCALE, G, CAP, DIR, IE>(raw, mode),
+        3 => ln_tang_g::<C::Storage, Int<3>, C::W, WideSlots, SCALE, G, CAP, DIR, IE>(raw, smax, smin, mode),
+        4 => ln_tang_g::<C::Storage, Int<4>, C::W, WideSlots, SCALE, G, CAP, DIR, IE>(raw, smax, smin, mode),
+        6 => ln_tang_g::<C::Storage, Int<6>, C::W, WideSlots, SCALE, G, CAP, DIR, IE>(raw, smax, smin, mode),
+        8 => ln_tang_g::<C::Storage, Int<8>, C::W, WideSlots, SCALE, G, CAP, DIR, IE>(raw, smax, smin, mode),
+        12 => ln_tang_g::<C::Storage, Int<12>, C::W, WideSlots, SCALE, G, CAP, DIR, IE>(raw, smax, smin, mode),
+        16 => ln_tang_g::<C::Storage, Int<16>, C::W, WideSlots, SCALE, G, CAP, DIR, IE>(raw, smax, smin, mode),
+        24 => ln_tang_g::<C::Storage, Int<24>, C::W, WideSlots, SCALE, G, CAP, DIR, IE>(raw, smax, smin, mode),
+        32 => ln_tang_g::<C::Storage, Int<32>, C::W, WideSlots, SCALE, G, CAP, DIR, IE>(raw, smax, smin, mode),
+        48 => ln_tang_g::<C::Storage, Int<48>, C::W, WideSlots, SCALE, G, CAP, DIR, IE>(raw, smax, smin, mode),
+        64 => ln_tang_g::<C::Storage, Int<64>, C::W, WideSlots, SCALE, G, CAP, DIR, IE>(raw, smax, smin, mode),
+        96 => ln_tang_g::<C::Storage, Int<96>, C::W, WideSlots, SCALE, G, CAP, DIR, IE>(raw, smax, smin, mode),
+        128 => ln_tang_g::<C::Storage, Int<128>, C::W, WideSlots, SCALE, G, CAP, DIR, IE>(raw, smax, smin, mode),
+        _ => ln_tang_g::<C::Storage, Int<176>, C::W, WideSlots, SCALE, G, CAP, DIR, IE>(raw, smax, smin, mode),
     }
 }
 
-#[cfg(feature = "_wide-support")]
+/// The NARROW (`D18` / `D38`) Tang arm — the one that closes the width
+/// inversion documented on [`select`].
+///
+/// ## One fixed work rung, `Int<12>` — and why NOT `Int<24>`
+///
+/// The wide tiers walk a rung ladder because their `$Work` is sized for a
+/// max scale far above most cells. There are only two narrow storage
+/// widths, so a ladder is machinery this case does not have: one fixed rung
+/// serves both tiers at every scale.
+///
+/// `Int<12>` is that rung, and the choice is load-bearing.
+/// `to_work_scaled_g` lifts through `BigInt::resize_to`, which stages the
+/// SOURCE magnitude into `[u128; MAX_U128_LIMB]` — and
+/// `MAX_U128_LIMB = 4 · MAX_WORK_N` is just **8** in a narrow-only build.
+/// `resize_to` indexes that buffer at `ceil(N_source / 2)`, so a source
+/// wider than 16 limbs panics on the slice range REGARDLESS OF VALUE.
+/// `Int<24>` sources 12 > 8 and so fails on every conditioned call, at
+/// every scale and every mode; `Int<12>` sources 6 and is safe in both
+/// directions. Its `BITS/8 = 96`-digit escalation budget clears the worst
+/// narrow cell's `37 + 51 = 88` (see [`select`]), and it holds the Tang
+/// table product.
+///
+/// ## Storage arithmetic runs in `Int<4>`, to keep `checked_ln` exact
+///
+/// `ln` genuinely overflows narrow storage: at `D38<37>` the smallest
+/// positive argument gives `ln(10^-37) ≈ -85.2`, needing ≈ `8.5·10^38`
+/// against D38's ≈ `1.7·10^38` capacity. The narrow Series kernel reports
+/// that as `None`, and `checked_ln`'s exactness on D18/D38 is a documented
+/// contract (`docs/ARCHITECTURE.md` → "Overflow & domain behaviour").
+///
+/// The shared narrowing (`wide_trig_core::narrow_range_checked_g`) PANICS
+/// on out-of-range instead, so handing it the true storage bounds would
+/// convert that `None` into a panic — a silent regression of a shipped
+/// contract. Running the kernel's storage arithmetic in `Int<4>` puts the
+/// result far inside the bounds it checks, so it cannot trip; this fn then
+/// applies the exact fit test itself, matching `narrow_fit`'s semantics for
+/// both tiers in one step. `Int<4>` is a local widening of THIS arm only —
+/// it imposes nothing on any other tier (Constitution rule 6), exactly as
+/// the Series arm already widens D18 into `Int<2>`.
+///
+/// ## `(GUARD, CAP, DIRECTED, INTERNAL_EXTRA) = (10, 400, true, false)`
+///
+/// The configuration nine of the ten wide tiers use. `INTERNAL_EXTRA` is
+/// `false` because the narrow cells have generous escalation headroom (a
+/// 96-digit rung budget against a 47-digit base working scale), which is
+/// exactly the condition that makes the pre-widening unnecessary — the wide
+/// tiers need it only where the Ziv cap collapses onto the base guard at
+/// max scale. `CAP = 400` covers working scales to
+/// `(2·400 + 1) · 2.408 ≈ 1928`, against a narrow maximum of 96.
+#[inline]
+fn tang_narrow<const N: usize, const SCALE: u32>(
+    raw: Int<N>,
+    mode: RoundingMode,
+) -> Option<Int<N>> {
+    use crate::algos::ln::ln_tang::ln_tang_g;
+    use crate::algos::support::ln_tang_slot::NarrowSlots;
+    let wide = ln_tang_g::<Int<4>, Int<12>, Int<12>, NarrowSlots, SCALE, 10, 400, true, false>(
+        raw.resize_to::<Int<4>>(),
+        Int::<4>::MAX,
+        Int::<4>::MIN,
+        mode,
+    );
+    // The `narrow_fit` round-trip idiom, taken at `Int<4>`: `None` iff the
+    // result does not survive the trip back into storage.
+    let out = wide.resize_to::<Int<N>>();
+    if out.resize_to::<Int<4>>() != wide {
+        return None;
+    }
+    Some(out)
+}
+
 #[inline]
 fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
     // Per-tier `(GUARD, CAP)` tuning for the Tang kernel. The select gates
@@ -351,6 +469,7 @@ fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode
     // cell to cell with margins mostly ≤ 1.2×, i.e. under the replication
     // floor, so the values below are not claimed to be optimal — only valid.
     match N {
+        1 | 2 => tang_narrow::<N, SCALE>(raw, mode),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => Some(tang_at_rung::<crate::types::widths::wide_trig_d57::Core, SCALE, 8, 100, true, false>(raw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -458,6 +577,104 @@ pub(crate) fn checked_log10_dispatch<const N: usize, const SCALE: u32>(
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => Some(crate::types::widths::wide_trig_d1232::log10_strict_with_kernel::<SCALE>(raw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>()),
         _ => crate::algos::ln::ln_series_2limb::log10::<SCALE>(raw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
+    }
+}
+
+#[cfg(test)]
+mod narrow_tang_tests {
+    //! The narrow (D18 / D38) Tang arm must be bit-identical to the Series
+    //! kernel it replaces. Both are correctly-rounded, so where both are
+    //! valid they agree exactly — this is the correctness wall behind the
+    //! routing change, and it runs in EVERY build (the narrow tiers are
+    //! always compiled).
+    //!
+    //! Comparing the two `Option`s rather than two values checks the
+    //! overflow contract at the same time: `ln` genuinely overflows narrow
+    //! storage at high scales, and `checked_ln`'s exact `None` on D18/D38 is
+    //! a documented guarantee. A Tang arm that panicked where Series
+    //! returned `None` would fail here.
+
+    use crate::int::types::Int;
+    use crate::support::rounding::RoundingMode;
+
+    const ALL_MODES: [RoundingMode; 8] = [
+        RoundingMode::HalfToEven,
+        RoundingMode::HalfAwayFromZero,
+        RoundingMode::HalfTowardZero,
+        RoundingMode::Trunc,
+        RoundingMode::Floor,
+        RoundingMode::Ceiling,
+        RoundingMode::AwayFromZero,
+        RoundingMode::ZeroFiveUp,
+    ];
+
+    /// Assert the routed narrow Tang arm equals the Series arm on `raws`,
+    /// under every rounding mode.
+    fn agrees<const N: usize, const SCALE: u32>(raws: &[i128]) {
+        for &r in raws {
+            let raw = Int::<N>::from_i128(r);
+            for mode in ALL_MODES {
+                assert_eq!(
+                    super::tang_narrow::<N, SCALE>(raw, mode),
+                    super::series_routed::<N, SCALE>(raw, mode),
+                    "narrow ln disagreed: raw={r} N={N} SCALE={SCALE} mode={mode:?}"
+                );
+            }
+        }
+    }
+
+    /// Operands are chosen NON-DEGENERATE (odd, and not a multiple of 5;
+    /// at SCALE 0 also >= 257) so neither kernel short-circuits: an exact
+    /// power of two takes the `m == 1` early-out in BOTH kernels, and a
+    /// mantissa landing exactly on a Tang table index makes Tang's residual
+    /// `t` zero so its artanh loop breaks immediately. See the
+    /// benchmark-hazard note in `ln_tang::tang_ln_fixed_g`. A degenerate
+    /// operand would assert almost nothing.
+    #[test]
+    fn d38_narrow_tang_matches_series() {
+        agrees::<2, 0>(&[257, 999, 100_003, 999_999_937]);
+        agrees::<2, 1>(&[3, 7, 13, 12_345_678_901_234_567]);
+        agrees::<2, 18>(&[
+            1_000_000_000_000_000_001,
+            999_999_999_999_999_999,
+            3_000_000_000_000_000_007,
+            7_000_000_000_000_000_003,
+        ]);
+        // D38's MAX_SCALE — the tier's top cell, and the largest inversion.
+        agrees::<2, 37>(&[
+            10i128.pow(37) + 1,
+            10i128.pow(37) - 1,
+            3 * 10i128.pow(37) + 7,
+            7 * 10i128.pow(37) + 3,
+        ]);
+    }
+
+    #[test]
+    fn d18_narrow_tang_matches_series() {
+        agrees::<1, 0>(&[257, 999, 100_003]);
+        agrees::<1, 9>(&[1_000_000_001, 999_999_999, 3_000_000_007]);
+        // D18's MAX_SCALE.
+        agrees::<1, 17>(&[
+            10i128.pow(17) + 1,
+            10i128.pow(17) - 1,
+            3 * 10i128.pow(17) + 7,
+        ]);
+    }
+
+    /// The out-of-range band: at `D38<37>` a small argument drives the
+    /// result past storage. `ln(10^-37) ~ -85.2` needs ~8.5e38 against
+    /// D38's ~1.7e38, so this MUST report `None` from both kernels rather
+    /// than panicking from either.
+    #[test]
+    fn d38_s37_out_of_range_agrees_and_does_not_panic() {
+        agrees::<2, 37>(&[1, 3, 7, 999_999_937]);
+        // And it really is the out-of-range band, not a quiet success:
+        // if this stops being `None` the case above has lost its point.
+        assert_eq!(
+            super::tang_narrow::<2, 37>(Int::<2>::from_i128(1), RoundingMode::HalfToEven),
+            None,
+            "expected ln(10^-37) at D38<37> to overflow storage"
+        );
     }
 }
 

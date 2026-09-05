@@ -4055,58 +4055,22 @@ use crate::int::types::traits::BigInt;
 /// M]`) in the tier's work integer `W` (a value `x` held as `x ·
 /// 10^w`). Replaces the per-call `ln_fixed` Series recompute.
 ///
-/// The slot is stored as `slot = round(L_idx · 2^B)` (B = LN_TANG_B,
-/// MS-limb first). We SLICE the high-order `p` limbs needed for this
-/// working scale — `slot_hi = floor(slot / 2^(B − 64·p))`, the binary
-/// fixed-point of `L_idx` at exponent `bp = 64·p` — then reconstruct
-///
-/// ```text
-/// round(L_idx · 10^w) = round(slot_hi · 10^w / 2^bp)
-///                     = (slot_hi · 10^w + 2^(bp−1)) >> bp
-/// ```
-///
-/// entirely in `W`: one zero-extend, one multiply, one add, one
-/// shift. `p` is chosen so `bp` carries the working scale's bits plus
-/// generous guard, and so the product `slot_hi · 10^w` (≈ bp + w·
-/// log2(10) bits ≈ 6.6·w bits, with w ≤ W::BITS/8) fits `W`.
-///
-/// `idx = 0` short-circuits to `0` (ln 1). The MS-limb-first layout
-/// makes the slice a contiguous high-limb PREFIX: a narrow tier reads
-/// fewer limbs, the widest tier reads the whole entry.
+/// The reconstruction itself lives ONCE, in
+/// [`crate::algos::support::ln_tang_slot::ln_table_entry_from_slot`],
+/// shared with the narrow high-prefix table
+/// ([`crate::algos::support::ln_tang_table_narrow`]) — this wrapper
+/// only names which slot to read. `idx = 0` short-circuits to `0`
+/// (`ln 1`); the MS-limb-first layout is what makes the shared body's
+/// slice a contiguous high-limb PREFIX.
 #[inline]
 pub(crate) fn ln_table_entry_baked<W: BigInt>(w: u32, idx: usize, pow10_w: W) -> W {
     if idx == 0 {
         return W::ZERO;
     }
-    let slot = &LN_TANG_SLOTS[idx];
-    // Binary precision needed: w·log2(10) value bits + guard. Use the
-    // rational 3322/1000 ≈ log2(10) (a slight over-estimate) and a
-    // 64-bit (one-limb) guard so the converted slot rounds correctly
-    // yet the conversion product `slot_hi · 10^w` (≈ bp + w·log2(10)
-    // ≈ 2·w·log2(10) + 64 ≈ 0.83·W::BITS + 64 at the `w = W::BITS/8`
-    // cap) stays inside `W` even on the narrowest work integer
-    // (Int<16> = 1024 bits: 0.83·1024 + 64 ≈ 914 < 1024). Round the
-    // limb count up; assert it fits the stored width.
-    let need_bits = (w as u64) * 3322 / 1000 + 64;
-    let p_full = need_bits.div_ceil(64) as usize;
-    assert!(
-        p_full <= LN_TANG_LIMBS,
-        "ln_tang: working scale {w} out of generated range ({LN_TANG_LIMBS} limbs)"
-    );
-    let p = p_full.max(1);
-    // Zero-extend the top `p` limbs (MS-first) into W:
-    //   slot_hi = sum_{k=0..p-1} slot[k] · 2^(64·(p−1−k)).
-    let mut slot_hi = W::ZERO;
-    for s in slot.iter().take(p) {
-        slot_hi = (slot_hi << 64)
-            | W::from_mag_sign_u128(&[*s as u128], false);
-    }
-    let bp = (64 * p) as u32;
-    // `10^w` in `W` — supplied by the caller from the kernel's baked
-    // `pow10_table` static (a lookup, not a per-call recompute).
-    let scaled = slot_hi * pow10_w;
-    // Round-half-up: add 2^(bp−1), then shift right by bp.
-    let bias = W::ONE << (bp - 1);
-    (scaled + bias) >> bp
+    crate::algos::support::ln_tang_slot::ln_table_entry_from_slot::<W>(
+        w,
+        &LN_TANG_SLOTS[idx],
+        pow10_w,
+    )
 }
 

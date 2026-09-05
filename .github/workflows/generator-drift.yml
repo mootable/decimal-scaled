@@ -38,6 +38,7 @@ on:
       - "src/algos/support/atan_tang_table.rs"
       - "src/algos/support/exp_tang_table.rs"
       - "src/algos/support/ln_tang_table.rs"
+      - "src/algos/support/ln_tang_table_narrow.rs"
       - "src/algos/support/sincos_tang_table.rs"
       - "src/consts/table.rs"
       - "src/consts/newton_recip.rs"
@@ -51,6 +52,7 @@ on:
       - "src/algos/support/atan_tang_table.rs"
       - "src/algos/support/exp_tang_table.rs"
       - "src/algos/support/ln_tang_table.rs"
+      - "src/algos/support/ln_tang_table_narrow.rs"
       - "src/algos/support/sincos_tang_table.rs"
       - "src/consts/table.rs"
       - "src/consts/newton_recip.rs"
@@ -88,9 +90,15 @@ jobs:
       - name: Re-run the generators and diff their output
         run: |
           set -uo pipefail
+          # One generator:output pair per line. `gen_ln_tang_table.py`
+          # appears TWICE by design — one run emits both the full-precision
+          # table and its narrow high-prefix sibling, and each output needs
+          # its own diff. Re-running it costs a fraction of a second, and
+          # listing only one of the two would leave the other unguarded.
           pairs="scripts/gen_atan_tang_table.py:src/algos/support/atan_tang_table.rs
           scripts/gen_exp_tang_table.py:src/algos/support/exp_tang_table.rs
           scripts/gen_ln_tang_table.py:src/algos/support/ln_tang_table.rs
+          scripts/gen_ln_tang_table.py:src/algos/support/ln_tang_table_narrow.rs
           scripts/gen_sincos_tang_table.py:src/algos/support/sincos_tang_table.rs
           scripts/gen_const_table.py:src/consts/table.rs
           scripts/gen_newton_recip_table.py:src/consts/newton_recip.rs"

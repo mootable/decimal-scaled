@@ -29,21 +29,36 @@
 //! ## Layering
 //!
 //! This is an **algorithm function** (`docs/ARCHITECTURE.md` →
-//! "Layering direction"): it computes only through the
-//! [`WideTrigCore`] trait surface (which forwards *down* into the
-//! per-tier guard-digit kernels) and `BigInt` arithmetic on the work
-//! integer. It never calls a method on a decimal type. The thirteen
-//! `policy::ln` Tang arms call *down* to [`ln_tang`]; the type's
-//! `ln` method delegates *down* through the policy.
+//! "Layering direction"): it computes through `BigInt` arithmetic on the
+//! work integer and the width-generic `wide_trig_core` leaves. It never
+//! calls a method on a decimal type. The `policy::ln` Tang arms call
+//! *down* to it; the type's `ln` method delegates *down* through the
+//! policy.
 //!
-//! This collapses the thirteen per-tier Tang `ln`
-//! kernels — structurally identical bar the `core` module
-//! (`wide_trig_d*`), the storage `Int<N>`, the narrow guard
-//! (`GUARD = 8` or `10`) and the artanh-series iteration cap — into one
-//! generic over `C: WideTrigCore`.
+//! This collapses what were thirteen per-tier Tang `ln` kernels —
+//! structurally identical bar the `core` module (`wide_trig_d*`), the
+//! storage `Int<N>`, the guard (`GUARD = 8` or `10`) and the
+//! artanh-series iteration cap — into one generic kernel.
+//!
+//! ## Narrow and wide share this one kernel
+//!
+//! [`ln_tang_g`] is the single body, and it is **`WideTrigCore`-free**:
+//! storage is a plain `St: BigInt`, the storage bounds arrive as VALUES,
+//! and the table arrives as a type parameter. That is what lets the
+//! narrow tiers (`D18`/`D38`) route Tang at all — they have no
+//! `WideTrigCore` impl, so a `C`-bound kernel was structurally
+//! unreachable for them (an unroutable computation, `architectural-review`
+//! Class N).
+//!
+//! Two thin `C`-bound wrappers remain for the wide callers' convenience
+//! ([`ln_tang`], [`tang_ln_fixed`]); both are `_wide-support`-gated and
+//! hold no computation of their own — they only source `C`'s storage
+//! bounds and name the wide table, so the wide path is bit-identical to
+//! what it was before the lift.
 
 use crate::algos::exp::exp_generic as eg;
-use crate::algos::support::ln_tang_table::ln_table_entry_baked;
+use crate::algos::support::ln_tang_slot::LnTangTable;
+#[cfg(feature = "_wide-support")]
 use crate::algos::support::wide_trig_core::WideTrigCore;
 use crate::int::types::compute_limbs::ComputeLimbs;
 use crate::int::types::traits::BigInt;
@@ -163,6 +178,7 @@ pub(crate) const EXTERNAL_EXTRA_DIGITS: u32 = 12;
 /// outer Ziv-escalation loop in [`ln_tang`] handles the bias by
 /// growing `guard` when the cap leaves room). Set `false` only for
 /// callers that already widen their `w` externally.
+#[cfg(feature = "_wide-support")]
 #[inline]
 pub(crate) fn tang_ln_fixed<
     C: WideTrigCore,
@@ -187,7 +203,7 @@ where
     // shim, removed with the `_approx` surface. Kept as the tier-bound
     // binding over the live generic kernel — it holds no computation of
     // its own, so nothing here is unroutable.
-    tang_ln_fixed_g::<C::W, CAP, INTERNAL_EXTRA>(
+    tang_ln_fixed_g::<C::W, crate::algos::support::ln_tang_slot::WideSlots, CAP, INTERNAL_EXTRA>(
         working_value, working_scale, |at_scale| C::ln2::<SCALE>(at_scale))
 }
 
@@ -197,13 +213,27 @@ where
 ///
 /// `ln 2` is supplied by an accessor `ln2(working_scale)` rather than computed
 /// here, so the caller owns the rounding mode (the crate's feature-flagged
-/// default — never a hardcoded one) and any const-fold. The Tang `ln` table is
-/// the already-width-generic [`ln_table_entry_baked`] (a binary,
-/// scale-independent lookup). `tang_ln_fixed::<C>` is the thin tier-bound
-/// wrapper; the wide compositions (`log`/`log2`/`log10`/`powf`/…) call this
-/// directly at their `Wagm` work width.
+/// default — never a hardcoded one) and any const-fold. `tang_ln_fixed::<C>`
+/// is the thin tier-bound wrapper; the wide compositions
+/// (`log`/`log2`/`log10`/`powf`/…) call this directly at their `Wagm` work
+/// width.
+///
+/// `T` names WHICH baked table to read — [`LnTangTable`], a compile-time
+/// selector, not a runtime one. The wide tiers pass `WideSlots` (the full
+/// `B = 7168`-bit slots); the narrow tiers pass `NarrowSlots` (the top-8-limb
+/// prefix of the SAME values, so the reconstruction is bit-identical within
+/// its reach — see `algos::support::ln_tang_slot`). It is a type parameter
+/// rather than a passed-in closure because the table is needed at TWO work
+/// widths in [`ln_tang_g`] (the rung width and the fall-up width), and one
+/// generic trait method serves both where a closure, monomorphic in its
+/// return type, would need two.
 #[inline]
-pub(crate) fn tang_ln_fixed_g<S: BigInt, const CAP: u128, const INTERNAL_EXTRA: bool>(
+pub(crate) fn tang_ln_fixed_g<
+    S: BigInt,
+    T: LnTangTable,
+    const CAP: u128,
+    const INTERNAL_EXTRA: bool,
+>(
     working_value: S,
     working_scale: u32,
     ln2: impl Fn(u32) -> S,
@@ -360,7 +390,7 @@ where
         }
         let ln_mantissa = sum
             + sum
-            + ln_table_entry_baked::<S>(
+            + T::entry::<S>(
                 extended_working_scale, table_index, pow10_at_extended_scale);
 
         // Final: ln(v) = k · ln(2) + ln(m). k·ln2 via the one-word
@@ -439,28 +469,32 @@ where
 #[inline]
 #[must_use]
 pub(crate) fn ln_tang_g<
-    C: WideTrigCore,
+    St: BigInt,
     Wk: BigInt,
+    Wtier: BigInt,
+    T: LnTangTable,
     const SCALE: u32,
     const GUARD: u32,
     const CAP: u128,
     const DIRECTED: bool,
     const INTERNAL_EXTRA: bool,
 >(
-    raw: C::Storage,
+    raw: St,
+    storage_max: St,
+    storage_min: St,
     mode: RoundingMode,
-) -> C::Storage
+) -> St
 where
     <Wk as BigInt>::Scratch: ComputeLimbs,
-    <C::W as BigInt>::Scratch: ComputeLimbs,
+    <Wtier as BigInt>::Scratch: ComputeLimbs,
 {
     use crate::algos::support::wide_trig_core::{
         round_to_storage_directed_widening_g, round_to_storage_with_g, to_work_scaled_g,
     };
     use crate::support::rounding::DEFAULT_ROUNDING_MODE;
 
-    if raw <= C::storage_zero() {
-        panic!("wide-tier ln: argument must be positive");
+    if raw <= St::ZERO {
+        panic!("tier ln: argument must be positive");
     }
     // `ln 2` at the RUNG work integer `Wk`, const-folded at the base working
     // scale `SCALE + GUARD` (the hot path) — the rung sibling of the per-tier
@@ -472,13 +506,14 @@ where
             crate::consts::ln2_by_working_scale::<Wk>(at_scale, DEFAULT_ROUNDING_MODE)
         }
     };
-    // The tier-width `ln 2` for the fall-up recompute (identical closure
-    // shape at `C::W` - the `ln_tang` alias's own).
-    let ln2_tier_width = |at_scale: u32| -> C::W {
+    // The fall-up-width `ln 2` for the widening recompute (identical closure
+    // shape at `Wtier` - the tier's full work integer, or `Wk` again when the
+    // narrow path runs a single width).
+    let ln2_tier_width = |at_scale: u32| -> Wtier {
         if at_scale == SCALE + GUARD {
-            crate::consts::ln2_by_scale::<C::W>(SCALE + GUARD, DEFAULT_ROUNDING_MODE)
+            crate::consts::ln2_by_scale::<Wtier>(SCALE + GUARD, DEFAULT_ROUNDING_MODE)
         } else {
-            crate::consts::ln2_by_working_scale::<C::W>(at_scale, DEFAULT_ROUNDING_MODE)
+            crate::consts::ln2_by_working_scale::<Wtier>(at_scale, DEFAULT_ROUNDING_MODE)
         }
     };
     if DIRECTED {
@@ -499,7 +534,7 @@ where
         // native-width path. `adjust_ln_near_one` (below) is itself value-gated
         // (`rounded == δ`), so the truly-unreachable ε case is handled regardless.
         let use_extra_digits = INTERNAL_EXTRA && {
-            let one = C::storage_one(SCALE);
+            let one = eg::pow10::<St>(SCALE);
             let distance_from_one = if raw >= one { raw - one } else { one - raw };
             // near 1 iff |x − 1| < ~10^(−SCALE/4), tested on the bit-length so
             // the threshold is a compile-time const and the check is O(limbs)
@@ -513,46 +548,46 @@ where
         // realisation, verbatim) - see
         // `wide_trig_core::round_to_storage_directed_widening_g`.
         let rounded = if use_extra_digits {
-            round_to_storage_directed_widening_g::<C::Storage, Wk, C::W>(
-                GUARD, SCALE, mode, C::storage_max(), C::storage_min(),
+            round_to_storage_directed_widening_g::<St, Wk, Wtier>(
+                GUARD, SCALE, mode, storage_max, storage_min,
                 |guard_digits| {
-                    tang_ln_fixed_g::<Wk, CAP, true>(
-                        to_work_scaled_g::<C::Storage, Wk>(raw, guard_digits),
+                    tang_ln_fixed_g::<Wk, T, CAP, true>(
+                        to_work_scaled_g::<St, Wk>(raw, guard_digits),
                         SCALE + guard_digits, ln2,
                     )
                 },
                 |guard_digits| {
-                    tang_ln_fixed_g::<C::W, CAP, true>(
-                        to_work_scaled_g::<C::Storage, C::W>(raw, guard_digits),
+                    tang_ln_fixed_g::<Wtier, T, CAP, true>(
+                        to_work_scaled_g::<St, Wtier>(raw, guard_digits),
                         SCALE + guard_digits, ln2_tier_width,
                     )
                 },
             )
         } else {
-            round_to_storage_directed_widening_g::<C::Storage, Wk, C::W>(
-                GUARD, SCALE, mode, C::storage_max(), C::storage_min(),
+            round_to_storage_directed_widening_g::<St, Wk, Wtier>(
+                GUARD, SCALE, mode, storage_max, storage_min,
                 |guard_digits| {
-                    tang_ln_fixed_g::<Wk, CAP, false>(
-                        to_work_scaled_g::<C::Storage, Wk>(raw, guard_digits),
+                    tang_ln_fixed_g::<Wk, T, CAP, false>(
+                        to_work_scaled_g::<St, Wk>(raw, guard_digits),
                         SCALE + guard_digits, ln2,
                     )
                 },
                 |guard_digits| {
-                    tang_ln_fixed_g::<C::W, CAP, false>(
-                        to_work_scaled_g::<C::Storage, C::W>(raw, guard_digits),
+                    tang_ln_fixed_g::<Wtier, T, CAP, false>(
+                        to_work_scaled_g::<St, Wtier>(raw, guard_digits),
                         SCALE + guard_digits, ln2_tier_width,
                     )
                 },
             )
         };
-        crate::algos::support::wide_trig_core::adjust_ln_near_one::<C, SCALE>(rounded, raw, mode)
+        crate::algos::support::wide_trig_core::adjust_ln_near_one::<St, Wtier, SCALE>(rounded, raw, mode)
     } else {
         let working_scale = SCALE + GUARD;
-        let working_value = tang_ln_fixed_g::<Wk, CAP, INTERNAL_EXTRA>(
-            to_work_scaled_g::<C::Storage, Wk>(raw, GUARD), working_scale, ln2,
+        let working_value = tang_ln_fixed_g::<Wk, T, CAP, INTERNAL_EXTRA>(
+            to_work_scaled_g::<St, Wk>(raw, GUARD), working_scale, ln2,
         );
-        round_to_storage_with_g::<C::Storage, Wk>(
-            working_value, working_scale, SCALE, mode, C::storage_max(), C::storage_min(),
+        round_to_storage_with_g::<St, Wk>(
+            working_value, working_scale, SCALE, mode, storage_max, storage_min,
         )
     }
 }
@@ -561,6 +596,7 @@ where
 /// kernel at the tier's full primitive work width. This thin alias keeps every
 /// existing `policy::ln` call site unchanged; the work-width campaign routes
 /// narrower rungs through [`ln_tang_g`] directly (`policy::ln::tang_with_rung`).
+#[cfg(feature = "_wide-support")]
 #[inline]
 #[must_use]
 pub(crate) fn ln_tang<
@@ -577,7 +613,17 @@ pub(crate) fn ln_tang<
 where
     <C::W as BigInt>::Scratch: ComputeLimbs,
 {
-    ln_tang_g::<C, C::W, SCALE, GUARD, CAP, DIRECTED, INTERNAL_EXTRA>(raw, mode)
+    ln_tang_g::<
+        C::Storage,
+        C::W,
+        C::W,
+        crate::algos::support::ln_tang_slot::WideSlots,
+        SCALE,
+        GUARD,
+        CAP,
+        DIRECTED,
+        INTERNAL_EXTRA,
+    >(raw, C::storage_max(), C::storage_min(), mode)
 }
 
 #[cfg(test)]

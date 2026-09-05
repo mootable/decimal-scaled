@@ -23,10 +23,14 @@ pub(crate) mod ln_series_2limb;
 /// to `select`.
 pub(crate) mod ln_schoolbook;
 
-/// Tier-generic Tang-style table-driven `ln` kernel, generic over
-/// `WideTrigCore`. Collapses the thirteen per-tier Tang ln
-/// kernels (D57 .. D1232) into one. The `policy::ln` Tang arms call it
-/// with the tier's `Core`, `SCALE`, narrow guard, series cap and
-/// narrowing strategy.
-#[cfg(feature = "_wide-support")]
+/// Width-generic Tang-style table-driven `ln` kernel. Collapses what were
+/// thirteen per-tier Tang ln kernels (D57 .. D1232) into one, and — since
+/// the kernel was lifted free of `WideTrigCore` — serves the NARROW tiers
+/// (D18 / D38) from the same body. The `policy::ln` Tang arms call it with
+/// the storage type, the work rung, the guard, the series cap, the
+/// narrowing strategy and which baked table to read.
+///
+/// Always compiled: the narrow tiers exist in every build. Only the two
+/// thin `C: WideTrigCore` convenience wrappers inside are
+/// `_wide-support`-gated.
 pub(crate) mod ln_tang;

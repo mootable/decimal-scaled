@@ -247,11 +247,12 @@ where
     <Wk as BigInt>::Scratch: ComputeLimbs,
 {
     |working_value, working_scale| {
-        crate::algos::ln::ln_tang::tang_ln_fixed_g::<Wk, CAP, false>(
-            working_value,
-            working_scale,
-            ln2_at::<Wk, SCALE>,
-        )
+        crate::algos::ln::ln_tang::tang_ln_fixed_g::<
+            Wk,
+            crate::algos::support::ln_tang_slot::WideSlots,
+            CAP,
+            false,
+        >(working_value, working_scale, ln2_at::<Wk, SCALE>)
     }
 }
 

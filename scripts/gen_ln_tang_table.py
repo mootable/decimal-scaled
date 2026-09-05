@@ -2,9 +2,18 @@
 
 This is a ONE-OFF hand-run generator (a sibling of
 `gen_const_table.py` / `gen_golden_precision.py`). It is NOT run at build
-time: it emits a committed Rust source file
-`src/algos/support/ln_tang_table.rs`, and that output is what the crate
-compiles. `build.rs` is untouched.
+time: it emits TWO committed Rust source files, and that output is what
+the crate compiles. `build.rs` is untouched.
+
+    src/algos/support/ln_tang_table.rs         full B = 7168-bit slots
+    src/algos/support/ln_tang_table_narrow.rs  the top 8 limbs of each
+
+Both come from ONE pass over the oracle: the narrow table is literally the
+high-limb prefix of the wide one (see `NARROW_B_LIMBS` below), so they
+cannot drift apart, and a narrow-only build carries ~8 KB instead of the
+wide table's ~115 KB. Registering only one of them in
+`.github/workflows/generator-drift.yml` would leave the other unguarded —
+both paths are listed there.
 
 ## What it stores
 
@@ -78,6 +87,33 @@ W_MAX_DECIMAL = 2048          # D1232 working-scale cap = Int<256>::BITS / 8
 B_LIMBS = 112                 # 112 · 64 = 7168 bits
 B = B_LIMBS * 64              # = 7168; guard ≈ 7168 − 6803 = 365 bits ≈ 110 dec digits
 
+# ── The NARROW high-prefix table ─────────────────────────────────────────
+#
+# The narrow tiers (D18 / D38) reach `ln` through the same Tang kernel, but
+# the wide table above is `129 · 112 · 8 B ≈ 115 KB` and is
+# `_wide-support`-gated — a narrow-only (`no_std`) build must not carry it.
+# Because slots are stored MS-limb first, the narrow table is simply the
+# TRUNCATION of each wide slot to its top `NARROW_B_LIMBS` limbs, emitted
+# from the SAME oracle values in the same run. That makes "the narrow table
+# is the wide table's prefix" structural rather than a claim to re-verify,
+# and the two reconstruct bit-identically at every working scale the narrow
+# table covers.
+#
+# Sizing — the deepest `w` a narrow call can demand:
+#
+#   narrow work rung        Int<12>   (see `policy::work_rung`; Int<24> is
+#                                      unusable narrow — `resize_to` stages
+#                                      `ceil(N/2)` u128 limbs against
+#                                      `MAX_U128_LIMB = 4·MAX_WORK_N = 8`)
+#   escalation cap          BITS/8 = 12·64/8 = 96 decimal digits
+#   accessor need_bits      96 · 3322/1000 + 64 = 382 bits
+#   limbs required          ceil(382 / 64) = 6
+#
+# `NARROW_B_LIMBS = 8` therefore carries 2 limbs (128 bits ≈ 38 decimal
+# digits) of headroom over the worst narrow cell, at ≈ 8 KB.
+NARROW_B_LIMBS = 8            # 8 · 64 = 512 bits
+NARROW_B = NARROW_B_LIMBS * 64
+
 # ── Oracle precision ──────────────────────────────────────────────────────
 # Set by the shared flint/Arb oracle (`scripts/tang_flint_oracle.py`) well
 # above the B bits retained, so every emitted digit is pinned by a rigorous
@@ -99,7 +135,26 @@ def slot_limbs_msb_first(i: int):
                       B, B_LIMBS, f"ln slot {i}")
 
 
-def main():
+def emit_slot_array(w, name, limbs_per_slot, slots):
+    """Emit one `[[u64; limbs_per_slot]; M + 1]` static, 4 limbs per line.
+
+    `slots` holds the FULL-width MS-first limbs; a narrower table is the
+    leading `limbs_per_slot` of each, i.e. the high-limb prefix.
+    """
+    w(f"pub(crate) static {name}: [[u64; {limbs_per_slot}]; {M + 1}] = [")
+    for i, limbs in enumerate(slots):
+        w(f"    // i = {i}: ln(1 + {i}/{M})")
+        w("    [")
+        for j in range(0, limbs_per_slot, 4):
+            chunk = limbs[j:j + 4]
+            chunk_str = ", ".join(f"0x{l:016x}" for l in chunk)
+            w(f"        {chunk_str},")
+        w("    ],")
+    w("];")
+    w("")
+
+
+def emit_wide(slots):
     out = []
     w = out.append
 
@@ -152,90 +207,135 @@ def main():
     w(f"/// `[u64; {B_LIMBS}]` little-endian magnitude emitted MOST-SIGNIFICANT")
     w("/// limb FIRST (so a narrow tier reads a high-limb prefix). Index by")
     w("/// `i ∈ [0, 128]`.")
-    w(f"pub(crate) static LN_TANG_SLOTS: [[u64; {B_LIMBS}]; {M + 1}] = [")
-    for i in range(M + 1):
-        limbs = slot_limbs_msb_first(i)
-        # one slot per line group; chunk the limbs across lines for
-        # readability (4 limbs per line).
-        w(f"    // i = {i}: ln(1 + {i}/{M})")
-        w("    [")
-        for j in range(0, B_LIMBS, 4):
-            chunk = limbs[j:j + 4]
-            chunk_str = ", ".join(f"0x{l:016x}" for l in chunk)
-            w(f"        {chunk_str},")
-        w("    ],")
-    w("];")
-    w("")
+    emit_slot_array(w, "LN_TANG_SLOTS", B_LIMBS, slots)
 
-    # ── Width-generic accessor ────────────────────────────────────────────
+    # ── The tier accessor — a thin wrapper over the ONE shared body ──────
     w("use crate::int::types::traits::BigInt;")
     w("")
     w("/// `ln(1 + idx/M)` reconstructed at working scale `w` (`idx ∈ [0,")
     w("/// M]`) in the tier's work integer `W` (a value `x` held as `x ·")
     w("/// 10^w`). Replaces the per-call `ln_fixed` Series recompute.")
     w("///")
-    w("/// The slot is stored as `slot = round(L_idx · 2^B)` (B = LN_TANG_B,")
-    w("/// MS-limb first). We SLICE the high-order `p` limbs needed for this")
-    w("/// working scale — `slot_hi = floor(slot / 2^(B − 64·p))`, the binary")
-    w("/// fixed-point of `L_idx` at exponent `bp = 64·p` — then reconstruct")
-    w("///")
-    w("/// ```text")
-    w("/// round(L_idx · 10^w) = round(slot_hi · 10^w / 2^bp)")
-    w("///                     = (slot_hi · 10^w + 2^(bp−1)) >> bp")
-    w("/// ```")
-    w("///")
-    w("/// entirely in `W`: one zero-extend, one multiply, one add, one")
-    w("/// shift. `p` is chosen so `bp` carries the working scale's bits plus")
-    w("/// generous guard, and so the product `slot_hi · 10^w` (≈ bp + w·")
-    w("/// log2(10) bits ≈ 6.6·w bits, with w ≤ W::BITS/8) fits `W`.")
-    w("///")
-    w("/// `idx = 0` short-circuits to `0` (ln 1). The MS-limb-first layout")
-    w("/// makes the slice a contiguous high-limb PREFIX: a narrow tier reads")
-    w("/// fewer limbs, the widest tier reads the whole entry.")
+    w("/// The reconstruction itself lives ONCE, in")
+    w("/// [`crate::algos::support::ln_tang_slot::ln_table_entry_from_slot`],")
+    w("/// shared with the narrow high-prefix table")
+    w("/// ([`crate::algos::support::ln_tang_table_narrow`]) — this wrapper")
+    w("/// only names which slot to read. `idx = 0` short-circuits to `0`")
+    w("/// (`ln 1`); the MS-limb-first layout is what makes the shared body's")
+    w("/// slice a contiguous high-limb PREFIX.")
     w("#[inline]")
     w("pub(crate) fn ln_table_entry_baked<W: BigInt>(w: u32, idx: usize, pow10_w: W) -> W {")
     w("    if idx == 0 {")
     w("        return W::ZERO;")
     w("    }")
-    w("    let slot = &LN_TANG_SLOTS[idx];")
-    w("    // Binary precision needed: w·log2(10) value bits + guard. Use the")
-    w("    // rational 3322/1000 ≈ log2(10) (a slight over-estimate) and a")
-    w("    // 64-bit (one-limb) guard so the converted slot rounds correctly")
-    w("    // yet the conversion product `slot_hi · 10^w` (≈ bp + w·log2(10)")
-    w("    // ≈ 2·w·log2(10) + 64 ≈ 0.83·W::BITS + 64 at the `w = W::BITS/8`")
-    w("    // cap) stays inside `W` even on the narrowest work integer")
-    w("    // (Int<16> = 1024 bits: 0.83·1024 + 64 ≈ 914 < 1024). Round the")
-    w("    // limb count up; assert it fits the stored width.")
-    w("    let need_bits = (w as u64) * 3322 / 1000 + 64;")
-    w("    let p_full = need_bits.div_ceil(64) as usize;")
-    w("    assert!(")
-    w("        p_full <= LN_TANG_LIMBS,")
-    w("        \"ln_tang: working scale {w} out of generated range ({LN_TANG_LIMBS} limbs)\"")
-    w("    );")
-    w("    let p = p_full.max(1);")
-    w("    // Zero-extend the top `p` limbs (MS-first) into W:")
-    w("    //   slot_hi = sum_{k=0..p-1} slot[k] · 2^(64·(p−1−k)).")
-    w("    let mut slot_hi = W::ZERO;")
-    w("    for s in slot.iter().take(p) {")
-    w("        slot_hi = (slot_hi << 64)")
-    w("            | W::from_mag_sign_u128(&[*s as u128], false);")
-    w("    }")
-    w("    let bp = (64 * p) as u32;")
-    w("    // `10^w` in `W` — supplied by the caller from the kernel's baked")
-    w("    // `pow10_table` static (a lookup, not a per-call recompute).")
-    w("    let scaled = slot_hi * pow10_w;")
-    w("    // Round-half-up: add 2^(bp−1), then shift right by bp.")
-    w("    let bias = W::ONE << (bp - 1);")
-    w("    (scaled + bias) >> bp")
+    w("    crate::algos::support::ln_tang_slot::ln_table_entry_from_slot::<W>(")
+    w("        w,")
+    w("        &LN_TANG_SLOTS[idx],")
+    w("        pow10_w,")
+    w("    )")
     w("}")
     w("")
 
-    src = "\n".join(out) + "\n"
-    path = "src/algos/support/ln_tang_table.rs"
-    with open(path, "w", encoding="utf-8", newline="\n") as f:
-        f.write(src)
-    print(f"wrote {path} ({len(src)} chars), B={B} ({B_LIMBS} limbs), "
-          f"arb prec={ORACLE_PREC_BITS} bits, M={M}, {datetime.date.today()}")
+    return "\n".join(out) + "\n"
+
+
+def emit_narrow(slots):
+    """The narrow high-prefix table — the top `NARROW_B_LIMBS` limbs of the
+    SAME slots, so it is the wide table's prefix by construction."""
+    out = []
+    w = out.append
+
+    w("// SPDX-FileCopyrightText: 2026 John Moxley")
+    w("// SPDX-License-Identifier: MIT OR Apache-2.0")
+    w("")
+    w("//! Baked binary Tang `ln(1 + i/M)` lookup table — the NARROW high")
+    w("//! prefix (`M = 128`).")
+    w("//!")
+    w("//! GENERATED by `scripts/gen_ln_tang_table.py` (flint/Arb oracle —")
+    w("//! every digit below is pinned by a rigorous interval bound). Do")
+    w("//! NOT edit by hand; re-run the script and commit its output. This")
+    w("//! file is NOT produced at build time — `build.rs` is untouched.")
+    w("//!")
+    w("//! Any change belongs in `scripts/gen_ln_tang_table.py`, never in")
+    w("//! this file. Re-run the generator and commit both; a hand-edit here")
+    w("//! is silently reverted the next time anyone regenerates.")
+    w("//!")
+    w(f"//! Each of the `M + 1 = {M + 1}` slots is the TRUNCATION of the matching")
+    w(f"//! [`crate::algos::support::ln_tang_table`] slot to its top")
+    w(f"//! `{NARROW_B_LIMBS}` limbs. Both are emitted from the same oracle values in the")
+    w("//! same generator run, so this table **is** the wide table's high-limb")
+    w("//! prefix by construction — not a second data set to keep in step.")
+    w("//! `ln_tang_slot`'s tests assert that identity wherever both compile.")
+    w("//!")
+    w("//! ## Why it exists")
+    w("//!")
+    w(f"//! Binary size, and nothing else. The wide table is `{M + 1} · {B_LIMBS} · 8 B`")
+    w(f"//! ≈ 115 KB and is `_wide-support`-gated, so a narrow (`D18`/`D38`-only,")
+    w(f"//! `no_std`) build must not carry it; this one is ≈ {(M + 1) * NARROW_B_LIMBS * 8 // 1024} KB.")
+    w("//!")
+    w(f"//! `B = {NARROW_B}` bits is sized against the narrow work rung `Int<12>`,")
+    w("//! whose Ziv-escalation cap is `BITS/8 = 96` decimal digits — the")
+    w("//! deepest working scale a narrow call can demand. The accessor needs")
+    w("//! `ceil((96 · 3322/1000 + 64) / 64) = 6` limbs there, so the stored")
+    w(f"//! `{NARROW_B_LIMBS}` carry two limbs (≈ 38 decimal digits) of headroom.")
+    w("")
+    w("/// Number of u64 limbs per stored narrow slot.")
+    w(f"pub(crate) const LN_TANG_NARROW_LIMBS: usize = {NARROW_B_LIMBS};")
+    w("")
+    w("/// Binary fixed-point exponent of a narrow slot — the wide entry's")
+    w(f"/// `round(ln(1+i/M) · 2^{B})` truncated to `2^{NARROW_B}`.")
+    w(f"pub(crate) const LN_TANG_NARROW_B: u32 = {NARROW_B};")
+    w("")
+    w(f"/// The `M + 1` narrow slots, each the top `{NARROW_B_LIMBS}` limbs of the wide")
+    w("/// entry, MOST-SIGNIFICANT limb first. Index by `i ∈ [0, 128]`. The")
+    w("/// `i = 0` slot is `ln(1) = 0`; the `i = 128` slot is `ln 2`.")
+    emit_slot_array(w, "LN_TANG_SLOTS_NARROW", NARROW_B_LIMBS,
+                    [s[:NARROW_B_LIMBS] for s in slots])
+    w("use crate::int::types::traits::BigInt;")
+    w("")
+    w("/// `ln(1 + idx/M)` at working scale `w`, read from the narrow prefix")
+    w("/// table into the work integer `W`.")
+    w("///")
+    w("/// The reconstruction lives ONCE, in")
+    w("/// [`crate::algos::support::ln_tang_slot::ln_table_entry_from_slot`];")
+    w("/// this wrapper only names which slot to read. `idx = 0` is `ln 1 = 0`.")
+    w("///")
+    w("/// # Panics")
+    w("///")
+    w("/// If `w` demands more than [`LN_TANG_NARROW_LIMBS`] limbs of slot —")
+    w("/// the validity wall bounding this table against the narrow rung's")
+    w("/// reach. A silently truncated slot would yield wrong digits.")
+    w("#[inline]")
+    w("pub(crate) fn ln_table_entry_narrow<W: BigInt>(w: u32, idx: usize, pow10_w: W) -> W {")
+    w("    if idx == 0 {")
+    w("        return W::ZERO;")
+    w("    }")
+    w("    crate::algos::support::ln_tang_slot::ln_table_entry_from_slot::<W>(")
+    w("        w,")
+    w("        &LN_TANG_SLOTS_NARROW[idx],")
+    w("        pow10_w,")
+    w("    )")
+    w("}")
+    w("")
+
+    return "\n".join(out) + "\n"
+
+
+def main():
+    # Every slot is computed ONCE at full width; the narrow table is the
+    # high-limb prefix of those same values, so the two cannot drift apart.
+    slots = [slot_limbs_msb_first(i) for i in range(M + 1)]
+
+    for src, path in (
+        (emit_wide(slots), "src/algos/support/ln_tang_table.rs"),
+        (emit_narrow(slots), "src/algos/support/ln_tang_table_narrow.rs"),
+    ):
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(src)
+        print(f"wrote {path} ({len(src)} chars)")
+    print(f"B={B} ({B_LIMBS} limbs), narrow B={NARROW_B} "
+          f"({NARROW_B_LIMBS} limbs), arb prec={ORACLE_PREC_BITS} bits, "
+          f"M={M}, {datetime.date.today()}")
 
 
 if __name__ == "__main__":
