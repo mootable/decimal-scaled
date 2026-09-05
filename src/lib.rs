@@ -496,6 +496,15 @@ pub mod __bench_internals {
             raw, divisor, mode,
         )
     }
+    /// The `Int<N>` -> `i64` saturating narrow both `to_int` kernels
+    /// finish with. Exposed so `to_int_surface`'s verbatim transcription
+    /// of the 0.5.x inline rounding can finish the same way the kernels
+    /// do — the narrow moved unchanged, so sharing it keeps the
+    /// comparison about the ROUNDING, which is the part that changed.
+    #[inline(never)]
+    pub fn to_int_narrow_saturating<const N: usize>(value: crate::int::types::Int<N>) -> i64 {
+        crate::algos::to_int::narrow_saturating::narrow_saturating_i64::<N>(value)
+    }
     /// The rescale-routed `to_int` candidate. `SCALE` cannot be inferred
     /// from the operand, so the caller names it alongside the limb count.
     #[inline(never)]
