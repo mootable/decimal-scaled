@@ -2086,6 +2086,39 @@ pub mod __bench_internals {
         crate::int::types::Int::<N>::from_mag_limbs(magnitude, false)
     }
 
+    /// The narrow tiers' kept Series `ln` (`ln_series_2limb`, the `_`-arm
+    /// path; D18 widens to `Int<2>`). `ln` never leaves storage range, so the
+    /// narrow `Option` contract is unwrapped at the bench seam.
+    #[inline(never)]
+    pub fn ln_series_narrow<const SCALE: u32>(raw: crate::int::types::Int<2>, mode: crate::RoundingMode) -> crate::int::types::Int<2> {
+        crate::algos::ln::ln_series_2limb::ln::<SCALE>(raw, mode).expect("ln is always in storage range")
+    }
+
+    /// The narrow tiers' routed Tang `ln`: the width-generic `ln_tang_g` with
+    /// its storage arithmetic in `Int<4>` (the `checked_` contract's widening —
+    /// see `policy::ln::tang_narrow`) at the fixed `Int<12>` work width (rung
+    /// and fall-up alike), directed, no internal extra — `tang_narrow`'s
+    /// realisation with `G` and `CAP` open at the bench seam (the routed pair
+    /// is `8, 100`). Bench operands are in range, so the plain narrowing back
+    /// to `Int<2>` is exact.
+    #[inline(never)]
+    pub fn ln_tang_narrow_p<const SCALE: u32, const G: u32, const CAP: u128>(raw: crate::int::types::Int<2>, mode: crate::RoundingMode) -> crate::int::types::Int<2> {
+        use crate::int::types::traits::BigInt;
+        if let Some(linear) = crate::algos::ln::ln_tang::ln_linear_band_exit::<crate::int::types::Int<2>, SCALE>(raw, mode) {
+            return linear;
+        }
+        let raw4 = BigInt::resize_to::<crate::int::types::Int<4>>(raw);
+        let wide = crate::algos::ln::ln_tang::ln_pow2_exit::<crate::int::types::Int<4>, crate::int::types::Int<12>, SCALE, G>(
+            raw4, crate::int::types::Int::<4>::MAX, crate::int::types::Int::<4>::MIN, mode,
+        )
+        .unwrap_or_else(|| {
+            crate::algos::ln::ln_tang::ln_tang_g::<crate::int::types::Int<4>, crate::int::types::Int<12>, crate::int::types::Int<12>, SCALE, G, CAP, true, false>(
+                raw4, crate::int::types::Int::<4>::MAX, crate::int::types::Int::<4>::MIN, mode,
+            )
+        });
+        BigInt::resize_to::<crate::int::types::Int<2>>(wide)
+    }
+
     #[inline(never)]
     pub fn mul_u64_into<const L: usize, const LP1: usize>(
         value: &[u64; L],

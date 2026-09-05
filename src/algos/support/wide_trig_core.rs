@@ -2026,19 +2026,19 @@ where
 /// [`adjust_log_near_zero`], which carries the full analysis. `ln`'s linear
 /// term is `δ = raw − 10^SCALE`, so the adjust reads the gap against `one`.
 #[inline]
-pub(crate) fn adjust_ln_near_one<C: WideTrigCore, const SCALE: u32>(
-    rounded: C::Storage,
-    raw: C::Storage,
+pub(crate) fn adjust_ln_near_one<St: BigInt + Copy, Wt: BigInt, const SCALE: u32>(
+    rounded: St,
+    raw: St,
     mode: RoundingMode,
-) -> C::Storage
+) -> St
 where
-    <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+    <Wt as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
     if crate::support::rounding::is_nearest_mode(mode) {
         return rounded;
     }
-    let one = C::storage_one(SCALE);
-    adjust_log_near_zero::<C::Storage, C::W>(rounded, raw - one, one, mode)
+    let one = crate::algos::exp::exp_generic::pow10::<St>(SCALE);
+    adjust_log_near_zero::<St, Wt>(rounded, raw - one, one, mode)
 }
 
 /// `tan` for a wide tier — generic over the tier `C`. Panics at

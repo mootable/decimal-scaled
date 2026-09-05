@@ -51,9 +51,10 @@ pub(crate) mod wide_trig_core;
 // `unique_fmpz`, which yields a value ONLY when the enclosing interval
 // determines every retained bit — committed, NOT built at build time
 // (`build.rs` untouched).
-// Gated to `_wide-support`: only the wide tiers (D57..D1232) carry the
-// Tang `ln` path; the narrow tiers (D18/D38) never reach it.
-#[cfg(feature = "_wide-support")]
+// Always compiled: the narrow tiers (D18/D38) now carry the Tang `ln`
+// path too. `LN_TANG_SLOTS` / `LN_TANG_LIMBS` are cfg-selected — the full
+// 112-limb table under `_wide-support` (narrow tiers read a free prefix),
+// an 8-limb prefix on a narrow-only build.
 pub(crate) mod ln_tang_table;
 
 // Baked binary Tang `(sin(c_j), cos(c_j))` lookup table (`M = 512`) + the
