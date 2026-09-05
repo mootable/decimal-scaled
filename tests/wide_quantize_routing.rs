@@ -39,11 +39,18 @@
 //! agrees trivially and proves nothing, so each test asserts that the
 //! rounding actually ran:
 //!
-//! - the dense case asserts `Trunc` and `AwayFromZero` disagree, which
-//!   holds exactly when the discarded digits are non-zero;
-//! - the tie case asserts `HalfTowardZero` and `HalfAwayFromZero` disagree,
-//!   which holds exactly when the remainder is the half — i.e. that the tie
-//!   the test was built to create really is one.
+//! - the dense case asserts `Trunc` and `AwayFromZero` disagree;
+//! - the tie case asserts `HalfTowardZero` and `HalfAwayFromZero` disagree.
+//!
+//! Neither is a heuristic. Both are exact biconditionals, provable from the
+//! mode definitions rather than observed to work, so neither can pass on an
+//! input that fails to exercise what it names. `Trunc` keeps the truncated
+//! quotient and `AwayFromZero` steps one away from zero on any non-zero
+//! discard, so the two differ **if and only if** the discarded digits are
+//! non-zero. `HalfTowardZero` and `HalfAwayFromZero` both bump above the
+//! half and both decline below it, and split only at the half itself — so
+//! they differ **if and only if** the remainder is exactly the half, which
+//! is the tie the test set out to construct.
 //!
 //! Both inputs are built near the storage maximum on purpose: the matcher
 //! keys on the significant limb length after leading-zero trimming, so a
