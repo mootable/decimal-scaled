@@ -113,11 +113,6 @@ on:
         type: choice
         options: ["cell", "width", "all"]
         default: "cell"
-      op_shards:
-        description: "How many jobs each (width, scale) cell splits into along the OP axis. 3 (default) = 3x the fan-out, each job running a third of the rows. An op's whole operand FAMILY always stays in ONE job, so the overlaid per-op chart stays same-machine. 1 = one job per cell, the pre-shard shape."
-        required: false
-        type: string
-        default: "3"
       micro_bench:
         description: "MICRO MODE. A [[bench]] name from benches/micro/ (e.g. ln_wide_series_tang_ab). Set this and the surface sweep is skipped entirely — this runs that one N-way comparison instead. Leave empty for the normal prod-vs-branch run."
         required: false
@@ -194,8 +189,6 @@ jobs:
       group: ${{ steps.plan.outputs.group }}
       bench_timeout: ${{ steps.plan.outputs.bench_timeout }}
       is_default: ${{ steps.plan.outputs.is_default }}
-      op_shards: ${{ steps.plan.outputs.op_shards }}
-      op_shard_map: ${{ steps.plan.outputs.op_shard_map }}
     steps:
       - name: Checkout (${{ inputs.ref || github.ref_name }})
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -213,7 +206,6 @@ jobs:
           BBC_FEATURES: ${{ inputs.features }}
           BBC_WIDTHS: ${{ inputs.widths }}
           BBC_GROUP: ${{ inputs.group }}
-          BBC_OP_SHARDS: ${{ inputs.op_shards }}
           PYTHONIOENCODING: utf-8
         run: |
           set -euo pipefail
@@ -221,7 +213,6 @@ jobs:
             --features "${BBC_FEATURES:-}" \
             --widths "${BBC_WIDTHS:-all}" \
             --group "${BBC_GROUP:-cell}" \
-            --op-shards "${BBC_OP_SHARDS:-3}" \
             --summary plan_summary.md
           cat plan_summary.md >> "$GITHUB_STEP_SUMMARY"
 
@@ -425,12 +416,6 @@ jobs:
           # is the same thing as running the exe with no name-filter at all.
           BBC_ENTRY_WIDTHS: ${{ matrix.widths }}
           BBC_ENTRY_SCALES: ${{ matrix.scales }}
-          # Criterion name-filter selecting this job's OP SHARD, from
-          # `plan`. Empty when the run is not op-sharded (`op_shards: 1`),
-          # which is the pre-shard behaviour exactly. The filter pins the
-          # scale too, so a sharded job is ONE invocation per width rather
-          # than one per scale.
-          BBC_ENTRY_OPS: ${{ matrix.ops }}
         run: |
           set -euo pipefail
           # Everything this job runs happens HERE, in one shell on one runner —
@@ -444,17 +429,7 @@ jobs:
             EXE=$(grep -v '\.d$' /tmp/bbc_exes.txt | head -1)
             if [ -z "$EXE" ]; then echo "no exe for compare_${WIDTH_LC}"; exit 1; fi
             chmod +x "$EXE"
-            if [ -n "${BBC_ENTRY_OPS:-}" ]; then
-              # OP-SHARDED. The filter from `plan` pins both the op group
-              # and the scale, so one invocation covers this job's whole
-              # slice. It is a REGEX anchored at `^` on the row name with
-              # an OPTIONAL `(@variant)?` group — which is what keeps an
-              # op's whole operand FAMILY inside this one job, hence on
-              # one machine, so the overlaid per-op chart compares its
-              # family lines fairly. Do not narrow that group.
-              echo "running: $EXE --bench <op-shard> for $W"
-              "$EXE" --bench "$BBC_ENTRY_OPS" --
-            elif [ "$BBC_ENTRY_SCALES" = "all" ]; then
+            if [ "$BBC_ENTRY_SCALES" = "all" ]; then
               # No filter: criterion runs every group in this width's target,
               # i.e. the tier's whole scale set, back to back on this machine.
               echo "running: $EXE --bench   (all scales for $W)"
