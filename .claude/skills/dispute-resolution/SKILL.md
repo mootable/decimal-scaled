@@ -29,20 +29,28 @@ the method behind it, and to answer their challenge on the evidence — includin
 them. Without that you have overruled, not resolved. The cost is not just the one bad call: a
 party who cannot contest a verdict stops surfacing what they know.
 
-**5. Aim for agreement.** Escalation is not the endpoint. Argue it through until the evidence
+**5. A finding you believe is wrong is DISPUTED — not complied with, not ignored.** Opening a
+dispute is the only correct response: under these rules, with your method attached. Complying
+with a finding you think is wrong writes a defect in and buries the disagreement; ignoring it
+leaves the finding standing against work that contradicts it. Both look like consensus from
+outside, and neither is. **A refuted finding is retired in writing** — struck from whatever
+record carries it, with the reason — or it is quoted back at the same work later by someone who
+never saw it fall.
+
+**6. Aim for agreement.** Escalation is not the endpoint. Argue it through until the evidence
 persuades one side. Most disputes about what code does or what a number means ARE resolvable by
 looking harder. **Being persuaded is the goal, not a concession** — say so plainly when it
 happens.
 
-**6. Hunt the hole, in either account.** Never restate your position more firmly. Look for what
+**7. Hunt the hole, in either account.** Never restate your position more firmly. Look for what
 is missing or unsound in *either* side and narrow the space of explanations — test hypotheses
 about the disagreement itself, not just its subject. **Beware the near-miss:** narrowing
 generates coincidences, and a near-miss reads like a match when you want the question closed.
 State the arithmetic, not the impression.
 
-**7. Record the outcome.** Every dispute leaves a written record, resolved or not.
+**8. Record the outcome.** Every dispute leaves a written record, resolved or not.
 
-**8. The human resolves genuine deadlocks** — or, with their agreement, a tie-breaker does.
+**9. The human resolves genuine deadlocks** — or, with their agreement, a tie-breaker does.
 When both sides have argued properly and still disagree, or the question is a judgement call:
 scope, priorities, what ships. Backstop, not route.
 
@@ -90,6 +98,23 @@ what grounds* — an adjudication with no reasoning is a fact with no method.
 **Put it in a decision log** — one file per dispute, default
 `decisions/<iso-datetime>_<argument>.md`, named for what was argued. Follow the repository's own
 convention for decision records where it has one.
+
+## When the other side has gone
+
+Most findings are made by a party that has since finished. So a refutation usually arrives with
+nobody on the other side, and the rules above — argue it through, be persuaded, both concede —
+have only one participant. The finding still gets a defence; it just has to come from the finding
+itself.
+
+**First recourse: the finding is defended by the METHOD it stated.** The challenger must defeat
+that method — show it could not have observed what it claims, that its field was mis-selected,
+that its arithmetic is wrong — not merely reach a different conclusion. A competing conclusion
+backed by a competing method is a tie, and a tie leaves the finding standing.
+
+**It goes to a fresh party in two cases:** the refutation would undo work that was previously
+MEASURED, or the finding stated no method at all — nothing for the challenger to defeat, and
+nothing that can defend itself. Then use the tie-breaker below, on its own terms (it needs the
+human's agreement, per-instance or standing).
 
 ## The tie-breaker
 

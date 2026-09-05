@@ -137,6 +137,17 @@ step CONFIRMS that base; it must never mutate git:
 > no_std build paths compile. Paste the check results before reporting. **Do NOT run the full
 > `cargo test`** — that's the coordinator's gate (#3). (Docs/scripts-only changes: confirm no
 > `.rs` changed.)
+>
+> **Report WHICH configs you ran AND how you proved each one could go RED.** This is a PER-TASK
+> control, and a per-task control is proved per task: which configs you run, and what each one
+> actually compiles, change with the change — so the control is genuinely new every time. (A
+> STANDING gate is the opposite: proved ONCE, recorded, then cited — never re-proved.)
+> Per configuration, say what makes it capable of failing on this change — the feature that pulls
+> your file into the build, the `cfg` arm your code sits under. Naming a config is not the same
+> as that config exercising the change: a `--no-default-features` green over code that is
+> feature-gated OUT of that build compiles nothing you wrote and passes either way. If a
+> configuration cannot reach your change, report THAT — it is a real result — rather than listing
+> it as a pass.
 
 ### 5. Push YOUR OWN branch and gate it yourself — the coordinator merges
 > Commit on your worktree branch and **push that branch**. **NEVER push `main`,
