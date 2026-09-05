@@ -262,16 +262,17 @@ macro_rules! funcs {
         // `11` sits 0.0044 from `7π/2`, giving `tan(11) ≈ -226` — the same
         // branch, harder.
         let tp: $ty = $crate::op_str!($scale, "1.47", "11").parse().unwrap();
-        // `asin@hard` / `acos@hard` / `atanh@hard` — just inside the domain
-        // wall. `inverse_schoolbook` switches at `|x| = 1/2`: below it goes
-        // straight to `atan_fixed(x/√(1-x²))`, above it takes the half-angle
-        // identity with THREE extra wide sqrts. `0.99` is above, the base
-        // rows' `0.1` below. `atanh(0.99) ≈ 2.647 < 10` bounds the choice.
-        // SCALE 0 is IRREDUCIBLE here, exactly as it is for the base rows:
-        // `asin`/`acos` are capped at `|v| <= 1` and `atanh` needs `|v| < 1`
-        // STRICTLY, so the only integer available is 0 and the s0 cell of
-        // these three rows repeats the base row's. That is forced by the
-        // domains, not chosen.
+        // `atanh@hard` — just inside the domain wall, where the gap `1 - |x|`
+        // is small and the composition is at its most conditioned.
+        // `atanh(0.99) ≈ 2.647 < 10` bounds the choice. MEASURED (run
+        // 33938890210): 2.91x at D18 and 2.94x at D38, and 1.01-1.03x at every
+        // wider tier — so this row earns its place at the NARROW tiers and is
+        // flat above them. (The same operand was tried for `asin`/`acos` and
+        // was flat everywhere; see the note at those rows.)
+        // SCALE 0 is IRREDUCIBLE here, exactly as it is for the base row:
+        // `atanh` needs `|v| < 1` STRICTLY, so the only integer available is 0
+        // and this row's s0 cell repeats the base row's. Forced by the domain,
+        // not chosen — and the measurement above confirms it (1.00x at s0).
         let n1: $ty = $crate::op_str!($scale, "0.99", "0").parse().unwrap();
         // `atan@hard` — `atan_fixed` folds `|x| > 1` through `π/2 - atan(1/x)`
         // and THEN halves via `atan(x) = 2·atan(x/(1+√(1+x²)))` while the
@@ -448,14 +449,18 @@ macro_rules! funcs {
         $crate::bench_one!($c, "asin", $w, $scale, $side, |bn| bn.iter(|| black_box(s).asin()));
         $crate::bench_one!($c, "acos", $w, $scale, $side, |bn| bn.iter(|| black_box(s).acos()));
         $crate::bench_one!($c, "atan", $w, $scale, $side, |bn| bn.iter(|| black_box(sw).atan()));
-        // FAMILY: `n1` crosses the `|x| = 1/2` switch into the half-angle
-        // identity (three extra wide sqrts); the base rows sit below it.
-        $crate::bench_one!($c, "asin@hard", $w, $scale, $side, |bn| {
-            bn.iter(|| black_box(n1).asin())
-        });
-        $crate::bench_one!($c, "acos@hard", $w, $scale, $side, |bn| {
-            bn.iter(|| black_box(n1).acos())
-        });
+        // NO FAMILY for `asin` / `acos` — MEASURED, not assumed. Both were
+        // benched with an `@hard` row at `n1 = 0.99`, which crosses the
+        // `|x| = 1/2` switch in `inverse_schoolbook` into the half-angle
+        // identity while the base rows' `0.1` takes the direct path. Run
+        // 33938890210 (the full default sweep) put the ratio at 1.01x median,
+        // 0.96-1.07x overall, and 0.98-1.04x at EVERY ONE of the twelve widths
+        // and all five scale positions. The branch is real but it is not a COST
+        // boundary: both arms are dominated by the shared inner `atan_fixed`,
+        // and the half-angle arm's three extra wide sqrts are cheap beside it.
+        // Two rows measuring the base row's number are worse than no rows, so
+        // they were removed. Do not re-add them without a different operand AND
+        // a reason to expect a different answer.
         // FAMILY: `atb` pays BOTH the `|x| > 1` reciprocal fold and the
         // argument halvings; the base row's small argument pays neither.
         $crate::bench_one!($c, "atan@hard", $w, $scale, $side, |bn| {
