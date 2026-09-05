@@ -317,6 +317,59 @@ jobs:
           echo "both sides (tiers): [$BRANCH_FEATS]"
           echo "prod as written:    [$PROD_FEATS]"
 
+      # ------------------------------------------------------------
+      # The compiled dependency tree. Every bbc run recompiles both sides from
+      # scratch today; the registry cache above saves only the DOWNLOAD.
+      #
+      # WHY THE KEY IS BUILT HERE AND NOT WITH THE OTHER CACHE: the prod
+      # baseline is resolved at RUN TIME from crates.io, not read from a file,
+      # so a key computed before the pin step above could not see it. A cache
+      # serving artefacts built against a different baseline would not crash --
+      # it would quietly measure the wrong thing, in the flattering direction,
+      # and every number the campaign has produced would be suspect with
+      # nothing looking wrong. So the key binds the LOCKFILE (which pins prod's
+      # exact version and every transitive dep), the resolved prod version by
+      # name, BOTH rewritten dep lines (hence the tier features and the
+      # `strict` asymmetry), the planned bench targets, and the toolchain.
+      #
+      # There are deliberately NO `restore-keys`. A prefix match would restore a
+      # tree built against different inputs; cargo's fingerprinting would
+      # rebuild what it must, but "cargo would probably notice" is not a
+      # standard to hold a measurement to. An exact miss costs precisely what
+      # today costs -- a cold build -- so the failure mode is slow, never wrong.
+      #
+      # The BRANCH side recompiles every run regardless: it is a `path`
+      # dependency and `actions/checkout` stamps fresh mtimes, so cargo treats
+      # it as dirty. That is a property worth having, not a shortfall -- the
+      # side under test is never served from cache. The saving is the
+      # dependency tree (prod, criterion, plotters, clap, regex, serde, ...).
+      - name: Resolve the target-cache key
+        working-directory: bench-compare
+        env:
+          FEATURES_CSV: ${{ needs.plan.outputs.features_csv }}
+          BENCH_ARGS: ${{ needs.plan.outputs.bench_args }}
+        run: |
+          set -euo pipefail
+          # Resolves the dependency graph against the JUST-PINNED manifest
+          # without compiling anything, so the lockfile can key the cache.
+          cargo generate-lockfile
+          {
+            rustc -V
+            cargo -V
+            echo "prod=${PROD_VERSION}"
+            echo "features=${FEATURES_CSV}"
+            echo "benches=${BENCH_ARGS}"
+            grep -E '^(decimal-scaled|prod) = ' Cargo.toml
+          } > .bbc_target_key
+          echo "--- cache key material ---"
+          cat .bbc_target_key
+
+      - name: Cache the compiled dependency tree
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: bench-compare/target
+          key: bbc-target-${{ runner.os }}-${{ hashFiles('bench-compare/Cargo.lock', 'bench-compare/.bbc_target_key') }}
+
       - name: Compile the planned width bench exes (no run)
         working-directory: bench-compare
         env:
@@ -352,6 +405,25 @@ jobs:
           cp Cargo.lock staged/Cargo.lock
           echo "PROD_VERSION=${PROD_VERSION}" > staged/prod_version.env
           echo "--- staged ---"; ls -1 staged/deps/
+
+      - name: Fingerprint the exes, then trim the cached tree
+        working-directory: bench-compare
+        run: |
+          set -euo pipefail
+          # A cold and a warm run are compared on THIS, not on the clock.
+          # 'the warm run was faster' is not evidence the cache is sound;
+          # 'the warm run emitted the same executables' is. Shipped in the
+          # artifact so the comparison needs no rerun to make.
+          ( cd staged/deps && sha256sum compare_d* ) | tee staged/exe_sha256.txt
+          before=$(du -sm target 2>/dev/null | cut -f1 || echo 0)
+          # The bench exes are already staged, and are relinked every run
+          # anyway because the branch path-dep is always dirty, so they are
+          # pure bulk in the cache. Depfiles and any incremental tree too.
+          rm -f target/release/deps/compare_d*-* 2>/dev/null || true
+          find target -name '*.d' -delete 2>/dev/null || true
+          rm -rf target/release/incremental target/debug 2>/dev/null || true
+          after=$(du -sm target 2>/dev/null | cut -f1 || echo 0)
+          echo "cached tree trimmed: ${before} MB -> ${after} MB"
 
       - name: Upload compiled bench exes
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
