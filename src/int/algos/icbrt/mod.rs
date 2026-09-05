@@ -9,10 +9,13 @@
 //! - [`icbrt_schoolbook`](icbrt_schoolbook::icbrt_schoolbook) -- bit-by-bit
 //!   restoring cube root; pure integer, no division, no float seed.
 //! - [`icbrt_newton_recip`](icbrt_newton_recip::icbrt_newton_recip) --
-//!   **candidate, UNWIRED**: division-free reciprocal-root Newton cube root
-//!   (multiplies only in the hot loop, exact integer end-correction). Written
-//!   to remove the per-iteration `n/s²` multi-precision divide the shipped
-//!   Newton kernel pays; benched + wired where it wins.
+//!   **candidate, registered but UNROUTED**
+//!   (`crate::int::policy::icbrt::Algorithm::NewtonRecip`): division-free
+//!   reciprocal-root Newton cube root (multiplies only in the hot loop,
+//!   exact integer end-correction). Written to remove the per-iteration
+//!   `n/s²` multi-precision divide the shipped Newton kernel pays; `select`
+//!   never returns it until a benchmark pass compares and (if it wins)
+//!   routes it.
 
 pub(crate) mod icbrt_newton;
 pub(crate) mod icbrt_newton_recip;

@@ -14,10 +14,20 @@
 //! 4. dispatch via an inline `const { select::<N>() }` block, then an
 //!    **exhaustive** `match algo` — no `_`, no panic.
 //!
-//! Because `select` is `const` and keyed only on the const generic `N`,
-//! the `const { … }` block folds per monomorphisation and the unchosen arm
-//! is dead-arm-eliminated in release: each concrete `Uint<N>` compiles to a
-//! direct call to the chosen kernel, no runtime branch.
+//! Because `select` is `const` and keyed only on the const generic `N`, the
+//! `const { … }` block folds per monomorphisation, and the FINAL compiled
+//! code carries no runtime branch: LLVM discards every arm the constant
+//! discriminant doesn't select, so each concrete `Uint<N>` still compiles to
+//! a direct call to the chosen kernel. What does NOT fold away is the
+//! compile-time mono-item cost: `match algo` switches on an enum
+//! discriminant, which rustc's mono collector cannot prune the way it prunes
+//! a `match N` on the const generic itself — every arm's kernel is
+//! instantiated (MIR generated, `required_consts` evaluated) for every `N`
+//! this policy is monomorphised at, in debug AND release
+//! ([[reference_mono_collector_prunes_int_switch_not_enum]]). Each extra
+//! unrouted arm is a bounded, accepted cost here — the same one
+//! [`Algorithm::Schoolbook`] has already paid since before
+//! [`Algorithm::NewtonRecip`] existed — not a runtime regression.
 //!
 //! # Algorithm selection
 //!
@@ -33,8 +43,11 @@
 //!
 //! [`Algorithm::Schoolbook`] is the registered-but-unselected reference
 //! baseline (kept per `docs/ARCHITECTURE.md` → "Keeping the alternatives").
-//! The `ByValue` arm of [`Select`] is present for canonical-shape
-//! uniformity; `select` never returns it.
+//! [`Algorithm::NewtonRecip`] is a second registered-but-unrouted candidate
+//! — a division-free reciprocal-root Newton kernel, bit-identical to the
+//! shipped [`Algorithm::Newton`] — kept the same way until a benchmark pass
+//! decides whether it wins. The `ByValue` arm of [`Select`] is present for
+//! canonical-shape uniformity; `select` never returns it either.
 //!
 //! # Const-ness
 //!
@@ -46,6 +59,7 @@
 //! `Schoolbook`.
 
 use crate::int::algos::icbrt::icbrt_newton::icbrt_newton as icbrt_newton_kernel;
+use crate::int::algos::icbrt::icbrt_newton_recip::icbrt_newton_recip as icbrt_newton_recip_kernel;
 use crate::int::algos::icbrt::icbrt_schoolbook::icbrt_schoolbook as icbrt_schoolbook_kernel;
 use crate::int::types::Uint;
 
@@ -66,6 +80,15 @@ enum Algorithm {
     /// registered-but-unselected reference baseline.
     #[allow(dead_code)]
     Schoolbook,
+    /// [`icbrt_newton_recip`] — division-free reciprocal-root Newton
+    /// iteration (multiplies only in the hot loop, exact integer
+    /// end-correction); bit-identical to [`icbrt_newton`] for every input.
+    /// Registered but **unrouted**: `select` never returns it. Kept per
+    /// `docs/ARCHITECTURE.md` → "Keeping the alternatives" until a
+    /// benchmark pass compares it against the shipped divide-per-iteration
+    /// Newton kernel and, if it wins, wires it.
+    #[allow(dead_code)]
+    NewtonRecip,
 }
 
 // ── 2. the verdict ────────────────────────────────────────────────────
@@ -121,6 +144,20 @@ pub(crate) fn icbrt_schoolbook_policy<const N: usize>(radicand: Uint<N>) -> Uint
     Uint::<N>::from_limbs(out)
 }
 
+/// Division-free reciprocal-Newton integer cube root for `Uint<N>` —
+/// registered but unrouted (`select` never returns [`Algorithm::NewtonRecip`]).
+///
+/// Delegates to [`icbrt_newton_recip_kernel`]: the multiply-only
+/// reciprocal-root Newton iteration plus exact integer end-correction; see
+/// [`crate::int::algos::icbrt::icbrt_newton_recip`] for the algorithm.
+#[allow(dead_code)]
+#[inline]
+pub(crate) fn icbrt_newton_recip_policy<const N: usize>(radicand: Uint<N>) -> Uint<N> {
+    let mut out = [0u64; N];
+    icbrt_newton_recip_kernel(radicand.as_limbs(), &mut out);
+    Uint::<N>::from_limbs(out)
+}
+
 // ── 4. the dispatcher: fold the verdict, then dispatch ────────────────
 
 /// Integer cube-root dispatcher for `Uint<N>`.
@@ -141,5 +178,6 @@ pub(crate) fn dispatch<const N: usize>(radicand: Uint<N>) -> Uint<N> {
     match algo {
         Algorithm::Newton => icbrt_newton::<N>(radicand),
         Algorithm::Schoolbook => icbrt_schoolbook_policy::<N>(radicand),
+        Algorithm::NewtonRecip => icbrt_newton_recip_policy::<N>(radicand),
     }
 }
