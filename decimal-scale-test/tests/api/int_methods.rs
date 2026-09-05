@@ -390,6 +390,107 @@ mod from_macros_int_and_conversions {
         let _ = D38::<2>::try_from(5).unwrap().to_int();
     }
 
+    /// `AwayFromZero` had NO `to_int_with` coverage before 0.5.1 — the
+    /// suite tested `HalfAwayFromZero` and nothing reached this arm. Any
+    /// non-zero remainder lifts the magnitude; an exact value is left
+    /// alone.
+    #[test]
+    fn to_int_away_from_zero_all_branches() {
+        let bits = |raw: i64| D38::<2>::from_bits(decimal_scaled::Int::<2>::from(raw));
+        // Non-zero remainder, both signs: always one step away from zero,
+        // however small the residue.
+        assert_eq!(bits(101).to_int_with(RoundingMode::AwayFromZero), 2);
+        assert_eq!(bits(199).to_int_with(RoundingMode::AwayFromZero), 2);
+        assert_eq!(bits(-101).to_int_with(RoundingMode::AwayFromZero), -2);
+        assert_eq!(bits(-199).to_int_with(RoundingMode::AwayFromZero), -2);
+        // A residue of one LSB still lifts, from a zero quotient too.
+        assert_eq!(bits(1).to_int_with(RoundingMode::AwayFromZero), 1);
+        assert_eq!(bits(-1).to_int_with(RoundingMode::AwayFromZero), -1);
+        // Exact values take the early return and are NOT lifted.
+        assert_eq!(bits(200).to_int_with(RoundingMode::AwayFromZero), 2);
+        assert_eq!(bits(-200).to_int_with(RoundingMode::AwayFromZero), -2);
+        assert_eq!(bits(0).to_int_with(RoundingMode::AwayFromZero), 0);
+    }
+
+    /// `ZeroFiveUp` had NO `to_int_with` coverage before 0.5.1. It pivots
+    /// on the last decimal digit of the TRUNCATED quotient's magnitude:
+    /// bump when that digit is 0 or 5, and only when the remainder is
+    /// non-zero.
+    #[test]
+    fn to_int_zero_five_up_all_branches() {
+        let bits = |raw: i64| D38::<2>::from_bits(decimal_scaled::Int::<2>::from(raw));
+        // digit 0 (quotient 0) with a residue → bump, both signs.
+        assert_eq!(bits(1).to_int_with(RoundingMode::ZeroFiveUp), 1);
+        assert_eq!(bits(-1).to_int_with(RoundingMode::ZeroFiveUp), -1);
+        // digit 5 → bump, both signs.
+        assert_eq!(bits(501).to_int_with(RoundingMode::ZeroFiveUp), 6);
+        assert_eq!(bits(-501).to_int_with(RoundingMode::ZeroFiveUp), -6);
+        // digit 0 at a two-digit quotient → bump (the digit, not the
+        // whole quotient, is the pivot).
+        assert_eq!(bits(1001).to_int_with(RoundingMode::ZeroFiveUp), 11);
+        // any other digit → no bump, however large the residue.
+        assert_eq!(bits(101).to_int_with(RoundingMode::ZeroFiveUp), 1);
+        assert_eq!(bits(199).to_int_with(RoundingMode::ZeroFiveUp), 1);
+        assert_eq!(bits(-199).to_int_with(RoundingMode::ZeroFiveUp), -1);
+        assert_eq!(bits(601).to_int_with(RoundingMode::ZeroFiveUp), 6);
+        // Exact values are left alone even when the digit is 0 or 5.
+        assert_eq!(bits(500).to_int_with(RoundingMode::ZeroFiveUp), 5);
+        assert_eq!(bits(0).to_int_with(RoundingMode::ZeroFiveUp), 0);
+    }
+
+    /// `to_int_with` and `quantize_with::<0>` round the same rational by
+    /// the same rule through DIFFERENT kernels — `to_int` divides the
+    /// storage integer twice with the typed operators, `quantize` makes
+    /// one pass through the `/10^scale` matcher. They must agree at every
+    /// mode and every sign.
+    ///
+    /// This is the differential gate on the 0.5.1 change that replaced
+    /// `to_int_with`'s own eight-mode match with the shared `should_bump`
+    /// decider: the two paths reach that decider by different routes, so
+    /// agreement across all eight modes is evidence the substitution is
+    /// faithful and not merely self-consistent.
+    ///
+    /// The trailing `.to_int()` on the quantized value is a pure narrow —
+    /// at `SCALE` 0 the remainder is always zero, so it takes the early
+    /// return and rounds nothing.
+    #[test]
+    fn to_int_agrees_with_quantize_to_scale_zero() {
+        const MODES: [RoundingMode; 8] = [
+            RoundingMode::HalfToEven,
+            RoundingMode::HalfAwayFromZero,
+            RoundingMode::HalfTowardZero,
+            RoundingMode::Trunc,
+            RoundingMode::Floor,
+            RoundingMode::Ceiling,
+            RoundingMode::AwayFromZero,
+            RoundingMode::ZeroFiveUp,
+        ];
+        // Residues spanning below / at / above the half-way tie, quotients
+        // ending in 0, 5 and other digits, both parities for the
+        // half-to-even tie break, both signs, and exact values.
+        const RAWS: [i64; 26] = [
+            0, 1, -1, 49, 50, 51, -49, -50, -51, 100, -100, 149, 150, 151, -149, -150, -151,
+            250, -250, 500, 501, -501, 1000, 1001, 1050, -1050,
+        ];
+        let mut checked = 0_u32;
+        for raw in RAWS {
+            let v = D38::<2>::from_bits(decimal_scaled::Int::<2>::from(raw));
+            for mode in MODES {
+                let direct = v.to_int_with(mode);
+                let via_quantize = v.quantize_with::<0>(mode).to_int();
+                assert_eq!(
+                    direct, via_quantize,
+                    "to_int_with and quantize_with::<0> disagree at raw {raw} mode {mode:?}: \
+                     {direct} vs {via_quantize}"
+                );
+                checked += 1;
+            }
+        }
+        // Absence of failure is not evidence: assert the loop actually ran
+        // the full grid rather than passing on an empty sweep.
+        assert_eq!(checked, 26 * 8, "differential sweep did not cover the full grid");
+    }
+
     #[cfg(feature = "wide")]
     #[test]
     fn to_int_wide_all_modes_and_signs() {
