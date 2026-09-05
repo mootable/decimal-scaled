@@ -60,9 +60,9 @@ const GUARD_NARROW: u32 = 8;
 /// `GUARD_NARROW`. Panics if `cos(self) == 0` (odd multiples of π/2).
 #[inline]
 #[must_use]
-pub(crate) fn tan<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
+pub(crate) fn tan<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Option<Int<3>> {
     if raw == Int::<3>::ZERO {
-        return Int::<3>::ZERO;
+        return Some(Int::<3>::ZERO);
     }
     let working_scale = SCALE + GUARD_NARROW;
     let working_value = core::to_work_scaled(raw, GUARD_NARROW);

@@ -98,10 +98,14 @@ fn tanh_k_lift<C: WideTrigCore, const SCALE: u32>(raw: C::Storage) -> u32 {
 /// correctly). Integer compare: `|x| > (SCALE + GUARD + 2)/0.86859`.
 #[cfg(feature = "_wide-support")]
 #[inline]
+/// `Option<Option<_>>`: the OUTER layer is this pin's own "does the
+/// saturation band apply?", the INNER one the narrowing's range verdict.
+/// The two are independent, and the call site returns the inner one
+/// straight back as its own result.
 fn tanh_saturated<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> Option<C::Storage>
+) -> Option<Option<C::Storage>>
 where
     <C::Wagm as crate::int::types::traits::BigInt>::Scratch:
         crate::int::types::compute_limbs::ComputeLimbs,
@@ -160,10 +164,10 @@ where
     };
     // sinh(0) = 0 is the SOLE exact point.
     if raw == C::storage_zero() {
-        return C::storage_zero();
+        return Some(C::storage_zero());
     }
     if let Some(pinned) = hyper_tiny_pin::<C, SCALE, true>(raw, mode) {
-        return pinned;
+        return Some(pinned);
     }
     let is_negative = raw < C::storage_zero();
     let k_lift = C::exp_result_int_digits(C::to_work_scaled(raw, 0), SCALE);
@@ -232,7 +236,7 @@ where
         round_to_storage_widening_g, to_work_scaled_g,
     };
     if raw == C::storage_zero() {
-        return C::storage_one(SCALE);
+        return Some(C::storage_one(SCALE));
     }
     let k_lift = C::exp_result_int_digits(C::to_work_scaled(raw, 0), SCALE);
     let base_guard = C::GUARD + k_lift;
@@ -285,10 +289,13 @@ where
     use crate::algos::exp::exp_generic as eg;
     use crate::algos::support::wide_trig_core::round_to_storage_directed_g;
     if let Some(pinned) = hyper_tiny_pin::<C, SCALE, false>(raw, mode) {
-        return pinned;
+        return Some(pinned);
     }
-    if let Some(pinned) = tanh_saturated::<C, SCALE>(raw, mode) {
-        return pinned;
+    // `tanh_saturated` answers two questions at once — see its doc: the outer
+    // layer is "did the saturation band apply?", the inner one the narrowing's
+    // range verdict, which is this kernel's own result.
+    if let Some(verdict) = tanh_saturated::<C, SCALE>(raw, mode) {
+        return verdict;
     }
     let is_negative = raw < C::storage_zero();
     let base_guard = C::GUARD + tanh_k_lift::<C, SCALE>(raw);
@@ -352,11 +359,11 @@ where
         round_to_storage_directed_decided_g, tiny_x_deep_directed_adjust, to_work_scaled_g,
     };
     if raw == C::storage_zero() {
-        return C::storage_zero();
+        return Some(C::storage_zero());
     }
     // asinh(x) = x − x³/6 + … : compressing (the j* = 3 linear band).
     if let Some(pinned) = hyper_tiny_pin::<C, SCALE, false>(raw, mode) {
-        return pinned;
+        return Some(pinned);
     }
     let is_negative = raw < C::storage_zero();
     let (rounded, decided) = round_to_storage_directed_decided_g::<C::Storage, C::Wagm>(
@@ -407,6 +414,10 @@ where
     // The exact alternating-series bracket first: where it closes it PROVES
     // which side of `r` the true value lies on, superseding the `j*`-parity
     // rule whose exactness premise fails for a multi-digit significand.
+    // An out-of-range narrowing is the verdict; neither the bracket nor the
+    // deep-band adjust below moves a value more than one ULP, so neither can
+    // bring it back inside storage.
+    let rounded = rounded?;
     if let Some(bracketed) = crate::algos::support::wide_trig_core::adjust_alternating_bracket::<
         C::Storage,
         C::Wagm,
@@ -417,16 +428,16 @@ where
         mode,
         crate::algos::support::wide_trig_core::AlternatingSeries::Asinh,
     ) {
-        return bracketed;
+        return Some(bracketed);
     }
-    tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
+    Some(tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
         rounded,
         decided,
         raw,
         mode,
         true,
         <C::Wagm as crate::int::types::traits::BigInt>::BITS,
-    )
+    ))
 }
 
 /// Schoolbook acosh for a wide tier -- ln(x + sqrt(x^2 - 1)), x >= 1.
@@ -519,7 +530,7 @@ where
     }
     // atanh(x) = x + x³/3 + … : expanding.
     if let Some(pinned) = hyper_tiny_pin::<C, SCALE, true>(raw, mode) {
-        return pinned;
+        return Some(pinned);
     }
     round_to_storage_directed_near_special_g::<C::Storage, C::Wagm>(
         C::GUARD,
@@ -611,10 +622,10 @@ where
     };
     // The canonical pins — identical to the tier kernel.
     if raw == C::storage_zero() {
-        return C::storage_zero();
+        return Some(C::storage_zero());
     }
     if let Some(pinned) = hyper_tiny_pin::<C, SCALE, true>(raw, mode) {
-        return pinned;
+        return Some(pinned);
     }
     let is_negative = raw < C::storage_zero();
     let k_lift = C::exp_result_int_digits(C::to_work_scaled(raw, 0), SCALE);
@@ -682,7 +693,7 @@ where
         round_to_storage_widening_g, to_work_scaled_g,
     };
     if raw == C::storage_zero() {
-        return C::storage_one(SCALE);
+        return Some(C::storage_one(SCALE));
     }
     let k_lift = C::exp_result_int_digits(C::to_work_scaled(raw, 0), SCALE);
     let base_guard = C::GUARD + k_lift;
@@ -740,10 +751,13 @@ where
     // fast path is unreachable at the rung (the policy gate admits
     // |x| < 10, far below the onset) but kept for kernel-level callers.
     if let Some(pinned) = hyper_tiny_pin::<C, SCALE, false>(raw, mode) {
-        return pinned;
+        return Some(pinned);
     }
-    if let Some(pinned) = tanh_saturated::<C, SCALE>(raw, mode) {
-        return pinned;
+    // `tanh_saturated` answers two questions at once — see its doc: the outer
+    // layer is "did the saturation band apply?", the inner one the narrowing's
+    // range verdict, which is this kernel's own result.
+    if let Some(verdict) = tanh_saturated::<C, SCALE>(raw, mode) {
+        return verdict;
     }
     let is_negative = raw < C::storage_zero();
     let base_guard = C::GUARD + tanh_k_lift::<C, SCALE>(raw);
@@ -851,12 +865,12 @@ where
         round_to_storage_directed_widening_decided_g, tiny_x_deep_directed_adjust, to_work_scaled_g,
     };
     if raw == C::storage_zero() {
-        return C::storage_zero();
+        return Some(C::storage_zero());
     }
     // The canonical pins — identical to the tier kernel (compressing:
     // asinh(x) = x − x³/6 + …).
     if let Some(pinned) = hyper_tiny_pin::<C, SCALE, false>(raw, mode) {
-        return pinned;
+        return Some(pinned);
     }
     let is_negative = raw < C::storage_zero();
     // Two-width fall-up to the tier walker width `Wagm` - the second
@@ -938,6 +952,10 @@ where
     // The exact alternating-series bracket first: where it closes it PROVES
     // which side of `r` the true value lies on, superseding the `j*`-parity
     // rule whose exactness premise fails for a multi-digit significand.
+    // An out-of-range narrowing is the verdict; neither the bracket nor the
+    // deep-band adjust below moves a value more than one ULP, so neither can
+    // bring it back inside storage.
+    let rounded = rounded?;
     if let Some(bracketed) = crate::algos::support::wide_trig_core::adjust_alternating_bracket::<
         C::Storage,
         C::Wagm,
@@ -948,16 +966,16 @@ where
         mode,
         crate::algos::support::wide_trig_core::AlternatingSeries::Asinh,
     ) {
-        return bracketed;
+        return Some(bracketed);
     }
-    tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
+    Some(tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
         rounded,
         decided,
         raw,
         mode,
         true,
         <C::Wagm as crate::int::types::traits::BigInt>::BITS,
-    )
+    ))
 }
 
 /// Rung-generic [`acosh_schoolbook`] — `ln(x + √(x² − 1))`, `x ≥ 1`, at
@@ -1078,7 +1096,7 @@ where
     // The canonical pins — identical to the tier kernel (expanding:
     // atanh(x) = x + x³/3 + …).
     if let Some(pinned) = hyper_tiny_pin::<C, SCALE, true>(raw, mode) {
-        return pinned;
+        return Some(pinned);
     }
     // Two-width fall-up (near-special form) to the tier walker width
     // `Wagm` - see [`acosh_schoolbook_g`].

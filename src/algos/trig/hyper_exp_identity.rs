@@ -175,13 +175,13 @@ where
         if abs_raw <= threshold {
             // `ZeroFiveUp`'s pivot digit; `abs_raw` is already `|raw|`.
             let raw_mod_10 = abs_raw.div_rem(<C::Storage as BigInt>::TEN).1.to_i128() as u8;
-            return crate::support::rounding::tiny_odd_compressing_directed(
+            return Some(crate::support::rounding::tiny_odd_compressing_directed(
                 raw,
                 zero,
                 <C::Storage as BigInt>::ONE,
                 raw_mod_10,
                 mode,
-            );
+            ));
         }
     }
     // General path: outside the tiny band the kernel error is far below

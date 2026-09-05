@@ -452,7 +452,7 @@ pub(crate) fn ln_tang_g<
     storage_max: St,
     storage_min: St,
     mode: RoundingMode,
-) -> St
+) -> Option<St>
 where
     <Wk as BigInt>::Scratch: ComputeLimbs,
     <Wtier as BigInt>::Scratch: ComputeLimbs,
@@ -535,7 +535,7 @@ where
                 },
             )
         };
-        crate::algos::support::wide_trig_core::adjust_ln_near_one::<St, Wtier, SCALE>(rounded, raw, mode)
+        Some(crate::algos::support::wide_trig_core::adjust_ln_near_one::<St, Wtier, SCALE>(rounded?, raw, mode))
     } else {
         let working_scale = SCALE + GUARD;
         let working_value = tang_ln_fixed_g::<Wk, CAP, INTERNAL_EXTRA>(
@@ -614,7 +614,7 @@ where
         |guard_digits| eg::scale_by_k::<Wk>(ln2_at::<Wk, SCALE, GUARD>(SCALE + guard_digits), k),
         |guard_digits| eg::scale_by_k::<Wk>(ln2_at::<Wk, SCALE, GUARD>(SCALE + guard_digits), k),
     );
-    Some(crate::algos::support::wide_trig_core::adjust_ln_near_one::<St, Wk, SCALE>(rounded, raw, mode))
+    Some(crate::algos::support::wide_trig_core::adjust_ln_near_one::<St, Wk, SCALE>(rounded?, raw, mode))
 }
 
 /// The linear near-1 exit for the narrow Tang arm — the input CLASS on which
@@ -667,7 +667,7 @@ pub(crate) fn ln_tang<
 >(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::W as BigInt>::Scratch: ComputeLimbs,
 {

@@ -79,13 +79,13 @@ pub(crate) fn asinh_series_composition<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     guard: u32,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::Wagm as BigInt>::Scratch: ComputeLimbs,
 {
     let storage_zero = C::storage_zero();
     if raw == storage_zero {
-        return storage_zero;
+        return Some(storage_zero);
     }
     let working_scale = SCALE + guard;
     // Two-core: composition runs on the wide `Wagm` work int.
@@ -149,7 +149,7 @@ pub(crate) fn acosh_ln_composition<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     guard: u32,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::Wagm as BigInt>::Scratch: ComputeLimbs,
 {
@@ -243,7 +243,7 @@ pub(crate) fn atanh_ln_composition<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     guard: u32,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::Wagm as BigInt>::Scratch: ComputeLimbs,
 {

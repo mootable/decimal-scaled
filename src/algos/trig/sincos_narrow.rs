@@ -41,12 +41,12 @@ fn sin_cos<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
     raw: C::Storage,
     mode: RoundingMode,
     which: Which,
-) -> C::Storage {
+) -> Option<C::Storage> {
     if raw == C::storage_zero() {
-        return match which {
+        return Some(match which {
             Which::Sin => C::storage_zero(),
             Which::Cos => C::storage_one(SCALE),
-        };
+        });
     }
 
     // Directed modes decide which side of a storage grid line the true
@@ -65,7 +65,9 @@ fn sin_cos<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
     // working scale, so the kernel rounds to exactly ±10^SCALE and a directed
     // mode lands on the wrong side; sin/cos are strictly interior for raw != 0,
     // so the side is known a priori. See `wide_trig_core::adjust_bounded_extremum`.
-    crate::algos::support::wide_trig_core::adjust_bounded_extremum::<C, SCALE>(rounded, raw, mode)
+    Some(crate::algos::support::wide_trig_core::adjust_bounded_extremum::<C, SCALE>(
+        rounded?, raw, mode,
+    ))
 }
 
 /// Narrow `sin` for a wide tier — generic over `C`, `SCALE`, the
@@ -75,7 +77,7 @@ fn sin_cos<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
 pub(crate) fn sin_narrow_with_taylor<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> Option<C::Storage> {
     sin_cos::<C, SCALE, GUARD>(raw, mode, Which::Sin)
 }
 
@@ -86,7 +88,7 @@ pub(crate) fn sin_narrow_with_taylor<C: WideTrigCore, const SCALE: u32, const GU
 pub(crate) fn cos_narrow_with_taylor<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> Option<C::Storage> {
     sin_cos::<C, SCALE, GUARD>(raw, mode, Which::Cos)
 }
 

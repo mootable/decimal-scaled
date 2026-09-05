@@ -159,7 +159,7 @@ pub(crate) fn expm1_series_g<St: BigInt + Copy, S: BigInt, const SCALE: u32>(
     storage_max: St,
     storage_min: St,
     mode: RoundingMode,
-) -> St
+) -> Option<St>
 where
     S::Scratch: ComputeLimbs,
 {

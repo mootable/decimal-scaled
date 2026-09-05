@@ -59,8 +59,8 @@ pub(crate) fn powf_pinned_exp_with_ln<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     exponent_raw: C::Storage,
     mode: RoundingMode,
-    sqrt_escape: fn(C::Storage, RoundingMode) -> C::Storage,
-) -> C::Storage
+    sqrt_escape: fn(C::Storage, RoundingMode) -> Option<C::Storage>,
+) -> Option<C::Storage>
 where
     <C::Wagm as BigInt>::Scratch: ComputeLimbs,
 {

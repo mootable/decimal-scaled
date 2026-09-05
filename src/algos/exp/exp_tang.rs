@@ -298,12 +298,12 @@ pub(crate) fn exp_tang<
 >(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::W as BigInt>::Scratch: ComputeLimbs,
 {
     if raw == C::storage_zero() {
-        return C::storage_one(SCALE);
+        return Some(C::storage_one(SCALE));
     }
 
     if !DIRECTED && crate::support::rounding::is_nearest_mode(mode) {

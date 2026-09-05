@@ -104,7 +104,7 @@ fn asin_fixed<const SCALE: u32>(working_value: core::W, working_scale: u32) -> c
 /// `asin` for `D57<SCALE>` with `SCALE ∈ 18..=22`.
 #[inline]
 #[must_use]
-pub(crate) fn asin<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
+pub(crate) fn asin<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Option<Int<3>> {
     let working_scale = SCALE + GUARD_NARROW;
     let working_value = core::to_work_scaled(raw, GUARD_NARROW);
     let asin_value = asin_fixed::<SCALE>(working_value, working_scale);
@@ -127,7 +127,7 @@ pub(crate) fn asin<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> 
 /// `acos` for `D57<SCALE>` with `SCALE ∈ 18..=22`.
 #[inline]
 #[must_use]
-pub(crate) fn acos<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
+pub(crate) fn acos<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Option<Int<3>> {
     let working_scale = SCALE + GUARD_NARROW;
     let working_value = core::to_work_scaled(raw, GUARD_NARROW);
     let asin_w = asin_fixed::<SCALE>(working_value, working_scale);
@@ -155,7 +155,7 @@ pub(crate) fn atan2<const SCALE: u32>(
     y_raw: Int<3>,
     x_raw: Int<3>,
     mode: RoundingMode,
-) -> Int<3> {
+) -> Option<Int<3>> {
     let working_scale = SCALE + GUARD_NARROW;
     let zero_s = Int::<3>::ZERO;
     let atan2_value = if x_raw == zero_s {

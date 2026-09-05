@@ -90,7 +90,7 @@ where
     // Analytic tiny-`x` directed decision (relocated from the policy layer) —
     // `asin(x) = x + x³/6 + …` EXPANDS (every Taylor coefficient is positive).
     if let Some(analytic_result) = tiny_x_linear_directed::<C::Storage, SCALE>(raw, mode, true) {
-        return analytic_result;
+        return Some(analytic_result);
     }
     // Ziv-escalated narrowing (NOT a single shot): the composition's true
     // value can sit a sub-resolution distance from a rounding boundary
@@ -110,15 +110,18 @@ where
             asin_work::<C, SCALE>(C::to_work_scaled(raw, guard_digits), SCALE + guard_digits)
         },
     );
+    // An out-of-range narrowing is the verdict; the deep-band adjust below
+    // moves a value by at most one ULP and so cannot bring it back in range.
+    let rounded = rounded?;
     // Deep sub-resolution band (`j* ≥ 5`): `asin` always EXPANDS.
-    tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
+    Some(tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
         rounded,
         decided,
         raw,
         mode,
         false,
         <C::W as crate::int::types::traits::BigInt>::BITS,
-    )
+    ))
 }
 
 /// Schoolbook acos for a wide tier -- pi/2 - asin(x). Panics if |x| > 1.
@@ -430,7 +433,7 @@ where
     // Analytic tiny-`x` directed decision — the SAME pre-empt the tier
     // [`asin_schoolbook`] carries (relocated from the policy layer).
     if let Some(analytic_result) = tiny_x_linear_directed::<C::Storage, SCALE>(raw, mode, true) {
-        return analytic_result;
+        return Some(analytic_result);
     }
     // Ziv-escalated two-width narrowing — see the tier [`asin_schoolbook`]
     // (the asin(3e-60) partial-sum family): rung probes first, an
@@ -453,15 +456,18 @@ where
             asin_work::<C, SCALE>(C::to_work_scaled(raw, guard_digits), SCALE + guard_digits)
         },
     );
+    // An out-of-range narrowing is the verdict; the deep-band adjust below
+    // moves a value by at most one ULP and so cannot bring it back in range.
+    let rounded = rounded?;
     // Deep sub-resolution band (`j* ≥ 5`): `asin` always EXPANDS.
-    tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
+    Some(tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
         rounded,
         decided,
         raw,
         mode,
         false,
         <C::W as crate::int::types::traits::BigInt>::BITS,
-    )
+    ))
 }
 
 /// Rung-generic [`acos_schoolbook`] — `π/2 − asin(x)` at an arbitrary

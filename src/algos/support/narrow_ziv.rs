@@ -83,6 +83,14 @@ pub(crate) fn walk(
     mode: RoundingMode,
     recompute: impl FnMut(u32) -> WZiv,
 ) -> i128 {
+    // The shared narrowing now REPORTS an out-of-range result instead of
+    // panicking inside itself. These narrow walkers keep the panic, applied
+    // here: the narrow tiers already meet the `checked_` contract a different
+    // way — the kernels compute in an integer wider than storage and
+    // `policy::narrow_fit` decides the fit afterwards — so nothing above this
+    // point wants an `Option`, and re-raising here leaves narrow behaviour
+    // bit-identical. `walk_checked` below guards the storage extreme before
+    // ever reaching it.
     wtc::round_to_storage_directed_g::<Int<2>, WZiv>(
         base_guard_digits,
         scale,
@@ -91,6 +99,7 @@ pub(crate) fn walk(
         Int::<2>::MIN,
         recompute,
     )
+    .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("narrow ziv walk", scale))
     .as_i128()
 }
 
@@ -105,6 +114,7 @@ pub(crate) fn walk_never_exact(
     mode: RoundingMode,
     recompute: impl FnMut(u32) -> WZiv,
 ) -> i128 {
+    // Panic re-applied here — see [`walk`].
     wtc::round_to_storage_directed_never_exact_g::<Int<2>, WZiv>(
         base_guard_digits,
         scale,
@@ -113,6 +123,7 @@ pub(crate) fn walk_never_exact(
         Int::<2>::MIN,
         recompute,
     )
+    .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("narrow ziv walk", scale))
     .as_i128()
 }
 
@@ -165,6 +176,7 @@ pub(crate) fn walk_near_special(
     mode: RoundingMode,
     recompute: impl FnMut(u32) -> WZiv,
 ) -> i128 {
+    // Panic re-applied here — see [`walk`].
     wtc::round_to_storage_directed_near_special_g::<Int<2>, WZiv>(
         base_guard_digits,
         scale,
@@ -173,5 +185,6 @@ pub(crate) fn walk_near_special(
         Int::<2>::MIN,
         recompute,
     )
+    .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("narrow ziv walk", scale))
     .as_i128()
 }

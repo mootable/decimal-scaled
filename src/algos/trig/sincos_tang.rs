@@ -91,7 +91,7 @@ fn sin_cos<C: WideTrigCore, const SCALE: u32, const M: u32>(
     raw: C::Storage,
     mode: RoundingMode,
     which: Which,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::W as crate::int::types::traits::BigInt>::Scratch:
         crate::int::types::compute_limbs::ComputeLimbs,
@@ -236,7 +236,7 @@ where
 pub(crate) fn sin_tang_with_taylor<C: WideTrigCore, const SCALE: u32, const M: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::W as crate::int::types::traits::BigInt>::Scratch:
         crate::int::types::compute_limbs::ComputeLimbs,
@@ -250,7 +250,7 @@ where
 pub(crate) fn cos_tang_with_taylor<C: WideTrigCore, const SCALE: u32, const M: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::W as crate::int::types::traits::BigInt>::Scratch:
         crate::int::types::compute_limbs::ComputeLimbs,

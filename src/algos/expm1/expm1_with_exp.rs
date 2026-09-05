@@ -145,7 +145,7 @@ where
             )
         },
     );
-    super::adjust_near_zero::<St>(rounded, raw, mode)
+    Some(super::adjust_near_zero::<St>(rounded?, raw, mode))
 }
 
 /// Tier-generic entry to [`expm1_with_exp_g`] at the tier's widest work integer

@@ -122,7 +122,7 @@ pub(crate) fn ln_schoolbook_fixed(working_value: Fixed, working_scale: u32) -> F
 pub(crate) fn ln_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> Option<C::Storage> {
     if raw <= C::storage_zero() {
         panic!("wide-tier ln schoolbook: argument must be positive");
     }

@@ -58,7 +58,7 @@ pub(crate) fn log_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw_x: C::Storage,
     raw_b: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> Option<C::Storage> {
     if raw_x <= C::storage_zero() {
         panic!("wide-tier log schoolbook: x must be positive");
     }
