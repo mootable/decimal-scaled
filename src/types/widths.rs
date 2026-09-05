@@ -459,6 +459,21 @@ crate::macros::arithmetic::decl_decimal_arithmetic!(wide D38, crate::int::types:
 // `decl_decimal_num_traits_conversions!` above.
 crate::macros::num_traits::decl_decimal_num_traits_basics!(D38);
 crate::macros::transcendental_trait::decl_decimal_transcendental_impl!(D38);
+// pow / powi and the checked_/wrapping_/saturating_/overflowing_pow
+// variants come from the shared macro. D38's hand-coded versions in
+// `types/powers.rs` were the same square-and-multiply as the macro's
+// (`base *= base` vs `base = base * base`, `self.is_negative()` vs
+// `self < Self::ZERO` — Int<N>::is_negative is a two's-complement
+// top-bit test with no distinct "negative zero", so the two are the
+// same predicate); the file header's claim that they "sit closer to
+// the mg_divide path" doesn't hold for this family — none of the six
+// methods call mg_divide, directly or indirectly, any differently
+// than the macro's versions do (both route through the same `Mul`/
+// `CheckedMul`/`Wrapping*`/`Overflowing*` operators the arithmetic
+// macro above already generates identically for every width). The
+// mg_divide path is real for `sqrt`/`cbrt` in the same file, which do
+// select a D38-specific kernel.
+crate::macros::pow::decl_decimal_pow!(D38);
 
 // D38 strict transcendentals: hand-tuned per-type kernels.
 //
