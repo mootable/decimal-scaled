@@ -465,13 +465,19 @@ def history_panel(pts: list[tuple]) -> str:
             f"per-cell sweep.</div>")
 
 
-def svg_for(rows: dict, op: str) -> str:
-    """The docs site's own chart, for one op."""
-    op_rows = [(o, w, s, ns) for (o, w, s), ns in rows.items() if o == op]
+def svg_for(rows: dict, op: str, uid: str = "") -> str:
+    """The docs site's own chart, for one op — its whole operand FAMILY overlaid
+    on one set of axes, with the same clickable legend the published pages get.
+
+    `op` is the BASE op, so `ln` here means `ln` and `ln@hard` on one chart. This
+    calls straight into `render_docs.perf_chart_block` rather than approximating
+    it, so this page and the site cannot drift apart. `uid` separates the two
+    copies drawn per op (published beside branch), whose toggle ids would
+    otherwise collide inside one document."""
+    op_rows = [(o, w, s, ns) for (o, w, s), ns in rows.items() if rd.base_op(o) == op]
     if not op_rows:
         return "<p class='none'>no data</p>"
-    widths, P, series = rd._perf_series(op_rows)
-    return rd._perf_svg(widths, P, series) or "<p class='none'>not enough data</p>"
+    return rd.perf_chart_block(op, op_rows, uid) or "<p class='none'>not enough data</p>"
 
 
 def inversions(rows: dict, min_scale: int) -> tuple[list, list]:
@@ -536,7 +542,10 @@ def inv_table(rows: list, kind: str, limit: int) -> str:
 
 
 def delta_table(base: dict, br: dict, op: str) -> str:
-    keys = sorted({k for k in set(base) | set(br) if k[0] == op}, key=lambda k: (k[1], k[2]))
+    # `op` is the BASE op, so the per-cell table under a family chart lists every
+    # family row (`ln` and `ln@hard`), sorted by row then width then scale.
+    keys = sorted({k for k in set(base) | set(br) if rd.base_op(k[0]) == op},
+                  key=lambda k: (k[0], k[1], k[2]))
     if not keys:
         return ""
     out = ["<table class='delta'><thead><tr><th>cell</th><th>published</th>"
@@ -631,7 +640,11 @@ def build(base: dict, br: dict, pairs: dict, hist: list, base_ref: str,
         cls = "win" if b < a else "loss"
         return f"<span class='{cls}'>{b - a:+d}</span>"
 
-    ops = sorted({k[0] for k in set(base) | set(br)})
+    # BASE ops: an operand family is one chart, not one chart per row, so `ln`
+    # here covers `ln` and `ln@hard` together. Keying on the base name also keeps
+    # `CATEGORIES` a list of real function names rather than needing an entry per
+    # variant.
+    ops = sorted({rd.base_op(k[0]) for k in set(base) | set(br)})
     body = []
     for cat, names in CATEGORIES.items():
         present = [o for o in names if o in ops]
@@ -641,9 +654,9 @@ def build(base: dict, br: dict, pairs: dict, hist: list, base_ref: str,
         for op in present:
             body.append(f"<h3>{html.escape(op)}</h3><div class='pair'>"
                         f"<div class='chart'><div class='cap'>published &mdash; {html.escape(base_ref)}</div>"
-                        f"{svg_for(base, op)}</div>"
+                        f"{svg_for(base, op, 'pub-')}</div>"
                         f"<div class='chart'><div class='cap'>branch &mdash; {html.escape(br_ref)}</div>"
-                        f"{svg_for(br, op)}</div></div>"
+                        f"{svg_for(br, op, 'brn-')}</div></div>"
                         f"<details><summary>per-cell change</summary>"
                         f"<div class='scroll'>{delta_table(base, br, op)}</div></details>")
     leftover = [o for o in ops if not any(o in v for v in CATEGORIES.values())]
@@ -651,8 +664,8 @@ def build(base: dict, br: dict, pairs: dict, hist: list, base_ref: str,
         body.append("<h2>Other</h2>")
         for op in leftover:
             body.append(f"<h3>{html.escape(op)}</h3><div class='pair'>"
-                        f"<div class='chart'><div class='cap'>published</div>{svg_for(base, op)}</div>"
-                        f"<div class='chart'><div class='cap'>branch</div>{svg_for(br, op)}</div></div>")
+                        f"<div class='chart'><div class='cap'>published</div>{svg_for(base, op, 'pub-')}</div>"
+                        f"<div class='chart'><div class='cap'>branch</div>{svg_for(br, op, 'brn-')}</div></div>")
 
     stamp = _dt.datetime.now().strftime("%Y-%m-%d %H:%M")
     base_run = measured_at(base_ref)
@@ -662,7 +675,7 @@ def build(base: dict, br: dict, pairs: dict, hist: list, base_ref: str,
                     if refresh else "")
     return f"""<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">{meta_refresh}
-<title>Performance compare</title><style>{CSS}</style></head><body><div class="wrap">
+<title>Performance compare</title><style>{CSS}{rd.PERF_FAMILY_CSS}</style></head><body><div class="wrap">
 <h1>Performance: branch vs published</h1>
 <p class="sub">published <code>{html.escape(base_ref)}</code> &nbsp;vs&nbsp;
 branch <code>{html.escape(br_ref)}</code> &middot;
