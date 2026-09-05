@@ -6,8 +6,12 @@
 //! `quantize` sets the quantum: it changes `SCALE` at a fixed storage width.
 //! [`requantize`](crate::macros::requantize) moves both axes at once.
 //!
-//! The body lives in `quantize_with`, which takes an explicit
-//! `RoundingMode`. The no-arg `quantize` delegates to it with the
+//! **Surface only.** Every method here is a thin delegation: the
+//! computation lives in [`crate::algos::quantize::quantize_pow10`], and
+//! which kernel runs for a given `(N, SCALE, TARGET_SCALE)` cell is
+//! [`crate::policy::quantize`]'s to decide. `quantize_with` forwards to
+//! that policy and owns nothing but the tier-named scale-up overflow
+//! panic; the no-arg `quantize` forwards to `quantize_with` with the
 //! crate's `DEFAULT_ROUNDING_MODE`, which is `HalfToEven` unless a
 //! `rounding-*` Cargo feature selects something else.
 //!
@@ -65,113 +69,13 @@ macro_rules! decl_decimal_quantize {
                 self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> $Type<TARGET_SCALE> {
-                if TARGET_SCALE == SCALE {
-                    return $Type::<TARGET_SCALE>::from_bits(self.0);
+                use $crate::policy::quantize::QuantizePolicy as _;
+                match self.quantize_impl::<TARGET_SCALE>(mode) {
+                    Some(bits) => $Type::<TARGET_SCALE>::from_bits(bits),
+                    // Scale-up only; the dispatcher never returns `None`
+                    // for a scale-down.
+                    None => panic!(concat!(stringify!($Type), "::quantize: scale-up overflow")),
                 }
-                let ten = <$Storage>::from_str_radix("10", 10)
-                    .expect("wide decimal: invalid base-10 literal");
-                let one = <$Storage>::from_str_radix("1", 10)
-                    .expect("wide decimal: invalid base-10 literal");
-                let zero = <$Storage>::from_str_radix("0", 10)
-                    .expect("wide decimal: invalid base-10 literal");
-                if TARGET_SCALE > SCALE {
-                    let shift = TARGET_SCALE - SCALE;
-                    let multiplier = ten.pow(shift);
-                    let scaled_up = match self.0.checked_mul(multiplier) {
-                        Some(scaled) => scaled,
-                        None => panic!(concat!(stringify!($Type), "::quantize: scale-up overflow")),
-                    };
-                    return $Type::<TARGET_SCALE>::from_bits(scaled_up);
-                }
-                let shift = SCALE - TARGET_SCALE;
-                let divisor = ten.pow(shift);
-                let raw = self.0;
-                let quotient = raw / divisor;
-                let remainder = raw % divisor;
-                if remainder == zero {
-                    return $Type::<TARGET_SCALE>::from_bits(quotient);
-                }
-                let abs_remainder = remainder.unsigned_abs();
-                let half = divisor.unsigned_abs() >> 1;
-                let is_non_negative = !raw.is_negative();
-                let bits = match mode {
-                    $crate::support::rounding::RoundingMode::HalfToEven => {
-                        if abs_remainder < half {
-                            quotient
-                        } else if abs_remainder > half {
-                            if is_non_negative {
-                                quotient + one
-                            } else {
-                                quotient - one
-                            }
-                        } else if !quotient.bit(0) {
-                            quotient
-                        } else if is_non_negative {
-                            quotient + one
-                        } else {
-                            quotient - one
-                        }
-                    }
-                    $crate::support::rounding::RoundingMode::HalfAwayFromZero => {
-                        if abs_remainder < half {
-                            quotient
-                        } else if is_non_negative {
-                            quotient + one
-                        } else {
-                            quotient - one
-                        }
-                    }
-                    $crate::support::rounding::RoundingMode::HalfTowardZero => {
-                        if abs_remainder > half {
-                            if is_non_negative {
-                                quotient + one
-                            } else {
-                                quotient - one
-                            }
-                        } else {
-                            quotient
-                        }
-                    }
-                    $crate::support::rounding::RoundingMode::Trunc => quotient,
-                    $crate::support::rounding::RoundingMode::Floor => {
-                        if is_non_negative {
-                            quotient
-                        } else {
-                            quotient - one
-                        }
-                    }
-                    $crate::support::rounding::RoundingMode::Ceiling => {
-                        if is_non_negative {
-                            quotient + one
-                        } else {
-                            quotient
-                        }
-                    }
-                    // Any non-zero remainder lifts the magnitude; the
-                    // `remainder == zero` case returned above.
-                    $crate::support::rounding::RoundingMode::AwayFromZero => {
-                        if is_non_negative {
-                            quotient + one
-                        } else {
-                            quotient - one
-                        }
-                    }
-                    // Pivot on the last decimal digit of |quotient| — a
-                    // wide `%`, so O(limbs).
-                    $crate::support::rounding::RoundingMode::ZeroFiveUp => {
-                        let digit = (quotient % ten).as_i128().unsigned_abs();
-                        if digit == 0 || digit == 5 {
-                            if is_non_negative {
-                                quotient + one
-                            } else {
-                                quotient - one
-                            }
-                        } else {
-                            quotient
-                        }
-                    }
-                };
-                $Type::<TARGET_SCALE>::from_bits(bits)
             }
 
             /// Deprecated alias for [`Self::quantize`].

@@ -40,6 +40,7 @@ pub(crate) mod log1p;
 pub(crate) mod mul;
 pub(crate) mod neg;
 pub(crate) mod pow;
+pub(crate) mod quantize;
 pub(crate) mod rem;
 pub(crate) mod sqrt;
 pub(crate) mod sub;
