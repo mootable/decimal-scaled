@@ -148,15 +148,38 @@ _BENCH_ONE = re.compile(r"""bench_one!\(\s*\$c\s*,\s*"(?P<op>[A-Za-z0-9_@]+)"\s*
 
 # How many jobs each (width, scale) cell is split into along the OP axis.
 #
-# THE INVARIANT, and it is not negotiable: every row of one op's operand FAMILY
-# lands in the SAME job. `ln` and `ln@hard` are measured in one process on one
-# runner, so the overlaid per-op chart compares them on equal footing. Split a
-# family across runners and the gap a reader sees between its lines carries the
-# cross-cell machine spread instead of the operand difference the chart exists
-# to show. `shard_ops` keys on the BASE op and `op_filter` appends an OPTIONAL
-# `@variant` group, so co-location is structural — a new `@variant` row joins
-# its base's shard automatically and cannot be separated by an edit here.
-DEFAULT_OP_SHARDS = 3
+# DEFAULT 1 — SHARDING IS OFF, AND IT SHOULD STAY OFF UNTIL ONE THING CHANGES.
+#
+# The machinery below works and is kept deliberately, but on the runner pool as
+# it stands today sharding is a strict loss, on wall time AND on the bill.
+# GitHub's documented concurrency cap for GitHub-hosted standard runners on the
+# `team` plan is 60 jobs, and the default sweep is 60 cells — so the fan-out
+# already fills the pool and `k` shards cannot buy `k` runners. With `B` the
+# bench seconds per cell and `V` the ~22 s per-job fixed overhead (runner
+# spin-up, `bbc-compiled` download, the apt install), `60k` jobs of `B/k + V`
+# spread over 60 slots gives
+#
+#     wall  = B + k*V          billed = 60 * (B + k*V)
+#
+# `B` is invariant and only the overhead multiplies, so each extra shard costs
+# ~22 s of wall and ~44 min of BILLED runner time per sweep for nothing
+# (measured: B = 343 s, V = 22 s -> k=1 365 min/sweep, k=3 409 min/sweep).
+#
+# THE ONE CONDITION THAT FLIPS IT: a runner cap above 60 (it is liftable by a
+# GitHub support ticket). Then the wall becomes `B/k + V` and k=3 saves ~3.8
+# min. That day this is a one-input change — `op_shards: 3` on the dispatch, or
+# this constant — with no other edit anywhere, which is why the code stays.
+#
+# THE INVARIANT, if it is ever switched on, and it is not negotiable: every row
+# of one op's operand FAMILY lands in the SAME job. `ln` and `ln@hard` are
+# measured in one process on one runner, so the overlaid per-op chart compares
+# them on equal footing. Split a family across runners and the gap a reader sees
+# between its lines carries the cross-cell machine spread instead of the operand
+# difference the chart exists to show. `shard_ops` keys on the BASE op and
+# `op_filter` appends an OPTIONAL `@variant` group, so co-location is
+# structural — a new `@variant` row joins its base's shard automatically and
+# cannot be separated by an edit here.
+DEFAULT_OP_SHARDS = 1
 
 
 def parse_ops(benches_dir: Path) -> list[str]:

@@ -44,16 +44,26 @@
 //!
 //! So an op whose kernel BRANCHES on the value gets a small family: the base
 //! row `op` — left exactly as it was, so its published figure and its history
-//! stay comparable — plus one or more `op@<variant>` rows named for the path
-//! they reach. `@hard` is the expensive branch; a more specific name is used
-//! where it says more (`@near1`, `@int`). Each family is declared beside the
-//! operands it uses in [`funcs!`], with the branch it targets and the source
-//! that branches on it.
+//! stay comparable, and rendered as `op@base` on the page so it reads as one
+//! input among several rather than as the function itself — plus one or more
+//! `op@<variant>` rows named for the path they reach. `@hard` is the expensive
+//! branch; a more specific name is used where it says more (`@near1`, `@int`).
+//! Each family is declared beside the operands it uses in [`funcs!`], with the
+//! branch it targets and the source that branches on it.
 //!
-//! An op whose cost does NOT vary with the value gets NO family — see "Ops
-//! deliberately left as a single row" in [`funcs!`] for why each was left
-//! alone. Rows cost sweep time linearly, so a family whose members all measure
-//! the same thing is worse than the single row it replaced.
+//! **Whether an op CAN have a second family is a question about the matcher,
+//! not about the kernel, and it has a checkable answer** — does its `select`
+//! RETURN a `ByValue`/`ByShape`, or does it only declare the variant? Those
+//! look alike to a grep and mean opposite things; the distinction, the count
+//! across this surface, and which ops are consequently exempt or deferred are
+//! recorded at "Ops on `@base` alone" in [`funcs!`]. Deciding from outside the
+//! code that an op has no value axis, and then not measuring it, assumes the
+//! answer to the question the row exists to ask.
+//!
+//! A family whose members land on top of each other is NOT a wasted row: it
+//! says the op's cost does not depend on its input, which is a fact about the
+//! matcher worth a line on the chart. `asin@hard` is the worked example — the
+//! `|x| = 1/2` half-angle branch is real and is not a cost boundary.
 //!
 //! `hypot` is benched across the full width set via the integer-only
 //! correctly-rounded form — the one method whose NAME differs between the
@@ -312,35 +322,61 @@ macro_rules! funcs {
         // irreducible, and now explained rather than accidental.
         let phard: $ty = $crate::op_str!($scale, "1.3", "2").parse().unwrap();
 
-        // ── OPS DELIBERATELY LEFT AS A SINGLE ROW ───────────────────────
+        // ── OPS ON `@base` ALONE — EXEMPT vs DEFERRED ───────────────────
         //
-        // A family is only worth its sweep time where the KERNEL branches on
-        // the value. These ten do not, so they keep one row each:
+        // READ THE POLICY, DON'T REASON ABOUT THE KERNEL. Whether an op can
+        // have a second family is decided by whether its matcher ROUTES on the
+        // value, and that is a question with a checkable answer. Counting
+        // `ByValue` textually does NOT answer it — every policy mentions the
+        // variant, because the canonical shape declares it "for uniformity"
+        // whether or not it is used. Two occurrences look identical and mean
+        // opposite things:
         //
-        //   add, sub, neg — fixed-width limb ripple over the tier's `N`
-        //     limbs. The work is the width, not the value.
-        //   mul — `policy::mul` says it plainly: "mul has no value split, so
-        //     `ByValue` is never returned". Its two internal paths (product
-        //     fits `Int<N>` vs widening) are chosen by whether `a_raw·b_raw`
-        //     overflows `N` limbs, and with every operand held under 10 by
-        //     the S-1 rule that is decided by SCALE — which this sweep
-        //     ALREADY fans out over. The fast path is the s0 column and the
-        //     widening path is everything above it, so the split is measured;
-        //     a value family would only re-measure the same two paths.
-        //   div, rem — the divisor's LIMB COUNT drives the Knuth engine, and
-        //     at a fixed scale a small-looking divisor still fills its raw
-        //     with trailing zeros. Same reasoning as `mul`: scale decides.
-        //   sqrt, cbrt — Newton on a radicand whose bit length is set by
-        //     SCALE; there is no perfect-square/cube short-circuit (the
-        //     `diff_nonzero` test in `algos::sqrt::sqrt_newton` is the round
-        //     step, not an early exit), and the seed comes from the shared
-        //     `f64` bootstrap, so the iteration count does not move between
-        //     `2.0` and `9.9`.
-        //   to_degrees, to_radians — one multiply by a constant.
+        //     Select::ByValue(choose) => choose(raw)   <- dispatch ARM. Every
+        //         policy has one. Says nothing.
+        //     (3, 0..=55) => Select::ByValue(gate)     <- a select RETURN.
+        //         This is the only one that means the value routes.
         //
-        // If a future bbc surface shows any of these moving with the value
-        // after all, the family goes in then; the reason it is absent is
-        // recorded here so the next reader does not have to re-derive it.
+        // `policy::trig` has EIGHT of the first and ZERO of the second, so it
+        // is not value-routed at all despite looking the most value-rich of
+        // any policy by a grep. Counting return sites across the benched
+        // surface: `exp` 2 (both `wide_tang_gate`), `log` 1
+        // (`log_near_one_base`), everything else 0.
+        //
+        //   * `log`'s arm IS reached — that is exactly what `log@near1` is.
+        //   * `exp`'s arm gates `|x| < 100`, and no legal operand reaches the
+        //     far side: S-1 caps every operand under 10, and at SCALE 0 an
+        //     argument of 100 needs `e^100` ~ 44 digits, which overflows
+        //     `D18<0>`'s 18. So the Series side is unreachable from here.
+        //
+        // EXEMPT — no value routing anywhere, and the shape says so:
+        //   add, sub, neg — `select` returns `ByAlgorithm` at every arm; the
+        //     work is a fixed-width limb ripple over the tier's `N` limbs, set
+        //     by the width, not the value.
+        //
+        // DEFERRED — plausibly worth a `@hard` later, not now:
+        //   mul, div, rem, sqrt, cbrt, to_degrees, to_radians. These bottom
+        //     out in the int layer, which DOES route on operand shape
+        //     (`int::policy::div_rem` switches engine on the divisor's
+        //     `effective_limbs`; a 1-limb divisor takes a different one). It
+        //     is the one genuinely reachable arm under any of these — but at a
+        //     fixed (width, SCALE) cell the limb count is set by SCALE, and
+        //     the S-1 rule caps operands under 10, so no legal pair straddles
+        //     it. SCALE already does, and the sweep fans out over SCALE.
+        //     (`int::policy::mul` also returns `ByShape`, on limb count, but
+        //     Karatsuba engages at 128 limbs and the widest tier is 64, so it
+        //     const-folds per width and no operand reaches it either.)
+        //
+        // WORTH SOMEONE'S ATTENTION, not chased here: `to_degrees` and
+        // `to_radians` are mathematical inverses implemented ASYMMETRICALLY.
+        // `to_radians` is `Schoolbook` at every width — a multiply. But
+        // `to_degrees` is `MulPiRatio` on the wide tiers and the `Fixed`-256
+        // kernel on the narrow ones, which per that policy's own comment
+        // "divides by `π` rather than multiplying by `deg_per_rad`". A divide
+        // where the partner does a multiply may be deliberate or may be a
+        // leftover; either way the two are a PAIR and get a `@hard` together
+        // or not at all, since treating them differently makes them
+        // uncomparable on the page.
 
         // ── arithmetic ──
         $crate::bench_one!($c, "add", $w, $scale, $side, |bn| {

@@ -114,10 +114,10 @@ on:
         options: ["cell", "width", "all"]
         default: "cell"
       op_shards:
-        description: "How many jobs each (width, scale) cell splits into along the OP axis. 3 (default) = 3x the fan-out, each job running a third of the rows. An op's whole operand FAMILY always stays in ONE job, so the overlaid per-op chart stays same-machine. 1 = one job per cell, the pre-shard shape."
+        description: "How many jobs each (width, scale) cell splits into along the OP axis. 1 (default) = one job per cell. Sharding is OFF because the 60-cell sweep already fills the documented 60-job `team` cap, so k shards cannot buy k runners and each level costs ~22s wall and ~44min billed per sweep for nothing; raise it only if that cap is lifted. An op's whole operand FAMILY always stays in ONE job whatever k is, so the overlaid per-op chart stays same-machine."
         required: false
         type: string
-        default: "3"
+        default: "1"
       micro_bench:
         description: "MICRO MODE. A [[bench]] name from benches/micro/ (e.g. ln_wide_series_tang_ab). Set this and the surface sweep is skipped entirely — this runs that one N-way comparison instead. Leave empty for the normal prod-vs-branch run."
         required: false
@@ -221,7 +221,7 @@ jobs:
             --features "${BBC_FEATURES:-}" \
             --widths "${BBC_WIDTHS:-all}" \
             --group "${BBC_GROUP:-cell}" \
-            --op-shards "${BBC_OP_SHARDS:-3}" \
+            --op-shards "${BBC_OP_SHARDS:-1}" \
             --summary plan_summary.md
           cat plan_summary.md >> "$GITHUB_STEP_SUMMARY"
 
