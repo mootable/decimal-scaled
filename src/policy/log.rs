@@ -16,13 +16,21 @@
 //! and [`log_near_one_base`] classifies by the base's conditioning number
 //! `k = ceil(-log10 |b - 1|)` (`algos::log::log_ln_divide::near_one_digits`):
 //!
-//! - `k == 0` (every ordinary base, `|b - 1| >= 0.1`) — `LnDivide`, the
-//!   fixed-guard shells: the narrow tiers through the
-//!   `crate::algos::log::log_ln_divide` kernels (D18 widens to Int<2>; D38
-//!   calls `ln::ln_series_2limb`), the wide tiers through the per-tier
+//! - `k == 0` (every ordinary base, `|b - 1| >= 0.1`) — the fixed-guard
+//!   shells at guard `30`, split on the CONST width axis. The wide tiers
+//!   run `LnDivide`: the per-tier
 //!   `wide_trig_<tier>::log_strict_with_kernel` free functions (emitted by
 //!   `decl_wide_transcendental!`), reached by a `match N` with `resize_to`
-//!   bridges (identity at the matched `N`). Unchanged.
+//!   bridges (identity at the matched `N`), whose natural-log core is Tang
+//!   through `ln_fixed_routed_agm`. The narrow tiers run `LnDivideTang`:
+//!   the shared `ln(x)/ln(b)` quotient on the same Tang core at the
+//!   `Int<12>` narrow-safe work width
+//!   (`log_ln_divide::log_ln_divide_tang_narrow`), so an ordinary base
+//!   takes the SAME natural-log engine at every width. The Series
+//!   composition it replaced (`log_ln_divide_d38`, via
+//!   `ln::ln_series_2limb::log`) is kept, de-routed, as `LnDivide`'s
+//!   narrow arm — still reachable, still tested, and the reference the
+//!   Tang arm must match bit for bit.
 //! - `k > 0` (a base within 0.1 of 1) — `LnDivideConditioned`, the ONE
 //!   generic `log_ln_divide_conditioned` kernel: the ratio formed as
 //!   `(ln x / g(ε)) · 10^SCALE / d` from the EXACT `d = b_raw − 10^SCALE`
@@ -46,6 +54,7 @@ use crate::support::rounding::RoundingMode;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
     LnDivide,
+    LnDivideTang,
     LnDivideConditioned,
     #[allow(dead_code)]
     Schoolbook,
@@ -63,10 +72,26 @@ enum Select<const N: usize> {
 /// hands it `braw`, never `raw`. One comparison against `10^(SCALE - 1)`
 /// settles every ordinary base (tier-1 work); only a base within 0.1 of 1
 /// pays the `pow10` bisection that pins `k`.
+///
+/// The ordinary band then splits on `N` alone — a CONST test that folds
+/// away per monomorphisation, leaving the `k` probe as the only runtime
+/// work (least-work-first: the value decides only what the const key
+/// cannot). The narrow tiers take the Tang core
+/// ([`Algorithm::LnDivideTang`]); the wide tiers keep their per-tier
+/// fixed-guard shell, which is ALREADY Tang through
+/// `ln_fixed_routed_agm`/`policy::ln::is_tang`. So both sides of the
+/// width axis now run the same natural-log engine for an ordinary base —
+/// which is exactly what the narrow-vs-wide inversion was: `policy::ln`
+/// moved its narrow tiers to Tang, and `log`, a composition of TWO
+/// natural logs, was left behind on Series.
 #[inline]
 fn log_near_one_base<const N: usize, const SCALE: u32>(base_raw: &Int<N>) -> Algorithm {
     if near_one_digits::<Int<N>>(*base_raw, SCALE) == 0 {
-        Algorithm::LnDivide
+        if N <= 2 {
+            Algorithm::LnDivideTang
+        } else {
+            Algorithm::LnDivide
+        }
     } else {
         Algorithm::LnDivideConditioned
     }
@@ -107,8 +132,40 @@ pub(crate) fn checked_dispatch<const N: usize, const SCALE: u32>(
     };
     match algo {
         Algorithm::LnDivide => ln_divide_routed::<N, SCALE>(raw, braw, mode),
+        Algorithm::LnDivideTang => ln_divide_tang_routed::<N, SCALE>(raw, braw, mode),
         Algorithm::LnDivideConditioned => ln_divide_conditioned_routed::<N, SCALE>(raw, braw, mode),
         Algorithm::Schoolbook => schoolbook_routed::<N, SCALE>(raw, braw, mode),
+    }
+}
+
+/// The narrow tiers' ordinary-base arm: the shared `ln(x)/ln(b)`
+/// composition on the TANG natural-log core, at the `Int<12>` narrow-safe
+/// work width `policy::ln`'s own narrow Tang arm runs at, with that arm's
+/// artanh cap (`CAP = 100`, covering working scales `w <= 482` against the
+/// `96` this composition's walker can reach).
+///
+/// This is a blanket over BOTH narrow widths at EVERY scale — no gate, no
+/// crossover, nothing snapped to a benched cell: the wide tiers already
+/// run Tang for this same composition at every scale, so routing the
+/// narrow ones to it removes a width discontinuity rather than placing a
+/// new one. `Algorithm::LnDivide` (the Series composition,
+/// `log_ln_divide_d38`) stays the kept alternative on this key.
+#[inline]
+fn ln_divide_tang_routed<const N: usize, const SCALE: u32>(
+    raw: Int<N>,
+    braw: Int<N>,
+    mode: RoundingMode,
+) -> Option<Int<N>> {
+    match N {
+        1 | 2 => crate::algos::log::log_ln_divide::log_ln_divide_tang_narrow::<
+            N,
+            Int<12>,
+            SCALE,
+            100,
+        >(raw, braw, mode),
+        // Unreachable: the classifier only names this algorithm for
+        // `N <= 2`. The wide tiers' own shell is already Tang-cored.
+        _ => ln_divide_routed::<N, SCALE>(raw, braw, mode),
     }
 }
 

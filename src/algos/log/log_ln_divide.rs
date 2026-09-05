@@ -100,6 +100,101 @@ pub(crate) fn log_ln_divide_d38<const SCALE: u32>(
     crate::algos::ln::ln_series_2limb::log::<SCALE>(raw, base_raw, mode)
 }
 
+/// The narrow tiers' Tang `log(x, base)` for an ORDINARY base (`k == 0`) —
+/// the Tang sibling of [`log_ln_divide_d38`], which runs the same
+/// composition on the Series core and stays the kept alternative.
+///
+/// `log(x, b) = ln x / ln b` at the fixed [`COMPOSITION_GUARD`], both logs
+/// through the width-generic Tang core ([`tang_core`]) at the caller's
+/// narrow-safe work width `Wk`, then the shared [`log_ratio_finish`] — the
+/// same finish (exact integer-power pin, clear-of-tie single shot, exact
+/// rational-power pin, Ziv-escalated directed narrowing) the wide
+/// fixed-guard shells and the conditioned arm already run, so every path
+/// decides the same input the same way.
+///
+/// ── WHY TANG HERE ──
+///
+/// The wide fixed-guard shells take their natural-log core from
+/// `ln_fixed_routed_agm`, which is Tang at every wide tier and every scale
+/// (`policy::ln::is_tang`), while the Series sibling pays
+/// `exp_generic::ln_fixed`'s Brent reduction and its `O(w)` artanh series
+/// TWICE per call — once for `x`, once for the base — at
+/// `w = SCALE + 30`. That is the same-scale inversion `policy::ln` closed
+/// for `ln` itself by routing the narrow tiers to Tang; `log` composes two
+/// natural logs, so it carried the inversion twice over and was left on
+/// Series when `ln` moved. Tang's reduction is a table read and its artanh
+/// runs at `|t| < 1/256` (~`0.21·w` terms against Series' ~`1.05·w`).
+///
+/// ── THE WORK WIDTH ──
+///
+/// `Wk` is the caller's; the policy binds `Int<12>`, the same narrow-safe
+/// work integer `policy::ln`'s narrow Tang arm runs at — 6 u128 limbs
+/// against the narrow build's `MAX_U128_LIMB = 8`, so it is a legal
+/// `resize_to` receiver both ways where `Int<24>` is not. Its budget
+/// carries this composition at EVERY narrow cell, not just the benched
+/// ones: the walker sizes by `8 · limbs = 96` digits against
+/// `needed_digits(SCALE, 0) = SCALE + 42`, i.e. `80` at the widest narrow
+/// cell `D38<37>`, and the arithmetic capacity `2w + 40 = 176` sits inside
+/// `19 · limbs = 228`. The baked Tang table reaches `w <= 134` in a narrow
+/// build (`LN_TANG_B = 512` bits against `w · log2(10) + 64`), above the
+/// `96` the walker can ever ask for — so this path needs no
+/// [`tang_table_reaches`] gate, and the table's own
+/// `p_full <= LN_TANG_LIMBS` assertion stands behind it.
+///
+/// `None` = result out of storage range: the narrow tiers' `checked_`
+/// contract. `log` genuinely leaves narrow storage for an ordinary base
+/// near the band edge (`log_1.1(x)` at `D38<37>` reaches ~`926`, past
+/// `Int<2>::MAX` at that scale), so the range is decided on the probe
+/// BEFORE the finish runs — the finish panics past storage — exactly as
+/// the conditioned narrow shell decides it.
+#[inline]
+#[must_use]
+pub(crate) fn log_ln_divide_tang_narrow<
+    const N: usize,
+    Wk: BigInt,
+    const SCALE: u32,
+    const CAP: u128,
+>(
+    raw: Int<N>,
+    base_raw: Int<N>,
+    mode: RoundingMode,
+) -> Option<Int<N>>
+where
+    <Wk as BigInt>::Scratch: ComputeLimbs,
+{
+    assert!(raw > Int::<N>::ZERO, "log: argument must be positive");
+    assert!(base_raw > Int::<N>::ZERO, "log: base must be positive");
+    // `b == 1` is the domain wall (`ln 1 = 0`, and the quotient would
+    // divide by zero). Decided EXACTLY on the storage integer — one
+    // comparison, no `ln b` — rather than on a rounded core result.
+    assert!(
+        base_raw != eg::pow10::<Int<N>>(SCALE),
+        "log: base must not equal 1 (ln(1) is zero)"
+    );
+    let ln_at = tang_core::<Wk, SCALE, CAP>();
+    let ratio_at = |guard_digits: u32| {
+        conditioned_ratio_quotient::<N, Wk, SCALE>(raw, base_raw, guard_digits, &ln_at)
+    };
+    let probe = ratio_at(COMPOSITION_GUARD);
+    let single_shot =
+        narrow_single_shot::<N, Wk>(probe, SCALE + COMPOSITION_GUARD, SCALE, mode)?;
+    // Within one ULP of the storage extreme the walker's ±1 could leave
+    // range and its own check would panic; the single shot stands there (a
+    // tie that deep at the extreme is Table-Maker's-Dilemma residue either
+    // way) — the conditioned narrow shell's rule, unchanged.
+    if single_shot.abs() >= Int::<N>::MAX - Int::<N>::ONE {
+        return Some(single_shot);
+    }
+    Some(log_ratio_finish::<N, Wk, SCALE>(
+        raw,
+        base_raw,
+        mode,
+        COMPOSITION_GUARD,
+        probe,
+        ratio_at,
+    ))
+}
+
 // ── The conditioned composition ─────────────────────────────────────────
 
 /// Guard digits of the `ln(x)/ln(b)` composition for an ordinary base — the
@@ -239,8 +334,15 @@ where
 /// The Tang natural-log core at work width `Wk` — `ln_tang::tang_ln_fixed_g`
 /// with the tier's artanh cap `CAP` and `INTERNAL_EXTRA = false`, exactly as
 /// the wide fixed shells' `ln_fixed_routed_agm` runs it. The caller gates it
-/// on [`tang_table_reaches`].
-#[cfg(feature = "_wide-support")]
+/// on [`tang_table_reaches`], or proves the reach from its own width budget
+/// (the narrow shell [`log_ln_divide_tang_narrow`] does the latter).
+///
+/// NOT `_wide-support`-gated: the Tang table is baked in BOTH builds — the
+/// narrow one stores the same `M + 1` slots at `B = 512` bits (8 u64 limbs)
+/// against the wide build's 7168 — and `policy::ln`'s narrow Tang arm
+/// already reads it through the same accessor. The core is width-generic,
+/// so the narrow `log` composition binds it at its own narrow-safe work
+/// width exactly as the wide shells bind it at `Wagm`.
 #[inline]
 pub(crate) fn tang_core<Wk: BigInt, const SCALE: u32, const CAP: u128>() -> impl Fn(Wk, u32) -> Wk
 where
@@ -481,14 +583,19 @@ where
     eg::mul::<Wk>(pre, sum, working_scale)
 }
 
-/// The naive quotient `ln(x)/ln(base)` at working scale
-/// `SCALE + guard_digits` — the composition every fixed-guard shell runs,
-/// KEPT as the unrouted reference for [`conditioned_ratio`]. Correctly
-/// rounded only at guard `30 + 2k` (the module doc's law: `ln b ~ 10^-k`
-/// held at absolute resolution loses `k` digits of relative precision and
-/// the quotient multiplies that by its own `10^k`); the bit-identity test
-/// runs it at that lift against the reformulation at `30 + k`.
-#[allow(dead_code)]
+/// The plain quotient `ln(x)/ln(base)` at working scale
+/// `SCALE + guard_digits` — the composition every fixed-guard shell runs.
+///
+/// ROUTED for the ordinary-base narrow path
+/// ([`log_ln_divide_tang_narrow`], `k == 0`, guard `30`), and kept as the
+/// reference formulation against which [`conditioned_ratio`] is checked
+/// for a base near 1. It is correctly rounded only at guard `30 + 2k` (the
+/// module doc's law: `ln b ~ 10^-k` held at absolute resolution loses `k`
+/// digits of relative precision and the quotient multiplies that by its
+/// own `10^k`), which is why the conditioned arm reformulates instead of
+/// calling it; at `k == 0` the two guards coincide at `30` and the plain
+/// quotient IS the correct composition. The bit-identity test runs it at
+/// the `30 + 2k` lift against the reformulation at `30 + k`.
 fn conditioned_ratio_quotient<const N: usize, Wk: BigInt, const SCALE: u32>(
     raw: Int<N>,
     base_raw: Int<N>,
