@@ -1331,11 +1331,14 @@ fn pow10_into(exponent: u32, out_limbs: &mut [u64], scratch: &mut [u64]) -> Opti
 /// `newton_reciprocal` and `div_widen_scale` use, and the one
 /// `div_rem::dispatch`'s own doc points concrete-`N` callers at.
 ///
-/// The non-`Rem` verdicts collapse to base-2⁶⁴ Knuth, which is value-identical
-/// to the u128-limb engine (that engine exists for speed, not a different
-/// result). Correct for every shape this kernel presents today, but it MUST be
-/// re-verified if an `Algorithm` arm joining `int::policy::div_rem` ever
-/// returns a numerically different answer.
+/// The verdict is matched EXHAUSTIVELY — no `_`, so adding an engine to
+/// `int::policy::div_rem` forces a decision here rather than silently
+/// degrading to Knuth. `KnuthU128Limb` carries its own arm and its own packed
+/// scratch: collapsing it onto base-2⁶⁴ Knuth was value-identical (that engine
+/// exists for speed, not a different result), but it discarded the verdict —
+/// so wherever the wide even-divisor shape does arise, the slower engine ran.
+/// The divisor lengths the four call sites present are runtime values and have
+/// not been enumerated, so this is a routing correction, not a measured win.
 fn bracket_div<Wk: BigInt>(
     dividend: &[u64],
     divisor: &[u64],
@@ -1355,7 +1358,45 @@ where
             crate::int::algos::div::div_rem::div_rem(dividend, divisor, quotient, remainder);
             true
         }
-        _ => {
+        // The base-2¹²⁸ engine. The u64 normalisation buffers are the same
+        // pair the Knuth arm sizes, because the engine normalises in u64
+        // space before packing; on top of them it needs the packed
+        // `⌈(dividend.len() + 2) / 2⌉ + 1` / `⌈divisor.len() / 2⌉` u128
+        // scratch. The SAME length check gates both, and it is what makes the
+        // packed pair provably long enough: clearing it means
+        // `dividend.len() + 2 <= 4·LIMBS` and `divisor.len() <= 2·LIMBS`, so
+        // the minima are at most `2·LIMBS + 1` and `LIMBS` — met by
+        // `quad_buffered_u128` (`⌊(4·LIMBS + ⌈LIMBS/2⌉ + 1) / 2⌋`, which
+        // exceeds `2·LIMBS + 1` for every `LIMBS >= 1`) and by `double_u128`
+        // (`LIMBS`) exactly. The engine zeroes all four buffers itself.
+        Algorithm::KnuthU128Limb => {
+            let mut norm_dividend_buf = <<Wk as BigInt>::Scratch as ComputeLimbs>::quad_u64();
+            let mut norm_divisor_buf = <<Wk as BigInt>::Scratch as ComputeLimbs>::double_u64();
+            let mut packed_dividend_buf =
+                <<Wk as BigInt>::Scratch as ComputeLimbs>::quad_buffered_u128();
+            let mut packed_divisor_buf =
+                <<Wk as BigInt>::Scratch as ComputeLimbs>::double_u128();
+            let norm_dividend = norm_dividend_buf.as_mut();
+            let norm_divisor = norm_divisor_buf.as_mut();
+            if norm_dividend.len() < dividend.len() + 2 || norm_divisor.len() < divisor.len() {
+                return false;
+            }
+            crate::int::algos::div::div_knuth_u128_limb::div_knuth_u128_limb_into(
+                dividend,
+                divisor,
+                quotient,
+                remainder,
+                norm_dividend,
+                norm_divisor,
+                packed_dividend_buf.as_mut(),
+                packed_divisor_buf.as_mut(),
+            );
+            true
+        }
+        // Base-2⁶⁴ Knuth. Burnikel–Ziegler and Schoolbook are never returned
+        // by the matcher today, but both are named so neither can be added
+        // silently.
+        Algorithm::Knuth | Algorithm::BurnikelZieglerWithKnuth | Algorithm::Schoolbook => {
             let mut norm_dividend_buf = <<Wk as BigInt>::Scratch as ComputeLimbs>::quad_u64();
             let mut norm_divisor_buf = <<Wk as BigInt>::Scratch as ComputeLimbs>::double_u64();
             let norm_dividend = norm_dividend_buf.as_mut();

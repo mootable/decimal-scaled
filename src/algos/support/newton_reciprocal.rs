@@ -300,8 +300,10 @@ impl NewtonReciprocal {
             // route on the divide matcher's own shape verdict, and call the
             // engine's `_into` door — the exact-scratch pattern
             // `int::policy::div_rem::dispatch`'s doc sanctions (the
-            // `exp_generic::div_rem_exact` precedent; the u128-limb
-            // refinement falls to the value-identical base-2⁶⁴ Knuth).
+            // `exp_generic::div_rem_exact` precedent). The verdict is matched
+            // EXHAUSTIVELY, so a new engine forces a decision here; the
+            // u128-limb refinement gets its own arm and its own packed
+            // scratch, sized from the same module ceilings.
             use crate::int::policy::div_rem::{select_for_limbs, Algorithm};
             match select_for_limbs(&numerator[..k_u64 + 1], &pow_scale[..pow_len]) {
                 // Single-limb divisor: hardware remainder, no normalisation
@@ -312,14 +314,46 @@ impl NewtonReciprocal {
                     &mut r[..k_u64 + 1],
                     &mut remainder[..pow_len],
                 ),
-                _ => {
-                    // Verdict collapse: any non-Rem algorithm (including the
-                    // u128-limb verdict) funnels here and runs Knuth. Correct
-                    // for every current `pow_scale`-denominator shape — the
-                    // u128 engine's large-dividend precondition is not met —
-                    // but MUST be re-verified whenever an Algorithm arm joins
-                    // `int::policy::div_rem`; a new engine winning for these
-                    // shapes would need an explicit arm, not a silent Knuth fall.
+                // The base-2¹²⁸ engine. Not a dead arm on shape grounds: the
+                // matcher's u128 gate is `den_n` even and `>= 24` with
+                // `num_m >= 2·den_n`, and this call site can present exactly
+                // that. `10^460` is 1529 bits = 24 u64 limbs (even, and at the
+                // threshold), while `num_m = k_u64 + 1 = width_limbs + pow_len
+                // + 1` clears `2·den_n = 48` from `width_limbs = 20` up. That
+                // is the gate arithmetic only — which `(scale, width_limbs)`
+                // pairs actually reach this fallback (it is taken at odd
+                // widths and outside the baked table's range) has not been
+                // enumerated, so treat the arm as live rather than assuming
+                // either way.
+                //
+                // Scratch from the same module ceilings as the Knuth arm, plus
+                // the packed pair. The engine wants
+                // `⌈(num.len() + 2) / 2⌉ + 1` u128 dividend limbs; `num.len()
+                // = k_u64 + 1` and `k_u64 < MAX_R_U64` (asserted above), so
+                // that is at most `⌈(MAX_R_U64 + 2) / 2⌉ + 1 = MAX_R_U128 + 2`.
+                // The divisor wants `⌈pow_len / 2⌉ <= MAX_POW_U128`.
+                Algorithm::KnuthU128Limb => {
+                    let mut dividend_scratch = [0u64; MAX_R_U64 + 2];
+                    let mut divisor_scratch = [0u64; MAX_POW_U64];
+                    let mut packed_dividend = [0u128; MAX_R_U128 + 2];
+                    let mut packed_divisor = [0u128; MAX_POW_U128];
+                    crate::int::algos::div::div_knuth_u128_limb::div_knuth_u128_limb_into(
+                        &numerator[..k_u64 + 1],
+                        &pow_scale[..pow_len],
+                        &mut r[..k_u64 + 1],
+                        &mut remainder[..pow_len],
+                        &mut dividend_scratch,
+                        &mut divisor_scratch,
+                        &mut packed_dividend,
+                        &mut packed_divisor,
+                    );
+                }
+                // Base-2⁶⁴ Knuth. Burnikel–Ziegler and Schoolbook are never
+                // returned by the matcher today, but both are named so neither
+                // can be added silently.
+                Algorithm::Knuth
+                | Algorithm::BurnikelZieglerWithKnuth
+                | Algorithm::Schoolbook => {
                     let mut dividend_scratch = [0u64; MAX_R_U64 + 2];
                     let mut divisor_scratch = [0u64; MAX_POW_U64];
                     crate::int::algos::div::div_knuth::div_knuth_into(

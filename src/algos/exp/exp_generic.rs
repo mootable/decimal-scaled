@@ -86,10 +86,11 @@ use crate::support::rounding::RoundingMode;
     /// exact-per-width at EVERY build instead of leaning on the blanket
     /// (the exact-scratch migration the `compute_limbs` blanket docs call
     /// for). Engine choice follows the divide matcher's own
-    /// `select_for_limbs` verdict; the u128-limb refinement (divisors of
-    /// ≥ 24 limbs, which no narrow probe and no in-range work value here
-    /// produces) falls to the value-identical base-2⁶⁴ Knuth. Truncated
-    /// semantics, identical to `Int::div_rem`.
+    /// `select_for_limbs` verdict, matched EXHAUSTIVELY (no `_`, so adding
+    /// an engine forces a decision here) — including the u128-limb
+    /// refinement, which gets its own arm and its own packed scratch rather
+    /// than collapsing onto base-2⁶⁴ Knuth. Truncated semantics, identical
+    /// to `Int::div_rem`.
     pub(crate) fn div_rem_exact<S: BigInt>(numerator: S, divisor: S) -> (S, S)
     where
         S::Scratch: ComputeLimbs,
@@ -112,8 +113,41 @@ use crate::support::rounding::RoundingMode;
                 quotient_limbs.as_mut(),
                 remainder_limbs.as_mut(),
             ),
-            // Knuth — with exact caller-sized scratch (see above).
-            _ => {
+            // The base-2¹²⁸ engine, with the same buffer family
+            // `rem_int_layer` uses for this shape — both operands are one
+            // `single_u64` (`n` u64 limbs) wide, so the u64 normalisation
+            // buffers are `single_buffered_u64` (`n + 2`) and the packed
+            // scratch is `double_u128` (`n`) / `single_u128` (`⌈n/2⌉`).
+            //
+            // Those cover the engine's minima wherever this arm can RUN, and
+            // the bound is stated rather than assumed: the verdict needs
+            // `den_n >= 24`, and `den_n <= den.len() = n`, so `n >= 24` on
+            // every entry — comfortably past the `n >= 5` at which
+            // `double_u128`'s `n` limbs reach `⌈(n+2)/2⌉ + 1`, and past the
+            // `⌈n/2⌉` that `single_u128` supplies exactly.
+            Algorithm::KnuthU128Limb => {
+                let mut dividend_scratch = <S::Scratch as ComputeLimbs>::single_buffered_u64();
+                let mut divisor_scratch = <S::Scratch as ComputeLimbs>::single_buffered_u64();
+                let mut packed_dividend = <S::Scratch as ComputeLimbs>::double_u128();
+                let mut packed_divisor = <S::Scratch as ComputeLimbs>::single_u128();
+                crate::int::algos::div::div_knuth_u128_limb::div_knuth_u128_limb_into(
+                    numerator_limbs.as_ref(),
+                    divisor_limbs.as_ref(),
+                    quotient_limbs.as_mut(),
+                    remainder_limbs.as_mut(),
+                    dividend_scratch.as_mut(),
+                    divisor_scratch.as_mut(),
+                    packed_dividend.as_mut(),
+                    packed_divisor.as_mut(),
+                );
+            }
+            // Base-2⁶⁴ Knuth — with exact caller-sized scratch (see above).
+            // Burnikel–Ziegler and Schoolbook are never returned by the
+            // matcher today, but both are named so neither can be added
+            // silently.
+            Algorithm::Knuth
+            | Algorithm::BurnikelZieglerWithKnuth
+            | Algorithm::Schoolbook => {
                 let mut dividend_scratch = <S::Scratch as ComputeLimbs>::single_buffered_u64();
                 let mut divisor_scratch = <S::Scratch as ComputeLimbs>::single_buffered_u64();
                 crate::int::algos::div::div_knuth::div_knuth_into(
