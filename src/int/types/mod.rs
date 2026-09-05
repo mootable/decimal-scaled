@@ -2233,6 +2233,23 @@ impl<const N: usize> Int<N> {
         // buffers (288 u64 limbs covers every shipped width / scale /
         // f64 exponent: D307 magnitude ≤ 16 limbs, 10^scale ≤ 16 limbs,
         // 2^1074 ≤ 17 limbs — products stay well under 288).
+        //
+        // This is a frozen literal on purpose, NOT `max_n_limbs(4)` — unlike
+        // the sibling `cmp_cross_scaled` above, whose staging buffer holds
+        // `10^scale_diff` and so genuinely shrinks with the build's widest
+        // decimal tier (a sound `MAX_WORK_N`-derived size). These buffers
+        // instead hold a value shifted left by up to f64's full IEEE-754
+        // exponent range (subnormal exponents reach -1074) — a fixed
+        // hardware constant with NO relationship to decimal width or
+        // `MAX_WORK_N`. The requirement is additive (`N` plus a ~18-limb
+        // shift margin), not a multiple of `N`, so no `ComputeLimbs` family
+        // can express it (`single`/`double`/`quad`, plain or `_buffered`,
+        // are all `mult·N` or `mult·N + ⌈N/2⌉`). A `MAX_WORK_N`-derived size
+        // would be actively WRONG here, not merely imprecise: at the
+        // narrowest build `max_n_limbs(4)` evaluates to 9 limbs, well under
+        // the fixed shift margin, and `shl` silently drops any write past
+        // the buffer's end rather than panicking — turning a genuine
+        // inequality into a false `Equal` with nothing to catch it.
         let self_mag = self.unsigned_abs();
         let self_mag_limbs = self_mag.as_limbs();
 
