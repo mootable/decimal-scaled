@@ -505,10 +505,10 @@ where
     )
 }
 
-/// Everything after the probe: the exact integer-power pin, the clear-of-tie
-/// single shot, the exact rational-power pin, and the Ziv-escalated
-/// narrowing into `Int<N>` (which panics past storage). `probe_ratio` is
-/// [`conditioned_probe`]'s value for the same arguments.
+/// Everything after the probe of the CONDITIONED composition:
+/// [`log_ratio_finish`] with [`conditioned_ratio`] as the walker's
+/// recompute. `probe_ratio` is [`conditioned_probe`]'s value for the same
+/// arguments.
 pub(crate) fn conditioned_finish<const N: usize, Wk: BigInt, const SCALE: u32>(
     raw: Int<N>,
     base_raw: Int<N>,
@@ -516,6 +516,47 @@ pub(crate) fn conditioned_finish<const N: usize, Wk: BigInt, const SCALE: u32>(
     guard: u32,
     ln_at: &impl Fn(Wk, u32) -> Wk,
     probe_ratio: Wk,
+) -> Int<N>
+where
+    <Wk as BigInt>::Scratch: ComputeLimbs,
+{
+    log_ratio_finish::<N, Wk, SCALE>(raw, base_raw, mode, guard, probe_ratio, |guard_digits| {
+        conditioned_ratio::<N, Wk, SCALE>(raw, base_raw, guard_digits, ln_at)
+    })
+}
+
+/// Everything after the probe of EVERY `ln(x)/ln(b)` composition, whatever
+/// formed the ratio: the exact integer-power pin, the clear-of-tie single
+/// shot, the exact rational-power pin, and the Ziv-escalated directed
+/// narrowing into `Int<N>` (which panics past storage). `probe_ratio` is
+/// the ratio at `guard`; `ratio_at(g)` is the same composition at guard
+/// `g`, called only for an ESCALATED probe (`g > guard`) — the walker's
+/// first probe is `probe_ratio` itself, so an ordinary input never
+/// recomputes.
+///
+/// The wide tiers' fixed-guard shell (`log_strict_with_kernel`, emitted by
+/// `decl_wide_transcendental!`) runs this finish with its own two-core
+/// quotient as `ratio_at`; the conditioned arm runs it through
+/// [`conditioned_finish`]. One finish, so the exact rational-power pin —
+/// which the wide shell lacked: golden `log_1.21(1.1) = 1/2`,
+/// `log_1.44(1.728) = 3/2` came back a ULP off under a directed mode
+/// wherever the kernel noise fell on the wrong side of the grid line —
+/// decides the same inputs the same way on every path. For decimal `x` and
+/// `b`, `log_b(x)` is rational or transcendental (Gelfond–Schneider): on
+/// the rational half no escalation converges, the residual at every depth
+/// being noise around the grid line, so a pin by exact integer arithmetic
+/// is the only sound decision; on the transcendental half the residual is
+/// genuine and escalation is the sound method. On an input the pins do not
+/// take, the sequence is the walker's own: the single shot IS its first
+/// step, bit for bit, and the walker is entered exactly when it would have
+/// escalated.
+pub(crate) fn log_ratio_finish<const N: usize, Wk: BigInt, const SCALE: u32>(
+    raw: Int<N>,
+    base_raw: Int<N>,
+    mode: RoundingMode,
+    guard: u32,
+    probe_ratio: Wk,
+    ratio_at: impl Fn(u32) -> Wk,
 ) -> Int<N>
 where
     <Wk as BigInt>::Scratch: ComputeLimbs,
@@ -575,7 +616,7 @@ where
             if guard_digits == guard {
                 return probe_ratio;
             }
-            conditioned_ratio::<N, Wk, SCALE>(raw, base_raw, guard_digits, ln_at)
+            ratio_at(guard_digits)
         },
     )
 }
@@ -1280,6 +1321,67 @@ mod tests {
         scale::<3, 42>(&mut misses, 57);
         scale::<3, 53>(&mut misses, 57);
         assert!(misses.is_empty(), "{} mis-rounded cells:\n{}", misses.len(), misses.join("\n"));
+    }
+
+    /// The wide fixed shell now finishes through `log_ratio_finish`. On an
+    /// input no pin takes — the overwhelming majority of `log` calls — that
+    /// must be BIT-IDENTICAL to the sequence it replaced, the exact-power
+    /// pin then the walker, which this test rebuilds from the tier's own
+    /// helpers: same probe, same recompute, same bounds. Ordinary bases on
+    /// both sides of 1, arguments across the range, every mode, scales
+    /// across the tier — including results that sit close to a grid line,
+    /// where the finish's single shot declines, its rational pin declines,
+    /// and the walker escalates exactly as before.
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[test]
+    fn wide_fixed_shell_finish_is_bit_identical_on_ordinary_inputs() {
+        use crate::types::widths::wide_trig_d57 as core;
+        fn check<const SCALE: u32>(x: (i128, u32), base: (i128, u32)) {
+            let at = |(m, f): (i128, u32)| Int::<3>::from_i128(m) * eg::pow10::<Int<3>>(SCALE - f);
+            let (raw, braw) = (at(x), at(base));
+            let base_working_scale = SCALE + core::GUARD;
+            let ratio_at = |guard_digits: u32| {
+                let working_scale = SCALE + guard_digits;
+                core::div_agm(
+                    core::ln_fixed_routed_agm::<SCALE>(core::to_work_scaled_agm(raw, guard_digits), working_scale),
+                    core::ln_fixed_routed_agm::<SCALE>(core::to_work_scaled_agm(braw, guard_digits), working_scale),
+                    working_scale,
+                )
+            };
+            let probe = ratio_at(core::GUARD);
+            for mode in ALL_MODES {
+                // The sequence the shell ran before this finish.
+                let exponent = core::round_to_nearest_int_agm(probe, base_working_scale);
+                let before = if core::log_is_exact_int::<core::Wagm>(
+                    core::to_work_scaled_agm(raw, 0),
+                    core::to_work_scaled_agm(braw, 0),
+                    SCALE,
+                    exponent,
+                ) {
+                    core::exact_int_at_scale(exponent, SCALE)
+                } else {
+                    core::round_to_storage_directed::<core::Wagm>(core::GUARD, SCALE, mode, |guard_digits| {
+                        if guard_digits == core::GUARD {
+                            probe
+                        } else {
+                            ratio_at(guard_digits)
+                        }
+                    })
+                };
+                let now = core::log_strict_with_kernel::<SCALE>(raw, braw, mode);
+                assert_eq!(now, before, "x={x:?} base={base:?} scale={SCALE} mode={mode:?}");
+            }
+        }
+        fn scale<const SCALE: u32>() {
+            for base in [(2, 0), (10, 0), (5, 1), (3, 0), (725, 2), (13, 1), (1000, 0)] {
+                for x in [(2, 0), (3, 0), (725, 2), (3, 1), (123456789, 3), (15, 1), (1, 2), (8, 0), (1024, 0)] {
+                    check::<SCALE>(x, base);
+                }
+            }
+        }
+        scale::<5>();
+        scale::<20>();
+        scale::<40>();
     }
 }
 
