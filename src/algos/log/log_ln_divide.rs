@@ -1216,6 +1216,87 @@ mod tests {
         }
     }
 
+    /// The narrow ORDINARY-base arm (`k == 0`) — the Tang composition
+    /// [`log_ln_divide_tang_narrow`] — through the policy exactly as the
+    /// golden gate reaches it, against the narrow `Fixed` Series shell it
+    /// replaced. Both are correctly rounded, so they must agree BIT FOR
+    /// BIT; this is the contract that lets the Tang arm take the routing
+    /// and the reason the Series shell is KEPT rather than removed, and it
+    /// is the sibling of
+    /// [`narrow_conditioned_arm_agrees_with_the_fixed_shell`] for the
+    /// other half of the base axis.
+    ///
+    /// Spread over the WHOLE narrow band, not the benched cells: both
+    /// widths, scales `0 / 2 / 9 / 19 / 37` (the D38 band's ends and
+    /// middle, and D18's own), and ordinary bases either side of 1
+    /// (`0.5`, `1.5`, `2`, `2.5`, `3`, `7`, `10`) against arguments either
+    /// side of 1 — including the exact-power rows the integer pin takes
+    /// (`log_2(8)`, `log_10(100)`) and non-degenerate ones it does not.
+    #[test]
+    fn narrow_ordinary_base_tang_arm_agrees_with_the_fixed_shell() {
+        fn check<const SCALE: u32>(raw_i: i128, braw_i: i128) {
+            let (raw, braw) = (Int::<2>::from_i128(raw_i), Int::<2>::from_i128(braw_i));
+            for mode in ALL_MODES {
+                let tang = crate::policy::log::checked_dispatch::<2, SCALE>(raw, braw, mode);
+                let fixed = log_ln_divide_d38::<SCALE>(raw, braw, mode);
+                assert_eq!(
+                    tang, fixed,
+                    "raw={raw_i} base_raw={braw_i} scale={SCALE} mode={mode:?}"
+                );
+                assert!(tang.is_some(), "raw={raw_i} base_raw={braw_i} scale={SCALE}: in range");
+            }
+        }
+        // SCALE 0 — integer storage, the band edge.
+        check::<0>(3, 2);
+        check::<0>(8, 2); // exact integer power: the pin
+        check::<0>(7, 10);
+        check::<0>(100, 10); // exact integer power
+        check::<0>(5, 3);
+        // SCALE 2.
+        let one2 = 100i128;
+        check::<2>(3 * one2, 2 * one2);
+        check::<2>(7 * one2, 10 * one2);
+        check::<2>(250, 2 * one2); // 2.5 argument
+        check::<2>(3 * one2, 50); // base 0.5 (negative ln b)
+        check::<2>(3 * one2, 150); // base 1.5, still ordinary (k == 0)
+        // SCALE 9 — mid-band, and D18's own top scale.
+        let one9 = 10i128.pow(9);
+        check::<9>(3 * one9, 2 * one9);
+        check::<9>(7 * one9, 10 * one9);
+        check::<9>(2 * one9, 15 * 10i128.pow(8));
+        check::<9>(one9 / 2, 3 * one9); // argument below 1
+        // SCALE 19.
+        let one19 = 10i128.pow(19);
+        check::<19>(3 * one19, 2 * one19);
+        check::<19>(7 * one19, 10 * one19);
+        check::<19>(one19 / 4, 2 * one19);
+        // SCALE 37 — the D38 band's top, the largest working scale.
+        let one37 = 10i128.pow(37);
+        check::<37>(3 * one37, 2 * one37);
+        check::<37>(7 * one37, 10 * one37);
+        check::<37>(one37 / 2, 3 * one37);
+        // D18 (N == 1) targets its OWN storage; the fixed path widens to
+        // Int<2>, runs the D38 shell and narrows back.
+        // (argument raw, base raw) at scale 9, written out: 3 base 2,
+        // 7 base 10, 2 base 1.5, 8 base 2 (the exact-power pin).
+        for (raw_i, braw_i) in [
+            (3 * one9, 2 * one9),
+            (7 * one9, 10 * one9),
+            (2 * one9, 15 * 10i128.pow(8)),
+            (8 * one9, 2 * one9),
+        ] {
+            let (raw1, braw1) = (Int::<1>::from_i128(raw_i), Int::<1>::from_i128(braw_i));
+            let (raw2, braw2) = (Int::<2>::from_i128(raw_i), Int::<2>::from_i128(braw_i));
+            for mode in ALL_MODES {
+                let tang = crate::policy::log::checked_dispatch::<1, 9>(raw1, braw1, mode);
+                let fixed = log_ln_divide_d38::<9>(raw2, braw2, mode)
+                    .and_then(crate::policy::narrow_fit::<1>);
+                assert_eq!(tang, fixed, "D18<9> raw={raw_i} base_raw={braw_i} mode={mode:?}");
+                assert!(tang.is_some());
+            }
+        }
+    }
+
     #[test]
     fn lift_and_budget_arithmetic() {
         assert_eq!(lifted_guard(0), COMPOSITION_GUARD);
