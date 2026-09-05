@@ -86,10 +86,6 @@ what grounds* — an adjudication with no reasoning is a fact with no method.
 `decisions/<iso-datetime>_<argument>.md`, named for what was argued. Follow the repository's own
 convention for decision records where it has one.
 
-Not in code comments. Comments earn their place explaining the code they sit beside; a dispute
-record is a different kind of thing and putting it there overloads them. And not in a chat log —
-that is a transcript, not a record.
-
 ## The tie-breaker
 
 A genuine deadlock can be broken by a fresh party instead of the human — **but only with the
