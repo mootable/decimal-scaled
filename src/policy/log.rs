@@ -218,25 +218,25 @@ fn ln_divide_conditioned_routed<const N: usize, const SCALE: u32>(
     match N {
         1 | 2 => conditioned_narrow::<N, SCALE>(raw, braw, mode, k),
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => Some(conditioned_wide::<3, crate::types::widths::wide_trig_d57::Wagm, crate::types::widths::wide_trig_d57::Wexp, SCALE, 100>(raw.resize_to::<Int<3>>(), braw.resize_to::<Int<3>>(), mode, k).resize_to::<Int<N>>()),
+        3 => conditioned_wide::<3, crate::types::widths::wide_trig_d57::Wagm, crate::types::widths::wide_trig_d57::Wexp, SCALE, 100>(raw.resize_to::<Int<3>>(), braw.resize_to::<Int<3>>(), mode, k).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => Some(conditioned_wide::<4, crate::types::widths::wide_trig_d76::Wagm, crate::types::widths::wide_trig_d76::Wexp, SCALE, 400>(raw.resize_to::<Int<4>>(), braw.resize_to::<Int<4>>(), mode, k).resize_to::<Int<N>>()),
+        4 => conditioned_wide::<4, crate::types::widths::wide_trig_d76::Wagm, crate::types::widths::wide_trig_d76::Wexp, SCALE, 400>(raw.resize_to::<Int<4>>(), braw.resize_to::<Int<4>>(), mode, k).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => Some(conditioned_wide::<6, crate::types::widths::wide_trig_d115::Wagm, crate::types::widths::wide_trig_d115::Wexp, SCALE, 200>(raw.resize_to::<Int<6>>(), braw.resize_to::<Int<6>>(), mode, k).resize_to::<Int<N>>()),
+        6 => conditioned_wide::<6, crate::types::widths::wide_trig_d115::Wagm, crate::types::widths::wide_trig_d115::Wexp, SCALE, 200>(raw.resize_to::<Int<6>>(), braw.resize_to::<Int<6>>(), mode, k).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => Some(conditioned_wide::<8, crate::types::widths::wide_trig_d153::Wagm, crate::types::widths::wide_trig_d153::Wexp, SCALE, 200>(raw.resize_to::<Int<8>>(), braw.resize_to::<Int<8>>(), mode, k).resize_to::<Int<N>>()),
+        8 => conditioned_wide::<8, crate::types::widths::wide_trig_d153::Wagm, crate::types::widths::wide_trig_d153::Wexp, SCALE, 200>(raw.resize_to::<Int<8>>(), braw.resize_to::<Int<8>>(), mode, k).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => Some(conditioned_wide::<12, crate::types::widths::wide_trig_d230::Wagm, crate::types::widths::wide_trig_d230::Wexp, SCALE, 400>(raw.resize_to::<Int<12>>(), braw.resize_to::<Int<12>>(), mode, k).resize_to::<Int<N>>()),
+        12 => conditioned_wide::<12, crate::types::widths::wide_trig_d230::Wagm, crate::types::widths::wide_trig_d230::Wexp, SCALE, 400>(raw.resize_to::<Int<12>>(), braw.resize_to::<Int<12>>(), mode, k).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => Some(conditioned_wide::<16, crate::types::widths::wide_trig_d307::Wagm, crate::types::widths::wide_trig_d307::Wexp, SCALE, 400>(raw.resize_to::<Int<16>>(), braw.resize_to::<Int<16>>(), mode, k).resize_to::<Int<N>>()),
+        16 => conditioned_wide::<16, crate::types::widths::wide_trig_d307::Wagm, crate::types::widths::wide_trig_d307::Wexp, SCALE, 400>(raw.resize_to::<Int<16>>(), braw.resize_to::<Int<16>>(), mode, k).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => Some(conditioned_wide::<24, crate::types::widths::wide_trig_d462::Wagm, crate::types::widths::wide_trig_d462::Wexp, SCALE, 400>(raw.resize_to::<Int<24>>(), braw.resize_to::<Int<24>>(), mode, k).resize_to::<Int<N>>()),
+        24 => conditioned_wide::<24, crate::types::widths::wide_trig_d462::Wagm, crate::types::widths::wide_trig_d462::Wexp, SCALE, 400>(raw.resize_to::<Int<24>>(), braw.resize_to::<Int<24>>(), mode, k).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => Some(conditioned_wide::<32, crate::types::widths::wide_trig_d616::Wagm, crate::types::widths::wide_trig_d616::Wexp, SCALE, 400>(raw.resize_to::<Int<32>>(), braw.resize_to::<Int<32>>(), mode, k).resize_to::<Int<N>>()),
+        32 => conditioned_wide::<32, crate::types::widths::wide_trig_d616::Wagm, crate::types::widths::wide_trig_d616::Wexp, SCALE, 400>(raw.resize_to::<Int<32>>(), braw.resize_to::<Int<32>>(), mode, k).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => Some(conditioned_wide::<48, crate::types::widths::wide_trig_d924::Wagm, crate::types::widths::wide_trig_d924::Wexp, SCALE, 400>(raw.resize_to::<Int<48>>(), braw.resize_to::<Int<48>>(), mode, k).resize_to::<Int<N>>()),
+        48 => conditioned_wide::<48, crate::types::widths::wide_trig_d924::Wagm, crate::types::widths::wide_trig_d924::Wexp, SCALE, 400>(raw.resize_to::<Int<48>>(), braw.resize_to::<Int<48>>(), mode, k).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => Some(conditioned_wide::<64, crate::types::widths::wide_trig_d1232::Wagm, crate::types::widths::wide_trig_d1232::Wexp, SCALE, 400>(raw.resize_to::<Int<64>>(), braw.resize_to::<Int<64>>(), mode, k).resize_to::<Int<N>>()),
+        64 => conditioned_wide::<64, crate::types::widths::wide_trig_d1232::Wagm, crate::types::widths::wide_trig_d1232::Wexp, SCALE, 400>(raw.resize_to::<Int<64>>(), braw.resize_to::<Int<64>>(), mode, k).map(|value| value.resize_to::<Int<N>>()),
         _ => conditioned_narrow::<N, SCALE>(raw, braw, mode, k),
     }
 }
@@ -364,25 +364,25 @@ fn ln_divide_routed<const N: usize, const SCALE: u32>(
         // reproduces its try-into fit check as `None`.
         1 | 2 => crate::algos::log::log_ln_divide::log_ln_divide_d38::<SCALE>(raw.resize_to::<Int<2>>(), braw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => Some(crate::types::widths::wide_trig_d57::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<3>>(), braw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>()),
+        3 => crate::types::widths::wide_trig_d57::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<3>>(), braw.resize_to::<Int<3>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => Some(crate::types::widths::wide_trig_d76::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<4>>(), braw.resize_to::<Int<4>>(), mode).resize_to::<Int<N>>()),
+        4 => crate::types::widths::wide_trig_d76::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<4>>(), braw.resize_to::<Int<4>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => Some(crate::types::widths::wide_trig_d115::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<6>>(), braw.resize_to::<Int<6>>(), mode).resize_to::<Int<N>>()),
+        6 => crate::types::widths::wide_trig_d115::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<6>>(), braw.resize_to::<Int<6>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => Some(crate::types::widths::wide_trig_d153::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<8>>(), braw.resize_to::<Int<8>>(), mode).resize_to::<Int<N>>()),
+        8 => crate::types::widths::wide_trig_d153::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<8>>(), braw.resize_to::<Int<8>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => Some(crate::types::widths::wide_trig_d230::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<12>>(), braw.resize_to::<Int<12>>(), mode).resize_to::<Int<N>>()),
+        12 => crate::types::widths::wide_trig_d230::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<12>>(), braw.resize_to::<Int<12>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => Some(crate::types::widths::wide_trig_d307::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<16>>(), braw.resize_to::<Int<16>>(), mode).resize_to::<Int<N>>()),
+        16 => crate::types::widths::wide_trig_d307::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<16>>(), braw.resize_to::<Int<16>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => Some(crate::types::widths::wide_trig_d462::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<24>>(), braw.resize_to::<Int<24>>(), mode).resize_to::<Int<N>>()),
+        24 => crate::types::widths::wide_trig_d462::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<24>>(), braw.resize_to::<Int<24>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => Some(crate::types::widths::wide_trig_d616::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<32>>(), braw.resize_to::<Int<32>>(), mode).resize_to::<Int<N>>()),
+        32 => crate::types::widths::wide_trig_d616::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<32>>(), braw.resize_to::<Int<32>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => Some(crate::types::widths::wide_trig_d924::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<48>>(), braw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>()),
+        48 => crate::types::widths::wide_trig_d924::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<48>>(), braw.resize_to::<Int<48>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => Some(crate::types::widths::wide_trig_d1232::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<64>>(), braw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>()),
+        64 => crate::types::widths::wide_trig_d1232::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<64>>(), braw.resize_to::<Int<64>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         _ => crate::algos::log::log_ln_divide::log_ln_divide_d38::<SCALE>(raw.resize_to::<Int<2>>(), braw.resize_to::<Int<2>>(), mode).and_then(super::narrow_fit::<N>),
     }
 }
@@ -396,25 +396,25 @@ fn schoolbook_routed<const N: usize, const SCALE: u32>(
     match N {
         1 | 2 => super::narrow_fit::<N>(crate::algos::log::log_schoolbook::log_schoolbook_strict::<SCALE>(raw.resize_to::<Int<2>>(), braw.resize_to::<Int<2>>(), mode)),
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => Some(crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw.resize_to::<Int<3>>(), braw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>()),
+        3 => crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw.resize_to::<Int<3>>(), braw.resize_to::<Int<3>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => Some(crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d76::Core, SCALE>(raw.resize_to::<Int<4>>(), braw.resize_to::<Int<4>>(), mode).resize_to::<Int<N>>()),
+        4 => crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d76::Core, SCALE>(raw.resize_to::<Int<4>>(), braw.resize_to::<Int<4>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => Some(crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d115::Core, SCALE>(raw.resize_to::<Int<6>>(), braw.resize_to::<Int<6>>(), mode).resize_to::<Int<N>>()),
+        6 => crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d115::Core, SCALE>(raw.resize_to::<Int<6>>(), braw.resize_to::<Int<6>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => Some(crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(raw.resize_to::<Int<8>>(), braw.resize_to::<Int<8>>(), mode).resize_to::<Int<N>>()),
+        8 => crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(raw.resize_to::<Int<8>>(), braw.resize_to::<Int<8>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => Some(crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d230::Core, SCALE>(raw.resize_to::<Int<12>>(), braw.resize_to::<Int<12>>(), mode).resize_to::<Int<N>>()),
+        12 => crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d230::Core, SCALE>(raw.resize_to::<Int<12>>(), braw.resize_to::<Int<12>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => Some(crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw.resize_to::<Int<16>>(), braw.resize_to::<Int<16>>(), mode).resize_to::<Int<N>>()),
+        16 => crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw.resize_to::<Int<16>>(), braw.resize_to::<Int<16>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => Some(crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d462::Core, SCALE>(raw.resize_to::<Int<24>>(), braw.resize_to::<Int<24>>(), mode).resize_to::<Int<N>>()),
+        24 => crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d462::Core, SCALE>(raw.resize_to::<Int<24>>(), braw.resize_to::<Int<24>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => Some(crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d616::Core, SCALE>(raw.resize_to::<Int<32>>(), braw.resize_to::<Int<32>>(), mode).resize_to::<Int<N>>()),
+        32 => crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d616::Core, SCALE>(raw.resize_to::<Int<32>>(), braw.resize_to::<Int<32>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => Some(crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw.resize_to::<Int<48>>(), braw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>()),
+        48 => crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw.resize_to::<Int<48>>(), braw.resize_to::<Int<48>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => Some(crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw.resize_to::<Int<64>>(), braw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>()),
+        64 => crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw.resize_to::<Int<64>>(), braw.resize_to::<Int<64>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         _ => super::narrow_fit::<N>(crate::algos::log::log_schoolbook::log_schoolbook_strict::<SCALE>(raw.resize_to::<Int<2>>(), braw.resize_to::<Int<2>>(), mode)),
     }
 }

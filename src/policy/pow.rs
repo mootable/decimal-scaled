@@ -202,25 +202,25 @@ pub(crate) fn checked_dispatch<const N: usize, const SCALE: u32>(
         )
         .and_then(super::narrow_fit::<N>),
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => Some(crate::D::<Int<3>, SCALE>(base.resize_to::<Int<3>>()).powf_with(crate::D::<Int<3>, SCALE>(exponent.resize_to::<Int<3>>()), mode).0.resize_to::<Int<N>>()),
+        3 => crate::D::<Int<3>, SCALE>(base.resize_to::<Int<3>>()).powf_with(crate::D::<Int<3>, SCALE>(exponent.resize_to::<Int<3>>()), mode).0.map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => Some(crate::D::<Int<4>, SCALE>(base.resize_to::<Int<4>>()).powf_with(crate::D::<Int<4>, SCALE>(exponent.resize_to::<Int<4>>()), mode).0.resize_to::<Int<N>>()),
+        4 => crate::D::<Int<4>, SCALE>(base.resize_to::<Int<4>>()).powf_with(crate::D::<Int<4>, SCALE>(exponent.resize_to::<Int<4>>()), mode).0.map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => Some(crate::D::<Int<6>, SCALE>(base.resize_to::<Int<6>>()).powf_with(crate::D::<Int<6>, SCALE>(exponent.resize_to::<Int<6>>()), mode).0.resize_to::<Int<N>>()),
+        6 => crate::D::<Int<6>, SCALE>(base.resize_to::<Int<6>>()).powf_with(crate::D::<Int<6>, SCALE>(exponent.resize_to::<Int<6>>()), mode).0.map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => Some(crate::D::<Int<8>, SCALE>(base.resize_to::<Int<8>>()).powf_with(crate::D::<Int<8>, SCALE>(exponent.resize_to::<Int<8>>()), mode).0.resize_to::<Int<N>>()),
+        8 => crate::D::<Int<8>, SCALE>(base.resize_to::<Int<8>>()).powf_with(crate::D::<Int<8>, SCALE>(exponent.resize_to::<Int<8>>()), mode).0.map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => Some(crate::D::<Int<12>, SCALE>(base.resize_to::<Int<12>>()).powf_with(crate::D::<Int<12>, SCALE>(exponent.resize_to::<Int<12>>()), mode).0.resize_to::<Int<N>>()),
+        12 => crate::D::<Int<12>, SCALE>(base.resize_to::<Int<12>>()).powf_with(crate::D::<Int<12>, SCALE>(exponent.resize_to::<Int<12>>()), mode).0.map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => Some(crate::D::<Int<16>, SCALE>(base.resize_to::<Int<16>>()).powf_with(crate::D::<Int<16>, SCALE>(exponent.resize_to::<Int<16>>()), mode).0.resize_to::<Int<N>>()),
+        16 => crate::D::<Int<16>, SCALE>(base.resize_to::<Int<16>>()).powf_with(crate::D::<Int<16>, SCALE>(exponent.resize_to::<Int<16>>()), mode).0.map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => Some(crate::D::<Int<24>, SCALE>(base.resize_to::<Int<24>>()).powf_with(crate::D::<Int<24>, SCALE>(exponent.resize_to::<Int<24>>()), mode).0.resize_to::<Int<N>>()),
+        24 => crate::D::<Int<24>, SCALE>(base.resize_to::<Int<24>>()).powf_with(crate::D::<Int<24>, SCALE>(exponent.resize_to::<Int<24>>()), mode).0.map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => Some(crate::D::<Int<32>, SCALE>(base.resize_to::<Int<32>>()).powf_with(crate::D::<Int<32>, SCALE>(exponent.resize_to::<Int<32>>()), mode).0.resize_to::<Int<N>>()),
+        32 => crate::D::<Int<32>, SCALE>(base.resize_to::<Int<32>>()).powf_with(crate::D::<Int<32>, SCALE>(exponent.resize_to::<Int<32>>()), mode).0.map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => Some(crate::D::<Int<48>, SCALE>(base.resize_to::<Int<48>>()).powf_with(crate::D::<Int<48>, SCALE>(exponent.resize_to::<Int<48>>()), mode).0.resize_to::<Int<N>>()),
+        48 => crate::D::<Int<48>, SCALE>(base.resize_to::<Int<48>>()).powf_with(crate::D::<Int<48>, SCALE>(exponent.resize_to::<Int<48>>()), mode).0.map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => Some(crate::D::<Int<64>, SCALE>(base.resize_to::<Int<64>>()).powf_with(crate::D::<Int<64>, SCALE>(exponent.resize_to::<Int<64>>()), mode).0.resize_to::<Int<N>>()),
+        64 => crate::D::<Int<64>, SCALE>(base.resize_to::<Int<64>>()).powf_with(crate::D::<Int<64>, SCALE>(exponent.resize_to::<Int<64>>()), mode).0.map(|value| value.resize_to::<Int<N>>()),
         _ => crate::algos::pow::powf_series_2limb::powf::<SCALE>(
             base.resize_to::<Int<2>>(),
             exponent.resize_to::<Int<2>>(),
