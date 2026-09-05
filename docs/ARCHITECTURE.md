@@ -541,6 +541,31 @@ new const knob.
   `LW == W::U128_LIMBS`) is the canonical defect — wider-than-`N` widths come
   from `ComputeLimbs` (previous section), never a const param. That is the
   const-work-width wall the `ComputeLimbs` associated types exist to remove.
+
+  > **The one sanctioned exception: `cross::{mul,add,sub,div,rem}` in
+  > `src/cross_scale.rs`, nightly-only behind the `cross-scale-ops` feature.**
+  > These free functions take two same-width decimals at *different* `SCALE`s
+  > (`D<W, S1>`, `D<W, S2>`) and return one at `{ max_const(S1, S2) }` — a
+  > `u32` derived from both operand scales, passed as a const-generic
+  > *argument*. Verified against the file rather than assumed from the
+  > review that raised it: every appearance of `{ max_const(S1, S2) }` in
+  > `cross_scale.rs` is the SAME quantity in the SAME role — the result's
+  > scale, both as the return type's own SCALE and as the target scale each
+  > operand is rescaled *up* to (via the `WidenScale` shim) before the
+  > underlying operator runs. Nothing else is derived: `W`, the storage
+  > type, is a plain shared type parameter both operands must already
+  > match — never a derived width — and no derived value ever feeds an
+  > algorithm's *choice* of kernel. So the exemption is exactly as narrow as
+  > it looks: a derived const-generic argument is permitted in this one
+  > place, expressing only the result scale of a cross-scale binary op,
+  > under this one nightly feature. It is nightly-only for a structural
+  > reason, not a policy choice: `generic_const_exprs` — the feature both
+  > `cross-scale-ops` and the unrelated `exact-scratch-nightly` activate —
+  > is the only mechanism on today's Rust that allows a const-generic
+  > argument to be an arbitrary *expression* (a function call) rather than a
+  > bare parameter or literal; there is no stable spelling of
+  > `D<W, { max_const(S1, S2) }>` at all, so this cannot leak onto stable.
+  > Every other derived const, anywhere else in the crate, stays forbidden.
 - **Inward is optional — and propagating the level's OWN const inward to
   enable const-folding is a WIN, not pollution.** Threading these consts
   *inward* (`select`, `select_for_limbs`, the kernels) is optional — a helper
@@ -1058,9 +1083,17 @@ src/
     types/    Int<N>/Uint<N> — the [u64; N] limb integers; the BigInt trait
     policy/   per-function `select` dispatch (keyed on limb count N)
     algos/    the algorithms — limb-slice arithmetic (add/mul/divmod/…) + width-matched kernels
+  consts/     mathematical-constant DATA leaf — one committed per-scale table
+              (pi, e, ln2, ln10, …) for every width, feeding both
+              types/consts/'s public API and the algorithm kernels directly
   types/      Dxx<SCALE> typed shells, the Decimal trait family, consts
   policy/     per-function `select` dispatch (keyed on width N, SCALE)
   algos/      the algorithms (sqrt cbrt exp ln trig pow …)
+  identity/   equality/ordering/hashing contract for the decimal types —
+              cross-primitive `PartialEq` wiring
   macros/     code generation for the per-type method shells
+  algo_x_support/  cross-algorithm shared leaf (Newton-root seed estimates,
+              …) used by both the int and decimal algorithm families; calls
+              nothing else in-crate
   support/    rounding modes, errors, display, serde helpers
 ```
