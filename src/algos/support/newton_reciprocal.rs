@@ -1313,3 +1313,78 @@ mod tests {
         assert_u64_u128_match(1850, 96, 48, 47, 1u128, (5, 0xfacefacef00d_u128));
     }
 }
+
+/// The reciprocal fallback's divide genuinely reaches the base-2¹²⁸ verdict.
+///
+/// A comment in this module previously asserted the opposite — that "the u128
+/// engine's large-dividend precondition is not met" for these `pow_scale`
+/// denominators. It is met, and this pins the arithmetic so the claim cannot
+/// drift back into prose: the deciding facts are that `10^460` occupies an EVEN
+/// 24 u64 limbs (exactly `U128_DIV_THRESHOLD`) and that the numerator is a lone
+/// `1` at limb `k_u64`, giving `num_m = k_u64 + 1` against a `2·den_n = 48`
+/// gate.
+///
+/// `width_limbs` is ODD on purpose: `newton_recip_le` refuses an odd width (the
+/// baked prefix identity holds only at an even one), so the SLOW branch — the
+/// one carrying the divide — is the branch deterministically taken, in every
+/// feature configuration.
+#[cfg(test)]
+mod fallback_divide_routing {
+    use super::{MAX_POW_U64, MAX_R_U64};
+    use crate::int::policy::div_rem::{select_for_limbs, Algorithm};
+
+    /// Effective limb count: length with trailing zero limbs stripped.
+    fn effective(limbs: &[u64]) -> usize {
+        let mut n = limbs.len();
+        while n > 0 && limbs[n - 1] == 0 {
+            n -= 1;
+        }
+        n
+    }
+
+    #[test]
+    fn deep_scale_fallback_routes_to_u128_engine() {
+        const SCALE: u32 = 460;
+        const WIDTH_LIMBS: usize = 21;
+
+        // The baked table must decline, so the divide branch is the live one.
+        assert!(
+            crate::consts::newton_recip_le(SCALE, WIDTH_LIMBS).is_none(),
+            "an odd width must fall through to the runtime divide"
+        );
+
+        // Rebuild exactly what `precompute` presents to the matcher.
+        let pow_len = (SCALE as usize / 19 + 3).max(1);
+        assert!(pow_len <= MAX_POW_U64);
+        let mut pow_scale = [0u64; MAX_POW_U64];
+        pow_scale[0] = 1;
+        for _ in 0..SCALE {
+            let mut carry: u64 = 0;
+            for limb in pow_scale[..pow_len].iter_mut() {
+                let prod = (*limb as u128) * 10u128 + (carry as u128);
+                *limb = prod as u64;
+                carry = (prod >> 64) as u64;
+            }
+            assert_eq!(carry, 0, "pow_scale buffer too small");
+        }
+
+        let k_u64_raw = WIDTH_LIMBS + pow_len;
+        let k_u64 = if k_u64_raw.is_multiple_of(2) { k_u64_raw } else { k_u64_raw + 1 };
+        assert!(k_u64 < MAX_R_U64);
+        let mut numerator = [0u64; MAX_R_U64];
+        numerator[k_u64] = 1;
+
+        // The three facts the verdict turns on, asserted rather than asserted-about.
+        let den_n = effective(&pow_scale[..pow_len]);
+        assert_eq!(den_n, 24, "10^460 occupies 24 u64 limbs");
+        assert!(den_n.is_multiple_of(2), "the u128 engine needs an even divisor");
+        let num_m = effective(&numerator[..k_u64 + 1]);
+        assert!(num_m >= 2 * den_n, "num_m {num_m} must clear the 2*den_n gate");
+
+        assert!(
+            select_for_limbs(&numerator[..k_u64 + 1], &pow_scale[..pow_len])
+                == Algorithm::KnuthU128Limb,
+            "the deep-scale fallback shape must route to KnuthU128Limb"
+        );
+    }
+}

@@ -2130,3 +2130,79 @@ mod tests {
         assert_eq!(log1p_fixed::<I>(neg, working_scale), neg_v);
     }
 }
+
+/// The base-2¹²⁸ arm of [`div_rem_exact`] is REACHED, and agrees with base-2⁶⁴.
+///
+/// Same wall as `algos::rem::rem_int_layer` and `wide_trig_core::bracket_div`,
+/// for the same reason: golden grades VALUES and both engines are
+/// bit-identical, so an unreached routing arm and a working one look alike.
+/// The shapes below are asserted to route to `Algorithm::KnuthU128Limb` before
+/// the divide runs, so the test fails rather than quietly reverting to Knuth if
+/// the matcher's gate moves.
+///
+/// `Int<64>` because the verdict needs `den_n >= 24` with `num_m >= 2·den_n`,
+/// and here BOTH operands unpack into one `single_u64` of `N` limbs — so `N`
+/// must be at least 48 for any qualifying pair to exist at all.
+#[cfg(test)]
+mod div_rem_exact_routing {
+    use super::div_rem_exact;
+    use crate::int::algos::div::div_knuth::div_knuth_into;
+    use crate::int::policy::div_rem::{select_for_limbs, Algorithm};
+    use crate::int::types::Int;
+
+    #[test]
+    fn u128_arm_is_reached_and_matches_knuth_reference() {
+        const N: usize = 64;
+        let mut state: u64 = 0xD1B5_4A32_D192_ED03;
+        let mut next = || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        // Effective limb counts clearing the u128 gate. Kept at or below 60 so
+        // the top limb of the signed `Int<64>` magnitude stays zero and both
+        // operands are unambiguously positive.
+        let shapes: &[(usize, usize)] = &[(48, 24), (52, 26), (56, 28), (60, 30), (60, 24)];
+        let mut graded = 0usize;
+        for (case, &(num_len, den_len)) in shapes.iter().enumerate() {
+            for round in 0..4 {
+                let mut dividend_limbs = [0u64; N];
+                let mut divisor_limbs = [0u64; N];
+                for limb in dividend_limbs[..num_len].iter_mut() {
+                    *limb = next();
+                }
+                for limb in divisor_limbs[..den_len].iter_mut() {
+                    *limb = next();
+                }
+                dividend_limbs[num_len - 1] |= 1;
+                divisor_limbs[den_len - 1] |= 1;
+
+                // `div_rem_exact` hands the matcher the FULL `single_u64`
+                // slices, so the verdict is asserted on exactly those.
+                assert!(
+                    select_for_limbs(&dividend_limbs, &divisor_limbs) == Algorithm::KnuthU128Limb,
+                    "case {case} round {round}: ({num_len},{den_len}) must route to KnuthU128Limb"
+                );
+
+                let dividend = Int::<N>::from_mag_limbs(&dividend_limbs, false);
+                let divisor = Int::<N>::from_mag_limbs(&divisor_limbs, false);
+                let (quotient, remainder) = div_rem_exact::<Int<N>>(dividend, divisor);
+
+                let mut ref_quot = [0u64; N];
+                let mut ref_rem = [0u64; N];
+                let mut u = [0u64; N + 2];
+                let mut v = [0u64; N + 2];
+                div_knuth_into(&dividend_limbs, &divisor_limbs, &mut ref_quot, &mut ref_rem,
+                    &mut u, &mut v);
+
+                assert_eq!(quotient, Int::<N>::from_mag_limbs(&ref_quot, false),
+                    "case {case} round {round}: quotient");
+                assert_eq!(remainder, Int::<N>::from_mag_limbs(&ref_rem, false),
+                    "case {case} round {round}: remainder");
+                graded += 1;
+            }
+        }
+        assert_eq!(graded, 20, "every pinned shape must be graded");
+    }
+}
