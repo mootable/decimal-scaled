@@ -53,6 +53,7 @@ Ziv on top).
 from __future__ import annotations
 
 import datetime
+import sys
 from flint import arb, fmpq
 
 from tang_flint_oracle import ORACLE_PREC_BITS, set_precision, slot_limbs
@@ -256,8 +257,12 @@ def main():
     path = "src/algos/support/ln_tang_table.rs"
     with open(path, "w", encoding="utf-8", newline="\n") as f:
         f.write(src)
+    # Progress goes to STDERR: the script writes its output file itself, and a
+    # stdout line naming that same file once invited a `> file` redirect that
+    # clobbered the SPDX header with this very line. stdout stays empty.
     print(f"wrote {path} ({len(src)} chars), B={B} ({B_LIMBS} limbs), "
-          f"arb prec={ORACLE_PREC_BITS} bits, M={M}, {datetime.date.today()}")
+          f"arb prec={ORACLE_PREC_BITS} bits, M={M}, {datetime.date.today()}",
+          file=sys.stderr)
 
 
 if __name__ == "__main__":

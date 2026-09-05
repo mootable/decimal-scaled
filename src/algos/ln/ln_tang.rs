@@ -699,4 +699,92 @@ mod tests {
         let one: crate::D115<0> = "1".parse().unwrap();
         assert_eq!(value.ln(), one);
     }
+
+    /// The narrow tiers now route Tang (`policy::ln::select` `(1, _) | (2, _)`)
+    /// through the width-generic kernel at `Int<12>`. Both Tang and the kept
+    /// Series path (`ln_series_2limb::ln`, the `_` arm) are correctly rounded,
+    /// so on every input they must agree BIT FOR BIT under all eight modes —
+    /// the oracle-free guard that the new arm is the same function, and that
+    /// `Int<12>` reaches every constructible narrow deciding depth (a miss
+    /// would be a 1-ULP directed disagreement, not a panic). Inputs cover the
+    /// structure Tang has and Series lacks: exact table-slot boundaries
+    /// `1 + i/128` (residual `t = 0`), mid-slot `1 + (2i+1)/256` (the largest
+    /// `|t|`), the `k·ln2` power-of-two reduction on both sides, `x < 1`, `x`
+    /// near 1 on both sides (the ln1p band and the directed near-1 adjust),
+    /// and full-width repeating decimals — at every narrow scale band of D18
+    /// and D38, filtered by the harness's own representability rule.
+    #[test]
+    fn narrow_tang_agrees_with_the_kept_series_under_every_mode() {
+        use crate::int::types::traits::BigInt;
+        use crate::int::types::Int;
+        use crate::support::rounding::RoundingMode;
+        const ALL_MODES: [RoundingMode; 8] = [
+            RoundingMode::HalfToEven,
+            RoundingMode::HalfAwayFromZero,
+            RoundingMode::HalfTowardZero,
+            RoundingMode::Trunc,
+            RoundingMode::Floor,
+            RoundingMode::Ceiling,
+            RoundingMode::AwayFromZero,
+            RoundingMode::ZeroFiveUp,
+        ];
+        fn digits(m: i128) -> u32 {
+            let (mut d, mut v) = (0u32, m.unsigned_abs());
+            while v > 0 {
+                v /= 10;
+                d += 1;
+            }
+            d.max(1)
+        }
+        // (mantissa, fraction digits) — the input is `m · 10^-f`.
+        const INPUTS: [(i128, u32); 22] = [
+            (2, 0), (3, 0), (10, 0), (7, 0), (1000, 0), (123456789, 0),
+            (5, 1), (25, 2), (1, 3), (15, 1), (75, 1),
+            (10078125, 7), // 1 + 1/128: slot boundary, t = 0
+            (18671875, 7), // 1 + 111/128: a high slot boundary
+            (10039062, 7), // ~1 + 1/256: mid-slot, near the largest |t|
+            (19960937, 7), // ~1 + 255/256: mid-slot at the top
+            (10000001, 7), // near 1 above: ln1p band / near-1 adjust
+            (9999999, 7),  // near 1 below
+            (1000001, 6),
+            (999999, 6),
+            (33333333333333333, 17), // 1/3, full-width repeating
+            (23333333333333333, 16), // 7/3
+            (14142135623730950, 16), // sqrt 2
+        ];
+        fn cell<const N: usize, const SCALE: u32>(misses: &mut Vec<String>, max_digits: u32) {
+            for (m, f) in INPUTS {
+                if SCALE < f || digits(m) + SCALE - f >= max_digits {
+                    continue; // the harness's own representability rule
+                }
+                let raw = Int::<N>::from_i128(m) * crate::algos::exp::exp_generic::pow10::<Int<N>>(SCALE - f);
+                let raw2 = raw.resize_to::<Int<2>>();
+                for mode in ALL_MODES {
+                    let tang = crate::policy::ln::checked_dispatch::<N, SCALE>(raw, mode);
+                    let series = crate::algos::ln::ln_series_2limb::ln::<SCALE>(raw2, mode)
+                        .and_then(crate::policy::narrow_fit::<N>);
+                    if tang != series {
+                        misses.push(format!(
+                            "N={N} scale={SCALE} x={m}e-{f} mode={mode:?}: tang {tang:?} vs series {series:?}"
+                        ));
+                    }
+                }
+            }
+        }
+        let mut misses = Vec::new();
+        // D18 = Int<1> (18 digits): its golden scale bands.
+        cell::<1, 0>(&mut misses, 18);
+        cell::<1, 4>(&mut misses, 18);
+        cell::<1, 9>(&mut misses, 18);
+        cell::<1, 13>(&mut misses, 18);
+        cell::<1, 17>(&mut misses, 18);
+        // D38 = Int<2> (38 digits): its golden scale bands, top scale included.
+        cell::<2, 0>(&mut misses, 38);
+        cell::<2, 6>(&mut misses, 38);
+        cell::<2, 12>(&mut misses, 38);
+        cell::<2, 19>(&mut misses, 38);
+        cell::<2, 28>(&mut misses, 38);
+        cell::<2, 37>(&mut misses, 38);
+        assert!(misses.is_empty(), "{} disagreements:\n{}", misses.len(), misses.join("\n"));
+    }
 }
