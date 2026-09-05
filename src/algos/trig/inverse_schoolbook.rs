@@ -68,7 +68,7 @@ fn asin_work<C: WideTrigCore, const SCALE: u32>(working_value: C::W, working_sca
 pub(crate) fn asin_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::W as crate::int::types::traits::BigInt>::Scratch:
         crate::int::types::compute_limbs::ComputeLimbs,
@@ -127,7 +127,7 @@ where
 pub(crate) fn acos_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> Option<C::Storage> {
     let base_working_scale = SCALE + C::GUARD;
     let one_w0 = C::one(base_working_scale);
     let base_working_value = C::to_work(raw);
@@ -154,7 +154,7 @@ pub(crate) fn atan2_schoolbook<C: WideTrigCore, const SCALE: u32>(
     y_raw: C::Storage,
     x_raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::W as crate::int::types::traits::BigInt>::Scratch:
         crate::int::types::compute_limbs::ComputeLimbs,
@@ -191,8 +191,11 @@ where
             )
             .0
         };
-        let floor_probe = probe(RoundingMode::Floor);
-        let ceiling_probe = probe(RoundingMode::Ceiling);
+        // Either probe landing out of range is the whole call's verdict, so
+        // take it here rather than threading `Option` through the directed
+        // arms below — they only choose BETWEEN the two probes.
+        let floor_probe = probe(RoundingMode::Floor)?;
+        let ceiling_probe = probe(RoundingMode::Ceiling)?;
         if floor_probe == ceiling_probe {
             // On grid: G = floor_probe. SINGLE analytic step from G — `atan z =
             // z − z³/3 + z⁵/5 − …` COMPRESSES (cubic −) and ALTERNATES, so the
@@ -202,7 +205,7 @@ where
             if let Some(adjusted) =
                 tiny_x_linear_directed::<C::Storage, SCALE>(grid_value, mode, false)
             {
-                return adjusted;
+                return Some(adjusted);
             }
             // The exact bracket posed on the RATIO `z = y/x`, which is what the
             // `grid_value`-as-argument step below cannot do: substituting
@@ -216,7 +219,7 @@ where
                     SCALE,
                 >(grid_value, y_raw, x_raw, mode)
             {
-                return adjusted;
+                return Some(adjusted);
             }
             let stepped = tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
                 grid_value,
@@ -227,14 +230,14 @@ where
                 <C::W as crate::int::types::traits::BigInt>::BITS,
             );
             if stepped != grid_value {
-                return stepped;
+                return Some(stepped);
             }
             // On grid but not in the tiny band (the helpers no-op): G is exact.
-            return grid_value;
+            return Some(grid_value);
         }
         // Off grid: the walker resolved the directed rounding. Return its result
         // for `mode` (Trunc is toward zero — x > 0 so the result sign is y's).
-        return match mode {
+        return Some(match mode {
             RoundingMode::Ceiling => ceiling_probe,
             RoundingMode::Floor => floor_probe,
             RoundingMode::Trunc => {
@@ -273,7 +276,7 @@ where
                 if digit == 0 || digit == 5 { away } else { toward_zero }
             }
             _ => unreachable!("directed mode"),
-        };
+        });
     }
     // Nearest modes, x ≤ 0, or |y| ≥ |x| (non-tiny |result|): ordinary narrowing.
     C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard_digits| {
@@ -401,7 +404,7 @@ where
 pub(crate) fn asin_schoolbook_g<C: WideTrigCore, Wk: crate::int::types::traits::BigInt, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     <C::W as crate::int::types::traits::BigInt>::Scratch:
@@ -469,7 +472,7 @@ where
 pub(crate) fn acos_schoolbook_g<C: WideTrigCore, Wk: crate::int::types::traits::BigInt, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     <C::W as crate::int::types::traits::BigInt>::Scratch:
@@ -525,7 +528,7 @@ pub(crate) fn atan2_schoolbook_g<C: WideTrigCore, Wk: crate::int::types::traits:
     y_raw: C::Storage,
     x_raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     <C::W as crate::int::types::traits::BigInt>::Scratch:
@@ -557,14 +560,15 @@ where
     // off-grid (a resolved non-terminating term, j* ≥ 9 → the walker already
     // rounds it correctly). atan compresses + alternates.
     if !crate::support::rounding::is_nearest_mode(mode) && x_raw > zero && abs_y < x_raw {
-        let floor_probe = walk(RoundingMode::Floor);
-        let ceiling_probe = walk(RoundingMode::Ceiling);
+        // See the atan2 sibling: an out-of-range probe settles the call.
+        let floor_probe = walk(RoundingMode::Floor)?;
+        let ceiling_probe = walk(RoundingMode::Ceiling)?;
         if floor_probe == ceiling_probe {
             let grid_value = floor_probe;
             if let Some(adjusted) =
                 tiny_x_linear_directed::<C::Storage, SCALE>(grid_value, mode, false)
             {
-                return adjusted;
+                return Some(adjusted);
             }
             // The exact bracket posed on the RATIO `z = y/x`, which is what the
             // `grid_value`-as-argument step below cannot do: substituting
@@ -578,7 +582,7 @@ where
                     SCALE,
                 >(grid_value, y_raw, x_raw, mode)
             {
-                return adjusted;
+                return Some(adjusted);
             }
             let stepped = tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
                 grid_value,
@@ -589,11 +593,11 @@ where
                 <C::W as crate::int::types::traits::BigInt>::BITS,
             );
             if stepped != grid_value {
-                return stepped;
+                return Some(stepped);
             }
-            return grid_value;
+            return Some(grid_value);
         }
-        return match mode {
+        return Some(match mode {
             RoundingMode::Ceiling => ceiling_probe,
             RoundingMode::Floor => floor_probe,
             RoundingMode::Trunc => {
@@ -632,7 +636,7 @@ where
                 if digit == 0 || digit == 5 { away } else { toward_zero }
             }
             _ => unreachable!("directed mode"),
-        };
+        });
     }
     walk(mode)
 }

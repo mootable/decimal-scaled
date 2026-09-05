@@ -51,7 +51,7 @@ use crate::support::rounding::RoundingMode;
 pub(crate) fn to_degrees_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> Option<C::Storage> {
     let working_scale = SCALE + C::GUARD;
     let working_value = C::to_work(raw);
     let degrees = C::div(
@@ -68,7 +68,7 @@ pub(crate) fn to_degrees_schoolbook<C: WideTrigCore, const SCALE: u32>(
 pub(crate) fn to_radians_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> Option<C::Storage> {
     let working_scale = SCALE + C::GUARD;
     let working_value = C::to_work(raw);
     let radians =

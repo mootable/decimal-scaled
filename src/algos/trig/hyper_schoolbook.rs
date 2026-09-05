@@ -147,7 +147,7 @@ where
 pub(crate) fn sinh_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::Wagm as crate::int::types::traits::BigInt>::Scratch:
         crate::int::types::compute_limbs::ComputeLimbs,
@@ -220,7 +220,7 @@ where
 pub(crate) fn cosh_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::Wagm as crate::int::types::traits::BigInt>::Scratch:
         crate::int::types::compute_limbs::ComputeLimbs,
@@ -275,7 +275,7 @@ where
 pub(crate) fn tanh_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::Wagm as crate::int::types::traits::BigInt>::Scratch:
         crate::int::types::compute_limbs::ComputeLimbs,
@@ -342,7 +342,7 @@ where
 pub(crate) fn asinh_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::Wagm as crate::int::types::traits::BigInt>::Scratch:
         crate::int::types::compute_limbs::ComputeLimbs,
@@ -439,7 +439,7 @@ where
 pub(crate) fn acosh_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::Wagm as crate::int::types::traits::BigInt>::Scratch:
         crate::int::types::compute_limbs::ComputeLimbs,
@@ -496,7 +496,7 @@ where
 pub(crate) fn atanh_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::Wagm as crate::int::types::traits::BigInt>::Scratch:
         crate::int::types::compute_limbs::ComputeLimbs,
@@ -599,7 +599,7 @@ where
 pub(crate) fn sinh_schoolbook_g<C: WideTrigCore, Wk: crate::int::types::traits::BigInt, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     <C::Wexp as crate::int::types::traits::BigInt>::Scratch:
@@ -671,7 +671,7 @@ where
 pub(crate) fn cosh_schoolbook_g<C: WideTrigCore, Wk: crate::int::types::traits::BigInt, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     <C::Wexp as crate::int::types::traits::BigInt>::Scratch:
@@ -726,7 +726,7 @@ where
 pub(crate) fn tanh_schoolbook_g<C: WideTrigCore, Wk: crate::int::types::traits::BigInt, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     <C::Wagm as crate::int::types::traits::BigInt>::Scratch:
@@ -840,7 +840,7 @@ fn ln2_at_rung<Wk: crate::int::types::traits::BigInt>(
 pub(crate) fn asinh_schoolbook_g<C: WideTrigCore, Wk: crate::int::types::traits::BigInt, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     <C::Wagm as crate::int::types::traits::BigInt>::Scratch:
@@ -970,7 +970,7 @@ where
 pub(crate) fn acosh_schoolbook_g<C: WideTrigCore, Wk: crate::int::types::traits::BigInt, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     <C::Wagm as crate::int::types::traits::BigInt>::Scratch:
@@ -1053,7 +1053,7 @@ where
 pub(crate) fn atanh_schoolbook_g<C: WideTrigCore, Wk: crate::int::types::traits::BigInt, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     <C::Wagm as crate::int::types::traits::BigInt>::Scratch:

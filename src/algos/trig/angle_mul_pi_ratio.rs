@@ -27,7 +27,7 @@ use crate::support::rounding::RoundingMode;
 pub(crate) fn to_degrees_mul_pi_ratio<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> Option<C::Storage> {
     let working_scale = SCALE + C::GUARD;
     let working_value = C::to_work(raw);
     // `x * 180/π`: multiply by the exact oracle `deg_per_rad` factor
@@ -58,7 +58,7 @@ pub(crate) fn to_degrees_mul_pi_ratio<C: WideTrigCore, const SCALE: u32>(
 pub(crate) fn to_radians_mul_pi_ratio<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> Option<C::Storage> {
     let working_scale = SCALE + C::GUARD;
     let working_value = C::to_work(raw);
     // `x * π/180`: multiply by the exact oracle `rad_per_deg` factor.

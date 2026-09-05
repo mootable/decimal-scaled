@@ -47,7 +47,7 @@ use crate::support::rounding::RoundingMode;
 pub(crate) fn sin_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> Option<C::Storage> {
     C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard_digits| {
         C::sin_fixed::<SCALE>(C::to_work_scaled(raw, guard_digits), SCALE + guard_digits)
     })
@@ -60,7 +60,7 @@ pub(crate) fn sin_schoolbook<C: WideTrigCore, const SCALE: u32>(
 pub(crate) fn cos_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> Option<C::Storage> {
     C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard_digits| {
         C::cos_fixed::<SCALE>(C::to_work_scaled(raw, guard_digits), SCALE + guard_digits)
     })
@@ -75,7 +75,7 @@ pub(crate) fn cos_schoolbook<C: WideTrigCore, const SCALE: u32>(
 pub(crate) fn tan_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> Option<C::Storage> {
     C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard_digits| {
         let working_scale = SCALE + guard_digits;
         let (sin_w, cos_w) =
@@ -95,7 +95,7 @@ pub(crate) fn tan_schoolbook<C: WideTrigCore, const SCALE: u32>(
 pub(crate) fn atan_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> Option<C::Storage> {
     C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard_digits| {
         C::atan_fixed::<SCALE>(C::to_work_scaled(raw, guard_digits), SCALE + guard_digits)
     })
