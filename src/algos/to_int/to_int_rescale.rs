@@ -47,9 +47,14 @@ use crate::support::rounding::RoundingMode;
 /// Rounds `raw / 10^SCALE` to a whole number under `mode` and narrows it
 /// to `i64`, saturating out of range.
 ///
-/// `SCALE == 0` is the identity: `dispatch_wide_pow10` returns the value
-/// untouched, matching the exact-remainder early return in the
-/// quotient-remainder kernel.
+/// `SCALE == 0` is the identity — the value is already whole, so there is
+/// nothing to round. It is taken here rather than left to the rescale
+/// door, for two reasons. It const-folds: `SCALE` is a const generic, so
+/// a scale-0 monomorphisation compiles to the narrow alone and every
+/// other one drops the branch. And it makes the kernel's contract
+/// self-evident instead of resting on the door's own `scale == 0`
+/// early-out, which `quantize_pow10` never reaches (it returns on
+/// `TARGET_SCALE == SCALE` first) and so does not exercise.
 #[inline]
 pub(crate) fn to_int_rescale<const N: usize, const SCALE: u32>(
     raw: Int<N>,
@@ -58,6 +63,9 @@ pub(crate) fn to_int_rescale<const N: usize, const SCALE: u32>(
 where
     Limbs<N>: ComputeLimbs,
 {
+    if SCALE == 0 {
+        return narrow_saturating_i64(raw);
+    }
     let rounded = crate::algos::support::rescale::dispatch_wide_pow10(raw, SCALE, mode);
     narrow_saturating_i64(rounded)
 }
