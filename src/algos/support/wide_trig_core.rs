@@ -1331,11 +1331,54 @@ fn pow10_into(exponent: u32, out_limbs: &mut [u64], scratch: &mut [u64]) -> Opti
 /// `newton_reciprocal` and `div_widen_scale` use, and the one
 /// `div_rem::dispatch`'s own doc points concrete-`N` callers at.
 ///
-/// The non-`Rem` verdicts collapse to base-2⁶⁴ Knuth, which is value-identical
-/// to the u128-limb engine (that engine exists for speed, not a different
-/// result). Correct for every shape this kernel presents today, but it MUST be
-/// re-verified if an `Algorithm` arm joining `int::policy::div_rem` ever
-/// returns a numerically different answer.
+/// The verdict is matched EXHAUSTIVELY — no `_`, so adding an engine to
+/// `int::policy::div_rem` forces a decision here rather than silently
+/// degrading to Knuth. `KnuthU128Limb` carries its own arm and its own packed
+/// scratch: collapsing it onto base-2⁶⁴ Knuth was value-identical (that engine
+/// exists for speed, not a different result), but it discarded the verdict —
+/// so wherever the wide even-divisor shape does arise, the slower engine ran.
+///
+/// # Buffer sizing — every minimum is ENFORCED, and the bound is PROVED
+///
+/// Two separate claims live here, and an earlier version of this comment
+/// conflated them: one is checked at run time, the other is a proof about the
+/// callers. Neither is left as an assertion standing in for a check.
+///
+/// **Enforced.** Each arm tests EVERY buffer the engine it calls will index,
+/// against that engine's own stated minimum, and returns `false` on a
+/// shortfall. For the base-2¹²⁸ arm that is all four
+/// (`div_knuth_u128_limb.rs`): `u64buf ≥ dividend.len() + 2`,
+/// `v64buf ≥ divisor.len()`, `u ≥ ⌈(dividend.len() + 2) / 2⌉ + 1`,
+/// `v ≥ ⌈divisor.len() / 2⌉`. The engine's own `debug_assert`s are compiled
+/// out in release, so an unchecked shortfall would be a bare slice
+/// bounds panic — the failure mode of #86. Soundness therefore does NOT rest
+/// on the bound below.
+///
+/// **Proved.** The bound decides the buffer SIZE, so it is derived rather than
+/// asserted. `bracket_div` is private and has no reference outside this file,
+/// so its caller set is CLOSED and enumerable — and every length feeding a
+/// dividend is a `sig_len` over a slice of length `limb_count = Wk::LIMBS`,
+/// hence at most `Wk::LIMBS` each:
+///
+/// | call site | dividend span | bound |
+/// |---|---|---|
+/// | `exp_series_g` tiny-x | `limb_count + 2·abs_raw_len` | `3·LIMBS` |
+/// | `atan`-face ratio | `limb_count + 2·abs_y_len` | `3·LIMBS` |
+/// | `atan`-face leading term | `limb_count + unit_len + abs_y_len` | `3·LIMBS` |
+/// | series term ratio | single-limb divisor → `Rem` arm, never packed | — |
+///
+/// So `D ≤ 3·LIMBS`, giving a packed dividend need of `⌈(3·LIMBS + 2) / 2⌉ + 1`
+/// ≈ `1.5·LIMBS + 2`. `quad_u128` (`2·LIMBS`) is the SMALLEST sanctioned member
+/// that covers it — `double_buffered_u128` (≈ `1.25·LIMBS`) does not reach — and
+/// it is the exact packed counterpart of the `quad_u64` already chosen for the
+/// u64 side, where `double_buffered_u64` (`2.5·LIMBS`) likewise falls short of
+/// `3·LIMBS + 2`. The divisor is at most `2·LIMBS` (a `2·x_len` square), so
+/// `double_u128` (`LIMBS`) meets `⌈divisor.len() / 2⌉` exactly.
+///
+/// A `pr` shorter than `4·limb_count` is rejected by each caller's own entry
+/// check before it reaches here, so the guard above is unreachable in practice;
+/// it exists so that the sizing cannot become wrong silently if a future caller
+/// widens the dividend past this table.
 fn bracket_div<Wk: BigInt>(
     dividend: &[u64],
     divisor: &[u64],
@@ -1355,15 +1398,58 @@ where
             crate::int::algos::div::div_rem::div_rem(dividend, divisor, quotient, remainder);
             true
         }
-        _ => {
+        // The base-2¹²⁸ engine. It normalises in u64 space before packing, so
+        // it wants the same u64 pair the Knuth arm sizes PLUS the packed pair.
+        // All FOUR minima are tested — the engine's `debug_assert`s vanish in
+        // release, so a shortfall it does not catch is a bare bounds panic.
+        // Sizes are `quad_u128` / `double_u128`; see the sizing section above
+        // for why those are the smallest sanctioned members that fit, and for
+        // the proof that the guard is unreachable. The engine zeroes all four.
+        Algorithm::KnuthU128Limb => {
+            let mut norm_dividend_buf = <<Wk as BigInt>::Scratch as ComputeLimbs>::quad_u64();
+            let mut norm_divisor_buf = <<Wk as BigInt>::Scratch as ComputeLimbs>::double_u64();
+            let mut packed_dividend_buf =
+                <<Wk as BigInt>::Scratch as ComputeLimbs>::quad_u128();
+            let mut packed_divisor_buf =
+                <<Wk as BigInt>::Scratch as ComputeLimbs>::double_u128();
+            let norm_dividend = norm_dividend_buf.as_mut();
+            let norm_divisor = norm_divisor_buf.as_mut();
+            let packed_dividend = packed_dividend_buf.as_mut();
+            let packed_divisor = packed_divisor_buf.as_mut();
+            if norm_dividend.len() < dividend.len() + 2
+                || norm_divisor.len() < divisor.len()
+                || packed_dividend.len() < (dividend.len() + 2).div_ceil(2) + 1
+                || packed_divisor.len() < divisor.len().div_ceil(2)
+            {
+                return false;
+            }
+            crate::int::algos::div::div_knuth_u128_limb::div_knuth_u128_limb_into(
+                dividend,
+                divisor,
+                quotient,
+                remainder,
+                norm_dividend,
+                norm_divisor,
+                packed_dividend,
+                packed_divisor,
+            );
+            true
+        }
+        // Base-2⁶⁴ Knuth. Burnikel–Ziegler and Schoolbook are never returned
+        // by the matcher today, but both are named so neither can be added
+        // silently.
+        Algorithm::Knuth | Algorithm::BurnikelZieglerWithKnuth | Algorithm::Schoolbook => {
             let mut norm_dividend_buf = <<Wk as BigInt>::Scratch as ComputeLimbs>::quad_u64();
             let mut norm_divisor_buf = <<Wk as BigInt>::Scratch as ComputeLimbs>::double_u64();
             let norm_dividend = norm_dividend_buf.as_mut();
             let norm_divisor = norm_divisor_buf.as_mut();
-            // Knuth needs `dividend.len() + 2` / `divisor.len()` zeroed limbs.
-            // The dividend here is at most `3·Wk::LIMBS`, so `quad_u64`
-            // (`4·LIMBS`) covers it — CHECKED, not assumed, because an
-            // unchecked version of exactly this is what went wrong upstream.
+            // Knuth needs `dividend.len() + 2` / `divisor.len()` zeroed limbs,
+            // and BOTH are tested here rather than inferred from the dividend's
+            // provable `3·Wk::LIMBS` bound — an unchecked version of exactly
+            // this is what went wrong upstream (#86). The bound justifies the
+            // buffer SIZE (see the sizing section above); this check is what
+            // makes the buffer SAFE, and the two are deliberately not the same
+            // claim.
             if norm_dividend.len() < dividend.len() + 2 || norm_divisor.len() < divisor.len() {
                 return false;
             }
@@ -4586,5 +4672,88 @@ mod log_near_zero_zero_five_up {
         let m = RoundingMode::AwayFromZero;
         assert_eq!(adj(100, 100, m), 100, "positive: away is Ceiling, no move");
         assert_eq!(adj(-100, -100, m), -101, "negative: away is Floor");
+    }
+}
+
+/// The base-2¹²⁸ arm of [`bracket_div`] is REACHED, and agrees with base-2⁶⁴.
+///
+/// The divide here routes on the matcher's verdict, and the golden suite is
+/// ENGINE-BLIND — it grades values, not which engine produced them. Both
+/// engines are bit-identical, so a routing arm that never fires is
+/// indistinguishable from one that works: golden would stay green either way.
+/// This pins operand shapes that PROVABLY reach `Algorithm::KnuthU128Limb`
+/// (asserted per pair, so a moved matcher gate fails the test instead of
+/// silently returning the arm to Knuth) and grades quotient AND remainder
+/// against [`div_knuth_into`] on the same magnitudes. Mirrors the same wall in
+/// `algos::rem::rem_int_layer`.
+///
+/// `Wk = Int<32>` because the shapes must respect the proven caller bound
+/// `D <= 3·LIMBS = 96` to be representative of what `bracket_div` can actually
+/// be handed; at `Int<16>` only one such shape exists.
+#[cfg(test)]
+mod bracket_div_routing {
+    use super::bracket_div;
+    use crate::int::algos::div::div_knuth::div_knuth_into;
+    use crate::int::policy::div_rem::{select_for_limbs, Algorithm};
+    use crate::int::types::Int;
+
+    #[test]
+    fn u128_arm_is_reached_and_matches_knuth_reference() {
+        let mut state: u64 = 0x9E37_79B9_7F4A_7C15;
+        let mut next = || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        // (dividend, divisor) effective limb counts meeting the matcher's u128
+        // gate — divisor EVEN and >= 24, dividend >= 2*divisor — and all within
+        // the proven `D <= 3*LIMBS = 96` caller bound.
+        let shapes: &[(usize, usize)] = &[(48, 24), (52, 26), (64, 32), (80, 40), (96, 48), (96, 24)];
+        let mut graded = 0usize;
+        for (case, &(num_len, den_len)) in shapes.iter().enumerate() {
+            for round in 0..4 {
+                let mut dividend = [0u64; 96];
+                let mut divisor = [0u64; 48];
+                for limb in dividend[..num_len].iter_mut() {
+                    *limb = next();
+                }
+                for limb in divisor[..den_len].iter_mut() {
+                    *limb = next();
+                }
+                // Pin both top limbs nonzero so the EFFECTIVE lengths are
+                // exactly (num_len, den_len) and the verdict is determinate.
+                dividend[num_len - 1] |= 1;
+                divisor[den_len - 1] |= 1;
+                let num = &dividend[..num_len];
+                let den = &divisor[..den_len];
+
+                assert!(
+                    select_for_limbs(num, den) == Algorithm::KnuthU128Limb,
+                    "case {case} round {round}: ({num_len},{den_len}) must route to KnuthU128Limb"
+                );
+
+                let mut quot = [0u64; 96];
+                let mut rem = [0u64; 48];
+                assert!(
+                    bracket_div::<Int<32>>(num, den, &mut quot[..num_len], &mut rem[..den_len]),
+                    "case {case} round {round}: bracket_div rejected a shape its buffers cover"
+                );
+
+                let mut ref_quot = [0u64; 96];
+                let mut ref_rem = [0u64; 48];
+                let mut u = [0u64; 128];
+                let mut v = [0u64; 64];
+                div_knuth_into(num, den, &mut ref_quot[..num_len], &mut ref_rem[..den_len],
+                    &mut u, &mut v);
+
+                assert_eq!(quot[..num_len], ref_quot[..num_len],
+                    "case {case} round {round}: quotient");
+                assert_eq!(rem[..den_len], ref_rem[..den_len],
+                    "case {case} round {round}: remainder");
+                graded += 1;
+            }
+        }
+        assert_eq!(graded, 24, "every pinned shape must be graded");
     }
 }

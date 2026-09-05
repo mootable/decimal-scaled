@@ -300,8 +300,10 @@ impl NewtonReciprocal {
             // route on the divide matcher's own shape verdict, and call the
             // engine's `_into` door — the exact-scratch pattern
             // `int::policy::div_rem::dispatch`'s doc sanctions (the
-            // `exp_generic::div_rem_exact` precedent; the u128-limb
-            // refinement falls to the value-identical base-2⁶⁴ Knuth).
+            // `exp_generic::div_rem_exact` precedent). The verdict is matched
+            // EXHAUSTIVELY, so a new engine forces a decision here; the
+            // u128-limb refinement gets its own arm and its own packed
+            // scratch, sized from the same module ceilings.
             use crate::int::policy::div_rem::{select_for_limbs, Algorithm};
             match select_for_limbs(&numerator[..k_u64 + 1], &pow_scale[..pow_len]) {
                 // Single-limb divisor: hardware remainder, no normalisation
@@ -312,14 +314,46 @@ impl NewtonReciprocal {
                     &mut r[..k_u64 + 1],
                     &mut remainder[..pow_len],
                 ),
-                _ => {
-                    // Verdict collapse: any non-Rem algorithm (including the
-                    // u128-limb verdict) funnels here and runs Knuth. Correct
-                    // for every current `pow_scale`-denominator shape — the
-                    // u128 engine's large-dividend precondition is not met —
-                    // but MUST be re-verified whenever an Algorithm arm joins
-                    // `int::policy::div_rem`; a new engine winning for these
-                    // shapes would need an explicit arm, not a silent Knuth fall.
+                // The base-2¹²⁸ engine. Not a dead arm on shape grounds: the
+                // matcher's u128 gate is `den_n` even and `>= 24` with
+                // `num_m >= 2·den_n`, and this call site can present exactly
+                // that. `10^460` is 1529 bits = 24 u64 limbs (even, and at the
+                // threshold), while `num_m = k_u64 + 1 = width_limbs + pow_len
+                // + 1` clears `2·den_n = 48` from `width_limbs = 20` up. That
+                // is the gate arithmetic only — which `(scale, width_limbs)`
+                // pairs actually reach this fallback (it is taken at odd
+                // widths and outside the baked table's range) has not been
+                // enumerated, so treat the arm as live rather than assuming
+                // either way.
+                //
+                // Scratch from the same module ceilings as the Knuth arm, plus
+                // the packed pair. The engine wants
+                // `⌈(num.len() + 2) / 2⌉ + 1` u128 dividend limbs; `num.len()
+                // = k_u64 + 1` and `k_u64 < MAX_R_U64` (asserted above), so
+                // that is at most `⌈(MAX_R_U64 + 2) / 2⌉ + 1 = MAX_R_U128 + 2`.
+                // The divisor wants `⌈pow_len / 2⌉ <= MAX_POW_U128`.
+                Algorithm::KnuthU128Limb => {
+                    let mut dividend_scratch = [0u64; MAX_R_U64 + 2];
+                    let mut divisor_scratch = [0u64; MAX_POW_U64];
+                    let mut packed_dividend = [0u128; MAX_R_U128 + 2];
+                    let mut packed_divisor = [0u128; MAX_POW_U128];
+                    crate::int::algos::div::div_knuth_u128_limb::div_knuth_u128_limb_into(
+                        &numerator[..k_u64 + 1],
+                        &pow_scale[..pow_len],
+                        &mut r[..k_u64 + 1],
+                        &mut remainder[..pow_len],
+                        &mut dividend_scratch,
+                        &mut divisor_scratch,
+                        &mut packed_dividend,
+                        &mut packed_divisor,
+                    );
+                }
+                // Base-2⁶⁴ Knuth. Burnikel–Ziegler and Schoolbook are never
+                // returned by the matcher today, but both are named so neither
+                // can be added silently.
+                Algorithm::Knuth
+                | Algorithm::BurnikelZieglerWithKnuth
+                | Algorithm::Schoolbook => {
                     let mut dividend_scratch = [0u64; MAX_R_U64 + 2];
                     let mut divisor_scratch = [0u64; MAX_POW_U64];
                     crate::int::algos::div::div_knuth::div_knuth_into(
@@ -1277,5 +1311,80 @@ mod tests {
     #[test]
     fn newton_u64_eq_u128_b6144_s1850() {
         assert_u64_u128_match(1850, 96, 48, 47, 1u128, (5, 0xfacefacef00d_u128));
+    }
+}
+
+/// The reciprocal fallback's divide genuinely reaches the base-2¹²⁸ verdict.
+///
+/// A comment in this module previously asserted the opposite — that "the u128
+/// engine's large-dividend precondition is not met" for these `pow_scale`
+/// denominators. It is met, and this pins the arithmetic so the claim cannot
+/// drift back into prose: the deciding facts are that `10^460` occupies an EVEN
+/// 24 u64 limbs (exactly `U128_DIV_THRESHOLD`) and that the numerator is a lone
+/// `1` at limb `k_u64`, giving `num_m = k_u64 + 1` against a `2·den_n = 48`
+/// gate.
+///
+/// `width_limbs` is ODD on purpose: `newton_recip_le` refuses an odd width (the
+/// baked prefix identity holds only at an even one), so the SLOW branch — the
+/// one carrying the divide — is the branch deterministically taken, in every
+/// feature configuration.
+#[cfg(test)]
+mod fallback_divide_routing {
+    use super::{MAX_POW_U64, MAX_R_U64};
+    use crate::int::policy::div_rem::{select_for_limbs, Algorithm};
+
+    /// Effective limb count: length with trailing zero limbs stripped.
+    fn effective(limbs: &[u64]) -> usize {
+        let mut n = limbs.len();
+        while n > 0 && limbs[n - 1] == 0 {
+            n -= 1;
+        }
+        n
+    }
+
+    #[test]
+    fn deep_scale_fallback_routes_to_u128_engine() {
+        const SCALE: u32 = 460;
+        const WIDTH_LIMBS: usize = 21;
+
+        // The baked table must decline, so the divide branch is the live one.
+        assert!(
+            crate::consts::newton_recip_le(SCALE, WIDTH_LIMBS).is_none(),
+            "an odd width must fall through to the runtime divide"
+        );
+
+        // Rebuild exactly what `precompute` presents to the matcher.
+        let pow_len = (SCALE as usize / 19 + 3).max(1);
+        assert!(pow_len <= MAX_POW_U64);
+        let mut pow_scale = [0u64; MAX_POW_U64];
+        pow_scale[0] = 1;
+        for _ in 0..SCALE {
+            let mut carry: u64 = 0;
+            for limb in pow_scale[..pow_len].iter_mut() {
+                let prod = (*limb as u128) * 10u128 + (carry as u128);
+                *limb = prod as u64;
+                carry = (prod >> 64) as u64;
+            }
+            assert_eq!(carry, 0, "pow_scale buffer too small");
+        }
+
+        let k_u64_raw = WIDTH_LIMBS + pow_len;
+        let k_u64 = if k_u64_raw.is_multiple_of(2) { k_u64_raw } else { k_u64_raw + 1 };
+        assert!(k_u64 < MAX_R_U64);
+        let mut numerator = [0u64; MAX_R_U64];
+        numerator[k_u64] = 1;
+
+        // The three facts the verdict turns on, asserted rather than asserted-about.
+        let den_n = effective(&pow_scale[..pow_len]);
+        assert_eq!(den_n, 24, "10^460 occupies 24 u64 limbs");
+        assert!(den_n.is_multiple_of(2), "the u128 engine needs an even divisor");
+        let num_m = effective(&numerator[..k_u64 + 1]);
+        assert!(num_m >= 2 * den_n, "num_m {num_m} must clear the 2*den_n gate");
+
+        assert!(
+            select_for_limbs(&numerator[..k_u64 + 1], &pow_scale[..pow_len])
+                == Algorithm::KnuthU128Limb,
+            "the deep-scale fallback shape must route to KnuthU128Limb"
+        );
     }
 }
