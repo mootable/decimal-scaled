@@ -42,6 +42,34 @@
 //! Collapses the per-tier D57 44..=56 sincos Tang
 //! kernel into one generic over `C: WideTrigCore`, the `SCALE`, and the
 //! table size `M`.
+//!
+//! ## Routing status — UNROUTED, and deliberately KEPT
+//!
+//! `policy::trig::forward::select` does not currently return `Tang` for any
+//! cell this kernel realises, so nothing in production reaches it. **That is
+//! its expected state, not evidence that it is dead** — `docs/ARCHITECTURE.md`
+//! → "Keeping the alternatives": algorithms are never deleted, and an
+//! unwired kernel reached only through its own tests and the
+//! `__bench_internals` bench seam is a kept alternative. Do not remove this
+//! module, its exports, or its tests because `select` no longer names it.
+//!
+//! It was routed at D57 on the `(3, 44..=56)` arm until that band was
+//! bisected. `benches/micro/sincos_d57_band_bisect.rs` ranked this kernel
+//! against what production actually runs at each scale — the Series arm at
+//! GUARD=30 outside `18..=22`, GUARD=8 inside — across `0..=56`, for sin and
+//! cos, validity-walled bit-identical to the oracle (35,376 comparisons per
+//! run, 0 mismatches). Two independent GHA runs, **33981810139** and
+//! **33983653830**, agreed cell for cell: Series won at EVERY probed scale in
+//! both, including every scale inside the band this kernel used to own
+//! (44 cells Series, 0 Tang; s44 1.16x/1.13x, s56 1.11x/1.07x across the two
+//! runs). Its win region at D57 is empty, so the arm was removed rather than
+//! re-edged.
+//!
+//! That verdict is specific to D57 — this tier's Series path is unusually
+//! strong because the `Int<16>` work integer is scale-independent and the
+//! rung kernel already pays few halvings. A different width, a cheaper table
+//! reconstruction, or a larger `M` could put this kernel back in front; the
+//! bench above is the harness that would show it.
 
 use crate::algos::support::wide_trig_core::WideTrigCore;
 use crate::support::rounding::RoundingMode;
