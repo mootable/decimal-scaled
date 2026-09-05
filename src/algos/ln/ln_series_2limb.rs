@@ -173,6 +173,32 @@ pub(crate) fn ln<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<In
 
 /// `i128` core of [`ln`].
 #[inline]
+/// The linear near-1 band's exponent, `k = ⌊(S−1)/2⌋` — ONE definition,
+/// shared by the Series exit in [`ln_strict_raw`] and the narrow Tang arm's
+/// gate (`ln_tang::ln_linear_band_exit`), so the two narrow `ln` paths can
+/// never disagree about which inputs are their own answer.
+///
+/// ```text
+/// ln(1 + δ/10^S)·10^S = δ − δ²/(2·10^S) + δ³/(3·10^(2S)) − …
+/// ```
+///
+/// The leading omitted term is `δ²/(2·10^S)`; at the band edge `|δ| = 10^k`
+/// it equals `10^(2k−S)/2` storage units, so the linear value `δ` is the
+/// nearest-rounded result only while `2k − S < 0` STRICTLY (the term is
+/// below half an LSB and the round is not a tie). `k = ⌊(S−1)/2⌋` gives
+/// `2k − S ≤ −1`, i.e. ≤ 0.05 LSB — strictly clear of the half-ULP tie for
+/// EVERY `S`. The old `k = ⌊S/2⌋` put `2k − S = 0` for even `S`, so the edge
+/// term was exactly 0.5 LSB and `δ` mis-rounded the tie (`ln(0.999)` at
+/// s6/s18/s28). The bound is about STORAGE resolution alone — which kernel
+/// computes the inputs outside the band (Series here, Tang on the routed
+/// narrow arm) does not enter it. Nearest modes only: a directed mode needs
+/// the true residual sign (the value sits sub-LSB to one side of `δ`).
+/// Derived from `S`, never from any input value.
+#[inline]
+pub(crate) const fn ln_linear_band_exponent(scale: u32) -> u32 {
+    scale.saturating_sub(1) / 2
+}
+
 fn ln_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     assert!(raw > 0, "ln kernel: argument must be positive");
     let one_scaled: i128 = 10_i128.pow(SCALE);
@@ -180,18 +206,10 @@ fn ln_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128
         return Some(0);
     }
     let delta = raw - one_scaled;
-    let ln1p_band: i128 = 10_i128.pow(SCALE.saturating_sub(1) / 2);
+    // The linear near-1 exit — see `ln_linear_band_exponent` for the bound.
+    // Directed modes fall through to the full working-scale kernel below.
+    let ln1p_band: i128 = 10_i128.pow(ln_linear_band_exponent(SCALE));
     if delta.abs() <= ln1p_band && is_nearest_mode(mode) {
-        // ln(1 + δ/10^S)·10^S = δ − δ²/(2·10^S) + … . The leading omitted term
-        // is δ²/(2·10^S); at the band edge |δ| = 10^k it equals 10^(2k−S)/2, so
-        // the linear value `δ` is the nearest-rounded result only while
-        // 2k − S < 0 STRICTLY (the term is below half an LSB and the round is
-        // not a tie). The band exponent k = ⌊(S−1)/2⌋ gives 2k − S ≤ −1, i.e.
-        // ≤ 0.05 LSB — strictly clear of the half-ULP tie for EVERY S. The old
-        // k = ⌊S/2⌋ put 2k − S = 0 for even S, so the edge term was exactly
-        // 0.5 LSB and `δ` misrounded the tie (ln(0.999) at s6/s18/s28). Directed
-        // modes need the true residual sign (the value sits sub-LSB to one side
-        // of `δ`), so they fall through to the full working-scale kernel below.
         return Some(delta);
     }
     let working_scale = SCALE + STRICT_GUARD;
