@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Side-by-side performance comparison: a feature branch against the published docs.
 
-Renders the SAME charts the docs site renders -- it imports `_perf_svg` and
-`_perf_series` from `scripts/render_docs.py` rather than approximating them -- so
-what you see here is directly comparable to
+Renders the SAME charts the docs site renders -- it imports `perf_chart_block`
+from `scripts/render_docs.py` rather than approximating it, so the operand
+families are overlaid here exactly as they are on the site, with the same
+clickable legend -- so what you see here is directly comparable to
 https://mootable.github.io/decimal-scaled/performance/ .
 
 Reads `results/timing/bbc_medians.tsv` straight out of git, so it needs no bench
