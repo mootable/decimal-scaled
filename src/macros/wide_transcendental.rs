@@ -475,7 +475,7 @@ macro_rules! decl_wide_transcendental {
                 working_value: W,
                 working_scale: u32,
                 target: u32
-            ) -> $Storage {
+            ) -> Option<$Storage> {
                 round_to_storage_with(
                     working_value,
                     working_scale,
@@ -498,7 +498,7 @@ macro_rules! decl_wide_transcendental {
                 working_scale: u32,
                 target: u32,
                 mode: $crate::support::rounding::RoundingMode,
-            ) -> $Storage {
+            ) -> Option<$Storage> {
                 // The narrow primitive `W` path; delegates to the work-int-
                 // generic narrowing so the wide compositions can narrow a
                 // `Wagm`-computed value to storage through the same code.
@@ -517,7 +517,7 @@ macro_rules! decl_wide_transcendental {
                 working_scale: u32,
                 target: u32,
                 mode: $crate::support::rounding::RoundingMode,
-            ) -> $Storage
+            ) -> Option<$Storage>
             where
                 S::Scratch: $crate::int::types::compute_limbs::ComputeLimbs,
             {
@@ -559,7 +559,7 @@ macro_rules! decl_wide_transcendental {
                 target: u32,
                 mode: $crate::support::rounding::RoundingMode,
                 recompute: impl FnMut(u32) -> S,
-            ) -> $Storage
+            ) -> Option<$Storage>
             where
                 S::Scratch: $crate::int::types::compute_limbs::ComputeLimbs,
             {
@@ -586,7 +586,7 @@ macro_rules! decl_wide_transcendental {
                 target: u32,
                 mode: $crate::support::rounding::RoundingMode,
                 recompute: impl FnMut(u32) -> S,
-            ) -> $Storage
+            ) -> Option<$Storage>
             where
                 S::Scratch: $crate::int::types::compute_limbs::ComputeLimbs,
             {
@@ -611,7 +611,7 @@ macro_rules! decl_wide_transcendental {
                 target: u32,
                 mode: $crate::support::rounding::RoundingMode,
                 recompute: impl FnMut(u32) -> S,
-            ) -> $Storage
+            ) -> Option<$Storage>
             where
                 S::Scratch: $crate::int::types::compute_limbs::ComputeLimbs,
             {
@@ -2185,7 +2185,7 @@ macro_rules! decl_wide_transcendental {
                     working_scale: u32,
                     target: u32,
                     mode: $crate::support::rounding::RoundingMode,
-                ) -> $Storage {
+                ) -> Option<$Storage> {
                     round_to_storage_with(working_value, working_scale, target, mode)
                 }
                 #[inline]
@@ -2198,7 +2198,7 @@ macro_rules! decl_wide_transcendental {
                     working_scale: u32,
                     target: u32,
                     mode: $crate::support::rounding::RoundingMode,
-                ) -> $Storage {
+                ) -> Option<$Storage> {
                     round_to_storage_with_g::<Wagm>(working_value, working_scale, target, mode)
                 }
                 #[inline]
@@ -2207,7 +2207,7 @@ macro_rules! decl_wide_transcendental {
                     target: u32,
                     mode: $crate::support::rounding::RoundingMode,
                     recompute: &mut dyn FnMut(u32) -> W,
-                ) -> $Storage {
+                ) -> Option<$Storage> {
                     round_to_storage_directed(base_guard_digits, target, mode, recompute)
                 }
                 #[inline]
@@ -2216,7 +2216,7 @@ macro_rules! decl_wide_transcendental {
                     target: u32,
                     mode: $crate::support::rounding::RoundingMode,
                     recompute: &mut dyn FnMut(u32) -> W,
-                ) -> $Storage {
+                ) -> Option<$Storage> {
                     round_to_storage_directed_never_exact(
                         base_guard_digits,
                         target,
