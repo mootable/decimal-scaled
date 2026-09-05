@@ -359,10 +359,24 @@ pub(crate) use decl_try_from_f64;
 /// integer is the fallible `TryFrom<iN>` surface (see
 /// [`decl_try_from_primitive!`] / [`decl_try_from_i128!`]); this macro
 /// only emits the to-integer direction.
+///
+/// **Surface only.** Both methods are thin delegations: the rounding and
+/// the saturating narrow live in [`crate::algos::to_int`], and which
+/// kernel runs for a given `(N, SCALE)` cell is
+/// [`crate::policy::to_int`]'s decision. `to_int_with` forwards its
+/// type's `10^SCALE` and the mode; the no-arg `to_int` forwards to
+/// `to_int_with` with the crate's `DEFAULT_ROUNDING_MODE`.
+///
+/// Until 0.5.1 this macro carried the eight-mode rounding match inline —
+/// a second copy of the decision
+/// [`should_bump`](crate::support::rounding::should_bump) already makes,
+/// expanded once per width.
 macro_rules! decl_decimal_int_conversion_methods {
-    // Wide storage. The rounding logic is carried in the wide storage
-    // type throughout; the final saturating narrow to `i64` goes through
-    // the `BigInt` cast.
+    // Wide storage. Every width uses this one arm — the ten tiers that
+    // come through `decl_decimal_full!`, plus D38 and D18 direct — so the
+    // delegation below is the whole of what any of them emits. `$Storage`
+    // is matched for call-site symmetry; the kernel reaches the storage
+    // type through the policy's blanket impl instead.
     (wide $Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> $Type<SCALE> {
             /// Converts to `i64` using the crate default rounding mode.
@@ -378,111 +392,8 @@ macro_rules! decl_decimal_int_conversion_methods {
             /// `i64::MIN` when the rounded integer is out of `i64` range.
             #[inline]
             pub fn to_int_with(self, mode: $crate::support::rounding::RoundingMode) -> i64 {
-                let zero = <$Storage>::from_str_radix("0", 10)
-                    .expect("wide decimal: invalid base-10 literal");
-                let one = <$Storage>::from_str_radix("1", 10)
-                    .expect("wide decimal: invalid base-10 literal");
-                let raw = self.0;
-                let divisor = Self::multiplier();
-                let quotient = raw / divisor;
-                let remainder = raw % divisor;
-                let int_rounded: $Storage = if remainder == zero {
-                    quotient
-                } else {
-                    let abs_remainder = remainder.unsigned_abs();
-                    // `divisor` is `10^SCALE` and always positive, so
-                    // `unsigned_abs()` is the value itself; `>> 1` is
-                    // the half-LSB threshold.
-                    let half = divisor.unsigned_abs() >> 1;
-                    let is_non_negative = !raw.is_negative();
-                    match mode {
-                        $crate::support::rounding::RoundingMode::HalfToEven => {
-                            if abs_remainder < half {
-                                quotient
-                            } else if abs_remainder > half {
-                                if is_non_negative {
-                                    quotient + one
-                                } else {
-                                    quotient - one
-                                }
-                            } else if !quotient.bit(0) {
-                                quotient
-                            } else if is_non_negative {
-                                quotient + one
-                            } else {
-                                quotient - one
-                            }
-                        }
-                        $crate::support::rounding::RoundingMode::HalfAwayFromZero => {
-                            if abs_remainder < half {
-                                quotient
-                            } else if is_non_negative {
-                                quotient + one
-                            } else {
-                                quotient - one
-                            }
-                        }
-                        $crate::support::rounding::RoundingMode::HalfTowardZero => {
-                            if abs_remainder > half {
-                                if is_non_negative {
-                                    quotient + one
-                                } else {
-                                    quotient - one
-                                }
-                            } else {
-                                quotient
-                            }
-                        }
-                        $crate::support::rounding::RoundingMode::Trunc => quotient,
-                        $crate::support::rounding::RoundingMode::Floor => {
-                            if is_non_negative {
-                                quotient
-                            } else {
-                                quotient - one
-                            }
-                        }
-                        $crate::support::rounding::RoundingMode::Ceiling => {
-                            if is_non_negative {
-                                quotient + one
-                            } else {
-                                quotient
-                            }
-                        }
-                        // Any non-zero remainder lifts the magnitude; the
-                        // `remainder == zero` case returned above.
-                        $crate::support::rounding::RoundingMode::AwayFromZero => {
-                            if is_non_negative {
-                                quotient + one
-                            } else {
-                                quotient - one
-                            }
-                        }
-                        // Pivot on the last decimal digit of |quotient| —
-                        // a wide `%`, so O(limbs).
-                        $crate::support::rounding::RoundingMode::ZeroFiveUp => {
-                            let ten = <$Storage>::from_i128(10);
-                            let digit = (quotient % ten).as_i128().unsigned_abs();
-                            if digit == 0 || digit == 5 {
-                                if is_non_negative {
-                                    quotient + one
-                                } else {
-                                    quotient - one
-                                }
-                            } else {
-                                quotient
-                            }
-                        }
-                    }
-                };
-                let i64_max: $Storage = <$Storage>::from_i128(i64::MAX as i128);
-                let i64_min: $Storage = <$Storage>::from_i128(i64::MIN as i128);
-                if int_rounded > i64_max {
-                    i64::MAX
-                } else if int_rounded < i64_min {
-                    i64::MIN
-                } else {
-                    int_rounded.as_i128() as i64
-                }
+                use $crate::policy::to_int::ToIntPolicy as _;
+                self.to_int_impl(Self::multiplier(), mode)
             }
         }
     };

@@ -473,6 +473,52 @@ pub mod __bench_internals {
         crate::int::algos::hypot::hypot_u128_fast::hypot_u128_fast::<N>(lhs, rhs, mode)
     }
 
+    /// `to_int` algorithm candidates for the `to_int_surface` microbench —
+    /// the dispatch-seam A/B that decides the `policy::to_int` `select`
+    /// arm per `(N, SCALE)` cell.
+    ///
+    /// Both round `raw / 10^SCALE` to a whole number under `mode` and
+    /// narrow to `i64`, and both take their rounding verdict from
+    /// `should_bump`, so they are bit-identical at every mode. They differ
+    /// only in how the truncated quotient and remainder are produced: two
+    /// typed full-width divides, versus one pass through the `÷10^scale`
+    /// matcher. The bench asserts the identity before timing either.
+    ///
+    /// `raw` is a decimal's `.0` and `divisor` its `multiplier()`, so a
+    /// caller reaches both without naming the private storage type.
+    #[inline(never)]
+    pub fn to_int_quotient_remainder<const N: usize>(
+        raw: crate::int::types::Int<N>,
+        divisor: crate::int::types::Int<N>,
+        mode: crate::RoundingMode,
+    ) -> i64 {
+        crate::algos::to_int::to_int_quotient_remainder::to_int_quotient_remainder::<N>(
+            raw, divisor, mode,
+        )
+    }
+    /// The `Int<N>` -> `i64` saturating narrow both `to_int` kernels
+    /// finish with. Exposed so `to_int_surface`'s verbatim transcription
+    /// of the 0.5.x inline rounding can finish the same way the kernels
+    /// do — the narrow moved unchanged, so sharing it keeps the
+    /// comparison about the ROUNDING, which is the part that changed.
+    #[inline(never)]
+    pub fn to_int_narrow_saturating<const N: usize>(value: crate::int::types::Int<N>) -> i64 {
+        crate::algos::to_int::narrow_saturating::narrow_saturating_i64::<N>(value)
+    }
+    /// The rescale-routed `to_int` candidate. `SCALE` cannot be inferred
+    /// from the operand, so the caller names it alongside the limb count.
+    #[inline(never)]
+    #[allow(private_bounds)]
+    pub fn to_int_rescale<const N: usize, const SCALE: u32>(
+        raw: crate::int::types::Int<N>,
+        mode: crate::RoundingMode,
+    ) -> i64
+    where
+        crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
+    {
+        crate::algos::to_int::to_int_rescale::to_int_rescale::<N, SCALE>(raw, mode)
+    }
+
     /// Remainder algorithm candidates exposed for the `rem_kernel_ab`
     /// microbench (the dispatch-seam A/B that decides the `rem` policy
     /// `select` arm per width).

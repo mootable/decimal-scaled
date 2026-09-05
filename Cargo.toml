@@ -1054,6 +1054,19 @@ path = "benches/micro/quantize_surface.rs"
 harness = false
 required-features = ["wide"]
 
+# The `to_int` dispatch-seam A/B: the two `policy::to_int` arms (two typed
+# full-width divides vs one pass through the `/10^scale` matcher) across
+# widths x scales, with the rounding MODE as the input axis so all eight
+# are timed, and both the exact (remainder-zero early return) and dense
+# (full divide-and-round) input classes. `to_int_with` had no bench
+# coverage of any kind before this; the `qr` arm is also the before-side
+# of the 0.5.1 lift out of `decl_decimal_int_conversion_methods!`.
+[[bench]]
+name = "to_int_surface"
+path = "benches/micro/to_int_surface.rs"
+harness = false
+required-features = ["wide", "bench-alt"]
+
 # Delegation parity (`rescale` vs `quantize`, which should be
 # indistinguishable), rounding-mode cost across all eight modes, and
 # whether `requantize` composes with or duplicates the scale move.

@@ -45,6 +45,7 @@ pub(crate) mod rem;
 pub(crate) mod sqrt;
 pub(crate) mod sub;
 pub(crate) mod to_degrees;
+pub(crate) mod to_int;
 pub(crate) mod to_radians;
 pub(crate) mod trig;
 // Shared policy-layer support: the SCALE-derived work-rung selector

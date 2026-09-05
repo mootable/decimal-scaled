@@ -65,6 +65,11 @@ pub(crate) mod quantize;
 pub(crate) mod rem;
 pub(crate) mod sqrt;
 pub(crate) mod sub;
+/// `to_int` kernels — rounding a decimal to a whole number and
+/// narrowing it to `i64`. `policy::to_int` chooses between the two
+/// typed divides (`to_int_quotient_remainder`) and one pass through the
+/// `÷10^scale` matcher (`to_int_rescale`).
+pub(crate) mod to_int;
 pub(crate) mod trig;
 
 // Cross-cutting support kernels consumed by multiple families and the
