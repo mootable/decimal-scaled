@@ -125,6 +125,42 @@ def parse(text: str) -> dict[tuple[str, int, int], float]:
     return out
 
 
+def parse_prod(text: str) -> dict[tuple[str, int, int], float]:
+    """`(op, width, scale) -> prod_ns` from the SAME run as the branch column.
+
+    THE PUBLISHED SIDE COMES FROM HERE, not from `origin/main`'s committed
+    medians, and the reason is not cosmetic.
+
+    `bench-compare` builds BOTH sides from one harness in one job: `prod_ns` is
+    the pinned published release measured with the SAME operands, on the SAME
+    runner, in the SAME process as `branch_ns`. Reading the published side out
+    of `origin/main` instead compares two runs, which brings two problems and
+    the first is fatal:
+
+    1. **The operands are not the same.** The scale-0 spelling of the small
+       argument used to be the integer `0`, so the whole s0 column timed `f(0)`
+       -- a short-circuit returning in 1-4 ns for `sin`, `cos`, `tan`, `exp`,
+       `atan`, the hyperbolics and `to_*`. It now spells `2`. Against
+       `origin/main` those cells read as a ~1000x REGRESSION when nothing about
+       the code moved; the two numbers answer different questions.
+    2. Cross-run cells span two runner VMs and carry the documented
+       p50 1.21x / p90 1.75x / p99 2.40x floor. Same-run cells carry none of it.
+
+    So this column is both the honest comparison and the quieter one.
+    """
+    out = {}
+    for line in text.splitlines()[1:]:
+        c = line.split("\t")
+        if len(c) >= 5:
+            w = c[1].lstrip("D")
+            if w.isdigit() and c[2].lstrip("-").isdigit():
+                try:
+                    out[(c[0], int(w), int(c[2]))] = float(c[3])
+                except ValueError:
+                    pass
+    return out
+
+
 def parse_pair(text: str) -> dict[tuple[str, int, int], tuple[float, float]]:
     """`(op, width, scale) -> (prod_ns, branch_ns)` from ONE run.
 
@@ -769,7 +805,11 @@ def main() -> int:
                       file=sys.stderr)
                 return 1, ""
 
-        base, br = parse(base_text), parse(br_text)
+        # The published side is the SAME run's `prod_ns` -- same harness, same
+        # operands, same runner, same process as `branch_ns`. See `parse_prod`.
+        # `base_text` is still read: it dates the published release and proves
+        # the ref resolves, but its timings are NOT the comparison.
+        base, br = parse_prod(br_text), parse(br_text)
         if not base or not br:
             print("one side has no timing rows -- has bbc run on it?",
                   file=sys.stderr)
