@@ -372,9 +372,11 @@ pub(crate) use decl_try_from_f64;
 /// [`should_bump`](crate::support::rounding::should_bump) already makes,
 /// expanded once per width.
 macro_rules! decl_decimal_int_conversion_methods {
-    // Wide storage. The rounding logic is carried in the wide storage
-    // type throughout; the final saturating narrow to `i64` goes through
-    // the `BigInt` cast.
+    // Wide storage. Every width uses this one arm — the ten tiers that
+    // come through `decl_decimal_full!`, plus D38 and D18 direct — so the
+    // delegation below is the whole of what any of them emits. `$Storage`
+    // is matched for call-site symmetry; the kernel reaches the storage
+    // type through the policy's blanket impl instead.
     (wide $Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> $Type<SCALE> {
             /// Converts to `i64` using the crate default rounding mode.
