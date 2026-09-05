@@ -868,6 +868,19 @@ path = "benches/micro/atan_d57_band_bisect.rs"
 harness = false
 required-features = ["wide", "bench-alt"]
 
+# D57 sin/cos Tang band LOWER EDGE — the (3, 44..=56) arm in
+# `forward::select`, whose edge was never bisected (it was left where atan's
+# had been put). The kernel under test is `sincos_tang`, NOT atan's
+# `atan_tang_3limb`, so `atan_d57_band_bisect`'s result does not transfer.
+# Ranks Tang against what production actually runs at each scale (Series
+# GUARD=30 outside 18..=22, GUARD=8 inside), validity-walled bit-identical
+# across all 8 rounding modes. Same shape as `atan_d57_band_bisect`.
+[[bench]]
+name = "sincos_d57_band_bisect"
+path = "benches/micro/sincos_d57_band_bisect.rs"
+harness = false
+required-features = ["wide", "bench-alt"]
+
 # trig_rung_ab: forward-trig SCALE-derived work-rung A/B -- tier-width Series
 # vs the rung-routed production path (gate + const-folded rung match) at
 # D307/D1232 across the scale axis, plus an out-of-budget large-|x| probe.

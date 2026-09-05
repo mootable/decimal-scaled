@@ -1689,6 +1689,66 @@ pub mod __bench_internals {
     ) -> crate::int::types::Int<3> {
         crate::algos::trig::sincos_tang::sin_tang_with_taylor::<crate::types::widths::wide_trig_d57::Core, SCALE, 512>(raw, mode)
     }
+    #[cfg(all(feature = "_wide-support", any(feature = "d57", feature = "wide")))]
+    #[inline(never)]
+    pub fn cos_tang_d57<const SCALE: u32>(
+        raw: crate::int::types::Int<3>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<3> {
+        crate::algos::trig::sincos_tang::cos_tang_with_taylor::<crate::types::widths::wide_trig_d57::Core, SCALE, 512>(raw, mode)
+    }
+
+    // D57 sin/cos band-edge bench seam — the kernels `policy_sin` /
+    // `policy_cos` can reach at D57, exposed so `sincos_d57_band_bisect` can
+    // bisect the lower edge of the `(3, 44..=56)` Tang arm in
+    // `forward::select` against what production ACTUALLY runs at each scale.
+    //
+    // The kernel under test is `sincos_tang::{sin,cos}_tang_with_taylor`
+    // (M=512), which is a DIFFERENT kernel from atan's `atan_tang_3limb` —
+    // atan's edge was bisected separately (`atan_d57_band_bisect`) and its
+    // result does not transfer here.
+    //
+    // - `{sin,cos}_rung_d57`        — the Series arm outside 18..=22
+    //   (GUARD = C::GUARD), i.e. the path the band edge diverts. This is the
+    //   validity oracle and the ranking baseline.
+    // - `{sin,cos}_rung_narrow_d57` — the Series arm INSIDE 18..=22
+    //   (GUARD=8; note atan's narrow band is GUARD=10). It runs at working
+    //   scale `SCALE + 8`, BELOW the Tang kernel's `SCALE + C::GUARD`, so the
+    //   band's win/loss there is a genuine measurement rather than an
+    //   interpolation across it.
+    // - `{sin,cos}_tang_d57`        — the Tang table kernel under test.
+    #[cfg(all(feature = "_wide-support", any(feature = "d57", feature = "wide")))]
+    #[inline(never)]
+    pub fn sin_rung_d57<const SCALE: u32>(
+        raw: crate::int::types::Int<3>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<3> {
+        crate::policy::trig::forward_rung::sin::<crate::types::widths::wide_trig_d57::Core, SCALE, { <crate::types::widths::wide_trig_d57::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(raw, mode)
+    }
+    #[cfg(all(feature = "_wide-support", any(feature = "d57", feature = "wide")))]
+    #[inline(never)]
+    pub fn sin_rung_narrow_d57<const SCALE: u32>(
+        raw: crate::int::types::Int<3>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<3> {
+        crate::policy::trig::forward_rung::sin::<crate::types::widths::wide_trig_d57::Core, SCALE, 8>(raw, mode)
+    }
+    #[cfg(all(feature = "_wide-support", any(feature = "d57", feature = "wide")))]
+    #[inline(never)]
+    pub fn cos_rung_d57<const SCALE: u32>(
+        raw: crate::int::types::Int<3>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<3> {
+        crate::policy::trig::forward_rung::cos::<crate::types::widths::wide_trig_d57::Core, SCALE, { <crate::types::widths::wide_trig_d57::Core as crate::algos::support::wide_trig_core::WideTrigCore>::GUARD }>(raw, mode)
+    }
+    #[cfg(all(feature = "_wide-support", any(feature = "d57", feature = "wide")))]
+    #[inline(never)]
+    pub fn cos_rung_narrow_d57<const SCALE: u32>(
+        raw: crate::int::types::Int<3>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<3> {
+        crate::policy::trig::forward_rung::cos::<crate::types::widths::wide_trig_d57::Core, SCALE, 8>(raw, mode)
+    }
 
     // D57 atan band-edge bench seam — the three kernels `policy_atan` can
     // reach at D57, exposed so `atan_d57_band_bisect` can bisect the lower
