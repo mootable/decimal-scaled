@@ -262,9 +262,23 @@ jobs:
         working-directory: bench-compare
         env:
           # One resolved value, written to BOTH dep lines. A bbc run whose two
-          # sides carry different TIER features is not a comparison — and it
-          # would fail in the flattering direction, since the side with fewer
-          # tiers gets smaller build-max scratch and looks like a large free win.
+          # sides carry different TIER features is not a comparison: the feature
+          # set decides which tiers exist and which kernels are compiled, so the
+          # two sides would not be running the same code.
+          #
+          # It does NOT, however, fail through build-max scratch. This comment
+          # used to claim the side with fewer tiers gets smaller build-max
+          # scratch and "looks like a large free win"; that was measured on
+          # 2026-09-05 and is false. Two runs at the SAME commit, one with
+          # `features=none` and one with every tier, calibrated on the
+          # scale-invariant ops (`add`/`sub`/`neg`, whose spread is pure
+          # machine): the scale-invariant ops land at exactly 1.00 of the
+          # calibrator and the transcendentals at 0.95 — nothing gets slower
+          # when more tiers are enabled, and the narrow-only side is not
+          # flattered. `MAX_U128_LIMB` grows 8 -> 256 across those builds, but
+          # only the used prefix is ever read, so the declaration costs nothing
+          # measurable. Keep the features matched for the reason above, not for
+          # a scratch effect that does not exist.
           #
           # `strict` is the ONE deliberate asymmetry, and it is not a tier: the
           # pinned baseline predates the API reduction, so its correctly-rounded
