@@ -439,6 +439,19 @@ mod wide_matcher_differential {
     //! trimming, so a small value at a wide tier routes as a narrow one and
     //! would silently miss the band. Each test asserts its input stayed
     //! above `MAX >> 3` so that property cannot rot.
+    //!
+    //! # Which kernel these actually reach, and where they do not
+    //!
+    //! The gates below are per-tier, matching this suite's convention and
+    //! CI's width-sharded matrix. A single-tier feature (`d462` and its
+    //! siblings) forwards only `decimal-scaled/d462`, and the matcher's
+    //! baked-reciprocal arm sits behind `x-wide` / `xx-wide` — so in a
+    //! single-tier build every cell here resolves to one of the two
+    //! magic-number kernels, which is what CI exercises today. The same
+    //! tests route the `200..=1850` cells to the baked-reciprocal arm
+    //! automatically under any `x-wide` or `xx-wide` build, with no edit;
+    //! that arm is therefore covered by these tests but not, as the shards
+    //! currently stand, gated by CI.
 
     use decimal_scaled::{Int, RoundingMode};
 
