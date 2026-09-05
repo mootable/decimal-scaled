@@ -256,7 +256,7 @@ pub(crate) trait WideTrigCore {
         target: u32,
         mode: RoundingMode,
         recompute: &mut dyn FnMut(u32) -> Self::W,
-    ) -> Self::Storage;
+    ) -> Option<Self::Storage>;
 
     // ── working-scale helpers the Tang lookup kernels need ─────────────
 
