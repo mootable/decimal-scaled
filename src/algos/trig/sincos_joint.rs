@@ -24,7 +24,9 @@
 //! Generic over the tier core `C`, so one kernel serves every wide width;
 //! there is no scale precondition, hence no band suffix on the name.
 
-use crate::algos::support::wide_trig_core::{round_to_storage_clear_of_tie_g, WideTrigCore};
+use crate::algos::support::wide_trig_core::{
+    round_to_storage_clear_of_tie_g, ClearShot, WideTrigCore,
+};
 use crate::int::types::compute_limbs::ComputeLimbs;
 use crate::int::types::traits::BigInt;
 use crate::support::rounding::RoundingMode;
@@ -52,9 +54,9 @@ use crate::support::rounding::RoundingMode;
 pub(crate) fn sin_cos_shared_taylor<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-    sin_escape: fn(C::Storage, RoundingMode) -> C::Storage,
-    cos_escape: fn(C::Storage, RoundingMode) -> C::Storage,
-) -> (C::Storage, C::Storage)
+    sin_escape: fn(C::Storage, RoundingMode) -> Option<C::Storage>,
+    cos_escape: fn(C::Storage, RoundingMode) -> Option<C::Storage>,
+) -> Option<(C::Storage, C::Storage)>
 where
     <C::W as BigInt>::Scratch: ComputeLimbs,
 {
@@ -72,8 +74,9 @@ where
         C::storage_max(),
         C::storage_min(),
     ) {
-        Some(narrowed) => narrowed,
-        None => sin_escape(raw, mode),
+        ClearShot::Decided(narrowed) => narrowed,
+        ClearShot::OutOfRange => return None,
+        ClearShot::Escalate => sin_escape(raw, mode)?,
     };
     let cos_bits = match round_to_storage_clear_of_tie_g::<C::Storage, C::W>(
         cos_w,
@@ -83,8 +86,9 @@ where
         C::storage_max(),
         C::storage_min(),
     ) {
-        Some(narrowed) => narrowed,
-        None => cos_escape(raw, mode),
+        ClearShot::Decided(narrowed) => narrowed,
+        ClearShot::OutOfRange => return None,
+        ClearShot::Escalate => cos_escape(raw, mode)?,
     };
-    (sin_bits, cos_bits)
+    Some((sin_bits, cos_bits))
 }

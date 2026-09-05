@@ -109,56 +109,68 @@ pub(crate) fn tan_narrow_with_taylor<
 >(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::W as crate::int::types::traits::BigInt>::Scratch:
         crate::int::types::compute_limbs::ComputeLimbs,
 {
     if raw == C::storage_zero() {
-        return C::storage_zero();
+        return Some(C::storage_zero());
     }
     let base_working_scale = SCALE + GUARD;
     let base_working_value = C::to_work_scaled(raw, GUARD);
     let (sin_base, cos_base) = C::sin_cos_fixed::<SCALE>(base_working_value, base_working_scale);
     if cos_base == C::zero() {
-        panic!("wide-tier tan: cosine is zero (argument is an odd multiple of pi/2)");
+        // The pole — see `wide_trig_core::tan_series`.
+        return None;
     }
     // Near-tie escapes — see `wide_trig_core::tan_series`: clear-of-band
     // residuals keep the single-shot cost; the band escalates through the
     // ratio walker (a deciding digit can sit below the fixed working scale).
-    let tie_walker = |base_guard_digits: u32| -> C::Storage {
-        C::round_to_storage_directed(base_guard_digits, SCALE, mode, &mut |guard_digits| {
-            let working_scale = SCALE + guard_digits;
-            let (sin_value, cos_value) =
-                C::sin_cos_fixed::<SCALE>(C::to_work_scaled(raw, guard_digits), working_scale);
-            if cos_value == C::zero() {
-                panic!("wide-tier tan: cosine is zero (argument is an odd multiple of pi/2)");
-            }
-            C::div(sin_value, cos_value, working_scale)
-        })
+    // `pole` is a plain call-local flag, the recompute closure's only way to
+    // report a pole it meets at a deeper guard (it owes the walker a value).
+    let mut pole = false;
+    let mut tie_walker = |base_guard_digits: u32| -> Option<C::Storage> {
+        let walked =
+            C::round_to_storage_directed(base_guard_digits, SCALE, mode, &mut |guard_digits| {
+                let working_scale = SCALE + guard_digits;
+                let (sin_value, cos_value) =
+                    C::sin_cos_fixed::<SCALE>(C::to_work_scaled(raw, guard_digits), working_scale);
+                if cos_value == C::zero() {
+                    pole = true;
+                    return C::zero();
+                }
+                C::div(sin_value, cos_value, working_scale)
+            });
+        if pole {
+            return None;
+        }
+        walked
     };
     if !NEAR_POLE {
         let tan_value = C::div(sin_base, cos_base, base_working_scale);
-        if let Some(rounded) =
+        if let Some(verdict) =
             crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<
                 C::Storage,
                 C::W,
             >(tan_value, base_working_scale, SCALE, mode, C::storage_max(), C::storage_min())
+            .settled()
         {
-            return rounded;
+            return verdict;
         }
         return tie_walker(GUARD);
     }
     let probe = C::div(sin_base, cos_base, base_working_scale);
     let extra = super::near_pole_tan::tan_extra_digits(C::bit_length(probe), base_working_scale);
     if extra == 0 {
-        if let Some(rounded) =
+        if let Some(verdict) =
             crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<
                 C::Storage,
                 C::W,
             >(probe, base_working_scale, SCALE, mode, C::storage_max(), C::storage_min())
+            .settled()
         {
-            return rounded;
+            return verdict;
         }
         return tie_walker(GUARD);
     }
@@ -166,13 +178,14 @@ where
     let working_value = C::to_work_scaled(raw, GUARD + extra);
     let (sin_w, cos_w) = C::sin_cos_fixed::<SCALE>(working_value, lifted_working_scale);
     let tan_value = C::div(sin_w, cos_w, lifted_working_scale);
-    if let Some(rounded) =
+    if let Some(verdict) =
         crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<
             C::Storage,
             C::W,
         >(tan_value, lifted_working_scale, SCALE, mode, C::storage_max(), C::storage_min())
+        .settled()
     {
-        return rounded;
+        return verdict;
     }
     tie_walker(GUARD + extra)
 }

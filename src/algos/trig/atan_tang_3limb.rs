@@ -273,8 +273,9 @@ pub(crate) fn atan<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> 
     match crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<Int<3>, _>(
         result, working_scale, SCALE, mode, Int::<3>::MAX, Int::<3>::MIN,
     ) {
-        Some(rounded) => rounded,
-        None => crate::algos::support::wide_trig_core::atan_series::<
+        crate::algos::support::wide_trig_core::ClearShot::Decided(rounded) => Some(rounded),
+        crate::algos::support::wide_trig_core::ClearShot::OutOfRange => None,
+        crate::algos::support::wide_trig_core::ClearShot::Escalate => crate::algos::support::wide_trig_core::atan_series::<
             crate::types::widths::wide_trig_d57::Core,
             SCALE,
         >(raw, mode),

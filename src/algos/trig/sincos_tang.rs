@@ -221,8 +221,9 @@ where
     match crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<C::Storage, C::W>(
         result, working_scale, SCALE, mode, C::storage_max(), C::storage_min(),
     ) {
-        Some(rounded) => rounded,
-        None => match which {
+        crate::algos::support::wide_trig_core::ClearShot::Decided(rounded) => Some(rounded),
+        crate::algos::support::wide_trig_core::ClearShot::OutOfRange => None,
+        crate::algos::support::wide_trig_core::ClearShot::Escalate => match which {
             Which::Sin => crate::algos::support::wide_trig_core::sin_series::<C, SCALE>(raw, mode),
             Which::Cos => crate::algos::support::wide_trig_core::cos_series::<C, SCALE>(raw, mode),
         },

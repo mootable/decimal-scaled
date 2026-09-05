@@ -115,8 +115,9 @@ pub(crate) fn asin<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> 
     match crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<Int<3>, _>(
         asin_value, working_scale, SCALE, mode, Int::<3>::MAX, Int::<3>::MIN,
     ) {
-        Some(rounded) => rounded,
-        None => crate::algos::trig::inverse_schoolbook::asin_schoolbook::<
+        crate::algos::support::wide_trig_core::ClearShot::Decided(rounded) => Some(rounded),
+        crate::algos::support::wide_trig_core::ClearShot::OutOfRange => None,
+        crate::algos::support::wide_trig_core::ClearShot::Escalate => crate::algos::trig::inverse_schoolbook::asin_schoolbook::<
             crate::types::widths::wide_trig_d57::Core,
             SCALE,
         >(raw, mode),
@@ -138,8 +139,9 @@ pub(crate) fn acos<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> 
     match crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<Int<3>, _>(
         acos_value, working_scale, SCALE, mode, Int::<3>::MAX, Int::<3>::MIN,
     ) {
-        Some(rounded) => rounded,
-        None => crate::algos::trig::inverse_schoolbook::acos_schoolbook::<
+        crate::algos::support::wide_trig_core::ClearShot::Decided(rounded) => Some(rounded),
+        crate::algos::support::wide_trig_core::ClearShot::OutOfRange => None,
+        crate::algos::support::wide_trig_core::ClearShot::Escalate => crate::algos::trig::inverse_schoolbook::acos_schoolbook::<
             crate::types::widths::wide_trig_d57::Core,
             SCALE,
         >(raw, mode),
@@ -204,8 +206,9 @@ pub(crate) fn atan2<const SCALE: u32>(
     match crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<Int<3>, _>(
         atan2_value, working_scale, SCALE, mode, Int::<3>::MAX, Int::<3>::MIN,
     ) {
-        Some(rounded) => rounded,
-        None => crate::algos::trig::inverse_schoolbook::atan2_schoolbook::<
+        crate::algos::support::wide_trig_core::ClearShot::Decided(rounded) => Some(rounded),
+        crate::algos::support::wide_trig_core::ClearShot::OutOfRange => None,
+        crate::algos::support::wide_trig_core::ClearShot::Escalate => crate::algos::trig::inverse_schoolbook::atan2_schoolbook::<
             crate::types::widths::wide_trig_d57::Core,
             SCALE,
         >(y_raw, x_raw, mode),
