@@ -292,10 +292,6 @@ macro_rules! decl_wide_transcendental {
                 }
             }
 
-            /// Hard cap on series iterations — a safety net; every
-            /// series terminates far sooner by reaching a zero term.
-            const SERIES_CAP: u128 = 20_000;
-
             #[inline]
             pub(crate) fn lit(value: u128) -> W {
                 <W as $crate::int::types::traits::BigInt>::from_mag_sign_u128(&[value], false)
@@ -330,41 +326,6 @@ macro_rules! decl_wide_transcendental {
                 // half-to-even divide logic. `W` is concrete here so the
                 // monomorphisation is the same one direct call.
                 $crate::algos::exp::exp_generic::round_div::<W>(numerator, divisor)
-            }
-            /// Half-to-even quotient `numerator / 10^exponent`, selecting
-            /// the fastest available divide kernel.
-            ///
-            /// For `1 ≤ exponent ≤ 38` the MG (magic-multiply) base-2^128
-            /// long-divide kernel ships a constant-time, branchless
-            /// inner loop — ~5 ops per u128 numerator limb — which
-            /// dominates the generic Knuth Algorithm D path on
-            /// pipelined CPUs. Audit `round_div_audit_mg_matches_*`
-            /// in `algos::support::mg_divide::tests` shows bit-exact agreement
-            /// with the generic `div_rem` reference across
-            /// 380 000 + 190 000 random inputs.
-            ///
-            /// For `exponent == 0` the divisor is 1 so the result is
-            /// `numerator` unchanged. For `1 ≤ exponent ≤ 38` the
-            /// single-chunk MG kernel handles the divide in one pass; for
-            /// `exponent > 38`
-            /// the chain-MG kernel breaks the divide into a sequence
-            /// of `÷ 10^38` stages plus a final `÷ 10^(exponent − 38·k)`,
-            /// each one a base-`2^128` MG long-divide, with
-            /// combined-remainder bookkeeping that yields bit-exact
-            /// half-to-even. The chain audit
-            /// (`round_div_chain_audit_*` in `algos::support::mg_divide::tests`)
-            /// confirms agreement with the schoolbook `div_rem`
-            /// reference on 380K + 190K random inputs across every
-            /// `RoundingMode` and `exponent ∈ 39..=100`.
-            #[inline]
-            fn round_div_pow10(numerator: W, exponent: u32) -> W {
-                // Forwards to the single generic source
-                // (`exp_generic::round_div_pow10`), which routes the
-                // `exponent > 38`
-                // rescale through the rescale matcher (baked-Newton / MgChain
-                // per `(scale, width)`, + the 9.24 magnitude-trim). `W`
-                // concrete here ⇒ one direct call.
-                $crate::algos::exp::exp_generic::round_div_pow10::<W>(numerator, exponent)
             }
             /// `(lhs · rhs) / 10^working_scale`, rounded half-to-even. The
             /// rounded variant replaces the previous truncating
@@ -1412,6 +1373,16 @@ macro_rules! decl_wide_transcendental {
             ///
             /// Reassembles `2^k · exp(s)` at the end.
             ///
+            /// This shell is the tier's REGIME SPLIT only — the kernel is
+            /// [`crate::algos::exp::exp_generic::exp_fixed`], the single
+            /// width-generic source, run here at the tier's own `W` and at
+            /// [`Wexp`] on the wide arm. It carried a per-tier copy of that
+            /// body until the copy was removed as a superseded duplicate: the
+            /// two ran the identical sequence over the identical helpers, and
+            /// the generic additionally carries the deep-negative-`k`
+            /// short-circuit and the `k < 0` extended-scale clamp the copy
+            /// never gained.
+            ///
             /// Reference: dashu-float's `exp_internal`
             /// (`float/src/exp.rs`); the trick traces back to Brent
             /// 1976 §3 ("binary-splitting for exp via repeated
@@ -1435,225 +1406,15 @@ macro_rules! decl_wide_transcendental {
                     return exp_fixed_wide(working_value, working_scale);
                 }
 
-                // Cache 10^w once — used as divisor in every Taylor
-                // iteration and squaring step below. At D307<150>
-                // w=180 and `pow10(180)` costs ~50 µs by itself
-                // (`lit(10).pow(180)` is ~log₂(180)=8 wide squarings
-                // followed by ~180 cumulative multiplies); without
-                // caching this would dominate the call.
-                #[cfg(feature = "perf-trace")]
-                let _reduce_span = $crate::tracing::info_span!("range_reduce").entered();
-                // Range reduction.
-                //
-                // Naively `s = v − k·ln 2` evaluated at the type's
-                // `working_scale` suffers catastrophic cancellation when `|v|`
-                // is large: each absorbed leading bit of `v` is paid for
-                // by an LSB of `k·ln 2`, and the final `2^k` rescaling at
-                // the end amplifies any residual error in `s` back up by
-                // the same factor. The total budget for `2^k` rescaling
-                // is roughly `2^k · LSB_w ≤ 0.5 · LSB_storage`, i.e.
-                // `k · log10(2) ≤ GUARD`. For wide-tier scales where the
-                // input `|v|` can reach `(MAX_SCALE − SCALE) · ln 10`,
-                // `k` overshoots that budget badly — D616<308>'s upper
-                // end gives `k ≈ 1020`, blowing past `GUARD = 30` by
-                // ~280 decimal digits and producing the multi-thousand-
-                // LSB drift the precision golden gate catches.
-                //
-                // Mitigation: bump the whole `exp_fixed` body to an
-                // `extended_working_scale = working_scale + extra_digits`,
-                // computed
-                // dynamically from `bit_length(|k|)`. `extra_digits` is sized
-                // so
-                // the post-squarings amplification by `2^k` against the
-                // residual LSB of the extended scale lands inside the `GUARD`
-                // budget
-                // at narrowing time. `extra_digits = ceil(|k|·log10(2)) + 6`
-                // suffices: the `+6` covers the Taylor-series-step
-                // accumulation, the post-Taylor `n` squarings, and the
-                // half-LSB error introduced by the final narrowing.
-                //
-                // Reference for the analysis: Muller, *Elementary
-                // Functions: Algorithms and Implementation* (3rd ed.,
-                // 2016), §11.1 — range-reduction error budget with the
-                // `2^k · exp(s)` reassembly.
-                let one_at_working_scale = one(working_scale);
-                let ln2_at_working_scale = ln2_cf::<SCALE>(
-                    working_scale,
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE
-                );
-                let pow10_at_working_scale = one_at_working_scale;
-                let k = round_to_nearest_int(
-                    div_cached(working_value, ln2_at_working_scale, pow10_at_working_scale),
-                    working_scale
-                );
-                let abs_k_u128 = if k < 0 { -k } else { k } as u128;
-                let extra_digits: u32 = if abs_k_u128 == 0 {
-                    0
-                } else {
-                    // The amplification of the LSB error in `k·ln 2` by
-                    // the final `2^k` rescaling is `2^k`, which is
-                    // `|k|·log10(2)` decimal digits. Compute that
-                    // directly from `|k|` (NOT `bit_length(|k|)`), then
-                    // add a margin for Taylor + squarings + final
-                    // narrowing.
-                    //
-                    // `|k|·log10(2) = |k| · 30103 / 100000`. Round up:
-                    let digits = (abs_k_u128 * 30103).div_ceil(100_000);
-                    // Cap at the type's working width to avoid blowing up
-                    // `pow10(extra_digits)`; if `|k|` is so large the result
-                    // would overflow storage anyway, the caller's
-                    // `round_to_storage_with` will panic on narrowing.
-                    let capped = digits.min((<W>::BITS / 4) as u128) as u32;
-                    // The +k/3 margin covers the cumulative-rounding
-                    // budget of the in-extended-width Taylor series and
-                    // post-Taylor squarings. Half-LSB error per op times
-                    // ~k·sqrt-of-precision ops grows roughly with k.
-                    capped + 12 + (capped >> 2)
-                };
-
-                let extended_working_scale = working_scale + extra_digits;
-                let extended_working_value = if extra_digits == 0 {
-                    working_value
-                } else {
-                    working_value * pow10(extra_digits)
-                };
-                let one_at_extended_scale = one(extended_working_scale);
-                let ln2_at_extended_scale = ln2_cf::<SCALE>(
-                    extended_working_scale,
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE
-                );
-                let pow10_at_extended_scale = one_at_extended_scale;
-                let reduced_arg =
-                    extended_working_value - scale_by_k(ln2_at_extended_scale, k);
-
-                // From here on the body operates at the extended working
-                // scale; we narrow
-                // back to `working_scale` after the final `2^k` reassembly so
-                // the
-                // caller's `round_to_storage_with(_, working_scale, scale, _)`
-                // sees
-                // a value at the expected `working_scale`.
-                let p_bits = extended_working_scale.saturating_mul(3).saturating_add(1);
-                let mut squarings: u32 = 1;
-                while (squarings + 1) * (squarings + 1) <= p_bits {
-                    squarings += 1;
-                }
-
-                let shifted_arg = reduced_arg >> squarings;
-                #[cfg(feature = "perf-trace")]
-                drop(_reduce_span);
-
-                #[cfg(feature = "perf-trace")]
-                let _taylor_span = $crate::tracing::info_span!("taylor_series").entered();
-                let mut sum = one_at_extended_scale + shifted_arg;
-                let mut term = shifted_arg;
-                let mut term_index: u128 = 2;
-                loop {
-                    // Taylor term: low-half u128-packed product
-                    // (`wrapping_mul_low_u128`) reduced by
-                    // `÷10^extended_working_scale`
-                    // through the fast MG `round_div_pow10` kernel (the
-                    // divisor is always exactly the power of ten
-                    // `10^extended_working_scale`).
-                    // Mirrors the blessed `exp_generic::exp_fixed` Taylor
-                    // step; bit-identical to the prior `round_div` reduction
-                    // (audited power-of-10 equivalence) at MG speed.
-                    term = round_div_pow10(
-                        $crate::int::types::traits::BigInt::wrapping_mul_low_u128(
-                            term,
-                            shifted_arg
-                        ),
-                        extended_working_scale,
-                    ) / lit(term_index);
-                    if term == zero() {
-                        break;
-                    }
-                    sum = sum + term;
-                    term_index += 1;
-                    if term_index > SERIES_CAP {
-                        break;
-                    }
-                }
-                #[cfg(feature = "perf-trace")]
-                drop(_taylor_span);
-
-                #[cfg(feature = "perf-trace")]
-                let _sqr_span = $crate::tracing::info_span!("postfix_squarings").entered();
-                let mut squared = sum;
-                let mut i = 0;
-                while i < squarings {
-                    // Low-half symmetric SQUARE through the limb-width matcher
-                    // (`wrapping_sqr_low_u128` → `int::policy::sqr_low`): the
-                    // u128-packed `sqr_low_limb` on even work widths (half the
-                    // limbs), bit-identical to the low-`BITS` of `x²`, reduced
-                    // by `÷10^extended_working_scale` through the fast MG
-                    // `round_div_pow10`
-                    // kernel (the divisor is always the power of ten
-                    // `10^extended_working_scale`). The squaring sibling of the
-                    // Taylor step;
-                    // bit-identical to the prior generic `round_div` at MG
-                    // speed. Mirrors `exp_generic::exp_fixed`.
-                    squared = round_div_pow10(
-                        $crate::int::types::traits::BigInt::wrapping_sqr_low_u128(squared),
-                        extended_working_scale,
-                    );
-                    i += 1;
-                }
-                let sum = squared;
-                #[cfg(feature = "perf-trace")]
-                drop(_sqr_span);
-
-                #[cfg(feature = "perf-trace")]
-                let _reasm_span = $crate::tracing::info_span!("reassemble").entered();
-                let scaled_at_extended_scale = if k >= 0 {
-                    let shift = k as u32;
-                    if bit_length(sum) + shift >= W::BITS {
-                        panic!(concat!(
-                            stringify!($Type),
-                            "::exp: result overflows the representable range"
-                        ));
-                    }
-                    sum << shift
-                } else {
-                    let neg_k = -k as u128;
-                    if neg_k >= bit_length(sum) as u128 {
-                        // Deep underflow: e^v (v < 0 here, since k < 0) is
-                        // strictly positive but below the working resolution.
-                        // Return the smallest positive working value (1 = 10^-w),
-                        // NOT zero, so the directed narrowing keeps the sign —
-                        // Ceiling rounds up to 1 ULP while Floor / Trunc /
-                        // nearest still give 0. A bare zero loses positivity and
-                        // rounds Ceiling to 0 (a correctly-rounded defect the
-                        // SCALE-30 golden cells catch). Reached only by direct
-                        // e^(negative); the hyperbolics call exp on |x| >= 0.
-                        return lit(1);
-                    }
-                    sum >> (neg_k as u32)
-                };
-                let exp_value = if extra_digits == 0 {
-                    scaled_at_extended_scale
-                } else {
-                    round_div_pow10(scaled_at_extended_scale, extra_digits)
-                };
-                // e^v > 0 for every finite v: a zero result here is genuine
-                // underflow of `e^(negative)` below the working resolution,
-                // NOT a true zero. Return the smallest positive working value
-                // (1 = 10^-w) so the directed narrowing keeps the sign —
-                // Ceiling rounds up to 1 ULP, Floor / Trunc / nearest still
-                // give 0. A bare zero rounds Ceiling to 0 (a correctly-rounded
-                // defect the SCALE-30 golden cells catch).
-                //
-                // The clamp is restricted to `k < 0` (the only regime where
-                // underflow to 0 is physical). For `k >= 0` (a large positive
-                // argument) `e^v >= 1`, so a 0 result would mean the `W`-scale
-                // lift overflowed; masking that as 1 would hide the defect.
-                // The `exp_fits_w` routing above sends those cases to the
-                // wider path before they reach here.
-                if k < 0 && exp_value == zero() {
-                    lit(1)
-                } else {
-                    exp_value
-                }
+                // The kernel is the width-generic `exp_generic::exp_fixed`,
+                // monomorphised at this tier's `W` — one direct call, no
+                // per-tier copy of the range-reduction / Taylor / squaring
+                // body. The arithmetic helpers the deleted copy used (`mul`,
+                // `div_cached`, `round_div_pow10`, `pow10_table`) were each
+                // already one-line forwarders to that same generic source,
+                // so this routes where the sequence LIVES without changing
+                // what it computes.
+                $crate::algos::exp::exp_generic::exp_fixed::<W>(working_value, working_scale)
             }
 
             /// Large-result `e^v`: runs the guard-digit `exp` core in
