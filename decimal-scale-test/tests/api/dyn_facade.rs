@@ -300,18 +300,6 @@ mod from_dyn_decimal {
         assert_eq!(format!("{v}"), "1.234");
     }
 
-    #[test]
-    #[allow(deprecated)]
-    fn deprecated_display_still_matches_the_display_impl() {
-        // `display()` is deprecated in 0.5.1 and removed in 0.6.0; until then it
-        // must keep agreeing with the `Display` impl it now defaults to.
-        let v: Box<dyn DynDecimal> = Box::new(D38::<3>::from_bits(
-            decimal_scaled::Int::<2>::try_from((1234) as i128).unwrap(),
-        ));
-        assert_eq!(v.display(), format!("{v}"));
-        assert_eq!(v.display(), "1.234");
-    }
-
     #[cfg(feature = "std")]
     #[test]
     fn to_f64_round_trip_low_scale() {

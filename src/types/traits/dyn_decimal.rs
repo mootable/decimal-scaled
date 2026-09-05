@@ -74,7 +74,6 @@
 #![cfg(feature = "dyn")]
 
 use alloc::boxed::Box;
-use alloc::string::String;
 use core::any::Any;
 use core::cmp::Ordering;
 
@@ -300,26 +299,6 @@ pub trait DynDecimal: ::core::fmt::Display + 'static {
     fn cmp_dyn(&self, rhs: &dyn DynDecimal) -> Option<Ordering>;
 
     // ── Conversion ──────────────────────────────────────────────────
-
-    /// Canonical decimal string.
-    ///
-    /// Deprecated: the trait now requires [`core::fmt::Display`], so `{}`
-    /// formatting works directly on a `dyn DynDecimal` and the caller decides
-    /// whether to allocate. This method always allocates a fresh `String`.
-    ///
-    /// The `dyn` facade is the one place this crate uses the heap, because a
-    /// trait object cannot exist without `Box`. That permission covers `Box`
-    /// and nothing else — everything inside is still held to the minimum, and
-    /// this allocation was not needed.
-    ///
-    /// Removed in 0.6.0.
-    #[deprecated(
-        since = "0.5.1",
-        note = "use `{}` formatting — `DynDecimal` now requires `Display`; `display` is removed in 0.6.0"
-    )]
-    fn display(&self) -> String {
-        ::alloc::format!("{}", self)
-    }
 
     /// Lossy conversion to `f64`. Available only with the `std` feature.
     #[cfg(feature = "std")]
