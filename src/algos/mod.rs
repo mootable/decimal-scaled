@@ -70,8 +70,8 @@ pub(crate) mod trig;
 // Cross-cutting support kernels consumed by multiple families and the
 // arithmetic layer: the Moller-Granlund magic-number divide
 // (`support::mg_divide`), the 256-bit sign-magnitude `Fixed` work
-// integer (`support::fixed`), and the Newton-Raphson reciprocal
-// divide (`support::newton_reciprocal`).
+// integer (`support::fixed`), and the Barrett-reduction reciprocal
+// divide (`support::barrett_reciprocal`).
 pub(crate) mod support;
 
 // Unit tests for the schoolbook baselines (add/sub/neg/rem/mul/div).

@@ -10,11 +10,11 @@
 //!   divide ([`mg_divide::div_pow10_mag_u128`]), for `scale ≤ 38`.
 //! * [`Algorithm::MgChain`] — the chained MG divide
 //!   ([`mg_divide::div_pow10_chain_mag_u128`]), for the narrow / out-of-baked-
-//!   range cells where Newton does not win.
-//! * [`Algorithm::Newton`] — the **baked-reciprocal** Newton rescale
-//!   ([`newton_reciprocal::newton_rescale_arm`]), SELECTED for the wide /
+//!   range cells where Barrett does not win.
+//! * [`Algorithm::Barrett`] — the **baked-reciprocal** Barrett rescale
+//!   ([`barrett_reciprocal::barrett_rescale_arm`]), SELECTED for the wide /
 //!   high-scale band (see [`select`]). The §9.20 baked `⌊2^k/10^scale⌋` const
-//!   table ([`crate::consts::newton_recip`]) makes its `precompute` a table
+//!   table ([`crate::consts::barrett_recip`]) makes its `precompute` a table
 //!   lookup, not a per-call Knuth divide, so the one-pass O(width) apply beats
 //!   the `⌈scale/38⌉`-pass `MgChain` 1.5–13× above the crossover.
 //!
@@ -34,14 +34,14 @@
 //!   the Taylor loops, so `select` is one runtime branch. It is
 //!   **magnitude-length-aware** (task 9.24): the per-term magnitude is far
 //!   shorter than the work buffer, so it trims the leading-zero high limbs and
-//!   routes + sizes `select`/Newton on the SIGNIFICANT length, not `W::BITS`
+//!   routes + sizes `select`/Barrett on the SIGNIFICANT length, not `W::BITS`
 //!   (see the fn doc).
 
 use crate::int::types::compute_limbs::ComputeLimbs;
 use crate::int::types::traits::BigInt;
 use crate::support::rounding::RoundingMode;
 
-/// The three rescale kernels. `Newton` (baked-reciprocal Newton — the §9.20
+/// The three rescale kernels. `Barrett` (baked-reciprocal Barrett — the §9.20
 /// const table makes `precompute` a lookup, not a per-call Knuth divide) is
 /// now SELECTED for the wide / high-scale rescale (see [`select`]); `MgSingle`
 /// for `scale <= 38`, `MgChain` for the rest.
@@ -49,7 +49,7 @@ use crate::support::rounding::RoundingMode;
 enum Algorithm {
     MgSingle,
     MgChain,
-    Newton,
+    Barrett,
 }
 
 /// Pick the rescale kernel for `mag / 10^scale`. `const fn`, so a const
@@ -57,14 +57,14 @@ enum Algorithm {
 /// `scale` (the transcendental door) is a single branch. Keyed on
 /// `(scale, width_bits)`.
 ///
-/// Routing (policy-map `newton_vs_mg`, with the §9.20 baked reciprocal table
+/// Routing (policy-map `barrett_vs_mg`, with the §9.20 baked reciprocal table
 /// making `precompute` a lookup): `scale <= 38` → single-pass `MgSingle`. For
 /// the wide / high-scale rescale where the baked table applies — work width
 /// `24..=132` u64 limbs AND `scale` in `200..=1850` — baked-reciprocal
-/// **Newton** wins 1.5–13× over the `⌈scale/38⌉`-pass `MgChain` (the win grows
+/// **Barrett** wins 1.5–13× over the `⌈scale/38⌉`-pass `MgChain` (the win grows
 /// with scale; 200 is a conservative continuous threshold safely past every
 /// per-width crossover). Everything else → `MgChain`: the narrow / `< 24`-limb
-/// widths (Newton doesn't win), `scale > 1850` (beyond the baked range — there
+/// widths (Barrett doesn't win), `scale > 1850` (beyond the baked range — there
 /// `precompute` would fall back to a per-call Knuth divide, the 9.18.2 loss),
 /// and the marginal `39..200` band.
 #[inline]
@@ -72,9 +72,9 @@ const fn select(scale: u32, width_bits: u32) -> Algorithm {
     if scale <= 38 {
         return Algorithm::MgSingle;
     }
-    // VALIDITY WALL: the Newton arm is selectable ONLY on the builds that
+    // VALIDITY WALL: the Barrett arm is selectable ONLY on the builds that
     // BAKE the reciprocal table (`x-wide` / `xx-wide` — `consts::
-    // newton_recip` is compiled out everywhere else). The arm's win IS the
+    // barrett_recip` is compiled out everywhere else). The arm's win IS the
     // baked lookup; on a table-less build every `precompute` would fall
     // back to a per-call Knuth divide — the same "9.18.2 loss" this
     // matcher already routes to `MgChain` past the baked range — and that
@@ -92,18 +92,18 @@ const fn select(scale: u32, width_bits: u32) -> Algorithm {
     #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
     {
         let width_limbs = width_bits / 64;
-        // 1850 = `consts::newton_recip::NEWTON_RECIP_MAX_SCALE` and
-        // 132 = `NEWTON_RECIP_MAX_WIDTH_LIMBS` (literals so the cfg-gated
+        // 1850 = `consts::barrett_recip::BARRETT_RECIP_MAX_SCALE` and
+        // 132 = `BARRETT_RECIP_MAX_WIDTH_LIMBS` (literals so the cfg-gated
         // consts are not named here): the routed band sits inside the baked
         // table, so `precompute` is ALWAYS a lookup for a selected cell.
         // `blanket_ok` is the historical build-max wall the 24..=132 band
-        // was mapped under (policy-map `newton_vs_mg`) — kept verbatim; do
+        // was mapped under (policy-map `barrett_vs_mg`) — kept verbatim; do
         // not widen without a re-bench.
         let blanket_ok =
             width_limbs as usize <= 4 * crate::int::algos::support::limbs::MAX_WORK_N;
         if scale >= 200 && scale <= 1850 && width_limbs >= 24 && width_limbs <= 132 && blanket_ok
         {
-            return Algorithm::Newton;
+            return Algorithm::Barrett;
         }
     }
     let _ = width_bits;
@@ -112,7 +112,7 @@ const fn select(scale: u32, width_bits: u32) -> Algorithm {
 
 /// `mag /= 10^scale` in place, rounded under `mode` — the **slice door**.
 /// `is_negative` is the result sign (rounding tie-break); `width_bits` is the
-/// work width in bits (the Newton key). `scale == 0` is a no-op.
+/// work width in bits (the Barrett key). `scale == 0` is a no-op.
 #[inline]
 pub(crate) fn dispatch_mag(
     mag: &mut [u128],
@@ -132,7 +132,7 @@ pub(crate) fn dispatch_mag(
             crate::algos::support::mg_divide::div_pow10_chain_mag_u128(
                 mag, scale, is_negative, mode)
         }
-        Algorithm::Newton => crate::algos::support::newton_reciprocal::newton_rescale_arm(
+        Algorithm::Barrett => crate::algos::support::barrett_reciprocal::barrett_rescale_arm(
             mag, scale, is_negative, mode, width_bits,
         ),
     }
@@ -150,12 +150,12 @@ pub(crate) fn dispatch_mag(
 /// working scale `w≈492`) held inside a wide work integer (D616's strict-Tang
 /// work is `Int<128>` = 128 u64 limbs). Every rescale kernel's cost scales
 /// with the SIGNIFICANT length, not the buffer width, so the routing key and
-/// the baked-Newton apply size are taken from the trimmed significant length —
+/// the baked-Barrett apply size are taken from the trimmed significant length —
 /// **not** `W::BITS`. Without this, `select` saw the full 128-limb width and
-/// sized the baked-Newton reciprocal at 157 limbs (forming a full-width
+/// sized the baked-Barrett reciprocal at 157 limbs (forming a full-width
 /// multiply-by-reciprocal + a 128-limb `quot·10^scale` product PER term) where
 /// `MgChain` scales with the real ~52-limb length. With
-/// the trim, a short transcendental magnitude keeps the **Newton** kernel (the
+/// the trim, a short transcendental magnitude keeps the **Barrett** kernel (the
 /// owner's decision) but at its REAL width, where it genuinely wins and the
 /// per-term products shrink ~2×. The baked reciprocal accessor slices the HIGH
 /// limbs of the width-132 table, so any shrunk width ≤ 132 stays a lookup, never

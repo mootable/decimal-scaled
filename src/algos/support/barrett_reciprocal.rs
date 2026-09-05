@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Newton–Raphson reciprocal divide for `n / 10^SCALE` at storage width.
+//! Barrett-reduction reciprocal divide for `n / 10^SCALE` at storage width.
 //!
-//! **ROUTED.** [`newton_rescale_arm`] is the `Newton` arm of the rescale
+//! **ROUTED.** [`barrett_rescale_arm`] is the `Barrett` arm of the rescale
 //! matcher ([`crate::algos::support::rescale`]): `select` routes work width
 //! `24..=132` u64 limbs × `scale 200..=1850` here, reached from the decimal
 //! `mul` ([`crate::algos::mul::mul_widen_divide`]) through the slice door
@@ -11,16 +11,16 @@
 //! the wide-transcendental rounding through the typed door
 //! [`dispatch_wide_pow10`](crate::algos::support::rescale::dispatch_wide_pow10).
 //!
-//! The one exception is [`div_wide_pow10_newton_with`] — the typed `W: BigInt`
-//! wrapper, which no production path calls. It exists so the `newton_vs_mg`
+//! The one exception is [`div_wide_pow10_barrett_with`] — the typed `W: BigInt`
+//! wrapper, which no production path calls. It exists so the `barrett_vs_mg`
 //! micro-bench shims (`lib.rs`, `#[cfg(feature = "bench-alt")]`) and this
 //! module's own validity-wall tests can compare the kernel head-to-head
 //! against [`crate::algos::support::mg_divide::div_wide_pow10_chain`].
 //!
 //! # Algorithm
 //!
-//! For invariant divisor `D = 10^SCALE`, precompute a fixed-point
-//! reciprocal
+//! Textbook Barrett reduction. For invariant divisor `D = 10^SCALE`,
+//! precompute a fixed-point reciprocal ONCE
 //!
 //! ```text
 //!   R = floor(2^k / D)
@@ -28,24 +28,38 @@
 //!
 //! where `k` is chosen so that `k - bit_length(D) ≥ bit_length(N_max)`,
 //! i.e. `R` carries enough fractional bits to represent the storage-width
-//! numerator's worth of quotient. The per-call divide reduces to
+//! numerator's worth of quotient. Every per-call divide is then a
+//! multiply–shift–correct, with no division and no iteration:
 //!
 //! ```text
 //!   q_approx = (n * R) >> k
 //!   r        = n - q_approx * D
-//!   if r >= D { q_approx += 1; r -= D; }   // single correction step
+//!   while r >= D { q_approx += 1; r -= D; }   // bounded correction
 //! ```
 //!
-//! The estimate `q_approx` is off by at most 1 (analogous to the
-//! Möller-Granlund add-back correction), so a single comparison suffices
-//! after the multiply.
+//! Truncating `R` downward makes `q_approx` an UNDER-estimate by a small
+//! bounded amount, so the correction only ever adds back; it is the same
+//! add-back the Möller–Granlund kernels in
+//! [`crate::algos::support::mg_divide`] carry. With a correctly-sized `k`
+//! the loop runs at most once or twice (see [`div_barrett`]).
+//!
+//! **This is Barrett, NOT Newton–Raphson division.** Newton–Raphson
+//! division is defined by REFINING an approximate reciprocal at call time
+//! (`x <- x·(2 - D·x)`, doubling the correct digits per step). Nothing
+//! here iterates: `R` is produced once, exactly, and then only ever
+//! multiplied by. The correction step above discriminates nothing between
+//! the two — Barrett carries the identical step.
 //!
 //! # Setup
 //!
-//! `R` is computed once per `(SCALE, width)` pair via the int-algos-layer
-//! variable-length divmod [`crate::int::algos::div::div_rem_mag_slice`].
-//! Setup cost is one wide divide; per-call cost is one wide multiply +
-//! one narrow multiply + one comparison + one optional subtract.
+//! `R` is computed once per `(SCALE, width)` pair. On the routed band it is
+//! a `copy_from_slice` from the baked const table
+//! ([`crate::consts::barrett_recip`]); outside it, a ONE-SHOT exact divide
+//! through the int-algos-layer variable-length divmod
+//! [`crate::int::algos::div::div_rem_mag_slice`]. Neither path iterates.
+//! Setup cost is one table lookup (or one wide divide); per-call cost is
+//! one wide multiply + one narrow multiply + one comparison + one optional
+//! subtract.
 //!
 //! # Storage — raw `u64` limb slices, below the `Int<N>` abstraction
 //!
@@ -72,17 +86,23 @@
 //! ([`crate::int::policy::mul::dispatch_slice`] — the sanctioned entry for
 //! bare-`&[u64]` slice callers), so the matcher chooses the multiply engine
 //! (schoolbook / Karatsuba) per operand shape. The u128-packed sibling
-//! ([`div_newton_u128`]) keeps its own local u128 schoolbook — the slice
+//! ([`div_barrett_u128`]) keeps its own local u128 schoolbook — the slice
 //! door is `u64`-only (no `u128` matcher door exists). All are DOWN-calls
 //! into the int matchers, so the decimal→int layering stays intact.
 //!
 //! # Reference
 //!
+//! Barrett, P. (1987). *Implementing the Rivest Shamir and Adleman Public
+//! Key Encryption Algorithm on a Standard Digital Signal Processor*,
+//! Advances in Cryptology — CRYPTO '86, LNCS 263, 311–323 — the origin of
+//! the precomputed-reciprocal multiply-shift-correct reduction this kernel
+//! implements. Wikipedia —
+//! [Barrett reduction](https://en.wikipedia.org/wiki/Barrett_reduction).
+//!
+//! For the sibling magic-multiplier kernels this arm is benched against:
 //! Granlund, T. & Montgomery, P. L. (1994). *Division by Invariant
 //! Integers using Multiplication*, PLDI '94. Möller, N. & Granlund, T.
 //! (2011). *Improved Division by Invariant Integers*, IEEE TC 60(2).
-//! The Newton-iteration view of the same reciprocal is
-//! Wikipedia — [Division algorithm § Newton–Raphson division](https://en.wikipedia.org/wiki/Division_algorithm#Newton%E2%80%93Raphson_division).
 
 use crate::int::algos::support::limbs::{cmp, sub_assign};
 use crate::int::policy::mul::dispatch_slice as mul_slice;
@@ -100,10 +120,10 @@ use crate::int::policy::mul::dispatch_slice as mul_slice;
 //   product   : n.len() + r.len() ≤ 128 + 200 = 328 u64
 //
 // All buffers are over-sized to a single ceiling that covers every
-// width the matcher routes Newton-vs-MG against, so the same type
+// width the matcher routes Barrett-vs-MG against, so the same type
 // serves every tier without const-generic gymnastics.
 //
-// These ceilings are internal to the runtime-sized `NewtonReciprocal`
+// These ceilings are internal to the runtime-sized `BarrettReciprocal`
 // struct — they never leak onto a concrete-`N` path (those size their
 // scratch via `ComputeLimbs::single_*` etc. per Constitution rule 6).
 // Over-sizing here costs constant per-call stack, not per-tier code
@@ -135,16 +155,16 @@ use crate::int::policy::mul::dispatch_slice as mul_slice;
 // The 8192 / 12288 / 16384 / 32768 widths (D462 Wexp / D1232 Work /
 // D924 Wide / D616 Wexp / D924
 // Wexp / D1232 Wide / D1232 Wexp) are deferred. At those widths the
-// Newton precompute's `2^k / 10^scale` numerator at the AGM-widened
+// Barrett precompute's `2^k / 10^scale` numerator at the AGM-widened
 // scale exceeds the routed `div_knuth`'s `MAX_SINGLE_LIMBS = 258`
 // build-max scratch — D1232 strict_agm runs at `w_prime ≈ 2466`
-// which puts an 8192-bit Newton's numerator at 260+ limbs, and a
-// 12288-bit Newton's at 293+, both past the build-max scratch the
+// which puts an 8192-bit Barrett's numerator at 260+ limbs, and a
+// 12288-bit Barrett's at 293+, both past the build-max scratch the
 // routed Knuth can hold. The atanh-diagnosis bench
-// also reported Newton LOSING by 5–58× at Int<192>/Int<256> w=38
+// also reported Barrett LOSING by 5–58× at Int<192>/Int<256> w=38
 // (low-scale shape), so even with extended scratch the integrated
 // picture isn't settled. Revisit when both the wider-numerator divide
-// scratch and the AGM-scale `newton_vs_mg` evidence line up.
+// scratch and the AGM-scale `barrett_vs_mg` evidence line up.
 
 /// Max `u64` limbs for the `10^SCALE` (`pow_scale`) buffer. Covers the
 /// D924 AGM scale at width 6144 (`w_prime ≤ 1850`, `pow_u64 ≤ 100`).
@@ -186,7 +206,7 @@ const MAX_PROD_U128: usize = MAX_PROD_U64.div_ceil(2);
 /// All storage is fixed-size — no heap. `r_len` / `pow_len` record the
 /// live limb counts within the over-sized backing arrays.
 #[derive(Clone)]
-pub struct NewtonReciprocal {
+pub struct BarrettReciprocal {
     /// Reciprocal limbs (little-endian, u64), live count `r_len`.
     r: [u64; MAX_R_U64],
     /// Live limb count of `r`.
@@ -201,8 +221,8 @@ pub struct NewtonReciprocal {
     // -- u128-packed mirrors of `r` and `pow_scale` -------------------
     //
     // Populated once at the end of `precompute` by pairwise packing the
-    // u64 limbs above (`limb = lo | hi << 64`). The u128 Newton kernel
-    // (`div_newton_u128`) consumes these directly with NO per-call pack,
+    // u64 limbs above (`limb = lo | hi << 64`). The u128 Barrett kernel
+    // (`div_barrett_u128`) consumes these directly with NO per-call pack,
     // achieving u128-slice mul throughput at the cost of one
     // extra pack pass during the (already amortised) precompute.
     /// Reciprocal limbs packed as u128 pairs, live count `r_u128_len`.
@@ -218,7 +238,7 @@ pub struct NewtonReciprocal {
     pow_u128_len: usize,
 }
 
-impl NewtonReciprocal {
+impl BarrettReciprocal {
     /// Compute reciprocal table for `D = 10^scale` at the given
     /// magnitude width.
     ///
@@ -263,7 +283,7 @@ impl NewtonReciprocal {
         //
         // Round UP to even so the u128-packed mirror right-shift is
         // limb-aligned in u128 (`k_u128 = k_u64 / 2`). Adding one to k
-        // grows R by a single limb (over-estimate); the Newton add-back
+        // grows R by a single limb (over-estimate); the Barrett add-back
         // correction absorbs the +1 ULP. The u64 kernel sees the bumped
         // `k_u64` too — bit-identical correction either way.
         let k_u64_raw = width_limbs + pow_len;
@@ -272,16 +292,16 @@ impl NewtonReciprocal {
         debug_assert!(k_u64 < MAX_R_U64, "num buffer too small");
 
         // r = floor(2^(64*k_u64) / 10^scale). FAST: read the baked reciprocal
-        // (`consts::newton_recip` — the high `k_u64+1` limbs of the width-132
+        // (`consts::barrett_recip` — the high `k_u64+1` limbs of the width-132
         // per-scale reciprocal; bit-identical to the divide below, both exact
         // integer floor division — `2^(64k)//10^s`). That prefix identity holds
-        // at an EVEN `width_limbs` only, so `newton_recip_le` refuses an odd
+        // at an EVEN `width_limbs` only, so `barrett_recip_le` refuses an odd
         // width. SLOW fallback (odd width, scale/width outside the baked range,
         // or a non-wide build where the table is gated out → `None`): the
         // one-shot Knuth divide.
         let mut r = [0u64; MAX_R_U64];
-        if let Some(baked) = crate::consts::newton_recip_le(scale, width_limbs) {
-            debug_assert_eq!(baked.len(), k_u64 + 1, "baked newton recip length");
+        if let Some(baked) = crate::consts::barrett_recip_le(scale, width_limbs) {
+            debug_assert_eq!(baked.len(), k_u64 + 1, "baked barrett recip length");
             r[..k_u64 + 1].copy_from_slice(baked);
         } else {
             // numerator = 2^(64 * k_u64) — a single 1 in limb position k_u64.
@@ -411,7 +431,7 @@ impl NewtonReciprocal {
     }
 }
 
-/// Per-call Newton-reciprocal divide.
+/// Per-call Barrett-reciprocal divide.
 ///
 /// `numerator` is the unsigned numerator magnitude in little-endian u64
 /// limbs. The quotient `floor(n / 10^scale)` is written into `quot`
@@ -420,12 +440,12 @@ impl NewtonReciprocal {
 ///
 /// # Precision
 ///
-/// Strict: the result is bit-exact `floor(n / 10^scale)`. The Newton
+/// Strict: the result is bit-exact `floor(n / 10^scale)`. The Barrett
 /// add-back step ensures correctness for the at-most-1 over/under
 /// estimate the truncated reciprocal produces.
-fn div_newton(
+fn div_barrett(
     numerator: &[u64],
-    table: &NewtonReciprocal,
+    table: &BarrettReciprocal,
     quot: &mut [u64],
     rem_out: &mut [u64],
 ) -> usize {
@@ -489,9 +509,9 @@ fn div_newton(
     rem_len
 }
 
-// -- u128-packed Newton kernel ----------------------------------------
+// -- u128-packed Barrett kernel ----------------------------------------
 //
-// Mirrors `div_newton` but operates entirely on packed u128 limb slices.
+// Mirrors `div_barrett` but operates entirely on packed u128 limb slices.
 // The precomputed `r_u128`/`pow_u128` are consumed directly with NO per-call
 // pack/unpack; the per-call operand (n) and output (quot, rem) all stay
 // in u128 throughout. Achieves `limbs_mul`-style throughput
@@ -566,9 +586,9 @@ fn mul_schoolbook_u128(lhs: &[u128], rhs: &[u128], out: &mut [u128]) {
 /// `i + j >= base`.
 /// The dropped low partials (`i + j < base`) are NOT included, so their carry
 /// into limb `base` is missing — making the high limbs too-LOW by a bounded
-/// amount. The Newton quotient `q = (a·b) >> k` reads this with a small guard
+/// amount. The Barrett quotient `q = (a·b) >> k` reads this with a small guard
 /// (`base = k - GUARD`), bounding the deficit to `< 1` ULP at the `k`-cut; the
-/// Newton correction LOOP (`while rem >= D { q += 1 }`) adds back any residual,
+/// Barrett correction LOOP (`while rem >= D { q += 1 }`) adds back any residual,
 /// so the result is EXACT regardless of guard — the guard only bounds the loop
 /// count (perf). `out` pre-zeroed;
 /// `out.len() >= lhs.len()+rhs.len() - base`. This halves the `mag·r` work
@@ -605,12 +625,12 @@ fn mul_high_schoolbook_u128(lhs: &[u128], rhs: &[u128], out: &mut [u128], base: 
     }
 }
 
-/// Per-call Newton-reciprocal divide, u128-packed sibling of `div_newton`.
+/// Per-call Barrett-reciprocal divide, u128-packed sibling of `div_barrett`.
 /// All multiplies run on the precomputed u128-packed `r` and `pow_scale` (NO
 /// per-call pack); operand/output stay in u128 throughout.
-fn div_newton_u128(
+fn div_barrett_u128(
     numerator: &[u128],
-    table: &NewtonReciprocal,
+    table: &BarrettReciprocal,
     quot: &mut [u128],
     rem_out: &mut [u128],
 ) -> usize {
@@ -663,15 +683,15 @@ fn div_newton_u128(
     rem_len
 }
 
-/// Width-agnostic Newton-reciprocal divide of a u128 magnitude slice by
+/// Width-agnostic Barrett-reciprocal divide of a u128 magnitude slice by
 /// `10^scale`, in place, with `mode`-aware rounding. Operates entirely
 /// in u128 limbs (NO transcoding to/from u64). Bit-identical to the u64
-/// path `newton_pow10_mag_u128`.
-pub(crate) fn newton_pow10_mag_u128_packed(
+/// path `barrett_pow10_mag_u128`.
+pub(crate) fn barrett_pow10_mag_u128_packed(
     mag_u128: &mut [u128],
     is_negative: bool,
     mode: crate::support::rounding::RoundingMode,
-    table: &NewtonReciprocal,
+    table: &BarrettReciprocal,
 ) {
     use crate::support::rounding;
 
@@ -682,7 +702,7 @@ pub(crate) fn newton_pow10_mag_u128_packed(
     let n_slice = &mag_u128[..top.max(1)];
     let mut quot = [0u128; MAX_MAG_U128];
     let mut rem = [0u128; MAX_MAG_U128 + 1];
-    let rem_len = div_newton_u128(n_slice, table, &mut quot[..mag_len], &mut rem);
+    let rem_len = div_barrett_u128(n_slice, table, &mut quot[..mag_len], &mut rem);
 
     let rem_is_zero = rem[..rem_len].iter().all(|&x| x == 0);
     if !rem_is_zero {
@@ -720,25 +740,25 @@ pub(crate) fn newton_pow10_mag_u128_packed(
 }
 
 /// Per-width Limb-axis matcher: does the `(width_bits, scale)`
-/// cell run the u128-packed Newton kernel? Continuous width region per
+/// cell run the u128-packed Barrett kernel? Continuous width region per
 /// Constitution rule 6 + Class I (never a per-scale carve-out).
 ///
 /// The u128-packed kernel wins at the
-/// 1536–4096 band and the 6144 width (`newton_vs_mg`
+/// 1536–4096 band and the 6144 width (`barrett_vs_mg`
 /// integrated bench, cores 22–23, sees u128 1.18–3.46× over MG and
 /// 1.0–1.24× over u64 across s115–s953).
 ///
 /// Wider widths (8192/12288/16384/32768) stay on MG entirely — the
 /// AGM-widening / buffer-scratch / contradicting-integrated-bench reasons
-/// in this module's notes. (Newton is now a [`crate::algos::support::rescale`]
+/// in this module's notes. (Barrett is now a [`crate::algos::support::rescale`]
 /// kept-alt for every width, 9.18.2; this picks the packed apply if revived.)
 #[inline]
-const fn newton_u128_wins(width_bits: u32) -> bool {
+const fn barrett_u128_wins(width_bits: u32) -> bool {
     // The u128-packed apply wins across the CONTINUOUS 1536..=6144-bit band
     // (per the integrated bench above), not just the five tier FULL widths.
     // The frozen `matches!(1536|2048|3072|4096|6144)` was a sparse whitelist of
     // those exact tier widths — so any *magnitude-trimmed* width (the decimal
-    // `mul` rescale, task-9.24 / the L6 trim, sizes the Newton on the product's
+    // `mul` rescale, task-9.24 / the L6 trim, sizes the Barrett on the product's
     // significant length, which lands on in-between 128-bit multiples like 2176
     // / 3200 / 4608) silently dropped onto the slow u64 apply. Key on the band +
     // 128-bit-multiple (even-u64, the packing precondition) instead. Perf-only:
@@ -751,11 +771,11 @@ const fn newton_u128_wins(width_bits: u32) -> bool {
 ///
 /// Direct analogue of [`crate::algos::support::mg_divide::div_wide_pow10_chain`]
 /// — same signature, same semantics, different inner algorithm.
-pub(crate) fn div_wide_pow10_newton_with<W>(
+pub(crate) fn div_wide_pow10_barrett_with<W>(
     value: W,
     scale: u32,
     mode: crate::support::rounding::RoundingMode,
-    table: &NewtonReciprocal,
+    table: &BarrettReciprocal,
 ) -> W
 where
     W: crate::int::types::traits::BigInt,
@@ -793,24 +813,24 @@ where
     let limbs = <W as crate::int::types::traits::BigInt>::U128_LIMBS;
     let mag = &mut buf.as_mut()[..limbs];
     let is_negative = value.mag_into_u128(mag);
-    newton_pow10_mag_u128(mag, is_negative, mode, table);
+    barrett_pow10_mag_u128(mag, is_negative, mode, table);
     W::from_mag_sign_u128(mag, is_negative)
 }
 
-/// Width-agnostic Newton-reciprocal divide of a u128-limb magnitude slice
+/// Width-agnostic Barrett-reciprocal divide of a u128-limb magnitude slice
 /// by `10^scale`, in place, with `mode`-aware rounding. `table` is the
 /// pre-computed reciprocal for `(scale, width)`. Slice core extracted from
-/// [`div_wide_pow10_newton_with`]; the only difference from the typed path
+/// [`div_wide_pow10_barrett_with`]; the only difference from the typed path
 /// is the `BigInt` pack/unpack the wrapper does around this call.
 ///
-/// The interior arithmetic runs on u64 limbs (`div_newton`), so this
+/// The interior arithmetic runs on u64 limbs (`div_barrett`), so this
 /// transcodes the u128 magnitude to u64, divides, rounds, and transcodes
 /// the quotient back into `mag` in place.
-pub(crate) fn newton_pow10_mag_u128(
+pub(crate) fn barrett_pow10_mag_u128(
     mag_u128: &mut [u128],
     is_negative: bool,
     mode: crate::support::rounding::RoundingMode,
-    table: &NewtonReciprocal,
+    table: &BarrettReciprocal,
 ) {
     use crate::support::rounding;
 
@@ -830,7 +850,7 @@ pub(crate) fn newton_pow10_mag_u128(
     let n_slice = &mag[..top.max(1)];
     let mut quot = [0u64; MAX_MAG_U64];
     let mut rem = [0u64; MAX_MAG_U64 + 1];
-    let rem_len = div_newton(n_slice, table, &mut quot[..mag_len], &mut rem);
+    let rem_len = div_barrett(n_slice, table, &mut quot[..mag_len], &mut rem);
 
     // Round per `mode`: compare remainder with pow_scale / 2.
     let rem_is_zero = rem[..rem_len].iter().all(|&x| x == 0);
@@ -878,9 +898,9 @@ pub(crate) fn newton_pow10_mag_u128(
     }
 }
 
-/// The baked-reciprocal Newton rescale execution: `mag /= 10^scale` via a
-/// per-call [`NewtonReciprocal::precompute`] (a table LOOKUP of the §9.20
-/// baked `⌊2^k/10^scale⌋` reciprocal — [`crate::consts::newton_recip`] — not a
+/// The baked-reciprocal Barrett rescale execution: `mag /= 10^scale` via a
+/// per-call [`BarrettReciprocal::precompute`] (a table LOOKUP of the §9.20
+/// baked `⌊2^k/10^scale⌋` reciprocal — [`crate::consts::barrett_recip`] — not a
 /// Knuth divide) plus a reciprocal-multiply apply, in place on a u128-limb
 /// magnitude slice (std-only; no_std forwards to the MG chain). `width_bits`
 /// is the magnitude width in bits — the typed door
@@ -889,16 +909,16 @@ pub(crate) fn newton_pow10_mag_u128(
 /// quotient to the real magnitude, not the full work buffer; `is_negative`
 /// is the result sign for the rounding tie-break.
 ///
-/// This is the `Newton` arm of the rescale matcher
+/// This is the `Barrett` arm of the rescale matcher
 /// ([`crate::algos::support::rescale`]) — **SELECTED** for the wide /
 /// high-scale band (`select` routes `width_limbs 24..=132 × scale 200..=1850`
 /// here). With the §9.20 baked table the precompute is a lookup, so the
 /// one-pass O(width) apply beats the `⌈scale/38⌉`-pass MG chain 1.5–13× above
 /// the crossover. The §9.2 no-state rule still holds — the per-call
-/// `NewtonReciprocal` is a fixed stack struct populated from the immutable
+/// `BarrettReciprocal` is a fixed stack struct populated from the immutable
 /// baked const table, no cache.
 #[inline]
-pub(crate) fn newton_rescale_arm(
+pub(crate) fn barrett_rescale_arm(
     mag: &mut [u128],
     scale: u32,
     is_negative: bool,
@@ -908,21 +928,21 @@ pub(crate) fn newton_rescale_arm(
     #[cfg(feature = "std")]
     {
         // `width_limbs` in u64 limbs — the `precompute` unit. Recompute the
-        // fixed-size, stack-only `NewtonReciprocal` for this `(width, scale)`
+        // fixed-size, stack-only `BarrettReciprocal` for this `(width, scale)`
         // each call: value-independent but not const-evaluable (Knuth divide),
         // so a per-call stack recompute is the stateless, heap-free form.
         let width_limbs = (width_bits as usize) / 64;
-        let table = NewtonReciprocal::precompute(scale, width_limbs);
-        if newton_u128_wins(width_bits) {
-            newton_pow10_mag_u128_packed(mag, is_negative, mode, &table);
+        let table = BarrettReciprocal::precompute(scale, width_limbs);
+        if barrett_u128_wins(width_bits) {
+            barrett_pow10_mag_u128_packed(mag, is_negative, mode, &table);
         } else {
-            newton_pow10_mag_u128(mag, is_negative, mode, &table);
+            barrett_pow10_mag_u128(mag, is_negative, mode, &table);
         }
     }
 
     #[cfg(not(feature = "std"))]
     {
-        // no_std has no Newton path (the per-call Knuth precompute is too
+        // no_std has no Barrett path (the per-call Knuth precompute is too
         // costly); forward to the MG chain — the kernel the matcher selects.
         let _ = width_bits;
         crate::algos::support::mg_divide::div_pow10_chain_mag_u128(
@@ -933,7 +953,7 @@ pub(crate) fn newton_rescale_arm(
 #[cfg(test)]
 mod tests {
     use super::*;
-    // These two imports back the `newton_matches_mg_chain_*` validity-wall
+    // These two imports back the `barrett_matches_mg_chain_*` validity-wall
     // tests, which exist only for the larger storage tiers (d307 … d1232).
     // Gate the imports to exactly that union of tiers — NOT the `wide`
     // umbrella, which is false under a single-tier build (`--features d307`)
@@ -960,13 +980,13 @@ mod tests {
     /// `precompute` would compute at runtime (`floor(2^(64*k) / 10^s)` via
     /// `div_rem_mag_slice`) — else the rescale result changes. Recompute the
     /// reciprocal independently (10^scale via a *10 chain, then the production
-    /// divide) and compare to `consts::newton_recip_le`, across every baked
+    /// divide) and compare to `consts::barrett_recip_le`, across every baked
     /// width and a scale sweep incl. the band edges.
     ///
     /// Gated to `xx-wide` (the test must not exceed production scope): this
     /// sweep spans the FULL baked grid (`width_limbs` up to
-    /// `NEWTON_RECIP_MAX_WIDTH_LIMBS` = 132, `scale` up to
-    /// `NEWTON_RECIP_MAX_SCALE` = 1850), so the independent
+    /// `BARRETT_RECIP_MAX_WIDTH_LIMBS` = 132, `scale` up to
+    /// `BARRETT_RECIP_MAX_SCALE` = 1850), so the independent
     /// recompute divides numerators of up to `width_limbs + pow_len + 1 ≈ 233`
     /// u64 limbs — wider than ANY value a narrower build can form. Only the
     /// xx-wide build's slice-divide scratch (`MAX_SINGLE_LIMBS = 4·MAX_WORK_N + 2`
@@ -976,7 +996,7 @@ mod tests {
     /// for every build.
     #[cfg(feature = "xx-wide")]
     #[test]
-    fn baked_newton_recip_matches_runtime_divide() {
+    fn baked_barrett_recip_matches_runtime_divide() {
         use crate::int::algos::div::div_fixed::div_rem_mag_slice;
         for &width_limbs in &[16usize, 24, 32, 48, 64, 96, 128, 132] {
             for &scale in &[1u32, 38, 39, 77, 200, 461, 615, 924, 1231, 1850] {
@@ -1001,7 +1021,7 @@ mod tests {
                 let mut rem = [0u64; MAX_POW_U64];
                 div_rem_mag_slice(&num[..top_limb + 1], &pow[..pow_len],
                     &mut recip[..top_limb + 1], &mut rem[..pow_len]);
-                let baked = crate::consts::newton_recip_le(scale, width_limbs)
+                let baked = crate::consts::barrett_recip_le(scale, width_limbs)
                     .expect("baked reciprocal in range");
                 assert_eq!(
                     baked,
@@ -1016,10 +1036,10 @@ mod tests {
     // build's `MAX_WORK_N`, so this only runs where that tier is enabled.
     #[cfg(feature = "d307")]
     #[test]
-    fn newton_matches_mg_chain_d307_s150() {
+    fn barrett_matches_mg_chain_d307_s150() {
         let scale = 150u32;
         let width_limbs = 16; // Int<16> = 8 u128 = 16 u64 limbs
-        let table = NewtonReciprocal::precompute(scale, width_limbs);
+        let table = BarrettReciprocal::precompute(scale, width_limbs);
 
         let mut limbs = [0u128; 64];
         limbs[6] = 1u128 << 32;
@@ -1028,20 +1048,20 @@ mod tests {
             &limbs, false);
 
         let got =
-            div_wide_pow10_newton_with(numerator, scale, RoundingMode::HalfToEven, &table);
+            div_wide_pow10_barrett_with(numerator, scale, RoundingMode::HalfToEven, &table);
         let want = div_wide_pow10_chain::<Int<16>>(numerator, scale, RoundingMode::HalfToEven);
-        assert_eq!(got, want, "Newton differs from MG chain at D307 s=150");
+        assert_eq!(got, want, "Barrett differs from MG chain at D307 s=150");
     }
 
     // Exercises `Int<24>` (D462 storage AND D230 Work) at the benchmarked anchor
     // scales — bit-identical agreement is the validity wall for the
-    // 1536-bit Newton kept-alt (the `rescale` matcher's `Newton` arm).
+    // 1536-bit Barrett kept-alt (the `rescale` matcher's `Barrett` arm).
     #[cfg(feature = "d462")]
     #[test]
-    fn newton_matches_mg_chain_d462_s202() {
+    fn barrett_matches_mg_chain_d462_s202() {
         let scale = 202u32;
         let width_limbs = 24; // Int<24> = 12 u128 = 24 u64 limbs
-        let table = NewtonReciprocal::precompute(scale, width_limbs);
+        let table = BarrettReciprocal::precompute(scale, width_limbs);
 
         let mut limbs = [0u128; 64];
         limbs[10] = 1u128 << 24;
@@ -1050,17 +1070,17 @@ mod tests {
             &limbs, false);
 
         let got =
-            div_wide_pow10_newton_with(numerator, scale, RoundingMode::HalfToEven, &table);
+            div_wide_pow10_barrett_with(numerator, scale, RoundingMode::HalfToEven, &table);
         let want = div_wide_pow10_chain::<Int<24>>(numerator, scale, RoundingMode::HalfToEven);
-        assert_eq!(got, want, "Newton differs from MG chain at Int<24> s=202");
+        assert_eq!(got, want, "Barrett differs from MG chain at Int<24> s=202");
     }
 
     #[cfg(feature = "d462")]
     #[test]
-    fn newton_matches_mg_chain_d462_s259() {
+    fn barrett_matches_mg_chain_d462_s259() {
         let scale = 259u32;
         let width_limbs = 24;
-        let table = NewtonReciprocal::precompute(scale, width_limbs);
+        let table = BarrettReciprocal::precompute(scale, width_limbs);
 
         let mut limbs = [0u128; 64];
         limbs[10] = 1u128 << 8;
@@ -1069,18 +1089,18 @@ mod tests {
             &limbs, false);
 
         let got =
-            div_wide_pow10_newton_with(numerator, scale, RoundingMode::HalfToEven, &table);
+            div_wide_pow10_barrett_with(numerator, scale, RoundingMode::HalfToEven, &table);
         let want = div_wide_pow10_chain::<Int<24>>(numerator, scale, RoundingMode::HalfToEven);
-        assert_eq!(got, want, "Newton differs from MG chain at Int<24> s=259");
+        assert_eq!(got, want, "Barrett differs from MG chain at Int<24> s=259");
     }
 
     // Exercises `Int<32>` (D616 storage) — runs only where that tier is on.
     #[cfg(feature = "d616")]
     #[test]
-    fn newton_matches_mg_chain_d616_s308() {
+    fn barrett_matches_mg_chain_d616_s308() {
         let scale = 308u32;
         let width_limbs = 32; // Int<32> = 16 u128 = 32 u64 limbs
-        let table = NewtonReciprocal::precompute(scale, width_limbs);
+        let table = BarrettReciprocal::precompute(scale, width_limbs);
 
         let mut limbs = [0u128; 64];
         limbs[14] = 1u128 << 16;
@@ -1089,18 +1109,18 @@ mod tests {
             &limbs, false);
 
         let got =
-            div_wide_pow10_newton_with(numerator, scale, RoundingMode::HalfToEven, &table);
+            div_wide_pow10_barrett_with(numerator, scale, RoundingMode::HalfToEven, &table);
         let want = div_wide_pow10_chain::<Int<32>>(numerator, scale, RoundingMode::HalfToEven);
-        assert_eq!(got, want, "Newton differs from MG chain at D616 s=308");
+        assert_eq!(got, want, "Barrett differs from MG chain at D616 s=308");
     }
 
     // Exercises `Int<64>` (D1232 storage) — runs only where that tier is on.
     #[cfg(feature = "d1232")]
     #[test]
-    fn newton_matches_mg_chain_d1232_s615() {
+    fn barrett_matches_mg_chain_d1232_s615() {
         let scale = 615u32;
         let width_limbs = 64; // Int<64> = 32 u128 = 64 u64 limbs
-        let table = NewtonReciprocal::precompute(scale, width_limbs);
+        let table = BarrettReciprocal::precompute(scale, width_limbs);
 
         let mut limbs = [0u128; 64];
         limbs[30] = 1u128 << 8;
@@ -1109,12 +1129,12 @@ mod tests {
             &limbs, false);
 
         let got =
-            div_wide_pow10_newton_with(numerator, scale, RoundingMode::HalfToEven, &table);
+            div_wide_pow10_barrett_with(numerator, scale, RoundingMode::HalfToEven, &table);
         let want = div_wide_pow10_chain::<Int<64>>(numerator, scale, RoundingMode::HalfToEven);
-        assert_eq!(got, want, "Newton differs from MG chain at D1232 s=615");
+        assert_eq!(got, want, "Barrett differs from MG chain at D1232 s=615");
     }
 
-    // -- u64-vs-u128 Newton bit-identity (validity wall) ---------------
+    // -- u64-vs-u128 Barrett bit-identity (validity wall) ---------------
     //
     // The u128-packed kernel MUST produce limb-identical output to the
     // u64 kernel for every supported width x representative scale, in
@@ -1128,7 +1148,7 @@ mod tests {
         top_limb_val: u128,
         low_perturbation: (usize, u128),
     ) {
-        let table = NewtonReciprocal::precompute(scale, width_limbs);
+        let table = BarrettReciprocal::precompute(scale, width_limbs);
 
         let modes = [
             RoundingMode::HalfToEven,
@@ -1149,96 +1169,96 @@ mod tests {
             mag_a[low_perturbation.0] = low_perturbation.1;
             let mut mag_b = mag_a;
 
-            super::newton_pow10_mag_u128(&mut mag_a[..mag_limbs], false, mode, &table);
-            super::newton_pow10_mag_u128_packed(&mut mag_b[..mag_limbs], false, mode, &table);
+            super::barrett_pow10_mag_u128(&mut mag_a[..mag_limbs], false, mode, &table);
+            super::barrett_pow10_mag_u128_packed(&mut mag_b[..mag_limbs], false, mode, &table);
             assert_eq!(
                 mag_a, mag_b,
-                "u64 != u128 Newton at scale={scale} width={width_limbs} mode={mode:?}"
+                "u64 != u128 Barrett at scale={scale} width={width_limbs} mode={mode:?}"
             );
 
             let mut mag_a = [0u128; 128];
             mag_a[top_limb_idx] = top_limb_val;
             mag_a[low_perturbation.0] = low_perturbation.1;
             let mut mag_b = mag_a;
-            super::newton_pow10_mag_u128(&mut mag_a[..mag_limbs], true, mode, &table);
-            super::newton_pow10_mag_u128_packed(&mut mag_b[..mag_limbs], true, mode, &table);
+            super::barrett_pow10_mag_u128(&mut mag_a[..mag_limbs], true, mode, &table);
+            super::barrett_pow10_mag_u128_packed(&mut mag_b[..mag_limbs], true, mode, &table);
             assert_eq!(
                 mag_a, mag_b,
-                "u64 != u128 Newton (neg) at scale={scale} width={width_limbs} mode={mode:?}"
+                "u64 != u128 Barrett (neg) at scale={scale} width={width_limbs} mode={mode:?}"
             );
         }
     }
 
     #[cfg(feature = "d307")]
     #[test]
-    fn newton_u64_eq_u128_d307_s150() {
+    fn barrett_u64_eq_u128_d307_s150() {
         assert_u64_u128_match(150, 16, 8, 6, 1u128 << 32, (1, 0xdeadbeef_cafef00d_u128));
     }
 
     #[cfg(feature = "d307")]
     #[test]
-    fn newton_u64_eq_u128_d307_s307() {
+    fn barrett_u64_eq_u128_d307_s307() {
         assert_u64_u128_match(307, 16, 8, 7, 0x1234_5678_9abc_def0u128, (0, 1));
     }
 
     // Int<24> = 1536-bit. The PRODUCTION row: D462 storage, D230 Work.
     #[cfg(feature = "d462")]
     #[test]
-    fn newton_u64_eq_u128_b1536_s200() {
+    fn barrett_u64_eq_u128_b1536_s200() {
         assert_u64_u128_match(200, 24, 12, 10, 1u128 << 24, (2, 0xfeedfacecafef00d_u128));
     }
 
     #[cfg(feature = "d462")]
     #[test]
-    fn newton_u64_eq_u128_b1536_s202() {
+    fn barrett_u64_eq_u128_b1536_s202() {
         assert_u64_u128_match(202, 24, 12, 10, 1u128 << 24, (2, 0xfeedfacecafef00d_u128));
     }
 
     #[cfg(feature = "d462")]
     #[test]
-    fn newton_u64_eq_u128_b1536_s259() {
+    fn barrett_u64_eq_u128_b1536_s259() {
         assert_u64_u128_match(259, 24, 12, 10, 1u128 << 8, (1, 0xdeadbeef_cafef00d_u128));
     }
 
     #[cfg(feature = "d462")]
     #[test]
-    fn newton_u64_eq_u128_b1536_s461() {
+    fn barrett_u64_eq_u128_b1536_s461() {
         assert_u64_u128_match(461, 24, 12, 11, 0x1u128, (3, 0xfacefacef00d_u128));
     }
 
     #[cfg(feature = "d616")]
     #[test]
-    fn newton_u64_eq_u128_d616_s308() {
+    fn barrett_u64_eq_u128_d616_s308() {
         assert_u64_u128_match(308, 32, 16, 14, 1u128 << 16, (3, 0xdeadbeef));
     }
 
     #[cfg(feature = "d616")]
     #[test]
-    fn newton_u64_eq_u128_d616_s616() {
+    fn barrett_u64_eq_u128_d616_s616() {
         assert_u64_u128_match(616, 32, 16, 15, 1u128 << 8, (4, 0xfeedface));
     }
 
     #[cfg(feature = "d924")]
     #[test]
-    fn newton_u64_eq_u128_d924_s460() {
+    fn barrett_u64_eq_u128_d924_s460() {
         assert_u64_u128_match(460, 48, 24, 22, 1u128 << 8, (5, 0xcafef00d));
     }
 
     #[cfg(feature = "d924")]
     #[test]
-    fn newton_u64_eq_u128_d924_s924() {
+    fn barrett_u64_eq_u128_d924_s924() {
         assert_u64_u128_match(924, 48, 24, 23, 1u128, (6, 0xfeedfacef00d));
     }
 
     #[cfg(feature = "d1232")]
     #[test]
-    fn newton_u64_eq_u128_d1232_s615() {
+    fn barrett_u64_eq_u128_d1232_s615() {
         assert_u64_u128_match(615, 64, 32, 30, 1u128 << 8, (5, 0xcafef00d));
     }
 
     #[cfg(feature = "d1232")]
     #[test]
-    fn newton_u64_eq_u128_d1232_s1231() {
+    fn barrett_u64_eq_u128_d1232_s1231() {
         assert_u64_u128_match(1231, 64, 32, 31, 1u128, (7, 0xdeadbeef_feedface_u128));
     }
 
@@ -1246,70 +1266,70 @@ mod tests {
     //
     // Int<96> / Int<128> / Int<192> exercised at the benchmarked anchor scales
     // and the maxima. Bit-identical agreement with the Knuth-routed
-    // `div_rem_mag_slice` path is the validity wall for the wide Newton
-    // kept-alt cells (6144 / 8192 / 12288; the `rescale` `Newton` arm).
+    // `div_rem_mag_slice` path is the validity wall for the wide Barrett
+    // kept-alt cells (6144 / 8192 / 12288; the `rescale` `Barrett` arm).
 
     #[cfg(any(feature = "d924", feature = "xx-wide"))]
     #[test]
-    fn newton_matches_mg_chain_b6144_s200() {
+    fn barrett_matches_mg_chain_b6144_s200() {
         let scale = 200u32;
         let width_limbs = 96; // Int<96> = 48 u128 = 96 u64
-        let table = NewtonReciprocal::precompute(scale, width_limbs);
+        let table = BarrettReciprocal::precompute(scale, width_limbs);
         let mut limbs = [0u128; 64];
         limbs[40] = 1u128 << 24;
         limbs[3] = 0xfeedfacecafef00d_u128;
         let numerator = <Int<96> as crate::int::types::traits::BigInt>::from_mag_sign_u128(
             &limbs, false);
         let got =
-            div_wide_pow10_newton_with(numerator, scale, RoundingMode::HalfToEven, &table);
+            div_wide_pow10_barrett_with(numerator, scale, RoundingMode::HalfToEven, &table);
         let want = div_wide_pow10_chain::<Int<96>>(numerator, scale, RoundingMode::HalfToEven);
-        assert_eq!(got, want, "Newton differs from MG chain at Int<96> s=200");
+        assert_eq!(got, want, "Barrett differs from MG chain at Int<96> s=200");
     }
 
     #[cfg(any(feature = "d924", feature = "xx-wide"))]
     #[test]
-    fn newton_matches_mg_chain_b6144_s953() {
+    fn barrett_matches_mg_chain_b6144_s953() {
         let scale = 953u32;
         let width_limbs = 96;
-        let table = NewtonReciprocal::precompute(scale, width_limbs);
+        let table = BarrettReciprocal::precompute(scale, width_limbs);
         let mut limbs = [0u128; 64];
         limbs[46] = 1u128 << 8;
         limbs[1] = 0xdeadbeef_cafef00d_u128;
         let numerator = <Int<96> as crate::int::types::traits::BigInt>::from_mag_sign_u128(
             &limbs, false);
         let got =
-            div_wide_pow10_newton_with(numerator, scale, RoundingMode::HalfToEven, &table);
+            div_wide_pow10_barrett_with(numerator, scale, RoundingMode::HalfToEven, &table);
         let want = div_wide_pow10_chain::<Int<96>>(numerator, scale, RoundingMode::HalfToEven);
-        assert_eq!(got, want, "Newton differs from MG chain at Int<96> s=953");
+        assert_eq!(got, want, "Barrett differs from MG chain at Int<96> s=953");
     }
 
     // u64 vs u128 bit-identity at the 6144 width covered by
-    // `newton_u128_wins` — production-shape cells across the D924
+    // `barrett_u128_wins` — production-shape cells across the D924
     // SCALE band AND the AGM-widened scales the strict_agm transcendentals
     // exercise.
 
     #[cfg(any(feature = "d924", feature = "xx-wide"))]
     #[test]
-    fn newton_u64_eq_u128_b6144_s200() {
+    fn barrett_u64_eq_u128_b6144_s200() {
         assert_u64_u128_match(200, 96, 48, 40, 1u128 << 24, (3, 0xfeedfacecafef00d_u128));
     }
 
     #[cfg(any(feature = "d924", feature = "xx-wide"))]
     #[test]
-    fn newton_u64_eq_u128_b6144_s953() {
+    fn barrett_u64_eq_u128_b6144_s953() {
         assert_u64_u128_match(953, 96, 48, 46, 1u128 << 8, (1, 0xdeadbeef_cafef00d_u128));
     }
 
     // AGM-band cells — D924 strict_agm runs at `w_prime ≤ 1850`.
     #[cfg(any(feature = "d924", feature = "xx-wide"))]
     #[test]
-    fn newton_u64_eq_u128_b6144_s1234() {
+    fn barrett_u64_eq_u128_b6144_s1234() {
         assert_u64_u128_match(1234, 96, 48, 46, 1u128 << 16, (2, 0xcafef00dbeef_u128));
     }
 
     #[cfg(any(feature = "d924", feature = "xx-wide"))]
     #[test]
-    fn newton_u64_eq_u128_b6144_s1850() {
+    fn barrett_u64_eq_u128_b6144_s1850() {
         assert_u64_u128_match(1850, 96, 48, 47, 1u128, (5, 0xfacefacef00d_u128));
     }
 }
@@ -1324,7 +1344,7 @@ mod tests {
 /// `1` at limb `k_u64`, giving `num_m = k_u64 + 1` against a `2·den_n = 48`
 /// gate.
 ///
-/// `width_limbs` is ODD on purpose: `newton_recip_le` refuses an odd width (the
+/// `width_limbs` is ODD on purpose: `barrett_recip_le` refuses an odd width (the
 /// baked prefix identity holds only at an even one), so the SLOW branch — the
 /// one carrying the divide — is the branch deterministically taken, in every
 /// feature configuration.
@@ -1349,7 +1369,7 @@ mod fallback_divide_routing {
 
         // The baked table must decline, so the divide branch is the live one.
         assert!(
-            crate::consts::newton_recip_le(SCALE, WIDTH_LIMBS).is_none(),
+            crate::consts::barrett_recip_le(SCALE, WIDTH_LIMBS).is_none(),
             "an odd width must fall through to the runtime divide"
         );
 

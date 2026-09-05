@@ -2135,7 +2135,7 @@ pub mod __bench_internals {
     // `algos::support::mg_divide::tests::round_div_*`):
     //   - SLOW: generic Knuth `div_rem` by `10^w` + half-to-even (the
     //     macro-local `round_div`);
-    //   - FAST: the MG / Newton power-of-10 kernel `round_div_pow10`.
+    //   - FAST: the MG / Barrett power-of-10 kernel `round_div_pow10`.
     // Exposed generic over the work-integer `W` so ONE pair covers every
     // wide work width the `div_recover_ab` sweep walks.
 
@@ -2178,7 +2178,7 @@ pub mod __bench_internals {
     /// FAST path: half-to-even `round(numerator / 10^exponent)` via the
     /// production
     /// power-of-10 divide kernel (the macro-local `round_div_pow10`):
-    /// single-chunk MG for `exponent <= 38`, MG / Newton chain dispatch
+    /// single-chunk MG for `exponent <= 38`, MG / Barrett chain dispatch
     /// above.
     #[inline(never)]
     #[allow(private_bounds)]
@@ -2204,15 +2204,15 @@ pub mod __bench_internals {
         )
     }
 
-    // Newton-reciprocal divide research kernel — wrapped via concrete
+    // Barrett-reciprocal divide research kernel — wrapped via concrete
     // shims so the bench harness gets head-to-head comparisons against
     // [`crate::algos::support::mg_divide::div_wide_pow10_chain`] without
     // exposing trait machinery.
     #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
-    pub mod newton_vs_mg {
-        use crate::algos::support::newton_reciprocal::NewtonReciprocal as NR;
-        pub struct NewtonReciprocal(pub(crate) NR);
-        impl NewtonReciprocal {
+    pub mod barrett_vs_mg {
+        use crate::algos::support::barrett_reciprocal::BarrettReciprocal as NR;
+        pub struct BarrettReciprocal(pub(crate) NR);
+        impl BarrettReciprocal {
             #[inline(never)]
             pub fn precompute(scale: u32, width_limbs: usize) -> Self {
                 Self(NR::precompute(scale, width_limbs))
@@ -2223,7 +2223,7 @@ pub mod __bench_internals {
             ($pub_name:ident, $width:ty, $feat:literal) => {
                 #[cfg(any(feature = $feat))]
                 pub mod $pub_name {
-                    use super::NewtonReciprocal;
+                    use super::BarrettReciprocal;
                     use crate::RoundingMode;
                     type W = $width;
 
@@ -2262,13 +2262,13 @@ pub mod __bench_internals {
                     }
 
                     #[inline(never)]
-                    pub fn newton(
+                    pub fn barrett(
                         numerator: Storage,
                         scale: u32,
-                        table: &NewtonReciprocal
+                        table: &BarrettReciprocal
                     ) -> Storage {
                         Storage(
-                            crate::algos::support::newton_reciprocal::div_wide_pow10_newton_with::<W>(
+                            crate::algos::support::barrett_reciprocal::div_wide_pow10_barrett_with::<W>(
                                 numerator.0,
                                 scale,
                                 RoundingMode::HalfToEven,
@@ -2277,21 +2277,21 @@ pub mod __bench_internals {
                         )
                     }
 
-                    /// u128-packed Newton variant. Pre-packs `r` and `pow_scale` at
+                    /// u128-packed Barrett variant. Pre-packs `r` and `pow_scale` at
                     /// `precompute` time (cached in the table), then runs the WHOLE
-                    /// Newton divide entirely on u128 limbs (no per-call pack/unpack
+                    /// Barrett divide entirely on u128 limbs (no per-call pack/unpack
                     /// of the cached state, no u128<->u64 transcoding of the operand).
-                    /// Validity wall: bit-identical to `newton` at every (width,
-                    /// scale) cell -- verified by the `newton_u64_eq_u128_*` unit
-                    /// tests in `newton_reciprocal.rs`.
+                    /// Validity wall: bit-identical to `barrett` at every (width,
+                    /// scale) cell -- verified by the `barrett_u64_eq_u128_*` unit
+                    /// tests in `barrett_reciprocal.rs`.
                     #[inline(never)]
-                    pub fn newton_u128(
+                    pub fn barrett_u128(
                         numerator: Storage,
                         scale: u32,
-                        table: &NewtonReciprocal
+                        table: &BarrettReciprocal
                     ) -> Storage {
                         use crate::int::types::traits::BigInt;
-                        // Match production slicing: the Newton kernel operates
+                        // Match production slicing: the Barrett kernel operates
                         // on EXACTLY `W::U128_LIMBS` u128 limbs (the storage
                         // type's width). Passing the whole 256-limb buffer
                         // would inflate the schoolbook product cost on smaller
@@ -2299,7 +2299,7 @@ pub mod __bench_internals {
                         let mut mag_u128 = [0u128; 256];
                         let magnitude = &mut mag_u128[..W::U128_LIMBS];
                         let is_negative = numerator.0.mag_into_u128(magnitude);
-                        crate::algos::support::newton_reciprocal::newton_pow10_mag_u128_packed(
+                        crate::algos::support::barrett_reciprocal::barrett_pow10_mag_u128_packed(
                             magnitude,
                             is_negative,
                             RoundingMode::HalfToEven,
@@ -2314,7 +2314,7 @@ pub mod __bench_internals {
         // `Int<24>` = 1536-bit storage; matches D462 storage, but ALSO the
         // production Work integer used by D230 (Int<12> storage doubles to
         // Int<24> for the wide-trig `Work` type). The cells
-        // `exp_D230_s{172,229}` rescale at this width, so the Newton-vs-MG
+        // `exp_D230_s{172,229}` rescale at this width, so the Barrett-vs-MG
         // dispatch decision needs `1536`-bit data — hence the dedicated shim
         // (the d307/d616/d924/d1232 set skips 1536).
         shim!(d462, crate::int::types::Int<24>, "x-wide");
@@ -2322,11 +2322,11 @@ pub mod __bench_internals {
         shim!(d924, crate::int::types::Int<48>, "xx-wide");
         shim!(d1232, crate::int::types::Int<64>, "xx-wide");
         // Int<96>=6144 = D230 Wexp /
-        // D924 Work. Bench-validated cells extend the Newton-vs-MG
+        // D924 Work. Bench-validated cells extend the Barrett-vs-MG
         // matrix beyond the 1536-4096 band.
         //
         // 8192 / 12288 / 16384 / 32768 are NOT exposed here: their
-        // Newton precompute numerator at the AGM-widened scales
+        // Barrett precompute numerator at the AGM-widened scales
         // exceeds the routed Knuth build-max scratch
         // (`MAX_SINGLE_LIMBS = 258`), and the integrated-bench picture
         // (the atanh diagnosis) suggests MG is the right

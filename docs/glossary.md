@@ -70,6 +70,7 @@ accepting mixed-width, mixed-`SCALE` operands.
 | Name | Used for |
 |------|----------|
 | **MG** — [Möller–Granlund](https://gmplib.org/~tege/division-paper.pdf) | division by a constant (`÷ 10^SCALE`) via magic-multiply |
+| **Barrett** — [Barrett reduction](https://en.wikipedia.org/wiki/Barrett_reduction) | division by a constant (`÷ 10^SCALE`) via a precomputed reciprocal `⌊2^k/D⌋`, applied as multiply–shift–correct. No iteration — distinct from **Newton** below |
 | **BZ** — Burnikel–Ziegler | recursive divide-and-conquer division (wide tiers) |
 | **Karatsuba** | subquadratic multiplication |
 | **Newton** ([Newton–Raphson](https://en.wikipedia.org/wiki/Newton%27s_method)) | precision-doubling iteration for roots/reciprocals |

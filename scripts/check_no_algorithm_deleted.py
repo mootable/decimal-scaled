@@ -48,7 +48,7 @@ COMPUTE = re.compile(
     r"|mul_agm|div_agm|add_agm|sub_agm"
     r"|sqrt_fixed|cbrt_fixed|log1p_fixed|ln_fixed|exp_fixed|atan_fixed|sin_fixed|cos_fixed"
     r"|round_to_storage|scale_by_k|bit_length"
-    r"|mul_schoolbook|karatsuba|newton|isqrt|icbrt"
+    r"|mul_schoolbook|karatsuba|newton|barrett|isqrt|icbrt"
     r"|for\s+\w+\s+in\s+0\.\.|while\s+"
     r")",
     re.I,

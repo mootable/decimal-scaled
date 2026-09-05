@@ -51,7 +51,7 @@ use crate::int::types::compute_limbs::{ComputeLimbs, Limb, Limbs};
 /// no `N` to route by. What protects the slice door is a property of its call
 /// sites, not of routing.)
 ///
-/// Every slice caller (`sqrt_newton`, `cbrt_newton`, `newton_reciprocal`,
+/// Every slice caller (`sqrt_newton`, `cbrt_newton`, `barrett_reciprocal`,
 /// `div_widen_scale`, `wide_trig_core`) carves operands from storage-derived
 /// `ComputeLimbs` buffers and shrinks them with `sig_len`, so the longest
 /// equal-length pair any can present today is about **96** limbs (`cbrt` at

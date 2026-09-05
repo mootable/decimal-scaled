@@ -21,10 +21,10 @@
 //!    [`crate::int::policy::mul::dispatch`], which routes even-`N` widths
 //!    to the u128-packed `mul_full_limb` kernel for maximum throughput;
 //! 2. transcode the product into a u128 magnitude buffer and divide it by
-//!    `10^SCALE` in place via the shared MG / Newton magnitude-slice cores
+//!    `10^SCALE` in place via the shared MG / Barrett magnitude-slice cores
 //!    ([`crate::algos::support::mg_divide::div_pow10_mag_u128`] for
-//!    `SCALE <= 38`, [`crate::algos::support::newton_reciprocal::dispatch_pow10_mag_u128`]
-//!    above) -- the same magic-number / Newton-reciprocal path the typed
+//!    `SCALE <= 38`, [`crate::algos::support::barrett_reciprocal::dispatch_pow10_mag_u128`]
+//!    above) -- the same magic-number / Barrett-reciprocal path the typed
 //!    `div_wide_pow10` wrapper uses, so no Knuth-divide regression;
 //! 3. rebuild the signed `Int<N>` result from the quotient magnitude and
 //!    the product sign.
@@ -109,7 +109,7 @@ fn narrow_mag_to_int<const N: usize>(magnitude: &[u128], is_negative: bool, msg:
 /// (via leading-zero counts); otherwise the magnitude product is formed in
 /// the scratch buffer via [`crate::int::policy::mul::dispatch`] (which routes
 /// even-`N` widths to the u128-packed `mul_full_limb` kernel), divided by
-/// `10^SCALE` via the MG / Newton magnitude cores, and rebuilt as `Int<N>`
+/// `10^SCALE` via the MG / Barrett magnitude cores, and rebuilt as `Int<N>`
 /// (panics on overflow in both debug and release). `SCALE == 0` returns the
 /// product unscaled.
 #[inline]
@@ -176,8 +176,8 @@ where
     // `magnitude` are zero. Every rescale kernel's cost scales with the
     // SIGNIFICANT length, not the buffer width, so strip the leading-zero
     // high limbs and size
-    // `select` + the baked-Newton apply on the real length — otherwise the
-    // wide-tier `÷10^SCALE` Newton runs at the full `2N` width regardless of the
+    // `select` + the baked-Barrett apply on the real length — otherwise the
+    // wide-tier `÷10^SCALE` Barrett runs at the full `2N` width regardless of the
     // operand magnitude. Bit-identical: the
     // quotient `<= ` the numerator, so the trimmed high limbs stay zero and
     // `narrow_mag_to_int` reads the full `magnitude` unchanged.

@@ -220,7 +220,7 @@ pub(crate) fn should_bump(
 /// Last decimal digit of a little-endian `u64`-limb MAGNITUDE — the
 /// `q_mod_10` input to [`should_bump`] for the kernels whose truncated
 /// quotient is a limb slice rather than a typed integer (`div_widen_scale`,
-/// `mul_schoolbook`, `newton_reciprocal`, `mg_divide`, `fixed`). Those
+/// `mul_schoolbook`, `barrett_reciprocal`, `mg_divide`, `fixed`). Those
 /// sites read `quot[0] & 1` for the parity the tie break used to need;
 /// the last DECIMAL digit is not carried by one limb, so it needs the
 /// whole magnitude.
@@ -256,7 +256,7 @@ pub(crate) const fn limbs_mod_10(mag: &[u64]) -> u8 {
 
 /// Last decimal digit of a little-endian `u128`-limb MAGNITUDE — the
 /// u128-packed sibling of [`limbs_mod_10`], for the kernels that carry
-/// their quotient in u128 limbs (`newton_reciprocal`'s u128 path).
+/// their quotient in u128 limbs (`barrett_reciprocal`'s u128 path).
 ///
 /// The same fold applies unchanged: `2^128 = (2^64)^2 ≡ 6^2 = 36 ≡ 6
 /// (mod 10)`, so the base's residue is `6` here too.
