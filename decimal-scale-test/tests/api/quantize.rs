@@ -3,6 +3,14 @@
 //!
 //! The deprecated `rescale` / `rescale_with` aliases (removed in 0.6.0)
 //! are covered by the main crate's `tests/deprecated_aliases.rs`.
+//!
+//! The wide tiers are covered by the main crate's
+//! `tests/wide_quantize_routing.rs`, not here. The scale-down's `/ 10^shift`
+//! routes through the rescale matcher, whose baked-reciprocal kernel exists
+//! only under `x-wide` / `xx-wide` — and this suite is built one tier at a
+//! time, which does not enable them. A root-crate test sits in the
+//! full-feature build where all three of that matcher's kernels are
+//! reachable.
 
 mod from_quantize {
     //! `D38::quantize` / `quantize_with` integration tests. Moved out of

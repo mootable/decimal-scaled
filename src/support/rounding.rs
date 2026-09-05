@@ -448,8 +448,10 @@ where
 /// Applies `mode` to integer division `raw / divisor`, returning the
 /// rounded quotient.
 ///
-/// Used by `D38::quantize_with` and by the multiplier-and-divide
-/// fast paths in `mg_divide`. The whole mode-specific logic is
+/// Used by the multiplier-and-divide fast paths in `mg_divide`. The
+/// magnitude-slice kernels there call [`should_bump`] directly instead,
+/// having already produced the quotient and remainder in one pass. The
+/// whole mode-specific logic is
 /// delegated to [`should_bump`]; this function is just the i128
 /// arithmetic wrapper that builds its inputs and applies the bump.
 #[inline(always)]

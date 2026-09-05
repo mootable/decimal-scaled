@@ -57,6 +57,11 @@ pub(crate) mod log1p;
 pub(crate) mod mul;
 pub(crate) mod neg;
 pub(crate) mod pow;
+/// `quantize` kernels — changing `SCALE` at a fixed storage width.
+/// `policy::quantize` routes the single `quantize_pow10`; the divide
+/// inside its scale-down direction belongs to the `÷10^scale` matcher
+/// (`algos::support::rescale`), which the kernel routes through.
+pub(crate) mod quantize;
 pub(crate) mod rem;
 pub(crate) mod sqrt;
 pub(crate) mod sub;
