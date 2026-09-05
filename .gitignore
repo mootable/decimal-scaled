@@ -15,5 +15,11 @@ profile.json*
 /tmp/
 /bench-compare/target
 
+# Private working notes. These share this working tree but are tracked by a
+# separate private repository, never by this one.
+/research/
+/decisions/
+/CLAUDE.md
+
 # Python bytecode cache (scripts/)
 __pycache__/
