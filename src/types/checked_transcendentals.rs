@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `checked_*` siblings of the strict transcendental family.
 //!
 //! One generic `impl` over `(N, SCALE)` — a single source serving every

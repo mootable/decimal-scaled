@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 John Moxley
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Cross-WIDTH operators, at any SCALEs.
 //!
 //! `a + b` where the operands differ in storage width, SCALE, or both.
