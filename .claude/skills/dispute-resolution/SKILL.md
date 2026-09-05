@@ -82,8 +82,13 @@ invites the same wrong turn later. Record **unresolved** disputes too: the deadl
 side holds, what evidence would settle it, and if a human adjudicated, what they decided *and on
 what grounds* — an adjudication with no reasoning is a fact with no method.
 
-Put it where the next person will hit it: alongside the code it concerns, in the commit that
-acts on it, or in a decision log. Not in a chat log.
+**Put it in a decision log** — one file per dispute, default
+`decisions/<iso-datetime>_<argument>.md`, named for what was argued. Follow the repository's own
+convention for decision records where it has one.
+
+Not in code comments. Comments earn their place explaining the code they sit beside; a dispute
+record is a different kind of thing and putting it there overloads them. And not in a chat log —
+that is a transcript, not a record.
 
 ## The tie-breaker
 
