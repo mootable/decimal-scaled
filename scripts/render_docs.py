@@ -346,9 +346,9 @@ def _timing_rows() -> list[tuple[str, int, int, float]] | None:
     = this build's median), or None if the file isn't committed yet / carries a
     foreign or superseded schema (the header guard mirrors `_golden_rows`).
 
-    PUBLISHABLE rows only — diagnostic rows (`is_diagnostic_op`) are dropped
-    here, at the one place the medians enter this file, so every caller is
-    covered and a future one cannot reintroduce them by accident."""
+    Every row here publishes: an op reaches the sweep only by naming a public
+    function, and a family row (`op@variant`) is the same function at a
+    different input."""
     if not TIMING_RESULTS.exists():
         return None
     lines = TIMING_RESULTS.read_text(encoding="utf-8").splitlines()
@@ -357,7 +357,7 @@ def _timing_rows() -> list[tuple[str, int, int, float]] | None:
     rows = []
     for line in lines[1:]:
         c = line.split("\t")  # op width scale prod_ns branch_ns ...
-        if len(c) >= 5 and not is_diagnostic_op(c[0]):
+        if len(c) >= 5:
             w = c[1].lstrip("D")
             if w.isdigit() and c[2].lstrip("-").isdigit():
                 rows.append((c[0], int(w), int(c[2]), float(c[4])))
@@ -818,42 +818,6 @@ def display_op(op: str) -> str:
     wire id is `op` itself."""
     return op if _FAMILY_SEP in op else f"{op}{_FAMILY_SEP}{_BASE_LABEL}"
 
-# --- Diagnostic (measured, never published) bench rows ---------------------
-#
-# The sweep carries rows that exist to MEASURE a kernel, not to document a
-# public function. `ln_nd` is the first: it runs `ln` at a non-degenerate
-# argument, because the published `ln` row's operand (2.0) is an exact power of
-# two whose range reduction collapses to mantissa 1 — so that row times a
-# short-circuit, not the log series. Such a row must stay in the bbc artifacts
-# (it IS the measurement) and must never reach the site, because `ln_nd` names
-# no function anyone can call.
-#
-# Excluded by a NAMING CONVENTION, not a list of op names: name a diagnostic row
-# `<op>_nd` and it is measured and never published, with nothing to remember at
-# render time. A marker for a different KIND of diagnostic is added here — one
-# entry covering every row that uses it — rather than one entry per row.
-#
-# The public direction is structural too: an op the category table lists is
-# public by definition and ALWAYS publishes, so no marker added here can ever
-# silently swallow a real function. `log2`/`log10` are listed, so they publish
-# whatever else changes.
-_DIAGNOSTIC_SUFFIXES = ("_nd",)
-
-
-def is_diagnostic_op(op: str) -> bool:
-    """True for a bench row that measures a kernel but names no public function,
-    so it must not be published. An op listed in `_CATEGORY_OPS` is public by
-    definition and is never diagnostic, whatever its spelling.
-
-    An `op@variant` family row is judged on its BASE op, so a family of a
-    published function publishes and a family of a diagnostic one would not.
-    The two conventions stay independent: `_nd` marks "never publish", `@`
-    marks "same function, different input"."""
-    if base_op(op) in _OP_CATEGORY:
-        return False
-    return op.endswith(_DIAGNOSTIC_SUFFIXES)
-
-
 def op_category(op: str) -> str:
     """The category an op renders under: `arithmetic`, `roots-and-exponents`, or
     `trigonometry`. An `op@variant` row takes its base op's category. An op in
@@ -1002,7 +966,7 @@ def _history_rows() -> list[tuple[str, int, str, float, float, float]] | None:
     rows = []
     for line in lines[1:]:
         c = line.split("\t")
-        if len(c) >= 4 and c[1].isdigit() and not is_diagnostic_op(c[0]):
+        if len(c) >= 4 and c[1].isdigit():
             med = float(c[3])
             lo = float(c[4]) if len(c) >= 6 and c[4] else med
             hi = float(c[5]) if len(c) >= 6 and c[5] else med

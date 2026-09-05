@@ -228,8 +228,8 @@ def op_filter(base_ops: list[str], scale: str) -> str:
       ^(alternation)(@[a-z0-9]+)?_D\\d+_s<scale>/
 
     `^` anchors to the row name so a bucket cannot pick up another's rows.
-    The alternation is sorted LONGEST-FIRST so `log10` is not shadowed by `log`
-    (and `ln_nd` not by `ln`). `(@[a-z0-9]+)?` is what keeps a family together:
+    The alternation is sorted LONGEST-FIRST so `log10` is not shadowed by
+    `log`. `(@[a-z0-9]+)?` is what keeps a family together:
     the shard is chosen by BASE op and every variant of it comes along.
     The trailing `/` is the group/function separator, which is what stops
     `_s30/` from also matching `_s306/`.
