@@ -141,7 +141,7 @@ A policy's real **correctness** test is the **golden** suite (routing-agnostic �
 
 Three buckets. **Support libraries are SINGLE files of leaves, NOT split per function.**
 
-- **`src/algos/support/`** — decimal-side cross-family leaves: `fixed.rs` (the 256-bit sign-magnitude `Fixed` work-int type), `mg_divide.rs`, `newton_reciprocal.rs`, `seed_bridge.rs` (typed-`W` seed bridge over the seed leaf), `table_cache.rs` (`decl_table_cache!` per-thread memo), `wide_trig_core.rs` (the `WideTrigCore` trait + 6 generic `*_series`).
+- **`src/algos/support/`** — decimal-side cross-family leaves: `fixed.rs` (the 256-bit sign-magnitude `Fixed` work-int type), `mg_divide.rs`, `barrett_reciprocal.rs`, `seed_bridge.rs` (typed-`W` seed bridge over the seed leaf), `table_cache.rs` (`decl_table_cache!` per-thread memo), `wide_trig_core.rs` (the `WideTrigCore` trait + 6 generic `*_series`).
 - **`src/int/algos/support/`** — int-side leaves: `limbs.rs` (the `add_assign`/`mul_schoolbook`/`shr`/`cmp`/`bit_len`/… limb primitives).
 - **`src/algo_x_support/`** — TRULY cross-tier-INDEPENDENT leaves. The hard invariant: a leaf here **calls NOTHING in-crate** — primitives + std-gated `f64` only. The **seed library** (`seed.rs`: `sqrt_seed`/`cbrt_seed`/`extract_top_u64`) lives here. One API per seed, with the std/no_std divergence encapsulated **inside** the leaf (internal `#[cfg]`), so consuming algorithms stay cfg-agnostic. Don't put anything here that imports another crate module.
 
