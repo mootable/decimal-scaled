@@ -7,9 +7,8 @@
 //!
 //! All six methods are square-and-multiply built on the type's `Mul`
 //! operator (or the matching overflow-variant of multiplication), so
-//! they apply unchanged to every storage kind. D38 keeps its
-//! hand-written versions, which sit closer to the `mg_divide` path;
-//! every other width takes them from this macro.
+//! they apply unchanged to every storage kind — every width, D38
+//! included, takes them from this macro (see `src/types/widths.rs`).
 
 /// Emits `pow` / `powi` and the four overflow variants for
 /// `$Type<SCALE>`.
