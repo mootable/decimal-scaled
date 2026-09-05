@@ -561,6 +561,46 @@ where
     }
 }
 
+/// The linear near-1 exit — the input CLASS on which `ln` is decided by its
+/// first series term alone, ahead of any kernel:
+///
+/// ```text
+/// ln(1 + δ/10^S) · 10^S = δ − δ²/(2·10^S) + δ³/(3·10^(2S)) − …
+/// ```
+///
+/// With `|δ| ≤ 10^k` the omitted leading term is `≤ 10^(2k−S)/2` storage
+/// units, so for `k = ⌊(S−1)/2⌋` it is `≤ 10^-1/2 = 0.05` LSB — strictly
+/// inside the half, never a tie — and the nearest-rounded result IS `δ`.
+/// (The `k = ⌊S/2⌋` band once put an even-`S` edge term at exactly 0.5 LSB
+/// and mis-rounded that tie; this bound is the corrected one
+/// `ln_series_2limb` ships, reproduced here bit for bit so the two narrow
+/// paths agree.) Directed modes need the true residual sign — the value sits
+/// sub-LSB to one side of `δ` — so they do not take it.
+///
+/// Why it is a class and not an operand: the Series path reaches this exit
+/// in ~13 ns at scale 0 where the Tang kernel must pay its `Int<12>` lift and
+/// walker (~470 ns) before it can know the answer was linear; that gap was
+/// first seen on `ln(2.0)` at s0 (`δ = 1 ≤ 10^0`) but belongs to every input
+/// within `10^⌊(S−1)/2⌋` raw units of 1 under a nearest mode, at every scale,
+/// and the check costs one subtraction and one compare. The narrow Tang arm
+/// takes it first; the band is `S`-parametric, never a benched value.
+#[inline]
+pub(crate) fn ln_linear_band_exit<St: BigInt + Copy, const SCALE: u32>(
+    raw: St,
+    mode: RoundingMode,
+) -> Option<St> {
+    if !crate::support::rounding::is_nearest_mode(mode) {
+        return None;
+    }
+    let delta = raw - eg::pow10::<St>(SCALE);
+    let band = eg::pow10::<St>(SCALE.saturating_sub(1) / 2);
+    if delta.abs() <= band {
+        Some(delta)
+    } else {
+        None
+    }
+}
+
 /// `ln_tang` = the `Wk = C::W` instantiation of [`ln_tang_g`] — the work-rung
 /// kernel at the tier's full primitive work width. This thin alias keeps every
 /// existing `policy::ln` call site unchanged; the work-width campaign routes

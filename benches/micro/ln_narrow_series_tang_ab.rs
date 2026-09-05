@@ -176,6 +176,23 @@ fn ln_pow2_input<const N: usize>(scale: u32) -> Vec<One<N>> {
     vec![One { label: "x2.0", raw: build_raw_pow2::<N>(scale) }]
 }
 
+/// The `_band` control: `x = 1 + 3·10^-scale`, inside the linear near-1
+/// class (`|δ| = 3 ≤ 10^⌊(scale−1)/2⌋` for `scale ≥ 3`) — the input class on
+/// which Series has always exited on its first term and the Tang arm now
+/// does too (`ln_linear_band_exit`). Odd and `≡ 3 (mod 5)`, so it also meets
+/// the kernel contract, but its point is the exit, not the kernel.
+fn build_raw_band<const N: usize>(scale: u32) -> Int<N> {
+    assert!(scale >= 3, "the _band control needs a band of at least 10 (scale >= 3)");
+    let mut mag = build_mag::<N>(1, 1, scale);
+    mul_add_small::<N>(&mut mag, 1, 3);
+    assert_non_degenerate::<N>(&mag, "x_band", scale);
+    int_from_mag_limbs::<N>(&mag)
+}
+
+fn ln_band_input<const N: usize>(scale: u32) -> Vec<One<N>> {
+    vec![One { label: "x_band", raw: build_raw_band::<N>(scale) }]
+}
+
 type LnFn<const N: usize> = fn(Int<N>, RoundingMode) -> Int<N>;
 
 fn selected(group: &str) -> bool {
@@ -250,6 +267,20 @@ macro_rules! narrow_cell {
     };
 }
 
+/// The linear-band control at `SCALE >= 3` (at s0 the band admits only
+/// `x = 2`, which the `_p2` cell already is).
+macro_rules! narrow_band_cell {
+    ($c:expr, $scale:literal) => {
+        cell::<2>(
+            $c,
+            concat!("ln_narrow_s", stringify!($scale), "_band"),
+            ln_band_input::<2>($scale),
+            ln_series_narrow::<$scale>,
+            &[("tang_g8_c100", ln_tang_narrow_p::<$scale, 8, 100>)],
+        );
+    };
+}
+
 fn benches(c: &mut Criterion) {
     // D18 golden scale bands {0, 4, 9, 13, 17} ∪ D38 {0, 9, 19, 28, 37}.
     narrow_cell!(c, 0);
@@ -260,6 +291,13 @@ fn benches(c: &mut Criterion) {
     narrow_cell!(c, 19);
     narrow_cell!(c, 28);
     narrow_cell!(c, 37);
+    narrow_band_cell!(c, 4);
+    narrow_band_cell!(c, 9);
+    narrow_band_cell!(c, 13);
+    narrow_band_cell!(c, 17);
+    narrow_band_cell!(c, 19);
+    narrow_band_cell!(c, 28);
+    narrow_band_cell!(c, 37);
     // The wide reference, same binary, at the scales the narrow set shares:
     // D57 at s0 / s28 (its `G8/CAP100` Tang is fixed), D76 at s0 / s19.
     cell::<3>(c, "ln_d57_s0", ln_inputs::<3>(0), ln_series_d57::<0>, &[("tang", ln_tang_d57::<0>)]);

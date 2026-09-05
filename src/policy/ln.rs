@@ -61,6 +61,20 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // `Fixed` at guard 30; Tang ~0.21·w at |t| < 1/256 at guard 8, the
         // table read as a free prefix. Series stays the kept alternative (the
         // `_` arm, and what `ln_fixed` gives the hyperbolics).
+        //
+        // MEASURED (`benches/micro/ln_narrow_series_tang_ab`, one process,
+        // non-degenerate operands 1/3 and 7/3, validity-gated): Tang over
+        // Series 1.25x at s0, 1.29x at s4, 1.83x-2.25x from s9 to s37; narrow
+        // Tang at or below D57/D76 Tang at every shared scale (0.68x-0.91x),
+        // so the same-scale inversion is closed. The TRUE prior inversion,
+        // narrow Series against wide Tang on the same machine, was 1.13x-1.74x
+        // - the bench-branch-compare `ln_nd` 4x-5.8x was inflated by its
+        // operand 7.0 = 2^2·(1 + 96/128) landing on Tang slot 96 on the wide
+        // side (a table read against real narrow work). The one operand class
+        // Tang loses is the exact power of two: Series' scale-0 ln1p band
+        // returns `delta` in ~13ns where Tang pays the lift and walker
+        // (~470ns), 4-35% at other scales - the published `ln` row benches
+        // exactly ln(2.0), so it reads slower here on that operand alone.
         (1, _) | (2, _) => Select::ByAlgorithm(Algorithm::Tang),
         // The table-driven Tang kernel eliminates the Series path's wide
         // argument-reduction sqrts and is bit-identical to Series (the
@@ -270,12 +284,25 @@ use super::work_rung::ln_rung;
 /// is the widest narrow-safe work integer with reach: `BigInt::resize_to`
 /// stages the SOURCE magnitude into `[u128; MAX_U128_LIMB]` (8 on a narrow
 /// build) and panics past it, so `Int<24>` (12 u128 limbs) would panic on the
-/// way back down while `Int<12>` (6) is safe both ways; its `BITS/8 = 96`-digit
-/// escalation cap clears the ≤ 2·38 = 76-digit narrow near-1 deciding depth.
-/// `GUARD 8 / CAP 100` are the `M = 128` sibling's (D57); `CAP = C` covers
-/// working scales `w ≤ (2C + 1)·2.408 = 484`, against the 96 cap. A
-/// narrow-only build reads the 8-limb table prefix; a wide build reads the
-/// same prefix of the full table — one kernel, one accessor, no per-tier copy.
+/// way back down while `Int<12>` (6) is safe both ways. Its escalation
+/// ceiling, from the walker (`wide_trig_core::round_to_storage_directed_
+/// tagged_impl_g`): `cap_digits = BITS/8 − (int_digits + 8) = 96 − 8 = 88`
+/// working digits for a near-1 result (`int_digits = 0`; a 2-digit result
+/// leaves 86), i.e. `max_guard = 88 − 37 = 51` at D38<37>. The deepest
+/// constructible narrow deciding depth is the near-1 family's `δ²/2` at
+/// `2·38 = 76` — a margin of 12 digits at the worst cell, not a comfortable
+/// one, and the golden D38<37> near-1 rows are the empirical wall. `GUARD 8
+/// / CAP 100` are the `M = 128` sibling's (D57); `CAP = C` covers working
+/// scales `w ≤ (2C + 1)·2.408 = 484`, against the 88 ceiling. A narrow-only
+/// build reads the 8-limb table prefix (`p_full ≤ 6` at `w = 88`); a wide
+/// build reads the same prefix of the full table — one kernel, one accessor.
+///
+/// Ahead of the kernel, [`ln_linear_band_exit`]: inputs within
+/// `10^⌊(S−1)/2⌋` raw units of 1 under a nearest mode ARE their own answer
+/// (`ln(1+ε) = ε` to below half an LSB); the Series arm has always exited
+/// there in ~13 ns where Tang would pay its lift and walker, and losing that
+/// silently was a real regression for the class — kept, as a class, at every
+/// scale.
 ///
 /// The kernel's STORAGE arithmetic runs in `Int<4>`, not the tier's own width,
 /// for the `checked_` contract. `ln` genuinely overflows narrow storage — at
@@ -292,7 +319,10 @@ use super::work_rung::ln_rung;
 /// from `Int<4>` (2 u128 limbs) is narrow-safe.
 #[inline]
 fn tang_narrow<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
-    use crate::algos::ln::ln_tang::ln_tang_g;
+    use crate::algos::ln::ln_tang::{ln_linear_band_exit, ln_tang_g};
+    if let Some(linear) = ln_linear_band_exit::<Int<N>, SCALE>(raw, mode) {
+        return Some(linear);
+    }
     let wide = ln_tang_g::<Int<4>, Int<12>, Int<12>, SCALE, 8, 100, true, false>(
         raw.resize_to::<Int<4>>(),
         Int::<4>::MAX,

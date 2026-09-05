@@ -5170,3 +5170,6 @@
 100000000000000000
 0.0000001
 123456.7890123
+// regression: the narrow checked_ln None contract on the Tang arm. ln genuinely overflows narrow storage - at D38<37>, ln(10^-37) ~ -85.2 needs ~8.5e38 against Int<2>'s ~1.7e38, and ln(2e-9) ~ -20.0 likewise (|ln x| > 17 overflows scale 37) - and the narrow contract there is None. The shared narrowing narrow_range_checked_g panics past the bounds it is handed, so the narrow Tang arm handing it Int<2>'s bounds turned that None into a panic; the arm now runs its storage arithmetic in Int<4> and decides the fit itself. Golden 33939044870 passed on the panicking arm because no row reached that cell: these two do. In range at every lower scale, where the value is graded.
+0.0000000000000000000000000000000000001
+0.000000002

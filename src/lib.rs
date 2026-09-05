@@ -2104,6 +2104,9 @@ pub mod __bench_internals {
     #[inline(never)]
     pub fn ln_tang_narrow_p<const SCALE: u32, const G: u32, const CAP: u128>(raw: crate::int::types::Int<2>, mode: crate::RoundingMode) -> crate::int::types::Int<2> {
         use crate::int::types::traits::BigInt;
+        if let Some(linear) = crate::algos::ln::ln_tang::ln_linear_band_exit::<crate::int::types::Int<2>, SCALE>(raw, mode) {
+            return linear;
+        }
         let wide = crate::algos::ln::ln_tang::ln_tang_g::<crate::int::types::Int<4>, crate::int::types::Int<12>, crate::int::types::Int<12>, SCALE, G, CAP, true, false>(
             BigInt::resize_to::<crate::int::types::Int<4>>(raw), crate::int::types::Int::<4>::MAX, crate::int::types::Int::<4>::MIN, mode,
         );

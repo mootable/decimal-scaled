@@ -263,9 +263,17 @@ where
 /// the walker's ±1 could leave range and its own range check would panic,
 /// the single shot stands (a tie that deep at the extreme is the
 /// Table-Maker's-Dilemma residue either way); everywhere else the full
-/// finish runs and cannot leave range. Series core (the narrow `ln`
-/// verdict). Capacity is never in question: the worst narrow lift (`D38`,
-/// `k = SCALE = 38`, `w = 106`) asks `252` of `Int<24>`'s `456` digits.
+/// finish runs and cannot leave range. The natural-log core is Series
+/// (`exp_generic::ln_fixed` on `WZiv`) — an INDEPENDENT choice for this
+/// composition, not inherited from `policy::ln`, whose narrow verdict is now
+/// Tang: the conditioned lift runs at `w = SCALE + 30 + k` in `Int<24>`, where
+/// the narrow Tang arm's `Int<12>` rung and 8-limb table prefix do not reach
+/// (`tang_table_reaches` is a wide-table question), and the Series engine is
+/// what every other narrow composition (`log2`, `log10`, `powf`, the
+/// hyperbolics) already runs on. Re-deciding it is a `policy::log` question
+/// with its own measurement, deliberately not coupled to `ln`'s. Capacity is
+/// never in question: the worst narrow lift (`D38`, `k = SCALE = 38`,
+/// `w = 106`) asks `252` of `Int<24>`'s `456` digits.
 #[inline]
 fn conditioned_narrow<const N: usize, const SCALE: u32>(
     raw: Int<N>,
