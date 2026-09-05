@@ -263,8 +263,20 @@ where
 /// the walker's ±1 could leave range and its own range check would panic,
 /// the single shot stands (a tie that deep at the extreme is the
 /// Table-Maker's-Dilemma residue either way); everywhere else the full
-/// finish runs and cannot leave range. Series core (the narrow `ln`
-/// verdict). Capacity is never in question: the worst narrow lift (`D38`,
+/// finish runs and cannot leave range.
+///
+/// **Series core — and this no longer tracks the narrow `ln` verdict.**
+/// It once did: when narrow `ln` was Series-only, "Series here" and "the
+/// narrow ln verdict" were the same statement. `policy::ln` now routes the
+/// narrow tiers to Tang, so this path is a DELIBERATE independent choice,
+/// not an inherited one. It stays Series because this path's work integer
+/// is `Int<24>` (`narrow_ziv::WZiv`), not the `Int<12>` rung the narrow
+/// `ln` Tang arm uses, and the narrow Tang table is sized against that
+/// rung's reach — pointing this at Tang would need its own capacity
+/// derivation and its own A/B, neither of which has been done. Left as a
+/// known, measured-nowhere follow-up rather than assumed safe.
+///
+/// Capacity is never in question: the worst narrow lift (`D38`,
 /// `k = SCALE = 38`, `w = 106`) asks `252` of `Int<24>`'s `456` digits.
 #[inline]
 fn conditioned_narrow<const N: usize, const SCALE: u32>(

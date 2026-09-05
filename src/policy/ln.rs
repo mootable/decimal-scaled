@@ -15,10 +15,20 @@
 //! 4. dispatch via `const { select::<N, SCALE>() }`, then an exhaustive
 //!    `match algo` — no `_`, no panic.
 //!
-//! The narrow tiers run the 256-bit `Fixed` kernel (`ln_series_2limb`,
-//! D18 widened to Int<2>); the wide tiers run the tier-generic `ln_series`
-//! over `WideTrigCore`, or the per-tier `ln_tang` band kernel, reached by
-//! a `match N` with `resize_to` bridges (identity at the matched `N`).
+//! EVERY tier now runs the table-driven Tang kernel for strict `ln`. The
+//! wide tiers reach it at a `work_rung`-selected `Int<K>`; the narrow tiers
+//! (D18/D38) reach it at a single fixed `Int<12>` rung — see [`tang_narrow`]
+//! for why that width and not `Int<24>`. Both call the ONE generic
+//! `ln_tang_g`, which was lifted free of `WideTrigCore` precisely so the
+//! narrow tiers could be routed to it; before that lift narrow Tang was
+//! structurally unselectable.
+//!
+//! The 256-bit `Fixed` kernel (`ln_series_2limb`, D18 widened to Int<2>)
+//! and the tier-generic `ln_series` over `WideTrigCore` are KEPT
+//! alternatives, still named by the `_` arm of [`select`] and still what
+//! `ln_fixed` gives the hyperbolics. `ln_series_2limb` also remains the
+//! ROUTED kernel for the narrow log2 / log10 surfaces below — those are
+//! separate dispatchers and this change did not touch them.
 //!
 //! log2 / log10 are derived (`ln(x)/ln2`, `ln(x)/ln10`) and route DOWN to
 //! the narrow `ln_series_2limb::{log2,log10}_*` kernels or the wide
