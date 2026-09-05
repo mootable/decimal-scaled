@@ -737,7 +737,7 @@ mod tests {
             d.max(1)
         }
         // (mantissa, fraction digits) — the input is `m · 10^-f`.
-        const INPUTS: [(i128, u32); 22] = [
+        const INPUTS: [(i128, u32); 24] = [
             (2, 0), (3, 0), (10, 0), (7, 0), (1000, 0), (123456789, 0),
             (5, 1), (25, 2), (1, 3), (15, 1), (75, 1),
             (10078125, 7), // 1 + 1/128: slot boundary, t = 0
@@ -751,6 +751,13 @@ mod tests {
             (33333333333333333, 17), // 1/3, full-width repeating
             (23333333333333333, 16), // 7/3
             (14142135623730950, 16), // sqrt 2
+            // OUT OF RANGE at D38<37>: ln(10^-37) ≈ -85.2 and ln(2·10^-9) ≈
+            // -20.0 both exceed Int<2> at scale 37 (|ln x| > 17). The
+            // `checked_` contract is `None`, never a panic — Series returns
+            // it; Tang's `Int<4>` widening + round-trip fit must match. In
+            // range at every lower scale, where both must agree on the value.
+            (1, 37),
+            (2, 9),
         ];
         fn cell<const N: usize, const SCALE: u32>(misses: &mut Vec<String>, max_digits: u32) {
             for (m, f) in INPUTS {

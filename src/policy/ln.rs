@@ -266,28 +266,44 @@ use super::work_rung::ln_rung;
 
 /// The narrow tiers' Tang `ln` (D18 / D38): the ONE width-generic kernel
 /// [`ln_tang_g`] at a fixed `Int<12>` work width for both the rung and the
-/// fall-up (so the widening walker degenerates to a single width), on storage
-/// `Int<2>` (D18 widens, exactly as the Series path does). `Int<12>` is the
-/// widest narrow-safe work integer with reach: `BigInt::resize_to` stages the
-/// SOURCE magnitude into `[u128; MAX_U128_LIMB]` (8 on a narrow build) and
-/// panics past it, so `Int<24>` (12 u128 limbs) would panic on the way back
-/// down while `Int<12>` (6) is safe both ways; its `BITS/8 = 96`-digit
+/// fall-up (so the widening walker degenerates to a single width). `Int<12>`
+/// is the widest narrow-safe work integer with reach: `BigInt::resize_to`
+/// stages the SOURCE magnitude into `[u128; MAX_U128_LIMB]` (8 on a narrow
+/// build) and panics past it, so `Int<24>` (12 u128 limbs) would panic on the
+/// way back down while `Int<12>` (6) is safe both ways; its `BITS/8 = 96`-digit
 /// escalation cap clears the ≤ 2·38 = 76-digit narrow near-1 deciding depth.
-/// `GUARD 8 / CAP 100` are the `M = 128` sibling's (D57). `ln` never leaves
-/// storage range, so the kernel's panicking narrowing is unreachable;
-/// `narrow_fit` keeps the narrow `Option` contract. A narrow-only build reads
-/// the 8-limb table prefix; a wide build reads the same prefix of the full
-/// table — one kernel, one accessor, no per-tier copy.
+/// `GUARD 8 / CAP 100` are the `M = 128` sibling's (D57); `CAP = C` covers
+/// working scales `w ≤ (2C + 1)·2.408 = 484`, against the 96 cap. A
+/// narrow-only build reads the 8-limb table prefix; a wide build reads the
+/// same prefix of the full table — one kernel, one accessor, no per-tier copy.
+///
+/// The kernel's STORAGE arithmetic runs in `Int<4>`, not the tier's own width,
+/// for the `checked_` contract. `ln` genuinely overflows narrow storage — at
+/// `D38<37>`, `ln(10^-37) ≈ -85.2` needs ≈ `8.5·10^38` against `Int<2>`'s
+/// ≈ `1.7·10^38` — and the narrow contract there is `None`
+/// (`docs/ARCHITECTURE.md`, "Overflow & domain behaviour"), which the Series
+/// arm honours. The shared narrowing (`narrow_range_checked_g`) PANICS past
+/// the bounds it is handed, so handing it `Int<2>`'s would turn that `None`
+/// into a panic. `Int<4>` puts every `ln` result far inside the bounds it
+/// checks, and the exact fit is decided HERE by the `narrow_fit` round-trip
+/// idiom: `None` iff the value does not survive the trip back into storage.
+/// A local widening of THIS arm only, exactly as the Series arm widens D18
+/// into `Int<2>` (rule 6: nothing imposed on any other tier); `resize_to`
+/// from `Int<4>` (2 u128 limbs) is narrow-safe.
 #[inline]
 fn tang_narrow<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
     use crate::algos::ln::ln_tang::ln_tang_g;
-    let out = ln_tang_g::<Int<2>, Int<12>, Int<12>, SCALE, 8, 100, true, false>(
-        raw.resize_to::<Int<2>>(),
-        Int::<2>::MAX,
-        Int::<2>::MIN,
+    let wide = ln_tang_g::<Int<4>, Int<12>, Int<12>, SCALE, 8, 100, true, false>(
+        raw.resize_to::<Int<4>>(),
+        Int::<4>::MAX,
+        Int::<4>::MIN,
         mode,
     );
-    super::narrow_fit::<N>(out)
+    let out = wide.resize_to::<Int<N>>();
+    if out.resize_to::<Int<4>>() != wide {
+        return None;
+    }
+    Some(out)
 }
 
 /// The Tang arm (every wide tier): pick the work rung, then call the ONE generic

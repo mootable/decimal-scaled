@@ -2094,16 +2094,20 @@ pub mod __bench_internals {
         crate::algos::ln::ln_series_2limb::ln::<SCALE>(raw, mode).expect("ln is always in storage range")
     }
 
-    /// The narrow tiers' routed Tang `ln`: the width-generic `ln_tang_g` on
-    /// `Int<2>` storage at the fixed `Int<12>` work width (rung and fall-up
-    /// alike), directed, no internal extra — `policy::ln::tang_narrow`'s
+    /// The narrow tiers' routed Tang `ln`: the width-generic `ln_tang_g` with
+    /// its storage arithmetic in `Int<4>` (the `checked_` contract's widening —
+    /// see `policy::ln::tang_narrow`) at the fixed `Int<12>` work width (rung
+    /// and fall-up alike), directed, no internal extra — `tang_narrow`'s
     /// realisation with `G` and `CAP` open at the bench seam (the routed pair
-    /// is `8, 100`).
+    /// is `8, 100`). Bench operands are in range, so the plain narrowing back
+    /// to `Int<2>` is exact.
     #[inline(never)]
     pub fn ln_tang_narrow_p<const SCALE: u32, const G: u32, const CAP: u128>(raw: crate::int::types::Int<2>, mode: crate::RoundingMode) -> crate::int::types::Int<2> {
-        crate::algos::ln::ln_tang::ln_tang_g::<crate::int::types::Int<2>, crate::int::types::Int<12>, crate::int::types::Int<12>, SCALE, G, CAP, true, false>(
-            raw, crate::int::types::Int::<2>::MAX, crate::int::types::Int::<2>::MIN, mode,
-        )
+        use crate::int::types::traits::BigInt;
+        let wide = crate::algos::ln::ln_tang::ln_tang_g::<crate::int::types::Int<4>, crate::int::types::Int<12>, crate::int::types::Int<12>, SCALE, G, CAP, true, false>(
+            BigInt::resize_to::<crate::int::types::Int<4>>(raw), crate::int::types::Int::<4>::MAX, crate::int::types::Int::<4>::MIN, mode,
+        );
+        BigInt::resize_to::<crate::int::types::Int<2>>(wide)
     }
 
     #[inline(never)]
