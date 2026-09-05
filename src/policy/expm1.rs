@@ -171,6 +171,13 @@ fn narrow_strict<const N: usize, const SCALE: u32>(
             mode,
         ),
     };
+    // The narrow kernels now REPORT an out-of-range narrowing rather than
+    // panicking inside themselves. This is the strict arm, so it re-raises
+    // that here — the same panic the storage fit below applies, and the same
+    // behaviour as before the seam was threaded.
+    let out = out.unwrap_or_else(|| {
+        crate::support::diagnostics::overflow_panic_with_scale("expm1", SCALE)
+    });
     super::narrow_checked::<N>(out, "expm1", SCALE)
 }
 

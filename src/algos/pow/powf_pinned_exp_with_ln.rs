@@ -66,7 +66,7 @@ where
 {
     let storage_zero = C::storage_zero();
     if raw <= storage_zero {
-        return storage_zero;
+        return Some(storage_zero);
     }
     // Exact integer-power pin. Uses the caller's `mode`: the reciprocal
     // of a non-terminating power (e.g. `3^-2`) and a sub-resolution

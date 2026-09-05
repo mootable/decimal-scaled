@@ -189,7 +189,7 @@ where
 pub(crate) fn expm1_series<C: wtc::WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::W as BigInt>::Scratch: ComputeLimbs,
 {

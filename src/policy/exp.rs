@@ -238,7 +238,7 @@ pub(crate) fn checked_dispatch<const N: usize, const SCALE: u32>(
 pub(crate) fn series_at_rung<C: crate::algos::support::wide_trig_core::WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     <C::Wexp as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,

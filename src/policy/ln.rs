@@ -364,7 +364,7 @@ fn tang_at_rung<
 >(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {

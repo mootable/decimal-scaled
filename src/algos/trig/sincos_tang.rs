@@ -98,10 +98,10 @@ where
 {
     // sin(0) = 0, cos(0) = 1 short-circuits — matches `wide_kernel`.
     if raw == C::storage_zero() {
-        return match which {
+        return Some(match which {
             Which::Sin => C::storage_zero(),
             Which::Cos => C::storage_one(SCALE),
-        };
+        });
     }
 
     let working_scale = SCALE + C::GUARD;
