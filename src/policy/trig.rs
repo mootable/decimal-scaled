@@ -130,18 +130,41 @@ pub(crate) mod forward {
     /// including the narrow-GUARD low bands realised as a `Series` kernel
     /// — runs `Series`.
     ///
-    /// Used by sin and cos. `tan` routes through [`select_tan`] (no D57
-    /// Tang band) and `atan` through [`select_atan`] (a D57 band with its
-    /// own, separately measured, lower edge).
+    /// Used by sin and cos. There is no D57 Tang band here any more — it was
+    /// bisected and removed (see the arm comment below). `tan` routes through
+    /// [`select_tan`], which has no D57 band either, and `atan` through
+    /// [`select_atan`], which does: a separately measured full-range band on
+    /// its own kernel.
     pub(crate) const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         match (N, SCALE) {
-            // D57 (`Int<3>`) Tang band — sin/cos only. This arm realises as
-            // `sincos_tang`, a DIFFERENT kernel from atan's
-            // `atan_tang_3limb`, so its edge is `sincos_tang`'s own
-            // question and is left where it was measured. atan's edge moved
-            // on atan's evidence in [`select_atan`]; nothing here follows it.
-            #[cfg(any(feature = "d57", feature = "wide"))]
-            (3, 44..=56) => Select::ByAlgorithm(Algorithm::Tang),
+            // NO D57 (`Int<3>`) Tang band. There used to be a
+            // `(3, 44..=56) => Tang` arm here, asserted rather than measured
+            // — it was left where atan's edge had been put, and atan's has
+            // since moved to `0..=56` on its own evidence in
+            // [`select_atan`]. The two could never share an edge: at D57 the
+            // `Tang` arm realises as a DIFFERENT kernel per function —
+            // `sincos_tang` for sin/cos, `atan_tang_3limb` for atan.
+            //
+            // MEASURED and REMOVED. `benches/micro/sincos_d57_band_bisect.rs`
+            // bisected this edge against `sincos_tang` itself (not atan's
+            // kernel), ranking Tang against what production actually runs at
+            // each scale — Series GUARD=30 outside 18..=22, GUARD=8 inside.
+            // Two independent GHA runs, 33981810139 and 33983653830, agree
+            // cell for cell: Series wins at EVERY probed scale in 0..=56 for
+            // BOTH sin and cos, including every scale inside the old band
+            // (s44 1.16x, s48 1.16x, s52 1.13x, s56 1.11x in run 1; the
+            // replicate reproduces the ordering everywhere, 44 cells Series
+            // to 0 Tang). Tang's win region at D57 is EMPTY, so there is no
+            // edge to place — the arm is a net 1.06x–1.18x LOSS across its
+            // own former range, and it goes rather than moves.
+            //
+            // `sincos_tang` is KEPT, not deleted (`docs/ARCHITECTURE.md` →
+            // "Keeping the alternatives"): it stays a registered `Tang`
+            // realisation, reached by its own tests and the
+            // `__bench_internals` bench seam, and a future width or a faster
+            // reduction may re-route it. Deleting it because `select` no
+            // longer names it would discard a measured alternative.
+            //
             // D153 (`Int<8>`) Tang band.
             #[cfg(any(feature = "d153", feature = "wide"))]
             (8, 70..=82) => Select::ByAlgorithm(Algorithm::Tang),
@@ -169,11 +192,19 @@ pub(crate) mod forward {
         }
     }
 
-    /// `tan`-specific matcher. Identical to [`select`] except the D57
-    /// 44..=56 cell stays `Series` (tan has no Tang band there — the
-    /// policy wires only sin/cos to the D57 44..=56 `sincos_tang` kernel,
-    /// and atan to its own kernel over the full range via [`select_atan`];
-    /// tan at 44..=56 falls to the generic `wide_kernel`).
+    /// `tan`-specific matcher. tan has never had a D57 Tang band: at D57 the
+    /// `Tang` arm realises per function, and there has never been a tan
+    /// realisation of it (`policy_tan`'s `Tang` arm forwards to the generic
+    /// kernel purely for match exhaustiveness).
+    ///
+    /// It now resolves the SAME cell-for-cell as [`select`], which lost its
+    /// own D57 band when that was bisected and removed. The two are kept
+    /// separate deliberately rather than merged: they answer independent
+    /// empirical questions — a `Tang` verdict realises as a different kernel
+    /// per function at a given tier — so a future measurement must be able
+    /// to move one function's routing without touching the other's. That is
+    /// the same reason [`select_atan`] is split out, and the reason the D57
+    /// bands diverged in the first place.
     pub(crate) const fn select_tan<const N: usize, const SCALE: u32>() -> Select<N> {
         match (N, SCALE) {
             #[cfg(any(feature = "d153", feature = "wide"))]
@@ -188,18 +219,21 @@ pub(crate) mod forward {
         }
     }
 
-    /// `atan`-specific matcher. Identical to [`select`] except the D57
-    /// arm, which is split out for the same reason [`select_tan`] is: at
-    /// D57 the `Tang` arm realises as a DIFFERENT kernel per function —
-    /// `atan_tang_3limb` for atan, `sincos_tang` for sin/cos — so
-    /// the two bands are separate empirical questions and must not share
-    /// an edge. Splitting keeps atan's edge moving on atan's evidence and
-    /// leaves sin/cos routing untouched.
+    /// `atan`-specific matcher. Identical to [`select`] except the D57 arm,
+    /// which atan alone still has. It is split out because at D57 the `Tang`
+    /// verdict realises as a DIFFERENT kernel per function —
+    /// `atan_tang_3limb` here, `sincos_tang` for sin/cos — so the two were
+    /// always separate empirical questions and could never share an edge.
     ///
-    /// The D57 lower edge here was BISECTED (`benches/micro/`
-    /// `atan_d57_band_bisect.rs`); the previous `44` was asserted rather
+    /// Both have since been measured, independently, and they came out
+    /// opposite ways — which is exactly why they had to be split. atan's D57
+    /// lower edge was BISECTED (`benches/micro/atan_d57_band_bisect.rs`) and
+    /// WIDENED to the full `0..=56`: the previous `44` was asserted rather
     /// than measured, and the kernel's own header said so. See that arm's
-    /// comment for the measurement.
+    /// comment for the measurement. sin/cos's D57 band was bisected against
+    /// `sincos_tang` (`benches/micro/sincos_d57_band_bisect.rs`) and REMOVED
+    /// outright — Tang lost at every scale there. Neither result transfers
+    /// to the other function.
     pub(crate) const fn select_atan<const N: usize, const SCALE: u32>() -> Select<N> {
         match (N, SCALE) {
             // D57 (`Int<3>`) atan Tang band — the FULL scale range, matching
@@ -1658,17 +1692,22 @@ macro_rules! wide_trig_forward_series {
     };
 }
 
-// ── D57 — forward Tang band at 44..=56 (sin/cos), atan Tang across the
-// FULL 0..=56 (its edge was bisected; see `forward::select_atan`),
+// ── D57 — atan Tang across the FULL 0..=56 (its edge was bisected; see
+// `forward::select_atan`); NO forward Tang band for sin/cos/tan (sin/cos's
+// 44..=56 band was bisected and removed — see `forward::select`);
 // narrow-GUARD Series band at 18..=22 (sin/cos/tan — atan's 18..=22 Series
 // sub-arm is now unreachable, kept for match exhaustiveness); inverse +
 // hyper divert 18..=22 to their lookup kernels. ────────────────────────
 #[cfg(any(feature = "d57", feature = "wide"))]
 impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
-    // Forward family — `Series` runs the 18..=22 narrow-GUARD lookup or
-    // the generic `wide_kernel`; `Tang` runs `sincos_tang` on the 44..=56
-    // band for sin/cos (tan has no Tang band here), while atan's `Tang`
-    // runs `atan_tang_3limb` across the whole 0..=56 range.
+    // Forward family — `Series` runs the 18..=22 narrow-GUARD lookup or the
+    // generic `wide_kernel`, and for sin/cos/tan it is now the only reachable
+    // verdict at this tier. atan's `Tang` runs `atan_tang_3limb` across the
+    // whole 0..=56 range; the sin/cos `Tang` arms below name `sincos_tang`
+    // but `forward::select` no longer returns `Tang` at N=3, so they are
+    // dead-arm-eliminated. They are KEPT, not collapsed to the generic: the
+    // arm is what records which kernel a re-routed band would run, and
+    // `sincos_tang` remains a kept alternative.
     #[inline]
     pub(crate) fn policy_sin(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<3, SCALE>(&self.0) {
