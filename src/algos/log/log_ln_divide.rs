@@ -505,10 +505,10 @@ where
     )
 }
 
-/// Everything after the probe: the exact integer-power pin, the clear-of-tie
-/// single shot, the exact rational-power pin, and the Ziv-escalated
-/// narrowing into `Int<N>` (which panics past storage). `probe_ratio` is
-/// [`conditioned_probe`]'s value for the same arguments.
+/// Everything after the probe of the CONDITIONED composition:
+/// [`log_ratio_finish`] with [`conditioned_ratio`] as the walker's
+/// recompute. `probe_ratio` is [`conditioned_probe`]'s value for the same
+/// arguments.
 pub(crate) fn conditioned_finish<const N: usize, Wk: BigInt, const SCALE: u32>(
     raw: Int<N>,
     base_raw: Int<N>,
@@ -516,6 +516,47 @@ pub(crate) fn conditioned_finish<const N: usize, Wk: BigInt, const SCALE: u32>(
     guard: u32,
     ln_at: &impl Fn(Wk, u32) -> Wk,
     probe_ratio: Wk,
+) -> Int<N>
+where
+    <Wk as BigInt>::Scratch: ComputeLimbs,
+{
+    log_ratio_finish::<N, Wk, SCALE>(raw, base_raw, mode, guard, probe_ratio, |guard_digits| {
+        conditioned_ratio::<N, Wk, SCALE>(raw, base_raw, guard_digits, ln_at)
+    })
+}
+
+/// Everything after the probe of EVERY `ln(x)/ln(b)` composition, whatever
+/// formed the ratio: the exact integer-power pin, the clear-of-tie single
+/// shot, the exact rational-power pin, and the Ziv-escalated directed
+/// narrowing into `Int<N>` (which panics past storage). `probe_ratio` is
+/// the ratio at `guard`; `ratio_at(g)` is the same composition at guard
+/// `g`, called only for an ESCALATED probe (`g > guard`) — the walker's
+/// first probe is `probe_ratio` itself, so an ordinary input never
+/// recomputes.
+///
+/// The wide tiers' fixed-guard shell (`log_strict_with_kernel`, emitted by
+/// `decl_wide_transcendental!`) runs this finish with its own two-core
+/// quotient as `ratio_at`; the conditioned arm runs it through
+/// [`conditioned_finish`]. One finish, so the exact rational-power pin —
+/// which the wide shell lacked: golden `log_1.21(1.1) = 1/2`,
+/// `log_1.44(1.728) = 3/2` came back a ULP off under a directed mode
+/// wherever the kernel noise fell on the wrong side of the grid line —
+/// decides the same inputs the same way on every path. For decimal `x` and
+/// `b`, `log_b(x)` is rational or transcendental (Gelfond–Schneider): on
+/// the rational half no escalation converges, the residual at every depth
+/// being noise around the grid line, so a pin by exact integer arithmetic
+/// is the only sound decision; on the transcendental half the residual is
+/// genuine and escalation is the sound method. On an input the pins do not
+/// take, the sequence is the walker's own: the single shot IS its first
+/// step, bit for bit, and the walker is entered exactly when it would have
+/// escalated.
+pub(crate) fn log_ratio_finish<const N: usize, Wk: BigInt, const SCALE: u32>(
+    raw: Int<N>,
+    base_raw: Int<N>,
+    mode: RoundingMode,
+    guard: u32,
+    probe_ratio: Wk,
+    ratio_at: impl Fn(u32) -> Wk,
 ) -> Int<N>
 where
     <Wk as BigInt>::Scratch: ComputeLimbs,
@@ -575,7 +616,7 @@ where
             if guard_digits == guard {
                 return probe_ratio;
             }
-            conditioned_ratio::<N, Wk, SCALE>(raw, base_raw, guard_digits, ln_at)
+            ratio_at(guard_digits)
         },
     )
 }
@@ -1207,6 +1248,140 @@ mod tests {
                 assert_eq!(got, expected, "p={p} q={q} mode={mode:?}");
             }
         }
+    }
+
+    /// Exact rationals through the FIXED shell — a base 0.1 or more from 1
+    /// (`k = 0`), so `policy::log` routes `LnDivide`, the wide tiers' macro
+    /// shell. `log_b(x)` for decimal `x` and `b` is rational or
+    /// transcendental (Gelfond–Schneider); on a terminating rational the
+    /// working residual at every depth is kernel noise around the grid
+    /// line, so the directed walker never converges and its unresolved
+    /// endgame returns the base probe's narrowing — 1 ULP off under a
+    /// directed mode wherever that noise lands on the wrong side, cell by
+    /// cell. Every cell, every mode, exact — the rational-power pin the
+    /// narrow `Fixed` shell already carries, on the wide shell too.
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[test]
+    fn wide_fixed_shell_decides_exact_rationals_under_every_mode() {
+        fn digits(m: i128) -> u32 {
+            let (mut d, mut v) = (0u32, m.unsigned_abs());
+            while v > 0 {
+                v /= 10;
+                d += 1;
+            }
+            d.max(1)
+        }
+        fn cell<const N: usize, const SCALE: u32>(
+            misses: &mut Vec<String>,
+            max_digits: u32,
+            x: (i128, u32),
+            base: (i128, u32),
+            expected: (i128, u32),
+        ) {
+            // The harness's own rule: a value needing more significant
+            // digits than the tier holds at this scale is not a cell.
+            let fits = |(m, f): (i128, u32)| SCALE >= f && digits(m) + SCALE - f < max_digits;
+            if !(fits(x) && fits(base) && fits(expected)) {
+                return;
+            }
+            // (mantissa, fraction digits) → raw at SCALE.
+            let at = |(m, f): (i128, u32)| Int::<N>::from_i128(m) * eg::pow10::<Int<N>>(SCALE - f);
+            let (raw, braw, want) = (at(x), at(base), at(expected));
+            for mode in ALL_MODES {
+                let got = crate::policy::log::checked_dispatch::<N, SCALE>(raw, braw, mode);
+                if got != Some(want) {
+                    misses.push(format!(
+                        "N={N} scale={SCALE} x={x:?} base={base:?} mode={mode:?}: got {got:?}, want {want:?}"
+                    ));
+                }
+            }
+        }
+        fn scale<const N: usize, const SCALE: u32>(misses: &mut Vec<String>, max_digits: u32) {
+            // x, base, log_base(x) — each as (mantissa, fraction digits).
+            let d = max_digits;
+            cell::<N, SCALE>(misses, d, (11, 1), (121, 2), (5, 1)); // 1/2
+            cell::<N, SCALE>(misses, d, (1331, 3), (121, 2), (15, 1)); // 3/2
+            cell::<N, SCALE>(misses, d, (1728, 3), (144, 2), (15, 1)); // 3/2
+            cell::<N, SCALE>(misses, d, (12, 1), (144, 2), (5, 1)); // 1/2
+            cell::<N, SCALE>(misses, d, (2, 0), (4, 0), (5, 1)); // 1/2
+            cell::<N, SCALE>(misses, d, (8, 0), (16, 0), (75, 2)); // 3/4
+            cell::<N, SCALE>(misses, d, (2, 0), (16, 0), (25, 2)); // 1/4
+            cell::<N, SCALE>(misses, d, (8, 0), (256, 0), (375, 3)); // 3/8
+            cell::<N, SCALE>(misses, d, (15, 1), (225, 2), (5, 1)); // 1/2
+            cell::<N, SCALE>(misses, d, (5, 1), (25, 2), (5, 1)); // 1/2, base below 1
+            cell::<N, SCALE>(misses, d, (2, 0), (25, 2), (-5, 1)); // -1/2
+            cell::<N, SCALE>(misses, d, (1, 1), (100, 0), (-5, 1)); // -1/2, x below 1
+            cell::<N, SCALE>(misses, d, (729, 3), (81, 2), (15, 1)); // 3/2, both below 1
+            cell::<N, SCALE>(misses, d, (100000, 0), (100, 0), (25, 1)); // 5/2
+        }
+        let mut misses = Vec::new();
+        scale::<3, 3>(&mut misses, 57);
+        scale::<3, 14>(&mut misses, 57);
+        scale::<3, 28>(&mut misses, 57);
+        scale::<3, 42>(&mut misses, 57);
+        scale::<3, 53>(&mut misses, 57);
+        assert!(misses.is_empty(), "{} mis-rounded cells:\n{}", misses.len(), misses.join("\n"));
+    }
+
+    /// The wide fixed shell now finishes through `log_ratio_finish`. On an
+    /// input no pin takes — the overwhelming majority of `log` calls — that
+    /// must be BIT-IDENTICAL to the sequence it replaced, the exact-power
+    /// pin then the walker, which this test rebuilds from the tier's own
+    /// helpers: same probe, same recompute, same bounds. Ordinary bases on
+    /// both sides of 1, arguments across the range, every mode, scales
+    /// across the tier — including results that sit close to a grid line,
+    /// where the finish's single shot declines, its rational pin declines,
+    /// and the walker escalates exactly as before.
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[test]
+    fn wide_fixed_shell_finish_is_bit_identical_on_ordinary_inputs() {
+        use crate::types::widths::wide_trig_d57 as core;
+        fn check<const SCALE: u32>(x: (i128, u32), base: (i128, u32)) {
+            let at = |(m, f): (i128, u32)| Int::<3>::from_i128(m) * eg::pow10::<Int<3>>(SCALE - f);
+            let (raw, braw) = (at(x), at(base));
+            let base_working_scale = SCALE + core::GUARD;
+            let ratio_at = |guard_digits: u32| {
+                let working_scale = SCALE + guard_digits;
+                core::div_agm(
+                    core::ln_fixed_routed_agm::<SCALE>(core::to_work_scaled_agm(raw, guard_digits), working_scale),
+                    core::ln_fixed_routed_agm::<SCALE>(core::to_work_scaled_agm(braw, guard_digits), working_scale),
+                    working_scale,
+                )
+            };
+            let probe = ratio_at(core::GUARD);
+            for mode in ALL_MODES {
+                // The sequence the shell ran before this finish.
+                let exponent = core::round_to_nearest_int_agm(probe, base_working_scale);
+                let before = if core::log_is_exact_int::<core::Wagm>(
+                    core::to_work_scaled_agm(raw, 0),
+                    core::to_work_scaled_agm(braw, 0),
+                    SCALE,
+                    exponent,
+                ) {
+                    core::exact_int_at_scale(exponent, SCALE)
+                } else {
+                    core::round_to_storage_directed::<core::Wagm>(core::GUARD, SCALE, mode, |guard_digits| {
+                        if guard_digits == core::GUARD {
+                            probe
+                        } else {
+                            ratio_at(guard_digits)
+                        }
+                    })
+                };
+                let now = core::log_strict_with_kernel::<SCALE>(raw, braw, mode);
+                assert_eq!(now, before, "x={x:?} base={base:?} scale={SCALE} mode={mode:?}");
+            }
+        }
+        fn scale<const SCALE: u32>() {
+            for base in [(2, 0), (10, 0), (5, 1), (3, 0), (725, 2), (13, 1), (1000, 0)] {
+                for x in [(2, 0), (3, 0), (725, 2), (3, 1), (123456789, 3), (15, 1), (1, 2), (8, 0), (1024, 0)] {
+                    check::<SCALE>(x, base);
+                }
+            }
+        }
+        scale::<5>();
+        scale::<20>();
+        scale::<40>();
     }
 }
 

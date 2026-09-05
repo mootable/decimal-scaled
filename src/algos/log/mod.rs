@@ -12,8 +12,13 @@
 //!   that module -- D18 widens to D38, runs its log, and narrows back; D38
 //!   calls the `ln::ln_series_2limb` log kernel directly -- and the wide
 //!   tiers through the per-tier `log_strict_with_kernel` free functions
-//!   emitted by `decl_wide_transcendental!` (the Ziv-escalating shell),
-//!   which live outside the policy in `crate::types::widths`;
+//!   emitted by `decl_wide_transcendental!`, which live outside the policy
+//!   in `crate::types::widths`: the probe is the tier's two-core quotient,
+//!   the finish is this module's shared `log_ratio_finish` (the exact-power
+//!   pin, the clear-of-tie single shot, the exact rational-power pin, the
+//!   Ziv walker) -- the same finish the conditioned arm runs, so an on-grid
+//!   rational (`log_1.21(1.1) = 1/2`) is decided by exact integer
+//!   arithmetic on every path;
 //! - `LnDivideConditioned`, for a base within 0.1 of 1: the ratio formed
 //!   from the exact `d = b_raw - 10^SCALE` as `(ln x / g(eps)) * 10^SCALE / d`
 //!   with `g(eps) = ln(1+eps)/eps` by its own series -- never `ln b` -- and,

@@ -2955,48 +2955,51 @@ macro_rules! decl_wide_transcendental {
                 if probe_ln_base == zero_agm() {
                     panic!(concat!(stringify!($Type), "::log: base must not equal 1"));
                 }
-                // Exact-power pin: `self == base^k` ⇒ result is exactly
-                // the integer `k` (see `log10_with`).
                 let probe_ratio = div_agm(
                     ln_fixed_routed_agm::<SCALE>(to_work_agm(raw), base_working_scale),
                     probe_ln_base,
                     base_working_scale
                 );
-                {
-                    let exponent = round_to_nearest_int_agm(probe_ratio, base_working_scale);
-                    if log_is_exact_int::<Wagm>(to_work_scaled_agm(raw, 0), to_work_scaled_agm(base_raw, 0), SCALE, exponent) {
-                        return exact_int_at_scale(exponent, SCALE);
-                    }
-                }
-                // Route the final narrowing through the directed-rounding
-                // Ziv escalation: recompute `ln(self)/ln(base)` at the
-                // requested guard so Trunc/Floor/Ceiling decide on the
-                // true residual sign, not the base-guard approximation.
+                // The finish is the composition's shared one
+                // (`log_ln_divide::log_ratio_finish`, the finish the
+                // conditioned arm runs): the exact-power pin (`x == base^k`
+                // ⇒ exactly `k`), the single-shot narrowing clear of the
+                // mode's boundary (the walker's own first step, bit for
+                // bit), the exact rational-power pin, then the
+                // Ziv-escalated directed narrowing. The pin is what this
+                // shell lacked: an on-grid rational (`log_1.21(1.1) = 1/2`,
+                // `log_1.44(1.728) = 3/2`) never resolves by escalation —
+                // the residual at every depth is kernel noise around the
+                // grid line — so the walker's unresolved endgame handed
+                // back the base probe's narrowing, 1 ULP off under a
+                // directed mode wherever that noise fell on the wrong side.
                 //
-                // The walker ALWAYS probes `base_guard_digits` first (see
-                // `round_to_storage_directed_tagged_impl_g` — both the
-                // nearest and the directed branch open with
-                // `recompute(base_guard_digits)`), and that probe is
+                // The walker ALWAYS probes `GUARD` first, and that probe is
                 // BIT-IDENTICAL to `probe_ratio` above: `guard_digits ==
                 // GUARD` makes `working_scale == base_working_scale`, and
                 // `to_work_scaled_agm(v, GUARD)` is `to_work_agm(v)` by
                 // definition (same body, same `pow10::<Wagm>(GUARD)`
                 // factor), so both logs and the divide take the same
                 // arguments — and `ln_fixed_routed_agm` is a pure function
-                // of them (the crate is stateless). Hand the walker the
-                // value it would recompute; only an ESCALATED probe
-                // (`guard_digits > GUARD`, the rare Ziv rung) does work.
-                round_to_storage_directed::<Wagm>(GUARD, SCALE, mode, |guard_digits| {
-                    if guard_digits == GUARD {
-                        return probe_ratio;
-                    }
-                    let working_scale = SCALE + guard_digits;
-                    let ln_base = ln_fixed_routed_agm::<SCALE>(
-                        to_work_scaled_agm(base_raw, guard_digits),
-                        working_scale
-                    );
-                    div_agm(ln_fixed_routed_agm::<SCALE>(to_work_scaled_agm(raw, guard_digits), working_scale), ln_base, working_scale)
-                })
+                // of them (the crate is stateless). The finish is handed the
+                // value the walker would recompute; only an ESCALATED probe
+                // (`guard_digits > GUARD`, the rare Ziv rung) does work,
+                // through this shell's own two-core composition.
+                $crate::algos::log::log_ln_divide::log_ratio_finish::<$n_limbs, Wagm, SCALE>(
+                    raw,
+                    base_raw,
+                    mode,
+                    GUARD,
+                    probe_ratio,
+                    |guard_digits| {
+                        let working_scale = SCALE + guard_digits;
+                        let ln_base = ln_fixed_routed_agm::<SCALE>(
+                            to_work_scaled_agm(base_raw, guard_digits),
+                            working_scale
+                        );
+                        div_agm(ln_fixed_routed_agm::<SCALE>(to_work_scaled_agm(raw, guard_digits), working_scale), ln_base, working_scale)
+                    },
+                )
             }
 
             /// Strict-guard `log2(x)` under `mode`, on raw storage.
