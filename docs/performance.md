@@ -31,7 +31,6 @@ The per-function tables and graphs are split across three category pages:
 | :-- | --: |
 | ns | 10⁰ ns |
 | µs | 10³ ns |
-| ms | 10⁶ ns |
 <!-- END GENERATED:performance:units -->
 
 </div>
