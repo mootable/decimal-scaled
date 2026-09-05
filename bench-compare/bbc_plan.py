@@ -140,6 +140,106 @@ class PlanError(Exception):
 # ---------------------------------------------------------------- parsing
 
 
+# Every benched row name, in declaration order, off the shared harness. Parsed
+# rather than listed here for the same reason the widths are: a hand-kept copy
+# of the op set drifts the moment a row is added, and the shard would then
+# silently stop covering it.
+_BENCH_ONE = re.compile(r"""bench_one!\(\s*\$c\s*,\s*"(?P<op>[A-Za-z0-9_@]+)"\s*,""")
+
+# How many jobs each (width, scale) cell is split into along the OP axis.
+#
+# DEFAULT 1 — SHARDING IS OFF, AND IT SHOULD STAY OFF UNTIL ONE THING CHANGES.
+#
+# The machinery below works and is kept deliberately, but on the runner pool as
+# it stands today sharding is a strict loss, on wall time AND on the bill.
+# GitHub's documented concurrency cap for GitHub-hosted standard runners on the
+# `team` plan is 60 jobs, and the default sweep is 60 cells — so the fan-out
+# already fills the pool and `k` shards cannot buy `k` runners. With `B` the
+# bench seconds per cell and `V` the ~22 s per-job fixed overhead (runner
+# spin-up, `bbc-compiled` download, the apt install), `60k` jobs of `B/k + V`
+# spread over 60 slots gives
+#
+#     wall  = B + k*V          billed = 60 * (B + k*V)
+#
+# `B` is invariant and only the overhead multiplies, so each extra shard costs
+# ~22 s of wall and ~44 min of BILLED runner time per sweep for nothing
+# (measured: B = 343 s, V = 22 s -> k=1 365 min/sweep, k=3 409 min/sweep).
+#
+# THE ONE CONDITION THAT FLIPS IT: a runner cap above 60 (it is liftable by a
+# GitHub support ticket). Then the wall becomes `B/k + V` and k=3 saves ~3.8
+# min. That day this is a one-input change — `op_shards: 3` on the dispatch, or
+# this constant — with no other edit anywhere, which is why the code stays.
+#
+# THE INVARIANT, if it is ever switched on, and it is not negotiable: every row
+# of one op's operand FAMILY lands in the SAME job. `ln` and `ln@hard` are
+# measured in one process on one runner, so the overlaid per-op chart compares
+# them on equal footing. Split a family across runners and the gap a reader sees
+# between its lines carries the cross-cell machine spread instead of the operand
+# difference the chart exists to show. `shard_ops` keys on the BASE op and
+# `op_filter` appends an OPTIONAL `@variant` group, so co-location is
+# structural — a new `@variant` row joins its base's shard automatically and
+# cannot be separated by an edit here.
+DEFAULT_OP_SHARDS = 1
+
+
+def parse_ops(benches_dir: Path) -> list[str]:
+    """Every benched row name from the shared harness, in declaration order."""
+    src = benches_dir / "compare_common.rs"
+    ops = [m.group("op") for m in _BENCH_ONE.finditer(src.read_text(encoding="utf-8"))]
+    if not ops:
+        raise PlanError(f"no `bench_one!` rows found in {src}")
+    seen: dict[str, None] = {}
+    for o in ops:
+        seen.setdefault(o, None)
+    return list(seen)
+
+
+def shard_ops(ops: list[str], shards: int) -> list[list[str]]:
+    """Partition the BASE ops into `shards` buckets of roughly equal ROW count.
+
+    Row count, not op count, is the right key: criterion adapts its iteration
+    count to a fixed time budget, so every row costs about the same wall time
+    whatever its per-call nanoseconds. Balancing on ops would leave the bucket
+    holding the 3-row families doing measurably more work.
+
+    Greedy longest-first — each base op, heaviest family first, goes to the
+    lightest bucket so far. Deterministic, and it re-balances by itself when
+    rows are added instead of needing this file re-tuned."""
+    if shards <= 1:
+        return [sorted({o.split("@", 1)[0] for o in ops})]
+    fams: dict[str, int] = {}
+    for o in ops:
+        fams[o.split("@", 1)[0]] = fams.get(o.split("@", 1)[0], 0) + 1
+    buckets: list[list[str]] = [[] for _ in range(shards)]
+    load = [0] * shards
+    for base, n in sorted(fams.items(), key=lambda kv: (-kv[1], kv[0])):
+        i = load.index(min(load))
+        buckets[i].append(base)
+        load[i] += n
+    return [sorted(b) for b in buckets]
+
+
+def op_filter(base_ops: list[str], scale: str) -> str:
+    """A criterion name-filter selecting exactly this shard's rows at `scale`.
+
+    Criterion treats the positional filter as a REGEX and matches it unanchored
+    against `<op>_D<width>_s<scale>/<side>`, so:
+
+      ^(alternation)(@[a-z0-9]+)?_D\\d+_s<scale>/
+
+    `^` anchors to the row name so a bucket cannot pick up another's rows.
+    The alternation is sorted LONGEST-FIRST so `log10` is not shadowed by `log`
+    (and `ln_nd` not by `ln`). `(@[a-z0-9]+)?` is what keeps a family together:
+    the shard is chosen by BASE op and every variant of it comes along.
+    The trailing `/` is the group/function separator, which is what stops
+    `_s30/` from also matching `_s306/`.
+
+    `scale == "all"` drops the scale pin and keeps the op pin."""
+    alt = "|".join(sorted(base_ops, key=lambda s: (-len(s), s)))
+    tail = r"\d+" if scale == "all" else re.escape(scale)
+    return rf"^({alt})(@[a-z0-9]+)?_D\d+_s{tail}/"
+
+
 def parse_widths(benches_dir: Path) -> dict[int, list[int]]:
     """`{18: [0, 4, 9, 13, 17], ...}` from the `width_bench!` invocations."""
     found: dict[int, list[int]] = {}
@@ -249,41 +349,61 @@ def enablers(features: dict[str, list[str]], gate: str) -> list[str]:
 
 
 def build_include(
-    group: str, selected: list[int], scale_sets: dict[int, list[int]]
+    group: str,
+    selected: list[int],
+    scale_sets: dict[int, list[int]],
+    shards: list[list[str]] | None = None,
 ) -> list[dict[str, object]]:
     """Partition the selected cells into matrix entries, one entry per job.
 
-    Every entry carries the same three fields whatever the mode — `widths` and
-    `scales` as csv (`scales: all` meaning that width's whole set) plus a `name`
-    used for the job title and the artifact — so the bench step is ONE loop and
-    does not branch on the mode.
+    Every entry carries the same fields whatever the mode — `widths` and
+    `scales` as csv (`scales: all` meaning that width's whole set), an `ops`
+    criterion filter (empty = every row), plus a `name` used for the job title
+    and the artifact — so the bench step is ONE loop and does not branch on the
+    mode.
 
-    In `cell` mode the names come out as `D18-s0`, so the artifacts keep the
-    exact names they have always had.
+    `shards` splits each cell along the OP axis into that many jobs, which is
+    how the fan-out is widened without touching the measurement: the whole
+    surface is still measured, just spread over more runners. Every row of one
+    op's FAMILY stays in one job (see `DEFAULT_OP_SHARDS`). With one shard the
+    `ops` filter is empty and the names come out as `D18-s0`, exactly as they
+    have always been.
     """
+    parts: list[tuple[str, list[str]]] = [("", [])]
+    if shards and len(shards) > 1:
+        parts = [(f"-g{i + 1}", ops) for i, ops in enumerate(shards)]
+
+    def entry(name, widths, scales, cells, ops):
+        return {
+            "name": name,
+            "widths": widths,
+            "scales": scales,
+            "cells": cells,
+            "ops": op_filter(ops, scales) if ops else "",
+        }
+
     if group == "cell":
         return [
-            {"name": f"D{w}-s{s}", "widths": f"D{w}", "scales": str(s), "cells": 1}
+            entry(f"D{w}-s{s}{sfx}", f"D{w}", str(s), 1, ops)
             for w in selected
             for s in scale_sets[w]
+            for sfx, ops in parts
         ]
     if group == "width":
         return [
-            {
-                "name": f"D{w}-all",
-                "widths": f"D{w}",
-                "scales": "all",
-                "cells": len(scale_sets[w]),
-            }
+            entry(f"D{w}-all{sfx}", f"D{w}", "all", len(scale_sets[w]), ops)
             for w in selected
+            for sfx, ops in parts
         ]
     return [
-        {
-            "name": "all",
-            "widths": ",".join(f"D{w}" for w in selected),
-            "scales": "all",
-            "cells": sum(len(scale_sets[w]) for w in selected),
-        }
+        entry(
+            f"all{sfx}",
+            ",".join(f"D{w}" for w in selected),
+            "all",
+            sum(len(scale_sets[w]) for w in selected),
+            ops,
+        )
+        for sfx, ops in parts
     ]
 
 
@@ -293,6 +413,7 @@ def resolve(
     benches_dir: Path,
     manifest: Path,
     group: str = "cell",
+    op_shards: int = DEFAULT_OP_SHARDS,
 ) -> dict[str, object]:
     group = ("".join(group.split()) or "cell").lower()
     if group not in GROUPS:
@@ -303,8 +424,12 @@ def resolve(
             f"everything selected, so cross-WIDTH ratios are too)."
         )
 
+    if op_shards < 1:
+        raise PlanError(f"op_shards must be >= 1, got {op_shards}")
+
     features = parse_features(manifest)
     scale_sets = parse_widths(benches_dir)
+    shards = shard_ops(parse_ops(benches_dir), op_shards)
 
     tiers = normalise_tiers(raw_features, features)
     active = closure(features, tiers)
@@ -360,7 +485,7 @@ def resolve(
             raise PlanError("no widths selected")
         selected.sort()
 
-    include = build_include(group, selected, scale_sets)
+    include = build_include(group, selected, scale_sets, shards)
     all_features = list(BASE_FEATURES) + tiers
 
     # A grouped job runs its cells in sequence, so it needs a budget per cell
@@ -382,6 +507,7 @@ def resolve(
         active == closure(features, list(DEFAULT_TIERS))
         and selected == known
         and group == "cell"
+        and op_shards == DEFAULT_OP_SHARDS
     )
 
     return {
@@ -395,6 +521,10 @@ def resolve(
         "cell_count": str(sum(int(e["cells"]) for e in include)),
         "job_count": str(len(include)),
         "bench_timeout": str(timeout),
+        "op_shards": str(op_shards),
+        "op_shard_map": " | ".join(
+            f"g{i + 1}: {', '.join(b)}" for i, b in enumerate(shards)
+        ),
         "is_default": "true" if is_default else "false",
     }
 
@@ -469,6 +599,16 @@ def main() -> int:
     ap.add_argument("--benches-dir", default=str(HERE / "benches"))
     ap.add_argument("--manifest", default=str(ROOT / "Cargo.toml"))
     ap.add_argument("--summary", help="write the markdown run-plan block here")
+    ap.add_argument(
+        "--op-shards",
+        type=int,
+        default=DEFAULT_OP_SHARDS,
+        help=(
+            "split each cell into this many jobs along the OP axis "
+            f"(default {DEFAULT_OP_SHARDS}; 1 = one job per cell as before). "
+            "An op's whole operand family always stays in one job."
+        ),
+    )
     args = ap.parse_args()
 
     try:
@@ -478,6 +618,7 @@ def main() -> int:
             Path(args.benches_dir),
             Path(args.manifest),
             args.group,
+            args.op_shards,
         )
     except PlanError as exc:
         # `::error::` renders as an annotation on the run; the plain copy keeps

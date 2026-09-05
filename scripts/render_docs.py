@@ -468,11 +468,122 @@ def _perf_series(op_rows) -> tuple[list[int], int, dict[int, list]]:
     return widths, P, series
 
 
+# --- Operand families on the chart ------------------------------------------
+#
+# A family chart carries THREE dimensions, so each gets its own channel and they
+# never compete:
+#   * width    -> x
+#   * scale    -> line STYLE (solid at scale 0 and max, dashed between). Unchanged.
+#   * family   -> COLOUR, plus a marker shape on the max-scale line.
+#
+# The colours are the first three slots of a categorical palette validated for
+# BOTH surfaces rather than eyeballed:
+#   light (surface #fcfcfb): lightness band PASS, chroma PASS, CVD separation
+#     PASS (worst adjacent pair dE 9.2 deutan, above the 8 target), normal-vision
+#     PASS (dE 27.6), contrast WARN on the aqua slot at 2.74:1;
+#   dark  (surface #1a1a19): all five checks PASS.
+# The light-mode contrast WARN obligates relief -- visible labels or a table
+# view -- and BOTH are already present: every op section renders the full
+# width x scale table beside its chart, and the legend labels each family in
+# text. Identity is therefore never colour-alone, which is also why the marker
+# shapes are worth their ink in greyscale and print.
+#
+# Three slots is the maximum any op needs (`log` = log / @hard / @near1 and
+# `powf` = powf / @int / @hard are the widest families). Slots are assigned in
+# FIXED ORDER by family name, never cycled, so a family keeps its colour when a
+# sibling is toggled off -- colour follows the entity, not its rank.
+_FAM_SLOTS = 3
+# The average is a DERIVED line, not a family, so it deliberately does not take a
+# categorical slot: it renders in the page's own ink, so it reads as an annotation
+# over the data rather than as another series competing with it.
+_FAM_MARKS = ("circle", "square", "triangle")
+
+# Defined ONCE here and consumed by both surfaces -- the docs pages emit it and
+# `perf_compare.py` folds the same constant into its standalone <style>, so the
+# two cannot drift. mkdocs-material flags dark mode with a data attribute on
+# <html>; the standalone page has no such attribute and follows the OS. Both
+# selectors are listed, and each is inert on the surface that does not use it.
+#
+# The toggles are pure CSS -- `:checked` plus a sibling combinator -- so the
+# published site needs NO JavaScript and gains no `extra_javascript` entry. The
+# rules key on the checkbox's POSITION, not its id, so this block is a fixed
+# handful of rules rather than generated per-op CSS; the ids exist only to bind
+# each <label> to its input.
+PERF_FAMILY_CSS = """
+:root{--fam-1:#2a78d6;--fam-2:#eb6834;--fam-3:#1baf7a}
+[data-md-color-scheme="slate"]{--fam-1:#3987e5;--fam-2:#d95926;--fam-3:#199e70}
+@media (prefers-color-scheme:dark){:root:not([data-md-color-scheme="default"]){
+  --fam-1:#3987e5;--fam-2:#d95926;--fam-3:#199e70}}
+.perf-chart{position:relative}
+.perf-chart>input.fam-toggle{position:absolute;width:1px;height:1px;opacity:0;
+  pointer-events:none;margin:0}
+.perf-chart>input.fam-toggle:nth-of-type(1):not(:checked)~figure .fam-1,
+.perf-chart>input.fam-toggle:nth-of-type(2):not(:checked)~figure .fam-2,
+.perf-chart>input.fam-toggle:nth-of-type(3):not(:checked)~figure .fam-3,
+.perf-chart>input.fam-toggle:nth-of-type(4):not(:checked)~figure .fam-avg{
+  display:none}
+.perf-chart .fam-legend{display:flex;flex-wrap:wrap;gap:.35rem .9rem;
+  justify-content:center;margin-top:.25rem}
+.perf-chart .fam-key{cursor:pointer;user-select:none;font-size:.7rem;
+  display:inline-flex;align-items:center;gap:.3rem;opacity:.45;
+  border-bottom:1px dotted currentColor}
+.perf-chart .fam-key::before{content:"";width:.75rem;height:0;
+  border-top:2px solid currentColor}
+.perf-chart .fam-key.k1{color:var(--fam-1)}
+.perf-chart .fam-key.k2{color:var(--fam-2)}
+.perf-chart .fam-key.k3{color:var(--fam-3)}
+.perf-chart>input.fam-toggle:nth-of-type(1):checked~figure .fam-key.k1,
+.perf-chart>input.fam-toggle:nth-of-type(2):checked~figure .fam-key.k2,
+.perf-chart>input.fam-toggle:nth-of-type(3):checked~figure .fam-key.k3,
+.perf-chart>input.fam-toggle:nth-of-type(4):checked~figure .fam-key.kavg{
+  opacity:1;border-bottom-style:solid}
+.perf-chart .fam-key.kavg::before{border-top-style:dashed}
+"""
+
+
+def _perf_families(op_rows) -> tuple[list[str], list[int], int, dict]:
+    """`(families, widths, P, series)` for one base op's whole family.
+
+    `families` is the row names in FIXED order — the base op first, then its
+    `@variant` siblings alphabetically — so a family's colour never depends on
+    which siblings happen to be present in the data. `widths` is the union
+    across families; `series[(family, width)]` is that family's timings by
+    ascending scale, padded to `P`."""
+    by_fam: dict[str, dict[int, dict[int, float]]] = {}
+    for op, w, s, ns in op_rows:
+        by_fam.setdefault(op, {}).setdefault(w, {})[s] = ns
+    families = sorted(by_fam, key=lambda o: (_FAMILY_SEP in o, o))
+    widths = sorted({w for f in by_fam.values() for w in f})
+    P = max((len(sc) for f in by_fam.values() for sc in f.values()), default=0)
+    series: dict[tuple[str, int], list] = {}
+    for fam, by_w in by_fam.items():
+        for w, sc in by_w.items():
+            vals = [sc[s] for s in sorted(sc)]
+            series[(fam, w)] = vals + [None] * (P - len(vals))
+    return families, widths, P, series
+
+
 def _perf_svg(widths: list[int], P: int, series: dict[int, list]) -> str:
-    """A log-time(y) vs width(x) line graph: one polyline per sampled scale —
-    solid for scale 0 and the max scale, dashed for the intermediate scales —
-    with a light fill between the two solid lines. Inline SVG so it tracks the
-    light/dark palette via CSS custom properties."""
+    """Single-family chart — the original `series[width] -> timings` shape, kept
+    so any caller holding one op's rows still works. Delegates to the family
+    renderer with one family, which is exactly the old output plus a group
+    wrapper."""
+    return _perf_svg_families(["_"], widths, P,
+                              {("_", w): v for w, v in series.items()})
+
+
+def _perf_svg_families(families: list[str], widths: list[int], P: int,
+                       series: dict, average: bool = False) -> str:
+    """A log-time(y) vs width(x) line graph with every FAMILY overlaid on one set
+    of axes: per family, one polyline per sampled scale — solid for scale 0 and
+    the max scale, dashed for the intermediate ones — coloured by family, with a
+    marker shape on the max-scale line as a second, non-colour cue. The
+    scale-band fill is drawn for the BASE family only; one fill per family would
+    overlap into mud and the band is a property of the op, not of the operand.
+
+    Each family is wrapped in `<g class="fam-N">` and the optional average in
+    `<g class="fam-avg">`, which is what the CSS toggles switch. Inline SVG, so
+    it tracks the light/dark palette through the custom properties above."""
     import math
     flat = [v for vs in series.values() for v in vs if v is not None]
     if not flat or len(widths) < 2:
@@ -489,6 +600,10 @@ def _perf_svg(widths: list[int], P: int, series: dict[int, list]) -> str:
     def yp(ns):
         return Tm + ph * (hi - math.log10(ns)) / (hi - lo)
 
+    def col(k):
+        # Slot 0 keeps the brand tone so a single-family chart is unchanged.
+        return "var(--md-primary-fg-color)" if k == 0 else f"var(--fam-{k + 1})"
+
     p = [
         f'<svg viewBox="0 0 {W} {H}" width="100%" style="height:auto;'
         f'color:var(--md-default-fg-color--light)" xmlns="http://www.w3.org/2000/svg">'
@@ -502,26 +617,114 @@ def _perf_svg(widths: list[int], P: int, series: dict[int, list]) -> str:
     for i, w in enumerate(widths):  # x (width) labels
         p.append(f'<text x="{xp(i):.1f}" y="{Tm + ph + 12}" text-anchor="middle" '
                  f'font-size="8" fill="currentColor">{w}</text>')
-    pin = "var(--md-primary-fg-color)"
-    s0 = [(xp(i), series[w][0]) for i, w in enumerate(widths) if series[w][0] is not None]
-    sm = [(xp(i), series[w][P - 1]) for i, w in enumerate(widths) if series[w][P - 1] is not None]
-    if len(s0) >= 2 and len(sm) >= 2:  # light fill between the two solid lines
-        pts = " ".join(f"{x:.1f},{yp(v):.1f}" for x, v in s0)
-        pts += " " + " ".join(f"{x:.1f},{yp(v):.1f}" for x, v in reversed(sm))
-        p.append(f'<polygon points="{pts}" fill="{pin}" fill-opacity="0.10"/>')
-    for j in range(P):  # one polyline per sampled scale
-        line = [(xp(i), series[w][j]) for i, w in enumerate(widths) if series[w][j] is not None]
-        if len(line) < 2:
-            continue
-        pts = " ".join(f"{x:.1f},{yp(v):.1f}" for x, v in line)
-        solid = j == 0 or j == P - 1
-        dash = "" if solid else ' stroke-dasharray="3 3"'
-        p.append(f'<polyline points="{pts}" fill="none" stroke="{pin}" '
-                 f'stroke-width="{1.6 if solid else 1.0}"{dash}/>')
+
+    def marker(shape, x, y, c):
+        if shape == "square":
+            return (f'<rect x="{x - 2.2:.1f}" y="{y - 2.2:.1f}" width="4.4" '
+                    f'height="4.4" fill="{c}"/>')
+        if shape == "triangle":
+            return (f'<polygon points="{x:.1f},{y - 2.8:.1f} {x + 2.6:.1f},'
+                    f'{y + 2.2:.1f} {x - 2.6:.1f},{y + 2.2:.1f}" fill="{c}"/>')
+        return f'<circle cx="{x:.1f}" cy="{y:.1f}" r="2.3" fill="{c}"/>'
+
+    for k, fam in enumerate(families):
+        c = col(k)
+        p.append(f'<g class="fam-{k + 1}">')
+        if k == 0:  # scale band, base family only
+            s0 = [(xp(i), series[(fam, w)][0]) for i, w in enumerate(widths)
+                  if (fam, w) in series and series[(fam, w)][0] is not None]
+            sm = [(xp(i), series[(fam, w)][P - 1]) for i, w in enumerate(widths)
+                  if (fam, w) in series and series[(fam, w)][P - 1] is not None]
+            if len(s0) >= 2 and len(sm) >= 2:
+                pts = " ".join(f"{x:.1f},{yp(v):.1f}" for x, v in s0)
+                pts += " " + " ".join(f"{x:.1f},{yp(v):.1f}" for x, v in reversed(sm))
+                p.append(f'<polygon points="{pts}" fill="{c}" fill-opacity="0.10"/>')
+        for j in range(P):
+            line = [(xp(i), series[(fam, w)][j]) for i, w in enumerate(widths)
+                    if (fam, w) in series and series[(fam, w)][j] is not None]
+            if len(line) < 2:
+                continue
+            pts = " ".join(f"{x:.1f},{yp(v):.1f}" for x, v in line)
+            solid = j == 0 or j == P - 1
+            dash = "" if solid else ' stroke-dasharray="3 3"'
+            p.append(f'<polyline points="{pts}" fill="none" stroke="{c}" '
+                     f'stroke-width="{1.6 if solid else 1.0}"{dash}/>')
+            if j == P - 1 and len(families) > 1:  # second cue, max-scale line only
+                shape = _FAM_MARKS[k % len(_FAM_MARKS)]
+                for x, v in line:
+                    p.append(marker(shape, x, yp(v), c))
+        p.append("</g>")
+
+    if average and len(families) > 1:
+        p.append('<g class="fam-avg">')
+        for j in range(P):
+            line = []
+            for i, w in enumerate(widths):
+                vs = [series[(f, w)][j] for f in families
+                      if (f, w) in series and series[(f, w)][j] is not None]
+                if vs:
+                    line.append((xp(i), sum(vs) / len(vs)))
+            if len(line) >= 2:
+                pts = " ".join(f"{x:.1f},{yp(v):.1f}" for x, v in line)
+                p.append(f'<polyline points="{pts}" fill="none" stroke="currentColor" '
+                         f'stroke-width="1.3" stroke-dasharray="6 3" '
+                         f'stroke-opacity="0.85"/>')
+        p.append("</g>")
+
     p.append(f'<line x1="{L}" y1="{Tm}" x2="{L}" y2="{Tm + ph}" stroke="currentColor" stroke-opacity="0.4"/>')
     p.append(f'<line x1="{L}" y1="{Tm + ph}" x2="{L + pw}" y2="{Tm + ph}" stroke="currentColor" stroke-opacity="0.4"/>')
     p.append("</svg>")
     return "".join(p)
+
+
+def _slug(text: str) -> str:
+    """An id-safe token — `log@near1` -> `log-near1`."""
+    return "".join(c if c.isalnum() else "-" for c in text)
+
+
+def perf_chart_block(base: str, op_rows, uid: str = "") -> str:
+    """One op's complete chart: the overlaid family chart plus its toggle
+    legend, as a self-contained HTML block.
+
+    BOTH surfaces render through this — the published Performance pages and
+    `perf_compare.py`'s standalone page — so the chart cannot diverge between
+    them. `uid` distinguishes the two copies `perf_compare` draws per op
+    (published beside branch) whose checkbox ids would otherwise collide.
+
+    Every family is drawn and every family toggle starts ON: the raw data is the
+    default view. The average is one MORE toggle, off by default, so it sits
+    alongside the families rather than standing in for them."""
+    families, widths, P, series = _perf_families(op_rows)
+    svg = _perf_svg_families(families, widths, P, series, average=len(families) > 1)
+    if not svg:
+        return ""
+    solo = len(families) == 1
+    pre = f"f-{_slug(uid + base)}"
+    keys = [f'<input type="checkbox" class="fam-toggle" id="{pre}-{k}" checked>'
+            for k in range(len(families))]
+    labels = [f'<label class="fam-key k{k + 1}" for="{pre}-{k}">{display_op(f)}</label>'
+              for k, f in enumerate(families)]
+    if not solo:
+        # An average OF ONE LINE is that line, so the entry only exists where
+        # there is something to average.
+        keys.append(f'<input type="checkbox" class="fam-toggle" id="{pre}-avg">')
+        labels.append(f'<label class="fam-key kavg" for="{pre}-avg">average</label>')
+    caption = (
+        "Median time vs width (log scale). "
+        + ("" if solo else
+           "Colour = operand family (click a legend entry to show or hide it); ")
+        + "solid = scale 0 and max, dashed = the intermediate band-edge scales."
+        + ("" if solo else " The shaded band is the base row's scale spread.")
+    )
+    return (
+        '<div class="perf-chart">'
+        + "".join(keys)
+        + "<figure>"
+        + svg
+        + f"<figcaption>{caption}</figcaption>"
+        + '<div class="fam-legend">' + "".join(labels) + "</div>"
+        + "</figure></div>"
+    )
 
 
 def render_performance_units() -> str:
@@ -558,6 +761,63 @@ _CATEGORY_OPS = {
 _OP_CATEGORY = {op: cat for cat, ops in _CATEGORY_OPS.items() for op in ops}
 _warned_ops: set[str] = set()
 
+# --- Operand-family rows (`op@variant`) -------------------------------------
+#
+# The bench sweep measures one input per cell, so an op whose kernel branches
+# on the value carries a small FAMILY of rows: the base `op` plus `op@<variant>`
+# (`ln@hard`, `log@near1`, `powf@int`, ...), each pinned to a different path
+# through the same public function. See `bench-compare/benches/compare_common.rs`
+# -> "Operand families".
+#
+# A variant belongs to its BASE op's category — `log@near1` is a logarithm
+# however it is spelled — so the separator is stripped before the category
+# lookup. Without this every family row would land in `trigonometry`, which is
+# where `op_category`'s fallback puts anything it does not recognise, and the
+# only signal would be a printed warning nobody reads in CI.
+#
+# `@` is the separator because it cannot occur in a Rust method name, so it can
+# never collide with a real function: `to_degrees` contains `_`, which is why
+# `_` is not used here and why `summarise.py` anchors its group regex on the
+# `_D<n>_s<n>` suffix rather than the first underscore. Criterion does not
+# rewrite `@` in a report directory name (`report::make_filename_safe` replaces
+# only `? " / \ * < > : | ^`), and the collator reads the canonical-case
+# `group_id` out of `benchmark.json` anyway.
+_FAMILY_SEP = "@"
+
+
+def base_op(op: str) -> str:
+    """The public function a bench row measures: `ln@hard` -> `ln`, `ln` -> `ln`.
+
+    Used for categorisation and grouping only — the row keeps its own full name
+    everywhere it is displayed, because the variant is the whole point of it."""
+    return op.split(_FAMILY_SEP, 1)[0]
+
+
+# The base row's WIRE id is the bare op name (`ln`, `log`, `add`) and stays that
+# way: `results/timing/bbc_medians.tsv` and the History surface are keyed on it,
+# and continuity of those rows is the reason the base operands were kept
+# unchanged in the first place. But bare is the wrong thing to SHOW. Beside
+# `ln@hard` and `log@near1`, a legend entry reading plain `ln` reads as "the"
+# `ln` with variants hanging off it, when it is one input among several — and
+# that is exactly the impression that made the degenerate `ln` row misleading
+# before the families existed: a reader takes the fast line as the function's
+# cost. `@base` says what it is.
+#
+# Applied uniformly, INCLUDING to ops with a single row, so `add@base` reads the
+# same as `ln@base`. If only the ops that acquired variants carried a suffix,
+# the suffix would silently mark which ops got families, which is not what it is
+# for. (A one-entry legend is redundant on its own terms; carrying the scheme
+# everywhere is worth more than dropping the box on those charts.)
+_BASE_LABEL = "base"
+
+
+def display_op(op: str) -> str:
+    """How a row is LABELLED — `ln` -> `ln@base`, `ln@hard` -> `ln@hard`.
+
+    Presentation only. Never write this to a data file or use it as a key: the
+    wire id is `op` itself."""
+    return op if _FAMILY_SEP in op else f"{op}{_FAMILY_SEP}{_BASE_LABEL}"
+
 # --- Diagnostic (measured, never published) bench rows ---------------------
 #
 # The sweep carries rows that exist to MEASURE a kernel, not to document a
@@ -583,17 +843,23 @@ _DIAGNOSTIC_SUFFIXES = ("_nd",)
 def is_diagnostic_op(op: str) -> bool:
     """True for a bench row that measures a kernel but names no public function,
     so it must not be published. An op listed in `_CATEGORY_OPS` is public by
-    definition and is never diagnostic, whatever its spelling."""
-    if op in _OP_CATEGORY:
+    definition and is never diagnostic, whatever its spelling.
+
+    An `op@variant` family row is judged on its BASE op, so a family of a
+    published function publishes and a family of a diagnostic one would not.
+    The two conventions stay independent: `_nd` marks "never publish", `@`
+    marks "same function, different input"."""
+    if base_op(op) in _OP_CATEGORY:
         return False
     return op.endswith(_DIAGNOSTIC_SUFFIXES)
 
 
 def op_category(op: str) -> str:
     """The category an op renders under: `arithmetic`, `roots-and-exponents`, or
-    `trigonometry`. An op in no listed set falls back to trigonometry (so a new
-    function still renders somewhere), logged once per name."""
-    cat = _OP_CATEGORY.get(op)
+    `trigonometry`. An `op@variant` row takes its base op's category. An op in
+    no listed set falls back to trigonometry (so a new function still renders
+    somewhere), logged once per name."""
+    cat = _OP_CATEGORY.get(base_op(op))
     if cat is None:
         if op not in _warned_ops:
             _warned_ops.add(op)
@@ -609,14 +875,26 @@ def _ops_in_category(ops, category: str) -> list[str]:
 
 def _perf_op_section(op: str, op_rows) -> list[str]:
     """The `### op` block for one operation: the width x scale timing table beside
-    its log-time-vs-width graph, each cell in its own natural unit."""
-    widths, P, series = _perf_series(op_rows)
-    head = "| Width | " + " | ".join(_pos_labels(P)) + " |"
+    the overlaid family chart, each cell in its own natural unit.
+
+    `op` is the BASE op and `op_rows` carries its whole family, so the section
+    holds ONE chart with the families laid over each other rather than one chart
+    per row. The table lists every family so the numbers behind the overlay are
+    readable directly — which is also the relief the palette's light-mode
+    contrast check requires."""
+    families, widths, P, series = _perf_families(op_rows)
+    # Every row is labelled by its FAMILY, single-family ops included, so the
+    # table reads the same way as the legend beside it.
+    head = "| Row | " + " | ".join(_pos_labels(P)) + " |"
     rule = "| :-- | " + " | ".join(["--:"] * P) + " |"
     trows = [head, rule]
-    for w in widths:
-        cells = [(_fmt_ns(v) if v is not None else "·") for v in series[w]]
-        trows.append(f"| D{w} | " + " | ".join(cells) + " |")
+    for fam in families:
+        for w in widths:
+            vals = series.get((fam, w))
+            if vals is None:
+                continue
+            cells = [(_fmt_ns(v) if v is not None else "·") for v in vals]
+            trows.append(f"| `{display_op(fam)}` D{w} | " + " | ".join(cells) + " |")
     return [
         f"### `{op}`",
         "",
@@ -624,11 +902,7 @@ def _perf_op_section(op: str, op_rows) -> list[str]:
         "",
         "\n".join(trows),
         "",
-        "<figure>",
-        _perf_svg(widths, P, series),
-        "<figcaption>Median time vs width (log scale). Solid: scale 0 and max; "
-        "dashed: the intermediate band-edge scales.</figcaption>",
-        "</figure>",
+        perf_chart_block(op, op_rows),
         "",
         "</div>",
         "",
@@ -638,17 +912,25 @@ def _perf_op_section(op: str, op_rows) -> list[str]:
 def _render_perf_category(category: str) -> str:
     """The body of one Performance category sub-page: just the `### op` sections for
     that category (the page IS the category, so no `## category` header). All from
-    results/timing/bbc_medians.tsv."""
+    results/timing/bbc_medians.tsv.
+
+    Rows are grouped by BASE op, so `ln` and `ln@hard` land in one section under
+    one chart instead of two sections that a reader would have to compare by
+    flicking between them."""
     rows = _timing_rows()
     if not rows:
         return _PENDING_PERF
     by_op: dict[str, list] = {}
     for r in rows:
-        by_op.setdefault(r[0], []).append(r)
+        by_op.setdefault(base_op(r[0]), []).append(r)
     ops = _ops_in_category(by_op, category)
     if not ops:
         return f"_No {_CATEGORY_LABELS[category].lower()} functions in this dataset._"
-    out: list[str] = []
+    # The family CSS travels WITH the block that needs it, emitted once per page,
+    # rather than living in `docs/stylesheets/extra.css`. That keeps one
+    # definition for both surfaces (`perf_compare.py` folds the same constant
+    # into its own <style>) instead of a copy in each that can drift apart.
+    out: list[str] = [f"<style>{PERF_FAMILY_CSS}</style>", ""]
     for op in ops:
         out += _perf_op_section(op, by_op[op])
     return "\n".join(out).rstrip()
