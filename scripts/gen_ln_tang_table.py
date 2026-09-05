@@ -78,6 +78,16 @@ W_MAX_DECIMAL = 2048          # D1232 working-scale cap = Int<256>::BITS / 8
 B_LIMBS = 112                 # 112 · 64 = 7168 bits
 B = B_LIMBS * 64              # = 7168; guard ≈ 7168 − 6803 = 365 bits ≈ 110 dec digits
 
+# ── Narrow-build prefix ───────────────────────────────────────────────────
+# A build without `_wide-support` (only D18/D38) carries no wide Tang table.
+# Its narrow `ln` Tang path works in `Int<12>` (768 bits), whose directed
+# narrowing caps the working scale at `BITS/8 = 96` decimal digits, so the
+# accessor demands at most `ceil((96·log2(10) + 64)/64) = 6` limbs of each
+# slot. We bake the top 8 limbs (512 bits ≈ 154 decimal digits) — a strict
+# MS-first PREFIX of the same slots — for guard margin. `p_full <= 8` is the
+# accessor's wall.
+NARROW_LIMBS = 8              # narrow-only build prefix; 6 needed, 8 for margin
+
 # ── Oracle precision ──────────────────────────────────────────────────────
 # Set by the shared flint/Arb oracle (`scripts/tang_flint_oracle.py`) well
 # above the B bits retained, so every emitted digit is pinned by a rigorous
@@ -141,31 +151,43 @@ def main():
     w("/// separate task; do NOT change this here.")
     w(f"pub(crate) const LN_TANG_M: u32 = {M};")
     w("")
-    w("/// Binary fixed-point exponent: each slot is `round(ln(1+i/M) ·")
-    w(f"/// 2^B)`. `B = {B}` bits = `{B_LIMBS}` u64 limbs.")
-    w(f"pub(crate) const LN_TANG_B: u32 = {B};")
-    w("")
-    w("/// Number of u64 limbs per stored slot (`B / 64`).")
-    w(f"pub(crate) const LN_TANG_LIMBS: usize = {B_LIMBS};")
-    w("")
-    w("/// The `M + 1` baked slots `round(ln(1+i/M) · 2^B)`, each a")
-    w(f"/// `[u64; {B_LIMBS}]` little-endian magnitude emitted MOST-SIGNIFICANT")
-    w("/// limb FIRST (so a narrow tier reads a high-limb prefix). Index by")
-    w("/// `i ∈ [0, 128]`.")
-    w(f"pub(crate) static LN_TANG_SLOTS: [[u64; {B_LIMBS}]; {M + 1}] = [")
-    for i in range(M + 1):
-        limbs = slot_limbs_msb_first(i)
-        # one slot per line group; chunk the limbs across lines for
-        # readability (4 limbs per line).
-        w(f"    // i = {i}: ln(1 + {i}/{M})")
-        w("    [")
-        for j in range(0, B_LIMBS, 4):
-            chunk = limbs[j:j + 4]
-            chunk_str = ", ".join(f"0x{l:016x}" for l in chunk)
-            w(f"        {chunk_str},")
-        w("    ],")
-    w("];")
-    w("")
+    # Every slot at full B, computed once; the narrow block is a top-limb
+    # PREFIX of the same MS-first magnitude, so both sizes come from one oracle
+    # pass and stay bit-consistent by construction.
+    all_slots = [slot_limbs_msb_first(i) for i in range(M + 1)]
+
+    def emit_size_block(cfg, limbs_count, b_bits, build):
+        w(f"/// Binary fixed-point exponent ({build} build): each slot is")
+        w(f"/// `round(ln(1+i/M) · 2^B)`. `B = {b_bits}` bits = `{limbs_count}` u64 limbs.")
+        w(cfg)
+        w(f"pub(crate) const LN_TANG_B: u32 = {b_bits};")
+        w("")
+        w(f"/// Number of u64 limbs per stored slot ({build} build).")
+        w(cfg)
+        w(f"pub(crate) const LN_TANG_LIMBS: usize = {limbs_count};")
+        w("")
+        w(f"/// The `M + 1` baked slots ({build} build), each a")
+        w(f"/// `[u64; {limbs_count}]` little-endian magnitude emitted MOST-SIGNIFICANT")
+        w("/// limb FIRST (so a narrower tier reads a high-limb prefix). Index by")
+        w("/// `i ∈ [0, 128]`.")
+        w(cfg)
+        w(f"pub(crate) static LN_TANG_SLOTS: [[u64; {limbs_count}]; {M + 1}] = [")
+        for i in range(M + 1):
+            limbs = all_slots[i][:limbs_count]
+            w(f"    // i = {i}: ln(1 + {i}/{M})")
+            w("    [")
+            for j in range(0, limbs_count, 4):
+                chunk = limbs[j:j + 4]
+                chunk_str = ", ".join(f"0x{l:016x}" for l in chunk)
+                w(f"        {chunk_str},")
+            w("    ],")
+        w("];")
+        w("")
+
+    # The full table when any wide tier is enabled (narrow tiers read a prefix
+    # of it for free); the 8-limb prefix on a narrow-only build.
+    emit_size_block('#[cfg(feature = "_wide-support")]', B_LIMBS, B, "wide")
+    emit_size_block('#[cfg(not(feature = "_wide-support"))]', NARROW_LIMBS, NARROW_LIMBS * 64, "narrow")
 
     # ── Width-generic accessor ────────────────────────────────────────────
     w("use crate::int::types::traits::BigInt;")

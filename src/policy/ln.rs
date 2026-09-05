@@ -15,10 +15,13 @@
 //! 4. dispatch via `const { select::<N, SCALE>() }`, then an exhaustive
 //!    `match algo` — no `_`, no panic.
 //!
-//! The narrow tiers run the 256-bit `Fixed` kernel (`ln_series_2limb`,
-//! D18 widened to Int<2>); the wide tiers run the tier-generic `ln_series`
-//! over `WideTrigCore`, or the per-tier `ln_tang` band kernel, reached by
-//! a `match N` with `resize_to` bridges (identity at the matched `N`).
+//! Every tier routes Tang: the narrow tiers (D18 widened to Int<2>, D38)
+//! through the width-generic `ln_tang_g` at a fixed `Int<12>` work width,
+//! the wide tiers through the same kernel at a `work_rung` width with the
+//! tier's `WideTrigCore` sourcing only its storage bounds and fall-up
+//! width — reached by a `match N` with `resize_to` bridges (identity at
+//! the matched `N`). Series (`ln_series_2limb` narrow, `ln_series` wide) is
+//! the kept alternative on the `_` arm.
 //!
 //! log2 / log10 are derived (`ln(x)/ln2`, `ln(x)/ln10`) and route DOWN to
 //! the narrow `ln_series_2limb::{log2,log10}_*` kernels or the wide
@@ -34,7 +37,6 @@ use crate::algos::support::wide_trig_core::WideTrigCore;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
     Series,
-    #[cfg(feature = "_wide-support")]
     Tang,
     #[allow(dead_code)]
     Schoolbook,
@@ -49,6 +51,17 @@ enum Select<const N: usize> {
 
 const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
     match (N, SCALE) {
+        // The narrow tiers (D18 = Int<1>, D38 = Int<2>), at EVERY scale — the
+        // `_` scale pattern is deliberate: an upper bound would silently leave
+        // the tier's top scale (the slowest cell, the largest inversion) on
+        // Series. The width-generic Tang kernel at a fixed `Int<12>` work
+        // width — no `WideTrigCore`, no rung ladder (two narrow storage widths
+        // need none). Recovers the same-scale inversion against the wider
+        // tiers: Series runs ~1.05·w artanh terms at |t| <= 1/3 on the 256-bit
+        // `Fixed` at guard 30; Tang ~0.21·w at |t| < 1/256 at guard 8, the
+        // table read as a free prefix. Series stays the kept alternative (the
+        // `_` arm, and what `ln_fixed` gives the hyperbolics).
+        (1, _) | (2, _) => Select::ByAlgorithm(Algorithm::Tang),
         // The table-driven Tang kernel eliminates the Series path's wide
         // argument-reduction sqrts and is bit-identical to Series (the
         // correctly-rounded oracle) across every wide tier's full valid
@@ -181,7 +194,6 @@ pub(crate) fn checked_dispatch<const N: usize, const SCALE: u32>(
 ) -> Option<Int<N>> {
     match resolve::<N, SCALE>(&raw) {
         Algorithm::Series => series_routed::<N, SCALE>(raw, mode),
-        #[cfg(feature = "_wide-support")]
         Algorithm::Tang => tang_routed::<N, SCALE>(raw, mode),
         Algorithm::Schoolbook => schoolbook_routed::<N, SCALE>(raw, mode),
     }
@@ -252,6 +264,32 @@ fn schoolbook_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: Roundi
 #[cfg(feature = "_wide-support")]
 use super::work_rung::ln_rung;
 
+/// The narrow tiers' Tang `ln` (D18 / D38): the ONE width-generic kernel
+/// [`ln_tang_g`] at a fixed `Int<12>` work width for both the rung and the
+/// fall-up (so the widening walker degenerates to a single width), on storage
+/// `Int<2>` (D18 widens, exactly as the Series path does). `Int<12>` is the
+/// widest narrow-safe work integer with reach: `BigInt::resize_to` stages the
+/// SOURCE magnitude into `[u128; MAX_U128_LIMB]` (8 on a narrow build) and
+/// panics past it, so `Int<24>` (12 u128 limbs) would panic on the way back
+/// down while `Int<12>` (6) is safe both ways; its `BITS/8 = 96`-digit
+/// escalation cap clears the ≤ 2·38 = 76-digit narrow near-1 deciding depth.
+/// `GUARD 8 / CAP 100` are the `M = 128` sibling's (D57). `ln` never leaves
+/// storage range, so the kernel's panicking narrowing is unreachable;
+/// `narrow_fit` keeps the narrow `Option` contract. A narrow-only build reads
+/// the 8-limb table prefix; a wide build reads the same prefix of the full
+/// table — one kernel, one accessor, no per-tier copy.
+#[inline]
+fn tang_narrow<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
+    use crate::algos::ln::ln_tang::ln_tang_g;
+    let out = ln_tang_g::<Int<2>, Int<12>, Int<12>, SCALE, 8, 100, true, false>(
+        raw.resize_to::<Int<2>>(),
+        Int::<2>::MAX,
+        Int::<2>::MIN,
+        mode,
+    );
+    super::narrow_fit::<N>(out)
+}
+
 /// The Tang arm (every wide tier): pick the work rung, then call the ONE generic
 /// kernel [`ln_tang_g`] at that rung. `const { ln_rung::<C, SCALE>() }` is a
 /// plain `usize` that folds per monomorphisation, so a concrete `D###<S>`
@@ -279,24 +317,28 @@ where
     <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
     use crate::algos::ln::ln_tang::ln_tang_g;
+    // The lifted kernel is `C`-free: storage `C::Storage`, rung work width
+    // `Int<K>`, fall-up width the tier's full `C::W`, storage bounds threaded
+    // as values. `C` here only SOURCES those — the routing is unchanged and
+    // the wide result is bit-identical (the wide golden is the proof).
+    let (smax, smin) = (C::storage_max(), C::storage_min());
     match const { ln_rung::<C, SCALE>() } {
-        3 => ln_tang_g::<C, Int<3>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        4 => ln_tang_g::<C, Int<4>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        6 => ln_tang_g::<C, Int<6>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        8 => ln_tang_g::<C, Int<8>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        12 => ln_tang_g::<C, Int<12>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        16 => ln_tang_g::<C, Int<16>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        24 => ln_tang_g::<C, Int<24>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        32 => ln_tang_g::<C, Int<32>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        48 => ln_tang_g::<C, Int<48>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        64 => ln_tang_g::<C, Int<64>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        96 => ln_tang_g::<C, Int<96>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        128 => ln_tang_g::<C, Int<128>, SCALE, G, CAP, DIR, IE>(raw, mode),
-        _ => ln_tang_g::<C, Int<176>, SCALE, G, CAP, DIR, IE>(raw, mode),
+        3 => ln_tang_g::<C::Storage, Int<3>, C::W, SCALE, G, CAP, DIR, IE>(raw, smax, smin, mode),
+        4 => ln_tang_g::<C::Storage, Int<4>, C::W, SCALE, G, CAP, DIR, IE>(raw, smax, smin, mode),
+        6 => ln_tang_g::<C::Storage, Int<6>, C::W, SCALE, G, CAP, DIR, IE>(raw, smax, smin, mode),
+        8 => ln_tang_g::<C::Storage, Int<8>, C::W, SCALE, G, CAP, DIR, IE>(raw, smax, smin, mode),
+        12 => ln_tang_g::<C::Storage, Int<12>, C::W, SCALE, G, CAP, DIR, IE>(raw, smax, smin, mode),
+        16 => ln_tang_g::<C::Storage, Int<16>, C::W, SCALE, G, CAP, DIR, IE>(raw, smax, smin, mode),
+        24 => ln_tang_g::<C::Storage, Int<24>, C::W, SCALE, G, CAP, DIR, IE>(raw, smax, smin, mode),
+        32 => ln_tang_g::<C::Storage, Int<32>, C::W, SCALE, G, CAP, DIR, IE>(raw, smax, smin, mode),
+        48 => ln_tang_g::<C::Storage, Int<48>, C::W, SCALE, G, CAP, DIR, IE>(raw, smax, smin, mode),
+        64 => ln_tang_g::<C::Storage, Int<64>, C::W, SCALE, G, CAP, DIR, IE>(raw, smax, smin, mode),
+        96 => ln_tang_g::<C::Storage, Int<96>, C::W, SCALE, G, CAP, DIR, IE>(raw, smax, smin, mode),
+        128 => ln_tang_g::<C::Storage, Int<128>, C::W, SCALE, G, CAP, DIR, IE>(raw, smax, smin, mode),
+        _ => ln_tang_g::<C::Storage, Int<176>, C::W, SCALE, G, CAP, DIR, IE>(raw, smax, smin, mode),
     }
 }
 
-#[cfg(feature = "_wide-support")]
 #[inline]
 fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
     // Per-tier `(GUARD, CAP)` tuning for the Tang kernel. The select gates
@@ -351,6 +393,7 @@ fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode
     // cell to cell with margins mostly ≤ 1.2×, i.e. under the replication
     // floor, so the values below are not claimed to be optimal — only valid.
     match N {
+        1 | 2 => tang_narrow::<N, SCALE>(raw, mode),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => Some(tang_at_rung::<crate::types::widths::wide_trig_d57::Core, SCALE, 8, 100, true, false>(raw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]

@@ -439,28 +439,31 @@ where
 #[inline]
 #[must_use]
 pub(crate) fn ln_tang_g<
-    C: WideTrigCore,
+    St: BigInt,
     Wk: BigInt,
+    Wtier: BigInt,
     const SCALE: u32,
     const GUARD: u32,
     const CAP: u128,
     const DIRECTED: bool,
     const INTERNAL_EXTRA: bool,
 >(
-    raw: C::Storage,
+    raw: St,
+    storage_max: St,
+    storage_min: St,
     mode: RoundingMode,
-) -> C::Storage
+) -> St
 where
     <Wk as BigInt>::Scratch: ComputeLimbs,
-    <C::W as BigInt>::Scratch: ComputeLimbs,
+    <Wtier as BigInt>::Scratch: ComputeLimbs,
 {
     use crate::algos::support::wide_trig_core::{
         round_to_storage_directed_widening_g, round_to_storage_with_g, to_work_scaled_g,
     };
     use crate::support::rounding::DEFAULT_ROUNDING_MODE;
 
-    if raw <= C::storage_zero() {
-        panic!("wide-tier ln: argument must be positive");
+    if raw <= St::ZERO {
+        panic!("tier ln: argument must be positive");
     }
     // `ln 2` at the RUNG work integer `Wk`, const-folded at the base working
     // scale `SCALE + GUARD` (the hot path) — the rung sibling of the per-tier
@@ -472,13 +475,14 @@ where
             crate::consts::ln2_by_working_scale::<Wk>(at_scale, DEFAULT_ROUNDING_MODE)
         }
     };
-    // The tier-width `ln 2` for the fall-up recompute (identical closure
-    // shape at `C::W` - the `ln_tang` alias's own).
-    let ln2_tier_width = |at_scale: u32| -> C::W {
+    // The fall-up-width `ln 2` for the widening recompute (identical closure
+    // shape at `Wtier` - the tier's full work integer, or `Wk` again when the
+    // narrow path runs a single width).
+    let ln2_tier_width = |at_scale: u32| -> Wtier {
         if at_scale == SCALE + GUARD {
-            crate::consts::ln2_by_scale::<C::W>(SCALE + GUARD, DEFAULT_ROUNDING_MODE)
+            crate::consts::ln2_by_scale::<Wtier>(SCALE + GUARD, DEFAULT_ROUNDING_MODE)
         } else {
-            crate::consts::ln2_by_working_scale::<C::W>(at_scale, DEFAULT_ROUNDING_MODE)
+            crate::consts::ln2_by_working_scale::<Wtier>(at_scale, DEFAULT_ROUNDING_MODE)
         }
     };
     if DIRECTED {
@@ -499,7 +503,7 @@ where
         // native-width path. `adjust_ln_near_one` (below) is itself value-gated
         // (`rounded == δ`), so the truly-unreachable ε case is handled regardless.
         let use_extra_digits = INTERNAL_EXTRA && {
-            let one = C::storage_one(SCALE);
+            let one = eg::pow10::<St>(SCALE);
             let distance_from_one = if raw >= one { raw - one } else { one - raw };
             // near 1 iff |x − 1| < ~10^(−SCALE/4), tested on the bit-length so
             // the threshold is a compile-time const and the check is O(limbs)
@@ -513,46 +517,46 @@ where
         // realisation, verbatim) - see
         // `wide_trig_core::round_to_storage_directed_widening_g`.
         let rounded = if use_extra_digits {
-            round_to_storage_directed_widening_g::<C::Storage, Wk, C::W>(
-                GUARD, SCALE, mode, C::storage_max(), C::storage_min(),
+            round_to_storage_directed_widening_g::<St, Wk, Wtier>(
+                GUARD, SCALE, mode, storage_max, storage_min,
                 |guard_digits| {
                     tang_ln_fixed_g::<Wk, CAP, true>(
-                        to_work_scaled_g::<C::Storage, Wk>(raw, guard_digits),
+                        to_work_scaled_g::<St, Wk>(raw, guard_digits),
                         SCALE + guard_digits, ln2,
                     )
                 },
                 |guard_digits| {
-                    tang_ln_fixed_g::<C::W, CAP, true>(
-                        to_work_scaled_g::<C::Storage, C::W>(raw, guard_digits),
+                    tang_ln_fixed_g::<Wtier, CAP, true>(
+                        to_work_scaled_g::<St, Wtier>(raw, guard_digits),
                         SCALE + guard_digits, ln2_tier_width,
                     )
                 },
             )
         } else {
-            round_to_storage_directed_widening_g::<C::Storage, Wk, C::W>(
-                GUARD, SCALE, mode, C::storage_max(), C::storage_min(),
+            round_to_storage_directed_widening_g::<St, Wk, Wtier>(
+                GUARD, SCALE, mode, storage_max, storage_min,
                 |guard_digits| {
                     tang_ln_fixed_g::<Wk, CAP, false>(
-                        to_work_scaled_g::<C::Storage, Wk>(raw, guard_digits),
+                        to_work_scaled_g::<St, Wk>(raw, guard_digits),
                         SCALE + guard_digits, ln2,
                     )
                 },
                 |guard_digits| {
-                    tang_ln_fixed_g::<C::W, CAP, false>(
-                        to_work_scaled_g::<C::Storage, C::W>(raw, guard_digits),
+                    tang_ln_fixed_g::<Wtier, CAP, false>(
+                        to_work_scaled_g::<St, Wtier>(raw, guard_digits),
                         SCALE + guard_digits, ln2_tier_width,
                     )
                 },
             )
         };
-        crate::algos::support::wide_trig_core::adjust_ln_near_one::<C, SCALE>(rounded, raw, mode)
+        crate::algos::support::wide_trig_core::adjust_ln_near_one::<St, Wtier, SCALE>(rounded, raw, mode)
     } else {
         let working_scale = SCALE + GUARD;
         let working_value = tang_ln_fixed_g::<Wk, CAP, INTERNAL_EXTRA>(
-            to_work_scaled_g::<C::Storage, Wk>(raw, GUARD), working_scale, ln2,
+            to_work_scaled_g::<St, Wk>(raw, GUARD), working_scale, ln2,
         );
-        round_to_storage_with_g::<C::Storage, Wk>(
-            working_value, working_scale, SCALE, mode, C::storage_max(), C::storage_min(),
+        round_to_storage_with_g::<St, Wk>(
+            working_value, working_scale, SCALE, mode, storage_max, storage_min,
         )
     }
 }
@@ -577,7 +581,9 @@ pub(crate) fn ln_tang<
 where
     <C::W as BigInt>::Scratch: ComputeLimbs,
 {
-    ln_tang_g::<C, C::W, SCALE, GUARD, CAP, DIRECTED, INTERNAL_EXTRA>(raw, mode)
+    ln_tang_g::<C::Storage, C::W, C::W, SCALE, GUARD, CAP, DIRECTED, INTERNAL_EXTRA>(
+        raw, C::storage_max(), C::storage_min(), mode,
+    )
 }
 
 #[cfg(test)]
