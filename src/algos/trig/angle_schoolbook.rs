@@ -1,13 +1,25 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Angle-conversion schoolbook reference kernels -- to_degrees /
-//! to_radians.
+//! Angle-conversion schoolbook kernels -- to_degrees / to_radians.
 //!
-//! Naive textbook realisations registered as unrouted `Schoolbook` arms
-//! of the angle-conversion policies. Correctness reference + A/B
-//! microbench partner for the routed `MulPiRatio` kernels; `select`
-//! never routes here.
+//! Textbook realisations of both angle conversions, registered as the
+//! `Schoolbook` arms of the angle-conversion policies. The two
+//! directions have OPPOSITE routing status, so read the one you need:
+//!
+//! - [`to_radians_schoolbook`] is ROUTED, and is production code.
+//!   `policy::to_radians::select` names `Schoolbook` at every width, so
+//!   this is the wide-tier `to_radians` kernel every wide cell runs (the
+//!   narrow tiers evaluate the same identity through
+//!   `trig_series_2limb::to_radians`). It is preferred over the
+//!   `MulPiRatio` alternative on PRECISION: multiplying by the sub-unit
+//!   `rad_per_deg` constant gives up about log10(180) digits, because a
+//!   constant below 1 held at the working scale spends its leading
+//!   digits on zeros -- see `angle_mul_pi_ratio::to_radians_mul_pi_ratio`.
+//! - [`to_degrees_schoolbook`] is UNROUTED. `policy::to_degrees::select`
+//!   names `MulPiRatio` at the wide tiers, and its narrow `Schoolbook`
+//!   arm runs `trig_series_2limb::to_degrees`. This direction is a kept
+//!   correctness reference + A/B microbench partner.
 //!
 //! Identities, dispatched DOWN to the `Int<N>` work int:
 //! - to_degrees(x) = x * 180 / pi  (multiply by the integer 180, divide
@@ -17,8 +29,15 @@
 //! Wide path uses the `WideTrigCore::mul` + the `pi` constant + the
 //! `lit(180)` literal binding; narrow path uses the `Fixed` work int and
 //! `wide_pi`. NEVER calls a decimal `*_strict_with` on its own value.
-//! Identical composition + narrowing as the routed kernel, so it matches
-//! bit-exactly.
+//!
+//! [`to_degrees_schoolbook`] does NOT match the routed `MulPiRatio`
+//! kernel in general. Dividing by `pi` is about log10(180/pi) digits
+//! weaker than multiplying by the `deg_per_rad` constant, which lands it
+//! 1 ULP low at the directed-mode boundaries -- e.g.
+//! `D57<0>::to_degrees(10^28)` under `Ceiling`, where the routed kernel
+//! is correct and this one is not. The divergence is magnitude-driven,
+//! so the small-input equivalence tests below agree while the general
+//! claim does not hold; see `angle_mul_pi_ratio` for the worked case.
 
 use crate::algos::ln::ln_series_2limb::STRICT_GUARD;
 use crate::algos::support::wide_trig_core::WideTrigCore;
@@ -111,10 +130,15 @@ pub(crate) fn to_radians_schoolbook_narrow<const SCALE: u32>(
     Int::<2>::from_i128(to_radians_schoolbook_raw::<SCALE>(raw.as_i128(), mode))
 }
 
-// -- Unit tests: each schoolbook is bit-exact against the routed kernel.
+// -- Unit tests: each schoolbook against the routed kernel on a
+// small-magnitude input set, at one scale per tier, over all eight
+// rounding modes.
 //
-// Reference correctness (skill 7): delta == 0 against the routed
-// MulPiRatio kernel at every input, scale, tier and mode.
+// These pin agreement where it holds; they are NOT a general
+// equivalence claim. `to_degrees_schoolbook`'s divergence from the
+// routed `MulPiRatio` kernel is magnitude-driven and appears well above
+// these inputs (module docs), so a passing run here says nothing about
+// the top of a tier's range.
 #[cfg(test)]
 mod tests {
     use super::*;
