@@ -83,15 +83,9 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(
     exponent: Int<N>,
     mode: RoundingMode,
 ) -> Int<N> {
-    let algo = match const { select::<N, SCALE>() } {
-        Select::ByAlgorithm(algorithm) => algorithm,
-        Select::ByValue(choose) => choose(&base),
-    };
-    match algo {
-        Algorithm::ExpWithLn => exp_with_ln_routed::<N, SCALE>(base, exponent, mode),
-        Algorithm::PinnedExpWithLn => pinned_exp_with_ln_routed::<N, SCALE>(base, exponent, mode),
-        Algorithm::Schoolbook => schoolbook_routed::<N, SCALE>(base, exponent, mode),
-    }
+    checked_dispatch::<N, SCALE>(base, exponent, mode).unwrap_or_else(|| {
+        crate::support::diagnostics::overflow_panic_with_scale("powf", SCALE)
+    })
 }
 
 /// The `PinnedExpWithLn` realisation per width — the wide production
@@ -119,7 +113,7 @@ fn pinned_exp_with_ln_routed<const N: usize, const SCALE: u32>(
     base: Int<N>,
     exponent: Int<N>,
     mode: RoundingMode,
-) -> Int<N> {
+) -> Option<Int<N>> {
     // Only the wide arms below use it; a narrow-only build has none.
     #[cfg(feature = "_wide-support")]
     macro_rules! pinned {
@@ -142,10 +136,7 @@ fn pinned_exp_with_ln_routed<const N: usize, const SCALE: u32>(
             exponent.resize_to::<Int<2>>(),
             mode,
         )
-        .and_then(super::narrow_fit::<N>)
-        .unwrap_or_else(|| {
-            crate::support::diagnostics::overflow_panic_with_scale("powf", SCALE)
-        }),
+        .and_then(super::narrow_fit::<N>),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => pinned!(3, wide_trig_d57),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -171,10 +162,7 @@ fn pinned_exp_with_ln_routed<const N: usize, const SCALE: u32>(
             exponent.resize_to::<Int<2>>(),
             mode,
         )
-        .and_then(super::narrow_fit::<N>)
-        .unwrap_or_else(|| {
-            crate::support::diagnostics::overflow_panic_with_scale("powf", SCALE)
-        }),
+        .and_then(super::narrow_fit::<N>),
     }
 }
 
@@ -194,39 +182,14 @@ pub(crate) fn checked_dispatch<const N: usize, const SCALE: u32>(
     exponent: Int<N>,
     mode: RoundingMode,
 ) -> Option<Int<N>> {
-    match N {
-        1 | 2 => crate::algos::pow::powf_series_2limb::powf::<SCALE>(
-            base.resize_to::<Int<2>>(),
-            exponent.resize_to::<Int<2>>(),
-            mode,
-        )
-        .and_then(super::narrow_fit::<N>),
-        #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => crate::D::<Int<3>, SCALE>(base.resize_to::<Int<3>>()).powf_with(crate::D::<Int<3>, SCALE>(exponent.resize_to::<Int<3>>()), mode).0.map(|value| value.resize_to::<Int<N>>()),
-        #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => crate::D::<Int<4>, SCALE>(base.resize_to::<Int<4>>()).powf_with(crate::D::<Int<4>, SCALE>(exponent.resize_to::<Int<4>>()), mode).0.map(|value| value.resize_to::<Int<N>>()),
-        #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => crate::D::<Int<6>, SCALE>(base.resize_to::<Int<6>>()).powf_with(crate::D::<Int<6>, SCALE>(exponent.resize_to::<Int<6>>()), mode).0.map(|value| value.resize_to::<Int<N>>()),
-        #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => crate::D::<Int<8>, SCALE>(base.resize_to::<Int<8>>()).powf_with(crate::D::<Int<8>, SCALE>(exponent.resize_to::<Int<8>>()), mode).0.map(|value| value.resize_to::<Int<N>>()),
-        #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => crate::D::<Int<12>, SCALE>(base.resize_to::<Int<12>>()).powf_with(crate::D::<Int<12>, SCALE>(exponent.resize_to::<Int<12>>()), mode).0.map(|value| value.resize_to::<Int<N>>()),
-        #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => crate::D::<Int<16>, SCALE>(base.resize_to::<Int<16>>()).powf_with(crate::D::<Int<16>, SCALE>(exponent.resize_to::<Int<16>>()), mode).0.map(|value| value.resize_to::<Int<N>>()),
-        #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => crate::D::<Int<24>, SCALE>(base.resize_to::<Int<24>>()).powf_with(crate::D::<Int<24>, SCALE>(exponent.resize_to::<Int<24>>()), mode).0.map(|value| value.resize_to::<Int<N>>()),
-        #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => crate::D::<Int<32>, SCALE>(base.resize_to::<Int<32>>()).powf_with(crate::D::<Int<32>, SCALE>(exponent.resize_to::<Int<32>>()), mode).0.map(|value| value.resize_to::<Int<N>>()),
-        #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => crate::D::<Int<48>, SCALE>(base.resize_to::<Int<48>>()).powf_with(crate::D::<Int<48>, SCALE>(exponent.resize_to::<Int<48>>()), mode).0.map(|value| value.resize_to::<Int<N>>()),
-        #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => crate::D::<Int<64>, SCALE>(base.resize_to::<Int<64>>()).powf_with(crate::D::<Int<64>, SCALE>(exponent.resize_to::<Int<64>>()), mode).0.map(|value| value.resize_to::<Int<N>>()),
-        _ => crate::algos::pow::powf_series_2limb::powf::<SCALE>(
-            base.resize_to::<Int<2>>(),
-            exponent.resize_to::<Int<2>>(),
-            mode,
-        )
-        .and_then(super::narrow_fit::<N>),
+    let algo = match const { select::<N, SCALE>() } {
+        Select::ByAlgorithm(algorithm) => algorithm,
+        Select::ByValue(choose) => choose(&base),
+    };
+    match algo {
+        Algorithm::ExpWithLn => exp_with_ln_routed::<N, SCALE>(base, exponent, mode),
+        Algorithm::PinnedExpWithLn => pinned_exp_with_ln_routed::<N, SCALE>(base, exponent, mode),
+        Algorithm::Schoolbook => schoolbook_routed::<N, SCALE>(base, exponent, mode),
     }
 }
 
@@ -235,76 +198,70 @@ fn exp_with_ln_routed<const N: usize, const SCALE: u32>(
     base: Int<N>,
     exponent: Int<N>,
     mode: RoundingMode,
-) -> Int<N> {
+) -> Option<Int<N>> {
     match N {
         1 | 2 => crate::algos::pow::powf_series_2limb::powf::<SCALE>(
             base.resize_to::<Int<2>>(),
             exponent.resize_to::<Int<2>>(),
             mode,
         )
-        .and_then(super::narrow_fit::<N>)
-        .unwrap_or_else(|| {
-            crate::support::diagnostics::overflow_panic_with_scale("powf", SCALE)
-        }),
+        .and_then(super::narrow_fit::<N>),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => crate::algos::pow::pow_schoolbook::pow_schoolbook::<
             crate::types::widths::wide_trig_d57::Core, SCALE,
         >(base.resize_to::<Int<3>>(), exponent.resize_to::<Int<3>>(), mode)
-        .resize_to::<Int<N>>(),
+        .map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
         4 => crate::algos::pow::pow_schoolbook::pow_schoolbook::<
             crate::types::widths::wide_trig_d76::Core, SCALE,
         >(base.resize_to::<Int<4>>(), exponent.resize_to::<Int<4>>(), mode)
-        .resize_to::<Int<N>>(),
+        .map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d115", feature = "wide"))]
         6 => crate::algos::pow::pow_schoolbook::pow_schoolbook::<
             crate::types::widths::wide_trig_d115::Core, SCALE,
         >(base.resize_to::<Int<6>>(), exponent.resize_to::<Int<6>>(), mode)
-        .resize_to::<Int<N>>(),
+        .map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d153", feature = "wide"))]
         8 => crate::algos::pow::pow_schoolbook::pow_schoolbook::<
             crate::types::widths::wide_trig_d153::Core, SCALE,
         >(base.resize_to::<Int<8>>(), exponent.resize_to::<Int<8>>(), mode)
-        .resize_to::<Int<N>>(),
+        .map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d230", feature = "wide"))]
         12 => crate::algos::pow::pow_schoolbook::pow_schoolbook::<
             crate::types::widths::wide_trig_d230::Core, SCALE,
         >(base.resize_to::<Int<12>>(), exponent.resize_to::<Int<12>>(), mode)
-        .resize_to::<Int<N>>(),
+        .map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
         16 => crate::algos::pow::pow_schoolbook::pow_schoolbook::<
             crate::types::widths::wide_trig_d307::Core, SCALE,
         >(base.resize_to::<Int<16>>(), exponent.resize_to::<Int<16>>(), mode)
-        .resize_to::<Int<N>>(),
+        .map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
         24 => crate::algos::pow::pow_schoolbook::pow_schoolbook::<
             crate::types::widths::wide_trig_d462::Core, SCALE,
         >(base.resize_to::<Int<24>>(), exponent.resize_to::<Int<24>>(), mode)
-        .resize_to::<Int<N>>(),
+        .map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
         32 => crate::algos::pow::pow_schoolbook::pow_schoolbook::<
             crate::types::widths::wide_trig_d616::Core, SCALE,
         >(base.resize_to::<Int<32>>(), exponent.resize_to::<Int<32>>(), mode)
-        .resize_to::<Int<N>>(),
+        .map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
         48 => crate::algos::pow::pow_schoolbook::pow_schoolbook::<
             crate::types::widths::wide_trig_d924::Core, SCALE,
         >(base.resize_to::<Int<48>>(), exponent.resize_to::<Int<48>>(), mode)
-        .resize_to::<Int<N>>(),
+        .map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => crate::algos::pow::pow_schoolbook::pow_schoolbook::<
             crate::types::widths::wide_trig_d1232::Core, SCALE,
         >(base.resize_to::<Int<64>>(), exponent.resize_to::<Int<64>>(), mode)
-        .resize_to::<Int<N>>(),
+        .map(|value| value.resize_to::<Int<N>>()),
         _ => crate::algos::pow::powf_series_2limb::powf::<SCALE>(
             base.resize_to::<Int<2>>(),
             exponent.resize_to::<Int<2>>(),
             mode,
         )
-        .and_then(super::narrow_fit::<N>)
-        .unwrap_or_else(|| {
-            crate::support::diagnostics::overflow_panic_with_scale("powf", SCALE)
-        }),
+        .and_then(super::narrow_fit::<N>),
     }
 }
 
@@ -313,75 +270,71 @@ fn schoolbook_routed<const N: usize, const SCALE: u32>(
     base: Int<N>,
     exponent: Int<N>,
     mode: RoundingMode,
-) -> Int<N> {
+) -> Option<Int<N>> {
     match N {
-        1 | 2 => super::narrow_checked::<N>(
+        1 | 2 => super::narrow_fit::<N>(
             crate::algos::pow::pow_schoolbook::pow_schoolbook_strict::<SCALE>(
                 base.resize_to::<Int<2>>(),
                 exponent.resize_to::<Int<2>>(),
                 mode,
             ),
-            "powf",
-            SCALE,
         ),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => crate::algos::pow::pow_schoolbook::pow_schoolbook::<
             crate::types::widths::wide_trig_d57::Core, SCALE,
         >(base.resize_to::<Int<3>>(), exponent.resize_to::<Int<3>>(), mode)
-        .resize_to::<Int<N>>(),
+        .map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
         4 => crate::algos::pow::pow_schoolbook::pow_schoolbook::<
             crate::types::widths::wide_trig_d76::Core, SCALE,
         >(base.resize_to::<Int<4>>(), exponent.resize_to::<Int<4>>(), mode)
-        .resize_to::<Int<N>>(),
+        .map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d115", feature = "wide"))]
         6 => crate::algos::pow::pow_schoolbook::pow_schoolbook::<
             crate::types::widths::wide_trig_d115::Core, SCALE,
         >(base.resize_to::<Int<6>>(), exponent.resize_to::<Int<6>>(), mode)
-        .resize_to::<Int<N>>(),
+        .map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d153", feature = "wide"))]
         8 => crate::algos::pow::pow_schoolbook::pow_schoolbook::<
             crate::types::widths::wide_trig_d153::Core, SCALE,
         >(base.resize_to::<Int<8>>(), exponent.resize_to::<Int<8>>(), mode)
-        .resize_to::<Int<N>>(),
+        .map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d230", feature = "wide"))]
         12 => crate::algos::pow::pow_schoolbook::pow_schoolbook::<
             crate::types::widths::wide_trig_d230::Core, SCALE,
         >(base.resize_to::<Int<12>>(), exponent.resize_to::<Int<12>>(), mode)
-        .resize_to::<Int<N>>(),
+        .map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
         16 => crate::algos::pow::pow_schoolbook::pow_schoolbook::<
             crate::types::widths::wide_trig_d307::Core, SCALE,
         >(base.resize_to::<Int<16>>(), exponent.resize_to::<Int<16>>(), mode)
-        .resize_to::<Int<N>>(),
+        .map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
         24 => crate::algos::pow::pow_schoolbook::pow_schoolbook::<
             crate::types::widths::wide_trig_d462::Core, SCALE,
         >(base.resize_to::<Int<24>>(), exponent.resize_to::<Int<24>>(), mode)
-        .resize_to::<Int<N>>(),
+        .map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
         32 => crate::algos::pow::pow_schoolbook::pow_schoolbook::<
             crate::types::widths::wide_trig_d616::Core, SCALE,
         >(base.resize_to::<Int<32>>(), exponent.resize_to::<Int<32>>(), mode)
-        .resize_to::<Int<N>>(),
+        .map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
         48 => crate::algos::pow::pow_schoolbook::pow_schoolbook::<
             crate::types::widths::wide_trig_d924::Core, SCALE,
         >(base.resize_to::<Int<48>>(), exponent.resize_to::<Int<48>>(), mode)
-        .resize_to::<Int<N>>(),
+        .map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => crate::algos::pow::pow_schoolbook::pow_schoolbook::<
             crate::types::widths::wide_trig_d1232::Core, SCALE,
         >(base.resize_to::<Int<64>>(), exponent.resize_to::<Int<64>>(), mode)
-        .resize_to::<Int<N>>(),
-        _ => super::narrow_checked::<N>(
+        .map(|value| value.resize_to::<Int<N>>()),
+        _ => super::narrow_fit::<N>(
             crate::algos::pow::pow_schoolbook::pow_schoolbook_strict::<SCALE>(
                 base.resize_to::<Int<2>>(),
                 exponent.resize_to::<Int<2>>(),
                 mode,
             ),
-            "powf",
-            SCALE,
         ),
     }
 }

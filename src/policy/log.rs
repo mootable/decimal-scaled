@@ -288,7 +288,7 @@ fn conditioned_at<const N: usize, Wk: BigInt, const SCALE: u32, const CAP: u128>
     braw: Int<N>,
     mode: RoundingMode,
     k: u32,
-) -> Int<N>
+) -> Option<Int<N>>
 where
     <Wk as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {

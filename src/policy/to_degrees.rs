@@ -148,7 +148,7 @@ fn schoolbook_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: Roundi
         // Widths no tier claims. Keeps the standalone narrow Schoolbook
         // kernel routed; it evaluates the same expression as the
         // `1 | 2` arm at the same guard width.
-        _ => crate::algos::trig::angle_schoolbook::to_degrees_schoolbook_narrow::<SCALE>(
-            raw.resize_to::<Int<2>>(), mode).resize_to::<Int<N>>(),
+        _ => Some(crate::algos::trig::angle_schoolbook::to_degrees_schoolbook_narrow::<SCALE>(
+            raw.resize_to::<Int<2>>(), mode).resize_to::<Int<N>>()),
     }
 }

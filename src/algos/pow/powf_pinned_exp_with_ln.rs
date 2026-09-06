@@ -87,7 +87,7 @@ where
         C::storage_max(),
         mode,
     ) {
-        return pinned;
+        return Some(pinned);
     }
     // Fractional-base integer-exponent fast path, under the caller's
     // `mode`.

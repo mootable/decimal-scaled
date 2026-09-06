@@ -664,7 +664,7 @@ pub(crate) fn log_ratio_finish<const N: usize, Wk: BigInt, const SCALE: u32>(
     guard: u32,
     probe_ratio: Wk,
     ratio_at: impl Fn(u32) -> Wk,
-) -> Int<N>
+) -> Option<Int<N>>
 where
     <Wk as BigInt>::Scratch: ComputeLimbs,
 {
@@ -683,15 +683,17 @@ where
     // narrows in one shot — the walker's own first probe, arm for arm
     // (`directed_narrow` / `nearest_narrow` at the base guard), so this is
     // bit-identical to entering the walker and returning from its first step.
-    if let Some(narrowed) = round_to_storage_clear_of_tie_g::<Int<N>, Wk>(
+    if let Some(verdict) = round_to_storage_clear_of_tie_g::<Int<N>, Wk>(
         probe_ratio,
         base_working_scale,
         SCALE,
         mode,
         Int::<N>::MAX,
         Int::<N>::MIN,
-    ) {
-        return narrowed;
+    )
+    .settled()
+    {
+        return verdict;
     }
     // Near a boundary. An EXACT rational result never resolves by escalation:
     // the probe's residual at every depth is the kernel's own noise around
@@ -968,7 +970,7 @@ fn exact_int_at_scale<const N: usize, Wk: BigInt>(
     integer_value: i128,
     scale: u32,
     mode: RoundingMode,
-) -> Int<N>
+) -> Option<Int<N>>
 where
     <Wk as BigInt>::Scratch: ComputeLimbs,
 {
