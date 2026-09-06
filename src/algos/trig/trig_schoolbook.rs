@@ -107,26 +107,24 @@ pub(crate) fn atan_schoolbook<C: WideTrigCore, const SCALE: u32>(
 /// Maclaurin `Fixed` leaf [`sin_fixed`], rounded at the strict guard.
 #[inline]
 #[must_use]
-fn sin_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+fn sin_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     if raw == 0 {
         return 0;
     }
     let working_scale = SCALE + STRICT_GUARD;
     sin_fixed(to_fixed(raw), working_scale)
         .round_to_i128_with(working_scale, SCALE, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("sin", SCALE))
 }
 
 /// Narrow schoolbook `cos` core -- `cos(x)` recovered from the joint
 /// [`sin_cos_fixed`] `Fixed` leaf (shared mod-2pi reduction).
 #[inline]
 #[must_use]
-fn cos_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+fn cos_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     let working_scale = SCALE + STRICT_GUARD;
     let (_sin_value, cos_value) = sin_cos_fixed(to_fixed(raw), working_scale);
     cos_value
         .round_to_i128_with(working_scale, SCALE, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("cos", SCALE))
 }
 
 /// Narrow schoolbook `tan` core -- the textbook quotient
@@ -134,7 +132,7 @@ fn cos_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
 /// leaf. Panics at the poles (cosine zero).
 #[inline]
 #[must_use]
-fn tan_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+fn tan_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     if raw == 0 {
         return 0;
     }
@@ -145,14 +143,13 @@ fn tan_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     }
     sin_value.div(cos_value, working_scale)
         .round_to_i128_with(working_scale, SCALE, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("tan", SCALE))
 }
 
 /// Narrow schoolbook `atan` core -- the arctan Maclaurin series with
 /// argument reduction supplied by the [`atan_fixed`] `Fixed` leaf.
 #[inline]
 #[must_use]
-fn atan_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+fn atan_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     use crate::types::consts::DecimalConstants;
     if raw == 0 {
         return 0;
@@ -175,7 +172,6 @@ fn atan_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 
     let working_scale = SCALE + STRICT_GUARD;
     atan_fixed(to_fixed(raw), working_scale)
         .round_to_i128_with(working_scale, SCALE, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("atan", SCALE))
 }
 
 // -- `Int<2>` entry points (bridge `Int<2> -> i128`) ------------------
@@ -183,29 +179,29 @@ fn atan_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 
 /// Narrow schoolbook `sin` for `Int<2>` storage.
 #[inline]
 #[must_use]
-pub(crate) fn sin_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    Int::<2>::from_i128(sin_schoolbook_raw::<SCALE>(raw.as_i128(), mode))
+pub(crate) fn sin_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+    sin_schoolbook_raw::<SCALE>(raw.as_i128(), mode).map(Int::<2>::from_i128)
 }
 
 /// Narrow schoolbook `cos` for `Int<2>` storage.
 #[inline]
 #[must_use]
-pub(crate) fn cos_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    Int::<2>::from_i128(cos_schoolbook_raw::<SCALE>(raw.as_i128(), mode))
+pub(crate) fn cos_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+    cos_schoolbook_raw::<SCALE>(raw.as_i128(), mode).map(Int::<2>::from_i128)
 }
 
 /// Narrow schoolbook `tan` for `Int<2>` storage.
 #[inline]
 #[must_use]
-pub(crate) fn tan_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    Int::<2>::from_i128(tan_schoolbook_raw::<SCALE>(raw.as_i128(), mode))
+pub(crate) fn tan_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+    tan_schoolbook_raw::<SCALE>(raw.as_i128(), mode).map(Int::<2>::from_i128)
 }
 
 /// Narrow schoolbook `atan` for `Int<2>` storage.
 #[inline]
 #[must_use]
-pub(crate) fn atan_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    Int::<2>::from_i128(atan_schoolbook_raw::<SCALE>(raw.as_i128(), mode))
+pub(crate) fn atan_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+    atan_schoolbook_raw::<SCALE>(raw.as_i128(), mode).map(Int::<2>::from_i128)
 }
 
 // ── Unit tests: each schoolbook is bit-exact against the routed kernel ──

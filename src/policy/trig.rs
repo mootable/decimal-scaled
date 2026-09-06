@@ -1299,12 +1299,12 @@ macro_rules! impl_narrow_trig {
                 )
             }
             #[inline]
-            pub(crate) fn policy_to_degrees(self, mode: RoundingMode) -> Self {
-                Self::from_bits(crate::policy::to_degrees::dispatch::<_, SCALE>(self.to_bits(), mode))
+            pub(crate) fn policy_to_degrees(self, mode: RoundingMode) -> Option<Self> {
+                crate::policy::to_degrees::checked_dispatch::<_, SCALE>(self.to_bits(), mode).map(Self::from_bits)
             }
             #[inline]
-            pub(crate) fn policy_to_radians(self, mode: RoundingMode) -> Self {
-                Self::from_bits(crate::policy::to_radians::dispatch::<_, SCALE>(self.to_bits(), mode))
+            pub(crate) fn policy_to_radians(self, mode: RoundingMode) -> Option<Self> {
+                crate::policy::to_radians::checked_dispatch::<_, SCALE>(self.to_bits(), mode).map(Self::from_bits)
             }
         }
     };
@@ -1340,48 +1340,48 @@ impl_narrow_trig!(
 macro_rules! d38_hyperbolic_and_angle {
     () => {
         #[inline]
-        pub(crate) fn policy_sinh(self, mode: RoundingMode) -> Self {
-            Self(match hyper::resolve::<2, SCALE>(&self.0) {
+        pub(crate) fn policy_sinh(self, mode: RoundingMode) -> Option<Self> {
+            match hyper::resolve::<2, SCALE>(&self.0) {
                 hyper::Algorithm::ExpIdentity => trig::trig_series_2limb::sinh::<SCALE>(self.0, mode),
                 #[allow(dead_code)]
                 hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::sinh_schoolbook_narrow::<SCALE>(self.0, mode),
-            })
+            }.map(Self)
         }
         #[inline]
-        pub(crate) fn policy_cosh(self, mode: RoundingMode) -> Self {
-            Self(match hyper::resolve::<2, SCALE>(&self.0) {
+        pub(crate) fn policy_cosh(self, mode: RoundingMode) -> Option<Self> {
+            match hyper::resolve::<2, SCALE>(&self.0) {
                 hyper::Algorithm::ExpIdentity => trig::trig_series_2limb::cosh::<SCALE>(self.0, mode),
                 #[allow(dead_code)]
                 hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::cosh_schoolbook_narrow::<SCALE>(self.0, mode),
-            })
+            }.map(Self)
         }
         #[inline]
-        pub(crate) fn policy_tanh(self, mode: RoundingMode) -> Self {
-            Self(match hyper::resolve::<2, SCALE>(&self.0) {
+        pub(crate) fn policy_tanh(self, mode: RoundingMode) -> Option<Self> {
+            match hyper::resolve::<2, SCALE>(&self.0) {
                 hyper::Algorithm::ExpIdentity => trig::trig_series_2limb::tanh::<SCALE>(self.0, mode),
                 #[allow(dead_code)]
                 hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::tanh_schoolbook_narrow::<SCALE>(self.0, mode),
-            })
+            }.map(Self)
         }
         #[inline]
-        pub(crate) fn policy_asinh(self, mode: RoundingMode) -> Self {
-            Self(trig::trig_series_2limb::asinh::<SCALE>(self.0, mode))
+        pub(crate) fn policy_asinh(self, mode: RoundingMode) -> Option<Self> {
+            trig::trig_series_2limb::asinh::<SCALE>(self.0, mode).map(Self)
         }
         #[inline]
-        pub(crate) fn policy_acosh(self, mode: RoundingMode) -> Self {
-            Self(trig::trig_series_2limb::acosh::<SCALE>(self.0, mode))
+        pub(crate) fn policy_acosh(self, mode: RoundingMode) -> Option<Self> {
+            trig::trig_series_2limb::acosh::<SCALE>(self.0, mode).map(Self)
         }
         #[inline]
-        pub(crate) fn policy_atanh(self, mode: RoundingMode) -> Self {
-            Self(trig::trig_series_2limb::atanh::<SCALE>(self.0, mode))
+        pub(crate) fn policy_atanh(self, mode: RoundingMode) -> Option<Self> {
+            trig::trig_series_2limb::atanh::<SCALE>(self.0, mode).map(Self)
         }
         #[inline]
-        pub(crate) fn policy_to_degrees(self, mode: RoundingMode) -> Self {
-            Self::from_bits(crate::policy::to_degrees::dispatch::<_, SCALE>(self.to_bits(), mode))
+        pub(crate) fn policy_to_degrees(self, mode: RoundingMode) -> Option<Self> {
+            crate::policy::to_degrees::checked_dispatch::<_, SCALE>(self.to_bits(), mode).map(Self::from_bits)
         }
         #[inline]
-        pub(crate) fn policy_to_radians(self, mode: RoundingMode) -> Self {
-            Self::from_bits(crate::policy::to_radians::dispatch::<_, SCALE>(self.to_bits(), mode))
+        pub(crate) fn policy_to_radians(self, mode: RoundingMode) -> Option<Self> {
+            crate::policy::to_radians::checked_dispatch::<_, SCALE>(self.to_bits(), mode).map(Self::from_bits)
         }
     };
 }
@@ -1392,34 +1392,34 @@ macro_rules! d38_hyperbolic_and_angle {
 macro_rules! d38_forward_fixed {
     () => {
         #[inline]
-        pub(crate) fn policy_sin(self, mode: RoundingMode) -> Self {
-            Self(match forward::resolve::<2, SCALE>(&self.0) {
+        pub(crate) fn policy_sin(self, mode: RoundingMode) -> Option<Self> {
+            match forward::resolve::<2, SCALE>(&self.0) {
                 forward::Algorithm::Series => trig::trig_series_2limb::sin::<SCALE>(self.0, mode),
                 #[cfg(feature = "_wide-support")]
                 forward::Algorithm::Tang => trig::trig_series_2limb::sin::<SCALE>(self.0, mode),
                 #[allow(dead_code)]
                 forward::Algorithm::Schoolbook => trig::trig_schoolbook::sin_schoolbook_narrow::<SCALE>(self.0, mode),
-            })
+            }.map(Self)
         }
         #[inline]
-        pub(crate) fn policy_cos(self, mode: RoundingMode) -> Self {
-            Self(match forward::resolve::<2, SCALE>(&self.0) {
+        pub(crate) fn policy_cos(self, mode: RoundingMode) -> Option<Self> {
+            match forward::resolve::<2, SCALE>(&self.0) {
                 forward::Algorithm::Series => trig::trig_series_2limb::cos::<SCALE>(self.0, mode),
                 #[cfg(feature = "_wide-support")]
                 forward::Algorithm::Tang => trig::trig_series_2limb::cos::<SCALE>(self.0, mode),
                 #[allow(dead_code)]
                 forward::Algorithm::Schoolbook => trig::trig_schoolbook::cos_schoolbook_narrow::<SCALE>(self.0, mode),
-            })
+            }.map(Self)
         }
         #[inline]
-        pub(crate) fn policy_tan(self, mode: RoundingMode) -> Self {
-            Self(match forward::resolve_tan::<2, SCALE>(&self.0) {
+        pub(crate) fn policy_tan(self, mode: RoundingMode) -> Option<Self> {
+            match forward::resolve_tan::<2, SCALE>(&self.0) {
                 forward::Algorithm::Series => trig::trig_series_2limb::tan::<SCALE>(self.0, mode),
                 #[cfg(feature = "_wide-support")]
                 forward::Algorithm::Tang => trig::trig_series_2limb::tan::<SCALE>(self.0, mode),
                 #[allow(dead_code)]
                 forward::Algorithm::Schoolbook => trig::trig_schoolbook::tan_schoolbook_narrow::<SCALE>(self.0, mode),
-            })
+            }.map(Self)
         }
     };
 }
@@ -1430,38 +1430,38 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     d38_forward_fixed!();
 
     #[inline]
-    pub(crate) fn policy_atan(self, mode: RoundingMode) -> Self {
-        Self(match inverse::resolve::<2, SCALE>(&self.0) {
+    pub(crate) fn policy_atan(self, mode: RoundingMode) -> Option<Self> {
+        match inverse::resolve::<2, SCALE>(&self.0) {
             inverse::Algorithm::Atan => borrow_d57::atan::<SCALE>(self.0, mode),
             #[allow(dead_code)]
             inverse::Algorithm::Schoolbook => trig::trig_schoolbook::atan_schoolbook_narrow::<SCALE>(self.0, mode),
-        })
+        }.map(Self)
     }
     #[inline]
-    pub(crate) fn policy_asin(self, mode: RoundingMode) -> Self {
-        Self(match inverse::resolve::<2, SCALE>(&self.0) {
+    pub(crate) fn policy_asin(self, mode: RoundingMode) -> Option<Self> {
+        match inverse::resolve::<2, SCALE>(&self.0) {
             inverse::Algorithm::Atan => borrow_d57::asin::<SCALE>(self.0, mode),
             #[allow(dead_code)]
             inverse::Algorithm::Schoolbook => trig::inverse_schoolbook::asin_schoolbook_narrow::<SCALE>(self.0, mode),
-        })
+        }.map(Self)
     }
     #[inline]
-    pub(crate) fn policy_acos(self, mode: RoundingMode) -> Self {
-        Self(match inverse::resolve::<2, SCALE>(&self.0) {
+    pub(crate) fn policy_acos(self, mode: RoundingMode) -> Option<Self> {
+        match inverse::resolve::<2, SCALE>(&self.0) {
             inverse::Algorithm::Atan => borrow_d57::acos::<SCALE>(self.0, mode),
             #[allow(dead_code)]
             inverse::Algorithm::Schoolbook => trig::inverse_schoolbook::acos_schoolbook_narrow::<SCALE>(self.0, mode),
-        })
+        }.map(Self)
     }
     #[inline]
-    pub(crate) fn policy_atan2(self, other: Self, mode: RoundingMode) -> Self {
-        Self(match inverse::resolve::<2, SCALE>(&self.0) {
+    pub(crate) fn policy_atan2(self, other: Self, mode: RoundingMode) -> Option<Self> {
+        match inverse::resolve::<2, SCALE>(&self.0) {
             inverse::Algorithm::Atan => {
                 borrow_d57::atan2::<SCALE>(self.0, other.0, mode)
             }
             #[allow(dead_code)]
             inverse::Algorithm::Schoolbook => trig::inverse_schoolbook::atan2_schoolbook_narrow::<SCALE>(self.0, other.0, mode),
-        })
+        }.map(Self)
     }
     d38_hyperbolic_and_angle!();
 }
@@ -1472,38 +1472,38 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     d38_forward_fixed!();
 
     #[inline]
-    pub(crate) fn policy_atan(self, mode: RoundingMode) -> Self {
-        Self(match inverse::resolve::<2, SCALE>(&self.0) {
+    pub(crate) fn policy_atan(self, mode: RoundingMode) -> Option<Self> {
+        match inverse::resolve::<2, SCALE>(&self.0) {
             inverse::Algorithm::Atan => trig::trig_series_2limb::atan::<SCALE>(self.0, mode),
             #[allow(dead_code)]
             inverse::Algorithm::Schoolbook => trig::trig_schoolbook::atan_schoolbook_narrow::<SCALE>(self.0, mode),
-        })
+        }.map(Self)
     }
     #[inline]
-    pub(crate) fn policy_asin(self, mode: RoundingMode) -> Self {
-        Self(match inverse::resolve::<2, SCALE>(&self.0) {
+    pub(crate) fn policy_asin(self, mode: RoundingMode) -> Option<Self> {
+        match inverse::resolve::<2, SCALE>(&self.0) {
             inverse::Algorithm::Atan => trig::trig_series_2limb::asin::<SCALE>(self.0, mode),
             #[allow(dead_code)]
             inverse::Algorithm::Schoolbook => trig::inverse_schoolbook::asin_schoolbook_narrow::<SCALE>(self.0, mode),
-        })
+        }.map(Self)
     }
     #[inline]
-    pub(crate) fn policy_acos(self, mode: RoundingMode) -> Self {
-        Self(match inverse::resolve::<2, SCALE>(&self.0) {
+    pub(crate) fn policy_acos(self, mode: RoundingMode) -> Option<Self> {
+        match inverse::resolve::<2, SCALE>(&self.0) {
             inverse::Algorithm::Atan => trig::trig_series_2limb::acos::<SCALE>(self.0, mode),
             #[allow(dead_code)]
             inverse::Algorithm::Schoolbook => trig::inverse_schoolbook::acos_schoolbook_narrow::<SCALE>(self.0, mode),
-        })
+        }.map(Self)
     }
     #[inline]
-    pub(crate) fn policy_atan2(self, other: Self, mode: RoundingMode) -> Self {
-        Self(match inverse::resolve::<2, SCALE>(&self.0) {
+    pub(crate) fn policy_atan2(self, other: Self, mode: RoundingMode) -> Option<Self> {
+        match inverse::resolve::<2, SCALE>(&self.0) {
             inverse::Algorithm::Atan => {
                 trig::trig_series_2limb::atan2::<SCALE>(self.0, other.0, mode)
             }
             #[allow(dead_code)]
             inverse::Algorithm::Schoolbook => trig::inverse_schoolbook::atan2_schoolbook_narrow::<SCALE>(self.0, other.0, mode),
-        })
+        }.map(Self)
     }
     d38_hyperbolic_and_angle!();
 }

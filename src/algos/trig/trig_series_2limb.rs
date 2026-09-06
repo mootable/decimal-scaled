@@ -732,14 +732,14 @@ pub(crate) fn atan_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -
     // fall through to the guarded computation + mode-aware rounding.
     if is_nearest_mode(mode) {
         if raw == one_bits {
-            return <crate::D<crate::int::types::Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
+            return Some(<crate::D<crate::int::types::Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128());
         }
         if raw == -one_bits {
             return -<crate::D<crate::int::types::Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
         }
     }
     if raw.abs() <= small_x_linear_threshold::<SCALE>() && is_nearest_mode(mode) {
-        return raw;
+        return Some(raw);
     }
     let working_scale = SCALE + STRICT_GUARD;
     match atan_fixed(to_fixed(raw), working_scale)
@@ -830,7 +830,7 @@ pub(crate) fn acos_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -
         return Some(0);
     }
     if raw == -one_bits && is_nearest_mode(mode) {
-        return <crate::D<crate::int::types::Int<2>, SCALE> as DecimalConstants>::pi().0.as_i128();
+        return Some(<crate::D<crate::int::types::Int<2>, SCALE> as DecimalConstants>::pi().0.as_i128());
     }
     let working_scale = SCALE + STRICT_GUARD;
     let one_w = Fixed {
@@ -962,13 +962,13 @@ fn sinh_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
         // below one ULP yet strictly positive, so the true value sits
         // just *above* the grid line `raw` (in magnitude) — the analytic
         // decision, exact at every depth.
-        return crate::support::rounding::tiny_odd_expanding_directed(
+        return Some(crate::support::rounding::tiny_odd_expanding_directed(
             raw,
             0,
             1,
             (raw.unsigned_abs() % 10) as u8,
             mode,
-        );
+        ));
     }
     let working_scale = scale + STRICT_GUARD;
     if crate::algos::exp::exp_series_2limb::hyper_needs_wide_narrow(raw, scale, working_scale) {
@@ -1055,7 +1055,7 @@ fn cosh_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
 #[inline]
 #[must_use]
 pub(crate) fn tanh<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
-    Int::<2>::from_i128(tanh_strict_raw(raw.as_i128(), SCALE, mode))
+    tanh_strict_raw(raw.as_i128(), SCALE, mode).map(Int::<2>::from_i128)
 }
 
 /// One `WZiv` tanh probe at working scale `scale + guard_digits`.
@@ -1086,13 +1086,13 @@ fn tanh_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
         // inside the grid line `raw`. Nearest modes return `raw`; the
         // directed modes need this analytic decision — no finite-precision
         // exp path can resolve the sub-ULP cubic.
-        return crate::support::rounding::tiny_odd_compressing_directed(
+        return Some(crate::support::rounding::tiny_odd_compressing_directed(
             raw,
             0,
             1,
             (raw.unsigned_abs() % 10) as u8,
             mode,
-        );
+        ));
     }
     let working_scale = scale + STRICT_GUARD;
     match tanh_eval_fixed(raw, STRICT_GUARD, working_scale) {
@@ -1163,7 +1163,7 @@ fn tanh_eval_fixed(raw: i128, working_digits: u32, working_scale: u32) -> (Fixed
 #[inline]
 #[must_use]
 pub(crate) fn asinh<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
-    Int::<2>::from_i128(asinh_strict_raw(raw.as_i128(), SCALE, mode))
+    asinh_strict_raw(raw.as_i128(), SCALE, mode).map(Int::<2>::from_i128)
 }
 
 /// One signed `Fixed` asinh evaluation at
@@ -1235,7 +1235,7 @@ fn asinh_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
         return Some(0);
     }
     if raw.abs() <= small_x_linear_threshold_scale(scale) && is_nearest_mode(mode) {
-        return raw;
+        return Some(raw);
     }
     let working_scale = scale + STRICT_GUARD;
     match asinh_eval_fixed(raw, STRICT_GUARD, working_scale)
@@ -1251,7 +1251,7 @@ fn asinh_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
 #[inline]
 #[must_use]
 pub(crate) fn acosh<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
-    Int::<2>::from_i128(acosh_strict_raw(raw.as_i128(), SCALE, mode))
+    acosh_strict_raw(raw.as_i128(), SCALE, mode).map(Int::<2>::from_i128)
 }
 
 /// One `Fixed` acosh evaluation at
@@ -1330,7 +1330,7 @@ fn acosh_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
 #[inline]
 #[must_use]
 pub(crate) fn atanh<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
-    Int::<2>::from_i128(atanh_strict_raw(raw.as_i128(), SCALE, mode))
+    atanh_strict_raw(raw.as_i128(), SCALE, mode).map(Int::<2>::from_i128)
 }
 
 /// One `WZiv` atanh probe at working scale `scale + guard_digits` — the
@@ -1363,7 +1363,7 @@ fn atanh_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
         return Some(0);
     }
     if raw.abs() <= small_x_linear_threshold_scale(scale) && is_nearest_mode(mode) {
-        return raw;
+        return Some(raw);
     }
     let working_scale = scale + STRICT_GUARD;
     match atanh_eval_fixed(raw, STRICT_GUARD, working_scale)
@@ -1431,7 +1431,7 @@ fn atanh_eval_fixed(raw: i128, working_digits: u32, working_scale: u32) -> Fixed
 #[inline]
 #[must_use]
 pub(crate) fn to_degrees<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
-    Int::<2>::from_i128(to_degrees_with_raw(raw.as_i128(), SCALE, STRICT_GUARD, mode))
+    to_degrees_with_raw(raw.as_i128(), SCALE, STRICT_GUARD, mode).map(Int::<2>::from_i128)
 }
 
 #[inline]
@@ -1455,7 +1455,7 @@ pub(crate) fn to_degrees_with_raw(
 #[inline]
 #[must_use]
 pub(crate) fn to_radians<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
-    Int::<2>::from_i128(to_radians_with_raw(raw.as_i128(), SCALE, STRICT_GUARD, mode))
+    to_radians_with_raw(raw.as_i128(), SCALE, STRICT_GUARD, mode).map(Int::<2>::from_i128)
 }
 
 #[inline]

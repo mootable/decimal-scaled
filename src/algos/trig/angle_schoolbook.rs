@@ -80,7 +80,7 @@ pub(crate) fn to_radians_schoolbook<C: WideTrigCore, const SCALE: u32>(
 
 #[inline]
 #[must_use]
-fn to_degrees_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+fn to_degrees_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     if raw == 0 {
         return 0;
     }
@@ -96,7 +96,7 @@ fn to_degrees_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) ->
 
 #[inline]
 #[must_use]
-fn to_radians_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+fn to_radians_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     if raw == 0 {
         return 0;
     }
@@ -117,7 +117,7 @@ pub(crate) fn to_degrees_schoolbook_narrow<const SCALE: u32>(
     raw: Int<2>,
     mode: RoundingMode,
 ) -> Int<2> {
-    Int::<2>::from_i128(to_degrees_schoolbook_raw::<SCALE>(raw.as_i128(), mode))
+    to_degrees_schoolbook_raw::<SCALE>(raw.as_i128(), mode).map(Int::<2>::from_i128)
 }
 
 /// Narrow schoolbook to_radians for Int<2> storage.
@@ -127,7 +127,7 @@ pub(crate) fn to_radians_schoolbook_narrow<const SCALE: u32>(
     raw: Int<2>,
     mode: RoundingMode,
 ) -> Int<2> {
-    Int::<2>::from_i128(to_radians_schoolbook_raw::<SCALE>(raw.as_i128(), mode))
+    to_radians_schoolbook_raw::<SCALE>(raw.as_i128(), mode).map(Int::<2>::from_i128)
 }
 
 // -- Unit tests: each schoolbook against the routed kernel on a
