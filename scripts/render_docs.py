@@ -60,6 +60,9 @@ GOLDEN_RESULTS = ROOT / "results" / "golden" / "summary.tsv"
 CELLS_SRC = ROOT / "decimal-scaled-cells" / "src" / "lib.rs"
 ROUNDING_SRC = ROOT / "decimal-scaled-golden" / "src" / "support" / "rounding.rs"
 TIMING_RESULTS = ROOT / "results" / "timing" / "bbc_medians.tsv"
+# The timing probes' readings, self-committed by bench-branch-compare on the
+# same gate as the medians above — they describe the run that produced them.
+TIMING_PROBE = ROOT / "results" / "timing" / "bbc_probe.tsv"
 HISTORY_RESULTS = ROOT / "results" / "history" / "history.tsv"
 LIBCMP_RESULTS = ROOT / "results" / "lib_cmp" / "medians.tsv"
 
@@ -731,6 +734,150 @@ def render_performance_units() -> str:
     """The time-unit legend for the Performance page header (left column)."""
     rows = _timing_rows()
     return _units_legend([r[3] for r in rows]) if rows else _PENDING_PERF
+
+
+# --- Calibration (docs/performance.md) — from results/timing/bbc_probe.tsv ---
+#
+# The timings on this page come off a shared GitHub-hosted runner, and a reader
+# has no way to judge how much of a difference between two of them is real. The
+# same bbc run measures two probe series at both ends of every bench job and
+# self-commits the readings alongside the medians; this renders them into
+# something a reader can APPLY to the other tables rather than a bare number.
+#
+# The two series are kept apart here exactly as they are in the CI summary:
+#   * SYNTHETIC — a reference workload with no library code in it, repeated so
+#     the spread of the repeats gives the measurement floor. This is what makes
+#     the "differences below X% are not distinguishable" sentence sayable.
+#   * PINNED — one fixed library operation, measured in the same runs so it is a
+#     stable point of reference over time.
+# Blending them would leave a slower runner and slower code indistinguishable.
+#
+# The headline percentage is the SAME statistic bench-compare/probe_summary.py
+# reports (worst pooled p90 within-job spread across the ladder), so the page and
+# the CI summary cannot disagree.
+
+_PENDING_PROBE = (
+    "_Pending the first bench-branch-compare CI run with the timing probes — "
+    "this renders from `results/timing/bbc_probe.tsv`._"
+)
+
+_PROBE_HEADER = [
+    "job", "series", "position", "subject", "cpu_model", "label", "iters",
+    "median_ns", "min_ns", "max_ns", "p10_ns", "p90_ns", "spread_rel",
+    "range_rel", "within_spread_rel", "clock_tick_ns", "clock_read_ns",
+]
+
+
+def _probe_rows() -> list[dict] | None:
+    """Parsed rows of results/timing/bbc_probe.tsv, or None when the file isn't
+    committed yet or carries a foreign/superseded schema (the header guard
+    mirrors `_timing_rows`)."""
+    if not TIMING_PROBE.exists():
+        return None
+    lines = TIMING_PROBE.read_text(encoding="utf-8").splitlines()
+    if not lines or lines[0].split("\t")[:17] != _PROBE_HEADER:
+        return None
+    out = []
+    for line in lines[1:]:
+        c = line.split("\t")
+        if len(c) < 17:
+            continue
+        try:
+            out.append({
+                "series": c[1], "subject": c[3], "label": c[5],
+                "median_ns": float(c[7]), "spread_rel": float(c[12]),
+                "clock_tick_ns": float(c[15]),
+            })
+        except ValueError:
+            continue
+    return out or None
+
+
+def _quantile(values: list[float], q: float) -> float | None:
+    """Linear-interpolated quantile over an unsorted list; None when empty."""
+    s = sorted(values)
+    if not s:
+        return None
+    pos = q * (len(s) - 1)
+    lo, hi = int(pos), min(int(pos) + 1, len(s) - 1)
+    return s[lo] if lo == hi else s[lo] + (s[hi] - s[lo]) * (pos - lo)
+
+
+def _probe_pooled(rows: list[dict], series: str) -> list[tuple[str, float, float]]:
+    """`(label, pooled median ns, pooled p90 spread)` per workload of one
+    series, ordered by cost so it reads as a ladder."""
+    by_label: dict[str, dict[str, list[float]]] = {}
+    for r in rows:
+        if r["series"] != series:
+            continue
+        slot = by_label.setdefault(r["label"], {"median_ns": [], "spread_rel": []})
+        slot["median_ns"].append(r["median_ns"])
+        slot["spread_rel"].append(r["spread_rel"])
+    out = []
+    for label, v in by_label.items():
+        med = _quantile(v["median_ns"], 0.5)
+        p90 = _quantile(v["spread_rel"], 0.9)
+        if med is not None and p90 is not None:
+            out.append((label, med, p90))
+    out.sort(key=lambda t: t[1])
+    return out
+
+
+def render_performance_calibration() -> str:
+    """The calibration block: what this run could resolve, in terms a reader can
+    apply to the timing tables on this page."""
+    rows = _probe_rows()
+    if rows is None:
+        return _PENDING_PROBE
+    synthetic = _probe_pooled(rows, "synthetic")
+    if not synthetic:
+        return _PENDING_PROBE
+
+    # The floor: the worst repeatability anywhere on the ladder. Quoted as the
+    # threshold a reader applies, so it must be the WORST rung rather than a
+    # typical one — a number that holds at every cost on the page.
+    floor = max(p90 for _label, _med, p90 in synthetic)
+
+    out = [
+        "| Reference cost | Repeatability (spread over repeated measurement) |",
+        "| :-- | --: |",
+    ]
+    out += [f"| {_fmt_ns(med)} | ±{p90 * 100:.1f}% |" for _label, med, p90 in synthetic]
+    out += [
+        "",
+        f"**Two timings on these pages that differ by less than about "
+        f"±{floor * 100:.0f}% are not distinguishable at this run's resolution.** "
+        "The table above is a synthetic reference workload — arithmetic with no "
+        "library code in it — measured repeatedly at each cost during the same run "
+        "that produced the timings. The spread of those repeats is measurement, not "
+        "code, so it is the floor under any difference read off this page.",
+    ]
+
+    pinned = _probe_pooled(rows, "pinned")
+    if pinned:
+        subject = next((r["subject"] for r in rows if r["series"] == "pinned" and r["subject"]), "")
+        label, med, p90 = pinned[0]
+        out += [
+            "",
+            f"A fixed library operation — {'`' + subject + '`' if subject else label} — "
+            f"is measured in the same runs, at {_fmt_ns(med)} (±{p90 * 100:.1f}%). It is "
+            "held constant deliberately, so its movement across releases is a check on "
+            "the library itself rather than on the machine. It is reported separately "
+            "from the synthetic reference above and never combined with it: a combined "
+            "figure could not tell a slower runner from slower code.",
+        ]
+
+    ticks = [r["clock_tick_ns"] for r in rows if r["clock_tick_ns"] > 0]
+    tick = _quantile(ticks, 0.5) if ticks else None
+    if tick is not None:
+        out += [
+            "",
+            f"The runner's clock resolves {_fmt_ns(tick)}, but that is not the floor: "
+            "each timing is an average over a long loop between two clock readings, so "
+            "it can be — and for the cheapest operations is — far finer than a single "
+            "tick. Repeatability, not the clock, is what bounds what can be read here.",
+        ]
+    return "\n".join(out)
 
 
 # --- Op classification -----------------------------------------------------
@@ -1516,6 +1663,7 @@ REGIONS: dict[str, tuple[str, "callable"]] = {
     "precision:surface": ("docs/precision.md", render_precision_surface),
     "performance:units": ("docs/performance.md", render_performance_units),
     "performance:widths": ("docs/performance.md", render_bench_widths),
+    "performance:calibration": ("docs/performance.md", render_performance_calibration),
     "performance:body:arithmetic": ("docs/performance/arithmetic.md", render_performance_arithmetic),
     "performance:body:roots": ("docs/performance/roots-and-exponents.md", render_performance_roots),
     "performance:body:trig": ("docs/performance/trigonometry.md", render_performance_trig),

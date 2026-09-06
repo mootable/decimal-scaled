@@ -34,28 +34,48 @@ name: "\U0001FA83 bench-branch-compare (branch vs latest tag)"
 #               Then probe_summary.py renders the resolution + drift readings
 #               beneath that table.
 #
-# THE TIMING PROBE — what can a runner actually resolve? summarise.py puts a
-# cell in the regression focus at `Δ% > +1 AND Δ > 10 ns`, and that second arm
-# is a FIXED ABSOLUTE floor applied across cells whose cost spans three orders
-# of magnitude. On a cell reporting ~1 ns/op it is a 1000% change, so the
-# cheapest operations are unassessable by construction: a real regression on
-# `add` is filtered out and footnoted as sitting below the measurement floor,
-# which it does not. Nobody had ever measured that floor — 10 ns was a guess.
+# THE TIMING PROBES — TWO SERIES, reported separately, never blended.
 #
-# `bench-compare/probe/bbc_probe.rs` measures it. It is SYNTHETIC and contains
-# no crate operation, because a probe built on one of our own operations
-# measures the runner AND our code at once, and when it moves you cannot tell
-# which of the two moved. That is enforced by the build rather than promised in
-# a comment: it is compiled with `rustc` DIRECTLY — no manifest, no dependency
-# graph — so it cannot link either side of the comparison even by accident, and
-# the run's tier features cannot reach it. It runs at the START and END of every
-# bench job, because the pair is the only thing that reveals whether the runner
-# degraded WHILE the sweep ran. Readings ride inside
-# `target/criterion/_bbc_probe/`, which summarise.py's `**/new/benchmark.json`
-# glob cannot match, so the medians schema is untouched. It ANNOTATES and never
-# gates: it cannot fail a job, and it does not change the filter — what that
-# floor should become is the owner's call, and the probe produces the number
-# that call needs.
+# Series 1, SYNTHETIC (`bench-compare/probe/bbc_probe.rs`) — what can a runner
+# actually resolve? summarise.py puts a cell in the regression focus at
+# `Δ% > +1 AND Δ > 10 ns`, and that second arm is a FIXED ABSOLUTE floor applied
+# across cells whose cost spans three orders of magnitude. On a cell reporting
+# ~1 ns/op it is a 1000% change, so the cheapest operations are unassessable by
+# construction: a real regression on `add` is filtered out and footnoted as
+# sitting below the measurement floor, which it does not. Nobody had ever
+# measured that floor — 10 ns was a guess.
+#
+# It contains NO crate operation, because a probe built on one of our own
+# operations measures the runner AND our code at once, and when it moves you
+# cannot tell which of the two moved. That is enforced by the build rather than
+# promised in a comment: it is compiled with `rustc` DIRECTLY — no manifest, no
+# dependency graph — so it cannot link either side of the comparison even by
+# accident, and the run's tier features cannot reach it.
+#
+# Series 2, PINNED (`bench-compare/examples/bbc_pinned_probe.rs`) — did OUR OWN
+# baseline move? It times one deliberately fixed library operation
+# (`decimal_scaled::D18<0>` add, chosen because its cost has no reason to
+# change). Nothing else in the sweep can see a slow uniform creep: every bbc
+# cell is a ratio against the previous release, so a drift that moves everything
+# reads as no change at all, every time. CHANGING WHAT IT MEASURES INVALIDATES
+# ITS HISTORICAL SERIES — the file says so at the top, and the subject string
+# travels inside every reading so such a change is visible in the data.
+#
+# Blending the two would destroy both: a merged figure leaves a slower runner
+# and slower code indistinguishable, which is the ambiguity the synthetic series
+# exists to remove. They share only `probe/probe_core.rs`, so both are measured
+# identically and a difference in method cannot masquerade as a difference in
+# result.
+#
+# BOTH run at the START and END of every bench job, because the pair is the only
+# thing that reveals whether the runner degraded WHILE the sweep ran. Readings
+# ride inside `target/criterion/_bbc_probe/`, which summarise.py's
+# `**/new/benchmark.json` glob cannot match, so the medians schema is untouched.
+# They ANNOTATE and never gate: they cannot fail a job, and they do not change
+# the filter — what that floor should become is the owner's call, and the probes
+# produce the number that call needs. The readings publish to
+# `results/timing/bbc_probe.tsv` on the same gate as the medians, and the
+# Performance page renders a calibration table from them.
 #
 # Triggers: (1) push to `main` — publishes the fresh timing medians to the `ci-data`
 # data branch, exactly like the other producers (history / lib-perf / golden); (2)
@@ -440,10 +460,13 @@ jobs:
           ls -1 target/release/deps/compare_d*-* | grep -v '\.d$' || true
 
       # ------------------------------------------------------------
-      # The timing probe (probe/bbc_probe.rs) — how fine a difference can a
-      # bench runner actually resolve, and how far apart do two measurements of
-      # IDENTICAL work land? The regression filter carries a fixed 10 ns
-      # absolute floor that nobody has ever measured; this is what replaces the
+      # TWO timing probes, compiled HERE because the bench jobs install no
+      # toolchain at all: they download this artifact and run prebuilt
+      # executables.
+      #
+      # SERIES 1, SYNTHETIC (probe/bbc_probe.rs) — how fine a difference can a
+      # bench runner actually resolve? The regression filter carries a fixed
+      # 10 ns absolute floor that nobody has ever measured; this replaces the
       # guess with a number.
       #
       # Compiled with `rustc` DIRECTLY: no manifest, no dependency graph, no
@@ -454,14 +477,11 @@ jobs:
       # the two moved. A synthetic reference stays comparable across every
       # future run whatever the library does.
       #
-      # It is compiled HERE because the bench jobs install no toolchain at all:
-      # they download this artifact and run prebuilt executables. `-C
-      # target-cpu` is deliberately NOT set, so codegen stays the generic
+      # `-C target-cpu` is deliberately NOT set, so codegen stays the generic
       # x86-64 baseline and does not shift when the hosted runner pool changes
-      # hardware. The toolchain and flags travel next to the binary, so a
-      # ladder that moves because the COMPILER moved is attributable rather
-      # than mysterious.
-      - name: Compile the timing probe
+      # hardware. The toolchain and flags travel next to the binary, so a ladder
+      # that moves because the COMPILER moved is attributable, not mysterious.
+      - name: Compile the synthetic timing probe
         working-directory: bench-compare
         run: |
           set -euo pipefail
@@ -472,6 +492,32 @@ jobs:
           rustc $FLAGS probe/bbc_probe.rs -o staged/bbc_probe
           echo "$(rustc -V) | rustc ${FLAGS}" > staged/probe_build.txt
           echo "--- probe build ---"; cat staged/probe_build.txt; ls -l staged/bbc_probe
+
+      # SERIES 2, PINNED (examples/bbc_pinned_probe.rs) — did OUR OWN baseline
+      # move? It times one deliberately fixed library operation
+      # (`decimal_scaled::D18<0>` add). Nothing else in the sweep can see a slow
+      # uniform creep: every bbc cell is a ratio against the previous release,
+      # so a drift that moves everything reads as no change at all, every time.
+      #
+      # The two series are reported SEPARATELY and never blended — a merged
+      # figure would leave a slower runner and slower code indistinguishable.
+      # They cannot share an executable either, because this one must link the
+      # crate and the synthetic one must not be ABLE to; they share only
+      # `probe/probe_core.rs`, so both are measured identically.
+      #
+      # `--release` is load-bearing: a debug build of the same operation is
+      # many times slower and would measure nothing useful. It is a cargo
+      # EXAMPLE rather than a `[[bench]]`, so `bbc_plan.py` (which emits only
+      # `--bench compare_d*`) is unaffected and no criterion harness is
+      # involved.
+      - name: Compile the pinned timing probe
+        working-directory: bench-compare
+        run: |
+          set -euo pipefail
+          mkdir -p staged
+          cargo build --release --example bbc_pinned_probe
+          cp target/release/examples/bbc_pinned_probe staged/bbc_pinned_probe
+          ls -l staged/bbc_pinned_probe
 
       - name: Stage the compiled exes + lockfile
         working-directory: bench-compare
@@ -503,6 +549,10 @@ jobs:
           # anyway because the branch path-dep is always dirty, so they are
           # pure bulk in the cache. Depfiles and any incremental tree too.
           rm -f target/release/deps/compare_d*-* 2>/dev/null || true
+          # The pinned probe is already staged and, like the bench exes, relinks
+          # every run anyway (the branch path-dep is always dirty), so caching it
+          # is pure bulk.
+          rm -f target/release/examples/bbc_pinned_probe* 2>/dev/null || true
           find target -name '*.d' -delete 2>/dev/null || true
           rm -rf target/release/incremental target/debug 2>/dev/null || true
           after=$(du -sm target 2>/dev/null | cut -f1 || echo 0)
@@ -565,7 +615,13 @@ jobs:
           name: bbc-compiled
           path: bbc-compiled
 
-      # ── The timing probe, taken at BOTH ends of this job ──────────────
+      # ── BOTH timing probes, taken at BOTH ends of this job ────────────
+      #
+      # TWO SERIES, reported separately: `bbc_probe` is the synthetic reference
+      # (what this runner can resolve, no crate code in it) and
+      # `bbc_pinned_probe` times one fixed library operation (whether our own
+      # baseline moved). Each answers a question the other cannot, and blending
+      # them would leave a slower runner and slower code indistinguishable.
       #
       # WHY A PAIR AND NOT ONE READING. A single reading cannot tell a slow
       # machine from a machine that BECAME slow. Only the pair does, and
@@ -573,7 +629,7 @@ jobs:
       # cells measured late in a long grouped job while leaving the early ones
       # alone.
       #
-      # It writes into `target/criterion/_bbc_probe/`, which is deliberate on
+      # They write into `target/criterion/_bbc_probe/`, which is deliberate on
       # two counts. The upload below has `path: target/criterion/`, so the
       # artifact ROOT *is* the criterion tree and `aggregate` merges it with
       # `cp -a "$d/."` — adding a second upload path would re-root the artifact
@@ -581,23 +637,26 @@ jobs:
       # which `_bbc_probe/*.json` cannot match, so the readings ride along
       # without the medians schema changing at all.
       #
-      # NEITHER STEP CAN FAIL THE JOB. The probe exits 0 on every path and a
+      # NEITHER STEP CAN FAIL THE JOB. Both probes exit 0 on every path and a
       # missing binary is a warning, because a probe that can red a bench cell
       # trades a quality annotation for a data outage — and a drifted job's
       # branch÷prod ratio is still sound, both sides having run seconds apart
       # inside the same criterion group.
-      - name: Timing probe (start)
+      - name: Timing probes (start)
         env:
           BBC_JOB: ${{ matrix.name }}
         run: |
           set -euo pipefail
-          if [ ! -f bbc-compiled/bbc_probe ]; then
-            echo "::warning::no bbc_probe in bbc-compiled — skipping the timing probe"
-            exit 0
-          fi
-          chmod +x bbc-compiled/bbc_probe
-          BBC_PROBE_BUILD="$(cat bbc-compiled/probe_build.txt 2>/dev/null || echo unknown)" \
-            ./bbc-compiled/bbc_probe start "$BBC_JOB" target/criterion/_bbc_probe
+          BUILD="$(cat bbc-compiled/probe_build.txt 2>/dev/null || echo unknown)"
+          for P in bbc_probe bbc_pinned_probe; do
+            if [ ! -f "bbc-compiled/$P" ]; then
+              echo "::warning::no $P in bbc-compiled — skipping that probe series"
+              continue
+            fi
+            chmod +x "bbc-compiled/$P"
+            BBC_PROBE_BUILD="$BUILD" \
+              "./bbc-compiled/$P" start "$BBC_JOB" target/criterion/_bbc_probe
+          done
 
       - name: Run ${{ matrix.name }}
         env:
@@ -658,18 +717,21 @@ jobs:
       # The second half of the pair. `always()` so a cell that failed part way
       # still contributes its drift reading — a job that fell over late is
       # precisely the one worth having an end reading for.
-      - name: Timing probe (end)
+      - name: Timing probes (end)
         if: always()
         env:
           BBC_JOB: ${{ matrix.name }}
         run: |
           set -euo pipefail
-          if [ ! -f bbc-compiled/bbc_probe ]; then
-            echo "::warning::no bbc_probe in bbc-compiled — skipping the timing probe"
-            exit 0
-          fi
-          BBC_PROBE_BUILD="$(cat bbc-compiled/probe_build.txt 2>/dev/null || echo unknown)" \
-            ./bbc-compiled/bbc_probe end "$BBC_JOB" target/criterion/_bbc_probe
+          BUILD="$(cat bbc-compiled/probe_build.txt 2>/dev/null || echo unknown)"
+          for P in bbc_probe bbc_pinned_probe; do
+            if [ ! -f "bbc-compiled/$P" ]; then
+              echo "::warning::no $P in bbc-compiled — skipping that probe series"
+              continue
+            fi
+            BBC_PROBE_BUILD="$BUILD" \
+              "./bbc-compiled/$P" end "$BBC_JOB" target/criterion/_bbc_probe
+          done
 
       - name: Upload criterion subtree
         if: always()
@@ -884,11 +946,23 @@ jobs:
         run: |
           set -euo pipefail
           tsv=bench-compare/aggregate/bbc_medians.tsv
+          probe=bench-compare/aggregate/bbc_probe.tsv
           if [ ! -f "$tsv" ]; then echo "no bbc_medians.tsv produced — skipping commit"; exit 0; fi
           mkdir -p results/timing
           # The full benched (op × width × scale) surface — collect everything,
           # so a later docs table is a render-only change, never a re-run.
           cp "$tsv" results/timing/bbc_medians.tsv
+          # The probe readings publish on the SAME gate as the medians, and for
+          # the same reason: they describe the run that produced those medians,
+          # so a reader can tell a real difference from one inside the noise.
+          # Raw per-(job, series, position) rows, exactly like the medians —
+          # the docs table is rendered FROM this by scripts/render_docs.py, so
+          # changing how it is presented is a render-only change, never a re-run.
+          if [ -f "$probe" ]; then
+            cp "$probe" results/timing/bbc_probe.tsv
+          else
+            echo "no bbc_probe.tsv produced — publishing medians only"
+          fi
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if [ "$GITHUB_REF_NAME" = "main" ]; then
@@ -897,12 +971,24 @@ jobs:
             # docs build reads them from there. Nothing is rendered or committed
             # to `main` here (that stays the release-cadence snapshot).
             bash scripts/push_ci_data.sh results/timing/bbc_medians.tsv
+            # One file per invocation (see the script's usage), so the probe
+            # readings are a second call rather than a second argument.
+            if [ -f results/timing/bbc_probe.tsv ]; then
+              bash scripts/push_ci_data.sh results/timing/bbc_probe.tsv
+            fi
           else
             # release/* (unprotected): self-commit the fresh medians + re-rendered
             # Performance page for the release PR — the RELEASING.md §3 refresh
             # path, unchanged. stdlib-only, no extra deps.
             python3 scripts/render_docs.py
             git add results/timing/bbc_medians.tsv
+            # Staged BEFORE render_docs would matter, and it already ran above:
+            # the calibration region on the Performance page renders from this
+            # file, so publishing the two together keeps the page and its data
+            # in step and the docs-drift gate green.
+            if [ -f results/timing/bbc_probe.tsv ]; then
+              git add results/timing/bbc_probe.tsv
+            fi
             git add -u README.md docs/
             if git diff --cached --quiet; then
               echo "timing medians + docs unchanged — nothing to commit"
