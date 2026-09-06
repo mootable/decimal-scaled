@@ -54,3 +54,13 @@ The per-function tables and graphs are split across three category pages:
 <!-- END GENERATED:performance:widths -->
 
 </div>
+
+## How much difference is real?
+
+Every timing on these pages was measured on a shared, GitHub-hosted machine, and
+some of the spread between any two of them is the machine rather than the code.
+So each run also measures its own instrument, and publishes what it found:
+
+<!-- BEGIN GENERATED:performance:calibration -->
+_Pending the first bench-branch-compare CI run with the timing probes — this renders from `results/timing/bbc_probe.tsv`._
+<!-- END GENERATED:performance:calibration -->

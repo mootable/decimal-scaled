@@ -189,6 +189,141 @@ def parse_pair(text: str) -> dict[tuple[str, int, int], tuple[float, float]]:
 NULL_P25, NULL_P50, NULL_P90, NULL_P99 = 1.08, 1.21, 1.75, 2.40
 
 
+# --- Measurement calibration, from the bbc timing probes --------------------
+#
+# The bands above were measured ONCE, by hand, from two runs of identical
+# published code. They are the best figures available and they are already the
+# SECOND attempt (see the SUPERSEDED note), which is exactly the problem: a hand
+# calibration has no way to notice when it stops being true. The runner pool
+# changes, the sweep's shape changes, and a constant in a source file does not.
+#
+# `bench-branch-compare` now measures the null on EVERY run, from two probe
+# series written at both ends of every bench job and committed alongside the
+# medians (bench-compare/probe/, results/timing/bbc_probe.tsv):
+#
+#   * SYNTHETIC — a mul+xorshift chain with NO library code in it, at eight
+#     costs from ~2 ns to ~30 us. Identical work BY CONSTRUCTION, so anything
+#     that moves it is the machine. This is what calibrates the page.
+#   * PINNED — one fixed library operation (D18<0> add). Reported separately and
+#     NEVER blended: a merged figure cannot tell a slower runner from slower
+#     code, which is the whole ambiguity the synthetic series removes.
+#
+# Two different nulls come out of it, and they band different sections here:
+#
+#   WITHIN-JOB — the same measurement repeated back to back in one process. This
+#     is the null for `branch / prod`, which is measured exactly that way, so it
+#     bands the improvements and regressions sections and is the honest floor
+#     under FLOOR_PCT below.
+#   CROSS-VM — the same synthetic rung across separate runner jobs. This is the
+#     null for a ratio taken BETWEEN cells, so it bands the two INVERSION
+#     sections, which are cross-cell by definition.
+#
+# The cross-VM statistic is every unordered pair's larger/smaller ratio, which is
+# the same SHAPE as an inversion ratio (one cell over another, on code that
+# should not differ). It is NOT adjacency-restricted the way the hand
+# calibration was — a synthetic rung has no neighbours — so read it as the same
+# quantity measured a slightly different way, not as a drop-in replacement for
+# the constants above. Superseding them is the owner's decision, on data; this
+# section exists to put that data in front of him.
+
+
+def probe_at(ref: str) -> str:
+    """The probe readings committed beside the medians, or "" when the ref
+    predates them. A miss is NORMAL — every sweep before the probes landed has
+    no such file — so it must never be an error."""
+    try:
+        return sh("git", "show", f"{ref}:results/timing/bbc_probe.tsv")
+    except subprocess.CalledProcessError:
+        return ""
+
+
+def parse_probe(text: str) -> list[dict]:
+    """Rows of `bbc_probe.tsv`. The header is checked against `render_docs`' own
+    constant, so the two readers of this file cannot drift apart."""
+    lines = text.splitlines()
+    if not lines or lines[0].split("\t")[:17] != rd._PROBE_HEADER:
+        return []
+    out = []
+    for line in lines[1:]:
+        c = line.split("\t")
+        if len(c) < 17:
+            continue
+        try:
+            out.append({"series": c[1], "subject": c[3], "label": c[5],
+                        "median_ns": float(c[7]), "spread_rel": float(c[12])})
+        except ValueError:
+            pass
+    return out
+
+
+def _pair_ratios(values: list[float]) -> list[float]:
+    """Every unordered pair's larger/smaller ratio — the cross-VM null in the
+    same shape as an inversion ratio."""
+    v = sorted(x for x in values if x > 0)
+    return [b / a for i, a in enumerate(v) for b in v[i + 1:]]
+
+
+def calibration_section(text: str) -> str:
+    """What this run could actually resolve — the panel section that qualifies
+    the two inversion sections beside it."""
+    rows = parse_probe(text)
+    cap = ("what the RUNNER does to identical work, from the timing probes committed "
+           "on the branch ref. It governs whether a gap is VISIBLE, never whether it "
+           "is acceptable.")
+    if not rows:
+        return ("<section><h3>Measurement calibration</h3>"
+                f"<div class='cap'>{cap}</div>"
+                "<p class='none'>No probe readings on this ref. Sweeps from before the "
+                "timing probes landed carry none, so the inversion sections are banded "
+                f"by the hand-measured constants (p50 {NULL_P50:.2f}x, "
+                f"p90 {NULL_P90:.2f}x, p99 {NULL_P99:.2f}x).</p></section>")
+
+    syn: dict[str, list[float]] = {}
+    spread: dict[str, list[float]] = {}
+    for r in rows:
+        if r["series"] == "synthetic":
+            syn.setdefault(r["label"], []).append(r["median_ns"])
+            spread.setdefault(r["label"], []).append(r["spread_rel"])
+
+    ratios: list[float] = []
+    for vals in syn.values():
+        ratios += _pair_ratios(vals)
+    within = max((rd._quantile(v, 0.9) or 0.0) for v in spread.values()) if spread else None
+
+    body = ["<table><thead><tr><th>null</th><th>what it bands</th>"
+            "<th>measured</th></tr></thead><tbody>"]
+    if within:
+        body.append("<tr><td>within-job</td><td>branch vs release (same job)</td>"
+                    f"<td>&plusmn;{within * 100:.1f}%</td></tr>")
+    if ratios:
+        body.append(
+            "<tr><td>cross-VM</td><td><b>the inversion sections</b></td>"
+            f"<td>p50 {rd._quantile(ratios, 0.50):.2f}x &middot; "
+            f"p90 {rd._quantile(ratios, 0.90):.2f}x &middot; "
+            f"p99 {rd._quantile(ratios, 0.99):.2f}x</td></tr>")
+    body.append("</tbody></table>")
+
+    note = ""
+    if ratios:
+        note = (f"<div class='cap'>An inversion below <b>{rd._quantile(ratios, 0.99):.2f}x</b> "
+                "cannot be distinguished from runner jitter in a cell-mode sweep. It is not "
+                "dismissed — it wants a <code>group=width</code> / <code>group=all</code> "
+                "replicate before you hunt it.</div>")
+    pin = [r for r in rows if r["series"] == "pinned"]
+    if pin:
+        subject = next((r["subject"] for r in pin if r["subject"]), "pinned op")
+        cost = rd._quantile([r["median_ns"] for r in pin], 0.5)
+        note += ("<div class='cap'>Reported separately, never blended into the above: "
+                 f"<code>{html.escape(subject)}</code> at {fmt(cost)} — a fixed operation "
+                 "whose movement ACROSS releases is a check on the library rather than the "
+                 "machine. It detects <i>slower</i> well and <i>faster</i> poorly: there is "
+                 "little in a single-limb ripple to win back, so a flat series is NOT "
+                 "evidence that nothing improved.</div>")
+
+    return ("<section><h3>Measurement calibration</h3>"
+            f"<div class='cap'>{cap}</div>" + "".join(body) + note + "</section>")
+
+
 # RELATIVE ONLY: a move counts when it is more than 1% of the shipped time.
 #
 # The repo's 8.4 filter also requires |delta| > 10 ns, and that absolute half is
@@ -450,8 +585,9 @@ def history_panel(pts: list[tuple]) -> str:
             f"job, so runner speed cancels.<br>The inversion bands are "
             f"thresholds measured by running the SAME code twice: two cells "
             f"land on two different GitHub runners, so their ratio moves even "
-            f"when nothing changed — 1.11x half the time, 1.60x one time in "
-            f"ten, 2.20x one in a hundred. An inversion below a band is still a "
+            f"when nothing changed — {NULL_P50:.2f}x half the time, "
+            f"{NULL_P90:.2f}x one time in "
+            f"ten, {NULL_P99:.2f}x one in a hundred. An inversion below a band is still a "
             f"defect; it just cannot be told apart from that noise in a "
             f"per-cell sweep.</div>")
 
@@ -525,7 +661,7 @@ def inv_table(rows: list, kind: str, limit: int) -> str:
     body = "".join(
         f"<tr><td><code>{html.escape(o)}</code></td><td>{html.escape(p)}</td>"
         f"<td>{html.escape(a)}</td><td>{fmt(hi)}</td><td>{fmt(lo)}</td>"
-        f"<td class='{'big' if r >= 2.2 else 'small'}'>{r:.2f}x</td></tr>"
+        f"<td class='{'big' if r >= NULL_P99 else 'small'}'>{r:.2f}x</td></tr>"
         for o, p, a, hi, lo, r in rows[:limit])
     more = (f"<tr><td colspan='6' class='none'>... and {len(rows) - limit} more</td></tr>"
             if len(rows) > limit else "")
@@ -624,6 +760,13 @@ def build(base: dict, br: dict, pairs: dict, hist: list, base_ref: str,
     bw, bs = inversions(base, min_scale)
     nw, ns_ = inversions(br, min_scale)
     gains, losses = movers(pairs, min_scale, limit)
+    # The probe readings committed on the BRANCH ref — the sweep whose inversions
+    # this page counts. Empty for any ref predating the probes, and the section
+    # says so rather than inventing a band. Note it is read from GIT: when the
+    # branch medians came from a newer ARTIFACT instead (see `source`), the
+    # calibration is the committed reading for that ref and may be a different
+    # run, which is why the section names its provenance.
+    probe_text = probe_at(br_ref)
 
     def d(a, b):
         if b == a:
@@ -688,8 +831,11 @@ scale 0 {zero} &middot; branch data: {html.escape(source)}</p>
 If D18 is slower than D57, D18 is too slow &mdash; it does strictly less work, and
 the fix target is the narrow side. Two things govern whether you can <em>see</em> one,
 never whether it is acceptable: bbc runs each (width, scale) cell on its own runner,
-so a cross-cell ratio carries a machine floor (p90 1.60x, p99 2.2x on identical code)
-&mdash; ratios below that are shown in amber and want replicating before you hunt.
+so a cross-cell ratio carries a machine floor (p90 {NULL_P90:.2f}x, p99 {NULL_P99:.2f}x
+on identical code) &mdash; ratios below that are shown in amber and want replicating
+before you hunt. The <b>Measurement calibration</b> section below reports that floor as
+MEASURED ON THIS SWEEP where the run carried the timing probes, rather than from a
+constant calibrated once by hand.
 And several ops have degenerate bench operands: <code>ln</code> runs on
 <code>2.0</code>, a power of two, which short-circuits its range reduction entirely.
 Check the operand before trusting any single cell.</div>
@@ -698,6 +844,7 @@ Check the operand before trusting any single cell.</div>
 <div class="hist">{history_panel(hist)}</div>
 
 <div class="panel">
+  {calibration_section(probe_text)}
   <section><h3>Width inversions &mdash; branch</h3>
     <div class="cap">a narrower tier slower than a wider one, same op and scale.
       Top {limit} by ratio, of {len(nw)}.</div>
