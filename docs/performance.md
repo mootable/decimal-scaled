@@ -11,8 +11,12 @@ compares it against the previous release, and commits the medians to
 `results/timing/`, which this page renders. They are refreshed on each release
 PR.
 
-> Absolute timings are machine-dependent — the *ratios* between operations and
-> widths, measured in the same run, are what to read. Operands are `black_box`-ed
+> Absolute timings are machine-dependent — the *ratios* between operations,
+> measured in the same run, are what to read. Ratios **between widths** are a
+> weaker reading: each width is benchmarked in its own job, on its own machine,
+> so a width-to-width gap carries runner variance as well as code. The
+> calibration section below measures that variance — treat a width gap smaller
+> than it as unresolved rather than real. Operands are `black_box`-ed
 > so the optimiser can't fold the work away.
 
 Times are the unit shown in each cell; the legend maps each unit to its size in

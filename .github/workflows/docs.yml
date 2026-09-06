@@ -107,7 +107,8 @@ jobs:
             for p in results/history/history.tsv \
                      results/lib_cmp/medians.tsv \
                      results/golden/summary.tsv \
-                     results/timing/bbc_medians.tsv; do
+                     results/timing/bbc_medians.tsv \
+                     results/timing/bbc_probe.tsv; do
               if git show "FETCH_HEAD:$p" > "$p.cidata" 2>/dev/null; then
                 mv "$p.cidata" "$p"; echo "overlaid $p from ci-data"
               else
