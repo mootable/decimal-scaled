@@ -40,8 +40,8 @@ use crate::types::consts::DecimalConstants;
 // (an `Int<2>`) straight to these entry points.
 macro_rules! int2_trig {
     (strict $pub:ident, $core:ident) => {
-        pub(crate) fn $pub<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-            Int::<2>::from_i128($core::<SCALE>(raw.as_i128(), mode))
+        pub(crate) fn $pub<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+            $core::<SCALE>(raw.as_i128(), mode).map(Int::<2>::from_i128)
         }
     };
     (atan2 $pub:ident, $core:ident) => {
@@ -49,8 +49,8 @@ macro_rules! int2_trig {
             y_raw: Int<2>,
             x_raw: Int<2>,
             mode: RoundingMode,
-        ) -> Int<2> {
-            Int::<2>::from_i128($core::<SCALE>(y_raw.as_i128(), x_raw.as_i128(), mode))
+        ) -> Option<Int<2>> {
+            $core::<SCALE>(y_raw.as_i128(), x_raw.as_i128(), mode).map(Int::<2>::from_i128)
         }
     };
 }
@@ -653,7 +653,7 @@ pub(crate) fn sin_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) ->
         return Some(0);
     }
     if raw.abs() <= small_x_linear_threshold::<SCALE>() && is_nearest_mode(mode) {
-        return raw;
+        return Some(raw);
     }
     let working_scale = SCALE + STRICT_GUARD;
     let rounded = match sin_fixed(to_fixed(raw), working_scale)
@@ -663,8 +663,8 @@ pub(crate) fn sin_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) ->
         None => narrow_ziv::walk(STRICT_GUARD, SCALE, mode, |guard_digits| {
             sin_ziv(raw, SCALE, guard_digits)
         }),
-    };
-    adjust_bounded_extremum_raw(rounded, SCALE, mode)
+    }?;
+    Some(adjust_bounded_extremum_raw(rounded, SCALE, mode))
 }
 
 // ── cos ────────────────────────────────────────────────────────────
@@ -685,8 +685,8 @@ pub(crate) fn cos_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) ->
         None => narrow_ziv::walk(STRICT_GUARD, SCALE, mode, |guard_digits| {
             cos_ziv(raw, SCALE, guard_digits)
         }),
-    };
-    adjust_bounded_extremum_raw(rounded, SCALE, mode)
+    }?;
+    Some(adjust_bounded_extremum_raw(rounded, SCALE, mode))
 }
 
 // ── tan ────────────────────────────────────────────────────────────
@@ -698,7 +698,7 @@ pub(crate) fn tan_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) ->
         return Some(0);
     }
     if raw.abs() <= small_x_linear_threshold::<SCALE>() && is_nearest_mode(mode) {
-        return raw;
+        return Some(raw);
     }
     let working_scale = SCALE + STRICT_GUARD;
     let (sin_w, cos_w) = sin_cos_fixed(to_fixed(raw), working_scale);
@@ -761,7 +761,7 @@ pub(crate) fn asin_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -
         return Some(0);
     }
     if raw.abs() <= small_x_linear_threshold::<SCALE>() && is_nearest_mode(mode) {
-        return raw;
+        return Some(raw);
     }
     let working_scale = SCALE + STRICT_GUARD;
     let one_w = Fixed {
@@ -827,7 +827,7 @@ pub(crate) fn acos_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -
     }
     let one_bits: i128 = 10_i128.pow(SCALE);
     if raw == one_bits {
-        return 0;
+        return Some(0);
     }
     if raw == -one_bits && is_nearest_mode(mode) {
         return <crate::D<crate::int::types::Int<2>, SCALE> as DecimalConstants>::pi().0.as_i128();
@@ -907,8 +907,8 @@ pub(crate) fn atan2_strict_raw<const SCALE: u32>(y_raw: i128, x_raw: i128, mode:
 
 #[inline]
 #[must_use]
-pub(crate) fn sinh<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    Int::<2>::from_i128(sinh_strict_raw(raw.as_i128(), SCALE, mode))
+pub(crate) fn sinh<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+    sinh_strict_raw(raw.as_i128(), SCALE, mode).map(Int::<2>::from_i128)
 }
 
 /// One signed `Fixed` sinh evaluation at
@@ -988,8 +988,8 @@ fn sinh_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
 
 #[inline]
 #[must_use]
-pub(crate) fn cosh<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    Int::<2>::from_i128(cosh_strict_raw(raw.as_i128(), SCALE, mode))
+pub(crate) fn cosh<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+    cosh_strict_raw(raw.as_i128(), SCALE, mode).map(Int::<2>::from_i128)
 }
 
 /// One non-negative `Fixed` cosh evaluation at
@@ -1054,7 +1054,7 @@ fn cosh_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
 
 #[inline]
 #[must_use]
-pub(crate) fn tanh<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
+pub(crate) fn tanh<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
     Int::<2>::from_i128(tanh_strict_raw(raw.as_i128(), SCALE, mode))
 }
 
@@ -1162,7 +1162,7 @@ fn tanh_eval_fixed(raw: i128, working_digits: u32, working_scale: u32) -> (Fixed
 
 #[inline]
 #[must_use]
-pub(crate) fn asinh<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
+pub(crate) fn asinh<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
     Int::<2>::from_i128(asinh_strict_raw(raw.as_i128(), SCALE, mode))
 }
 
@@ -1250,7 +1250,7 @@ fn asinh_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
 
 #[inline]
 #[must_use]
-pub(crate) fn acosh<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
+pub(crate) fn acosh<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
     Int::<2>::from_i128(acosh_strict_raw(raw.as_i128(), SCALE, mode))
 }
 
@@ -1329,7 +1329,7 @@ fn acosh_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
 
 #[inline]
 #[must_use]
-pub(crate) fn atanh<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
+pub(crate) fn atanh<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
     Int::<2>::from_i128(atanh_strict_raw(raw.as_i128(), SCALE, mode))
 }
 
@@ -1430,7 +1430,7 @@ fn atanh_eval_fixed(raw: i128, working_digits: u32, working_scale: u32) -> Fixed
 
 #[inline]
 #[must_use]
-pub(crate) fn to_degrees<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
+pub(crate) fn to_degrees<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
     Int::<2>::from_i128(to_degrees_with_raw(raw.as_i128(), SCALE, STRICT_GUARD, mode))
 }
 
@@ -1454,7 +1454,7 @@ pub(crate) fn to_degrees_with_raw(
 
 #[inline]
 #[must_use]
-pub(crate) fn to_radians<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
+pub(crate) fn to_radians<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
     Int::<2>::from_i128(to_radians_with_raw(raw.as_i128(), SCALE, STRICT_GUARD, mode))
 }
 
